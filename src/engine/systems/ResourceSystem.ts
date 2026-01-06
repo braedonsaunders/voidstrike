@@ -1,4 +1,5 @@
 import { System } from '../ecs/System';
+import { Entity } from '../ecs/Entity';
 import { Transform } from '../components/Transform';
 import { Unit } from '../components/Unit';
 import { Resource } from '../components/Resource';
@@ -146,7 +147,7 @@ export class ResourceSystem extends System {
   }
 
   private handleResourceReturn(
-    workerEntity: { id: number; get: <T>(type: string) => T | undefined },
+    workerEntity: Entity,
     transform: Transform,
     unit: Unit
   ): void {
@@ -212,10 +213,7 @@ export class ResourceSystem extends System {
     }
   }
 
-  private findAndReturnToBase(workerEntity: {
-    id: number;
-    get: <T>(type: string) => T | undefined;
-  }): void {
+  private findAndReturnToBase(workerEntity: Entity): void {
     const transform = workerEntity.get<Transform>('Transform');
     const unit = workerEntity.get<Unit>('Unit');
 
