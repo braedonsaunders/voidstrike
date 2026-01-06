@@ -38,14 +38,16 @@ voidstrike/
 │   │   │   ├── Component.ts   # Component base
 │   │   │   └── System.ts      # System base
 │   │   ├── systems/
-│   │   │   ├── MovementSystem.ts
+│   │   │   ├── SpawnSystem.ts      # Unit spawning from production
+│   │   │   ├── BuildingPlacementSystem.ts # Building construction
+│   │   │   ├── MovementSystem.ts   # Unit movement & formations
 │   │   │   ├── CombatSystem.ts
 │   │   │   ├── SelectionSystem.ts
 │   │   │   ├── ProductionSystem.ts
 │   │   │   ├── ResourceSystem.ts
 │   │   │   ├── VisionSystem.ts     # Fog of war visibility
 │   │   │   ├── AbilitySystem.ts    # Unit abilities & cooldowns
-│   │   │   └── AISystem.ts         # AI opponent behavior
+│   │   │   └── AISystem.ts         # AI opponent with resource management
 │   │   ├── components/
 │   │   │   ├── Transform.ts
 │   │   │   ├── Health.ts
