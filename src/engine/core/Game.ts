@@ -9,6 +9,8 @@ import { ResourceSystem } from '../systems/ResourceSystem';
 import { AISystem } from '../systems/AISystem';
 import { VisionSystem } from '../systems/VisionSystem';
 import { AbilitySystem } from '../systems/AbilitySystem';
+import { SpawnSystem } from '../systems/SpawnSystem';
+import { BuildingPlacementSystem } from '../systems/BuildingPlacementSystem';
 
 export type GameState = 'initializing' | 'running' | 'paused' | 'ended';
 
@@ -71,6 +73,8 @@ export class Game {
 
   private initializeSystems(): void {
     // Add systems in order of execution
+    this.world.addSystem(new SpawnSystem(this));
+    this.world.addSystem(new BuildingPlacementSystem(this));
     this.world.addSystem(new SelectionSystem(this));
     this.world.addSystem(new MovementSystem(this));
     this.world.addSystem(new CombatSystem(this));

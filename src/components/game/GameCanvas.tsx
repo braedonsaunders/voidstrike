@@ -15,6 +15,12 @@ import { useGameStore } from '@/store/gameStore';
 import { SelectionBox } from './SelectionBox';
 import { spawnInitialEntities } from '@/utils/gameSetup';
 import { DEFAULT_MAP, MapData } from '@/data/maps';
+import { Resource } from '@/engine/components/Resource';
+import { Unit } from '@/engine/components/Unit';
+import { Building } from '@/engine/components/Building';
+import { Selectable } from '@/engine/components/Selectable';
+import { Transform } from '@/engine/components/Transform';
+import { Health } from '@/engine/components/Health';
 
 // Get current map (will support map selection later)
 const CURRENT_MAP: MapData = DEFAULT_MAP;
@@ -259,6 +265,47 @@ export function GameCanvas() {
         }
 
         if (selectedUnits.length > 0) {
+          // Smart right-click: detect what we clicked on
+          const clickedEntity = findEntityAtPosition(gameRef.current, worldPos.x, worldPos.z);
+
+          if (clickedEntity) {
+            const resource = clickedEntity.entity.get<Resource>('Resource');
+            const selectable = clickedEntity.entity.get<Selectable>('Selectable');
+            const health = clickedEntity.entity.get<Health>('Health');
+
+            // Check if clicking on a resource (for gathering)
+            if (resource) {
+              // Check if any selected units are workers
+              const hasWorkers = selectedUnits.some((id) => {
+                const entity = gameRef.current!.world.getEntity(id);
+                const unit = entity?.get<Unit>('Unit');
+                return unit?.isWorker;
+              });
+
+              if (hasWorkers) {
+                // Issue gather command
+                gameRef.current.eventBus.emit('command:gather', {
+                  entityIds: selectedUnits,
+                  targetEntityId: clickedEntity.entity.id,
+                });
+                return;
+              }
+            }
+
+            // Check if clicking on an enemy unit/building (for attacking)
+            if (selectable && selectable.playerId !== 'player1' && health && !health.isDead()) {
+              gameRef.current.processCommand({
+                tick: gameRef.current.getCurrentTick(),
+                playerId: 'player1',
+                type: 'ATTACK',
+                entityIds: selectedUnits,
+                targetEntityId: clickedEntity.entity.id,
+              });
+              return;
+            }
+          }
+
+          // Default: move command
           gameRef.current.processCommand({
             tick: gameRef.current.getCurrentTick(),
             playerId: 'player1',
@@ -270,6 +317,50 @@ export function GameCanvas() {
       }
     }
   }, [isBuilding, buildingType, isAttackMove, isSettingRallyPoint]);
+
+  // Helper function to find entity at world position
+  const findEntityAtPosition = (game: Game, x: number, z: number): { entity: ReturnType<typeof game.world.getEntity> extends infer T ? NonNullable<T> : never } | null => {
+    const clickRadius = 1.5;
+
+    // Check resources first
+    const resources = game.world.getEntitiesWith('Resource', 'Transform');
+    for (const entity of resources) {
+      const transform = entity.get<Transform>('Transform')!;
+      const dx = transform.x - x;
+      const dy = transform.y - z;
+      if (dx * dx + dy * dy < clickRadius * clickRadius) {
+        return { entity };
+      }
+    }
+
+    // Check units
+    const units = game.world.getEntitiesWith('Unit', 'Transform', 'Health');
+    for (const entity of units) {
+      const transform = entity.get<Transform>('Transform')!;
+      const health = entity.get<Health>('Health')!;
+      if (health.isDead()) continue;
+      const dx = transform.x - x;
+      const dy = transform.y - z;
+      if (dx * dx + dy * dy < clickRadius * clickRadius) {
+        return { entity };
+      }
+    }
+
+    // Check buildings
+    const buildings = game.world.getEntitiesWith('Building', 'Transform', 'Health');
+    for (const entity of buildings) {
+      const transform = entity.get<Transform>('Transform')!;
+      const health = entity.get<Health>('Health')!;
+      if (health.isDead()) continue;
+      const dx = transform.x - x;
+      const dy = transform.y - z;
+      if (dx * dx + dy * dy < 4) { // Buildings are larger
+        return { entity };
+      }
+    }
+
+    return null;
+  };
 
   const handleMouseMove = useCallback((e: React.MouseEvent) => {
     if (isSelecting) {

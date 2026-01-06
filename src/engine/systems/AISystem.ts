@@ -4,7 +4,10 @@ import { Unit } from '../components/Unit';
 import { Building } from '../components/Building';
 import { Health } from '../components/Health';
 import { Selectable } from '../components/Selectable';
+import { Resource } from '../components/Resource';
 import { Game, GameCommand } from '../core/Game';
+import { UNIT_DEFINITIONS } from '@/data/units/dominion';
+import { BUILDING_DEFINITIONS } from '@/data/buildings/dominion';
 
 type AIState = 'building' | 'expanding' | 'attacking' | 'defending';
 
@@ -17,6 +20,14 @@ interface AIPlayer {
   targetSupply: number;
   workerCount: number;
   armyValue: number;
+  // Resource tracking
+  minerals: number;
+  vespene: number;
+  supply: number;
+  maxSupply: number;
+  // Building flags
+  hasBarracks: boolean;
+  supplyDepotsBuilding: number;
 }
 
 export class AISystem extends System {
@@ -43,6 +54,57 @@ export class AISystem extends System {
       targetSupply: 14,
       workerCount: 0,
       armyValue: 0,
+      minerals: 50, // Starting minerals
+      vespene: 0,
+      supply: 6, // 6 starting workers
+      maxSupply: 11, // Command Center provides 11
+      hasBarracks: false,
+      supplyDepotsBuilding: 0,
+    });
+
+    // Listen for production events to track AI resources
+    this.setupResourceTracking(playerId);
+  }
+
+  private setupResourceTracking(playerId: string): void {
+    // Track when AI units are produced (deduct resources)
+    this.game.eventBus.on('unit:spawned', (data: { playerId: string; unitType: string }) => {
+      if (data.playerId !== playerId) return;
+      const ai = this.aiPlayers.get(playerId);
+      if (!ai) return;
+
+      const unitDef = UNIT_DEFINITIONS[data.unitType];
+      if (unitDef) {
+        ai.supply += unitDef.supplyCost;
+      }
+    });
+
+    // Track building completions
+    this.game.eventBus.on('building:complete', (data: { buildingType: string }) => {
+      const buildings = this.world.getEntitiesWith('Building', 'Selectable');
+      for (const entity of buildings) {
+        const selectable = entity.get<Selectable>('Selectable')!;
+        const building = entity.get<Building>('Building')!;
+
+        if (selectable.playerId !== playerId) continue;
+        if (building.buildingId !== data.buildingType) continue;
+
+        const ai = this.aiPlayers.get(playerId);
+        if (!ai) return;
+
+        // Add supply
+        if (building.supplyProvided > 0) {
+          ai.maxSupply += building.supplyProvided;
+        }
+
+        // Track building types
+        if (building.buildingId === 'barracks') {
+          ai.hasBarracks = true;
+        }
+        if (building.buildingId === 'supply_depot') {
+          ai.supplyDepotsBuilding = Math.max(0, ai.supplyDepotsBuilding - 1);
+        }
+      }
     });
   }
 
@@ -144,27 +206,229 @@ export class AISystem extends System {
   }
 
   private executeBuildingPhase(ai: AIPlayer): void {
-    // Priority: Workers > Supply > Army
+    // Update AI's resource count by checking what they own
+    this.updateAIResources(ai);
 
-    // Check if we need workers
-    if (ai.workerCount < 16) {
-      this.trainUnit(ai, 'scv');
-      return;
+    // Priority: Supply > Workers > Barracks > Army
+
+    // Check if supply capped (need supply depot)
+    if (ai.supply >= ai.maxSupply - 2 && ai.supplyDepotsBuilding === 0) {
+      if (this.tryBuildBuilding(ai, 'supply_depot')) {
+        ai.supplyDepotsBuilding++;
+        return;
+      }
     }
 
-    // Check if we need supply
-    // TODO: Implement supply check
+    // Build workers if we have room and need more
+    if (ai.workerCount < 16 && ai.supply < ai.maxSupply) {
+      if (this.tryTrainUnit(ai, 'scv')) {
+        return;
+      }
+    }
 
-    // Build army
-    this.trainUnit(ai, 'marine');
+    // Build barracks if we don't have one
+    if (!ai.hasBarracks && ai.workerCount >= 10) {
+      if (this.tryBuildBuilding(ai, 'barracks')) {
+        return;
+      }
+    }
+
+    // Build army (marines) if we have a barracks
+    if (ai.hasBarracks && ai.supply < ai.maxSupply) {
+      this.tryTrainUnit(ai, 'marine');
+    }
   }
 
   private executeExpandingPhase(ai: AIPlayer): void {
-    // Build expansion
-    // TODO: Implement expansion logic
+    // Update resources
+    this.updateAIResources(ai);
 
-    // Keep building army
-    this.trainUnit(ai, 'marine');
+    // Keep building supply depots
+    if (ai.supply >= ai.maxSupply - 2 && ai.supplyDepotsBuilding === 0) {
+      if (this.tryBuildBuilding(ai, 'supply_depot')) {
+        ai.supplyDepotsBuilding++;
+        return;
+      }
+    }
+
+    // Keep training marines
+    if (ai.hasBarracks && ai.supply < ai.maxSupply) {
+      this.tryTrainUnit(ai, 'marine');
+    }
+  }
+
+  private updateAIResources(ai: AIPlayer): void {
+    // Count minerals from gathering (simplified: give AI passive income)
+    // In a real implementation, we'd track workers on minerals
+    const gatherRate = ai.workerCount * 0.8; // ~0.8 minerals per worker per action
+    ai.minerals += gatherRate;
+
+    // Cap minerals at reasonable amount
+    ai.minerals = Math.min(ai.minerals, 10000);
+  }
+
+  private tryTrainUnit(ai: AIPlayer, unitType: string): boolean {
+    const unitDef = UNIT_DEFINITIONS[unitType];
+    if (!unitDef) return false;
+
+    // Check resources
+    if (ai.minerals < unitDef.mineralCost || ai.vespene < unitDef.vespeneCost) {
+      return false;
+    }
+
+    // Check supply
+    if (ai.supply + unitDef.supplyCost > ai.maxSupply) {
+      return false;
+    }
+
+    // Find a production building
+    const buildings = this.world.getEntitiesWith('Building', 'Selectable');
+
+    for (const entity of buildings) {
+      const selectable = entity.get<Selectable>('Selectable')!;
+      const building = entity.get<Building>('Building')!;
+
+      if (selectable.playerId !== ai.playerId) continue;
+      if (!building.isComplete()) continue;
+      if (!building.canProduce.includes(unitType)) continue;
+
+      // Check if queue isn't too full
+      if (building.productionQueue.length >= 3) continue;
+
+      // Deduct resources
+      ai.minerals -= unitDef.mineralCost;
+      ai.vespene -= unitDef.vespeneCost;
+
+      // Queue the unit
+      building.addToProductionQueue('unit', unitType, unitDef.buildTime);
+
+      return true;
+    }
+
+    return false;
+  }
+
+  private tryBuildBuilding(ai: AIPlayer, buildingType: string): boolean {
+    const buildingDef = BUILDING_DEFINITIONS[buildingType];
+    if (!buildingDef) return false;
+
+    // Check resources
+    if (ai.minerals < buildingDef.mineralCost || ai.vespene < buildingDef.vespeneCost) {
+      return false;
+    }
+
+    // Find AI's command center for building near it
+    const ccPos = this.findAIBase(ai.playerId);
+    if (!ccPos) return false;
+
+    // Find a good spot near the base
+    const buildPos = this.findBuildingSpot(ai.playerId, ccPos, buildingDef.width, buildingDef.height);
+    if (!buildPos) return false;
+
+    // Deduct resources
+    ai.minerals -= buildingDef.mineralCost;
+    ai.vespene -= buildingDef.vespeneCost;
+
+    // Place the building
+    this.game.eventBus.emit('building:place', {
+      buildingType,
+      position: buildPos,
+      playerId: ai.playerId,
+    });
+
+    return true;
+  }
+
+  private findAIBase(playerId: string): { x: number; y: number } | null {
+    const buildings = this.world.getEntitiesWith('Building', 'Transform', 'Selectable');
+
+    for (const entity of buildings) {
+      const selectable = entity.get<Selectable>('Selectable')!;
+      const building = entity.get<Building>('Building')!;
+      const transform = entity.get<Transform>('Transform')!;
+
+      if (selectable.playerId !== playerId) continue;
+      if (building.buildingId === 'command_center') {
+        return { x: transform.x, y: transform.y };
+      }
+    }
+
+    return null;
+  }
+
+  private findBuildingSpot(
+    playerId: string,
+    basePos: { x: number; y: number },
+    width: number,
+    height: number
+  ): { x: number; y: number } | null {
+    // Try positions around the base in a spiral
+    const offsets = [
+      { x: 8, y: 0 },
+      { x: 8, y: 4 },
+      { x: 8, y: -4 },
+      { x: -8, y: 0 },
+      { x: -8, y: 4 },
+      { x: -8, y: -4 },
+      { x: 0, y: 8 },
+      { x: 4, y: 8 },
+      { x: 12, y: 0 },
+      { x: 12, y: 4 },
+    ];
+
+    for (const offset of offsets) {
+      const pos = {
+        x: basePos.x + offset.x,
+        y: basePos.y + offset.y,
+      };
+
+      if (this.isValidBuildingSpot(pos.x, pos.y, width, height)) {
+        return pos;
+      }
+    }
+
+    return null;
+  }
+
+  private isValidBuildingSpot(x: number, y: number, width: number, height: number): boolean {
+    // Check map bounds
+    const config = this.game.config;
+    if (x < 0 || y < 0 || x + width > config.mapWidth || y + height > config.mapHeight) {
+      return false;
+    }
+
+    // Check for overlapping buildings
+    const buildings = this.world.getEntitiesWith('Building', 'Transform');
+    for (const entity of buildings) {
+      const transform = entity.get<Transform>('Transform')!;
+      const building = entity.get<Building>('Building')!;
+
+      if (
+        x < transform.x + building.width + 1 &&
+        x + width > transform.x - 1 &&
+        y < transform.y + building.height + 1 &&
+        y + height > transform.y - 1
+      ) {
+        return false;
+      }
+    }
+
+    // Check for overlapping resources
+    const resources = this.world.getEntitiesWith('Resource', 'Transform');
+    for (const entity of resources) {
+      const transform = entity.get<Transform>('Transform')!;
+
+      if (
+        x < transform.x + 3 &&
+        x + width > transform.x - 1 &&
+        y < transform.y + 3 &&
+        y + height > transform.y - 1
+      ) {
+        return false;
+      }
+    }
+
+    return true;
   }
 
   private executeAttackingPhase(ai: AIPlayer): void {
@@ -255,28 +519,6 @@ export class AISystem extends System {
       };
 
       this.game.processCommand(command);
-    }
-  }
-
-  private trainUnit(ai: AIPlayer, unitType: string): void {
-    // Find a production building
-    const buildings = this.world.getEntitiesWith('Building', 'Selectable');
-
-    for (const entity of buildings) {
-      const selectable = entity.get<Selectable>('Selectable')!;
-      const building = entity.get<Building>('Building')!;
-
-      if (selectable.playerId !== ai.playerId) continue;
-      if (!building.isComplete()) continue;
-      if (!building.canProduce.includes(unitType)) continue;
-
-      // Found a valid building, queue unit
-      this.game.eventBus.emit('command:train', {
-        entityIds: [entity.id],
-        unitType,
-      });
-
-      return;
     }
   }
 

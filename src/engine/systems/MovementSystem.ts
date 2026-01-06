@@ -11,6 +11,72 @@ export class MovementSystem extends System {
 
   constructor(game: Game) {
     super(game);
+    this.setupEventListeners();
+  }
+
+  private setupEventListeners(): void {
+    // Handle move commands
+    this.game.eventBus.on('command:move', this.handleMoveCommand.bind(this));
+  }
+
+  private handleMoveCommand(data: {
+    entityIds: number[];
+    targetPosition: { x: number; y: number };
+  }): void {
+    const { entityIds, targetPosition } = data;
+
+    // Calculate formation positions for multiple units
+    const positions = this.calculateFormationPositions(
+      targetPosition.x,
+      targetPosition.y,
+      entityIds.length
+    );
+
+    for (let i = 0; i < entityIds.length; i++) {
+      const entityId = entityIds[i];
+      const entity = this.world.getEntity(entityId);
+      if (!entity) continue;
+
+      const unit = entity.get<Unit>('Unit');
+      if (!unit) continue;
+
+      // Set target position (using formation if multiple units)
+      const pos = positions[i];
+      unit.setMoveTarget(pos.x, pos.y);
+
+      // Clear any path (simple direct movement for now)
+      unit.path = [];
+      unit.pathIndex = 0;
+    }
+  }
+
+  private calculateFormationPositions(
+    targetX: number,
+    targetY: number,
+    count: number
+  ): Array<{ x: number; y: number }> {
+    if (count === 1) {
+      return [{ x: targetX, y: targetY }];
+    }
+
+    const positions: Array<{ x: number; y: number }> = [];
+    const spacing = 1.5;
+    const cols = Math.ceil(Math.sqrt(count));
+    const rows = Math.ceil(count / cols);
+
+    const offsetX = ((cols - 1) * spacing) / 2;
+    const offsetY = ((rows - 1) * spacing) / 2;
+
+    for (let i = 0; i < count; i++) {
+      const col = i % cols;
+      const row = Math.floor(i / cols);
+      positions.push({
+        x: targetX + col * spacing - offsetX,
+        y: targetY + row * spacing - offsetY,
+      });
+    }
+
+    return positions;
   }
 
   public update(deltaTime: number): void {
