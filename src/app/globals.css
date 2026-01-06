@@ -1,0 +1,145 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --void-glow: 0 0 20px rgba(132, 61, 255, 0.5);
+  --dominion-glow: 0 0 20px rgba(74, 144, 217, 0.5);
+  --synthesis-glow: 0 0 20px rgba(155, 89, 182, 0.5);
+  --swarm-glow: 0 0 20px rgba(139, 69, 19, 0.5);
+}
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html,
+body {
+  overflow: hidden;
+  width: 100%;
+  height: 100%;
+}
+
+/* Custom scrollbar */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: rgba(0, 0, 0, 0.3);
+}
+
+::-webkit-scrollbar-thumb {
+  background: rgba(132, 61, 255, 0.5);
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(132, 61, 255, 0.7);
+}
+
+/* Game UI styles */
+@layer components {
+  .game-panel {
+    @apply bg-black/80 border border-void-700/50 backdrop-blur-sm;
+  }
+
+  .game-button {
+    @apply px-4 py-2 bg-void-800 hover:bg-void-700 border border-void-600
+           text-white font-display uppercase tracking-wider transition-all
+           hover:shadow-[var(--void-glow)] active:scale-95;
+  }
+
+  .game-button-primary {
+    @apply game-button bg-void-600 hover:bg-void-500;
+  }
+
+  .resource-display {
+    @apply flex items-center gap-2 px-3 py-1 bg-black/60 border border-void-800/50 rounded;
+  }
+
+  .control-group-indicator {
+    @apply w-6 h-6 flex items-center justify-center bg-void-900/80 border border-void-700
+           text-xs font-mono text-void-300;
+  }
+
+  .minimap-container {
+    @apply relative w-48 h-48 bg-black/90 border-2 border-void-700/50;
+  }
+
+  .selection-box {
+    @apply absolute border-2 border-void-400 bg-void-400/20 pointer-events-none;
+  }
+
+  .unit-health-bar {
+    @apply absolute -top-2 left-1/2 -translate-x-1/2 w-8 h-1 bg-black/80;
+  }
+
+  .unit-health-fill {
+    @apply h-full bg-green-500 transition-all;
+  }
+
+  .command-card {
+    @apply grid grid-cols-4 gap-1 p-2 bg-black/80 border border-void-700/50;
+  }
+
+  .command-button {
+    @apply w-12 h-12 bg-void-900 hover:bg-void-800 border border-void-700/50
+           flex items-center justify-center transition-all hover:border-void-500;
+  }
+
+  .command-button-disabled {
+    @apply opacity-50 cursor-not-allowed hover:bg-void-900 hover:border-void-700/50;
+  }
+}
+
+/* Animations */
+@keyframes pulse-glow {
+  0%, 100% {
+    box-shadow: 0 0 10px rgba(132, 61, 255, 0.3);
+  }
+  50% {
+    box-shadow: 0 0 20px rgba(132, 61, 255, 0.6);
+  }
+}
+
+@keyframes selection-pulse {
+  0%, 100% {
+    transform: scale(1);
+    opacity: 1;
+  }
+  50% {
+    transform: scale(1.1);
+    opacity: 0.7;
+  }
+}
+
+.animate-pulse-glow {
+  animation: pulse-glow 2s ease-in-out infinite;
+}
+
+.animate-selection {
+  animation: selection-pulse 1s ease-in-out infinite;
+}
+
+/* Prevent text selection during gameplay */
+.game-container {
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+/* Cursor styles */
+.cursor-attack {
+  cursor: crosshair;
+}
+
+.cursor-move {
+  cursor: pointer;
+}
+
+.cursor-build {
+  cursor: cell;
+}
