@@ -6,6 +6,7 @@ import { Health } from '@/engine/components/Health';
 import { Selectable } from '@/engine/components/Selectable';
 import { VisionSystem } from '@/engine/systems/VisionSystem';
 import { AssetManager } from '@/assets/AssetManager';
+import { Terrain } from './Terrain';
 
 interface UnitMeshData {
   group: THREE.Group;
@@ -27,6 +28,7 @@ export class UnitRenderer {
   private scene: THREE.Scene;
   private world: World;
   private visionSystem: VisionSystem | null;
+  private terrain: Terrain | null;
   private playerId: string = 'player1';
   private unitMeshes: Map<number, UnitMeshData> = new Map();
 
@@ -35,10 +37,11 @@ export class UnitRenderer {
   private selectionMaterial: THREE.MeshBasicMaterial;
   private enemySelectionMaterial: THREE.MeshBasicMaterial;
 
-  constructor(scene: THREE.Scene, world: World, visionSystem?: VisionSystem) {
+  constructor(scene: THREE.Scene, world: World, visionSystem?: VisionSystem, terrain?: Terrain) {
     this.scene = scene;
     this.world = world;
     this.visionSystem = visionSystem ?? null;
+    this.terrain = terrain ?? null;
 
     this.selectionGeometry = new THREE.RingGeometry(0.6, 0.8, 32);
     this.selectionMaterial = new THREE.MeshBasicMaterial({
@@ -109,12 +112,15 @@ export class UnitRenderer {
         continue;
       }
 
-      // Update position
-      meshData.group.position.set(transform.x, 0, transform.y);
+      // Get terrain height at this position
+      const terrainHeight = this.terrain?.getHeightAt(transform.x, transform.y) ?? 0;
+
+      // Update position - place unit on top of terrain
+      meshData.group.position.set(transform.x, terrainHeight, transform.y);
       meshData.group.rotation.y = -transform.rotation + Math.PI / 2;
 
       // Update selection ring
-      meshData.selectionRing.position.set(transform.x, 0.05, transform.y);
+      meshData.selectionRing.position.set(transform.x, terrainHeight + 0.05, transform.y);
       meshData.selectionRing.visible = selectable?.isSelected ?? false;
 
       // Update selection ring color based on ownership
@@ -125,7 +131,7 @@ export class UnitRenderer {
 
       // Update health bar
       if (health) {
-        meshData.healthBar.position.set(transform.x, 1.5, transform.y);
+        meshData.healthBar.position.set(transform.x, terrainHeight + 1.5, transform.y);
         this.updateHealthBar(meshData.healthBar, health);
       }
     }

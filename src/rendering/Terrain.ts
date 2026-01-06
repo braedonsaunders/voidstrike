@@ -1,59 +1,70 @@
 import * as THREE from 'three';
 import { MapData, MapCell, TerrainType, ElevationLevel } from '@/data/maps';
 
-// Much brighter, more vibrant terrain colors
+// Terrain subdivision for smoother rendering
+const SUBDIVISIONS = 2; // 2x2 subdivisions per cell for better quality
+
+// Rich, saturated terrain colors with more contrast
 const TERRAIN_COLORS: Record<TerrainType, Record<ElevationLevel, THREE.Color>> = {
   ground: {
-    0: new THREE.Color(0x3d5a3e), // Low ground - grass green
-    1: new THREE.Color(0x4d6a4e), // Medium ground - lighter grass
-    2: new THREE.Color(0x5d7a5e), // High ground - bright grass
+    0: new THREE.Color(0x2d4a2f), // Low ground - deep grass
+    1: new THREE.Color(0x3d6a3f), // Medium ground - lush grass
+    2: new THREE.Color(0x4d8a4f), // High ground - bright grass
   },
   unwalkable: {
-    0: new THREE.Color(0x4a4a4a), // Dark rock
-    1: new THREE.Color(0x5a5a5a), // Medium rock
-    2: new THREE.Color(0x6a6a6a), // Light rock
+    0: new THREE.Color(0x3a3a40), // Dark rock/cliff
+    1: new THREE.Color(0x5a5a60), // Medium rock
+    2: new THREE.Color(0x7a7a80), // Light rock
   },
   ramp: {
-    0: new THREE.Color(0x7a7060), // Tan/dirt ramp
-    1: new THREE.Color(0x8a8070),
-    2: new THREE.Color(0x9a9080),
+    0: new THREE.Color(0x6a6050), // Tan/dirt ramp
+    1: new THREE.Color(0x7a7060),
+    2: new THREE.Color(0x8a8070),
   },
   unbuildable: {
-    0: new THREE.Color(0x3a5040), // Darker grass
-    1: new THREE.Color(0x4a6050),
-    2: new THREE.Color(0x5a7060),
+    0: new THREE.Color(0x2a4030), // Darker grass/mud
+    1: new THREE.Color(0x3a5040),
+    2: new THREE.Color(0x4a6050),
   },
   creep: {
-    0: new THREE.Color(0x5d3060), // Purple creep
-    1: new THREE.Color(0x6d4070),
-    2: new THREE.Color(0x7d5080),
+    0: new THREE.Color(0x4d2050), // Purple creep
+    1: new THREE.Color(0x5d3060),
+    2: new THREE.Color(0x6d4070),
   },
 };
 
-// Accent colors for detail variation
+// Accent colors for detail variation - more variety
 const ACCENT_COLORS: Record<TerrainType, THREE.Color[]> = {
   ground: [
-    new THREE.Color(0x4a6848), // Darker grass patch
-    new THREE.Color(0x6a8868), // Lighter grass patch
-    new THREE.Color(0x5a7858), // Medium grass
-    new THREE.Color(0x456040), // Forest green patch
+    new THREE.Color(0x3a5838), // Darker grass patch
+    new THREE.Color(0x5a9858), // Lighter grass patch
+    new THREE.Color(0x4a7848), // Medium grass
+    new THREE.Color(0x355530), // Forest green patch
+    new THREE.Color(0x6aaa68), // Bright grass highlight
+    new THREE.Color(0x2d4528), // Shadow grass
   ],
   unwalkable: [
-    new THREE.Color(0x555555),
-    new THREE.Color(0x606060),
-    new THREE.Color(0x4a4a50),
+    new THREE.Color(0x454550),
+    new THREE.Color(0x555560),
+    new THREE.Color(0x656570),
+    new THREE.Color(0x353540), // Dark shadow
+    new THREE.Color(0x757580), // Light highlight
   ],
   ramp: [
+    new THREE.Color(0x7a6a5a),
     new THREE.Color(0x8a7a6a),
     new THREE.Color(0x9a8a7a),
+    new THREE.Color(0x6a5a4a),
   ],
   unbuildable: [
-    new THREE.Color(0x4a5848),
     new THREE.Color(0x3a4838),
+    new THREE.Color(0x2a3828),
+    new THREE.Color(0x4a5848),
   ],
   creep: [
-    new THREE.Color(0x6a4070),
     new THREE.Color(0x5a3060),
+    new THREE.Color(0x4a2050),
+    new THREE.Color(0x7a5080),
   ],
 };
 
@@ -157,7 +168,7 @@ export class Terrain {
     const normals: number[] = [];
     const uvs: number[] = [];
 
-    // Pre-calculate height map with smooth transitions
+    // Pre-calculate height map with smooth transitions and natural variation
     const vertexGrid: THREE.Vector3[][] = [];
 
     for (let y = 0; y <= height; y++) {
@@ -166,19 +177,34 @@ export class Terrain {
         const cell = this.sampleTerrain(terrain, x, y, width, height);
         const baseHeight = ELEVATION_HEIGHTS[cell.elevation];
 
+        // Calculate edge factor for cliff handling
+        const edgeFactor = this.calculateElevationEdgeFactor(terrain, x, y, width, height);
+
         // Add procedural detail noise
         let detailNoise = 0;
         if (cell.terrain !== 'ramp') {
-          // Multi-octave noise for natural terrain look
-          detailNoise = fractalNoise(x, y, 4, 0.5, 42) * 0.4;
+          // Multi-octave noise for natural terrain look - more pronounced
+          detailNoise = fractalNoise(x, y, 5, 0.55, 42) * 0.6;
 
-          // Add larger scale hills
-          detailNoise += smoothNoise(x, y, 20, 123) * 0.3;
+          // Add larger scale rolling hills
+          detailNoise += smoothNoise(x, y, 15, 123) * 0.4;
 
-          // Cliff edges get extra noise
+          // Add medium scale variation
+          detailNoise += smoothNoise(x, y, 8, 789) * 0.25;
+
+          // Cliff/unwalkable areas get dramatic height variation
           if (cell.terrain === 'unwalkable') {
-            detailNoise += smoothNoise(x, y, 3, 456) * 1.0;
+            detailNoise += smoothNoise(x, y, 4, 456) * 1.5;
+            detailNoise += fractalNoise(x * 2, y * 2, 3, 0.6, 321) * 0.8;
           }
+
+          // Add cliff edges - sharp height increase at elevation boundaries
+          if (edgeFactor > 0) {
+            detailNoise += edgeFactor * 1.0 * smoothNoise(x, y, 2, 999);
+          }
+        } else {
+          // Ramps get subtle noise to avoid perfectly flat surfaces
+          detailNoise = smoothNoise(x, y, 8, 555) * 0.15;
         }
 
         const finalHeight = baseHeight + detailNoise;
@@ -312,6 +338,36 @@ export class Terrain {
     }
 
     return edgeFactor;
+  }
+
+  private calculateElevationEdgeFactor(
+    terrain: MapCell[][],
+    x: number,
+    y: number,
+    width: number,
+    height: number
+  ): number {
+    // Check all 8 neighbors for elevation changes to create cliff edges
+    const neighbors = [
+      { dx: -1, dy: -1 }, { dx: 0, dy: -1 }, { dx: 1, dy: -1 },
+      { dx: -1, dy: 0 },                      { dx: 1, dy: 0 },
+      { dx: -1, dy: 1 },  { dx: 0, dy: 1 },  { dx: 1, dy: 1 },
+    ];
+
+    let maxElevationDiff = 0;
+    const cell = this.sampleTerrain(terrain, x, y, width, height);
+
+    for (const { dx, dy } of neighbors) {
+      const nx = x + dx;
+      const ny = y + dy;
+      if (nx >= 0 && nx <= width && ny >= 0 && ny <= height) {
+        const neighbor = this.sampleTerrain(terrain, nx, ny, width, height);
+        const diff = Math.abs(neighbor.elevation - cell.elevation);
+        maxElevationDiff = Math.max(maxElevationDiff, diff);
+      }
+    }
+
+    return maxElevationDiff;
   }
 
   private sampleTerrain(
@@ -487,9 +543,11 @@ export class TerrainGrid {
 // Decorative elements (watch towers, destructible rocks, trees, etc.)
 export class MapDecorations {
   public group: THREE.Group;
+  private terrain: Terrain;
 
-  constructor(mapData: MapData) {
+  constructor(mapData: MapData, terrain: Terrain) {
     this.group = new THREE.Group();
+    this.terrain = terrain;
     this.createWatchTowers(mapData);
     this.createDestructibles(mapData);
     this.createTrees(mapData);
@@ -498,6 +556,9 @@ export class MapDecorations {
 
   private createWatchTowers(mapData: MapData): void {
     for (const tower of mapData.watchTowers) {
+      // Get terrain height at tower position
+      const terrainHeight = this.terrain.getHeightAt(tower.x, tower.y);
+
       // Tower base
       const baseGeometry = new THREE.CylinderGeometry(2, 2.5, 1, 8);
       const baseMaterial = new THREE.MeshStandardMaterial({
@@ -506,7 +567,7 @@ export class MapDecorations {
         metalness: 0.4,
       });
       const base = new THREE.Mesh(baseGeometry, baseMaterial);
-      base.position.set(tower.x, 0.5, tower.y);
+      base.position.set(tower.x, terrainHeight + 0.5, tower.y);
       base.castShadow = true;
       base.receiveShadow = true;
       this.group.add(base);
@@ -519,7 +580,7 @@ export class MapDecorations {
         metalness: 0.6,
       });
       const pillar = new THREE.Mesh(pillarGeometry, pillarMaterial);
-      pillar.position.set(tower.x, 3.5, tower.y);
+      pillar.position.set(tower.x, terrainHeight + 3.5, tower.y);
       pillar.castShadow = true;
       pillar.receiveShadow = true;
       this.group.add(pillar);
@@ -532,7 +593,7 @@ export class MapDecorations {
         metalness: 0.7,
       });
       const top = new THREE.Mesh(topGeometry, topMaterial);
-      top.position.set(tower.x, 7, tower.y);
+      top.position.set(tower.x, terrainHeight + 7, tower.y);
       top.castShadow = true;
       this.group.add(top);
 
@@ -546,13 +607,16 @@ export class MapDecorations {
       });
       const ring = new THREE.Mesh(ringGeometry, ringMaterial);
       ring.rotation.x = -Math.PI / 2;
-      ring.position.set(tower.x, 0.15, tower.y);
+      ring.position.set(tower.x, terrainHeight + 0.15, tower.y);
       this.group.add(ring);
     }
   }
 
   private createDestructibles(mapData: MapData): void {
     for (const rock of mapData.destructibles) {
+      // Get terrain height at rock position
+      const terrainHeight = this.terrain.getHeightAt(rock.x, rock.y);
+
       // Create more detailed rock formation
       const rockGroup = new THREE.Group();
 
@@ -596,7 +660,7 @@ export class MapDecorations {
         rockGroup.add(smallRock);
       }
 
-      rockGroup.position.set(rock.x, 0, rock.y);
+      rockGroup.position.set(rock.x, terrainHeight, rock.y);
       this.group.add(rockGroup);
     }
   }
@@ -642,6 +706,9 @@ export class MapDecorations {
 
     // Create trees
     for (const pos of treePositions) {
+      // Get terrain height at tree position
+      const terrainHeight = this.terrain.getHeightAt(pos.x, pos.y);
+
       const treeGroup = new THREE.Group();
       const height = 3 + Math.random() * 2;
 
@@ -673,7 +740,7 @@ export class MapDecorations {
         treeGroup.add(foliage);
       }
 
-      treeGroup.position.set(pos.x, 0, pos.y);
+      treeGroup.position.set(pos.x, terrainHeight, pos.y);
       treeGroup.rotation.y = Math.random() * Math.PI * 2;
       treeGroup.scale.setScalar(0.8 + Math.random() * 0.4);
       this.group.add(treeGroup);
@@ -691,13 +758,16 @@ export class MapDecorations {
       if (cellX >= 0 && cellX < mapData.width && cellY >= 0 && cellY < mapData.height) {
         const cell = mapData.terrain[cellY][cellX];
         if (cell.terrain === 'ground' || cell.terrain === 'unbuildable') {
+          // Get terrain height at rock position
+          const terrainHeight = this.terrain.getHeightAt(x, y);
+
           const rockGeometry = new THREE.DodecahedronGeometry(0.3 + Math.random() * 0.4);
           const rockMaterial = new THREE.MeshStandardMaterial({
             color: new THREE.Color(0.3 + Math.random() * 0.1, 0.28 + Math.random() * 0.1, 0.25 + Math.random() * 0.1),
             roughness: 0.9,
           });
           const rock = new THREE.Mesh(rockGeometry, rockMaterial);
-          rock.position.set(x, 0.15 + Math.random() * 0.1, y);
+          rock.position.set(x, terrainHeight + 0.15 + Math.random() * 0.1, y);
           rock.rotation.set(
             Math.random() * Math.PI,
             Math.random() * Math.PI,

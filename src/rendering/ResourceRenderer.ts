@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { World } from '@/engine/ecs/World';
 import { Transform } from '@/engine/components/Transform';
 import { Resource } from '@/engine/components/Resource';
+import { Terrain } from './Terrain';
 
 interface ResourceMeshData {
   mesh: THREE.Mesh;
@@ -11,6 +12,7 @@ interface ResourceMeshData {
 export class ResourceRenderer {
   private scene: THREE.Scene;
   private world: World;
+  private terrain: Terrain | null;
   private resourceMeshes: Map<number, ResourceMeshData> = new Map();
 
   // Shared resources
@@ -19,9 +21,10 @@ export class ResourceRenderer {
   private vespeneGeometry: THREE.SphereGeometry;
   private vespeneMaterial: THREE.MeshStandardMaterial;
 
-  constructor(scene: THREE.Scene, world: World) {
+  constructor(scene: THREE.Scene, world: World, terrain?: Terrain) {
     this.scene = scene;
     this.world = world;
+    this.terrain = terrain ?? null;
 
     // Minerals - blue crystals
     this.mineralGeometry = new THREE.OctahedronGeometry(0.8);
@@ -65,9 +68,12 @@ export class ResourceRenderer {
         this.scene.add(meshData.glow);
       }
 
-      // Update position
-      meshData.mesh.position.set(transform.x, 0.8, transform.y);
-      meshData.glow.position.set(transform.x, 1, transform.y);
+      // Get terrain height at this position
+      const terrainHeight = this.terrain?.getHeightAt(transform.x, transform.y) ?? 0;
+
+      // Update position - place resource on top of terrain
+      meshData.mesh.position.set(transform.x, terrainHeight + 0.8, transform.y);
+      meshData.glow.position.set(transform.x, terrainHeight + 1, transform.y);
 
       // Scale based on remaining amount
       const scale = 0.5 + resource.getPercentRemaining() * 0.5;

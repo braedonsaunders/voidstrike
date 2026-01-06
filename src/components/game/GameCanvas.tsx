@@ -77,7 +77,9 @@ export function GameCanvas() {
       mapWidth,
       mapHeight
     );
-    camera.setPosition(mapWidth / 2, mapHeight / 2);
+    // Start camera at player 1's spawn point
+    const playerSpawn = CURRENT_MAP.spawns.find(s => s.playerSlot === 1) || CURRENT_MAP.spawns[0];
+    camera.setPosition(playerSpawn.x, playerSpawn.y);
     cameraRef.current = camera;
 
     // Add lighting - bright and vibrant
@@ -112,8 +114,8 @@ export function GameCanvas() {
     const terrain = new Terrain({ mapData: CURRENT_MAP });
     scene.add(terrain.mesh);
 
-    // Create map decorations (watch towers, destructible rocks)
-    const decorations = new MapDecorations(CURRENT_MAP);
+    // Create map decorations (watch towers, destructible rocks) - pass terrain for height
+    const decorations = new MapDecorations(CURRENT_MAP, terrain);
     scene.add(decorations.group);
 
     // Create terrain grid (for building placement)
@@ -131,10 +133,10 @@ export function GameCanvas() {
     });
     gameRef.current = game;
 
-    // Create renderers
-    unitRendererRef.current = new UnitRenderer(scene, game.world, game.visionSystem);
-    buildingRendererRef.current = new BuildingRenderer(scene, game.world, game.visionSystem);
-    resourceRendererRef.current = new ResourceRenderer(scene, game.world);
+    // Create renderers - pass terrain for correct Y positioning
+    unitRendererRef.current = new UnitRenderer(scene, game.world, game.visionSystem, terrain);
+    buildingRendererRef.current = new BuildingRenderer(scene, game.world, game.visionSystem, terrain);
+    resourceRendererRef.current = new ResourceRenderer(scene, game.world, terrain);
 
     // Create fog of war overlay
     const fogOfWar = new FogOfWar({ mapWidth, mapHeight });

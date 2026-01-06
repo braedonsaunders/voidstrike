@@ -6,6 +6,7 @@ import { Health } from '@/engine/components/Health';
 import { Selectable } from '@/engine/components/Selectable';
 import { VisionSystem } from '@/engine/systems/VisionSystem';
 import { AssetManager } from '@/assets/AssetManager';
+import { Terrain } from './Terrain';
 
 interface BuildingMeshData {
   group: THREE.Group;
@@ -28,6 +29,7 @@ export class BuildingRenderer {
   private scene: THREE.Scene;
   private world: World;
   private visionSystem: VisionSystem | null;
+  private terrain: Terrain | null;
   private playerId: string = 'player1';
   private buildingMeshes: Map<number, BuildingMeshData> = new Map();
 
@@ -36,10 +38,11 @@ export class BuildingRenderer {
   private selectionMaterial: THREE.MeshBasicMaterial;
   private enemySelectionMaterial: THREE.MeshBasicMaterial;
 
-  constructor(scene: THREE.Scene, world: World, visionSystem?: VisionSystem) {
+  constructor(scene: THREE.Scene, world: World, visionSystem?: VisionSystem, terrain?: Terrain) {
     this.scene = scene;
     this.world = world;
     this.visionSystem = visionSystem ?? null;
+    this.terrain = terrain ?? null;
 
     this.constructingMaterial = new THREE.MeshStandardMaterial({
       color: 0x4a90d9,
@@ -111,8 +114,11 @@ export class BuildingRenderer {
         continue;
       }
 
-      // Update position
-      meshData.group.position.set(transform.x, 0, transform.y);
+      // Get terrain height at this position
+      const terrainHeight = this.terrain?.getHeightAt(transform.x, transform.y) ?? 0;
+
+      // Update position - place building on top of terrain
+      meshData.group.position.set(transform.x, terrainHeight, transform.y);
 
       // Construction animation - scale up as building completes
       if (!building.isComplete()) {
@@ -142,7 +148,7 @@ export class BuildingRenderer {
 
       // Update selection ring
       const ringSize = Math.max(building.width, building.height) * 0.6;
-      meshData.selectionRing.position.set(transform.x, 0.05, transform.y);
+      meshData.selectionRing.position.set(transform.x, terrainHeight + 0.05, transform.y);
       meshData.selectionRing.scale.set(ringSize, ringSize, 1);
       meshData.selectionRing.visible = selectable?.isSelected ?? false;
 
@@ -154,7 +160,7 @@ export class BuildingRenderer {
 
       // Update health bar
       if (health && building.isComplete()) {
-        meshData.healthBar.position.set(transform.x, building.height + 0.5, transform.y);
+        meshData.healthBar.position.set(transform.x, terrainHeight + building.height + 0.5, transform.y);
         meshData.healthBar.visible = health.getHealthPercent() < 1;
         this.updateHealthBar(meshData.healthBar, health);
       } else {
@@ -164,11 +170,11 @@ export class BuildingRenderer {
       // Update progress bar (only for own buildings)
       if (isOwned) {
         if (!building.isComplete()) {
-          meshData.progressBar.position.set(transform.x, building.height + 0.5, transform.y);
+          meshData.progressBar.position.set(transform.x, terrainHeight + building.height + 0.5, transform.y);
           meshData.progressBar.visible = true;
           this.updateProgressBar(meshData.progressBar, building.buildProgress);
         } else if (building.productionQueue.length > 0) {
-          meshData.progressBar.position.set(transform.x, building.height + 0.5, transform.y);
+          meshData.progressBar.position.set(transform.x, terrainHeight + building.height + 0.5, transform.y);
           meshData.progressBar.visible = true;
           this.updateProgressBar(meshData.progressBar, building.getProductionProgress());
         } else {

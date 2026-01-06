@@ -204,10 +204,46 @@ export function fillTerrainCircle(
   }
 }
 
-// Helper to create a ramp in the terrain
+// Helper to create a ramp in the terrain with proper elevation gradient
 export function createRampInTerrain(
   grid: MapCell[][],
   ramp: Ramp
 ): void {
-  fillTerrainRect(grid, ramp.x, ramp.y, ramp.width, ramp.height, 'ramp');
+  const { x, y, width, height, direction, fromElevation, toElevation } = ramp;
+
+  for (let dy = 0; dy < height; dy++) {
+    for (let dx = 0; dx < width; dx++) {
+      const px = Math.floor(x + dx);
+      const py = Math.floor(y + dy);
+
+      if (py >= 0 && py < grid.length && px >= 0 && px < grid[0].length) {
+        // Calculate elevation gradient based on direction
+        let t = 0;
+        switch (direction) {
+          case 'north':
+            t = dy / (height - 1);
+            break;
+          case 'south':
+            t = 1 - dy / (height - 1);
+            break;
+          case 'east':
+            t = dx / (width - 1);
+            break;
+          case 'west':
+            t = 1 - dx / (width - 1);
+            break;
+        }
+
+        // Interpolate elevation and round to nearest valid level
+        const elevationValue = fromElevation + (toElevation - fromElevation) * t;
+        const roundedElevation = Math.round(elevationValue) as ElevationLevel;
+
+        grid[py][px] = {
+          terrain: 'ramp',
+          elevation: roundedElevation,
+          textureId: Math.floor(Math.random() * 4),
+        };
+      }
+    }
+  }
 }
