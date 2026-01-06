@@ -10,6 +10,7 @@ import { UNIT_DEFINITIONS } from '@/data/units/dominion';
 import { BUILDING_DEFINITIONS } from '@/data/buildings/dominion';
 import { AISystem } from '@/engine/systems/AISystem';
 import { MapData, Expansion } from '@/data/maps';
+import { useGameStore } from '@/store/gameStore';
 
 export function spawnInitialEntities(game: Game, mapData: MapData): void {
   const world = game.world;
@@ -60,6 +61,13 @@ function spawnBase(game: Game, playerId: string, x: number, y: number): void {
   building.buildProgress = 1;
   building.state = 'complete';
 
+  // Set up initial supply for player
+  if (playerId === 'player1') {
+    const store = useGameStore.getState();
+    // Set initial max supply from command center
+    store.addMaxSupply(ccDef.supplyProvided || 11);
+  }
+
   // Spawn initial workers around the command center
   const scvDef = UNIT_DEFINITIONS['scv'];
   const workerPositions = [
@@ -74,6 +82,11 @@ function spawnBase(game: Game, playerId: string, x: number, y: number): void {
   for (let i = 0; i < 6; i++) {
     const pos = workerPositions[i];
     spawnUnit(game, scvDef, x + pos.x, y + pos.y, playerId);
+
+    // Track supply for player units
+    if (playerId === 'player1') {
+      useGameStore.getState().addSupply(scvDef.supplyCost);
+    }
   }
 }
 

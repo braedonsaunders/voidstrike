@@ -91,11 +91,20 @@ export class Unit extends Component {
     this.isHoldingPosition = false;
   }
 
-  public setMoveTarget(x: number, y: number): void {
+  public setMoveTarget(x: number, y: number, preserveState: boolean = false): void {
     this.targetX = x;
     this.targetY = y;
-    this.state = 'moving';
+    if (!preserveState) {
+      this.state = 'moving';
+    }
     this.targetEntityId = null;
+  }
+
+  // Move to position while preserving current state (for gathering, etc.)
+  public moveToPosition(x: number, y: number): void {
+    this.targetX = x;
+    this.targetY = y;
+    // Don't change state - used for gathering movement
   }
 
   public setAttackTarget(entityId: number): void {

@@ -11,13 +11,14 @@
 
 ### Rendering
 - [x] Three.js scene setup
-- [x] Terrain rendering with heightmap
+- [x] Terrain rendering with heightmap + procedural details
 - [x] Camera controls (pan, zoom, rotate, edge scroll)
 - [x] Unit rendering with instancing
 - [x] Building rendering
 - [x] Selection indicators
 - [x] Fog of war shader
 - [x] Combat effects (projectiles, hits)
+- [x] 3D Asset System (procedural + GLTF loader)
 - [ ] Day/night cycle (stretch)
 
 ### Input & Selection
@@ -26,7 +27,7 @@
 - [x] Control groups (Ctrl+1-9)
 - [x] Right-click commands
 - [x] Keyboard shortcuts
-- [ ] Minimap interaction
+- [x] Minimap interaction
 
 ### Pathfinding
 - [x] A* algorithm implementation
@@ -48,7 +49,7 @@
 - [x] Resource node system
 - [x] Worker gathering mechanics
 - [x] Resource storage/tracking
-- [ ] Supply/population system
+- [x] Supply/population system (UI + tracking)
 
 ## Phase 2: Combat Depth
 
@@ -67,21 +68,21 @@
 - [ ] Passive ability effects
 
 ### Tech Tree
-- [ ] Research system
-- [ ] Upgrade effects
-- [ ] Tech requirements
+- [x] Research system
+- [x] Upgrade effects
+- [x] Tech requirements
 - [ ] Building dependencies
 
 ### UI Improvements
 - [x] Command card (abilities/actions)
 - [x] Production panel
-- [ ] Tech tree viewer
+- [x] Tech tree viewer
 - [ ] Unit info tooltips
 - [ ] Damage numbers
 
 ### Audio
-- [ ] Sound effect system
-- [ ] Spatial audio positioning
+- [x] Sound effect system
+- [x] Spatial audio positioning
 - [ ] Unit voice lines
 - [ ] Music system
 - [ ] Ambient sounds

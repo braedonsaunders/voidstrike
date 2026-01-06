@@ -5,12 +5,23 @@ import { Unit } from '@/engine/components/Unit';
 import { Health } from '@/engine/components/Health';
 import { Selectable } from '@/engine/components/Selectable';
 import { VisionSystem } from '@/engine/systems/VisionSystem';
+import { AssetManager } from '@/assets/AssetManager';
 
 interface UnitMeshData {
-  mesh: THREE.Mesh;
+  group: THREE.Group;
   selectionRing: THREE.Mesh;
   healthBar: THREE.Group;
+  unitId: string;
 }
+
+// Player colors
+const PLAYER_COLORS: Record<string, number> = {
+  player1: 0x40a0ff, // Blue
+  ai: 0xff4040, // Red
+  player2: 0x40ff40, // Green
+  player3: 0xffff40, // Yellow
+  player4: 0xff40ff, // Purple
+};
 
 export class UnitRenderer {
   private scene: THREE.Scene;
@@ -19,46 +30,15 @@ export class UnitRenderer {
   private playerId: string = 'player1';
   private unitMeshes: Map<number, UnitMeshData> = new Map();
 
-  // Shared geometries and materials
-  private unitGeometry: THREE.CylinderGeometry;
-  private workerMaterial: THREE.MeshStandardMaterial;
-  private marineMaterial: THREE.MeshStandardMaterial;
-  private defaultMaterial: THREE.MeshStandardMaterial;
-  private enemyMaterial: THREE.MeshStandardMaterial;
+  // Shared resources
   private selectionGeometry: THREE.RingGeometry;
   private selectionMaterial: THREE.MeshBasicMaterial;
+  private enemySelectionMaterial: THREE.MeshBasicMaterial;
 
   constructor(scene: THREE.Scene, world: World, visionSystem?: VisionSystem) {
     this.scene = scene;
     this.world = world;
     this.visionSystem = visionSystem ?? null;
-
-    // Create shared resources
-    this.unitGeometry = new THREE.CylinderGeometry(0.4, 0.5, 1, 8);
-
-    this.workerMaterial = new THREE.MeshStandardMaterial({
-      color: 0xffaa00,
-      roughness: 0.7,
-      metalness: 0.3,
-    });
-
-    this.marineMaterial = new THREE.MeshStandardMaterial({
-      color: 0x4a90d9,
-      roughness: 0.6,
-      metalness: 0.4,
-    });
-
-    this.defaultMaterial = new THREE.MeshStandardMaterial({
-      color: 0x888888,
-      roughness: 0.7,
-      metalness: 0.3,
-    });
-
-    this.enemyMaterial = new THREE.MeshStandardMaterial({
-      color: 0xd94a4a,
-      roughness: 0.6,
-      metalness: 0.4,
-    });
 
     this.selectionGeometry = new THREE.RingGeometry(0.6, 0.8, 32);
     this.selectionMaterial = new THREE.MeshBasicMaterial({
@@ -67,6 +47,15 @@ export class UnitRenderer {
       opacity: 0.6,
       side: THREE.DoubleSide,
     });
+    this.enemySelectionMaterial = new THREE.MeshBasicMaterial({
+      color: 0xff0000,
+      transparent: true,
+      opacity: 0.6,
+      side: THREE.DoubleSide,
+    });
+
+    // Preload common assets
+    AssetManager.preloadCommonAssets();
   }
 
   public setPlayerId(playerId: string): void {
@@ -85,8 +74,9 @@ export class UnitRenderer {
       const health = entity.get<Health>('Health');
       const selectable = entity.get<Selectable>('Selectable');
 
-      const isOwned = selectable?.playerId === this.playerId;
-      const isEnemy = selectable && selectable.playerId !== this.playerId;
+      const ownerId = selectable?.playerId ?? 'unknown';
+      const isOwned = ownerId === this.playerId;
+      const isEnemy = selectable && ownerId !== this.playerId;
 
       // Check visibility for enemy units
       let shouldShow = true;
@@ -94,19 +84,24 @@ export class UnitRenderer {
         shouldShow = this.visionSystem.isVisible(this.playerId, transform.x, transform.y);
       }
 
+      // Skip dead units
+      if (health && health.isDead()) {
+        shouldShow = false;
+      }
+
       let meshData = this.unitMeshes.get(entity.id);
 
       if (!meshData) {
         // Create new mesh for this unit
-        meshData = this.createUnitMesh(unit, isEnemy);
+        meshData = this.createUnitMesh(unit, ownerId);
         this.unitMeshes.set(entity.id, meshData);
-        this.scene.add(meshData.mesh);
+        this.scene.add(meshData.group);
         this.scene.add(meshData.selectionRing);
         this.scene.add(meshData.healthBar);
       }
 
       // Update visibility
-      meshData.mesh.visible = shouldShow;
+      meshData.group.visible = shouldShow;
       meshData.healthBar.visible = shouldShow && !!health && health.getHealthPercent() < 1;
 
       if (!shouldShow) {
@@ -115,12 +110,18 @@ export class UnitRenderer {
       }
 
       // Update position
-      meshData.mesh.position.set(transform.x, 0.5, transform.y);
-      meshData.mesh.rotation.y = -transform.rotation + Math.PI / 2;
+      meshData.group.position.set(transform.x, 0, transform.y);
+      meshData.group.rotation.y = -transform.rotation + Math.PI / 2;
 
       // Update selection ring
       meshData.selectionRing.position.set(transform.x, 0.05, transform.y);
       meshData.selectionRing.visible = selectable?.isSelected ?? false;
+
+      // Update selection ring color based on ownership
+      if (meshData.selectionRing.visible) {
+        (meshData.selectionRing.material as THREE.MeshBasicMaterial) =
+          isOwned ? this.selectionMaterial : this.enemySelectionMaterial;
+      }
 
       // Update health bar
       if (health) {
@@ -132,34 +133,29 @@ export class UnitRenderer {
     // Remove meshes for destroyed entities
     for (const [entityId, meshData] of this.unitMeshes) {
       if (!currentIds.has(entityId)) {
-        this.scene.remove(meshData.mesh);
+        this.scene.remove(meshData.group);
         this.scene.remove(meshData.selectionRing);
         this.scene.remove(meshData.healthBar);
+        this.disposeGroup(meshData.group);
         this.unitMeshes.delete(entityId);
       }
     }
   }
 
-  private createUnitMesh(unit: Unit, isEnemy: boolean = false): UnitMeshData {
-    // Select material based on unit type and ownership
-    let material: THREE.MeshStandardMaterial;
-    let scale = 1;
+  private createUnitMesh(unit: Unit, playerId: string): UnitMeshData {
+    // Get player color
+    const playerColor = PLAYER_COLORS[playerId] ?? 0x808080;
 
-    if (isEnemy) {
-      material = this.enemyMaterial;
-    } else if (unit.isWorker) {
-      material = this.workerMaterial;
-      scale = 0.8;
-    } else if (unit.unitId === 'marine') {
-      material = this.marineMaterial;
-    } else {
-      material = this.defaultMaterial;
-    }
+    // Get unit mesh from AssetManager
+    const group = AssetManager.getUnitMesh(unit.unitId, playerColor) as THREE.Group;
 
-    const mesh = new THREE.Mesh(this.unitGeometry, material);
-    mesh.scale.set(scale, scale, scale);
-    mesh.castShadow = true;
-    mesh.receiveShadow = true;
+    // Ensure proper shadows
+    group.traverse((child) => {
+      if (child instanceof THREE.Mesh) {
+        child.castShadow = true;
+        child.receiveShadow = true;
+      }
+    });
 
     // Selection ring
     const selectionRing = new THREE.Mesh(this.selectionGeometry, this.selectionMaterial);
@@ -169,7 +165,7 @@ export class UnitRenderer {
     // Health bar
     const healthBar = this.createHealthBar();
 
-    return { mesh, selectionRing, healthBar };
+    return { group, selectionRing, healthBar, unitId: unit.unitId };
   }
 
   private createHealthBar(): THREE.Group {
@@ -241,18 +237,27 @@ export class UnitRenderer {
     }
   }
 
+  private disposeGroup(group: THREE.Group): void {
+    group.traverse((child) => {
+      if (child instanceof THREE.Mesh) {
+        child.geometry.dispose();
+        if (child.material instanceof THREE.Material) {
+          child.material.dispose();
+        } else if (Array.isArray(child.material)) {
+          child.material.forEach(m => m.dispose());
+        }
+      }
+    });
+  }
+
   public dispose(): void {
-    this.unitGeometry.dispose();
-    this.workerMaterial.dispose();
-    this.marineMaterial.dispose();
-    this.defaultMaterial.dispose();
-    this.enemyMaterial.dispose();
     this.selectionGeometry.dispose();
     this.selectionMaterial.dispose();
+    this.enemySelectionMaterial.dispose();
 
     for (const meshData of this.unitMeshes.values()) {
-      meshData.mesh.geometry.dispose();
-      this.scene.remove(meshData.mesh);
+      this.disposeGroup(meshData.group);
+      this.scene.remove(meshData.group);
       this.scene.remove(meshData.selectionRing);
       this.scene.remove(meshData.healthBar);
     }

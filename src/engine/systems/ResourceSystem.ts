@@ -40,12 +40,12 @@ export class ResourceSystem extends System {
       unit.gatherTargetId = command.targetEntityId;
       unit.state = 'gathering';
 
-      // Move to resource
+      // Move to resource (use moveToPosition to keep 'gathering' state)
       const transform = entity.get<Transform>('Transform');
       const targetTransform = targetEntity.get<Transform>('Transform');
       if (transform && targetTransform) {
-        unit.setMoveTarget(targetTransform.x, targetTransform.y);
-        unit.state = 'gathering';
+        unit.moveToPosition(targetTransform.x, targetTransform.y);
+        // State is already 'gathering' from above
       }
     }
   }
@@ -104,9 +104,8 @@ export class ResourceSystem extends System {
           // At resource - gather
           this.gatherResource(entity, unit, resource);
         } else {
-          // Move to resource
-          unit.setMoveTarget(resourceTransform.x, resourceTransform.y);
-          unit.state = 'gathering';
+          // Move to resource (keep gathering state)
+          unit.moveToPosition(resourceTransform.x, resourceTransform.y);
         }
       }
     }
@@ -198,8 +197,8 @@ export class ResourceSystem extends System {
         if (resourceEntity) {
           const resourceTransform = resourceEntity.get<Transform>('Transform');
           if (resourceTransform) {
-            unit.setMoveTarget(resourceTransform.x, resourceTransform.y);
-            unit.state = 'gathering';
+            unit.moveToPosition(resourceTransform.x, resourceTransform.y);
+            // State already 'gathering'
             return;
           }
         }
@@ -207,9 +206,8 @@ export class ResourceSystem extends System {
 
       unit.state = 'idle';
     } else {
-      // Move to base
-      unit.setMoveTarget(nearestBase.transform.x, nearestBase.transform.y);
-      unit.state = 'gathering'; // Keep in gathering state while returning
+      // Move to base (keep gathering state)
+      unit.moveToPosition(nearestBase.transform.x, nearestBase.transform.y);
     }
   }
 
@@ -231,7 +229,7 @@ export class ResourceSystem extends System {
         continue;
       }
 
-      unit.setMoveTarget(baseTransform.x, baseTransform.y);
+      unit.moveToPosition(baseTransform.x, baseTransform.y);
       unit.state = 'gathering';
       return;
     }

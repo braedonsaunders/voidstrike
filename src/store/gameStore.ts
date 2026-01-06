@@ -1,4 +1,11 @@
 import { create } from 'zustand';
+import { UpgradeEffect } from '@/data/research/dominion';
+
+export interface ResearchedUpgrade {
+  id: string;
+  effects: UpgradeEffect[];
+  completedAt: number; // game time when completed
+}
 
 export interface GameState {
   // Resources
@@ -20,12 +27,16 @@ export interface GameState {
   playerId: string;
   faction: string;
 
+  // Research
+  researchedUpgrades: Map<string, ResearchedUpgrade>; // playerId -> upgrades
+
   // UI state
   isBuilding: boolean;
   buildingType: string | null;
   isSettingRallyPoint: boolean;
   showMinimap: boolean;
   showResourcePanel: boolean;
+  showTechTree: boolean;
 
   // Camera
   cameraX: number;
@@ -48,6 +59,10 @@ export interface GameState {
   setBuildingMode: (type: string | null) => void;
   setRallyPointMode: (isActive: boolean) => void;
   setCamera: (x: number, y: number, zoom?: number) => void;
+  addResearch: (playerId: string, upgradeId: string, effects: UpgradeEffect[], completedAt: number) => void;
+  hasResearch: (playerId: string, upgradeId: string) => boolean;
+  getUpgradeBonus: (playerId: string, unitId: string, effectType: UpgradeEffect['type']) => number;
+  setShowTechTree: (show: boolean) => void;
   reset: () => void;
 }
 
@@ -55,7 +70,7 @@ const initialState = {
   minerals: 50,
   vespene: 0,
   supply: 0,
-  maxSupply: 10,
+  maxSupply: 0, // Will be set from buildings when game starts
   selectedUnits: [],
   controlGroups: new Map<number, number[]>(),
   gameTime: 0,
@@ -63,11 +78,13 @@ const initialState = {
   gameSpeed: 1,
   playerId: 'player1',
   faction: 'dominion',
+  researchedUpgrades: new Map<string, ResearchedUpgrade>(),
   isBuilding: false,
   buildingType: null,
   isSettingRallyPoint: false,
   showMinimap: true,
   showResourcePanel: true,
+  showTechTree: false,
   cameraX: 64,
   cameraY: 64,
   cameraZoom: 30,
@@ -143,6 +160,49 @@ export const useGameStore = create<GameState>((set, get) => ({
       cameraY: y,
       cameraZoom: zoom ?? state.cameraZoom,
     })),
+
+  addResearch: (playerId, upgradeId, effects, completedAt) =>
+    set((state) => {
+      const key = `${playerId}:${upgradeId}`;
+      const newUpgrades = new Map(state.researchedUpgrades);
+      newUpgrades.set(key, { id: upgradeId, effects, completedAt });
+      return { researchedUpgrades: newUpgrades };
+    }),
+
+  hasResearch: (playerId, upgradeId) => {
+    const key = `${playerId}:${upgradeId}`;
+    return get().researchedUpgrades.has(key);
+  },
+
+  getUpgradeBonus: (playerId, unitId, effectType) => {
+    const state = get();
+    let bonus = 0;
+
+    // Import unit types dynamically to avoid circular deps
+    const { UNIT_TYPES } = require('@/data/research/dominion');
+    const unitType = UNIT_TYPES[unitId];
+
+    for (const [key, upgrade] of state.researchedUpgrades) {
+      if (!key.startsWith(playerId + ':')) continue;
+
+      for (const effect of upgrade.effects) {
+        if (effect.type !== effectType) continue;
+
+        // Check if effect applies to this unit
+        const appliesToUnit =
+          (!effect.targets || effect.targets.length === 0 || effect.targets.includes(unitId)) &&
+          (!effect.unitTypes || effect.unitTypes.length === 0 || (unitType && effect.unitTypes.includes(unitType)));
+
+        if (appliesToUnit) {
+          bonus += effect.value;
+        }
+      }
+    }
+
+    return bonus;
+  },
+
+  setShowTechTree: (show) => set({ showTechTree: show }),
 
   reset: () => set(initialState),
 }));

@@ -62,10 +62,10 @@ export function GameCanvas() {
     renderer.shadowMap.type = THREE.PCFSoftShadowMap;
     rendererRef.current = renderer;
 
-    // Create scene
+    // Create scene with better sky color
     const scene = new THREE.Scene();
-    scene.background = new THREE.Color(0x1a1a2e);
-    scene.fog = new THREE.Fog(0x1a1a2e, 50, 150);
+    scene.background = new THREE.Color(0x87ceeb); // Sky blue background
+    scene.fog = new THREE.Fog(0x87ceeb, 80, 200); // Lighter, more distant fog
     sceneRef.current = scene;
 
     // Create camera with map dimensions
@@ -80,22 +80,33 @@ export function GameCanvas() {
     camera.setPosition(mapWidth / 2, mapHeight / 2);
     cameraRef.current = camera;
 
-    // Add lighting
-    const ambientLight = new THREE.AmbientLight(0x404060, 0.5);
+    // Add lighting - bright and vibrant
+    const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
     scene.add(ambientLight);
 
-    const directionalLight = new THREE.DirectionalLight(0xffffff, 1);
+    // Main sun light
+    const directionalLight = new THREE.DirectionalLight(0xfffaf0, 1.2);
     directionalLight.position.set(50, 100, 50);
     directionalLight.castShadow = true;
-    directionalLight.shadow.mapSize.width = 2048;
-    directionalLight.shadow.mapSize.height = 2048;
+    directionalLight.shadow.mapSize.width = 4096;
+    directionalLight.shadow.mapSize.height = 4096;
     directionalLight.shadow.camera.near = 10;
-    directionalLight.shadow.camera.far = 200;
-    directionalLight.shadow.camera.left = -100;
-    directionalLight.shadow.camera.right = 100;
-    directionalLight.shadow.camera.top = 100;
-    directionalLight.shadow.camera.bottom = -100;
+    directionalLight.shadow.camera.far = 300;
+    directionalLight.shadow.camera.left = -150;
+    directionalLight.shadow.camera.right = 150;
+    directionalLight.shadow.camera.top = 150;
+    directionalLight.shadow.camera.bottom = -150;
+    directionalLight.shadow.bias = -0.0001;
     scene.add(directionalLight);
+
+    // Secondary fill light from opposite side
+    const fillLight = new THREE.DirectionalLight(0x8080ff, 0.3);
+    fillLight.position.set(-50, 50, -50);
+    scene.add(fillLight);
+
+    // Hemisphere light for natural outdoor lighting
+    const hemisphereLight = new THREE.HemisphereLight(0x87ceeb, 0x3d5a3e, 0.4);
+    scene.add(hemisphereLight);
 
     // Create terrain from map data
     const terrain = new Terrain({ mapData: CURRENT_MAP });
@@ -142,6 +153,9 @@ export function GameCanvas() {
 
     // Spawn initial entities based on map data
     spawnInitialEntities(game, CURRENT_MAP);
+
+    // Initialize audio system with camera for spatial audio
+    game.audioSystem.initialize(camera.camera);
 
     // Start game
     game.start();
@@ -200,6 +214,7 @@ export function GameCanvas() {
       unitRendererRef.current?.dispose();
       buildingRendererRef.current?.dispose();
       resourceRendererRef.current?.dispose();
+      game.audioSystem.dispose();
       Game.resetInstance();
     };
   }, []);

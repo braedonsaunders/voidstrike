@@ -7,6 +7,7 @@ import { Building } from '@/engine/components/Building';
 import { useEffect, useState } from 'react';
 import { UNIT_DEFINITIONS } from '@/data/units/dominion';
 import { BUILDING_DEFINITIONS } from '@/data/buildings/dominion';
+import { RESEARCH_DEFINITIONS } from '@/data/research/dominion';
 
 interface CommandButton {
   id: string;
@@ -139,6 +140,61 @@ export function CommandCard() {
             vespene < unitDef.vespeneCost ||
             supply + unitDef.supplyCost > maxSupply,
           tooltip: `Train ${unitDef.name} (${unitDef.mineralCost}/${unitDef.vespeneCost})`,
+        });
+      });
+
+      // Research commands
+      const store = useGameStore.getState();
+      const researchMap: Record<string, string[]> = {
+        engineering_bay: ['infantry_weapons_1', 'infantry_armor_1', 'hi_sec_auto_tracking', 'building_armor'],
+        armory: ['vehicle_weapons_1', 'vehicle_armor_1', 'ship_weapons_1', 'ship_armor_1'],
+        fusion_core: ['yamato_cannon', 'battlecruiser_weapon_refit'],
+        barracks: ['stim_pack', 'combat_shield', 'concussive_shells'],
+        factory: ['siege_tech', 'drilling_claws'],
+        starport: ['cloaking_field', 'caduceus_reactor'],
+      };
+
+      const availableResearch = researchMap[building.buildingId] || [];
+      availableResearch.forEach((upgradeId) => {
+        const upgrade = RESEARCH_DEFINITIONS[upgradeId];
+        if (!upgrade) return;
+
+        // Check if already researched
+        const isResearched = store.hasResearch('player1', upgradeId);
+        if (isResearched) return;
+
+        // Check requirements
+        let reqMet = true;
+        if (upgrade.requirements) {
+          for (const req of upgrade.requirements) {
+            if (RESEARCH_DEFINITIONS[req] && !store.hasResearch('player1', req)) {
+              reqMet = false;
+              break;
+            }
+          }
+        }
+
+        // Check if building is already researching this
+        const isResearching = building.productionQueue.some(
+          (item) => item.type === 'upgrade' && item.id === upgradeId
+        );
+
+        buttons.push({
+          id: `research_${upgradeId}`,
+          label: upgrade.name.substring(0, 10),
+          shortcut: upgrade.name.charAt(0).toUpperCase(),
+          action: () => {
+            game.eventBus.emit('command:research', {
+              entityIds: selectedUnits,
+              upgradeId,
+            });
+          },
+          isDisabled:
+            minerals < upgrade.mineralCost ||
+            vespene < upgrade.vespeneCost ||
+            !reqMet ||
+            isResearching,
+          tooltip: `${upgrade.name}\n${upgrade.description}\n(${upgrade.mineralCost}/${upgrade.vespeneCost})`,
         });
       });
 

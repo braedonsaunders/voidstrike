@@ -8,6 +8,7 @@ import { Velocity } from '../components/Velocity';
 import { Ability } from '../components/Ability';
 import { UNIT_DEFINITIONS } from '@/data/units/dominion';
 import { DOMINION_ABILITIES } from '../components/Ability';
+import { useGameStore } from '@/store/gameStore';
 
 /**
  * SpawnSystem handles creating new units when production completes
@@ -68,6 +69,11 @@ export class SpawnSystem extends System {
       entity.add(abilityComponent);
     }
 
+    // Update supply for player units
+    if (playerId === 'player1' && definition.supplyCost > 0) {
+      useGameStore.getState().addSupply(definition.supplyCost);
+    }
+
     // Emit spawn complete event for UI feedback
     this.game.eventBus.emit('unit:spawned', {
       entityId: entity.id,
@@ -82,6 +88,17 @@ export class SpawnSystem extends System {
   private handleUnitDeath(data: { entityId: number }): void {
     const entity = this.world.getEntity(data.entityId);
     if (entity) {
+      // Reduce supply for player units
+      const unit = entity.get<Unit>('Unit');
+      const selectable = entity.get<Selectable>('Selectable');
+
+      if (unit && selectable && selectable.playerId === 'player1') {
+        const definition = UNIT_DEFINITIONS[unit.unitId];
+        if (definition && definition.supplyCost > 0) {
+          useGameStore.getState().addSupply(-definition.supplyCost);
+        }
+      }
+
       // Schedule entity for removal
       // The actual removal should happen at the end of the tick to avoid issues
       this.world.destroyEntity(data.entityId);

@@ -5,9 +5,11 @@ import { Minimap } from './Minimap';
 import { ResourcePanel } from './ResourcePanel';
 import { SelectionPanel } from './SelectionPanel';
 import { CommandCard } from './CommandCard';
+import { TechTreePanel } from './TechTreePanel';
+import { ProductionQueuePanel } from './ProductionQueuePanel';
 
 export function HUD() {
-  const { isPaused, togglePause, gameTime } = useGameStore();
+  const { isPaused, togglePause, gameTime, setShowTechTree } = useGameStore();
 
   const formatTime = (seconds: number) => {
     const mins = Math.floor(seconds / 60);
@@ -29,6 +31,13 @@ export function HUD() {
 
         {/* Menu buttons */}
         <div className="flex gap-2">
+          <button
+            onClick={() => setShowTechTree(true)}
+            className="game-button text-sm"
+            title="View Tech Tree (T)"
+          >
+            Tech
+          </button>
           <button
             onClick={togglePause}
             className="game-button text-sm"
@@ -57,6 +66,14 @@ export function HUD() {
         {/* Command card */}
         <CommandCard />
       </div>
+
+      {/* Production Queue Panel - right side */}
+      <div className="absolute top-16 right-2 pointer-events-auto">
+        <ProductionQueuePanel />
+      </div>
+
+      {/* Tech Tree Modal */}
+      <TechTreePanel />
 
       {/* Pause overlay */}
       {isPaused && (

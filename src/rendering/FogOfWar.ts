@@ -54,12 +54,12 @@ export class FogOfWar {
     this.texture.minFilter = THREE.LinearFilter;
     this.texture.magFilter = THREE.LinearFilter;
 
-    // Create shader material for smooth fog effect
+    // Create shader material for smooth fog effect - lighter and less oppressive
     this.material = new THREE.ShaderMaterial({
       uniforms: {
         fogTexture: { value: this.texture },
-        unexploredColor: { value: new THREE.Color(0x000000) },
-        exploredColor: { value: new THREE.Color(0x1a1a2e) },
+        unexploredColor: { value: new THREE.Color(0x2a3a4a) }, // Dark blue-gray instead of black
+        exploredColor: { value: new THREE.Color(0x1a2a3a) },
       },
       vertexShader: `
         varying vec2 vUv;
@@ -80,11 +80,11 @@ export class FogOfWar {
 
           // visibility: 0 = unexplored, 0.5 = explored, 1 = visible
           if (visibility < 0.01) {
-            // Unexplored - solid black
-            gl_FragColor = vec4(unexploredColor, 0.95);
+            // Unexplored - semi-transparent dark overlay (can still see terrain)
+            gl_FragColor = vec4(unexploredColor, 0.7);
           } else if (visibility < 0.75) {
-            // Explored - dark transparent overlay
-            gl_FragColor = vec4(exploredColor, 0.6);
+            // Explored - light transparent overlay
+            gl_FragColor = vec4(exploredColor, 0.35);
           } else {
             // Visible - no fog
             discard;

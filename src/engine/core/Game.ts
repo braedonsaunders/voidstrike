@@ -6,11 +6,13 @@ import { SelectionSystem } from '../systems/SelectionSystem';
 import { CombatSystem } from '../systems/CombatSystem';
 import { ProductionSystem } from '../systems/ProductionSystem';
 import { ResourceSystem } from '../systems/ResourceSystem';
+import { ResearchSystem } from '../systems/ResearchSystem';
 import { AISystem } from '../systems/AISystem';
 import { VisionSystem } from '../systems/VisionSystem';
 import { AbilitySystem } from '../systems/AbilitySystem';
 import { SpawnSystem } from '../systems/SpawnSystem';
 import { BuildingPlacementSystem } from '../systems/BuildingPlacementSystem';
+import { AudioSystem } from '../systems/AudioSystem';
 
 export type GameState = 'initializing' | 'running' | 'paused' | 'ended';
 
@@ -39,6 +41,7 @@ export class Game {
   public eventBus: EventBus;
   public config: GameConfig;
   public visionSystem: VisionSystem;
+  public audioSystem: AudioSystem;
 
   private gameLoop: GameLoop;
   private state: GameState = 'initializing';
@@ -53,6 +56,9 @@ export class Game {
     // Initialize vision system (needs to be created before other systems)
     // Note: passing `this` is safe here since VisionSystem doesn't use game in constructor
     this.visionSystem = new VisionSystem(this, this.config.mapWidth, this.config.mapHeight);
+
+    // Initialize audio system (needs camera later for spatial audio)
+    this.audioSystem = new AudioSystem(this);
 
     this.initializeSystems();
   }
@@ -80,8 +86,10 @@ export class Game {
     this.world.addSystem(new CombatSystem(this));
     this.world.addSystem(new ProductionSystem(this));
     this.world.addSystem(new ResourceSystem(this));
+    this.world.addSystem(new ResearchSystem(this));
     this.world.addSystem(new AbilitySystem(this));
     this.world.addSystem(this.visionSystem);
+    this.world.addSystem(this.audioSystem);
 
     if (this.config.aiEnabled) {
       this.world.addSystem(new AISystem(this));
@@ -171,6 +179,9 @@ export class Game {
       case 'HOLD':
         this.eventBus.emit('command:hold', command);
         break;
+      case 'RESEARCH':
+        this.eventBus.emit('command:research', command);
+        break;
     }
   }
 }
@@ -178,11 +189,12 @@ export class Game {
 export interface GameCommand {
   tick: number;
   playerId: string;
-  type: 'MOVE' | 'ATTACK' | 'BUILD' | 'TRAIN' | 'ABILITY' | 'STOP' | 'HOLD';
+  type: 'MOVE' | 'ATTACK' | 'BUILD' | 'TRAIN' | 'ABILITY' | 'STOP' | 'HOLD' | 'RESEARCH';
   entityIds: number[];
   targetPosition?: { x: number; y: number };
   targetEntityId?: number;
   buildingType?: string;
   unitType?: string;
   abilityId?: string;
+  upgradeId?: string;
 }

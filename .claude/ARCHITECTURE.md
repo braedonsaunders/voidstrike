@@ -60,13 +60,15 @@ voidstrike/
 │   │       ├── AStar.ts
 │   │       ├── Grid.ts
 │   │       └── pathfinder.worker.ts
+│   ├── assets/
+│   │   └── AssetManager.ts    # 3D asset generation & loading
 │   ├── rendering/
 │   │   ├── Scene.ts           # Three.js scene setup
 │   │   ├── Camera.ts          # RTS camera controller
-│   │   ├── Terrain.ts         # Terrain mesh generation
-│   │   ├── UnitRenderer.ts    # Instanced unit rendering
+│   │   ├── Terrain.ts         # Terrain mesh with procedural details
+│   │   ├── UnitRenderer.ts    # Unit rendering with player colors
 │   │   ├── BuildingRenderer.ts # Building mesh rendering
-│   │   ├── FogOfWar.ts        # Fog of war system
+│   │   ├── FogOfWar.ts        # Fog of war visibility system
 │   │   ├── EffectsRenderer.ts # Combat effects (projectiles, hits)
 │   │   └── RallyPointRenderer.ts # Building rally point visuals
 │   ├── input/
@@ -304,6 +306,49 @@ Renderer (draw current state)
 HUD Update (React state sync)
 ```
 
+## Asset System
+
+### AssetManager
+
+Centralized 3D asset management with procedural generation and GLTF loading:
+
+```typescript
+// Get procedural mesh for a unit
+const mesh = AssetManager.getUnitMesh('marine', playerColor);
+
+// Get procedural mesh for a building
+const buildingMesh = AssetManager.getBuildingMesh('barracks', playerColor);
+
+// Load custom GLTF model
+await AssetManager.loadGLTF('/models/custom_unit.glb', 'custom_unit');
+
+// Register custom asset override
+AssetManager.registerCustomAsset('marine', customMarineMesh);
+```
+
+### Procedural Generator
+
+Built-in procedural mesh generation for all unit types:
+
+- **Units**: SCV, Marine, Marauder, Siege Tank, Medivac, etc.
+- **Buildings**: Command Center, Barracks, Factory, Starport, etc.
+- **Resources**: Mineral patches, Vespene geysers
+- **Decorations**: Trees, rocks, grass
+
+Each procedural mesh:
+- Applies player team colors dynamically
+- Casts and receives shadows
+- Uses optimized geometry
+
+### Custom Asset Pipeline
+
+To add custom 3D models:
+
+1. Export from Blender/Maya as GLTF/GLB
+2. Place in `public/models/`
+3. Load via `AssetManager.loadGLTF(url, assetId)`
+4. Register as override: `AssetManager.registerCustomAsset(unitId, mesh)`
+
 ## Performance Considerations
 
 1. **Instanced Rendering**: All units of same type use instanced meshes
@@ -313,3 +358,4 @@ HUD Update (React state sync)
 5. **LOD System**: Reduce detail at distance
 6. **Frustum Culling**: Don't render off-screen entities
 7. **Delta Compression**: Only send changed state in multiplayer
+8. **Asset Caching**: Meshes cached and cloned for reuse

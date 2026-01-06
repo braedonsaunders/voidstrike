@@ -5,13 +5,24 @@ import { Building } from '@/engine/components/Building';
 import { Health } from '@/engine/components/Health';
 import { Selectable } from '@/engine/components/Selectable';
 import { VisionSystem } from '@/engine/systems/VisionSystem';
+import { AssetManager } from '@/assets/AssetManager';
 
 interface BuildingMeshData {
-  mesh: THREE.Mesh;
+  group: THREE.Group;
   selectionRing: THREE.Mesh;
   healthBar: THREE.Group;
   progressBar: THREE.Group;
+  buildingId: string;
 }
+
+// Player colors
+const PLAYER_COLORS: Record<string, number> = {
+  player1: 0x40a0ff, // Blue
+  ai: 0xff4040, // Red
+  player2: 0x40ff40, // Green
+  player3: 0xffff40, // Yellow
+  player4: 0xff40ff, // Purple
+};
 
 export class BuildingRenderer {
   private scene: THREE.Scene;
@@ -20,22 +31,15 @@ export class BuildingRenderer {
   private playerId: string = 'player1';
   private buildingMeshes: Map<number, BuildingMeshData> = new Map();
 
-  // Materials
-  private completeMaterial: THREE.MeshStandardMaterial;
+  // Shared materials
   private constructingMaterial: THREE.MeshStandardMaterial;
-  private enemyMaterial: THREE.MeshStandardMaterial;
   private selectionMaterial: THREE.MeshBasicMaterial;
+  private enemySelectionMaterial: THREE.MeshBasicMaterial;
 
   constructor(scene: THREE.Scene, world: World, visionSystem?: VisionSystem) {
     this.scene = scene;
     this.world = world;
     this.visionSystem = visionSystem ?? null;
-
-    this.completeMaterial = new THREE.MeshStandardMaterial({
-      color: 0x4a90d9,
-      roughness: 0.5,
-      metalness: 0.5,
-    });
 
     this.constructingMaterial = new THREE.MeshStandardMaterial({
       color: 0x4a90d9,
@@ -45,14 +49,15 @@ export class BuildingRenderer {
       opacity: 0.5,
     });
 
-    this.enemyMaterial = new THREE.MeshStandardMaterial({
-      color: 0xd94a4a,
-      roughness: 0.5,
-      metalness: 0.5,
-    });
-
     this.selectionMaterial = new THREE.MeshBasicMaterial({
       color: 0x00ff00,
+      transparent: true,
+      opacity: 0.5,
+      side: THREE.DoubleSide,
+    });
+
+    this.enemySelectionMaterial = new THREE.MeshBasicMaterial({
+      color: 0xff0000,
       transparent: true,
       opacity: 0.5,
       side: THREE.DoubleSide,
@@ -75,11 +80,11 @@ export class BuildingRenderer {
       const health = entity.get<Health>('Health');
       const selectable = entity.get<Selectable>('Selectable');
 
-      const isOwned = selectable?.playerId === this.playerId;
-      const isEnemy = selectable && selectable.playerId !== this.playerId;
+      const ownerId = selectable?.playerId ?? 'unknown';
+      const isOwned = ownerId === this.playerId;
+      const isEnemy = selectable && ownerId !== this.playerId;
 
       // Check visibility for enemy buildings
-      // Buildings in explored areas are shown, but only with current state if visible
       let shouldShow = true;
       if (isEnemy && this.visionSystem) {
         shouldShow = this.visionSystem.isExplored(this.playerId, transform.x, transform.y);
@@ -88,16 +93,16 @@ export class BuildingRenderer {
       let meshData = this.buildingMeshes.get(entity.id);
 
       if (!meshData) {
-        meshData = this.createBuildingMesh(building, isEnemy);
+        meshData = this.createBuildingMesh(building, ownerId);
         this.buildingMeshes.set(entity.id, meshData);
-        this.scene.add(meshData.mesh);
+        this.scene.add(meshData.group);
         this.scene.add(meshData.selectionRing);
         this.scene.add(meshData.healthBar);
         this.scene.add(meshData.progressBar);
       }
 
       // Update visibility
-      meshData.mesh.visible = shouldShow;
+      meshData.group.visible = shouldShow;
 
       if (!shouldShow) {
         meshData.selectionRing.visible = false;
@@ -107,24 +112,45 @@ export class BuildingRenderer {
       }
 
       // Update position
-      const height = building.isComplete() ? building.height : building.height * building.buildProgress;
-      meshData.mesh.position.set(transform.x, height / 2, transform.y);
-      meshData.mesh.scale.y = building.isComplete() ? 1 : building.buildProgress;
+      meshData.group.position.set(transform.x, 0, transform.y);
 
-      // Update material based on ownership and state
-      if (isEnemy) {
-        meshData.mesh.material = this.enemyMaterial;
+      // Construction animation - scale up as building completes
+      if (!building.isComplete()) {
+        const progress = building.buildProgress;
+        meshData.group.scale.setScalar(0.5 + progress * 0.5);
+        meshData.group.traverse((child) => {
+          if (child instanceof THREE.Mesh) {
+            const mat = child.material as THREE.MeshStandardMaterial;
+            if (mat.transparent !== undefined) {
+              mat.transparent = true;
+              mat.opacity = 0.5 + progress * 0.5;
+            }
+          }
+        });
       } else {
-        meshData.mesh.material = building.isComplete()
-          ? this.completeMaterial
-          : this.constructingMaterial;
+        meshData.group.scale.setScalar(1);
+        meshData.group.traverse((child) => {
+          if (child instanceof THREE.Mesh) {
+            const mat = child.material as THREE.MeshStandardMaterial;
+            if (mat.transparent !== undefined) {
+              mat.transparent = false;
+              mat.opacity = 1;
+            }
+          }
+        });
       }
 
       // Update selection ring
-      const ringSize = Math.max(building.width, building.height) * 0.8;
+      const ringSize = Math.max(building.width, building.height) * 0.6;
       meshData.selectionRing.position.set(transform.x, 0.05, transform.y);
       meshData.selectionRing.scale.set(ringSize, ringSize, 1);
       meshData.selectionRing.visible = selectable?.isSelected ?? false;
+
+      // Update selection ring color
+      if (meshData.selectionRing.visible) {
+        (meshData.selectionRing.material as THREE.MeshBasicMaterial) =
+          isOwned ? this.selectionMaterial : this.enemySelectionMaterial;
+      }
 
       // Update health bar
       if (health && building.isComplete()) {
@@ -156,27 +182,30 @@ export class BuildingRenderer {
     // Remove meshes for destroyed entities
     for (const [entityId, meshData] of this.buildingMeshes) {
       if (!currentIds.has(entityId)) {
-        this.scene.remove(meshData.mesh);
+        this.scene.remove(meshData.group);
         this.scene.remove(meshData.selectionRing);
         this.scene.remove(meshData.healthBar);
         this.scene.remove(meshData.progressBar);
+        this.disposeGroup(meshData.group);
         this.buildingMeshes.delete(entityId);
       }
     }
   }
 
-  private createBuildingMesh(building: Building, isEnemy: boolean = false): BuildingMeshData {
-    // Create building geometry based on size
-    const geometry = new THREE.BoxGeometry(
-      building.width * 0.9,
-      building.height,
-      building.height * 0.9
-    );
+  private createBuildingMesh(building: Building, playerId: string): BuildingMeshData {
+    // Get player color
+    const playerColor = PLAYER_COLORS[playerId] ?? 0x808080;
 
-    const material = isEnemy ? this.enemyMaterial : this.constructingMaterial;
-    const mesh = new THREE.Mesh(geometry, material);
-    mesh.castShadow = true;
-    mesh.receiveShadow = true;
+    // Get building mesh from AssetManager
+    const group = AssetManager.getBuildingMesh(building.buildingId, playerColor) as THREE.Group;
+
+    // Ensure proper shadows
+    group.traverse((child) => {
+      if (child instanceof THREE.Mesh) {
+        child.castShadow = true;
+        child.receiveShadow = true;
+      }
+    });
 
     // Selection ring
     const ringGeometry = new THREE.RingGeometry(0.8, 1, 32);
@@ -190,7 +219,7 @@ export class BuildingRenderer {
     // Progress bar
     const progressBar = this.createBar(0xffff00);
 
-    return { mesh, selectionRing, healthBar, progressBar };
+    return { group, selectionRing, healthBar, progressBar, buildingId: building.buildingId };
   }
 
   private createBar(color: number): THREE.Group {
@@ -244,15 +273,27 @@ export class BuildingRenderer {
     }
   }
 
+  private disposeGroup(group: THREE.Group): void {
+    group.traverse((child) => {
+      if (child instanceof THREE.Mesh) {
+        child.geometry.dispose();
+        if (child.material instanceof THREE.Material) {
+          child.material.dispose();
+        } else if (Array.isArray(child.material)) {
+          child.material.forEach(m => m.dispose());
+        }
+      }
+    });
+  }
+
   public dispose(): void {
-    this.completeMaterial.dispose();
     this.constructingMaterial.dispose();
-    this.enemyMaterial.dispose();
     this.selectionMaterial.dispose();
+    this.enemySelectionMaterial.dispose();
 
     for (const meshData of this.buildingMeshes.values()) {
-      meshData.mesh.geometry.dispose();
-      this.scene.remove(meshData.mesh);
+      this.disposeGroup(meshData.group);
+      this.scene.remove(meshData.group);
       this.scene.remove(meshData.selectionRing);
       this.scene.remove(meshData.healthBar);
       this.scene.remove(meshData.progressBar);

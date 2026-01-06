@@ -88,7 +88,8 @@ export class MovementSystem extends System {
       const unit = entity.get<Unit>('Unit')!;
       const velocity = entity.get<Velocity>('Velocity')!;
 
-      if (unit.state !== 'moving' && unit.state !== 'attacking') {
+      // Allow movement for moving, attacking, and gathering states
+      if (unit.state !== 'moving' && unit.state !== 'attacking' && unit.state !== 'gathering') {
         velocity.zero();
         continue;
       }
@@ -148,6 +149,13 @@ export class MovementSystem extends System {
           unit.pathIndex++;
         } else {
           // Arrived at final destination
+          // For gathering units, just clear the move target but keep the state
+          if (unit.state === 'gathering') {
+            unit.targetX = null;
+            unit.targetY = null;
+            velocity.zero();
+            continue;
+          }
           unit.clearTarget();
           velocity.zero();
           continue;
