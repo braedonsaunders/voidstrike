@@ -4,16 +4,17 @@ import { useRef, useEffect, useCallback, useState } from 'react';
 import * as THREE from 'three';
 import { Game } from '@/engine/core/Game';
 import { RTSCamera } from '@/rendering/Camera';
-import { Terrain, TerrainGrid } from '@/rendering/Terrain';
+import { Terrain, TerrainGrid, MapDecorations } from '@/rendering/Terrain';
 import { UnitRenderer } from '@/rendering/UnitRenderer';
 import { BuildingRenderer } from '@/rendering/BuildingRenderer';
 import { ResourceRenderer } from '@/rendering/ResourceRenderer';
 import { useGameStore } from '@/store/gameStore';
 import { SelectionBox } from './SelectionBox';
 import { spawnInitialEntities } from '@/utils/gameSetup';
+import { DEFAULT_MAP, MapData } from '@/data/maps';
 
-const MAP_WIDTH = 128;
-const MAP_HEIGHT = 128;
+// Get current map (will support map selection later)
+const CURRENT_MAP: MapData = DEFAULT_MAP;
 
 export function GameCanvas() {
   const containerRef = useRef<HTMLDivElement>(null);
@@ -54,13 +55,16 @@ export function GameCanvas() {
     scene.fog = new THREE.Fog(0x1a1a2e, 50, 150);
     sceneRef.current = scene;
 
-    // Create camera
+    // Create camera with map dimensions
+    const mapWidth = CURRENT_MAP.width;
+    const mapHeight = CURRENT_MAP.height;
+
     const camera = new RTSCamera(
       window.innerWidth / window.innerHeight,
-      MAP_WIDTH,
-      MAP_HEIGHT
+      mapWidth,
+      mapHeight
     );
-    camera.setPosition(MAP_WIDTH / 2, MAP_HEIGHT / 2);
+    camera.setPosition(mapWidth / 2, mapHeight / 2);
     cameraRef.current = camera;
 
     // Add lighting
@@ -80,25 +84,22 @@ export function GameCanvas() {
     directionalLight.shadow.camera.bottom = -100;
     scene.add(directionalLight);
 
-    // Create terrain
-    const terrain = new Terrain({
-      width: MAP_WIDTH,
-      height: MAP_HEIGHT,
-      segments: 128,
-      maxHeight: 5,
-    });
-    terrain.mesh.position.set(MAP_WIDTH / 2, 0, MAP_HEIGHT / 2);
+    // Create terrain from map data
+    const terrain = new Terrain({ mapData: CURRENT_MAP });
     scene.add(terrain.mesh);
 
+    // Create map decorations (watch towers, destructible rocks)
+    const decorations = new MapDecorations(CURRENT_MAP);
+    scene.add(decorations.group);
+
     // Create terrain grid (for building placement)
-    const grid = new TerrainGrid(MAP_WIDTH, MAP_HEIGHT, 1);
-    grid.mesh.position.set(MAP_WIDTH / 2, 0, MAP_HEIGHT / 2);
+    const grid = new TerrainGrid(mapWidth, mapHeight, 1);
     scene.add(grid.mesh);
 
     // Initialize game engine
     const game = Game.getInstance({
-      mapWidth: MAP_WIDTH,
-      mapHeight: MAP_HEIGHT,
+      mapWidth,
+      mapHeight,
       tickRate: 20,
       isMultiplayer: false,
       playerId: 'player1',
@@ -111,8 +112,8 @@ export function GameCanvas() {
     buildingRendererRef.current = new BuildingRenderer(scene, game.world);
     resourceRendererRef.current = new ResourceRenderer(scene, game.world);
 
-    // Spawn initial entities
-    spawnInitialEntities(game);
+    // Spawn initial entities based on map data
+    spawnInitialEntities(game, CURRENT_MAP);
 
     // Start game
     game.start();
@@ -159,6 +160,7 @@ export function GameCanvas() {
       window.removeEventListener('resize', handleResize);
       renderer.dispose();
       terrain.dispose();
+      decorations.dispose();
       grid.dispose();
       camera.dispose();
       unitRendererRef.current?.dispose();

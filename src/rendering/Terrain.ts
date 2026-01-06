@@ -1,167 +1,237 @@
 import * as THREE from 'three';
+import { MapData, MapCell, TerrainType, ElevationLevel } from '@/data/maps';
+
+// Colors for different terrain types and elevations
+const TERRAIN_COLORS: Record<TerrainType, Record<ElevationLevel, THREE.Color>> = {
+  ground: {
+    0: new THREE.Color(0x2d3a2e), // Low ground - dark green
+    1: new THREE.Color(0x3d4a3e), // Medium ground - medium green
+    2: new THREE.Color(0x4d5a4e), // High ground - lighter green
+  },
+  unwalkable: {
+    0: new THREE.Color(0x1a1a1a), // Dark cliff
+    1: new THREE.Color(0x252525),
+    2: new THREE.Color(0x303030),
+  },
+  ramp: {
+    0: new THREE.Color(0x4a4535), // Ramp color - tan
+    1: new THREE.Color(0x5a5545),
+    2: new THREE.Color(0x6a6555),
+  },
+  unbuildable: {
+    0: new THREE.Color(0x2a3530), // Slightly different from ground
+    1: new THREE.Color(0x3a4540),
+    2: new THREE.Color(0x4a5550),
+  },
+  creep: {
+    0: new THREE.Color(0x3d2040), // Purple creep
+    1: new THREE.Color(0x4d3050),
+    2: new THREE.Color(0x5d4060),
+  },
+};
+
+// Height for each elevation level
+const ELEVATION_HEIGHTS: Record<ElevationLevel, number> = {
+  0: 0,
+  1: 1.5,
+  2: 3,
+};
 
 export interface TerrainConfig {
-  width: number;
-  height: number;
-  segments: number;
-  maxHeight: number;
-  seed?: number;
+  mapData: MapData;
+  cellSize?: number;
 }
 
 export class Terrain {
   public mesh: THREE.Mesh;
-  public heightData: Float32Array;
+  public mapData: MapData;
 
-  private width: number;
-  private height: number;
-  private segments: number;
-  private maxHeight: number;
+  private cellSize: number;
+  private geometry: THREE.BufferGeometry;
+  private material: THREE.MeshStandardMaterial;
 
   constructor(config: TerrainConfig) {
-    this.width = config.width;
-    this.height = config.height;
-    this.segments = config.segments;
-    this.maxHeight = config.maxHeight;
+    this.mapData = config.mapData;
+    this.cellSize = config.cellSize ?? 1;
 
-    this.heightData = this.generateHeightmap(config.seed ?? Math.random() * 10000);
-    this.mesh = this.createMesh();
-  }
-
-  private generateHeightmap(seed: number): Float32Array {
-    const size = (this.segments + 1) * (this.segments + 1);
-    const data = new Float32Array(size);
-
-    // Simple Perlin-like noise generation
-    for (let i = 0; i <= this.segments; i++) {
-      for (let j = 0; j <= this.segments; j++) {
-        const index = i * (this.segments + 1) + j;
-
-        // Multi-octave noise
-        let height = 0;
-        let amplitude = 1;
-        let frequency = 0.02;
-
-        for (let octave = 0; octave < 4; octave++) {
-          const nx = j * frequency + seed;
-          const ny = i * frequency + seed * 2;
-
-          // Simple noise function
-          height += this.noise2D(nx, ny) * amplitude;
-
-          amplitude *= 0.5;
-          frequency *= 2;
-        }
-
-        // Normalize and scale
-        data[index] = ((height + 1) / 2) * this.maxHeight * 0.3;
-      }
-    }
-
-    return data;
-  }
-
-  private noise2D(x: number, y: number): number {
-    // Simple pseudo-random noise
-    const n = Math.sin(x * 12.9898 + y * 78.233) * 43758.5453;
-    return (n - Math.floor(n)) * 2 - 1;
-  }
-
-  private createMesh(): THREE.Mesh {
-    const geometry = new THREE.PlaneGeometry(
-      this.width,
-      this.height,
-      this.segments,
-      this.segments
-    );
-
-    // Apply heightmap to vertices
-    const positions = geometry.attributes.position;
-    for (let i = 0; i < positions.count; i++) {
-      positions.setZ(i, this.heightData[i]);
-    }
-
-    geometry.computeVertexNormals();
-
-    // Create material with vertex colors based on height
-    const colors = new Float32Array(positions.count * 3);
-    for (let i = 0; i < positions.count; i++) {
-      const height = this.heightData[i] / this.maxHeight;
-
-      // Color gradient: dark green -> light green -> brown -> gray
-      let r, g, b;
-      if (height < 0.3) {
-        // Low ground - dark green
-        r = 0.1 + height * 0.3;
-        g = 0.3 + height * 0.4;
-        b = 0.1;
-      } else if (height < 0.6) {
-        // Mid ground - light green to brown
-        const t = (height - 0.3) / 0.3;
-        r = 0.2 + t * 0.4;
-        g = 0.5 - t * 0.2;
-        b = 0.1 + t * 0.1;
-      } else {
-        // High ground - brown to gray
-        const t = (height - 0.6) / 0.4;
-        r = 0.5 + t * 0.2;
-        g = 0.3 + t * 0.2;
-        b = 0.2 + t * 0.3;
-      }
-
-      colors[i * 3] = r;
-      colors[i * 3 + 1] = g;
-      colors[i * 3 + 2] = b;
-    }
-
-    geometry.setAttribute('color', new THREE.BufferAttribute(colors, 3));
-
-    const material = new THREE.MeshStandardMaterial({
+    this.geometry = this.createGeometry();
+    this.material = new THREE.MeshStandardMaterial({
       vertexColors: true,
-      roughness: 0.9,
+      roughness: 0.85,
       metalness: 0.1,
       flatShading: false,
     });
 
-    const mesh = new THREE.Mesh(geometry, material);
-    mesh.rotation.x = -Math.PI / 2;
-    mesh.receiveShadow = true;
-
-    return mesh;
+    this.mesh = new THREE.Mesh(this.geometry, this.material);
+    this.mesh.receiveShadow = true;
+    this.mesh.rotation.x = -Math.PI / 2;
   }
 
-  public getHeightAt(x: number, y: number): number {
-    // Convert world coordinates to heightmap indices
-    const localX = (x + this.width / 2) / this.width;
-    const localY = (y + this.height / 2) / this.height;
+  private createGeometry(): THREE.BufferGeometry {
+    const { width, height, terrain } = this.mapData;
+    const cellSize = this.cellSize;
 
-    const gridX = Math.floor(localX * this.segments);
-    const gridY = Math.floor(localY * this.segments);
+    const vertices: number[] = [];
+    const colors: number[] = [];
+    const indices: number[] = [];
 
-    if (gridX < 0 || gridX >= this.segments || gridY < 0 || gridY >= this.segments) {
+    // Generate vertex grid with heights based on terrain
+    const vertexGrid: THREE.Vector3[][] = [];
+
+    for (let y = 0; y <= height; y++) {
+      vertexGrid[y] = [];
+      for (let x = 0; x <= width; x++) {
+        const cell = this.sampleTerrain(terrain, x, y, width, height);
+        const heightValue = ELEVATION_HEIGHTS[cell.elevation];
+        const noise = this.getTerrainNoise(x, y, cell.terrain);
+
+        vertexGrid[y][x] = new THREE.Vector3(
+          x * cellSize,
+          y * cellSize,
+          heightValue + noise
+        );
+      }
+    }
+
+    // Create triangles and colors
+    let vertexIndex = 0;
+
+    for (let y = 0; y < height; y++) {
+      for (let x = 0; x < width; x++) {
+        const cell = terrain[y][x];
+        const color = TERRAIN_COLORS[cell.terrain][cell.elevation];
+
+        const colorVariation = (cell.textureId - 2) * 0.02;
+        const r = Math.max(0, Math.min(1, color.r + colorVariation));
+        const g = Math.max(0, Math.min(1, color.g + colorVariation));
+        const b = Math.max(0, Math.min(1, color.b + colorVariation));
+
+        const v00 = vertexGrid[y][x];
+        const v10 = vertexGrid[y][x + 1];
+        const v01 = vertexGrid[y + 1][x];
+        const v11 = vertexGrid[y + 1][x + 1];
+
+        // Triangle 1
+        vertices.push(v00.x, v00.y, v00.z);
+        vertices.push(v10.x, v10.y, v10.z);
+        vertices.push(v01.x, v01.y, v01.z);
+
+        // Triangle 2
+        vertices.push(v10.x, v10.y, v10.z);
+        vertices.push(v11.x, v11.y, v11.z);
+        vertices.push(v01.x, v01.y, v01.z);
+
+        for (let i = 0; i < 6; i++) {
+          colors.push(r, g, b);
+        }
+
+        indices.push(vertexIndex, vertexIndex + 1, vertexIndex + 2);
+        indices.push(vertexIndex + 3, vertexIndex + 4, vertexIndex + 5);
+        vertexIndex += 6;
+      }
+    }
+
+    const geometry = new THREE.BufferGeometry();
+    geometry.setAttribute('position', new THREE.Float32BufferAttribute(vertices, 3));
+    geometry.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3));
+    geometry.setIndex(indices);
+    geometry.computeVertexNormals();
+
+    return geometry;
+  }
+
+  private sampleTerrain(
+    terrain: MapCell[][],
+    x: number,
+    y: number,
+    width: number,
+    height: number
+  ): MapCell {
+    const samples: MapCell[] = [];
+
+    for (let dy = -1; dy <= 0; dy++) {
+      for (let dx = -1; dx <= 0; dx++) {
+        const sx = Math.max(0, Math.min(width - 1, x + dx));
+        const sy = Math.max(0, Math.min(height - 1, y + dy));
+        samples.push(terrain[sy][sx]);
+      }
+    }
+
+    let maxElevation: ElevationLevel = 0;
+    let dominantTerrain: TerrainType = 'ground';
+
+    for (const sample of samples) {
+      if (sample.elevation > maxElevation) {
+        maxElevation = sample.elevation;
+        dominantTerrain = sample.terrain;
+      }
+    }
+
+    return {
+      terrain: dominantTerrain,
+      elevation: maxElevation,
+      textureId: samples[0].textureId,
+    };
+  }
+
+  private getTerrainNoise(x: number, y: number, terrain: TerrainType): number {
+    if (terrain === 'unwalkable') {
+      return Math.sin(x * 0.5) * Math.cos(y * 0.5) * 0.5 + 0.5;
+    }
+    if (terrain === 'ramp') {
+      return 0;
+    }
+    const noise1 = Math.sin(x * 0.3 + y * 0.2) * 0.1;
+    const noise2 = Math.cos(x * 0.5 - y * 0.3) * 0.05;
+    return noise1 + noise2;
+  }
+
+  public getHeightAt(worldX: number, worldY: number): number {
+    const x = Math.floor(worldX / this.cellSize);
+    const y = Math.floor(worldY / this.cellSize);
+
+    if (x < 0 || x >= this.mapData.width || y < 0 || y >= this.mapData.height) {
       return 0;
     }
 
-    const index = gridY * (this.segments + 1) + gridX;
-    return this.heightData[index] || 0;
+    const cell = this.mapData.terrain[y][x];
+    return ELEVATION_HEIGHTS[cell.elevation];
   }
 
-  public isWalkable(x: number, y: number): boolean {
-    const height = this.getHeightAt(x, y);
-    // Consider unwalkable if height is above certain threshold (cliffs)
-    return height < this.maxHeight * 0.7;
+  public getTerrainAt(worldX: number, worldY: number): MapCell | null {
+    const x = Math.floor(worldX / this.cellSize);
+    const y = Math.floor(worldY / this.cellSize);
+
+    if (x < 0 || x >= this.mapData.width || y < 0 || y >= this.mapData.height) {
+      return null;
+    }
+
+    return this.mapData.terrain[y][x];
+  }
+
+  public isWalkable(worldX: number, worldY: number): boolean {
+    const cell = this.getTerrainAt(worldX, worldY);
+    if (!cell) return false;
+    return cell.terrain !== 'unwalkable';
+  }
+
+  public isBuildable(worldX: number, worldY: number): boolean {
+    const cell = this.getTerrainAt(worldX, worldY);
+    if (!cell) return false;
+    return cell.terrain === 'ground';
   }
 
   public getWidth(): number {
-    return this.width;
+    return this.mapData.width * this.cellSize;
   }
 
   public getHeight(): number {
-    return this.height;
+    return this.mapData.height * this.cellSize;
   }
 
   public dispose(): void {
-    this.mesh.geometry.dispose();
-    (this.mesh.material as THREE.Material).dispose();
+    this.geometry.dispose();
+    this.material.dispose();
   }
 }
 
@@ -178,26 +248,21 @@ export class TerrainGrid {
     this.height = height;
     this.cellSize = cellSize;
     this.mesh = this.createMesh();
-    this.mesh.visible = false; // Hidden by default
+    this.mesh.visible = false;
   }
 
   private createMesh(): THREE.LineSegments {
     const geometry = new THREE.BufferGeometry();
     const vertices: number[] = [];
 
-    const halfWidth = this.width / 2;
-    const halfHeight = this.height / 2;
-
-    // Vertical lines
-    for (let x = -halfWidth; x <= halfWidth; x += this.cellSize) {
-      vertices.push(x, 0.1, -halfHeight);
-      vertices.push(x, 0.1, halfHeight);
+    for (let x = 0; x <= this.width; x += this.cellSize) {
+      vertices.push(x, 0, 0.1);
+      vertices.push(x, this.height, 0.1);
     }
 
-    // Horizontal lines
-    for (let z = -halfHeight; z <= halfHeight; z += this.cellSize) {
-      vertices.push(-halfWidth, 0.1, z);
-      vertices.push(halfWidth, 0.1, z);
+    for (let y = 0; y <= this.height; y += this.cellSize) {
+      vertices.push(0, y, 0.1);
+      vertices.push(this.width, y, 0.1);
     }
 
     geometry.setAttribute(
@@ -207,11 +272,13 @@ export class TerrainGrid {
 
     const material = new THREE.LineBasicMaterial({
       color: 0x00ff00,
-      opacity: 0.3,
+      opacity: 0.2,
       transparent: true,
     });
 
-    return new THREE.LineSegments(geometry, material);
+    const mesh = new THREE.LineSegments(geometry, material);
+    mesh.rotation.x = -Math.PI / 2;
+    return mesh;
   }
 
   public show(): void {
@@ -225,5 +292,85 @@ export class TerrainGrid {
   public dispose(): void {
     this.mesh.geometry.dispose();
     (this.mesh.material as THREE.Material).dispose();
+  }
+}
+
+// Decorative elements (watch towers, destructible rocks, etc.)
+export class MapDecorations {
+  public group: THREE.Group;
+
+  constructor(mapData: MapData) {
+    this.group = new THREE.Group();
+    this.createWatchTowers(mapData);
+    this.createDestructibles(mapData);
+  }
+
+  private createWatchTowers(mapData: MapData): void {
+    const towerGeometry = new THREE.CylinderGeometry(1, 1.5, 4, 8);
+    const towerMaterial = new THREE.MeshStandardMaterial({
+      color: 0x8080a0,
+      roughness: 0.5,
+      metalness: 0.7,
+    });
+
+    for (const tower of mapData.watchTowers) {
+      const mesh = new THREE.Mesh(towerGeometry, towerMaterial);
+      mesh.position.set(tower.x, 2, tower.y);
+      mesh.castShadow = true;
+      mesh.receiveShadow = true;
+      this.group.add(mesh);
+
+      const ringGeometry = new THREE.RingGeometry(tower.radius - 0.5, tower.radius, 32);
+      const ringMaterial = new THREE.MeshBasicMaterial({
+        color: 0x4080ff,
+        transparent: true,
+        opacity: 0.3,
+        side: THREE.DoubleSide,
+      });
+      const ring = new THREE.Mesh(ringGeometry, ringMaterial);
+      ring.rotation.x = -Math.PI / 2;
+      ring.position.set(tower.x, 0.1, tower.y);
+      this.group.add(ring);
+    }
+
+    towerGeometry.dispose();
+    towerMaterial.dispose();
+  }
+
+  private createDestructibles(mapData: MapData): void {
+    const rockGeometry = new THREE.DodecahedronGeometry(1.5);
+    const rockMaterial = new THREE.MeshStandardMaterial({
+      color: 0x6a5a4a,
+      roughness: 0.9,
+      metalness: 0.1,
+    });
+
+    for (const rock of mapData.destructibles) {
+      const mesh = new THREE.Mesh(rockGeometry, rockMaterial);
+      mesh.position.set(rock.x, 1, rock.y);
+      mesh.rotation.set(
+        Math.random() * Math.PI,
+        Math.random() * Math.PI,
+        Math.random() * Math.PI
+      );
+      mesh.scale.setScalar(0.8 + Math.random() * 0.4);
+      mesh.castShadow = true;
+      mesh.receiveShadow = true;
+      this.group.add(mesh);
+    }
+
+    rockGeometry.dispose();
+    rockMaterial.dispose();
+  }
+
+  public dispose(): void {
+    this.group.traverse((child) => {
+      if (child instanceof THREE.Mesh) {
+        child.geometry.dispose();
+        if (child.material instanceof THREE.Material) {
+          child.material.dispose();
+        }
+      }
+    });
   }
 }

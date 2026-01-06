@@ -9,40 +9,39 @@ import { Velocity } from '@/engine/components/Velocity';
 import { UNIT_DEFINITIONS } from '@/data/units/dominion';
 import { BUILDING_DEFINITIONS } from '@/data/buildings/dominion';
 import { AISystem } from '@/engine/systems/AISystem';
+import { MapData, Expansion } from '@/data/maps';
 
-export function spawnInitialEntities(game: Game): void {
+export function spawnInitialEntities(game: Game, mapData: MapData): void {
   const world = game.world;
 
-  // Spawn player base at bottom-left
-  spawnBase(game, 'player1', 20, 20);
+  // Get spawn points for each player
+  const spawns = mapData.spawns;
+  const playerSpawn = spawns.find(s => s.playerSlot === 1) || spawns[0];
+  const aiSpawn = spawns.find(s => s.playerSlot === 2) || spawns[1];
 
-  // Spawn AI base at top-right
-  spawnBase(game, 'ai', 108, 108);
+  // Spawn player base at designated spawn point
+  spawnBase(game, 'player1', playerSpawn.x, playerSpawn.y);
 
-  // Register AI player
-  const aiSystem = world.getEntitiesWith('Building').length > 0
-    ? (game.world as unknown as { systems: AISystem[] }).systems?.find(
-        (s: unknown) => s instanceof AISystem
-      ) as AISystem | undefined
-    : undefined;
+  // Spawn AI base at their spawn point
+  if (aiSpawn) {
+    spawnBase(game, 'ai', aiSpawn.x, aiSpawn.y);
 
-  if (aiSystem) {
-    aiSystem.registerAI('ai', 'dominion', 'easy');
+    // Register AI player
+    const aiSystem = world.getEntitiesWith('Building').length > 0
+      ? (game.world as unknown as { systems: AISystem[] }).systems?.find(
+          (s: unknown) => s instanceof AISystem
+        ) as AISystem | undefined
+      : undefined;
+
+    if (aiSystem) {
+      aiSystem.registerAI('ai', 'dominion', 'easy');
+    }
   }
 
-  // Spawn resource patches
-  spawnResourcePatch(game, 30, 20, 'minerals');
-  spawnResourcePatch(game, 98, 108, 'minerals');
-
-  // Additional resource patches in middle
-  spawnResourcePatch(game, 64, 50, 'minerals');
-  spawnResourcePatch(game, 64, 78, 'minerals');
-
-  // Vespene geysers
-  spawnVespeneGeyser(game, 15, 30);
-  spawnVespeneGeyser(game, 113, 98);
-  spawnVespeneGeyser(game, 55, 64);
-  spawnVespeneGeyser(game, 73, 64);
+  // Spawn resources at all expansion locations
+  for (const expansion of mapData.expansions) {
+    spawnExpansionResources(game, expansion);
+  }
 }
 
 function spawnBase(game: Game, playerId: string, x: number, y: number): void {
@@ -61,11 +60,49 @@ function spawnBase(game: Game, playerId: string, x: number, y: number): void {
   building.buildProgress = 1;
   building.state = 'complete';
 
-  // Spawn initial SCVs
+  // Spawn initial workers around the command center
   const scvDef = UNIT_DEFINITIONS['scv'];
+  const workerPositions = [
+    { x: -2, y: -2 },
+    { x: 0, y: -2 },
+    { x: 2, y: -2 },
+    { x: -2, y: 0 },
+    { x: 2, y: 0 },
+    { x: -1, y: 2 },
+  ];
+
   for (let i = 0; i < 6; i++) {
-    spawnUnit(game, scvDef, x + 3 + (i % 3), y + 3 + Math.floor(i / 3), playerId);
+    const pos = workerPositions[i];
+    spawnUnit(game, scvDef, x + pos.x, y + pos.y, playerId);
   }
+}
+
+function spawnExpansionResources(game: Game, expansion: Expansion): void {
+  // Spawn mineral patches
+  for (const mineral of expansion.minerals) {
+    spawnMineralPatch(game, mineral.x, mineral.y, mineral.amount);
+  }
+
+  // Spawn vespene geysers
+  for (const geyser of expansion.vespene) {
+    spawnVespeneGeyser(game, geyser.x, geyser.y, geyser.amount);
+  }
+}
+
+function spawnMineralPatch(game: Game, x: number, y: number, amount: number): void {
+  const world = game.world;
+  const entity = world.createEntity();
+  entity
+    .add(new Transform(x, y, 0))
+    .add(new Resource('minerals', amount, 2, 5, 2));
+}
+
+function spawnVespeneGeyser(game: Game, x: number, y: number, amount: number): void {
+  const world = game.world;
+  const entity = world.createEntity();
+  entity
+    .add(new Transform(x, y, 0))
+    .add(new Resource('vespene', amount, 3, 4, 2));
 }
 
 function spawnUnit(
@@ -90,43 +127,6 @@ function spawnUnit(
     )
     .add(new Selectable(0.5, 5, playerId))
     .add(new Velocity());
-}
-
-function spawnResourcePatch(
-  game: Game,
-  centerX: number,
-  centerY: number,
-  type: 'minerals' | 'vespene'
-): void {
-  const world = game.world;
-
-  // Spawn cluster of mineral patches
-  const positions = [
-    { x: 0, y: 0 },
-    { x: 2, y: 0 },
-    { x: 4, y: 0 },
-    { x: 1, y: 1.5 },
-    { x: 3, y: 1.5 },
-    { x: 0, y: 3 },
-    { x: 2, y: 3 },
-    { x: 4, y: 3 },
-  ];
-
-  for (const pos of positions) {
-    const entity = world.createEntity();
-    entity
-      .add(new Transform(centerX + pos.x, centerY + pos.y, 0))
-      .add(new Resource(type, 1500, 2, 5, 2));
-  }
-}
-
-function spawnVespeneGeyser(game: Game, x: number, y: number): void {
-  const world = game.world;
-
-  const entity = world.createEntity();
-  entity
-    .add(new Transform(x, y, 0))
-    .add(new Resource('vespene', 2500, 3, 4, 2));
 }
 
 export function spawnBuildingAtPosition(
