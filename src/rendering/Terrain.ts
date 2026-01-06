@@ -182,9 +182,11 @@ export class Terrain {
         }
 
         const finalHeight = baseHeight + detailNoise;
+        // Use negative Y so that after -π/2 rotation around X,
+        // the terrain ends up at positive Z (0 to mapHeight)
         vertexGrid[y][x] = new THREE.Vector3(
           x * cellSize,
-          y * cellSize,
+          -y * cellSize,  // Negative so world Z will be positive after rotation
           finalHeight
         );
 

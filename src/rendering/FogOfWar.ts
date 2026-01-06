@@ -102,6 +102,7 @@ export class FogOfWar {
     // Create mesh
     this.mesh = new THREE.Mesh(this.geometry, this.material);
     this.mesh.rotation.x = -Math.PI / 2;
+    // Position to cover terrain (X: 0 to width, Z: 0 to height)
     this.mesh.position.set(this.mapWidth / 2, 0.5, this.mapHeight / 2);
     this.mesh.renderOrder = 100; // Render after terrain
   }
