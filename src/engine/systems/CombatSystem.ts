@@ -155,7 +155,7 @@ export class CombatSystem extends System {
         if (distance <= unit.attackRange) {
           // In range - attempt attack
           if (unit.canAttack(gameTime)) {
-            this.performAttack(unit, targetHealth, gameTime);
+            this.performAttack(unit, transform, targetHealth, targetTransform, gameTime);
           }
         }
         // If not in range, MovementSystem will handle moving toward target
@@ -207,7 +207,13 @@ export class CombatSystem extends System {
     return nearestId;
   }
 
-  private performAttack(attacker: Unit, targetHealth: Health, gameTime: number): void {
+  private performAttack(
+    attacker: Unit,
+    attackerTransform: Transform,
+    targetHealth: Health,
+    targetTransform: Transform,
+    gameTime: number
+  ): void {
     attacker.lastAttackTime = gameTime;
 
     // Calculate damage with type multiplier
@@ -224,6 +230,8 @@ export class CombatSystem extends System {
 
     this.game.eventBus.emit('combat:attack', {
       attackerId: attacker.unitId,
+      attackerPos: { x: attackerTransform.x, y: attackerTransform.y },
+      targetPos: { x: targetTransform.x, y: targetTransform.y },
       damage: finalDamage,
       damageType: attacker.damageType,
     });

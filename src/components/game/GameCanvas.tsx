@@ -9,6 +9,7 @@ import { UnitRenderer } from '@/rendering/UnitRenderer';
 import { BuildingRenderer } from '@/rendering/BuildingRenderer';
 import { ResourceRenderer } from '@/rendering/ResourceRenderer';
 import { FogOfWar } from '@/rendering/FogOfWar';
+import { EffectsRenderer } from '@/rendering/EffectsRenderer';
 import { useGameStore } from '@/store/gameStore';
 import { SelectionBox } from './SelectionBox';
 import { spawnInitialEntities } from '@/utils/gameSetup';
@@ -29,10 +30,12 @@ export function GameCanvas() {
   const buildingRendererRef = useRef<BuildingRenderer | null>(null);
   const resourceRendererRef = useRef<ResourceRenderer | null>(null);
   const fogOfWarRef = useRef<FogOfWar | null>(null);
+  const effectsRendererRef = useRef<EffectsRenderer | null>(null);
 
   const [isSelecting, setIsSelecting] = useState(false);
   const [selectionStart, setSelectionStart] = useState({ x: 0, y: 0 });
   const [selectionEnd, setSelectionEnd] = useState({ x: 0, y: 0 });
+  const [isAttackMove, setIsAttackMove] = useState(false);
 
   const { isBuilding, buildingType } = useGameStore();
 
@@ -121,6 +124,10 @@ export function GameCanvas() {
     scene.add(fogOfWar.mesh);
     fogOfWarRef.current = fogOfWar;
 
+    // Create effects renderer for combat animations
+    const effectsRenderer = new EffectsRenderer(scene, game.eventBus);
+    effectsRendererRef.current = effectsRenderer;
+
     // Spawn initial entities based on map data
     spawnInitialEntities(game, CURRENT_MAP);
 
@@ -142,6 +149,7 @@ export function GameCanvas() {
       buildingRendererRef.current?.update();
       resourceRendererRef.current?.update();
       fogOfWarRef.current?.update();
+      effectsRendererRef.current?.update(deltaTime);
 
       // Update game store camera position
       const pos = camera.getPosition();
@@ -173,6 +181,7 @@ export function GameCanvas() {
       decorations.dispose();
       grid.dispose();
       fogOfWar.dispose();
+      effectsRenderer.dispose();
       camera.dispose();
       unitRendererRef.current?.dispose();
       buildingRendererRef.current?.dispose();
@@ -184,8 +193,24 @@ export function GameCanvas() {
   // Handle mouse events
   const handleMouseDown = useCallback((e: React.MouseEvent) => {
     if (e.button === 0) {
-      // Left click - start selection or place building
-      if (isBuilding && buildingType) {
+      // Left click - start selection, place building, or attack-move
+      if (isAttackMove) {
+        // Attack-move command
+        const worldPos = cameraRef.current?.screenToWorld(e.clientX, e.clientY);
+        if (worldPos && gameRef.current) {
+          const selectedUnits = useGameStore.getState().selectedUnits;
+          if (selectedUnits.length > 0) {
+            gameRef.current.processCommand({
+              tick: gameRef.current.getCurrentTick(),
+              playerId: 'player1',
+              type: 'ATTACK',
+              entityIds: selectedUnits,
+              targetPosition: { x: worldPos.x, y: worldPos.z },
+            });
+          }
+        }
+        setIsAttackMove(false);
+      } else if (isBuilding && buildingType) {
         // Place building
         const worldPos = cameraRef.current?.screenToWorld(e.clientX, e.clientY);
         if (worldPos && gameRef.current) {
@@ -202,7 +227,11 @@ export function GameCanvas() {
         setSelectionEnd({ x: e.clientX, y: e.clientY });
       }
     } else if (e.button === 2) {
-      // Right click - issue command
+      // Right click - issue move command (or cancel attack-move)
+      if (isAttackMove) {
+        setIsAttackMove(false);
+        return;
+      }
       const worldPos = cameraRef.current?.screenToWorld(e.clientX, e.clientY);
       if (worldPos && gameRef.current) {
         const selectedUnits = useGameStore.getState().selectedUnits;
@@ -218,7 +247,7 @@ export function GameCanvas() {
         }
       }
     }
-  }, [isBuilding, buildingType]);
+  }, [isBuilding, buildingType, isAttackMove]);
 
   const handleMouseMove = useCallback((e: React.MouseEvent) => {
     if (isSelecting) {
@@ -293,8 +322,10 @@ export function GameCanvas() {
       // Commands
       switch (e.key.toLowerCase()) {
         case 'a':
-          // Attack move
-          // TODO: Implement attack-move cursor
+          // Attack move - enable attack cursor
+          if (useGameStore.getState().selectedUnits.length > 0) {
+            setIsAttackMove(true);
+          }
           break;
         case 's':
           // Stop
@@ -315,8 +346,10 @@ export function GameCanvas() {
           });
           break;
         case 'escape':
-          // Cancel building mode or clear selection
-          if (isBuilding) {
+          // Cancel attack-move, building mode, or clear selection
+          if (isAttackMove) {
+            setIsAttackMove(false);
+          } else if (isBuilding) {
             useGameStore.getState().setBuildingMode(null);
           } else {
             game.eventBus.emit('selection:clear');
@@ -327,7 +360,7 @@ export function GameCanvas() {
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [isBuilding]);
+  }, [isBuilding, isAttackMove]);
 
   return (
     <div
@@ -353,6 +386,14 @@ export function GameCanvas() {
         <div className="absolute top-4 left-1/2 transform -translate-x-1/2 bg-black/80 px-4 py-2 rounded border border-void-600">
           <span className="text-void-300">
             Placing {buildingType} - Click to place, ESC to cancel
+          </span>
+        </div>
+      )}
+
+      {isAttackMove && (
+        <div className="absolute top-4 left-1/2 transform -translate-x-1/2 bg-black/80 px-4 py-2 rounded border border-red-600">
+          <span className="text-red-400">
+            Attack-Move - Click target, ESC to cancel
           </span>
         </div>
       )}
