@@ -41,58 +41,92 @@ body {
   background: rgba(132, 61, 255, 0.7);
 }
 
-/* Game UI styles */
+/* Game UI styles - Modern RTS Interface */
 @layer components {
+  /* Base panel style - matches ResourcePanel quality */
   .game-panel {
-    @apply bg-black/80 border border-void-700/50 backdrop-blur-sm;
+    @apply bg-black/70 border border-void-700 rounded-lg backdrop-blur-sm shadow-lg;
   }
 
+  /* Modern buttons with gradient and glow */
   .game-button {
-    @apply px-4 py-2 bg-void-800 hover:bg-void-700 border border-void-600
-           text-white font-display uppercase tracking-wider transition-all
-           hover:shadow-[var(--void-glow)] active:scale-95;
+    @apply px-4 py-2 bg-gradient-to-b from-void-700 to-void-800
+           hover:from-void-600 hover:to-void-700
+           border border-void-500/50 rounded-md
+           text-white font-medium text-sm tracking-wide transition-all duration-200
+           hover:shadow-[0_0_12px_rgba(74,144,217,0.3)]
+           active:scale-[0.98] active:shadow-inner;
   }
 
   .game-button-primary {
-    @apply game-button bg-void-600 hover:bg-void-500;
+    @apply px-4 py-2 bg-gradient-to-b from-blue-600 to-blue-700
+           hover:from-blue-500 hover:to-blue-600
+           border border-blue-400/50 rounded-md
+           text-white font-medium text-sm tracking-wide transition-all duration-200
+           hover:shadow-[0_0_16px_rgba(59,130,246,0.4)]
+           active:scale-[0.98];
   }
 
   .resource-display {
-    @apply flex items-center gap-2 px-3 py-1 bg-black/60 border border-void-800/50 rounded;
+    @apply flex items-center gap-2 px-3 py-1.5 bg-black/50 border border-void-700/50 rounded-md;
   }
 
   .control-group-indicator {
-    @apply w-6 h-6 flex items-center justify-center bg-void-900/80 border border-void-700
-           text-xs font-mono text-void-300;
+    @apply w-7 h-7 flex items-center justify-center
+           bg-gradient-to-b from-void-800 to-void-900
+           border border-void-600/50 rounded
+           text-xs font-mono text-void-200 shadow-inner;
   }
 
+  /* Minimap with modern border treatment */
   .minimap-container {
-    @apply relative w-48 h-48 bg-black/90 border-2 border-void-700/50;
+    @apply relative w-48 h-48 bg-black/90 rounded-lg overflow-hidden
+           border border-void-600 shadow-[0_0_20px_rgba(0,0,0,0.5)];
   }
 
   .selection-box {
-    @apply absolute border-2 border-void-400 bg-void-400/20 pointer-events-none;
+    @apply absolute border-2 border-blue-400/80 bg-blue-400/15 pointer-events-none
+           shadow-[0_0_8px_rgba(59,130,246,0.3)];
   }
 
   .unit-health-bar {
-    @apply absolute -top-2 left-1/2 -translate-x-1/2 w-8 h-1 bg-black/80;
+    @apply absolute -top-2 left-1/2 -translate-x-1/2 w-10 h-1.5
+           bg-black/80 rounded-full overflow-hidden border border-black/50;
   }
 
   .unit-health-fill {
-    @apply h-full bg-green-500 transition-all;
+    @apply h-full bg-gradient-to-r from-green-600 to-green-400 transition-all duration-200;
   }
 
+  /* Command card with improved grid styling */
   .command-card {
-    @apply grid grid-cols-4 gap-1 p-2 bg-black/80 border border-void-700/50;
+    @apply grid grid-cols-4 gap-1.5 p-3
+           bg-black/70 border border-void-700 rounded-lg backdrop-blur-sm;
   }
 
   .command-button {
-    @apply w-12 h-12 bg-void-900 hover:bg-void-800 border border-void-700/50
-           flex items-center justify-center transition-all hover:border-void-500;
+    @apply w-12 h-12 relative
+           bg-gradient-to-b from-void-800 to-void-900
+           hover:from-void-700 hover:to-void-800
+           border border-void-600/50 rounded-md
+           flex flex-col items-center justify-center gap-0.5
+           transition-all duration-150
+           hover:border-blue-500/50 hover:shadow-[0_0_8px_rgba(59,130,246,0.2)]
+           active:scale-95;
   }
 
   .command-button-disabled {
-    @apply opacity-50 cursor-not-allowed hover:bg-void-900 hover:border-void-700/50;
+    @apply opacity-40 cursor-not-allowed
+           hover:from-void-800 hover:to-void-900
+           hover:border-void-600/50 hover:shadow-none;
+  }
+
+  /* Tooltip styling */
+  .tooltip {
+    @apply absolute z-50 px-3 py-2 text-sm
+           bg-black/95 border border-void-600 rounded-md
+           text-void-200 shadow-xl backdrop-blur-sm
+           pointer-events-none;
   }
 }
 

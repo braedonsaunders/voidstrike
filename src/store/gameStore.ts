@@ -42,6 +42,7 @@ export interface GameState {
   cameraX: number;
   cameraY: number;
   cameraZoom: number;
+  pendingCameraMove: { x: number; y: number } | null;
 
   // Actions
   selectUnits: (ids: number[]) => void;
@@ -59,6 +60,8 @@ export interface GameState {
   setBuildingMode: (type: string | null) => void;
   setRallyPointMode: (isActive: boolean) => void;
   setCamera: (x: number, y: number, zoom?: number) => void;
+  moveCameraTo: (x: number, y: number) => void;
+  clearPendingCameraMove: () => void;
   addResearch: (playerId: string, upgradeId: string, effects: UpgradeEffect[], completedAt: number) => void;
   hasResearch: (playerId: string, upgradeId: string) => boolean;
   getUpgradeBonus: (playerId: string, unitId: string, effectType: UpgradeEffect['type']) => number;
@@ -88,6 +91,7 @@ const initialState = {
   cameraX: 64,
   cameraY: 64,
   cameraZoom: 30,
+  pendingCameraMove: null,
 };
 
 export const useGameStore = create<GameState>((set, get) => ({
@@ -160,6 +164,12 @@ export const useGameStore = create<GameState>((set, get) => ({
       cameraY: y,
       cameraZoom: zoom ?? state.cameraZoom,
     })),
+
+  moveCameraTo: (x, y) =>
+    set({ pendingCameraMove: { x, y } }),
+
+  clearPendingCameraMove: () =>
+    set({ pendingCameraMove: null }),
 
   addResearch: (playerId, upgradeId, effects, completedAt) =>
     set((state) => {

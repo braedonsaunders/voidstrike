@@ -14,11 +14,11 @@ export interface CameraConfig {
 const DEFAULT_CONFIG: CameraConfig = {
   minZoom: 10,
   maxZoom: 80,
-  panSpeed: 50,
+  panSpeed: 80,
   zoomSpeed: 5,
   rotationSpeed: 2,
-  edgeScrollSpeed: 30,
-  edgeScrollThreshold: 30,
+  edgeScrollSpeed: 60,
+  edgeScrollThreshold: 40,
   boundaryPadding: 10,
 };
 

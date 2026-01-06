@@ -167,6 +167,13 @@ export function GameCanvas() {
       const deltaTime = currentTime - lastTime;
       lastTime = currentTime;
 
+      // Check for pending camera move from minimap
+      const pendingMove = useGameStore.getState().pendingCameraMove;
+      if (pendingMove) {
+        camera.setPosition(pendingMove.x, pendingMove.y);
+        useGameStore.getState().clearPendingCameraMove();
+      }
+
       // Update camera
       camera.update(deltaTime);
 

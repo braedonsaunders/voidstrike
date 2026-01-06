@@ -69,10 +69,8 @@ export class SpawnSystem extends System {
       entity.add(abilityComponent);
     }
 
-    // Update supply for player units
-    if (playerId === 'player1' && definition.supplyCost > 0) {
-      useGameStore.getState().addSupply(definition.supplyCost);
-    }
+    // Note: Supply is already reserved when production is queued in ProductionSystem
+    // So we don't add supply here - it was already accounted for
 
     // Emit spawn complete event for UI feedback
     this.game.eventBus.emit('unit:spawned', {

@@ -172,11 +172,15 @@ export function Minimap() {
         }
       }
 
-      // Draw camera viewport
-      const viewWidth = (cameraZoom * 2) * scale;
-      const viewHeight = (cameraZoom * 1.5) * scale;
-      const viewX = cameraX * scale - viewWidth / 2;
-      const viewY = cameraY * scale - viewHeight / 2;
+      // Draw camera viewport - read fresh values from store for zoom tracking
+      const storeState = useGameStore.getState();
+      const currentZoom = storeState.cameraZoom;
+      const currentCameraX = storeState.cameraX;
+      const currentCameraY = storeState.cameraY;
+      const viewWidth = (currentZoom * 2) * scale;
+      const viewHeight = (currentZoom * 1.5) * scale;
+      const viewX = currentCameraX * scale - viewWidth / 2;
+      const viewY = currentCameraY * scale - viewHeight / 2;
 
       ctx.strokeStyle = '#ffffff';
       ctx.lineWidth = 1.5;
@@ -236,7 +240,7 @@ export function Minimap() {
       setIsDragging(true);
       const pos = screenToMap(e.clientX, e.clientY);
       if (pos) {
-        useGameStore.getState().setCamera(pos.x, pos.y);
+        useGameStore.getState().moveCameraTo(pos.x, pos.y);
       }
     }
   }, [screenToMap]);
@@ -246,7 +250,7 @@ export function Minimap() {
     if (isDragging) {
       const pos = screenToMap(e.clientX, e.clientY);
       if (pos) {
-        useGameStore.getState().setCamera(pos.x, pos.y);
+        useGameStore.getState().moveCameraTo(pos.x, pos.y);
       }
     }
   }, [isDragging, screenToMap]);
@@ -304,7 +308,7 @@ export function Minimap() {
   const handleDoubleClick = useCallback((e: React.MouseEvent<HTMLCanvasElement>) => {
     const pos = screenToMap(e.clientX, e.clientY);
     if (pos) {
-      useGameStore.getState().setCamera(pos.x, pos.y);
+      useGameStore.getState().moveCameraTo(pos.x, pos.y);
     }
   }, [screenToMap]);
 

@@ -9,25 +9,14 @@ import { TechTreePanel } from './TechTreePanel';
 import { ProductionQueuePanel } from './ProductionQueuePanel';
 
 export function HUD() {
-  const { isPaused, togglePause, gameTime, setShowTechTree } = useGameStore();
-
-  const formatTime = (seconds: number) => {
-    const mins = Math.floor(seconds / 60);
-    const secs = Math.floor(seconds % 60);
-    return `${mins}:${secs.toString().padStart(2, '0')}`;
-  };
+  const { isPaused, togglePause, setShowTechTree } = useGameStore();
 
   return (
     <div className="absolute inset-0 pointer-events-none">
       {/* Top bar */}
       <div className="absolute top-0 left-0 right-0 flex justify-between items-start p-2 pointer-events-auto">
-        {/* Resources */}
+        {/* Resources (includes game time) */}
         <ResourcePanel />
-
-        {/* Game time */}
-        <div className="game-panel px-4 py-2">
-          <span className="font-mono text-void-300">{formatTime(gameTime)}</span>
-        </div>
 
         {/* Menu buttons */}
         <div className="flex gap-2">

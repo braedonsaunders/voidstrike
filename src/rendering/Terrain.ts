@@ -239,23 +239,23 @@ export class Terrain {
           colors6.push(color);
         }
 
-        // Triangle 1 (v00, v10, v01)
+        // Triangle 1 (v00, v01, v10) - reversed winding for correct normals after rotation
         vertices.push(v00.x, v00.y, v00.z);
-        vertices.push(v10.x, v10.y, v10.z);
         vertices.push(v01.x, v01.y, v01.z);
+        vertices.push(v10.x, v10.y, v10.z);
 
         uvs.push(x / width, y / height);
-        uvs.push((x + 1) / width, y / height);
         uvs.push(x / width, (y + 1) / height);
+        uvs.push((x + 1) / width, y / height);
 
-        // Triangle 2 (v10, v11, v01)
+        // Triangle 2 (v10, v01, v11) - reversed winding for correct normals after rotation
         vertices.push(v10.x, v10.y, v10.z);
-        vertices.push(v11.x, v11.y, v11.z);
         vertices.push(v01.x, v01.y, v01.z);
+        vertices.push(v11.x, v11.y, v11.z);
 
         uvs.push((x + 1) / width, y / height);
-        uvs.push((x + 1) / width, (y + 1) / height);
         uvs.push(x / width, (y + 1) / height);
+        uvs.push((x + 1) / width, (y + 1) / height);
 
         // Add colors
         for (let i = 0; i < 6; i++) {
