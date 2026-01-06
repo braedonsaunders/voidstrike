@@ -148,9 +148,9 @@ export function CommandCard() {
         label: 'Rally',
         shortcut: 'R',
         action: () => {
-          // TODO: Enter rally point mode
+          useGameStore.getState().setRallyPointMode(true);
         },
-        tooltip: 'Set rally point',
+        tooltip: 'Set rally point (right-click to set)',
       });
     }
 

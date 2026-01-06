@@ -23,6 +23,7 @@ export interface GameState {
   // UI state
   isBuilding: boolean;
   buildingType: string | null;
+  isSettingRallyPoint: boolean;
   showMinimap: boolean;
   showResourcePanel: boolean;
 
@@ -45,6 +46,7 @@ export interface GameState {
   togglePause: () => void;
   setGameSpeed: (speed: number) => void;
   setBuildingMode: (type: string | null) => void;
+  setRallyPointMode: (isActive: boolean) => void;
   setCamera: (x: number, y: number, zoom?: number) => void;
   reset: () => void;
 }
@@ -63,6 +65,7 @@ const initialState = {
   faction: 'dominion',
   isBuilding: false,
   buildingType: null,
+  isSettingRallyPoint: false,
   showMinimap: true,
   showResourcePanel: true,
   cameraX: 64,
@@ -124,6 +127,14 @@ export const useGameStore = create<GameState>((set, get) => ({
     set({
       isBuilding: type !== null,
       buildingType: type,
+      isSettingRallyPoint: false,
+    }),
+
+  setRallyPointMode: (isActive) =>
+    set({
+      isSettingRallyPoint: isActive,
+      isBuilding: false,
+      buildingType: null,
     }),
 
   setCamera: (x, y, zoom) =>

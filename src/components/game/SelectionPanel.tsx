@@ -6,6 +6,7 @@ import { Unit } from '@/engine/components/Unit';
 import { Building } from '@/engine/components/Building';
 import { Health } from '@/engine/components/Health';
 import { useEffect, useState } from 'react';
+import { ProductionQueuePanel } from './ProductionQueuePanel';
 
 interface SelectedEntityInfo {
   id: number;
@@ -84,16 +85,16 @@ export function SelectionPanel() {
       : 0;
 
     return (
-      <div className="game-panel p-4 h-32">
+      <div className="game-panel p-4 min-h-32">
         <div className="flex items-start gap-4">
           {/* Portrait placeholder */}
-          <div className="w-16 h-16 bg-void-900 border border-void-700 flex items-center justify-center">
+          <div className="w-16 h-16 bg-void-900 border border-void-700 flex items-center justify-center flex-shrink-0">
             <span className="text-2xl text-void-500">
               {entity.type === 'unit' ? '👤' : '🏠'}
             </span>
           </div>
 
-          <div className="flex-1">
+          <div className="flex-1 min-w-0">
             <h3 className="font-display text-lg text-void-200">{entity.name}</h3>
             <p className="text-sm text-void-500 capitalize">{entity.state}</p>
 
@@ -138,6 +139,9 @@ export function SelectionPanel() {
             </div>
           </div>
         </div>
+
+        {/* Production queue for buildings */}
+        {entity.type === 'building' && <ProductionQueuePanel />}
       </div>
     );
   }

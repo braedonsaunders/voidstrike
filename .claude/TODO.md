@@ -16,7 +16,8 @@
 - [x] Unit rendering with instancing
 - [x] Building rendering
 - [x] Selection indicators
-- [ ] Fog of war shader
+- [x] Fog of war shader
+- [x] Combat effects (projectiles, hits)
 - [ ] Day/night cycle (stretch)
 
 ### Input & Selection
@@ -40,8 +41,8 @@
 - [x] Unit spawning system
 - [x] Building placement with validation
 - [x] Construction progress
-- [ ] Rally points
-- [ ] Production queues
+- [x] Production queues
+- [x] Rally points
 
 ### Resources
 - [x] Resource node system
@@ -52,17 +53,17 @@
 ## Phase 2: Combat Depth
 
 ### Combat System
-- [ ] Attack command implementation
-- [ ] Damage calculation (types/armor)
-- [ ] Unit death and cleanup
-- [ ] Attack animations
-- [ ] Projectile system
+- [x] Attack command implementation
+- [x] Damage calculation (types/armor)
+- [x] Unit death and cleanup
+- [x] Attack animations
+- [x] Projectile system
 - [ ] Area of effect damage
 
 ### Abilities
-- [ ] Ability system framework
-- [ ] Cooldown management
-- [ ] Active ability targeting
+- [x] Ability system framework
+- [x] Cooldown management
+- [x] Active ability targeting
 - [ ] Passive ability effects
 
 ### Tech Tree
@@ -72,8 +73,8 @@
 - [ ] Building dependencies
 
 ### UI Improvements
-- [ ] Command card (abilities/actions)
-- [ ] Production panel
+- [x] Command card (abilities/actions)
+- [x] Production panel
 - [ ] Tech tree viewer
 - [ ] Unit info tooltips
 - [ ] Damage numbers

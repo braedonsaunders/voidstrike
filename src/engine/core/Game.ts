@@ -8,6 +8,7 @@ import { ProductionSystem } from '../systems/ProductionSystem';
 import { ResourceSystem } from '../systems/ResourceSystem';
 import { AISystem } from '../systems/AISystem';
 import { VisionSystem } from '../systems/VisionSystem';
+import { AbilitySystem } from '../systems/AbilitySystem';
 
 export type GameState = 'initializing' | 'running' | 'paused' | 'ended';
 
@@ -75,6 +76,7 @@ export class Game {
     this.world.addSystem(new CombatSystem(this));
     this.world.addSystem(new ProductionSystem(this));
     this.world.addSystem(new ResourceSystem(this));
+    this.world.addSystem(new AbilitySystem(this));
     this.world.addSystem(this.visionSystem);
 
     if (this.config.aiEnabled) {

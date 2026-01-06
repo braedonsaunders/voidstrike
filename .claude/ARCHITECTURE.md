@@ -23,7 +23,9 @@ voidstrike/
 │   │   │   ├── HUD.tsx
 │   │   │   ├── Minimap.tsx
 │   │   │   ├── CommandCard.tsx
-│   │   │   └── SelectionPanel.tsx
+│   │   │   ├── SelectionPanel.tsx
+│   │   │   ├── ProductionQueuePanel.tsx # Building production UI
+│   │   │   └── ResourcePanel.tsx
 │   │   └── ui/                # Reusable UI components
 │   ├── engine/
 │   │   ├── core/
@@ -40,14 +42,18 @@ voidstrike/
 │   │   │   ├── CombatSystem.ts
 │   │   │   ├── SelectionSystem.ts
 │   │   │   ├── ProductionSystem.ts
-│   │   │   └── ResourceSystem.ts
+│   │   │   ├── ResourceSystem.ts
+│   │   │   ├── VisionSystem.ts     # Fog of war visibility
+│   │   │   ├── AbilitySystem.ts    # Unit abilities & cooldowns
+│   │   │   └── AISystem.ts         # AI opponent behavior
 │   │   ├── components/
 │   │   │   ├── Transform.ts
 │   │   │   ├── Health.ts
 │   │   │   ├── Selectable.ts
 │   │   │   ├── Unit.ts
 │   │   │   ├── Building.ts
-│   │   │   └── Resource.ts
+│   │   │   ├── Resource.ts
+│   │   │   └── Ability.ts          # Unit abilities component
 │   │   └── pathfinding/
 │   │       ├── AStar.ts
 │   │       ├── Grid.ts
@@ -57,7 +63,10 @@ voidstrike/
 │   │   ├── Camera.ts          # RTS camera controller
 │   │   ├── Terrain.ts         # Terrain mesh generation
 │   │   ├── UnitRenderer.ts    # Instanced unit rendering
-│   │   └── FogOfWar.ts        # Fog of war system
+│   │   ├── BuildingRenderer.ts # Building mesh rendering
+│   │   ├── FogOfWar.ts        # Fog of war system
+│   │   ├── EffectsRenderer.ts # Combat effects (projectiles, hits)
+│   │   └── RallyPointRenderer.ts # Building rally point visuals
 │   ├── input/
 │   │   ├── InputManager.ts    # Input abstraction
 │   │   ├── Selection.ts       # Box selection

@@ -10,6 +10,7 @@ import { BuildingRenderer } from '@/rendering/BuildingRenderer';
 import { ResourceRenderer } from '@/rendering/ResourceRenderer';
 import { FogOfWar } from '@/rendering/FogOfWar';
 import { EffectsRenderer } from '@/rendering/EffectsRenderer';
+import { RallyPointRenderer } from '@/rendering/RallyPointRenderer';
 import { useGameStore } from '@/store/gameStore';
 import { SelectionBox } from './SelectionBox';
 import { spawnInitialEntities } from '@/utils/gameSetup';
@@ -31,13 +32,14 @@ export function GameCanvas() {
   const resourceRendererRef = useRef<ResourceRenderer | null>(null);
   const fogOfWarRef = useRef<FogOfWar | null>(null);
   const effectsRendererRef = useRef<EffectsRenderer | null>(null);
+  const rallyPointRendererRef = useRef<RallyPointRenderer | null>(null);
 
   const [isSelecting, setIsSelecting] = useState(false);
   const [selectionStart, setSelectionStart] = useState({ x: 0, y: 0 });
   const [selectionEnd, setSelectionEnd] = useState({ x: 0, y: 0 });
   const [isAttackMove, setIsAttackMove] = useState(false);
 
-  const { isBuilding, buildingType } = useGameStore();
+  const { isBuilding, buildingType, isSettingRallyPoint } = useGameStore();
 
   // Initialize Three.js and game engine
   useEffect(() => {
@@ -128,6 +130,10 @@ export function GameCanvas() {
     const effectsRenderer = new EffectsRenderer(scene, game.eventBus);
     effectsRendererRef.current = effectsRenderer;
 
+    // Create rally point renderer
+    const rallyPointRenderer = new RallyPointRenderer(scene, game.eventBus, game.world, 'player1');
+    rallyPointRendererRef.current = rallyPointRenderer;
+
     // Spawn initial entities based on map data
     spawnInitialEntities(game, CURRENT_MAP);
 
@@ -150,6 +156,7 @@ export function GameCanvas() {
       resourceRendererRef.current?.update();
       fogOfWarRef.current?.update();
       effectsRendererRef.current?.update(deltaTime);
+      rallyPointRendererRef.current?.update();
 
       // Update game store camera position
       const pos = camera.getPosition();
@@ -182,6 +189,7 @@ export function GameCanvas() {
       grid.dispose();
       fogOfWar.dispose();
       effectsRenderer.dispose();
+      rallyPointRenderer.dispose();
       camera.dispose();
       unitRendererRef.current?.dispose();
       buildingRendererRef.current?.dispose();
@@ -227,14 +235,28 @@ export function GameCanvas() {
         setSelectionEnd({ x: e.clientX, y: e.clientY });
       }
     } else if (e.button === 2) {
-      // Right click - issue move command (or cancel attack-move)
+      // Right click - issue move command, set rally, or cancel attack-move
       if (isAttackMove) {
         setIsAttackMove(false);
         return;
       }
+
       const worldPos = cameraRef.current?.screenToWorld(e.clientX, e.clientY);
       if (worldPos && gameRef.current) {
         const selectedUnits = useGameStore.getState().selectedUnits;
+
+        // If in rally point mode, set rally point for selected buildings
+        if (isSettingRallyPoint) {
+          for (const buildingId of selectedUnits) {
+            gameRef.current.eventBus.emit('rally:set', {
+              buildingId,
+              x: worldPos.x,
+              y: worldPos.z,
+            });
+          }
+          useGameStore.getState().setRallyPointMode(false);
+          return;
+        }
 
         if (selectedUnits.length > 0) {
           gameRef.current.processCommand({
@@ -247,7 +269,7 @@ export function GameCanvas() {
         }
       }
     }
-  }, [isBuilding, buildingType, isAttackMove]);
+  }, [isBuilding, buildingType, isAttackMove, isSettingRallyPoint]);
 
   const handleMouseMove = useCallback((e: React.MouseEvent) => {
     if (isSelecting) {
@@ -346,13 +368,24 @@ export function GameCanvas() {
           });
           break;
         case 'escape':
-          // Cancel attack-move, building mode, or clear selection
+          // Cancel attack-move, rally mode, building mode, or clear selection
           if (isAttackMove) {
             setIsAttackMove(false);
+          } else if (isSettingRallyPoint) {
+            useGameStore.getState().setRallyPointMode(false);
           } else if (isBuilding) {
             useGameStore.getState().setBuildingMode(null);
           } else {
             game.eventBus.emit('selection:clear');
+          }
+          break;
+        case 'r':
+          // Rally point shortcut for buildings
+          {
+            const store = useGameStore.getState();
+            if (store.selectedUnits.length > 0) {
+              store.setRallyPointMode(true);
+            }
           }
           break;
       }
@@ -360,7 +393,7 @@ export function GameCanvas() {
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [isBuilding, isAttackMove]);
+  }, [isBuilding, isAttackMove, isSettingRallyPoint]);
 
   return (
     <div
@@ -394,6 +427,14 @@ export function GameCanvas() {
         <div className="absolute top-4 left-1/2 transform -translate-x-1/2 bg-black/80 px-4 py-2 rounded border border-red-600">
           <span className="text-red-400">
             Attack-Move - Click target, ESC to cancel
+          </span>
+        </div>
+      )}
+
+      {isSettingRallyPoint && (
+        <div className="absolute top-4 left-1/2 transform -translate-x-1/2 bg-black/80 px-4 py-2 rounded border border-green-600">
+          <span className="text-green-400">
+            Set Rally Point - Right-click to set, ESC to cancel
           </span>
         </div>
       )}
