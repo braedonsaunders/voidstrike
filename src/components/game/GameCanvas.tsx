@@ -8,6 +8,7 @@ import { Terrain, TerrainGrid, MapDecorations } from '@/rendering/Terrain';
 import { UnitRenderer } from '@/rendering/UnitRenderer';
 import { BuildingRenderer } from '@/rendering/BuildingRenderer';
 import { ResourceRenderer } from '@/rendering/ResourceRenderer';
+import { FogOfWar } from '@/rendering/FogOfWar';
 import { useGameStore } from '@/store/gameStore';
 import { SelectionBox } from './SelectionBox';
 import { spawnInitialEntities } from '@/utils/gameSetup';
@@ -27,6 +28,7 @@ export function GameCanvas() {
   const unitRendererRef = useRef<UnitRenderer | null>(null);
   const buildingRendererRef = useRef<BuildingRenderer | null>(null);
   const resourceRendererRef = useRef<ResourceRenderer | null>(null);
+  const fogOfWarRef = useRef<FogOfWar | null>(null);
 
   const [isSelecting, setIsSelecting] = useState(false);
   const [selectionStart, setSelectionStart] = useState({ x: 0, y: 0 });
@@ -108,9 +110,16 @@ export function GameCanvas() {
     gameRef.current = game;
 
     // Create renderers
-    unitRendererRef.current = new UnitRenderer(scene, game.world);
-    buildingRendererRef.current = new BuildingRenderer(scene, game.world);
+    unitRendererRef.current = new UnitRenderer(scene, game.world, game.visionSystem);
+    buildingRendererRef.current = new BuildingRenderer(scene, game.world, game.visionSystem);
     resourceRendererRef.current = new ResourceRenderer(scene, game.world);
+
+    // Create fog of war overlay
+    const fogOfWar = new FogOfWar({ mapWidth, mapHeight });
+    fogOfWar.setVisionSystem(game.visionSystem);
+    fogOfWar.setPlayerId('player1');
+    scene.add(fogOfWar.mesh);
+    fogOfWarRef.current = fogOfWar;
 
     // Spawn initial entities based on map data
     spawnInitialEntities(game, CURRENT_MAP);
@@ -132,6 +141,7 @@ export function GameCanvas() {
       unitRendererRef.current?.update();
       buildingRendererRef.current?.update();
       resourceRendererRef.current?.update();
+      fogOfWarRef.current?.update();
 
       // Update game store camera position
       const pos = camera.getPosition();
@@ -162,6 +172,7 @@ export function GameCanvas() {
       terrain.dispose();
       decorations.dispose();
       grid.dispose();
+      fogOfWar.dispose();
       camera.dispose();
       unitRendererRef.current?.dispose();
       buildingRendererRef.current?.dispose();

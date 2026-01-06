@@ -4,6 +4,7 @@ import { Transform } from '@/engine/components/Transform';
 import { Unit } from '@/engine/components/Unit';
 import { Health } from '@/engine/components/Health';
 import { Selectable } from '@/engine/components/Selectable';
+import { VisionSystem } from '@/engine/systems/VisionSystem';
 
 interface UnitMeshData {
   mesh: THREE.Mesh;
@@ -14,6 +15,8 @@ interface UnitMeshData {
 export class UnitRenderer {
   private scene: THREE.Scene;
   private world: World;
+  private visionSystem: VisionSystem | null;
+  private playerId: string = 'player1';
   private unitMeshes: Map<number, UnitMeshData> = new Map();
 
   // Shared geometries and materials
@@ -21,12 +24,14 @@ export class UnitRenderer {
   private workerMaterial: THREE.MeshStandardMaterial;
   private marineMaterial: THREE.MeshStandardMaterial;
   private defaultMaterial: THREE.MeshStandardMaterial;
+  private enemyMaterial: THREE.MeshStandardMaterial;
   private selectionGeometry: THREE.RingGeometry;
   private selectionMaterial: THREE.MeshBasicMaterial;
 
-  constructor(scene: THREE.Scene, world: World) {
+  constructor(scene: THREE.Scene, world: World, visionSystem?: VisionSystem) {
     this.scene = scene;
     this.world = world;
+    this.visionSystem = visionSystem ?? null;
 
     // Create shared resources
     this.unitGeometry = new THREE.CylinderGeometry(0.4, 0.5, 1, 8);
@@ -49,6 +54,12 @@ export class UnitRenderer {
       metalness: 0.3,
     });
 
+    this.enemyMaterial = new THREE.MeshStandardMaterial({
+      color: 0xd94a4a,
+      roughness: 0.6,
+      metalness: 0.4,
+    });
+
     this.selectionGeometry = new THREE.RingGeometry(0.6, 0.8, 32);
     this.selectionMaterial = new THREE.MeshBasicMaterial({
       color: 0x00ff00,
@@ -56,6 +67,10 @@ export class UnitRenderer {
       opacity: 0.6,
       side: THREE.DoubleSide,
     });
+  }
+
+  public setPlayerId(playerId: string): void {
+    this.playerId = playerId;
   }
 
   public update(): void {
@@ -70,15 +85,33 @@ export class UnitRenderer {
       const health = entity.get<Health>('Health');
       const selectable = entity.get<Selectable>('Selectable');
 
+      const isOwned = selectable?.playerId === this.playerId;
+      const isEnemy = selectable && selectable.playerId !== this.playerId;
+
+      // Check visibility for enemy units
+      let shouldShow = true;
+      if (isEnemy && this.visionSystem) {
+        shouldShow = this.visionSystem.isVisible(this.playerId, transform.x, transform.y);
+      }
+
       let meshData = this.unitMeshes.get(entity.id);
 
       if (!meshData) {
         // Create new mesh for this unit
-        meshData = this.createUnitMesh(unit);
+        meshData = this.createUnitMesh(unit, isEnemy);
         this.unitMeshes.set(entity.id, meshData);
         this.scene.add(meshData.mesh);
         this.scene.add(meshData.selectionRing);
         this.scene.add(meshData.healthBar);
+      }
+
+      // Update visibility
+      meshData.mesh.visible = shouldShow;
+      meshData.healthBar.visible = shouldShow && !!health && health.getHealthPercent() < 1;
+
+      if (!shouldShow) {
+        meshData.selectionRing.visible = false;
+        continue;
       }
 
       // Update position
@@ -92,7 +125,6 @@ export class UnitRenderer {
       // Update health bar
       if (health) {
         meshData.healthBar.position.set(transform.x, 1.5, transform.y);
-        meshData.healthBar.visible = health.getHealthPercent() < 1;
         this.updateHealthBar(meshData.healthBar, health);
       }
     }
@@ -108,12 +140,14 @@ export class UnitRenderer {
     }
   }
 
-  private createUnitMesh(unit: Unit): UnitMeshData {
-    // Select material based on unit type
+  private createUnitMesh(unit: Unit, isEnemy: boolean = false): UnitMeshData {
+    // Select material based on unit type and ownership
     let material: THREE.MeshStandardMaterial;
     let scale = 1;
 
-    if (unit.isWorker) {
+    if (isEnemy) {
+      material = this.enemyMaterial;
+    } else if (unit.isWorker) {
       material = this.workerMaterial;
       scale = 0.8;
     } else if (unit.unitId === 'marine') {
@@ -212,6 +246,7 @@ export class UnitRenderer {
     this.workerMaterial.dispose();
     this.marineMaterial.dispose();
     this.defaultMaterial.dispose();
+    this.enemyMaterial.dispose();
     this.selectionGeometry.dispose();
     this.selectionMaterial.dispose();
 

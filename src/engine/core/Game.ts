@@ -7,6 +7,7 @@ import { CombatSystem } from '../systems/CombatSystem';
 import { ProductionSystem } from '../systems/ProductionSystem';
 import { ResourceSystem } from '../systems/ResourceSystem';
 import { AISystem } from '../systems/AISystem';
+import { VisionSystem } from '../systems/VisionSystem';
 
 export type GameState = 'initializing' | 'running' | 'paused' | 'ended';
 
@@ -34,6 +35,7 @@ export class Game {
   public world: World;
   public eventBus: EventBus;
   public config: GameConfig;
+  public visionSystem: VisionSystem;
 
   private gameLoop: GameLoop;
   private state: GameState = 'initializing';
@@ -44,6 +46,10 @@ export class Game {
     this.eventBus = new EventBus();
     this.world = new World();
     this.gameLoop = new GameLoop(this.config.tickRate, this.update.bind(this));
+
+    // Initialize vision system (needs to be created before other systems)
+    // Note: passing `this` is safe here since VisionSystem doesn't use game in constructor
+    this.visionSystem = new VisionSystem(this, this.config.mapWidth, this.config.mapHeight);
 
     this.initializeSystems();
   }
@@ -69,6 +75,7 @@ export class Game {
     this.world.addSystem(new CombatSystem(this));
     this.world.addSystem(new ProductionSystem(this));
     this.world.addSystem(new ResourceSystem(this));
+    this.world.addSystem(this.visionSystem);
 
     if (this.config.aiEnabled) {
       this.world.addSystem(new AISystem(this));
