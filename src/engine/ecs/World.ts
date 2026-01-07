@@ -86,7 +86,8 @@ export class World {
     }
   }
 
-  public getSystem<T extends System>(systemClass: new (...args: unknown[]) => T): T | undefined {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  public getSystem<T extends System>(systemClass: new (...args: any[]) => T): T | undefined {
     return this.systems.find((s): s is T => s instanceof systemClass);
   }
 
