@@ -613,6 +613,13 @@ export function GameCanvas() {
             }
           }
           break;
+        case '?':
+          // Toggle keyboard shortcuts panel
+          {
+            const store = useGameStore.getState();
+            store.setShowKeyboardShortcuts(!store.showKeyboardShortcuts);
+          }
+          break;
       }
     };
 

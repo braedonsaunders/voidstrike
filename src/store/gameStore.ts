@@ -37,6 +37,7 @@ export interface GameState {
   showMinimap: boolean;
   showResourcePanel: boolean;
   showTechTree: boolean;
+  showKeyboardShortcuts: boolean;
 
   // Camera
   cameraX: number;
@@ -66,6 +67,7 @@ export interface GameState {
   hasResearch: (playerId: string, upgradeId: string) => boolean;
   getUpgradeBonus: (playerId: string, unitId: string, effectType: UpgradeEffect['type']) => number;
   setShowTechTree: (show: boolean) => void;
+  setShowKeyboardShortcuts: (show: boolean) => void;
   reset: () => void;
 }
 
@@ -88,6 +90,7 @@ const initialState = {
   showMinimap: true,
   showResourcePanel: true,
   showTechTree: false,
+  showKeyboardShortcuts: false,
   cameraX: 64,
   cameraY: 64,
   cameraZoom: 30,
@@ -213,6 +216,8 @@ export const useGameStore = create<GameState>((set, get) => ({
   },
 
   setShowTechTree: (show) => set({ showTechTree: show }),
+
+  setShowKeyboardShortcuts: (show) => set({ showKeyboardShortcuts: show }),
 
   reset: () => set(initialState),
 }));

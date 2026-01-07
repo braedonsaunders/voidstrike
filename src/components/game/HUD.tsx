@@ -8,9 +8,10 @@ import { CommandCard } from './CommandCard';
 import { TechTreePanel } from './TechTreePanel';
 import { ProductionQueuePanel } from './ProductionQueuePanel';
 import { IdleWorkerButton } from './IdleWorkerButton';
+import { KeyboardShortcutsPanel } from './KeyboardShortcutsPanel';
 
 export function HUD() {
-  const { isPaused, togglePause, setShowTechTree } = useGameStore();
+  const { isPaused, togglePause, setShowTechTree, setShowKeyboardShortcuts } = useGameStore();
 
   return (
     <div className="absolute inset-0 pointer-events-none">
@@ -28,6 +29,13 @@ export function HUD() {
             title="View Tech Tree (T)"
           >
             Tech
+          </button>
+          <button
+            onClick={() => setShowKeyboardShortcuts(true)}
+            className="game-button text-sm"
+            title="Keyboard Shortcuts (?)"
+          >
+            ?
           </button>
           <button
             onClick={togglePause}
@@ -65,6 +73,9 @@ export function HUD() {
 
       {/* Tech Tree Modal */}
       <TechTreePanel />
+
+      {/* Keyboard Shortcuts Modal */}
+      <KeyboardShortcutsPanel />
 
       {/* Pause overlay */}
       {isPaused && (

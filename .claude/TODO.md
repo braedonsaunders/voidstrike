@@ -83,7 +83,7 @@
 
 ---
 
-## Phase 1.6: Maps & UX Polish (COMPLETE)
+## Phase 1.6: Maps & UX Polish (MOSTLY COMPLETE)
 
 > **Goal**: High-quality maps with visual variety and improved game setup UX.
 
@@ -98,15 +98,15 @@
 - [x] **Particle effects** - Snow, dust, ash, spores per biome
 - [x] **Environment manager** - Unified system for all map visuals
 
-### Pre-Game Setup (Pending)
-- [ ] **Game options menu** - Map selection, settings, faction choice
-- [ ] **Map preview** - Thumbnail and minimap preview
-- [ ] **Game settings** - Starting resources, speed, AI difficulty
+### Pre-Game Setup (Complete)
+- [x] **Game options menu** - Map selection, settings, faction choice
+- [x] **Map preview** - Biome-colored preview with spawn indicators
+- [x] **Game settings** - Starting resources, speed, AI difficulty, fog of war
 - [ ] **Procedural map generator** - Generate balanced maps with seed
 
-### UX Improvements (Pending)
-- [ ] **Keyboard shortcuts help** - Modal showing all hotkeys (? or F12)
-- [ ] **Controls hint** - Small "Press ? for controls" in HUD corner
+### UX Improvements (Complete)
+- [x] **Keyboard shortcuts help** - Modal showing all hotkeys (? key)
+- [x] **Controls hint** - Small "Press ? for controls" in HUD and setup page
 
 ---
 
