@@ -117,7 +117,8 @@ export function ProductionQueuePanel() {
 
   useEffect(() => {
     updateProductionInfo();
-    const interval = setInterval(updateProductionInfo, 100);
+    // PERFORMANCE: Reduced from 100ms to 200ms - production progress doesn't need 10 FPS updates
+    const interval = setInterval(updateProductionInfo, 200);
     return () => clearInterval(interval);
   }, [updateProductionInfo]);
 

@@ -88,7 +88,8 @@ export function SelectionPanel() {
     };
 
     updateSelection();
-    const interval = setInterval(updateSelection, 100);
+    // PERFORMANCE: Reduced from 100ms to 250ms - 4 FPS is plenty for health bar updates
+    const interval = setInterval(updateSelection, 250);
     return () => clearInterval(interval);
   }, [selectedUnits]);
 

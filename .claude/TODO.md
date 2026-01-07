@@ -6,6 +6,22 @@
 
 ---
 
+## Critical Performance Fixes (January 2026)
+
+### Fixed Issues
+- [x] **Shadow mapping disabled** - 2048x2048 PCFSoftShadowMap causing <1 FPS on M1
+- [x] **FogOfWar throttled** - Reduced from 60 FPS to 10 FPS updates
+- [x] **Minimap throttled** - Reduced from 60 FPS to 15 FPS rendering
+- [x] **React re-renders reduced** - SelectionPanel/ProductionQueue from 10 FPS to 4-5 FPS
+- [x] **Renderer optimized** - Disabled antialiasing, capped pixel ratio to 1.5
+
+### Future Optimizations
+- [ ] Object pooling for projectiles/effects
+- [ ] Graphics settings UI (shadows optional)
+- [ ] Web Worker for AI calculations
+
+---
+
 ## Phase 1: Foundation (COMPLETE ✓)
 
 ### Core Engine

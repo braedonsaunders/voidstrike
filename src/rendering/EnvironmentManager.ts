@@ -50,16 +50,15 @@ export class EnvironmentManager {
 
     this.directionalLight = new THREE.DirectionalLight(this.biome.colors.sun, 1.2);
     this.directionalLight.position.set(50, 80, 50);
-    this.directionalLight.castShadow = true;
-    this.directionalLight.shadow.mapSize.width = 2048;
-    this.directionalLight.shadow.mapSize.height = 2048;
-    this.directionalLight.shadow.camera.near = 1;
-    this.directionalLight.shadow.camera.far = 200;
-    this.directionalLight.shadow.camera.left = -100;
-    this.directionalLight.shadow.camera.right = 100;
-    this.directionalLight.shadow.camera.top = 100;
-    this.directionalLight.shadow.camera.bottom = -100;
+    // PERFORMANCE: Disable shadow casting - 2048x2048 shadow maps cause <1 FPS on M1 Macs
+    // Shadow mapping is extremely expensive and not essential for RTS gameplay
+    this.directionalLight.castShadow = false;
     scene.add(this.directionalLight);
+
+    // Add a fill light to compensate for lack of shadows
+    const fillLight = new THREE.DirectionalLight(this.biome.colors.sun, 0.3);
+    fillLight.position.set(-30, 40, -30);
+    scene.add(fillLight);
 
     // Setup fog based on biome
     const fogNear = mapData.fogNear ?? 60;

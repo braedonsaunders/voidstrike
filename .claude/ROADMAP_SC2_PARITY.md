@@ -125,6 +125,50 @@
 
 ---
 
+## Known Performance Issues (CRITICAL)
+
+### Fixed Issues (January 2026)
+
+These issues were causing <1 FPS on M1 MacBooks:
+
+1. **Shadow Mapping** (FIXED)
+   - Problem: 2048x2048 PCFSoftShadowMap is extremely expensive on M1/integrated GPUs
+   - Solution: Disabled shadow mapping entirely, added fill light for depth
+   - Files: `GameCanvas.tsx`, `EnvironmentManager.ts`
+
+2. **Fog of War Updates** (FIXED)
+   - Problem: Full grid iteration (4096+ cells) every frame
+   - Solution: Throttled to 100ms intervals (10 FPS)
+   - File: `FogOfWar.ts`
+
+3. **Minimap Rendering** (FIXED)
+   - Problem: Independent requestAnimationFrame loop at 60+ FPS
+   - Problem: Creating new gradient objects every frame
+   - Solution: Throttled to 15 FPS, pre-created gradient
+   - File: `Minimap.tsx`
+
+4. **React Re-render Frequency** (FIXED)
+   - Problem: SelectionPanel updating every 100ms (10 FPS)
+   - Problem: ProductionQueuePanel updating every 100ms
+   - Solution: Reduced to 250ms and 200ms respectively
+   - Files: `SelectionPanel.tsx`, `ProductionQueuePanel.tsx`
+
+5. **Renderer Settings** (FIXED)
+   - Problem: High pixel ratio (2x on Retina), antialiasing enabled
+   - Solution: Capped pixel ratio to 1.5, disabled antialiasing
+   - File: `GameCanvas.tsx`
+
+### Potential Future Optimizations
+
+- [ ] **Object Pooling** - Projectiles, effects, damage numbers create new objects
+- [ ] **Instanced Rendering** - Verify all repeated objects use GPU instancing
+- [ ] **Web Worker AI** - Move AI calculations off main thread
+- [ ] **Frustum Culling** - Don't update/render off-screen entities
+- [ ] **LOD System** - Reduce detail for distant units
+- [ ] **Graphics Settings UI** - Let players enable/disable features
+
+---
+
 ## Remaining Work for SC2 Parity
 
 ### Phase 1: Missing Dominion Features (Priority: HIGH)
