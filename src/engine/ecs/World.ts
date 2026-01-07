@@ -86,6 +86,11 @@ export class World {
     }
   }
 
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  public getSystem<T extends System>(systemClass: new (...args: any[]) => T): T | undefined {
+    return this.systems.find((s): s is T => s instanceof systemClass);
+  }
+
   public update(deltaTime: number): void {
     for (const system of this.systems) {
       if (system.enabled) {
