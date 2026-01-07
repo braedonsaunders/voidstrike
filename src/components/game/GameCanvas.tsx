@@ -13,6 +13,7 @@ import { FogOfWar } from '@/rendering/FogOfWar';
 import { EffectsRenderer } from '@/rendering/EffectsRenderer';
 import { RallyPointRenderer } from '@/rendering/RallyPointRenderer';
 import { useGameStore } from '@/store/gameStore';
+import { useGameSetupStore } from '@/store/gameSetupStore';
 import { SelectionBox } from './SelectionBox';
 import { spawnInitialEntities } from '@/utils/gameSetup';
 import { DEFAULT_MAP, MapData } from '@/data/maps';
@@ -116,17 +117,33 @@ export function GameCanvas() {
     });
     gameRef.current = game;
 
+    // Check if fog of war is enabled from game setup
+    const fogOfWarEnabled = useGameSetupStore.getState().fogOfWar;
+
     // Create renderers - pass terrain for correct Y positioning
-    unitRendererRef.current = new UnitRenderer(scene, game.world, game.visionSystem, terrain);
-    buildingRendererRef.current = new BuildingRenderer(scene, game.world, game.visionSystem, terrain);
+    // If fog of war is disabled, don't pass visionSystem so enemies are always visible
+    unitRendererRef.current = new UnitRenderer(
+      scene,
+      game.world,
+      fogOfWarEnabled ? game.visionSystem : undefined,
+      terrain
+    );
+    buildingRendererRef.current = new BuildingRenderer(
+      scene,
+      game.world,
+      fogOfWarEnabled ? game.visionSystem : undefined,
+      terrain
+    );
     resourceRendererRef.current = new ResourceRenderer(scene, game.world, terrain);
 
-    // Create fog of war overlay
-    const fogOfWar = new FogOfWar({ mapWidth, mapHeight });
-    fogOfWar.setVisionSystem(game.visionSystem);
-    fogOfWar.setPlayerId('player1');
-    scene.add(fogOfWar.mesh);
-    fogOfWarRef.current = fogOfWar;
+    // Create fog of war overlay only if enabled
+    if (fogOfWarEnabled) {
+      const fogOfWar = new FogOfWar({ mapWidth, mapHeight });
+      fogOfWar.setVisionSystem(game.visionSystem);
+      fogOfWar.setPlayerId('player1');
+      scene.add(fogOfWar.mesh);
+      fogOfWarRef.current = fogOfWar;
+    }
 
     // Create effects renderer for combat animations
     const effectsRenderer = new EffectsRenderer(scene, game.eventBus);
@@ -174,6 +191,9 @@ export function GameCanvas() {
       const gameTime = gameRef.current?.getGameTime() ?? 0;
       environmentRef.current?.update(deltaTime / 1000, gameTime);
 
+      // Update game store with current game time for UI display
+      useGameStore.getState().setGameTime(gameTime);
+
       // Update game store camera position
       const pos = camera.getPosition();
       useGameStore.getState().setCamera(pos.x, pos.z, camera.getZoom());
@@ -202,7 +222,7 @@ export function GameCanvas() {
       renderer.dispose();
       environment.dispose();
       grid.dispose();
-      fogOfWar.dispose();
+      fogOfWarRef.current?.dispose();
       effectsRenderer.dispose();
       rallyPointRenderer.dispose();
       camera.dispose();
