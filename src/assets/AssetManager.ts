@@ -80,28 +80,41 @@ const gltfLoader = new GLTFLoader();
  * Per threejs-builder skill: use one anchor rule per asset class
  */
 function normalizeModel(root: THREE.Object3D, targetHeight: number): void {
-  // Get bounds from VISIBLE geometry only (animated models have invisible bones)
-  const box = new THREE.Box3();
-  root.traverse((child) => {
-    if (child instanceof THREE.Mesh && child.visible) {
-      const childBox = new THREE.Box3().setFromObject(child);
-      box.union(childBox);
-    }
-  });
+  // Update world matrices first
+  root.updateMatrixWorld(true);
 
-  // Scale to target height
-  const size = box.getSize(new THREE.Vector3());
-  if (size.y > 0) {
-    const scale = targetHeight / size.y;
-    root.scale.setScalar(scale);
+  // Get bounds from the entire model
+  const box = new THREE.Box3().setFromObject(root);
+
+  // Check if the bounding box is valid
+  if (box.isEmpty()) {
+    console.warn('[AssetManager] normalizeModel: Empty bounding box, skipping normalization');
+    return;
   }
 
-  // Update and recalculate bounds
+  const size = box.getSize(new THREE.Vector3());
+
+  // Log model info for debugging
+  console.log(`[AssetManager] Model bounds: size=(${size.x.toFixed(2)}, ${size.y.toFixed(2)}, ${size.z.toFixed(2)}), min.y=${box.min.y.toFixed(2)}`);
+
+  // Scale to target height if model has height
+  if (size.y > 0.001) {
+    const scale = targetHeight / size.y;
+    root.scale.setScalar(scale);
+    console.log(`[AssetManager] Applied scale: ${scale.toFixed(4)} to achieve height ${targetHeight}`);
+  }
+
+  // Update matrices after scaling
   root.updateMatrixWorld(true);
+
+  // Recalculate bounds after scaling
   box.setFromObject(root);
 
   // Ground the model (set bottom at y=0) - minY anchor
-  root.position.y = -box.min.y;
+  if (isFinite(box.min.y)) {
+    root.position.y = -box.min.y;
+    console.log(`[AssetManager] Grounded model: position.y = ${root.position.y.toFixed(4)}`);
+  }
 }
 
 /**
@@ -229,7 +242,36 @@ export class AssetManager {
   static getUnitMesh(unitId: string, playerColor?: number): THREE.Object3D {
     // Check for custom override first
     if (customAssets.has(unitId)) {
-      return cloneModel(customAssets.get(unitId)!, unitId);
+      const original = customAssets.get(unitId)!;
+      const cloned = cloneModel(original, unitId);
+
+      // Wrap in a parent group so the renderer can position the group
+      // while the model maintains its normalization offset
+      const wrapper = new THREE.Group();
+
+      // Apply the normalization offset to the cloned model
+      cloned.position.copy(original.position);
+      cloned.scale.copy(original.scale);
+      cloned.rotation.copy(original.rotation);
+
+      // Ensure all meshes are visible and not culled
+      let meshCount = 0;
+      cloned.traverse((child) => {
+        if (child instanceof THREE.Mesh) {
+          meshCount++;
+          child.visible = true;
+          child.frustumCulled = false;
+          child.castShadow = true;
+          child.receiveShadow = true;
+        }
+      });
+
+      wrapper.add(cloned);
+      wrapper.updateMatrixWorld(true);
+
+      console.log(`[AssetManager] Custom ${unitId}: ${meshCount} meshes, inner pos.y=${cloned.position.y.toFixed(3)}, scale=${cloned.scale.x.toFixed(4)}`);
+
+      return wrapper;
     }
 
     const cacheKey = `unit_${unitId}`;

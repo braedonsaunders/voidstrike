@@ -19,6 +19,9 @@ export interface GameSetupState {
   playerFaction: string;
   playerColor: string;
 
+  // Game session flag - must be true to enter /game
+  gameStarted: boolean;
+
   // Actions
   setSelectedMap: (mapId: string) => void;
   setStartingResources: (resources: StartingResources) => void;
@@ -27,6 +30,8 @@ export interface GameSetupState {
   setFogOfWar: (enabled: boolean) => void;
   setPlayerFaction: (faction: string) => void;
   setPlayerColor: (color: string) => void;
+  startGame: () => void;
+  endGame: () => void;
   reset: () => void;
 }
 
@@ -62,6 +67,7 @@ const initialState = {
   fogOfWar: true,
   playerFaction: 'dominion',
   playerColor: 'blue',
+  gameStarted: false,
 };
 
 export const useGameSetupStore = create<GameSetupState>((set) => ({
@@ -74,5 +80,7 @@ export const useGameSetupStore = create<GameSetupState>((set) => ({
   setFogOfWar: (enabled) => set({ fogOfWar: enabled }),
   setPlayerFaction: (faction) => set({ playerFaction: faction }),
   setPlayerColor: (color) => set({ playerColor: color }),
+  startGame: () => set({ gameStarted: true }),
+  endGame: () => set({ gameStarted: false }),
   reset: () => set(initialState),
 }));
