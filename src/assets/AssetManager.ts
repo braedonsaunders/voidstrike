@@ -499,9 +499,38 @@ export class AssetManager {
   static async loadCustomModels(): Promise<void> {
     // Define custom model paths - add more as models are created
     const customModels: Array<{ path: string; assetId: string; targetHeight: number }> = [
+      // Units
       { path: '/models/units/scv.glb', assetId: 'scv', targetHeight: REFERENCE_FRAME.UNIT_HEIGHTS.scv || 1.0 },
       { path: '/models/units/marine.glb', assetId: 'marine', targetHeight: REFERENCE_FRAME.UNIT_HEIGHTS.marine || 1.2 },
-      // Add more models here as they're created
+      { path: '/models/units/marauder.glb', assetId: 'marauder', targetHeight: REFERENCE_FRAME.UNIT_HEIGHTS.marauder || 1.5 },
+      { path: '/models/units/reaper.glb', assetId: 'reaper', targetHeight: 1.3 },
+      { path: '/models/units/ghost.glb', assetId: 'ghost', targetHeight: 1.3 },
+      { path: '/models/units/hellion.glb', assetId: 'hellion', targetHeight: 1.0 },
+      { path: '/models/units/siege_tank.glb', assetId: 'siege_tank', targetHeight: REFERENCE_FRAME.UNIT_HEIGHTS.siege_tank || 1.2 },
+      { path: '/models/units/thor.glb', assetId: 'thor', targetHeight: 2.5 },
+      { path: '/models/units/viking.glb', assetId: 'viking', targetHeight: REFERENCE_FRAME.UNIT_HEIGHTS.viking || 1.8 },
+      { path: '/models/units/medivac.glb', assetId: 'medivac', targetHeight: 1.5 },
+      { path: '/models/units/banshee.glb', assetId: 'banshee', targetHeight: REFERENCE_FRAME.UNIT_HEIGHTS.banshee || 1.5 },
+      { path: '/models/units/raven.glb', assetId: 'raven', targetHeight: 1.5 },
+      { path: '/models/units/battlecruiser.glb', assetId: 'battlecruiser', targetHeight: REFERENCE_FRAME.UNIT_HEIGHTS.battlecruiser || 2.5 },
+      // Buildings
+      { path: '/models/buildings/command_center.glb', assetId: 'command_center', targetHeight: REFERENCE_FRAME.BUILDING_HEIGHTS.command_center || 4.5 },
+      { path: '/models/buildings/orbital_command.glb', assetId: 'orbital_command', targetHeight: 4.5 },
+      { path: '/models/buildings/planetary_fortress.glb', assetId: 'planetary_fortress', targetHeight: 4.5 },
+      { path: '/models/buildings/supply_depot.glb', assetId: 'supply_depot', targetHeight: REFERENCE_FRAME.BUILDING_HEIGHTS.supply_depot || 1.8 },
+      { path: '/models/buildings/refinery.glb', assetId: 'refinery', targetHeight: REFERENCE_FRAME.BUILDING_HEIGHTS.refinery || 4.0 },
+      { path: '/models/buildings/barracks.glb', assetId: 'barracks', targetHeight: REFERENCE_FRAME.BUILDING_HEIGHTS.barracks || 2.8 },
+      { path: '/models/buildings/engineering_bay.glb', assetId: 'engineering_bay', targetHeight: 2.5 },
+      { path: '/models/buildings/bunker.glb', assetId: 'bunker', targetHeight: 2.0 },
+      { path: '/models/buildings/factory.glb', assetId: 'factory', targetHeight: REFERENCE_FRAME.BUILDING_HEIGHTS.factory || 2.8 },
+      { path: '/models/buildings/armory.glb', assetId: 'armory', targetHeight: 2.8 },
+      { path: '/models/buildings/starport.glb', assetId: 'starport', targetHeight: REFERENCE_FRAME.BUILDING_HEIGHTS.starport || 2.2 },
+      { path: '/models/buildings/fusion_core.glb', assetId: 'fusion_core', targetHeight: 3.0 },
+      { path: '/models/buildings/ghost_academy.glb', assetId: 'ghost_academy', targetHeight: 2.8 },
+      { path: '/models/buildings/sensor_tower.glb', assetId: 'sensor_tower', targetHeight: 4.0 },
+      { path: '/models/buildings/missile_turret.glb', assetId: 'missile_turret', targetHeight: 2.5 },
+      { path: '/models/buildings/tech_lab.glb', assetId: 'tech_lab', targetHeight: 2.0 },
+      { path: '/models/buildings/reactor.glb', assetId: 'reactor', targetHeight: 2.0 },
     ];
 
     console.log('[AssetManager] Loading custom models...');
