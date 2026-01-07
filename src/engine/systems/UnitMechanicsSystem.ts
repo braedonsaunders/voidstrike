@@ -1,4 +1,5 @@
 import { System } from '../ecs/System';
+import { Entity } from '../ecs/Entity';
 import { Game } from '../core/Game';
 import { Transform } from '../components/Transform';
 import { Unit } from '../components/Unit';
@@ -678,8 +679,8 @@ export class UnitMechanicsSystem extends System {
     y: number,
     range: number,
     playerId: string
-  ): Array<{ id: number; get: <T>(type: string) => T | undefined }> {
-    const enemies: Array<{ id: number; get: <T>(type: string) => T | undefined }> = [];
+  ): Entity[] {
+    const enemies: Entity[] = [];
     const entities = this.world.getEntitiesWith('Transform', 'Health', 'Selectable');
 
     for (const entity of entities) {

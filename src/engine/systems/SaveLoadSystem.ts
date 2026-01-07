@@ -6,7 +6,7 @@ import { Health } from '../components/Health';
 import { Selectable } from '../components/Selectable';
 import { Building } from '../components/Building';
 import { Ability } from '../components/Ability';
-import { ResourceNode } from '../components/ResourceNode';
+import { Resource } from '../components/Resource';
 
 export interface SavedEntity {
   id: number;
@@ -187,7 +187,7 @@ export class SaveLoadSystem extends System {
     const entities: SavedEntity[] = [];
 
     // Serialize all entities with their components
-    const allEntities = this.world.getAllEntities();
+    const allEntities = this.world.getEntities();
     for (const entity of allEntities) {
       const savedEntity: SavedEntity = {
         id: entity.id,
@@ -239,14 +239,16 @@ export class SaveLoadSystem extends System {
       if (building) {
         savedEntity.components.Building = {
           buildingId: building.buildingId,
-          isConstructing: building.isConstructing,
-          constructionProgress: building.constructionProgress,
+          state: building.state,
+          buildProgress: building.buildProgress,
           productionQueue: building.productionQueue,
           currentAddon: building.currentAddon,
+          addonEntityId: building.addonEntityId,
           isFlying: building.isFlying,
           isLowered: building.isLowered,
-          rallyPoint: building.rallyPoint,
-          garrisonedUnits: building.garrisonedUnits,
+          rallyX: building.rallyX,
+          rallyY: building.rallyY,
+          rallyTargetId: building.rallyTargetId,
         };
       }
 
@@ -276,13 +278,13 @@ export class SaveLoadSystem extends System {
         };
       }
 
-      // Serialize ResourceNode
-      const resourceNode = entity.get<ResourceNode>('ResourceNode');
-      if (resourceNode) {
-        savedEntity.components.ResourceNode = {
-          resourceType: resourceNode.resourceType,
-          amount: resourceNode.amount,
-          maxAmount: resourceNode.maxAmount,
+      // Serialize Resource
+      const resource = entity.get<Resource>('Resource');
+      if (resource) {
+        savedEntity.components.Resource = {
+          resourceType: resource.resourceType,
+          amount: resource.amount,
+          maxAmount: resource.maxAmount,
         };
       }
 
@@ -291,7 +293,6 @@ export class SaveLoadSystem extends System {
 
     // Get player states
     const players: SavedPlayerState[] = [];
-    const resourceSystem = this.game.world.getSystem('ResourceSystem');
 
     // Collect player IDs from entities
     const playerIds = new Set<string>();
@@ -337,7 +338,7 @@ export class SaveLoadSystem extends System {
     }
 
     // Clear existing entities
-    const allEntities = this.world.getAllEntities();
+    const allEntities = this.world.getEntities();
     for (const entity of allEntities) {
       this.world.destroyEntity(entity.id);
     }
@@ -381,7 +382,9 @@ export class SaveLoadSystem extends System {
           playerId: string;
           isSelected: boolean;
         };
-        entity.add(new Selectable(s.playerId));
+        const selectable = new Selectable(1, 0, s.playerId);
+        selectable.isSelected = s.isSelected;
+        entity.add(selectable);
       }
 
       // Other components would be restored similarly
