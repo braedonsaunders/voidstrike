@@ -7,6 +7,7 @@ import { SelectionPanel } from './SelectionPanel';
 import { CommandCard } from './CommandCard';
 import { TechTreePanel } from './TechTreePanel';
 import { ProductionQueuePanel } from './ProductionQueuePanel';
+import { IdleWorkerButton } from './IdleWorkerButton';
 
 export function HUD() {
   const { isPaused, togglePause, setShowTechTree } = useGameStore();
@@ -20,6 +21,7 @@ export function HUD() {
 
         {/* Menu buttons */}
         <div className="flex gap-2">
+          <IdleWorkerButton />
           <button
             onClick={() => setShowTechTree(true)}
             className="game-button text-sm"

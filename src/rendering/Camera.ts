@@ -22,6 +22,13 @@ const DEFAULT_CONFIG: CameraConfig = {
   boundaryPadding: 10,
 };
 
+// Camera location bookmark
+interface CameraLocation {
+  x: number;
+  z: number;
+  zoom: number;
+}
+
 export class RTSCamera {
   public camera: THREE.PerspectiveCamera;
   public target: THREE.Vector3;
@@ -43,6 +50,9 @@ export class RTSCamera {
   // Screen dimensions
   private screenWidth = 0;
   private screenHeight = 0;
+
+  // Camera location bookmarks (F5-F8)
+  private savedLocations: Map<string, CameraLocation> = new Map();
 
   constructor(
     aspect: number,
@@ -228,6 +238,33 @@ export class RTSCamera {
 
   public getPosition(): { x: number; z: number } {
     return { x: this.target.x, z: this.target.z };
+  }
+
+  // Save current camera location to a slot (F5-F8)
+  public saveLocation(slot: string): void {
+    this.savedLocations.set(slot, {
+      x: this.target.x,
+      z: this.target.z,
+      zoom: this.currentZoom,
+    });
+  }
+
+  // Recall a saved camera location
+  public recallLocation(slot: string): boolean {
+    const location = this.savedLocations.get(slot);
+    if (location) {
+      this.target.x = location.x;
+      this.target.z = location.z;
+      this.currentZoom = location.zoom;
+      this.updateCameraPosition();
+      return true;
+    }
+    return false;
+  }
+
+  // Check if a location slot has a saved position
+  public hasLocation(slot: string): boolean {
+    return this.savedLocations.has(slot);
   }
 
   // Convert screen coordinates to world coordinates

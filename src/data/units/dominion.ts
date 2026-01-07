@@ -113,6 +113,7 @@ export const UNIT_DEFINITIONS: Record<string, UnitDefinition> = {
     maxHealth: 90,
     armor: 0,
     abilities: ['transform_hellbat'],
+    splashRadius: 2, // Line splash for flame attack
   },
 
   siege_tank: {
@@ -132,6 +133,7 @@ export const UNIT_DEFINITIONS: Record<string, UnitDefinition> = {
     maxHealth: 175,
     armor: 1,
     abilities: ['siege_mode'],
+    splashRadius: 3, // AoE damage radius
   },
 
   thor: {

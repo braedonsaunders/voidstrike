@@ -50,6 +50,15 @@ export class BuildingPlacementSystem extends System {
       return;
     }
 
+    // Check building dependencies (tech requirements)
+    if (definition.requirements && definition.requirements.length > 0) {
+      const missingDep = this.checkBuildingDependencies(definition.requirements, playerId);
+      if (missingDep) {
+        this.game.eventBus.emit('ui:error', { message: `Requires ${missingDep}` });
+        return;
+      }
+    }
+
     // Check placement validity (simple check - could be enhanced)
     if (!this.isValidPlacement(position.x, position.y, definition.width, definition.height)) {
       this.game.eventBus.emit('ui:error', { message: 'Invalid placement' });
@@ -102,6 +111,40 @@ export class BuildingPlacementSystem extends System {
         buildingType: building.buildingId,
       });
     }
+  }
+
+  /**
+   * Check if all required buildings exist for the player
+   * Returns the name of the first missing requirement, or null if all met
+   */
+  private checkBuildingDependencies(requirements: string[], playerId: string): string | null {
+    const playerBuildings = this.world.getEntitiesWith('Building', 'Selectable');
+
+    for (const reqBuildingId of requirements) {
+      let found = false;
+
+      for (const entity of playerBuildings) {
+        const building = entity.get<Building>('Building')!;
+        const selectable = entity.get<Selectable>('Selectable')!;
+
+        // Check if this building belongs to the player and is the required type
+        if (selectable.playerId === playerId && building.buildingId === reqBuildingId) {
+          // Must be complete (not under construction)
+          if (building.isComplete()) {
+            found = true;
+            break;
+          }
+        }
+      }
+
+      if (!found) {
+        // Return human-readable name
+        const def = BUILDING_DEFINITIONS[reqBuildingId];
+        return def?.name || reqBuildingId;
+      }
+    }
+
+    return null; // All requirements met
   }
 
   private isValidPlacement(x: number, y: number, width: number, height: number): boolean {

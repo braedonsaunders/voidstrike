@@ -359,3 +359,102 @@ To add custom 3D models:
 6. **Frustum Culling**: Don't render off-screen entities
 7. **Delta Compression**: Only send changed state in multiplayer
 8. **Asset Caching**: Meshes cached and cloned for reuse
+
+## SC2 Parity Features
+
+### Unit Movement System
+
+Enhanced movement with StarCraft 2-like responsiveness:
+
+```typescript
+// Unit acceleration/deceleration
+unit.maxSpeed = definition.speed;
+unit.currentSpeed = 0; // Starts at 0
+unit.acceleration = 15; // Units/sec²
+
+// Boids-like separation for unit avoidance
+const SEPARATION_RADIUS = 2.0;
+const SEPARATION_STRENGTH = 8.0;
+calculateSeparationForce(self, others);
+```
+
+Features:
+- **Smooth acceleration**: Units ramp up to max speed naturally
+- **Separation steering**: Units avoid overlapping via boids algorithm
+- **Command queuing**: Shift-click to queue move/attack/patrol commands
+- **Patrol**: P key sets patrol between current position and target
+
+### Camera Hotkey System
+
+```typescript
+// Save camera location (Ctrl+F5-F8)
+camera.saveLocation('F5');
+
+// Recall camera location (F5-F8)
+camera.recallLocation('F5');
+
+// Double-tap control group to center camera
+if (doubleTapDetected) {
+  camera.setPosition(avgX, avgY);
+}
+```
+
+### Smart Combat System
+
+Priority-based target selection:
+
+```typescript
+const TARGET_PRIORITY = {
+  siege_tank: 100,    // High-value targets first
+  battlecruiser: 95,
+  marine: 50,
+  scv: 10,            // Workers last
+};
+
+// Area of effect damage
+if (unit.splashRadius > 0) {
+  applySplashDamage(target, damage, splashRadius);
+}
+```
+
+### Idle Worker Button
+
+UI component + F1 hotkey for fast worker management:
+
+```typescript
+// IdleWorkerButton.tsx
+const idleWorkers = workers.filter(
+  w => w.unit.isWorker && w.unit.state === 'idle'
+);
+
+// On click: select and center camera on idle worker
+selectUnits([worker.id]);
+camera.setPosition(worker.x, worker.y);
+```
+
+### Building Dependencies
+
+Tech tree validation in BuildingPlacementSystem:
+
+```typescript
+// Check all required buildings exist and are complete
+private checkBuildingDependencies(requirements: string[], playerId: string) {
+  for (const reqBuildingId of requirements) {
+    const found = playerBuildings.some(b =>
+      b.buildingId === reqBuildingId && b.isComplete()
+    );
+    if (!found) return def?.name; // Return missing requirement
+  }
+  return null; // All requirements met
+}
+```
+
+## Audio Asset Guidelines
+
+See `.claude/AUDIO_PROMPTS.md` for comprehensive audio generation prompts including:
+- Music tracks (menu, gameplay, events)
+- Unit sound effects
+- Building sounds
+- UI feedback sounds
+- Ambient sounds
+- Voice lines

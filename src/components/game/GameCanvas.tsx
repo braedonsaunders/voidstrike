@@ -44,6 +44,13 @@ export function GameCanvas() {
   const [selectionStart, setSelectionStart] = useState({ x: 0, y: 0 });
   const [selectionEnd, setSelectionEnd] = useState({ x: 0, y: 0 });
   const [isAttackMove, setIsAttackMove] = useState(false);
+  const [isPatrolMode, setIsPatrolMode] = useState(false);
+
+  // Track double-tap for control groups
+  const lastControlGroupTap = useRef<{ group: number; time: number } | null>(null);
+
+  // Track current subgroup index for Tab cycling
+  const subgroupIndexRef = useRef(0);
 
   const { isBuilding, buildingType, isSettingRallyPoint } = useGameStore();
 
@@ -232,23 +239,34 @@ export function GameCanvas() {
   // Handle mouse events
   const handleMouseDown = useCallback((e: React.MouseEvent) => {
     if (e.button === 0) {
-      // Left click - start selection, place building, or attack-move
+      // Left click - start selection, place building, attack-move, or patrol
       if (isAttackMove) {
-        // Attack-move command
+        // Attack-move command (supports shift-click queuing)
         const worldPos = cameraRef.current?.screenToWorld(e.clientX, e.clientY);
         if (worldPos && gameRef.current) {
           const selectedUnits = useGameStore.getState().selectedUnits;
           if (selectedUnits.length > 0) {
-            gameRef.current.processCommand({
-              tick: gameRef.current.getCurrentTick(),
-              playerId: 'player1',
-              type: 'ATTACK',
+            gameRef.current.eventBus.emit('command:attack', {
+              entityIds: selectedUnits,
+              targetPosition: { x: worldPos.x, y: worldPos.z },
+              queue: e.shiftKey, // Queue if shift held
+            });
+          }
+        }
+        if (!e.shiftKey) setIsAttackMove(false);
+      } else if (isPatrolMode) {
+        // Patrol command
+        const worldPos = cameraRef.current?.screenToWorld(e.clientX, e.clientY);
+        if (worldPos && gameRef.current) {
+          const selectedUnits = useGameStore.getState().selectedUnits;
+          if (selectedUnits.length > 0) {
+            gameRef.current.eventBus.emit('command:patrol', {
               entityIds: selectedUnits,
               targetPosition: { x: worldPos.x, y: worldPos.z },
             });
           }
         }
-        setIsAttackMove(false);
+        setIsPatrolMode(false);
       } else if (isBuilding && buildingType) {
         // Place building
         const worldPos = cameraRef.current?.screenToWorld(e.clientX, e.clientY);
@@ -266,9 +284,13 @@ export function GameCanvas() {
         setSelectionEnd({ x: e.clientX, y: e.clientY });
       }
     } else if (e.button === 2) {
-      // Right click - issue move command, set rally, or cancel attack-move
+      // Right click - issue move command, set rally, or cancel attack-move/patrol
       if (isAttackMove) {
         setIsAttackMove(false);
+        return;
+      }
+      if (isPatrolMode) {
+        setIsPatrolMode(false);
         return;
       }
 
@@ -290,6 +312,9 @@ export function GameCanvas() {
         }
 
         if (selectedUnits.length > 0) {
+          // Shift-click queues the command
+          const queue = e.shiftKey;
+
           // Smart right-click: detect what we clicked on
           const clickedEntity = findEntityAtPosition(gameRef.current, worldPos.x, worldPos.z);
 
@@ -308,10 +333,11 @@ export function GameCanvas() {
               });
 
               if (hasWorkers) {
-                // Issue gather command
+                // Issue gather command (queue if shift held)
                 gameRef.current.eventBus.emit('command:gather', {
                   entityIds: selectedUnits,
                   targetEntityId: clickedEntity.entity.id,
+                  queue,
                 });
                 return;
               }
@@ -319,29 +345,25 @@ export function GameCanvas() {
 
             // Check if clicking on an enemy unit/building (for attacking)
             if (selectable && selectable.playerId !== 'player1' && health && !health.isDead()) {
-              gameRef.current.processCommand({
-                tick: gameRef.current.getCurrentTick(),
-                playerId: 'player1',
-                type: 'ATTACK',
+              gameRef.current.eventBus.emit('command:attack', {
                 entityIds: selectedUnits,
                 targetEntityId: clickedEntity.entity.id,
+                queue,
               });
               return;
             }
           }
 
-          // Default: move command
-          gameRef.current.processCommand({
-            tick: gameRef.current.getCurrentTick(),
-            playerId: 'player1',
-            type: 'MOVE',
+          // Default: move command (queue if shift held)
+          gameRef.current.eventBus.emit('command:move', {
             entityIds: selectedUnits,
             targetPosition: { x: worldPos.x, y: worldPos.z },
+            queue,
           });
         }
       }
     }
-  }, [isBuilding, buildingType, isAttackMove, isSettingRallyPoint]);
+  }, [isBuilding, buildingType, isAttackMove, isPatrolMode, isSettingRallyPoint]);
 
   // Helper function to find entity at world position
   const findEntityAtPosition = (game: Game, x: number, z: number): { entity: ReturnType<typeof game.world.getEntity> extends infer T ? NonNullable<T> : never } | null => {
@@ -439,9 +461,83 @@ export function GameCanvas() {
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       const game = gameRef.current;
+      const camera = cameraRef.current;
       if (!game) return;
 
-      // Control groups
+      // F1 - Select idle worker
+      if (e.key === 'F1') {
+        e.preventDefault();
+        const workers = game.world.getEntitiesWith('Unit', 'Transform', 'Selectable');
+        const idleWorkers: Array<{ id: number; x: number; y: number }> = [];
+
+        for (const entity of workers) {
+          const unit = entity.get<Unit>('Unit')!;
+          const transform = entity.get<Transform>('Transform')!;
+          const selectable = entity.get<Selectable>('Selectable')!;
+
+          if (unit.isWorker && unit.state === 'idle' && selectable.playerId === 'player1') {
+            idleWorkers.push({ id: entity.id, x: transform.x, y: transform.y });
+          }
+        }
+
+        if (idleWorkers.length > 0) {
+          const worker = idleWorkers[0];
+          useGameStore.getState().selectUnits([worker.id]);
+          if (camera) {
+            camera.setPosition(worker.x, worker.y);
+          }
+        }
+        return;
+      }
+
+      // Camera location hotkeys (F5-F8)
+      if (e.key >= 'F5' && e.key <= 'F8') {
+        e.preventDefault();
+        const slot = e.key; // 'F5', 'F6', 'F7', 'F8'
+        if (camera) {
+          if (e.ctrlKey) {
+            // Save camera location
+            camera.saveLocation(slot);
+          } else {
+            // Recall camera location
+            camera.recallLocation(slot);
+          }
+        }
+        return;
+      }
+
+      // Tab - cycle through unit subgroups
+      if (e.key === 'Tab') {
+        e.preventDefault();
+        const selectedUnits = useGameStore.getState().selectedUnits;
+        if (selectedUnits.length > 0) {
+          // Group units by type
+          const unitsByType = new Map<string, number[]>();
+          for (const id of selectedUnits) {
+            const entity = game.world.getEntity(id);
+            const unit = entity?.get<Unit>('Unit');
+            if (unit) {
+              const type = unit.unitId;
+              if (!unitsByType.has(type)) {
+                unitsByType.set(type, []);
+              }
+              unitsByType.get(type)!.push(id);
+            }
+          }
+
+          // Get unique types and cycle
+          const types = Array.from(unitsByType.keys());
+          if (types.length > 1) {
+            subgroupIndexRef.current = (subgroupIndexRef.current + 1) % types.length;
+            const typeToSelect = types[subgroupIndexRef.current];
+            const unitsOfType = unitsByType.get(typeToSelect) || [];
+            useGameStore.getState().selectUnits(unitsOfType);
+          }
+        }
+        return;
+      }
+
+      // Control groups with double-tap detection
       if (e.ctrlKey && e.key >= '0' && e.key <= '9') {
         const group = parseInt(e.key);
         const selectedUnits = useGameStore.getState().selectedUnits;
@@ -452,9 +548,40 @@ export function GameCanvas() {
             entityIds: selectedUnits,
           });
         }
-      } else if (e.key >= '0' && e.key <= '9') {
+      } else if (!e.ctrlKey && !e.altKey && e.key >= '0' && e.key <= '9') {
         const group = parseInt(e.key);
-        game.eventBus.emit('selection:controlGroup:get', { group });
+        const now = Date.now();
+
+        // Check for double-tap (within 300ms)
+        if (lastControlGroupTap.current &&
+            lastControlGroupTap.current.group === group &&
+            now - lastControlGroupTap.current.time < 300) {
+          // Double-tap: center camera on control group
+          const groupUnits = useGameStore.getState().getControlGroup(group);
+          if (groupUnits.length > 0 && camera) {
+            // Get average position of units in group
+            let avgX = 0, avgZ = 0;
+            let count = 0;
+            for (const id of groupUnits) {
+              const entity = game.world.getEntity(id);
+              const transform = entity?.get<Transform>('Transform');
+              if (transform) {
+                avgX += transform.x;
+                avgZ += transform.y;
+                count++;
+              }
+            }
+            if (count > 0) {
+              camera.setPosition(avgX / count, avgZ / count);
+            }
+          }
+          lastControlGroupTap.current = null;
+        } else {
+          // Single tap: select control group
+          game.eventBus.emit('selection:controlGroup:get', { group });
+          lastControlGroupTap.current = { group, time: now };
+        }
+        return;
       }
 
       // Commands
@@ -463,6 +590,14 @@ export function GameCanvas() {
           // Attack move - enable attack cursor
           if (useGameStore.getState().selectedUnits.length > 0) {
             setIsAttackMove(true);
+            setIsPatrolMode(false);
+          }
+          break;
+        case 'p':
+          // Patrol mode
+          if (useGameStore.getState().selectedUnits.length > 0) {
+            setIsPatrolMode(true);
+            setIsAttackMove(false);
           }
           break;
         case 's':
@@ -484,9 +619,11 @@ export function GameCanvas() {
           });
           break;
         case 'escape':
-          // Cancel attack-move, rally mode, building mode, or clear selection
+          // Cancel modes or clear selection
           if (isAttackMove) {
             setIsAttackMove(false);
+          } else if (isPatrolMode) {
+            setIsPatrolMode(false);
           } else if (isSettingRallyPoint) {
             useGameStore.getState().setRallyPointMode(false);
           } else if (isBuilding) {
@@ -509,7 +646,7 @@ export function GameCanvas() {
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [isBuilding, isAttackMove, isSettingRallyPoint]);
+  }, [isBuilding, isAttackMove, isPatrolMode, isSettingRallyPoint]);
 
   return (
     <div
@@ -551,6 +688,14 @@ export function GameCanvas() {
         <div className="absolute top-4 left-1/2 transform -translate-x-1/2 bg-black/80 px-4 py-2 rounded border border-green-600">
           <span className="text-green-400">
             Set Rally Point - Right-click to set, ESC to cancel
+          </span>
+        </div>
+      )}
+
+      {isPatrolMode && (
+        <div className="absolute top-4 left-1/2 transform -translate-x-1/2 bg-black/80 px-4 py-2 rounded border border-yellow-600">
+          <span className="text-yellow-400">
+            Patrol Mode - Click destination, ESC to cancel
           </span>
         </div>
       )}

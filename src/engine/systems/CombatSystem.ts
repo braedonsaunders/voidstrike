@@ -3,6 +3,7 @@ import { Transform } from '../components/Transform';
 import { Unit, DamageType } from '../components/Unit';
 import { Health, ArmorType } from '../components/Health';
 import { Game } from '../core/Game';
+import { Selectable } from '../components/Selectable';
 
 // Damage multipliers: [damageType][armorType]
 const DAMAGE_MULTIPLIERS: Record<DamageType, Record<ArmorType, number>> = {
@@ -32,8 +33,34 @@ const DAMAGE_MULTIPLIERS: Record<DamageType, Record<ArmorType, number>> = {
   },
 };
 
+// Target priority - higher = more likely to be attacked first
+const TARGET_PRIORITY: Record<string, number> = {
+  // High threat combat units
+  siege_tank: 100,
+  battlecruiser: 95,
+  thor: 90,
+  banshee: 85,
+  ghost: 80,
+  marauder: 70,
+  marine: 60,
+  hellion: 55,
+  viking: 50,
+  medivac: 45, // Support units have moderate priority
+  reaper: 40,
+  // Workers are low priority
+  scv: 10,
+  probe: 10,
+  drone: 10,
+};
+
+// Cooldown for under attack alerts (prevent spam)
+const UNDER_ATTACK_COOLDOWN = 10000; // 10 seconds
+
 export class CombatSystem extends System {
   public priority = 20;
+
+  // Track last under attack alert time per player
+  private lastUnderAttackAlert: Map<string, number> = new Map();
 
   constructor(game: Game) {
     super(game);
@@ -50,6 +77,7 @@ export class CombatSystem extends System {
     entityIds: number[];
     targetEntityId?: number;
     targetPosition?: { x: number; y: number };
+    queue?: boolean;
   }): void {
     for (const entityId of command.entityIds) {
       const entity = this.world.getEntity(entityId);
@@ -58,11 +86,27 @@ export class CombatSystem extends System {
       const unit = entity.get<Unit>('Unit');
       if (!unit) continue;
 
-      if (command.targetEntityId !== undefined) {
-        unit.setAttackTarget(command.targetEntityId);
-      } else if (command.targetPosition) {
-        // Attack-move
-        unit.setMoveTarget(command.targetPosition.x, command.targetPosition.y);
+      if (command.queue) {
+        // Queue the attack command
+        if (command.targetEntityId !== undefined) {
+          unit.queueCommand({
+            type: 'attack',
+            targetEntityId: command.targetEntityId,
+          });
+        } else if (command.targetPosition) {
+          unit.queueCommand({
+            type: 'attackmove',
+            targetX: command.targetPosition.x,
+            targetY: command.targetPosition.y,
+          });
+        }
+      } else {
+        if (command.targetEntityId !== undefined) {
+          unit.setAttackTarget(command.targetEntityId);
+        } else if (command.targetPosition) {
+          // Attack-move
+          unit.setMoveTarget(command.targetPosition.x, command.targetPosition.y);
+        }
       }
     }
   }
@@ -104,17 +148,20 @@ export class CombatSystem extends System {
       if (health.isDead()) {
         if (unit.state !== 'dead') {
           unit.state = 'dead';
-          this.game.eventBus.emit('unit:died', { entityId: attacker.id });
+          this.game.eventBus.emit('unit:died', {
+            entityId: attacker.id,
+            position: { x: transform.x, y: transform.y },
+          });
         }
         continue;
       }
 
-      // Auto-acquire targets for idle or holding units
+      // Auto-acquire targets for idle, patrolling, or holding units
       if (
-        (unit.state === 'idle' || unit.isHoldingPosition) &&
+        (unit.state === 'idle' || unit.state === 'patrolling' || unit.isHoldingPosition) &&
         unit.targetEntityId === null
       ) {
-        const target = this.findNearestEnemy(attacker.id, transform, unit);
+        const target = this.findBestTarget(attacker.id, transform, unit);
         if (target && !unit.isHoldingPosition) {
           unit.setAttackTarget(target);
         } else if (target && unit.isHoldingPosition) {
@@ -137,8 +184,10 @@ export class CombatSystem extends System {
         const targetEntity = this.world.getEntity(unit.targetEntityId);
 
         if (!targetEntity || targetEntity.isDestroyed()) {
-          // Target no longer exists
-          unit.clearTarget();
+          // Target no longer exists - check for queued commands
+          if (!unit.executeNextCommand()) {
+            unit.clearTarget();
+          }
           continue;
         }
 
@@ -146,7 +195,9 @@ export class CombatSystem extends System {
         const targetHealth = targetEntity.get<Health>('Health');
 
         if (!targetTransform || !targetHealth || targetHealth.isDead()) {
-          unit.clearTarget();
+          if (!unit.executeNextCommand()) {
+            unit.clearTarget();
+          }
           continue;
         }
 
@@ -155,7 +206,7 @@ export class CombatSystem extends System {
         if (distance <= unit.attackRange) {
           // In range - attempt attack
           if (unit.canAttack(gameTime)) {
-            this.performAttack(unit, transform, targetHealth, targetTransform, gameTime);
+            this.performAttack(attacker.id, unit, transform, targetEntity.id, targetHealth, targetTransform, gameTime);
           }
         }
         // If not in range, MovementSystem will handle moving toward target
@@ -169,47 +220,68 @@ export class CombatSystem extends System {
     }
   }
 
-  private findNearestEnemy(
+  /**
+   * Find the best target using smart targeting (priority system)
+   * Prioritizes high-threat units over workers
+   */
+  private findBestTarget(
     selfId: number,
     selfTransform: Transform,
     selfUnit: Unit
   ): number | null {
     const entities = this.world.getEntitiesWith('Transform', 'Health', 'Selectable');
-    let nearestId: number | null = null;
-    let nearestDistance = Infinity;
+
+    // Get self's player ID
+    const selfEntity = this.world.getEntity(selfId);
+    const selfSelectable = selfEntity?.get<Selectable>('Selectable');
+    if (!selfSelectable) return null;
+
+    let bestTarget: { id: number; score: number } | null = null;
 
     for (const entity of entities) {
       if (entity.id === selfId) continue;
 
       const transform = entity.get<Transform>('Transform')!;
       const health = entity.get<Health>('Health')!;
-      const selectable = entity.get('Selectable') as { playerId: string } | undefined;
+      const selectable = entity.get<Selectable>('Selectable');
+      const unit = entity.get<Unit>('Unit');
 
       // Skip if same player or dead
       if (!selectable) continue;
-
-      // Get player ID from the self entity's selectable component
-      const selfEntity = this.world.getEntity(selfId);
-      const selfSelectable = selfEntity?.get('Selectable') as { playerId: string } | undefined;
-
-      if (selectable.playerId === selfSelectable?.playerId) continue;
+      if (selectable.playerId === selfSelectable.playerId) continue;
       if (health.isDead()) continue;
 
       const distance = selfTransform.distanceTo(transform);
 
       // Only consider enemies within sight range
-      if (distance <= selfUnit.sightRange && distance < nearestDistance) {
-        nearestDistance = distance;
-        nearestId = entity.id;
+      if (distance > selfUnit.sightRange) continue;
+
+      // Calculate target score based on priority and distance
+      const unitId = unit?.unitId || 'default';
+      const basePriority = TARGET_PRIORITY[unitId] || 50;
+
+      // Distance factor: closer targets score higher (normalize to 0-1 range)
+      const distanceFactor = 1 - (distance / selfUnit.sightRange);
+
+      // Low health factor: prefer targets that can be killed quickly
+      const healthFactor = 1 - (health.current / health.max);
+
+      // Combined score
+      const score = basePriority * 0.5 + distanceFactor * 30 + healthFactor * 20;
+
+      if (!bestTarget || score > bestTarget.score) {
+        bestTarget = { id: entity.id, score };
       }
     }
 
-    return nearestId;
+    return bestTarget?.id || null;
   }
 
   private performAttack(
+    attackerId: number,
     attacker: Unit,
     attackerTransform: Transform,
+    targetId: number,
     targetHealth: Health,
     targetTransform: Transform,
     gameTime: number
@@ -226,14 +298,115 @@ export class CombatSystem extends System {
         ? damage
         : Math.max(1, damage - targetHealth.armor);
 
+    // Apply primary target damage
     targetHealth.takeDamage(finalDamage, gameTime);
 
+    // Emit attack event
     this.game.eventBus.emit('combat:attack', {
       attackerId: attacker.unitId,
       attackerPos: { x: attackerTransform.x, y: attackerTransform.y },
       targetPos: { x: targetTransform.x, y: targetTransform.y },
       damage: finalDamage,
       damageType: attacker.damageType,
+    });
+
+    // Check for under attack alert
+    this.checkUnderAttackAlert(targetId, targetTransform, gameTime);
+
+    // Apply AoE/splash damage if applicable
+    if (attacker.splashRadius > 0) {
+      this.applySplashDamage(
+        attackerId,
+        attacker,
+        attackerTransform,
+        targetTransform,
+        finalDamage,
+        gameTime
+      );
+    }
+  }
+
+  /**
+   * Apply splash damage to nearby enemies
+   */
+  private applySplashDamage(
+    attackerId: number,
+    attacker: Unit,
+    attackerTransform: Transform,
+    impactPos: Transform,
+    baseDamage: number,
+    gameTime: number
+  ): void {
+    const entities = this.world.getEntitiesWith('Transform', 'Health', 'Selectable');
+
+    // Get attacker's player ID
+    const attackerEntity = this.world.getEntity(attackerId);
+    const attackerSelectable = attackerEntity?.get<Selectable>('Selectable');
+    if (!attackerSelectable) return;
+
+    for (const entity of entities) {
+      if (entity.id === attackerId) continue;
+
+      const transform = entity.get<Transform>('Transform')!;
+      const health = entity.get<Health>('Health')!;
+      const selectable = entity.get<Selectable>('Selectable');
+
+      // Skip allies and dead units
+      if (!selectable) continue;
+      if (selectable.playerId === attackerSelectable.playerId) continue;
+      if (health.isDead()) continue;
+
+      // Calculate distance from impact point
+      const dx = transform.x - impactPos.x;
+      const dy = transform.y - impactPos.y;
+      const distance = Math.sqrt(dx * dx + dy * dy);
+
+      // Apply splash damage with falloff
+      if (distance > 0 && distance <= attacker.splashRadius) {
+        // Linear falloff: 100% at center, 50% at edge
+        const falloff = 1 - (distance / attacker.splashRadius) * 0.5;
+        const splashDamage = Math.max(1, Math.floor(baseDamage * falloff));
+
+        health.takeDamage(splashDamage, gameTime);
+
+        // Emit splash damage event
+        this.game.eventBus.emit('combat:splash', {
+          position: { x: transform.x, y: transform.y },
+          damage: splashDamage,
+        });
+
+        // Check for under attack alert for splash victims
+        this.checkUnderAttackAlert(entity.id, transform, gameTime);
+      }
+    }
+  }
+
+  /**
+   * Emit under attack alert for the player who owns the target
+   */
+  private checkUnderAttackAlert(
+    targetId: number,
+    targetTransform: Transform,
+    gameTime: number
+  ): void {
+    const targetEntity = this.world.getEntity(targetId);
+    const targetSelectable = targetEntity?.get<Selectable>('Selectable');
+    if (!targetSelectable) return;
+
+    const playerId = targetSelectable.playerId;
+    const lastAlert = this.lastUnderAttackAlert.get(playerId) || 0;
+
+    // Check cooldown
+    if (gameTime - lastAlert < UNDER_ATTACK_COOLDOWN) return;
+
+    // Update last alert time
+    this.lastUnderAttackAlert.set(playerId, gameTime);
+
+    // Emit under attack alert
+    this.game.eventBus.emit('alert:underAttack', {
+      playerId,
+      position: { x: targetTransform.x, y: targetTransform.y },
+      time: gameTime,
     });
   }
 }

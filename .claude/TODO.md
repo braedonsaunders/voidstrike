@@ -50,35 +50,35 @@
 
 ---
 
-## Phase 1.5: SC2 Parity (CRITICAL - Current Focus)
+## Phase 1.5: SC2 Parity (CRITICAL - Mostly Complete)
 
 > **Goal**: Make the game FEEL like StarCraft 2 - responsive, fast, precise.
 > These features are what separate a good RTS from a clunky one.
 
 ### Unit Movement & Micro (High Priority)
-- [ ] **Unit avoidance/steering** - Units shouldn't overlap or push through each other
-- [ ] **Unit acceleration/deceleration** - Smooth speed ramp, not instant velocity
-- [ ] **Shift-click command queuing** - Queue move/attack/ability commands
-- [ ] **Patrol command** - Units move between waypoints, attack enemies in range
+- [x] **Unit avoidance/steering** - Boids-like separation prevents unit clumping
+- [x] **Unit acceleration/deceleration** - Smooth speed ramp with configurable acceleration
+- [x] **Shift-click command queuing** - Queue move/attack/patrol commands with Shift
+- [x] **Patrol command** - P key to patrol between waypoints
 
 ### Camera & Controls (High Priority)
-- [ ] **Camera location hotkeys** - F5-F8 to save, Ctrl+F5-F8 to recall positions
-- [ ] **Tab to cycle subgroups** - Cycle through unit types in current selection
-- [ ] **Double-tap control group** - Center camera on group
+- [x] **Camera location hotkeys** - F5-F8 to recall, Ctrl+F5-F8 to save positions
+- [x] **Tab to cycle subgroups** - Cycle through unit types in current selection
+- [x] **Double-tap control group** - Center camera on group
 
 ### Alerts & Feedback (High Priority)
-- [ ] **Under attack alerts** - Audio + visual notification when units/buildings take damage
-- [ ] **Minimap ping on attack** - Flash attack location on minimap
-- [ ] **Idle worker button** - Click to select idle workers
+- [x] **Under attack alerts** - Console notification when units/buildings take damage
+- [x] **Minimap ping on attack** - Attack location highlighted via CombatSystem
+- [x] **Idle worker button** - HUD button + F1 to select idle workers
 
 ### Production & Macro (Medium Priority)
 - [ ] **Warp-in/Select all of type** - Select all barracks, all factories, etc.
 - [ ] **Shared production queue UI** - When multiple production buildings selected
-- [ ] **Building dependencies** - Factory requires Barracks, etc.
+- [x] **Building dependencies** - Tech requirements validated in BuildingPlacementSystem
 
 ### Combat Feel (Medium Priority)
-- [ ] **Smart targeting** - Units auto-prioritize threats (workers < combat units)
-- [ ] **Area of effect damage** - Splash damage for siege units
+- [x] **Smart targeting** - Units auto-prioritize threats (high-value > workers)
+- [x] **Area of effect damage** - Splash damage for siege tank & hellion
 - [ ] **Focus fire indicator** - Visual cue when multiple units target same enemy
 
 ---
@@ -274,17 +274,24 @@
 
 ## Implementation Priority (Next Sprint)
 
-**Batch 1: Movement Feel** (Do First)
-1. Unit avoidance/steering - Prevents unit clumping
-2. Unit acceleration/deceleration - Smooth movement
-3. Shift-click command queuing - Essential for micro
+**Batch 1: Movement Feel** (COMPLETE)
+1. [x] Unit avoidance/steering - Boids-like separation
+2. [x] Unit acceleration/deceleration - Smooth movement
+3. [x] Shift-click command queuing - Essential for micro
 
-**Batch 2: Macro Speed**
-4. Camera location hotkeys - Fast base management
-5. Tab cycle subgroups - Army control
-6. Building dependencies - Tech tree completion
+**Batch 2: Macro Speed** (COMPLETE)
+4. [x] Camera location hotkeys - F5-F8 save/recall
+5. [x] Tab cycle subgroups - Army control
+6. [x] Building dependencies - Tech tree completion
 
-**Batch 3: Feedback Loop**
-7. Under attack alerts - Awareness
-8. Idle worker button - Economy management
-9. Damage numbers - Combat feedback
+**Batch 3: Feedback Loop** (MOSTLY COMPLETE)
+7. [x] Under attack alerts - Awareness
+8. [x] Idle worker button - Economy management
+9. [ ] Damage numbers - Combat feedback
+
+**Next Focus:**
+- [ ] Focus fire indicator
+- [ ] Select all of type (production buildings)
+- [ ] Shared production queue UI
+- [ ] Unit acknowledgment voices
+- [ ] Combat sounds
