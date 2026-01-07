@@ -286,6 +286,55 @@ export function getBiome(type: BiomeType): BiomeConfig {
   return BIOMES[type];
 }
 
+// Get shader configuration for a biome
+export interface BiomeShaderConfig {
+  groundColor: THREE.Color;
+  rockColor: THREE.Color;
+  accentColor: THREE.Color;
+  snowLine: number;
+  fogDensity: number;
+  fogColor: THREE.Color;
+}
+
+export function getBiomeShaderConfig(biome: BiomeConfig): BiomeShaderConfig {
+  // Calculate average ground color
+  const groundColor = biome.colors.ground[0].clone();
+  for (let i = 1; i < Math.min(3, biome.colors.ground.length); i++) {
+    groundColor.lerp(biome.colors.ground[i], 0.3);
+  }
+
+  // Calculate average rock/cliff color
+  const rockColor = biome.colors.cliff[0].clone();
+  if (biome.colors.cliff.length > 1) {
+    rockColor.lerp(biome.colors.cliff[1], 0.3);
+  }
+
+  // Get accent color
+  const accentColor = biome.colors.accent[0].clone();
+
+  // Snow line based on biome
+  let snowLine = -1; // Disabled by default
+  if (biome.name === 'Frozen Wastes') {
+    snowLine = 3.0; // Snow above elevation 3
+  }
+
+  // Fog density based on biome
+  let fogDensity = 0.8;
+  if (biome.name === 'Jungle') fogDensity = 1.5;
+  if (biome.name === 'Desert') fogDensity = 0.5;
+  if (biome.name === 'Void') fogDensity = 2.0;
+  if (biome.name === 'Volcanic') fogDensity = 1.8;
+
+  return {
+    groundColor,
+    rockColor,
+    accentColor,
+    snowLine,
+    fogDensity,
+    fogColor: biome.colors.fog.clone(),
+  };
+}
+
 export function getRandomGroundColor(biome: BiomeConfig, x: number, y: number): THREE.Color {
   const colors = biome.colors.ground;
   const noise = Math.sin(x * 12.9898 + y * 78.233) * 43758.5453;

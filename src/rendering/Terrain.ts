@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { MapData, MapCell, TerrainType, ElevationLevel } from '@/data/maps';
-import { BiomeConfig, BIOMES, blendBiomeColors, BiomeType } from './Biomes';
+import { BiomeConfig, BIOMES, blendBiomeColors, BiomeType, getBiomeShaderConfig } from './Biomes';
+import { createTerrainShaderMaterial, updateTerrainShader } from './shaders/TerrainShader';
 
 // Terrain subdivision for smoother rendering
 const SUBDIVISIONS = 2; // 2x2 subdivisions per cell for better quality
@@ -68,12 +69,15 @@ export class Terrain {
 
   private cellSize: number;
   private geometry: THREE.BufferGeometry;
-  private material: THREE.MeshStandardMaterial;
+  private material: THREE.ShaderMaterial;
 
   // Store heightmap for queries
   private heightMap: Float32Array;
   private gridWidth: number;
   private gridHeight: number;
+
+  // Flag to use modern shader (can be toggled for performance testing)
+  private static USE_MODERN_SHADER = true;
 
   constructor(config: TerrainConfig) {
     this.mapData = config.mapData;
@@ -86,17 +90,20 @@ export class Terrain {
     this.biome = BIOMES[this.mapData.biome || 'grassland'];
 
     this.geometry = this.createGeometry();
-    this.material = new THREE.MeshStandardMaterial({
-      vertexColors: true,
-      roughness: this.biome.groundRoughness,
-      metalness: this.biome.groundMetalness,
-      flatShading: false,
-    });
+
+    // Create modern procedural shader material
+    const shaderConfig = getBiomeShaderConfig(this.biome);
+    this.material = createTerrainShaderMaterial(shaderConfig);
 
     this.mesh = new THREE.Mesh(this.geometry, this.material);
     this.mesh.receiveShadow = true;
     this.mesh.castShadow = false;
     this.mesh.rotation.x = -Math.PI / 2;
+  }
+
+  // Update shader uniforms (call each frame for animated effects)
+  public update(deltaTime: number, sunDirection?: THREE.Vector3): void {
+    updateTerrainShader(this.material, deltaTime, sunDirection);
   }
 
   private createGeometry(): THREE.BufferGeometry {
