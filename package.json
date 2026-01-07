@@ -7,7 +7,8 @@
     "build": "next build",
     "start": "next start",
     "lint": "next lint",
-    "type-check": "tsc --noEmit"
+    "type-check": "tsc --noEmit",
+    "optimize-models": "node scripts/optimize-models.js"
   },
   "dependencies": {
     "@react-three/drei": "^9.92.7",
