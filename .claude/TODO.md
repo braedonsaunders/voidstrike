@@ -139,13 +139,14 @@
 - [ ] Damage numbers (floating combat text)
 - [ ] Unit wireframes in selection panel
 
-### Audio
+### Audio (Complete)
 - [x] Sound effect system
 - [x] Spatial audio positioning
-- [ ] Unit acknowledgment voices ("Yes sir", "Moving out")
-- [ ] Combat sounds (weapon fire, impacts, deaths)
-- [ ] Alert sounds (under attack, research complete)
-- [ ] Ambient background sounds
+- [x] Unit acknowledgment voices ("Yes sir", "Moving out")
+- [x] Combat sounds (weapon fire, impacts, deaths)
+- [x] Alert sounds (under attack, research complete)
+- [x] Ambient background sounds (biome-specific)
+- [x] Audio asset documentation (AUDIO_ASSETS.md)
 
 ---
 

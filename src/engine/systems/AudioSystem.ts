@@ -1,20 +1,24 @@
 import { System } from '../ecs/System';
 import { Game } from '../core/Game';
 import { Transform } from '../components/Transform';
-import { AudioManager } from '@/audio/AudioManager';
+import { Unit } from '../components/Unit';
+import { AudioManager, UNIT_VOICES, BIOME_AMBIENT } from '@/audio/AudioManager';
 import * as THREE from 'three';
 
 export class AudioSystem extends System {
   public priority = 100; // Run after other systems
   private camera: THREE.Camera | null = null;
   private initialized = false;
+  private currentAmbient: string | null = null;
+  private lastVoiceTime = 0;
+  private voiceCooldown = 300; // ms between voice lines
 
   constructor(game: Game) {
     super(game);
   }
 
   // Call this after camera is created
-  public initialize(camera: THREE.Camera): void {
+  public initialize(camera: THREE.Camera, biome?: string): void {
     if (this.initialized) return;
 
     this.camera = camera;
@@ -24,42 +28,138 @@ export class AudioSystem extends System {
 
     // Preload common sounds
     AudioManager.preload([
+      // UI
       'ui_click',
       'ui_error',
       'ui_select',
       'ui_research_complete',
       'ui_building_complete',
+      'ui_notification',
+      // Alerts
+      'alert_under_attack',
+      'alert_unit_lost',
+      'alert_building_lost',
+      'alert_supply_blocked',
+      // Combat
       'attack_rifle',
+      'attack_cannon',
+      'attack_flamethrower',
       'hit_impact',
       'unit_death',
+      'unit_death_mech',
+      'unit_death_bio',
+      'explosion_small',
+      'explosion_large',
+      // Unit commands
       'unit_move',
       'unit_attack',
       'unit_ready',
+      // Building
       'building_place',
       'production_start',
     ]);
+
+    // Start biome-specific ambient sound
+    if (biome) {
+      this.startAmbient(biome);
+    }
+  }
+
+  // Start ambient sound for a biome
+  public startAmbient(biome: string): void {
+    // Stop current ambient if different
+    if (this.currentAmbient && this.currentAmbient !== biome) {
+      const currentSound = BIOME_AMBIENT[this.currentAmbient];
+      if (currentSound) {
+        AudioManager.stop(currentSound);
+      }
+    }
+
+    const ambientSound = BIOME_AMBIENT[biome];
+    if (ambientSound) {
+      this.currentAmbient = biome;
+      AudioManager.play(ambientSound);
+    }
+  }
+
+  // Play a random voice line for a unit type
+  private playVoice(unitId: string, action: 'select' | 'move' | 'attack' | 'ready'): void {
+    const now = Date.now();
+    if (now - this.lastVoiceTime < this.voiceCooldown) return;
+
+    const voices = UNIT_VOICES[unitId];
+    if (!voices) return;
+
+    let soundIds: string[];
+    if (action === 'ready' && voices.ready) {
+      soundIds = [voices.ready];
+    } else if (action === 'ready') {
+      return; // No ready sound for this unit
+    } else {
+      soundIds = voices[action];
+    }
+
+    if (soundIds.length === 0) return;
+
+    const soundId = soundIds[Math.floor(Math.random() * soundIds.length)];
+    AudioManager.play(soundId);
+    this.lastVoiceTime = now;
+  }
+
+  // Get the first unit type from a selection for voice lines
+  private getFirstUnitType(entityIds: number[]): string | null {
+    for (const id of entityIds) {
+      const entity = this.world.getEntity(id);
+      if (entity) {
+        const unit = entity.get<Unit>('Unit');
+        if (unit) {
+          return unit.unitId;
+        }
+      }
+    }
+    return null;
   }
 
   private setupEventListeners(): void {
-    // Selection events
-    this.game.eventBus.on('selection:changed', () => {
+    // Selection events - play unit voice on select
+    this.game.eventBus.on('selection:changed', (data: { entityIds: number[] }) => {
       AudioManager.play('ui_select');
+
+      // Play unit voice line
+      if (data && data.entityIds && data.entityIds.length > 0) {
+        const unitType = this.getFirstUnitType(data.entityIds);
+        if (unitType) {
+          this.playVoice(unitType, 'select');
+        }
+      }
     });
 
-    // Command events
+    // Command events - play unit voice on move/attack
     this.game.eventBus.on('command:move', (data: { entityIds: number[] }) => {
       if (data.entityIds.length > 0) {
         AudioManager.play('unit_move');
+
+        // Play unit voice line
+        const unitType = this.getFirstUnitType(data.entityIds);
+        if (unitType) {
+          this.playVoice(unitType, 'move');
+        }
       }
     });
 
     this.game.eventBus.on('command:attack', (data: { entityIds: number[] }) => {
       if (data.entityIds.length > 0) {
         AudioManager.play('unit_attack');
+
+        // Play unit voice line
+        const unitType = this.getFirstUnitType(data.entityIds);
+        if (unitType) {
+          this.playVoice(unitType, 'attack');
+        }
       }
     });
 
-    // Combat events
+    // Combat events - play weapon sounds based on unit type
     this.game.eventBus.on('combat:attack', (data: {
       attackerId: number;
       targetId: number;
@@ -68,9 +168,23 @@ export class AudioSystem extends System {
       const attacker = this.world.getEntity(data.attackerId);
       if (attacker) {
         const transform = attacker.get<Transform>('Transform');
+        const unit = attacker.get<Unit>('Unit');
         if (transform) {
           const pos = new THREE.Vector3(transform.x, 0, transform.y);
-          AudioManager.playAt('attack_rifle', pos);
+
+          // Choose weapon sound based on unit type
+          let weaponSound = 'attack_rifle';
+          if (unit) {
+            if (unit.unitId === 'siege_tank') {
+              weaponSound = 'attack_cannon';
+            } else if (unit.unitId === 'hellion') {
+              weaponSound = 'attack_flamethrower';
+            } else if (unit.unitId === 'marauder') {
+              weaponSound = 'attack_cannon';
+            }
+          }
+
+          AudioManager.playAt(weaponSound, pos);
         }
       }
     });
@@ -89,13 +203,59 @@ export class AudioSystem extends System {
       }
     });
 
+    // Unit/building destroyed - play death sounds and alerts
     this.game.eventBus.on('unit:destroyed', (data: {
       entityId: number;
       x: number;
       y: number;
+      unitId?: string;
+      playerId?: string;
     }) => {
       const pos = new THREE.Vector3(data.x, 0, data.y);
-      AudioManager.playAt('unit_death', pos);
+
+      // Choose death sound based on unit type
+      let deathSound = 'unit_death';
+      if (data.unitId === 'siege_tank' || data.unitId === 'hellion') {
+        deathSound = 'unit_death_mech';
+        AudioManager.playAt('explosion_small', pos);
+      }
+      AudioManager.playAt(deathSound, pos);
+
+      // Play alert for player's units
+      if (data.playerId === 'player1') {
+        AudioManager.play('alert_unit_lost');
+      }
+    });
+
+    this.game.eventBus.on('building:destroyed', (data: {
+      entityId: number;
+      x: number;
+      y: number;
+      playerId?: string;
+    }) => {
+      const pos = new THREE.Vector3(data.x, 0, data.y);
+      AudioManager.playAt('explosion_building', pos);
+
+      // Play alert for player's buildings
+      if (data.playerId === 'player1') {
+        AudioManager.play('alert_building_lost');
+      }
+    });
+
+    // Under attack alert
+    this.game.eventBus.on('alert:underAttack', (data: {
+      x: number;
+      y: number;
+      playerId?: string;
+    }) => {
+      if (data.playerId === 'player1') {
+        AudioManager.play('alert_under_attack');
+      }
+    });
+
+    // Supply blocked alert
+    this.game.eventBus.on('alert:supplyBlocked', () => {
+      AudioManager.play('alert_supply_blocked');
     });
 
     // Production events
@@ -103,8 +263,13 @@ export class AudioSystem extends System {
       AudioManager.play('production_start');
     });
 
-    this.game.eventBus.on('production:complete', () => {
+    this.game.eventBus.on('production:complete', (data: { unitId?: string }) => {
       AudioManager.play('unit_ready');
+
+      // Play unit-specific ready voice
+      if (data && data.unitId) {
+        this.playVoice(data.unitId, 'ready');
+      }
     });
 
     // Building events

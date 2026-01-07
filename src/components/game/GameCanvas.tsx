@@ -133,8 +133,8 @@ export function GameCanvas() {
     // Spawn initial entities based on map data
     spawnInitialEntities(game, CURRENT_MAP);
 
-    // Initialize audio system with camera for spatial audio
-    game.audioSystem.initialize(camera.camera);
+    // Initialize audio system with camera for spatial audio and biome ambient
+    game.audioSystem.initialize(camera.camera, CURRENT_MAP.biome);
 
     // Start game
     game.start();
