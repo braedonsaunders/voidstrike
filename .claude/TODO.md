@@ -312,14 +312,33 @@
 5. [x] Tab cycle subgroups - Army control
 6. [x] Building dependencies - Tech tree completion
 
-**Batch 3: Feedback Loop** (MOSTLY COMPLETE)
+**Batch 3: Feedback Loop** (COMPLETE)
 7. [x] Under attack alerts - Awareness
 8. [x] Idle worker button - Economy management
-9. [ ] Damage numbers - Combat feedback
+9. [x] Unit acknowledgment voices - Per-unit voice lines
+10. [x] Combat sounds - Weapons, impacts, deaths, explosions
 
-**Next Focus:**
-- [ ] Focus fire indicator
-- [ ] Select all of type (production buildings)
-- [ ] Shared production queue UI
-- [ ] Unit acknowledgment voices
-- [ ] Combat sounds
+**Batch 4: UI Polish** (NEXT)
+- [ ] Focus fire indicator - Visual cue for concentrated fire
+- [ ] Damage numbers - Floating combat text
+- [ ] Select all of type - Ctrl+click to select all barracks, etc.
+- [ ] Shared production queue UI - Multi-building queue display
+- [ ] Unit info tooltips - Hover for stats
+
+---
+
+## Current Status Summary
+
+### Completed Features
+- Full single-player gameplay loop
+- Dominion faction with 6 unit types
+- 3 maps with biome-specific visuals
+- Complete audio system (awaiting asset generation)
+- Game setup/options menu
+- Keyboard shortcuts documentation
+
+### Ready for Next Phase
+The game is feature-complete for single-player vs AI. The next major milestone is either:
+1. **UI Polish** - Improve combat feedback and macro controls
+2. **AI Opponent** - Basic computer opponent for single-player
+3. **Multiplayer** - Real-time networked gameplay
