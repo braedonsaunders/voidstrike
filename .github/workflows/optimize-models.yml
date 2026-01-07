@@ -1,15 +1,7 @@
 name: Optimize 3D Models
 
 on:
-  pull_request:
-    paths:
-      - 'public/models/**/*.glb'
-  push:
-    branches:
-      - main
-    paths:
-      - 'public/models/**/*.glb'
-  workflow_dispatch:  # Allow manual trigger
+  workflow_dispatch:  # Manual trigger only
 
 jobs:
   optimize:
@@ -29,34 +21,7 @@ jobs:
         with:
           node-version: '20'
 
-      - name: Get changed GLB files
-        id: changed-files
-        uses: tj-actions/changed-files@v44
-        with:
-          files: |
-            public/models/**/*.glb
-
-      - name: Check for GLB files to optimize
-        id: check-files
-        run: |
-          # For manual trigger, process ALL GLB files
-          if [ "${{ github.event_name }}" == "workflow_dispatch" ]; then
-            echo "has_files=true" >> $GITHUB_OUTPUT
-            echo "📦 Manual trigger - will process ALL GLB files"
-            find public/models -name "*.glb" -type f > /tmp/glb_files.txt
-            cat /tmp/glb_files.txt
-          elif [ "${{ steps.changed-files.outputs.any_changed }}" == "true" ]; then
-            echo "has_files=true" >> $GITHUB_OUTPUT
-            echo "📦 Found changed GLB files to optimize:"
-            echo "${{ steps.changed-files.outputs.all_changed_files }}"
-            echo "${{ steps.changed-files.outputs.all_changed_files }}" | tr ' ' '\n' > /tmp/glb_files.txt
-          else
-            echo "has_files=false" >> $GITHUB_OUTPUT
-            echo "No GLB files changed."
-          fi
-
       - name: Optimize models
-        if: steps.check-files.outputs.has_files == 'true'
         run: |
           echo "🎮 Installing gltf-transform..."
           npm install -g @gltf-transform/cli
@@ -67,13 +32,7 @@ jobs:
           find public/models -name "*.bin" -type f -delete 2>/dev/null || true
 
           echo "📦 Optimizing models..."
-
-          # Get file list based on trigger type
-          if [ "${{ github.event_name }}" == "workflow_dispatch" ]; then
-            files=$(find public/models -name "*.glb" -type f)
-          else
-            files="${{ steps.changed-files.outputs.all_changed_files }}"
-          fi
+          files=$(find public/models -name "*.glb" -type f)
 
           for file in $files; do
             echo "Processing: $file"
@@ -132,7 +91,6 @@ jobs:
           done
 
       - name: Commit optimized models
-        if: steps.check-files.outputs.has_files == 'true'
         run: |
           git config --local user.email "github-actions[bot]@users.noreply.github.com"
           git config --local user.name "github-actions[bot]"
@@ -151,29 +109,3 @@ jobs:
             git commit -m "chore: Optimize 3D models (Draco compression)"
             git push
           fi
-
-      - name: Comment on PR
-        if: github.event_name == 'pull_request' && steps.check-files.outputs.has_files == 'true'
-        uses: actions/github-script@v7
-        with:
-          script: |
-            const changedFiles = `${{ steps.changed-files.outputs.all_changed_files }}`.split(' ');
-            const fileList = changedFiles.map(f => `- \`${f}\``).join('\n');
-
-            github.rest.issues.createComment({
-              issue_number: context.issue.number,
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              body: `## 🎮 3D Model Optimization
-
-            The following GLB files were automatically optimized:
-
-            ${fileList}
-
-            **Optimizations applied:**
-            - Textures resized to 512x512
-            - Draco mesh compression enabled
-            - Single GLB file preserved (no extracted textures)
-
-            This reduces file sizes significantly while maintaining visual quality.`
-            });
