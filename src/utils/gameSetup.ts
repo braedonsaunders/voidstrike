@@ -77,14 +77,15 @@ function spawnBase(game: Game, playerId: string, x: number, y: number): void {
   }
 
   // Spawn initial workers around the command center
+  // Command center is 5x5 (from -2.5 to +2.5), spawn workers outside at offset ~4
   const scvDef = UNIT_DEFINITIONS['scv'];
   const workerPositions = [
-    { x: -2, y: -2 },
-    { x: 0, y: -2 },
-    { x: 2, y: -2 },
-    { x: -2, y: 0 },
-    { x: 2, y: 0 },
-    { x: -1, y: 2 },
+    { x: -4, y: -4 },
+    { x: 0, y: -4 },
+    { x: 4, y: -4 },
+    { x: -4, y: 0 },
+    { x: 4, y: 0 },
+    { x: 0, y: 4 },
   ];
 
   for (let i = 0; i < 6; i++) {

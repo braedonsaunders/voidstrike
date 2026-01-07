@@ -113,6 +113,8 @@ export class Unit extends Component {
   public carryingMinerals: number;
   public carryingVespene: number;
   public gatherTargetId: number | null;
+  public miningTimer: number; // Time remaining until mining completes (seconds)
+  public isMining: boolean; // Currently in mining animation
 
   // Construction (for workers building structures)
   public constructingBuildingId: number | null; // Entity ID of building being constructed
@@ -200,6 +202,8 @@ export class Unit extends Component {
     this.carryingMinerals = 0;
     this.carryingVespene = 0;
     this.gatherTargetId = null;
+    this.miningTimer = 0;
+    this.isMining = false;
 
     // Construction
     this.constructingBuildingId = null;

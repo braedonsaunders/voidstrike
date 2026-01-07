@@ -312,7 +312,36 @@ export class AssetManager {
    */
   static getBuildingMesh(buildingId: string, playerColor?: number): THREE.Object3D {
     if (customAssets.has(buildingId)) {
-      return cloneModel(customAssets.get(buildingId)!, buildingId);
+      const original = customAssets.get(buildingId)!;
+      const cloned = cloneModel(original, buildingId);
+
+      // Wrap in a parent group so the renderer can position the group
+      // while the model maintains its normalization offset (same as getUnitMesh)
+      const wrapper = new THREE.Group();
+
+      // Apply the normalization offset to the cloned model
+      cloned.position.copy(original.position);
+      cloned.scale.copy(original.scale);
+      cloned.rotation.copy(original.rotation);
+
+      // Ensure all meshes are visible and not culled
+      let meshCount = 0;
+      cloned.traverse((child) => {
+        if (child instanceof THREE.Mesh) {
+          meshCount++;
+          child.visible = true;
+          child.frustumCulled = false;
+          child.castShadow = true;
+          child.receiveShadow = true;
+        }
+      });
+
+      wrapper.add(cloned);
+      wrapper.updateMatrixWorld(true);
+
+      console.log(`[AssetManager] Custom building ${buildingId}: ${meshCount} meshes, inner pos.y=${cloned.position.y.toFixed(3)}, scale=${cloned.scale.x.toFixed(4)}`);
+
+      return wrapper;
     }
 
     const cacheKey = `building_${buildingId}`;
