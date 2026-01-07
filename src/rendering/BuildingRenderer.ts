@@ -157,8 +157,8 @@ export class BuildingRenderer {
       }
       // PERFORMANCE: If building was already complete, skip traverse() entirely
 
-      // Update selection ring
-      const ringSize = Math.max(building.width, building.height) * 0.6;
+      // Update selection ring - larger multiplier for better visibility
+      const ringSize = Math.max(building.width, building.height) * 0.9;
       meshData.selectionRing.position.set(transform.x, terrainHeight + 0.05, transform.y);
       meshData.selectionRing.scale.set(ringSize, ringSize, 1);
       meshData.selectionRing.visible = selectable?.isSelected ?? false;
