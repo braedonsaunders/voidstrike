@@ -39,10 +39,17 @@ jobs:
       - name: Check for GLB files to optimize
         id: check-files
         run: |
-          if [ "${{ steps.changed-files.outputs.any_changed }}" == "true" ]; then
+          # For manual trigger, process ALL GLB files
+          if [ "${{ github.event_name }}" == "workflow_dispatch" ]; then
             echo "has_files=true" >> $GITHUB_OUTPUT
-            echo "📦 Found GLB files to optimize:"
+            echo "📦 Manual trigger - will process ALL GLB files"
+            find public/models -name "*.glb" -type f > /tmp/glb_files.txt
+            cat /tmp/glb_files.txt
+          elif [ "${{ steps.changed-files.outputs.any_changed }}" == "true" ]; then
+            echo "has_files=true" >> $GITHUB_OUTPUT
+            echo "📦 Found changed GLB files to optimize:"
             echo "${{ steps.changed-files.outputs.all_changed_files }}"
+            echo "${{ steps.changed-files.outputs.all_changed_files }}" | tr ' ' '\n' > /tmp/glb_files.txt
           else
             echo "has_files=false" >> $GITHUB_OUTPUT
             echo "No GLB files changed."
@@ -54,18 +61,31 @@ jobs:
           echo "🎮 Installing gltf-transform..."
           npm install -g @gltf-transform/cli
 
+          # Clean up any extracted texture/bin files from previous bad runs
+          echo "🧹 Cleaning up extracted files..."
+          find public/models -name "*.webp" -type f -delete 2>/dev/null || true
+          find public/models -name "*.bin" -type f -delete 2>/dev/null || true
+
           echo "📦 Optimizing models..."
-          for file in ${{ steps.changed-files.outputs.all_changed_files }}; do
+
+          # Get file list based on trigger type
+          if [ "${{ github.event_name }}" == "workflow_dispatch" ]; then
+            files=$(find public/models -name "*.glb" -type f)
+          else
+            files="${{ steps.changed-files.outputs.all_changed_files }}"
+          fi
+
+          for file in $files; do
             echo "Processing: $file"
 
             # Get original size
             original_size=$(stat -f%z "$file" 2>/dev/null || stat -c%s "$file")
             echo "  Original size: $((original_size / 1024)) KB"
 
-            # Optimize
+            # Optimize - NO texture-compress to keep single GLB file
+            # Draco compression + texture resize provides good savings
             gltf-transform optimize "$file" "${file}.optimized" \
               --texture-size 512 \
-              --texture-compress webp \
               --compress draco || {
                 echo "  ⚠️ Optimization failed, keeping original"
                 continue
@@ -93,12 +113,18 @@ jobs:
           git config --local user.email "github-actions[bot]@users.noreply.github.com"
           git config --local user.name "github-actions[bot]"
 
+          # Final cleanup of any extracted files
+          find public/models -name "*.webp" -type f -delete 2>/dev/null || true
+          find public/models -name "*.bin" -type f -delete 2>/dev/null || true
+
+          # Only add GLB files (not extracted textures)
+          git add public/models/**/*.glb
+
           # Check if there are changes to commit
-          if git diff --quiet; then
+          if git diff --staged --quiet; then
             echo "No changes to commit (models may already be optimized)"
           else
-            git add public/models/
-            git commit -m "chore: Optimize 3D models (auto-compressed textures)"
+            git commit -m "chore: Optimize 3D models (Draco compression)"
             git push
           fi
 
@@ -122,8 +148,8 @@ jobs:
 
             **Optimizations applied:**
             - Textures resized to 512x512
-            - Textures converted to WebP format
             - Draco mesh compression enabled
+            - Single GLB file preserved (no extracted textures)
 
-            This reduces file sizes by ~90% while maintaining visual quality for RTS units.`
+            This reduces file sizes significantly while maintaining visual quality.`
             });
