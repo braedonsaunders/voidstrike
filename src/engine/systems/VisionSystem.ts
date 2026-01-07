@@ -30,6 +30,10 @@ export class VisionSystem extends System {
   private cellSize: number;
   private players: string[] = ['player1', 'ai'];
 
+  // Throttle vision updates for performance - update every N ticks
+  private readonly UPDATE_INTERVAL = 3; // Update every 3 ticks instead of every tick
+  private tickCounter = 0;
+
   constructor(game: Game, mapWidth: number, mapHeight: number, cellSize: number = 2) {
     super(game);
     this.mapWidth = mapWidth;
@@ -69,6 +73,13 @@ export class VisionSystem extends System {
   }
 
   public update(_deltaTime: number): void {
+    // Throttle vision updates for performance
+    this.tickCounter++;
+    if (this.tickCounter < this.UPDATE_INTERVAL) {
+      return; // Skip this tick
+    }
+    this.tickCounter = 0;
+
     // Clear currently visible cells
     for (const playerId of this.players) {
       const currentVisible = this.visionMap.currentlyVisible.get(playerId)!;

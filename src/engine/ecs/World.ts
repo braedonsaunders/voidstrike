@@ -1,6 +1,7 @@
 import { Entity, EntityId } from './Entity';
 import { Component, ComponentType } from './Component';
 import { System } from './System';
+import { SpatialGrid } from '../core/SpatialGrid';
 
 export class World {
   private entities: Map<EntityId, Entity> = new Map();
@@ -9,6 +10,21 @@ export class World {
 
   // Component storage for faster queries
   private componentIndex: Map<ComponentType, Set<EntityId>> = new Map();
+
+  // Query cache - invalidated each tick
+  private queryCache: Map<string, Entity[]> = new Map();
+  private currentTick: number = 0;
+  private lastCacheTick: number = -1;
+
+  // Spatial grids for different entity types
+  public readonly unitGrid: SpatialGrid;
+  public readonly buildingGrid: SpatialGrid;
+
+  constructor(mapWidth: number = 200, mapHeight: number = 200) {
+    // Cell size of 10 = ~20x20 cells for 200x200 map
+    this.unitGrid = new SpatialGrid(mapWidth, mapHeight, 10);
+    this.buildingGrid = new SpatialGrid(mapWidth, mapHeight, 10);
+  }
 
   public createEntity(): Entity {
     const id = this.nextEntityId++;
@@ -21,6 +37,10 @@ export class World {
     const entity = this.entities.get(id);
     if (!entity) return;
 
+    // Remove from spatial grids
+    this.unitGrid.remove(id);
+    this.buildingGrid.remove(id);
+
     // Remove from component indices
     for (const [type, entityIds] of this.componentIndex) {
       entityIds.delete(id);
@@ -29,6 +49,14 @@ export class World {
     // Mark entity as destroyed
     entity.destroy();
     this.entities.delete(id);
+  }
+
+  /**
+   * Set the current tick - called by Game each frame
+   * This invalidates the query cache
+   */
+  public setCurrentTick(tick: number): void {
+    this.currentTick = tick;
   }
 
   public getEntity(id: EntityId): Entity | undefined {
@@ -42,6 +70,21 @@ export class World {
   public getEntitiesWith(...componentTypes: ComponentType[]): Entity[] {
     if (componentTypes.length === 0) {
       return this.getEntities();
+    }
+
+    // Check if cache is stale
+    if (this.lastCacheTick !== this.currentTick) {
+      this.queryCache.clear();
+      this.lastCacheTick = this.currentTick;
+    }
+
+    // Create cache key
+    const cacheKey = componentTypes.sort().join(',');
+
+    // Check cache
+    const cached = this.queryCache.get(cacheKey);
+    if (cached !== undefined) {
+      return cached;
     }
 
     // Start with the smallest set
@@ -69,6 +112,9 @@ export class World {
         result.push(entity);
       }
     }
+
+    // Cache the result
+    this.queryCache.set(cacheKey, result);
 
     return result;
   }

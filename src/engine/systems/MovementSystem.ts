@@ -18,32 +18,9 @@ export class MovementSystem extends System {
   private arrivalThreshold = 0.5;
   private decelerationThreshold = 2.0; // Start slowing down at this distance
 
-  // Cached queries for performance
-  private cachedBuildings: Array<{ transform: Transform; building: Building }> = [];
-  private lastBuildingCacheFrame = -1;
-
   constructor(game: Game) {
     super(game);
     this.setupEventListeners();
-  }
-
-  /**
-   * Cache buildings once per frame for collision checks
-   */
-  private getBuildingsForCollision(): Array<{ transform: Transform; building: Building }> {
-    const currentTick = this.game.getCurrentTick();
-    if (this.lastBuildingCacheFrame !== currentTick) {
-      this.cachedBuildings = [];
-      const buildings = this.world.getEntitiesWith('Building', 'Transform');
-      for (const entity of buildings) {
-        this.cachedBuildings.push({
-          transform: entity.get<Transform>('Transform')!,
-          building: entity.get<Building>('Building')!,
-        });
-      }
-      this.lastBuildingCacheFrame = currentTick;
-    }
-    return this.cachedBuildings;
   }
 
   private setupEventListeners(): void {
@@ -143,6 +120,7 @@ export class MovementSystem extends System {
   /**
    * Calculate separation force (boids-like avoidance)
    * Units push away from nearby units to avoid overlapping
+   * Uses spatial grid for O(1) lookups instead of checking all entities
    */
   private calculateSeparationForce(
     selfId: number,
@@ -152,13 +130,22 @@ export class MovementSystem extends System {
     let forceX = 0;
     let forceY = 0;
 
-    const entities = this.world.getEntitiesWith('Transform', 'Unit');
+    // Use spatial grid to find nearby units - only check units within separation radius
+    const nearbyIds = this.world.unitGrid.queryRadius(
+      selfTransform.x,
+      selfTransform.y,
+      SEPARATION_RADIUS + selfUnit.collisionRadius
+    );
 
-    for (const entity of entities) {
-      if (entity.id === selfId) continue;
+    for (const entityId of nearbyIds) {
+      if (entityId === selfId) continue;
 
-      const otherTransform = entity.get<Transform>('Transform')!;
-      const otherUnit = entity.get<Unit>('Unit')!;
+      const entity = this.world.getEntity(entityId);
+      if (!entity) continue;
+
+      const otherTransform = entity.get<Transform>('Transform');
+      const otherUnit = entity.get<Unit>('Unit');
+      if (!otherTransform || !otherUnit) continue;
 
       // Skip dead units
       if (otherUnit.state === 'dead') continue;
@@ -199,6 +186,7 @@ export class MovementSystem extends System {
   /**
    * Calculate building avoidance force
    * Units are pushed away from buildings they're overlapping with
+   * Uses spatial grid for O(1) lookups
    */
   private calculateBuildingAvoidanceForce(
     selfTransform: Transform,
@@ -212,10 +200,20 @@ export class MovementSystem extends System {
     let forceX = 0;
     let forceY = 0;
 
-    // Use cached buildings for performance
-    const buildings = this.getBuildingsForCollision();
+    // Use spatial grid to find nearby buildings
+    const nearbyBuildingIds = this.world.buildingGrid.queryRadius(
+      selfTransform.x,
+      selfTransform.y,
+      BUILDING_AVOIDANCE_MARGIN + selfUnit.collisionRadius + 5 // Extra range for large buildings
+    );
 
-    for (const { transform: buildingTransform, building } of buildings) {
+    for (const buildingId of nearbyBuildingIds) {
+      const entity = this.world.getEntity(buildingId);
+      if (!entity) continue;
+
+      const buildingTransform = entity.get<Transform>('Transform');
+      const building = entity.get<Building>('Building');
+      if (!buildingTransform || !building) continue;
 
       // Get building bounds (center-based)
       const halfWidth = building.width / 2 + BUILDING_AVOIDANCE_MARGIN;
@@ -270,6 +268,15 @@ export class MovementSystem extends System {
     const entities = this.world.getEntitiesWith('Transform', 'Unit', 'Velocity');
     const dt = deltaTime / 1000; // Convert to seconds
 
+    // Update all unit positions in spatial grid at start of frame
+    for (const entity of entities) {
+      const transform = entity.get<Transform>('Transform')!;
+      const unit = entity.get<Unit>('Unit')!;
+      if (unit.state !== 'dead') {
+        this.world.unitGrid.update(entity.id, transform.x, transform.y, unit.collisionRadius);
+      }
+    }
+
     for (const entity of entities) {
       const transform = entity.get<Transform>('Transform')!;
       const unit = entity.get<Unit>('Unit')!;
@@ -278,6 +285,7 @@ export class MovementSystem extends System {
       // Skip dead units
       if (unit.state === 'dead') {
         velocity.zero();
+        this.world.unitGrid.remove(entity.id);
         continue;
       }
 
