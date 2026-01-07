@@ -4,6 +4,7 @@ import { Unit } from '../components/Unit';
 import { Building } from '../components/Building';
 import { Health } from '../components/Health';
 import { Selectable } from '../components/Selectable';
+import { Resource } from '../components/Resource';
 import { Game, GameCommand } from '../core/Game';
 import { UNIT_DEFINITIONS } from '@/data/units/dominion';
 import { BUILDING_DEFINITIONS } from '@/data/buildings/dominion';
@@ -370,8 +371,8 @@ export class EnhancedAISystem extends System {
   }
 
   private executeBuildingPhase(ai: AIPlayer): void {
-    // Update passive income
-    ai.minerals += ai.workerCount * 0.8;
+    // Send idle workers to gather (instead of just passive income)
+    this.assignIdleWorkersToGather(ai);
 
     // Follow build order if available
     if (ai.buildOrderIndex < ai.buildOrder.length) {
@@ -850,5 +851,72 @@ export class EnhancedAISystem extends System {
 
     // Otherwise target enemy base
     return this.findEnemyBase(playerId);
+  }
+
+  /**
+   * Find idle workers and send them to gather minerals
+   */
+  private assignIdleWorkersToGather(ai: AIPlayer): void {
+    // Find AI's base position
+    const basePos = this.findAIBase(ai.playerId);
+    if (!basePos) return;
+
+    // Find nearby mineral patches
+    const resources = this.world.getEntitiesWith('Resource', 'Transform');
+    const nearbyMinerals: { entityId: number; x: number; y: number; distance: number }[] = [];
+
+    for (const entity of resources) {
+      const resource = entity.get<Resource>('Resource')!;
+      const transform = entity.get<Transform>('Transform')!;
+
+      // Only minerals for now (not vespene without refinery)
+      if (resource.resourceType !== 'minerals') continue;
+      if (resource.isDepleted()) continue;
+
+      const dx = transform.x - basePos.x;
+      const dy = transform.y - basePos.y;
+      const distance = Math.sqrt(dx * dx + dy * dy);
+
+      // Only consider minerals within reasonable distance of base
+      if (distance < 30) {
+        nearbyMinerals.push({ entityId: entity.id, x: transform.x, y: transform.y, distance });
+      }
+    }
+
+    // Sort by distance
+    nearbyMinerals.sort((a, b) => a.distance - b.distance);
+
+    if (nearbyMinerals.length === 0) return;
+
+    // Find idle AI workers
+    const units = this.world.getEntitiesWith('Unit', 'Selectable', 'Health');
+    const idleWorkers: number[] = [];
+
+    for (const entity of units) {
+      const selectable = entity.get<Selectable>('Selectable')!;
+      const unit = entity.get<Unit>('Unit')!;
+      const health = entity.get<Health>('Health')!;
+
+      if (selectable.playerId !== ai.playerId) continue;
+      if (!unit.isWorker) continue;
+      if (health.isDead()) continue;
+
+      // Only grab truly idle workers (not already gathering or building)
+      if (unit.state === 'idle') {
+        idleWorkers.push(entity.id);
+      }
+    }
+
+    // Assign idle workers to minerals
+    for (const workerId of idleWorkers) {
+      // Pick a random mineral patch from nearby ones (distributes workers better)
+      const targetMineral = nearbyMinerals[Math.floor(Math.random() * Math.min(nearbyMinerals.length, 4))];
+
+      // Emit gather command
+      this.game.eventBus.emit('command:gather', {
+        entityIds: [workerId],
+        targetEntityId: targetMineral.entityId,
+      });
+    }
   }
 }
