@@ -48,7 +48,7 @@ jobs:
 
             # Run gltfpack with texture compression
             temp_file="${file}.optimized.glb"
-            if gltfpack -i "$file" -o "$temp_file" -tc -cc -si 0.75 2>/dev/null; then
+            if gltfpack -i "$file" -o "$temp_file" -cc 2>&1; then
               opt_size=$(stat -c%s "$temp_file")
               echo "  Optimized size: $((opt_size / 1024)) KB"
 
