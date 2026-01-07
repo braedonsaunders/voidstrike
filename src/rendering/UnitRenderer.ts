@@ -57,8 +57,14 @@ export class UnitRenderer {
       side: THREE.DoubleSide,
     });
 
-    // Preload common assets
+    // Preload common procedural assets
     AssetManager.preloadCommonAssets();
+
+    // Load custom GLB models (async, runs in background)
+    // Animation names will be logged to console when models load
+    AssetManager.loadCustomModels().catch(err => {
+      console.warn('[UnitRenderer] Error loading custom models:', err);
+    });
   }
 
   public setPlayerId(playerId: string): void {

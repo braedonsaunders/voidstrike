@@ -75,16 +75,17 @@ export class BuildingPlacementSystem extends System {
       }
     }
 
-    // Check placement validity using center position
-    if (!this.isValidPlacement(snappedX, snappedY, definition.width, definition.height)) {
-      this.game.eventBus.emit('ui:error', { message: 'Cannot build here - area blocked' });
-      return;
-    }
-
-    // Find a worker to assign to this construction
+    // Find a worker to assign to this construction FIRST (before placement check)
+    // so we can exclude them from collision detection
     const worker = this.findWorkerForConstruction(data.workerId, playerId);
     if (!worker) {
       this.game.eventBus.emit('ui:error', { message: 'No worker available' });
+      return;
+    }
+
+    // Check placement validity using center position (exclude builder from collision)
+    if (!this.isValidPlacement(snappedX, snappedY, definition.width, definition.height, worker.entity.id)) {
+      this.game.eventBus.emit('ui:error', { message: 'Cannot build here - area blocked' });
       return;
     }
 
@@ -247,7 +248,7 @@ export class BuildingPlacementSystem extends System {
     return null;
   }
 
-  private isValidPlacement(centerX: number, centerY: number, width: number, height: number): boolean {
+  private isValidPlacement(centerX: number, centerY: number, width: number, height: number, excludeEntityId?: number): boolean {
     const config = this.game.config;
     const halfW = width / 2;
     const halfH = height / 2;
@@ -255,6 +256,7 @@ export class BuildingPlacementSystem extends System {
     // Check map bounds
     if (centerX - halfW < 0 || centerY - halfH < 0 ||
         centerX + halfW > config.mapWidth || centerY + halfH > config.mapHeight) {
+      console.log('BuildingPlacement: Failed - out of map bounds');
       return false;
     }
 
@@ -270,6 +272,7 @@ export class BuildingPlacementSystem extends System {
       const dy = Math.abs(centerY - transform.y);
 
       if (dx < halfW + existingHalfW + 0.5 && dy < halfH + existingHalfH + 0.5) {
+        console.log(`BuildingPlacement: Failed - overlaps building at (${transform.x}, ${transform.y})`);
         return false;
       }
     }
@@ -282,18 +285,25 @@ export class BuildingPlacementSystem extends System {
       const dy = Math.abs(centerY - transform.y);
 
       if (dx < halfW + 1.5 && dy < halfH + 1.5) {
+        console.log(`BuildingPlacement: Failed - overlaps resource at (${transform.x}, ${transform.y})`);
         return false;
       }
     }
 
-    // Check for overlapping units (except the worker who will build)
+    // Check for overlapping units (exclude the builder worker)
     const units = this.world.getEntitiesWith('Unit', 'Transform');
     for (const entity of units) {
+      // Skip the worker who will build this structure
+      if (excludeEntityId !== undefined && entity.id === excludeEntityId) {
+        continue;
+      }
+
       const transform = entity.get<Transform>('Transform')!;
       const dx = Math.abs(centerX - transform.x);
       const dy = Math.abs(centerY - transform.y);
 
       if (dx < halfW + 0.5 && dy < halfH + 0.5) {
+        console.log(`BuildingPlacement: Failed - overlaps unit ${entity.id} at (${transform.x}, ${transform.y})`);
         return false;
       }
     }
