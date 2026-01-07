@@ -6,7 +6,8 @@ import { Terrain } from './Terrain';
 
 interface ResourceMeshData {
   mesh: THREE.Mesh;
-  glow: THREE.PointLight;
+  // PERFORMANCE: Removed PointLight - they're extremely expensive (per-pixel lighting calculations)
+  // Using emissive material instead for glow effect
 }
 
 export class ResourceRenderer {
@@ -26,24 +27,24 @@ export class ResourceRenderer {
     this.world = world;
     this.terrain = terrain ?? null;
 
-    // Minerals - blue crystals
+    // Minerals - blue crystals with stronger emissive for glow effect (no PointLight needed)
     this.mineralGeometry = new THREE.OctahedronGeometry(0.8);
     this.mineralMaterial = new THREE.MeshStandardMaterial({
       color: 0x00aaff,
       roughness: 0.2,
       metalness: 0.8,
-      emissive: 0x003366,
-      emissiveIntensity: 0.3,
+      emissive: 0x0066aa, // Stronger emissive to replace PointLight glow
+      emissiveIntensity: 0.6,
     });
 
-    // Vespene - green gas
-    this.vespeneGeometry = new THREE.SphereGeometry(1, 16, 16);
+    // Vespene - green gas with stronger emissive
+    this.vespeneGeometry = new THREE.SphereGeometry(1, 12, 12); // Reduced segments for performance
     this.vespeneMaterial = new THREE.MeshStandardMaterial({
       color: 0x00ff66,
       roughness: 0.1,
       metalness: 0.3,
-      emissive: 0x006633,
-      emissiveIntensity: 0.5,
+      emissive: 0x00aa44, // Stronger emissive to replace PointLight glow
+      emissiveIntensity: 0.8,
       transparent: true,
       opacity: 0.8,
     });
@@ -65,7 +66,6 @@ export class ResourceRenderer {
         meshData = this.createResourceMesh(resource);
         this.resourceMeshes.set(entity.id, meshData);
         this.scene.add(meshData.mesh);
-        this.scene.add(meshData.glow);
       }
 
       // Get terrain height at this position
@@ -73,22 +73,17 @@ export class ResourceRenderer {
 
       // Update position - place resource on top of terrain
       meshData.mesh.position.set(transform.x, terrainHeight + 0.8, transform.y);
-      meshData.glow.position.set(transform.x, terrainHeight + 1, transform.y);
 
       // Scale based on remaining amount
       const scale = 0.5 + resource.getPercentRemaining() * 0.5;
       meshData.mesh.scale.setScalar(scale);
 
-      // Rotate for visual effect
-      meshData.mesh.rotation.y += 0.01;
-
-      // Update glow intensity
-      meshData.glow.intensity = resource.getPercentRemaining() * 0.5;
+      // PERFORMANCE: Removed per-frame rotation - unnecessary visual effect causing CPU overhead
+      // Resources now have a static random rotation set on creation
 
       // Hide if depleted
       if (resource.isDepleted()) {
         meshData.mesh.visible = false;
-        meshData.glow.visible = false;
       }
     }
 
@@ -96,7 +91,6 @@ export class ResourceRenderer {
     for (const [entityId, meshData] of this.resourceMeshes) {
       if (!currentIds.has(entityId)) {
         this.scene.remove(meshData.mesh);
-        this.scene.remove(meshData.glow);
         this.resourceMeshes.delete(entityId);
       }
     }
@@ -109,16 +103,11 @@ export class ResourceRenderer {
     const material = isMinerals ? this.mineralMaterial : this.vespeneMaterial;
 
     const mesh = new THREE.Mesh(geometry, material);
-    mesh.castShadow = true;
+    // PERFORMANCE: Set random rotation once instead of animating every frame
+    mesh.rotation.y = Math.random() * Math.PI * 2;
+    mesh.castShadow = false; // PERFORMANCE: Resources don't need to cast shadows
 
-    // Add glow light
-    const glow = new THREE.PointLight(
-      isMinerals ? 0x00aaff : 0x00ff66,
-      0.5,
-      5
-    );
-
-    return { mesh, glow };
+    return { mesh };
   }
 
   public dispose(): void {
@@ -129,7 +118,6 @@ export class ResourceRenderer {
 
     for (const meshData of this.resourceMeshes.values()) {
       this.scene.remove(meshData.mesh);
-      this.scene.remove(meshData.glow);
     }
 
     this.resourceMeshes.clear();

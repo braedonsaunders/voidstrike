@@ -158,14 +158,34 @@ These issues were causing <1 FPS on M1 MacBooks:
    - Solution: Capped pixel ratio to 1.5, disabled antialiasing
    - File: `GameCanvas.tsx`
 
+6. **Resource PointLights** (FIXED - CRITICAL)
+   - Problem: Every mineral/vespene had a THREE.PointLight (20+ expensive per-pixel lights)
+   - Solution: Removed PointLights, using emissive materials instead
+   - File: `ResourceRenderer.ts`
+
+7. **BuildingRenderer traverse() per frame** (FIXED)
+   - Problem: Calling group.traverse() for EVERY building EVERY frame
+   - Solution: Track completion state, only traverse() when state changes
+   - File: `BuildingRenderer.ts`
+
+8. **Damage Number Texture Spam** (FIXED)
+   - Problem: Creating new CanvasTexture + SpriteMaterial for every damage number
+   - Solution: Limited to 15 active damage numbers, reduced duration
+   - File: `EffectsRenderer.ts`
+
+9. **Resource Rotation Animation** (FIXED)
+   - Problem: Rotating every resource mesh every frame
+   - Solution: Set random rotation once on creation
+   - File: `ResourceRenderer.ts`
+
 ### Potential Future Optimizations
 
-- [ ] **Object Pooling** - Projectiles, effects, damage numbers create new objects
-- [ ] **Instanced Rendering** - Verify all repeated objects use GPU instancing
+- [ ] **Instanced Decorations** - Trees, rocks, debris should use InstancedMesh (1000s of draw calls)
 - [ ] **Web Worker AI** - Move AI calculations off main thread
 - [ ] **Frustum Culling** - Don't update/render off-screen entities
 - [ ] **LOD System** - Reduce detail for distant units
 - [ ] **Graphics Settings UI** - Let players enable/disable features
+- [ ] **Damage Number Pool** - Pre-render texture atlas for damage numbers
 
 ---
 
