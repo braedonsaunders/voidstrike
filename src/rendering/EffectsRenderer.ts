@@ -24,11 +24,14 @@ export class EffectsRenderer {
   private hitEffects: HitEffect[] = [];
 
   // Shared geometries and materials
+  // Per threejs-builder skill: create geometries once, don't create in event handlers
   private projectileGeometry: THREE.SphereGeometry;
   private projectileMaterial: THREE.MeshBasicMaterial;
   private laserMaterial: THREE.LineBasicMaterial;
   private hitGeometry: THREE.RingGeometry;
   private hitMaterial: THREE.MeshBasicMaterial;
+  private deathGeometry: THREE.RingGeometry;
+  private deathMaterial: THREE.MeshBasicMaterial;
 
   constructor(scene: THREE.Scene, eventBus: EventBus) {
     this.scene = scene;
@@ -53,6 +56,15 @@ export class EffectsRenderer {
       color: 0xffaa00,
       transparent: true,
       opacity: 0.8,
+      side: THREE.DoubleSide,
+    });
+
+    // Death effect geometry - created once, reused per threejs-builder skill
+    this.deathGeometry = new THREE.RingGeometry(0.5, 1.0, 16);
+    this.deathMaterial = new THREE.MeshBasicMaterial({
+      color: 0xff4400,
+      transparent: true,
+      opacity: 1,
       side: THREE.DoubleSide,
     });
 
@@ -143,15 +155,9 @@ export class EffectsRenderer {
   }
 
   private createDeathEffect(position: THREE.Vector3): void {
-    // Create expanding ring effect for death
-    const geometry = new THREE.RingGeometry(0.5, 1.0, 16);
-    const material = new THREE.MeshBasicMaterial({
-      color: 0xff4400,
-      transparent: true,
-      opacity: 1,
-      side: THREE.DoubleSide,
-    });
-    const mesh = new THREE.Mesh(geometry, material);
+    // Use shared geometry, clone material for independent opacity
+    // Per threejs-builder skill: don't create geometry in event handlers
+    const mesh = new THREE.Mesh(this.deathGeometry, this.deathMaterial.clone());
     mesh.position.copy(position);
     mesh.rotation.x = -Math.PI / 2;
     this.scene.add(mesh);
@@ -242,6 +248,8 @@ export class EffectsRenderer {
     this.laserMaterial.dispose();
     this.hitGeometry.dispose();
     this.hitMaterial.dispose();
+    this.deathGeometry.dispose();
+    this.deathMaterial.dispose();
 
     this.attackEffects = [];
     this.hitEffects = [];

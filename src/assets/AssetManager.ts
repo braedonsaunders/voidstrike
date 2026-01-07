@@ -18,6 +18,39 @@
 
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
+import * as SkeletonUtils from 'three/examples/jsm/utils/SkeletonUtils.js';
+
+// Reference Frame Contract Constants
+// Per threejs-builder skill: document these upfront to avoid reference-frame bugs
+export const REFERENCE_FRAME = {
+  // World axes: +X right, +Y up, +Z toward camera (Three.js default)
+  // GLTF models face -Z by default
+  MODEL_FORWARD_OFFSET: 0, // radians - adjust if models face wrong direction
+
+  // Unit scale: 1 unit = ~1 meter
+  UNIT_HEIGHTS: {
+    scv: 1.0,
+    marine: 1.2,
+    marauder: 1.5,
+    medic: 1.2,
+    siege_tank: 1.2,
+    viking: 1.8,
+    banshee: 1.5,
+    battlecruiser: 2.5,
+  } as Record<string, number>,
+
+  BUILDING_HEIGHTS: {
+    command_center: 4.5,
+    supply_depot: 1.8,
+    barracks: 2.8,
+    refinery: 4.0,
+    factory: 2.8,
+    starport: 2.2,
+  } as Record<string, number>,
+
+  // Anchor mode: units/buildings have bottom at y=0 (minY anchor)
+  ANCHOR_MODE: 'minY' as const,
+};
 
 // Asset definition types
 export interface AssetDefinition {
@@ -33,8 +66,53 @@ export interface AssetDefinition {
 const assetCache = new Map<string, THREE.Object3D>();
 const customAssets = new Map<string, THREE.Object3D>();
 
+// Track which assets are animated/skinned (require SkeletonUtils.clone)
+const animatedAssets = new Set<string>();
+
 // GLTF loader instance
 const gltfLoader = new GLTFLoader();
+
+/**
+ * Normalize a model to a target height and anchor to ground (minY = 0)
+ * Per threejs-builder skill: use one anchor rule per asset class
+ */
+function normalizeModel(root: THREE.Object3D, targetHeight: number): void {
+  // Get bounds from VISIBLE geometry only (animated models have invisible bones)
+  const box = new THREE.Box3();
+  root.traverse((child) => {
+    if (child instanceof THREE.Mesh && child.visible) {
+      const childBox = new THREE.Box3().setFromObject(child);
+      box.union(childBox);
+    }
+  });
+
+  // Scale to target height
+  const size = box.getSize(new THREE.Vector3());
+  if (size.y > 0) {
+    const scale = targetHeight / size.y;
+    root.scale.setScalar(scale);
+  }
+
+  // Update and recalculate bounds
+  root.updateMatrixWorld(true);
+  box.setFromObject(root);
+
+  // Ground the model (set bottom at y=0) - minY anchor
+  root.position.y = -box.min.y;
+}
+
+/**
+ * Clone a model properly - uses SkeletonUtils for animated/skinned models
+ * Per threejs-builder skill: SkeletonUtils.clone() is REQUIRED for animated models
+ */
+function cloneModel(original: THREE.Object3D, assetId: string): THREE.Object3D {
+  if (animatedAssets.has(assetId)) {
+    // Animated/skinned model - must use SkeletonUtils
+    return SkeletonUtils.clone(original) as THREE.Object3D;
+  }
+  // Static model - regular clone is fine
+  return original.clone();
+}
 
 // Standard materials library
 export const Materials = {
@@ -143,11 +221,12 @@ export function colorMaterial(baseMaterial: THREE.MeshStandardMaterial, color: n
 export class AssetManager {
   /**
    * Get or generate a unit mesh
+   * Uses SkeletonUtils.clone() for custom animated models per threejs-builder skill
    */
   static getUnitMesh(unitId: string, playerColor?: number): THREE.Object3D {
     // Check for custom override first
     if (customAssets.has(unitId)) {
-      return customAssets.get(unitId)!.clone();
+      return cloneModel(customAssets.get(unitId)!, unitId);
     }
 
     const cacheKey = `unit_${unitId}`;
@@ -174,10 +253,11 @@ export class AssetManager {
 
   /**
    * Get or generate a building mesh
+   * Uses SkeletonUtils.clone() for custom animated models per threejs-builder skill
    */
   static getBuildingMesh(buildingId: string, playerColor?: number): THREE.Object3D {
     if (customAssets.has(buildingId)) {
-      return customAssets.get(buildingId)!.clone();
+      return cloneModel(customAssets.get(buildingId)!, buildingId);
     }
 
     const cacheKey = `building_${buildingId}`;
@@ -227,19 +307,56 @@ export class AssetManager {
 
   /**
    * Load a custom GLTF/GLB model
+   * Per threejs-builder skill: normalizes model and tracks if animated
    */
-  static async loadGLTF(url: string, assetId: string): Promise<THREE.Object3D> {
+  static async loadGLTF(
+    url: string,
+    assetId: string,
+    options: { targetHeight?: number; isAnimated?: boolean } = {}
+  ): Promise<THREE.Object3D> {
     return new Promise((resolve, reject) => {
       gltfLoader.load(
         url,
         (gltf) => {
           const model = gltf.scene;
+
+          // Configure shadows
           model.traverse((child) => {
             if (child instanceof THREE.Mesh) {
               child.castShadow = true;
               child.receiveShadow = true;
             }
           });
+
+          // Track if animated (has animations or skinned meshes)
+          const hasAnimations = gltf.animations && gltf.animations.length > 0;
+          let hasSkinning = false;
+          model.traverse((child) => {
+            if (child instanceof THREE.SkinnedMesh) {
+              hasSkinning = true;
+            }
+          });
+
+          if (options.isAnimated || hasAnimations || hasSkinning) {
+            animatedAssets.add(assetId);
+            console.log(`[AssetManager] Registered ${assetId} as animated model`);
+          }
+
+          // Log animation names per threejs-builder skill
+          if (hasAnimations) {
+            console.log(`[AssetManager] ${assetId} animations:`, gltf.animations.map(a => a.name));
+          }
+
+          // Normalize to target height if specified
+          if (options.targetHeight) {
+            normalizeModel(model, options.targetHeight);
+          }
+
+          // Apply model forward offset if needed
+          if (REFERENCE_FRAME.MODEL_FORWARD_OFFSET !== 0) {
+            model.rotation.y = REFERENCE_FRAME.MODEL_FORWARD_OFFSET;
+          }
+
           customAssets.set(assetId, model);
           resolve(model);
         },
@@ -258,10 +375,11 @@ export class AssetManager {
 
   /**
    * Get a custom mesh by ID
+   * Uses SkeletonUtils.clone() for animated models per threejs-builder skill
    */
   static getCustomMesh(assetId: string): THREE.Object3D | null {
     const asset = customAssets.get(assetId);
-    return asset ? asset.clone() : null;
+    return asset ? cloneModel(asset, assetId) : null;
   }
 
   /**
