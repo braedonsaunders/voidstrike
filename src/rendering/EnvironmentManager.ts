@@ -2,8 +2,10 @@ import * as THREE from 'three';
 import { MapData } from '@/data/maps';
 import { BIOMES, BiomeConfig } from './Biomes';
 import { Terrain, MapDecorations } from './Terrain';
-import { InstancedGrass, GroundDebris, CrystalField, WaterPlane } from './GroundDetail';
-import { EnhancedTrees, EnhancedRocks, EnvironmentParticles } from './EnhancedDecorations';
+import { CrystalField, WaterPlane } from './GroundDetail';
+import { EnvironmentParticles } from './EnhancedDecorations';
+// PERFORMANCE: Use instanced decorations instead of individual meshes
+import { InstancedTrees, InstancedRocks, InstancedGrass, InstancedPebbles } from './InstancedDecorations';
 
 /**
  * Manages all environmental rendering for a map including:
@@ -21,11 +23,11 @@ export class EnvironmentManager {
   private scene: THREE.Scene;
   private mapData: MapData;
 
-  // Enhanced decoration systems
-  private trees: EnhancedTrees | null = null;
-  private rocks: EnhancedRocks | null = null;
+  // PERFORMANCE: Instanced decoration systems (single draw call per type)
+  private trees: InstancedTrees | null = null;
+  private rocks: InstancedRocks | null = null;
   private grass: InstancedGrass | null = null;
-  private debris: GroundDebris | null = null;
+  private pebbles: InstancedPebbles | null = null;
   private crystals: CrystalField | null = null;
   private water: WaterPlane | null = null;
   private particles: EnvironmentParticles | null = null;
@@ -73,28 +75,28 @@ export class EnvironmentManager {
   private createEnhancedDecorations(): void {
     const getHeightAt = this.terrain.getHeightAt.bind(this.terrain);
 
-    // Enhanced trees (biome-specific)
+    // PERFORMANCE: Instanced trees - single draw call for all trees
     if (this.biome.treeDensity > 0) {
-      this.trees = new EnhancedTrees(this.mapData, this.biome, getHeightAt);
+      this.trees = new InstancedTrees(this.mapData, this.biome, getHeightAt);
       this.scene.add(this.trees.group);
     }
 
-    // Enhanced rocks
+    // PERFORMANCE: Instanced rocks - single draw call for all rocks
     if (this.biome.rockDensity > 0) {
-      this.rocks = new EnhancedRocks(this.mapData, this.biome, getHeightAt);
+      this.rocks = new InstancedRocks(this.mapData, this.biome, getHeightAt);
       this.scene.add(this.rocks.group);
     }
 
-    // Instanced grass
+    // PERFORMANCE: Instanced grass - thousands of grass blades in one draw call
     if (this.biome.grassDensity > 0) {
       this.grass = new InstancedGrass(this.mapData, this.biome, getHeightAt);
-      this.scene.add(this.grass.mesh);
+      this.scene.add(this.grass.group);
     }
 
-    // Ground debris
-    if (this.biome.grassDensity > 0 || this.biome.treeDensity > 0.1) {
-      this.debris = new GroundDebris(this.mapData, this.biome, getHeightAt);
-      this.scene.add(this.debris.group);
+    // PERFORMANCE: Instanced pebbles - replaces old GroundDebris
+    if (this.biome.grassDensity > 0 || this.biome.rockDensity > 0.1) {
+      this.pebbles = new InstancedPebbles(this.mapData, this.biome, getHeightAt);
+      this.scene.add(this.pebbles.group);
     }
 
     // Crystals (for frozen/void biomes)
@@ -161,7 +163,7 @@ export class EnvironmentManager {
     this.trees?.dispose();
     this.rocks?.dispose();
     this.grass?.dispose();
-    this.debris?.dispose();
+    this.pebbles?.dispose();
     this.crystals?.dispose();
     this.water?.dispose();
     this.particles?.dispose();
@@ -173,8 +175,8 @@ export class EnvironmentManager {
 
     if (this.trees) this.scene.remove(this.trees.group);
     if (this.rocks) this.scene.remove(this.rocks.group);
-    if (this.grass) this.scene.remove(this.grass.mesh);
-    if (this.debris) this.scene.remove(this.debris.group);
+    if (this.grass) this.scene.remove(this.grass.group);
+    if (this.pebbles) this.scene.remove(this.pebbles.group);
     if (this.crystals) this.scene.remove(this.crystals.group);
     if (this.water) this.scene.remove(this.water.mesh);
     if (this.particles) this.scene.remove(this.particles.points);
