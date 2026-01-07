@@ -48,8 +48,26 @@ export function Minimap() {
     const game = Game.getInstance();
     if (!game) return;
 
+    // PERFORMANCE: Pre-create gradient once instead of every frame
+    const terrainGradient = ctx.createLinearGradient(0, 0, MINIMAP_SIZE, MINIMAP_SIZE);
+    terrainGradient.addColorStop(0, '#2d4a3a');
+    terrainGradient.addColorStop(0.5, '#3d5a4a');
+    terrainGradient.addColorStop(1, '#2d4a3a');
+
+    // PERFORMANCE: Throttle minimap to 15 FPS instead of 60+ FPS
+    const MINIMAP_FPS = 15;
+    const FRAME_TIME = 1000 / MINIMAP_FPS;
+    let lastDrawTime = 0;
+
     // Draw minimap
-    const draw = () => {
+    const draw = (timestamp: number) => {
+      // PERFORMANCE: Skip frame if not enough time has passed
+      if (timestamp - lastDrawTime < FRAME_TIME) {
+        requestAnimationFrame(draw);
+        return;
+      }
+      lastDrawTime = timestamp;
+
       const scale = MINIMAP_SIZE / MAP_SIZE;
       const currentTime = Date.now();
 
@@ -57,12 +75,8 @@ export function Minimap() {
       ctx.fillStyle = '#1a1a2e';
       ctx.fillRect(0, 0, MINIMAP_SIZE, MINIMAP_SIZE);
 
-      // Draw terrain gradient (simplified)
-      const gradient = ctx.createLinearGradient(0, 0, MINIMAP_SIZE, MINIMAP_SIZE);
-      gradient.addColorStop(0, '#2d4a3a');
-      gradient.addColorStop(0.5, '#3d5a4a');
-      gradient.addColorStop(1, '#2d4a3a');
-      ctx.fillStyle = gradient;
+      // Draw terrain gradient (using pre-created gradient)
+      ctx.fillStyle = terrainGradient;
       ctx.fillRect(0, 0, MINIMAP_SIZE, MINIMAP_SIZE);
 
       // Draw grid lines

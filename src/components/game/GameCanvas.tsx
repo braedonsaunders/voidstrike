@@ -60,16 +60,19 @@ export function GameCanvas() {
   useEffect(() => {
     if (!containerRef.current || !canvasRef.current) return;
 
-    // Create renderer
+    // Create renderer with performance optimizations
     const renderer = new THREE.WebGLRenderer({
       canvas: canvasRef.current,
-      antialias: true,
+      antialias: false, // PERFORMANCE: Disable antialiasing - major GPU cost
+      powerPreference: 'high-performance',
     });
     renderer.setSize(window.innerWidth, window.innerHeight);
-    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
-    renderer.outputColorSpace = THREE.SRGBColorSpace; // Correct color output per reference-frame-contract
-    renderer.shadowMap.enabled = true;
-    renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+    // PERFORMANCE: Limit pixel ratio to 1.5 max on high-DPI displays (M1 Macs have 2x)
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.5));
+    renderer.outputColorSpace = THREE.SRGBColorSpace;
+    // PERFORMANCE: Disable shadows - they're extremely expensive on M1/integrated GPUs
+    // PCFSoftShadowMap with 2048x2048 resolution was causing <1 FPS
+    renderer.shadowMap.enabled = false;
     rendererRef.current = renderer;
 
     // Create scene

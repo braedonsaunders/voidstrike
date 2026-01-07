@@ -26,6 +26,11 @@ export class FogOfWar {
   private visionSystem: VisionSystem | null = null;
   private playerId: string = 'player1';
 
+  // PERFORMANCE: Throttle updates to reduce CPU load
+  private lastUpdateTime: number = 0;
+  private updateInterval: number = 100; // Only update every 100ms (10 FPS)
+  private isDirty: boolean = true;
+
   constructor(config: FogOfWarConfig) {
     this.mapWidth = config.mapWidth;
     this.mapHeight = config.mapHeight;
@@ -117,6 +122,13 @@ export class FogOfWar {
 
   public update(): void {
     if (!this.visionSystem) return;
+
+    // PERFORMANCE: Throttle updates - fog doesn't need to update every frame
+    const now = performance.now();
+    if (now - this.lastUpdateTime < this.updateInterval) {
+      return;
+    }
+    this.lastUpdateTime = now;
 
     const visionGrid = this.visionSystem.getVisionGridForPlayer(this.playerId);
     if (!visionGrid) return;

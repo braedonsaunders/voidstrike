@@ -1,6 +1,28 @@
 # VOIDSTRIKE - Development Roadmap
 
-## Phase 1: Foundation (Nearly Complete)
+## Current Priority: SC2 Parity (Single-Player)
+
+> See **ROADMAP_SC2_PARITY.md** for comprehensive feature breakdown
+
+---
+
+## Critical Performance Fixes (January 2026)
+
+### Fixed Issues
+- [x] **Shadow mapping disabled** - 2048x2048 PCFSoftShadowMap causing <1 FPS on M1
+- [x] **FogOfWar throttled** - Reduced from 60 FPS to 10 FPS updates
+- [x] **Minimap throttled** - Reduced from 60 FPS to 15 FPS rendering
+- [x] **React re-renders reduced** - SelectionPanel/ProductionQueue from 10 FPS to 4-5 FPS
+- [x] **Renderer optimized** - Disabled antialiasing, capped pixel ratio to 1.5
+
+### Future Optimizations
+- [ ] Object pooling for projectiles/effects
+- [ ] Graphics settings UI (shadows optional)
+- [ ] Web Worker for AI calculations
+
+---
+
+## Phase 1: Foundation (COMPLETE ✓)
 
 ### Core Engine
 - [x] Project setup (Next.js 14, TypeScript, Three.js)
@@ -50,71 +72,65 @@
 
 ---
 
-## Phase 1.5: SC2 Parity (CRITICAL - Mostly Complete)
+## Phase 1.5: SC2 Feel (COMPLETE ✓)
 
-> **Goal**: Make the game FEEL like StarCraft 2 - responsive, fast, precise.
-> These features are what separate a good RTS from a clunky one.
+### Unit Movement & Micro
+- [x] Unit avoidance/steering (Boids-like)
+- [x] Unit acceleration/deceleration
+- [x] Shift-click command queuing
+- [x] Patrol command (P key)
 
-### Unit Movement & Micro (High Priority)
-- [x] **Unit avoidance/steering** - Boids-like separation prevents unit clumping
-- [x] **Unit acceleration/deceleration** - Smooth speed ramp with configurable acceleration
-- [x] **Shift-click command queuing** - Queue move/attack/patrol commands with Shift
-- [x] **Patrol command** - P key to patrol between waypoints
+### Camera & Controls
+- [x] Camera location hotkeys (F5-F8)
+- [x] Tab to cycle subgroups
+- [x] Double-tap control group to center camera
 
-### Camera & Controls (High Priority)
-- [x] **Camera location hotkeys** - F5-F8 to recall, Ctrl+F5-F8 to save positions
-- [x] **Tab to cycle subgroups** - Cycle through unit types in current selection
-- [x] **Double-tap control group** - Center camera on group
+### Alerts & Feedback
+- [x] Under attack alerts
+- [x] Minimap ping on attack
+- [x] Idle worker button (F1)
 
-### Alerts & Feedback (High Priority)
-- [x] **Under attack alerts** - Console notification when units/buildings take damage
-- [x] **Minimap ping on attack** - Attack location highlighted via CombatSystem
-- [x] **Idle worker button** - HUD button + F1 to select idle workers
+### Production & Macro
+- [x] Select all of type (Ctrl+click)
+- [x] Shared production queue UI
+- [x] Building dependencies (tech requirements)
 
-### Production & Macro (Medium Priority)
-- [x] **Select all of type** - Ctrl+click to select all units of same type
-- [x] **Shared production queue UI** - When multiple production buildings selected
-- [x] **Building dependencies** - Tech requirements validated in BuildingPlacementSystem
-
-### Combat Feel (Medium Priority)
-- [x] **Smart targeting** - Units auto-prioritize threats (high-value > workers)
-- [x] **Area of effect damage** - Splash damage for siege tank & hellion
-- [x] **Focus fire indicator** - Visual cue when multiple units target same enemy
+### Combat Feel
+- [x] Smart targeting (priority system)
+- [x] Area of effect damage (splash)
+- [x] Focus fire indicator
 
 ---
 
-## Phase 1.6: Maps & UX Polish (MOSTLY COMPLETE)
+## Phase 1.6: Maps & Environment (COMPLETE ✓)
 
-> **Goal**: High-quality maps with visual variety and improved game setup UX.
+### Map Visual Quality
+- [x] Biome system (6 biomes)
+- [x] PBR terrain materials
+- [x] Instanced grass/ground detail
+- [x] Enhanced decorations (trees, rocks, crystals)
+- [x] Water/lava animated planes
+- [x] Particle effects (snow, dust, ash, spores)
+- [x] Environment manager
 
-### Map Visual Quality (Complete)
-- [x] **Biome system** - 6 distinct biomes (Grassland, Desert, Frozen, Volcanic, Void, Jungle)
-- [x] **PBR terrain materials** - Roughness/metalness per biome for realistic look
-- [x] **Instanced grass/ground detail** - Thousands of grass blades via GPU instancing
-- [x] **Enhanced decorations** - Biome-specific trees (pine, oak, dead, cactus, alien)
-- [x] **Rock formations** - Improved procedural rock clusters
-- [x] **Crystal fields** - For frozen/void biomes with glow effects
-- [x] **Water/lava planes** - Animated shader with waves
-- [x] **Particle effects** - Snow, dust, ash, spores per biome
-- [x] **Environment manager** - Unified system for all map visuals
+### Pre-Game Setup
+- [x] Game options menu
+- [x] Map preview
+- [x] Game settings (resources, speed, AI)
+- [ ] Procedural map generator
 
-### Pre-Game Setup (Complete)
-- [x] **Game options menu** - Map selection, settings, faction choice
-- [x] **Map preview** - Biome-colored preview with spawn indicators
-- [x] **Game settings** - Starting resources, speed, AI difficulty, fog of war
-- [ ] **Procedural map generator** - Generate balanced maps with seed
-
-### UX Improvements (Complete)
-- [x] **Keyboard shortcuts help** - Modal showing all hotkeys (? key)
-- [x] **Controls hint** - Small "Press ? for controls" in HUD and setup page
+### UX
+- [x] Keyboard shortcuts help (?)
+- [x] Controls hint in HUD
 
 ---
 
-## Phase 2: Combat Depth
+## Phase 2: Combat & Abilities (COMPLETE ✓)
 
 ### Combat System
 - [x] Attack command implementation
-- [x] Damage calculation (types/armor)
+- [x] Damage calculation (4 types, 4 armor types)
+- [x] High ground advantage (30% miss)
 - [x] Unit death and cleanup
 - [x] Attack animations
 - [x] Projectile system
@@ -131,238 +147,238 @@
 - [x] Upgrade effects
 - [x] Tech requirements
 
-### UI Polish
+### UI
 - [x] Command card (abilities/actions)
 - [x] Production panel
 - [x] Tech tree viewer
-- [x] Unit info tooltips (hover for stats)
-- [x] Damage numbers (floating combat text)
+- [x] Unit info tooltips
+- [x] Damage numbers
 - [ ] Unit wireframes in selection panel
 
-### Audio (Complete)
-- [x] Sound effect system
+### Audio Framework
+- [x] Sound effect system (Howler.js)
 - [x] Spatial audio positioning
-- [x] Unit acknowledgment voices ("Yes sir", "Moving out")
-- [x] Combat sounds (weapon fire, impacts, deaths)
-- [x] Alert sounds (under attack, research complete)
-- [x] Ambient background sounds (biome-specific)
-- [x] Audio asset documentation (AUDIO_ASSETS.md)
+- [x] Audio asset documentation
 
 ---
 
-## Phase 3: Multiplayer
+## Phase 2.5: Advanced Unit Mechanics (COMPLETE ✓)
 
-### Authentication
-- [ ] Supabase Auth integration
-- [ ] OAuth providers (Google, Discord, GitHub)
-- [ ] Player profiles
-- [ ] Session management
+### Transform Mechanics
+- [x] Siege Tank (Tank ↔ Siege mode)
+- [x] Hellion ↔ Hellbat
+- [x] Viking (Fighter ↔ Assault mode)
 
-### Lobby System
-- [ ] Create game lobby
-- [ ] Browse open lobbies
-- [ ] Join/leave mechanics
-- [ ] Ready check
-- [ ] Map selection
-- [ ] Faction selection
+### Cloak & Detection
+- [x] Cloak implementation (Ghost, Banshee)
+- [x] Detection (Missile Turret, Sensor Tower, Raven, Scanner Sweep)
 
-### Networking
-- [ ] Lockstep synchronization
-- [ ] Input broadcasting
-- [ ] Checksum validation
-- [ ] Desync detection/recovery
-- [ ] Reconnection handling
-- [ ] Latency compensation
+### Transport & Bunker
+- [x] Medivac load/unload (8 capacity)
+- [x] Bunker system (4 infantry, fire from inside)
 
-### Competitive
-- [ ] ELO rating system
-- [ ] Matchmaking queue
-- [ ] Ranked/unranked modes
-- [ ] Match result recording
+### Healing & Repair
+- [x] SCV repair (buildings, mechanical)
+- [x] Medivac heal (biological)
+
+### Building Features
+- [x] Lift-off/Landing (CC, Barracks, Factory, Starport)
+- [x] Addons (Tech Lab, Reactor)
+- [x] Addon swap mechanics
+- [x] Supply Depot lowering
+
+---
+
+## Phase 3: AI System (COMPLETE ✓)
+
+### AI Behaviors
+- [x] 5 difficulty levels (Easy → Insane)
+- [x] Build order system
+- [x] Scouting behavior
+- [x] Multi-pronged attacks
+- [x] Harassment tactics
+- [x] Worker management
+- [x] Defense coordination
+
+### Game State
+- [x] Victory/defeat conditions
+- [x] Player statistics (units, resources, APM)
+
+---
+
+## Phase 4: Remaining Dominion Polish (IN PROGRESS)
+
+### Missing Abilities
+- [ ] Auto Turret (Raven)
+- [ ] Interference Matrix (Raven)
+- [ ] Anti-Armor Missile (Raven)
+- [ ] Afterburners (Medivac)
+- [ ] KD8 Charge (Reaper)
+- [ ] High Impact Payload toggle (Thor)
+
+### Missing Features
+- [ ] Salvage bunker (return 75%)
+- [ ] Cancel construction (return 75%)
+- [ ] Building burning (low HP damage)
+- [ ] Neosteel Frame research (+2 bunker)
+- [ ] Building Auto-Repair research
+
+### Visual Polish
+- [ ] Unit wireframes (damage state)
+- [ ] Building placement ghost
+- [ ] Stim Pack visual effect (red tint)
+- [ ] Siege Mode transform animation
+- [ ] Cloak shimmer effect
+- [ ] Nuke targeting laser
+- [ ] Death animations
+
+---
+
+## Phase 5: Audio Content (TODO)
+
+### Weapon Sounds
+- [ ] Gauss rifle (Marine)
+- [ ] Punisher grenades (Marauder)
+- [ ] Flamethrower (Hellion)
+- [ ] Arclite cannon (Siege Tank)
+- [ ] Laser batteries (Battlecruiser)
+
+### Voice Lines
+- [ ] Unit acknowledgments (5+ per unit)
+- [ ] Attack confirmations
+- [ ] Advisor lines ("Under attack", "Research complete")
+
+### Music
+- [ ] Menu theme
+- [ ] Gameplay ambient
+- [ ] Victory/defeat themes
+
+---
+
+## Phase 6: Second Faction - Synthesis (TODO)
+
+### Core Mechanics
+- [ ] Shield system (regen, EMP interaction)
+- [ ] Pylon power fields
+- [ ] Warp-in mechanic
+- [ ] Chrono Boost
+
+### Units (14)
+- [ ] Probe, Zealot, Stalker, Sentry, Adept
+- [ ] High Templar, Dark Templar, Archon
+- [ ] Immortal, Colossus
+- [ ] Phoenix, Void Ray, Oracle, Carrier
+
+### Buildings (13)
+- [ ] Nexus, Pylon, Gateway/Warp Gate
+- [ ] Forge, Cybernetics Core
+- [ ] Twilight Council, Templar Archives, Dark Shrine
+- [ ] Robotics Facility, Robotics Bay
+- [ ] Stargate, Fleet Beacon
+- [ ] Photon Cannon
+
+### Research (30+)
+- [ ] Weapons/Armor/Shields upgrades
+- [ ] Unit-specific abilities (Charge, Blink, Storm, etc.)
+
+---
+
+## Phase 7: Quality of Life (TODO)
+
+### Tutorial System
+- [ ] Basic controls tutorial
+- [ ] Economy tutorial
+- [ ] Combat tutorial
+- [ ] Advanced tutorial
+
+### Settings
+- [ ] Custom hotkeys
+- [ ] Graphics settings (quality presets)
+- [ ] Audio settings (volume sliders)
+- [ ] Gameplay settings
+
+### Skirmish Options
+- [ ] Multiple AI opponents
+- [ ] Team games (2v2, 3v3)
+- [ ] Custom game options
+
+### Map Generator
+- [ ] Procedural generation
+- [ ] Seed system
+
+---
+
+## Phase 8: Replay System (TODO)
+
+- [ ] Command recording
+- [ ] Playback controls
+- [ ] Speed adjustment
+- [ ] Analysis features (graphs, timeline)
+
+---
+
+## Phase 9: Third Faction - Swarm (TODO)
+
+### Core Mechanics
+- [ ] Creep system
+- [ ] Larva/inject system
+- [ ] Morph mechanics
+- [ ] Burrow
+- [ ] Regeneration
+
+### Units (14)
+- [ ] Drone, Zergling, Baneling, Roach, Ravager
+- [ ] Hydralisk, Lurker, Queen
+- [ ] Mutalisk, Corruptor, Brood Lord
+- [ ] Infestor, Swarm Host, Ultralisk, Viper
+
+### Buildings (17)
+- [ ] Hatchery/Lair/Hive, Spawning Pool
+- [ ] Baneling Nest, Roach Warren, Hydralisk Den, Lurker Den
+- [ ] Infestation Pit, Ultralisk Cavern
+- [ ] Spire, Greater Spire, Evolution Chamber
+- [ ] Extractor, Spine/Spore Crawler, Nydus Network
+
+---
+
+## Future: Multiplayer (Not in SC2 Parity Scope)
+
+- [ ] Authentication (Supabase)
+- [ ] Lobby system
+- [ ] Lockstep networking
+- [ ] Matchmaking
+- [ ] Ranked system
 - [ ] Leaderboards
 
 ---
 
-## Phase 4: Second Faction (Synthesis)
+## Current Sprint Focus
 
-### Units
-- [ ] Probe (worker)
-- [ ] Sentinel (basic combat)
-- [ ] Stalker (ranged, blink)
-- [ ] Immortal (armored)
-- [ ] Colossus (siege)
-- [ ] Archon (heavy)
-- [ ] Oracle (caster)
-- [ ] Carrier (capital)
+**Sprint 1: Dominion Polish**
+1. [ ] Implement remaining Raven abilities
+2. [ ] Add unit wireframes to selection panel
+3. [ ] Building placement ghost preview
+4. [ ] Generate weapon sound effects
 
-### Buildings
-- [ ] Nexus (main)
-- [ ] Pylon (power/supply)
-- [ ] Gateway (unit production)
-- [ ] Forge (upgrades)
-- [ ] Stargate (air units)
-- [ ] Robotics Facility
-
-### Mechanics
-- [ ] Shield system
-- [ ] Warp-in mechanic
-- [ ] Pylon power fields
-- [ ] Chrono boost
+**Sprint 2: Visual Effects**
+1. [ ] Ability visual effects (Siege, Cloak, Nuke)
+2. [ ] Death animations
+3. [ ] Muzzle flashes
+4. [ ] Complete audio generation
 
 ---
 
-## Phase 5: Polish & Meta
+## Status Summary
 
-### Replay System
-- [ ] Command recording
-- [ ] Playback controls
-- [ ] Speed adjustment
-- [ ] Camera following
-- [ ] Replay sharing
-
-### Spectator Mode
-- [ ] Observer camera
-- [ ] Production tab
-- [ ] Army value display
-- [ ] Player vision toggle
-
-### Statistics
-- [ ] Match history
-- [ ] Win/loss by matchup
-- [ ] APM tracking
-- [ ] Resource graphs
-- [ ] Unit composition timeline
-
-### Quality of Life
-- [ ] Tutorial missions
-- [x] Practice mode vs AI - AI opponent with difficulty settings
-- [ ] Custom hotkeys
-- [ ] Graphics settings
-- [ ] Accessibility options
-
----
-
-## Phase 6: Third Faction (Swarm)
-
-### Units
-- [ ] Drone (worker, morphs into buildings)
-- [ ] Zergling (fast melee)
-- [ ] Roach (armored)
-- [ ] Hydralisk (ranged)
-- [ ] Mutalisk (air harass)
-- [ ] Ultralisk (heavy)
-- [ ] Infestor (caster)
-- [ ] Brood Lord (siege)
-
-### Buildings
-- [ ] Hatchery (main, larva)
-- [ ] Spawning Pool
-- [ ] Evolution Chamber
-- [ ] Spire
-- [ ] Nydus Network
-
-### Mechanics
-- [ ] Creep spread
-- [ ] Larva inject
-- [ ] Unit morphing
-- [ ] Burrow
-- [ ] Regeneration
-
----
-
-## Future Considerations
-
-### Visual Polish
-- [ ] Day/night cycle
-- [ ] Weather effects
-- [ ] Particle systems for abilities
-- [ ] Unit death animations
-
-### Map Editor
-- [ ] Terrain painting
-- [ ] Resource placement
-- [ ] Spawn point setting
-- [ ] Decoration objects
-- [ ] Map validation
-- [ ] Publishing system
-
-### Esports Features
-- [ ] Tournament bracket system
-- [ ] Match scheduling
-- [ ] Stream integration
-- [ ] Prize pool tracking
-- [ ] Team support
-
-### Mobile Support
-- [ ] Touch controls
-- [ ] Simplified UI
-- [ ] Portrait mode (observer only)
-
----
-
-## Implementation Priority (Next Sprint)
-
-**Batch 1: Movement Feel** (COMPLETE)
-1. [x] Unit avoidance/steering - Boids-like separation
-2. [x] Unit acceleration/deceleration - Smooth movement
-3. [x] Shift-click command queuing - Essential for micro
-
-**Batch 2: Macro Speed** (COMPLETE)
-4. [x] Camera location hotkeys - F5-F8 save/recall
-5. [x] Tab cycle subgroups - Army control
-6. [x] Building dependencies - Tech tree completion
-
-**Batch 3: Feedback Loop** (COMPLETE)
-7. [x] Under attack alerts - Awareness
-8. [x] Idle worker button - Economy management
-9. [x] Unit acknowledgment voices - Per-unit voice lines
-10. [x] Combat sounds - Weapons, impacts, deaths, explosions
-
-**Batch 4: UI Polish** (COMPLETE)
-- [x] Focus fire indicator - Visual cue for concentrated fire
-- [x] Damage numbers - Floating combat text
-- [x] Select all of type - Ctrl+click to select all units of same type
-- [x] Shared production queue UI - Multi-building queue display
-- [x] Unit info tooltips - Hover for stats
-
-**Batch 5: AI Opponent** (COMPLETE)
-- [x] AI difficulty configuration - Easy/Medium/Hard from game setup
-- [x] Resource management - Passive income based on workers
-- [x] Building order - Supply depots, barracks, factory (hard)
-- [x] Unit variety - Marines, marauders, hellions (based on difficulty)
-- [x] Attack timing - Configurable cooldowns and minimum army size
-- [x] Defense behavior - Rally to threatened buildings
-
----
-
-## Current Status Summary
-
-### Completed Features
-- Full single-player gameplay loop with AI opponent
-- Dominion faction with 12 unit types, 11 buildings, 36 upgrades
-- 3 maps with biome-specific visuals (6 biome types)
-- Complete audio system framework (awaiting asset generation)
-- Game setup/options menu with AI difficulty
-- Keyboard shortcuts documentation
-- Combat feedback (damage numbers, focus fire indicators)
-- Enhanced selection (Ctrl+click for same type, shared queue UI)
-- Unit tooltips with detailed stats
-- SC2-like controls (shift-queue, patrol, control groups)
-
-### Phase 1-3 Implementation (COMPLETE)
-- **Unit Mechanics**: Transform (Siege Tank, Hellion, Viking), Cloak, Transport, Healing, Repair
-- **Building Mechanics**: Addons (Tech Lab, Reactor), Lift-Off/Landing, Supply Depot lowering
-- **Ability System**: Stim Pack, EMP, Snipe, Nuke, Yamato Cannon, Tactical Jump, MULE, Supply Drop
-- **Enhanced AI**: 5 difficulty levels, build orders, scouting, multi-pronged attacks, harassment
-- **Combat Systems**: High ground advantage (30% miss chance), buff/debuff system, auto-cast
-- **Game State**: Victory/defeat conditions, player stats tracking, APM calculation
-- **Save/Load**: Multiple save slots, auto-save, quick save/load
-
-### SC2 Parity Roadmap
-See **ROADMAP_SC2_PARITY.md** for the comprehensive feature roadmap.
-
-### Immediate Next Steps (Priority Order)
-1. **Second Faction (Synthesis)** - Shields, warp-in, pylon power, 12 units
-2. **Visual/Audio Polish** - Animations, effects, actual audio files
-3. **Quality of Life** - Tutorial, custom hotkeys, graphics settings
-4. **Third Faction (Swarm)** - Creep, larva, burrow, morphing
+| Component | Status | Notes |
+|-----------|--------|-------|
+| Core Engine | 100% | Production-ready |
+| Dominion Units | 95% | Missing some abilities |
+| Dominion Buildings | 100% | All 16 complete |
+| Combat System | 100% | All damage/armor types |
+| AI System | 100% | 5 difficulty levels |
+| UI/HUD | 95% | Missing wireframes |
+| Audio | Framework only | Needs actual assets |
+| Synthesis Faction | 0% | Not started |
+| Swarm Faction | 0% | Not started |
+| Multiplayer | 0% | Excluded from scope |
