@@ -339,17 +339,23 @@
 
 ### Completed Features
 - Full single-player gameplay loop with AI opponent
-- Dominion faction with 6 unit types
-- 3 maps with biome-specific visuals
-- Complete audio system (awaiting asset generation)
+- Dominion faction with 12 unit types, 11 buildings, 36 upgrades
+- 3 maps with biome-specific visuals (6 biome types)
+- Complete audio system framework (awaiting asset generation)
 - Game setup/options menu with AI difficulty
 - Keyboard shortcuts documentation
 - Combat feedback (damage numbers, focus fire indicators)
 - Enhanced selection (Ctrl+click for same type, shared queue UI)
 - Unit tooltips with detailed stats
+- SC2-like controls (shift-queue, patrol, control groups)
 
-### Ready for Next Phase
-The game is feature-complete for single-player vs AI. The next major milestone is:
-1. **Multiplayer** - Real-time networked gameplay
-2. **Second Faction** - Synthesis faction with shields and warp-in
-3. **Quality of Life** - Tutorial, custom hotkeys, graphics settings
+### SC2 Parity Roadmap
+See **ROADMAP_SC2_PARITY.md** for the comprehensive feature roadmap.
+
+### Immediate Next Steps (Priority Order)
+1. **Complete Dominion Mechanics** - Transform, Cloak, Transport systems
+2. **Enhanced AI** - Scouting, build orders, smarter attacks
+3. **Gameplay Systems** - High ground, buffs, auto-cast
+4. **Second Faction (Synthesis)** - Shields, warp-in, 12 units
+5. **Visual/Audio Polish** - Animations, effects, actual audio files
+6. **Quality of Life** - Tutorial, settings, save/load
