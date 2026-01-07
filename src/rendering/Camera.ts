@@ -54,6 +54,9 @@ export class RTSCamera {
   // Camera location bookmarks (F5-F8)
   private savedLocations: Map<string, CameraLocation> = new Map();
 
+  // Terrain height function for accurate screen-to-world conversion
+  private getTerrainHeight: ((x: number, z: number) => number) | null = null;
+
   constructor(
     aspect: number,
     mapWidth: number,
@@ -240,6 +243,11 @@ export class RTSCamera {
     return { x: this.target.x, z: this.target.z };
   }
 
+  // Set the terrain height function for accurate screen-to-world conversion
+  public setTerrainHeightFunction(fn: (x: number, z: number) => number): void {
+    this.getTerrainHeight = fn;
+  }
+
   // Save current camera location to a slot (F5-F8)
   public saveLocation(slot: string): void {
     this.savedLocations.set(slot, {
@@ -275,11 +283,22 @@ export class RTSCamera {
     const raycaster = new THREE.Raycaster();
     raycaster.setFromCamera(new THREE.Vector2(normalizedX, normalizedY), this.camera);
 
-    // Find intersection with ground plane (y = 0)
     const plane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
     const target = new THREE.Vector3();
 
+    // Initial intersection with y=0 plane
     raycaster.ray.intersectPlane(plane, target);
+
+    // If we have terrain height function, iterate to find accurate intersection
+    if (this.getTerrainHeight && target) {
+      // Iterate 3 times to converge on correct terrain intersection
+      for (let i = 0; i < 3; i++) {
+        const terrainHeight = this.getTerrainHeight(target.x, target.z);
+        // Create plane at terrain height
+        plane.constant = -terrainHeight;
+        raycaster.ray.intersectPlane(plane, target);
+      }
+    }
 
     return target;
   }

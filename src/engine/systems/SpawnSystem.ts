@@ -52,7 +52,7 @@ export class SpawnSystem extends System {
       .add(new Transform(x, y, 0))
       .add(new Unit(definition))
       .add(new Health(definition.maxHealth, definition.armor, this.getArmorType(definition)))
-      .add(new Selectable(0.5, 5, playerId))
+      .add(new Selectable(1.2, 5, playerId))
       .add(new Velocity());
 
     // Add abilities if the unit has any

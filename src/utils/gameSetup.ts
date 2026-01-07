@@ -144,7 +144,7 @@ function spawnUnit(
         'light'
       )
     )
-    .add(new Selectable(0.5, 5, playerId))
+    .add(new Selectable(1.2, 5, playerId))
     .add(new Velocity());
 }
 
