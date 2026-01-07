@@ -60,27 +60,23 @@ function optimizeModel(inputPath) {
   const base = path.basename(inputPath, ext);
   const tempOutput = path.join(dir, `${base}.temp${ext}`);
 
-  // Build gltf-transform commands - run each step separately to avoid extraction issues
-  // Step 1: Resize textures and compress mesh
-  const commands = [
-    'npx',
-    '--yes',
-    '@gltf-transform/cli',
-    'optimize',
-    `"${inputPath}"`,
-    `"${tempOutput}"`,
-    `--texture-size ${CONFIG.textureSize}`,
-    `--compress ${CONFIG.useDraco ? 'draco' : 'meshopt'}`,
-  ];
-
-  // Note: We skip --texture-compress webp because it can cause texture extraction
-  // The texture resize alone provides significant savings
-
-  const command = commands.join(' ');
+  // Run transforms individually to avoid texture extraction
+  // The 'optimize' command extracts textures by default, so we use specific transforms
+  const step1Output = path.join(dir, `${base}.step1${ext}`);
 
   try {
-    console.log(`   Running optimization...`);
-    execSync(command, { stdio: 'pipe', encoding: 'utf-8' });
+    console.log(`   Step 1: Resizing textures to ${CONFIG.textureSize}x${CONFIG.textureSize}...`);
+    const resizeCmd = `npx --yes @gltf-transform/cli resize "${inputPath}" "${step1Output}" --width ${CONFIG.textureSize} --height ${CONFIG.textureSize}`;
+    execSync(resizeCmd, { stdio: 'pipe', encoding: 'utf-8' });
+
+    console.log(`   Step 2: Applying ${CONFIG.useDraco ? 'Draco' : 'Meshopt'} compression...`);
+    const compressCmd = `npx --yes @gltf-transform/cli ${CONFIG.useDraco ? 'draco' : 'meshopt'} "${step1Output}" "${tempOutput}"`;
+    execSync(compressCmd, { stdio: 'pipe', encoding: 'utf-8' });
+
+    // Clean up intermediate file
+    if (fs.existsSync(step1Output)) {
+      fs.unlinkSync(step1Output);
+    }
 
     const outputSize = getFileSizeKB(tempOutput);
     const reduction = ((1 - outputSize / inputSize) * 100).toFixed(1);
@@ -144,7 +140,7 @@ function findGlbFiles(dir) {
 function main() {
   console.log('🎮 VOIDSTRIKE Model Optimizer');
   console.log('━'.repeat(50));
-  console.log(`Settings: ${CONFIG.textureSize}x${CONFIG.textureSize} ${CONFIG.textureFormat.toUpperCase()}, Draco: ${CONFIG.useDraco ? 'ON' : 'OFF'}`);
+  console.log(`Settings: ${CONFIG.textureSize}x${CONFIG.textureSize}, Draco: ${CONFIG.useDraco ? 'ON' : 'OFF'}`);
 
   // Get files to process
   let filesToProcess = [];
