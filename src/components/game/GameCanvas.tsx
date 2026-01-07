@@ -249,9 +249,12 @@ export function GameCanvas() {
         // Place building
         const worldPos = cameraRef.current?.screenToWorld(e.clientX, e.clientY);
         if (worldPos && gameRef.current) {
+          // Pass the selected worker ID so the specific SCV that triggered the build is assigned
+          const selectedUnits = useGameStore.getState().selectedUnits;
           gameRef.current.eventBus.emit('building:place', {
             buildingType,
             position: { x: worldPos.x, y: worldPos.z },
+            workerId: selectedUnits.length > 0 ? selectedUnits[0] : undefined,
           });
           useGameStore.getState().setBuildingMode(null);
         }

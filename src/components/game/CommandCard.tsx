@@ -239,7 +239,7 @@ export function CommandCard() {
           buttons.push({
             id: `build_${buildingId}`,
             label: def.name,
-            shortcut: def.hotkey || def.name.charAt(0).toUpperCase(),
+            shortcut: def.name.charAt(0).toUpperCase(),
             action: () => {
               useGameStore.getState().setBuildingMode(buildingId);
             },
@@ -261,7 +261,7 @@ export function CommandCard() {
         buttons.push({
           id: `train_${unitId}`,
           label: unitDef.name,
-          shortcut: unitDef.hotkey || unitDef.name.charAt(0).toUpperCase(),
+          shortcut: unitDef.name.charAt(0).toUpperCase(),
           action: () => {
             game.eventBus.emit('command:train', {
               entityIds: selectedUnits,

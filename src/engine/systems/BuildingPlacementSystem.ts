@@ -1,5 +1,6 @@
 import { System } from '../ecs/System';
 import { Game } from '../core/Game';
+import { Entity } from '../ecs/Entity';
 import { Transform } from '../components/Transform';
 import { Building } from '../components/Building';
 import { Health } from '../components/Health';
@@ -127,7 +128,7 @@ export class BuildingPlacementSystem extends System {
   private findWorkerForConstruction(
     workerId: number | undefined,
     playerId: string
-  ): { entity: { id: number; get: <T>(type: string) => T | null } } | null {
+  ): { entity: Entity } | null {
     const store = useGameStore.getState();
     const selectedUnits = store.selectedUnits;
 
