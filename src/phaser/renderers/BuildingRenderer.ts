@@ -6,6 +6,7 @@ import { Health } from '@/engine/components/Health';
 import { Selectable } from '@/engine/components/Selectable';
 import { VisionSystem } from '@/engine/systems/VisionSystem';
 import { BUILDING_DEFINITIONS } from '@/data/buildings/dominion';
+import { CELL_SIZE, DEPTH } from '../constants';
 
 // Player colors
 const PLAYER_COLORS: Record<string, number> = {
@@ -48,7 +49,7 @@ export class BuildingRenderer {
 
     // Create container for all building sprites
     this.container = scene.add.container(0, 0);
-    this.container.setDepth(50); // Buildings below units
+    this.container.setDepth(DEPTH.BUILDINGS);
   }
 
   update(): void {
@@ -91,8 +92,8 @@ export class BuildingRenderer {
 
       if (!shouldShow) continue;
 
-      // Update position
-      sprite.container.setPosition(transform.x, transform.y);
+      // Update position (convert grid to pixel coordinates)
+      sprite.container.setPosition(transform.x * CELL_SIZE, transform.y * CELL_SIZE);
 
       // Update selection ring
       if (sprite.selectionRing) {

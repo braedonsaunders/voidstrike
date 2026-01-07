@@ -1,5 +1,6 @@
 import * as Phaser from 'phaser';
 import { EventBus } from '@/engine/core/EventBus';
+import { CELL_SIZE, DEPTH } from '../constants';
 
 interface AttackEffect {
   startX: number;
@@ -58,7 +59,7 @@ export class EffectsRenderer {
     this.eventBus = eventBus;
 
     this.container = scene.add.container(0, 0);
-    this.container.setDepth(200); // Above units
+    this.container.setDepth(DEPTH.EFFECTS);
 
     this.setupEventListeners();
   }
@@ -73,16 +74,20 @@ export class EffectsRenderer {
       damageType: string;
     }) => {
       if (data.attackerPos && data.targetPos) {
+        // Convert grid to pixel coordinates
         this.createAttackEffect(
-          data.attackerPos.x, data.attackerPos.y,
-          data.targetPos.x, data.targetPos.y,
+          data.attackerPos.x * CELL_SIZE, data.attackerPos.y * CELL_SIZE,
+          data.targetPos.x * CELL_SIZE, data.targetPos.y * CELL_SIZE,
           data.damageType
         );
 
-        this.createDamageNumber(data.targetPos.x, data.targetPos.y, data.damage);
+        this.createDamageNumber(data.targetPos.x * CELL_SIZE, data.targetPos.y * CELL_SIZE, data.damage);
 
         if (data.attackerId !== undefined && data.targetId !== undefined) {
-          this.trackFocusFire(data.attackerId, data.targetId, data.targetPos);
+          this.trackFocusFire(data.attackerId, data.targetId, {
+            x: data.targetPos.x * CELL_SIZE,
+            y: data.targetPos.y * CELL_SIZE
+          });
         }
       }
     });
@@ -92,7 +97,8 @@ export class EffectsRenderer {
       position?: { x: number; y: number };
     }) => {
       if (data.position) {
-        this.createDeathEffect(data.position.x, data.position.y);
+        // Convert grid to pixel coordinates
+        this.createDeathEffect(data.position.x * CELL_SIZE, data.position.y * CELL_SIZE);
       }
       if (data.entityId !== undefined) {
         this.clearFocusFire(data.entityId);

@@ -1,5 +1,6 @@
 import * as Phaser from 'phaser';
 import { VisionSystem, VisionState } from '@/engine/systems/VisionSystem';
+import { CELL_SIZE, DEPTH } from '../constants';
 
 export class FogOfWarRenderer {
   private scene: Phaser.Scene;
@@ -9,7 +10,7 @@ export class FogOfWarRenderer {
   private playerId = 'player1';
 
   private fogGraphics: Phaser.GameObjects.Graphics;
-  private cellSize = 2; // Each fog cell covers 2x2 world units
+  private fogCellSize = 2; // Each fog cell covers 2x2 grid units
 
   // Throttle updates
   private lastUpdateTime = 0;
@@ -28,7 +29,7 @@ export class FogOfWarRenderer {
 
     // Create fog graphics layer
     this.fogGraphics = scene.add.graphics();
-    this.fogGraphics.setDepth(500); // Above everything except UI
+    this.fogGraphics.setDepth(DEPTH.FOG_OF_WAR);
 
     // Initial render
     this.render();
@@ -47,8 +48,8 @@ export class FogOfWarRenderer {
   private render(): void {
     this.fogGraphics.clear();
 
-    const gridWidth = Math.ceil(this.mapWidth / this.cellSize);
-    const gridHeight = Math.ceil(this.mapHeight / this.cellSize);
+    const gridWidth = Math.ceil(this.mapWidth / this.fogCellSize);
+    const gridHeight = Math.ceil(this.mapHeight / this.fogCellSize);
 
     const visionGrid = this.visionSystem.getVisionGridForPlayer(this.playerId);
     if (!visionGrid) return;
@@ -57,21 +58,25 @@ export class FogOfWarRenderer {
     const unexploredColor = 0x1a2030;
     const exploredColor = 0x1a2535;
 
+    // Pixel size for each fog cell
+    const pixelCellSize = this.fogCellSize * CELL_SIZE;
+
     for (let gy = 0; gy < gridHeight; gy++) {
       for (let gx = 0; gx < gridWidth; gx++) {
         const state = visionGrid[gy]?.[gx] ?? 'unexplored';
 
-        const worldX = gx * this.cellSize;
-        const worldY = gy * this.cellSize;
+        // Convert grid to pixel coordinates
+        const px = gx * pixelCellSize;
+        const py = gy * pixelCellSize;
 
         if (state === 'unexplored') {
           // Unexplored - darker fog
           this.fogGraphics.fillStyle(unexploredColor, 0.85);
-          this.fogGraphics.fillRect(worldX, worldY, this.cellSize, this.cellSize);
+          this.fogGraphics.fillRect(px, py, pixelCellSize, pixelCellSize);
         } else if (state === 'explored') {
           // Explored but not visible - lighter fog
           this.fogGraphics.fillStyle(exploredColor, 0.5);
-          this.fogGraphics.fillRect(worldX, worldY, this.cellSize, this.cellSize);
+          this.fogGraphics.fillRect(px, py, pixelCellSize, pixelCellSize);
         }
         // Visible areas have no fog drawn
       }

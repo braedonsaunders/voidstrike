@@ -9,6 +9,7 @@ import { Resource } from '@/engine/components/Resource';
 import { Selectable } from '@/engine/components/Selectable';
 import { Health } from '@/engine/components/Health';
 import { useGameStore } from '@/store/gameStore';
+import { CELL_SIZE, DEPTH } from '../constants';
 
 // Player colors for minimap dots
 const PLAYER_COLORS: Record<string, number> = {
@@ -68,7 +69,7 @@ export class MinimapRenderer {
     const y = scene.scale.height - this.MINIMAP_SIZE - this.PADDING;
 
     this.container = scene.add.container(x, y);
-    this.container.setDepth(1000); // Above everything
+    this.container.setDepth(DEPTH.MINIMAP);
     this.container.setScrollFactor(0); // Fixed to screen
 
     // Create graphics layers
@@ -284,10 +285,11 @@ export class MinimapRenderer {
     this.cameraGraphics.clear();
 
     const camera = this.scene.cameras.main;
-    const camX = camera.scrollX * this.scaleX;
-    const camY = camera.scrollY * this.scaleY;
-    const camWidth = (camera.width / camera.zoom) * this.scaleX;
-    const camHeight = (camera.height / camera.zoom) * this.scaleY;
+    // Camera scrollX/Y are in pixels, convert to grid coordinates then to minimap
+    const camX = (camera.scrollX / CELL_SIZE) * this.scaleX;
+    const camY = (camera.scrollY / CELL_SIZE) * this.scaleY;
+    const camWidth = (camera.width / camera.zoom / CELL_SIZE) * this.scaleX;
+    const camHeight = (camera.height / camera.zoom / CELL_SIZE) * this.scaleY;
 
     this.cameraGraphics.lineStyle(1, 0xffffff, 0.8);
     this.cameraGraphics.strokeRect(camX, camY, camWidth, camHeight);
