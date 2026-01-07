@@ -11,6 +11,7 @@ import { BUILDING_DEFINITIONS } from '@/data/buildings/dominion';
 import { AISystem } from '@/engine/systems/AISystem';
 import { MapData, Expansion } from '@/data/maps';
 import { useGameStore } from '@/store/gameStore';
+import { useGameSetupStore, AIDifficulty } from '@/store/gameSetupStore';
 
 export function spawnInitialEntities(game: Game, mapData: MapData): void {
   const world = game.world;
@@ -27,7 +28,7 @@ export function spawnInitialEntities(game: Game, mapData: MapData): void {
   if (aiSpawn) {
     spawnBase(game, 'ai', aiSpawn.x, aiSpawn.y);
 
-    // Register AI player
+    // Register AI player with difficulty from game setup
     const aiSystem = world.getEntitiesWith('Building').length > 0
       ? (game.world as unknown as { systems: AISystem[] }).systems?.find(
           (s: unknown) => s instanceof AISystem
@@ -35,7 +36,12 @@ export function spawnInitialEntities(game: Game, mapData: MapData): void {
       : undefined;
 
     if (aiSystem) {
-      aiSystem.registerAI('ai', 'dominion', 'easy');
+      // Get difficulty from game setup store
+      const difficulty = useGameSetupStore.getState().aiDifficulty;
+      // Map 'insane' to 'hard' since AISystem only supports easy/medium/hard
+      const aiDifficulty: 'easy' | 'medium' | 'hard' =
+        difficulty === 'insane' ? 'hard' : difficulty;
+      aiSystem.registerAI('ai', 'dominion', aiDifficulty);
     }
   }
 

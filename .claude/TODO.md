@@ -72,14 +72,14 @@
 - [x] **Idle worker button** - HUD button + F1 to select idle workers
 
 ### Production & Macro (Medium Priority)
-- [ ] **Warp-in/Select all of type** - Select all barracks, all factories, etc.
-- [ ] **Shared production queue UI** - When multiple production buildings selected
+- [x] **Select all of type** - Ctrl+click to select all units of same type
+- [x] **Shared production queue UI** - When multiple production buildings selected
 - [x] **Building dependencies** - Tech requirements validated in BuildingPlacementSystem
 
 ### Combat Feel (Medium Priority)
 - [x] **Smart targeting** - Units auto-prioritize threats (high-value > workers)
 - [x] **Area of effect damage** - Splash damage for siege tank & hellion
-- [ ] **Focus fire indicator** - Visual cue when multiple units target same enemy
+- [x] **Focus fire indicator** - Visual cue when multiple units target same enemy
 
 ---
 
@@ -135,8 +135,8 @@
 - [x] Command card (abilities/actions)
 - [x] Production panel
 - [x] Tech tree viewer
-- [ ] Unit info tooltips (hover for stats)
-- [ ] Damage numbers (floating combat text)
+- [x] Unit info tooltips (hover for stats)
+- [x] Damage numbers (floating combat text)
 - [ ] Unit wireframes in selection panel
 
 ### Audio (Complete)
@@ -235,7 +235,7 @@
 
 ### Quality of Life
 - [ ] Tutorial missions
-- [ ] Practice mode vs AI
+- [x] Practice mode vs AI - AI opponent with difficulty settings
 - [ ] Custom hotkeys
 - [ ] Graphics settings
 - [ ] Accessibility options
@@ -318,27 +318,38 @@
 9. [x] Unit acknowledgment voices - Per-unit voice lines
 10. [x] Combat sounds - Weapons, impacts, deaths, explosions
 
-**Batch 4: UI Polish** (NEXT)
-- [ ] Focus fire indicator - Visual cue for concentrated fire
-- [ ] Damage numbers - Floating combat text
-- [ ] Select all of type - Ctrl+click to select all barracks, etc.
-- [ ] Shared production queue UI - Multi-building queue display
-- [ ] Unit info tooltips - Hover for stats
+**Batch 4: UI Polish** (COMPLETE)
+- [x] Focus fire indicator - Visual cue for concentrated fire
+- [x] Damage numbers - Floating combat text
+- [x] Select all of type - Ctrl+click to select all units of same type
+- [x] Shared production queue UI - Multi-building queue display
+- [x] Unit info tooltips - Hover for stats
+
+**Batch 5: AI Opponent** (COMPLETE)
+- [x] AI difficulty configuration - Easy/Medium/Hard from game setup
+- [x] Resource management - Passive income based on workers
+- [x] Building order - Supply depots, barracks, factory (hard)
+- [x] Unit variety - Marines, marauders, hellions (based on difficulty)
+- [x] Attack timing - Configurable cooldowns and minimum army size
+- [x] Defense behavior - Rally to threatened buildings
 
 ---
 
 ## Current Status Summary
 
 ### Completed Features
-- Full single-player gameplay loop
+- Full single-player gameplay loop with AI opponent
 - Dominion faction with 6 unit types
 - 3 maps with biome-specific visuals
 - Complete audio system (awaiting asset generation)
-- Game setup/options menu
+- Game setup/options menu with AI difficulty
 - Keyboard shortcuts documentation
+- Combat feedback (damage numbers, focus fire indicators)
+- Enhanced selection (Ctrl+click for same type, shared queue UI)
+- Unit tooltips with detailed stats
 
 ### Ready for Next Phase
-The game is feature-complete for single-player vs AI. The next major milestone is either:
-1. **UI Polish** - Improve combat feedback and macro controls
-2. **AI Opponent** - Basic computer opponent for single-player
-3. **Multiplayer** - Real-time networked gameplay
+The game is feature-complete for single-player vs AI. The next major milestone is:
+1. **Multiplayer** - Real-time networked gameplay
+2. **Second Faction** - Synthesis faction with shields and warp-in
+3. **Quality of Life** - Tutorial, custom hotkeys, graphics settings

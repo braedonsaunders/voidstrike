@@ -1,6 +1,7 @@
 import { System } from '../ecs/System';
 import { Transform } from '../components/Transform';
 import { Selectable } from '../components/Selectable';
+import { Unit } from '../components/Unit';
 import { Game } from '../core/Game';
 import { useGameStore } from '@/store/gameStore';
 
@@ -77,9 +78,10 @@ export class SelectionSystem extends System {
     x: number;
     y: number;
     additive: boolean;
+    selectAllOfType?: boolean;
     playerId: string;
   }): void {
-    const { x, y, additive, playerId } = data;
+    const { x, y, additive, selectAllOfType, playerId } = data;
 
     const entities = this.world.getEntitiesWith('Transform', 'Selectable');
     let closestEntity: { id: number; distance: number; priority: number } | null = null;
@@ -104,6 +106,18 @@ export class SelectionSystem extends System {
             distance,
             priority: selectable.selectionPriority,
           };
+        }
+      }
+    }
+
+    // Handle Ctrl+click - select all of same type
+    if (selectAllOfType && closestEntity) {
+      const clickedEntity = this.world.getEntity(closestEntity.id);
+      if (clickedEntity) {
+        const clickedUnit = clickedEntity.get<Unit>('Unit');
+        if (clickedUnit) {
+          this.selectAllOfUnitType(clickedUnit.unitId, playerId, additive);
+          return;
         }
       }
     }
@@ -143,6 +157,41 @@ export class SelectionSystem extends System {
       } else if (closestEntity) {
         useGameStore.getState().selectUnits(current.filter((id) => id !== closestEntity!.id));
       }
+    }
+
+    this.game.eventBus.emit('selection:changed', { selectedIds });
+  }
+
+  private selectAllOfUnitType(unitId: string, playerId: string, additive: boolean): void {
+    const entities = this.world.getEntitiesWith('Unit', 'Selectable');
+    const selectedIds: number[] = [];
+
+    // Clear selection if not additive
+    if (!additive) {
+      for (const entity of entities) {
+        const selectable = entity.get<Selectable>('Selectable')!;
+        selectable.deselect();
+      }
+    }
+
+    // Select all units of the same type belonging to the player
+    for (const entity of entities) {
+      const unit = entity.get<Unit>('Unit')!;
+      const selectable = entity.get<Selectable>('Selectable')!;
+
+      if (unit.unitId === unitId && selectable.playerId === playerId) {
+        selectable.select();
+        selectedIds.push(entity.id);
+      }
+    }
+
+    // Update store
+    if (additive) {
+      const current = useGameStore.getState().selectedUnits;
+      const combined = [...new Set([...current, ...selectedIds])];
+      useGameStore.getState().selectUnits(combined);
+    } else {
+      useGameStore.getState().selectUnits(selectedIds);
     }
 
     this.game.eventBus.emit('selection:changed', { selectedIds });

@@ -17,11 +17,30 @@ interface HitEffect {
   mesh: THREE.Mesh;
 }
 
+interface DamageNumber {
+  position: THREE.Vector3;
+  damage: number;
+  progress: number;
+  duration: number;
+  sprite: THREE.Sprite;
+  velocity: THREE.Vector3;
+}
+
+interface FocusFireIndicator {
+  targetId: number;
+  attackerCount: number;
+  mesh: THREE.Mesh;
+  pulseTime: number;
+}
+
 export class EffectsRenderer {
   private scene: THREE.Scene;
   private eventBus: EventBus;
   private attackEffects: AttackEffect[] = [];
   private hitEffects: HitEffect[] = [];
+  private damageNumbers: DamageNumber[] = [];
+  private focusFireIndicators: Map<number, FocusFireIndicator> = new Map();
+  private targetAttackerCounts: Map<number, Set<number>> = new Map(); // targetId -> Set of attackerIds
 
   // Shared geometries and materials
   // Per threejs-builder skill: create geometries once, don't create in event handlers
@@ -32,6 +51,10 @@ export class EffectsRenderer {
   private hitMaterial: THREE.MeshBasicMaterial;
   private deathGeometry: THREE.RingGeometry;
   private deathMaterial: THREE.MeshBasicMaterial;
+  private focusFireGeometry: THREE.RingGeometry;
+  private focusFireMaterial: THREE.MeshBasicMaterial;
+  private damageCanvas: HTMLCanvasElement;
+  private damageContext: CanvasRenderingContext2D;
 
   constructor(scene: THREE.Scene, eventBus: EventBus) {
     this.scene = scene;
@@ -68,11 +91,28 @@ export class EffectsRenderer {
       side: THREE.DoubleSide,
     });
 
+    // Focus fire indicator - pulsing ring around targets being attacked by multiple units
+    this.focusFireGeometry = new THREE.RingGeometry(0.8, 1.2, 24);
+    this.focusFireMaterial = new THREE.MeshBasicMaterial({
+      color: 0xff0000,
+      transparent: true,
+      opacity: 0.6,
+      side: THREE.DoubleSide,
+    });
+
+    // Canvas for damage numbers
+    this.damageCanvas = document.createElement('canvas');
+    this.damageCanvas.width = 128;
+    this.damageCanvas.height = 64;
+    this.damageContext = this.damageCanvas.getContext('2d')!;
+
     this.setupEventListeners();
   }
 
   private setupEventListeners(): void {
     this.eventBus.on('combat:attack', (data: {
+      attackerId?: number;
+      targetId?: number;
       attackerPos?: { x: number; y: number };
       targetPos?: { x: number; y: number };
       damage: number;
@@ -84,12 +124,37 @@ export class EffectsRenderer {
           new THREE.Vector3(data.targetPos.x, 0.5, data.targetPos.y),
           data.damageType
         );
+
+        // Create floating damage number
+        this.createDamageNumber(
+          new THREE.Vector3(data.targetPos.x, 1.5, data.targetPos.y),
+          data.damage
+        );
+
+        // Track focus fire - multiple attackers on same target
+        if (data.attackerId !== undefined && data.targetId !== undefined) {
+          this.trackFocusFire(data.attackerId, data.targetId, data.targetPos);
+        }
       }
     });
 
-    this.eventBus.on('unit:died', (data: { position?: { x: number; y: number } }) => {
+    this.eventBus.on('unit:died', (data: {
+      entityId?: number;
+      position?: { x: number; y: number };
+    }) => {
       if (data.position) {
         this.createDeathEffect(new THREE.Vector3(data.position.x, 0.1, data.position.y));
+      }
+      // Clear focus fire tracking for dead unit
+      if (data.entityId !== undefined) {
+        this.clearFocusFire(data.entityId);
+      }
+    });
+
+    // Clear attacker from focus fire when they die or stop attacking
+    this.eventBus.on('unit:stopAttack', (data: { attackerId?: number; targetId?: number }) => {
+      if (data.attackerId !== undefined && data.targetId !== undefined) {
+        this.removeAttackerFromTarget(data.attackerId, data.targetId);
       }
     });
   }
@@ -170,6 +235,121 @@ export class EffectsRenderer {
     });
   }
 
+  private createDamageNumber(position: THREE.Vector3, damage: number): void {
+    // Draw damage text to canvas
+    this.damageContext.clearRect(0, 0, 128, 64);
+    this.damageContext.font = 'bold 32px Arial';
+    this.damageContext.textAlign = 'center';
+    this.damageContext.textBaseline = 'middle';
+
+    // Yellow text with black outline for visibility
+    this.damageContext.strokeStyle = '#000000';
+    this.damageContext.lineWidth = 4;
+    this.damageContext.strokeText(Math.round(damage).toString(), 64, 32);
+    this.damageContext.fillStyle = '#ffff00';
+    this.damageContext.fillText(Math.round(damage).toString(), 64, 32);
+
+    // Create texture from canvas
+    const texture = new THREE.CanvasTexture(this.damageCanvas);
+    texture.needsUpdate = true;
+
+    const material = new THREE.SpriteMaterial({
+      map: texture,
+      transparent: true,
+      depthTest: false,
+    });
+
+    const sprite = new THREE.Sprite(material);
+    sprite.position.copy(position);
+    sprite.scale.set(1.5, 0.75, 1);
+    this.scene.add(sprite);
+
+    this.damageNumbers.push({
+      position: position.clone(),
+      damage,
+      progress: 0,
+      duration: 1.0, // 1 second float
+      sprite,
+      velocity: new THREE.Vector3(
+        (Math.random() - 0.5) * 0.5, // Random horizontal drift
+        2.0, // Upward velocity
+        (Math.random() - 0.5) * 0.5
+      ),
+    });
+  }
+
+  private trackFocusFire(attackerId: number, targetId: number, targetPos: { x: number; y: number }): void {
+    // Get or create the set of attackers for this target
+    let attackers = this.targetAttackerCounts.get(targetId);
+    if (!attackers) {
+      attackers = new Set();
+      this.targetAttackerCounts.set(targetId, attackers);
+    }
+
+    // Add this attacker
+    attackers.add(attackerId);
+
+    // If 2+ attackers, show/update focus fire indicator
+    if (attackers.size >= 2) {
+      let indicator = this.focusFireIndicators.get(targetId);
+
+      if (!indicator) {
+        // Create new indicator
+        const mesh = new THREE.Mesh(this.focusFireGeometry, this.focusFireMaterial.clone());
+        mesh.position.set(targetPos.x, 0.15, targetPos.y);
+        mesh.rotation.x = -Math.PI / 2;
+        this.scene.add(mesh);
+
+        indicator = {
+          targetId,
+          attackerCount: attackers.size,
+          mesh,
+          pulseTime: 0,
+        };
+        this.focusFireIndicators.set(targetId, indicator);
+      } else {
+        // Update existing indicator position
+        indicator.mesh.position.set(targetPos.x, 0.15, targetPos.y);
+        indicator.attackerCount = attackers.size;
+      }
+    }
+  }
+
+  private clearFocusFire(targetId: number): void {
+    // Remove indicator
+    const indicator = this.focusFireIndicators.get(targetId);
+    if (indicator) {
+      this.scene.remove(indicator.mesh);
+      (indicator.mesh.material as THREE.Material).dispose();
+      this.focusFireIndicators.delete(targetId);
+    }
+
+    // Clear attacker tracking
+    this.targetAttackerCounts.delete(targetId);
+  }
+
+  private removeAttackerFromTarget(attackerId: number, targetId: number): void {
+    const attackers = this.targetAttackerCounts.get(targetId);
+    if (!attackers) return;
+
+    attackers.delete(attackerId);
+
+    // If less than 2 attackers, remove indicator
+    if (attackers.size < 2) {
+      const indicator = this.focusFireIndicators.get(targetId);
+      if (indicator) {
+        this.scene.remove(indicator.mesh);
+        (indicator.mesh.material as THREE.Material).dispose();
+        this.focusFireIndicators.delete(targetId);
+      }
+    }
+
+    // Clean up empty sets
+    if (attackers.size === 0) {
+      this.targetAttackerCounts.delete(targetId);
+    }
+  }
+
   public update(deltaTime: number): void {
     const dt = deltaTime / 1000; // Convert to seconds
 
@@ -227,6 +407,47 @@ export class EffectsRenderer {
         (effect.mesh.material as THREE.MeshBasicMaterial).opacity = 1 - effect.progress;
       }
     }
+
+    // Update damage numbers
+    for (let i = this.damageNumbers.length - 1; i >= 0; i--) {
+      const dmgNum = this.damageNumbers[i];
+      dmgNum.progress += dt / dmgNum.duration;
+
+      if (dmgNum.progress >= 1) {
+        // Effect complete
+        this.scene.remove(dmgNum.sprite);
+        (dmgNum.sprite.material as THREE.SpriteMaterial).map?.dispose();
+        (dmgNum.sprite.material as THREE.SpriteMaterial).dispose();
+        this.damageNumbers.splice(i, 1);
+      } else {
+        // Float upward with deceleration and fade out
+        const decel = 1 - dmgNum.progress * 0.8;
+        dmgNum.sprite.position.x += dmgNum.velocity.x * dt * decel;
+        dmgNum.sprite.position.y += dmgNum.velocity.y * dt * decel;
+        dmgNum.sprite.position.z += dmgNum.velocity.z * dt * decel;
+
+        // Fade out in second half
+        if (dmgNum.progress > 0.5) {
+          const fadeProgress = (dmgNum.progress - 0.5) * 2;
+          (dmgNum.sprite.material as THREE.SpriteMaterial).opacity = 1 - fadeProgress;
+        }
+
+        // Scale up slightly as it rises
+        const scale = 1 + dmgNum.progress * 0.3;
+        dmgNum.sprite.scale.set(1.5 * scale, 0.75 * scale, 1);
+      }
+    }
+
+    // Update focus fire indicators (pulsing effect)
+    for (const indicator of this.focusFireIndicators.values()) {
+      indicator.pulseTime += dt * 4; // Pulse speed
+      const pulse = 0.8 + Math.sin(indicator.pulseTime) * 0.2;
+      indicator.mesh.scale.set(pulse, pulse, 1);
+
+      // Intensity based on attacker count (more attackers = more opaque)
+      const baseOpacity = Math.min(0.4 + indicator.attackerCount * 0.15, 0.9);
+      (indicator.mesh.material as THREE.MeshBasicMaterial).opacity = baseOpacity * pulse;
+    }
   }
 
   public dispose(): void {
@@ -242,6 +463,19 @@ export class EffectsRenderer {
       (effect.mesh.material as THREE.Material).dispose();
     }
 
+    // Clean up damage numbers
+    for (const dmgNum of this.damageNumbers) {
+      this.scene.remove(dmgNum.sprite);
+      (dmgNum.sprite.material as THREE.SpriteMaterial).map?.dispose();
+      (dmgNum.sprite.material as THREE.SpriteMaterial).dispose();
+    }
+
+    // Clean up focus fire indicators
+    for (const indicator of this.focusFireIndicators.values()) {
+      this.scene.remove(indicator.mesh);
+      (indicator.mesh.material as THREE.Material).dispose();
+    }
+
     // Dispose shared resources
     this.projectileGeometry.dispose();
     this.projectileMaterial.dispose();
@@ -250,8 +484,13 @@ export class EffectsRenderer {
     this.hitMaterial.dispose();
     this.deathGeometry.dispose();
     this.deathMaterial.dispose();
+    this.focusFireGeometry.dispose();
+    this.focusFireMaterial.dispose();
 
     this.attackEffects = [];
     this.hitEffects = [];
+    this.damageNumbers = [];
+    this.focusFireIndicators.clear();
+    this.targetAttackerCounts.clear();
   }
 }

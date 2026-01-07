@@ -27,7 +27,13 @@ interface AIPlayer {
   maxSupply: number;
   // Building flags
   hasBarracks: boolean;
+  hasFactory: boolean;
+  hasRefinery: boolean;
   supplyDepotsBuilding: number;
+  barracksCount: number;
+  // Attack timing
+  lastAttackTick: number;
+  attackCooldown: number;
 }
 
 export class AISystem extends System {
@@ -45,6 +51,13 @@ export class AISystem extends System {
     faction: string,
     difficulty: 'easy' | 'medium' | 'hard' = 'medium'
   ): void {
+    // Configure attack behavior based on difficulty
+    const attackCooldownByDifficulty = {
+      easy: 600, // 30 seconds at 20 tps
+      medium: 400, // 20 seconds
+      hard: 200, // 10 seconds
+    };
+
     this.aiPlayers.set(playerId, {
       playerId,
       faction,
@@ -59,7 +72,12 @@ export class AISystem extends System {
       supply: 6, // 6 starting workers
       maxSupply: 11, // Command Center provides 11
       hasBarracks: false,
+      hasFactory: false,
+      hasRefinery: false,
       supplyDepotsBuilding: 0,
+      barracksCount: 0,
+      lastAttackTick: 0,
+      attackCooldown: attackCooldownByDifficulty[difficulty],
     });
 
     // Listen for production events to track AI resources
@@ -100,6 +118,13 @@ export class AISystem extends System {
         // Track building types
         if (building.buildingId === 'barracks') {
           ai.hasBarracks = true;
+          ai.barracksCount++;
+        }
+        if (building.buildingId === 'factory') {
+          ai.hasFactory = true;
+        }
+        if (building.buildingId === 'refinery') {
+          ai.hasRefinery = true;
         }
         if (building.buildingId === 'supply_depot') {
           ai.supplyDepotsBuilding = Math.max(0, ai.supplyDepotsBuilding - 1);
@@ -209,7 +234,7 @@ export class AISystem extends System {
     // Update AI's resource count by checking what they own
     this.updateAIResources(ai);
 
-    // Priority: Supply > Workers > Barracks > Army
+    // Priority: Supply > Workers > Production Buildings > Army
 
     // Check if supply capped (need supply depot)
     if (ai.supply >= ai.maxSupply - 2 && ai.supplyDepotsBuilding === 0) {
@@ -220,7 +245,8 @@ export class AISystem extends System {
     }
 
     // Build workers if we have room and need more
-    if (ai.workerCount < 16 && ai.supply < ai.maxSupply) {
+    const targetWorkers = ai.difficulty === 'hard' ? 20 : ai.difficulty === 'medium' ? 18 : 16;
+    if (ai.workerCount < targetWorkers && ai.supply < ai.maxSupply) {
       if (this.tryTrainUnit(ai, 'scv')) {
         return;
       }
@@ -233,9 +259,49 @@ export class AISystem extends System {
       }
     }
 
-    // Build army (marines) if we have a barracks
+    // Medium/Hard: Build second barracks for faster production
+    if (ai.difficulty !== 'easy' && ai.barracksCount < 2 && ai.hasBarracks && ai.workerCount >= 14) {
+      if (this.tryBuildBuilding(ai, 'barracks')) {
+        return;
+      }
+    }
+
+    // Hard: Build refinery and factory
+    if (ai.difficulty === 'hard' && ai.hasBarracks && !ai.hasRefinery && ai.workerCount >= 14) {
+      if (this.tryBuildBuilding(ai, 'refinery')) {
+        return;
+      }
+    }
+
+    if (ai.difficulty === 'hard' && ai.hasRefinery && !ai.hasFactory && ai.vespene >= 100) {
+      if (this.tryBuildBuilding(ai, 'factory')) {
+        return;
+      }
+    }
+
+    // Build army based on difficulty
     if (ai.hasBarracks && ai.supply < ai.maxSupply) {
-      this.tryTrainUnit(ai, 'marine');
+      // Vary unit composition based on difficulty
+      if (ai.difficulty === 'easy') {
+        // Easy: Just marines
+        this.tryTrainUnit(ai, 'marine');
+      } else if (ai.difficulty === 'medium') {
+        // Medium: Marines and occasionally marauders
+        if (Math.random() < 0.3 && ai.minerals >= 100) {
+          this.tryTrainUnit(ai, 'marauder');
+        } else {
+          this.tryTrainUnit(ai, 'marine');
+        }
+      } else {
+        // Hard: Mixed army with hellions from factory
+        if (ai.hasFactory && Math.random() < 0.3 && ai.minerals >= 100) {
+          this.tryTrainUnit(ai, 'hellion');
+        } else if (Math.random() < 0.4 && ai.minerals >= 100 && ai.vespene >= 25) {
+          this.tryTrainUnit(ai, 'marauder');
+        } else {
+          this.tryTrainUnit(ai, 'marine');
+        }
+      }
     }
   }
 
@@ -432,6 +498,22 @@ export class AISystem extends System {
   }
 
   private executeAttackingPhase(ai: AIPlayer): void {
+    const currentTick = this.game.getCurrentTick();
+
+    // Check attack cooldown to prevent constant attack spam
+    if (currentTick - ai.lastAttackTick < ai.attackCooldown) {
+      // During cooldown, keep building
+      this.executeBuildingPhase(ai);
+      return;
+    }
+
+    // Require minimum army size before attacking (based on difficulty)
+    const minArmySize = ai.difficulty === 'hard' ? 6 : ai.difficulty === 'medium' ? 8 : 10;
+    if (ai.armyValue < minArmySize) {
+      this.executeBuildingPhase(ai);
+      return;
+    }
+
     // Find enemy base
     const enemyBase = this.findEnemyBase(ai.playerId);
     if (!enemyBase) return;
@@ -454,8 +536,10 @@ export class AISystem extends System {
 
     // Attack move to enemy base
     if (armyUnits.length > 0) {
+      ai.lastAttackTick = currentTick;
+
       const command: GameCommand = {
-        tick: this.game.getCurrentTick(),
+        tick: currentTick,
         playerId: ai.playerId,
         type: 'ATTACK',
         entityIds: armyUnits,

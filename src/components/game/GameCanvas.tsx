@@ -418,6 +418,7 @@ export function GameCanvas() {
             x: end.x,
             y: end.z,
             additive: e.shiftKey,
+            selectAllOfType: e.ctrlKey, // Ctrl+click to select all of same type
             playerId: 'player1',
           });
         }
