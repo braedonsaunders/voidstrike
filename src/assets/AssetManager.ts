@@ -18,6 +18,7 @@
 
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
+import { DRACOLoader } from 'three/examples/jsm/loaders/DRACOLoader.js';
 import * as SkeletonUtils from 'three/examples/jsm/utils/SkeletonUtils.js';
 
 // Reference Frame Contract Constants
@@ -72,8 +73,14 @@ const animatedAssets = new Set<string>();
 // Callbacks to notify when custom models are loaded
 const onModelsLoadedCallbacks: Array<() => void> = [];
 
-// GLTF loader instance
+// DRACO loader for compressed meshes
+const dracoLoader = new DRACOLoader();
+dracoLoader.setDecoderPath('https://www.gstatic.com/draco/versioned/decoders/1.5.6/');
+dracoLoader.setDecoderConfig({ type: 'js' }); // Use JS decoder for compatibility
+
+// GLTF loader instance with DRACO support
 const gltfLoader = new GLTFLoader();
+gltfLoader.setDRACOLoader(dracoLoader);
 
 /**
  * Normalize a model to a target height and anchor to ground (minY = 0)
