@@ -236,6 +236,19 @@ export class EffectsRenderer {
   }
 
   private createDamageNumber(position: THREE.Vector3, damage: number): void {
+    // PERFORMANCE: Limit max active damage numbers to prevent GPU texture spam
+    // During heavy combat, this prevents creating hundreds of textures
+    const MAX_DAMAGE_NUMBERS = 15;
+    if (this.damageNumbers.length >= MAX_DAMAGE_NUMBERS) {
+      // Remove oldest damage number to make room
+      const oldest = this.damageNumbers.shift();
+      if (oldest) {
+        this.scene.remove(oldest.sprite);
+        (oldest.sprite.material as THREE.SpriteMaterial).map?.dispose();
+        (oldest.sprite.material as THREE.SpriteMaterial).dispose();
+      }
+    }
+
     // Draw damage text to canvas
     this.damageContext.clearRect(0, 0, 128, 64);
     this.damageContext.font = 'bold 32px Arial';
@@ -268,11 +281,11 @@ export class EffectsRenderer {
       position: position.clone(),
       damage,
       progress: 0,
-      duration: 1.0, // 1 second float
+      duration: 0.7, // PERFORMANCE: Reduced from 1.0s to 0.7s to cycle faster
       sprite,
       velocity: new THREE.Vector3(
-        (Math.random() - 0.5) * 0.5, // Random horizontal drift
-        2.0, // Upward velocity
+        (Math.random() - 0.5) * 0.5,
+        2.0,
         (Math.random() - 0.5) * 0.5
       ),
     });

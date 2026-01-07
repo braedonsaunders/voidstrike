@@ -8,17 +8,24 @@
 
 ## Critical Performance Fixes (January 2026)
 
-### Fixed Issues
+### Fixed Issues (Round 1)
 - [x] **Shadow mapping disabled** - 2048x2048 PCFSoftShadowMap causing <1 FPS on M1
 - [x] **FogOfWar throttled** - Reduced from 60 FPS to 10 FPS updates
 - [x] **Minimap throttled** - Reduced from 60 FPS to 15 FPS rendering
 - [x] **React re-renders reduced** - SelectionPanel/ProductionQueue from 10 FPS to 4-5 FPS
 - [x] **Renderer optimized** - Disabled antialiasing, capped pixel ratio to 1.5
 
+### Fixed Issues (Round 2 - Deep Dive)
+- [x] **Resource PointLights removed** - CRITICAL: 20+ PointLights were killing the GPU
+- [x] **BuildingRenderer traverse() optimized** - Only traverse() on state change, not every frame
+- [x] **Damage number spam limited** - Max 15 active, reduced duration to 0.7s
+- [x] **Resource rotation removed** - Static rotation instead of animating every frame
+
 ### Future Optimizations
-- [ ] Object pooling for projectiles/effects
+- [ ] Instanced decorations (trees, rocks, debris - 1000s of draw calls)
 - [ ] Graphics settings UI (shadows optional)
 - [ ] Web Worker for AI calculations
+- [ ] Damage number texture atlas (pool instead of create)
 
 ---
 

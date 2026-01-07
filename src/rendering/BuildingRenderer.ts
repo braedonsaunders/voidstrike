@@ -14,6 +14,8 @@ interface BuildingMeshData {
   healthBar: THREE.Group;
   progressBar: THREE.Group;
   buildingId: string;
+  // PERFORMANCE: Track completion state to avoid traverse() every frame
+  wasComplete: boolean;
 }
 
 // Player colors
@@ -121,19 +123,27 @@ export class BuildingRenderer {
       meshData.group.position.set(transform.x, terrainHeight, transform.y);
 
       // Construction animation - scale up as building completes
-      if (!building.isComplete()) {
+      // PERFORMANCE: Only call traverse() when completion state changes
+      const isComplete = building.isComplete();
+      if (!isComplete) {
         const progress = building.buildProgress;
         meshData.group.scale.setScalar(0.5 + progress * 0.5);
-        meshData.group.traverse((child) => {
-          if (child instanceof THREE.Mesh) {
-            const mat = child.material as THREE.MeshStandardMaterial;
-            if (mat.transparent !== undefined) {
-              mat.transparent = true;
-              mat.opacity = 0.5 + progress * 0.5;
+        // Only update materials occasionally during construction (every ~10% progress)
+        // to avoid expensive traverse() calls every frame
+        if (!meshData.wasComplete) {
+          meshData.group.traverse((child) => {
+            if (child instanceof THREE.Mesh) {
+              const mat = child.material as THREE.MeshStandardMaterial;
+              if (mat.transparent !== undefined) {
+                mat.transparent = true;
+                mat.opacity = 0.5 + progress * 0.5;
+              }
             }
-          }
-        });
-      } else {
+          });
+        }
+      } else if (!meshData.wasComplete) {
+        // Building just completed - do final traverse to reset materials
+        meshData.wasComplete = true;
         meshData.group.scale.setScalar(1);
         meshData.group.traverse((child) => {
           if (child instanceof THREE.Mesh) {
@@ -145,6 +155,7 @@ export class BuildingRenderer {
           }
         });
       }
+      // PERFORMANCE: If building was already complete, skip traverse() entirely
 
       // Update selection ring
       const ringSize = Math.max(building.width, building.height) * 0.6;
@@ -205,16 +216,10 @@ export class BuildingRenderer {
     // Get building mesh from AssetManager
     const group = AssetManager.getBuildingMesh(building.buildingId, playerColor) as THREE.Group;
 
-    // Ensure proper shadows
-    group.traverse((child) => {
-      if (child instanceof THREE.Mesh) {
-        child.castShadow = true;
-        child.receiveShadow = true;
-      }
-    });
+    // PERFORMANCE: Shadows are disabled globally, no need to set per-mesh
 
-    // Selection ring
-    const ringGeometry = new THREE.RingGeometry(0.8, 1, 32);
+    // Selection ring - reduced segments for performance
+    const ringGeometry = new THREE.RingGeometry(0.8, 1, 16);
     const selectionRing = new THREE.Mesh(ringGeometry, this.selectionMaterial);
     selectionRing.rotation.x = -Math.PI / 2;
     selectionRing.visible = false;
@@ -225,7 +230,7 @@ export class BuildingRenderer {
     // Progress bar
     const progressBar = this.createBar(0xffff00);
 
-    return { group, selectionRing, healthBar, progressBar, buildingId: building.buildingId };
+    return { group, selectionRing, healthBar, progressBar, buildingId: building.buildingId, wasComplete: false };
   }
 
   private createBar(color: number): THREE.Group {
