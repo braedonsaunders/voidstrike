@@ -18,9 +18,32 @@ export class MovementSystem extends System {
   private arrivalThreshold = 0.5;
   private decelerationThreshold = 2.0; // Start slowing down at this distance
 
+  // Cached queries for performance
+  private cachedBuildings: Array<{ transform: Transform; building: Building }> = [];
+  private lastBuildingCacheFrame = -1;
+
   constructor(game: Game) {
     super(game);
     this.setupEventListeners();
+  }
+
+  /**
+   * Cache buildings once per frame for collision checks
+   */
+  private getBuildingsForCollision(): Array<{ transform: Transform; building: Building }> {
+    const currentTick = this.game.getCurrentTick();
+    if (this.lastBuildingCacheFrame !== currentTick) {
+      this.cachedBuildings = [];
+      const buildings = this.world.getEntitiesWith('Building', 'Transform');
+      for (const entity of buildings) {
+        this.cachedBuildings.push({
+          transform: entity.get<Transform>('Transform')!,
+          building: entity.get<Building>('Building')!,
+        });
+      }
+      this.lastBuildingCacheFrame = currentTick;
+    }
+    return this.cachedBuildings;
   }
 
   private setupEventListeners(): void {
@@ -189,11 +212,10 @@ export class MovementSystem extends System {
     let forceX = 0;
     let forceY = 0;
 
-    const buildings = this.world.getEntitiesWith('Building', 'Transform');
+    // Use cached buildings for performance
+    const buildings = this.getBuildingsForCollision();
 
-    for (const buildingEntity of buildings) {
-      const building = buildingEntity.get<Building>('Building')!;
-      const buildingTransform = buildingEntity.get<Transform>('Transform')!;
+    for (const { transform: buildingTransform, building } of buildings) {
 
       // Get building bounds (center-based)
       const halfWidth = building.width / 2 + BUILDING_AVOIDANCE_MARGIN;
