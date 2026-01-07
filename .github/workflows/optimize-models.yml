@@ -82,14 +82,22 @@ jobs:
             original_size=$(stat -f%z "$file" 2>/dev/null || stat -c%s "$file")
             echo "  Original size: $((original_size / 1024)) KB"
 
-            # Optimize - NO texture-compress to keep single GLB file
-            # Draco compression + texture resize provides good savings
-            gltf-transform optimize "$file" "${file}.optimized" \
-              --texture-size 512 \
-              --compress draco || {
-                echo "  ⚠️ Optimization failed, keeping original"
-                continue
-              }
+            # Run transforms individually to avoid texture extraction
+            # Step 1: Resize textures (keeps them embedded in GLB)
+            gltf-transform resize "$file" "${file}.step1" --width 512 --height 512 || {
+              echo "  ⚠️ Resize failed, keeping original"
+              continue
+            }
+
+            # Step 2: Apply Draco compression
+            gltf-transform draco "${file}.step1" "${file}.optimized" || {
+              echo "  ⚠️ Draco compression failed, keeping original"
+              rm -f "${file}.step1"
+              continue
+            }
+
+            # Cleanup intermediate file
+            rm -f "${file}.step1"
 
             # Replace original
             mv "${file}.optimized" "$file"
