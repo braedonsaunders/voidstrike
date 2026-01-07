@@ -158,23 +158,33 @@ export class UnitRenderer {
       if (meshData.mixer && meshData.animations.length > 0) {
         meshData.mixer.update(delta);
 
-        // Determine if unit is moving (has significant velocity)
-        const isMoving = unit.state === 'moving' || unit.state === 'attacking' ||
-                         unit.state === 'gathering' || unit.state === 'patrolling' ||
-                         unit.state === 'building';
+        // Determine desired animation state
+        const isMoving = unit.state === 'moving' || unit.state === 'gathering' ||
+                         unit.state === 'patrolling' || unit.state === 'building';
+        const isAttacking = unit.state === 'attacking';
 
-        // Play first available animation when moving
-        // (Meshy exports use generic names like 'Armature|clip0|baselayer')
-        if (meshData.currentAction === null && meshData.animations.length > 0) {
-          // Start playing the first animation
+        // Find appropriate animation by name pattern
+        const desiredAnim = this.findAnimationForState(meshData.animations, isMoving, isAttacking);
+
+        // Switch animation if needed
+        if (desiredAnim && meshData.currentAction?.getClip() !== desiredAnim) {
+          // Fade out current animation
+          if (meshData.currentAction) {
+            meshData.currentAction.fadeOut(0.2);
+          }
+          // Start new animation
+          meshData.currentAction = meshData.mixer.clipAction(desiredAnim);
+          meshData.currentAction.reset().fadeIn(0.2).play();
+        } else if (!meshData.currentAction && meshData.animations.length > 0) {
+          // No animation playing yet - start the first one
           meshData.currentAction = meshData.mixer.clipAction(meshData.animations[0]);
           meshData.currentAction.play();
           console.log(`[UnitRenderer] Started animation for ${unit.unitId}: ${meshData.animations[0].name}`);
         }
 
-        // Adjust animation time scale based on movement state
-        if (meshData.currentAction) {
-          meshData.currentAction.timeScale = isMoving ? 1.0 : 0.3; // Slow when idle
+        // For single-animation models, vary speed based on state
+        if (meshData.animations.length === 1 && meshData.currentAction) {
+          meshData.currentAction.timeScale = isMoving || isAttacking ? 1.0 : 0.3;
         }
       }
     }
@@ -270,6 +280,46 @@ export class UnitRenderer {
     group.lookAt(0, 100, 0);
 
     return group;
+  }
+
+  /**
+   * Find the best animation for a given state by searching name patterns.
+   * Falls back to first animation if no match found.
+   */
+  private findAnimationForState(
+    animations: THREE.AnimationClip[],
+    isMoving: boolean,
+    isAttacking: boolean
+  ): THREE.AnimationClip | null {
+    if (animations.length === 0) return null;
+    if (animations.length === 1) return animations[0]; // Only one animation, use it
+
+    const lowerNames = animations.map(a => a.name.toLowerCase());
+
+    if (isAttacking) {
+      // Look for attack animation
+      const attackIdx = lowerNames.findIndex(n =>
+        n.includes('attack') || n.includes('fire') || n.includes('shoot')
+      );
+      if (attackIdx >= 0) return animations[attackIdx];
+    }
+
+    if (isMoving) {
+      // Look for walk/run animation
+      const moveIdx = lowerNames.findIndex(n =>
+        n.includes('walk') || n.includes('run') || n.includes('move')
+      );
+      if (moveIdx >= 0) return animations[moveIdx];
+    }
+
+    // Look for idle animation
+    const idleIdx = lowerNames.findIndex(n =>
+      n.includes('idle') || n.includes('stand') || n.includes('rest')
+    );
+    if (idleIdx >= 0) return animations[idleIdx];
+
+    // Fallback: return first animation
+    return animations[0];
   }
 
   private updateHealthBar(healthBar: THREE.Group, health: Health): void {

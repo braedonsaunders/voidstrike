@@ -23,8 +23,6 @@ const path = require('path');
 // Configuration
 const CONFIG = {
   textureSize: 512,        // Max texture dimension (512x512 is plenty for RTS units)
-  textureFormat: 'webp',   // webp, jpeg, or png
-  textureQuality: 85,      // 0-100 for lossy formats
   useDraco: true,          // Enable Draco mesh compression
   modelDirs: [             // Directories to scan for models
     'public/models/units',
@@ -62,7 +60,8 @@ function optimizeModel(inputPath) {
   const base = path.basename(inputPath, ext);
   const tempOutput = path.join(dir, `${base}.temp${ext}`);
 
-  // Build gltf-transform command
+  // Build gltf-transform commands - run each step separately to avoid extraction issues
+  // Step 1: Resize textures and compress mesh
   const commands = [
     'npx',
     '--yes',
@@ -71,9 +70,11 @@ function optimizeModel(inputPath) {
     `"${inputPath}"`,
     `"${tempOutput}"`,
     `--texture-size ${CONFIG.textureSize}`,
-    `--texture-compress ${CONFIG.textureFormat}`,
     `--compress ${CONFIG.useDraco ? 'draco' : 'meshopt'}`,
   ];
+
+  // Note: We skip --texture-compress webp because it can cause texture extraction
+  // The texture resize alone provides significant savings
 
   const command = commands.join(' ');
 
