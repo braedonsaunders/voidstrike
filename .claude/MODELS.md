@@ -320,6 +320,31 @@ game-ready low poly, PBR materials, white background
 
 ---
 
+### 13. Raven
+**File:** `/public/models/units/raven.glb`
+
+**Dimensions:** 1.5m wide × 0.8m tall × 2.0m long
+
+**Description:** Support aircraft with deployable turrets and detection abilities.
+
+**AI Prompt:**
+```
+Futuristic support drone aircraft, sleek unmanned aerial vehicle,
+sensor dome on top, small turret launchers under wings,
+detection equipment, radar array, surveillance craft design,
+blue-gray with glowing sensor lights, autonomous drone aesthetic,
+game-ready low poly, PBR materials, white background
+```
+
+**Key Features:**
+- Sensor dome (accent color with glow)
+- Small form factor drone
+- Detection/radar equipment
+- Turret deployment bays
+- Unmanned/autonomous appearance
+
+---
+
 ## BUILDINGS
 
 ### 1. Command Center
@@ -327,7 +352,7 @@ game-ready low poly, PBR materials, white background
 
 **Dimensions:** 5m × 5m footprint, 4m tall
 
-**Description:** Main base headquarters and worker production facility.
+**Description:** Main base headquarters and worker production facility. Can upgrade to Orbital Command or Planetary Fortress.
 
 **AI Prompt:**
 ```
@@ -346,7 +371,58 @@ PBR materials, isometric view, white background
 
 ---
 
-### 2. Supply Depot
+### 2. Orbital Command (Command Center Upgrade)
+**File:** `/public/models/buildings/orbital_command.glb`
+
+**Dimensions:** 5m × 5m footprint, 5m tall
+
+**Description:** Upgraded Command Center with orbital satellite uplink capabilities. Provides MULEs, Scanner Sweep, and Supply Drops.
+
+**AI Prompt:**
+```
+Futuristic orbital command center, upgraded military headquarters,
+large satellite dish array pointing skyward, communication towers,
+holographic displays, orbital uplink antenna, heavy fortified structure,
+glowing blue communication dishes, advanced command facility,
+blue-gray armor with cyan accent lights, game-ready low poly,
+PBR materials, isometric view, white background
+```
+
+**Key Features:**
+- Large satellite dish array (accent color)
+- Multiple communication antennas
+- Orbital uplink equipment
+- Upgraded from Command Center appearance
+- Glowing holographic elements
+
+---
+
+### 3. Planetary Fortress (Command Center Upgrade)
+**File:** `/public/models/buildings/planetary_fortress.glb`
+
+**Dimensions:** 5m × 5m footprint, 4m tall
+
+**Description:** Heavily fortified Command Center upgrade with twin Ibiks cannons. Cannot lift off. Massive defensive structure.
+
+**AI Prompt:**
+```
+Heavily fortified planetary fortress, defensive military stronghold,
+twin large turret cannons on top, thick armored bunker walls,
+reinforced blast plating, firing slits, heavy defensive structure,
+dark military armor with orange warning lights, imposing fortress,
+game-ready low poly, PBR materials, isometric view, white background
+```
+
+**Key Features:**
+- Twin Ibiks cannons on turret (accent color)
+- Extra thick armored walls
+- Bunker-like defensive appearance
+- No visible landing pad (cannot lift off)
+- More fortified than standard Command Center
+
+---
+
+### 4. Supply Depot
 **File:** `/public/models/buildings/supply_depot.glb`
 
 **Dimensions:** 2m × 2m footprint, 1.5m tall
@@ -607,6 +683,82 @@ PBR materials, isometric view, white background
 
 ---
 
+### 13. Ghost Academy
+**File:** `/public/models/buildings/ghost_academy.glb`
+
+**Dimensions:** 3m × 3m footprint, 3m tall
+
+**Description:** Covert operations training facility for Ghost production.
+
+**AI Prompt:**
+```
+Futuristic covert ops training facility, ghost academy building,
+dark stealth architecture, holographic training displays,
+psionic amplifier dome on roof, shadowy secure entrance,
+dark matte materials with subtle blue tech accents,
+secretive military facility, game-ready low poly,
+PBR materials, isometric view, white background
+```
+
+**Key Features:**
+- Dark stealth aesthetic
+- Psionic amplifier dome (accent color with glow)
+- Secure entrance
+- Training hologram elements
+- Covert ops appearance
+
+---
+
+### 14. Tech Lab (Addon)
+**File:** `/public/models/buildings/tech_lab.glb`
+
+**Dimensions:** 2m × 2m footprint, 2m tall
+
+**Description:** Research addon for Barracks/Factory/Starport that enables advanced unit production.
+
+**AI Prompt:**
+```
+Futuristic research addon module, compact tech laboratory,
+holographic displays, research equipment, data screens,
+modular attachment design, blue glowing tech elements,
+scientific military addon, game-ready low poly,
+PBR materials, isometric view, white background
+```
+
+**Key Features:**
+- Compact modular design (2x2 footprint)
+- Holographic displays (accent color with glow)
+- Research equipment visible
+- Attachment point on one side
+- High-tech laboratory aesthetic
+
+---
+
+### 15. Reactor (Addon)
+**File:** `/public/models/buildings/reactor.glb`
+
+**Dimensions:** 2m × 2m footprint, 2m tall
+
+**Description:** Power addon for Barracks/Factory/Starport that enables double unit production.
+
+**AI Prompt:**
+```
+Futuristic power reactor addon module, compact energy generator,
+glowing power core, cooling vents, energy conduits,
+modular attachment design, orange/yellow energy glow,
+industrial power module, game-ready low poly,
+PBR materials, isometric view, white background
+```
+
+**Key Features:**
+- Compact modular design (2x2 footprint)
+- Glowing power core (accent color with strong emission)
+- Cooling vents/radiators
+- Attachment point on one side
+- Industrial power plant aesthetic
+
+---
+
 ## RESOURCES
 
 ### 1. Mineral Patch
@@ -784,8 +936,8 @@ The AssetManager will automatically use custom models when available, falling ba
 
 ## Checklist
 
-### Units (12 total)
-- [ ] SCV
+### Units (13 total)
+- [x] SCV *(optimized: 204KB)*
 - [ ] Marine
 - [ ] Marauder
 - [ ] Reaper
@@ -797,9 +949,12 @@ The AssetManager will automatically use custom models when available, falling ba
 - [ ] Viking
 - [ ] Banshee
 - [ ] Battlecruiser
+- [ ] Raven
 
-### Buildings (12 total)
+### Buildings (15 total)
 - [ ] Command Center
+- [ ] Orbital Command *(CC upgrade)*
+- [ ] Planetary Fortress *(CC upgrade)*
 - [ ] Supply Depot
 - [ ] Refinery
 - [ ] Barracks
@@ -809,8 +964,11 @@ The AssetManager will automatically use custom models when available, falling ba
 - [ ] Armory
 - [ ] Starport
 - [ ] Fusion Core
+- [ ] Ghost Academy
 - [ ] Sensor Tower
 - [ ] Missile Turret
+- [ ] Tech Lab *(addon)*
+- [ ] Reactor *(addon)*
 
 ### Resources (2 total)
 - [ ] Mineral Patch
