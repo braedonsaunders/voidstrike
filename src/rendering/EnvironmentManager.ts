@@ -123,9 +123,13 @@ export class EnvironmentManager {
   }
 
   /**
-   * Update animated elements (water, particles)
+   * Update animated elements (water, particles, terrain shader)
    */
   public update(deltaTime: number, gameTime: number): void {
+    // Update terrain shader for procedural effects
+    const sunDirection = this.directionalLight.position.clone().normalize();
+    this.terrain.update(deltaTime, sunDirection);
+
     if (this.water) {
       this.water.update(gameTime);
     }
