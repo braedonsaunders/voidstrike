@@ -412,6 +412,41 @@ export class AssetManager {
       this.getProjectileMesh(id);
     });
   }
+
+  /**
+   * Load custom 3D models from public/models folder
+   * Replaces procedural meshes with custom GLB models when available
+   * Logs animation names to console for debugging
+   */
+  static async loadCustomModels(): Promise<void> {
+    // Define custom model paths - add more as models are created
+    const customModels: Array<{ path: string; assetId: string; targetHeight: number }> = [
+      { path: '/models/units/scv.glb', assetId: 'scv', targetHeight: REFERENCE_FRAME.UNIT_HEIGHTS.scv || 1.0 },
+      { path: '/models/units/marine.glb', assetId: 'marine', targetHeight: REFERENCE_FRAME.UNIT_HEIGHTS.marine || 1.2 },
+      // Add more models here as they're created
+    ];
+
+    console.log('[AssetManager] Loading custom models...');
+
+    for (const model of customModels) {
+      try {
+        // Check if file exists by trying to fetch headers
+        const response = await fetch(model.path, { method: 'HEAD' });
+        if (!response.ok) {
+          console.log(`[AssetManager] No custom model found at ${model.path}, using procedural mesh`);
+          continue;
+        }
+
+        // Load the GLTF model
+        await this.loadGLTF(model.path, model.assetId, { targetHeight: model.targetHeight });
+        console.log(`[AssetManager] ✓ Loaded custom model: ${model.assetId} from ${model.path}`);
+      } catch (error) {
+        console.log(`[AssetManager] Could not load ${model.path}:`, error);
+      }
+    }
+
+    console.log('[AssetManager] Custom model loading complete');
+  }
 }
 
 /**
