@@ -1,0 +1,88 @@
+import * as Phaser from 'phaser';
+import { VisionSystem, VisionState } from '@/engine/systems/VisionSystem';
+
+export class FogOfWarRenderer {
+  private scene: Phaser.Scene;
+  private mapWidth: number;
+  private mapHeight: number;
+  private visionSystem: VisionSystem;
+  private playerId = 'player1';
+
+  private fogGraphics: Phaser.GameObjects.Graphics;
+  private cellSize = 2; // Each fog cell covers 2x2 world units
+
+  // Throttle updates
+  private lastUpdateTime = 0;
+  private updateInterval = 100; // Update every 100ms
+
+  constructor(
+    scene: Phaser.Scene,
+    mapWidth: number,
+    mapHeight: number,
+    visionSystem: VisionSystem
+  ) {
+    this.scene = scene;
+    this.mapWidth = mapWidth;
+    this.mapHeight = mapHeight;
+    this.visionSystem = visionSystem;
+
+    // Create fog graphics layer
+    this.fogGraphics = scene.add.graphics();
+    this.fogGraphics.setDepth(500); // Above everything except UI
+
+    // Initial render
+    this.render();
+  }
+
+  update(): void {
+    const now = performance.now();
+    if (now - this.lastUpdateTime < this.updateInterval) {
+      return;
+    }
+    this.lastUpdateTime = now;
+
+    this.render();
+  }
+
+  private render(): void {
+    this.fogGraphics.clear();
+
+    const gridWidth = Math.ceil(this.mapWidth / this.cellSize);
+    const gridHeight = Math.ceil(this.mapHeight / this.cellSize);
+
+    const visionGrid = this.visionSystem.getVisionGridForPlayer(this.playerId);
+    if (!visionGrid) return;
+
+    // Colors for different visibility states
+    const unexploredColor = 0x1a2030;
+    const exploredColor = 0x1a2535;
+
+    for (let gy = 0; gy < gridHeight; gy++) {
+      for (let gx = 0; gx < gridWidth; gx++) {
+        const state = visionGrid[gy]?.[gx] ?? 'unexplored';
+
+        const worldX = gx * this.cellSize;
+        const worldY = gy * this.cellSize;
+
+        if (state === 'unexplored') {
+          // Unexplored - darker fog
+          this.fogGraphics.fillStyle(unexploredColor, 0.85);
+          this.fogGraphics.fillRect(worldX, worldY, this.cellSize, this.cellSize);
+        } else if (state === 'explored') {
+          // Explored but not visible - lighter fog
+          this.fogGraphics.fillStyle(exploredColor, 0.5);
+          this.fogGraphics.fillRect(worldX, worldY, this.cellSize, this.cellSize);
+        }
+        // Visible areas have no fog drawn
+      }
+    }
+  }
+
+  setPlayerId(playerId: string): void {
+    this.playerId = playerId;
+  }
+
+  destroy(): void {
+    this.fogGraphics.destroy();
+  }
+}

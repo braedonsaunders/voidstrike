@@ -17,11 +17,11 @@ export class AudioSystem extends System {
     super(game);
   }
 
-  // Call this after camera is created
-  public initialize(camera: THREE.Camera, biome?: string): void {
+  // Call this after camera is created (camera is optional for 2D audio only)
+  public initialize(camera?: THREE.Camera, biome?: string): void {
     if (this.initialized) return;
 
-    this.camera = camera;
+    this.camera = camera ?? null;
     AudioManager.initialize(camera);
     this.setupEventListeners();
     this.initialized = true;

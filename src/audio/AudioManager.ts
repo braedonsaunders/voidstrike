@@ -212,14 +212,20 @@ class AudioManagerClass {
   private masterVolume = 1;
   private muted = false;
 
-  // Initialize with Three.js scene
-  public initialize(camera: THREE.Camera): void {
-    this.listener = new THREE.AudioListener();
-    camera.add(this.listener);
-    this.audioContext = this.listener.context;
+  // Initialize with optional Three.js camera (for positional audio)
+  // If no camera provided, uses 2D audio only
+  public initialize(camera?: THREE.Camera): void {
+    if (camera) {
+      this.listener = new THREE.AudioListener();
+      camera.add(this.listener);
+      this.audioContext = this.listener.context;
+    } else {
+      // Create audio context without THREE.js for 2D audio only
+      this.audioContext = new (window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext)();
+    }
 
     // Resume audio context on user interaction
-    if (this.audioContext.state === 'suspended') {
+    if (this.audioContext && this.audioContext.state === 'suspended') {
       const resumeAudio = () => {
         this.audioContext?.resume();
         document.removeEventListener('click', resumeAudio);
