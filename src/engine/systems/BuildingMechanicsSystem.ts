@@ -1,4 +1,5 @@
 import { System } from '../ecs/System';
+import { Entity } from '../ecs/Entity';
 import { Game } from '../core/Game';
 import { Transform } from '../components/Transform';
 import { Building, AddonType } from '../components/Building';
@@ -296,8 +297,8 @@ export class BuildingMechanicsSystem extends System {
     transform: Transform,
     playerId: string,
     range: number
-  ): { entity: { id: number; get: <T>(type: string) => T | undefined }; distance: number } | null {
-    let bestTarget: { entity: { id: number; get: <T>(type: string) => T | undefined }; distance: number } | null = null;
+  ): { entity: Entity; distance: number } | null {
+    let bestTarget: { entity: Entity; distance: number } | null = null;
 
     const entities = this.world.getEntitiesWith('Transform', 'Health', 'Selectable');
 
