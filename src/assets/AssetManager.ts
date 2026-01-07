@@ -67,6 +67,9 @@ export interface AssetDefinition {
 const assetCache = new Map<string, THREE.Object3D>();
 const customAssets = new Map<string, THREE.Object3D>();
 
+// Store animations for custom models
+const assetAnimations = new Map<string, THREE.AnimationClip[]>();
+
 // Track which assets are animated/skinned (require SkeletonUtils.clone)
 const animatedAssets = new Set<string>();
 
@@ -394,9 +397,10 @@ export class AssetManager {
             console.log(`[AssetManager] Registered ${assetId} as animated model`);
           }
 
-          // Log animation names per threejs-builder skill
+          // Log animation names and store them per threejs-builder skill
           if (hasAnimations) {
             console.log(`[AssetManager] ${assetId} animations:`, gltf.animations.map(a => a.name));
+            assetAnimations.set(assetId, gltf.animations);
           }
 
           // Normalize to target height if specified
@@ -432,6 +436,20 @@ export class AssetManager {
   static getCustomMesh(assetId: string): THREE.Object3D | null {
     const asset = customAssets.get(assetId);
     return asset ? cloneModel(asset, assetId) : null;
+  }
+
+  /**
+   * Get animations for an asset
+   */
+  static getAnimations(assetId: string): THREE.AnimationClip[] {
+    return assetAnimations.get(assetId) || [];
+  }
+
+  /**
+   * Check if an asset has animations
+   */
+  static hasAnimations(assetId: string): boolean {
+    return animatedAssets.has(assetId);
   }
 
   /**

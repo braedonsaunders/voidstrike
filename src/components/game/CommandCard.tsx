@@ -4,6 +4,7 @@ import { useGameStore } from '@/store/gameStore';
 import { Game } from '@/engine/core/Game';
 import { Unit } from '@/engine/components/Unit';
 import { Building } from '@/engine/components/Building';
+import { Ability } from '@/engine/components/Ability';
 import { useEffect, useState } from 'react';
 import { UNIT_DEFINITIONS } from '@/data/units/dominion';
 import { BUILDING_DEFINITIONS } from '@/data/buildings/dominion';
@@ -62,6 +63,11 @@ const COMMAND_ICONS: Record<string, string> = {
   ship: '🚀',
   siege: '🎯',
   cloak: '👁',
+  // Abilities
+  mule: '🔧',
+  scanner_sweep: '📡',
+  supply_drop: '📦',
+  scanner: '📡',
   default: '◆',
 };
 
@@ -368,6 +374,41 @@ export function CommandCard() {
           },
           tooltip: 'Set rally point for new units',
         });
+      }
+
+      // Building abilities (e.g., Orbital Command abilities)
+      const abilityComponent = entity.get<Ability>('Ability');
+      if (abilityComponent) {
+        const abilities = abilityComponent.getAbilityList();
+        for (const abilityState of abilities) {
+          const def = abilityState.definition;
+          const canUse = abilityComponent.canUseAbility(def.id);
+          const energyCost = def.energyCost;
+
+          buttons.push({
+            id: `ability_${def.id}`,
+            label: def.name,
+            shortcut: def.hotkey,
+            action: () => {
+              if (def.targetType === 'point') {
+                // Need to enable targeting mode for point abilities
+                useGameStore.getState().setAbilityTargetMode(def.id);
+              } else if (def.targetType === 'unit') {
+                // Need to enable unit targeting mode
+                useGameStore.getState().setAbilityTargetMode(def.id);
+              } else {
+                // Instant cast
+                game.eventBus.emit('command:ability', {
+                  entityIds: selectedUnits,
+                  abilityId: def.id,
+                });
+              }
+            },
+            isDisabled: !canUse,
+            tooltip: def.description + (abilityState.currentCooldown > 0 ? ` (CD: ${Math.ceil(abilityState.currentCooldown)}s)` : ''),
+            cost: energyCost > 0 ? { minerals: 0, vespene: 0, supply: energyCost } : undefined,
+          });
+        }
       }
     }
 

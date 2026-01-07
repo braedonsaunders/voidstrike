@@ -34,6 +34,7 @@ export interface GameState {
   isBuilding: boolean;
   buildingType: string | null;
   isSettingRallyPoint: boolean;
+  abilityTargetMode: string | null; // ability ID being targeted
   showMinimap: boolean;
   showResourcePanel: boolean;
   showTechTree: boolean;
@@ -60,6 +61,7 @@ export interface GameState {
   setGameSpeed: (speed: number) => void;
   setBuildingMode: (type: string | null) => void;
   setRallyPointMode: (isActive: boolean) => void;
+  setAbilityTargetMode: (abilityId: string | null) => void;
   setCamera: (x: number, y: number, zoom?: number) => void;
   moveCameraTo: (x: number, y: number) => void;
   clearPendingCameraMove: () => void;
@@ -87,6 +89,7 @@ const initialState = {
   isBuilding: false,
   buildingType: null,
   isSettingRallyPoint: false,
+  abilityTargetMode: null,
   showMinimap: true,
   showResourcePanel: true,
   showTechTree: false,
@@ -159,6 +162,15 @@ export const useGameStore = create<GameState>((set, get) => ({
       isSettingRallyPoint: isActive,
       isBuilding: false,
       buildingType: null,
+      abilityTargetMode: null,
+    }),
+
+  setAbilityTargetMode: (abilityId) =>
+    set({
+      abilityTargetMode: abilityId,
+      isBuilding: false,
+      buildingType: null,
+      isSettingRallyPoint: false,
     }),
 
   setCamera: (x, y, zoom) =>

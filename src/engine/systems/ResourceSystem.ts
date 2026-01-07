@@ -30,6 +30,12 @@ export class ResourceSystem extends System {
     const resource = targetEntity.get<Resource>('Resource');
     if (!resource) return;
 
+    // Check if trying to gather vespene without a refinery
+    if (resource.resourceType === 'vespene' && !resource.hasRefinery()) {
+      this.game.eventBus.emit('ui:error', { message: 'Requires a Refinery' });
+      return;
+    }
+
     for (const entityId of command.entityIds) {
       const entity = this.world.getEntity(entityId);
       if (!entity) continue;

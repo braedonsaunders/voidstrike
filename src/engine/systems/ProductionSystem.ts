@@ -2,6 +2,7 @@ import { System } from '../ecs/System';
 import { Transform } from '../components/Transform';
 import { Building } from '../components/Building';
 import { Health } from '../components/Health';
+import { Ability, DOMINION_ABILITIES } from '../components/Ability';
 import { Game } from '../core/Game';
 import { useGameStore } from '@/store/gameStore';
 import { UNIT_DEFINITIONS } from '@/data/units/dominion';
@@ -249,6 +250,20 @@ export class ProductionSystem extends System {
         const healthPercent = health.current / health.max;
         health.max = newDef.maxHealth;
         health.current = Math.round(newDef.maxHealth * healthPercent);
+      }
+
+      // Add abilities for Orbital Command
+      if (newBuildingType === 'orbital_command') {
+        const orbitalAbilities = [
+          DOMINION_ABILITIES.mule,
+          DOMINION_ABILITIES.scanner_sweep,
+          DOMINION_ABILITIES.supply_drop,
+        ];
+        // Orbital Command starts with 50 energy, max 200, regen 0.5625/sec
+        const abilityComponent = new Ability(200, 0.5625, orbitalAbilities);
+        abilityComponent.energy = 50; // Start with 50 energy
+        entity.add(abilityComponent);
+        console.log(`[ProductionSystem] Added abilities to Orbital Command ${buildingId}`);
       }
     }
 

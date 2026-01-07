@@ -83,6 +83,12 @@ export class Game {
   public static getInstance(config?: Partial<GameConfig>): Game {
     if (!Game.instance) {
       Game.instance = new Game(config);
+    } else if (config && (config.mapWidth || config.mapHeight)) {
+      // Update map dimensions if a new config is provided with map settings
+      // This handles cases where components access Game before GameCanvas initializes it
+      if (config.mapWidth) Game.instance.config.mapWidth = config.mapWidth;
+      if (config.mapHeight) Game.instance.config.mapHeight = config.mapHeight;
+      console.log(`[Game] Updated map dimensions to ${Game.instance.config.mapWidth}x${Game.instance.config.mapHeight}`);
     }
     return Game.instance;
   }
