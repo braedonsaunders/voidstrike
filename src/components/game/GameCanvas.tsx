@@ -54,7 +54,7 @@ export function GameCanvas() {
   // Track current subgroup index for Tab cycling
   const subgroupIndexRef = useRef(0);
 
-  const { isBuilding, buildingType, isSettingRallyPoint } = useGameStore();
+  const { isBuilding, buildingType, isSettingRallyPoint, abilityTargetMode } = useGameStore();
 
   // Initialize Three.js and game engine
   useEffect(() => {
@@ -245,6 +245,22 @@ export function GameCanvas() {
           }
         }
         setIsPatrolMode(false);
+      } else if (abilityTargetMode) {
+        // Ability targeting mode - cast ability at clicked position/target
+        const worldPos = cameraRef.current?.screenToWorld(e.clientX, e.clientY);
+        if (worldPos && gameRef.current) {
+          const selectedUnits = useGameStore.getState().selectedUnits;
+          // Check if clicking on an entity (for unit-targeted abilities)
+          const clickedEntity = findEntityAtPosition(gameRef.current, worldPos.x, worldPos.z);
+
+          gameRef.current.eventBus.emit('command:ability', {
+            entityIds: selectedUnits,
+            abilityId: abilityTargetMode,
+            targetPosition: { x: worldPos.x, y: worldPos.z },
+            targetEntityId: clickedEntity?.entity.id,
+          });
+        }
+        useGameStore.getState().setAbilityTargetMode(null);
       } else if (isBuilding && buildingType) {
         // Place building
         const worldPos = cameraRef.current?.screenToWorld(e.clientX, e.clientY);
@@ -344,7 +360,7 @@ export function GameCanvas() {
         }
       }
     }
-  }, [isBuilding, buildingType, isAttackMove, isPatrolMode, isSettingRallyPoint]);
+  }, [isBuilding, buildingType, isAttackMove, isPatrolMode, isSettingRallyPoint, abilityTargetMode]);
 
   // Helper function to find entity at world position
   const findEntityAtPosition = (game: Game, x: number, z: number): { entity: ReturnType<typeof game.world.getEntity> extends infer T ? NonNullable<T> : never } | null => {
@@ -608,6 +624,8 @@ export function GameCanvas() {
             setIsPatrolMode(false);
           } else if (isSettingRallyPoint) {
             useGameStore.getState().setRallyPointMode(false);
+          } else if (abilityTargetMode) {
+            useGameStore.getState().setAbilityTargetMode(null);
           } else if (isBuilding) {
             useGameStore.getState().setBuildingMode(null);
           } else {
@@ -635,7 +653,7 @@ export function GameCanvas() {
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [isBuilding, isAttackMove, isPatrolMode, isSettingRallyPoint]);
+  }, [isBuilding, isAttackMove, isPatrolMode, isSettingRallyPoint, abilityTargetMode]);
 
   return (
     <div
@@ -685,6 +703,14 @@ export function GameCanvas() {
         <div className="absolute top-4 left-1/2 transform -translate-x-1/2 bg-black/80 px-4 py-2 rounded border border-yellow-600">
           <span className="text-yellow-400">
             Patrol Mode - Click destination, ESC to cancel
+          </span>
+        </div>
+      )}
+
+      {abilityTargetMode && (
+        <div className="absolute top-4 left-1/2 transform -translate-x-1/2 bg-black/80 px-4 py-2 rounded border border-purple-600">
+          <span className="text-purple-400">
+            Select Target - Click location, ESC to cancel
           </span>
         </div>
       )}

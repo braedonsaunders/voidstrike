@@ -287,15 +287,19 @@ export class MovementSystem extends System {
       }
 
       // Calculate separation force for unit avoidance
-      const separation = this.calculateSeparationForce(entity.id, transform, unit);
+      // Reduce separation for units close to destination to prevent twitching
+      const separationWeight = distance > this.decelerationThreshold ? 0.5 : 0.1;
+      const separation = distance > this.arrivalThreshold * 2
+        ? this.calculateSeparationForce(entity.id, transform, unit)
+        : { x: 0, y: 0 }; // No separation when nearly arrived
 
       // Normalize direction to target
       let dirX = distance > 0.01 ? dx / distance : 0;
       let dirY = distance > 0.01 ? dy / distance : 0;
 
-      // Add separation force to direction
-      dirX += separation.x * 0.5; // Weight separation lower than target direction
-      dirY += separation.y * 0.5;
+      // Add separation force to direction (reduced near destination)
+      dirX += separation.x * separationWeight;
+      dirY += separation.y * separationWeight;
 
       // Re-normalize
       const newMag = Math.sqrt(dirX * dirX + dirY * dirY);
@@ -319,9 +323,11 @@ export class MovementSystem extends System {
         unit.currentSpeed = Math.max(targetSpeed, unit.currentSpeed - unit.acceleration * dt * 2);
       }
 
-      // Apply velocity
-      velocity.x = dirX * unit.currentSpeed;
-      velocity.y = dirY * unit.currentSpeed;
+      // Apply velocity with damping for nearly-stopped units
+      // This prevents oscillation/twitching when units are at rest
+      const speedDamping = unit.currentSpeed < unit.maxSpeed * 0.2 ? 0.5 : 1.0;
+      velocity.x = dirX * unit.currentSpeed * speedDamping;
+      velocity.y = dirY * unit.currentSpeed * speedDamping;
 
       // Update rotation to face movement direction (smooth rotation)
       const targetRotation = Math.atan2(dy, dx);

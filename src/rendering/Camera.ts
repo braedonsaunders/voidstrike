@@ -187,9 +187,9 @@ export class RTSCamera {
       }
 
       if (this.mousePosition.y < edgeScrollThreshold) {
-        dz += edgeScrollSpeed * dt;
+        dz -= edgeScrollSpeed * dt; // Top of screen = scroll up (same as W key)
       } else if (this.mousePosition.y > this.screenHeight - edgeScrollThreshold) {
-        dz -= edgeScrollSpeed * dt;
+        dz += edgeScrollSpeed * dt; // Bottom of screen = scroll down (same as S key)
       }
     }
 

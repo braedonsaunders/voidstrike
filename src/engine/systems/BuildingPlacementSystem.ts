@@ -6,6 +6,7 @@ import { Building } from '../components/Building';
 import { Health } from '../components/Health';
 import { Selectable } from '../components/Selectable';
 import { Unit } from '../components/Unit';
+import { Resource } from '../components/Resource';
 import { BUILDING_DEFINITIONS } from '@/data/buildings/dominion';
 import { useGameStore } from '@/store/gameStore';
 
@@ -75,6 +76,21 @@ export class BuildingPlacementSystem extends System {
       }
     }
 
+    // Special handling for refineries: must be placed on vespene geysers
+    let vespeneGeyserEntity: Entity | null = null;
+    if (buildingType === 'refinery') {
+      vespeneGeyserEntity = this.findVespeneGeyserAt(snappedX, snappedY);
+      if (!vespeneGeyserEntity) {
+        this.game.eventBus.emit('ui:error', { message: 'Refinery must be placed on a Vespene Geyser' });
+        return;
+      }
+      const resource = vespeneGeyserEntity.get<Resource>('Resource')!;
+      if (resource.hasRefinery()) {
+        this.game.eventBus.emit('ui:error', { message: 'Vespene Geyser already has a Refinery' });
+        return;
+      }
+    }
+
     // Find a worker to assign to this construction FIRST (before placement check)
     // so we can exclude them from collision detection
     const worker = this.findWorkerForConstruction(data.workerId, playerId);
@@ -84,7 +100,8 @@ export class BuildingPlacementSystem extends System {
     }
 
     // Check placement validity using center position (exclude builder from collision)
-    if (!this.isValidPlacement(snappedX, snappedY, definition.width, definition.height, worker.entity.id)) {
+    // Skip collision check for refineries since they go on vespene geysers
+    if (buildingType !== 'refinery' && !this.isValidPlacement(snappedX, snappedY, definition.width, definition.height, worker.entity.id)) {
       this.game.eventBus.emit('ui:error', { message: 'Cannot build here - area blocked' });
       return;
     }
@@ -105,6 +122,13 @@ export class BuildingPlacementSystem extends System {
     building.state = 'constructing';
     building.buildProgress = 0;
 
+    // Associate refinery with vespene geyser
+    if (vespeneGeyserEntity) {
+      const resource = vespeneGeyserEntity.get<Resource>('Resource')!;
+      resource.refineryEntityId = buildingEntity.id;
+      console.log(`BuildingPlacementSystem: Refinery ${buildingEntity.id} associated with vespene geyser ${vespeneGeyserEntity.id}`);
+    }
+
     // Assign the worker to this construction
     const workerUnit = worker.entity.get<Unit>('Unit')!;
     workerUnit.startBuilding(buildingType, snappedX, snappedY);
@@ -117,9 +141,33 @@ export class BuildingPlacementSystem extends System {
       playerId,
       position: { x: snappedX, y: snappedY },
       workerId: worker.entity.id,
+      vespeneGeyserId: vespeneGeyserEntity?.id,
     });
 
     console.log(`BuildingPlacementSystem: ${definition.name} placed at (${snappedX}, ${snappedY}), SCV ${worker.entity.id} assigned`);
+  }
+
+  /**
+   * Find a vespene geyser at or near the given position
+   */
+  private findVespeneGeyserAt(x: number, y: number): Entity | null {
+    const resources = this.world.getEntitiesWith('Resource', 'Transform');
+    const searchRadius = 3; // Allow some tolerance for click position
+
+    for (const entity of resources) {
+      const resource = entity.get<Resource>('Resource')!;
+      if (resource.resourceType !== 'vespene') continue;
+
+      const transform = entity.get<Transform>('Transform')!;
+      const dx = Math.abs(transform.x - x);
+      const dy = Math.abs(transform.y - y);
+
+      if (dx <= searchRadius && dy <= searchRadius) {
+        return entity;
+      }
+    }
+
+    return null;
   }
 
   /**
@@ -253,10 +301,13 @@ export class BuildingPlacementSystem extends System {
     const halfW = width / 2;
     const halfH = height / 2;
 
+    // Debug: log placement attempt
+    console.log(`BuildingPlacement: Attempting at (${centerX.toFixed(1)}, ${centerY.toFixed(1)}), size ${width}x${height}, map bounds: ${config.mapWidth}x${config.mapHeight}`);
+
     // Check map bounds
     if (centerX - halfW < 0 || centerY - halfH < 0 ||
         centerX + halfW > config.mapWidth || centerY + halfH > config.mapHeight) {
-      console.log('BuildingPlacement: Failed - out of map bounds');
+      console.log(`BuildingPlacement: Failed - out of map bounds (centerX-halfW=${(centerX - halfW).toFixed(1)}, centerY-halfH=${(centerY - halfH).toFixed(1)}, centerX+halfW=${(centerX + halfW).toFixed(1)}, centerY+halfH=${(centerY + halfH).toFixed(1)})`);
       return false;
     }
 

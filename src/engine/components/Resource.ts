@@ -13,6 +13,9 @@ export class Resource extends Component {
   public currentGatherers: Set<number>; // Entity IDs of workers currently gathering
   public maxGatherers: number;
 
+  // For vespene: the refinery entity ID (null if no refinery built)
+  public refineryEntityId: number | null = null;
+
   constructor(
     resourceType: ResourceType,
     amount: number,
@@ -31,7 +34,15 @@ export class Resource extends Component {
   }
 
   public canGather(): boolean {
+    // Vespene requires a refinery to be built
+    if (this.resourceType === 'vespene' && this.refineryEntityId === null) {
+      return false;
+    }
     return this.amount > 0 && this.currentGatherers.size < this.maxGatherers;
+  }
+
+  public hasRefinery(): boolean {
+    return this.refineryEntityId !== null;
   }
 
   public addGatherer(entityId: number): boolean {
