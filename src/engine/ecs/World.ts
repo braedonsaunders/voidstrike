@@ -86,6 +86,10 @@ export class World {
     }
   }
 
+  public getSystem<T extends System>(systemClass: new (...args: unknown[]) => T): T | undefined {
+    return this.systems.find((s): s is T => s instanceof systemClass);
+  }
+
   public update(deltaTime: number): void {
     for (const system of this.systems) {
       if (system.enabled) {

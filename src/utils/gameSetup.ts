@@ -9,9 +9,10 @@ import { Velocity } from '@/engine/components/Velocity';
 import { UNIT_DEFINITIONS } from '@/data/units/dominion';
 import { BUILDING_DEFINITIONS } from '@/data/buildings/dominion';
 import { AISystem } from '@/engine/systems/AISystem';
+import { EnhancedAISystem } from '@/engine/systems/EnhancedAISystem';
 import { MapData, Expansion } from '@/data/maps';
 import { useGameStore } from '@/store/gameStore';
-import { useGameSetupStore, AIDifficulty } from '@/store/gameSetupStore';
+import { useGameSetupStore } from '@/store/gameSetupStore';
 
 export function spawnInitialEntities(game: Game, mapData: MapData): void {
   const world = game.world;
@@ -29,19 +30,20 @@ export function spawnInitialEntities(game: Game, mapData: MapData): void {
     spawnBase(game, 'ai', aiSpawn.x, aiSpawn.y);
 
     // Register AI player with difficulty from game setup
-    const aiSystem = world.getEntitiesWith('Building').length > 0
-      ? (game.world as unknown as { systems: AISystem[] }).systems?.find(
-          (s: unknown) => s instanceof AISystem
-        ) as AISystem | undefined
-      : undefined;
+    const difficulty = useGameSetupStore.getState().aiDifficulty;
 
-    if (aiSystem) {
-      // Get difficulty from game setup store
-      const difficulty = useGameSetupStore.getState().aiDifficulty;
-      // Map 'insane' to 'hard' since AISystem only supports easy/medium/hard
-      const aiDifficulty: 'easy' | 'medium' | 'hard' =
-        difficulty === 'insane' ? 'hard' : difficulty;
-      aiSystem.registerAI('ai', 'dominion', aiDifficulty);
+    // Try to find EnhancedAISystem first (default), then fall back to AISystem
+    const enhancedAI = world.getSystem(EnhancedAISystem);
+    if (enhancedAI) {
+      enhancedAI.registerAI('ai', 'dominion', difficulty);
+    } else {
+      const basicAI = world.getSystem(AISystem);
+      if (basicAI) {
+        // Map 'insane' and 'very_hard' to 'hard' since basic AISystem only supports easy/medium/hard
+        const aiDifficulty: 'easy' | 'medium' | 'hard' =
+          difficulty === 'insane' || difficulty === 'very_hard' ? 'hard' : difficulty;
+        basicAI.registerAI('ai', 'dominion', aiDifficulty);
+      }
     }
   }
 
