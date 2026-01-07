@@ -39,9 +39,9 @@ export function spawnInitialEntities(game: Game, mapData: MapData): void {
     } else {
       const basicAI = world.getSystem(AISystem);
       if (basicAI) {
-        // Map 'insane' and 'very_hard' to 'hard' since basic AISystem only supports easy/medium/hard
+        // Map 'insane' to 'hard' since basic AISystem only supports easy/medium/hard
         const aiDifficulty: 'easy' | 'medium' | 'hard' =
-          difficulty === 'insane' || difficulty === 'very_hard' ? 'hard' : difficulty;
+          difficulty === 'insane' ? 'hard' : difficulty;
         basicAI.registerAI('ai', 'dominion', aiDifficulty);
       }
     }
