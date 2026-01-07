@@ -28,226 +28,229 @@
 ## Phase 1: Complete Dominion Faction Mechanics
 
 > **Priority**: CRITICAL
+> **Status**: MOSTLY COMPLETE
 > **Goal**: Make the existing faction feel complete and polished
 
-### 1.1 Transform Mechanics (HIGH)
-- [ ] **Siege Tank Siege Mode** - Full implementation
+### 1.1 Transform Mechanics (HIGH) ✅
+- [x] **Siege Tank Siege Mode** - Full implementation
   - Stationary mode with increased range (13) and splash damage (40+35 splash)
   - 2-second transform animation
   - Cannot attack while transforming
   - Siege mode attacks should have visible projectile arc
-- [ ] **Hellion ↔ Hellbat Transform**
+- [x] **Hellion ↔ Hellbat Transform**
   - Hellbat: Slower (3.15 speed), more HP (135), melee splash attack
   - Requires Infernal Pre-Igniter research
-- [ ] **Viking Fighter ↔ Assault Mode**
+- [x] **Viking Fighter ↔ Assault Mode**
   - Fighter Mode: Air-to-air only
   - Assault Mode: Ground unit with ground attack
 
-### 1.2 Cloak & Detection System (HIGH)
-- [ ] **Cloak Implementation**
+### 1.2 Cloak & Detection System (HIGH) ✅
+- [x] **Cloak Implementation**
   - Ghost cloak (energy drain: 1/sec)
   - Banshee cloak (energy drain: 1/sec)
   - Cloaked units invisible without detection
   - Shimmer effect when cloaked (partial visibility to owner)
-- [ ] **Detection**
+- [x] **Detection**
   - Missile Turret detection radius (11)
   - Sensor Tower extended vision (30 radius)
   - Scanner Sweep reveal (temporary, from Command Center)
   - Orbital Command upgrade for Scanner Sweep
 
-### 1.3 Transport & Bunker Mechanics (HIGH)
-- [ ] **Medivac Load/Unload**
+### 1.3 Transport & Bunker Mechanics (HIGH) ✅
+- [x] **Medivac Load/Unload**
   - Load infantry units (capacity: 8 slots)
   - Unload at location
   - Quick unload hotkey
   - Boost ability (Afterburners)
-- [ ] **Bunker System**
+- [x] **Bunker System**
   - Load up to 4 infantry
   - Infantry fire from inside (reduced damage taken)
   - Salvage bunker (return 75% cost)
   - Attack range bonus while garrisoned
 
-### 1.4 Healing & Repair (MEDIUM)
-- [ ] **SCV Repair**
+### 1.4 Healing & Repair (MEDIUM) ✅
+- [x] **SCV Repair**
   - Repair buildings and mechanical units
   - Costs resources based on damage repaired
   - Auto-repair toggle
-- [ ] **Medivac Heal**
+- [x] **Medivac Heal**
   - Heal biological units
   - Energy-based (3 energy per 10 HP)
   - Auto-heal nearby injured allies
 - [ ] **Building Auto-Repair** (optional research)
 
-### 1.5 Building Addons (MEDIUM)
-- [ ] **Tech Lab**
+### 1.5 Building Addons (MEDIUM) ✅
+- [x] **Tech Lab**
   - Attaches to Barracks/Factory/Starport
   - Unlocks advanced units (Marauder, Ghost, Siege Tank, Thor, etc.)
   - Enables unit-specific upgrades
-- [ ] **Reactor**
+- [x] **Reactor**
   - Attaches to Barracks/Factory/Starport
   - Allows training 2 units simultaneously
   - Only basic units (Marines, Hellions, Vikings, Medivacs)
-- [ ] **Addon Swap**
+- [x] **Addon Swap**
   - Buildings can lift off and swap addons
   - Strategic flexibility
 
-### 1.6 Building Special Features (MEDIUM)
-- [ ] **Terran Building Lift-Off/Landing**
+### 1.6 Building Special Features (MEDIUM) ✅
+- [x] **Terran Building Lift-Off/Landing**
   - Barracks, Factory, Starport, Command Center can lift
   - Fly to new locations
   - Floating buildings cannot produce
-- [ ] **Supply Depot Lower/Raise**
+- [x] **Supply Depot Lower/Raise**
   - Lower supply depot to let units pass through
   - Toggle ability
-- [ ] **Orbital Command Upgrade**
+- [x] **Orbital Command Upgrade**
   - Upgrade Command Center
   - Enables: MULE, Scanner Sweep, Extra Supplies
-- [ ] **Planetary Fortress Upgrade**
+- [x] **Planetary Fortress Upgrade**
   - Upgrade Command Center
   - Cannot lift off, gains powerful ground attack
 
-### 1.7 Complete Ability Implementations (HIGH)
-- [ ] **Stim Pack** - Full implementation with HP cost (10), speed/attack buff
-- [ ] **Concussive Shells** - Slow effect on targets (50% for 1.07s)
-- [ ] **Combat Shield** - Research for +10 Marine HP
-- [ ] **Snipe** - Working against biological units only, 170 damage
-- [ ] **EMP Round** - Drain shields and energy in AoE
-- [ ] **Nuke** - Full implementation with Ghost channeling, warning indicator
-- [ ] **Yamato Cannon** - 240 damage to single target, 3s channel
-- [ ] **Tactical Jump** - Teleport Battlecruiser anywhere on map
+### 1.7 Complete Ability Implementations (HIGH) ✅
+- [x] **Stim Pack** - Full implementation with HP cost (10), speed/attack buff
+- [x] **Concussive Shells** - Slow effect on targets (50% for 1.07s)
+- [x] **Combat Shield** - Research for +10 Marine HP
+- [x] **Snipe** - Working against biological units only, 170 damage
+- [x] **EMP Round** - Drain shields and energy in AoE
+- [x] **Nuke** - Full implementation with Ghost channeling, warning indicator
+- [x] **Yamato Cannon** - 240 damage to single target, 3s channel
+- [x] **Tactical Jump** - Teleport Battlecruiser anywhere on map
 
 ---
 
 ## Phase 2: Enhanced AI System
 
 > **Priority**: HIGH
+> **Status**: COMPLETE
 > **Goal**: Make AI opponents challenging and fun at all difficulty levels
 
-### 2.1 Strategic AI Improvements (HIGH)
-- [ ] **Scouting Behavior**
+### 2.1 Strategic AI Improvements (HIGH) ✅
+- [x] **Scouting Behavior**
   - Send early worker scout
   - React to enemy tech/composition
   - Maintain map awareness with patrol units
-- [ ] **Build Order System**
+- [x] **Build Order System**
   - Multiple build orders per difficulty
   - Adapt based on scouting information
   - Timing attacks at specific supply counts
-- [ ] **Tech Progression**
+- [x] **Tech Progression**
   - Research upgrades appropriately
   - Tech switch based on enemy composition
   - Counter-unit production
 
-### 2.2 Tactical AI (MEDIUM)
-- [ ] **Multi-Pronged Attacks**
+### 2.2 Tactical AI (MEDIUM) ✅
+- [x] **Multi-Pronged Attacks**
   - Harass expansions while main attack
   - Drops with Medivacs
   - Pincer movements
-- [ ] **Micro Decisions**
+- [x] **Micro Decisions**
   - Focus fire high-value targets
   - Retreat damaged units
   - Stutter-step with ranged units
   - Use abilities intelligently
-- [ ] **Defensive Positioning**
+- [x] **Defensive Positioning**
   - Hold ramps and chokepoints
   - Bunker placement
   - Turret rings for defense
 
-### 2.3 Economic AI (MEDIUM)
-- [ ] **Expansion Timing**
+### 2.3 Economic AI (MEDIUM) ✅
+- [x] **Expansion Timing**
   - Take natural expansion
   - Saturate bases properly (16-24 workers)
   - Recognize when to take third base
-- [ ] **Worker Management**
+- [x] **Worker Management**
   - Transfer workers between bases
   - Build appropriate number of refineries
   - Protect workers from harassment
 
-### 2.4 Difficulty Scaling (HIGH)
-- [ ] **Very Easy** - Slow reactions, no micro, simple builds
-- [ ] **Easy** - Basic macro, simple attack patterns
-- [ ] **Medium** - Decent macro, uses abilities, scouts
-- [ ] **Hard** - Good macro/micro, multi-pronged attacks
-- [ ] **Very Hard** - Optimal builds, strong micro, adaptation
-- [ ] **Insane** - Cheating AI (faster resources, full vision) - optional
+### 2.4 Difficulty Scaling (HIGH) ✅
+- [x] **Very Easy** - Slow reactions, no micro, simple builds
+- [x] **Easy** - Basic macro, simple attack patterns
+- [x] **Medium** - Decent macro, uses abilities, scouts
+- [x] **Hard** - Good macro/micro, multi-pronged attacks
+- [x] **Very Hard** - Optimal builds, strong micro, adaptation
+- [x] **Insane** - Cheating AI (faster resources, full vision) - optional
 
 ---
 
 ## Phase 3: Gameplay Systems
 
 > **Priority**: HIGH
+> **Status**: COMPLETE
 > **Goal**: Core gameplay mechanics matching SC2
 
-### 3.1 Combat Enhancements (HIGH)
-- [ ] **High Ground Advantage**
+### 3.1 Combat Enhancements (HIGH) ✅
+- [x] **High Ground Advantage**
   - Units on low ground have 30% miss chance vs high ground
   - Losing vision of high ground units
-- [ ] **Attack-Move Behavior**
+- [x] **Attack-Move Behavior**
   - Units stop to engage enemies encountered
   - Continue to destination after combat
-- [ ] **Hold Position Enhancement**
+- [x] **Hold Position Enhancement**
   - Units don't chase, stay in place
   - Still return fire
-- [ ] **Patrol Enhancement**
+- [x] **Patrol Enhancement**
   - Attack enemies encountered during patrol
   - Continue patrol route after combat
 
-### 3.2 Buff/Debuff System (HIGH)
-- [ ] **Buff Framework**
+### 3.2 Buff/Debuff System (HIGH) ✅
+- [x] **Buff Framework**
   - Timed stat modifications
   - Visual indicators for active buffs
   - Stacking rules
-- [ ] **Implemented Buffs**
+- [x] **Implemented Buffs**
   - Stim Pack (speed + attack speed)
   - Concussive Shell slow
   - Guardian Shield (Synthesis)
   - Fungal Growth (Swarm)
-- [ ] **Status Effect Display**
+- [x] **Status Effect Display**
   - Icons on unit health bars
   - Buff timers
 
-### 3.3 Auto-Cast System (MEDIUM)
-- [ ] **Toggle Auto-Cast**
+### 3.3 Auto-Cast System (MEDIUM) ✅
+- [x] **Toggle Auto-Cast**
   - Right-click ability to enable/disable
   - Visual indicator when enabled
-- [ ] **Auto-Cast Abilities**
+- [x] **Auto-Cast Abilities**
   - Medivac Heal
   - SCV Repair
   - Ghost Snipe (optional)
   - Infestor Fungal (optional)
 
-### 3.4 Passive Abilities (MEDIUM)
-- [ ] **Passive Framework**
+### 3.4 Passive Abilities (MEDIUM) ✅
+- [x] **Passive Framework**
   - Always-active effects
   - Conditional triggers
-- [ ] **Examples**
+- [x] **Examples**
   - Reaper HP regeneration (out of combat)
   - Shield regeneration (Synthesis)
   - Creep speed bonus (Swarm)
   - High ground vision (Sensor Tower)
 
-### 3.5 Victory/Defeat Conditions (HIGH)
-- [ ] **Victory Conditions**
+### 3.5 Victory/Defeat Conditions (HIGH) ✅
+- [x] **Victory Conditions**
   - Destroy all enemy structures
   - Enemy surrender
   - Custom conditions (map-specific)
-- [ ] **Defeat Screen**
+- [x] **Defeat Screen**
   - Show game statistics
   - Option to watch replay
   - Return to menu
-- [ ] **Victory Screen**
+- [x] **Victory Screen**
   - Congratulations display
   - Statistics summary
   - Continue or quit options
 
-### 3.6 Save/Load System (MEDIUM)
-- [ ] **Save Game**
+### 3.6 Save/Load System (MEDIUM) ✅
+- [x] **Save Game**
   - Serialize complete game state
   - Save to local storage or file
   - Multiple save slots
-- [ ] **Load Game**
+- [x] **Load Game**
   - Restore game state exactly
   - Continue from any save point
-- [ ] **Auto-Save**
+- [x] **Auto-Save**
   - Periodic auto-saves during gameplay
   - Recovery from crashes
 
