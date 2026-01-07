@@ -98,6 +98,9 @@ export function GameCanvas() {
     environmentRef.current = environment;
     const terrain = environment.terrain;
 
+    // Set terrain height function on camera for accurate screen-to-world conversion
+    camera.setTerrainHeightFunction((x, z) => terrain.getHeightAt(x, z));
+
     // Create terrain grid (for building placement)
     const grid = new TerrainGrid(mapWidth, mapHeight, 1);
     scene.add(grid.mesh);
