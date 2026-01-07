@@ -458,9 +458,9 @@ export class AbilitySystem extends System {
     if (!building || building.buildingId !== 'supply_depot') return;
 
     // Instantly complete the supply depot construction
-    if (building.isConstructing) {
-      building.constructionProgress = 1.0;
-      building.isConstructing = false;
+    if (building.state === 'constructing') {
+      building.buildProgress = 1.0;
+      building.state = 'complete';
 
       this.game.eventBus.emit('building:complete', {
         entityId: targetId,
