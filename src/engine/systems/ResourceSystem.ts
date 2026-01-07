@@ -7,6 +7,9 @@ import { Building } from '../components/Building';
 import { Game } from '../core/Game';
 import { useGameStore } from '@/store/gameStore';
 
+// Mining time in seconds
+const MINING_TIME = 2.5;
+
 export class ResourceSystem extends System {
   public priority = 25;
 
@@ -91,6 +94,8 @@ export class ResourceSystem extends System {
         const resourceEntity = this.world.getEntity(unit.gatherTargetId);
         if (!resourceEntity) {
           unit.gatherTargetId = null;
+          unit.isMining = false;
+          unit.miningTimer = 0;
           unit.state = 'idle';
           continue;
         }
@@ -100,6 +105,8 @@ export class ResourceSystem extends System {
 
         if (!resource || !resourceTransform || resource.isDepleted()) {
           unit.gatherTargetId = null;
+          unit.isMining = false;
+          unit.miningTimer = 0;
           unit.state = 'idle';
           continue;
         }
@@ -107,10 +114,31 @@ export class ResourceSystem extends System {
         const distance = transform.distanceTo(resourceTransform);
 
         if (distance <= 2) {
-          // At resource - gather
-          this.gatherResource(entity, unit, resource);
+          // At resource - start or continue mining
+          if (!unit.isMining) {
+            // Start mining
+            unit.isMining = true;
+            unit.miningTimer = MINING_TIME;
+            // Reserve a spot at the resource
+            resource.addGatherer(entity.id);
+          } else {
+            // Continue mining - decrement timer
+            unit.miningTimer -= deltaTime;
+            if (unit.miningTimer <= 0) {
+              // Mining complete - gather resources
+              this.gatherResource(entity, unit, resource);
+              unit.isMining = false;
+              unit.miningTimer = 0;
+            }
+          }
         } else {
           // Move to resource (keep gathering state)
+          // If we were mining, cancel it
+          if (unit.isMining) {
+            resource.removeGatherer(entity.id);
+            unit.isMining = false;
+            unit.miningTimer = 0;
+          }
           unit.moveToPosition(resourceTransform.x, resourceTransform.y);
         }
       }
@@ -122,16 +150,7 @@ export class ResourceSystem extends System {
     unit: Unit,
     resource: Resource
   ): void {
-    // Check if can gather
-    if (!resource.canGather()) {
-      // Resource is occupied, wait
-      return;
-    }
-
-    // Add gatherer
-    resource.addGatherer(workerEntity.id);
-
-    // Simulate gathering (instant for now, could add animation delay)
+    // Gather the resources (gatherer was already added when mining started)
     const gathered = resource.gather();
 
     if (resource.resourceType === 'minerals') {
@@ -140,7 +159,7 @@ export class ResourceSystem extends System {
       unit.carryingVespene = gathered;
     }
 
-    // Remove gatherer
+    // Remove gatherer - mining complete
     resource.removeGatherer(workerEntity.id);
 
     // If resource depleted, emit event

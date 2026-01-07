@@ -293,9 +293,24 @@ export class EnhancedAISystem extends System {
 
   private applyResourceBonus(ai: AIPlayer): void {
     const config = this.getDifficultyConfig(ai.difficulty);
-    if (config.resourceBonus > 0) {
-      ai.minerals += ai.workerCount * config.resourceBonus * 0.5;
+
+    // All AI difficulties get passive income based on workers gathering
+    // This simulates workers mining (since the game store is only for player1)
+    // Base income: ~5 minerals per worker per action tick
+    const baseIncomePerWorker = 5;
+    const incomeMultiplier = 1 + config.resourceBonus;
+
+    ai.minerals += ai.workerCount * baseIncomePerWorker * incomeMultiplier;
+
+    // Vespene income if AI has a refinery (simplified: assume 3 workers on gas)
+    if (ai.buildingCounts.get('refinery') || 0 > 0) {
+      ai.vespene += 3 * baseIncomePerWorker * 0.8 * incomeMultiplier;
     }
+
+    // Update max supply based on buildings
+    const ccCount = ai.buildingCounts.get('command_center') || 0;
+    const depotCount = ai.buildingCounts.get('supply_depot') || 0;
+    ai.maxSupply = ccCount * 11 + depotCount * 8;
   }
 
   private updateAIState(ai: AIPlayer, currentTick: number): void {

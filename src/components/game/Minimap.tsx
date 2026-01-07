@@ -11,7 +11,6 @@ import { Selectable } from '@/engine/components/Selectable';
 import { Health } from '@/engine/components/Health';
 
 const MINIMAP_SIZE = 192;
-const MAP_SIZE = 128;
 
 // Ping animation data
 interface Ping {
@@ -32,9 +31,15 @@ export function Minimap() {
     const canvas = canvasRef.current;
     if (!canvas) return null;
 
+    const game = Game.getInstance();
+    if (!game) return null;
+
+    const mapWidth = game.config.mapWidth;
+    const mapHeight = game.config.mapHeight;
+
     const rect = canvas.getBoundingClientRect();
-    const x = Math.max(0, Math.min(MAP_SIZE, (clientX - rect.left) / MINIMAP_SIZE * MAP_SIZE));
-    const y = Math.max(0, Math.min(MAP_SIZE, (clientY - rect.top) / MINIMAP_SIZE * MAP_SIZE));
+    const x = Math.max(0, Math.min(mapWidth, (clientX - rect.left) / MINIMAP_SIZE * mapWidth));
+    const y = Math.max(0, Math.min(mapHeight, (clientY - rect.top) / MINIMAP_SIZE * mapHeight));
     return { x, y };
   }, []);
 
@@ -59,6 +64,11 @@ export function Minimap() {
     const FRAME_TIME = 1000 / MINIMAP_FPS;
     let lastDrawTime = 0;
 
+    // Get map dimensions from game config
+    const mapWidth = game.config.mapWidth;
+    const mapHeight = game.config.mapHeight;
+    const mapSize = Math.max(mapWidth, mapHeight); // Use largest dimension for scale
+
     // Draw minimap
     const draw = (timestamp: number) => {
       // PERFORMANCE: Skip frame if not enough time has passed
@@ -68,7 +78,7 @@ export function Minimap() {
       }
       lastDrawTime = timestamp;
 
-      const scale = MINIMAP_SIZE / MAP_SIZE;
+      const scale = MINIMAP_SIZE / mapSize;
       const currentTime = Date.now();
 
       // Clear
@@ -82,7 +92,7 @@ export function Minimap() {
       // Draw grid lines
       ctx.strokeStyle = 'rgba(255, 255, 255, 0.05)';
       ctx.lineWidth = 1;
-      for (let i = 0; i <= MAP_SIZE; i += 16) {
+      for (let i = 0; i <= mapSize; i += 16) {
         const pos = i * scale;
         ctx.beginPath();
         ctx.moveTo(pos, 0);
@@ -98,8 +108,8 @@ export function Minimap() {
       if (game.visionSystem) {
         ctx.fillStyle = 'rgba(0, 0, 0, 0.5)';
         const visionScale = 4; // Check every 4 units
-        for (let mapX = 0; mapX < MAP_SIZE; mapX += visionScale) {
-          for (let mapY = 0; mapY < MAP_SIZE; mapY += visionScale) {
+        for (let mapX = 0; mapX < mapWidth; mapX += visionScale) {
+          for (let mapY = 0; mapY < mapHeight; mapY += visionScale) {
             if (!game.visionSystem.isExplored('player1', mapX, mapY)) {
               ctx.fillRect(
                 mapX * scale,
