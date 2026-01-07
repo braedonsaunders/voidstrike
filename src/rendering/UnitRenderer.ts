@@ -60,6 +60,11 @@ export class UnitRenderer {
     // Preload common procedural assets
     AssetManager.preloadCommonAssets();
 
+    // Register callback to refresh meshes when custom models finish loading
+    AssetManager.onModelsLoaded(() => {
+      this.refreshAllMeshes();
+    });
+
     // Load custom GLB models (async, runs in background)
     // Animation names will be logged to console when models load
     AssetManager.loadCustomModels().catch(err => {
@@ -260,6 +265,22 @@ export class UnitRenderer {
         }
       }
     });
+  }
+
+  /**
+   * Clear all cached meshes so they get recreated with updated assets on next update.
+   * Called when custom models finish loading.
+   */
+  public refreshAllMeshes(): void {
+    console.log('[UnitRenderer] Refreshing all unit meshes...');
+    for (const [entityId, meshData] of this.unitMeshes) {
+      this.scene.remove(meshData.group);
+      this.scene.remove(meshData.selectionRing);
+      this.scene.remove(meshData.healthBar);
+      this.disposeGroup(meshData.group);
+    }
+    this.unitMeshes.clear();
+    // Meshes will be recreated on next update() call
   }
 
   public dispose(): void {

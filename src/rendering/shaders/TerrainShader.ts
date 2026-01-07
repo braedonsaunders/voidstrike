@@ -12,6 +12,9 @@ import * as THREE from 'three';
 
 // Vertex shader - passes data to fragment shader
 export const terrainVertexShader = /* glsl */ `
+precision highp float;
+precision highp int;
+
 varying vec3 vWorldPosition;
 varying vec3 vWorldNormal;
 varying vec2 vUv;
@@ -36,6 +39,9 @@ void main() {
 
 // Fragment shader - creates the visual appearance
 export const terrainFragmentShader = /* glsl */ `
+precision highp float;
+precision highp int;
+
 uniform float uTime;
 uniform vec3 uBiomeGroundColor;
 uniform vec3 uBiomeRockColor;
@@ -123,19 +129,51 @@ float snoise(vec3 v) {
 }
 
 // Fractal Brownian Motion (multi-octave noise)
-float fbm(vec3 p, int octaves) {
+// Using fixed octave versions for better GPU compatibility
+float fbm3(vec3 p) {
   float value = 0.0;
   float amplitude = 0.5;
   float frequency = 1.0;
-  float lacunarity = 2.0;
-  float persistence = 0.5;
 
-  for (int i = 0; i < 8; i++) {
-    if (i >= octaves) break;
-    value += amplitude * snoise(p * frequency);
-    amplitude *= persistence;
-    frequency *= lacunarity;
-  }
+  value += amplitude * snoise(p * frequency);
+  amplitude *= 0.5; frequency *= 2.0;
+  value += amplitude * snoise(p * frequency);
+  amplitude *= 0.5; frequency *= 2.0;
+  value += amplitude * snoise(p * frequency);
+
+  return value;
+}
+
+float fbm4(vec3 p) {
+  float value = 0.0;
+  float amplitude = 0.5;
+  float frequency = 1.0;
+
+  value += amplitude * snoise(p * frequency);
+  amplitude *= 0.5; frequency *= 2.0;
+  value += amplitude * snoise(p * frequency);
+  amplitude *= 0.5; frequency *= 2.0;
+  value += amplitude * snoise(p * frequency);
+  amplitude *= 0.5; frequency *= 2.0;
+  value += amplitude * snoise(p * frequency);
+
+  return value;
+}
+
+float fbm5(vec3 p) {
+  float value = 0.0;
+  float amplitude = 0.5;
+  float frequency = 1.0;
+
+  value += amplitude * snoise(p * frequency);
+  amplitude *= 0.5; frequency *= 2.0;
+  value += amplitude * snoise(p * frequency);
+  amplitude *= 0.5; frequency *= 2.0;
+  value += amplitude * snoise(p * frequency);
+  amplitude *= 0.5; frequency *= 2.0;
+  value += amplitude * snoise(p * frequency);
+  amplitude *= 0.5; frequency *= 2.0;
+  value += amplitude * snoise(p * frequency);
 
   return value;
 }
@@ -147,9 +185,9 @@ float fbm(vec3 p, int octaves) {
 vec3 calculateProceduralNormal(vec3 worldPos, float scale, float strength) {
   float eps = 0.05;
 
-  float h0 = fbm(worldPos * scale, 4);
-  float hx = fbm((worldPos + vec3(eps, 0.0, 0.0)) * scale, 4);
-  float hz = fbm((worldPos + vec3(0.0, 0.0, eps)) * scale, 4);
+  float h0 = fbm4(worldPos * scale);
+  float hx = fbm4((worldPos + vec3(eps, 0.0, 0.0)) * scale);
+  float hz = fbm4((worldPos + vec3(0.0, 0.0, eps)) * scale);
 
   vec3 normal;
   normal.x = (h0 - hx) * strength;
@@ -169,9 +207,9 @@ vec3 triplanarNoise(vec3 worldPos, vec3 worldNormal, float scale) {
   float b = blending.x + blending.y + blending.z;
   blending /= b;
 
-  float noiseX = fbm(worldPos.zy * scale, 3);
-  float noiseY = fbm(worldPos.xz * scale, 3);
-  float noiseZ = fbm(worldPos.xy * scale, 3);
+  float noiseX = fbm3(vec3(worldPos.zy * scale, 0.0));
+  float noiseY = fbm3(vec3(worldPos.xz * scale, 0.0));
+  float noiseZ = fbm3(vec3(worldPos.xy * scale, 0.0));
 
   return vec3(
     noiseX * blending.x + noiseY * blending.y + noiseZ * blending.z
@@ -200,9 +238,9 @@ vec3 blendTerrainMaterials(
   float slope = getSlopeFactor(worldNormal);
 
   // Base noise for variation
-  float largeNoise = fbm(worldPos * 0.1, 3) * 0.5 + 0.5;
-  float mediumNoise = fbm(worldPos * 0.3, 4) * 0.5 + 0.5;
-  float fineNoise = fbm(worldPos * 1.2, 5) * 0.5 + 0.5;
+  float largeNoise = fbm3(worldPos * 0.1) * 0.5 + 0.5;
+  float mediumNoise = fbm4(worldPos * 0.3) * 0.5 + 0.5;
+  float fineNoise = fbm5(worldPos * 1.2) * 0.5 + 0.5;
 
   // Ground color with variation
   vec3 groundVaried = groundColor;
@@ -295,7 +333,7 @@ void main() {
   baseColor = mix(baseColor, vColor, 0.3);
 
   // Add fine detail noise for texture
-  float detailNoise = fbm(vWorldPosition * 3.0, 5) * 0.5 + 0.5;
+  float detailNoise = fbm5(vWorldPosition * 3.0) * 0.5 + 0.5;
   baseColor *= 0.85 + detailNoise * 0.3;
 
   // Apply lighting
