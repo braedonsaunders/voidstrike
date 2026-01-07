@@ -1,4 +1,5 @@
 import * as Phaser from 'phaser';
+import { CELL_SIZE } from '../constants';
 
 interface CameraLocation {
   x: number;
@@ -42,11 +43,11 @@ export class RTSCamera {
 
     this.camera = scene.cameras.main;
 
-    // Set up camera bounds
-    this.camera.setBounds(0, 0, mapWidth, mapHeight);
+    // Set up camera bounds (map dimensions are in grid cells, convert to pixels)
+    this.camera.setBounds(0, 0, mapWidth * CELL_SIZE, mapHeight * CELL_SIZE);
 
-    // Center on starting position
-    this.camera.centerOn(startX, startY);
+    // Center on starting position (convert grid to pixels)
+    this.camera.centerOn(startX * CELL_SIZE, startY * CELL_SIZE);
 
     // Set initial zoom
     this.camera.setZoom(1);
@@ -150,13 +151,17 @@ export class RTSCamera {
   }
 
   setPosition(x: number, y: number): void {
-    this.camera.centerOn(x, y);
+    // x, y are in grid coordinates, convert to pixels
+    this.camera.centerOn(x * CELL_SIZE, y * CELL_SIZE);
   }
 
   getPosition(): { x: number; y: number } {
+    // Return position in grid coordinates
+    const pixelX = this.camera.scrollX + this.camera.width / 2 / this.camera.zoom;
+    const pixelY = this.camera.scrollY + this.camera.height / 2 / this.camera.zoom;
     return {
-      x: this.camera.scrollX + this.camera.width / 2 / this.camera.zoom,
-      y: this.camera.scrollY + this.camera.height / 2 / this.camera.zoom,
+      x: pixelX / CELL_SIZE,
+      y: pixelY / CELL_SIZE,
     };
   }
 
@@ -187,16 +192,18 @@ export class RTSCamera {
     return false;
   }
 
-  // Convert screen coordinates to world coordinates
+  // Convert screen coordinates to world coordinates (returns grid coordinates)
   screenToWorld(screenX: number, screenY: number): { x: number; y: number } {
     const worldPoint = this.camera.getWorldPoint(screenX, screenY);
-    return { x: worldPoint.x, y: worldPoint.y };
+    return { x: worldPoint.x / CELL_SIZE, y: worldPoint.y / CELL_SIZE };
   }
 
-  // Convert world coordinates to screen coordinates
+  // Convert world coordinates to screen coordinates (worldX/Y are in grid coordinates)
   worldToScreen(worldX: number, worldY: number): { x: number; y: number } {
-    const screenX = (worldX - this.camera.scrollX) * this.camera.zoom;
-    const screenY = (worldY - this.camera.scrollY) * this.camera.zoom;
+    const pixelX = worldX * CELL_SIZE;
+    const pixelY = worldY * CELL_SIZE;
+    const screenX = (pixelX - this.camera.scrollX) * this.camera.zoom;
+    const screenY = (pixelY - this.camera.scrollY) * this.camera.zoom;
     return { x: screenX, y: screenY };
   }
 
@@ -205,11 +212,12 @@ export class RTSCamera {
   }
 
   getBounds(): { x: number; y: number; width: number; height: number } {
+    // Return bounds in grid coordinates
     return {
-      x: this.camera.scrollX,
-      y: this.camera.scrollY,
-      width: this.camera.width / this.camera.zoom,
-      height: this.camera.height / this.camera.zoom,
+      x: this.camera.scrollX / CELL_SIZE,
+      y: this.camera.scrollY / CELL_SIZE,
+      width: this.camera.width / this.camera.zoom / CELL_SIZE,
+      height: this.camera.height / this.camera.zoom / CELL_SIZE,
     };
   }
 }

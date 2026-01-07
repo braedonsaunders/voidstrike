@@ -4,10 +4,11 @@ import { EventBus } from '@/engine/core/EventBus';
 import { Transform } from '@/engine/components/Transform';
 import { Building } from '@/engine/components/Building';
 import { Selectable } from '@/engine/components/Selectable';
+import { CELL_SIZE, DEPTH } from '../constants';
 
 interface RallyPoint {
   buildingId: number;
-  x: number;
+  x: number; // Grid coordinates
   y: number;
 }
 
@@ -26,7 +27,7 @@ export class RallyPointRenderer {
     this.eventBus = eventBus;
 
     this.graphics = scene.add.graphics();
-    this.graphics.setDepth(120); // Above buildings, below units
+    this.graphics.setDepth(DEPTH.BUILDINGS + 20); // Above buildings, below units
 
     this.setupEventListeners();
   }
@@ -64,7 +65,11 @@ export class RallyPointRenderer {
       const rallyPoint = this.rallyPoints.get(entity.id);
 
       if (rallyPoint) {
-        this.drawRallyPoint(transform.x, transform.y, rallyPoint.x, rallyPoint.y);
+        // Convert grid to pixel coordinates
+        this.drawRallyPoint(
+          transform.x * CELL_SIZE, transform.y * CELL_SIZE,
+          rallyPoint.x * CELL_SIZE, rallyPoint.y * CELL_SIZE
+        );
       }
     }
   }

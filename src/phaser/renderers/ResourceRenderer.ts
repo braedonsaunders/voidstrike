@@ -2,6 +2,7 @@ import * as Phaser from 'phaser';
 import { World } from '@/engine/ecs/World';
 import { Transform } from '@/engine/components/Transform';
 import { Resource } from '@/engine/components/Resource';
+import { CELL_SIZE, DEPTH } from '../constants';
 
 interface ResourceSprite {
   container: Phaser.GameObjects.Container;
@@ -24,7 +25,7 @@ export class ResourceRenderer {
 
     // Create container for all resource sprites
     this.container = scene.add.container(0, 0);
-    this.container.setDepth(25); // Resources below buildings
+    this.container.setDepth(DEPTH.RESOURCES);
   }
 
   update(): void {
@@ -45,8 +46,8 @@ export class ResourceRenderer {
         this.container.add(sprite.container);
       }
 
-      // Update position
-      sprite.container.setPosition(transform.x, transform.y);
+      // Update position (convert grid to pixel coordinates)
+      sprite.container.setPosition(transform.x * CELL_SIZE, transform.y * CELL_SIZE);
 
       // Update amount display if changed
       if (sprite.lastAmount !== resource.amount) {

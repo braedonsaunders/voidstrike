@@ -6,6 +6,7 @@ import { Health } from '@/engine/components/Health';
 import { Selectable } from '@/engine/components/Selectable';
 import { VisionSystem } from '@/engine/systems/VisionSystem';
 import { UNIT_DEFINITIONS } from '@/data/units/dominion';
+import { CELL_SIZE, DEPTH } from '../constants';
 
 // Player colors (HSL values for tinting)
 const PLAYER_COLORS: Record<string, number> = {
@@ -65,7 +66,7 @@ export class UnitRenderer {
 
     // Create container for all unit sprites (for z-ordering)
     this.container = scene.add.container(0, 0);
-    this.container.setDepth(100); // Units above terrain
+    this.container.setDepth(DEPTH.UNITS);
   }
 
   update(): void {
@@ -109,8 +110,8 @@ export class UnitRenderer {
 
       if (!shouldShow) continue;
 
-      // Update position
-      sprite.container.setPosition(transform.x, transform.y);
+      // Update position (convert grid to pixel coordinates)
+      sprite.container.setPosition(transform.x * CELL_SIZE, transform.y * CELL_SIZE);
 
       // Update rotation (convert from radians)
       sprite.body.setRotation(transform.rotation);

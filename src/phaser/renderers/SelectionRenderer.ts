@@ -4,6 +4,7 @@ import { Transform } from '@/engine/components/Transform';
 import { Selectable } from '@/engine/components/Selectable';
 import { Unit } from '@/engine/components/Unit';
 import { Building } from '@/engine/components/Building';
+import { CELL_SIZE, DEPTH } from '../constants';
 
 export class SelectionRenderer {
   private scene: Phaser.Scene;
@@ -16,7 +17,7 @@ export class SelectionRenderer {
     this.world = world;
 
     this.selectionGraphics = scene.add.graphics();
-    this.selectionGraphics.setDepth(150); // Above units
+    this.selectionGraphics.setDepth(DEPTH.SELECTION);
   }
 
   update(): void {
@@ -36,21 +37,20 @@ export class SelectionRenderer {
       const isOwned = selectable.playerId === 'player1';
       const color = isOwned ? 0x00ff00 : 0xff0000;
 
+      // Convert grid coordinates to pixel coordinates
+      const px = transform.x * CELL_SIZE;
+      const py = transform.y * CELL_SIZE;
+
       if (building) {
-        // Building selection - rectangle
-        const size = (building.width || 3) * 4;
+        // Building selection - rectangle (scale size with CELL_SIZE)
+        const size = (building.width || 3) * CELL_SIZE / 2;
         this.selectionGraphics.lineStyle(2, color, 0.8);
-        this.selectionGraphics.strokeRect(
-          transform.x - size,
-          transform.y - size,
-          size * 2,
-          size * 2
-        );
+        this.selectionGraphics.strokeRect(px - size, py - size, size * 2, size * 2);
       } else {
         // Unit selection - circle
-        const radius = unit?.isWorker ? 8 : 10;
+        const radius = unit?.isWorker ? 12 : 14;
         this.selectionGraphics.lineStyle(2, color, 0.8);
-        this.selectionGraphics.strokeCircle(transform.x, transform.y, radius);
+        this.selectionGraphics.strokeCircle(px, py, radius);
       }
     }
   }

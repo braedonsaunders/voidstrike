@@ -1,6 +1,7 @@
 import * as Phaser from 'phaser';
 import { MapData, MapCell } from '@/data/maps/MapTypes';
 import { BiomeType } from '@/rendering/Biomes';
+import { CELL_SIZE, DEPTH } from '../constants';
 
 // Simple 2D biome config for Phaser (without THREE.js dependencies)
 interface SimpleBiomeConfig {
@@ -62,11 +63,11 @@ export class TerrainRenderer {
 
     // Create terrain graphics layer
     this.terrainGraphics = scene.add.graphics();
-    this.terrainGraphics.setDepth(0);
+    this.terrainGraphics.setDepth(DEPTH.TERRAIN);
 
     // Create decoration container
     this.decorationContainer = scene.add.container(0, 0);
-    this.decorationContainer.setDepth(10);
+    this.decorationContainer.setDepth(DEPTH.TERRAIN + 10);
 
     // Render initial terrain
     this.renderTerrain();
@@ -127,16 +128,16 @@ export class TerrainRenderer {
       }
     }
 
-    // Draw cell
+    // Draw cell (scaled by CELL_SIZE)
     this.terrainGraphics.fillStyle(cellColor, 1);
-    this.terrainGraphics.fillRect(x, y, 1, 1);
+    this.terrainGraphics.fillRect(x * CELL_SIZE, y * CELL_SIZE, CELL_SIZE, CELL_SIZE);
 
     // Add subtle noise/variation for visual interest
     if (Math.random() < 0.1 && cell.terrain === 'ground') {
       const variance = Math.random() * 10 - 5;
       const variedColor = Phaser.Display.Color.IntegerToColor(cellColor).lighten(variance).color;
       this.terrainGraphics.fillStyle(variedColor, 0.5);
-      this.terrainGraphics.fillRect(x, y, 1, 1);
+      this.terrainGraphics.fillRect(x * CELL_SIZE, y * CELL_SIZE, CELL_SIZE, CELL_SIZE);
     }
   }
 
@@ -144,28 +145,26 @@ export class TerrainRenderer {
     ramp: { x: number; y: number; width: number; height: number; direction: string },
     baseColor: number
   ): void {
-    // Draw ramp with gradient effect
+    // Draw ramp with gradient effect (scaled by CELL_SIZE)
     const rampColor = Phaser.Display.Color.IntegerToColor(baseColor).lighten(10).color;
+    const px = ramp.x * CELL_SIZE;
+    const py = ramp.y * CELL_SIZE;
+    const pw = ramp.width * CELL_SIZE;
+    const ph = ramp.height * CELL_SIZE;
 
     this.terrainGraphics.fillStyle(rampColor, 0.9);
-    this.terrainGraphics.fillRect(ramp.x, ramp.y, ramp.width, ramp.height);
+    this.terrainGraphics.fillRect(px, py, pw, ph);
 
     // Add directional lines to indicate slope
     this.terrainGraphics.lineStyle(1, 0x000000, 0.2);
 
     if (ramp.direction === 'north' || ramp.direction === 'south') {
-      for (let i = 0; i < ramp.height; i += 2) {
-        this.terrainGraphics.lineBetween(
-          ramp.x, ramp.y + i,
-          ramp.x + ramp.width, ramp.y + i
-        );
+      for (let i = 0; i < ph; i += CELL_SIZE / 2) {
+        this.terrainGraphics.lineBetween(px, py + i, px + pw, py + i);
       }
     } else {
-      for (let i = 0; i < ramp.width; i += 2) {
-        this.terrainGraphics.lineBetween(
-          ramp.x + i, ramp.y,
-          ramp.x + i, ramp.y + ramp.height
-        );
+      for (let i = 0; i < pw; i += CELL_SIZE / 2) {
+        this.terrainGraphics.lineBetween(px + i, py, px + i, py + ph);
       }
     }
   }
@@ -201,24 +200,29 @@ export class TerrainRenderer {
     biomeConfig: typeof BIOME_CONFIGS.grassland
   ): void {
     const graphics = this.scene.add.graphics();
-    graphics.setPosition(x + Math.random(), y + Math.random());
+    // Position in pixel space with some randomness within the cell
+    const px = (x + Math.random()) * CELL_SIZE;
+    const py = (y + Math.random()) * CELL_SIZE;
+    graphics.setPosition(px, py);
 
     const decorType = Math.random();
+    const scale = CELL_SIZE / 32; // Scale decorations relative to cell size
 
     if (decorType < 0.4) {
       // Small rock
       graphics.fillStyle(0x666666, 0.7);
-      graphics.fillCircle(0, 0, 0.5 + Math.random() * 0.5);
+      graphics.fillCircle(0, 0, (4 + Math.random() * 4) * scale);
     } else if (decorType < 0.7) {
       // Grass tuft (for grassland) or debris
       const color = parseInt(biomeConfig.vegetationColor?.replace('#', '') ?? '228822', 16);
       graphics.fillStyle(color, 0.6);
-      graphics.fillTriangle(-0.3, 0, 0, -1, 0.3, 0);
+      const s = 8 * scale;
+      graphics.fillTriangle(-s, 0, 0, -s * 2, s, 0);
     } else {
       // Small plant or crystal (biome specific)
       const color = parseInt(biomeConfig.highlightColor.replace('#', ''), 16);
       graphics.fillStyle(color, 0.5);
-      graphics.fillCircle(0, 0, 0.3);
+      graphics.fillCircle(0, 0, 3 * scale);
     }
 
     this.decorationContainer.add(graphics);
