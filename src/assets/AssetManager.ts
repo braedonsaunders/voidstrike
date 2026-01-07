@@ -69,6 +69,9 @@ const customAssets = new Map<string, THREE.Object3D>();
 // Track which assets are animated/skinned (require SkeletonUtils.clone)
 const animatedAssets = new Set<string>();
 
+// Callbacks to notify when custom models are loaded
+const onModelsLoadedCallbacks: Array<() => void> = [];
+
 // GLTF loader instance
 const gltfLoader = new GLTFLoader();
 
@@ -414,6 +417,14 @@ export class AssetManager {
   }
 
   /**
+   * Register a callback to be called when custom models finish loading.
+   * Used by renderers to refresh meshes with new custom models.
+   */
+  static onModelsLoaded(callback: () => void): void {
+    onModelsLoadedCallbacks.push(callback);
+  }
+
+  /**
    * Load custom 3D models from public/models folder
    * Replaces procedural meshes with custom GLB models when available
    * Logs animation names to console for debugging
@@ -427,6 +438,7 @@ export class AssetManager {
     ];
 
     console.log('[AssetManager] Loading custom models...');
+    let loadedCount = 0;
 
     for (const model of customModels) {
       try {
@@ -440,12 +452,25 @@ export class AssetManager {
         // Load the GLTF model
         await this.loadGLTF(model.path, model.assetId, { targetHeight: model.targetHeight });
         console.log(`[AssetManager] ✓ Loaded custom model: ${model.assetId} from ${model.path}`);
+        loadedCount++;
       } catch (error) {
         console.log(`[AssetManager] Could not load ${model.path}:`, error);
       }
     }
 
-    console.log('[AssetManager] Custom model loading complete');
+    console.log(`[AssetManager] Custom model loading complete (${loadedCount} models loaded)`);
+
+    // Notify all listeners that models have been loaded
+    if (loadedCount > 0) {
+      console.log(`[AssetManager] Notifying ${onModelsLoadedCallbacks.length} listeners to refresh meshes`);
+      for (const callback of onModelsLoadedCallbacks) {
+        try {
+          callback();
+        } catch (err) {
+          console.error('[AssetManager] Error in onModelsLoaded callback:', err);
+        }
+      }
+    }
   }
 }
 
