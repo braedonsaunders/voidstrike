@@ -33,7 +33,7 @@ export class BuildingPlacementSystem extends System {
     workerId?: number;
     playerId?: string;
   }): void {
-    const { buildingType, position, playerId = 'player1' } = data;
+    const { buildingType, playerId = 'player1' } = data;
     const definition = BUILDING_DEFINITIONS[buildingType];
 
     if (!definition) {
@@ -41,6 +41,10 @@ export class BuildingPlacementSystem extends System {
       this.game.eventBus.emit('ui:error', { message: `Unknown building: ${buildingType}` });
       return;
     }
+
+    // Snap click position to grid for clean placement (center-based)
+    const snappedX = Math.round(data.position.x);
+    const snappedY = Math.round(data.position.y);
 
     const store = useGameStore.getState();
 
@@ -59,22 +63,22 @@ export class BuildingPlacementSystem extends System {
       }
     }
 
-    // Check placement validity (simple check - could be enhanced)
-    if (!this.isValidPlacement(position.x, position.y, definition.width, definition.height)) {
-      this.game.eventBus.emit('ui:error', { message: 'Invalid placement' });
+    // Check placement validity using center position
+    if (!this.isValidPlacement(snappedX, snappedY, definition.width, definition.height)) {
+      this.game.eventBus.emit('ui:error', { message: 'Cannot build here - area blocked' });
       return;
     }
 
     // Deduct resources
     store.addResources(-definition.mineralCost, -definition.vespeneCost);
 
-    // Create the building entity
+    // Create the building entity at the snapped center position
     const entity = this.world.createEntity();
     entity
-      .add(new Transform(position.x, position.y, 0))
+      .add(new Transform(snappedX, snappedY, 0))
       .add(new Building(definition))
       .add(new Health(definition.maxHealth * 0.1, definition.armor, 'structure')) // Start at 10% health
-      .add(new Selectable(definition.width, 10, playerId));
+      .add(new Selectable(Math.max(definition.width, definition.height) * 0.6, 10, playerId));
 
     // Building starts in 'constructing' state automatically from Building constructor
 
@@ -147,42 +151,60 @@ export class BuildingPlacementSystem extends System {
     return null; // All requirements met
   }
 
-  private isValidPlacement(x: number, y: number, width: number, height: number): boolean {
-    // Check map bounds
+  private isValidPlacement(centerX: number, centerY: number, width: number, height: number): boolean {
+    // Check map bounds (center-based)
     const config = this.game.config;
-    if (x < 0 || y < 0 || x + width > config.mapWidth || y + height > config.mapHeight) {
+    const halfW = width / 2;
+    const halfH = height / 2;
+
+    if (centerX - halfW < 0 || centerY - halfH < 0 ||
+        centerX + halfW > config.mapWidth || centerY + halfH > config.mapHeight) {
       return false;
     }
 
-    // Check for overlapping buildings
+    // Check for overlapping buildings (center-to-center with half-width separation)
     const buildings = this.world.getEntitiesWith('Building', 'Transform');
     for (const entity of buildings) {
       const transform = entity.get<Transform>('Transform')!;
       const building = entity.get<Building>('Building')!;
 
-      // Simple AABB collision check
-      if (
-        x < transform.x + building.width &&
-        x + width > transform.x &&
-        y < transform.y + building.height &&
-        y + height > transform.y
-      ) {
+      // Both positions are centers - check if bounding boxes overlap
+      const existingHalfW = building.width / 2;
+      const existingHalfH = building.height / 2;
+
+      const dx = Math.abs(centerX - transform.x);
+      const dy = Math.abs(centerY - transform.y);
+
+      // Add a small buffer (0.5) to prevent buildings from touching
+      if (dx < halfW + existingHalfW + 0.5 && dy < halfH + existingHalfH + 0.5) {
         return false;
       }
     }
 
-    // Check for overlapping resources
+    // Check for overlapping resources (resources are point-based with ~2 unit radius)
     const resources = this.world.getEntitiesWith('Resource', 'Transform');
     for (const entity of resources) {
       const transform = entity.get<Transform>('Transform')!;
 
-      // Resources are roughly 2x2
-      if (
-        x < transform.x + 2 &&
-        x + width > transform.x &&
-        y < transform.y + 2 &&
-        y + height > transform.y
-      ) {
+      const dx = Math.abs(centerX - transform.x);
+      const dy = Math.abs(centerY - transform.y);
+
+      // Resources have roughly 1.5 unit radius, add building half-size
+      if (dx < halfW + 1.5 && dy < halfH + 1.5) {
+        return false;
+      }
+    }
+
+    // Check for overlapping units (don't build on top of units)
+    const units = this.world.getEntitiesWith('Unit', 'Transform');
+    for (const entity of units) {
+      const transform = entity.get<Transform>('Transform')!;
+
+      const dx = Math.abs(centerX - transform.x);
+      const dy = Math.abs(centerY - transform.y);
+
+      // Units have roughly 0.5 unit radius
+      if (dx < halfW + 0.5 && dy < halfH + 0.5) {
         return false;
       }
     }

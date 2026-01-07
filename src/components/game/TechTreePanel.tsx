@@ -1,5 +1,6 @@
 'use client';
 
+import { useEffect } from 'react';
 import { useGameStore } from '@/store/gameStore';
 import { RESEARCH_DEFINITIONS, ResearchDefinition } from '@/data/research/dominion';
 import { BUILDING_DEFINITIONS } from '@/data/buildings/dominion';
@@ -170,24 +171,46 @@ function CategorySection({ category }: { category: TechCategory }) {
 export function TechTreePanel() {
   const { showTechTree, setShowTechTree } = useGameStore();
 
+  // Handle ESC key to close
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape' && showTechTree) {
+        setShowTechTree(false);
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [showTechTree, setShowTechTree]);
+
   if (!showTechTree) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70">
-      <div className="bg-void-900 border border-void-600 rounded-lg shadow-xl max-w-4xl max-h-[80vh] overflow-hidden">
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/70"
+      onClick={(e) => {
+        // Close when clicking backdrop
+        if (e.target === e.currentTarget) {
+          setShowTechTree(false);
+        }
+      }}
+    >
+      <div className="bg-void-900 border border-void-600 rounded-lg shadow-xl w-[900px] max-w-[95vw] h-[85vh] flex flex-col">
         {/* Header */}
-        <div className="flex items-center justify-between p-4 border-b border-void-700">
-          <h2 className="text-xl font-bold text-white">Tech Tree</h2>
-          <button
-            onClick={() => setShowTechTree(false)}
-            className="text-void-400 hover:text-white transition-colors text-2xl leading-none"
-          >
-            ×
-          </button>
+        <div className="flex items-center justify-between p-4 border-b border-void-700 flex-shrink-0">
+          <h2 className="text-xl font-bold text-white">Tech Tree - Dominion</h2>
+          <div className="flex items-center gap-2">
+            <span className="text-void-500 text-sm">Press ESC or click outside to close</span>
+            <button
+              onClick={() => setShowTechTree(false)}
+              className="w-8 h-8 flex items-center justify-center bg-red-900/50 hover:bg-red-800 text-white rounded border border-red-700 transition-colors text-xl leading-none"
+            >
+              ✕
+            </button>
+          </div>
         </div>
 
-        {/* Content */}
-        <div className="p-4 overflow-y-auto max-h-[calc(80vh-60px)]">
+        {/* Content - Scrollable */}
+        <div className="flex-1 overflow-y-auto p-4 custom-scrollbar">
           {/* Upgrade Categories */}
           <div className="grid grid-cols-2 gap-6">
             <div>

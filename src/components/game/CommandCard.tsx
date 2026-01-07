@@ -6,7 +6,7 @@ import { Unit } from '@/engine/components/Unit';
 import { Building } from '@/engine/components/Building';
 import { useEffect, useState } from 'react';
 import { UNIT_DEFINITIONS } from '@/data/units/dominion';
-import { BUILDING_DEFINITIONS } from '@/data/buildings/dominion';
+import { BUILDING_DEFINITIONS, BuildingDefinition } from '@/data/buildings/dominion';
 import { RESEARCH_DEFINITIONS } from '@/data/research/dominion';
 
 // Icon mappings for commands and units
@@ -19,6 +19,11 @@ const COMMAND_ICONS: Record<string, string> = {
   patrol: '↻',
   gather: '⛏',
   rally: '⚑',
+  build: '🔨',
+  build_basic: '🏗',
+  build_advanced: '🏭',
+  cancel: '✕',
+  back: '◀',
   // Units
   scv: '🔧',
   marine: '🎖',
@@ -38,7 +43,7 @@ const COMMAND_ICONS: Record<string, string> = {
   supply_depot: '📦',
   refinery: '⛽',
   barracks: '🏠',
-  engineering_bay: '🔧',
+  engineering_bay: '🔬',
   bunker: '🏰',
   factory: '🏭',
   armory: '⚙',
@@ -60,14 +65,10 @@ const COMMAND_ICONS: Record<string, string> = {
 
 function getIcon(id: string): string {
   const lc = id.toLowerCase();
-  // Check exact match
   if (COMMAND_ICONS[lc]) return COMMAND_ICONS[lc];
-
-  // Check partial match
   for (const [key, icon] of Object.entries(COMMAND_ICONS)) {
     if (lc.includes(key)) return icon;
   }
-
   return COMMAND_ICONS.default;
 }
 
@@ -78,13 +79,33 @@ interface CommandButton {
   action: () => void;
   isDisabled?: boolean;
   tooltip?: string;
-  cost?: { minerals: number; vespene: number };
+  cost?: { minerals: number; vespene: number; supply?: number };
 }
 
+type MenuMode = 'main' | 'build_basic' | 'build_advanced';
+
+// Basic structures (no tech requirements)
+const BASIC_BUILDINGS = ['command_center', 'supply_depot', 'refinery', 'barracks', 'engineering_bay', 'bunker', 'missile_turret'];
+// Advanced structures (tech requirements)
+const ADVANCED_BUILDINGS = ['factory', 'armory', 'starport', 'fusion_core', 'ghost_academy', 'sensor_tower'];
+
 export function CommandCard() {
-  const { selectedUnits, minerals, vespene, supply, maxSupply } = useGameStore();
+  const { selectedUnits, minerals, vespene, supply, maxSupply, isBuilding } = useGameStore();
   const [commands, setCommands] = useState<CommandButton[]>([]);
   const [hoveredCmd, setHoveredCmd] = useState<string | null>(null);
+  const [menuMode, setMenuMode] = useState<MenuMode>('main');
+
+  // Reset menu when selection changes or building mode exits
+  useEffect(() => {
+    if (!isBuilding) {
+      // Don't reset menu mode when exiting building mode - let user stay in build menu
+    }
+  }, [isBuilding]);
+
+  useEffect(() => {
+    // Reset to main menu when selection changes
+    setMenuMode('main');
+  }, [selectedUnits]);
 
   useEffect(() => {
     const game = Game.getInstance();
@@ -94,8 +115,6 @@ export function CommandCard() {
     }
 
     const buttons: CommandButton[] = [];
-
-    // Get the first selected entity to determine commands
     const entity = game.world.getEntity(selectedUnits[0]);
     if (!entity) {
       setCommands([]);
@@ -106,82 +125,126 @@ export function CommandCard() {
     const building = entity.get<Building>('Building');
 
     if (unit) {
-      // Basic unit commands
-      buttons.push({
-        id: 'move',
-        label: 'Move',
-        shortcut: 'M',
-        action: () => {},
-        tooltip: 'Move to location',
-      });
-
-      buttons.push({
-        id: 'stop',
-        label: 'Stop',
-        shortcut: 'S',
-        action: () => {
-          game.processCommand({
-            tick: game.getCurrentTick(),
-            playerId: 'player1',
-            type: 'STOP',
-            entityIds: selectedUnits,
-          });
-        },
-        tooltip: 'Stop current action',
-      });
-
-      buttons.push({
-        id: 'hold',
-        label: 'Hold',
-        shortcut: 'H',
-        action: () => {
-          game.processCommand({
-            tick: game.getCurrentTick(),
-            playerId: 'player1',
-            type: 'HOLD',
-            entityIds: selectedUnits,
-          });
-        },
-        tooltip: 'Hold position',
-      });
-
-      buttons.push({
-        id: 'attack',
-        label: 'Attack',
-        shortcut: 'A',
-        action: () => {},
-        tooltip: 'Attack move',
-      });
-
-      buttons.push({
-        id: 'patrol',
-        label: 'Patrol',
-        shortcut: 'P',
-        action: () => {},
-        tooltip: 'Patrol between points',
-      });
-
-      // Worker-specific commands
-      if (unit.isWorker) {
+      if (menuMode === 'main') {
+        // Basic unit commands
         buttons.push({
-          id: 'gather',
-          label: 'Gather',
-          shortcut: 'G',
+          id: 'move',
+          label: 'Move',
+          shortcut: 'M',
           action: () => {},
-          tooltip: 'Gather resources',
+          tooltip: 'Move to location (right-click)',
         });
 
-        // Building commands - show all but limit display
-        Object.entries(BUILDING_DEFINITIONS).forEach(([id, def]) => {
+        buttons.push({
+          id: 'stop',
+          label: 'Stop',
+          shortcut: 'S',
+          action: () => {
+            game.processCommand({
+              tick: game.getCurrentTick(),
+              playerId: 'player1',
+              type: 'STOP',
+              entityIds: selectedUnits,
+            });
+          },
+          tooltip: 'Stop current action',
+        });
+
+        buttons.push({
+          id: 'hold',
+          label: 'Hold',
+          shortcut: 'H',
+          action: () => {
+            game.processCommand({
+              tick: game.getCurrentTick(),
+              playerId: 'player1',
+              type: 'HOLD',
+              entityIds: selectedUnits,
+            });
+          },
+          tooltip: 'Hold position - do not move to attack',
+        });
+
+        buttons.push({
+          id: 'attack',
+          label: 'Attack',
+          shortcut: 'A',
+          action: () => {},
+          tooltip: 'Attack-move to location',
+        });
+
+        buttons.push({
+          id: 'patrol',
+          label: 'Patrol',
+          shortcut: 'P',
+          action: () => {},
+          tooltip: 'Patrol between points',
+        });
+
+        // Worker-specific commands
+        if (unit.isWorker) {
           buttons.push({
-            id: `build_${id}`,
+            id: 'gather',
+            label: 'Gather',
+            shortcut: 'G',
+            action: () => {},
+            tooltip: 'Gather resources (right-click on minerals/gas)',
+          });
+
+          // Build Basic submenu button
+          buttons.push({
+            id: 'build_basic',
+            label: 'Build Basic',
+            shortcut: 'B',
+            action: () => setMenuMode('build_basic'),
+            tooltip: 'Build basic structures',
+          });
+
+          // Build Advanced submenu button
+          buttons.push({
+            id: 'build_advanced',
+            label: 'Build Adv.',
+            shortcut: 'V',
+            action: () => setMenuMode('build_advanced'),
+            tooltip: 'Build advanced structures',
+          });
+        }
+      } else if (menuMode === 'build_basic' || menuMode === 'build_advanced') {
+        // Back button
+        buttons.push({
+          id: 'back',
+          label: 'Back',
+          shortcut: 'ESC',
+          action: () => setMenuMode('main'),
+          tooltip: 'Return to main commands',
+        });
+
+        // Building buttons for the selected category
+        const buildingList = menuMode === 'build_basic' ? BASIC_BUILDINGS : ADVANCED_BUILDINGS;
+
+        buildingList.forEach((buildingId) => {
+          const def = BUILDING_DEFINITIONS[buildingId];
+          if (!def) return;
+
+          // Check tech requirements
+          let requirementsMet = true;
+          let reqText = '';
+          if (def.requirements && def.requirements.length > 0) {
+            // For now, simplified check - in full implementation, check actual player buildings
+            reqText = `Requires: ${def.requirements.map(r => BUILDING_DEFINITIONS[r]?.name || r).join(', ')}`;
+          }
+
+          const canAfford = minerals >= def.mineralCost && vespene >= def.vespeneCost;
+
+          buttons.push({
+            id: `build_${buildingId}`,
             label: def.name,
-            shortcut: def.name.charAt(0).toUpperCase(),
+            shortcut: def.hotkey || def.name.charAt(0).toUpperCase(),
             action: () => {
-              useGameStore.getState().setBuildingMode(id);
+              useGameStore.getState().setBuildingMode(buildingId);
             },
-            isDisabled: minerals < def.mineralCost || vespene < def.vespeneCost,
-            tooltip: `Build ${def.name}`,
+            isDisabled: !canAfford,
+            tooltip: reqText || `Build ${def.name}`,
             cost: { minerals: def.mineralCost, vespene: def.vespeneCost },
           });
         });
@@ -192,22 +255,22 @@ export function CommandCard() {
         const unitDef = UNIT_DEFINITIONS[unitId];
         if (!unitDef) return;
 
+        const canAfford = minerals >= unitDef.mineralCost && vespene >= unitDef.vespeneCost;
+        const hasSupply = supply + unitDef.supplyCost <= maxSupply;
+
         buttons.push({
           id: `train_${unitId}`,
           label: unitDef.name,
-          shortcut: unitDef.name.charAt(0).toUpperCase(),
+          shortcut: unitDef.hotkey || unitDef.name.charAt(0).toUpperCase(),
           action: () => {
             game.eventBus.emit('command:train', {
               entityIds: selectedUnits,
               unitType: unitId,
             });
           },
-          isDisabled:
-            minerals < unitDef.mineralCost ||
-            vespene < unitDef.vespeneCost ||
-            supply + unitDef.supplyCost > maxSupply,
-          tooltip: `Train ${unitDef.name}`,
-          cost: { minerals: unitDef.mineralCost, vespene: unitDef.vespeneCost },
+          isDisabled: !canAfford || !hasSupply,
+          tooltip: `Train ${unitDef.name}` + (!hasSupply ? ' (Need more supply)' : ''),
+          cost: { minerals: unitDef.mineralCost, vespene: unitDef.vespeneCost, supply: unitDef.supplyCost },
         });
       });
 
@@ -254,25 +317,62 @@ export function CommandCard() {
             });
           },
           isDisabled: minerals < upgrade.mineralCost || vespene < upgrade.vespeneCost || !reqMet || isResearching,
-          tooltip: upgrade.description,
+          tooltip: upgrade.description + (isResearching ? ' (In progress)' : ''),
           cost: { minerals: upgrade.mineralCost, vespene: upgrade.vespeneCost },
         });
       });
 
-      // Rally point
-      buttons.push({
-        id: 'rally',
-        label: 'Rally',
-        shortcut: 'R',
-        action: () => {
-          useGameStore.getState().setRallyPointMode(true);
-        },
-        tooltip: 'Set rally point',
-      });
+      // Rally point for production buildings
+      if (building.canProduce.length > 0) {
+        buttons.push({
+          id: 'rally',
+          label: 'Rally',
+          shortcut: 'R',
+          action: () => {
+            useGameStore.getState().setRallyPointMode(true);
+          },
+          tooltip: 'Set rally point for new units',
+        });
+      }
     }
 
     setCommands(buttons.slice(0, 12)); // Max 4x3 grid
-  }, [selectedUnits, minerals, vespene, supply, maxSupply]);
+  }, [selectedUnits, minerals, vespene, supply, maxSupply, menuMode]);
+
+  // Handle ESC to go back in menus
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape' && menuMode !== 'main') {
+        e.stopPropagation();
+        setMenuMode('main');
+      }
+      // Hotkey B for Build Basic
+      if (e.key.toLowerCase() === 'b' && menuMode === 'main') {
+        const game = Game.getInstance();
+        if (game && selectedUnits.length > 0) {
+          const entity = game.world.getEntity(selectedUnits[0]);
+          const unit = entity?.get<Unit>('Unit');
+          if (unit?.isWorker) {
+            setMenuMode('build_basic');
+          }
+        }
+      }
+      // Hotkey V for Build Advanced
+      if (e.key.toLowerCase() === 'v' && menuMode === 'main') {
+        const game = Game.getInstance();
+        if (game && selectedUnits.length > 0) {
+          const entity = game.world.getEntity(selectedUnits[0]);
+          const unit = entity?.get<Unit>('Unit');
+          if (unit?.isWorker) {
+            setMenuMode('build_advanced');
+          }
+        }
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [menuMode, selectedUnits]);
 
   if (commands.length === 0) {
     return (
@@ -282,10 +382,17 @@ export function CommandCard() {
     );
   }
 
-  const hoveredCommand = commands.find(c => c.id === hoveredCmd);
+  const hoveredCommand = commands.find((c) => c.id === hoveredCmd);
 
   return (
     <div className="relative">
+      {/* Menu title when in submenu */}
+      {menuMode !== 'main' && (
+        <div className="absolute -top-6 left-0 text-xs text-void-400">
+          {menuMode === 'build_basic' ? '🏗 Basic Structures' : '🏭 Advanced Structures'}
+        </div>
+      )}
+
       {/* Command grid - 4 columns, 3 rows */}
       <div className="w-60 bg-black/80 border border-void-700/50 rounded-lg p-2 backdrop-blur-sm">
         <div className="grid grid-cols-4 gap-1.5">
@@ -301,6 +408,7 @@ export function CommandCard() {
                   ? 'opacity-40 cursor-not-allowed border-void-700/30'
                   : 'border-void-600/50 hover:from-void-700 hover:to-void-800 hover:border-blue-400/60 active:scale-95'
                 }
+                ${cmd.id === 'back' ? 'bg-gradient-to-b from-void-700/80 to-void-800/80' : ''}
               `}
               onClick={cmd.action}
               disabled={cmd.isDisabled}
@@ -311,8 +419,8 @@ export function CommandCard() {
               <span className="text-lg leading-none mb-0.5">{getIcon(cmd.id)}</span>
 
               {/* Label */}
-              <span className="text-[8px] text-void-300 truncate w-full text-center leading-tight">
-                {cmd.label.length > 7 ? cmd.label.substring(0, 6) + '..' : cmd.label}
+              <span className="text-[8px] text-void-300 truncate w-full text-center leading-tight px-0.5">
+                {cmd.label.length > 8 ? cmd.label.substring(0, 7) + '..' : cmd.label}
               </span>
 
               {/* Hotkey badge */}
@@ -364,6 +472,12 @@ export function CommandCard() {
                   <span className={`flex items-center gap-1 ${vespene < hoveredCommand.cost.vespene ? 'text-red-400' : 'text-green-300'}`}>
                     <span>💚</span>
                     {hoveredCommand.cost.vespene}
+                  </span>
+                )}
+                {hoveredCommand.cost.supply && hoveredCommand.cost.supply > 0 && (
+                  <span className={`flex items-center gap-1 ${supply + hoveredCommand.cost.supply > maxSupply ? 'text-red-400' : 'text-yellow-300'}`}>
+                    <span>👤</span>
+                    {hoveredCommand.cost.supply}
                   </span>
                 )}
               </div>
