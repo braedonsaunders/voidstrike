@@ -1,562 +1,500 @@
-# VOIDSTRIKE - StarCraft 2 Parity Roadmap (Single-Player)
+# VOIDSTRIKE - StarCraft 2 Parity Roadmap (Updated)
 
-> **Goal**: Achieve feature parity with StarCraft 2's single-player/skirmish experience.
-> **Scope**: Excludes multiplayer networking features (will be addressed separately).
-
----
-
-## Current State Summary
-
-### Completed Features
-- Core ECS engine (12 systems, 8 components)
-- Dominion faction: 12 units, 11 buildings, 36 upgrades
-- Combat system (damage types, armor, splash, priority targeting)
-- A* pathfinding with Web Workers
-- Fog of war with vision states
-- Resource gathering (minerals, vespene, supply)
-- Production queues and building construction
-- 6 biomes with full visual polish
-- 3 playable maps
-- AI opponent (Easy/Medium/Hard)
-- Audio system framework (awaiting assets)
-- Ability system framework (partial implementations)
-- SC2-like controls (control groups, shift-queuing, patrol, etc.)
-- Complete HUD (minimap, command card, selection panel, tooltips)
+> **Last Updated**: January 2026
+> **Goal**: Achieve feature parity with StarCraft 2's single-player/skirmish experience
+> **Scope**: Excludes multiplayer networking features (will be addressed separately)
 
 ---
 
-## Phase 1: Complete Dominion Faction Mechanics
+## Current State Assessment
 
-> **Priority**: CRITICAL
-> **Status**: MOSTLY COMPLETE
-> **Goal**: Make the existing faction feel complete and polished
+### What's Complete (95% of Dominion Faction)
 
-### 1.1 Transform Mechanics (HIGH) ✅
-- [x] **Siege Tank Siege Mode** - Full implementation
-  - Stationary mode with increased range (13) and splash damage (40+35 splash)
-  - 2-second transform animation
-  - Cannot attack while transforming
-  - Siege mode attacks should have visible projectile arc
-- [x] **Hellion ↔ Hellbat Transform**
-  - Hellbat: Slower (3.15 speed), more HP (135), melee splash attack
-  - Requires Infernal Pre-Igniter research
-- [x] **Viking Fighter ↔ Assault Mode**
-  - Fighter Mode: Air-to-air only
-  - Assault Mode: Ground unit with ground attack
+**Core Engine**
+- [x] ECS architecture (17 systems, 19 components)
+- [x] Fixed timestep game loop (20 ticks/sec)
+- [x] Event bus for inter-system communication
+- [x] Command system (17+ command types)
+- [x] A* pathfinding with Web Worker offloading
 
-### 1.2 Cloak & Detection System (HIGH) ✅
-- [x] **Cloak Implementation**
-  - Ghost cloak (energy drain: 1/sec)
-  - Banshee cloak (energy drain: 1/sec)
-  - Cloaked units invisible without detection
-  - Shimmer effect when cloaked (partial visibility to owner)
-- [x] **Detection**
-  - Missile Turret detection radius (11)
-  - Sensor Tower extended vision (30 radius)
-  - Scanner Sweep reveal (temporary, from Command Center)
-  - Orbital Command upgrade for Scanner Sweep
+**Dominion Faction - Units (13 total)**
+- [x] SCV (worker, repair)
+- [x] Marine (Stim Pack)
+- [x] Marauder (Concussive Shells, Stim Pack)
+- [x] Reaper (Jet Pack placeholder)
+- [x] Ghost (Snipe, EMP, Cloak, Nuke)
+- [x] Hellion/Hellbat (transform)
+- [x] Siege Tank (Tank/Siege mode transform)
+- [x] Thor (High Impact Payload)
+- [x] Medivac (heal, transport, load/unload)
+- [x] Viking (Fighter/Assault transform)
+- [x] Banshee (cloak)
+- [x] Battlecruiser (Yamato Cannon, Tactical Jump)
+- [x] Raven (detector, abilities placeholder)
 
-### 1.3 Transport & Bunker Mechanics (HIGH) ✅
-- [x] **Medivac Load/Unload**
-  - Load infantry units (capacity: 8 slots)
-  - Unload at location
-  - Quick unload hotkey
-  - Boost ability (Afterburners)
-- [x] **Bunker System**
-  - Load up to 4 infantry
-  - Infantry fire from inside (reduced damage taken)
-  - Salvage bunker (return 75% cost)
-  - Attack range bonus while garrisoned
+**Dominion Faction - Buildings (16 total)**
+- [x] Command Center / Orbital Command / Planetary Fortress
+- [x] Supply Depot (lowering mechanic)
+- [x] Refinery
+- [x] Barracks (lift-off, addon support)
+- [x] Engineering Bay
+- [x] Bunker (load/unload infantry, attack from inside)
+- [x] Factory (lift-off, addon support)
+- [x] Armory
+- [x] Starport (lift-off, addon support)
+- [x] Fusion Core
+- [x] Ghost Academy
+- [x] Sensor Tower (detection)
+- [x] Missile Turret (detection, attack)
+- [x] Tech Lab (addon)
+- [x] Reactor (addon)
 
-### 1.4 Healing & Repair (MEDIUM) ✅
-- [x] **SCV Repair**
-  - Repair buildings and mechanical units
-  - Costs resources based on damage repaired
-  - Auto-repair toggle
-- [x] **Medivac Heal**
-  - Heal biological units
-  - Energy-based (3 energy per 10 HP)
-  - Auto-heal nearby injured allies
-- [ ] **Building Auto-Repair** (optional research)
+**Combat Systems**
+- [x] 4 damage types (Normal, Explosive, Concussive, Psionic)
+- [x] 4 armor types (Light, Armored, Massive, Structure)
+- [x] Damage-armor multiplier matrix
+- [x] High ground advantage (30% miss chance)
+- [x] Splash damage (radius-based)
+- [x] Priority targeting
+- [x] Focus fire
+- [x] Attack-move, Hold position, Patrol
 
-### 1.5 Building Addons (MEDIUM) ✅
-- [x] **Tech Lab**
-  - Attaches to Barracks/Factory/Starport
-  - Unlocks advanced units (Marauder, Ghost, Siege Tank, Thor, etc.)
-  - Enables unit-specific upgrades
-- [x] **Reactor**
-  - Attaches to Barracks/Factory/Starport
-  - Allows training 2 units simultaneously
-  - Only basic units (Marines, Hellions, Vikings, Medivacs)
-- [x] **Addon Swap**
-  - Buildings can lift off and swap addons
-  - Strategic flexibility
+**Advanced Unit Mechanics**
+- [x] Transform system (Siege Tank, Hellion, Viking)
+- [x] Cloak system (Ghost, Banshee)
+- [x] Detection system (Missile Turret, Sensor Tower, Raven, Scanner Sweep)
+- [x] Transport system (Medivac load/unload)
+- [x] Bunker system (4-unit capacity, firing from inside)
+- [x] Healing (Medivac → biological)
+- [x] Repair (SCV → mechanical/buildings)
+- [x] Building lift-off/landing
+- [x] Addon system (Tech Lab, Reactor)
+- [x] Buff/debuff system with duration tracking
 
-### 1.6 Building Special Features (MEDIUM) ✅
-- [x] **Terran Building Lift-Off/Landing**
-  - Barracks, Factory, Starport, Command Center can lift
-  - Fly to new locations
-  - Floating buildings cannot produce
-- [x] **Supply Depot Lower/Raise**
-  - Lower supply depot to let units pass through
-  - Toggle ability
-- [x] **Orbital Command Upgrade**
-  - Upgrade Command Center
-  - Enables: MULE, Scanner Sweep, Extra Supplies
-- [x] **Planetary Fortress Upgrade**
-  - Upgrade Command Center
-  - Cannot lift off, gains powerful ground attack
+**Abilities Implemented**
+- [x] Stim Pack (HP cost, speed/attack buff)
+- [x] Concussive Shells (slow effect)
+- [x] Combat Shield (permanent +10 HP)
+- [x] Snipe (anti-biological, 150 damage)
+- [x] EMP Round (drain shields/energy in AoE)
+- [x] Nuke (10s channel, massive AoE damage)
+- [x] Yamato Cannon (3s channel, 240 single-target damage)
+- [x] Tactical Jump (teleport Battlecruiser)
+- [x] MULE (temporary mining unit)
+- [x] Scanner Sweep (reveal area)
+- [x] Supply Drop (instant supply depot)
 
-### 1.7 Complete Ability Implementations (HIGH) ✅
-- [x] **Stim Pack** - Full implementation with HP cost (10), speed/attack buff
-- [x] **Concussive Shells** - Slow effect on targets (50% for 1.07s)
-- [x] **Combat Shield** - Research for +10 Marine HP
-- [x] **Snipe** - Working against biological units only, 170 damage
-- [x] **EMP Round** - Drain shields and energy in AoE
-- [x] **Nuke** - Full implementation with Ghost channeling, warning indicator
-- [x] **Yamato Cannon** - 240 damage to single target, 3s channel
-- [x] **Tactical Jump** - Teleport Battlecruiser anywhere on map
+**AI System**
+- [x] 5 difficulty levels (Easy → Insane)
+- [x] Build order system
+- [x] Scouting behavior
+- [x] Multi-pronged attacks
+- [x] Harassment tactics
+- [x] Worker management
+- [x] Defense coordination
 
----
+**UI/UX**
+- [x] Full HUD (resources, minimap, selection, command card)
+- [x] Control groups (1-9, Ctrl+# to set, double-tap to center)
+- [x] Shift-click command queuing
+- [x] Tab to cycle subgroups
+- [x] Camera hotkeys (F5-F8)
+- [x] Idle worker button (F1)
+- [x] Under attack alerts
+- [x] Minimap pings
+- [x] Unit tooltips with stats
+- [x] Production queue panel
+- [x] Tech tree viewer
+- [x] Keyboard shortcuts help (?)
 
-## Phase 2: Enhanced AI System
+**Rendering**
+- [x] 6 biome system with distinct visuals
+- [x] PBR terrain materials
+- [x] Instanced grass/decorations
+- [x] Fog of war (3 states: unexplored/explored/visible)
+- [x] Particle effects (snow, dust, ash, spores)
+- [x] Combat effects (projectiles, impacts, damage numbers)
+- [x] Rally point visualization
 
-> **Priority**: HIGH
-> **Status**: COMPLETE
-> **Goal**: Make AI opponents challenging and fun at all difficulty levels
-
-### 2.1 Strategic AI Improvements (HIGH) ✅
-- [x] **Scouting Behavior**
-  - Send early worker scout
-  - React to enemy tech/composition
-  - Maintain map awareness with patrol units
-- [x] **Build Order System**
-  - Multiple build orders per difficulty
-  - Adapt based on scouting information
-  - Timing attacks at specific supply counts
-- [x] **Tech Progression**
-  - Research upgrades appropriately
-  - Tech switch based on enemy composition
-  - Counter-unit production
-
-### 2.2 Tactical AI (MEDIUM) ✅
-- [x] **Multi-Pronged Attacks**
-  - Harass expansions while main attack
-  - Drops with Medivacs
-  - Pincer movements
-- [x] **Micro Decisions**
-  - Focus fire high-value targets
-  - Retreat damaged units
-  - Stutter-step with ranged units
-  - Use abilities intelligently
-- [x] **Defensive Positioning**
-  - Hold ramps and chokepoints
-  - Bunker placement
-  - Turret rings for defense
-
-### 2.3 Economic AI (MEDIUM) ✅
-- [x] **Expansion Timing**
-  - Take natural expansion
-  - Saturate bases properly (16-24 workers)
-  - Recognize when to take third base
-- [x] **Worker Management**
-  - Transfer workers between bases
-  - Build appropriate number of refineries
-  - Protect workers from harassment
-
-### 2.4 Difficulty Scaling (HIGH) ✅
-- [x] **Very Easy** - Slow reactions, no micro, simple builds
-- [x] **Easy** - Basic macro, simple attack patterns
-- [x] **Medium** - Decent macro, uses abilities, scouts
-- [x] **Hard** - Good macro/micro, multi-pronged attacks
-- [x] **Very Hard** - Optimal builds, strong micro, adaptation
-- [x] **Insane** - Cheating AI (faster resources, full vision) - optional
+**Infrastructure**
+- [x] Save/Load system (multiple slots, auto-save, quick save/load)
+- [x] Victory/Defeat conditions
+- [x] Player statistics tracking
+- [x] Audio system framework (Howler.js)
+- [x] 3 playable maps
 
 ---
 
-## Phase 3: Gameplay Systems
+## Remaining Work for SC2 Parity
 
-> **Priority**: HIGH
-> **Status**: COMPLETE
-> **Goal**: Core gameplay mechanics matching SC2
+### Phase 1: Missing Dominion Features (Priority: HIGH)
 
-### 3.1 Combat Enhancements (HIGH) ✅
-- [x] **High Ground Advantage**
-  - Units on low ground have 30% miss chance vs high ground
-  - Losing vision of high ground units
-- [x] **Attack-Move Behavior**
-  - Units stop to engage enemies encountered
-  - Continue to destination after combat
-- [x] **Hold Position Enhancement**
-  - Units don't chase, stay in place
-  - Still return fire
-- [x] **Patrol Enhancement**
-  - Attack enemies encountered during patrol
-  - Continue patrol route after combat
+**Estimated Effort**: Small
 
-### 3.2 Buff/Debuff System (HIGH) ✅
-- [x] **Buff Framework**
-  - Timed stat modifications
-  - Visual indicators for active buffs
-  - Stacking rules
-- [x] **Implemented Buffs**
-  - Stim Pack (speed + attack speed)
-  - Concussive Shell slow
-  - Guardian Shield (Synthesis)
-  - Fungal Growth (Swarm)
-- [x] **Status Effect Display**
-  - Icons on unit health bars
-  - Buff timers
+#### 1.1 Missing Abilities
+- [ ] **Auto Turret** (Raven) - Deploy temporary turret
+- [ ] **Interference Matrix** (Raven) - Disable mech unit
+- [ ] **Anti-Armor Missile** (Raven) - AoE debuff
+- [ ] **Afterburners** (Medivac) - Temporary speed boost
+- [ ] **KD8 Charge** (Reaper) - Knockback grenade
+- [ ] **High Impact Payload** (Thor) - Toggle anti-air mode
 
-### 3.3 Auto-Cast System (MEDIUM) ✅
-- [x] **Toggle Auto-Cast**
-  - Right-click ability to enable/disable
-  - Visual indicator when enabled
-- [x] **Auto-Cast Abilities**
-  - Medivac Heal
-  - SCV Repair
-  - Ghost Snipe (optional)
-  - Infestor Fungal (optional)
+#### 1.2 Research Completeness
+- [ ] Verify all 36+ upgrades are properly applying effects
+- [ ] Building Auto-Repair (Engineering Bay research)
+- [ ] Neosteel Frame (Bunker +2 capacity)
 
-### 3.4 Passive Abilities (MEDIUM) ✅
-- [x] **Passive Framework**
-  - Always-active effects
-  - Conditional triggers
-- [x] **Examples**
-  - Reaper HP regeneration (out of combat)
-  - Shield regeneration (Synthesis)
-  - Creep speed bonus (Swarm)
-  - High ground vision (Sensor Tower)
-
-### 3.5 Victory/Defeat Conditions (HIGH) ✅
-- [x] **Victory Conditions**
-  - Destroy all enemy structures
-  - Enemy surrender
-  - Custom conditions (map-specific)
-- [x] **Defeat Screen**
-  - Show game statistics
-  - Option to watch replay
-  - Return to menu
-- [x] **Victory Screen**
-  - Congratulations display
-  - Statistics summary
-  - Continue or quit options
-
-### 3.6 Save/Load System (MEDIUM) ✅
-- [x] **Save Game**
-  - Serialize complete game state
-  - Save to local storage or file
-  - Multiple save slots
-- [x] **Load Game**
-  - Restore game state exactly
-  - Continue from any save point
-- [x] **Auto-Save**
-  - Periodic auto-saves during gameplay
-  - Recovery from crashes
+#### 1.3 Minor Mechanics
+- [ ] Salvage bunker (return 75% minerals)
+- [ ] Cancel construction (return 75% cost)
+- [ ] Building burning (low HP buildings take damage over time)
 
 ---
 
-## Phase 4: Second Faction - The Synthesis
+### Phase 2: Visual Polish (Priority: HIGH)
 
-> **Priority**: HIGH
-> **Goal**: Add Protoss-equivalent faction with unique mechanics
+**Estimated Effort**: Medium
 
-### 4.1 Core Mechanics
-- [ ] **Shield System**
-  - All units have shields + health
-  - Shields regenerate over time (2/sec)
-  - Shields take full damage from all types
-  - EMP drains shields completely
-- [ ] **Pylon Power Fields**
-  - Buildings require pylon power
-  - 6.5 radius power field
-  - Unpowered buildings inactive
-  - Warping requires power field
-- [ ] **Warp-In Mechanic**
-  - Gateway units warp in at pylons
-  - 5-second warp-in time
-  - Vulnerable during warp (50% HP)
-- [ ] **Chrono Boost**
-  - Nexus ability
-  - +50% production speed on target building
-  - 20-second duration, 50 energy
+#### 2.1 Unit Visual Feedback
+- [ ] **Unit Wireframes** - Silhouette in selection panel showing damage state
+- [ ] **Health bar colors** - Green → Yellow → Red gradient
+- [ ] **Shield bars** - Blue bar above health for Synthesis units
+- [ ] **Buff/debuff icons** - Small icons on unit health bars
+- [ ] **Stim effect** - Red tint on stimmed Marines/Marauders
 
-### 4.2 Units (12 Total)
-- [ ] **Probe** - Worker, builds then warps, energy-based
-- [ ] **Zealot** - Fast melee, Charge ability
-- [ ] **Stalker** - Ranged, Blink ability (teleport)
-- [ ] **Sentry** - Support caster, Guardian Shield, Force Field, Hallucination
-- [ ] **Adept** - Ranged, Psionic Transfer (shade)
-- [ ] **High Templar** - Powerful caster, Psionic Storm, Feedback
-- [ ] **Dark Templar** - Permanently cloaked melee assassin
-- [ ] **Archon** - Merged from 2 Templar, massive damage
-- [ ] **Immortal** - Anti-armor ground, Barrier ability
-- [ ] **Colossus** - Tall siege walker, cliff walking
-- [ ] **Phoenix** - Light air fighter, Graviton Beam
-- [ ] **Carrier** - Capital ship with Interceptors
-- [ ] **Void Ray** - Beam damage charges up over time
-- [ ] **Oracle** - Air caster, Revelation, Stasis Ward
+#### 2.2 Building Visuals
+- [ ] **Construction animation** - Building rising from ground
+- [ ] **Placement ghost** - Semi-transparent preview while placing
+- [ ] **Power field visualization** - For future Synthesis pylons
+- [ ] **Addon attachment preview** - Show where addon will attach
 
-### 4.3 Buildings (10 Total)
-- [ ] **Nexus** - Main building, Chrono Boost
-- [ ] **Pylon** - Power supply, warp-in point
-- [ ] **Gateway/Warp Gate** - Basic unit production, transforms
-- [ ] **Forge** - Ground upgrades
-- [ ] **Cybernetics Core** - Air/ability upgrades, unlocks tech
-- [ ] **Robotics Facility** - Mechanical ground units
-- [ ] **Robotics Bay** - Advanced mech upgrades
-- [ ] **Stargate** - Air units
-- [ ] **Fleet Beacon** - Capital ship upgrades
-- [ ] **Twilight Council** - Advanced infantry tech
-- [ ] **Templar Archives** - Templar tech
-- [ ] **Dark Shrine** - Dark Templar tech
-- [ ] **Photon Cannon** - Static defense
+#### 2.3 Ability Effects
+- [ ] **Siege Mode transform** - Mechanical unfolding animation
+- [ ] **Cloak shimmer** - Visible shimmer to unit owner
+- [ ] **Nuke targeting laser** - Red laser from Ghost to target
+- [ ] **Nuke mushroom cloud** - Explosion effect
+- [ ] **Yamato charging beam** - Energy gathering effect
+- [ ] **Tactical Jump portal** - Warp effect at origin/destination
+- [ ] **EMP wave** - Blue energy ripple
+- [ ] **Scanner Sweep circle** - Rotating scan line effect
 
-### 4.4 Research (30+ Upgrades)
+#### 2.4 Combat Effects
+- [ ] **Muzzle flashes** - Per weapon type
+- [ ] **Tracer rounds** - Visible bullet trails
+- [ ] **Explosion variations** - Small/medium/large
+- [ ] **Death animations** - Unit-specific (ragdoll infantry, explode vehicles)
+- [ ] **Destruction debris** - Wreckage remaining after unit death
+- [ ] **Impact decals** - Temporary ground marks from explosions
+
+---
+
+### Phase 3: Audio Content (Priority: HIGH)
+
+**Estimated Effort**: Medium (can use AI generation)
+
+> Reference: `.claude/AUDIO_PROMPTS.md` for generation prompts
+
+#### 3.1 Weapon Sounds
+- [ ] Gauss rifle (Marine)
+- [ ] Punisher grenades (Marauder)
+- [ ] Pistol (Reaper)
+- [ ] C-10 Rifle (Ghost)
+- [ ] Flamethrower (Hellion/Hellbat)
+- [ ] Arclite cannon (Siege Tank)
+- [ ] Thor cannons
+- [ ] Lanzer torpedoes (Viking)
+- [ ] Backlash rockets (Banshee)
+- [ ] ATS/ATA laser batteries (Battlecruiser)
+- [ ] Missile turret launch
+
+#### 3.2 Impact/Explosion Sounds
+- [ ] Bullet impact (flesh, armor, building)
+- [ ] Small explosion
+- [ ] Medium explosion
+- [ ] Large explosion (nuke)
+- [ ] Shield impact (for Synthesis)
+
+#### 3.3 Unit Voice Lines (5+ per unit)
+- [ ] SCV acknowledgments ("SCV ready", "Yes sir?", etc.)
+- [ ] Marine acknowledgments
+- [ ] Marauder acknowledgments
+- [ ] Ghost acknowledgments
+- [ ] Siege Tank acknowledgments
+- [ ] Medivac acknowledgments
+- [ ] Battlecruiser acknowledgments
+- [ ] Attack confirmations
+- [ ] Death sounds
+
+#### 3.4 Advisor Voice Lines
+- [ ] "Your base is under attack"
+- [ ] "Our base is under attack"
+- [ ] "Nuclear launch detected"
+- [ ] "Research complete"
+- [ ] "Upgrade complete"
+- [ ] "Not enough minerals"
+- [ ] "Not enough vespene gas"
+- [ ] "Supply depot required"
+- [ ] "Building complete"
+- [ ] "Unit ready"
+- [ ] "You are victorious"
+- [ ] "You have been defeated"
+
+#### 3.5 Ambient & Music
+- [ ] Menu theme
+- [ ] Gameplay ambient (per biome)
+- [ ] Combat intensity music
+- [ ] Victory fanfare
+- [ ] Defeat theme
+
+---
+
+### Phase 4: Second Faction - The Synthesis (Priority: HIGH)
+
+**Estimated Effort**: Very Large
+
+#### 4.1 Core Mechanics
+
+##### Shield System
+- [ ] All Synthesis units have shields + health
+- [ ] Shields regenerate (2/sec out of combat)
+- [ ] Shields take full damage from all types
+- [ ] EMP drains shields completely
+- [ ] Shield bar UI (blue, above health)
+
+##### Pylon Power Fields
+- [ ] Buildings require pylon power (6.5 radius)
+- [ ] Unpowered buildings become inactive
+- [ ] Power field visualization (subtle grid/glow)
+- [ ] Building placement checks for power
+- [ ] Pylon destruction disables nearby buildings
+
+##### Warp-In Mechanic
+- [ ] Gateway transforms to Warp Gate (research)
+- [ ] Warp Gate can warp units to any power field
+- [ ] 5-second warp-in animation
+- [ ] Units have 50% HP during warp-in
+- [ ] Warp-in visual effect (energy shimmer)
+
+##### Chrono Boost
+- [ ] Nexus ability (50 energy)
+- [ ] +50% production/research speed
+- [ ] 20-second duration
+- [ ] Visual indicator on boosted building
+
+#### 4.2 Units (14 total)
+
+| Unit | Role | Key Abilities |
+|------|------|---------------|
+| **Probe** | Worker | Warp-in buildings, energy-based |
+| **Zealot** | Melee | Charge (dash to target) |
+| **Stalker** | Ranged | Blink (teleport 8 range) |
+| **Sentry** | Support | Guardian Shield, Force Field, Hallucination |
+| **Adept** | Ranged | Psionic Transfer (shade scout) |
+| **High Templar** | Caster | Psionic Storm, Feedback |
+| **Dark Templar** | Assassin | Permanent cloak, high damage |
+| **Archon** | AOE | Merge from 2 Templar |
+| **Immortal** | Anti-Armor | Barrier (damage reduction) |
+| **Colossus** | Siege | Cliff walking, beam attack |
+| **Phoenix** | Air Fighter | Graviton Beam (lift unit) |
+| **Void Ray** | Air | Prismatic Alignment (charge damage) |
+| **Oracle** | Air Caster | Revelation, Stasis Ward |
+| **Carrier** | Capital | Interceptors (8 max) |
+
+#### 4.3 Buildings (13 total)
+
+| Building | Function |
+|----------|----------|
+| **Nexus** | Main, Chrono Boost |
+| **Pylon** | Power, Supply (8) |
+| **Gateway** | Infantry production |
+| **Warp Gate** | Upgraded Gateway |
+| **Forge** | Ground upgrades |
+| **Cybernetics Core** | Core tech unlock |
+| **Twilight Council** | Advanced infantry tech |
+| **Templar Archives** | Templar tech |
+| **Dark Shrine** | Dark Templar tech |
+| **Robotics Facility** | Ground mech |
+| **Robotics Bay** | Mech upgrades |
+| **Stargate** | Air units |
+| **Fleet Beacon** | Capital ship tech |
+| **Photon Cannon** | Static defense |
+
+#### 4.4 Research (30+ upgrades)
 - [ ] Ground Weapons/Armor (3 levels each)
 - [ ] Air Weapons/Armor (3 levels each)
-- [ ] Shield upgrades (3 levels)
-- [ ] Charge (Zealot speed + damage)
-- [ ] Blink (Stalker teleport)
-- [ ] Resonating Glaives (Adept attack speed)
+- [ ] Shields (3 levels)
+- [ ] Charge (Zealot)
+- [ ] Blink (Stalker)
+- [ ] Resonating Glaives (Adept)
 - [ ] Psionic Storm
-- [ ] Shadow Stride (Dark Templar Blink)
-- [ ] Extended Thermal Lance (Colossus range)
-- [ ] Graviton Catapult (Carrier)
+- [ ] Shadow Stride (DT Blink)
+- [ ] Extended Thermal Lance (Colossus +2 range)
+- [ ] Graviton Catapult (Carrier Interceptor speed)
 - [ ] Flux Vanes (Void Ray speed)
 
 ---
 
-## Phase 5: Visual Polish
+### Phase 5: Quality of Life (Priority: MEDIUM)
 
-> **Priority**: MEDIUM
-> **Goal**: Match SC2's visual feedback and clarity
+**Estimated Effort**: Medium
 
-### 5.1 Unit Animations (HIGH)
-- [ ] **Attack Animations**
-  - Per-unit attack visuals
-  - Muzzle flashes, beam effects
-  - Melee swing animations
-- [ ] **Death Animations**
-  - Ragdoll/collapse for infantry
-  - Explosion for vehicles
-  - Disintegration for energy-based
-- [ ] **Idle Animations**
-  - Subtle movement when stationary
-  - Breathing, shifting weight
+#### 5.1 Tutorial System
+- [ ] **Basic Controls** - Camera, selection, movement
+- [ ] **Economy** - Workers, gathering, supply
+- [ ] **Production** - Buildings, units, queues
+- [ ] **Combat** - Attack-move, abilities, micro
+- [ ] **Advanced** - Control groups, hotkeys, macro cycling
+- [ ] Tutorial mission framework with triggers
+- [ ] Progress tracking
 
-### 5.2 Ability Effects (HIGH)
-- [ ] **Stim Pack** - Red tint on stimmed units
-- [ ] **Siege Mode Transform** - Mechanical animation
-- [ ] **Psionic Storm** - Lightning field effect
-- [ ] **Nuke** - Laser target, mushroom cloud
-- [ ] **Yamato Cannon** - Charging beam, massive blast
-- [ ] **Warp-In** - Protoss energy shimmer
-- [ ] **Blink** - Teleport particle effect
-- [ ] **EMP** - Blue energy wave
-- [ ] **Cloak** - Shimmer/invisibility shader
-
-### 5.3 UI Enhancements (MEDIUM)
-- [ ] **Unit Wireframes**
-  - Damaged state visualization
-  - Green → Yellow → Red coloring
-  - In selection panel
-- [ ] **Unit Portraits**
-  - Animated unit face/icon
-  - Voice sync (future)
-- [ ] **Status Effects HUD**
-  - Buff/debuff icons
-  - Timers for temporary effects
-- [ ] **Building Placement Preview**
-  - Ghost building while placing
-  - Red/green for valid/invalid
-  - Power field visualization
-
-### 5.4 Environmental Effects (LOW)
-- [ ] **Day/Night Cycle** (optional)
-- [ ] **Dynamic Weather**
-  - Rain, snow, sandstorm
-  - Visual only (no gameplay impact)
-- [ ] **Destruction Debris**
-  - Wreckage from destroyed units
-  - Craters from explosions
-
----
-
-## Phase 6: Audio Content
-
-> **Priority**: MEDIUM
-> **Goal**: Immersive audio matching SC2's production quality
-
-### 6.1 Sound Effects (HIGH)
-- [ ] **Generate Weapon Sounds**
-  - Gauss rifle (Marine)
-  - Siege cannon
-  - Flamethrower
-  - Laser weapons
-  - Missile launchers
-- [ ] **Impact Sounds**
-  - Bullet impacts
-  - Explosions (small/medium/large)
-  - Shield impacts
-- [ ] **Unit Sounds**
-  - Footsteps (infantry vs mech)
-  - Engine sounds (vehicles/aircraft)
-  - Death screams/explosions
-
-### 6.2 Voice Lines (MEDIUM)
-- [ ] **Complete Dominion Voices**
-  - 5+ acknowledgments per unit
-  - Attack, move, special ability lines
-  - Under attack warnings
-- [ ] **Synthesis Voice Lines**
-  - Robotic/ethereal voices
-  - Unique personality per unit
-- [ ] **Advisor Voice**
-  - "Your base is under attack"
-  - "Research complete"
-  - "Not enough minerals"
-  - "Spawn more overlords" equivalent
-
-### 6.3 Music System (LOW)
-- [ ] **Menu Music** - Atmospheric, building tension
-- [ ] **Gameplay Music** - Dynamic based on combat intensity
-- [ ] **Victory/Defeat Themes**
-- [ ] **Faction-Specific Themes**
-
----
-
-## Phase 7: Quality of Life
-
-> **Priority**: MEDIUM
-> **Goal**: Polish and accessibility features
-
-### 7.1 Tutorial System (HIGH)
-- [ ] **Basic Tutorial**
-  - Camera controls
-  - Unit selection
-  - Movement commands
-  - Attack commands
-- [ ] **Economy Tutorial**
-  - Worker gathering
-  - Building construction
-  - Supply management
-- [ ] **Combat Tutorial**
-  - Attack-move
-  - Focus fire
-  - Retreating
-  - Using abilities
-- [ ] **Advanced Tutorial**
-  - Control groups
-  - Hotkeys
-  - Macro cycling
-  - Micro techniques
-
-### 7.2 Settings & Customization (MEDIUM)
-- [ ] **Custom Hotkeys**
-  - Rebindable keys
-  - Profile saving
-  - Import/export
+#### 5.2 Settings & Customization
+- [ ] **Custom Hotkeys** - Rebindable keys
+- [ ] Hotkey profiles (save/load)
 - [ ] **Graphics Settings**
   - Quality presets (Low/Medium/High/Ultra)
-  - Individual toggles (shadows, particles, etc.)
+  - Individual toggles (shadows, particles, grass)
   - Resolution options
+  - FPS cap
 - [ ] **Audio Settings**
-  - Master volume
-  - Music/SFX/Voice sliders
-  - Mute options
+  - Master/Music/SFX/Voice sliders
+  - Mute toggles
 - [ ] **Gameplay Settings**
-  - Game speed
-  - Mouse scroll speed
-  - Edge scroll toggle
+  - Game speed slider
+  - Mouse sensitivity
+  - Edge scroll toggle/speed
+  - Minimap settings
 
-### 7.3 Game Modes (MEDIUM)
-- [ ] **Skirmish vs AI**
-  - Multiple AI opponents
-  - Team games (2v2, 3v3)
-  - FFA (Free for All)
+#### 5.3 Skirmish Enhancements
+- [ ] **Multiple AI Opponents** - 2v2, 3v3, FFA
+- [ ] **Team Games** - Allied AI vs enemy AI
 - [ ] **Custom Game Options**
-  - Starting resources
-  - Map reveal
-  - AI difficulty per player
+  - Starting resources (Low/Medium/High)
+  - Map reveal (normal/explored/revealed)
+  - Per-player AI difficulty
   - Disable fog of war
+  - Starting units options
 - [ ] **Challenge Modes**
-  - Time trials
-  - Puzzle scenarios
+  - Time trials (build X units in Y time)
   - Economy challenges
+  - Micro challenges
+  - Defense scenarios
 
-### 7.4 Map Generator (LOW)
-- [ ] **Procedural Generation**
-  - Balanced spawn positions
-  - Resource distribution
-  - Terrain variation
-- [ ] **Seed System**
-  - Reproducible maps
-  - Share map seeds
+#### 5.4 Procedural Map Generator
+- [ ] Balanced spawn positions
+- [ ] Resource distribution algorithm
+- [ ] Terrain variation (ramps, cliffs)
+- [ ] Seed system for reproducibility
+- [ ] Map sharing via seed codes
+- [ ] Biome selection
 
 ---
 
-## Phase 8: Third Faction - The Swarm
+### Phase 6: Replay System (Priority: MEDIUM)
 
-> **Priority**: LOW (After Synthesis is complete)
-> **Goal**: Add Zerg-equivalent faction with unique mechanics
+**Estimated Effort**: Medium
 
-### 8.1 Core Mechanics
-- [ ] **Creep System**
-  - Spreads from Hatcheries and Tumors
-  - +30% movement speed for Swarm units on creep
-  - Provides vision
-  - Creep Tumors spread creep
-- [ ] **Larva System**
-  - Hatchery spawns larva (max 3)
-  - Queen Inject increases larva (max +3)
-  - All units morph from larva
-- [ ] **Morph Mechanic**
-  - Units transform into other units
-  - Buildings morph from Drones
-  - Drone is consumed
-- [ ] **Burrow**
-  - Most units can burrow
-  - Invisible and untargetable
-  - Cannot attack while burrowed (except Lurker)
-- [ ] **Regeneration**
-  - All Swarm units regenerate HP
-  - Faster regeneration on creep
+#### 6.1 Recording
+- [ ] Record all commands with tick numbers
+- [ ] Store initial game state
+- [ ] Metadata (players, map, duration, winner)
+- [ ] Compression for storage
 
-### 8.2 Units (14 Total)
-- [ ] **Drone** - Worker, morphs into buildings
-- [ ] **Zergling** - Fast, cheap melee (2 per larva)
-- [ ] **Baneling** - Suicide bomber (morphs from Zergling)
-- [ ] **Roach** - Armored, burrow movement, regen
-- [ ] **Ravager** - Artillery (morphs from Roach)
-- [ ] **Hydralisk** - Ranged DPS
-- [ ] **Lurker** - Burrowed siege (morphs from Hydra)
-- [ ] **Queen** - Base defender, Inject Larva, Creep Tumor, Transfuse
-- [ ] **Mutalisk** - Fast air harasser, bouncing attack
-- [ ] **Corruptor** - Anti-air, Corruption ability
-- [ ] **Brood Lord** - Siege air (morphs from Corruptor)
-- [ ] **Infestor** - Caster, Fungal Growth, Neural Parasite
-- [ ] **Swarm Host** - Spawns Locusts
-- [ ] **Ultralisk** - Massive melee tank
-- [ ] **Viper** - Air caster, Abduct, Blinding Cloud
+#### 6.2 Playback
+- [ ] Reconstruct game state from commands
+- [ ] Playback controls (play, pause, speed)
+- [ ] Speed adjustment (0.5x, 1x, 2x, 4x, 8x)
+- [ ] Scrubbing (jump to any point)
+- [ ] Player perspective toggle
 
-### 8.3 Buildings (9 Total)
-- [ ] **Hatchery/Lair/Hive** - Main building, produces larva, upgrades
-- [ ] **Spawning Pool** - Unlocks Zerglings, Queen
-- [ ] **Baneling Nest** - Baneling morph
-- [ ] **Roach Warren** - Roach production
-- [ ] **Hydralisk Den** - Hydralisk production
-- [ ] **Lurker Den** - Lurker morph
-- [ ] **Spire/Greater Spire** - Air units
-- [ ] **Infestation Pit** - Infestor, Swarm Host
-- [ ] **Ultralisk Cavern** - Ultralisk
-- [ ] **Evolution Chamber** - Ground upgrades
-- [ ] **Extractor** - Vespene harvesting
-- [ ] **Spine Crawler** - Anti-ground defense (can uproot)
-- [ ] **Spore Crawler** - Anti-air defense (can uproot)
-- [ ] **Nydus Network/Worm** - Instant unit transport
+#### 6.3 Analysis Features
+- [ ] Production tab (what each player built)
+- [ ] Army value graph over time
+- [ ] Resource income graph
+- [ ] APM graph
+- [ ] Unit composition timeline
+- [ ] Event markers (battles, expansions)
 
-### 8.4 Research (25+ Upgrades)
+---
+
+### Phase 7: Third Faction - The Swarm (Priority: LOW)
+
+**Estimated Effort**: Very Large
+
+#### 7.1 Core Mechanics
+
+##### Creep System
+- [ ] Spreads from Hatcheries and Creep Tumors
+- [ ] +30% movement speed for Swarm units on creep
+- [ ] Provides vision while on creep
+- [ ] Creep Tumors spread creep (build from Queen)
+- [ ] Creep recedes when source destroyed
+- [ ] Visual: purple organic texture on terrain
+
+##### Larva System
+- [ ] Hatchery passively spawns larva (max 3)
+- [ ] Queen Inject Larva ability (+3 larva)
+- [ ] All units morph from larva
+- [ ] Larva select all on Hatchery select
+
+##### Morph Mechanic
+- [ ] Units transform into other units (Zergling → Baneling)
+- [ ] Drones morph into buildings (consumed)
+- [ ] Building upgrades (Hatchery → Lair → Hive)
+
+##### Burrow
+- [ ] Most units can burrow (research)
+- [ ] Burrowed units invisible
+- [ ] Cannot attack while burrowed (except Lurker, Infestor)
+- [ ] Detector reveals burrowed units
+
+##### Regeneration
+- [ ] All Swarm units passively regenerate HP
+- [ ] +100% regen speed on creep
+
+#### 7.2 Units (14 total)
+
+| Unit | Role | Key Abilities |
+|------|------|---------------|
+| **Drone** | Worker | Morphs into buildings |
+| **Zergling** | Swarm | Fast, cheap (2 per egg) |
+| **Baneling** | Suicide | Morphs from Zergling, explodes |
+| **Roach** | Armored | Burrow movement, high regen |
+| **Ravager** | Artillery | Morphs from Roach, Corrosive Bile |
+| **Hydralisk** | Ranged DPS | Versatile anti-air/ground |
+| **Lurker** | Siege | Burrow attack, line splash |
+| **Queen** | Support | Inject Larva, Creep Tumor, Transfuse |
+| **Mutalisk** | Harass | Bouncing attack |
+| **Corruptor** | Anti-Air | Corruption debuff |
+| **Brood Lord** | Siege Air | Morphs from Corruptor, spawns Broodlings |
+| **Infestor** | Caster | Fungal Growth, Neural Parasite |
+| **Swarm Host** | Siege | Spawns Locusts |
+| **Ultralisk** | Tank | Massive melee, Frenzied (cannot be CC'd) |
+| **Viper** | Air Caster | Abduct, Blinding Cloud, Parasitic Bomb |
+
+#### 7.3 Buildings (13 total)
+
+| Building | Function |
+|----------|----------|
+| **Hatchery** | Main, Larva production |
+| **Lair** | Upgrade from Hatchery |
+| **Hive** | Upgrade from Lair |
+| **Spawning Pool** | Zergling, Queen unlock |
+| **Baneling Nest** | Baneling morph |
+| **Roach Warren** | Roach production |
+| **Hydralisk Den** | Hydralisk production |
+| **Lurker Den** | Lurker morph |
+| **Infestation Pit** | Infestor, Swarm Host |
+| **Ultralisk Cavern** | Ultralisk |
+| **Spire** | Air units |
+| **Greater Spire** | Brood Lord morph |
+| **Evolution Chamber** | Ground upgrades |
+| **Extractor** | Vespene gathering |
+| **Spine Crawler** | Ground defense (can uproot) |
+| **Spore Crawler** | Air defense (can uproot) |
+| **Nydus Network** | Unit teleport network |
+| **Nydus Worm** | Exit point for Network |
+
+#### 7.4 Research (25+ upgrades)
 - [ ] Melee/Ranged/Carapace (3 levels each)
 - [ ] Flyer Attack/Carapace (3 levels each)
 - [ ] Metabolic Boost (Zergling speed)
@@ -566,88 +504,99 @@
 - [ ] Tunneling Claws (Roach burrow move)
 - [ ] Muscular Augments (Hydra speed)
 - [ ] Grooved Spines (Hydra range)
-- [ ] Chitinous Plating (Ultralisk armor)
+- [ ] Chitinous Plating (Ultra armor)
+- [ ] Burrow (all units)
 
 ---
 
-## Implementation Priority Matrix
+## Implementation Priority Summary
 
-| Phase | Priority | Estimated Effort | Dependencies |
-|-------|----------|------------------|--------------|
-| 1. Complete Dominion | CRITICAL | Large | None |
-| 2. Enhanced AI | HIGH | Large | Phase 1 |
-| 3. Gameplay Systems | HIGH | Medium | Phase 1 |
-| 4. Synthesis Faction | HIGH | Very Large | Phase 1, 3 |
-| 5. Visual Polish | MEDIUM | Medium | Phase 1 |
-| 6. Audio Content | MEDIUM | Medium | Phase 1 |
-| 7. Quality of Life | MEDIUM | Medium | Phase 3 |
-| 8. Swarm Faction | LOW | Very Large | Phase 4 |
+| Phase | Priority | Effort | Dependencies | SC2 Value |
+|-------|----------|--------|--------------|-----------|
+| **1. Missing Dominion** | HIGH | Small | None | Low |
+| **2. Visual Polish** | HIGH | Medium | None | High |
+| **3. Audio Content** | HIGH | Medium | None | High |
+| **4. Synthesis Faction** | HIGH | Very Large | None | Critical |
+| **5. Quality of Life** | MEDIUM | Medium | None | Medium |
+| **6. Replay System** | MEDIUM | Medium | Phase 1-3 | Medium |
+| **7. Swarm Faction** | LOW | Very Large | Phase 4 | Critical |
 
 ---
 
 ## Recommended Implementation Order
 
-### Sprint 1: Dominion Core (Weeks 1-2)
-1. Transform mechanics (Siege Tank, Viking)
-2. Cloak & Detection system
-3. High ground advantage
-4. Complete ability implementations
+### Sprint 1: Polish Existing (1-2 weeks)
+1. Finish remaining Dominion abilities (Raven, Reaper)
+2. Unit wireframes in selection panel
+3. Building placement ghost preview
+4. Generate weapon sound effects
 
-### Sprint 2: Transport & Buildings (Weeks 3-4)
-1. Medivac load/unload
-2. Bunker system
-3. Building addons (Tech Lab/Reactor)
-4. Lift-off/Landing
+### Sprint 2: Visual Effects (2-3 weeks)
+1. Ability visual effects (Siege Mode, Cloak, Nuke)
+2. Death animations and debris
+3. Muzzle flashes and tracers
+4. Complete audio generation
 
-### Sprint 3: AI Enhancement (Weeks 5-6)
-1. Scouting behavior
-2. Build order system
-3. Difficulty scaling
-4. Basic micro decisions
+### Sprint 3: Quality of Life (2-3 weeks)
+1. Basic tutorial (4 missions)
+2. Settings menus (graphics, audio, hotkeys)
+3. Skirmish options (multiple AI, teams)
 
-### Sprint 4: Gameplay Polish (Weeks 7-8)
-1. Buff/Debuff system
-2. Auto-cast
-3. Victory/Defeat screens
-4. Save/Load system
+### Sprint 4-6: Synthesis Faction (4-6 weeks)
+1. Shield system and pylon power
+2. Core units (Probe, Zealot, Stalker, Immortal)
+3. Warp Gate mechanic
+4. Air units (Phoenix, Void Ray, Carrier)
+5. Caster units (Sentry, HT, DT, Archon)
+6. Complete buildings and upgrades
 
-### Sprint 5: Synthesis Faction (Weeks 9-12)
-1. Shield system & Pylon power
-2. Core units (Zealot, Stalker, Immortal)
-3. Warp-in mechanic
-4. Complete unit roster
+### Sprint 7: Replay System (2 weeks)
+1. Command recording
+2. Playback with controls
+3. Basic analysis features
 
-### Sprint 6: Content & Polish (Weeks 13-14)
-1. Tutorial system
-2. Settings menus
-3. Visual effects
-4. Audio assets
-
-### Sprint 7: Swarm Faction (Weeks 15-18)
-1. Creep system & Larva
-2. Core units (Zergling, Roach, Hydra)
-3. Morph mechanics
-4. Complete unit roster
+### Sprint 8-10: Swarm Faction (4-6 weeks)
+1. Creep and Larva systems
+2. Core units (Zergling, Roach, Hydra, Queen)
+3. Morph mechanics (Baneling, Lurker, Brood Lord)
+4. Advanced units (Infestor, Ultra, Viper)
+5. Buildings and upgrades
 
 ---
 
-## Success Metrics
+## Success Criteria
 
-A successful SC2 parity implementation should achieve:
+A successful SC2-parity implementation achieves:
 
-1. **Gameplay Feel**: Controls and responsiveness match SC2
-2. **Strategic Depth**: Multiple viable strategies per faction
-3. **AI Challenge**: Hard AI defeats average players
-4. **Visual Clarity**: Easy to understand unit health, abilities, terrain
-5. **Audio Feedback**: Every action has appropriate sound response
-6. **Polish**: No major bugs, smooth performance at 60 FPS
+1. **Gameplay Feel**: Controls match SC2 responsiveness (already achieved)
+2. **Strategic Depth**: 3 asymmetric factions with unique mechanics
+3. **AI Challenge**: Insane AI defeats most players
+4. **Visual Clarity**: Unit state, abilities, and terrain instantly readable
+5. **Audio Feedback**: Every action has appropriate sound
+6. **Polish**: 60 FPS with 200+ units, no major bugs
+7. **Accessibility**: Tutorial teaches new players, custom hotkeys for veterans
+
+---
+
+## What's NOT in Scope (Multiplayer Phase)
+
+These features are excluded from this roadmap:
+- Authentication (Supabase Auth)
+- Lobby system
+- Network synchronization (lockstep)
+- Matchmaking
+- Ranked/ELO system
+- Leaderboards
+- Anti-cheat
+- Reconnection handling
+- Spectator mode (live)
 
 ---
 
 ## Notes
 
-- This roadmap excludes multiplayer features (networking, matchmaking, ranked)
-- Time estimates assume a solo developer; scale accordingly for teams
-- Each phase can be shipped independently for early player feedback
-- Audio assets can be generated using AI tools per AUDIO_PROMPTS.md
-- Prioritize gameplay feel over visual polish initially
+- Time estimates assume a solo developer
+- Each sprint can be shipped for player feedback
+- Audio can be AI-generated per AUDIO_PROMPTS.md
+- Prioritize gameplay feel over visual polish
+- Test extensively with AI at each phase
