@@ -79,6 +79,8 @@ jobs:
             echo "Processing: $file"
             dir=$(dirname "$file")
             base=$(basename "$file")
+            # Use temp filename with .glb extension so gltf-transform outputs GLB format
+            temp_file="optimized_${base}"
 
             # Get original size
             original_size=$(stat -c%s "$file")
@@ -87,9 +89,9 @@ jobs:
             # Change to file directory to avoid path issues with gltf-transform
             pushd "$dir" > /dev/null
 
-            # Only apply Draco compression (resize was extracting textures)
+            # Apply Draco compression - output must end in .glb to stay as binary GLB
             echo "  Applying Draco compression..."
-            gltf-transform draco "$base" "${base}.optimized" || {
+            gltf-transform draco "$base" "$temp_file" || {
               echo "  ⚠️ Draco compression failed, keeping original"
               popd > /dev/null
               continue
@@ -100,21 +102,24 @@ jobs:
             ls -la *.glb* 2>/dev/null || true
 
             # Check if optimized file exists and has reasonable size
-            if [ -f "${base}.optimized" ]; then
-              opt_size=$(stat -c%s "${base}.optimized")
+            if [ -f "$temp_file" ]; then
+              opt_size=$(stat -c%s "$temp_file")
               echo "  Optimized file size: $((opt_size / 1024)) KB"
 
-              # Only replace if optimized file is > 100KB (sanity check)
-              if [ $opt_size -gt 102400 ]; then
-                mv "${base}.optimized" "$base"
+              # Only replace if optimized file is > 1MB (sanity check for these large models)
+              if [ $opt_size -gt 1048576 ]; then
+                mv "$temp_file" "$base"
                 echo "  ✅ Replaced with optimized version"
               else
-                echo "  ⚠️ Optimized file too small ($opt_size bytes), keeping original"
-                rm -f "${base}.optimized"
+                echo "  ⚠️ Optimized file too small ($((opt_size / 1024)) KB), keeping original"
+                rm -f "$temp_file"
               fi
             else
               echo "  ⚠️ Optimized file not found, keeping original"
             fi
+
+            # Clean up any extracted .bin files
+            rm -f *.bin 2>/dev/null || true
 
             popd > /dev/null
 
