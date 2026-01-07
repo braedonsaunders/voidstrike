@@ -2,12 +2,15 @@ import { System } from '../ecs/System';
 import { Transform } from '../components/Transform';
 import { Unit } from '../components/Unit';
 import { Velocity } from '../components/Velocity';
+import { Building } from '../components/Building';
 import { Game } from '../core/Game';
 
 // Steering behavior constants
 const SEPARATION_RADIUS = 2.0; // Units start avoiding at this distance
 const SEPARATION_STRENGTH = 8.0; // How strongly units push apart
 const MAX_AVOIDANCE_FORCE = 5.0; // Cap on avoidance force
+const BUILDING_AVOIDANCE_STRENGTH = 15.0; // Stronger push from buildings
+const BUILDING_AVOIDANCE_MARGIN = 0.5; // Extra margin around buildings
 
 export class MovementSystem extends System {
   public priority = 10;
@@ -117,6 +120,7 @@ export class MovementSystem extends System {
   /**
    * Calculate separation force (boids-like avoidance)
    * Units push away from nearby units to avoid overlapping
+   * Uses spatial grid for O(1) lookups instead of checking all entities
    */
   private calculateSeparationForce(
     selfId: number,
@@ -126,13 +130,22 @@ export class MovementSystem extends System {
     let forceX = 0;
     let forceY = 0;
 
-    const entities = this.world.getEntitiesWith('Transform', 'Unit');
+    // Use spatial grid to find nearby units - only check units within separation radius
+    const nearbyIds = this.world.unitGrid.queryRadius(
+      selfTransform.x,
+      selfTransform.y,
+      SEPARATION_RADIUS + selfUnit.collisionRadius
+    );
 
-    for (const entity of entities) {
-      if (entity.id === selfId) continue;
+    for (const entityId of nearbyIds) {
+      if (entityId === selfId) continue;
 
-      const otherTransform = entity.get<Transform>('Transform')!;
-      const otherUnit = entity.get<Unit>('Unit')!;
+      const entity = this.world.getEntity(entityId);
+      if (!entity) continue;
+
+      const otherTransform = entity.get<Transform>('Transform');
+      const otherUnit = entity.get<Unit>('Unit');
+      if (!otherTransform || !otherUnit) continue;
 
       // Skip dead units
       if (otherUnit.state === 'dead') continue;
@@ -170,9 +183,99 @@ export class MovementSystem extends System {
     return { x: forceX, y: forceY };
   }
 
+  /**
+   * Calculate building avoidance force
+   * Units are pushed away from buildings they're overlapping with
+   * Uses spatial grid for O(1) lookups
+   */
+  private calculateBuildingAvoidanceForce(
+    selfTransform: Transform,
+    selfUnit: Unit
+  ): { x: number; y: number } {
+    // Flying units don't collide with buildings
+    if (selfUnit.isFlying) {
+      return { x: 0, y: 0 };
+    }
+
+    let forceX = 0;
+    let forceY = 0;
+
+    // Use spatial grid to find nearby buildings
+    const nearbyBuildingIds = this.world.buildingGrid.queryRadius(
+      selfTransform.x,
+      selfTransform.y,
+      BUILDING_AVOIDANCE_MARGIN + selfUnit.collisionRadius + 5 // Extra range for large buildings
+    );
+
+    for (const buildingId of nearbyBuildingIds) {
+      const entity = this.world.getEntity(buildingId);
+      if (!entity) continue;
+
+      const buildingTransform = entity.get<Transform>('Transform');
+      const building = entity.get<Building>('Building');
+      if (!buildingTransform || !building) continue;
+
+      // Get building bounds (center-based)
+      const halfWidth = building.width / 2 + BUILDING_AVOIDANCE_MARGIN;
+      const halfHeight = building.height / 2 + BUILDING_AVOIDANCE_MARGIN;
+
+      // Calculate closest point on building to unit
+      const clampedX = Math.max(
+        buildingTransform.x - halfWidth,
+        Math.min(selfTransform.x, buildingTransform.x + halfWidth)
+      );
+      const clampedY = Math.max(
+        buildingTransform.y - halfHeight,
+        Math.min(selfTransform.y, buildingTransform.y + halfHeight)
+      );
+
+      // Distance from unit to closest point on building
+      const dx = selfTransform.x - clampedX;
+      const dy = selfTransform.y - clampedY;
+      const distance = Math.sqrt(dx * dx + dy * dy);
+
+      // If unit is overlapping with building (within collision radius)
+      const collisionDist = selfUnit.collisionRadius + BUILDING_AVOIDANCE_MARGIN;
+
+      if (distance < collisionDist && distance > 0.01) {
+        // Push unit away from building
+        const strength = BUILDING_AVOIDANCE_STRENGTH * (1 - distance / collisionDist);
+        const normalizedDx = dx / distance;
+        const normalizedDy = dy / distance;
+
+        forceX += normalizedDx * strength;
+        forceY += normalizedDy * strength;
+      } else if (distance < 0.01) {
+        // Unit is inside building - push toward center direction
+        const toCenterX = selfTransform.x - buildingTransform.x;
+        const toCenterY = selfTransform.y - buildingTransform.y;
+        const toCenterDist = Math.sqrt(toCenterX * toCenterX + toCenterY * toCenterY);
+
+        if (toCenterDist > 0.01) {
+          forceX += (toCenterX / toCenterDist) * BUILDING_AVOIDANCE_STRENGTH;
+          forceY += (toCenterY / toCenterDist) * BUILDING_AVOIDANCE_STRENGTH;
+        } else {
+          // Exactly at center - push in random direction
+          forceX += BUILDING_AVOIDANCE_STRENGTH;
+        }
+      }
+    }
+
+    return { x: forceX, y: forceY };
+  }
+
   public update(deltaTime: number): void {
     const entities = this.world.getEntitiesWith('Transform', 'Unit', 'Velocity');
     const dt = deltaTime / 1000; // Convert to seconds
+
+    // Update all unit positions in spatial grid at start of frame
+    for (const entity of entities) {
+      const transform = entity.get<Transform>('Transform')!;
+      const unit = entity.get<Unit>('Unit')!;
+      if (unit.state !== 'dead') {
+        this.world.unitGrid.update(entity.id, transform.x, transform.y, unit.collisionRadius);
+      }
+    }
 
     for (const entity of entities) {
       const transform = entity.get<Transform>('Transform')!;
@@ -182,6 +285,7 @@ export class MovementSystem extends System {
       // Skip dead units
       if (unit.state === 'dead') {
         velocity.zero();
+        this.world.unitGrid.remove(entity.id);
         continue;
       }
 
@@ -293,6 +397,9 @@ export class MovementSystem extends System {
         ? this.calculateSeparationForce(entity.id, transform, unit)
         : { x: 0, y: 0 }; // No separation when nearly arrived
 
+      // Calculate building avoidance (always active)
+      const buildingAvoidance = this.calculateBuildingAvoidanceForce(transform, unit);
+
       // Normalize direction to target
       let dirX = distance > 0.01 ? dx / distance : 0;
       let dirY = distance > 0.01 ? dy / distance : 0;
@@ -300,6 +407,10 @@ export class MovementSystem extends System {
       // Add separation force to direction (reduced near destination)
       dirX += separation.x * separationWeight;
       dirY += separation.y * separationWeight;
+
+      // Add building avoidance (with full weight - buildings are solid)
+      dirX += buildingAvoidance.x;
+      dirY += buildingAvoidance.y;
 
       // Re-normalize
       const newMag = Math.sqrt(dirX * dirX + dirY * dirY);

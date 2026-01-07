@@ -15,6 +15,7 @@ import { RallyPointRenderer } from '@/rendering/RallyPointRenderer';
 import { useGameStore } from '@/store/gameStore';
 import { useGameSetupStore } from '@/store/gameSetupStore';
 import { SelectionBox } from './SelectionBox';
+import { LoadingScreen } from './LoadingScreen';
 import { spawnInitialEntities } from '@/utils/gameSetup';
 import { DEFAULT_MAP, MapData } from '@/data/maps';
 import { Resource } from '@/engine/components/Resource';
@@ -23,6 +24,7 @@ import { Building } from '@/engine/components/Building';
 import { Selectable } from '@/engine/components/Selectable';
 import { Transform } from '@/engine/components/Transform';
 import { Health } from '@/engine/components/Health';
+import AssetManager from '@/assets/AssetManager';
 
 // Get current map (will support map selection later)
 const CURRENT_MAP: MapData = DEFAULT_MAP;
@@ -49,6 +51,11 @@ export function GameCanvas() {
   const [isAttackMove, setIsAttackMove] = useState(false);
   const [isPatrolMode, setIsPatrolMode] = useState(false);
 
+  // Loading state
+  const [isLoading, setIsLoading] = useState(true);
+  const [loadingProgress, setLoadingProgress] = useState(0);
+  const [loadingStatus, setLoadingStatus] = useState('Initializing');
+
   // Track double-tap for control groups
   const lastControlGroupTap = useRef<{ group: number; time: number } | null>(null);
 
@@ -61,9 +68,38 @@ export function GameCanvas() {
   useEffect(() => {
     if (!containerRef.current || !canvasRef.current) return;
 
-    // Create renderer with performance optimizations
-    const renderer = new THREE.WebGLRenderer({
-      canvas: canvasRef.current,
+    // Load all assets before starting the game
+    const initializeGame = async () => {
+      setLoadingStatus('Loading 3D models');
+      setLoadingProgress(10);
+
+      // Load all custom models first
+      await AssetManager.loadCustomModels();
+      setLoadingProgress(60);
+
+      setLoadingStatus('Preparing game world');
+      setLoadingProgress(70);
+
+      // Small delay to ensure render
+      await new Promise(resolve => setTimeout(resolve, 100));
+
+      // Now initialize the game
+      initializeGameWorld();
+
+      setLoadingProgress(100);
+      setLoadingStatus('Ready');
+
+      // Fade out loading screen
+      await new Promise(resolve => setTimeout(resolve, 300));
+      setIsLoading(false);
+    };
+
+    const initializeGameWorld = () => {
+      if (!canvasRef.current) return;
+
+      // Create renderer with performance optimizations
+      const renderer = new THREE.WebGLRenderer({
+        canvas: canvasRef.current,
       antialias: false, // PERFORMANCE: Disable antialiasing - major GPU cost
       powerPreference: 'high-performance',
     });
@@ -214,23 +250,39 @@ export function GameCanvas() {
       camera.camera.updateProjectionMatrix();
     };
 
-    window.addEventListener('resize', handleResize);
+      window.addEventListener('resize', handleResize);
+    };
 
-    // Cleanup
+    // Store cleanup function in ref
+    const cleanupRef = { current: () => {} };
+
+    // Wrapper to track cleanup
+    const wrappedInit = async () => {
+      await initializeGame();
+
+      // Set up cleanup after initialization
+      cleanupRef.current = () => {
+        if (rendererRef.current) rendererRef.current.dispose();
+        if (environmentRef.current) environmentRef.current.dispose();
+        fogOfWarRef.current?.dispose();
+        effectsRendererRef.current?.dispose();
+        rallyPointRendererRef.current?.dispose();
+        cameraRef.current?.dispose();
+        unitRendererRef.current?.dispose();
+        buildingRendererRef.current?.dispose();
+        resourceRendererRef.current?.dispose();
+        if (gameRef.current) {
+          gameRef.current.audioSystem.dispose();
+          Game.resetInstance();
+        }
+      };
+    };
+
+    wrappedInit();
+
+    // Return cleanup function
     return () => {
-      window.removeEventListener('resize', handleResize);
-      renderer.dispose();
-      environment.dispose();
-      grid.dispose();
-      fogOfWarRef.current?.dispose();
-      effectsRenderer.dispose();
-      rallyPointRenderer.dispose();
-      camera.dispose();
-      unitRendererRef.current?.dispose();
-      buildingRendererRef.current?.dispose();
-      resourceRendererRef.current?.dispose();
-      game.audioSystem.dispose();
-      Game.resetInstance();
+      cleanupRef.current();
     };
   }, []);
 
@@ -684,6 +736,11 @@ export function GameCanvas() {
       onMouseUp={handleMouseUp}
       onContextMenu={handleContextMenu}
     >
+      {/* Loading screen */}
+      {isLoading && (
+        <LoadingScreen progress={loadingProgress} status={loadingStatus} />
+      )}
+
       <canvas ref={canvasRef} className="w-full h-full" />
 
       {isSelecting && (

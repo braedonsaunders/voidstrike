@@ -61,7 +61,8 @@ export class Game {
   private constructor(config: Partial<GameConfig> = {}) {
     this.config = { ...DEFAULT_CONFIG, ...config };
     this.eventBus = new EventBus();
-    this.world = new World();
+    // Pass map dimensions for spatial grid initialization
+    this.world = new World(this.config.mapWidth, this.config.mapHeight);
     this.gameLoop = new GameLoop(this.config.tickRate, this.update.bind(this));
 
     // Initialize vision system (needs to be created before other systems)
@@ -161,6 +162,9 @@ export class Game {
     if (this.state !== 'running') return;
 
     this.currentTick++;
+
+    // Set current tick for query cache invalidation
+    this.world.setCurrentTick(this.currentTick);
 
     // Update all systems
     this.world.update(deltaTime);

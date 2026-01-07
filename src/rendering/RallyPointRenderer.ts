@@ -114,9 +114,9 @@ export class RallyPointRenderer {
       if (!building || !transform) continue;
       if (building.rallyX === null || building.rallyY === null) continue;
 
-      // Calculate building center
-      const buildingCenterX = transform.x + building.width / 2;
-      const buildingCenterY = transform.y + building.height / 2;
+      // Building position is already center-based
+      const buildingCenterX = transform.x;
+      const buildingCenterY = transform.y;
 
       const existing = this.rallyPoints.get(buildingId);
 

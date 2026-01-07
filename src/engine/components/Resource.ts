@@ -15,6 +15,8 @@ export class Resource extends Component {
 
   // For vespene: the refinery entity ID (null if no refinery built)
   public refineryEntityId: number | null = null;
+  // Callback to check if refinery is complete (set by game systems)
+  private _refineryCompleteChecker: ((entityId: number) => boolean) | null = null;
 
   constructor(
     resourceType: ResourceType,
@@ -33,16 +35,34 @@ export class Resource extends Component {
     this.maxGatherers = maxGatherers;
   }
 
+  /**
+   * Set a function to check if the refinery building is complete.
+   * This allows the Resource component to verify refinery status without
+   * importing Game/World (avoiding circular dependencies).
+   */
+  public setRefineryCompleteChecker(checker: (entityId: number) => boolean): void {
+    this._refineryCompleteChecker = checker;
+  }
+
   public canGather(): boolean {
-    // Vespene requires a refinery to be built
-    if (this.resourceType === 'vespene' && this.refineryEntityId === null) {
-      return false;
+    // Vespene requires a completed refinery
+    if (this.resourceType === 'vespene') {
+      if (this.refineryEntityId === null) return false;
+      // Check if refinery is complete
+      if (this._refineryCompleteChecker && !this._refineryCompleteChecker(this.refineryEntityId)) {
+        return false;
+      }
     }
     return this.amount > 0 && this.currentGatherers.size < this.maxGatherers;
   }
 
   public hasRefinery(): boolean {
-    return this.refineryEntityId !== null;
+    if (this.refineryEntityId === null) return false;
+    // Also check if complete
+    if (this._refineryCompleteChecker) {
+      return this._refineryCompleteChecker(this.refineryEntityId);
+    }
+    return true; // Fallback if no checker set
   }
 
   public addGatherer(entityId: number): boolean {

@@ -16,6 +16,41 @@ export class ResourceSystem extends System {
   constructor(game: Game) {
     super(game);
     this.setupEventListeners();
+    this.setupRefineryCheckers();
+  }
+
+  /**
+   * Set up refinery completion checkers for all vespene geysers.
+   * This allows Resource.hasRefinery() to verify the refinery is complete.
+   */
+  private setupRefineryCheckers(): void {
+    // Create a checker function that looks up the building entity
+    const refineryChecker = (entityId: number): boolean => {
+      const entity = this.world.getEntity(entityId);
+      if (!entity) return false;
+      const building = entity.get<Building>('Building');
+      return building ? building.isComplete() : false;
+    };
+
+    // Apply to all existing vespene resources
+    const resources = this.world.getEntitiesWith('Resource');
+    for (const entity of resources) {
+      const resource = entity.get<Resource>('Resource')!;
+      if (resource.resourceType === 'vespene') {
+        resource.setRefineryCompleteChecker(refineryChecker);
+      }
+    }
+
+    // Also listen for new resources (if spawned dynamically)
+    this.game.eventBus.on('resource:spawned', (data: { entityId: number }) => {
+      const entity = this.world.getEntity(data.entityId);
+      if (entity) {
+        const resource = entity.get<Resource>('Resource');
+        if (resource && resource.resourceType === 'vespene') {
+          resource.setRefineryCompleteChecker(refineryChecker);
+        }
+      }
+    });
   }
 
   private setupEventListeners(): void {
