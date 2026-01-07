@@ -187,9 +187,9 @@ export class RTSCamera {
       }
 
       if (this.mousePosition.y < edgeScrollThreshold) {
-        dz -= edgeScrollSpeed * dt;
-      } else if (this.mousePosition.y > this.screenHeight - edgeScrollThreshold) {
         dz += edgeScrollSpeed * dt;
+      } else if (this.mousePosition.y > this.screenHeight - edgeScrollThreshold) {
+        dz -= edgeScrollSpeed * dt;
       }
     }
 

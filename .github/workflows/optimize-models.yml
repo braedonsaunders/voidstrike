@@ -1,0 +1,129 @@
+name: Optimize 3D Models
+
+on:
+  pull_request:
+    paths:
+      - 'public/models/**/*.glb'
+  push:
+    branches:
+      - main
+    paths:
+      - 'public/models/**/*.glb'
+  workflow_dispatch:  # Allow manual trigger
+
+jobs:
+  optimize:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Get changed GLB files
+        id: changed-files
+        uses: tj-actions/changed-files@v44
+        with:
+          files: |
+            public/models/**/*.glb
+
+      - name: Check for GLB files to optimize
+        id: check-files
+        run: |
+          if [ "${{ steps.changed-files.outputs.any_changed }}" == "true" ]; then
+            echo "has_files=true" >> $GITHUB_OUTPUT
+            echo "📦 Found GLB files to optimize:"
+            echo "${{ steps.changed-files.outputs.all_changed_files }}"
+          else
+            echo "has_files=false" >> $GITHUB_OUTPUT
+            echo "No GLB files changed."
+          fi
+
+      - name: Optimize models
+        if: steps.check-files.outputs.has_files == 'true'
+        run: |
+          echo "🎮 Installing gltf-transform..."
+          npm install -g @gltf-transform/cli
+
+          echo "📦 Optimizing models..."
+          for file in ${{ steps.changed-files.outputs.all_changed_files }}; do
+            echo "Processing: $file"
+
+            # Get original size
+            original_size=$(stat -f%z "$file" 2>/dev/null || stat -c%s "$file")
+            echo "  Original size: $((original_size / 1024)) KB"
+
+            # Optimize
+            gltf-transform optimize "$file" "${file}.optimized" \
+              --texture-size 512 \
+              --texture-compress webp \
+              --compress draco || {
+                echo "  ⚠️ Optimization failed, keeping original"
+                continue
+              }
+
+            # Replace original
+            mv "${file}.optimized" "$file"
+
+            # Get new size
+            new_size=$(stat -f%z "$file" 2>/dev/null || stat -c%s "$file")
+            reduction=$((100 - (new_size * 100 / original_size)))
+            echo "  Optimized size: $((new_size / 1024)) KB (${reduction}% reduction)"
+
+            # Warn if still large
+            if [ $new_size -gt 2097152 ]; then
+              echo "  ⚠️ WARNING: File still > 2MB. Consider reducing polygon count."
+            elif [ $new_size -gt 524288 ]; then
+              echo "  ⚠️ Note: File > 500KB. Consider if this is necessary for an RTS unit."
+            fi
+          done
+
+      - name: Commit optimized models
+        if: steps.check-files.outputs.has_files == 'true'
+        run: |
+          git config --local user.email "github-actions[bot]@users.noreply.github.com"
+          git config --local user.name "github-actions[bot]"
+
+          # Check if there are changes to commit
+          if git diff --quiet; then
+            echo "No changes to commit (models may already be optimized)"
+          else
+            git add public/models/
+            git commit -m "chore: Optimize 3D models (auto-compressed textures)"
+            git push
+          fi
+
+      - name: Comment on PR
+        if: github.event_name == 'pull_request' && steps.check-files.outputs.has_files == 'true'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const changedFiles = `${{ steps.changed-files.outputs.all_changed_files }}`.split(' ');
+            const fileList = changedFiles.map(f => `- \`${f}\``).join('\n');
+
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: `## 🎮 3D Model Optimization
+
+            The following GLB files were automatically optimized:
+
+            ${fileList}
+
+            **Optimizations applied:**
+            - Textures resized to 512x512
+            - Textures converted to WebP format
+            - Draco mesh compression enabled
+
+            This reduces file sizes by ~90% while maintaining visual quality for RTS units.`
+            });

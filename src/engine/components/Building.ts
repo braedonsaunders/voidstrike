@@ -36,6 +36,8 @@ export interface BuildingDefinition {
   attackRange?: number;
   attackDamage?: number;
   attackSpeed?: number;
+  // Building upgrades (e.g., CC -> Orbital/Planetary)
+  canUpgradeTo?: string[];
 }
 
 export interface ProductionQueueItem {
@@ -105,6 +107,9 @@ export class Building extends Component {
   public attackSpeed: number;
   public lastAttackTime: number;
 
+  // Building upgrades (e.g., CC -> Orbital/Planetary)
+  public canUpgradeTo: string[];
+
   constructor(definition: BuildingDefinition) {
     super();
     this.buildingId = definition.id;
@@ -157,6 +162,9 @@ export class Building extends Component {
     this.attackDamage = definition.attackDamage ?? 0;
     this.attackSpeed = definition.attackSpeed ?? 0;
     this.lastAttackTime = 0;
+
+    // Building upgrades
+    this.canUpgradeTo = definition.canUpgradeTo ?? [];
   }
 
   public updateConstruction(deltaTime: number): boolean {

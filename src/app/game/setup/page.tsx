@@ -233,8 +233,11 @@ export default function GameSetupPage() {
   const maps = Object.values(ALL_MAPS);
   const selectedMap = ALL_MAPS[selectedMapId] || maps[0];
 
+  const { startGame } = useGameSetupStore();
+
   const handleStartGame = () => {
-    // Settings are already in the store, just navigate to game
+    // Mark game as started and navigate to game
+    startGame();
     router.push('/game');
   };
 

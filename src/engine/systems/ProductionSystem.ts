@@ -5,6 +5,7 @@ import { Health } from '../components/Health';
 import { Game } from '../core/Game';
 import { useGameStore } from '@/store/gameStore';
 import { UNIT_DEFINITIONS } from '@/data/units/dominion';
+import { BUILDING_DEFINITIONS } from '@/data/buildings/dominion';
 
 export class ProductionSystem extends System {
   public priority = 30;
@@ -17,6 +18,7 @@ export class ProductionSystem extends System {
   private setupEventListeners(): void {
     this.game.eventBus.on('command:train', this.handleTrainCommand.bind(this));
     this.game.eventBus.on('command:build', this.handleBuildCommand.bind(this));
+    this.game.eventBus.on('command:upgrade_building', this.handleUpgradeBuildingCommand.bind(this));
   }
 
   private handleTrainCommand(command: {
@@ -88,6 +90,61 @@ export class ProductionSystem extends System {
     });
   }
 
+  private handleUpgradeBuildingCommand(command: {
+    entityIds: number[];
+    upgradeTo: string;
+  }): void {
+    const { entityIds, upgradeTo } = command;
+    const upgradeDef = BUILDING_DEFINITIONS[upgradeTo];
+
+    if (!upgradeDef) {
+      console.warn(`Unknown building type: ${upgradeTo}`);
+      return;
+    }
+
+    const store = useGameStore.getState();
+
+    // Check resources
+    if (
+      store.minerals < upgradeDef.mineralCost ||
+      store.vespene < upgradeDef.vespeneCost
+    ) {
+      this.game.eventBus.emit('ui:error', { message: 'Not enough resources' });
+      return;
+    }
+
+    // Find first valid building that can upgrade
+    for (const entityId of entityIds) {
+      const entity = this.world.getEntity(entityId);
+      if (!entity) continue;
+
+      const building = entity.get<Building>('Building');
+      if (!building || !building.isComplete()) continue;
+
+      // Check if this building can upgrade to the target
+      if (!building.canUpgradeTo || !building.canUpgradeTo.includes(upgradeTo)) continue;
+
+      // Check if already upgrading
+      const isUpgrading = building.productionQueue.some(
+        (item) => item.type === 'upgrade' && building.canUpgradeTo.includes(item.id)
+      );
+      if (isUpgrading) continue;
+
+      // Deduct resources
+      store.addResources(-upgradeDef.mineralCost, -upgradeDef.vespeneCost);
+
+      // Add to production queue as 'upgrade' type with building ID
+      building.addToProductionQueue('upgrade', upgradeTo, upgradeDef.buildTime);
+
+      this.game.eventBus.emit('building:upgrade_started', {
+        buildingId: entityId,
+        upgradeTo,
+      });
+
+      return; // Only upgrade one building
+    }
+  }
+
   public update(deltaTime: number): void {
     const dt = deltaTime / 1000;
     const buildings = this.world.getEntitiesWith('Building', 'Transform', 'Health');
@@ -149,10 +206,57 @@ export class ProductionSystem extends System {
         unitType: item.id,
       });
     } else if (item.type === 'upgrade') {
-      this.game.eventBus.emit('research:complete', {
-        buildingId,
-        upgradeId: item.id,
-      });
+      // Check if this is a building upgrade or research upgrade
+      const upgradeBuildingDef = BUILDING_DEFINITIONS[item.id];
+      if (upgradeBuildingDef) {
+        // This is a building upgrade (e.g., CC -> Orbital Command)
+        this.handleBuildingUpgradeComplete(buildingId, building, item.id, upgradeBuildingDef);
+      } else {
+        // This is a research upgrade
+        this.game.eventBus.emit('research:complete', {
+          buildingId,
+          upgradeId: item.id,
+        });
+      }
     }
+  }
+
+  private handleBuildingUpgradeComplete(
+    buildingId: number,
+    building: Building,
+    newBuildingType: string,
+    newDef: typeof BUILDING_DEFINITIONS[string]
+  ): void {
+    // Transform the building to the new type
+    building.buildingId = newDef.id;
+    building.name = newDef.name;
+    building.canProduce = newDef.canProduce ?? [];
+    building.canResearch = newDef.canResearch ?? [];
+    building.canUpgradeTo = newDef.canUpgradeTo ?? [];
+    building.canLiftOff = newDef.canLiftOff ?? false;
+    building.attackRange = newDef.attackRange ?? 0;
+    building.attackDamage = newDef.attackDamage ?? 0;
+    building.attackSpeed = newDef.attackSpeed ?? 0;
+    building.isDetector = newDef.isDetector ?? false;
+    building.detectionRange = newDef.detectionRange ?? 0;
+
+    // Update entity for mesh refresh
+    const entity = this.world.getEntity(buildingId);
+    if (entity) {
+      const health = entity.get<Health>('Health');
+      if (health && newDef.maxHealth) {
+        // Keep current health percentage, apply to new max
+        const healthPercent = health.current / health.max;
+        health.max = newDef.maxHealth;
+        health.current = Math.round(newDef.maxHealth * healthPercent);
+      }
+    }
+
+    this.game.eventBus.emit('building:upgraded', {
+      buildingId,
+      newType: newBuildingType,
+    });
+
+    console.log(`[ProductionSystem] Building ${buildingId} upgraded to ${newDef.name}`);
   }
 }

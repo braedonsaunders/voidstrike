@@ -17,6 +17,7 @@ export const BUILDING_DEFINITIONS: Record<string, BuildingDefinition> = {
     canProduce: ['scv'],
     canResearch: [],
     canLiftOff: true,
+    canUpgradeTo: ['orbital_command', 'planetary_fortress'],
   },
 
   // Orbital Command - upgraded from Command Center

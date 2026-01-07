@@ -40,6 +40,8 @@ const COMMAND_ICONS: Record<string, string> = {
   raven: '🦅',
   // Buildings
   command_center: '🏛',
+  orbital_command: '🛰',
+  planetary_fortress: '🏰',
   supply_depot: '📦',
   refinery: '⛽',
   barracks: '🏠',
@@ -321,6 +323,39 @@ export function CommandCard() {
           cost: { minerals: upgrade.mineralCost, vespene: upgrade.vespeneCost },
         });
       });
+
+      // Building upgrade buttons (e.g., CC -> Orbital/Planetary)
+      if (building.canUpgradeTo && building.canUpgradeTo.length > 0) {
+        const isUpgrading = building.productionQueue.some(
+          (item) => item.type === 'upgrade' && building.canUpgradeTo.includes(item.id)
+        );
+
+        building.canUpgradeTo.forEach((upgradeBuildingId) => {
+          const upgradeDef = BUILDING_DEFINITIONS[upgradeBuildingId];
+          if (!upgradeDef) return;
+
+          const canAfford = minerals >= upgradeDef.mineralCost && vespene >= upgradeDef.vespeneCost;
+
+          // Create shortcut from first letter of last word (O for Orbital, P for Planetary)
+          const words = upgradeDef.name.split(' ');
+          const shortcut = words[words.length - 1].charAt(0).toUpperCase();
+
+          buttons.push({
+            id: `upgrade_${upgradeBuildingId}`,
+            label: upgradeDef.name,
+            shortcut,
+            action: () => {
+              game.eventBus.emit('command:upgrade_building', {
+                entityIds: selectedUnits,
+                upgradeTo: upgradeBuildingId,
+              });
+            },
+            isDisabled: !canAfford || isUpgrading,
+            tooltip: `Upgrade to ${upgradeDef.name}` + (isUpgrading ? ' (Upgrading...)' : ''),
+            cost: { minerals: upgradeDef.mineralCost, vespene: upgradeDef.vespeneCost },
+          });
+        });
+      }
 
       // Rally point for production buildings
       if (building.canProduce.length > 0) {
