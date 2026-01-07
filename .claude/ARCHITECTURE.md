@@ -38,16 +38,21 @@ voidstrike/
 │   │   │   ├── Component.ts   # Component base
 │   │   │   └── System.ts      # System base
 │   │   ├── systems/
-│   │   │   ├── SpawnSystem.ts      # Unit spawning from production
+│   │   │   ├── SpawnSystem.ts           # Unit spawning from production
 │   │   │   ├── BuildingPlacementSystem.ts # Building construction
-│   │   │   ├── MovementSystem.ts   # Unit movement & formations
-│   │   │   ├── CombatSystem.ts
-│   │   │   ├── SelectionSystem.ts
-│   │   │   ├── ProductionSystem.ts
-│   │   │   ├── ResourceSystem.ts
-│   │   │   ├── VisionSystem.ts     # Fog of war visibility
-│   │   │   ├── AbilitySystem.ts    # Unit abilities & cooldowns
-│   │   │   └── AISystem.ts         # AI opponent with resource management
+│   │   │   ├── MovementSystem.ts        # Unit movement & formations
+│   │   │   ├── CombatSystem.ts          # Attack, damage, high ground
+│   │   │   ├── SelectionSystem.ts       # Unit/building selection
+│   │   │   ├── ProductionSystem.ts      # Building production queues
+│   │   │   ├── ResourceSystem.ts        # Resource gathering
+│   │   │   ├── VisionSystem.ts          # Fog of war visibility
+│   │   │   ├── AbilitySystem.ts         # Unit abilities & cooldowns
+│   │   │   ├── AISystem.ts              # Basic AI opponent
+│   │   │   ├── EnhancedAISystem.ts      # Advanced AI with build orders
+│   │   │   ├── UnitMechanicsSystem.ts   # Transform, cloak, transport, heal
+│   │   │   ├── BuildingMechanicsSystem.ts # Lift-off, addons, lowering
+│   │   │   ├── GameStateSystem.ts       # Victory/defeat conditions
+│   │   │   └── SaveLoadSystem.ts        # Game save/load functionality
 │   │   ├── components/
 │   │   │   ├── Transform.ts
 │   │   │   ├── Health.ts
@@ -506,6 +511,190 @@ environment.update(deltaTime, gameTime);
 - **EnhancedTrees**: 6 tree types (pine, oak, dead, cactus, palm, alien)
 - **EnhancedRocks**: Procedural rock formations with surrounding debris
 - **EnvironmentParticles**: Snow, dust, ash, spores with physics
+
+## Phase 1-3 Systems
+
+### Unit Mechanics System (`UnitMechanicsSystem.ts`)
+
+Handles advanced unit behaviors:
+
+```typescript
+// Transform system (Siege Tank, Hellion, Viking)
+handleTransformCommand(entityIds, targetMode);
+updateTransforming(entity, unit, deltaTime);
+
+// Cloak system (Ghost, Banshee)
+handleCloakCommand(entityIds);
+updateCloakedUnits(deltaTime); // Energy drain
+
+// Transport system (Medivac)
+handleLoadCommand(transportId, unitIds);
+handleUnloadCommand(transportId, position, unitId);
+
+// Bunker system
+handleBunkerLoad(bunkerId, unitIds);
+handleBunkerUnload(bunkerId, unitId);
+processBunkerAttacks(bunker, deltaTime);
+
+// Healing & Repair
+handleHealCommand(healerId, targetId); // Medivac
+handleRepairCommand(repairerId, targetId); // SCV
+```
+
+### Building Mechanics System (`BuildingMechanicsSystem.ts`)
+
+Handles building-specific behaviors:
+
+```typescript
+// Lift-off/Landing (Barracks, Factory, Starport, CC)
+handleLiftOffCommand(entityIds);
+handleLandCommand(entityIds, positions);
+
+// Addon management (Tech Lab, Reactor)
+handleBuildAddonCommand(buildingId, addonType);
+canProduceUnit(building, unitType); // Tech Lab check
+canDoubleProduceUnit(building, unitType); // Reactor check
+
+// Supply Depot lowering
+handleLowerCommand(entityIds);
+
+// Building attacks (Turrets, Planetary Fortress)
+processBuildingAttacks(building, deltaTime);
+```
+
+### Enhanced AI System (`EnhancedAISystem.ts`)
+
+5-tier difficulty system with strategic behaviors:
+
+```typescript
+type AIDifficulty = 'easy' | 'medium' | 'hard' | 'very_hard' | 'insane';
+
+interface AIConfig {
+  buildOrderSpeed: number;      // 0.5 (easy) to 2.0 (insane)
+  attackTiming: number;         // Time between attacks
+  scoutingEnabled: boolean;
+  multiProngEnabled: boolean;
+  harassmentEnabled: boolean;
+  microLevel: number;           // 0-3
+  resourceBonus: number;        // Cheating for insane
+  macroEfficiency: number;      // 0.6-1.0
+}
+
+// State machine
+type AIState = 'building' | 'expanding' | 'attacking' |
+               'defending' | 'scouting' | 'harassing';
+
+// Build order system
+const BUILD_ORDERS = {
+  easy: ['supply_depot', 'barracks', 'marine'],
+  hard: ['supply_depot', 'refinery', 'barracks', 'tech_lab', ...],
+  insane: ['supply_depot', 'barracks', 'marine', 'expansion', ...]
+};
+```
+
+### Game State System (`GameStateSystem.ts`)
+
+Tracks game statistics and victory conditions:
+
+```typescript
+interface PlayerStats {
+  unitsProduced: number;
+  unitsLost: number;
+  unitsKilled: number;
+  buildingsConstructed: number;
+  buildingsLost: number;
+  buildingsDestroyed: number;
+  resourcesGathered: { minerals: number; vespene: number };
+  resourcesSpent: { minerals: number; vespene: number };
+  totalDamageDealt: number;
+  totalDamageTaken: number;
+  apm: number;
+}
+
+interface GameResult {
+  winner: string | null;
+  loser: string | null;
+  reason: 'elimination' | 'surrender' | 'disconnect' | 'timeout';
+  duration: number;
+  stats: Map<string, PlayerStats>;
+}
+
+// Victory conditions
+checkVictoryConditions(); // Destroy all enemy buildings
+handleSurrender(playerId);
+```
+
+### Save/Load System (`SaveLoadSystem.ts`)
+
+Complete game state serialization:
+
+```typescript
+interface SavedGameState {
+  version: string;
+  timestamp: number;
+  gameTime: number;
+  currentTick: number;
+  mapWidth: number;
+  mapHeight: number;
+  players: SavedPlayerState[];
+  entities: SavedEntity[];
+  fogOfWar: Record<string, number[][]>;
+}
+
+// Save operations
+saveGame(slot, name); // Manual save
+quickSave();          // F5 style
+autoSave();           // Every 60 seconds
+
+// Load operations
+loadGame(slot);
+quickLoad();          // F9 style
+
+// Management
+getSaveSlots(): SaveSlotInfo[];
+deleteSave(slot);
+setAutoSaveEnabled(enabled);
+```
+
+### Combat Enhancements
+
+High ground advantage in CombatSystem:
+
+```typescript
+// 30% miss chance when attacking uphill
+const HIGH_GROUND_MISS_CHANCE = 0.3;
+const HIGH_GROUND_THRESHOLD = 1.5; // Height difference
+
+// In performAttack()
+const heightDifference = targetTransform.z - attackerTransform.z;
+if (heightDifference > HIGH_GROUND_THRESHOLD) {
+  if (missRoll < HIGH_GROUND_MISS_CHANCE) {
+    emit('combat:miss', { reason: 'high_ground' });
+    return;
+  }
+}
+```
+
+### Buff/Debuff System
+
+Integrated into Unit component:
+
+```typescript
+// Unit.ts
+activeBuffs: Map<string, {
+  duration: number;
+  effects: Record<string, number>;
+}>;
+
+applyBuff(buffId, duration, effects);
+getEffectiveSpeed(); // Base speed * buff modifiers
+getEffectiveDamage(); // Base damage * buff modifiers
+
+// Example buffs
+- stim_pack: +50% speed, +50% attack speed
+- concussive_shells: -50% speed for 1.07s
+- combat_shield: +10 max HP (permanent)
+```
 
 ## Audio Asset Guidelines
 

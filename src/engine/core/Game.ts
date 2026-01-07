@@ -8,11 +8,16 @@ import { ProductionSystem } from '../systems/ProductionSystem';
 import { ResourceSystem } from '../systems/ResourceSystem';
 import { ResearchSystem } from '../systems/ResearchSystem';
 import { AISystem } from '../systems/AISystem';
+import { EnhancedAISystem, AIDifficulty } from '../systems/EnhancedAISystem';
 import { VisionSystem } from '../systems/VisionSystem';
 import { AbilitySystem } from '../systems/AbilitySystem';
 import { SpawnSystem } from '../systems/SpawnSystem';
 import { BuildingPlacementSystem } from '../systems/BuildingPlacementSystem';
 import { AudioSystem } from '../systems/AudioSystem';
+import { UnitMechanicsSystem } from '../systems/UnitMechanicsSystem';
+import { BuildingMechanicsSystem } from '../systems/BuildingMechanicsSystem';
+import { GameStateSystem } from '../systems/GameStateSystem';
+import { SaveLoadSystem } from '../systems/SaveLoadSystem';
 
 export type GameState = 'initializing' | 'running' | 'paused' | 'ended';
 
@@ -23,6 +28,8 @@ export interface GameConfig {
   isMultiplayer: boolean;
   playerId: string;
   aiEnabled: boolean;
+  aiDifficulty: AIDifficulty;
+  useEnhancedAI: boolean;
 }
 
 const DEFAULT_CONFIG: GameConfig = {
@@ -32,6 +39,8 @@ const DEFAULT_CONFIG: GameConfig = {
   isMultiplayer: false,
   playerId: 'player1',
   aiEnabled: true,
+  aiDifficulty: 'medium',
+  useEnhancedAI: true,
 };
 
 export class Game {
@@ -42,6 +51,8 @@ export class Game {
   public config: GameConfig;
   public visionSystem: VisionSystem;
   public audioSystem: AudioSystem;
+  public gameStateSystem: GameStateSystem;
+  public saveLoadSystem: SaveLoadSystem;
 
   private gameLoop: GameLoop;
   private state: GameState = 'initializing';
@@ -59,6 +70,12 @@ export class Game {
 
     // Initialize audio system (needs camera later for spatial audio)
     this.audioSystem = new AudioSystem(this);
+
+    // Initialize game state system for victory/defeat tracking
+    this.gameStateSystem = new GameStateSystem(this);
+
+    // Initialize save/load system
+    this.saveLoadSystem = new SaveLoadSystem(this);
 
     this.initializeSystems();
   }
@@ -82,6 +99,8 @@ export class Game {
     this.world.addSystem(new SpawnSystem(this));
     this.world.addSystem(new BuildingPlacementSystem(this));
     this.world.addSystem(new SelectionSystem(this));
+    this.world.addSystem(new BuildingMechanicsSystem(this)); // Lift-off, Addons, Building attacks
+    this.world.addSystem(new UnitMechanicsSystem(this)); // Transform, Cloak, Transport, Heal, Repair
     this.world.addSystem(new MovementSystem(this));
     this.world.addSystem(new CombatSystem(this));
     this.world.addSystem(new ProductionSystem(this));
@@ -90,9 +109,15 @@ export class Game {
     this.world.addSystem(new AbilitySystem(this));
     this.world.addSystem(this.visionSystem);
     this.world.addSystem(this.audioSystem);
+    this.world.addSystem(this.gameStateSystem); // Victory/defeat conditions
+    this.world.addSystem(this.saveLoadSystem); // Save/Load functionality
 
     if (this.config.aiEnabled) {
-      this.world.addSystem(new AISystem(this));
+      if (this.config.useEnhancedAI) {
+        this.world.addSystem(new EnhancedAISystem(this, this.config.aiDifficulty));
+      } else {
+        this.world.addSystem(new AISystem(this));
+      }
     }
   }
 
@@ -182,6 +207,57 @@ export class Game {
       case 'RESEARCH':
         this.eventBus.emit('command:research', command);
         break;
+      case 'PATROL':
+        this.eventBus.emit('command:patrol', command);
+        break;
+      case 'TRANSFORM':
+        this.eventBus.emit('command:transform', {
+          entityIds: command.entityIds,
+          targetMode: command.targetMode,
+        });
+        break;
+      case 'CLOAK':
+        this.eventBus.emit('command:cloak', {
+          entityIds: command.entityIds,
+        });
+        break;
+      case 'LOAD':
+        this.eventBus.emit('command:load', {
+          transportId: command.transportId,
+          unitIds: command.entityIds,
+        });
+        break;
+      case 'UNLOAD':
+        this.eventBus.emit('command:unload', {
+          transportId: command.transportId,
+          position: command.targetPosition,
+          unitId: command.targetEntityId,
+        });
+        break;
+      case 'LOAD_BUNKER':
+        this.eventBus.emit('command:loadBunker', {
+          bunkerId: command.bunkerId,
+          unitIds: command.entityIds,
+        });
+        break;
+      case 'UNLOAD_BUNKER':
+        this.eventBus.emit('command:unloadBunker', {
+          bunkerId: command.bunkerId,
+          unitId: command.targetEntityId,
+        });
+        break;
+      case 'HEAL':
+        this.eventBus.emit('command:heal', {
+          healerId: command.entityIds[0],
+          targetId: command.targetEntityId,
+        });
+        break;
+      case 'REPAIR':
+        this.eventBus.emit('command:repair', {
+          repairerId: command.entityIds[0],
+          targetId: command.targetEntityId,
+        });
+        break;
     }
   }
 }
@@ -189,7 +265,24 @@ export class Game {
 export interface GameCommand {
   tick: number;
   playerId: string;
-  type: 'MOVE' | 'ATTACK' | 'BUILD' | 'TRAIN' | 'ABILITY' | 'STOP' | 'HOLD' | 'RESEARCH';
+  type:
+    | 'MOVE'
+    | 'ATTACK'
+    | 'BUILD'
+    | 'TRAIN'
+    | 'ABILITY'
+    | 'STOP'
+    | 'HOLD'
+    | 'RESEARCH'
+    | 'TRANSFORM'
+    | 'CLOAK'
+    | 'LOAD'
+    | 'UNLOAD'
+    | 'LOAD_BUNKER'
+    | 'UNLOAD_BUNKER'
+    | 'HEAL'
+    | 'REPAIR'
+    | 'PATROL';
   entityIds: number[];
   targetPosition?: { x: number; y: number };
   targetEntityId?: number;
@@ -197,4 +290,7 @@ export interface GameCommand {
   unitType?: string;
   abilityId?: string;
   upgradeId?: string;
+  targetMode?: string; // For transform
+  transportId?: number; // For load/unload
+  bunkerId?: number; // For bunker load/unload
 }

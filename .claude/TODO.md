@@ -7,7 +7,7 @@
 - [x] Game state management (Zustand)
 - [x] Entity Component System architecture
 - [x] Game loop with fixed timestep
-- [ ] Save/Load game state
+- [x] Save/Load game state
 
 ### Rendering
 - [x] Three.js scene setup
@@ -123,8 +123,8 @@
 - [x] Ability system framework
 - [x] Cooldown management
 - [x] Active ability targeting
-- [ ] Passive ability effects
-- [ ] Ability auto-cast toggle
+- [x] Passive ability effects
+- [x] Ability auto-cast toggle
 
 ### Tech Tree
 - [x] Research system
@@ -339,17 +339,30 @@
 
 ### Completed Features
 - Full single-player gameplay loop with AI opponent
-- Dominion faction with 6 unit types
-- 3 maps with biome-specific visuals
-- Complete audio system (awaiting asset generation)
+- Dominion faction with 12 unit types, 11 buildings, 36 upgrades
+- 3 maps with biome-specific visuals (6 biome types)
+- Complete audio system framework (awaiting asset generation)
 - Game setup/options menu with AI difficulty
 - Keyboard shortcuts documentation
 - Combat feedback (damage numbers, focus fire indicators)
 - Enhanced selection (Ctrl+click for same type, shared queue UI)
 - Unit tooltips with detailed stats
+- SC2-like controls (shift-queue, patrol, control groups)
 
-### Ready for Next Phase
-The game is feature-complete for single-player vs AI. The next major milestone is:
-1. **Multiplayer** - Real-time networked gameplay
-2. **Second Faction** - Synthesis faction with shields and warp-in
+### Phase 1-3 Implementation (COMPLETE)
+- **Unit Mechanics**: Transform (Siege Tank, Hellion, Viking), Cloak, Transport, Healing, Repair
+- **Building Mechanics**: Addons (Tech Lab, Reactor), Lift-Off/Landing, Supply Depot lowering
+- **Ability System**: Stim Pack, EMP, Snipe, Nuke, Yamato Cannon, Tactical Jump, MULE, Supply Drop
+- **Enhanced AI**: 5 difficulty levels, build orders, scouting, multi-pronged attacks, harassment
+- **Combat Systems**: High ground advantage (30% miss chance), buff/debuff system, auto-cast
+- **Game State**: Victory/defeat conditions, player stats tracking, APM calculation
+- **Save/Load**: Multiple save slots, auto-save, quick save/load
+
+### SC2 Parity Roadmap
+See **ROADMAP_SC2_PARITY.md** for the comprehensive feature roadmap.
+
+### Immediate Next Steps (Priority Order)
+1. **Second Faction (Synthesis)** - Shields, warp-in, pylon power, 12 units
+2. **Visual/Audio Polish** - Animations, effects, actual audio files
 3. **Quality of Life** - Tutorial, custom hotkeys, graphics settings
+4. **Third Faction (Swarm)** - Creep, larva, burrow, morphing

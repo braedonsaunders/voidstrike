@@ -56,6 +56,10 @@ const TARGET_PRIORITY: Record<string, number> = {
 // Cooldown for under attack alerts (prevent spam)
 const UNDER_ATTACK_COOLDOWN = 10000; // 10 seconds
 
+// High ground advantage constants
+const HIGH_GROUND_MISS_CHANCE = 0.3; // 30% miss chance when attacking uphill
+const HIGH_GROUND_THRESHOLD = 1.5; // Height difference to count as high ground
+
 export class CombatSystem extends System {
   public priority = 20;
 
@@ -287,6 +291,25 @@ export class CombatSystem extends System {
     gameTime: number
   ): void {
     attacker.lastAttackTime = gameTime;
+
+    // High ground miss chance check
+    const heightDifference = targetTransform.z - attackerTransform.z;
+    if (heightDifference > HIGH_GROUND_THRESHOLD) {
+      // Target is on high ground - check for miss
+      // Use deterministic pseudo-random based on game time and attacker ID
+      const seed = (gameTime * 1000 + attackerId) % 1;
+      const missRoll = Math.abs(Math.sin(seed * 12345.6789) % 1);
+      if (missRoll < HIGH_GROUND_MISS_CHANCE) {
+        // Attack missed
+        this.game.eventBus.emit('combat:miss', {
+          attackerId: attacker.unitId,
+          attackerPos: { x: attackerTransform.x, y: attackerTransform.y },
+          targetPos: { x: targetTransform.x, y: targetTransform.y },
+          reason: 'high_ground',
+        });
+        return;
+      }
+    }
 
     // Calculate damage with type multiplier
     const multiplier = DAMAGE_MULTIPLIERS[attacker.damageType][targetHealth.armorType];

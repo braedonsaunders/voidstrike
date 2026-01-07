@@ -1,6 +1,7 @@
 import { Component } from '../ecs/Component';
 
-export type BuildingState = 'constructing' | 'complete' | 'destroyed';
+export type BuildingState = 'constructing' | 'complete' | 'destroyed' | 'lifting' | 'flying' | 'landing';
+export type AddonType = 'tech_lab' | 'reactor' | null;
 
 export interface BuildingDefinition {
   id: string;
@@ -18,6 +19,23 @@ export interface BuildingDefinition {
   canProduce?: string[]; // unit IDs
   canResearch?: string[]; // upgrade IDs
   requirements?: string[]; // building IDs required
+  // New mechanics
+  canLiftOff?: boolean;
+  canHaveAddon?: boolean;
+  isAddon?: boolean;
+  addonFor?: string[]; // building types this addon can attach to
+  // Bunker specific
+  isBunker?: boolean;
+  bunkerCapacity?: number;
+  // Supply depot specific
+  canLower?: boolean;
+  // Detection
+  isDetector?: boolean;
+  detectionRange?: number;
+  // Attack (for turrets, bunkers)
+  attackRange?: number;
+  attackDamage?: number;
+  attackSpeed?: number;
 }
 
 export interface ProductionQueueItem {
@@ -57,6 +75,36 @@ export class Building extends Component {
   // Vision
   public sightRange: number;
 
+  // Addon system
+  public canLiftOff: boolean;
+  public canHaveAddon: boolean;
+  public currentAddon: AddonType;
+  public addonEntityId: number | null; // The addon building entity
+  public attachedToId: number | null; // If this is an addon, the building it's attached to
+
+  // Flying state
+  public isFlying: boolean;
+  public liftProgress: number; // 0-1 for lift/land animation
+  public landingTarget: { x: number; y: number } | null;
+
+  // Supply depot lowered state
+  public canLower: boolean;
+  public isLowered: boolean;
+
+  // Detection
+  public isDetector: boolean;
+  public detectionRange: number;
+
+  // Bunker
+  public isBunker: boolean;
+  public bunkerCapacity: number;
+
+  // Attack (for turrets)
+  public attackRange: number;
+  public attackDamage: number;
+  public attackSpeed: number;
+  public lastAttackTime: number;
+
   constructor(definition: BuildingDefinition) {
     super();
     this.buildingId = definition.id;
@@ -79,6 +127,36 @@ export class Building extends Component {
 
     this.supplyProvided = definition.supplyProvided ?? 0;
     this.sightRange = definition.sightRange;
+
+    // Addon system
+    this.canLiftOff = definition.canLiftOff ?? false;
+    this.canHaveAddon = definition.canHaveAddon ?? false;
+    this.currentAddon = null;
+    this.addonEntityId = null;
+    this.attachedToId = null;
+
+    // Flying state
+    this.isFlying = false;
+    this.liftProgress = 0;
+    this.landingTarget = null;
+
+    // Supply depot
+    this.canLower = definition.canLower ?? false;
+    this.isLowered = false;
+
+    // Detection
+    this.isDetector = definition.isDetector ?? false;
+    this.detectionRange = definition.detectionRange ?? 0;
+
+    // Bunker
+    this.isBunker = definition.isBunker ?? false;
+    this.bunkerCapacity = definition.bunkerCapacity ?? 0;
+
+    // Attack
+    this.attackRange = definition.attackRange ?? 0;
+    this.attackDamage = definition.attackDamage ?? 0;
+    this.attackSpeed = definition.attackSpeed ?? 0;
+    this.lastAttackTime = 0;
   }
 
   public updateConstruction(deltaTime: number): boolean {
@@ -137,5 +215,136 @@ export class Building extends Component {
   public cancelProduction(index: number): ProductionQueueItem | null {
     if (index < 0 || index >= this.productionQueue.length) return null;
     return this.productionQueue.splice(index, 1)[0];
+  }
+
+  // ==================== ADDON MECHANICS ====================
+
+  public attachAddon(addonType: AddonType, addonEntityId: number): boolean {
+    if (!this.canHaveAddon) return false;
+    if (this.currentAddon !== null) return false;
+
+    this.currentAddon = addonType;
+    this.addonEntityId = addonEntityId;
+
+    // Update produceable units based on addon
+    this.updateProductionCapability();
+    return true;
+  }
+
+  public detachAddon(): number | null {
+    if (this.currentAddon === null) return null;
+
+    const addonId = this.addonEntityId;
+    this.currentAddon = null;
+    this.addonEntityId = null;
+
+    // Reset production capability
+    this.updateProductionCapability();
+    return addonId;
+  }
+
+  private updateProductionCapability(): void {
+    // This would update canProduce based on addon type
+    // Tech Lab: Enables advanced units (Marauder, Ghost, Siege Tank, Thor, etc.)
+    // Reactor: Allows double production of basic units
+    // For now, this is handled by production system checking addon status
+  }
+
+  public hasAddon(): boolean {
+    return this.currentAddon !== null;
+  }
+
+  public hasTechLab(): boolean {
+    return this.currentAddon === 'tech_lab';
+  }
+
+  public hasReactor(): boolean {
+    return this.currentAddon === 'reactor';
+  }
+
+  // ==================== LIFT-OFF MECHANICS ====================
+
+  public startLiftOff(): boolean {
+    if (!this.canLiftOff) return false;
+    if (this.state !== 'complete') return false;
+    if (this.isFlying) return false;
+    if (this.productionQueue.length > 0) return false; // Can't lift with queue
+
+    this.state = 'lifting';
+    this.liftProgress = 0;
+
+    // Detach addon when lifting
+    if (this.currentAddon !== null) {
+      this.detachAddon();
+    }
+
+    return true;
+  }
+
+  public updateLift(deltaTime: number): boolean {
+    if (this.state !== 'lifting') return false;
+
+    const liftTime = 2; // seconds to lift off
+    this.liftProgress += deltaTime / liftTime;
+
+    if (this.liftProgress >= 1) {
+      this.liftProgress = 1;
+      this.state = 'flying';
+      this.isFlying = true;
+      return true;
+    }
+
+    return false;
+  }
+
+  public startLanding(targetX: number, targetY: number): boolean {
+    if (!this.canLiftOff) return false;
+    if (this.state !== 'flying') return false;
+
+    this.state = 'landing';
+    this.liftProgress = 1;
+    this.landingTarget = { x: targetX, y: targetY };
+    return true;
+  }
+
+  public updateLanding(deltaTime: number): boolean {
+    if (this.state !== 'landing') return false;
+
+    const landTime = 2; // seconds to land
+    this.liftProgress -= deltaTime / landTime;
+
+    if (this.liftProgress <= 0) {
+      this.liftProgress = 0;
+      this.state = 'complete';
+      this.isFlying = false;
+      this.landingTarget = null;
+      return true;
+    }
+
+    return false;
+  }
+
+  // ==================== SUPPLY DEPOT MECHANICS ====================
+
+  public toggleLowered(): boolean {
+    if (!this.canLower) return false;
+    if (this.state !== 'complete') return false;
+
+    this.isLowered = !this.isLowered;
+    return true;
+  }
+
+  public setLowered(lowered: boolean): void {
+    if (this.canLower && this.state === 'complete') {
+      this.isLowered = lowered;
+    }
+  }
+
+  // ==================== ATTACK MECHANICS (for turrets) ====================
+
+  public canAttack(gameTime: number): boolean {
+    if (this.attackDamage <= 0 || this.attackSpeed <= 0) return false;
+    const timeSinceLastAttack = gameTime - this.lastAttackTime;
+    return timeSinceLastAttack >= 1 / this.attackSpeed;
   }
 }

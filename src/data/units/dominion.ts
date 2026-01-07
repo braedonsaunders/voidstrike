@@ -1,4 +1,88 @@
-import { UnitDefinition } from '@/engine/components/Unit';
+import { UnitDefinition, TransformMode } from '@/engine/components/Unit';
+
+// Transform modes for Siege Tank
+const SIEGE_TANK_MODES: TransformMode[] = [
+  {
+    id: 'tank',
+    name: 'Tank Mode',
+    speed: 3.15,
+    attackRange: 7,
+    attackDamage: 15,
+    attackSpeed: 0.74,
+    splashRadius: 0.5,
+    sightRange: 11,
+    canMove: true,
+    transformTime: 2,
+  },
+  {
+    id: 'siege',
+    name: 'Siege Mode',
+    speed: 0,
+    attackRange: 13,
+    attackDamage: 40,
+    attackSpeed: 0.47,
+    splashRadius: 1.25,
+    sightRange: 11,
+    canMove: false,
+    transformTime: 2,
+  },
+];
+
+// Transform modes for Hellion/Hellbat
+const HELLION_MODES: TransformMode[] = [
+  {
+    id: 'hellion',
+    name: 'Hellion',
+    speed: 5.95,
+    attackRange: 5,
+    attackDamage: 8,
+    attackSpeed: 1.8,
+    splashRadius: 2,
+    sightRange: 10,
+    canMove: true,
+    transformTime: 2,
+  },
+  {
+    id: 'hellbat',
+    name: 'Hellbat',
+    speed: 3.15,
+    attackRange: 2,
+    attackDamage: 18,
+    attackSpeed: 1.4,
+    splashRadius: 1.5,
+    sightRange: 10,
+    canMove: true,
+    transformTime: 2,
+  },
+];
+
+// Transform modes for Viking
+const VIKING_MODES: TransformMode[] = [
+  {
+    id: 'fighter',
+    name: 'Fighter Mode',
+    speed: 3.85,
+    attackRange: 9,
+    attackDamage: 10,
+    attackSpeed: 0.71,
+    sightRange: 10,
+    isFlying: true,
+    canMove: true,
+    transformTime: 2.25,
+  },
+  {
+    id: 'assault',
+    name: 'Assault Mode',
+    speed: 3.15,
+    attackRange: 6,
+    attackDamage: 12,
+    attackSpeed: 0.71,
+    sightRange: 10,
+    isFlying: false,
+    canMove: true,
+    transformTime: 2.25,
+  },
+];
 
 export const UNIT_DEFINITIONS: Record<string, UnitDefinition> = {
   scv: {
@@ -18,6 +102,8 @@ export const UNIT_DEFINITIONS: Record<string, UnitDefinition> = {
     maxHealth: 45,
     armor: 0,
     isWorker: true,
+    isMechanical: true,
+    canRepair: true,
   },
 
   marine: {
@@ -37,6 +123,7 @@ export const UNIT_DEFINITIONS: Record<string, UnitDefinition> = {
     maxHealth: 45,
     armor: 0,
     abilities: ['stim_pack'],
+    isBiological: true,
   },
 
   marauder: {
@@ -56,6 +143,7 @@ export const UNIT_DEFINITIONS: Record<string, UnitDefinition> = {
     maxHealth: 125,
     armor: 1,
     abilities: ['stim_pack', 'concussive_shells'],
+    isBiological: true,
   },
 
   reaper: {
@@ -75,6 +163,7 @@ export const UNIT_DEFINITIONS: Record<string, UnitDefinition> = {
     maxHealth: 60,
     armor: 0,
     abilities: ['jet_pack', 'grenade'],
+    isBiological: true,
   },
 
   ghost: {
@@ -93,7 +182,10 @@ export const UNIT_DEFINITIONS: Record<string, UnitDefinition> = {
     damageType: 'normal',
     maxHealth: 100,
     armor: 0,
-    abilities: ['snipe', 'emp', 'cloak', 'nuke'],
+    abilities: ['snipe', 'emp_round', 'cloak', 'nuke'],
+    isBiological: true,
+    canCloak: true,
+    cloakEnergyCost: 1,
   },
 
   hellion: {
@@ -113,7 +205,11 @@ export const UNIT_DEFINITIONS: Record<string, UnitDefinition> = {
     maxHealth: 90,
     armor: 0,
     abilities: ['transform_hellbat'],
-    splashRadius: 2, // Line splash for flame attack
+    splashRadius: 2,
+    isMechanical: true,
+    canTransform: true,
+    transformModes: HELLION_MODES,
+    defaultMode: 'hellion',
   },
 
   siege_tank: {
@@ -133,7 +229,11 @@ export const UNIT_DEFINITIONS: Record<string, UnitDefinition> = {
     maxHealth: 175,
     armor: 1,
     abilities: ['siege_mode'],
-    splashRadius: 3, // AoE damage radius
+    splashRadius: 0.5,
+    isMechanical: true,
+    canTransform: true,
+    transformModes: SIEGE_TANK_MODES,
+    defaultMode: 'tank',
   },
 
   thor: {
@@ -153,6 +253,7 @@ export const UNIT_DEFINITIONS: Record<string, UnitDefinition> = {
     maxHealth: 400,
     armor: 2,
     abilities: ['high_impact_payload'],
+    isMechanical: true,
   },
 
   medivac: {
@@ -171,8 +272,15 @@ export const UNIT_DEFINITIONS: Record<string, UnitDefinition> = {
     damageType: 'normal',
     maxHealth: 150,
     armor: 1,
-    abilities: ['heal', 'load', 'afterburners'],
+    abilities: ['heal', 'load', 'unload', 'afterburners'],
     isFlying: true,
+    isMechanical: true,
+    isTransport: true,
+    transportCapacity: 8,
+    canHeal: true,
+    healRange: 4,
+    healRate: 12.6,
+    healEnergyCost: 1,
   },
 
   viking: {
@@ -193,6 +301,10 @@ export const UNIT_DEFINITIONS: Record<string, UnitDefinition> = {
     armor: 0,
     abilities: ['transform_assault'],
     isFlying: true,
+    isMechanical: true,
+    canTransform: true,
+    transformModes: VIKING_MODES,
+    defaultMode: 'fighter',
   },
 
   banshee: {
@@ -213,6 +325,9 @@ export const UNIT_DEFINITIONS: Record<string, UnitDefinition> = {
     armor: 0,
     abilities: ['cloak'],
     isFlying: true,
+    isMechanical: true,
+    canCloak: true,
+    cloakEnergyCost: 1,
   },
 
   battlecruiser: {
@@ -233,6 +348,31 @@ export const UNIT_DEFINITIONS: Record<string, UnitDefinition> = {
     armor: 3,
     abilities: ['yamato_cannon', 'tactical_jump'],
     isFlying: true,
+    isMechanical: true,
+  },
+
+  // Detector unit - Raven
+  raven: {
+    id: 'raven',
+    name: 'Raven',
+    faction: 'dominion',
+    mineralCost: 100,
+    vespeneCost: 200,
+    buildTime: 43,
+    supplyCost: 2,
+    speed: 3.85,
+    sightRange: 11,
+    attackRange: 0,
+    attackDamage: 0,
+    attackSpeed: 0,
+    damageType: 'normal',
+    maxHealth: 140,
+    armor: 1,
+    abilities: ['auto_turret', 'interference_matrix', 'anti_armor_missile'],
+    isFlying: true,
+    isMechanical: true,
+    isDetector: true,
+    detectionRange: 11,
   },
 };
 

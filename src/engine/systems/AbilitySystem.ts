@@ -5,6 +5,7 @@ import { Unit } from '../components/Unit';
 import { Health } from '../components/Health';
 import { Ability, AbilityDefinition, AbilityTargetType } from '../components/Ability';
 import { Selectable } from '../components/Selectable';
+import { Building } from '../components/Building';
 
 interface AbilityCommand {
   entityIds: number[];
@@ -153,6 +154,44 @@ export class AbilitySystem extends System {
             definition.aoeRadius || 8
           );
         }
+        break;
+
+      case 'yamato_cannon':
+        if (command.targetEntityId) {
+          this.executeYamatoCannon(casterEntity, command.targetEntityId, definition.damage || 240);
+        }
+        break;
+
+      case 'tactical_jump':
+        if (command.targetPosition) {
+          this.executeTacticalJump(casterEntity, command.targetPosition);
+        }
+        break;
+
+      case 'mule':
+        if (command.targetPosition) {
+          this.executeMULE(
+            casterSelectable?.playerId || 'player1',
+            command.targetPosition,
+            definition.duration || 64
+          );
+        }
+        break;
+
+      case 'supply_drop':
+        if (command.targetEntityId) {
+          this.executeSupplyDrop(command.targetEntityId);
+        }
+        break;
+
+      case 'concussive_shells':
+        if (command.targetEntityId) {
+          this.applyConcussiveShells(command.targetEntityId);
+        }
+        break;
+
+      case 'combat_shield':
+        this.applyCombatShield(casterEntity);
         break;
 
       default:
@@ -323,6 +362,158 @@ export class AbilitySystem extends System {
     }, 10000); // 10 second delay
   }
 
+  private executeYamatoCannon(
+    caster: { id: number },
+    targetId: number,
+    damage: number
+  ): void {
+    const target = this.world.getEntity(targetId);
+    if (!target) return;
+
+    const casterEntity = this.world.getEntity(caster.id);
+    const casterTransform = casterEntity?.get<Transform>('Transform');
+    const targetTransform = target.get<Transform>('Transform');
+
+    // Yamato Cannon has a 3 second channel time
+    this.game.eventBus.emit('ability:channeling', {
+      casterId: caster.id,
+      abilityId: 'yamato_cannon',
+      duration: 3,
+      targetId,
+    });
+
+    // Schedule the damage after channel completes
+    setTimeout(() => {
+      const currentTarget = this.world.getEntity(targetId);
+      if (!currentTarget) return;
+
+      const targetHealth = currentTarget.get<Health>('Health');
+      if (!targetHealth) return;
+
+      // Deal massive damage to single target
+      targetHealth.takeDamage(damage, this.game.getGameTime());
+
+      this.game.eventBus.emit('ability:effect', {
+        type: 'yamato_cannon',
+        casterId: caster.id,
+        targetId,
+        damage,
+        position: targetTransform ? { x: targetTransform.x, y: targetTransform.y } : null,
+      });
+    }, 3000);
+  }
+
+  private executeTacticalJump(
+    caster: { id: number },
+    position: { x: number; y: number }
+  ): void {
+    const entity = this.world.getEntity(caster.id);
+    if (!entity) return;
+
+    const transform = entity.get<Transform>('Transform');
+    if (!transform) return;
+
+    // Emit effect at origin
+    this.game.eventBus.emit('ability:effect', {
+      type: 'tactical_jump_start',
+      position: { x: transform.x, y: transform.y },
+    });
+
+    // Teleport the Battlecruiser to target location
+    transform.setPosition(position.x, position.y);
+
+    // Emit effect at destination
+    this.game.eventBus.emit('ability:effect', {
+      type: 'tactical_jump_end',
+      position,
+    });
+  }
+
+  private executeMULE(
+    playerId: string,
+    position: { x: number; y: number },
+    duration: number
+  ): void {
+    // Spawn a MULE unit at the position
+    this.game.eventBus.emit('spawn:unit', {
+      unitType: 'mule',
+      playerId,
+      position,
+      isTimed: true,
+      duration,
+    });
+
+    this.game.eventBus.emit('ability:effect', {
+      type: 'mule_drop',
+      position,
+      playerId,
+    });
+  }
+
+  private executeSupplyDrop(targetId: number): void {
+    const target = this.world.getEntity(targetId);
+    if (!target) return;
+
+    const building = target.get<Building>('Building');
+    if (!building || building.buildingId !== 'supply_depot') return;
+
+    // Instantly complete the supply depot construction
+    if (building.state === 'constructing') {
+      building.buildProgress = 1.0;
+      building.state = 'complete';
+
+      this.game.eventBus.emit('building:complete', {
+        entityId: targetId,
+        buildingType: 'supply_depot',
+        instant: true,
+      });
+    }
+
+    this.game.eventBus.emit('ability:effect', {
+      type: 'supply_drop',
+      targetId,
+    });
+  }
+
+  private applyConcussiveShells(targetId: number): void {
+    const target = this.world.getEntity(targetId);
+    if (!target) return;
+
+    const unit = target.get<Unit>('Unit');
+    if (!unit) return;
+
+    // Apply 50% slow for 1.07 seconds
+    unit.applyBuff('concussive_shells', 1.07, {
+      moveSpeedMultiplier: 0.5,
+    });
+
+    this.game.eventBus.emit('buff:apply', {
+      entityId: targetId,
+      buffId: 'concussive_shells',
+      duration: 1.07,
+      effects: {
+        moveSpeedMultiplier: 0.5,
+      },
+    });
+  }
+
+  private applyCombatShield(caster: { id: number }): void {
+    const entity = this.world.getEntity(caster.id);
+    if (!entity) return;
+
+    const health = entity.get<Health>('Health');
+    if (!health) return;
+
+    // Increase max HP by 10 (permanent)
+    health.max += 10;
+    health.current += 10;
+
+    this.game.eventBus.emit('ability:effect', {
+      type: 'combat_shield',
+      entityId: caster.id,
+    });
+  }
+
   public update(deltaTime: number): void {
     const dt = deltaTime / 1000; // Convert to seconds
 
@@ -333,5 +524,69 @@ export class AbilitySystem extends System {
       const ability = entity.get<Ability>('Ability')!;
       ability.updateCooldowns(dt);
     }
+
+    // Process auto-cast abilities
+    this.processAutoCast(dt);
+  }
+
+  private processAutoCast(deltaTime: number): void {
+    const healers = this.world.getEntitiesWith('Unit', 'Ability', 'Transform', 'Selectable');
+
+    for (const healer of healers) {
+      const unit = healer.get<Unit>('Unit')!;
+      const ability = healer.get<Ability>('Ability')!;
+      const transform = healer.get<Transform>('Transform')!;
+      const selectable = healer.get<Selectable>('Selectable')!;
+
+      // Auto-heal for medivacs
+      if (unit.canHeal && ability.canUseAbility('heal')) {
+        const target = this.findHealTarget(healer.id, transform, selectable.playerId, unit.healRange);
+        if (target !== null) {
+          // Emit heal command
+          this.game.eventBus.emit('command:heal', {
+            healerId: healer.id,
+            targetId: target,
+          });
+        }
+      }
+    }
+  }
+
+  private findHealTarget(
+    selfId: number,
+    selfTransform: Transform,
+    playerId: string,
+    range: number
+  ): number | null {
+    const entities = this.world.getEntitiesWith('Transform', 'Health', 'Unit', 'Selectable');
+
+    let bestTarget: { id: number; healthPercent: number } | null = null;
+
+    for (const entity of entities) {
+      if (entity.id === selfId) continue;
+
+      const transform = entity.get<Transform>('Transform')!;
+      const health = entity.get<Health>('Health')!;
+      const unit = entity.get<Unit>('Unit')!;
+      const selectable = entity.get<Selectable>('Selectable')!;
+
+      // Must be ally, biological, and damaged
+      if (selectable.playerId !== playerId) continue;
+      if (!unit.isBiological) continue;
+      if (health.isDead()) continue;
+      if (health.current >= health.max) continue;
+
+      const distance = selfTransform.distanceTo(transform);
+      if (distance > range) continue;
+
+      const healthPercent = health.current / health.max;
+
+      // Prefer lower health targets
+      if (!bestTarget || healthPercent < bestTarget.healthPercent) {
+        bestTarget = { id: entity.id, healthPercent };
+      }
+    }
+
+    return bestTarget?.id || null;
   }
 }
