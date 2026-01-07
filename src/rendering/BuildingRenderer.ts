@@ -67,6 +67,28 @@ export class BuildingRenderer {
       opacity: 0.5,
       side: THREE.DoubleSide,
     });
+
+    // Register callback to refresh meshes when custom models finish loading
+    AssetManager.onModelsLoaded(() => {
+      this.refreshAllMeshes();
+    });
+  }
+
+  /**
+   * Clear all cached meshes so they get recreated with updated assets on next update.
+   * Called when custom models finish loading.
+   */
+  public refreshAllMeshes(): void {
+    console.log('[BuildingRenderer] Refreshing all building meshes...');
+    for (const [entityId, meshData] of this.buildingMeshes) {
+      this.scene.remove(meshData.group);
+      this.scene.remove(meshData.selectionRing);
+      this.scene.remove(meshData.healthBar);
+      this.scene.remove(meshData.progressBar);
+      this.disposeGroup(meshData.group);
+    }
+    this.buildingMeshes.clear();
+    // Meshes will be recreated on next update() call
   }
 
   public setPlayerId(playerId: string): void {

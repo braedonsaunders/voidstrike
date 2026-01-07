@@ -164,7 +164,7 @@ export class UnitRenderer {
         const isAttacking = unit.state === 'attacking';
 
         // Find appropriate animation by name pattern
-        const desiredAnim = this.findAnimationForState(meshData.animations, isMoving, isAttacking);
+        const desiredAnim = this.findAnimationForState(meshData.animations, isMoving, isAttacking, unit.unitId);
 
         // Switch animation if needed
         if (desiredAnim && meshData.currentAction?.getClip() !== desiredAnim) {
@@ -285,11 +285,16 @@ export class UnitRenderer {
   /**
    * Find the best animation for a given state by searching name patterns.
    * Falls back to first animation if no match found.
+   * Note: Some models (like SCV) may have inverted animation names -
+   * the "idle" animation shows movement and "walk" shows standing.
+   * We detect this by checking if the unit has exactly 2 animations
+   * with one named idle/stand and one named walk/run.
    */
   private findAnimationForState(
     animations: THREE.AnimationClip[],
     isMoving: boolean,
-    isAttacking: boolean
+    isAttacking: boolean,
+    unitId?: string
   ): THREE.AnimationClip | null {
     if (animations.length === 0) return null;
     if (animations.length === 1) return animations[0]; // Only one animation, use it
@@ -304,15 +309,34 @@ export class UnitRenderer {
       if (attackIdx >= 0) return animations[attackIdx];
     }
 
+    // Check for inverted animations (common in some exported models)
+    // If we have exactly 2 animations and one is idle-like and one is walk-like,
+    // check if they need to be swapped based on the model
+    const hasIdleAnim = lowerNames.findIndex(n => n.includes('idle') || n.includes('stand'));
+    const hasWalkAnim = lowerNames.findIndex(n => n.includes('walk') || n.includes('run'));
+
+    // SCV and some other models have inverted animation names in their exports
+    const invertedModels = ['scv'];
+    const shouldInvert = unitId && invertedModels.includes(unitId) &&
+                         hasIdleAnim >= 0 && hasWalkAnim >= 0;
+
     if (isMoving) {
-      // Look for walk/run animation
+      // Look for walk/run animation (or idle if inverted)
+      if (shouldInvert) {
+        // Model has inverted names - use idle animation for moving
+        if (hasIdleAnim >= 0) return animations[hasIdleAnim];
+      }
       const moveIdx = lowerNames.findIndex(n =>
         n.includes('walk') || n.includes('run') || n.includes('move')
       );
       if (moveIdx >= 0) return animations[moveIdx];
     }
 
-    // Look for idle animation
+    // Look for idle animation (or walk if inverted)
+    if (shouldInvert) {
+      // Model has inverted names - use walk animation for idle
+      if (hasWalkAnim >= 0) return animations[hasWalkAnim];
+    }
     const idleIdx = lowerNames.findIndex(n =>
       n.includes('idle') || n.includes('stand') || n.includes('rest')
     );
