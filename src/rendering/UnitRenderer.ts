@@ -13,6 +13,10 @@ interface UnitMeshData {
   selectionRing: THREE.Mesh;
   healthBar: THREE.Group;
   unitId: string;
+  // Animation support
+  mixer: THREE.AnimationMixer | null;
+  currentAction: THREE.AnimationAction | null;
+  animations: THREE.AnimationClip[];
 }
 
 // Player colors
@@ -31,6 +35,9 @@ export class UnitRenderer {
   private terrain: Terrain | null;
   private playerId: string = 'player1';
   private unitMeshes: Map<number, UnitMeshData> = new Map();
+
+  // Animation timing
+  private clock: THREE.Clock = new THREE.Clock();
 
   // Shared resources
   private selectionGeometry: THREE.RingGeometry;
@@ -77,6 +84,7 @@ export class UnitRenderer {
   }
 
   public update(): void {
+    const delta = this.clock.getDelta();
     const entities = this.world.getEntitiesWith('Transform', 'Unit');
     const currentIds = new Set<number>();
 
@@ -145,6 +153,30 @@ export class UnitRenderer {
         meshData.healthBar.position.set(transform.x, terrainHeight + 1.5, transform.y);
         this.updateHealthBar(meshData.healthBar, health);
       }
+
+      // Update animations
+      if (meshData.mixer && meshData.animations.length > 0) {
+        meshData.mixer.update(delta);
+
+        // Determine if unit is moving (has significant velocity)
+        const isMoving = unit.state === 'moving' || unit.state === 'attacking' ||
+                         unit.state === 'gathering' || unit.state === 'patrolling' ||
+                         unit.state === 'building';
+
+        // Play first available animation when moving
+        // (Meshy exports use generic names like 'Armature|clip0|baselayer')
+        if (meshData.currentAction === null && meshData.animations.length > 0) {
+          // Start playing the first animation
+          meshData.currentAction = meshData.mixer.clipAction(meshData.animations[0]);
+          meshData.currentAction.play();
+          console.log(`[UnitRenderer] Started animation for ${unit.unitId}: ${meshData.animations[0].name}`);
+        }
+
+        // Adjust animation time scale based on movement state
+        if (meshData.currentAction) {
+          meshData.currentAction.timeScale = isMoving ? 1.0 : 0.3; // Slow when idle
+        }
+      }
     }
 
     // Remove meshes for destroyed entities
@@ -182,7 +214,21 @@ export class UnitRenderer {
     // Health bar
     const healthBar = this.createHealthBar();
 
-    return { group, selectionRing, healthBar, unitId: unit.unitId };
+    // Set up animations if available
+    let mixer: THREE.AnimationMixer | null = null;
+    let currentAction: THREE.AnimationAction | null = null;
+    const animations = AssetManager.getAnimations(unit.unitId);
+
+    if (animations.length > 0) {
+      // Create mixer for the inner model (not the wrapper group)
+      const innerModel = group.children[0];
+      if (innerModel) {
+        mixer = new THREE.AnimationMixer(innerModel);
+        console.log(`[UnitRenderer] Created AnimationMixer for ${unit.unitId} with ${animations.length} animations`);
+      }
+    }
+
+    return { group, selectionRing, healthBar, unitId: unit.unitId, mixer, currentAction, animations };
   }
 
   private createHealthBar(): THREE.Group {
