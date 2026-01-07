@@ -193,28 +193,32 @@ export function Minimap() {
       const currentCameraY = storeState.cameraY;
       const viewWidth = (currentZoom * 2) * scale;
       const viewHeight = (currentZoom * 1.5) * scale;
-      const viewX = currentCameraX * scale - viewWidth / 2;
-      const viewY = currentCameraY * scale - viewHeight / 2;
+      let viewX = currentCameraX * scale - viewWidth / 2;
+      let viewY = currentCameraY * scale - viewHeight / 2;
+
+      // Clamp viewport rectangle to stay within minimap bounds
+      const clampedX = Math.max(0, Math.min(MINIMAP_SIZE - viewWidth, viewX));
+      const clampedY = Math.max(0, Math.min(MINIMAP_SIZE - viewHeight, viewY));
 
       ctx.strokeStyle = '#ffffff';
       ctx.lineWidth = 1.5;
-      ctx.strokeRect(viewX, viewY, viewWidth, viewHeight);
+      ctx.strokeRect(clampedX, clampedY, viewWidth, viewHeight);
 
-      // Draw corner markers for visibility
+      // Draw corner markers for visibility (using clamped coordinates)
       const cornerSize = 4;
       ctx.fillStyle = '#ffffff';
       // Top-left
-      ctx.fillRect(viewX - 1, viewY - 1, cornerSize, 2);
-      ctx.fillRect(viewX - 1, viewY - 1, 2, cornerSize);
+      ctx.fillRect(clampedX - 1, clampedY - 1, cornerSize, 2);
+      ctx.fillRect(clampedX - 1, clampedY - 1, 2, cornerSize);
       // Top-right
-      ctx.fillRect(viewX + viewWidth - cornerSize + 1, viewY - 1, cornerSize, 2);
-      ctx.fillRect(viewX + viewWidth - 1, viewY - 1, 2, cornerSize);
+      ctx.fillRect(clampedX + viewWidth - cornerSize + 1, clampedY - 1, cornerSize, 2);
+      ctx.fillRect(clampedX + viewWidth - 1, clampedY - 1, 2, cornerSize);
       // Bottom-left
-      ctx.fillRect(viewX - 1, viewY + viewHeight - 1, cornerSize, 2);
-      ctx.fillRect(viewX - 1, viewY + viewHeight - cornerSize + 1, 2, cornerSize);
+      ctx.fillRect(clampedX - 1, clampedY + viewHeight - 1, cornerSize, 2);
+      ctx.fillRect(clampedX - 1, clampedY + viewHeight - cornerSize + 1, 2, cornerSize);
       // Bottom-right
-      ctx.fillRect(viewX + viewWidth - cornerSize + 1, viewY + viewHeight - 1, cornerSize, 2);
-      ctx.fillRect(viewX + viewWidth - 1, viewY + viewHeight - cornerSize + 1, 2, cornerSize);
+      ctx.fillRect(clampedX + viewWidth - cornerSize + 1, clampedY + viewHeight - 1, cornerSize, 2);
+      ctx.fillRect(clampedX + viewWidth - 1, clampedY + viewHeight - cornerSize + 1, 2, cornerSize);
 
       // Draw pings with animation
       const activePings: Ping[] = [];

@@ -77,41 +77,52 @@ jobs:
 
           for file in $files; do
             echo "Processing: $file"
+            dir=$(dirname "$file")
+            base=$(basename "$file")
 
             # Get original size
-            original_size=$(stat -f%z "$file" 2>/dev/null || stat -c%s "$file")
+            original_size=$(stat -c%s "$file")
             echo "  Original size: $((original_size / 1024)) KB"
 
-            # Run transforms individually to avoid texture extraction
-            # Step 1: Resize textures (keeps them embedded in GLB)
-            gltf-transform resize "$file" "${file}.step1" --width 512 --height 512 || {
-              echo "  ⚠️ Resize failed, keeping original"
-              continue
-            }
+            # Change to file directory to avoid path issues with gltf-transform
+            pushd "$dir" > /dev/null
 
-            # Step 2: Apply Draco compression
-            gltf-transform draco "${file}.step1" "${file}.optimized" || {
+            # Only apply Draco compression (resize was extracting textures)
+            echo "  Applying Draco compression..."
+            gltf-transform draco "$base" "${base}.optimized" || {
               echo "  ⚠️ Draco compression failed, keeping original"
-              rm -f "${file}.step1"
+              popd > /dev/null
               continue
             }
 
-            # Cleanup intermediate file
-            rm -f "${file}.step1"
+            # Debug: show what files exist
+            echo "  Files after draco:"
+            ls -la *.glb* 2>/dev/null || true
 
-            # Replace original
-            mv "${file}.optimized" "$file"
+            # Check if optimized file exists and has reasonable size
+            if [ -f "${base}.optimized" ]; then
+              opt_size=$(stat -c%s "${base}.optimized")
+              echo "  Optimized file size: $((opt_size / 1024)) KB"
 
-            # Get new size
-            new_size=$(stat -f%z "$file" 2>/dev/null || stat -c%s "$file")
-            reduction=$((100 - (new_size * 100 / original_size)))
-            echo "  Optimized size: $((new_size / 1024)) KB (${reduction}% reduction)"
+              # Only replace if optimized file is > 100KB (sanity check)
+              if [ $opt_size -gt 102400 ]; then
+                mv "${base}.optimized" "$base"
+                echo "  ✅ Replaced with optimized version"
+              else
+                echo "  ⚠️ Optimized file too small ($opt_size bytes), keeping original"
+                rm -f "${base}.optimized"
+              fi
+            else
+              echo "  ⚠️ Optimized file not found, keeping original"
+            fi
 
-            # Warn if still large
-            if [ $new_size -gt 2097152 ]; then
-              echo "  ⚠️ WARNING: File still > 2MB. Consider reducing polygon count."
-            elif [ $new_size -gt 524288 ]; then
-              echo "  ⚠️ Note: File > 500KB. Consider if this is necessary for an RTS unit."
+            popd > /dev/null
+
+            # Get final size
+            new_size=$(stat -c%s "$file")
+            if [ $original_size -gt 0 ]; then
+              reduction=$((100 - (new_size * 100 / original_size)))
+              echo "  Final size: $((new_size / 1024)) KB (${reduction}% reduction)"
             fi
           done
 
