@@ -1,179 +1,94 @@
 name: Optimize 3D Models
 
 on:
-  pull_request:
-    paths:
-      - 'public/models/**/*.glb'
-  push:
-    branches:
-      - main
-    paths:
-      - 'public/models/**/*.glb'
-  workflow_dispatch:  # Allow manual trigger
+  workflow_dispatch:  # Manual trigger only
 
 jobs:
   optimize:
     runs-on: ubuntu-latest
     permissions:
       contents: write
-      pull-requests: write
 
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
 
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: '20'
-
-      - name: Get changed GLB files
-        id: changed-files
-        uses: tj-actions/changed-files@v44
-        with:
-          files: |
-            public/models/**/*.glb
-
-      - name: Check for GLB files to optimize
-        id: check-files
+      - name: Install gltfpack
         run: |
-          # For manual trigger, process ALL GLB files
-          if [ "${{ github.event_name }}" == "workflow_dispatch" ]; then
-            echo "has_files=true" >> $GITHUB_OUTPUT
-            echo "📦 Manual trigger - will process ALL GLB files"
-            find public/models -name "*.glb" -type f > /tmp/glb_files.txt
-            cat /tmp/glb_files.txt
-          elif [ "${{ steps.changed-files.outputs.any_changed }}" == "true" ]; then
-            echo "has_files=true" >> $GITHUB_OUTPUT
-            echo "📦 Found changed GLB files to optimize:"
-            echo "${{ steps.changed-files.outputs.all_changed_files }}"
-            echo "${{ steps.changed-files.outputs.all_changed_files }}" | tr ' ' '\n' > /tmp/glb_files.txt
-          else
-            echo "has_files=false" >> $GITHUB_OUTPUT
-            echo "No GLB files changed."
-          fi
+          echo "🎮 Installing gltfpack..."
+          wget -q https://github.com/zeux/meshoptimizer/releases/download/v0.21/gltfpack-0.21-linux.zip
+          unzip -q gltfpack-0.21-linux.zip
+          chmod +x gltfpack
+          sudo mv gltfpack /usr/local/bin/
 
       - name: Optimize models
-        if: steps.check-files.outputs.has_files == 'true'
         run: |
-          echo "🎮 Installing gltf-transform..."
-          npm install -g @gltf-transform/cli
-
-          # Clean up any extracted texture/bin files from previous bad runs
-          echo "🧹 Cleaning up extracted files..."
-          find public/models -name "*.webp" -type f -delete 2>/dev/null || true
-          find public/models -name "*.bin" -type f -delete 2>/dev/null || true
-
           echo "📦 Optimizing models..."
 
-          # Get file list based on trigger type
-          if [ "${{ github.event_name }}" == "workflow_dispatch" ]; then
-            files=$(find public/models -name "*.glb" -type f)
-          else
-            files="${{ steps.changed-files.outputs.all_changed_files }}"
-          fi
+          # Create/load optimized files registry
+          REGISTRY=".github/optimized-models.txt"
+          touch "$REGISTRY"
+
+          files=$(find public/models -name "*.glb" -type f)
+          optimized_count=0
 
           for file in $files; do
-            echo "Processing: $file"
-            dir=$(dirname "$file")
-            base=$(basename "$file")
-            # Use temp filename with .glb extension so gltf-transform outputs GLB format
-            temp_file="optimized_${base}"
+            # Get file hash to check if already optimized
+            file_hash=$(sha256sum "$file" | cut -d' ' -f1)
 
-            # Get original size
+            # Skip if already optimized (hash exists in registry)
+            if grep -q "$file_hash" "$REGISTRY" 2>/dev/null; then
+              echo "⏭️  Skipping (already optimized): $file"
+              continue
+            fi
+
+            echo "Processing: $file"
             original_size=$(stat -c%s "$file")
             echo "  Original size: $((original_size / 1024)) KB"
 
-            # Change to file directory to avoid path issues with gltf-transform
-            pushd "$dir" > /dev/null
-
-            # Apply Draco compression - output must end in .glb to stay as binary GLB
-            echo "  Applying Draco compression..."
-            gltf-transform draco "$base" "$temp_file" || {
-              echo "  ⚠️ Draco compression failed, keeping original"
-              popd > /dev/null
-              continue
-            }
-
-            # Debug: show what files exist
-            echo "  Files after draco:"
-            ls -la *.glb* 2>/dev/null || true
-
-            # Check if optimized file exists and has reasonable size
-            if [ -f "$temp_file" ]; then
+            # Run gltfpack with texture compression
+            temp_file="${file}.optimized.glb"
+            if gltfpack -i "$file" -o "$temp_file" -tc -cc -si 0.75 2>/dev/null; then
               opt_size=$(stat -c%s "$temp_file")
-              echo "  Optimized file size: $((opt_size / 1024)) KB"
+              echo "  Optimized size: $((opt_size / 1024)) KB"
 
-              # Only replace if optimized file is > 1MB (sanity check for these large models)
-              if [ $opt_size -gt 1048576 ]; then
-                mv "$temp_file" "$base"
-                echo "  ✅ Replaced with optimized version"
+              # Only replace if we got meaningful compression and file is valid
+              if [ $opt_size -gt 100000 ] && [ $opt_size -lt $original_size ]; then
+                mv "$temp_file" "$file"
+                reduction=$((100 - (opt_size * 100 / original_size)))
+                echo "  ✅ Saved ${reduction}% ($((original_size / 1024)) KB → $((opt_size / 1024)) KB)"
+
+                # Add new hash to registry
+                new_hash=$(sha256sum "$file" | cut -d' ' -f1)
+                echo "$new_hash  $file" >> "$REGISTRY"
+                optimized_count=$((optimized_count + 1))
               else
-                echo "  ⚠️ Optimized file too small ($((opt_size / 1024)) KB), keeping original"
+                echo "  ⚠️ Optimization didn't help, keeping original"
                 rm -f "$temp_file"
+                # Still mark as processed so we don't retry
+                echo "$file_hash  $file" >> "$REGISTRY"
               fi
             else
-              echo "  ⚠️ Optimized file not found, keeping original"
-            fi
-
-            # Clean up any extracted .bin files
-            rm -f *.bin 2>/dev/null || true
-
-            popd > /dev/null
-
-            # Get final size
-            new_size=$(stat -c%s "$file")
-            if [ $original_size -gt 0 ]; then
-              reduction=$((100 - (new_size * 100 / original_size)))
-              echo "  Final size: $((new_size / 1024)) KB (${reduction}% reduction)"
+              echo "  ⚠️ gltfpack failed, keeping original"
+              rm -f "$temp_file"
             fi
           done
 
-      - name: Commit optimized models
-        if: steps.check-files.outputs.has_files == 'true'
+          echo ""
+          echo "📊 Optimized $optimized_count model(s)"
+
+      - name: Commit changes
         run: |
           git config --local user.email "github-actions[bot]@users.noreply.github.com"
           git config --local user.name "github-actions[bot]"
 
-          # Final cleanup of any extracted files
-          find public/models -name "*.webp" -type f -delete 2>/dev/null || true
-          find public/models -name "*.bin" -type f -delete 2>/dev/null || true
-
-          # Only add GLB files (not extracted textures)
-          git add public/models/**/*.glb
+          # Add optimized models and registry
+          git add public/models/**/*.glb .github/optimized-models.txt
 
           # Check if there are changes to commit
           if git diff --staged --quiet; then
-            echo "No changes to commit (models may already be optimized)"
+            echo "No changes to commit (models already optimized)"
           else
-            git commit -m "chore: Optimize 3D models (Draco compression)"
+            git commit -m "chore: Optimize 3D models (gltfpack)"
             git push
           fi
-
-      - name: Comment on PR
-        if: github.event_name == 'pull_request' && steps.check-files.outputs.has_files == 'true'
-        uses: actions/github-script@v7
-        with:
-          script: |
-            const changedFiles = `${{ steps.changed-files.outputs.all_changed_files }}`.split(' ');
-            const fileList = changedFiles.map(f => `- \`${f}\``).join('\n');
-
-            github.rest.issues.createComment({
-              issue_number: context.issue.number,
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              body: `## 🎮 3D Model Optimization
-
-            The following GLB files were automatically optimized:
-
-            ${fileList}
-
-            **Optimizations applied:**
-            - Textures resized to 512x512
-            - Draco mesh compression enabled
-            - Single GLB file preserved (no extracted textures)
-
-            This reduces file sizes significantly while maintaining visual quality.`
-            });
