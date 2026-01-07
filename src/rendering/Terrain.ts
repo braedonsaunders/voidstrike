@@ -1,72 +1,9 @@
 import * as THREE from 'three';
 import { MapData, MapCell, TerrainType, ElevationLevel } from '@/data/maps';
+import { BiomeConfig, BIOMES, blendBiomeColors, BiomeType } from './Biomes';
 
 // Terrain subdivision for smoother rendering
 const SUBDIVISIONS = 2; // 2x2 subdivisions per cell for better quality
-
-// Rich, saturated terrain colors with more contrast
-const TERRAIN_COLORS: Record<TerrainType, Record<ElevationLevel, THREE.Color>> = {
-  ground: {
-    0: new THREE.Color(0x2d4a2f), // Low ground - deep grass
-    1: new THREE.Color(0x3d6a3f), // Medium ground - lush grass
-    2: new THREE.Color(0x4d8a4f), // High ground - bright grass
-  },
-  unwalkable: {
-    0: new THREE.Color(0x3a3a40), // Dark rock/cliff
-    1: new THREE.Color(0x5a5a60), // Medium rock
-    2: new THREE.Color(0x7a7a80), // Light rock
-  },
-  ramp: {
-    0: new THREE.Color(0x6a6050), // Tan/dirt ramp
-    1: new THREE.Color(0x7a7060),
-    2: new THREE.Color(0x8a8070),
-  },
-  unbuildable: {
-    0: new THREE.Color(0x2a4030), // Darker grass/mud
-    1: new THREE.Color(0x3a5040),
-    2: new THREE.Color(0x4a6050),
-  },
-  creep: {
-    0: new THREE.Color(0x4d2050), // Purple creep
-    1: new THREE.Color(0x5d3060),
-    2: new THREE.Color(0x6d4070),
-  },
-};
-
-// Accent colors for detail variation - more variety
-const ACCENT_COLORS: Record<TerrainType, THREE.Color[]> = {
-  ground: [
-    new THREE.Color(0x3a5838), // Darker grass patch
-    new THREE.Color(0x5a9858), // Lighter grass patch
-    new THREE.Color(0x4a7848), // Medium grass
-    new THREE.Color(0x355530), // Forest green patch
-    new THREE.Color(0x6aaa68), // Bright grass highlight
-    new THREE.Color(0x2d4528), // Shadow grass
-  ],
-  unwalkable: [
-    new THREE.Color(0x454550),
-    new THREE.Color(0x555560),
-    new THREE.Color(0x656570),
-    new THREE.Color(0x353540), // Dark shadow
-    new THREE.Color(0x757580), // Light highlight
-  ],
-  ramp: [
-    new THREE.Color(0x7a6a5a),
-    new THREE.Color(0x8a7a6a),
-    new THREE.Color(0x9a8a7a),
-    new THREE.Color(0x6a5a4a),
-  ],
-  unbuildable: [
-    new THREE.Color(0x3a4838),
-    new THREE.Color(0x2a3828),
-    new THREE.Color(0x4a5848),
-  ],
-  creep: [
-    new THREE.Color(0x5a3060),
-    new THREE.Color(0x4a2050),
-    new THREE.Color(0x7a5080),
-  ],
-};
 
 // Height for each elevation level
 const ELEVATION_HEIGHTS: Record<ElevationLevel, number> = {
@@ -127,6 +64,7 @@ function fractalNoise(x: number, y: number, octaves: number, persistence: number
 export class Terrain {
   public mesh: THREE.Mesh;
   public mapData: MapData;
+  public biome: BiomeConfig;
 
   private cellSize: number;
   private geometry: THREE.BufferGeometry;
@@ -144,11 +82,14 @@ export class Terrain {
     this.gridHeight = this.mapData.height + 1;
     this.heightMap = new Float32Array(this.gridWidth * this.gridHeight);
 
+    // Get biome configuration
+    this.biome = BIOMES[this.mapData.biome || 'grassland'];
+
     this.geometry = this.createGeometry();
     this.material = new THREE.MeshStandardMaterial({
       vertexColors: true,
-      roughness: 0.75,
-      metalness: 0.05,
+      roughness: this.biome.groundRoughness,
+      metalness: this.biome.groundMetalness,
       flatShading: false,
     });
 
@@ -227,8 +168,15 @@ export class Terrain {
     for (let y = 0; y < height; y++) {
       for (let x = 0; x < width; x++) {
         const cell = terrain[y][x];
-        const baseColor = TERRAIN_COLORS[cell.terrain][cell.elevation];
-        const accents = ACCENT_COLORS[cell.terrain];
+
+        // Get biome-based color for this terrain type
+        const terrainColorType = cell.terrain === 'unwalkable' ? 'cliff' :
+                                  cell.terrain === 'ramp' ? 'ramp' : 'ground';
+        const baseColor = blendBiomeColors(this.biome, x, y, terrainColorType);
+
+        // Adjust color based on elevation
+        const elevationBrightness = 1 + cell.elevation * 0.08;
+        baseColor.multiplyScalar(elevationBrightness);
 
         // Get cell corners
         const v00 = vertexGrid[y][x];
@@ -239,19 +187,20 @@ export class Terrain {
         // Calculate colors with variation
         const colors6: THREE.Color[] = [];
         for (let i = 0; i < 6; i++) {
-          const color = new THREE.Color(baseColor);
+          const color = baseColor.clone();
 
           // Add texture variation based on position
           const noiseVal = noise2D(x + i * 0.1, y + i * 0.1, cell.textureId);
 
-          // Blend with accent colors
-          if (accents.length > 0 && noiseVal > 0.6) {
+          // Blend with accent colors from biome
+          const accents = this.biome.colors.accent;
+          if (accents.length > 0 && noiseVal > 0.7) {
             const accentIndex = Math.floor(noiseVal * accents.length) % accents.length;
-            color.lerp(accents[accentIndex], (noiseVal - 0.6) * 2);
+            color.lerp(accents[accentIndex], (noiseVal - 0.7) * 1.5);
           }
 
           // Add subtle brightness variation
-          const brightVar = (noise2D(x * 2.5, y * 2.5, 789) - 0.5) * 0.15;
+          const brightVar = (noise2D(x * 2.5, y * 2.5, 789) - 0.5) * 0.12;
           color.r = Math.max(0, Math.min(1, color.r + brightVar));
           color.g = Math.max(0, Math.min(1, color.g + brightVar));
           color.b = Math.max(0, Math.min(1, color.b + brightVar));
@@ -259,7 +208,7 @@ export class Terrain {
           // Edge darkening for depth
           const edgeFactor = this.getEdgeFactor(terrain, x, y, width, height);
           if (edgeFactor > 0) {
-            color.multiplyScalar(1 - edgeFactor * 0.2);
+            color.multiplyScalar(1 - edgeFactor * 0.25);
           }
 
           colors6.push(color);

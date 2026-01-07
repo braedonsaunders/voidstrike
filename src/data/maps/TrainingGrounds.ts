@@ -249,6 +249,7 @@ function generateTrainingGrounds(): MapData {
     maxPlayers: 2,
     isRanked: false,
 
+    biome: 'grassland',
     skyboxColor: '#0f1520',
     ambientColor: '#405060',
     sunColor: '#ffffff',

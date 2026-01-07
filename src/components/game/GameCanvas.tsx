@@ -4,7 +4,8 @@ import { useRef, useEffect, useCallback, useState } from 'react';
 import * as THREE from 'three';
 import { Game } from '@/engine/core/Game';
 import { RTSCamera } from '@/rendering/Camera';
-import { Terrain, TerrainGrid, MapDecorations } from '@/rendering/Terrain';
+import { TerrainGrid } from '@/rendering/Terrain';
+import { EnvironmentManager } from '@/rendering/EnvironmentManager';
 import { UnitRenderer } from '@/rendering/UnitRenderer';
 import { BuildingRenderer } from '@/rendering/BuildingRenderer';
 import { ResourceRenderer } from '@/rendering/ResourceRenderer';
@@ -39,6 +40,7 @@ export function GameCanvas() {
   const fogOfWarRef = useRef<FogOfWar | null>(null);
   const effectsRendererRef = useRef<EffectsRenderer | null>(null);
   const rallyPointRendererRef = useRef<RallyPointRenderer | null>(null);
+  const environmentRef = useRef<EnvironmentManager | null>(null);
 
   const [isSelecting, setIsSelecting] = useState(false);
   const [selectionStart, setSelectionStart] = useState({ x: 0, y: 0 });
@@ -70,10 +72,8 @@ export function GameCanvas() {
     renderer.shadowMap.type = THREE.PCFSoftShadowMap;
     rendererRef.current = renderer;
 
-    // Create scene with better sky color
+    // Create scene
     const scene = new THREE.Scene();
-    scene.background = new THREE.Color(0x87ceeb); // Sky blue background
-    scene.fog = new THREE.Fog(0x87ceeb, 80, 200); // Lighter, more distant fog
     sceneRef.current = scene;
 
     // Create camera with map dimensions
@@ -90,41 +90,10 @@ export function GameCanvas() {
     camera.setPosition(playerSpawn.x, playerSpawn.y);
     cameraRef.current = camera;
 
-    // Add lighting - bright and vibrant
-    const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
-    scene.add(ambientLight);
-
-    // Main sun light
-    const directionalLight = new THREE.DirectionalLight(0xfffaf0, 1.2);
-    directionalLight.position.set(50, 100, 50);
-    directionalLight.castShadow = true;
-    directionalLight.shadow.mapSize.width = 4096;
-    directionalLight.shadow.mapSize.height = 4096;
-    directionalLight.shadow.camera.near = 10;
-    directionalLight.shadow.camera.far = 300;
-    directionalLight.shadow.camera.left = -150;
-    directionalLight.shadow.camera.right = 150;
-    directionalLight.shadow.camera.top = 150;
-    directionalLight.shadow.camera.bottom = -150;
-    directionalLight.shadow.bias = -0.0001;
-    scene.add(directionalLight);
-
-    // Secondary fill light from opposite side
-    const fillLight = new THREE.DirectionalLight(0x8080ff, 0.3);
-    fillLight.position.set(-50, 50, -50);
-    scene.add(fillLight);
-
-    // Hemisphere light for natural outdoor lighting
-    const hemisphereLight = new THREE.HemisphereLight(0x87ceeb, 0x3d5a3e, 0.4);
-    scene.add(hemisphereLight);
-
-    // Create terrain from map data
-    const terrain = new Terrain({ mapData: CURRENT_MAP });
-    scene.add(terrain.mesh);
-
-    // Create map decorations (watch towers, destructible rocks) - pass terrain for height
-    const decorations = new MapDecorations(CURRENT_MAP, terrain);
-    scene.add(decorations.group);
+    // Create environment manager (terrain, decorations, lighting, particles)
+    const environment = new EnvironmentManager(scene, CURRENT_MAP);
+    environmentRef.current = environment;
+    const terrain = environment.terrain;
 
     // Create terrain grid (for building placement)
     const grid = new TerrainGrid(mapWidth, mapHeight, 1);
@@ -195,6 +164,10 @@ export function GameCanvas() {
       effectsRendererRef.current?.update(deltaTime);
       rallyPointRendererRef.current?.update();
 
+      // Update environment (water animation, particles)
+      const gameTime = gameRef.current?.getGameTime() ?? 0;
+      environmentRef.current?.update(deltaTime / 1000, gameTime);
+
       // Update game store camera position
       const pos = camera.getPosition();
       useGameStore.getState().setCamera(pos.x, pos.z, camera.getZoom());
@@ -221,8 +194,7 @@ export function GameCanvas() {
     return () => {
       window.removeEventListener('resize', handleResize);
       renderer.dispose();
-      terrain.dispose();
-      decorations.dispose();
+      environment.dispose();
       grid.dispose();
       fogOfWar.dispose();
       effectsRenderer.dispose();

@@ -449,6 +449,64 @@ private checkBuildingDependencies(requirements: string[], playerId: string) {
 }
 ```
 
+## Biome & Environment System
+
+### Biome Configuration (`src/rendering/Biomes.ts`)
+
+6 distinct biomes with unique visual characteristics:
+
+| Biome | Colors | Features | Particles |
+|-------|--------|----------|-----------|
+| Grassland | Greens, browns | Trees, grass, water | None |
+| Desert | Tans, oranges | Cacti, rocks, oases | Dust |
+| Frozen | Whites, blues | Dead trees, ice crystals, frozen lakes | Snow |
+| Volcanic | Blacks, reds | Charred stumps, lava rivers | Ash |
+| Void | Purples, blacks | Alien trees, crystals, energy pools | Spores |
+| Jungle | Dark greens | Dense trees, grass, murky water | Spores |
+
+Each biome defines:
+- Ground/cliff/ramp color palettes
+- PBR material properties (roughness, metalness)
+- Decoration densities (trees, rocks, grass, crystals)
+- Water/lava settings
+- Fog and lighting colors
+
+### Environment Manager (`src/rendering/EnvironmentManager.ts`)
+
+Unified system that creates and manages:
+
+```typescript
+const environment = new EnvironmentManager(scene, mapData);
+
+// Creates:
+// - Terrain mesh with biome colors
+// - Lighting (ambient, directional, fill)
+// - Sky and fog
+// - Enhanced trees (biome-specific types)
+// - Rock formations
+// - Instanced grass (GPU instancing)
+// - Ground debris
+// - Crystal fields
+// - Water/lava planes
+// - Particle systems
+
+// Update animated elements
+environment.update(deltaTime, gameTime);
+```
+
+### Ground Detail (`src/rendering/GroundDetail.ts`)
+
+- **InstancedGrass**: Up to 50,000 grass blades via THREE.InstancedMesh
+- **GroundDebris**: Pebbles and sticks scattered on terrain
+- **CrystalField**: Glowing crystal clusters for frozen/void biomes
+- **WaterPlane**: Animated shader with wave simulation
+
+### Enhanced Decorations (`src/rendering/EnhancedDecorations.ts`)
+
+- **EnhancedTrees**: 6 tree types (pine, oak, dead, cactus, palm, alien)
+- **EnhancedRocks**: Procedural rock formations with surrounding debris
+- **EnvironmentParticles**: Snow, dust, ash, spores with physics
+
 ## Audio Asset Guidelines
 
 See `.claude/AUDIO_PROMPTS.md` for comprehensive audio generation prompts including:

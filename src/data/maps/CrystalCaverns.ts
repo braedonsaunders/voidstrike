@@ -201,6 +201,7 @@ function generateCrystalCaverns(): MapData {
     maxPlayers: 2,
     isRanked: true,
 
+    biome: 'frozen',
     skyboxColor: '#0e1428',
     ambientColor: '#2a3050',
     sunColor: '#80b0ff',

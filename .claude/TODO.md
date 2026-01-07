@@ -83,6 +83,33 @@
 
 ---
 
+## Phase 1.6: Maps & UX Polish (COMPLETE)
+
+> **Goal**: High-quality maps with visual variety and improved game setup UX.
+
+### Map Visual Quality (Complete)
+- [x] **Biome system** - 6 distinct biomes (Grassland, Desert, Frozen, Volcanic, Void, Jungle)
+- [x] **PBR terrain materials** - Roughness/metalness per biome for realistic look
+- [x] **Instanced grass/ground detail** - Thousands of grass blades via GPU instancing
+- [x] **Enhanced decorations** - Biome-specific trees (pine, oak, dead, cactus, alien)
+- [x] **Rock formations** - Improved procedural rock clusters
+- [x] **Crystal fields** - For frozen/void biomes with glow effects
+- [x] **Water/lava planes** - Animated shader with waves
+- [x] **Particle effects** - Snow, dust, ash, spores per biome
+- [x] **Environment manager** - Unified system for all map visuals
+
+### Pre-Game Setup (Pending)
+- [ ] **Game options menu** - Map selection, settings, faction choice
+- [ ] **Map preview** - Thumbnail and minimap preview
+- [ ] **Game settings** - Starting resources, speed, AI difficulty
+- [ ] **Procedural map generator** - Generate balanced maps with seed
+
+### UX Improvements (Pending)
+- [ ] **Keyboard shortcuts help** - Modal showing all hotkeys (? or F12)
+- [ ] **Controls hint** - Small "Press ? for controls" in HUD corner
+
+---
+
 ## Phase 2: Combat Depth
 
 ### Combat System

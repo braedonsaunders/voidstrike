@@ -1,5 +1,7 @@
 // Map data structures for SC2-style maps
 
+import { BiomeType } from '@/rendering/Biomes';
+
 export type TerrainType =
   | 'ground'      // Normal walkable terrain
   | 'unwalkable'  // Cliffs, water, etc.
@@ -86,13 +88,16 @@ export interface MapData {
   isRanked: boolean;
   thumbnailUrl?: string;
 
-  // Visual
-  skyboxColor: string;
-  ambientColor: string;
-  sunColor: string;
-  fogColor: string;
-  fogNear: number;
-  fogFar: number;
+  // Visual - biome determines colors, decorations, particles, etc.
+  biome: BiomeType;
+
+  // Legacy visual settings (deprecated - use biome instead)
+  skyboxColor?: string;
+  ambientColor?: string;
+  sunColor?: string;
+  fogColor?: string;
+  fogNear?: number;
+  fogFar?: number;
 }
 
 // Helper to create a blank terrain grid

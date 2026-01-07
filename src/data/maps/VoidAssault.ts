@@ -203,6 +203,7 @@ function generateVoidAssault(): MapData {
     maxPlayers: 2,
     isRanked: true,
 
+    biome: 'void',
     skyboxColor: '#0a0a1e',
     ambientColor: '#303050',
     sunColor: '#ffe0b0',
