@@ -5,6 +5,7 @@ import { Unit } from '../components/Unit';
 import { Resource } from '../components/Resource';
 import { Building } from '../components/Building';
 import { Game } from '../core/Game';
+import { World } from '../ecs/World';
 import { useGameStore } from '@/store/gameStore';
 
 // Mining time in seconds
@@ -16,6 +17,10 @@ export class ResourceSystem extends System {
   constructor(game: Game) {
     super(game);
     this.setupEventListeners();
+  }
+
+  public init(world: World): void {
+    super.init(world);
     this.setupRefineryCheckers();
   }
 
