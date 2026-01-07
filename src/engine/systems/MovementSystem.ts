@@ -185,9 +185,10 @@ export class MovementSystem extends System {
         continue;
       }
 
-      // Allow movement for moving, attacking, gathering, and patrolling states
+      // Allow movement for moving, attacking, gathering, patrolling, and building states
       const canMove = unit.state === 'moving' || unit.state === 'attacking' ||
-                      unit.state === 'gathering' || unit.state === 'patrolling';
+                      unit.state === 'gathering' || unit.state === 'patrolling' ||
+                      unit.state === 'building';
 
       if (!canMove) {
         // Decelerate to stop

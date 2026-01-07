@@ -114,6 +114,12 @@ export class Unit extends Component {
   public carryingVespene: number;
   public gatherTargetId: number | null;
 
+  // Construction (for workers building structures)
+  public constructingBuildingId: number | null; // Entity ID of building being constructed
+  public buildTargetX: number | null; // Target position to build at
+  public buildTargetY: number | null;
+  public buildingType: string | null; // Type of building to construct
+
   // Flags
   public isFlying: boolean;
   public isHoldingPosition: boolean;
@@ -194,6 +200,12 @@ export class Unit extends Component {
     this.carryingMinerals = 0;
     this.carryingVespene = 0;
     this.gatherTargetId = null;
+
+    // Construction
+    this.constructingBuildingId = null;
+    this.buildTargetX = null;
+    this.buildTargetY = null;
+    this.buildingType = null;
 
     this.isFlying = definition.isFlying ?? false;
     this.isHoldingPosition = false;
@@ -522,6 +534,46 @@ export class Unit extends Component {
   public clearRepairTarget(): void {
     this.repairTargetId = null;
     this.isRepairing = false;
+  }
+
+  // ==================== CONSTRUCTION MECHANICS ====================
+
+  // Start building - worker moves to location then constructs
+  public startBuilding(buildingType: string, targetX: number, targetY: number): void {
+    if (!this.isWorker) return;
+    this.buildingType = buildingType;
+    this.buildTargetX = targetX;
+    this.buildTargetY = targetY;
+    this.constructingBuildingId = null; // Will be set when building is placed
+    this.state = 'building';
+    this.targetX = targetX;
+    this.targetY = targetY;
+    this.gatherTargetId = null;
+    this.carryingMinerals = 0;
+    this.carryingVespene = 0;
+  }
+
+  // Assign this worker to an existing construction site
+  public assignToConstruction(buildingEntityId: number): void {
+    if (!this.isWorker) return;
+    this.constructingBuildingId = buildingEntityId;
+    this.state = 'building';
+  }
+
+  // Cancel construction task
+  public cancelBuilding(): void {
+    this.constructingBuildingId = null;
+    this.buildTargetX = null;
+    this.buildTargetY = null;
+    this.buildingType = null;
+    this.state = 'idle';
+    this.targetX = null;
+    this.targetY = null;
+  }
+
+  // Check if worker is actively constructing (near building site)
+  public isActivelyConstructing(): boolean {
+    return this.state === 'building' && this.constructingBuildingId !== null;
   }
 
   // ==================== BUFF MECHANICS ====================

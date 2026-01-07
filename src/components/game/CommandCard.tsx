@@ -6,7 +6,7 @@ import { Unit } from '@/engine/components/Unit';
 import { Building } from '@/engine/components/Building';
 import { useEffect, useState } from 'react';
 import { UNIT_DEFINITIONS } from '@/data/units/dominion';
-import { BUILDING_DEFINITIONS, BuildingDefinition } from '@/data/buildings/dominion';
+import { BUILDING_DEFINITIONS } from '@/data/buildings/dominion';
 import { RESEARCH_DEFINITIONS } from '@/data/research/dominion';
 
 // Icon mappings for commands and units
