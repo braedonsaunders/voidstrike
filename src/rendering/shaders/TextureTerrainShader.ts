@@ -1,18 +1,23 @@
 import * as THREE from 'three';
 
 /**
- * Texture-based terrain shader - HIGH PERFORMANCE
+ * Texture-based terrain shader - HIGH PERFORMANCE with PBR
  * Uses texture lookups instead of procedural noise (100x faster)
  *
  * Required textures (place in /public/textures/terrain/):
- * - grass_diffuse.jpg
+ * - grass_diffuse.jpg (albedo)
  * - grass_normal.jpg
- * - dirt_diffuse.jpg
- * - dirt_normal.jpg
- * - rock_diffuse.jpg
- * - rock_normal.jpg
- * - cliff_diffuse.jpg
- * - cliff_normal.jpg
+ * - grass_roughness.jpg (optional - defaults to 0.8)
+ * - grass_displacement.jpg (optional - for parallax depth)
+ * - dirt_diffuse.jpg, dirt_normal.jpg, dirt_roughness.jpg, dirt_displacement.jpg
+ * - rock_diffuse.jpg, rock_normal.jpg, rock_roughness.jpg, rock_displacement.jpg
+ * - cliff_diffuse.jpg, cliff_normal.jpg, cliff_roughness.jpg, cliff_displacement.jpg
+ *
+ * From Polycam AI:
+ * - albedo → *_diffuse.jpg
+ * - normal → *_normal.jpg
+ * - roughness → *_roughness.jpg
+ * - displacement/height → *_displacement.jpg
  */
 
 export const textureTerrainVertexShader = /* glsl */ `
@@ -46,13 +51,24 @@ export const textureTerrainVertexShader = /* glsl */ `
 export const textureTerrainFragmentShader = /* glsl */ `
   uniform sampler2D uGrassTexture;
   uniform sampler2D uGrassNormal;
+  uniform sampler2D uGrassRoughness;
+  uniform sampler2D uGrassDisplacement;
   uniform sampler2D uDirtTexture;
   uniform sampler2D uDirtNormal;
+  uniform sampler2D uDirtRoughness;
+  uniform sampler2D uDirtDisplacement;
   uniform sampler2D uRockTexture;
   uniform sampler2D uRockNormal;
+  uniform sampler2D uRockRoughness;
+  uniform sampler2D uRockDisplacement;
   uniform sampler2D uCliffTexture;
   uniform sampler2D uCliffNormal;
+  uniform sampler2D uCliffRoughness;
+  uniform sampler2D uCliffDisplacement;
 
+  uniform bool uUseRoughness;
+  uniform bool uUseDisplacement;
+  uniform float uParallaxScale;
   uniform vec3 uSunDirection;
   uniform float uSunIntensity;
   uniform vec3 uAmbientColor;
@@ -65,37 +81,107 @@ export const textureTerrainFragmentShader = /* glsl */ `
   varying float vElevation;
   varying vec3 vColor;
 
-  // Blend normals using Reoriented Normal Mapping
-  vec3 blendNormals(vec3 n1, vec3 n2) {
-    n1 += vec3(0.0, 0.0, 1.0);
-    n2 *= vec3(-1.0, -1.0, 1.0);
-    return normalize(n1 * dot(n1, n2) - n2 * n1.z);
-  }
-
   // Unpack normal from texture
   vec3 unpackNormal(vec4 texel) {
     return texel.xyz * 2.0 - 1.0;
   }
 
+  // GGX/Trowbridge-Reitz NDF
+  float D_GGX(float NdotH, float roughness) {
+    float a = roughness * roughness;
+    float a2 = a * a;
+    float NdotH2 = NdotH * NdotH;
+    float denom = NdotH2 * (a2 - 1.0) + 1.0;
+    return a2 / (3.14159 * denom * denom);
+  }
+
+  // Fresnel-Schlick
+  vec3 F_Schlick(float VdotH, vec3 F0) {
+    return F0 + (1.0 - F0) * pow(1.0 - VdotH, 5.0);
+  }
+
+  // Geometry function (Smith GGX)
+  float G_Smith(float NdotV, float NdotL, float roughness) {
+    float k = (roughness + 1.0) * (roughness + 1.0) / 8.0;
+    float ggx1 = NdotV / (NdotV * (1.0 - k) + k);
+    float ggx2 = NdotL / (NdotL * (1.0 - k) + k);
+    return ggx1 * ggx2;
+  }
+
+  // Parallax Occlusion Mapping - offset UV based on view angle and height
+  vec2 parallaxMapping(vec2 uv, vec3 viewDir, sampler2D heightMap, float scale) {
+    // Simple parallax with offset limiting (steep parallax is expensive)
+    float height = texture2D(heightMap, uv).r;
+    vec2 p = viewDir.xy / viewDir.z * (height * scale);
+    return uv - p;
+  }
+
+  // Blend displacement heights for multi-texture terrain
+  float blendedHeight(vec2 uv, float gW, float dW, float rW, float cW, vec3 blendWeights, vec2 uvX, vec2 uvY, vec2 uvZ) {
+    float grassH = texture2D(uGrassDisplacement, uv).r * gW;
+    float dirtH = texture2D(uDirtDisplacement, uv).r * dW;
+    float rockH = texture2D(uRockDisplacement, uv).r * rW;
+
+    // Triplanar for cliff displacement
+    float cliffHX = texture2D(uCliffDisplacement, uvX).r;
+    float cliffHY = texture2D(uCliffDisplacement, uvY).r;
+    float cliffHZ = texture2D(uCliffDisplacement, uvZ).r;
+    float cliffH = (cliffHX * blendWeights.x + cliffHY * blendWeights.y + cliffHZ * blendWeights.z) * cW;
+
+    return grassH + dirtH + rockH + cliffH;
+  }
+
   void main() {
-    // Sample all textures
-    vec3 grassColor = texture2D(uGrassTexture, vUv).rgb;
-    vec3 grassNorm = unpackNormal(texture2D(uGrassNormal, vUv));
+    // Calculate view direction in tangent space for parallax
+    vec3 V = normalize(cameraPosition - vWorldPosition);
+    vec3 N = normalize(vWorldNormal);
+    vec3 T = normalize(cross(N, vec3(0.0, 0.0, 1.0)));
+    vec3 B = cross(N, T);
+    mat3 TBN = mat3(T, B, N);
+    vec3 viewDirTangent = normalize(transpose(TBN) * V);
 
-    vec3 dirtColor = texture2D(uDirtTexture, vUv).rgb;
-    vec3 dirtNorm = unpackNormal(texture2D(uDirtNormal, vUv));
+    // Apply parallax offset to UVs if displacement is enabled
+    vec2 uv = vUv;
+    if (uUseDisplacement) {
+      // Sample average height to determine offset
+      float avgHeight = (
+        texture2D(uGrassDisplacement, vUv).r +
+        texture2D(uDirtDisplacement, vUv).r +
+        texture2D(uRockDisplacement, vUv).r
+      ) / 3.0;
+      vec2 p = viewDirTangent.xy / max(viewDirTangent.z, 0.1) * (avgHeight * uParallaxScale);
+      uv = vUv - p;
+    }
 
-    vec3 rockColor = texture2D(uRockTexture, vUv).rgb;
-    vec3 rockNorm = unpackNormal(texture2D(uRockNormal, vUv));
+    // Sample all textures with parallax-adjusted UVs
+    vec3 grassColor = texture2D(uGrassTexture, uv).rgb;
+    vec3 grassNorm = unpackNormal(texture2D(uGrassNormal, uv));
+    float grassRough = uUseRoughness ? texture2D(uGrassRoughness, uv).r : 0.85;
+
+    vec3 dirtColor = texture2D(uDirtTexture, uv).rgb;
+    vec3 dirtNorm = unpackNormal(texture2D(uDirtNormal, uv));
+    float dirtRough = uUseRoughness ? texture2D(uDirtRoughness, uv).r : 0.9;
+
+    vec3 rockColor = texture2D(uRockTexture, uv).rgb;
+    vec3 rockNorm = unpackNormal(texture2D(uRockNormal, uv));
+    float rockRough = uUseRoughness ? texture2D(uRockRoughness, uv).r : 0.7;
 
     // Triplanar for cliffs to avoid stretching
     vec3 blendWeights = abs(vWorldNormal);
     blendWeights = pow(blendWeights, vec3(4.0));
     blendWeights /= (blendWeights.x + blendWeights.y + blendWeights.z);
 
+    // Apply parallax offset to triplanar UVs as well
     vec2 uvX = vWorldPosition.zy * 0.5;
     vec2 uvY = vWorldPosition.xz * 0.5;
     vec2 uvZ = vWorldPosition.xy * 0.5;
+    if (uUseDisplacement) {
+      float cliffHeight = texture2D(uCliffDisplacement, uvY).r;
+      vec2 offset = viewDirTangent.xy / max(viewDirTangent.z, 0.1) * (cliffHeight * uParallaxScale);
+      uvX -= offset;
+      uvY -= offset;
+      uvZ -= offset;
+    }
 
     vec3 cliffColorX = texture2D(uCliffTexture, uvX).rgb;
     vec3 cliffColorY = texture2D(uCliffTexture, uvY).rgb;
@@ -106,6 +192,11 @@ export const textureTerrainFragmentShader = /* glsl */ `
     vec3 cliffNormY = unpackNormal(texture2D(uCliffNormal, uvY));
     vec3 cliffNormZ = unpackNormal(texture2D(uCliffNormal, uvZ));
     vec3 cliffNorm = normalize(cliffNormX * blendWeights.x + cliffNormY * blendWeights.y + cliffNormZ * blendWeights.z);
+
+    float cliffRoughX = uUseRoughness ? texture2D(uCliffRoughness, uvX).r : 0.75;
+    float cliffRoughY = uUseRoughness ? texture2D(uCliffRoughness, uvY).r : 0.75;
+    float cliffRoughZ = uUseRoughness ? texture2D(uCliffRoughness, uvZ).r : 0.75;
+    float cliffRough = cliffRoughX * blendWeights.x + cliffRoughY * blendWeights.y + cliffRoughZ * blendWeights.z;
 
     // Calculate blend weights based on slope and height
     float grassWeight = smoothstep(0.3, 0.15, vSlope) * smoothstep(-1.0, 1.0, vElevation);
@@ -138,35 +229,54 @@ export const textureTerrainFragmentShader = /* glsl */ `
                         cliffNorm * cliffWeight;
     detailNormal = normalize(detailNormal);
 
-    // Construct TBN matrix for normal mapping
-    vec3 N = normalize(vWorldNormal);
-    vec3 T = normalize(cross(N, vec3(0.0, 0.0, 1.0)));
-    vec3 B = cross(N, T);
-    mat3 TBN = mat3(T, B, N);
+    // Blend roughness
+    float roughness = grassRough * grassWeight +
+                      dirtRough * dirtWeight +
+                      rockRough * rockWeight +
+                      cliffRough * cliffWeight;
 
+    // Apply detail normal using TBN matrix (already computed for parallax)
     vec3 worldNormal = normalize(TBN * detailNormal);
 
-    // Simple but effective lighting
+    // PBR Lighting (V already computed for parallax)
     vec3 L = normalize(uSunDirection);
-    float NdotL = max(dot(worldNormal, L), 0.0);
+    vec3 H = normalize(L + V);
 
-    // Diffuse lighting
+    float NdotL = max(dot(worldNormal, L), 0.0);
+    float NdotV = max(dot(worldNormal, V), 0.001);
+    float NdotH = max(dot(worldNormal, H), 0.0);
+    float VdotH = max(dot(V, H), 0.0);
+
+    // Diffuse
     vec3 diffuse = albedo * NdotL * uSunIntensity;
 
-    // Ambient with slight AO from normal
+    // Specular (PBR)
+    vec3 F0 = vec3(0.04); // Non-metallic
+    float D = D_GGX(NdotH, roughness);
+    vec3 F = F_Schlick(VdotH, F0);
+    float G = G_Smith(NdotV, NdotL, roughness);
+
+    vec3 specular = (D * F * G) / max(4.0 * NdotV * NdotL, 0.001);
+    specular *= NdotL * uSunIntensity;
+
+    // Ambient with AO from normal agreement
     float ao = 0.5 + 0.5 * dot(N, worldNormal);
     vec3 ambient = albedo * uAmbientColor * ao;
 
-    // Slight rim lighting for depth
-    vec3 V = normalize(cameraPosition - vWorldPosition);
-    float rim = 1.0 - max(dot(worldNormal, V), 0.0);
-    rim = pow(rim, 3.0) * 0.15;
+    // Rim lighting for depth
+    float rim = 1.0 - NdotV;
+    rim = pow(rim, 3.0) * 0.12;
 
-    vec3 finalColor = diffuse + ambient + vec3(rim);
+    vec3 finalColor = diffuse + specular + ambient + vec3(rim);
 
-    // Subtle color grading
-    finalColor = pow(finalColor, vec3(0.95)); // Slight gamma
-    finalColor = mix(finalColor, finalColor * vec3(1.02, 1.0, 0.98), 0.3); // Warm tint
+    // Tone mapping (simple Reinhard)
+    finalColor = finalColor / (finalColor + vec3(1.0));
+
+    // Gamma correction
+    finalColor = pow(finalColor, vec3(1.0 / 2.2));
+
+    // Subtle warm tint
+    finalColor = mix(finalColor, finalColor * vec3(1.02, 1.0, 0.98), 0.2);
 
     gl_FragColor = vec4(finalColor, 1.0);
   }
@@ -175,18 +285,55 @@ export const textureTerrainFragmentShader = /* glsl */ `
 export interface TextureTerrainConfig {
   grassTexture: string;
   grassNormal: string;
+  grassRoughness?: string;
+  grassDisplacement?: string;
   dirtTexture: string;
   dirtNormal: string;
+  dirtRoughness?: string;
+  dirtDisplacement?: string;
   rockTexture: string;
   rockNormal: string;
+  rockRoughness?: string;
+  rockDisplacement?: string;
   cliffTexture: string;
   cliffNormal: string;
+  cliffRoughness?: string;
+  cliffDisplacement?: string;
+  parallaxScale?: number; // Default 0.05, higher = more depth
   sunDirection?: THREE.Vector3;
   sunIntensity?: number;
   ambientColor?: THREE.Color;
 }
 
 const textureLoader = new THREE.TextureLoader();
+
+// Create a 1x1 white texture as fallback for missing roughness maps
+function createDefaultRoughnessTexture(): THREE.Texture {
+  const canvas = document.createElement('canvas');
+  canvas.width = 1;
+  canvas.height = 1;
+  const ctx = canvas.getContext('2d')!;
+  ctx.fillStyle = '#cccccc'; // 0.8 roughness
+  ctx.fillRect(0, 0, 1, 1);
+  const texture = new THREE.CanvasTexture(canvas);
+  texture.wrapS = THREE.RepeatWrapping;
+  texture.wrapT = THREE.RepeatWrapping;
+  return texture;
+}
+
+// Create a 1x1 gray texture as fallback for missing displacement maps
+function createDefaultDisplacementTexture(): THREE.Texture {
+  const canvas = document.createElement('canvas');
+  canvas.width = 1;
+  canvas.height = 1;
+  const ctx = canvas.getContext('2d')!;
+  ctx.fillStyle = '#808080'; // 0.5 = neutral height (no displacement)
+  ctx.fillRect(0, 0, 1, 1);
+  const texture = new THREE.CanvasTexture(canvas);
+  texture.wrapS = THREE.RepeatWrapping;
+  texture.wrapT = THREE.RepeatWrapping;
+  return texture;
+}
 
 function loadTexture(path: string): THREE.Texture {
   const texture = textureLoader.load(path);
@@ -198,19 +345,40 @@ function loadTexture(path: string): THREE.Texture {
   return texture;
 }
 
+function loadTextureOrDefault(path: string | undefined, defaultTexture: THREE.Texture): THREE.Texture {
+  if (!path) return defaultTexture;
+  return loadTexture(path);
+}
+
 export function createTextureTerrainMaterial(config: TextureTerrainConfig): THREE.ShaderMaterial {
   console.log('[TextureTerrainShader] Loading textures...');
+
+  const defaultRoughness = createDefaultRoughnessTexture();
+  const defaultDisplacement = createDefaultDisplacementTexture();
+  const hasRoughness = !!(config.grassRoughness || config.dirtRoughness || config.rockRoughness || config.cliffRoughness);
+  const hasDisplacement = !!(config.grassDisplacement || config.dirtDisplacement || config.rockDisplacement || config.cliffDisplacement);
 
   const material = new THREE.ShaderMaterial({
     uniforms: {
       uGrassTexture: { value: loadTexture(config.grassTexture) },
       uGrassNormal: { value: loadTexture(config.grassNormal) },
+      uGrassRoughness: { value: loadTextureOrDefault(config.grassRoughness, defaultRoughness) },
+      uGrassDisplacement: { value: loadTextureOrDefault(config.grassDisplacement, defaultDisplacement) },
       uDirtTexture: { value: loadTexture(config.dirtTexture) },
       uDirtNormal: { value: loadTexture(config.dirtNormal) },
+      uDirtRoughness: { value: loadTextureOrDefault(config.dirtRoughness, defaultRoughness) },
+      uDirtDisplacement: { value: loadTextureOrDefault(config.dirtDisplacement, defaultDisplacement) },
       uRockTexture: { value: loadTexture(config.rockTexture) },
       uRockNormal: { value: loadTexture(config.rockNormal) },
+      uRockRoughness: { value: loadTextureOrDefault(config.rockRoughness, defaultRoughness) },
+      uRockDisplacement: { value: loadTextureOrDefault(config.rockDisplacement, defaultDisplacement) },
       uCliffTexture: { value: loadTexture(config.cliffTexture) },
       uCliffNormal: { value: loadTexture(config.cliffNormal) },
+      uCliffRoughness: { value: loadTextureOrDefault(config.cliffRoughness, defaultRoughness) },
+      uCliffDisplacement: { value: loadTextureOrDefault(config.cliffDisplacement, defaultDisplacement) },
+      uUseRoughness: { value: hasRoughness },
+      uUseDisplacement: { value: hasDisplacement },
+      uParallaxScale: { value: config.parallaxScale ?? 0.05 },
       uSunDirection: { value: config.sunDirection ?? new THREE.Vector3(0.5, 0.8, 0.3).normalize() },
       uSunIntensity: { value: config.sunIntensity ?? 1.2 },
       uAmbientColor: { value: config.ambientColor ?? new THREE.Color(0.3, 0.35, 0.4) },
@@ -221,7 +389,10 @@ export function createTextureTerrainMaterial(config: TextureTerrainConfig): THRE
     vertexColors: true,
   });
 
-  console.log('[TextureTerrainShader] Material created successfully');
+  const features = [];
+  if (hasRoughness) features.push('roughness maps');
+  if (hasDisplacement) features.push('parallax displacement');
+  console.log('[TextureTerrainShader] Material created with PBR lighting' + (features.length ? ' + ' + features.join(' + ') : ''));
   return material;
 }
 
@@ -243,11 +414,20 @@ export function getDefaultTextureConfig(): TextureTerrainConfig {
   return {
     grassTexture: `${basePath}grass_diffuse.jpg`,
     grassNormal: `${basePath}grass_normal.jpg`,
+    grassRoughness: `${basePath}grass_roughness.jpg`,
+    grassDisplacement: `${basePath}grass_displacement.jpg`,
     dirtTexture: `${basePath}dirt_diffuse.jpg`,
     dirtNormal: `${basePath}dirt_normal.jpg`,
+    dirtRoughness: `${basePath}dirt_roughness.jpg`,
+    dirtDisplacement: `${basePath}dirt_displacement.jpg`,
     rockTexture: `${basePath}rock_diffuse.jpg`,
     rockNormal: `${basePath}rock_normal.jpg`,
+    rockRoughness: `${basePath}rock_roughness.jpg`,
+    rockDisplacement: `${basePath}rock_displacement.jpg`,
     cliffTexture: `${basePath}cliff_diffuse.jpg`,
     cliffNormal: `${basePath}cliff_normal.jpg`,
+    cliffRoughness: `${basePath}cliff_roughness.jpg`,
+    cliffDisplacement: `${basePath}cliff_displacement.jpg`,
+    parallaxScale: 0.05, // Subtle depth, increase for more pronounced effect
   };
 }

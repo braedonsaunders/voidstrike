@@ -96,18 +96,26 @@ const textures = [
   // Grass - green
   { name: 'grass_diffuse.jpg', r: 80, g: 140, b: 60, noise: true },
   { name: 'grass_normal.jpg', isNormal: true, noise: true },
+  { name: 'grass_roughness.jpg', r: 200, g: 200, b: 200, noise: true }, // High roughness
+  { name: 'grass_displacement.jpg', r: 128, g: 128, b: 128, noise: true }, // Neutral height with noise
 
   // Dirt - brown
   { name: 'dirt_diffuse.jpg', r: 120, g: 90, b: 60, noise: true },
   { name: 'dirt_normal.jpg', isNormal: true, noise: true },
+  { name: 'dirt_roughness.jpg', r: 220, g: 220, b: 220, noise: true }, // Very rough
+  { name: 'dirt_displacement.jpg', r: 100, g: 100, b: 100, noise: true }, // Slightly lower
 
   // Rock - gray
   { name: 'rock_diffuse.jpg', r: 100, g: 100, b: 105, noise: true },
   { name: 'rock_normal.jpg', isNormal: true, noise: true },
+  { name: 'rock_roughness.jpg', r: 160, g: 160, b: 160, noise: true }, // Medium roughness
+  { name: 'rock_displacement.jpg', r: 140, g: 140, b: 140, noise: true }, // Raised areas
 
   // Cliff - dark gray
   { name: 'cliff_diffuse.jpg', r: 80, g: 80, b: 85, noise: true },
   { name: 'cliff_normal.jpg', isNormal: true, noise: true },
+  { name: 'cliff_roughness.jpg', r: 180, g: 180, b: 180, noise: true }, // Medium-high roughness
+  { name: 'cliff_displacement.jpg', r: 150, g: 150, b: 150, noise: true }, // Irregular surface
 ];
 
 console.log('Generating placeholder terrain textures...\n');
