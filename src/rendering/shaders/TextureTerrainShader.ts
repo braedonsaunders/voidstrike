@@ -5,19 +5,19 @@ import * as THREE from 'three';
  * Uses texture lookups instead of procedural noise (100x faster)
  *
  * Required textures (place in /public/textures/terrain/):
- * - grass_diffuse.jpg (albedo)
- * - grass_normal.jpg
- * - grass_roughness.jpg (optional - defaults to 0.8)
- * - grass_displacement.jpg (optional - for parallax depth)
- * - dirt_diffuse.jpg, dirt_normal.jpg, dirt_roughness.jpg, dirt_displacement.jpg
- * - rock_diffuse.jpg, rock_normal.jpg, rock_roughness.jpg, rock_displacement.jpg
- * - cliff_diffuse.jpg, cliff_normal.jpg, cliff_roughness.jpg, cliff_displacement.jpg
+ * - grass_diffuse.png (albedo)
+ * - grass_normal.png
+ * - grass_roughness.png (optional - defaults to 0.8)
+ * - grass_displacement.png (optional - for parallax depth)
+ * - dirt_diffuse.png, dirt_normal.png, dirt_roughness.png, dirt_displacement.png
+ * - rock_diffuse.png, rock_normal.png, rock_roughness.png, rock_displacement.png
+ * - cliff_diffuse.png, cliff_normal.png, cliff_roughness.png, cliff_displacement.png
  *
  * From Polycam AI:
- * - albedo → *_diffuse.jpg
- * - normal → *_normal.jpg
- * - roughness → *_roughness.jpg
- * - displacement/height → *_displacement.jpg
+ * - albedo → *_diffuse.png
+ * - normal → *_normal.png
+ * - roughness → *_roughness.png
+ * - displacement/height → *_displacement.png
  */
 
 export const textureTerrainVertexShader = /* glsl */ `
@@ -412,22 +412,22 @@ export function updateTextureTerrainShader(
 export function getDefaultTextureConfig(): TextureTerrainConfig {
   const basePath = '/textures/terrain/';
   return {
-    grassTexture: `${basePath}grass_diffuse.jpg`,
-    grassNormal: `${basePath}grass_normal.jpg`,
-    grassRoughness: `${basePath}grass_roughness.jpg`,
-    grassDisplacement: `${basePath}grass_displacement.jpg`,
-    dirtTexture: `${basePath}dirt_diffuse.jpg`,
-    dirtNormal: `${basePath}dirt_normal.jpg`,
-    dirtRoughness: `${basePath}dirt_roughness.jpg`,
-    dirtDisplacement: `${basePath}dirt_displacement.jpg`,
-    rockTexture: `${basePath}rock_diffuse.jpg`,
-    rockNormal: `${basePath}rock_normal.jpg`,
-    rockRoughness: `${basePath}rock_roughness.jpg`,
-    rockDisplacement: `${basePath}rock_displacement.jpg`,
-    cliffTexture: `${basePath}cliff_diffuse.jpg`,
-    cliffNormal: `${basePath}cliff_normal.jpg`,
-    cliffRoughness: `${basePath}cliff_roughness.jpg`,
-    cliffDisplacement: `${basePath}cliff_displacement.jpg`,
+    grassTexture: `${basePath}grass_diffuse.png`,
+    grassNormal: `${basePath}grass_normal.png`,
+    grassRoughness: `${basePath}grass_roughness.png`,
+    grassDisplacement: `${basePath}grass_displacement.png`,
+    dirtTexture: `${basePath}dirt_diffuse.png`,
+    dirtNormal: `${basePath}dirt_normal.png`,
+    dirtRoughness: `${basePath}dirt_roughness.png`,
+    dirtDisplacement: `${basePath}dirt_displacement.png`,
+    rockTexture: `${basePath}rock_diffuse.png`,
+    rockNormal: `${basePath}rock_normal.png`,
+    rockRoughness: `${basePath}rock_roughness.png`,
+    rockDisplacement: `${basePath}rock_displacement.png`,
+    cliffTexture: `${basePath}cliff_diffuse.png`,
+    cliffNormal: `${basePath}cliff_normal.png`,
+    cliffRoughness: `${basePath}cliff_roughness.png`,
+    cliffDisplacement: `${basePath}cliff_displacement.png`,
     parallaxScale: 0.05, // Subtle depth, increase for more pronounced effect
   };
 }
