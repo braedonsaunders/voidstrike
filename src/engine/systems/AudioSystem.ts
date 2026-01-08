@@ -277,8 +277,11 @@ export class AudioSystem extends System {
       AudioManager.play('building_place');
     });
 
-    this.game.eventBus.on('building:complete', () => {
-      AudioManager.play('ui_building_complete');
+    this.game.eventBus.on('building:complete', (data: { playerId?: string }) => {
+      // Only play sound for player's buildings, not AI
+      if (data?.playerId === 'player1') {
+        AudioManager.play('ui_building_complete');
+      }
     });
 
     // Research events

@@ -210,15 +210,43 @@ export function createMineralLineOld(
 }
 
 // Helper to create vespene geysers (typically 2 per base)
+// Places geysers on either side of the mineral arc
+// mineralCenterX/Y: center of the mineral arc
+// baseCenterX/Y: position of the command center
 export function createVespeneGeysers(
-  baseX: number,
-  baseY: number,
-  spread: number = 8,
+  mineralCenterX: number,
+  mineralCenterY: number,
+  baseCenterX: number,
+  baseCenterY: number,
   amount: number = 2250
 ): ResourceNode[] {
+  // Calculate angle from mineral center toward base center
+  const dx = baseCenterX - mineralCenterX;
+  const dy = baseCenterY - mineralCenterY;
+  const angleToBase = Math.atan2(dy, dx);
+
+  // Place geysers at the ends of the mineral arc (±70 degrees from base direction)
+  // Distance from base center - similar to mineral distance but slightly closer
+  const distFromBase = Math.sqrt(dx * dx + dy * dy) * 0.85;
+  const geyserAngleOffset = Math.PI * 0.4; // ~72 degrees from center line
+
+  // Calculate geyser positions - on either side of the mineral arc
+  const geyser1Angle = angleToBase + Math.PI + geyserAngleOffset;
+  const geyser2Angle = angleToBase + Math.PI - geyserAngleOffset;
+
   return [
-    { x: baseX - spread / 2, y: baseY + spread / 2, type: 'vespene', amount },
-    { x: baseX + spread / 2, y: baseY + spread / 2, type: 'vespene', amount },
+    {
+      x: Math.round((baseCenterX + Math.cos(geyser1Angle) * distFromBase) * 2) / 2,
+      y: Math.round((baseCenterY + Math.sin(geyser1Angle) * distFromBase) * 2) / 2,
+      type: 'vespene',
+      amount,
+    },
+    {
+      x: Math.round((baseCenterX + Math.cos(geyser2Angle) * distFromBase) * 2) / 2,
+      y: Math.round((baseCenterY + Math.sin(geyser2Angle) * distFromBase) * 2) / 2,
+      type: 'vespene',
+      amount,
+    },
   ];
 }
 
