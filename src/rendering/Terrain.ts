@@ -4,6 +4,7 @@ import { BiomeConfig, BIOMES, blendBiomeColors, BiomeType, getBiomeShaderConfig 
 import { createTerrainShaderMaterial, updateTerrainShader } from './shaders/TerrainShader';
 import { createSC2TerrainShaderMaterial, getSC2BiomeConfig, updateSC2TerrainShader } from './shaders/SC2TerrainShader';
 import { createTextureTerrainMaterial, updateTextureTerrainShader, getDefaultTextureConfig } from './shaders/TextureTerrainShader';
+import AssetManager from '@/assets/AssetManager';
 
 // Shader mode for terrain rendering
 type TerrainShaderMode = 'texture' | 'basic' | 'sc2';
@@ -546,43 +547,51 @@ export class MapDecorations {
       // Get terrain height at tower position
       const terrainHeight = this.terrain.getHeightAt(tower.x, tower.y);
 
-      // Tower base
-      const baseGeometry = new THREE.CylinderGeometry(2, 2.5, 1, 8);
-      const baseMaterial = new THREE.MeshStandardMaterial({
-        color: 0x606070,
-        roughness: 0.6,
-        metalness: 0.4,
-      });
-      const base = new THREE.Mesh(baseGeometry, baseMaterial);
-      base.position.set(tower.x, terrainHeight + 0.5, tower.y);
-      base.castShadow = true;
-      base.receiveShadow = true;
-      this.group.add(base);
+      // Try to use custom xelnaga_tower model
+      const customTower = AssetManager.getDecorationMesh('xelnaga_tower');
+      if (customTower) {
+        customTower.position.set(tower.x, terrainHeight, tower.y);
+        this.group.add(customTower);
+      } else {
+        // Fall back to procedural tower
+        // Tower base
+        const baseGeometry = new THREE.CylinderGeometry(2, 2.5, 1, 8);
+        const baseMaterial = new THREE.MeshStandardMaterial({
+          color: 0x606070,
+          roughness: 0.6,
+          metalness: 0.4,
+        });
+        const base = new THREE.Mesh(baseGeometry, baseMaterial);
+        base.position.set(tower.x, terrainHeight + 0.5, tower.y);
+        base.castShadow = true;
+        base.receiveShadow = true;
+        this.group.add(base);
 
-      // Tower pillar
-      const pillarGeometry = new THREE.CylinderGeometry(1, 1.5, 5, 8);
-      const pillarMaterial = new THREE.MeshStandardMaterial({
-        color: 0x8080a0,
-        roughness: 0.5,
-        metalness: 0.6,
-      });
-      const pillar = new THREE.Mesh(pillarGeometry, pillarMaterial);
-      pillar.position.set(tower.x, terrainHeight + 3.5, tower.y);
-      pillar.castShadow = true;
-      pillar.receiveShadow = true;
-      this.group.add(pillar);
+        // Tower pillar
+        const pillarGeometry = new THREE.CylinderGeometry(1, 1.5, 5, 8);
+        const pillarMaterial = new THREE.MeshStandardMaterial({
+          color: 0x8080a0,
+          roughness: 0.5,
+          metalness: 0.6,
+        });
+        const pillar = new THREE.Mesh(pillarGeometry, pillarMaterial);
+        pillar.position.set(tower.x, terrainHeight + 3.5, tower.y);
+        pillar.castShadow = true;
+        pillar.receiveShadow = true;
+        this.group.add(pillar);
 
-      // Tower top/beacon
-      const topGeometry = new THREE.ConeGeometry(1.5, 2, 8);
-      const topMaterial = new THREE.MeshStandardMaterial({
-        color: 0xa0a0c0,
-        roughness: 0.3,
-        metalness: 0.7,
-      });
-      const top = new THREE.Mesh(topGeometry, topMaterial);
-      top.position.set(tower.x, terrainHeight + 7, tower.y);
-      top.castShadow = true;
-      this.group.add(top);
+        // Tower top/beacon
+        const topGeometry = new THREE.ConeGeometry(1.5, 2, 8);
+        const topMaterial = new THREE.MeshStandardMaterial({
+          color: 0xa0a0c0,
+          roughness: 0.3,
+          metalness: 0.7,
+        });
+        const top = new THREE.Mesh(topGeometry, topMaterial);
+        top.position.set(tower.x, terrainHeight + 7, tower.y);
+        top.castShadow = true;
+        this.group.add(top);
+      }
 
       // Vision range ring
       const ringGeometry = new THREE.RingGeometry(tower.radius - 0.5, tower.radius, 64);

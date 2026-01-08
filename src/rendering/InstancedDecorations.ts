@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { BiomeConfig } from './Biomes';
 import { MapData } from '@/data/maps';
+import AssetManager from '@/assets/AssetManager';
 
 /**
  * PERFORMANCE: Instanced rendering for decorations
@@ -8,7 +9,40 @@ import { MapData } from '@/data/maps';
  * Instead of creating individual meshes (1000+ draw calls),
  * we use InstancedMesh to render all similar objects in a single draw call.
  * This can improve performance by 10-100x for decoration rendering.
+ *
+ * When custom GLB models are available, we use individual meshes placed at
+ * each position. When not available, we fall back to instanced procedural meshes.
  */
+
+/**
+ * Extract geometry from a loaded model for instancing
+ */
+function extractGeometry(object: THREE.Object3D): THREE.BufferGeometry | null {
+  let geometry: THREE.BufferGeometry | null = null;
+  object.traverse((child) => {
+    if (child instanceof THREE.Mesh && child.geometry && !geometry) {
+      geometry = child.geometry.clone();
+    }
+  });
+  return geometry;
+}
+
+/**
+ * Extract material from a loaded model
+ */
+function extractMaterial(object: THREE.Object3D): THREE.Material | null {
+  let material: THREE.Material | null = null;
+  object.traverse((child) => {
+    if (child instanceof THREE.Mesh && child.material && !material) {
+      if (Array.isArray(child.material)) {
+        material = child.material[0];
+      } else {
+        material = child.material;
+      }
+    }
+  });
+  return material;
+}
 
 interface InstancedGroupConfig {
   geometry: THREE.BufferGeometry;
@@ -83,6 +117,52 @@ export class InstancedTrees {
     biome: BiomeConfig,
     positions: Array<{ x: number; y: number; z: number; scale: number; rotation: number }>
   ): void {
+    // Try to use custom tree models first
+    const treeModelIds = ['tree_pine_tall', 'tree_pine_medium', 'tree_dead', 'tree_alien'];
+    let customGeometry: THREE.BufferGeometry | null = null;
+    let customMaterial: THREE.Material | null = null;
+
+    for (const modelId of treeModelIds) {
+      const model = AssetManager.getDecorationMesh(modelId);
+      if (model) {
+        customGeometry = extractGeometry(model);
+        customMaterial = extractMaterial(model);
+        if (customGeometry && customMaterial) {
+          break;
+        }
+      }
+    }
+
+    if (customGeometry && customMaterial) {
+      // Use custom model with instancing
+      this.geometries.push(customGeometry);
+      this.materials.push(customMaterial);
+
+      const instancedMesh = new THREE.InstancedMesh(customGeometry, customMaterial, positions.length);
+
+      const matrix = new THREE.Matrix4();
+      const position = new THREE.Vector3();
+      const quaternion = new THREE.Quaternion();
+      const scale = new THREE.Vector3();
+
+      for (let i = 0; i < positions.length; i++) {
+        const p = positions[i];
+        position.set(p.x, p.y, p.z);
+        quaternion.setFromEuler(new THREE.Euler(0, p.rotation, 0));
+        scale.set(p.scale, p.scale, p.scale);
+        matrix.compose(position, quaternion, scale);
+        instancedMesh.setMatrixAt(i, matrix);
+      }
+
+      instancedMesh.instanceMatrix.needsUpdate = true;
+      instancedMesh.frustumCulled = false;
+
+      this.instancedMeshes.push(instancedMesh);
+      this.group.add(instancedMesh);
+      return;
+    }
+
+    // Fall back to procedural trees
     // Trunk material (shared)
     const trunkMaterial = new THREE.MeshBasicMaterial({ color: 0x4a3520 });
     this.materials.push(trunkMaterial);
@@ -212,14 +292,33 @@ export class InstancedRocks {
 
     if (positions.length === 0) return;
 
-    // Rock material based on biome
-    const rockColor = biome.colors.cliff[0];
-    this.material = new THREE.MeshBasicMaterial({
-      color: rockColor,
-    });
+    // Try to use custom rock models first
+    const rockModelIds = ['rocks_large', 'rocks_small', 'rock_single'];
+    let customGeometry: THREE.BufferGeometry | null = null;
+    let customMaterial: THREE.Material | null = null;
 
-    // Use dodecahedron for rocks
-    this.geometry = new THREE.DodecahedronGeometry(1, 0);
+    for (const modelId of rockModelIds) {
+      const model = AssetManager.getDecorationMesh(modelId);
+      if (model) {
+        customGeometry = extractGeometry(model);
+        customMaterial = extractMaterial(model);
+        if (customGeometry && customMaterial) {
+          break;
+        }
+      }
+    }
+
+    if (customGeometry && customMaterial) {
+      this.geometry = customGeometry;
+      this.material = customMaterial;
+    } else {
+      // Fall back to procedural rocks
+      const rockColor = biome.colors.cliff[0];
+      this.material = new THREE.MeshBasicMaterial({
+        color: rockColor,
+      });
+      this.geometry = new THREE.DodecahedronGeometry(1, 0);
+    }
 
     // Create instanced mesh
     this.instancedMesh = new THREE.InstancedMesh(
