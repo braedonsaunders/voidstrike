@@ -459,6 +459,59 @@ export class MovementSystem extends System {
 
       // Apply velocity
       transform.translate(velocity.x * dt, velocity.y * dt);
+
+      // Hard collision resolution - push unit out of buildings if overlapping
+      if (!unit.isFlying) {
+        this.resolveHardBuildingCollision(transform, unit);
+      }
+    }
+  }
+
+  /**
+   * Push unit out of any building they're overlapping with.
+   * This is a hard collision resolution that runs after movement.
+   */
+  private resolveHardBuildingCollision(transform: Transform, unit: Unit): void {
+    const nearbyBuildingIds = this.world.buildingGrid.queryRadius(
+      transform.x,
+      transform.y,
+      unit.collisionRadius + 5
+    );
+
+    for (const buildingId of nearbyBuildingIds) {
+      const entity = this.world.getEntity(buildingId);
+      if (!entity) continue;
+
+      const buildingTransform = entity.get<Transform>('Transform');
+      const building = entity.get<Building>('Building');
+      if (!buildingTransform || !building) continue;
+
+      // Check if unit is inside building bounds
+      const halfWidth = building.width / 2 + unit.collisionRadius;
+      const halfHeight = building.height / 2 + unit.collisionRadius;
+
+      const dx = transform.x - buildingTransform.x;
+      const dy = transform.y - buildingTransform.y;
+
+      if (Math.abs(dx) < halfWidth && Math.abs(dy) < halfHeight) {
+        // Unit is inside building - push them out
+        // Find the shortest escape direction
+        const escapeLeft = buildingTransform.x - halfWidth - transform.x;
+        const escapeRight = buildingTransform.x + halfWidth - transform.x;
+        const escapeUp = buildingTransform.y - halfHeight - transform.y;
+        const escapeDown = buildingTransform.y + halfHeight - transform.y;
+
+        // Find minimum absolute escape distance
+        const escapeX = Math.abs(escapeLeft) < Math.abs(escapeRight) ? escapeLeft : escapeRight;
+        const escapeY = Math.abs(escapeUp) < Math.abs(escapeDown) ? escapeUp : escapeDown;
+
+        // Push in the direction requiring least movement
+        if (Math.abs(escapeX) < Math.abs(escapeY)) {
+          transform.x += escapeX;
+        } else {
+          transform.y += escapeY;
+        }
+      }
     }
   }
 }
