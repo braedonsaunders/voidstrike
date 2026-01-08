@@ -80,6 +80,15 @@ export class ResourceSystem extends System {
       return;
     }
 
+    const targetTransform = targetEntity.get<Transform>('Transform');
+    if (!targetTransform) return;
+
+    // For minerals, find all nearby mineral patches for worker splitting
+    let mineralPatches: Array<{ entity: Entity; resource: Resource; transform: Transform; gathererCount: number }> = [];
+    if (resource.resourceType === 'minerals') {
+      mineralPatches = this.findNearbyMineralPatches(targetTransform.x, targetTransform.y, 15);
+    }
+
     for (const entityId of command.entityIds) {
       const entity = this.world.getEntity(entityId);
       if (!entity) continue;
@@ -87,17 +96,97 @@ export class ResourceSystem extends System {
       const unit = entity.get<Unit>('Unit');
       if (!unit || !unit.isWorker) continue;
 
-      unit.gatherTargetId = command.targetEntityId;
+      const transform = entity.get<Transform>('Transform');
+      if (!transform) continue;
+
+      // SC2-style mineral splitting: assign worker to patch with fewest gatherers
+      let assignedTargetId = command.targetEntityId;
+      let assignedTransform = targetTransform;
+
+      if (resource.resourceType === 'minerals' && mineralPatches.length > 0) {
+        // Find the patch with fewest workers (prefer patches with < 2 workers)
+        const bestPatch = this.findBestMineralPatch(mineralPatches, transform);
+        if (bestPatch) {
+          assignedTargetId = bestPatch.entity.id;
+          assignedTransform = bestPatch.transform;
+          // Increment virtual gatherer count for next worker assignment
+          bestPatch.gathererCount++;
+        }
+      }
+
+      unit.gatherTargetId = assignedTargetId;
       unit.state = 'gathering';
 
-      // Move to resource (use moveToPosition to keep 'gathering' state)
-      const transform = entity.get<Transform>('Transform');
-      const targetTransform = targetEntity.get<Transform>('Transform');
-      if (transform && targetTransform) {
-        unit.moveToPosition(targetTransform.x, targetTransform.y);
-        // State is already 'gathering' from above
+      // Move to assigned resource
+      unit.moveToPosition(assignedTransform.x, assignedTransform.y);
+    }
+  }
+
+  /**
+   * Find all mineral patches within range of a position (SC2-style mineral line)
+   */
+  private findNearbyMineralPatches(
+    x: number,
+    y: number,
+    range: number
+  ): Array<{ entity: Entity; resource: Resource; transform: Transform; gathererCount: number }> {
+    const patches: Array<{ entity: Entity; resource: Resource; transform: Transform; gathererCount: number }> = [];
+    const resources = this.world.getEntitiesWith('Resource', 'Transform');
+
+    for (const entity of resources) {
+      const resource = entity.get<Resource>('Resource')!;
+      const transform = entity.get<Transform>('Transform')!;
+
+      if (resource.resourceType !== 'minerals' || resource.isDepleted()) continue;
+
+      const dx = transform.x - x;
+      const dy = transform.y - y;
+      const distance = Math.sqrt(dx * dx + dy * dy);
+
+      if (distance <= range) {
+        patches.push({
+          entity,
+          resource,
+          transform,
+          gathererCount: resource.getCurrentGatherers(),
+        });
       }
     }
+
+    return patches;
+  }
+
+  /**
+   * SC2-style: Find the best mineral patch for a worker
+   * Prefers patches with 0-1 workers, then closest with fewest workers
+   */
+  private findBestMineralPatch(
+    patches: Array<{ entity: Entity; resource: Resource; transform: Transform; gathererCount: number }>,
+    workerTransform: Transform
+  ): { entity: Entity; resource: Resource; transform: Transform; gathererCount: number } | null {
+    if (patches.length === 0) return null;
+
+    // Sort by: 1) gatherer count (fewer first), 2) distance (closer first)
+    const sortedPatches = patches
+      .filter(p => !p.resource.isDepleted())
+      .sort((a, b) => {
+        // Strongly prefer patches with < 2 workers (optimal saturation)
+        const aOptimal = a.gathererCount < 2 ? 0 : 1;
+        const bOptimal = b.gathererCount < 2 ? 0 : 1;
+        if (aOptimal !== bOptimal) return aOptimal - bOptimal;
+
+        // Then by gatherer count
+        if (a.gathererCount !== b.gathererCount) {
+          return a.gathererCount - b.gathererCount;
+        }
+
+        // Then by distance
+        const distA = workerTransform.distanceTo(a.transform);
+        const distB = workerTransform.distanceTo(b.transform);
+        return distA - distB;
+      });
+
+    return sortedPatches[0] || null;
   }
 
   private handleReturnCommand(command: { entityIds: number[] }): void {
@@ -278,7 +367,26 @@ export class ResourceSystem extends System {
         const resourceEntity = this.world.getEntity(unit.gatherTargetId);
         if (resourceEntity) {
           const resourceTransform = resourceEntity.get<Transform>('Transform');
-          if (resourceTransform) {
+          const resource = resourceEntity.get<Resource>('Resource');
+
+          if (resourceTransform && resource && !resource.isDepleted()) {
+            // SC2-style rebalancing: check if we should switch to a less saturated patch
+            if (resource.resourceType === 'minerals' && resource.getCurrentGatherers() >= 2) {
+              const nearbyPatches = this.findNearbyMineralPatches(resourceTransform.x, resourceTransform.y, 15);
+              const betterPatch = nearbyPatches.find(p =>
+                p.entity.id !== resourceEntity.id &&
+                !p.resource.isDepleted() &&
+                p.gathererCount < resource.getCurrentGatherers()
+              );
+
+              if (betterPatch) {
+                // Switch to less saturated patch
+                unit.gatherTargetId = betterPatch.entity.id;
+                unit.moveToPosition(betterPatch.transform.x, betterPatch.transform.y);
+                return;
+              }
+            }
+
             unit.moveToPosition(resourceTransform.x, resourceTransform.y);
             // State already 'gathering'
             return;

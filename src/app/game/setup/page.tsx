@@ -45,9 +45,9 @@ function MapPreview({ map, isSelected, onSelect }: {
           : 'border-void-800/50 hover:border-void-600'
         }`}
     >
-      {/* Map mini-preview (color based on biome) */}
+      {/* Map mini-preview (color based on biome) - reduced height */}
       <div
-        className="h-32 w-full relative"
+        className="h-20 w-full relative"
         style={{
           background: `linear-gradient(135deg,
             ${colorToHex(groundColors[2])},
@@ -57,36 +57,32 @@ function MapPreview({ map, isSelected, onSelect }: {
       >
         {/* Spawn points indicator */}
         <div className="absolute inset-0 flex items-center justify-between px-4">
-          <div className="w-4 h-4 rounded-full bg-blue-500 border-2 border-white shadow-lg" title="Player 1" />
-          <div className="w-4 h-4 rounded-full bg-red-500 border-2 border-white shadow-lg" title="Player 2" />
+          <div className="w-3 h-3 rounded-full bg-blue-500 border-2 border-white shadow-lg" title="Player 1" />
+          <div className="w-3 h-3 rounded-full bg-red-500 border-2 border-white shadow-lg" title="Player 2" />
         </div>
 
         {/* Map size badge */}
-        <div className="absolute top-2 right-2 bg-black/60 px-2 py-1 rounded text-xs text-void-300">
+        <div className="absolute top-1 right-1 bg-black/60 px-1.5 py-0.5 rounded text-[10px] text-void-300">
           {map.width}x{map.height}
         </div>
 
         {/* Biome badge */}
-        <div className="absolute bottom-2 left-2 bg-black/60 px-2 py-1 rounded text-xs capitalize"
+        <div className="absolute bottom-1 left-1 bg-black/60 px-1.5 py-0.5 rounded text-[10px] capitalize"
              style={{ color: accentColor }}>
           {map.biome || 'grassland'}
         </div>
       </div>
 
-      {/* Map info */}
-      <div className="p-3 bg-void-950">
-        <h3 className="font-display text-white text-sm mb-1">{map.name}</h3>
-        <p className="text-void-400 text-xs line-clamp-2">{map.description}</p>
-        <div className="mt-2 flex items-center gap-2 text-xs text-void-500">
-          <span>{map.maxPlayers} Players</span>
-          {map.isRanked && <span className="text-yellow-500">Ranked</span>}
-        </div>
+      {/* Map info - condensed */}
+      <div className="p-2 bg-void-950">
+        <h3 className="font-display text-white text-xs mb-0.5">{map.name}</h3>
+        <p className="text-void-400 text-[10px] line-clamp-1">{map.description}</p>
       </div>
 
       {/* Selected indicator */}
       {isSelected && (
-        <div className="absolute top-2 left-2 bg-void-500 text-white px-2 py-1 rounded text-xs font-bold">
-          Selected
+        <div className="absolute top-1 left-1 bg-void-500 text-white px-1.5 py-0.5 rounded text-[10px] font-bold">
+          ✓
         </div>
       )}
     </button>
@@ -248,22 +244,22 @@ export default function GameSetupPage() {
       <div className="fixed inset-0 bg-[radial-gradient(ellipse_at_center,rgba(132,61,255,0.1),transparent_70%)]" />
 
       {/* Content */}
-      <div className="relative z-10 max-w-6xl mx-auto px-6 py-8">
+      <div className="relative z-10 max-w-6xl mx-auto px-6 py-4">
         {/* Header */}
-        <div className="flex items-center justify-between mb-8">
+        <div className="flex items-center justify-between mb-4">
           <div>
-            <Link href="/" className="text-void-400 hover:text-void-300 text-sm mb-2 inline-block">
+            <Link href="/" className="text-void-400 hover:text-void-300 text-sm mb-1 inline-block">
               &larr; Back to Menu
             </Link>
-            <h1 className="font-display text-3xl text-white">Game Setup</h1>
+            <h1 className="font-display text-2xl text-white">Game Setup</h1>
           </div>
         </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           {/* Map Selection - Takes 2 columns */}
           <div className="lg:col-span-2">
-            <h2 className="font-display text-xl text-white mb-4">Select Map</h2>
-            <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+            <h2 className="font-display text-lg text-white mb-2">Select Map</h2>
+            <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
               {maps.map((map) => (
                 <MapPreview
                   key={map.id}
@@ -274,36 +270,21 @@ export default function GameSetupPage() {
               ))}
             </div>
 
-            {/* Selected map details */}
-            <div className="mt-6 p-4 bg-void-900/50 rounded-lg border border-void-800/50">
-              <h3 className="font-display text-lg text-white mb-2">{selectedMap.name}</h3>
-              <p className="text-void-400 text-sm mb-4">{selectedMap.description}</p>
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
-                <div>
-                  <span className="text-void-500">Size</span>
-                  <p className="text-white">{selectedMap.width}x{selectedMap.height}</p>
-                </div>
-                <div>
-                  <span className="text-void-500">Players</span>
-                  <p className="text-white">{selectedMap.maxPlayers}</p>
-                </div>
-                <div>
-                  <span className="text-void-500">Expansions</span>
-                  <p className="text-white">{selectedMap.expansions.length}</p>
-                </div>
-                <div>
-                  <span className="text-void-500">Biome</span>
-                  <p className="text-white capitalize">{selectedMap.biome || 'Grassland'}</p>
-                </div>
+            {/* Selected map details - condensed */}
+            <div className="mt-3 p-3 bg-void-900/50 rounded-lg border border-void-800/50">
+              <div className="flex items-center justify-between mb-1">
+                <h3 className="font-display text-base text-white">{selectedMap.name}</h3>
+                <span className="text-void-400 text-xs">{selectedMap.width}x{selectedMap.height} • {selectedMap.maxPlayers}P</span>
               </div>
+              <p className="text-void-400 text-xs">{selectedMap.description}</p>
             </div>
           </div>
 
           {/* Settings Panel - 1 column */}
-          <div className="space-y-6">
+          <div className="space-y-4">
             {/* Faction Selection */}
             <div>
-              <h2 className="font-display text-xl text-white mb-4">Faction</h2>
+              <h2 className="font-display text-lg text-white mb-2">Faction</h2>
               <FactionSelector
                 selected={playerFaction}
                 onSelect={setPlayerFaction}
@@ -312,8 +293,8 @@ export default function GameSetupPage() {
 
             {/* Game Settings */}
             <div>
-              <h2 className="font-display text-xl text-white mb-4">Game Settings</h2>
-              <div className="bg-void-900/50 rounded-lg border border-void-800/50 p-4">
+              <h2 className="font-display text-lg text-white mb-2">Game Settings</h2>
+              <div className="bg-void-900/50 rounded-lg border border-void-800/50 p-3">
                 <SettingSelect
                   label="Starting Resources"
                   value={startingResources}
@@ -369,21 +350,19 @@ export default function GameSetupPage() {
               </div>
             </div>
 
+            {/* Start Game Button - inside settings column */}
+            <button
+              onClick={handleStartGame}
+              className="w-full game-button-primary text-lg px-8 py-3 font-display"
+            >
+              Start Game
+            </button>
+
             {/* Keyboard hint */}
-            <p className="text-center text-void-600 text-xs">
-              Press <kbd className="px-1.5 py-0.5 bg-void-800 rounded">?</kbd> during game for controls
+            <p className="text-center text-void-600 text-[10px]">
+              Press <kbd className="px-1 py-0.5 bg-void-800 rounded text-[10px]">?</kbd> during game for controls
             </p>
           </div>
-        </div>
-
-        {/* Start Game Button - Bottom */}
-        <div className="mt-8 flex justify-center">
-          <button
-            onClick={handleStartGame}
-            className="game-button-primary text-xl px-12 py-4 font-display"
-          >
-            Start Game
-          </button>
         </div>
       </div>
     </main>

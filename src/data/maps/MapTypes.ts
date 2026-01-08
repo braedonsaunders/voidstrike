@@ -123,8 +123,50 @@ export function createTerrainGrid(
   return grid;
 }
 
-// Helper to create standard mineral line (8 patches in a row)
+// Helper to create SC2-style mineral arc (8 patches in a crescent shape)
+// The arc faces toward the base center
 export function createMineralLine(
+  baseX: number,
+  baseY: number,
+  direction: 'horizontal' | 'vertical' = 'horizontal',
+  amount: number = 1500
+): ResourceNode[] {
+  const minerals: ResourceNode[] = [];
+
+  // SC2 has 8 mineral patches in an arc formation
+  // Patches are spaced about 2 units apart along the arc
+  const arcRadius = 6; // Distance from arc center
+  const arcSpread = Math.PI * 0.6; // ~108 degrees total arc spread
+
+  // Determine arc center angle based on direction
+  // Arc should face toward where the command center would be
+  const centerAngle = direction === 'horizontal' ? Math.PI : Math.PI / 2;
+
+  for (let i = 0; i < 8; i++) {
+    // Distribute patches along the arc
+    const t = (i - 3.5) / 3.5; // -1 to 1, centered
+    const angle = centerAngle + t * (arcSpread / 2);
+
+    // Add slight variation to make it look more natural
+    const radiusVariation = (i % 2 === 0) ? 0 : 0.8; // Alternate rows
+    const r = arcRadius + radiusVariation;
+
+    const x = baseX + Math.cos(angle) * r;
+    const y = baseY + Math.sin(angle) * r;
+
+    minerals.push({
+      x: Math.round(x * 2) / 2, // Snap to 0.5 grid
+      y: Math.round(y * 2) / 2,
+      type: 'minerals',
+      amount: i < 6 ? amount : amount * 0.5, // Last 2 patches are gold
+    });
+  }
+
+  return minerals;
+}
+
+// Legacy helper - creates straight line (kept for backwards compatibility)
+export function createMineralLineOld(
   baseX: number,
   baseY: number,
   direction: 'horizontal' | 'vertical' = 'horizontal',
@@ -138,7 +180,7 @@ export function createMineralLine(
       x: direction === 'horizontal' ? baseX + offset : baseX + Math.floor(i / 4) * 1.5,
       y: direction === 'horizontal' ? baseY + Math.floor(i / 4) * 1.5 : baseY + offset,
       type: 'minerals',
-      amount: i < 6 ? amount : amount * 0.5, // Last 2 patches are gold (half amount but 2x gather rate)
+      amount: i < 6 ? amount : amount * 0.5,
     });
   }
 

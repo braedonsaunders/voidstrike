@@ -88,4 +88,8 @@ export class Resource extends Component {
   public getPercentRemaining(): number {
     return this.amount / this.maxAmount;
   }
+
+  public getCurrentGatherers(): number {
+    return this.currentGatherers.size;
+  }
 }
