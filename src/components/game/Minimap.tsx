@@ -22,7 +22,7 @@ interface Ping {
 
 export function Minimap() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  const { cameraX, cameraY, cameraZoom, selectedUnits } = useGameStore();
+  const selectedUnits = useGameStore((state) => state.selectedUnits);
   const [isDragging, setIsDragging] = useState(false);
   const [pings, setPings] = useState<Ping[]>([]);
 
@@ -259,7 +259,7 @@ export function Minimap() {
     const frameId = requestAnimationFrame(draw);
 
     return () => cancelAnimationFrame(frameId);
-  }, [cameraX, cameraY, cameraZoom, selectedUnits, pings]);
+  }, [selectedUnits, pings]); // Camera position read directly from store in draw loop
 
   // Handle mouse down - start drag or click
   const handleMouseDown = useCallback((e: React.MouseEvent<HTMLCanvasElement>) => {

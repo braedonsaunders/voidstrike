@@ -257,13 +257,6 @@ export default function GameSetupPage() {
             </Link>
             <h1 className="font-display text-3xl text-white">Game Setup</h1>
           </div>
-
-          <button
-            onClick={handleStartGame}
-            className="game-button-primary text-lg px-8 py-3"
-          >
-            Start Game
-          </button>
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
@@ -381,6 +374,16 @@ export default function GameSetupPage() {
               Press <kbd className="px-1.5 py-0.5 bg-void-800 rounded">?</kbd> during game for controls
             </p>
           </div>
+        </div>
+
+        {/* Start Game Button - Bottom */}
+        <div className="mt-8 flex justify-center">
+          <button
+            onClick={handleStartGame}
+            className="game-button-primary text-xl px-12 py-4 font-display"
+          >
+            Start Game
+          </button>
         </div>
       </div>
     </main>

@@ -60,11 +60,14 @@ export class BuildingPlacementSystem extends System {
     const snappedY = Math.round(data.position.y);
 
     const store = useGameStore.getState();
+    const isPlayer = playerId === 'player1';
 
-    // Check resources
-    if (store.minerals < definition.mineralCost || store.vespene < definition.vespeneCost) {
-      this.game.eventBus.emit('ui:error', { message: 'Not enough resources' });
-      return;
+    // Check resources (only for human player - AI handles its own resources)
+    if (isPlayer) {
+      if (store.minerals < definition.mineralCost || store.vespene < definition.vespeneCost) {
+        this.game.eventBus.emit('ui:error', { message: 'Not enough resources' });
+        return;
+      }
     }
 
     // Check building dependencies (tech requirements)
@@ -106,8 +109,10 @@ export class BuildingPlacementSystem extends System {
       return;
     }
 
-    // Deduct resources
-    store.addResources(-definition.mineralCost, -definition.vespeneCost);
+    // Deduct resources (only for human player - AI handles its own resources)
+    if (isPlayer) {
+      store.addResources(-definition.mineralCost, -definition.vespeneCost);
+    }
 
     // Create the building entity at the snapped center position
     const buildingEntity = this.world.createEntity();

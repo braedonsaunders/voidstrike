@@ -9,8 +9,8 @@ import { Game } from '../core/Game';
 const SEPARATION_RADIUS = 2.0; // Units start avoiding at this distance
 const SEPARATION_STRENGTH = 8.0; // How strongly units push apart
 const MAX_AVOIDANCE_FORCE = 5.0; // Cap on avoidance force
-const BUILDING_AVOIDANCE_STRENGTH = 15.0; // Stronger push from buildings
-const BUILDING_AVOIDANCE_MARGIN = 0.5; // Extra margin around buildings
+const BUILDING_AVOIDANCE_STRENGTH = 50.0; // Very strong push from buildings (hard collision)
+const BUILDING_AVOIDANCE_MARGIN = 1.0; // Extra margin around buildings
 
 export class MovementSystem extends System {
   public priority = 10;
