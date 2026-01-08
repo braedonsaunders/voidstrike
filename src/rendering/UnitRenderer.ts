@@ -8,17 +8,6 @@ import { VisionSystem } from '@/engine/systems/VisionSystem';
 import { AssetManager } from '@/assets/AssetManager';
 import { Terrain } from './Terrain';
 
-interface UnitMeshData {
-  group: THREE.Group;
-  selectionRing: THREE.Mesh;
-  healthBar: THREE.Group;
-  unitId: string;
-  // Animation support
-  mixer: THREE.AnimationMixer | null;
-  currentAction: THREE.AnimationAction | null;
-  animations: THREE.AnimationClip[];
-}
-
 // Player colors
 const PLAYER_COLORS: Record<string, number> = {
   player1: 0x40a0ff, // Blue
@@ -28,21 +17,49 @@ const PLAYER_COLORS: Record<string, number> = {
   player4: 0xff40ff, // Purple
 };
 
+// Instance data for a single unit type + player combo
+interface InstancedUnitGroup {
+  mesh: THREE.InstancedMesh;
+  unitType: string;
+  playerId: string;
+  maxInstances: number;
+  entityIds: number[]; // Maps instance index to entity ID
+  dummy: THREE.Object3D; // Reusable for matrix calculations
+}
+
+// Per-unit overlay data (selection ring, health bar)
+interface UnitOverlay {
+  selectionRing: THREE.Mesh;
+  healthBar: THREE.Group;
+  lastHealth: number;
+}
+
+const MAX_INSTANCES_PER_TYPE = 100; // Max units of same type per player
+
 export class UnitRenderer {
   private scene: THREE.Scene;
   private world: World;
   private visionSystem: VisionSystem | null;
   private terrain: Terrain | null;
   private playerId: string = 'player1';
-  private unitMeshes: Map<number, UnitMeshData> = new Map();
 
-  // Animation timing
-  private clock: THREE.Clock = new THREE.Clock();
+  // Instanced mesh groups: key = "unitType_playerId"
+  private instancedGroups: Map<string, InstancedUnitGroup> = new Map();
+
+  // Per-unit overlays (selection rings, health bars)
+  private unitOverlays: Map<number, UnitOverlay> = new Map();
 
   // Shared resources
   private selectionGeometry: THREE.RingGeometry;
   private selectionMaterial: THREE.MeshBasicMaterial;
   private enemySelectionMaterial: THREE.MeshBasicMaterial;
+
+  // Reusable objects for matrix calculations
+  private tempMatrix: THREE.Matrix4 = new THREE.Matrix4();
+  private tempPosition: THREE.Vector3 = new THREE.Vector3();
+  private tempQuaternion: THREE.Quaternion = new THREE.Quaternion();
+  private tempScale: THREE.Vector3 = new THREE.Vector3(1, 1, 1);
+  private tempEuler: THREE.Euler = new THREE.Euler();
 
   constructor(scene: THREE.Scene, world: World, visionSystem?: VisionSystem, terrain?: Terrain) {
     this.scene = scene;
@@ -50,7 +67,7 @@ export class UnitRenderer {
     this.visionSystem = visionSystem ?? null;
     this.terrain = terrain ?? null;
 
-    this.selectionGeometry = new THREE.RingGeometry(0.6, 0.8, 32);
+    this.selectionGeometry = new THREE.RingGeometry(0.6, 0.8, 16); // Reduced segments for perf
     this.selectionMaterial = new THREE.MeshBasicMaterial({
       color: 0x00ff00,
       transparent: true,
@@ -73,7 +90,6 @@ export class UnitRenderer {
     });
 
     // Load custom GLB models (async, runs in background)
-    // Animation names will be logged to console when models load
     AssetManager.loadCustomModels().catch(err => {
       console.warn('[UnitRenderer] Error loading custom models:', err);
     });
@@ -83,11 +99,105 @@ export class UnitRenderer {
     this.playerId = playerId;
   }
 
+  /**
+   * Get or create an instanced mesh group for a unit type + player combo
+   */
+  private getOrCreateInstancedGroup(unitType: string, playerId: string): InstancedUnitGroup {
+    const key = `${unitType}_${playerId}`;
+    let group = this.instancedGroups.get(key);
+
+    if (!group) {
+      const playerColor = PLAYER_COLORS[playerId] ?? 0x808080;
+
+      // Get the base mesh from AssetManager
+      const baseMesh = AssetManager.getUnitMesh(unitType, playerColor);
+
+      // Find the actual mesh geometry and material from the group
+      let geometry: THREE.BufferGeometry | null = null;
+      let material: THREE.Material | THREE.Material[] | null = null;
+
+      baseMesh.traverse((child) => {
+        if (child instanceof THREE.Mesh && !geometry) {
+          geometry = child.geometry;
+          material = child.material;
+        }
+      });
+
+      if (!geometry) {
+        // Fallback: create a simple box
+        geometry = new THREE.BoxGeometry(0.5, 1, 0.5);
+        material = new THREE.MeshStandardMaterial({ color: playerColor });
+      }
+
+      // Create instanced mesh
+      const instancedMesh = new THREE.InstancedMesh(
+        geometry,
+        material!,
+        MAX_INSTANCES_PER_TYPE
+      );
+      instancedMesh.count = 0; // Start with no visible instances
+      instancedMesh.castShadow = true;
+      instancedMesh.receiveShadow = true;
+      instancedMesh.frustumCulled = false; // We'll handle culling ourselves
+
+      this.scene.add(instancedMesh);
+
+      group = {
+        mesh: instancedMesh,
+        unitType,
+        playerId,
+        maxInstances: MAX_INSTANCES_PER_TYPE,
+        entityIds: [],
+        dummy: new THREE.Object3D(),
+      };
+
+      this.instancedGroups.set(key, group);
+    }
+
+    return group;
+  }
+
+  /**
+   * Get or create overlay (selection ring, health bar) for a unit
+   */
+  private getOrCreateOverlay(entityId: number): UnitOverlay {
+    let overlay = this.unitOverlays.get(entityId);
+
+    if (!overlay) {
+      // Selection ring
+      const selectionRing = new THREE.Mesh(this.selectionGeometry, this.selectionMaterial);
+      selectionRing.rotation.x = -Math.PI / 2;
+      selectionRing.visible = false;
+      this.scene.add(selectionRing);
+
+      // Health bar
+      const healthBar = this.createHealthBar();
+      healthBar.visible = false;
+      this.scene.add(healthBar);
+
+      overlay = {
+        selectionRing,
+        healthBar,
+        lastHealth: 1,
+      };
+
+      this.unitOverlays.set(entityId, overlay);
+    }
+
+    return overlay;
+  }
+
   public update(): void {
-    const delta = this.clock.getDelta();
     const entities = this.world.getEntitiesWith('Transform', 'Unit');
     const currentIds = new Set<number>();
 
+    // Reset instance counts for all groups
+    for (const group of this.instancedGroups.values()) {
+      group.mesh.count = 0;
+      group.entityIds = [];
+    }
+
+    // Build instance data
     for (const entity of entities) {
       currentIds.add(entity.id);
 
@@ -111,140 +221,86 @@ export class UnitRenderer {
         shouldShow = false;
       }
 
-      let meshData = this.unitMeshes.get(entity.id);
-
-      if (!meshData) {
-        // Create new mesh for this unit
-        meshData = this.createUnitMesh(unit, ownerId);
-        this.unitMeshes.set(entity.id, meshData);
-        this.scene.add(meshData.group);
-        this.scene.add(meshData.selectionRing);
-        this.scene.add(meshData.healthBar);
-      }
-
-      // Update visibility
-      meshData.group.visible = shouldShow;
-      meshData.healthBar.visible = shouldShow && !!health && health.getHealthPercent() < 1;
-
       if (!shouldShow) {
-        meshData.selectionRing.visible = false;
+        // Hide overlay if exists
+        const overlay = this.unitOverlays.get(entity.id);
+        if (overlay) {
+          overlay.selectionRing.visible = false;
+          overlay.healthBar.visible = false;
+        }
         continue;
       }
 
-      // Get terrain height at this position
-      const terrainHeight = this.terrain?.getHeightAt(transform.x, transform.y) ?? 0;
+      // Get or create instanced group for this unit type + player
+      const group = this.getOrCreateInstancedGroup(unit.unitId, ownerId);
 
-      // Update position - place unit on top of terrain
-      meshData.group.position.set(transform.x, terrainHeight, transform.y);
-      meshData.group.rotation.y = -transform.rotation + Math.PI / 2;
+      // Add instance if we have room
+      if (group.mesh.count < group.maxInstances) {
+        const instanceIndex = group.mesh.count;
+        group.entityIds[instanceIndex] = entity.id;
 
-      // Update selection ring
-      meshData.selectionRing.position.set(transform.x, terrainHeight + 0.05, transform.y);
-      meshData.selectionRing.visible = selectable?.isSelected ?? false;
+        // Get terrain height
+        const terrainHeight = this.terrain?.getHeightAt(transform.x, transform.y) ?? 0;
 
-      // Update selection ring color based on ownership
-      if (meshData.selectionRing.visible) {
-        (meshData.selectionRing.material as THREE.MeshBasicMaterial) =
-          isOwned ? this.selectionMaterial : this.enemySelectionMaterial;
-      }
+        // Set instance transform
+        this.tempPosition.set(transform.x, terrainHeight, transform.y);
+        this.tempEuler.set(0, -transform.rotation + Math.PI / 2, 0);
+        this.tempQuaternion.setFromEuler(this.tempEuler);
+        this.tempMatrix.compose(this.tempPosition, this.tempQuaternion, this.tempScale);
+        group.mesh.setMatrixAt(instanceIndex, this.tempMatrix);
 
-      // Update health bar
-      if (health) {
-        meshData.healthBar.position.set(transform.x, terrainHeight + 1.5, transform.y);
-        this.updateHealthBar(meshData.healthBar, health);
-      }
+        group.mesh.count++;
 
-      // Update animations
-      if (meshData.mixer && meshData.animations.length > 0) {
-        meshData.mixer.update(delta);
+        // Update overlay (selection ring, health bar)
+        const overlay = this.getOrCreateOverlay(entity.id);
 
-        // Determine desired animation state
-        const isMoving = unit.state === 'moving' || unit.state === 'gathering' ||
-                         unit.state === 'patrolling' || unit.state === 'building';
-        const isAttacking = unit.state === 'attacking';
+        // Selection ring
+        overlay.selectionRing.position.set(transform.x, terrainHeight + 0.05, transform.y);
+        overlay.selectionRing.visible = selectable?.isSelected ?? false;
+        if (overlay.selectionRing.visible) {
+          (overlay.selectionRing.material as THREE.MeshBasicMaterial) =
+            isOwned ? this.selectionMaterial : this.enemySelectionMaterial;
+        }
 
-        // Find appropriate animation by name pattern
-        const desiredAnim = this.findAnimationForState(meshData.animations, isMoving, isAttacking, unit.unitId);
-
-        // Switch animation if needed
-        if (desiredAnim && meshData.currentAction?.getClip() !== desiredAnim) {
-          // Fade out current animation
-          if (meshData.currentAction) {
-            meshData.currentAction.fadeOut(0.2);
+        // Health bar - only show if damaged
+        if (health) {
+          const healthPercent = health.getHealthPercent();
+          overlay.healthBar.visible = healthPercent < 1;
+          if (overlay.healthBar.visible) {
+            overlay.healthBar.position.set(transform.x, terrainHeight + 1.5, transform.y);
+            // Only update health bar visuals if health changed
+            if (Math.abs(overlay.lastHealth - healthPercent) > 0.01) {
+              this.updateHealthBar(overlay.healthBar, health);
+              overlay.lastHealth = healthPercent;
+            }
           }
-          // Start new animation
-          meshData.currentAction = meshData.mixer.clipAction(desiredAnim);
-          meshData.currentAction.reset().fadeIn(0.2).play();
-        } else if (!meshData.currentAction && meshData.animations.length > 0) {
-          // No animation playing yet - start the first one
-          meshData.currentAction = meshData.mixer.clipAction(meshData.animations[0]);
-          meshData.currentAction.play();
-          console.log(`[UnitRenderer] Started animation for ${unit.unitId}: ${meshData.animations[0].name}`);
-        }
-
-        // For single-animation models, vary speed based on state
-        if (meshData.animations.length === 1 && meshData.currentAction) {
-          meshData.currentAction.timeScale = isMoving || isAttacking ? 1.0 : 0.3;
         }
       }
     }
 
-    // Remove meshes for destroyed entities
-    for (const [entityId, meshData] of this.unitMeshes) {
+    // Mark instance matrices as needing update
+    for (const group of this.instancedGroups.values()) {
+      if (group.mesh.count > 0) {
+        group.mesh.instanceMatrix.needsUpdate = true;
+      }
+    }
+
+    // Clean up overlays for destroyed entities
+    for (const [entityId, overlay] of this.unitOverlays) {
       if (!currentIds.has(entityId)) {
-        this.scene.remove(meshData.group);
-        this.scene.remove(meshData.selectionRing);
-        this.scene.remove(meshData.healthBar);
-        this.disposeGroup(meshData.group);
-        this.unitMeshes.delete(entityId);
+        this.scene.remove(overlay.selectionRing);
+        this.scene.remove(overlay.healthBar);
+        overlay.selectionRing.geometry.dispose();
+        this.disposeGroup(overlay.healthBar);
+        this.unitOverlays.delete(entityId);
       }
     }
-  }
-
-  private createUnitMesh(unit: Unit, playerId: string): UnitMeshData {
-    // Get player color
-    const playerColor = PLAYER_COLORS[playerId] ?? 0x808080;
-
-    // Get unit mesh from AssetManager
-    const group = AssetManager.getUnitMesh(unit.unitId, playerColor) as THREE.Group;
-
-    // Ensure proper shadows
-    group.traverse((child) => {
-      if (child instanceof THREE.Mesh) {
-        child.castShadow = true;
-        child.receiveShadow = true;
-      }
-    });
-
-    // Selection ring
-    const selectionRing = new THREE.Mesh(this.selectionGeometry, this.selectionMaterial);
-    selectionRing.rotation.x = -Math.PI / 2;
-    selectionRing.visible = false;
-
-    // Health bar
-    const healthBar = this.createHealthBar();
-
-    // Set up animations if available
-    let mixer: THREE.AnimationMixer | null = null;
-    let currentAction: THREE.AnimationAction | null = null;
-    const animations = AssetManager.getAnimations(unit.unitId);
-
-    if (animations.length > 0) {
-      // Create mixer for the inner model (not the wrapper group)
-      const innerModel = group.children[0];
-      if (innerModel) {
-        mixer = new THREE.AnimationMixer(innerModel);
-        console.log(`[UnitRenderer] Created AnimationMixer for ${unit.unitId} with ${animations.length} animations`);
-      }
-    }
-
-    return { group, selectionRing, healthBar, unitId: unit.unitId, mixer, currentAction, animations };
   }
 
   private createHealthBar(): THREE.Group {
     const group = new THREE.Group();
 
-    // Background
+    // Background - use simpler geometry
     const bgGeometry = new THREE.PlaneGeometry(1, 0.1);
     const bgMaterial = new THREE.MeshBasicMaterial({
       color: 0x333333,
@@ -264,91 +320,14 @@ export class UnitRenderer {
     fill.name = 'healthFill';
     group.add(fill);
 
-    // Shield bar (if applicable)
-    const shieldGeometry = new THREE.PlaneGeometry(1, 0.05);
-    const shieldMaterial = new THREE.MeshBasicMaterial({
-      color: 0x00aaff,
-    });
-    const shield = new THREE.Mesh(shieldGeometry, shieldMaterial);
-    shield.position.y = 0.08;
-    shield.position.z = 0.01;
-    shield.name = 'shieldFill';
-    shield.visible = false;
-    group.add(shield);
-
     // Make health bar always face camera
     group.lookAt(0, 100, 0);
 
     return group;
   }
 
-  /**
-   * Find the best animation for a given state by searching name patterns.
-   * Falls back to first animation if no match found.
-   * Note: Some models (like SCV) may have inverted animation names -
-   * the "idle" animation shows movement and "walk" shows standing.
-   * We detect this by checking if the unit has exactly 2 animations
-   * with one named idle/stand and one named walk/run.
-   */
-  private findAnimationForState(
-    animations: THREE.AnimationClip[],
-    isMoving: boolean,
-    isAttacking: boolean,
-    unitId?: string
-  ): THREE.AnimationClip | null {
-    if (animations.length === 0) return null;
-    if (animations.length === 1) return animations[0]; // Only one animation, use it
-
-    const lowerNames = animations.map(a => a.name.toLowerCase());
-
-    if (isAttacking) {
-      // Look for attack animation
-      const attackIdx = lowerNames.findIndex(n =>
-        n.includes('attack') || n.includes('fire') || n.includes('shoot')
-      );
-      if (attackIdx >= 0) return animations[attackIdx];
-    }
-
-    // Check for inverted animations (common in some exported models)
-    // If we have exactly 2 animations and one is idle-like and one is walk-like,
-    // check if they need to be swapped based on the model
-    const hasIdleAnim = lowerNames.findIndex(n => n.includes('idle') || n.includes('stand'));
-    const hasWalkAnim = lowerNames.findIndex(n => n.includes('walk') || n.includes('run'));
-
-    // SCV and some other models have inverted animation names in their exports
-    const invertedModels = ['scv'];
-    const shouldInvert = unitId && invertedModels.includes(unitId) &&
-                         hasIdleAnim >= 0 && hasWalkAnim >= 0;
-
-    if (isMoving) {
-      // Look for walk/run animation (or idle if inverted)
-      if (shouldInvert) {
-        // Model has inverted names - use idle animation for moving
-        if (hasIdleAnim >= 0) return animations[hasIdleAnim];
-      }
-      const moveIdx = lowerNames.findIndex(n =>
-        n.includes('walk') || n.includes('run') || n.includes('move')
-      );
-      if (moveIdx >= 0) return animations[moveIdx];
-    }
-
-    // Look for idle animation (or walk if inverted)
-    if (shouldInvert) {
-      // Model has inverted names - use walk animation for idle
-      if (hasWalkAnim >= 0) return animations[hasWalkAnim];
-    }
-    const idleIdx = lowerNames.findIndex(n =>
-      n.includes('idle') || n.includes('stand') || n.includes('rest')
-    );
-    if (idleIdx >= 0) return animations[idleIdx];
-
-    // Fallback: return first animation
-    return animations[0];
-  }
-
   private updateHealthBar(healthBar: THREE.Group, health: Health): void {
     const fill = healthBar.getObjectByName('healthFill') as THREE.Mesh;
-    const shield = healthBar.getObjectByName('shieldFill') as THREE.Mesh;
 
     if (fill) {
       const percent = health.getHealthPercent();
@@ -364,13 +343,6 @@ export class UnitRenderer {
       } else {
         material.color.setHex(0xff0000);
       }
-    }
-
-    if (shield && health.maxShield > 0) {
-      shield.visible = true;
-      const shieldPercent = health.getShieldPercent();
-      shield.scale.x = shieldPercent;
-      shield.position.x = (shieldPercent - 1) / 2;
     }
   }
 
@@ -389,18 +361,26 @@ export class UnitRenderer {
 
   /**
    * Clear all cached meshes so they get recreated with updated assets on next update.
-   * Called when custom models finish loading.
    */
   public refreshAllMeshes(): void {
     console.log('[UnitRenderer] Refreshing all unit meshes...');
-    for (const [entityId, meshData] of this.unitMeshes) {
-      this.scene.remove(meshData.group);
-      this.scene.remove(meshData.selectionRing);
-      this.scene.remove(meshData.healthBar);
-      this.disposeGroup(meshData.group);
+
+    // Clear instanced groups
+    for (const group of this.instancedGroups.values()) {
+      this.scene.remove(group.mesh);
+      group.mesh.geometry.dispose();
+      if (group.mesh.material instanceof THREE.Material) {
+        group.mesh.material.dispose();
+      }
     }
-    this.unitMeshes.clear();
-    // Meshes will be recreated on next update() call
+    this.instancedGroups.clear();
+
+    // Clear overlays
+    for (const overlay of this.unitOverlays.values()) {
+      this.scene.remove(overlay.selectionRing);
+      this.scene.remove(overlay.healthBar);
+    }
+    this.unitOverlays.clear();
   }
 
   public dispose(): void {
@@ -408,13 +388,17 @@ export class UnitRenderer {
     this.selectionMaterial.dispose();
     this.enemySelectionMaterial.dispose();
 
-    for (const meshData of this.unitMeshes.values()) {
-      this.disposeGroup(meshData.group);
-      this.scene.remove(meshData.group);
-      this.scene.remove(meshData.selectionRing);
-      this.scene.remove(meshData.healthBar);
+    for (const group of this.instancedGroups.values()) {
+      this.scene.remove(group.mesh);
+      group.mesh.geometry.dispose();
     }
+    this.instancedGroups.clear();
 
-    this.unitMeshes.clear();
+    for (const overlay of this.unitOverlays.values()) {
+      this.scene.remove(overlay.selectionRing);
+      this.scene.remove(overlay.healthBar);
+      this.disposeGroup(overlay.healthBar);
+    }
+    this.unitOverlays.clear();
   }
 }

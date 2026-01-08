@@ -391,18 +391,89 @@ export class AISystem extends System {
     const buildPos = this.findBuildingSpot(ai.playerId, ccPos, buildingDef.width, buildingDef.height);
     if (!buildPos) return false;
 
+    // Find an available worker to assign to construction
+    const workerId = this.findAvailableWorker(ai.playerId);
+    if (workerId === null) {
+      console.log(`AISystem: No available worker for ${buildingType}`);
+      return false;
+    }
+
     // Deduct resources
     ai.minerals -= buildingDef.mineralCost;
     ai.vespene -= buildingDef.vespeneCost;
 
-    // Place the building
+    // Place the building with explicit worker assignment
     this.game.eventBus.emit('building:place', {
       buildingType,
       position: buildPos,
       playerId: ai.playerId,
+      workerId: workerId,
     });
 
+    console.log(`AISystem: ${ai.playerId} building ${buildingType} with worker ${workerId}`);
     return true;
+  }
+
+  /**
+   * Find an available worker for construction
+   * Priority: idle > gathering > moving (not already building)
+   */
+  private findAvailableWorker(playerId: string): number | null {
+    const workers = this.world.getEntitiesWith('Unit', 'Selectable', 'Health');
+
+    // First pass: find idle workers
+    for (const entity of workers) {
+      const unit = entity.get<Unit>('Unit')!;
+      const selectable = entity.get<Selectable>('Selectable')!;
+      const health = entity.get<Health>('Health')!;
+
+      if (!unit.isWorker) continue;
+      if (selectable.playerId !== playerId) continue;
+      if (health.isDead()) continue;
+
+      if (unit.state === 'idle') {
+        return entity.id;
+      }
+    }
+
+    // Second pass: find gathering workers (not already assigned to build)
+    for (const entity of workers) {
+      const unit = entity.get<Unit>('Unit')!;
+      const selectable = entity.get<Selectable>('Selectable')!;
+      const health = entity.get<Health>('Health')!;
+
+      if (!unit.isWorker) continue;
+      if (selectable.playerId !== playerId) continue;
+      if (health.isDead()) continue;
+
+      // Skip workers already assigned to construction
+      if (unit.constructingBuildingId !== null) continue;
+
+      if (unit.state === 'gathering') {
+        return entity.id;
+      }
+    }
+
+    // Third pass: find moving workers (not building)
+    for (const entity of workers) {
+      const unit = entity.get<Unit>('Unit')!;
+      const selectable = entity.get<Selectable>('Selectable')!;
+      const health = entity.get<Health>('Health')!;
+
+      if (!unit.isWorker) continue;
+      if (selectable.playerId !== playerId) continue;
+      if (health.isDead()) continue;
+
+      // Skip workers already assigned to construction
+      if (unit.constructingBuildingId !== null) continue;
+      if (unit.state === 'building') continue;
+
+      if (unit.state === 'moving') {
+        return entity.id;
+      }
+    }
+
+    return null;
   }
 
   private findAIBase(playerId: string): { x: number; y: number } | null {
