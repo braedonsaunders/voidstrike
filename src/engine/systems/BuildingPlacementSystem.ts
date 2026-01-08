@@ -215,10 +215,10 @@ export class BuildingPlacementSystem extends System {
     // Fall back to any available worker
     const workers = this.world.getEntitiesWith('Unit', 'Selectable', 'Transform');
     for (const entity of workers) {
-      const unit = entity.get<Unit>('Unit')!;
-      const selectable = entity.get<Selectable>('Selectable')!;
+      const unit = entity.get<Unit>('Unit');
+      const selectable = entity.get<Selectable>('Selectable');
 
-      if (unit.isWorker && selectable.playerId === playerId) {
+      if (unit?.isWorker && selectable?.playerId === playerId) {
         if (unit.state === 'idle' || unit.state === 'gathering') {
           return { entity };
         }
@@ -392,8 +392,9 @@ export class BuildingPlacementSystem extends System {
     const workers = this.world.getEntitiesWith('Unit', 'Transform');
 
     for (const entity of workers) {
-      const unit = entity.get<Unit>('Unit')!;
-      const transform = entity.get<Transform>('Transform')!;
+      const unit = entity.get<Unit>('Unit');
+      const transform = entity.get<Transform>('Transform');
+      if (!unit || !transform) continue;
 
       if (unit.state !== 'building' || unit.constructingBuildingId === null) {
         continue;
@@ -501,7 +502,8 @@ export class BuildingPlacementSystem extends System {
     const workers = this.world.getEntitiesWith('Unit', 'Transform');
 
     for (const entity of workers) {
-      const unit = entity.get<Unit>('Unit')!;
+      const unit = entity.get<Unit>('Unit');
+      if (!unit) continue;
 
       if (unit.constructingBuildingId !== buildingEntityId) {
         continue;
@@ -511,7 +513,8 @@ export class BuildingPlacementSystem extends System {
         continue;
       }
 
-      const workerTransform = entity.get<Transform>('Transform')!;
+      const workerTransform = entity.get<Transform>('Transform');
+      if (!workerTransform) continue;
       const dx = workerTransform.x - buildingTransform.x;
       const dy = workerTransform.y - buildingTransform.y;
       const distance = Math.sqrt(dx * dx + dy * dy);

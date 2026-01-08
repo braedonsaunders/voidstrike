@@ -28,10 +28,11 @@ interface AnimatedUnitMesh {
   currentAction: string;
 }
 
-// Per-unit overlay data (selection ring, health bar)
+// Per-unit overlay data (selection ring, health bar, team marker)
 interface UnitOverlay {
   selectionRing: THREE.Mesh;
   healthBar: THREE.Group;
+  teamMarker: THREE.Mesh;
   lastHealth: number;
 }
 
@@ -60,6 +61,7 @@ export class UnitRenderer {
   private selectionGeometry: THREE.RingGeometry;
   private selectionMaterial: THREE.MeshBasicMaterial;
   private enemySelectionMaterial: THREE.MeshBasicMaterial;
+  private teamMarkerGeometry: THREE.CircleGeometry;
 
   // Reusable objects for matrix calculations
   private tempMatrix: THREE.Matrix4 = new THREE.Matrix4();
@@ -87,6 +89,9 @@ export class UnitRenderer {
       opacity: 0.6,
       side: THREE.DoubleSide,
     });
+
+    // Team marker geometry - small circle beneath each unit showing team color
+    this.teamMarkerGeometry = new THREE.CircleGeometry(0.4, 12);
 
     // Preload common procedural assets
     AssetManager.preloadCommonAssets();
@@ -262,9 +267,9 @@ export class UnitRenderer {
   }
 
   /**
-   * Get or create overlay (selection ring, health bar) for a unit
+   * Get or create overlay (selection ring, health bar, team marker) for a unit
    */
-  private getOrCreateOverlay(entityId: number): UnitOverlay {
+  private getOrCreateOverlay(entityId: number, playerId: string): UnitOverlay {
     let overlay = this.unitOverlays.get(entityId);
 
     if (!overlay) {
@@ -279,9 +284,23 @@ export class UnitRenderer {
       healthBar.visible = false;
       this.scene.add(healthBar);
 
+      // Team marker - always visible colored circle showing team color
+      const teamColor = getPlayerColor(playerId);
+      const teamMarkerMaterial = new THREE.MeshBasicMaterial({
+        color: teamColor,
+        transparent: true,
+        opacity: 0.7,
+        side: THREE.DoubleSide,
+      });
+      const teamMarker = new THREE.Mesh(this.teamMarkerGeometry, teamMarkerMaterial);
+      teamMarker.rotation.x = -Math.PI / 2;
+      teamMarker.visible = true;
+      this.scene.add(teamMarker);
+
       overlay = {
         selectionRing,
         healthBar,
+        teamMarker,
         lastHealth: 1,
       };
 
@@ -337,6 +356,7 @@ export class UnitRenderer {
         if (overlay) {
           overlay.selectionRing.visible = false;
           overlay.healthBar.visible = false;
+          overlay.teamMarker.visible = false;
         }
         continue;
       }
@@ -383,8 +403,12 @@ export class UnitRenderer {
         }
       }
 
-      // Update overlay (selection ring, health bar) for all units
-      const overlay = this.getOrCreateOverlay(entity.id);
+      // Update overlay (selection ring, health bar, team marker) for all units
+      const overlay = this.getOrCreateOverlay(entity.id, ownerId);
+
+      // Team marker - always visible colored circle beneath unit
+      overlay.teamMarker.position.set(transform.x, terrainHeight + 0.02, transform.y);
+      overlay.teamMarker.visible = true;
 
       // Selection ring
       overlay.selectionRing.position.set(transform.x, terrainHeight + 0.05, transform.y);
@@ -421,7 +445,9 @@ export class UnitRenderer {
       if (!currentIds.has(entityId)) {
         this.scene.remove(overlay.selectionRing);
         this.scene.remove(overlay.healthBar);
+        this.scene.remove(overlay.teamMarker);
         overlay.selectionRing.geometry.dispose();
+        (overlay.teamMarker.material as THREE.Material).dispose();
         this.disposeGroup(overlay.healthBar);
         this.unitOverlays.delete(entityId);
       }
@@ -527,6 +553,8 @@ export class UnitRenderer {
     for (const overlay of this.unitOverlays.values()) {
       this.scene.remove(overlay.selectionRing);
       this.scene.remove(overlay.healthBar);
+      this.scene.remove(overlay.teamMarker);
+      (overlay.teamMarker.material as THREE.Material).dispose();
     }
     this.unitOverlays.clear();
   }
@@ -535,6 +563,7 @@ export class UnitRenderer {
     this.selectionGeometry.dispose();
     this.selectionMaterial.dispose();
     this.enemySelectionMaterial.dispose();
+    this.teamMarkerGeometry.dispose();
 
     for (const group of this.instancedGroups.values()) {
       this.scene.remove(group.mesh);
@@ -552,6 +581,8 @@ export class UnitRenderer {
     for (const overlay of this.unitOverlays.values()) {
       this.scene.remove(overlay.selectionRing);
       this.scene.remove(overlay.healthBar);
+      this.scene.remove(overlay.teamMarker);
+      (overlay.teamMarker.material as THREE.Material).dispose();
       this.disposeGroup(overlay.healthBar);
     }
     this.unitOverlays.clear();

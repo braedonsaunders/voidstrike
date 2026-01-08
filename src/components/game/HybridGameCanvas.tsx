@@ -230,6 +230,24 @@ export function HybridGameCanvas() {
         CURRENT_MAP,
         (x, y) => terrain.getHeightAt(x, y)
       );
+      // Set up vespene geyser checker for refinery placement
+      placementPreviewRef.current.setVespeneGeyserChecker((x, y) => {
+        const resources = game.world.getEntitiesWith('Resource', 'Transform');
+        const searchRadius = 3;
+        for (const entity of resources) {
+          const resource = entity.get<Resource>('Resource');
+          if (resource?.resourceType !== 'vespene') continue;
+          if (resource.hasRefinery()) continue; // Skip geysers that already have a refinery
+          const transform = entity.get<Transform>('Transform');
+          if (!transform) continue;
+          const dx = Math.abs(transform.x - x);
+          const dy = Math.abs(transform.y - y);
+          if (dx <= searchRadius && dy <= searchRadius) {
+            return true;
+          }
+        }
+        return false;
+      });
       scene.add(placementPreviewRef.current.group);
 
       // Initialize SC2-level visual systems
