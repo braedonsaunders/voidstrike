@@ -210,7 +210,7 @@ export function createMineralLineOld(
 }
 
 // Helper to create vespene geysers (typically 2 per base)
-// Places geysers on either side of the mineral arc
+// Places geysers at the ends of the mineral arc, like SC2
 // mineralCenterX/Y: center of the mineral arc
 // baseCenterX/Y: position of the command center
 export function createVespeneGeysers(
@@ -224,13 +224,14 @@ export function createVespeneGeysers(
   const dx = baseCenterX - mineralCenterX;
   const dy = baseCenterY - mineralCenterY;
   const angleToBase = Math.atan2(dy, dx);
+  const distFromBase = Math.sqrt(dx * dx + dy * dy);
 
-  // Place geysers at the ends of the mineral arc (±70 degrees from base direction)
-  // Distance from base center - similar to mineral distance but slightly closer
-  const distFromBase = Math.sqrt(dx * dx + dy * dy) * 0.85;
-  const geyserAngleOffset = Math.PI * 0.4; // ~72 degrees from center line
+  // Mineral arc spans ~117 degrees (arcSpread = PI * 0.65), ends at ±58 degrees
+  // Place geysers just inside the arc ends at ~50 degrees from center line
+  // Same distance from base as minerals
+  const geyserAngleOffset = Math.PI * 0.28; // ~50 degrees - at the ends of mineral arc
 
-  // Calculate geyser positions - on either side of the mineral arc
+  // Calculate geyser positions - at the ends of the mineral arc
   const geyser1Angle = angleToBase + Math.PI + geyserAngleOffset;
   const geyser2Angle = angleToBase + Math.PI - geyserAngleOffset;
 
