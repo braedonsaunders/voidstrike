@@ -376,16 +376,6 @@ export default function GameSetupPage() {
               </div>
             </div>
 
-            {/* Quick Actions */}
-            <div className="flex gap-3">
-              <button
-                onClick={handleStartGame}
-                className="flex-1 game-button-primary py-3"
-              >
-                Start Game
-              </button>
-            </div>
-
             {/* Keyboard hint */}
             <p className="text-center text-void-600 text-xs">
               Press <kbd className="px-1.5 py-0.5 bg-void-800 rounded">?</kbd> during game for controls

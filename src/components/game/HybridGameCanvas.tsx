@@ -219,7 +219,12 @@ export function HybridGameCanvas() {
       // Initialize SC2-level visual systems
       selectionSystemRef.current = new SC2SelectionSystem(scene);
       particleSystemRef.current = new SC2ParticleSystem(scene);
-      postProcessingRef.current = new SC2PostProcessing(renderer, scene, camera.camera);
+      // PERFORMANCE: Post-processing disabled by default for M1/low-end devices
+      // Can be enabled via settings for high-end devices
+      const enablePostProcessing = false; // TODO: Add to game settings
+      if (enablePostProcessing) {
+        postProcessingRef.current = new SC2PostProcessing(renderer, scene, camera.camera);
+      }
 
       // Hook particle system to combat events
       game.eventBus.on('combat:attack', (data: {
@@ -317,10 +322,13 @@ export function HybridGameCanvas() {
           }
         }
 
-        useGameStore.getState().setGameTime(gameTime);
-
-        const pos = camera.getPosition();
-        useGameStore.getState().setCamera(pos.x, pos.z, camera.getZoom());
+        // PERFORMANCE: Throttle zustand store updates to reduce React re-renders
+        // Only update every 100ms instead of every frame (60fps -> 10fps for store updates)
+        if (deltaTime > 0 && Math.floor(currentTime / 100) !== Math.floor(lastTime / 100)) {
+          useGameStore.getState().setGameTime(gameTime);
+          const pos = camera.getPosition();
+          useGameStore.getState().setCamera(pos.x, pos.z, camera.getZoom());
+        }
 
         // Render Three.js with post-processing
         if (postProcessingRef.current) {

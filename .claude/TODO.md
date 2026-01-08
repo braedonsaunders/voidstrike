@@ -16,7 +16,8 @@
 ### SC2-Level Rendering Systems
 - [x] **SC2SelectionSystem** - Animated glowing selection rings with GLSL shaders
 - [x] **SC2ParticleSystem** - GPU-instanced particles (muzzle flashes, explosions, debris)
-- [x] **SC2PostProcessing** - Bloom, vignette, color grading, ACES tone mapping
+- [x] **SC2PostProcessing** - Bloom, vignette, color grading, ACES tone mapping (fixed black screen bug)
+- [x] **SC2TerrainShader** - Multi-layer procedural texturing with PBR-like lighting
 
 ### Visual Features
 - [x] Team-colored pulsing selection rings with shimmer animation
@@ -42,6 +43,21 @@
 - [x] **BuildingRenderer traverse() optimized** - Only traverse() on state change, not every frame
 - [x] **Damage number spam limited** - Max 15 active, reduced duration to 0.7s
 - [x] **Resource rotation removed** - Static rotation instead of animating every frame
+
+### Fixed Issues (Round 3 - January 2026)
+- [x] **Post-processing disabled by default** - Heavy render passes causing FPS drops
+- [x] **Zustand store updates throttled** - From 60Hz to 10Hz to reduce React re-renders
+- [x] **Vibrant terrain colors** - Increased saturation and reduced vertex color influence
+
+---
+
+## Critical Bug Fixes (January 2026)
+
+### Gameplay Bugs Fixed
+- [x] **AI unit ownership bug** - Units from AI buildings were assigned to player1 (hardcoded)
+- [x] **Orbital Command model not updating** - BuildingRenderer didn't detect buildingId changes
+- [x] **Workers going to enemy base** - Drop-off didn't check ownership or include upgraded bases
+- [x] **Duplicate start buttons** - Removed redundant Quick Actions start button
 
 ### Future Optimizations
 - [ ] Instanced decorations (trees, rocks, debris - 1000s of draw calls)

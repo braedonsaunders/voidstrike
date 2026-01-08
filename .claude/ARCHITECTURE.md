@@ -312,6 +312,17 @@ Located in `src/rendering/`:
    - Color grading and contrast
    - ACES tone mapping
    - Subtle film grain
+   - Uses dedicated orthographic camera for fullscreen quad rendering
+
+4. **shaders/SC2TerrainShader.ts** - Advanced terrain rendering
+   - Multi-layer procedural texturing (grass, dirt, rock, cliff)
+   - Voronoi-based rock cracks and pebble patterns
+   - PBR-like lighting with Fresnel and GGX specular
+   - Real-time normal map generation from FBM noise
+   - Height and slope-based material blending
+   - Triplanar mapping for cliffs (no UV stretching)
+   - Subsurface scattering approximation for grass
+   - Per-biome configuration with distinct visual styles
 
 ### Three.js Scene Graph
 

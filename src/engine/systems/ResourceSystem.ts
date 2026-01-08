@@ -4,6 +4,7 @@ import { Transform } from '../components/Transform';
 import { Unit } from '../components/Unit';
 import { Resource } from '../components/Resource';
 import { Building } from '../components/Building';
+import { Selectable } from '../components/Selectable';
 import { Game } from '../core/Game';
 import { World } from '../ecs/World';
 import { useGameStore } from '@/store/gameStore';
@@ -215,18 +216,33 @@ export class ResourceSystem extends System {
     transform: Transform,
     unit: Unit
   ): void {
-    // Find nearest command center / main building
+    // Find nearest command center / main building owned by the same player
     const bases = this.world.getEntitiesWith('Building', 'Transform');
     let nearestBase: { transform: Transform; building: Building } | null = null;
     let nearestDistance = Infinity;
 
+    // Get worker's owner to match against bases
+    const workerSelectable = workerEntity.get<Selectable>('Selectable');
+    const workerOwner = workerSelectable?.playerId;
+
     for (const baseEntity of bases) {
       const building = baseEntity.get<Building>('Building')!;
       const baseTransform = baseEntity.get<Transform>('Transform')!;
+      const baseSelectable = baseEntity.get<Selectable>('Selectable');
 
       // Check if this is a main building that accepts resources
+      // Includes upgraded versions: Orbital Command, Planetary Fortress, Lair, Hive
       if (!building.isComplete()) continue;
-      if (!['command_center', 'nexus', 'hatchery'].includes(building.buildingId)) {
+
+      // Only use bases owned by the same player
+      if (baseSelectable?.playerId !== workerOwner) continue;
+
+      const resourceDropOffBuildings = [
+        'command_center', 'orbital_command', 'planetary_fortress',
+        'nexus',
+        'hatchery', 'lair', 'hive'
+      ];
+      if (!resourceDropOffBuildings.includes(building.buildingId)) {
         continue;
       }
 
@@ -285,12 +301,26 @@ export class ResourceSystem extends System {
     // Find nearest base
     const bases = this.world.getEntitiesWith('Building', 'Transform');
 
+    // Get worker's owner
+    const workerSelectable = workerEntity.get<Selectable>('Selectable');
+    const workerOwner = workerSelectable?.playerId;
+
     for (const baseEntity of bases) {
       const building = baseEntity.get<Building>('Building')!;
       const baseTransform = baseEntity.get<Transform>('Transform')!;
+      const baseSelectable = baseEntity.get<Selectable>('Selectable');
 
       if (!building.isComplete()) continue;
-      if (!['command_center', 'nexus', 'hatchery'].includes(building.buildingId)) {
+
+      // Only return to bases owned by the same player
+      if (baseSelectable?.playerId !== workerOwner) continue;
+
+      const resourceDropOffBuildings = [
+        'command_center', 'orbital_command', 'planetary_fortress',
+        'nexus',
+        'hatchery', 'lair', 'hive'
+      ];
+      if (!resourceDropOffBuildings.includes(building.buildingId)) {
         continue;
       }
 
