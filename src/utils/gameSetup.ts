@@ -12,10 +12,17 @@ import { AISystem } from '@/engine/systems/AISystem';
 import { EnhancedAISystem } from '@/engine/systems/EnhancedAISystem';
 import { MapData, Expansion } from '@/data/maps';
 import { useGameStore } from '@/store/gameStore';
-import { useGameSetupStore } from '@/store/gameSetupStore';
+import { useGameSetupStore, STARTING_RESOURCES_VALUES } from '@/store/gameSetupStore';
 
 export function spawnInitialEntities(game: Game, mapData: MapData): void {
   const world = game.world;
+
+  // Apply starting resources from game setup
+  const setupStore = useGameSetupStore.getState();
+  const startingResources = STARTING_RESOURCES_VALUES[setupStore.startingResources];
+  const gameStore = useGameStore.getState();
+  // Reset to starting values (not additive)
+  gameStore.addResources(startingResources.minerals - gameStore.minerals, startingResources.vespene - gameStore.vespene);
 
   // Get spawn points for each player
   const spawns = mapData.spawns;

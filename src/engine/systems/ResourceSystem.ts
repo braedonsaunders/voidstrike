@@ -350,9 +350,9 @@ export class ResourceSystem extends System {
     }
 
     // Calculate drop-off range based on building size
-    // Workers should drop off when they reach the edge of the building plus a small margin
+    // Must be larger than building avoidance zone (halfWidth + 1.0) to allow workers to reach
     const buildingHalfWidth = (nearestBase.building.width || 5) / 2;
-    const dropOffRange = buildingHalfWidth + 2.0; // Edge of building + worker radius + margin
+    const dropOffRange = buildingHalfWidth + 3.5; // Generous range outside avoidance zone
 
     if (nearestDistance <= dropOffRange) {
       // At base - deposit resources (only for player, AI tracks separately)
@@ -405,22 +405,22 @@ export class ResourceSystem extends System {
       unit.state = 'idle';
     } else {
       // Move toward the edge of the base building (not the center)
-      // This prevents fighting against building collision avoidance
+      // Target must be OUTSIDE the building avoidance zone (halfWidth + 1.0) to prevent oscillation
       const dx = transform.x - nearestBase.transform.x;
       const dy = transform.y - nearestBase.transform.y;
       const dist = Math.sqrt(dx * dx + dy * dy);
 
       if (dist > 0.1) {
-        // Target a point at the edge of the building, in direction toward worker
+        // Target a point outside the avoidance zone, in direction toward worker
         const dirX = dx / dist;
         const dirY = dy / dist;
-        const edgeDistance = buildingHalfWidth + 1.0; // Just outside the building edge
+        const edgeDistance = buildingHalfWidth + 2.0; // Outside the avoidance margin (halfWidth + 1.0)
         const targetX = nearestBase.transform.x + dirX * edgeDistance;
         const targetY = nearestBase.transform.y + dirY * edgeDistance;
         unit.moveToPosition(targetX, targetY);
       } else {
         // Worker is at center somehow, just move away slightly
-        unit.moveToPosition(nearestBase.transform.x + buildingHalfWidth + 1, nearestBase.transform.y);
+        unit.moveToPosition(nearestBase.transform.x + buildingHalfWidth + 2, nearestBase.transform.y);
       }
     }
   }
@@ -458,6 +458,7 @@ export class ResourceSystem extends System {
       }
 
       // Move toward edge of building, not center (prevents fighting building collision)
+      // Target must be outside the avoidance zone (halfWidth + 1.0)
       const buildingHalfWidth = (building.width || 5) / 2;
       const dx = transform.x - baseTransform.x;
       const dy = transform.y - baseTransform.y;
@@ -466,10 +467,10 @@ export class ResourceSystem extends System {
       if (dist > 0.1) {
         const dirX = dx / dist;
         const dirY = dy / dist;
-        const edgeDistance = buildingHalfWidth + 1.0;
+        const edgeDistance = buildingHalfWidth + 2.0; // Outside avoidance zone
         unit.moveToPosition(baseTransform.x + dirX * edgeDistance, baseTransform.y + dirY * edgeDistance);
       } else {
-        unit.moveToPosition(baseTransform.x + buildingHalfWidth + 1, baseTransform.y);
+        unit.moveToPosition(baseTransform.x + buildingHalfWidth + 2, baseTransform.y);
       }
       unit.state = 'gathering';
       return;
