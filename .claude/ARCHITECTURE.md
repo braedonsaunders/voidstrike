@@ -40,6 +40,7 @@ voidstrike/
 │   │   ├── systems/
 │   │   │   ├── SpawnSystem.ts           # Unit spawning from production
 │   │   │   ├── BuildingPlacementSystem.ts # Building construction
+│   │   │   ├── PathfindingSystem.ts     # Dynamic pathfinding with obstacle detection
 │   │   │   ├── MovementSystem.ts        # Unit movement & formations
 │   │   │   ├── CombatSystem.ts          # Attack, damage, high ground
 │   │   │   ├── SelectionSystem.ts       # Unit/building selection
@@ -48,11 +49,14 @@ voidstrike/
 │   │   │   ├── VisionSystem.ts          # Fog of war visibility
 │   │   │   ├── AbilitySystem.ts         # Unit abilities & cooldowns
 │   │   │   ├── AISystem.ts              # Basic AI opponent
-│   │   │   ├── EnhancedAISystem.ts      # Advanced AI with build orders
+│   │   │   ├── EnhancedAISystem.ts      # Advanced AI with build orders & counter-building
+│   │   │   ├── AIMicroSystem.ts         # AI unit micro (kiting, focus fire, positioning)
 │   │   │   ├── UnitMechanicsSystem.ts   # Transform, cloak, transport, heal
 │   │   │   ├── BuildingMechanicsSystem.ts # Lift-off, addons, lowering
 │   │   │   ├── GameStateSystem.ts       # Victory/defeat conditions
 │   │   │   └── SaveLoadSystem.ts        # Game save/load functionality
+│   │   ├── ai/
+│   │   │   └── BehaviorTree.ts          # Behavior tree for unit AI micro
 │   │   ├── components/
 │   │   │   ├── Transform.ts
 │   │   │   ├── Health.ts
@@ -771,6 +775,153 @@ getEffectiveDamage(); // Base damage * buff modifiers
 - concussive_shells: -50% speed for 1.07s
 - combat_shield: +10 max HP (permanent)
 ```
+
+## Dynamic Pathfinding System
+
+### PathfindingSystem (`PathfindingSystem.ts`)
+
+Manages dynamic path calculation with obstacle detection and automatic repathing:
+
+```typescript
+// Path invalidation on obstacle changes
+eventBus.on('building:placed', (data) => {
+  blockArea(data.position, data.width, data.height);
+  invalidateAffectedPaths();
+});
+
+eventBus.on('building:destroyed', (data) => {
+  unblockArea(data.position, data.width, data.height);
+  invalidateAffectedPaths();
+});
+
+// Periodic stuck detection
+const REPATH_INTERVAL_TICKS = 40;  // Check every 2 seconds
+const MAX_STUCK_TICKS = 20;        // Repath if no movement for 1 second
+
+// Automatic repath when:
+// 1. Obstacle placed in current path
+// 2. Unit hasn't moved for MAX_STUCK_TICKS
+// 3. Periodic check finds blocked cells ahead
+```
+
+Features:
+- **Path Invalidation**: When buildings are placed/destroyed, affected unit paths are recalculated
+- **Stuck Detection**: Units that haven't moved are automatically repathed
+- **Periodic Repath**: Moving units periodically check for blocked paths
+- **Priority Queue**: Stuck units get higher repath priority than periodic checks
+
+## AI Micro System
+
+### AIMicroSystem (`AIMicroSystem.ts`)
+
+Handles tactical unit control for AI players:
+
+```typescript
+// Kiting for ranged units
+if (shouldKite(unit, nearestMeleeEnemy)) {
+  kiteAwayFrom(unit, enemy.position);
+  reacquireTarget(unit);
+}
+
+// Focus fire on low-health targets
+const FOCUS_FIRE_THRESHOLD = 0.7;
+if (currentTarget.healthPercent > FOCUS_FIRE_THRESHOLD) {
+  const betterTarget = findLowHealthTarget();
+  if (betterTarget) switchTarget(unit, betterTarget);
+}
+
+// Threat assessment
+interface ThreatInfo {
+  entityId: number;
+  threatScore: number;    // Based on DPS, priority, distance
+  distance: number;
+  healthPercent: number;
+  dps: number;
+}
+```
+
+Features:
+- **Kiting Logic**: Ranged units maintain distance from melee threats
+- **Focus Fire**: AI coordinates attacks on low-health or high-priority targets
+- **Threat Assessment**: Ranks nearby enemies by threat score
+- **Retreat Logic**: Damaged units retreat to base when overwhelmed
+
+### Counter-Building System
+
+Analyzes enemy composition and recommends unit production:
+
+```typescript
+interface EnemyComposition {
+  infantry: number;
+  vehicles: number;
+  air: number;
+  workers: number;
+  total: number;
+}
+
+// Counter matrix
+const COUNTER_MATRIX = {
+  marine: ['hellion', 'hellbat', 'siege_tank'],
+  siege_tank: ['viking', 'banshee', 'marine'],
+  thor: ['marine', 'marauder', 'siege_tank'],
+};
+
+// AI adapts production to counter enemy
+if (enemyComp.air > 0.3 * enemyComp.total) {
+  prioritize(['viking', 'marine', 'thor']);
+}
+```
+
+Enabled for 'hard', 'very_hard', and 'insane' difficulties.
+
+## Behavior Tree System
+
+### BehaviorTree (`ai/BehaviorTree.ts`)
+
+Composable behavior tree for unit AI decision making:
+
+```typescript
+// Node types
+type BehaviorStatus = 'success' | 'failure' | 'running';
+
+// Composite nodes
+selector(...children);   // OR - try until one succeeds
+sequence(...children);   // AND - try until one fails
+parallel(threshold, ...children);  // Run all, succeed if N succeed
+
+// Decorator nodes
+inverter(child);         // Invert result
+condition(predicate, child);  // Only run if condition true
+cooldown(ms, child);     // Rate limit execution
+
+// Action nodes
+action((ctx) => boolean);  // Execute and return success/failure
+wait(ms);                  // Wait for duration
+```
+
+Example combat micro tree:
+
+```typescript
+const combatMicroTree = selector(
+  // Priority 1: Kite from melee enemies
+  sequence(
+    action(ctx => shouldKite(ctx)),
+    action(ctx => executeKite(ctx))
+  ),
+  // Priority 2: Retreat if in danger
+  sequence(
+    action(ctx => isInDanger(ctx)),
+    action(ctx => retreat(ctx))
+  ),
+  // Priority 3: Optimal positioning
+  action(ctx => positionForCombat(ctx))
+);
+```
+
+Features:
+- **Composable**: Build complex behaviors from simple nodes
+- **Stateful**: Blackboard stores per-unit decision data
+- **Reusable**: Same tree works for multiple units
 
 ## Audio Asset Guidelines
 

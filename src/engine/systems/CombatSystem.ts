@@ -275,6 +275,8 @@ export class CombatSystem extends System {
           playerId: selectable.playerId,
           buildingType: buildingComp.buildingId,
           position: { x: transform.x, y: transform.y },
+          width: buildingComp.width,
+          height: buildingComp.height,
         });
 
         // Schedule entity for destruction

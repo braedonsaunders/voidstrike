@@ -18,6 +18,8 @@ import { UnitMechanicsSystem } from '../systems/UnitMechanicsSystem';
 import { BuildingMechanicsSystem } from '../systems/BuildingMechanicsSystem';
 import { GameStateSystem } from '../systems/GameStateSystem';
 import { SaveLoadSystem } from '../systems/SaveLoadSystem';
+import { PathfindingSystem } from '../systems/PathfindingSystem';
+import { AIMicroSystem } from '../systems/AIMicroSystem';
 
 export type GameState = 'initializing' | 'running' | 'paused' | 'ended';
 
@@ -53,6 +55,8 @@ export class Game {
   public audioSystem: AudioSystem;
   public gameStateSystem: GameStateSystem;
   public saveLoadSystem: SaveLoadSystem;
+  public pathfindingSystem: PathfindingSystem;
+  public aiMicroSystem: AIMicroSystem;
 
   private gameLoop: GameLoop;
   private state: GameState = 'initializing';
@@ -77,6 +81,12 @@ export class Game {
 
     // Initialize save/load system
     this.saveLoadSystem = new SaveLoadSystem(this);
+
+    // Initialize pathfinding system
+    this.pathfindingSystem = new PathfindingSystem(this, this.config.mapWidth, this.config.mapHeight);
+
+    // Initialize AI micro system
+    this.aiMicroSystem = new AIMicroSystem(this);
 
     this.initializeSystems();
   }
@@ -106,6 +116,7 @@ export class Game {
     this.world.addSystem(new SpawnSystem(this));
     this.world.addSystem(new BuildingPlacementSystem(this));
     this.world.addSystem(new SelectionSystem(this));
+    this.world.addSystem(this.pathfindingSystem); // Dynamic pathfinding with obstacle detection
     this.world.addSystem(new BuildingMechanicsSystem(this)); // Lift-off, Addons, Building attacks
     this.world.addSystem(new UnitMechanicsSystem(this)); // Transform, Cloak, Transport, Heal, Repair
     this.world.addSystem(new MovementSystem(this));
@@ -121,7 +132,11 @@ export class Game {
 
     if (this.config.aiEnabled) {
       if (this.config.useEnhancedAI) {
-        this.world.addSystem(new EnhancedAISystem(this, this.config.aiDifficulty));
+        const enhancedAI = new EnhancedAISystem(this, this.config.aiDifficulty);
+        this.world.addSystem(enhancedAI);
+        this.world.addSystem(this.aiMicroSystem); // AI unit micro (kiting, focus fire)
+        // Register AI player for micro system
+        this.aiMicroSystem.registerAIPlayer('player2');
       } else {
         this.world.addSystem(new AISystem(this));
       }
