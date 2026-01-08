@@ -140,7 +140,9 @@ export class EffectsRenderer {
       }
     }
 
-    const text = this.scene.add.text(x, y - 10, Math.round(damage).toString(), {
+    // Spawn damage number well ABOVE the target (y - 25 in screen coords)
+    const startY = y - 25;
+    const text = this.scene.add.text(x, startY, Math.round(damage).toString(), {
       fontSize: '14px',
       fontFamily: 'Arial',
       color: '#ffff00',
@@ -151,12 +153,12 @@ export class EffectsRenderer {
     text.setDepth(250);
 
     this.damageNumbers.push({
-      x, y: y - 10,
+      x, y: startY,
       damage,
       progress: 0,
       duration: 700,
       text,
-      velocityY: -30,
+      velocityY: -40, // Float upward faster
     });
   }
 
