@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { MapData, MapCell, TerrainType, ElevationLevel } from '@/data/maps';
 import { BiomeConfig, BIOMES, blendBiomeColors, BiomeType, getBiomeShaderConfig } from './Biomes';
 import { createTerrainShaderMaterial, updateTerrainShader } from './shaders/TerrainShader';
+import { createSC2TerrainShaderMaterial, getSC2BiomeConfig, updateSC2TerrainShader } from './shaders/SC2TerrainShader';
 
 // Terrain subdivision for smoother rendering
 const SUBDIVISIONS = 2; // 2x2 subdivisions per cell for better quality
@@ -76,8 +77,8 @@ export class Terrain {
   private gridWidth: number;
   private gridHeight: number;
 
-  // Flag to use modern shader (can be toggled for performance testing)
-  private static USE_MODERN_SHADER = true;
+  // Flag to use SC2-quality shader (can be toggled for performance testing)
+  private static USE_SC2_SHADER = true;
 
   constructor(config: TerrainConfig) {
     this.mapData = config.mapData;
@@ -91,9 +92,14 @@ export class Terrain {
 
     this.geometry = this.createGeometry();
 
-    // Create modern procedural shader material
-    const shaderConfig = getBiomeShaderConfig(this.biome);
-    this.material = createTerrainShaderMaterial(shaderConfig);
+    // Create SC2-level quality shader material
+    if (Terrain.USE_SC2_SHADER) {
+      const sc2Config = getSC2BiomeConfig(this.mapData.biome || 'grassland');
+      this.material = createSC2TerrainShaderMaterial(sc2Config);
+    } else {
+      const shaderConfig = getBiomeShaderConfig(this.biome);
+      this.material = createTerrainShaderMaterial(shaderConfig);
+    }
 
     this.mesh = new THREE.Mesh(this.geometry, this.material);
     this.mesh.receiveShadow = true;
@@ -103,7 +109,11 @@ export class Terrain {
 
   // Update shader uniforms (call each frame for animated effects)
   public update(deltaTime: number, sunDirection?: THREE.Vector3): void {
-    updateTerrainShader(this.material, deltaTime, sunDirection);
+    if (Terrain.USE_SC2_SHADER) {
+      updateSC2TerrainShader(this.material, deltaTime, sunDirection);
+    } else {
+      updateTerrainShader(this.material, deltaTime, sunDirection);
+    }
   }
 
   private createGeometry(): THREE.BufferGeometry {

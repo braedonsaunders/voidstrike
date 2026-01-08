@@ -46,21 +46,36 @@ export class EnvironmentManager {
     this.terrain = new Terrain({ mapData });
     scene.add(this.terrain.mesh);
 
-    // Setup lighting based on biome
-    this.ambientLight = new THREE.AmbientLight(this.biome.colors.ambient, 0.6);
+    // Setup SC2-quality lighting based on biome
+    // Main ambient light - slightly tinted for atmosphere
+    this.ambientLight = new THREE.AmbientLight(this.biome.colors.ambient, 0.5);
     scene.add(this.ambientLight);
 
-    this.directionalLight = new THREE.DirectionalLight(this.biome.colors.sun, 1.2);
+    // Key light (main sun) - warm and directional
+    this.directionalLight = new THREE.DirectionalLight(this.biome.colors.sun, 1.4);
     this.directionalLight.position.set(50, 80, 50);
     // PERFORMANCE: Disable shadow casting - 2048x2048 shadow maps cause <1 FPS on M1 Macs
     // Shadow mapping is extremely expensive and not essential for RTS gameplay
     this.directionalLight.castShadow = false;
     scene.add(this.directionalLight);
 
-    // Add a fill light to compensate for lack of shadows
-    const fillLight = new THREE.DirectionalLight(this.biome.colors.sun, 0.3);
-    fillLight.position.set(-30, 40, -30);
+    // Fill light - cooler tint for shadows, adds depth
+    const fillLight = new THREE.DirectionalLight(0x8090b0, 0.4);
+    fillLight.position.set(-40, 50, -40);
     scene.add(fillLight);
+
+    // Back/rim light - adds definition to objects
+    const backLight = new THREE.DirectionalLight(this.biome.colors.sun, 0.25);
+    backLight.position.set(-20, 30, 60);
+    scene.add(backLight);
+
+    // Hemisphere light for realistic sky/ground bounce
+    const hemiLight = new THREE.HemisphereLight(
+      this.biome.colors.sky, // Sky color
+      new THREE.Color(this.biome.colors.ground?.[0] || 0x444444), // Ground color
+      0.3
+    );
+    scene.add(hemiLight);
 
     // Setup fog based on biome
     const fogNear = mapData.fogNear ?? 60;

@@ -15,6 +15,10 @@ export class SC2PostProcessing {
   private scene: THREE.Scene;
   private camera: THREE.Camera;
 
+  // Dedicated camera and scene for post-processing (critical for correct rendering)
+  private postProcessCamera: THREE.OrthographicCamera;
+  private postProcessScene: THREE.Scene;
+
   // Render targets
   private renderTarget: THREE.WebGLRenderTarget;
   private bloomRenderTarget: THREE.WebGLRenderTarget;
@@ -43,6 +47,11 @@ export class SC2PostProcessing {
     this.scene = scene;
     this.camera = camera;
 
+    // Create orthographic camera for fullscreen quad rendering
+    // This is CRITICAL - using perspective camera breaks screen-space effects
+    this.postProcessCamera = new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1);
+    this.postProcessScene = new THREE.Scene();
+
     const size = renderer.getSize(new THREE.Vector2());
     const pixelRatio = renderer.getPixelRatio();
 
@@ -68,9 +77,10 @@ export class SC2PostProcessing {
     this.blurRenderTargetH = new THREE.WebGLRenderTarget(bloomWidth, bloomHeight, rtParams);
     this.blurRenderTargetV = new THREE.WebGLRenderTarget(bloomWidth, bloomHeight, rtParams);
 
-    // Create fullscreen quad
+    // Create fullscreen quad and add to post-process scene
     const quadGeometry = new THREE.PlaneGeometry(2, 2);
     this.fullscreenQuad = new THREE.Mesh(quadGeometry, new THREE.MeshBasicMaterial());
+    this.postProcessScene.add(this.fullscreenQuad);
 
     // Create shader materials
     this.bloomExtractMaterial = this.createBloomExtractMaterial();
@@ -222,16 +232,21 @@ export class SC2PostProcessing {
     const renderer = this.renderer;
     const originalRenderTarget = renderer.getRenderTarget();
 
-    // 1. Render scene to render target
+    // 1. Render main scene to render target (uses game camera)
     renderer.setRenderTarget(this.renderTarget);
     renderer.clear();
     renderer.render(this.scene, this.camera);
+
+    // All subsequent passes use the orthographic post-process camera
+    const postCam = this.postProcessCamera;
+    const postScene = this.postProcessScene;
 
     // 2. Extract bright areas for bloom
     this.fullscreenQuad.material = this.bloomExtractMaterial;
     this.bloomExtractMaterial.uniforms.tDiffuse.value = this.renderTarget.texture;
     renderer.setRenderTarget(this.bloomRenderTarget);
-    renderer.render(this.fullscreenQuad, this.camera);
+    renderer.clear();
+    renderer.render(postScene, postCam);
 
     // 3. Horizontal blur
     this.fullscreenQuad.material = this.blurMaterialH;
@@ -241,7 +256,8 @@ export class SC2PostProcessing {
       this.blurRenderTargetH.height
     );
     renderer.setRenderTarget(this.blurRenderTargetH);
-    renderer.render(this.fullscreenQuad, this.camera);
+    renderer.clear();
+    renderer.render(postScene, postCam);
 
     // 4. Vertical blur
     this.fullscreenQuad.material = this.blurMaterialV;
@@ -251,18 +267,21 @@ export class SC2PostProcessing {
       this.blurRenderTargetV.height
     );
     renderer.setRenderTarget(this.blurRenderTargetV);
-    renderer.render(this.fullscreenQuad, this.camera);
+    renderer.clear();
+    renderer.render(postScene, postCam);
 
     // 5. Second blur pass for smoother bloom
     this.blurMaterialH.uniforms.tDiffuse.value = this.blurRenderTargetV.texture;
     renderer.setRenderTarget(this.blurRenderTargetH);
-    renderer.render(this.fullscreenQuad, this.camera);
+    renderer.clear();
+    renderer.render(postScene, postCam);
 
     this.blurMaterialV.uniforms.tDiffuse.value = this.blurRenderTargetH.texture;
     renderer.setRenderTarget(this.blurRenderTargetV);
-    renderer.render(this.fullscreenQuad, this.camera);
+    renderer.clear();
+    renderer.render(postScene, postCam);
 
-    // 6. Composite final image
+    // 6. Composite final image to screen
     this.fullscreenQuad.material = this.compositeMaterial;
     this.compositeMaterial.uniforms.tDiffuse.value = this.renderTarget.texture;
     this.compositeMaterial.uniforms.tBloom.value = this.blurRenderTargetV.texture;
@@ -271,7 +290,8 @@ export class SC2PostProcessing {
       this.renderTarget.height
     );
     renderer.setRenderTarget(originalRenderTarget);
-    renderer.render(this.fullscreenQuad, this.camera);
+    renderer.clear();
+    renderer.render(postScene, postCam);
   }
 
   setSize(width: number, height: number): void {
