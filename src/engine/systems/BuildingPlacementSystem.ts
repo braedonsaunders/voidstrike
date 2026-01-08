@@ -240,8 +240,9 @@ export class BuildingPlacementSystem extends System {
       building.state = 'complete';
       health.current = health.max;
 
-      // Add supply if applicable
-      if (building.supplyProvided > 0) {
+      // Add supply if applicable - only for player1 buildings
+      const selectable = entity.get<Selectable>('Selectable');
+      if (building.supplyProvided > 0 && selectable?.playerId === 'player1') {
         useGameStore.getState().addMaxSupply(building.supplyProvided);
       }
 
@@ -251,6 +252,7 @@ export class BuildingPlacementSystem extends System {
       this.game.eventBus.emit('building:complete', {
         entityId: data.entityId,
         buildingType: building.buildingId,
+        playerId: selectable?.playerId,
       });
     }
   }
@@ -473,16 +475,17 @@ export class BuildingPlacementSystem extends System {
         if (!wasComplete && building.isComplete()) {
           health.current = health.max;
 
-          // Add supply if applicable
-          if (building.supplyProvided > 0) {
+          // Get the building's owner
+          const selectable = entity.get<Selectable>('Selectable');
+
+          // Add supply if applicable - only for player1 buildings
+          if (building.supplyProvided > 0 && selectable?.playerId === 'player1') {
             useGameStore.getState().addMaxSupply(building.supplyProvided);
           }
 
           // Release workers
           this.releaseWorkersFromBuilding(entity.id);
 
-          // Get the building's owner
-          const selectable = entity.get<Selectable>('Selectable');
           this.game.eventBus.emit('building:complete', {
             entityId: entity.id,
             buildingType: building.buildingId,

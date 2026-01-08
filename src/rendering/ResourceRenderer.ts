@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { World } from '@/engine/ecs/World';
 import { Transform } from '@/engine/components/Transform';
 import { Resource } from '@/engine/components/Resource';
+import { Selectable } from '@/engine/components/Selectable';
 import { Terrain } from './Terrain';
 import AssetManager from '@/assets/AssetManager';
 
@@ -15,10 +16,11 @@ interface InstancedResourceGroup {
   baseScale: number; // Base scale from model normalization
 }
 
-// Track per-resource rotation for visual variety
+// Track per-resource rotation and selection ring
 interface ResourceData {
   rotation: number;
   lastScale: number;
+  selectionRing: THREE.Mesh | null;
 }
 
 const MAX_RESOURCES_PER_TYPE = 50;
@@ -34,6 +36,10 @@ export class ResourceRenderer {
   // Per-resource data
   private resourceData: Map<number, ResourceData> = new Map();
 
+  // Selection ring resources
+  private selectionGeometry: THREE.RingGeometry;
+  private selectionMaterial: THREE.MeshBasicMaterial;
+
   // Reusable objects for matrix calculations
   private tempMatrix: THREE.Matrix4 = new THREE.Matrix4();
   private tempPosition: THREE.Vector3 = new THREE.Vector3();
@@ -45,6 +51,15 @@ export class ResourceRenderer {
     this.scene = scene;
     this.world = world;
     this.terrain = terrain ?? null;
+
+    // Selection ring for resources (yellow for neutral)
+    this.selectionGeometry = new THREE.RingGeometry(1.2, 1.5, 16);
+    this.selectionMaterial = new THREE.MeshBasicMaterial({
+      color: 0xffff00,
+      transparent: true,
+      opacity: 0.6,
+      side: THREE.DoubleSide,
+    });
   }
 
   /**
@@ -131,14 +146,21 @@ export class ResourceRenderer {
   }
 
   /**
-   * Get or create per-resource data (rotation)
+   * Get or create per-resource data (rotation, selection ring)
    */
   private getOrCreateResourceData(entityId: number): ResourceData {
     let data = this.resourceData.get(entityId);
     if (!data) {
+      // Create selection ring
+      const selectionRing = new THREE.Mesh(this.selectionGeometry, this.selectionMaterial);
+      selectionRing.rotation.x = -Math.PI / 2;
+      selectionRing.visible = false;
+      this.scene.add(selectionRing);
+
       data = {
         rotation: Math.random() * Math.PI * 2,
         lastScale: 1,
+        selectionRing,
       };
       this.resourceData.set(entityId, data);
     }
@@ -175,12 +197,19 @@ export class ResourceRenderer {
       const group = this.getOrCreateInstancedGroup(resource.resourceType);
       const data = this.getOrCreateResourceData(entity.id);
 
+      // Get terrain height
+      const terrainHeight = this.terrain?.getHeightAt(transform.x, transform.y) ?? 0;
+
+      // Update selection ring
+      const selectable = entity.get<Selectable>('Selectable');
+      if (data.selectionRing) {
+        data.selectionRing.position.set(transform.x, terrainHeight + 0.05, transform.y);
+        data.selectionRing.visible = selectable?.isSelected ?? false;
+      }
+
       if (group.mesh.count < group.maxInstances) {
         const instanceIndex = group.mesh.count;
         group.entityIds[instanceIndex] = entity.id;
-
-        // Get terrain height
-        const terrainHeight = this.terrain?.getHeightAt(transform.x, transform.y) ?? 0;
 
         // Scale based on remaining amount, including base scale from model
         const amountScale = 0.5 + resource.getPercentRemaining() * 0.5;
@@ -206,8 +235,11 @@ export class ResourceRenderer {
     }
 
     // Clean up resource data for destroyed entities
-    for (const entityId of this.resourceData.keys()) {
+    for (const [entityId, data] of this.resourceData) {
       if (!currentIds.has(entityId)) {
+        if (data.selectionRing) {
+          this.scene.remove(data.selectionRing);
+        }
         this.resourceData.delete(entityId);
       }
     }
@@ -222,6 +254,16 @@ export class ResourceRenderer {
       }
     }
     this.instancedGroups.clear();
+
+    // Clean up selection rings
+    for (const data of this.resourceData.values()) {
+      if (data.selectionRing) {
+        this.scene.remove(data.selectionRing);
+      }
+    }
     this.resourceData.clear();
+
+    this.selectionGeometry.dispose();
+    this.selectionMaterial.dispose();
   }
 }

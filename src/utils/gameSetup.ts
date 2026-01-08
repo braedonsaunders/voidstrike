@@ -142,7 +142,8 @@ function spawnMineralPatch(game: Game, x: number, y: number, amount: number): vo
   const entity = world.createEntity();
   entity
     .add(new Transform(x, y, 0))
-    .add(new Resource('minerals', amount, 2, 5, 2));
+    .add(new Resource('minerals', amount, 2, 5, 2))
+    .add(new Selectable(1.5, 0, 'neutral')); // Selectable by anyone, priority 0 (lowest)
 }
 
 function spawnVespeneGeyser(game: Game, x: number, y: number, amount: number): void {
@@ -150,7 +151,8 @@ function spawnVespeneGeyser(game: Game, x: number, y: number, amount: number): v
   const entity = world.createEntity();
   entity
     .add(new Transform(x, y, 0))
-    .add(new Resource('vespene', amount, 3, 4, 2));
+    .add(new Resource('vespene', amount, 3, 4, 2))
+    .add(new Selectable(2.0, 0, 'neutral')); // Selectable by anyone, priority 0 (lowest)
 }
 
 function spawnUnit(
