@@ -16,7 +16,8 @@
 ### SC2-Level Rendering Systems
 - [x] **SC2SelectionSystem** - Animated glowing selection rings with GLSL shaders
 - [x] **SC2ParticleSystem** - GPU-instanced particles (muzzle flashes, explosions, debris)
-- [x] **SC2PostProcessing** - Bloom, vignette, color grading, ACES tone mapping
+- [x] **SC2PostProcessing** - Bloom, vignette, color grading, ACES tone mapping (fixed black screen bug)
+- [x] **SC2TerrainShader** - Multi-layer procedural texturing with PBR-like lighting
 
 ### Visual Features
 - [x] Team-colored pulsing selection rings with shimmer animation
