@@ -94,9 +94,11 @@ export class Terrain {
 
     // Create SC2-level quality shader material
     if (Terrain.USE_SC2_SHADER) {
+      console.log('[Terrain] Using SC2 terrain shader for biome:', this.mapData.biome || 'grassland');
       const sc2Config = getSC2BiomeConfig(this.mapData.biome || 'grassland');
       this.material = createSC2TerrainShaderMaterial(sc2Config);
     } else {
+      console.log('[Terrain] Using basic terrain shader');
       const shaderConfig = getBiomeShaderConfig(this.biome);
       this.material = createTerrainShaderMaterial(shaderConfig);
     }

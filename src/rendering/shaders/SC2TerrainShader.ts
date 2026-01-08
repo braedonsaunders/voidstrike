@@ -487,7 +487,17 @@ export interface SC2TerrainShaderConfig {
 }
 
 export function createSC2TerrainShaderMaterial(config: SC2TerrainShaderConfig): THREE.ShaderMaterial {
-  return new THREE.ShaderMaterial({
+  console.log('[SC2TerrainShader] Creating material with config:', {
+    groundColor1: '#' + config.groundColor1.getHexString(),
+    groundColor2: '#' + config.groundColor2.getHexString(),
+    rockColor: '#' + config.rockColor.getHexString(),
+    cliffColor: '#' + config.cliffColor.getHexString(),
+    accentColor: '#' + config.accentColor.getHexString(),
+    fogDensity: config.fogDensity,
+    snowLine: config.snowLine,
+  });
+
+  const material = new THREE.ShaderMaterial({
     vertexShader: sc2TerrainVertexShader,
     fragmentShader: sc2TerrainFragmentShader,
     uniforms: {
@@ -506,6 +516,19 @@ export function createSC2TerrainShaderMaterial(config: SC2TerrainShaderConfig): 
     vertexColors: true,
     side: THREE.FrontSide,
   });
+
+  // Log shader compilation status after first render
+  setTimeout(() => {
+    // Cast to any to access internal program property
+    const prog = (material as unknown as { program?: unknown }).program;
+    if (prog) {
+      console.log('[SC2TerrainShader] Shader compiled successfully');
+    } else {
+      console.warn('[SC2TerrainShader] Shader may not have compiled yet or has errors');
+    }
+  }, 1000);
+
+  return material;
 }
 
 export function getSC2BiomeConfig(biomeType: string): SC2TerrainShaderConfig {
