@@ -428,8 +428,8 @@ void main() {
                    cliffCol * cliffWeight +
                    dirtCol * dirtWeight;
 
-  // Mix with vertex color for map-specific variation
-  baseColor = mix(baseColor, vColor, 0.25);
+  // Mix with vertex color for map-specific variation (reduced to let shader textures dominate)
+  baseColor = mix(baseColor, vColor, 0.1);
 
   // Add accent color in specific areas
   float accentFactor = smoothstep(0.7, 0.9, blendNoise1) * smoothstep(0.3, 0.15, slope);
@@ -509,66 +509,67 @@ export function createSC2TerrainShaderMaterial(config: SC2TerrainShaderConfig): 
 }
 
 export function getSC2BiomeConfig(biomeType: string): SC2TerrainShaderConfig {
+  // More vibrant SC2-style colors for each biome
   const configs: Record<string, SC2TerrainShaderConfig> = {
     grassland: {
-      groundColor1: new THREE.Color(0x4a8b45),
-      groundColor2: new THREE.Color(0x8b7355),
-      rockColor: new THREE.Color(0x6a6a6a),
-      cliffColor: new THREE.Color(0x5a5a5a),
-      accentColor: new THREE.Color(0x6aaa60),
-      fogColor: new THREE.Color(0xc0d8e8),
+      groundColor1: new THREE.Color(0x5aad55), // Vibrant green grass
+      groundColor2: new THREE.Color(0x9a8060), // Rich brown dirt
+      rockColor: new THREE.Color(0x707070),    // Gray rock
+      cliffColor: new THREE.Color(0x606060),   // Dark cliff
+      accentColor: new THREE.Color(0x7acc70),  // Bright grass highlights
+      fogColor: new THREE.Color(0xc5ddf0),     // Sky blue fog
       snowLine: -1,
-      fogDensity: 0.8,
+      fogDensity: 0.6,
     },
     desert: {
-      groundColor1: new THREE.Color(0xd4b36a),
-      groundColor2: new THREE.Color(0xb09060),
-      rockColor: new THREE.Color(0x9b7b5a),
-      cliffColor: new THREE.Color(0x8b6b4a),
-      accentColor: new THREE.Color(0xd4c080),
-      fogColor: new THREE.Color(0xe8d8c0),
+      groundColor1: new THREE.Color(0xe8c878), // Golden sand
+      groundColor2: new THREE.Color(0xc49858), // Rich earth
+      rockColor: new THREE.Color(0xb08060),    // Orange-brown rock
+      cliffColor: new THREE.Color(0xa07050),   // Sandstone cliff
+      accentColor: new THREE.Color(0xf0d890),  // Sunlit sand
+      fogColor: new THREE.Color(0xf0e0c8),     // Desert haze
       snowLine: -1,
-      fogDensity: 0.5,
+      fogDensity: 0.4,
     },
     frozen: {
-      groundColor1: new THREE.Color(0xd8e8f8),
-      groundColor2: new THREE.Color(0xa0b8c8),
-      rockColor: new THREE.Color(0x8898b0),
-      cliffColor: new THREE.Color(0x7888a0),
-      accentColor: new THREE.Color(0xd0e8ff),
-      fogColor: new THREE.Color(0xd0e0f0),
-      snowLine: 2.0,
-      fogDensity: 1.0,
+      groundColor1: new THREE.Color(0xe8f4ff), // Bright snow
+      groundColor2: new THREE.Color(0xb0c8d8), // Ice blue
+      rockColor: new THREE.Color(0x9ab0c8),    // Frozen rock
+      cliffColor: new THREE.Color(0x8898b0),   // Ice cliff
+      accentColor: new THREE.Color(0xe0f0ff),  // Ice sparkle
+      fogColor: new THREE.Color(0xd8e8f8),     // Snowy fog
+      snowLine: 1.5,
+      fogDensity: 0.8,
     },
     volcanic: {
-      groundColor1: new THREE.Color(0x3a3a3a),
-      groundColor2: new THREE.Color(0x4a4040),
-      rockColor: new THREE.Color(0x4a4040),
-      cliffColor: new THREE.Color(0x3a3030),
-      accentColor: new THREE.Color(0xff6020),
-      fogColor: new THREE.Color(0x402020),
-      snowLine: -1,
-      fogDensity: 1.8,
-    },
-    void: {
-      groundColor1: new THREE.Color(0x2a2040),
-      groundColor2: new THREE.Color(0x1a1030),
-      rockColor: new THREE.Color(0x3a3050),
-      cliffColor: new THREE.Color(0x2a2040),
-      accentColor: new THREE.Color(0x8040ff),
-      fogColor: new THREE.Color(0x100820),
-      snowLine: -1,
-      fogDensity: 2.0,
-    },
-    jungle: {
-      groundColor1: new THREE.Color(0x3a5a35),
-      groundColor2: new THREE.Color(0x2a3a20),
-      rockColor: new THREE.Color(0x5a6a5a),
-      cliffColor: new THREE.Color(0x4a5a4a),
-      accentColor: new THREE.Color(0x5a8a50),
-      fogColor: new THREE.Color(0x405040),
+      groundColor1: new THREE.Color(0x404040), // Ash ground
+      groundColor2: new THREE.Color(0x503030), // Scorched earth
+      rockColor: new THREE.Color(0x505050),    // Dark volcanic rock
+      cliffColor: new THREE.Color(0x403030),   // Charred cliff
+      accentColor: new THREE.Color(0xff5500),  // Lava glow
+      fogColor: new THREE.Color(0x301818),     // Ash-laden air
       snowLine: -1,
       fogDensity: 1.5,
+    },
+    void: {
+      groundColor1: new THREE.Color(0x352850), // Deep purple
+      groundColor2: new THREE.Color(0x201838), // Dark void
+      rockColor: new THREE.Color(0x453860),    // Void rock
+      cliffColor: new THREE.Color(0x302848),   // Shadow cliff
+      accentColor: new THREE.Color(0x9050ff),  // Void energy
+      fogColor: new THREE.Color(0x180c28),     // Void mist
+      snowLine: -1,
+      fogDensity: 1.5,
+    },
+    jungle: {
+      groundColor1: new THREE.Color(0x3a6838), // Dark jungle green
+      groundColor2: new THREE.Color(0x504030), // Jungle floor dirt
+      rockColor: new THREE.Color(0x607058),    // Mossy rock
+      cliffColor: new THREE.Color(0x506048),   // Overgrown cliff
+      accentColor: new THREE.Color(0x60a858),  // Bright foliage
+      fogColor: new THREE.Color(0x405838),     // Humid jungle air
+      snowLine: -1,
+      fogDensity: 1.2,
     },
   };
 
