@@ -33,12 +33,26 @@ interface FocusFireIndicator {
   pulseTime: number;
 }
 
+interface ExplosionParticle {
+  mesh: THREE.Mesh;
+  velocity: THREE.Vector3;
+  progress: number;
+  duration: number;
+}
+
+interface FireEffect {
+  entityId: number;
+  particles: THREE.Points;
+  progress: number;
+}
+
 export class EffectsRenderer {
   private scene: THREE.Scene;
   private eventBus: EventBus;
   private attackEffects: AttackEffect[] = [];
   private hitEffects: HitEffect[] = [];
   private damageNumbers: DamageNumber[] = [];
+  private explosionParticles: ExplosionParticle[] = [];
   private focusFireIndicators: Map<number, FocusFireIndicator> = new Map();
   private targetAttackerCounts: Map<number, Set<number>> = new Map(); // targetId -> Set of attackerIds
 
@@ -53,6 +67,8 @@ export class EffectsRenderer {
   private deathMaterial: THREE.MeshBasicMaterial;
   private focusFireGeometry: THREE.RingGeometry;
   private focusFireMaterial: THREE.MeshBasicMaterial;
+  private explosionGeometry: THREE.SphereGeometry;
+  private explosionMaterial: THREE.MeshBasicMaterial;
   private damageCanvas: HTMLCanvasElement;
   private damageContext: CanvasRenderingContext2D;
 
@@ -98,6 +114,14 @@ export class EffectsRenderer {
       transparent: true,
       opacity: 0.6,
       side: THREE.DoubleSide,
+    });
+
+    // Explosion debris particles
+    this.explosionGeometry = new THREE.SphereGeometry(0.2, 6, 6);
+    this.explosionMaterial = new THREE.MeshBasicMaterial({
+      color: 0xff6600,
+      transparent: true,
+      opacity: 1,
     });
 
     // Canvas for damage numbers
@@ -156,6 +180,21 @@ export class EffectsRenderer {
       if (data.attackerId !== undefined && data.targetId !== undefined) {
         this.removeAttackerFromTarget(data.attackerId, data.targetId);
       }
+    });
+
+    // Building destroyed - create big explosion
+    this.eventBus.on('building:destroyed', (data: {
+      entityId: number;
+      playerId: string;
+      buildingType: string;
+      position: { x: number; y: number };
+    }) => {
+      this.createBuildingExplosion(
+        new THREE.Vector3(data.position.x, 0, data.position.y),
+        data.buildingType
+      );
+      // Clear any focus fire on this building
+      this.clearFocusFire(data.entityId);
     });
   }
 
@@ -232,6 +271,95 @@ export class EffectsRenderer {
       progress: 0,
       duration: 0.5,
       mesh,
+    });
+  }
+
+  /**
+   * Create a large explosion effect for building destruction
+   * Multiple debris particles + expanding ring + flash
+   */
+  private createBuildingExplosion(position: THREE.Vector3, buildingType: string): void {
+    // Determine explosion size based on building type
+    const isLargeBuilding = ['command_center', 'barracks', 'factory', 'starport'].includes(buildingType);
+    const particleCount = isLargeBuilding ? 20 : 12;
+    const explosionRadius = isLargeBuilding ? 4 : 2.5;
+
+    // Create debris particles flying outward
+    for (let i = 0; i < particleCount; i++) {
+      const material = this.explosionMaterial.clone();
+      // Vary colors between orange, red, and yellow
+      const colorChoice = Math.random();
+      if (colorChoice < 0.33) {
+        material.color.setHex(0xff6600); // Orange
+      } else if (colorChoice < 0.66) {
+        material.color.setHex(0xff2200); // Red-orange
+      } else {
+        material.color.setHex(0xffaa00); // Yellow-orange
+      }
+
+      const mesh = new THREE.Mesh(this.explosionGeometry, material);
+      mesh.position.copy(position);
+      mesh.position.y = 0.5 + Math.random() * 1.5; // Start at various heights
+      mesh.scale.setScalar(0.3 + Math.random() * 0.5);
+      this.scene.add(mesh);
+
+      // Random outward velocity
+      const angle = Math.random() * Math.PI * 2;
+      const speed = 3 + Math.random() * 4;
+      const upSpeed = 2 + Math.random() * 4;
+
+      this.explosionParticles.push({
+        mesh,
+        velocity: new THREE.Vector3(
+          Math.cos(angle) * speed,
+          upSpeed,
+          Math.sin(angle) * speed
+        ),
+        progress: 0,
+        duration: 0.8 + Math.random() * 0.4,
+      });
+    }
+
+    // Create expanding shockwave ring on ground
+    const ringMesh = new THREE.Mesh(
+      new THREE.RingGeometry(0.5, explosionRadius, 24),
+      new THREE.MeshBasicMaterial({
+        color: 0xff4400,
+        transparent: true,
+        opacity: 0.8,
+        side: THREE.DoubleSide,
+      })
+    );
+    ringMesh.position.copy(position);
+    ringMesh.position.y = 0.1;
+    ringMesh.rotation.x = -Math.PI / 2;
+    this.scene.add(ringMesh);
+
+    this.hitEffects.push({
+      position: position.clone(),
+      progress: 0,
+      duration: 0.6,
+      mesh: ringMesh,
+    });
+
+    // Create bright flash at center
+    const flashMesh = new THREE.Mesh(
+      new THREE.SphereGeometry(explosionRadius * 0.5, 12, 12),
+      new THREE.MeshBasicMaterial({
+        color: 0xffff88,
+        transparent: true,
+        opacity: 1,
+      })
+    );
+    flashMesh.position.copy(position);
+    flashMesh.position.y = 1;
+    this.scene.add(flashMesh);
+
+    this.hitEffects.push({
+      position: position.clone(),
+      progress: 0,
+      duration: 0.3,
+      mesh: flashMesh,
     });
   }
 
@@ -411,6 +539,7 @@ export class EffectsRenderer {
       if (effect.progress >= 1) {
         // Effect complete
         this.scene.remove(effect.mesh);
+        if (effect.mesh.geometry) effect.mesh.geometry.dispose();
         (effect.mesh.material as THREE.Material).dispose();
         this.hitEffects.splice(i, 1);
       } else {
@@ -418,6 +547,42 @@ export class EffectsRenderer {
         const scale = 1 + effect.progress * 2;
         effect.mesh.scale.set(scale, scale, 1);
         (effect.mesh.material as THREE.MeshBasicMaterial).opacity = 1 - effect.progress;
+      }
+    }
+
+    // Update explosion particles (debris flying outward with gravity)
+    const gravity = -15;
+    for (let i = this.explosionParticles.length - 1; i >= 0; i--) {
+      const particle = this.explosionParticles[i];
+      particle.progress += dt / particle.duration;
+
+      if (particle.progress >= 1) {
+        // Particle expired
+        this.scene.remove(particle.mesh);
+        (particle.mesh.material as THREE.Material).dispose();
+        this.explosionParticles.splice(i, 1);
+      } else {
+        // Apply velocity and gravity
+        particle.velocity.y += gravity * dt;
+        particle.mesh.position.x += particle.velocity.x * dt;
+        particle.mesh.position.y += particle.velocity.y * dt;
+        particle.mesh.position.z += particle.velocity.z * dt;
+
+        // Don't let particles go below ground
+        if (particle.mesh.position.y < 0.1) {
+          particle.mesh.position.y = 0.1;
+          particle.velocity.y = 0;
+          particle.velocity.x *= 0.5; // Friction
+          particle.velocity.z *= 0.5;
+        }
+
+        // Fade out in second half and shrink
+        if (particle.progress > 0.5) {
+          const fadeProgress = (particle.progress - 0.5) * 2;
+          (particle.mesh.material as THREE.MeshBasicMaterial).opacity = 1 - fadeProgress;
+          const shrink = 1 - fadeProgress * 0.5;
+          particle.mesh.scale.setScalar(shrink * (0.3 + Math.random() * 0.2));
+        }
       }
     }
 
@@ -473,7 +638,14 @@ export class EffectsRenderer {
     }
     for (const effect of this.hitEffects) {
       this.scene.remove(effect.mesh);
+      if (effect.mesh.geometry) effect.mesh.geometry.dispose();
       (effect.mesh.material as THREE.Material).dispose();
+    }
+
+    // Clean up explosion particles
+    for (const particle of this.explosionParticles) {
+      this.scene.remove(particle.mesh);
+      (particle.mesh.material as THREE.Material).dispose();
     }
 
     // Clean up damage numbers
@@ -499,9 +671,12 @@ export class EffectsRenderer {
     this.deathMaterial.dispose();
     this.focusFireGeometry.dispose();
     this.focusFireMaterial.dispose();
+    this.explosionGeometry.dispose();
+    this.explosionMaterial.dispose();
 
     this.attackEffects = [];
     this.hitEffects = [];
+    this.explosionParticles = [];
     this.damageNumbers = [];
     this.focusFireIndicators.clear();
     this.targetAttackerCounts.clear();
