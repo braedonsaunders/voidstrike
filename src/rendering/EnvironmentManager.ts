@@ -90,16 +90,22 @@ export class EnvironmentManager {
   private createEnhancedDecorations(): void {
     const getHeightAt = this.terrain.getHeightAt.bind(this.terrain);
 
-    // PERFORMANCE: Instanced trees - single draw call for all trees
-    if (this.biome.treeDensity > 0) {
-      this.trees = new InstancedTrees(this.mapData, this.biome, getHeightAt);
-      this.scene.add(this.trees.group);
-    }
+    // Check if map has explicit decorations defined
+    const hasExplicitDecorations = this.mapData.decorations && this.mapData.decorations.length > 0;
 
-    // PERFORMANCE: Instanced rocks - single draw call for all rocks
-    if (this.biome.rockDensity > 0) {
-      this.rocks = new InstancedRocks(this.mapData, this.biome, getHeightAt);
-      this.scene.add(this.rocks.group);
+    // Only use instanced random decorations if no explicit decorations defined
+    if (!hasExplicitDecorations) {
+      // PERFORMANCE: Instanced trees - single draw call for all trees
+      if (this.biome.treeDensity > 0) {
+        this.trees = new InstancedTrees(this.mapData, this.biome, getHeightAt);
+        this.scene.add(this.trees.group);
+      }
+
+      // PERFORMANCE: Instanced rocks - single draw call for all rocks
+      if (this.biome.rockDensity > 0) {
+        this.rocks = new InstancedRocks(this.mapData, this.biome, getHeightAt);
+        this.scene.add(this.rocks.group);
+      }
     }
 
     // PERFORMANCE: Instanced grass - thousands of grass blades in one draw call

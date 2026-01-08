@@ -1,5 +1,6 @@
 import {
   MapData,
+  MapDecoration,
   createTerrainGrid,
   createMineralLine,
   createVespeneGeysers,
@@ -34,6 +35,94 @@ import {
 
 const MAP_WIDTH = 176;
 const MAP_HEIGHT = 176;
+
+// Generate void-themed decorations
+function generateVoidDecorations(): MapDecoration[] {
+  const decorations: MapDecoration[] = [];
+
+  // Helper to add crystal formations
+  const addCrystalCluster = (cx: number, cy: number, count: number, spread: number) => {
+    for (let i = 0; i < count; i++) {
+      const angle = Math.random() * Math.PI * 2;
+      const dist = Math.random() * spread;
+      decorations.push({
+        type: 'crystal_formation',
+        x: cx + Math.cos(angle) * dist,
+        y: cy + Math.sin(angle) * dist,
+        scale: 0.6 + Math.random() * 0.8,
+        rotation: Math.random() * Math.PI * 2,
+      });
+    }
+  };
+
+  // Helper to add alien trees
+  const addAlienTrees = (cx: number, cy: number, count: number, spread: number) => {
+    for (let i = 0; i < count; i++) {
+      const angle = Math.random() * Math.PI * 2;
+      const dist = Math.random() * spread;
+      decorations.push({
+        type: 'tree_alien',
+        x: cx + Math.cos(angle) * dist,
+        y: cy + Math.sin(angle) * dist,
+        scale: 0.8 + Math.random() * 0.5,
+        rotation: Math.random() * Math.PI * 2,
+      });
+    }
+  };
+
+  // Helper to add rocks
+  const addRockCluster = (cx: number, cy: number, count: number, spread: number) => {
+    const rockTypes: Array<'rocks_large' | 'rocks_small' | 'rock_single'> = [
+      'rocks_large', 'rocks_small', 'rock_single'
+    ];
+    for (let i = 0; i < count; i++) {
+      const angle = Math.random() * Math.PI * 2;
+      const dist = Math.random() * spread;
+      decorations.push({
+        type: rockTypes[Math.floor(Math.random() * rockTypes.length)],
+        x: cx + Math.cos(angle) * dist,
+        y: cy + Math.sin(angle) * dist,
+        scale: 0.5 + Math.random() * 0.7,
+        rotation: Math.random() * Math.PI * 2,
+      });
+    }
+  };
+
+  // Crystal formations near center and obstacles
+  addCrystalCluster(88, 88, 8, 12); // Center
+  addCrystalCluster(40, 40, 5, 8);  // Top-left obstacle
+  addCrystalCluster(136, 136, 5, 8); // Bottom-right obstacle
+
+  // Crystal lines along edges
+  addCrystalCluster(88, 10, 4, 6);
+  addCrystalCluster(88, 166, 4, 6);
+  addCrystalCluster(10, 88, 3, 5);
+  addCrystalCluster(166, 88, 3, 5);
+
+  // Alien trees near cliffs
+  addAlienTrees(10, 135, 5, 8);
+  addAlienTrees(166, 41, 5, 8);
+  addAlienTrees(115, 10, 4, 6);
+  addAlienTrees(61, 166, 4, 6);
+
+  // Rock formations near destructibles
+  addRockCluster(22, 45, 4, 5);
+  addRockCluster(154, 131, 4, 5);
+  addRockCluster(60, 88, 3, 4);
+  addRockCluster(116, 88, 3, 4);
+
+  // Scattered rocks along borders
+  addRockCluster(20, 80, 2, 3);
+  addRockCluster(156, 96, 2, 3);
+
+  // Debris near battles areas
+  decorations.push({ type: 'debris', x: 70, y: 70, scale: 0.8 });
+  decorations.push({ type: 'debris', x: 106, y: 106, scale: 0.8 });
+  decorations.push({ type: 'ruined_wall', x: 85, y: 75, scale: 1 });
+  decorations.push({ type: 'ruined_wall', x: 91, y: 101, scale: 1 });
+
+  return decorations;
+}
 
 function generateVoidAssault(): MapData {
   // Create base terrain (low ground)
@@ -200,6 +289,9 @@ function generateVoidAssault(): MapData {
       { x: 60, y: 88, health: 1500 },
       { x: 116, y: 88, health: 1500 },
     ],
+
+    // Void-themed decorations with crystals and alien trees
+    decorations: generateVoidDecorations(),
 
     maxPlayers: 2,
     isRanked: true,

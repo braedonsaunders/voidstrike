@@ -63,6 +63,32 @@ export interface DestructibleRock {
   health: number;
 }
 
+// Decoration types that can be placed on maps
+export type DecorationType =
+  | 'tree_pine_tall'
+  | 'tree_pine_medium'
+  | 'tree_dead'
+  | 'tree_alien'
+  | 'tree_palm'
+  | 'tree_mushroom'
+  | 'rocks_large'
+  | 'rocks_small'
+  | 'rock_single'
+  | 'crystal_formation'
+  | 'bush'
+  | 'grass_clump'
+  | 'debris'
+  | 'escape_pod'
+  | 'ruined_wall';
+
+export interface MapDecoration {
+  type: DecorationType;
+  x: number;
+  y: number;
+  scale?: number;      // Default 1.0
+  rotation?: number;   // Radians, default random
+}
+
 export interface MapData {
   id: string;
   name: string;
@@ -82,6 +108,7 @@ export interface MapData {
   watchTowers: WatchTower[];
   ramps: Ramp[];
   destructibles: DestructibleRock[];
+  decorations?: MapDecoration[];  // Explicit decoration placements
 
   // Metadata
   maxPlayers: number;

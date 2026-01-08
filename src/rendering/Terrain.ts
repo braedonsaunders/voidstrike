@@ -538,8 +538,102 @@ export class MapDecorations {
     this.terrain = terrain;
     this.createWatchTowers(mapData);
     this.createDestructibles(mapData);
-    this.createTrees(mapData);
-    this.createRocks(mapData);
+
+    // Use explicit decorations from map data if available, otherwise use procedural
+    if (mapData.decorations && mapData.decorations.length > 0) {
+      this.createExplicitDecorations(mapData);
+    } else {
+      this.createTrees(mapData);
+      this.createRocks(mapData);
+    }
+  }
+
+  // Create explicit decorations from map data using GLB models
+  private createExplicitDecorations(mapData: MapData): void {
+    if (!mapData.decorations) return;
+
+    for (const decoration of mapData.decorations) {
+      const terrainHeight = this.terrain.getHeightAt(decoration.x, decoration.y);
+
+      // Try to get the GLB model for this decoration type
+      const model = AssetManager.getDecorationMesh(decoration.type);
+      if (model) {
+        model.position.set(decoration.x, terrainHeight, decoration.y);
+        if (decoration.scale) {
+          model.scale.setScalar(decoration.scale);
+        }
+        if (decoration.rotation !== undefined) {
+          model.rotation.y = decoration.rotation;
+        } else {
+          model.rotation.y = Math.random() * Math.PI * 2;
+        }
+        this.group.add(model);
+      } else {
+        // Fallback to procedural mesh for unloaded decoration types
+        this.createProceduralDecoration(decoration, terrainHeight);
+      }
+    }
+  }
+
+  // Fallback procedural decorations for when models aren't loaded
+  private createProceduralDecoration(
+    decoration: { type: string; x: number; y: number; scale?: number; rotation?: number },
+    terrainHeight: number
+  ): void {
+    const scale = decoration.scale ?? 1;
+    let mesh: THREE.Mesh | THREE.Group | null = null;
+
+    if (decoration.type.includes('tree')) {
+      // Create procedural tree
+      const group = new THREE.Group();
+      const trunk = new THREE.Mesh(
+        new THREE.CylinderGeometry(0.2 * scale, 0.3 * scale, 2 * scale, 6),
+        new THREE.MeshBasicMaterial({ color: 0x4a3520 })
+      );
+      trunk.position.y = scale;
+      group.add(trunk);
+
+      const foliage = new THREE.Mesh(
+        new THREE.ConeGeometry(1.2 * scale, 2.5 * scale, 8),
+        new THREE.MeshBasicMaterial({ color: 0x2d5a2d })
+      );
+      foliage.position.y = 2.5 * scale;
+      group.add(foliage);
+      mesh = group as unknown as THREE.Mesh;
+    } else if (decoration.type.includes('rock')) {
+      mesh = new THREE.Mesh(
+        new THREE.DodecahedronGeometry(0.8 * scale),
+        new THREE.MeshBasicMaterial({ color: 0x5a5a5a })
+      );
+    } else if (decoration.type === 'crystal_formation') {
+      mesh = new THREE.Mesh(
+        new THREE.OctahedronGeometry(0.6 * scale),
+        new THREE.MeshBasicMaterial({ color: 0x80a0ff, transparent: true, opacity: 0.7 })
+      );
+    } else if (decoration.type === 'bush' || decoration.type === 'grass_clump') {
+      mesh = new THREE.Mesh(
+        new THREE.SphereGeometry(0.4 * scale, 6, 4),
+        new THREE.MeshBasicMaterial({ color: 0x3a6a3a })
+      );
+    } else if (decoration.type === 'debris') {
+      mesh = new THREE.Mesh(
+        new THREE.BoxGeometry(0.5 * scale, 0.2 * scale, 0.5 * scale),
+        new THREE.MeshBasicMaterial({ color: 0x4a4a4a })
+      );
+    } else if (decoration.type === 'ruined_wall') {
+      mesh = new THREE.Mesh(
+        new THREE.BoxGeometry(2 * scale, 1.5 * scale, 0.3 * scale),
+        new THREE.MeshBasicMaterial({ color: 0x6a6a6a })
+      );
+    }
+
+    if (mesh) {
+      mesh.position.set(decoration.x, terrainHeight + (decoration.type.includes('rock') ? 0.3 : 0), decoration.y);
+      if (decoration.rotation !== undefined) {
+        mesh.rotation.y = decoration.rotation;
+      }
+      this.group.add(mesh);
+    }
   }
 
   private createWatchTowers(mapData: MapData): void {

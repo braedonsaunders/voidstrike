@@ -1,5 +1,6 @@
 import {
   MapData,
+  MapDecoration,
   createTerrainGrid,
   createMineralLine,
   createVespeneGeysers,
@@ -32,6 +33,109 @@ import {
 
 const MAP_WIDTH = 200;
 const MAP_HEIGHT = 200;
+
+// Generate decorations for the map
+function generateDecorations(): MapDecoration[] {
+  const decorations: MapDecoration[] = [];
+
+  // Helper to add tree cluster
+  const addTreeCluster = (cx: number, cy: number, count: number, spread: number) => {
+    const treeTypes: Array<'tree_pine_tall' | 'tree_pine_medium' | 'tree_dead'> = [
+      'tree_pine_tall', 'tree_pine_medium', 'tree_dead'
+    ];
+    for (let i = 0; i < count; i++) {
+      const angle = Math.random() * Math.PI * 2;
+      const dist = Math.random() * spread;
+      decorations.push({
+        type: treeTypes[Math.floor(Math.random() * treeTypes.length)],
+        x: cx + Math.cos(angle) * dist,
+        y: cy + Math.sin(angle) * dist,
+        scale: 0.7 + Math.random() * 0.6,
+        rotation: Math.random() * Math.PI * 2,
+      });
+    }
+  };
+
+  // Helper to add rock cluster
+  const addRockCluster = (cx: number, cy: number, count: number, spread: number) => {
+    const rockTypes: Array<'rocks_large' | 'rocks_small' | 'rock_single'> = [
+      'rocks_large', 'rocks_small', 'rock_single'
+    ];
+    for (let i = 0; i < count; i++) {
+      const angle = Math.random() * Math.PI * 2;
+      const dist = Math.random() * spread;
+      decorations.push({
+        type: rockTypes[Math.floor(Math.random() * rockTypes.length)],
+        x: cx + Math.cos(angle) * dist,
+        y: cy + Math.sin(angle) * dist,
+        scale: 0.5 + Math.random() * 0.8,
+        rotation: Math.random() * Math.PI * 2,
+      });
+    }
+  };
+
+  // Tree clusters along map edges (avoiding bases)
+  // Top edge
+  addTreeCluster(50, 15, 8, 10);
+  addTreeCluster(100, 12, 6, 8);
+  addTreeCluster(150, 15, 8, 10);
+
+  // Bottom edge
+  addTreeCluster(50, 185, 8, 10);
+  addTreeCluster(150, 188, 6, 8);
+
+  // Left edge
+  addTreeCluster(15, 60, 7, 8);
+  addTreeCluster(15, 100, 6, 8);
+  addTreeCluster(15, 140, 7, 8);
+
+  // Right edge
+  addTreeCluster(185, 60, 7, 8);
+  addTreeCluster(185, 100, 6, 8);
+  addTreeCluster(188, 140, 7, 8);
+
+  // Tree clusters near cliffs (corners)
+  addTreeCluster(25, 155, 10, 12); // Near bottom-left cliff
+  addTreeCluster(175, 45, 10, 12); // Near top-right cliff
+
+  // Trees near interior cliffs
+  addTreeCluster(50, 50, 8, 10);
+  addTreeCluster(150, 150, 8, 10);
+
+  // Rock clusters near cliffs
+  addRockCluster(35, 165, 5, 6);
+  addRockCluster(165, 35, 5, 6);
+  addRockCluster(55, 55, 4, 5);
+  addRockCluster(145, 145, 4, 5);
+
+  // Scattered rocks along paths
+  addRockCluster(80, 80, 3, 4);
+  addRockCluster(120, 120, 3, 4);
+  addRockCluster(100, 130, 2, 3);
+  addRockCluster(100, 70, 2, 3);
+
+  // Bush/grass decorations in open areas
+  for (let i = 0; i < 30; i++) {
+    const x = 30 + Math.random() * 140;
+    const y = 30 + Math.random() * 140;
+    // Avoid base areas
+    if ((x < 50 && y > 150) || (x > 150 && y < 50)) continue;
+    if ((x < 50 && y < 50) || (x > 150 && y > 150)) continue;
+    decorations.push({
+      type: Math.random() > 0.5 ? 'bush' : 'grass_clump',
+      x, y,
+      scale: 0.8 + Math.random() * 0.4,
+    });
+  }
+
+  // Debris near destructible rocks
+  decorations.push({ type: 'debris', x: 43, y: 143, scale: 1 });
+  decorations.push({ type: 'debris', x: 47, y: 147, scale: 0.8 });
+  decorations.push({ type: 'debris', x: 153, y: 53, scale: 1 });
+  decorations.push({ type: 'debris', x: 157, y: 57, scale: 0.8 });
+
+  return decorations;
+}
 
 function generateTrainingGrounds(): MapData {
   // Start with low ground (elevation 0)
@@ -246,6 +350,9 @@ function generateTrainingGrounds(): MapData {
       { x: 45, y: 145, health: 2000 },
       { x: 155, y: 55, health: 2000 },
     ],
+
+    // Explicit decoration placements using GLB models
+    decorations: generateDecorations(),
 
     maxPlayers: 2,
     isRanked: false,
