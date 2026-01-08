@@ -5,12 +5,12 @@ import { Velocity } from '../components/Velocity';
 import { Building } from '../components/Building';
 import { Game } from '../core/Game';
 
-// Steering behavior constants
-const SEPARATION_RADIUS = 2.0; // Units start avoiding at this distance
-const SEPARATION_STRENGTH = 8.0; // How strongly units push apart
-const MAX_AVOIDANCE_FORCE = 5.0; // Cap on avoidance force
-const BUILDING_AVOIDANCE_STRENGTH = 50.0; // Very strong push from buildings (hard collision)
-const BUILDING_AVOIDANCE_MARGIN = 1.0; // Extra margin around buildings
+// Steering behavior constants - SC2-style soft separation (units can overlap and clump)
+const SEPARATION_RADIUS = 1.0; // Units only avoid when nearly overlapping
+const SEPARATION_STRENGTH = 2.0; // Very soft push - allows clumping like SC2
+const MAX_AVOIDANCE_FORCE = 1.5; // Low cap - units can stack
+const BUILDING_AVOIDANCE_STRENGTH = 25.0; // Push from buildings (still solid)
+const BUILDING_AVOIDANCE_MARGIN = 0.25; // Minimal margin around buildings - hitbox should match model
 
 export class MovementSystem extends System {
   public priority = 10;
@@ -118,8 +118,9 @@ export class MovementSystem extends System {
   }
 
   /**
-   * Calculate separation force (boids-like avoidance)
-   * Units push away from nearby units to avoid overlapping
+   * Calculate separation force (SC2-style soft avoidance)
+   * Units can overlap and clump - separation is very soft
+   * Gathering workers skip separation entirely (like SC2 mining)
    * Uses spatial grid for O(1) lookups instead of checking all entities
    */
   private calculateSeparationForce(
@@ -127,6 +128,11 @@ export class MovementSystem extends System {
     selfTransform: Transform,
     selfUnit: Unit
   ): { x: number; y: number } {
+    // SC2-style: gathering workers walk through each other completely
+    if (selfUnit.state === 'gathering') {
+      return { x: 0, y: 0 };
+    }
+
     let forceX = 0;
     let forceY = 0;
 
@@ -153,16 +159,19 @@ export class MovementSystem extends System {
       // Flying units don't collide with ground units
       if (selfUnit.isFlying !== otherUnit.isFlying) continue;
 
+      // SC2-style: skip separation with gathering workers (they walk through)
+      if (otherUnit.state === 'gathering') continue;
+
       const dx = selfTransform.x - otherTransform.x;
       const dy = selfTransform.y - otherTransform.y;
       const distance = Math.sqrt(dx * dx + dy * dy);
 
-      // Combined radius for collision
+      // Combined radius for collision - only push when nearly overlapping
       const combinedRadius = selfUnit.collisionRadius + otherUnit.collisionRadius;
-      const separationDist = Math.max(combinedRadius, SEPARATION_RADIUS);
+      const separationDist = Math.max(combinedRadius * 0.5, SEPARATION_RADIUS);
 
       if (distance < separationDist && distance > 0.01) {
-        // Inverse square falloff - stronger push when closer
+        // Very soft push - allows clumping like SC2
         const strength = SEPARATION_STRENGTH * (1 - distance / separationDist);
         const normalizedDx = dx / distance;
         const normalizedDy = dy / distance;
@@ -172,7 +181,7 @@ export class MovementSystem extends System {
       }
     }
 
-    // Clamp the force magnitude
+    // Clamp the force magnitude - low cap allows stacking
     const magnitude = Math.sqrt(forceX * forceX + forceY * forceY);
     if (magnitude > MAX_AVOIDANCE_FORCE) {
       const scale = MAX_AVOIDANCE_FORCE / magnitude;
@@ -207,17 +216,31 @@ export class MovementSystem extends System {
       BUILDING_AVOIDANCE_MARGIN + selfUnit.collisionRadius + 5 // Extra range for large buildings
     );
 
+    // Resource drop-off buildings - workers carrying resources skip avoidance for these
+    const dropOffBuildings = [
+      'command_center', 'orbital_command', 'planetary_fortress',
+      'nexus', 'hatchery', 'lair', 'hive'
+    ];
+    const isCarryingResources = selfUnit.isWorker &&
+      (selfUnit.carryingMinerals > 0 || selfUnit.carryingVespene > 0);
+
     for (const buildingId of nearbyBuildingIds) {
       // Skip the building this worker is constructing - they need to get close to it
       if (selfUnit.constructingBuildingId === buildingId) {
         continue;
       }
+
       const entity = this.world.getEntity(buildingId);
       if (!entity) continue;
 
       const buildingTransform = entity.get<Transform>('Transform');
       const building = entity.get<Building>('Building');
       if (!buildingTransform || !building) continue;
+
+      // Skip drop-off buildings for workers carrying resources - they need to get close
+      if (isCarryingResources && dropOffBuildings.includes(building.buildingId)) {
+        continue;
+      }
 
       // Get building bounds (center-based)
       const halfWidth = building.width / 2 + BUILDING_AVOIDANCE_MARGIN;
@@ -482,6 +505,14 @@ export class MovementSystem extends System {
       unit.collisionRadius + 5
     );
 
+    // Resource drop-off buildings - workers carrying resources skip collision for these
+    const dropOffBuildings = [
+      'command_center', 'orbital_command', 'planetary_fortress',
+      'nexus', 'hatchery', 'lair', 'hive'
+    ];
+    const isCarryingResources = unit.isWorker &&
+      (unit.carryingMinerals > 0 || unit.carryingVespene > 0);
+
     for (const buildingId of nearbyBuildingIds) {
       // Skip the building this worker is constructing - they need to be at it
       if (unit.constructingBuildingId === buildingId) {
@@ -494,6 +525,11 @@ export class MovementSystem extends System {
       const buildingTransform = entity.get<Transform>('Transform');
       const building = entity.get<Building>('Building');
       if (!buildingTransform || !building) continue;
+
+      // Skip drop-off buildings for workers carrying resources
+      if (isCarryingResources && dropOffBuildings.includes(building.buildingId)) {
+        continue;
+      }
 
       // Check if unit is inside building bounds
       const halfWidth = building.width / 2 + unit.collisionRadius;

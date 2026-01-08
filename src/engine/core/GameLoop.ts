@@ -3,7 +3,7 @@ export type UpdateCallback = (deltaTime: number) => void;
 /**
  * Game loop that continues running even when tab is inactive.
  * Uses setInterval for consistent game logic updates regardless of tab visibility.
- * Handles browser throttling in background tabs by catching up on lost time.
+ * Handles browser throttling/suspension by tracking real time when hidden.
  */
 export class GameLoop {
   private tickRate: number;
@@ -12,7 +12,9 @@ export class GameLoop {
   private lastTime = 0;
   private accumulator = 0;
   private intervalId: ReturnType<typeof setInterval> | null = null;
-  private wasHidden = false;
+
+  // Track when tab was hidden to calculate catch-up time
+  private hiddenAtTime: number | null = null;
 
   private updateCallback: UpdateCallback;
 
@@ -29,7 +31,21 @@ export class GameLoop {
 
   private handleVisibilityChange(): void {
     if (document.hidden) {
-      this.wasHidden = true;
+      // Record when we went hidden
+      this.hiddenAtTime = performance.now();
+    } else if (this.hiddenAtTime !== null) {
+      // Tab became visible - calculate time spent hidden and add to accumulator
+      const hiddenDuration = performance.now() - this.hiddenAtTime;
+      // Cap at 30 seconds of catch-up to prevent extreme lag
+      const catchUpTime = Math.min(hiddenDuration, 30000);
+      this.accumulator += catchUpTime;
+      this.hiddenAtTime = null;
+      this.lastTime = performance.now();
+
+      // Immediately trigger a tick to start processing catch-up
+      if (this.isRunning) {
+        this.tick();
+      }
     }
   }
 
@@ -60,26 +76,15 @@ export class GameLoop {
     const deltaTime = currentTime - this.lastTime;
     this.lastTime = currentTime;
 
-    // Check if we're currently hidden or were recently hidden
-    const isHidden = typeof document !== 'undefined' && document.hidden;
-    const needsCatchup = this.wasHidden || isHidden;
-
-    // When tab is hidden or returning from hidden, allow larger deltas
-    // This ensures game time progresses properly in background
-    // Cap at 5 seconds to prevent extreme catchup after long absence
-    const maxDelta = needsCatchup ? 5000 : 250;
-    const cappedDelta = Math.min(deltaTime, maxDelta);
+    // Normal operation - cap delta to prevent spiral of death
+    // The visibility change handler handles background catch-up separately
+    const cappedDelta = Math.min(deltaTime, 250);
     this.accumulator += cappedDelta;
 
-    // Reset hidden flag only after we've returned and processed
-    if (this.wasHidden && !isHidden) {
-      this.wasHidden = false;
-    }
-
-    // Fixed timestep updates - limit iterations to prevent spiral of death
-    // Process up to 100 ticks per call (5 seconds at 20 tick/sec)
+    // Fixed timestep updates - limit iterations per frame to prevent UI freeze
+    // Process up to 200 ticks per call (10 seconds at 20 tick/sec)
     let iterations = 0;
-    const maxIterations = 100;
+    const maxIterations = 200;
 
     while (this.accumulator >= this.tickMs && iterations < maxIterations) {
       this.updateCallback(this.tickMs);
@@ -87,9 +92,10 @@ export class GameLoop {
       iterations++;
     }
 
-    // If we hit max iterations, discard excess to prevent permanent lag
-    if (iterations >= maxIterations && this.accumulator > this.tickMs) {
-      this.accumulator = 0;
+    // If we still have excess after max iterations, schedule another tick
+    // This spreads catch-up over multiple frames to prevent UI freeze
+    if (this.accumulator >= this.tickMs) {
+      setTimeout(() => this.tick(), 0);
     }
   }
 

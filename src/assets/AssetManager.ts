@@ -217,19 +217,21 @@ export const Materials = {
     }),
   },
 
-  // Resources
+  // Resources - bright emissive materials for visibility
   resources: {
     mineral: new THREE.MeshStandardMaterial({
       color: 0x60a0ff,
-      roughness: 0.3,
-      metalness: 0.6,
-      emissive: 0x102040,
+      roughness: 0.2,
+      metalness: 0.4,
+      emissive: 0x4080ff,
+      emissiveIntensity: 0.8,
     }),
     vespene: new THREE.MeshStandardMaterial({
       color: 0x40ff80,
       roughness: 0.2,
-      metalness: 0.4,
-      emissive: 0x104020,
+      metalness: 0.3,
+      emissive: 0x20ff60,
+      emissiveIntensity: 0.6,
     }),
   },
 };
