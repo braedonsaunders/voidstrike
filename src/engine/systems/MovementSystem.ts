@@ -208,6 +208,10 @@ export class MovementSystem extends System {
     );
 
     for (const buildingId of nearbyBuildingIds) {
+      // Skip the building this worker is constructing - they need to get close to it
+      if (selfUnit.constructingBuildingId === buildingId) {
+        continue;
+      }
       const entity = this.world.getEntity(buildingId);
       if (!entity) continue;
 
@@ -479,6 +483,11 @@ export class MovementSystem extends System {
     );
 
     for (const buildingId of nearbyBuildingIds) {
+      // Skip the building this worker is constructing - they need to be at it
+      if (unit.constructingBuildingId === buildingId) {
+        continue;
+      }
+
       const entity = this.world.getEntity(buildingId);
       if (!entity) continue;
 
