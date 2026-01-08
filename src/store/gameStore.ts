@@ -43,8 +43,12 @@ export interface GameState {
   // Camera
   cameraX: number;
   cameraY: number;
+  cameraZ: number; // For SC2Minimap compatibility
   cameraZoom: number;
   pendingCameraMove: { x: number; y: number } | null;
+
+  // Alerts
+  pendingAlerts: Array<{ x: number; y: number; type: string; time: number }>;
 
   // Actions
   selectUnits: (ids: number[]) => void;
@@ -70,6 +74,9 @@ export interface GameState {
   getUpgradeBonus: (playerId: string, unitId: string, effectType: UpgradeEffect['type']) => number;
   setShowTechTree: (show: boolean) => void;
   setShowKeyboardShortcuts: (show: boolean) => void;
+  setPendingCameraMove: (x: number, y: number) => void;
+  addAlert: (x: number, y: number, type: string) => void;
+  clearPendingAlerts: () => void;
   reset: () => void;
 }
 
@@ -78,7 +85,7 @@ const initialState = {
   vespene: 0,
   supply: 0,
   maxSupply: 0, // Will be set from buildings when game starts
-  selectedUnits: [],
+  selectedUnits: [] as number[],
   controlGroups: new Map<number, number[]>(),
   gameTime: 0,
   isPaused: false,
@@ -87,17 +94,19 @@ const initialState = {
   faction: 'dominion',
   researchedUpgrades: new Map<string, ResearchedUpgrade>(),
   isBuilding: false,
-  buildingType: null,
+  buildingType: null as string | null,
   isSettingRallyPoint: false,
-  abilityTargetMode: null,
+  abilityTargetMode: null as string | null,
   showMinimap: true,
   showResourcePanel: true,
   showTechTree: false,
   showKeyboardShortcuts: false,
   cameraX: 64,
   cameraY: 64,
+  cameraZ: 64,
   cameraZoom: 30,
-  pendingCameraMove: null,
+  pendingCameraMove: null as { x: number; y: number } | null,
+  pendingAlerts: [] as Array<{ x: number; y: number; type: string; time: number }>,
 };
 
 export const useGameStore = create<GameState>((set, get) => ({
@@ -177,6 +186,7 @@ export const useGameStore = create<GameState>((set, get) => ({
     set((state) => ({
       cameraX: x,
       cameraY: y,
+      cameraZ: y, // Alias for minimap compatibility
       cameraZoom: zoom ?? state.cameraZoom,
     })),
 
@@ -230,6 +240,20 @@ export const useGameStore = create<GameState>((set, get) => ({
   setShowTechTree: (show) => set({ showTechTree: show }),
 
   setShowKeyboardShortcuts: (show) => set({ showKeyboardShortcuts: show }),
+
+  setPendingCameraMove: (x, y) =>
+    set({ pendingCameraMove: { x, y } }),
+
+  addAlert: (x, y, type) =>
+    set((state) => ({
+      pendingAlerts: [
+        ...state.pendingAlerts.filter((a) => Date.now() - a.time < 10000), // Keep recent
+        { x, y, type, time: Date.now() },
+      ].slice(-10), // Max 10 alerts
+    })),
+
+  clearPendingAlerts: () =>
+    set({ pendingAlerts: [] }),
 
   reset: () => set(initialState),
 }));
