@@ -5,6 +5,7 @@ import { Health, ArmorType } from '../components/Health';
 import { Game } from '../core/Game';
 import { Selectable } from '../components/Selectable';
 import { Building } from '../components/Building';
+import { Resource } from '../components/Resource';
 
 // Damage multipliers: [damageType][armorType]
 const DAMAGE_MULTIPLIERS: Record<DamageType, Record<ArmorType, number>> = {
@@ -256,6 +257,19 @@ export class CombatSystem extends System {
       if (health.isDead() && buildingComp.state !== 'destroyed') {
         buildingComp.state = 'destroyed';
 
+        // If this is a refinery, restore the vespene geyser visibility
+        if (buildingComp.buildingId === 'refinery') {
+          const resources = this.world.getEntitiesWith('Resource', 'Transform');
+          for (const resourceEntity of resources) {
+            const resource = resourceEntity.get<Resource>('Resource');
+            if (resource && resource.refineryEntityId === building.id) {
+              resource.refineryEntityId = null;
+              console.log(`CombatSystem: Refinery destroyed, vespene geyser ${resourceEntity.id} restored`);
+              break;
+            }
+          }
+        }
+
         this.game.eventBus.emit('building:destroyed', {
           entityId: building.id,
           playerId: selectable.playerId,
@@ -463,6 +477,11 @@ export class CombatSystem extends System {
     // Apply primary target damage
     targetHealth.takeDamage(finalDamage, gameTime);
 
+    // Check if target is a building (for damage number positioning)
+    const targetEntity = this.world.getEntity(targetId);
+    const targetBuilding = targetEntity?.get<Building>('Building');
+    const targetHeight = targetBuilding ? Math.max(targetBuilding.width, targetBuilding.height) : 0;
+
     // Emit attack event
     this.game.eventBus.emit('combat:attack', {
       attackerId: attacker.unitId,
@@ -470,10 +489,10 @@ export class CombatSystem extends System {
       targetPos: { x: targetTransform.x, y: targetTransform.y },
       damage: finalDamage,
       damageType: attacker.damageType,
+      targetHeight,
     });
 
     // Emit player:damage for Phaser overlay effects when player unit takes damage
-    const targetEntity = this.world.getEntity(targetId);
     const targetSelectable = targetEntity?.get<Selectable>('Selectable');
     if (targetSelectable?.playerId === 'player1') {
       this.game.eventBus.emit('player:damage', {

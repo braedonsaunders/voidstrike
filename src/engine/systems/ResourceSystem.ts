@@ -208,7 +208,8 @@ export class ResourceSystem extends System {
     const workers = this.world.getEntitiesWith('Transform', 'Unit');
 
     for (const entity of workers) {
-      const unit = entity.get<Unit>('Unit')!;
+      const unit = entity.get<Unit>('Unit');
+      if (!unit) continue;
 
       if (!unit.isWorker || unit.state !== 'gathering') continue;
 

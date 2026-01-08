@@ -160,6 +160,7 @@ export class EffectsRenderer {
       targetPos?: { x: number; y: number };
       damage: number;
       damageType: string;
+      targetHeight?: number;
     }) => {
       if (data.attackerPos && data.targetPos) {
         this.createAttackEffect(
@@ -168,9 +169,11 @@ export class EffectsRenderer {
           data.damageType
         );
 
-        // Create floating damage number ABOVE the target (y=2.5 for good visibility)
+        // Create floating damage number ABOVE the target
+        // Use targetHeight for buildings, default 2.5 for units
+        const damageNumberY = (data.targetHeight && data.targetHeight > 0) ? data.targetHeight + 1.5 : 2.5;
         this.createDamageNumber(
-          new THREE.Vector3(data.targetPos.x, 2.5, data.targetPos.y),
+          new THREE.Vector3(data.targetPos.x, damageNumberY, data.targetPos.y),
           data.damage
         );
 

@@ -20,6 +20,7 @@ export class BuildingPlacementPreview {
   private currentPosition: { x: number; y: number } = { x: 0, y: 0 };
   private isValid: boolean = false;
   private getTerrainHeight: ((x: number, y: number) => number) | null = null;
+  private checkVespeneGeyser: ((x: number, y: number) => boolean) | null = null;
 
   // Grid visualization settings
   private static readonly GRID_OFFSET = 0.15; // Offset above terrain
@@ -32,6 +33,13 @@ export class BuildingPlacementPreview {
     this.mapData = mapData;
     this.getTerrainHeight = getTerrainHeight ?? null;
     this.group.visible = false;
+  }
+
+  /**
+   * Set callback to check if a position is on a vespene geyser
+   */
+  public setVespeneGeyserChecker(fn: (x: number, y: number) => boolean): void {
+    this.checkVespeneGeyser = fn;
   }
 
   /**
@@ -109,6 +117,15 @@ export class BuildingPlacementPreview {
   private checkPlacementValidity(centerX: number, centerY: number, width: number, height: number): boolean {
     const halfWidth = width / 2;
     const halfHeight = height / 2;
+
+    // Special case: refineries MUST be placed on vespene geysers
+    if (this.currentBuildingType === 'refinery') {
+      if (!this.checkVespeneGeyser || !this.checkVespeneGeyser(centerX, centerY)) {
+        return false;
+      }
+      // If on a geyser, it's valid (skip terrain checks for geysers)
+      return true;
+    }
 
     // Check all tiles the building would occupy
     for (let dy = -Math.floor(halfHeight); dy < Math.ceil(halfHeight); dy++) {

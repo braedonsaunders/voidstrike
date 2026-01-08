@@ -167,6 +167,11 @@ export class ResourceRenderer {
         continue;
       }
 
+      // Skip vespene geysers that have a refinery built on them
+      if (resource.resourceType === 'vespene' && resource.hasRefinery()) {
+        continue;
+      }
+
       const group = this.getOrCreateInstancedGroup(resource.resourceType);
       const data = this.getOrCreateResourceData(entity.id);
 
