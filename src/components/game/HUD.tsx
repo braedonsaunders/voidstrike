@@ -45,9 +45,9 @@ export function HUD() {
 
   return (
     <div className="absolute inset-0 pointer-events-none">
-      {/* FPS Counter */}
+      {/* FPS Counter - positioned in top right corner */}
       {showFPS && (
-        <div className="absolute top-12 left-2 bg-black/70 px-2 py-1 rounded text-xs font-mono text-green-400 pointer-events-none z-50">
+        <div className="absolute top-2 right-48 bg-black/70 px-2 py-1 rounded text-xs font-mono text-green-400 pointer-events-none z-50">
           {fps} FPS
         </div>
       )}

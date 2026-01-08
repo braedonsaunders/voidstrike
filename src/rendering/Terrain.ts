@@ -77,8 +77,9 @@ export class Terrain {
   private gridWidth: number;
   private gridHeight: number;
 
-  // Flag to use SC2-quality shader (can be toggled for performance testing)
-  private static USE_SC2_SHADER = true;
+  // Flag to use SC2-quality shader (disabled - too expensive, causes 10 FPS)
+  // The shader does 50+ procedural noise calls per pixel which is unsustainable
+  private static USE_SC2_SHADER = false;
 
   constructor(config: TerrainConfig) {
     this.mapData = config.mapData;
