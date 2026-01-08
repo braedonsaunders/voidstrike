@@ -1,6 +1,6 @@
 import { Component } from '../ecs/Component';
 
-export type BuildingState = 'constructing' | 'complete' | 'destroyed' | 'lifting' | 'flying' | 'landing';
+export type BuildingState = 'waiting_for_worker' | 'constructing' | 'complete' | 'destroyed' | 'lifting' | 'flying' | 'landing';
 export type AddonType = 'tech_lab' | 'reactor' | null;
 
 export interface BuildingDefinition {
@@ -115,7 +115,7 @@ export class Building extends Component {
     this.buildingId = definition.id;
     this.name = definition.name;
     this.faction = definition.faction;
-    this.state = 'constructing';
+    this.state = 'waiting_for_worker'; // Starts waiting for SCV to arrive
 
     this.buildProgress = 0;
     this.buildTime = definition.buildTime;
@@ -165,6 +165,22 @@ export class Building extends Component {
 
     // Building upgrades
     this.canUpgradeTo = definition.canUpgradeTo ?? [];
+  }
+
+  /**
+   * Called when worker arrives at construction site to begin building
+   */
+  public startConstruction(): void {
+    if (this.state === 'waiting_for_worker') {
+      this.state = 'constructing';
+    }
+  }
+
+  /**
+   * Check if construction has started (worker has arrived)
+   */
+  public hasConstructionStarted(): boolean {
+    return this.state === 'constructing' || this.state === 'complete';
   }
 
   public updateConstruction(deltaTime: number): boolean {

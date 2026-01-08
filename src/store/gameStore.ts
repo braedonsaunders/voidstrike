@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import { UpgradeEffect } from '@/data/research/dominion';
+import { Game } from '@/engine/core/Game';
 
 export interface ResearchedUpgrade {
   id: string;
@@ -146,7 +147,22 @@ export const useGameStore = create<GameState>((set, get) => ({
 
   setGameTime: (time) => set({ gameTime: time }),
 
-  togglePause: () => set((state) => ({ isPaused: !state.isPaused })),
+  togglePause: () =>
+    set((state) => {
+      const newPaused = !state.isPaused;
+      // Actually pause/resume the game engine
+      try {
+        const game = Game.getInstance();
+        if (newPaused) {
+          game.pause();
+        } else {
+          game.resume();
+        }
+      } catch {
+        // Game instance might not exist yet
+      }
+      return { isPaused: newPaused };
+    }),
 
   setGameSpeed: (speed) => set({ gameSpeed: speed }),
 

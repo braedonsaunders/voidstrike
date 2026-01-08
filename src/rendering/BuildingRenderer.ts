@@ -156,14 +156,29 @@ export class BuildingRenderer {
       // Update position - place building on top of terrain
       meshData.group.position.set(transform.x, terrainHeight, transform.y);
 
-      // Construction animation - scale up as building completes
-      // PERFORMANCE: Only call traverse() when completion state changes
+      // Construction animation based on building state
       const isComplete = building.isComplete();
-      if (!isComplete) {
+      const isWaitingForWorker = building.state === 'waiting_for_worker';
+
+      if (isWaitingForWorker) {
+        // Show a ghost/placeholder while waiting for SCV to arrive
+        // Small scale, very transparent wireframe-like appearance
+        meshData.group.scale.setScalar(0.3);
+        meshData.group.traverse((child) => {
+          if (child instanceof THREE.Mesh) {
+            const mat = child.material as THREE.MeshStandardMaterial;
+            if (mat.transparent !== undefined) {
+              mat.transparent = true;
+              mat.opacity = 0.15; // Very faint ghost
+              mat.wireframe = true; // Wireframe mode while waiting
+            }
+          }
+        });
+      } else if (!isComplete) {
+        // Construction in progress - scale up as building completes
         const progress = building.buildProgress;
         meshData.group.scale.setScalar(0.5 + progress * 0.5);
-        // Only update materials occasionally during construction (every ~10% progress)
-        // to avoid expensive traverse() calls every frame
+        // Update materials during construction
         if (!meshData.wasComplete) {
           meshData.group.traverse((child) => {
             if (child instanceof THREE.Mesh) {
@@ -171,6 +186,7 @@ export class BuildingRenderer {
               if (mat.transparent !== undefined) {
                 mat.transparent = true;
                 mat.opacity = 0.5 + progress * 0.5;
+                mat.wireframe = false; // Solid during construction
               }
             }
           });
@@ -185,6 +201,7 @@ export class BuildingRenderer {
             if (mat.transparent !== undefined) {
               mat.transparent = false;
               mat.opacity = 1;
+              mat.wireframe = false;
             }
           }
         });
