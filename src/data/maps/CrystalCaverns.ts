@@ -109,61 +109,61 @@ function generateCrystalCaverns(): MapData {
   // createMineralLine(mineralCenterX, mineralCenterY, baseCenterX, baseCenterY, amount)
 
   const expansions = [
-    // Player 1 (left side)
+    // Player 1 (left side) - minerals toward left edge
     {
       name: 'P1 Main',
       x: 24,
       y: 72,
       isMain: true,
-      minerals: createMineralLine(10, 72, 24, 72, 1800),
-      vespene: createVespeneGeysers(16, 85, 8, 2250),
+      minerals: createMineralLine(17, 72, 24, 72, 1800), // ~7 units left of CC
+      vespene: createVespeneGeysers(24, 80, 6, 2250),
     },
     {
       name: 'P1 Natural',
       x: 40,
       y: 36,
       isNatural: true,
-      minerals: createMineralLine(30, 25, 40, 36, 1500),
-      vespene: createVespeneGeysers(50, 40, 6, 2250),
+      minerals: createMineralLine(33, 30, 40, 36, 1500), // ~7 units away toward top-left
+      vespene: createVespeneGeysers(47, 30, 6, 2250),
     },
     {
       name: 'P1 Third',
       x: 40,
       y: 108,
-      minerals: createMineralLine(30, 118, 40, 108, 1500),
-      vespene: createVespeneGeysers(50, 102, 6, 2250),
+      minerals: createMineralLine(33, 114, 40, 108, 1500), // ~7 units away toward bottom-left
+      vespene: createVespeneGeysers(47, 114, 6, 2250),
     },
-    // Player 2 (right side)
+    // Player 2 (right side) - minerals toward right edge
     {
       name: 'P2 Main',
       x: 136,
       y: 72,
       isMain: true,
-      minerals: createMineralLine(150, 72, 136, 72, 1800),
-      vespene: createVespeneGeysers(144, 85, 8, 2250),
+      minerals: createMineralLine(143, 72, 136, 72, 1800), // ~7 units right of CC
+      vespene: createVespeneGeysers(136, 80, 6, 2250),
     },
     {
       name: 'P2 Natural',
       x: 120,
       y: 36,
       isNatural: true,
-      minerals: createMineralLine(130, 25, 120, 36, 1500),
-      vespene: createVespeneGeysers(110, 40, 6, 2250),
+      minerals: createMineralLine(127, 30, 120, 36, 1500), // ~7 units away toward top-right
+      vespene: createVespeneGeysers(113, 30, 6, 2250),
     },
     {
       name: 'P2 Third',
       x: 120,
       y: 108,
-      minerals: createMineralLine(130, 118, 120, 108, 1500),
-      vespene: createVespeneGeysers(110, 102, 6, 2250),
+      minerals: createMineralLine(127, 114, 120, 108, 1500), // ~7 units away toward bottom-right
+      vespene: createVespeneGeysers(113, 114, 6, 2250),
     },
     // Center contested expansion
     {
       name: 'Center',
       x: 80,
       y: 72,
-      minerals: createMineralLine(80, 60, 80, 72, 750), // Rich minerals
-      vespene: [{ x: 90, y: 76, type: 'vespene' as const, amount: 2250 }],
+      minerals: createMineralLine(80, 65, 80, 72, 750), // Rich minerals, 7 units north
+      vespene: [{ x: 87, y: 72, type: 'vespene' as const, amount: 2250 }],
     },
   ];
 

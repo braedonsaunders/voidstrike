@@ -125,6 +125,8 @@ export function createTerrainGrid(
 
 // Helper to create SC2-style mineral arc (8 patches in a crescent shape)
 // The arc faces toward the base center
+// mineralCenterX/Y: center of the mineral arc (should be ~7 units from CC center)
+// baseCenterX/Y: position of the command center
 export function createMineralLine(
   mineralCenterX: number,
   mineralCenterY: number,
@@ -134,9 +136,9 @@ export function createMineralLine(
 ): ResourceNode[] {
   const minerals: ResourceNode[] = [];
 
-  // SC2 has 8 mineral patches in an arc formation
-  const arcRadius = 5; // Distance from arc center to patches
-  const arcSpread = Math.PI * 0.55; // ~100 degrees total arc spread
+  // SC2 has 8 mineral patches in a tight arc formation
+  const arcRadius = 3.5; // Distance from arc center to patches (tighter arc)
+  const arcSpread = Math.PI * 0.65; // ~117 degrees total arc spread
 
   // Calculate angle from mineral center toward base center
   const dx = baseCenterX - mineralCenterX;
@@ -148,8 +150,8 @@ export function createMineralLine(
     const t = (i - 3.5) / 3.5; // -1 to 1, centered
     const angle = angleToBase + t * (arcSpread / 2);
 
-    // Alternate rows for depth (like SC2)
-    const radiusVariation = (i % 2 === 0) ? 0 : 1.0;
+    // Alternate rows for depth (like SC2) - closer patches are even indices
+    const radiusVariation = (i % 2 === 0) ? 0 : 0.8;
     const r = arcRadius + radiusVariation;
 
     // Position relative to mineral center, patches curve AWAY from base
@@ -160,7 +162,7 @@ export function createMineralLine(
       x: Math.round(x * 2) / 2, // Snap to 0.5 grid
       y: Math.round(y * 2) / 2,
       type: 'minerals',
-      amount: i < 6 ? amount : amount * 0.5, // Last 2 patches are gold
+      amount: i < 6 ? amount : amount * 0.5, // Last 2 patches are half (SC2 style)
     });
   }
 

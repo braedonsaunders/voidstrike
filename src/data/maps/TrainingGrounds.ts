@@ -136,74 +136,74 @@ function generateTrainingGrounds(): MapData {
   // === Expansions with Resources ===
   // createMineralLine(mineralCenterX, mineralCenterY, baseCenterX, baseCenterY, amount)
   const expansions = [
-    // P1 Main (CC at 170, 170) - minerals to the upper-right
+    // P1 Main (CC at 170, 170) - minerals toward bottom-right corner
     {
       name: 'P1 Main',
       x: 170,
       y: 170,
       isMain: true,
-      minerals: createMineralLine(180, 160, 170, 170, 1800),
-      vespene: createVespeneGeysers(160, 180, 8, 2250),
+      minerals: createMineralLine(177, 177, 170, 170, 1800), // ~7 units toward corner
+      vespene: createVespeneGeysers(163, 177, 6, 2250),
     },
-    // P1 Natural (CC at 120, 160) - minerals to the right
+    // P1 Natural (CC at 120, 160) - minerals toward bottom edge
     {
       name: 'P1 Natural',
       x: 120,
       y: 160,
       isNatural: true,
-      minerals: createMineralLine(135, 155, 120, 160, 1500),
-      vespene: createVespeneGeysers(110, 170, 8, 2250),
+      minerals: createMineralLine(120, 167, 120, 160, 1500), // ~7 units south
+      vespene: createVespeneGeysers(127, 153, 6, 2250),
     },
     // P1 Third (CC at 60, 100) - minerals to the left
     {
       name: 'P1 Third',
       x: 60,
       y: 100,
-      minerals: createMineralLine(45, 100, 60, 100, 1500),
-      vespene: createVespeneGeysers(70, 110, 6, 2250),
+      minerals: createMineralLine(53, 100, 60, 100, 1500), // ~7 units west
+      vespene: createVespeneGeysers(67, 107, 6, 2250),
     },
-    // P1 Fourth (CC at 100, 185) - minerals below
+    // P1 Fourth (CC at 100, 185) - minerals toward edge
     {
       name: 'P1 Fourth',
       x: 100,
       y: 185,
-      minerals: createMineralLine(100, 195, 100, 185, 1200),
-      vespene: createVespeneGeysers(110, 180, 4, 2250),
+      minerals: createMineralLine(100, 192, 100, 185, 1200), // ~7 units south
+      vespene: createVespeneGeysers(107, 178, 4, 2250),
     },
 
-    // P2 Main (CC at 30, 30) - minerals to the lower-left
+    // P2 Main (CC at 30, 30) - minerals toward top-left corner
     {
       name: 'P2 Main',
       x: 30,
       y: 30,
       isMain: true,
-      minerals: createMineralLine(20, 40, 30, 30, 1800),
-      vespene: createVespeneGeysers(40, 20, 8, 2250),
+      minerals: createMineralLine(23, 23, 30, 30, 1800), // ~7 units toward corner
+      vespene: createVespeneGeysers(37, 23, 6, 2250),
     },
-    // P2 Natural (CC at 80, 40) - minerals to the left
+    // P2 Natural (CC at 80, 40) - minerals toward top edge
     {
       name: 'P2 Natural',
       x: 80,
       y: 40,
       isNatural: true,
-      minerals: createMineralLine(65, 45, 80, 40, 1500),
-      vespene: createVespeneGeysers(90, 30, 8, 2250),
+      minerals: createMineralLine(80, 33, 80, 40, 1500), // ~7 units north
+      vespene: createVespeneGeysers(73, 47, 6, 2250),
     },
     // P2 Third (CC at 140, 100) - minerals to the right
     {
       name: 'P2 Third',
       x: 140,
       y: 100,
-      minerals: createMineralLine(155, 100, 140, 100, 1500),
-      vespene: createVespeneGeysers(130, 90, 6, 2250),
+      minerals: createMineralLine(147, 100, 140, 100, 1500), // ~7 units east
+      vespene: createVespeneGeysers(133, 93, 6, 2250),
     },
-    // P2 Fourth (CC at 100, 15) - minerals above
+    // P2 Fourth (CC at 100, 15) - minerals toward edge
     {
       name: 'P2 Fourth',
       x: 100,
       y: 15,
-      minerals: createMineralLine(100, 5, 100, 15, 1200),
-      vespene: createVespeneGeysers(110, 20, 4, 2250),
+      minerals: createMineralLine(100, 11, 100, 15, 1200), // ~4 units north (near edge)
+      vespene: createVespeneGeysers(93, 22, 4, 2250),
     },
 
     // Gold base (center - high yield)
@@ -211,8 +211,8 @@ function generateTrainingGrounds(): MapData {
       name: 'Gold Base',
       x: 100,
       y: 100,
-      minerals: createMineralLine(90, 90, 100, 100, 900),
-      vespene: createVespeneGeysers(110, 105, 6, 2250),
+      minerals: createMineralLine(93, 93, 100, 100, 900), // ~7 units toward center
+      vespene: createVespeneGeysers(107, 93, 6, 2250),
     },
   ];
 
