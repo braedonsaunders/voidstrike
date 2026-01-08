@@ -71,14 +71,11 @@ voidstrike/
 │   │   ├── Scene.ts           # Three.js scene setup
 │   │   ├── Camera.ts          # RTS camera controller
 │   │   ├── Terrain.ts         # Terrain mesh with procedural details
-│   │   ├── UnitRenderer.ts    # Unit rendering with player colors, SC2-style selection
+│   │   ├── UnitRenderer.ts    # Unit rendering with player colors
 │   │   ├── BuildingRenderer.ts # Building mesh rendering
 │   │   ├── FogOfWar.ts        # Fog of war visibility system
 │   │   ├── EffectsRenderer.ts # Combat effects (projectiles, hits)
-│   │   ├── RallyPointRenderer.ts # Building rally point visuals
-│   │   ├── SC2SelectionRenderer.ts # SC2-style selection circles with team colors
-│   │   ├── SC2EffectsRenderer.ts # Enhanced combat effects (screen shake, projectiles)
-│   │   └── BuildingGhostRenderer.ts # Building placement preview with validation
+│   │   └── RallyPointRenderer.ts # Building rally point visuals
 │   ├── input/
 │   │   ├── InputManager.ts    # Input abstraction
 │   │   ├── Selection.ts       # Box selection
@@ -698,80 +695,6 @@ getEffectiveDamage(); // Base damage * buff modifiers
 - concussive_shells: -50% speed for 1.07s
 - combat_shield: +10 max HP (permanent)
 ```
-
-## SC2-Style Visual Systems
-
-### Selection Renderer (`SC2SelectionRenderer.ts`)
-
-StarCraft 2-inspired selection circles with team colors:
-
-```typescript
-// Team color definitions with primary, secondary, and glow colors
-const TEAM_COLORS = {
-  player1: { primary: 0x00aaff, secondary: 0x0066cc, glow: 0x00ccff },
-  ai: { primary: 0xff4444, secondary: 0xcc2222, glow: 0xff6666 },
-  // ...
-};
-
-// Creates animated selection circle with:
-// - Inner solid ring (primary color)
-// - Outer glow ring (soft glow color)
-// - Pulse ring (expands periodically)
-createSC2SelectionCircle({ radius, isBuilding, teamColors });
-
-// Unit shadows for grounding
-createUnitShadow(radius);
-
-// Building placement ghost
-createBuildingGhost(width, height, buildingHeight);
-```
-
-### Effects Renderer (`SC2EffectsRenderer.ts`)
-
-Enhanced combat feedback system:
-
-```typescript
-enum WeaponType {
-  GAUSS_RIFLE,    // Small yellow tracers
-  GRENADE,        // Blue concussive grenades
-  HELLFIRE,       // Orange flames
-  SIEGE_CANNON,   // Large explosive shells
-  MISSILE,        // Tracking missiles with smoke trails
-  LASER,          // Continuous beams
-  YAMATO,         // Massive energy blasts
-}
-
-// Features:
-// - Screen shake on explosions and impacts
-// - Weapon-specific projectiles with unique visuals
-// - Muzzle flash effects
-// - Death explosions (mechanical vs biological)
-// - Shield hit effects (blue ripple)
-```
-
-### Building Ghost Renderer (`BuildingGhostRenderer.ts`)
-
-Real-time building placement validation:
-
-```typescript
-// Shows preview of building placement with:
-// - Semi-transparent building shape
-// - Grid cells showing valid/invalid tiles
-// - Color coding: green (valid) / red (invalid)
-
-// Validates against:
-// - Terrain walkability/buildability
-// - Map bounds
-// - Existing building collisions
-// - Resource proximity
-```
-
-### SC2 HUD Components
-
-New UI components in `src/components/game/`:
-
-- `SC2Minimap.tsx` - Minimap with unit dots, camera viewport, alert pings
-- `SC2HUD.tsx` - Full HUD layout with resources, selection panel, command card
 
 ## Audio Asset Guidelines
 
