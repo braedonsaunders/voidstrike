@@ -65,6 +65,8 @@
 - [x] **AI deposits to player store** - ResourceSystem now only credits player1 store, AI tracks internally
 - [x] **SC2-style mineral arcs** - Minerals now form tight arcs facing CC, ~7 units away (was 15-20)
 - [x] **Worker mineral splitting** - Workers auto-spread across mineral patches, prefer <2 gatherers
+- [x] **SC2-style flat terrain** - Buildable areas now perfectly flat, only cliffs have height variation
+- [x] **Building placement grid** - Green/red tile visualization when placing buildings
 
 ### UI Improvements
 - [x] **Options menu** - Replaced Menu button with dropdown (Controls, Tech Tree, Exit to Menu)
@@ -281,7 +283,7 @@
 
 ### Visual Polish
 - [ ] Unit wireframes (damage state)
-- [ ] Building placement ghost
+- [x] Building placement ghost - SC2-style grid + ghost preview when placing
 - [ ] Stim Pack visual effect (red tint)
 - [ ] Siege Mode transform animation
 - [ ] Cloak shimmer effect

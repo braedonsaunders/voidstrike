@@ -13,6 +13,7 @@ import { ResourceRenderer } from '@/rendering/ResourceRenderer';
 import { FogOfWar } from '@/rendering/FogOfWar';
 import { EffectsRenderer } from '@/rendering/EffectsRenderer';
 import { RallyPointRenderer } from '@/rendering/RallyPointRenderer';
+import { BuildingPlacementPreview } from '@/rendering/BuildingPlacementPreview';
 import { SC2SelectionSystem } from '@/rendering/SC2SelectionSystem';
 import { SC2ParticleSystem } from '@/rendering/SC2ParticleSystem';
 import { SC2PostProcessing } from '@/rendering/SC2PostProcessing';
@@ -63,6 +64,7 @@ export function HybridGameCanvas() {
   const fogOfWarRef = useRef<FogOfWar | null>(null);
   const effectsRendererRef = useRef<EffectsRenderer | null>(null);
   const rallyPointRendererRef = useRef<RallyPointRenderer | null>(null);
+  const placementPreviewRef = useRef<BuildingPlacementPreview | null>(null);
   const environmentRef = useRef<EnvironmentManager | null>(null);
 
   // SC2-level visual systems
@@ -215,6 +217,10 @@ export function HybridGameCanvas() {
 
       effectsRendererRef.current = new EffectsRenderer(scene, game.eventBus);
       rallyPointRendererRef.current = new RallyPointRenderer(scene, game.eventBus, game.world, 'player1');
+
+      // Building placement preview (SC2-style grid + ghost)
+      placementPreviewRef.current = new BuildingPlacementPreview(CURRENT_MAP);
+      scene.add(placementPreviewRef.current.group);
 
       // Initialize SC2-level visual systems
       selectionSystemRef.current = new SC2SelectionSystem(scene);
@@ -567,6 +573,17 @@ export function HybridGameCanvas() {
     }
   }, [isBuilding, buildingType, isAttackMove, isPatrolMode, isSettingRallyPoint, abilityTargetMode]);
 
+  // Handle building placement preview start/stop
+  useEffect(() => {
+    if (placementPreviewRef.current) {
+      if (isBuilding && buildingType) {
+        placementPreviewRef.current.startPlacement(buildingType);
+      } else {
+        placementPreviewRef.current.stopPlacement();
+      }
+    }
+  }, [isBuilding, buildingType]);
+
   const findEntityAtPosition = (game: Game, x: number, z: number) => {
     const clickRadius = 1.5;
 
@@ -611,7 +628,15 @@ export function HybridGameCanvas() {
     if (isSelecting) {
       setSelectionEnd({ x: e.clientX, y: e.clientY });
     }
-  }, [isSelecting]);
+
+    // Update building placement preview position
+    if (isBuilding && buildingType && placementPreviewRef.current && cameraRef.current) {
+      const worldPos = cameraRef.current.screenToWorld(e.clientX, e.clientY);
+      if (worldPos) {
+        placementPreviewRef.current.updatePosition(worldPos.x, worldPos.z);
+      }
+    }
+  }, [isSelecting, isBuilding, buildingType]);
 
   const handleMouseUp = useCallback((e: React.MouseEvent) => {
     if (e.button === 0 && isSelecting) {
