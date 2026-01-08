@@ -164,31 +164,26 @@ export class Terrain {
         // Calculate edge factor for cliff handling
         const edgeFactor = this.calculateElevationEdgeFactor(terrain, x, y, width, height);
 
-        // Add procedural detail noise
+        // SC2-style terrain: FLAT buildable areas, dramatic cliffs only on unwalkable
         let detailNoise = 0;
-        if (cell.terrain !== 'ramp') {
-          // Multi-octave noise for natural terrain look - more pronounced
-          detailNoise = fractalNoise(x, y, 5, 0.55, 42) * 0.6;
 
-          // Add larger scale rolling hills
-          detailNoise += smoothNoise(x, y, 15, 123) * 0.4;
+        if (cell.terrain === 'unwalkable') {
+          // Cliffs and unwalkable areas get dramatic height variation
+          detailNoise = fractalNoise(x, y, 5, 0.55, 42) * 0.8;
+          detailNoise += smoothNoise(x, y, 4, 456) * 1.5;
+          detailNoise += fractalNoise(x * 2, y * 2, 3, 0.6, 321) * 1.0;
 
-          // Add medium scale variation
-          detailNoise += smoothNoise(x, y, 8, 789) * 0.25;
-
-          // Cliff/unwalkable areas get dramatic height variation
-          if (cell.terrain === 'unwalkable') {
-            detailNoise += smoothNoise(x, y, 4, 456) * 1.5;
-            detailNoise += fractalNoise(x * 2, y * 2, 3, 0.6, 321) * 0.8;
-          }
-
-          // Add cliff edges - sharp height increase at elevation boundaries
+          // Add cliff edge variation
           if (edgeFactor > 0) {
-            detailNoise += edgeFactor * 1.0 * smoothNoise(x, y, 2, 999);
+            detailNoise += edgeFactor * 1.5 * smoothNoise(x, y, 2, 999);
           }
+        } else if (cell.terrain === 'ramp') {
+          // Ramps get very subtle noise - mostly flat for smooth transition
+          detailNoise = smoothNoise(x, y, 12, 555) * 0.08;
         } else {
-          // Ramps get subtle noise to avoid perfectly flat surfaces
-          detailNoise = smoothNoise(x, y, 8, 555) * 0.15;
+          // Ground and unbuildable: PERFECTLY FLAT (SC2 style)
+          // Only add tiny micro-variation for visual interest in textures
+          detailNoise = 0;
         }
 
         const finalHeight = baseHeight + detailNoise;

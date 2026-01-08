@@ -75,7 +75,8 @@ voidstrike/
 │   │   ├── BuildingRenderer.ts # Building mesh rendering
 │   │   ├── FogOfWar.ts        # Fog of war visibility system
 │   │   ├── EffectsRenderer.ts # Combat effects (projectiles, hits)
-│   │   └── RallyPointRenderer.ts # Building rally point visuals
+│   │   ├── RallyPointRenderer.ts # Building rally point visuals
+│   │   └── BuildingPlacementPreview.ts # SC2-style placement grid + ghost
 │   ├── input/
 │   │   ├── InputManager.ts    # Input abstraction
 │   │   ├── Selection.ts       # Box selection
