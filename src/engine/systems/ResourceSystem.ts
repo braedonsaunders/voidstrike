@@ -115,6 +115,7 @@ export class ResourceSystem extends System {
   }
 
   public update(deltaTime: number): void {
+    const dt = deltaTime / 1000; // Convert ms to seconds
     const workers = this.world.getEntitiesWith('Transform', 'Unit');
 
     for (const entity of workers) {
@@ -163,8 +164,8 @@ export class ResourceSystem extends System {
             // Reserve a spot at the resource
             resource.addGatherer(entity.id);
           } else {
-            // Continue mining - decrement timer
-            unit.miningTimer -= deltaTime;
+            // Continue mining - decrement timer (dt is in seconds)
+            unit.miningTimer -= dt;
             if (unit.miningTimer <= 0) {
               // Mining complete - gather resources
               this.gatherResource(entity, unit, resource);
