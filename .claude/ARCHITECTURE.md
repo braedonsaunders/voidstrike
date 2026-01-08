@@ -249,6 +249,70 @@ interface StateChecksum {
 
 ## Rendering Pipeline
 
+### Hybrid Architecture (Three.js + Phaser 4)
+
+The game uses a unique hybrid rendering approach for world-class visuals:
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                    PHASER 4 OVERLAY LAYER                       │
+│  ┌─────────────────────────────────────────────────────────┐   │
+│  │  • Stylized 2D Effect Overlays (ability splashes)       │   │
+│  │  • "Tactical View" toggle (strategic info layer)        │   │
+│  │  • Screen-space particles (combat intensity sparks)     │   │
+│  │  • Alert system ("Nuclear launch detected" animations)  │   │
+│  │  • Damage vignettes, screen shake effects               │   │
+│  └─────────────────────────────────────────────────────────┘   │
+├─────────────────────────────────────────────────────────────────┤
+│                     REACT HUD LAYER                             │
+│  ┌─────────────────┐  ┌──────────────┐  ┌──────────────────┐   │
+│  │ Command Card    │  │   Minimap    │  │  Resources/Info  │   │
+│  │ (React + CSS)   │  │  (Phaser 4)  │  │   (React)        │   │
+│  └─────────────────┘  └──────────────┘  └──────────────────┘   │
+├─────────────────────────────────────────────────────────────────┤
+│                   THREE.JS 3D WORLD                             │
+│  ┌─────────────────────────────────────────────────────────┐   │
+│  │  • Isometric 3D Camera (SC2 angle ~60°)                 │   │
+│  │  • 3D Terrain with height maps                          │   │
+│  │  • GLB Models (units, buildings) with animations        │   │
+│  │  • Real-time shadows + lighting                         │   │
+│  │  • 3D Particle systems (explosions, projectiles)        │   │
+│  │  • Post-processing (bloom, ambient occlusion)           │   │
+│  └─────────────────────────────────────────────────────────┘   │
+├─────────────────────────────────────────────────────────────────┤
+│                    ECS GAME ENGINE                              │
+│               (Unchanged - drives both layers)                  │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+Key Components:
+- `HybridGameCanvas.tsx` - Main component combining Three.js + Phaser
+- `OverlayScene.ts` - Phaser 4 scene for 2D effects overlay
+
+### SC2-Level Visual Systems
+
+Located in `src/rendering/`:
+
+1. **SC2SelectionSystem.ts** - Animated glowing selection rings
+   - Custom GLSL shaders for pulsing glow effects
+   - Team-colored rings with shimmer animation
+   - Multiple concentric rings per selected unit
+   - Hover highlight indicators
+
+2. **SC2ParticleSystem.ts** - GPU-instanced particle effects
+   - Muzzle flashes, projectile trails
+   - Explosion particles with debris
+   - Impact sparks and energy effects
+   - Death explosions with smoke
+   - Up to 5000 particles via instanced mesh
+
+3. **SC2PostProcessing.ts** - Cinematic post-processing
+   - HDR bloom for energy weapons and explosions
+   - Subtle vignette for focus
+   - Color grading and contrast
+   - ACES tone mapping
+   - Subtle film grain
+
 ### Three.js Scene Graph
 
 ```
