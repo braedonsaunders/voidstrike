@@ -204,8 +204,9 @@ export class OverlayScene extends Phaser.Scene {
     });
 
     // Building complete
-    this.eventBus.on('building:complete', (data: { buildingName: string }) => {
-      this.showAlert(`${data.buildingName.toUpperCase()} COMPLETE`, 0x88ff00, 2000);
+    this.eventBus.on('building:complete', (data: { buildingName?: string; buildingType?: string }) => {
+      const name = data.buildingName || data.buildingType || 'BUILDING';
+      this.showAlert(`${name.toUpperCase()} COMPLETE`, 0x88ff00, 2000);
     });
 
     // Resource warnings

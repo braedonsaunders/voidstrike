@@ -1,5 +1,6 @@
 import {
   MapData,
+  MapDecoration,
   createTerrainGrid,
   createMineralLine,
   createVespeneGeysers,
@@ -31,6 +32,101 @@ import {
 
 const MAP_WIDTH = 160;
 const MAP_HEIGHT = 144;
+
+// Generate frozen/crystal themed decorations
+function generateFrozenDecorations(): MapDecoration[] {
+  const decorations: MapDecoration[] = [];
+
+  // Helper to add crystal formations (ice crystals)
+  const addCrystalCluster = (cx: number, cy: number, count: number, spread: number) => {
+    for (let i = 0; i < count; i++) {
+      const angle = Math.random() * Math.PI * 2;
+      const dist = Math.random() * spread;
+      decorations.push({
+        type: 'crystal_formation',
+        x: cx + Math.cos(angle) * dist,
+        y: cy + Math.sin(angle) * dist,
+        scale: 0.5 + Math.random() * 0.7,
+        rotation: Math.random() * Math.PI * 2,
+      });
+    }
+  };
+
+  // Helper to add dead/frozen trees
+  const addDeadTrees = (cx: number, cy: number, count: number, spread: number) => {
+    for (let i = 0; i < count; i++) {
+      const angle = Math.random() * Math.PI * 2;
+      const dist = Math.random() * spread;
+      decorations.push({
+        type: 'tree_dead',
+        x: cx + Math.cos(angle) * dist,
+        y: cy + Math.sin(angle) * dist,
+        scale: 0.7 + Math.random() * 0.5,
+        rotation: Math.random() * Math.PI * 2,
+      });
+    }
+  };
+
+  // Helper to add rocks (ice-covered)
+  const addRockCluster = (cx: number, cy: number, count: number, spread: number) => {
+    const rockTypes: Array<'rocks_large' | 'rocks_small' | 'rock_single'> = [
+      'rocks_large', 'rocks_small', 'rock_single'
+    ];
+    for (let i = 0; i < count; i++) {
+      const angle = Math.random() * Math.PI * 2;
+      const dist = Math.random() * spread;
+      decorations.push({
+        type: rockTypes[Math.floor(Math.random() * rockTypes.length)],
+        x: cx + Math.cos(angle) * dist,
+        y: cy + Math.sin(angle) * dist,
+        scale: 0.4 + Math.random() * 0.6,
+        rotation: Math.random() * Math.PI * 2,
+      });
+    }
+  };
+
+  // Crystal formations along the center dividers
+  addCrystalCluster(80, 43, 6, 8);  // Top divider
+  addCrystalCluster(80, 101, 6, 8); // Bottom divider
+
+  // Crystal clusters near watch towers
+  addCrystalCluster(80, 24, 5, 6);
+  addCrystalCluster(80, 120, 5, 6);
+
+  // Ice crystals in corners
+  addCrystalCluster(24, 24, 4, 5);
+  addCrystalCluster(24, 120, 4, 5);
+  addCrystalCluster(136, 24, 4, 5);
+  addCrystalCluster(136, 120, 4, 5);
+
+  // Dead trees along edges
+  addDeadTrees(10, 50, 4, 6);
+  addDeadTrees(10, 94, 4, 6);
+  addDeadTrees(150, 50, 4, 6);
+  addDeadTrees(150, 94, 4, 6);
+
+  // Dead trees near bases (but not blocking)
+  addDeadTrees(12, 72, 3, 5);
+  addDeadTrees(148, 72, 3, 5);
+
+  // Rock formations near cliffs
+  addRockCluster(24, 24, 3, 4);
+  addRockCluster(24, 120, 3, 4);
+  addRockCluster(136, 24, 3, 4);
+  addRockCluster(136, 120, 3, 4);
+
+  // Rocks near destructibles
+  addRockCluster(56, 24, 2, 3);
+  addRockCluster(104, 24, 2, 3);
+  addRockCluster(56, 120, 2, 3);
+  addRockCluster(104, 120, 2, 3);
+
+  // Debris in center battle area
+  decorations.push({ type: 'debris', x: 75, y: 72, scale: 0.7 });
+  decorations.push({ type: 'debris', x: 85, y: 72, scale: 0.7 });
+
+  return decorations;
+}
 
 function generateCrystalCaverns(): MapData {
   const terrain = createTerrainGrid(MAP_WIDTH, MAP_HEIGHT, 'ground', 0);
@@ -198,6 +294,9 @@ function generateCrystalCaverns(): MapData {
       { x: 56, y: 120, health: 1500 },
       { x: 104, y: 120, health: 1500 },
     ],
+
+    // Frozen/crystal themed decorations
+    decorations: generateFrozenDecorations(),
 
     maxPlayers: 2,
     isRanked: true,
