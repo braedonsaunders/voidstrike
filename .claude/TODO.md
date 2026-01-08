@@ -6,6 +6,28 @@
 
 ---
 
+## SC2-Level Visual Overhaul (January 2026) ✓
+
+### Hybrid Architecture
+- [x] **Three.js + Phaser 4 hybrid** - 3D world with 2D overlay system
+- [x] **HybridGameCanvas** - Main component combining both engines
+- [x] **OverlayScene** - Phaser 4 scene for tactical view and screen effects
+
+### SC2-Level Rendering Systems
+- [x] **SC2SelectionSystem** - Animated glowing selection rings with GLSL shaders
+- [x] **SC2ParticleSystem** - GPU-instanced particles (muzzle flashes, explosions, debris)
+- [x] **SC2PostProcessing** - Bloom, vignette, color grading, ACES tone mapping
+
+### Visual Features
+- [x] Team-colored pulsing selection rings with shimmer animation
+- [x] Tactical overlay mode (toggle with backtick key)
+- [x] Combat intensity screen effects (border glow, damage vignette)
+- [x] Alert system with animated banners
+- [x] Off-screen attack warning indicators
+- [x] Screen shake on damage
+
+---
+
 ## Critical Performance Fixes (January 2026)
 
 ### Fixed Issues (Round 1)
@@ -231,20 +253,13 @@
 - [ ] Building Auto-Repair research
 
 ### Visual Polish
-- [x] Unit wireframes (damage state) - SC2-style selection panel
-- [x] Building placement ghost - Real-time valid/invalid indicators
-- [x] SC2-style selection circles with team colors and glow effects
-- [x] Unit shadows (blob shadows for grounding)
-- [x] Screen shake on explosions and impacts
-- [x] Weapon-specific projectiles with trails
-- [x] Muzzle flash effects
-- [x] Death explosions (mechanical vs biological)
-- [x] SC2-style minimap with unit dots and camera viewport
-- [x] SC2-style HUD with resources, selection panel, command card
+- [ ] Unit wireframes (damage state)
+- [ ] Building placement ghost
 - [ ] Stim Pack visual effect (red tint)
 - [ ] Siege Mode transform animation
 - [ ] Cloak shimmer effect
 - [ ] Nuke targeting laser
+- [ ] Death animations
 
 ---
 

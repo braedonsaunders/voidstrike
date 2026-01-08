@@ -7,27 +7,19 @@ import { Selectable } from '@/engine/components/Selectable';
 import { VisionSystem } from '@/engine/systems/VisionSystem';
 import { AssetManager } from '@/assets/AssetManager';
 import { Terrain } from './Terrain';
-import {
-  createSC2SelectionCircle,
-  updateSelectionCircle,
-  createUnitShadow,
-  TEAM_COLORS,
-} from './SC2SelectionRenderer';
 
 interface UnitMeshData {
   group: THREE.Group;
-  selectionRing: THREE.Group; // Changed from Mesh to Group for SC2-style
-  shadow: THREE.Mesh;
+  selectionRing: THREE.Mesh;
   healthBar: THREE.Group;
   unitId: string;
-  playerId: string;
   // Animation support
   mixer: THREE.AnimationMixer | null;
   currentAction: THREE.AnimationAction | null;
   animations: THREE.AnimationClip[];
 }
 
-// Player colors for unit tinting
+// Player colors
 const PLAYER_COLORS: Record<string, number> = {
   player1: 0x40a0ff, // Blue
   ai: 0xff4040, // Red
@@ -46,13 +38,31 @@ export class UnitRenderer {
 
   // Animation timing
   private clock: THREE.Clock = new THREE.Clock();
-  private lastUpdateTime: number = 0;
+
+  // Shared resources
+  private selectionGeometry: THREE.RingGeometry;
+  private selectionMaterial: THREE.MeshBasicMaterial;
+  private enemySelectionMaterial: THREE.MeshBasicMaterial;
 
   constructor(scene: THREE.Scene, world: World, visionSystem?: VisionSystem, terrain?: Terrain) {
     this.scene = scene;
     this.world = world;
     this.visionSystem = visionSystem ?? null;
     this.terrain = terrain ?? null;
+
+    this.selectionGeometry = new THREE.RingGeometry(0.6, 0.8, 32);
+    this.selectionMaterial = new THREE.MeshBasicMaterial({
+      color: 0x00ff00,
+      transparent: true,
+      opacity: 0.6,
+      side: THREE.DoubleSide,
+    });
+    this.enemySelectionMaterial = new THREE.MeshBasicMaterial({
+      color: 0xff0000,
+      transparent: true,
+      opacity: 0.6,
+      side: THREE.DoubleSide,
+    });
 
     // Preload common procedural assets
     AssetManager.preloadCommonAssets();
@@ -109,13 +119,11 @@ export class UnitRenderer {
         this.unitMeshes.set(entity.id, meshData);
         this.scene.add(meshData.group);
         this.scene.add(meshData.selectionRing);
-        this.scene.add(meshData.shadow);
         this.scene.add(meshData.healthBar);
       }
 
       // Update visibility
       meshData.group.visible = shouldShow;
-      meshData.shadow.visible = shouldShow;
       meshData.healthBar.visible = shouldShow && !!health && health.getHealthPercent() < 1;
 
       if (!shouldShow) {
@@ -130,17 +138,14 @@ export class UnitRenderer {
       meshData.group.position.set(transform.x, terrainHeight, transform.y);
       meshData.group.rotation.y = -transform.rotation + Math.PI / 2;
 
-      // Update shadow position (stays on ground)
-      meshData.shadow.position.set(transform.x, terrainHeight + 0.02, transform.y);
-
-      // Update selection ring with SC2-style animation
+      // Update selection ring
       meshData.selectionRing.position.set(transform.x, terrainHeight + 0.05, transform.y);
-      const isSelected = selectable?.isSelected ?? false;
-      meshData.selectionRing.visible = isSelected;
+      meshData.selectionRing.visible = selectable?.isSelected ?? false;
 
-      // Animate selection ring if visible
-      if (isSelected) {
-        updateSelectionCircle(meshData.selectionRing, delta, false);
+      // Update selection ring color based on ownership
+      if (meshData.selectionRing.visible) {
+        (meshData.selectionRing.material as THREE.MeshBasicMaterial) =
+          isOwned ? this.selectionMaterial : this.enemySelectionMaterial;
       }
 
       // Update health bar
@@ -189,7 +194,6 @@ export class UnitRenderer {
       if (!currentIds.has(entityId)) {
         this.scene.remove(meshData.group);
         this.scene.remove(meshData.selectionRing);
-        this.scene.remove(meshData.shadow);
         this.scene.remove(meshData.healthBar);
         this.disposeGroup(meshData.group);
         this.unitMeshes.delete(entityId);
@@ -212,20 +216,10 @@ export class UnitRenderer {
       }
     });
 
-    // Get team colors for SC2-style selection
-    const teamColors = TEAM_COLORS[playerId as keyof typeof TEAM_COLORS] || TEAM_COLORS.neutral;
-
-    // SC2-style selection ring with team colors
-    const selectionRadius = unit.collisionRadius || 0.8;
-    const selectionRing = createSC2SelectionCircle({
-      radius: selectionRadius,
-      isBuilding: false,
-      teamColors,
-    });
+    // Selection ring
+    const selectionRing = new THREE.Mesh(this.selectionGeometry, this.selectionMaterial);
+    selectionRing.rotation.x = -Math.PI / 2;
     selectionRing.visible = false;
-
-    // Unit shadow (blob shadow for grounding)
-    const shadow = createUnitShadow(selectionRadius);
 
     // Health bar
     const healthBar = this.createHealthBar();
@@ -244,17 +238,7 @@ export class UnitRenderer {
       }
     }
 
-    return {
-      group,
-      selectionRing,
-      shadow,
-      healthBar,
-      unitId: unit.unitId,
-      playerId,
-      mixer,
-      currentAction,
-      animations,
-    };
+    return { group, selectionRing, healthBar, unitId: unit.unitId, mixer, currentAction, animations };
   }
 
   private createHealthBar(): THREE.Group {
@@ -412,29 +396,23 @@ export class UnitRenderer {
     for (const [entityId, meshData] of this.unitMeshes) {
       this.scene.remove(meshData.group);
       this.scene.remove(meshData.selectionRing);
-      this.scene.remove(meshData.shadow);
       this.scene.remove(meshData.healthBar);
       this.disposeGroup(meshData.group);
-      this.disposeGroup(meshData.selectionRing);
-      meshData.shadow.geometry.dispose();
-      (meshData.shadow.material as THREE.Material).dispose();
     }
     this.unitMeshes.clear();
     // Meshes will be recreated on next update() call
   }
 
   public dispose(): void {
+    this.selectionGeometry.dispose();
+    this.selectionMaterial.dispose();
+    this.enemySelectionMaterial.dispose();
+
     for (const meshData of this.unitMeshes.values()) {
       this.disposeGroup(meshData.group);
-      this.disposeGroup(meshData.selectionRing);
       this.scene.remove(meshData.group);
       this.scene.remove(meshData.selectionRing);
-      this.scene.remove(meshData.shadow);
       this.scene.remove(meshData.healthBar);
-
-      // Dispose shadow
-      meshData.shadow.geometry.dispose();
-      (meshData.shadow.material as THREE.Material).dispose();
     }
 
     this.unitMeshes.clear();

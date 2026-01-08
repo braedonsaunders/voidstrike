@@ -71,14 +71,11 @@ voidstrike/
 │   │   ├── Scene.ts           # Three.js scene setup
 │   │   ├── Camera.ts          # RTS camera controller
 │   │   ├── Terrain.ts         # Terrain mesh with procedural details
-│   │   ├── UnitRenderer.ts    # Unit rendering with player colors, SC2-style selection
+│   │   ├── UnitRenderer.ts    # Unit rendering with player colors
 │   │   ├── BuildingRenderer.ts # Building mesh rendering
 │   │   ├── FogOfWar.ts        # Fog of war visibility system
 │   │   ├── EffectsRenderer.ts # Combat effects (projectiles, hits)
-│   │   ├── RallyPointRenderer.ts # Building rally point visuals
-│   │   ├── SC2SelectionRenderer.ts # SC2-style selection circles with team colors
-│   │   ├── SC2EffectsRenderer.ts # Enhanced combat effects (screen shake, projectiles)
-│   │   └── BuildingGhostRenderer.ts # Building placement preview with validation
+│   │   └── RallyPointRenderer.ts # Building rally point visuals
 │   ├── input/
 │   │   ├── InputManager.ts    # Input abstraction
 │   │   ├── Selection.ts       # Box selection
@@ -251,6 +248,70 @@ interface StateChecksum {
 ```
 
 ## Rendering Pipeline
+
+### Hybrid Architecture (Three.js + Phaser 4)
+
+The game uses a unique hybrid rendering approach for world-class visuals:
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                    PHASER 4 OVERLAY LAYER                       │
+│  ┌─────────────────────────────────────────────────────────┐   │
+│  │  • Stylized 2D Effect Overlays (ability splashes)       │   │
+│  │  • "Tactical View" toggle (strategic info layer)        │   │
+│  │  • Screen-space particles (combat intensity sparks)     │   │
+│  │  • Alert system ("Nuclear launch detected" animations)  │   │
+│  │  • Damage vignettes, screen shake effects               │   │
+│  └─────────────────────────────────────────────────────────┘   │
+├─────────────────────────────────────────────────────────────────┤
+│                     REACT HUD LAYER                             │
+│  ┌─────────────────┐  ┌──────────────┐  ┌──────────────────┐   │
+│  │ Command Card    │  │   Minimap    │  │  Resources/Info  │   │
+│  │ (React + CSS)   │  │  (Phaser 4)  │  │   (React)        │   │
+│  └─────────────────┘  └──────────────┘  └──────────────────┘   │
+├─────────────────────────────────────────────────────────────────┤
+│                   THREE.JS 3D WORLD                             │
+│  ┌─────────────────────────────────────────────────────────┐   │
+│  │  • Isometric 3D Camera (SC2 angle ~60°)                 │   │
+│  │  • 3D Terrain with height maps                          │   │
+│  │  • GLB Models (units, buildings) with animations        │   │
+│  │  • Real-time shadows + lighting                         │   │
+│  │  • 3D Particle systems (explosions, projectiles)        │   │
+│  │  • Post-processing (bloom, ambient occlusion)           │   │
+│  └─────────────────────────────────────────────────────────┘   │
+├─────────────────────────────────────────────────────────────────┤
+│                    ECS GAME ENGINE                              │
+│               (Unchanged - drives both layers)                  │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+Key Components:
+- `HybridGameCanvas.tsx` - Main component combining Three.js + Phaser
+- `OverlayScene.ts` - Phaser 4 scene for 2D effects overlay
+
+### SC2-Level Visual Systems
+
+Located in `src/rendering/`:
+
+1. **SC2SelectionSystem.ts** - Animated glowing selection rings
+   - Custom GLSL shaders for pulsing glow effects
+   - Team-colored rings with shimmer animation
+   - Multiple concentric rings per selected unit
+   - Hover highlight indicators
+
+2. **SC2ParticleSystem.ts** - GPU-instanced particle effects
+   - Muzzle flashes, projectile trails
+   - Explosion particles with debris
+   - Impact sparks and energy effects
+   - Death explosions with smoke
+   - Up to 5000 particles via instanced mesh
+
+3. **SC2PostProcessing.ts** - Cinematic post-processing
+   - HDR bloom for energy weapons and explosions
+   - Subtle vignette for focus
+   - Color grading and contrast
+   - ACES tone mapping
+   - Subtle film grain
 
 ### Three.js Scene Graph
 
@@ -698,80 +759,6 @@ getEffectiveDamage(); // Base damage * buff modifiers
 - concussive_shells: -50% speed for 1.07s
 - combat_shield: +10 max HP (permanent)
 ```
-
-## SC2-Style Visual Systems
-
-### Selection Renderer (`SC2SelectionRenderer.ts`)
-
-StarCraft 2-inspired selection circles with team colors:
-
-```typescript
-// Team color definitions with primary, secondary, and glow colors
-const TEAM_COLORS = {
-  player1: { primary: 0x00aaff, secondary: 0x0066cc, glow: 0x00ccff },
-  ai: { primary: 0xff4444, secondary: 0xcc2222, glow: 0xff6666 },
-  // ...
-};
-
-// Creates animated selection circle with:
-// - Inner solid ring (primary color)
-// - Outer glow ring (soft glow color)
-// - Pulse ring (expands periodically)
-createSC2SelectionCircle({ radius, isBuilding, teamColors });
-
-// Unit shadows for grounding
-createUnitShadow(radius);
-
-// Building placement ghost
-createBuildingGhost(width, height, buildingHeight);
-```
-
-### Effects Renderer (`SC2EffectsRenderer.ts`)
-
-Enhanced combat feedback system:
-
-```typescript
-enum WeaponType {
-  GAUSS_RIFLE,    // Small yellow tracers
-  GRENADE,        // Blue concussive grenades
-  HELLFIRE,       // Orange flames
-  SIEGE_CANNON,   // Large explosive shells
-  MISSILE,        // Tracking missiles with smoke trails
-  LASER,          // Continuous beams
-  YAMATO,         // Massive energy blasts
-}
-
-// Features:
-// - Screen shake on explosions and impacts
-// - Weapon-specific projectiles with unique visuals
-// - Muzzle flash effects
-// - Death explosions (mechanical vs biological)
-// - Shield hit effects (blue ripple)
-```
-
-### Building Ghost Renderer (`BuildingGhostRenderer.ts`)
-
-Real-time building placement validation:
-
-```typescript
-// Shows preview of building placement with:
-// - Semi-transparent building shape
-// - Grid cells showing valid/invalid tiles
-// - Color coding: green (valid) / red (invalid)
-
-// Validates against:
-// - Terrain walkability/buildability
-// - Map bounds
-// - Existing building collisions
-// - Resource proximity
-```
-
-### SC2 HUD Components
-
-New UI components in `src/components/game/`:
-
-- `SC2Minimap.tsx` - Minimap with unit dots, camera viewport, alert pings
-- `SC2HUD.tsx` - Full HUD layout with resources, selection panel, command card
 
 ## Audio Asset Guidelines
 
