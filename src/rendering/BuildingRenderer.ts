@@ -17,6 +17,9 @@ interface BuildingMeshData {
   buildingId: string;
   // PERFORMANCE: Track completion state to avoid traverse() every frame
   wasComplete: boolean;
+  // Fire effect for damaged buildings
+  fireEffect: THREE.Group | null;
+  lastHealthPercent: number;
 }
 
 export class BuildingRenderer {
@@ -31,6 +34,12 @@ export class BuildingRenderer {
   private constructingMaterial: THREE.MeshStandardMaterial;
   private selectionMaterial: THREE.MeshBasicMaterial;
   private enemySelectionMaterial: THREE.MeshBasicMaterial;
+  private fireMaterial: THREE.MeshBasicMaterial;
+  private smokeMaterial: THREE.MeshBasicMaterial;
+  private fireGeometry: THREE.ConeGeometry;
+
+  // Animation time for fire effects
+  private fireAnimTime: number = 0;
 
   constructor(scene: THREE.Scene, world: World, visionSystem?: VisionSystem, terrain?: Terrain) {
     this.scene = scene;
@@ -60,6 +69,21 @@ export class BuildingRenderer {
       side: THREE.DoubleSide,
     });
 
+    // Fire effect materials
+    this.fireMaterial = new THREE.MeshBasicMaterial({
+      color: 0xff4400,
+      transparent: true,
+      opacity: 0.8,
+    });
+
+    this.smokeMaterial = new THREE.MeshBasicMaterial({
+      color: 0x333333,
+      transparent: true,
+      opacity: 0.5,
+    });
+
+    this.fireGeometry = new THREE.ConeGeometry(0.3, 0.8, 8);
+
     // Register callback to refresh meshes when custom models finish loading
     AssetManager.onModelsLoaded(() => {
       this.refreshAllMeshes();
@@ -87,7 +111,10 @@ export class BuildingRenderer {
     this.playerId = playerId;
   }
 
-  public update(): void {
+  public update(deltaTime: number = 16): void {
+    const dt = deltaTime / 1000;
+    this.fireAnimTime += dt;
+
     const entities = this.world.getEntitiesWith('Transform', 'Building');
     const currentIds = new Set<number>();
 
@@ -212,11 +239,37 @@ export class BuildingRenderer {
           isOwned ? this.selectionMaterial : this.enemySelectionMaterial;
       }
 
-      // Update health bar
+      // Update health bar and fire effects
       if (health && building.isComplete()) {
+        const healthPercent = health.getHealthPercent();
         meshData.healthBar.position.set(transform.x, terrainHeight + building.height + 0.5, transform.y);
-        meshData.healthBar.visible = health.getHealthPercent() < 1;
+        meshData.healthBar.visible = healthPercent < 1;
         this.updateHealthBar(meshData.healthBar, health);
+
+        // Fire effects for damaged buildings (below 50% health)
+        if (healthPercent < 0.5 && !meshData.fireEffect) {
+          // Create fire effect
+          meshData.fireEffect = this.createFireEffect(building.width, building.height);
+          meshData.fireEffect.position.set(transform.x, terrainHeight, transform.y);
+          this.scene.add(meshData.fireEffect);
+        } else if (healthPercent >= 0.5 && meshData.fireEffect) {
+          // Remove fire effect if health recovered
+          this.scene.remove(meshData.fireEffect);
+          this.disposeGroup(meshData.fireEffect);
+          meshData.fireEffect = null;
+        }
+
+        // Animate fire effect
+        if (meshData.fireEffect) {
+          meshData.fireEffect.position.set(transform.x, terrainHeight, transform.y);
+          this.updateFireEffect(meshData.fireEffect, dt);
+
+          // More intense fire at lower health
+          const intensity = 1 + (0.5 - healthPercent) * 2;
+          meshData.fireEffect.scale.setScalar(intensity);
+        }
+
+        meshData.lastHealthPercent = healthPercent;
       } else {
         meshData.healthBar.visible = false;
       }
@@ -246,6 +299,10 @@ export class BuildingRenderer {
         this.scene.remove(meshData.selectionRing);
         this.scene.remove(meshData.healthBar);
         this.scene.remove(meshData.progressBar);
+        if (meshData.fireEffect) {
+          this.scene.remove(meshData.fireEffect);
+          this.disposeGroup(meshData.fireEffect);
+        }
         this.disposeGroup(meshData.group);
         this.buildingMeshes.delete(entityId);
       }
@@ -273,7 +330,103 @@ export class BuildingRenderer {
     // Progress bar
     const progressBar = this.createBar(0xffff00);
 
-    return { group, selectionRing, healthBar, progressBar, buildingId: building.buildingId, wasComplete: false };
+    return {
+      group,
+      selectionRing,
+      healthBar,
+      progressBar,
+      buildingId: building.buildingId,
+      wasComplete: false,
+      fireEffect: null,
+      lastHealthPercent: 1,
+    };
+  }
+
+  /**
+   * Create fire effect for damaged buildings
+   */
+  private createFireEffect(buildingWidth: number, buildingHeight: number): THREE.Group {
+    const fireGroup = new THREE.Group();
+
+    // Create multiple flame cones at random positions
+    const flameCount = Math.max(3, Math.floor(buildingWidth * buildingHeight / 4));
+    for (let i = 0; i < flameCount; i++) {
+      const flame = new THREE.Mesh(
+        this.fireGeometry,
+        this.fireMaterial.clone()
+      );
+
+      // Random position within building footprint
+      flame.position.x = (Math.random() - 0.5) * buildingWidth * 0.8;
+      flame.position.z = (Math.random() - 0.5) * buildingHeight * 0.8;
+      flame.position.y = buildingHeight * 0.3 + Math.random() * buildingHeight * 0.4;
+
+      // Random scale
+      const scale = 0.5 + Math.random() * 1.0;
+      flame.scale.set(scale, scale * (0.8 + Math.random() * 0.4), scale);
+
+      // Vary colors between orange and red
+      const mat = flame.material as THREE.MeshBasicMaterial;
+      mat.color.setHex(Math.random() > 0.5 ? 0xff4400 : 0xff6600);
+
+      // Store original position for animation
+      flame.userData.baseY = flame.position.y;
+      flame.userData.phase = Math.random() * Math.PI * 2;
+
+      fireGroup.add(flame);
+    }
+
+    // Add some smoke spheres
+    const smokeGeometry = new THREE.SphereGeometry(0.4, 8, 8);
+    for (let i = 0; i < 3; i++) {
+      const smoke = new THREE.Mesh(smokeGeometry, this.smokeMaterial.clone());
+      smoke.position.x = (Math.random() - 0.5) * buildingWidth * 0.6;
+      smoke.position.z = (Math.random() - 0.5) * buildingHeight * 0.6;
+      smoke.position.y = buildingHeight * 0.8 + Math.random() * 0.5;
+
+      const scale = 0.8 + Math.random() * 0.6;
+      smoke.scale.setScalar(scale);
+
+      smoke.userData.baseY = smoke.position.y;
+      smoke.userData.phase = Math.random() * Math.PI * 2;
+      smoke.userData.isSmoke = true;
+
+      fireGroup.add(smoke);
+    }
+
+    return fireGroup;
+  }
+
+  /**
+   * Animate fire effect
+   */
+  private updateFireEffect(fireGroup: THREE.Group, dt: number): void {
+    for (const child of fireGroup.children) {
+      if (child instanceof THREE.Mesh) {
+        const phase = child.userData.phase || 0;
+        const baseY = child.userData.baseY || 0;
+
+        // Flickering animation
+        const flicker = Math.sin(this.fireAnimTime * 10 + phase) * 0.1;
+        child.position.y = baseY + flicker;
+
+        // Scale pulsing
+        const pulse = 1 + Math.sin(this.fireAnimTime * 8 + phase) * 0.15;
+        const baseScale = child.userData.isSmoke ? 1 : 0.8;
+        child.scale.y = baseScale * pulse;
+
+        // Smoke rises slowly
+        if (child.userData.isSmoke) {
+          child.position.y += dt * 0.3;
+          if (child.position.y > baseY + 2) {
+            child.position.y = baseY;
+          }
+          // Fade smoke as it rises
+          const mat = child.material as THREE.MeshBasicMaterial;
+          mat.opacity = 0.5 * (1 - (child.position.y - baseY) / 2);
+        }
+      }
+    }
   }
 
   private createBar(color: number): THREE.Group {
@@ -344,6 +497,9 @@ export class BuildingRenderer {
     this.constructingMaterial.dispose();
     this.selectionMaterial.dispose();
     this.enemySelectionMaterial.dispose();
+    this.fireMaterial.dispose();
+    this.smokeMaterial.dispose();
+    this.fireGeometry.dispose();
 
     for (const meshData of this.buildingMeshes.values()) {
       this.disposeGroup(meshData.group);
@@ -351,6 +507,10 @@ export class BuildingRenderer {
       this.scene.remove(meshData.selectionRing);
       this.scene.remove(meshData.healthBar);
       this.scene.remove(meshData.progressBar);
+      if (meshData.fireEffect) {
+        this.scene.remove(meshData.fireEffect);
+        this.disposeGroup(meshData.fireEffect);
+      }
     }
 
     this.buildingMeshes.clear();

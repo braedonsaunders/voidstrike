@@ -233,6 +233,21 @@ export class OverlayScene extends Phaser.Scene {
       this.addAbilitySplash(data.position.x, data.position.y, data.abilityName, data.color ?? 0xffffff);
       this.showAlert(data.abilityName.toUpperCase(), data.color ?? 0xffffff, 2000);
     });
+
+    // Victory/Defeat events
+    this.eventBus.on('game:victory', (data: {
+      winner: string;
+      loser: string;
+      reason: string;
+      duration: number;
+    }) => {
+      const isVictory = data.winner === 'player1';
+      this.showGameEndOverlay(isVictory, data.duration, data.reason);
+    });
+
+    this.eventBus.on('game:draw', (data: { duration: number }) => {
+      this.showGameEndOverlay(null, data.duration, 'draw');
+    });
   }
 
   private setupKeyboardShortcuts(): void {
@@ -284,6 +299,115 @@ export class OverlayScene extends Phaser.Scene {
 
   private addScreenEffect(effect: ScreenEffect): void {
     this.screenEffects.push(effect);
+  }
+
+  /**
+   * Show full-screen victory or defeat overlay
+   */
+  private showGameEndOverlay(isVictory: boolean | null, duration: number, reason: string): void {
+    const screenWidth = this.scale.width;
+    const screenHeight = this.scale.height;
+
+    // Create dark overlay
+    const overlay = this.add.graphics();
+    overlay.setDepth(500);
+    overlay.fillStyle(0x000000, 0.85);
+    overlay.fillRect(0, 0, screenWidth, screenHeight);
+
+    // Create container for all elements
+    const container = this.add.container(screenWidth / 2, screenHeight / 2);
+    container.setDepth(501);
+
+    // Determine text and colors based on result
+    let mainText: string;
+    let mainColor: number;
+    let subColor: number;
+
+    if (isVictory === null) {
+      mainText = 'DRAW';
+      mainColor = 0xffff00;
+      subColor = 0xcccc00;
+    } else if (isVictory) {
+      mainText = 'VICTORY';
+      mainColor = 0x00ff00;
+      subColor = 0x00cc00;
+    } else {
+      mainText = 'DEFEAT';
+      mainColor = 0xff0000;
+      subColor = 0xcc0000;
+    }
+
+    // Create main title with glow effect
+    const title = this.add.text(0, -80, mainText, {
+      fontSize: '96px',
+      fontFamily: 'Orbitron, sans-serif',
+      color: '#' + mainColor.toString(16).padStart(6, '0'),
+      stroke: '#000000',
+      strokeThickness: 6,
+    });
+    title.setOrigin(0.5, 0.5);
+    container.add(title);
+
+    // Subtitle with reason
+    const reasonText = reason === 'elimination' ? 'Enemy Eliminated'
+      : reason === 'surrender' ? 'Enemy Surrendered'
+      : reason === 'draw' ? 'All Forces Lost'
+      : 'Game Over';
+    const subtitle = this.add.text(0, 0, reasonText, {
+      fontSize: '32px',
+      fontFamily: 'Inter, sans-serif',
+      color: '#ffffff',
+    });
+    subtitle.setOrigin(0.5, 0.5);
+    container.add(subtitle);
+
+    // Game duration
+    const minutes = Math.floor(duration / 60);
+    const seconds = Math.floor(duration % 60);
+    const durationText = this.add.text(0, 50, `Game Duration: ${minutes}:${seconds.toString().padStart(2, '0')}`, {
+      fontSize: '24px',
+      fontFamily: 'Inter, sans-serif',
+      color: '#aaaaaa',
+    });
+    durationText.setOrigin(0.5, 0.5);
+    container.add(durationText);
+
+    // Return to menu hint
+    const hintText = this.add.text(0, 120, 'Press ESCAPE to return to menu', {
+      fontSize: '20px',
+      fontFamily: 'Inter, sans-serif',
+      color: '#666666',
+    });
+    hintText.setOrigin(0.5, 0.5);
+    container.add(hintText);
+
+    // Animate elements in
+    container.setAlpha(0);
+    this.tweens.add({
+      targets: container,
+      alpha: 1,
+      duration: 500,
+      ease: 'Power2',
+    });
+
+    // Pulse animation on title
+    this.tweens.add({
+      targets: title,
+      scaleX: 1.05,
+      scaleY: 1.05,
+      duration: 1000,
+      yoyo: true,
+      repeat: -1,
+      ease: 'Sine.easeInOut',
+    });
+
+    // Listen for escape key to return to menu
+    if (this.input.keyboard) {
+      const escKey = this.input.keyboard.addKey('ESC');
+      escKey.once('down', () => {
+        window.location.href = '/';
+      });
+    }
   }
 
   private showAlert(text: string, color: number, duration: number): void {
