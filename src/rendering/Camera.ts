@@ -203,10 +203,11 @@ export class RTSCamera {
       this.target.x += rotatedX;
       this.target.z += rotatedZ;
 
-      // Clamp to map boundaries
-      const padding = this.config.boundaryPadding;
-      this.target.x = Math.max(padding, Math.min(this.mapWidth - padding, this.target.x));
-      this.target.z = Math.max(padding, Math.min(this.mapHeight - padding, this.target.z));
+      // Clamp to map boundaries - ensure viewport stays within map
+      const viewHalfWidth = this.currentZoom;
+      const viewHalfHeight = this.currentZoom * 0.75;
+      this.target.x = Math.max(viewHalfWidth, Math.min(this.mapWidth - viewHalfWidth, this.target.x));
+      this.target.z = Math.max(viewHalfHeight, Math.min(this.mapHeight - viewHalfHeight, this.target.z));
 
       this.updateCameraPosition();
     }
@@ -222,8 +223,14 @@ export class RTSCamera {
   }
 
   public setPosition(x: number, z: number): void {
-    this.target.x = x;
-    this.target.z = z;
+    // Calculate viewport half-sizes to ensure camera view stays within map bounds
+    // These values match the minimap viewport calculation
+    const viewHalfWidth = this.currentZoom;
+    const viewHalfHeight = this.currentZoom * 0.75;
+
+    // Clamp position so the entire viewport stays within map boundaries
+    this.target.x = Math.max(viewHalfWidth, Math.min(this.mapWidth - viewHalfWidth, x));
+    this.target.z = Math.max(viewHalfHeight, Math.min(this.mapHeight - viewHalfHeight, z));
     this.updateCameraPosition();
   }
 
@@ -261,10 +268,9 @@ export class RTSCamera {
   public recallLocation(slot: string): boolean {
     const location = this.savedLocations.get(slot);
     if (location) {
-      this.target.x = location.x;
-      this.target.z = location.z;
       this.currentZoom = location.zoom;
-      this.updateCameraPosition();
+      // Use setPosition for consistent boundary clamping
+      this.setPosition(location.x, location.z);
       return true;
     }
     return false;
