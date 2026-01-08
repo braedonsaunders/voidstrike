@@ -67,6 +67,14 @@ export class CombatSystem extends System {
   // Track last under attack alert time per player
   private lastUnderAttackAlert: Map<string, number> = new Map();
 
+  // Target acquisition throttling - don't search every frame
+  private lastTargetSearchTick: Map<number, number> = new Map();
+  private readonly TARGET_SEARCH_INTERVAL = 10; // Only search every 10 ticks (~0.5 sec)
+
+  // Cache current targets to avoid re-searching
+  private cachedTargets: Map<number, { targetId: number; validUntilTick: number }> = new Map();
+  private readonly TARGET_CACHE_DURATION = 20; // Cache valid for 20 ticks (~1 sec)
+
   constructor(game: Game) {
     super(game);
     this.setupEventListeners();
@@ -142,6 +150,7 @@ export class CombatSystem extends System {
 
   public update(deltaTime: number): void {
     const gameTime = this.game.getGameTime();
+    const currentTick = this.game.getCurrentTick();
     const attackers = this.world.getEntitiesWith('Transform', 'Unit', 'Health');
 
     for (const attacker of attackers) {
@@ -168,7 +177,8 @@ export class CombatSystem extends System {
         (unit.state === 'idle' || unit.state === 'patrolling' || unit.isHoldingPosition) &&
         unit.targetEntityId === null
       ) {
-        const target = this.findBestTarget(attacker.id, transform, unit);
+        // Use throttled/cached target search for performance
+        const target = this.getTargetThrottled(attacker.id, transform, unit, currentTick);
         if (target && !unit.isHoldingPosition) {
           unit.setAttackTarget(target);
         } else if (target && unit.isHoldingPosition) {
@@ -266,16 +276,60 @@ export class CombatSystem extends System {
   }
 
   /**
-   * Find the best target using smart targeting (priority system)
+   * Throttled target acquisition - only searches for targets periodically
+   * and caches results to reduce CPU usage
+   */
+  private getTargetThrottled(
+    selfId: number,
+    selfTransform: Transform,
+    selfUnit: Unit,
+    currentTick: number
+  ): number | null {
+    // Check cache first
+    const cached = this.cachedTargets.get(selfId);
+    if (cached && cached.validUntilTick > currentTick) {
+      // Verify cached target is still valid
+      const targetEntity = this.world.getEntity(cached.targetId);
+      if (targetEntity && !targetEntity.isDestroyed()) {
+        const targetHealth = targetEntity.get<Health>('Health');
+        if (targetHealth && !targetHealth.isDead()) {
+          return cached.targetId;
+        }
+      }
+      // Cached target invalid, remove it
+      this.cachedTargets.delete(selfId);
+    }
+
+    // Check if enough time has passed since last search
+    const lastSearch = this.lastTargetSearchTick.get(selfId) || 0;
+    if (currentTick - lastSearch < this.TARGET_SEARCH_INTERVAL) {
+      return null; // Not time to search yet
+    }
+
+    // Perform the search
+    this.lastTargetSearchTick.set(selfId, currentTick);
+    const target = this.findBestTargetSpatial(selfId, selfTransform, selfUnit);
+
+    // Cache the result
+    if (target !== null) {
+      this.cachedTargets.set(selfId, {
+        targetId: target,
+        validUntilTick: currentTick + this.TARGET_CACHE_DURATION,
+      });
+    }
+
+    return target;
+  }
+
+  /**
+   * Find the best target using spatial grid for O(nearby) instead of O(all entities)
    * Prioritizes high-threat units over workers
    */
-  private findBestTarget(
+  private findBestTargetSpatial(
     selfId: number,
     selfTransform: Transform,
     selfUnit: Unit
   ): number | null {
-    const entities = this.world.getEntitiesWith('Transform', 'Health', 'Selectable');
-
     // Get self's player ID
     const selfEntity = this.world.getEntity(selfId);
     const selfSelectable = selfEntity?.get<Selectable>('Selectable');
@@ -283,39 +337,83 @@ export class CombatSystem extends System {
 
     let bestTarget: { id: number; score: number } | null = null;
 
-    for (const entity of entities) {
-      if (entity.id === selfId) continue;
+    // Use spatial grid to find nearby units - much faster than checking all entities
+    const nearbyUnitIds = this.world.unitGrid.queryRadius(
+      selfTransform.x,
+      selfTransform.y,
+      selfUnit.sightRange
+    );
 
-      const transform = entity.get<Transform>('Transform')!;
-      const health = entity.get<Health>('Health')!;
+    // Check nearby units
+    for (const entityId of nearbyUnitIds) {
+      if (entityId === selfId) continue;
+
+      const entity = this.world.getEntity(entityId);
+      if (!entity) continue;
+
+      const transform = entity.get<Transform>('Transform');
+      const health = entity.get<Health>('Health');
       const selectable = entity.get<Selectable>('Selectable');
       const unit = entity.get<Unit>('Unit');
 
-      // Skip if same player or dead
-      if (!selectable) continue;
+      if (!transform || !health || !selectable) continue;
       if (selectable.playerId === selfSelectable.playerId) continue;
       if (health.isDead()) continue;
 
       const distance = selfTransform.distanceTo(transform);
-
-      // Only consider enemies within sight range
       if (distance > selfUnit.sightRange) continue;
 
       // Calculate target score based on priority and distance
       const unitId = unit?.unitId || 'default';
       const basePriority = TARGET_PRIORITY[unitId] || 50;
-
-      // Distance factor: closer targets score higher (normalize to 0-1 range)
       const distanceFactor = 1 - (distance / selfUnit.sightRange);
-
-      // Low health factor: prefer targets that can be killed quickly
       const healthFactor = 1 - (health.current / health.max);
-
-      // Combined score
       const score = basePriority * 0.5 + distanceFactor * 30 + healthFactor * 20;
 
       if (!bestTarget || score > bestTarget.score) {
-        bestTarget = { id: entity.id, score };
+        bestTarget = { id: entityId, score };
+      }
+    }
+
+    // Also check nearby buildings using building grid
+    const nearbyBuildingIds = this.world.buildingGrid.queryRadius(
+      selfTransform.x,
+      selfTransform.y,
+      selfUnit.sightRange
+    );
+
+    for (const entityId of nearbyBuildingIds) {
+      const entity = this.world.getEntity(entityId);
+      if (!entity) continue;
+
+      const transform = entity.get<Transform>('Transform');
+      const health = entity.get<Health>('Health');
+      const selectable = entity.get<Selectable>('Selectable');
+      const building = entity.get<Building>('Building');
+
+      if (!transform || !health || !selectable || !building) continue;
+      if (selectable.playerId === selfSelectable.playerId) continue;
+      if (health.isDead()) continue;
+
+      // Distance to building edge
+      const halfW = building.width / 2;
+      const halfH = building.height / 2;
+      const clampedX = Math.max(transform.x - halfW, Math.min(selfTransform.x, transform.x + halfW));
+      const clampedY = Math.max(transform.y - halfH, Math.min(selfTransform.y, transform.y + halfH));
+      const edgeDx = selfTransform.x - clampedX;
+      const edgeDy = selfTransform.y - clampedY;
+      const distance = Math.sqrt(edgeDx * edgeDx + edgeDy * edgeDy);
+
+      if (distance > selfUnit.sightRange) continue;
+
+      // Buildings have lower priority than combat units
+      const basePriority = 30;
+      const distanceFactor = 1 - (distance / selfUnit.sightRange);
+      const healthFactor = 1 - (health.current / health.max);
+      const score = basePriority * 0.5 + distanceFactor * 30 + healthFactor * 20;
+
+      if (!bestTarget || score > bestTarget.score) {
+        bestTarget = { id: entityId, score };
       }
     }
 
