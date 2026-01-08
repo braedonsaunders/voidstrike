@@ -121,8 +121,10 @@ export class BuildingRenderer {
     for (const entity of entities) {
       currentIds.add(entity.id);
 
-      const transform = entity.get<Transform>('Transform')!;
-      const building = entity.get<Building>('Building')!;
+      const transform = entity.get<Transform>('Transform');
+      const building = entity.get<Building>('Building');
+      if (!transform || !building) continue;
+
       const health = entity.get<Health>('Health');
       const selectable = entity.get<Selectable>('Selectable');
 

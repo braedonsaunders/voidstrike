@@ -35,9 +35,11 @@ export class SpawnSystem extends System {
     x: number;
     y: number;
     playerId: string;
+    rallyX?: number | null;
+    rallyY?: number | null;
     rallyTargetId?: number | null;
   }): void {
-    const { unitType, x, y, playerId, rallyTargetId } = data;
+    const { unitType, x, y, playerId, rallyX, rallyY, rallyTargetId } = data;
     const definition = UNIT_DEFINITIONS[unitType];
 
     if (!definition) {
@@ -73,13 +75,13 @@ export class SpawnSystem extends System {
     // Note: Supply is already reserved when production is queued in ProductionSystem
     // So we don't add supply here - it was already accounted for
 
-    // Auto-gather for workers rallied to resources
+    // Handle rally point - send unit to rally after spawn
     if (rallyTargetId && definition.isWorker) {
+      // Worker rallied to resource - auto-gather
       const targetEntity = this.world.getEntity(rallyTargetId);
       if (targetEntity) {
         const resource = targetEntity.get('Resource');
         if (resource) {
-          // Send gather command to the newly spawned worker
           this.game.eventBus.emit('command:gather', {
             entityIds: [entity.id],
             targetEntityId: rallyTargetId,
@@ -87,6 +89,14 @@ export class SpawnSystem extends System {
           console.log(`SpawnSystem: Auto-gather for ${definition.name} to resource ${rallyTargetId}`);
         }
       }
+    } else if (rallyX != null && rallyY != null) {
+      // Send unit to rally point
+      this.game.eventBus.emit('command:move', {
+        entityIds: [entity.id],
+        x: rallyX,
+        y: rallyY,
+      });
+      console.log(`SpawnSystem: Moving ${definition.name} to rally point (${rallyX.toFixed(1)}, ${rallyY.toFixed(1)})`);
     }
 
     // Emit spawn complete event for UI feedback

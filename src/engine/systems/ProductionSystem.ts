@@ -184,8 +184,8 @@ export class ProductionSystem extends System {
             });
           }
 
-          // Add supply if applicable
-          if (building.supplyProvided > 0) {
+          // Add supply if applicable - only for player1 buildings
+          if (building.supplyProvided > 0 && selectable?.playerId === 'player1') {
             useGameStore.getState().addMaxSupply(building.supplyProvided);
           }
 
@@ -215,9 +215,9 @@ export class ProductionSystem extends System {
     item: { type: string; id: string }
   ): void {
     if (item.type === 'unit') {
-      // Spawn the unit at rally point or near building
-      const spawnX = building.rallyX ?? buildingTransform.x + building.width + 1;
-      const spawnY = building.rallyY ?? buildingTransform.y + building.height / 2;
+      // Spawn the unit near the building (not at rally point)
+      const spawnX = buildingTransform.x + building.width / 2 + 1;
+      const spawnY = buildingTransform.y;
 
       // Get the building's owner from its Selectable component
       const buildingEntity = this.world.getEntity(buildingId);
@@ -229,6 +229,9 @@ export class ProductionSystem extends System {
         x: spawnX,
         y: spawnY,
         playerId: ownerPlayerId,
+        // Pass rally point coordinates so unit walks there after spawn
+        rallyX: building.rallyX,
+        rallyY: building.rallyY,
         // Pass rally target for auto-gather (workers rallied to resources)
         rallyTargetId: building.rallyTargetId,
       });

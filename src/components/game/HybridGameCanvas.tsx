@@ -233,7 +233,7 @@ export function HybridGameCanvas() {
       // Set up vespene geyser checker for refinery placement
       placementPreviewRef.current.setVespeneGeyserChecker((x, y) => {
         const resources = game.world.getEntitiesWith('Resource', 'Transform');
-        const searchRadius = 3;
+        const searchRadius = 1.5; // Must be placed directly on top of geyser
         for (const entity of resources) {
           const resource = entity.get<Resource>('Resource');
           if (resource?.resourceType !== 'vespene') continue;
