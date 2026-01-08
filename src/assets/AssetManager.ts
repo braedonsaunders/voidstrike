@@ -369,12 +369,69 @@ export class AssetManager {
    * Get or generate a resource mesh
    */
   static getResourceMesh(resourceType: 'minerals' | 'vespene'): THREE.Object3D {
+    // Check for custom model first
+    if (customAssets.has(resourceType)) {
+      const original = customAssets.get(resourceType)!;
+      const cloned = cloneModel(original, resourceType);
+
+      const wrapper = new THREE.Group();
+      cloned.position.copy(original.position);
+      cloned.scale.copy(original.scale);
+      cloned.rotation.copy(original.rotation);
+
+      cloned.traverse((child) => {
+        if (child instanceof THREE.Mesh) {
+          child.visible = true;
+          child.frustumCulled = false;
+        }
+      });
+
+      wrapper.add(cloned);
+      return wrapper;
+    }
+
     const cacheKey = `resource_${resourceType}`;
     if (!assetCache.has(cacheKey)) {
       const mesh = ProceduralGenerator.generateResource(resourceType);
       assetCache.set(cacheKey, mesh);
     }
     return assetCache.get(cacheKey)!.clone();
+  }
+
+  /**
+   * Get or generate a decoration mesh (trees, rocks, towers)
+   */
+  static getDecorationMesh(decorationType: string): THREE.Object3D | null {
+    // Check for custom model first
+    if (customAssets.has(decorationType)) {
+      const original = customAssets.get(decorationType)!;
+      const cloned = cloneModel(original, decorationType);
+
+      const wrapper = new THREE.Group();
+      cloned.position.copy(original.position);
+      cloned.scale.copy(original.scale);
+      cloned.rotation.copy(original.rotation);
+
+      cloned.traverse((child) => {
+        if (child instanceof THREE.Mesh) {
+          child.visible = true;
+          child.frustumCulled = false;
+        }
+      });
+
+      wrapper.add(cloned);
+      return wrapper;
+    }
+
+    // No procedural fallback for decorations yet
+    return null;
+  }
+
+  /**
+   * Check if a custom decoration model exists
+   */
+  static hasDecorationModel(decorationType: string): boolean {
+    return customAssets.has(decorationType);
   }
 
   /**
@@ -560,6 +617,26 @@ export class AssetManager {
       { path: '/models/buildings/missile_turret.glb', assetId: 'missile_turret', targetHeight: 2.5 },
       { path: '/models/buildings/tech_lab.glb', assetId: 'tech_lab', targetHeight: 2.0 },
       { path: '/models/buildings/reactor.glb', assetId: 'reactor', targetHeight: 2.0 },
+      // Resources
+      { path: '/models/resources/minerals.glb', assetId: 'minerals', targetHeight: 2.0 },
+      { path: '/models/resources/vespene.glb', assetId: 'vespene', targetHeight: 2.0 },
+      // Decorations
+      { path: '/models/decorations/xelnaga_tower.glb', assetId: 'xelnaga_tower', targetHeight: 7.0 },
+      { path: '/models/decorations/rocks_large.glb', assetId: 'rocks_large', targetHeight: 2.0 },
+      { path: '/models/decorations/rocks_small.glb', assetId: 'rocks_small', targetHeight: 1.0 },
+      { path: '/models/decorations/rock_single.glb', assetId: 'rock_single', targetHeight: 1.0 },
+      { path: '/models/decorations/tree_pine_tall.glb', assetId: 'tree_pine_tall', targetHeight: 5.5 },
+      { path: '/models/decorations/tree_pine_medium.glb', assetId: 'tree_pine_medium', targetHeight: 3.5 },
+      { path: '/models/decorations/tree_dead.glb', assetId: 'tree_dead', targetHeight: 3.5 },
+      { path: '/models/decorations/tree_alien.glb', assetId: 'tree_alien', targetHeight: 4.5 },
+      { path: '/models/decorations/tree_palm.glb', assetId: 'tree_palm', targetHeight: 4.5 },
+      { path: '/models/decorations/tree_mushroom.glb', assetId: 'tree_mushroom', targetHeight: 3.5 },
+      { path: '/models/decorations/crystal_formation.glb', assetId: 'crystal_formation', targetHeight: 1.5 },
+      { path: '/models/decorations/bush.glb', assetId: 'bush', targetHeight: 0.5 },
+      { path: '/models/decorations/grass_clump.glb', assetId: 'grass_clump', targetHeight: 0.3 },
+      { path: '/models/decorations/debris.glb', assetId: 'debris', targetHeight: 0.5 },
+      { path: '/models/decorations/escape_pod.glb', assetId: 'escape_pod', targetHeight: 1.5 },
+      { path: '/models/decorations/ruined_wall.glb', assetId: 'ruined_wall', targetHeight: 2.0 },
     ];
 
     console.log('[AssetManager] Loading custom models...');

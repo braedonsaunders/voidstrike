@@ -28,6 +28,7 @@ import { Unit } from '@/engine/components/Unit';
 import { Selectable } from '@/engine/components/Selectable';
 import { Transform } from '@/engine/components/Transform';
 import { Health } from '@/engine/components/Health';
+import { Building } from '@/engine/components/Building';
 import AssetManager from '@/assets/AssetManager';
 import { OverlayScene } from '@/phaser/scenes/OverlayScene';
 
@@ -216,10 +217,19 @@ export function HybridGameCanvas() {
       }
 
       effectsRendererRef.current = new EffectsRenderer(scene, game.eventBus);
-      rallyPointRendererRef.current = new RallyPointRenderer(scene, game.eventBus, game.world, 'player1');
+      rallyPointRendererRef.current = new RallyPointRenderer(
+        scene,
+        game.eventBus,
+        game.world,
+        'player1',
+        (x, y) => terrain.getHeightAt(x, y)
+      );
 
       // Building placement preview (SC2-style grid + ghost)
-      placementPreviewRef.current = new BuildingPlacementPreview(CURRENT_MAP);
+      placementPreviewRef.current = new BuildingPlacementPreview(
+        CURRENT_MAP,
+        (x, y) => terrain.getHeightAt(x, y)
+      );
       scene.add(placementPreviewRef.current.group);
 
       // Initialize SC2-level visual systems
@@ -530,6 +540,36 @@ export function HybridGameCanvas() {
         if (selectedUnits.length > 0) {
           const queue = e.shiftKey;
           const clickedEntity = findEntityAtPosition(gameRef.current, worldPos.x, worldPos.z);
+
+          // Check if selected entities are BUILDINGS (for rally point)
+          const selectedBuildings: number[] = [];
+          const selectedUnitEntities: number[] = [];
+
+          for (const id of selectedUnits) {
+            const entity = gameRef.current.world.getEntity(id);
+            if (!entity) continue;
+
+            const building = entity.get<Building>('Building');
+            const unit = entity.get<Unit>('Unit');
+
+            if (building && building.canProduce && building.canProduce.length > 0) {
+              selectedBuildings.push(id);
+            } else if (unit) {
+              selectedUnitEntities.push(id);
+            }
+          }
+
+          // If ONLY production buildings are selected, set rally point
+          if (selectedBuildings.length > 0 && selectedUnitEntities.length === 0) {
+            for (const buildingId of selectedBuildings) {
+              gameRef.current.eventBus.emit('rally:set', {
+                buildingId,
+                x: worldPos.x,
+                y: worldPos.z,
+              });
+            }
+            return;
+          }
 
           if (clickedEntity) {
             const resource = clickedEntity.entity.get<Resource>('Resource');

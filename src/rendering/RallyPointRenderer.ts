@@ -16,6 +16,7 @@ export class RallyPointRenderer {
   private eventBus: EventBus;
   private world: World;
   private playerId: string;
+  private getTerrainHeight: ((x: number, y: number) => number) | null = null;
 
   private rallyPoints: Map<number, RallyPoint> = new Map();
   private selectedBuildingIds: Set<number> = new Set();
@@ -29,12 +30,14 @@ export class RallyPointRenderer {
     scene: THREE.Scene,
     eventBus: EventBus,
     world: World,
-    playerId: string = 'player1'
+    playerId: string = 'player1',
+    getTerrainHeight?: (x: number, y: number) => number
   ) {
     this.scene = scene;
     this.eventBus = eventBus;
     this.world = world;
     this.playerId = playerId;
+    this.getTerrainHeight = getTerrainHeight ?? null;
 
     // Create shared resources
     this.lineMaterial = new THREE.LineBasicMaterial({
@@ -155,9 +158,10 @@ export class RallyPointRenderer {
     const geometry = new THREE.BufferGeometry().setFromPoints(points);
     const line = new THREE.Line(geometry, this.lineMaterial);
 
-    // Create marker at rally point
+    // Create marker at rally point - account for terrain height
+    const endHeight = this.getTerrainHeight ? this.getTerrainHeight(endX, endY) : 0;
     const marker = new THREE.Mesh(this.markerGeometry, this.markerMaterial);
-    marker.position.set(endX, 0.5, endY);
+    marker.position.set(endX, endHeight + 0.5, endY);
     marker.rotation.x = Math.PI; // Point downward
 
     return { buildingId: 0, line, marker };
@@ -175,12 +179,12 @@ export class RallyPointRenderer {
     rallyPoint.line.geometry.dispose();
     rallyPoint.line.geometry = new THREE.BufferGeometry().setFromPoints(points);
 
-    // Update marker position
-    rallyPoint.marker.position.set(endX, 0.5, endY);
+    // Update marker position - account for terrain height
+    const endHeight = this.getTerrainHeight ? this.getTerrainHeight(endX, endY) : 0;
 
     // Add subtle animation to marker
     const time = Date.now() * 0.003;
-    rallyPoint.marker.position.y = 0.5 + Math.sin(time) * 0.1;
+    rallyPoint.marker.position.set(endX, endHeight + 0.5 + Math.sin(time) * 0.1, endY);
     rallyPoint.marker.rotation.y = time;
   }
 
@@ -193,6 +197,7 @@ export class RallyPointRenderer {
     const points: THREE.Vector3[] = [];
     const dashLength = 0.5;
     const gapLength = 0.3;
+    const lineOffset = 0.2; // Height above terrain
 
     const dx = endX - startX;
     const dy = endY - startY;
@@ -206,26 +211,31 @@ export class RallyPointRenderer {
       const segmentStart = i * (dashLength + gapLength);
       const segmentEnd = segmentStart + dashLength;
 
+      const x1 = startX + dirX * segmentStart;
+      const z1 = startY + dirY * segmentStart;
+      const x2 = startX + dirX * Math.min(segmentEnd, distance);
+      const z2 = startY + dirY * Math.min(segmentEnd, distance);
+
+      const y1 = (this.getTerrainHeight ? this.getTerrainHeight(x1, z1) : 0) + lineOffset;
+      const y2 = (this.getTerrainHeight ? this.getTerrainHeight(x2, z2) : 0) + lineOffset;
+
       points.push(
-        new THREE.Vector3(
-          startX + dirX * segmentStart,
-          0.2,
-          startY + dirY * segmentStart
-        ),
-        new THREE.Vector3(
-          startX + dirX * Math.min(segmentEnd, distance),
-          0.2,
-          startY + dirY * Math.min(segmentEnd, distance)
-        )
+        new THREE.Vector3(x1, y1, z1),
+        new THREE.Vector3(x2, y2, z2)
       );
     }
 
     // Add final segment to reach the end point
     const lastSegmentEnd = segments * (dashLength + gapLength);
     if (lastSegmentEnd < distance) {
+      const x1 = startX + dirX * lastSegmentEnd;
+      const z1 = startY + dirY * lastSegmentEnd;
+      const y1 = (this.getTerrainHeight ? this.getTerrainHeight(x1, z1) : 0) + lineOffset;
+      const yEnd = (this.getTerrainHeight ? this.getTerrainHeight(endX, endY) : 0) + lineOffset;
+
       points.push(
-        new THREE.Vector3(startX + dirX * lastSegmentEnd, 0.2, startY + dirY * lastSegmentEnd),
-        new THREE.Vector3(endX, 0.2, endY)
+        new THREE.Vector3(x1, y1, z1),
+        new THREE.Vector3(endX, yEnd, endY)
       );
     }
 

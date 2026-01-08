@@ -71,6 +71,11 @@
 - [x] **Combat feedback** - Player damage vignette, unit death effects, enhanced combat border
 - [x] **Resource warnings** - "NOT ENOUGH MINERALS/VESPENE", "SUPPLY BLOCKED" alerts
 - [x] **Ability splashes** - Major ability notifications (Stim Pack, Yamato Cannon)
+- [x] **Rally point visibility** - Rally points now properly show when production buildings are selected
+- [x] **Rally point right-click** - Right-clicking with building selected sets rally point
+- [x] **Building placement elevation** - Placement grid follows terrain height on elevated areas
+- [x] **Minimap fog of war** - Enemy units/buildings no longer visible through fog of war
+- [x] **3D model integration** - AssetManager wired to load decoration models (trees, rocks, Xel'Naga tower)
 
 ### UI Improvements
 - [x] **Options menu** - Replaced Menu button with dropdown (Controls, Tech Tree, Exit to Menu)
