@@ -50,9 +50,6 @@ export function Minimap() {
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
 
-    const game = Game.getInstance();
-    if (!game) return;
-
     // PERFORMANCE: Pre-create gradient once instead of every frame
     const terrainGradient = ctx.createLinearGradient(0, 0, MINIMAP_SIZE, MINIMAP_SIZE);
     terrainGradient.addColorStop(0, '#2d4a3a');
@@ -64,13 +61,26 @@ export function Minimap() {
     const FRAME_TIME = 1000 / MINIMAP_FPS;
     let lastDrawTime = 0;
 
-    // Get map dimensions from game config
-    const mapWidth = game.config.mapWidth;
-    const mapHeight = game.config.mapHeight;
-    const mapSize = Math.max(mapWidth, mapHeight); // Use largest dimension for scale
-
     // Draw minimap
     const draw = (timestamp: number) => {
+      // Get game instance - may not be available immediately on mount
+      const game = Game.getInstance();
+      if (!game) {
+        // Game not ready yet, draw placeholder and keep trying
+        ctx.fillStyle = '#1a1a2e';
+        ctx.fillRect(0, 0, MINIMAP_SIZE, MINIMAP_SIZE);
+        ctx.fillStyle = 'rgba(255, 255, 255, 0.3)';
+        ctx.font = '12px sans-serif';
+        ctx.textAlign = 'center';
+        ctx.fillText('Loading...', MINIMAP_SIZE / 2, MINIMAP_SIZE / 2);
+        requestAnimationFrame(draw);
+        return;
+      }
+
+      // Get map dimensions from game config
+      const mapWidth = game.config.mapWidth;
+      const mapHeight = game.config.mapHeight;
+      const mapSize = Math.max(mapWidth, mapHeight); // Use largest dimension for scale
       // PERFORMANCE: Skip frame if not enough time has passed
       if (timestamp - lastDrawTime < FRAME_TIME) {
         requestAnimationFrame(draw);
