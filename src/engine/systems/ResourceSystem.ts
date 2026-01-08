@@ -349,8 +349,12 @@ export class ResourceSystem extends System {
       return;
     }
 
-    // Drop-off range accounts for building size (CC is 5x5, so center is ~2.5 from edge)
-    if (nearestDistance <= 5) {
+    // Calculate drop-off range based on building size
+    // Workers should drop off when they reach the edge of the building plus a small margin
+    const buildingHalfWidth = (nearestBase.building.width || 5) / 2;
+    const dropOffRange = buildingHalfWidth + 2.0; // Edge of building + worker radius + margin
+
+    if (nearestDistance <= dropOffRange) {
       // At base - deposit resources (only for player, AI tracks separately)
       if (workerOwner === 'player1') {
         const store = useGameStore.getState();
@@ -400,8 +404,24 @@ export class ResourceSystem extends System {
 
       unit.state = 'idle';
     } else {
-      // Move to base (keep gathering state)
-      unit.moveToPosition(nearestBase.transform.x, nearestBase.transform.y);
+      // Move toward the edge of the base building (not the center)
+      // This prevents fighting against building collision avoidance
+      const dx = transform.x - nearestBase.transform.x;
+      const dy = transform.y - nearestBase.transform.y;
+      const dist = Math.sqrt(dx * dx + dy * dy);
+
+      if (dist > 0.1) {
+        // Target a point at the edge of the building, in direction toward worker
+        const dirX = dx / dist;
+        const dirY = dy / dist;
+        const edgeDistance = buildingHalfWidth + 1.0; // Just outside the building edge
+        const targetX = nearestBase.transform.x + dirX * edgeDistance;
+        const targetY = nearestBase.transform.y + dirY * edgeDistance;
+        unit.moveToPosition(targetX, targetY);
+      } else {
+        // Worker is at center somehow, just move away slightly
+        unit.moveToPosition(nearestBase.transform.x + buildingHalfWidth + 1, nearestBase.transform.y);
+      }
     }
   }
 
@@ -437,7 +457,20 @@ export class ResourceSystem extends System {
         continue;
       }
 
-      unit.moveToPosition(baseTransform.x, baseTransform.y);
+      // Move toward edge of building, not center (prevents fighting building collision)
+      const buildingHalfWidth = (building.width || 5) / 2;
+      const dx = transform.x - baseTransform.x;
+      const dy = transform.y - baseTransform.y;
+      const dist = Math.sqrt(dx * dx + dy * dy);
+
+      if (dist > 0.1) {
+        const dirX = dx / dist;
+        const dirY = dy / dist;
+        const edgeDistance = buildingHalfWidth + 1.0;
+        unit.moveToPosition(baseTransform.x + dirX * edgeDistance, baseTransform.y + dirY * edgeDistance);
+      } else {
+        unit.moveToPosition(baseTransform.x + buildingHalfWidth + 1, baseTransform.y);
+      }
       unit.state = 'gathering';
       return;
     }
