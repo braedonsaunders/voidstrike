@@ -212,8 +212,8 @@ export class AISystem extends System {
   }
 
   private isUnderAttack(playerId: string): boolean {
-    // Check if any buildings are under attack
-    const buildings = this.world.getEntitiesWith('Building', 'Selectable', 'Health');
+    // Check if any buildings are under attack (health below 80%)
+    const buildings = this.world.getEntitiesWith('Building', 'Selectable', 'Health', 'Transform');
 
     for (const entity of buildings) {
       const selectable = entity.get<Selectable>('Selectable')!;
@@ -224,6 +224,32 @@ export class AISystem extends System {
       // Consider under attack if health is below 80%
       if (health.getHealthPercent() < 0.8) {
         return true;
+      }
+    }
+
+    // Also check for enemy units near our base (within sight range of buildings)
+    const ccPos = this.findAIBase(playerId);
+    if (ccPos) {
+      const baseDetectionRange = 20; // Check for enemies within 20 units of base
+      const enemies = this.world.getEntitiesWith('Unit', 'Transform', 'Selectable', 'Health');
+
+      for (const entity of enemies) {
+        const selectable = entity.get<Selectable>('Selectable')!;
+        const health = entity.get<Health>('Health')!;
+        const transform = entity.get<Transform>('Transform')!;
+
+        // Skip own units and dead units
+        if (selectable.playerId === playerId) continue;
+        if (health.isDead()) continue;
+
+        // Check distance to base
+        const dx = transform.x - ccPos.x;
+        const dy = transform.y - ccPos.y;
+        const distance = Math.sqrt(dx * dx + dy * dy);
+
+        if (distance < baseDetectionRange) {
+          return true;
+        }
       }
     }
 

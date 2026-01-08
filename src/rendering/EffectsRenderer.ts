@@ -46,6 +46,13 @@ interface FireEffect {
   progress: number;
 }
 
+interface MoveIndicator {
+  position: THREE.Vector3;
+  progress: number;
+  duration: number;
+  rings: THREE.Mesh[];
+}
+
 export class EffectsRenderer {
   private scene: THREE.Scene;
   private eventBus: EventBus;
@@ -55,6 +62,7 @@ export class EffectsRenderer {
   private explosionParticles: ExplosionParticle[] = [];
   private focusFireIndicators: Map<number, FocusFireIndicator> = new Map();
   private targetAttackerCounts: Map<number, Set<number>> = new Map(); // targetId -> Set of attackerIds
+  private moveIndicators: MoveIndicator[] = [];
 
   // Shared geometries and materials
   // Per threejs-builder skill: create geometries once, don't create in event handlers
@@ -71,6 +79,8 @@ export class EffectsRenderer {
   private explosionMaterial: THREE.MeshBasicMaterial;
   private damageCanvas: HTMLCanvasElement;
   private damageContext: CanvasRenderingContext2D;
+  private moveIndicatorGeometry: THREE.RingGeometry;
+  private moveIndicatorMaterial: THREE.MeshBasicMaterial;
 
   constructor(scene: THREE.Scene, eventBus: EventBus) {
     this.scene = scene;
@@ -129,6 +139,15 @@ export class EffectsRenderer {
     this.damageCanvas.width = 128;
     this.damageCanvas.height = 64;
     this.damageContext = this.damageCanvas.getContext('2d')!;
+
+    // Move command indicator - green ring that shrinks
+    this.moveIndicatorGeometry = new THREE.RingGeometry(0.3, 0.6, 16);
+    this.moveIndicatorMaterial = new THREE.MeshBasicMaterial({
+      color: 0x00ff88,
+      transparent: true,
+      opacity: 0.9,
+      side: THREE.DoubleSide,
+    });
 
     this.setupEventListeners();
   }
@@ -195,6 +214,18 @@ export class EffectsRenderer {
       );
       // Clear any focus fire on this building
       this.clearFocusFire(data.entityId);
+    });
+
+    // Move command - show indicator on ground
+    this.eventBus.on('command:move', (data: {
+      entityIds: number[];
+      targetPosition: { x: number; y: number };
+    }) => {
+      if (data.entityIds.length > 0) {
+        this.createMoveIndicator(
+          new THREE.Vector3(data.targetPosition.x, 0.15, data.targetPosition.y)
+        );
+      }
     });
   }
 
@@ -419,6 +450,34 @@ export class EffectsRenderer {
     });
   }
 
+  /**
+   * Create an animated move indicator on the ground
+   * Shows 3 concentric rings that shrink and fade
+   */
+  private createMoveIndicator(position: THREE.Vector3): void {
+    const rings: THREE.Mesh[] = [];
+
+    // Create 3 concentric rings
+    for (let i = 0; i < 3; i++) {
+      const ringGeometry = new THREE.RingGeometry(0.4 + i * 0.5, 0.5 + i * 0.5, 16);
+      const material = this.moveIndicatorMaterial.clone();
+      material.opacity = 0.9 - i * 0.2;
+
+      const ring = new THREE.Mesh(ringGeometry, material);
+      ring.position.copy(position);
+      ring.rotation.x = -Math.PI / 2;
+      this.scene.add(ring);
+      rings.push(ring);
+    }
+
+    this.moveIndicators.push({
+      position: position.clone(),
+      progress: 0,
+      duration: 0.5, // Fast animation
+      rings,
+    });
+  }
+
   private trackFocusFire(attackerId: number, targetId: number, targetPos: { x: number; y: number }): void {
     // Get or create the set of attackers for this target
     let attackers = this.targetAttackerCounts.get(targetId);
@@ -626,6 +685,31 @@ export class EffectsRenderer {
       const baseOpacity = Math.min(0.4 + indicator.attackerCount * 0.15, 0.9);
       (indicator.mesh.material as THREE.MeshBasicMaterial).opacity = baseOpacity * pulse;
     }
+
+    // Update move indicators (shrinking rings)
+    for (let i = this.moveIndicators.length - 1; i >= 0; i--) {
+      const indicator = this.moveIndicators[i];
+      indicator.progress += dt / indicator.duration;
+
+      if (indicator.progress >= 1) {
+        // Remove all rings
+        for (const ring of indicator.rings) {
+          this.scene.remove(ring);
+          ring.geometry.dispose();
+          (ring.material as THREE.Material).dispose();
+        }
+        this.moveIndicators.splice(i, 1);
+      } else {
+        // Shrink and fade rings
+        for (let j = 0; j < indicator.rings.length; j++) {
+          const ring = indicator.rings[j];
+          const shrink = 1 - indicator.progress * 0.5;
+          ring.scale.set(shrink, shrink, 1);
+          const baseOpacity = 0.9 - j * 0.2;
+          (ring.material as THREE.MeshBasicMaterial).opacity = baseOpacity * (1 - indicator.progress);
+        }
+      }
+    }
   }
 
   public dispose(): void {
@@ -661,6 +745,15 @@ export class EffectsRenderer {
       (indicator.mesh.material as THREE.Material).dispose();
     }
 
+    // Clean up move indicators
+    for (const indicator of this.moveIndicators) {
+      for (const ring of indicator.rings) {
+        this.scene.remove(ring);
+        ring.geometry.dispose();
+        (ring.material as THREE.Material).dispose();
+      }
+    }
+
     // Dispose shared resources
     this.projectileGeometry.dispose();
     this.projectileMaterial.dispose();
@@ -673,6 +766,8 @@ export class EffectsRenderer {
     this.focusFireMaterial.dispose();
     this.explosionGeometry.dispose();
     this.explosionMaterial.dispose();
+    this.moveIndicatorGeometry.dispose();
+    this.moveIndicatorMaterial.dispose();
 
     this.attackEffects = [];
     this.hitEffects = [];
@@ -680,5 +775,6 @@ export class EffectsRenderer {
     this.damageNumbers = [];
     this.focusFireIndicators.clear();
     this.targetAttackerCounts.clear();
+    this.moveIndicators = [];
   }
 }

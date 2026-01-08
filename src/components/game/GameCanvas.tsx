@@ -296,11 +296,26 @@ export function GameCanvas() {
         if (worldPos && gameRef.current) {
           const selectedUnits = useGameStore.getState().selectedUnits;
           if (selectedUnits.length > 0) {
-            gameRef.current.eventBus.emit('command:attack', {
-              entityIds: selectedUnits,
-              targetPosition: { x: worldPos.x, y: worldPos.z },
-              queue: e.shiftKey, // Queue if shift held
-            });
+            // Check if clicking on an enemy to target them specifically
+            const clickedEntity = findEntityAtPosition(gameRef.current, worldPos.x, worldPos.z);
+            const selectable = clickedEntity?.entity.get<Selectable>('Selectable');
+            const health = clickedEntity?.entity.get<Health>('Health');
+
+            if (clickedEntity && selectable && selectable.playerId !== 'player1' && health && !health.isDead()) {
+              // Attack specific enemy target
+              gameRef.current.eventBus.emit('command:attack', {
+                entityIds: selectedUnits,
+                targetEntityId: clickedEntity.entity.id,
+                queue: e.shiftKey,
+              });
+            } else {
+              // Attack-move to ground position
+              gameRef.current.eventBus.emit('command:attack', {
+                entityIds: selectedUnits,
+                targetPosition: { x: worldPos.x, y: worldPos.z },
+                queue: e.shiftKey,
+              });
+            }
           }
         }
         if (!e.shiftKey) setIsAttackMove(false);
@@ -369,11 +384,16 @@ export function GameCanvas() {
 
         // If in rally point mode, set rally point for selected buildings
         if (isSettingRallyPoint) {
+          // Check if clicking on a resource to enable auto-gather for newly spawned workers
+          const clickedEntity = findEntityAtPosition(gameRef.current, worldPos.x, worldPos.z);
+          const resourceTarget = clickedEntity?.entity.get<Resource>('Resource') ? clickedEntity.entity.id : undefined;
+
           for (const buildingId of selectedUnits) {
             gameRef.current.eventBus.emit('rally:set', {
               buildingId,
               x: worldPos.x,
               y: worldPos.z,
+              targetId: resourceTarget,
             });
           }
           useGameStore.getState().setRallyPointMode(false);

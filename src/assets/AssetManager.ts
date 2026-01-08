@@ -44,7 +44,7 @@ export const REFERENCE_FRAME = {
     command_center: 4.5,
     supply_depot: 0.9, // Half size for supply depot
     barracks: 2.8,
-    refinery: 4.0,
+    refinery: 2.0, // Half size for refinery
     factory: 2.8,
     starport: 2.2,
   } as Record<string, number>,
@@ -606,7 +606,7 @@ export class AssetManager {
       { path: '/models/buildings/orbital_command.glb', assetId: 'orbital_command', targetHeight: 4.5 },
       { path: '/models/buildings/planetary_fortress.glb', assetId: 'planetary_fortress', targetHeight: 4.5 },
       { path: '/models/buildings/supply_depot.glb', assetId: 'supply_depot', targetHeight: REFERENCE_FRAME.BUILDING_HEIGHTS.supply_depot || 1.8 },
-      { path: '/models/buildings/refinery.glb', assetId: 'refinery', targetHeight: REFERENCE_FRAME.BUILDING_HEIGHTS.refinery || 4.0 },
+      { path: '/models/buildings/refinery.glb', assetId: 'refinery', targetHeight: REFERENCE_FRAME.BUILDING_HEIGHTS.refinery || 2.0 },
       { path: '/models/buildings/barracks.glb', assetId: 'barracks', targetHeight: REFERENCE_FRAME.BUILDING_HEIGHTS.barracks || 2.8 },
       { path: '/models/buildings/engineering_bay.glb', assetId: 'engineering_bay', targetHeight: 2.5 },
       { path: '/models/buildings/bunker.glb', assetId: 'bunker', targetHeight: 2.0 },

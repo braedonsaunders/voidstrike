@@ -27,7 +27,7 @@ export class SpawnSystem extends System {
     this.game.eventBus.on('unit:spawn', this.handleUnitSpawn.bind(this));
 
     // Handle unit death (cleanup)
-    this.game.eventBus.on('unit:death', this.handleUnitDeath.bind(this));
+    this.game.eventBus.on('unit:died', this.handleUnitDeath.bind(this));
   }
 
   private handleUnitSpawn(data: {

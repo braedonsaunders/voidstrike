@@ -2,6 +2,7 @@ import { System } from '../ecs/System';
 import { Transform } from '../components/Transform';
 import { Selectable } from '../components/Selectable';
 import { Unit } from '../components/Unit';
+import { Health } from '../components/Health';
 import { Game } from '../core/Game';
 import { useGameStore } from '@/store/gameStore';
 
@@ -53,9 +54,13 @@ export class SelectionSystem extends System {
     for (const entity of entities) {
       const transform = entity.get<Transform>('Transform')!;
       const selectable = entity.get<Selectable>('Selectable')!;
+      const health = entity.get<Health>('Health');
 
       // Only select own units
       if (selectable.playerId !== playerId) continue;
+
+      // Skip dead units
+      if (health && health.isDead()) continue;
 
       if (
         transform.x >= minX &&
@@ -90,9 +95,13 @@ export class SelectionSystem extends System {
     for (const entity of entities) {
       const transform = entity.get<Transform>('Transform')!;
       const selectable = entity.get<Selectable>('Selectable')!;
+      const health = entity.get<Health>('Health');
 
       // Only allow selecting own units/buildings
       if (selectable.playerId !== playerId) continue;
+
+      // Skip dead units
+      if (health && health.isDead()) continue;
 
       const distance = transform.distanceToPoint(x, y);
 
@@ -181,6 +190,10 @@ export class SelectionSystem extends System {
     for (const entity of entities) {
       const unit = entity.get<Unit>('Unit')!;
       const selectable = entity.get<Selectable>('Selectable')!;
+      const health = entity.get<Health>('Health');
+
+      // Skip dead units
+      if (health && health.isDead()) continue;
 
       if (unit.unitId === unitId && selectable.playerId === playerId) {
         selectable.select();
@@ -275,6 +288,36 @@ export class SelectionSystem extends System {
   }
 
   public update(_deltaTime: number): void {
-    // Selection system is event-driven, no per-tick updates needed
+    // Auto-deselect dead units
+    const selectedUnits = useGameStore.getState().selectedUnits;
+    let needsUpdate = false;
+    const validSelectedIds: number[] = [];
+
+    for (const entityId of selectedUnits) {
+      const entity = this.world.getEntity(entityId);
+      if (!entity || entity.isDestroyed()) {
+        needsUpdate = true;
+        continue;
+      }
+
+      const health = entity.get<Health>('Health');
+      if (health && health.isDead()) {
+        // Deselect dead unit
+        const selectable = entity.get<Selectable>('Selectable');
+        if (selectable) {
+          selectable.deselect();
+        }
+        needsUpdate = true;
+        continue;
+      }
+
+      validSelectedIds.push(entityId);
+    }
+
+    // Update store if selection changed
+    if (needsUpdate) {
+      useGameStore.getState().selectUnits(validSelectedIds);
+      this.game.eventBus.emit('selection:changed', { selectedIds: validSelectedIds });
+    }
   }
 }

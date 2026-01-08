@@ -695,13 +695,26 @@ export class EnhancedAISystem extends System {
     width: number,
     height: number
   ): { x: number; y: number } | null {
-    const offsets = [
-      { x: 8, y: 0 }, { x: 8, y: 4 }, { x: 8, y: -4 },
-      { x: -8, y: 0 }, { x: -8, y: 4 }, { x: -8, y: -4 },
-      { x: 0, y: 8 }, { x: 4, y: 8 }, { x: 12, y: 0 },
-      { x: 12, y: 4 }, { x: 0, y: -8 }, { x: -4, y: -8 },
-    ];
+    // Generate more varied offsets in a spiral pattern
+    const offsets: { x: number; y: number }[] = [];
 
+    // Add offsets in expanding rings around the base
+    for (let radius = 6; radius <= 20; radius += 3) {
+      for (let angle = 0; angle < 8; angle++) {
+        const theta = (angle * Math.PI * 2) / 8 + Math.random() * 0.5;
+        const x = Math.round(Math.cos(theta) * radius);
+        const y = Math.round(Math.sin(theta) * radius);
+        offsets.push({ x, y });
+      }
+    }
+
+    // Shuffle offsets for variety
+    for (let i = offsets.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [offsets[i], offsets[j]] = [offsets[j], offsets[i]];
+    }
+
+    // Try each offset until we find a valid spot
     for (const offset of offsets) {
       const pos = { x: basePos.x + offset.x, y: basePos.y + offset.y };
       if (this.isValidBuildingSpot(pos.x, pos.y, width, height)) {
@@ -714,21 +727,38 @@ export class EnhancedAISystem extends System {
 
   private isValidBuildingSpot(x: number, y: number, width: number, height: number): boolean {
     const config = this.game.config;
-    if (x < 0 || y < 0 || x + width > config.mapWidth || y + height > config.mapHeight) {
+    const halfW = width / 2;
+    const halfH = height / 2;
+
+    // Check map bounds (position is center-based)
+    if (x - halfW < 0 || y - halfH < 0 || x + halfW > config.mapWidth || y + halfH > config.mapHeight) {
       return false;
     }
 
+    // Check for overlapping buildings
     const buildings = this.world.getEntitiesWith('Building', 'Transform');
     for (const entity of buildings) {
       const transform = entity.get<Transform>('Transform')!;
       const building = entity.get<Building>('Building')!;
+      const existingHalfW = building.width / 2;
+      const existingHalfH = building.height / 2;
 
-      if (
-        x < transform.x + building.width + 1 &&
-        x + width > transform.x - 1 &&
-        y < transform.y + building.height + 1 &&
-        y + height > transform.y - 1
-      ) {
+      const dx = Math.abs(x - transform.x);
+      const dy = Math.abs(y - transform.y);
+
+      if (dx < halfW + existingHalfW + 1 && dy < halfH + existingHalfH + 1) {
+        return false;
+      }
+    }
+
+    // Check for overlapping resources
+    const resources = this.world.getEntitiesWith('Resource', 'Transform');
+    for (const entity of resources) {
+      const transform = entity.get<Transform>('Transform')!;
+      const dx = Math.abs(x - transform.x);
+      const dy = Math.abs(y - transform.y);
+
+      if (dx < halfW + 2 && dy < halfH + 2) {
         return false;
       }
     }
