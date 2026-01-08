@@ -61,6 +61,10 @@
 - [x] **AI spending player minerals** - BuildingPlacementSystem was deducting from player store for AI buildings
 - [x] **Minimap camera position not updating** - Fixed store subscription and dependency array
 - [x] **SC2TerrainShader not compiling** - Replaced dynamic fbm loop with fixed-octave versions for WebGL
+- [x] **AI workers stuck at CC** - Drop-off distance was 3 units but CC center is 2.5 from edge, increased to 5
+- [x] **AI deposits to player store** - ResourceSystem now only credits player1 store, AI tracks internally
+- [x] **SC2-style mineral arcs** - Minerals now form tight arcs facing CC, ~7 units away (was 15-20)
+- [x] **Worker mineral splitting** - Workers auto-spread across mineral patches, prefer <2 gatherers
 
 ### UI Improvements
 - [x] **Options menu** - Replaced Menu button with dropdown (Controls, Tech Tree, Exit to Menu)

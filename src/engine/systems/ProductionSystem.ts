@@ -174,6 +174,15 @@ export class ProductionSystem extends System {
           if (building.supplyProvided > 0) {
             useGameStore.getState().addMaxSupply(building.supplyProvided);
           }
+
+          // Set default rally point for production buildings
+          if (building.canProduce.length > 0 && building.rallyX === null) {
+            // Default rally point is in front of the building (offset by building size)
+            building.setRallyPoint(
+              transform.x + building.width / 2 + 3,
+              transform.y
+            );
+          }
         }
       }
 

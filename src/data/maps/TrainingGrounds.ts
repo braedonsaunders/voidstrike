@@ -134,75 +134,76 @@ function generateTrainingGrounds(): MapData {
   ramps.forEach(ramp => createRampInTerrain(terrain, ramp));
 
   // === Expansions with Resources ===
+  // createMineralLine(mineralCenterX, mineralCenterY, baseCenterX, baseCenterY, amount)
   const expansions = [
-    // P1 Main
+    // P1 Main (CC at 170, 170) - minerals toward bottom-right corner
     {
       name: 'P1 Main',
       x: 170,
       y: 170,
       isMain: true,
-      minerals: createMineralLine(180, 178, 'vertical', 1800),
-      vespene: createVespeneGeysers(162, 180, 8, 2250),
+      minerals: createMineralLine(177, 177, 170, 170, 1800), // ~7 units toward corner
+      vespene: createVespeneGeysers(163, 177, 6, 2250),
     },
-    // P1 Natural
+    // P1 Natural (CC at 120, 160) - minerals toward bottom edge
     {
       name: 'P1 Natural',
       x: 120,
       y: 160,
       isNatural: true,
-      minerals: createMineralLine(130, 168, 'vertical', 1500),
-      vespene: createVespeneGeysers(112, 168, 8, 2250),
+      minerals: createMineralLine(120, 167, 120, 160, 1500), // ~7 units south
+      vespene: createVespeneGeysers(127, 153, 6, 2250),
     },
-    // P1 Third
+    // P1 Third (CC at 60, 100) - minerals to the left
     {
       name: 'P1 Third',
       x: 60,
       y: 100,
-      minerals: createMineralLine(48, 92, 'horizontal', 1500),
-      vespene: createVespeneGeysers(68, 108, 6, 2250),
+      minerals: createMineralLine(53, 100, 60, 100, 1500), // ~7 units west
+      vespene: createVespeneGeysers(67, 107, 6, 2250),
     },
-    // P1 Fourth
+    // P1 Fourth (CC at 100, 185) - minerals toward edge
     {
       name: 'P1 Fourth',
       x: 100,
       y: 185,
-      minerals: createMineralLine(88, 188, 'horizontal', 1200),
-      vespene: createVespeneGeysers(108, 182, 4, 2250),
+      minerals: createMineralLine(100, 192, 100, 185, 1200), // ~7 units south
+      vespene: createVespeneGeysers(107, 178, 4, 2250),
     },
 
-    // P2 Main
+    // P2 Main (CC at 30, 30) - minerals toward top-left corner
     {
       name: 'P2 Main',
       x: 30,
       y: 30,
       isMain: true,
-      minerals: createMineralLine(12, 22, 'vertical', 1800),
-      vespene: createVespeneGeysers(38, 12, 8, 2250),
+      minerals: createMineralLine(23, 23, 30, 30, 1800), // ~7 units toward corner
+      vespene: createVespeneGeysers(37, 23, 6, 2250),
     },
-    // P2 Natural
+    // P2 Natural (CC at 80, 40) - minerals toward top edge
     {
       name: 'P2 Natural',
       x: 80,
       y: 40,
       isNatural: true,
-      minerals: createMineralLine(62, 32, 'vertical', 1500),
-      vespene: createVespeneGeysers(88, 32, 8, 2250),
+      minerals: createMineralLine(80, 33, 80, 40, 1500), // ~7 units north
+      vespene: createVespeneGeysers(73, 47, 6, 2250),
     },
-    // P2 Third
+    // P2 Third (CC at 140, 100) - minerals to the right
     {
       name: 'P2 Third',
       x: 140,
       y: 100,
-      minerals: createMineralLine(148, 108, 'horizontal', 1500),
-      vespene: createVespeneGeysers(132, 92, 6, 2250),
+      minerals: createMineralLine(147, 100, 140, 100, 1500), // ~7 units east
+      vespene: createVespeneGeysers(133, 93, 6, 2250),
     },
-    // P2 Fourth
+    // P2 Fourth (CC at 100, 15) - minerals toward edge
     {
       name: 'P2 Fourth',
       x: 100,
       y: 15,
-      minerals: createMineralLine(88, 12, 'horizontal', 1200),
-      vespene: createVespeneGeysers(108, 18, 4, 2250),
+      minerals: createMineralLine(100, 11, 100, 15, 1200), // ~4 units north (near edge)
+      vespene: createVespeneGeysers(93, 22, 4, 2250),
     },
 
     // Gold base (center - high yield)
@@ -210,8 +211,8 @@ function generateTrainingGrounds(): MapData {
       name: 'Gold Base',
       x: 100,
       y: 100,
-      minerals: createMineralLine(90, 95, 'horizontal', 900), // Gold minerals - less but faster
-      vespene: createVespeneGeysers(105, 108, 6, 2250),
+      minerals: createMineralLine(93, 93, 100, 100, 900), // ~7 units toward center
+      vespene: createVespeneGeysers(107, 93, 6, 2250),
     },
   ];
 
