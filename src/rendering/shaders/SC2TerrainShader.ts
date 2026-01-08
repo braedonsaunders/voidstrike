@@ -136,18 +136,45 @@ float snoise(vec3 v) {
   return 42.0 * dot(m * m, vec4(dot(p0, x0), dot(p1, x1), dot(p2, x2), dot(p3, x3)));
 }
 
-// Multi-octave FBM for natural detail
-float fbm(vec3 p, int octaves) {
+// Fixed-octave FBM functions (WebGL requires compile-time loop bounds)
+float fbm2(vec3 p) {
   float value = 0.0;
   float amplitude = 0.5;
   float frequency = 1.0;
 
-  for (int i = 0; i < 6; i++) {
-    if (i >= octaves) break;
-    value += amplitude * snoise(p * frequency);
-    amplitude *= 0.5;
-    frequency *= 2.0;
-  }
+  value += amplitude * snoise(p * frequency);
+  amplitude *= 0.5; frequency *= 2.0;
+  value += amplitude * snoise(p * frequency);
+
+  return value;
+}
+
+float fbm3(vec3 p) {
+  float value = 0.0;
+  float amplitude = 0.5;
+  float frequency = 1.0;
+
+  value += amplitude * snoise(p * frequency);
+  amplitude *= 0.5; frequency *= 2.0;
+  value += amplitude * snoise(p * frequency);
+  amplitude *= 0.5; frequency *= 2.0;
+  value += amplitude * snoise(p * frequency);
+
+  return value;
+}
+
+float fbm4(vec3 p) {
+  float value = 0.0;
+  float amplitude = 0.5;
+  float frequency = 1.0;
+
+  value += amplitude * snoise(p * frequency);
+  amplitude *= 0.5; frequency *= 2.0;
+  value += amplitude * snoise(p * frequency);
+  amplitude *= 0.5; frequency *= 2.0;
+  value += amplitude * snoise(p * frequency);
+  amplitude *= 0.5; frequency *= 2.0;
+  value += amplitude * snoise(p * frequency);
 
   return value;
 }
@@ -185,9 +212,9 @@ vec2 voronoi(vec2 p) {
 
 // Grass texture with blade-like detail
 vec3 grassTexture(vec3 pos, vec3 baseColor) {
-  float detail1 = fbm(pos * 8.0, 4) * 0.5 + 0.5;
-  float detail2 = fbm(pos * 24.0, 3) * 0.5 + 0.5;
-  float blades = fbm(pos * 64.0, 2) * 0.5 + 0.5;
+  float detail1 = fbm4(pos * 8.0) * 0.5 + 0.5;
+  float detail2 = fbm3(pos * 24.0) * 0.5 + 0.5;
+  float blades = fbm2(pos * 64.0) * 0.5 + 0.5;
 
   // Color variation
   vec3 darkGrass = baseColor * 0.7;
@@ -207,9 +234,9 @@ vec3 grassTexture(vec3 pos, vec3 baseColor) {
 
 // Rock texture with cracks and weathering
 vec3 rockTexture(vec3 pos, vec3 baseColor) {
-  float large = fbm(pos * 2.0, 4) * 0.5 + 0.5;
-  float medium = fbm(pos * 8.0, 3) * 0.5 + 0.5;
-  float fine = fbm(pos * 32.0, 2) * 0.5 + 0.5;
+  float large = fbm4(pos * 2.0) * 0.5 + 0.5;
+  float medium = fbm3(pos * 8.0) * 0.5 + 0.5;
+  float fine = fbm2(pos * 32.0) * 0.5 + 0.5;
 
   vec2 cracks = voronoi(pos.xz * 4.0);
   float crackLines = smoothstep(0.02, 0.08, cracks.y);
@@ -240,15 +267,15 @@ vec3 cliffTexture(vec3 pos, vec3 normal, vec3 baseColor) {
   float b = blend.x + blend.y + blend.z;
   blend /= b;
 
-  float streakX = fbm(vec3(pos.y * 4.0, pos.z * 0.5, 0.0), 4);
-  float streakZ = fbm(vec3(pos.y * 4.0, pos.x * 0.5, 0.0), 4);
-  float streakY = fbm(pos * 2.0, 4);
+  float streakX = fbm4(vec3(pos.y * 4.0, pos.z * 0.5, 0.0));
+  float streakZ = fbm4(vec3(pos.y * 4.0, pos.x * 0.5, 0.0));
+  float streakY = fbm4(pos * 2.0);
 
   float streak = streakX * blend.x + streakY * blend.y + streakZ * blend.z;
   streak = streak * 0.5 + 0.5;
 
   // Vertical weathering streaks
-  float vertical = fbm(vec3(pos.x * 0.3, pos.y * 8.0, pos.z * 0.3), 3) * 0.5 + 0.5;
+  float vertical = fbm3(vec3(pos.x * 0.3, pos.y * 8.0, pos.z * 0.3)) * 0.5 + 0.5;
 
   vec3 result = baseColor;
   result = mix(result * 0.6, result * 1.1, streak);
@@ -263,9 +290,9 @@ vec3 cliffTexture(vec3 pos, vec3 normal, vec3 baseColor) {
 
 // Dirt/ground texture
 vec3 dirtTexture(vec3 pos, vec3 baseColor) {
-  float large = fbm(pos * 3.0, 4) * 0.5 + 0.5;
-  float medium = fbm(pos * 12.0, 3) * 0.5 + 0.5;
-  float fine = fbm(pos * 48.0, 2) * 0.5 + 0.5;
+  float large = fbm4(pos * 3.0) * 0.5 + 0.5;
+  float medium = fbm3(pos * 12.0) * 0.5 + 0.5;
+  float fine = fbm2(pos * 48.0) * 0.5 + 0.5;
 
   // Pebble-like detail
   vec2 pebbles = voronoi(pos.xz * 8.0);
@@ -289,9 +316,9 @@ vec3 dirtTexture(vec3 pos, vec3 baseColor) {
 vec3 calculateDetailNormal(vec3 pos, float scale, float strength) {
   float eps = 0.02;
 
-  float h0 = fbm(pos * scale, 4);
-  float hx = fbm((pos + vec3(eps, 0.0, 0.0)) * scale, 4);
-  float hz = fbm((pos + vec3(0.0, 0.0, eps)) * scale, 4);
+  float h0 = fbm4(pos * scale);
+  float hx = fbm4((pos + vec3(eps, 0.0, 0.0)) * scale);
+  float hz = fbm4((pos + vec3(0.0, 0.0, eps)) * scale);
 
   vec3 normal;
   normal.x = (h0 - hx) * strength;
@@ -395,9 +422,9 @@ void main() {
   float height = vElevation;
 
   // Noise-based blending factors
-  float blendNoise1 = fbm(pos * 0.3, 3) * 0.5 + 0.5;
-  float blendNoise2 = fbm(pos * 1.2, 3) * 0.5 + 0.5;
-  float blendNoise3 = fbm(pos * 4.0, 2) * 0.5 + 0.5;
+  float blendNoise1 = fbm3(pos * 0.3) * 0.5 + 0.5;
+  float blendNoise2 = fbm3(pos * 1.2) * 0.5 + 0.5;
+  float blendNoise3 = fbm2(pos * 4.0) * 0.5 + 0.5;
 
   // Calculate material weights
   float grassWeight = smoothstep(0.35, 0.2, slope) * smoothstep(-0.5, 0.5, height);

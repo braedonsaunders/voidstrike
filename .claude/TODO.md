@@ -57,7 +57,14 @@
 - [x] **AI unit ownership bug** - Units from AI buildings were assigned to player1 (hardcoded)
 - [x] **Orbital Command model not updating** - BuildingRenderer didn't detect buildingId changes
 - [x] **Workers going to enemy base** - Drop-off didn't check ownership or include upgraded bases
-- [x] **Duplicate start buttons** - Removed redundant Quick Actions start button
+- [x] **Duplicate start buttons** - Moved start button to bottom of setup page
+- [x] **AI spending player minerals** - BuildingPlacementSystem was deducting from player store for AI buildings
+- [x] **Minimap camera position not updating** - Fixed store subscription and dependency array
+- [x] **SC2TerrainShader not compiling** - Replaced dynamic fbm loop with fixed-octave versions for WebGL
+
+### UI Improvements
+- [x] **Options menu** - Replaced Menu button with dropdown (Controls, Tech Tree, Exit to Menu)
+- [x] **Increased building avoidance** - Units now properly avoid walking through buildings
 
 ### Future Optimizations
 - [ ] Instanced decorations (trees, rocks, debris - 1000s of draw calls)

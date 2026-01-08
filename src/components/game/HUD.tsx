@@ -1,5 +1,6 @@
 'use client';
 
+import { useState } from 'react';
 import { useGameStore } from '@/store/gameStore';
 import { Minimap } from './Minimap';
 import { ResourcePanel } from './ResourcePanel';
@@ -12,6 +13,7 @@ import { KeyboardShortcutsPanel } from './KeyboardShortcutsPanel';
 
 export function HUD() {
   const { isPaused, togglePause, setShowTechTree, setShowKeyboardShortcuts } = useGameStore();
+  const [showOptionsMenu, setShowOptionsMenu] = useState(false);
 
   return (
     <div className="absolute inset-0 pointer-events-none">
@@ -43,12 +45,47 @@ export function HUD() {
           >
             {isPaused ? 'Resume' : 'Pause'}
           </button>
-          <button
-            onClick={() => window.location.href = '/'}
-            className="game-button text-sm"
-          >
-            Menu
-          </button>
+          <div className="relative">
+            <button
+              onClick={() => setShowOptionsMenu(!showOptionsMenu)}
+              className="game-button text-sm"
+            >
+              Options
+            </button>
+            {showOptionsMenu && (
+              <div className="absolute right-0 top-full mt-1 bg-void-900 border border-void-700 rounded shadow-lg z-50 min-w-[150px]">
+                <button
+                  onClick={() => {
+                    setShowOptionsMenu(false);
+                    setShowKeyboardShortcuts(true);
+                  }}
+                  className="w-full px-4 py-2 text-left text-sm text-void-200 hover:bg-void-800 transition-colors"
+                >
+                  Controls
+                </button>
+                <button
+                  onClick={() => {
+                    setShowOptionsMenu(false);
+                    setShowTechTree(true);
+                  }}
+                  className="w-full px-4 py-2 text-left text-sm text-void-200 hover:bg-void-800 transition-colors"
+                >
+                  Tech Tree
+                </button>
+                <div className="border-t border-void-700 my-1" />
+                <button
+                  onClick={() => {
+                    if (confirm('Return to main menu? Progress will be lost.')) {
+                      window.location.href = '/';
+                    }
+                  }}
+                  className="w-full px-4 py-2 text-left text-sm text-red-400 hover:bg-void-800 transition-colors"
+                >
+                  Exit to Menu
+                </button>
+              </div>
+            )}
+          </div>
         </div>
       </div>
 
