@@ -93,8 +93,7 @@ export class SpawnSystem extends System {
       // Send unit to rally point
       this.game.eventBus.emit('command:move', {
         entityIds: [entity.id],
-        x: rallyX,
-        y: rallyY,
+        targetPosition: { x: rallyX, y: rallyY },
       });
       console.log(`SpawnSystem: Moving ${definition.name} to rally point (${rallyX.toFixed(1)}, ${rallyY.toFixed(1)})`);
     }

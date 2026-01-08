@@ -118,8 +118,8 @@ export class CombatSystem extends System {
         if (command.targetEntityId !== undefined) {
           unit.setAttackTarget(command.targetEntityId);
         } else if (command.targetPosition) {
-          // Attack-move
-          unit.setMoveTarget(command.targetPosition.x, command.targetPosition.y);
+          // Attack-move: move toward position while engaging enemies
+          unit.setAttackMoveTarget(command.targetPosition.x, command.targetPosition.y);
         }
       }
     }
@@ -173,15 +173,26 @@ export class CombatSystem extends System {
         continue;
       }
 
-      // Auto-acquire targets for idle, patrolling, or holding units
+      // Auto-acquire targets for idle, patrolling, attackmoving, or holding units
       if (
-        (unit.state === 'idle' || unit.state === 'patrolling' || unit.isHoldingPosition) &&
+        (unit.state === 'idle' || unit.state === 'patrolling' || unit.state === 'attackmoving' || unit.isHoldingPosition) &&
         unit.targetEntityId === null
       ) {
         // Use throttled/cached target search for performance
         const target = this.getTargetThrottled(attacker.id, transform, unit, currentTick);
         if (target && !unit.isHoldingPosition) {
+          // For attackmoving units, save the destination before switching to attacking
+          const savedTargetX = unit.targetX;
+          const savedTargetY = unit.targetY;
+          const wasAttackMoving = unit.state === 'attackmoving';
+
           unit.setAttackTarget(target);
+
+          // Restore attack-move destination so unit resumes after killing target
+          if (wasAttackMoving && savedTargetX !== null && savedTargetY !== null) {
+            unit.targetX = savedTargetX;
+            unit.targetY = savedTargetY;
+          }
         } else if (target && unit.isHoldingPosition) {
           // Only attack if in range
           const targetEntity = this.world.getEntity(target);
@@ -202,8 +213,12 @@ export class CombatSystem extends System {
         const targetEntity = this.world.getEntity(unit.targetEntityId);
 
         if (!targetEntity || targetEntity.isDestroyed()) {
-          // Target no longer exists - check for queued commands
-          if (!unit.executeNextCommand()) {
+          // Target no longer exists - check if we were attack-moving
+          if (unit.targetX !== null && unit.targetY !== null) {
+            // Resume attack-move to destination
+            unit.state = 'attackmoving';
+            unit.targetEntityId = null;
+          } else if (!unit.executeNextCommand()) {
             unit.clearTarget();
           }
           continue;
@@ -213,7 +228,12 @@ export class CombatSystem extends System {
         const targetHealth = targetEntity.get<Health>('Health');
 
         if (!targetTransform || !targetHealth || targetHealth.isDead()) {
-          if (!unit.executeNextCommand()) {
+          // Target dead - check if we were attack-moving
+          if (unit.targetX !== null && unit.targetY !== null) {
+            // Resume attack-move to destination
+            unit.state = 'attackmoving';
+            unit.targetEntityId = null;
+          } else if (!unit.executeNextCommand()) {
             unit.clearTarget();
           }
           continue;
