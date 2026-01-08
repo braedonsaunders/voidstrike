@@ -2,6 +2,7 @@
 
 import { useRef, useEffect, useState, useCallback } from 'react';
 import { useGameStore } from '@/store/gameStore';
+import { useGameSetupStore } from '@/store/gameSetupStore';
 import { Game } from '@/engine/core/Game';
 import { Transform } from '@/engine/components/Transform';
 import { Unit } from '@/engine/components/Unit';
@@ -158,7 +159,8 @@ export function Minimap() {
         if (health.isDead()) continue;
 
         // Skip enemy buildings that are not visible due to fog of war
-        if (selectable.playerId !== 'player1' && game.visionSystem) {
+        const fogOfWarEnabled = useGameSetupStore.getState().fogOfWar;
+        if (selectable.playerId !== 'player1' && fogOfWarEnabled && game.visionSystem) {
           if (!game.visionSystem.isVisible('player1', transform.x, transform.y)) {
             continue;
           }
@@ -195,7 +197,8 @@ export function Minimap() {
         if (health.isDead()) continue;
 
         // Skip enemy units that are not visible due to fog of war
-        if (selectable.playerId !== 'player1' && game.visionSystem) {
+        const fogEnabled = useGameSetupStore.getState().fogOfWar;
+        if (selectable.playerId !== 'player1' && fogEnabled && game.visionSystem) {
           if (!game.visionSystem.isVisible('player1', transform.x, transform.y)) {
             continue;
           }
