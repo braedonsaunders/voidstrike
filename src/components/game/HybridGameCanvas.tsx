@@ -129,15 +129,20 @@ export function HybridGameCanvas() {
     const initializeThreeJS = () => {
       if (!threeCanvasRef.current) return;
 
-      // Create renderer with high quality settings
+      // Create renderer with SC2-level quality settings
       const renderer = new THREE.WebGLRenderer({
         canvas: threeCanvasRef.current,
         antialias: true,
         powerPreference: 'high-performance',
+        alpha: false,
+        stencil: false,
+        depth: true,
       });
       renderer.setSize(window.innerWidth, window.innerHeight);
       renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
       renderer.outputColorSpace = THREE.SRGBColorSpace;
+      renderer.toneMapping = THREE.ACESFilmicToneMapping;
+      renderer.toneMappingExposure = 1.1;
       renderer.shadowMap.enabled = true;
       renderer.shadowMap.type = THREE.PCFSoftShadowMap;
       rendererRef.current = renderer;
