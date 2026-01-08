@@ -122,10 +122,8 @@ export class BuildingPlacementSystem extends System {
       .add(new Health(definition.maxHealth * 0.1, definition.armor, 'structure'))
       .add(new Selectable(Math.max(definition.width, definition.height) * 0.6, 10, playerId));
 
-    // Get the building component and set it to wait for worker
-    const building = buildingEntity.get<Building>('Building')!;
-    building.state = 'constructing';
-    building.buildProgress = 0;
+    // Building starts in 'waiting_for_worker' state (from constructor)
+    // Construction will start when worker arrives at site
 
     // Associate refinery with vespene geyser
     if (vespeneGeyserEntity) {
@@ -441,7 +439,8 @@ export class BuildingPlacementSystem extends System {
       const health = entity.get<Health>('Health')!;
       const buildingTransform = entity.get<Transform>('Transform')!;
 
-      if (building.state !== 'constructing') {
+      // Skip buildings that are not waiting or constructing
+      if (building.state !== 'waiting_for_worker' && building.state !== 'constructing') {
         continue;
       }
 
@@ -449,6 +448,17 @@ export class BuildingPlacementSystem extends System {
       const workerConstructing = this.isWorkerConstructing(entity.id, buildingTransform);
 
       if (workerConstructing) {
+        // If building was waiting for worker, start construction now
+        if (building.state === 'waiting_for_worker') {
+          building.startConstruction();
+          this.game.eventBus.emit('building:construction_started', {
+            entityId: entity.id,
+            buildingType: building.buildingId,
+            position: { x: buildingTransform.x, y: buildingTransform.y },
+          });
+          console.log(`BuildingPlacementSystem: ${building.name} construction started - worker arrived!`);
+        }
+
         // Progress construction
         const wasComplete = building.isComplete();
         building.updateConstruction(dt);
