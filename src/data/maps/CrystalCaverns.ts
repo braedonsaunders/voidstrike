@@ -274,8 +274,14 @@ function generateCrystalCaverns(): MapData {
     terrain,
 
     spawns: [
-      { x: 24, y: 72, playerSlot: 1, rotation: 0 },
-      { x: 136, y: 72, playerSlot: 2, rotation: Math.PI },
+      { x: 24, y: 72, playerSlot: 1, rotation: 0 },      // P1 Main
+      { x: 136, y: 72, playerSlot: 2, rotation: Math.PI }, // P2 Main
+      { x: 40, y: 36, playerSlot: 3, rotation: Math.PI / 4 },  // P1 Natural
+      { x: 120, y: 36, playerSlot: 4, rotation: Math.PI * 3 / 4 }, // P2 Natural
+      { x: 40, y: 108, playerSlot: 5, rotation: -Math.PI / 4 }, // P1 Third
+      { x: 120, y: 108, playerSlot: 6, rotation: -Math.PI * 3 / 4 }, // P2 Third
+      { x: 80, y: 24, playerSlot: 7, rotation: Math.PI / 2 },  // Top Watch Tower
+      { x: 80, y: 120, playerSlot: 8, rotation: -Math.PI / 2 }, // Bottom Watch Tower
     ],
 
     expansions,
@@ -298,7 +304,7 @@ function generateCrystalCaverns(): MapData {
     // Frozen/crystal themed decorations
     decorations: generateFrozenDecorations(),
 
-    maxPlayers: 2,
+    maxPlayers: 8,
     isRanked: true,
 
     biome: 'frozen',

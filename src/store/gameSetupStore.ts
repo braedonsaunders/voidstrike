@@ -5,6 +5,9 @@ export type GameSpeed = 'slower' | 'normal' | 'faster' | 'fastest';
 export type AIDifficulty = 'easy' | 'medium' | 'hard' | 'insane';
 export type PlayerType = 'human' | 'ai' | 'open' | 'closed';
 
+// Team configuration: 0 = Free For All, 1-4 = team numbers
+export type TeamNumber = 0 | 1 | 2 | 3 | 4;
+
 // Player slot configuration
 export interface PlayerSlot {
   id: string; // player1, player2, etc.
@@ -13,6 +16,7 @@ export interface PlayerSlot {
   colorId: string;
   aiDifficulty: AIDifficulty;
   name: string;
+  team: TeamNumber; // 0 = FFA, 1-4 = team
 }
 
 export interface GameSetupState {
@@ -42,6 +46,7 @@ export interface GameSetupState {
   setPlayerSlotColor: (slotId: string, colorId: string) => void;
   setPlayerSlotAIDifficulty: (slotId: string, difficulty: AIDifficulty) => void;
   setPlayerSlotName: (slotId: string, name: string) => void;
+  setPlayerSlotTeam: (slotId: string, team: TeamNumber) => void;
   addPlayerSlot: () => void;
   removePlayerSlot: (slotId: string) => void;
 
@@ -84,6 +89,15 @@ export function getColorHex(colorId: string): number {
   return color?.hex ?? 0x808080;
 }
 
+// Team colors for display
+export const TEAM_COLORS: Record<TeamNumber, { name: string; color: string }> = {
+  0: { name: 'FFA', color: '#888888' },
+  1: { name: 'Team 1', color: '#4080ff' },
+  2: { name: 'Team 2', color: '#ff4040' },
+  3: { name: 'Team 3', color: '#40ff40' },
+  4: { name: 'Team 4', color: '#ffff40' },
+};
+
 // Default player slots (player 1 human, player 2 AI)
 const defaultPlayerSlots: PlayerSlot[] = [
   {
@@ -93,6 +107,7 @@ const defaultPlayerSlots: PlayerSlot[] = [
     colorId: 'blue',
     aiDifficulty: 'medium',
     name: 'Player 1',
+    team: 0, // FFA by default
   },
   {
     id: 'player2',
@@ -101,6 +116,7 @@ const defaultPlayerSlots: PlayerSlot[] = [
     colorId: 'red',
     aiDifficulty: 'medium',
     name: 'AI Player',
+    team: 0, // FFA by default
   },
 ];
 
@@ -151,6 +167,12 @@ export const useGameSetupStore = create<GameSetupState>((set, get) => ({
     ),
   })),
 
+  setPlayerSlotTeam: (slotId, team) => set((state) => ({
+    playerSlots: state.playerSlots.map(slot =>
+      slot.id === slotId ? { ...slot, team } : slot
+    ),
+  })),
+
   addPlayerSlot: () => set((state) => {
     if (state.playerSlots.length >= 8) return state;
 
@@ -164,6 +186,7 @@ export const useGameSetupStore = create<GameSetupState>((set, get) => ({
       colorId: availableColor,
       aiDifficulty: 'medium',
       name: `Player ${state.playerSlots.length + 1}`,
+      team: 0, // FFA by default
     };
 
     return { playerSlots: [...state.playerSlots, newSlot] };

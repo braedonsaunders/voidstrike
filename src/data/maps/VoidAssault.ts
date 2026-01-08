@@ -269,8 +269,14 @@ function generateVoidAssault(): MapData {
     terrain,
 
     spawns: [
-      { x: 28, y: 148, playerSlot: 1, rotation: Math.PI / 4 },
-      { x: 148, y: 28, playerSlot: 2, rotation: -Math.PI * 3 / 4 },
+      { x: 28, y: 148, playerSlot: 1, rotation: Math.PI / 4 },       // P1 Main
+      { x: 148, y: 28, playerSlot: 2, rotation: -Math.PI * 3 / 4 },  // P2 Main
+      { x: 48, y: 118, playerSlot: 3, rotation: 0 },                 // P1 Natural
+      { x: 128, y: 58, playerSlot: 4, rotation: Math.PI },           // P2 Natural
+      { x: 28, y: 28, playerSlot: 5, rotation: Math.PI / 4 },        // P1 Third
+      { x: 148, y: 148, playerSlot: 6, rotation: -Math.PI * 3 / 4 }, // P2 Third
+      { x: 88, y: 20, playerSlot: 7, rotation: Math.PI / 2 },        // Top Center
+      { x: 88, y: 156, playerSlot: 8, rotation: -Math.PI / 2 },      // Bottom Center
     ],
 
     expansions,
@@ -293,7 +299,7 @@ function generateVoidAssault(): MapData {
     // Void-themed decorations with crystals and alien trees
     decorations: generateVoidDecorations(),
 
-    maxPlayers: 2,
+    maxPlayers: 8,
     isRanked: true,
 
     biome: 'void',

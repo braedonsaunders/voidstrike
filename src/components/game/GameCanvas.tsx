@@ -216,7 +216,7 @@ export function GameCanvas() {
       camera.update(deltaTime);
 
       // Update renderers
-      unitRendererRef.current?.update();
+      unitRendererRef.current?.update(deltaTime / 1000); // Convert ms to seconds for animation mixer
       buildingRendererRef.current?.update();
       resourceRendererRef.current?.update();
       fogOfWarRef.current?.update();

@@ -7,11 +7,13 @@ import { BIOMES } from '@/rendering/Biomes';
 import {
   useGameSetupStore,
   PLAYER_COLORS,
+  TEAM_COLORS,
   StartingResources,
   GameSpeed,
   AIDifficulty,
   PlayerType,
   PlayerSlot,
+  TeamNumber,
 } from '@/store/gameSetupStore';
 
 // Helper to convert THREE.Color to hex string
@@ -87,6 +89,7 @@ function PlayerSlotRow({
   onFactionChange,
   onColorChange,
   onDifficultyChange,
+  onTeamChange,
   onRemove,
   canRemove,
 }: {
@@ -97,6 +100,7 @@ function PlayerSlotRow({
   onFactionChange: (faction: string) => void;
   onColorChange: (colorId: string) => void;
   onDifficultyChange: (difficulty: AIDifficulty) => void;
+  onTeamChange: (team: TeamNumber) => void;
   onRemove: () => void;
   canRemove: boolean;
 }) {
@@ -115,7 +119,7 @@ function PlayerSlotRow({
         value={slot.type}
         onChange={(e) => onTypeChange(e.target.value as PlayerType)}
         className="bg-void-800 border border-void-700 rounded px-2 py-1 text-white text-xs
-                   focus:outline-none focus:border-void-500 cursor-pointer flex-1 min-w-[80px]"
+                   focus:outline-none focus:border-void-500 cursor-pointer min-w-[70px]"
       >
         <option value="human">Human</option>
         <option value="ai">AI</option>
@@ -123,13 +127,28 @@ function PlayerSlotRow({
         <option value="closed">Closed</option>
       </select>
 
+      {/* Team selection (only for human/ai) */}
+      {(slot.type === 'human' || slot.type === 'ai') && (
+        <select
+          value={slot.team}
+          onChange={(e) => onTeamChange(Number(e.target.value) as TeamNumber)}
+          className="bg-void-800 border border-void-700 rounded px-2 py-1 text-white text-xs
+                     focus:outline-none focus:border-void-500 cursor-pointer min-w-[65px]"
+          style={{ borderLeftColor: TEAM_COLORS[slot.team].color, borderLeftWidth: '3px' }}
+        >
+          {Object.entries(TEAM_COLORS).map(([key, { name }]) => (
+            <option key={key} value={key}>{name}</option>
+          ))}
+        </select>
+      )}
+
       {/* Faction (only for human/ai) */}
       {(slot.type === 'human' || slot.type === 'ai') && (
         <select
           value={slot.faction}
           onChange={(e) => onFactionChange(e.target.value)}
           className="bg-void-800 border border-void-700 rounded px-2 py-1 text-white text-xs
-                     focus:outline-none focus:border-void-500 cursor-pointer min-w-[90px]"
+                     focus:outline-none focus:border-void-500 cursor-pointer min-w-[80px]"
         >
           <option value="dominion">Dominion</option>
         </select>
@@ -141,7 +160,7 @@ function PlayerSlotRow({
           value={slot.aiDifficulty}
           onChange={(e) => onDifficultyChange(e.target.value as AIDifficulty)}
           className="bg-void-800 border border-void-700 rounded px-2 py-1 text-white text-xs
-                     focus:outline-none focus:border-void-500 cursor-pointer min-w-[70px]"
+                     focus:outline-none focus:border-void-500 cursor-pointer min-w-[65px]"
         >
           <option value="easy">Easy</option>
           <option value="medium">Medium</option>
@@ -237,6 +256,7 @@ export default function GameSetupPage() {
     setPlayerSlotFaction,
     setPlayerSlotColor,
     setPlayerSlotAIDifficulty,
+    setPlayerSlotTeam,
     addPlayerSlot,
     removePlayerSlot,
     startGame,
@@ -330,6 +350,7 @@ export default function GameSetupPage() {
                     onFactionChange={(faction) => setPlayerSlotFaction(slot.id, faction)}
                     onColorChange={(colorId) => setPlayerSlotColor(slot.id, colorId)}
                     onDifficultyChange={(diff) => setPlayerSlotAIDifficulty(slot.id, diff)}
+                    onTeamChange={(team) => setPlayerSlotTeam(slot.id, team)}
                     onRemove={() => removePlayerSlot(slot.id)}
                     canRemove={canRemovePlayer}
                   />
