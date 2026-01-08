@@ -480,9 +480,12 @@ export class BuildingPlacementSystem extends System {
           // Release workers
           this.releaseWorkersFromBuilding(entity.id);
 
+          // Get the building's owner
+          const selectable = entity.get<Selectable>('Selectable');
           this.game.eventBus.emit('building:complete', {
             entityId: entity.id,
             buildingType: building.buildingId,
+            playerId: selectable?.playerId,
           });
 
           console.log(`BuildingPlacementSystem: ${building.name} construction complete!`);

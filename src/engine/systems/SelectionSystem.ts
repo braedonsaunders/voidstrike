@@ -86,10 +86,13 @@ export class SelectionSystem extends System {
     const entities = this.world.getEntitiesWith('Transform', 'Selectable');
     let closestEntity: { id: number; distance: number; priority: number } | null = null;
 
-    // Find closest entity to click point
+    // Find closest entity to click point (only own units/buildings)
     for (const entity of entities) {
       const transform = entity.get<Transform>('Transform')!;
       const selectable = entity.get<Selectable>('Selectable')!;
+
+      // Only allow selecting own units/buildings
+      if (selectable.playerId !== playerId) continue;
 
       const distance = transform.distanceToPoint(x, y);
 

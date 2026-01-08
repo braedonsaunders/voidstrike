@@ -17,6 +17,12 @@ export class InputHandler extends Phaser.Events.EventEmitter {
   private isSelecting = false;
   private selectionStart = { x: 0, y: 0 };
 
+  // Double-click tracking
+  private lastClickTime = 0;
+  private lastClickPos = { x: 0, y: 0 };
+  private readonly DOUBLE_CLICK_TIME = 300; // ms
+  private readonly DOUBLE_CLICK_DIST = 10; // pixels
+
   // Command modes
   private isAttackMove = false;
   private isPatrolMode = false;
@@ -143,11 +149,21 @@ export class InputHandler extends Phaser.Events.EventEmitter {
     // Handle rally point mode
     if (store.isSettingRallyPoint) {
       const selectedUnits = store.selectedUnits;
+      // Check if clicking on a resource for auto-gather rally
+      const clickedEntity = this.findEntityAtPosition(worldPos.x, worldPos.y);
+      let targetId: number | undefined = undefined;
+      if (clickedEntity) {
+        const entity = this.game.world.getEntity(clickedEntity.id);
+        if (entity?.get<Resource>('Resource')) {
+          targetId = clickedEntity.id;
+        }
+      }
       for (const buildingId of selectedUnits) {
         this.game.eventBus.emit('rally:set', {
           buildingId,
           x: worldPos.x,
           y: worldPos.y,
+          targetId,
         });
       }
       store.setRallyPointMode(false);
@@ -217,6 +233,18 @@ export class InputHandler extends Phaser.Events.EventEmitter {
     const dx = Math.abs(endWorld.x - startWorld.x);
     const dy = Math.abs(endWorld.y - startWorld.y);
 
+    // Check for double-click
+    const now = Date.now();
+    const clickDx = Math.abs(pointer.x - this.lastClickPos.x);
+    const clickDy = Math.abs(pointer.y - this.lastClickPos.y);
+    const isDoubleClick = (now - this.lastClickTime < this.DOUBLE_CLICK_TIME) &&
+                          (clickDx < this.DOUBLE_CLICK_DIST) &&
+                          (clickDy < this.DOUBLE_CLICK_DIST);
+
+    // Update last click tracking
+    this.lastClickTime = now;
+    this.lastClickPos = { x: pointer.x, y: pointer.y };
+
     if (dx > 1 || dy > 1) {
       // Box selection
       this.game.eventBus.emit('selection:box', {
@@ -228,12 +256,12 @@ export class InputHandler extends Phaser.Events.EventEmitter {
         playerId: 'player1',
       });
     } else {
-      // Click selection
+      // Click selection - double-click selects all of same type
       this.game.eventBus.emit('selection:click', {
         x: endWorld.x,
         y: endWorld.y,
         additive: pointer.event.shiftKey,
-        selectAllOfType: pointer.event.ctrlKey,
+        selectAllOfType: pointer.event.ctrlKey || isDoubleClick,
         playerId: 'player1',
       });
     }

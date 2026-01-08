@@ -229,6 +229,8 @@ export class ProductionSystem extends System {
         x: spawnX,
         y: spawnY,
         playerId: ownerPlayerId,
+        // Pass rally target for auto-gather (workers rallied to resources)
+        rallyTargetId: building.rallyTargetId,
       });
 
       // Emit production complete for Phaser overlay (player units only)

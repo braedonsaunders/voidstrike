@@ -348,12 +348,33 @@ export class MovementSystem extends System {
         const targetEntity = this.world.getEntity(unit.targetEntityId);
         if (targetEntity) {
           const targetTransform = targetEntity.get<Transform>('Transform');
+          const targetBuilding = targetEntity.get<Building>('Building');
           if (targetTransform) {
-            const distance = transform.distanceTo(targetTransform);
-            if (distance > unit.attackRange) {
-              // Move toward target
-              targetX = targetTransform.x;
-              targetY = targetTransform.y;
+            // For buildings, calculate distance to edge, not center
+            let effectiveDistance: number;
+            let attackTargetX = targetTransform.x;
+            let attackTargetY = targetTransform.y;
+
+            if (targetBuilding) {
+              // Calculate closest point on building edge
+              const halfW = targetBuilding.width / 2;
+              const halfH = targetBuilding.height / 2;
+              const clampedX = Math.max(targetTransform.x - halfW, Math.min(transform.x, targetTransform.x + halfW));
+              const clampedY = Math.max(targetTransform.y - halfH, Math.min(transform.y, targetTransform.y + halfH));
+              const edgeDx = transform.x - clampedX;
+              const edgeDy = transform.y - clampedY;
+              effectiveDistance = Math.sqrt(edgeDx * edgeDx + edgeDy * edgeDy);
+              // Target the edge of the building, not the center
+              attackTargetX = clampedX;
+              attackTargetY = clampedY;
+            } else {
+              effectiveDistance = transform.distanceTo(targetTransform);
+            }
+
+            if (effectiveDistance > unit.attackRange) {
+              // Move toward target (edge for buildings, center for units)
+              targetX = attackTargetX;
+              targetY = attackTargetY;
             } else {
               // In range, stop moving but keep facing target
               transform.rotation = Math.atan2(
