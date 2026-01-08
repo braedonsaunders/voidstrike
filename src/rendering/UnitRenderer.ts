@@ -7,15 +7,7 @@ import { Selectable } from '@/engine/components/Selectable';
 import { VisionSystem } from '@/engine/systems/VisionSystem';
 import { AssetManager } from '@/assets/AssetManager';
 import { Terrain } from './Terrain';
-
-// Player colors
-const PLAYER_COLORS: Record<string, number> = {
-  player1: 0x40a0ff, // Blue
-  ai: 0xff4040, // Red
-  player2: 0x40ff40, // Green
-  player3: 0xffff40, // Yellow
-  player4: 0xff40ff, // Purple
-};
+import { getPlayerColor } from '@/store/gameSetupStore';
 
 // Instance data for a single unit type + player combo
 interface InstancedUnitGroup {
@@ -107,7 +99,7 @@ export class UnitRenderer {
     let group = this.instancedGroups.get(key);
 
     if (!group) {
-      const playerColor = PLAYER_COLORS[playerId] ?? 0x808080;
+      const playerColor = getPlayerColor(playerId);
 
       // Get the base mesh from AssetManager
       const baseMesh = AssetManager.getUnitMesh(unitType, playerColor);

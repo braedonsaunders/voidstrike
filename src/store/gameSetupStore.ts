@@ -1,9 +1,19 @@
 import { create } from 'zustand';
-import { BiomeType } from '@/rendering/Biomes';
 
 export type StartingResources = 'normal' | 'high' | 'insane';
 export type GameSpeed = 'slower' | 'normal' | 'faster' | 'fastest';
 export type AIDifficulty = 'easy' | 'medium' | 'hard' | 'insane';
+export type PlayerType = 'human' | 'ai' | 'open' | 'closed';
+
+// Player slot configuration
+export interface PlayerSlot {
+  id: string; // player1, player2, etc.
+  type: PlayerType;
+  faction: string;
+  colorId: string;
+  aiDifficulty: AIDifficulty;
+  name: string;
+}
 
 export interface GameSetupState {
   // Map selection
@@ -12,12 +22,10 @@ export interface GameSetupState {
   // Game settings
   startingResources: StartingResources;
   gameSpeed: GameSpeed;
-  aiDifficulty: AIDifficulty;
   fogOfWar: boolean;
 
-  // Player settings
-  playerFaction: string;
-  playerColor: string;
+  // Player slots (max 8 players)
+  playerSlots: PlayerSlot[];
 
   // Game session flag - must be true to enter /game
   gameStarted: boolean;
@@ -26,10 +34,20 @@ export interface GameSetupState {
   setSelectedMap: (mapId: string) => void;
   setStartingResources: (resources: StartingResources) => void;
   setGameSpeed: (speed: GameSpeed) => void;
-  setAIDifficulty: (difficulty: AIDifficulty) => void;
   setFogOfWar: (enabled: boolean) => void;
-  setPlayerFaction: (faction: string) => void;
-  setPlayerColor: (color: string) => void;
+
+  // Player slot actions
+  setPlayerSlotType: (slotId: string, type: PlayerType) => void;
+  setPlayerSlotFaction: (slotId: string, faction: string) => void;
+  setPlayerSlotColor: (slotId: string, colorId: string) => void;
+  setPlayerSlotAIDifficulty: (slotId: string, difficulty: AIDifficulty) => void;
+  setPlayerSlotName: (slotId: string, name: string) => void;
+  addPlayerSlot: () => void;
+  removePlayerSlot: (slotId: string) => void;
+
+  // Get player color hex by player ID
+  getPlayerColorHex: (playerId: string) => number;
+
   startGame: () => void;
   endGame: () => void;
   reset: () => void;
@@ -48,39 +66,134 @@ export const GAME_SPEED_VALUES: Record<GameSpeed, number> = {
   fastest: 2.0,
 };
 
+// Available player colors
 export const PLAYER_COLORS = [
-  { id: 'blue', name: 'Blue', hex: '#0080ff' },
-  { id: 'red', name: 'Red', hex: '#ff4040' },
-  { id: 'green', name: 'Green', hex: '#40ff40' },
-  { id: 'yellow', name: 'Yellow', hex: '#ffff40' },
-  { id: 'purple', name: 'Purple', hex: '#a040ff' },
-  { id: 'orange', name: 'Orange', hex: '#ff8000' },
-  { id: 'cyan', name: 'Cyan', hex: '#40ffff' },
-  { id: 'pink', name: 'Pink', hex: '#ff80c0' },
+  { id: 'blue', name: 'Blue', hex: 0x40a0ff },
+  { id: 'red', name: 'Red', hex: 0xff4040 },
+  { id: 'green', name: 'Green', hex: 0x40ff40 },
+  { id: 'yellow', name: 'Yellow', hex: 0xffff40 },
+  { id: 'purple', name: 'Purple', hex: 0xa040ff },
+  { id: 'orange', name: 'Orange', hex: 0xff8000 },
+  { id: 'cyan', name: 'Cyan', hex: 0x40ffff },
+  { id: 'pink', name: 'Pink', hex: 0xff80c0 },
+];
+
+// Get color hex by color ID
+export function getColorHex(colorId: string): number {
+  const color = PLAYER_COLORS.find(c => c.id === colorId);
+  return color?.hex ?? 0x808080;
+}
+
+// Default player slots (player 1 human, player 2 AI)
+const defaultPlayerSlots: PlayerSlot[] = [
+  {
+    id: 'player1',
+    type: 'human',
+    faction: 'dominion',
+    colorId: 'blue',
+    aiDifficulty: 'medium',
+    name: 'Player 1',
+  },
+  {
+    id: 'player2',
+    type: 'ai',
+    faction: 'dominion',
+    colorId: 'red',
+    aiDifficulty: 'medium',
+    name: 'AI Player',
+  },
 ];
 
 const initialState = {
   selectedMapId: 'training_grounds',
   startingResources: 'normal' as StartingResources,
   gameSpeed: 'normal' as GameSpeed,
-  aiDifficulty: 'medium' as AIDifficulty,
   fogOfWar: true,
-  playerFaction: 'dominion',
-  playerColor: 'blue',
+  playerSlots: [...defaultPlayerSlots],
   gameStarted: false,
 };
 
-export const useGameSetupStore = create<GameSetupState>((set) => ({
+export const useGameSetupStore = create<GameSetupState>((set, get) => ({
   ...initialState,
 
   setSelectedMap: (mapId) => set({ selectedMapId: mapId }),
   setStartingResources: (resources) => set({ startingResources: resources }),
   setGameSpeed: (speed) => set({ gameSpeed: speed }),
-  setAIDifficulty: (difficulty) => set({ aiDifficulty: difficulty }),
   setFogOfWar: (enabled) => set({ fogOfWar: enabled }),
-  setPlayerFaction: (faction) => set({ playerFaction: faction }),
-  setPlayerColor: (color) => set({ playerColor: color }),
+
+  setPlayerSlotType: (slotId, type) => set((state) => ({
+    playerSlots: state.playerSlots.map(slot =>
+      slot.id === slotId ? { ...slot, type } : slot
+    ),
+  })),
+
+  setPlayerSlotFaction: (slotId, faction) => set((state) => ({
+    playerSlots: state.playerSlots.map(slot =>
+      slot.id === slotId ? { ...slot, faction } : slot
+    ),
+  })),
+
+  setPlayerSlotColor: (slotId, colorId) => set((state) => ({
+    playerSlots: state.playerSlots.map(slot =>
+      slot.id === slotId ? { ...slot, colorId } : slot
+    ),
+  })),
+
+  setPlayerSlotAIDifficulty: (slotId, difficulty) => set((state) => ({
+    playerSlots: state.playerSlots.map(slot =>
+      slot.id === slotId ? { ...slot, aiDifficulty: difficulty } : slot
+    ),
+  })),
+
+  setPlayerSlotName: (slotId, name) => set((state) => ({
+    playerSlots: state.playerSlots.map(slot =>
+      slot.id === slotId ? { ...slot, name } : slot
+    ),
+  })),
+
+  addPlayerSlot: () => set((state) => {
+    if (state.playerSlots.length >= 8) return state;
+
+    const usedColors = new Set(state.playerSlots.map(s => s.colorId));
+    const availableColor = PLAYER_COLORS.find(c => !usedColors.has(c.id))?.id ?? 'blue';
+
+    const newSlot: PlayerSlot = {
+      id: `player${state.playerSlots.length + 1}`,
+      type: 'ai',
+      faction: 'dominion',
+      colorId: availableColor,
+      aiDifficulty: 'medium',
+      name: `Player ${state.playerSlots.length + 1}`,
+    };
+
+    return { playerSlots: [...state.playerSlots, newSlot] };
+  }),
+
+  removePlayerSlot: (slotId) => set((state) => ({
+    playerSlots: state.playerSlots.filter(slot => slot.id !== slotId),
+  })),
+
+  getPlayerColorHex: (playerId: string): number => {
+    const slot = get().playerSlots.find(s => s.id === playerId);
+    if (slot) {
+      return getColorHex(slot.colorId);
+    }
+    // Fallback for legacy 'ai' player ID
+    if (playerId === 'ai') {
+      const aiSlot = get().playerSlots.find(s => s.type === 'ai');
+      if (aiSlot) {
+        return getColorHex(aiSlot.colorId);
+      }
+    }
+    return 0x808080; // Default gray
+  },
+
   startGame: () => set({ gameStarted: true }),
   endGame: () => set({ gameStarted: false }),
-  reset: () => set(initialState),
+  reset: () => set({ ...initialState, playerSlots: [...defaultPlayerSlots] }),
 }));
+
+// Export a function to get player color that can be used outside React
+export function getPlayerColor(playerId: string): number {
+  return useGameSetupStore.getState().getPlayerColorHex(playerId);
+}

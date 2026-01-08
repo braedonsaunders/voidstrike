@@ -316,12 +316,12 @@ export class ResourceSystem extends System {
     const workerOwner = workerSelectable?.playerId;
 
     for (const baseEntity of bases) {
-      const building = baseEntity.get<Building>('Building')!;
-      const baseTransform = baseEntity.get<Transform>('Transform')!;
+      const building = baseEntity.get<Building>('Building');
+      const baseTransform = baseEntity.get<Transform>('Transform');
       const baseSelectable = baseEntity.get<Selectable>('Selectable');
 
-      // Check if this is a main building that accepts resources
-      // Includes upgraded versions: Orbital Command, Planetary Fortress, Lair, Hive
+      // Skip if components are missing or building is destroyed/incomplete
+      if (!building || !baseTransform) continue;
       if (!building.isComplete()) continue;
 
       // Only use bases owned by the same player
@@ -439,10 +439,12 @@ export class ResourceSystem extends System {
     const workerOwner = workerSelectable?.playerId;
 
     for (const baseEntity of bases) {
-      const building = baseEntity.get<Building>('Building')!;
-      const baseTransform = baseEntity.get<Transform>('Transform')!;
+      const building = baseEntity.get<Building>('Building');
+      const baseTransform = baseEntity.get<Transform>('Transform');
       const baseSelectable = baseEntity.get<Selectable>('Selectable');
 
+      // Skip if components are missing or building destroyed/incomplete
+      if (!building || !baseTransform) continue;
       if (!building.isComplete()) continue;
 
       // Only return to bases owned by the same player

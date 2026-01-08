@@ -364,15 +364,39 @@ export class MovementSystem extends System {
               const edgeDx = transform.x - clampedX;
               const edgeDy = transform.y - clampedY;
               effectiveDistance = Math.sqrt(edgeDx * edgeDx + edgeDy * edgeDy);
-              // Target the edge of the building, not the center
-              attackTargetX = clampedX;
-              attackTargetY = clampedY;
+
+              // Target a point OUTSIDE the building at attack range distance from the edge
+              // NOT the edge itself - units should never try to get inside buildings
+              if (effectiveDistance > 0.1) {
+                // Calculate direction from edge to unit
+                const dirX = edgeDx / effectiveDistance;
+                const dirY = edgeDy / effectiveDistance;
+                // Target position is just outside the building edge at attack range
+                // Add a small margin (0.5) to ensure unit stays outside
+                const standOffDistance = Math.max(unit.attackRange * 0.8, 0.5);
+                attackTargetX = clampedX + dirX * standOffDistance;
+                attackTargetY = clampedY + dirY * standOffDistance;
+              } else {
+                // Unit is at the edge or inside - move away from building center
+                const awayDx = transform.x - targetTransform.x;
+                const awayDy = transform.y - targetTransform.y;
+                const awayDist = Math.sqrt(awayDx * awayDx + awayDy * awayDy);
+                if (awayDist > 0.1) {
+                  const standOffDistance = Math.max(halfW, halfH) + unit.attackRange;
+                  attackTargetX = targetTransform.x + (awayDx / awayDist) * standOffDistance;
+                  attackTargetY = targetTransform.y + (awayDy / awayDist) * standOffDistance;
+                } else {
+                  // At center - move to any edge
+                  attackTargetX = targetTransform.x + halfW + unit.attackRange;
+                  attackTargetY = targetTransform.y;
+                }
+              }
             } else {
               effectiveDistance = transform.distanceTo(targetTransform);
             }
 
             if (effectiveDistance > unit.attackRange) {
-              // Move toward target (edge for buildings, center for units)
+              // Move toward target position (outside building for buildings, near center for units)
               targetX = attackTargetX;
               targetY = attackTargetY;
             } else {

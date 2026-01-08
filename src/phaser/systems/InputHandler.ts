@@ -20,8 +20,8 @@ export class InputHandler extends Phaser.Events.EventEmitter {
   // Double-click tracking
   private lastClickTime = 0;
   private lastClickPos = { x: 0, y: 0 };
-  private readonly DOUBLE_CLICK_TIME = 300; // ms
-  private readonly DOUBLE_CLICK_DIST = 10; // pixels
+  private readonly DOUBLE_CLICK_TIME = 400; // ms - slightly longer for better detection
+  private readonly DOUBLE_CLICK_DIST = 30; // pixels - more forgiving for slight mouse movement
 
   // Command modes
   private isAttackMove = false;

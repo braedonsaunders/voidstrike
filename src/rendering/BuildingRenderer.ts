@@ -7,6 +7,7 @@ import { Selectable } from '@/engine/components/Selectable';
 import { VisionSystem } from '@/engine/systems/VisionSystem';
 import { AssetManager } from '@/assets/AssetManager';
 import { Terrain } from './Terrain';
+import { getPlayerColor } from '@/store/gameSetupStore';
 
 interface BuildingMeshData {
   group: THREE.Group;
@@ -17,15 +18,6 @@ interface BuildingMeshData {
   // PERFORMANCE: Track completion state to avoid traverse() every frame
   wasComplete: boolean;
 }
-
-// Player colors
-const PLAYER_COLORS: Record<string, number> = {
-  player1: 0x40a0ff, // Blue
-  ai: 0xff4040, // Red
-  player2: 0x40ff40, // Green
-  player3: 0xffff40, // Yellow
-  player4: 0xff40ff, // Purple
-};
 
 export class BuildingRenderer {
   private scene: THREE.Scene;
@@ -262,7 +254,7 @@ export class BuildingRenderer {
 
   private createBuildingMesh(building: Building, playerId: string): BuildingMeshData {
     // Get player color
-    const playerColor = PLAYER_COLORS[playerId] ?? 0x808080;
+    const playerColor = getPlayerColor(playerId);
 
     // Get building mesh from AssetManager
     const group = AssetManager.getBuildingMesh(building.buildingId, playerColor) as THREE.Group;

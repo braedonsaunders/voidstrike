@@ -125,9 +125,9 @@ export class EffectsRenderer {
           data.damageType
         );
 
-        // Create floating damage number
+        // Create floating damage number ABOVE the target (y=2.5 for good visibility)
         this.createDamageNumber(
-          new THREE.Vector3(data.targetPos.x, 1.5, data.targetPos.y),
+          new THREE.Vector3(data.targetPos.x, 2.5, data.targetPos.y),
           data.damage
         );
 
