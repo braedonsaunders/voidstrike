@@ -4,6 +4,7 @@ import { Unit, DamageType } from '../components/Unit';
 import { Health, ArmorType } from '../components/Health';
 import { Game } from '../core/Game';
 import { Selectable } from '../components/Selectable';
+import { Building } from '../components/Building';
 
 // Damage multipliers: [damageType][armorType]
 const DAMAGE_MULTIPLIERS: Record<DamageType, Record<ArmorType, number>> = {
@@ -207,15 +208,53 @@ export class CombatSystem extends System {
           continue;
         }
 
-        const distance = transform.distanceTo(targetTransform);
+        // Calculate effective distance (to edge for buildings, center for units)
+        let effectiveDistance: number;
+        const targetBuilding = targetEntity.get<Building>('Building');
 
-        if (distance <= unit.attackRange) {
+        if (targetBuilding) {
+          // Distance to building edge
+          const halfW = targetBuilding.width / 2;
+          const halfH = targetBuilding.height / 2;
+          const clampedX = Math.max(targetTransform.x - halfW, Math.min(transform.x, targetTransform.x + halfW));
+          const clampedY = Math.max(targetTransform.y - halfH, Math.min(transform.y, targetTransform.y + halfH));
+          const edgeDx = transform.x - clampedX;
+          const edgeDy = transform.y - clampedY;
+          effectiveDistance = Math.sqrt(edgeDx * edgeDx + edgeDy * edgeDy);
+        } else {
+          effectiveDistance = transform.distanceTo(targetTransform);
+        }
+
+        if (effectiveDistance <= unit.attackRange) {
           // In range - attempt attack
           if (unit.canAttack(gameTime)) {
             this.performAttack(attacker.id, unit, transform, targetEntity.id, targetHealth, targetTransform, gameTime);
           }
         }
         // If not in range, MovementSystem will handle moving toward target
+      }
+    }
+
+    // Check for building deaths
+    const buildings = this.world.getEntitiesWith('Building', 'Transform', 'Health', 'Selectable');
+    for (const building of buildings) {
+      const health = building.get<Health>('Health')!;
+      const buildingComp = building.get<Building>('Building')!;
+      const selectable = building.get<Selectable>('Selectable')!;
+      const transform = building.get<Transform>('Transform')!;
+
+      if (health.isDead() && buildingComp.state !== 'destroyed') {
+        buildingComp.state = 'destroyed';
+
+        this.game.eventBus.emit('building:destroyed', {
+          entityId: building.id,
+          playerId: selectable.playerId,
+          buildingType: buildingComp.buildingId,
+          position: { x: transform.x, y: transform.y },
+        });
+
+        // Schedule entity for destruction
+        this.world.destroyEntity(building.id);
       }
     }
 

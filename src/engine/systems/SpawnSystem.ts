@@ -35,8 +35,9 @@ export class SpawnSystem extends System {
     x: number;
     y: number;
     playerId: string;
+    rallyTargetId?: number | null;
   }): void {
-    const { unitType, x, y, playerId } = data;
+    const { unitType, x, y, playerId, rallyTargetId } = data;
     const definition = UNIT_DEFINITIONS[unitType];
 
     if (!definition) {
@@ -71,6 +72,22 @@ export class SpawnSystem extends System {
 
     // Note: Supply is already reserved when production is queued in ProductionSystem
     // So we don't add supply here - it was already accounted for
+
+    // Auto-gather for workers rallied to resources
+    if (rallyTargetId && definition.isWorker) {
+      const targetEntity = this.world.getEntity(rallyTargetId);
+      if (targetEntity) {
+        const resource = targetEntity.get('Resource');
+        if (resource) {
+          // Send gather command to the newly spawned worker
+          this.game.eventBus.emit('command:gather', {
+            entityIds: [entity.id],
+            targetEntityId: rallyTargetId,
+          });
+          console.log(`SpawnSystem: Auto-gather for ${definition.name} to resource ${rallyTargetId}`);
+        }
+      }
+    }
 
     // Emit spawn complete event for UI feedback
     this.game.eventBus.emit('unit:spawned', {
