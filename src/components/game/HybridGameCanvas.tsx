@@ -270,6 +270,7 @@ export function HybridGameCanvas() {
 
       const animate = (currentTime: number) => {
         const deltaTime = currentTime - lastTime;
+        const prevTime = lastTime; // Save for throttle check
         lastTime = currentTime;
 
         // Handle pending camera moves
@@ -324,7 +325,7 @@ export function HybridGameCanvas() {
 
         // PERFORMANCE: Throttle zustand store updates to reduce React re-renders
         // Only update every 100ms instead of every frame (60fps -> 10fps for store updates)
-        if (deltaTime > 0 && Math.floor(currentTime / 100) !== Math.floor(lastTime / 100)) {
+        if (deltaTime > 0 && Math.floor(currentTime / 100) !== Math.floor(prevTime / 100)) {
           useGameStore.getState().setGameTime(gameTime);
           const pos = camera.getPosition();
           useGameStore.getState().setCamera(pos.x, pos.z, camera.getZoom());

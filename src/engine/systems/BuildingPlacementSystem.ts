@@ -22,7 +22,7 @@ import { useGameStore } from '@/store/gameStore';
  * 6. When complete, worker is released and returns to idle
  */
 export class BuildingPlacementSystem extends System {
-  public priority = 10;
+  public priority = 5; // Run before MovementSystem to populate buildingGrid
 
   // Distance threshold for worker to be "at" the building site
   private readonly CONSTRUCTION_RANGE = 2.5;

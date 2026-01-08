@@ -3,6 +3,11 @@ import { MapData, MapCell, TerrainType, ElevationLevel } from '@/data/maps';
 import { BiomeConfig, BIOMES, blendBiomeColors, BiomeType, getBiomeShaderConfig } from './Biomes';
 import { createTerrainShaderMaterial, updateTerrainShader } from './shaders/TerrainShader';
 import { createSC2TerrainShaderMaterial, getSC2BiomeConfig, updateSC2TerrainShader } from './shaders/SC2TerrainShader';
+import { createTextureTerrainMaterial, updateTextureTerrainShader, getDefaultTextureConfig } from './shaders/TextureTerrainShader';
+
+// Shader mode for terrain rendering
+type TerrainShaderMode = 'texture' | 'basic' | 'sc2';
+
 
 // Terrain subdivision for smoother rendering
 const SUBDIVISIONS = 2; // 2x2 subdivisions per cell for better quality
@@ -77,8 +82,11 @@ export class Terrain {
   private gridWidth: number;
   private gridHeight: number;
 
-  // Flag to use SC2-quality shader (can be toggled for performance testing)
-  private static USE_SC2_SHADER = true;
+  // Shader mode selection:
+  // - 'texture': Uses AI-generated textures (60+ FPS) - RECOMMENDED
+  // - 'basic': Simple procedural shader (30-60 FPS)
+  // - 'sc2': Full procedural (10 FPS - too slow)
+  private static SHADER_MODE: TerrainShaderMode = 'texture';
 
   constructor(config: TerrainConfig) {
     this.mapData = config.mapData;
@@ -92,15 +100,24 @@ export class Terrain {
 
     this.geometry = this.createGeometry();
 
-    // Create SC2-level quality shader material
-    if (Terrain.USE_SC2_SHADER) {
-      console.log('[Terrain] Using SC2 terrain shader for biome:', this.mapData.biome || 'grassland');
-      const sc2Config = getSC2BiomeConfig(this.mapData.biome || 'grassland');
-      this.material = createSC2TerrainShaderMaterial(sc2Config);
-    } else {
-      console.log('[Terrain] Using basic terrain shader');
-      const shaderConfig = getBiomeShaderConfig(this.biome);
-      this.material = createTerrainShaderMaterial(shaderConfig);
+    // Create shader material based on mode
+    switch (Terrain.SHADER_MODE) {
+      case 'texture':
+        console.log('[Terrain] Using TEXTURE-BASED terrain shader (60+ FPS)');
+        const textureConfig = getDefaultTextureConfig();
+        this.material = createTextureTerrainMaterial(textureConfig);
+        break;
+      case 'sc2':
+        console.log('[Terrain] Using SC2 terrain shader for biome:', this.mapData.biome || 'grassland');
+        const sc2Config = getSC2BiomeConfig(this.mapData.biome || 'grassland');
+        this.material = createSC2TerrainShaderMaterial(sc2Config);
+        break;
+      case 'basic':
+      default:
+        console.log('[Terrain] Using basic terrain shader');
+        const shaderConfig = getBiomeShaderConfig(this.biome);
+        this.material = createTerrainShaderMaterial(shaderConfig);
+        break;
     }
 
     this.mesh = new THREE.Mesh(this.geometry, this.material);
@@ -111,10 +128,17 @@ export class Terrain {
 
   // Update shader uniforms (call each frame for animated effects)
   public update(deltaTime: number, sunDirection?: THREE.Vector3): void {
-    if (Terrain.USE_SC2_SHADER) {
-      updateSC2TerrainShader(this.material, deltaTime, sunDirection);
-    } else {
-      updateTerrainShader(this.material, deltaTime, sunDirection);
+    switch (Terrain.SHADER_MODE) {
+      case 'texture':
+        updateTextureTerrainShader(this.material, deltaTime, sunDirection);
+        break;
+      case 'sc2':
+        updateSC2TerrainShader(this.material, deltaTime, sunDirection);
+        break;
+      case 'basic':
+      default:
+        updateTerrainShader(this.material, deltaTime, sunDirection);
+        break;
     }
   }
 
