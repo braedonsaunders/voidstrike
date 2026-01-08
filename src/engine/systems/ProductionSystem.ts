@@ -2,6 +2,7 @@ import { System } from '../ecs/System';
 import { Transform } from '../components/Transform';
 import { Building } from '../components/Building';
 import { Health } from '../components/Health';
+import { Selectable } from '../components/Selectable';
 import { Ability, DOMINION_ABILITIES } from '../components/Ability';
 import { Game } from '../core/Game';
 import { useGameStore } from '@/store/gameStore';
@@ -195,11 +196,16 @@ export class ProductionSystem extends System {
       const spawnX = building.rallyX ?? buildingTransform.x + building.width + 1;
       const spawnY = building.rallyY ?? buildingTransform.y + building.height / 2;
 
+      // Get the building's owner from its Selectable component
+      const buildingEntity = this.world.getEntity(buildingId);
+      const selectable = buildingEntity?.get<Selectable>('Selectable');
+      const ownerPlayerId = selectable?.playerId ?? 'player1';
+
       this.game.eventBus.emit('unit:spawn', {
         unitType: item.id,
         x: spawnX,
         y: spawnY,
-        playerId: 'player1', // TODO: Get from building owner
+        playerId: ownerPlayerId,
       });
 
       this.game.eventBus.emit('production:complete', {

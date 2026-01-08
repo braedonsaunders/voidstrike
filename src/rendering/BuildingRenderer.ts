@@ -119,6 +119,18 @@ export class BuildingRenderer {
 
       let meshData = this.buildingMeshes.get(entity.id);
 
+      // Check if building was upgraded (buildingId changed) - recreate mesh if so
+      if (meshData && meshData.buildingId !== building.buildingId) {
+        // Building was upgraded, remove old mesh and create new one
+        this.scene.remove(meshData.group);
+        this.scene.remove(meshData.selectionRing);
+        this.scene.remove(meshData.healthBar);
+        this.scene.remove(meshData.progressBar);
+        this.disposeGroup(meshData.group);
+        this.buildingMeshes.delete(entity.id);
+        meshData = undefined;
+      }
+
       if (!meshData) {
         meshData = this.createBuildingMesh(building, ownerId);
         this.buildingMeshes.set(entity.id, meshData);
