@@ -147,6 +147,13 @@ export function Minimap() {
 
         if (health.isDead()) continue;
 
+        // Skip enemy buildings that are not visible due to fog of war
+        if (selectable.playerId !== 'player1' && game.visionSystem) {
+          if (!game.visionSystem.isVisible('player1', transform.x, transform.y)) {
+            continue;
+          }
+        }
+
         const x = transform.x * scale;
         const y = transform.y * scale;
         const w = Math.max(building.width * scale, 4);
@@ -176,6 +183,13 @@ export function Minimap() {
         const health = entity.get<Health>('Health')!;
 
         if (health.isDead()) continue;
+
+        // Skip enemy units that are not visible due to fog of war
+        if (selectable.playerId !== 'player1' && game.visionSystem) {
+          if (!game.visionSystem.isVisible('player1', transform.x, transform.y)) {
+            continue;
+          }
+        }
 
         const x = transform.x * scale;
         const y = transform.y * scale;

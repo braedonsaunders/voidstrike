@@ -19,17 +19,26 @@ export class BuildingPlacementPreview {
   private currentBuildingType: string | null = null;
   private currentPosition: { x: number; y: number } = { x: 0, y: 0 };
   private isValid: boolean = false;
+  private getTerrainHeight: ((x: number, y: number) => number) | null = null;
 
   // Grid visualization settings
-  private static readonly GRID_HEIGHT = 0.15; // Slightly above terrain
+  private static readonly GRID_OFFSET = 0.15; // Offset above terrain
   private static readonly VALID_COLOR = new THREE.Color(0x00ff00);
   private static readonly INVALID_COLOR = new THREE.Color(0xff0000);
   private static readonly GRID_OPACITY = 0.4;
 
-  constructor(mapData: MapData) {
+  constructor(mapData: MapData, getTerrainHeight?: (x: number, y: number) => number) {
     this.group = new THREE.Group();
     this.mapData = mapData;
+    this.getTerrainHeight = getTerrainHeight ?? null;
     this.group.visible = false;
+  }
+
+  /**
+   * Set terrain height function (for elevation support)
+   */
+  public setTerrainHeightFunction(fn: (x: number, y: number) => number): void {
+    this.getTerrainHeight = fn;
   }
 
   /**
@@ -165,11 +174,16 @@ export class BuildingPlacementPreview {
         const y0 = centerY + dy - 0.5;
         const y1 = centerY + dy + 0.5;
 
+        // Get terrain height for this tile (use center point)
+        const tileHeight = this.getTerrainHeight
+          ? this.getTerrainHeight(centerX + dx, centerY + dy) + BuildingPlacementPreview.GRID_OFFSET
+          : BuildingPlacementPreview.GRID_OFFSET;
+
         // Four vertices for quad
-        vertices.push(x0, BuildingPlacementPreview.GRID_HEIGHT, y0);
-        vertices.push(x1, BuildingPlacementPreview.GRID_HEIGHT, y0);
-        vertices.push(x1, BuildingPlacementPreview.GRID_HEIGHT, y1);
-        vertices.push(x0, BuildingPlacementPreview.GRID_HEIGHT, y1);
+        vertices.push(x0, tileHeight, y0);
+        vertices.push(x1, tileHeight, y0);
+        vertices.push(x1, tileHeight, y1);
+        vertices.push(x0, tileHeight, y1);
 
         // Colors for all four vertices
         for (let i = 0; i < 4; i++) {
@@ -218,8 +232,13 @@ export class BuildingPlacementPreview {
       wireframe: false,
     });
 
+    // Get terrain height at center
+    const terrainHeight = this.getTerrainHeight
+      ? this.getTerrainHeight(centerX, centerY)
+      : 0;
+
     this.ghostMesh = new THREE.Mesh(geometry, material);
-    this.ghostMesh.position.set(centerX, 1 + BuildingPlacementPreview.GRID_HEIGHT, centerY);
+    this.ghostMesh.position.set(centerX, terrainHeight + 1 + BuildingPlacementPreview.GRID_OFFSET, centerY);
     this.group.add(this.ghostMesh);
 
     // Add wireframe outline

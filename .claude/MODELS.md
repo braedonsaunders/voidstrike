@@ -861,52 +861,323 @@ simple elongated shape, game-ready low poly
 
 ## MAP DECORATIONS
 
-### 1. Watch Tower
-**File:** `/public/models/decorations/watch_tower.glb`
+### 1. Xel'Naga Watch Tower
+**File:** `/public/models/decorations/xelnaga_tower.glb`
 
 **Dimensions:** 2m × 2m footprint, 7m tall
 
-**Description:** Neutral vision-granting structure.
+**Description:** Ancient alien watch tower that grants vision when a unit stands nearby. Iconic Xel'Naga design with glowing energy core.
 
 **AI Prompt:**
 ```
-Ancient alien watch tower, tall stone/metal pillar,
-glowing beacon on top, mysterious artifact,
-neutral gray stone material, sci-fi ancient ruins,
-game-ready low poly, PBR materials
+Ancient alien Xel'Naga watch tower, tall ornate pillar structure,
+golden-bronze metallic surface with intricate alien engravings,
+glowing blue energy orb beacon at the top, crystalline elements,
+mysterious protoss-style architecture, triangular geometric patterns,
+hovering energy rings around the beacon, ancient artifact aesthetic,
+weathered but advanced technology, game-ready low poly,
+PBR materials with emissive glow, white background
+```
+
+**Key Features:**
+- Tall ornate pillar (7m tall)
+- Glowing blue energy beacon at top (emissive)
+- Golden-bronze ancient metal material
+- Alien geometric engravings
+- Floating/hovering energy elements
+
+---
+
+### 2. Destructible Rocks (Large)
+**File:** `/public/models/decorations/rocks_large.glb`
+
+**Dimensions:** 4m × 4m cluster, 2m tall
+
+**Description:** Large rock formation that blocks paths until destroyed.
+
+**AI Prompt:**
+```
+Large destructible boulder formation, massive rocky barrier,
+three to five large angular rocks clustered together,
+dark gray volcanic stone with brown earth tones,
+jagged broken edges, moss patches, cracked surfaces,
+natural geological formation, imposing rock wall,
+game-ready low poly, PBR materials, white background
+```
+
+**Key Features:**
+- 3-5 clustered boulders
+- Dark gray/brown volcanic stone
+- Cracked and weathered surfaces
+- Blocks unit pathing
+
+---
+
+### 3. Destructible Rocks (Small)
+**File:** `/public/models/decorations/rocks_small.glb`
+
+**Dimensions:** 2m × 2m cluster, 1m tall
+
+**Description:** Smaller rock formation for secondary paths.
+
+**AI Prompt:**
+```
+Small destructible rock cluster, scattered boulder pile,
+two to three medium rocks with several smaller stones,
+gray-brown natural stone, mossy patches,
+easily breakable appearance, pathway obstacle,
+game-ready low poly, PBR materials, white background
 ```
 
 ---
 
-### 2. Destructible Rocks
-**File:** `/public/models/decorations/destructible_rocks.glb`
+### 4. Decorative Rock (Single)
+**File:** `/public/models/decorations/rock_single.glb`
 
-**Dimensions:** 4m × 4m cluster
+**Dimensions:** 1m × 1m, 0.5-1m tall
 
-**Description:** Rock formation that blocks paths until destroyed.
+**Description:** Single decorative boulder for terrain detail.
 
 **AI Prompt:**
 ```
-Large boulder formation, destructible rock barrier,
-multiple large rocks clustered, brown/gray stone,
-natural rock formation, can be destroyed,
-game-ready low poly, PBR materials
+Single decorative boulder, natural rock formation,
+rounded weathered stone, gray-brown granite texture,
+mossy patches on top, partially buried in ground,
+terrain decoration element, game-ready low poly,
+PBR materials, white background
 ```
 
 ---
 
-### 3. Pine Tree
-**File:** `/public/models/decorations/tree_pine.glb`
+## TREES
 
-**Dimensions:** 1m × 1m footprint, 3-5m tall
+### 5. Pine Tree (Tall)
+**File:** `/public/models/decorations/tree_pine_tall.glb`
 
-**Description:** Decorative tree for map edges.
+**Dimensions:** 1m × 1m footprint, 5-6m tall
+
+**Description:** Tall coniferous tree for forest areas and map edges.
 
 **AI Prompt:**
 ```
-Stylized pine tree, sci-fi alien conifer,
-layered cone foliage, thin trunk, dark green,
-decorative nature element, game-ready low poly
+Tall pine tree, sci-fi alien conifer evergreen,
+triangular layered foliage in dark green-blue tones,
+thin brown bark trunk, straight vertical growth,
+slightly stylized alien vegetation, forest tree,
+game-ready low poly, PBR materials, white background
+```
+
+**Key Features:**
+- Tall triangular silhouette (5-6m)
+- Layered branch tiers
+- Dark green-blue foliage
+- Straight trunk
+
+---
+
+### 6. Pine Tree (Medium)
+**File:** `/public/models/decorations/tree_pine_medium.glb`
+
+**Dimensions:** 0.8m × 0.8m footprint, 3-4m tall
+
+**Description:** Medium pine tree for varied forest density.
+
+**AI Prompt:**
+```
+Medium pine tree, stylized alien evergreen,
+compact triangular shape, dense dark green foliage,
+visible branch structure, brown textured bark,
+decorative forest element, game-ready low poly,
+PBR materials, white background
+```
+
+---
+
+### 7. Dead Tree
+**File:** `/public/models/decorations/tree_dead.glb`
+
+**Dimensions:** 1m × 1m footprint, 3-4m tall
+
+**Description:** Leafless dead tree for wasteland and corrupted areas.
+
+**AI Prompt:**
+```
+Dead leafless tree, twisted barren branches,
+gnarled gray-brown trunk, no foliage,
+broken branch stumps, weathered bark texture,
+haunting wasteland vegetation, slightly bent,
+game-ready low poly, PBR materials, white background
+```
+
+---
+
+### 8. Alien Tree (Bioluminescent)
+**File:** `/public/models/decorations/tree_alien.glb`
+
+**Dimensions:** 1.5m × 1.5m footprint, 4-5m tall
+
+**Description:** Strange alien tree with glowing elements for exotic biomes.
+
+**AI Prompt:**
+```
+Alien bioluminescent tree, strange organic growth,
+twisted purple-blue trunk, glowing cyan leaf pods,
+alien flora aesthetic, organic bulbous shapes,
+luminescent fruit or flowers, otherworldly vegetation,
+game-ready low poly, PBR materials with emission,
+white background
+```
+
+**Key Features:**
+- Purple-blue organic trunk
+- Glowing cyan elements (emissive)
+- Alien/otherworldly design
+- Bioluminescent pods
+
+---
+
+### 9. Palm Tree
+**File:** `/public/models/decorations/tree_palm.glb`
+
+**Dimensions:** 1m × 1m footprint, 4-5m tall
+
+**Description:** Tropical palm tree for beach and jungle biomes.
+
+**AI Prompt:**
+```
+Tropical palm tree, curved brown trunk,
+large fan-shaped green fronds at top,
+sci-fi alien tropical vegetation, beach aesthetic,
+slightly swaying appearance, coconut-like fruit,
+game-ready low poly, PBR materials, white background
+```
+
+---
+
+### 10. Mushroom Tree (Giant)
+**File:** `/public/models/decorations/tree_mushroom.glb`
+
+**Dimensions:** 2m × 2m footprint, 3-4m tall
+
+**Description:** Giant alien mushroom for fungal/swamp biomes.
+
+**AI Prompt:**
+```
+Giant alien mushroom, massive fungal growth,
+wide spotted cap in purple-red colors,
+thick pale stalk, bioluminescent spots on cap,
+alien fungal forest element, organic textures,
+game-ready low poly, PBR materials with emission,
+white background
+```
+
+---
+
+### 11. Crystal Formation
+**File:** `/public/models/decorations/crystal_formation.glb`
+
+**Dimensions:** 1m × 1m footprint, 1-2m tall
+
+**Description:** Decorative crystal cluster (non-harvestable) for terrain detail.
+
+**AI Prompt:**
+```
+Decorative crystal formation, small crystal cluster,
+purple-pink translucent crystals, angular faceted shapes,
+natural crystal growth pattern, glowing internal light,
+terrain decoration element, alien mineral aesthetic,
+game-ready low poly, PBR materials with emission,
+white background
+```
+
+---
+
+### 12. Bush/Shrub
+**File:** `/public/models/decorations/bush.glb`
+
+**Dimensions:** 0.5m × 0.5m footprint, 0.5m tall
+
+**Description:** Small decorative bush for ground cover.
+
+**AI Prompt:**
+```
+Small decorative bush, compact round shrub,
+dense dark green foliage, slightly alien appearance,
+ground cover vegetation, no visible trunk,
+terrain filler decoration, game-ready low poly,
+PBR materials, white background
+```
+
+---
+
+### 13. Grass Clump
+**File:** `/public/models/decorations/grass_clump.glb`
+
+**Dimensions:** 0.3m × 0.3m footprint, 0.3m tall
+
+**Description:** Decorative grass tuft for terrain detail.
+
+**AI Prompt:**
+```
+Grass tuft decoration, tall grass clump,
+multiple blade shapes, green-yellow coloring,
+swaying appearance, ground detail element,
+terrain grass decoration, game-ready low poly,
+PBR materials, white background
+```
+
+---
+
+### 14. Debris Pile
+**File:** `/public/models/decorations/debris.glb`
+
+**Dimensions:** 2m × 2m footprint, 0.5m tall
+
+**Description:** Scattered mechanical debris for battlefield/industrial areas.
+
+**AI Prompt:**
+```
+Mechanical debris pile, scattered metal wreckage,
+broken machinery parts, damaged vehicle components,
+rusty metal scraps, destroyed equipment aesthetic,
+battlefield decoration, industrial waste,
+game-ready low poly, PBR materials, white background
+```
+
+---
+
+### 15. Crashed Escape Pod
+**File:** `/public/models/decorations/escape_pod.glb`
+
+**Dimensions:** 2m × 2m footprint, 1.5m tall
+
+**Description:** Crashed/abandoned escape pod for story elements.
+
+**AI Prompt:**
+```
+Crashed escape pod, damaged spacecraft capsule,
+scorched entry burns, broken hatch door,
+emergency beacon light (optional glow),
+abandoned sci-fi wreckage, impact crater detail,
+game-ready low poly, PBR materials, white background
+```
+
+---
+
+### 16. Ruined Wall Section
+**File:** `/public/models/decorations/ruined_wall.glb`
+
+**Dimensions:** 3m × 1m footprint, 2m tall
+
+**Description:** Destroyed building wall section for urban/ruined areas.
+
+**AI Prompt:**
+```
+Ruined building wall section, destroyed concrete wall,
+broken and crumbling edges, exposed rebar/metal,
+blast damage marks, partially standing structure,
+post-apocalyptic urban debris, war-torn aesthetic,
+game-ready low poly, PBR materials, white background
 ```
 
 ---
@@ -979,7 +1250,20 @@ The AssetManager will automatically use custom models when available, falling ba
 - [ ] Missile
 - [ ] Laser
 
-### Decorations (3 total)
-- [ ] Watch Tower
-- [ ] Destructible Rocks
-- [ ] Pine Tree
+### Decorations (16 total)
+- [ ] Xel'Naga Watch Tower
+- [ ] Destructible Rocks (Large)
+- [ ] Destructible Rocks (Small)
+- [ ] Decorative Rock (Single)
+- [ ] Pine Tree (Tall)
+- [ ] Pine Tree (Medium)
+- [ ] Dead Tree
+- [ ] Alien Tree (Bioluminescent)
+- [ ] Palm Tree
+- [ ] Mushroom Tree (Giant)
+- [ ] Crystal Formation
+- [ ] Bush/Shrub
+- [ ] Grass Clump
+- [ ] Debris Pile
+- [ ] Crashed Escape Pod
+- [ ] Ruined Wall Section
