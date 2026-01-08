@@ -4,12 +4,13 @@ import { Transform } from '@/engine/components/Transform';
 import { Unit } from '@/engine/components/Unit';
 import { Health } from '@/engine/components/Health';
 import { Selectable } from '@/engine/components/Selectable';
+import { Velocity } from '@/engine/components/Velocity';
 import { VisionSystem } from '@/engine/systems/VisionSystem';
 import { AssetManager } from '@/assets/AssetManager';
 import { Terrain } from './Terrain';
 import { getPlayerColor } from '@/store/gameSetupStore';
 
-// Instance data for a single unit type + player combo
+// Instance data for a single unit type + player combo (non-animated units)
 interface InstancedUnitGroup {
   mesh: THREE.InstancedMesh;
   unitType: string;
@@ -17,6 +18,14 @@ interface InstancedUnitGroup {
   maxInstances: number;
   entityIds: number[]; // Maps instance index to entity ID
   dummy: THREE.Object3D; // Reusable for matrix calculations
+}
+
+// Per-unit animated mesh data (for animated units)
+interface AnimatedUnitMesh {
+  mesh: THREE.Object3D;
+  mixer: THREE.AnimationMixer;
+  animations: Map<string, THREE.AnimationAction>;
+  currentAction: string;
 }
 
 // Per-unit overlay data (selection ring, health bar)
@@ -35,8 +44,14 @@ export class UnitRenderer {
   private terrain: Terrain | null;
   private playerId: string = 'player1';
 
-  // Instanced mesh groups: key = "unitType_playerId"
+  // Instanced mesh groups: key = "unitType_playerId" (for non-animated units)
   private instancedGroups: Map<string, InstancedUnitGroup> = new Map();
+
+  // Animated unit meshes: key = entityId (for animated units)
+  private animatedUnits: Map<number, AnimatedUnitMesh> = new Map();
+
+  // Track which unit types are animated
+  private animatedUnitTypes: Set<string> = new Set();
 
   // Per-unit overlays (selection rings, health bars)
   private unitOverlays: Map<number, UnitOverlay> = new Map();
@@ -89,6 +104,103 @@ export class UnitRenderer {
 
   public setPlayerId(playerId: string): void {
     this.playerId = playerId;
+  }
+
+  /**
+   * Check if a unit type should use animated rendering
+   */
+  private isAnimatedUnitType(unitType: string): boolean {
+    // Check cached result first
+    if (this.animatedUnitTypes.has(unitType)) {
+      return true;
+    }
+    // Check if asset has animations
+    if (AssetManager.hasAnimations(unitType)) {
+      this.animatedUnitTypes.add(unitType);
+      return true;
+    }
+    return false;
+  }
+
+  /**
+   * Get or create an animated mesh for a specific unit entity
+   */
+  private getOrCreateAnimatedUnit(entityId: number, unitType: string, playerId: string): AnimatedUnitMesh {
+    let animUnit = this.animatedUnits.get(entityId);
+
+    if (!animUnit) {
+      const playerColor = getPlayerColor(playerId);
+      const mesh = AssetManager.getUnitMesh(unitType, playerColor);
+      this.scene.add(mesh);
+
+      // Create animation mixer
+      const mixer = new THREE.AnimationMixer(mesh);
+      const animations = new Map<string, THREE.AnimationAction>();
+
+      // Get animations from asset manager and create actions
+      const clips = AssetManager.getAnimations(unitType);
+      for (const clip of clips) {
+        const action = mixer.clipAction(clip);
+        const name = clip.name.toLowerCase();
+        animations.set(name, action);
+
+        // Also map common aliases
+        if (name.includes('idle') || name.includes('stand')) {
+          animations.set('idle', action);
+        } else if (name.includes('walk') || name.includes('run') || name.includes('move')) {
+          animations.set('walk', action);
+        } else if (name.includes('attack') || name.includes('shoot')) {
+          animations.set('attack', action);
+        }
+      }
+
+      // Start with idle animation if available
+      const idleAction = animations.get('idle');
+      if (idleAction) {
+        idleAction.play();
+      } else if (clips.length > 0) {
+        // Fall back to first animation
+        const firstAction = mixer.clipAction(clips[0]);
+        firstAction.play();
+        animations.set('idle', firstAction);
+      }
+
+      animUnit = {
+        mesh,
+        mixer,
+        animations,
+        currentAction: 'idle',
+      };
+
+      this.animatedUnits.set(entityId, animUnit);
+    }
+
+    return animUnit;
+  }
+
+  /**
+   * Update animation state based on unit state
+   */
+  private updateAnimationState(animUnit: AnimatedUnitMesh, isMoving: boolean, isAttacking: boolean): void {
+    let targetAction = 'idle';
+    if (isAttacking) {
+      targetAction = 'attack';
+    } else if (isMoving) {
+      targetAction = 'walk';
+    }
+
+    if (animUnit.currentAction !== targetAction) {
+      const currentActionObj = animUnit.animations.get(animUnit.currentAction);
+      const targetActionObj = animUnit.animations.get(targetAction);
+
+      if (targetActionObj) {
+        if (currentActionObj) {
+          currentActionObj.fadeOut(0.2);
+        }
+        targetActionObj.reset().fadeIn(0.2).play();
+        animUnit.currentAction = targetAction;
+      }
+    }
   }
 
   /**
@@ -179,7 +291,7 @@ export class UnitRenderer {
     return overlay;
   }
 
-  public update(): void {
+  public update(deltaTime: number = 1/60): void {
     const entities = this.world.getEntitiesWith('Transform', 'Unit');
     const currentIds = new Set<number>();
 
@@ -187,6 +299,11 @@ export class UnitRenderer {
     for (const group of this.instancedGroups.values()) {
       group.mesh.count = 0;
       group.entityIds = [];
+    }
+
+    // Hide animated units that may be hidden
+    for (const animUnit of this.animatedUnits.values()) {
+      animUnit.mesh.visible = false;
     }
 
     // Build instance data
@@ -197,6 +314,7 @@ export class UnitRenderer {
       const unit = entity.get<Unit>('Unit')!;
       const health = entity.get<Health>('Health');
       const selectable = entity.get<Selectable>('Selectable');
+      const velocity = entity.get<Velocity>('Velocity');
 
       const ownerId = selectable?.playerId ?? 'unknown';
       const isOwned = ownerId === this.playerId;
@@ -223,48 +341,69 @@ export class UnitRenderer {
         continue;
       }
 
-      // Get or create instanced group for this unit type + player
-      const group = this.getOrCreateInstancedGroup(unit.unitId, ownerId);
+      // Get terrain height
+      const terrainHeight = this.terrain?.getHeightAt(transform.x, transform.y) ?? 0;
 
-      // Add instance if we have room
-      if (group.mesh.count < group.maxInstances) {
-        const instanceIndex = group.mesh.count;
-        group.entityIds[instanceIndex] = entity.id;
+      // Check if this is an animated unit type
+      if (this.isAnimatedUnitType(unit.unitId)) {
+        // Use individual animated mesh
+        const animUnit = this.getOrCreateAnimatedUnit(entity.id, unit.unitId, ownerId);
+        animUnit.mesh.visible = true;
 
-        // Get terrain height
-        const terrainHeight = this.terrain?.getHeightAt(transform.x, transform.y) ?? 0;
+        // Update position and rotation
+        animUnit.mesh.position.set(transform.x, terrainHeight, transform.y);
+        animUnit.mesh.rotation.y = -transform.rotation + Math.PI / 2;
 
-        // Set instance transform
-        this.tempPosition.set(transform.x, terrainHeight, transform.y);
-        this.tempEuler.set(0, -transform.rotation + Math.PI / 2, 0);
-        this.tempQuaternion.setFromEuler(this.tempEuler);
-        this.tempMatrix.compose(this.tempPosition, this.tempQuaternion, this.tempScale);
-        group.mesh.setMatrixAt(instanceIndex, this.tempMatrix);
+        // Determine animation state
+        const isMoving = velocity ? (Math.abs(velocity.x) > 0.01 || Math.abs(velocity.y) > 0.01) : false;
+        const isAttacking = unit.state === 'attacking';
 
-        group.mesh.count++;
+        // Update animation
+        this.updateAnimationState(animUnit, isMoving, isAttacking);
 
-        // Update overlay (selection ring, health bar)
-        const overlay = this.getOrCreateOverlay(entity.id);
+        // Update animation mixer
+        animUnit.mixer.update(deltaTime);
+      } else {
+        // Use instanced rendering for non-animated units
+        const group = this.getOrCreateInstancedGroup(unit.unitId, ownerId);
 
-        // Selection ring
-        overlay.selectionRing.position.set(transform.x, terrainHeight + 0.05, transform.y);
-        overlay.selectionRing.visible = selectable?.isSelected ?? false;
-        if (overlay.selectionRing.visible) {
-          (overlay.selectionRing.material as THREE.MeshBasicMaterial) =
-            isOwned ? this.selectionMaterial : this.enemySelectionMaterial;
+        // Add instance if we have room
+        if (group.mesh.count < group.maxInstances) {
+          const instanceIndex = group.mesh.count;
+          group.entityIds[instanceIndex] = entity.id;
+
+          // Set instance transform
+          this.tempPosition.set(transform.x, terrainHeight, transform.y);
+          this.tempEuler.set(0, -transform.rotation + Math.PI / 2, 0);
+          this.tempQuaternion.setFromEuler(this.tempEuler);
+          this.tempMatrix.compose(this.tempPosition, this.tempQuaternion, this.tempScale);
+          group.mesh.setMatrixAt(instanceIndex, this.tempMatrix);
+
+          group.mesh.count++;
         }
+      }
 
-        // Health bar - only show if damaged
-        if (health) {
-          const healthPercent = health.getHealthPercent();
-          overlay.healthBar.visible = healthPercent < 1;
-          if (overlay.healthBar.visible) {
-            overlay.healthBar.position.set(transform.x, terrainHeight + 1.5, transform.y);
-            // Only update health bar visuals if health changed
-            if (Math.abs(overlay.lastHealth - healthPercent) > 0.01) {
-              this.updateHealthBar(overlay.healthBar, health);
-              overlay.lastHealth = healthPercent;
-            }
+      // Update overlay (selection ring, health bar) for all units
+      const overlay = this.getOrCreateOverlay(entity.id);
+
+      // Selection ring
+      overlay.selectionRing.position.set(transform.x, terrainHeight + 0.05, transform.y);
+      overlay.selectionRing.visible = selectable?.isSelected ?? false;
+      if (overlay.selectionRing.visible) {
+        (overlay.selectionRing.material as THREE.MeshBasicMaterial) =
+          isOwned ? this.selectionMaterial : this.enemySelectionMaterial;
+      }
+
+      // Health bar - only show if damaged
+      if (health) {
+        const healthPercent = health.getHealthPercent();
+        overlay.healthBar.visible = healthPercent < 1;
+        if (overlay.healthBar.visible) {
+          overlay.healthBar.position.set(transform.x, terrainHeight + 1.5, transform.y);
+          // Only update health bar visuals if health changed
+          if (Math.abs(overlay.lastHealth - healthPercent) > 0.01) {
+            this.updateHealthBar(overlay.healthBar, health);
+            overlay.lastHealth = healthPercent;
           }
         }
       }
@@ -277,7 +416,7 @@ export class UnitRenderer {
       }
     }
 
-    // Clean up overlays for destroyed entities
+    // Clean up resources for destroyed entities
     for (const [entityId, overlay] of this.unitOverlays) {
       if (!currentIds.has(entityId)) {
         this.scene.remove(overlay.selectionRing);
@@ -285,6 +424,15 @@ export class UnitRenderer {
         overlay.selectionRing.geometry.dispose();
         this.disposeGroup(overlay.healthBar);
         this.unitOverlays.delete(entityId);
+      }
+    }
+
+    // Clean up animated units for destroyed entities
+    for (const [entityId, animUnit] of this.animatedUnits) {
+      if (!currentIds.has(entityId)) {
+        this.scene.remove(animUnit.mesh);
+        animUnit.mixer.stopAllAction();
+        this.animatedUnits.delete(entityId);
       }
     }
   }
@@ -367,6 +515,14 @@ export class UnitRenderer {
     }
     this.instancedGroups.clear();
 
+    // Clear animated units
+    for (const animUnit of this.animatedUnits.values()) {
+      this.scene.remove(animUnit.mesh);
+      animUnit.mixer.stopAllAction();
+    }
+    this.animatedUnits.clear();
+    this.animatedUnitTypes.clear();
+
     // Clear overlays
     for (const overlay of this.unitOverlays.values()) {
       this.scene.remove(overlay.selectionRing);
@@ -385,6 +541,13 @@ export class UnitRenderer {
       group.mesh.geometry.dispose();
     }
     this.instancedGroups.clear();
+
+    for (const animUnit of this.animatedUnits.values()) {
+      this.scene.remove(animUnit.mesh);
+      animUnit.mixer.stopAllAction();
+    }
+    this.animatedUnits.clear();
+    this.animatedUnitTypes.clear();
 
     for (const overlay of this.unitOverlays.values()) {
       this.scene.remove(overlay.selectionRing);

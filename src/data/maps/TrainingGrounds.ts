@@ -333,8 +333,14 @@ function generateTrainingGrounds(): MapData {
     terrain,
 
     spawns: [
-      { x: 170, y: 170, playerSlot: 1, rotation: Math.PI * 5 / 4 },
-      { x: 30, y: 30, playerSlot: 2, rotation: Math.PI / 4 },
+      { x: 170, y: 170, playerSlot: 1, rotation: Math.PI * 5 / 4 },  // P1 Main
+      { x: 30, y: 30, playerSlot: 2, rotation: Math.PI / 4 },        // P2 Main
+      { x: 120, y: 160, playerSlot: 3, rotation: Math.PI * 3 / 2 },  // P1 Natural area
+      { x: 80, y: 40, playerSlot: 4, rotation: Math.PI / 2 },        // P2 Natural area
+      { x: 60, y: 100, playerSlot: 5, rotation: Math.PI },           // P1 Third
+      { x: 140, y: 100, playerSlot: 6, rotation: 0 },                // P2 Third
+      { x: 100, y: 185, playerSlot: 7, rotation: Math.PI * 3 / 2 },  // P1 Fourth
+      { x: 100, y: 15, playerSlot: 8, rotation: Math.PI / 2 },       // P2 Fourth
     ],
 
     expansions,
@@ -356,7 +362,7 @@ function generateTrainingGrounds(): MapData {
     // Explicit decoration placements using GLB models
     decorations: generateDecorations(),
 
-    maxPlayers: 2,
+    maxPlayers: 8,
     isRanked: false,
 
     biome: 'grassland',

@@ -4,6 +4,7 @@ import { Building } from '../components/Building';
 import { Unit } from '../components/Unit';
 import { Health } from '../components/Health';
 import { Selectable } from '../components/Selectable';
+import { useGameSetupStore, TeamNumber } from '@/store/gameSetupStore';
 
 export interface PlayerStats {
   playerId: string;
@@ -34,6 +35,7 @@ export class GameStateSystem extends System {
   public priority = 200; // Run late, after most other systems
 
   private playerStats: Map<string, PlayerStats> = new Map();
+  private playerTeams: Map<string, TeamNumber> = new Map(); // Cache player -> team mapping
   private gameStartTime: number = 0;
   private isGameOver: boolean = false;
   private gameResult: GameResult | null = null;
@@ -43,6 +45,20 @@ export class GameStateSystem extends System {
   constructor(game: Game) {
     super(game);
     this.setupEventListeners();
+    this.cachePlayerTeams();
+  }
+
+  private cachePlayerTeams(): void {
+    const setupStore = useGameSetupStore.getState();
+    for (const slot of setupStore.playerSlots) {
+      if (slot.type === 'human' || slot.type === 'ai') {
+        this.playerTeams.set(slot.id, slot.team);
+      }
+    }
+  }
+
+  private getPlayerTeam(playerId: string): TeamNumber {
+    return this.playerTeams.get(playerId) ?? 0;
   }
 
   public initializePlayer(playerId: string): void {
@@ -174,7 +190,6 @@ export class GameStateSystem extends System {
   private checkVictoryConditions(): void {
     const players = new Set<string>();
     const playersWithBuildings = new Set<string>();
-    const playersWithUnits = new Set<string>();
 
     // Collect all players
     const allEntities = this.world.getEntitiesWith('Selectable');
@@ -194,26 +209,32 @@ export class GameStateSystem extends System {
       }
     }
 
-    // Check which players still have units
-    const units = this.world.getEntitiesWith('Unit', 'Selectable', 'Health');
-    for (const entity of units) {
-      const selectable = entity.get<Selectable>('Selectable')!;
-      const health = entity.get<Health>('Health')!;
+    // Group active players by team
+    // For FFA (team 0), each player is their own "team" using negative player index
+    const teamsWithActivePlayers = new Map<number, string[]>();
+    let ffaIndex = -1;
 
-      if (!health.isDead()) {
-        playersWithUnits.add(selectable.playerId);
+    for (const playerId of playersWithBuildings) {
+      const team = this.getPlayerTeam(playerId);
+      if (team === 0) {
+        // FFA - each player is their own team
+        teamsWithActivePlayers.set(ffaIndex--, [playerId]);
+      } else {
+        // Team game - group by team number
+        const existing = teamsWithActivePlayers.get(team) ?? [];
+        existing.push(playerId);
+        teamsWithActivePlayers.set(team, existing);
       }
     }
 
-    // Victory condition: Only one player has buildings remaining
-    const activePlayers = [...playersWithBuildings];
+    // Victory condition: Only one team has players with buildings remaining
+    if (teamsWithActivePlayers.size === 1 && players.size > 1) {
+      const [teamId, teamPlayers] = [...teamsWithActivePlayers.entries()][0];
+      const winner = teamPlayers[0]; // First player of winning team
+      const losers = [...players].filter(p => !teamPlayers.includes(p));
 
-    if (activePlayers.length === 1 && players.size > 1) {
-      const winner = activePlayers[0];
-      const losers = [...players].filter(p => p !== winner);
-
-      this.declareVictory(winner, losers[0], 'elimination');
-    } else if (activePlayers.length === 0 && players.size > 0) {
+      this.declareVictory(winner, losers[0] ?? 'none', 'elimination');
+    } else if (teamsWithActivePlayers.size === 0 && players.size > 0) {
       // Draw - everyone eliminated
       this.declareDraw();
     }

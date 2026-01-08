@@ -11,6 +11,8 @@ interface InstancedResourceGroup {
   maxInstances: number;
   entityIds: number[];
   rotations: number[]; // Store random rotations per instance
+  yOffset: number; // Y offset from model normalization (to ground the model)
+  baseScale: number; // Base scale from model normalization
 }
 
 // Track per-resource rotation for visual variety
@@ -55,14 +57,26 @@ export class ResourceRenderer {
       // Get the base mesh from AssetManager
       const baseMesh = AssetManager.getResourceMesh(resourceType as 'minerals' | 'vespene');
 
-      // Find the actual mesh geometry and material from the group
+      // Find the actual mesh geometry, material, and extract transforms from the model
       let geometry: THREE.BufferGeometry | null = null;
       let material: THREE.Material | THREE.Material[] | null = null;
+      let yOffset = 0;
+      let baseScale = 1;
 
+      // baseMesh is a wrapper Group containing the normalized model
+      // The inner model has position.y set for grounding and scale set for sizing
       baseMesh.traverse((child) => {
         if (child instanceof THREE.Mesh && !geometry) {
           geometry = child.geometry;
           material = child.material;
+          // Get the accumulated y-offset and scale from the transform chain
+          // Walk up the parent chain to accumulate transforms
+          let obj: THREE.Object3D | null = child;
+          while (obj && obj !== baseMesh) {
+            yOffset += obj.position.y * (obj.parent?.scale.y ?? 1);
+            baseScale *= obj.scale.y;
+            obj = obj.parent;
+          }
         }
       });
 
@@ -98,12 +112,16 @@ export class ResourceRenderer {
 
       this.scene.add(instancedMesh);
 
+      console.log(`[ResourceRenderer] Created instanced group for ${resourceType}: yOffset=${yOffset.toFixed(2)}, baseScale=${baseScale.toFixed(3)}`);
+
       group = {
         mesh: instancedMesh,
         resourceType,
         maxInstances: MAX_RESOURCES_PER_TYPE,
         entityIds: [],
         rotations: [],
+        yOffset,
+        baseScale,
       };
 
       this.instancedGroups.set(resourceType, group);
@@ -159,14 +177,15 @@ export class ResourceRenderer {
         // Get terrain height
         const terrainHeight = this.terrain?.getHeightAt(transform.x, transform.y) ?? 0;
 
-        // Scale based on remaining amount
-        const scale = 0.5 + resource.getPercentRemaining() * 0.5;
+        // Scale based on remaining amount, including base scale from model
+        const amountScale = 0.5 + resource.getPercentRemaining() * 0.5;
+        const finalScale = amountScale * group.baseScale;
 
-        // Set instance transform
-        this.tempPosition.set(transform.x, terrainHeight, transform.y);
+        // Set instance transform - apply yOffset scaled appropriately
+        this.tempPosition.set(transform.x, terrainHeight + group.yOffset * amountScale, transform.y);
         this.tempEuler.set(0, data.rotation, 0);
         this.tempQuaternion.setFromEuler(this.tempEuler);
-        this.tempScale.set(scale, scale, scale);
+        this.tempScale.set(finalScale, finalScale, finalScale);
         this.tempMatrix.compose(this.tempPosition, this.tempQuaternion, this.tempScale);
         group.mesh.setMatrixAt(instanceIndex, this.tempMatrix);
 
