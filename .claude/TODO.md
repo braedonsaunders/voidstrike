@@ -67,6 +67,10 @@
 - [x] **Worker mineral splitting** - Workers auto-spread across mineral patches, prefer <2 gatherers
 - [x] **SC2-style flat terrain** - Buildable areas now perfectly flat, only cliffs have height variation
 - [x] **Building placement grid** - Green/red tile visualization when placing buildings
+- [x] **Phaser overlay integration** - Fixed event mismatches, added production/research/building alerts
+- [x] **Combat feedback** - Player damage vignette, unit death effects, enhanced combat border
+- [x] **Resource warnings** - "NOT ENOUGH MINERALS/VESPENE", "SUPPLY BLOCKED" alerts
+- [x] **Ability splashes** - Major ability notifications (Stim Pack, Yamato Cannon)
 
 ### UI Improvements
 - [x] **Options menu** - Replaced Menu button with dropdown (Controls, Tech Tree, Exit to Menu)

@@ -38,17 +38,21 @@ export class ProductionSystem extends System {
     const store = useGameStore.getState();
 
     // Check resources
-    if (
-      store.minerals < unitDef.mineralCost ||
-      store.vespene < unitDef.vespeneCost
-    ) {
-      this.game.eventBus.emit('ui:error', { message: 'Not enough resources' });
+    if (store.minerals < unitDef.mineralCost) {
+      this.game.eventBus.emit('ui:error', { message: 'Not enough minerals' });
+      this.game.eventBus.emit('warning:lowMinerals', {});
+      return;
+    }
+    if (store.vespene < unitDef.vespeneCost) {
+      this.game.eventBus.emit('ui:error', { message: 'Not enough vespene' });
+      this.game.eventBus.emit('warning:lowVespene', {});
       return;
     }
 
     // Check supply
     if (store.supply + unitDef.supplyCost > store.maxSupply) {
       this.game.eventBus.emit('ui:error', { message: 'Not enough supply' });
+      this.game.eventBus.emit('warning:supplyBlocked', {});
       return;
     }
 
@@ -107,11 +111,14 @@ export class ProductionSystem extends System {
     const store = useGameStore.getState();
 
     // Check resources
-    if (
-      store.minerals < upgradeDef.mineralCost ||
-      store.vespene < upgradeDef.vespeneCost
-    ) {
-      this.game.eventBus.emit('ui:error', { message: 'Not enough resources' });
+    if (store.minerals < upgradeDef.mineralCost) {
+      this.game.eventBus.emit('ui:error', { message: 'Not enough minerals' });
+      this.game.eventBus.emit('warning:lowMinerals', {});
+      return;
+    }
+    if (store.vespene < upgradeDef.vespeneCost) {
+      this.game.eventBus.emit('ui:error', { message: 'Not enough vespene' });
+      this.game.eventBus.emit('warning:lowVespene', {});
       return;
     }
 
@@ -165,10 +172,17 @@ export class ProductionSystem extends System {
         building.updateConstruction(dt);
 
         if (!wasComplete && building.isComplete()) {
-          this.game.eventBus.emit('building:complete', {
-            entityId: entity.id,
-            buildingType: building.buildingId,
-          });
+          const selectable = entity.get<Selectable>('Selectable');
+          const buildingDef = BUILDING_DEFINITIONS[building.buildingId];
+
+          // Emit building complete for Phaser overlay (player buildings only)
+          if (selectable?.playerId === 'player1') {
+            this.game.eventBus.emit('building:complete', {
+              entityId: entity.id,
+              buildingType: building.buildingId,
+              buildingName: buildingDef?.name ?? building.buildingId,
+            });
+          }
 
           // Add supply if applicable
           if (building.supplyProvided > 0) {
@@ -217,10 +231,15 @@ export class ProductionSystem extends System {
         playerId: ownerPlayerId,
       });
 
-      this.game.eventBus.emit('production:complete', {
-        buildingId,
-        unitType: item.id,
-      });
+      // Emit production complete for Phaser overlay (player units only)
+      if (ownerPlayerId === 'player1') {
+        const unitDef = UNIT_DEFINITIONS[item.id];
+        this.game.eventBus.emit('production:complete', {
+          buildingId,
+          unitType: item.id,
+          unitName: unitDef?.name ?? item.id,
+        });
+      }
     } else if (item.type === 'upgrade') {
       // Check if this is a building upgrade or research upgrade
       const upgradeBuildingDef = BUILDING_DEFINITIONS[item.id];
@@ -228,11 +247,16 @@ export class ProductionSystem extends System {
         // This is a building upgrade (e.g., CC -> Orbital Command)
         this.handleBuildingUpgradeComplete(buildingId, building, item.id, upgradeBuildingDef);
       } else {
-        // This is a research upgrade
-        this.game.eventBus.emit('research:complete', {
-          buildingId,
-          upgradeId: item.id,
-        });
+        // This is a research upgrade - emit for Phaser overlay
+        const buildingEntity = this.world.getEntity(buildingId);
+        const buildingSelectable = buildingEntity?.get<Selectable>('Selectable');
+        if (buildingSelectable?.playerId === 'player1') {
+          this.game.eventBus.emit('research:complete', {
+            buildingId,
+            upgradeId: item.id,
+            researchName: item.id.replace(/_/g, ' '),
+          });
+        }
       }
     }
   }

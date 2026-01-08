@@ -152,9 +152,11 @@ export class CombatSystem extends System {
       if (health.isDead()) {
         if (unit.state !== 'dead') {
           unit.state = 'dead';
+          const selectable = attacker.get<Selectable>('Selectable');
           this.game.eventBus.emit('unit:died', {
             entityId: attacker.id,
             position: { x: transform.x, y: transform.y },
+            isPlayerUnit: selectable?.playerId === 'player1',
           });
         }
         continue;
@@ -332,6 +334,16 @@ export class CombatSystem extends System {
       damage: finalDamage,
       damageType: attacker.damageType,
     });
+
+    // Emit player:damage for Phaser overlay effects when player unit takes damage
+    const targetEntity = this.world.getEntity(targetId);
+    const targetSelectable = targetEntity?.get<Selectable>('Selectable');
+    if (targetSelectable?.playerId === 'player1') {
+      this.game.eventBus.emit('player:damage', {
+        damage: finalDamage,
+        position: { x: targetTransform.x, y: targetTransform.y },
+      });
+    }
 
     // Check for under attack alert
     this.checkUnderAttackAlert(targetId, targetTransform, gameTime);

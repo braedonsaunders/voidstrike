@@ -222,6 +222,16 @@ export class AbilitySystem extends System {
           moveSpeedBonus: 0.5,
         },
       });
+
+      // Emit major ability for Phaser overlay
+      const transform = entity?.get<Transform>('Transform');
+      if (transform) {
+        this.game.eventBus.emit('ability:major', {
+          abilityName: 'STIM PACK',
+          position: { x: transform.x, y: transform.y },
+          color: 0xff4444,
+        });
+      }
     }
   }
 
@@ -382,6 +392,15 @@ export class AbilitySystem extends System {
       targetId,
     });
 
+    // Emit major ability for Phaser overlay (channeling starts)
+    if (casterTransform) {
+      this.game.eventBus.emit('ability:major', {
+        abilityName: 'YAMATO CANNON',
+        position: { x: casterTransform.x, y: casterTransform.y },
+        color: 0xffaa00,
+      });
+    }
+
     // Schedule the damage after channel completes
     setTimeout(() => {
       const currentTarget = this.world.getEntity(targetId);
@@ -400,6 +419,15 @@ export class AbilitySystem extends System {
         damage,
         position: targetTransform ? { x: targetTransform.x, y: targetTransform.y } : null,
       });
+
+      // Impact effect for Phaser overlay
+      if (targetTransform) {
+        this.game.eventBus.emit('ability:major', {
+          abilityName: 'YAMATO IMPACT',
+          position: { x: targetTransform.x, y: targetTransform.y },
+          color: 0xff6600,
+        });
+      }
     }, 3000);
   }
 

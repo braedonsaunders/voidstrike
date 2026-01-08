@@ -148,15 +148,6 @@ export class OverlayScene extends Phaser.Scene {
       this.screenShakeIntensity = Math.min(10, this.screenShakeIntensity + data.damage / 20);
     });
 
-    // Major ability used - show splash effect
-    this.eventBus.on('ability:major', (data: {
-      abilityName: string;
-      position: { x: number; y: number };
-      color?: number;
-    }) => {
-      this.addAbilitySplash(data.position.x, data.position.y, data.abilityName, data.color ?? 0xffffff);
-    });
-
     // Nuclear launch detected!
     this.eventBus.on('alert:nuclear', (data: { targetPosition?: { x: number; y: number } }) => {
       this.showAlert('NUCLEAR LAUNCH DETECTED', 0xff0000, 5000);
@@ -169,7 +160,7 @@ export class OverlayScene extends Phaser.Scene {
     });
 
     // Base under attack
-    this.eventBus.on('alert:baseAttack', (data: { position?: { x: number; y: number } }) => {
+    this.eventBus.on('alert:underAttack', (data: { position?: { x: number; y: number } }) => {
       this.showAlert('YOUR BASE IS UNDER ATTACK', 0xff4444, 3000);
       if (data.position) {
         this.checkOffScreenAttack(data.position.x, data.position.y);
@@ -180,7 +171,64 @@ export class OverlayScene extends Phaser.Scene {
     this.eventBus.on('unit:died', (data: { position?: { x: number; y: number }; isPlayerUnit?: boolean }) => {
       if (data.isPlayerUnit) {
         this.combatIntensity = Math.min(1, this.combatIntensity + 0.1);
+        // Show damage vignette when player unit dies
+        this.addScreenEffect({
+          type: 'damage_vignette',
+          intensity: 0.4,
+          startTime: Date.now(),
+          duration: 400,
+        });
       }
+    });
+
+    // Player unit takes damage - show vignette
+    this.eventBus.on('player:damage', (data: { damage: number; position?: { x: number; y: number } }) => {
+      this.addScreenEffect({
+        type: 'damage_vignette',
+        intensity: Math.min(0.6, data.damage / 80),
+        startTime: Date.now(),
+        duration: 350,
+      });
+      // Add screen shake based on damage
+      this.screenShakeIntensity = Math.min(12, this.screenShakeIntensity + data.damage / 15);
+    });
+
+    // Production complete notifications
+    this.eventBus.on('production:complete', (data: { unitName: string; buildingName?: string }) => {
+      this.showAlert(`${data.unitName.toUpperCase()} READY`, 0x00ff88, 2000);
+    });
+
+    // Research complete
+    this.eventBus.on('research:complete', (data: { researchName: string }) => {
+      this.showAlert(`RESEARCH COMPLETE: ${data.researchName.toUpperCase()}`, 0x00ffff, 3000);
+    });
+
+    // Building complete
+    this.eventBus.on('building:complete', (data: { buildingName: string }) => {
+      this.showAlert(`${data.buildingName.toUpperCase()} COMPLETE`, 0x88ff00, 2000);
+    });
+
+    // Resource warnings
+    this.eventBus.on('warning:lowMinerals', () => {
+      this.showAlert('NOT ENOUGH MINERALS', 0xffaa00, 1500);
+    });
+
+    this.eventBus.on('warning:lowVespene', () => {
+      this.showAlert('NOT ENOUGH VESPENE', 0x00ffaa, 1500);
+    });
+
+    this.eventBus.on('warning:supplyBlocked', () => {
+      this.showAlert('SUPPLY BLOCKED', 0xff6600, 2000);
+    });
+
+    // Major ability used - show splash effect
+    this.eventBus.on('ability:major', (data: {
+      abilityName: string;
+      position: { x: number; y: number };
+      color?: number;
+    }) => {
+      this.addAbilitySplash(data.position.x, data.position.y, data.abilityName, data.color ?? 0xffffff);
+      this.showAlert(data.abilityName.toUpperCase(), data.color ?? 0xffffff, 2000);
     });
   }
 
@@ -488,16 +536,22 @@ export class OverlayScene extends Phaser.Scene {
     const screenWidth = this.scale.width;
     const screenHeight = this.scale.height;
 
-    // Pulsing border based on combat intensity
-    const pulse = Math.sin(Date.now() / 100) * 0.3 + 0.7;
-    const alpha = this.combatIntensity * 0.4 * pulse;
+    // Pulsing border based on combat intensity - MORE VISIBLE
+    const pulse = Math.sin(Date.now() / 80) * 0.4 + 0.6;
+    const alpha = this.combatIntensity * 0.7 * pulse;
 
-    this.vignetteGraphics.lineStyle(3, 0xff4400, alpha);
-    this.vignetteGraphics.strokeRect(5, 5, screenWidth - 10, screenHeight - 10);
+    // Outer glow effect (multiple layers)
+    for (let i = 0; i < 3; i++) {
+      const offset = i * 4;
+      const layerAlpha = alpha * (1 - i * 0.3);
+      this.vignetteGraphics.lineStyle(6 - i * 2, 0xff4400, layerAlpha);
+      this.vignetteGraphics.strokeRect(offset, offset, screenWidth - offset * 2, screenHeight - offset * 2);
+    }
 
-    // Corner highlights
-    const cornerSize = 30 + this.combatIntensity * 20;
-    this.vignetteGraphics.lineStyle(4, 0xff6600, alpha * 1.5);
+    // Corner highlights - BIGGER and BRIGHTER
+    const cornerSize = 50 + this.combatIntensity * 40;
+    const cornerThickness = 6 + this.combatIntensity * 4;
+    this.vignetteGraphics.lineStyle(cornerThickness, 0xff6600, alpha * 1.8);
 
     // Top-left
     this.vignetteGraphics.lineBetween(0, cornerSize, 0, 0);
@@ -514,6 +568,21 @@ export class OverlayScene extends Phaser.Scene {
     // Bottom-right
     this.vignetteGraphics.lineBetween(screenWidth - cornerSize, screenHeight, screenWidth, screenHeight);
     this.vignetteGraphics.lineBetween(screenWidth, screenHeight - cornerSize, screenWidth, screenHeight);
+
+    // Inner corner accents
+    this.vignetteGraphics.lineStyle(2, 0xffaa00, alpha * 2);
+    const innerCorner = 20;
+    this.vignetteGraphics.lineBetween(innerCorner, innerCorner + 15, innerCorner, innerCorner);
+    this.vignetteGraphics.lineBetween(innerCorner, innerCorner, innerCorner + 15, innerCorner);
+
+    this.vignetteGraphics.lineBetween(screenWidth - innerCorner - 15, innerCorner, screenWidth - innerCorner, innerCorner);
+    this.vignetteGraphics.lineBetween(screenWidth - innerCorner, innerCorner, screenWidth - innerCorner, innerCorner + 15);
+
+    this.vignetteGraphics.lineBetween(innerCorner, screenHeight - innerCorner - 15, innerCorner, screenHeight - innerCorner);
+    this.vignetteGraphics.lineBetween(innerCorner, screenHeight - innerCorner, innerCorner + 15, screenHeight - innerCorner);
+
+    this.vignetteGraphics.lineBetween(screenWidth - innerCorner - 15, screenHeight - innerCorner, screenWidth - innerCorner, screenHeight - innerCorner);
+    this.vignetteGraphics.lineBetween(screenWidth - innerCorner, screenHeight - innerCorner - 15, screenWidth - innerCorner, screenHeight - innerCorner);
   }
 
   private updateEdgeWarnings(now: number): void {
