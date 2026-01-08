@@ -42,7 +42,7 @@ export const REFERENCE_FRAME = {
 
   BUILDING_HEIGHTS: {
     command_center: 4.5,
-    supply_depot: 1.8,
+    supply_depot: 0.9, // Half size for supply depot
     barracks: 2.8,
     refinery: 4.0,
     factory: 2.8,

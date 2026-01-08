@@ -10,15 +10,7 @@ import { Selectable } from '@/engine/components/Selectable';
 import { Health } from '@/engine/components/Health';
 import { useGameStore } from '@/store/gameStore';
 import { CELL_SIZE, DEPTH } from '../constants';
-
-// Player colors for minimap dots
-const PLAYER_COLORS: Record<string, number> = {
-  player1: 0x4080ff,
-  ai: 0xff4040,
-  player2: 0x40ff40,
-  player3: 0xffff40,
-  player4: 0xff40ff,
-};
+import { getPlayerColor } from '@/store/gameSetupStore';
 
 export class MinimapRenderer {
   private scene: Phaser.Scene;
@@ -219,7 +211,7 @@ export class MinimapRenderer {
       const mx = transform.x * this.scaleX;
       const my = transform.y * this.scaleY;
 
-      const color = PLAYER_COLORS[selectable.playerId] ?? 0x808080;
+      const color = getPlayerColor(selectable.playerId);
       this.entityGraphics.fillStyle(color, 1);
       this.entityGraphics.fillRect(mx - 2, my - 2, 5, 5);
     }
@@ -243,7 +235,7 @@ export class MinimapRenderer {
       const mx = transform.x * this.scaleX;
       const my = transform.y * this.scaleY;
 
-      const color = PLAYER_COLORS[selectable.playerId] ?? 0x808080;
+      const color = getPlayerColor(selectable.playerId);
       this.entityGraphics.fillStyle(color, 1);
       this.entityGraphics.fillCircle(mx, my, 2);
     }

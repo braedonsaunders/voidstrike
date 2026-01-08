@@ -7,15 +7,7 @@ import { Selectable } from '@/engine/components/Selectable';
 import { VisionSystem } from '@/engine/systems/VisionSystem';
 import { BUILDING_DEFINITIONS } from '@/data/buildings/dominion';
 import { CELL_SIZE, DEPTH } from '../constants';
-
-// Player colors
-const PLAYER_COLORS: Record<string, number> = {
-  player1: 0x4080ff, // Blue
-  ai: 0xff4040,      // Red
-  player2: 0x40ff40, // Green
-  player3: 0xffff40, // Yellow
-  player4: 0xff40ff, // Purple
-};
+import { getPlayerColor } from '@/store/gameSetupStore';
 
 interface BuildingSprite {
   container: Phaser.GameObjects.Container;
@@ -141,7 +133,7 @@ export class BuildingRenderer {
 
   private createBuildingSprite(building: Building, playerId: string): BuildingSprite {
     const container = this.scene.add.container(0, 0);
-    const color = PLAYER_COLORS[playerId] ?? 0x808080;
+    const color = getPlayerColor(playerId);
     const def = BUILDING_DEFINITIONS[building.buildingId];
     const width = (def?.width ?? 3) * 8;
     const height = (def?.height ?? 3) * 8;

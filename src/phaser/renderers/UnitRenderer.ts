@@ -7,15 +7,7 @@ import { Selectable } from '@/engine/components/Selectable';
 import { VisionSystem } from '@/engine/systems/VisionSystem';
 import { UNIT_DEFINITIONS } from '@/data/units/dominion';
 import { CELL_SIZE, DEPTH } from '../constants';
-
-// Player colors (HSL values for tinting)
-const PLAYER_COLORS: Record<string, number> = {
-  player1: 0x4080ff, // Blue
-  ai: 0xff4040,      // Red
-  player2: 0x40ff40, // Green
-  player3: 0xffff40, // Yellow
-  player4: 0xff40ff, // Purple
-};
+import { getPlayerColor } from '@/store/gameSetupStore';
 
 // Unit sizes for rendering
 const UNIT_SIZES: Record<string, { width: number; height: number }> = {
@@ -156,7 +148,7 @@ export class UnitRenderer {
 
   private createUnitSprite(unit: Unit, playerId: string): UnitSprite {
     const container = this.scene.add.container(0, 0);
-    const color = PLAYER_COLORS[playerId] ?? 0x808080;
+    const color = getPlayerColor(playerId);
     const size = UNIT_SIZES[unit.unitId] ?? { width: 16, height: 16 };
 
     // Create unit body graphic

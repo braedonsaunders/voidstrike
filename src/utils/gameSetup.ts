@@ -12,7 +12,7 @@ import { AISystem } from '@/engine/systems/AISystem';
 import { EnhancedAISystem } from '@/engine/systems/EnhancedAISystem';
 import { MapData, Expansion } from '@/data/maps';
 import { useGameStore } from '@/store/gameStore';
-import { useGameSetupStore, STARTING_RESOURCES_VALUES } from '@/store/gameSetupStore';
+import { useGameSetupStore, STARTING_RESOURCES_VALUES, AIDifficulty } from '@/store/gameSetupStore';
 
 export function spawnInitialEntities(game: Game, mapData: MapData): void {
   const world = game.world;
@@ -26,33 +26,24 @@ export function spawnInitialEntities(game: Game, mapData: MapData): void {
 
   // Get spawn points for each player
   const spawns = mapData.spawns;
-  const playerSpawn = spawns.find(s => s.playerSlot === 1) || spawns[0];
-  const aiSpawn = spawns.find(s => s.playerSlot === 2) || spawns[1];
 
-  // Spawn player base at designated spawn point
-  spawnBase(game, 'player1', playerSpawn.x, playerSpawn.y);
+  // Get active player slots (human or AI)
+  const playerSlots = setupStore.playerSlots.filter(
+    slot => slot.type === 'human' || slot.type === 'ai'
+  );
 
-  // Spawn AI base at their spawn point
-  if (aiSpawn) {
-    spawnBase(game, 'ai', aiSpawn.x, aiSpawn.y);
+  // Spawn bases for each active player
+  playerSlots.forEach((slot, index) => {
+    const spawn = spawns.find(s => s.playerSlot === index + 1) || spawns[index];
+    if (!spawn) return;
 
-    // Register AI player with difficulty from game setup
-    const difficulty = useGameSetupStore.getState().aiDifficulty;
+    spawnBase(game, slot.id, spawn.x, spawn.y, slot.id === 'player1');
 
-    // Try to find EnhancedAISystem first (default), then fall back to AISystem
-    const enhancedAI = world.getSystem(EnhancedAISystem);
-    if (enhancedAI) {
-      enhancedAI.registerAI('ai', 'dominion', difficulty);
-    } else {
-      const basicAI = world.getSystem(AISystem);
-      if (basicAI) {
-        // Map 'insane' to 'hard' since basic AISystem only supports easy/medium/hard
-        const aiDifficulty: 'easy' | 'medium' | 'hard' =
-          difficulty === 'insane' ? 'hard' : difficulty;
-        basicAI.registerAI('ai', 'dominion', aiDifficulty);
-      }
+    // Register AI players
+    if (slot.type === 'ai') {
+      registerAIPlayer(game, slot.id, slot.faction, slot.aiDifficulty);
     }
-  }
+  });
 
   // Spawn resources at all expansion locations
   for (const expansion of mapData.expansions) {
@@ -60,7 +51,30 @@ export function spawnInitialEntities(game: Game, mapData: MapData): void {
   }
 }
 
-function spawnBase(game: Game, playerId: string, x: number, y: number): void {
+function registerAIPlayer(
+  game: Game,
+  playerId: string,
+  faction: string,
+  difficulty: AIDifficulty
+): void {
+  const world = game.world;
+
+  // Try to find EnhancedAISystem first (default), then fall back to AISystem
+  const enhancedAI = world.getSystem(EnhancedAISystem);
+  if (enhancedAI) {
+    enhancedAI.registerAI(playerId, faction, difficulty);
+  } else {
+    const basicAI = world.getSystem(AISystem);
+    if (basicAI) {
+      // Map 'insane' to 'hard' since basic AISystem only supports easy/medium/hard
+      const aiDifficulty: 'easy' | 'medium' | 'hard' =
+        difficulty === 'insane' ? 'hard' : difficulty;
+      basicAI.registerAI(playerId, faction, aiDifficulty);
+    }
+  }
+}
+
+function spawnBase(game: Game, playerId: string, x: number, y: number, isHumanPlayer: boolean = false): void {
   const world = game.world;
 
   // Spawn Command Center
@@ -81,8 +95,8 @@ function spawnBase(game: Game, playerId: string, x: number, y: number): void {
     building.setRallyPoint(x + ccDef.width / 2 + 3, y);
   }
 
-  // Set up initial supply for player
-  if (playerId === 'player1') {
+  // Set up initial supply for human player
+  if (isHumanPlayer) {
     const store = useGameStore.getState();
     // Set initial max supply from command center
     store.addMaxSupply(ccDef.supplyProvided || 11);
@@ -104,8 +118,8 @@ function spawnBase(game: Game, playerId: string, x: number, y: number): void {
     const pos = workerPositions[i];
     spawnUnit(game, scvDef, x + pos.x, y + pos.y, playerId);
 
-    // Track supply for player units
-    if (playerId === 'player1') {
+    // Track supply for human player units
+    if (isHumanPlayer) {
       useGameStore.getState().addSupply(scvDef.supplyCost);
     }
   }

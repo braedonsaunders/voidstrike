@@ -2,17 +2,16 @@
 
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { useState } from 'react';
 import { ALL_MAPS, MapData } from '@/data/maps';
-import { BIOMES, BiomeType } from '@/rendering/Biomes';
+import { BIOMES } from '@/rendering/Biomes';
 import {
   useGameSetupStore,
-  STARTING_RESOURCES_VALUES,
-  GAME_SPEED_VALUES,
   PLAYER_COLORS,
   StartingResources,
   GameSpeed,
   AIDifficulty,
+  PlayerType,
+  PlayerSlot,
 } from '@/store/gameSetupStore';
 
 // Helper to convert THREE.Color to hex string
@@ -23,6 +22,11 @@ function colorToHex(color: { r: number; g: number; b: number }): string {
   return `#${r}${g}${b}`;
 }
 
+// Helper to convert hex number to CSS color
+function hexToCSS(hex: number): string {
+  return `#${hex.toString(16).padStart(6, '0')}`;
+}
+
 // Map preview component
 function MapPreview({ map, isSelected, onSelect }: {
   map: MapData;
@@ -30,10 +34,7 @@ function MapPreview({ map, isSelected, onSelect }: {
   onSelect: () => void;
 }) {
   const biome = BIOMES[map.biome || 'grassland'];
-
-  // Get colors from biome (these are THREE.Color objects)
   const groundColors = biome.colors.ground;
-  const cliffColor = colorToHex(biome.colors.cliff[0]);
   const accentColor = colorToHex(biome.colors.accent[0]);
 
   return (
@@ -45,7 +46,6 @@ function MapPreview({ map, isSelected, onSelect }: {
           : 'border-void-800/50 hover:border-void-600'
         }`}
     >
-      {/* Map mini-preview (color based on biome) - reduced height */}
       <div
         className="h-20 w-full relative"
         style={{
@@ -55,31 +55,20 @@ function MapPreview({ map, isSelected, onSelect }: {
             ${colorToHex(groundColors[1])})`
         }}
       >
-        {/* Spawn points indicator */}
-        <div className="absolute inset-0 flex items-center justify-between px-4">
-          <div className="w-3 h-3 rounded-full bg-blue-500 border-2 border-white shadow-lg" title="Player 1" />
-          <div className="w-3 h-3 rounded-full bg-red-500 border-2 border-white shadow-lg" title="Player 2" />
-        </div>
-
-        {/* Map size badge */}
         <div className="absolute top-1 right-1 bg-black/60 px-1.5 py-0.5 rounded text-[10px] text-void-300">
           {map.width}x{map.height}
         </div>
-
-        {/* Biome badge */}
         <div className="absolute bottom-1 left-1 bg-black/60 px-1.5 py-0.5 rounded text-[10px] capitalize"
              style={{ color: accentColor }}>
           {map.biome || 'grassland'}
         </div>
       </div>
 
-      {/* Map info - condensed */}
       <div className="p-2 bg-void-950">
         <h3 className="font-display text-white text-xs mb-0.5">{map.name}</h3>
         <p className="text-void-400 text-[10px] line-clamp-1">{map.description}</p>
       </div>
 
-      {/* Selected indicator */}
       {isSelected && (
         <div className="absolute top-1 left-1 bg-void-500 text-white px-1.5 py-0.5 rounded text-[10px] font-bold">
           ✓
@@ -89,62 +78,114 @@ function MapPreview({ map, isSelected, onSelect }: {
   );
 }
 
-// Faction selector component
-function FactionSelector({ selected, onSelect }: {
-  selected: string;
-  onSelect: (faction: string) => void;
+// Player slot row component
+function PlayerSlotRow({
+  slot,
+  index,
+  usedColors,
+  onTypeChange,
+  onFactionChange,
+  onColorChange,
+  onDifficultyChange,
+  onRemove,
+  canRemove,
+}: {
+  slot: PlayerSlot;
+  index: number;
+  usedColors: Set<string>;
+  onTypeChange: (type: PlayerType) => void;
+  onFactionChange: (faction: string) => void;
+  onColorChange: (colorId: string) => void;
+  onDifficultyChange: (difficulty: AIDifficulty) => void;
+  onRemove: () => void;
+  canRemove: boolean;
 }) {
-  const factions = [
-    {
-      id: 'dominion',
-      name: 'Dominion',
-      description: 'Versatile human forces',
-      color: 'from-blue-600 to-blue-900',
-      available: true,
-    },
-    {
-      id: 'synthesis',
-      name: 'Synthesis',
-      description: 'Shield-based machines',
-      color: 'from-purple-600 to-purple-900',
-      available: false,
-    },
-    {
-      id: 'swarm',
-      name: 'Swarm',
-      description: 'Overwhelming numbers',
-      color: 'from-amber-700 to-amber-950',
-      available: false,
-    },
-  ];
+  const selectedColor = PLAYER_COLORS.find(c => c.id === slot.colorId);
 
   return (
-    <div className="grid grid-cols-3 gap-3">
-      {factions.map((faction) => (
-        <button
-          key={faction.id}
-          onClick={() => faction.available && onSelect(faction.id)}
-          disabled={!faction.available}
-          className={`relative overflow-hidden rounded-lg border-2 p-4 transition-all duration-300
-            bg-gradient-to-br ${faction.color}
-            ${selected === faction.id
-              ? 'border-white shadow-[0_0_15px_rgba(255,255,255,0.3)]'
-              : 'border-transparent'
-            }
-            ${faction.available
-              ? 'cursor-pointer hover:border-white/50'
-              : 'opacity-50 cursor-not-allowed'
-            }`}
+    <div className="flex items-center gap-2 p-2 bg-void-900/50 rounded-lg border border-void-800/50">
+      {/* Player number */}
+      <div className="w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold"
+           style={{ backgroundColor: hexToCSS(selectedColor?.hex ?? 0x808080), color: '#000' }}>
+        {index + 1}
+      </div>
+
+      {/* Player type */}
+      <select
+        value={slot.type}
+        onChange={(e) => onTypeChange(e.target.value as PlayerType)}
+        className="bg-void-800 border border-void-700 rounded px-2 py-1 text-white text-xs
+                   focus:outline-none focus:border-void-500 cursor-pointer flex-1 min-w-[80px]"
+      >
+        <option value="human">Human</option>
+        <option value="ai">AI</option>
+        <option value="open">Open</option>
+        <option value="closed">Closed</option>
+      </select>
+
+      {/* Faction (only for human/ai) */}
+      {(slot.type === 'human' || slot.type === 'ai') && (
+        <select
+          value={slot.faction}
+          onChange={(e) => onFactionChange(e.target.value)}
+          className="bg-void-800 border border-void-700 rounded px-2 py-1 text-white text-xs
+                     focus:outline-none focus:border-void-500 cursor-pointer min-w-[90px]"
         >
-          <h4 className="font-display text-white text-sm">{faction.name}</h4>
-          <p className="text-gray-300 text-xs mt-1">{faction.description}</p>
-          {!faction.available && (
-            <div className="absolute inset-0 bg-black/50 flex items-center justify-center">
-              <span className="text-xs text-white/70">Coming Soon</span>
-            </div>
-          )}
+          <option value="dominion">Dominion</option>
+        </select>
+      )}
+
+      {/* AI Difficulty (only for AI) */}
+      {slot.type === 'ai' && (
+        <select
+          value={slot.aiDifficulty}
+          onChange={(e) => onDifficultyChange(e.target.value as AIDifficulty)}
+          className="bg-void-800 border border-void-700 rounded px-2 py-1 text-white text-xs
+                     focus:outline-none focus:border-void-500 cursor-pointer min-w-[70px]"
+        >
+          <option value="easy">Easy</option>
+          <option value="medium">Medium</option>
+          <option value="hard">Hard</option>
+          <option value="insane">Insane</option>
+        </select>
+      )}
+
+      {/* Color selector (only for human/ai) */}
+      {(slot.type === 'human' || slot.type === 'ai') && (
+        <div className="flex gap-1">
+          {PLAYER_COLORS.map((color) => {
+            const isUsed = usedColors.has(color.id) && slot.colorId !== color.id;
+            return (
+              <button
+                key={color.id}
+                onClick={() => !isUsed && onColorChange(color.id)}
+                title={color.name}
+                disabled={isUsed}
+                className={`w-5 h-5 rounded-full transition-all duration-200
+                  ${slot.colorId === color.id
+                    ? 'ring-2 ring-white scale-110'
+                    : isUsed
+                      ? 'opacity-30 cursor-not-allowed'
+                      : 'hover:scale-110'
+                  }`}
+                style={{ backgroundColor: hexToCSS(color.hex) }}
+              />
+            );
+          })}
+        </div>
+      )}
+
+      {/* Remove button */}
+      {canRemove && (
+        <button
+          onClick={onRemove}
+          className="w-6 h-6 flex items-center justify-center text-void-500 hover:text-red-400
+                     hover:bg-red-900/30 rounded transition-colors"
+          title="Remove player"
+        >
+          ✕
         </button>
-      ))}
+      )}
     </div>
   );
 }
@@ -158,7 +199,7 @@ function SettingSelect<T extends string>({
 }: {
   label: string;
   value: T;
-  options: { value: T; label: string; description?: string }[];
+  options: { value: T; label: string }[];
   onChange: (value: T) => void;
 }) {
   return (
@@ -180,62 +221,47 @@ function SettingSelect<T extends string>({
   );
 }
 
-// Color selector
-function ColorSelector({ selected, onSelect }: {
-  selected: string;
-  onSelect: (color: string) => void;
-}) {
-  return (
-    <div className="flex items-center justify-between py-2 border-b border-void-800/50">
-      <span className="text-void-300 text-sm">Player Color</span>
-      <div className="flex gap-1.5">
-        {PLAYER_COLORS.map((color) => (
-          <button
-            key={color.id}
-            onClick={() => onSelect(color.id)}
-            title={color.name}
-            className={`w-6 h-6 rounded-full transition-all duration-200
-              ${selected === color.id
-                ? 'ring-2 ring-white ring-offset-2 ring-offset-void-950 scale-110'
-                : 'hover:scale-110'
-              }`}
-            style={{ backgroundColor: color.hex }}
-          />
-        ))}
-      </div>
-    </div>
-  );
-}
-
 export default function GameSetupPage() {
   const router = useRouter();
   const {
     selectedMapId,
     startingResources,
     gameSpeed,
-    aiDifficulty,
     fogOfWar,
-    playerFaction,
-    playerColor,
+    playerSlots,
     setSelectedMap,
     setStartingResources,
     setGameSpeed,
-    setAIDifficulty,
     setFogOfWar,
-    setPlayerFaction,
-    setPlayerColor,
+    setPlayerSlotType,
+    setPlayerSlotFaction,
+    setPlayerSlotColor,
+    setPlayerSlotAIDifficulty,
+    addPlayerSlot,
+    removePlayerSlot,
+    startGame,
   } = useGameSetupStore();
 
   const maps = Object.values(ALL_MAPS);
   const selectedMap = ALL_MAPS[selectedMapId] || maps[0];
 
-  const { startGame } = useGameSetupStore();
+  // Get used colors for duplicate prevention
+  const usedColors = new Set(
+    playerSlots
+      .filter(s => s.type === 'human' || s.type === 'ai')
+      .map(s => s.colorId)
+  );
+
+  // Count active players
+  const activePlayerCount = playerSlots.filter(s => s.type === 'human' || s.type === 'ai').length;
 
   const handleStartGame = () => {
-    // Mark game as started and navigate to game
     startGame();
     router.push('/game');
   };
+
+  const canAddPlayer = playerSlots.length < 8;
+  const canRemovePlayer = playerSlots.length > 2;
 
   return (
     <main className="min-h-screen bg-black">
@@ -270,7 +296,7 @@ export default function GameSetupPage() {
               ))}
             </div>
 
-            {/* Selected map details - condensed */}
+            {/* Selected map details */}
             <div className="mt-3 p-3 bg-void-900/50 rounded-lg border border-void-800/50">
               <div className="flex items-center justify-between mb-1">
                 <h3 className="font-display text-base text-white">{selectedMap.name}</h3>
@@ -278,19 +304,42 @@ export default function GameSetupPage() {
               </div>
               <p className="text-void-400 text-xs">{selectedMap.description}</p>
             </div>
+
+            {/* Players Section */}
+            <div className="mt-4">
+              <div className="flex items-center justify-between mb-2">
+                <h2 className="font-display text-lg text-white">Players ({activePlayerCount})</h2>
+                {canAddPlayer && (
+                  <button
+                    onClick={addPlayerSlot}
+                    className="text-void-400 hover:text-void-300 text-sm px-2 py-1 rounded border border-void-700
+                               hover:border-void-500 transition-colors"
+                  >
+                    + Add Player
+                  </button>
+                )}
+              </div>
+              <div className="space-y-2">
+                {playerSlots.map((slot, index) => (
+                  <PlayerSlotRow
+                    key={slot.id}
+                    slot={slot}
+                    index={index}
+                    usedColors={usedColors}
+                    onTypeChange={(type) => setPlayerSlotType(slot.id, type)}
+                    onFactionChange={(faction) => setPlayerSlotFaction(slot.id, faction)}
+                    onColorChange={(colorId) => setPlayerSlotColor(slot.id, colorId)}
+                    onDifficultyChange={(diff) => setPlayerSlotAIDifficulty(slot.id, diff)}
+                    onRemove={() => removePlayerSlot(slot.id)}
+                    canRemove={canRemovePlayer}
+                  />
+                ))}
+              </div>
+            </div>
           </div>
 
           {/* Settings Panel - 1 column */}
           <div className="space-y-4">
-            {/* Faction Selection */}
-            <div>
-              <h2 className="font-display text-lg text-white mb-2">Faction</h2>
-              <FactionSelector
-                selected={playerFaction}
-                onSelect={setPlayerFaction}
-              />
-            </div>
-
             {/* Game Settings */}
             <div>
               <h2 className="font-display text-lg text-white mb-2">Game Settings</h2>
@@ -318,19 +367,7 @@ export default function GameSetupPage() {
                   onChange={setGameSpeed}
                 />
 
-                <SettingSelect
-                  label="AI Difficulty"
-                  value={aiDifficulty}
-                  options={[
-                    { value: 'easy', label: 'Easy' },
-                    { value: 'medium', label: 'Medium' },
-                    { value: 'hard', label: 'Hard' },
-                    { value: 'insane', label: 'Insane' },
-                  ]}
-                  onChange={setAIDifficulty}
-                />
-
-                <div className="flex items-center justify-between py-2 border-b border-void-800/50">
+                <div className="flex items-center justify-between py-2">
                   <span className="text-void-300 text-sm">Fog of War</span>
                   <button
                     onClick={() => setFogOfWar(!fogOfWar)}
@@ -342,21 +379,23 @@ export default function GameSetupPage() {
                     />
                   </button>
                 </div>
-
-                <ColorSelector
-                  selected={playerColor}
-                  onSelect={setPlayerColor}
-                />
               </div>
             </div>
 
-            {/* Start Game Button - inside settings column */}
+            {/* Start Game Button */}
             <button
               onClick={handleStartGame}
-              className="w-full game-button-primary text-lg px-8 py-3 font-display"
+              disabled={activePlayerCount < 2}
+              className="w-full game-button-primary text-lg px-8 py-3 font-display disabled:opacity-50 disabled:cursor-not-allowed"
             >
               Start Game
             </button>
+
+            {activePlayerCount < 2 && (
+              <p className="text-center text-red-400 text-xs">
+                At least 2 active players required
+              </p>
+            )}
 
             {/* Keyboard hint */}
             <p className="text-center text-void-600 text-[10px]">
