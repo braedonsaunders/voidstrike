@@ -126,33 +126,35 @@ export function createTerrainGrid(
 // Helper to create SC2-style mineral arc (8 patches in a crescent shape)
 // The arc faces toward the base center
 export function createMineralLine(
-  baseX: number,
-  baseY: number,
-  direction: 'horizontal' | 'vertical' = 'horizontal',
+  mineralCenterX: number,
+  mineralCenterY: number,
+  baseCenterX: number,
+  baseCenterY: number,
   amount: number = 1500
 ): ResourceNode[] {
   const minerals: ResourceNode[] = [];
 
   // SC2 has 8 mineral patches in an arc formation
-  // Patches are spaced about 2 units apart along the arc
-  const arcRadius = 6; // Distance from arc center
-  const arcSpread = Math.PI * 0.6; // ~108 degrees total arc spread
+  const arcRadius = 5; // Distance from arc center to patches
+  const arcSpread = Math.PI * 0.55; // ~100 degrees total arc spread
 
-  // Determine arc center angle based on direction
-  // Arc should face toward where the command center would be
-  const centerAngle = direction === 'horizontal' ? Math.PI : Math.PI / 2;
+  // Calculate angle from mineral center toward base center
+  const dx = baseCenterX - mineralCenterX;
+  const dy = baseCenterY - mineralCenterY;
+  const angleToBase = Math.atan2(dy, dx);
 
   for (let i = 0; i < 8; i++) {
-    // Distribute patches along the arc
+    // Distribute patches along the arc, facing the base
     const t = (i - 3.5) / 3.5; // -1 to 1, centered
-    const angle = centerAngle + t * (arcSpread / 2);
+    const angle = angleToBase + t * (arcSpread / 2);
 
-    // Add slight variation to make it look more natural
-    const radiusVariation = (i % 2 === 0) ? 0 : 0.8; // Alternate rows
+    // Alternate rows for depth (like SC2)
+    const radiusVariation = (i % 2 === 0) ? 0 : 1.0;
     const r = arcRadius + radiusVariation;
 
-    const x = baseX + Math.cos(angle) * r;
-    const y = baseY + Math.sin(angle) * r;
+    // Position relative to mineral center, patches curve AWAY from base
+    const x = mineralCenterX - Math.cos(angle) * r;
+    const y = mineralCenterY - Math.sin(angle) * r;
 
     minerals.push({
       x: Math.round(x * 2) / 2, // Snap to 0.5 grid
@@ -165,26 +167,17 @@ export function createMineralLine(
   return minerals;
 }
 
-// Legacy helper - creates straight line (kept for backwards compatibility)
+// Legacy helper with direction parameter (backwards compatibility)
 export function createMineralLineOld(
   baseX: number,
   baseY: number,
   direction: 'horizontal' | 'vertical' = 'horizontal',
   amount: number = 1500
 ): ResourceNode[] {
-  const minerals: ResourceNode[] = [];
-
-  for (let i = 0; i < 8; i++) {
-    const offset = (i % 4) * 2 + Math.floor(i / 4) * 1.5;
-    minerals.push({
-      x: direction === 'horizontal' ? baseX + offset : baseX + Math.floor(i / 4) * 1.5,
-      y: direction === 'horizontal' ? baseY + Math.floor(i / 4) * 1.5 : baseY + offset,
-      type: 'minerals',
-      amount: i < 6 ? amount : amount * 0.5,
-    });
-  }
-
-  return minerals;
+  // Convert old API to new: assume base is ~10 units away in the direction
+  const offsetX = direction === 'horizontal' ? -10 : 0;
+  const offsetY = direction === 'vertical' ? -10 : 0;
+  return createMineralLine(baseX, baseY, baseX + offsetX, baseY + offsetY, amount);
 }
 
 // Helper to create vespene geysers (typically 2 per base)

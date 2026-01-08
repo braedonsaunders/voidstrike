@@ -349,10 +349,14 @@ export class ResourceSystem extends System {
       return;
     }
 
-    if (nearestDistance <= 3) {
-      // At base - deposit resources
-      const store = useGameStore.getState();
-      store.addResources(unit.carryingMinerals, unit.carryingVespene);
+    // Drop-off range accounts for building size (CC is 5x5, so center is ~2.5 from edge)
+    if (nearestDistance <= 5) {
+      // At base - deposit resources (only for player, AI tracks separately)
+      if (workerOwner === 'player1') {
+        const store = useGameStore.getState();
+        store.addResources(unit.carryingMinerals, unit.carryingVespene);
+      }
+      // AI resources are tracked internally by AI system
 
       this.game.eventBus.emit('resource:gathered', {
         minerals: unit.carryingMinerals,

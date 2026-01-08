@@ -69,6 +69,11 @@ function spawnBase(game: Game, playerId: string, x: number, y: number): void {
   building.buildProgress = 1;
   building.state = 'complete';
 
+  // Set default rally point for production buildings
+  if (building.canProduce.length > 0) {
+    building.setRallyPoint(x + ccDef.width / 2 + 3, y);
+  }
+
   // Set up initial supply for player
   if (playerId === 'player1') {
     const store = useGameStore.getState();

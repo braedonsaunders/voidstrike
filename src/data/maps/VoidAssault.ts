@@ -97,16 +97,17 @@ function generateVoidAssault(): MapData {
   fillTerrainCircle(terrain, 88, 156, 12, 'ground', 1);
 
   // === Define expansions ===
+  // createMineralLine(mineralCenterX, mineralCenterY, baseCenterX, baseCenterY, amount)
 
   const expansions = [
-    // Player 1 Main
+    // Player 1 Main (bottom-left)
     {
       name: 'P1 Main',
       x: 28,
       y: 148,
       isMain: true,
-      minerals: createMineralLine(16, 156, 'horizontal', 1800),
-      vespene: createVespeneGeysers(20, 140, 10, 2250),
+      minerals: createMineralLine(15, 158, 28, 148, 1800),
+      vespene: createVespeneGeysers(20, 138, 10, 2250),
     },
     // Player 1 Natural
     {
@@ -114,25 +115,25 @@ function generateVoidAssault(): MapData {
       x: 48,
       y: 118,
       isNatural: true,
-      minerals: createMineralLine(36, 124, 'horizontal', 1500),
-      vespene: createVespeneGeysers(42, 110, 8, 2250),
+      minerals: createMineralLine(35, 128, 48, 118, 1500),
+      vespene: createVespeneGeysers(58, 110, 8, 2250),
     },
-    // Player 1 Third
+    // Player 1 Third (top-left corner)
     {
       name: 'P1 Third',
       x: 28,
       y: 28,
-      minerals: createMineralLine(16, 34, 'horizontal', 1500),
-      vespene: createVespeneGeysers(22, 20, 8, 2250),
+      minerals: createMineralLine(15, 18, 28, 28, 1500),
+      vespene: createVespeneGeysers(38, 20, 8, 2250),
     },
-    // Player 2 Main
+    // Player 2 Main (top-right)
     {
       name: 'P2 Main',
       x: 148,
       y: 28,
       isMain: true,
-      minerals: createMineralLine(144, 12, 'horizontal', 1800),
-      vespene: createVespeneGeysers(150, 36, 10, 2250),
+      minerals: createMineralLine(160, 18, 148, 28, 1800),
+      vespene: createVespeneGeysers(156, 38, 10, 2250),
     },
     // Player 2 Natural
     {
@@ -140,30 +141,30 @@ function generateVoidAssault(): MapData {
       x: 128,
       y: 58,
       isNatural: true,
-      minerals: createMineralLine(124, 48, 'horizontal', 1500),
-      vespene: createVespeneGeysers(130, 66, 8, 2250),
+      minerals: createMineralLine(140, 48, 128, 58, 1500),
+      vespene: createVespeneGeysers(118, 66, 8, 2250),
     },
-    // Player 2 Third
+    // Player 2 Third (bottom-right corner)
     {
       name: 'P2 Third',
       x: 148,
       y: 148,
-      minerals: createMineralLine(144, 140, 'horizontal', 1500),
-      vespene: createVespeneGeysers(150, 156, 8, 2250),
+      minerals: createMineralLine(160, 158, 148, 148, 1500),
+      vespene: createVespeneGeysers(138, 156, 8, 2250),
     },
     // Center expansions (high-yield/contested)
     {
       name: 'Top Center',
       x: 88,
       y: 20,
-      minerals: createMineralLine(78, 14, 'horizontal', 900), // Gold minerals
+      minerals: createMineralLine(88, 8, 88, 20, 900), // Gold minerals
       vespene: [{ x: 98, y: 24, type: 'vespene' as const, amount: 2250 }],
     },
     {
       name: 'Bottom Center',
       x: 88,
       y: 156,
-      minerals: createMineralLine(78, 162, 'horizontal', 900), // Gold minerals
+      minerals: createMineralLine(88, 168, 88, 156, 900), // Gold minerals
       vespene: [{ x: 98, y: 152, type: 'vespene' as const, amount: 2250 }],
     },
   ];
