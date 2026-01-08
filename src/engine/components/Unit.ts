@@ -1,6 +1,6 @@
 import { Component } from '../ecs/Component';
 
-export type UnitState = 'idle' | 'moving' | 'attacking' | 'gathering' | 'building' | 'dead' | 'patrolling' | 'transforming' | 'loaded';
+export type UnitState = 'idle' | 'moving' | 'attackmoving' | 'attacking' | 'gathering' | 'building' | 'dead' | 'patrolling' | 'transforming' | 'loaded';
 export type DamageType = 'normal' | 'explosive' | 'concussive' | 'psionic';
 
 // Transform mode definitions for units that can transform
@@ -277,6 +277,14 @@ export class Unit extends Component {
     this.targetY = null;
   }
 
+  // Attack-move: move toward a position while engaging enemies along the way
+  public setAttackMoveTarget(x: number, y: number): void {
+    this.targetX = x;
+    this.targetY = y;
+    this.state = 'attackmoving';
+    this.targetEntityId = null;
+  }
+
   public setPath(path: Array<{ x: number; y: number }>): void {
     this.path = path;
     this.pathIndex = 0;
@@ -339,8 +347,7 @@ export class Unit extends Component {
         break;
       case 'attackmove':
         if (command.targetX !== undefined && command.targetY !== undefined) {
-          this.setMoveTarget(command.targetX, command.targetY);
-          // Attack-move state will be handled by combat system
+          this.setAttackMoveTarget(command.targetX, command.targetY);
         }
         break;
       case 'patrol':
