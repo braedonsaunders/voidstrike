@@ -3,7 +3,7 @@ import { MapData, MapCell, TerrainType, ElevationLevel } from '@/data/maps';
 import { BiomeConfig, BIOMES, blendBiomeColors, BiomeType, getBiomeShaderConfig } from './Biomes';
 import { createTerrainShaderMaterial, updateTerrainShader } from './shaders/TerrainShader';
 import { createSC2TerrainShaderMaterial, getSC2BiomeConfig, updateSC2TerrainShader } from './shaders/SC2TerrainShader';
-import { createTextureTerrainMaterial, updateTextureTerrainShader, getDefaultTextureConfig } from './shaders/TextureTerrainShader';
+import { createTextureTerrainMaterial, updateTextureTerrainShader, getBiomeTextureConfig, BiomeTextureType } from './shaders/TextureTerrainShader';
 import AssetManager from '@/assets/AssetManager';
 
 // Shader mode for terrain rendering
@@ -222,8 +222,10 @@ export class Terrain {
     // Create shader material based on mode
     switch (Terrain.SHADER_MODE) {
       case 'texture':
-        console.log('[Terrain] Using TEXTURE-BASED terrain shader (60+ FPS)');
-        const textureConfig = getDefaultTextureConfig();
+        // Use biome-specific textures (falls back to grassland if not available)
+        const biomeType = (this.mapData.biome || 'grassland') as BiomeTextureType;
+        console.log(`[Terrain] Using TEXTURE-BASED terrain shader for biome: ${biomeType}`);
+        const textureConfig = getBiomeTextureConfig(biomeType);
         this.material = createTextureTerrainMaterial(textureConfig);
         break;
       case 'sc2':
