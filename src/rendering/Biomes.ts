@@ -148,8 +148,8 @@ export const BIOMES: Record<BiomeType, BiomeConfig> = {
     treeDensity: 0.15, // Sparse dead trees
     rockDensity: 0.2,
     crystalDensity: 0.3, // Ice crystals
-    hasWater: true, // Frozen lakes
-    waterLevel: 0.2,
+    hasWater: false,  // Disabled - water plane at 0.2 was visible over low-elevation terrain causing animated diagonal stripe artifacts
+    waterLevel: -1,
     particleType: 'none',  // Disabled - was 'snow'
     groundRoughness: 0.3, // Icy smooth
     groundMetalness: 0.1,
@@ -232,8 +232,8 @@ export const BIOMES: Record<BiomeType, BiomeConfig> = {
     treeDensity: 0,
     rockDensity: 0.3,
     crystalDensity: 0.6, // Many crystals
-    hasWater: true, // Energy pools
-    waterLevel: 0,
+    hasWater: false,  // Disabled - water plane at 0 was visible over elevation 0 terrain causing animated diagonal stripe artifacts
+    waterLevel: -1,
     particleType: 'none',  // Disabled - was 'spores'
     groundRoughness: 0.6,
     groundMetalness: 0.3,
@@ -274,8 +274,8 @@ export const BIOMES: Record<BiomeType, BiomeConfig> = {
     treeDensity: 0.7,
     rockDensity: 0.2,
     crystalDensity: 0.05,
-    hasWater: true,
-    waterLevel: 0.1,
+    hasWater: false,  // Disabled - water plane at 0.1 was visible over low-elevation terrain causing animated diagonal stripe artifacts
+    waterLevel: -1,
     particleType: 'none',  // Disabled - was 'spores'
     groundRoughness: 0.8,
     groundMetalness: 0.0,
