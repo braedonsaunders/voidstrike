@@ -1303,66 +1303,69 @@ The AssetManager will automatically use custom models when available, falling ba
 
 ## Checklist
 
-### Units (13 total) - 1 complete
-- [x] SCV *(optimized: 204KB)*
-- [ ] Marine
-- [ ] Marauder
-- [ ] Reaper
-- [ ] Ghost
-- [ ] Hellion
-- [ ] Siege Tank
-- [ ] Thor
-- [ ] Medivac
-- [ ] Viking
-- [ ] Banshee
-- [ ] Battlecruiser
-- [ ] Raven
+> **Note:** This checklist reflects VOIDSTRIKE's actual unit/building names (not SC2 names).
+> The AI prompts above use SC2-style descriptions as reference for visual style.
 
-### Buildings (17 total) - 5 complete
-- [x] Command Center
-- [x] Orbital Command *(CC upgrade)*
-- [x] Planetary Fortress *(CC upgrade)*
-- [x] Supply Depot
-- [x] Refinery
-- [ ] Barracks
-- [ ] Engineering Bay
-- [ ] Bunker
-- [ ] Factory
-- [ ] Armory
-- [ ] Starport
-- [ ] Fusion Core
-- [ ] Ghost Academy
-- [ ] Sensor Tower
-- [ ] Missile Turret
-- [ ] Tech Lab *(addon)*
-- [ ] Reactor *(addon)*
+### Units (13 total) - 4 complete
+- [x] Fabricator *(worker unit)* `fabricator.glb`
+- [x] Trooper *(basic infantry)* `trooper.glb`
+- [x] Breacher *(heavy infantry)* `breacher.glb`
+- [ ] Vanguard *(jetpack infantry)*
+- [ ] Operative *(stealth sniper)*
+- [ ] Scorcher *(flame buggy, transforms to Inferno)*
+- [x] Devastator *(siege tank)* `devastator.glb`
+- [ ] Colossus *(heavy assault mech)*
+- [ ] Lifter *(medical dropship)*
+- [ ] Valkyrie *(transforming fighter)*
+- [ ] Specter *(stealth aircraft)*
+- [ ] Dreadnought *(capital battleship)*
+- [ ] Overseer *(support drone)*
 
-### Resources (2 total) - 0 complete
-- [ ] Mineral Patch
-- [ ] Vespene Geyser
+### Buildings (17 total) - 13 complete
+- [x] Headquarters *(main base)* `headquarters.glb`
+- [x] Orbital Station *(HQ upgrade)* `orbital_station.glb`
+- [x] Bastion *(HQ defensive upgrade)* `bastion.glb`
+- [x] Supply Cache *(supply depot)* `supply_cache.glb`
+- [x] Extractor *(gas refinery)* `extractor.glb`
+- [x] Infantry Bay *(infantry production)* `infantry_bay.glb`
+- [x] Tech Center *(infantry upgrades)* `tech_center.glb`
+- [x] Garrison *(defensive bunker)* `garrison.glb`
+- [x] Forge *(vehicle production)* `forge.glb`
+- [ ] Arsenal *(vehicle upgrades)*
+- [ ] Hangar *(air production)*
+- [ ] Power Core *(advanced tech)*
+- [x] Ops Center *(special ops)* `ops_center.glb`
+- [ ] Radar Array *(detection tower)*
+- [x] Defense Turret *(anti-air turret)* `defense_turret.glb`
+- [x] Research Module *(addon)* `research_module.glb`
+- [x] Production Module *(addon)* `production_module.glb`
+
+### Resources (2 total) - 2 complete
+- [x] Minerals `minerals.glb`
+- [x] Vespene Geyser `vespene.glb`
 
 ### Projectiles (3 total) - 0 complete
 - [ ] Bullet
 - [ ] Missile
 - [ ] Laser
 
-### Decorations (16 total) - 11 complete
-- [x] Xel'Naga Watch Tower
-- [x] Destructible Rocks (Large)
-- [x] Destructible Rocks (Small)
-- [x] Decorative Rock (Single)
-- [x] Pine Tree (Tall)
-- [x] Pine Tree (Medium)
-- [x] Dead Tree
-- [x] Alien Tree (Bioluminescent)
-- [x] Palm Tree
-- [x] Mushroom Tree (Giant)
-- [x] Crystal Formation
-- [ ] Bush/Shrub
-- [ ] Grass Clump
-- [ ] Debris Pile
-- [ ] Crashed Escape Pod
-- [ ] Ruined Wall Section
+### Decorations (16 total) - 16 complete
+- [x] Alien Tower *(watch tower)* `alien_tower.glb`
+- [x] Rocks Large *(destructible)* `rocks_large.glb`
+- [x] Rocks Small *(destructible)* `rocks_small.glb`
+- [x] Rock Single *(decorative)* `rock_single.glb`
+- [x] Tree Pine Tall `tree_pine_tall.glb`
+- [x] Tree Pine Medium `tree_pine_medium.glb`
+- [x] Tree Dead `tree_dead.glb`
+- [x] Tree Alien *(bioluminescent)* `tree_alien.glb`
+- [x] Tree Palm `tree_palm.glb`
+- [x] Tree Mushroom *(giant fungus)* `tree_mushroom.glb`
+- [x] Crystal Formation `crystal_formation.glb`
+- [x] Bush `bush.glb`
+- [x] Grass Clump `grass_clump.glb`
+- [x] Debris `debris.glb`
+- [x] Escape Pod `escape_pod.glb`
+- [x] Ruined Wall `ruined_wall.glb`
 
 ---
 
@@ -1370,9 +1373,32 @@ The AssetManager will automatically use custom models when available, falling ba
 
 | Category | Complete | Total | Progress |
 |----------|----------|-------|----------|
-| Units | 1 | 13 | 8% |
-| Buildings | 5 | 17 | 29% |
-| Resources | 0 | 2 | 0% |
+| Units | 4 | 13 | 31% |
+| Buildings | 13 | 17 | 76% |
+| Resources | 2 | 2 | 100% |
 | Projectiles | 0 | 3 | 0% |
-| Decorations | 11 | 16 | 69% |
-| **Total** | **17** | **51** | **33%** |
+| Decorations | 16 | 16 | 100% |
+| **Total** | **35** | **51** | **69%** |
+
+---
+
+## Missing Models Priority
+
+### High Priority (Core Gameplay)
+1. **Vanguard** - Jetpack infantry for early game aggression
+2. **Scorcher** - Fast harassment unit
+3. **Lifter** - Essential support unit
+4. **Hangar** - Required for air units
+5. **Arsenal** - Required for vehicle upgrades
+
+### Medium Priority (Mid-Game Units)
+6. **Operative** - Stealth/sniper unit
+7. **Valkyrie** - Transforming air/ground fighter
+8. **Specter** - Stealth air attacker
+9. **Power Core** - Tech building for capital ships
+
+### Lower Priority (Late-Game)
+10. **Colossus** - Heavy mech
+11. **Dreadnought** - Capital ship
+12. **Overseer** - Support drone
+13. **Radar Array** - Detection building

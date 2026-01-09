@@ -408,26 +408,128 @@ export function updateTextureTerrainShader(
   }
 }
 
-// Default texture paths for easy setup
+// Default texture paths for easy setup (grassland biome)
 export function getDefaultTextureConfig(): TextureTerrainConfig {
+  return getBiomeTextureConfig('grassland');
+}
+
+// Biome-specific texture configurations
+// Falls back to grassland textures if biome textures don't exist
+export type BiomeTextureType = 'grassland' | 'desert' | 'frozen' | 'volcanic' | 'void' | 'jungle';
+
+interface BiomeTextureMapping {
+  ground: string;  // Flat buildable areas (grass, sand, snow, etc.)
+  dirt: string;    // Paths, trampled areas
+  rock: string;    // Rocky terrain, slopes
+  cliff: string;   // Steep cliffs, walls
+}
+
+// Maps biome types to their texture prefixes
+const BIOME_TEXTURE_PREFIXES: Record<BiomeTextureType, BiomeTextureMapping> = {
+  grassland: {
+    ground: 'grass',
+    dirt: 'dirt',
+    rock: 'rock',
+    cliff: 'cliff',
+  },
+  desert: {
+    ground: 'sand',
+    dirt: 'desert_dirt',
+    rock: 'sandstone',
+    cliff: 'desert_cliff',
+  },
+  frozen: {
+    ground: 'snow',
+    dirt: 'permafrost',
+    rock: 'ice_rock',
+    cliff: 'ice_cliff',
+  },
+  volcanic: {
+    ground: 'ash',
+    dirt: 'scorched',
+    rock: 'basalt',
+    cliff: 'volcanic_cliff',
+  },
+  void: {
+    ground: 'void_ground',
+    dirt: 'void_dirt',
+    rock: 'void_rock',
+    cliff: 'void_cliff',
+  },
+  jungle: {
+    ground: 'jungle_floor',
+    dirt: 'mud',
+    rock: 'mossy_rock',
+    cliff: 'jungle_cliff',
+  },
+};
+
+// Check if a texture file exists (client-side check via image load)
+// For now, we assume grassland always exists and others may not
+const AVAILABLE_BIOME_TEXTURES: Set<BiomeTextureType> = new Set(['grassland']);
+
+/**
+ * Register a biome's textures as available.
+ * Call this after confirming the texture files exist.
+ */
+export function registerBiomeTextures(biome: BiomeTextureType): void {
+  AVAILABLE_BIOME_TEXTURES.add(biome);
+}
+
+/**
+ * Check if a biome has its textures available.
+ */
+export function hasBiomeTextures(biome: BiomeTextureType): boolean {
+  return AVAILABLE_BIOME_TEXTURES.has(biome);
+}
+
+/**
+ * Get texture configuration for a specific biome.
+ * Falls back to grassland if biome textures aren't available.
+ */
+export function getBiomeTextureConfig(biome: BiomeTextureType): TextureTerrainConfig {
   const basePath = '/textures/terrain/';
+
+  // Use grassland as fallback if biome textures don't exist
+  const effectiveBiome = AVAILABLE_BIOME_TEXTURES.has(biome) ? biome : 'grassland';
+  const prefixes = BIOME_TEXTURE_PREFIXES[effectiveBiome];
+
   return {
-    grassTexture: `${basePath}grass_diffuse.png`,
-    grassNormal: `${basePath}grass_normal.png`,
-    grassRoughness: `${basePath}grass_roughness.png`,
-    grassDisplacement: `${basePath}grass_displacement.png`,
-    dirtTexture: `${basePath}dirt_diffuse.png`,
-    dirtNormal: `${basePath}dirt_normal.png`,
-    dirtRoughness: `${basePath}dirt_roughness.png`,
-    dirtDisplacement: `${basePath}dirt_displacement.png`,
-    rockTexture: `${basePath}rock_diffuse.png`,
-    rockNormal: `${basePath}rock_normal.png`,
-    rockRoughness: `${basePath}rock_roughness.png`,
-    rockDisplacement: `${basePath}rock_displacement.png`,
-    cliffTexture: `${basePath}cliff_diffuse.png`,
-    cliffNormal: `${basePath}cliff_normal.png`,
-    cliffRoughness: `${basePath}cliff_roughness.png`,
-    cliffDisplacement: `${basePath}cliff_displacement.png`,
-    parallaxScale: 0.05, // Subtle depth, increase for more pronounced effect
+    grassTexture: `${basePath}${prefixes.ground}_diffuse.png`,
+    grassNormal: `${basePath}${prefixes.ground}_normal.png`,
+    grassRoughness: `${basePath}${prefixes.ground}_roughness.png`,
+    grassDisplacement: `${basePath}${prefixes.ground}_displacement.png`,
+    dirtTexture: `${basePath}${prefixes.dirt}_diffuse.png`,
+    dirtNormal: `${basePath}${prefixes.dirt}_normal.png`,
+    dirtRoughness: `${basePath}${prefixes.dirt}_roughness.png`,
+    dirtDisplacement: `${basePath}${prefixes.dirt}_displacement.png`,
+    rockTexture: `${basePath}${prefixes.rock}_diffuse.png`,
+    rockNormal: `${basePath}${prefixes.rock}_normal.png`,
+    rockRoughness: `${basePath}${prefixes.rock}_roughness.png`,
+    rockDisplacement: `${basePath}${prefixes.rock}_displacement.png`,
+    cliffTexture: `${basePath}${prefixes.cliff}_diffuse.png`,
+    cliffNormal: `${basePath}${prefixes.cliff}_normal.png`,
+    cliffRoughness: `${basePath}${prefixes.cliff}_roughness.png`,
+    cliffDisplacement: `${basePath}${prefixes.cliff}_displacement.png`,
+    parallaxScale: 0.05,
   };
+}
+
+/**
+ * Get the list of texture files needed for a biome.
+ * Useful for preloading or checking availability.
+ */
+export function getBiomeTextureFiles(biome: BiomeTextureType): string[] {
+  const basePath = '/textures/terrain/';
+  const prefixes = BIOME_TEXTURE_PREFIXES[biome];
+  const types = ['diffuse', 'normal', 'roughness', 'displacement'];
+  const files: string[] = [];
+
+  for (const material of [prefixes.ground, prefixes.dirt, prefixes.rock, prefixes.cliff]) {
+    for (const type of types) {
+      files.push(`${basePath}${material}_${type}.png`);
+    }
+  }
+
+  return files;
 }
