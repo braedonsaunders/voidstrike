@@ -201,9 +201,10 @@ export class GameStateSystem extends System {
     // Check which players still have buildings
     const buildings = this.world.getEntitiesWith('Building', 'Selectable', 'Health');
     for (const entity of buildings) {
-      const selectable = entity.get<Selectable>('Selectable')!;
-      const health = entity.get<Health>('Health')!;
+      const selectable = entity.get<Selectable>('Selectable');
+      const health = entity.get<Health>('Health');
 
+      if (!selectable || !health) continue;
       if (!health.isDead()) {
         playersWithBuildings.add(selectable.playerId);
       }

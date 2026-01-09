@@ -182,10 +182,12 @@ export class AISystem extends System {
     let armyValue = 0;
 
     for (const entity of entities) {
-      const selectable = entity.get<Selectable>('Selectable')!;
-      const unit = entity.get<Unit>('Unit')!;
-      const health = entity.get<Health>('Health')!;
+      const selectable = entity.get<Selectable>('Selectable');
+      const unit = entity.get<Unit>('Unit');
+      const health = entity.get<Health>('Health');
 
+      // Defensive null checks
+      if (!selectable || !unit || !health) continue;
       if (selectable.playerId !== ai.playerId) continue;
       if (health.isDead()) continue;
 
@@ -216,9 +218,10 @@ export class AISystem extends System {
     const buildings = this.world.getEntitiesWith('Building', 'Selectable', 'Health', 'Transform');
 
     for (const entity of buildings) {
-      const selectable = entity.get<Selectable>('Selectable')!;
-      const health = entity.get<Health>('Health')!;
+      const selectable = entity.get<Selectable>('Selectable');
+      const health = entity.get<Health>('Health');
 
+      if (!selectable || !health) continue;
       if (selectable.playerId !== playerId) continue;
 
       // Consider under attack if health is below 80%
@@ -449,10 +452,11 @@ export class AISystem extends System {
 
     // First pass: find idle workers
     for (const entity of workers) {
-      const unit = entity.get<Unit>('Unit')!;
-      const selectable = entity.get<Selectable>('Selectable')!;
-      const health = entity.get<Health>('Health')!;
+      const unit = entity.get<Unit>('Unit');
+      const selectable = entity.get<Selectable>('Selectable');
+      const health = entity.get<Health>('Health');
 
+      if (!unit || !selectable || !health) continue;
       if (!unit.isWorker) continue;
       if (selectable.playerId !== playerId) continue;
       if (health.isDead()) continue;
@@ -464,10 +468,11 @@ export class AISystem extends System {
 
     // Second pass: find gathering workers (not already assigned to build)
     for (const entity of workers) {
-      const unit = entity.get<Unit>('Unit')!;
-      const selectable = entity.get<Selectable>('Selectable')!;
-      const health = entity.get<Health>('Health')!;
+      const unit = entity.get<Unit>('Unit');
+      const selectable = entity.get<Selectable>('Selectable');
+      const health = entity.get<Health>('Health');
 
+      if (!unit || !selectable || !health) continue;
       if (!unit.isWorker) continue;
       if (selectable.playerId !== playerId) continue;
       if (health.isDead()) continue;
@@ -482,10 +487,11 @@ export class AISystem extends System {
 
     // Third pass: find moving workers (not building)
     for (const entity of workers) {
-      const unit = entity.get<Unit>('Unit')!;
-      const selectable = entity.get<Selectable>('Selectable')!;
-      const health = entity.get<Health>('Health')!;
+      const unit = entity.get<Unit>('Unit');
+      const selectable = entity.get<Selectable>('Selectable');
+      const health = entity.get<Health>('Health');
 
+      if (!unit || !selectable || !health) continue;
       if (!unit.isWorker) continue;
       if (selectable.playerId !== playerId) continue;
       if (health.isDead()) continue;
