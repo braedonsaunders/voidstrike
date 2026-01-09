@@ -156,8 +156,10 @@ export class ResourceRenderer {
         console.warn(`[ResourceRenderer] ${resourceType}: Negative yOffset ${yOffset.toFixed(2)} clamped to 0`);
         yOffset = 0;
       }
-      if (baseScale <= 0 || baseScale > 10) {
-        console.warn(`[ResourceRenderer] ${resourceType}: Invalid baseScale ${baseScale.toFixed(4)} clamped to 1`);
+      // baseScale must be in a reasonable range - too small makes resources invisible
+      // If model normalization resulted in tiny scale, use 1.0 instead
+      if (baseScale <= 0.1 || baseScale > 10) {
+        console.warn(`[ResourceRenderer] ${resourceType}: Invalid baseScale ${baseScale.toFixed(4)} clamped to 1.0`);
         baseScale = 1;
       }
 
