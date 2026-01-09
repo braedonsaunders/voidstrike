@@ -134,9 +134,44 @@ Workers -> Resource Nodes -> Storage -> Production
 - **H** - Hold position
 - **P** - Patrol
 
+## Map Design
+
+### Map Design Principles
+All maps follow StarCraft 2-inspired design principles:
+
+1. **Protected Main Bases** - Each main base is ~90% enclosed by cliffs with a single narrow ramp exit
+2. **Defensive Natural Expansions** - Natural expansions have chokepoints for defensive play
+3. **Contested Center** - Central area with watch towers for map control
+4. **Multiple Expansion Tiers** - Main → Natural → Third → Fourth → Gold bases
+5. **Narrow Ramps** - 6-10 tile wide ramps for wall-offs and defense
+6. **Elevation Variety** - Multiple elevation levels (0, 1, 2) for strategic positioning
+
+### Available Maps
+
+| Map | Players | Size | Biome | Description |
+|-----|---------|------|-------|-------------|
+| Crystal Caverns | 2 | 200×180 | Frozen | Horizontal 1v1 with protected bases and center gold |
+| Void Assault | 2 | 220×220 | Void | Diagonal 1v1 with multiple attack paths |
+| Scorched Basin | 4 | 280×280 | Desert | 4-player corner spawns with shared expansions |
+| Contested Frontier | 6 | 360×320 | Jungle | 3v3 team map with two rows facing off |
+| Titan's Colosseum | 8 | 400×400 | Volcanic | 8-player FFA/4v4 with central arena |
+
+### Expansion Types
+- **Main Base** - Starting location, rich minerals (1800), protected by cliffs
+- **Natural** - Close to main, moderate minerals (1500), semi-protected
+- **Third** - Contested, requires army presence, moderate minerals (1500)
+- **Gold** - High-risk high-reward, rich gold minerals (1000), exposed
+- **Center** - Highly contested, limited resources (750)
+
+### Spawn Point Rules
+- Only main base locations are valid spawn points
+- Each player slot (1-8) maps to a specific main base
+- AI and human players are assigned to main bases only
+- Expansion locations are never spawn points
+
 ## Performance Targets
 
 - 60 FPS with 200 units on screen
 - < 100ms input latency (multiplayer)
 - < 5 second initial load
-- Support for 1v1, 2v2 stretch goal
+- Support for 1v1, 2v2, 3v3, 4v4 game modes
