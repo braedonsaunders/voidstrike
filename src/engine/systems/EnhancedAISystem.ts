@@ -635,20 +635,70 @@ export class EnhancedAISystem extends System {
       return;
     }
 
-    const command: GameCommand = {
-      tick: this.game.getCurrentTick(),
-      playerId: ai.playerId,
-      type: 'ATTACK',
-      entityIds: armyUnits,
-      targetPosition: baseLocation,
-    };
+    // Find any nearby enemy to defend against
+    const nearbyEnemy = this.findNearbyEnemy(ai.playerId, baseLocation, 30);
+    if (nearbyEnemy) {
+      // Attack the actual enemy, not our own base
+      const command: GameCommand = {
+        tick: this.game.getCurrentTick(),
+        playerId: ai.playerId,
+        type: 'ATTACK',
+        entityIds: armyUnits,
+        targetPosition: nearbyEnemy,
+      };
+      this.game.processCommand(command);
+    } else {
+      // No enemy in range - rally units near the base (not AT it) to form a defensive position
+      // Position units in front of the base (offset by 8 units)
+      const rallyPoint = {
+        x: baseLocation.x + 8,
+        y: baseLocation.y + 8,
+      };
 
-    this.game.processCommand(command);
+      const command: GameCommand = {
+        tick: this.game.getCurrentTick(),
+        playerId: ai.playerId,
+        type: 'MOVE',
+        entityIds: armyUnits,
+        targetPosition: rallyPoint,
+      };
+      this.game.processCommand(command);
+
+      // No threat nearby, switch back to building
+      ai.state = 'building';
+    }
 
     // Check if threat is cleared
     if (!this.isUnderAttack(ai.playerId)) {
       ai.state = 'building';
     }
+  }
+
+  /**
+   * Find a nearby enemy unit or building to defend against
+   */
+  private findNearbyEnemy(playerId: string, position: { x: number; y: number }, range: number): { x: number; y: number } | null {
+    // Look for enemy units first
+    const units = this.world.getEntitiesWith('Unit', 'Transform', 'Selectable', 'Health');
+    for (const entity of units) {
+      const selectable = entity.get<Selectable>('Selectable');
+      const health = entity.get<Health>('Health');
+      const transform = entity.get<Transform>('Transform');
+
+      if (!selectable || !health || !transform) continue;
+      if (selectable.playerId === playerId) continue;
+      if (health.isDead()) continue;
+
+      const dx = transform.x - position.x;
+      const dy = transform.y - position.y;
+      const distance = Math.sqrt(dx * dx + dy * dy);
+
+      if (distance <= range) {
+        return { x: transform.x, y: transform.y };
+      }
+    }
+
+    return null;
   }
 
   private executeScoutingPhase(ai: AIPlayer, currentTick: number): void {
