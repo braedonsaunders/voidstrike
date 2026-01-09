@@ -1411,9 +1411,12 @@ export class EnhancedAISystem extends System {
       if (unit.constructingBuildingId !== null) continue; // Building something
       if (unit.state === 'building') continue;
 
-      // Prefer idle workers, but also use gathering workers for emergencies
-      const isIdle = unit.state === 'idle';
-      if (isIdle || (unit.state === 'gathering' && damagedBuildings.some(b => b.healthPercent < 0.5))) {
+      // Use idle or moving workers for any repair
+      // Use gathering workers for damaged buildings (they'll return to gathering after repair)
+      const isIdle = unit.state === 'idle' || unit.state === 'moving';
+      const isGathering = unit.state === 'gathering';
+
+      if (isIdle || isGathering) {
         availableWorkers.push({
           entityId: entity.id,
           x: transform.x,

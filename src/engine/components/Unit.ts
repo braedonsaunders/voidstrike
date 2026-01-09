@@ -534,8 +534,15 @@ export class Unit extends Component {
 
   public setRepairTarget(targetId: number): void {
     if (!this.canRepair) return;
+    // Clear any gathering state to prevent ResourceSystem interference
+    if (this.state === 'gathering') {
+      this.gatherTargetId = null;
+      this.isMining = false;
+      this.isReturning = false;
+    }
     this.repairTargetId = targetId;
     this.isRepairing = true;
+    this.state = 'idle'; // Use idle state so movement works and ResourceSystem doesn't interfere
   }
 
   public clearHealTarget(): void {
