@@ -745,14 +745,20 @@ export class EnhancedAISystem extends System {
    * Find any enemy target - buildings first, then units
    * Used to ensure AI destroys ALL enemy assets for victory
    * Returns a position OUTSIDE the building (at its edge) to prevent unit clipping
-   * IMPROVED: Focus on weakest enemy (fewest buildings) to ensure eliminations
+   * IMPROVED: Each AI targets a different enemy based on proximity to their own base
+   * This prevents all AI from ganging up on one player
    */
   private findAnyEnemyTarget(playerId: string): { x: number; y: number } | null {
-    // Get AI's base position for calculating attack approach direction
+    // Get AI's base position for calculating closest enemy
     const aiBase = this.findAIBase(playerId);
+    if (!aiBase) return null;
 
-    // Count buildings per enemy player to prioritize weakest enemy
-    const enemyBuildingsByPlayer: Map<string, { x: number; y: number; width: number; height: number }[]> = new Map();
+    // Count buildings per enemy player and track their base locations
+    const enemyData: Map<string, {
+      buildings: { x: number; y: number; width: number; height: number }[];
+      basePos: { x: number; y: number } | null;
+      distance: number;
+    }> = new Map();
 
     const buildings = this.world.getEntitiesWith('Building', 'Transform', 'Selectable', 'Health');
     for (const entity of buildings) {
@@ -766,39 +772,73 @@ export class EnhancedAISystem extends System {
       if (health.isDead()) continue;
 
       const enemyId = selectable.playerId;
-      if (!enemyBuildingsByPlayer.has(enemyId)) {
-        enemyBuildingsByPlayer.set(enemyId, []);
+      if (!enemyData.has(enemyId)) {
+        enemyData.set(enemyId, { buildings: [], basePos: null, distance: Infinity });
       }
-      enemyBuildingsByPlayer.get(enemyId)!.push({
+
+      const data = enemyData.get(enemyId)!;
+      data.buildings.push({
         x: transform.x,
         y: transform.y,
         width: building.width,
         height: building.height
       });
-    }
 
-    // Find the enemy with fewest buildings (prioritize finishing them off)
-    let weakestEnemy: string | null = null;
-    let minBuildings = Infinity;
-
-    for (const [enemyId, enemyBuildings] of enemyBuildingsByPlayer) {
-      if (enemyBuildings.length < minBuildings) {
-        minBuildings = enemyBuildings.length;
-        weakestEnemy = enemyId;
+      // Track headquarters position as base location
+      if (building.buildingId === 'headquarters' || building.buildingId === 'orbital_station') {
+        data.basePos = { x: transform.x, y: transform.y };
+        // Calculate distance from this AI's base to enemy base
+        const dx = transform.x - aiBase.x;
+        const dy = transform.y - aiBase.y;
+        data.distance = Math.sqrt(dx * dx + dy * dy);
       }
     }
 
-    // Attack the weakest enemy's buildings
-    if (weakestEnemy && enemyBuildingsByPlayer.has(weakestEnemy)) {
-      const targetBuildings = enemyBuildingsByPlayer.get(weakestEnemy)!;
+    // Calculate distance for enemies without HQ (use first building)
+    for (const [enemyId, data] of enemyData) {
+      if (data.distance === Infinity && data.buildings.length > 0) {
+        const firstBuilding = data.buildings[0];
+        const dx = firstBuilding.x - aiBase.x;
+        const dy = firstBuilding.y - aiBase.y;
+        data.distance = Math.sqrt(dx * dx + dy * dy);
+        data.basePos = { x: firstBuilding.x, y: firstBuilding.y };
+      }
+    }
+
+    // Priority 1: Find the CLOSEST enemy to this AI's base (not weakest)
+    // This distributes attacks across different enemies
+    let closestEnemy: string | null = null;
+    let closestDistance = Infinity;
+
+    // But if any enemy has 2 or fewer buildings, prioritize finishing them off
+    let nearlyDefeatedEnemy: string | null = null;
+    let nearlyDefeatedDistance = Infinity;
+
+    for (const [enemyId, data] of enemyData) {
+      if (data.buildings.length <= 2 && data.distance < nearlyDefeatedDistance) {
+        nearlyDefeatedEnemy = enemyId;
+        nearlyDefeatedDistance = data.distance;
+      }
+      if (data.distance < closestDistance) {
+        closestDistance = data.distance;
+        closestEnemy = enemyId;
+      }
+    }
+
+    // Prefer nearly-defeated enemies, otherwise attack closest
+    const targetEnemy = nearlyDefeatedEnemy || closestEnemy;
+
+    // Attack the target enemy's buildings
+    if (targetEnemy && enemyData.has(targetEnemy)) {
+      const targetBuildings = enemyData.get(targetEnemy)!.buildings;
       if (targetBuildings.length > 0) {
         const target = targetBuildings[0];
         return this.getAttackPositionForBuilding(target.x, target.y, target.width, target.height, aiBase);
       }
     }
 
-    // If no buildings, look for enemy units (also prioritize weakest enemy)
-    const enemyUnitsByPlayer: Map<string, { x: number; y: number }[]> = new Map();
+    // If no buildings, look for enemy units (also prioritize closest)
+    const enemyUnitsByPlayer: Map<string, { x: number; y: number; distance: number }[]> = new Map();
     const units = this.world.getEntitiesWith('Unit', 'Transform', 'Selectable', 'Health');
     for (const entity of units) {
       const selectable = entity.get<Selectable>('Selectable');
@@ -810,28 +850,39 @@ export class EnhancedAISystem extends System {
       if (health.isDead()) continue;
 
       const enemyId = selectable.playerId;
+      const dx = transform.x - aiBase.x;
+      const dy = transform.y - aiBase.y;
+      const distance = Math.sqrt(dx * dx + dy * dy);
+
       if (!enemyUnitsByPlayer.has(enemyId)) {
         enemyUnitsByPlayer.set(enemyId, []);
       }
-      enemyUnitsByPlayer.get(enemyId)!.push({ x: transform.x, y: transform.y });
+      enemyUnitsByPlayer.get(enemyId)!.push({ x: transform.x, y: transform.y, distance });
     }
 
-    // Target units from the weakest enemy first, or any enemy with units
-    if (weakestEnemy && enemyUnitsByPlayer.has(weakestEnemy)) {
-      const targetUnits = enemyUnitsByPlayer.get(weakestEnemy)!;
+    // Target units from the closest enemy
+    if (targetEnemy && enemyUnitsByPlayer.has(targetEnemy)) {
+      const targetUnits = enemyUnitsByPlayer.get(targetEnemy)!;
       if (targetUnits.length > 0) {
-        return targetUnits[0];
+        // Sort by distance and pick closest
+        targetUnits.sort((a, b) => a.distance - b.distance);
+        return { x: targetUnits[0].x, y: targetUnits[0].y };
       }
     }
 
-    // Fallback: any enemy unit
+    // Fallback: any enemy unit (closest one)
+    let closestUnit: { x: number; y: number } | null = null;
+    let closestUnitDist = Infinity;
     for (const [, enemyUnits] of enemyUnitsByPlayer) {
-      if (enemyUnits.length > 0) {
-        return enemyUnits[0];
+      for (const unit of enemyUnits) {
+        if (unit.distance < closestUnitDist) {
+          closestUnitDist = unit.distance;
+          closestUnit = { x: unit.x, y: unit.y };
+        }
       }
     }
 
-    return null;
+    return closestUnit;
   }
 
   /**

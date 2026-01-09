@@ -13,6 +13,7 @@ import { ResourceRenderer } from '@/rendering/ResourceRenderer';
 import { FogOfWar } from '@/rendering/FogOfWar';
 import { EffectsRenderer } from '@/rendering/EffectsRenderer';
 import { RallyPointRenderer } from '@/rendering/RallyPointRenderer';
+import { WatchTowerRenderer } from '@/rendering/WatchTowerRenderer';
 import { BuildingPlacementPreview } from '@/rendering/BuildingPlacementPreview';
 import { SC2SelectionSystem } from '@/rendering/SC2SelectionSystem';
 import { SC2ParticleSystem } from '@/rendering/SC2ParticleSystem';
@@ -66,6 +67,7 @@ export function HybridGameCanvas() {
   const fogOfWarRef = useRef<FogOfWar | null>(null);
   const effectsRendererRef = useRef<EffectsRenderer | null>(null);
   const rallyPointRendererRef = useRef<RallyPointRenderer | null>(null);
+  const watchTowerRendererRef = useRef<WatchTowerRenderer | null>(null);
   const placementPreviewRef = useRef<BuildingPlacementPreview | null>(null);
   const environmentRef = useRef<EnvironmentManager | null>(null);
 
@@ -307,6 +309,13 @@ export function HybridGameCanvas() {
       // Spawn entities
       spawnInitialEntities(game, CURRENT_MAP);
 
+      // Initialize watch towers from map data
+      if (CURRENT_MAP.watchTowers && CURRENT_MAP.watchTowers.length > 0) {
+        game.visionSystem.setWatchTowers(CURRENT_MAP.watchTowers);
+        // Create watch tower renderer for visual effects
+        watchTowerRendererRef.current = new WatchTowerRenderer(scene, game.visionSystem);
+      }
+
       // Initialize audio
       game.audioSystem.initialize(camera.camera, CURRENT_MAP.biome);
 
@@ -336,6 +345,7 @@ export function HybridGameCanvas() {
         fogOfWarRef.current?.update();
         effectsRendererRef.current?.update(deltaTime);
         rallyPointRendererRef.current?.update();
+        watchTowerRendererRef.current?.update(deltaTime);
 
         const gameTime = gameRef.current?.getGameTime() ?? 0;
         environmentRef.current?.update(deltaTime / 1000, gameTime);
@@ -464,6 +474,7 @@ export function HybridGameCanvas() {
       fogOfWarRef.current?.dispose();
       effectsRendererRef.current?.dispose();
       rallyPointRendererRef.current?.dispose();
+      watchTowerRendererRef.current?.dispose();
       cameraRef.current?.dispose();
       unitRendererRef.current?.dispose();
       buildingRendererRef.current?.dispose();

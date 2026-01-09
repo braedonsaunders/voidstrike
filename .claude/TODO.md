@@ -85,6 +85,12 @@
 - [x] **Layer-by-layer construction reveal** - Replaced opacity-only animation with clipping plane reveal. Buildings now reveal from bottom to top with construction particles at the build height.
 - [x] **Supply depot/refinery heights** - Fixed target heights (supply_depot: 0.9→1.8, refinery: 2.0→2.5) to match procedural versions and prevent buildings from appearing half in the ground.
 
+### Resource Rendering Fixes (January 2026)
+- [x] **Debug logging for resource rendering** - Added comprehensive logging to trace mineral/vespene spawning and instanced mesh creation
+- [x] **Resource geometry validation** - Added safety check for models with < 3 vertices, fallback to procedural geometry
+- [x] **yOffset/baseScale clamping** - Prevent resources from rendering underground or at invisible scales due to bad model transforms
+- [ ] **Natural expansion minerals not visible** - Under investigation. Debug logging added to help identify root cause.
+
 ### UI Improvements
 - [x] **Options menu** - Replaced Menu button with dropdown (Controls, Tech Tree, Exit to Menu)
 - [x] **Increased building avoidance** - Units now properly avoid walking through buildings
@@ -92,6 +98,7 @@
 ### AI & Combat Fixes
 - [x] **VisionSystem multi-player support** - Changed from hardcoded ['player1', 'ai'] to dynamic player registration, enabling proper 4-AI spectator games.
 - [x] **AI attack persistence** - AI now stays in attacking state until all enemies are eliminated, preventing premature retreat when taking losses.
+- [x] **AI proximity-based targeting** - Fixed FFA games where all AI targeted the same enemy. Now each AI targets their CLOSEST enemy (with priority for nearly-defeated enemies with ≤2 buildings).
 - [x] **Units clipping into buildings** - Fixed bug where attacking units would get stuck inside target buildings. Added escape logic to force movement out before stopping to attack.
 - [x] **AI units clipping through enemy CC** - Fixed attack targeting to position units at building EDGE instead of center, preventing units from clipping through enemy command centers.
 - [x] **AI expansion support** - AI now builds expansion command centers at resource clusters without nearby bases, enabling multi-base strategies.

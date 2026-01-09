@@ -6,9 +6,17 @@ import { Unit } from '../components/Unit';
 import { Building } from '../components/Building';
 import { Selectable } from '../components/Selectable';
 import { Game } from '../core/Game';
+import { WatchTower } from '@/data/maps/MapTypes';
 
 // Vision states for fog of war
 export type VisionState = 'unexplored' | 'explored' | 'visible';
+
+// Watch tower with activation state
+export interface ActiveWatchTower extends WatchTower {
+  id: number;
+  isActive: boolean;
+  controllingPlayers: Set<string>; // Players with units in range
+}
 
 export interface VisionMap {
   width: number;
@@ -31,6 +39,10 @@ export class VisionSystem extends System {
   // Dynamic player registration instead of hardcoded list
   private knownPlayers: Set<string> = new Set();
 
+  // Watch towers (Xel'naga towers)
+  private watchTowers: ActiveWatchTower[] = [];
+  private readonly WATCH_TOWER_CAPTURE_RADIUS = 3; // Units within 3 units capture the tower
+
   // Throttle vision updates for performance - update every N ticks
   private readonly UPDATE_INTERVAL = 3; // Update every 3 ticks instead of every tick
   private tickCounter = 0;
@@ -40,6 +52,25 @@ export class VisionSystem extends System {
     this.mapWidth = mapWidth;
     this.mapHeight = mapHeight;
     this.cellSize = cellSize;
+  }
+
+  /**
+   * Initialize watch towers from map data
+   */
+  public setWatchTowers(towers: WatchTower[]): void {
+    this.watchTowers = towers.map((tower, index) => ({
+      ...tower,
+      id: index,
+      isActive: false,
+      controllingPlayers: new Set<string>(),
+    }));
+  }
+
+  /**
+   * Get all watch towers with their current state
+   */
+  public getWatchTowers(): ActiveWatchTower[] {
+    return this.watchTowers;
   }
 
   public init(world: World): void {
@@ -116,6 +147,46 @@ export class VisionSystem extends System {
     const buildings = this.world.getEntitiesWith('Building', 'Transform', 'Selectable');
     for (const entity of buildings) {
       this.updateBuildingVision(entity);
+    }
+
+    // Update watch towers
+    this.updateWatchTowers(units);
+  }
+
+  /**
+   * Update watch tower control and vision
+   */
+  private updateWatchTowers(units: Entity[]): void {
+    // Reset all tower controlling players
+    for (const tower of this.watchTowers) {
+      tower.controllingPlayers.clear();
+      tower.isActive = false;
+    }
+
+    // Check which players have units near each tower
+    for (const entity of units) {
+      const transform = entity.get<Transform>('Transform')!;
+      const selectable = entity.get<Selectable>('Selectable')!;
+
+      for (const tower of this.watchTowers) {
+        const dx = transform.x - tower.x;
+        const dy = transform.y - tower.y;
+        const dist = Math.sqrt(dx * dx + dy * dy);
+
+        if (dist <= this.WATCH_TOWER_CAPTURE_RADIUS) {
+          tower.controllingPlayers.add(selectable.playerId);
+          tower.isActive = true;
+        }
+      }
+    }
+
+    // Grant vision to controlling players
+    for (const tower of this.watchTowers) {
+      if (tower.isActive) {
+        for (const playerId of tower.controllingPlayers) {
+          this.revealArea(playerId, tower.x, tower.y, tower.radius);
+        }
+      }
     }
   }
 

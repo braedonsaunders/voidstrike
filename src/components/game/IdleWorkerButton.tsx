@@ -6,11 +6,18 @@ import { Unit } from '@/engine/components/Unit';
 import { Transform } from '@/engine/components/Transform';
 import { Selectable } from '@/engine/components/Selectable';
 import { useGameStore } from '@/store/gameStore';
+import { useGameSetupStore } from '@/store/gameSetupStore';
 
 export function IdleWorkerButton() {
   const [idleWorkerCount, setIdleWorkerCount] = useState(0);
   const [lastSelectedIndex, setLastSelectedIndex] = useState(0);
   const { selectUnits, moveCameraTo, playerId } = useGameStore();
+  const isSpectator = useGameSetupStore((state) => state.isSpectator());
+
+  // Don't render for spectators
+  if (isSpectator) {
+    return null;
+  }
 
   // Update idle worker count periodically
   useEffect(() => {
