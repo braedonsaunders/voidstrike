@@ -371,6 +371,9 @@ export class MovementSystem extends System {
             let attackTargetX = targetTransform.x;
             let attackTargetY = targetTransform.y;
 
+            // Flag to force movement when unit needs to escape from inside building
+            let needsToEscape = false;
+
             if (targetBuilding) {
               // Calculate closest point on building edge
               const halfW = targetBuilding.width / 2;
@@ -385,7 +388,7 @@ export class MovementSystem extends System {
               // Position at 80% of attack range from building edge
               const standOffDistance = unit.attackRange * 0.8;
               // Minimum safe distance to prevent unit from clipping into building
-              const minSafeDistance = unit.collisionRadius + 0.3;
+              const minSafeDistance = unit.collisionRadius + 0.5;
 
               if (effectiveDistance > minSafeDistance) {
                 // Unit is outside - target a position at attack range from building edge
@@ -394,18 +397,19 @@ export class MovementSystem extends System {
                 attackTargetX = clampedX + dirX * standOffDistance;
                 attackTargetY = clampedY + dirY * standOffDistance;
               } else {
-                // Unit is too close to or inside building - push them out
+                // Unit is too close to or inside building - MUST escape first
+                needsToEscape = true;
                 const awayDx = transform.x - targetTransform.x;
                 const awayDy = transform.y - targetTransform.y;
                 const awayDist = Math.sqrt(awayDx * awayDx + awayDy * awayDy);
                 if (awayDist > 0.1) {
                   // Move to a position outside the building at attack range
-                  const escapeDistance = Math.max(halfW, halfH) + standOffDistance;
+                  const escapeDistance = Math.max(halfW, halfH) + standOffDistance + 0.5;
                   attackTargetX = targetTransform.x + (awayDx / awayDist) * escapeDistance;
                   attackTargetY = targetTransform.y + (awayDy / awayDist) * escapeDistance;
                 } else {
                   // At center - move to any edge at attack range
-                  attackTargetX = targetTransform.x + halfW + standOffDistance;
+                  attackTargetX = targetTransform.x + halfW + standOffDistance + 0.5;
                   attackTargetY = targetTransform.y;
                 }
               }
@@ -413,7 +417,8 @@ export class MovementSystem extends System {
               effectiveDistance = transform.distanceTo(targetTransform);
             }
 
-            if (effectiveDistance > unit.attackRange) {
+            // Move if out of range OR if unit needs to escape from inside building
+            if (effectiveDistance > unit.attackRange || needsToEscape) {
               // Move toward target position (outside building for buildings, near center for units)
               targetX = attackTargetX;
               targetY = attackTargetY;

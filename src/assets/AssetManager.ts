@@ -42,10 +42,10 @@ export const REFERENCE_FRAME = {
 
   BUILDING_HEIGHTS: {
     headquarters: 4.5,
-    supply_cache: 0.9, // Half size for supply cache
+    supply_cache: 1.8, // Match procedural version height
     infantry_bay: 2.8,
-    extractor: 2.0, // Half size for extractor
-    forge: 3.5, // Increased size
+    extractor: 2.5, // Proper extractor height
+    forge: 2.8,
     hangar: 2.2,
   } as Record<string, number>,
 

@@ -340,6 +340,17 @@ export class EnhancedAISystem extends System {
       return;
     }
 
+    // CRITICAL: Continue attacking if already in attack state and enemies still exist
+    // This prevents the AI from giving up mid-attack when it takes losses
+    if (ai.state === 'attacking') {
+      const hasArmy = this.getArmyUnits(ai.playerId).length > 0;
+      const hasEnemies = this.findAnyEnemyTarget(ai.playerId) !== null;
+      if (hasArmy && hasEnemies) {
+        // Stay in attacking state - finish the job!
+        return;
+      }
+    }
+
     // Check if should harass (hard+ difficulty)
     if (ai.harassCooldown > 0 && currentTick - ai.lastHarassTick >= ai.harassCooldown) {
       const harassUnits = this.getHarassUnits(ai);
@@ -565,9 +576,13 @@ export class EnhancedAISystem extends System {
       return;
     }
 
-    // Only retreat if army is very small AND we have buildings to defend
+    // Only retreat if army is tiny AND we have significant buildings to defend
+    // AND there are still substantial enemies - otherwise finish the job!
     const totalBuildings = Array.from(ai.buildingCounts.values()).reduce((a, b) => a + b, 0);
-    if (armyUnits.length < 3 && totalBuildings > 1) {
+    const enemyBuildingCount = this.countEnemyBuildings(ai.playerId);
+
+    // Don't retreat if enemy has few buildings left - finish them off!
+    if (armyUnits.length < 2 && totalBuildings > 3 && enemyBuildingCount > 2) {
       ai.state = 'building';
       return;
     }
@@ -623,6 +638,25 @@ export class EnhancedAISystem extends System {
     }
 
     return null;
+  }
+
+  /**
+   * Count how many enemy buildings remain
+   */
+  private countEnemyBuildings(playerId: string): number {
+    let count = 0;
+    const buildings = this.world.getEntitiesWith('Building', 'Selectable', 'Health');
+    for (const entity of buildings) {
+      const selectable = entity.get<Selectable>('Selectable');
+      const health = entity.get<Health>('Health');
+
+      if (!selectable || !health) continue;
+      if (selectable.playerId === playerId) continue;
+      if (health.isDead()) continue;
+
+      count++;
+    }
+    return count;
   }
 
   private executeDefendingPhase(ai: AIPlayer): void {

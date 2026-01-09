@@ -33,6 +33,8 @@ interface InstancedBuildingGroup {
   maxInstances: number;
   entityIds: number[];
   dummy: THREE.Object3D;
+  // CRITICAL: Track model scale to apply to instances (custom models are normalized with scale)
+  modelScale: THREE.Vector3;
 }
 
 const MAX_BUILDING_INSTANCES_PER_TYPE = 50;
@@ -174,14 +176,21 @@ export class BuildingRenderer {
       const playerColor = getPlayerColor(playerId);
       const baseMesh = AssetManager.getBuildingMesh(buildingType, playerColor);
 
-      // Find geometry and material from the base mesh
+      // Find geometry, material, and world scale from the base mesh
+      // CRITICAL: Custom models have scale applied to Object3D, not geometry vertices
       let geometry: THREE.BufferGeometry | null = null;
       let material: THREE.Material | THREE.Material[] | null = null;
+      const modelScale = new THREE.Vector3(1, 1, 1);
+
+      // Update world matrices to get accurate world scale
+      baseMesh.updateMatrixWorld(true);
 
       baseMesh.traverse((child) => {
         if (child instanceof THREE.Mesh && !geometry) {
           geometry = child.geometry;
           material = child.material;
+          // Get the world scale of this mesh (includes parent scales from normalization)
+          child.getWorldScale(modelScale);
         }
       });
 
@@ -210,6 +219,7 @@ export class BuildingRenderer {
         maxInstances: MAX_BUILDING_INSTANCES_PER_TYPE,
         entityIds: [],
         dummy: new THREE.Object3D(),
+        modelScale, // Store the model's world scale for proper instance sizing
       };
 
       this.instancedGroups.set(key, group);
@@ -245,20 +255,25 @@ export class BuildingRenderer {
 
   /**
    * Set opacity on a mesh's material(s), handling both single materials and arrays.
+   * Optionally applies a clipping plane for construction reveal effect.
    */
-  private setMaterialOpacity(mesh: THREE.Mesh, opacity: number, transparent: boolean): void {
+  private setMaterialOpacity(mesh: THREE.Mesh, opacity: number, transparent: boolean, clippingPlane?: THREE.Plane): void {
+    const applyToMaterial = (mat: THREE.Material) => {
+      if (mat instanceof THREE.MeshStandardMaterial) {
+        mat.clippingPlanes = clippingPlane ? [clippingPlane] : [];
+        mat.clipShadows = true;
+        mat.transparent = transparent;
+        mat.opacity = opacity;
+        mat.side = THREE.DoubleSide;
+      }
+    };
+
     if (Array.isArray(mesh.material)) {
       for (const mat of mesh.material) {
-        if (mat instanceof THREE.MeshStandardMaterial) {
-          mat.clippingPlanes = [];
-          mat.transparent = transparent;
-          mat.opacity = opacity;
-        }
+        applyToMaterial(mat);
       }
-    } else if (mesh.material instanceof THREE.MeshStandardMaterial) {
-      mesh.material.clippingPlanes = [];
-      mesh.material.transparent = transparent;
-      mesh.material.opacity = opacity;
+    } else {
+      applyToMaterial(mesh.material);
     }
   }
 
@@ -310,9 +325,9 @@ export class BuildingRenderer {
         if (group.mesh.count < group.maxInstances) {
           const terrainHeight = this.terrain?.getHeightAt(transform.x, transform.y) ?? 0;
 
-          // Set instance matrix
+          // Set instance matrix - CRITICAL: Use model's scale from normalization
           this.tempPosition.set(transform.x, terrainHeight, transform.y);
-          this.tempScale.set(1, 1, 1);
+          this.tempScale.copy(group.modelScale); // Apply the normalized model scale
           this.tempMatrix.compose(this.tempPosition, this.tempQuaternion, this.tempScale);
           group.mesh.setMatrixAt(group.mesh.count, this.tempMatrix);
           group.entityIds.push(entity.id);
@@ -424,23 +439,37 @@ export class BuildingRenderer {
         }
       } else {
         // Construction in progress (state === 'constructing')
-        // Simple opacity-only animation - no particles to avoid cleanup issues
+        // Layer-by-layer reveal using clipping plane + semi-transparent effect
         const progress = building.buildProgress;
-        const opacity = 0.3 + progress * 0.7; // Opacity from 30% to 100%
 
+        // Calculate the current build height (revealed portion)
+        const buildHeight = meshData.buildingHeight * progress;
+        const clipY = terrainHeight + buildHeight;
+
+        // Create a unique clipping plane for this building (each building has different height)
+        // Plane clips where: dot(point, normal) + constant < 0
+        // With normal (0,1,0) and constant -clipY: clips points where Y < clipY
+        const clipPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), -clipY);
+
+        // Building is semi-transparent with clipping plane for layer reveal
+        const opacity = 0.7 + progress * 0.3; // 70% to 100% as it builds
         meshData.group.scale.setScalar(1);
         meshData.group.traverse((child) => {
           if (child instanceof THREE.Mesh) {
-            this.setMaterialOpacity(child, opacity, true);
+            this.setMaterialOpacity(child, opacity, true, clipPlane);
           }
         });
-      }
 
-      // Always clean up construction effects (they're disabled for now)
-      if (meshData.constructionEffect) {
-        this.scene.remove(meshData.constructionEffect);
-        this.disposeGroup(meshData.constructionEffect);
-        meshData.constructionEffect = null;
+        // Create/update construction effect (dust and sparks)
+        if (!meshData.constructionEffect) {
+          meshData.constructionEffect = this.createConstructionEffect(building.width, building.height, meshData.buildingHeight);
+          this.scene.add(meshData.constructionEffect);
+        }
+
+        // Position construction particles at the current build height (construction line)
+        meshData.constructionEffect.visible = true;
+        meshData.constructionEffect.position.set(transform.x, clipY, transform.y);
+        this.updateConstructionEffect(meshData.constructionEffect, dt, building.width, building.height);
       }
 
       // Update selection ring - larger multiplier for better visibility
