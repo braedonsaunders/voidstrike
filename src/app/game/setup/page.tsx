@@ -306,13 +306,14 @@ export default function GameSetupPage() {
   const canRemovePlayer = playerSlots.length > 2;
 
   return (
-    <main className="min-h-screen bg-black">
+    <main className="h-screen bg-black overflow-hidden">
       {/* Background */}
       <div className="fixed inset-0 bg-gradient-to-b from-void-950/50 via-black to-black" />
       <div className="fixed inset-0 bg-[radial-gradient(ellipse_at_center,rgba(132,61,255,0.1),transparent_70%)]" />
 
-      {/* Content */}
-      <div className="relative z-10 max-w-6xl mx-auto px-6 py-4">
+      {/* Content - scrollable */}
+      <div className="relative z-10 h-full overflow-y-auto">
+        <div className="max-w-6xl mx-auto px-6 py-4 pb-8">
         {/* Header */}
         <div className="flex items-center justify-between mb-4">
           <div>
@@ -449,6 +450,7 @@ export default function GameSetupPage() {
               Press <kbd className="px-1 py-0.5 bg-void-800 rounded text-[10px]">?</kbd> during game for controls
             </p>
           </div>
+        </div>
         </div>
       </div>
     </main>
