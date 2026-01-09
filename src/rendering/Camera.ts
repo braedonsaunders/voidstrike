@@ -86,7 +86,7 @@ export class RTSCamera {
     window.addEventListener('mousemove', this.handleMouseMove.bind(this));
     window.addEventListener('mousedown', this.handleMouseDown.bind(this));
     window.addEventListener('mouseup', this.handleMouseUp.bind(this));
-    window.addEventListener('wheel', this.handleWheel.bind(this));
+    window.addEventListener('wheel', this.handleWheel.bind(this), { passive: false });
     window.addEventListener('resize', this.handleResize.bind(this));
 
     this.screenWidth = window.innerWidth;

@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useRef } from 'react';
+import { useState } from 'react';
 import { useGameStore } from '@/store/gameStore';
 import { useUIStore } from '@/store/uiStore';
 import { Minimap } from './Minimap';
@@ -14,43 +14,11 @@ import { KeyboardShortcutsPanel } from './KeyboardShortcutsPanel';
 
 export function HUD() {
   const { isPaused, togglePause, setShowTechTree, setShowKeyboardShortcuts } = useGameStore();
-  const { showFPS, toggleFPS } = useUIStore();
+  const { toggleFPS, showFPS } = useUIStore();
   const [showOptionsMenu, setShowOptionsMenu] = useState(false);
-  const [fps, setFps] = useState(0);
-  const frameCountRef = useRef(0);
-  const lastTimeRef = useRef(performance.now());
-
-  // FPS counter
-  useEffect(() => {
-    if (!showFPS) return;
-
-    let animationId: number;
-    const updateFPS = () => {
-      frameCountRef.current++;
-      const now = performance.now();
-      const elapsed = now - lastTimeRef.current;
-
-      if (elapsed >= 1000) {
-        setFps(Math.round((frameCountRef.current * 1000) / elapsed));
-        frameCountRef.current = 0;
-        lastTimeRef.current = now;
-      }
-
-      animationId = requestAnimationFrame(updateFPS);
-    };
-
-    animationId = requestAnimationFrame(updateFPS);
-    return () => cancelAnimationFrame(animationId);
-  }, [showFPS]);
 
   return (
     <div className="absolute inset-0 pointer-events-none">
-      {/* FPS Counter - positioned in top left under resource panel */}
-      {showFPS && (
-        <div className="absolute top-14 left-2 bg-black/70 px-2 py-1 rounded text-xs font-mono text-green-400 pointer-events-none z-50">
-          {fps} FPS
-        </div>
-      )}
 
       {/* Top bar */}
       <div className="absolute top-0 left-0 right-0 flex justify-between items-start p-2 pointer-events-auto">
