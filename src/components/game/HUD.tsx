@@ -11,6 +11,7 @@ import { TechTreePanel } from './TechTreePanel';
 import { ProductionQueuePanel } from './ProductionQueuePanel';
 import { IdleWorkerButton } from './IdleWorkerButton';
 import { KeyboardShortcutsPanel } from './KeyboardShortcutsPanel';
+import { PlayerStatusPanel } from './PlayerStatusPanel';
 
 export function HUD() {
   const { isPaused, togglePause, setShowTechTree, setShowKeyboardShortcuts } = useGameStore();
@@ -113,8 +114,13 @@ export function HUD() {
         <CommandCard />
       </div>
 
-      {/* Production Queue Panel - right side */}
-      <div className="absolute top-16 right-2 pointer-events-auto">
+      {/* Player Status Panel - top right */}
+      <div className="absolute top-12 right-2 pointer-events-auto">
+        <PlayerStatusPanel />
+      </div>
+
+      {/* Production Queue Panel - right side, below player status */}
+      <div className="absolute top-32 right-2 pointer-events-auto">
         <ProductionQueuePanel />
       </div>
 

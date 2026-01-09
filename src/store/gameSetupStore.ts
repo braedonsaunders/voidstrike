@@ -56,6 +56,9 @@ export interface GameSetupState {
   startGame: () => void;
   endGame: () => void;
   reset: () => void;
+
+  // Check if current session is spectator mode (no human players)
+  isSpectator: () => boolean;
 }
 
 export const STARTING_RESOURCES_VALUES: Record<StartingResources, { minerals: number; vespene: number }> = {
@@ -214,6 +217,12 @@ export const useGameSetupStore = create<GameSetupState>((set, get) => ({
   startGame: () => set({ gameStarted: true }),
   endGame: () => set({ gameStarted: false }),
   reset: () => set({ ...initialState, playerSlots: [...defaultPlayerSlots] }),
+
+  isSpectator: (): boolean => {
+    // Check if player1 slot is not human - this means we're spectating
+    const player1Slot = get().playerSlots.find(s => s.id === 'player1');
+    return player1Slot?.type !== 'human';
+  },
 }));
 
 // Export a function to get player color that can be used outside React
