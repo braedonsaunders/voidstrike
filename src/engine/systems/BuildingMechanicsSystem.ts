@@ -5,7 +5,7 @@ import { Transform } from '../components/Transform';
 import { Building, AddonType } from '../components/Building';
 import { Health } from '../components/Health';
 import { Selectable } from '../components/Selectable';
-import { TECH_LAB_UNITS, REACTOR_UNITS } from '@/data/buildings/dominion';
+import { RESEARCH_MODULE_UNITS, PRODUCTION_MODULE_UNITS } from '@/data/buildings/dominion';
 
 interface LiftOffCommand {
   buildingId: number;
@@ -18,7 +18,7 @@ interface LandCommand {
 
 interface BuildAddonCommand {
   buildingId: number;
-  addonType: 'tech_lab' | 'reactor';
+  addonType: 'research_module' | 'production_module';
   playerId: string;
 }
 
@@ -133,7 +133,7 @@ export class BuildingMechanicsSystem extends System {
 
     if (!building || !addon) return;
 
-    const addonType = addon.buildingId === 'tech_lab' ? 'tech_lab' : 'reactor';
+    const addonType = addon.buildingId === 'research_module' ? 'research_module' : 'production_module';
     building.attachAddon(addonType as AddonType, data.addonId);
     addon.attachedToId = data.buildingId;
 
@@ -248,7 +248,7 @@ export class BuildingMechanicsSystem extends System {
       const addonTransform = entity.get<Transform>('Transform')!;
 
       // Check if this is an unattached addon at the right position
-      if (addonBuilding.buildingId !== 'tech_lab' && addonBuilding.buildingId !== 'reactor') continue;
+      if (addonBuilding.buildingId !== 'research_module' && addonBuilding.buildingId !== 'production_module') continue;
       if (addonBuilding.attachedToId !== null) continue;
 
       const dx = Math.abs(addonTransform.x - addonX);
@@ -329,7 +329,7 @@ export class BuildingMechanicsSystem extends System {
     const buildingType = building.buildingId;
 
     // Check if unit requires tech lab
-    const techLabUnits = TECH_LAB_UNITS[buildingType] || [];
+    const techLabUnits = RESEARCH_MODULE_UNITS[buildingType] || [];
     if (techLabUnits.includes(unitId)) {
       return building.hasTechLab();
     }
@@ -343,7 +343,7 @@ export class BuildingMechanicsSystem extends System {
     if (!building.hasReactor()) return false;
 
     const buildingType = building.buildingId;
-    const reactorUnits = REACTOR_UNITS[buildingType] || [];
+    const reactorUnits = PRODUCTION_MODULE_UNITS[buildingType] || [];
 
     return reactorUnits.includes(unitId);
   }

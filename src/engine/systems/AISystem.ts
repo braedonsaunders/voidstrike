@@ -26,11 +26,11 @@ interface AIPlayer {
   supply: number;
   maxSupply: number;
   // Building flags
-  hasBarracks: boolean;
-  hasFactory: boolean;
-  hasRefinery: boolean;
-  supplyDepotsBuilding: number;
-  barracksCount: number;
+  hasInfantryBay: boolean;
+  hasForge: boolean;
+  hasExtractor: boolean;
+  supplyCachesBuilding: number;
+  infantryBayCount: number;
   // Attack timing
   lastAttackTick: number;
   attackCooldown: number;
@@ -70,12 +70,12 @@ export class AISystem extends System {
       minerals: 50, // Starting minerals
       vespene: 0,
       supply: 6, // 6 starting workers
-      maxSupply: 11, // Command Center provides 11
-      hasBarracks: false,
-      hasFactory: false,
-      hasRefinery: false,
-      supplyDepotsBuilding: 0,
-      barracksCount: 0,
+      maxSupply: 11, // Headquarters provides 11
+      hasInfantryBay: false,
+      hasForge: false,
+      hasExtractor: false,
+      supplyCachesBuilding: 0,
+      infantryBayCount: 0,
       lastAttackTick: 0,
       attackCooldown: attackCooldownByDifficulty[difficulty],
     });
@@ -116,18 +116,18 @@ export class AISystem extends System {
         }
 
         // Track building types
-        if (building.buildingId === 'barracks') {
-          ai.hasBarracks = true;
-          ai.barracksCount++;
+        if (building.buildingId === 'infantry_bay') {
+          ai.hasInfantryBay = true;
+          ai.infantryBayCount++;
         }
-        if (building.buildingId === 'factory') {
-          ai.hasFactory = true;
+        if (building.buildingId === 'forge') {
+          ai.hasForge = true;
         }
-        if (building.buildingId === 'refinery') {
-          ai.hasRefinery = true;
+        if (building.buildingId === 'extractor') {
+          ai.hasExtractor = true;
         }
-        if (building.buildingId === 'supply_depot') {
-          ai.supplyDepotsBuilding = Math.max(0, ai.supplyDepotsBuilding - 1);
+        if (building.buildingId === 'supply_cache') {
+          ai.supplyCachesBuilding = Math.max(0, ai.supplyCachesBuilding - 1);
         }
       }
     });
@@ -265,10 +265,10 @@ export class AISystem extends System {
 
     // Priority: Supply > Workers > Production Buildings > Army
 
-    // Check if supply capped (need supply depot)
-    if (ai.supply >= ai.maxSupply - 2 && ai.supplyDepotsBuilding === 0) {
-      if (this.tryBuildBuilding(ai, 'supply_depot')) {
-        ai.supplyDepotsBuilding++;
+    // Check if supply capped (need supply cache)
+    if (ai.supply >= ai.maxSupply - 2 && ai.supplyCachesBuilding === 0) {
+      if (this.tryBuildBuilding(ai, 'supply_cache')) {
+        ai.supplyCachesBuilding++;
         return;
       }
     }
@@ -276,59 +276,59 @@ export class AISystem extends System {
     // Build workers if we have room and need more
     const targetWorkers = ai.difficulty === 'hard' ? 20 : ai.difficulty === 'medium' ? 18 : 16;
     if (ai.workerCount < targetWorkers && ai.supply < ai.maxSupply) {
-      if (this.tryTrainUnit(ai, 'scv')) {
+      if (this.tryTrainUnit(ai, 'fabricator')) {
         return;
       }
     }
 
-    // Build barracks if we don't have one
-    if (!ai.hasBarracks && ai.workerCount >= 10) {
-      if (this.tryBuildBuilding(ai, 'barracks')) {
+    // Build infantry bay if we don't have one
+    if (!ai.hasInfantryBay && ai.workerCount >= 10) {
+      if (this.tryBuildBuilding(ai, 'infantry_bay')) {
         return;
       }
     }
 
-    // Medium/Hard: Build second barracks for faster production
-    if (ai.difficulty !== 'easy' && ai.barracksCount < 2 && ai.hasBarracks && ai.workerCount >= 14) {
-      if (this.tryBuildBuilding(ai, 'barracks')) {
+    // Medium/Hard: Build second infantry bay for faster production
+    if (ai.difficulty !== 'easy' && ai.infantryBayCount < 2 && ai.hasInfantryBay && ai.workerCount >= 14) {
+      if (this.tryBuildBuilding(ai, 'infantry_bay')) {
         return;
       }
     }
 
-    // Hard: Build refinery and factory
-    if (ai.difficulty === 'hard' && ai.hasBarracks && !ai.hasRefinery && ai.workerCount >= 14) {
-      if (this.tryBuildBuilding(ai, 'refinery')) {
+    // Hard: Build extractor and forge
+    if (ai.difficulty === 'hard' && ai.hasInfantryBay && !ai.hasExtractor && ai.workerCount >= 14) {
+      if (this.tryBuildBuilding(ai, 'extractor')) {
         return;
       }
     }
 
-    if (ai.difficulty === 'hard' && ai.hasRefinery && !ai.hasFactory && ai.vespene >= 100) {
-      if (this.tryBuildBuilding(ai, 'factory')) {
+    if (ai.difficulty === 'hard' && ai.hasExtractor && !ai.hasForge && ai.vespene >= 100) {
+      if (this.tryBuildBuilding(ai, 'forge')) {
         return;
       }
     }
 
     // Build army based on difficulty
-    if (ai.hasBarracks && ai.supply < ai.maxSupply) {
+    if (ai.hasInfantryBay && ai.supply < ai.maxSupply) {
       // Vary unit composition based on difficulty
       if (ai.difficulty === 'easy') {
-        // Easy: Just marines
-        this.tryTrainUnit(ai, 'marine');
+        // Easy: Just troopers
+        this.tryTrainUnit(ai, 'trooper');
       } else if (ai.difficulty === 'medium') {
-        // Medium: Marines and occasionally marauders
+        // Medium: Troopers and occasionally breachers
         if (Math.random() < 0.3 && ai.minerals >= 100) {
-          this.tryTrainUnit(ai, 'marauder');
+          this.tryTrainUnit(ai, 'breacher');
         } else {
-          this.tryTrainUnit(ai, 'marine');
+          this.tryTrainUnit(ai, 'trooper');
         }
       } else {
-        // Hard: Mixed army with hellions from factory
-        if (ai.hasFactory && Math.random() < 0.3 && ai.minerals >= 100) {
-          this.tryTrainUnit(ai, 'hellion');
+        // Hard: Mixed army with scorchers from forge
+        if (ai.hasForge && Math.random() < 0.3 && ai.minerals >= 100) {
+          this.tryTrainUnit(ai, 'scorcher');
         } else if (Math.random() < 0.4 && ai.minerals >= 100 && ai.vespene >= 25) {
-          this.tryTrainUnit(ai, 'marauder');
+          this.tryTrainUnit(ai, 'breacher');
         } else {
-          this.tryTrainUnit(ai, 'marine');
+          this.tryTrainUnit(ai, 'trooper');
         }
       }
     }
@@ -338,17 +338,17 @@ export class AISystem extends System {
     // Update resources
     this.updateAIResources(ai);
 
-    // Keep building supply depots
-    if (ai.supply >= ai.maxSupply - 2 && ai.supplyDepotsBuilding === 0) {
-      if (this.tryBuildBuilding(ai, 'supply_depot')) {
-        ai.supplyDepotsBuilding++;
+    // Keep building supply caches
+    if (ai.supply >= ai.maxSupply - 2 && ai.supplyCachesBuilding === 0) {
+      if (this.tryBuildBuilding(ai, 'supply_cache')) {
+        ai.supplyCachesBuilding++;
         return;
       }
     }
 
-    // Keep training marines
-    if (ai.hasBarracks && ai.supply < ai.maxSupply) {
-      this.tryTrainUnit(ai, 'marine');
+    // Keep training troopers
+    if (ai.hasInfantryBay && ai.supply < ai.maxSupply) {
+      this.tryTrainUnit(ai, 'trooper');
     }
   }
 
@@ -517,7 +517,7 @@ export class AISystem extends System {
       const transform = entity.get<Transform>('Transform')!;
 
       if (selectable.playerId !== playerId) continue;
-      if (building.buildingId === 'command_center') {
+      if (building.buildingId === 'headquarters') {
         return { x: transform.x, y: transform.y };
       }
     }
@@ -720,7 +720,7 @@ export class AISystem extends System {
       if (selectable.playerId === playerId) continue;
 
       // Found enemy building
-      if (['command_center', 'nexus', 'hatchery'].includes(building.buildingId)) {
+      if (['headquarters', 'nexus', 'hatchery'].includes(building.buildingId)) {
         return { x: transform.x, y: transform.y };
       }
     }

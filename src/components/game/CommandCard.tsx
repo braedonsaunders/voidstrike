@@ -26,35 +26,35 @@ const COMMAND_ICONS: Record<string, string> = {
   cancel: '✕',
   back: '◀',
   // Units
-  scv: '🔧',
-  marine: '🎖',
-  marauder: '💪',
-  reaper: '💀',
-  ghost: '👻',
-  hellion: '🔥',
-  siege_tank: '🎯',
-  thor: '⚡',
-  medivac: '✚',
-  viking: '✈',
-  banshee: '🦇',
-  battlecruiser: '🚀',
-  raven: '🦅',
+  fabricator: '🔧',
+  trooper: '🎖',
+  breacher: '💪',
+  vanguard: '💀',
+  operative: '👻',
+  scorcher: '🔥',
+  devastator: '🎯',
+  colossus: '⚡',
+  lifter: '✚',
+  valkyrie: '✈',
+  specter: '🦇',
+  dreadnought: '🚀',
+  overseer: '🦅',
   // Buildings
-  command_center: '🏛',
-  orbital_command: '🛰',
-  planetary_fortress: '🏰',
-  supply_depot: '📦',
-  refinery: '⛽',
-  barracks: '🏠',
-  engineering_bay: '🔬',
-  bunker: '🏰',
-  factory: '🏭',
-  armory: '⚙',
-  starport: '🛫',
-  fusion_core: '⚛',
-  ghost_academy: '🎓',
-  sensor_tower: '📡',
-  missile_turret: '🗼',
+  headquarters: '🏛',
+  orbital_station: '🛰',
+  bastion: '🏰',
+  supply_cache: '📦',
+  extractor: '⛽',
+  infantry_bay: '🏠',
+  tech_center: '🔬',
+  garrison: '🏰',
+  forge: '🏭',
+  arsenal: '⚙',
+  hangar: '🛫',
+  power_core: '⚛',
+  ops_center: '🎓',
+  radar_array: '📡',
+  defense_turret: '🗼',
   // Upgrades
   stim: '💉',
   combat: '🛡',
@@ -93,9 +93,9 @@ interface CommandButton {
 type MenuMode = 'main' | 'build_basic' | 'build_advanced';
 
 // Basic structures (no tech requirements)
-const BASIC_BUILDINGS = ['command_center', 'supply_depot', 'refinery', 'barracks', 'engineering_bay', 'bunker', 'missile_turret'];
+const BASIC_BUILDINGS = ['headquarters', 'supply_cache', 'extractor', 'infantry_bay', 'tech_center', 'garrison', 'defense_turret'];
 // Advanced structures (tech requirements)
-const ADVANCED_BUILDINGS = ['factory', 'armory', 'starport', 'fusion_core', 'ghost_academy', 'sensor_tower'];
+const ADVANCED_BUILDINGS = ['forge', 'arsenal', 'hangar', 'power_core', 'ops_center', 'radar_array'];
 
 export function CommandCard() {
   const { selectedUnits, minerals, vespene, supply, maxSupply, isBuilding } = useGameStore();
@@ -285,11 +285,11 @@ export function CommandCard() {
       // Research commands
       const store = useGameStore.getState();
       const researchMap: Record<string, string[]> = {
-        engineering_bay: ['infantry_weapons_1', 'infantry_armor_1'],
-        armory: ['vehicle_weapons_1', 'vehicle_armor_1'],
-        barracks: ['stim_pack', 'combat_shield'],
-        factory: ['siege_tech'],
-        starport: ['cloaking_field'],
+        tech_center: ['infantry_weapons_1', 'infantry_armor_1'],
+        arsenal: ['vehicle_weapons_1', 'vehicle_armor_1'],
+        infantry_bay: ['combat_stim', 'combat_shield'],
+        forge: ['bombardment_systems'],
+        hangar: ['cloaking_field'],
       };
 
       const availableResearch = researchMap[building.buildingId] || [];

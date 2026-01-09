@@ -42,19 +42,19 @@ const DAMAGE_MULTIPLIERS: Record<DamageType, Record<ArmorType, number>> = {
 // Target priority - higher = more likely to be attacked first
 const TARGET_PRIORITY: Record<string, number> = {
   // High threat combat units
-  siege_tank: 100,
-  battlecruiser: 95,
-  thor: 90,
-  banshee: 85,
-  ghost: 80,
-  marauder: 70,
-  marine: 60,
-  hellion: 55,
-  viking: 50,
-  medivac: 45, // Support units have moderate priority
-  reaper: 40,
+  devastator: 100,
+  dreadnought: 95,
+  colossus: 90,
+  specter: 85,
+  operative: 80,
+  breacher: 70,
+  trooper: 60,
+  scorcher: 55,
+  valkyrie: 50,
+  lifter: 45, // Support units have moderate priority
+  vanguard: 40,
   // Workers are low priority
-  scv: 10,
+  constructor: 10,
   probe: 10,
   drone: 10,
 };
@@ -281,14 +281,14 @@ export class CombatSystem extends System {
       if (health.isDead() && buildingComp.state !== 'destroyed') {
         buildingComp.state = 'destroyed';
 
-        // If this is a refinery, restore the vespene geyser visibility
-        if (buildingComp.buildingId === 'refinery') {
+        // If this is an extractor, restore the vespene geyser visibility
+        if (buildingComp.buildingId === 'extractor') {
           const resources = this.world.getEntitiesWith('Resource', 'Transform');
           for (const resourceEntity of resources) {
             const resource = resourceEntity.get<Resource>('Resource');
-            if (resource && resource.refineryEntityId === building.id) {
-              resource.refineryEntityId = null;
-              console.log(`CombatSystem: Refinery destroyed, vespene geyser ${resourceEntity.id} restored`);
+            if (resource && resource.extractorEntityId === building.id) {
+              resource.extractorEntityId = null;
+              console.log(`CombatSystem: Extractor destroyed, vespene geyser ${resourceEntity.id} restored`);
               break;
             }
           }

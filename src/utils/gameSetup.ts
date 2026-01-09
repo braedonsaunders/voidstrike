@@ -98,8 +98,8 @@ function registerAIPlayer(
 function spawnBase(game: Game, playerId: string, x: number, y: number, isHumanPlayer: boolean = false): void {
   const world = game.world;
 
-  // Spawn Command Center
-  const ccDef = BUILDING_DEFINITIONS['command_center'];
+  // Spawn Headquarters
+  const ccDef = BUILDING_DEFINITIONS['headquarters'];
   const cc = world.createEntity();
   cc.add(new Transform(x, y, 0))
     .add(new Building({ ...ccDef, buildTime: 0 })) // Instant build
@@ -123,9 +123,9 @@ function spawnBase(game: Game, playerId: string, x: number, y: number, isHumanPl
     store.addMaxSupply(ccDef.supplyProvided || 11);
   }
 
-  // Spawn initial workers around the command center
-  // Command center is 5x5 (from -2.5 to +2.5), spawn workers outside at offset ~4
-  const scvDef = UNIT_DEFINITIONS['scv'];
+  // Spawn initial workers around the headquarters
+  // Headquarters is 5x5 (from -2.5 to +2.5), spawn workers outside at offset ~4
+  const scvDef = UNIT_DEFINITIONS['fabricator'];
   const workerPositions = [
     { x: -4, y: -4 },
     { x: 0, y: -4 },

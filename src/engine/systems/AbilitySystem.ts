@@ -115,12 +115,12 @@ export class AbilitySystem extends System {
 
     // Execute based on ability type
     switch (definition.id) {
-      case 'stim_pack':
-        this.executeStimPack(casterEntity);
+      case 'combat_stim':
+        this.executeCombatStim(casterEntity);
         break;
 
-      case 'siege_mode':
-        this.executeSiegeMode(casterEntity);
+      case 'bombardment_mode':
+        this.executeBombardmentMode(casterEntity);
         break;
 
       case 'snipe':
@@ -156,9 +156,9 @@ export class AbilitySystem extends System {
         }
         break;
 
-      case 'yamato_cannon':
+      case 'nova_cannon':
         if (command.targetEntityId) {
-          this.executeYamatoCannon(casterEntity, command.targetEntityId, definition.damage || 240);
+          this.executeNovaCannon(casterEntity, command.targetEntityId, definition.damage || 240);
         }
         break;
 
@@ -200,7 +200,7 @@ export class AbilitySystem extends System {
     }
   }
 
-  private executeStimPack(caster: { id: number }): void {
+  private executeCombatStim(caster: { id: number }): void {
     const entity = this.world.getEntity(caster.id);
     if (!entity) return;
 
@@ -215,7 +215,7 @@ export class AbilitySystem extends System {
       // Store the buff info (would need a buff system for proper implementation)
       this.game.eventBus.emit('buff:apply', {
         entityId: caster.id,
-        buffId: 'stim_pack',
+        buffId: 'combat_stim',
         duration: 10,
         effects: {
           attackSpeedBonus: 0.5,
@@ -227,7 +227,7 @@ export class AbilitySystem extends System {
       const transform = entity?.get<Transform>('Transform');
       if (transform) {
         this.game.eventBus.emit('ability:major', {
-          abilityName: 'STIM PACK',
+          abilityName: 'COMBAT STIM',
           position: { x: transform.x, y: transform.y },
           color: 0xff4444,
         });
@@ -235,7 +235,7 @@ export class AbilitySystem extends System {
     }
   }
 
-  private executeSiegeMode(caster: { id: number }): void {
+  private executeBombardmentMode(caster: { id: number }): void {
     const entity = this.world.getEntity(caster.id);
     if (!entity) return;
 
@@ -372,7 +372,7 @@ export class AbilitySystem extends System {
     }, 10000); // 10 second delay
   }
 
-  private executeYamatoCannon(
+  private executeNovaCannon(
     caster: { id: number },
     targetId: number,
     damage: number
@@ -384,10 +384,10 @@ export class AbilitySystem extends System {
     const casterTransform = casterEntity?.get<Transform>('Transform');
     const targetTransform = target.get<Transform>('Transform');
 
-    // Yamato Cannon has a 3 second channel time
+    // Nova Cannon has a 3 second channel time
     this.game.eventBus.emit('ability:channeling', {
       casterId: caster.id,
-      abilityId: 'yamato_cannon',
+      abilityId: 'nova_cannon',
       duration: 3,
       targetId,
     });
@@ -395,7 +395,7 @@ export class AbilitySystem extends System {
     // Emit major ability for Phaser overlay (channeling starts)
     if (casterTransform) {
       this.game.eventBus.emit('ability:major', {
-        abilityName: 'YAMATO CANNON',
+        abilityName: 'NOVA CANNON',
         position: { x: casterTransform.x, y: casterTransform.y },
         color: 0xffaa00,
       });
@@ -413,7 +413,7 @@ export class AbilitySystem extends System {
       targetHealth.takeDamage(damage, this.game.getGameTime());
 
       this.game.eventBus.emit('ability:effect', {
-        type: 'yamato_cannon',
+        type: 'nova_cannon',
         casterId: caster.id,
         targetId,
         damage,
@@ -423,7 +423,7 @@ export class AbilitySystem extends System {
       // Impact effect for Phaser overlay
       if (targetTransform) {
         this.game.eventBus.emit('ability:major', {
-          abilityName: 'YAMATO IMPACT',
+          abilityName: 'NOVA IMPACT',
           position: { x: targetTransform.x, y: targetTransform.y },
           color: 0xff6600,
         });
@@ -483,16 +483,16 @@ export class AbilitySystem extends System {
     if (!target) return;
 
     const building = target.get<Building>('Building');
-    if (!building || building.buildingId !== 'supply_depot') return;
+    if (!building || building.buildingId !== 'supply_cache') return;
 
-    // Instantly complete the supply depot construction
+    // Instantly complete the supply cache construction
     if (building.state === 'constructing') {
       building.buildProgress = 1.0;
       building.state = 'complete';
 
       this.game.eventBus.emit('building:complete', {
         entityId: targetId,
-        buildingType: 'supply_depot',
+        buildingType: 'supply_cache',
         instant: true,
       });
     }
@@ -566,7 +566,7 @@ export class AbilitySystem extends System {
       const transform = healer.get<Transform>('Transform')!;
       const selectable = healer.get<Selectable>('Selectable')!;
 
-      // Auto-heal for medivacs
+      // Auto-heal for lifters
       if (unit.canHeal && ability.canUseAbility('heal')) {
         const target = this.findHealTarget(healer.id, transform, selectable.playerId, unit.healRange);
         if (target !== null) {

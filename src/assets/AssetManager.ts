@@ -5,15 +5,15 @@
  *
  * USAGE:
  * 1. Procedural Assets (built-in):
- *    const mesh = AssetManager.getUnitMesh('scv');
- *    const building = AssetManager.getBuildingMesh('command_center');
+ *    const mesh = AssetManager.getUnitMesh('fabricator');
+ *    const building = AssetManager.getBuildingMesh('headquarters');
  *
  * 2. Custom GLTF/GLB Models:
  *    await AssetManager.loadGLTF('/models/custom_unit.glb', 'my_unit');
  *    const mesh = AssetManager.getCustomMesh('my_unit');
  *
  * 3. Replace default assets:
- *    AssetManager.registerCustomAsset('scv', myCustomSCVMesh);
+ *    AssetManager.registerCustomAsset('fabricator', myCustomFabricatorMesh);
  */
 
 import * as THREE from 'three';
@@ -30,23 +30,23 @@ export const REFERENCE_FRAME = {
 
   // Unit scale: 1 unit = ~1 meter
   UNIT_HEIGHTS: {
-    scv: 1.0,
-    marine: 1.2,
-    marauder: 1.5,
+    fabricator: 1.0,
+    trooper: 1.2,
+    breacher: 1.5,
     medic: 1.2,
-    siege_tank: 1.2,
-    viking: 1.8,
-    banshee: 1.5,
-    battlecruiser: 2.5,
+    devastator: 1.2,
+    valkyrie: 1.8,
+    specter: 1.5,
+    dreadnought: 2.5,
   } as Record<string, number>,
 
   BUILDING_HEIGHTS: {
-    command_center: 4.5,
-    supply_depot: 1.8, // Match procedural version height
-    barracks: 2.8,
-    refinery: 2.5, // Proper refinery height
-    factory: 2.8,
-    starport: 2.2,
+    headquarters: 4.5,
+    supply_cache: 1.8, // Match procedural version height
+    infantry_bay: 2.8,
+    extractor: 2.5, // Proper extractor height
+    forge: 2.8,
+    hangar: 2.2,
   } as Record<string, number>,
 
   // Anchor mode: units/buildings have bottom at y=0 (minY anchor)
@@ -552,12 +552,12 @@ export class AssetManager {
    */
   static preloadCommonAssets(): void {
     // Units
-    ['scv', 'marine', 'marauder', 'medic', 'siege_tank', 'viking', 'banshee'].forEach(id => {
+    ['fabricator', 'trooper', 'breacher', 'medic', 'devastator', 'valkyrie', 'specter'].forEach(id => {
       this.getUnitMesh(id);
     });
 
     // Buildings
-    ['command_center', 'supply_depot', 'barracks', 'refinery', 'factory', 'starport'].forEach(id => {
+    ['headquarters', 'supply_cache', 'infantry_bay', 'extractor', 'forge', 'hangar'].forEach(id => {
       this.getBuildingMesh(id);
     });
 
@@ -588,42 +588,42 @@ export class AssetManager {
     // Define custom model paths - add more as models are created
     const customModels: Array<{ path: string; assetId: string; targetHeight: number }> = [
       // Units
-      { path: '/models/units/scv.glb', assetId: 'scv', targetHeight: REFERENCE_FRAME.UNIT_HEIGHTS.scv || 1.0 },
-      { path: '/models/units/marine.glb', assetId: 'marine', targetHeight: REFERENCE_FRAME.UNIT_HEIGHTS.marine || 1.2 },
-      { path: '/models/units/marauder.glb', assetId: 'marauder', targetHeight: REFERENCE_FRAME.UNIT_HEIGHTS.marauder || 1.5 },
-      { path: '/models/units/reaper.glb', assetId: 'reaper', targetHeight: 1.3 },
-      { path: '/models/units/ghost.glb', assetId: 'ghost', targetHeight: 1.3 },
-      { path: '/models/units/hellion.glb', assetId: 'hellion', targetHeight: 1.0 },
-      { path: '/models/units/siege_tank.glb', assetId: 'siege_tank', targetHeight: REFERENCE_FRAME.UNIT_HEIGHTS.siege_tank || 1.2 },
-      { path: '/models/units/thor.glb', assetId: 'thor', targetHeight: 2.5 },
-      { path: '/models/units/viking.glb', assetId: 'viking', targetHeight: REFERENCE_FRAME.UNIT_HEIGHTS.viking || 1.8 },
-      { path: '/models/units/medivac.glb', assetId: 'medivac', targetHeight: 1.5 },
-      { path: '/models/units/banshee.glb', assetId: 'banshee', targetHeight: REFERENCE_FRAME.UNIT_HEIGHTS.banshee || 1.5 },
-      { path: '/models/units/raven.glb', assetId: 'raven', targetHeight: 1.5 },
-      { path: '/models/units/battlecruiser.glb', assetId: 'battlecruiser', targetHeight: REFERENCE_FRAME.UNIT_HEIGHTS.battlecruiser || 2.5 },
+      { path: '/models/units/fabricator.glb', assetId: 'fabricator', targetHeight: REFERENCE_FRAME.UNIT_HEIGHTS.fabricator || 1.0 },
+      { path: '/models/units/trooper.glb', assetId: 'trooper', targetHeight: REFERENCE_FRAME.UNIT_HEIGHTS.trooper || 1.2 },
+      { path: '/models/units/breacher.glb', assetId: 'breacher', targetHeight: REFERENCE_FRAME.UNIT_HEIGHTS.breacher || 1.5 },
+      { path: '/models/units/vanguard.glb', assetId: 'vanguard', targetHeight: 1.3 },
+      { path: '/models/units/operative.glb', assetId: 'operative', targetHeight: 1.3 },
+      { path: '/models/units/scorcher.glb', assetId: 'scorcher', targetHeight: 1.0 },
+      { path: '/models/units/devastator.glb', assetId: 'devastator', targetHeight: REFERENCE_FRAME.UNIT_HEIGHTS.devastator || 1.2 },
+      { path: '/models/units/colossus.glb', assetId: 'colossus', targetHeight: 2.5 },
+      { path: '/models/units/valkyrie.glb', assetId: 'valkyrie', targetHeight: REFERENCE_FRAME.UNIT_HEIGHTS.valkyrie || 1.8 },
+      { path: '/models/units/lifter.glb', assetId: 'lifter', targetHeight: 1.5 },
+      { path: '/models/units/specter.glb', assetId: 'specter', targetHeight: REFERENCE_FRAME.UNIT_HEIGHTS.specter || 1.5 },
+      { path: '/models/units/overseer.glb', assetId: 'overseer', targetHeight: 1.5 },
+      { path: '/models/units/dreadnought.glb', assetId: 'dreadnought', targetHeight: REFERENCE_FRAME.UNIT_HEIGHTS.dreadnought || 2.5 },
       // Buildings
-      { path: '/models/buildings/command_center.glb', assetId: 'command_center', targetHeight: REFERENCE_FRAME.BUILDING_HEIGHTS.command_center || 4.5 },
-      { path: '/models/buildings/orbital_command.glb', assetId: 'orbital_command', targetHeight: 4.5 },
-      { path: '/models/buildings/planetary_fortress.glb', assetId: 'planetary_fortress', targetHeight: 4.5 },
-      { path: '/models/buildings/supply_depot.glb', assetId: 'supply_depot', targetHeight: REFERENCE_FRAME.BUILDING_HEIGHTS.supply_depot || 1.8 },
-      { path: '/models/buildings/refinery.glb', assetId: 'refinery', targetHeight: REFERENCE_FRAME.BUILDING_HEIGHTS.refinery || 2.0 },
-      { path: '/models/buildings/barracks.glb', assetId: 'barracks', targetHeight: REFERENCE_FRAME.BUILDING_HEIGHTS.barracks || 2.8 },
-      { path: '/models/buildings/engineering_bay.glb', assetId: 'engineering_bay', targetHeight: 2.5 },
-      { path: '/models/buildings/bunker.glb', assetId: 'bunker', targetHeight: 2.0 },
-      { path: '/models/buildings/factory.glb', assetId: 'factory', targetHeight: REFERENCE_FRAME.BUILDING_HEIGHTS.factory || 2.8 },
-      { path: '/models/buildings/armory.glb', assetId: 'armory', targetHeight: 2.8 },
-      { path: '/models/buildings/starport.glb', assetId: 'starport', targetHeight: REFERENCE_FRAME.BUILDING_HEIGHTS.starport || 2.2 },
-      { path: '/models/buildings/fusion_core.glb', assetId: 'fusion_core', targetHeight: 3.0 },
-      { path: '/models/buildings/ghost_academy.glb', assetId: 'ghost_academy', targetHeight: 2.8 },
-      { path: '/models/buildings/sensor_tower.glb', assetId: 'sensor_tower', targetHeight: 4.0 },
-      { path: '/models/buildings/missile_turret.glb', assetId: 'missile_turret', targetHeight: 2.5 },
-      { path: '/models/buildings/tech_lab.glb', assetId: 'tech_lab', targetHeight: 2.0 },
-      { path: '/models/buildings/reactor.glb', assetId: 'reactor', targetHeight: 2.0 },
+      { path: '/models/buildings/headquarters.glb', assetId: 'headquarters', targetHeight: REFERENCE_FRAME.BUILDING_HEIGHTS.headquarters || 4.5 },
+      { path: '/models/buildings/orbital_station.glb', assetId: 'orbital_station', targetHeight: 4.5 },
+      { path: '/models/buildings/bastion.glb', assetId: 'bastion', targetHeight: 4.5 },
+      { path: '/models/buildings/supply_cache.glb', assetId: 'supply_cache', targetHeight: REFERENCE_FRAME.BUILDING_HEIGHTS.supply_cache || 1.8 },
+      { path: '/models/buildings/extractor.glb', assetId: 'extractor', targetHeight: REFERENCE_FRAME.BUILDING_HEIGHTS.extractor || 2.0 },
+      { path: '/models/buildings/infantry_bay.glb', assetId: 'infantry_bay', targetHeight: REFERENCE_FRAME.BUILDING_HEIGHTS.infantry_bay || 2.8 },
+      { path: '/models/buildings/tech_center.glb', assetId: 'tech_center', targetHeight: 2.5 },
+      { path: '/models/buildings/garrison.glb', assetId: 'garrison', targetHeight: 2.0 },
+      { path: '/models/buildings/forge.glb', assetId: 'forge', targetHeight: REFERENCE_FRAME.BUILDING_HEIGHTS.forge || 2.8 },
+      { path: '/models/buildings/arsenal.glb', assetId: 'arsenal', targetHeight: 2.8 },
+      { path: '/models/buildings/hangar.glb', assetId: 'hangar', targetHeight: REFERENCE_FRAME.BUILDING_HEIGHTS.hangar || 2.2 },
+      { path: '/models/buildings/power_core.glb', assetId: 'power_core', targetHeight: 3.0 },
+      { path: '/models/buildings/ops_center.glb', assetId: 'ops_center', targetHeight: 2.8 },
+      { path: '/models/buildings/radar_array.glb', assetId: 'radar_array', targetHeight: 4.0 },
+      { path: '/models/buildings/defense_turret.glb', assetId: 'defense_turret', targetHeight: 2.5 },
+      { path: '/models/buildings/research_module.glb', assetId: 'research_module', targetHeight: 2.0 },
+      { path: '/models/buildings/production_module.glb', assetId: 'production_module', targetHeight: 2.0 },
       // Resources
       { path: '/models/resources/minerals.glb', assetId: 'minerals', targetHeight: 2.0 },
       { path: '/models/resources/vespene.glb', assetId: 'vespene', targetHeight: 2.0 },
       // Decorations
-      { path: '/models/decorations/xelnaga_tower.glb', assetId: 'xelnaga_tower', targetHeight: 7.0 },
+      { path: '/models/decorations/alien_tower.glb', assetId: 'alien_tower', targetHeight: 7.0 },
       { path: '/models/decorations/rocks_large.glb', assetId: 'rocks_large', targetHeight: 2.0 },
       { path: '/models/decorations/rocks_small.glb', assetId: 'rocks_small', targetHeight: 1.0 },
       { path: '/models/decorations/rock_single.glb', assetId: 'rock_single', targetHeight: 1.0 },
@@ -687,22 +687,22 @@ export class ProceduralGenerator {
    */
   static generateUnit(unitId: string): THREE.Group {
     switch (unitId) {
-      case 'scv':
-        return this.generateSCV();
-      case 'marine':
-        return this.generateMarine();
-      case 'marauder':
-        return this.generateMarauder();
+      case 'fabricator':
+        return this.generateFabricator();
+      case 'trooper':
+        return this.generateTrooper();
+      case 'breacher':
+        return this.generateBreacher();
       case 'medic':
         return this.generateMedic();
-      case 'siege_tank':
-        return this.generateSiegeTank();
-      case 'viking':
-        return this.generateViking();
-      case 'banshee':
-        return this.generateBanshee();
-      case 'battlecruiser':
-        return this.generateBattlecruiser();
+      case 'devastator':
+        return this.generateDevastator();
+      case 'valkyrie':
+        return this.generateValkyrie();
+      case 'specter':
+        return this.generateSpecter();
+      case 'dreadnought':
+        return this.generateDreadnought();
       default:
         return this.generateGenericUnit();
     }
@@ -713,26 +713,26 @@ export class ProceduralGenerator {
    */
   static generateBuilding(buildingId: string): THREE.Group {
     switch (buildingId) {
-      case 'command_center':
-        return this.generateCommandCenter();
-      case 'supply_depot':
-        return this.generateSupplyDepot();
-      case 'barracks':
-        return this.generateBarracks();
-      case 'refinery':
-        return this.generateRefinery();
-      case 'factory':
-        return this.generateFactory();
-      case 'starport':
-        return this.generateStarport();
-      case 'engineering_bay':
-        return this.generateEngineeringBay();
-      case 'armory':
-        return this.generateArmory();
-      case 'bunker':
-        return this.generateBunker();
-      case 'missile_turret':
-        return this.generateMissileTurret();
+      case 'headquarters':
+        return this.generateHeadquarters();
+      case 'supply_cache':
+        return this.generateSupplyCache();
+      case 'infantry_bay':
+        return this.generateInfantryBay();
+      case 'extractor':
+        return this.generateExtractor();
+      case 'forge':
+        return this.generateForge();
+      case 'hangar':
+        return this.generateHangar();
+      case 'tech_center':
+        return this.generateTechCenter();
+      case 'arsenal':
+        return this.generateArsenal();
+      case 'garrison':
+        return this.generateGarrison();
+      case 'defense_turret':
+        return this.generateDefenseTurret();
       default:
         return this.generateGenericBuilding();
     }
@@ -827,7 +827,7 @@ export class ProceduralGenerator {
 
   // === UNIT GENERATORS ===
 
-  private static generateSCV(): THREE.Group {
+  private static generateFabricator(): THREE.Group {
     const group = new THREE.Group();
 
     // Body
@@ -881,7 +881,7 @@ export class ProceduralGenerator {
     return group;
   }
 
-  private static generateMarine(): THREE.Group {
+  private static generateTrooper(): THREE.Group {
     const group = new THREE.Group();
 
     // Body/torso
@@ -952,7 +952,7 @@ export class ProceduralGenerator {
     return group;
   }
 
-  private static generateMarauder(): THREE.Group {
+  private static generateBreacher(): THREE.Group {
     const group = new THREE.Group();
 
     // Larger, bulkier body
@@ -1001,7 +1001,7 @@ export class ProceduralGenerator {
   }
 
   private static generateMedic(): THREE.Group {
-    const group = this.generateMarine();
+    const group = this.generateTrooper();
 
     // Change color to white/red medical scheme
     group.traverse((child) => {
@@ -1037,7 +1037,7 @@ export class ProceduralGenerator {
     return group;
   }
 
-  private static generateSiegeTank(): THREE.Group {
+  private static generateDevastator(): THREE.Group {
     const group = new THREE.Group();
 
     // Tank body
@@ -1078,7 +1078,7 @@ export class ProceduralGenerator {
     return group;
   }
 
-  private static generateViking(): THREE.Group {
+  private static generateValkyrie(): THREE.Group {
     const group = new THREE.Group();
 
     // Main body
@@ -1133,7 +1133,7 @@ export class ProceduralGenerator {
     return group;
   }
 
-  private static generateBanshee(): THREE.Group {
+  private static generateSpecter(): THREE.Group {
     const group = new THREE.Group();
 
     // Sleek body
@@ -1177,7 +1177,7 @@ export class ProceduralGenerator {
     return group;
   }
 
-  private static generateBattlecruiser(): THREE.Group {
+  private static generateDreadnought(): THREE.Group {
     const group = new THREE.Group();
 
     // Main hull
@@ -1205,7 +1205,7 @@ export class ProceduralGenerator {
       group.add(engine);
     }
 
-    // Yamato cannon
+    // Nova cannon
     const cannonGeo = new THREE.CylinderGeometry(0.15, 0.2, 1.0, 8);
     const cannon = new THREE.Mesh(cannonGeo, Materials.dominion.accent);
     cannon.userData.isAccent = true;
@@ -1231,7 +1231,7 @@ export class ProceduralGenerator {
 
   // === BUILDING GENERATORS ===
 
-  private static generateCommandCenter(): THREE.Group {
+  private static generateHeadquarters(): THREE.Group {
     const group = new THREE.Group();
 
     // Main structure
@@ -1274,7 +1274,7 @@ export class ProceduralGenerator {
     return group;
   }
 
-  private static generateSupplyDepot(): THREE.Group {
+  private static generateSupplyCache(): THREE.Group {
     const group = new THREE.Group();
 
     // Main container
@@ -1306,7 +1306,7 @@ export class ProceduralGenerator {
     return group;
   }
 
-  private static generateBarracks(): THREE.Group {
+  private static generateInfantryBay(): THREE.Group {
     const group = new THREE.Group();
 
     // Main building
@@ -1348,7 +1348,7 @@ export class ProceduralGenerator {
     return group;
   }
 
-  private static generateRefinery(): THREE.Group {
+  private static generateExtractor(): THREE.Group {
     const group = new THREE.Group();
 
     // Main structure
@@ -1390,7 +1390,7 @@ export class ProceduralGenerator {
     return group;
   }
 
-  private static generateFactory(): THREE.Group {
+  private static generateForge(): THREE.Group {
     const group = new THREE.Group();
 
     // Main building
@@ -1428,7 +1428,7 @@ export class ProceduralGenerator {
     return group;
   }
 
-  private static generateStarport(): THREE.Group {
+  private static generateHangar(): THREE.Group {
     const group = new THREE.Group();
 
     // Main hangar
@@ -1470,7 +1470,7 @@ export class ProceduralGenerator {
     return group;
   }
 
-  private static generateEngineeringBay(): THREE.Group {
+  private static generateTechCenter(): THREE.Group {
     const group = new THREE.Group();
 
     const mainGeo = new THREE.BoxGeometry(3, 2, 3);
@@ -1490,7 +1490,7 @@ export class ProceduralGenerator {
     return group;
   }
 
-  private static generateArmory(): THREE.Group {
+  private static generateArsenal(): THREE.Group {
     const group = new THREE.Group();
 
     const mainGeo = new THREE.BoxGeometry(3.5, 2.5, 3.5);
@@ -1508,7 +1508,7 @@ export class ProceduralGenerator {
     return group;
   }
 
-  private static generateBunker(): THREE.Group {
+  private static generateGarrison(): THREE.Group {
     const group = new THREE.Group();
 
     // Low fortified structure
@@ -1531,7 +1531,7 @@ export class ProceduralGenerator {
     return group;
   }
 
-  private static generateMissileTurret(): THREE.Group {
+  private static generateDefenseTurret(): THREE.Group {
     const group = new THREE.Group();
 
     // Base

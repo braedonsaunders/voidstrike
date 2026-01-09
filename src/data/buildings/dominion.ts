@@ -1,9 +1,9 @@
 import { BuildingDefinition } from '@/engine/components/Building';
 
 export const BUILDING_DEFINITIONS: Record<string, BuildingDefinition> = {
-  command_center: {
-    id: 'command_center',
-    name: 'Command Center',
+  headquarters: {
+    id: 'headquarters',
+    name: 'Headquarters',
     faction: 'dominion',
     mineralCost: 400,
     vespeneCost: 0,
@@ -14,18 +14,18 @@ export const BUILDING_DEFINITIONS: Record<string, BuildingDefinition> = {
     armor: 1,
     sightRange: 11,
     supplyProvided: 11,
-    canProduce: ['scv'],
+    canProduce: ['fabricator'],
     canResearch: [],
     canLiftOff: true,
-    canUpgradeTo: ['orbital_command', 'planetary_fortress'],
+    canUpgradeTo: ['orbital_station', 'bastion'],
   },
 
-  // Orbital Command - upgraded from Command Center
-  orbital_command: {
-    id: 'orbital_command',
-    name: 'Orbital Command',
+  // Orbital Station - upgraded from Headquarters
+  orbital_station: {
+    id: 'orbital_station',
+    name: 'Orbital Station',
     faction: 'dominion',
-    mineralCost: 150, // Upgrade cost from CC
+    mineralCost: 150, // Upgrade cost from HQ
     vespeneCost: 0,
     buildTime: 25,
     width: 5,
@@ -34,15 +34,15 @@ export const BUILDING_DEFINITIONS: Record<string, BuildingDefinition> = {
     armor: 1,
     sightRange: 11,
     supplyProvided: 11,
-    canProduce: ['scv'],
-    canResearch: ['scanner_sweep', 'mule', 'supply_drop'],
+    canProduce: ['fabricator'],
+    canResearch: ['sensor_sweep', 'drone', 'supply_drop'],
     canLiftOff: true,
   },
 
-  // Planetary Fortress - upgraded from Command Center
-  planetary_fortress: {
-    id: 'planetary_fortress',
-    name: 'Planetary Fortress',
+  // Bastion - upgraded from Headquarters
+  bastion: {
+    id: 'bastion',
+    name: 'Bastion',
     faction: 'dominion',
     mineralCost: 150,
     vespeneCost: 150,
@@ -53,7 +53,7 @@ export const BUILDING_DEFINITIONS: Record<string, BuildingDefinition> = {
     armor: 3,
     sightRange: 11,
     supplyProvided: 11,
-    canProduce: ['scv'],
+    canProduce: ['fabricator'],
     canResearch: [],
     canLiftOff: false, // Can't lift off once upgraded
     attackRange: 6,
@@ -61,9 +61,9 @@ export const BUILDING_DEFINITIONS: Record<string, BuildingDefinition> = {
     attackSpeed: 0.71,
   },
 
-  supply_depot: {
-    id: 'supply_depot',
-    name: 'Supply Depot',
+  supply_cache: {
+    id: 'supply_cache',
+    name: 'Supply Cache',
     faction: 'dominion',
     mineralCost: 100,
     vespeneCost: 0,
@@ -79,9 +79,9 @@ export const BUILDING_DEFINITIONS: Record<string, BuildingDefinition> = {
     canLower: true, // Can lower to let units pass
   },
 
-  refinery: {
-    id: 'refinery',
-    name: 'Refinery',
+  extractor: {
+    id: 'extractor',
+    name: 'Extractor',
     faction: 'dominion',
     mineralCost: 75,
     vespeneCost: 0,
@@ -95,9 +95,9 @@ export const BUILDING_DEFINITIONS: Record<string, BuildingDefinition> = {
     canResearch: [],
   },
 
-  barracks: {
-    id: 'barracks',
-    name: 'Barracks',
+  infantry_bay: {
+    id: 'infantry_bay',
+    name: 'Infantry Bay',
     faction: 'dominion',
     mineralCost: 150,
     vespeneCost: 0,
@@ -107,16 +107,16 @@ export const BUILDING_DEFINITIONS: Record<string, BuildingDefinition> = {
     maxHealth: 1000,
     armor: 1,
     sightRange: 9,
-    canProduce: ['marine', 'reaper'], // Basic units without tech lab
+    canProduce: ['trooper', 'vanguard'], // Basic units without tech lab
     canResearch: [],
-    requirements: ['supply_depot'],
+    requirements: ['supply_cache'],
     canLiftOff: true,
     canHaveAddon: true,
   },
 
-  engineering_bay: {
-    id: 'engineering_bay',
-    name: 'Engineering Bay',
+  tech_center: {
+    id: 'tech_center',
+    name: 'Tech Center',
     faction: 'dominion',
     mineralCost: 125,
     vespeneCost: 0,
@@ -128,12 +128,12 @@ export const BUILDING_DEFINITIONS: Record<string, BuildingDefinition> = {
     sightRange: 9,
     canProduce: [],
     canResearch: ['infantry_weapons_1', 'infantry_armor_1', 'infantry_weapons_2', 'infantry_armor_2', 'infantry_weapons_3', 'infantry_armor_3'],
-    requirements: ['supply_depot'],
+    requirements: ['supply_cache'],
   },
 
-  bunker: {
-    id: 'bunker',
-    name: 'Bunker',
+  garrison: {
+    id: 'garrison',
+    name: 'Garrison',
     faction: 'dominion',
     mineralCost: 100,
     vespeneCost: 0,
@@ -145,14 +145,14 @@ export const BUILDING_DEFINITIONS: Record<string, BuildingDefinition> = {
     sightRange: 11,
     canProduce: [],
     canResearch: [],
-    requirements: ['barracks'],
+    requirements: ['infantry_bay'],
     isBunker: true,
     bunkerCapacity: 4,
   },
 
-  factory: {
-    id: 'factory',
-    name: 'Factory',
+  forge: {
+    id: 'forge',
+    name: 'Forge',
     faction: 'dominion',
     mineralCost: 150,
     vespeneCost: 100,
@@ -162,16 +162,16 @@ export const BUILDING_DEFINITIONS: Record<string, BuildingDefinition> = {
     maxHealth: 1250,
     armor: 1,
     sightRange: 9,
-    canProduce: ['hellion'], // Basic units without tech lab
+    canProduce: ['scorcher'], // Basic units without tech lab
     canResearch: [],
-    requirements: ['barracks'],
+    requirements: ['infantry_bay'],
     canLiftOff: true,
     canHaveAddon: true,
   },
 
-  armory: {
-    id: 'armory',
-    name: 'Armory',
+  arsenal: {
+    id: 'arsenal',
+    name: 'Arsenal',
     faction: 'dominion',
     mineralCost: 150,
     vespeneCost: 100,
@@ -183,12 +183,12 @@ export const BUILDING_DEFINITIONS: Record<string, BuildingDefinition> = {
     sightRange: 9,
     canProduce: [],
     canResearch: ['vehicle_weapons_1', 'vehicle_armor_1', 'ship_weapons_1', 'ship_armor_1', 'vehicle_weapons_2', 'vehicle_armor_2', 'ship_weapons_2', 'ship_armor_2', 'vehicle_weapons_3', 'vehicle_armor_3', 'ship_weapons_3', 'ship_armor_3'],
-    requirements: ['factory'],
+    requirements: ['forge'],
   },
 
-  starport: {
-    id: 'starport',
-    name: 'Starport',
+  hangar: {
+    id: 'hangar',
+    name: 'Hangar',
     faction: 'dominion',
     mineralCost: 150,
     vespeneCost: 100,
@@ -198,16 +198,16 @@ export const BUILDING_DEFINITIONS: Record<string, BuildingDefinition> = {
     maxHealth: 1300,
     armor: 1,
     sightRange: 9,
-    canProduce: ['medivac', 'viking'], // Basic units without tech lab
+    canProduce: ['lifter', 'valkyrie'], // Basic units without tech lab
     canResearch: [],
-    requirements: ['factory'],
+    requirements: ['forge'],
     canLiftOff: true,
     canHaveAddon: true,
   },
 
-  fusion_core: {
-    id: 'fusion_core',
-    name: 'Fusion Core',
+  power_core: {
+    id: 'power_core',
+    name: 'Power Core',
     faction: 'dominion',
     mineralCost: 150,
     vespeneCost: 150,
@@ -218,13 +218,13 @@ export const BUILDING_DEFINITIONS: Record<string, BuildingDefinition> = {
     armor: 1,
     sightRange: 9,
     canProduce: [],
-    canResearch: ['yamato_cannon', 'battlecruiser_weapon_refit'],
-    requirements: ['starport'],
+    canResearch: ['nova_cannon', 'dreadnought_weapon_refit'],
+    requirements: ['hangar'],
   },
 
-  ghost_academy: {
-    id: 'ghost_academy',
-    name: 'Ghost Academy',
+  ops_center: {
+    id: 'ops_center',
+    name: 'Ops Center',
     faction: 'dominion',
     mineralCost: 150,
     vespeneCost: 50,
@@ -235,13 +235,13 @@ export const BUILDING_DEFINITIONS: Record<string, BuildingDefinition> = {
     armor: 1,
     sightRange: 9,
     canProduce: [],
-    canResearch: ['personal_cloaking', 'moebius_reactor'],
-    requirements: ['barracks'],
+    canResearch: ['stealth_systems', 'enhanced_reactor'],
+    requirements: ['infantry_bay'],
   },
 
-  sensor_tower: {
-    id: 'sensor_tower',
-    name: 'Sensor Tower',
+  radar_array: {
+    id: 'radar_array',
+    name: 'Radar Array',
     faction: 'dominion',
     mineralCost: 125,
     vespeneCost: 100,
@@ -253,14 +253,14 @@ export const BUILDING_DEFINITIONS: Record<string, BuildingDefinition> = {
     sightRange: 30,
     canProduce: [],
     canResearch: [],
-    requirements: ['engineering_bay'],
+    requirements: ['tech_center'],
     isDetector: true,
     detectionRange: 30,
   },
 
-  missile_turret: {
-    id: 'missile_turret',
-    name: 'Missile Turret',
+  defense_turret: {
+    id: 'defense_turret',
+    name: 'Defense Turret',
     faction: 'dominion',
     mineralCost: 100,
     vespeneCost: 0,
@@ -272,7 +272,7 @@ export const BUILDING_DEFINITIONS: Record<string, BuildingDefinition> = {
     sightRange: 11,
     canProduce: [],
     canResearch: [],
-    requirements: ['engineering_bay'],
+    requirements: ['tech_center'],
     isDetector: true,
     detectionRange: 11,
     attackRange: 7,
@@ -280,10 +280,10 @@ export const BUILDING_DEFINITIONS: Record<string, BuildingDefinition> = {
     attackSpeed: 0.61,
   },
 
-  // Tech Lab addon
-  tech_lab: {
-    id: 'tech_lab',
-    name: 'Tech Lab',
+  // Research Module addon
+  research_module: {
+    id: 'research_module',
+    name: 'Research Module',
     faction: 'dominion',
     mineralCost: 50,
     vespeneCost: 25,
@@ -294,15 +294,15 @@ export const BUILDING_DEFINITIONS: Record<string, BuildingDefinition> = {
     armor: 1,
     sightRange: 9,
     canProduce: [],
-    canResearch: ['stim_pack', 'combat_shield', 'concussive_shells', 'infernal_pre_igniter', 'siege_tech', 'drilling_claws', 'cloaking_field', 'caduceus_reactor'],
+    canResearch: ['combat_stim', 'combat_shield', 'concussive_shells', 'thermal_igniter', 'bombardment_systems', 'drilling_claws', 'cloaking_field', 'medical_reactor'],
     isAddon: true,
-    addonFor: ['barracks', 'factory', 'starport'],
+    addonFor: ['infantry_bay', 'forge', 'hangar'],
   },
 
-  // Reactor addon
-  reactor: {
-    id: 'reactor',
-    name: 'Reactor',
+  // Production Module addon
+  production_module: {
+    id: 'production_module',
+    name: 'Production Module',
     faction: 'dominion',
     mineralCost: 50,
     vespeneCost: 50,
@@ -315,22 +315,22 @@ export const BUILDING_DEFINITIONS: Record<string, BuildingDefinition> = {
     canProduce: [],
     canResearch: [],
     isAddon: true,
-    addonFor: ['barracks', 'factory', 'starport'],
+    addonFor: ['infantry_bay', 'forge', 'hangar'],
   },
 };
 
-// Units that require Tech Lab
-export const TECH_LAB_UNITS: Record<string, string[]> = {
-  barracks: ['marauder', 'ghost'],
-  factory: ['siege_tank', 'thor'],
-  starport: ['raven', 'banshee', 'battlecruiser'],
+// Units that require Research Module
+export const RESEARCH_MODULE_UNITS: Record<string, string[]> = {
+  infantry_bay: ['breacher', 'operative'],
+  forge: ['devastator', 'colossus'],
+  hangar: ['overseer', 'specter', 'dreadnought'],
 };
 
-// Units that can be double-produced with Reactor
-export const REACTOR_UNITS: Record<string, string[]> = {
-  barracks: ['marine', 'reaper'],
-  factory: ['hellion'],
-  starport: ['medivac', 'viking'],
+// Units that can be double-produced with Production Module
+export const PRODUCTION_MODULE_UNITS: Record<string, string[]> = {
+  infantry_bay: ['trooper', 'vanguard'],
+  forge: ['scorcher'],
+  hangar: ['lifter', 'valkyrie'],
 };
 
 export const DOMINION_BUILDINGS = Object.values(BUILDING_DEFINITIONS);

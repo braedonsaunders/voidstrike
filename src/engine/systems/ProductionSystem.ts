@@ -299,18 +299,18 @@ export class ProductionSystem extends System {
         health.current = Math.round(newDef.maxHealth * healthPercent);
       }
 
-      // Add abilities for Orbital Command
-      if (newBuildingType === 'orbital_command') {
+      // Add abilities for Orbital Station
+      if (newBuildingType === 'orbital_station') {
         const orbitalAbilities = [
           DOMINION_ABILITIES.mule,
           DOMINION_ABILITIES.scanner_sweep,
           DOMINION_ABILITIES.supply_drop,
         ];
-        // Orbital Command starts with 50 energy, max 200, regen 0.5625/sec
+        // Orbital Station starts with 50 energy, max 200, regen 0.5625/sec
         const abilityComponent = new Ability(200, 0.5625, orbitalAbilities);
         abilityComponent.energy = 50; // Start with 50 energy
         entity.add(abilityComponent);
-        console.log(`[ProductionSystem] Added abilities to Orbital Command ${buildingId}`);
+        console.log(`[ProductionSystem] Added abilities to Orbital Station ${buildingId}`);
       }
     }
 

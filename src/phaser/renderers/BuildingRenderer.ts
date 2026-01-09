@@ -180,9 +180,9 @@ export class BuildingRenderer {
     graphics.clear();
 
     const def = BUILDING_DEFINITIONS[building.buildingId];
-    const isResourceBuilding = building.buildingId === 'refinery';
-    const isDefense = building.buildingId.includes('turret') || building.buildingId === 'bunker';
-    const isMain = building.buildingId.includes('command') || building.buildingId === 'orbital_command';
+    const isResourceBuilding = building.buildingId === 'extractor';
+    const isDefense = building.buildingId.includes('turret') || building.buildingId === 'garrison';
+    const isMain = building.buildingId === 'headquarters' || building.buildingId === 'orbital_station' || building.buildingId === 'bastion';
 
     // Draw based on building type
     if (isMain) {
@@ -210,19 +210,19 @@ export class BuildingRenderer {
       graphics.fillStyle(0x444444, 1);
       graphics.fillRect(-4, -height / 2, 8, height / 2);
     } else if (isResourceBuilding) {
-      // Refineries - cylindrical
+      // Extractors - cylindrical
       graphics.fillStyle(0x444444, 0.9);
       graphics.fillEllipse(0, 0, width, height * 0.6);
       graphics.fillStyle(color, 0.7);
       graphics.fillEllipse(0, -height / 4, width * 0.8, height * 0.3);
-    } else if (building.buildingId === 'supply_depot') {
-      // Supply depot - small square
+    } else if (building.buildingId === 'supply_cache') {
+      // Supply cache - small square
       graphics.fillStyle(color, 0.9);
       graphics.fillRect(-width / 2, -height / 2, width, height);
       // Crate detail
       graphics.lineStyle(2, 0x333333, 0.8);
       graphics.strokeRect(-width / 2 + 4, -height / 2 + 4, width - 8, height - 8);
-    } else if (building.buildingId === 'barracks' || building.buildingId === 'factory' || building.buildingId === 'starport') {
+    } else if (building.buildingId === 'infantry_bay' || building.buildingId === 'forge' || building.buildingId === 'hangar') {
       // Production buildings - rectangular with details
       graphics.fillStyle(color, 0.9);
       graphics.fillRect(-width / 2, -height / 2, width, height);

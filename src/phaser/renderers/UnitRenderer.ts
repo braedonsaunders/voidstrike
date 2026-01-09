@@ -213,7 +213,7 @@ export class UnitRenderer {
       // Mining tool
       graphics.fillStyle(0xffaa00, 0.9);
       graphics.fillRect(size.width / 2 - 2, -2, 6, 4);
-    } else if (unit.unitId === 'siege_tank') {
+    } else if (unit.unitId === 'devastator') {
       // Tank - rectangular with turret
       graphics.fillStyle(color, 0.9);
       graphics.fillRect(-size.width / 2, -size.height / 4, size.width, size.height / 2);
@@ -223,8 +223,8 @@ export class UnitRenderer {
       // Barrel
       graphics.fillStyle(0x444444, 1);
       graphics.fillRect(0, -2, size.width / 2, 4);
-    } else if (unit.unitId === 'thor') {
-      // Thor - large mech
+    } else if (unit.unitId === 'colossus') {
+      // Colossus - large mech
       graphics.fillStyle(color, 0.9);
       graphics.fillRect(-size.width / 2, -size.height / 2, size.width, size.height);
       // Arms

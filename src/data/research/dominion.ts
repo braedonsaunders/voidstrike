@@ -22,18 +22,18 @@ export interface ResearchDefinition {
 
 // Unit type mappings
 export const UNIT_TYPES: Record<string, 'infantry' | 'vehicle' | 'ship'> = {
-  scv: 'infantry',
-  marine: 'infantry',
-  marauder: 'infantry',
-  reaper: 'infantry',
-  ghost: 'infantry',
-  hellion: 'vehicle',
-  siege_tank: 'vehicle',
-  thor: 'vehicle',
-  medivac: 'ship',
-  viking: 'ship',
-  banshee: 'ship',
-  battlecruiser: 'ship',
+  fabricator: 'infantry',
+  trooper: 'infantry',
+  breacher: 'infantry',
+  vanguard: 'infantry',
+  operative: 'infantry',
+  scorcher: 'vehicle',
+  devastator: 'vehicle',
+  colossus: 'vehicle',
+  lifter: 'ship',
+  valkyrie: 'ship',
+  specter: 'ship',
+  dreadnought: 'ship',
 };
 
 export const RESEARCH_DEFINITIONS: Record<string, ResearchDefinition> = {
@@ -67,7 +67,7 @@ export const RESEARCH_DEFINITIONS: Record<string, ResearchDefinition> = {
     researchTime: 136,
     level: 2,
     nextLevel: 'infantry_weapons_3',
-    requirements: ['infantry_weapons_1', 'armory'],
+    requirements: ['infantry_weapons_1', 'arsenal'],
     effects: [
       {
         type: 'damage_bonus',
@@ -86,7 +86,7 @@ export const RESEARCH_DEFINITIONS: Record<string, ResearchDefinition> = {
     vespeneCost: 250,
     researchTime: 157,
     level: 3,
-    requirements: ['infantry_weapons_2', 'armory'],
+    requirements: ['infantry_weapons_2', 'arsenal'],
     effects: [
       {
         type: 'damage_bonus',
@@ -126,7 +126,7 @@ export const RESEARCH_DEFINITIONS: Record<string, ResearchDefinition> = {
     researchTime: 136,
     level: 2,
     nextLevel: 'infantry_armor_3',
-    requirements: ['infantry_armor_1', 'armory'],
+    requirements: ['infantry_armor_1', 'arsenal'],
     effects: [
       {
         type: 'armor_bonus',
@@ -145,7 +145,7 @@ export const RESEARCH_DEFINITIONS: Record<string, ResearchDefinition> = {
     vespeneCost: 250,
     researchTime: 157,
     level: 3,
-    requirements: ['infantry_armor_2', 'armory'],
+    requirements: ['infantry_armor_2', 'arsenal'],
     effects: [
       {
         type: 'armor_bonus',
@@ -391,11 +391,11 @@ export const RESEARCH_DEFINITIONS: Record<string, ResearchDefinition> = {
     ],
   },
 
-  // Special Upgrades (Fusion Core)
-  yamato_cannon: {
-    id: 'yamato_cannon',
-    name: 'Yamato Cannon',
-    description: 'Unlocks the devastating Yamato Cannon ability for Battlecruisers.',
+  // Special Upgrades (Power Core)
+  nova_cannon: {
+    id: 'nova_cannon',
+    name: 'Nova Cannon',
+    description: 'Unlocks the devastating Nova Cannon ability for Dreadnoughts.',
     faction: 'dominion',
     mineralCost: 150,
     vespeneCost: 150,
@@ -404,15 +404,15 @@ export const RESEARCH_DEFINITIONS: Record<string, ResearchDefinition> = {
       {
         type: 'ability_unlock',
         value: 1,
-        targets: ['battlecruiser'],
+        targets: ['dreadnought'],
       },
     ],
   },
 
-  battlecruiser_weapon_refit: {
-    id: 'battlecruiser_weapon_refit',
+  dreadnought_weapon_refit: {
+    id: 'dreadnought_weapon_refit',
     name: 'Weapon Refit',
-    description: 'Increases Battlecruiser attack speed by 25%.',
+    description: 'Increases Dreadnought attack speed by 25%.',
     faction: 'dominion',
     mineralCost: 150,
     vespeneCost: 150,
@@ -421,16 +421,16 @@ export const RESEARCH_DEFINITIONS: Record<string, ResearchDefinition> = {
       {
         type: 'attack_speed',
         value: 0.25,
-        targets: ['battlecruiser'],
+        targets: ['dreadnought'],
       },
     ],
   },
 
-  // Stim Pack (Tech Lab)
-  stim_pack: {
-    id: 'stim_pack',
-    name: 'Stimpack',
-    description: 'Unlocks the Stimpack ability for Marines and Marauders.',
+  // Combat Stim (Research Module)
+  combat_stim: {
+    id: 'combat_stim',
+    name: 'Combat Stim',
+    description: 'Unlocks the Combat Stim ability for Troopers and Breachers.',
     faction: 'dominion',
     mineralCost: 100,
     vespeneCost: 100,
@@ -439,16 +439,16 @@ export const RESEARCH_DEFINITIONS: Record<string, ResearchDefinition> = {
       {
         type: 'ability_unlock',
         value: 1,
-        targets: ['marine', 'marauder'],
+        targets: ['trooper', 'breacher'],
       },
     ],
   },
 
-  // Combat Shield (Tech Lab)
+  // Combat Shield (Research Module)
   combat_shield: {
     id: 'combat_shield',
     name: 'Combat Shield',
-    description: 'Increases Marine health by 10.',
+    description: 'Increases Trooper health by 10.',
     faction: 'dominion',
     mineralCost: 100,
     vespeneCost: 100,
@@ -457,16 +457,16 @@ export const RESEARCH_DEFINITIONS: Record<string, ResearchDefinition> = {
       {
         type: 'health_bonus',
         value: 10,
-        targets: ['marine'],
+        targets: ['trooper'],
       },
     ],
   },
 
-  // Concussive Shells (Tech Lab)
+  // Concussive Shells (Research Module)
   concussive_shells: {
     id: 'concussive_shells',
     name: 'Concussive Shells',
-    description: 'Marauder attacks slow enemy movement speed.',
+    description: 'Breacher attacks slow enemy movement speed.',
     faction: 'dominion',
     mineralCost: 50,
     vespeneCost: 50,
@@ -475,16 +475,16 @@ export const RESEARCH_DEFINITIONS: Record<string, ResearchDefinition> = {
       {
         type: 'ability_unlock',
         value: 1,
-        targets: ['marauder'],
+        targets: ['breacher'],
       },
     ],
   },
 
-  // Siege Tech (Tech Lab - Factory)
-  siege_tech: {
-    id: 'siege_tech',
-    name: 'Siege Tech',
-    description: 'Enables Siege Tanks to transform into Siege Mode.',
+  // Bombardment Systems (Research Module - Forge)
+  bombardment_systems: {
+    id: 'bombardment_systems',
+    name: 'Bombardment Systems',
+    description: 'Enables Devastators to transform into Bombardment Mode.',
     faction: 'dominion',
     mineralCost: 100,
     vespeneCost: 100,
@@ -493,16 +493,16 @@ export const RESEARCH_DEFINITIONS: Record<string, ResearchDefinition> = {
       {
         type: 'ability_unlock',
         value: 1,
-        targets: ['siege_tank'],
+        targets: ['devastator'],
       },
     ],
   },
 
-  // Drilling Claws (Tech Lab - Factory)
+  // Drilling Claws (Research Module - Forge)
   drilling_claws: {
     id: 'drilling_claws',
     name: 'Drilling Claws',
-    description: 'Hellions transform into Hellbats faster.',
+    description: 'Scorchers transform into Inferno mode faster.',
     faction: 'dominion',
     mineralCost: 75,
     vespeneCost: 75,
@@ -511,16 +511,16 @@ export const RESEARCH_DEFINITIONS: Record<string, ResearchDefinition> = {
       {
         type: 'ability_unlock',
         value: 1,
-        targets: ['hellion'],
+        targets: ['scorcher'],
       },
     ],
   },
 
-  // Cloaking Field (Tech Lab - Starport)
+  // Cloaking Field (Research Module - Hangar)
   cloaking_field: {
     id: 'cloaking_field',
     name: 'Cloaking Field',
-    description: 'Enables Banshees to cloak.',
+    description: 'Enables Specters to cloak.',
     faction: 'dominion',
     mineralCost: 100,
     vespeneCost: 100,
@@ -529,16 +529,16 @@ export const RESEARCH_DEFINITIONS: Record<string, ResearchDefinition> = {
       {
         type: 'ability_unlock',
         value: 1,
-        targets: ['banshee'],
+        targets: ['specter'],
       },
     ],
   },
 
-  // Caduceus Reactor (Tech Lab - Starport)
-  caduceus_reactor: {
-    id: 'caduceus_reactor',
-    name: 'Caduceus Reactor',
-    description: 'Increases Medivac energy regeneration by 100%.',
+  // Medical Reactor (Research Module - Hangar)
+  medical_reactor: {
+    id: 'medical_reactor',
+    name: 'Medical Reactor',
+    description: 'Increases Lifter energy regeneration by 100%.',
     faction: 'dominion',
     mineralCost: 100,
     vespeneCost: 100,
@@ -547,15 +547,15 @@ export const RESEARCH_DEFINITIONS: Record<string, ResearchDefinition> = {
       {
         type: 'ability_unlock',
         value: 1,
-        targets: ['medivac'],
+        targets: ['lifter'],
       },
     ],
   },
 
-  // Hi-Sec Auto Tracking (Engineering Bay)
-  hi_sec_auto_tracking: {
-    id: 'hi_sec_auto_tracking',
-    name: 'Hi-Sec Auto Tracking',
+  // Auto Tracking (Tech Center)
+  auto_tracking: {
+    id: 'auto_tracking',
+    name: 'Auto Tracking',
     description: 'Increases the attack range of structures by 1.',
     faction: 'dominion',
     mineralCost: 100,
@@ -565,15 +565,15 @@ export const RESEARCH_DEFINITIONS: Record<string, ResearchDefinition> = {
       {
         type: 'range_bonus',
         value: 1,
-        targets: ['missile_turret', 'bunker'],
+        targets: ['defense_turret', 'garrison'],
       },
     ],
   },
 
-  // Building Armor (Engineering Bay)
+  // Building Armor (Tech Center)
   building_armor: {
     id: 'building_armor',
-    name: 'Neosteel Armor',
+    name: 'Reinforced Plating',
     description: 'Increases the armor of all structures by 2.',
     faction: 'dominion',
     mineralCost: 150,
@@ -587,6 +587,60 @@ export const RESEARCH_DEFINITIONS: Record<string, ResearchDefinition> = {
       },
     ],
   },
+
+  // Thermal Igniter (Research Module - Forge)
+  thermal_igniter: {
+    id: 'thermal_igniter',
+    name: 'Thermal Igniter',
+    description: 'Increases Scorcher attack damage by 5.',
+    faction: 'dominion',
+    mineralCost: 100,
+    vespeneCost: 100,
+    researchTime: 79,
+    effects: [
+      {
+        type: 'damage_bonus',
+        value: 5,
+        targets: ['scorcher'],
+      },
+    ],
+  },
+
+  // Stealth Systems (Ops Center)
+  stealth_systems: {
+    id: 'stealth_systems',
+    name: 'Stealth Systems',
+    description: 'Enables Operatives to cloak.',
+    faction: 'dominion',
+    mineralCost: 150,
+    vespeneCost: 150,
+    researchTime: 100,
+    effects: [
+      {
+        type: 'ability_unlock',
+        value: 1,
+        targets: ['operative'],
+      },
+    ],
+  },
+
+  // Enhanced Reactor (Ops Center)
+  enhanced_reactor: {
+    id: 'enhanced_reactor',
+    name: 'Enhanced Reactor',
+    description: 'Increases Operative starting energy by 25.',
+    faction: 'dominion',
+    mineralCost: 100,
+    vespeneCost: 100,
+    researchTime: 79,
+    effects: [
+      {
+        type: 'ability_unlock',
+        value: 1,
+        targets: ['operative'],
+      },
+    ],
+  },
 };
 
 export const DOMINION_RESEARCH = Object.values(RESEARCH_DEFINITIONS);
@@ -594,12 +648,13 @@ export const DOMINION_RESEARCH = Object.values(RESEARCH_DEFINITIONS);
 // Helper function to get all available research for a building
 export function getAvailableResearch(buildingId: string): ResearchDefinition[] {
   const building = {
-    engineering_bay: ['infantry_weapons_1', 'infantry_armor_1', 'hi_sec_auto_tracking', 'building_armor'],
-    armory: ['vehicle_weapons_1', 'vehicle_armor_1', 'ship_weapons_1', 'ship_armor_1'],
-    fusion_core: ['yamato_cannon', 'battlecruiser_weapon_refit'],
-    barracks_tech_lab: ['stim_pack', 'combat_shield', 'concussive_shells'],
-    factory_tech_lab: ['siege_tech', 'drilling_claws'],
-    starport_tech_lab: ['cloaking_field', 'caduceus_reactor'],
+    tech_center: ['infantry_weapons_1', 'infantry_armor_1', 'auto_tracking', 'building_armor'],
+    arsenal: ['vehicle_weapons_1', 'vehicle_armor_1', 'ship_weapons_1', 'ship_armor_1'],
+    power_core: ['nova_cannon', 'dreadnought_weapon_refit'],
+    infantry_bay_research_module: ['combat_stim', 'combat_shield', 'concussive_shells'],
+    forge_research_module: ['bombardment_systems', 'drilling_claws', 'thermal_igniter'],
+    hangar_research_module: ['cloaking_field', 'medical_reactor'],
+    ops_center: ['stealth_systems', 'enhanced_reactor'],
   }[buildingId];
 
   if (!building) return [];

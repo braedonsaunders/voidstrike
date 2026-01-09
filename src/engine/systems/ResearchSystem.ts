@@ -159,21 +159,21 @@ export class ResearchSystem extends System {
   private canBuildingResearch(buildingId: string, upgradeId: string): boolean {
     // Map building types to what they can research
     const researchMap: Record<string, string[]> = {
-      engineering_bay: [
+      tech_center: [
         'infantry_weapons_1', 'infantry_weapons_2', 'infantry_weapons_3',
         'infantry_armor_1', 'infantry_armor_2', 'infantry_armor_3',
         'hi_sec_auto_tracking', 'building_armor',
       ],
-      armory: [
+      arsenal: [
         'vehicle_weapons_1', 'vehicle_weapons_2', 'vehicle_weapons_3',
         'vehicle_armor_1', 'vehicle_armor_2', 'vehicle_armor_3',
         'ship_weapons_1', 'ship_weapons_2', 'ship_weapons_3',
         'ship_armor_1', 'ship_armor_2', 'ship_armor_3',
       ],
-      fusion_core: ['yamato_cannon', 'battlecruiser_weapon_refit'],
-      barracks: ['stim_pack', 'combat_shield', 'concussive_shells'],
-      factory: ['siege_tech', 'drilling_claws'],
-      starport: ['cloaking_field', 'caduceus_reactor'],
+      power_core: ['nova_cannon', 'dreadnought_weapon_refit'],
+      infantry_bay: ['combat_stim', 'combat_shield', 'concussive_shells'],
+      forge: ['bombardment_systems', 'drilling_claws'],
+      hangar: ['cloaking_field', 'medical_reactor'],
     };
 
     const available = researchMap[buildingId];

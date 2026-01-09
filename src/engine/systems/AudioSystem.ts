@@ -190,11 +190,11 @@ export class AudioSystem extends System {
           // Choose weapon sound based on unit type
           let weaponSound = 'attack_rifle';
           if (unit) {
-            if (unit.unitId === 'siege_tank') {
+            if (unit.unitId === 'devastator') {
               weaponSound = 'attack_cannon';
-            } else if (unit.unitId === 'hellion') {
+            } else if (unit.unitId === 'scorcher') {
               weaponSound = 'attack_flamethrower';
-            } else if (unit.unitId === 'marauder') {
+            } else if (unit.unitId === 'breacher') {
               weaponSound = 'attack_cannon';
             }
           }
@@ -230,7 +230,7 @@ export class AudioSystem extends System {
 
       // Choose death sound based on unit type
       let deathSound = 'unit_death';
-      if (data.unitId === 'siege_tank' || data.unitId === 'hellion') {
+      if (data.unitId === 'devastator' || data.unitId === 'scorcher') {
         deathSound = 'unit_death_mech';
         AudioManager.playAt('explosion_small', pos);
       }
