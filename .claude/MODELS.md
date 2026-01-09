@@ -957,19 +957,19 @@ simple elongated shape, game-ready low poly
 
 ## MAP DECORATIONS
 
-### 1. Xel'Naga Watch Tower
-**File:** `/public/models/decorations/xelnaga_tower.glb`
+### 1. Alien Watch Tower
+**File:** `/public/models/decorations/alien_tower.glb`
 
 **Dimensions:** 2m × 2m footprint, 7m tall
 
-**Description:** Ancient alien watch tower that grants vision when a unit stands nearby. Iconic Xel'Naga design with glowing energy core.
+**Description:** Ancient alien watch tower that grants vision when a unit stands nearby. Mysterious alien design with glowing energy core.
 
 **AI Prompt:**
 ```
-Ancient alien Xel'Naga watch tower, tall ornate pillar structure,
+Ancient alien watch tower, tall ornate pillar structure,
 golden-bronze metallic surface with intricate alien engravings,
 glowing blue energy orb beacon at the top, crystalline elements,
-mysterious protoss-style architecture, triangular geometric patterns,
+mysterious alien architecture, triangular geometric patterns,
 hovering energy rings around the beacon, ancient artifact aesthetic,
 weathered but advanced technology, game-ready low poly,
 PBR materials with emissive glow, white background

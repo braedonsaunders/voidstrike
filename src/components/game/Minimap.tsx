@@ -123,8 +123,9 @@ export function Minimap() {
         ctx.stroke();
       }
 
-      // Draw fog of war (simplified)
-      if (game.visionSystem) {
+      // Draw fog of war (simplified) - skip in spectator mode
+      const isSpectatorMode = useGameSetupStore.getState().isSpectator();
+      if (game.visionSystem && !isSpectatorMode) {
         ctx.fillStyle = 'rgba(0, 0, 0, 0.5)';
         const visionScale = 4; // Check every 4 units
         for (let mapX = 0; mapX < mapWidth; mapX += visionScale) {
@@ -169,9 +170,9 @@ export function Minimap() {
         if (!transform || !building || !selectable || !health) continue;
         if (health.isDead()) continue;
 
-        // Skip enemy buildings that are not visible due to fog of war
+        // Skip enemy buildings that are not visible due to fog of war (unless spectator)
         const fogOfWarEnabled = useGameSetupStore.getState().fogOfWar;
-        if (selectable.playerId !== 'player1' && fogOfWarEnabled && game.visionSystem) {
+        if (selectable.playerId !== 'player1' && fogOfWarEnabled && game.visionSystem && !isSpectatorMode) {
           if (!game.visionSystem.isVisible('player1', transform.x, transform.y)) {
             continue;
           }
@@ -205,9 +206,9 @@ export function Minimap() {
         if (!transform || !selectable || !health) continue;
         if (health.isDead()) continue;
 
-        // Skip enemy units that are not visible due to fog of war
+        // Skip enemy units that are not visible due to fog of war (unless spectator)
         const fogEnabled = useGameSetupStore.getState().fogOfWar;
-        if (selectable.playerId !== 'player1' && fogEnabled && game.visionSystem) {
+        if (selectable.playerId !== 'player1' && fogEnabled && game.visionSystem && !isSpectatorMode) {
           if (!game.visionSystem.isVisible('player1', transform.x, transform.y)) {
             continue;
           }
