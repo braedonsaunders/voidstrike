@@ -42,10 +42,10 @@ export const REFERENCE_FRAME = {
 
   BUILDING_HEIGHTS: {
     command_center: 4.5,
-    supply_depot: 0.9, // Half size for supply depot
+    supply_depot: 1.8, // Match procedural version height
     barracks: 2.8,
-    refinery: 2.0, // Half size for refinery
-    factory: 3.5, // Increased size
+    refinery: 2.5, // Proper refinery height
+    factory: 2.8,
     starport: 2.2,
   } as Record<string, number>,
 
