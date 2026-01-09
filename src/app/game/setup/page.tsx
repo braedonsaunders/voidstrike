@@ -275,12 +275,34 @@ export default function GameSetupPage() {
   // Count active players
   const activePlayerCount = playerSlots.filter(s => s.type === 'human' || s.type === 'ai').length;
 
+  // Handle map selection - trim excess players if new map has fewer slots
+  const handleMapSelect = (mapId: string) => {
+    const newMap = ALL_MAPS[mapId];
+    if (newMap) {
+      setSelectedMap(mapId);
+      // Remove excess players if map has fewer max players
+      // Get fresh state from store each iteration
+      let currentSlots = useGameSetupStore.getState().playerSlots;
+      while (currentSlots.length > newMap.maxPlayers) {
+        const lastSlot = currentSlots[currentSlots.length - 1];
+        if (lastSlot) {
+          removePlayerSlot(lastSlot.id);
+          currentSlots = useGameSetupStore.getState().playerSlots;
+        } else {
+          break;
+        }
+      }
+    }
+  };
+
   const handleStartGame = () => {
     startGame();
     router.push('/game');
   };
 
-  const canAddPlayer = playerSlots.length < 8;
+  // Limit players to map's maxPlayers, and global max of 8
+  const maxPlayersForMap = selectedMap.maxPlayers;
+  const canAddPlayer = playerSlots.length < maxPlayersForMap && playerSlots.length < 8;
   const canRemovePlayer = playerSlots.length > 2;
 
   return (
@@ -311,7 +333,7 @@ export default function GameSetupPage() {
                   key={map.id}
                   map={map}
                   isSelected={selectedMapId === map.id}
-                  onSelect={() => setSelectedMap(map.id)}
+                  onSelect={() => handleMapSelect(map.id)}
                 />
               ))}
             </div>
@@ -328,16 +350,20 @@ export default function GameSetupPage() {
             {/* Players Section */}
             <div className="mt-4">
               <div className="flex items-center justify-between mb-2">
-                <h2 className="font-display text-lg text-white">Players ({activePlayerCount})</h2>
-                {canAddPlayer && (
-                  <button
-                    onClick={addPlayerSlot}
-                    className="text-void-400 hover:text-void-300 text-sm px-2 py-1 rounded border border-void-700
-                               hover:border-void-500 transition-colors"
-                  >
-                    + Add Player
-                  </button>
-                )}
+                <h2 className="font-display text-lg text-white">
+                  Players ({activePlayerCount}/{maxPlayersForMap})
+                </h2>
+                <button
+                  onClick={addPlayerSlot}
+                  disabled={!canAddPlayer}
+                  className={`text-sm px-2 py-1 rounded border transition-colors
+                    ${canAddPlayer
+                      ? 'text-void-400 hover:text-void-300 border-void-700 hover:border-void-500'
+                      : 'text-void-600 border-void-800 cursor-not-allowed opacity-50'
+                    }`}
+                >
+                  + Add Player
+                </button>
               </div>
               <div className="space-y-2">
                 {playerSlots.map((slot, index) => (

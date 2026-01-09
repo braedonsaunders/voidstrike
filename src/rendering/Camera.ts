@@ -195,8 +195,9 @@ export class RTSCamera {
 
     if (dx !== 0 || dz !== 0) {
       // Rotate movement direction based on camera angle
-      const cos = Math.cos(this.currentAngle);
-      const sin = Math.sin(this.currentAngle);
+      // Use negative angle to compensate for camera rotation - movement should be screen-relative
+      const cos = Math.cos(-this.currentAngle);
+      const sin = Math.sin(-this.currentAngle);
       const rotatedX = dx * cos - dz * sin;
       const rotatedZ = dx * sin + dz * cos;
 

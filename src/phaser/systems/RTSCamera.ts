@@ -44,7 +44,9 @@ export class RTSCamera {
     this.camera = scene.cameras.main;
 
     // Set up camera bounds (map dimensions are in grid cells, convert to pixels)
-    this.camera.setBounds(0, 0, mapWidth * CELL_SIZE, mapHeight * CELL_SIZE);
+    // The 5th parameter (centerOn=true) allows camera to center on any point within bounds
+    // Without this, the camera can't show the bottom/right edges of the map
+    this.camera.setBounds(0, 0, mapWidth * CELL_SIZE, mapHeight * CELL_SIZE, true);
 
     // Center on starting position (convert grid to pixels)
     this.camera.centerOn(startX * CELL_SIZE, startY * CELL_SIZE);
