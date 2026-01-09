@@ -28,7 +28,8 @@ export class VisionSystem extends System {
   private mapWidth: number;
   private mapHeight: number;
   private cellSize: number;
-  private players: string[] = ['player1', 'ai'];
+  // Dynamic player registration instead of hardcoded list
+  private knownPlayers: Set<string> = new Set();
 
   // Throttle vision updates for performance - update every N ticks
   private readonly UPDATE_INTERVAL = 3; // Update every 3 ticks instead of every tick
@@ -57,19 +58,26 @@ export class VisionSystem extends System {
       playerVision: new Map(),
       currentlyVisible: new Map(),
     };
+    // Players will be registered dynamically when first encountered
+  }
 
-    // Initialize vision arrays for each player
-    for (const playerId of this.players) {
-      const visionGrid: VisionState[][] = [];
-      for (let y = 0; y < gridHeight; y++) {
-        visionGrid[y] = [];
-        for (let x = 0; x < gridWidth; x++) {
-          visionGrid[y][x] = 'unexplored';
-        }
+  /**
+   * Register a player in the vision system if not already known
+   */
+  private ensurePlayerRegistered(playerId: string): void {
+    if (this.knownPlayers.has(playerId)) return;
+
+    // Create vision grid for this player
+    const visionGrid: VisionState[][] = [];
+    for (let y = 0; y < this.visionMap.height; y++) {
+      visionGrid[y] = [];
+      for (let x = 0; x < this.visionMap.width; x++) {
+        visionGrid[y][x] = 'unexplored';
       }
-      this.visionMap.playerVision.set(playerId, visionGrid);
-      this.visionMap.currentlyVisible.set(playerId, new Set());
     }
+    this.visionMap.playerVision.set(playerId, visionGrid);
+    this.visionMap.currentlyVisible.set(playerId, new Set());
+    this.knownPlayers.add(playerId);
   }
 
   public update(_deltaTime: number): void {
@@ -81,9 +89,12 @@ export class VisionSystem extends System {
     this.tickCounter = 0;
 
     // Clear currently visible cells
-    for (const playerId of this.players) {
-      const currentVisible = this.visionMap.currentlyVisible.get(playerId)!;
-      const visionGrid = this.visionMap.playerVision.get(playerId)!;
+    for (const playerId of this.knownPlayers) {
+      const currentVisible = this.visionMap.currentlyVisible.get(playerId);
+      const visionGrid = this.visionMap.playerVision.get(playerId);
+
+      // Skip if player not properly registered yet
+      if (!currentVisible || !visionGrid) continue;
 
       // Mark previously visible cells as 'explored' (not 'visible')
       for (const key of currentVisible) {
@@ -130,10 +141,11 @@ export class VisionSystem extends System {
   }
 
   private revealArea(playerId: string, worldX: number, worldY: number, range: number): void {
-    const visionGrid = this.visionMap.playerVision.get(playerId);
-    const currentVisible = this.visionMap.currentlyVisible.get(playerId);
+    // Dynamically register player if not known yet
+    this.ensurePlayerRegistered(playerId);
 
-    if (!visionGrid || !currentVisible) return;
+    const visionGrid = this.visionMap.playerVision.get(playerId)!;
+    const currentVisible = this.visionMap.currentlyVisible.get(playerId)!;
 
     const cellX = Math.floor(worldX / this.cellSize);
     const cellY = Math.floor(worldY / this.cellSize);
