@@ -231,6 +231,37 @@ export class BuildingRenderer {
     return true;
   }
 
+  /**
+   * Reset building materials to full opacity (complete state).
+   * Properly handles both single materials and material arrays.
+   */
+  private resetBuildingMaterials(group: THREE.Group): void {
+    group.traverse((child) => {
+      if (child instanceof THREE.Mesh) {
+        this.setMaterialOpacity(child, 1, false);
+      }
+    });
+  }
+
+  /**
+   * Set opacity on a mesh's material(s), handling both single materials and arrays.
+   */
+  private setMaterialOpacity(mesh: THREE.Mesh, opacity: number, transparent: boolean): void {
+    if (Array.isArray(mesh.material)) {
+      for (const mat of mesh.material) {
+        if (mat instanceof THREE.MeshStandardMaterial) {
+          mat.clippingPlanes = [];
+          mat.transparent = transparent;
+          mat.opacity = opacity;
+        }
+      }
+    } else if (mesh.material instanceof THREE.MeshStandardMaterial) {
+      mesh.material.clippingPlanes = [];
+      mesh.material.transparent = transparent;
+      mesh.material.opacity = opacity;
+    }
+  }
+
   public setPlayerId(playerId: string): void {
     this.playerId = playerId;
   }
@@ -290,13 +321,26 @@ export class BuildingRenderer {
 
           instancedBuildingIds.add(entity.id);
 
-          // Hide individual mesh if it exists
+          // Hide individual mesh if it exists and clean up construction state
           const existingMesh = this.buildingMeshes.get(entity.id);
           if (existingMesh) {
             existingMesh.group.visible = false;
             existingMesh.selectionRing.visible = false;
             existingMesh.healthBar.visible = false;
             existingMesh.progressBar.visible = false;
+
+            // CRITICAL: Hide/remove construction effect when switching to instancing
+            if (existingMesh.constructionEffect) {
+              this.scene.remove(existingMesh.constructionEffect);
+              this.disposeGroup(existingMesh.constructionEffect);
+              existingMesh.constructionEffect = null;
+            }
+
+            // Ensure materials are properly reset for when building returns to individual rendering
+            if (!existingMesh.wasComplete) {
+              this.resetBuildingMaterials(existingMesh.group);
+              existingMesh.wasComplete = true;
+            }
           }
           continue; // Skip individual mesh handling
         }
@@ -328,16 +372,7 @@ export class BuildingRenderer {
 
         // If building is already complete, ensure materials are correct immediately
         if (building.isComplete()) {
-          meshData.group.traverse((child) => {
-            if (child instanceof THREE.Mesh) {
-              const mat = child.material as THREE.MeshStandardMaterial;
-              if (mat) {
-                mat.clippingPlanes = [];
-                mat.transparent = false;
-                mat.opacity = 1;
-              }
-            }
-          });
+          this.resetBuildingMaterials(meshData.group);
         }
       }
 
@@ -367,16 +402,7 @@ export class BuildingRenderer {
       if (shouldShowComplete) {
         // Complete/operational building - full opacity, no construction effects
         meshData.group.scale.setScalar(1);
-        meshData.group.traverse((child) => {
-          if (child instanceof THREE.Mesh) {
-            const mat = child.material as THREE.MeshStandardMaterial;
-            if (mat) {
-              mat.clippingPlanes = [];
-              mat.transparent = false;
-              mat.opacity = 1;
-            }
-          }
-        });
+        this.resetBuildingMaterials(meshData.group);
         // Remove construction effect if present
         if (meshData.constructionEffect) {
           this.scene.remove(meshData.constructionEffect);
@@ -389,12 +415,7 @@ export class BuildingRenderer {
         meshData.group.scale.setScalar(1);
         meshData.group.traverse((child) => {
           if (child instanceof THREE.Mesh) {
-            const mat = child.material as THREE.MeshStandardMaterial;
-            if (mat) {
-              mat.clippingPlanes = [];
-              mat.transparent = true;
-              mat.opacity = 0.25;
-            }
+            this.setMaterialOpacity(child, 0.25, true);
           }
         });
         // Hide construction effect while waiting
@@ -410,12 +431,7 @@ export class BuildingRenderer {
         meshData.group.scale.setScalar(1); // Keep scale at 1 to avoid position offset issues
         meshData.group.traverse((child) => {
           if (child instanceof THREE.Mesh) {
-            const mat = child.material as THREE.MeshStandardMaterial;
-            if (mat) {
-              mat.clippingPlanes = [];
-              mat.transparent = true;
-              mat.opacity = opacity;
-            }
+            this.setMaterialOpacity(child, opacity, true);
           }
         });
 
