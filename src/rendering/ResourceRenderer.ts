@@ -112,9 +112,10 @@ export class ResourceRenderer {
       });
 
       // Fallback to procedural geometry if model has no geometry or invalid geometry
-      const vertexCount = geometry?.attributes?.position?.count ?? 0;
-      if (!geometry || vertexCount < 3) {
-        console.log(`[ResourceRenderer] ${resourceType}: Using procedural fallback (geometry ${geometry ? 'has ' + vertexCount + ' vertices' : 'missing'})`);
+      const geomToCheck = geometry as THREE.BufferGeometry | null;
+      const vertexCount = geomToCheck?.attributes?.position?.count ?? 0;
+      if (!geomToCheck || vertexCount < 3) {
+        console.log(`[ResourceRenderer] ${resourceType}: Using procedural fallback (geometry ${geomToCheck ? 'has ' + vertexCount + ' vertices' : 'missing'})`);
         // Fallback: create a simple shape
         if (resourceType === 'minerals') {
           geometry = new THREE.ConeGeometry(0.4, 1.2, 6);
@@ -137,9 +138,9 @@ export class ResourceRenderer {
         }
       }
 
-      // Create instanced mesh
+      // Create instanced mesh (geometry is guaranteed non-null after fallback)
       const instancedMesh = new THREE.InstancedMesh(
-        geometry,
+        geometry!,
         material!,
         MAX_RESOURCES_PER_TYPE
       );
