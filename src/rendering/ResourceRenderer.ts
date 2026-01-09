@@ -150,6 +150,16 @@ export class ResourceRenderer {
 
       this.scene.add(instancedMesh);
 
+      // Clamp values to reasonable ranges to prevent underground rendering or invisible scales
+      if (yOffset < 0) {
+        console.warn(`[ResourceRenderer] ${resourceType}: Negative yOffset ${yOffset.toFixed(2)} clamped to 0`);
+        yOffset = 0;
+      }
+      if (baseScale <= 0 || baseScale > 10) {
+        console.warn(`[ResourceRenderer] ${resourceType}: Invalid baseScale ${baseScale.toFixed(4)} clamped to 1`);
+        baseScale = 1;
+      }
+
       console.log(`[ResourceRenderer] Created instanced group for ${resourceType}: yOffset=${yOffset.toFixed(2)}, baseScale=${baseScale.toFixed(3)}, geometry=${!!geometry}, material=${!!material}`);
 
       group = {
