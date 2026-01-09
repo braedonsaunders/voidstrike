@@ -549,7 +549,7 @@ export class MovementSystem extends System {
     const nearbyBuildingIds = this.world.buildingGrid.queryRadius(
       transform.x,
       transform.y,
-      unit.collisionRadius + 5
+      unit.collisionRadius + 8 // Increased range for large buildings
     );
 
     // Resource drop-off buildings - workers carrying resources skip collision for these
@@ -578,30 +578,32 @@ export class MovementSystem extends System {
         continue;
       }
 
-      // Check if unit is inside building bounds
-      const halfWidth = building.width / 2 + unit.collisionRadius;
-      const halfHeight = building.height / 2 + unit.collisionRadius;
+      // Check if unit is inside building bounds - use tighter collision
+      // Building collision radius = actual building size + small margin
+      const collisionMargin = 0.5; // Small margin to prevent units from touching buildings
+      const halfWidth = building.width / 2 + collisionMargin;
+      const halfHeight = building.height / 2 + collisionMargin;
 
       const dx = transform.x - buildingTransform.x;
       const dy = transform.y - buildingTransform.y;
 
       if (Math.abs(dx) < halfWidth && Math.abs(dy) < halfHeight) {
-        // Unit is inside building - push them out
+        // Unit is inside building - push them out immediately
         // Find the shortest escape direction
-        const escapeLeft = buildingTransform.x - halfWidth - transform.x;
-        const escapeRight = buildingTransform.x + halfWidth - transform.x;
-        const escapeUp = buildingTransform.y - halfHeight - transform.y;
-        const escapeDown = buildingTransform.y + halfHeight - transform.y;
+        const escapeLeft = -(halfWidth + dx);  // Distance to left edge
+        const escapeRight = halfWidth - dx;     // Distance to right edge
+        const escapeUp = -(halfHeight + dy);    // Distance to top edge
+        const escapeDown = halfHeight - dy;     // Distance to bottom edge
 
         // Find minimum absolute escape distance
         const escapeX = Math.abs(escapeLeft) < Math.abs(escapeRight) ? escapeLeft : escapeRight;
         const escapeY = Math.abs(escapeUp) < Math.abs(escapeDown) ? escapeUp : escapeDown;
 
-        // Push in the direction requiring least movement
+        // Push in the direction requiring least movement + extra buffer
         if (Math.abs(escapeX) < Math.abs(escapeY)) {
-          transform.x += escapeX;
+          transform.x += escapeX + (escapeX > 0 ? 0.2 : -0.2);
         } else {
-          transform.y += escapeY;
+          transform.y += escapeY + (escapeY > 0 ? 0.2 : -0.2);
         }
       }
     }
