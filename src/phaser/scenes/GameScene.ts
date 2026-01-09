@@ -14,7 +14,7 @@ import { InputHandler } from '../systems/InputHandler';
 import { useGameStore } from '@/store/gameStore';
 import { useGameSetupStore } from '@/store/gameSetupStore';
 import { spawnInitialEntities } from '@/utils/gameSetup';
-import { DEFAULT_MAP, MapData } from '@/data/maps';
+import { DEFAULT_MAP, MapData, getMapById } from '@/data/maps';
 import { Transform } from '@/engine/components/Transform';
 import { Unit } from '@/engine/components/Unit';
 import { Selectable } from '@/engine/components/Selectable';
@@ -22,7 +22,7 @@ import { Selectable } from '@/engine/components/Selectable';
 export class GameScene extends Phaser.Scene {
   // Core game engine (named differently to avoid conflict with Phaser.Scene.game)
   private gameEngine!: Game;
-  private mapData: MapData = DEFAULT_MAP;
+  private mapData!: MapData;
 
   // Camera system
   private rtsCamera!: RTSCamera;
@@ -59,6 +59,11 @@ export class GameScene extends Phaser.Scene {
   }
 
   create(): void {
+    // Load the selected map from the game setup store
+    const selectedMapId = useGameSetupStore.getState().selectedMapId;
+    this.mapData = getMapById(selectedMapId) || DEFAULT_MAP;
+    console.log(`[GameScene] Loading map: ${this.mapData.name} (${this.mapData.id})`);
+
     // Initialize game engine
     this.gameEngine = Game.getInstance({
       mapWidth: this.mapData.width,
