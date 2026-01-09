@@ -14,7 +14,7 @@ This document lists all 3D models required for VOIDSTRIKE, with AI generation pr
 ### General Specifications
 | Property | Requirement |
 |----------|-------------|
-| Polygon count | 500-5000 triangles (units), 1000-10000 (buildings) |
+| Polygon count | See detailed breakdown below |
 | Scale | 1 unit = 1 meter |
 | Origin | Center-bottom (ground level) |
 | Orientation | Face +X direction (forward) |
@@ -22,11 +22,107 @@ This document lists all 3D models required for VOIDSTRIKE, with AI generation pr
 | Materials | PBR (metallic-roughness workflow) |
 | Textures | Max 1024x1024, prefer 512x512 |
 
+### Polygon Budget
+
+**Units (animated):**
+| Unit Type | Triangle Budget |
+|-----------|----------------|
+| Infantry (Marine, Ghost, Reaper) | 2,000 - 5,000 |
+| Heavy Infantry (Marauder) | 3,000 - 6,000 |
+| Vehicles (Hellion, Siege Tank) | 4,000 - 8,000 |
+| Mechs (Thor) | 6,000 - 10,000 |
+| Aircraft (Viking, Banshee, Medivac) | 4,000 - 8,000 |
+| Capital Ships (Battlecruiser) | 8,000 - 15,000 |
+
+**Buildings (static):**
+| Building Type | Triangle Budget |
+|---------------|----------------|
+| Command Center, Starport | 25,000 - 35,000 |
+| Barracks, Factory | 15,000 - 25,000 |
+| Refinery, Engineering Bay | 10,000 - 20,000 |
+| Supply Depot, Bunker | 5,000 - 10,000 |
+| Addons (Tech Lab, Reactor) | 3,000 - 5,000 |
+| Turrets (Missile Turret) | 3,000 - 6,000 |
+
 ### Color Guidelines
 - **Primary:** Steel blue-gray (#6080a0)
 - **Accent (player color):** Bright blue (#40a0ff) - will be tinted per-player
 - **Lights/Glow:** Cyan (#80c0ff)
 - Mark accent meshes for player color tinting in your 3D software
+
+---
+
+## Animation Requirements
+
+### Required Animations Per Unit
+
+All animated units should have these **three core animations** embedded in the GLB file:
+
+| Animation Name | Alternative Names | Description |
+|----------------|-------------------|-------------|
+| `idle` | `stand`, `idle_pose`, `*idle*`, `*stand*` | Default stationary pose, loops continuously |
+| `walk` | `run`, `move`, `*walk*`, `*run*`, `*move*` | Movement animation, loops while unit is moving |
+| `attack` | `shoot`, `fire`, `*attack*`, `*shoot*` | Combat attack animation, plays when attacking |
+
+**Auto-mapping:** The system automatically maps animation names containing keywords. For example:
+- `marine_idle_standing` → maps to `idle`
+- `scv_walk_cycle` → maps to `walk`
+- `attack_rifle_shoot` → maps to `attack`
+
+### Animation Specifications
+
+| Property | Requirement |
+|----------|-------------|
+| Format | Embedded in GLB (not separate files) |
+| Frame rate | 24-30 FPS |
+| Loop | `idle` and `walk` should loop seamlessly |
+| Duration | `idle`: 2-4 sec, `walk`: 0.5-1 sec cycle, `attack`: 0.5-1.5 sec |
+
+### Unit-Specific Animation Notes
+
+| Unit | idle | walk | attack | Special Notes |
+|------|------|------|--------|---------------|
+| **SCV** | Standing with tools | Walking/hovering | Drill/weld motion | Add `gather` animation for mining if possible |
+| **Marine** | Combat ready stance | Marching walk | Rifle burst fire | |
+| **Marauder** | Heavy stance | Heavy stomping walk | Grenade launch | Slower animations due to bulk |
+| **Reaper** | Light combat stance | Quick agile run | Dual pistol fire | Fast, agile animations |
+| **Ghost** | Stealth ready pose | Stealthy walk | Sniper shot | Slow, deliberate movements |
+| **Hellion** | Engine idle | Wheel rolling | Flame burst | Vehicle - wheels should turn in walk |
+| **Siege Tank** | Tank idle | Treads moving | Cannon fire | Add `siege` for siege mode if possible |
+| **Thor** | Heavy mech idle | Heavy stomping | Arm cannon barrage | Very heavy/slow movements |
+| **Medivac** | Hovering idle | Flying forward | N/A (no attack) | Add `heal` animation if possible |
+| **Viking** | Flying hover | Flying forward | Missile launch | Add `transform` animation if possible |
+| **Banshee** | Stealth hover | Flying forward | Rocket barrage | |
+| **Battlecruiser** | Massive hover | Slow forward flight | Turret fire | Add `yamato` for Yamato Cannon |
+| **Raven** | Drone hover | Flying movement | N/A (no attack) | Support unit, no attack animation needed |
+
+### Optional Bonus Animations
+
+These are not required but enhance the experience:
+
+| Animation | Used For | Units |
+|-----------|----------|-------|
+| `death` | Death sequence | All units |
+| `gather` | Mining/gathering | SCV |
+| `build` | Construction | SCV |
+| `heal` | Healing others | Medivac |
+| `siege` | Siege mode pose | Siege Tank |
+| `transform` | Mode transformation | Viking, Hellion, Siege Tank |
+| `yamato` | Yamato Cannon | Battlecruiser |
+| `stim` | Stim Pack effect | Marine, Marauder |
+| `cloak` | Cloaking effect | Ghost, Banshee |
+
+### Example Animation Setup (Blender)
+
+```
+1. Create armature with bones for unit
+2. Create 3 actions minimum:
+   - "idle" - 60-120 frames, looping
+   - "walk" - 20-30 frames, looping
+   - "attack" - 15-40 frames, single play
+3. Push actions to NLA tracks
+4. Export as GLB with "Include > Animations" checked
+```
 
 ---
 
