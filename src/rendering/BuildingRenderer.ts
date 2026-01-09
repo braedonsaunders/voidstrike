@@ -264,11 +264,11 @@ export class BuildingRenderer {
         }
       } else {
         // Construction in progress (state === 'constructing')
-        // Use opacity-only animation to avoid position issues from scaling
+        // Simple opacity-only animation - no particles to avoid cleanup issues
         const progress = building.buildProgress;
         const opacity = 0.3 + progress * 0.7; // Opacity from 30% to 100%
 
-        meshData.group.scale.setScalar(1); // Keep scale at 1 to avoid position offset issues
+        meshData.group.scale.setScalar(1);
         meshData.group.traverse((child) => {
           if (child instanceof THREE.Mesh) {
             const mat = child.material as THREE.MeshStandardMaterial;
@@ -279,17 +279,13 @@ export class BuildingRenderer {
             }
           }
         });
+      }
 
-        // Create/update construction effect (dust and sparks)
-        if (!meshData.constructionEffect) {
-          meshData.constructionEffect = this.createConstructionEffect(building.width, building.height, meshData.buildingHeight);
-          this.scene.add(meshData.constructionEffect);
-        }
-
-        // Position construction effect at base of building
-        meshData.constructionEffect.visible = true;
-        meshData.constructionEffect.position.set(transform.x, terrainHeight + 0.1, transform.y);
-        this.updateConstructionEffect(meshData.constructionEffect, dt, building.width, building.height);
+      // Always clean up construction effects (they're disabled for now)
+      if (meshData.constructionEffect) {
+        this.scene.remove(meshData.constructionEffect);
+        this.disposeGroup(meshData.constructionEffect);
+        meshData.constructionEffect = null;
       }
 
       // Update selection ring - larger multiplier for better visibility
