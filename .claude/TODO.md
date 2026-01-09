@@ -77,6 +77,9 @@
 - [x] **Minimap fog of war** - Enemy units/buildings no longer visible through fog of war
 - [x] **3D model integration** - AssetManager wired to load decoration models (trees, rocks, Xel'Naga tower)
 
+### Building System Fixes
+- [x] **Building construction completion bug** - Buildings would stay translucent, construction particles wouldn't disappear, buildings could resize incorrectly. Fixed material array handling and construction effect cleanup when switching to instanced rendering.
+
 ### UI Improvements
 - [x] **Options menu** - Replaced Menu button with dropdown (Controls, Tech Tree, Exit to Menu)
 - [x] **Increased building avoidance** - Units now properly avoid walking through buildings
