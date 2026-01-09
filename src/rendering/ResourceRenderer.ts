@@ -49,6 +49,7 @@ export class ResourceRenderer {
 
   // Debug tracking
   private _lastMineralCount: number = 0;
+  private _debugLoggedThisSession: boolean = false;
 
   constructor(scene: THREE.Scene, world: World, terrain?: Terrain) {
     this.scene = scene;
@@ -81,18 +82,24 @@ export class ResourceRenderer {
       let yOffset = 0;
       let baseScale = 1;
 
-      // Debug: count meshes in the model
+      // Debug: count meshes in the model and log their details
       let meshCount = 0;
-      baseMesh.traverse((child) => {
+      const meshDetails: string[] = [];
+      baseMesh.traverse((child: THREE.Object3D) => {
         if (child instanceof THREE.Mesh) {
+          const geo = child.geometry;
+          const vertCount = geo?.attributes?.position?.count ?? 0;
+          const hasIndex = !!geo?.index;
+          const hasNormal = !!geo?.attributes?.normal;
+          meshDetails.push(`mesh${meshCount}: verts=${vertCount}, indexed=${hasIndex}, normals=${hasNormal}`);
           meshCount++;
         }
       });
-      console.log(`[ResourceRenderer] ${resourceType} model has ${meshCount} meshes`);
+      console.log(`[ResourceRenderer] ${resourceType} model has ${meshCount} meshes: ${meshDetails.join(', ')}`);
 
       // baseMesh is a wrapper Group containing the normalized model
       // The inner model has position.y set for grounding and scale set for sizing
-      baseMesh.traverse((child) => {
+      baseMesh.traverse((child: THREE.Object3D) => {
         if (child instanceof THREE.Mesh && !geometry) {
           geometry = child.geometry;
           material = child.material;
@@ -228,6 +235,10 @@ export class ResourceRenderer {
     }
 
     // Build instance data
+    let debugMineralEntities = 0;
+    let debugMineralSkippedDepleted = 0;
+    let debugMineralAdded = 0;
+
     for (const entity of entities) {
       currentIds.add(entity.id);
 
@@ -237,8 +248,15 @@ export class ResourceRenderer {
       // Skip entities with missing required components (defensive check)
       if (!transform || !resource) continue;
 
+      if (resource.resourceType === 'minerals') {
+        debugMineralEntities++;
+      }
+
       // Skip depleted resources
       if (resource.isDepleted()) {
+        if (resource.resourceType === 'minerals') {
+          debugMineralSkippedDepleted++;
+        }
         continue;
       }
 
@@ -249,6 +267,10 @@ export class ResourceRenderer {
 
       const group = this.getOrCreateInstancedGroup(resource.resourceType);
       const data = this.getOrCreateResourceData(entity.id);
+
+      if (resource.resourceType === 'minerals') {
+        debugMineralAdded++;
+      }
 
       // Get terrain height
       const terrainHeight = this.terrain?.getHeightAt(transform.x, transform.y) ?? 0;
@@ -269,15 +291,27 @@ export class ResourceRenderer {
         const finalScale = amountScale * group.baseScale;
 
         // Set instance transform - apply yOffset scaled appropriately
-        this.tempPosition.set(transform.x, terrainHeight + group.yOffset * amountScale, transform.y);
+        const yPos = terrainHeight + group.yOffset * amountScale;
+        this.tempPosition.set(transform.x, yPos, transform.y);
         this.tempEuler.set(0, data.rotation, 0);
         this.tempQuaternion.setFromEuler(this.tempEuler);
         this.tempScale.set(finalScale, finalScale, finalScale);
         this.tempMatrix.compose(this.tempPosition, this.tempQuaternion, this.tempScale);
         group.mesh.setMatrixAt(instanceIndex, this.tempMatrix);
 
+        // Debug: log first few mineral instances
+        if (resource.resourceType === 'minerals' && instanceIndex < 5) {
+          console.log(`[ResourceRenderer] mineral instance ${instanceIndex}: pos=(${transform.x.toFixed(1)}, ${yPos.toFixed(2)}, ${transform.y.toFixed(1)}), scale=${finalScale.toFixed(3)}, terrainH=${terrainHeight.toFixed(2)}`);
+        }
+
         group.mesh.count++;
       }
+    }
+
+    // Debug log once per session
+    if (!this._debugLoggedThisSession && debugMineralEntities > 0) {
+      console.log(`[ResourceRenderer] MINERAL DEBUG: entities=${debugMineralEntities}, skippedDepleted=${debugMineralSkippedDepleted}, addedToInstance=${debugMineralAdded}`);
+      this._debugLoggedThisSession = true;
     }
 
     // Mark instance matrices as needing update and log counts
@@ -289,7 +323,7 @@ export class ResourceRenderer {
       const key = `_last${group.resourceType}Count`;
       const self = this as unknown as Record<string, number>;
       if (self[key] !== group.mesh.count) {
-        console.log(`[ResourceRenderer] ${group.resourceType} instance count: ${group.mesh.count}`);
+        console.log(`[ResourceRenderer] ${group.resourceType} instance count: ${group.mesh.count}, baseScale=${group.baseScale.toFixed(3)}, yOffset=${group.yOffset.toFixed(2)}`);
         self[key] = group.mesh.count;
       }
     }
