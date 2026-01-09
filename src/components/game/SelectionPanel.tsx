@@ -1,5 +1,6 @@
 'use client';
 
+import { memo, useCallback, useMemo } from 'react';
 import { useGameStore } from '@/store/gameStore';
 import { Game } from '@/engine/core/Game';
 import { Unit } from '@/engine/components/Unit';
@@ -295,18 +296,18 @@ export function SelectionPanel() {
   );
 }
 
-// Helper component for stat display
-function StatItem({ label, value, color }: { label: string; value: number | string | undefined; color: string }) {
+// PERFORMANCE: Memoized helper component for stat display
+const StatItem = memo(function StatItem({ label, value, color }: { label: string; value: number | string | undefined; color: string }) {
   return (
     <div className="flex items-center gap-1">
       <span className="text-void-500">{label}:</span>
       <span className={color}>{value ?? '-'}</span>
     </div>
   );
-}
+});
 
-// Tooltip content for entities in multi-selection
-function EntityTooltipContent({ entity }: { entity: SelectedEntityInfo }) {
+// PERFORMANCE: Memoized tooltip content for entities in multi-selection
+const EntityTooltipContent = memo(function EntityTooltipContent({ entity }: { entity: SelectedEntityInfo }) {
   const healthPercent = Math.floor((entity.health / entity.maxHealth) * 100);
   const isResource = entity.type === 'resource';
 
@@ -389,4 +390,4 @@ function EntityTooltipContent({ entity }: { entity: SelectedEntityInfo }) {
       )}
     </div>
   );
-}
+});

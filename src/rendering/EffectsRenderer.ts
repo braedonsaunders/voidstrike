@@ -53,6 +53,15 @@ interface MoveIndicator {
   rings: THREE.Mesh[];
 }
 
+// PERFORMANCE: Object pools to avoid allocation/deallocation in hot loops
+interface MeshPool {
+  available: THREE.Mesh[];
+  inUse: Set<THREE.Mesh>;
+  maxSize: number;
+}
+
+const POOL_SIZE = 50;
+
 export class EffectsRenderer {
   private scene: THREE.Scene;
   private eventBus: EventBus;
@@ -63,6 +72,11 @@ export class EffectsRenderer {
   private focusFireIndicators: Map<number, FocusFireIndicator> = new Map();
   private targetAttackerCounts: Map<number, Set<number>> = new Map(); // targetId -> Set of attackerIds
   private moveIndicators: MoveIndicator[] = [];
+
+  // PERFORMANCE: Object pools for reusable meshes
+  private projectilePool: MeshPool;
+  private hitEffectPool: MeshPool;
+  private explosionPool: MeshPool;
 
   // Shared geometries and materials
   // Per threejs-builder skill: create geometries once, don't create in event handlers
@@ -149,7 +163,100 @@ export class EffectsRenderer {
       side: THREE.DoubleSide,
     });
 
+    // Initialize object pools
+    this.projectilePool = this.createPool(POOL_SIZE, () => {
+      const mesh = new THREE.Mesh(this.projectileGeometry, this.projectileMaterial.clone());
+      mesh.visible = false;
+      return mesh;
+    });
+
+    this.hitEffectPool = this.createPool(POOL_SIZE, () => {
+      const mesh = new THREE.Mesh(this.hitGeometry, this.hitMaterial.clone());
+      mesh.visible = false;
+      mesh.rotation.x = -Math.PI / 2;
+      return mesh;
+    });
+
+    this.explosionPool = this.createPool(POOL_SIZE, () => {
+      const mesh = new THREE.Mesh(this.explosionGeometry, this.explosionMaterial.clone());
+      mesh.visible = false;
+      return mesh;
+    });
+
     this.setupEventListeners();
+  }
+
+  /**
+   * Create an object pool with pre-allocated meshes
+   */
+  private createPool(size: number, factory: () => THREE.Mesh): MeshPool {
+    const pool: MeshPool = {
+      available: [],
+      inUse: new Set(),
+      maxSize: size,
+    };
+
+    for (let i = 0; i < size; i++) {
+      const mesh = factory();
+      this.scene.add(mesh);
+      pool.available.push(mesh);
+    }
+
+    return pool;
+  }
+
+  /**
+   * Acquire a mesh from the pool
+   */
+  private acquireFromPool(pool: MeshPool, factory?: () => THREE.Mesh): THREE.Mesh | null {
+    if (pool.available.length > 0) {
+      const mesh = pool.available.pop()!;
+      pool.inUse.add(mesh);
+      mesh.visible = true;
+      return mesh;
+    }
+
+    // Pool exhausted - create new if factory provided and under max
+    if (factory && pool.inUse.size < pool.maxSize * 2) {
+      const mesh = factory();
+      this.scene.add(mesh);
+      pool.inUse.add(mesh);
+      mesh.visible = true;
+      return mesh;
+    }
+
+    return null;
+  }
+
+  /**
+   * Release a mesh back to the pool
+   */
+  private releaseToPool(pool: MeshPool, mesh: THREE.Mesh): void {
+    if (pool.inUse.has(mesh)) {
+      pool.inUse.delete(mesh);
+      mesh.visible = false;
+      mesh.scale.set(1, 1, 1);
+      (mesh.material as THREE.MeshBasicMaterial).opacity = 1;
+      if (pool.available.length < pool.maxSize) {
+        pool.available.push(mesh);
+      }
+    }
+  }
+
+  /**
+   * Dispose all meshes in a pool
+   */
+  private disposePool(pool: MeshPool): void {
+    for (const mesh of pool.available) {
+      this.scene.remove(mesh);
+      (mesh.material as THREE.Material).dispose();
+    }
+    for (const mesh of pool.inUse) {
+      this.scene.remove(mesh);
+      (mesh.material as THREE.Material).dispose();
+    }
+    pool.available = [];
+    pool.inUse.clear();
   }
 
   private setupEventListeners(): void {
@@ -245,9 +352,16 @@ export class EffectsRenderer {
   }
 
   private createProjectileEffect(start: THREE.Vector3, end: THREE.Vector3): void {
-    const mesh = new THREE.Mesh(this.projectileGeometry, this.projectileMaterial.clone());
+    // PERFORMANCE: Use object pool instead of creating new mesh
+    const mesh = this.acquireFromPool(this.projectilePool, () => {
+      const m = new THREE.Mesh(this.projectileGeometry, this.projectileMaterial.clone());
+      return m;
+    });
+
+    if (!mesh) return; // Pool exhausted
+
     mesh.position.copy(start);
-    this.scene.add(mesh);
+    (mesh.material as THREE.MeshBasicMaterial).opacity = 0.9;
 
     this.attackEffects.push({
       startPos: start.clone(),
@@ -278,11 +392,19 @@ export class EffectsRenderer {
   }
 
   private createHitEffect(position: THREE.Vector3): void {
-    const mesh = new THREE.Mesh(this.hitGeometry, this.hitMaterial.clone());
+    // PERFORMANCE: Use object pool instead of creating new mesh
+    const mesh = this.acquireFromPool(this.hitEffectPool, () => {
+      const m = new THREE.Mesh(this.hitGeometry, this.hitMaterial.clone());
+      m.rotation.x = -Math.PI / 2;
+      return m;
+    });
+
+    if (!mesh) return; // Pool exhausted
+
     mesh.position.copy(position);
     mesh.position.y = 0.1;
-    mesh.rotation.x = -Math.PI / 2;
-    this.scene.add(mesh);
+    mesh.scale.set(1, 1, 1);
+    (mesh.material as THREE.MeshBasicMaterial).opacity = 0.8;
 
     this.hitEffects.push({
       position: position.clone(),
@@ -318,24 +440,33 @@ export class EffectsRenderer {
     const particleCount = isLargeBuilding ? 20 : 12;
     const explosionRadius = isLargeBuilding ? 4 : 2.5;
 
-    // Create debris particles flying outward
+    // Create debris particles flying outward - use pool when possible
     for (let i = 0; i < particleCount; i++) {
-      const material = this.explosionMaterial.clone();
-      // Vary colors between orange, red, and yellow
-      const colorChoice = Math.random();
-      if (colorChoice < 0.33) {
-        material.color.setHex(0xff6600); // Orange
-      } else if (colorChoice < 0.66) {
-        material.color.setHex(0xff2200); // Red-orange
-      } else {
-        material.color.setHex(0xffaa00); // Yellow-orange
+      // PERFORMANCE: Try to acquire from pool first
+      let mesh = this.acquireFromPool(this.explosionPool);
+
+      if (!mesh) {
+        // Pool exhausted - create new
+        const material = this.explosionMaterial.clone();
+        mesh = new THREE.Mesh(this.explosionGeometry, material);
+        this.scene.add(mesh);
       }
 
-      const mesh = new THREE.Mesh(this.explosionGeometry, material);
+      // Vary colors between orange, red, and yellow
+      const colorChoice = Math.random();
+      const mat = mesh.material as THREE.MeshBasicMaterial;
+      if (colorChoice < 0.33) {
+        mat.color.setHex(0xff6600); // Orange
+      } else if (colorChoice < 0.66) {
+        mat.color.setHex(0xff2200); // Red-orange
+      } else {
+        mat.color.setHex(0xffaa00); // Yellow-orange
+      }
+      mat.opacity = 1;
+
       mesh.position.copy(position);
       mesh.position.y = 0.5 + Math.random() * 1.5; // Start at various heights
       mesh.scale.setScalar(0.3 + Math.random() * 0.5);
-      this.scene.add(mesh);
 
       // Random outward velocity
       const angle = Math.random() * Math.PI * 2;
@@ -562,18 +693,15 @@ export class EffectsRenderer {
       effect.progress += dt / effect.duration;
 
       if (effect.progress >= 1) {
-        // Effect complete
-        this.scene.remove(effect.mesh);
-        if (effect.mesh instanceof THREE.Mesh) {
-          (effect.mesh.material as THREE.Material).dispose();
+        // Effect complete - return to pool or dispose
+        if (effect.type === 'projectile' && effect.mesh instanceof THREE.Mesh) {
+          this.releaseToPool(this.projectilePool, effect.mesh);
+          // Create hit effect for projectiles
+          this.createHitEffect(effect.endPos);
         } else if (effect.mesh instanceof THREE.Line) {
+          this.scene.remove(effect.mesh);
           effect.mesh.geometry.dispose();
           (effect.mesh.material as THREE.Material).dispose();
-        }
-
-        // Create hit effect for projectiles
-        if (effect.type === 'projectile') {
-          this.createHitEffect(effect.endPos);
         }
 
         this.attackEffects.splice(i, 1);
@@ -599,10 +727,15 @@ export class EffectsRenderer {
       effect.progress += dt / effect.duration;
 
       if (effect.progress >= 1) {
-        // Effect complete
-        this.scene.remove(effect.mesh);
-        if (effect.mesh.geometry) effect.mesh.geometry.dispose();
-        (effect.mesh.material as THREE.Material).dispose();
+        // Effect complete - return to pool if it's a pooled mesh
+        if (this.hitEffectPool.inUse.has(effect.mesh)) {
+          this.releaseToPool(this.hitEffectPool, effect.mesh);
+        } else {
+          // Non-pooled mesh (death effects, etc) - dispose
+          this.scene.remove(effect.mesh);
+          if (effect.mesh.geometry) effect.mesh.geometry.dispose();
+          (effect.mesh.material as THREE.Material).dispose();
+        }
         this.hitEffects.splice(i, 1);
       } else {
         // Expand and fade
@@ -619,9 +752,13 @@ export class EffectsRenderer {
       particle.progress += dt / particle.duration;
 
       if (particle.progress >= 1) {
-        // Particle expired
-        this.scene.remove(particle.mesh);
-        (particle.mesh.material as THREE.Material).dispose();
+        // Particle expired - return to pool if possible
+        if (this.explosionPool.inUse.has(particle.mesh)) {
+          this.releaseToPool(this.explosionPool, particle.mesh);
+        } else {
+          this.scene.remove(particle.mesh);
+          (particle.mesh.material as THREE.Material).dispose();
+        }
         this.explosionParticles.splice(i, 1);
       } else {
         // Apply velocity and gravity
@@ -716,24 +853,41 @@ export class EffectsRenderer {
   }
 
   public dispose(): void {
-    // Clean up all effects
+    // Clean up all effects - release pooled meshes first
     for (const effect of this.attackEffects) {
-      this.scene.remove(effect.mesh);
-      if (effect.mesh instanceof THREE.Mesh) {
-        (effect.mesh.material as THREE.Material).dispose();
+      if (effect.type === 'projectile' && effect.mesh instanceof THREE.Mesh) {
+        this.releaseToPool(this.projectilePool, effect.mesh);
+      } else {
+        this.scene.remove(effect.mesh);
+        if (effect.mesh instanceof THREE.Mesh) {
+          (effect.mesh.material as THREE.Material).dispose();
+        }
       }
     }
     for (const effect of this.hitEffects) {
-      this.scene.remove(effect.mesh);
-      if (effect.mesh.geometry) effect.mesh.geometry.dispose();
-      (effect.mesh.material as THREE.Material).dispose();
+      if (this.hitEffectPool.inUse.has(effect.mesh)) {
+        this.releaseToPool(this.hitEffectPool, effect.mesh);
+      } else {
+        this.scene.remove(effect.mesh);
+        if (effect.mesh.geometry) effect.mesh.geometry.dispose();
+        (effect.mesh.material as THREE.Material).dispose();
+      }
     }
 
     // Clean up explosion particles
     for (const particle of this.explosionParticles) {
-      this.scene.remove(particle.mesh);
-      (particle.mesh.material as THREE.Material).dispose();
+      if (this.explosionPool.inUse.has(particle.mesh)) {
+        this.releaseToPool(this.explosionPool, particle.mesh);
+      } else {
+        this.scene.remove(particle.mesh);
+        (particle.mesh.material as THREE.Material).dispose();
+      }
     }
+
+    // Dispose all pooled meshes
+    this.disposePool(this.projectilePool);
+    this.disposePool(this.hitEffectPool);
+    this.disposePool(this.explosionPool);
 
     // Clean up damage numbers
     for (const dmgNum of this.damageNumbers) {

@@ -1,14 +1,20 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
-import { useGameStore } from '@/store/gameStore';
+import { memo, useMemo, useEffect, useRef, useState } from 'react';
+import { useGameStore, GameState } from '@/store/gameStore';
 import { useUIStore } from '@/store/uiStore';
-import { useGameSetupStore } from '@/store/gameSetupStore';
+import { useGameSetupStore, GameSetupState } from '@/store/gameSetupStore';
 
-export function ResourcePanel() {
-  const { minerals, vespene, supply, maxSupply, gameTime } = useGameStore();
+// PERFORMANCE: Memoized ResourcePanel to prevent unnecessary re-renders
+export const ResourcePanel = memo(function ResourcePanel() {
+  // Use selectors to minimize re-renders - only re-render when these specific values change
+  const minerals = useGameStore((state: GameState) => state.minerals);
+  const vespene = useGameStore((state: GameState) => state.vespene);
+  const supply = useGameStore((state: GameState) => state.supply);
+  const maxSupply = useGameStore((state: GameState) => state.maxSupply);
+  const gameTime = useGameStore((state: GameState) => state.gameTime);
   const { showFPS } = useUIStore();
-  const isSpectator = useGameSetupStore(state => state.isSpectator());
+  const isSpectator = useGameSetupStore((state: GameSetupState) => state.isSpectator());
   const [fps, setFps] = useState(0);
   const frameCountRef = useRef(0);
   const lastTimeRef = useRef(performance.now());
@@ -36,19 +42,22 @@ export function ResourcePanel() {
     return () => cancelAnimationFrame(animationId);
   }, [showFPS]);
 
-  // Format game time as mm:ss
-  const formatTime = (time: number) => {
-    const minutes = Math.floor(time / 60);
-    const seconds = Math.floor(time % 60);
+  // PERFORMANCE: Memoize derived values
+  const formattedTime = useMemo(() => {
+    const minutes = Math.floor(gameTime / 60);
+    const seconds = Math.floor(gameTime % 60);
     return `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
-  };
+  }, [gameTime]);
 
-  const isSupplyBlocked = supply >= maxSupply && maxSupply > 0;
+  const { isSupplyBlocked, supplyPercent } = useMemo(() => ({
+    isSupplyBlocked: supply >= maxSupply && maxSupply > 0,
+    supplyPercent: maxSupply > 0 ? (supply / maxSupply) * 100 : 0,
+  }), [supply, maxSupply]);
 
   return (
     <div className="flex items-center gap-3 bg-black/40 backdrop-blur-sm px-3 py-1 rounded text-sm">
       {/* Game Time */}
-      <span className="font-mono text-void-300">{formatTime(gameTime)}</span>
+      <span className="font-mono text-void-300">{formattedTime}</span>
 
       {/* Spectator Mode Indicator */}
       {isSpectator && (
@@ -106,4 +115,7 @@ export function ResourcePanel() {
       )}
     </div>
   );
-}
+});
+
+// Set display name for debugging
+ResourcePanel.displayName = 'ResourcePanel';

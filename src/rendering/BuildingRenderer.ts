@@ -25,6 +25,18 @@ interface BuildingMeshData {
   buildingHeight: number; // Stored for clipping calculation
 }
 
+// Instanced building group for same-type completed buildings
+interface InstancedBuildingGroup {
+  mesh: THREE.InstancedMesh;
+  buildingType: string;
+  playerId: string;
+  maxInstances: number;
+  entityIds: number[];
+  dummy: THREE.Object3D;
+}
+
+const MAX_BUILDING_INSTANCES_PER_TYPE = 50;
+
 export class BuildingRenderer {
   private scene: THREE.Scene;
   private world: World;
@@ -32,6 +44,15 @@ export class BuildingRenderer {
   private terrain: Terrain | null;
   private playerId: string = 'player1';
   private buildingMeshes: Map<number, BuildingMeshData> = new Map();
+
+  // PERFORMANCE: Instanced mesh groups for completed static buildings
+  private instancedGroups: Map<string, InstancedBuildingGroup> = new Map();
+
+  // Reusable objects for matrix calculations
+  private tempMatrix: THREE.Matrix4 = new THREE.Matrix4();
+  private tempPosition: THREE.Vector3 = new THREE.Vector3();
+  private tempQuaternion: THREE.Quaternion = new THREE.Quaternion();
+  private tempScale: THREE.Vector3 = new THREE.Vector3(1, 1, 1);
 
   // Shared materials
   private constructingMaterial: THREE.MeshStandardMaterial;
@@ -128,7 +149,86 @@ export class BuildingRenderer {
       this.disposeGroup(meshData.group);
     }
     this.buildingMeshes.clear();
+
+    // Also clear instanced groups
+    for (const group of this.instancedGroups.values()) {
+      this.scene.remove(group.mesh);
+      group.mesh.geometry.dispose();
+      if (group.mesh.material instanceof THREE.Material) {
+        group.mesh.material.dispose();
+      }
+    }
+    this.instancedGroups.clear();
     // Meshes will be recreated on next update() call
+  }
+
+  /**
+   * Get or create an instanced mesh group for a building type + player combo.
+   * Used for completed, non-selected, non-damaged buildings.
+   */
+  private getOrCreateInstancedGroup(buildingType: string, playerId: string): InstancedBuildingGroup {
+    const key = `${buildingType}_${playerId}`;
+    let group = this.instancedGroups.get(key);
+
+    if (!group) {
+      const playerColor = getPlayerColor(playerId);
+      const baseMesh = AssetManager.getBuildingMesh(buildingType, playerColor);
+
+      // Find geometry and material from the base mesh
+      let geometry: THREE.BufferGeometry | null = null;
+      let material: THREE.Material | THREE.Material[] | null = null;
+
+      baseMesh.traverse((child) => {
+        if (child instanceof THREE.Mesh && !geometry) {
+          geometry = child.geometry;
+          material = child.material;
+        }
+      });
+
+      if (!geometry) {
+        // Fallback
+        geometry = new THREE.BoxGeometry(1, 1, 1);
+        material = new THREE.MeshStandardMaterial({ color: playerColor });
+      }
+
+      const instancedMesh = new THREE.InstancedMesh(
+        geometry,
+        material!,
+        MAX_BUILDING_INSTANCES_PER_TYPE
+      );
+      instancedMesh.count = 0;
+      instancedMesh.castShadow = true;
+      instancedMesh.receiveShadow = true;
+      instancedMesh.frustumCulled = false;
+
+      this.scene.add(instancedMesh);
+
+      group = {
+        mesh: instancedMesh,
+        buildingType,
+        playerId,
+        maxInstances: MAX_BUILDING_INSTANCES_PER_TYPE,
+        entityIds: [],
+        dummy: new THREE.Object3D(),
+      };
+
+      this.instancedGroups.set(key, group);
+    }
+
+    return group;
+  }
+
+  /**
+   * Check if a building can use instanced rendering.
+   * Requirements: completed, not selected, not damaged (<100% health), visible
+   */
+  private canUseInstancing(building: Building, health: Health | undefined, selectable: Selectable | undefined): boolean {
+    if (!building.isComplete()) return false;
+    if (selectable?.isSelected) return false;
+    if (health && health.getHealthPercent() < 1) return false;
+    // Buildings with production queue shouldn't use instancing (need progress bar)
+    if (building.productionQueue.length > 0) return false;
+    return true;
   }
 
   public setPlayerId(playerId: string): void {
@@ -142,6 +242,15 @@ export class BuildingRenderer {
 
     const entities = this.world.getEntitiesWith('Transform', 'Building');
     const currentIds = new Set<number>();
+
+    // Reset instanced group counts
+    for (const group of this.instancedGroups.values()) {
+      group.mesh.count = 0;
+      group.entityIds = [];
+    }
+
+    // Track which buildings use instancing (to skip individual mesh handling)
+    const instancedBuildingIds = new Set<number>();
 
     for (const entity of entities) {
       currentIds.add(entity.id);
@@ -161,6 +270,36 @@ export class BuildingRenderer {
       let shouldShow = true;
       if (isEnemy && this.visionSystem) {
         shouldShow = this.visionSystem.isExplored(this.playerId, transform.x, transform.y);
+      }
+
+      // PERFORMANCE: Try to use instanced rendering for completed static buildings
+      if (shouldShow && this.canUseInstancing(building, health, selectable)) {
+        const group = this.getOrCreateInstancedGroup(building.buildingId, ownerId);
+
+        if (group.mesh.count < group.maxInstances) {
+          const terrainHeight = this.terrain?.getHeightAt(transform.x, transform.y) ?? 0;
+
+          // Set instance matrix
+          this.tempPosition.set(transform.x, terrainHeight, transform.y);
+          this.tempScale.set(1, 1, 1);
+          this.tempMatrix.compose(this.tempPosition, this.tempQuaternion, this.tempScale);
+          group.mesh.setMatrixAt(group.mesh.count, this.tempMatrix);
+          group.entityIds.push(entity.id);
+          group.mesh.count++;
+          group.mesh.instanceMatrix.needsUpdate = true;
+
+          instancedBuildingIds.add(entity.id);
+
+          // Hide individual mesh if it exists
+          const existingMesh = this.buildingMeshes.get(entity.id);
+          if (existingMesh) {
+            existingMesh.group.visible = false;
+            existingMesh.selectionRing.visible = false;
+            existingMesh.healthBar.visible = false;
+            existingMesh.progressBar.visible = false;
+          }
+          continue; // Skip individual mesh handling
+        }
       }
 
       let meshData = this.buildingMeshes.get(entity.id);
@@ -809,7 +948,18 @@ export class BuildingRenderer {
         this.disposeGroup(meshData.constructionEffect);
       }
     }
-
     this.buildingMeshes.clear();
+
+    // Dispose instanced groups
+    for (const group of this.instancedGroups.values()) {
+      this.scene.remove(group.mesh);
+      group.mesh.geometry.dispose();
+      if (group.mesh.material instanceof THREE.Material) {
+        group.mesh.material.dispose();
+      } else if (Array.isArray(group.mesh.material)) {
+        group.mesh.material.forEach(m => m.dispose());
+      }
+    }
+    this.instancedGroups.clear();
   }
 }
