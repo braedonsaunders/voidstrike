@@ -2,8 +2,8 @@ import {
   MapData,
   MapDecoration,
   createTerrainGrid,
-  createMineralLine,
-  createVespeneGeysers,
+  createBaseResources,
+  DIR,
   fillTerrainRect,
   fillTerrainCircle,
   createRampInTerrain,
@@ -315,93 +315,30 @@ function generateVoidAssault(): MapData {
   ramps.forEach(ramp => createRampInTerrain(terrain, ramp));
 
   // ========================================
-  // EXPANSIONS WITH RESOURCES
+  // EXPANSIONS WITH RESOURCES (uniform 7-unit mineral distance)
   // ========================================
+  const p1Main = createBaseResources(35, 185, DIR.DOWN_LEFT, 1800, 2500);
+  const p1Nat = createBaseResources(60, 145, DIR.DOWN_LEFT, 1500, 2500);
+  const p1Third = createBaseResources(35, 35, DIR.UP_LEFT, 1500, 2500);
+  const p1Fourth = createBaseResources(35, 110, DIR.LEFT, 1200, 2500);
+  const p2Main = createBaseResources(185, 35, DIR.UP_RIGHT, 1800, 2500);
+  const p2Nat = createBaseResources(160, 75, DIR.UP_RIGHT, 1500, 2500);
+  const p2Third = createBaseResources(185, 185, DIR.DOWN_RIGHT, 1500, 2500);
+  const p2Fourth = createBaseResources(185, 110, DIR.RIGHT, 1200, 2500);
+  const goldNorth = createBaseResources(80, 60, DIR.UP, 1000, 2500);
+  const goldSouth = createBaseResources(140, 160, DIR.DOWN, 1000, 2500);
+
   const expansions = [
-    // P1 Main - minerals in corner
-    {
-      name: 'P1 Main',
-      x: 35,
-      y: 185,
-      isMain: true,
-      minerals: createMineralLine(22, 195, 35, 185, 1800),
-      vespene: createVespeneGeysers(22, 195, 35, 185, 2500),
-    },
-    // P1 Natural
-    {
-      name: 'P1 Natural',
-      x: 60,
-      y: 145,
-      isNatural: true,
-      minerals: createMineralLine(48, 155, 60, 145, 1500),
-      vespene: createVespeneGeysers(48, 155, 60, 145, 2500),
-    },
-    // P1 Third
-    {
-      name: 'P1 Third',
-      x: 35,
-      y: 35,
-      minerals: createMineralLine(22, 25, 35, 35, 1500),
-      vespene: createVespeneGeysers(22, 25, 35, 35, 2500),
-    },
-    // P1 Fourth
-    {
-      name: 'P1 Fourth',
-      x: 35,
-      y: 110,
-      minerals: createMineralLine(20, 110, 35, 110, 1200),
-      vespene: createVespeneGeysers(20, 110, 35, 110, 2500),
-    },
-    // P2 Main - minerals in corner
-    {
-      name: 'P2 Main',
-      x: 185,
-      y: 35,
-      isMain: true,
-      minerals: createMineralLine(198, 25, 185, 35, 1800),
-      vespene: createVespeneGeysers(198, 25, 185, 35, 2500),
-    },
-    // P2 Natural
-    {
-      name: 'P2 Natural',
-      x: 160,
-      y: 75,
-      isNatural: true,
-      minerals: createMineralLine(172, 65, 160, 75, 1500),
-      vespene: createVespeneGeysers(172, 65, 160, 75, 2500),
-    },
-    // P2 Third
-    {
-      name: 'P2 Third',
-      x: 185,
-      y: 185,
-      minerals: createMineralLine(198, 195, 185, 185, 1500),
-      vespene: createVespeneGeysers(198, 195, 185, 185, 2500),
-    },
-    // P2 Fourth
-    {
-      name: 'P2 Fourth',
-      x: 185,
-      y: 110,
-      minerals: createMineralLine(200, 110, 185, 110, 1200),
-      vespene: createVespeneGeysers(200, 110, 185, 110, 2500),
-    },
-    // Gold 1 (near P2 side)
-    {
-      name: 'Gold North',
-      x: 80,
-      y: 60,
-      minerals: createMineralLine(80, 48, 80, 60, 1000),
-      vespene: createVespeneGeysers(80, 48, 80, 60, 2500),
-    },
-    // Gold 2 (near P1 side)
-    {
-      name: 'Gold South',
-      x: 140,
-      y: 160,
-      minerals: createMineralLine(140, 172, 140, 160, 1000),
-      vespene: createVespeneGeysers(140, 172, 140, 160, 2500),
-    },
+    { name: 'P1 Main', x: 35, y: 185, isMain: true, ...p1Main },
+    { name: 'P1 Natural', x: 60, y: 145, isNatural: true, ...p1Nat },
+    { name: 'P1 Third', x: 35, y: 35, ...p1Third },
+    { name: 'P1 Fourth', x: 35, y: 110, ...p1Fourth },
+    { name: 'P2 Main', x: 185, y: 35, isMain: true, ...p2Main },
+    { name: 'P2 Natural', x: 160, y: 75, isNatural: true, ...p2Nat },
+    { name: 'P2 Third', x: 185, y: 185, ...p2Third },
+    { name: 'P2 Fourth', x: 185, y: 110, ...p2Fourth },
+    { name: 'Gold North', x: 80, y: 60, ...goldNorth },
+    { name: 'Gold South', x: 140, y: 160, ...goldSouth },
   ];
 
   return {

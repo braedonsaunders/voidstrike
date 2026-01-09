@@ -2,8 +2,8 @@ import {
   MapData,
   MapDecoration,
   createTerrainGrid,
-  createMineralLine,
-  createVespeneGeysers,
+  createBaseResources,
+  DIR,
   fillTerrainRect,
   fillTerrainCircle,
   createRampInTerrain,
@@ -377,41 +377,61 @@ function generateContestedFrontier(): MapData {
   ramps.forEach(ramp => createRampInTerrain(terrain, ramp));
 
   // ========================================
-  // EXPANSIONS WITH RESOURCES
+  // EXPANSIONS WITH RESOURCES (uniform 7-unit mineral distance)
   // ========================================
+  // Top row mains & naturals (minerals face up/away from center)
+  const p1Main = createBaseResources(50, 45, DIR.UP_LEFT, 1800, 2500);
+  const p1Nat = createBaseResources(70, 85, DIR.UP_LEFT, 1500, 2500);
+  const p2Main = createBaseResources(180, 45, DIR.UP, 1800, 2500);
+  const p2Nat = createBaseResources(180, 85, DIR.UP, 1500, 2500);
+  const p3Main = createBaseResources(310, 45, DIR.UP_RIGHT, 1800, 2500);
+  const p3Nat = createBaseResources(290, 85, DIR.UP_RIGHT, 1500, 2500);
+  // Bottom row mains & naturals (minerals face down/away from center)
+  const p4Main = createBaseResources(50, 275, DIR.DOWN_LEFT, 1800, 2500);
+  const p4Nat = createBaseResources(70, 235, DIR.DOWN_LEFT, 1500, 2500);
+  const p5Main = createBaseResources(180, 275, DIR.DOWN, 1800, 2500);
+  const p5Nat = createBaseResources(180, 235, DIR.DOWN, 1500, 2500);
+  const p6Main = createBaseResources(310, 275, DIR.DOWN_RIGHT, 1800, 2500);
+  const p6Nat = createBaseResources(290, 235, DIR.DOWN_RIGHT, 1500, 2500);
+  // Third expansions
+  const westThird = createBaseResources(40, 160, DIR.LEFT, 1500, 2500);
+  const eastThird = createBaseResources(320, 160, DIR.RIGHT, 1500, 2500);
+  const midThirdNW = createBaseResources(120, 130, DIR.UP_LEFT, 1500, 2500);
+  const midThirdNE = createBaseResources(240, 130, DIR.UP_RIGHT, 1500, 2500);
+  const midThirdSW = createBaseResources(120, 190, DIR.DOWN_LEFT, 1500, 2500);
+  const midThirdSE = createBaseResources(240, 190, DIR.DOWN_RIGHT, 1500, 2500);
+  // Gold expansions
+  const goldNW = createBaseResources(100, 130, DIR.UP_LEFT, 1000, 2500);
+  const goldNE = createBaseResources(260, 130, DIR.UP_RIGHT, 1000, 2500);
+  const goldSW = createBaseResources(100, 190, DIR.DOWN_LEFT, 1000, 2500);
+  const goldSE = createBaseResources(260, 190, DIR.DOWN_RIGHT, 1000, 2500);
+  // Center
+  const center = createBaseResources(180, 160, DIR.DOWN, 750, 2500);
+
   const expansions = [
-    // P1 Main & Natural
-    { name: 'P1 Main', x: 50, y: 45, isMain: true, minerals: createMineralLine(30, 30, 50, 45, 1800), vespene: createVespeneGeysers(30, 30, 50, 45, 2500) },
-    { name: 'P1 Natural', x: 70, y: 85, isNatural: true, minerals: createMineralLine(55, 75, 70, 85, 1500), vespene: createVespeneGeysers(55, 75, 70, 85, 2500) },
-    // P2 Main & Natural
-    { name: 'P2 Main', x: 180, y: 45, isMain: true, minerals: createMineralLine(180, 25, 180, 45, 1800), vespene: createVespeneGeysers(180, 25, 180, 45, 2500) },
-    { name: 'P2 Natural', x: 180, y: 85, isNatural: true, minerals: createMineralLine(180, 70, 180, 85, 1500), vespene: createVespeneGeysers(180, 70, 180, 85, 2500) },
-    // P3 Main & Natural
-    { name: 'P3 Main', x: 310, y: 45, isMain: true, minerals: createMineralLine(330, 30, 310, 45, 1800), vespene: createVespeneGeysers(330, 30, 310, 45, 2500) },
-    { name: 'P3 Natural', x: 290, y: 85, isNatural: true, minerals: createMineralLine(305, 75, 290, 85, 1500), vespene: createVespeneGeysers(305, 75, 290, 85, 2500) },
-    // P4 Main & Natural
-    { name: 'P4 Main', x: 50, y: 275, isMain: true, minerals: createMineralLine(30, 290, 50, 275, 1800), vespene: createVespeneGeysers(30, 290, 50, 275, 2500) },
-    { name: 'P4 Natural', x: 70, y: 235, isNatural: true, minerals: createMineralLine(55, 245, 70, 235, 1500), vespene: createVespeneGeysers(55, 245, 70, 235, 2500) },
-    // P5 Main & Natural
-    { name: 'P5 Main', x: 180, y: 275, isMain: true, minerals: createMineralLine(180, 295, 180, 275, 1800), vespene: createVespeneGeysers(180, 295, 180, 275, 2500) },
-    { name: 'P5 Natural', x: 180, y: 235, isNatural: true, minerals: createMineralLine(180, 250, 180, 235, 1500), vespene: createVespeneGeysers(180, 250, 180, 235, 2500) },
-    // P6 Main & Natural
-    { name: 'P6 Main', x: 310, y: 275, isMain: true, minerals: createMineralLine(330, 290, 310, 275, 1800), vespene: createVespeneGeysers(330, 290, 310, 275, 2500) },
-    { name: 'P6 Natural', x: 290, y: 235, isNatural: true, minerals: createMineralLine(305, 245, 290, 235, 1500), vespene: createVespeneGeysers(305, 245, 290, 235, 2500) },
-    // Third expansions
-    { name: 'West Third', x: 40, y: 160, minerals: createMineralLine(22, 160, 40, 160, 1500), vespene: createVespeneGeysers(22, 160, 40, 160, 2500) },
-    { name: 'East Third', x: 320, y: 160, minerals: createMineralLine(338, 160, 320, 160, 1500), vespene: createVespeneGeysers(338, 160, 320, 160, 2500) },
-    { name: 'Mid Third NW', x: 120, y: 130, minerals: createMineralLine(108, 118, 120, 130, 1500), vespene: createVespeneGeysers(108, 118, 120, 130, 2500) },
-    { name: 'Mid Third NE', x: 240, y: 130, minerals: createMineralLine(252, 118, 240, 130, 1500), vespene: createVespeneGeysers(252, 118, 240, 130, 2500) },
-    { name: 'Mid Third SW', x: 120, y: 190, minerals: createMineralLine(108, 202, 120, 190, 1500), vespene: createVespeneGeysers(108, 202, 120, 190, 2500) },
-    { name: 'Mid Third SE', x: 240, y: 190, minerals: createMineralLine(252, 202, 240, 190, 1500), vespene: createVespeneGeysers(252, 202, 240, 190, 2500) },
-    // Gold expansions
-    { name: 'Gold NW', x: 100, y: 130, minerals: createMineralLine(88, 120, 100, 130, 1000), vespene: createVespeneGeysers(88, 120, 100, 130, 2500) },
-    { name: 'Gold NE', x: 260, y: 130, minerals: createMineralLine(272, 120, 260, 130, 1000), vespene: createVespeneGeysers(272, 120, 260, 130, 2500) },
-    { name: 'Gold SW', x: 100, y: 190, minerals: createMineralLine(88, 200, 100, 190, 1000), vespene: createVespeneGeysers(88, 200, 100, 190, 2500) },
-    { name: 'Gold SE', x: 260, y: 190, minerals: createMineralLine(272, 200, 260, 190, 1000), vespene: createVespeneGeysers(272, 200, 260, 190, 2500) },
-    // Center
-    { name: 'Center', x: 180, y: 160, minerals: createMineralLine(180, 175, 180, 160, 750), vespene: createVespeneGeysers(180, 175, 180, 160, 2500) },
+    { name: 'P1 Main', x: 50, y: 45, isMain: true, ...p1Main },
+    { name: 'P1 Natural', x: 70, y: 85, isNatural: true, ...p1Nat },
+    { name: 'P2 Main', x: 180, y: 45, isMain: true, ...p2Main },
+    { name: 'P2 Natural', x: 180, y: 85, isNatural: true, ...p2Nat },
+    { name: 'P3 Main', x: 310, y: 45, isMain: true, ...p3Main },
+    { name: 'P3 Natural', x: 290, y: 85, isNatural: true, ...p3Nat },
+    { name: 'P4 Main', x: 50, y: 275, isMain: true, ...p4Main },
+    { name: 'P4 Natural', x: 70, y: 235, isNatural: true, ...p4Nat },
+    { name: 'P5 Main', x: 180, y: 275, isMain: true, ...p5Main },
+    { name: 'P5 Natural', x: 180, y: 235, isNatural: true, ...p5Nat },
+    { name: 'P6 Main', x: 310, y: 275, isMain: true, ...p6Main },
+    { name: 'P6 Natural', x: 290, y: 235, isNatural: true, ...p6Nat },
+    { name: 'West Third', x: 40, y: 160, ...westThird },
+    { name: 'East Third', x: 320, y: 160, ...eastThird },
+    { name: 'Mid Third NW', x: 120, y: 130, ...midThirdNW },
+    { name: 'Mid Third NE', x: 240, y: 130, ...midThirdNE },
+    { name: 'Mid Third SW', x: 120, y: 190, ...midThirdSW },
+    { name: 'Mid Third SE', x: 240, y: 190, ...midThirdSE },
+    { name: 'Gold NW', x: 100, y: 130, ...goldNW },
+    { name: 'Gold NE', x: 260, y: 130, ...goldNE },
+    { name: 'Gold SW', x: 100, y: 190, ...goldSW },
+    { name: 'Gold SE', x: 260, y: 190, ...goldSE },
+    { name: 'Center', x: 180, y: 160, ...center },
   ];
 
   return {
