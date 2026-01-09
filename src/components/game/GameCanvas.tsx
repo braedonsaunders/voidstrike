@@ -12,6 +12,7 @@ import { ResourceRenderer } from '@/rendering/ResourceRenderer';
 import { FogOfWar } from '@/rendering/FogOfWar';
 import { EffectsRenderer } from '@/rendering/EffectsRenderer';
 import { RallyPointRenderer } from '@/rendering/RallyPointRenderer';
+import { WatchTowerRenderer } from '@/rendering/WatchTowerRenderer';
 import { useGameStore } from '@/store/gameStore';
 import { useGameSetupStore } from '@/store/gameSetupStore';
 import { SelectionBox } from './SelectionBox';
@@ -43,6 +44,7 @@ export function GameCanvas() {
   const fogOfWarRef = useRef<FogOfWar | null>(null);
   const effectsRendererRef = useRef<EffectsRenderer | null>(null);
   const rallyPointRendererRef = useRef<RallyPointRenderer | null>(null);
+  const watchTowerRendererRef = useRef<WatchTowerRenderer | null>(null);
   const environmentRef = useRef<EnvironmentManager | null>(null);
 
   const [isSelecting, setIsSelecting] = useState(false);
@@ -202,6 +204,13 @@ export function GameCanvas() {
     // Spawn initial entities based on map data
     spawnInitialEntities(game, CURRENT_MAP);
 
+    // Initialize watch towers from map data
+    if (CURRENT_MAP.watchTowers && CURRENT_MAP.watchTowers.length > 0) {
+      game.visionSystem.setWatchTowers(CURRENT_MAP.watchTowers);
+      // Create watch tower renderer for visual effects
+      watchTowerRendererRef.current = new WatchTowerRenderer(scene, game.visionSystem);
+    }
+
     // Initialize audio system with camera for spatial audio and biome ambient
     game.audioSystem.initialize(camera.camera, CURRENT_MAP.biome);
 
@@ -232,6 +241,7 @@ export function GameCanvas() {
       fogOfWarRef.current?.update();
       effectsRendererRef.current?.update(deltaTime);
       rallyPointRendererRef.current?.update();
+      watchTowerRendererRef.current?.update(deltaTime);
 
       // Update environment (water animation, particles)
       const gameTime = gameRef.current?.getGameTime() ?? 0;
@@ -277,6 +287,7 @@ export function GameCanvas() {
         fogOfWarRef.current?.dispose();
         effectsRendererRef.current?.dispose();
         rallyPointRendererRef.current?.dispose();
+        watchTowerRendererRef.current?.dispose();
         cameraRef.current?.dispose();
         unitRendererRef.current?.dispose();
         buildingRendererRef.current?.dispose();
