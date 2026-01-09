@@ -191,6 +191,9 @@ export function HybridGameCanvas() {
       });
       gameRef.current = game;
 
+      // Set terrain grid for building placement validation
+      game.setTerrainGrid(CURRENT_MAP.terrain);
+
       const fogOfWarEnabled = useGameSetupStore.getState().fogOfWar;
 
       // Create renderers

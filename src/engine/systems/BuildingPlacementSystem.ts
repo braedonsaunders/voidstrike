@@ -316,6 +316,12 @@ export class BuildingPlacementSystem extends System {
       return false;
     }
 
+    // Check terrain validity (must be on ground, same elevation, not on ramps/cliffs)
+    if (!this.game.isValidTerrainForBuilding(centerX, centerY, width, height)) {
+      console.log(`BuildingPlacement: Failed - invalid terrain (cliff edge, ramp, or elevation mismatch)`);
+      return false;
+    }
+
     // Check for overlapping buildings
     const buildings = this.world.getEntitiesWith('Building', 'Transform');
     for (const entity of buildings) {

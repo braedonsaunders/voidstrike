@@ -21,6 +21,12 @@ import { SaveLoadSystem } from '../systems/SaveLoadSystem';
 
 export type GameState = 'initializing' | 'running' | 'paused' | 'ended';
 
+// Terrain cell for building placement validation
+export interface TerrainCell {
+  terrain: 'ground' | 'unwalkable' | 'ramp' | 'unbuildable' | 'creep';
+  elevation: 0 | 1 | 2;
+}
+
 export interface GameConfig {
   mapWidth: number;
   mapHeight: number;
@@ -53,6 +59,9 @@ export class Game {
   public audioSystem: AudioSystem;
   public gameStateSystem: GameStateSystem;
   public saveLoadSystem: SaveLoadSystem;
+
+  // Terrain grid for building placement validation
+  private terrainGrid: TerrainCell[][] | null = null;
 
   private gameLoop: GameLoop;
   private state: GameState = 'initializing';
@@ -186,6 +195,59 @@ export class Game {
 
   public getGameTime(): number {
     return this.currentTick / this.config.tickRate;
+  }
+
+  /**
+   * Set the terrain grid for building placement validation
+   * Should be called after map is loaded
+   */
+  public setTerrainGrid(terrain: TerrainCell[][]): void {
+    this.terrainGrid = terrain;
+  }
+
+  /**
+   * Check if a building can be placed at the given position
+   * Returns true if all tiles under the building are walkable ground at the same elevation
+   */
+  public isValidTerrainForBuilding(centerX: number, centerY: number, width: number, height: number): boolean {
+    if (!this.terrainGrid) {
+      // No terrain data - allow placement (legacy behavior)
+      return true;
+    }
+
+    const halfWidth = width / 2;
+    const halfHeight = height / 2;
+    let requiredElevation: number | null = null;
+
+    // Check all tiles the building would occupy
+    for (let dy = -Math.floor(halfHeight); dy < Math.ceil(halfHeight); dy++) {
+      for (let dx = -Math.floor(halfWidth); dx < Math.ceil(halfWidth); dx++) {
+        const tileX = Math.floor(centerX + dx);
+        const tileY = Math.floor(centerY + dy);
+
+        // Check bounds
+        if (tileY < 0 || tileY >= this.terrainGrid.length ||
+            tileX < 0 || tileX >= this.terrainGrid[0].length) {
+          return false;
+        }
+
+        const cell = this.terrainGrid[tileY][tileX];
+
+        // Must be buildable ground (not unwalkable, ramp, or unbuildable)
+        if (cell.terrain !== 'ground') {
+          return false;
+        }
+
+        // All tiles must be at the same elevation
+        if (requiredElevation === null) {
+          requiredElevation = cell.elevation;
+        } else if (cell.elevation !== requiredElevation) {
+          return false;
+        }
+      }
+    }
+
+    return true;
   }
 
   // Command processing for multiplayer lockstep
