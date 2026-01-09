@@ -33,9 +33,30 @@ export function spawnInitialEntities(game: Game, mapData: MapData): void {
   );
 
   // Spawn bases for each active player
-  playerSlots.forEach((slot, index) => {
-    const spawn = spawns.find(s => s.playerSlot === index + 1) || spawns[index];
-    if (!spawn) return;
+  // Track used spawns to prevent multiple players at same location
+  const usedSpawnIndices = new Set<number>();
+
+  playerSlots.forEach((slot) => {
+    // Find the slot's player number (1-8) from the slot.id (e.g., "player1" -> 1)
+    const playerNumber = parseInt(slot.id.replace('player', ''), 10);
+
+    // First try to find the spawn matching this player's slot number
+    let spawnIndex = spawns.findIndex(s => s.playerSlot === playerNumber);
+
+    // If that spawn is taken or doesn't exist, find the next available spawn
+    if (spawnIndex === -1 || usedSpawnIndices.has(spawnIndex)) {
+      spawnIndex = spawns.findIndex((_, idx) => !usedSpawnIndices.has(idx));
+    }
+
+    if (spawnIndex === -1) {
+      console.warn(`No available spawn point for ${slot.id}`);
+      return;
+    }
+
+    const spawn = spawns[spawnIndex];
+    usedSpawnIndices.add(spawnIndex);
+
+    console.log(`Spawning ${slot.id} at spawn index ${spawnIndex} (${spawn.x}, ${spawn.y})`);
 
     spawnBase(game, slot.id, spawn.x, spawn.y, slot.id === 'player1');
 

@@ -253,10 +253,12 @@ export class EnhancedAISystem extends System {
 
     const units = this.world.getEntitiesWith('Unit', 'Selectable', 'Health');
     for (const entity of units) {
-      const selectable = entity.get<Selectable>('Selectable')!;
-      const unit = entity.get<Unit>('Unit')!;
-      const health = entity.get<Health>('Health')!;
+      const selectable = entity.get<Selectable>('Selectable');
+      const unit = entity.get<Unit>('Unit');
+      const health = entity.get<Health>('Health');
 
+      // Defensive null checks
+      if (!selectable || !unit || !health) continue;
       if (selectable.playerId !== ai.playerId) continue;
       if (health.isDead()) continue;
 
@@ -273,10 +275,12 @@ export class EnhancedAISystem extends System {
 
     const buildings = this.world.getEntitiesWith('Building', 'Selectable', 'Health');
     for (const entity of buildings) {
-      const selectable = entity.get<Selectable>('Selectable')!;
-      const building = entity.get<Building>('Building')!;
-      const health = entity.get<Health>('Health')!;
+      const selectable = entity.get<Selectable>('Selectable');
+      const building = entity.get<Building>('Building');
+      const health = entity.get<Health>('Health');
 
+      // Defensive null checks
+      if (!selectable || !building || !health) continue;
       if (selectable.playerId !== ai.playerId) continue;
       if (health.isDead()) continue;
 
@@ -303,7 +307,7 @@ export class EnhancedAISystem extends System {
     ai.minerals += ai.workerCount * baseIncomePerWorker * incomeMultiplier;
 
     // Vespene income if AI has a refinery (simplified: assume 3 workers on gas)
-    if (ai.buildingCounts.get('refinery') || 0 > 0) {
+    if ((ai.buildingCounts.get('refinery') || 0) > 0) {
       ai.vespene += 3 * baseIncomePerWorker * 0.8 * incomeMultiplier;
     }
 
@@ -938,10 +942,12 @@ export class EnhancedAISystem extends System {
     const idleWorkers: number[] = [];
 
     for (const entity of units) {
-      const selectable = entity.get<Selectable>('Selectable')!;
-      const unit = entity.get<Unit>('Unit')!;
-      const health = entity.get<Health>('Health')!;
+      const selectable = entity.get<Selectable>('Selectable');
+      const unit = entity.get<Unit>('Unit');
+      const health = entity.get<Health>('Health');
 
+      // Defensive null checks
+      if (!selectable || !unit || !health) continue;
       if (selectable.playerId !== ai.playerId) continue;
       if (!unit.isWorker) continue;
       if (health.isDead()) continue;
