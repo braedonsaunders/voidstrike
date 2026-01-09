@@ -904,18 +904,8 @@ export class MapDecorations {
         this.group.add(top);
       }
 
-      // Vision range ring
-      const ringGeometry = new THREE.RingGeometry(tower.radius - 0.5, tower.radius, 64);
-      const ringMaterial = new THREE.MeshBasicMaterial({
-        color: 0x4080ff,
-        transparent: true,
-        opacity: 0.15,
-        side: THREE.DoubleSide,
-      });
-      const ring = new THREE.Mesh(ringGeometry, ringMaterial);
-      ring.rotation.x = -Math.PI / 2;
-      ring.position.set(tower.x, terrainHeight + 0.15, tower.y);
-      this.group.add(ring);
+      // Note: Vision range rings removed - they were causing "eye-shaped shadow" visual artifacts
+      // on large maps with multiple watch towers. The WatchTowerRenderer handles tower visualization.
     }
   }
 
