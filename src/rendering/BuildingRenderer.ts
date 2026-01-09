@@ -35,6 +35,8 @@ interface InstancedBuildingGroup {
   dummy: THREE.Object3D;
   // CRITICAL: Track model scale to apply to instances (custom models are normalized with scale)
   modelScale: THREE.Vector3;
+  // CRITICAL: Track model Y offset for proper grounding (models have position.y set to anchor bottom at y=0)
+  modelYOffset: number;
 }
 
 const MAX_BUILDING_INSTANCES_PER_TYPE = 50;
@@ -184,8 +186,9 @@ export class BuildingRenderer {
       let geometry: THREE.BufferGeometry | null = null;
       let material: THREE.Material | THREE.Material[] | null = null;
       const modelScale = new THREE.Vector3(1, 1, 1);
+      const modelPosition = new THREE.Vector3();
 
-      // Update world matrices to get accurate world scale
+      // Update world matrices to get accurate world scale and position
       baseMesh.updateMatrixWorld(true);
 
       baseMesh.traverse((child) => {
@@ -194,6 +197,8 @@ export class BuildingRenderer {
           material = child.material;
           // Get the world scale of this mesh (includes parent scales from normalization)
           child.getWorldScale(modelScale);
+          // Get the world position of this mesh (includes Y offset for grounding)
+          child.getWorldPosition(modelPosition);
         }
       });
 
@@ -223,6 +228,7 @@ export class BuildingRenderer {
         entityIds: [],
         dummy: new THREE.Object3D(),
         modelScale, // Store the model's world scale for proper instance sizing
+        modelYOffset: modelPosition.y, // Store Y offset for proper grounding
       };
 
       this.instancedGroups.set(key, group);
@@ -360,8 +366,9 @@ export class BuildingRenderer {
         if (group.mesh.count < group.maxInstances) {
           const terrainHeight = this.getTerrainHeightAt(transform.x, transform.y);
 
-          // Set instance matrix - CRITICAL: Use model's scale from normalization
-          this.tempPosition.set(transform.x, terrainHeight, transform.y);
+          // Set instance matrix - CRITICAL: Use model's scale and Y offset from normalization
+          // The Y offset ensures buildings are properly grounded (bottom at terrain level)
+          this.tempPosition.set(transform.x, terrainHeight + group.modelYOffset, transform.y);
           this.tempScale.copy(group.modelScale); // Apply the normalized model scale
           this.tempMatrix.compose(this.tempPosition, this.tempQuaternion, this.tempScale);
           group.mesh.setMatrixAt(group.mesh.count, this.tempMatrix);

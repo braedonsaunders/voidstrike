@@ -584,14 +584,49 @@ export class UnitMechanicsSystem extends System {
       return;
     }
 
-    // Check range (1.5 for repair)
-    const dx = targetTransform.x - repairerTransform.x;
-    const dy = targetTransform.y - repairerTransform.y;
-    const distance = Math.sqrt(dx * dx + dy * dy);
+    // Calculate effective distance - for buildings, measure to edge not center
+    const repairRange = 2.0; // Repair range
+    let effectiveDistance: number;
+    let moveTargetX = targetTransform.x;
+    let moveTargetY = targetTransform.y;
 
-    if (distance > 1.5) {
-      // Move toward target
-      unit.setMoveTarget(targetTransform.x, targetTransform.y, true);
+    if (targetBuilding) {
+      // Calculate closest point on building edge
+      const halfW = targetBuilding.width / 2;
+      const halfH = targetBuilding.height / 2;
+      const clampedX = Math.max(targetTransform.x - halfW, Math.min(repairerTransform.x, targetTransform.x + halfW));
+      const clampedY = Math.max(targetTransform.y - halfH, Math.min(repairerTransform.y, targetTransform.y + halfH));
+      const edgeDx = repairerTransform.x - clampedX;
+      const edgeDy = repairerTransform.y - clampedY;
+      effectiveDistance = Math.sqrt(edgeDx * edgeDx + edgeDy * edgeDy);
+
+      // Calculate move target at building edge with buffer
+      if (effectiveDistance > repairRange) {
+        // Direction from building center to repairer
+        const dx = repairerTransform.x - targetTransform.x;
+        const dy = repairerTransform.y - targetTransform.y;
+        const dist = Math.sqrt(dx * dx + dy * dy);
+        if (dist > 0.01) {
+          const dirX = dx / dist;
+          const dirY = dy / dist;
+          // Position at building edge + small buffer
+          moveTargetX = targetTransform.x + dirX * (Math.max(halfW, halfH) + 0.5);
+          moveTargetY = targetTransform.y + dirY * (Math.max(halfW, halfH) + 0.5);
+        }
+      }
+    } else {
+      // For units, use center-to-center distance
+      const dx = targetTransform.x - repairerTransform.x;
+      const dy = targetTransform.y - repairerTransform.y;
+      effectiveDistance = Math.sqrt(dx * dx + dy * dy);
+    }
+
+    if (effectiveDistance > repairRange) {
+      // Move toward target (at edge for buildings)
+      // Don't preserve state - need to be in 'moving' state for MovementSystem to work
+      unit.targetX = moveTargetX;
+      unit.targetY = moveTargetY;
+      unit.state = 'moving';
       return;
     }
 
