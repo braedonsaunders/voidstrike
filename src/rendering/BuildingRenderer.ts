@@ -443,13 +443,15 @@ export class BuildingRenderer {
         const progress = building.buildProgress;
 
         // Calculate the current build height (revealed portion)
+        // At progress=0, nothing visible. At progress=1, full building visible.
         const buildHeight = meshData.buildingHeight * progress;
         const clipY = terrainHeight + buildHeight;
 
-        // Create a unique clipping plane for this building (each building has different height)
-        // Plane clips where: dot(point, normal) + constant < 0
-        // With normal (0,1,0) and constant -clipY: clips points where Y < clipY
-        const clipPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), -clipY);
+        // Create clipping plane that hides geometry ABOVE clipY (reveals from bottom up)
+        // Plane equation: dot(point, normal) + constant < 0 means point is clipped
+        // Normal (0, -1, 0) pointing DOWN with constant clipY:
+        //   -point.y + clipY < 0 → point.y > clipY → clips above clipY
+        const clipPlane = new THREE.Plane(new THREE.Vector3(0, -1, 0), clipY);
 
         // Building is semi-transparent with clipping plane for layer reveal
         const opacity = 0.7 + progress * 0.3; // 70% to 100% as it builds
