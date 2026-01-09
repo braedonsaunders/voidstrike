@@ -285,9 +285,10 @@ export class ResourceRenderer {
       }
       // Log instance counts on first frame or when they change
       const key = `_last${group.resourceType}Count`;
-      if ((this as Record<string, number>)[key] !== group.mesh.count) {
+      const self = this as unknown as Record<string, number>;
+      if (self[key] !== group.mesh.count) {
         console.log(`[ResourceRenderer] ${group.resourceType} instance count: ${group.mesh.count}`);
-        (this as Record<string, number>)[key] = group.mesh.count;
+        self[key] = group.mesh.count;
       }
     }
 
