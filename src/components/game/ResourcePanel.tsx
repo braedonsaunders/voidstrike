@@ -86,7 +86,7 @@ export function ResourcePanel() {
       {showFPS && (
         <>
           <div className="w-px h-4 bg-void-600" />
-          <span className="font-mono text-green-400 text-xs">{fps}</span>
+          <span className="font-mono text-green-400 text-xs">{fps} FPS</span>
         </>
       )}
     </div>
