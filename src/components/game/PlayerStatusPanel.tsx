@@ -32,10 +32,15 @@ export function PlayerStatusPanel() {
       const world = game.world;
       const statuses: PlayerStatus[] = [];
 
-      // Get active player slots (human or AI)
-      const activeSlots = playerSlots.filter(
-        slot => slot.type === 'human' || slot.type === 'ai'
-      );
+      // Get active player slots (human or AI) and sort by player ID for consistent ordering
+      const activeSlots = playerSlots
+        .filter(slot => slot.type === 'human' || slot.type === 'ai')
+        .sort((a, b) => {
+          // Extract player number from ID (e.g., "player1" -> 1)
+          const numA = parseInt(a.id.replace('player', ''), 10) || 0;
+          const numB = parseInt(b.id.replace('player', ''), 10) || 0;
+          return numA - numB;
+        });
 
       for (const slot of activeSlots) {
         let buildingCount = 0;

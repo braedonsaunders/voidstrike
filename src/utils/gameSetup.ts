@@ -58,7 +58,9 @@ export function spawnInitialEntities(game: Game, mapData: MapData): void {
 
     console.log(`Spawning ${slot.id} at spawn index ${spawnIndex} (${spawn.x}, ${spawn.y})`);
 
-    spawnBase(game, slot.id, spawn.x, spawn.y, slot.id === 'player1');
+    // Only treat as human player if slot type is 'human' (not based on slot ID)
+    const isHumanPlayer = slot.type === 'human';
+    spawnBase(game, slot.id, spawn.x, spawn.y, isHumanPlayer);
 
     // Register AI players
     if (slot.type === 'ai') {
