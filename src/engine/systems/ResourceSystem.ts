@@ -22,16 +22,16 @@ export class ResourceSystem extends System {
 
   public init(world: World): void {
     super.init(world);
-    this.setupRefineryCheckers();
+    this.setupExtractorCheckers();
   }
 
   /**
-   * Set up refinery completion checkers for all vespene geysers.
-   * This allows Resource.hasRefinery() to verify the refinery is complete.
+   * Set up extractor completion checkers for all vespene geysers.
+   * This allows Resource.hasExtractor() to verify the extractor is complete.
    */
-  private setupRefineryCheckers(): void {
+  private setupExtractorCheckers(): void {
     // Create a checker function that looks up the building entity
-    const refineryChecker = (entityId: number): boolean => {
+    const extractorChecker = (entityId: number): boolean => {
       const entity = this.world.getEntity(entityId);
       if (!entity) return false;
       const building = entity.get<Building>('Building');
@@ -43,7 +43,7 @@ export class ResourceSystem extends System {
     for (const entity of resources) {
       const resource = entity.get<Resource>('Resource')!;
       if (resource.resourceType === 'vespene') {
-        resource.setRefineryCompleteChecker(refineryChecker);
+        resource.setExtractorCompleteChecker(extractorChecker);
       }
     }
 
@@ -53,7 +53,7 @@ export class ResourceSystem extends System {
       if (entity) {
         const resource = entity.get<Resource>('Resource');
         if (resource && resource.resourceType === 'vespene') {
-          resource.setRefineryCompleteChecker(refineryChecker);
+          resource.setExtractorCompleteChecker(extractorChecker);
         }
       }
     });
@@ -74,9 +74,9 @@ export class ResourceSystem extends System {
     const resource = targetEntity.get<Resource>('Resource');
     if (!resource) return;
 
-    // Check if trying to gather vespene without a refinery
+    // Check if trying to gather vespene without an extractor
     if (resource.resourceType === 'vespene' && !resource.hasRefinery()) {
-      this.game.eventBus.emit('ui:error', { message: 'Requires a Refinery' });
+      this.game.eventBus.emit('ui:error', { message: 'Requires an Extractor' });
       return;
     }
 
@@ -329,7 +329,7 @@ export class ResourceSystem extends System {
       if (baseSelectable?.playerId !== workerOwner) continue;
 
       const resourceDropOffBuildings = [
-        'command_center', 'orbital_command', 'planetary_fortress',
+        'headquarters', 'orbital_station', 'bastion',
         'nexus',
         'hatchery', 'lair', 'hive'
       ];
@@ -452,7 +452,7 @@ export class ResourceSystem extends System {
       if (baseSelectable?.playerId !== workerOwner) continue;
 
       const resourceDropOffBuildings = [
-        'command_center', 'orbital_command', 'planetary_fortress',
+        'headquarters', 'orbital_station', 'bastion',
         'nexus',
         'hatchery', 'lair', 'hive'
       ];

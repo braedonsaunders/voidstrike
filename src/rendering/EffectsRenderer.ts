@@ -436,7 +436,7 @@ export class EffectsRenderer {
    */
   private createBuildingExplosion(position: THREE.Vector3, buildingType: string): void {
     // Determine explosion size based on building type
-    const isLargeBuilding = ['command_center', 'barracks', 'factory', 'starport'].includes(buildingType);
+    const isLargeBuilding = ['headquarters', 'infantry_bay', 'forge', 'hangar'].includes(buildingType);
     const particleCount = isLargeBuilding ? 20 : 12;
     const explosionRadius = isLargeBuilding ? 4 : 2.5;
 

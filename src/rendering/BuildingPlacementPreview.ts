@@ -118,8 +118,8 @@ export class BuildingPlacementPreview {
     const halfWidth = width / 2;
     const halfHeight = height / 2;
 
-    // Special case: refineries MUST be placed on vespene geysers
-    if (this.currentBuildingType === 'refinery') {
+    // Special case: extractors MUST be placed on vespene geysers
+    if (this.currentBuildingType === 'extractor') {
       if (!this.checkVespeneGeyser || !this.checkVespeneGeyser(centerX, centerY)) {
         return false;
       }

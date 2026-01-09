@@ -233,7 +233,7 @@ export class MovementSystem extends System {
 
     // Resource drop-off buildings - workers carrying resources skip avoidance for these
     const dropOffBuildings = [
-      'command_center', 'orbital_command', 'planetary_fortress',
+      'headquarters', 'orbital_station', 'bastion',
       'nexus', 'hatchery', 'lair', 'hive'
     ];
     const isCarryingResources = selfUnit.isWorker &&
@@ -573,7 +573,7 @@ export class MovementSystem extends System {
 
     // Resource drop-off buildings - workers carrying resources skip collision for these
     const dropOffBuildings = [
-      'command_center', 'orbital_command', 'planetary_fortress',
+      'headquarters', 'orbital_station', 'bastion',
       'nexus', 'hatchery', 'lair', 'hive'
     ];
     const isCarryingResources = unit.isWorker &&

@@ -38,18 +38,18 @@ interface ThreatInfo {
 
 // Unit priority for focus fire (higher = more important to kill)
 const UNIT_PRIORITY: Record<string, number> = {
-  siege_tank: 100,
-  thor: 90,
-  medivac: 85,
-  banshee: 80,
-  viking: 75,
-  hellbat: 70,
-  marauder: 65,
-  marine: 60,
-  ghost: 55,
-  reaper: 50,
-  hellion: 45,
-  scv: 10,
+  devastator: 100,
+  colossus: 90,
+  lifter: 85,
+  specter: 80,
+  valkyrie: 75,
+  inferno: 70,
+  breacher: 65,
+  trooper: 60,
+  operative: 55,
+  vanguard: 50,
+  scorcher: 45,
+  constructor: 10,
 };
 
 export class AIMicroSystem extends System {
@@ -255,7 +255,7 @@ export class AIMicroSystem extends System {
 
       if (selectable.playerId !== playerId) continue;
 
-      if (building.buildingId === 'command_center' || building.buildingId === 'orbital_command') {
+      if (building.buildingId === 'headquarters' || building.buildingId === 'orbital_station') {
         return { x: transform.x, y: transform.y };
       }
     }
@@ -415,15 +415,15 @@ export interface CounterRecommendation {
 // Counter matrix: what counters what
 const COUNTER_MATRIX: Record<string, string[]> = {
   // Air units counter ground-heavy compositions
-  marine: ['hellion', 'hellbat', 'siege_tank'],
-  marauder: ['marine', 'hellion'],
-  hellion: ['siege_tank', 'thor'],
-  hellbat: ['marine', 'marauder'],
-  siege_tank: ['viking', 'banshee', 'marine'],
-  thor: ['marine', 'marauder', 'siege_tank'],
-  viking: ['marine', 'thor'],
-  medivac: ['marine', 'viking'],
-  banshee: ['marine', 'viking', 'thor'],
+  trooper: ['scorcher', 'inferno', 'devastator'],
+  breacher: ['trooper', 'scorcher'],
+  scorcher: ['devastator', 'colossus'],
+  inferno: ['trooper', 'breacher'],
+  devastator: ['valkyrie', 'specter', 'trooper'],
+  colossus: ['trooper', 'breacher', 'devastator'],
+  valkyrie: ['trooper', 'colossus'],
+  lifter: ['trooper', 'valkyrie'],
+  specter: ['trooper', 'valkyrie', 'colossus'],
 };
 
 export function analyzeEnemyComposition(
@@ -478,39 +478,39 @@ export function getCounterRecommendation(
     buildingsToBuild: [],
   };
 
-  // Heavy air -> Build vikings, thors, marines
+  // Heavy air -> Build valkyries, colossus, troopers
   if (enemyComp.air > enemyComp.total * 0.3) {
-    recommendation.unitsToBuild.push({ unitId: 'viking', priority: 10 });
-    recommendation.unitsToBuild.push({ unitId: 'marine', priority: 8 });
-    recommendation.unitsToBuild.push({ unitId: 'thor', priority: 7 });
+    recommendation.unitsToBuild.push({ unitId: 'valkyrie', priority: 10 });
+    recommendation.unitsToBuild.push({ unitId: 'trooper', priority: 8 });
+    recommendation.unitsToBuild.push({ unitId: 'colossus', priority: 7 });
 
-    if (!myBuildingCounts.get('starport')) {
-      recommendation.buildingsToBuild.push({ buildingId: 'starport', priority: 10 });
+    if (!myBuildingCounts.get('hangar')) {
+      recommendation.buildingsToBuild.push({ buildingId: 'hangar', priority: 10 });
     }
   }
 
-  // Heavy vehicles -> Build siege tanks, marauders
+  // Heavy vehicles -> Build devastators, breachers
   if (enemyComp.vehicles > enemyComp.total * 0.4) {
-    recommendation.unitsToBuild.push({ unitId: 'siege_tank', priority: 10 });
-    recommendation.unitsToBuild.push({ unitId: 'marauder', priority: 8 });
+    recommendation.unitsToBuild.push({ unitId: 'devastator', priority: 10 });
+    recommendation.unitsToBuild.push({ unitId: 'breacher', priority: 8 });
 
-    if (!myBuildingCounts.get('factory')) {
-      recommendation.buildingsToBuild.push({ buildingId: 'factory', priority: 10 });
+    if (!myBuildingCounts.get('forge')) {
+      recommendation.buildingsToBuild.push({ buildingId: 'forge', priority: 10 });
     }
   }
 
-  // Heavy infantry -> Build hellions, hellbats
+  // Heavy infantry -> Build scorchers, infernos
   if (enemyComp.infantry > enemyComp.total * 0.5) {
-    recommendation.unitsToBuild.push({ unitId: 'hellion', priority: 9 });
-    recommendation.unitsToBuild.push({ unitId: 'hellbat', priority: 8 });
-    recommendation.unitsToBuild.push({ unitId: 'siege_tank', priority: 7 });
+    recommendation.unitsToBuild.push({ unitId: 'scorcher', priority: 9 });
+    recommendation.unitsToBuild.push({ unitId: 'inferno', priority: 8 });
+    recommendation.unitsToBuild.push({ unitId: 'devastator', priority: 7 });
   }
 
   // Balanced -> Mixed composition
   if (recommendation.unitsToBuild.length === 0) {
-    recommendation.unitsToBuild.push({ unitId: 'marine', priority: 7 });
-    recommendation.unitsToBuild.push({ unitId: 'marauder', priority: 6 });
-    recommendation.unitsToBuild.push({ unitId: 'medivac', priority: 5 });
+    recommendation.unitsToBuild.push({ unitId: 'trooper', priority: 7 });
+    recommendation.unitsToBuild.push({ unitId: 'breacher', priority: 6 });
+    recommendation.unitsToBuild.push({ unitId: 'lifter', priority: 5 });
   }
 
   // Sort by priority

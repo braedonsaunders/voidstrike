@@ -13,10 +13,10 @@ export class Resource extends Component {
   public currentGatherers: Set<number>; // Entity IDs of workers currently gathering
   public maxGatherers: number;
 
-  // For vespene: the refinery entity ID (null if no refinery built)
-  public refineryEntityId: number | null = null;
-  // Callback to check if refinery is complete (set by game systems)
-  private _refineryCompleteChecker: ((entityId: number) => boolean) | null = null;
+  // For vespene: the extractor entity ID (null if no extractor built)
+  public extractorEntityId: number | null = null;
+  // Callback to check if extractor is complete (set by game systems)
+  private _extractorCompleteChecker: ((entityId: number) => boolean) | null = null;
 
   constructor(
     resourceType: ResourceType,
@@ -36,33 +36,38 @@ export class Resource extends Component {
   }
 
   /**
-   * Set a function to check if the refinery building is complete.
-   * This allows the Resource component to verify refinery status without
+   * Set a function to check if the extractor building is complete.
+   * This allows the Resource component to verify extractor status without
    * importing Game/World (avoiding circular dependencies).
    */
-  public setRefineryCompleteChecker(checker: (entityId: number) => boolean): void {
-    this._refineryCompleteChecker = checker;
+  public setExtractorCompleteChecker(checker: (entityId: number) => boolean): void {
+    this._extractorCompleteChecker = checker;
   }
 
   public canGather(): boolean {
-    // Vespene requires a completed refinery
+    // Vespene requires a completed extractor
     if (this.resourceType === 'vespene') {
-      if (this.refineryEntityId === null) return false;
-      // Check if refinery is complete
-      if (this._refineryCompleteChecker && !this._refineryCompleteChecker(this.refineryEntityId)) {
+      if (this.extractorEntityId === null) return false;
+      // Check if extractor is complete
+      if (this._extractorCompleteChecker && !this._extractorCompleteChecker(this.extractorEntityId)) {
         return false;
       }
     }
     return this.amount > 0 && this.currentGatherers.size < this.maxGatherers;
   }
 
-  public hasRefinery(): boolean {
-    if (this.refineryEntityId === null) return false;
+  public hasExtractor(): boolean {
+    if (this.extractorEntityId === null) return false;
     // Also check if complete
-    if (this._refineryCompleteChecker) {
-      return this._refineryCompleteChecker(this.refineryEntityId);
+    if (this._extractorCompleteChecker) {
+      return this._extractorCompleteChecker(this.extractorEntityId);
     }
     return true; // Fallback if no checker set
+  }
+
+  // Backwards compatibility alias
+  public hasRefinery(): boolean {
+    return this.hasExtractor();
   }
 
   public addGatherer(entityId: number): boolean {

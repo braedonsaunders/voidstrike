@@ -85,17 +85,17 @@ export class BuildingPlacementSystem extends System {
       }
     }
 
-    // Special handling for refineries: must be placed on vespene geysers
+    // Special handling for extractors: must be placed on vespene geysers
     let vespeneGeyserEntity: Entity | null = null;
-    if (buildingType === 'refinery') {
+    if (buildingType === 'extractor') {
       vespeneGeyserEntity = this.findVespeneGeyserAt(snappedX, snappedY);
       if (!vespeneGeyserEntity) {
-        this.game.eventBus.emit('ui:error', { message: 'Refinery must be placed on a Vespene Geyser' });
+        this.game.eventBus.emit('ui:error', { message: 'Extractor must be placed on a Vespene Geyser' });
         return;
       }
       const resource = vespeneGeyserEntity.get<Resource>('Resource')!;
       if (resource.hasRefinery()) {
-        this.game.eventBus.emit('ui:error', { message: 'Vespene Geyser already has a Refinery' });
+        this.game.eventBus.emit('ui:error', { message: 'Vespene Geyser already has an Extractor' });
         return;
       }
     }
@@ -109,8 +109,8 @@ export class BuildingPlacementSystem extends System {
     }
 
     // Check placement validity using center position (exclude builder from collision)
-    // Skip collision check for refineries since they go on vespene geysers
-    if (buildingType !== 'refinery' && !this.isValidPlacement(snappedX, snappedY, definition.width, definition.height, worker.entity.id)) {
+    // Skip collision check for extractors since they go on vespene geysers
+    if (buildingType !== 'extractor' && !this.isValidPlacement(snappedX, snappedY, definition.width, definition.height, worker.entity.id)) {
       this.game.eventBus.emit('ui:error', { message: 'Cannot build here - area blocked' });
       return;
     }
@@ -131,11 +131,11 @@ export class BuildingPlacementSystem extends System {
     // Building starts in 'waiting_for_worker' state (from constructor)
     // Construction will start when worker arrives at site
 
-    // Associate refinery with vespene geyser
+    // Associate extractor with vespene geyser
     if (vespeneGeyserEntity) {
       const resource = vespeneGeyserEntity.get<Resource>('Resource')!;
-      resource.refineryEntityId = buildingEntity.id;
-      console.log(`BuildingPlacementSystem: Refinery ${buildingEntity.id} associated with vespene geyser ${vespeneGeyserEntity.id}`);
+      resource.extractorEntityId = buildingEntity.id;
+      console.log(`BuildingPlacementSystem: Extractor ${buildingEntity.id} associated with vespene geyser ${vespeneGeyserEntity.id}`);
     }
 
     // Assign the worker to this construction

@@ -1,7 +1,7 @@
 import { UnitDefinition, TransformMode } from '@/engine/components/Unit';
 
-// Transform modes for Siege Tank
-const SIEGE_TANK_MODES: TransformMode[] = [
+// Transform modes for Devastator
+const DEVASTATOR_MODES: TransformMode[] = [
   {
     id: 'tank',
     name: 'Tank Mode',
@@ -28,11 +28,11 @@ const SIEGE_TANK_MODES: TransformMode[] = [
   },
 ];
 
-// Transform modes for Hellion/Hellbat
-const HELLION_MODES: TransformMode[] = [
+// Transform modes for Scorcher/Inferno
+const SCORCHER_MODES: TransformMode[] = [
   {
-    id: 'hellion',
-    name: 'Hellion',
+    id: 'scorcher',
+    name: 'Scorcher',
     speed: 5.95,
     attackRange: 5,
     attackDamage: 8,
@@ -43,8 +43,8 @@ const HELLION_MODES: TransformMode[] = [
     transformTime: 2,
   },
   {
-    id: 'hellbat',
-    name: 'Hellbat',
+    id: 'inferno',
+    name: 'Inferno',
     speed: 3.15,
     attackRange: 2,
     attackDamage: 18,
@@ -56,8 +56,8 @@ const HELLION_MODES: TransformMode[] = [
   },
 ];
 
-// Transform modes for Viking
-const VIKING_MODES: TransformMode[] = [
+// Transform modes for Valkyrie
+const VALKYRIE_MODES: TransformMode[] = [
   {
     id: 'fighter',
     name: 'Fighter Mode',
@@ -85,9 +85,9 @@ const VIKING_MODES: TransformMode[] = [
 ];
 
 export const UNIT_DEFINITIONS: Record<string, UnitDefinition> = {
-  scv: {
-    id: 'scv',
-    name: 'SCV',
+  constructor: {
+    id: 'constructor',
+    name: 'Constructor',
     faction: 'dominion',
     mineralCost: 50,
     vespeneCost: 0,
@@ -106,9 +106,9 @@ export const UNIT_DEFINITIONS: Record<string, UnitDefinition> = {
     canRepair: true,
   },
 
-  marine: {
-    id: 'marine',
-    name: 'Marine',
+  trooper: {
+    id: 'trooper',
+    name: 'Trooper',
     faction: 'dominion',
     mineralCost: 50,
     vespeneCost: 0,
@@ -126,9 +126,9 @@ export const UNIT_DEFINITIONS: Record<string, UnitDefinition> = {
     isBiological: true,
   },
 
-  marauder: {
-    id: 'marauder',
-    name: 'Marauder',
+  breacher: {
+    id: 'breacher',
+    name: 'Breacher',
     faction: 'dominion',
     mineralCost: 100,
     vespeneCost: 25,
@@ -146,9 +146,9 @@ export const UNIT_DEFINITIONS: Record<string, UnitDefinition> = {
     isBiological: true,
   },
 
-  reaper: {
-    id: 'reaper',
-    name: 'Reaper',
+  vanguard: {
+    id: 'vanguard',
+    name: 'Vanguard',
     faction: 'dominion',
     mineralCost: 50,
     vespeneCost: 50,
@@ -166,9 +166,9 @@ export const UNIT_DEFINITIONS: Record<string, UnitDefinition> = {
     isBiological: true,
   },
 
-  ghost: {
-    id: 'ghost',
-    name: 'Ghost',
+  operative: {
+    id: 'operative',
+    name: 'Operative',
     faction: 'dominion',
     mineralCost: 150,
     vespeneCost: 125,
@@ -188,9 +188,9 @@ export const UNIT_DEFINITIONS: Record<string, UnitDefinition> = {
     cloakEnergyCost: 1,
   },
 
-  hellion: {
-    id: 'hellion',
-    name: 'Hellion',
+  scorcher: {
+    id: 'scorcher',
+    name: 'Scorcher',
     faction: 'dominion',
     mineralCost: 100,
     vespeneCost: 0,
@@ -204,17 +204,17 @@ export const UNIT_DEFINITIONS: Record<string, UnitDefinition> = {
     damageType: 'explosive',
     maxHealth: 90,
     armor: 0,
-    abilities: ['transform_hellbat'],
+    abilities: ['transform_inferno'],
     splashRadius: 2,
     isMechanical: true,
     canTransform: true,
-    transformModes: HELLION_MODES,
-    defaultMode: 'hellion',
+    transformModes: SCORCHER_MODES,
+    defaultMode: 'scorcher',
   },
 
-  siege_tank: {
-    id: 'siege_tank',
-    name: 'Siege Tank',
+  devastator: {
+    id: 'devastator',
+    name: 'Devastator',
     faction: 'dominion',
     mineralCost: 150,
     vespeneCost: 125,
@@ -228,17 +228,17 @@ export const UNIT_DEFINITIONS: Record<string, UnitDefinition> = {
     damageType: 'explosive',
     maxHealth: 175,
     armor: 1,
-    abilities: ['siege_mode'],
+    abilities: ['bombardment_mode'],
     splashRadius: 0.5,
     isMechanical: true,
     canTransform: true,
-    transformModes: SIEGE_TANK_MODES,
+    transformModes: DEVASTATOR_MODES,
     defaultMode: 'tank',
   },
 
-  thor: {
-    id: 'thor',
-    name: 'Thor',
+  colossus: {
+    id: 'colossus',
+    name: 'Colossus',
     faction: 'dominion',
     mineralCost: 300,
     vespeneCost: 200,
@@ -256,9 +256,9 @@ export const UNIT_DEFINITIONS: Record<string, UnitDefinition> = {
     isMechanical: true,
   },
 
-  medivac: {
-    id: 'medivac',
-    name: 'Medivac',
+  lifter: {
+    id: 'lifter',
+    name: 'Lifter',
     faction: 'dominion',
     mineralCost: 100,
     vespeneCost: 100,
@@ -283,9 +283,9 @@ export const UNIT_DEFINITIONS: Record<string, UnitDefinition> = {
     healEnergyCost: 1,
   },
 
-  viking: {
-    id: 'viking',
-    name: 'Viking',
+  valkyrie: {
+    id: 'valkyrie',
+    name: 'Valkyrie',
     faction: 'dominion',
     mineralCost: 150,
     vespeneCost: 75,
@@ -303,13 +303,13 @@ export const UNIT_DEFINITIONS: Record<string, UnitDefinition> = {
     isFlying: true,
     isMechanical: true,
     canTransform: true,
-    transformModes: VIKING_MODES,
+    transformModes: VALKYRIE_MODES,
     defaultMode: 'fighter',
   },
 
-  banshee: {
-    id: 'banshee',
-    name: 'Banshee',
+  specter: {
+    id: 'specter',
+    name: 'Specter',
     faction: 'dominion',
     mineralCost: 150,
     vespeneCost: 100,
@@ -330,9 +330,9 @@ export const UNIT_DEFINITIONS: Record<string, UnitDefinition> = {
     cloakEnergyCost: 1,
   },
 
-  battlecruiser: {
-    id: 'battlecruiser',
-    name: 'Battlecruiser',
+  dreadnought: {
+    id: 'dreadnought',
+    name: 'Dreadnought',
     faction: 'dominion',
     mineralCost: 400,
     vespeneCost: 300,
@@ -346,15 +346,15 @@ export const UNIT_DEFINITIONS: Record<string, UnitDefinition> = {
     damageType: 'normal',
     maxHealth: 550,
     armor: 3,
-    abilities: ['yamato_cannon', 'tactical_jump'],
+    abilities: ['nova_cannon', 'warp_jump'],
     isFlying: true,
     isMechanical: true,
   },
 
-  // Detector unit - Raven
-  raven: {
-    id: 'raven',
-    name: 'Raven',
+  // Detector unit - Overseer
+  overseer: {
+    id: 'overseer',
+    name: 'Overseer',
     faction: 'dominion',
     mineralCost: 100,
     vespeneCost: 200,

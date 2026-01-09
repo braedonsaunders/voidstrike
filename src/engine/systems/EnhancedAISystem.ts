@@ -66,51 +66,51 @@ interface AIPlayer {
 // Build order definitions for different difficulties
 const BUILD_ORDERS: Record<AIDifficulty, BuildOrderStep[]> = {
   easy: [
-    { type: 'unit', id: 'scv' },
-    { type: 'unit', id: 'scv' },
-    { type: 'building', id: 'supply_depot', supply: 10 },
-    { type: 'building', id: 'barracks', supply: 12 },
-    { type: 'unit', id: 'marine' },
+    { type: 'unit', id: 'constructor' },
+    { type: 'unit', id: 'constructor' },
+    { type: 'building', id: 'supply_cache', supply: 10 },
+    { type: 'building', id: 'infantry_bay', supply: 12 },
+    { type: 'unit', id: 'trooper' },
   ],
   medium: [
-    { type: 'unit', id: 'scv' },
-    { type: 'unit', id: 'scv' },
-    { type: 'unit', id: 'scv' },
-    { type: 'building', id: 'supply_depot', supply: 14 },
-    { type: 'building', id: 'barracks', supply: 15 },
-    { type: 'building', id: 'refinery', supply: 16 },
-    { type: 'unit', id: 'marine' },
-    { type: 'building', id: 'barracks', supply: 20 },
+    { type: 'unit', id: 'constructor' },
+    { type: 'unit', id: 'constructor' },
+    { type: 'unit', id: 'constructor' },
+    { type: 'building', id: 'supply_cache', supply: 14 },
+    { type: 'building', id: 'infantry_bay', supply: 15 },
+    { type: 'building', id: 'extractor', supply: 16 },
+    { type: 'unit', id: 'trooper' },
+    { type: 'building', id: 'infantry_bay', supply: 20 },
   ],
   hard: [
-    { type: 'unit', id: 'scv' },
-    { type: 'unit', id: 'scv' },
-    { type: 'unit', id: 'scv' },
-    { type: 'building', id: 'supply_depot', supply: 14 },
-    { type: 'building', id: 'barracks', supply: 15 },
-    { type: 'building', id: 'refinery', supply: 16 },
-    { type: 'building', id: 'factory', supply: 22 },
-    { type: 'unit', id: 'hellion' },
-    { type: 'building', id: 'starport', supply: 30 },
+    { type: 'unit', id: 'constructor' },
+    { type: 'unit', id: 'constructor' },
+    { type: 'unit', id: 'constructor' },
+    { type: 'building', id: 'supply_cache', supply: 14 },
+    { type: 'building', id: 'infantry_bay', supply: 15 },
+    { type: 'building', id: 'extractor', supply: 16 },
+    { type: 'building', id: 'forge', supply: 22 },
+    { type: 'unit', id: 'scorcher' },
+    { type: 'building', id: 'hangar', supply: 30 },
   ],
   very_hard: [
-    { type: 'unit', id: 'scv' },
-    { type: 'unit', id: 'scv' },
-    { type: 'building', id: 'supply_depot', supply: 13 },
-    { type: 'building', id: 'barracks', supply: 14 },
-    { type: 'building', id: 'refinery', supply: 15 },
-    { type: 'building', id: 'factory', supply: 20 },
-    { type: 'building', id: 'starport', supply: 28 },
-    { type: 'building', id: 'barracks', supply: 30 },
+    { type: 'unit', id: 'constructor' },
+    { type: 'unit', id: 'constructor' },
+    { type: 'building', id: 'supply_cache', supply: 13 },
+    { type: 'building', id: 'infantry_bay', supply: 14 },
+    { type: 'building', id: 'extractor', supply: 15 },
+    { type: 'building', id: 'forge', supply: 20 },
+    { type: 'building', id: 'hangar', supply: 28 },
+    { type: 'building', id: 'infantry_bay', supply: 30 },
   ],
   insane: [
-    { type: 'unit', id: 'scv' },
-    { type: 'building', id: 'supply_depot', supply: 12 },
-    { type: 'building', id: 'barracks', supply: 13 },
-    { type: 'building', id: 'refinery', supply: 14 },
-    { type: 'building', id: 'factory', supply: 18 },
-    { type: 'building', id: 'starport', supply: 24 },
-    { type: 'building', id: 'armory', supply: 30 },
+    { type: 'unit', id: 'constructor' },
+    { type: 'building', id: 'supply_cache', supply: 12 },
+    { type: 'building', id: 'infantry_bay', supply: 13 },
+    { type: 'building', id: 'extractor', supply: 14 },
+    { type: 'building', id: 'forge', supply: 18 },
+    { type: 'building', id: 'hangar', supply: 24 },
+    { type: 'building', id: 'arsenal', supply: 30 },
   ],
 };
 
@@ -172,7 +172,7 @@ export class EnhancedAISystem extends System {
       armySupply: 0,
       armyComposition: new Map(),
 
-      buildingCounts: new Map([['command_center', 1]]),
+      buildingCounts: new Map([['headquarters', 1]]),
       buildingsInProgress: new Map(),
 
       enemyBaseLocation: null,
@@ -314,15 +314,15 @@ export class EnhancedAISystem extends System {
 
     ai.minerals += ai.workerCount * baseIncomePerWorker * incomeMultiplier;
 
-    // Vespene income if AI has a refinery (simplified: assume 3 workers on gas)
-    if ((ai.buildingCounts.get('refinery') || 0) > 0) {
+    // Vespene income if AI has an extractor (simplified: assume 3 workers on gas)
+    if ((ai.buildingCounts.get('extractor') || 0) > 0) {
       ai.vespene += 3 * baseIncomePerWorker * 0.8 * incomeMultiplier;
     }
 
     // Update max supply based on buildings
-    const ccCount = ai.buildingCounts.get('command_center') || 0;
-    const depotCount = ai.buildingCounts.get('supply_depot') || 0;
-    ai.maxSupply = ccCount * 11 + depotCount * 8;
+    const hqCount = ai.buildingCounts.get('headquarters') || 0;
+    const cacheCount = ai.buildingCounts.get('supply_cache') || 0;
+    ai.maxSupply = hqCount * 11 + cacheCount * 8;
   }
 
   private updateAIState(ai: AIPlayer, currentTick: number): void {
@@ -439,12 +439,12 @@ export class EnhancedAISystem extends System {
   private doMacro(ai: AIPlayer): void {
     // Supply check
     if (ai.supply >= ai.maxSupply - 2) {
-      if (this.tryBuildBuilding(ai, 'supply_depot')) return;
+      if (this.tryBuildBuilding(ai, 'supply_cache')) return;
     }
 
     // Worker production
     if (ai.workerCount < ai.targetWorkerCount) {
-      if (this.tryTrainUnit(ai, 'scv')) return;
+      if (this.tryTrainUnit(ai, 'constructor')) return;
     }
 
     // Army production based on difficulty
@@ -452,35 +452,35 @@ export class EnhancedAISystem extends System {
   }
 
   private produceArmy(ai: AIPlayer): void {
-    const hasBarracks = (ai.buildingCounts.get('barracks') || 0) > 0;
-    const hasFactory = (ai.buildingCounts.get('factory') || 0) > 0;
-    const hasStarport = (ai.buildingCounts.get('starport') || 0) > 0;
-    const hasRefinery = (ai.buildingCounts.get('refinery') || 0) > 0;
-    const barrackCount = ai.buildingCounts.get('barracks') || 0;
+    const hasInfantryBay = (ai.buildingCounts.get('infantry_bay') || 0) > 0;
+    const hasForge = (ai.buildingCounts.get('forge') || 0) > 0;
+    const hasHangar = (ai.buildingCounts.get('hangar') || 0) > 0;
+    const hasExtractor = (ai.buildingCounts.get('extractor') || 0) > 0;
+    const infantryBayCount = ai.buildingCounts.get('infantry_bay') || 0;
 
-    // Build refinery early to get vespene for tech
-    if (!hasRefinery && ai.workerCount >= 14) {
-      if (this.tryBuildBuilding(ai, 'refinery')) return;
+    // Build extractor early to get vespene for tech
+    if (!hasExtractor && ai.workerCount >= 14) {
+      if (this.tryBuildBuilding(ai, 'extractor')) return;
     }
 
     // Build production buildings if needed
-    if (!hasBarracks && ai.workerCount >= 12) {
-      if (this.tryBuildBuilding(ai, 'barracks')) return;
+    if (!hasInfantryBay && ai.workerCount >= 12) {
+      if (this.tryBuildBuilding(ai, 'infantry_bay')) return;
     }
 
-    // Second barracks for more production
-    if (barrackCount === 1 && ai.workerCount >= 18 && ai.armySupply >= 4) {
-      if (this.tryBuildBuilding(ai, 'barracks')) return;
+    // Second infantry bay for more production
+    if (infantryBayCount === 1 && ai.workerCount >= 18 && ai.armySupply >= 4) {
+      if (this.tryBuildBuilding(ai, 'infantry_bay')) return;
     }
 
-    // Factory for all difficulties except easy (requires refinery for vespene)
-    if (hasBarracks && hasRefinery && !hasFactory && ai.difficulty !== 'easy' && ai.vespene >= 100) {
-      if (this.tryBuildBuilding(ai, 'factory')) return;
+    // Forge for all difficulties except easy (requires extractor for vespene)
+    if (hasInfantryBay && hasExtractor && !hasForge && ai.difficulty !== 'easy' && ai.vespene >= 100) {
+      if (this.tryBuildBuilding(ai, 'forge')) return;
     }
 
-    // Starport for medium+ difficulties
-    if (hasFactory && !hasStarport && ai.difficulty !== 'easy' && ai.vespene >= 100) {
-      if (this.tryBuildBuilding(ai, 'starport')) return;
+    // Hangar for medium+ difficulties
+    if (hasForge && !hasHangar && ai.difficulty !== 'easy' && ai.vespene >= 100) {
+      if (this.tryBuildBuilding(ai, 'hangar')) return;
     }
 
     // Use counter-building logic for harder difficulties
@@ -506,26 +506,26 @@ export class EnhancedAISystem extends System {
     }
 
     // Produce units based on available buildings and resources
-    if (hasStarport && ai.vespene >= 100 && Math.random() < 0.25) {
-      if (this.tryTrainUnit(ai, 'medivac')) return;
+    if (hasHangar && ai.vespene >= 100 && Math.random() < 0.25) {
+      if (this.tryTrainUnit(ai, 'lifter')) return;
     }
 
-    if (hasFactory && ai.vespene >= 25) {
+    if (hasForge && ai.vespene >= 25) {
       if (Math.random() < 0.35) {
-        if (this.tryTrainUnit(ai, 'hellion')) return;
+        if (this.tryTrainUnit(ai, 'scorcher')) return;
       }
       if (ai.vespene >= 125 && Math.random() < 0.25) {
-        if (this.tryTrainUnit(ai, 'siege_tank')) return;
+        if (this.tryTrainUnit(ai, 'devastator')) return;
       }
     }
 
-    if (hasBarracks) {
-      // Marines don't need vespene - always a good choice
+    if (hasInfantryBay) {
+      // Troopers don't need vespene - always a good choice
       if (ai.vespene >= 25 && Math.random() < 0.35 && ai.difficulty !== 'easy') {
-        // Marauders need vespene
-        this.tryTrainUnit(ai, 'marauder');
+        // Breachers need vespene
+        this.tryTrainUnit(ai, 'breacher');
       } else {
-        this.tryTrainUnit(ai, 'marine');
+        this.tryTrainUnit(ai, 'trooper');
       }
     }
   }
@@ -798,8 +798,8 @@ export class EnhancedAISystem extends System {
 
     let buildPos: { x: number; y: number } | null = null;
 
-    // Special handling for refineries - must be placed on vespene geysers
-    if (buildingType === 'refinery') {
+    // Special handling for extractors - must be placed on vespene geysers
+    if (buildingType === 'extractor') {
       buildPos = this.findAvailableVespeneGeyser(ai.playerId, basePos);
       if (!buildPos) {
         // No available vespene geyser nearby, skip building refinery
@@ -860,7 +860,7 @@ export class EnhancedAISystem extends System {
       const transform = entity.get<Transform>('Transform')!;
 
       if (selectable.playerId !== playerId) continue;
-      if (building.buildingId === 'command_center' || building.buildingId === 'orbital_command') {
+      if (building.buildingId === 'headquarters' || building.buildingId === 'orbital_station') {
         return { x: transform.x, y: transform.y };
       }
     }
@@ -875,7 +875,7 @@ export class EnhancedAISystem extends System {
       const transform = entity.get<Transform>('Transform')!;
 
       if (selectable.playerId === playerId) continue;
-      if (building.buildingId === 'command_center' || building.buildingId === 'nexus' || building.buildingId === 'hatchery') {
+      if (building.buildingId === 'headquarters' || building.buildingId === 'nexus' || building.buildingId === 'hatchery') {
         return { x: transform.x, y: transform.y };
       }
     }
@@ -1018,7 +1018,7 @@ export class EnhancedAISystem extends System {
       if (selectable.playerId !== ai.playerId) continue;
       if (health.isDead()) continue;
 
-      if (unit.unitId === 'hellion' || unit.unitId === 'reaper') {
+      if (unit.unitId === 'scorcher' || unit.unitId === 'vanguard') {
         harassUnits.push(entity.id);
       }
     }
@@ -1038,7 +1038,7 @@ export class EnhancedAISystem extends System {
       if (health.isDead()) continue;
 
       // Prefer fast units for scouting
-      if (unit.unitId === 'reaper' || unit.unitId === 'hellion') {
+      if (unit.unitId === 'vanguard' || unit.unitId === 'scorcher') {
         return entity.id;
       }
     }
@@ -1149,7 +1149,7 @@ export class EnhancedAISystem extends System {
 
       if (!building || !selectable) continue;
       if (selectable.playerId !== ai.playerId) continue;
-      if (building.buildingId !== 'refinery') continue;
+      if (building.buildingId !== 'extractor') continue;
       if (!building.isComplete()) continue;
 
       // Find the associated vespene geyser
@@ -1157,7 +1157,7 @@ export class EnhancedAISystem extends System {
         const resource = resEntity.get<Resource>('Resource');
         if (!resource) continue;
         if (resource.resourceType !== 'vespene') continue;
-        if (resource.refineryEntityId === entity.id) {
+        if (resource.extractorEntityId === entity.id) {
           refineries.push({ entityId: entity.id, resourceEntityId: resEntity.id });
           break;
         }
