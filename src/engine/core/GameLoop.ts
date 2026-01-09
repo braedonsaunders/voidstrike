@@ -1,9 +1,8 @@
 export type UpdateCallback = (deltaTime: number) => void;
 
 /**
- * Game loop that continues running even when tab is inactive.
- * Uses setInterval for consistent game logic updates regardless of tab visibility.
- * Handles browser throttling/suspension by tracking real time when hidden.
+ * Game loop that continues running at full speed even when tab is inactive.
+ * Uses a Web Worker for timing since Workers are NOT throttled by browsers.
  */
 export class GameLoop {
   private tickRate: number;
@@ -11,10 +10,7 @@ export class GameLoop {
   private isRunning = false;
   private lastTime = 0;
   private accumulator = 0;
-  private intervalId: ReturnType<typeof setInterval> | null = null;
-
-  // Track when tab was hidden to calculate catch-up time
-  private hiddenAtTime: number | null = null;
+  private worker: Worker | null = null;
 
   private updateCallback: UpdateCallback;
 
@@ -23,30 +19,51 @@ export class GameLoop {
     this.tickMs = 1000 / tickRate;
     this.updateCallback = updateCallback;
 
-    // Listen for visibility changes to handle tab switching
-    if (typeof document !== 'undefined') {
-      document.addEventListener('visibilitychange', this.handleVisibilityChange.bind(this));
-    }
+    // Create inline worker for timing (avoids separate file loading issues)
+    this.createWorker();
   }
 
-  private handleVisibilityChange(): void {
-    if (document.hidden) {
-      // Record when we went hidden
-      this.hiddenAtTime = performance.now();
-    } else if (this.hiddenAtTime !== null) {
-      // Tab became visible - calculate time spent hidden and add to accumulator
-      const hiddenDuration = performance.now() - this.hiddenAtTime;
-      // Cap at 30 seconds of catch-up to prevent extreme lag
-      const catchUpTime = Math.min(hiddenDuration, 30000);
-      this.accumulator += catchUpTime;
-      this.hiddenAtTime = null;
-      this.lastTime = performance.now();
+  private createWorker(): void {
+    if (typeof Worker === 'undefined') return;
 
-      // Immediately trigger a tick to start processing catch-up
-      if (this.isRunning) {
+    // Create worker from inline code using Blob
+    const workerCode = `
+      let intervalId = null;
+      self.onmessage = (e) => {
+        const { type, intervalMs } = e.data;
+        if (type === 'start') {
+          if (intervalId !== null) clearInterval(intervalId);
+          intervalId = setInterval(() => {
+            self.postMessage({ type: 'tick', time: performance.now() });
+          }, intervalMs);
+        } else if (type === 'stop') {
+          if (intervalId !== null) {
+            clearInterval(intervalId);
+            intervalId = null;
+          }
+        } else if (type === 'setInterval') {
+          if (intervalId !== null) {
+            clearInterval(intervalId);
+            intervalId = setInterval(() => {
+              self.postMessage({ type: 'tick', time: performance.now() });
+            }, intervalMs);
+          }
+        }
+      };
+    `;
+
+    const blob = new Blob([workerCode], { type: 'application/javascript' });
+    const workerUrl = URL.createObjectURL(blob);
+    this.worker = new Worker(workerUrl);
+
+    this.worker.onmessage = (e: MessageEvent) => {
+      if (e.data.type === 'tick') {
         this.tick();
       }
-    }
+    };
+
+    // Clean up blob URL
+    URL.revokeObjectURL(workerUrl);
   }
 
   public start(): void {
@@ -56,16 +73,34 @@ export class GameLoop {
     this.lastTime = performance.now();
     this.accumulator = 0;
 
-    // Use setInterval instead of requestAnimationFrame so game runs when tab is hidden
-    // Run at slightly higher frequency than tick rate for smooth accumulation
-    this.intervalId = setInterval(() => this.tick(), Math.floor(this.tickMs / 2));
+    if (this.worker) {
+      // Use worker for timing - runs at full speed even in background
+      this.worker.postMessage({
+        type: 'start',
+        intervalMs: Math.floor(this.tickMs / 2),
+      });
+    } else {
+      // Fallback to setInterval if workers unavailable
+      this.startFallback();
+    }
+  }
+
+  private fallbackIntervalId: ReturnType<typeof setInterval> | null = null;
+
+  private startFallback(): void {
+    this.fallbackIntervalId = setInterval(() => this.tick(), Math.floor(this.tickMs / 2));
   }
 
   public stop(): void {
     this.isRunning = false;
-    if (this.intervalId !== null) {
-      clearInterval(this.intervalId);
-      this.intervalId = null;
+
+    if (this.worker) {
+      this.worker.postMessage({ type: 'stop' });
+    }
+
+    if (this.fallbackIntervalId !== null) {
+      clearInterval(this.fallbackIntervalId);
+      this.fallbackIntervalId = null;
     }
   }
 
@@ -76,8 +111,7 @@ export class GameLoop {
     const deltaTime = currentTime - this.lastTime;
     this.lastTime = currentTime;
 
-    // Normal operation - cap delta to prevent spiral of death
-    // The visibility change handler handles background catch-up separately
+    // Cap delta to prevent spiral of death (e.g., if main thread was blocked)
     const cappedDelta = Math.min(deltaTime, 250);
     this.accumulator += cappedDelta;
 
@@ -92,11 +126,8 @@ export class GameLoop {
       iterations++;
     }
 
-    // If we still have excess after max iterations, schedule another tick
-    // This spreads catch-up over multiple frames to prevent UI freeze
-    if (this.accumulator >= this.tickMs) {
-      setTimeout(() => this.tick(), 0);
-    }
+    // If we still have excess after max iterations, it will be processed next tick
+    // The accumulator preserves any remaining time
   }
 
   public getInterpolation(): number {
@@ -107,14 +138,30 @@ export class GameLoop {
     this.tickRate = tickRate;
     this.tickMs = 1000 / tickRate;
 
-    // Restart interval with new rate if running
-    if (this.isRunning && this.intervalId !== null) {
-      clearInterval(this.intervalId);
-      this.intervalId = setInterval(() => this.tick(), Math.floor(this.tickMs / 2));
+    // Update worker interval if running
+    if (this.isRunning && this.worker) {
+      this.worker.postMessage({
+        type: 'setInterval',
+        intervalMs: Math.floor(this.tickMs / 2),
+      });
+    }
+
+    // Update fallback interval if running
+    if (this.isRunning && this.fallbackIntervalId !== null) {
+      clearInterval(this.fallbackIntervalId);
+      this.fallbackIntervalId = setInterval(() => this.tick(), Math.floor(this.tickMs / 2));
     }
   }
 
   public getTickRate(): number {
     return this.tickRate;
+  }
+
+  public dispose(): void {
+    this.stop();
+    if (this.worker) {
+      this.worker.terminate();
+      this.worker = null;
+    }
   }
 }
