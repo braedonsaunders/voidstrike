@@ -538,7 +538,6 @@ export class Unit extends Component {
     if (this.state === 'gathering') {
       this.gatherTargetId = null;
       this.isMining = false;
-      this.isReturning = false;
     }
     this.repairTargetId = targetId;
     this.isRepairing = true;
