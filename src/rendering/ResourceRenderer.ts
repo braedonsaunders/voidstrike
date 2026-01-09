@@ -181,8 +181,11 @@ export class ResourceRenderer {
     for (const entity of entities) {
       currentIds.add(entity.id);
 
-      const transform = entity.get<Transform>('Transform')!;
-      const resource = entity.get<Resource>('Resource')!;
+      const transform = entity.get<Transform>('Transform');
+      const resource = entity.get<Resource>('Resource');
+
+      // Skip entities with missing required components (defensive check)
+      if (!transform || !resource) continue;
 
       // Skip depleted resources
       if (resource.isDepleted()) {

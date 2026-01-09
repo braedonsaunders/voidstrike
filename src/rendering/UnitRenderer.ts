@@ -329,8 +329,12 @@ export class UnitRenderer {
     for (const entity of entities) {
       currentIds.add(entity.id);
 
-      const transform = entity.get<Transform>('Transform')!;
-      const unit = entity.get<Unit>('Unit')!;
+      const transform = entity.get<Transform>('Transform');
+      const unit = entity.get<Unit>('Unit');
+
+      // Skip entities with missing required components (defensive check)
+      if (!transform || !unit) continue;
+
       const health = entity.get<Health>('Health');
       const selectable = entity.get<Selectable>('Selectable');
       const velocity = entity.get<Velocity>('Velocity');
