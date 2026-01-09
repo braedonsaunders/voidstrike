@@ -55,6 +55,12 @@ export class BuildingPlacementSystem extends System {
       return;
     }
 
+    // Validate position exists
+    if (!data.position || typeof data.position.x !== 'number' || typeof data.position.y !== 'number') {
+      console.warn(`BuildingPlacementSystem: Invalid position for ${buildingType}:`, data.position);
+      return;
+    }
+
     // Snap click position to grid for clean placement (center-based)
     const snappedX = Math.round(data.position.x);
     const snappedY = Math.round(data.position.y);
@@ -354,8 +360,9 @@ export class BuildingPlacementSystem extends System {
     // Check for overlapping buildings
     const buildings = this.world.getEntitiesWith('Building', 'Transform');
     for (const entity of buildings) {
-      const transform = entity.get<Transform>('Transform')!;
-      const building = entity.get<Building>('Building')!;
+      const transform = entity.get<Transform>('Transform');
+      const building = entity.get<Building>('Building');
+      if (!transform || !building) continue;
 
       const existingHalfW = building.width / 2;
       const existingHalfH = building.height / 2;
@@ -371,7 +378,9 @@ export class BuildingPlacementSystem extends System {
     // Check for overlapping resources
     const resources = this.world.getEntitiesWith('Resource', 'Transform');
     for (const entity of resources) {
-      const transform = entity.get<Transform>('Transform')!;
+      const transform = entity.get<Transform>('Transform');
+      if (!transform) continue;
+
       const dx = Math.abs(centerX - transform.x);
       const dy = Math.abs(centerY - transform.y);
 
@@ -389,7 +398,9 @@ export class BuildingPlacementSystem extends System {
         continue;
       }
 
-      const transform = entity.get<Transform>('Transform')!;
+      const transform = entity.get<Transform>('Transform');
+      if (!transform) continue;
+
       const dx = Math.abs(centerX - transform.x);
       const dy = Math.abs(centerY - transform.y);
 
