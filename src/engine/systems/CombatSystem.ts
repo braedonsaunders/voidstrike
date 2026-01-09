@@ -270,7 +270,7 @@ export class CombatSystem extends System {
       }
     }
 
-    // Check for building deaths
+    // Check for building deaths - CRITICAL: Must destroy buildings with 0 health
     const buildings = this.world.getEntitiesWith('Building', 'Transform', 'Health', 'Selectable');
     for (const building of buildings) {
       const health = building.get<Health>('Health')!;
@@ -278,7 +278,13 @@ export class CombatSystem extends System {
       const selectable = building.get<Selectable>('Selectable')!;
       const transform = building.get<Transform>('Transform')!;
 
-      if (health.isDead() && buildingComp.state !== 'destroyed') {
+      // Check multiple conditions for death to ensure we catch all cases
+      // Building should be destroyed if: health <= 0, OR if health is very low (floating point safety)
+      const shouldDestroy = health.isDead() || health.current <= 0.01;
+
+      if (shouldDestroy && buildingComp.state !== 'destroyed') {
+        // Force health to exactly 0 to prevent edge cases
+        health.current = 0;
         buildingComp.state = 'destroyed';
 
         // If this is an extractor, restore the vespene geyser visibility
@@ -294,6 +300,8 @@ export class CombatSystem extends System {
           }
         }
 
+        console.log(`CombatSystem: Building ${buildingComp.buildingId} (${building.id}) destroyed at (${transform.x.toFixed(1)}, ${transform.y.toFixed(1)})`);
+
         this.game.eventBus.emit('building:destroyed', {
           entityId: building.id,
           playerId: selectable.playerId,
@@ -303,7 +311,7 @@ export class CombatSystem extends System {
           height: buildingComp.height,
         });
 
-        // Schedule entity for destruction
+        // Schedule entity for destruction immediately
         this.world.destroyEntity(building.id);
       }
     }

@@ -70,6 +70,9 @@ export class BuildingRenderer {
   private fireAnimTime: number = 0;
   private constructionAnimTime: number = 0;
 
+  // Fallback elevation heights when terrain isn't available
+  private static readonly ELEVATION_HEIGHTS = [0, 1.8, 3.5];
+
   constructor(scene: THREE.Scene, world: World, visionSystem?: VisionSystem, terrain?: Terrain) {
     this.scene = scene;
     this.world = world;
@@ -281,6 +284,38 @@ export class BuildingRenderer {
     this.playerId = playerId;
   }
 
+  /**
+   * Get terrain height at position with fallback to map data elevation
+   * Ensures buildings are never rendered underground
+   */
+  private getTerrainHeightAt(x: number, y: number): number {
+    // First try terrain system
+    if (this.terrain) {
+      const height = this.terrain.getHeightAt(x, y);
+      // Validate height is reasonable (not NaN or extreme values)
+      if (isFinite(height) && height >= -10 && height <= 100) {
+        return height;
+      }
+    }
+
+    // Fallback: get elevation from map data if available
+    // This ensures buildings are placed correctly even if terrain isn't ready
+    const mapData = (this.terrain as unknown as { mapData?: { width: number; height: number; terrain: Array<Array<{ elevation: number }>> } })?.mapData;
+    if (mapData?.terrain) {
+      const cellX = Math.floor(x);
+      const cellY = Math.floor(y);
+      if (cellX >= 0 && cellX < mapData.width && cellY >= 0 && cellY < mapData.height) {
+        const cell = mapData.terrain[cellY]?.[cellX];
+        if (cell && typeof cell.elevation === 'number') {
+          return BuildingRenderer.ELEVATION_HEIGHTS[cell.elevation] ?? 0;
+        }
+      }
+    }
+
+    // Ultimate fallback: ground level
+    return 0;
+  }
+
   public update(deltaTime: number = 16): void {
     const dt = deltaTime / 1000;
     this.fireAnimTime += dt;
@@ -323,7 +358,7 @@ export class BuildingRenderer {
         const group = this.getOrCreateInstancedGroup(building.buildingId, ownerId);
 
         if (group.mesh.count < group.maxInstances) {
-          const terrainHeight = this.terrain?.getHeightAt(transform.x, transform.y) ?? 0;
+          const terrainHeight = this.getTerrainHeightAt(transform.x, transform.y);
 
           // Set instance matrix - CRITICAL: Use model's scale from normalization
           this.tempPosition.set(transform.x, terrainHeight, transform.y);
@@ -401,8 +436,8 @@ export class BuildingRenderer {
         continue;
       }
 
-      // Get terrain height at this position
-      const terrainHeight = this.terrain?.getHeightAt(transform.x, transform.y) ?? 0;
+      // Get terrain height at this position - use safe method with fallback
+      const terrainHeight = this.getTerrainHeightAt(transform.x, transform.y);
 
       // Update position - place building on top of terrain
       meshData.group.position.set(transform.x, terrainHeight, transform.y);
