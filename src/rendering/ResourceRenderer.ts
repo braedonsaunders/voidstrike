@@ -47,6 +47,9 @@ export class ResourceRenderer {
   private tempScale: THREE.Vector3 = new THREE.Vector3();
   private tempEuler: THREE.Euler = new THREE.Euler();
 
+  // Debug tracking
+  private _lastMineralCount: number = 0;
+
   constructor(scene: THREE.Scene, world: World, terrain?: Terrain) {
     this.scene = scene;
     this.world = world;
@@ -78,24 +81,40 @@ export class ResourceRenderer {
       let yOffset = 0;
       let baseScale = 1;
 
+      // Debug: count meshes in the model
+      let meshCount = 0;
+      baseMesh.traverse((child) => {
+        if (child instanceof THREE.Mesh) {
+          meshCount++;
+        }
+      });
+      console.log(`[ResourceRenderer] ${resourceType} model has ${meshCount} meshes`);
+
       // baseMesh is a wrapper Group containing the normalized model
       // The inner model has position.y set for grounding and scale set for sizing
       baseMesh.traverse((child) => {
         if (child instanceof THREE.Mesh && !geometry) {
           geometry = child.geometry;
           material = child.material;
+          console.log(`[ResourceRenderer] ${resourceType} using mesh: geometry vertices=${geometry?.attributes?.position?.count ?? 'unknown'}, material=${material ? 'present' : 'missing'}`);
           // Get the accumulated y-offset and scale from the transform chain
           // Walk up the parent chain to accumulate transforms
           let obj: THREE.Object3D | null = child;
+          let depth = 0;
           while (obj && obj !== baseMesh) {
+            console.log(`[ResourceRenderer] ${resourceType} transform chain[${depth}]: pos.y=${obj.position.y.toFixed(2)}, scale.y=${obj.scale.y.toFixed(4)}`);
             yOffset += obj.position.y * (obj.parent?.scale.y ?? 1);
             baseScale *= obj.scale.y;
             obj = obj.parent;
+            depth++;
           }
         }
       });
 
-      if (!geometry) {
+      // Fallback to procedural geometry if model has no geometry or invalid geometry
+      const vertexCount = geometry?.attributes?.position?.count ?? 0;
+      if (!geometry || vertexCount < 3) {
+        console.log(`[ResourceRenderer] ${resourceType}: Using procedural fallback (geometry ${geometry ? 'has ' + vertexCount + ' vertices' : 'missing'})`);
         // Fallback: create a simple shape
         if (resourceType === 'minerals') {
           geometry = new THREE.ConeGeometry(0.4, 1.2, 6);
@@ -104,6 +123,8 @@ export class ResourceRenderer {
             emissive: 0x4080ff,
             emissiveIntensity: 0.8,
           });
+          yOffset = 0.6; // Half height of cone
+          baseScale = 1;
         } else {
           geometry = new THREE.CylinderGeometry(0.5, 0.7, 0.6, 8);
           material = new THREE.MeshStandardMaterial({
@@ -111,6 +132,8 @@ export class ResourceRenderer {
             emissive: 0x20ff60,
             emissiveIntensity: 0.6,
           });
+          yOffset = 0.3; // Half height of cylinder
+          baseScale = 1;
         }
       }
 
@@ -127,7 +150,7 @@ export class ResourceRenderer {
 
       this.scene.add(instancedMesh);
 
-      console.log(`[ResourceRenderer] Created instanced group for ${resourceType}: yOffset=${yOffset.toFixed(2)}, baseScale=${baseScale.toFixed(3)}`);
+      console.log(`[ResourceRenderer] Created instanced group for ${resourceType}: yOffset=${yOffset.toFixed(2)}, baseScale=${baseScale.toFixed(3)}, geometry=${!!geometry}, material=${!!material}`);
 
       group = {
         mesh: instancedMesh,
@@ -170,6 +193,20 @@ export class ResourceRenderer {
   public update(): void {
     const entities = this.world.getEntitiesWith('Transform', 'Resource');
     const currentIds = new Set<number>();
+
+    // Count resources by type for debugging
+    let mineralCount = 0;
+    let vespeneCount = 0;
+    for (const entity of entities) {
+      const resource = entity.get<Resource>('Resource');
+      if (resource?.resourceType === 'minerals') mineralCount++;
+      else if (resource?.resourceType === 'vespene') vespeneCount++;
+    }
+    // Only log once at startup or when counts change
+    if (!this._lastMineralCount || this._lastMineralCount !== mineralCount) {
+      console.log(`[ResourceRenderer] Found ${mineralCount} minerals, ${vespeneCount} vespene entities`);
+      this._lastMineralCount = mineralCount;
+    }
 
     // Reset instance counts
     for (const group of this.instancedGroups.values()) {
@@ -230,10 +267,16 @@ export class ResourceRenderer {
       }
     }
 
-    // Mark instance matrices as needing update
+    // Mark instance matrices as needing update and log counts
     for (const group of this.instancedGroups.values()) {
       if (group.mesh.count > 0) {
         group.mesh.instanceMatrix.needsUpdate = true;
+      }
+      // Log instance counts on first frame or when they change
+      const key = `_last${group.resourceType}Count`;
+      if ((this as Record<string, number>)[key] !== group.mesh.count) {
+        console.log(`[ResourceRenderer] ${group.resourceType} instance count: ${group.mesh.count}`);
+        (this as Record<string, number>)[key] = group.mesh.count;
       }
     }
 

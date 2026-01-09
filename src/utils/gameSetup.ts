@@ -147,14 +147,28 @@ function spawnBase(game: Game, playerId: string, x: number, y: number, isHumanPl
 }
 
 function spawnExpansionResources(game: Game, expansion: Expansion): void {
+  console.log(`[gameSetup] Spawning resources for expansion: ${expansion.name}`);
+  console.log(`[gameSetup]   Minerals: ${expansion.minerals?.length ?? 0} patches`);
+  console.log(`[gameSetup]   Vespene: ${expansion.vespene?.length ?? 0} geysers`);
+
   // Spawn mineral patches
-  for (const mineral of expansion.minerals) {
-    spawnMineralPatch(game, mineral.x, mineral.y, mineral.amount);
+  if (expansion.minerals) {
+    for (const mineral of expansion.minerals) {
+      console.log(`[gameSetup]   Creating mineral at (${mineral.x.toFixed(1)}, ${mineral.y.toFixed(1)}) amount=${mineral.amount}`);
+      spawnMineralPatch(game, mineral.x, mineral.y, mineral.amount);
+    }
+  } else {
+    console.warn(`[gameSetup]   WARNING: expansion.minerals is undefined!`);
   }
 
   // Spawn vespene geysers
-  for (const geyser of expansion.vespene) {
-    spawnVespeneGeyser(game, geyser.x, geyser.y, geyser.amount);
+  if (expansion.vespene) {
+    for (const geyser of expansion.vespene) {
+      console.log(`[gameSetup]   Creating vespene at (${geyser.x.toFixed(1)}, ${geyser.y.toFixed(1)}) amount=${geyser.amount}`);
+      spawnVespeneGeyser(game, geyser.x, geyser.y, geyser.amount);
+    }
+  } else {
+    console.warn(`[gameSetup]   WARNING: expansion.vespene is undefined!`);
   }
 }
 
