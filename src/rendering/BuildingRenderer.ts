@@ -219,12 +219,14 @@ export class BuildingRenderer {
       meshData.group.position.set(transform.x, terrainHeight, transform.y);
 
       // Construction animation based on building state
-      const isComplete = building.isComplete();
+      // States: 'waiting_for_worker', 'constructing', 'complete', 'lifting', 'flying', 'landing', 'destroyed'
+      const isConstructing = building.state === 'constructing';
       const isWaitingForWorker = building.state === 'waiting_for_worker';
+      // All other states (complete, lifting, flying, landing) should show full opacity building
+      const shouldShowComplete = !isConstructing && !isWaitingForWorker;
 
-      // ALWAYS check building state directly - don't rely on cached wasComplete
-      if (isComplete) {
-        // Complete building - full opacity, no effects
+      if (shouldShowComplete) {
+        // Complete/operational building - full opacity, no construction effects
         meshData.group.scale.setScalar(1);
         meshData.group.traverse((child) => {
           if (child instanceof THREE.Mesh) {
@@ -261,18 +263,18 @@ export class BuildingRenderer {
           meshData.constructionEffect.visible = false;
         }
       } else {
-        // Construction in progress - scale up and increase opacity based on progress
+        // Construction in progress (state === 'constructing')
+        // Use opacity-only animation to avoid position issues from scaling
         const progress = building.buildProgress;
-        const scale = 0.3 + progress * 0.7; // Scale from 30% to 100%
-        const opacity = 0.4 + progress * 0.6; // Opacity from 40% to 100%
+        const opacity = 0.3 + progress * 0.7; // Opacity from 30% to 100%
 
-        meshData.group.scale.setScalar(scale);
+        meshData.group.scale.setScalar(1); // Keep scale at 1 to avoid position offset issues
         meshData.group.traverse((child) => {
           if (child instanceof THREE.Mesh) {
             const mat = child.material as THREE.MeshStandardMaterial;
             if (mat) {
               mat.clippingPlanes = [];
-              mat.transparent = progress < 0.95; // Only transparent during construction
+              mat.transparent = true;
               mat.opacity = opacity;
             }
           }
@@ -284,9 +286,9 @@ export class BuildingRenderer {
           this.scene.add(meshData.constructionEffect);
         }
 
-        // Position construction effect at building
+        // Position construction effect at base of building
         meshData.constructionEffect.visible = true;
-        meshData.constructionEffect.position.set(transform.x, terrainHeight + meshData.buildingHeight * progress * 0.5, transform.y);
+        meshData.constructionEffect.position.set(transform.x, terrainHeight + 0.1, transform.y);
         this.updateConstructionEffect(meshData.constructionEffect, dt, building.width, building.height);
       }
 
@@ -302,8 +304,8 @@ export class BuildingRenderer {
           isOwned ? this.selectionMaterial : this.enemySelectionMaterial;
       }
 
-      // Update health bar and fire effects
-      if (health && building.isComplete()) {
+      // Update health bar and fire effects (for all non-constructing states)
+      if (health && shouldShowComplete) {
         const healthPercent = health.getHealthPercent();
         meshData.healthBar.position.set(transform.x, terrainHeight + building.height + 0.5, transform.y);
         meshData.healthBar.visible = healthPercent < 1;
@@ -387,9 +389,17 @@ export class BuildingRenderer {
     const bbox = new THREE.Box3().setFromObject(group);
     const buildingHeight = bbox.max.y - bbox.min.y || building.height;
 
-    // Enable clipping on all materials
+    // CRITICAL: Clone materials so each building has its own material instance
+    // This prevents transparency changes on one building from affecting others
     group.traverse((child) => {
       if (child instanceof THREE.Mesh) {
+        if (child.material) {
+          if (Array.isArray(child.material)) {
+            child.material = child.material.map(mat => mat.clone());
+          } else {
+            child.material = child.material.clone();
+          }
+        }
         const mat = child.material as THREE.MeshStandardMaterial;
         if (mat) {
           mat.side = THREE.DoubleSide; // Required for clipping to look correct
