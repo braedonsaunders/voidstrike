@@ -1,8 +1,11 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { useGameSetupStore, getColorHex, PLAYER_COLORS } from '@/store/gameSetupStore';
+import { useGameSetupStore, PLAYER_COLORS } from '@/store/gameSetupStore';
 import { Game } from '@/engine/core/Game';
+import { Selectable } from '@/engine/components/Selectable';
+import { Health } from '@/engine/components/Health';
+import { Unit } from '@/engine/components/Unit';
 
 interface PlayerStatus {
   playerId: string;
@@ -43,8 +46,8 @@ export function PlayerStatusPanel() {
         // Count buildings
         const buildings = world.getEntitiesWith('Building', 'Selectable', 'Health');
         for (const entity of buildings) {
-          const selectable = entity.get<{ playerId: string }>('Selectable');
-          const health = entity.get<{ isDead: () => boolean }>('Health');
+          const selectable = entity.get<Selectable>('Selectable');
+          const health = entity.get<Health>('Health');
           if (selectable?.playerId === slot.id && !health?.isDead()) {
             buildingCount++;
           }
@@ -53,9 +56,9 @@ export function PlayerStatusPanel() {
         // Count units
         const units = world.getEntitiesWith('Unit', 'Selectable', 'Health');
         for (const entity of units) {
-          const selectable = entity.get<{ playerId: string }>('Selectable');
-          const unit = entity.get<{ isWorker: boolean; supplyCost?: number }>('Unit');
-          const health = entity.get<{ isDead: () => boolean }>('Health');
+          const selectable = entity.get<Selectable>('Selectable');
+          const unit = entity.get<Unit>('Unit');
+          const health = entity.get<Health>('Health');
           if (selectable?.playerId === slot.id && !health?.isDead()) {
             unitCount++;
             if (unit?.isWorker) {

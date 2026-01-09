@@ -3,6 +3,7 @@ import { Game } from '../core/Game';
 import { Transform } from '../components/Transform';
 import { Unit } from '../components/Unit';
 import { AudioManager, UNIT_VOICES, BIOME_AMBIENT } from '@/audio/AudioManager';
+import { useGameSetupStore } from '@/store/gameSetupStore';
 import * as THREE from 'three';
 
 export class AudioSystem extends System {
@@ -15,6 +16,11 @@ export class AudioSystem extends System {
 
   constructor(game: Game) {
     super(game);
+  }
+
+  // Check if we're in spectator mode (no human player)
+  private isSpectator(): boolean {
+    return useGameSetupStore.getState().isSpectator();
   }
 
   // Call this after camera is created (camera is optional for 2D audio only)
@@ -121,8 +127,11 @@ export class AudioSystem extends System {
   }
 
   private setupEventListeners(): void {
-    // Selection events - play unit voice on select
+    // Selection events - play unit voice on select (only for human player)
     this.game.eventBus.on('selection:changed', (data: { entityIds: number[] }) => {
+      // Skip selection sounds in spectator mode
+      if (this.isSpectator()) return;
+
       AudioManager.play('ui_select');
 
       // Play unit voice line
@@ -134,8 +143,11 @@ export class AudioSystem extends System {
       }
     });
 
-    // Command events - play unit voice on move/attack
+    // Command events - play unit voice on move/attack (only for human player)
     this.game.eventBus.on('command:move', (data: { entityIds: number[] }) => {
+      // Skip command sounds in spectator mode
+      if (this.isSpectator()) return;
+
       if (data.entityIds.length > 0) {
         AudioManager.play('unit_move');
 
@@ -148,6 +160,9 @@ export class AudioSystem extends System {
     });
 
     this.game.eventBus.on('command:attack', (data: { entityIds: number[] }) => {
+      // Skip command sounds in spectator mode
+      if (this.isSpectator()) return;
+
       if (data.entityIds.length > 0) {
         AudioManager.play('unit_attack');
 
@@ -253,17 +268,26 @@ export class AudioSystem extends System {
       }
     });
 
-    // Supply blocked alert
+    // Supply blocked alert (only for human player)
     this.game.eventBus.on('alert:supplyBlocked', () => {
+      // Skip in spectator mode
+      if (this.isSpectator()) return;
       AudioManager.play('alert_supply_blocked');
     });
 
-    // Production events
-    this.game.eventBus.on('production:started', () => {
+    // Production events (only for player1)
+    this.game.eventBus.on('production:started', (data: { playerId?: string }) => {
+      // Only play for player1's production, not AI
+      if (data?.playerId && data.playerId !== 'player1') return;
+      if (this.isSpectator()) return;
       AudioManager.play('production_start');
     });
 
-    this.game.eventBus.on('production:complete', (data: { unitId?: string }) => {
+    this.game.eventBus.on('production:complete', (data: { unitId?: string; playerId?: string }) => {
+      // Only play for player1's production, not AI
+      if (data?.playerId && data.playerId !== 'player1') return;
+      if (this.isSpectator()) return;
+
       AudioManager.play('unit_ready');
 
       // Play unit-specific ready voice
@@ -272,34 +296,47 @@ export class AudioSystem extends System {
       }
     });
 
-    // Building events
-    this.game.eventBus.on('building:place', () => {
+    // Building events (only for player1)
+    this.game.eventBus.on('building:place', (data: { playerId?: string }) => {
+      // Only play for player1's buildings, not AI
+      if (data?.playerId && data.playerId !== 'player1') return;
+      if (this.isSpectator()) return;
       AudioManager.play('building_place');
     });
 
     this.game.eventBus.on('building:complete', (data: { playerId?: string }) => {
       // Only play sound for player's buildings, not AI
-      if (data?.playerId === 'player1') {
-        AudioManager.play('ui_building_complete');
-      }
+      if (data?.playerId !== 'player1') return;
+      if (this.isSpectator()) return;
+      AudioManager.play('ui_building_complete');
     });
 
-    // Research events
-    this.game.eventBus.on('research:started', () => {
+    // Research events (only for player1)
+    this.game.eventBus.on('research:started', (data: { playerId?: string }) => {
+      // Only play for player1's research, not AI
+      if (data?.playerId && data.playerId !== 'player1') return;
+      if (this.isSpectator()) return;
       AudioManager.play('production_start');
     });
 
-    this.game.eventBus.on('research:complete', () => {
+    this.game.eventBus.on('research:complete', (data: { playerId?: string }) => {
+      // Only play for player1's research, not AI
+      if (data?.playerId && data.playerId !== 'player1') return;
+      if (this.isSpectator()) return;
       AudioManager.play('ui_research_complete');
     });
 
-    // UI error events
+    // UI error events (only for human player)
     this.game.eventBus.on('ui:error', () => {
+      // Skip in spectator mode
+      if (this.isSpectator()) return;
       AudioManager.play('ui_error');
     });
 
-    // UI click (can be called from UI components)
+    // UI click (can be called from UI components - only for human player)
     this.game.eventBus.on('ui:click', () => {
+      // Skip in spectator mode
+      if (this.isSpectator()) return;
       AudioManager.play('ui_click');
     });
   }

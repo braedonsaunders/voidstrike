@@ -1,6 +1,7 @@
 import * as Phaser from 'phaser';
 import { EventBus } from '@/engine/core/EventBus';
 import { useGameStore } from '@/store/gameStore';
+import { useGameSetupStore } from '@/store/gameSetupStore';
 
 /**
  * Phaser 4 Overlay Scene
@@ -85,6 +86,11 @@ export class OverlayScene extends Phaser.Scene {
     super({ key: 'OverlayScene' });
   }
 
+  // Check if we're in spectator mode (no human player)
+  private isSpectator(): boolean {
+    return useGameSetupStore.getState().isSpectator();
+  }
+
   init(data: { eventBus: EventBus }): void {
     this.eventBus = data.eventBus;
   }
@@ -135,8 +141,12 @@ export class OverlayScene extends Phaser.Scene {
       }
     });
 
-    // Player takes damage - show vignette
-    this.eventBus.on('player:damage', (data: { damage: number; position?: { x: number; y: number } }) => {
+    // Player takes damage - show vignette (only for player1)
+    this.eventBus.on('player:damage', (data: { damage: number; position?: { x: number; y: number }; playerId?: string }) => {
+      // Skip in spectator mode or if not player1
+      if (this.isSpectator()) return;
+      if (data.playerId && data.playerId !== 'player1') return;
+
       this.addScreenEffect({
         type: 'damage_vignette',
         intensity: Math.min(0.5, data.damage / 100),
@@ -159,17 +169,26 @@ export class OverlayScene extends Phaser.Scene {
       });
     });
 
-    // Base under attack
-    this.eventBus.on('alert:underAttack', (data: { position?: { x: number; y: number } }) => {
+    // Base under attack (only for player1)
+    this.eventBus.on('alert:underAttack', (data: { position?: { x: number; y: number }; playerId?: string }) => {
+      // Skip in spectator mode or if not player1
+      if (this.isSpectator()) return;
+      if (data.playerId && data.playerId !== 'player1') return;
+
       this.showAlert('YOUR BASE IS UNDER ATTACK', 0xff4444, 3000);
       if (data.position) {
         this.checkOffScreenAttack(data.position.x, data.position.y);
       }
     });
 
-    // Unit died
-    this.eventBus.on('unit:died', (data: { position?: { x: number; y: number }; isPlayerUnit?: boolean }) => {
-      if (data.isPlayerUnit) {
+    // Unit died (only show vignette for player1 units)
+    this.eventBus.on('unit:died', (data: { position?: { x: number; y: number }; isPlayerUnit?: boolean; playerId?: string }) => {
+      // Skip screen effects in spectator mode
+      if (this.isSpectator()) return;
+
+      // Check if this is player1's unit
+      const isPlayer1Unit = data.isPlayerUnit || data.playerId === 'player1';
+      if (isPlayer1Unit) {
         this.combatIntensity = Math.min(1, this.combatIntensity + 0.1);
         // Show damage vignette when player unit dies
         this.addScreenEffect({
@@ -181,8 +200,13 @@ export class OverlayScene extends Phaser.Scene {
       }
     });
 
-    // Player unit takes damage - show vignette
-    this.eventBus.on('player:damage', (data: { damage: number; position?: { x: number; y: number } }) => {
+    // Player unit takes damage - show vignette (only for player1)
+    // NOTE: This is a second listener for the same event - both will fire
+    this.eventBus.on('player:damage', (data: { damage: number; position?: { x: number; y: number }; playerId?: string }) => {
+      // Skip in spectator mode or if not player1
+      if (this.isSpectator()) return;
+      if (data.playerId && data.playerId !== 'player1') return;
+
       this.addScreenEffect({
         type: 'damage_vignette',
         intensity: Math.min(0.6, data.damage / 80),
@@ -193,34 +217,50 @@ export class OverlayScene extends Phaser.Scene {
       this.screenShakeIntensity = Math.min(12, this.screenShakeIntensity + data.damage / 15);
     });
 
-    // Production complete notifications
-    this.eventBus.on('production:complete', (data: { unitName: string; buildingName?: string }) => {
+    // Production complete notifications (only for player1)
+    this.eventBus.on('production:complete', (data: { unitName: string; buildingName?: string; playerId?: string }) => {
+      // Skip in spectator mode or if not player1
+      if (this.isSpectator()) return;
+      if (data.playerId && data.playerId !== 'player1') return;
+
       this.showAlert(`${data.unitName.toUpperCase()} READY`, 0x00ff88, 2000);
     });
 
-    // Research complete
-    this.eventBus.on('research:complete', (data: { researchName: string }) => {
+    // Research complete (only for player1)
+    this.eventBus.on('research:complete', (data: { researchName: string; playerId?: string }) => {
+      // Skip in spectator mode or if not player1
+      if (this.isSpectator()) return;
+      if (data.playerId && data.playerId !== 'player1') return;
+
       this.showAlert(`RESEARCH COMPLETE: ${data.researchName.toUpperCase()}`, 0x00ffff, 3000);
     });
 
     // Building complete - only show for player's buildings
     this.eventBus.on('building:complete', (data: { buildingName?: string; buildingType?: string; playerId?: string }) => {
-      // Only show alert for player1's buildings
+      // Skip in spectator mode or if not player1
+      if (this.isSpectator()) return;
       if (data.playerId && data.playerId !== 'player1') return;
+
       const name = data.buildingName || data.buildingType || 'BUILDING';
       this.showAlert(`${name.toUpperCase()} COMPLETE`, 0x88ff00, 2000);
     });
 
-    // Resource warnings
+    // Resource warnings (only for human player)
     this.eventBus.on('warning:lowMinerals', () => {
+      // Skip in spectator mode
+      if (this.isSpectator()) return;
       this.showAlert('NOT ENOUGH MINERALS', 0xffaa00, 1500);
     });
 
     this.eventBus.on('warning:lowVespene', () => {
+      // Skip in spectator mode
+      if (this.isSpectator()) return;
       this.showAlert('NOT ENOUGH VESPENE', 0x00ffaa, 1500);
     });
 
     this.eventBus.on('warning:supplyBlocked', () => {
+      // Skip in spectator mode
+      if (this.isSpectator()) return;
       this.showAlert('SUPPLY BLOCKED', 0xff6600, 2000);
     });
 
