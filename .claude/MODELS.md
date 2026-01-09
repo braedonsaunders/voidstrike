@@ -1303,7 +1303,7 @@ The AssetManager will automatically use custom models when available, falling ba
 
 ## Checklist
 
-### Units (13 total)
+### Units (13 total) - 1 complete
 - [x] SCV *(optimized: 204KB)*
 - [ ] Marine
 - [ ] Marauder
@@ -1318,12 +1318,12 @@ The AssetManager will automatically use custom models when available, falling ba
 - [ ] Battlecruiser
 - [ ] Raven
 
-### Buildings (15 total)
-- [ ] Command Center
-- [ ] Orbital Command *(CC upgrade)*
-- [ ] Planetary Fortress *(CC upgrade)*
-- [ ] Supply Depot
-- [ ] Refinery
+### Buildings (17 total) - 5 complete
+- [x] Command Center
+- [x] Orbital Command *(CC upgrade)*
+- [x] Planetary Fortress *(CC upgrade)*
+- [x] Supply Depot
+- [x] Refinery
 - [ ] Barracks
 - [ ] Engineering Bay
 - [ ] Bunker
@@ -1337,29 +1337,42 @@ The AssetManager will automatically use custom models when available, falling ba
 - [ ] Tech Lab *(addon)*
 - [ ] Reactor *(addon)*
 
-### Resources (2 total)
+### Resources (2 total) - 0 complete
 - [ ] Mineral Patch
 - [ ] Vespene Geyser
 
-### Projectiles (3 total)
+### Projectiles (3 total) - 0 complete
 - [ ] Bullet
 - [ ] Missile
 - [ ] Laser
 
-### Decorations (16 total)
-- [ ] Xel'Naga Watch Tower
-- [ ] Destructible Rocks (Large)
-- [ ] Destructible Rocks (Small)
-- [ ] Decorative Rock (Single)
-- [ ] Pine Tree (Tall)
-- [ ] Pine Tree (Medium)
-- [ ] Dead Tree
-- [ ] Alien Tree (Bioluminescent)
-- [ ] Palm Tree
-- [ ] Mushroom Tree (Giant)
-- [ ] Crystal Formation
+### Decorations (16 total) - 11 complete
+- [x] Xel'Naga Watch Tower
+- [x] Destructible Rocks (Large)
+- [x] Destructible Rocks (Small)
+- [x] Decorative Rock (Single)
+- [x] Pine Tree (Tall)
+- [x] Pine Tree (Medium)
+- [x] Dead Tree
+- [x] Alien Tree (Bioluminescent)
+- [x] Palm Tree
+- [x] Mushroom Tree (Giant)
+- [x] Crystal Formation
 - [ ] Bush/Shrub
 - [ ] Grass Clump
 - [ ] Debris Pile
 - [ ] Crashed Escape Pod
 - [ ] Ruined Wall Section
+
+---
+
+## Summary
+
+| Category | Complete | Total | Progress |
+|----------|----------|-------|----------|
+| Units | 1 | 13 | 8% |
+| Buildings | 5 | 17 | 29% |
+| Resources | 0 | 2 | 0% |
+| Projectiles | 0 | 3 | 0% |
+| Decorations | 11 | 16 | 69% |
+| **Total** | **17** | **51** | **33%** |

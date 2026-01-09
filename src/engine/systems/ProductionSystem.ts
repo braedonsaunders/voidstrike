@@ -159,9 +159,12 @@ export class ProductionSystem extends System {
     const buildings = this.world.getEntitiesWith('Building', 'Transform', 'Health');
 
     for (const entity of buildings) {
-      const building = entity.get<Building>('Building')!;
-      const transform = entity.get<Transform>('Transform')!;
-      const health = entity.get<Health>('Health')!;
+      const building = entity.get<Building>('Building');
+      const transform = entity.get<Transform>('Transform');
+      const health = entity.get<Health>('Health');
+
+      // Defensive null checks
+      if (!building || !transform || !health) continue;
 
       // Skip destroyed buildings
       if (health.isDead()) continue;
