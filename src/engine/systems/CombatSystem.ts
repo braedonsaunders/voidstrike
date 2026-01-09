@@ -6,6 +6,10 @@ import { Game } from '../core/Game';
 import { Selectable } from '../components/Selectable';
 import { Building } from '../components/Building';
 import { Resource } from '../components/Resource';
+import { PooledVector2 } from '@/utils/VectorPool';
+
+// Static temp vectors to avoid allocations in hot loops
+const tempTargetScore: { id: number; score: number } | null = null;
 
 // Damage multipliers: [damageType][armorType]
 const DAMAGE_MULTIPLIERS: Record<DamageType, Record<ArmorType, number>> = {
@@ -541,6 +545,7 @@ export class CombatSystem extends System {
 
   /**
    * Apply splash damage to nearby enemies
+   * OPTIMIZED: Uses spatial grid for O(nearby) instead of O(all entities)
    */
   private applySplashDamage(
     attackerId: number,
@@ -550,22 +555,31 @@ export class CombatSystem extends System {
     baseDamage: number,
     gameTime: number
   ): void {
-    const entities = this.world.getEntitiesWith('Transform', 'Health', 'Selectable');
-
     // Get attacker's player ID
     const attackerEntity = this.world.getEntity(attackerId);
     const attackerSelectable = attackerEntity?.get<Selectable>('Selectable');
     if (!attackerSelectable) return;
 
-    for (const entity of entities) {
-      if (entity.id === attackerId) continue;
+    // Use spatial grid to find nearby units - much faster than checking all entities
+    const nearbyUnitIds = this.world.unitGrid.queryRadius(
+      impactPos.x,
+      impactPos.y,
+      attacker.splashRadius
+    );
 
-      const transform = entity.get<Transform>('Transform')!;
-      const health = entity.get<Health>('Health')!;
+    // Check nearby units
+    for (const entityId of nearbyUnitIds) {
+      if (entityId === attackerId) continue;
+
+      const entity = this.world.getEntity(entityId);
+      if (!entity) continue;
+
+      const transform = entity.get<Transform>('Transform');
+      const health = entity.get<Health>('Health');
       const selectable = entity.get<Selectable>('Selectable');
 
       // Skip allies and dead units
-      if (!selectable) continue;
+      if (!transform || !health || !selectable) continue;
       if (selectable.playerId === attackerSelectable.playerId) continue;
       if (health.isDead()) continue;
 
@@ -589,6 +603,50 @@ export class CombatSystem extends System {
         });
 
         // Check for under attack alert for splash victims
+        this.checkUnderAttackAlert(entity.id, transform, gameTime);
+      }
+    }
+
+    // Also check nearby buildings for splash damage
+    const nearbyBuildingIds = this.world.buildingGrid.queryRadius(
+      impactPos.x,
+      impactPos.y,
+      attacker.splashRadius
+    );
+
+    for (const entityId of nearbyBuildingIds) {
+      const entity = this.world.getEntity(entityId);
+      if (!entity) continue;
+
+      const transform = entity.get<Transform>('Transform');
+      const health = entity.get<Health>('Health');
+      const selectable = entity.get<Selectable>('Selectable');
+      const building = entity.get<Building>('Building');
+
+      if (!transform || !health || !selectable || !building) continue;
+      if (selectable.playerId === attackerSelectable.playerId) continue;
+      if (health.isDead()) continue;
+
+      // Distance to building edge
+      const halfW = building.width / 2;
+      const halfH = building.height / 2;
+      const clampedX = Math.max(transform.x - halfW, Math.min(impactPos.x, transform.x + halfW));
+      const clampedY = Math.max(transform.y - halfH, Math.min(impactPos.y, transform.y + halfH));
+      const edgeDx = impactPos.x - clampedX;
+      const edgeDy = impactPos.y - clampedY;
+      const distance = Math.sqrt(edgeDx * edgeDx + edgeDy * edgeDy);
+
+      if (distance <= attacker.splashRadius) {
+        const falloff = 1 - (distance / attacker.splashRadius) * 0.5;
+        const splashDamage = Math.max(1, Math.floor(baseDamage * falloff));
+
+        health.takeDamage(splashDamage, gameTime);
+
+        this.game.eventBus.emit('combat:splash', {
+          position: { x: transform.x, y: transform.y },
+          damage: splashDamage,
+        });
+
         this.checkUnderAttackAlert(entity.id, transform, gameTime);
       }
     }

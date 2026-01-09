@@ -4,6 +4,7 @@ import { Unit } from '../components/Unit';
 import { Building } from '../components/Building';
 import { Game } from '../core/Game';
 import { AStar, PathResult } from '../pathfinding/AStar';
+import { HierarchicalAStar } from '../pathfinding/HierarchicalAStar';
 
 // Configuration for path invalidation
 const REPATH_INTERVAL_TICKS = 40; // Check for repath every 2 seconds at 20 TPS
@@ -27,21 +28,37 @@ interface UnitPathState {
   destinationY: number;
 }
 
+// Distance threshold for using hierarchical pathfinding
+const HIERARCHICAL_PATH_THRESHOLD = 20;
+
 export class PathfindingSystem extends System {
   public priority = 5; // Run before MovementSystem
 
   private pathfinder: AStar;
+  private hierarchicalPathfinder: HierarchicalAStar;
   private unitPathStates: Map<number, UnitPathState> = new Map();
   private pendingRequests: PathRequest[] = [];
-  private blockedCells: Set<string> = new Set();
 
-  // Track which cells changed this tick for efficient invalidation
-  private cellsChangedThisTick: Set<string> = new Set();
+  // OPTIMIZED: Use numeric keys instead of string keys to avoid GC pressure
+  private blockedCells: Set<number> = new Set();
+  private cellsChangedThisTick: Set<number> = new Set();
+  private mapWidth: number;
+  private mapHeight: number;
 
   constructor(game: Game, mapWidth: number, mapHeight: number) {
     super(game);
+    this.mapWidth = mapWidth;
+    this.mapHeight = mapHeight;
     this.pathfinder = new AStar(mapWidth, mapHeight, 1);
+    this.hierarchicalPathfinder = new HierarchicalAStar(mapWidth, mapHeight, 1);
     this.setupEventListeners();
+  }
+
+  /**
+   * Convert (x, y) to numeric cell key - avoids string allocation
+   */
+  private cellKey(x: number, y: number): number {
+    return Math.floor(y) * this.mapWidth + Math.floor(x);
   }
 
   private setupEventListeners(): void {
@@ -105,10 +122,11 @@ export class PathfindingSystem extends System {
 
     for (let y = Math.floor(centerY - halfH); y <= Math.ceil(centerY + halfH); y++) {
       for (let x = Math.floor(centerX - halfW); x <= Math.ceil(centerX + halfW); x++) {
-        const key = `${x},${y}`;
+        const key = this.cellKey(x, y);
         this.blockedCells.add(key);
         this.cellsChangedThisTick.add(key);
         this.pathfinder.setWalkable(x, y, false);
+        this.hierarchicalPathfinder.setWalkable(x, y, false);
       }
     }
   }
@@ -119,10 +137,11 @@ export class PathfindingSystem extends System {
 
     for (let y = Math.floor(centerY - halfH); y <= Math.ceil(centerY + halfH); y++) {
       for (let x = Math.floor(centerX - halfW); x <= Math.ceil(centerX + halfW); x++) {
-        const key = `${x},${y}`;
+        const key = this.cellKey(x, y);
         this.blockedCells.delete(key);
         this.cellsChangedThisTick.add(key);
         this.pathfinder.setWalkable(x, y, true);
+        this.hierarchicalPathfinder.setWalkable(x, y, true);
       }
     }
   }
@@ -157,6 +176,15 @@ export class PathfindingSystem extends System {
   }
 
   public findPath(startX: number, startY: number, endX: number, endY: number): PathResult {
+    // Use hierarchical pathfinding for long distances
+    const dx = endX - startX;
+    const dy = endY - startY;
+    const distance = Math.sqrt(dx * dx + dy * dy);
+
+    if (distance > HIERARCHICAL_PATH_THRESHOLD) {
+      return this.hierarchicalPathfinder.findPath(startX, startY, endX, endY);
+    }
+
     return this.pathfinder.findPath(startX, startY, endX, endY);
   }
 
@@ -223,14 +251,16 @@ export class PathfindingSystem extends System {
   private isPathAffected(path: Array<{ x: number; y: number }>, fromIndex: number): boolean {
     for (let i = fromIndex; i < path.length; i++) {
       const waypoint = path[i];
-      const key = `${Math.floor(waypoint.x)},${Math.floor(waypoint.y)}`;
+      const wx = Math.floor(waypoint.x);
+      const wy = Math.floor(waypoint.y);
+      const key = this.cellKey(wx, wy);
       if (this.cellsChangedThisTick.has(key)) {
         return true;
       }
       // Also check adjacent cells for units with collision radius
       for (let dy = -1; dy <= 1; dy++) {
         for (let dx = -1; dx <= 1; dx++) {
-          const adjKey = `${Math.floor(waypoint.x) + dx},${Math.floor(waypoint.y) + dy}`;
+          const adjKey = this.cellKey(wx + dx, wy + dy);
           if (this.cellsChangedThisTick.has(adjKey)) {
             return true;
           }

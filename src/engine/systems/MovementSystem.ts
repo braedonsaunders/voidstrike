@@ -4,6 +4,7 @@ import { Unit } from '../components/Unit';
 import { Velocity } from '../components/Velocity';
 import { Building } from '../components/Building';
 import { Game } from '../core/Game';
+import { PooledVector2 } from '@/utils/VectorPool';
 
 // Steering behavior constants - SC2-style soft separation (units can overlap and clump)
 const SEPARATION_RADIUS = 1.0; // Units only avoid when nearly overlapping
@@ -11,6 +12,11 @@ const SEPARATION_STRENGTH = 2.0; // Very soft push - allows clumping like SC2
 const MAX_AVOIDANCE_FORCE = 1.5; // Low cap - units can stack
 const BUILDING_AVOIDANCE_STRENGTH = 25.0; // Push from buildings (still solid)
 const BUILDING_AVOIDANCE_MARGIN = 0.25; // Minimal margin around buildings - hitbox should match model
+
+// Static temp vectors to avoid allocations in hot loops
+const tempSeparation: PooledVector2 = { x: 0, y: 0 };
+const tempBuildingAvoid: PooledVector2 = { x: 0, y: 0 };
+const zeroVector: PooledVector2 = { x: 0, y: 0 };
 
 export class MovementSystem extends System {
   public priority = 10;
@@ -122,15 +128,19 @@ export class MovementSystem extends System {
    * Units can overlap and clump - separation is very soft
    * Gathering workers skip separation entirely (like SC2 mining)
    * Uses spatial grid for O(1) lookups instead of checking all entities
+   * @param out - Output vector to write result (avoids allocation)
    */
   private calculateSeparationForce(
     selfId: number,
     selfTransform: Transform,
-    selfUnit: Unit
-  ): { x: number; y: number } {
+    selfUnit: Unit,
+    out: PooledVector2
+  ): void {
     // SC2-style: gathering workers walk through each other completely
     if (selfUnit.state === 'gathering') {
-      return { x: 0, y: 0 };
+      out.x = 0;
+      out.y = 0;
+      return;
     }
 
     let forceX = 0;
@@ -189,21 +199,26 @@ export class MovementSystem extends System {
       forceY *= scale;
     }
 
-    return { x: forceX, y: forceY };
+    out.x = forceX;
+    out.y = forceY;
   }
 
   /**
    * Calculate building avoidance force
    * Units are pushed away from buildings they're overlapping with
    * Uses spatial grid for O(1) lookups
+   * @param out - Output vector to write result (avoids allocation)
    */
   private calculateBuildingAvoidanceForce(
     selfTransform: Transform,
-    selfUnit: Unit
-  ): { x: number; y: number } {
+    selfUnit: Unit,
+    out: PooledVector2
+  ): void {
     // Flying units don't collide with buildings
     if (selfUnit.isFlying) {
-      return { x: 0, y: 0 };
+      out.x = 0;
+      out.y = 0;
+      return;
     }
 
     let forceX = 0;
@@ -288,7 +303,8 @@ export class MovementSystem extends System {
       }
     }
 
-    return { x: forceX, y: forceY };
+    out.x = forceX;
+    out.y = forceY;
   }
 
   public update(deltaTime: number): void {
@@ -467,24 +483,27 @@ export class MovementSystem extends System {
       // Calculate separation force for unit avoidance
       // Reduce separation for units close to destination to prevent twitching
       const separationWeight = distance > this.decelerationThreshold ? 0.5 : 0.1;
-      const separation = distance > this.arrivalThreshold * 2
-        ? this.calculateSeparationForce(entity.id, transform, unit)
-        : { x: 0, y: 0 }; // No separation when nearly arrived
+      if (distance > this.arrivalThreshold * 2) {
+        this.calculateSeparationForce(entity.id, transform, unit, tempSeparation);
+      } else {
+        tempSeparation.x = 0;
+        tempSeparation.y = 0;
+      }
 
       // Calculate building avoidance (always active)
-      const buildingAvoidance = this.calculateBuildingAvoidanceForce(transform, unit);
+      this.calculateBuildingAvoidanceForce(transform, unit, tempBuildingAvoid);
 
       // Normalize direction to target
       let dirX = distance > 0.01 ? dx / distance : 0;
       let dirY = distance > 0.01 ? dy / distance : 0;
 
       // Add separation force to direction (reduced near destination)
-      dirX += separation.x * separationWeight;
-      dirY += separation.y * separationWeight;
+      dirX += tempSeparation.x * separationWeight;
+      dirY += tempSeparation.y * separationWeight;
 
       // Add building avoidance (with full weight - buildings are solid)
-      dirX += buildingAvoidance.x;
-      dirY += buildingAvoidance.y;
+      dirX += tempBuildingAvoid.x;
+      dirY += tempBuildingAvoid.y;
 
       // Re-normalize
       const newMag = Math.sqrt(dirX * dirX + dirY * dirY);
