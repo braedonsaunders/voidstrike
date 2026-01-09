@@ -210,7 +210,7 @@ export function createMineralLineOld(
 }
 
 // Helper to create vespene geysers (typically 2 per base)
-// Places geysers at the ends of the mineral arc, like SC2
+// Places geysers at the ends of the mineral arc, forming a continuous crescent
 // mineralCenterX/Y: center of the mineral arc
 // baseCenterX/Y: position of the command center
 export function createVespeneGeysers(
@@ -224,27 +224,31 @@ export function createVespeneGeysers(
   const dx = baseCenterX - mineralCenterX;
   const dy = baseCenterY - mineralCenterY;
   const angleToBase = Math.atan2(dy, dx);
-  const distFromBase = Math.sqrt(dx * dx + dy * dy);
 
-  // Mineral arc spans ~117 degrees (arcSpread = PI * 0.65), ends at ±58 degrees
-  // Place geysers just inside the arc ends at ~50 degrees from center line
-  // Same distance from base as minerals
-  const geyserAngleOffset = Math.PI * 0.28; // ~50 degrees - at the ends of mineral arc
+  // Match mineral arc parameters from createMineralLine
+  const arcRadius = 3.5; // Same base radius as minerals
+  const arcSpread = Math.PI * 0.65; // ~117 degrees total arc spread
 
-  // Calculate geyser positions - at the ends of the mineral arc
-  const geyser1Angle = angleToBase + Math.PI + geyserAngleOffset;
-  const geyser2Angle = angleToBase + Math.PI - geyserAngleOffset;
+  // Place geysers just outside the mineral arc ends to form a continuous crescent
+  // Mineral arc ends at ±(arcSpread/2) = ±58.5 degrees
+  // Place geysers at ±70 degrees (just past arc ends) with slight extra radius
+  const geyserAngleOffset = (arcSpread / 2) + Math.PI * 0.06; // ~70 degrees from center
+  const geyserRadius = arcRadius + 1.2; // Slightly further out than minerals
+
+  // Calculate geyser positions - at the ends of the mineral arc, curving away from base
+  const geyser1Angle = angleToBase + geyserAngleOffset;
+  const geyser2Angle = angleToBase - geyserAngleOffset;
 
   return [
     {
-      x: Math.round((baseCenterX + Math.cos(geyser1Angle) * distFromBase) * 2) / 2,
-      y: Math.round((baseCenterY + Math.sin(geyser1Angle) * distFromBase) * 2) / 2,
+      x: Math.round((mineralCenterX - Math.cos(geyser1Angle) * geyserRadius) * 2) / 2,
+      y: Math.round((mineralCenterY - Math.sin(geyser1Angle) * geyserRadius) * 2) / 2,
       type: 'vespene',
       amount,
     },
     {
-      x: Math.round((baseCenterX + Math.cos(geyser2Angle) * distFromBase) * 2) / 2,
-      y: Math.round((baseCenterY + Math.sin(geyser2Angle) * distFromBase) * 2) / 2,
+      x: Math.round((mineralCenterX - Math.cos(geyser2Angle) * geyserRadius) * 2) / 2,
+      y: Math.round((mineralCenterY - Math.sin(geyser2Angle) * geyserRadius) * 2) / 2,
       type: 'vespene',
       amount,
     },
