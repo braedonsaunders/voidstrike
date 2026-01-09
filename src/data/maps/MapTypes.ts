@@ -111,7 +111,8 @@ export interface MapData {
   decorations?: MapDecoration[];  // Explicit decoration placements
 
   // Metadata
-  maxPlayers: number;
+  playerCount: 2 | 4 | 6 | 8;  // Designed player count for this map
+  maxPlayers: number;          // Maximum supported players
   isRanked: boolean;
   thumbnailUrl?: string;
 

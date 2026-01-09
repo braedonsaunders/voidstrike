@@ -124,7 +124,7 @@ const defaultPlayerSlots: PlayerSlot[] = [
 ];
 
 const initialState = {
-  selectedMapId: 'training_grounds',
+  selectedMapId: 'crystal_caverns',
   startingResources: 'normal' as StartingResources,
   gameSpeed: 'normal' as GameSpeed,
   fogOfWar: true,

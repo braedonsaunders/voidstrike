@@ -10,120 +10,166 @@ import {
 } from './MapTypes';
 
 /**
- * CRYSTAL CAVERNS
- * A medium-sized 1v1 map with horizontal spawns and a contested center.
+ * CRYSTAL CAVERNS - 2 Player (1v1) Map
  *
- * Features:
- * - Horizontal spawn positions (left vs right)
- * - Open middle area for large engagements
- * - Multiple paths between bases
- * - Natural expansions that are easy to take but harder to defend
+ * A competitive 1v1 map with horizontal spawns and frozen biome.
  *
- * Layout (160x144):
+ * Key Features:
+ * - Protected main bases with single ramp entrance
+ * - Natural expansions with defensible chokepoints
+ * - Multiple expansion locations for late game
+ * - Central contested area with watch tower
+ * - Ice/crystal themed environment
  *
- *   [Third]                [Center Top]                [Third]
- *      |                       |                          |
- *   [P1 Nat]    Path    [Watch Tower]    Path      [P2 Nat]
- *      |          \           |           /           |
- *   [P1 Main]      ----[Open Center]----        [P2 Main]
- *      |          /           |           \           |
- *   [Third]     Path    [Watch Tower]     Path    [Third]
+ * Layout (200x180):
+ *
+ *   ┌─────────────────────────────────────────────────────────┐
+ *   │ ██████████           [Fourth]           ██████████████ │
+ *   │ █ P1 MAIN █             │             █ P2 MAIN ██████ │
+ *   │ █  [CC]   █          [Third]          █   [CC]  ██████ │
+ *   │ █████↓████              │              ████↓█████████ │
+ *   │    [NAT]     ────[WATCH TOWER]────     [NAT]          │
+ *   │       ↓                 │                 ↓            │
+ *   │    [Third]         [CENTER]          [Third]          │
+ *   │                    [GOLD]                              │
+ *   │ █████████████           │           ██████████████████ │
+ *   │ █ [Fourth] █                        █  [Fourth]  █████ │
+ *   │ █████████████                       ██████████████████ │
+ *   └─────────────────────────────────────────────────────────┘
  */
 
-const MAP_WIDTH = 160;
-const MAP_HEIGHT = 144;
+const MAP_WIDTH = 200;
+const MAP_HEIGHT = 180;
 
-// Generate frozen/crystal themed decorations
+// Seeded random for consistent decorations
+function seededRandom(seed: number): () => number {
+  return () => {
+    seed = (seed * 1103515245 + 12345) & 0x7fffffff;
+    return seed / 0x7fffffff;
+  };
+}
+
+// Base exclusion zones - no decorations here
+const BASE_EXCLUSION_ZONES = [
+  { x: 30, y: 90, radius: 22 },   // P1 main
+  { x: 170, y: 90, radius: 22 },  // P2 main
+  { x: 55, y: 55, radius: 16 },   // P1 natural
+  { x: 145, y: 125, radius: 16 }, // P2 natural
+  { x: 30, y: 30, radius: 14 },   // P1 third
+  { x: 170, y: 150, radius: 14 }, // P2 third
+  { x: 100, y: 90, radius: 16 },  // Center gold
+  { x: 30, y: 150, radius: 14 },  // P1 fourth
+  { x: 170, y: 30, radius: 14 },  // P2 fourth
+];
+
+function isInBaseArea(x: number, y: number): boolean {
+  for (const zone of BASE_EXCLUSION_ZONES) {
+    const dx = x - zone.x;
+    const dy = y - zone.y;
+    if (dx * dx + dy * dy < zone.radius * zone.radius) {
+      return true;
+    }
+  }
+  return false;
+}
+
 function generateFrozenDecorations(): MapDecoration[] {
   const decorations: MapDecoration[] = [];
+  const rand = seededRandom(123);
 
-  // Helper to add crystal formations (ice crystals)
   const addCrystalCluster = (cx: number, cy: number, count: number, spread: number) => {
     for (let i = 0; i < count; i++) {
-      const angle = Math.random() * Math.PI * 2;
-      const dist = Math.random() * spread;
+      const angle = rand() * Math.PI * 2;
+      const dist = rand() * spread;
+      const x = cx + Math.cos(angle) * dist;
+      const y = cy + Math.sin(angle) * dist;
+      if (isInBaseArea(x, y)) continue;
       decorations.push({
         type: 'crystal_formation',
-        x: cx + Math.cos(angle) * dist,
-        y: cy + Math.sin(angle) * dist,
-        scale: 0.5 + Math.random() * 0.7,
-        rotation: Math.random() * Math.PI * 2,
+        x, y,
+        scale: 0.5 + rand() * 0.7,
+        rotation: rand() * Math.PI * 2,
       });
     }
   };
 
-  // Helper to add dead/frozen trees
   const addDeadTrees = (cx: number, cy: number, count: number, spread: number) => {
     for (let i = 0; i < count; i++) {
-      const angle = Math.random() * Math.PI * 2;
-      const dist = Math.random() * spread;
+      const angle = rand() * Math.PI * 2;
+      const dist = rand() * spread;
+      const x = cx + Math.cos(angle) * dist;
+      const y = cy + Math.sin(angle) * dist;
+      if (isInBaseArea(x, y)) continue;
       decorations.push({
         type: 'tree_dead',
-        x: cx + Math.cos(angle) * dist,
-        y: cy + Math.sin(angle) * dist,
-        scale: 0.7 + Math.random() * 0.5,
-        rotation: Math.random() * Math.PI * 2,
+        x, y,
+        scale: 0.7 + rand() * 0.5,
+        rotation: rand() * Math.PI * 2,
       });
     }
   };
 
-  // Helper to add rocks (ice-covered)
   const addRockCluster = (cx: number, cy: number, count: number, spread: number) => {
     const rockTypes: Array<'rocks_large' | 'rocks_small' | 'rock_single'> = [
       'rocks_large', 'rocks_small', 'rock_single'
     ];
     for (let i = 0; i < count; i++) {
-      const angle = Math.random() * Math.PI * 2;
-      const dist = Math.random() * spread;
+      const angle = rand() * Math.PI * 2;
+      const dist = rand() * spread;
+      const x = cx + Math.cos(angle) * dist;
+      const y = cy + Math.sin(angle) * dist;
+      if (isInBaseArea(x, y)) continue;
       decorations.push({
-        type: rockTypes[Math.floor(Math.random() * rockTypes.length)],
-        x: cx + Math.cos(angle) * dist,
-        y: cy + Math.sin(angle) * dist,
-        scale: 0.4 + Math.random() * 0.6,
-        rotation: Math.random() * Math.PI * 2,
+        type: rockTypes[Math.floor(rand() * rockTypes.length)],
+        x, y,
+        scale: 0.4 + rand() * 0.6,
+        rotation: rand() * Math.PI * 2,
       });
     }
   };
 
-  // Crystal formations along the center dividers
-  addCrystalCluster(80, 43, 6, 8);  // Top divider
-  addCrystalCluster(80, 101, 6, 8); // Bottom divider
+  // Map border decorations
+  for (let x = 15; x < MAP_WIDTH - 15; x += 8) {
+    addCrystalCluster(x, 12, 3, 4);
+    addDeadTrees(x, 168, 3, 4);
+  }
+  for (let y = 15; y < MAP_HEIGHT - 15; y += 8) {
+    addCrystalCluster(12, y, 3, 4);
+    addDeadTrees(188, y, 3, 4);
+  }
 
-  // Crystal clusters near watch towers
-  addCrystalCluster(80, 24, 5, 6);
-  addCrystalCluster(80, 120, 5, 6);
+  // Cliff edge decorations around main bases
+  addCrystalCluster(15, 70, 8, 6);
+  addCrystalCluster(15, 110, 8, 6);
+  addCrystalCluster(185, 70, 8, 6);
+  addCrystalCluster(185, 110, 8, 6);
 
-  // Ice crystals in corners
-  addCrystalCluster(24, 24, 4, 5);
-  addCrystalCluster(24, 120, 4, 5);
-  addCrystalCluster(136, 24, 4, 5);
-  addCrystalCluster(136, 120, 4, 5);
+  // Natural expansion surroundings
+  addDeadTrees(70, 45, 10, 8);
+  addDeadTrees(130, 135, 10, 8);
+  addRockCluster(65, 60, 6, 5);
+  addRockCluster(135, 120, 6, 5);
 
-  // Dead trees along edges
-  addDeadTrees(10, 50, 4, 6);
-  addDeadTrees(10, 94, 4, 6);
-  addDeadTrees(150, 50, 4, 6);
-  addDeadTrees(150, 94, 4, 6);
+  // Center area - contested
+  addCrystalCluster(100, 75, 12, 10);
+  addCrystalCluster(100, 105, 12, 10);
+  addRockCluster(85, 90, 8, 6);
+  addRockCluster(115, 90, 8, 6);
 
-  // Dead trees near bases (but not blocking)
-  addDeadTrees(12, 72, 3, 5);
-  addDeadTrees(148, 72, 3, 5);
+  // Chokepoint decorations
+  addRockCluster(75, 90, 6, 4);
+  addRockCluster(125, 90, 6, 4);
 
-  // Rock formations near cliffs
-  addRockCluster(24, 24, 3, 4);
-  addRockCluster(24, 120, 3, 4);
-  addRockCluster(136, 24, 3, 4);
-  addRockCluster(136, 120, 3, 4);
+  // Third/fourth expansion surroundings
+  addDeadTrees(20, 25, 6, 5);
+  addDeadTrees(180, 155, 6, 5);
+  addDeadTrees(20, 155, 6, 5);
+  addDeadTrees(180, 25, 6, 5);
 
-  // Rocks near destructibles
-  addRockCluster(56, 24, 2, 3);
-  addRockCluster(104, 24, 2, 3);
-  addRockCluster(56, 120, 2, 3);
-  addRockCluster(104, 120, 2, 3);
-
-  // Debris in center battle area
-  decorations.push({ type: 'debris', x: 75, y: 72, scale: 0.7 });
-  decorations.push({ type: 'debris', x: 85, y: 72, scale: 0.7 });
+  // Debris
+  decorations.push({ type: 'debris', x: 90, y: 85, scale: 0.8 });
+  decorations.push({ type: 'debris', x: 110, y: 95, scale: 0.8 });
+  decorations.push({ type: 'ruined_wall', x: 100, y: 90, scale: 1.0 });
 
   return decorations;
 }
@@ -131,135 +177,193 @@ function generateFrozenDecorations(): MapDecoration[] {
 function generateCrystalCaverns(): MapData {
   const terrain = createTerrainGrid(MAP_WIDTH, MAP_HEIGHT, 'ground', 0);
 
-  // === Player 1 area (left side) ===
+  // ========================================
+  // MAP BORDERS - Thick unwalkable cliffs
+  // ========================================
+  fillTerrainRect(terrain, 0, 0, 10, MAP_HEIGHT, 'unwalkable');
+  fillTerrainRect(terrain, MAP_WIDTH - 10, 0, 10, MAP_HEIGHT, 'unwalkable');
+  fillTerrainRect(terrain, 0, 0, MAP_WIDTH, 10, 'unwalkable');
+  fillTerrainRect(terrain, 0, MAP_HEIGHT - 10, MAP_WIDTH, 10, 'unwalkable');
 
-  // P1 Main base (elevated)
-  fillTerrainCircle(terrain, 24, 72, 20, 'ground', 2);
+  // ========================================
+  // PLAYER 1 MAIN BASE (Left side) - Elevation 2
+  // Almost fully enclosed by cliffs, single ramp exit
+  // ========================================
+  fillTerrainCircle(terrain, 30, 90, 25, 'ground', 2);
 
-  // P1 Natural (slightly lower, north)
-  fillTerrainCircle(terrain, 40, 36, 15, 'ground', 1);
+  // P1 Main cliff walls - surround ~85% of base
+  fillTerrainRect(terrain, 10, 60, 15, 60, 'unwalkable');    // West wall
+  fillTerrainRect(terrain, 10, 60, 45, 12, 'unwalkable');    // North wall
+  fillTerrainRect(terrain, 10, 108, 45, 12, 'unwalkable');   // South wall
+  // Leave opening for ramp on east side (around y=85-95)
+  fillTerrainRect(terrain, 45, 60, 10, 22, 'unwalkable');    // North-east corner
+  fillTerrainRect(terrain, 45, 98, 10, 22, 'unwalkable');    // South-east corner
 
-  // P1 Third (south)
-  fillTerrainCircle(terrain, 40, 108, 15, 'ground', 1);
+  // ========================================
+  // PLAYER 2 MAIN BASE (Right side) - Elevation 2
+  // ========================================
+  fillTerrainCircle(terrain, 170, 90, 25, 'ground', 2);
 
-  // === Player 2 area (right side) ===
+  // P2 Main cliff walls
+  fillTerrainRect(terrain, 175, 60, 15, 60, 'unwalkable');   // East wall
+  fillTerrainRect(terrain, 145, 60, 45, 12, 'unwalkable');   // North wall
+  fillTerrainRect(terrain, 145, 108, 45, 12, 'unwalkable');  // South wall
+  // Leave opening for ramp on west side
+  fillTerrainRect(terrain, 145, 60, 10, 22, 'unwalkable');   // North-west corner
+  fillTerrainRect(terrain, 145, 98, 10, 22, 'unwalkable');   // South-west corner
 
-  // P2 Main base (elevated)
-  fillTerrainCircle(terrain, 136, 72, 20, 'ground', 2);
+  // ========================================
+  // NATURAL EXPANSIONS - Elevation 1
+  // ========================================
 
-  // P2 Natural (slightly lower, north)
-  fillTerrainCircle(terrain, 120, 36, 15, 'ground', 1);
+  // P1 Natural (northeast of main)
+  fillTerrainCircle(terrain, 55, 55, 18, 'ground', 1);
+  // Natural chokepoint walls
+  fillTerrainRect(terrain, 35, 35, 15, 12, 'unwalkable');
+  fillTerrainRect(terrain, 65, 35, 15, 12, 'unwalkable');
 
-  // P2 Third (south)
-  fillTerrainCircle(terrain, 120, 108, 15, 'ground', 1);
+  // P2 Natural (southwest of main)
+  fillTerrainCircle(terrain, 145, 125, 18, 'ground', 1);
+  // Natural chokepoint walls
+  fillTerrainRect(terrain, 120, 133, 15, 12, 'unwalkable');
+  fillTerrainRect(terrain, 150, 133, 15, 12, 'unwalkable');
 
-  // === Central area ===
+  // ========================================
+  // THIRD EXPANSIONS - Elevation 0
+  // ========================================
 
-  // Center plateau (low ground, open for fights)
-  fillTerrainRect(terrain, 55, 52, 50, 40, 'ground', 0);
+  // P1 Third (top-left corner)
+  fillTerrainCircle(terrain, 30, 30, 16, 'ground', 0);
 
-  // Top and bottom watch tower areas
-  fillTerrainCircle(terrain, 80, 24, 10, 'ground', 1);
-  fillTerrainCircle(terrain, 80, 120, 10, 'ground', 1);
+  // P2 Third (bottom-right corner)
+  fillTerrainCircle(terrain, 170, 150, 16, 'ground', 0);
 
-  // === Cliffs and obstacles ===
+  // ========================================
+  // FOURTH EXPANSIONS - Edge locations
+  // ========================================
 
-  // Map edges
-  fillTerrainRect(terrain, 0, 0, 6, MAP_HEIGHT, 'unwalkable');
-  fillTerrainRect(terrain, MAP_WIDTH - 6, 0, 6, MAP_HEIGHT, 'unwalkable');
-  fillTerrainRect(terrain, 0, 0, MAP_WIDTH, 6, 'unwalkable');
-  fillTerrainRect(terrain, 0, MAP_HEIGHT - 6, MAP_WIDTH, 6, 'unwalkable');
+  // P1 Fourth (bottom-left)
+  fillTerrainCircle(terrain, 30, 150, 14, 'ground', 0);
 
-  // Center dividers (create choke points)
-  fillTerrainRect(terrain, 70, 40, 20, 6, 'unwalkable');
-  fillTerrainRect(terrain, 70, 98, 20, 6, 'unwalkable');
+  // P2 Fourth (top-right)
+  fillTerrainCircle(terrain, 170, 30, 14, 'ground', 0);
 
-  // Side cliffs
-  fillTerrainCircle(terrain, 24, 24, 8, 'unwalkable');
-  fillTerrainCircle(terrain, 24, 120, 8, 'unwalkable');
-  fillTerrainCircle(terrain, 136, 24, 8, 'unwalkable');
-  fillTerrainCircle(terrain, 136, 120, 8, 'unwalkable');
+  // ========================================
+  // CENTER GOLD EXPANSION - Highly contested
+  // ========================================
+  fillTerrainCircle(terrain, 100, 90, 18, 'ground', 0);
 
-  // === Ramps ===
+  // ========================================
+  // CENTRAL TERRAIN FEATURES - Chokepoints
+  // ========================================
 
+  // Central cliff obstacle
+  fillTerrainRect(terrain, 92, 75, 16, 10, 'unwalkable');
+  fillTerrainRect(terrain, 92, 95, 16, 10, 'unwalkable');
+
+  // Side passage cliffs
+  fillTerrainCircle(terrain, 70, 130, 12, 'unwalkable');
+  fillTerrainCircle(terrain, 130, 50, 12, 'unwalkable');
+
+  // Additional chokepoint cliffs
+  fillTerrainCircle(terrain, 60, 90, 8, 'unwalkable');
+  fillTerrainCircle(terrain, 140, 90, 8, 'unwalkable');
+
+  // ========================================
+  // RAMPS - Narrow for defensibility (6-8 tiles)
+  // ========================================
   const ramps = [
-    // P1 main ramps
-    { x: 36, y: 60, width: 8, height: 6, direction: 'east' as const, fromElevation: 2 as const, toElevation: 0 as const },
-    { x: 36, y: 78, width: 8, height: 6, direction: 'east' as const, fromElevation: 2 as const, toElevation: 0 as const },
-    // P1 natural ramp
-    { x: 50, y: 42, width: 6, height: 6, direction: 'east' as const, fromElevation: 1 as const, toElevation: 0 as const },
-    // P1 third ramp
-    { x: 50, y: 96, width: 6, height: 6, direction: 'east' as const, fromElevation: 1 as const, toElevation: 0 as const },
-    // P2 main ramps
-    { x: 116, y: 60, width: 8, height: 6, direction: 'west' as const, fromElevation: 2 as const, toElevation: 0 as const },
-    { x: 116, y: 78, width: 8, height: 6, direction: 'west' as const, fromElevation: 2 as const, toElevation: 0 as const },
-    // P2 natural ramp
-    { x: 104, y: 42, width: 6, height: 6, direction: 'west' as const, fromElevation: 1 as const, toElevation: 0 as const },
-    // P2 third ramp
-    { x: 104, y: 96, width: 6, height: 6, direction: 'west' as const, fromElevation: 1 as const, toElevation: 0 as const },
+    // P1 Main ramp (east exit)
+    { x: 48, y: 85, width: 8, height: 10, direction: 'east' as const, fromElevation: 2 as const, toElevation: 0 as const },
+    // P2 Main ramp (west exit)
+    { x: 144, y: 85, width: 8, height: 10, direction: 'west' as const, fromElevation: 2 as const, toElevation: 0 as const },
+    // P1 Natural ramp
+    { x: 55, y: 68, width: 6, height: 8, direction: 'south' as const, fromElevation: 1 as const, toElevation: 0 as const },
+    // P2 Natural ramp
+    { x: 145, y: 108, width: 6, height: 8, direction: 'north' as const, fromElevation: 1 as const, toElevation: 0 as const },
   ];
 
   ramps.forEach(ramp => createRampInTerrain(terrain, ramp));
 
-  // === Expansions ===
-  // createMineralLine(mineralCenterX, mineralCenterY, baseCenterX, baseCenterY, amount)
-
+  // ========================================
+  // EXPANSIONS WITH RESOURCES
+  // ========================================
   const expansions = [
-    // Player 1 (left side) - minerals toward left edge
+    // P1 Main - minerals against west cliff
     {
       name: 'P1 Main',
-      x: 24,
-      y: 72,
+      x: 30,
+      y: 90,
       isMain: true,
-      minerals: createMineralLine(17, 72, 24, 72, 1800), // ~7 units left of CC
-      vespene: createVespeneGeysers(24, 80, 6, 2250),
+      minerals: createMineralLine(18, 90, 30, 90, 1800),
+      vespene: createVespeneGeysers(18, 90, 30, 90, 2500),
     },
+    // P1 Natural
     {
       name: 'P1 Natural',
-      x: 40,
-      y: 36,
+      x: 55,
+      y: 55,
       isNatural: true,
-      minerals: createMineralLine(33, 30, 40, 36, 1500), // ~7 units away toward top-left
-      vespene: createVespeneGeysers(47, 30, 6, 2250),
+      minerals: createMineralLine(45, 45, 55, 55, 1500),
+      vespene: createVespeneGeysers(45, 45, 55, 55, 2500),
     },
+    // P1 Third
     {
       name: 'P1 Third',
-      x: 40,
-      y: 108,
-      minerals: createMineralLine(33, 114, 40, 108, 1500), // ~7 units away toward bottom-left
-      vespene: createVespeneGeysers(47, 114, 6, 2250),
+      x: 30,
+      y: 30,
+      minerals: createMineralLine(18, 25, 30, 30, 1500),
+      vespene: createVespeneGeysers(18, 25, 30, 30, 2500),
     },
-    // Player 2 (right side) - minerals toward right edge
+    // P1 Fourth
+    {
+      name: 'P1 Fourth',
+      x: 30,
+      y: 150,
+      minerals: createMineralLine(18, 155, 30, 150, 1200),
+      vespene: createVespeneGeysers(18, 155, 30, 150, 2500),
+    },
+    // P2 Main - minerals against east cliff
     {
       name: 'P2 Main',
-      x: 136,
-      y: 72,
+      x: 170,
+      y: 90,
       isMain: true,
-      minerals: createMineralLine(143, 72, 136, 72, 1800), // ~7 units right of CC
-      vespene: createVespeneGeysers(136, 80, 6, 2250),
+      minerals: createMineralLine(182, 90, 170, 90, 1800),
+      vespene: createVespeneGeysers(182, 90, 170, 90, 2500),
     },
+    // P2 Natural
     {
       name: 'P2 Natural',
-      x: 120,
-      y: 36,
+      x: 145,
+      y: 125,
       isNatural: true,
-      minerals: createMineralLine(127, 30, 120, 36, 1500), // ~7 units away toward top-right
-      vespene: createVespeneGeysers(113, 30, 6, 2250),
+      minerals: createMineralLine(155, 135, 145, 125, 1500),
+      vespene: createVespeneGeysers(155, 135, 145, 125, 2500),
     },
+    // P2 Third
     {
       name: 'P2 Third',
-      x: 120,
-      y: 108,
-      minerals: createMineralLine(127, 114, 120, 108, 1500), // ~7 units away toward bottom-right
-      vespene: createVespeneGeysers(113, 114, 6, 2250),
+      x: 170,
+      y: 150,
+      minerals: createMineralLine(182, 155, 170, 150, 1500),
+      vespene: createVespeneGeysers(182, 155, 170, 150, 2500),
     },
-    // Center contested expansion
+    // P2 Fourth
     {
-      name: 'Center',
-      x: 80,
-      y: 72,
-      minerals: createMineralLine(80, 65, 80, 72, 750), // Rich minerals, 7 units north
-      vespene: [{ x: 87, y: 72, type: 'vespene' as const, amount: 2250 }],
+      name: 'P2 Fourth',
+      x: 170,
+      y: 30,
+      minerals: createMineralLine(182, 25, 170, 30, 1200),
+      vespene: createVespeneGeysers(182, 25, 170, 30, 2500),
+    },
+    // Center Gold (contested)
+    {
+      name: 'Center Gold',
+      x: 100,
+      y: 90,
+      minerals: createMineralLine(100, 80, 100, 90, 1000),
+      vespene: createVespeneGeysers(100, 80, 100, 90, 2500),
     },
   ];
 
@@ -267,44 +371,42 @@ function generateCrystalCaverns(): MapData {
     id: 'crystal_caverns',
     name: 'Crystal Caverns',
     author: 'VOIDSTRIKE Team',
-    description: 'Horizontal spawn positions with an open center. Multiple ramps allow for dynamic engagements. Secure your natural quickly!',
+    description: 'A competitive 1v1 map with horizontal spawns. Protected main bases with single ramp entry. Control the center gold expansion for economic advantage.',
 
     width: MAP_WIDTH,
     height: MAP_HEIGHT,
     terrain,
 
+    // ONLY main base spawn points - critical fix!
     spawns: [
-      { x: 24, y: 72, playerSlot: 1, rotation: 0 },      // P1 Main
-      { x: 136, y: 72, playerSlot: 2, rotation: Math.PI }, // P2 Main
-      { x: 40, y: 36, playerSlot: 3, rotation: Math.PI / 4 },  // P1 Natural
-      { x: 120, y: 36, playerSlot: 4, rotation: Math.PI * 3 / 4 }, // P2 Natural
-      { x: 40, y: 108, playerSlot: 5, rotation: -Math.PI / 4 }, // P1 Third
-      { x: 120, y: 108, playerSlot: 6, rotation: -Math.PI * 3 / 4 }, // P2 Third
-      { x: 80, y: 24, playerSlot: 7, rotation: Math.PI / 2 },  // Top Watch Tower
-      { x: 80, y: 120, playerSlot: 8, rotation: -Math.PI / 2 }, // Bottom Watch Tower
+      { x: 30, y: 90, playerSlot: 1, rotation: 0 },           // P1 Main
+      { x: 170, y: 90, playerSlot: 2, rotation: Math.PI },    // P2 Main
     ],
 
     expansions,
 
     watchTowers: [
-      { x: 80, y: 24, radius: 18 },  // Top tower
-      { x: 80, y: 120, radius: 18 }, // Bottom tower
+      { x: 100, y: 55, radius: 20 },   // Top center
+      { x: 100, y: 125, radius: 20 },  // Bottom center
+      { x: 70, y: 90, radius: 16 },    // Left mid
+      { x: 130, y: 90, radius: 16 },   // Right mid
     ],
 
     ramps,
 
     destructibles: [
-      // Rocks blocking side paths
-      { x: 56, y: 24, health: 1500 },
-      { x: 104, y: 24, health: 1500 },
-      { x: 56, y: 120, health: 1500 },
-      { x: 104, y: 120, health: 1500 },
+      // Backdoor rocks to third bases
+      { x: 40, y: 42, health: 2000 },
+      { x: 160, y: 138, health: 2000 },
+      // Center path rocks
+      { x: 85, y: 90, health: 1500 },
+      { x: 115, y: 90, health: 1500 },
     ],
 
-    // Frozen/crystal themed decorations
     decorations: generateFrozenDecorations(),
 
-    maxPlayers: 8,
+    playerCount: 2,
+    maxPlayers: 2,
     isRanked: true,
 
     biome: 'frozen',
@@ -312,8 +414,8 @@ function generateCrystalCaverns(): MapData {
     ambientColor: '#2a3050',
     sunColor: '#80b0ff',
     fogColor: '#1a2040',
-    fogNear: 70,
-    fogFar: 180,
+    fogNear: 80,
+    fogFar: 220,
   };
 }
 
