@@ -149,14 +149,24 @@ export class UnitRenderer {
         const name = clip.name.toLowerCase();
         animations.set(name, action);
 
-        // Also map common aliases
-        if (name.includes('idle') || name.includes('stand')) {
+        // Map common aliases - use separate ifs so animations can match multiple aliases
+        if (name.includes('idle') || name.includes('stand') || name === 'pose') {
           animations.set('idle', action);
-        } else if (name.includes('walk') || name.includes('run') || name.includes('move')) {
+        }
+        if (name.includes('walk') || name.includes('run') || name.includes('move') || name.includes('locomotion')) {
           animations.set('walk', action);
-        } else if (name.includes('attack') || name.includes('shoot')) {
+        }
+        if (name.includes('attack') || name.includes('shoot') || name.includes('fire') || name.includes('combat')) {
           animations.set('attack', action);
         }
+      }
+
+      // Ensure we have fallbacks for missing animations
+      if (!animations.has('walk') && animations.has('idle')) {
+        animations.set('walk', animations.get('idle')!);
+      }
+      if (!animations.has('attack') && animations.has('idle')) {
+        animations.set('attack', animations.get('idle')!);
       }
 
       // Start with idle animation if available
@@ -379,11 +389,14 @@ export class UnitRenderer {
         animUnit.mesh.rotation.y = -transform.rotation + Math.PI / 2;
 
         // Determine animation state
+        // isMoving: unit has non-zero velocity
         const isMoving = velocity ? (Math.abs(velocity.x) > 0.01 || Math.abs(velocity.y) > 0.01) : false;
-        const isAttacking = unit.state === 'attacking';
+        // isActuallyAttacking: unit is in attacking state AND stationary (in range, performing attack)
+        // When chasing a target (moving toward it), show walk animation, not attack
+        const isActuallyAttacking = unit.state === 'attacking' && !isMoving;
 
         // Update animation
-        this.updateAnimationState(animUnit, isMoving, isAttacking);
+        this.updateAnimationState(animUnit, isMoving, isActuallyAttacking);
 
         // Update animation mixer
         animUnit.mixer.update(deltaTime);
