@@ -17,7 +17,7 @@ import { useGameSetupStore } from '@/store/gameSetupStore';
 import { SelectionBox } from './SelectionBox';
 import { LoadingScreen } from './LoadingScreen';
 import { spawnInitialEntities } from '@/utils/gameSetup';
-import { DEFAULT_MAP, MapData } from '@/data/maps';
+import { DEFAULT_MAP, MapData, getMapById } from '@/data/maps';
 import { Resource } from '@/engine/components/Resource';
 import { Unit } from '@/engine/components/Unit';
 import { Building } from '@/engine/components/Building';
@@ -26,8 +26,8 @@ import { Transform } from '@/engine/components/Transform';
 import { Health } from '@/engine/components/Health';
 import AssetManager from '@/assets/AssetManager';
 
-// Get current map (will support map selection later)
-const CURRENT_MAP: MapData = DEFAULT_MAP;
+// Map reference - loaded dynamically from store
+let CURRENT_MAP: MapData = DEFAULT_MAP;
 
 export function GameCanvas() {
   const containerRef = useRef<HTMLDivElement>(null);
@@ -70,6 +70,11 @@ export function GameCanvas() {
 
     // Load all assets before starting the game
     const initializeGame = async () => {
+      // Load selected map from store
+      const selectedMapId = useGameSetupStore.getState().selectedMapId;
+      CURRENT_MAP = getMapById(selectedMapId) || DEFAULT_MAP;
+      console.log(`[GameCanvas] Loading map: ${CURRENT_MAP.name} (${CURRENT_MAP.id})`);
+
       setLoadingStatus('Loading 3D models');
       setLoadingProgress(10);
 
