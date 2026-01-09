@@ -181,7 +181,26 @@ export class BuildingRenderer {
       const isComplete = building.isComplete();
       const isWaitingForWorker = building.state === 'waiting_for_worker';
 
-      if (isWaitingForWorker) {
+      // DEFENSIVE: If building is complete, always show as complete
+      // This prevents any state bugs from causing visual glitches
+      if (isComplete) {
+        if (!meshData.wasComplete) {
+          // Building just completed - do final traverse to reset materials
+          meshData.wasComplete = true;
+          meshData.group.scale.setScalar(1);
+          meshData.group.traverse((child) => {
+            if (child instanceof THREE.Mesh) {
+              const mat = child.material as THREE.MeshStandardMaterial;
+              if (mat.transparent !== undefined) {
+                mat.transparent = false;
+                mat.opacity = 1;
+                mat.wireframe = false;
+              }
+            }
+          });
+        }
+        // PERFORMANCE: If building was already complete, skip traverse() entirely
+      } else if (isWaitingForWorker) {
         // Show a ghost/placeholder while waiting for SCV to arrive
         // Small scale, very transparent wireframe-like appearance
         meshData.group.scale.setScalar(0.3);
@@ -195,39 +214,22 @@ export class BuildingRenderer {
             }
           }
         });
-      } else if (!isComplete) {
+      } else {
         // Construction in progress - scale up as building completes
         const progress = building.buildProgress;
         meshData.group.scale.setScalar(0.5 + progress * 0.5);
         // Update materials during construction
-        if (!meshData.wasComplete) {
-          meshData.group.traverse((child) => {
-            if (child instanceof THREE.Mesh) {
-              const mat = child.material as THREE.MeshStandardMaterial;
-              if (mat.transparent !== undefined) {
-                mat.transparent = true;
-                mat.opacity = 0.5 + progress * 0.5;
-                mat.wireframe = false; // Solid during construction
-              }
-            }
-          });
-        }
-      } else if (!meshData.wasComplete) {
-        // Building just completed - do final traverse to reset materials
-        meshData.wasComplete = true;
-        meshData.group.scale.setScalar(1);
         meshData.group.traverse((child) => {
           if (child instanceof THREE.Mesh) {
             const mat = child.material as THREE.MeshStandardMaterial;
             if (mat.transparent !== undefined) {
-              mat.transparent = false;
-              mat.opacity = 1;
-              mat.wireframe = false;
+              mat.transparent = true;
+              mat.opacity = 0.5 + progress * 0.5;
+              mat.wireframe = false; // Solid during construction
             }
           }
         });
       }
-      // PERFORMANCE: If building was already complete, skip traverse() entirely
 
       // Update selection ring - larger multiplier for better visibility
       const ringSize = Math.max(building.width, building.height) * 0.9;

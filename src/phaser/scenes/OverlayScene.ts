@@ -125,13 +125,20 @@ export class OverlayScene extends Phaser.Scene {
   private setupEventListeners(): void {
     if (!this.eventBus) return;
 
-    // Combat events increase intensity
+    // Combat events increase intensity (only for human player)
     this.eventBus.on('combat:attack', (data: {
       attackerPos?: { x: number; y: number };
       targetPos?: { x: number; y: number };
       damage: number;
       damageType: string;
+      targetPlayerId?: string;
     }) => {
+      // Skip combat feedback in spectator mode
+      if (this.isSpectator()) return;
+
+      // Only show intensity/warnings when player1's units are targeted
+      if (data.targetPlayerId && data.targetPlayerId !== 'player1') return;
+
       // Increase combat intensity
       this.combatIntensity = Math.min(1, this.combatIntensity + 0.05);
 

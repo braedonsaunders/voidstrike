@@ -152,11 +152,29 @@ export const useGameSetupStore = create<GameSetupState>((set, get) => ({
     ),
   })),
 
-  setPlayerSlotColor: (slotId, colorId) => set((state) => ({
-    playerSlots: state.playerSlots.map(slot =>
-      slot.id === slotId ? { ...slot, colorId } : slot
-    ),
-  })),
+  setPlayerSlotColor: (slotId, colorId) => set((state) => {
+    // Check if color is already in use by another player
+    const currentSlot = state.playerSlots.find(s => s.id === slotId);
+    const otherSlot = state.playerSlots.find(s => s.id !== slotId && s.colorId === colorId);
+
+    if (otherSlot && currentSlot) {
+      // Swap colors between the two slots to maintain uniqueness
+      return {
+        playerSlots: state.playerSlots.map(slot => {
+          if (slot.id === slotId) return { ...slot, colorId };
+          if (slot.id === otherSlot.id) return { ...slot, colorId: currentSlot.colorId };
+          return slot;
+        }),
+      };
+    }
+
+    // No conflict, just set the color
+    return {
+      playerSlots: state.playerSlots.map(slot =>
+        slot.id === slotId ? { ...slot, colorId } : slot
+      ),
+    };
+  }),
 
   setPlayerSlotAIDifficulty: (slotId, difficulty) => set((state) => ({
     playerSlots: state.playerSlots.map(slot =>
@@ -179,16 +197,26 @@ export const useGameSetupStore = create<GameSetupState>((set, get) => ({
   addPlayerSlot: () => set((state) => {
     if (state.playerSlots.length >= 8) return state;
 
+    // Find used colors and IDs
     const usedColors = new Set(state.playerSlots.map(s => s.colorId));
+    const usedIds = new Set(state.playerSlots.map(s => s.id));
+
+    // Find next available color
     const availableColor = PLAYER_COLORS.find(c => !usedColors.has(c.id))?.id ?? 'blue';
 
+    // Find next available player number (1-8)
+    let playerNumber = 1;
+    while (usedIds.has(`player${playerNumber}`) && playerNumber <= 8) {
+      playerNumber++;
+    }
+
     const newSlot: PlayerSlot = {
-      id: `player${state.playerSlots.length + 1}`,
+      id: `player${playerNumber}`,
       type: 'ai',
       faction: 'dominion',
       colorId: availableColor,
       aiDifficulty: 'medium',
-      name: `Player ${state.playerSlots.length + 1}`,
+      name: `Player ${playerNumber}`,
       team: 0, // FFA by default
     };
 

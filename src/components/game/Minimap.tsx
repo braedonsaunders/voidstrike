@@ -136,8 +136,10 @@ export function Minimap() {
       // Draw resources
       const resources = game.world.getEntitiesWith('Transform', 'Resource');
       for (const entity of resources) {
-        const transform = entity.get<Transform>('Transform')!;
-        const resource = entity.get<Resource>('Resource')!;
+        const transform = entity.get<Transform>('Transform');
+        const resource = entity.get<Resource>('Resource');
+
+        if (!transform || !resource) continue;
 
         const x = transform.x * scale;
         const y = transform.y * scale;
@@ -151,11 +153,12 @@ export function Minimap() {
       // Draw buildings
       const buildings = game.world.getEntitiesWith('Transform', 'Building', 'Selectable', 'Health');
       for (const entity of buildings) {
-        const transform = entity.get<Transform>('Transform')!;
-        const building = entity.get<Building>('Building')!;
-        const selectable = entity.get<Selectable>('Selectable')!;
-        const health = entity.get<Health>('Health')!;
+        const transform = entity.get<Transform>('Transform');
+        const building = entity.get<Building>('Building');
+        const selectable = entity.get<Selectable>('Selectable');
+        const health = entity.get<Health>('Health');
 
+        if (!transform || !building || !selectable || !health) continue;
         if (health.isDead()) continue;
 
         // Skip enemy buildings that are not visible due to fog of war
@@ -190,10 +193,11 @@ export function Minimap() {
       // Draw units
       const units = game.world.getEntitiesWith('Transform', 'Unit', 'Selectable', 'Health');
       for (const entity of units) {
-        const transform = entity.get<Transform>('Transform')!;
-        const selectable = entity.get<Selectable>('Selectable')!;
-        const health = entity.get<Health>('Health')!;
+        const transform = entity.get<Transform>('Transform');
+        const selectable = entity.get<Selectable>('Selectable');
+        const health = entity.get<Health>('Health');
 
+        if (!transform || !selectable || !health) continue;
         if (health.isDead()) continue;
 
         // Skip enemy units that are not visible due to fog of war
