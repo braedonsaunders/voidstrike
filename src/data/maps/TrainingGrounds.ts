@@ -10,31 +10,17 @@ import {
 } from './MapTypes';
 
 /**
- * TRAINING GROUNDS - SC2-Style Map
+ * TRAINING GROUNDS - SC2-Style Professional Map
  *
- * A professional-quality 1v1 map with:
- * - Elevated main bases with cliff edges and single ramp entry
- * - Natural expansions at medium elevation with choke points
- * - Third/fourth expansions in contested areas
- * - Strategic watch towers and destructible rocks
- * - Dense decorations creating atmosphere
- * - Clear pathing corridors with cliff walls
- *
- * Layout (200x200):
- *
- *        [Cliff Wall]──────────────────────[Cliff Wall]
- *              │                                  │
- *         [P2 Main]                          [P2 4th]
- *           ║ ramp                              │
- *      [P2 Natural]──[Choke]──[Center]──[Choke]─┘
- *              │         │        │
- *         [3rd Exp]  [Watchtower] [3rd Exp]
- *              │         │        │
- *      ┌─[Choke]──[Center]──[Choke]──[P1 Natural]
- *      │                              ║ ramp
- *   [P1 4th]                      [P1 Main]
- *      │                                  │
- *   [Cliff Wall]──────────────────────[Cliff Wall]
+ * A high-quality 1v1 map featuring:
+ * - Elevated main bases with cliff edges and wide ramps
+ * - Natural expansions with choke points
+ * - Strategic third/fourth expansion locations
+ * - Central contested gold base
+ * - Water features blocking certain paths
+ * - Dense forest and rock decorations
+ * - Multiple elevation levels creating depth
+ * - Watch towers at key control points
  */
 
 const MAP_WIDTH = 200;
@@ -48,13 +34,13 @@ function seededRandom(seed: number): () => number {
   };
 }
 
-// Generate comprehensive decorations
+// Generate massively enhanced decorations (2x density)
 function generateDecorations(): MapDecoration[] {
   const decorations: MapDecoration[] = [];
-  const rand = seededRandom(42); // Consistent seed
+  const rand = seededRandom(42);
 
-  // Helper to add tree cluster
-  const addTreeCluster = (cx: number, cy: number, count: number, spread: number, density = 1) => {
+  // Helper to add tree cluster with DOUBLED density
+  const addTreeCluster = (cx: number, cy: number, count: number, spread: number, density = 2) => {
     const treeTypes: Array<'tree_pine_tall' | 'tree_pine_medium' | 'tree_dead'> = [
       'tree_pine_tall', 'tree_pine_medium', 'tree_dead'
     ];
@@ -65,168 +51,260 @@ function generateDecorations(): MapDecoration[] {
         type: treeTypes[Math.floor(rand() * treeTypes.length)],
         x: cx + Math.cos(angle) * dist,
         y: cy + Math.sin(angle) * dist,
-        scale: 0.6 + rand() * 0.8,
+        scale: 0.5 + rand() * 0.9,
         rotation: rand() * Math.PI * 2,
       });
     }
   };
 
-  // Helper to add rock cluster
+  // Helper to add rock cluster with DOUBLED density
   const addRockCluster = (cx: number, cy: number, count: number, spread: number) => {
     const rockTypes: Array<'rocks_large' | 'rocks_small' | 'rock_single'> = [
       'rocks_large', 'rocks_small', 'rock_single'
     ];
-    for (let i = 0; i < count; i++) {
+    for (let i = 0; i < count * 2; i++) {
       const angle = rand() * Math.PI * 2;
       const dist = rand() * spread;
       decorations.push({
         type: rockTypes[Math.floor(rand() * rockTypes.length)],
         x: cx + Math.cos(angle) * dist,
         y: cy + Math.sin(angle) * dist,
-        scale: 0.4 + rand() * 1.0,
+        scale: 0.3 + rand() * 1.2,
         rotation: rand() * Math.PI * 2,
       });
     }
   };
 
-  // Helper to add rocks along cliff edge
-  const addCliffEdgeRocks = (x1: number, y1: number, x2: number, y2: number, count: number) => {
+  // Helper to add mixed vegetation line
+  const addVegetationLine = (x1: number, y1: number, x2: number, y2: number, count: number) => {
     for (let i = 0; i < count; i++) {
-      const t = rand();
-      const x = x1 + (x2 - x1) * t + (rand() - 0.5) * 4;
-      const y = y1 + (y2 - y1) * t + (rand() - 0.5) * 4;
+      const t = i / (count - 1);
+      const x = x1 + (x2 - x1) * t + (rand() - 0.5) * 6;
+      const y = y1 + (y2 - y1) * t + (rand() - 0.5) * 6;
+
+      if (rand() > 0.3) {
+        decorations.push({
+          type: rand() > 0.5 ? 'tree_pine_tall' : 'tree_pine_medium',
+          x, y,
+          scale: 0.5 + rand() * 0.8,
+          rotation: rand() * Math.PI * 2,
+        });
+      } else {
+        decorations.push({
+          type: rand() > 0.5 ? 'rocks_large' : 'rocks_small',
+          x, y,
+          scale: 0.4 + rand() * 0.8,
+          rotation: rand() * Math.PI * 2,
+        });
+      }
+    }
+  };
+
+  // Helper to add crystal formations
+  const addCrystalCluster = (cx: number, cy: number, count: number, spread: number) => {
+    for (let i = 0; i < count; i++) {
+      const angle = rand() * Math.PI * 2;
+      const dist = rand() * spread;
       decorations.push({
-        type: rand() > 0.7 ? 'rocks_large' : 'rocks_small',
-        x, y,
-        scale: 0.5 + rand() * 0.8,
+        type: 'crystal_formation',
+        x: cx + Math.cos(angle) * dist,
+        y: cy + Math.sin(angle) * dist,
+        scale: 0.4 + rand() * 0.8,
         rotation: rand() * Math.PI * 2,
       });
     }
   };
 
-  // === DENSE CLIFF EDGE DECORATIONS ===
+  // ========================================
+  // MAP BORDER DECORATIONS (VERY DENSE)
+  // ========================================
 
-  // Map border cliffs - heavy tree/rock coverage
-  // Top border
-  for (let x = 15; x < 185; x += 12) {
-    addTreeCluster(x, 14, 5, 4, 1.5);
-    addRockCluster(x + 6, 12, 3, 3);
+  // Top border - triple density trees and rocks
+  for (let x = 14; x < 186; x += 6) {
+    addTreeCluster(x, 13, 6, 5, 2.5);
+    addRockCluster(x + 3, 11, 4, 4);
   }
 
   // Bottom border
-  for (let x = 15; x < 185; x += 12) {
-    addTreeCluster(x, 186, 5, 4, 1.5);
-    addRockCluster(x + 6, 188, 3, 3);
+  for (let x = 14; x < 186; x += 6) {
+    addTreeCluster(x, 187, 6, 5, 2.5);
+    addRockCluster(x + 3, 189, 4, 4);
   }
 
   // Left border
-  for (let y = 15; y < 185; y += 12) {
-    addTreeCluster(14, y, 5, 4, 1.5);
-    addRockCluster(12, y + 6, 3, 3);
+  for (let y = 14; y < 186; y += 6) {
+    addTreeCluster(13, y, 6, 5, 2.5);
+    addRockCluster(11, y + 3, 4, 4);
   }
 
   // Right border
-  for (let y = 15; y < 185; y += 12) {
-    addTreeCluster(186, y, 5, 4, 1.5);
-    addRockCluster(188, y + 6, 3, 3);
+  for (let y = 14; y < 186; y += 6) {
+    addTreeCluster(187, y, 6, 5, 2.5);
+    addRockCluster(189, y + 3, 4, 4);
   }
 
-  // === CLIFF WALLS BETWEEN AREAS ===
+  // ========================================
+  // MAIN BASE CLIFF DECORATIONS
+  // ========================================
 
-  // P1 main cliff edges (bottom-right elevated area)
-  addCliffEdgeRocks(145, 180, 180, 145, 15);
-  addTreeCluster(150, 175, 8, 6);
-  addTreeCluster(175, 150, 8, 6);
-  addTreeCluster(185, 165, 6, 4);
-  addTreeCluster(165, 185, 6, 4);
+  // P1 main (bottom-right) - dense cliff edge coverage
+  addVegetationLine(145, 185, 185, 145, 30);
+  addTreeCluster(150, 178, 12, 8);
+  addTreeCluster(178, 150, 12, 8);
+  addTreeCluster(160, 168, 10, 6);
+  addTreeCluster(168, 160, 10, 6);
+  addRockCluster(155, 172, 8, 5);
+  addRockCluster(172, 155, 8, 5);
 
-  // P2 main cliff edges (top-left elevated area)
-  addCliffEdgeRocks(20, 55, 55, 20, 15);
-  addTreeCluster(25, 50, 8, 6);
-  addTreeCluster(50, 25, 8, 6);
-  addTreeCluster(15, 35, 6, 4);
-  addTreeCluster(35, 15, 6, 4);
+  // P2 main (top-left) - dense cliff edge coverage
+  addVegetationLine(15, 55, 55, 15, 30);
+  addTreeCluster(22, 50, 12, 8);
+  addTreeCluster(50, 22, 12, 8);
+  addTreeCluster(32, 40, 10, 6);
+  addTreeCluster(40, 32, 10, 6);
+  addRockCluster(28, 45, 8, 5);
+  addRockCluster(45, 28, 8, 5);
 
-  // Central dividing cliffs
-  addTreeCluster(70, 70, 12, 8);
-  addRockCluster(65, 75, 6, 5);
-  addTreeCluster(130, 130, 12, 8);
-  addRockCluster(135, 125, 6, 5);
+  // ========================================
+  // CENTRAL CLIFF WALLS (CHOKEPOINTS)
+  // ========================================
 
-  // Cliff walls creating main corridors
-  addTreeCluster(45, 90, 10, 6);
-  addRockCluster(40, 95, 5, 4);
-  addTreeCluster(155, 110, 10, 6);
-  addRockCluster(160, 105, 5, 4);
+  // Central diagonal cliffs - heavy decoration
+  addTreeCluster(65, 65, 18, 10);
+  addRockCluster(70, 60, 10, 7);
+  addRockCluster(60, 70, 10, 7);
+  addCrystalCluster(65, 65, 6, 6);
 
-  // === EXPANSION AREA DECORATIONS ===
+  addTreeCluster(135, 135, 18, 10);
+  addRockCluster(130, 140, 10, 7);
+  addRockCluster(140, 130, 10, 7);
+  addCrystalCluster(135, 135, 6, 6);
 
-  // Natural expansion edges
-  addTreeCluster(95, 165, 6, 4);
-  addTreeCluster(105, 35, 6, 4);
-  addRockCluster(130, 150, 4, 3);
-  addRockCluster(70, 50, 4, 3);
+  // Side chokepoint cliffs
+  addTreeCluster(38, 88, 14, 8);
+  addRockCluster(42, 82, 8, 6);
+  addTreeCluster(162, 112, 14, 8);
+  addRockCluster(158, 118, 8, 6);
 
-  // Third expansion surroundings
-  addTreeCluster(45, 100, 8, 5);
-  addTreeCluster(155, 100, 8, 5);
-  addRockCluster(50, 110, 4, 3);
-  addRockCluster(150, 90, 4, 3);
+  // Additional path-narrowing cliffs
+  addTreeCluster(78, 138, 10, 6);
+  addRockCluster(72, 132, 6, 5);
+  addTreeCluster(122, 62, 10, 6);
+  addRockCluster(128, 68, 6, 5);
+
+  // ========================================
+  // WATER EDGE DECORATIONS
+  // ========================================
+
+  // Water areas get special crystal/rock treatment
+  addCrystalCluster(22, 178, 10, 8);
+  addRockCluster(28, 172, 8, 6);
+  addTreeCluster(18, 168, 8, 6);
+
+  addCrystalCluster(178, 22, 10, 8);
+  addRockCluster(172, 28, 8, 6);
+  addTreeCluster(182, 32, 8, 6);
+
+  // ========================================
+  // EXPANSION AREA DECORATIONS
+  // ========================================
+
+  // Natural expansion surroundings
+  addTreeCluster(92, 168, 10, 6);
+  addTreeCluster(108, 32, 10, 6);
+  addRockCluster(128, 152, 6, 5);
+  addRockCluster(72, 48, 6, 5);
+
+  // Third expansion surroundings - heavy coverage
+  addTreeCluster(38, 108, 12, 7);
+  addTreeCluster(38, 122, 12, 7);
+  addRockCluster(45, 115, 8, 6);
+  addTreeCluster(162, 78, 12, 7);
+  addTreeCluster(162, 92, 12, 7);
+  addRockCluster(155, 85, 8, 6);
 
   // Fourth expansion surroundings
-  addTreeCluster(95, 180, 6, 4);
-  addTreeCluster(105, 20, 6, 4);
+  addTreeCluster(38, 178, 10, 6);
+  addTreeCluster(162, 22, 10, 6);
+  addRockCluster(45, 172, 6, 4);
+  addRockCluster(155, 28, 6, 4);
 
-  // === PATH DECORATIONS ===
+  // ========================================
+  // PATH DECORATIONS (SCATTERED)
+  // ========================================
 
-  // Scattered rocks along main paths
-  addRockCluster(100, 80, 3, 4);
-  addRockCluster(100, 120, 3, 4);
-  addRockCluster(80, 100, 3, 4);
-  addRockCluster(120, 100, 3, 4);
+  // Main paths - scattered rocks and occasional trees
+  addRockCluster(100, 75, 5, 6);
+  addRockCluster(100, 125, 5, 6);
+  addRockCluster(75, 100, 5, 6);
+  addRockCluster(125, 100, 5, 6);
 
-  // === CHOKE POINT DECORATIONS ===
+  // Diagonal paths
+  addRockCluster(85, 85, 4, 5);
+  addRockCluster(115, 115, 4, 5);
+  addRockCluster(85, 115, 4, 5);
+  addRockCluster(115, 85, 4, 5);
 
-  // Chokes near naturals
-  addRockCluster(105, 145, 5, 4);
-  addRockCluster(95, 55, 5, 4);
+  // ========================================
+  // CHOKE POINT SPECIAL DECORATIONS
+  // ========================================
 
-  // Central chokes
-  addRockCluster(85, 85, 4, 3);
-  addRockCluster(115, 115, 4, 3);
+  // Ramp approaches - rocks for cover
+  addRockCluster(132, 158, 8, 5);
+  addRockCluster(68, 42, 8, 5);
 
-  // === GRASS AND BUSHES IN OPEN AREAS ===
+  // Natural choke points
+  addRockCluster(98, 148, 6, 4);
+  addRockCluster(102, 52, 6, 4);
 
-  // Scattered vegetation
-  for (let i = 0; i < 80; i++) {
-    const x = 25 + rand() * 150;
-    const y = 25 + rand() * 150;
+  // Center control area
+  addCrystalCluster(100, 100, 8, 6);
+  addRockCluster(92, 108, 5, 4);
+  addRockCluster(108, 92, 5, 4);
 
-    // Skip base areas
-    if ((x > 145 && y > 145) || (x < 55 && y < 55)) continue;
-    // Skip mineral lines
-    if (Math.abs(x - 170) < 15 && Math.abs(y - 170) < 15) continue;
-    if (Math.abs(x - 30) < 15 && Math.abs(y - 30) < 15) continue;
+  // ========================================
+  // GRASS AND BUSHES (FILL - VERY DENSE)
+  // ========================================
 
+  // Scatter vegetation across entire map
+  for (let i = 0; i < 200; i++) {
+    const x = 20 + rand() * 160;
+    const y = 20 + rand() * 160;
+
+    // Skip base areas and mineral lines
+    if ((x > 140 && y > 140) || (x < 60 && y < 60)) continue;
+    if (Math.abs(x - 100) < 8 && Math.abs(y - 100) < 8) continue;
+
+    const type = rand() > 0.4 ? 'bush' : 'grass_clump';
     decorations.push({
-      type: rand() > 0.5 ? 'bush' : 'grass_clump',
+      type,
       x, y,
-      scale: 0.6 + rand() * 0.5,
+      scale: 0.5 + rand() * 0.6,
       rotation: rand() * Math.PI * 2,
     });
   }
 
-  // === DEBRIS AND SPECIAL ===
+  // ========================================
+  // DEBRIS AND SPECIAL OBJECTS
+  // ========================================
 
   // Debris near destructible rocks
-  decorations.push({ type: 'debris', x: 62, y: 138, scale: 1.2 });
-  decorations.push({ type: 'debris', x: 138, y: 62, scale: 1.2 });
-  decorations.push({ type: 'debris', x: 85, y: 75, scale: 0.9 });
-  decorations.push({ type: 'debris', x: 115, y: 125, scale: 0.9 });
+  decorations.push({ type: 'debris', x: 58, y: 142, scale: 1.3 });
+  decorations.push({ type: 'debris', x: 62, y: 138, scale: 1.0 });
+  decorations.push({ type: 'debris', x: 142, y: 58, scale: 1.3 });
+  decorations.push({ type: 'debris', x: 138, y: 62, scale: 1.0 });
 
-  // Escape pod easter eggs
-  decorations.push({ type: 'escape_pod', x: 15, y: 185, scale: 1, rotation: 0.5 });
-  decorations.push({ type: 'escape_pod', x: 185, y: 15, scale: 1, rotation: 2.5 });
+  // Center debris
+  decorations.push({ type: 'debris', x: 88, y: 78, scale: 0.9 });
+  decorations.push({ type: 'debris', x: 112, y: 122, scale: 0.9 });
+
+  // Escape pods in corners (easter eggs)
+  decorations.push({ type: 'escape_pod', x: 14, y: 186, scale: 1.1, rotation: 0.5 });
+  decorations.push({ type: 'escape_pod', x: 186, y: 14, scale: 1.1, rotation: 2.5 });
+
+  // Additional escape pods near water
+  decorations.push({ type: 'escape_pod', x: 26, y: 174, scale: 0.9, rotation: 1.2 });
+  decorations.push({ type: 'escape_pod', x: 174, y: 26, scale: 0.9, rotation: 4.0 });
 
   return decorations;
 }
@@ -235,118 +313,164 @@ function generateTrainingGrounds(): MapData {
   // Start with low ground (elevation 0)
   const terrain = createTerrainGrid(MAP_WIDTH, MAP_HEIGHT, 'ground', 0);
 
-  // === MAP BORDER - Thick unwalkable cliffs ===
+  // ========================================
+  // MAP BORDERS - Thick unwalkable cliffs
+  // ========================================
   fillTerrainRect(terrain, 0, 0, 12, MAP_HEIGHT, 'unwalkable');
   fillTerrainRect(terrain, MAP_WIDTH - 12, 0, 12, MAP_HEIGHT, 'unwalkable');
   fillTerrainRect(terrain, 0, 0, MAP_WIDTH, 12, 'unwalkable');
   fillTerrainRect(terrain, 0, MAP_HEIGHT - 12, MAP_WIDTH, 12, 'unwalkable');
 
-  // === MAIN BASES - Large elevated plateaus (elevation 2) ===
+  // ========================================
+  // MAIN BASES - Elevated plateaus (elevation 2)
+  // ========================================
 
-  // P1 Main (bottom-right) - Large plateau with cliff edges
-  fillTerrainRect(terrain, 140, 140, 48, 48, 'ground', 2);
-  // Cliff edges around P1 main
-  fillTerrainRect(terrain, 140, 140, 8, 48, 'unwalkable'); // West cliff wall
-  fillTerrainRect(terrain, 140, 140, 48, 8, 'unwalkable'); // North cliff wall
-  // Leave opening for ramp area
-  fillTerrainRect(terrain, 140, 155, 8, 20, 'ground', 2); // Ramp approach
+  // P1 Main (bottom-right) - Large plateau
+  fillTerrainRect(terrain, 138, 138, 50, 50, 'ground', 2);
+  // Cliff walls around P1 main (leave ramp opening)
+  fillTerrainRect(terrain, 138, 138, 10, 42, 'unwalkable');
+  fillTerrainRect(terrain, 138, 138, 42, 10, 'unwalkable');
+  // Ramp approach area
+  fillTerrainRect(terrain, 138, 152, 10, 24, 'ground', 2);
 
-  // P2 Main (top-left) - Large plateau with cliff edges
-  fillTerrainRect(terrain, 12, 12, 48, 48, 'ground', 2);
-  // Cliff edges around P2 main
-  fillTerrainRect(terrain, 52, 12, 8, 48, 'unwalkable'); // East cliff wall
-  fillTerrainRect(terrain, 12, 52, 48, 8, 'unwalkable'); // South cliff wall
-  // Leave opening for ramp area
-  fillTerrainRect(terrain, 52, 25, 8, 20, 'ground', 2); // Ramp approach
+  // P2 Main (top-left) - Large plateau
+  fillTerrainRect(terrain, 12, 12, 50, 50, 'ground', 2);
+  // Cliff walls around P2 main (leave ramp opening)
+  fillTerrainRect(terrain, 52, 12, 10, 42, 'unwalkable');
+  fillTerrainRect(terrain, 12, 52, 42, 10, 'unwalkable');
+  // Ramp approach area
+  fillTerrainRect(terrain, 52, 24, 10, 24, 'ground', 2);
 
-  // === NATURAL EXPANSIONS - Medium elevation plateaus ===
+  // ========================================
+  // NATURAL EXPANSIONS - Medium elevation (1)
+  // ========================================
 
-  // P1 Natural (west of main, elevation 1)
-  fillTerrainCircle(terrain, 115, 160, 22, 'ground', 1);
-  // Connect to low ground path
-  fillTerrainRect(terrain, 90, 150, 15, 20, 'ground', 1);
+  // P1 Natural (west of main)
+  fillTerrainCircle(terrain, 112, 162, 24, 'ground', 1);
+  fillTerrainRect(terrain, 88, 152, 18, 22, 'ground', 1);
 
-  // P2 Natural (east of main, elevation 1)
-  fillTerrainCircle(terrain, 85, 40, 22, 'ground', 1);
-  // Connect to low ground path
-  fillTerrainRect(terrain, 95, 30, 15, 20, 'ground', 1);
+  // P2 Natural (east of main)
+  fillTerrainCircle(terrain, 88, 38, 24, 'ground', 1);
+  fillTerrainRect(terrain, 94, 26, 18, 22, 'ground', 1);
 
-  // === THIRD EXPANSIONS - Low ground with some cover ===
+  // ========================================
+  // THIRD EXPANSIONS - Low ground with cover
+  // ========================================
 
   // P1 Third (west side)
-  fillTerrainCircle(terrain, 50, 115, 18, 'ground', 0);
+  fillTerrainCircle(terrain, 48, 115, 20, 'ground', 0);
 
   // P2 Third (east side)
-  fillTerrainCircle(terrain, 150, 85, 18, 'ground', 0);
+  fillTerrainCircle(terrain, 152, 85, 20, 'ground', 0);
 
-  // === FOURTH EXPANSIONS - Contested edges ===
+  // ========================================
+  // FOURTH EXPANSIONS - Edge locations
+  // ========================================
 
-  // P1 Fourth (bottom-left area)
-  fillTerrainCircle(terrain, 50, 175, 15, 'ground', 0);
+  // P1 Fourth (bottom-left corner area)
+  fillTerrainCircle(terrain, 48, 178, 16, 'ground', 0);
 
-  // P2 Fourth (top-right area)
-  fillTerrainCircle(terrain, 150, 25, 15, 'ground', 0);
+  // P2 Fourth (top-right corner area)
+  fillTerrainCircle(terrain, 152, 22, 16, 'ground', 0);
 
-  // === GOLD EXPANSION - Center, heavily contested ===
-  fillTerrainCircle(terrain, 100, 100, 16, 'ground', 0);
+  // ========================================
+  // GOLD EXPANSION - Center contested
+  // ========================================
+  fillTerrainCircle(terrain, 100, 100, 18, 'ground', 0);
 
-  // === CLIFF WALLS - Create paths and choke points ===
+  // ========================================
+  // CLIFF WALLS - Create chokepoints and paths
+  // ========================================
 
-  // Central diagonal cliffs - create winding paths
-  fillTerrainCircle(terrain, 65, 65, 14, 'unwalkable');
-  fillTerrainCircle(terrain, 135, 135, 14, 'unwalkable');
+  // Central diagonal cliffs (major path dividers)
+  fillTerrainCircle(terrain, 62, 62, 16, 'unwalkable');
+  fillTerrainCircle(terrain, 138, 138, 16, 'unwalkable');
 
-  // Side cliffs - narrow the map paths
-  fillTerrainCircle(terrain, 40, 85, 10, 'unwalkable');
-  fillTerrainCircle(terrain, 160, 115, 10, 'unwalkable');
+  // Side chokepoint cliffs
+  fillTerrainCircle(terrain, 38, 90, 12, 'unwalkable');
+  fillTerrainCircle(terrain, 162, 110, 12, 'unwalkable');
 
-  // Additional cliffs for path variety
-  fillTerrainCircle(terrain, 75, 135, 8, 'unwalkable');
-  fillTerrainCircle(terrain, 125, 65, 8, 'unwalkable');
+  // Additional path-narrowing cliffs
+  fillTerrainCircle(terrain, 75, 140, 10, 'unwalkable');
+  fillTerrainCircle(terrain, 125, 60, 10, 'unwalkable');
 
   // Corner blocking cliffs
-  fillTerrainCircle(terrain, 25, 175, 12, 'unwalkable');
-  fillTerrainCircle(terrain, 175, 25, 12, 'unwalkable');
+  fillTerrainCircle(terrain, 22, 178, 14, 'unwalkable');
+  fillTerrainCircle(terrain, 178, 22, 14, 'unwalkable');
 
-  // === RAMPS - Wide, natural-looking transitions ===
+  // Medium elevation ridge for path variety (elevation 1)
+  fillTerrainRect(terrain, 70, 90, 12, 20, 'ground', 1);
+  fillTerrainRect(terrain, 118, 90, 12, 20, 'ground', 1);
+
+  // ========================================
+  // WATER FEATURES - Impassable decorative areas
+  // ========================================
+
+  // Water ponds in corners (using unwalkable terrain)
+  // These create natural barriers and visual interest
+  fillTerrainCircle(terrain, 20, 180, 8, 'unbuildable');
+  fillTerrainCircle(terrain, 180, 20, 8, 'unbuildable');
+
+  // ========================================
+  // RAMPS - Wide natural transitions
+  // ========================================
   const ramps = [
-    // P1 main ramp (from main down to natural area) - wider for better gameplay
+    // P1 main ramp (wide entry)
     {
-      x: 138,
+      x: 134,
       y: 155,
-      width: 14,
-      height: 10,
+      width: 16,
+      height: 12,
       direction: 'west' as const,
       fromElevation: 2 as const,
       toElevation: 1 as const,
     },
     // P1 natural to low ground
     {
-      x: 88,
-      y: 155,
-      width: 12,
+      x: 85,
+      y: 158,
+      width: 14,
       height: 10,
       direction: 'west' as const,
       fromElevation: 1 as const,
       toElevation: 0 as const,
     },
-    // P2 main ramp (from main down to natural area)
+    // P2 main ramp (wide entry)
     {
-      x: 48,
-      y: 35,
-      width: 14,
-      height: 10,
+      x: 50,
+      y: 33,
+      width: 16,
+      height: 12,
       direction: 'east' as const,
       fromElevation: 2 as const,
       toElevation: 1 as const,
     },
     // P2 natural to low ground
     {
-      x: 100,
-      y: 35,
-      width: 12,
+      x: 101,
+      y: 32,
+      width: 14,
       height: 10,
       direction: 'east' as const,
+      fromElevation: 1 as const,
+      toElevation: 0 as const,
+    },
+    // Side ridges ramps
+    {
+      x: 70,
+      y: 88,
+      width: 10,
+      height: 8,
+      direction: 'north' as const,
+      fromElevation: 1 as const,
+      toElevation: 0 as const,
+    },
+    {
+      x: 120,
+      y: 104,
+      width: 10,
+      height: 8,
+      direction: 'south' as const,
       fromElevation: 1 as const,
       toElevation: 0 as const,
     },
@@ -354,9 +478,11 @@ function generateTrainingGrounds(): MapData {
 
   ramps.forEach(ramp => createRampInTerrain(terrain, ramp));
 
-  // === EXPANSIONS WITH RESOURCES ===
+  // ========================================
+  // EXPANSIONS WITH RESOURCES
+  // ========================================
   const expansions = [
-    // P1 Main (CC at 165, 165)
+    // P1 Main
     {
       name: 'P1 Main',
       x: 165,
@@ -365,33 +491,33 @@ function generateTrainingGrounds(): MapData {
       minerals: createMineralLine(175, 175, 165, 165, 1800),
       vespene: createVespeneGeysers(175, 175, 165, 165, 2500),
     },
-    // P1 Natural (CC at 115, 160)
+    // P1 Natural
     {
       name: 'P1 Natural',
-      x: 115,
-      y: 160,
+      x: 112,
+      y: 162,
       isNatural: true,
-      minerals: createMineralLine(115, 172, 115, 160, 1500),
-      vespene: createVespeneGeysers(115, 172, 115, 160, 2500),
+      minerals: createMineralLine(112, 175, 112, 162, 1500),
+      vespene: createVespeneGeysers(112, 175, 112, 162, 2500),
     },
-    // P1 Third (CC at 50, 115)
+    // P1 Third
     {
       name: 'P1 Third',
-      x: 50,
+      x: 48,
       y: 115,
-      minerals: createMineralLine(38, 115, 50, 115, 1500),
-      vespene: createVespeneGeysers(38, 115, 50, 115, 2500),
+      minerals: createMineralLine(35, 115, 48, 115, 1500),
+      vespene: createVespeneGeysers(35, 115, 48, 115, 2500),
     },
-    // P1 Fourth (CC at 50, 175)
+    // P1 Fourth
     {
       name: 'P1 Fourth',
-      x: 50,
-      y: 175,
-      minerals: createMineralLine(38, 175, 50, 175, 1200),
-      vespene: createVespeneGeysers(38, 175, 50, 175, 2500),
+      x: 48,
+      y: 178,
+      minerals: createMineralLine(35, 178, 48, 178, 1200),
+      vespene: createVespeneGeysers(35, 178, 48, 178, 2500),
     },
 
-    // P2 Main (CC at 35, 35)
+    // P2 Main
     {
       name: 'P2 Main',
       x: 35,
@@ -400,30 +526,30 @@ function generateTrainingGrounds(): MapData {
       minerals: createMineralLine(25, 25, 35, 35, 1800),
       vespene: createVespeneGeysers(25, 25, 35, 35, 2500),
     },
-    // P2 Natural (CC at 85, 40)
+    // P2 Natural
     {
       name: 'P2 Natural',
-      x: 85,
-      y: 40,
+      x: 88,
+      y: 38,
       isNatural: true,
-      minerals: createMineralLine(85, 28, 85, 40, 1500),
-      vespene: createVespeneGeysers(85, 28, 85, 40, 2500),
+      minerals: createMineralLine(88, 25, 88, 38, 1500),
+      vespene: createVespeneGeysers(88, 25, 88, 38, 2500),
     },
-    // P2 Third (CC at 150, 85)
+    // P2 Third
     {
       name: 'P2 Third',
-      x: 150,
+      x: 152,
       y: 85,
-      minerals: createMineralLine(162, 85, 150, 85, 1500),
-      vespene: createVespeneGeysers(162, 85, 150, 85, 2500),
+      minerals: createMineralLine(165, 85, 152, 85, 1500),
+      vespene: createVespeneGeysers(165, 85, 152, 85, 2500),
     },
-    // P2 Fourth (CC at 150, 25)
+    // P2 Fourth
     {
       name: 'P2 Fourth',
-      x: 150,
-      y: 25,
-      minerals: createMineralLine(162, 25, 150, 25, 1200),
-      vespene: createVespeneGeysers(162, 25, 150, 25, 2500),
+      x: 152,
+      y: 22,
+      minerals: createMineralLine(165, 22, 152, 22, 1200),
+      vespene: createVespeneGeysers(165, 22, 152, 22, 2500),
     },
 
     // Gold base (center)
@@ -431,8 +557,8 @@ function generateTrainingGrounds(): MapData {
       name: 'Gold Base',
       x: 100,
       y: 100,
-      minerals: createMineralLine(88, 100, 100, 100, 1000),
-      vespene: createVespeneGeysers(88, 100, 100, 100, 2500),
+      minerals: createMineralLine(86, 100, 100, 100, 1000),
+      vespene: createVespeneGeysers(86, 100, 100, 100, 2500),
     },
   ];
 
@@ -440,42 +566,45 @@ function generateTrainingGrounds(): MapData {
     id: 'training_grounds',
     name: 'Training Grounds',
     author: 'VOIDSTRIKE Team',
-    description: 'A balanced 1v1 map with elevated main bases, defensible naturals, and strategic expansion options.',
+    description: 'A professional 1v1 map with elevated bases, natural chokes, water features, and strategic expansion options.',
 
     width: MAP_WIDTH,
     height: MAP_HEIGHT,
     terrain,
 
     spawns: [
-      { x: 165, y: 165, playerSlot: 1, rotation: Math.PI * 5 / 4 },  // P1 Main
-      { x: 35, y: 35, playerSlot: 2, rotation: Math.PI / 4 },        // P2 Main
-      { x: 115, y: 160, playerSlot: 3, rotation: Math.PI * 3 / 2 },  // P1 Natural
-      { x: 85, y: 40, playerSlot: 4, rotation: Math.PI / 2 },        // P2 Natural
-      { x: 50, y: 115, playerSlot: 5, rotation: Math.PI },           // P1 Third
-      { x: 150, y: 85, playerSlot: 6, rotation: 0 },                 // P2 Third
-      { x: 50, y: 175, playerSlot: 7, rotation: Math.PI * 3 / 2 },   // P1 Fourth
-      { x: 150, y: 25, playerSlot: 8, rotation: Math.PI / 2 },       // P2 Fourth
+      { x: 165, y: 165, playerSlot: 1, rotation: Math.PI * 5 / 4 },
+      { x: 35, y: 35, playerSlot: 2, rotation: Math.PI / 4 },
+      { x: 112, y: 162, playerSlot: 3, rotation: Math.PI * 3 / 2 },
+      { x: 88, y: 38, playerSlot: 4, rotation: Math.PI / 2 },
+      { x: 48, y: 115, playerSlot: 5, rotation: Math.PI },
+      { x: 152, y: 85, playerSlot: 6, rotation: 0 },
+      { x: 48, y: 178, playerSlot: 7, rotation: Math.PI * 3 / 2 },
+      { x: 152, y: 22, playerSlot: 8, rotation: Math.PI / 2 },
     ],
 
     expansions,
 
     watchTowers: [
-      { x: 100, y: 100, radius: 20 },  // Center - primary control point
-      { x: 65, y: 135, radius: 16 },   // P1 side - watch natural approach
-      { x: 135, y: 65, radius: 16 },   // P2 side - watch natural approach
-      { x: 80, y: 80, radius: 14 },    // Mid-path tower
-      { x: 120, y: 120, radius: 14 },  // Mid-path tower
+      { x: 100, y: 100, radius: 22 },  // Center - primary control
+      { x: 62, y: 138, radius: 16 },   // P1 side
+      { x: 138, y: 62, radius: 16 },   // P2 side
+      { x: 78, y: 78, radius: 14 },    // Mid-diagonal
+      { x: 122, y: 122, radius: 14 },  // Mid-diagonal
     ],
 
     ramps,
 
     destructibles: [
-      // Backdoor rocks - break for alternate routes
-      { x: 60, y: 140, health: 2000 },  // P1 backdoor
-      { x: 140, y: 60, health: 2000 },  // P2 backdoor
-      // Center rocks - control access
-      { x: 85, y: 75, health: 1500 },
-      { x: 115, y: 125, health: 1500 },
+      // Backdoor rocks
+      { x: 58, y: 142, health: 2000 },
+      { x: 142, y: 58, health: 2000 },
+      // Center control rocks
+      { x: 88, y: 78, health: 1500 },
+      { x: 112, y: 122, health: 1500 },
+      // Side path rocks
+      { x: 55, y: 100, health: 1200 },
+      { x: 145, y: 100, health: 1200 },
     ],
 
     decorations: generateDecorations(),

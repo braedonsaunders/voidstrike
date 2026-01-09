@@ -13,11 +13,11 @@ type TerrainShaderMode = 'texture' | 'basic' | 'sc2';
 // Terrain subdivision for smoother rendering
 const SUBDIVISIONS = 2; // 2x2 subdivisions per cell for better quality
 
-// Height for each elevation level
+// Height for each elevation level - reduced for less dramatic cliffs
 const ELEVATION_HEIGHTS: Record<ElevationLevel, number> = {
   0: 0,
-  1: 2.5,
-  2: 5,
+  1: 1.8,
+  2: 3.5,
 };
 
 export interface TerrainConfig {
@@ -165,26 +165,38 @@ export class Terrain {
         // Calculate edge factor for cliff handling
         const edgeFactor = this.calculateElevationEdgeFactor(terrain, x, y, width, height);
 
-        // SC2-style terrain: FLAT buildable areas, dramatic cliffs only on unwalkable
+        // SC2-style terrain: FLAT buildable areas, natural-looking cliffs and ramps
         let detailNoise = 0;
 
         if (cell.terrain === 'unwalkable') {
-          // Cliffs and unwalkable areas get dramatic height variation
-          detailNoise = fractalNoise(x, y, 5, 0.55, 42) * 0.8;
-          detailNoise += smoothNoise(x, y, 4, 456) * 1.5;
-          detailNoise += fractalNoise(x * 2, y * 2, 3, 0.6, 321) * 1.0;
+          // Cliffs get moderate height variation for natural look
+          detailNoise = fractalNoise(x, y, 4, 0.5, 42) * 0.5;
+          detailNoise += smoothNoise(x, y, 6, 456) * 0.8;
 
-          // Add cliff edge variation
+          // Add cliff edge blending for smoother transitions
           if (edgeFactor > 0) {
-            detailNoise += edgeFactor * 1.5 * smoothNoise(x, y, 2, 999);
+            detailNoise += edgeFactor * 0.8 * smoothNoise(x, y, 3, 999);
           }
         } else if (cell.terrain === 'ramp') {
-          // Ramps get very subtle noise - mostly flat for smooth transition
-          detailNoise = smoothNoise(x, y, 12, 555) * 0.08;
+          // Ramps: smooth gradient with subtle variation
+          // Calculate smooth interpolation based on position in ramp
+          const rampNoise = smoothNoise(x, y, 8, 555) * 0.1;
+          detailNoise = rampNoise;
+
+          // Add smooth edge blending to nearby elevations
+          if (edgeFactor > 0) {
+            // Create gradual slope toward higher elevation
+            detailNoise += edgeFactor * 0.4;
+          }
         } else {
-          // Ground and unbuildable: PERFECTLY FLAT (SC2 style)
-          // Only add tiny micro-variation for visual interest in textures
-          detailNoise = 0;
+          // Ground: mostly flat with very subtle variation
+          // Small variation makes terrain feel more natural without affecting gameplay
+          detailNoise = smoothNoise(x, y, 20, 123) * 0.05;
+
+          // Smooth blending near elevation changes
+          if (edgeFactor > 0) {
+            detailNoise += edgeFactor * 0.3 * smoothNoise(x, y, 4, 777);
+          }
         }
 
         const finalHeight = baseHeight + detailNoise;
