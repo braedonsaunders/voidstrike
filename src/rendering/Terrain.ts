@@ -651,8 +651,8 @@ export class MapDecorations {
       // Get terrain height at tower position
       const terrainHeight = this.terrain.getHeightAt(tower.x, tower.y);
 
-      // Try to use custom xelnaga_tower model
-      const customTower = AssetManager.getDecorationMesh('xelnaga_tower');
+      // Try to use custom alien_tower model
+      const customTower = AssetManager.getDecorationMesh('alien_tower');
       if (customTower) {
         customTower.position.set(tower.x, terrainHeight, tower.y);
         this.group.add(customTower);
