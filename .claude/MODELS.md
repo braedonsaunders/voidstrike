@@ -14,13 +14,35 @@ This document lists all 3D models required for VOIDSTRIKE, with AI generation pr
 ### General Specifications
 | Property | Requirement |
 |----------|-------------|
-| Polygon count | 500-5000 triangles (units), 1000-10000 (buildings) |
+| Polygon count | See detailed breakdown below |
 | Scale | 1 unit = 1 meter |
 | Origin | Center-bottom (ground level) |
 | Orientation | Face +X direction (forward) |
 | Up axis | +Y |
 | Materials | PBR (metallic-roughness workflow) |
 | Textures | Max 1024x1024, prefer 512x512 |
+
+### Polygon Budget
+
+**Units (animated):**
+| Unit Type | Triangle Budget |
+|-----------|----------------|
+| Infantry (Marine, Ghost, Reaper) | 2,000 - 5,000 |
+| Heavy Infantry (Marauder) | 3,000 - 6,000 |
+| Vehicles (Hellion, Siege Tank) | 4,000 - 8,000 |
+| Mechs (Thor) | 6,000 - 10,000 |
+| Aircraft (Viking, Banshee, Medivac) | 4,000 - 8,000 |
+| Capital Ships (Battlecruiser) | 8,000 - 15,000 |
+
+**Buildings (static):**
+| Building Type | Triangle Budget |
+|---------------|----------------|
+| Command Center, Starport | 25,000 - 35,000 |
+| Barracks, Factory | 15,000 - 25,000 |
+| Refinery, Engineering Bay | 10,000 - 20,000 |
+| Supply Depot, Bunker | 5,000 - 10,000 |
+| Addons (Tech Lab, Reactor) | 3,000 - 5,000 |
+| Turrets (Missile Turret) | 3,000 - 6,000 |
 
 ### Color Guidelines
 - **Primary:** Steel blue-gray (#6080a0)
