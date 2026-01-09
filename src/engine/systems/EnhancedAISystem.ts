@@ -916,6 +916,11 @@ export class EnhancedAISystem extends System {
       }
     }
 
+    // Check for overlapping decorations (rocks, trees, etc.)
+    if (!this.game.isPositionClearOfDecorations(x, y, width, height)) {
+      return false;
+    }
+
     return true;
   }
 

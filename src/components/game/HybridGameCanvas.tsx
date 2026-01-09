@@ -194,6 +194,9 @@ export function HybridGameCanvas() {
       // Set terrain grid for building placement validation
       game.setTerrainGrid(CURRENT_MAP.terrain);
 
+      // Pass decoration collision data to game for building placement validation
+      game.setDecorationCollisions(environment.getRockCollisions());
+
       const fogOfWarEnabled = useGameSetupStore.getState().fogOfWar;
 
       // Create renderers

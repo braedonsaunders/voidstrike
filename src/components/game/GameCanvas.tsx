@@ -153,6 +153,9 @@ export function GameCanvas() {
     });
     gameRef.current = game;
 
+    // Pass decoration collision data to game for building placement validation
+    game.setDecorationCollisions(environment.getRockCollisions());
+
     // Check if fog of war is enabled from game setup
     const fogOfWarEnabled = useGameSetupStore.getState().fogOfWar;
 
