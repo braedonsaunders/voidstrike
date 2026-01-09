@@ -79,6 +79,9 @@
 
 ### Building System Fixes
 - [x] **Building construction completion bug** - Buildings would stay translucent, construction particles wouldn't disappear, buildings could resize incorrectly. Fixed material array handling and construction effect cleanup when switching to instanced rendering.
+- [x] **Instanced rendering scale bug** - Buildings using instanced rendering appeared extremely small because the geometry was used without the model's normalization scale. Fixed by tracking and applying modelScale to instance matrices.
+- [x] **Layer-by-layer construction reveal** - Replaced opacity-only animation with clipping plane reveal. Buildings now reveal from bottom to top with construction particles at the build height.
+- [x] **Supply depot/refinery heights** - Fixed target heights (supply_depot: 0.9→1.8, refinery: 2.0→2.5) to match procedural versions and prevent buildings from appearing half in the ground.
 
 ### UI Improvements
 - [x] **Options menu** - Replaced Menu button with dropdown (Controls, Tech Tree, Exit to Menu)
