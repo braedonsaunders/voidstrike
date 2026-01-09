@@ -22,7 +22,7 @@ import { useGameSetupStore } from '@/store/gameSetupStore';
 import { SelectionBox } from './SelectionBox';
 import { LoadingScreen } from './LoadingScreen';
 import { spawnInitialEntities } from '@/utils/gameSetup';
-import { DEFAULT_MAP, MapData } from '@/data/maps';
+import { DEFAULT_MAP, MapData, getMapById } from '@/data/maps';
 import { Resource } from '@/engine/components/Resource';
 import { Unit } from '@/engine/components/Unit';
 import { Selectable } from '@/engine/components/Selectable';
@@ -49,7 +49,8 @@ import { OverlayScene } from '@/phaser/scenes/OverlayScene';
  * └────────────────────────────────────────┘
  */
 
-const CURRENT_MAP: MapData = DEFAULT_MAP;
+// Map reference - loaded dynamically from store
+let CURRENT_MAP: MapData = DEFAULT_MAP;
 
 export function HybridGameCanvas() {
   const containerRef = useRef<HTMLDivElement>(null);
@@ -104,6 +105,11 @@ export function HybridGameCanvas() {
     if (!containerRef.current || !threeCanvasRef.current || !phaserContainerRef.current) return;
 
     const initializeGame = async () => {
+      // Load selected map from store
+      const selectedMapId = useGameSetupStore.getState().selectedMapId;
+      CURRENT_MAP = getMapById(selectedMapId) || DEFAULT_MAP;
+      console.log(`[HybridGameCanvas] Loading map: ${CURRENT_MAP.name} (${CURRENT_MAP.id})`);
+
       setLoadingStatus('Loading 3D models');
       setLoadingProgress(10);
 
