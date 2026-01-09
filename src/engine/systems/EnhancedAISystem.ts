@@ -223,6 +223,13 @@ export class EnhancedAISystem extends System {
       // Update AI's knowledge of the game state
       this.updateGameState(ai);
 
+      // Check if AI is defeated (no buildings left)
+      const totalBuildings = Array.from(ai.buildingCounts.values()).reduce((a, b) => a + b, 0);
+      if (totalBuildings === 0) {
+        // AI is defeated - stop all activity
+        continue;
+      }
+
       // Resource bonus for harder difficulties
       this.applyResourceBonus(ai);
 
@@ -448,17 +455,31 @@ export class EnhancedAISystem extends System {
     const hasBarracks = (ai.buildingCounts.get('barracks') || 0) > 0;
     const hasFactory = (ai.buildingCounts.get('factory') || 0) > 0;
     const hasStarport = (ai.buildingCounts.get('starport') || 0) > 0;
+    const hasRefinery = (ai.buildingCounts.get('refinery') || 0) > 0;
+    const barrackCount = ai.buildingCounts.get('barracks') || 0;
+
+    // Build refinery early to get vespene for tech
+    if (!hasRefinery && ai.workerCount >= 14) {
+      if (this.tryBuildBuilding(ai, 'refinery')) return;
+    }
 
     // Build production buildings if needed
     if (!hasBarracks && ai.workerCount >= 12) {
       if (this.tryBuildBuilding(ai, 'barracks')) return;
     }
 
-    if (hasBarracks && !hasFactory && ai.difficulty !== 'easy' && ai.workerCount >= 16) {
+    // Second barracks for more production
+    if (barrackCount === 1 && ai.workerCount >= 18 && ai.armySupply >= 4) {
+      if (this.tryBuildBuilding(ai, 'barracks')) return;
+    }
+
+    // Factory for all difficulties except easy (requires refinery for vespene)
+    if (hasBarracks && hasRefinery && !hasFactory && ai.difficulty !== 'easy' && ai.vespene >= 100) {
       if (this.tryBuildBuilding(ai, 'factory')) return;
     }
 
-    if (hasFactory && !hasStarport && ai.difficulty !== 'easy' && ai.difficulty !== 'medium' && ai.workerCount >= 20) {
+    // Starport for medium+ difficulties
+    if (hasFactory && !hasStarport && ai.difficulty !== 'easy' && ai.vespene >= 100) {
       if (this.tryBuildBuilding(ai, 'starport')) return;
     }
 
@@ -471,37 +492,40 @@ export class EnhancedAISystem extends System {
         if (this.tryBuildBuilding(ai, buildingRec.buildingId)) return;
       }
 
-      // Try to train recommended units
+      // Try to train recommended units (with vespene checks)
       for (const unitRec of recommendation.unitsToBuild) {
-        // Check if we have the production building for this unit
         const unitDef = UNIT_DEFINITIONS[unitRec.unitId];
         if (!unitDef) continue;
 
-        // Determine which building produces this unit
+        // Check we have enough vespene for this unit
+        if (ai.vespene < unitDef.vespeneCost) continue;
+
         const canProduce = this.canProduceUnit(ai, unitRec.unitId);
         if (canProduce && this.tryTrainUnit(ai, unitRec.unitId)) return;
       }
     }
 
-    // Fallback: standard production logic
-    if (hasStarport && ai.difficulty !== 'easy' && Math.random() < 0.2) {
+    // Produce units based on available buildings and resources
+    if (hasStarport && ai.vespene >= 100 && Math.random() < 0.25) {
       if (this.tryTrainUnit(ai, 'medivac')) return;
     }
 
-    if (hasFactory && ai.difficulty !== 'easy') {
-      if (Math.random() < 0.3) {
+    if (hasFactory && ai.vespene >= 25) {
+      if (Math.random() < 0.35) {
         if (this.tryTrainUnit(ai, 'hellion')) return;
       }
-      if (ai.difficulty !== 'medium' && Math.random() < 0.2) {
+      if (ai.vespene >= 125 && Math.random() < 0.25) {
         if (this.tryTrainUnit(ai, 'siege_tank')) return;
       }
     }
 
     if (hasBarracks) {
-      if (Math.random() < 0.7) {
-        this.tryTrainUnit(ai, 'marine');
-      } else if (ai.difficulty !== 'easy') {
+      // Marines don't need vespene - always a good choice
+      if (ai.vespene >= 25 && Math.random() < 0.35 && ai.difficulty !== 'easy') {
+        // Marauders need vespene
         this.tryTrainUnit(ai, 'marauder');
+      } else {
+        this.tryTrainUnit(ai, 'marine');
       }
     }
   }
@@ -527,30 +551,78 @@ export class EnhancedAISystem extends System {
   }
 
   private executeAttackingPhase(ai: AIPlayer, currentTick: number): void {
-    const enemyBase = this.findEnemyBase(ai.playerId);
-    if (!enemyBase) {
+    // Find any enemy target (building or unit)
+    const enemyTarget = this.findAnyEnemyTarget(ai.playerId);
+    if (!enemyTarget) {
+      // No enemies left - victory! Go back to building
       ai.state = 'building';
       return;
     }
 
     const armyUnits = this.getArmyUnits(ai.playerId);
-    if (armyUnits.length < this.getMinArmyForAttack(ai.difficulty) * 0.5) {
+    if (armyUnits.length === 0) {
+      ai.state = 'building';
+      return;
+    }
+
+    // Only retreat if army is very small AND we have buildings to defend
+    const totalBuildings = Array.from(ai.buildingCounts.values()).reduce((a, b) => a + b, 0);
+    if (armyUnits.length < 3 && totalBuildings > 1) {
       ai.state = 'building';
       return;
     }
 
     ai.lastAttackTick = currentTick;
 
-    // Attack-move to enemy base
+    // Attack-move to enemy target
     const command: GameCommand = {
       tick: currentTick,
       playerId: ai.playerId,
       type: 'ATTACK',
       entityIds: armyUnits,
-      targetPosition: { x: enemyBase.x, y: enemyBase.y },
+      targetPosition: { x: enemyTarget.x, y: enemyTarget.y },
     };
 
     this.game.processCommand(command);
+
+    // Continue attacking - stay in attack state until enemies are gone
+    // This ensures AI pursues victory
+  }
+
+  /**
+   * Find any enemy target - buildings first, then units
+   * Used to ensure AI destroys ALL enemy assets for victory
+   */
+  private findAnyEnemyTarget(playerId: string): { x: number; y: number } | null {
+    // First, look for enemy buildings
+    const buildings = this.world.getEntitiesWith('Building', 'Transform', 'Selectable', 'Health');
+    for (const entity of buildings) {
+      const selectable = entity.get<Selectable>('Selectable');
+      const health = entity.get<Health>('Health');
+      const transform = entity.get<Transform>('Transform');
+
+      if (!selectable || !health || !transform) continue;
+      if (selectable.playerId === playerId) continue;
+      if (health.isDead()) continue;
+
+      return { x: transform.x, y: transform.y };
+    }
+
+    // Then, look for enemy units
+    const units = this.world.getEntitiesWith('Unit', 'Transform', 'Selectable', 'Health');
+    for (const entity of units) {
+      const selectable = entity.get<Selectable>('Selectable');
+      const health = entity.get<Health>('Health');
+      const transform = entity.get<Transform>('Transform');
+
+      if (!selectable || !health || !transform) continue;
+      if (selectable.playerId === playerId) continue;
+      if (health.isDead()) continue;
+
+      return { x: transform.x, y: transform.y };
+    }
+
+    return null;
   }
 
   private executeDefendingPhase(ai: AIPlayer): void {
@@ -563,20 +635,70 @@ export class EnhancedAISystem extends System {
       return;
     }
 
-    const command: GameCommand = {
-      tick: this.game.getCurrentTick(),
-      playerId: ai.playerId,
-      type: 'ATTACK',
-      entityIds: armyUnits,
-      targetPosition: baseLocation,
-    };
+    // Find any nearby enemy to defend against
+    const nearbyEnemy = this.findNearbyEnemy(ai.playerId, baseLocation, 30);
+    if (nearbyEnemy) {
+      // Attack the actual enemy, not our own base
+      const command: GameCommand = {
+        tick: this.game.getCurrentTick(),
+        playerId: ai.playerId,
+        type: 'ATTACK',
+        entityIds: armyUnits,
+        targetPosition: nearbyEnemy,
+      };
+      this.game.processCommand(command);
+    } else {
+      // No enemy in range - rally units near the base (not AT it) to form a defensive position
+      // Position units in front of the base (offset by 8 units)
+      const rallyPoint = {
+        x: baseLocation.x + 8,
+        y: baseLocation.y + 8,
+      };
 
-    this.game.processCommand(command);
+      const command: GameCommand = {
+        tick: this.game.getCurrentTick(),
+        playerId: ai.playerId,
+        type: 'MOVE',
+        entityIds: armyUnits,
+        targetPosition: rallyPoint,
+      };
+      this.game.processCommand(command);
+
+      // No threat nearby, switch back to building
+      ai.state = 'building';
+    }
 
     // Check if threat is cleared
     if (!this.isUnderAttack(ai.playerId)) {
       ai.state = 'building';
     }
+  }
+
+  /**
+   * Find a nearby enemy unit or building to defend against
+   */
+  private findNearbyEnemy(playerId: string, position: { x: number; y: number }, range: number): { x: number; y: number } | null {
+    // Look for enemy units first
+    const units = this.world.getEntitiesWith('Unit', 'Transform', 'Selectable', 'Health');
+    for (const entity of units) {
+      const selectable = entity.get<Selectable>('Selectable');
+      const health = entity.get<Health>('Health');
+      const transform = entity.get<Transform>('Transform');
+
+      if (!selectable || !health || !transform) continue;
+      if (selectable.playerId === playerId) continue;
+      if (health.isDead()) continue;
+
+      const dx = transform.x - position.x;
+      const dy = transform.y - position.y;
+      const distance = Math.sqrt(dx * dx + dy * dy);
+
+      if (distance <= range) {
+        return { x: transform.x, y: transform.y };
+      }
+    }
+
+    return null;
   }
 
   private executeScoutingPhase(ai: AIPlayer, currentTick: number): void {
@@ -842,6 +964,11 @@ export class EnhancedAISystem extends System {
       if (dx < halfW + 2 && dy < halfH + 2) {
         return false;
       }
+    }
+
+    // Check for overlapping decorations (rocks, trees, etc.)
+    if (!this.game.isPositionClearOfDecorations(x, y, width, height)) {
+      return false;
     }
 
     return true;

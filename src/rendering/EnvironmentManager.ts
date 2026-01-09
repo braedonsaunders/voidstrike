@@ -181,6 +181,14 @@ export class EnvironmentManager {
   }
 
   /**
+   * Get rock collision data for building placement validation
+   * Returns array of { x, z, radius } for each rock
+   */
+  public getRockCollisions(): Array<{ x: number; z: number; radius: number }> {
+    return this.rocks?.getRockCollisions() || [];
+  }
+
+  /**
    * Dispose all resources
    */
   public dispose(): void {

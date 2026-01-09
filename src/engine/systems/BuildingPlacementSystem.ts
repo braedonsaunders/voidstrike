@@ -399,6 +399,12 @@ export class BuildingPlacementSystem extends System {
       }
     }
 
+    // Check for overlapping decorations (rocks, trees, etc.)
+    if (!this.game.isPositionClearOfDecorations(centerX, centerY, width, height)) {
+      console.log(`BuildingPlacement: Failed - overlaps decoration at (${centerX}, ${centerY})`);
+      return false;
+    }
+
     return true;
   }
 

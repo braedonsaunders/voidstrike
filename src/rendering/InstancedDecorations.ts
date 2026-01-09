@@ -251,6 +251,9 @@ export class InstancedRocks {
   private geometry: THREE.BufferGeometry | null = null;
   private material: THREE.Material | null = null;
 
+  // Store rock positions for collision detection (x, z are world coords, radius is collision size)
+  private rockCollisions: Array<{ x: number; z: number; radius: number }> = [];
+
   constructor(
     mapData: MapData,
     biome: BiomeConfig,
@@ -286,6 +289,9 @@ export class InstancedRocks {
               Math.random() * 0.3
             ),
           });
+          // Store collision data for building placement validation
+          // Collision radius is based on rock scale (larger rocks = bigger collision area)
+          this.rockCollisions.push({ x, z: y, radius: size * 1.5 });
         }
       }
     }
@@ -353,6 +359,14 @@ export class InstancedRocks {
     this.instancedMesh?.dispose();
     this.geometry?.dispose();
     this.material?.dispose();
+  }
+
+  /**
+   * Get rock collision data for building placement validation
+   * Returns array of { x, z, radius } for each rock
+   */
+  public getRockCollisions(): Array<{ x: number; z: number; radius: number }> {
+    return this.rockCollisions;
   }
 }
 

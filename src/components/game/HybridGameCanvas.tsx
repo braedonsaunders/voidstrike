@@ -146,6 +146,8 @@ export function HybridGameCanvas() {
       renderer.outputColorSpace = THREE.SRGBColorSpace;
       renderer.toneMapping = THREE.ACESFilmicToneMapping;
       renderer.toneMappingExposure = 1.1;
+      // Enable local clipping for construction animations
+      renderer.localClippingEnabled = true;
       renderer.shadowMap.enabled = true;
       renderer.shadowMap.type = THREE.PCFSoftShadowMap;
       rendererRef.current = renderer;
@@ -193,6 +195,9 @@ export function HybridGameCanvas() {
 
       // Set terrain grid for building placement validation
       game.setTerrainGrid(CURRENT_MAP.terrain);
+
+      // Pass decoration collision data to game for building placement validation
+      game.setDecorationCollisions(environment.getRockCollisions());
 
       const fogOfWarEnabled = useGameSetupStore.getState().fogOfWar;
 

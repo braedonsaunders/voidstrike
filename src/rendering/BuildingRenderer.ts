@@ -20,6 +20,9 @@ interface BuildingMeshData {
   // Fire effect for damaged buildings
   fireEffect: THREE.Group | null;
   lastHealthPercent: number;
+  // Construction effect (dust particles at build height)
+  constructionEffect: THREE.Group | null;
+  buildingHeight: number; // Stored for clipping calculation
 }
 
 export class BuildingRenderer {
@@ -37,9 +40,12 @@ export class BuildingRenderer {
   private fireMaterial: THREE.MeshBasicMaterial;
   private smokeMaterial: THREE.MeshBasicMaterial;
   private fireGeometry: THREE.ConeGeometry;
+  private constructionDustMaterial: THREE.PointsMaterial;
+  private constructionSparkMaterial: THREE.PointsMaterial;
 
-  // Animation time for fire effects
+  // Animation time for effects
   private fireAnimTime: number = 0;
+  private constructionAnimTime: number = 0;
 
   constructor(scene: THREE.Scene, world: World, visionSystem?: VisionSystem, terrain?: Terrain) {
     this.scene = scene;
@@ -84,6 +90,24 @@ export class BuildingRenderer {
 
     this.fireGeometry = new THREE.ConeGeometry(0.3, 0.8, 8);
 
+    // Construction dust particles
+    this.constructionDustMaterial = new THREE.PointsMaterial({
+      color: 0xaa9977,
+      size: 0.15,
+      transparent: true,
+      opacity: 0.7,
+      blending: THREE.AdditiveBlending,
+    });
+
+    // Construction sparks (welding/building effect)
+    this.constructionSparkMaterial = new THREE.PointsMaterial({
+      color: 0xffcc44,
+      size: 0.08,
+      transparent: true,
+      opacity: 0.9,
+      blending: THREE.AdditiveBlending,
+    });
+
     // Register callback to refresh meshes when custom models finish loading
     AssetManager.onModelsLoaded(() => {
       this.refreshAllMeshes();
@@ -114,6 +138,7 @@ export class BuildingRenderer {
   public update(deltaTime: number = 16): void {
     const dt = deltaTime / 1000;
     this.fireAnimTime += dt;
+    this.constructionAnimTime += dt;
 
     const entities = this.world.getEntitiesWith('Transform', 'Building');
     const currentIds = new Set<number>();
@@ -180,55 +205,79 @@ export class BuildingRenderer {
       // Construction animation based on building state
       const isComplete = building.isComplete();
       const isWaitingForWorker = building.state === 'waiting_for_worker';
+      const buildingHeight = meshData.buildingHeight;
 
       // DEFENSIVE: If building is complete, always show as complete
-      // This prevents any state bugs from causing visual glitches
       if (isComplete) {
         if (!meshData.wasComplete) {
-          // Building just completed - do final traverse to reset materials
+          // Building just completed - remove clipping and reset materials
           meshData.wasComplete = true;
           meshData.group.scale.setScalar(1);
           meshData.group.traverse((child) => {
             if (child instanceof THREE.Mesh) {
               const mat = child.material as THREE.MeshStandardMaterial;
-              if (mat.transparent !== undefined) {
+              if (mat) {
+                mat.clippingPlanes = [];
                 mat.transparent = false;
                 mat.opacity = 1;
-                mat.wireframe = false;
               }
             }
           });
+          // Remove construction effect
+          if (meshData.constructionEffect) {
+            this.scene.remove(meshData.constructionEffect);
+            this.disposeGroup(meshData.constructionEffect);
+            meshData.constructionEffect = null;
+          }
         }
-        // PERFORMANCE: If building was already complete, skip traverse() entirely
       } else if (isWaitingForWorker) {
-        // Show a ghost/placeholder while waiting for SCV to arrive
-        // Small scale, very transparent wireframe-like appearance
-        meshData.group.scale.setScalar(0.3);
+        // Show a very faint holographic preview (no wireframe)
+        meshData.group.scale.setScalar(1);
         meshData.group.traverse((child) => {
           if (child instanceof THREE.Mesh) {
             const mat = child.material as THREE.MeshStandardMaterial;
-            if (mat.transparent !== undefined) {
+            if (mat) {
               mat.transparent = true;
-              mat.opacity = 0.15; // Very faint ghost
-              mat.wireframe = true; // Wireframe mode while waiting
+              mat.opacity = 0.2;
+              mat.clippingPlanes = [];
             }
           }
         });
+        // No construction effect while waiting
+        if (meshData.constructionEffect) {
+          meshData.constructionEffect.visible = false;
+        }
       } else {
-        // Construction in progress - scale up as building completes
+        // Construction in progress - bottom-up reveal with clipping plane
         const progress = building.buildProgress;
-        meshData.group.scale.setScalar(0.5 + progress * 0.5);
-        // Update materials during construction
+        const revealHeight = progress * buildingHeight;
+
+        // Create clipping plane that clips everything above the reveal height
+        const clipPlane = new THREE.Plane(new THREE.Vector3(0, -1, 0), revealHeight);
+
+        meshData.group.scale.setScalar(1); // Full scale
         meshData.group.traverse((child) => {
           if (child instanceof THREE.Mesh) {
             const mat = child.material as THREE.MeshStandardMaterial;
-            if (mat.transparent !== undefined) {
-              mat.transparent = true;
-              mat.opacity = 0.5 + progress * 0.5;
-              mat.wireframe = false; // Solid during construction
+            if (mat) {
+              mat.clippingPlanes = [clipPlane];
+              mat.clipShadows = true;
+              mat.transparent = false;
+              mat.opacity = 1;
             }
           }
         });
+
+        // Create/update construction effect (dust and sparks at build level)
+        if (!meshData.constructionEffect) {
+          meshData.constructionEffect = this.createConstructionEffect(building.width, building.height, buildingHeight);
+          this.scene.add(meshData.constructionEffect);
+        }
+
+        // Position construction effect at current build height
+        meshData.constructionEffect.visible = true;
+        meshData.constructionEffect.position.set(transform.x, terrainHeight + revealHeight, transform.y);
+        this.updateConstructionEffect(meshData.constructionEffect, dt, building.width, building.height);
       }
 
       // Update selection ring - larger multiplier for better visibility
@@ -307,6 +356,10 @@ export class BuildingRenderer {
           this.scene.remove(meshData.fireEffect);
           this.disposeGroup(meshData.fireEffect);
         }
+        if (meshData.constructionEffect) {
+          this.scene.remove(meshData.constructionEffect);
+          this.disposeGroup(meshData.constructionEffect);
+        }
         this.disposeGroup(meshData.group);
         this.buildingMeshes.delete(entityId);
       }
@@ -320,7 +373,19 @@ export class BuildingRenderer {
     // Get building mesh from AssetManager
     const group = AssetManager.getBuildingMesh(building.buildingId, playerColor) as THREE.Group;
 
-    // PERFORMANCE: Shadows are disabled globally, no need to set per-mesh
+    // Calculate building height from the mesh bounding box
+    const bbox = new THREE.Box3().setFromObject(group);
+    const buildingHeight = bbox.max.y - bbox.min.y || building.height;
+
+    // Enable clipping on all materials
+    group.traverse((child) => {
+      if (child instanceof THREE.Mesh) {
+        const mat = child.material as THREE.MeshStandardMaterial;
+        if (mat) {
+          mat.side = THREE.DoubleSide; // Required for clipping to look correct
+        }
+      }
+    });
 
     // Selection ring - reduced segments for performance
     const ringGeometry = new THREE.RingGeometry(0.8, 1, 16);
@@ -343,92 +408,314 @@ export class BuildingRenderer {
       wasComplete: false,
       fireEffect: null,
       lastHealthPercent: 1,
+      constructionEffect: null,
+      buildingHeight,
     };
   }
 
   /**
    * Create fire effect for damaged buildings
+   * Uses particle system for more realistic fire
    */
   private createFireEffect(buildingWidth: number, buildingHeight: number): THREE.Group {
     const fireGroup = new THREE.Group();
 
-    // Create multiple flame cones at random positions
-    const flameCount = Math.max(3, Math.floor(buildingWidth * buildingHeight / 4));
-    for (let i = 0; i < flameCount; i++) {
-      const flame = new THREE.Mesh(
-        this.fireGeometry,
-        this.fireMaterial.clone()
-      );
+    // Fire particles (many small particles that rise and fade)
+    const fireParticleCount = 80;
+    const firePositions = new Float32Array(fireParticleCount * 3);
+    const fireColors = new Float32Array(fireParticleCount * 3);
 
-      // Random position within building footprint
-      flame.position.x = (Math.random() - 0.5) * buildingWidth * 0.8;
-      flame.position.z = (Math.random() - 0.5) * buildingHeight * 0.8;
-      flame.position.y = buildingHeight * 0.3 + Math.random() * buildingHeight * 0.4;
+    for (let i = 0; i < fireParticleCount; i++) {
+      firePositions[i * 3] = (Math.random() - 0.5) * buildingWidth * 0.7;
+      firePositions[i * 3 + 1] = Math.random() * buildingHeight * 0.6;
+      firePositions[i * 3 + 2] = (Math.random() - 0.5) * buildingHeight * 0.7;
 
-      // Random scale
-      const scale = 0.5 + Math.random() * 1.0;
-      flame.scale.set(scale, scale * (0.8 + Math.random() * 0.4), scale);
-
-      // Vary colors between orange and red
-      const mat = flame.material as THREE.MeshBasicMaterial;
-      mat.color.setHex(Math.random() > 0.5 ? 0xff4400 : 0xff6600);
-
-      // Store original position for animation
-      flame.userData.baseY = flame.position.y;
-      flame.userData.phase = Math.random() * Math.PI * 2;
-
-      fireGroup.add(flame);
+      // Orange to yellow colors
+      fireColors[i * 3] = 1;
+      fireColors[i * 3 + 1] = 0.3 + Math.random() * 0.5;
+      fireColors[i * 3 + 2] = 0;
     }
 
-    // Add some smoke spheres
-    const smokeGeometry = new THREE.SphereGeometry(0.4, 8, 8);
-    for (let i = 0; i < 3; i++) {
-      const smoke = new THREE.Mesh(smokeGeometry, this.smokeMaterial.clone());
-      smoke.position.x = (Math.random() - 0.5) * buildingWidth * 0.6;
-      smoke.position.z = (Math.random() - 0.5) * buildingHeight * 0.6;
-      smoke.position.y = buildingHeight * 0.8 + Math.random() * 0.5;
+    const fireGeometry = new THREE.BufferGeometry();
+    fireGeometry.setAttribute('position', new THREE.BufferAttribute(firePositions, 3));
+    fireGeometry.setAttribute('color', new THREE.BufferAttribute(fireColors, 3));
 
-      const scale = 0.8 + Math.random() * 0.6;
-      smoke.scale.setScalar(scale);
+    const fireParticleMaterial = new THREE.PointsMaterial({
+      size: 0.4,
+      vertexColors: true,
+      transparent: true,
+      opacity: 0.9,
+      blending: THREE.AdditiveBlending,
+      depthWrite: false,
+    });
 
-      smoke.userData.baseY = smoke.position.y;
-      smoke.userData.phase = Math.random() * Math.PI * 2;
-      smoke.userData.isSmoke = true;
+    const fireParticles = new THREE.Points(fireGeometry, fireParticleMaterial);
+    fireParticles.userData.isFireParticles = true;
+    fireParticles.userData.buildingWidth = buildingWidth;
+    fireParticles.userData.buildingHeight = buildingHeight;
+    fireParticles.userData.lifetimes = new Float32Array(fireParticleCount).fill(0).map(() => Math.random());
+    fireGroup.add(fireParticles);
 
-      fireGroup.add(smoke);
+    // Smoke particles (larger, darker, rise slower)
+    const smokeParticleCount = 30;
+    const smokePositions = new Float32Array(smokeParticleCount * 3);
+
+    for (let i = 0; i < smokeParticleCount; i++) {
+      smokePositions[i * 3] = (Math.random() - 0.5) * buildingWidth * 0.6;
+      smokePositions[i * 3 + 1] = buildingHeight * 0.5 + Math.random() * buildingHeight * 0.5;
+      smokePositions[i * 3 + 2] = (Math.random() - 0.5) * buildingHeight * 0.6;
     }
+
+    const smokeGeometry = new THREE.BufferGeometry();
+    smokeGeometry.setAttribute('position', new THREE.BufferAttribute(smokePositions, 3));
+
+    const smokeParticleMaterial = new THREE.PointsMaterial({
+      color: 0x333333,
+      size: 0.8,
+      transparent: true,
+      opacity: 0.4,
+      depthWrite: false,
+    });
+
+    const smokeParticles = new THREE.Points(smokeGeometry, smokeParticleMaterial);
+    smokeParticles.userData.isSmokeParticles = true;
+    smokeParticles.userData.buildingHeight = buildingHeight;
+    smokeParticles.userData.lifetimes = new Float32Array(smokeParticleCount).fill(0).map(() => Math.random());
+    fireGroup.add(smokeParticles);
+
+    // Ember particles (small bright sparks that shoot up)
+    const emberCount = 20;
+    const emberPositions = new Float32Array(emberCount * 3);
+
+    for (let i = 0; i < emberCount; i++) {
+      emberPositions[i * 3] = (Math.random() - 0.5) * buildingWidth * 0.5;
+      emberPositions[i * 3 + 1] = Math.random() * buildingHeight * 0.4;
+      emberPositions[i * 3 + 2] = (Math.random() - 0.5) * buildingHeight * 0.5;
+    }
+
+    const emberGeometry = new THREE.BufferGeometry();
+    emberGeometry.setAttribute('position', new THREE.BufferAttribute(emberPositions, 3));
+
+    const emberMaterial = new THREE.PointsMaterial({
+      color: 0xffaa00,
+      size: 0.15,
+      transparent: true,
+      opacity: 1,
+      blending: THREE.AdditiveBlending,
+      depthWrite: false,
+    });
+
+    const emberParticles = new THREE.Points(emberGeometry, emberMaterial);
+    emberParticles.userData.isEmbers = true;
+    emberParticles.userData.buildingWidth = buildingWidth;
+    emberParticles.userData.buildingHeight = buildingHeight;
+    emberParticles.userData.lifetimes = new Float32Array(emberCount).fill(0).map(() => Math.random());
+    emberParticles.userData.velocities = new Float32Array(emberCount * 3);
+    for (let i = 0; i < emberCount; i++) {
+      emberParticles.userData.velocities[i * 3] = (Math.random() - 0.5) * 2;
+      emberParticles.userData.velocities[i * 3 + 1] = 2 + Math.random() * 3;
+      emberParticles.userData.velocities[i * 3 + 2] = (Math.random() - 0.5) * 2;
+    }
+    fireGroup.add(emberParticles);
 
     return fireGroup;
   }
 
   /**
-   * Animate fire effect
+   * Animate fire effect with realistic particle behavior
    */
   private updateFireEffect(fireGroup: THREE.Group, dt: number): void {
     for (const child of fireGroup.children) {
-      if (child instanceof THREE.Mesh) {
-        const phase = child.userData.phase || 0;
-        const baseY = child.userData.baseY || 0;
+      if (!(child instanceof THREE.Points)) continue;
 
-        // Flickering animation
-        const flicker = Math.sin(this.fireAnimTime * 10 + phase) * 0.1;
-        child.position.y = baseY + flicker;
+      const positions = (child.geometry.attributes.position as THREE.BufferAttribute).array as Float32Array;
+      const lifetimes = child.userData.lifetimes as Float32Array;
 
-        // Scale pulsing
-        const pulse = 1 + Math.sin(this.fireAnimTime * 8 + phase) * 0.15;
-        const baseScale = child.userData.isSmoke ? 1 : 0.8;
-        child.scale.y = baseScale * pulse;
+      if (child.userData.isFireParticles) {
+        // Fire particles rise and flicker
+        const bw = child.userData.buildingWidth;
+        const bh = child.userData.buildingHeight;
+        const colors = (child.geometry.attributes.color as THREE.BufferAttribute).array as Float32Array;
 
-        // Smoke rises slowly
-        if (child.userData.isSmoke) {
-          child.position.y += dt * 0.3;
-          if (child.position.y > baseY + 2) {
-            child.position.y = baseY;
+        for (let i = 0; i < positions.length / 3; i++) {
+          lifetimes[i] += dt * (1.5 + Math.random() * 0.5);
+
+          // Rise upward with slight horizontal drift
+          positions[i * 3] += (Math.random() - 0.5) * dt * 0.5;
+          positions[i * 3 + 1] += dt * (1 + Math.random() * 0.5);
+          positions[i * 3 + 2] += (Math.random() - 0.5) * dt * 0.5;
+
+          // Reset when lifetime exceeded or too high
+          if (lifetimes[i] > 1 || positions[i * 3 + 1] > bh * 1.2) {
+            lifetimes[i] = 0;
+            positions[i * 3] = (Math.random() - 0.5) * bw * 0.7;
+            positions[i * 3 + 1] = Math.random() * 0.3;
+            positions[i * 3 + 2] = (Math.random() - 0.5) * bh * 0.7;
           }
-          // Fade smoke as it rises
-          const mat = child.material as THREE.MeshBasicMaterial;
-          mat.opacity = 0.5 * (1 - (child.position.y - baseY) / 2);
+
+          // Color fades from yellow/white to orange/red as it rises
+          const progress = lifetimes[i];
+          colors[i * 3] = 1;
+          colors[i * 3 + 1] = Math.max(0.2, 0.8 - progress * 0.6);
+          colors[i * 3 + 2] = Math.max(0, 0.3 - progress * 0.3);
         }
+        child.geometry.attributes.color.needsUpdate = true;
+
+        // Pulse overall opacity
+        const mat = child.material as THREE.PointsMaterial;
+        mat.opacity = 0.7 + Math.sin(this.fireAnimTime * 15) * 0.2;
+
+      } else if (child.userData.isSmokeParticles) {
+        // Smoke rises slowly and drifts
+        const bh = child.userData.buildingHeight;
+
+        for (let i = 0; i < positions.length / 3; i++) {
+          lifetimes[i] += dt * 0.3;
+
+          // Slow rise with drift
+          positions[i * 3] += (Math.random() - 0.5) * dt * 0.3;
+          positions[i * 3 + 1] += dt * 0.8;
+          positions[i * 3 + 2] += (Math.random() - 0.5) * dt * 0.3;
+
+          // Reset when too high
+          if (positions[i * 3 + 1] > bh * 2) {
+            lifetimes[i] = 0;
+            positions[i * 3] = (Math.random() - 0.5) * bh * 0.6;
+            positions[i * 3 + 1] = bh * 0.5;
+            positions[i * 3 + 2] = (Math.random() - 0.5) * bh * 0.6;
+          }
+        }
+
+      } else if (child.userData.isEmbers) {
+        // Embers shoot up and arc down
+        const bw = child.userData.buildingWidth;
+        const bh = child.userData.buildingHeight;
+        const velocities = child.userData.velocities as Float32Array;
+
+        for (let i = 0; i < positions.length / 3; i++) {
+          lifetimes[i] += dt;
+
+          // Apply velocity
+          positions[i * 3] += velocities[i * 3] * dt;
+          positions[i * 3 + 1] += velocities[i * 3 + 1] * dt;
+          positions[i * 3 + 2] += velocities[i * 3 + 2] * dt;
+
+          // Gravity
+          velocities[i * 3 + 1] -= dt * 4;
+
+          // Reset when fallen below start or too old
+          if (lifetimes[i] > 2 || positions[i * 3 + 1] < 0) {
+            lifetimes[i] = 0;
+            positions[i * 3] = (Math.random() - 0.5) * bw * 0.5;
+            positions[i * 3 + 1] = Math.random() * 0.3;
+            positions[i * 3 + 2] = (Math.random() - 0.5) * bh * 0.5;
+            velocities[i * 3] = (Math.random() - 0.5) * 2;
+            velocities[i * 3 + 1] = 2 + Math.random() * 3;
+            velocities[i * 3 + 2] = (Math.random() - 0.5) * 2;
+          }
+        }
+      }
+
+      child.geometry.attributes.position.needsUpdate = true;
+    }
+  }
+
+  /**
+   * Create construction effect (dust and sparks at build layer)
+   */
+  private createConstructionEffect(buildingWidth: number, buildingDepth: number, _buildingHeight: number): THREE.Group {
+    const effectGroup = new THREE.Group();
+
+    // Create dust particles (scattered around construction area)
+    const dustCount = 50;
+    const dustPositions = new Float32Array(dustCount * 3);
+    for (let i = 0; i < dustCount; i++) {
+      dustPositions[i * 3] = (Math.random() - 0.5) * buildingWidth * 1.2;
+      dustPositions[i * 3 + 1] = Math.random() * 0.5; // Slight vertical spread
+      dustPositions[i * 3 + 2] = (Math.random() - 0.5) * buildingDepth * 1.2;
+    }
+    const dustGeometry = new THREE.BufferGeometry();
+    dustGeometry.setAttribute('position', new THREE.BufferAttribute(dustPositions, 3));
+
+    const dustPoints = new THREE.Points(dustGeometry, this.constructionDustMaterial.clone());
+    dustPoints.userData.basePositions = dustPositions.slice();
+    dustPoints.userData.velocities = new Float32Array(dustCount * 3);
+    for (let i = 0; i < dustCount * 3; i++) {
+      dustPoints.userData.velocities[i] = (Math.random() - 0.5) * 2;
+    }
+    effectGroup.add(dustPoints);
+
+    // Create spark particles (welding/building sparks)
+    const sparkCount = 30;
+    const sparkPositions = new Float32Array(sparkCount * 3);
+    for (let i = 0; i < sparkCount; i++) {
+      sparkPositions[i * 3] = (Math.random() - 0.5) * buildingWidth * 0.8;
+      sparkPositions[i * 3 + 1] = Math.random() * 0.3;
+      sparkPositions[i * 3 + 2] = (Math.random() - 0.5) * buildingDepth * 0.8;
+    }
+    const sparkGeometry = new THREE.BufferGeometry();
+    sparkGeometry.setAttribute('position', new THREE.BufferAttribute(sparkPositions, 3));
+
+    const sparkPoints = new THREE.Points(sparkGeometry, this.constructionSparkMaterial.clone());
+    sparkPoints.userData.basePositions = sparkPositions.slice();
+    sparkPoints.userData.lifetimes = new Float32Array(sparkCount);
+    for (let i = 0; i < sparkCount; i++) {
+      sparkPoints.userData.lifetimes[i] = Math.random();
+    }
+    sparkPoints.userData.isSparks = true;
+    effectGroup.add(sparkPoints);
+
+    return effectGroup;
+  }
+
+  /**
+   * Update construction effect animation
+   */
+  private updateConstructionEffect(effectGroup: THREE.Group, dt: number, buildingWidth: number, buildingDepth: number): void {
+    for (const child of effectGroup.children) {
+      if (child instanceof THREE.Points) {
+        const positions = (child.geometry.attributes.position as THREE.BufferAttribute).array as Float32Array;
+        const basePositions = child.userData.basePositions as Float32Array;
+
+        if (child.userData.isSparks) {
+          // Spark animation - quick bursts that fade and respawn
+          const lifetimes = child.userData.lifetimes as Float32Array;
+          for (let i = 0; i < positions.length / 3; i++) {
+            lifetimes[i] += dt * 3;
+            if (lifetimes[i] > 1) {
+              // Respawn spark
+              lifetimes[i] = 0;
+              positions[i * 3] = (Math.random() - 0.5) * buildingWidth * 0.8;
+              positions[i * 3 + 1] = 0;
+              positions[i * 3 + 2] = (Math.random() - 0.5) * buildingDepth * 0.8;
+            } else {
+              // Move spark upward and outward
+              positions[i * 3 + 1] += dt * 2 * (1 - lifetimes[i]);
+              positions[i * 3] += (Math.random() - 0.5) * dt * 0.5;
+              positions[i * 3 + 2] += (Math.random() - 0.5) * dt * 0.5;
+            }
+          }
+          // Pulse opacity based on construction
+          const mat = child.material as THREE.PointsMaterial;
+          mat.opacity = 0.5 + Math.sin(this.constructionAnimTime * 15) * 0.4;
+        } else {
+          // Dust animation - drift upward slowly
+          const velocities = child.userData.velocities as Float32Array;
+          for (let i = 0; i < positions.length / 3; i++) {
+            positions[i * 3] += velocities[i * 3] * dt * 0.2;
+            positions[i * 3 + 1] += dt * 0.5; // Drift upward
+            positions[i * 3 + 2] += velocities[i * 3 + 2] * dt * 0.2;
+
+            // Reset if too far
+            if (positions[i * 3 + 1] > 1 || Math.abs(positions[i * 3]) > buildingWidth) {
+              positions[i * 3] = basePositions[i * 3];
+              positions[i * 3 + 1] = 0;
+              positions[i * 3 + 2] = basePositions[i * 3 + 2];
+            }
+          }
+        }
+
+        child.geometry.attributes.position.needsUpdate = true;
       }
     }
   }
@@ -486,7 +773,7 @@ export class BuildingRenderer {
 
   private disposeGroup(group: THREE.Group): void {
     group.traverse((child) => {
-      if (child instanceof THREE.Mesh) {
+      if (child instanceof THREE.Mesh || child instanceof THREE.Points) {
         child.geometry.dispose();
         if (child.material instanceof THREE.Material) {
           child.material.dispose();
@@ -504,6 +791,8 @@ export class BuildingRenderer {
     this.fireMaterial.dispose();
     this.smokeMaterial.dispose();
     this.fireGeometry.dispose();
+    this.constructionDustMaterial.dispose();
+    this.constructionSparkMaterial.dispose();
 
     for (const meshData of this.buildingMeshes.values()) {
       this.disposeGroup(meshData.group);
@@ -514,6 +803,10 @@ export class BuildingRenderer {
       if (meshData.fireEffect) {
         this.scene.remove(meshData.fireEffect);
         this.disposeGroup(meshData.fireEffect);
+      }
+      if (meshData.constructionEffect) {
+        this.scene.remove(meshData.constructionEffect);
+        this.disposeGroup(meshData.constructionEffect);
       }
     }
 

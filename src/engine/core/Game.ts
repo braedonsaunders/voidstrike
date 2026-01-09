@@ -67,6 +67,9 @@ export class Game {
   // Terrain grid for building placement validation
   private terrainGrid: TerrainCell[][] | null = null;
 
+  // Decoration collision data for building placement (rocks, trees)
+  private decorationCollisions: Array<{ x: number; z: number; radius: number }> = [];
+
   private gameLoop: GameLoop;
   private state: GameState = 'initializing';
   private currentTick = 0;
@@ -218,6 +221,41 @@ export class Game {
    */
   public setTerrainGrid(terrain: TerrainCell[][]): void {
     this.terrainGrid = terrain;
+  }
+
+  /**
+   * Set decoration collision data for building placement validation
+   * Should be called after environment is loaded
+   */
+  public setDecorationCollisions(collisions: Array<{ x: number; z: number; radius: number }>): void {
+    this.decorationCollisions = collisions;
+  }
+
+  /**
+   * Get decoration collision data for building placement validation
+   */
+  public getDecorationCollisions(): Array<{ x: number; z: number; radius: number }> {
+    return this.decorationCollisions;
+  }
+
+  /**
+   * Check if a building position overlaps with decorations (rocks, trees)
+   */
+  public isPositionClearOfDecorations(centerX: number, centerY: number, width: number, height: number): boolean {
+    const halfW = width / 2 + 0.5; // Small buffer
+    const halfH = height / 2 + 0.5;
+
+    for (const deco of this.decorationCollisions) {
+      // Check if decoration is within the building footprint
+      const dx = Math.abs(centerX - deco.x);
+      const dz = Math.abs(centerY - deco.z);
+
+      if (dx < halfW + deco.radius && dz < halfH + deco.radius) {
+        return false;
+      }
+    }
+
+    return true;
   }
 
   /**

@@ -107,6 +107,8 @@ export function GameCanvas() {
     // PERFORMANCE: Limit pixel ratio to 1.5 max on high-DPI displays (M1 Macs have 2x)
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.5));
     renderer.outputColorSpace = THREE.SRGBColorSpace;
+    // Enable local clipping for construction animations
+    renderer.localClippingEnabled = true;
     // PERFORMANCE: Disable shadows - they're extremely expensive on M1/integrated GPUs
     // PCFSoftShadowMap with 2048x2048 resolution was causing <1 FPS
     renderer.shadowMap.enabled = false;
@@ -152,6 +154,9 @@ export function GameCanvas() {
       aiEnabled: true,
     });
     gameRef.current = game;
+
+    // Pass decoration collision data to game for building placement validation
+    game.setDecorationCollisions(environment.getRockCollisions());
 
     // Check if fog of war is enabled from game setup
     const fogOfWarEnabled = useGameSetupStore.getState().fogOfWar;

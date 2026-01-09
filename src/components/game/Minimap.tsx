@@ -2,7 +2,7 @@
 
 import { useRef, useEffect, useState, useCallback } from 'react';
 import { useGameStore } from '@/store/gameStore';
-import { useGameSetupStore } from '@/store/gameSetupStore';
+import { useGameSetupStore, getPlayerColor } from '@/store/gameSetupStore';
 import { Game } from '@/engine/core/Game';
 import { Transform } from '@/engine/components/Transform';
 import { Unit } from '@/engine/components/Unit';
@@ -12,6 +12,14 @@ import { Selectable } from '@/engine/components/Selectable';
 import { Health } from '@/engine/components/Health';
 
 const MINIMAP_SIZE = 192;
+
+// Convert hex color (0xRRGGBB) to CSS hex string
+function hexToCSS(hex: number, darken: number = 0): string {
+  const r = Math.max(0, ((hex >> 16) & 0xff) - darken);
+  const g = Math.max(0, ((hex >> 8) & 0xff) - darken);
+  const b = Math.max(0, (hex & 0xff) - darken);
+  return `#${r.toString(16).padStart(2, '0')}${g.toString(16).padStart(2, '0')}${b.toString(16).padStart(2, '0')}`;
+}
 
 // Ping animation data
 interface Ping {
@@ -174,12 +182,9 @@ export function Minimap() {
         const w = Math.max(building.width * scale, 4);
         const h = Math.max(building.height * scale, 4);
 
-        // Building color based on player
-        if (selectable.playerId === 'player1') {
-          ctx.fillStyle = building.isComplete() ? '#4a90d9' : '#2a5090';
-        } else {
-          ctx.fillStyle = '#d94a4a';
-        }
+        // Building color based on player's assigned color
+        const playerHex = getPlayerColor(selectable.playerId);
+        ctx.fillStyle = building.isComplete() ? hexToCSS(playerHex) : hexToCSS(playerHex, 60);
         ctx.fillRect(x - w / 2, y - h / 2, w, h);
 
         // Border for selected buildings
@@ -211,8 +216,9 @@ export function Minimap() {
         const x = transform.x * scale;
         const y = transform.y * scale;
 
-        // Unit color based on player
-        ctx.fillStyle = selectable.playerId === 'player1' ? '#7cb9e8' : '#e87c7c';
+        // Unit color based on player's assigned color
+        const unitPlayerHex = getPlayerColor(selectable.playerId);
+        ctx.fillStyle = hexToCSS(unitPlayerHex);
         ctx.beginPath();
         ctx.arc(x, y, 2.5, 0, Math.PI * 2);
         ctx.fill();
