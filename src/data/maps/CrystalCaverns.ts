@@ -2,8 +2,8 @@ import {
   MapData,
   MapDecoration,
   createTerrainGrid,
-  createMineralLine,
-  createVespeneGeysers,
+  createBaseResources,
+  DIR,
   fillTerrainRect,
   fillTerrainCircle,
   createRampInTerrain,
@@ -288,83 +288,27 @@ function generateCrystalCaverns(): MapData {
   // ========================================
   // EXPANSIONS WITH RESOURCES
   // ========================================
+  // All expansions use standard 7-unit mineral distance from CC
+  const p1Main = createBaseResources(30, 90, DIR.LEFT, 1800, 2500);
+  const p1Nat = createBaseResources(55, 55, DIR.UP_LEFT, 1500, 2500);
+  const p1Third = createBaseResources(30, 30, DIR.LEFT, 1500, 2500);
+  const p1Fourth = createBaseResources(30, 150, DIR.LEFT, 1200, 2500);
+  const p2Main = createBaseResources(170, 90, DIR.RIGHT, 1800, 2500);
+  const p2Nat = createBaseResources(145, 125, DIR.DOWN_RIGHT, 1500, 2500);
+  const p2Third = createBaseResources(170, 150, DIR.RIGHT, 1500, 2500);
+  const p2Fourth = createBaseResources(170, 30, DIR.RIGHT, 1200, 2500);
+  const centerGold = createBaseResources(100, 90, DIR.UP, 1000, 2500);
+
   const expansions = [
-    // P1 Main - minerals against west cliff
-    {
-      name: 'P1 Main',
-      x: 30,
-      y: 90,
-      isMain: true,
-      minerals: createMineralLine(18, 90, 30, 90, 1800),
-      vespene: createVespeneGeysers(18, 90, 30, 90, 2500),
-    },
-    // P1 Natural
-    {
-      name: 'P1 Natural',
-      x: 55,
-      y: 55,
-      isNatural: true,
-      minerals: createMineralLine(45, 45, 55, 55, 1500),
-      vespene: createVespeneGeysers(45, 45, 55, 55, 2500),
-    },
-    // P1 Third
-    {
-      name: 'P1 Third',
-      x: 30,
-      y: 30,
-      minerals: createMineralLine(18, 25, 30, 30, 1500),
-      vespene: createVespeneGeysers(18, 25, 30, 30, 2500),
-    },
-    // P1 Fourth
-    {
-      name: 'P1 Fourth',
-      x: 30,
-      y: 150,
-      minerals: createMineralLine(18, 155, 30, 150, 1200),
-      vespene: createVespeneGeysers(18, 155, 30, 150, 2500),
-    },
-    // P2 Main - minerals against east cliff
-    {
-      name: 'P2 Main',
-      x: 170,
-      y: 90,
-      isMain: true,
-      minerals: createMineralLine(182, 90, 170, 90, 1800),
-      vespene: createVespeneGeysers(182, 90, 170, 90, 2500),
-    },
-    // P2 Natural
-    {
-      name: 'P2 Natural',
-      x: 145,
-      y: 125,
-      isNatural: true,
-      minerals: createMineralLine(155, 135, 145, 125, 1500),
-      vespene: createVespeneGeysers(155, 135, 145, 125, 2500),
-    },
-    // P2 Third
-    {
-      name: 'P2 Third',
-      x: 170,
-      y: 150,
-      minerals: createMineralLine(182, 155, 170, 150, 1500),
-      vespene: createVespeneGeysers(182, 155, 170, 150, 2500),
-    },
-    // P2 Fourth
-    {
-      name: 'P2 Fourth',
-      x: 170,
-      y: 30,
-      minerals: createMineralLine(182, 25, 170, 30, 1200),
-      vespene: createVespeneGeysers(182, 25, 170, 30, 2500),
-    },
-    // Center Gold (contested)
-    {
-      name: 'Center Gold',
-      x: 100,
-      y: 90,
-      minerals: createMineralLine(100, 80, 100, 90, 1000),
-      vespene: createVespeneGeysers(100, 80, 100, 90, 2500),
-    },
+    { name: 'P1 Main', x: 30, y: 90, isMain: true, ...p1Main },
+    { name: 'P1 Natural', x: 55, y: 55, isNatural: true, ...p1Nat },
+    { name: 'P1 Third', x: 30, y: 30, ...p1Third },
+    { name: 'P1 Fourth', x: 30, y: 150, ...p1Fourth },
+    { name: 'P2 Main', x: 170, y: 90, isMain: true, ...p2Main },
+    { name: 'P2 Natural', x: 145, y: 125, isNatural: true, ...p2Nat },
+    { name: 'P2 Third', x: 170, y: 150, ...p2Third },
+    { name: 'P2 Fourth', x: 170, y: 30, ...p2Fourth },
+    { name: 'Center Gold', x: 100, y: 90, ...centerGold },
   ];
 
   return {

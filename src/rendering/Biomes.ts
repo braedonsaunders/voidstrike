@@ -108,7 +108,7 @@ export const BIOMES: Record<BiomeType, BiomeConfig> = {
     crystalDensity: 0.1,
     hasWater: false, // Rare oasis only
     waterLevel: -1,
-    particleType: 'dust',
+    particleType: 'none',  // Disabled - was 'dust'
     groundRoughness: 0.95,
     groundMetalness: 0.0,
   },
@@ -150,7 +150,7 @@ export const BIOMES: Record<BiomeType, BiomeConfig> = {
     crystalDensity: 0.3, // Ice crystals
     hasWater: true, // Frozen lakes
     waterLevel: 0.2,
-    particleType: 'snow',
+    particleType: 'none',  // Disabled - was 'snow'
     groundRoughness: 0.3, // Icy smooth
     groundMetalness: 0.1,
   },
@@ -192,7 +192,7 @@ export const BIOMES: Record<BiomeType, BiomeConfig> = {
     crystalDensity: 0.05,
     hasWater: true, // Lava rivers
     waterLevel: -0.3,
-    particleType: 'ash',
+    particleType: 'none',  // Disabled - was 'ash'
     groundRoughness: 0.9,
     groundMetalness: 0.1,
   },
@@ -234,7 +234,7 @@ export const BIOMES: Record<BiomeType, BiomeConfig> = {
     crystalDensity: 0.6, // Many crystals
     hasWater: true, // Energy pools
     waterLevel: 0,
-    particleType: 'spores',
+    particleType: 'none',  // Disabled - was 'spores'
     groundRoughness: 0.6,
     groundMetalness: 0.3,
   },
@@ -265,10 +265,10 @@ export const BIOMES: Record<BiomeType, BiomeConfig> = {
         new THREE.Color(0x7aaa70), // Sunlit
       ],
       water: new THREE.Color(0x406050), // Murky water
-      fog: new THREE.Color(0x405040),
-      ambient: new THREE.Color(0x405040),
-      sun: new THREE.Color(0xf0e0c0),
-      sky: new THREE.Color(0x506050),
+      fog: new THREE.Color(0x90b090),   // Bright misty green (was 0x405040)
+      ambient: new THREE.Color(0x608060), // Brighter ambient (was 0x405040)
+      sun: new THREE.Color(0xfff8e0),   // Warm bright sun
+      sky: new THREE.Color(0x88aa88),   // Light green sky (was 0x506050)
     },
     grassDensity: 0.9,
     treeDensity: 0.7,
@@ -276,7 +276,7 @@ export const BIOMES: Record<BiomeType, BiomeConfig> = {
     crystalDensity: 0.05,
     hasWater: true,
     waterLevel: 0.1,
-    particleType: 'spores',
+    particleType: 'none',  // Disabled - was 'spores'
     groundRoughness: 0.8,
     groundMetalness: 0.0,
   },

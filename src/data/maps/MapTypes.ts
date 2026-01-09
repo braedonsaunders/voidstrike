@@ -256,6 +256,48 @@ export function createVespeneGeysers(
   ];
 }
 
+// STANDARD mineral distance from CC (SC2-style)
+const MINERAL_DISTANCE = 7; // 7 units from CC center to mineral arc center
+
+/**
+ * Create minerals and geysers for a base at standardized distance.
+ * This ensures uniform resource placement across all maps.
+ *
+ * @param baseX - X position of the command center
+ * @param baseY - Y position of the command center
+ * @param direction - Angle in radians where minerals face (0 = right, PI/2 = down, PI = left, -PI/2 = up)
+ * @param mineralAmount - Amount per mineral patch (default 1500 for mains, use 1500 for naturals, 750 for gold)
+ * @param gasAmount - Amount per geyser (default 2250)
+ */
+export function createBaseResources(
+  baseX: number,
+  baseY: number,
+  direction: number,
+  mineralAmount: number = 1500,
+  gasAmount: number = 2250
+): { minerals: ResourceNode[]; vespene: ResourceNode[] } {
+  // Place mineral center at standard distance from base
+  const mineralCenterX = baseX + Math.cos(direction) * MINERAL_DISTANCE;
+  const mineralCenterY = baseY + Math.sin(direction) * MINERAL_DISTANCE;
+
+  return {
+    minerals: createMineralLine(mineralCenterX, mineralCenterY, baseX, baseY, mineralAmount),
+    vespene: createVespeneGeysers(mineralCenterX, mineralCenterY, baseX, baseY, gasAmount),
+  };
+}
+
+// Helper directions for createBaseResources
+export const DIR = {
+  UP: -Math.PI / 2,
+  DOWN: Math.PI / 2,
+  LEFT: Math.PI,
+  RIGHT: 0,
+  UP_LEFT: -Math.PI * 3 / 4,
+  UP_RIGHT: -Math.PI / 4,
+  DOWN_LEFT: Math.PI * 3 / 4,
+  DOWN_RIGHT: Math.PI / 4,
+};
+
 // Helper to fill a rectangular area with a terrain type
 export function fillTerrainRect(
   grid: MapCell[][],
