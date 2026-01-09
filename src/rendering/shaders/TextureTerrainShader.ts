@@ -464,9 +464,15 @@ const BIOME_TEXTURE_PREFIXES: Record<BiomeTextureType, BiomeTextureMapping> = {
   },
 };
 
-// Check if a texture file exists (client-side check via image load)
-// For now, we assume grassland always exists and others may not
-const AVAILABLE_BIOME_TEXTURES: Set<BiomeTextureType> = new Set(['grassland']);
+// All biome textures are now available
+const AVAILABLE_BIOME_TEXTURES: Set<BiomeTextureType> = new Set([
+  'grassland',
+  'desert',
+  'frozen',
+  'volcanic',
+  'void',
+  'jungle',
+]);
 
 /**
  * Register a biome's textures as available.

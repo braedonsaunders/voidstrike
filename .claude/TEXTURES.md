@@ -340,35 +340,35 @@ PBR material, tileable 1024x1024
 - [x] rock_diffuse.png, rock_normal.png, rock_roughness.png, rock_displacement.png
 - [x] cliff_diffuse.png, cliff_normal.png, cliff_roughness.png, cliff_displacement.png
 
-### Desert - ❌ MISSING (16 textures)
-- [ ] sand_diffuse.png, sand_normal.png, sand_roughness.png, sand_displacement.png
-- [ ] desert_dirt_diffuse.png, desert_dirt_normal.png, desert_dirt_roughness.png, desert_dirt_displacement.png
-- [ ] sandstone_diffuse.png, sandstone_normal.png, sandstone_roughness.png, sandstone_displacement.png
-- [ ] desert_cliff_diffuse.png, desert_cliff_normal.png, desert_cliff_roughness.png, desert_cliff_displacement.png
+### Desert - ✅ COMPLETE
+- [x] sand_diffuse.png, sand_normal.png, sand_roughness.png, sand_displacement.png
+- [x] desert_dirt_diffuse.png, desert_dirt_normal.png, desert_dirt_roughness.png, desert_dirt_displacement.png
+- [x] sandstone_diffuse.png, sandstone_normal.png, sandstone_roughness.png, sandstone_displacement.png
+- [x] desert_cliff_diffuse.png, desert_cliff_normal.png, desert_cliff_roughness.png, desert_cliff_displacement.png
 
-### Frozen - ❌ MISSING (16 textures)
-- [ ] snow_diffuse.png, snow_normal.png, snow_roughness.png, snow_displacement.png
-- [ ] permafrost_diffuse.png, permafrost_normal.png, permafrost_roughness.png, permafrost_displacement.png
-- [ ] ice_rock_diffuse.png, ice_rock_normal.png, ice_rock_roughness.png, ice_rock_displacement.png
-- [ ] ice_cliff_diffuse.png, ice_cliff_normal.png, ice_cliff_roughness.png, ice_cliff_displacement.png
+### Frozen - ✅ COMPLETE
+- [x] snow_diffuse.png, snow_normal.png, snow_roughness.png, snow_displacement.png
+- [x] permafrost_diffuse.png, permafrost_normal.png, permafrost_roughness.png, permafrost_displacement.png
+- [x] ice_rock_diffuse.png, ice_rock_normal.png, ice_rock_roughness.png, ice_rock_displacement.png
+- [x] ice_cliff_diffuse.png, ice_cliff_normal.png, ice_cliff_roughness.png, ice_cliff_displacement.png
 
-### Volcanic - ❌ MISSING (16 textures)
-- [ ] ash_diffuse.png, ash_normal.png, ash_roughness.png, ash_displacement.png
-- [ ] scorched_diffuse.png, scorched_normal.png, scorched_roughness.png, scorched_displacement.png
-- [ ] basalt_diffuse.png, basalt_normal.png, basalt_roughness.png, basalt_displacement.png
-- [ ] volcanic_cliff_diffuse.png, volcanic_cliff_normal.png, volcanic_cliff_roughness.png, volcanic_cliff_displacement.png
+### Volcanic - ✅ COMPLETE
+- [x] ash_diffuse.png, ash_normal.png, ash_roughness.png, ash_displacement.png
+- [x] scorched_diffuse.png, scorched_normal.png, scorched_roughness.png, scorched_displacement.png
+- [x] basalt_diffuse.png, basalt_normal.png, basalt_roughness.png, basalt_displacement.png
+- [x] volcanic_cliff_diffuse.png, volcanic_cliff_normal.png, volcanic_cliff_roughness.png, volcanic_cliff_displacement.png
 
-### Void - ❌ MISSING (16 textures)
-- [ ] void_ground_diffuse.png, void_ground_normal.png, void_ground_roughness.png, void_ground_displacement.png
-- [ ] void_dirt_diffuse.png, void_dirt_normal.png, void_dirt_roughness.png, void_dirt_displacement.png
-- [ ] void_rock_diffuse.png, void_rock_normal.png, void_rock_roughness.png, void_rock_displacement.png
-- [ ] void_cliff_diffuse.png, void_cliff_normal.png, void_cliff_roughness.png, void_cliff_displacement.png
+### Void - ✅ COMPLETE
+- [x] void_ground_diffuse.png, void_ground_normal.png, void_ground_roughness.png, void_ground_displacement.png
+- [x] void_dirt_diffuse.png, void_dirt_normal.png, void_dirt_roughness.png, void_dirt_displacement.png
+- [x] void_rock_diffuse.png, void_rock_normal.png, void_rock_roughness.png, void_rock_displacement.png
+- [x] void_cliff_diffuse.png, void_cliff_normal.png, void_cliff_roughness.png, void_cliff_displacement.png
 
-### Jungle - ❌ MISSING (16 textures)
-- [ ] jungle_floor_diffuse.png, jungle_floor_normal.png, jungle_floor_roughness.png, jungle_floor_displacement.png
-- [ ] mud_diffuse.png, mud_normal.png, mud_roughness.png, mud_displacement.png
-- [ ] mossy_rock_diffuse.png, mossy_rock_normal.png, mossy_rock_roughness.png, mossy_rock_displacement.png
-- [ ] jungle_cliff_diffuse.png, jungle_cliff_normal.png, jungle_cliff_roughness.png, jungle_cliff_displacement.png
+### Jungle - ✅ COMPLETE
+- [x] jungle_floor_diffuse.png, jungle_floor_normal.png, jungle_floor_roughness.png, jungle_floor_displacement.png
+- [x] mud_diffuse.png, mud_normal.png, mud_roughness.png, mud_displacement.png
+- [x] mossy_rock_diffuse.png, mossy_rock_normal.png, mossy_rock_roughness.png, mossy_rock_displacement.png
+- [x] jungle_cliff_diffuse.png, jungle_cliff_normal.png, jungle_cliff_roughness.png, jungle_cliff_displacement.png
 
 ---
 
@@ -377,24 +377,18 @@ PBR material, tileable 1024x1024
 | Biome | Complete | Total | Progress |
 |-------|----------|-------|----------|
 | Grassland | 16 | 16 | ✅ 100% |
-| Desert | 0 | 16 | ❌ 0% |
-| Frozen | 0 | 16 | ❌ 0% |
-| Volcanic | 0 | 16 | ❌ 0% |
-| Void | 0 | 16 | ❌ 0% |
-| Jungle | 0 | 16 | ❌ 0% |
-| **Total** | **16** | **96** | **17%** |
+| Desert | 16 | 16 | ✅ 100% |
+| Frozen | 16 | 16 | ✅ 100% |
+| Volcanic | 16 | 16 | ✅ 100% |
+| Void | 16 | 16 | ✅ 100% |
+| Jungle | 16 | 16 | ✅ 100% |
+| **Total** | **96** | **96** | **✅ 100%** |
 
 ---
 
-## Quick Generation Workflow
+## Texture Generation Reference
 
-1. Go to [Polycam AI Texture Generator](https://poly.cam/tools/ai-texture-generator)
-2. Copy the AI prompt for the texture you need
-3. Generate the texture (select 1024x1024 if available)
-4. Download all 4 maps (albedo, normal, roughness, displacement)
-5. Rename files to match our naming convention
-6. Place in `/public/textures/terrain/{biome}/`
-7. Update this checklist
+The AI prompts above were used to generate all textures via [Polycam AI Texture Generator](https://poly.cam/tools/ai-texture-generator). They are preserved here for reference if textures need to be regenerated or improved.
 
 ---
 
