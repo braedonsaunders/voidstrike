@@ -137,12 +137,14 @@ export class BuildingPlacementSystem extends System {
     workerUnit.startBuilding(buildingType, snappedX, snappedY);
     workerUnit.constructingBuildingId = buildingEntity.id;
 
-    // Emit placement success event
+    // Emit placement success event (includes dimensions for pathfinding grid update)
     this.game.eventBus.emit('building:placed', {
       entityId: buildingEntity.id,
       buildingType,
       playerId,
       position: { x: snappedX, y: snappedY },
+      width: definition.width,
+      height: definition.height,
       workerId: worker.entity.id,
       vespeneGeyserId: vespeneGeyserEntity?.id,
     });

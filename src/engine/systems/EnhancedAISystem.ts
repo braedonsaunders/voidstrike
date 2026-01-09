@@ -8,6 +8,7 @@ import { Resource } from '../components/Resource';
 import { Game, GameCommand } from '../core/Game';
 import { UNIT_DEFINITIONS } from '@/data/units/dominion';
 import { BUILDING_DEFINITIONS } from '@/data/buildings/dominion';
+import { getCounterRecommendation } from './AIMicroSystem';
 
 type AIState = 'building' | 'expanding' | 'attacking' | 'defending' | 'scouting' | 'harassing';
 export type AIDifficulty = 'easy' | 'medium' | 'hard' | 'very_hard' | 'insane';
@@ -457,7 +458,28 @@ export class EnhancedAISystem extends System {
       if (this.tryBuildBuilding(ai, 'starport')) return;
     }
 
-    // Produce units based on difficulty
+    // Use counter-building logic for harder difficulties
+    if (ai.difficulty === 'hard' || ai.difficulty === 'very_hard' || ai.difficulty === 'insane') {
+      const recommendation = getCounterRecommendation(this.world, ai.playerId, ai.buildingCounts);
+
+      // Try to build recommended buildings first
+      for (const buildingRec of recommendation.buildingsToBuild) {
+        if (this.tryBuildBuilding(ai, buildingRec.buildingId)) return;
+      }
+
+      // Try to train recommended units
+      for (const unitRec of recommendation.unitsToBuild) {
+        // Check if we have the production building for this unit
+        const unitDef = UNIT_DEFINITIONS[unitRec.unitId];
+        if (!unitDef) continue;
+
+        // Determine which building produces this unit
+        const canProduce = this.canProduceUnit(ai, unitRec.unitId);
+        if (canProduce && this.tryTrainUnit(ai, unitRec.unitId)) return;
+      }
+    }
+
+    // Fallback: standard production logic
     if (hasStarport && ai.difficulty !== 'easy' && Math.random() < 0.2) {
       if (this.tryTrainUnit(ai, 'medivac')) return;
     }
@@ -478,6 +500,20 @@ export class EnhancedAISystem extends System {
         this.tryTrainUnit(ai, 'marauder');
       }
     }
+  }
+
+  private canProduceUnit(ai: AIPlayer, unitId: string): boolean {
+    // Check what buildings can produce this unit
+    const buildings = this.world.getEntitiesWith('Building', 'Selectable');
+    for (const entity of buildings) {
+      const selectable = entity.get<Selectable>('Selectable')!;
+      const building = entity.get<Building>('Building')!;
+
+      if (selectable.playerId !== ai.playerId) continue;
+      if (!building.isComplete()) continue;
+      if (building.canProduce.includes(unitId)) return true;
+    }
+    return false;
   }
 
   private executeExpandingPhase(ai: AIPlayer): void {
