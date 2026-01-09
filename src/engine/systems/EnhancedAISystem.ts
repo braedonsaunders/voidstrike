@@ -409,6 +409,9 @@ export class EnhancedAISystem extends System {
   }
 
   private executeBuildingPhase(ai: AIPlayer): void {
+    // First priority: Repair damaged buildings and units
+    this.assignWorkersToRepair(ai);
+
     // Send idle workers to gather (instead of just passive income)
     this.assignIdleWorkersToGather(ai);
 
@@ -556,9 +559,138 @@ export class EnhancedAISystem extends System {
   }
 
   private executeExpandingPhase(ai: AIPlayer): void {
-    // Build expansion command center
-    // For now, just continue building
+    // Try to build expansion command center
+    const hqCount = ai.buildingCounts.get('headquarters') || 0;
+    const orbitalCount = ai.buildingCounts.get('orbital_station') || 0;
+    const totalBases = hqCount + orbitalCount;
+
+    // Only expand if we have enough economy and army
+    if (totalBases < 3 && ai.minerals >= 400 && ai.armySupply >= 8) {
+      const expansionPos = this.findExpansionLocation(ai);
+      if (expansionPos) {
+        // Try to build headquarters at expansion
+        if (this.tryBuildBuildingAt(ai, 'headquarters', expansionPos)) {
+          console.log(`EnhancedAI: ${ai.playerId} expanding to (${expansionPos.x}, ${expansionPos.y})`);
+          ai.state = 'building';
+          return;
+        }
+      }
+    }
+
+    // Continue normal building phase
     this.executeBuildingPhase(ai);
+  }
+
+  /**
+   * Find a suitable expansion location by locating resource clusters without nearby command centers
+   */
+  private findExpansionLocation(ai: AIPlayer): { x: number; y: number } | null {
+    const aiBase = this.findAIBase(ai.playerId);
+    if (!aiBase) return null;
+
+    // Get all existing command center positions
+    const existingBases: Array<{ x: number; y: number }> = [];
+    const buildings = this.world.getEntitiesWith('Building', 'Transform', 'Selectable');
+    for (const entity of buildings) {
+      const building = entity.get<Building>('Building')!;
+      const transform = entity.get<Transform>('Transform')!;
+      if (['headquarters', 'orbital_station', 'nexus', 'hatchery'].includes(building.buildingId)) {
+        existingBases.push({ x: transform.x, y: transform.y });
+      }
+    }
+
+    // Find mineral patches and group them into clusters
+    const resources = this.world.getEntitiesWith('Resource', 'Transform');
+    const mineralClusters: Array<{ x: number; y: number; count: number }> = [];
+
+    for (const resource of resources) {
+      const transform = resource.get<Transform>('Transform')!;
+      const resourceComp = resource.get<Resource>('Resource');
+      if (!resourceComp || resourceComp.resourceType !== 'minerals') continue;
+
+      // Check if this mineral is near an existing cluster
+      let addedToCluster = false;
+      for (const cluster of mineralClusters) {
+        const dx = transform.x - cluster.x;
+        const dy = transform.y - cluster.y;
+        if (Math.sqrt(dx * dx + dy * dy) < 10) {
+          // Update cluster center (weighted average)
+          cluster.x = (cluster.x * cluster.count + transform.x) / (cluster.count + 1);
+          cluster.y = (cluster.y * cluster.count + transform.y) / (cluster.count + 1);
+          cluster.count++;
+          addedToCluster = true;
+          break;
+        }
+      }
+
+      if (!addedToCluster) {
+        mineralClusters.push({ x: transform.x, y: transform.y, count: 1 });
+      }
+    }
+
+    // Find the closest resource cluster that doesn't have a command center nearby
+    let bestLocation: { x: number; y: number; distance: number } | null = null;
+
+    for (const cluster of mineralClusters) {
+      // Skip small clusters (not real bases)
+      if (cluster.count < 4) continue;
+
+      // Check if this cluster already has a command center
+      let hasCCNearby = false;
+      for (const base of existingBases) {
+        const dx = cluster.x - base.x;
+        const dy = cluster.y - base.y;
+        if (Math.sqrt(dx * dx + dy * dy) < 15) {
+          hasCCNearby = true;
+          break;
+        }
+      }
+
+      if (hasCCNearby) continue;
+
+      // Calculate distance from AI base
+      const dx = cluster.x - aiBase.x;
+      const dy = cluster.y - aiBase.y;
+      const distance = Math.sqrt(dx * dx + dy * dy);
+
+      // Prefer closer expansions
+      if (!bestLocation || distance < bestLocation.distance) {
+        // Offset slightly from mineral cluster center for CC placement
+        bestLocation = {
+          x: cluster.x + 5,  // Place CC near but not on minerals
+          y: cluster.y + 5,
+          distance
+        };
+      }
+    }
+
+    return bestLocation ? { x: bestLocation.x, y: bestLocation.y } : null;
+  }
+
+  /**
+   * Try to build a building at a specific location
+   */
+  private tryBuildBuildingAt(ai: AIPlayer, buildingType: string, position: { x: number; y: number }): boolean {
+    const buildingDef = BUILDING_DEFINITIONS[buildingType];
+    if (!buildingDef) return false;
+
+    if (ai.minerals < buildingDef.mineralCost || ai.vespene < buildingDef.vespeneCost) return false;
+
+    // Validate position is buildable
+    if (!this.isValidBuildingSpot(position.x, position.y, buildingDef.width, buildingDef.height)) {
+      return false;
+    }
+
+    ai.minerals -= buildingDef.mineralCost;
+    ai.vespene -= buildingDef.vespeneCost;
+
+    this.game.eventBus.emit('building:place', {
+      buildingType,
+      position,
+      playerId: ai.playerId,
+    });
+
+    return true;
   }
 
   private executeAttackingPhase(ai: AIPlayer, currentTick: number): void {
@@ -607,19 +739,30 @@ export class EnhancedAISystem extends System {
   /**
    * Find any enemy target - buildings first, then units
    * Used to ensure AI destroys ALL enemy assets for victory
+   * Returns a position OUTSIDE the building (at its edge) to prevent unit clipping
    */
   private findAnyEnemyTarget(playerId: string): { x: number; y: number } | null {
+    // Get AI's base position for calculating attack approach direction
+    const aiBase = this.findAIBase(playerId);
+
     // First, look for enemy buildings
     const buildings = this.world.getEntitiesWith('Building', 'Transform', 'Selectable', 'Health');
     for (const entity of buildings) {
       const selectable = entity.get<Selectable>('Selectable');
       const health = entity.get<Health>('Health');
       const transform = entity.get<Transform>('Transform');
+      const building = entity.get<Building>('Building');
 
       if (!selectable || !health || !transform) continue;
       if (selectable.playerId === playerId) continue;
       if (health.isDead()) continue;
 
+      // Calculate attack position at the EDGE of the building, not center
+      // Approach from AI's base direction
+      if (building) {
+        const attackPos = this.getAttackPositionForBuilding(transform.x, transform.y, building.width, building.height, aiBase);
+        return attackPos;
+      }
       return { x: transform.x, y: transform.y };
     }
 
@@ -638,6 +781,54 @@ export class EnhancedAISystem extends System {
     }
 
     return null;
+  }
+
+  /**
+   * Get attack position at the edge of a building to prevent units from clipping inside
+   */
+  private getAttackPositionForBuilding(
+    buildingX: number,
+    buildingY: number,
+    buildingWidth: number,
+    buildingHeight: number,
+    approachFrom: { x: number; y: number } | null
+  ): { x: number; y: number } {
+    // Calculate direction from approach point (AI base) to building
+    let dx = 0;
+    let dy = -1; // Default: approach from south
+
+    if (approachFrom) {
+      dx = buildingX - approachFrom.x;
+      dy = buildingY - approachFrom.y;
+      const dist = Math.sqrt(dx * dx + dy * dy);
+      if (dist > 0) {
+        dx /= dist;
+        dy /= dist;
+      }
+    }
+
+    // Calculate attack position outside the building edge
+    // Add buffer distance (2 units) so units gather just outside the building
+    const halfWidth = buildingWidth / 2;
+    const halfHeight = buildingHeight / 2;
+    const buffer = 3; // Distance outside building edge for units to gather
+
+    // Determine which edge to approach based on direction
+    let offsetX = 0;
+    let offsetY = 0;
+
+    if (Math.abs(dx) > Math.abs(dy)) {
+      // Approach from left or right
+      offsetX = dx > 0 ? -(halfWidth + buffer) : (halfWidth + buffer);
+    } else {
+      // Approach from top or bottom
+      offsetY = dy > 0 ? -(halfHeight + buffer) : (halfHeight + buffer);
+    }
+
+    return {
+      x: buildingX + offsetX,
+      y: buildingY + offsetY
+    };
   }
 
   /**
@@ -1138,6 +1329,140 @@ export class EnhancedAISystem extends System {
 
     // Otherwise target enemy base
     return this.findEnemyBase(playerId);
+  }
+
+  /**
+   * Assign workers to repair damaged buildings and mechanical units
+   */
+  private assignWorkersToRepair(ai: AIPlayer): void {
+    // Find damaged buildings that need repair (below 90% health)
+    const damagedBuildings: { entityId: number; x: number; y: number; healthPercent: number }[] = [];
+    const buildings = this.world.getEntitiesWith('Building', 'Transform', 'Selectable', 'Health');
+
+    for (const entity of buildings) {
+      const selectable = entity.get<Selectable>('Selectable')!;
+      const health = entity.get<Health>('Health')!;
+      const transform = entity.get<Transform>('Transform')!;
+      const building = entity.get<Building>('Building')!;
+
+      if (selectable.playerId !== ai.playerId) continue;
+      if (health.isDead()) continue;
+      if (!building.isComplete()) continue; // Don't repair buildings under construction
+
+      const healthPercent = health.getHealthPercent();
+      if (healthPercent < 0.9) {
+        damagedBuildings.push({
+          entityId: entity.id,
+          x: transform.x,
+          y: transform.y,
+          healthPercent
+        });
+      }
+    }
+
+    // Find damaged mechanical units (below 90% health)
+    const damagedUnits: { entityId: number; x: number; y: number; healthPercent: number }[] = [];
+    const units = this.world.getEntitiesWith('Unit', 'Transform', 'Selectable', 'Health');
+
+    for (const entity of units) {
+      const selectable = entity.get<Selectable>('Selectable')!;
+      const health = entity.get<Health>('Health')!;
+      const transform = entity.get<Transform>('Transform')!;
+      const unit = entity.get<Unit>('Unit')!;
+
+      if (selectable.playerId !== ai.playerId) continue;
+      if (health.isDead()) continue;
+      if (!unit.isMechanical) continue; // Can only repair mechanical units
+      if (unit.isWorker) continue; // Don't repair workers (they can repair each other endlessly)
+
+      const healthPercent = health.getHealthPercent();
+      if (healthPercent < 0.9) {
+        damagedUnits.push({
+          entityId: entity.id,
+          x: transform.x,
+          y: transform.y,
+          healthPercent
+        });
+      }
+    }
+
+    // If nothing needs repair, return
+    if (damagedBuildings.length === 0 && damagedUnits.length === 0) return;
+
+    // Prioritize: critically damaged buildings > moderately damaged buildings > damaged units
+    // Sort by health (most damaged first)
+    damagedBuildings.sort((a, b) => a.healthPercent - b.healthPercent);
+    damagedUnits.sort((a, b) => a.healthPercent - b.healthPercent);
+
+    // Find available workers for repair (idle or gathering, not already repairing or building)
+    const availableWorkers: { entityId: number; x: number; y: number; isIdle: boolean }[] = [];
+
+    for (const entity of units) {
+      const selectable = entity.get<Selectable>('Selectable')!;
+      const unit = entity.get<Unit>('Unit')!;
+      const health = entity.get<Health>('Health')!;
+      const transform = entity.get<Transform>('Transform')!;
+
+      if (selectable.playerId !== ai.playerId) continue;
+      if (!unit.isWorker) continue;
+      if (!unit.canRepair) continue;
+      if (health.isDead()) continue;
+      if (unit.isRepairing) continue; // Already repairing
+      if (unit.constructingBuildingId !== null) continue; // Building something
+      if (unit.state === 'building') continue;
+
+      // Prefer idle workers, but also use gathering workers for emergencies
+      const isIdle = unit.state === 'idle';
+      if (isIdle || (unit.state === 'gathering' && damagedBuildings.some(b => b.healthPercent < 0.5))) {
+        availableWorkers.push({
+          entityId: entity.id,
+          x: transform.x,
+          y: transform.y,
+          isIdle
+        });
+      }
+    }
+
+    if (availableWorkers.length === 0) return;
+
+    // Sort workers - idle first
+    availableWorkers.sort((a, b) => (b.isIdle ? 1 : 0) - (a.isIdle ? 1 : 0));
+
+    // Assign workers to repair targets
+    let workerIndex = 0;
+
+    // Repair critically damaged buildings first (below 50%)
+    for (const building of damagedBuildings) {
+      if (building.healthPercent < 0.5 && workerIndex < availableWorkers.length) {
+        const worker = availableWorkers[workerIndex++];
+        this.game.eventBus.emit('command:repair', {
+          repairerId: worker.entityId,
+          targetId: building.entityId,
+        });
+      }
+    }
+
+    // Then repair other damaged buildings
+    for (const building of damagedBuildings) {
+      if (building.healthPercent >= 0.5 && workerIndex < availableWorkers.length) {
+        const worker = availableWorkers[workerIndex++];
+        this.game.eventBus.emit('command:repair', {
+          repairerId: worker.entityId,
+          targetId: building.entityId,
+        });
+      }
+    }
+
+    // Finally repair damaged mechanical units
+    for (const unit of damagedUnits) {
+      if (workerIndex < availableWorkers.length) {
+        const worker = availableWorkers[workerIndex++];
+        this.game.eventBus.emit('command:repair', {
+          repairerId: worker.entityId,
+          targetId: unit.entityId,
+        });
+      }
+    }
   }
 
   /**

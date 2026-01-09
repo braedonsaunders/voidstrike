@@ -327,6 +327,15 @@ Located in `src/rendering/`:
    - Height and slope-based material blending
    - Triplanar mapping for cliffs (no UV stretching)
    - Subsurface scattering approximation for grass
+
+5. **Terrain.ts** - Enhanced terrain geometry with THREE.Terrain-style algorithms
+   - Proper Perlin noise with gradient interpolation
+   - Fractal Brownian Motion (fBM) for multi-octave noise
+   - Ridged multi-fractal noise for mountain ridges
+   - Voronoi/Worley noise for cellular rock patterns
+   - Turbulence noise for hard-edged features
+   - Gaussian smoothing pass for natural transitions
+   - Bilinear height interpolation for smooth unit movement
    - Per-biome configuration with distinct visual styles
 
 ### Three.js Scene Graph

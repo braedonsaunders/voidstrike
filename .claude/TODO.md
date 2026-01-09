@@ -48,6 +48,8 @@
 - [x] **Post-processing disabled by default** - Heavy render passes causing FPS drops
 - [x] **Zustand store updates throttled** - From 60Hz to 10Hz to reduce React re-renders
 - [x] **Vibrant terrain colors** - Increased saturation and reduced vertex color influence
+- [x] **Building terrain positioning** - Buildings sometimes rendered underground. Added fallback height calculation when terrain not initialized.
+- [x] **Enhanced terrain generation** - Implemented proper Perlin/Simplex noise, fBM, ridged noise, and Voronoi patterns for natural-looking terrain with THREE.Terrain-style algorithms.
 
 ---
 
@@ -91,6 +93,10 @@
 - [x] **VisionSystem multi-player support** - Changed from hardcoded ['player1', 'ai'] to dynamic player registration, enabling proper 4-AI spectator games.
 - [x] **AI attack persistence** - AI now stays in attacking state until all enemies are eliminated, preventing premature retreat when taking losses.
 - [x] **Units clipping into buildings** - Fixed bug where attacking units would get stuck inside target buildings. Added escape logic to force movement out before stopping to attack.
+- [x] **AI units clipping through enemy CC** - Fixed attack targeting to position units at building EDGE instead of center, preventing units from clipping through enemy command centers.
+- [x] **AI expansion support** - AI now builds expansion command centers at resource clusters without nearby bases, enabling multi-base strategies.
+- [x] **AI repair functionality** - Workers automatically repair damaged buildings (<90% health) and mechanical units. Prioritizes critically damaged buildings first.
+- [x] **Building destruction bug** - Fixed buildings with 0 health (on fire) not being destroyed. Added floating-point safety check for death detection.
 
 ### Future Optimizations
 - [ ] Instanced decorations (trees, rocks, debris - 1000s of draw calls)

@@ -25,48 +25,166 @@ export interface TerrainConfig {
   cellSize?: number;
 }
 
-// Simplex-like noise function for terrain variation
+// ============================================
+// ENHANCED TERRAIN NOISE SYSTEM
+// Based on THREE.Terrain algorithms for natural-looking terrain
+// ============================================
+
+// Permutation table for Perlin noise (pre-computed for performance)
+const PERM = new Uint8Array(512);
+const GRAD3 = [
+  [1, 1, 0], [-1, 1, 0], [1, -1, 0], [-1, -1, 0],
+  [1, 0, 1], [-1, 0, 1], [1, 0, -1], [-1, 0, -1],
+  [0, 1, 1], [0, -1, 1], [0, 1, -1], [0, -1, -1]
+];
+
+// Initialize permutation table with seed
+function initPermutation(seed: number = 0): void {
+  const p = new Uint8Array(256);
+  for (let i = 0; i < 256; i++) p[i] = i;
+
+  // Fisher-Yates shuffle with seed
+  let n = seed || Date.now();
+  for (let i = 255; i > 0; i--) {
+    n = (n * 1103515245 + 12345) & 0x7fffffff;
+    const j = n % (i + 1);
+    [p[i], p[j]] = [p[j], p[i]];
+  }
+
+  for (let i = 0; i < 512; i++) {
+    PERM[i] = p[i & 255];
+  }
+}
+
+// Initialize once
+initPermutation(42);
+
+// Smooth interpolation (quintic curve for C2 continuity)
+function fade(t: number): number {
+  return t * t * t * (t * (t * 6 - 15) + 10);
+}
+
+function lerp(a: number, b: number, t: number): number {
+  return a + t * (b - a);
+}
+
+function grad(hash: number, x: number, y: number): number {
+  const g = GRAD3[hash % 12];
+  return g[0] * x + g[1] * y;
+}
+
+// Proper Perlin noise implementation
+function perlinNoise(x: number, y: number): number {
+  const X = Math.floor(x) & 255;
+  const Y = Math.floor(y) & 255;
+
+  x -= Math.floor(x);
+  y -= Math.floor(y);
+
+  const u = fade(x);
+  const v = fade(y);
+
+  const A = PERM[X] + Y;
+  const B = PERM[X + 1] + Y;
+
+  return lerp(
+    lerp(grad(PERM[A], x, y), grad(PERM[B], x - 1, y), u),
+    lerp(grad(PERM[A + 1], x, y - 1), grad(PERM[B + 1], x - 1, y - 1), u),
+    v
+  );
+}
+
+// Fractal Brownian Motion (fBM) - multi-octave Perlin noise
+function fbmNoise(x: number, y: number, octaves: number, lacunarity: number = 2.0, persistence: number = 0.5): number {
+  let total = 0;
+  let amplitude = 1;
+  let frequency = 1;
+  let maxValue = 0;
+
+  for (let i = 0; i < octaves; i++) {
+    total += perlinNoise(x * frequency, y * frequency) * amplitude;
+    maxValue += amplitude;
+    amplitude *= persistence;
+    frequency *= lacunarity;
+  }
+
+  return total / maxValue;
+}
+
+// Ridged multi-fractal noise (good for ridges and mountain ranges)
+function ridgedNoise(x: number, y: number, octaves: number, lacunarity: number = 2.0, persistence: number = 0.5): number {
+  let total = 0;
+  let amplitude = 1;
+  let frequency = 1;
+  let maxValue = 0;
+
+  for (let i = 0; i < octaves; i++) {
+    const n = 1 - Math.abs(perlinNoise(x * frequency, y * frequency));
+    total += n * n * amplitude;
+    maxValue += amplitude;
+    amplitude *= persistence;
+    frequency *= lacunarity;
+  }
+
+  return total / maxValue;
+}
+
+// Turbulence noise (absolute value creates harder edges)
+function turbulenceNoise(x: number, y: number, octaves: number): number {
+  let total = 0;
+  let amplitude = 1;
+  let frequency = 1;
+  let maxValue = 0;
+
+  for (let i = 0; i < octaves; i++) {
+    total += Math.abs(perlinNoise(x * frequency, y * frequency)) * amplitude;
+    maxValue += amplitude;
+    amplitude *= 0.5;
+    frequency *= 2;
+  }
+
+  return total / maxValue;
+}
+
+// Voronoi/Worley noise for cellular patterns
+function voronoiNoise(x: number, y: number, frequency: number = 4): number {
+  const fx = x * frequency;
+  const fy = y * frequency;
+  const ix = Math.floor(fx);
+  const iy = Math.floor(fy);
+
+  let minDist = Infinity;
+
+  for (let dy = -1; dy <= 1; dy++) {
+    for (let dx = -1; dx <= 1; dx++) {
+      const nx = ix + dx;
+      const ny = iy + dy;
+
+      // Pseudo-random point in cell
+      const n = (nx * 1619 + ny * 31337) & 0x7fffffff;
+      const px = nx + ((n * 7919) % 1000) / 1000;
+      const py = ny + ((n * 104729) % 1000) / 1000;
+
+      const dist = (fx - px) * (fx - px) + (fy - py) * (fy - py);
+      minDist = Math.min(minDist, dist);
+    }
+  }
+
+  return Math.sqrt(minDist);
+}
+
+// Legacy noise functions for compatibility
 function noise2D(x: number, y: number, seed: number = 0): number {
   const n = Math.sin(x * 12.9898 + y * 78.233 + seed) * 43758.5453;
   return n - Math.floor(n);
 }
 
 function smoothNoise(x: number, y: number, scale: number, seed: number = 0): number {
-  const sx = x / scale;
-  const sy = y / scale;
-  const x0 = Math.floor(sx);
-  const y0 = Math.floor(sy);
-  const fx = sx - x0;
-  const fy = sy - y0;
-
-  const n00 = noise2D(x0, y0, seed);
-  const n10 = noise2D(x0 + 1, y0, seed);
-  const n01 = noise2D(x0, y0 + 1, seed);
-  const n11 = noise2D(x0 + 1, y0 + 1, seed);
-
-  const fx2 = fx * fx * (3 - 2 * fx);
-  const fy2 = fy * fy * (3 - 2 * fy);
-
-  return n00 * (1 - fx2) * (1 - fy2) +
-         n10 * fx2 * (1 - fy2) +
-         n01 * (1 - fx2) * fy2 +
-         n11 * fx2 * fy2;
+  return fbmNoise(x / scale + seed * 0.1, y / scale + seed * 0.1, 3, 2.0, 0.5) * 0.5 + 0.5;
 }
 
 function fractalNoise(x: number, y: number, octaves: number, persistence: number, seed: number = 0): number {
-  let total = 0;
-  let frequency = 1;
-  let amplitude = 1;
-  let maxValue = 0;
-
-  for (let i = 0; i < octaves; i++) {
-    total += smoothNoise(x * frequency, y * frequency, 1, seed + i * 100) * amplitude;
-    maxValue += amplitude;
-    amplitude *= persistence;
-    frequency *= 2;
-  }
-
-  return total / maxValue;
+  return fbmNoise(x * 0.1 + seed * 0.01, y * 0.1 + seed * 0.01, octaves, 2.0, persistence) * 0.5 + 0.5;
 }
 
 export class Terrain {
@@ -154,7 +272,14 @@ export class Terrain {
     const uvs: number[] = [];
 
     // Pre-calculate height map with smooth transitions and natural variation
+    // Using enhanced noise functions for more organic terrain
     const vertexGrid: THREE.Vector3[][] = [];
+
+    // Terrain feature scales based on map size
+    const mapScale = Math.min(width, height);
+    const largeFeatureScale = mapScale * 0.15;  // Rolling hills
+    const mediumFeatureScale = mapScale * 0.05; // Terrain variation
+    const smallFeatureScale = mapScale * 0.02;  // Fine detail
 
     for (let y = 0; y <= height; y++) {
       vertexGrid[y] = [];
@@ -165,35 +290,56 @@ export class Terrain {
         // Calculate edge factor for cliff handling
         const edgeFactor = this.calculateElevationEdgeFactor(terrain, x, y, width, height);
 
-        // SC2-style terrain: FLAT buildable areas, smooth natural-looking terrain
+        // Normalized coordinates for noise sampling
+        const nx = x / mapScale;
+        const ny = y / mapScale;
+
+        // SC2-style terrain: FLAT buildable areas, natural-looking non-buildable terrain
         let detailNoise = 0;
 
         if (cell.terrain === 'unwalkable') {
-          // Cliffs get gentle height variation for natural look - reduced noise
-          detailNoise = fractalNoise(x, y, 3, 0.4, 42) * 0.25;
-          detailNoise += smoothNoise(x, y, 10, 456) * 0.3;
+          // Cliffs and unwalkable areas: natural rocky terrain with layered noise
+          // Large scale rolling features
+          const largeNoise = fbmNoise(nx * 3, ny * 3, 4, 2.0, 0.5) * 0.4;
+
+          // Medium scale variation for rock formations
+          const mediumNoise = ridgedNoise(nx * 8, ny * 8, 3, 2.0, 0.5) * 0.25;
+
+          // Small scale detail for texture
+          const smallNoise = fbmNoise(nx * 20, ny * 20, 2, 2.0, 0.5) * 0.08;
+
+          // Voronoi for cracked/rocky appearance on cliffs
+          const voronoiDetail = voronoiNoise(nx, ny, 10) * 0.15;
+
+          detailNoise = largeNoise + mediumNoise + smallNoise - voronoiDetail * 0.5;
 
           // Smoother cliff edge blending
           if (edgeFactor > 0) {
-            detailNoise += edgeFactor * 0.4 * smoothNoise(x, y, 5, 999);
+            detailNoise += edgeFactor * 0.3 * fbmNoise(nx * 5, ny * 5, 2, 2.0, 0.5);
           }
         } else if (cell.terrain === 'ramp') {
           // Ramps: very smooth gradient with minimal variation
-          const rampNoise = smoothNoise(x, y, 12, 555) * 0.05;
+          // Only subtle noise to make ramps feel natural
+          const rampNoise = fbmNoise(nx * 4, ny * 4, 2, 2.0, 0.5) * 0.04;
           detailNoise = rampNoise;
 
           // Gentle edge blending to nearby elevations
           if (edgeFactor > 0) {
-            detailNoise += edgeFactor * 0.25;
+            detailNoise += edgeFactor * 0.2;
           }
         } else {
-          // Ground: nearly flat with very subtle variation
-          // Minimal variation for clean buildable areas
-          detailNoise = smoothNoise(x, y, 25, 123) * 0.02;
+          // Buildable ground: nearly flat with very subtle organic variation
+          // Extremely subtle to keep buildable areas clean
+          const groundNoise = fbmNoise(nx * 6, ny * 6, 3, 2.0, 0.5) * 0.015;
+
+          // Very faint micro-detail for visual interest
+          const microDetail = perlinNoise(nx * 30, ny * 30) * 0.008;
+
+          detailNoise = groundNoise + microDetail;
 
           // Very smooth blending near elevation changes
           if (edgeFactor > 0) {
-            detailNoise += edgeFactor * 0.15 * smoothNoise(x, y, 6, 777);
+            detailNoise += edgeFactor * 0.12 * fbmNoise(nx * 4, ny * 4, 2, 2.0, 0.5);
           }
         }
 
@@ -208,6 +354,18 @@ export class Terrain {
 
         // Store in heightmap
         this.heightMap[y * this.gridWidth + x] = finalHeight;
+      }
+    }
+
+    // Apply smoothing pass to heightmap for more natural transitions
+    // This creates smoother cliff edges and more natural terrain flow
+    this.smoothHeightMap(2); // 2 iterations of smoothing
+
+    // Update vertex grid with smoothed heights
+    for (let y = 0; y <= height; y++) {
+      for (let x = 0; x <= width; x++) {
+        const smoothedHeight = this.heightMap[y * this.gridWidth + x];
+        vertexGrid[y][x].z = smoothedHeight;
       }
     }
 
@@ -470,6 +628,53 @@ export class Terrain {
 
   public getHeight(): number {
     return this.mapData.height * this.cellSize;
+  }
+
+  /**
+   * Smooth the heightmap using Gaussian-like averaging
+   * Preserves large features while smoothing rough transitions
+   */
+  private smoothHeightMap(iterations: number = 1): void {
+    const { width, height } = this.mapData;
+    const temp = new Float32Array(this.heightMap.length);
+
+    for (let iter = 0; iter < iterations; iter++) {
+      for (let y = 0; y <= height; y++) {
+        for (let x = 0; x <= width; x++) {
+          const idx = y * this.gridWidth + x;
+          let sum = this.heightMap[idx] * 4; // Center weight
+          let weight = 4;
+
+          // Sample neighbors with distance-based weighting
+          const offsets = [
+            { dx: -1, dy: 0, w: 2 },
+            { dx: 1, dy: 0, w: 2 },
+            { dx: 0, dy: -1, w: 2 },
+            { dx: 0, dy: 1, w: 2 },
+            { dx: -1, dy: -1, w: 1 },
+            { dx: 1, dy: -1, w: 1 },
+            { dx: -1, dy: 1, w: 1 },
+            { dx: 1, dy: 1, w: 1 },
+          ];
+
+          for (const { dx, dy, w } of offsets) {
+            const nx = x + dx;
+            const ny = y + dy;
+            if (nx >= 0 && nx <= width && ny >= 0 && ny <= height) {
+              sum += this.heightMap[ny * this.gridWidth + nx] * w;
+              weight += w;
+            }
+          }
+
+          temp[idx] = sum / weight;
+        }
+      }
+
+      // Copy back
+      for (let i = 0; i < this.heightMap.length; i++) {
+        this.heightMap[i] = temp[i];
+      }
+    }
   }
 
   public dispose(): void {

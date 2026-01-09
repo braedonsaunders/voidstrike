@@ -711,6 +711,7 @@ export class AISystem extends System {
 
   private findEnemyBase(playerId: string): { x: number; y: number } | null {
     const buildings = this.world.getEntitiesWith('Building', 'Transform', 'Selectable');
+    const aiBase = this.findAIBase(playerId);
 
     for (const entity of buildings) {
       const selectable = entity.get<Selectable>('Selectable')!;
@@ -719,9 +720,9 @@ export class AISystem extends System {
 
       if (selectable.playerId === playerId) continue;
 
-      // Found enemy building
+      // Found enemy building - return attack position at EDGE, not center
       if (['headquarters', 'nexus', 'hatchery'].includes(building.buildingId)) {
-        return { x: transform.x, y: transform.y };
+        return this.getAttackPositionForBuilding(transform.x, transform.y, building.width, building.height, aiBase);
       }
     }
 
@@ -729,12 +730,60 @@ export class AISystem extends System {
     for (const entity of buildings) {
       const selectable = entity.get<Selectable>('Selectable')!;
       const transform = entity.get<Transform>('Transform')!;
+      const building = entity.get<Building>('Building')!;
 
       if (selectable.playerId === playerId) continue;
 
-      return { x: transform.x, y: transform.y };
+      return this.getAttackPositionForBuilding(transform.x, transform.y, building.width, building.height, aiBase);
     }
 
     return null;
+  }
+
+  /**
+   * Get attack position at the edge of a building to prevent units from clipping inside
+   */
+  private getAttackPositionForBuilding(
+    buildingX: number,
+    buildingY: number,
+    buildingWidth: number,
+    buildingHeight: number,
+    approachFrom: { x: number; y: number } | null
+  ): { x: number; y: number } {
+    // Calculate direction from approach point (AI base) to building
+    let dx = 0;
+    let dy = -1; // Default: approach from south
+
+    if (approachFrom) {
+      dx = buildingX - approachFrom.x;
+      dy = buildingY - approachFrom.y;
+      const dist = Math.sqrt(dx * dx + dy * dy);
+      if (dist > 0) {
+        dx /= dist;
+        dy /= dist;
+      }
+    }
+
+    // Calculate attack position outside the building edge
+    const halfWidth = buildingWidth / 2;
+    const halfHeight = buildingHeight / 2;
+    const buffer = 3; // Distance outside building edge for units to gather
+
+    // Determine which edge to approach based on direction
+    let offsetX = 0;
+    let offsetY = 0;
+
+    if (Math.abs(dx) > Math.abs(dy)) {
+      // Approach from left or right
+      offsetX = dx > 0 ? -(halfWidth + buffer) : (halfWidth + buffer);
+    } else {
+      // Approach from top or bottom
+      offsetY = dy > 0 ? -(halfHeight + buffer) : (halfHeight + buffer);
+    }
+
+    return {
+      x: buildingX + offsetX,
+      y: buildingY + offsetY
+    };
   }
 }
