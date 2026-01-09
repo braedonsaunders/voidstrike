@@ -222,9 +222,9 @@ export class EffectsRenderer {
     // Move command - show indicator on ground
     this.eventBus.on('command:move', (data: {
       entityIds: number[];
-      targetPosition: { x: number; y: number };
+      targetPosition?: { x: number; y: number };
     }) => {
-      if (data.entityIds.length > 0) {
+      if (data.entityIds.length > 0 && data.targetPosition) {
         this.createMoveIndicator(
           new THREE.Vector3(data.targetPosition.x, 0.15, data.targetPosition.y)
         );
