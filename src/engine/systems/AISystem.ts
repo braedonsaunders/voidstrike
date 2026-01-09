@@ -276,7 +276,7 @@ export class AISystem extends System {
     // Build workers if we have room and need more
     const targetWorkers = ai.difficulty === 'hard' ? 20 : ai.difficulty === 'medium' ? 18 : 16;
     if (ai.workerCount < targetWorkers && ai.supply < ai.maxSupply) {
-      if (this.tryTrainUnit(ai, 'constructor')) {
+      if (this.tryTrainUnit(ai, 'fabricator')) {
         return;
       }
     }

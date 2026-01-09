@@ -125,7 +125,7 @@ function spawnBase(game: Game, playerId: string, x: number, y: number, isHumanPl
 
   // Spawn initial workers around the headquarters
   // Headquarters is 5x5 (from -2.5 to +2.5), spawn workers outside at offset ~4
-  const scvDef = UNIT_DEFINITIONS['constructor'];
+  const scvDef = UNIT_DEFINITIONS['fabricator'];
   const workerPositions = [
     { x: -4, y: -4 },
     { x: 0, y: -4 },

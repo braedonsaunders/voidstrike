@@ -5,7 +5,7 @@
  *
  * USAGE:
  * 1. Procedural Assets (built-in):
- *    const mesh = AssetManager.getUnitMesh('constructor');
+ *    const mesh = AssetManager.getUnitMesh('fabricator');
  *    const building = AssetManager.getBuildingMesh('headquarters');
  *
  * 2. Custom GLTF/GLB Models:
@@ -13,7 +13,7 @@
  *    const mesh = AssetManager.getCustomMesh('my_unit');
  *
  * 3. Replace default assets:
- *    AssetManager.registerCustomAsset('constructor', myCustomConstructorMesh);
+ *    AssetManager.registerCustomAsset('fabricator', myCustomFabricatorMesh);
  */
 
 import * as THREE from 'three';
@@ -30,7 +30,7 @@ export const REFERENCE_FRAME = {
 
   // Unit scale: 1 unit = ~1 meter
   UNIT_HEIGHTS: {
-    constructor: 1.0,
+    fabricator: 1.0,
     trooper: 1.2,
     breacher: 1.5,
     medic: 1.2,
@@ -552,7 +552,7 @@ export class AssetManager {
    */
   static preloadCommonAssets(): void {
     // Units
-    ['constructor', 'trooper', 'breacher', 'medic', 'devastator', 'valkyrie', 'specter'].forEach(id => {
+    ['fabricator', 'trooper', 'breacher', 'medic', 'devastator', 'valkyrie', 'specter'].forEach(id => {
       this.getUnitMesh(id);
     });
 
@@ -588,7 +588,7 @@ export class AssetManager {
     // Define custom model paths - add more as models are created
     const customModels: Array<{ path: string; assetId: string; targetHeight: number }> = [
       // Units
-      { path: '/models/units/constructor.glb', assetId: 'constructor', targetHeight: REFERENCE_FRAME.UNIT_HEIGHTS.constructor || 1.0 },
+      { path: '/models/units/fabricator.glb', assetId: 'fabricator', targetHeight: REFERENCE_FRAME.UNIT_HEIGHTS.fabricator || 1.0 },
       { path: '/models/units/trooper.glb', assetId: 'trooper', targetHeight: REFERENCE_FRAME.UNIT_HEIGHTS.trooper || 1.2 },
       { path: '/models/units/breacher.glb', assetId: 'breacher', targetHeight: REFERENCE_FRAME.UNIT_HEIGHTS.breacher || 1.5 },
       { path: '/models/units/vanguard.glb', assetId: 'vanguard', targetHeight: 1.3 },
@@ -687,8 +687,8 @@ export class ProceduralGenerator {
    */
   static generateUnit(unitId: string): THREE.Group {
     switch (unitId) {
-      case 'constructor':
-        return this.generateConstructor();
+      case 'fabricator':
+        return this.generateFabricator();
       case 'trooper':
         return this.generateTrooper();
       case 'breacher':
@@ -827,7 +827,7 @@ export class ProceduralGenerator {
 
   // === UNIT GENERATORS ===
 
-  private static generateConstructor(): THREE.Group {
+  private static generateFabricator(): THREE.Group {
     const group = new THREE.Group();
 
     // Body

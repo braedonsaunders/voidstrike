@@ -26,7 +26,7 @@ const COMMAND_ICONS: Record<string, string> = {
   cancel: '✕',
   back: '◀',
   // Units
-  constructor: '🔧',
+  fabricator: '🔧',
   trooper: '🎖',
   breacher: '💪',
   vanguard: '💀',

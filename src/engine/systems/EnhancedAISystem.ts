@@ -66,16 +66,16 @@ interface AIPlayer {
 // Build order definitions for different difficulties
 const BUILD_ORDERS: Record<AIDifficulty, BuildOrderStep[]> = {
   easy: [
-    { type: 'unit', id: 'constructor' },
-    { type: 'unit', id: 'constructor' },
+    { type: 'unit', id: 'fabricator' },
+    { type: 'unit', id: 'fabricator' },
     { type: 'building', id: 'supply_cache', supply: 10 },
     { type: 'building', id: 'infantry_bay', supply: 12 },
     { type: 'unit', id: 'trooper' },
   ],
   medium: [
-    { type: 'unit', id: 'constructor' },
-    { type: 'unit', id: 'constructor' },
-    { type: 'unit', id: 'constructor' },
+    { type: 'unit', id: 'fabricator' },
+    { type: 'unit', id: 'fabricator' },
+    { type: 'unit', id: 'fabricator' },
     { type: 'building', id: 'supply_cache', supply: 14 },
     { type: 'building', id: 'infantry_bay', supply: 15 },
     { type: 'building', id: 'extractor', supply: 16 },
@@ -83,9 +83,9 @@ const BUILD_ORDERS: Record<AIDifficulty, BuildOrderStep[]> = {
     { type: 'building', id: 'infantry_bay', supply: 20 },
   ],
   hard: [
-    { type: 'unit', id: 'constructor' },
-    { type: 'unit', id: 'constructor' },
-    { type: 'unit', id: 'constructor' },
+    { type: 'unit', id: 'fabricator' },
+    { type: 'unit', id: 'fabricator' },
+    { type: 'unit', id: 'fabricator' },
     { type: 'building', id: 'supply_cache', supply: 14 },
     { type: 'building', id: 'infantry_bay', supply: 15 },
     { type: 'building', id: 'extractor', supply: 16 },
@@ -94,8 +94,8 @@ const BUILD_ORDERS: Record<AIDifficulty, BuildOrderStep[]> = {
     { type: 'building', id: 'hangar', supply: 30 },
   ],
   very_hard: [
-    { type: 'unit', id: 'constructor' },
-    { type: 'unit', id: 'constructor' },
+    { type: 'unit', id: 'fabricator' },
+    { type: 'unit', id: 'fabricator' },
     { type: 'building', id: 'supply_cache', supply: 13 },
     { type: 'building', id: 'infantry_bay', supply: 14 },
     { type: 'building', id: 'extractor', supply: 15 },
@@ -104,7 +104,7 @@ const BUILD_ORDERS: Record<AIDifficulty, BuildOrderStep[]> = {
     { type: 'building', id: 'infantry_bay', supply: 30 },
   ],
   insane: [
-    { type: 'unit', id: 'constructor' },
+    { type: 'unit', id: 'fabricator' },
     { type: 'building', id: 'supply_cache', supply: 12 },
     { type: 'building', id: 'infantry_bay', supply: 13 },
     { type: 'building', id: 'extractor', supply: 14 },
@@ -444,7 +444,7 @@ export class EnhancedAISystem extends System {
 
     // Worker production
     if (ai.workerCount < ai.targetWorkerCount) {
-      if (this.tryTrainUnit(ai, 'constructor')) return;
+      if (this.tryTrainUnit(ai, 'fabricator')) return;
     }
 
     // Army production based on difficulty

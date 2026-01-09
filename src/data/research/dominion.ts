@@ -22,7 +22,7 @@ export interface ResearchDefinition {
 
 // Unit type mappings
 export const UNIT_TYPES: Record<string, 'infantry' | 'vehicle' | 'ship'> = {
-  constructor: 'infantry',
+  fabricator: 'infantry',
   trooper: 'infantry',
   breacher: 'infantry',
   vanguard: 'infantry',

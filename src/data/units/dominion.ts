@@ -85,9 +85,9 @@ const VALKYRIE_MODES: TransformMode[] = [
 ];
 
 export const UNIT_DEFINITIONS: Record<string, UnitDefinition> = {
-  constructor: {
-    id: 'constructor',
-    name: 'Constructor',
+  fabricator: {
+    id: 'fabricator',
+    name: 'Fabricator',
     faction: 'dominion',
     mineralCost: 50,
     vespeneCost: 0,
