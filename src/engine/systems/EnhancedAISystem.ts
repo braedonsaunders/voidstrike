@@ -222,6 +222,13 @@ export class EnhancedAISystem extends System {
       // Update AI's knowledge of the game state
       this.updateGameState(ai);
 
+      // Check if AI is defeated (no buildings left)
+      const totalBuildings = Array.from(ai.buildingCounts.values()).reduce((a, b) => a + b, 0);
+      if (totalBuildings === 0) {
+        // AI is defeated - stop all activity
+        continue;
+      }
+
       // Resource bonus for harder difficulties
       this.applyResourceBonus(ai);
 
@@ -447,39 +454,55 @@ export class EnhancedAISystem extends System {
     const hasBarracks = (ai.buildingCounts.get('barracks') || 0) > 0;
     const hasFactory = (ai.buildingCounts.get('factory') || 0) > 0;
     const hasStarport = (ai.buildingCounts.get('starport') || 0) > 0;
+    const hasRefinery = (ai.buildingCounts.get('refinery') || 0) > 0;
+    const barrackCount = ai.buildingCounts.get('barracks') || 0;
+
+    // Build refinery early to get vespene for tech
+    if (!hasRefinery && ai.workerCount >= 14) {
+      if (this.tryBuildBuilding(ai, 'refinery')) return;
+    }
 
     // Build production buildings if needed
     if (!hasBarracks && ai.workerCount >= 12) {
       if (this.tryBuildBuilding(ai, 'barracks')) return;
     }
 
-    if (hasBarracks && !hasFactory && ai.difficulty !== 'easy' && ai.workerCount >= 16) {
+    // Second barracks for more production
+    if (barrackCount === 1 && ai.workerCount >= 18 && ai.armySupply >= 4) {
+      if (this.tryBuildBuilding(ai, 'barracks')) return;
+    }
+
+    // Factory for all difficulties except easy (requires refinery for vespene)
+    if (hasBarracks && hasRefinery && !hasFactory && ai.difficulty !== 'easy' && ai.vespene >= 100) {
       if (this.tryBuildBuilding(ai, 'factory')) return;
     }
 
-    if (hasFactory && !hasStarport && ai.difficulty !== 'easy' && ai.difficulty !== 'medium' && ai.workerCount >= 20) {
+    // Starport for medium+ difficulties
+    if (hasFactory && !hasStarport && ai.difficulty !== 'easy' && ai.vespene >= 100) {
       if (this.tryBuildBuilding(ai, 'starport')) return;
     }
 
-    // Produce units based on difficulty
-    if (hasStarport && ai.difficulty !== 'easy' && Math.random() < 0.2) {
+    // Produce units based on available buildings and resources
+    if (hasStarport && ai.vespene >= 100 && Math.random() < 0.25) {
       if (this.tryTrainUnit(ai, 'medivac')) return;
     }
 
-    if (hasFactory && ai.difficulty !== 'easy') {
-      if (Math.random() < 0.3) {
+    if (hasFactory && ai.vespene >= 25) {
+      if (Math.random() < 0.35) {
         if (this.tryTrainUnit(ai, 'hellion')) return;
       }
-      if (ai.difficulty !== 'medium' && Math.random() < 0.2) {
+      if (ai.vespene >= 125 && Math.random() < 0.25) {
         if (this.tryTrainUnit(ai, 'siege_tank')) return;
       }
     }
 
     if (hasBarracks) {
-      if (Math.random() < 0.7) {
-        this.tryTrainUnit(ai, 'marine');
-      } else if (ai.difficulty !== 'easy') {
+      // Marines don't need vespene - always a good choice
+      if (ai.vespene >= 25 && Math.random() < 0.35 && ai.difficulty !== 'easy') {
+        // Marauders need vespene
         this.tryTrainUnit(ai, 'marauder');
+      } else {
+        this.tryTrainUnit(ai, 'marine');
       }
     }
   }
@@ -491,30 +514,78 @@ export class EnhancedAISystem extends System {
   }
 
   private executeAttackingPhase(ai: AIPlayer, currentTick: number): void {
-    const enemyBase = this.findEnemyBase(ai.playerId);
-    if (!enemyBase) {
+    // Find any enemy target (building or unit)
+    const enemyTarget = this.findAnyEnemyTarget(ai.playerId);
+    if (!enemyTarget) {
+      // No enemies left - victory! Go back to building
       ai.state = 'building';
       return;
     }
 
     const armyUnits = this.getArmyUnits(ai.playerId);
-    if (armyUnits.length < this.getMinArmyForAttack(ai.difficulty) * 0.5) {
+    if (armyUnits.length === 0) {
+      ai.state = 'building';
+      return;
+    }
+
+    // Only retreat if army is very small AND we have buildings to defend
+    const totalBuildings = Array.from(ai.buildingCounts.values()).reduce((a, b) => a + b, 0);
+    if (armyUnits.length < 3 && totalBuildings > 1) {
       ai.state = 'building';
       return;
     }
 
     ai.lastAttackTick = currentTick;
 
-    // Attack-move to enemy base
+    // Attack-move to enemy target
     const command: GameCommand = {
       tick: currentTick,
       playerId: ai.playerId,
       type: 'ATTACK',
       entityIds: armyUnits,
-      targetPosition: { x: enemyBase.x, y: enemyBase.y },
+      targetPosition: { x: enemyTarget.x, y: enemyTarget.y },
     };
 
     this.game.processCommand(command);
+
+    // Continue attacking - stay in attack state until enemies are gone
+    // This ensures AI pursues victory
+  }
+
+  /**
+   * Find any enemy target - buildings first, then units
+   * Used to ensure AI destroys ALL enemy assets for victory
+   */
+  private findAnyEnemyTarget(playerId: string): { x: number; y: number } | null {
+    // First, look for enemy buildings
+    const buildings = this.world.getEntitiesWith('Building', 'Transform', 'Selectable', 'Health');
+    for (const entity of buildings) {
+      const selectable = entity.get<Selectable>('Selectable');
+      const health = entity.get<Health>('Health');
+      const transform = entity.get<Transform>('Transform');
+
+      if (!selectable || !health || !transform) continue;
+      if (selectable.playerId === playerId) continue;
+      if (health.isDead()) continue;
+
+      return { x: transform.x, y: transform.y };
+    }
+
+    // Then, look for enemy units
+    const units = this.world.getEntitiesWith('Unit', 'Transform', 'Selectable', 'Health');
+    for (const entity of units) {
+      const selectable = entity.get<Selectable>('Selectable');
+      const health = entity.get<Health>('Health');
+      const transform = entity.get<Transform>('Transform');
+
+      if (!selectable || !health || !transform) continue;
+      if (selectable.playerId === playerId) continue;
+      if (health.isDead()) continue;
+
+      return { x: transform.x, y: transform.y };
+    }
+
+    return null;
   }
 
   private executeDefendingPhase(ai: AIPlayer): void {
