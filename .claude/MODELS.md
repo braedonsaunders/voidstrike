@@ -30,6 +30,80 @@ This document lists all 3D models required for VOIDSTRIKE, with AI generation pr
 
 ---
 
+## Animation Requirements
+
+### Required Animations Per Unit
+
+All animated units should have these **three core animations** embedded in the GLB file:
+
+| Animation Name | Alternative Names | Description |
+|----------------|-------------------|-------------|
+| `idle` | `stand`, `idle_pose`, `*idle*`, `*stand*` | Default stationary pose, loops continuously |
+| `walk` | `run`, `move`, `*walk*`, `*run*`, `*move*` | Movement animation, loops while unit is moving |
+| `attack` | `shoot`, `fire`, `*attack*`, `*shoot*` | Combat attack animation, plays when attacking |
+
+**Auto-mapping:** The system automatically maps animation names containing keywords. For example:
+- `marine_idle_standing` → maps to `idle`
+- `scv_walk_cycle` → maps to `walk`
+- `attack_rifle_shoot` → maps to `attack`
+
+### Animation Specifications
+
+| Property | Requirement |
+|----------|-------------|
+| Format | Embedded in GLB (not separate files) |
+| Frame rate | 24-30 FPS |
+| Loop | `idle` and `walk` should loop seamlessly |
+| Duration | `idle`: 2-4 sec, `walk`: 0.5-1 sec cycle, `attack`: 0.5-1.5 sec |
+
+### Unit-Specific Animation Notes
+
+| Unit | idle | walk | attack | Special Notes |
+|------|------|------|--------|---------------|
+| **SCV** | Standing with tools | Walking/hovering | Drill/weld motion | Add `gather` animation for mining if possible |
+| **Marine** | Combat ready stance | Marching walk | Rifle burst fire | |
+| **Marauder** | Heavy stance | Heavy stomping walk | Grenade launch | Slower animations due to bulk |
+| **Reaper** | Light combat stance | Quick agile run | Dual pistol fire | Fast, agile animations |
+| **Ghost** | Stealth ready pose | Stealthy walk | Sniper shot | Slow, deliberate movements |
+| **Hellion** | Engine idle | Wheel rolling | Flame burst | Vehicle - wheels should turn in walk |
+| **Siege Tank** | Tank idle | Treads moving | Cannon fire | Add `siege` for siege mode if possible |
+| **Thor** | Heavy mech idle | Heavy stomping | Arm cannon barrage | Very heavy/slow movements |
+| **Medivac** | Hovering idle | Flying forward | N/A (no attack) | Add `heal` animation if possible |
+| **Viking** | Flying hover | Flying forward | Missile launch | Add `transform` animation if possible |
+| **Banshee** | Stealth hover | Flying forward | Rocket barrage | |
+| **Battlecruiser** | Massive hover | Slow forward flight | Turret fire | Add `yamato` for Yamato Cannon |
+| **Raven** | Drone hover | Flying movement | N/A (no attack) | Support unit, no attack animation needed |
+
+### Optional Bonus Animations
+
+These are not required but enhance the experience:
+
+| Animation | Used For | Units |
+|-----------|----------|-------|
+| `death` | Death sequence | All units |
+| `gather` | Mining/gathering | SCV |
+| `build` | Construction | SCV |
+| `heal` | Healing others | Medivac |
+| `siege` | Siege mode pose | Siege Tank |
+| `transform` | Mode transformation | Viking, Hellion, Siege Tank |
+| `yamato` | Yamato Cannon | Battlecruiser |
+| `stim` | Stim Pack effect | Marine, Marauder |
+| `cloak` | Cloaking effect | Ghost, Banshee |
+
+### Example Animation Setup (Blender)
+
+```
+1. Create armature with bones for unit
+2. Create 3 actions minimum:
+   - "idle" - 60-120 frames, looping
+   - "walk" - 20-30 frames, looping
+   - "attack" - 15-40 frames, single play
+3. Push actions to NLA tracks
+4. Export as GLB with "Include > Animations" checked
+```
+
+---
+
 ## UNITS
 
 ### 1. SCV (Space Construction Vehicle)
