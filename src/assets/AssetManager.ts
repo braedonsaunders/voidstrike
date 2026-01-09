@@ -45,7 +45,7 @@ export const REFERENCE_FRAME = {
     supply_depot: 0.9, // Half size for supply depot
     barracks: 2.8,
     refinery: 2.0, // Half size for refinery
-    factory: 2.8,
+    factory: 3.5, // Increased size
     starport: 2.2,
   } as Record<string, number>,
 
