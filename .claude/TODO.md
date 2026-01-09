@@ -87,6 +87,11 @@
 - [x] **Options menu** - Replaced Menu button with dropdown (Controls, Tech Tree, Exit to Menu)
 - [x] **Increased building avoidance** - Units now properly avoid walking through buildings
 
+### AI & Combat Fixes
+- [x] **VisionSystem multi-player support** - Changed from hardcoded ['player1', 'ai'] to dynamic player registration, enabling proper 4-AI spectator games.
+- [x] **AI attack persistence** - AI now stays in attacking state until all enemies are eliminated, preventing premature retreat when taking losses.
+- [x] **Units clipping into buildings** - Fixed bug where attacking units would get stuck inside target buildings. Added escape logic to force movement out before stopping to attack.
+
 ### Future Optimizations
 - [ ] Instanced decorations (trees, rocks, debris - 1000s of draw calls)
 - [ ] Graphics settings UI (shadows optional)
