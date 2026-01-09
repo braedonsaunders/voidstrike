@@ -318,11 +318,27 @@ export class BuildingRenderer {
 
       if (!meshData) {
         meshData = this.createBuildingMesh(building, ownerId);
+        // Initialize wasComplete based on actual building state
+        meshData.wasComplete = building.isComplete();
         this.buildingMeshes.set(entity.id, meshData);
         this.scene.add(meshData.group);
         this.scene.add(meshData.selectionRing);
         this.scene.add(meshData.healthBar);
         this.scene.add(meshData.progressBar);
+
+        // If building is already complete, ensure materials are correct immediately
+        if (building.isComplete()) {
+          meshData.group.traverse((child) => {
+            if (child instanceof THREE.Mesh) {
+              const mat = child.material as THREE.MeshStandardMaterial;
+              if (mat) {
+                mat.clippingPlanes = [];
+                mat.transparent = false;
+                mat.opacity = 1;
+              }
+            }
+          });
+        }
       }
 
       // Update visibility
@@ -344,78 +360,72 @@ export class BuildingRenderer {
       // Construction animation based on building state
       const isComplete = building.isComplete();
       const isWaitingForWorker = building.state === 'waiting_for_worker';
-      const buildingHeight = meshData.buildingHeight;
 
-      // DEFENSIVE: If building is complete, always show as complete
+      // ALWAYS check building state directly - don't rely on cached wasComplete
       if (isComplete) {
-        if (!meshData.wasComplete) {
-          // Building just completed - remove clipping and reset materials
-          meshData.wasComplete = true;
-          meshData.group.scale.setScalar(1);
-          meshData.group.traverse((child) => {
-            if (child instanceof THREE.Mesh) {
-              const mat = child.material as THREE.MeshStandardMaterial;
-              if (mat) {
-                mat.clippingPlanes = [];
-                mat.transparent = false;
-                mat.opacity = 1;
-              }
-            }
-          });
-          // Remove construction effect
-          if (meshData.constructionEffect) {
-            this.scene.remove(meshData.constructionEffect);
-            this.disposeGroup(meshData.constructionEffect);
-            meshData.constructionEffect = null;
-          }
-        }
-      } else if (isWaitingForWorker) {
-        // Show a very faint holographic preview (no wireframe)
+        // Complete building - full opacity, no effects
         meshData.group.scale.setScalar(1);
         meshData.group.traverse((child) => {
           if (child instanceof THREE.Mesh) {
             const mat = child.material as THREE.MeshStandardMaterial;
             if (mat) {
-              mat.transparent = true;
-              mat.opacity = 0.2;
               mat.clippingPlanes = [];
-            }
-          }
-        });
-        // No construction effect while waiting
-        if (meshData.constructionEffect) {
-          meshData.constructionEffect.visible = false;
-        }
-      } else {
-        // Construction in progress - bottom-up reveal with clipping plane
-        const progress = building.buildProgress;
-        const revealHeight = progress * buildingHeight;
-
-        // Create clipping plane that clips everything above the reveal height
-        const clipPlane = new THREE.Plane(new THREE.Vector3(0, -1, 0), revealHeight);
-
-        meshData.group.scale.setScalar(1); // Full scale
-        meshData.group.traverse((child) => {
-          if (child instanceof THREE.Mesh) {
-            const mat = child.material as THREE.MeshStandardMaterial;
-            if (mat) {
-              mat.clippingPlanes = [clipPlane];
-              mat.clipShadows = true;
               mat.transparent = false;
               mat.opacity = 1;
             }
           }
         });
+        // Remove construction effect if present
+        if (meshData.constructionEffect) {
+          this.scene.remove(meshData.constructionEffect);
+          this.disposeGroup(meshData.constructionEffect);
+          meshData.constructionEffect = null;
+        }
+        meshData.wasComplete = true;
+      } else if (isWaitingForWorker) {
+        // Waiting for worker - faint ghost preview
+        meshData.group.scale.setScalar(1);
+        meshData.group.traverse((child) => {
+          if (child instanceof THREE.Mesh) {
+            const mat = child.material as THREE.MeshStandardMaterial;
+            if (mat) {
+              mat.clippingPlanes = [];
+              mat.transparent = true;
+              mat.opacity = 0.25;
+            }
+          }
+        });
+        // Hide construction effect while waiting
+        if (meshData.constructionEffect) {
+          meshData.constructionEffect.visible = false;
+        }
+      } else {
+        // Construction in progress - scale up and increase opacity based on progress
+        const progress = building.buildProgress;
+        const scale = 0.3 + progress * 0.7; // Scale from 30% to 100%
+        const opacity = 0.4 + progress * 0.6; // Opacity from 40% to 100%
 
-        // Create/update construction effect (dust and sparks at build level)
+        meshData.group.scale.setScalar(scale);
+        meshData.group.traverse((child) => {
+          if (child instanceof THREE.Mesh) {
+            const mat = child.material as THREE.MeshStandardMaterial;
+            if (mat) {
+              mat.clippingPlanes = [];
+              mat.transparent = progress < 0.95; // Only transparent during construction
+              mat.opacity = opacity;
+            }
+          }
+        });
+
+        // Create/update construction effect (dust and sparks)
         if (!meshData.constructionEffect) {
-          meshData.constructionEffect = this.createConstructionEffect(building.width, building.height, buildingHeight);
+          meshData.constructionEffect = this.createConstructionEffect(building.width, building.height, meshData.buildingHeight);
           this.scene.add(meshData.constructionEffect);
         }
 
-        // Position construction effect at current build height
+        // Position construction effect at building
         meshData.constructionEffect.visible = true;
-        meshData.constructionEffect.position.set(transform.x, terrainHeight + revealHeight, transform.y);
+        meshData.constructionEffect.position.set(transform.x, terrainHeight + meshData.buildingHeight * progress * 0.5, transform.y);
         this.updateConstructionEffect(meshData.constructionEffect, dt, building.width, building.height);
       }
 
