@@ -726,16 +726,54 @@ export class EnhancedAISystem extends System {
 
     ai.lastAttackTick = currentTick;
 
-    // Attack-move to enemy target
-    const command: GameCommand = {
-      tick: currentTick,
-      playerId: ai.playerId,
-      type: 'ATTACK',
-      entityIds: armyUnits,
-      targetPosition: { x: enemyTarget.x, y: enemyTarget.y },
-    };
+    // FIX: Only send attack commands to units that are idle or need new orders
+    // Units that are already attacking or moving to attack should NOT be interrupted
+    // Sending attack commands every tick was resetting targetEntityId and preventing attacks
+    const idleOrNeedingOrders: number[] = [];
+    for (const unitId of armyUnits) {
+      const entity = this.world.getEntity(unitId);
+      if (!entity) continue;
+      const unit = entity.get<Unit>('Unit');
+      if (!unit) continue;
 
-    this.game.processCommand(command);
+      // Only give new orders to units that are:
+      // - idle (not doing anything)
+      // - or attackmoving but have no target and have arrived at destination
+      const isIdle = unit.state === 'idle';
+      const needsNewTarget = unit.state === 'attackmoving' &&
+                             unit.targetEntityId === null &&
+                             unit.targetX !== null && unit.targetY !== null;
+
+      // Check if unit has arrived at its attack-move destination
+      if (needsNewTarget) {
+        const transform = entity.get<Transform>('Transform');
+        if (transform) {
+          const dx = unit.targetX! - transform.x;
+          const dy = unit.targetY! - transform.y;
+          const distToTarget = Math.sqrt(dx * dx + dy * dy);
+          // If close to destination and no target, give new orders
+          if (distToTarget < 3) {
+            idleOrNeedingOrders.push(unitId);
+          }
+        }
+      } else if (isIdle) {
+        idleOrNeedingOrders.push(unitId);
+      }
+      // Units that are 'attacking' or actively 'attackmoving' toward enemies are left alone
+    }
+
+    // Only issue commands if there are units that need them
+    if (idleOrNeedingOrders.length > 0) {
+      const command: GameCommand = {
+        tick: currentTick,
+        playerId: ai.playerId,
+        type: 'ATTACK',
+        entityIds: idleOrNeedingOrders,
+        targetPosition: { x: enemyTarget.x, y: enemyTarget.y },
+      };
+
+      this.game.processCommand(command);
+    }
 
     // Continue attacking - stay in attack state until enemies are gone
     // This ensures AI pursues victory
