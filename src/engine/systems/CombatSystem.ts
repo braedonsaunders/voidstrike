@@ -74,11 +74,11 @@ export class CombatSystem extends System {
 
   // Target acquisition throttling - don't search every frame
   private lastTargetSearchTick: Map<number, number> = new Map();
-  private readonly TARGET_SEARCH_INTERVAL = 10; // Only search every 10 ticks (~0.5 sec)
+  private readonly TARGET_SEARCH_INTERVAL = 3; // Search every 3 ticks (~150ms) for responsive auto-attack
 
   // Cache current targets to avoid re-searching
   private cachedTargets: Map<number, { targetId: number; validUntilTick: number }> = new Map();
-  private readonly TARGET_CACHE_DURATION = 20; // Cache valid for 20 ticks (~1 sec)
+  private readonly TARGET_CACHE_DURATION = 10; // Cache valid for 10 ticks (~0.5 sec)
 
   constructor(game: Game) {
     super(game);
