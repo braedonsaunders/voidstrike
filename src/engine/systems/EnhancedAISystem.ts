@@ -903,7 +903,7 @@ export class EnhancedAISystem extends System {
   }
 
   /**
-   * Find idle workers and send them to gather minerals
+   * Find idle workers and send them to gather minerals or vespene
    */
   private assignIdleWorkersToGather(ai: AIPlayer): void {
     // Find AI's base position
@@ -915,10 +915,10 @@ export class EnhancedAISystem extends System {
     const nearbyMinerals: { entityId: number; x: number; y: number; distance: number }[] = [];
 
     for (const entity of resources) {
-      const resource = entity.get<Resource>('Resource')!;
-      const transform = entity.get<Transform>('Transform')!;
+      const resource = entity.get<Resource>('Resource');
+      const transform = entity.get<Transform>('Transform');
 
-      // Only minerals for now (not vespene without refinery)
+      if (!resource || !transform) continue;
       if (resource.resourceType !== 'minerals') continue;
       if (resource.isDepleted()) continue;
 
@@ -935,11 +935,35 @@ export class EnhancedAISystem extends System {
     // Sort by distance
     nearbyMinerals.sort((a, b) => a.distance - b.distance);
 
-    if (nearbyMinerals.length === 0) return;
+    // Find AI's completed refineries for vespene harvesting
+    const refineries: { entityId: number; resourceEntityId: number }[] = [];
+    const buildings = this.world.getEntitiesWith('Building', 'Selectable', 'Transform');
+
+    for (const entity of buildings) {
+      const building = entity.get<Building>('Building');
+      const selectable = entity.get<Selectable>('Selectable');
+
+      if (!building || !selectable) continue;
+      if (selectable.playerId !== ai.playerId) continue;
+      if (building.buildingId !== 'refinery') continue;
+      if (!building.isComplete()) continue;
+
+      // Find the associated vespene geyser
+      for (const resEntity of resources) {
+        const resource = resEntity.get<Resource>('Resource');
+        if (!resource) continue;
+        if (resource.resourceType !== 'vespene') continue;
+        if (resource.refineryEntityId === entity.id) {
+          refineries.push({ entityId: entity.id, resourceEntityId: resEntity.id });
+          break;
+        }
+      }
+    }
 
     // Find idle AI workers
     const units = this.world.getEntitiesWith('Unit', 'Selectable', 'Health');
     const idleWorkers: number[] = [];
+    let gasWorkers = 0;
 
     for (const entity of units) {
       const selectable = entity.get<Selectable>('Selectable');
@@ -952,22 +976,46 @@ export class EnhancedAISystem extends System {
       if (!unit.isWorker) continue;
       if (health.isDead()) continue;
 
+      // Count workers on gas
+      if (unit.state === 'gathering' && unit.gatherTargetId !== null) {
+        const targetEntity = this.world.getEntity(unit.gatherTargetId);
+        if (targetEntity) {
+          const resource = targetEntity.get<Resource>('Resource');
+          if (resource?.resourceType === 'vespene') {
+            gasWorkers++;
+          }
+        }
+      }
+
       // Only grab truly idle workers (not already gathering or building)
       if (unit.state === 'idle') {
         idleWorkers.push(entity.id);
       }
     }
 
-    // Assign idle workers to minerals
-    for (const workerId of idleWorkers) {
-      // Pick a random mineral patch from nearby ones (distributes workers better)
-      const targetMineral = nearbyMinerals[Math.floor(Math.random() * Math.min(nearbyMinerals.length, 4))];
+    if (nearbyMinerals.length === 0 && refineries.length === 0) return;
 
-      // Emit gather command
-      this.game.eventBus.emit('command:gather', {
-        entityIds: [workerId],
-        targetEntityId: targetMineral.entityId,
-      });
+    // Assign idle workers - prioritize getting 3 workers per refinery first
+    const targetGasWorkers = refineries.length * 3;
+    let assignedToGas = 0;
+
+    for (const workerId of idleWorkers) {
+      // If we need more gas workers and have refineries, assign to gas
+      if (refineries.length > 0 && gasWorkers + assignedToGas < targetGasWorkers) {
+        const refinery = refineries[assignedToGas % refineries.length];
+        this.game.eventBus.emit('command:gather', {
+          entityIds: [workerId],
+          targetEntityId: refinery.resourceEntityId,
+        });
+        assignedToGas++;
+      } else if (nearbyMinerals.length > 0) {
+        // Otherwise assign to minerals
+        const targetMineral = nearbyMinerals[Math.floor(Math.random() * Math.min(nearbyMinerals.length, 4))];
+        this.game.eventBus.emit('command:gather', {
+          entityIds: [workerId],
+          targetEntityId: targetMineral.entityId,
+        });
+      }
     }
   }
 }

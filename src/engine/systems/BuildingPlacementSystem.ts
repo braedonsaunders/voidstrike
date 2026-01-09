@@ -212,14 +212,41 @@ export class BuildingPlacementSystem extends System {
       }
     }
 
-    // Fall back to any available worker
+    // Fall back to any available worker - broader search
     const workers = this.world.getEntitiesWith('Unit', 'Selectable', 'Transform');
+
+    // First pass: idle or gathering workers
     for (const entity of workers) {
       const unit = entity.get<Unit>('Unit');
       const selectable = entity.get<Selectable>('Selectable');
 
       if (unit?.isWorker && selectable?.playerId === playerId) {
         if (unit.state === 'idle' || unit.state === 'gathering') {
+          return { entity };
+        }
+      }
+    }
+
+    // Second pass: moving workers (can be redirected)
+    for (const entity of workers) {
+      const unit = entity.get<Unit>('Unit');
+      const selectable = entity.get<Selectable>('Selectable');
+
+      if (unit?.isWorker && selectable?.playerId === playerId) {
+        if (unit.state === 'moving') {
+          return { entity };
+        }
+      }
+    }
+
+    // Third pass: any non-building worker
+    for (const entity of workers) {
+      const unit = entity.get<Unit>('Unit');
+      const selectable = entity.get<Selectable>('Selectable');
+      const health = entity.get<Health>('Health');
+
+      if (unit?.isWorker && selectable?.playerId === playerId && !health?.isDead()) {
+        if (unit.state !== 'building') {
           return { entity };
         }
       }
