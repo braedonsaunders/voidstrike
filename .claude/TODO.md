@@ -89,7 +89,8 @@
 - [x] **Debug logging for resource rendering** - Added comprehensive logging to trace mineral/vespene spawning and instanced mesh creation
 - [x] **Resource geometry validation** - Added safety check for models with < 3 vertices, fallback to procedural geometry
 - [x] **yOffset/baseScale clamping** - Prevent resources from rendering underground or at invisible scales due to bad model transforms
-- [ ] **Natural expansion minerals not visible** - Under investigation. Debug logging added to help identify root cause.
+- [x] **Natural expansion minerals not visible** - Fixed by clamping baseScale to >= 0.1. The minerals.glb model normalization was causing baseScale to be ~0.02, making minerals invisible.
+- [x] **Watch tower vision ring artifacts** - Removed decorative vision range rings from MapDecorations that were causing "eye-shaped shadow" visual artifacts on maps with multiple watch towers.
 
 ### UI Improvements
 - [x] **Options menu** - Replaced Menu button with dropdown (Controls, Tech Tree, Exit to Menu)
