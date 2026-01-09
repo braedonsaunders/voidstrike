@@ -42,10 +42,10 @@ export const REFERENCE_FRAME = {
 
   BUILDING_HEIGHTS: {
     headquarters: 4.5,
-    supply_cache: 1.8, // Match procedural version height
+    supply_cache: 0.9, // Reduced to half size
     infantry_bay: 2.8,
     extractor: 2.5, // Proper extractor height
-    forge: 2.8,
+    forge: 4.2, // Increased by 50%
     hangar: 2.2,
   } as Record<string, number>,
 
@@ -1277,28 +1277,28 @@ export class ProceduralGenerator {
   private static generateSupplyCache(): THREE.Group {
     const group = new THREE.Group();
 
-    // Main container
-    const containerGeo = new THREE.BoxGeometry(2.5, 1.5, 2.5);
+    // Main container (reduced to half size)
+    const containerGeo = new THREE.BoxGeometry(1.25, 0.75, 1.25);
     const container = new THREE.Mesh(containerGeo, Materials.dominion.building);
-    container.position.y = 0.75;
+    container.position.y = 0.375;
     container.castShadow = true;
     container.receiveShadow = true;
     group.add(container);
 
     // Top detail
-    const topGeo = new THREE.BoxGeometry(2, 0.3, 2);
+    const topGeo = new THREE.BoxGeometry(1, 0.15, 1);
     const top = new THREE.Mesh(topGeo, Materials.dominion.accent);
     top.userData.isAccent = true;
-    top.position.y = 1.65;
+    top.position.y = 0.825;
     top.castShadow = true;
     group.add(top);
 
     // Side vents
     for (let i = 0; i < 4; i++) {
-      const ventGeo = new THREE.BoxGeometry(0.1, 0.5, 0.3);
+      const ventGeo = new THREE.BoxGeometry(0.05, 0.25, 0.15);
       const vent = new THREE.Mesh(ventGeo, Materials.dominion.metal);
       const angle = (i / 4) * Math.PI * 2;
-      vent.position.set(Math.cos(angle) * 1.3, 0.5, Math.sin(angle) * 1.3);
+      vent.position.set(Math.cos(angle) * 0.65, 0.25, Math.sin(angle) * 0.65);
       vent.rotation.y = angle;
       group.add(vent);
     }
@@ -1393,35 +1393,35 @@ export class ProceduralGenerator {
   private static generateForge(): THREE.Group {
     const group = new THREE.Group();
 
-    // Main building
-    const mainGeo = new THREE.BoxGeometry(5, 2.5, 4);
+    // Main building (increased by 50%)
+    const mainGeo = new THREE.BoxGeometry(7.5, 3.75, 6);
     const main = new THREE.Mesh(mainGeo, Materials.dominion.building);
-    main.position.y = 1.25;
+    main.position.y = 1.875;
     main.castShadow = true;
     main.receiveShadow = true;
     group.add(main);
 
     // Production bay door
-    const doorGeo = new THREE.BoxGeometry(2, 2, 0.2);
+    const doorGeo = new THREE.BoxGeometry(3, 3, 0.3);
     const door = new THREE.Mesh(doorGeo, Materials.dominion.accent);
     door.userData.isAccent = true;
-    door.position.set(0, 1, 2.1);
+    door.position.set(0, 1.5, 3.15);
     door.castShadow = true;
     group.add(door);
 
     // Smoke stacks
     for (let i = 0; i < 2; i++) {
-      const stackGeo = new THREE.CylinderGeometry(0.2, 0.3, 1.5, 8);
+      const stackGeo = new THREE.CylinderGeometry(0.3, 0.45, 2.25, 8);
       const stack = new THREE.Mesh(stackGeo, Materials.dominion.metal);
-      stack.position.set(-2 + i * 0.8, 3.25, -1);
+      stack.position.set(-3 + i * 1.2, 4.875, -1.5);
       stack.castShadow = true;
       group.add(stack);
     }
 
     // Crane arm
-    const craneGeo = new THREE.BoxGeometry(3, 0.2, 0.2);
+    const craneGeo = new THREE.BoxGeometry(4.5, 0.3, 0.3);
     const crane = new THREE.Mesh(craneGeo, Materials.dominion.metal);
-    crane.position.set(0, 3, 0);
+    crane.position.set(0, 4.5, 0);
     crane.castShadow = true;
     group.add(crane);
 
