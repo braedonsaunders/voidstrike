@@ -9,7 +9,7 @@ import { HierarchicalAStar } from '../pathfinding/HierarchicalAStar';
 // Configuration for path invalidation
 const REPATH_INTERVAL_TICKS = 40; // Check for repath every 2 seconds at 20 TPS
 const BLOCKED_CHECK_RADIUS = 3; // Check cells within this radius for blockage
-const MAX_STUCK_TICKS = 20; // If unit hasn't moved for this many ticks, repath
+const MAX_STUCK_TICKS = 10; // If unit hasn't moved for this many ticks, repath (reduced for faster recovery)
 
 interface PathRequest {
   entityId: number;
@@ -314,22 +314,23 @@ export class PathfindingSystem extends System {
         // Unit hasn't moved - check if stuck
         const ticksSinceMove = currentTick - state.lastMoveTick;
 
-        if (ticksSinceMove > MAX_STUCK_TICKS && unit.path.length > 0) {
-          // Unit is stuck, check if next waypoint is blocked
-          if (unit.pathIndex < unit.path.length) {
-            const nextWaypoint = unit.path[unit.pathIndex];
-            if (!this.pathfinder.isWalkable(nextWaypoint.x, nextWaypoint.y)) {
-              // Path is blocked, recalculate
-              this.requestPath({
-                entityId: entity.id,
-                startX: transform.x,
-                startY: transform.y,
-                endX: state.destinationX,
-                endY: state.destinationY,
-                priority: 3, // Highest priority for stuck units
-              });
-              state.lastMoveTick = currentTick; // Reset stuck timer
-            }
+        if (ticksSinceMove > MAX_STUCK_TICKS) {
+          // Unit is stuck - force repath regardless of waypoint state
+          // Unit could be stuck between buildings even if waypoint is "walkable"
+          if (unit.path.length > 0 || (unit.targetX !== null && unit.targetY !== null)) {
+            // Clear current path and recalculate
+            unit.path = [];
+            unit.pathIndex = 0;
+
+            this.requestPath({
+              entityId: entity.id,
+              startX: transform.x,
+              startY: transform.y,
+              endX: state.destinationX,
+              endY: state.destinationY,
+              priority: 3, // Highest priority for stuck units
+            });
+            state.lastMoveTick = currentTick; // Reset stuck timer
           }
         }
       }

@@ -713,8 +713,13 @@ export class EnhancedAISystem extends System {
     const totalBuildings = Array.from(ai.buildingCounts.values()).reduce((a, b) => a + b, 0);
     const enemyBuildingCount = this.countEnemyBuildings(ai.playerId);
 
-    // Don't retreat if enemy has few buildings left - finish them off!
-    if (armyUnits.length < 2 && totalBuildings > 3 && enemyBuildingCount > 2) {
+    // NEVER retreat if any enemy has only 1-2 buildings left - finish them!
+    // This ensures victory conditions are met
+    const anyEnemyNearlyDefeated = this.isAnyEnemyNearlyDefeated(ai.playerId);
+    if (anyEnemyNearlyDefeated) {
+      // Keep attacking - don't retreat!
+    } else if (armyUnits.length < 2 && totalBuildings > 3 && enemyBuildingCount > 5) {
+      // Only retreat if enemy has substantial presence (more than 5 buildings total)
       ai.state = 'building';
       return;
     }
@@ -740,12 +745,15 @@ export class EnhancedAISystem extends System {
    * Find any enemy target - buildings first, then units
    * Used to ensure AI destroys ALL enemy assets for victory
    * Returns a position OUTSIDE the building (at its edge) to prevent unit clipping
+   * IMPROVED: Focus on weakest enemy (fewest buildings) to ensure eliminations
    */
   private findAnyEnemyTarget(playerId: string): { x: number; y: number } | null {
     // Get AI's base position for calculating attack approach direction
     const aiBase = this.findAIBase(playerId);
 
-    // First, look for enemy buildings
+    // Count buildings per enemy player to prioritize weakest enemy
+    const enemyBuildingsByPlayer: Map<string, { x: number; y: number; width: number; height: number }[]> = new Map();
+
     const buildings = this.world.getEntitiesWith('Building', 'Transform', 'Selectable', 'Health');
     for (const entity of buildings) {
       const selectable = entity.get<Selectable>('Selectable');
@@ -753,20 +761,44 @@ export class EnhancedAISystem extends System {
       const transform = entity.get<Transform>('Transform');
       const building = entity.get<Building>('Building');
 
-      if (!selectable || !health || !transform) continue;
+      if (!selectable || !health || !transform || !building) continue;
       if (selectable.playerId === playerId) continue;
       if (health.isDead()) continue;
 
-      // Calculate attack position at the EDGE of the building, not center
-      // Approach from AI's base direction
-      if (building) {
-        const attackPos = this.getAttackPositionForBuilding(transform.x, transform.y, building.width, building.height, aiBase);
-        return attackPos;
+      const enemyId = selectable.playerId;
+      if (!enemyBuildingsByPlayer.has(enemyId)) {
+        enemyBuildingsByPlayer.set(enemyId, []);
       }
-      return { x: transform.x, y: transform.y };
+      enemyBuildingsByPlayer.get(enemyId)!.push({
+        x: transform.x,
+        y: transform.y,
+        width: building.width,
+        height: building.height
+      });
     }
 
-    // Then, look for enemy units
+    // Find the enemy with fewest buildings (prioritize finishing them off)
+    let weakestEnemy: string | null = null;
+    let minBuildings = Infinity;
+
+    for (const [enemyId, enemyBuildings] of enemyBuildingsByPlayer) {
+      if (enemyBuildings.length < minBuildings) {
+        minBuildings = enemyBuildings.length;
+        weakestEnemy = enemyId;
+      }
+    }
+
+    // Attack the weakest enemy's buildings
+    if (weakestEnemy && enemyBuildingsByPlayer.has(weakestEnemy)) {
+      const targetBuildings = enemyBuildingsByPlayer.get(weakestEnemy)!;
+      if (targetBuildings.length > 0) {
+        const target = targetBuildings[0];
+        return this.getAttackPositionForBuilding(target.x, target.y, target.width, target.height, aiBase);
+      }
+    }
+
+    // If no buildings, look for enemy units (also prioritize weakest enemy)
+    const enemyUnitsByPlayer: Map<string, { x: number; y: number }[]> = new Map();
     const units = this.world.getEntitiesWith('Unit', 'Transform', 'Selectable', 'Health');
     for (const entity of units) {
       const selectable = entity.get<Selectable>('Selectable');
@@ -777,7 +809,26 @@ export class EnhancedAISystem extends System {
       if (selectable.playerId === playerId) continue;
       if (health.isDead()) continue;
 
-      return { x: transform.x, y: transform.y };
+      const enemyId = selectable.playerId;
+      if (!enemyUnitsByPlayer.has(enemyId)) {
+        enemyUnitsByPlayer.set(enemyId, []);
+      }
+      enemyUnitsByPlayer.get(enemyId)!.push({ x: transform.x, y: transform.y });
+    }
+
+    // Target units from the weakest enemy first, or any enemy with units
+    if (weakestEnemy && enemyUnitsByPlayer.has(weakestEnemy)) {
+      const targetUnits = enemyUnitsByPlayer.get(weakestEnemy)!;
+      if (targetUnits.length > 0) {
+        return targetUnits[0];
+      }
+    }
+
+    // Fallback: any enemy unit
+    for (const [, enemyUnits] of enemyUnitsByPlayer) {
+      if (enemyUnits.length > 0) {
+        return enemyUnits[0];
+      }
     }
 
     return null;
@@ -848,6 +899,35 @@ export class EnhancedAISystem extends System {
       count++;
     }
     return count;
+  }
+
+  /**
+   * Check if any enemy player is nearly defeated (1-2 buildings left)
+   * Used to ensure AI finishes off weakened enemies for victory
+   */
+  private isAnyEnemyNearlyDefeated(playerId: string): boolean {
+    const buildingsPerEnemy: Map<string, number> = new Map();
+
+    const buildings = this.world.getEntitiesWith('Building', 'Selectable', 'Health');
+    for (const entity of buildings) {
+      const selectable = entity.get<Selectable>('Selectable');
+      const health = entity.get<Health>('Health');
+
+      if (!selectable || !health) continue;
+      if (selectable.playerId === playerId) continue;
+      if (health.isDead()) continue;
+
+      const enemyId = selectable.playerId;
+      buildingsPerEnemy.set(enemyId, (buildingsPerEnemy.get(enemyId) || 0) + 1);
+    }
+
+    // Check if any enemy has 2 or fewer buildings
+    for (const [, count] of buildingsPerEnemy) {
+      if (count <= 2) {
+        return true;
+      }
+    }
+    return false;
   }
 
   private executeDefendingPhase(ai: AIPlayer): void {
