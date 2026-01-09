@@ -165,37 +165,35 @@ export class Terrain {
         // Calculate edge factor for cliff handling
         const edgeFactor = this.calculateElevationEdgeFactor(terrain, x, y, width, height);
 
-        // SC2-style terrain: FLAT buildable areas, natural-looking cliffs and ramps
+        // SC2-style terrain: FLAT buildable areas, smooth natural-looking terrain
         let detailNoise = 0;
 
         if (cell.terrain === 'unwalkable') {
-          // Cliffs get moderate height variation for natural look
-          detailNoise = fractalNoise(x, y, 4, 0.5, 42) * 0.5;
-          detailNoise += smoothNoise(x, y, 6, 456) * 0.8;
+          // Cliffs get gentle height variation for natural look - reduced noise
+          detailNoise = fractalNoise(x, y, 3, 0.4, 42) * 0.25;
+          detailNoise += smoothNoise(x, y, 10, 456) * 0.3;
 
-          // Add cliff edge blending for smoother transitions
+          // Smoother cliff edge blending
           if (edgeFactor > 0) {
-            detailNoise += edgeFactor * 0.8 * smoothNoise(x, y, 3, 999);
+            detailNoise += edgeFactor * 0.4 * smoothNoise(x, y, 5, 999);
           }
         } else if (cell.terrain === 'ramp') {
-          // Ramps: smooth gradient with subtle variation
-          // Calculate smooth interpolation based on position in ramp
-          const rampNoise = smoothNoise(x, y, 8, 555) * 0.1;
+          // Ramps: very smooth gradient with minimal variation
+          const rampNoise = smoothNoise(x, y, 12, 555) * 0.05;
           detailNoise = rampNoise;
 
-          // Add smooth edge blending to nearby elevations
+          // Gentle edge blending to nearby elevations
           if (edgeFactor > 0) {
-            // Create gradual slope toward higher elevation
-            detailNoise += edgeFactor * 0.4;
+            detailNoise += edgeFactor * 0.25;
           }
         } else {
-          // Ground: mostly flat with very subtle variation
-          // Small variation makes terrain feel more natural without affecting gameplay
-          detailNoise = smoothNoise(x, y, 20, 123) * 0.05;
+          // Ground: nearly flat with very subtle variation
+          // Minimal variation for clean buildable areas
+          detailNoise = smoothNoise(x, y, 25, 123) * 0.02;
 
-          // Smooth blending near elevation changes
+          // Very smooth blending near elevation changes
           if (edgeFactor > 0) {
-            detailNoise += edgeFactor * 0.3 * smoothNoise(x, y, 4, 777);
+            detailNoise += edgeFactor * 0.15 * smoothNoise(x, y, 6, 777);
           }
         }
 

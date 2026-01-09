@@ -229,11 +229,11 @@ export function createVespeneGeysers(
   const arcRadius = 3.5; // Same base radius as minerals
   const arcSpread = Math.PI * 0.65; // ~117 degrees total arc spread
 
-  // Place geysers just outside the mineral arc ends to form a continuous crescent
+  // Place geysers further from minerals for cleaner base layout
   // Mineral arc ends at ±(arcSpread/2) = ±58.5 degrees
-  // Place geysers at ±70 degrees (just past arc ends) with slight extra radius
-  const geyserAngleOffset = (arcSpread / 2) + Math.PI * 0.06; // ~70 degrees from center
-  const geyserRadius = arcRadius + 1.2; // Slightly further out than minerals
+  // Place geysers at ±75 degrees with more distance from mineral center
+  const geyserAngleOffset = (arcSpread / 2) + Math.PI * 0.09; // ~75 degrees from center
+  const geyserRadius = arcRadius + 3.0; // Significantly further out than minerals
 
   // Calculate geyser positions - at the ends of the mineral arc, curving away from base
   const geyser1Angle = angleToBase + geyserAngleOffset;

@@ -34,12 +34,37 @@ function seededRandom(seed: number): () => number {
   };
 }
 
+// Base/spawn locations with exclusion radius - NO decorations in these areas
+const BASE_EXCLUSION_ZONES = [
+  { x: 165, y: 165, radius: 20 }, // P1 main
+  { x: 35, y: 35, radius: 20 },   // P2 main
+  { x: 112, y: 162, radius: 16 }, // P1 natural
+  { x: 88, y: 38, radius: 16 },   // P2 natural
+  { x: 48, y: 115, radius: 14 },  // P1 third
+  { x: 152, y: 85, radius: 14 },  // P2 third
+  { x: 48, y: 178, radius: 14 },  // P1 fourth
+  { x: 152, y: 22, radius: 14 },  // P2 fourth
+  { x: 100, y: 100, radius: 14 }, // Gold base center
+];
+
+// Check if a position is inside any base area
+function isInBaseArea(x: number, y: number): boolean {
+  for (const zone of BASE_EXCLUSION_ZONES) {
+    const dx = x - zone.x;
+    const dy = y - zone.y;
+    if (dx * dx + dy * dy < zone.radius * zone.radius) {
+      return true;
+    }
+  }
+  return false;
+}
+
 // Generate massively enhanced decorations (2x density)
 function generateDecorations(): MapDecoration[] {
   const decorations: MapDecoration[] = [];
   const rand = seededRandom(42);
 
-  // Helper to add tree cluster with DOUBLED density
+  // Helper to add tree cluster with DOUBLED density - skips base areas
   const addTreeCluster = (cx: number, cy: number, count: number, spread: number, density = 2) => {
     const treeTypes: Array<'tree_pine_tall' | 'tree_pine_medium' | 'tree_dead'> = [
       'tree_pine_tall', 'tree_pine_medium', 'tree_dead'
@@ -47,17 +72,22 @@ function generateDecorations(): MapDecoration[] {
     for (let i = 0; i < count * density; i++) {
       const angle = rand() * Math.PI * 2;
       const dist = rand() * spread;
+      const x = cx + Math.cos(angle) * dist;
+      const y = cy + Math.sin(angle) * dist;
+
+      // Skip decorations in base areas
+      if (isInBaseArea(x, y)) continue;
+
       decorations.push({
         type: treeTypes[Math.floor(rand() * treeTypes.length)],
-        x: cx + Math.cos(angle) * dist,
-        y: cy + Math.sin(angle) * dist,
+        x, y,
         scale: 0.5 + rand() * 0.9,
         rotation: rand() * Math.PI * 2,
       });
     }
   };
 
-  // Helper to add rock cluster with DOUBLED density
+  // Helper to add rock cluster with DOUBLED density - skips base areas
   const addRockCluster = (cx: number, cy: number, count: number, spread: number) => {
     const rockTypes: Array<'rocks_large' | 'rocks_small' | 'rock_single'> = [
       'rocks_large', 'rocks_small', 'rock_single'
@@ -65,22 +95,30 @@ function generateDecorations(): MapDecoration[] {
     for (let i = 0; i < count * 2; i++) {
       const angle = rand() * Math.PI * 2;
       const dist = rand() * spread;
+      const x = cx + Math.cos(angle) * dist;
+      const y = cy + Math.sin(angle) * dist;
+
+      // Skip decorations in base areas
+      if (isInBaseArea(x, y)) continue;
+
       decorations.push({
         type: rockTypes[Math.floor(rand() * rockTypes.length)],
-        x: cx + Math.cos(angle) * dist,
-        y: cy + Math.sin(angle) * dist,
+        x, y,
         scale: 0.3 + rand() * 1.2,
         rotation: rand() * Math.PI * 2,
       });
     }
   };
 
-  // Helper to add mixed vegetation line
+  // Helper to add mixed vegetation line - skips base areas
   const addVegetationLine = (x1: number, y1: number, x2: number, y2: number, count: number) => {
     for (let i = 0; i < count; i++) {
       const t = i / (count - 1);
       const x = x1 + (x2 - x1) * t + (rand() - 0.5) * 6;
       const y = y1 + (y2 - y1) * t + (rand() - 0.5) * 6;
+
+      // Skip decorations in base areas
+      if (isInBaseArea(x, y)) continue;
 
       if (rand() > 0.3) {
         decorations.push({
@@ -100,15 +138,20 @@ function generateDecorations(): MapDecoration[] {
     }
   };
 
-  // Helper to add crystal formations
+  // Helper to add crystal formations - skips base areas
   const addCrystalCluster = (cx: number, cy: number, count: number, spread: number) => {
     for (let i = 0; i < count; i++) {
       const angle = rand() * Math.PI * 2;
       const dist = rand() * spread;
+      const x = cx + Math.cos(angle) * dist;
+      const y = cy + Math.sin(angle) * dist;
+
+      // Skip decorations in base areas
+      if (isInBaseArea(x, y)) continue;
+
       decorations.push({
         type: 'crystal_formation',
-        x: cx + Math.cos(angle) * dist,
-        y: cy + Math.sin(angle) * dist,
+        x, y,
         scale: 0.4 + rand() * 0.8,
         rotation: rand() * Math.PI * 2,
       });
@@ -266,14 +309,13 @@ function generateDecorations(): MapDecoration[] {
   // GRASS AND BUSHES (FILL - VERY DENSE)
   // ========================================
 
-  // Scatter vegetation across entire map
+  // Scatter vegetation across entire map - uses base exclusion check
   for (let i = 0; i < 200; i++) {
     const x = 20 + rand() * 160;
     const y = 20 + rand() * 160;
 
-    // Skip base areas and mineral lines
-    if ((x > 140 && y > 140) || (x < 60 && y < 60)) continue;
-    if (Math.abs(x - 100) < 8 && Math.abs(y - 100) < 8) continue;
+    // Skip all base areas using the unified check
+    if (isInBaseArea(x, y)) continue;
 
     const type = rand() > 0.4 ? 'bush' : 'grass_clump';
     decorations.push({
