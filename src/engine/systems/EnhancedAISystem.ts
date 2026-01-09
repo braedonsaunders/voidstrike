@@ -638,8 +638,19 @@ export class EnhancedAISystem extends System {
     const basePos = this.findAIBase(ai.playerId);
     if (!basePos) return false;
 
-    const buildPos = this.findBuildingSpot(ai.playerId, basePos, buildingDef.width, buildingDef.height);
-    if (!buildPos) return false;
+    let buildPos: { x: number; y: number } | null = null;
+
+    // Special handling for refineries - must be placed on vespene geysers
+    if (buildingType === 'refinery') {
+      buildPos = this.findAvailableVespeneGeyser(ai.playerId, basePos);
+      if (!buildPos) {
+        // No available vespene geyser nearby, skip building refinery
+        return false;
+      }
+    } else {
+      buildPos = this.findBuildingSpot(ai.playerId, basePos, buildingDef.width, buildingDef.height);
+      if (!buildPos) return false;
+    }
 
     ai.minerals -= buildingDef.mineralCost;
     ai.vespene -= buildingDef.vespeneCost;
@@ -651,6 +662,36 @@ export class EnhancedAISystem extends System {
     });
 
     return true;
+  }
+
+  /**
+   * Find a vespene geyser near the AI's base that doesn't have a refinery yet
+   */
+  private findAvailableVespeneGeyser(playerId: string, basePos: { x: number; y: number }): { x: number; y: number } | null {
+    const resources = this.world.getEntitiesWith('Resource', 'Transform');
+    let closestGeyser: { x: number; y: number; distance: number } | null = null;
+
+    for (const entity of resources) {
+      const resource = entity.get<Resource>('Resource');
+      const transform = entity.get<Transform>('Transform');
+
+      if (!resource || !transform) continue;
+      if (resource.resourceType !== 'vespene') continue;
+      if (resource.hasRefinery()) continue; // Already has a refinery
+
+      const dx = transform.x - basePos.x;
+      const dy = transform.y - basePos.y;
+      const distance = Math.sqrt(dx * dx + dy * dy);
+
+      // Only consider geysers within reasonable distance of base (near main or natural)
+      if (distance < 30) {
+        if (!closestGeyser || distance < closestGeyser.distance) {
+          closestGeyser = { x: transform.x, y: transform.y, distance };
+        }
+      }
+    }
+
+    return closestGeyser ? { x: closestGeyser.x, y: closestGeyser.y } : null;
   }
 
   private findAIBase(playerId: string): { x: number; y: number } | null {
