@@ -99,6 +99,15 @@
 - [x] **Repair visual feedback** - Green pulsing selection ring flash appears on target when repair command is issued.
 - [x] **Autocast repair toggle** - Added autocastRepair property to workers. When enabled, idle SCVs automatically repair nearby damaged buildings/mechanical units within 8 range.
 
+### Pathfinding System Overhaul (January 2026)
+- [x] **MovementSystem path requests** - Fixed critical bug where move commands didn't request paths from PathfindingSystem, causing units to walk directly into obstacles
+- [x] **Path smoothing line-of-sight validation** - Replaced direction-based smoothing with Bresenham's line algorithm to verify waypoints don't skip through obstacles
+- [x] **Stuck detection improvements** - Reduced stuck detection from 10 to 6 ticks, added cooldown to prevent path request spam, skip repath when near destination
+- [x] **HierarchicalAStar waypoint pathing** - Fixed refineAbstractPath to actually use sector entrances instead of falling back to full A* for all long paths
+- [x] **Terrain feature integration** - Updated loadTerrainData to use TERRAIN_FEATURE_CONFIG for proper walkability and movement cost calculations
+- [x] **Proactive path fallback** - Units with targets but no paths now automatically request paths for distances > 3 units
+- [x] **Patrol and queue path requests** - Added path requests for patrol commands and shift-click queued commands
+
 ### Camera & Input Fixes (January 2026)
 - [x] **WASD keys removed from camera** - WASD was conflicting with shortcuts (A=attack move, S=stop, etc.). Camera now uses arrow keys only for keyboard panning.
 

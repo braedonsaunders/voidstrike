@@ -317,29 +317,93 @@ export class AStar {
     return this.smoothPath(path);
   }
 
+  /**
+   * Smooth path by removing unnecessary waypoints while validating line-of-sight.
+   * Uses Bresenham's line algorithm to verify the direct path is clear.
+   */
   private smoothPath(
     path: Array<{ x: number; y: number }>
   ): Array<{ x: number; y: number }> {
     if (path.length <= 2) return path;
 
     const smoothed: Array<{ x: number; y: number }> = [path[0]];
+    let anchor = 0;
 
-    for (let i = 1; i < path.length - 1; i++) {
-      const prev = path[i - 1];
-      const curr = path[i];
-      const next = path[i + 1];
+    for (let i = 1; i < path.length; i++) {
+      // Check if we can go directly from anchor to point i+1 (skip point i)
+      if (i + 1 < path.length) {
+        const from = path[anchor];
+        const to = path[i + 1];
 
-      // Check if direction changes
-      const dir1 = Math.atan2(curr.y - prev.y, curr.x - prev.x);
-      const dir2 = Math.atan2(next.y - curr.y, next.x - curr.x);
+        if (this.hasLineOfSight(from.x, from.y, to.x, to.y)) {
+          // Can skip waypoint i, continue checking
+          continue;
+        }
+      }
 
-      if (Math.abs(dir1 - dir2) > 0.01) {
-        smoothed.push(curr);
+      // Cannot skip waypoint i, add it to the smoothed path
+      smoothed.push(path[i]);
+      anchor = i;
+    }
+
+    // Always add the final destination
+    if (smoothed[smoothed.length - 1] !== path[path.length - 1]) {
+      smoothed.push(path[path.length - 1]);
+    }
+
+    return smoothed;
+  }
+
+  /**
+   * Check if there's a clear line of sight between two points using Bresenham's line algorithm.
+   * Returns true if all cells along the line are walkable.
+   */
+  private hasLineOfSight(x1: number, y1: number, x2: number, y2: number): boolean {
+    // Convert to grid coordinates
+    const gx1 = Math.floor(x1 / this.cellSize);
+    const gy1 = Math.floor(y1 / this.cellSize);
+    const gx2 = Math.floor(x2 / this.cellSize);
+    const gy2 = Math.floor(y2 / this.cellSize);
+
+    // Bresenham's line algorithm
+    let x = gx1;
+    let y = gy1;
+    const dx = Math.abs(gx2 - gx1);
+    const dy = Math.abs(gy2 - gy1);
+    const sx = gx1 < gx2 ? 1 : -1;
+    const sy = gy1 < gy2 ? 1 : -1;
+    let err = dx - dy;
+
+    while (true) {
+      // Check if current cell is walkable
+      if (!this.isInBounds(x, y) || !this.grid[y][x].walkable) {
+        return false;
+      }
+
+      // For diagonal movement, also check adjacent cells to prevent corner cutting
+      if (x !== gx1 || y !== gy1) {
+        const prevX = x - sx;
+        const prevY = y - sy;
+        if (this.isInBounds(prevX, y) && !this.grid[y][prevX].walkable &&
+            this.isInBounds(x, prevY) && !this.grid[prevY][x].walkable) {
+          return false; // Blocked corner
+        }
+      }
+
+      if (x === gx2 && y === gy2) break;
+
+      const e2 = 2 * err;
+      if (e2 > -dy) {
+        err -= dy;
+        x += sx;
+      }
+      if (e2 < dx) {
+        err += dx;
+        y += sy;
       }
     }
 
-    smoothed.push(path[path.length - 1]);
-    return smoothed;
+    return true;
   }
 
   private findNearestWalkable(

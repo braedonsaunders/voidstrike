@@ -896,21 +896,67 @@ eventBus.on('building:destroyed', (data) => {
   invalidateAffectedPaths();
 });
 
-// Periodic stuck detection
-const REPATH_INTERVAL_TICKS = 40;  // Check every 2 seconds
-const MAX_STUCK_TICKS = 20;        // Repath if no movement for 1 second
-
-// Automatic repath when:
-// 1. Obstacle placed in current path
-// 2. Unit hasn't moved for MAX_STUCK_TICKS
-// 3. Periodic check finds blocked cells ahead
+// Stuck detection configuration
+const REPATH_INTERVAL_TICKS = 30;    // Check every 1.5 seconds
+const MAX_STUCK_TICKS = 6;           // Repath if no movement for 0.3 seconds
+const PATH_REQUEST_COOLDOWN = 10;    // Prevent repath spam
+const MIN_MOVEMENT_THRESHOLD = 0.05; // Minimum distance to count as movement
 ```
 
 Features:
+- **Path Request Integration**: MovementSystem emits `pathfinding:request` events for all move commands
 - **Path Invalidation**: When buildings are placed/destroyed, affected unit paths are recalculated
-- **Stuck Detection**: Units that haven't moved are automatically repathed
-- **Periodic Repath**: Moving units periodically check for blocked paths
-- **Priority Queue**: Stuck units get higher repath priority than periodic checks
+- **Stuck Detection**: Units that haven't moved are automatically repathed with cooldown
+- **Destination Proximity Check**: Skip repathing when units are within 2 units of destination
+- **Terrain Feature Support**: Uses TERRAIN_FEATURE_CONFIG for walkability and movement costs
+
+### AStar Algorithm (`AStar.ts`)
+
+Grid-based A* pathfinding with terrain cost support:
+
+```typescript
+// Line-of-sight validated path smoothing
+private smoothPath(path) {
+  // Uses Bresenham's line algorithm to verify direct paths are clear
+  // Only removes waypoints when hasLineOfSight() confirms no obstacles
+}
+
+// Corner-cutting prevention
+private hasLineOfSight(x1, y1, x2, y2) {
+  // Checks all cells along line using Bresenham's algorithm
+  // Also validates diagonal movement doesn't cut through corners
+}
+```
+
+Features:
+- **Terrain Movement Costs**: Roads (0.7x), forests (1.3-1.8x), mud (1.5x), water (2.0x)
+- **Octile Distance Heuristic**: Accurate cost estimation for 8-directional movement
+- **Line-of-Sight Path Smoothing**: Removes redundant waypoints only when clear path exists
+- **Nearest Walkable Fallback**: Finds alternative destination if target is blocked
+
+### HierarchicalAStar (`HierarchicalAStar.ts`)
+
+Two-level hierarchical pathfinding for long-distance paths:
+
+```typescript
+// Sector-based pathfinding for distances > 20 units
+const SECTOR_SIZE = 16;  // 16x16 cell sectors
+const HIERARCHICAL_PATH_THRESHOLD = 20;
+
+// Refine abstract path through sector entrances
+private refineAbstractPath(startX, startY, endX, endY, abstractPath) {
+  // Collect waypoints: start -> sector entrances -> end
+  // Pathfind between consecutive waypoints
+  // Concatenate segments into full path
+}
+```
+
+Features:
+- **Sector Graph**: Map divided into 16x16 sectors with entrance detection
+- **Abstract Pathfinding**: A* on sector graph for long-distance routing
+- **Waypoint Refinement**: Detailed A* between sector entrances
+- **Path Caching**: LRU cache with 5-second TTL for frequently used paths
+- **Automatic Fallback**: Uses regular A* for same/adjacent sector paths
 
 ## AI Micro System
 

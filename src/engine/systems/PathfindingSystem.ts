@@ -5,13 +5,15 @@ import { Building } from '../components/Building';
 import { Game } from '../core/Game';
 import { AStar, PathResult } from '../pathfinding/AStar';
 import { HierarchicalAStar } from '../pathfinding/HierarchicalAStar';
-import { MapData } from '@/data/maps';
+import { MapData, TERRAIN_FEATURE_CONFIG, TerrainFeature } from '@/data/maps';
 import { debugPathfinding } from '@/utils/debugLogger';
 
 // Configuration for path invalidation
-const REPATH_INTERVAL_TICKS = 40; // Check for repath every 2 seconds at 20 TPS
+const REPATH_INTERVAL_TICKS = 30; // Check for repath every 1.5 seconds at 20 TPS
 const BLOCKED_CHECK_RADIUS = 3; // Check cells within this radius for blockage
-const MAX_STUCK_TICKS = 10; // If unit hasn't moved for this many ticks, repath (reduced for faster recovery)
+const MAX_STUCK_TICKS = 6; // If unit hasn't moved for this many ticks, repath (faster recovery)
+const MIN_MOVEMENT_THRESHOLD = 0.05; // Minimum distance to count as "moved"
+const PATH_REQUEST_COOLDOWN = 10; // Minimum ticks between path requests to prevent spam
 
 interface PathRequest {
   entityId: number;
@@ -59,7 +61,7 @@ export class PathfindingSystem extends System {
 
   /**
    * Load terrain walkability into the pathfinding grid.
-   * Marks unwalkable terrain (cliffs, water, void) as blocked.
+   * Uses TERRAIN_FEATURE_CONFIG to properly determine walkability and movement costs.
    */
   public loadTerrainData(): void {
     const terrainGrid = this.game.getTerrainGrid();
@@ -72,47 +74,53 @@ export class PathfindingSystem extends System {
     for (let y = 0; y < terrainGrid.length; y++) {
       for (let x = 0; x < terrainGrid[y].length; x++) {
         const cell = terrainGrid[y][x];
+        let isWalkable = true;
+        let moveCost = 1.0;
 
-        // Block unwalkable terrain (cliffs, void, etc.)
+        // Check base terrain type
         if (cell.terrain === 'unwalkable') {
+          isWalkable = false;
+        }
+
+        // Check terrain feature using the config
+        if (cell.feature) {
+          const feature = cell.feature as TerrainFeature;
+          const featureConfig = TERRAIN_FEATURE_CONFIG[feature];
+
+          if (featureConfig) {
+            // Feature can override walkability
+            if (!featureConfig.walkable) {
+              isWalkable = false;
+            }
+
+            // Use the feature's speed modifier to set move cost
+            // speedModifier < 1 means slower, so moveCost should be higher
+            if (featureConfig.speedModifier > 0) {
+              moveCost = 1.0 / featureConfig.speedModifier;
+            } else {
+              // Speed 0 means unwalkable
+              isWalkable = false;
+            }
+          }
+        }
+
+        // Apply walkability
+        if (!isWalkable) {
           this.pathfinder.setWalkable(x, y, false);
           this.hierarchicalPathfinder.setWalkable(x, y, false);
           this.blockedCells.add(this.cellKey(x, y));
           blockedCount++;
-        }
-
-        // Set movement costs for terrain features
-        if (cell.feature) {
-          switch (cell.feature) {
-            case 'forest_dense':
-              this.pathfinder.setMoveCost(x, y, 1.8); // 80% slower
-              break;
-            case 'forest_light':
-              this.pathfinder.setMoveCost(x, y, 1.3); // 30% slower
-              break;
-            case 'mud':
-              this.pathfinder.setMoveCost(x, y, 1.5); // 50% slower
-              break;
-            case 'road':
-              this.pathfinder.setMoveCost(x, y, 0.7); // 30% faster
-              break;
-            case 'water_shallow':
-              this.pathfinder.setMoveCost(x, y, 2.0); // 100% slower
-              break;
-            case 'water_deep':
-            case 'void':
-              // These should also be unwalkable
-              this.pathfinder.setWalkable(x, y, false);
-              this.hierarchicalPathfinder.setWalkable(x, y, false);
-              this.blockedCells.add(this.cellKey(x, y));
-              blockedCount++;
-              break;
-          }
+        } else {
+          // Apply movement cost (roads have cost < 1, forests/mud have cost > 1)
+          this.pathfinder.setMoveCost(x, y, moveCost);
         }
       }
     }
 
     debugPathfinding.log(`[PathfindingSystem] Loaded terrain: ${blockedCount} cells blocked`);
+
+    // Rebuild hierarchical pathfinding graph after terrain is loaded
+    this.hierarchicalPathfinder.rebuildAbstractGraph();
   }
 
   /**
@@ -125,7 +133,7 @@ export class PathfindingSystem extends System {
   /**
    * Initialize the pathfinding grid from terrain data.
    * Must be called after the game is created with the map data.
-   * Marks unwalkable terrain (cliffs, water) as blocked.
+   * Uses TERRAIN_FEATURE_CONFIG to properly determine walkability and movement costs.
    */
   public initializeFromTerrain(mapData: MapData): void {
     console.log('[PathfindingSystem] Initializing from terrain data...');
@@ -134,19 +142,46 @@ export class PathfindingSystem extends System {
     for (let y = 0; y < mapData.height; y++) {
       for (let x = 0; x < mapData.width; x++) {
         const cell = mapData.terrain[y][x];
-        // Only 'unwalkable' terrain is impassable
-        // 'ground', 'ramp', 'unbuildable', 'creep' are all walkable
+        let isWalkable = true;
+        let moveCost = 1.0;
+
+        // Check base terrain type
         if (cell.terrain === 'unwalkable') {
+          isWalkable = false;
+        }
+
+        // Check terrain feature using the config
+        if (cell.feature) {
+          const feature = cell.feature as TerrainFeature;
+          const featureConfig = TERRAIN_FEATURE_CONFIG[feature];
+
+          if (featureConfig) {
+            if (!featureConfig.walkable) {
+              isWalkable = false;
+            }
+            if (featureConfig.speedModifier > 0) {
+              moveCost = 1.0 / featureConfig.speedModifier;
+            } else {
+              isWalkable = false;
+            }
+          }
+        }
+
+        if (!isWalkable) {
           this.pathfinder.setWalkable(x, y, false);
           this.hierarchicalPathfinder.setWalkable(x, y, false);
-          const key = this.cellKey(x, y);
-          this.blockedCells.add(key);
+          this.blockedCells.add(this.cellKey(x, y));
           blockedCount++;
+        } else {
+          this.pathfinder.setMoveCost(x, y, moveCost);
         }
       }
     }
 
     debugPathfinding.log(`[PathfindingSystem] Marked ${blockedCount} cells as unwalkable`);
+
+    // Rebuild hierarchical pathfinding graph
+    this.hierarchicalPathfinder.rebuildAbstractGraph();
   }
 
   private setupEventListeners(): void {
@@ -374,7 +409,7 @@ export class PathfindingSystem extends System {
       const transform = entity.get<Transform>('Transform')!;
 
       // Only check units that are trying to move
-      if (unit.state !== 'moving' && unit.state !== 'attacking' && unit.state !== 'gathering') {
+      if (unit.state !== 'moving' && unit.state !== 'attacking' && unit.state !== 'gathering' && unit.state !== 'attackmoving') {
         // Clean up state for non-moving units
         this.unitPathStates.delete(entity.id);
         continue;
@@ -397,23 +432,40 @@ export class PathfindingSystem extends System {
 
       if (!state) continue;
 
+      // Update destination if it changed
+      if (unit.targetX !== null && unit.targetY !== null) {
+        state.destinationX = unit.targetX;
+        state.destinationY = unit.targetY;
+      }
+
       // Check if unit has moved
       const dx = transform.x - state.lastPosition.x;
       const dy = transform.y - state.lastPosition.y;
       const distanceMoved = Math.sqrt(dx * dx + dy * dy);
 
-      if (distanceMoved > 0.1) {
+      if (distanceMoved > MIN_MOVEMENT_THRESHOLD) {
         // Unit is moving, update state
         state.lastPosition = { x: transform.x, y: transform.y };
         state.lastMoveTick = currentTick;
       } else {
         // Unit hasn't moved - check if stuck
         const ticksSinceMove = currentTick - state.lastMoveTick;
+        const ticksSinceRepath = currentTick - state.lastRepathTick;
 
-        if (ticksSinceMove > MAX_STUCK_TICKS) {
-          // Unit is stuck - force repath regardless of waypoint state
-          // Unit could be stuck between buildings even if waypoint is "walkable"
-          if (unit.path.length > 0 || (unit.targetX !== null && unit.targetY !== null)) {
+        if (ticksSinceMove > MAX_STUCK_TICKS && ticksSinceRepath > PATH_REQUEST_COOLDOWN) {
+          // Unit is stuck - check if current waypoint or next cell is blocked
+          let needsRepath = true;
+
+          // Check if we're near the destination (stuck in a crowd is OK)
+          const distToDest = Math.sqrt(
+            (transform.x - state.destinationX) ** 2 +
+            (transform.y - state.destinationY) ** 2
+          );
+          if (distToDest < 2) {
+            needsRepath = false; // Close enough, don't spam repaths
+          }
+
+          if (needsRepath && (unit.path.length > 0 || (unit.targetX !== null && unit.targetY !== null))) {
             // Clear current path and recalculate
             unit.path = [];
             unit.pathIndex = 0;
@@ -427,6 +479,7 @@ export class PathfindingSystem extends System {
               priority: 3, // Highest priority for stuck units
             });
             state.lastMoveTick = currentTick; // Reset stuck timer
+            state.lastRepathTick = currentTick; // Reset repath timer
           }
         }
       }
