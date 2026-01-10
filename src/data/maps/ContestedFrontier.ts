@@ -394,20 +394,48 @@ function generateContestedFrontier(): MapData {
   createRoad(terrain, 40, 160, 130, 160, 4);   // West third to center-ish
   createRoad(terrain, 230, 160, 320, 160, 4);  // Center-ish to east third
 
-  // SCATTERED FORESTS - Fill open areas with strategic cover
-  scatterForests(terrain, MAP_WIDTH, MAP_HEIGHT, 35, 5, 12, BASE_EXCLUSION_ZONES, 777, 0.25);
+  // SCATTERED FORESTS - Fill open areas with strategic cover (3x more trees)
+  scatterForests(terrain, MAP_WIDTH, MAP_HEIGHT, 120, 4, 10, BASE_EXCLUSION_ZONES, 777, 0.35);
 
-  // DENSE FOREST patches at key flanking positions
-  fillFeatureCircle(terrain, 30, 130, 8, 'forest_dense');   // West flank upper
-  fillFeatureCircle(terrain, 30, 190, 8, 'forest_dense');   // West flank lower
-  fillFeatureCircle(terrain, 330, 130, 8, 'forest_dense');  // East flank upper
-  fillFeatureCircle(terrain, 330, 190, 8, 'forest_dense');  // East flank lower
+  // DENSE FOREST WALLS - Major terrain obstacles with paths through them
+  // West forest wall (with gap for path)
+  fillFeatureCircle(terrain, 30, 115, 12, 'forest_dense');
+  fillFeatureCircle(terrain, 35, 135, 10, 'forest_dense');
+  fillFeatureCircle(terrain, 30, 185, 10, 'forest_dense');
+  fillFeatureCircle(terrain, 35, 205, 12, 'forest_dense');
+  // East forest wall (with gap for path)
+  fillFeatureCircle(terrain, 330, 115, 12, 'forest_dense');
+  fillFeatureCircle(terrain, 325, 135, 10, 'forest_dense');
+  fillFeatureCircle(terrain, 330, 185, 10, 'forest_dense');
+  fillFeatureCircle(terrain, 325, 205, 12, 'forest_dense');
 
-  // Light forests around gold expansions (cover for harassment)
-  fillFeatureCircle(terrain, 100, 145, 10, 'forest_light');
-  fillFeatureCircle(terrain, 260, 145, 10, 'forest_light');
-  fillFeatureCircle(terrain, 100, 175, 10, 'forest_light');
-  fillFeatureCircle(terrain, 260, 175, 10, 'forest_light');
+  // CENTRAL FOREST ZONES - Cover for engagements
+  fillFeatureCircle(terrain, 100, 145, 14, 'forest_dense');
+  fillFeatureCircle(terrain, 260, 145, 14, 'forest_dense');
+  fillFeatureCircle(terrain, 100, 175, 14, 'forest_dense');
+  fillFeatureCircle(terrain, 260, 175, 14, 'forest_dense');
+  fillFeatureCircle(terrain, 140, 130, 10, 'forest_light');
+  fillFeatureCircle(terrain, 220, 130, 10, 'forest_light');
+  fillFeatureCircle(terrain, 140, 190, 10, 'forest_light');
+  fillFeatureCircle(terrain, 220, 190, 10, 'forest_light');
+
+  // APPROACH FORESTS - Cover near naturals
+  fillFeatureCircle(terrain, 45, 110, 8, 'forest_light');
+  fillFeatureCircle(terrain, 95, 110, 8, 'forest_light');
+  fillFeatureCircle(terrain, 155, 110, 8, 'forest_light');
+  fillFeatureCircle(terrain, 205, 110, 8, 'forest_light');
+  fillFeatureCircle(terrain, 265, 110, 8, 'forest_light');
+  fillFeatureCircle(terrain, 315, 110, 8, 'forest_light');
+  fillFeatureCircle(terrain, 45, 210, 8, 'forest_light');
+  fillFeatureCircle(terrain, 95, 210, 8, 'forest_light');
+  fillFeatureCircle(terrain, 155, 210, 8, 'forest_light');
+  fillFeatureCircle(terrain, 205, 210, 8, 'forest_light');
+  fillFeatureCircle(terrain, 265, 210, 8, 'forest_light');
+  fillFeatureCircle(terrain, 315, 210, 8, 'forest_light');
+
+  // FLANKING FORESTS - Additional cover on map edges
+  fillFeatureCircle(terrain, 20, 160, 10, 'forest_dense');
+  fillFeatureCircle(terrain, 340, 160, 10, 'forest_dense');
 
   // MUD areas in contested center (slow down engagement)
   fillFeatureCircle(terrain, 180, 140, 8, 'mud');

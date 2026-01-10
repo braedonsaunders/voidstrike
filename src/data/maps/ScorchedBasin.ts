@@ -368,14 +368,35 @@ function generateScorchedBasin(): MapData {
   createRoad(terrain, 75, 205, 90, 190, 3);
   createRoad(terrain, 205, 205, 190, 190, 3);
 
-  // SCATTERED FORESTS - Sparse desert scrub
-  scatterForests(terrain, MAP_WIDTH, MAP_HEIGHT, 25, 4, 9, BASE_EXCLUSION_ZONES, 333, 0.2);
+  // SCATTERED FORESTS - Sparse desert scrub (3x more - strategic clusters)
+  scatterForests(terrain, MAP_WIDTH, MAP_HEIGHT, 85, 4, 10, BASE_EXCLUSION_ZONES, 333, 0.25);
 
   // DENSE FORESTS - Oasis-like cover points near gold bases
   fillFeatureCircle(terrain, 90, 90, 8, 'forest_dense');
   fillFeatureCircle(terrain, 190, 90, 8, 'forest_dense');
   fillFeatureCircle(terrain, 90, 190, 8, 'forest_dense');
   fillFeatureCircle(terrain, 190, 190, 8, 'forest_dense');
+
+  // STRATEGIC OASIS CLUSTERS - Desert map has fewer but larger strategic patches
+  // Cross-map oasis walls creating lanes
+  fillFeatureRect(terrain, 120, 60, 10, 25, 'forest_dense');   // North-center oasis wall
+  fillFeatureRect(terrain, 150, 195, 10, 25, 'forest_dense');  // South-center oasis wall
+  fillFeatureRect(terrain, 60, 120, 25, 10, 'forest_dense');   // West-center oasis wall
+  fillFeatureRect(terrain, 195, 150, 25, 10, 'forest_dense');  // East-center oasis wall
+
+  // Corner oasis clusters for flanking routes
+  fillFeatureCircle(terrain, 60, 60, 9, 'forest_dense');       // NW corner oasis
+  fillFeatureCircle(terrain, 220, 60, 9, 'forest_dense');      // NE corner oasis
+  fillFeatureCircle(terrain, 60, 220, 9, 'forest_dense');      // SW corner oasis
+  fillFeatureCircle(terrain, 220, 220, 9, 'forest_dense');     // SE corner oasis
+
+  // Mid-map strategic oasis points
+  fillFeatureCircle(terrain, 110, 90, 6, 'forest_dense');      // P1-P2 approach
+  fillFeatureCircle(terrain, 170, 90, 6, 'forest_dense');      // P2-P4 approach
+  fillFeatureCircle(terrain, 90, 110, 6, 'forest_dense');      // P1-P3 approach
+  fillFeatureCircle(terrain, 110, 170, 6, 'forest_dense');     // P3-P4 approach
+  fillFeatureCircle(terrain, 170, 190, 6, 'forest_dense');     // South cross
+  fillFeatureCircle(terrain, 190, 170, 6, 'forest_dense');     // East cross
 
   // MUD/SAND areas - Scorched earth slow zones
   createMudArea(terrain, 140, 140, 15);  // Center contested
@@ -384,11 +405,20 @@ function generateScorchedBasin(): MapData {
   createMudArea(terrain, 110, 170, 6);
   createMudArea(terrain, 170, 170, 6);
 
-  // Light forest cover along edges
+  // Light forest cover along edges - expanded
   fillFeatureCircle(terrain, 40, 100, 6, 'forest_light');
   fillFeatureCircle(terrain, 40, 180, 6, 'forest_light');
   fillFeatureCircle(terrain, 240, 100, 6, 'forest_light');
   fillFeatureCircle(terrain, 240, 180, 6, 'forest_light');
+  // Additional light forest clusters
+  fillFeatureCircle(terrain, 100, 40, 6, 'forest_light');      // North edge
+  fillFeatureCircle(terrain, 180, 40, 6, 'forest_light');      // North edge
+  fillFeatureCircle(terrain, 100, 240, 6, 'forest_light');     // South edge
+  fillFeatureCircle(terrain, 180, 240, 6, 'forest_light');     // South edge
+  fillFeatureCircle(terrain, 80, 140, 5, 'forest_light');      // West mid
+  fillFeatureCircle(terrain, 200, 140, 5, 'forest_light');     // East mid
+  fillFeatureCircle(terrain, 140, 80, 5, 'forest_light');      // North mid
+  fillFeatureCircle(terrain, 140, 200, 5, 'forest_light');     // South mid
 
   // ========================================
   // EXPANSIONS WITH RESOURCES

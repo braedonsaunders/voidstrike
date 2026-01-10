@@ -302,19 +302,46 @@ function generateCrystalCaverns(): MapData {
   // Cross map highway
   createRoad(terrain, 55, 90, 145, 90, 3);
 
-  // SCATTERED FORESTS - Frozen forest cover
-  scatterForests(terrain, MAP_WIDTH, MAP_HEIGHT, 20, 4, 8, BASE_EXCLUSION_ZONES, 456, 0.35);
+  // SCATTERED FORESTS - Frozen forest cover (3x more trees)
+  scatterForests(terrain, MAP_WIDTH, MAP_HEIGHT, 70, 4, 10, BASE_EXCLUSION_ZONES, 456, 0.35);
 
   // DENSE FOREST ambush positions near thirds
   fillFeatureCircle(terrain, 20, 45, 6, 'forest_dense');   // Near P1 third
   fillFeatureCircle(terrain, 180, 135, 6, 'forest_dense'); // Near P2 third
 
+  // FOREST WALLS creating chokepoints and tactical paths
+  // North-south forest wall with gap in middle (frozen tree barrier)
+  fillFeatureRect(terrain, 75, 15, 8, 30, 'forest_dense');    // Top section
+  fillFeatureRect(terrain, 75, 135, 8, 35, 'forest_dense');   // Bottom section
+  fillFeatureRect(terrain, 115, 15, 8, 30, 'forest_dense');   // Top section (P2 side)
+  fillFeatureRect(terrain, 115, 135, 8, 35, 'forest_dense');  // Bottom section (P2 side)
+
+  // Diagonal forest walls for flanking cover
+  fillFeatureCircle(terrain, 45, 35, 8, 'forest_dense');     // P1 third approach
+  fillFeatureCircle(terrain, 155, 145, 8, 'forest_dense');   // P2 third approach
+
+  // Additional dense forest clusters at strategic points
+  fillFeatureCircle(terrain, 45, 130, 7, 'forest_dense');    // P1 natural flank
+  fillFeatureCircle(terrain, 155, 50, 7, 'forest_dense');    // P2 natural flank
+  fillFeatureCircle(terrain, 85, 45, 6, 'forest_dense');     // Near P1 third approach
+  fillFeatureCircle(terrain, 115, 135, 6, 'forest_dense');   // Near P2 third approach
+
+  // Mid-map forest patches for army positioning
+  fillFeatureCircle(terrain, 65, 75, 6, 'forest_dense');     // P1 mid
+  fillFeatureCircle(terrain, 135, 105, 6, 'forest_dense');   // P2 mid
+
   // MUD/ICE SLICK areas in contested zones (slippery slow zones)
   createMudArea(terrain, 100, 90, 10);  // Center contested
 
-  // Light forests for cover
+  // Light forests for cover - expanded
   fillFeatureCircle(terrain, 75, 65, 7, 'forest_light');
   fillFeatureCircle(terrain, 125, 115, 7, 'forest_light');
+  fillFeatureCircle(terrain, 50, 100, 6, 'forest_light');    // P1 approach
+  fillFeatureCircle(terrain, 150, 80, 6, 'forest_light');    // P2 approach
+  fillFeatureCircle(terrain, 95, 40, 5, 'forest_light');     // North mid
+  fillFeatureCircle(terrain, 105, 140, 5, 'forest_light');   // South mid
+  fillFeatureCircle(terrain, 30, 65, 5, 'forest_light');     // P1 flank
+  fillFeatureCircle(terrain, 170, 115, 5, 'forest_light');   // P2 flank
 
   // ========================================
   // EXPANSIONS WITH RESOURCES
