@@ -324,8 +324,11 @@ export function HybridGameCanvas() {
         damageType?: string;
       }) => {
         if (data.attackerPos && data.targetPos && particleSystemRef.current) {
-          const startPos = new THREE.Vector3(data.attackerPos.x, 0.5, data.attackerPos.y);
-          const endPos = new THREE.Vector3(data.targetPos.x, 0.5, data.targetPos.y);
+          // Get terrain height for proper positioning on elevated terrain
+          const startHeight = terrain.getHeightAt(data.attackerPos.x, data.attackerPos.y) + 0.5;
+          const endHeight = terrain.getHeightAt(data.targetPos.x, data.targetPos.y) + 0.5;
+          const startPos = new THREE.Vector3(data.attackerPos.x, startHeight, data.attackerPos.y);
+          const endPos = new THREE.Vector3(data.targetPos.x, endHeight, data.targetPos.y);
           const direction = endPos.clone().sub(startPos).normalize();
 
           // Muzzle flash
@@ -342,7 +345,8 @@ export function HybridGameCanvas() {
 
       game.eventBus.on('unit:died', (data: { position?: { x: number; y: number } }) => {
         if (data.position && particleSystemRef.current) {
-          const pos = new THREE.Vector3(data.position.x, 0.5, data.position.y);
+          const terrainHeight = terrain.getHeightAt(data.position.x, data.position.y);
+          const pos = new THREE.Vector3(data.position.x, terrainHeight + 0.5, data.position.y);
           particleSystemRef.current.spawnDeathEffect(pos, 1);
         }
       });
