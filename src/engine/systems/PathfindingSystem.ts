@@ -52,9 +52,7 @@ export class PathfindingSystem extends System {
     this.pathfinder = new AStar(mapWidth, mapHeight, 1);
     this.hierarchicalPathfinder = new HierarchicalAStar(mapWidth, mapHeight, 1);
     this.setupEventListeners();
-
-    // Load terrain walkability data after a short delay to ensure terrain is loaded
-    setTimeout(() => this.loadTerrainData(), 100);
+    // Note: loadTerrainData() is called by Game.setTerrainGrid() when map is loaded
   }
 
   /**

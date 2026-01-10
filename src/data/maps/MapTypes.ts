@@ -576,8 +576,8 @@ export function createRaisedPlatform(
             textureId: Math.floor(Math.random() * 4),
           };
         } else if (dist <= outerRadius) {
-          // Cliff ring - but skip near ramps
-          if (!isRampOrNearRamp(grid, px, py, 2)) {
+          // Cliff ring - but skip near ramps (buffer must be >= cliff width to ensure gap)
+          if (!isRampOrNearRamp(grid, px, py, cliffWidth + 1)) {
             grid[py][px] = {
               terrain: 'unwalkable',
               elevation: elevation256,
@@ -629,8 +629,8 @@ export function createRaisedRect(
             feature: 'none',
             textureId: Math.floor(Math.random() * 4),
           };
-        } else if (isOuter && !isRampOrNearRamp(grid, px, py, 2)) {
-          // Cliff edge
+        } else if (isOuter && !isRampOrNearRamp(grid, px, py, cliffWidth + 1)) {
+          // Cliff edge - buffer must be >= cliff width to ensure gap for ramps
           grid[py][px] = {
             terrain: 'unwalkable',
             elevation: elevation256,
