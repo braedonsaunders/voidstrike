@@ -18,7 +18,7 @@ export function HUD() {
   const { isPaused, togglePause, setShowTechTree, setShowKeyboardShortcuts } = useGameStore();
   const { toggleFPS, showFPS, toggleGraphicsOptions, showGraphicsOptions, toggleDebugMenu, showDebugMenu } = useUIStore();
   const [showOptionsMenu, setShowOptionsMenu] = useState(false);
-  const [showPlayerStatus, setShowPlayerStatus] = useState(true);
+  const [showPlayerStatus, setShowPlayerStatus] = useState(false);
 
   // Disable edge scrolling when mouse is over the bottom UI
   const handleBottomUIMouseEnter = useCallback(() => {
