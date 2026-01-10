@@ -138,43 +138,154 @@ function generateFrozenDecorations(): MapDecoration[] {
     }
   };
 
+  // Helper to create continuous rock cliff wall
+  const addRockCliffLine = (x1: number, y1: number, x2: number, y2: number, density: number = 2) => {
+    const dx = x2 - x1;
+    const dy = y2 - y1;
+    const length = Math.sqrt(dx * dx + dy * dy);
+    const steps = Math.ceil(length / density);
+    for (let i = 0; i <= steps; i++) {
+      const t = i / steps;
+      const x = x1 + dx * t + (rand() - 0.5) * 2;
+      const y = y1 + dy * t + (rand() - 0.5) * 2;
+      if (isInBaseArea(x, y)) continue;
+      const rockType = rand() < 0.4 ? 'rocks_large' : (rand() < 0.7 ? 'rocks_small' : 'rock_single');
+      decorations.push({
+        type: rockType,
+        x, y,
+        scale: 0.6 + rand() * 0.6,
+        rotation: rand() * Math.PI * 2,
+      });
+    }
+  };
+
+  // Helper to add rocks around a circular base edge
+  const addBaseEdgeRocks = (cx: number, cy: number, radius: number, count: number) => {
+    for (let i = 0; i < count; i++) {
+      const angle = (i / count) * Math.PI * 2 + rand() * 0.3;
+      const dist = radius + 2 + rand() * 4;
+      const x = cx + Math.cos(angle) * dist;
+      const y = cy + Math.sin(angle) * dist;
+      if (isInBaseArea(x, y)) continue;
+      const rockType = rand() < 0.3 ? 'rocks_large' : (rand() < 0.6 ? 'rocks_small' : 'rock_single');
+      decorations.push({
+        type: rockType,
+        x, y,
+        scale: 0.5 + rand() * 0.6,
+        rotation: rand() * Math.PI * 2,
+      });
+    }
+  };
+
+  // Helper to add trees around a circular base edge
+  const addBaseEdgeTrees = (cx: number, cy: number, radius: number, count: number) => {
+    for (let i = 0; i < count; i++) {
+      const angle = (i / count) * Math.PI * 2 + rand() * 0.4;
+      const dist = radius + 4 + rand() * 6;
+      const x = cx + Math.cos(angle) * dist;
+      const y = cy + Math.sin(angle) * dist;
+      if (isInBaseArea(x, y)) continue;
+      decorations.push({
+        type: 'tree_dead',
+        x, y,
+        scale: 0.6 + rand() * 0.5,
+        rotation: rand() * Math.PI * 2,
+      });
+    }
+  };
+
+  // ========================================
+  // MAIN BASE EDGE DECORATIONS
+  // ========================================
+
+  // P1 Main (30, 90) - radius 20
+  addBaseEdgeRocks(30, 90, 24, 20);
+  addBaseEdgeTrees(30, 90, 27, 14);
+
+  // P2 Main (170, 90)
+  addBaseEdgeRocks(170, 90, 24, 20);
+  addBaseEdgeTrees(170, 90, 27, 14);
+
+  // ========================================
+  // NATURAL EXPANSION EDGE DECORATIONS
+  // ========================================
+
+  addBaseEdgeRocks(55, 55, 19, 14);
+  addBaseEdgeTrees(55, 55, 22, 10);
+  addBaseEdgeRocks(145, 125, 19, 14);
+  addBaseEdgeTrees(145, 125, 22, 10);
+
+  // ========================================
+  // CONTINUOUS ROCK CLIFF WALLS
+  // ========================================
+
+  // Map border cliffs
+  addRockCliffLine(12, 12, 12, 168, 3);
+  addRockCliffLine(188, 12, 188, 168, 3);
+  addRockCliffLine(12, 12, 188, 12, 3);
+  addRockCliffLine(12, 168, 188, 168, 3);
+
+  // Main base cliff edges - forming walls
+  addRockCliffLine(10, 68, 20, 68, 2);
+  addRockCliffLine(10, 112, 20, 112, 2);
+  addRockCliffLine(180, 68, 190, 68, 2);
+  addRockCliffLine(180, 112, 190, 112, 2);
+
+  // Natural chokepoints
+  addRockCliffLine(45, 40, 65, 40, 2);
+  addRockCliffLine(45, 70, 65, 70, 2);
+  addRockCliffLine(135, 110, 155, 110, 2);
+  addRockCliffLine(135, 140, 155, 140, 2);
+
+  // Center area cliffs
+  addRockCliffLine(85, 75, 115, 75, 2);
+  addRockCliffLine(85, 105, 115, 105, 2);
+
+  // ========================================
+  // ORIGINAL DECORATIONS (enhanced)
+  // ========================================
+
   // Map border decorations
   for (let x = 15; x < MAP_WIDTH - 15; x += 8) {
-    addCrystalCluster(x, 12, 3, 4);
-    addDeadTrees(x, 168, 3, 4);
+    addCrystalCluster(x, 12, 4, 5);
+    addDeadTrees(x, 168, 4, 5);
   }
   for (let y = 15; y < MAP_HEIGHT - 15; y += 8) {
-    addCrystalCluster(12, y, 3, 4);
-    addDeadTrees(188, y, 3, 4);
+    addCrystalCluster(12, y, 4, 5);
+    addDeadTrees(188, y, 4, 5);
   }
 
-  // Cliff edge decorations around main bases
-  addCrystalCluster(15, 70, 8, 6);
-  addCrystalCluster(15, 110, 8, 6);
-  addCrystalCluster(185, 70, 8, 6);
-  addCrystalCluster(185, 110, 8, 6);
+  // Cliff edge decorations around main bases - enhanced
+  addCrystalCluster(15, 70, 12, 8);
+  addCrystalCluster(15, 110, 12, 8);
+  addCrystalCluster(185, 70, 12, 8);
+  addCrystalCluster(185, 110, 12, 8);
 
-  // Natural expansion surroundings
-  addDeadTrees(70, 45, 10, 8);
-  addDeadTrees(130, 135, 10, 8);
-  addRockCluster(65, 60, 6, 5);
-  addRockCluster(135, 120, 6, 5);
+  // Natural expansion surroundings - more decorations
+  addDeadTrees(70, 45, 14, 10);
+  addDeadTrees(130, 135, 14, 10);
+  addRockCluster(65, 60, 10, 7);
+  addRockCluster(135, 120, 10, 7);
 
-  // Center area - contested
-  addCrystalCluster(100, 75, 12, 10);
-  addCrystalCluster(100, 105, 12, 10);
-  addRockCluster(85, 90, 8, 6);
-  addRockCluster(115, 90, 8, 6);
+  // Center area - contested (enhanced)
+  addCrystalCluster(100, 75, 15, 12);
+  addCrystalCluster(100, 105, 15, 12);
+  addRockCluster(85, 90, 12, 8);
+  addRockCluster(115, 90, 12, 8);
 
-  // Chokepoint decorations
-  addRockCluster(75, 90, 6, 4);
-  addRockCluster(125, 90, 6, 4);
+  // Chokepoint decorations - more rocks
+  addRockCluster(75, 90, 10, 6);
+  addRockCluster(125, 90, 10, 6);
 
-  // Third/fourth expansion surroundings
-  addDeadTrees(20, 25, 6, 5);
-  addDeadTrees(180, 155, 6, 5);
-  addDeadTrees(20, 155, 6, 5);
-  addDeadTrees(180, 25, 6, 5);
+  // Third/fourth expansion surroundings - enhanced
+  addDeadTrees(20, 25, 10, 7);
+  addDeadTrees(180, 155, 10, 7);
+  addDeadTrees(20, 155, 10, 7);
+  addDeadTrees(180, 25, 10, 7);
+  addRockCluster(25, 30, 6, 5);
+  addRockCluster(175, 150, 6, 5);
+  addRockCluster(25, 150, 6, 5);
+  addRockCluster(175, 30, 6, 5);
 
   // Debris
   decorations.push({ type: 'debris', x: 90, y: 85, scale: 0.8 });
