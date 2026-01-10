@@ -443,7 +443,7 @@
 ### Settings
 - [ ] Custom hotkeys
 - [ ] Graphics settings (quality presets)
-- [ ] Audio settings (volume sliders)
+- [x] Audio settings (volume sliders, music player, SFX controls)
 - [ ] Gameplay settings
 
 ### Skirmish Options

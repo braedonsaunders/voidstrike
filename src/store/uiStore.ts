@@ -86,6 +86,9 @@ export interface UIState {
   graphicsSettings: GraphicsSettings;
   showGraphicsOptions: boolean;
 
+  // Sound settings
+  showSoundOptions: boolean;
+
   // Debug settings
   debugSettings: DebugSettings;
   showDebugMenu: boolean;
@@ -115,6 +118,8 @@ export interface UIState {
   toggleGraphicsOptions: () => void;
   setGraphicsSetting: <K extends keyof GraphicsSettings>(key: K, value: GraphicsSettings[K]) => void;
   toggleGraphicsSetting: (key: keyof GraphicsSettings) => void;
+  // Sound settings actions
+  toggleSoundOptions: () => void;
   // Debug settings actions
   toggleDebugMenu: () => void;
   toggleDebugSetting: (key: keyof DebugSettings) => void;
@@ -139,6 +144,7 @@ export const useUIStore = create<UIState>((set, get) => ({
   showFPS: false,
   showPing: true,
   showGraphicsOptions: false,
+  showSoundOptions: false,
   graphicsSettings: {
     postProcessingEnabled: true,
     toneMappingExposure: 1.0,
@@ -255,6 +261,8 @@ export const useUIStore = create<UIState>((set, get) => ({
   togglePing: () => set((state) => ({ showPing: !state.showPing })),
 
   toggleGraphicsOptions: () => set((state) => ({ showGraphicsOptions: !state.showGraphicsOptions })),
+
+  toggleSoundOptions: () => set((state) => ({ showSoundOptions: !state.showSoundOptions })),
 
   setGraphicsSetting: (key, value) =>
     set((state) => ({

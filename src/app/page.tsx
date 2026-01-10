@@ -1,10 +1,40 @@
 'use client';
 
 import Link from 'next/link';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
+import { MusicPlayer } from '@/audio/MusicPlayer';
+import { useUIStore } from '@/store/uiStore';
 
 export default function Home() {
   const [hoveredFaction, setHoveredFaction] = useState<string | null>(null);
+  const musicEnabled = useUIStore((state) => state.musicEnabled);
+  const musicVolume = useUIStore((state) => state.musicVolume);
+
+  // Initialize and play menu music
+  useEffect(() => {
+    const startMenuMusic = async () => {
+      await MusicPlayer.initialize();
+      MusicPlayer.setVolume(musicVolume);
+      MusicPlayer.setMuted(!musicEnabled);
+      await MusicPlayer.discoverTracks();
+      if (musicEnabled) {
+        MusicPlayer.play('menu');
+      }
+    };
+
+    startMenuMusic();
+
+    // Stop music when leaving the menu
+    return () => {
+      MusicPlayer.stop();
+    };
+  }, []);
+
+  // Sync volume changes
+  useEffect(() => {
+    MusicPlayer.setVolume(musicVolume);
+    MusicPlayer.setMuted(!musicEnabled);
+  }, [musicVolume, musicEnabled]);
 
   const factions = [
     {
