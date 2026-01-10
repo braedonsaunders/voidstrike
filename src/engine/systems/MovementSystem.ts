@@ -14,6 +14,9 @@ const MAX_AVOIDANCE_FORCE = 1.5; // Low cap - units can stack
 const BUILDING_AVOIDANCE_STRENGTH = 25.0; // Push from buildings (still solid)
 const BUILDING_AVOIDANCE_MARGIN = 0.25; // Minimal margin around buildings - hitbox should match model
 
+// Path request cooldown to prevent spamming
+const PATH_REQUEST_COOLDOWN_MS = 500; // Minimum time between path requests per unit
+
 // Static temp vectors to avoid allocations in hot loops
 const tempSeparation: PooledVector2 = { x: 0, y: 0 };
 const tempBuildingAvoid: PooledVector2 = { x: 0, y: 0 };
@@ -25,6 +28,9 @@ export class MovementSystem extends System {
   private arrivalThreshold = 0.5;
   private decelerationThreshold = 2.0; // Start slowing down at this distance
 
+  // Track last path request time per entity to prevent spam
+  private lastPathRequestTime: Map<number, number> = new Map();
+
   constructor(game: Game) {
     super(game);
     this.setupEventListeners();
@@ -34,6 +40,27 @@ export class MovementSystem extends System {
     // Handle move commands
     this.game.eventBus.on('command:move', this.handleMoveCommand.bind(this));
     this.game.eventBus.on('command:patrol', this.handlePatrolCommand.bind(this));
+  }
+
+  /**
+   * Request a path with cooldown to prevent spam.
+   * Returns true if request was sent, false if on cooldown.
+   */
+  private requestPathWithCooldown(entityId: number, targetX: number, targetY: number, force: boolean = false): boolean {
+    const now = Date.now();
+    const lastRequest = this.lastPathRequestTime.get(entityId) || 0;
+
+    if (!force && now - lastRequest < PATH_REQUEST_COOLDOWN_MS) {
+      return false; // On cooldown
+    }
+
+    this.lastPathRequestTime.set(entityId, now);
+    this.game.eventBus.emit('pathfinding:request', {
+      entityId: entityId,
+      targetX: targetX,
+      targetY: targetY,
+    });
+    return true;
   }
 
   private handleMoveCommand(data: {
@@ -73,12 +100,8 @@ export class MovementSystem extends System {
         unit.path = [];
         unit.pathIndex = 0;
 
-        // Request a path from the pathfinding system
-        this.game.eventBus.emit('pathfinding:request', {
-          entityId: entityId,
-          targetX: pos.x,
-          targetY: pos.y,
-        });
+        // Request a path from the pathfinding system (force=true for user commands)
+        this.requestPathWithCooldown(entityId, pos.x, pos.y, true);
       }
     }
   }
@@ -100,12 +123,8 @@ export class MovementSystem extends System {
       // Set patrol between current position and target
       unit.setPatrol(transform.x, transform.y, targetPosition.x, targetPosition.y);
 
-      // Request path to first patrol destination
-      this.game.eventBus.emit('pathfinding:request', {
-        entityId: entityId,
-        targetX: targetPosition.x,
-        targetY: targetPosition.y,
-      });
+      // Request path to first patrol destination (force=true for user commands)
+      this.requestPathWithCooldown(entityId, targetPosition.x, targetPosition.y, true);
     }
   }
 
@@ -375,17 +394,14 @@ export class MovementSystem extends System {
 
         // No path but has target - request path if distance is significant
         // This handles edge cases where path request was missed or path is empty
+        // Uses cooldown to prevent spamming when no path can be found
         const directDx = unit.targetX - transform.x;
         const directDy = unit.targetY - transform.y;
         const directDistance = Math.sqrt(directDx * directDx + directDy * directDy);
 
         // Request path for distances > 3 units (short movements can go direct)
         if (directDistance > 3 && unit.state === 'moving') {
-          this.game.eventBus.emit('pathfinding:request', {
-            entityId: entity.id,
-            targetX: unit.targetX,
-            targetY: unit.targetY,
-          });
+          this.requestPathWithCooldown(entity.id, unit.targetX, unit.targetY);
         }
       }
 
@@ -481,11 +497,7 @@ export class MovementSystem extends System {
           if (unit.targetX !== null && unit.targetY !== null) {
             unit.path = [];
             unit.pathIndex = 0;
-            this.game.eventBus.emit('pathfinding:request', {
-              entityId: entity.id,
-              targetX: unit.targetX,
-              targetY: unit.targetY,
-            });
+            this.requestPathWithCooldown(entity.id, unit.targetX, unit.targetY, true);
           }
         } else {
           // Decelerate
@@ -511,11 +523,7 @@ export class MovementSystem extends System {
           unit.path = [];
           unit.pathIndex = 0;
           if (unit.targetX !== null && unit.targetY !== null) {
-            this.game.eventBus.emit('pathfinding:request', {
-              entityId: entity.id,
-              targetX: unit.targetX,
-              targetY: unit.targetY,
-            });
+            this.requestPathWithCooldown(entity.id, unit.targetX, unit.targetY, true);
           }
         } else {
           // Arrived at final destination
@@ -541,11 +549,7 @@ export class MovementSystem extends System {
             if (unit.targetX !== null && unit.targetY !== null) {
               unit.path = [];
               unit.pathIndex = 0;
-              this.game.eventBus.emit('pathfinding:request', {
-                entityId: entity.id,
-                targetX: unit.targetX,
-                targetY: unit.targetY,
-              });
+              this.requestPathWithCooldown(entity.id, unit.targetX, unit.targetY, true);
             }
           } else {
             unit.clearTarget();

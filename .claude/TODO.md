@@ -107,6 +107,8 @@
 - [x] **Terrain feature integration** - Updated loadTerrainData to use TERRAIN_FEATURE_CONFIG for proper walkability and movement cost calculations
 - [x] **Proactive path fallback** - Units with targets but no paths now automatically request paths for distances > 3 units
 - [x] **Patrol and queue path requests** - Added path requests for patrol commands and shift-click queued commands
+- [x] **Path request spam prevention** - Added 500ms cooldown per unit to prevent flooding pathfinding system when no path can be found
+- [x] **Alternate path fallback** - When path not found, now tries nearby walkable cells for both start and end positions to escape stuck situations
 
 ### Camera & Input Fixes (January 2026)
 - [x] **WASD keys removed from camera** - WASD was conflicting with shortcuts (A=attack move, S=stop, etc.). Camera now uses arrow keys only for keyboard panning.
