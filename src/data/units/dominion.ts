@@ -88,6 +88,7 @@ export const UNIT_DEFINITIONS: Record<string, UnitDefinition> = {
   fabricator: {
     id: 'fabricator',
     name: 'Fabricator',
+    description: 'Worker unit that gathers resources and constructs buildings.',
     faction: 'dominion',
     mineralCost: 50,
     vespeneCost: 0,
@@ -109,6 +110,7 @@ export const UNIT_DEFINITIONS: Record<string, UnitDefinition> = {
   trooper: {
     id: 'trooper',
     name: 'Trooper',
+    description: 'Basic infantry unit. Cheap and effective in large numbers.',
     faction: 'dominion',
     mineralCost: 50,
     vespeneCost: 0,
@@ -129,6 +131,7 @@ export const UNIT_DEFINITIONS: Record<string, UnitDefinition> = {
   breacher: {
     id: 'breacher',
     name: 'Breacher',
+    description: 'Heavy armored infantry. Effective against armored units.',
     faction: 'dominion',
     mineralCost: 100,
     vespeneCost: 25,
@@ -149,6 +152,7 @@ export const UNIT_DEFINITIONS: Record<string, UnitDefinition> = {
   vanguard: {
     id: 'vanguard',
     name: 'Vanguard',
+    description: 'Fast assault infantry with jetpacks and grenades.',
     faction: 'dominion',
     mineralCost: 50,
     vespeneCost: 50,
@@ -169,6 +173,7 @@ export const UNIT_DEFINITIONS: Record<string, UnitDefinition> = {
   operative: {
     id: 'operative',
     name: 'Operative',
+    description: 'Elite stealth unit. Can cloak, snipe, and call nuclear strikes.',
     faction: 'dominion',
     mineralCost: 150,
     vespeneCost: 125,
@@ -191,6 +196,7 @@ export const UNIT_DEFINITIONS: Record<string, UnitDefinition> = {
   scorcher: {
     id: 'scorcher',
     name: 'Scorcher',
+    description: 'Fast attack vehicle with flame weapons. Transforms into Inferno.',
     faction: 'dominion',
     mineralCost: 100,
     vespeneCost: 0,
@@ -215,6 +221,7 @@ export const UNIT_DEFINITIONS: Record<string, UnitDefinition> = {
   devastator: {
     id: 'devastator',
     name: 'Devastator',
+    description: 'Heavy siege tank. Transforms into siege mode for long-range artillery.',
     faction: 'dominion',
     mineralCost: 150,
     vespeneCost: 125,
@@ -239,6 +246,7 @@ export const UNIT_DEFINITIONS: Record<string, UnitDefinition> = {
   colossus: {
     id: 'colossus',
     name: 'Colossus',
+    description: 'Massive walker mech. Devastating heavy firepower.',
     faction: 'dominion',
     mineralCost: 300,
     vespeneCost: 200,
@@ -259,6 +267,7 @@ export const UNIT_DEFINITIONS: Record<string, UnitDefinition> = {
   lifter: {
     id: 'lifter',
     name: 'Lifter',
+    description: 'Flying transport and medical support. Heals nearby units.',
     faction: 'dominion',
     mineralCost: 100,
     vespeneCost: 100,
@@ -286,6 +295,7 @@ export const UNIT_DEFINITIONS: Record<string, UnitDefinition> = {
   valkyrie: {
     id: 'valkyrie',
     name: 'Valkyrie',
+    description: 'Transforming fighter. Switches between air and ground modes.',
     faction: 'dominion',
     mineralCost: 150,
     vespeneCost: 75,
@@ -310,6 +320,7 @@ export const UNIT_DEFINITIONS: Record<string, UnitDefinition> = {
   specter: {
     id: 'specter',
     name: 'Specter',
+    description: 'Cloakable strike fighter. Stealthy air superiority.',
     faction: 'dominion',
     mineralCost: 150,
     vespeneCost: 100,
@@ -333,6 +344,7 @@ export const UNIT_DEFINITIONS: Record<string, UnitDefinition> = {
   dreadnought: {
     id: 'dreadnought',
     name: 'Dreadnought',
+    description: 'Capital ship with heavy armor. Nova Cannon devastates areas.',
     faction: 'dominion',
     mineralCost: 400,
     vespeneCost: 300,
@@ -355,6 +367,7 @@ export const UNIT_DEFINITIONS: Record<string, UnitDefinition> = {
   overseer: {
     id: 'overseer',
     name: 'Overseer',
+    description: 'Support craft with detection. Reveals cloaked and burrowed units.',
     faction: 'dominion',
     mineralCost: 100,
     vespeneCost: 200,

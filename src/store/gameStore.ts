@@ -35,6 +35,7 @@ export interface GameState {
   isBuilding: boolean;
   buildingType: string | null;
   isSettingRallyPoint: boolean;
+  isRepairMode: boolean; // Repair targeting mode
   abilityTargetMode: string | null; // ability ID being targeted
   showMinimap: boolean;
   showResourcePanel: boolean;
@@ -62,6 +63,7 @@ export interface GameState {
   setGameSpeed: (speed: number) => void;
   setBuildingMode: (type: string | null) => void;
   setRallyPointMode: (isActive: boolean) => void;
+  setRepairMode: (isActive: boolean) => void;
   setAbilityTargetMode: (abilityId: string | null) => void;
   setCamera: (x: number, y: number, zoom?: number) => void;
   moveCameraTo: (x: number, y: number) => void;
@@ -90,6 +92,7 @@ const initialState = {
   isBuilding: false,
   buildingType: null,
   isSettingRallyPoint: false,
+  isRepairMode: false,
   abilityTargetMode: null,
   showMinimap: true,
   showResourcePanel: true,
@@ -178,6 +181,16 @@ export const useGameStore = create<GameState>((set, get) => ({
       isSettingRallyPoint: isActive,
       isBuilding: false,
       buildingType: null,
+      isRepairMode: false,
+      abilityTargetMode: null,
+    }),
+
+  setRepairMode: (isActive) =>
+    set({
+      isRepairMode: isActive,
+      isBuilding: false,
+      buildingType: null,
+      isSettingRallyPoint: false,
       abilityTargetMode: null,
     }),
 
@@ -187,6 +200,7 @@ export const useGameStore = create<GameState>((set, get) => ({
       isBuilding: false,
       buildingType: null,
       isSettingRallyPoint: false,
+      isRepairMode: false,
     }),
 
   setCamera: (x, y, zoom) =>

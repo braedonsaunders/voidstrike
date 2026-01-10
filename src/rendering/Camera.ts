@@ -35,6 +35,7 @@ export class RTSCamera {
 
   private config: CameraConfig;
   private currentZoom: number;
+  private targetZoom: number; // For smooth zoom interpolation
   private currentAngle: number;
   private currentPitch: number;
 
@@ -71,6 +72,7 @@ export class RTSCamera {
     this.target = new THREE.Vector3(mapWidth / 2, 0, mapHeight / 2);
 
     this.currentZoom = 30;
+    this.targetZoom = 30; // Initialize target zoom same as current
     this.currentAngle = 0;
     this.currentPitch = Math.PI / 4; // 45 degrees
 
@@ -141,13 +143,12 @@ export class RTSCamera {
   private handleWheel(e: WheelEvent): void {
     e.preventDefault();
 
-    const zoomDelta = e.deltaY * 0.05;
-    this.currentZoom = Math.max(
+    // Set target zoom - actual zoom will smoothly interpolate in update()
+    const zoomDelta = e.deltaY * 0.08;
+    this.targetZoom = Math.max(
       this.config.minZoom,
-      Math.min(this.config.maxZoom, this.currentZoom + zoomDelta)
+      Math.min(this.config.maxZoom, this.targetZoom + zoomDelta)
     );
-
-    this.updateCameraPosition();
   }
 
   private handleResize(): void {
@@ -193,6 +194,18 @@ export class RTSCamera {
       }
     }
 
+    // Smooth zoom interpolation
+    const zoomDiff = this.targetZoom - this.currentZoom;
+    if (Math.abs(zoomDiff) > 0.01) {
+      // Lerp towards target zoom (8 is the smoothing factor - higher = faster)
+      this.currentZoom += zoomDiff * Math.min(1, dt * 8);
+      this.updateCameraPosition();
+    } else if (zoomDiff !== 0) {
+      // Snap to exact target when close enough
+      this.currentZoom = this.targetZoom;
+      this.updateCameraPosition();
+    }
+
     if (dx !== 0 || dz !== 0) {
       // Rotate movement direction based on camera angle
       // Use negative angle to compensate for camera rotation - movement should be screen-relative
@@ -235,12 +248,17 @@ export class RTSCamera {
     this.updateCameraPosition();
   }
 
-  public setZoom(zoom: number): void {
-    this.currentZoom = Math.max(
+  public setZoom(zoom: number, instant = false): void {
+    const clampedZoom = Math.max(
       this.config.minZoom,
       Math.min(this.config.maxZoom, zoom)
     );
-    this.updateCameraPosition();
+    this.targetZoom = clampedZoom;
+    if (instant) {
+      this.currentZoom = clampedZoom;
+      this.updateCameraPosition();
+    }
+    // Non-instant will smoothly interpolate in update()
   }
 
   public getZoom(): number {
