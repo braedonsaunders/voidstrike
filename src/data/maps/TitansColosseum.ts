@@ -466,38 +466,40 @@ function generateTitansColosseum(): MapData {
   ramps.forEach(ramp => createRampInTerrain(terrain, ramp));
 
   // ========================================
-  // EXPANSIONS WITH RESOURCES (uniform 7-unit mineral distance)
+  // EXPANSIONS WITH RESOURCES
+  // Standard: 6x 1500 + 2x 900 minerals per base, 2250 gas per geyser
+  // Gold: all 8 patches at 900 minerals
   // ========================================
   // 8 Main bases (minerals face outward from map center)
-  const p1Main = createBaseResources(80, 45, DIR.UP_LEFT, 1800, 2500);
-  const p2Main = createBaseResources(320, 45, DIR.UP_RIGHT, 1800, 2500);
-  const p3Main = createBaseResources(355, 130, DIR.RIGHT, 1800, 2500);
-  const p4Main = createBaseResources(355, 270, DIR.RIGHT, 1800, 2500);
-  const p5Main = createBaseResources(320, 355, DIR.DOWN_RIGHT, 1800, 2500);
-  const p6Main = createBaseResources(80, 355, DIR.DOWN_LEFT, 1800, 2500);
-  const p7Main = createBaseResources(45, 270, DIR.LEFT, 1800, 2500);
-  const p8Main = createBaseResources(45, 130, DIR.LEFT, 1800, 2500);
+  const p1Main = createBaseResources(80, 45, DIR.UP_LEFT);       // Standard
+  const p2Main = createBaseResources(320, 45, DIR.UP_RIGHT);     // Standard
+  const p3Main = createBaseResources(355, 130, DIR.RIGHT);       // Standard
+  const p4Main = createBaseResources(355, 270, DIR.RIGHT);       // Standard
+  const p5Main = createBaseResources(320, 355, DIR.DOWN_RIGHT);  // Standard
+  const p6Main = createBaseResources(80, 355, DIR.DOWN_LEFT);    // Standard
+  const p7Main = createBaseResources(45, 270, DIR.LEFT);         // Standard
+  const p8Main = createBaseResources(45, 130, DIR.LEFT);         // Standard
   // 8 Natural expansions
-  const p1Nat = createBaseResources(110, 75, DIR.UP, 1500, 2500);
-  const p2Nat = createBaseResources(290, 75, DIR.UP, 1500, 2500);
-  const p3Nat = createBaseResources(325, 160, DIR.RIGHT, 1500, 2500);
-  const p4Nat = createBaseResources(325, 240, DIR.RIGHT, 1500, 2500);
-  const p5Nat = createBaseResources(290, 325, DIR.DOWN, 1500, 2500);
-  const p6Nat = createBaseResources(110, 325, DIR.DOWN, 1500, 2500);
-  const p7Nat = createBaseResources(75, 240, DIR.LEFT, 1500, 2500);
-  const p8Nat = createBaseResources(75, 160, DIR.LEFT, 1500, 2500);
+  const p1Nat = createBaseResources(110, 75, DIR.UP);            // Standard
+  const p2Nat = createBaseResources(290, 75, DIR.UP);            // Standard
+  const p3Nat = createBaseResources(325, 160, DIR.RIGHT);        // Standard
+  const p4Nat = createBaseResources(325, 240, DIR.RIGHT);        // Standard
+  const p5Nat = createBaseResources(290, 325, DIR.DOWN);         // Standard
+  const p6Nat = createBaseResources(110, 325, DIR.DOWN);         // Standard
+  const p7Nat = createBaseResources(75, 240, DIR.LEFT);          // Standard
+  const p8Nat = createBaseResources(75, 160, DIR.LEFT);          // Standard
   // Gold expansions (inner ring)
-  const goldNW = createBaseResources(140, 140, DIR.UP_LEFT, 1000, 2500);
-  const goldNE = createBaseResources(260, 140, DIR.UP_RIGHT, 1000, 2500);
-  const goldSE = createBaseResources(260, 260, DIR.DOWN_RIGHT, 1000, 2500);
-  const goldSW = createBaseResources(140, 260, DIR.DOWN_LEFT, 1000, 2500);
+  const goldNW = createBaseResources(140, 140, DIR.UP_LEFT, 1500, 2250, true);     // Gold
+  const goldNE = createBaseResources(260, 140, DIR.UP_RIGHT, 1500, 2250, true);    // Gold
+  const goldSE = createBaseResources(260, 260, DIR.DOWN_RIGHT, 1500, 2250, true);  // Gold
+  const goldSW = createBaseResources(140, 260, DIR.DOWN_LEFT, 1500, 2250, true);   // Gold
   // Edge thirds
-  const northThird = createBaseResources(200, 60, DIR.UP, 1500, 2500);
-  const southThird = createBaseResources(200, 340, DIR.DOWN, 1500, 2500);
-  const westThird = createBaseResources(60, 200, DIR.LEFT, 1500, 2500);
-  const eastThird = createBaseResources(340, 200, DIR.RIGHT, 1500, 2500);
+  const northThird = createBaseResources(200, 60, DIR.UP);       // Standard
+  const southThird = createBaseResources(200, 340, DIR.DOWN);    // Standard
+  const westThird = createBaseResources(60, 200, DIR.LEFT);      // Standard
+  const eastThird = createBaseResources(340, 200, DIR.RIGHT);    // Standard
   // Center
-  const center = createBaseResources(200, 200, DIR.DOWN, 750, 2500);
+  const center = createBaseResources(200, 200, DIR.DOWN, 1500, 2250, true);        // Gold (contested)
 
   const expansions = [
     { name: 'P1 Main', x: 80, y: 45, isMain: true, ...p1Main },

@@ -250,20 +250,28 @@ export function createTerrainGrid(
   return grid;
 }
 
-// Helper to create SC2-style mineral arc (8 patches in a crescent shape)
+// Standard resource amounts
+export const MINERAL_NORMAL = 1500;  // Standard mineral patches
+export const MINERAL_CLOSE = 900;    // Close/small mineral patches (2 per base)
+export const MINERAL_GOLD = 900;     // Gold/rich mineral patches
+export const GAS_NORMAL = 2250;      // Standard vespene geyser
+
+// Helper to create mineral arc (8 patches in a crescent shape)
 // The arc faces toward the base center
 // mineralCenterX/Y: center of the mineral arc (should be ~7 units from CC center)
 // baseCenterX/Y: position of the command center
+// isGold: if true, all patches have 900 minerals (gold base)
 export function createMineralLine(
   mineralCenterX: number,
   mineralCenterY: number,
   baseCenterX: number,
   baseCenterY: number,
-  amount: number = 1500
+  amount: number = MINERAL_NORMAL,
+  isGold: boolean = false
 ): ResourceNode[] {
   const minerals: ResourceNode[] = [];
 
-  // SC2 has 8 mineral patches in a tight arc formation
+  // 8 mineral patches in a tight arc formation
   const arcRadius = 3.5; // Distance from arc center to patches (tighter arc)
   const arcSpread = Math.PI * 0.65; // ~117 degrees total arc spread
 
@@ -285,11 +293,19 @@ export function createMineralLine(
     const x = mineralCenterX - Math.cos(angle) * r;
     const y = mineralCenterY - Math.sin(angle) * r;
 
+    // Gold bases have all 900, regular bases have 6x normal + 2x 900 (close patches)
+    let patchAmount: number;
+    if (isGold) {
+      patchAmount = MINERAL_GOLD;
+    } else {
+      patchAmount = i < 6 ? amount : MINERAL_CLOSE;
+    }
+
     minerals.push({
       x: Math.round(x * 2) / 2, // Snap to 0.5 grid
       y: Math.round(y * 2) / 2,
       type: 'minerals',
-      amount: i < 6 ? amount : amount * 0.5, // Last 2 patches are half (SC2 style)
+      amount: patchAmount,
     });
   }
 
@@ -365,22 +381,24 @@ const MINERAL_DISTANCE = 7; // 7 units from CC center to mineral arc center
  * @param baseX - X position of the command center
  * @param baseY - Y position of the command center
  * @param direction - Angle in radians where minerals face (0 = right, PI/2 = down, PI = left, -PI/2 = up)
- * @param mineralAmount - Amount per mineral patch (default 1500 for mains, use 1500 for naturals, 750 for gold)
+ * @param mineralAmount - Amount per normal mineral patch (default 1500, close patches always 900)
  * @param gasAmount - Amount per geyser (default 2250)
+ * @param isGold - If true, all mineral patches have 900 minerals (gold/rich base)
  */
 export function createBaseResources(
   baseX: number,
   baseY: number,
   direction: number,
-  mineralAmount: number = 1500,
-  gasAmount: number = 2250
+  mineralAmount: number = MINERAL_NORMAL,
+  gasAmount: number = GAS_NORMAL,
+  isGold: boolean = false
 ): { minerals: ResourceNode[]; vespene: ResourceNode[] } {
   // Place mineral center at standard distance from base
   const mineralCenterX = baseX + Math.cos(direction) * MINERAL_DISTANCE;
   const mineralCenterY = baseY + Math.sin(direction) * MINERAL_DISTANCE;
 
   return {
-    minerals: createMineralLine(mineralCenterX, mineralCenterY, baseX, baseY, mineralAmount),
+    minerals: createMineralLine(mineralCenterX, mineralCenterY, baseX, baseY, mineralAmount, isGold),
     vespene: createVespeneGeysers(mineralCenterX, mineralCenterY, baseX, baseY, gasAmount),
   };
 }

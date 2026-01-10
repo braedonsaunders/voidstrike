@@ -447,25 +447,27 @@ function generateScorchedBasin(): MapData {
   ramps.forEach(ramp => createRampInTerrain(terrain, ramp));
 
   // ========================================
-  // EXPANSIONS WITH RESOURCES (uniform 7-unit mineral distance)
+  // EXPANSIONS WITH RESOURCES
+  // Standard: 6x 1500 + 2x 900 minerals per base, 2250 gas per geyser
+  // Gold: all 8 patches at 900 minerals
   // ========================================
-  const p1Main = createBaseResources(40, 40, DIR.UP_LEFT, 1800, 2500);
-  const p1Nat = createBaseResources(75, 75, DIR.UP_LEFT, 1500, 2500);
-  const p2Main = createBaseResources(240, 40, DIR.UP_RIGHT, 1800, 2500);
-  const p2Nat = createBaseResources(205, 75, DIR.UP_RIGHT, 1500, 2500);
-  const p3Main = createBaseResources(40, 240, DIR.DOWN_LEFT, 1800, 2500);
-  const p3Nat = createBaseResources(75, 205, DIR.DOWN_LEFT, 1500, 2500);
-  const p4Main = createBaseResources(240, 240, DIR.DOWN_RIGHT, 1800, 2500);
-  const p4Nat = createBaseResources(205, 205, DIR.DOWN_RIGHT, 1500, 2500);
-  const westThird = createBaseResources(40, 140, DIR.LEFT, 1500, 2500);
-  const eastThird = createBaseResources(240, 140, DIR.RIGHT, 1500, 2500);
-  const northThird = createBaseResources(140, 40, DIR.UP, 1500, 2500);
-  const southThird = createBaseResources(140, 240, DIR.DOWN, 1500, 2500);
-  const goldSW = createBaseResources(90, 190, DIR.DOWN_LEFT, 1000, 2500);
-  const goldNE = createBaseResources(190, 90, DIR.UP_RIGHT, 1000, 2500);
-  const goldNW = createBaseResources(90, 90, DIR.UP_LEFT, 1000, 2500);
-  const goldSE = createBaseResources(190, 190, DIR.DOWN_RIGHT, 1000, 2500);
-  const center = createBaseResources(140, 140, DIR.DOWN, 750, 2500);
+  const p1Main = createBaseResources(40, 40, DIR.UP_LEFT);       // Standard
+  const p1Nat = createBaseResources(75, 75, DIR.UP_LEFT);        // Standard
+  const p2Main = createBaseResources(240, 40, DIR.UP_RIGHT);     // Standard
+  const p2Nat = createBaseResources(205, 75, DIR.UP_RIGHT);      // Standard
+  const p3Main = createBaseResources(40, 240, DIR.DOWN_LEFT);    // Standard
+  const p3Nat = createBaseResources(75, 205, DIR.DOWN_LEFT);     // Standard
+  const p4Main = createBaseResources(240, 240, DIR.DOWN_RIGHT);  // Standard
+  const p4Nat = createBaseResources(205, 205, DIR.DOWN_RIGHT);   // Standard
+  const westThird = createBaseResources(40, 140, DIR.LEFT);      // Standard
+  const eastThird = createBaseResources(240, 140, DIR.RIGHT);    // Standard
+  const northThird = createBaseResources(140, 40, DIR.UP);       // Standard
+  const southThird = createBaseResources(140, 240, DIR.DOWN);    // Standard
+  const goldSW = createBaseResources(90, 190, DIR.DOWN_LEFT, 1500, 2250, true);   // Gold
+  const goldNE = createBaseResources(190, 90, DIR.UP_RIGHT, 1500, 2250, true);    // Gold
+  const goldNW = createBaseResources(90, 90, DIR.UP_LEFT, 1500, 2250, true);      // Gold
+  const goldSE = createBaseResources(190, 190, DIR.DOWN_RIGHT, 1500, 2250, true); // Gold
+  const center = createBaseResources(140, 140, DIR.DOWN, 1500, 2250, true);       // Gold (contested)
 
   const expansions = [
     { name: 'P1 Main', x: 40, y: 40, isMain: true, ...p1Main },

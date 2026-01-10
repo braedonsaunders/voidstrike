@@ -341,17 +341,18 @@ function generateCrystalCaverns(): MapData {
 
   // ========================================
   // EXPANSIONS WITH RESOURCES
+  // Standard: 6x 1500 + 2x 900 minerals per base, 2250 gas per geyser
+  // Gold: all 8 patches at 900 minerals
   // ========================================
-  // All expansions use standard 7-unit mineral distance from CC
-  const p1Main = createBaseResources(30, 90, DIR.LEFT, 1800, 2500);
-  const p1Nat = createBaseResources(55, 55, DIR.UP_LEFT, 1500, 2500);
-  const p1Third = createBaseResources(30, 30, DIR.LEFT, 1500, 2500);
-  const p1Fourth = createBaseResources(30, 150, DIR.LEFT, 1200, 2500);
-  const p2Main = createBaseResources(170, 90, DIR.RIGHT, 1800, 2500);
-  const p2Nat = createBaseResources(145, 125, DIR.DOWN_RIGHT, 1500, 2500);
-  const p2Third = createBaseResources(170, 150, DIR.RIGHT, 1500, 2500);
-  const p2Fourth = createBaseResources(170, 30, DIR.RIGHT, 1200, 2500);
-  const centerGold = createBaseResources(100, 90, DIR.UP, 1000, 2500);
+  const p1Main = createBaseResources(30, 90, DIR.LEFT);          // Standard
+  const p1Nat = createBaseResources(55, 55, DIR.UP_LEFT);        // Standard
+  const p1Third = createBaseResources(30, 30, DIR.LEFT);         // Standard
+  const p1Fourth = createBaseResources(30, 150, DIR.LEFT);       // Standard
+  const p2Main = createBaseResources(170, 90, DIR.RIGHT);        // Standard
+  const p2Nat = createBaseResources(145, 125, DIR.DOWN_RIGHT);   // Standard
+  const p2Third = createBaseResources(170, 150, DIR.RIGHT);      // Standard
+  const p2Fourth = createBaseResources(170, 30, DIR.RIGHT);      // Standard
+  const centerGold = createBaseResources(100, 90, DIR.UP, 1500, 2250, true);  // Gold
 
   const expansions = [
     { name: 'P1 Main', x: 30, y: 90, isMain: true, ...p1Main },
