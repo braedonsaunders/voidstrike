@@ -7,6 +7,7 @@ import {
   fillTerrainRect,
   fillTerrainCircle,
   createRampInTerrain,
+  createRaisedPlatform,
   createForestCorridor,
   createRiver,
   createLake,
@@ -241,98 +242,55 @@ function generateTitansColosseum(): MapData {
   fillTerrainRect(terrain, 0, MAP_HEIGHT - 14, MAP_WIDTH, 14, 'unwalkable');
 
   // ========================================
-  // MAIN BASES - Elevation 2, protected
+  // RAMPS - Must be created BEFORE raised platforms
   // ========================================
-
-  // P1 (top-left)
-  fillTerrainCircle(terrain, 80, 45, 30, 'ground', 2);
-  fillTerrainRect(terrain, 50, 14, 25, 50, 'unwalkable');
-  fillTerrainRect(terrain, 50, 14, 55, 20, 'unwalkable');
-  fillTerrainRect(terrain, 95, 14, 20, 40, 'unwalkable');
-  fillTerrainRect(terrain, 50, 60, 30, 15, 'unwalkable');
-
-  // P2 (top-right)
-  fillTerrainCircle(terrain, 320, 45, 30, 'ground', 2);
-  fillTerrainRect(terrain, 325, 14, 25, 50, 'unwalkable');
-  fillTerrainRect(terrain, 295, 14, 55, 20, 'unwalkable');
-  fillTerrainRect(terrain, 285, 14, 20, 40, 'unwalkable');
-  fillTerrainRect(terrain, 320, 60, 30, 15, 'unwalkable');
-
-  // P3 (right-top)
-  fillTerrainCircle(terrain, 355, 130, 30, 'ground', 2);
-  fillTerrainRect(terrain, 356, 100, 30, 25, 'unwalkable');
-  fillTerrainRect(terrain, 366, 100, 20, 55, 'unwalkable');
-  fillTerrainRect(terrain, 356, 145, 30, 20, 'unwalkable');
-  fillTerrainRect(terrain, 330, 100, 15, 30, 'unwalkable');
-
-  // P4 (right-bottom)
-  fillTerrainCircle(terrain, 355, 270, 30, 'ground', 2);
-  fillTerrainRect(terrain, 356, 255, 30, 25, 'unwalkable');
-  fillTerrainRect(terrain, 366, 255, 20, 55, 'unwalkable');
-  fillTerrainRect(terrain, 356, 235, 30, 20, 'unwalkable');
-  fillTerrainRect(terrain, 330, 270, 15, 30, 'unwalkable');
-
-  // P5 (bottom-right)
-  fillTerrainCircle(terrain, 320, 355, 30, 'ground', 2);
-  fillTerrainRect(terrain, 325, 336, 25, 50, 'unwalkable');
-  fillTerrainRect(terrain, 295, 366, 55, 20, 'unwalkable');
-  fillTerrainRect(terrain, 285, 346, 20, 40, 'unwalkable');
-  fillTerrainRect(terrain, 320, 325, 30, 15, 'unwalkable');
-
-  // P6 (bottom-left)
-  fillTerrainCircle(terrain, 80, 355, 30, 'ground', 2);
-  fillTerrainRect(terrain, 50, 336, 25, 50, 'unwalkable');
-  fillTerrainRect(terrain, 50, 366, 55, 20, 'unwalkable');
-  fillTerrainRect(terrain, 95, 346, 20, 40, 'unwalkable');
-  fillTerrainRect(terrain, 50, 325, 30, 15, 'unwalkable');
-
-  // P7 (left-bottom)
-  fillTerrainCircle(terrain, 45, 270, 30, 'ground', 2);
-  fillTerrainRect(terrain, 14, 255, 30, 25, 'unwalkable');
-  fillTerrainRect(terrain, 14, 255, 20, 55, 'unwalkable');
-  fillTerrainRect(terrain, 14, 235, 30, 20, 'unwalkable');
-  fillTerrainRect(terrain, 55, 270, 15, 30, 'unwalkable');
-
-  // P8 (left-top)
-  fillTerrainCircle(terrain, 45, 130, 30, 'ground', 2);
-  fillTerrainRect(terrain, 14, 100, 30, 25, 'unwalkable');
-  fillTerrainRect(terrain, 14, 100, 20, 55, 'unwalkable');
-  fillTerrainRect(terrain, 14, 145, 30, 20, 'unwalkable');
-  fillTerrainRect(terrain, 55, 100, 15, 30, 'unwalkable');
+  const ramps = [
+    // Main ramps (8 total)
+    { x: 95, y: 55, width: 10, height: 10, direction: 'south' as const, fromElevation: 2 as const, toElevation: 1 as const },
+    { x: 295, y: 55, width: 10, height: 10, direction: 'south' as const, fromElevation: 2 as const, toElevation: 1 as const },
+    { x: 340, y: 140, width: 10, height: 10, direction: 'west' as const, fromElevation: 2 as const, toElevation: 1 as const },
+    { x: 340, y: 260, width: 10, height: 10, direction: 'west' as const, fromElevation: 2 as const, toElevation: 1 as const },
+    { x: 295, y: 335, width: 10, height: 10, direction: 'north' as const, fromElevation: 2 as const, toElevation: 1 as const },
+    { x: 95, y: 335, width: 10, height: 10, direction: 'north' as const, fromElevation: 2 as const, toElevation: 1 as const },
+    { x: 50, y: 260, width: 10, height: 10, direction: 'east' as const, fromElevation: 2 as const, toElevation: 1 as const },
+    { x: 50, y: 140, width: 10, height: 10, direction: 'east' as const, fromElevation: 2 as const, toElevation: 1 as const },
+    // Natural to low ground ramps
+    { x: 110, y: 90, width: 8, height: 8, direction: 'south' as const, fromElevation: 1 as const, toElevation: 0 as const },
+    { x: 290, y: 90, width: 8, height: 8, direction: 'south' as const, fromElevation: 1 as const, toElevation: 0 as const },
+    { x: 308, y: 160, width: 8, height: 8, direction: 'west' as const, fromElevation: 1 as const, toElevation: 0 as const },
+    { x: 308, y: 240, width: 8, height: 8, direction: 'west' as const, fromElevation: 1 as const, toElevation: 0 as const },
+    { x: 290, y: 302, width: 8, height: 8, direction: 'north' as const, fromElevation: 1 as const, toElevation: 0 as const },
+    { x: 110, y: 302, width: 8, height: 8, direction: 'north' as const, fromElevation: 1 as const, toElevation: 0 as const },
+    { x: 84, y: 240, width: 8, height: 8, direction: 'east' as const, fromElevation: 1 as const, toElevation: 0 as const },
+    { x: 84, y: 160, width: 8, height: 8, direction: 'east' as const, fromElevation: 1 as const, toElevation: 0 as const },
+  ];
+  ramps.forEach(ramp => createRampInTerrain(terrain, ramp));
 
   // ========================================
-  // NATURAL EXPANSIONS - Elevation 1
+  // MAIN BASES - Raised platforms with cliff edges (Elevation 2)
   // ========================================
 
-  fillTerrainCircle(terrain, 110, 75, 18, 'ground', 1);
-  fillTerrainCircle(terrain, 290, 75, 18, 'ground', 1);
-  fillTerrainCircle(terrain, 325, 160, 18, 'ground', 1);
-  fillTerrainCircle(terrain, 325, 240, 18, 'ground', 1);
-  fillTerrainCircle(terrain, 290, 325, 18, 'ground', 1);
-  fillTerrainCircle(terrain, 110, 325, 18, 'ground', 1);
-  fillTerrainCircle(terrain, 75, 240, 18, 'ground', 1);
-  fillTerrainCircle(terrain, 75, 160, 18, 'ground', 1);
+  createRaisedPlatform(terrain, 80, 45, 25, 2, 4);   // P1 (top-left)
+  createRaisedPlatform(terrain, 320, 45, 25, 2, 4); // P2 (top-right)
+  createRaisedPlatform(terrain, 355, 130, 25, 2, 4); // P3 (right-top)
+  createRaisedPlatform(terrain, 355, 270, 25, 2, 4); // P4 (right-bottom)
+  createRaisedPlatform(terrain, 320, 355, 25, 2, 4); // P5 (bottom-right)
+  createRaisedPlatform(terrain, 80, 355, 25, 2, 4);  // P6 (bottom-left)
+  createRaisedPlatform(terrain, 45, 270, 25, 2, 4);  // P7 (left-bottom)
+  createRaisedPlatform(terrain, 45, 130, 25, 2, 4);  // P8 (left-top)
 
-  // Natural protection
-  fillTerrainRect(terrain, 95, 88, 10, 12, 'unwalkable');
-  fillTerrainRect(terrain, 120, 88, 10, 12, 'unwalkable');
-  fillTerrainRect(terrain, 275, 88, 10, 12, 'unwalkable');
-  fillTerrainRect(terrain, 300, 88, 10, 12, 'unwalkable');
+  // ========================================
+  // NATURAL EXPANSIONS - Raised platforms (Elevation 1)
+  // ========================================
 
-  fillTerrainRect(terrain, 310, 148, 12, 10, 'unwalkable');
-  fillTerrainRect(terrain, 310, 168, 12, 10, 'unwalkable');
-  fillTerrainRect(terrain, 310, 228, 12, 10, 'unwalkable');
-  fillTerrainRect(terrain, 310, 248, 12, 10, 'unwalkable');
-
-  fillTerrainRect(terrain, 95, 300, 10, 12, 'unwalkable');
-  fillTerrainRect(terrain, 120, 300, 10, 12, 'unwalkable');
-  fillTerrainRect(terrain, 275, 300, 10, 12, 'unwalkable');
-  fillTerrainRect(terrain, 300, 300, 10, 12, 'unwalkable');
-
-  fillTerrainRect(terrain, 78, 148, 12, 10, 'unwalkable');
-  fillTerrainRect(terrain, 78, 168, 12, 10, 'unwalkable');
-  fillTerrainRect(terrain, 78, 228, 12, 10, 'unwalkable');
-  fillTerrainRect(terrain, 78, 248, 12, 10, 'unwalkable');
+  createRaisedPlatform(terrain, 110, 75, 16, 1, 3);
+  createRaisedPlatform(terrain, 290, 75, 16, 1, 3);
+  createRaisedPlatform(terrain, 325, 160, 16, 1, 3);
+  createRaisedPlatform(terrain, 325, 240, 16, 1, 3);
+  createRaisedPlatform(terrain, 290, 325, 16, 1, 3);
+  createRaisedPlatform(terrain, 110, 325, 16, 1, 3);
+  createRaisedPlatform(terrain, 75, 240, 16, 1, 3);
+  createRaisedPlatform(terrain, 75, 160, 16, 1, 3);
 
   // ========================================
   // THIRD/GOLD EXPANSIONS - Elevation 0
@@ -438,32 +396,6 @@ function generateTitansColosseum(): MapData {
   fillFeatureCircle(terrain, 100, 250, 8, 'forest_light');
   fillFeatureCircle(terrain, 300, 150, 8, 'forest_light');
   fillFeatureCircle(terrain, 300, 250, 8, 'forest_light');
-
-  // ========================================
-  // RAMPS
-  // ========================================
-  const ramps = [
-    // Main ramps (8 total)
-    { x: 95, y: 55, width: 10, height: 10, direction: 'south' as const, fromElevation: 2 as const, toElevation: 1 as const },
-    { x: 295, y: 55, width: 10, height: 10, direction: 'south' as const, fromElevation: 2 as const, toElevation: 1 as const },
-    { x: 340, y: 140, width: 10, height: 10, direction: 'west' as const, fromElevation: 2 as const, toElevation: 1 as const },
-    { x: 340, y: 260, width: 10, height: 10, direction: 'west' as const, fromElevation: 2 as const, toElevation: 1 as const },
-    { x: 295, y: 335, width: 10, height: 10, direction: 'north' as const, fromElevation: 2 as const, toElevation: 1 as const },
-    { x: 95, y: 335, width: 10, height: 10, direction: 'north' as const, fromElevation: 2 as const, toElevation: 1 as const },
-    { x: 50, y: 260, width: 10, height: 10, direction: 'east' as const, fromElevation: 2 as const, toElevation: 1 as const },
-    { x: 50, y: 140, width: 10, height: 10, direction: 'east' as const, fromElevation: 2 as const, toElevation: 1 as const },
-    // Natural to low ground ramps
-    { x: 110, y: 90, width: 8, height: 8, direction: 'south' as const, fromElevation: 1 as const, toElevation: 0 as const },
-    { x: 290, y: 90, width: 8, height: 8, direction: 'south' as const, fromElevation: 1 as const, toElevation: 0 as const },
-    { x: 308, y: 160, width: 8, height: 8, direction: 'west' as const, fromElevation: 1 as const, toElevation: 0 as const },
-    { x: 308, y: 240, width: 8, height: 8, direction: 'west' as const, fromElevation: 1 as const, toElevation: 0 as const },
-    { x: 290, y: 302, width: 8, height: 8, direction: 'north' as const, fromElevation: 1 as const, toElevation: 0 as const },
-    { x: 110, y: 302, width: 8, height: 8, direction: 'north' as const, fromElevation: 1 as const, toElevation: 0 as const },
-    { x: 84, y: 240, width: 8, height: 8, direction: 'east' as const, fromElevation: 1 as const, toElevation: 0 as const },
-    { x: 84, y: 160, width: 8, height: 8, direction: 'east' as const, fromElevation: 1 as const, toElevation: 0 as const },
-  ];
-
-  ramps.forEach(ramp => createRampInTerrain(terrain, ramp));
 
   // ========================================
   // EXPANSIONS WITH RESOURCES
