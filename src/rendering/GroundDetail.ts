@@ -557,9 +557,9 @@ export class MapBorderFog {
     const mapHeight = mapData.height;
 
     // Border extends this far beyond the map
-    const borderSize = 60;
+    const borderSize = 80;
     // How far the fog encroaches INWARD onto the map (hides hard edges)
-    const inwardEncroachment = 12;
+    const inwardEncroachment = 25;
     // Total fade distance from inner edge to outer edge
     const fadeDistance = borderSize + inwardEncroachment;
 
@@ -649,32 +649,35 @@ export class MapBorderFog {
         void main() {
           // Multi-octave noise for smoky, organic movement
           // Slow animation speeds for atmospheric effect
-          vec2 noiseCoord = vWorldPosition.xz * 0.025;
-          float n1 = snoise(noiseCoord + time * 0.006);
-          float n2 = snoise(noiseCoord * 2.0 - time * 0.004) * 0.5;
-          float n3 = snoise(noiseCoord * 4.0 + time * 0.008) * 0.25;
-          float n4 = snoise(noiseCoord * 8.0 - time * 0.003) * 0.125;
+          vec2 noiseCoord = vWorldPosition.xz * 0.02;
+          float n1 = snoise(noiseCoord + time * 0.005);
+          float n2 = snoise(noiseCoord * 2.0 - time * 0.003) * 0.5;
+          float n3 = snoise(noiseCoord * 4.0 + time * 0.006) * 0.25;
 
-          float noise = (n1 + n2 + n3 + n4) * 0.5 + 0.5;
+          float noise = (n1 + n2 + n3) * 0.5 + 0.5;
 
           // Wispy smoke tendrils effect
-          float wisps = smoothstep(0.3, 0.7, noise);
+          float wisps = smoothstep(0.35, 0.65, noise);
 
           // Base fade from vertex attribute (0 at inner edge, 1 at outer edge)
+          // The map boundary is at ~0.24 fade (25 units into 105 total)
           float baseFade = vFade;
 
           // Apply noise variation to the fade edge for organic boundary
-          float noisyFade = baseFade + (noise - 0.5) * 0.2;
+          float noisyFade = baseFade + (noise - 0.5) * 0.12;
           noisyFade = clamp(noisyFade, 0.0, 1.0);
 
-          // Smooth transition - starts transparent, becomes opaque
-          // Use pow for more gradual fade-in near map edge
-          float alpha = smoothstep(0.0, 0.5, noisyFade);
-          alpha = pow(alpha, 0.8) * (0.9 + wisps * 0.1);
+          // Steep fade curve - fog becomes opaque quickly
+          // At fade=0.24 (map edge): reaches ~70% opacity
+          // At fade=0.4: reaches ~95% opacity
+          float alpha = smoothstep(0.0, 0.3, noisyFade);
+          alpha = alpha * alpha; // Quadratic for steeper rise
+          alpha = min(alpha * 1.3, 1.0); // Boost and clamp
+          alpha *= (0.92 + wisps * 0.08);
 
-          // Add subtle color variation for depth
+          // Subtle color variation for depth
           vec3 color = fogColor;
-          color += vec3(0.015, 0.01, 0.02) * noise; // Very subtle tint in lighter areas
+          color += vec3(0.01, 0.008, 0.015) * noise;
 
           gl_FragColor = vec4(color, alpha);
         }
