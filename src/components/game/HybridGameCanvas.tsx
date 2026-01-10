@@ -18,6 +18,7 @@ import { BuildingPlacementPreview } from '@/rendering/BuildingPlacementPreview';
 import { VoidstrikeSelectionSystem } from '@/rendering/VoidstrikeSelectionSystem';
 import { VoidstrikeParticleSystem } from '@/rendering/VoidstrikeParticleSystem';
 import { VoidstrikePostProcessing } from '@/rendering/VoidstrikePostProcessing';
+import { GameOverlayManager } from '@/rendering/GameOverlayManager';
 import { useGameStore } from '@/store/gameStore';
 import { useGameSetupStore, getLocalPlayerId, isSpectatorMode } from '@/store/gameSetupStore';
 import { SelectionBox } from './SelectionBox';
@@ -81,6 +82,7 @@ export function HybridGameCanvas() {
   const selectionSystemRef = useRef<VoidstrikeSelectionSystem | null>(null);
   const particleSystemRef = useRef<VoidstrikeParticleSystem | null>(null);
   const postProcessingRef = useRef<VoidstrikePostProcessing | null>(null);
+  const overlayManagerRef = useRef<GameOverlayManager | null>(null);
 
   // Phaser refs
   const phaserContainerRef = useRef<HTMLDivElement>(null);
@@ -379,6 +381,14 @@ export function HybridGameCanvas() {
       // Disable this on very low-end devices if performance is an issue
       postProcessingRef.current = new VoidstrikePostProcessing(renderer, scene, camera.camera);
 
+      // Initialize game overlays (terrain, elevation, threat)
+      overlayManagerRef.current = new GameOverlayManager(
+        scene,
+        CURRENT_MAP,
+        (x, y) => terrain.getHeightAt(x, y)
+      );
+      overlayManagerRef.current.setWorld(game.world);
+
       // Apply initial graphics settings
       const initialSettings = useUIStore.getState().graphicsSettings;
       if (postProcessingRef.current) {
@@ -482,6 +492,7 @@ export function HybridGameCanvas() {
         // Update visual systems
         selectionSystemRef.current?.update(deltaTime);
         particleSystemRef.current?.update(deltaTime);
+        overlayManagerRef.current?.update(deltaTime);
 
         // Update SC2 selection rings for selected units
         const selectedUnits = useGameStore.getState().selectedUnits;
@@ -626,6 +637,7 @@ export function HybridGameCanvas() {
       selectionSystemRef.current?.dispose();
       particleSystemRef.current?.dispose();
       postProcessingRef.current?.dispose();
+      overlayManagerRef.current?.dispose();
 
       // Cleanup Phaser
       phaserGameRef.current?.destroy(true);
@@ -1158,6 +1170,17 @@ export function HybridGameCanvas() {
             store.setShowKeyboardShortcuts(!store.showKeyboardShortcuts);
           }
           break;
+        case 'o':
+          {
+            // Cycle through overlays: none -> terrain -> elevation -> threat -> none
+            const uiStore = useUIStore.getState();
+            const currentOverlay = uiStore.overlaySettings.activeOverlay;
+            const overlayOrder: Array<'none' | 'terrain' | 'elevation' | 'threat'> = ['none', 'terrain', 'elevation', 'threat'];
+            const currentIndex = overlayOrder.indexOf(currentOverlay);
+            const nextIndex = (currentIndex + 1) % overlayOrder.length;
+            uiStore.setActiveOverlay(overlayOrder[nextIndex]);
+          }
+          break;
       }
     };
 
@@ -1193,6 +1216,30 @@ export function HybridGameCanvas() {
         const particles = environmentRef.current.getParticles();
         if (particles) {
           particles.points.visible = settings.particlesEnabled;
+        }
+      }
+    });
+
+    return () => unsubscribe();
+  }, []);
+
+  // Subscribe to overlay settings changes
+  useEffect(() => {
+    const unsubscribe = useUIStore.subscribe((state, prevState) => {
+      const overlaySettings = state.overlaySettings;
+      const prevOverlaySettings = prevState.overlaySettings;
+
+      // Only update if overlay settings changed
+      if (overlaySettings === prevOverlaySettings) return;
+
+      // Update overlay manager
+      if (overlayManagerRef.current) {
+        overlayManagerRef.current.setActiveOverlay(overlaySettings.activeOverlay);
+
+        // Update opacity based on active overlay
+        const opacityKey = `${overlaySettings.activeOverlay}OverlayOpacity` as keyof typeof overlaySettings;
+        if (opacityKey in overlaySettings && typeof overlaySettings[opacityKey] === 'number') {
+          overlayManagerRef.current.setOpacity(overlaySettings[opacityKey] as number);
         }
       }
     });

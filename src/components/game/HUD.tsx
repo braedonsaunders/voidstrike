@@ -2,7 +2,7 @@
 
 import { useState, useCallback, useEffect } from 'react';
 import { useGameStore } from '@/store/gameStore';
-import { useUIStore } from '@/store/uiStore';
+import { useUIStore, GameOverlayType } from '@/store/uiStore';
 import { isMultiplayerMode } from '@/store/gameSetupStore';
 import { setEdgeScrollEnabled } from '@/store/cameraStore';
 import { Minimap } from './Minimap';
@@ -17,9 +17,10 @@ import { SoundOptionsPanel } from './SoundOptionsPanel';
 
 export function HUD() {
   const { isPaused, togglePause, setShowTechTree, setShowKeyboardShortcuts } = useGameStore();
-  const { toggleFPS, showFPS, toggleGraphicsOptions, showGraphicsOptions, toggleSoundOptions, showSoundOptions, toggleDebugMenu, showDebugMenu, isFullscreen, toggleFullscreen, setFullscreen } = useUIStore();
+  const { toggleFPS, showFPS, toggleGraphicsOptions, showGraphicsOptions, toggleSoundOptions, showSoundOptions, toggleDebugMenu, showDebugMenu, isFullscreen, toggleFullscreen, setFullscreen, overlaySettings, toggleOverlay } = useUIStore();
   const [showOptionsMenu, setShowOptionsMenu] = useState(false);
   const [showPlayerStatus, setShowPlayerStatus] = useState(false);
+  const [showOverlayMenu, setShowOverlayMenu] = useState(false);
 
   // Disable edge scrolling when mouse is over UI elements
   const handleUIMouseEnter = useCallback(() => {
@@ -81,7 +82,10 @@ export function HUD() {
           </button>
           <div className="relative">
             <button
-              onClick={() => setShowOptionsMenu(!showOptionsMenu)}
+              onClick={() => {
+                setShowOptionsMenu(!showOptionsMenu);
+                setShowOverlayMenu(false);
+              }}
               className="game-button text-sm"
             >
               Options
@@ -116,6 +120,62 @@ export function HUD() {
                 >
                   Tech Tree
                 </button>
+                {/* Overlays submenu */}
+                <div className="relative">
+                  <button
+                    onClick={() => setShowOverlayMenu(!showOverlayMenu)}
+                    className="w-full px-4 py-2 text-left text-sm text-void-200 hover:bg-void-800 transition-colors flex justify-between items-center"
+                  >
+                    <span>Overlays</span>
+                    <span className={overlaySettings.activeOverlay !== 'none' ? 'text-green-400' : 'text-void-500'}>
+                      {overlaySettings.activeOverlay !== 'none' ? overlaySettings.activeOverlay.toUpperCase() : ''}
+                    </span>
+                  </button>
+                  {showOverlayMenu && (
+                    <div className="absolute left-full top-0 ml-1 bg-void-900 border border-void-700 rounded shadow-lg z-50 min-w-[180px]">
+                      <button
+                        onClick={() => {
+                          toggleOverlay('terrain');
+                          setShowOverlayMenu(false);
+                        }}
+                        className={`w-full px-4 py-2 text-left text-sm hover:bg-void-800 transition-colors flex justify-between items-center ${
+                          overlaySettings.activeOverlay === 'terrain' ? 'text-green-400' : 'text-void-200'
+                        }`}
+                      >
+                        <span>Terrain (Walkability)</span>
+                        {overlaySettings.activeOverlay === 'terrain' && <span>ON</span>}
+                      </button>
+                      <button
+                        onClick={() => {
+                          toggleOverlay('elevation');
+                          setShowOverlayMenu(false);
+                        }}
+                        className={`w-full px-4 py-2 text-left text-sm hover:bg-void-800 transition-colors flex justify-between items-center ${
+                          overlaySettings.activeOverlay === 'elevation' ? 'text-cyan-400' : 'text-void-200'
+                        }`}
+                      >
+                        <span>Elevation (High Ground)</span>
+                        {overlaySettings.activeOverlay === 'elevation' && <span>ON</span>}
+                      </button>
+                      <button
+                        onClick={() => {
+                          toggleOverlay('threat');
+                          setShowOverlayMenu(false);
+                        }}
+                        className={`w-full px-4 py-2 text-left text-sm hover:bg-void-800 transition-colors flex justify-between items-center ${
+                          overlaySettings.activeOverlay === 'threat' ? 'text-red-400' : 'text-void-200'
+                        }`}
+                      >
+                        <span>Threat Ranges (Enemy)</span>
+                        {overlaySettings.activeOverlay === 'threat' && <span>ON</span>}
+                      </button>
+                      <div className="border-t border-void-700 my-1" />
+                      <div className="px-4 py-1 text-xs text-void-500">
+                        Press O to cycle overlays
+                      </div>
+                    </div>
+                  )}
+                </div>
                 <button
                   onClick={toggleFPS}
                   className="w-full px-4 py-2 text-left text-sm text-void-200 hover:bg-void-800 transition-colors flex justify-between items-center"

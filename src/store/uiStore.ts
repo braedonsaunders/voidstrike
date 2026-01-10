@@ -53,6 +53,17 @@ export interface GraphicsSettings {
   particleDensity: number;
 }
 
+// Game overlay types for strategic information display
+export type GameOverlayType = 'none' | 'terrain' | 'elevation' | 'threat';
+
+// Overlay settings
+export interface OverlaySettings {
+  activeOverlay: GameOverlayType;
+  terrainOverlayOpacity: number;
+  elevationOverlayOpacity: number;
+  threatOverlayOpacity: number;
+}
+
 export interface UIState {
   // Screen management
   currentScreen: ScreenType;
@@ -96,6 +107,9 @@ export interface UIState {
   debugSettings: DebugSettings;
   showDebugMenu: boolean;
 
+  // Overlay settings for strategic view
+  overlaySettings: OverlaySettings;
+
   // Actions
   setScreen: (screen: ScreenType) => void;
   goBack: () => void;
@@ -130,6 +144,10 @@ export interface UIState {
   toggleDebugMenu: () => void;
   toggleDebugSetting: (key: keyof DebugSettings) => void;
   setAllDebugSettings: (enabled: boolean) => void;
+  // Overlay settings actions
+  setActiveOverlay: (overlay: GameOverlayType) => void;
+  toggleOverlay: (overlay: GameOverlayType) => void;
+  setOverlayOpacity: (overlay: GameOverlayType, opacity: number) => void;
 }
 
 export const useUIStore = create<UIState>((set, get) => ({
@@ -168,6 +186,12 @@ export const useUIStore = create<UIState>((set, get) => ({
     particleDensity: 1.0,
   },
   showDebugMenu: false,
+  overlaySettings: {
+    activeOverlay: 'none',
+    terrainOverlayOpacity: 0.7,
+    elevationOverlayOpacity: 0.7,
+    threatOverlayOpacity: 0.5,
+  },
   debugSettings: {
     debugEnabled: false,
     // Rendering
@@ -331,4 +355,32 @@ export const useUIStore = create<UIState>((set, get) => ({
         debugAudio: enabled,
       },
     })),
+
+  // Overlay settings actions
+  setActiveOverlay: (overlay) =>
+    set((state) => ({
+      overlaySettings: { ...state.overlaySettings, activeOverlay: overlay },
+    })),
+
+  toggleOverlay: (overlay) =>
+    set((state) => ({
+      overlaySettings: {
+        ...state.overlaySettings,
+        activeOverlay: state.overlaySettings.activeOverlay === overlay ? 'none' : overlay,
+      },
+    })),
+
+  setOverlayOpacity: (overlay, opacity) =>
+    set((state) => {
+      const key = `${overlay}OverlayOpacity` as keyof OverlaySettings;
+      if (key in state.overlaySettings && key !== 'activeOverlay') {
+        return {
+          overlaySettings: {
+            ...state.overlaySettings,
+            [key]: Math.max(0, Math.min(1, opacity)),
+          },
+        };
+      }
+      return state;
+    }),
 }));

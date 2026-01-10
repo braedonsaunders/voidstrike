@@ -471,6 +471,7 @@
 - [ ] Custom hotkeys
 - [ ] Graphics settings (quality presets)
 - [x] Audio settings (volume sliders, music player, SFX controls)
+- [x] Strategic overlays (terrain, elevation, threat range) with options menu UI
 - [ ] Gameplay settings
 
 ### Skirmish Options
