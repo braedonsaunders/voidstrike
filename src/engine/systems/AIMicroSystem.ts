@@ -174,10 +174,14 @@ export class AIMicroSystem extends System {
     targetX = Math.max(2, Math.min(this.game.config.mapWidth - 2, targetX));
     targetY = Math.max(2, Math.min(this.game.config.mapHeight - 2, targetY));
 
-    // Issue move command
+    // Save target BEFORE move command clears it
+    const savedTargetId = unit.targetEntityId;
+    const playerId = entity.get<Selectable>('Selectable')!.playerId;
+
+    // Issue move command (this clears targetEntityId)
     const command: GameCommand = {
       tick: currentTick,
-      playerId: entity.get<Selectable>('Selectable')!.playerId,
+      playerId,
       type: 'MOVE',
       entityIds: [entityId],
       targetPosition: { x: targetX, y: targetY },
@@ -186,14 +190,14 @@ export class AIMicroSystem extends System {
     this.game.processCommand(command);
     state.lastKiteTick = currentTick;
 
-    // Re-target after kiting
-    if (unit.targetEntityId !== null) {
+    // Re-target after kiting using the saved target ID
+    if (savedTargetId !== null) {
       const retargetCommand: GameCommand = {
         tick: currentTick + 5, // Slight delay
-        playerId: entity.get<Selectable>('Selectable')!.playerId,
+        playerId,
         type: 'ATTACK',
         entityIds: [entityId],
-        targetEntityId: unit.targetEntityId,
+        targetEntityId: savedTargetId,
       };
       // Queue this for later
       setTimeout(() => {

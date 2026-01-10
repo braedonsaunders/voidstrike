@@ -1011,7 +1011,7 @@ export class EnhancedAISystem extends System {
     ai.lastAttackTick = currentTick;
 
     // FIX: Only send attack commands to units that are idle or need new orders
-    // Units that are already attacking or moving to attack should NOT be interrupted
+    // Units that are already attacking should NOT be interrupted
     // Sending attack commands every tick was resetting targetEntityId and preventing attacks
     const idleOrNeedingOrders: number[] = [];
     for (const unitId of armyUnits) {
@@ -1020,30 +1020,39 @@ export class EnhancedAISystem extends System {
       const unit = entity.get<Unit>('Unit');
       if (!unit) continue;
 
-      // Only give new orders to units that are:
-      // - idle (not doing anything)
-      // - or attackmoving but have no target and have arrived at destination
-      const isIdle = unit.state === 'idle';
-      const needsNewTarget = unit.state === 'attackmoving' &&
-                             unit.targetEntityId === null &&
-                             unit.targetX !== null && unit.targetY !== null;
+      // Skip units that are actively attacking with a target - don't interrupt them
+      if (unit.state === 'attacking' && unit.targetEntityId !== null) {
+        continue;
+      }
 
-      // Check if unit has arrived at its attack-move destination
-      if (needsNewTarget) {
+      // Give new orders to units that are:
+      // - idle (not doing anything)
+      // - 'moving' with no target (finished kiting/repositioning)
+      // - 'attackmoving' with no target and at/near their destination
+      const isIdle = unit.state === 'idle';
+      const isMovingNoTarget = unit.state === 'moving' && unit.targetEntityId === null;
+      const isAttackMovingNoTarget = unit.state === 'attackmoving' &&
+                                     unit.targetEntityId === null &&
+                                     unit.targetX !== null && unit.targetY !== null;
+
+      // For moving/attackmoving units, check if they've arrived at destination
+      if (isAttackMovingNoTarget || isMovingNoTarget) {
         const transform = entity.get<Transform>('Transform');
-        if (transform) {
-          const dx = unit.targetX! - transform.x;
-          const dy = unit.targetY! - transform.y;
+        if (transform && unit.targetX !== null && unit.targetY !== null) {
+          const dx = unit.targetX - transform.x;
+          const dy = unit.targetY - transform.y;
           const distToTarget = Math.sqrt(dx * dx + dy * dy);
-          // If close to destination and no target, give new orders
+          // If close to destination (or no destination for moving), give new orders
           if (distToTarget < 3) {
             idleOrNeedingOrders.push(unitId);
           }
+        } else if (isMovingNoTarget && (!unit.targetX || !unit.targetY)) {
+          // Moving unit with no destination - give orders immediately
+          idleOrNeedingOrders.push(unitId);
         }
       } else if (isIdle) {
         idleOrNeedingOrders.push(unitId);
       }
-      // Units that are 'attacking' or actively 'attackmoving' toward enemies are left alone
     }
 
     // Only issue commands if there are units that need them
