@@ -198,6 +198,11 @@ export class SC2PostProcessing {
     this.fxaaPass.enabled = enabled;
   }
 
+  // === Tone Mapping Controls ===
+  setToneMappingExposure(exposure: number): void {
+    this.renderer.toneMappingExposure = exposure;
+  }
+
   // === Utility ===
   getOutlinePass(): OutlinePass {
     return this.outlinePass;

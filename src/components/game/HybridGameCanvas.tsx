@@ -160,9 +160,9 @@ export function HybridGameCanvas() {
       renderer.setSize(window.innerWidth, window.innerHeight);
       renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
       renderer.outputColorSpace = THREE.SRGBColorSpace;
-      // Note: Don't set toneMapping here - OutputPass handles it when post-processing is enabled
-      // This avoids double tone mapping (once by renderer, once by OutputPass)
-      renderer.toneMapping = THREE.NoToneMapping;
+      // Use ACES tone mapping with controllable exposure via graphics settings
+      renderer.toneMapping = THREE.ACESFilmicToneMapping;
+      renderer.toneMappingExposure = useUIStore.getState().graphicsSettings.toneMappingExposure;
       // Enable local clipping for construction animations
       renderer.localClippingEnabled = true;
       renderer.shadowMap.enabled = true;
@@ -292,20 +292,19 @@ export function HybridGameCanvas() {
       // Apply initial graphics settings
       const initialSettings = useUIStore.getState().graphicsSettings;
       if (postProcessingRef.current) {
+        postProcessingRef.current.setToneMappingExposure(initialSettings.toneMappingExposure);
         postProcessingRef.current.setSSAOEnabled(initialSettings.postProcessingEnabled && initialSettings.ssaoEnabled);
         postProcessingRef.current.setSSAOKernelRadius(initialSettings.ssaoRadius);
         postProcessingRef.current.setBloomEnabled(initialSettings.postProcessingEnabled && initialSettings.bloomEnabled);
         postProcessingRef.current.setBloomStrength(initialSettings.bloomStrength);
         postProcessingRef.current.setBloomThreshold(initialSettings.bloomThreshold);
+        postProcessingRef.current.setBloomRadius(initialSettings.bloomRadius);
         postProcessingRef.current.setOutlineEnabled(initialSettings.postProcessingEnabled && initialSettings.outlineEnabled);
         postProcessingRef.current.setOutlineStrength(initialSettings.outlineStrength);
         postProcessingRef.current.setFXAAEnabled(initialSettings.postProcessingEnabled && initialSettings.fxaaEnabled);
       }
+      // Apply particle settings
       if (environmentRef.current) {
-        const groundFog = environmentRef.current.getGroundFog();
-        if (groundFog) {
-          groundFog.mesh.visible = initialSettings.groundFogEnabled;
-        }
         const particles = environmentRef.current.getParticles();
         if (particles) {
           particles.points.visible = initialSettings.particlesEnabled;
@@ -1058,22 +1057,20 @@ export function HybridGameCanvas() {
 
       // Update post-processing
       if (postProcessingRef.current) {
+        postProcessingRef.current.setToneMappingExposure(settings.toneMappingExposure);
         postProcessingRef.current.setSSAOEnabled(settings.postProcessingEnabled && settings.ssaoEnabled);
         postProcessingRef.current.setSSAOKernelRadius(settings.ssaoRadius);
         postProcessingRef.current.setBloomEnabled(settings.postProcessingEnabled && settings.bloomEnabled);
         postProcessingRef.current.setBloomStrength(settings.bloomStrength);
         postProcessingRef.current.setBloomThreshold(settings.bloomThreshold);
+        postProcessingRef.current.setBloomRadius(settings.bloomRadius);
         postProcessingRef.current.setOutlineEnabled(settings.postProcessingEnabled && settings.outlineEnabled);
         postProcessingRef.current.setOutlineStrength(settings.outlineStrength);
         postProcessingRef.current.setFXAAEnabled(settings.postProcessingEnabled && settings.fxaaEnabled);
       }
 
-      // Update ground fog visibility
+      // Update particle visibility
       if (environmentRef.current) {
-        const groundFog = environmentRef.current.getGroundFog();
-        if (groundFog) {
-          groundFog.mesh.visible = settings.groundFogEnabled;
-        }
         const particles = environmentRef.current.getParticles();
         if (particles) {
           particles.points.visible = settings.particlesEnabled;

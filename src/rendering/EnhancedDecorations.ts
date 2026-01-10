@@ -425,7 +425,7 @@ export class EnvironmentParticles {
       return;
     }
 
-    this.particleCount = 500;
+    this.particleCount = 1500; // 3x more particles for better atmosphere
     const positions = new Float32Array(this.particleCount * 3);
     this.velocities = new Float32Array(this.particleCount * 3);
 
