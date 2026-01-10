@@ -77,200 +77,249 @@ export function GameCanvas() {
       CURRENT_MAP = getMapById(selectedMapId) || DEFAULT_MAP;
       console.log(`[GameCanvas] Loading map: ${CURRENT_MAP.name} (${CURRENT_MAP.id})`);
 
+      // Stage 1: Loading 3D models (0-45%)
       setLoadingStatus('Loading 3D models');
-      setLoadingProgress(10);
+      setLoadingProgress(2);
 
-      // Load all custom models first
-      await AssetManager.loadCustomModels();
-      setLoadingProgress(60);
+      await AssetManager.loadCustomModels((loaded, total, assetId) => {
+        const modelProgress = Math.floor((loaded / total) * 43);
+        setLoadingProgress(2 + modelProgress);
+        // Show current asset being loaded
+        const displayName = assetId.replace(/_/g, ' ');
+        setLoadingStatus(`Loading: ${displayName}`);
+      });
 
-      setLoadingStatus('Preparing game world');
-      setLoadingProgress(70);
-
-      // Small delay to ensure render
-      await new Promise(resolve => setTimeout(resolve, 100));
-
-      // Now initialize the game
-      initializeGameWorld();
+      // Stage 2: Initialize game world with progress tracking
+      await initializeGameWorldWithProgress();
 
       setLoadingProgress(100);
       setLoadingStatus('Ready');
 
       // Fade out loading screen
-      await new Promise(resolve => setTimeout(resolve, 300));
+      await new Promise(resolve => setTimeout(resolve, 500));
       setIsLoading(false);
     };
 
-    const initializeGameWorld = () => {
+    // Initialize game world with granular progress reporting
+    const initializeGameWorldWithProgress = async () => {
       if (!canvasRef.current) return;
+
+      // Stage 2: Creating WebGL renderer (45-50%)
+      setLoadingStatus('Creating WebGL renderer');
+      setLoadingProgress(47);
+      await new Promise(resolve => setTimeout(resolve, 16)); // Allow UI update
 
       // Create renderer with performance optimizations
       const renderer = new THREE.WebGLRenderer({
         canvas: canvasRef.current,
-      antialias: false, // PERFORMANCE: Disable antialiasing - major GPU cost
-      powerPreference: 'high-performance',
-    });
-    renderer.setSize(window.innerWidth, window.innerHeight);
-    // PERFORMANCE: Limit pixel ratio to 1.5 max on high-DPI displays (M1 Macs have 2x)
-    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.5));
-    renderer.outputColorSpace = THREE.SRGBColorSpace;
-    // Enable local clipping for construction animations
-    renderer.localClippingEnabled = true;
-    // PERFORMANCE: Disable shadows - they're extremely expensive on M1/integrated GPUs
-    // PCFSoftShadowMap with 2048x2048 resolution was causing <1 FPS
-    renderer.shadowMap.enabled = false;
-    rendererRef.current = renderer;
+        antialias: false, // PERFORMANCE: Disable antialiasing - major GPU cost
+        powerPreference: 'high-performance',
+      });
+      renderer.setSize(window.innerWidth, window.innerHeight);
+      renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.5));
+      renderer.outputColorSpace = THREE.SRGBColorSpace;
+      renderer.localClippingEnabled = true;
+      renderer.shadowMap.enabled = false;
+      rendererRef.current = renderer;
 
-    // Create scene
-    const scene = new THREE.Scene();
-    sceneRef.current = scene;
+      setLoadingProgress(50);
 
-    // Create camera with map dimensions
-    const mapWidth = CURRENT_MAP.width;
-    const mapHeight = CURRENT_MAP.height;
+      // Stage 3: Creating scene and camera (50-55%)
+      setLoadingStatus('Setting up camera');
+      await new Promise(resolve => setTimeout(resolve, 16));
 
-    const camera = new RTSCamera(
-      window.innerWidth / window.innerHeight,
-      mapWidth,
-      mapHeight
-    );
-    // Start camera at player 1's spawn point
-    const playerSpawn = CURRENT_MAP.spawns.find(s => s.playerSlot === 1) || CURRENT_MAP.spawns[0];
-    camera.setPosition(playerSpawn.x, playerSpawn.y);
-    cameraRef.current = camera;
+      const scene = new THREE.Scene();
+      sceneRef.current = scene;
 
-    // Create environment manager (terrain, decorations, lighting, particles)
-    const environment = new EnvironmentManager(scene, CURRENT_MAP);
-    environmentRef.current = environment;
-    const terrain = environment.terrain;
+      const mapWidth = CURRENT_MAP.width;
+      const mapHeight = CURRENT_MAP.height;
 
-    // Set terrain height function on camera for accurate screen-to-world conversion
-    camera.setTerrainHeightFunction((x, z) => terrain.getHeightAt(x, z));
+      const camera = new RTSCamera(
+        window.innerWidth / window.innerHeight,
+        mapWidth,
+        mapHeight
+      );
+      const playerSpawn = CURRENT_MAP.spawns.find(s => s.playerSlot === 1) || CURRENT_MAP.spawns[0];
+      camera.setPosition(playerSpawn.x, playerSpawn.y);
+      cameraRef.current = camera;
 
-    // Create terrain grid (for building placement)
-    const grid = new TerrainGrid(mapWidth, mapHeight, 1);
-    scene.add(grid.mesh);
+      setLoadingProgress(55);
 
-    // Initialize game engine
-    const game = Game.getInstance({
-      mapWidth,
-      mapHeight,
-      tickRate: 20,
-      isMultiplayer: false,
-      playerId: 'player1',
-      aiEnabled: true,
-    });
-    gameRef.current = game;
+      // Stage 4: Building terrain and environment (55-65%)
+      setLoadingStatus('Generating terrain');
+      await new Promise(resolve => setTimeout(resolve, 16));
 
-    // Pass decoration collision data to game for building placement validation
-    game.setDecorationCollisions(environment.getRockCollisions());
+      const environment = new EnvironmentManager(scene, CURRENT_MAP);
+      environmentRef.current = environment;
+      const terrain = environment.terrain;
 
-    // Check if fog of war is enabled from game setup
-    const fogOfWarEnabled = useGameSetupStore.getState().fogOfWar;
+      camera.setTerrainHeightFunction((x, z) => terrain.getHeightAt(x, z));
 
-    // Create renderers - pass terrain for correct Y positioning
-    // If fog of war is disabled, don't pass visionSystem so enemies are always visible
-    unitRendererRef.current = new UnitRenderer(
-      scene,
-      game.world,
-      fogOfWarEnabled ? game.visionSystem : undefined,
-      terrain
-    );
-    buildingRendererRef.current = new BuildingRenderer(
-      scene,
-      game.world,
-      fogOfWarEnabled ? game.visionSystem : undefined,
-      terrain
-    );
-    resourceRendererRef.current = new ResourceRenderer(scene, game.world, terrain);
+      setLoadingProgress(60);
+      setLoadingStatus('Placing decorations');
+      await new Promise(resolve => setTimeout(resolve, 16));
 
-    // Create fog of war overlay only if enabled
-    if (fogOfWarEnabled) {
-      const fogOfWar = new FogOfWar({ mapWidth, mapHeight });
-      fogOfWar.setVisionSystem(game.visionSystem);
-      fogOfWar.setPlayerId('player1');
-      scene.add(fogOfWar.mesh);
-      fogOfWarRef.current = fogOfWar;
-    }
+      const grid = new TerrainGrid(mapWidth, mapHeight, 1);
+      scene.add(grid.mesh);
 
-    // Create effects renderer for combat animations
-    const effectsRenderer = new EffectsRenderer(scene, game.eventBus);
-    effectsRendererRef.current = effectsRenderer;
+      setLoadingProgress(65);
 
-    // Create rally point renderer
-    const rallyPointRenderer = new RallyPointRenderer(scene, game.eventBus, game.world, 'player1');
-    rallyPointRendererRef.current = rallyPointRenderer;
+      // Stage 5: Initializing game engine (65-75%)
+      setLoadingStatus('Initializing game engine');
+      await new Promise(resolve => setTimeout(resolve, 16));
 
-    // Spawn initial entities based on map data
-    spawnInitialEntities(game, CURRENT_MAP);
+      const game = Game.getInstance({
+        mapWidth,
+        mapHeight,
+        tickRate: 20,
+        isMultiplayer: false,
+        playerId: 'player1',
+        aiEnabled: true,
+      });
+      gameRef.current = game;
 
-    // Initialize watch towers from map data
-    if (CURRENT_MAP.watchTowers && CURRENT_MAP.watchTowers.length > 0) {
-      game.visionSystem.setWatchTowers(CURRENT_MAP.watchTowers);
-      // Create watch tower renderer for visual effects
-      watchTowerRendererRef.current = new WatchTowerRenderer(scene, game.visionSystem);
-    }
+      game.setDecorationCollisions(environment.getRockCollisions());
 
-    // Initialize audio system with camera for spatial audio and biome ambient
-    game.audioSystem.initialize(camera.camera, CURRENT_MAP.biome);
+      setLoadingProgress(72);
+      setLoadingStatus('Registering game systems');
+      await new Promise(resolve => setTimeout(resolve, 16));
 
-    // Start game
-    game.start();
+      setLoadingProgress(75);
 
-    // Animation loop
-    let lastTime = performance.now();
+      // Stage 6: Creating renderers (75-85%)
+      setLoadingStatus('Creating unit renderer');
+      await new Promise(resolve => setTimeout(resolve, 16));
 
-    const animate = (currentTime: number) => {
-      const deltaTime = currentTime - lastTime;
-      lastTime = currentTime;
+      const fogOfWarEnabled = useGameSetupStore.getState().fogOfWar;
 
-      // Check for pending camera move from minimap
-      const pendingMove = useGameStore.getState().pendingCameraMove;
-      if (pendingMove) {
-        camera.setPosition(pendingMove.x, pendingMove.y);
-        useGameStore.getState().clearPendingCameraMove();
+      unitRendererRef.current = new UnitRenderer(
+        scene,
+        game.world,
+        fogOfWarEnabled ? game.visionSystem : undefined,
+        terrain
+      );
+
+      setLoadingProgress(78);
+      setLoadingStatus('Creating building renderer');
+      await new Promise(resolve => setTimeout(resolve, 16));
+
+      buildingRendererRef.current = new BuildingRenderer(
+        scene,
+        game.world,
+        fogOfWarEnabled ? game.visionSystem : undefined,
+        terrain
+      );
+
+      setLoadingProgress(80);
+      setLoadingStatus('Creating resource renderer');
+      await new Promise(resolve => setTimeout(resolve, 16));
+
+      resourceRendererRef.current = new ResourceRenderer(scene, game.world, terrain);
+
+      if (fogOfWarEnabled) {
+        setLoadingProgress(82);
+        setLoadingStatus('Setting up fog of war');
+        await new Promise(resolve => setTimeout(resolve, 16));
+
+        const fogOfWar = new FogOfWar({ mapWidth, mapHeight });
+        fogOfWar.setVisionSystem(game.visionSystem);
+        fogOfWar.setPlayerId('player1');
+        scene.add(fogOfWar.mesh);
+        fogOfWarRef.current = fogOfWar;
       }
 
-      // Update camera
-      camera.update(deltaTime);
+      setLoadingProgress(84);
+      setLoadingStatus('Creating effects renderer');
+      await new Promise(resolve => setTimeout(resolve, 16));
 
-      // Update renderers
-      unitRendererRef.current?.update(deltaTime / 1000); // Convert ms to seconds for animation mixer
-      buildingRendererRef.current?.update();
-      resourceRendererRef.current?.update();
-      fogOfWarRef.current?.update();
-      effectsRendererRef.current?.update(deltaTime);
-      rallyPointRendererRef.current?.update();
-      watchTowerRendererRef.current?.update(deltaTime);
+      const effectsRenderer = new EffectsRenderer(scene, game.eventBus);
+      effectsRendererRef.current = effectsRenderer;
 
-      // Update environment (water animation, particles)
-      const gameTime = gameRef.current?.getGameTime() ?? 0;
-      environmentRef.current?.update(deltaTime / 1000, gameTime);
+      const rallyPointRenderer = new RallyPointRenderer(scene, game.eventBus, game.world, 'player1');
+      rallyPointRendererRef.current = rallyPointRenderer;
 
-      // Update game store with current game time for UI display
-      useGameStore.getState().setGameTime(gameTime);
+      setLoadingProgress(85);
 
-      // Update game store camera position
-      const pos = camera.getPosition();
-      useGameStore.getState().setCamera(pos.x, pos.z, camera.getZoom());
+      // Stage 7: Spawning entities (85-90%)
+      setLoadingStatus('Spawning units and buildings');
+      await new Promise(resolve => setTimeout(resolve, 16));
 
-      // Render
-      renderer.render(scene, camera.camera);
+      spawnInitialEntities(game, CURRENT_MAP);
+
+      setLoadingProgress(88);
+
+      if (CURRENT_MAP.watchTowers && CURRENT_MAP.watchTowers.length > 0) {
+        setLoadingStatus('Setting up watch towers');
+        await new Promise(resolve => setTimeout(resolve, 16));
+
+        game.visionSystem.setWatchTowers(CURRENT_MAP.watchTowers);
+        watchTowerRendererRef.current = new WatchTowerRenderer(scene, game.visionSystem);
+      }
+
+      setLoadingProgress(90);
+
+      // Stage 8: Initializing audio (90-95%)
+      setLoadingStatus('Initializing audio system');
+      await new Promise(resolve => setTimeout(resolve, 16));
+
+      game.audioSystem.initialize(camera.camera, CURRENT_MAP.biome);
+
+      setLoadingProgress(95);
+
+      // Stage 9: Starting game (95-100%)
+      setLoadingStatus('Starting game engine');
+      await new Promise(resolve => setTimeout(resolve, 16));
+
+      game.start();
+
+      // Animation loop
+      let lastTime = performance.now();
+
+      const animate = (currentTime: number) => {
+        const deltaTime = currentTime - lastTime;
+        lastTime = currentTime;
+
+        const pendingMove = useGameStore.getState().pendingCameraMove;
+        if (pendingMove) {
+          camera.setPosition(pendingMove.x, pendingMove.y);
+          useGameStore.getState().clearPendingCameraMove();
+        }
+
+        camera.update(deltaTime);
+
+        unitRendererRef.current?.update(deltaTime / 1000);
+        buildingRendererRef.current?.update();
+        resourceRendererRef.current?.update();
+        fogOfWarRef.current?.update();
+        effectsRendererRef.current?.update(deltaTime);
+        rallyPointRendererRef.current?.update();
+        watchTowerRendererRef.current?.update(deltaTime);
+
+        const gameTime = gameRef.current?.getGameTime() ?? 0;
+        environmentRef.current?.update(deltaTime / 1000, gameTime);
+
+        useGameStore.getState().setGameTime(gameTime);
+
+        const pos = camera.getPosition();
+        useGameStore.getState().setCamera(pos.x, pos.z, camera.getZoom());
+
+        renderer.render(scene, camera.camera);
+
+        requestAnimationFrame(animate);
+      };
 
       requestAnimationFrame(animate);
-    };
 
-    requestAnimationFrame(animate);
-
-    // Handle resize
-    const handleResize = () => {
-      if (!renderer || !camera) return;
-      renderer.setSize(window.innerWidth, window.innerHeight);
-      camera.camera.aspect = window.innerWidth / window.innerHeight;
-      camera.camera.updateProjectionMatrix();
-    };
+      const handleResize = () => {
+        if (!renderer || !camera) return;
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        camera.camera.aspect = window.innerWidth / window.innerHeight;
+        camera.camera.updateProjectionMatrix();
+      };
 
       window.addEventListener('resize', handleResize);
+
+      setLoadingProgress(98);
     };
 
     // Store cleanup function in ref
