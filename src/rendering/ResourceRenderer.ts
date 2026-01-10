@@ -23,7 +23,10 @@ interface ResourceData {
   selectionRing: THREE.Mesh | null;
 }
 
-const MAX_RESOURCES_PER_TYPE = 50;
+// Max instances per resource type - must exceed max minerals/vespene on largest maps
+// 4-player maps: ~17 expansions × 8 minerals = 136 minerals
+// 8-player maps could have even more, so we use 200 for headroom
+const MAX_RESOURCES_PER_TYPE = 200;
 
 export class ResourceRenderer {
   private scene: THREE.Scene;
@@ -50,6 +53,7 @@ export class ResourceRenderer {
   // Debug tracking
   private _lastMineralCount: number = 0;
   private _debugLoggedThisSession: boolean = false;
+  private _warnedInstanceLimit: Set<string> = new Set();
 
   constructor(scene: THREE.Scene, world: World, terrain?: Terrain) {
     this.scene = scene;
@@ -279,6 +283,10 @@ export class ResourceRenderer {
         }
 
         group.mesh.count++;
+      } else if (!this._warnedInstanceLimit.has(resource.resourceType)) {
+        // Warn once per resource type if we hit the instance limit
+        console.warn(`[ResourceRenderer] ${resource.resourceType} instance limit (${group.maxInstances}) reached! Some resources will not render.`);
+        this._warnedInstanceLimit.add(resource.resourceType);
       }
     }
 
