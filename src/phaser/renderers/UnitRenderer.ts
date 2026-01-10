@@ -7,7 +7,7 @@ import { Selectable } from '@/engine/components/Selectable';
 import { VisionSystem } from '@/engine/systems/VisionSystem';
 import { UNIT_DEFINITIONS } from '@/data/units/dominion';
 import { CELL_SIZE, DEPTH } from '../constants';
-import { getPlayerColor } from '@/store/gameSetupStore';
+import { getPlayerColor, getLocalPlayerId, isSpectatorMode } from '@/store/gameSetupStore';
 
 // Unit sizes for rendering
 const UNIT_SIZES: Record<string, { width: number; height: number }> = {
@@ -40,7 +40,7 @@ export class UnitRenderer {
   private world: World;
   private visionSystem: VisionSystem | null;
   private fogOfWarEnabled: boolean;
-  private playerId = 'player1';
+  private playerId: string | null = null;
 
   private unitSprites: Map<number, UnitSprite> = new Map();
   private container: Phaser.GameObjects.Container;
@@ -74,12 +74,13 @@ export class UnitRenderer {
       const selectable = entity.get<Selectable>('Selectable');
 
       const ownerId = selectable?.playerId ?? 'unknown';
-      const isOwned = ownerId === this.playerId;
-      const isEnemy = selectable && ownerId !== this.playerId;
+      const isSpectating = isSpectatorMode() || !this.playerId;
+      const isOwned = !isSpectating && ownerId === this.playerId;
+      const isEnemy = !isSpectating && selectable && ownerId !== this.playerId;
 
-      // Check visibility for enemy units
+      // Check visibility for enemy units (spectators see everything)
       let shouldShow = true;
-      if (isEnemy && this.fogOfWarEnabled && this.visionSystem) {
+      if (isEnemy && this.fogOfWarEnabled && this.visionSystem && this.playerId) {
         shouldShow = this.visionSystem.isVisible(this.playerId, transform.x, transform.y);
       }
 
@@ -292,7 +293,7 @@ export class UnitRenderer {
     }
   }
 
-  setPlayerId(playerId: string): void {
+  setPlayerId(playerId: string | null): void {
     this.playerId = playerId;
   }
 

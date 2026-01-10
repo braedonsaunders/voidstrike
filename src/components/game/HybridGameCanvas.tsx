@@ -19,7 +19,7 @@ import { SC2SelectionSystem } from '@/rendering/SC2SelectionSystem';
 import { SC2ParticleSystem } from '@/rendering/SC2ParticleSystem';
 import { SC2PostProcessing } from '@/rendering/SC2PostProcessing';
 import { useGameStore } from '@/store/gameStore';
-import { useGameSetupStore } from '@/store/gameSetupStore';
+import { useGameSetupStore, getLocalPlayerId, isSpectatorMode } from '@/store/gameSetupStore';
 import { SelectionBox } from './SelectionBox';
 import { LoadingScreen } from './LoadingScreen';
 import { GraphicsOptionsPanel } from './GraphicsOptionsPanel';
@@ -181,8 +181,9 @@ export function HybridGameCanvas() {
         mapHeight
       );
 
-      // Start at player spawn
-      const playerSpawn = CURRENT_MAP.spawns.find(s => s.playerSlot === 1) || CURRENT_MAP.spawns[0];
+      // Start at local player's spawn (or first spawn if spectating)
+      const localPlayerSlot = useGameSetupStore.getState().getLocalPlayerSlot();
+      const playerSpawn = CURRENT_MAP.spawns.find(s => s.playerSlot === localPlayerSlot) || CURRENT_MAP.spawns[0];
       camera.setPosition(playerSpawn.x, playerSpawn.y);
       cameraRef.current = camera;
 
@@ -198,12 +199,13 @@ export function HybridGameCanvas() {
       scene.add(grid.mesh);
 
       // Initialize game engine
+      const localPlayerId = getLocalPlayerId();
       const game = Game.getInstance({
         mapWidth,
         mapHeight,
         tickRate: 20,
         isMultiplayer: false,
-        playerId: 'player1',
+        playerId: localPlayerId ?? 'spectator',
         aiEnabled: true,
       });
       gameRef.current = game;
@@ -231,10 +233,10 @@ export function HybridGameCanvas() {
       );
       resourceRendererRef.current = new ResourceRenderer(scene, game.world, terrain);
 
-      if (fogOfWarEnabled) {
+      if (fogOfWarEnabled && !isSpectatorMode()) {
         const fogOfWar = new FogOfWar({ mapWidth, mapHeight });
         fogOfWar.setVisionSystem(game.visionSystem);
-        fogOfWar.setPlayerId('player1');
+        fogOfWar.setPlayerId(localPlayerId);
         scene.add(fogOfWar.mesh);
         fogOfWarRef.current = fogOfWar;
       }
@@ -244,7 +246,7 @@ export function HybridGameCanvas() {
         scene,
         game.eventBus,
         game.world,
-        'player1',
+        localPlayerId,
         (x, y) => terrain.getHeightAt(x, y)
       );
 
@@ -603,7 +605,8 @@ export function HybridGameCanvas() {
             const selectable = clickedEntity.entity.get<Selectable>('Selectable');
 
             // Can repair own buildings or mechanical units
-            if (selectable?.playerId === 'player1' && health && !health.isDead()) {
+            const localPlayerForRepair = getLocalPlayerId();
+            if (localPlayerForRepair && selectable?.playerId === localPlayerForRepair && health && !health.isDead()) {
               if (building || unit?.isMechanical) {
                 gameRef.current.eventBus.emit('command:repair', {
                   entityIds: selectedUnits,
@@ -675,7 +678,8 @@ export function HybridGameCanvas() {
               }
             }
 
-            if (selectable && selectable.playerId !== 'player1' && health && !health.isDead()) {
+            const localPlayerForAttack = getLocalPlayerId();
+            if (selectable && localPlayerForAttack && selectable.playerId !== localPlayerForAttack && health && !health.isDead()) {
               gameRef.current.eventBus.emit('command:attack', {
                 entityIds: selectedUnits,
                 targetEntityId: clickedEntity.entity.id,
@@ -782,7 +786,7 @@ export function HybridGameCanvas() {
             endX: Math.max(start.x, end.x),
             endY: Math.max(start.z, end.z),
             additive: e.shiftKey,
-            playerId: 'player1',
+            playerId: getLocalPlayerId(),
           });
           lastClickRef.current = null; // Reset double-click on box select
         } else {
@@ -808,7 +812,7 @@ export function HybridGameCanvas() {
             y: end.z,
             additive: e.shiftKey,
             selectAllOfType: e.ctrlKey || isDoubleClick, // Ctrl+click OR double-click
-            playerId: 'player1',
+            playerId: getLocalPlayerId(),
           });
         }
       }
@@ -840,7 +844,8 @@ export function HybridGameCanvas() {
           const transform = entity.get<Transform>('Transform')!;
           const selectable = entity.get<Selectable>('Selectable')!;
 
-          if (unit.isWorker && unit.state === 'idle' && selectable.playerId === 'player1') {
+          const localPlayerForWorker = getLocalPlayerId();
+          if (unit.isWorker && unit.state === 'idle' && localPlayerForWorker && selectable.playerId === localPlayerForWorker) {
             useGameStore.getState().selectUnits([entity.id]);
             if (camera) {
               camera.setPosition(transform.x, transform.y);
@@ -945,20 +950,30 @@ export function HybridGameCanvas() {
           }
           break;
         case 's':
-          game.processCommand({
-            tick: game.getCurrentTick(),
-            playerId: 'player1',
-            type: 'STOP',
-            entityIds: useGameStore.getState().selectedUnits,
-          });
+          {
+            const localPlayerForStop = getLocalPlayerId();
+            if (localPlayerForStop) {
+              game.processCommand({
+                tick: game.getCurrentTick(),
+                playerId: localPlayerForStop,
+                type: 'STOP',
+                entityIds: useGameStore.getState().selectedUnits,
+              });
+            }
+          }
           break;
         case 'h':
-          game.processCommand({
-            tick: game.getCurrentTick(),
-            playerId: 'player1',
-            type: 'HOLD',
-            entityIds: useGameStore.getState().selectedUnits,
-          });
+          {
+            const localPlayerForHold = getLocalPlayerId();
+            if (localPlayerForHold) {
+              game.processCommand({
+                tick: game.getCurrentTick(),
+                playerId: localPlayerForHold,
+                type: 'HOLD',
+                entityIds: useGameStore.getState().selectedUnits,
+              });
+            }
+          }
           break;
         case 'escape':
           if (isAttackMove) setIsAttackMove(false);

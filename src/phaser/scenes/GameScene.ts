@@ -12,7 +12,7 @@ import { MinimapRenderer } from '../renderers/MinimapRenderer';
 import { RallyPointRenderer } from '../renderers/RallyPointRenderer';
 import { InputHandler } from '../systems/InputHandler';
 import { useGameStore } from '@/store/gameStore';
-import { useGameSetupStore } from '@/store/gameSetupStore';
+import { useGameSetupStore, getLocalPlayerId, isSpectatorMode } from '@/store/gameSetupStore';
 import { spawnInitialEntities } from '@/utils/gameSetup';
 import { DEFAULT_MAP, MapData, getMapById } from '@/data/maps';
 import { Transform } from '@/engine/components/Transform';
@@ -65,12 +65,13 @@ export class GameScene extends Phaser.Scene {
     console.log(`[GameScene] Loading map: ${this.mapData.name} (${this.mapData.id})`);
 
     // Initialize game engine
+    const localPlayerId = getLocalPlayerId();
     this.gameEngine = Game.getInstance({
       mapWidth: this.mapData.width,
       mapHeight: this.mapData.height,
       tickRate: 20,
       isMultiplayer: false,
-      playerId: 'player1',
+      playerId: localPlayerId ?? 'spectator',
       aiEnabled: true,
     });
 
@@ -78,7 +79,8 @@ export class GameScene extends Phaser.Scene {
     const fogOfWarEnabled = useGameSetupStore.getState().fogOfWar;
 
     // Initialize camera
-    const playerSpawn = this.mapData.spawns.find(s => s.playerSlot === 1) || this.mapData.spawns[0];
+    const localPlayerSlot = useGameSetupStore.getState().getLocalPlayerSlot();
+    const playerSpawn = this.mapData.spawns.find(s => s.playerSlot === localPlayerSlot) || this.mapData.spawns[0];
     this.rtsCamera = new RTSCamera(
       this,
       this.mapData.width,
@@ -220,22 +222,28 @@ export class GameScene extends Phaser.Scene {
 
     // S - Stop
     this.input.keyboard.on('keydown-S', () => {
-      this.gameEngine.processCommand({
-        tick: this.gameEngine.getCurrentTick(),
-        playerId: 'player1',
-        type: 'STOP',
-        entityIds: useGameStore.getState().selectedUnits,
-      });
+      const localPlayerForStop = getLocalPlayerId();
+      if (localPlayerForStop) {
+        this.gameEngine.processCommand({
+          tick: this.gameEngine.getCurrentTick(),
+          playerId: localPlayerForStop,
+          type: 'STOP',
+          entityIds: useGameStore.getState().selectedUnits,
+        });
+      }
     });
 
     // H - Hold position
     this.input.keyboard.on('keydown-H', () => {
-      this.gameEngine.processCommand({
-        tick: this.gameEngine.getCurrentTick(),
-        playerId: 'player1',
-        type: 'HOLD',
-        entityIds: useGameStore.getState().selectedUnits,
-      });
+      const localPlayerForHold = getLocalPlayerId();
+      if (localPlayerForHold) {
+        this.gameEngine.processCommand({
+          tick: this.gameEngine.getCurrentTick(),
+          playerId: localPlayerForHold,
+          type: 'HOLD',
+          entityIds: useGameStore.getState().selectedUnits,
+        });
+      }
     });
 
     // Escape - Cancel
@@ -268,7 +276,8 @@ export class GameScene extends Phaser.Scene {
       const transform = entity.get<Transform>('Transform')!;
       const selectable = entity.get<Selectable>('Selectable');
 
-      if (unit.isWorker && unit.state === 'idle' && selectable?.playerId === 'player1') {
+      const localPlayerForWorker = getLocalPlayerId();
+      if (unit.isWorker && unit.state === 'idle' && localPlayerForWorker && selectable?.playerId === localPlayerForWorker) {
         useGameStore.getState().selectUnits([entity.id]);
         this.rtsCamera.setPosition(transform.x, transform.y);
         return;

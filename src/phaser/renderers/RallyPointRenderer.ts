@@ -5,6 +5,7 @@ import { Transform } from '@/engine/components/Transform';
 import { Building } from '@/engine/components/Building';
 import { Selectable } from '@/engine/components/Selectable';
 import { CELL_SIZE, DEPTH } from '../constants';
+import { getLocalPlayerId, isSpectatorMode } from '@/store/gameSetupStore';
 
 interface RallyPoint {
   buildingId: number;
@@ -16,7 +17,7 @@ export class RallyPointRenderer {
   private scene: Phaser.Scene;
   private world: World;
   private eventBus: EventBus;
-  private playerId = 'player1';
+  private playerId: string | null = null;
 
   private graphics: Phaser.GameObjects.Graphics;
   private rallyPoints: Map<number, RallyPoint> = new Map();
@@ -49,13 +50,14 @@ export class RallyPointRenderer {
   update(): void {
     this.graphics.clear();
 
-    // Get selected buildings
+    // Get selected buildings (in spectator mode, show rally points for all selected buildings)
+    const isSpectating = isSpectatorMode() || !this.playerId;
     const selectedBuildings = this.world.getEntitiesWith('Transform', 'Building', 'Selectable')
       .filter(entity => {
         const selectable = entity.get<Selectable>('Selectable')!;
         const building = entity.get<Building>('Building')!;
         return selectable.isSelected &&
-               selectable.playerId === this.playerId &&
+               (isSpectating || selectable.playerId === this.playerId) &&
                building.buildProgress >= 1;
       });
 
@@ -104,7 +106,7 @@ export class RallyPointRenderer {
     this.graphics.strokeCircle(toX, toY, 4);
   }
 
-  setPlayerId(playerId: string): void {
+  setPlayerId(playerId: string | null): void {
     this.playerId = playerId;
   }
 

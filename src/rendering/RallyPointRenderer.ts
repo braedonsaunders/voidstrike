@@ -4,6 +4,7 @@ import { World } from '@/engine/ecs/World';
 import { Building } from '@/engine/components/Building';
 import { Transform } from '@/engine/components/Transform';
 import { Selectable } from '@/engine/components/Selectable';
+import { getLocalPlayerId, isSpectatorMode } from '@/store/gameSetupStore';
 
 interface RallyPoint {
   buildingId: number;
@@ -15,7 +16,7 @@ export class RallyPointRenderer {
   private scene: THREE.Scene;
   private eventBus: EventBus;
   private world: World;
-  private playerId: string;
+  private playerId: string | null;
   private getTerrainHeight: ((x: number, y: number) => number) | null = null;
 
   private rallyPoints: Map<number, RallyPoint> = new Map();
@@ -30,13 +31,13 @@ export class RallyPointRenderer {
     scene: THREE.Scene,
     eventBus: EventBus,
     world: World,
-    playerId: string = 'player1',
+    playerId: string | null = null,
     getTerrainHeight?: (x: number, y: number) => number
   ) {
     this.scene = scene;
     this.eventBus = eventBus;
     this.world = world;
-    this.playerId = playerId;
+    this.playerId = playerId ?? getLocalPlayerId();
     this.getTerrainHeight = getTerrainHeight ?? null;
 
     // Create shared resources
@@ -89,7 +90,9 @@ export class RallyPointRenderer {
       const building = entity.get<Building>('Building');
       const selectable = entity.get<Selectable>('Selectable');
 
-      if (building && selectable?.playerId === this.playerId) {
+      // In spectator mode, show rally points for all buildings; otherwise only for owned buildings
+      const isSpectating = isSpectatorMode() || !this.playerId;
+      if (building && (isSpectating || selectable?.playerId === this.playerId)) {
         this.selectedBuildingIds.add(id);
       }
     }

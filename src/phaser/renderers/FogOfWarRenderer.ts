@@ -1,13 +1,14 @@
 import * as Phaser from 'phaser';
 import { VisionSystem, VisionState } from '@/engine/systems/VisionSystem';
 import { CELL_SIZE, DEPTH } from '../constants';
+import { getLocalPlayerId, isSpectatorMode } from '@/store/gameSetupStore';
 
 export class FogOfWarRenderer {
   private scene: Phaser.Scene;
   private mapWidth: number;
   private mapHeight: number;
   private visionSystem: VisionSystem;
-  private playerId = 'player1';
+  private playerId: string | null = null;
 
   private fogGraphics: Phaser.GameObjects.Graphics;
   private fogCellSize = 2; // Each fog cell covers 2x2 grid units
@@ -48,6 +49,11 @@ export class FogOfWarRenderer {
   private render(): void {
     this.fogGraphics.clear();
 
+    // In spectator mode, don't render fog - show full map
+    if (isSpectatorMode() || !this.playerId) {
+      return;
+    }
+
     const gridWidth = Math.ceil(this.mapWidth / this.fogCellSize);
     const gridHeight = Math.ceil(this.mapHeight / this.fogCellSize);
 
@@ -83,7 +89,7 @@ export class FogOfWarRenderer {
     }
   }
 
-  setPlayerId(playerId: string): void {
+  setPlayerId(playerId: string | null): void {
     this.playerId = playerId;
   }
 

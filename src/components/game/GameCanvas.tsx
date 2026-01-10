@@ -14,7 +14,7 @@ import { EffectsRenderer } from '@/rendering/EffectsRenderer';
 import { RallyPointRenderer } from '@/rendering/RallyPointRenderer';
 import { WatchTowerRenderer } from '@/rendering/WatchTowerRenderer';
 import { useGameStore } from '@/store/gameStore';
-import { useGameSetupStore } from '@/store/gameSetupStore';
+import { useGameSetupStore, getLocalPlayerId, isSpectatorMode } from '@/store/gameSetupStore';
 import { SelectionBox } from './SelectionBox';
 import { LoadingScreen } from './LoadingScreen';
 import { spawnInitialEntities } from '@/utils/gameSetup';
@@ -139,7 +139,9 @@ export function GameCanvas() {
         mapWidth,
         mapHeight
       );
-      const playerSpawn = CURRENT_MAP.spawns.find(s => s.playerSlot === 1) || CURRENT_MAP.spawns[0];
+      // Start camera at local player's spawn point (or first spawn if spectating)
+      const localPlayerSlot = useGameSetupStore.getState().getLocalPlayerSlot();
+      const playerSpawn = CURRENT_MAP.spawns.find(s => s.playerSlot === localPlayerSlot) || CURRENT_MAP.spawns[0];
       camera.setPosition(playerSpawn.x, playerSpawn.y);
       cameraRef.current = camera;
 
@@ -168,12 +170,13 @@ export function GameCanvas() {
       setLoadingStatus('Initializing game engine');
       await new Promise(resolve => setTimeout(resolve, 16));
 
+      const localPlayerId = getLocalPlayerId();
       const game = Game.getInstance({
         mapWidth,
         mapHeight,
         tickRate: 20,
         isMultiplayer: false,
-        playerId: 'player1',
+        playerId: localPlayerId ?? 'spectator',
         aiEnabled: true,
       });
       gameRef.current = game;
@@ -216,14 +219,15 @@ export function GameCanvas() {
 
       resourceRendererRef.current = new ResourceRenderer(scene, game.world, terrain);
 
-      if (fogOfWarEnabled) {
+      // Create fog of war overlay only if enabled (and not spectating)
+      if (fogOfWarEnabled && !isSpectatorMode()) {
         setLoadingProgress(82);
         setLoadingStatus('Setting up fog of war');
         await new Promise(resolve => setTimeout(resolve, 16));
 
         const fogOfWar = new FogOfWar({ mapWidth, mapHeight });
         fogOfWar.setVisionSystem(game.visionSystem);
-        fogOfWar.setPlayerId('player1');
+        fogOfWar.setPlayerId(localPlayerId);
         scene.add(fogOfWar.mesh);
         fogOfWarRef.current = fogOfWar;
       }
@@ -235,7 +239,7 @@ export function GameCanvas() {
       const effectsRenderer = new EffectsRenderer(scene, game.eventBus);
       effectsRendererRef.current = effectsRenderer;
 
-      const rallyPointRenderer = new RallyPointRenderer(scene, game.eventBus, game.world, 'player1');
+      const rallyPointRenderer = new RallyPointRenderer(scene, game.eventBus, game.world, localPlayerId);
       rallyPointRendererRef.current = rallyPointRenderer;
 
       setLoadingProgress(85);
@@ -371,7 +375,8 @@ export function GameCanvas() {
             const selectable = clickedEntity?.entity.get<Selectable>('Selectable');
             const health = clickedEntity?.entity.get<Health>('Health');
 
-            if (clickedEntity && selectable && selectable.playerId !== 'player1' && health && !health.isDead()) {
+            const localPlayer = getLocalPlayerId();
+            if (clickedEntity && selectable && localPlayer && selectable.playerId !== localPlayer && health && !health.isDead()) {
               // Attack specific enemy target
               gameRef.current.eventBus.emit('command:attack', {
                 entityIds: selectedUnits,
@@ -503,7 +508,8 @@ export function GameCanvas() {
             }
 
             // Check if clicking on an enemy unit/building (for attacking)
-            if (selectable && selectable.playerId !== 'player1' && health && !health.isDead()) {
+            const localPlayerForAttack = getLocalPlayerId();
+            if (selectable && localPlayerForAttack && selectable.playerId !== localPlayerForAttack && health && !health.isDead()) {
               gameRef.current.eventBus.emit('command:attack', {
                 entityIds: selectedUnits,
                 targetEntityId: clickedEntity.entity.id,
@@ -597,7 +603,7 @@ export function GameCanvas() {
             endX: Math.max(start.x, end.x),
             endY: Math.max(start.z, end.z),
             additive: e.shiftKey,
-            playerId: 'player1',
+            playerId: getLocalPlayerId(),
           });
         } else {
           // Click selection
@@ -606,7 +612,7 @@ export function GameCanvas() {
             y: end.z,
             additive: e.shiftKey,
             selectAllOfType: e.ctrlKey, // Ctrl+click to select all of same type
-            playerId: 'player1',
+            playerId: getLocalPlayerId(),
           });
         }
       }
@@ -635,7 +641,8 @@ export function GameCanvas() {
           const transform = entity.get<Transform>('Transform')!;
           const selectable = entity.get<Selectable>('Selectable')!;
 
-          if (unit.isWorker && unit.state === 'idle' && selectable.playerId === 'player1') {
+          const localPlayerForWorker = getLocalPlayerId();
+          if (unit.isWorker && unit.state === 'idle' && localPlayerForWorker && selectable.playerId === localPlayerForWorker) {
             idleWorkers.push({ id: entity.id, x: transform.x, y: transform.y });
           }
         }
@@ -762,21 +769,31 @@ export function GameCanvas() {
           break;
         case 's':
           // Stop
-          game.processCommand({
-            tick: game.getCurrentTick(),
-            playerId: 'player1',
-            type: 'STOP',
-            entityIds: useGameStore.getState().selectedUnits,
-          });
+          {
+            const localPlayerForStop = getLocalPlayerId();
+            if (localPlayerForStop) {
+              game.processCommand({
+                tick: game.getCurrentTick(),
+                playerId: localPlayerForStop,
+                type: 'STOP',
+                entityIds: useGameStore.getState().selectedUnits,
+              });
+            }
+          }
           break;
         case 'h':
           // Hold position
-          game.processCommand({
-            tick: game.getCurrentTick(),
-            playerId: 'player1',
-            type: 'HOLD',
-            entityIds: useGameStore.getState().selectedUnits,
-          });
+          {
+            const localPlayerForHold = getLocalPlayerId();
+            if (localPlayerForHold) {
+              game.processCommand({
+                tick: game.getCurrentTick(),
+                playerId: localPlayerForHold,
+                type: 'HOLD',
+                entityIds: useGameStore.getState().selectedUnits,
+              });
+            }
+          }
           break;
         case 'escape':
           // Cancel modes or clear selection

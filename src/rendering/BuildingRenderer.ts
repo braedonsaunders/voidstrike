@@ -7,7 +7,7 @@ import { Selectable } from '@/engine/components/Selectable';
 import { VisionSystem } from '@/engine/systems/VisionSystem';
 import { AssetManager } from '@/assets/AssetManager';
 import { Terrain } from './Terrain';
-import { getPlayerColor } from '@/store/gameSetupStore';
+import { getPlayerColor, getLocalPlayerId, isSpectatorMode } from '@/store/gameSetupStore';
 
 interface BuildingMeshData {
   group: THREE.Group;
@@ -46,7 +46,7 @@ export class BuildingRenderer {
   private world: World;
   private visionSystem: VisionSystem | null;
   private terrain: Terrain | null;
-  private playerId: string = 'player1';
+  private playerId: string | null = null;
   private buildingMeshes: Map<number, BuildingMeshData> = new Map();
 
   // PERFORMANCE: Instanced mesh groups for completed static buildings
@@ -286,7 +286,7 @@ export class BuildingRenderer {
     }
   }
 
-  public setPlayerId(playerId: string): void {
+  public setPlayerId(playerId: string | null): void {
     this.playerId = playerId;
   }
 
@@ -350,12 +350,13 @@ export class BuildingRenderer {
       const selectable = entity.get<Selectable>('Selectable');
 
       const ownerId = selectable?.playerId ?? 'unknown';
-      const isOwned = ownerId === this.playerId;
-      const isEnemy = selectable && ownerId !== this.playerId;
+      const isSpectating = isSpectatorMode() || !this.playerId;
+      const isOwned = !isSpectating && ownerId === this.playerId;
+      const isEnemy = !isSpectating && selectable && ownerId !== this.playerId;
 
-      // Check visibility for enemy buildings
+      // Check visibility for enemy buildings (skip in spectator mode - show all)
       let shouldShow = true;
-      if (isEnemy && this.visionSystem) {
+      if (isEnemy && this.visionSystem && this.playerId) {
         shouldShow = this.visionSystem.isExplored(this.playerId, transform.x, transform.y);
       }
 
