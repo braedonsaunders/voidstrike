@@ -963,17 +963,22 @@ export class EnhancedAISystem extends System {
 
       if (hasCCNearby) continue;
 
-      // Calculate distance from AI base
+      // Calculate distance from AI base to this cluster
       const dx = cluster.x - aiBase.x;
       const dy = cluster.y - aiBase.y;
       const distance = Math.sqrt(dx * dx + dy * dy);
 
       // Prefer closer expansions
       if (!bestLocation || distance < bestLocation.distance) {
-        // Offset slightly from mineral cluster center for CC placement
+        // Calculate CC placement: offset FROM mineral cluster TOWARD the AI's main base
+        // The CC should be placed on the "home" side of the minerals (closer to AI base)
+        // Standard mineral distance is ~7 units from CC center
+        const ccOffset = 6; // Distance from cluster center to CC
+        const dirToBase = Math.atan2(aiBase.y - cluster.y, aiBase.x - cluster.x);
+
         bestLocation = {
-          x: cluster.x + 5,  // Place CC near but not on minerals
-          y: cluster.y + 5,
+          x: cluster.x + Math.cos(dirToBase) * ccOffset,
+          y: cluster.y + Math.sin(dirToBase) * ccOffset,
           distance
         };
       }
