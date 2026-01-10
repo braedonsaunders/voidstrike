@@ -108,7 +108,10 @@ export class EffectsRenderer {
         this.createDeathEffect(screenPos.x, screenPos.y);
       }
       if (data.entityId !== undefined) {
+        // Clear focus fire tracking for this target
         this.clearFocusFire(data.entityId);
+        // Also clean up if this unit was an attacker (prevent memory leak)
+        this.clearAttackerFromAllTargets(data.entityId);
       }
     });
 
@@ -257,6 +260,30 @@ export class EffectsRenderer {
 
     if (attackers.size === 0) {
       this.targetAttackerCounts.delete(targetId);
+    }
+  }
+
+  /**
+   * Clean up an attacker from all targets when the attacker dies
+   * Prevents memory leak in targetAttackerCounts Map
+   */
+  private clearAttackerFromAllTargets(attackerId: number): void {
+    for (const [targetId, attackers] of this.targetAttackerCounts) {
+      if (attackers.has(attackerId)) {
+        attackers.delete(attackerId);
+
+        if (attackers.size < 2) {
+          const indicator = this.focusFireIndicators.get(targetId);
+          if (indicator) {
+            indicator.graphics.destroy();
+            this.focusFireIndicators.delete(targetId);
+          }
+        }
+
+        if (attackers.size === 0) {
+          this.targetAttackerCounts.delete(targetId);
+        }
+      }
     }
   }
 
