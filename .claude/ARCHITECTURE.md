@@ -19,6 +19,8 @@ voidstrike/
 │   │   └── api/               # API routes
 │   │       └── music/         # Music discovery endpoint
 │   ├── components/
+│   │   ├── home/              # Homepage/menu components
+│   │   │   └── HomeBackground.tsx  # Cinematic Three.js animated background
 │   │   ├── game/              # Game-specific components
 │   │   │   ├── GameCanvas.tsx
 │   │   │   ├── HUD.tsx
@@ -1138,3 +1140,81 @@ See `.claude/AUDIO_PROMPTS.md` for comprehensive audio generation prompts includ
 - UI feedback sounds
 - Ambient sounds
 - Voice lines
+
+## Homescreen 3D Background System
+
+### HomeBackground Component (`src/components/home/HomeBackground.tsx`)
+
+A cinematic Three.js animated background that creates an immersive menu experience similar to StarCraft 2:
+
+```typescript
+// Key features:
+- Procedural void nebula shader with flowing noise patterns
+- 3000+ animated stars with twinkling effect
+- Floating asteroid field with rotation and drift
+- Energy stream particle systems flowing toward center
+- Cinematic camera movement following mouse position
+- Post-processing pipeline (bloom, chromatic aberration, vignette)
+```
+
+### Visual Systems
+
+1. **Void Nebula Shader** - Custom GLSL fragment shader
+   - 6-octave fractal Brownian motion (fBM) for organic noise
+   - Multi-layer color gradient based on noise intensity
+   - Energy stream highlights with power function
+   - Mouse-reactive position offset
+   - Pulsing intensity animation
+
+2. **Star Field** - GPU-instanced points
+   - 3000 stars distributed in a spherical shell
+   - Color variation (white, blue, purple tints)
+   - Size-based distance scaling
+   - Twinkle animation via vertex shader
+
+3. **Asteroid Field** - Deformed icosahedrons
+   - 15 randomly deformed asteroids
+   - Individual rotation speeds
+   - Gentle floating motion (sinusoidal)
+   - Dark purple emissive material
+
+4. **Energy Streams** - Point particle systems
+   - 5 streams with 200 particles each
+   - Particles flow from outer edges toward center
+   - Lifetime-based respawning
+   - Additive blending for glow effect
+
+5. **Post-Processing Stack**
+   - UnrealBloomPass (strength: 0.8, radius: 0.4, threshold: 0.85)
+   - ChromaticAberrationShader (subtle edge distortion)
+   - VignetteShader (darker edges for focus)
+
+### Camera System
+
+```typescript
+// Cinematic camera movement:
+- Base position at (0, 0, 5) looking at (0, 0, -5)
+- Mouse tracking with 0.02 interpolation factor
+- Subtle "breathing" motion via sine waves
+- Results in parallax effect as mouse moves
+```
+
+### Integration
+
+The HomeBackground is dynamically imported in `page.tsx` to avoid SSR issues:
+
+```typescript
+const HomeBackground = dynamic(() => import('@/components/home/HomeBackground'), {
+  ssr: false,
+  loading: () => <div className="fixed inset-0 bg-[#050010]" />,
+});
+```
+
+### UI Overlay
+
+The homepage uses glassmorphism design with:
+- Translucent faction cards with backdrop blur
+- Animated number counters for stats
+- Shimmer animation on title text
+- Staggered fade-in animations on load
+- Mouse parallax on hero content
