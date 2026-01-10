@@ -90,6 +90,18 @@ export class CombatSystem extends System {
     this.game.eventBus.on('command:attack', this.handleAttackCommand.bind(this));
     this.game.eventBus.on('command:stop', this.handleStopCommand.bind(this));
     this.game.eventBus.on('command:hold', this.handleHoldCommand.bind(this));
+
+    // Clean up target caches when units are destroyed to prevent memory leaks
+    this.game.eventBus.on('unit:died', this.handleUnitDeath.bind(this));
+    this.game.eventBus.on('unit:destroyed', this.handleUnitDeath.bind(this));
+  }
+
+  /**
+   * Clean up target caches when a unit dies to prevent memory leaks
+   */
+  private handleUnitDeath(data: { entityId: number }): void {
+    this.cachedTargets.delete(data.entityId);
+    this.lastTargetSearchTick.delete(data.entityId);
   }
 
   private handleAttackCommand(command: {

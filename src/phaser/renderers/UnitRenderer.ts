@@ -45,6 +45,12 @@ export class UnitRenderer {
   private unitSprites: Map<number, UnitSprite> = new Map();
   private container: Phaser.GameObjects.Container;
 
+  // Track if container needs re-sorting (only sort when units added/removed)
+  private needsSort = false;
+  // Throttle periodic re-sort for unit movement (every N frames instead of every frame)
+  private sortFrameCounter = 0;
+  private readonly SORT_INTERVAL = 10; // Sort every 10 frames (~6 times per second at 60fps)
+
   constructor(
     scene: Phaser.Scene,
     world: World,
@@ -64,6 +70,8 @@ export class UnitRenderer {
   update(): void {
     const entities = this.world.getEntitiesWith('Transform', 'Unit');
     const currentIds = new Set<number>();
+    let unitsAdded = false;
+    let unitsRemoved = false;
 
     for (const entity of entities) {
       currentIds.add(entity.id);
@@ -96,6 +104,7 @@ export class UnitRenderer {
         sprite = this.createUnitSprite(unit, ownerId);
         this.unitSprites.set(entity.id, sprite);
         this.container.add(sprite.container);
+        unitsAdded = true;
       }
 
       // Update visibility
@@ -140,11 +149,23 @@ export class UnitRenderer {
       if (!currentIds.has(entityId)) {
         sprite.container.destroy();
         this.unitSprites.delete(entityId);
+        unitsRemoved = true;
       }
     }
 
-    // Sort units by Y position for proper depth
-    this.container.sort('y');
+    // Throttled sorting: sort immediately when units added/removed,
+    // or periodically for movement (every SORT_INTERVAL frames instead of every frame)
+    // This reduces O(n log n) sort operation from 60x/sec to ~6x/sec
+    this.sortFrameCounter++;
+    const periodicSort = this.sortFrameCounter >= this.SORT_INTERVAL;
+
+    if (unitsAdded || unitsRemoved || this.needsSort || periodicSort) {
+      this.container.sort('y');
+      this.needsSort = false;
+      if (periodicSort) {
+        this.sortFrameCounter = 0;
+      }
+    }
   }
 
   private createUnitSprite(unit: Unit, playerId: string): UnitSprite {

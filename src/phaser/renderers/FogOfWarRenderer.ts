@@ -17,6 +17,10 @@ export class FogOfWarRenderer {
   private lastUpdateTime = 0;
   private updateInterval = 100; // Update every 100ms
 
+  // Dirty tracking - cache previous vision state to only redraw changed cells
+  private previousVisionState: VisionState[][] | null = null;
+  private needsFullRedraw = true;
+
   constructor(
     scene: Phaser.Scene,
     mapWidth: number,
@@ -47,10 +51,10 @@ export class FogOfWarRenderer {
   }
 
   private render(): void {
-    this.fogGraphics.clear();
-
     // In spectator mode, don't render fog - show full map
     if (isSpectatorMode() || !this.playerId) {
+      this.fogGraphics.clear();
+      this.previousVisionState = null;
       return;
     }
 
@@ -67,30 +71,87 @@ export class FogOfWarRenderer {
     // Pixel size for each fog cell
     const pixelCellSize = this.fogCellSize * CELL_SIZE;
 
-    for (let gy = 0; gy < gridHeight; gy++) {
-      for (let gx = 0; gx < gridWidth; gx++) {
-        const state = visionGrid[gy]?.[gx] ?? 'unexplored';
+    // Check if we need a full redraw (first render or player changed)
+    if (this.needsFullRedraw || !this.previousVisionState) {
+      this.fogGraphics.clear();
+      this.needsFullRedraw = false;
 
-        // Convert grid to pixel coordinates
-        const px = gx * pixelCellSize;
-        const py = gy * pixelCellSize;
-
-        if (state === 'unexplored') {
-          // Unexplored - darker fog
-          this.fogGraphics.fillStyle(unexploredColor, 0.85);
-          this.fogGraphics.fillRect(px, py, pixelCellSize, pixelCellSize);
-        } else if (state === 'explored') {
-          // Explored but not visible - lighter fog
-          this.fogGraphics.fillStyle(exploredColor, 0.5);
-          this.fogGraphics.fillRect(px, py, pixelCellSize, pixelCellSize);
+      // Initialize previous state cache
+      if (!this.previousVisionState) {
+        this.previousVisionState = [];
+        for (let y = 0; y < gridHeight; y++) {
+          this.previousVisionState[y] = [];
+          for (let x = 0; x < gridWidth; x++) {
+            this.previousVisionState[y][x] = 'unexplored';
+          }
         }
-        // Visible areas have no fog drawn
       }
+
+      // Full redraw
+      for (let gy = 0; gy < gridHeight; gy++) {
+        for (let gx = 0; gx < gridWidth; gx++) {
+          const state = visionGrid[gy]?.[gx] ?? 'unexplored';
+          this.previousVisionState[gy][gx] = state;
+
+          const px = gx * pixelCellSize;
+          const py = gy * pixelCellSize;
+
+          if (state === 'unexplored') {
+            this.fogGraphics.fillStyle(unexploredColor, 0.85);
+            this.fogGraphics.fillRect(px, py, pixelCellSize, pixelCellSize);
+          } else if (state === 'explored') {
+            this.fogGraphics.fillStyle(exploredColor, 0.5);
+            this.fogGraphics.fillRect(px, py, pixelCellSize, pixelCellSize);
+          }
+        }
+      }
+    } else {
+      // Incremental update - only redraw changed cells
+      // Unfortunately Phaser Graphics doesn't support partial clearing,
+      // so we need to do a full clear and redraw only if there are changes
+      let hasChanges = false;
+
+      // First pass: detect changes
+      for (let gy = 0; gy < gridHeight; gy++) {
+        for (let gx = 0; gx < gridWidth; gx++) {
+          const state = visionGrid[gy]?.[gx] ?? 'unexplored';
+          if (this.previousVisionState[gy][gx] !== state) {
+            hasChanges = true;
+            this.previousVisionState[gy][gx] = state;
+          }
+        }
+      }
+
+      // Only redraw if there are changes
+      if (hasChanges) {
+        this.fogGraphics.clear();
+
+        for (let gy = 0; gy < gridHeight; gy++) {
+          for (let gx = 0; gx < gridWidth; gx++) {
+            const state = this.previousVisionState[gy][gx];
+            const px = gx * pixelCellSize;
+            const py = gy * pixelCellSize;
+
+            if (state === 'unexplored') {
+              this.fogGraphics.fillStyle(unexploredColor, 0.85);
+              this.fogGraphics.fillRect(px, py, pixelCellSize, pixelCellSize);
+            } else if (state === 'explored') {
+              this.fogGraphics.fillStyle(exploredColor, 0.5);
+              this.fogGraphics.fillRect(px, py, pixelCellSize, pixelCellSize);
+            }
+          }
+        }
+      }
+      // If no changes, skip the redraw entirely (major performance win)
     }
   }
 
   setPlayerId(playerId: string | null): void {
-    this.playerId = playerId;
+    if (this.playerId !== playerId) {
+      this.playerId = playerId;
+      this.needsFullRedraw = true;
+      this.previousVisionState = null;
+    }
   }
 
   destroy(): void {

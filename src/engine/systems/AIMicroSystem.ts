@@ -25,6 +25,13 @@ interface UnitMicroState {
   threatScore: number;
   primaryTarget: number | null;
   retreating: boolean;
+  retreatEndTick: number | null; // Tick when retreat should end (replaces setTimeout)
+}
+
+// Delayed command to be processed at a specific tick
+interface DelayedCommand {
+  executeTick: number;
+  command: GameCommand;
 }
 
 interface ThreatInfo {
@@ -58,6 +65,9 @@ export class AIMicroSystem extends System {
   private unitStates: Map<number, UnitMicroState> = new Map();
   private aiPlayerIds: Set<string> = new Set();
 
+  // Queue for delayed commands (replaces setTimeout)
+  private pendingCommands: DelayedCommand[] = [];
+
   constructor(game: Game) {
     super(game);
     this.setupEventListeners();
@@ -81,6 +91,12 @@ export class AIMicroSystem extends System {
 
   public update(deltaTime: number): void {
     const currentTick = this.game.getCurrentTick();
+
+    // Process pending delayed commands
+    this.processPendingCommands(currentTick);
+
+    // Process retreat state timeouts (tick-based instead of setTimeout)
+    this.processRetreatTimeouts(currentTick);
 
     // Only update micro at intervals to reduce CPU load
     if (currentTick % MICRO_UPDATE_INTERVAL !== 0) return;
@@ -111,6 +127,7 @@ export class AIMicroSystem extends System {
           threatScore: 0,
           primaryTarget: null,
           retreating: false,
+          retreatEndTick: null,
         };
         this.unitStates.set(entity.id, state);
       }
@@ -191,18 +208,20 @@ export class AIMicroSystem extends System {
     state.lastKiteTick = currentTick;
 
     // Re-target after kiting using the saved target ID
+    // Use tick-based delay instead of setTimeout (5 ticks = 250ms at 20 TPS)
     if (savedTargetId !== null) {
       const retargetCommand: GameCommand = {
-        tick: currentTick + 5, // Slight delay
+        tick: currentTick + 5,
         playerId,
         type: 'ATTACK',
         entityIds: [entityId],
         targetEntityId: savedTargetId,
       };
-      // Queue this for later
-      setTimeout(() => {
-        this.game.processCommand(retargetCommand);
-      }, 250);
+      // Queue command for execution at specific tick
+      this.pendingCommands.push({
+        executeTick: currentTick + 5,
+        command: retargetCommand,
+      });
     }
   }
 
@@ -242,11 +261,46 @@ export class AIMicroSystem extends System {
     this.game.processCommand(command);
     state.retreating = true;
 
-    // Clear retreat flag after a delay
-    setTimeout(() => {
-      state.retreating = false;
-      state.behaviorTree.setBlackboard('shouldRetreat', false);
-    }, 2000);
+    // Set tick when retreat should end (40 ticks = 2000ms at 20 TPS)
+    // This replaces setTimeout with tick-based timing
+    state.retreatEndTick = this.game.getCurrentTick() + 40;
+  }
+
+  /**
+   * Process pending delayed commands (replaces setTimeout)
+   */
+  private processPendingCommands(currentTick: number): void {
+    // Process all commands that are due
+    let i = 0;
+    while (i < this.pendingCommands.length) {
+      const pending = this.pendingCommands[i];
+      if (pending.executeTick <= currentTick) {
+        // Verify the entity still exists before executing
+        const entityId = pending.command.entityIds[0];
+        const entity = this.world.getEntity(entityId);
+        if (entity && !entity.isDestroyed()) {
+          this.game.processCommand(pending.command);
+        }
+        // Remove from queue (swap with last for O(1) removal)
+        this.pendingCommands[i] = this.pendingCommands[this.pendingCommands.length - 1];
+        this.pendingCommands.pop();
+      } else {
+        i++;
+      }
+    }
+  }
+
+  /**
+   * Process retreat state timeouts (replaces setTimeout)
+   */
+  private processRetreatTimeouts(currentTick: number): void {
+    for (const [entityId, state] of this.unitStates) {
+      if (state.retreating && state.retreatEndTick !== null && currentTick >= state.retreatEndTick) {
+        state.retreating = false;
+        state.retreatEndTick = null;
+        state.behaviorTree.setBlackboard('shouldRetreat', false);
+      }
+    }
   }
 
   private findFriendlyBase(playerId: string): { x: number; y: number } | null {

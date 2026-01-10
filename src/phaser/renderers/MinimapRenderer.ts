@@ -40,6 +40,10 @@ export class MinimapRenderer {
   private lastUpdateTime = 0;
   private updateInterval = 66; // ~15 FPS
 
+  // Dirty tracking for fog layer
+  private previousFogState: import('@/engine/systems/VisionSystem').VisionState[][] | null = null;
+  private needsFogRedraw = true;
+
   constructor(
     scene: Phaser.Scene,
     mapData: MapData,
@@ -247,12 +251,11 @@ export class MinimapRenderer {
     // In spectator mode, don't draw fog
     if (isSpectatorMode() || !this.playerId) {
       this.fogGraphics.clear();
+      this.previousFogState = null;
       return;
     }
 
     if (!this.fogOfWarEnabled || !this.visionSystem) return;
-
-    this.fogGraphics.clear();
 
     const gridWidth = Math.ceil(this.mapData.width / 2);
     const gridHeight = Math.ceil(this.mapData.height / 2);
@@ -260,24 +263,75 @@ export class MinimapRenderer {
     const visionGrid = this.visionSystem.getVisionGridForPlayer(this.playerId);
     if (!visionGrid) return;
 
-    for (let gy = 0; gy < gridHeight; gy++) {
-      for (let gx = 0; gx < gridWidth; gx++) {
-        const state = visionGrid[gy]?.[gx] ?? 'unexplored';
+    // Check if we need a full redraw
+    if (this.needsFogRedraw || !this.previousFogState) {
+      this.fogGraphics.clear();
+      this.needsFogRedraw = false;
 
-        if (state === 'unexplored') {
-          const mx = gx * 2 * this.scaleX;
-          const my = gy * 2 * this.scaleY;
-
-          this.fogGraphics.fillStyle(0x000000, 0.8);
-          this.fogGraphics.fillRect(mx, my, this.scaleX * 2, this.scaleY * 2);
-        } else if (state === 'explored') {
-          const mx = gx * 2 * this.scaleX;
-          const my = gy * 2 * this.scaleY;
-
-          this.fogGraphics.fillStyle(0x000000, 0.4);
-          this.fogGraphics.fillRect(mx, my, this.scaleX * 2, this.scaleY * 2);
+      // Initialize previous state cache
+      if (!this.previousFogState) {
+        this.previousFogState = [];
+        for (let y = 0; y < gridHeight; y++) {
+          this.previousFogState[y] = [];
+          for (let x = 0; x < gridWidth; x++) {
+            this.previousFogState[y][x] = 'unexplored';
+          }
         }
       }
+
+      // Full redraw
+      for (let gy = 0; gy < gridHeight; gy++) {
+        for (let gx = 0; gx < gridWidth; gx++) {
+          const state = visionGrid[gy]?.[gx] ?? 'unexplored';
+          this.previousFogState[gy][gx] = state;
+
+          const mx = gx * 2 * this.scaleX;
+          const my = gy * 2 * this.scaleY;
+
+          if (state === 'unexplored') {
+            this.fogGraphics.fillStyle(0x000000, 0.8);
+            this.fogGraphics.fillRect(mx, my, this.scaleX * 2, this.scaleY * 2);
+          } else if (state === 'explored') {
+            this.fogGraphics.fillStyle(0x000000, 0.4);
+            this.fogGraphics.fillRect(mx, my, this.scaleX * 2, this.scaleY * 2);
+          }
+        }
+      }
+    } else {
+      // Incremental update - check for changes
+      let hasChanges = false;
+
+      for (let gy = 0; gy < gridHeight; gy++) {
+        for (let gx = 0; gx < gridWidth; gx++) {
+          const state = visionGrid[gy]?.[gx] ?? 'unexplored';
+          if (this.previousFogState[gy][gx] !== state) {
+            hasChanges = true;
+            this.previousFogState[gy][gx] = state;
+          }
+        }
+      }
+
+      // Only redraw if there are changes
+      if (hasChanges) {
+        this.fogGraphics.clear();
+
+        for (let gy = 0; gy < gridHeight; gy++) {
+          for (let gx = 0; gx < gridWidth; gx++) {
+            const state = this.previousFogState[gy][gx];
+            const mx = gx * 2 * this.scaleX;
+            const my = gy * 2 * this.scaleY;
+
+            if (state === 'unexplored') {
+              this.fogGraphics.fillStyle(0x000000, 0.8);
+              this.fogGraphics.fillRect(mx, my, this.scaleX * 2, this.scaleY * 2);
+            } else if (state === 'explored') {
+              this.fogGraphics.fillStyle(0x000000, 0.4);
+              this.fogGraphics.fillRect(mx, my, this.scaleX * 2, this.scaleY * 2);
+            }
+          }
+        }
+      }
+      // If no changes, skip the redraw entirely
     }
   }
 
@@ -303,7 +357,11 @@ export class MinimapRenderer {
   }
 
   setPlayerId(playerId: string | null): void {
-    this.playerId = playerId;
+    if (this.playerId !== playerId) {
+      this.playerId = playerId;
+      this.needsFogRedraw = true;
+      this.previousFogState = null;
+    }
   }
 
   destroy(): void {
