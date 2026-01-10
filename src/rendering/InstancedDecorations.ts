@@ -66,71 +66,81 @@ export class InstancedTrees {
 
     if (biome.treeDensity <= 0) return;
 
-    // Increased tree count
-    const treeCount = Math.floor(mapData.width * mapData.height * biome.treeDensity * 0.012);
-    const maxTrees = Math.min(treeCount, 500);
+    // Tree count - focus on map edges, not cliff edges
+    const treeCount = Math.floor(mapData.width * mapData.height * biome.treeDensity * 0.01);
+    const maxTrees = Math.min(treeCount, 400);
 
     // Get tree model types based on biome
     const treeModelIds = this.getTreeModelsForBiome(biome);
 
-    // Find elevated areas (bases are usually at higher elevation)
-    // We'll place trees along cliff edges and elevated terrain
-    const elevatedPositions: Array<{ x: number; y: number }> = [];
-    const regularPositions: Array<{ x: number; y: number }> = [];
+    // Build a set of cells near ramps that should be avoided (pathways)
+    const rampClearance = new Set<string>();
+    const RAMP_CLEARANCE_RADIUS = 8; // Stay far from ramps
 
-    // Scan the map for elevated cliff edges
-    for (let cy = 1; cy < mapData.height - 1; cy++) {
-      for (let cx = 1; cx < mapData.width - 1; cx++) {
+    for (let cy = 0; cy < mapData.height; cy++) {
+      for (let cx = 0; cx < mapData.width; cx++) {
         const cell = mapData.terrain[cy][cx];
-        if (cell.terrain === 'unbuildable' || cell.terrain === 'cliff') {
-          // Check if this is near a cliff edge (adjacent to lower terrain)
-          const neighbors = [
-            mapData.terrain[cy - 1]?.[cx],
-            mapData.terrain[cy + 1]?.[cx],
-            mapData.terrain[cy]?.[cx - 1],
-            mapData.terrain[cy]?.[cx + 1],
-          ];
-          const nearCliff = neighbors.some(n => n && (n.terrain === 'ground' || n.terrain === 'ramp'));
-          if (nearCliff) {
-            elevatedPositions.push({ x: cx + Math.random(), y: cy + Math.random() });
+        if (cell.terrain === 'ramp') {
+          // Mark all cells within clearance radius as blocked
+          for (let dy = -RAMP_CLEARANCE_RADIUS; dy <= RAMP_CLEARANCE_RADIUS; dy++) {
+            for (let dx = -RAMP_CLEARANCE_RADIUS; dx <= RAMP_CLEARANCE_RADIUS; dx++) {
+              const dist = Math.sqrt(dx * dx + dy * dy);
+              if (dist <= RAMP_CLEARANCE_RADIUS) {
+                rampClearance.add(`${cx + dx},${cy + dy}`);
+              }
+            }
           }
         }
       }
     }
 
-    // Add trees - prioritize elevated cliff edges
+    // Also avoid the center corridor (main pathway between bases)
+    const mapCenterX = mapData.width / 2;
+    const mapCenterY = mapData.height / 2;
+
     let treesPlaced = 0;
 
-    // Place trees on elevated edges (50% of trees)
-    const elevatedTreeCount = Math.min(Math.floor(maxTrees * 0.5), elevatedPositions.length);
-    for (let i = 0; i < elevatedTreeCount && treesPlaced < maxTrees; i++) {
-      const idx = Math.floor(Math.random() * elevatedPositions.length);
-      const pos = elevatedPositions.splice(idx, 1)[0];
-      if (this.placeTree(pos.x, pos.y, mapData, getHeightAt, treeModelIds, biome)) {
-        treesPlaced++;
-      }
-    }
-
-    // Place trees on map edges (30% of trees)
-    const edgeTreeCount = Math.floor(maxTrees * 0.3);
-    for (let i = 0; i < edgeTreeCount && treesPlaced < maxTrees; i++) {
+    // Place trees primarily on the outer edges of the map (70%)
+    const edgeTreeCount = Math.floor(maxTrees * 0.7);
+    for (let i = 0; i < edgeTreeCount * 3 && treesPlaced < edgeTreeCount; i++) {
       let x: number, y: number;
       const edge = Math.floor(Math.random() * 4);
+      // Place in outer 15 cells of each edge
       switch (edge) {
-        case 0: x = 3 + Math.random() * 18; y = 5 + Math.random() * (mapData.height - 10); break;
-        case 1: x = mapData.width - 21 + Math.random() * 18; y = 5 + Math.random() * (mapData.height - 10); break;
-        case 2: x = 5 + Math.random() * (mapData.width - 10); y = 3 + Math.random() * 18; break;
-        default: x = 5 + Math.random() * (mapData.width - 10); y = mapData.height - 21 + Math.random() * 18; break;
+        case 0: x = 2 + Math.random() * 12; y = 5 + Math.random() * (mapData.height - 10); break;
+        case 1: x = mapData.width - 14 + Math.random() * 12; y = 5 + Math.random() * (mapData.height - 10); break;
+        case 2: x = 5 + Math.random() * (mapData.width - 10); y = 2 + Math.random() * 12; break;
+        default: x = 5 + Math.random() * (mapData.width - 10); y = mapData.height - 14 + Math.random() * 12; break;
       }
+
+      // Check clearance
+      if (rampClearance.has(`${Math.floor(x)},${Math.floor(y)}`)) continue;
+
       if (this.placeTree(x, y, mapData, getHeightAt, treeModelIds, biome)) {
         treesPlaced++;
       }
     }
 
-    // Fill remaining trees scattered
-    for (let i = 0; treesPlaced < maxTrees && i < maxTrees * 2; i++) {
-      const x = 10 + Math.random() * (mapData.width - 20);
-      const y = 10 + Math.random() * (mapData.height - 20);
+    // Scatter remaining trees in corners and far edges (30%)
+    const cornerTrees = maxTrees - treesPlaced;
+    for (let i = 0; i < cornerTrees * 3 && treesPlaced < maxTrees; i++) {
+      // Pick a corner
+      const corner = Math.floor(Math.random() * 4);
+      let x: number, y: number;
+      switch (corner) {
+        case 0: x = 3 + Math.random() * 20; y = 3 + Math.random() * 20; break;
+        case 1: x = mapData.width - 23 + Math.random() * 20; y = 3 + Math.random() * 20; break;
+        case 2: x = 3 + Math.random() * 20; y = mapData.height - 23 + Math.random() * 20; break;
+        default: x = mapData.width - 23 + Math.random() * 20; y = mapData.height - 23 + Math.random() * 20; break;
+      }
+
+      // Check clearance
+      if (rampClearance.has(`${Math.floor(x)},${Math.floor(y)}`)) continue;
+
+      // Avoid center corridor
+      const distFromCenter = Math.abs(x - mapCenterX) + Math.abs(y - mapCenterY);
+      if (distFromCenter < mapData.width * 0.3) continue;
+
       if (this.placeTree(x, y, mapData, getHeightAt, treeModelIds, biome)) {
         treesPlaced++;
       }
@@ -219,38 +229,63 @@ export class InstancedRocks {
   ) {
     this.group = new THREE.Group();
 
-    // Increased rock count - more rocks for better map coverage
-    const rockCount = Math.floor(mapData.width * mapData.height * biome.rockDensity * 0.015);
-    const maxRocks = Math.min(rockCount, 400);
+    // Rock count
+    const rockCount = Math.floor(mapData.width * mapData.height * biome.rockDensity * 0.012);
+    const maxRocks = Math.min(rockCount, 300);
 
     // Rock model types to use for variety
     const rockModelIds = ['rocks_large', 'rocks_small', 'rock_single'];
 
-    for (let i = 0; i < maxRocks; i++) {
+    // Build ramp clearance set to avoid blocking pathways
+    const rampClearance = new Set<string>();
+    const RAMP_CLEARANCE_RADIUS = 6;
+
+    for (let cy = 0; cy < mapData.height; cy++) {
+      for (let cx = 0; cx < mapData.width; cx++) {
+        const cell = mapData.terrain[cy][cx];
+        if (cell.terrain === 'ramp') {
+          for (let dy = -RAMP_CLEARANCE_RADIUS; dy <= RAMP_CLEARANCE_RADIUS; dy++) {
+            for (let dx = -RAMP_CLEARANCE_RADIUS; dx <= RAMP_CLEARANCE_RADIUS; dx++) {
+              const dist = Math.sqrt(dx * dx + dy * dy);
+              if (dist <= RAMP_CLEARANCE_RADIUS) {
+                rampClearance.add(`${cx + dx},${cy + dy}`);
+              }
+            }
+          }
+        }
+      }
+    }
+
+    let rocksPlaced = 0;
+    for (let i = 0; i < maxRocks * 3 && rocksPlaced < maxRocks; i++) {
       let x: number, y: number;
 
-      // 40% on edges/elevated areas, 60% scattered
-      if (Math.random() < 0.4) {
-        // Edge/elevated placement
+      // Place rocks primarily on map edges (60%) and scattered (40%)
+      if (Math.random() < 0.6) {
+        // Edge placement - outer 10 cells
         const edge = Math.floor(Math.random() * 4);
         switch (edge) {
-          case 0: x = 5 + Math.random() * 12; y = 8 + Math.random() * (mapData.height - 16); break;
-          case 1: x = mapData.width - 17 + Math.random() * 12; y = 8 + Math.random() * (mapData.height - 16); break;
-          case 2: x = 8 + Math.random() * (mapData.width - 16); y = 5 + Math.random() * 12; break;
-          default: x = 8 + Math.random() * (mapData.width - 16); y = mapData.height - 17 + Math.random() * 12; break;
+          case 0: x = 3 + Math.random() * 10; y = 8 + Math.random() * (mapData.height - 16); break;
+          case 1: x = mapData.width - 13 + Math.random() * 10; y = 8 + Math.random() * (mapData.height - 16); break;
+          case 2: x = 8 + Math.random() * (mapData.width - 16); y = 3 + Math.random() * 10; break;
+          default: x = 8 + Math.random() * (mapData.width - 16); y = mapData.height - 13 + Math.random() * 10; break;
         }
       } else {
-        // Random scattered placement
-        x = 8 + Math.random() * (mapData.width - 16);
-        y = 8 + Math.random() * (mapData.height - 16);
+        // Random scattered placement - avoid center
+        x = 10 + Math.random() * (mapData.width - 20);
+        y = 10 + Math.random() * (mapData.height - 20);
       }
 
       const cellX = Math.floor(x);
       const cellY = Math.floor(y);
+
+      // Skip if in ramp clearance zone
+      if (rampClearance.has(`${cellX},${cellY}`)) continue;
+
       if (cellX >= 0 && cellX < mapData.width && cellY >= 0 && cellY < mapData.height) {
         const cell = mapData.terrain[cellY][cellX];
-        // Place on ground, unbuildable, or cliff terrain
-        if (cell.terrain !== 'ramp' && cell.terrain !== 'blocked') {
+        // Only place on ground or unbuildable, NOT on cliff edges near ramps
+        if (cell.terrain === 'ground' || cell.terrain === 'unbuildable') {
           const height = getHeightAt(x, y);
 
           // Choose random rock model type
@@ -272,6 +307,7 @@ export class InstancedRocks {
             // Store collision data
             const collisionRadius = scale * 2.0;
             this.rockCollisions.push({ x, z: y, radius: collisionRadius });
+            rocksPlaced++;
           }
         }
       }
