@@ -46,6 +46,7 @@ export class AudioSystem extends System {
     AudioManager.setCategoryVolume('alert', uiState.soundVolume);
 
     // Initialize MusicPlayer with settings from store
+    // Don't stop menu music - let it crossfade to gameplay music naturally
     await MusicPlayer.initialize();
     MusicPlayer.setVolume(uiState.musicVolume);
     MusicPlayer.setMuted(!uiState.musicEnabled);
@@ -88,8 +89,11 @@ export class AudioSystem extends System {
       this.startAmbient(biome);
     }
 
-    // Start gameplay music
-    this.startGameplayMusic();
+    // Start gameplay music after a short delay to let the game fully initialize first
+    // This prevents any audio operations from blocking the initial render
+    setTimeout(() => {
+      this.startGameplayMusic();
+    }, 500);
   }
 
   // Start gameplay music (discovers and plays random tracks from gameplay folder)

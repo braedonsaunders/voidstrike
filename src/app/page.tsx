@@ -17,17 +17,14 @@ export default function Home() {
       MusicPlayer.setVolume(musicVolume);
       MusicPlayer.setMuted(!musicEnabled);
       await MusicPlayer.discoverTracks();
-      if (musicEnabled) {
+      // Only start if not already playing menu music
+      if (musicEnabled && MusicPlayer.getCurrentCategory() !== 'menu') {
         MusicPlayer.play('menu');
       }
     };
 
     startMenuMusic();
-
-    // Stop music when leaving the menu
-    return () => {
-      MusicPlayer.stop();
-    };
+    // Don't stop music on unmount - let it continue to game setup
   }, []);
 
   // Sync volume changes
