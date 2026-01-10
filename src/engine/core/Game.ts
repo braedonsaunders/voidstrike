@@ -246,6 +246,8 @@ export class Game {
    */
   public setTerrainGrid(terrain: TerrainCell[][]): void {
     this.terrainGrid = terrain;
+    // Load terrain walkability into pathfinding system
+    this.pathfindingSystem.loadTerrainData();
   }
 
   /**
