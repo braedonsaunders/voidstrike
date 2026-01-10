@@ -39,8 +39,11 @@ export class SignalingService {
       return true;
     }
 
+    // Capture reference for use in callback
+    const client = supabase;
+
     return new Promise((resolve) => {
-      this.channel = supabase
+      this.channel = client
         .channel(`signaling:${this.lobbyId}`, {
           config: {
             broadcast: {
