@@ -194,6 +194,10 @@ export function GameCanvas() {
         fogOfWarEnabled ? game.visionSystem : undefined,
         terrain
       );
+      // Set player ID for fog of war visibility checks
+      if (fogOfWarEnabled && localPlayerId) {
+        unitRendererRef.current.setPlayerId(localPlayerId);
+      }
 
       await updateProgress(78, 'Creating building renderer', 80);
 
@@ -203,6 +207,10 @@ export function GameCanvas() {
         fogOfWarEnabled ? game.visionSystem : undefined,
         terrain
       );
+      // Set player ID for fog of war visibility checks
+      if (fogOfWarEnabled && localPlayerId) {
+        buildingRendererRef.current.setPlayerId(localPlayerId);
+      }
 
       await updateProgress(80, 'Creating resource renderer', 80);
 
