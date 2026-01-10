@@ -705,15 +705,16 @@ export function HybridGameCanvas() {
             const health = clickedEntity.entity.get<Health>('Health');
 
             if (resource) {
-              const hasWorkers = selectedUnits.some((id) => {
+              // Filter to only include worker entity IDs
+              const workerIds = selectedUnits.filter((id) => {
                 const entity = gameRef.current!.world.getEntity(id);
                 const unit = entity?.get<Unit>('Unit');
                 return unit?.isWorker;
               });
 
-              if (hasWorkers) {
+              if (workerIds.length > 0) {
                 gameRef.current.eventBus.emit('command:gather', {
-                  entityIds: selectedUnits,
+                  entityIds: workerIds,
                   targetEntityId: clickedEntity.entity.id,
                   queue,
                 });
@@ -754,14 +755,16 @@ export function HybridGameCanvas() {
   }, [isBuilding, buildingType]);
 
   const findEntityAtPosition = (game: Game, x: number, z: number) => {
-    const clickRadius = 1.5;
+    // Use larger radius for resources to make them easier to click on
+    const resourceClickRadius = 2.5;
+    const unitClickRadius = 1.5;
 
     const resources = game.world.getEntitiesWith('Resource', 'Transform');
     for (const entity of resources) {
       const transform = entity.get<Transform>('Transform')!;
       const dx = transform.x - x;
       const dy = transform.y - z;
-      if (dx * dx + dy * dy < clickRadius * clickRadius) {
+      if (dx * dx + dy * dy < resourceClickRadius * resourceClickRadius) {
         return { entity };
       }
     }
@@ -773,11 +776,13 @@ export function HybridGameCanvas() {
       if (health.isDead()) continue;
       const dx = transform.x - x;
       const dy = transform.y - z;
-      if (dx * dx + dy * dy < clickRadius * clickRadius) {
+      if (dx * dx + dy * dy < unitClickRadius * unitClickRadius) {
         return { entity };
       }
     }
 
+    // Buildings have larger click radius due to their size
+    const buildingClickRadius = 2.0;
     const buildings = game.world.getEntitiesWith('Building', 'Transform', 'Health');
     for (const entity of buildings) {
       const transform = entity.get<Transform>('Transform')!;
@@ -785,7 +790,7 @@ export function HybridGameCanvas() {
       if (health.isDead()) continue;
       const dx = transform.x - x;
       const dy = transform.y - z;
-      if (dx * dx + dy * dy < 4) {
+      if (dx * dx + dy * dy < buildingClickRadius * buildingClickRadius) {
         return { entity };
       }
     }
