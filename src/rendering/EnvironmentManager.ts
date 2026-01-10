@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import { MapData } from '@/data/maps';
 import { BIOMES, BiomeConfig } from './Biomes';
 import { Terrain, MapDecorations } from './Terrain';
-import { CrystalField, WaterPlane, GroundFog } from './GroundDetail';
+import { CrystalField, WaterPlane, GroundFog, MapBorderFog } from './GroundDetail';
 import { EnvironmentParticles } from './EnhancedDecorations';
 // PERFORMANCE: Use instanced decorations instead of individual meshes
 import { InstancedTrees, InstancedRocks, InstancedGrass, InstancedPebbles } from './InstancedDecorations';
@@ -31,6 +31,7 @@ export class EnvironmentManager {
   private crystals: CrystalField | null = null;
   private water: WaterPlane | null = null;
   private groundFog: GroundFog | null = null;
+  private mapBorderFog: MapBorderFog | null = null;
   private particles: EnvironmentParticles | null = null;
   private legacyDecorations: MapDecorations | null = null;
 
@@ -119,7 +120,8 @@ export class EnvironmentManager {
     }
 
     scene.fog = new THREE.Fog(this.biome.colors.fog, fogNear, fogFar);
-    scene.background = this.biome.colors.sky;
+    // Use dark background - the MapBorderFog creates a smoky transition at map edges
+    scene.background = new THREE.Color(0x000000);
 
     // Create enhanced decorations
     this.createEnhancedDecorations();
@@ -174,6 +176,10 @@ export class EnvironmentManager {
     this.groundFog = new GroundFog(this.mapData, this.biome);
     this.scene.add(this.groundFog.mesh);
 
+    // Map border fog - dark smoky effect around map edges (SC2-style)
+    this.mapBorderFog = new MapBorderFog(this.mapData);
+    this.scene.add(this.mapBorderFog.mesh);
+
     // Particle effects
     if (this.biome.particleType !== 'none') {
       this.particles = new EnvironmentParticles(this.mapData, this.biome);
@@ -198,6 +204,9 @@ export class EnvironmentManager {
     }
     if (this.groundFog) {
       this.groundFog.update(gameTime);
+    }
+    if (this.mapBorderFog) {
+      this.mapBorderFog.update(gameTime);
     }
     if (this.particles) {
       this.particles.update(deltaTime);
@@ -259,6 +268,7 @@ export class EnvironmentManager {
     this.crystals?.dispose();
     this.water?.dispose();
     this.groundFog?.dispose();
+    this.mapBorderFog?.dispose();
     this.particles?.dispose();
     this.legacyDecorations?.dispose();
 
@@ -273,6 +283,7 @@ export class EnvironmentManager {
     if (this.crystals) this.scene.remove(this.crystals.group);
     if (this.water) this.scene.remove(this.water.mesh);
     if (this.groundFog) this.scene.remove(this.groundFog.mesh);
+    if (this.mapBorderFog) this.scene.remove(this.mapBorderFog.mesh);
     if (this.particles) this.scene.remove(this.particles.points);
     if (this.legacyDecorations) this.scene.remove(this.legacyDecorations.group);
   }
