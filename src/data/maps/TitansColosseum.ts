@@ -371,14 +371,51 @@ function generateTitansColosseum(): MapData {
   createRoad(terrain, 100, 300, 160, 240, 3);
   createRoad(terrain, 300, 300, 240, 240, 3);
 
-  // SCATTERED FORESTS - Moderate cover
-  scatterForests(terrain, MAP_WIDTH, MAP_HEIGHT, 50, 5, 12, BASE_EXCLUSION_ZONES, 1234, 0.3);
+  // SCATTERED FORESTS - Ash/dead tree coverage (3x more)
+  scatterForests(terrain, MAP_WIDTH, MAP_HEIGHT, 160, 5, 14, BASE_EXCLUSION_ZONES, 1234, 0.3);
 
   // DENSE FORESTS - Ambush positions at gold expansions
   fillFeatureCircle(terrain, 140, 140, 10, 'forest_dense');
   fillFeatureCircle(terrain, 260, 140, 10, 'forest_dense');
   fillFeatureCircle(terrain, 140, 260, 10, 'forest_dense');
   fillFeatureCircle(terrain, 260, 260, 10, 'forest_dense');
+
+  // VOLCANIC ASH FOREST WALLS - Create major chokepoints and lanes
+  // Outer ring forest barriers (create 8 approach lanes)
+  fillFeatureRect(terrain, 140, 20, 12, 35, 'forest_dense');   // Top-center wall
+  fillFeatureRect(terrain, 248, 20, 12, 35, 'forest_dense');   // Top-right wall
+  fillFeatureRect(terrain, 140, 345, 12, 35, 'forest_dense');  // Bottom-center wall
+  fillFeatureRect(terrain, 248, 345, 12, 35, 'forest_dense');  // Bottom-right wall
+  fillFeatureRect(terrain, 20, 140, 35, 12, 'forest_dense');   // Left-top wall
+  fillFeatureRect(terrain, 20, 248, 35, 12, 'forest_dense');   // Left-bottom wall
+  fillFeatureRect(terrain, 345, 140, 35, 12, 'forest_dense');  // Right-top wall
+  fillFeatureRect(terrain, 345, 248, 35, 12, 'forest_dense');  // Right-bottom wall
+
+  // Diagonal forest walls converging on center
+  fillFeatureCircle(terrain, 120, 120, 12, 'forest_dense');    // NW diagonal
+  fillFeatureCircle(terrain, 280, 120, 12, 'forest_dense');    // NE diagonal
+  fillFeatureCircle(terrain, 120, 280, 12, 'forest_dense');    // SW diagonal
+  fillFeatureCircle(terrain, 280, 280, 12, 'forest_dense');    // SE diagonal
+
+  // Mid-ring ash forest clusters
+  fillFeatureCircle(terrain, 170, 90, 9, 'forest_dense');      // N approach
+  fillFeatureCircle(terrain, 230, 90, 9, 'forest_dense');      // N approach
+  fillFeatureCircle(terrain, 90, 170, 9, 'forest_dense');      // W approach
+  fillFeatureCircle(terrain, 90, 230, 9, 'forest_dense');      // W approach
+  fillFeatureCircle(terrain, 170, 310, 9, 'forest_dense');     // S approach
+  fillFeatureCircle(terrain, 230, 310, 9, 'forest_dense');     // S approach
+  fillFeatureCircle(terrain, 310, 170, 9, 'forest_dense');     // E approach
+  fillFeatureCircle(terrain, 310, 230, 9, 'forest_dense');     // E approach
+
+  // Additional inner ring clusters for center control fights
+  fillFeatureCircle(terrain, 180, 150, 7, 'forest_dense');     // Center N
+  fillFeatureCircle(terrain, 220, 150, 7, 'forest_dense');     // Center N
+  fillFeatureCircle(terrain, 180, 250, 7, 'forest_dense');     // Center S
+  fillFeatureCircle(terrain, 220, 250, 7, 'forest_dense');     // Center S
+  fillFeatureCircle(terrain, 150, 180, 7, 'forest_dense');     // Center W
+  fillFeatureCircle(terrain, 150, 220, 7, 'forest_dense');     // Center W
+  fillFeatureCircle(terrain, 250, 180, 7, 'forest_dense');     // Center E
+  fillFeatureCircle(terrain, 250, 220, 7, 'forest_dense');     // Center E
 
   // MUD areas - Contested slow zones
   createMudArea(terrain, 200, 200, 20);  // Center arena
@@ -387,7 +424,7 @@ function generateTitansColosseum(): MapData {
   createMudArea(terrain, 100, 200, 8);   // West approach
   createMudArea(terrain, 300, 200, 8);   // East approach
 
-  // Light forests for flanking cover
+  // Light forests for flanking cover - expanded
   fillFeatureCircle(terrain, 150, 100, 8, 'forest_light');
   fillFeatureCircle(terrain, 250, 100, 8, 'forest_light');
   fillFeatureCircle(terrain, 150, 300, 8, 'forest_light');
@@ -396,6 +433,19 @@ function generateTitansColosseum(): MapData {
   fillFeatureCircle(terrain, 100, 250, 8, 'forest_light');
   fillFeatureCircle(terrain, 300, 150, 8, 'forest_light');
   fillFeatureCircle(terrain, 300, 250, 8, 'forest_light');
+  // Additional light forest coverage
+  fillFeatureCircle(terrain, 60, 100, 6, 'forest_light');      // Outer NW
+  fillFeatureCircle(terrain, 100, 60, 6, 'forest_light');      // Outer NW
+  fillFeatureCircle(terrain, 340, 100, 6, 'forest_light');     // Outer NE
+  fillFeatureCircle(terrain, 300, 60, 6, 'forest_light');      // Outer NE
+  fillFeatureCircle(terrain, 60, 300, 6, 'forest_light');      // Outer SW
+  fillFeatureCircle(terrain, 100, 340, 6, 'forest_light');     // Outer SW
+  fillFeatureCircle(terrain, 340, 300, 6, 'forest_light');     // Outer SE
+  fillFeatureCircle(terrain, 300, 340, 6, 'forest_light');     // Outer SE
+  fillFeatureCircle(terrain, 200, 150, 5, 'forest_light');     // Center approaches
+  fillFeatureCircle(terrain, 200, 250, 5, 'forest_light');     // Center approaches
+  fillFeatureCircle(terrain, 150, 200, 5, 'forest_light');     // Center approaches
+  fillFeatureCircle(terrain, 250, 200, 5, 'forest_light');     // Center approaches
 
   // ========================================
   // EXPANSIONS WITH RESOURCES

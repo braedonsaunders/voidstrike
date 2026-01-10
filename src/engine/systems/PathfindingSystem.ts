@@ -52,6 +52,67 @@ export class PathfindingSystem extends System {
     this.pathfinder = new AStar(mapWidth, mapHeight, 1);
     this.hierarchicalPathfinder = new HierarchicalAStar(mapWidth, mapHeight, 1);
     this.setupEventListeners();
+
+    // Load terrain walkability data after a short delay to ensure terrain is loaded
+    setTimeout(() => this.loadTerrainData(), 100);
+  }
+
+  /**
+   * Load terrain walkability into the pathfinding grid.
+   * Marks unwalkable terrain (cliffs, water, void) as blocked.
+   */
+  public loadTerrainData(): void {
+    const terrainGrid = this.game.getTerrainGrid();
+    if (!terrainGrid) {
+      console.warn('[PathfindingSystem] No terrain grid available');
+      return;
+    }
+
+    let blockedCount = 0;
+    for (let y = 0; y < terrainGrid.length; y++) {
+      for (let x = 0; x < terrainGrid[y].length; x++) {
+        const cell = terrainGrid[y][x];
+
+        // Block unwalkable terrain (cliffs, void, etc.)
+        if (cell.terrain === 'unwalkable') {
+          this.pathfinder.setWalkable(x, y, false);
+          this.hierarchicalPathfinder.setWalkable(x, y, false);
+          this.blockedCells.add(this.cellKey(x, y));
+          blockedCount++;
+        }
+
+        // Set movement costs for terrain features
+        if (cell.feature) {
+          switch (cell.feature) {
+            case 'forest_dense':
+              this.pathfinder.setMoveCost(x, y, 1.8); // 80% slower
+              break;
+            case 'forest_light':
+              this.pathfinder.setMoveCost(x, y, 1.3); // 30% slower
+              break;
+            case 'mud':
+              this.pathfinder.setMoveCost(x, y, 1.5); // 50% slower
+              break;
+            case 'road':
+              this.pathfinder.setMoveCost(x, y, 0.7); // 30% faster
+              break;
+            case 'water_shallow':
+              this.pathfinder.setMoveCost(x, y, 2.0); // 100% slower
+              break;
+            case 'water_deep':
+            case 'void':
+              // These should also be unwalkable
+              this.pathfinder.setWalkable(x, y, false);
+              this.hierarchicalPathfinder.setWalkable(x, y, false);
+              this.blockedCells.add(this.cellKey(x, y));
+              blockedCount++;
+              break;
+          }
+        }
+      }
+    }
+
+    console.log(`[PathfindingSystem] Loaded terrain: ${blockedCount} cells blocked`);
   }
 
   /**

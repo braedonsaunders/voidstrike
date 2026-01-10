@@ -15,17 +15,18 @@ const SUBDIVISIONS = 2; // 2x2 subdivisions per cell for better quality
 
 /**
  * Convert 256-level elevation (0-255) to physical world height.
- * Range: 0 to ~6.4 units (0.025 per level)
+ * Range: 0 to ~10 units (0.04 per level for dramatic cliffs)
+ * SC2-style: significant height difference between elevation levels
  */
 function elevationToHeight(elevation: Elevation): number {
-  return elevation * 0.025;
+  return elevation * 0.04;
 }
 
 // Legacy height lookup for backwards compatibility
 const ELEVATION_HEIGHTS: Record<ElevationLevel, number> = {
-  0: elevationToHeight(60),   // ~1.5
-  1: elevationToHeight(140),  // ~3.5
-  2: elevationToHeight(220),  // ~5.5
+  0: elevationToHeight(60),   // ~2.4 (low ground)
+  1: elevationToHeight(140),  // ~5.6 (natural expansion level)
+  2: elevationToHeight(220),  // ~8.8 (main base level)
 };
 
 /**

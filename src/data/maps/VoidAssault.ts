@@ -343,25 +343,63 @@ function generateVoidAssault(): MapData {
   // Cross-map diagonal
   createRoad(terrain, 75, 135, 145, 85, 3);
 
-  // SCATTERED FORESTS - Alien growths
-  scatterForests(terrain, MAP_WIDTH, MAP_HEIGHT, 25, 4, 10, BASE_EXCLUSION_ZONES, 789, 0.35);
+  // SCATTERED FORESTS - Alien flora/void growths (3x more)
+  scatterForests(terrain, MAP_WIDTH, MAP_HEIGHT, 80, 4, 10, BASE_EXCLUSION_ZONES, 789, 0.35);
 
-  // DENSE FOREST ambush points
+  // DENSE FOREST ambush points - original
   fillFeatureCircle(terrain, 45, 75, 7, 'forest_dense');   // P1 flank
   fillFeatureCircle(terrain, 175, 145, 7, 'forest_dense'); // P2 flank
   fillFeatureCircle(terrain, 95, 55, 6, 'forest_dense');   // Gold approach
   fillFeatureCircle(terrain, 125, 165, 6, 'forest_dense'); // Gold approach
+
+  // VOID FOREST WALLS - Alien flora creating tactical chokepoints
+  // Diagonal void forest barriers (matches diagonal spawn layout)
+  fillFeatureRect(terrain, 60, 25, 8, 30, 'forest_dense');    // Top P1 side wall
+  fillFeatureRect(terrain, 155, 165, 8, 30, 'forest_dense');  // Bottom P2 side wall
+  fillFeatureRect(terrain, 25, 60, 30, 8, 'forest_dense');    // Left P1 side wall
+  fillFeatureRect(terrain, 165, 155, 30, 8, 'forest_dense');  // Right P2 side wall
+
+  // Cross-map forest corridors with gaps for paths
+  fillFeatureRect(terrain, 85, 15, 10, 25, 'forest_dense');   // Top corridor section
+  fillFeatureRect(terrain, 130, 180, 10, 25, 'forest_dense'); // Bottom corridor section
+  fillFeatureRect(terrain, 15, 85, 25, 10, 'forest_dense');   // Left corridor section
+  fillFeatureRect(terrain, 180, 130, 25, 10, 'forest_dense'); // Right corridor section
+
+  // Alien growth clusters at strategic points
+  fillFeatureCircle(terrain, 65, 100, 8, 'forest_dense');     // P1 expansion approach
+  fillFeatureCircle(terrain, 155, 120, 8, 'forest_dense');    // P2 expansion approach
+  fillFeatureCircle(terrain, 100, 65, 7, 'forest_dense');     // Gold 1 defense
+  fillFeatureCircle(terrain, 120, 155, 7, 'forest_dense');    // Gold 2 defense
+  fillFeatureCircle(terrain, 50, 50, 7, 'forest_dense');      // P1 third region
+  fillFeatureCircle(terrain, 170, 170, 7, 'forest_dense');    // P2 third region
+
+  // Mid-map void forest clusters for army positioning
+  fillFeatureCircle(terrain, 90, 90, 6, 'forest_dense');      // Center NW
+  fillFeatureCircle(terrain, 130, 130, 6, 'forest_dense');    // Center SE
+  fillFeatureCircle(terrain, 80, 130, 5, 'forest_dense');     // P1 side center
+  fillFeatureCircle(terrain, 140, 90, 5, 'forest_dense');     // P2 side center
 
   // MUD areas (void-corrupted ground)
   createMudArea(terrain, 110, 110, 12);  // Center
   createMudArea(terrain, 70, 70, 6);     // P1 side
   createMudArea(terrain, 150, 150, 6);   // P2 side
 
-  // Light forests for cover
+  // Light forests for cover - expanded
   fillFeatureCircle(terrain, 55, 125, 6, 'forest_light');
   fillFeatureCircle(terrain, 165, 95, 6, 'forest_light');
   fillFeatureCircle(terrain, 110, 80, 5, 'forest_light');
   fillFeatureCircle(terrain, 110, 140, 5, 'forest_light');
+  // Additional void flora patches
+  fillFeatureCircle(terrain, 35, 65, 5, 'forest_light');      // P1 main area
+  fillFeatureCircle(terrain, 185, 155, 5, 'forest_light');    // P2 main area
+  fillFeatureCircle(terrain, 75, 45, 5, 'forest_light');      // P1 third approach
+  fillFeatureCircle(terrain, 145, 175, 5, 'forest_light');    // P2 third approach
+  fillFeatureCircle(terrain, 20, 130, 4, 'forest_light');     // West edge
+  fillFeatureCircle(terrain, 200, 90, 4, 'forest_light');     // East edge
+  fillFeatureCircle(terrain, 130, 20, 4, 'forest_light');     // North edge
+  fillFeatureCircle(terrain, 90, 200, 4, 'forest_light');     // South edge
+  fillFeatureCircle(terrain, 60, 165, 4, 'forest_light');     // P1 natural area
+  fillFeatureCircle(terrain, 160, 55, 4, 'forest_light');     // P2 natural area
 
   // ========================================
   // EXPANSIONS WITH RESOURCES
