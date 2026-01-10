@@ -8,6 +8,7 @@ import { Building } from '../components/Building';
 import { Resource } from '../components/Resource';
 import { PooledVector2 } from '@/utils/VectorPool';
 import { isLocalPlayer } from '@/store/gameSetupStore';
+import { debugCombat } from '@/utils/debugLogger';
 
 // Static temp vectors to avoid allocations in hot loops
 const tempTargetScore: { id: number; score: number } | null = null;
@@ -301,13 +302,13 @@ export class CombatSystem extends System {
             const resource = resourceEntity.get<Resource>('Resource');
             if (resource && resource.extractorEntityId === building.id) {
               resource.extractorEntityId = null;
-              console.log(`CombatSystem: Extractor destroyed, vespene geyser ${resourceEntity.id} restored`);
+              debugCombat.log(`CombatSystem: Extractor destroyed, vespene geyser ${resourceEntity.id} restored`);
               break;
             }
           }
         }
 
-        console.log(`CombatSystem: Building ${buildingComp.buildingId} (${building.id}) destroyed at (${transform.x.toFixed(1)}, ${transform.y.toFixed(1)})`);
+        debugCombat.log(`CombatSystem: Building ${buildingComp.buildingId} (${building.id}) destroyed at (${transform.x.toFixed(1)}, ${transform.y.toFixed(1)})`);
 
         this.game.eventBus.emit('building:destroyed', {
           entityId: building.id,

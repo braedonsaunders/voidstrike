@@ -9,6 +9,7 @@ import { VisionSystem } from '@/engine/systems/VisionSystem';
 import { AssetManager } from '@/assets/AssetManager';
 import { Terrain } from './Terrain';
 import { getPlayerColor, getLocalPlayerId, isSpectatorMode } from '@/store/gameSetupStore';
+import { debugAnimation, debugAssets } from '@/utils/debugLogger';
 
 // Instance data for a single unit type + player combo (non-animated units)
 interface InstancedUnitGroup {
@@ -103,7 +104,7 @@ export class UnitRenderer {
 
     // Load custom GLB models (async, runs in background)
     AssetManager.loadCustomModels().catch(err => {
-      console.warn('[UnitRenderer] Error loading custom models:', err);
+      debugAssets.warn('[UnitRenderer] Error loading custom models:', err);
     });
   }
 
@@ -163,7 +164,7 @@ export class UnitRenderer {
         }
 
         animations.set(name, action);
-        console.log(`[UnitRenderer] ${unitType}: Found animation "${clip.name}" -> normalized "${name}"`);
+        debugAnimation.log(`[UnitRenderer] ${unitType}: Found animation "${clip.name}" -> normalized "${name}"`);
 
         // Map to canonical animation names, preferring EXACT matches over partial matches
         // This prevents "idle_4" from overwriting "idle", or "running" from overwriting "walk"
@@ -172,22 +173,22 @@ export class UnitRenderer {
         if (name === 'idle' || name === 'stand' || name === 'pose') {
           animations.set('idle', action);
           exactMatches.idle = true;
-          console.log(`[UnitRenderer] ${unitType}: Mapped "${name}" -> 'idle' (exact match)`);
+          debugAnimation.log(`[UnitRenderer] ${unitType}: Mapped "${name}" -> 'idle' (exact match)`);
         }
         if (name === 'walk' || name === 'run' || name === 'move') {
           animations.set('walk', action);
           exactMatches.walk = true;
-          console.log(`[UnitRenderer] ${unitType}: Mapped "${name}" -> 'walk' (exact match)`);
+          debugAnimation.log(`[UnitRenderer] ${unitType}: Mapped "${name}" -> 'walk' (exact match)`);
         }
         if (name === 'attack' || name === 'shoot' || name === 'fire' || name === 'combat') {
           animations.set('attack', action);
           exactMatches.attack = true;
-          console.log(`[UnitRenderer] ${unitType}: Mapped "${name}" -> 'attack' (exact match)`);
+          debugAnimation.log(`[UnitRenderer] ${unitType}: Mapped "${name}" -> 'attack' (exact match)`);
         }
         if (name === 'death' || name === 'die' || name === 'dead') {
           animations.set('death', action);
           exactMatches.death = true;
-          console.log(`[UnitRenderer] ${unitType}: Mapped "${name}" -> 'death' (exact match)`);
+          debugAnimation.log(`[UnitRenderer] ${unitType}: Mapped "${name}" -> 'death' (exact match)`);
         }
       }
 
@@ -203,25 +204,25 @@ export class UnitRenderer {
         if (!exactMatches.idle && !animations.has('idle')) {
           if (name.includes('idle') || name.includes('stand')) {
             animations.set('idle', action);
-            console.log(`[UnitRenderer] ${unitType}: Mapped "${name}" -> 'idle' (partial match)`);
+            debugAnimation.log(`[UnitRenderer] ${unitType}: Mapped "${name}" -> 'idle' (partial match)`);
           }
         }
         if (!exactMatches.walk && !animations.has('walk')) {
           if (name.includes('walk') || name.includes('run') || name.includes('move') || name.includes('locomotion')) {
             animations.set('walk', action);
-            console.log(`[UnitRenderer] ${unitType}: Mapped "${name}" -> 'walk' (partial match)`);
+            debugAnimation.log(`[UnitRenderer] ${unitType}: Mapped "${name}" -> 'walk' (partial match)`);
           }
         }
         if (!exactMatches.attack && !animations.has('attack')) {
           if (name.includes('attack') || name.includes('shoot') || name.includes('fire') || name.includes('combat')) {
             animations.set('attack', action);
-            console.log(`[UnitRenderer] ${unitType}: Mapped "${name}" -> 'attack' (partial match)`);
+            debugAnimation.log(`[UnitRenderer] ${unitType}: Mapped "${name}" -> 'attack' (partial match)`);
           }
         }
         if (!exactMatches.death && !animations.has('death')) {
           if (name.includes('death') || name.includes('die') || name.includes('dead')) {
             animations.set('death', action);
-            console.log(`[UnitRenderer] ${unitType}: Mapped "${name}" -> 'death' (partial match)`);
+            debugAnimation.log(`[UnitRenderer] ${unitType}: Mapped "${name}" -> 'death' (partial match)`);
           }
         }
       }
@@ -235,16 +236,16 @@ export class UnitRenderer {
       }
 
       // Log final animation mappings
-      console.log(`[UnitRenderer] ${unitType}: Final animation mappings:`);
+      debugAnimation.log(`[UnitRenderer] ${unitType}: Final animation mappings:`);
       for (const [key, action] of animations) {
         const clipName = action.getClip().name;
-        console.log(`[UnitRenderer]   '${key}' -> clip "${clipName}"`);
+        debugAnimation.log(`[UnitRenderer]   '${key}' -> clip "${clipName}"`);
       }
 
       // Start with idle animation if available
       const idleAction = animations.get('idle');
       if (idleAction) {
-        console.log(`[UnitRenderer] ${unitType}: Starting idle animation, clip name: "${idleAction.getClip().name}"`);
+        debugAnimation.log(`[UnitRenderer] ${unitType}: Starting idle animation, clip name: "${idleAction.getClip().name}"`);
         idleAction.play();
       } else if (clips.length > 0) {
         // Fall back to first NON-DEATH animation to avoid playing death as idle
@@ -260,7 +261,7 @@ export class UnitRenderer {
         const firstAction = mixer.clipAction(fallbackClip);
         firstAction.play();
         animations.set('idle', firstAction);
-        console.log(`[UnitRenderer] ${unitType}: No idle animation found, using fallback: ${fallbackClip.name}`);
+        debugAnimation.log(`[UnitRenderer] ${unitType}: No idle animation found, using fallback: ${fallbackClip.name}`);
       }
 
       animUnit = {
@@ -313,7 +314,7 @@ export class UnitRenderer {
     // Remove tracks in reverse order to maintain correct indices
     for (let i = tracksToRemove.length - 1; i >= 0; i--) {
       const removedTrack = clip.tracks.splice(tracksToRemove[i], 1)[0];
-      console.log(`[UnitRenderer] Removed root motion track: ${removedTrack.name} from ${clip.name}`);
+      debugAnimation.log(`[UnitRenderer] Removed root motion track: ${removedTrack.name} from ${clip.name}`);
     }
   }
 
@@ -332,8 +333,8 @@ export class UnitRenderer {
       const currentActionObj = animUnit.animations.get(animUnit.currentAction);
       const targetActionObj = animUnit.animations.get(targetAction);
 
-      console.log(`[UnitRenderer] Animation switch: ${animUnit.currentAction} -> ${targetAction} (isMoving=${isMoving}, isAttacking=${isAttacking})`);
-      console.log(`[UnitRenderer] Available animations:`, Array.from(animUnit.animations.keys()));
+      debugAnimation.log(`[UnitRenderer] Animation switch: ${animUnit.currentAction} -> ${targetAction} (isMoving=${isMoving}, isAttacking=${isAttacking})`);
+      debugAnimation.log(`[UnitRenderer] Available animations:`, Array.from(animUnit.animations.keys()));
 
       if (targetActionObj) {
         if (currentActionObj) {
@@ -342,7 +343,7 @@ export class UnitRenderer {
         targetActionObj.reset().fadeIn(0.2).play();
         animUnit.currentAction = targetAction;
       } else {
-        console.warn(`[UnitRenderer] Target animation '${targetAction}' not found!`);
+        debugAnimation.warn(`[UnitRenderer] Target animation '${targetAction}' not found!`);
       }
     }
   }
@@ -676,7 +677,7 @@ export class UnitRenderer {
    * Clear all cached meshes so they get recreated with updated assets on next update.
    */
   public refreshAllMeshes(): void {
-    console.log('[UnitRenderer] Refreshing all unit meshes...');
+    debugAssets.log('[UnitRenderer] Refreshing all unit meshes...');
 
     // Clear instanced groups
     for (const group of this.instancedGroups.values()) {

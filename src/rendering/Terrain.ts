@@ -5,6 +5,7 @@ import { createTerrainShaderMaterial, updateTerrainShader } from './shaders/Terr
 import { createSC2TerrainShaderMaterial, getSC2BiomeConfig, updateSC2TerrainShader } from './shaders/SC2TerrainShader';
 import { createTextureTerrainMaterial, updateTextureTerrainShader, getBiomeTextureConfig, BiomeTextureType } from './shaders/TextureTerrainShader';
 import AssetManager from '@/assets/AssetManager';
+import { debugTerrain } from '@/utils/debugLogger';
 
 // Shader mode for terrain rendering
 type TerrainShaderMode = 'texture' | 'basic' | 'sc2';
@@ -248,18 +249,18 @@ export class Terrain {
       case 'texture':
         // Use biome-specific textures (falls back to grassland if not available)
         const biomeType = (this.mapData.biome || 'grassland') as BiomeTextureType;
-        console.log(`[Terrain] Using TEXTURE-BASED terrain shader for biome: ${biomeType}`);
+        debugTerrain.log(`[Terrain] Using TEXTURE-BASED terrain shader for biome: ${biomeType}`);
         const textureConfig = getBiomeTextureConfig(biomeType);
         this.material = createTextureTerrainMaterial(textureConfig);
         break;
       case 'sc2':
-        console.log('[Terrain] Using SC2 terrain shader for biome:', this.mapData.biome || 'grassland');
+        debugTerrain.log('[Terrain] Using SC2 terrain shader for biome:', this.mapData.biome || 'grassland');
         const sc2Config = getSC2BiomeConfig(this.mapData.biome || 'grassland');
         this.material = createSC2TerrainShaderMaterial(sc2Config);
         break;
       case 'basic':
       default:
-        console.log('[Terrain] Using basic terrain shader');
+        debugTerrain.log('[Terrain] Using basic terrain shader');
         const shaderConfig = getBiomeShaderConfig(this.biome);
         this.material = createTerrainShaderMaterial(shaderConfig);
         break;

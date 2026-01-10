@@ -25,7 +25,9 @@ voidstrike/
 │   │   │   ├── CommandCard.tsx
 │   │   │   ├── SelectionPanel.tsx
 │   │   │   ├── ProductionQueuePanel.tsx # Building production UI
-│   │   │   └── ResourcePanel.tsx
+│   │   │   ├── ResourcePanel.tsx
+│   │   │   ├── GraphicsOptionsPanel.tsx # Graphics settings panel
+│   │   │   └── DebugMenuPanel.tsx       # Debug logging settings (disabled in multiplayer)
 │   │   └── ui/                # Reusable UI components
 │   ├── engine/
 │   │   ├── core/
@@ -100,7 +102,9 @@ voidstrike/
 │   └── utils/
 │       ├── math.ts            # Math utilities
 │       ├── spatial.ts         # Spatial hashing
-│       └── deterministic.ts   # Deterministic random
+│       ├── deterministic.ts   # Deterministic random
+│       ├── gameSetup.ts       # Initial game entity spawning
+│       └── debugLogger.ts     # Category-based debug logging utility
 ├── public/
 │   ├── models/                # 3D models (GLTF)
 │   ├── textures/              # Terrain, unit textures

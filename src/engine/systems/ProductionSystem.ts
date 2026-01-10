@@ -9,6 +9,7 @@ import { useGameStore } from '@/store/gameStore';
 import { isLocalPlayer } from '@/store/gameSetupStore';
 import { UNIT_DEFINITIONS } from '@/data/units/dominion';
 import { BUILDING_DEFINITIONS } from '@/data/buildings/dominion';
+import { debugProduction } from '@/utils/debugLogger';
 
 export class ProductionSystem extends System {
   public priority = 30;
@@ -32,7 +33,7 @@ export class ProductionSystem extends System {
     const unitDef = UNIT_DEFINITIONS[unitType];
 
     if (!unitDef) {
-      console.warn(`Unknown unit type: ${unitType}`);
+      debugProduction.warn(`Unknown unit type: ${unitType}`);
       return;
     }
 
@@ -105,7 +106,7 @@ export class ProductionSystem extends System {
     const upgradeDef = BUILDING_DEFINITIONS[upgradeTo];
 
     if (!upgradeDef) {
-      console.warn(`Unknown building type: ${upgradeTo}`);
+      debugProduction.warn(`Unknown building type: ${upgradeTo}`);
       return;
     }
 
@@ -283,7 +284,7 @@ export class ProductionSystem extends System {
         const abilityComponent = new Ability(200, 0.5625, orbitalAbilities);
         abilityComponent.energy = 50; // Start with 50 energy
         entity.add(abilityComponent);
-        console.log(`[ProductionSystem] Added abilities to Orbital Station ${buildingId}`);
+        debugProduction.log(`[ProductionSystem] Added abilities to Orbital Station ${buildingId}`);
       }
     }
 
@@ -292,6 +293,6 @@ export class ProductionSystem extends System {
       newType: newBuildingType,
     });
 
-    console.log(`[ProductionSystem] Building ${buildingId} upgraded to ${newDef.name}`);
+    debugProduction.log(`[ProductionSystem] Building ${buildingId} upgraded to ${newDef.name}`);
   }
 }

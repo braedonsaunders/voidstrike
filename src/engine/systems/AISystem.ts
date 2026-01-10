@@ -8,6 +8,7 @@ import { Resource } from '../components/Resource';
 import { Game, GameCommand } from '../core/Game';
 import { UNIT_DEFINITIONS } from '@/data/units/dominion';
 import { BUILDING_DEFINITIONS } from '@/data/buildings/dominion';
+import { debugAI } from '@/utils/debugLogger';
 
 type AIState = 'building' | 'expanding' | 'attacking' | 'defending';
 
@@ -423,7 +424,7 @@ export class AISystem extends System {
     // Find an available worker to assign to construction
     const workerId = this.findAvailableWorker(ai.playerId);
     if (workerId === null) {
-      console.log(`AISystem: No available worker for ${buildingType}`);
+      debugAI.log(`AISystem: No available worker for ${buildingType}`);
       return false;
     }
 
@@ -439,7 +440,7 @@ export class AISystem extends System {
       workerId: workerId,
     });
 
-    console.log(`AISystem: ${ai.playerId} building ${buildingType} with worker ${workerId}`);
+    debugAI.log(`AISystem: ${ai.playerId} building ${buildingType} with worker ${workerId}`);
     return true;
   }
 

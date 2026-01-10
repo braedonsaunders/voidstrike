@@ -3,6 +3,7 @@
 import { useState, useCallback } from 'react';
 import { useGameStore } from '@/store/gameStore';
 import { useUIStore } from '@/store/uiStore';
+import { isMultiplayerMode } from '@/store/gameSetupStore';
 import { setEdgeScrollEnabled } from '@/store/cameraStore';
 import { Minimap } from './Minimap';
 import { ResourcePanel } from './ResourcePanel';
@@ -15,7 +16,7 @@ import { PlayerStatusPanel } from './PlayerStatusPanel';
 
 export function HUD() {
   const { isPaused, togglePause, setShowTechTree, setShowKeyboardShortcuts } = useGameStore();
-  const { toggleFPS, showFPS, toggleGraphicsOptions, showGraphicsOptions } = useUIStore();
+  const { toggleFPS, showFPS, toggleGraphicsOptions, showGraphicsOptions, toggleDebugMenu, showDebugMenu } = useUIStore();
   const [showOptionsMenu, setShowOptionsMenu] = useState(false);
   const [showPlayerStatus, setShowPlayerStatus] = useState(true);
 
@@ -110,6 +111,19 @@ export function HUD() {
                   <span>Graphics</span>
                   <span className={showGraphicsOptions ? 'text-green-400' : 'text-void-500'}>{showGraphicsOptions ? 'OPEN' : ''}</span>
                 </button>
+                {/* Debug menu only available in single player (not in multiplayer with multiple humans) */}
+                {!isMultiplayerMode() && (
+                  <button
+                    onClick={() => {
+                      setShowOptionsMenu(false);
+                      toggleDebugMenu();
+                    }}
+                    className="w-full px-4 py-2 text-left text-sm text-void-200 hover:bg-void-800 transition-colors flex justify-between items-center"
+                  >
+                    <span>Debug</span>
+                    <span className={showDebugMenu ? 'text-green-400' : 'text-void-500'}>{showDebugMenu ? 'OPEN' : ''}</span>
+                  </button>
+                )}
                 <div className="border-t border-void-700 my-1" />
                 <button
                   onClick={() => {
