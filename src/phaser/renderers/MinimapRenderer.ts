@@ -203,7 +203,7 @@ export class MinimapRenderer {
 
       // Check visibility for enemy buildings (spectators see everything)
       const isSpectating = isSpectatorMode() || !this.playerId;
-      if (!isSpectating && selectable.playerId !== this.playerId && this.fogOfWarEnabled && this.visionSystem) {
+      if (!isSpectating && this.playerId && selectable.playerId !== this.playerId && this.fogOfWarEnabled && this.visionSystem) {
         if (!this.visionSystem.isExplored(this.playerId, transform.x, transform.y)) {
           continue;
         }
@@ -228,7 +228,7 @@ export class MinimapRenderer {
 
       // Check visibility for enemy units (spectators see everything)
       const isSpectatingUnits = isSpectatorMode() || !this.playerId;
-      if (!isSpectatingUnits && selectable.playerId !== this.playerId && this.fogOfWarEnabled && this.visionSystem) {
+      if (!isSpectatingUnits && this.playerId && selectable.playerId !== this.playerId && this.fogOfWarEnabled && this.visionSystem) {
         if (!this.visionSystem.isVisible(this.playerId, transform.x, transform.y)) {
           continue;
         }
