@@ -542,3 +542,268 @@ export class GroundFog {
     this.material.dispose();
   }
 }
+
+/**
+ * Map border fog - creates a dark, smoky fog effect around the map edges
+ * Similar to Starcraft 2's map boundary effect
+ * Uses a single ring mesh with an animated shader for performance
+ */
+export class MapBorderFog {
+  public mesh: THREE.Mesh;
+  private material: THREE.ShaderMaterial;
+
+  constructor(mapData: MapData) {
+    const mapWidth = mapData.width;
+    const mapHeight = mapData.height;
+
+    // Border extends this far beyond the map
+    const borderSize = 60;
+    // How far the fog fades inward from the map edge
+    const fadeDistance = 15;
+
+    // Create a ring-shaped geometry that surrounds the map
+    // Inner rectangle is the map bounds, outer rectangle extends beyond
+    const outerWidth = mapWidth + borderSize * 2;
+    const outerHeight = mapHeight + borderSize * 2;
+
+    // Create custom geometry - a frame/ring shape
+    const geometry = this.createBorderGeometry(
+      mapWidth,
+      mapHeight,
+      outerWidth,
+      outerHeight,
+      fadeDistance
+    );
+
+    this.material = new THREE.ShaderMaterial({
+      uniforms: {
+        time: { value: 0 },
+        fogColor: { value: new THREE.Color(0x000000) },
+        mapCenter: { value: new THREE.Vector2(mapWidth / 2, mapHeight / 2) },
+        mapSize: { value: new THREE.Vector2(mapWidth, mapHeight) },
+        fadeDistance: { value: fadeDistance },
+      },
+      vertexShader: `
+        varying vec2 vUv;
+        varying vec3 vWorldPosition;
+        varying float vFade;
+
+        attribute float fade;
+
+        void main() {
+          vUv = uv;
+          vFade = fade;
+          vec4 worldPos = modelMatrix * vec4(position, 1.0);
+          vWorldPosition = worldPos.xyz;
+          gl_Position = projectionMatrix * viewMatrix * worldPos;
+        }
+      `,
+      fragmentShader: `
+        uniform float time;
+        uniform vec3 fogColor;
+        uniform vec2 mapCenter;
+        uniform vec2 mapSize;
+        uniform float fadeDistance;
+
+        varying vec2 vUv;
+        varying vec3 vWorldPosition;
+        varying float vFade;
+
+        // Simplex noise for organic smoke movement
+        vec3 mod289(vec3 x) { return x - floor(x * (1.0 / 289.0)) * 289.0; }
+        vec2 mod289(vec2 x) { return x - floor(x * (1.0 / 289.0)) * 289.0; }
+        vec3 permute(vec3 x) { return mod289(((x*34.0)+1.0)*x); }
+
+        float snoise(vec2 v) {
+          const vec4 C = vec4(0.211324865405187, 0.366025403784439,
+                             -0.577350269189626, 0.024390243902439);
+          vec2 i  = floor(v + dot(v, C.yy));
+          vec2 x0 = v -   i + dot(i, C.xx);
+          vec2 i1;
+          i1 = (x0.x > x0.y) ? vec2(1.0, 0.0) : vec2(0.0, 1.0);
+          vec4 x12 = x0.xyxy + C.xxzz;
+          x12.xy -= i1;
+          i = mod289(i);
+          vec3 p = permute(permute(i.y + vec3(0.0, i1.y, 1.0))
+                          + i.x + vec3(0.0, i1.x, 1.0));
+          vec3 m = max(0.5 - vec3(dot(x0,x0), dot(x12.xy,x12.xy),
+                                  dot(x12.zw,x12.zw)), 0.0);
+          m = m*m;
+          m = m*m;
+          vec3 x = 2.0 * fract(p * C.www) - 1.0;
+          vec3 h = abs(x) - 0.5;
+          vec3 ox = floor(x + 0.5);
+          vec3 a0 = x - ox;
+          m *= 1.79284291400159 - 0.85373472095314 * (a0*a0 + h*h);
+          vec3 g;
+          g.x = a0.x * x0.x + h.x * x0.y;
+          g.yz = a0.yz * x12.xz + h.yz * x12.yw;
+          return 130.0 * dot(m, g);
+        }
+
+        void main() {
+          // Multi-octave noise for smoky, organic movement
+          vec2 noiseCoord = vWorldPosition.xz * 0.03;
+          float n1 = snoise(noiseCoord + time * 0.02);
+          float n2 = snoise(noiseCoord * 2.0 - time * 0.015) * 0.5;
+          float n3 = snoise(noiseCoord * 4.0 + time * 0.025) * 0.25;
+          float n4 = snoise(noiseCoord * 8.0 - time * 0.01) * 0.125;
+
+          float noise = (n1 + n2 + n3 + n4) * 0.5 + 0.5;
+
+          // Wispy smoke tendrils effect
+          float wisps = smoothstep(0.3, 0.7, noise);
+
+          // Base fade from vertex attribute (0 at map edge, 1 at outer edge)
+          float baseFade = vFade;
+
+          // Apply noise variation to the fade
+          float noisyFade = baseFade + (noise - 0.5) * 0.15;
+          noisyFade = clamp(noisyFade, 0.0, 1.0);
+
+          // Smooth transition with noise-based variation
+          float alpha = smoothstep(0.0, 0.4, noisyFade) * (0.85 + wisps * 0.15);
+
+          // Add subtle color variation for depth
+          vec3 color = fogColor;
+          color += vec3(0.02, 0.01, 0.03) * noise; // Very subtle purple tint in lighter areas
+
+          gl_FragColor = vec4(color, alpha);
+        }
+      `,
+      transparent: true,
+      side: THREE.DoubleSide,
+      depthWrite: false,
+      blending: THREE.NormalBlending,
+    });
+
+    this.mesh = new THREE.Mesh(geometry, this.material);
+    this.mesh.rotation.x = -Math.PI / 2;
+    this.mesh.position.set(mapWidth / 2, 0.1, mapHeight / 2); // Slightly above ground
+    this.mesh.renderOrder = 100; // Render after most objects
+  }
+
+  /**
+   * Creates a ring/frame geometry that surrounds the map
+   * Uses vertex attributes for fade values
+   */
+  private createBorderGeometry(
+    mapWidth: number,
+    mapHeight: number,
+    outerWidth: number,
+    outerHeight: number,
+    _fadeDistance: number
+  ): THREE.BufferGeometry {
+    // Create 4 border strips (top, bottom, left, right) plus corners
+    // This is more efficient than a complex ring shape
+
+    const positions: number[] = [];
+    const uvs: number[] = [];
+    const fades: number[] = [];
+    const indices: number[] = [];
+
+    const halfMapW = mapWidth / 2;
+    const halfMapH = mapHeight / 2;
+    const halfOuterW = outerWidth / 2;
+    const halfOuterH = outerHeight / 2;
+
+    let vertexIndex = 0;
+
+    // Helper to add a rectangular section
+    const addSection = (
+      innerX1: number, innerZ1: number,
+      innerX2: number, innerZ2: number,
+      outerX1: number, outerZ1: number,
+      outerX2: number, outerZ2: number,
+      segsX: number, segsZ: number
+    ) => {
+      for (let iz = 0; iz <= segsZ; iz++) {
+        const tz = iz / segsZ;
+        const fade = tz; // 0 at inner edge, 1 at outer edge
+
+        for (let ix = 0; ix <= segsX; ix++) {
+          const tx = ix / segsX;
+
+          const x = innerX1 + (innerX2 - innerX1) * tx +
+                    (outerX1 + (outerX2 - outerX1) * tx - (innerX1 + (innerX2 - innerX1) * tx)) * tz;
+          const z = innerZ1 + (innerZ2 - innerZ1) * tx +
+                    (outerZ1 + (outerZ2 - outerZ1) * tx - (innerZ1 + (innerZ2 - innerZ1) * tx)) * tz;
+
+          positions.push(x, 0, z);
+          uvs.push(tx, tz);
+          fades.push(fade);
+        }
+      }
+
+      // Create triangles
+      for (let iz = 0; iz < segsZ; iz++) {
+        for (let ix = 0; ix < segsX; ix++) {
+          const base = vertexIndex + iz * (segsX + 1) + ix;
+          const nextRow = base + segsX + 1;
+
+          indices.push(base, nextRow, base + 1);
+          indices.push(base + 1, nextRow, nextRow + 1);
+        }
+      }
+
+      vertexIndex += (segsX + 1) * (segsZ + 1);
+    };
+
+    const segs = 16; // Segments for gradient smoothness
+    const segsSide = 32; // More segments along the long sides
+
+    // Top border (north)
+    addSection(
+      -halfMapW, -halfMapH,           // Inner left
+      halfMapW, -halfMapH,            // Inner right
+      -halfOuterW, -halfOuterH,       // Outer left
+      halfOuterW, -halfOuterH,        // Outer right
+      segsSide, segs
+    );
+
+    // Bottom border (south)
+    addSection(
+      -halfMapW, halfMapH,            // Inner left
+      halfMapW, halfMapH,             // Inner right
+      -halfOuterW, halfOuterH,        // Outer left
+      halfOuterW, halfOuterH,         // Outer right
+      segsSide, segs
+    );
+
+    // Left border (west)
+    addSection(
+      -halfMapW, -halfMapH,           // Inner top
+      -halfMapW, halfMapH,            // Inner bottom
+      -halfOuterW, -halfOuterH,       // Outer top
+      -halfOuterW, halfOuterH,        // Outer bottom
+      segs, segsSide
+    );
+
+    // Right border (east)
+    addSection(
+      halfMapW, -halfMapH,            // Inner top
+      halfMapW, halfMapH,             // Inner bottom
+      halfOuterW, -halfOuterH,        // Outer top
+      halfOuterW, halfOuterH,         // Outer bottom
+      segs, segsSide
+    );
+
+    const geometry = new THREE.BufferGeometry();
+    geometry.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
+    geometry.setAttribute('uv', new THREE.Float32BufferAttribute(uvs, 2));
+    geometry.setAttribute('fade', new THREE.Float32BufferAttribute(fades, 1));
+    geometry.setIndex(indices);
+    geometry.computeVertexNormals();
+
+    return geometry;
+  }
+
+  public update(time: number): void {
+    this.material.uniforms.time.value = time;
+  }
+
+  public dispose(): void {
+    this.mesh.geometry.dispose();
+    this.material.dispose();
+  }
+}

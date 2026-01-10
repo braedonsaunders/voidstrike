@@ -35,12 +35,15 @@ class MusicPlayerClass {
   private volume = 0.5;
   private muted = false;
   private isPlaying = false;
+  private isLoading = false; // Prevent multiple simultaneous loads
   private initialized = false;
   private tracksDiscovered = false;
   private currentTrackName: string | null = null;
+  private consecutiveFailures = 0;
+  private maxConsecutiveFailures = 3; // Stop trying after 3 failures
 
   private crossfadeDuration = 1500; // 1.5 seconds crossfade
-  private crossfadeUpdateInterval = 50; // Update every 50ms (20 updates/sec, NOT 60)
+  private crossfadeUpdateInterval = 100; // Update every 100ms (10 updates/sec)
 
   /**
    * Initialize the music player
@@ -119,12 +122,22 @@ class MusicPlayerClass {
    * Play music for a specific category
    */
   public async play(category: MusicCategory): Promise<void> {
+    // Reset failure counter when explicitly starting playback
+    this.consecutiveFailures = 0;
+
     if (!this.initialized) {
       await this.initialize();
     }
 
     if (!this.tracksDiscovered) {
       await this.discoverTracks();
+    }
+
+    // Check if there are any tracks for this category
+    const availableTracks = category === 'menu' ? this.menuTracks : this.gameplayTracks;
+    if (availableTracks.length === 0) {
+      debugAudio.warn(`No ${category} music tracks available - skipping music playback`);
+      return;
     }
 
     // If switching categories, prepare new queue
@@ -135,7 +148,7 @@ class MusicPlayerClass {
     // Get next track
     const track = this.getNextTrack();
     if (!track) {
-      debugAudio.warn(`No ${category} music tracks available`);
+      debugAudio.warn(`No ${category} music tracks in queue`);
       return;
     }
 
@@ -146,6 +159,20 @@ class MusicPlayerClass {
    * Play a specific track
    */
   private async playTrack(track: MusicTrack): Promise<void> {
+    // Prevent multiple simultaneous loads
+    if (this.isLoading) {
+      debugAudio.log('Already loading a track, skipping');
+      return;
+    }
+
+    // Check for too many consecutive failures (no actual files)
+    if (this.consecutiveFailures >= this.maxConsecutiveFailures) {
+      debugAudio.warn('Too many consecutive failures, stopping music attempts');
+      this.isPlaying = false;
+      return;
+    }
+
+    this.isLoading = true;
     debugAudio.log(`Playing track: ${track.name}`);
     this.currentTrackName = track.name;
 
@@ -156,18 +183,29 @@ class MusicPlayerClass {
 
     // Set up track ended handler to play next
     audio.addEventListener('ended', () => {
+      this.consecutiveFailures = 0; // Reset on successful play
       this.onTrackEnded();
     });
 
-    // Handle load errors
-    audio.addEventListener('error', (e) => {
-      debugAudio.warn(`Failed to load track ${track.name}:`, e);
-      // Try next track
-      this.onTrackEnded();
+    // Handle load errors - but don't create infinite loop
+    audio.addEventListener('error', () => {
+      debugAudio.warn(`Failed to load track ${track.name}`);
+      this.consecutiveFailures++;
+      this.isLoading = false;
+
+      // Only try next if we haven't hit the limit
+      if (this.consecutiveFailures < this.maxConsecutiveFailures) {
+        // Add delay before trying next to prevent CPU spin
+        setTimeout(() => this.onTrackEnded(), 500);
+      } else {
+        debugAudio.warn('Max failures reached, stopping music');
+        this.isPlaying = false;
+      }
     });
 
     // Crossfade if there's a current track playing
     if (this.currentAudio && this.isPlaying) {
+      // Note: isLoading will be reset in crossfade completion
       this.crossfade(this.currentAudio, audio);
     } else {
       // Just play the new track
@@ -175,9 +213,12 @@ class MusicPlayerClass {
         await audio.play();
         this.currentAudio = audio;
         this.isPlaying = true;
+        this.consecutiveFailures = 0; // Reset on success
       } catch (error) {
         debugAudio.warn('Failed to play track:', error);
+        this.consecutiveFailures++;
       }
+      this.isLoading = false;
     }
   }
 
@@ -215,11 +256,15 @@ class MusicPlayerClass {
           // Crossfade complete
           this.cleanupCrossfade();
           this.currentAudio = to;
+          this.isLoading = false; // Reset loading flag now that crossfade is done
+          this.consecutiveFailures = 0; // Reset on successful play
         }
       }, this.crossfadeUpdateInterval);
     }).catch((error) => {
       debugAudio.warn('Failed to start crossfade:', error);
       this.cleanupCrossfade();
+      this.isLoading = false; // Reset loading flag on failure
+      this.consecutiveFailures++;
     });
   }
 
@@ -264,6 +309,8 @@ class MusicPlayerClass {
       this.currentAudio = null;
     }
     this.isPlaying = false;
+    this.isLoading = false;
+    this.consecutiveFailures = 0;
     this.currentTrackName = null;
     this.currentCategory = null;
     debugAudio.log('Music stopped');
@@ -297,12 +344,70 @@ class MusicPlayerClass {
    * Skip to next track
    */
   public skip(): void {
-    if (this.currentCategory) {
-      const track = this.getNextTrack();
-      if (track) {
-        this.playTrack(track);
+    // Don't skip if already loading or no category
+    if (this.isLoading || !this.currentCategory) {
+      return;
+    }
+
+    // Don't skip if we've hit max failures (no files)
+    if (this.consecutiveFailures >= this.maxConsecutiveFailures) {
+      return;
+    }
+
+    const track = this.getNextTrack();
+    if (track) {
+      this.playTrack(track);
+    }
+  }
+
+  /**
+   * Play a one-shot music track (like victory/defeat music)
+   * This stops any current music and plays the specified track once
+   */
+  public async playOneShot(url: string, onComplete?: () => void): Promise<void> {
+    if (!this.initialized) {
+      await this.initialize();
+    }
+
+    // Stop current music with crossfade
+    this.cleanupCrossfade();
+
+    const audio = new Audio(url);
+    audio.volume = this.muted ? 0 : this.volume;
+    audio.loop = false;
+
+    // Set up completion handler
+    audio.addEventListener('ended', () => {
+      this.currentAudio = null;
+      this.isPlaying = false;
+      this.currentTrackName = null;
+      onComplete?.();
+    });
+
+    // Handle load errors
+    audio.addEventListener('error', (e) => {
+      debugAudio.warn(`Failed to load one-shot track: ${url}`, e);
+      onComplete?.();
+    });
+
+    // Crossfade if there's current music playing
+    if (this.currentAudio && this.isPlaying) {
+      this.crossfade(this.currentAudio, audio);
+    } else {
+      try {
+        await audio.play();
+        this.currentAudio = audio;
+        this.isPlaying = true;
+      } catch (error) {
+        debugAudio.warn('Failed to play one-shot track:', error);
+        onComplete?.();
       }
     }
+
+    // Clear category since this is a one-shot
+    this.currentCategory = null;
+    this.currentTrackName = url.split('/').pop() || 'one-shot';
+    debugAudio.log(`Playing one-shot track: ${this.currentTrackName}`);
   }
 
   /**

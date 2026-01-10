@@ -365,9 +365,10 @@ export class ResourceSystem extends System {
     }
 
     // Calculate drop-off range based on building size
-    // Must be larger than building avoidance zone (halfWidth + 1.0) to allow workers to reach
+    // Workers carrying resources skip building avoidance, so they can get close
+    // Use a generous range to ensure drop-off succeeds
     const buildingHalfWidth = (nearestBase.building.width || 5) / 2;
-    const dropOffRange = buildingHalfWidth + 1.75; // Closer range for drop-off
+    const dropOffRange = buildingHalfWidth + 2.5; // Generous range for reliable drop-off
 
     if (nearestDistance <= dropOffRange) {
       // At base - deposit resources (only for local player, AI tracks separately)
