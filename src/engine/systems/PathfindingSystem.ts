@@ -15,6 +15,10 @@ const MAX_STUCK_TICKS = 6; // If unit hasn't moved for this many ticks, repath (
 const MIN_MOVEMENT_THRESHOLD = 0.05; // Minimum distance to count as "moved"
 const PATH_REQUEST_COOLDOWN = 10; // Minimum ticks between path requests to prevent spam
 
+// Terrain edge buffer - units can't path right next to terrain edges
+// This prevents units from getting stuck on collision with terrain edges
+const TERRAIN_EDGE_BUFFER = 1; // Number of cells to buffer around unwalkable terrain
+
 interface PathRequest {
   entityId: number;
   startX: number;
@@ -62,6 +66,7 @@ export class PathfindingSystem extends System {
   /**
    * Load terrain walkability into the pathfinding grid.
    * Uses TERRAIN_FEATURE_CONFIG to properly determine walkability and movement costs.
+   * Adds buffer zones around unwalkable terrain to prevent units getting stuck on edges.
    */
   public loadTerrainData(): void {
     const terrainGrid = this.game.getTerrainGrid();
@@ -70,7 +75,10 @@ export class PathfindingSystem extends System {
       return;
     }
 
-    let blockedCount = 0;
+    // First pass: identify all unwalkable cells
+    const unwalkableCells = new Set<number>();
+    const moveCosts = new Map<number, number>();
+
     for (let y = 0; y < terrainGrid.length; y++) {
       for (let x = 0; x < terrainGrid[y].length; x++) {
         const cell = terrainGrid[y][x];
@@ -104,21 +112,77 @@ export class PathfindingSystem extends System {
           }
         }
 
-        // Apply walkability
+        const key = this.cellKey(x, y);
         if (!isWalkable) {
-          this.pathfinder.setWalkable(x, y, false);
-          this.hierarchicalPathfinder.setWalkable(x, y, false);
-          this.blockedCells.add(this.cellKey(x, y));
-          blockedCount++;
+          unwalkableCells.add(key);
         } else {
-          // Apply movement cost (roads have cost < 1, forests/mud have cost > 1)
-          this.pathfinder.setMoveCost(x, y, moveCost);
-          this.hierarchicalPathfinder.setMoveCost(x, y, moveCost);
+          moveCosts.set(key, moveCost);
         }
       }
     }
 
-    debugPathfinding.log(`[PathfindingSystem] Loaded terrain: ${blockedCount} cells blocked`);
+    // Second pass: create buffer zones around unwalkable cells
+    // This prevents units from pathing right along terrain edges
+    const bufferedCells = new Set<number>();
+    const height = terrainGrid.length;
+    const width = terrainGrid[0].length;
+
+    for (const key of unwalkableCells) {
+      const y = Math.floor(key / this.mapWidth);
+      const x = key % this.mapWidth;
+
+      // Add buffer around this unwalkable cell
+      for (let dy = -TERRAIN_EDGE_BUFFER; dy <= TERRAIN_EDGE_BUFFER; dy++) {
+        for (let dx = -TERRAIN_EDGE_BUFFER; dx <= TERRAIN_EDGE_BUFFER; dx++) {
+          const nx = x + dx;
+          const ny = y + dy;
+          if (nx >= 0 && nx < width && ny >= 0 && ny < height) {
+            const neighborKey = this.cellKey(nx, ny);
+            // Only buffer walkable cells that aren't already unwalkable
+            if (!unwalkableCells.has(neighborKey)) {
+              const neighborCell = terrainGrid[ny][nx];
+              // Don't buffer ramps - they need to stay walkable for navigation
+              if (neighborCell.terrain !== 'ramp') {
+                bufferedCells.add(neighborKey);
+              }
+            }
+          }
+        }
+      }
+    }
+
+    // Third pass: apply walkability and costs
+    let blockedCount = 0;
+    let bufferedCount = 0;
+
+    for (let y = 0; y < height; y++) {
+      for (let x = 0; x < width; x++) {
+        const key = this.cellKey(x, y);
+
+        if (unwalkableCells.has(key)) {
+          // Primary unwalkable cell
+          this.pathfinder.setWalkable(x, y, false);
+          this.hierarchicalPathfinder.setWalkable(x, y, false);
+          this.blockedCells.add(key);
+          blockedCount++;
+        } else if (bufferedCells.has(key)) {
+          // Buffer zone cell - increase movement cost significantly instead of blocking
+          // This allows paths through edges when necessary but discourages them
+          const baseCost = moveCosts.get(key) || 1.0;
+          const bufferedCost = baseCost * 3.0; // High cost discourages but doesn't block
+          this.pathfinder.setMoveCost(x, y, bufferedCost);
+          this.hierarchicalPathfinder.setMoveCost(x, y, bufferedCost);
+          bufferedCount++;
+        } else {
+          // Normal walkable cell - apply regular movement cost
+          const cost = moveCosts.get(key) || 1.0;
+          this.pathfinder.setMoveCost(x, y, cost);
+          this.hierarchicalPathfinder.setMoveCost(x, y, cost);
+        }
+      }
+    }
+
+    debugPathfinding.log(`[PathfindingSystem] Loaded terrain: ${blockedCount} cells blocked, ${bufferedCount} cells buffered`);
 
     // Rebuild hierarchical pathfinding graph after terrain is loaded
     this.hierarchicalPathfinder.rebuildAbstractGraph();
@@ -632,5 +696,63 @@ export class PathfindingSystem extends System {
 
   public getPathfinder(): AStar {
     return this.pathfinder;
+  }
+
+  /**
+   * Register decoration collisions (rocks, large obstacles) with pathfinding.
+   * Large decorations will have their cells marked with high movement cost
+   * to discourage pathing through them while not completely blocking.
+   */
+  public registerDecorationCollisions(collisions: Array<{ x: number; z: number; radius: number }>): void {
+    const DECORATION_BLOCKING_RADIUS = 1.0; // Only block decorations with radius >= this value
+    const DECORATION_MOVE_COST = 5.0; // High cost discourages but doesn't completely block
+
+    let decorationsBlocked = 0;
+
+    for (const deco of collisions) {
+      // Only process larger decorations that would actually block units
+      if (deco.radius < DECORATION_BLOCKING_RADIUS) continue;
+
+      // Note: deco.z corresponds to world Y (map coordinate)
+      const centerX = deco.x;
+      const centerY = deco.z;
+      const effectiveRadius = Math.ceil(deco.radius);
+
+      // Mark cells covered by this decoration with high movement cost
+      for (let dy = -effectiveRadius; dy <= effectiveRadius; dy++) {
+        for (let dx = -effectiveRadius; dx <= effectiveRadius; dx++) {
+          const dist = Math.sqrt(dx * dx + dy * dy);
+          if (dist <= deco.radius) {
+            const cellX = Math.floor(centerX + dx);
+            const cellY = Math.floor(centerY + dy);
+
+            // Bounds check
+            if (cellX < 0 || cellX >= this.mapWidth || cellY < 0 || cellY >= this.mapHeight) {
+              continue;
+            }
+
+            // Don't modify already blocked cells (terrain)
+            if (!this.pathfinder.isWalkable(cellX, cellY)) {
+              continue;
+            }
+
+            // Set high movement cost instead of completely blocking
+            // This allows units to push through if absolutely necessary
+            // but strongly discourages pathing through decorations
+            const currentCost = this.pathfinder.getMoveCost(cellX, cellY);
+            const newCost = Math.max(currentCost, DECORATION_MOVE_COST);
+            this.pathfinder.setMoveCost(cellX, cellY, newCost);
+            this.hierarchicalPathfinder.setMoveCost(cellX, cellY, newCost);
+            decorationsBlocked++;
+          }
+        }
+      }
+    }
+
+    if (decorationsBlocked > 0) {
+      debugPathfinding.log(`[PathfindingSystem] Registered ${decorationsBlocked} cells with decoration obstacles`);
+      // Rebuild hierarchical graph after adding decorations
+      this.hierarchicalPathfinder.rebuildAbstractGraph();
+    }
   }
 }

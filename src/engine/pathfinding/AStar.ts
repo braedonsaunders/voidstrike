@@ -346,9 +346,14 @@ export class AStar {
           }
 
           // Calculate movement cost
-          const moveCost = isDiagonal ? DIAGONAL_COST : STRAIGHT_COST;
+          const baseCost = isDiagonal ? DIAGONAL_COST : STRAIGHT_COST;
+
+          // Add edge penalty - check if this cell is near unwalkable terrain
+          // This discourages paths that run right along terrain edges
+          const edgePenalty = this.getEdgePenalty(nx, ny);
+
           const terrainCost = neighbor.moveCost;
-          const tentativeG = current.g + moveCost * terrainCost;
+          const tentativeG = current.g + (baseCost + edgePenalty) * terrainCost;
 
           if (tentativeG < neighbor.g) {
             neighbor.parent = current;
@@ -377,6 +382,39 @@ export class AStar {
   }
 
   /**
+   * Calculate edge penalty for a cell based on proximity to unwalkable terrain.
+   * This discourages paths that run right along terrain edges, preventing units
+   * from getting stuck on collision with terrain.
+   */
+  private getEdgePenalty(x: number, y: number): number {
+    // Check all 8 neighbors for unwalkable cells
+    let unwalkableNeighbors = 0;
+
+    for (let dy = -1; dy <= 1; dy++) {
+      for (let dx = -1; dx <= 1; dx++) {
+        if (dx === 0 && dy === 0) continue;
+
+        const nx = x + dx;
+        const ny = y + dy;
+
+        if (!this.isInBounds(nx, ny) || !this.grid[ny][nx].walkable) {
+          unwalkableNeighbors++;
+        }
+      }
+    }
+
+    // Add penalty proportional to number of unwalkable neighbors
+    // This makes paths prefer to stay away from terrain edges
+    if (unwalkableNeighbors === 0) {
+      return 0; // No penalty if no unwalkable neighbors
+    }
+
+    // More unwalkable neighbors = higher penalty
+    // 1 neighbor: 0.3 extra cost, 8 neighbors: 2.4 extra cost
+    return unwalkableNeighbors * 0.3;
+  }
+
+  /**
    * Octile distance heuristic (optimal for 8-directional movement)
    */
   private heuristic(x1: number, y1: number, x2: number, y2: number): number {
@@ -401,7 +439,8 @@ export class AStar {
   }
 
   /**
-   * Smooth path by removing unnecessary waypoints using line-of-sight checks
+   * Smooth path by removing unnecessary waypoints using line-of-sight checks.
+   * Uses a conservative corridor check to account for unit collision radius.
    */
   private smoothPath(path: Array<{ x: number; y: number }>): Array<{ x: number; y: number }> {
     if (path.length <= 2) return path;
@@ -414,7 +453,8 @@ export class AStar {
         const from = path[anchor];
         const to = path[i + 1];
 
-        if (this.hasLineOfSight(from.x, from.y, to.x, to.y)) {
+        // Use corridor-based line of sight check to account for unit size
+        if (this.hasCorridorLineOfSight(from.x, from.y, to.x, to.y)) {
           continue; // Can skip waypoint i
         }
       }
@@ -462,6 +502,87 @@ export class AStar {
       if (e2 < dx) {
         err += dx;
         y += sy;
+      }
+    }
+
+    return true;
+  }
+
+  /**
+   * Check line of sight with a corridor buffer to account for unit collision radius.
+   * Checks not just the main path but also adjacent cells to ensure units won't clip terrain.
+   */
+  private hasCorridorLineOfSight(x1: number, y1: number, x2: number, y2: number): boolean {
+    const gx1 = Math.floor(x1 / this.cellSize);
+    const gy1 = Math.floor(y1 / this.cellSize);
+    const gx2 = Math.floor(x2 / this.cellSize);
+    const gy2 = Math.floor(y2 / this.cellSize);
+
+    // Calculate perpendicular direction for corridor width
+    const dx = gx2 - gx1;
+    const dy = gy2 - gy1;
+    const length = Math.sqrt(dx * dx + dy * dy);
+
+    if (length < 0.01) return true; // Same cell
+
+    // Perpendicular offsets for corridor checking
+    const perpX = -dy / length;
+    const perpY = dx / length;
+
+    let x = gx1;
+    let y = gy1;
+    const adx = Math.abs(dx);
+    const ady = Math.abs(dy);
+    const sx = gx1 < gx2 ? 1 : -1;
+    const sy = gy1 < gy2 ? 1 : -1;
+    let err = adx - ady;
+
+    while (true) {
+      // Check main cell and adjacent cells for corridor
+      if (!this.isCorridorWalkable(x, y, perpX, perpY)) {
+        return false;
+      }
+
+      if (x === gx2 && y === gy2) break;
+
+      const e2 = 2 * err;
+      if (e2 > -ady) {
+        err -= ady;
+        x += sx;
+      }
+      if (e2 < adx) {
+        err += adx;
+        y += sy;
+      }
+    }
+
+    return true;
+  }
+
+  /**
+   * Check if a cell and its corridor neighbors are walkable.
+   * This ensures units with collision radius won't clip into terrain.
+   */
+  private isCorridorWalkable(x: number, y: number, perpX: number, perpY: number): boolean {
+    // Check main cell
+    if (!this.isInBounds(x, y) || !this.grid[y][x].walkable) {
+      return false;
+    }
+
+    // Check adjacent cells perpendicular to path direction
+    // This creates a 3-cell-wide corridor check
+    const offsets = [
+      { dx: Math.round(perpX), dy: Math.round(perpY) },
+      { dx: Math.round(-perpX), dy: Math.round(-perpY) },
+    ];
+
+    for (const { dx, dy } of offsets) {
+      if (dx === 0 && dy === 0) continue;
+      const nx = x + dx;
+      const ny = y + dy;
+      if (this.isInBounds(nx, ny) && !this.grid[ny][nx].walkable) {
+        // Adjacent cell is unwalkable - path is too close to terrain edge
+        return false;
       }
     }
 
