@@ -15,7 +15,7 @@ import { PlayerStatusPanel } from './PlayerStatusPanel';
 
 export function HUD() {
   const { isPaused, togglePause, setShowTechTree, setShowKeyboardShortcuts } = useGameStore();
-  const { toggleFPS, showFPS } = useUIStore();
+  const { toggleFPS, showFPS, toggleGraphicsOptions, showGraphicsOptions } = useUIStore();
   const [showOptionsMenu, setShowOptionsMenu] = useState(false);
 
   return (
@@ -82,6 +82,16 @@ export function HUD() {
                 >
                   <span>Show FPS</span>
                   <span className={showFPS ? 'text-green-400' : 'text-void-500'}>{showFPS ? 'ON' : 'OFF'}</span>
+                </button>
+                <button
+                  onClick={() => {
+                    setShowOptionsMenu(false);
+                    toggleGraphicsOptions();
+                  }}
+                  className="w-full px-4 py-2 text-left text-sm text-void-200 hover:bg-void-800 transition-colors flex justify-between items-center"
+                >
+                  <span>Graphics</span>
+                  <span className={showGraphicsOptions ? 'text-green-400' : 'text-void-500'}>{showGraphicsOptions ? 'OPEN' : ''}</span>
                 </button>
                 <div className="border-t border-void-700 my-1" />
                 <button
