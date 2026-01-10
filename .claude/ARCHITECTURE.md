@@ -716,6 +716,45 @@ environment.update(deltaTime, gameTime);
 - **WaterPlane**: Animated shader with wave simulation
 - **MapBorderFog**: SC2-style dark smoky fog around map edges, animated shader with multi-octave simplex noise for organic smoke movement
 
+### Game Overlay Manager (`src/rendering/GameOverlayManager.ts`)
+
+Strategic information overlays for tactical awareness:
+
+```typescript
+// Overlay types
+type GameOverlayType = 'none' | 'terrain' | 'elevation' | 'threat';
+
+// Usage
+const overlayManager = new GameOverlayManager(scene, mapData, getHeightFn);
+overlayManager.setWorld(game.world);
+overlayManager.setActiveOverlay('terrain');
+overlayManager.update(deltaTime);
+```
+
+**Terrain Overlay** - Color-coded walkability and speed:
+- Green: Normal walkable terrain
+- Cyan: Roads (1.25x speed boost)
+- Yellow: Ramps, light forest (0.85x speed)
+- Orange: Slow terrain (mud, shallow water, 0.4-0.6x speed)
+- Red: Impassable (deep water, void, cliffs)
+
+**Elevation Overlay** - Height zone visualization:
+- Blue: Low ground (elevation 0-85)
+- Yellow: Mid ground (elevation 86-170)
+- Red: High ground (elevation 171-255)
+- Gradient coloring within each zone
+
+**Threat Range Overlay** - Enemy attack coverage:
+- Red zones show areas within enemy attack range
+- Pulsing shader effect for visibility
+- Updates dynamically as enemies move
+- Considers both units and buildings with attack capability
+
+UI Integration:
+- Options menu "Overlays" submenu with toggle buttons
+- Keyboard shortcut: 'O' to cycle through overlays
+- Per-overlay opacity settings in uiStore
+
 ### Enhanced Decorations (`src/rendering/EnhancedDecorations.ts`)
 
 - **EnhancedTrees**: 6 tree types (pine, oak, dead, cactus, palm, alien)
