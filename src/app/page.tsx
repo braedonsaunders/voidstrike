@@ -14,11 +14,12 @@ const HomeBackground = dynamic(() => import('@/components/home/HomeBackground'),
   ),
 });
 
-// Optional: Depth parallax layer for pre-rendered images
-// Uncomment when you have images ready in /public/images/homescreen/
-// const DepthParallaxLayer = dynamic(() => import('@/components/home/DepthParallaxLayer'), {
-//   ssr: false,
-// });
+// Gaussian Splat background - displays 3D splat scenes from /public/splats/
+// Automatically discovers and rotates through .splat, .ply, .ksplat files
+const GaussianSplatBackground = dynamic(
+  () => import('@/components/home/GaussianSplatBackground'),
+  { ssr: false }
+);
 
 // Glowing orb component for ambient atmosphere
 function GlowingOrb({ color, size, position, delay }: {
@@ -137,18 +138,19 @@ export default function Home() {
 
   return (
     <main className="relative min-h-screen bg-black overflow-hidden">
-      {/* Layer 1: Optional depth parallax from pre-rendered image */}
-      {/* Uncomment when you have images ready:
-      <DepthParallaxLayer
-        imagePath="/images/homescreen/scene.jpg"
-        depthMapPath="/images/homescreen/scene_depth.jpg"
-        parallaxStrength={0.04}
-        depthScale={1.2}
-        opacity={0.6}
+      {/* Layer 0: 3D Gaussian Splat scenes (if available in /public/splats/) */}
+      {/* Drop .splat, .ply, or .ksplat files in /public/splats/ to enable */}
+      {/* They will auto-rotate every 1.5 minutes with dissolve transitions */}
+      <GaussianSplatBackground
+        rotationInterval={90000}  // 1.5 minutes per scene
+        transitionDuration={3000} // 3 second dissolve transition
+        cameraDistance={5}
+        autoRotate={true}
+        autoRotateSpeed={0.08}
       />
-      */}
 
-      {/* Layer 2: Procedural Three.js effects */}
+      {/* Layer 1: Procedural Three.js effects (nebula, stars, particles) */}
+      {/* Shows through when no splat files are present, or blends on top */}
       <HomeBackground />
 
       {/* Layer 3: Ambient glow orbs */}
