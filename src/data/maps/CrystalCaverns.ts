@@ -286,9 +286,9 @@ function generateCrystalCaverns(): MapData {
   ramps.forEach(ramp => createRampInTerrain(terrain, ramp));
 
   // ========================================
-  // EXPANSIONS WITH RESOURCES (SC2-accurate amounts)
-  // SC2 values: 6x 1500 + 2x 900 minerals per base, 2250 gas per geyser
-  // Gold bases: all 8 patches at 900 minerals
+  // EXPANSIONS WITH RESOURCES
+  // Standard: 6x 1500 + 2x 900 minerals per base, 2250 gas per geyser
+  // Gold: all 8 patches at 900 minerals
   // ========================================
   const p1Main = createBaseResources(30, 90, DIR.LEFT);          // Standard
   const p1Nat = createBaseResources(55, 55, DIR.UP_LEFT);        // Standard

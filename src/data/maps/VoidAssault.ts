@@ -315,9 +315,9 @@ function generateVoidAssault(): MapData {
   ramps.forEach(ramp => createRampInTerrain(terrain, ramp));
 
   // ========================================
-  // EXPANSIONS WITH RESOURCES (SC2-accurate amounts)
-  // SC2 values: 6x 1500 + 2x 900 minerals per base, 2250 gas per geyser
-  // Gold bases: all 8 patches at 900 minerals
+  // EXPANSIONS WITH RESOURCES
+  // Standard: 6x 1500 + 2x 900 minerals per base, 2250 gas per geyser
+  // Gold: all 8 patches at 900 minerals
   // ========================================
   const p1Main = createBaseResources(35, 185, DIR.DOWN_LEFT);     // Standard: 6x1500 + 2x900
   const p1Nat = createBaseResources(60, 145, DIR.DOWN_LEFT);      // Standard
