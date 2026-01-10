@@ -109,6 +109,9 @@
 - [x] **AI tech unit production** - AI now builds tech labs and produces advanced units (devastator, colossus, breacher, operative, specter, valkyrie). Build orders updated to include research modules. Tech unit production probability significantly increased.
 - [x] **Player1 AI spectator fix** - Fixed bug where player1 as AI was treated as human player due to ID-based check instead of type-based check. This could cause AI player1 to not function correctly.
 - [x] **Player status panel ordering** - Fixed player list ordering in spectator mode to sort by player ID (Player 1, Player 2, etc.) instead of array insertion order.
+- [x] **AI units not attacking** - Fixed two bugs preventing AI units from attacking:
+  - EnhancedAISystem now gives attack orders to 'moving' units that finished kiting/repositioning
+  - AIMicroSystem saves targetEntityId before MOVE commands clear it, allowing proper re-targeting after kiting
 
 ### Future Optimizations
 - [ ] Instanced decorations (trees, rocks, debris - 1000s of draw calls)
