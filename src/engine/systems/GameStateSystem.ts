@@ -41,6 +41,7 @@ export class GameStateSystem extends System {
   private gameResult: GameResult | null = null;
   private lastVictoryCheck: number = 0;
   private victoryCheckInterval: number = 1; // Check every 1 second
+  private eliminatedPlayers: Set<string> = new Set(); // Track eliminated players
 
   constructor(game: Game) {
     super(game);
@@ -209,6 +210,35 @@ export class GameStateSystem extends System {
       // Only count complete buildings, not blueprints (waiting_for_worker or constructing)
       if (!health.isDead() && building.isComplete()) {
         playersWithBuildings.add(selectable.playerId);
+      }
+    }
+
+    // Check for newly eliminated players (had buildings before, now have none)
+    for (const playerId of players) {
+      if (!playersWithBuildings.has(playerId) && !this.eliminatedPlayers.has(playerId)) {
+        // Player just got eliminated
+        this.eliminatedPlayers.add(playerId);
+
+        // Count remaining active teams (excluding just-eliminated player)
+        let remainingTeams = 0;
+        const countedTeams = new Set<number>();
+        for (const activePlayerId of playersWithBuildings) {
+          const team = this.getPlayerTeam(activePlayerId);
+          const teamKey = team === 0 ? -parseInt(activePlayerId.replace('player', '')) : team;
+          if (!countedTeams.has(teamKey)) {
+            countedTeams.add(teamKey);
+            remainingTeams++;
+          }
+        }
+
+        const duration = (Date.now() - this.gameStartTime) / 1000;
+        this.game.eventBus.emit('game:playerEliminated', {
+          playerId,
+          reason: 'elimination',
+          duration,
+          gameOver: remainingTeams <= 1, // Game will end after this
+          remainingPlayers: playersWithBuildings.size,
+        });
       }
     }
 
