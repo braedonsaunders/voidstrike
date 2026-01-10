@@ -12,6 +12,7 @@ import { ResourceRenderer } from '@/rendering/ResourceRenderer';
 import { FogOfWar } from '@/rendering/FogOfWar';
 import { EffectsRenderer } from '@/rendering/EffectsRenderer';
 import { RallyPointRenderer } from '@/rendering/RallyPointRenderer';
+import { CommandQueueRenderer } from '@/rendering/CommandQueueRenderer';
 import { WatchTowerRenderer } from '@/rendering/WatchTowerRenderer';
 import { useGameStore } from '@/store/gameStore';
 import { useGameSetupStore, getLocalPlayerId, isSpectatorMode } from '@/store/gameSetupStore';
@@ -44,6 +45,7 @@ export function GameCanvas() {
   const fogOfWarRef = useRef<FogOfWar | null>(null);
   const effectsRendererRef = useRef<EffectsRenderer | null>(null);
   const rallyPointRendererRef = useRef<RallyPointRenderer | null>(null);
+  const commandQueueRendererRef = useRef<CommandQueueRenderer | null>(null);
   const watchTowerRendererRef = useRef<WatchTowerRenderer | null>(null);
   const environmentRef = useRef<EnvironmentManager | null>(null);
 
@@ -242,6 +244,9 @@ export function GameCanvas() {
       const rallyPointRenderer = new RallyPointRenderer(scene, game.eventBus, game.world, localPlayerId);
       rallyPointRendererRef.current = rallyPointRenderer;
 
+      const commandQueueRenderer = new CommandQueueRenderer(scene, game.eventBus, game.world, localPlayerId);
+      commandQueueRendererRef.current = commandQueueRenderer;
+
       // Stage 7: Spawning entities (85-90%)
       await updateProgress(85, 'Spawning units and buildings', 120);
 
@@ -285,6 +290,7 @@ export function GameCanvas() {
         fogOfWarRef.current?.update();
         effectsRendererRef.current?.update(deltaTime);
         rallyPointRendererRef.current?.update();
+        commandQueueRendererRef.current?.update();
         watchTowerRendererRef.current?.update(deltaTime);
 
         const gameTime = gameRef.current?.getGameTime() ?? 0;
@@ -328,6 +334,7 @@ export function GameCanvas() {
         fogOfWarRef.current?.dispose();
         effectsRendererRef.current?.dispose();
         rallyPointRendererRef.current?.dispose();
+        commandQueueRendererRef.current?.dispose();
         watchTowerRendererRef.current?.dispose();
         cameraRef.current?.dispose();
         unitRendererRef.current?.dispose();
@@ -383,7 +390,7 @@ export function GameCanvas() {
         }
         if (!e.shiftKey) setIsAttackMove(false);
       } else if (isPatrolMode) {
-        // Patrol command
+        // Patrol command (supports shift-click queuing)
         const worldPos = cameraRef.current?.screenToWorld(e.clientX, e.clientY);
         if (worldPos && gameRef.current) {
           const selectedUnits = useGameStore.getState().selectedUnits;
@@ -391,10 +398,11 @@ export function GameCanvas() {
             gameRef.current.eventBus.emit('command:patrol', {
               entityIds: selectedUnits,
               targetPosition: { x: worldPos.x, y: worldPos.z },
+              queue: e.shiftKey,
             });
           }
         }
-        setIsPatrolMode(false);
+        if (!e.shiftKey) setIsPatrolMode(false);
       } else if (abilityTargetMode) {
         // Ability targeting mode - cast ability at clicked position/target
         const worldPos = cameraRef.current?.screenToWorld(e.clientX, e.clientY);

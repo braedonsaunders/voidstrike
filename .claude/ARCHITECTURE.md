@@ -89,6 +89,7 @@ voidstrike/
 │   │   ├── FogOfWar.ts        # Fog of war visibility system
 │   │   ├── EffectsRenderer.ts # Combat effects (projectiles, hits)
 │   │   ├── RallyPointRenderer.ts # Building rally point visuals
+│   │   ├── CommandQueueRenderer.ts # Shift-click waypoint visualization
 │   │   └── BuildingPlacementPreview.ts # SC2-style placement grid + ghost
 │   ├── input/
 │   │   ├── InputManager.ts    # Input abstraction
@@ -490,8 +491,33 @@ calculateSeparationForce(self, others);
 Features:
 - **Smooth acceleration**: Units ramp up to max speed naturally
 - **Separation steering**: Units avoid overlapping via boids algorithm
-- **Command queuing**: Shift-click to queue move/attack/patrol commands
+- **Command queuing**: Shift-click to queue move/attack/patrol/gather commands
 - **Patrol**: P key sets patrol between current position and target
+- **Visual waypoints**: Green lines and markers show queued command paths
+
+### Command Queue System
+
+SC2-style shift-click command chaining with visual feedback:
+
+```typescript
+// Supported queued command types
+type QueuedCommand = {
+  type: 'move' | 'attack' | 'attackmove' | 'patrol' | 'gather';
+  targetX?: number;
+  targetY?: number;
+  targetEntityId?: number;
+};
+
+// Unit.ts - command queue execution
+unit.commandQueue: QueuedCommand[];
+unit.queueCommand(cmd);      // Add to queue (shift-click)
+unit.executeNextCommand();   // Called when current action completes
+```
+
+Visual feedback via `CommandQueueRenderer.ts`:
+- Green waypoint markers at each queued destination
+- Green lines connecting unit position → current target → queued waypoints
+- Only shown for selected units owned by the player
 
 ### Camera Hotkey System
 

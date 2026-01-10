@@ -140,6 +140,8 @@ AI prioritizes filling extractors to 3 workers first, then distributes workers e
 ### Control Scheme
 - **Left Click** - Select unit/building
 - **Right Click** - Move/Attack/Interact
+- **Shift+Right Click** - Queue command (chain commands like SC2)
+- **Shift+A Click** - Queue attack-move
 - **Box Drag** - Multi-select
 - **Ctrl+#** - Create control group
 - **#** - Select control group
@@ -147,6 +149,13 @@ AI prioritizes filling extractors to 3 workers first, then distributes workers e
 - **S** - Stop
 - **H** - Hold position
 - **P** - Patrol
+
+### Command Queuing (Shift-Click)
+Hold **Shift** while issuing commands to queue them in sequence:
+- Units execute commands in order, proceeding to next when current completes
+- Works with: Move, Attack, Attack-Move, Patrol, Gather
+- Green waypoint indicators show queued destinations for selected units
+- Press **S** (Stop) to clear all queued commands
 
 ## Map Design
 
