@@ -1055,17 +1055,45 @@ export class EnhancedAISystem extends System {
       }
     }
 
-    // Only issue commands if there are units that need them
-    if (idleOrNeedingOrders.length > 0) {
-      const command: GameCommand = {
-        tick: currentTick,
-        playerId: ai.playerId,
-        type: 'ATTACK',
-        entityIds: idleOrNeedingOrders,
-        targetPosition: { x: enemyTarget.x, y: enemyTarget.y },
-      };
+    // Issue commands to units that need them
+    // For each unit, check if there's a nearby enemy to directly attack
+    // This ensures units actually fire instead of just attack-moving
+    for (const unitId of idleOrNeedingOrders) {
+      const entity = this.world.getEntity(unitId);
+      if (!entity) continue;
 
-      this.game.processCommand(command);
+      const transform = entity.get<Transform>('Transform');
+      const unit = entity.get<Unit>('Unit');
+      if (!transform || !unit) continue;
+
+      // Look for a nearby enemy within sight range to directly attack
+      const nearbyEnemy = this.findNearestEnemyEntity(
+        ai.playerId,
+        { x: transform.x, y: transform.y },
+        unit.sightRange
+      );
+
+      if (nearbyEnemy) {
+        // Direct attack command with specific target entity
+        const directAttackCommand: GameCommand = {
+          tick: currentTick,
+          playerId: ai.playerId,
+          type: 'ATTACK',
+          entityIds: [unitId],
+          targetEntityId: nearbyEnemy.entityId,
+        };
+        this.game.processCommand(directAttackCommand);
+      } else {
+        // No nearby enemy - attack-move toward enemy base
+        const attackMoveCommand: GameCommand = {
+          tick: currentTick,
+          playerId: ai.playerId,
+          type: 'ATTACK',
+          entityIds: [unitId],
+          targetPosition: { x: enemyTarget.x, y: enemyTarget.y },
+        };
+        this.game.processCommand(attackMoveCommand);
+      }
     }
 
     // Continue attacking - stay in attack state until enemies are gone
@@ -1322,18 +1350,28 @@ export class EnhancedAISystem extends System {
       return;
     }
 
-    // Find any nearby enemy to defend against
-    const nearbyEnemy = this.findNearbyEnemy(ai.playerId, baseLocation, 30);
+    const currentTick = this.game.getCurrentTick();
+
+    // Find any nearby enemy entity to defend against - use direct targeting
+    const nearbyEnemy = this.findNearestEnemyEntity(ai.playerId, baseLocation, 30);
     if (nearbyEnemy) {
-      // Attack the actual enemy, not our own base
-      const command: GameCommand = {
-        tick: this.game.getCurrentTick(),
-        playerId: ai.playerId,
-        type: 'ATTACK',
-        entityIds: armyUnits,
-        targetPosition: nearbyEnemy,
-      };
-      this.game.processCommand(command);
+      // Direct attack command with specific target entity for each army unit
+      for (const unitId of armyUnits) {
+        const entity = this.world.getEntity(unitId);
+        if (!entity) continue;
+        const unit = entity.get<Unit>('Unit');
+        // Skip units already attacking with a target
+        if (unit && unit.state === 'attacking' && unit.targetEntityId !== null) continue;
+
+        const directAttackCommand: GameCommand = {
+          tick: currentTick,
+          playerId: ai.playerId,
+          type: 'ATTACK',
+          entityIds: [unitId],
+          targetEntityId: nearbyEnemy.entityId,
+        };
+        this.game.processCommand(directAttackCommand);
+      }
     } else {
       // No enemy in range - rally units near the base (not AT it) to form a defensive position
       // Position units in front of the base (offset by 8 units)
@@ -1386,6 +1424,56 @@ export class EnhancedAISystem extends System {
     }
 
     return null;
+  }
+
+  /**
+   * Find the nearest enemy entity (unit or building) that can be attacked directly
+   * Returns both the entity ID and position for more precise targeting
+   */
+  private findNearestEnemyEntity(playerId: string, position: { x: number; y: number }, range: number): { entityId: number; x: number; y: number } | null {
+    let closestEnemy: { entityId: number; x: number; y: number; distance: number } | null = null;
+
+    // Check enemy units first (higher priority)
+    const units = this.world.getEntitiesWith('Unit', 'Transform', 'Selectable', 'Health');
+    for (const entity of units) {
+      const selectable = entity.get<Selectable>('Selectable');
+      const health = entity.get<Health>('Health');
+      const transform = entity.get<Transform>('Transform');
+
+      if (!selectable || !health || !transform) continue;
+      if (selectable.playerId === playerId) continue;
+      if (health.isDead()) continue;
+
+      const dx = transform.x - position.x;
+      const dy = transform.y - position.y;
+      const distance = Math.sqrt(dx * dx + dy * dy);
+
+      if (distance <= range && (!closestEnemy || distance < closestEnemy.distance)) {
+        closestEnemy = { entityId: entity.id, x: transform.x, y: transform.y, distance };
+      }
+    }
+
+    // Also check enemy buildings
+    const buildings = this.world.getEntitiesWith('Building', 'Transform', 'Selectable', 'Health');
+    for (const entity of buildings) {
+      const selectable = entity.get<Selectable>('Selectable');
+      const health = entity.get<Health>('Health');
+      const transform = entity.get<Transform>('Transform');
+
+      if (!selectable || !health || !transform) continue;
+      if (selectable.playerId === playerId) continue;
+      if (health.isDead()) continue;
+
+      const dx = transform.x - position.x;
+      const dy = transform.y - position.y;
+      const distance = Math.sqrt(dx * dx + dy * dy);
+
+      if (distance <= range && (!closestEnemy || distance < closestEnemy.distance)) {
+        closestEnemy = { entityId: entity.id, x: transform.x, y: transform.y, distance };
+      }
+    }
+
+    return closestEnemy ? { entityId: closestEnemy.entityId, x: closestEnemy.x, y: closestEnemy.y } : null;
   }
 
   private executeScoutingPhase(ai: AIPlayer, currentTick: number): void {
