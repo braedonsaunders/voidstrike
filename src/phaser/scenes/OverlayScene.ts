@@ -338,7 +338,7 @@ export class OverlayScene extends Phaser.Scene {
       const localPlayerId = getLocalPlayerId();
       const isVictory = localPlayerId ? data.winner === localPlayerId : null;
       // Game is over - no spectating option (canSpectate = false)
-      this.showGameEndOverlay(isVictory, data.duration, data.reason, false);
+      this.showGameEndOverlay(isVictory, data.duration, data.reason, false, data.winner);
     });
 
     this.eventBus.on('game:draw', (data: { duration: number }) => {
@@ -505,12 +505,13 @@ export class OverlayScene extends Phaser.Scene {
 
   /**
    * Show full-screen victory or defeat overlay
-   * @param isVictory - true for victory, false for defeat, null for draw
+   * @param isVictory - true for victory, false for defeat, null for draw/spectator
    * @param duration - game duration in seconds
    * @param reason - reason for game end
    * @param canSpectate - whether player can continue spectating (game continues with other players)
+   * @param winner - optional winner player ID (for spectator display)
    */
-  private showGameEndOverlay(isVictory: boolean | null, duration: number, reason: string, canSpectate: boolean = false): void {
+  private showGameEndOverlay(isVictory: boolean | null, duration: number, reason: string, canSpectate: boolean = false, winner?: string): void {
     // If overlay is already showing, don't create another one
     // (This can happen if player is eliminated and then game ends shortly after)
     if (this.gameEndOverlay || this.gameEndContainer) {
@@ -539,12 +540,18 @@ export class OverlayScene extends Phaser.Scene {
     this.gameEndContainer = container;
 
     // Determine text and colors based on result
+    // isVictory: true = local player won, false = local player lost, null = spectator or draw
     let mainText: string;
     let mainColor: number;
 
-    if (isVictory === null) {
+    if (reason === 'draw') {
+      // Actual draw - all forces lost
       mainText = 'DRAW';
       mainColor = 0xffff00;
+    } else if (isVictory === null) {
+      // Spectator watching a non-draw game end
+      mainText = 'GAME OVER';
+      mainColor = 0xaaaaaa;
     } else if (isVictory) {
       mainText = 'VICTORY';
       mainColor = 0x00ff00;
@@ -566,7 +573,19 @@ export class OverlayScene extends Phaser.Scene {
 
     // Subtitle with reason - show appropriate message based on victory/defeat
     let reasonText: string;
-    if (reason === 'elimination') {
+    if (isVictory === null && reason !== 'draw') {
+      // Spectator watching game end - show who won
+      const winnerName = winner ? this.formatPlayerName(winner) : 'Unknown';
+      if (reason === 'elimination') {
+        reasonText = `${winnerName} Wins - Enemy Eliminated`;
+      } else if (reason === 'surrender') {
+        reasonText = `${winnerName} Wins - Enemy Surrendered`;
+      } else {
+        reasonText = `${winnerName} Wins`;
+      }
+    } else if (reason === 'draw') {
+      reasonText = 'All Forces Lost';
+    } else if (reason === 'elimination') {
       reasonText = isVictory ? 'Enemy Eliminated' : 'Your Forces Eliminated';
     } else if (reason === 'surrender') {
       reasonText = isVictory ? 'Enemy Surrendered' : 'You Surrendered';
@@ -677,6 +696,19 @@ export class OverlayScene extends Phaser.Scene {
         window.location.href = '/';
       });
     }
+  }
+
+  /**
+   * Format a player ID for display (e.g., "player1" -> "Player 1")
+   */
+  private formatPlayerName(playerId: string): string {
+    // Extract number from player ID like "player1", "player2"
+    const match = playerId.match(/player(\d+)/i);
+    if (match) {
+      return `Player ${match[1]}`;
+    }
+    // Fallback: capitalize first letter
+    return playerId.charAt(0).toUpperCase() + playerId.slice(1);
   }
 
   /**
