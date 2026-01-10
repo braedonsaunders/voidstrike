@@ -22,7 +22,7 @@ voidstrike/
 │   │   ├── home/              # Homepage/menu components
 │   │   │   └── HomeBackground.tsx  # Cinematic Three.js animated background
 │   │   ├── game/              # Game-specific components
-│   │   │   ├── GameCanvas.tsx
+│   │   │   ├── WebGPUGameCanvas.tsx # Main game canvas (WebGPU with WebGL fallback)
 │   │   │   ├── HUD.tsx
 │   │   │   ├── Minimap.tsx
 │   │   │   ├── CommandCard.tsx
@@ -266,9 +266,9 @@ interface StateChecksum {
 
 ## Rendering Pipeline
 
-### Hybrid Architecture (Three.js + Phaser 4)
+### WebGPU-First Architecture (Three.js r182 + TSL)
 
-The game uses a unique hybrid rendering approach for world-class visuals:
+The game uses Three.js WebGPU Renderer with automatic WebGL fallback, powered by TSL (Three.js Shading Language) for cross-backend shader compatibility:
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
@@ -287,6 +287,15 @@ The game uses a unique hybrid rendering approach for world-class visuals:
 │  │ (React + CSS)   │  │  (Phaser 4)  │  │   (React)        │   │
 │  └─────────────────┘  └──────────────┘  └──────────────────┘   │
 ├─────────────────────────────────────────────────────────────────┤
+│                THREE.JS WEBGPU RENDERER                         │
+│  ┌─────────────────────────────────────────────────────────┐   │
+│  │  • WebGPURenderer with automatic WebGL2 fallback        │   │
+│  │  • TSL (Three.js Shading Language) for all shaders      │   │
+│  │  • GPU-computed particle systems via TSL EffectEmitter  │   │
+│  │  • Node-based post-processing (bloom, SSAO, FXAA)       │   │
+│  │  • Async rendering for non-blocking frame submission    │   │
+│  └─────────────────────────────────────────────────────────┘   │
+├─────────────────────────────────────────────────────────────────┤
 │                   THREE.JS 3D WORLD                             │
 │  ┌─────────────────────────────────────────────────────────┐   │
 │  │  • Isometric 3D Camera (SC2 angle ~60°)                 │   │
@@ -303,10 +312,47 @@ The game uses a unique hybrid rendering approach for world-class visuals:
 ```
 
 Key Components:
-- `HybridGameCanvas.tsx` - Main component combining Three.js + Phaser
+- `WebGPUGameCanvas.tsx` - Main game canvas (WebGPU with WebGL fallback)
 - `OverlayScene.ts` - Phaser 4 scene for 2D effects overlay
 
-### SC2-Level Visual Systems
+### TSL Rendering Systems
+
+Located in `src/rendering/tsl/`:
+
+1. **WebGPURenderer.ts** - Renderer initialization and management
+   - `createWebGPURenderer()` - Async renderer creation with fallback
+   - Automatic WebGL2 fallback if WebGPU unavailable
+   - Backend detection via `renderer.backend.isWebGLBackend`
+
+2. **PostProcessing.ts** - TSL-based post-processing pipeline
+   - Bloom effect with configurable strength/radius/threshold
+   - Screen-space ambient occlusion (SSAO)
+   - FXAA anti-aliasing
+   - Vignette and color grading (exposure, saturation, contrast)
+   - `RenderPipeline` class for unified effect management
+
+3. **SelectionMaterial.ts** - TSL selection ring shaders
+   - `createSelectionRingMaterial()` - Animated pulsing glow
+   - Team-colored rings with shimmer animation
+   - `createHealthBarMaterial()` - Health bar rendering
+   - Uses `MeshBasicNodeMaterial` from `three/webgpu`
+
+4. **ProceduralTerrainMaterial.ts** - TSL terrain shaders
+   - Multi-layer procedural texturing (grass, dirt, rock, cliff)
+   - fBM noise for height-based blending
+   - Triplanar mapping for cliffs
+   - Real-time normal generation
+
+5. **TextureTerrainMaterial.ts** - Texture-based terrain
+   - Multi-texture splatting with TSL
+   - PBR material properties
+
+6. **EffectEmitter.ts** - GPU particle system
+   - TSL compute shaders for particle simulation
+   - Burst and continuous emission modes
+   - Physics-based particle movement
+
+### Visual Systems (GLSL-based)
 
 Located in `src/rendering/`:
 

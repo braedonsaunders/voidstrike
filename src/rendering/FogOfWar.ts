@@ -51,7 +51,7 @@ export class FogOfWar {
 
     // Create texture
     this.texture = new THREE.DataTexture(
-      this.textureData as unknown as BufferSource,
+      this.textureData,
       this.gridWidth,
       this.gridHeight,
       THREE.RGBAFormat

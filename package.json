@@ -20,7 +20,7 @@
     "phaser": "^4.0.0-rc.6",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
-    "three": "^0.160.0",
+    "three": "^0.182.0",
     "zustand": "^4.4.7"
   },
   "devDependencies": {
@@ -29,7 +29,7 @@
     "@types/pathfinding": "^0.1.0",
     "@types/react": "^18.2.45",
     "@types/react-dom": "^18.2.18",
-    "@types/three": "^0.160.0",
+    "@types/three": "^0.172.0",
     "autoprefixer": "^10.4.16",
     "eslint": "^8.56.0",
     "eslint-config-next": "14.0.4",
