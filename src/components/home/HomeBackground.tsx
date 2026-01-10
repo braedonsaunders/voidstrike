@@ -392,41 +392,41 @@ export default function HomeBackground() {
   }, []);
 
   const createEnergyStreams = useCallback((scene: THREE.Scene) => {
-    const streamCount = 5;
+    const streamCount = 4;
     const streams: EnergyStream[] = [];
 
     for (let s = 0; s < streamCount; s++) {
-      const particleCount = 200;
+      const particleCount = 100;
       const geometry = new THREE.BufferGeometry();
       const positions = new Float32Array(particleCount * 3);
       const velocities = new Float32Array(particleCount * 3);
       const lifetimes = new Float32Array(particleCount);
       const sizes = new Float32Array(particleCount);
 
-      // Stream origin
+      // Stream origin - push further back and to the sides
       const originAngle = (s / streamCount) * Math.PI * 2;
-      const originRadius = 15 + Math.random() * 10;
+      const originRadius = 25 + Math.random() * 15;
       const originX = Math.cos(originAngle) * originRadius;
-      const originY = (Math.random() - 0.5) * 8;
-      const originZ = Math.sin(originAngle) * originRadius - 10;
+      const originY = (Math.random() - 0.5) * 6;
+      const originZ = Math.sin(originAngle) * originRadius - 25;
 
       for (let i = 0; i < particleCount; i++) {
         const i3 = i * 3;
-        positions[i3] = originX + (Math.random() - 0.5) * 2;
-        positions[i3 + 1] = originY + (Math.random() - 0.5) * 2;
-        positions[i3 + 2] = originZ + (Math.random() - 0.5) * 2;
+        positions[i3] = originX + (Math.random() - 0.5) * 3;
+        positions[i3 + 1] = originY + (Math.random() - 0.5) * 3;
+        positions[i3 + 2] = originZ + (Math.random() - 0.5) * 3;
 
-        // Velocity toward center
+        // Velocity toward center - much slower
         const toCenter = new THREE.Vector3(-originX, -originY, -originZ + 5);
         toCenter.normalize();
-        toCenter.multiplyScalar(0.05 + Math.random() * 0.05);
+        toCenter.multiplyScalar(0.008 + Math.random() * 0.012);
 
-        velocities[i3] = toCenter.x + (Math.random() - 0.5) * 0.02;
-        velocities[i3 + 1] = toCenter.y + (Math.random() - 0.5) * 0.02;
-        velocities[i3 + 2] = toCenter.z + (Math.random() - 0.5) * 0.02;
+        velocities[i3] = toCenter.x + (Math.random() - 0.5) * 0.005;
+        velocities[i3 + 1] = toCenter.y + (Math.random() - 0.5) * 0.005;
+        velocities[i3 + 2] = toCenter.z + (Math.random() - 0.5) * 0.005;
 
         lifetimes[i] = Math.random();
-        sizes[i] = Math.random() * 3 + 1;
+        sizes[i] = Math.random() * 1.5 + 0.5;
       }
 
       geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
@@ -446,8 +446,8 @@ export default function HomeBackground() {
 
           void main() {
             vec4 mvPosition = modelViewMatrix * vec4(position, 1.0);
-            vAlpha = 1.0 - smoothstep(0.0, 20.0, -mvPosition.z);
-            gl_PointSize = size * uPixelRatio * (200.0 / -mvPosition.z);
+            vAlpha = 1.0 - smoothstep(0.0, 30.0, -mvPosition.z);
+            gl_PointSize = size * uPixelRatio * (120.0 / -mvPosition.z);
             gl_Position = projectionMatrix * mvPosition;
           }
         `,
@@ -460,10 +460,10 @@ export default function HomeBackground() {
             if (dist > 0.5) discard;
 
             float alpha = (1.0 - dist * 2.0) * vAlpha;
-            float glow = exp(-dist * 3.0);
+            float glow = exp(-dist * 4.0);
 
-            vec3 color = uColor + vec3(0.5, 0.3, 0.8) * glow;
-            gl_FragColor = vec4(color, alpha * 0.6);
+            vec3 color = uColor + vec3(0.3, 0.2, 0.5) * glow;
+            gl_FragColor = vec4(color, alpha * 0.2);
           }
         `,
         transparent: true,
@@ -562,16 +562,16 @@ export default function HomeBackground() {
 
       for (let i = 0; i < stream.lifetimes.length; i++) {
         const i3 = i * 3;
-        stream.lifetimes[i] += 0.01;
+        stream.lifetimes[i] += 0.002; // Much slower lifetime
 
         if (stream.lifetimes[i] > 1) {
-          // Reset particle
+          // Reset particle - spawn far away
           stream.lifetimes[i] = 0;
           const originAngle = Math.random() * Math.PI * 2;
-          const originRadius = 15 + Math.random() * 10;
+          const originRadius = 25 + Math.random() * 15;
           posArray[i3] = Math.cos(originAngle) * originRadius;
-          posArray[i3 + 1] = (Math.random() - 0.5) * 8;
-          posArray[i3 + 2] = Math.sin(originAngle) * originRadius - 10;
+          posArray[i3 + 1] = (Math.random() - 0.5) * 6;
+          posArray[i3 + 2] = Math.sin(originAngle) * originRadius - 25;
 
           const toCenter = new THREE.Vector3(
             -posArray[i3],
@@ -579,7 +579,7 @@ export default function HomeBackground() {
             -posArray[i3 + 2] + 5
           );
           toCenter.normalize();
-          toCenter.multiplyScalar(0.05 + Math.random() * 0.05);
+          toCenter.multiplyScalar(0.008 + Math.random() * 0.012);
 
           stream.velocities[i3] = toCenter.x;
           stream.velocities[i3 + 1] = toCenter.y;
