@@ -20,7 +20,9 @@ export function GraphicsOptionsPanel() {
 
   const toggleOptions: Array<{ key: keyof GraphicsSettings; label: string }> = [
     { key: 'postProcessingEnabled', label: 'Post-Processing (Master)' },
+    { key: 'ssaoEnabled', label: 'SSAO (Ambient Occlusion)' },
     { key: 'bloomEnabled', label: 'Bloom' },
+    { key: 'outlineEnabled', label: 'Selection Outline' },
     { key: 'fxaaEnabled', label: 'Anti-Aliasing (FXAA)' },
     { key: 'groundFogEnabled', label: 'Ground Fog' },
     { key: 'particlesEnabled', label: 'Ambient Particles' },

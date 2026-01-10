@@ -13,7 +13,9 @@ export interface Notification {
 // Graphics settings for post-processing and visual effects
 export interface GraphicsSettings {
   postProcessingEnabled: boolean;
+  ssaoEnabled: boolean;
   bloomEnabled: boolean;
+  outlineEnabled: boolean;
   fxaaEnabled: boolean;
   groundFogEnabled: boolean;
   particlesEnabled: boolean;
@@ -101,9 +103,11 @@ export const useUIStore = create<UIState>((set, get) => ({
   showGraphicsOptions: false,
   graphicsSettings: {
     postProcessingEnabled: true,
+    ssaoEnabled: true,
     bloomEnabled: true,
+    outlineEnabled: true,
     fxaaEnabled: true,
-    groundFogEnabled: false, // Disabled by default - was causing issues
+    groundFogEnabled: false,
     particlesEnabled: true,
     bloomStrength: 0.3,
     bloomThreshold: 0.85,

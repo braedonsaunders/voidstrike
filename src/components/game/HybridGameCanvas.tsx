@@ -380,6 +380,14 @@ export function HybridGameCanvas() {
           }
         }
 
+        // Update outline pass with selected unit meshes (for post-processing outline effect)
+        if (postProcessingRef.current && unitRendererRef.current && selectedUnits.length > 0) {
+          const meshes = unitRendererRef.current.getMeshesForEntities(selectedUnits);
+          postProcessingRef.current.setOutlinedObjects(meshes);
+        } else if (postProcessingRef.current) {
+          postProcessingRef.current.clearOutlinedObjects();
+        }
+
         // PERFORMANCE: Throttle zustand store updates to reduce React re-renders
         // Only update every 100ms instead of every frame (60fps -> 10fps for store updates)
         if (deltaTime > 0 && Math.floor(currentTime / 100) !== Math.floor(prevTime / 100)) {
@@ -942,9 +950,11 @@ export function HybridGameCanvas() {
 
       // Update post-processing
       if (postProcessingRef.current) {
+        postProcessingRef.current.setSSAOEnabled(settings.postProcessingEnabled && settings.ssaoEnabled);
         postProcessingRef.current.setBloomEnabled(settings.postProcessingEnabled && settings.bloomEnabled);
         postProcessingRef.current.setBloomStrength(settings.bloomStrength);
         postProcessingRef.current.setBloomThreshold(settings.bloomThreshold);
+        postProcessingRef.current.setOutlineEnabled(settings.postProcessingEnabled && settings.outlineEnabled);
         postProcessingRef.current.setFXAAEnabled(settings.postProcessingEnabled && settings.fxaaEnabled);
       }
 

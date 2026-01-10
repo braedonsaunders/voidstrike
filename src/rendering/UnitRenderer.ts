@@ -576,6 +576,32 @@ export class UnitRenderer {
     this.unitOverlays.clear();
   }
 
+  /**
+   * Get Three.js meshes for a list of entity IDs (for outline pass)
+   */
+  public getMeshesForEntities(entityIds: number[]): THREE.Object3D[] {
+    const meshes: THREE.Object3D[] = [];
+
+    for (const entityId of entityIds) {
+      // Check animated units first (they have individual meshes)
+      const animUnit = this.animatedUnits.get(entityId);
+      if (animUnit) {
+        meshes.push(animUnit.mesh);
+        continue;
+      }
+
+      // For instanced units, we can't outline individual instances easily
+      // But we can add the overlay meshes (selection rings, team markers)
+      const overlay = this.unitOverlays.get(entityId);
+      if (overlay) {
+        // Add team marker as a fallback for outline
+        meshes.push(overlay.teamMarker);
+      }
+    }
+
+    return meshes;
+  }
+
   public dispose(): void {
     this.selectionGeometry.dispose();
     this.selectionMaterial.dispose();
