@@ -533,6 +533,116 @@ export function createRampInTerrain(
   }
 }
 
+/**
+ * Create a raised platform (base/expansion) with cliff edges.
+ * SC2-style: units can't walk up the edges, only through ramps.
+ *
+ * @param grid - The terrain grid
+ * @param centerX - Center X of the platform
+ * @param centerY - Center Y of the platform
+ * @param radius - Radius of the buildable area
+ * @param elevation - Elevation level (0, 1, or 2)
+ * @param cliffWidth - Width of the cliff ring around the platform (default 3)
+ */
+export function createRaisedPlatform(
+  grid: MapCell[][],
+  centerX: number,
+  centerY: number,
+  radius: number,
+  elevation: ElevationLevel,
+  cliffWidth: number = 3
+): void {
+  const elevation256 = legacyElevationTo256(elevation);
+  const outerRadius = radius + cliffWidth;
+
+  for (let dy = -outerRadius; dy <= outerRadius; dy++) {
+    for (let dx = -outerRadius; dx <= outerRadius; dx++) {
+      const dist = Math.sqrt(dx * dx + dy * dy);
+      const px = Math.floor(centerX + dx);
+      const py = Math.floor(centerY + dy);
+
+      if (py >= 0 && py < grid.length && px >= 0 && px < grid[0].length) {
+        // Skip if this is already a ramp (ramps should be created first)
+        if (grid[py][px].terrain === 'ramp') {
+          continue;
+        }
+
+        if (dist <= radius) {
+          // Inner buildable area
+          grid[py][px] = {
+            terrain: 'ground',
+            elevation: elevation256,
+            feature: 'none',
+            textureId: Math.floor(Math.random() * 4),
+          };
+        } else if (dist <= outerRadius) {
+          // Cliff ring - but skip near ramps
+          if (!isRampOrNearRamp(grid, px, py, 2)) {
+            grid[py][px] = {
+              terrain: 'unwalkable',
+              elevation: elevation256,
+              feature: 'cliff',
+              textureId: Math.floor(Math.random() * 4),
+            };
+          }
+        }
+      }
+    }
+  }
+}
+
+/**
+ * Create a raised rectangular platform with cliff edges.
+ * Useful for bases that need non-circular shapes.
+ */
+export function createRaisedRect(
+  grid: MapCell[][],
+  x: number,
+  y: number,
+  width: number,
+  height: number,
+  elevation: ElevationLevel,
+  cliffWidth: number = 3
+): void {
+  const elevation256 = legacyElevationTo256(elevation);
+
+  // Create outer cliff ring first
+  for (let dy = -cliffWidth; dy < height + cliffWidth; dy++) {
+    for (let dx = -cliffWidth; dx < width + cliffWidth; dx++) {
+      const px = Math.floor(x + dx);
+      const py = Math.floor(y + dy);
+
+      if (py >= 0 && py < grid.length && px >= 0 && px < grid[0].length) {
+        // Skip if this is already a ramp
+        if (grid[py][px].terrain === 'ramp') {
+          continue;
+        }
+
+        const isInner = dx >= 0 && dx < width && dy >= 0 && dy < height;
+        const isOuter = !isInner;
+
+        if (isInner) {
+          // Inner buildable area
+          grid[py][px] = {
+            terrain: 'ground',
+            elevation: elevation256,
+            feature: 'none',
+            textureId: Math.floor(Math.random() * 4),
+          };
+        } else if (isOuter && !isRampOrNearRamp(grid, px, py, 2)) {
+          // Cliff edge
+          grid[py][px] = {
+            terrain: 'unwalkable',
+            elevation: elevation256,
+            feature: 'cliff',
+            textureId: Math.floor(Math.random() * 4),
+          };
+        }
+      }
+    }
+  }
+}
+
 // ============================================
 // NEW TERRAIN FEATURE HELPERS
 // ============================================
