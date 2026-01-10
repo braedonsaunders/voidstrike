@@ -72,6 +72,13 @@ export class MovementSystem extends System {
         unit.setMoveTarget(pos.x, pos.y);
         unit.path = [];
         unit.pathIndex = 0;
+
+        // Request a path from the pathfinding system
+        this.game.eventBus.emit('pathfinding:request', {
+          entityId: entityId,
+          targetX: pos.x,
+          targetY: pos.y,
+        });
       }
     }
   }
@@ -92,6 +99,13 @@ export class MovementSystem extends System {
 
       // Set patrol between current position and target
       unit.setPatrol(transform.x, transform.y, targetPosition.x, targetPosition.y);
+
+      // Request path to first patrol destination
+      this.game.eventBus.emit('pathfinding:request', {
+        entityId: entityId,
+        targetX: targetPosition.x,
+        targetY: targetPosition.y,
+      });
     }
   }
 
@@ -358,6 +372,21 @@ export class MovementSystem extends System {
       } else if (unit.targetX !== null && unit.targetY !== null) {
         targetX = unit.targetX;
         targetY = unit.targetY;
+
+        // No path but has target - request path if distance is significant
+        // This handles edge cases where path request was missed or path is empty
+        const directDx = unit.targetX - transform.x;
+        const directDy = unit.targetY - transform.y;
+        const directDistance = Math.sqrt(directDx * directDx + directDy * directDy);
+
+        // Request path for distances > 3 units (short movements can go direct)
+        if (directDistance > 3 && unit.state === 'moving') {
+          this.game.eventBus.emit('pathfinding:request', {
+            entityId: entity.id,
+            targetX: unit.targetX,
+            targetY: unit.targetY,
+          });
+        }
       }
 
       // If attacking, we need to get the target's position
@@ -447,7 +476,18 @@ export class MovementSystem extends System {
 
       if (targetX === null || targetY === null) {
         // No target - check for queued commands
-        if (!unit.executeNextCommand()) {
+        if (unit.executeNextCommand()) {
+          // Queued command executed - request path if it's a move
+          if (unit.targetX !== null && unit.targetY !== null) {
+            unit.path = [];
+            unit.pathIndex = 0;
+            this.game.eventBus.emit('pathfinding:request', {
+              entityId: entity.id,
+              targetX: unit.targetX,
+              targetY: unit.targetY,
+            });
+          }
+        } else {
           // Decelerate
           unit.currentSpeed = Math.max(0, unit.currentSpeed - unit.acceleration * dt * 2);
         }
@@ -466,8 +506,17 @@ export class MovementSystem extends System {
           // Move to next waypoint
           unit.pathIndex++;
         } else if (unit.state === 'patrolling') {
-          // Advance to next patrol point
+          // Advance to next patrol point and request new path
           unit.nextPatrolPoint();
+          unit.path = [];
+          unit.pathIndex = 0;
+          if (unit.targetX !== null && unit.targetY !== null) {
+            this.game.eventBus.emit('pathfinding:request', {
+              entityId: entity.id,
+              targetX: unit.targetX,
+              targetY: unit.targetY,
+            });
+          }
         } else {
           // Arrived at final destination
           if (unit.state === 'gathering') {
@@ -487,7 +536,18 @@ export class MovementSystem extends System {
           }
 
           // Check for queued commands before going idle
-          if (!unit.executeNextCommand()) {
+          if (unit.executeNextCommand()) {
+            // Queued command executed - request path if it's a move
+            if (unit.targetX !== null && unit.targetY !== null) {
+              unit.path = [];
+              unit.pathIndex = 0;
+              this.game.eventBus.emit('pathfinding:request', {
+                entityId: entity.id,
+                targetX: unit.targetX,
+                targetY: unit.targetY,
+              });
+            }
+          } else {
             unit.clearTarget();
           }
           velocity.zero();

@@ -372,7 +372,8 @@ export class HierarchicalAStar {
   }
 
   /**
-   * Refine abstract path into detailed path
+   * Refine abstract path into detailed path by pathfinding through sector entrances.
+   * This breaks the long path into smaller segments for efficiency.
    */
   private refineAbstractPath(
     startX: number,
@@ -385,9 +386,50 @@ export class HierarchicalAStar {
       return { path: [], found: false };
     }
 
-    // For simplicity, just use regular A* with the knowledge that a path exists
-    // A more sophisticated implementation would pathfind through waypoints
-    return this.baseAStar.findPath(startX, startY, endX, endY);
+    // Collect waypoints: start -> sector entrances -> end
+    const waypoints: Array<{ x: number; y: number }> = [{ x: startX, y: startY }];
+
+    // Add entrance points between sectors
+    for (let i = 0; i < abstractPath.length - 1; i++) {
+      const currentSector = this.sectors[abstractPath[i]];
+      const nextSectorId = abstractPath[i + 1];
+
+      // Find the entrance to the next sector
+      const entrance = currentSector.entrances.find(e => e.neighborSectorId === nextSectorId);
+      if (entrance) {
+        // Convert grid coords to world coords (center of cell)
+        waypoints.push({
+          x: entrance.x + 0.5,
+          y: entrance.y + 0.5,
+        });
+      }
+    }
+
+    waypoints.push({ x: endX, y: endY });
+
+    // Now pathfind between consecutive waypoints
+    const fullPath: Array<{ x: number; y: number }> = [];
+
+    for (let i = 0; i < waypoints.length - 1; i++) {
+      const from = waypoints[i];
+      const to = waypoints[i + 1];
+
+      const segment = this.baseAStar.findPath(from.x, from.y, to.x, to.y);
+
+      if (!segment.found) {
+        // If any segment fails, fall back to direct A* for the whole path
+        return this.baseAStar.findPath(startX, startY, endX, endY);
+      }
+
+      // Add segment to full path (skip first point of subsequent segments to avoid duplicates)
+      if (i === 0) {
+        fullPath.push(...segment.path);
+      } else if (segment.path.length > 1) {
+        fullPath.push(...segment.path.slice(1));
+      }
+    }
+
+    return { path: fullPath, found: true };
   }
 
   /**
