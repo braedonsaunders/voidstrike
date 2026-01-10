@@ -558,18 +558,23 @@ export class MapBorderFog {
 
     // Border extends this far beyond the map
     const borderSize = 60;
-    // How far the fog fades inward from the map edge
-    const fadeDistance = 15;
+    // How far the fog encroaches INWARD onto the map (hides hard edges)
+    const inwardEncroachment = 12;
+    // Total fade distance from inner edge to outer edge
+    const fadeDistance = borderSize + inwardEncroachment;
 
     // Create a ring-shaped geometry that surrounds the map
-    // Inner rectangle is the map bounds, outer rectangle extends beyond
+    // Inner edge is INSIDE the map bounds to hide hard terrain edges
+    // Outer edge extends beyond the map
+    const innerWidth = mapWidth - inwardEncroachment * 2;
+    const innerHeight = mapHeight - inwardEncroachment * 2;
     const outerWidth = mapWidth + borderSize * 2;
     const outerHeight = mapHeight + borderSize * 2;
 
     // Create custom geometry - a frame/ring shape
     const geometry = this.createBorderGeometry(
-      mapWidth,
-      mapHeight,
+      innerWidth,
+      innerHeight,
       outerWidth,
       outerHeight,
       fadeDistance
@@ -643,30 +648,33 @@ export class MapBorderFog {
 
         void main() {
           // Multi-octave noise for smoky, organic movement
-          vec2 noiseCoord = vWorldPosition.xz * 0.03;
-          float n1 = snoise(noiseCoord + time * 0.02);
-          float n2 = snoise(noiseCoord * 2.0 - time * 0.015) * 0.5;
-          float n3 = snoise(noiseCoord * 4.0 + time * 0.025) * 0.25;
-          float n4 = snoise(noiseCoord * 8.0 - time * 0.01) * 0.125;
+          // Slow animation speeds for atmospheric effect
+          vec2 noiseCoord = vWorldPosition.xz * 0.025;
+          float n1 = snoise(noiseCoord + time * 0.006);
+          float n2 = snoise(noiseCoord * 2.0 - time * 0.004) * 0.5;
+          float n3 = snoise(noiseCoord * 4.0 + time * 0.008) * 0.25;
+          float n4 = snoise(noiseCoord * 8.0 - time * 0.003) * 0.125;
 
           float noise = (n1 + n2 + n3 + n4) * 0.5 + 0.5;
 
           // Wispy smoke tendrils effect
           float wisps = smoothstep(0.3, 0.7, noise);
 
-          // Base fade from vertex attribute (0 at map edge, 1 at outer edge)
+          // Base fade from vertex attribute (0 at inner edge, 1 at outer edge)
           float baseFade = vFade;
 
-          // Apply noise variation to the fade
-          float noisyFade = baseFade + (noise - 0.5) * 0.15;
+          // Apply noise variation to the fade edge for organic boundary
+          float noisyFade = baseFade + (noise - 0.5) * 0.2;
           noisyFade = clamp(noisyFade, 0.0, 1.0);
 
-          // Smooth transition with noise-based variation
-          float alpha = smoothstep(0.0, 0.4, noisyFade) * (0.85 + wisps * 0.15);
+          // Smooth transition - starts transparent, becomes opaque
+          // Use pow for more gradual fade-in near map edge
+          float alpha = smoothstep(0.0, 0.5, noisyFade);
+          alpha = pow(alpha, 0.8) * (0.9 + wisps * 0.1);
 
           // Add subtle color variation for depth
           vec3 color = fogColor;
-          color += vec3(0.02, 0.01, 0.03) * noise; // Very subtle purple tint in lighter areas
+          color += vec3(0.015, 0.01, 0.02) * noise; // Very subtle tint in lighter areas
 
           gl_FragColor = vec4(color, alpha);
         }
