@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { World } from '@/engine/ecs/World';
 import { Transform } from '@/engine/components/Transform';
-import { Resource } from '@/engine/components/Resource';
+import { Resource, OPTIMAL_WORKERS_PER_MINERAL, OPTIMAL_WORKERS_PER_VESPENE } from '@/engine/components/Resource';
 import { Selectable } from '@/engine/components/Selectable';
 import { Terrain } from './Terrain';
 import AssetManager from '@/assets/AssetManager';
@@ -17,11 +17,14 @@ interface InstancedResourceGroup {
   baseScale: number; // Base scale from model normalization
 }
 
-// Track per-resource rotation and selection ring
+// Track per-resource rotation, selection ring, and worker count label
 interface ResourceData {
   rotation: number;
   lastScale: number;
   selectionRing: THREE.Mesh | null;
+  workerLabel: THREE.Sprite | null;
+  lastGathererCount: number;
+  lastOptimalCount: number;
 }
 
 // Max instances per resource type - must exceed max minerals/vespene on largest maps
@@ -181,7 +184,7 @@ export class ResourceRenderer {
   }
 
   /**
-   * Get or create per-resource data (rotation, selection ring)
+   * Get or create per-resource data (rotation, selection ring, worker label)
    */
   private getOrCreateResourceData(entityId: number): ResourceData {
     let data = this.resourceData.get(entityId);
@@ -192,14 +195,95 @@ export class ResourceRenderer {
       selectionRing.visible = false;
       this.scene.add(selectionRing);
 
+      // Create worker count label sprite
+      const workerLabel = this.createWorkerLabel();
+      this.scene.add(workerLabel);
+
       data = {
         rotation: Math.random() * Math.PI * 2,
         lastScale: 1,
         selectionRing,
+        workerLabel,
+        lastGathererCount: -1, // Force update on first frame
+        lastOptimalCount: -1,
       };
       this.resourceData.set(entityId, data);
     }
     return data;
+  }
+
+  /**
+   * Create a sprite for displaying worker count (e.g., "2/2")
+   */
+  private createWorkerLabel(): THREE.Sprite {
+    const canvas = document.createElement('canvas');
+    canvas.width = 64;
+    canvas.height = 32;
+
+    const texture = new THREE.CanvasTexture(canvas);
+    texture.minFilter = THREE.LinearFilter;
+    texture.magFilter = THREE.LinearFilter;
+
+    const material = new THREE.SpriteMaterial({
+      map: texture,
+      transparent: true,
+      depthTest: false,
+      depthWrite: false,
+    });
+
+    const sprite = new THREE.Sprite(material);
+    sprite.scale.set(1.2, 0.6, 1);
+    sprite.visible = false;
+
+    return sprite;
+  }
+
+  /**
+   * Update the worker label texture with current/optimal worker counts
+   */
+  private updateWorkerLabel(
+    sprite: THREE.Sprite,
+    currentWorkers: number,
+    optimalWorkers: number,
+    resourceType: 'minerals' | 'vespene'
+  ): void {
+    const material = sprite.material as THREE.SpriteMaterial;
+    const texture = material.map as THREE.CanvasTexture;
+    const canvas = texture.image as HTMLCanvasElement;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+
+    // Clear canvas
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+    // Background with rounded corners
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
+    ctx.beginPath();
+    ctx.roundRect(2, 2, canvas.width - 4, canvas.height - 4, 4);
+    ctx.fill();
+
+    // Determine color based on saturation level
+    let color: string;
+    if (currentWorkers >= optimalWorkers) {
+      // Fully saturated - green
+      color = '#00ff00';
+    } else if (currentWorkers > 0) {
+      // Partially saturated - yellow
+      color = '#ffff00';
+    } else {
+      // No workers - white/gray
+      color = '#aaaaaa';
+    }
+
+    // Draw text (e.g., "2/2")
+    ctx.font = 'bold 18px Arial';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillStyle = color;
+    ctx.fillText(`${currentWorkers}/${optimalWorkers}`, canvas.width / 2, canvas.height / 2);
+
+    // Mark texture for update
+    texture.needsUpdate = true;
   }
 
   public update(): void {
@@ -259,6 +343,28 @@ export class ResourceRenderer {
       if (data.selectionRing) {
         data.selectionRing.position.set(transform.x, terrainHeight + 0.05, transform.y);
         data.selectionRing.visible = selectable?.isSelected ?? false;
+      }
+
+      // Update worker count label
+      if (data.workerLabel) {
+        const currentGatherers = resource.getCurrentGatherers();
+        const optimalWorkers = resource.getOptimalWorkers();
+
+        // Position label above the resource
+        data.workerLabel.position.set(transform.x, terrainHeight + 1.8, transform.y);
+
+        // Only show label when there are workers or resource has been worked
+        // For minerals: always show if there are any gatherers
+        // For vespene with extractor: show worker count
+        const showLabel = currentGatherers > 0 || (resource.resourceType === 'vespene' && resource.hasExtractor());
+        data.workerLabel.visible = showLabel;
+
+        // Update texture only if count changed (optimization)
+        if (showLabel && (currentGatherers !== data.lastGathererCount || optimalWorkers !== data.lastOptimalCount)) {
+          this.updateWorkerLabel(data.workerLabel, currentGatherers, optimalWorkers, resource.resourceType);
+          data.lastGathererCount = currentGatherers;
+          data.lastOptimalCount = optimalWorkers;
+        }
       }
 
       if (group.mesh.count < group.maxInstances) {
@@ -321,9 +427,24 @@ export class ResourceRenderer {
         if (data.selectionRing) {
           this.scene.remove(data.selectionRing);
         }
+        if (data.workerLabel) {
+          this.scene.remove(data.workerLabel);
+          this.disposeWorkerLabel(data.workerLabel);
+        }
         this.resourceData.delete(entityId);
       }
     }
+  }
+
+  /**
+   * Dispose a worker label sprite and its resources
+   */
+  private disposeWorkerLabel(sprite: THREE.Sprite): void {
+    const material = sprite.material as THREE.SpriteMaterial;
+    if (material.map) {
+      material.map.dispose();
+    }
+    material.dispose();
   }
 
   public dispose(): void {
@@ -336,10 +457,14 @@ export class ResourceRenderer {
     }
     this.instancedGroups.clear();
 
-    // Clean up selection rings
+    // Clean up selection rings and worker labels
     for (const data of this.resourceData.values()) {
       if (data.selectionRing) {
         this.scene.remove(data.selectionRing);
+      }
+      if (data.workerLabel) {
+        this.scene.remove(data.workerLabel);
+        this.disposeWorkerLabel(data.workerLabel);
       }
     }
     this.resourceData.clear();

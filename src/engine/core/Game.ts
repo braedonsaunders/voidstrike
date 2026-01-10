@@ -188,6 +188,7 @@ export class Game {
 
     this.state = 'running';
     this.gameLoop.start();
+    this.eventBus.emit('game:countdown', {}); // SC2-style 3, 2, 1, GO! countdown
     this.eventBus.emit('game:started', { tick: this.currentTick });
   }
 

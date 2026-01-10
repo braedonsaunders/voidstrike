@@ -91,6 +91,20 @@ For multiplayer, we use deterministic lockstep:
 Workers -> Resource Nodes -> Storage -> Production
 ```
 
+### Worker Saturation (SC2-style)
+Each resource node displays worker assignment status with floating labels showing "X/Y" (current/optimal):
+
+| Resource Type | Optimal Workers | Max Useful Workers | Label Color |
+|--------------|-----------------|-------------------|-------------|
+| **Minerals** | 2 per patch | 3 per patch | Green when saturated, Yellow when under |
+| **Vespene** | 3 per geyser | 3 per geyser | Green when saturated, Yellow when under |
+
+- **Green (X/Y)**: Optimal saturation reached - maximum efficiency
+- **Yellow (X/Y)**: Undersaturated - workers needed for optimal income
+- **Gray (0/Y)**: No workers assigned
+
+AI prioritizes filling extractors to 3 workers first, then distributes workers evenly across mineral patches (2 per patch optimal, 3 maximum).
+
 ## Combat System
 
 ### Damage Types

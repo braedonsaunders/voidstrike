@@ -2,6 +2,14 @@ import { Component } from '../ecs/Component';
 
 export type ResourceType = 'minerals' | 'vespene';
 
+// SC2-style optimal worker counts per resource
+// Minerals: 2 workers per patch is optimal, 3 is max (diminishing returns)
+// Vespene: 3 workers per geyser is optimal and max
+export const OPTIMAL_WORKERS_PER_MINERAL = 2;
+export const MAX_WORKERS_PER_MINERAL = 3;
+export const OPTIMAL_WORKERS_PER_VESPENE = 3;
+export const MAX_WORKERS_PER_VESPENE = 3;
+
 export class Resource extends Component {
   public readonly type = 'Resource';
 
@@ -96,5 +104,39 @@ export class Resource extends Component {
 
   public getCurrentGatherers(): number {
     return this.currentGatherers.size;
+  }
+
+  /**
+   * Get the optimal number of workers for this resource type.
+   * Optimal means maximum efficiency without diminishing returns.
+   */
+  public getOptimalWorkers(): number {
+    return this.resourceType === 'minerals'
+      ? OPTIMAL_WORKERS_PER_MINERAL
+      : OPTIMAL_WORKERS_PER_VESPENE;
+  }
+
+  /**
+   * Get the maximum useful workers for this resource type.
+   * Beyond this, additional workers provide no benefit.
+   */
+  public getMaxUsefulWorkers(): number {
+    return this.resourceType === 'minerals'
+      ? MAX_WORKERS_PER_MINERAL
+      : MAX_WORKERS_PER_VESPENE;
+  }
+
+  /**
+   * Check if this resource is at optimal saturation.
+   */
+  public isOptimallySaturated(): boolean {
+    return this.currentGatherers.size >= this.getOptimalWorkers();
+  }
+
+  /**
+   * Check if this resource is oversaturated (more workers than useful).
+   */
+  public isOversaturated(): boolean {
+    return this.currentGatherers.size > this.getMaxUsefulWorkers();
   }
 }

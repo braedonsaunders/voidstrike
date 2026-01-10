@@ -185,7 +185,7 @@ export class EffectsRenderer {
       const mesh = new THREE.Mesh(this.hitGeometry, this.hitMaterial.clone());
       mesh.visible = false;
       mesh.rotation.x = -Math.PI / 2;
-      mesh.renderOrder = 998; // Render after terrain but before damage numbers
+      mesh.renderOrder = 5; // Ground effects render BEFORE units (50) but after terrain
       return mesh;
     });
 
@@ -455,7 +455,7 @@ export class EffectsRenderer {
     const mesh = new THREE.Mesh(this.deathGeometry, this.deathMaterial.clone());
     mesh.position.copy(position);
     mesh.rotation.x = -Math.PI / 2;
-    mesh.renderOrder = 998; // Render after terrain
+    mesh.renderOrder = 5; // Ground effects render BEFORE units
     this.scene.add(mesh);
 
     this.hitEffects.push({
@@ -539,7 +539,7 @@ export class EffectsRenderer {
     // Keep terrain height, add small offset to prevent z-fighting
     ringMesh.position.y = position.y + 0.1;
     ringMesh.rotation.x = -Math.PI / 2;
-    ringMesh.renderOrder = 998;
+    ringMesh.renderOrder = 5; // Ground effects render BEFORE units
     this.scene.add(ringMesh);
 
     this.hitEffects.push({
@@ -563,7 +563,7 @@ export class EffectsRenderer {
     flashMesh.position.copy(position);
     // Flash at terrain height + 1 for visibility
     flashMesh.position.y = position.y + 1;
-    flashMesh.renderOrder = 998;
+    flashMesh.renderOrder = 6; // Slightly above ground rings
     this.scene.add(flashMesh);
 
     this.hitEffects.push({
@@ -615,7 +615,7 @@ export class EffectsRenderer {
     const sprite = new THREE.Sprite(material);
     sprite.position.copy(position);
     sprite.scale.set(1.5, 0.75, 1);
-    sprite.renderOrder = 999; // Render after terrain and other 3D objects
+    sprite.renderOrder = 100; // Damage numbers render AFTER units, always on top
     this.scene.add(sprite);
 
     this.damageNumbers.push({
@@ -648,7 +648,7 @@ export class EffectsRenderer {
       const ring = new THREE.Mesh(ringGeometry, material);
       ring.position.copy(position);
       ring.rotation.x = -Math.PI / 2;
-      ring.renderOrder = 996; // Render after terrain
+      ring.renderOrder = 5; // Ground effects render BEFORE units
       this.scene.add(ring);
       rings.push(ring);
     }
@@ -684,7 +684,7 @@ export class EffectsRenderer {
         const mesh = new THREE.Mesh(this.focusFireGeometry, this.focusFireMaterial.clone());
         mesh.position.set(targetPos.x, terrainHeight + 0.15, targetPos.y);
         mesh.rotation.x = -Math.PI / 2;
-        mesh.renderOrder = 997; // Render after terrain
+        mesh.renderOrder = 5; // Ground effects render BEFORE units
         this.scene.add(mesh);
 
         indicator = {

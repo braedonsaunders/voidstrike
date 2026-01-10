@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import { MapData, MapCell, TerrainType, ElevationLevel, Elevation, TerrainFeature, TERRAIN_FEATURE_CONFIG } from '@/data/maps';
 import { BiomeConfig, BIOMES, blendBiomeColors, BiomeType, getBiomeShaderConfig } from './Biomes';
 import { createTerrainShaderMaterial, updateTerrainShader } from './shaders/TerrainShader';
-import { createSC2TerrainShaderMaterial, getSC2BiomeConfig, updateSC2TerrainShader } from './shaders/SC2TerrainShader';
+import { createVoidstrikeTerrainShaderMaterial, getVoidstrikeBiomeConfig, updateVoidstrikeTerrainShader } from './shaders/VoidstrikeTerrainShader';
 import { createTextureTerrainMaterial, updateTextureTerrainShader, getBiomeTextureConfig, BiomeTextureType } from './shaders/TextureTerrainShader';
 import AssetManager from '@/assets/AssetManager';
 import { debugTerrain } from '@/utils/debugLogger';
@@ -254,9 +254,9 @@ export class Terrain {
         this.material = createTextureTerrainMaterial(textureConfig);
         break;
       case 'sc2':
-        debugTerrain.log('[Terrain] Using SC2 terrain shader for biome:', this.mapData.biome || 'grassland');
-        const sc2Config = getSC2BiomeConfig(this.mapData.biome || 'grassland');
-        this.material = createSC2TerrainShaderMaterial(sc2Config);
+        debugTerrain.log('[Terrain] Using Voidstrike terrain shader for biome:', this.mapData.biome || 'grassland');
+        const voidstrikeConfig = getVoidstrikeBiomeConfig(this.mapData.biome || 'grassland');
+        this.material = createVoidstrikeTerrainShaderMaterial(voidstrikeConfig);
         break;
       case 'basic':
       default:
@@ -279,7 +279,7 @@ export class Terrain {
         updateTextureTerrainShader(this.material, deltaTime, sunDirection);
         break;
       case 'sc2':
-        updateSC2TerrainShader(this.material, deltaTime, sunDirection);
+        updateVoidstrikeTerrainShader(this.material, deltaTime, sunDirection);
         break;
       case 'basic':
       default:
