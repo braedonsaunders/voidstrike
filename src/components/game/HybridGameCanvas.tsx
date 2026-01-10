@@ -15,9 +15,9 @@ import { EffectsRenderer } from '@/rendering/EffectsRenderer';
 import { RallyPointRenderer } from '@/rendering/RallyPointRenderer';
 import { WatchTowerRenderer } from '@/rendering/WatchTowerRenderer';
 import { BuildingPlacementPreview } from '@/rendering/BuildingPlacementPreview';
-import { SC2SelectionSystem } from '@/rendering/SC2SelectionSystem';
-import { SC2ParticleSystem } from '@/rendering/SC2ParticleSystem';
-import { SC2PostProcessing } from '@/rendering/SC2PostProcessing';
+import { VoidstrikeSelectionSystem } from '@/rendering/VoidstrikeSelectionSystem';
+import { VoidstrikeParticleSystem } from '@/rendering/VoidstrikeParticleSystem';
+import { VoidstrikePostProcessing } from '@/rendering/VoidstrikePostProcessing';
 import { useGameStore } from '@/store/gameStore';
 import { useGameSetupStore, getLocalPlayerId, isSpectatorMode } from '@/store/gameSetupStore';
 import { SelectionBox } from './SelectionBox';
@@ -77,10 +77,10 @@ export function HybridGameCanvas() {
   const placementPreviewRef = useRef<BuildingPlacementPreview | null>(null);
   const environmentRef = useRef<EnvironmentManager | null>(null);
 
-  // SC2-level visual systems
-  const selectionSystemRef = useRef<SC2SelectionSystem | null>(null);
-  const particleSystemRef = useRef<SC2ParticleSystem | null>(null);
-  const postProcessingRef = useRef<SC2PostProcessing | null>(null);
+  // Voidstrike visual systems
+  const selectionSystemRef = useRef<VoidstrikeSelectionSystem | null>(null);
+  const particleSystemRef = useRef<VoidstrikeParticleSystem | null>(null);
+  const postProcessingRef = useRef<VoidstrikePostProcessing | null>(null);
 
   // Phaser refs
   const phaserContainerRef = useRef<HTMLDivElement>(null);
@@ -151,7 +151,7 @@ export function HybridGameCanvas() {
     const initializeThreeJS = () => {
       if (!threeCanvasRef.current) return;
 
-      // Create renderer with SC2-level quality settings
+      // Create renderer with Voidstrike quality settings
       const renderer = new THREE.WebGLRenderer({
         canvas: threeCanvasRef.current,
         antialias: true,
@@ -365,12 +365,12 @@ export function HybridGameCanvas() {
       });
       scene.add(placementPreviewRef.current.group);
 
-      // Initialize SC2-level visual systems
-      selectionSystemRef.current = new SC2SelectionSystem(scene);
-      particleSystemRef.current = new SC2ParticleSystem(scene);
+      // Initialize Voidstrike visual systems
+      selectionSystemRef.current = new VoidstrikeSelectionSystem(scene);
+      particleSystemRef.current = new VoidstrikeParticleSystem(scene);
       // Post-processing enabled for visual polish (bloom, vignette, color grading)
       // Disable this on very low-end devices if performance is an issue
-      postProcessingRef.current = new SC2PostProcessing(renderer, scene, camera.camera);
+      postProcessingRef.current = new VoidstrikePostProcessing(renderer, scene, camera.camera);
 
       // Apply initial graphics settings
       const initialSettings = useUIStore.getState().graphicsSettings;
@@ -472,7 +472,7 @@ export function HybridGameCanvas() {
         const gameTime = gameRef.current?.getGameTime() ?? 0;
         environmentRef.current?.update(deltaTime / 1000, gameTime);
 
-        // Update SC2 visual systems
+        // Update visual systems
         selectionSystemRef.current?.update(deltaTime);
         particleSystemRef.current?.update(deltaTime);
 

@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import { debugShaders } from '@/utils/debugLogger';
 
 /**
- * SC2-LEVEL TERRAIN SHADER
+ * VOIDSTRIKE TERRAIN SHADER
  *
  * Dramatically improved terrain rendering with:
  * - Multi-layer procedural texturing (dirt, grass, rock, cliff, debris)
@@ -15,7 +15,7 @@ import { debugShaders } from '@/utils/debugLogger';
  * - Ambient occlusion in crevices
  */
 
-export const sc2TerrainVertexShader = /* glsl */ `
+export const voidstrikeTerrainVertexShader = /* glsl */ `
 precision highp float;
 
 varying vec3 vWorldPosition;
@@ -45,7 +45,7 @@ void main() {
 }
 `;
 
-export const sc2TerrainFragmentShader = /* glsl */ `
+export const voidstrikeTerrainFragmentShader = /* glsl */ `
 precision highp float;
 
 uniform float uTime;
@@ -503,7 +503,7 @@ void main() {
 }
 `;
 
-export interface SC2TerrainShaderConfig {
+export interface VoidstrikeTerrainShaderConfig {
   groundColor1: THREE.Color;
   groundColor2: THREE.Color;
   rockColor: THREE.Color;
@@ -514,8 +514,8 @@ export interface SC2TerrainShaderConfig {
   fogDensity: number;
 }
 
-export function createSC2TerrainShaderMaterial(config: SC2TerrainShaderConfig): THREE.ShaderMaterial {
-  debugShaders.log('[SC2TerrainShader] Creating material with config:', {
+export function createVoidstrikeTerrainShaderMaterial(config: VoidstrikeTerrainShaderConfig): THREE.ShaderMaterial {
+  debugShaders.log('[VoidstrikeTerrainShader] Creating material with config:', {
     groundColor1: '#' + config.groundColor1.getHexString(),
     groundColor2: '#' + config.groundColor2.getHexString(),
     rockColor: '#' + config.rockColor.getHexString(),
@@ -526,8 +526,8 @@ export function createSC2TerrainShaderMaterial(config: SC2TerrainShaderConfig): 
   });
 
   const material = new THREE.ShaderMaterial({
-    vertexShader: sc2TerrainVertexShader,
-    fragmentShader: sc2TerrainFragmentShader,
+    vertexShader: voidstrikeTerrainVertexShader,
+    fragmentShader: voidstrikeTerrainFragmentShader,
     uniforms: {
       uTime: { value: 0 },
       uGroundColor1: { value: config.groundColor1 },
@@ -550,18 +550,18 @@ export function createSC2TerrainShaderMaterial(config: SC2TerrainShaderConfig): 
     // Cast to any to access internal program property
     const prog = (material as unknown as { program?: unknown }).program;
     if (prog) {
-      debugShaders.log('[SC2TerrainShader] Shader compiled successfully');
+      debugShaders.log('[VoidstrikeTerrainShader] Shader compiled successfully');
     } else {
-      debugShaders.warn('[SC2TerrainShader] Shader may not have compiled yet or has errors');
+      debugShaders.warn('[VoidstrikeTerrainShader] Shader may not have compiled yet or has errors');
     }
   }, 1000);
 
   return material;
 }
 
-export function getSC2BiomeConfig(biomeType: string): SC2TerrainShaderConfig {
+export function getVoidstrikeBiomeConfig(biomeType: string): VoidstrikeTerrainShaderConfig {
   // More vibrant SC2-style colors for each biome
-  const configs: Record<string, SC2TerrainShaderConfig> = {
+  const configs: Record<string, VoidstrikeTerrainShaderConfig> = {
     grassland: {
       groundColor1: new THREE.Color(0x5aad55), // Vibrant green grass
       groundColor2: new THREE.Color(0x9a8060), // Rich brown dirt
@@ -627,7 +627,7 @@ export function getSC2BiomeConfig(biomeType: string): SC2TerrainShaderConfig {
   return configs[biomeType] || configs.grassland;
 }
 
-export function updateSC2TerrainShader(
+export function updateVoidstrikeTerrainShader(
   material: THREE.ShaderMaterial,
   deltaTime: number,
   sunDirection?: THREE.Vector3

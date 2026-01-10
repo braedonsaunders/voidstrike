@@ -10,7 +10,7 @@ import { FXAAShader } from 'three/examples/jsm/shaders/FXAAShader.js';
 import { debugPostProcessing } from '@/utils/debugLogger';
 
 /**
- * SC2-LEVEL POST-PROCESSING
+ * VOIDSTRIKE POST-PROCESSING
  *
  * Uses Three.js's official post-processing library:
  * - SSAOPass for ambient occlusion (depth/grounding)
@@ -20,7 +20,7 @@ import { debugPostProcessing } from '@/utils/debugLogger';
  * - OutputPass for correct color space handling
  */
 
-export class SC2PostProcessing {
+export class VoidstrikePostProcessing {
   private composer: EffectComposer;
   private renderPass: RenderPass;
   private ssaoPass: SSAOPass;
@@ -93,7 +93,7 @@ export class SC2PostProcessing {
     this.outputPass = new OutputPass();
     this.composer.addPass(this.outputPass);
 
-    debugPostProcessing.log('[SC2PostProcessing] Initialized with SSAO, Bloom, Outline, FXAA');
+    debugPostProcessing.log('[VoidstrikePostProcessing] Initialized with SSAO, Bloom, Outline, FXAA');
   }
 
   render(): void {
