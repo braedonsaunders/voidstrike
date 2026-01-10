@@ -2,12 +2,20 @@ import * as THREE from 'three';
 import { MapData } from '@/data/maps';
 import { BUILDING_DEFINITIONS } from '@/data/buildings/dominion';
 
+// Interface for queued building placements
+interface QueuedPlacement {
+  buildingType: string;
+  x: number;
+  y: number;
+}
+
 /**
  * Building placement preview system - SC2 style
  * Shows:
  * - Grid overlay when placing buildings
  * - Green/red tiles for valid/invalid placement
  * - Ghost preview of the building footprint
+ * - Queued placement indicators with path lines (shift-click queue)
  */
 
 export class BuildingPlacementPreview {
@@ -24,17 +32,42 @@ export class BuildingPlacementPreview {
   // Validator that checks collisions with buildings, units, resources, decorations
   private placementValidator: ((centerX: number, centerY: number, width: number, height: number) => boolean) | null = null;
 
+  // Queued placement visualization
+  private queuedPlacements: QueuedPlacement[] = [];
+  private queueLine: THREE.LineSegments | null = null;
+  private queueMarkers: THREE.Mesh[] = [];
+  private queueLineMaterial: THREE.LineBasicMaterial;
+  private queueMarkerMaterial: THREE.MeshBasicMaterial;
+  private queueMarkerGeometry: THREE.SphereGeometry;
+
   // Grid visualization settings
   private static readonly GRID_OFFSET = 0.15; // Offset above terrain
   private static readonly VALID_COLOR = new THREE.Color(0x00ff00);
   private static readonly INVALID_COLOR = new THREE.Color(0xff0000);
   private static readonly GRID_OPACITY = 0.4;
+  private static readonly QUEUE_LINE_COLOR = 0x00ff88; // Same as rally point green
 
   constructor(mapData: MapData, getTerrainHeight?: (x: number, y: number) => number) {
     this.group = new THREE.Group();
     this.mapData = mapData;
     this.getTerrainHeight = getTerrainHeight ?? null;
     this.group.visible = false;
+
+    // Initialize queue visualization materials (same style as rally points)
+    this.queueLineMaterial = new THREE.LineBasicMaterial({
+      color: BuildingPlacementPreview.QUEUE_LINE_COLOR,
+      transparent: true,
+      opacity: 0.7,
+      linewidth: 2,
+    });
+
+    this.queueMarkerMaterial = new THREE.MeshBasicMaterial({
+      color: BuildingPlacementPreview.QUEUE_LINE_COLOR,
+      transparent: true,
+      opacity: 0.8,
+    });
+
+    this.queueMarkerGeometry = new THREE.SphereGeometry(0.4, 8, 8);
   }
 
   /**
@@ -75,6 +108,132 @@ export class BuildingPlacementPreview {
     this.currentBuildingType = null;
     this.group.visible = false;
     this.clearMeshes();
+    this.clearQueueVisuals();
+    this.queuedPlacements = [];
+  }
+
+  /**
+   * Update queued placements for visual display (shift-click queue)
+   */
+  public setQueuedPlacements(placements: QueuedPlacement[]): void {
+    this.queuedPlacements = placements;
+    this.updateQueueVisuals();
+  }
+
+  /**
+   * Clear queue visuals
+   */
+  private clearQueueVisuals(): void {
+    if (this.queueLine) {
+      this.group.remove(this.queueLine);
+      this.queueLine.geometry.dispose();
+      this.queueLine = null;
+    }
+
+    for (const marker of this.queueMarkers) {
+      this.group.remove(marker);
+    }
+    this.queueMarkers = [];
+  }
+
+  /**
+   * Update queue path lines and markers
+   */
+  private updateQueueVisuals(): void {
+    this.clearQueueVisuals();
+
+    if (this.queuedPlacements.length === 0) return;
+
+    // Create dashed line path connecting all queued placements
+    const linePoints: THREE.Vector3[] = [];
+    const lineOffset = 0.2;
+
+    for (let i = 0; i < this.queuedPlacements.length; i++) {
+      const placement = this.queuedPlacements[i];
+      const prevPlacement = i > 0 ? this.queuedPlacements[i - 1] : null;
+
+      // Create marker at this position
+      const height = this.getTerrainHeight ? this.getTerrainHeight(placement.x, placement.y) : 0;
+      const marker = new THREE.Mesh(this.queueMarkerGeometry, this.queueMarkerMaterial);
+      marker.position.set(placement.x, height + 0.5, placement.y);
+      this.group.add(marker);
+      this.queueMarkers.push(marker);
+
+      // Add line segment from previous placement to this one
+      if (prevPlacement) {
+        const prevHeight = this.getTerrainHeight ? this.getTerrainHeight(prevPlacement.x, prevPlacement.y) : 0;
+        // Create dashed line segments
+        const dashPoints = this.createDashedLinePoints(
+          prevPlacement.x, prevPlacement.y, prevHeight + lineOffset,
+          placement.x, placement.y, height + lineOffset
+        );
+        linePoints.push(...dashPoints);
+      }
+    }
+
+    // Create line geometry if we have points
+    if (linePoints.length > 0) {
+      const lineGeometry = new THREE.BufferGeometry().setFromPoints(linePoints);
+      this.queueLine = new THREE.LineSegments(lineGeometry, this.queueLineMaterial);
+      this.group.add(this.queueLine);
+    }
+  }
+
+  /**
+   * Create dashed line points between two positions (same style as rally points)
+   */
+  private createDashedLinePoints(
+    startX: number, startY: number, startHeight: number,
+    endX: number, endY: number, endHeight: number
+  ): THREE.Vector3[] {
+    const points: THREE.Vector3[] = [];
+    const dashLength = 0.5;
+    const gapLength = 0.3;
+
+    const dx = endX - startX;
+    const dy = endY - startY;
+    const dh = endHeight - startHeight;
+    const distance = Math.sqrt(dx * dx + dy * dy);
+    const segments = Math.floor(distance / (dashLength + gapLength));
+
+    if (distance < 0.1) return points;
+
+    const dirX = dx / distance;
+    const dirY = dy / distance;
+    const dirH = dh / distance;
+
+    for (let i = 0; i < segments; i++) {
+      const segmentStart = i * (dashLength + gapLength);
+      const segmentEnd = segmentStart + dashLength;
+
+      const x1 = startX + dirX * segmentStart;
+      const z1 = startY + dirY * segmentStart;
+      const y1 = startHeight + dirH * segmentStart;
+
+      const x2 = startX + dirX * Math.min(segmentEnd, distance);
+      const z2 = startY + dirY * Math.min(segmentEnd, distance);
+      const y2 = startHeight + dirH * Math.min(segmentEnd, distance);
+
+      points.push(
+        new THREE.Vector3(x1, y1, z1),
+        new THREE.Vector3(x2, y2, z2)
+      );
+    }
+
+    // Add final segment to reach the end point
+    const lastSegmentEnd = segments * (dashLength + gapLength);
+    if (lastSegmentEnd < distance) {
+      const x1 = startX + dirX * lastSegmentEnd;
+      const z1 = startY + dirY * lastSegmentEnd;
+      const y1 = startHeight + dirH * lastSegmentEnd;
+
+      points.push(
+        new THREE.Vector3(x1, y1, z1),
+        new THREE.Vector3(endX, endHeight, endY)
+      );
+    }
+
+    return points;
   }
 
   /**
@@ -309,5 +468,9 @@ export class BuildingPlacementPreview {
 
   public dispose(): void {
     this.clearMeshes();
+    this.clearQueueVisuals();
+    this.queueLineMaterial.dispose();
+    this.queueMarkerMaterial.dispose();
+    this.queueMarkerGeometry.dispose();
   }
 }

@@ -420,7 +420,7 @@ export function GameCanvas() {
         }
         useGameStore.getState().setAbilityTargetMode(null);
       } else if (isBuilding && buildingType) {
-        // Place building
+        // Place building (supports shift-click to queue multiple placements)
         const worldPos = cameraRef.current?.screenToWorld(e.clientX, e.clientY);
         if (worldPos && gameRef.current) {
           // Pass the selected worker ID so the specific SCV that triggered the build is assigned
@@ -430,7 +430,18 @@ export function GameCanvas() {
             position: { x: worldPos.x, y: worldPos.z },
             workerId: selectedUnits.length > 0 ? selectedUnits[0] : undefined,
           });
-          useGameStore.getState().setBuildingMode(null);
+
+          if (e.shiftKey) {
+            // Shift held: add to queue for visual display, stay in building mode
+            useGameStore.getState().addToBuildingQueue({
+              buildingType,
+              x: worldPos.x,
+              y: worldPos.z,
+            });
+          } else {
+            // No shift: exit building mode
+            useGameStore.getState().setBuildingMode(null);
+          }
         }
       } else {
         // Start selection box

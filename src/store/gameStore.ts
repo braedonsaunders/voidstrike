@@ -9,6 +9,13 @@ export interface ResearchedUpgrade {
   completedAt: number; // game time when completed
 }
 
+// Queued building placement for shift-click building chains
+export interface QueuedBuildingPlacement {
+  buildingType: string;
+  x: number;
+  y: number;
+}
+
 export interface GameState {
   // Resources
   minerals: number;
@@ -35,6 +42,7 @@ export interface GameState {
   // UI state
   isBuilding: boolean;
   buildingType: string | null;
+  buildingPlacementQueue: QueuedBuildingPlacement[]; // Shift-click queued placements
   isSettingRallyPoint: boolean;
   isRepairMode: boolean; // Repair targeting mode
   abilityTargetMode: string | null; // ability ID being targeted
@@ -63,6 +71,8 @@ export interface GameState {
   togglePause: () => void;
   setGameSpeed: (speed: number) => void;
   setBuildingMode: (type: string | null) => void;
+  addToBuildingQueue: (placement: QueuedBuildingPlacement) => void;
+  clearBuildingQueue: () => void;
   setRallyPointMode: (isActive: boolean) => void;
   setRepairMode: (isActive: boolean) => void;
   setAbilityTargetMode: (abilityId: string | null) => void;
@@ -94,6 +104,7 @@ const initialState = {
   researchedUpgrades: new Map<string, ResearchedUpgrade>(),
   isBuilding: false,
   buildingType: null,
+  buildingPlacementQueue: [],
   isSettingRallyPoint: false,
   isRepairMode: false,
   abilityTargetMode: null,
@@ -173,11 +184,21 @@ export const useGameStore = create<GameState>((set, get) => ({
   setGameSpeed: (speed) => set({ gameSpeed: speed }),
 
   setBuildingMode: (type) =>
-    set({
+    set((state) => ({
       isBuilding: type !== null,
       buildingType: type,
       isSettingRallyPoint: false,
-    }),
+      // Clear queue when exiting building mode
+      buildingPlacementQueue: type === null ? [] : state.buildingPlacementQueue,
+    })),
+
+  addToBuildingQueue: (placement) =>
+    set((state) => ({
+      buildingPlacementQueue: [...state.buildingPlacementQueue, placement],
+    })),
+
+  clearBuildingQueue: () =>
+    set({ buildingPlacementQueue: [] }),
 
   setRallyPointMode: (isActive) =>
     set({

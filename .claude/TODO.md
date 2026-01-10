@@ -213,6 +213,7 @@
 - [x] Unit acceleration/deceleration
 - [x] Shift-click command queuing (move, attack, attack-move, patrol, gather)
 - [x] Command queue visual waypoint indicators (green lines/markers)
+- [x] Shift-click building placement queuing with visual path lines
 - [x] Patrol command (P key)
 
 ### Camera & Controls
