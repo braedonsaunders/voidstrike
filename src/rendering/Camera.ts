@@ -49,7 +49,7 @@ export class RTSCamera {
   private isMiddleMouseDown = false;
   private lastMousePosition = { x: 0, y: 0 };
   private edgeScrollEnabled = true;
-  private mouseInViewport = true;
+  private mouseInViewport = false; // Start false to prevent edge scroll before first mouse event
 
   // Screen dimensions
   private screenWidth = 0;
@@ -77,8 +77,8 @@ export class RTSCamera {
     this.camera = new THREE.PerspectiveCamera(60, aspect, 0.1, 1000);
     this.target = new THREE.Vector3(mapWidth / 2, 0, mapHeight / 2);
 
-    this.currentZoom = 30;
-    this.targetZoom = 30; // Initialize target zoom same as current
+    this.currentZoom = 45; // SC2-like default: good overview of starting base
+    this.targetZoom = 45; // Initialize target zoom same as current
     this.currentAngle = 0;
     this.manualPitchOffset = 0; // User can adjust pitch via middle mouse drag
     this.currentPitch = this.calculateZoomBasedPitch(this.currentZoom);
@@ -144,6 +144,7 @@ export class RTSCamera {
   private handleMouseMove(e: MouseEvent): void {
     this.mousePosition.x = e.clientX;
     this.mousePosition.y = e.clientY;
+    this.mouseInViewport = true; // Mouse is in viewport when moving
 
     if (this.isMiddleMouseDown) {
       const deltaX = e.clientX - this.lastMousePosition.x;
