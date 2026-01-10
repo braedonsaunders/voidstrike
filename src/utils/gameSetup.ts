@@ -10,12 +10,19 @@ import { UNIT_DEFINITIONS } from '@/data/units/dominion';
 import { BUILDING_DEFINITIONS } from '@/data/buildings/dominion';
 import { AISystem } from '@/engine/systems/AISystem';
 import { EnhancedAISystem } from '@/engine/systems/EnhancedAISystem';
+import { PathfindingSystem } from '@/engine/systems/PathfindingSystem';
 import { MapData, Expansion } from '@/data/maps';
 import { useGameStore } from '@/store/gameStore';
 import { useGameSetupStore, STARTING_RESOURCES_VALUES, AIDifficulty, isLocalPlayer } from '@/store/gameSetupStore';
 
 export function spawnInitialEntities(game: Game, mapData: MapData): void {
   const world = game.world;
+
+  // Initialize pathfinding with terrain data (mark cliffs/water as unwalkable)
+  const pathfindingSystem = world.getSystem(PathfindingSystem);
+  if (pathfindingSystem) {
+    pathfindingSystem.initializeFromTerrain(mapData);
+  }
 
   // Apply starting resources from game setup
   const setupStore = useGameSetupStore.getState();

@@ -49,18 +49,18 @@ export class SC2PostProcessing {
 
     // 2. SSAO - Screen Space Ambient Occlusion
     this.ssaoPass = new SSAOPass(scene, camera, size.x, size.y);
-    this.ssaoPass.kernelRadius = 16;
+    this.ssaoPass.kernelRadius = 8;  // Reduced for subtler effect
     this.ssaoPass.minDistance = 0.005;
-    this.ssaoPass.maxDistance = 0.1;
+    this.ssaoPass.maxDistance = 0.08;
     this.ssaoPass.enabled = true;
     this.composer.addPass(this.ssaoPass);
 
     // 3. Bloom (Unreal Engine style)
     this.bloomPass = new UnrealBloomPass(
       new THREE.Vector2(size.x, size.y),
-      0.3,   // strength (subtle)
+      0.2,   // strength (subtle)
       0.4,   // radius
-      0.85   // threshold (only bright things bloom)
+      0.9    // threshold (only very bright things bloom)
     );
     this.composer.addPass(this.bloomPass);
 

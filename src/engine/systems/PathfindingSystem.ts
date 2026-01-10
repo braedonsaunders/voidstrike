@@ -5,6 +5,7 @@ import { Building } from '../components/Building';
 import { Game } from '../core/Game';
 import { AStar, PathResult } from '../pathfinding/AStar';
 import { HierarchicalAStar } from '../pathfinding/HierarchicalAStar';
+import { MapData } from '@/data/maps';
 
 // Configuration for path invalidation
 const REPATH_INTERVAL_TICKS = 40; // Check for repath every 2 seconds at 20 TPS
@@ -118,6 +119,33 @@ export class PathfindingSystem extends System {
    */
   private cellKey(x: number, y: number): number {
     return Math.floor(y) * this.mapWidth + Math.floor(x);
+  }
+
+  /**
+   * Initialize the pathfinding grid from terrain data.
+   * Must be called after the game is created with the map data.
+   * Marks unwalkable terrain (cliffs, water) as blocked.
+   */
+  public initializeFromTerrain(mapData: MapData): void {
+    console.log('[PathfindingSystem] Initializing from terrain data...');
+    let blockedCount = 0;
+
+    for (let y = 0; y < mapData.height; y++) {
+      for (let x = 0; x < mapData.width; x++) {
+        const cell = mapData.terrain[y][x];
+        // Only 'unwalkable' terrain is impassable
+        // 'ground', 'ramp', 'unbuildable', 'creep' are all walkable
+        if (cell.terrain === 'unwalkable') {
+          this.pathfinder.setWalkable(x, y, false);
+          this.hierarchicalPathfinder.setWalkable(x, y, false);
+          const key = this.cellKey(x, y);
+          this.blockedCells.add(key);
+          blockedCount++;
+        }
+      }
+    }
+
+    console.log(`[PathfindingSystem] Marked ${blockedCount} cells as unwalkable`);
   }
 
   private setupEventListeners(): void {
