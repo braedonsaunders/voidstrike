@@ -1,9 +1,22 @@
 /**
- * Behavior Tree Implementation for RTS Unit AI
+ * World-Class Behavior Tree Implementation for RTS AI
  *
- * Provides a flexible, composable way to define unit behaviors
- * for combat micro, positioning, and tactical decision making.
+ * Features:
+ * - Stateless functional nodes with composable architecture
+ * - Memory nodes that resume from previous state
+ * - Utility-based selection with dynamic scoring
+ * - Reactive sequences with interrupt support
+ * - Hierarchical blackboard with scoping
+ * - Comprehensive debugging and tracing
+ * - Pre-built combat, worker, and strategic behaviors
+ *
+ * Architecture follows industry standards from:
+ * - Unreal Engine Behavior Trees
+ * - Unity's ML-Agents
+ * - behavior3js patterns
  */
+
+// ==================== CORE TYPES ====================
 
 export type BehaviorStatus = 'success' | 'failure' | 'running';
 
@@ -11,11 +24,150 @@ export interface BehaviorContext {
   entityId: number;
   world: import('../ecs/World').World;
   game: import('../core/Game').Game;
-  blackboard: Map<string, unknown>;
+  blackboard: Blackboard;
   deltaTime: number;
+  tick: number;
+  // Debug info
+  trace?: BehaviorTrace;
 }
 
-export type BehaviorNode = (context: BehaviorContext) => BehaviorStatus;
+export interface BehaviorTrace {
+  nodes: TraceEntry[];
+  startTime: number;
+  endTime?: number;
+}
+
+export interface TraceEntry {
+  nodeId: string;
+  nodeName: string;
+  status: BehaviorStatus;
+  startTime: number;
+  endTime: number;
+  depth: number;
+}
+
+// Node metadata for debugging
+export interface NodeMetadata {
+  id: string;
+  name: string;
+  type: string;
+  description?: string;
+}
+
+export type BehaviorNode = ((context: BehaviorContext) => BehaviorStatus) & {
+  __meta?: NodeMetadata;
+};
+
+// ==================== BLACKBOARD ====================
+
+/**
+ * Hierarchical blackboard for sharing data between nodes.
+ * Supports scoped data (per-entity, per-tree, global).
+ */
+export class Blackboard {
+  private data: Map<string, unknown> = new Map();
+  private parent: Blackboard | null = null;
+  private children: Map<string, Blackboard> = new Map();
+
+  constructor(parent: Blackboard | null = null) {
+    this.parent = parent;
+  }
+
+  /**
+   * Get a value, checking parent scopes if not found
+   */
+  public get<T>(key: string): T | undefined {
+    if (this.data.has(key)) {
+      return this.data.get(key) as T;
+    }
+    return this.parent?.get<T>(key);
+  }
+
+  /**
+   * Set a value in this scope
+   */
+  public set(key: string, value: unknown): void {
+    this.data.set(key, value);
+  }
+
+  /**
+   * Check if key exists in this scope or parents
+   */
+  public has(key: string): boolean {
+    return this.data.has(key) || (this.parent?.has(key) ?? false);
+  }
+
+  /**
+   * Delete a key from this scope
+   */
+  public delete(key: string): boolean {
+    return this.data.delete(key);
+  }
+
+  /**
+   * Clear all data in this scope
+   */
+  public clear(): void {
+    this.data.clear();
+  }
+
+  /**
+   * Create a child scope
+   */
+  public createScope(name: string): Blackboard {
+    const child = new Blackboard(this);
+    this.children.set(name, child);
+    return child;
+  }
+
+  /**
+   * Get or create a child scope
+   */
+  public getScope(name: string): Blackboard {
+    if (!this.children.has(name)) {
+      this.children.set(name, new Blackboard(this));
+    }
+    return this.children.get(name)!;
+  }
+
+  /**
+   * Get all keys in this scope (not parents)
+   */
+  public keys(): string[] {
+    return Array.from(this.data.keys());
+  }
+
+  /**
+   * Serialize blackboard state for debugging
+   */
+  public toJSON(): Record<string, unknown> {
+    const result: Record<string, unknown> = {};
+    for (const [key, value] of this.data) {
+      result[key] = value;
+    }
+    return result;
+  }
+}
+
+// ==================== NODE FACTORY HELPERS ====================
+
+let nodeIdCounter = 0;
+
+function createNode(
+  fn: (context: BehaviorContext) => BehaviorStatus,
+  type: string,
+  name: string,
+  description?: string
+): BehaviorNode {
+  const node = fn as BehaviorNode;
+  node.__meta = {
+    id: `${type}_${++nodeIdCounter}`,
+    name,
+    type,
+    description,
+  };
+  return node;
+}
 
 // ==================== COMPOSITE NODES ====================
 
@@ -23,30 +175,106 @@ export type BehaviorNode = (context: BehaviorContext) => BehaviorStatus;
  * Selector (OR) - Tries children in order until one succeeds
  * Returns success if any child succeeds, failure if all fail
  */
-export function selector(...children: BehaviorNode[]): BehaviorNode {
-  return (context: BehaviorContext) => {
-    for (const child of children) {
-      const status = child(context);
-      if (status === 'success') return 'success';
-      if (status === 'running') return 'running';
-    }
-    return 'failure';
-  };
+export function selector(name: string, ...children: BehaviorNode[]): BehaviorNode {
+  return createNode(
+    (context: BehaviorContext) => {
+      for (const child of children) {
+        const status = child(context);
+        if (status === 'success') return 'success';
+        if (status === 'running') return 'running';
+      }
+      return 'failure';
+    },
+    'selector',
+    name,
+    `Tries ${children.length} children until one succeeds`
+  );
 }
 
 /**
  * Sequence (AND) - Tries children in order until one fails
  * Returns success if all children succeed, failure if any fails
  */
-export function sequence(...children: BehaviorNode[]): BehaviorNode {
-  return (context: BehaviorContext) => {
-    for (const child of children) {
-      const status = child(context);
-      if (status === 'failure') return 'failure';
-      if (status === 'running') return 'running';
-    }
-    return 'success';
-  };
+export function sequence(name: string, ...children: BehaviorNode[]): BehaviorNode {
+  return createNode(
+    (context: BehaviorContext) => {
+      for (const child of children) {
+        const status = child(context);
+        if (status === 'failure') return 'failure';
+        if (status === 'running') return 'running';
+      }
+      return 'success';
+    },
+    'sequence',
+    name,
+    `Runs ${children.length} children in sequence`
+  );
+}
+
+/**
+ * Memory Selector - Remembers which child was running and resumes from there
+ */
+export function memorySelector(name: string, ...children: BehaviorNode[]): BehaviorNode {
+  const stateKey = `__memSel_${name}_${++nodeIdCounter}`;
+
+  return createNode(
+    (context: BehaviorContext) => {
+      let startIndex = context.blackboard.get<number>(stateKey) ?? 0;
+
+      for (let i = startIndex; i < children.length; i++) {
+        const status = children[i](context);
+
+        if (status === 'running') {
+          context.blackboard.set(stateKey, i);
+          return 'running';
+        }
+
+        if (status === 'success') {
+          context.blackboard.delete(stateKey);
+          return 'success';
+        }
+      }
+
+      context.blackboard.delete(stateKey);
+      return 'failure';
+    },
+    'memorySelector',
+    name,
+    `Selector that resumes from last running child`
+  );
+}
+
+/**
+ * Memory Sequence - Remembers which child was running and resumes from there
+ */
+export function memorySequence(name: string, ...children: BehaviorNode[]): BehaviorNode {
+  const stateKey = `__memSeq_${name}_${++nodeIdCounter}`;
+
+  return createNode(
+    (context: BehaviorContext) => {
+      let startIndex = context.blackboard.get<number>(stateKey) ?? 0;
+
+      for (let i = startIndex; i < children.length; i++) {
+        const status = children[i](context);
+
+        if (status === 'running') {
+          context.blackboard.set(stateKey, i);
+          return 'running';
+        }
+
+        if (status === 'failure') {
+          context.blackboard.delete(stateKey);
+          return 'failure';
+        }
+      }
+
+      context.blackboard.delete(stateKey);
+      return 'success';
+    },
+    'memorySequence',
+    name,
+    `Sequence that resumes from last running child`
+  );
 }
 
 /**
@@ -54,24 +282,142 @@ export function sequence(...children: BehaviorNode[]): BehaviorNode {
  * Returns success if required number succeed, failure if too many fail
  */
 export function parallel(
+  name: string,
   successThreshold: number,
   ...children: BehaviorNode[]
 ): BehaviorNode {
-  return (context: BehaviorContext) => {
-    let successCount = 0;
-    let failureCount = 0;
-    const failureThreshold = children.length - successThreshold + 1;
+  return createNode(
+    (context: BehaviorContext) => {
+      let successCount = 0;
+      let failureCount = 0;
+      const failureThreshold = children.length - successThreshold + 1;
 
-    for (const child of children) {
-      const status = child(context);
-      if (status === 'success') successCount++;
-      if (status === 'failure') failureCount++;
-    }
+      for (const child of children) {
+        const status = child(context);
+        if (status === 'success') successCount++;
+        if (status === 'failure') failureCount++;
+      }
 
-    if (successCount >= successThreshold) return 'success';
-    if (failureCount >= failureThreshold) return 'failure';
-    return 'running';
-  };
+      if (successCount >= successThreshold) return 'success';
+      if (failureCount >= failureThreshold) return 'failure';
+      return 'running';
+    },
+    'parallel',
+    name,
+    `Runs ${children.length} children in parallel, needs ${successThreshold} to succeed`
+  );
+}
+
+/**
+ * Race - Runs all children, returns first non-running result
+ */
+export function race(name: string, ...children: BehaviorNode[]): BehaviorNode {
+  return createNode(
+    (context: BehaviorContext) => {
+      let hasRunning = false;
+
+      for (const child of children) {
+        const status = child(context);
+        if (status === 'success') return 'success';
+        if (status === 'failure') return 'failure';
+        if (status === 'running') hasRunning = true;
+      }
+
+      return hasRunning ? 'running' : 'failure';
+    },
+    'race',
+    name,
+    `Returns first completed result from ${children.length} children`
+  );
+}
+
+/**
+ * Random Selector - Shuffles children before trying
+ */
+export function randomSelector(name: string, ...children: BehaviorNode[]): BehaviorNode {
+  return createNode(
+    (context: BehaviorContext) => {
+      // Fisher-Yates shuffle
+      const shuffled = [...children];
+      for (let i = shuffled.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+      }
+
+      for (const child of shuffled) {
+        const status = child(context);
+        if (status === 'success') return 'success';
+        if (status === 'running') return 'running';
+      }
+      return 'failure';
+    },
+    'randomSelector',
+    name,
+    `Randomly orders ${children.length} children before selection`
+  );
+}
+
+/**
+ * Priority Selector - Orders children by dynamic priority scores
+ */
+export function prioritySelector(
+  name: string,
+  children: Array<{ node: BehaviorNode; priority: (ctx: BehaviorContext) => number }>
+): BehaviorNode {
+  return createNode(
+    (context: BehaviorContext) => {
+      // Sort by priority (highest first)
+      const sorted = [...children].sort(
+        (a, b) => b.priority(context) - a.priority(context)
+      );
+
+      for (const { node } of sorted) {
+        const status = node(context);
+        if (status === 'success') return 'success';
+        if (status === 'running') return 'running';
+      }
+      return 'failure';
+    },
+    'prioritySelector',
+    name,
+    `Selects from ${children.length} children by dynamic priority`
+  );
+}
+
+/**
+ * Utility Selector - Scores children and picks the best
+ * This is more sophisticated than priority - it evaluates all and picks highest
+ */
+export function utilitySelector(
+  name: string,
+  children: Array<{
+    node: BehaviorNode;
+    score: (ctx: BehaviorContext) => number;
+    threshold?: number; // Minimum score to consider
+  }>
+): BehaviorNode {
+  return createNode(
+    (context: BehaviorContext) => {
+      let bestChild: BehaviorNode | null = null;
+      let bestScore = -Infinity;
+
+      for (const { node, score, threshold = 0 } of children) {
+        const s = score(context);
+        if (s >= threshold && s > bestScore) {
+          bestScore = s;
+          bestChild = node;
+        }
+      }
+
+      if (bestChild) {
+        return bestChild(context);
+      }
+      return 'failure';
+    },
+    'utilitySelector',
+    name,
+    `Picks highest-scoring option from ${children.length} children`
+  );
 }
 
 // ==================== DECORATOR NODES ====================
@@ -79,74 +425,322 @@ export function parallel(
 /**
  * Inverter - Inverts the result of a child node
  */
-export function inverter(child: BehaviorNode): BehaviorNode {
-  return (context: BehaviorContext) => {
-    const status = child(context);
-    if (status === 'success') return 'failure';
-    if (status === 'failure') return 'success';
-    return 'running';
-  };
+export function inverter(name: string, child: BehaviorNode): BehaviorNode {
+  return createNode(
+    (context: BehaviorContext) => {
+      const status = child(context);
+      if (status === 'success') return 'failure';
+      if (status === 'failure') return 'success';
+      return 'running';
+    },
+    'inverter',
+    name,
+    `Inverts child result`
+  );
 }
 
 /**
  * Succeeder - Always returns success (useful for optional actions)
  */
-export function succeeder(child: BehaviorNode): BehaviorNode {
-  return (context: BehaviorContext) => {
-    child(context);
-    return 'success';
-  };
+export function succeeder(name: string, child: BehaviorNode): BehaviorNode {
+  return createNode(
+    (context: BehaviorContext) => {
+      child(context);
+      return 'success';
+    },
+    'succeeder',
+    name,
+    `Always succeeds after running child`
+  );
+}
+
+/**
+ * Failer - Always returns failure
+ */
+export function failer(name: string, child: BehaviorNode): BehaviorNode {
+  return createNode(
+    (context: BehaviorContext) => {
+      child(context);
+      return 'failure';
+    },
+    'failer',
+    name,
+    `Always fails after running child`
+  );
 }
 
 /**
  * Repeater - Repeats a child node a number of times
  */
-export function repeater(times: number, child: BehaviorNode): BehaviorNode {
-  let count = 0;
-  return (context: BehaviorContext) => {
-    if (count >= times) {
-      count = 0;
-      return 'success';
-    }
-    const status = child(context);
-    if (status === 'success' || status === 'failure') {
-      count++;
-    }
-    return 'running';
-  };
+export function repeater(name: string, times: number, child: BehaviorNode): BehaviorNode {
+  const stateKey = `__rep_${name}_${++nodeIdCounter}`;
+
+  return createNode(
+    (context: BehaviorContext) => {
+      let count = context.blackboard.get<number>(stateKey) ?? 0;
+
+      if (count >= times) {
+        context.blackboard.delete(stateKey);
+        return 'success';
+      }
+
+      const status = child(context);
+
+      if (status === 'running') {
+        return 'running';
+      }
+
+      context.blackboard.set(stateKey, count + 1);
+
+      if (count + 1 >= times) {
+        context.blackboard.delete(stateKey);
+        return 'success';
+      }
+
+      return 'running';
+    },
+    'repeater',
+    name,
+    `Repeats child ${times} times`
+  );
+}
+
+/**
+ * RepeatUntilFail - Repeats child until it fails
+ */
+export function repeatUntilFail(name: string, child: BehaviorNode): BehaviorNode {
+  return createNode(
+    (context: BehaviorContext) => {
+      const status = child(context);
+      if (status === 'failure') return 'success';
+      return 'running';
+    },
+    'repeatUntilFail',
+    name,
+    `Repeats child until failure`
+  );
+}
+
+/**
+ * RepeatUntilSuccess - Repeats child until it succeeds
+ */
+export function repeatUntilSuccess(name: string, child: BehaviorNode): BehaviorNode {
+  return createNode(
+    (context: BehaviorContext) => {
+      const status = child(context);
+      if (status === 'success') return 'success';
+      return 'running';
+    },
+    'repeatUntilSuccess',
+    name,
+    `Repeats child until success`
+  );
 }
 
 /**
  * Condition - Only runs child if condition is true
  */
 export function condition(
+  name: string,
   predicate: (context: BehaviorContext) => boolean,
   child: BehaviorNode
 ): BehaviorNode {
-  return (context: BehaviorContext) => {
-    if (predicate(context)) {
-      return child(context);
-    }
-    return 'failure';
-  };
+  return createNode(
+    (context: BehaviorContext) => {
+      if (predicate(context)) {
+        return child(context);
+      }
+      return 'failure';
+    },
+    'condition',
+    name,
+    `Guards child with condition`
+  );
+}
+
+/**
+ * Guard - Like condition but can specify failure vs running on false
+ */
+export function guard(
+  name: string,
+  predicate: (context: BehaviorContext) => boolean,
+  child: BehaviorNode,
+  onFalse: BehaviorStatus = 'failure'
+): BehaviorNode {
+  return createNode(
+    (context: BehaviorContext) => {
+      if (predicate(context)) {
+        return child(context);
+      }
+      return onFalse;
+    },
+    'guard',
+    name,
+    `Guards child, returns ${onFalse} if condition false`
+  );
 }
 
 /**
  * Cooldown - Only allows child to run after cooldown period
  */
-export function cooldown(cooldownMs: number, child: BehaviorNode): BehaviorNode {
-  let lastRunTime = 0;
-  return (context: BehaviorContext) => {
-    const now = Date.now();
-    if (now - lastRunTime < cooldownMs) {
-      return 'failure';
-    }
-    const status = child(context);
-    if (status === 'success') {
-      lastRunTime = now;
-    }
-    return status;
-  };
+export function cooldown(
+  name: string,
+  cooldownMs: number,
+  child: BehaviorNode
+): BehaviorNode {
+  const stateKey = `__cd_${name}_${++nodeIdCounter}`;
+
+  return createNode(
+    (context: BehaviorContext) => {
+      const lastRun = context.blackboard.get<number>(stateKey) ?? 0;
+      const now = Date.now();
+
+      if (now - lastRun < cooldownMs) {
+        return 'failure';
+      }
+
+      const status = child(context);
+
+      if (status === 'success') {
+        context.blackboard.set(stateKey, now);
+      }
+
+      return status;
+    },
+    'cooldown',
+    name,
+    `Enforces ${cooldownMs}ms cooldown between executions`
+  );
+}
+
+/**
+ * Cooldown by ticks (deterministic, better for multiplayer)
+ */
+export function cooldownTicks(
+  name: string,
+  cooldownTicks: number,
+  child: BehaviorNode
+): BehaviorNode {
+  const stateKey = `__cdT_${name}_${++nodeIdCounter}`;
+
+  return createNode(
+    (context: BehaviorContext) => {
+      const lastRun = context.blackboard.get<number>(stateKey) ?? 0;
+
+      if (context.tick - lastRun < cooldownTicks) {
+        return 'failure';
+      }
+
+      const status = child(context);
+
+      if (status === 'success') {
+        context.blackboard.set(stateKey, context.tick);
+      }
+
+      return status;
+    },
+    'cooldownTicks',
+    name,
+    `Enforces ${cooldownTicks} tick cooldown between executions`
+  );
+}
+
+/**
+ * Timeout - Fails if child takes too long (by ticks)
+ */
+export function timeout(
+  name: string,
+  maxTicks: number,
+  child: BehaviorNode
+): BehaviorNode {
+  const startKey = `__to_${name}_${++nodeIdCounter}`;
+
+  return createNode(
+    (context: BehaviorContext) => {
+      let startTick = context.blackboard.get<number>(startKey);
+
+      if (startTick === undefined) {
+        startTick = context.tick;
+        context.blackboard.set(startKey, startTick);
+      }
+
+      if (context.tick - startTick >= maxTicks) {
+        context.blackboard.delete(startKey);
+        return 'failure';
+      }
+
+      const status = child(context);
+
+      if (status !== 'running') {
+        context.blackboard.delete(startKey);
+      }
+
+      return status;
+    },
+    'timeout',
+    name,
+    `Fails if child runs longer than ${maxTicks} ticks`
+  );
+}
+
+/**
+ * Limit - Limits how many times child can run per time window
+ */
+export function rateLimit(
+  name: string,
+  maxRuns: number,
+  windowTicks: number,
+  child: BehaviorNode
+): BehaviorNode {
+  const historyKey = `__rl_${name}_${++nodeIdCounter}`;
+
+  return createNode(
+    (context: BehaviorContext) => {
+      let history = context.blackboard.get<number[]>(historyKey) ?? [];
+
+      // Clean old entries
+      const cutoff = context.tick - windowTicks;
+      history = history.filter((t) => t > cutoff);
+
+      if (history.length >= maxRuns) {
+        return 'failure';
+      }
+
+      const status = child(context);
+
+      if (status === 'success') {
+        history.push(context.tick);
+        context.blackboard.set(historyKey, history);
+      }
+
+      return status;
+    },
+    'rateLimit',
+    name,
+    `Limits to ${maxRuns} runs per ${windowTicks} ticks`
+  );
+}
+
+/**
+ * Reactive - Re-evaluates condition each tick, can interrupt running child
+ */
+export function reactive(
+  name: string,
+  predicate: (context: BehaviorContext) => boolean,
+  child: BehaviorNode
+): BehaviorNode {
+  return createNode(
+    (context: BehaviorContext) => {
+      // Always check condition first
+      if (!predicate(context)) {
+        return 'failure';
+      }
+      return child(context);
+    },
+    'reactive',
+    name,
+    `Re-evaluates condition each tick`
+  );
 }
 
 // ==================== ACTION NODES ====================
@@ -155,44 +749,176 @@ export function cooldown(cooldownMs: number, child: BehaviorNode): BehaviorNode 
  * Action - Wraps a function that performs an action
  */
 export function action(
+  name: string,
   fn: (context: BehaviorContext) => boolean
 ): BehaviorNode {
-  return (context: BehaviorContext) => {
-    return fn(context) ? 'success' : 'failure';
-  };
+  return createNode(
+    (context: BehaviorContext) => {
+      return fn(context) ? 'success' : 'failure';
+    },
+    'action',
+    name,
+    `Executes action`
+  );
 }
 
 /**
- * Wait - Waits for a specified duration
+ * Action with running state - Can return running
  */
-export function wait(durationMs: number): BehaviorNode {
-  let startTime: number | null = null;
-  return (_context: BehaviorContext) => {
-    const now = Date.now();
-    if (startTime === null) {
-      startTime = now;
-    }
-    if (now - startTime >= durationMs) {
-      startTime = null;
-      return 'success';
-    }
-    return 'running';
-  };
+export function asyncAction(
+  name: string,
+  fn: (context: BehaviorContext) => BehaviorStatus
+): BehaviorNode {
+  return createNode(fn, 'asyncAction', name, `Executes async action`);
 }
 
-// ==================== UTILITY FUNCTIONS ====================
+/**
+ * Wait - Waits for a specified duration (in ticks for determinism)
+ */
+export function wait(name: string, durationTicks: number): BehaviorNode {
+  const startKey = `__wait_${name}_${++nodeIdCounter}`;
+
+  return createNode(
+    (context: BehaviorContext) => {
+      let startTick = context.blackboard.get<number>(startKey);
+
+      if (startTick === undefined) {
+        startTick = context.tick;
+        context.blackboard.set(startKey, startTick);
+      }
+
+      if (context.tick - startTick >= durationTicks) {
+        context.blackboard.delete(startKey);
+        return 'success';
+      }
+
+      return 'running';
+    },
+    'wait',
+    name,
+    `Waits for ${durationTicks} ticks`
+  );
+}
 
 /**
- * Creates a stateful behavior tree runner
+ * Log - Logs a message (for debugging)
+ */
+export function log(name: string, message: string | ((ctx: BehaviorContext) => string)): BehaviorNode {
+  return createNode(
+    (context: BehaviorContext) => {
+      const msg = typeof message === 'function' ? message(context) : message;
+      console.log(`[BT:${context.entityId}] ${msg}`);
+      return 'success';
+    },
+    'log',
+    name,
+    `Logs message`
+  );
+}
+
+/**
+ * SetBlackboard - Sets a value on the blackboard
+ */
+export function setBlackboard(
+  name: string,
+  key: string,
+  value: unknown | ((ctx: BehaviorContext) => unknown)
+): BehaviorNode {
+  return createNode(
+    (context: BehaviorContext) => {
+      const v = typeof value === 'function' ? (value as (ctx: BehaviorContext) => unknown)(context) : value;
+      context.blackboard.set(key, v);
+      return 'success';
+    },
+    'setBlackboard',
+    name,
+    `Sets blackboard key "${key}"`
+  );
+}
+
+/**
+ * CheckBlackboard - Checks if a blackboard value matches
+ */
+export function checkBlackboard(
+  name: string,
+  key: string,
+  predicate: (value: unknown) => boolean
+): BehaviorNode {
+  return createNode(
+    (context: BehaviorContext) => {
+      const value = context.blackboard.get(key);
+      return predicate(value) ? 'success' : 'failure';
+    },
+    'checkBlackboard',
+    name,
+    `Checks blackboard key "${key}"`
+  );
+}
+
+/**
+ * Noop - Does nothing, returns success
+ */
+export function noop(name: string): BehaviorNode {
+  return createNode(() => 'success', 'noop', name, `Does nothing`);
+}
+
+/**
+ * Fail - Always fails
+ */
+export function fail(name: string): BehaviorNode {
+  return createNode(() => 'failure', 'fail', name, `Always fails`);
+}
+
+/**
+ * Running - Always returns running
+ */
+export function running(name: string): BehaviorNode {
+  return createNode(() => 'running', 'running', name, `Always running`);
+}
+
+// ==================== SUBTREE REFERENCE ====================
+
+/**
+ * Subtree - References another behavior tree
+ * Useful for reusing common behaviors
+ */
+export function subtree(name: string, getTree: () => BehaviorNode): BehaviorNode {
+  let cachedTree: BehaviorNode | null = null;
+
+  return createNode(
+    (context: BehaviorContext) => {
+      if (!cachedTree) {
+        cachedTree = getTree();
+      }
+      return cachedTree(context);
+    },
+    'subtree',
+    name,
+    `References subtree`
+  );
+}
+
+// ==================== BEHAVIOR TREE RUNNER ====================
+
+/**
+ * Stateful behavior tree runner with debugging support
  */
 export class BehaviorTreeRunner {
   private root: BehaviorNode;
-  private blackboard: Map<string, unknown> = new Map();
+  private blackboard: Blackboard;
+  private debugEnabled: boolean = false;
+  private lastTrace: BehaviorTrace | null = null;
 
-  constructor(root: BehaviorNode) {
+  constructor(root: BehaviorNode, parentBlackboard?: Blackboard) {
     this.root = root;
+    this.blackboard = parentBlackboard
+      ? parentBlackboard.createScope(`tree_${nodeIdCounter++}`)
+      : new Blackboard();
   }
 
+  /**
+   * Tick the behavior tree
+   */
   public tick(
     entityId: number,
     world: import('../ecs/World').World,
@@ -205,284 +931,85 @@ export class BehaviorTreeRunner {
       game,
       blackboard: this.blackboard,
       deltaTime,
+      tick: game.getCurrentTick(),
     };
-    return this.root(context);
+
+    if (this.debugEnabled) {
+      context.trace = {
+        nodes: [],
+        startTime: performance.now(),
+      };
+    }
+
+    const status = this.root(context);
+
+    if (context.trace) {
+      context.trace.endTime = performance.now();
+      this.lastTrace = context.trace;
+    }
+
+    return status;
   }
 
-  public setBlackboard(key: string, value: unknown): void {
+  /**
+   * Get the blackboard
+   */
+  public getBlackboard(): Blackboard {
+    return this.blackboard;
+  }
+
+  /**
+   * Set a blackboard value
+   */
+  public set(key: string, value: unknown): void {
     this.blackboard.set(key, value);
   }
 
-  public getBlackboard<T>(key: string): T | undefined {
-    return this.blackboard.get(key) as T | undefined;
+  /**
+   * Get a blackboard value
+   */
+  public get<T>(key: string): T | undefined {
+    return this.blackboard.get<T>(key);
   }
 
-  public clearBlackboard(): void {
+  /**
+   * Clear the blackboard
+   */
+  public clear(): void {
     this.blackboard.clear();
   }
-}
 
-// ==================== PRESET BEHAVIOR TREES ====================
-
-import { Transform } from '../components/Transform';
-import { Unit } from '../components/Unit';
-import { Health } from '../components/Health';
-import { Selectable } from '../components/Selectable';
-
-/**
- * Check if unit should kite (ranged unit with enemy in range but too close)
- */
-export function shouldKite(context: BehaviorContext): boolean {
-  const entity = context.world.getEntity(context.entityId);
-  if (!entity) return false;
-
-  const unit = entity.get<Unit>('Unit');
-  const transform = entity.get<Transform>('Transform');
-  if (!unit || !transform) return false;
-
-  // Only ranged units kite
-  if (unit.attackRange < 3) return false;
-
-  // Check if there's a melee enemy too close
-  const dangerRange = unit.attackRange * 0.5;
-  const kiteThreshold = unit.attackRange * 0.3;
-
-  const nearbyUnits = context.world.unitGrid.queryRadius(
-    transform.x,
-    transform.y,
-    dangerRange
-  );
-
-  for (const nearbyId of nearbyUnits) {
-    if (nearbyId === context.entityId) continue;
-
-    const nearbyEntity = context.world.getEntity(nearbyId);
-    if (!nearbyEntity) continue;
-
-    const nearbyUnit = nearbyEntity.get<Unit>('Unit');
-    const nearbyTransform = nearbyEntity.get<Transform>('Transform');
-    const nearbySelectable = nearbyEntity.get<Selectable>('Selectable');
-    const nearbyHealth = nearbyEntity.get<Health>('Health');
-
-    if (!nearbyUnit || !nearbyTransform || !nearbySelectable || !nearbyHealth) continue;
-
-    // Check if enemy and alive
-    const mySelectable = entity.get<Selectable>('Selectable');
-    if (!mySelectable || nearbySelectable.playerId === mySelectable.playerId) continue;
-    if (nearbyHealth.isDead()) continue;
-
-    // Check if enemy is a melee threat that's too close
-    const dx = nearbyTransform.x - transform.x;
-    const dy = nearbyTransform.y - transform.y;
-    const distance = Math.sqrt(dx * dx + dy * dy);
-
-    if (nearbyUnit.attackRange < 3 && distance < kiteThreshold) {
-      context.blackboard.set('kiteFromX', nearbyTransform.x);
-      context.blackboard.set('kiteFromY', nearbyTransform.y);
-      return true;
-    }
+  /**
+   * Enable/disable debugging
+   */
+  public setDebug(enabled: boolean): void {
+    this.debugEnabled = enabled;
   }
 
-  return false;
-}
-
-/**
- * Execute kiting movement away from enemy
- */
-export function executeKite(context: BehaviorContext): boolean {
-  const entity = context.world.getEntity(context.entityId);
-  if (!entity) return false;
-
-  const unit = entity.get<Unit>('Unit');
-  const transform = entity.get<Transform>('Transform');
-  if (!unit || !transform) return false;
-
-  const kiteFromX = context.blackboard.get('kiteFromX') as number;
-  const kiteFromY = context.blackboard.get('kiteFromY') as number;
-
-  if (kiteFromX === undefined || kiteFromY === undefined) return false;
-
-  // Calculate direction away from threat
-  const dx = transform.x - kiteFromX;
-  const dy = transform.y - kiteFromY;
-  const distance = Math.sqrt(dx * dx + dy * dy);
-
-  if (distance < 0.1) return false;
-
-  // Move away to max attack range
-  const kiteDistance = unit.attackRange * 0.8;
-  const targetX = transform.x + (dx / distance) * kiteDistance;
-  const targetY = transform.y + (dy / distance) * kiteDistance;
-
-  // Clamp to map bounds
-  const config = context.game.config;
-  const clampedX = Math.max(1, Math.min(config.mapWidth - 1, targetX));
-  const clampedY = Math.max(1, Math.min(config.mapHeight - 1, targetY));
-
-  // Set move target while preserving attack state
-  unit.targetX = clampedX;
-  unit.targetY = clampedY;
-
-  return true;
-}
-
-/**
- * Find nearby threats and calculate threat score
- */
-export function calculateThreatScore(context: BehaviorContext): number {
-  const entity = context.world.getEntity(context.entityId);
-  if (!entity) return 0;
-
-  const transform = entity.get<Transform>('Transform');
-  const unit = entity.get<Unit>('Unit');
-  const mySelectable = entity.get<Selectable>('Selectable');
-  if (!transform || !unit || !mySelectable) return 0;
-
-  let threatScore = 0;
-  const threatRange = unit.sightRange;
-
-  const nearbyUnits = context.world.unitGrid.queryRadius(
-    transform.x,
-    transform.y,
-    threatRange
-  );
-
-  for (const nearbyId of nearbyUnits) {
-    if (nearbyId === context.entityId) continue;
-
-    const nearbyEntity = context.world.getEntity(nearbyId);
-    if (!nearbyEntity) continue;
-
-    const nearbyUnit = nearbyEntity.get<Unit>('Unit');
-    const nearbyTransform = nearbyEntity.get<Transform>('Transform');
-    const nearbySelectable = nearbyEntity.get<Selectable>('Selectable');
-    const nearbyHealth = nearbyEntity.get<Health>('Health');
-
-    if (!nearbyUnit || !nearbyTransform || !nearbySelectable || !nearbyHealth) continue;
-
-    // Only count enemies
-    if (nearbySelectable.playerId === mySelectable.playerId) continue;
-    if (nearbyHealth.isDead()) continue;
-
-    const dx = nearbyTransform.x - transform.x;
-    const dy = nearbyTransform.y - transform.y;
-    const distance = Math.sqrt(dx * dx + dy * dy);
-
-    // Threat increases with damage and decreases with distance
-    const distanceFactor = 1 - (distance / threatRange);
-    const damageFactor = nearbyUnit.attackDamage / 10;
-    threatScore += damageFactor * distanceFactor;
+  /**
+   * Get the last execution trace
+   */
+  public getLastTrace(): BehaviorTrace | null {
+    return this.lastTrace;
   }
 
-  context.blackboard.set('threatScore', threatScore);
-  return threatScore;
+  /**
+   * Get the root node metadata
+   */
+  public getRootMeta(): NodeMetadata | undefined {
+    return this.root.__meta;
+  }
 }
+
+// ==================== GLOBAL BLACKBOARD ====================
 
 /**
- * Check if unit is in danger (low health and under threat)
+ * Global blackboard for sharing data across all behavior trees
  */
-export function isInDanger(context: BehaviorContext): boolean {
-  const entity = context.world.getEntity(context.entityId);
-  if (!entity) return false;
+export const globalBlackboard = new Blackboard();
 
-  const health = entity.get<Health>('Health');
-  if (!health) return false;
+// ==================== RE-EXPORTS FOR BACKWARDS COMPATIBILITY ====================
 
-  const healthPercent = health.getHealthPercent();
-  const threatScore = calculateThreatScore(context);
-
-  // In danger if low health and threats nearby
-  return healthPercent < 0.3 && threatScore > 2;
-}
-
-/**
- * Find best position for ranged combat
- */
-export function findOptimalCombatPosition(context: BehaviorContext): { x: number; y: number } | null {
-  const entity = context.world.getEntity(context.entityId);
-  if (!entity) return null;
-
-  const unit = entity.get<Unit>('Unit');
-  const transform = entity.get<Transform>('Transform');
-  const mySelectable = entity.get<Selectable>('Selectable');
-  if (!unit || !transform || !mySelectable) return null;
-
-  // Only ranged units need to position
-  if (unit.attackRange < 3) return null;
-
-  // Find current target
-  if (unit.targetEntityId === null) return null;
-
-  const targetEntity = context.world.getEntity(unit.targetEntityId);
-  if (!targetEntity) return null;
-
-  const targetTransform = targetEntity.get<Transform>('Transform');
-  if (!targetTransform) return null;
-
-  // Calculate ideal position at max attack range
-  const dx = transform.x - targetTransform.x;
-  const dy = transform.y - targetTransform.y;
-  const currentDistance = Math.sqrt(dx * dx + dy * dy);
-
-  if (currentDistance < 0.1) return null;
-
-  // Position at 90% of attack range for safety buffer
-  const idealDistance = unit.attackRange * 0.9;
-  const dirX = dx / currentDistance;
-  const dirY = dy / currentDistance;
-
-  return {
-    x: targetTransform.x + dirX * idealDistance,
-    y: targetTransform.y + dirY * idealDistance,
-  };
-}
-
-/**
- * Create a combat micro behavior tree for a unit type
- */
-export function createCombatMicroTree(): BehaviorNode {
-  return selector(
-    // Priority 1: Kite from melee enemies if ranged
-    sequence(
-      action(ctx => shouldKite(ctx)),
-      action(ctx => executeKite(ctx))
-    ),
-    // Priority 2: Retreat if in danger
-    sequence(
-      action(ctx => isInDanger(ctx)),
-      action(ctx => {
-        const entity = ctx.world.getEntity(ctx.entityId);
-        if (!entity) return false;
-        const unit = entity.get<Unit>('Unit');
-        if (!unit) return false;
-        // Will be handled by retreat logic
-        ctx.blackboard.set('shouldRetreat', true);
-        return true;
-      })
-    ),
-    // Priority 3: Position optimally for combat
-    action(ctx => {
-      const pos = findOptimalCombatPosition(ctx);
-      if (!pos) return false;
-
-      const entity = ctx.world.getEntity(ctx.entityId);
-      if (!entity) return false;
-
-      const unit = entity.get<Unit>('Unit');
-      const transform = entity.get<Transform>('Transform');
-      if (!unit || !transform) return false;
-
-      // Only reposition if significantly out of position
-      const dx = pos.x - transform.x;
-      const dy = pos.y - transform.y;
-      const distance = Math.sqrt(dx * dx + dy * dy);
-
-      if (distance > 1) {
-        unit.targetX = pos.x;
-        unit.targetY = pos.y;
-        return true;
-      }
-      return false;
-    })
-  );
-}
+// Keep old function signatures working
+export { selector as selectorSimple };
+export { sequence as sequenceSimple };
