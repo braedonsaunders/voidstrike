@@ -174,6 +174,9 @@ export function HybridGameCanvas() {
       renderer.shadowMap.type = THREE.PCFSoftShadowMap;
       rendererRef.current = renderer;
 
+      // Set renderer API in UI store for graphics options display
+      useUIStore.getState().setRendererAPI('WebGL');
+
       // Create scene
       const scene = new THREE.Scene();
       scene.fog = new THREE.Fog(0x1a1a2e, 50, 150);

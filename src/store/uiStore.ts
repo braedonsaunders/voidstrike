@@ -36,6 +36,9 @@ export interface DebugSettings {
   debugAudio: boolean;
 }
 
+// Renderer API type (WebGPU or WebGL)
+export type RendererAPI = 'WebGPU' | 'WebGL' | null;
+
 // Graphics settings for post-processing and visual effects
 export interface GraphicsSettings {
   postProcessingEnabled: boolean;
@@ -96,6 +99,8 @@ export interface UIState {
   // Graphics settings
   graphicsSettings: GraphicsSettings;
   showGraphicsOptions: boolean;
+  rendererAPI: RendererAPI;
+  preferWebGPU: boolean; // User preference for renderer (true = try WebGPU, false = force WebGL)
 
   // Sound settings
   showSoundOptions: boolean;
@@ -135,6 +140,8 @@ export interface UIState {
   toggleGraphicsOptions: () => void;
   setGraphicsSetting: <K extends keyof GraphicsSettings>(key: K, value: GraphicsSettings[K]) => void;
   toggleGraphicsSetting: (key: keyof GraphicsSettings) => void;
+  setRendererAPI: (api: RendererAPI) => void;
+  setPreferWebGPU: (prefer: boolean) => void;
   // Sound settings actions
   toggleSoundOptions: () => void;
   // Fullscreen actions
@@ -168,6 +175,8 @@ export const useUIStore = create<UIState>((set, get) => ({
   showFPS: false,
   showPing: true,
   showGraphicsOptions: false,
+  rendererAPI: null,
+  preferWebGPU: false, // Default to WebGL for stability (WebGPU has TSL build issues)
   showSoundOptions: false,
   isFullscreen: false,
   graphicsSettings: {
@@ -292,6 +301,10 @@ export const useUIStore = create<UIState>((set, get) => ({
   togglePing: () => set((state) => ({ showPing: !state.showPing })),
 
   toggleGraphicsOptions: () => set((state) => ({ showGraphicsOptions: !state.showGraphicsOptions })),
+
+  setRendererAPI: (api) => set({ rendererAPI: api }),
+
+  setPreferWebGPU: (prefer) => set({ preferWebGPU: prefer }),
 
   toggleSoundOptions: () => set((state) => ({ showSoundOptions: !state.showSoundOptions })),
 

@@ -7,8 +7,9 @@ import { HUD } from '@/components/game/HUD';
 import { LoadingScreen } from '@/components/ui/LoadingScreen';
 import { useGameSetupStore } from '@/store/gameSetupStore';
 
-// Dynamic import for Hybrid game canvas (Three.js + Phaser overlay)
-// No SSR - both Three.js and Phaser require browser
+// Dynamic import for game canvas - No SSR (Three.js and Phaser require browser)
+// HybridGameCanvas uses WebGL (stable, production-ready)
+// Note: WebGPU renderer exists but requires Three.js TSL which has build compatibility issues
 const HybridGameCanvas = dynamic(
   () => import('@/components/game/HybridGameCanvas').then((mod) => mod.HybridGameCanvas),
   { ssr: false }
