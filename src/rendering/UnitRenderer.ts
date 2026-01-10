@@ -145,8 +145,9 @@ export class UnitRenderer {
       // Get animations from asset manager and create actions
       const clips = AssetManager.getAnimations(unitType);
 
-      // First pass: collect and classify all animations
-      const classifiedAnims: { idle?: THREE.AnimationAction; walk?: THREE.AnimationAction; attack?: THREE.AnimationAction; death?: THREE.AnimationAction } = {};
+      // First pass: create all actions and store by normalized name
+      // Track which canonical names have exact matches to prefer them over partial matches
+      const exactMatches = { idle: false, walk: false, attack: false, death: false };
 
       for (const clip of clips) {
         // Remove root motion (position tracks) from animations to prevent jolt/warping
@@ -160,29 +161,68 @@ export class UnitRenderer {
         if (name.includes('|')) {
           name = name.split('|').pop() || name;
         }
-        // Also handle underscore prefixes (e.g., "char_idle" -> check for "idle")
 
         animations.set(name, action);
         console.log(`[UnitRenderer] ${unitType}: Found animation "${clip.name}" -> normalized "${name}"`);
 
-        // Map common aliases - use separate ifs so animations can match multiple aliases
-        // Check idle FIRST to establish the base animation
-        if (name.includes('idle') || name.includes('stand') || name === 'pose') {
+        // Map to canonical animation names, preferring EXACT matches over partial matches
+        // This prevents "idle_4" from overwriting "idle", or "running" from overwriting "walk"
+
+        // Check for EXACT matches first (these always win)
+        if (name === 'idle' || name === 'stand' || name === 'pose') {
           animations.set('idle', action);
-          classifiedAnims.idle = action;
+          exactMatches.idle = true;
+          console.log(`[UnitRenderer] ${unitType}: Mapped "${name}" -> 'idle' (exact match)`);
         }
-        if (name.includes('walk') || name.includes('run') || name.includes('move') || name.includes('locomotion')) {
+        if (name === 'walk' || name === 'run' || name === 'move') {
           animations.set('walk', action);
-          classifiedAnims.walk = action;
+          exactMatches.walk = true;
+          console.log(`[UnitRenderer] ${unitType}: Mapped "${name}" -> 'walk' (exact match)`);
         }
-        if (name.includes('attack') || name.includes('shoot') || name.includes('fire') || name.includes('combat')) {
+        if (name === 'attack' || name === 'shoot' || name === 'fire' || name === 'combat') {
           animations.set('attack', action);
-          classifiedAnims.attack = action;
+          exactMatches.attack = true;
+          console.log(`[UnitRenderer] ${unitType}: Mapped "${name}" -> 'attack' (exact match)`);
         }
-        // Explicitly detect death animation to prevent it from being used as fallback
-        if (name.includes('death') || name.includes('die') || name.includes('dead')) {
+        if (name === 'death' || name === 'die' || name === 'dead') {
           animations.set('death', action);
-          classifiedAnims.death = action;
+          exactMatches.death = true;
+          console.log(`[UnitRenderer] ${unitType}: Mapped "${name}" -> 'death' (exact match)`);
+        }
+      }
+
+      // Second pass: fill in missing canonical names with partial matches (only if no exact match exists)
+      for (const clip of clips) {
+        let name = clip.name.toLowerCase();
+        if (name.includes('|')) {
+          name = name.split('|').pop() || name;
+        }
+        const action = animations.get(name)!;
+
+        // Only use partial matches if we don't have an exact match
+        if (!exactMatches.idle && !animations.has('idle')) {
+          if (name.includes('idle') || name.includes('stand')) {
+            animations.set('idle', action);
+            console.log(`[UnitRenderer] ${unitType}: Mapped "${name}" -> 'idle' (partial match)`);
+          }
+        }
+        if (!exactMatches.walk && !animations.has('walk')) {
+          if (name.includes('walk') || name.includes('run') || name.includes('move') || name.includes('locomotion')) {
+            animations.set('walk', action);
+            console.log(`[UnitRenderer] ${unitType}: Mapped "${name}" -> 'walk' (partial match)`);
+          }
+        }
+        if (!exactMatches.attack && !animations.has('attack')) {
+          if (name.includes('attack') || name.includes('shoot') || name.includes('fire') || name.includes('combat')) {
+            animations.set('attack', action);
+            console.log(`[UnitRenderer] ${unitType}: Mapped "${name}" -> 'attack' (partial match)`);
+          }
+        }
+        if (!exactMatches.death && !animations.has('death')) {
+          if (name.includes('death') || name.includes('die') || name.includes('dead')) {
+            animations.set('death', action);
+            console.log(`[UnitRenderer] ${unitType}: Mapped "${name}" -> 'death' (partial match)`);
+          }
         }
       }
 
