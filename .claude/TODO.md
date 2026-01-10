@@ -223,6 +223,7 @@
 - [x] Water/lava animated planes
 - [x] Particle effects (snow, dust, ash, spores)
 - [x] Environment manager
+- [x] Map border fog (SC2-style smoky fog effect around map edges)
 
 ### Pre-Game Setup
 - [x] Game options menu

@@ -686,6 +686,7 @@ environment.update(deltaTime, gameTime);
 - **GroundDebris**: Pebbles and sticks scattered on terrain
 - **CrystalField**: Glowing crystal clusters for frozen/void biomes
 - **WaterPlane**: Animated shader with wave simulation
+- **MapBorderFog**: SC2-style dark smoky fog around map edges, animated shader with multi-octave simplex noise for organic smoke movement
 
 ### Enhanced Decorations (`src/rendering/EnhancedDecorations.ts`)
 
