@@ -98,10 +98,16 @@ export class AudioSystem extends System {
 
   // Start gameplay music (discovers and plays random tracks from gameplay folder)
   public async startGameplayMusic(): Promise<void> {
-    const uiState = useUIStore.getState();
-    if (!uiState.musicEnabled) return;
-
     await MusicPlayer.discoverTracks();
+
+    const uiState = useUIStore.getState();
+    if (!uiState.musicEnabled) {
+      // Still switch to gameplay category so when music is re-enabled,
+      // it plays gameplay tracks instead of menu tracks
+      MusicPlayer.switchToCategory('gameplay');
+      return;
+    }
+
     MusicPlayer.play('gameplay');
   }
 
