@@ -547,6 +547,51 @@ class MusicPlayerClass {
   }
 
   /**
+   * Switch to a new category without starting playback
+   * This is useful when entering a game with music disabled - it ensures
+   * the correct tracks are queued so when music is re-enabled, the right
+   * category plays.
+   */
+  public switchToCategory(category: MusicCategory): void {
+    // Stop any current playback
+    this.cleanupCrossfade();
+    if (this.currentAudio) {
+      this.audioElementsToIgnore.add(this.currentAudio);
+      this.currentAudio.pause();
+      this.currentAudio.src = '';
+      this.currentAudio = null;
+    }
+    this.isPlaying = false;
+    this.isLoading = false;
+    this.currentTrackName = null;
+
+    // Prepare new category queue
+    this.prepareCategoryQueue(category);
+    debugAudio.log(`Switched to ${category} category (not playing)`);
+  }
+
+  /**
+   * Start playing or resume - handles the case where there's no current audio
+   * but a category is set (e.g., when re-enabling music after it was disabled)
+   */
+  public startOrResume(): void {
+    if (this.currentAudio && !this.isPlaying) {
+      // Resume existing audio
+      this.currentAudio.play().catch((error) => {
+        debugAudio.warn('Failed to resume music:', error);
+      });
+      this.isPlaying = true;
+      debugAudio.log('Music resumed');
+    } else if (!this.currentAudio && this.currentCategory) {
+      // No audio but we have a category - start playing from it
+      debugAudio.log(`Starting fresh playback for ${this.currentCategory} category`);
+      this.play(this.currentCategory);
+    } else if (!this.currentAudio) {
+      debugAudio.log('No music to resume and no category set');
+    }
+  }
+
+  /**
    * Get available track counts
    */
   public getTrackCounts(): { menu: number; gameplay: number } {

@@ -82,7 +82,9 @@ export function SoundOptionsPanel() {
     if (!newEnabled) {
       MusicPlayer.pause();
     } else {
-      MusicPlayer.resume();
+      // Use startOrResume to handle the case where there's no current audio
+      // but a category is set (e.g., when music was disabled before entering a game)
+      MusicPlayer.startOrResume();
     }
   }, [toggleMusic, musicEnabled]);
 
