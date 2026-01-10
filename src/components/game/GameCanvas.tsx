@@ -14,6 +14,7 @@ import { EffectsRenderer } from '@/rendering/EffectsRenderer';
 import { RallyPointRenderer } from '@/rendering/RallyPointRenderer';
 import { CommandQueueRenderer } from '@/rendering/CommandQueueRenderer';
 import { WatchTowerRenderer } from '@/rendering/WatchTowerRenderer';
+import { BuildingPlacementPreview } from '@/rendering/BuildingPlacementPreview';
 import { useGameStore } from '@/store/gameStore';
 import { useGameSetupStore, getLocalPlayerId, isSpectatorMode } from '@/store/gameSetupStore';
 import { SelectionBox } from './SelectionBox';
@@ -47,6 +48,7 @@ export function GameCanvas() {
   const rallyPointRendererRef = useRef<RallyPointRenderer | null>(null);
   const commandQueueRendererRef = useRef<CommandQueueRenderer | null>(null);
   const watchTowerRendererRef = useRef<WatchTowerRenderer | null>(null);
+  const placementPreviewRef = useRef<BuildingPlacementPreview | null>(null);
   const environmentRef = useRef<EnvironmentManager | null>(null);
 
   const [isSelecting, setIsSelecting] = useState(false);
@@ -66,7 +68,7 @@ export function GameCanvas() {
   // Track current subgroup index for Tab cycling
   const subgroupIndexRef = useRef(0);
 
-  const { isBuilding, buildingType, isSettingRallyPoint, abilityTargetMode } = useGameStore();
+  const { isBuilding, buildingType, buildingPlacementQueue, isSettingRallyPoint, abilityTargetMode } = useGameStore();
 
   // Initialize Three.js and game engine
   useEffect(() => {
@@ -247,6 +249,46 @@ export function GameCanvas() {
       const commandQueueRenderer = new CommandQueueRenderer(scene, game.eventBus, game.world, localPlayerId);
       commandQueueRendererRef.current = commandQueueRenderer;
 
+      // Building placement preview (SC2-style)
+      const placementPreview = new BuildingPlacementPreview(CURRENT_MAP, (x, z) => terrain.getHeightAt(x, z));
+      placementPreview.setVespeneGeyserChecker((x, y) => {
+        const resources = game.world.getEntitiesWith('Resource', 'Transform');
+        for (const entity of resources) {
+          const resource = entity.get<Resource>('Resource')!;
+          const transform = entity.get<Transform>('Transform')!;
+          if (resource.resourceType === 'vespene') {
+            const dx = transform.x - x;
+            const dy = transform.y - y;
+            if (dx * dx + dy * dy < 4) return true;
+          }
+        }
+        return false;
+      });
+      placementPreview.setPlacementValidator((centerX, centerY, width, height) => {
+        const halfWidth = width / 2;
+        const halfHeight = height / 2;
+        const entities = game.world.getEntitiesWith('Transform');
+        for (const entity of entities) {
+          const transform = entity.get<Transform>('Transform')!;
+          const building = entity.get<Building>('Building');
+          const unit = entity.get<Unit>('Unit');
+          const resource = entity.get<Resource>('Resource');
+          if (building || unit || resource) {
+            const entityWidth = building ? building.width : 1;
+            const entityHeight = building ? building.height : 1;
+            const entityHalfW = entityWidth / 2;
+            const entityHalfH = entityHeight / 2;
+            if (Math.abs(transform.x - centerX) < halfWidth + entityHalfW &&
+                Math.abs(transform.y - centerY) < halfHeight + entityHalfH) {
+              return false;
+            }
+          }
+        }
+        return true;
+      });
+      scene.add(placementPreview.group);
+      placementPreviewRef.current = placementPreview;
+
       // Stage 7: Spawning entities (85-90%)
       await updateProgress(85, 'Spawning units and buildings', 120);
 
@@ -336,6 +378,7 @@ export function GameCanvas() {
         rallyPointRendererRef.current?.dispose();
         commandQueueRendererRef.current?.dispose();
         watchTowerRendererRef.current?.dispose();
+        placementPreviewRef.current?.dispose();
         cameraRef.current?.dispose();
         unitRendererRef.current?.dispose();
         buildingRendererRef.current?.dispose();
@@ -354,6 +397,24 @@ export function GameCanvas() {
       cleanupRef.current();
     };
   }, []);
+
+  // Handle building placement preview start/stop
+  useEffect(() => {
+    if (placementPreviewRef.current) {
+      if (isBuilding && buildingType) {
+        placementPreviewRef.current.startPlacement(buildingType);
+      } else {
+        placementPreviewRef.current.stopPlacement();
+      }
+    }
+  }, [isBuilding, buildingType]);
+
+  // Sync building placement queue to preview for visual path lines
+  useEffect(() => {
+    if (placementPreviewRef.current) {
+      placementPreviewRef.current.setQueuedPlacements(buildingPlacementQueue);
+    }
+  }, [buildingPlacementQueue]);
 
   // Handle mouse events
   const handleMouseDown = useCallback((e: React.MouseEvent) => {
@@ -588,7 +649,15 @@ export function GameCanvas() {
     if (isSelecting) {
       setSelectionEnd({ x: e.clientX, y: e.clientY });
     }
-  }, [isSelecting]);
+
+    // Update building placement preview position
+    if (isBuilding && buildingType && placementPreviewRef.current && cameraRef.current) {
+      const worldPos = cameraRef.current.screenToWorld(e.clientX, e.clientY);
+      if (worldPos) {
+        placementPreviewRef.current.updatePosition(worldPos.x, worldPos.z);
+      }
+    }
+  }, [isSelecting, isBuilding, buildingType]);
 
   const handleMouseUp = useCallback((e: React.MouseEvent) => {
     if (e.button === 0 && isSelecting) {

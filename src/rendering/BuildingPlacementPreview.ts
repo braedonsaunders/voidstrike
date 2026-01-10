@@ -132,12 +132,21 @@ export class BuildingPlacementPreview {
 
     for (const marker of this.queueMarkers) {
       this.group.remove(marker);
+      // Dispose ghost mesh and its children (wireframe)
+      marker.traverse((child) => {
+        if (child instanceof THREE.Mesh || child instanceof THREE.LineSegments) {
+          child.geometry.dispose();
+          if (child.material instanceof THREE.Material) {
+            child.material.dispose();
+          }
+        }
+      });
     }
     this.queueMarkers = [];
   }
 
   /**
-   * Update queue path lines and markers
+   * Update queue path lines and markers (SC2-style building ghosts)
    */
   private updateQueueVisuals(): void {
     this.clearQueueVisuals();
@@ -148,24 +157,60 @@ export class BuildingPlacementPreview {
     const linePoints: THREE.Vector3[] = [];
     const lineOffset = 0.2;
 
+    // Add line from current cursor position to first queued placement
+    if (this.currentBuildingType && this.queuedPlacements.length > 0) {
+      const firstPlacement = this.queuedPlacements[0];
+      const cursorHeight = this.getTerrainHeight ? this.getTerrainHeight(this.currentPosition.x, this.currentPosition.y) : 0;
+      const firstHeight = this.getTerrainHeight ? this.getTerrainHeight(firstPlacement.x, firstPlacement.y) : 0;
+      const dashPoints = this.createDashedLinePoints(
+        this.currentPosition.x, this.currentPosition.y, cursorHeight + lineOffset,
+        firstPlacement.x, firstPlacement.y, firstHeight + lineOffset
+      );
+      linePoints.push(...dashPoints);
+    }
+
     for (let i = 0; i < this.queuedPlacements.length; i++) {
       const placement = this.queuedPlacements[i];
-      const prevPlacement = i > 0 ? this.queuedPlacements[i - 1] : null;
+      const nextPlacement = i < this.queuedPlacements.length - 1 ? this.queuedPlacements[i + 1] : null;
 
-      // Create marker at this position
-      const height = this.getTerrainHeight ? this.getTerrainHeight(placement.x, placement.y) : 0;
-      const marker = new THREE.Mesh(this.queueMarkerGeometry, this.queueMarkerMaterial);
-      marker.position.set(placement.x, height + 0.5, placement.y);
-      this.group.add(marker);
-      this.queueMarkers.push(marker);
+      // Get building dimensions from definition
+      const definition = BUILDING_DEFINITIONS[placement.buildingType];
+      const width = definition?.width ?? 2;
+      const height = definition?.height ?? 2;
 
-      // Add line segment from previous placement to this one
-      if (prevPlacement) {
-        const prevHeight = this.getTerrainHeight ? this.getTerrainHeight(prevPlacement.x, prevPlacement.y) : 0;
+      // Create building ghost at this position (same style as main ghost but slightly dimmer)
+      const terrainHeight = this.getTerrainHeight ? this.getTerrainHeight(placement.x, placement.y) : 0;
+
+      // Ghost box mesh
+      const ghostGeometry = new THREE.BoxGeometry(width * 0.9, 2, height * 0.9);
+      const ghostMaterial = new THREE.MeshBasicMaterial({
+        color: BuildingPlacementPreview.QUEUE_LINE_COLOR,
+        transparent: true,
+        opacity: 0.25,
+        wireframe: false,
+      });
+      const ghost = new THREE.Mesh(ghostGeometry, ghostMaterial);
+      ghost.position.set(placement.x, terrainHeight + 1 + BuildingPlacementPreview.GRID_OFFSET, placement.y);
+
+      // Add wireframe outline to ghost
+      const wireGeometry = new THREE.EdgesGeometry(ghostGeometry);
+      const wireMaterial = new THREE.LineBasicMaterial({
+        color: BuildingPlacementPreview.QUEUE_LINE_COLOR,
+        linewidth: 2,
+      });
+      const wireframe = new THREE.LineSegments(wireGeometry, wireMaterial);
+      ghost.add(wireframe);
+
+      this.group.add(ghost);
+      this.queueMarkers.push(ghost);
+
+      // Add line segment to next placement
+      if (nextPlacement) {
+        const nextHeight = this.getTerrainHeight ? this.getTerrainHeight(nextPlacement.x, nextPlacement.y) : 0;
         // Create dashed line segments
         const dashPoints = this.createDashedLinePoints(
-          prevPlacement.x, prevPlacement.y, prevHeight + lineOffset,
-          placement.x, placement.y, height + lineOffset
+          placement.x, placement.y, terrainHeight + lineOffset,
+          nextPlacement.x, nextPlacement.y, nextHeight + lineOffset
         );
         linePoints.push(...dashPoints);
       }
@@ -247,6 +292,10 @@ export class BuildingPlacementPreview {
     if (snappedX !== this.currentPosition.x || snappedY !== this.currentPosition.y) {
       this.currentPosition = { x: snappedX, y: snappedY };
       this.updatePreview(snappedX, snappedY);
+      // Update queue visuals so line from cursor to first queued building follows cursor
+      if (this.queuedPlacements.length > 0) {
+        this.updateQueueVisuals();
+      }
     }
   }
 
