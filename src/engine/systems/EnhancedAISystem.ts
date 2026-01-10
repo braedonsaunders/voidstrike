@@ -693,6 +693,10 @@ export class EnhancedAISystem extends System {
       if (ai.vespene >= 100 && Math.random() < 0.2) {
         if (this.tryTrainUnit(ai, 'lifter')) return;
       }
+      // Valkyrie as fallback - always try to produce something from hangar
+      if (ai.vespene >= 75) {
+        if (this.tryTrainUnit(ai, 'valkyrie')) return;
+      }
     }
 
     // Produce vehicles from Forge
@@ -701,6 +705,8 @@ export class EnhancedAISystem extends System {
       if (Math.random() < 0.4) {
         if (this.tryTrainUnit(ai, 'scorcher')) return;
       }
+      // Scorcher as fallback - always try to produce something from forge
+      if (this.tryTrainUnit(ai, 'scorcher')) return;
     }
 
     // Produce infantry from Infantry Bay
