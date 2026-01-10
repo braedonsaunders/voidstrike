@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { World } from '@/engine/ecs/World';
 import { Transform } from '@/engine/components/Transform';
 import { Resource, OPTIMAL_WORKERS_PER_MINERAL, OPTIMAL_WORKERS_PER_VESPENE } from '@/engine/components/Resource';
+import { Unit } from '@/engine/components/Unit';
 import { Selectable } from '@/engine/components/Selectable';
 import { Terrain } from './Terrain';
 import AssetManager from '@/assets/AssetManager';
@@ -17,13 +18,28 @@ interface InstancedResourceGroup {
   baseScale: number; // Base scale from model normalization
 }
 
-// Track per-resource rotation, selection ring, and worker count label
+// Track per-resource rotation and selection ring (no individual labels)
 interface ResourceData {
   rotation: number;
   lastScale: number;
   selectionRing: THREE.Mesh | null;
-  workerLabel: THREE.Sprite | null;
-  lastGathererCount: number;
+}
+
+// Track mineral line worker labels (one label per mineral line)
+interface MineralLineLabel {
+  sprite: THREE.Sprite;
+  centerX: number;
+  centerY: number;
+  patchIds: Set<number>; // Entity IDs of patches in this line
+  lastWorkerCount: number;
+  lastOptimalCount: number;
+}
+
+// Track vespene geyser labels (one label per geyser with extractor)
+interface VespeneLabel {
+  sprite: THREE.Sprite;
+  entityId: number;
+  lastWorkerCount: number;
   lastOptimalCount: number;
 }
 
@@ -31,6 +47,9 @@ interface ResourceData {
 // 4-player maps: ~17 expansions × 8 minerals = 136 minerals
 // 8-player maps could have even more, so we use 200 for headroom
 const MAX_RESOURCES_PER_TYPE = 200;
+
+// Distance threshold to group minerals into a line
+const MINERAL_LINE_GROUPING_DISTANCE = 15;
 
 export class ResourceRenderer {
   private scene: THREE.Scene;
@@ -40,8 +59,14 @@ export class ResourceRenderer {
   // Instanced mesh groups: one per resource type
   private instancedGroups: Map<string, InstancedResourceGroup> = new Map();
 
-  // Per-resource data
+  // Per-resource data (rotation, selection ring)
   private resourceData: Map<number, ResourceData> = new Map();
+
+  // Mineral line labels (one per mineral line, not per patch)
+  private mineralLineLabels: MineralLineLabel[] = [];
+
+  // Vespene labels (one per geyser with extractor)
+  private vespeneLabels: Map<number, VespeneLabel> = new Map();
 
   // Selection ring resources
   private selectionGeometry: THREE.RingGeometry;
@@ -58,6 +83,7 @@ export class ResourceRenderer {
   private _lastMineralCount: number = 0;
   private _debugLoggedThisSession: boolean = false;
   private _warnedInstanceLimit: Set<string> = new Set();
+  private _mineralLinesBuilt: boolean = false;
 
   constructor(scene: THREE.Scene, world: World, terrain?: Terrain) {
     this.scene = scene;
@@ -184,7 +210,7 @@ export class ResourceRenderer {
   }
 
   /**
-   * Get or create per-resource data (rotation, selection ring, worker label)
+   * Get or create per-resource data (rotation, selection ring)
    */
   private getOrCreateResourceData(entityId: number): ResourceData {
     let data = this.resourceData.get(entityId);
@@ -195,17 +221,10 @@ export class ResourceRenderer {
       selectionRing.visible = false;
       this.scene.add(selectionRing);
 
-      // Create worker count label sprite
-      const workerLabel = this.createWorkerLabel();
-      this.scene.add(workerLabel);
-
       data = {
         rotation: Math.random() * Math.PI * 2,
         lastScale: 1,
         selectionRing,
-        workerLabel,
-        lastGathererCount: -1, // Force update on first frame
-        lastOptimalCount: -1,
       };
       this.resourceData.set(entityId, data);
     }
@@ -213,12 +232,12 @@ export class ResourceRenderer {
   }
 
   /**
-   * Create a sprite for displaying worker count (e.g., "2/2")
+   * Create a sprite for displaying worker count (e.g., "16/16")
    */
   private createWorkerLabel(): THREE.Sprite {
     const canvas = document.createElement('canvas');
-    canvas.width = 64;
-    canvas.height = 32;
+    canvas.width = 96;
+    canvas.height = 40;
 
     const texture = new THREE.CanvasTexture(canvas);
     texture.minFilter = THREE.LinearFilter;
@@ -232,7 +251,7 @@ export class ResourceRenderer {
     });
 
     const sprite = new THREE.Sprite(material);
-    sprite.scale.set(1.2, 0.6, 1);
+    sprite.scale.set(2.0, 0.8, 1);
     sprite.visible = false;
 
     return sprite;
@@ -244,8 +263,7 @@ export class ResourceRenderer {
   private updateWorkerLabel(
     sprite: THREE.Sprite,
     currentWorkers: number,
-    optimalWorkers: number,
-    resourceType: 'minerals' | 'vespene'
+    optimalWorkers: number
   ): void {
     const material = sprite.material as THREE.SpriteMaterial;
     const texture = material.map as THREE.CanvasTexture;
@@ -257,9 +275,9 @@ export class ResourceRenderer {
     ctx.clearRect(0, 0, canvas.width, canvas.height);
 
     // Background with rounded corners
-    ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.75)';
     ctx.beginPath();
-    ctx.roundRect(2, 2, canvas.width - 4, canvas.height - 4, 4);
+    ctx.roundRect(2, 2, canvas.width - 4, canvas.height - 4, 6);
     ctx.fill();
 
     // Determine color based on saturation level
@@ -275,8 +293,8 @@ export class ResourceRenderer {
       color = '#aaaaaa';
     }
 
-    // Draw text (e.g., "2/2")
-    ctx.font = 'bold 18px Arial';
+    // Draw text (e.g., "16/16")
+    ctx.font = 'bold 22px Arial';
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
     ctx.fillStyle = color;
@@ -284,6 +302,122 @@ export class ResourceRenderer {
 
     // Mark texture for update
     texture.needsUpdate = true;
+  }
+
+  /**
+   * Build mineral line groupings from current mineral patches.
+   * Groups nearby minerals into "mineral lines" for combined worker display.
+   */
+  private buildMineralLines(): void {
+    // Clean up old labels
+    for (const label of this.mineralLineLabels) {
+      this.scene.remove(label.sprite);
+      this.disposeWorkerLabel(label.sprite);
+    }
+    this.mineralLineLabels = [];
+
+    // Get all mineral patches
+    const resources = this.world.getEntitiesWith('Resource', 'Transform');
+    const mineralPatches: { entityId: number; x: number; y: number }[] = [];
+
+    for (const entity of resources) {
+      const resource = entity.get<Resource>('Resource');
+      const transform = entity.get<Transform>('Transform');
+      if (!resource || !transform) continue;
+      if (resource.resourceType !== 'minerals') continue;
+      if (resource.isDepleted()) continue;
+
+      mineralPatches.push({
+        entityId: entity.id,
+        x: transform.x,
+        y: transform.y,
+      });
+    }
+
+    // Group minerals using simple clustering
+    const assigned = new Set<number>();
+
+    for (const patch of mineralPatches) {
+      if (assigned.has(patch.entityId)) continue;
+
+      // Start a new mineral line with this patch
+      const linePatches: typeof mineralPatches = [patch];
+      assigned.add(patch.entityId);
+
+      // Find all nearby patches that belong to this line
+      let addedNew = true;
+      while (addedNew) {
+        addedNew = false;
+        for (const otherPatch of mineralPatches) {
+          if (assigned.has(otherPatch.entityId)) continue;
+
+          // Check if close to any patch in the current line
+          for (const linePatch of linePatches) {
+            const dx = otherPatch.x - linePatch.x;
+            const dy = otherPatch.y - linePatch.y;
+            const dist = Math.sqrt(dx * dx + dy * dy);
+
+            if (dist <= MINERAL_LINE_GROUPING_DISTANCE) {
+              linePatches.push(otherPatch);
+              assigned.add(otherPatch.entityId);
+              addedNew = true;
+              break;
+            }
+          }
+        }
+      }
+
+      // Calculate center of the mineral line
+      let centerX = 0;
+      let centerY = 0;
+      for (const p of linePatches) {
+        centerX += p.x;
+        centerY += p.y;
+      }
+      centerX /= linePatches.length;
+      centerY /= linePatches.length;
+
+      // Create label for this mineral line
+      const sprite = this.createWorkerLabel();
+      this.scene.add(sprite);
+
+      const patchIds = new Set<number>();
+      for (const p of linePatches) {
+        patchIds.add(p.entityId);
+      }
+
+      this.mineralLineLabels.push({
+        sprite,
+        centerX,
+        centerY,
+        patchIds,
+        lastWorkerCount: -1,
+        lastOptimalCount: -1,
+      });
+    }
+
+    this._mineralLinesBuilt = true;
+    debugMesh.log(`[ResourceRenderer] Built ${this.mineralLineLabels.length} mineral line labels from ${mineralPatches.length} patches`);
+  }
+
+  /**
+   * Count workers assigned to a set of resource entity IDs.
+   * Counts by worker's gatherTargetId, so workers returning to CC still count.
+   */
+  private countWorkersForResources(resourceIds: Set<number>): number {
+    let count = 0;
+    const units = this.world.getEntitiesWith('Unit');
+
+    for (const entity of units) {
+      const unit = entity.get<Unit>('Unit');
+      if (!unit || !unit.isWorker) continue;
+      if (unit.state !== 'gathering') continue;
+      if (unit.gatherTargetId !== null && resourceIds.has(unit.gatherTargetId)) {
+        count++;
+      }
+    }
+
+    return count;
   }
 
   public update(): void {
@@ -294,6 +428,17 @@ export class ResourceRenderer {
     for (const group of this.instancedGroups.values()) {
       group.mesh.count = 0;
       group.entityIds = [];
+    }
+
+    // Build mineral lines on first frame or when minerals change significantly
+    const mineralCount = [...entities].filter(e => {
+      const r = e.get<Resource>('Resource');
+      return r && r.resourceType === 'minerals' && !r.isDepleted();
+    }).length;
+
+    if (!this._mineralLinesBuilt || Math.abs(mineralCount - this._lastMineralCount) > 2) {
+      this.buildMineralLines();
+      this._lastMineralCount = mineralCount;
     }
 
     // Build instance data
@@ -345,28 +490,6 @@ export class ResourceRenderer {
         data.selectionRing.visible = selectable?.isSelected ?? false;
       }
 
-      // Update worker count label
-      if (data.workerLabel) {
-        const currentGatherers = resource.getCurrentGatherers();
-        const optimalWorkers = resource.getOptimalWorkers();
-
-        // Position label above the resource
-        data.workerLabel.position.set(transform.x, terrainHeight + 1.8, transform.y);
-
-        // Only show label when there are workers or resource has been worked
-        // For minerals: always show if there are any gatherers
-        // For vespene with extractor: show worker count
-        const showLabel = currentGatherers > 0 || (resource.resourceType === 'vespene' && resource.hasExtractor());
-        data.workerLabel.visible = showLabel;
-
-        // Update texture only if count changed (optimization)
-        if (showLabel && (currentGatherers !== data.lastGathererCount || optimalWorkers !== data.lastOptimalCount)) {
-          this.updateWorkerLabel(data.workerLabel, currentGatherers, optimalWorkers, resource.resourceType);
-          data.lastGathererCount = currentGatherers;
-          data.lastOptimalCount = optimalWorkers;
-        }
-      }
-
       if (group.mesh.count < group.maxInstances) {
         const instanceIndex = group.mesh.count;
         group.entityIds[instanceIndex] = entity.id;
@@ -394,6 +517,95 @@ export class ResourceRenderer {
         // Warn once per resource type if we hit the instance limit
         debugMesh.warn(`[ResourceRenderer] ${resource.resourceType} instance limit (${group.maxInstances}) reached! Some resources will not render.`);
         this._warnedInstanceLimit.add(resource.resourceType);
+      }
+    }
+
+    // Update mineral line labels
+    for (const label of this.mineralLineLabels) {
+      // Check if any patches in this line still exist
+      let hasPatches = false;
+      for (const patchId of label.patchIds) {
+        if (currentIds.has(patchId)) {
+          hasPatches = true;
+          break;
+        }
+      }
+
+      if (!hasPatches) {
+        label.sprite.visible = false;
+        continue;
+      }
+
+      // Count workers assigned to this mineral line
+      const currentWorkers = this.countWorkersForResources(label.patchIds);
+      const optimalWorkers = label.patchIds.size * OPTIMAL_WORKERS_PER_MINERAL;
+
+      // Position label at center of mineral line
+      const terrainHeight = this.terrain?.getHeightAt(label.centerX, label.centerY) ?? 0;
+      label.sprite.position.set(label.centerX, terrainHeight + 2.5, label.centerY);
+
+      // Show label if any workers assigned or if mineral line has workers nearby
+      const showLabel = currentWorkers > 0;
+      label.sprite.visible = showLabel;
+
+      // Update texture only if count changed
+      if (showLabel && (currentWorkers !== label.lastWorkerCount || optimalWorkers !== label.lastOptimalCount)) {
+        this.updateWorkerLabel(label.sprite, currentWorkers, optimalWorkers);
+        label.lastWorkerCount = currentWorkers;
+        label.lastOptimalCount = optimalWorkers;
+      }
+    }
+
+    // Update vespene geyser labels
+    for (const entity of entities) {
+      const resource = entity.get<Resource>('Resource');
+      const transform = entity.get<Transform>('Transform');
+      if (!resource || !transform) continue;
+      if (resource.resourceType !== 'vespene') continue;
+      if (!resource.hasExtractor()) continue;
+
+      // Get or create vespene label
+      let vespeneLabel = this.vespeneLabels.get(entity.id);
+      if (!vespeneLabel) {
+        const sprite = this.createWorkerLabel();
+        this.scene.add(sprite);
+        vespeneLabel = {
+          sprite,
+          entityId: entity.id,
+          lastWorkerCount: -1,
+          lastOptimalCount: -1,
+        };
+        this.vespeneLabels.set(entity.id, vespeneLabel);
+      }
+
+      // Count workers assigned to this geyser
+      const resourceIds = new Set([entity.id]);
+      const currentWorkers = this.countWorkersForResources(resourceIds);
+      const optimalWorkers = OPTIMAL_WORKERS_PER_VESPENE;
+
+      // Position label above the extractor
+      const terrainHeight = this.terrain?.getHeightAt(transform.x, transform.y) ?? 0;
+      vespeneLabel.sprite.position.set(transform.x, terrainHeight + 3.5, transform.y);
+
+      // Always show for extractors (even with 0 workers)
+      vespeneLabel.sprite.visible = true;
+
+      // Update texture only if count changed
+      if (currentWorkers !== vespeneLabel.lastWorkerCount || optimalWorkers !== vespeneLabel.lastOptimalCount) {
+        this.updateWorkerLabel(vespeneLabel.sprite, currentWorkers, optimalWorkers);
+        vespeneLabel.lastWorkerCount = currentWorkers;
+        vespeneLabel.lastOptimalCount = optimalWorkers;
+      }
+    }
+
+    // Clean up vespene labels for destroyed extractors
+    for (const [entityId, label] of this.vespeneLabels) {
+      const entity = this.world.getEntity(entityId);
+      const resource = entity?.get<Resource>('Resource');
+      if (!entity || !resource || !resource.hasExtractor()) {
+        this.scene.remove(label.sprite);
+        this.disposeWorkerLabel(label.sprite);
+        this.vespeneLabels.delete(entityId);
       }
     }
 
@@ -427,10 +639,6 @@ export class ResourceRenderer {
         if (data.selectionRing) {
           this.scene.remove(data.selectionRing);
         }
-        if (data.workerLabel) {
-          this.scene.remove(data.workerLabel);
-          this.disposeWorkerLabel(data.workerLabel);
-        }
         this.resourceData.delete(entityId);
       }
     }
@@ -457,17 +665,27 @@ export class ResourceRenderer {
     }
     this.instancedGroups.clear();
 
-    // Clean up selection rings and worker labels
+    // Clean up selection rings
     for (const data of this.resourceData.values()) {
       if (data.selectionRing) {
         this.scene.remove(data.selectionRing);
       }
-      if (data.workerLabel) {
-        this.scene.remove(data.workerLabel);
-        this.disposeWorkerLabel(data.workerLabel);
-      }
     }
     this.resourceData.clear();
+
+    // Clean up mineral line labels
+    for (const label of this.mineralLineLabels) {
+      this.scene.remove(label.sprite);
+      this.disposeWorkerLabel(label.sprite);
+    }
+    this.mineralLineLabels = [];
+
+    // Clean up vespene labels
+    for (const label of this.vespeneLabels.values()) {
+      this.scene.remove(label.sprite);
+      this.disposeWorkerLabel(label.sprite);
+    }
+    this.vespeneLabels.clear();
 
     this.selectionGeometry.dispose();
     this.selectionMaterial.dispose();
