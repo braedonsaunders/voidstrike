@@ -1,11 +1,12 @@
 'use client';
 
 import React from 'react';
-import { useUIStore, GraphicsSettings } from '@/store/uiStore';
+import { useUIStore } from '@/store/uiStore';
 
 /**
  * In-game graphics options panel
  * Access via Options menu -> Graphics
+ * Each effect has its toggle followed by related sliders
  */
 export function GraphicsOptionsPanel() {
   const {
@@ -18,15 +19,27 @@ export function GraphicsOptionsPanel() {
 
   if (!showGraphicsOptions) return null;
 
-  const toggleOptions: Array<{ key: keyof GraphicsSettings; label: string }> = [
-    { key: 'postProcessingEnabled', label: 'Post-Processing (Master)' },
-    { key: 'ssaoEnabled', label: 'SSAO (Ambient Occlusion)' },
-    { key: 'bloomEnabled', label: 'Bloom' },
-    { key: 'outlineEnabled', label: 'Selection Outline' },
-    { key: 'fxaaEnabled', label: 'Anti-Aliasing (FXAA)' },
-    { key: 'groundFogEnabled', label: 'Ground Fog' },
-    { key: 'particlesEnabled', label: 'Ambient Particles' },
-  ];
+  const sliderStyle = { width: '100%', marginTop: '4px' };
+  const labelStyle = { display: 'block', marginBottom: '2px', color: '#888', fontSize: '11px' };
+  const sectionStyle = { marginBottom: '16px', paddingBottom: '12px', borderBottom: '1px solid #333' };
+
+  const ToggleButton = ({ enabled, onClick }: { enabled: boolean; onClick: () => void }) => (
+    <button
+      onClick={onClick}
+      style={{
+        padding: '4px 12px',
+        backgroundColor: enabled ? '#2a5a2a' : '#5a2a2a',
+        border: 'none',
+        borderRadius: '4px',
+        color: 'white',
+        cursor: 'pointer',
+        fontSize: '11px',
+        minWidth: '50px',
+      }}
+    >
+      {enabled ? 'ON' : 'OFF'}
+    </button>
+  );
 
   return (
     <div
@@ -34,7 +47,7 @@ export function GraphicsOptionsPanel() {
         position: 'absolute',
         top: '50px',
         right: '10px',
-        backgroundColor: 'rgba(0, 0, 0, 0.9)',
+        backgroundColor: 'rgba(0, 0, 0, 0.95)',
         border: '1px solid #444',
         borderRadius: '8px',
         padding: '16px',
@@ -42,10 +55,13 @@ export function GraphicsOptionsPanel() {
         fontFamily: 'monospace',
         fontSize: '13px',
         zIndex: 1000,
-        minWidth: '280px',
+        minWidth: '300px',
+        maxHeight: '80vh',
+        overflowY: 'auto',
       }}
     >
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
+      {/* Header */}
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
         <h3 style={{ margin: 0, fontSize: '14px' }}>Graphics Options</h3>
         <button
           onClick={toggleGraphicsOptions}
@@ -61,98 +77,166 @@ export function GraphicsOptionsPanel() {
         </button>
       </div>
 
-      <div style={{ borderBottom: '1px solid #333', marginBottom: '12px', paddingBottom: '8px' }}>
-        <span style={{ color: '#888', fontSize: '11px' }}>Using Three.js EffectComposer</span>
-      </div>
-
-      {toggleOptions.map(({ key, label }) => (
-        <div
-          key={key}
-          style={{
-            display: 'flex',
-            justifyContent: 'space-between',
-            alignItems: 'center',
-            padding: '6px 0',
-            borderBottom: '1px solid #222',
-          }}
-        >
-          <span style={{ color: graphicsSettings[key] ? '#fff' : '#666' }}>{label}</span>
-          <button
-            onClick={() => toggleGraphicsSetting(key)}
-            style={{
-              padding: '4px 12px',
-              backgroundColor: graphicsSettings[key] ? '#2a5a2a' : '#5a2a2a',
-              border: 'none',
-              borderRadius: '4px',
-              color: 'white',
-              cursor: 'pointer',
-              fontSize: '11px',
-              minWidth: '50px',
-            }}
-          >
-            {graphicsSettings[key] ? 'ON' : 'OFF'}
-          </button>
-        </div>
-      ))}
-
-      <div style={{ marginTop: '16px', borderTop: '1px solid #333', paddingTop: '12px' }}>
-        <div style={{ marginBottom: '12px' }}>
-          <label style={{ display: 'block', marginBottom: '4px', color: '#aaa', fontSize: '11px' }}>
-            SSAO Radius: {graphicsSettings.ssaoRadius}
-          </label>
-          <input
-            type="range"
-            min="2"
-            max="32"
-            step="2"
-            value={graphicsSettings.ssaoRadius}
-            onChange={(e) => setGraphicsSetting('ssaoRadius', parseFloat(e.target.value))}
-            style={{ width: '100%' }}
+      {/* === POST-PROCESSING MASTER === */}
+      <div style={sectionStyle}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
+          <span style={{ fontWeight: 'bold' }}>Post-Processing (Master)</span>
+          <ToggleButton
+            enabled={graphicsSettings.postProcessingEnabled}
+            onClick={() => toggleGraphicsSetting('postProcessingEnabled')}
           />
         </div>
-
-        <div style={{ marginBottom: '12px' }}>
-          <label style={{ display: 'block', marginBottom: '4px', color: '#aaa', fontSize: '11px' }}>
-            Outline Strength: {graphicsSettings.outlineStrength.toFixed(1)}
+        <div>
+          <label style={labelStyle}>
+            Tone Mapping Exposure: {graphicsSettings.toneMappingExposure.toFixed(2)}
           </label>
           <input
             type="range"
             min="0.5"
-            max="5"
-            step="0.5"
-            value={graphicsSettings.outlineStrength}
-            onChange={(e) => setGraphicsSetting('outlineStrength', parseFloat(e.target.value))}
-            style={{ width: '100%' }}
+            max="2.0"
+            step="0.05"
+            value={graphicsSettings.toneMappingExposure}
+            onChange={(e) => setGraphicsSetting('toneMappingExposure', parseFloat(e.target.value))}
+            style={sliderStyle}
           />
         </div>
+      </div>
 
-        <div style={{ marginBottom: '12px' }}>
-          <label style={{ display: 'block', marginBottom: '4px', color: '#aaa', fontSize: '11px' }}>
-            Bloom Strength: {graphicsSettings.bloomStrength.toFixed(2)}
+      {/* === SSAO === */}
+      <div style={sectionStyle}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
+          <span>SSAO (Ambient Occlusion)</span>
+          <ToggleButton
+            enabled={graphicsSettings.ssaoEnabled}
+            onClick={() => toggleGraphicsSetting('ssaoEnabled')}
+          />
+        </div>
+        <div>
+          <label style={labelStyle}>
+            Radius: {graphicsSettings.ssaoRadius}
+          </label>
+          <input
+            type="range"
+            min="4"
+            max="32"
+            step="2"
+            value={graphicsSettings.ssaoRadius}
+            onChange={(e) => setGraphicsSetting('ssaoRadius', parseFloat(e.target.value))}
+            style={sliderStyle}
+          />
+        </div>
+      </div>
+
+      {/* === BLOOM === */}
+      <div style={sectionStyle}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
+          <span>Bloom</span>
+          <ToggleButton
+            enabled={graphicsSettings.bloomEnabled}
+            onClick={() => toggleGraphicsSetting('bloomEnabled')}
+          />
+        </div>
+        <div style={{ marginBottom: '8px' }}>
+          <label style={labelStyle}>
+            Strength: {graphicsSettings.bloomStrength.toFixed(2)}
+          </label>
+          <input
+            type="range"
+            min="0"
+            max="1.5"
+            step="0.05"
+            value={graphicsSettings.bloomStrength}
+            onChange={(e) => setGraphicsSetting('bloomStrength', parseFloat(e.target.value))}
+            style={sliderStyle}
+          />
+        </div>
+        <div style={{ marginBottom: '8px' }}>
+          <label style={labelStyle}>
+            Threshold: {graphicsSettings.bloomThreshold.toFixed(2)}
           </label>
           <input
             type="range"
             min="0"
             max="1"
             step="0.05"
-            value={graphicsSettings.bloomStrength}
-            onChange={(e) => setGraphicsSetting('bloomStrength', parseFloat(e.target.value))}
-            style={{ width: '100%' }}
+            value={graphicsSettings.bloomThreshold}
+            onChange={(e) => setGraphicsSetting('bloomThreshold', parseFloat(e.target.value))}
+            style={sliderStyle}
           />
         </div>
-
         <div>
-          <label style={{ display: 'block', marginBottom: '4px', color: '#aaa', fontSize: '11px' }}>
-            Bloom Threshold: {graphicsSettings.bloomThreshold.toFixed(2)}
+          <label style={labelStyle}>
+            Radius: {graphicsSettings.bloomRadius.toFixed(2)}
+          </label>
+          <input
+            type="range"
+            min="0"
+            max="2"
+            step="0.1"
+            value={graphicsSettings.bloomRadius}
+            onChange={(e) => setGraphicsSetting('bloomRadius', parseFloat(e.target.value))}
+            style={sliderStyle}
+          />
+        </div>
+      </div>
+
+      {/* === OUTLINE === */}
+      <div style={sectionStyle}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
+          <span>Selection Outline</span>
+          <ToggleButton
+            enabled={graphicsSettings.outlineEnabled}
+            onClick={() => toggleGraphicsSetting('outlineEnabled')}
+          />
+        </div>
+        <div>
+          <label style={labelStyle}>
+            Strength: {graphicsSettings.outlineStrength.toFixed(1)}
           </label>
           <input
             type="range"
             min="0.5"
-            max="1"
-            step="0.05"
-            value={graphicsSettings.bloomThreshold}
-            onChange={(e) => setGraphicsSetting('bloomThreshold', parseFloat(e.target.value))}
-            style={{ width: '100%' }}
+            max="10"
+            step="0.5"
+            value={graphicsSettings.outlineStrength}
+            onChange={(e) => setGraphicsSetting('outlineStrength', parseFloat(e.target.value))}
+            style={sliderStyle}
+          />
+        </div>
+      </div>
+
+      {/* === FXAA === */}
+      <div style={sectionStyle}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <span>Anti-Aliasing (FXAA)</span>
+          <ToggleButton
+            enabled={graphicsSettings.fxaaEnabled}
+            onClick={() => toggleGraphicsSetting('fxaaEnabled')}
+          />
+        </div>
+      </div>
+
+      {/* === PARTICLES === */}
+      <div style={{ marginBottom: '8px' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
+          <span>Ambient Particles</span>
+          <ToggleButton
+            enabled={graphicsSettings.particlesEnabled}
+            onClick={() => toggleGraphicsSetting('particlesEnabled')}
+          />
+        </div>
+        <div>
+          <label style={labelStyle}>
+            Density: {graphicsSettings.particleDensity.toFixed(1)}x
+          </label>
+          <input
+            type="range"
+            min="0.5"
+            max="5"
+            step="0.5"
+            value={graphicsSettings.particleDensity}
+            onChange={(e) => setGraphicsSetting('particleDensity', parseFloat(e.target.value))}
+            style={sliderStyle}
           />
         </div>
       </div>
