@@ -95,6 +95,7 @@
 ### UI Improvements
 - [x] **Options menu** - Replaced Menu button with dropdown (Controls, Tech Tree, Exit to Menu)
 - [x] **Increased building avoidance** - Units now properly avoid walking through buildings
+- [x] **Enhanced loading screen** - Real loading progress with granular stages (models, renderer, terrain, engine, audio), stunning animated particle background with nebulas, geometric shapes, constellation effects, and progress-reactive energy beam
 
 ### AI & Combat Fixes
 - [x] **VisionSystem multi-player support** - Changed from hardcoded ['player1', 'ai'] to dynamic player registration, enabling proper 4-AI spectator games.
