@@ -45,6 +45,8 @@ class MusicPlayerClass {
 
   private crossfadeDuration = 1500; // 1.5 seconds crossfade
   private crossfadeUpdateInterval = 100; // Update every 100ms (10 updates/sec)
+  private pendingCategory: MusicCategory | null = null; // Category waiting for user interaction
+  private userInteractionListenerAdded = false;
 
   /**
    * Initialize the music player
@@ -53,6 +55,33 @@ class MusicPlayerClass {
     if (this.initialized) return;
     this.initialized = true;
     debugAudio.log('MusicPlayer initialized');
+  }
+
+  /**
+   * Set up a one-time listener for user interaction to resume blocked audio
+   */
+  private setupUserInteractionListener(): void {
+    if (this.userInteractionListenerAdded || typeof window === 'undefined') return;
+
+    const handleUserInteraction = () => {
+      if (this.pendingCategory) {
+        debugAudio.log(`User interaction detected, starting ${this.pendingCategory} music`);
+        const category = this.pendingCategory;
+        this.pendingCategory = null;
+        this.play(category);
+      }
+      // Remove listeners after first interaction
+      window.removeEventListener('click', handleUserInteraction);
+      window.removeEventListener('keydown', handleUserInteraction);
+      window.removeEventListener('touchstart', handleUserInteraction);
+      this.userInteractionListenerAdded = false;
+    };
+
+    window.addEventListener('click', handleUserInteraction, { once: true });
+    window.addEventListener('keydown', handleUserInteraction, { once: true });
+    window.addEventListener('touchstart', handleUserInteraction, { once: true });
+    this.userInteractionListenerAdded = true;
+    debugAudio.log('Waiting for user interaction to start music (browser autoplay policy)');
   }
 
   /**
@@ -224,8 +253,16 @@ class MusicPlayerClass {
         this.isPlaying = true;
         this.consecutiveFailures = 0; // Reset on success
       } catch (error) {
-        debugAudio.warn('Failed to play track:', error);
-        this.consecutiveFailures++;
+        // Check if this is an autoplay policy block
+        if (error instanceof Error && error.name === 'NotAllowedError') {
+          debugAudio.log('Autoplay blocked by browser policy');
+          // Store the category so we can start when user interacts
+          this.pendingCategory = this.currentCategory;
+          this.setupUserInteractionListener();
+        } else {
+          debugAudio.warn('Failed to play track:', error);
+          this.consecutiveFailures++;
+        }
       }
       this.isLoading = false;
     }
@@ -340,6 +377,7 @@ class MusicPlayerClass {
     this.consecutiveFailures = 0;
     this.currentTrackName = null;
     this.currentCategory = null;
+    this.pendingCategory = null;
     debugAudio.log('Music stopped');
   }
 
@@ -525,6 +563,7 @@ class MusicPlayerClass {
     this.stop();
     this.initialized = false;
     this.tracksDiscovered = false;
+    this.userInteractionListenerAdded = false;
     debugAudio.log('MusicPlayer disposed');
   }
 }
