@@ -45,6 +45,13 @@ interface ScreenEffect {
   duration: number;
 }
 
+interface DamageVignetteState {
+  currentIntensity: number;
+  targetIntensity: number;
+  pulsePhase: number;
+  lastDamageTime: number;
+}
+
 interface AbilitySplash {
   x: number;
   y: number;
@@ -83,6 +90,16 @@ export class OverlayScene extends Phaser.Scene {
 
   // Screen edge warning indicators
   private edgeWarnings: Map<string, { x: number; y: number; time: number }> = new Map();
+
+  // Premium damage vignette state
+  private damageVignetteState: DamageVignetteState = {
+    currentIntensity: 0,
+    targetIntensity: 0,
+    pulsePhase: 0,
+    lastDamageTime: 0,
+  };
+  private vignetteTexture: Phaser.GameObjects.RenderTexture | null = null;
+  private vignetteSprite: Phaser.GameObjects.Sprite | null = null;
 
   // Game end overlay elements (for hiding when continuing to spectate)
   private gameEndOverlay: Phaser.GameObjects.Graphics | null = null;
@@ -124,6 +141,9 @@ export class OverlayScene extends Phaser.Scene {
     // Vignette for screen effects (covers entire screen)
     this.vignetteGraphics = this.add.graphics();
     this.vignetteGraphics.setDepth(300);
+
+    // Create premium damage vignette render texture
+    this.createDamageVignetteTexture();
 
     this.setupEventListeners();
     this.setupKeyboardShortcuts();
@@ -320,6 +340,111 @@ export class OverlayScene extends Phaser.Scene {
         1000
       );
     });
+  }
+
+  /**
+   * Create a premium radial vignette texture for damage overlay
+   * Uses multiple gradient layers for a rich, cinematic effect
+   */
+  private createDamageVignetteTexture(): void {
+    const screenWidth = this.scale.width;
+    const screenHeight = this.scale.height;
+
+    // Create render texture for the vignette
+    this.vignetteTexture = this.add.renderTexture(0, 0, screenWidth, screenHeight);
+    this.vignetteTexture.setOrigin(0, 0);
+    this.vignetteTexture.setDepth(301);
+    this.vignetteTexture.setAlpha(0);
+
+    // Draw the vignette pattern to the texture
+    this.redrawVignetteTexture();
+
+    // Handle resize
+    this.scale.on('resize', () => {
+      this.redrawVignetteTexture();
+    });
+  }
+
+  /**
+   * Redraw the vignette texture (called on resize)
+   */
+  private redrawVignetteTexture(): void {
+    if (!this.vignetteTexture) return;
+
+    const screenWidth = this.scale.width;
+    const screenHeight = this.scale.height;
+
+    // Resize the texture
+    this.vignetteTexture.resize(screenWidth, screenHeight);
+    this.vignetteTexture.clear();
+
+    const graphics = this.make.graphics({ x: 0, y: 0 });
+
+    // Calculate vignette dimensions - relative to screen size
+    const maxDimension = Math.max(screenWidth, screenHeight);
+
+    // Create edge-based vignette with smooth gradient falloff
+    const edgeWidth = maxDimension * 0.25;
+    const steps = 32;
+
+    for (let i = 0; i < steps; i++) {
+      const t = i / steps;
+      const alpha = Math.pow(1 - t, 2.5) * 0.85; // Exponential falloff
+      const offset = t * edgeWidth;
+
+      // Blend from deep crimson at edges to brighter red inside
+      const r = Math.floor(0x22 + (0xcc - 0x22) * t);
+      const color = (r << 16) | 0x0000;
+
+      graphics.lineStyle(edgeWidth / steps + 1, color, alpha);
+
+      // Draw rounded rectangle frame
+      if (offset < Math.min(screenWidth, screenHeight) / 2) {
+        graphics.strokeRoundedRect(
+          offset,
+          offset,
+          screenWidth - offset * 2,
+          screenHeight - offset * 2,
+          Math.max(0, 30 - offset * 0.5)
+        );
+      }
+    }
+
+    // Add corner bloom effects for extra polish
+    const corners = [
+      { x: 0, y: 0 },
+      { x: screenWidth, y: 0 },
+      { x: 0, y: screenHeight },
+      { x: screenWidth, y: screenHeight },
+    ];
+
+    for (const corner of corners) {
+      const bloomRadius = maxDimension * 0.35;
+      const bloomSteps = 20;
+
+      for (let i = 0; i < bloomSteps; i++) {
+        const t = i / bloomSteps;
+        const radius = bloomRadius * (1 - t);
+        const alpha = Math.pow(t, 0.5) * 0.4;
+
+        const r = Math.floor(0x88 + (0xff - 0x88) * (1 - t));
+        const color = (r << 16) | 0x0000;
+
+        graphics.fillStyle(color, alpha);
+        graphics.fillCircle(corner.x, corner.y, radius);
+      }
+    }
+
+    // Subtle edge glow line
+    graphics.lineStyle(2, 0xff2200, 0.6);
+    graphics.strokeRect(0, 0, screenWidth, screenHeight);
+
+    graphics.lineStyle(1, 0xff4400, 0.4);
+    graphics.strokeRect(2, 2, screenWidth - 4, screenHeight - 4);
+
+    // Draw to render texture
+    this.vignetteTexture.draw(graphics);
+    graphics.destroy();
   }
 
   private checkOffScreenAttack(worldX: number, worldY: number): void {
@@ -705,7 +830,10 @@ export class OverlayScene extends Phaser.Scene {
       this.drawTacticalOverlay();
     }
 
-    // Draw screen effects
+    // Update premium damage vignette with smooth animation
+    this.updateDamageVignette(now, dt);
+
+    // Draw other screen effects (ability flash, nuke warning)
     this.updateScreenEffects(now);
 
     // Draw combat intensity border
@@ -721,6 +849,63 @@ export class OverlayScene extends Phaser.Scene {
 
     // Cleanup expired splashes
     this.cleanupSplashes(now);
+  }
+
+  /**
+   * Update the premium damage vignette with smooth animations
+   */
+  private updateDamageVignette(now: number, dt: number): void {
+    if (!this.vignetteTexture) return;
+
+    const state = this.damageVignetteState;
+
+    // Calculate target intensity from active damage effects
+    let targetIntensity = 0;
+    for (const effect of this.screenEffects) {
+      if (effect.type === 'damage_vignette') {
+        const elapsed = now - effect.startTime;
+        const progress = elapsed / effect.duration;
+        if (progress < 1) {
+          // Use a more interesting curve - quick rise, slow fall
+          const curve = progress < 0.15
+            ? progress / 0.15 // Fast rise
+            : Math.pow(1 - (progress - 0.15) / 0.85, 1.5); // Slow exponential fall
+          targetIntensity = Math.max(targetIntensity, effect.intensity * curve);
+        }
+      }
+    }
+
+    state.targetIntensity = targetIntensity;
+
+    // Smooth lerp to target (fast rise, slower fall)
+    const lerpSpeed = state.currentIntensity < state.targetIntensity ? 15 : 4;
+    state.currentIntensity = state.currentIntensity + (state.targetIntensity - state.currentIntensity) * Math.min(1, lerpSpeed * dt);
+
+    // Add subtle pulse when taking damage
+    state.pulsePhase += dt * 8;
+    const pulse = state.currentIntensity > 0.05
+      ? 1 + Math.sin(state.pulsePhase) * 0.08 * state.currentIntensity
+      : 1;
+
+    // Calculate final alpha with pulse
+    const finalAlpha = state.currentIntensity * pulse;
+
+    // Apply to vignette texture
+    if (finalAlpha > 0.01) {
+      this.vignetteTexture.setAlpha(finalAlpha);
+      this.vignetteTexture.setVisible(true);
+
+      // Subtle scale pulse for extra punch on high damage
+      if (state.currentIntensity > 0.3) {
+        const scalePulse = 1 + (state.currentIntensity - 0.3) * 0.02 * Math.sin(state.pulsePhase * 1.5);
+        this.vignetteTexture.setScale(scalePulse);
+      } else {
+        this.vignetteTexture.setScale(1);
+      }
+    } else {
+      this.vignetteTexture.setVisible(false);
+      state.pulsePhase = 0;
+    }
   }
 
   private drawTacticalOverlay(): void {
@@ -779,17 +964,13 @@ export class OverlayScene extends Phaser.Scene {
 
       switch (effect.type) {
         case 'damage_vignette':
-          // Red vignette from edges
-          this.vignetteGraphics.fillStyle(0xff0000, alpha * 0.3);
-          this.vignetteGraphics.fillRect(0, 0, 40, screenHeight);
-          this.vignetteGraphics.fillRect(screenWidth - 40, 0, 40, screenHeight);
-          this.vignetteGraphics.fillRect(0, 0, screenWidth, 40);
-          this.vignetteGraphics.fillRect(0, screenHeight - 40, screenWidth, 40);
+          // Handled by premium updateDamageVignette - just keep the effect alive for timing
           break;
 
         case 'ability_flash':
-          // White flash
-          this.vignetteGraphics.fillStyle(0xffffff, alpha * 0.5);
+          // White flash with smooth falloff
+          const flashCurve = Math.pow(1 - progress, 2);
+          this.vignetteGraphics.fillStyle(0xffffff, alpha * 0.5 * flashCurve);
           this.vignetteGraphics.fillRect(0, 0, screenWidth, screenHeight);
           break;
 
@@ -948,6 +1129,7 @@ export class OverlayScene extends Phaser.Scene {
     this.threatZoneGraphics?.destroy();
     this.rallyPathGraphics?.destroy();
     this.vignetteGraphics?.destroy();
+    this.vignetteTexture?.destroy();
     this.alertContainer?.destroy();
     this.splashContainer?.destroy();
 
@@ -961,5 +1143,6 @@ export class OverlayScene extends Phaser.Scene {
     this.alerts = [];
     this.abilitySplashes = [];
     this.edgeWarnings.clear();
+    this.vignetteTexture = null;
   }
 }
