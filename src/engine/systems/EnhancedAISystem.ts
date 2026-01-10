@@ -2054,11 +2054,6 @@ export class EnhancedAISystem extends System {
       return;
     }
 
-    // Debug log base position for player1
-    if (ai.playerId === 'player1' && this.game.getCurrentTick() === 20) {
-      console.log(`[EnhancedAI] ${ai.playerId}: Base at (${basePos.x.toFixed(1)}, ${basePos.y.toFixed(1)})`);
-    }
-
     // Find nearby mineral patches
     const resources = this.world.getEntitiesWith('Resource', 'Transform');
     const nearbyMinerals: { entityId: number; x: number; y: number; distance: number }[] = [];
@@ -2114,6 +2109,9 @@ export class EnhancedAISystem extends System {
     const idleWorkers: number[] = [];
     let gasWorkers = 0;
 
+    // Track all worker states for debugging
+    const workerStates: Record<string, number> = {};
+
     for (const entity of units) {
       const selectable = entity.get<Selectable>('Selectable');
       const unit = entity.get<Unit>('Unit');
@@ -2124,6 +2122,9 @@ export class EnhancedAISystem extends System {
       if (selectable.playerId !== ai.playerId) continue;
       if (!unit.isWorker) continue;
       if (health.isDead()) continue;
+
+      // Track worker state counts
+      workerStates[unit.state] = (workerStates[unit.state] || 0) + 1;
 
       // Count workers on gas
       if (unit.state === 'gathering' && unit.gatherTargetId !== null) {
@@ -2140,18 +2141,14 @@ export class EnhancedAISystem extends System {
       if (unit.state === 'idle') {
         idleWorkers.push(entity.id);
       }
-
-      // Debug: log worker states for player1
-      if (ai.playerId === 'player1' && this.game.getCurrentTick() === 20) {
-        console.log(`[EnhancedAI] ${ai.playerId} worker ${entity.id}: state=${unit.state}`);
-      }
     }
 
     if (nearbyMinerals.length === 0 && refineries.length === 0) return;
 
     // Debug log for player1
     if (ai.playerId === 'player1' && this.game.getCurrentTick() % 100 === 0) {
-      console.log(`[EnhancedAI] ${ai.playerId}: idle workers=${idleWorkers.length}, nearby minerals=${nearbyMinerals.length}`);
+      const statesStr = Object.entries(workerStates).map(([k, v]) => `${k}:${v}`).join(', ');
+      console.log(`[EnhancedAI] ${ai.playerId}: worker states=[${statesStr}], nearby minerals=${nearbyMinerals.length}`);
     }
 
     // Assign idle workers - prioritize getting 3 workers per refinery first
