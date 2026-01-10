@@ -1,6 +1,7 @@
 import * as Phaser from 'phaser';
 import { EventBus } from '@/engine/core/EventBus';
-import { CELL_SIZE, DEPTH } from '../constants';
+import { DEPTH } from '../constants';
+import { useProjectionStore } from '@/store/projectionStore';
 
 interface AttackEffect {
   startX: number;
@@ -74,19 +75,23 @@ export class EffectsRenderer {
       damageType: string;
     }) => {
       if (data.attackerPos && data.targetPos) {
-        // Convert grid to pixel coordinates
+        // Project world coordinates to screen space (accounts for terrain height and camera)
+        const projectionStore = useProjectionStore.getState();
+        const attackerScreen = projectionStore.projectToScreen(data.attackerPos.x, data.attackerPos.y);
+        const targetScreen = projectionStore.projectToScreen(data.targetPos.x, data.targetPos.y);
+
         this.createAttackEffect(
-          data.attackerPos.x * CELL_SIZE, data.attackerPos.y * CELL_SIZE,
-          data.targetPos.x * CELL_SIZE, data.targetPos.y * CELL_SIZE,
+          attackerScreen.x, attackerScreen.y,
+          targetScreen.x, targetScreen.y,
           data.damageType
         );
 
-        this.createDamageNumber(data.targetPos.x * CELL_SIZE, data.targetPos.y * CELL_SIZE, data.damage);
+        this.createDamageNumber(targetScreen.x, targetScreen.y, data.damage);
 
         if (data.attackerId !== undefined && data.targetId !== undefined) {
           this.trackFocusFire(data.attackerId, data.targetId, {
-            x: data.targetPos.x * CELL_SIZE,
-            y: data.targetPos.y * CELL_SIZE
+            x: targetScreen.x,
+            y: targetScreen.y
           });
         }
       }
@@ -97,8 +102,10 @@ export class EffectsRenderer {
       position?: { x: number; y: number };
     }) => {
       if (data.position) {
-        // Convert grid to pixel coordinates
-        this.createDeathEffect(data.position.x * CELL_SIZE, data.position.y * CELL_SIZE);
+        // Project world coordinates to screen space
+        const projectionStore = useProjectionStore.getState();
+        const screenPos = projectionStore.projectToScreen(data.position.x, data.position.y);
+        this.createDeathEffect(screenPos.x, screenPos.y);
       }
       if (data.entityId !== undefined) {
         this.clearFocusFire(data.entityId);

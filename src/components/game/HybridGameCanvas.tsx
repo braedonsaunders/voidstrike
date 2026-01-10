@@ -34,6 +34,7 @@ import { Health } from '@/engine/components/Health';
 import { Building } from '@/engine/components/Building';
 import AssetManager from '@/assets/AssetManager';
 import { OverlayScene } from '@/phaser/scenes/OverlayScene';
+import { useProjectionStore } from '@/store/projectionStore';
 
 /**
  * HYBRID GAME CANVAS
@@ -193,6 +194,11 @@ export function HybridGameCanvas() {
       const terrain = environment.terrain;
 
       camera.setTerrainHeightFunction((x, z) => terrain.getHeightAt(x, z));
+
+      // Set up projection store for Phaser overlay to use proper 3D->2D projection
+      useProjectionStore.getState().setWorldToScreen((worldX, worldZ, worldY) => {
+        return camera.worldToScreen(worldX, worldZ, worldY);
+      });
 
       // Create terrain grid
       const grid = new TerrainGrid(mapWidth, mapHeight, 1);
@@ -482,6 +488,9 @@ export function HybridGameCanvas() {
 
     return () => {
       window.removeEventListener('resize', handleResize);
+
+      // Clear projection store
+      useProjectionStore.getState().setWorldToScreen(null);
 
       // Cleanup Three.js
       rendererRef.current?.dispose();
