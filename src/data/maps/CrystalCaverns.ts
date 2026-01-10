@@ -7,6 +7,7 @@ import {
   fillTerrainRect,
   fillTerrainCircle,
   createRampInTerrain,
+  createRaisedPlatform,
   createForestCorridor,
   createRiver,
   createLake,
@@ -195,47 +196,39 @@ function generateCrystalCaverns(): MapData {
   fillTerrainRect(terrain, 0, MAP_HEIGHT - 10, MAP_WIDTH, 10, 'unwalkable');
 
   // ========================================
-  // PLAYER 1 MAIN BASE (Left side) - Elevation 2
-  // Almost fully enclosed by cliffs, single ramp exit
+  // RAMPS - Must be created BEFORE raised platforms
   // ========================================
-  fillTerrainCircle(terrain, 30, 90, 25, 'ground', 2);
-
-  // P1 Main cliff walls - surround ~85% of base
-  fillTerrainRect(terrain, 10, 60, 15, 60, 'unwalkable');    // West wall
-  fillTerrainRect(terrain, 10, 60, 45, 12, 'unwalkable');    // North wall
-  fillTerrainRect(terrain, 10, 108, 45, 12, 'unwalkable');   // South wall
-  // Leave opening for ramp on east side (around y=85-95)
-  fillTerrainRect(terrain, 45, 60, 10, 22, 'unwalkable');    // North-east corner
-  fillTerrainRect(terrain, 45, 98, 10, 22, 'unwalkable');    // South-east corner
-
-  // ========================================
-  // PLAYER 2 MAIN BASE (Right side) - Elevation 2
-  // ========================================
-  fillTerrainCircle(terrain, 170, 90, 25, 'ground', 2);
-
-  // P2 Main cliff walls
-  fillTerrainRect(terrain, 175, 60, 15, 60, 'unwalkable');   // East wall
-  fillTerrainRect(terrain, 145, 60, 45, 12, 'unwalkable');   // North wall
-  fillTerrainRect(terrain, 145, 108, 45, 12, 'unwalkable');  // South wall
-  // Leave opening for ramp on west side
-  fillTerrainRect(terrain, 145, 60, 10, 22, 'unwalkable');   // North-west corner
-  fillTerrainRect(terrain, 145, 98, 10, 22, 'unwalkable');   // South-west corner
+  const ramps = [
+    // P1 Main ramp (east exit)
+    { x: 48, y: 85, width: 8, height: 10, direction: 'east' as const, fromElevation: 2 as const, toElevation: 0 as const },
+    // P2 Main ramp (west exit)
+    { x: 144, y: 85, width: 8, height: 10, direction: 'west' as const, fromElevation: 2 as const, toElevation: 0 as const },
+    // P1 Natural ramp
+    { x: 55, y: 68, width: 6, height: 8, direction: 'south' as const, fromElevation: 1 as const, toElevation: 0 as const },
+    // P2 Natural ramp
+    { x: 145, y: 108, width: 6, height: 8, direction: 'north' as const, fromElevation: 1 as const, toElevation: 0 as const },
+  ];
+  ramps.forEach(ramp => createRampInTerrain(terrain, ramp));
 
   // ========================================
-  // NATURAL EXPANSIONS - Elevation 1
+  // PLAYER 1 MAIN BASE (Left side) - Raised platform with cliff ring (Elevation 2)
+  // ========================================
+  createRaisedPlatform(terrain, 30, 90, 25, 2, 4);
+
+  // ========================================
+  // PLAYER 2 MAIN BASE (Right side) - Raised platform with cliff ring (Elevation 2)
+  // ========================================
+  createRaisedPlatform(terrain, 170, 90, 25, 2, 4);
+
+  // ========================================
+  // NATURAL EXPANSIONS - Raised platforms with cliff ring (Elevation 1)
   // ========================================
 
   // P1 Natural (northeast of main)
-  fillTerrainCircle(terrain, 55, 55, 18, 'ground', 1);
-  // Natural chokepoint walls
-  fillTerrainRect(terrain, 35, 35, 15, 12, 'unwalkable');
-  fillTerrainRect(terrain, 65, 35, 15, 12, 'unwalkable');
+  createRaisedPlatform(terrain, 55, 55, 16, 1, 3);
 
   // P2 Natural (southwest of main)
-  fillTerrainCircle(terrain, 145, 125, 18, 'ground', 1);
-  // Natural chokepoint walls
-  fillTerrainRect(terrain, 120, 133, 15, 12, 'unwalkable');
-  fillTerrainRect(terrain, 150, 133, 15, 12, 'unwalkable');
+  createRaisedPlatform(terrain, 145, 125, 16, 1, 3);
 
   // ========================================
   // THIRD EXPANSIONS - Elevation 0
@@ -322,22 +315,6 @@ function generateCrystalCaverns(): MapData {
   // Light forests for cover
   fillFeatureCircle(terrain, 75, 65, 7, 'forest_light');
   fillFeatureCircle(terrain, 125, 115, 7, 'forest_light');
-
-  // ========================================
-  // RAMPS - Narrow for defensibility (6-8 tiles)
-  // ========================================
-  const ramps = [
-    // P1 Main ramp (east exit)
-    { x: 48, y: 85, width: 8, height: 10, direction: 'east' as const, fromElevation: 2 as const, toElevation: 0 as const },
-    // P2 Main ramp (west exit)
-    { x: 144, y: 85, width: 8, height: 10, direction: 'west' as const, fromElevation: 2 as const, toElevation: 0 as const },
-    // P1 Natural ramp
-    { x: 55, y: 68, width: 6, height: 8, direction: 'south' as const, fromElevation: 1 as const, toElevation: 0 as const },
-    // P2 Natural ramp
-    { x: 145, y: 108, width: 6, height: 8, direction: 'north' as const, fromElevation: 1 as const, toElevation: 0 as const },
-  ];
-
-  ramps.forEach(ramp => createRampInTerrain(terrain, ramp));
 
   // ========================================
   // EXPANSIONS WITH RESOURCES
