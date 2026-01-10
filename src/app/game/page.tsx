@@ -7,10 +7,11 @@ import { HUD } from '@/components/game/HUD';
 import { LoadingScreen } from '@/components/ui/LoadingScreen';
 import { useGameSetupStore } from '@/store/gameSetupStore';
 
-// Dynamic import for Hybrid game canvas (Three.js + Phaser overlay)
+// Dynamic import for WebGPU game canvas (Three.js WebGPU + Phaser overlay)
+// Uses WebGPU with automatic WebGL fallback for older browsers
 // No SSR - both Three.js and Phaser require browser
-const HybridGameCanvas = dynamic(
-  () => import('@/components/game/HybridGameCanvas').then((mod) => mod.HybridGameCanvas),
+const WebGPUGameCanvas = dynamic(
+  () => import('@/components/game/WebGPUGameCanvas').then((mod) => mod.WebGPUGameCanvas),
   { ssr: false }
 );
 
@@ -39,7 +40,7 @@ export default function GamePage() {
   return (
     <div className="game-container w-screen h-screen bg-black overflow-hidden">
       <Suspense fallback={<LoadingScreen />}>
-        <HybridGameCanvas />
+        <WebGPUGameCanvas />
         <HUD />
       </Suspense>
     </div>

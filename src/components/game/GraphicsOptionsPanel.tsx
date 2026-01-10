@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useEffect } from 'react';
-import { useUIStore, GraphicsSettings } from '@/store/uiStore';
+import { useUIStore, GraphicsSettings, RendererAPI } from '@/store/uiStore';
 import { setEdgeScrollEnabled } from '@/store/cameraStore';
 
 const buttonStyle = (enabled: boolean) => ({
@@ -27,6 +27,7 @@ const sectionStyle: React.CSSProperties = { marginBottom: '16px', paddingBottom:
 export function GraphicsOptionsPanel() {
   const showGraphicsOptions = useUIStore((state) => state.showGraphicsOptions);
   const graphicsSettings = useUIStore((state) => state.graphicsSettings);
+  const rendererAPI = useUIStore((state) => state.rendererAPI);
   const toggleGraphicsOptions = useUIStore((state) => state.toggleGraphicsOptions);
   const toggleGraphicsSetting = useUIStore((state) => state.toggleGraphicsSetting);
   const setGraphicsSetting = useUIStore((state) => state.setGraphicsSetting);
@@ -81,6 +82,24 @@ export function GraphicsOptionsPanel() {
         >
           ✕
         </button>
+      </div>
+
+      {/* Renderer API Indicator */}
+      <div style={{ ...sectionStyle, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+        <span style={{ color: '#888', fontSize: '12px' }}>Renderer</span>
+        <span
+          style={{
+            padding: '3px 10px',
+            borderRadius: '12px',
+            fontSize: '11px',
+            fontWeight: 'bold',
+            backgroundColor: rendererAPI === 'WebGPU' ? 'rgba(34, 197, 94, 0.2)' : 'rgba(234, 179, 8, 0.2)',
+            color: rendererAPI === 'WebGPU' ? '#22c55e' : '#eab308',
+            border: `1px solid ${rendererAPI === 'WebGPU' ? '#22c55e' : '#eab308'}`,
+          }}
+        >
+          {rendererAPI || 'Unknown'}
+        </span>
       </div>
 
       {/* === POST-PROCESSING MASTER === */}

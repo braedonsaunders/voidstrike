@@ -182,6 +182,9 @@ export function WebGPUGameCanvas() {
       renderContextRef.current = renderContext;
       setIsWebGPU(renderContext.isWebGPU);
 
+      // Set renderer API in UI store for graphics options display
+      useUIStore.getState().setRendererAPI(renderContext.isWebGPU ? 'WebGPU' : 'WebGL');
+
       console.log(`[WebGPUGameCanvas] Using ${renderContext.isWebGPU ? 'WebGPU' : 'WebGL'} backend`);
       if (renderContext.supportsCompute) {
         console.log('[WebGPUGameCanvas] GPU Compute shaders available');
