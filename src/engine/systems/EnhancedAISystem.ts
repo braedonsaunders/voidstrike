@@ -68,65 +68,68 @@ interface AIPlayer {
 
 // Build order definitions for different difficulties
 // Includes tech progression with research modules for advanced units
+// Build orders with supply conditions that can actually be reached
+// AI starts with 6 workers (supply 6), max supply 11 from HQ
+// Supply conditions should be achievable with the workers trained before that step
 const BUILD_ORDERS: Record<AIDifficulty, BuildOrderStep[]> = {
   easy: [
     { type: 'unit', id: 'fabricator' },
     { type: 'unit', id: 'fabricator' },
-    { type: 'building', id: 'supply_cache', supply: 10 },
-    { type: 'building', id: 'infantry_bay', supply: 12 },
+    { type: 'building', id: 'supply_cache' }, // No supply gate - build when affordable
+    { type: 'building', id: 'infantry_bay' }, // Build immediately after supply_cache
     { type: 'unit', id: 'trooper' },
     { type: 'unit', id: 'trooper' },
-    { type: 'building', id: 'extractor', supply: 18 },
+    { type: 'building', id: 'extractor', supply: 10 }, // After some army is built
   ],
   medium: [
     { type: 'unit', id: 'fabricator' },
     { type: 'unit', id: 'fabricator' },
     { type: 'unit', id: 'fabricator' },
-    { type: 'building', id: 'supply_cache', supply: 14 },
-    { type: 'building', id: 'infantry_bay', supply: 15 },
-    { type: 'building', id: 'extractor', supply: 16 },
+    { type: 'building', id: 'supply_cache' }, // No supply gate
+    { type: 'building', id: 'infantry_bay' },
+    { type: 'building', id: 'extractor' },
     { type: 'unit', id: 'trooper' },
-    { type: 'building', id: 'infantry_bay', supply: 20 },
-    { type: 'building', id: 'forge', supply: 24 },
-    { type: 'building', id: 'research_module', supply: 28 }, // For breachers/devastators
+    { type: 'building', id: 'infantry_bay', supply: 14 }, // After some economy
+    { type: 'building', id: 'forge', supply: 18 },
+    { type: 'building', id: 'research_module', supply: 22 }, // For breachers/devastators
   ],
   hard: [
     { type: 'unit', id: 'fabricator' },
     { type: 'unit', id: 'fabricator' },
     { type: 'unit', id: 'fabricator' },
-    { type: 'building', id: 'supply_cache', supply: 14 },
-    { type: 'building', id: 'infantry_bay', supply: 15 },
-    { type: 'building', id: 'extractor', supply: 16 },
-    { type: 'building', id: 'research_module', supply: 20 }, // Early tech for breachers
-    { type: 'building', id: 'forge', supply: 22 },
+    { type: 'building', id: 'supply_cache' }, // No supply gate
+    { type: 'building', id: 'infantry_bay' },
+    { type: 'building', id: 'extractor' },
+    { type: 'building', id: 'research_module', supply: 12 }, // Early tech for breachers
+    { type: 'building', id: 'forge', supply: 16 },
     { type: 'unit', id: 'breacher' },
-    { type: 'building', id: 'research_module', supply: 26 }, // Tech on forge for devastators
-    { type: 'building', id: 'hangar', supply: 30 },
+    { type: 'building', id: 'research_module', supply: 20 }, // Tech on forge for devastators
+    { type: 'building', id: 'hangar', supply: 24 },
   ],
   very_hard: [
     { type: 'unit', id: 'fabricator' },
     { type: 'unit', id: 'fabricator' },
-    { type: 'building', id: 'supply_cache', supply: 13 },
-    { type: 'building', id: 'infantry_bay', supply: 14 },
-    { type: 'building', id: 'extractor', supply: 15 },
-    { type: 'building', id: 'research_module', supply: 18 }, // Early tech
-    { type: 'building', id: 'forge', supply: 20 },
-    { type: 'building', id: 'research_module', supply: 24 }, // Forge tech
-    { type: 'building', id: 'hangar', supply: 28 },
-    { type: 'building', id: 'infantry_bay', supply: 30 },
-    { type: 'building', id: 'research_module', supply: 34 }, // Hangar tech
+    { type: 'building', id: 'supply_cache' }, // No supply gate
+    { type: 'building', id: 'infantry_bay' },
+    { type: 'building', id: 'extractor' },
+    { type: 'building', id: 'research_module', supply: 10 }, // Early tech
+    { type: 'building', id: 'forge', supply: 14 },
+    { type: 'building', id: 'research_module', supply: 18 }, // Forge tech
+    { type: 'building', id: 'hangar', supply: 22 },
+    { type: 'building', id: 'infantry_bay', supply: 26 },
+    { type: 'building', id: 'research_module', supply: 30 }, // Hangar tech
   ],
   insane: [
     { type: 'unit', id: 'fabricator' },
-    { type: 'building', id: 'supply_cache', supply: 12 },
-    { type: 'building', id: 'infantry_bay', supply: 13 },
-    { type: 'building', id: 'extractor', supply: 14 },
-    { type: 'building', id: 'research_module', supply: 16 }, // Immediate tech
-    { type: 'building', id: 'forge', supply: 18 },
-    { type: 'building', id: 'research_module', supply: 20 }, // Forge tech
-    { type: 'building', id: 'hangar', supply: 24 },
-    { type: 'building', id: 'research_module', supply: 26 }, // Hangar tech
-    { type: 'building', id: 'arsenal', supply: 30 },
+    { type: 'building', id: 'supply_cache' }, // No supply gate - rush
+    { type: 'building', id: 'infantry_bay' },
+    { type: 'building', id: 'extractor' },
+    { type: 'building', id: 'research_module', supply: 9 }, // Immediate tech
+    { type: 'building', id: 'forge', supply: 12 },
+    { type: 'building', id: 'research_module', supply: 16 }, // Forge tech
+    { type: 'building', id: 'hangar', supply: 20 },
+    { type: 'building', id: 'research_module', supply: 24 }, // Hangar tech
+    { type: 'building', id: 'arsenal', supply: 28 },
   ],
 };
 
