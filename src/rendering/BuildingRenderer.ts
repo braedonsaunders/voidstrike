@@ -453,11 +453,12 @@ export class BuildingRenderer {
       meshData.group.position.set(transform.x, terrainHeight, transform.y);
 
       // Construction animation based on building state
-      // States: 'waiting_for_worker', 'constructing', 'complete', 'lifting', 'flying', 'landing', 'destroyed'
+      // States: 'waiting_for_worker', 'constructing', 'paused', 'complete', 'lifting', 'flying', 'landing', 'destroyed'
       const isConstructing = building.state === 'constructing';
       const isWaitingForWorker = building.state === 'waiting_for_worker';
-      // All other states (complete, lifting, flying, landing) should show full opacity building
-      const shouldShowComplete = !isConstructing && !isWaitingForWorker;
+      const isPaused = building.state === 'paused';
+      // Only truly complete states should show full opacity building (not paused construction)
+      const shouldShowComplete = !isConstructing && !isWaitingForWorker && !isPaused;
 
       if (shouldShowComplete) {
         // Complete/operational building - full opacity, no construction effects
@@ -479,6 +480,26 @@ export class BuildingRenderer {
           }
         });
         // Hide construction effect while waiting
+        if (meshData.constructionEffect) {
+          meshData.constructionEffect.visible = false;
+        }
+      } else if (isPaused) {
+        // Construction paused (SC2-style) - show partially built state without active effects
+        const progress = building.buildProgress;
+        const buildHeight = meshData.buildingHeight * progress;
+        const clipY = terrainHeight + buildHeight;
+        const clipPlane = new THREE.Plane(new THREE.Vector3(0, -1, 0), clipY);
+
+        // Building is semi-transparent with clipping plane showing partial construction
+        const opacity = 0.7 + progress * 0.3;
+        meshData.group.scale.setScalar(1);
+        meshData.group.traverse((child) => {
+          if (child instanceof THREE.Mesh) {
+            this.setMaterialOpacity(child, opacity, true, clipPlane);
+          }
+        });
+
+        // Hide construction particles when paused (no active construction)
         if (meshData.constructionEffect) {
           meshData.constructionEffect.visible = false;
         }
