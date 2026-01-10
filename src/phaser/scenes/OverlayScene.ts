@@ -311,7 +311,24 @@ export class OverlayScene extends Phaser.Scene {
       this.showAlert(data.abilityName.toUpperCase(), data.color ?? 0xffffff, 2000);
     });
 
-    // Victory/Defeat events
+    // Player eliminated event (may or may not end the game)
+    this.eventBus.on('game:playerEliminated', (data: {
+      playerId: string;
+      reason: string;
+      duration: number;
+      gameOver: boolean;
+      remainingPlayers: number;
+    }) => {
+      const localPlayerId = getLocalPlayerId();
+      // Show defeat screen for local player when they are eliminated
+      if (localPlayerId && data.playerId === localPlayerId) {
+        // canSpectate = true if game continues (other players still fighting)
+        const canSpectate = !data.gameOver && data.remainingPlayers >= 2;
+        this.showGameEndOverlay(false, data.duration, data.reason, canSpectate);
+      }
+    });
+
+    // Victory/Defeat events - game is completely over
     this.eventBus.on('game:victory', (data: {
       winner: string;
       loser: string;
@@ -320,11 +337,13 @@ export class OverlayScene extends Phaser.Scene {
     }) => {
       const localPlayerId = getLocalPlayerId();
       const isVictory = localPlayerId ? data.winner === localPlayerId : null;
-      this.showGameEndOverlay(isVictory, data.duration, data.reason);
+      // Game is over - no spectating option (canSpectate = false)
+      this.showGameEndOverlay(isVictory, data.duration, data.reason, false);
     });
 
     this.eventBus.on('game:draw', (data: { duration: number }) => {
-      this.showGameEndOverlay(null, data.duration, 'draw');
+      // Game is over - no spectating option
+      this.showGameEndOverlay(null, data.duration, 'draw', false);
     });
   }
 
@@ -486,8 +505,18 @@ export class OverlayScene extends Phaser.Scene {
 
   /**
    * Show full-screen victory or defeat overlay
+   * @param isVictory - true for victory, false for defeat, null for draw
+   * @param duration - game duration in seconds
+   * @param reason - reason for game end
+   * @param canSpectate - whether player can continue spectating (game continues with other players)
    */
-  private showGameEndOverlay(isVictory: boolean | null, duration: number, reason: string): void {
+  private showGameEndOverlay(isVictory: boolean | null, duration: number, reason: string, canSpectate: boolean = false): void {
+    // If overlay is already showing, don't create another one
+    // (This can happen if player is eliminated and then game ends shortly after)
+    if (this.gameEndOverlay || this.gameEndContainer) {
+      return;
+    }
+
     const screenWidth = this.scale.width;
     const screenHeight = this.scale.height;
 
@@ -565,9 +594,8 @@ export class OverlayScene extends Phaser.Scene {
     durationText.setOrigin(0.5, 0.5);
     container.add(durationText);
 
-    // For defeats (not victory or draw), show "Continue Spectating" button
-    // This allows player to dismiss the overlay and watch the rest of the game
-    if (isVictory === false) {
+    // Show "Continue Spectating" button only if game continues and player can spectate
+    if (canSpectate) {
       // Continue Spectating button
       const spectateButton = this.add.text(0, 110, '[ CONTINUE SPECTATING ]', {
         fontSize: '24px',
@@ -590,9 +618,13 @@ export class OverlayScene extends Phaser.Scene {
       });
 
       // Click handler - hide overlay and enable spectator mode
+      // Use setTimeout to avoid React state update conflicts
       spectateButton.on('pointerdown', () => {
         this.hideGameEndOverlay();
-        enableSpectatorMode();
+        // Delay state update to avoid React render conflicts
+        setTimeout(() => {
+          enableSpectatorMode();
+        }, 0);
         // Transition back to gameplay music
         MusicPlayer.play('gameplay');
       });
@@ -608,7 +640,7 @@ export class OverlayScene extends Phaser.Scene {
       hintText.setOrigin(0.5, 0.5);
       container.add(hintText);
     } else {
-      // Victory or draw - just show return to menu hint
+      // No spectating option - just show return to menu hint
       const hintText = this.add.text(0, 120, 'Press ESCAPE to return to menu', {
         fontSize: '20px',
         fontFamily: 'Inter, sans-serif',
