@@ -761,7 +761,7 @@ export class BuildingPlacementSystem extends System {
       }
 
       // Remove the building entity
-      this.world.removeEntity(entity.id);
+      this.world.destroyEntity(entity.id);
     }
   }
 }
