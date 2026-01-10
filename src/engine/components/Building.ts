@@ -6,6 +6,7 @@ export type AddonType = 'tech_lab' | 'reactor' | null;
 export interface BuildingDefinition {
   id: string;
   name: string;
+  description?: string;
   faction: string;
   mineralCost: number;
   vespeneCost: number;

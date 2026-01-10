@@ -100,7 +100,12 @@ export function HybridGameCanvas() {
   const lastControlGroupTap = useRef<{ group: number; time: number } | null>(null);
   const subgroupIndexRef = useRef(0);
 
-  const { isBuilding, buildingType, isSettingRallyPoint, abilityTargetMode } = useGameStore();
+  // Double-click detection for select-all-of-type
+  const lastClickRef = useRef<{ time: number; x: number; y: number } | null>(null);
+  const DOUBLE_CLICK_TIME = 400; // ms
+  const DOUBLE_CLICK_DIST = 10; // pixels
+
+  const { isBuilding, buildingType, isSettingRallyPoint, isRepairMode, abilityTargetMode } = useGameStore();
 
   // Initialize both Three.js and Phaser
   useEffect(() => {
@@ -580,6 +585,32 @@ export function HybridGameCanvas() {
           return;
         }
 
+        // Handle repair mode - right-click on repairable target
+        if (isRepairMode) {
+          const clickedEntity = findEntityAtPosition(gameRef.current, worldPos.x, worldPos.z);
+          if (clickedEntity) {
+            const building = clickedEntity.entity.get<Building>('Building');
+            const unit = clickedEntity.entity.get<Unit>('Unit');
+            const health = clickedEntity.entity.get<Health>('Health');
+            const selectable = clickedEntity.entity.get<Selectable>('Selectable');
+
+            // Can repair own buildings or mechanical units
+            if (selectable?.playerId === 'player1' && health && !health.isDead()) {
+              if (building || unit?.isMechanical) {
+                gameRef.current.eventBus.emit('command:repair', {
+                  entityIds: selectedUnits,
+                  targetId: clickedEntity.entity.id,
+                });
+                useGameStore.getState().setRepairMode(false);
+                return;
+              }
+            }
+          }
+          // Clicked on invalid target - cancel repair mode
+          useGameStore.getState().setRepairMode(false);
+          return;
+        }
+
         if (selectedUnits.length > 0) {
           const queue = e.shiftKey;
           const clickedEntity = findEntityAtPosition(gameRef.current, worldPos.x, worldPos.z);
@@ -654,7 +685,7 @@ export function HybridGameCanvas() {
         }
       }
     }
-  }, [isBuilding, buildingType, isAttackMove, isPatrolMode, isSettingRallyPoint, abilityTargetMode]);
+  }, [isBuilding, buildingType, isAttackMove, isPatrolMode, isSettingRallyPoint, isRepairMode, abilityTargetMode]);
 
   // Handle building placement preview start/stop
   useEffect(() => {
@@ -736,6 +767,7 @@ export function HybridGameCanvas() {
         const dy = Math.abs(end.z - start.z);
 
         if (dx > 1 || dy > 1) {
+          // Box selection
           game.eventBus.emit('selection:box', {
             startX: Math.min(start.x, end.x),
             startY: Math.min(start.z, end.z),
@@ -744,12 +776,30 @@ export function HybridGameCanvas() {
             additive: e.shiftKey,
             playerId: 'player1',
           });
+          lastClickRef.current = null; // Reset double-click on box select
         } else {
+          // Click selection - check for double-click
+          const now = Date.now();
+          let isDoubleClick = false;
+
+          if (lastClickRef.current) {
+            const timeDiff = now - lastClickRef.current.time;
+            const clickDx = Math.abs(e.clientX - lastClickRef.current.x);
+            const clickDy = Math.abs(e.clientY - lastClickRef.current.y);
+
+            isDoubleClick = timeDiff < DOUBLE_CLICK_TIME &&
+                           clickDx < DOUBLE_CLICK_DIST &&
+                           clickDy < DOUBLE_CLICK_DIST;
+          }
+
+          // Update last click
+          lastClickRef.current = { time: now, x: e.clientX, y: e.clientY };
+
           game.eventBus.emit('selection:click', {
             x: end.x,
             y: end.z,
             additive: e.shiftKey,
-            selectAllOfType: e.ctrlKey,
+            selectAllOfType: e.ctrlKey || isDoubleClick, // Ctrl+click OR double-click
             playerId: 'player1',
           });
         }
@@ -899,6 +949,7 @@ export function HybridGameCanvas() {
         case 'escape':
           if (isAttackMove) setIsAttackMove(false);
           else if (isPatrolMode) setIsPatrolMode(false);
+          else if (isRepairMode) useGameStore.getState().setRepairMode(false);
           else if (isSettingRallyPoint) useGameStore.getState().setRallyPointMode(false);
           else if (abilityTargetMode) useGameStore.getState().setAbilityTargetMode(null);
           else if (isBuilding) useGameStore.getState().setBuildingMode(null);
@@ -908,7 +959,16 @@ export function HybridGameCanvas() {
           {
             const store = useGameStore.getState();
             if (store.selectedUnits.length > 0) {
-              store.setRallyPointMode(true);
+              // Check if selected units are workers (repair) or buildings (rally)
+              const firstEntity = game.world.getEntity(store.selectedUnits[0]);
+              const unit = firstEntity?.get<Unit>('Unit');
+              const building = firstEntity?.get<Building>('Building');
+
+              if (unit?.isWorker && unit?.canRepair) {
+                store.setRepairMode(true);
+              } else if (building) {
+                store.setRallyPointMode(true);
+              }
             }
           }
           break;
@@ -923,7 +983,7 @@ export function HybridGameCanvas() {
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [isBuilding, isAttackMove, isPatrolMode, isSettingRallyPoint, abilityTargetMode]);
+  }, [isBuilding, isAttackMove, isPatrolMode, isSettingRallyPoint, isRepairMode, abilityTargetMode]);
 
   return (
     <div
@@ -991,6 +1051,14 @@ export function HybridGameCanvas() {
         <div className="absolute top-4 left-1/2 transform -translate-x-1/2 bg-black/80 px-4 py-2 rounded border border-yellow-600 z-20">
           <span className="text-yellow-400">
             Patrol Mode - Click destination, ESC to cancel
+          </span>
+        </div>
+      )}
+
+      {isRepairMode && (
+        <div className="absolute top-4 left-1/2 transform -translate-x-1/2 bg-black/80 px-4 py-2 rounded border border-cyan-600 z-20">
+          <span className="text-cyan-400">
+            🔧 Repair Mode - Right-click on building or mech unit, ESC to cancel
           </span>
         </div>
       )}

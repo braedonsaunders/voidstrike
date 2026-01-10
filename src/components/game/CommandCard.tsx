@@ -7,7 +7,7 @@ import { Building } from '@/engine/components/Building';
 import { Ability } from '@/engine/components/Ability';
 import { useEffect, useState } from 'react';
 import { UNIT_DEFINITIONS } from '@/data/units/dominion';
-import { BUILDING_DEFINITIONS } from '@/data/buildings/dominion';
+import { BUILDING_DEFINITIONS, RESEARCH_MODULE_UNITS } from '@/data/buildings/dominion';
 import { RESEARCH_DEFINITIONS } from '@/data/research/dominion';
 
 // Icon mappings for commands and units
@@ -19,6 +19,7 @@ const COMMAND_ICONS: Record<string, string> = {
   attack: '⚔',
   patrol: '↻',
   gather: '⛏',
+  repair: '🔧',
   rally: '⚑',
   build: '🔨',
   build_basic: '🏗',
@@ -199,6 +200,19 @@ export function CommandCard() {
             tooltip: 'Gather resources (right-click on minerals/gas)',
           });
 
+          // Repair command for workers
+          if (unit.canRepair) {
+            buttons.push({
+              id: 'repair',
+              label: 'Repair',
+              shortcut: 'R',
+              action: () => {
+                useGameStore.getState().setRepairMode(true);
+              },
+              tooltip: 'Repair buildings and mechanical units (right-click on damaged target)',
+            });
+          }
+
           // Build Basic submenu button
           buttons.push({
             id: 'build_basic',
@@ -244,6 +258,12 @@ export function CommandCard() {
 
           const canAfford = minerals >= def.mineralCost && vespene >= def.vespeneCost;
 
+          // Build tooltip with description and requirements
+          let tooltip = def.description || `Build ${def.name}`;
+          if (reqText) {
+            tooltip += ` (${reqText})`;
+          }
+
           buttons.push({
             id: `build_${buildingId}`,
             label: def.name,
@@ -252,13 +272,17 @@ export function CommandCard() {
               useGameStore.getState().setBuildingMode(buildingId);
             },
             isDisabled: !canAfford,
-            tooltip: reqText || `Build ${def.name}`,
+            tooltip,
             cost: { minerals: def.mineralCost, vespene: def.vespeneCost },
           });
         });
       }
     } else if (building && building.isComplete()) {
-      // Building commands - train units
+      // Get tech-gated units for this building
+      const techUnits = RESEARCH_MODULE_UNITS[building.buildingId] || [];
+      const hasTechLab = building.hasAddon() && building.hasTechLab();
+
+      // Building commands - train units (basic units from canProduce)
       building.canProduce.forEach((unitId) => {
         const unitDef = UNIT_DEFINITIONS[unitId];
         if (!unitDef) return;
@@ -277,10 +301,61 @@ export function CommandCard() {
             });
           },
           isDisabled: !canAfford || !hasSupply,
-          tooltip: `Train ${unitDef.name}` + (!hasSupply ? ' (Need more supply)' : ''),
+          tooltip: (unitDef.description || `Train ${unitDef.name}`) + (!hasSupply ? ' (Need more supply)' : ''),
           cost: { minerals: unitDef.mineralCost, vespene: unitDef.vespeneCost, supply: unitDef.supplyCost },
         });
       });
+
+      // Tech-gated units (from Research Module)
+      techUnits.forEach((unitId) => {
+        const unitDef = UNIT_DEFINITIONS[unitId];
+        if (!unitDef) return;
+
+        const canAfford = minerals >= unitDef.mineralCost && vespene >= unitDef.vespeneCost;
+        const hasSupply = supply + unitDef.supplyCost <= maxSupply;
+        const canTrain = hasTechLab && canAfford && hasSupply;
+
+        buttons.push({
+          id: `train_${unitId}`,
+          label: unitDef.name,
+          shortcut: unitDef.name.charAt(0).toUpperCase(),
+          action: () => {
+            if (hasTechLab) {
+              game.eventBus.emit('command:train', {
+                entityIds: selectedUnits,
+                unitType: unitId,
+              });
+            }
+          },
+          isDisabled: !canTrain,
+          tooltip: !hasTechLab
+            ? `${unitDef.description || unitDef.name} - Requires Research Module`
+            : (unitDef.description || `Train ${unitDef.name}`) + (!hasSupply ? ' (Need more supply)' : ''),
+          cost: { minerals: unitDef.mineralCost, vespene: unitDef.vespeneCost, supply: unitDef.supplyCost },
+        });
+      });
+
+      // Build Research Module addon button (if building supports addons and doesn't have one)
+      if (building.canHaveAddon && !building.hasAddon()) {
+        const moduleDef = BUILDING_DEFINITIONS['research_module'];
+        if (moduleDef) {
+          const canAffordModule = minerals >= moduleDef.mineralCost && vespene >= moduleDef.vespeneCost;
+          buttons.push({
+            id: 'build_research_module',
+            label: 'Tech Lab',
+            shortcut: 'T',
+            action: () => {
+              game.eventBus.emit('building:build_addon', {
+                buildingId: selectedUnits[0],
+                addonType: 'research_module',
+              });
+            },
+            isDisabled: !canAffordModule,
+            tooltip: moduleDef.description || 'Addon that unlocks advanced units and research.',
+            cost: { minerals: moduleDef.mineralCost, vespene: moduleDef.vespeneCost },
+          });
+        }
+      }
 
       // Research commands
       const store = useGameStore.getState();
@@ -357,7 +432,7 @@ export function CommandCard() {
               });
             },
             isDisabled: !canAfford || isUpgrading,
-            tooltip: `Upgrade to ${upgradeDef.name}` + (isUpgrading ? ' (Upgrading...)' : ''),
+            tooltip: (upgradeDef.description || `Upgrade to ${upgradeDef.name}`) + (isUpgrading ? ' (Upgrading...)' : ''),
             cost: { minerals: upgradeDef.mineralCost, vespene: upgradeDef.vespeneCost },
           });
         });

@@ -21,6 +21,7 @@ export interface TransformMode {
 export interface UnitDefinition {
   id: string;
   name: string;
+  description?: string;
   faction: string;
   mineralCost: number;
   vespeneCost: number;

@@ -38,6 +38,9 @@ export class BuildingPlacementSystem extends System {
 
     // Handle instant building completion (for testing/cheats)
     this.game.eventBus.on('building:complete:instant', this.handleInstantComplete.bind(this));
+
+    // Handle addon construction
+    this.game.eventBus.on('building:build_addon', this.handleBuildAddon.bind(this));
   }
 
   private handleBuildingPlace(data: {
@@ -121,11 +124,14 @@ export class BuildingPlacementSystem extends System {
     }
 
     // Create the building entity at the snapped center position
+    // Building starts at full max health but current health at 10% (under construction)
     const buildingEntity = this.world.createEntity();
+    const health = new Health(definition.maxHealth, definition.armor, 'structure');
+    health.current = definition.maxHealth * 0.1; // Start at 10% health (under construction)
     buildingEntity
       .add(new Transform(snappedX, snappedY, 0))
       .add(new Building(definition))
-      .add(new Health(definition.maxHealth * 0.1, definition.armor, 'structure'))
+      .add(health)
       .add(new Selectable(Math.max(definition.width, definition.height) * 0.6, 10, playerId));
 
     // Building starts in 'waiting_for_worker' state (from constructor)
@@ -290,6 +296,112 @@ export class BuildingPlacementSystem extends System {
         playerId: selectable?.playerId,
       });
     }
+  }
+
+  private handleBuildAddon(data: {
+    buildingId: number;
+    addonType: string;
+    playerId?: string;
+  }): void {
+    const { buildingId, addonType, playerId = 'player1' } = data;
+
+    // Get the parent building entity
+    const parentEntity = this.world.getEntity(buildingId);
+    if (!parentEntity) {
+      console.warn(`BuildingPlacementSystem: Parent building ${buildingId} not found`);
+      return;
+    }
+
+    const parentBuilding = parentEntity.get<Building>('Building');
+    const parentTransform = parentEntity.get<Transform>('Transform');
+    const parentSelectable = parentEntity.get<Selectable>('Selectable');
+
+    if (!parentBuilding || !parentTransform || !parentSelectable) {
+      console.warn(`BuildingPlacementSystem: Parent building missing components`);
+      return;
+    }
+
+    // Verify building can have an addon
+    if (!parentBuilding.canHaveAddon) {
+      this.game.eventBus.emit('ui:error', { message: 'This building cannot have addons' });
+      return;
+    }
+
+    // Check if building already has an addon
+    if (parentBuilding.hasAddon()) {
+      this.game.eventBus.emit('ui:error', { message: 'Building already has an addon' });
+      return;
+    }
+
+    // Check if building is complete
+    if (!parentBuilding.isComplete()) {
+      this.game.eventBus.emit('ui:error', { message: 'Building must be complete first' });
+      return;
+    }
+
+    // Get the addon definition
+    const addonDef = BUILDING_DEFINITIONS[addonType];
+    if (!addonDef) {
+      console.warn(`BuildingPlacementSystem: Unknown addon type: ${addonType}`);
+      return;
+    }
+
+    // Check resources (only for human player)
+    const store = useGameStore.getState();
+    const isPlayer = playerId === 'player1';
+    if (isPlayer) {
+      if (store.minerals < addonDef.mineralCost || store.vespene < addonDef.vespeneCost) {
+        this.game.eventBus.emit('ui:error', { message: 'Not enough resources' });
+        return;
+      }
+    }
+
+    // Calculate addon position (to the right of the parent building)
+    const addonX = parentTransform.x + parentBuilding.width / 2 + addonDef.width / 2;
+    const addonY = parentTransform.y;
+
+    // Check if addon position is valid (no collisions)
+    if (!this.isValidPlacement(addonX, addonY, addonDef.width, addonDef.height)) {
+      this.game.eventBus.emit('ui:error', { message: 'Cannot build addon here - blocked' });
+      return;
+    }
+
+    // Deduct resources (only for human player)
+    if (isPlayer) {
+      store.addResources(-addonDef.mineralCost, -addonDef.vespeneCost);
+    }
+
+    // Create the addon entity - addons complete instantly when built
+    const addonEntity = this.world.createEntity();
+    const addonBuilding = new Building(addonDef);
+    addonBuilding.buildProgress = 1;
+    addonBuilding.state = 'complete';
+    addonBuilding.attachedToId = buildingId;
+
+    const addonHealth = new Health(addonDef.maxHealth, addonDef.armor, 'structure');
+
+    addonEntity
+      .add(new Transform(addonX, addonY, 0))
+      .add(addonBuilding)
+      .add(addonHealth)
+      .add(new Selectable(Math.max(addonDef.width, addonDef.height) * 0.6, 10, playerId));
+
+    // Attach the addon to the parent building
+    const techLabType = addonType === 'research_module' ? 'tech_lab' :
+                        addonType === 'production_module' ? 'reactor' : null;
+    if (techLabType) {
+      parentBuilding.attachAddon(techLabType, addonEntity.id);
+    }
+
+    // Emit success event
+    this.game.eventBus.emit('building:addon_complete', {
+      parentId: buildingId,
+      addonId: addonEntity.id,
+      addonType,
+      playerId,
+    });
+
+    console.log(`BuildingPlacementSystem: ${addonDef.name} built for ${parentBuilding.name} at (${addonX}, ${addonY})`);
   }
 
   /**

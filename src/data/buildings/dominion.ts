@@ -4,6 +4,7 @@ export const BUILDING_DEFINITIONS: Record<string, BuildingDefinition> = {
   headquarters: {
     id: 'headquarters',
     name: 'Headquarters',
+    description: 'Main base structure. Produces workers and provides supply.',
     faction: 'dominion',
     mineralCost: 400,
     vespeneCost: 0,
@@ -24,6 +25,7 @@ export const BUILDING_DEFINITIONS: Record<string, BuildingDefinition> = {
   orbital_station: {
     id: 'orbital_station',
     name: 'Orbital Station',
+    description: 'Upgraded HQ with orbital abilities. Sensor sweep and supply drops.',
     faction: 'dominion',
     mineralCost: 150, // Upgrade cost from HQ
     vespeneCost: 0,
@@ -43,6 +45,7 @@ export const BUILDING_DEFINITIONS: Record<string, BuildingDefinition> = {
   bastion: {
     id: 'bastion',
     name: 'Bastion',
+    description: 'Fortified HQ with defensive weapons. Cannot lift off.',
     faction: 'dominion',
     mineralCost: 150,
     vespeneCost: 150,
@@ -64,6 +67,7 @@ export const BUILDING_DEFINITIONS: Record<string, BuildingDefinition> = {
   supply_cache: {
     id: 'supply_cache',
     name: 'Supply Cache',
+    description: 'Provides supply for units. Can lower to allow units to pass.',
     faction: 'dominion',
     mineralCost: 100,
     vespeneCost: 0,
@@ -82,6 +86,7 @@ export const BUILDING_DEFINITIONS: Record<string, BuildingDefinition> = {
   extractor: {
     id: 'extractor',
     name: 'Extractor',
+    description: 'Built on vespene geysers to harvest vespene gas.',
     faction: 'dominion',
     mineralCost: 75,
     vespeneCost: 0,
@@ -98,6 +103,7 @@ export const BUILDING_DEFINITIONS: Record<string, BuildingDefinition> = {
   infantry_bay: {
     id: 'infantry_bay',
     name: 'Infantry Bay',
+    description: 'Produces infantry units. Add Research Module for advanced units.',
     faction: 'dominion',
     mineralCost: 150,
     vespeneCost: 0,
@@ -117,6 +123,7 @@ export const BUILDING_DEFINITIONS: Record<string, BuildingDefinition> = {
   tech_center: {
     id: 'tech_center',
     name: 'Tech Center',
+    description: 'Researches infantry weapon and armor upgrades.',
     faction: 'dominion',
     mineralCost: 125,
     vespeneCost: 0,
@@ -134,6 +141,7 @@ export const BUILDING_DEFINITIONS: Record<string, BuildingDefinition> = {
   garrison: {
     id: 'garrison',
     name: 'Garrison',
+    description: 'Defensive bunker that protects garrisoned infantry.',
     faction: 'dominion',
     mineralCost: 100,
     vespeneCost: 0,
@@ -153,6 +161,7 @@ export const BUILDING_DEFINITIONS: Record<string, BuildingDefinition> = {
   forge: {
     id: 'forge',
     name: 'Forge',
+    description: 'Produces vehicles. Add Research Module for siege tanks.',
     faction: 'dominion',
     mineralCost: 150,
     vespeneCost: 100,
@@ -172,6 +181,7 @@ export const BUILDING_DEFINITIONS: Record<string, BuildingDefinition> = {
   arsenal: {
     id: 'arsenal',
     name: 'Arsenal',
+    description: 'Researches vehicle and ship upgrades.',
     faction: 'dominion',
     mineralCost: 150,
     vespeneCost: 100,
@@ -189,6 +199,7 @@ export const BUILDING_DEFINITIONS: Record<string, BuildingDefinition> = {
   hangar: {
     id: 'hangar',
     name: 'Hangar',
+    description: 'Produces air units. Add Research Module for advanced ships.',
     faction: 'dominion',
     mineralCost: 150,
     vespeneCost: 100,
@@ -208,6 +219,7 @@ export const BUILDING_DEFINITIONS: Record<string, BuildingDefinition> = {
   power_core: {
     id: 'power_core',
     name: 'Power Core',
+    description: 'Unlocks capital ship upgrades. Required for Dreadnought.',
     faction: 'dominion',
     mineralCost: 150,
     vespeneCost: 150,
@@ -225,6 +237,7 @@ export const BUILDING_DEFINITIONS: Record<string, BuildingDefinition> = {
   ops_center: {
     id: 'ops_center',
     name: 'Ops Center',
+    description: 'Researches cloaking and energy upgrades.',
     faction: 'dominion',
     mineralCost: 150,
     vespeneCost: 50,
@@ -242,6 +255,7 @@ export const BUILDING_DEFINITIONS: Record<string, BuildingDefinition> = {
   radar_array: {
     id: 'radar_array',
     name: 'Radar Array',
+    description: 'Long-range detector. Reveals cloaked and burrowed units.',
     faction: 'dominion',
     mineralCost: 125,
     vespeneCost: 100,
@@ -261,6 +275,7 @@ export const BUILDING_DEFINITIONS: Record<string, BuildingDefinition> = {
   defense_turret: {
     id: 'defense_turret',
     name: 'Defense Turret',
+    description: 'Defensive structure with detection. Attacks ground and air.',
     faction: 'dominion',
     mineralCost: 100,
     vespeneCost: 0,
@@ -284,6 +299,7 @@ export const BUILDING_DEFINITIONS: Record<string, BuildingDefinition> = {
   research_module: {
     id: 'research_module',
     name: 'Research Module',
+    description: 'Addon that unlocks advanced units and research.',
     faction: 'dominion',
     mineralCost: 50,
     vespeneCost: 25,
@@ -303,6 +319,7 @@ export const BUILDING_DEFINITIONS: Record<string, BuildingDefinition> = {
   production_module: {
     id: 'production_module',
     name: 'Production Module',
+    description: 'Addon that enables double production of basic units.',
     faction: 'dominion',
     mineralCost: 50,
     vespeneCost: 50,
