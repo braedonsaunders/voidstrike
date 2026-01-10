@@ -45,7 +45,10 @@ export class AudioSystem extends System {
     AudioManager.setCategoryVolume('voice', uiState.soundVolume);
     AudioManager.setCategoryVolume('alert', uiState.soundVolume);
 
-    // Initialize MusicPlayer with settings from store
+    // Stop any menu music that was playing and reset music player state
+    MusicPlayer.stop();
+
+    // Initialize MusicPlayer with settings from store (but don't auto-play)
     await MusicPlayer.initialize();
     MusicPlayer.setVolume(uiState.musicVolume);
     MusicPlayer.setMuted(!uiState.musicEnabled);
@@ -88,8 +91,9 @@ export class AudioSystem extends System {
       this.startAmbient(biome);
     }
 
-    // Start gameplay music
-    this.startGameplayMusic();
+    // Note: Gameplay music is NOT auto-started to avoid performance issues
+    // Users can control music via the Sound Options panel
+    // The menu music will naturally stop when switching categories if user enables gameplay music
   }
 
   // Start gameplay music (discovers and plays random tracks from gameplay folder)
