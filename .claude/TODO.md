@@ -211,7 +211,8 @@
 ### Unit Movement & Micro
 - [x] Unit avoidance/steering (Boids-like)
 - [x] Unit acceleration/deceleration
-- [x] Shift-click command queuing
+- [x] Shift-click command queuing (move, attack, attack-move, patrol, gather)
+- [x] Command queue visual waypoint indicators (green lines/markers)
 - [x] Patrol command (P key)
 
 ### Camera & Controls
