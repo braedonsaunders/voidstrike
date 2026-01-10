@@ -91,14 +91,15 @@ export class SelectionSystem extends System {
     const entities = this.world.getEntitiesWith('Transform', 'Selectable');
     let closestEntity: { id: number; distance: number; priority: number } | null = null;
 
-    // Find closest entity to click point (only own units/buildings)
+    // Find closest entity to click point (only own units/buildings OR neutral resources)
     for (const entity of entities) {
       const transform = entity.get<Transform>('Transform')!;
       const selectable = entity.get<Selectable>('Selectable')!;
       const health = entity.get<Health>('Health');
 
-      // Only allow selecting own units/buildings
-      if (selectable.playerId !== playerId) continue;
+      // Allow selecting own units/buildings OR neutral entities (resources)
+      // Neutral resources (minerals, vespene) should be selectable by anyone
+      if (selectable.playerId !== playerId && selectable.playerId !== 'neutral') continue;
 
       // Skip dead units
       if (health && health.isDead()) continue;
