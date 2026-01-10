@@ -21,6 +21,8 @@ export class BuildingPlacementPreview {
   private isValid: boolean = false;
   private getTerrainHeight: ((x: number, y: number) => number) | null = null;
   private checkVespeneGeyser: ((x: number, y: number) => boolean) | null = null;
+  // Validator that checks collisions with buildings, units, resources, decorations
+  private placementValidator: ((centerX: number, centerY: number, width: number, height: number) => boolean) | null = null;
 
   // Grid visualization settings
   private static readonly GRID_OFFSET = 0.15; // Offset above terrain
@@ -40,6 +42,14 @@ export class BuildingPlacementPreview {
    */
   public setVespeneGeyserChecker(fn: (x: number, y: number) => boolean): void {
     this.checkVespeneGeyser = fn;
+  }
+
+  /**
+   * Set callback to validate placement against buildings, units, resources, decorations
+   * This enables full SC2-style placement validation
+   */
+  public setPlacementValidator(fn: (centerX: number, centerY: number, width: number, height: number) => boolean): void {
+    this.placementValidator = fn;
   }
 
   /**
@@ -127,7 +137,7 @@ export class BuildingPlacementPreview {
       return true;
     }
 
-    // Check all tiles the building would occupy
+    // Check all tiles the building would occupy for terrain validity
     for (let dy = -Math.floor(halfHeight); dy < Math.ceil(halfHeight); dy++) {
       for (let dx = -Math.floor(halfWidth); dx < Math.ceil(halfWidth); dx++) {
         const tileX = Math.floor(centerX + dx);
@@ -144,6 +154,12 @@ export class BuildingPlacementPreview {
           return false;
         }
       }
+    }
+
+    // Check for entity collisions (buildings, units, resources, decorations)
+    // This is the SC2-style full validation
+    if (this.placementValidator && !this.placementValidator(centerX, centerY, width, height)) {
+      return false;
     }
 
     return true;
