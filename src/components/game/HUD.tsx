@@ -17,7 +17,7 @@ import { SoundOptionsPanel } from './SoundOptionsPanel';
 
 export function HUD() {
   const { isPaused, togglePause, setShowTechTree, setShowKeyboardShortcuts } = useGameStore();
-  const { toggleFPS, showFPS, toggleGraphicsOptions, showGraphicsOptions, toggleSoundOptions, showSoundOptions, toggleDebugMenu, showDebugMenu } = useUIStore();
+  const { toggleFPS, showFPS, toggleGraphicsOptions, showGraphicsOptions, toggleSoundOptions, showSoundOptions, toggleDebugMenu, showDebugMenu, isFullscreen, toggleFullscreen, setFullscreen } = useUIStore();
   const [showOptionsMenu, setShowOptionsMenu] = useState(false);
   const [showPlayerStatus, setShowPlayerStatus] = useState(false);
 
@@ -39,6 +39,16 @@ export function HUD() {
       };
     }
   }, [isPaused]);
+
+  // Sync fullscreen state with browser
+  useEffect(() => {
+    const handleFullscreenChange = () => {
+      setFullscreen(!!document.fullscreenElement);
+    };
+    document.addEventListener('fullscreenchange', handleFullscreenChange);
+    setFullscreen(!!document.fullscreenElement);
+    return () => document.removeEventListener('fullscreenchange', handleFullscreenChange);
+  }, [setFullscreen]);
 
   return (
     <div className="absolute inset-0 pointer-events-none">
@@ -112,6 +122,13 @@ export function HUD() {
                 >
                   <span>Show FPS</span>
                   <span className={showFPS ? 'text-green-400' : 'text-void-500'}>{showFPS ? 'ON' : 'OFF'}</span>
+                </button>
+                <button
+                  onClick={toggleFullscreen}
+                  className="w-full px-4 py-2 text-left text-sm text-void-200 hover:bg-void-800 transition-colors flex justify-between items-center"
+                >
+                  <span>Fullscreen</span>
+                  <span className={isFullscreen ? 'text-green-400' : 'text-void-500'}>{isFullscreen ? 'ON' : 'OFF'}</span>
                 </button>
                 <button
                   onClick={() => {

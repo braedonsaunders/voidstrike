@@ -89,6 +89,9 @@ export interface UIState {
   // Sound settings
   showSoundOptions: boolean;
 
+  // Fullscreen
+  isFullscreen: boolean;
+
   // Debug settings
   debugSettings: DebugSettings;
   showDebugMenu: boolean;
@@ -120,6 +123,9 @@ export interface UIState {
   toggleGraphicsSetting: (key: keyof GraphicsSettings) => void;
   // Sound settings actions
   toggleSoundOptions: () => void;
+  // Fullscreen actions
+  toggleFullscreen: () => void;
+  setFullscreen: (isFullscreen: boolean) => void;
   // Debug settings actions
   toggleDebugMenu: () => void;
   toggleDebugSetting: (key: keyof DebugSettings) => void;
@@ -145,6 +151,7 @@ export const useUIStore = create<UIState>((set, get) => ({
   showPing: true,
   showGraphicsOptions: false,
   showSoundOptions: false,
+  isFullscreen: false,
   graphicsSettings: {
     postProcessingEnabled: true,
     toneMappingExposure: 1.0,
@@ -263,6 +270,22 @@ export const useUIStore = create<UIState>((set, get) => ({
   toggleGraphicsOptions: () => set((state) => ({ showGraphicsOptions: !state.showGraphicsOptions })),
 
   toggleSoundOptions: () => set((state) => ({ showSoundOptions: !state.showSoundOptions })),
+
+  toggleFullscreen: () => {
+    if (typeof document !== 'undefined') {
+      if (!document.fullscreenElement) {
+        document.documentElement.requestFullscreen().catch(() => {
+          // Fullscreen request failed - possibly not allowed
+        });
+      } else {
+        document.exitFullscreen().catch(() => {
+          // Exit fullscreen failed
+        });
+      }
+    }
+  },
+
+  setFullscreen: (isFullscreen) => set({ isFullscreen }),
 
   setGraphicsSetting: (key, value) =>
     set((state) => ({

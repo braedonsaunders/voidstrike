@@ -66,6 +66,9 @@ export default function Home() {
   const musicEnabled = useUIStore((state) => state.musicEnabled);
   const musicVolume = useUIStore((state) => state.musicVolume);
   const toggleMusic = useUIStore((state) => state.toggleMusic);
+  const isFullscreen = useUIStore((state) => state.isFullscreen);
+  const toggleFullscreen = useUIStore((state) => state.toggleFullscreen);
+  const setFullscreen = useUIStore((state) => state.setFullscreen);
 
   const handleMusicToggle = useCallback(() => {
     toggleMusic();
@@ -98,6 +101,17 @@ export default function Home() {
     MusicPlayer.setVolume(musicVolume);
     MusicPlayer.setMuted(!musicEnabled);
   }, [musicVolume, musicEnabled]);
+
+  // Sync fullscreen state with browser
+  useEffect(() => {
+    const handleFullscreenChange = () => {
+      setFullscreen(!!document.fullscreenElement);
+    };
+    document.addEventListener('fullscreenchange', handleFullscreenChange);
+    // Sync initial state
+    setFullscreen(!!document.fullscreenElement);
+    return () => document.removeEventListener('fullscreenchange', handleFullscreenChange);
+  }, [setFullscreen]);
 
   // Loading animation
   useEffect(() => {
@@ -165,16 +179,27 @@ export default function Home() {
               </div>
             </div>
 
-            {/* Music Toggle */}
-            <button
-              onClick={handleMusicToggle}
-              className="w-10 h-10 rounded-full flex items-center justify-center
-                       bg-white/5 hover:bg-white/10 border border-white/10
-                       transition-all duration-200 hover:scale-105 hover:border-void-500/50"
-              title={musicEnabled ? 'Mute Music' : 'Unmute Music'}
-            >
-              <span className="text-base">{musicEnabled ? '🔊' : '🔇'}</span>
-            </button>
+            {/* Toggle Buttons */}
+            <div className="flex items-center gap-3">
+              <button
+                onClick={handleMusicToggle}
+                className="w-10 h-10 rounded-full flex items-center justify-center
+                         bg-white/5 hover:bg-white/10 border border-white/10
+                         transition-all duration-200 hover:scale-105 hover:border-void-500/50"
+                title={musicEnabled ? 'Mute Music' : 'Unmute Music'}
+              >
+                <span className="text-base">{musicEnabled ? '🔊' : '🔇'}</span>
+              </button>
+              <button
+                onClick={toggleFullscreen}
+                className="w-10 h-10 rounded-full flex items-center justify-center
+                         bg-white/5 hover:bg-white/10 border border-white/10
+                         transition-all duration-200 hover:scale-105 hover:border-void-500/50"
+                title={isFullscreen ? 'Exit Fullscreen' : 'Enter Fullscreen'}
+              >
+                <span className="text-base">{isFullscreen ? '⛶' : '⛶'}</span>
+              </button>
+            </div>
           </div>
         </nav>
 
