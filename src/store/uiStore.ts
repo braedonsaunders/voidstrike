@@ -140,7 +140,7 @@ export const useUIStore = create<UIState>((set, get) => ({
   soundEnabled: true,
   musicEnabled: true,
   soundVolume: 0.7,
-  musicVolume: 0.5,
+  musicVolume: 0.25,
   showFPS: false,
   showPing: true,
   showGraphicsOptions: false,

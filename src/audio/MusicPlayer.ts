@@ -32,7 +32,7 @@ class MusicPlayerClass {
   private currentCategory: MusicCategory | null = null;
   private currentTrackIndex = 0;
 
-  private volume = 0.5;
+  private volume = 0.25;
   private muted = false;
   private isPlaying = false;
   private isLoading = false; // Prevent multiple simultaneous loads
@@ -41,6 +41,7 @@ class MusicPlayerClass {
   private currentTrackName: string | null = null;
   private consecutiveFailures = 0;
   private maxConsecutiveFailures = 3; // Stop trying after 3 failures
+  private audioElementsToIgnore: Set<HTMLAudioElement> = new Set(); // Track cleaned up elements
 
   private crossfadeDuration = 1500; // 1.5 seconds crossfade
   private crossfadeUpdateInterval = 100; // Update every 100ms (10 updates/sec)
@@ -183,12 +184,20 @@ class MusicPlayerClass {
 
     // Set up track ended handler to play next
     audio.addEventListener('ended', () => {
+      // Ignore events from cleaned up audio elements
+      if (this.audioElementsToIgnore.has(audio)) {
+        return;
+      }
       this.consecutiveFailures = 0; // Reset on successful play
       this.onTrackEnded();
     });
 
     // Handle load errors - but don't create infinite loop
     audio.addEventListener('error', () => {
+      // Ignore events from cleaned up audio elements
+      if (this.audioElementsToIgnore.has(audio)) {
+        return;
+      }
       debugAudio.warn(`Failed to load track ${track.name}`);
       this.consecutiveFailures++;
       this.isLoading = false;
@@ -283,9 +292,19 @@ class MusicPlayerClass {
       this.crossfadeInterval = null;
     }
     if (this.fadingOutAudio) {
+      // Mark this element to be ignored so its events don't trigger actions
+      this.audioElementsToIgnore.add(this.fadingOutAudio);
       this.fadingOutAudio.pause();
       this.fadingOutAudio.src = '';
       this.fadingOutAudio = null;
+
+      // Clean up old ignored elements to prevent memory leak (keep max 10)
+      if (this.audioElementsToIgnore.size > 10) {
+        const firstElement = this.audioElementsToIgnore.values().next().value;
+        if (firstElement) {
+          this.audioElementsToIgnore.delete(firstElement);
+        }
+      }
     }
   }
 
@@ -310,6 +329,8 @@ class MusicPlayerClass {
   public stop(): void {
     this.cleanupCrossfade();
     if (this.currentAudio) {
+      // Mark this element to be ignored so its events don't trigger actions
+      this.audioElementsToIgnore.add(this.currentAudio);
       this.currentAudio.pause();
       this.currentAudio.src = '';
       this.currentAudio = null;
