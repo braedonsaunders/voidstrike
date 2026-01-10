@@ -400,11 +400,17 @@ export class OverlayScene extends Phaser.Scene {
     title.setOrigin(0.5, 0.5);
     container.add(title);
 
-    // Subtitle with reason
-    const reasonText = reason === 'elimination' ? 'Enemy Eliminated'
-      : reason === 'surrender' ? 'Enemy Surrendered'
-      : reason === 'draw' ? 'All Forces Lost'
-      : 'Game Over';
+    // Subtitle with reason - show appropriate message based on victory/defeat
+    let reasonText: string;
+    if (reason === 'elimination') {
+      reasonText = isVictory ? 'Enemy Eliminated' : 'Your Forces Eliminated';
+    } else if (reason === 'surrender') {
+      reasonText = isVictory ? 'Enemy Surrendered' : 'You Surrendered';
+    } else if (reason === 'draw') {
+      reasonText = 'All Forces Lost';
+    } else {
+      reasonText = 'Game Over';
+    }
     const subtitle = this.add.text(0, 0, reasonText, {
       fontSize: '32px',
       fontFamily: 'Inter, sans-serif',
