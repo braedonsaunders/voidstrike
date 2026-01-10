@@ -7,6 +7,7 @@ import { Unit } from '@/engine/components/Unit';
 import { Resource } from '@/engine/components/Resource';
 import { Selectable } from '@/engine/components/Selectable';
 import { Health } from '@/engine/components/Health';
+import { Building } from '@/engine/components/Building';
 import { getLocalPlayerId } from '@/store/gameSetupStore';
 
 export class InputHandler extends Phaser.Events.EventEmitter {
@@ -204,8 +205,44 @@ export class InputHandler extends Phaser.Events.EventEmitter {
           }
         }
 
-        // Check if clicking on an enemy unit/building (for attacking)
         const localPlayerId = getLocalPlayerId();
+        const building = entity.get<Building>('Building');
+        const targetUnit = entity.get<Unit>('Unit');
+
+        // Check if clicking on a friendly damaged building/mechanical unit (for repair)
+        if (selectable && localPlayerId && selectable.playerId === localPlayerId && health && !health.isDead()) {
+          // Can repair buildings or mechanical units
+          const canBeRepaired = building || (targetUnit && targetUnit.isMechanical);
+          const needsRepair = health.current < health.max;
+
+          if (canBeRepaired && needsRepair) {
+            // Check if selected units include workers that can repair
+            const repairWorkers = selectedUnits.filter(id => {
+              const e = this.game.world.getEntity(id);
+              const unit = e?.get<Unit>('Unit');
+              return unit?.canRepair;
+            });
+
+            if (repairWorkers.length > 0) {
+              // Issue repair command to all repair-capable units
+              for (const workerId of repairWorkers) {
+                this.game.eventBus.emit('command:repair', {
+                  repairerId: workerId,
+                  targetId: clickedEntity.id,
+                });
+              }
+              // Show visual feedback - flash selection ring on target
+              this.game.eventBus.emit('ui:flash_selection', {
+                entityId: clickedEntity.id,
+                color: 0x00ff00, // Green for repair
+                duration: 300,
+              });
+              return;
+            }
+          }
+        }
+
+        // Check if clicking on an enemy unit/building (for attacking)
         if (selectable && localPlayerId && selectable.playerId !== localPlayerId && health && !health.isDead()) {
           this.game.eventBus.emit('command:attack', {
             entityIds: selectedUnits,

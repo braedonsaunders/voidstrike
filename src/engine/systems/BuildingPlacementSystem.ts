@@ -645,10 +645,19 @@ export class BuildingPlacementSystem extends System {
 
           // Get the building's owner
           const selectable = entity.get<Selectable>('Selectable');
+          const buildingDef = BUILDING_DEFINITIONS[building.buildingId];
 
           // Add supply if applicable - only for local player's buildings
           if (building.supplyProvided > 0 && selectable?.playerId && isLocalPlayer(selectable.playerId)) {
             useGameStore.getState().addMaxSupply(building.supplyProvided);
+          }
+
+          // Set default rally point for production buildings
+          if (building.canProduce.length > 0 && building.rallyX === null) {
+            building.setRallyPoint(
+              buildingTransform.x + building.width / 2 + 3,
+              buildingTransform.y
+            );
           }
 
           // Release workers
@@ -657,6 +666,7 @@ export class BuildingPlacementSystem extends System {
           this.game.eventBus.emit('building:complete', {
             entityId: entity.id,
             buildingType: building.buildingId,
+            buildingName: buildingDef?.name ?? building.name,
             playerId: selectable?.playerId,
           });
 
