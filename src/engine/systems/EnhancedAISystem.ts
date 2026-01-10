@@ -4,7 +4,7 @@ import { Unit } from '../components/Unit';
 import { Building } from '../components/Building';
 import { Health } from '../components/Health';
 import { Selectable } from '../components/Selectable';
-import { Resource } from '../components/Resource';
+import { Resource, OPTIMAL_WORKERS_PER_MINERAL, OPTIMAL_WORKERS_PER_VESPENE } from '../components/Resource';
 import { Game, GameCommand } from '../core/Game';
 import { UNIT_DEFINITIONS } from '@/data/units/dominion';
 import { BUILDING_DEFINITIONS, RESEARCH_MODULE_UNITS } from '@/data/buildings/dominion';
@@ -2074,6 +2074,7 @@ export class EnhancedAISystem extends System {
 
   /**
    * Find idle workers and send them to gather minerals or vespene
+   * Uses SC2-style optimal saturation targeting
    */
   private assignIdleWorkersToGather(ai: AIPlayer): void {
     // Find AI's base position
@@ -2083,9 +2084,9 @@ export class EnhancedAISystem extends System {
       return;
     }
 
-    // Find nearby mineral patches
+    // Find nearby mineral patches with their current saturation
     const resources = this.world.getEntitiesWith('Resource', 'Transform');
-    const nearbyMinerals: { entityId: number; x: number; y: number; distance: number }[] = [];
+    const nearbyMinerals: { entityId: number; x: number; y: number; distance: number; currentWorkers: number }[] = [];
 
     for (const entity of resources) {
       const resource = entity.get<Resource>('Resource');
@@ -2101,15 +2102,18 @@ export class EnhancedAISystem extends System {
 
       // Only consider minerals within reasonable distance of base
       if (distance < 30) {
-        nearbyMinerals.push({ entityId: entity.id, x: transform.x, y: transform.y, distance });
+        nearbyMinerals.push({
+          entityId: entity.id,
+          x: transform.x,
+          y: transform.y,
+          distance,
+          currentWorkers: resource.getCurrentGatherers()
+        });
       }
     }
 
-    // Sort by distance
-    nearbyMinerals.sort((a, b) => a.distance - b.distance);
-
     // Find AI's completed refineries for vespene harvesting
-    const refineries: { entityId: number; resourceEntityId: number }[] = [];
+    const refineries: { entityId: number; resourceEntityId: number; currentWorkers: number }[] = [];
     const buildings = this.world.getEntitiesWith('Building', 'Selectable', 'Transform');
 
     for (const entity of buildings) {
@@ -2127,7 +2131,11 @@ export class EnhancedAISystem extends System {
         if (!resource) continue;
         if (resource.resourceType !== 'vespene') continue;
         if (resource.extractorEntityId === entity.id) {
-          refineries.push({ entityId: entity.id, resourceEntityId: resEntity.id });
+          refineries.push({
+            entityId: entity.id,
+            resourceEntityId: resEntity.id,
+            currentWorkers: resource.getCurrentGatherers()
+          });
           break;
         }
       }
@@ -2136,7 +2144,6 @@ export class EnhancedAISystem extends System {
     // Find idle AI workers
     const units = this.world.getEntitiesWith('Unit', 'Selectable', 'Health');
     const idleWorkers: number[] = [];
-    let gasWorkers = 0;
 
     // Track all worker states for debugging
     const workerStates: Record<string, number> = {};
@@ -2155,17 +2162,6 @@ export class EnhancedAISystem extends System {
       // Track worker state counts
       workerStates[unit.state] = (workerStates[unit.state] || 0) + 1;
 
-      // Count workers on gas
-      if (unit.state === 'gathering' && unit.gatherTargetId !== null) {
-        const targetEntity = this.world.getEntity(unit.gatherTargetId);
-        if (targetEntity) {
-          const resource = targetEntity.get<Resource>('Resource');
-          if (resource?.resourceType === 'vespene') {
-            gasWorkers++;
-          }
-        }
-      }
-
       // Only grab truly idle workers (not already gathering or building)
       if (unit.state === 'idle') {
         idleWorkers.push(entity.id);
@@ -2174,31 +2170,64 @@ export class EnhancedAISystem extends System {
 
     if (nearbyMinerals.length === 0 && refineries.length === 0) return;
 
-    // Debug log for player1
-    if (ai.playerId === 'player1' && this.game.getCurrentTick() % 100 === 0) {
+    // Debug log periodically
+    if (this.game.getCurrentTick() % 200 === 0) {
       const statesStr = Object.entries(workerStates).map(([k, v]) => `${k}:${v}`).join(', ');
-      debugAI.log(`[EnhancedAI] ${ai.playerId}: worker states=[${statesStr}], nearby minerals=${nearbyMinerals.length}`);
+      const totalMineralWorkers = nearbyMinerals.reduce((sum, m) => sum + m.currentWorkers, 0);
+      const totalGasWorkers = refineries.reduce((sum, r) => sum + r.currentWorkers, 0);
+      debugAI.log(`[EnhancedAI] ${ai.playerId}: workers=[${statesStr}], idle=${idleWorkers.length}, minerals=${totalMineralWorkers}/${nearbyMinerals.length * OPTIMAL_WORKERS_PER_MINERAL}, gas=${totalGasWorkers}/${refineries.length * OPTIMAL_WORKERS_PER_VESPENE}`);
     }
 
-    // Assign idle workers - prioritize getting 3 workers per refinery first
-    const targetGasWorkers = refineries.length * 3;
-    let assignedToGas = 0;
-
+    // Assign idle workers using SC2-style optimal saturation
     for (const workerId of idleWorkers) {
-      // If we need more gas workers and have refineries, assign to gas
-      if (refineries.length > 0 && gasWorkers + assignedToGas < targetGasWorkers) {
-        const refinery = refineries[assignedToGas % refineries.length];
+      // Priority 1: Fill undersaturated gas (vespene is more valuable)
+      const undersaturatedGas = refineries.find(r => r.currentWorkers < OPTIMAL_WORKERS_PER_VESPENE);
+      if (undersaturatedGas) {
         this.game.eventBus.emit('command:gather', {
           entityIds: [workerId],
-          targetEntityId: refinery.resourceEntityId,
+          targetEntityId: undersaturatedGas.resourceEntityId,
         });
-        assignedToGas++;
-      } else if (nearbyMinerals.length > 0) {
-        // Otherwise assign to minerals
-        const targetMineral = nearbyMinerals[Math.floor(Math.random() * Math.min(nearbyMinerals.length, 4))];
+        undersaturatedGas.currentWorkers++; // Track assignment for next worker
+        continue;
+      }
+
+      // Priority 2: Fill undersaturated minerals (patches with < 2 workers)
+      // Sort by workers first (fewest first), then distance
+      nearbyMinerals.sort((a, b) => {
+        if (a.currentWorkers !== b.currentWorkers) {
+          return a.currentWorkers - b.currentWorkers;
+        }
+        return a.distance - b.distance;
+      });
+
+      const undersaturatedMineral = nearbyMinerals.find(m => m.currentWorkers < OPTIMAL_WORKERS_PER_MINERAL);
+      if (undersaturatedMineral) {
         this.game.eventBus.emit('command:gather', {
           entityIds: [workerId],
-          targetEntityId: targetMineral.entityId,
+          targetEntityId: undersaturatedMineral.entityId,
+        });
+        undersaturatedMineral.currentWorkers++; // Track assignment for next worker
+        continue;
+      }
+
+      // Priority 3: If all minerals are at optimal (2), assign to patches with 2 workers (allows 3rd worker)
+      // This provides some oversaturation for faster mining when worker count is high
+      const mineralWithRoom = nearbyMinerals.find(m => m.currentWorkers < 3);
+      if (mineralWithRoom) {
+        this.game.eventBus.emit('command:gather', {
+          entityIds: [workerId],
+          targetEntityId: mineralWithRoom.entityId,
+        });
+        mineralWithRoom.currentWorkers++;
+        continue;
+      }
+
+      // Fallback: assign to closest mineral (shouldn't normally reach here)
+      if (nearbyMinerals.length > 0) {
+        nearbyMinerals.sort((a, b) => a.distance - b.distance);
+        this.game.eventBus.emit('command:gather', {
+          entityIds: [workerId],
+          targetEntityId: nearbyMinerals[0].entityId,
         });
       }
     }

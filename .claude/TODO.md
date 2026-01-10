@@ -202,6 +202,7 @@
 - [x] Worker gathering mechanics
 - [x] Resource storage/tracking
 - [x] Supply/population system (UI + tracking)
+- [x] SC2-style worker saturation display (X/Y labels above resources)
 
 ---
 
@@ -371,6 +372,7 @@
 - [x] Harassment tactics
 - [x] Worker management
 - [x] Defense coordination
+- [x] SC2-style optimal worker saturation targeting (gas first, then minerals)
 
 ### Game State
 - [x] Victory/defeat conditions
