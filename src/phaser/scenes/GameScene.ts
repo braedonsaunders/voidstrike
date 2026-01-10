@@ -95,6 +95,7 @@ export class GameScene extends Phaser.Scene {
     this.buildingRenderer = new BuildingRenderer(this, this.gameEngine.world, this.gameEngine.visionSystem, fogOfWarEnabled);
     this.unitRenderer = new UnitRenderer(this, this.gameEngine.world, this.gameEngine.visionSystem, fogOfWarEnabled);
     this.selectionRenderer = new SelectionRenderer(this, this.gameEngine.world);
+    this.selectionRenderer.setEventBus(this.gameEngine.eventBus);
     this.effectsRenderer = new EffectsRenderer(this, this.gameEngine.eventBus);
     this.rallyPointRenderer = new RallyPointRenderer(this, this.gameEngine.world, this.gameEngine.eventBus);
 
@@ -355,7 +356,7 @@ export class GameScene extends Phaser.Scene {
     this.resourceRenderer.update();
     this.buildingRenderer.update();
     this.unitRenderer.update();
-    this.selectionRenderer.update();
+    this.selectionRenderer.update(delta);
     this.effectsRenderer.update(delta);
     this.rallyPointRenderer.update();
 
