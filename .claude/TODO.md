@@ -8,6 +8,17 @@
 
 ## SC2-Level Visual Overhaul (January 2026) ✓
 
+### Cinematic Homescreen (January 2026) ✓
+- [x] **HomeBackground.tsx** - Cinematic Three.js animated background for homepage
+- [x] **Void Nebula Shader** - Procedural shader with fBM noise, mouse reactivity
+- [x] **Star Field System** - 3000+ animated stars with twinkling
+- [x] **Asteroid Field** - Floating deformed asteroids with rotation
+- [x] **Energy Stream Particles** - 5 particle streams flowing toward center
+- [x] **Post-Processing** - Bloom, chromatic aberration, vignette
+- [x] **Cinematic Camera** - Mouse-following with breathing motion parallax
+- [x] **Glassmorphism UI** - Redesigned homepage with translucent cards, animated counters
+- [x] **Faction Showcases** - Interactive faction cards with hover effects, stats display
+
 ### Hybrid Architecture
 - [x] **Three.js + Phaser 4 hybrid** - 3D world with 2D overlay system
 - [x] **HybridGameCanvas** - Main component combining both engines
