@@ -97,6 +97,10 @@ function registerAIPlayer(
   const enhancedAI = world.getSystem(EnhancedAISystem);
   if (enhancedAI) {
     enhancedAI.registerAI(playerId, faction, difficulty);
+    // Also register with AIMicroSystem for unit micro behavior (kiting, focus fire)
+    // This is critical - without this, AI units won't have proper combat micro
+    game.aiMicroSystem.registerAIPlayer(playerId);
+    debugInitialization.log(`[gameSetup] Registered ${playerId} with EnhancedAI and AIMicroSystem`);
   } else {
     const basicAI = world.getSystem(AISystem);
     if (basicAI) {

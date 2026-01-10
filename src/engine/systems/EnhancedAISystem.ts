@@ -579,6 +579,10 @@ export class EnhancedAISystem extends System {
 
       if (success) {
         ai.buildOrderIndex++;
+        debugAI.log(`[EnhancedAI] ${ai.playerId}: Completed build order step ${ai.buildOrderIndex - 1} (${step.type}: ${step.id})`);
+      } else if (this.game.getCurrentTick() % 100 === 0) {
+        // Log when stuck on a build order step (every 5 seconds)
+        debugAI.log(`[EnhancedAI] ${ai.playerId}: Stuck on build order step ${ai.buildOrderIndex} (${step.type}: ${step.id}), minerals=${Math.floor(ai.minerals)}, supply=${ai.supply}/${ai.maxSupply}`);
       }
       return;
     }
@@ -1588,12 +1592,21 @@ export class EnhancedAISystem extends System {
 
   private tryBuildBuilding(ai: AIPlayer, buildingType: string): boolean {
     const buildingDef = BUILDING_DEFINITIONS[buildingType];
-    if (!buildingDef) return false;
+    if (!buildingDef) {
+      debugAI.log(`[EnhancedAI] ${ai.playerId}: tryBuildBuilding failed - unknown building type: ${buildingType}`);
+      return false;
+    }
 
-    if (ai.minerals < buildingDef.mineralCost || ai.vespene < buildingDef.vespeneCost) return false;
+    if (ai.minerals < buildingDef.mineralCost || ai.vespene < buildingDef.vespeneCost) {
+      // Not enough resources - this is normal, don't log
+      return false;
+    }
 
     const basePos = this.findAIBase(ai.playerId);
-    if (!basePos) return false;
+    if (!basePos) {
+      debugAI.log(`[EnhancedAI] ${ai.playerId}: tryBuildBuilding failed - cannot find AI base!`);
+      return false;
+    }
 
     let buildPos: { x: number; y: number } | null = null;
 
@@ -1602,11 +1615,15 @@ export class EnhancedAISystem extends System {
       buildPos = this.findAvailableVespeneGeyser(ai.playerId, basePos);
       if (!buildPos) {
         // No available vespene geyser nearby, skip building refinery
+        debugAI.log(`[EnhancedAI] ${ai.playerId}: tryBuildBuilding failed - no available vespene geyser near base at (${basePos.x}, ${basePos.y})`);
         return false;
       }
     } else {
       buildPos = this.findBuildingSpot(ai.playerId, basePos, buildingDef.width, buildingDef.height);
-      if (!buildPos) return false;
+      if (!buildPos) {
+        debugAI.log(`[EnhancedAI] ${ai.playerId}: tryBuildBuilding failed - no valid building spot for ${buildingType} near base at (${basePos.x}, ${basePos.y})`);
+        return false;
+      }
     }
 
     ai.minerals -= buildingDef.mineralCost;

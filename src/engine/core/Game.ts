@@ -21,7 +21,7 @@ import { GameStateSystem } from '../systems/GameStateSystem';
 import { SaveLoadSystem } from '../systems/SaveLoadSystem';
 import { PathfindingSystem } from '../systems/PathfindingSystem';
 import { AIMicroSystem } from '../systems/AIMicroSystem';
-import { getAIPlayerIds, getLocalPlayerId } from '@/store/gameSetupStore';
+import { getLocalPlayerId } from '@/store/gameSetupStore';
 
 export type GameState = 'initializing' | 'running' | 'paused' | 'ended';
 
@@ -174,11 +174,9 @@ export class Game {
         const enhancedAI = new EnhancedAISystem(this, this.config.aiDifficulty);
         this.world.addSystem(enhancedAI);
         this.world.addSystem(this.aiMicroSystem); // AI unit micro (kiting, focus fire)
-        // Register all AI players from game setup
-        const aiPlayerIds = getAIPlayerIds();
-        for (const aiPlayerId of aiPlayerIds) {
-          this.aiMicroSystem.registerAIPlayer(aiPlayerId);
-        }
+        // NOTE: AI player registration with AIMicroSystem happens in spawnInitialEntities()
+        // This ensures the store has the correct player configuration when registration occurs
+        // Do NOT register here as the store may have stale/default state at this point
       } else {
         this.world.addSystem(new AISystem(this));
       }
