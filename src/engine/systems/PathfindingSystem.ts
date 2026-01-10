@@ -113,6 +113,7 @@ export class PathfindingSystem extends System {
         } else {
           // Apply movement cost (roads have cost < 1, forests/mud have cost > 1)
           this.pathfinder.setMoveCost(x, y, moveCost);
+          this.hierarchicalPathfinder.setMoveCost(x, y, moveCost);
         }
       }
     }
@@ -174,6 +175,7 @@ export class PathfindingSystem extends System {
           blockedCount++;
         } else {
           this.pathfinder.setMoveCost(x, y, moveCost);
+          this.hierarchicalPathfinder.setMoveCost(x, y, moveCost);
         }
       }
     }

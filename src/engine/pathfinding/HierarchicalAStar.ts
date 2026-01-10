@@ -1,16 +1,17 @@
-import { AStar, PathResult } from './AStar';
-
 /**
- * Hierarchical Pathfinding A* (HPA*)
+ * Hierarchical Pathfinding A* (HPA*) using pathfinding.js
  *
  * Optimizes long-distance pathfinding by:
  * 1. Dividing the map into sectors (clusters)
  * 2. Pre-computing abstract paths between sector entrances
- * 3. Caching frequently used paths
+ * 3. Caching frequently used paths with LRU eviction
  * 4. Using hierarchical search for long paths
  *
- * For short paths (within same/adjacent sectors), falls back to regular A*
+ * For short paths (within same/adjacent sectors), falls back to JPS/A*
  */
+
+import * as PF from 'pathfinding';
+import { AStar, PathResult } from './AStar';
 
 interface Sector {
   id: number;
@@ -54,6 +55,10 @@ export class HierarchicalAStar {
   private pathCache: Map<string, CachedPath> = new Map();
   private cacheKeys: string[] = [];
 
+  // Use pathfinding.js for abstract graph search
+  private abstractGridWidth: number = 0;
+  private abstractGridHeight: number = 0;
+
   // Track if abstract graph needs rebuild
   private needsRebuild = true;
 
@@ -70,6 +75,9 @@ export class HierarchicalAStar {
   private initializeSectors(): void {
     const sectorsX = Math.ceil(this.width / SECTOR_SIZE);
     const sectorsY = Math.ceil(this.height / SECTOR_SIZE);
+
+    this.abstractGridWidth = sectorsX;
+    this.abstractGridHeight = sectorsY;
 
     // Create sectors
     let sectorId = 0;
@@ -121,7 +129,6 @@ export class HierarchicalAStar {
 
       for (let i = 0; i < sector.entrances.length; i++) {
         const entrance = sector.entrances[i];
-        const neighborSector = this.sectors[entrance.neighborSectorId];
 
         // Calculate cost to neighbor through this entrance
         const cost = this.estimateCrossingSectorCost(sector, entrance);
@@ -149,13 +156,29 @@ export class HierarchicalAStar {
     // Check right border
     if (sector.x + sector.width < this.width) {
       const neighborId = sector.id + 1;
-      this.findBorderEntrances(sector, neighborId, sector.x + sector.width - 1, sector.y, 0, 1, sector.height);
+      this.findBorderEntrances(
+        sector,
+        neighborId,
+        sector.x + sector.width - 1,
+        sector.y,
+        0,
+        1,
+        sector.height
+      );
     }
 
     // Check bottom border
     if (sector.y + sector.height < this.height) {
       const neighborId = sector.id + sectorsPerRow;
-      this.findBorderEntrances(sector, neighborId, sector.x, sector.y + sector.height - 1, 1, 0, sector.width);
+      this.findBorderEntrances(
+        sector,
+        neighborId,
+        sector.x,
+        sector.y + sector.height - 1,
+        1,
+        0,
+        sector.width
+      );
     }
 
     // Check left border
@@ -230,7 +253,7 @@ export class HierarchicalAStar {
   /**
    * Estimate cost to cross a sector
    */
-  private estimateCrossingSectorCost(sector: Sector, entrance: SectorEntrance): number {
+  private estimateCrossingSectorCost(_sector: Sector, _entrance: SectorEntrance): number {
     // Simple heuristic based on sector size
     return SECTOR_SIZE * 0.7;
   }
@@ -303,61 +326,46 @@ export class HierarchicalAStar {
   }
 
   /**
-   * Find abstract path through sectors using A* on sector graph
+   * Find abstract path through sectors using A* with binary heap
    */
   private findAbstractPath(startSector: number, endSector: number): number[] {
-    const openSet: { sector: number; g: number; f: number; parent: number | null }[] = [];
-    const closedSet = new Set<number>();
-    const cameFrom = new Map<number, number>();
+    // Use pathfinding.js AStarFinder on the abstract graph
+    // Create a temporary grid for sector-level pathfinding
+    const abstractGrid = new (PF.Grid as unknown as new (w: number, h: number) => PF.Grid)(this.abstractGridWidth, this.abstractGridHeight);
 
-    openSet.push({
-      sector: startSector,
-      g: 0,
-      f: this.sectorHeuristic(startSector, endSector),
-      parent: null,
-    });
-
-    while (openSet.length > 0) {
-      // Find lowest f
-      openSet.sort((a, b) => a.f - b.f);
-      const current = openSet.shift()!;
-
-      if (current.sector === endSector) {
-        // Reconstruct path
-        const path: number[] = [];
-        let node: number | null = current.sector;
-        while (node !== null) {
-          path.unshift(node);
-          node = cameFrom.get(node) ?? null;
-        }
-        return path;
-      }
-
-      if (closedSet.has(current.sector)) continue;
-      closedSet.add(current.sector);
-
-      // Explore neighbors
-      const edges = this.abstractGraph.get(current.sector) ?? [];
-      for (const edge of edges) {
-        if (closedSet.has(edge.toSector)) continue;
-
-        const tentativeG = current.g + edge.cost;
-        const f = tentativeG + this.sectorHeuristic(edge.toSector, endSector);
-
-        const existing = openSet.find(n => n.sector === edge.toSector);
-        if (!existing || tentativeG < existing.g) {
-          cameFrom.set(edge.toSector, current.sector);
-          if (existing) {
-            existing.g = tentativeG;
-            existing.f = f;
-          } else {
-            openSet.push({ sector: edge.toSector, g: tentativeG, f, parent: current.sector });
-          }
-        }
-      }
+    // Mark sectors without any entrances as unwalkable
+    for (const sector of this.sectors) {
+      const sx = sector.id % this.abstractGridWidth;
+      const sy = Math.floor(sector.id / this.abstractGridWidth);
+      const hasEntrances = sector.entrances.length > 0;
+      // A sector is walkable if it has entrances OR is the start/end sector
+      abstractGrid.setWalkableAt(
+        sx,
+        sy,
+        hasEntrances || sector.id === startSector || sector.id === endSector
+      );
     }
 
-    return []; // No path found
+    const startSx = startSector % this.abstractGridWidth;
+    const startSy = Math.floor(startSector / this.abstractGridWidth);
+    const endSx = endSector % this.abstractGridWidth;
+    const endSy = Math.floor(endSector / this.abstractGridWidth);
+
+    // Use A* with binary heap for abstract pathfinding
+    const finder = new (PF.AStarFinder as unknown as new (opts: PF.FinderOptions) => {
+      findPath(sx: number, sy: number, ex: number, ey: number, grid: PF.Grid): number[][];
+    })({
+      diagonalMovement: PF.DiagonalMovement.Never, // Sectors connect orthogonally
+    });
+
+    const rawPath = finder.findPath(startSx, startSy, endSx, endSy, abstractGrid);
+
+    if (rawPath.length === 0) {
+      return [];
+    }
+
+    // Convert grid coordinates back to sector IDs
+    return rawPath.map(([x, y]) => y * this.abstractGridWidth + x);
   }
 
   /**
@@ -366,8 +374,8 @@ export class HierarchicalAStar {
   private sectorHeuristic(sectorA: number, sectorB: number): number {
     const a = this.sectors[sectorA];
     const b = this.sectors[sectorB];
-    const dx = Math.abs((a.x + a.width / 2) - (b.x + b.width / 2));
-    const dy = Math.abs((a.y + a.height / 2) - (b.y + b.height / 2));
+    const dx = Math.abs(a.x + a.width / 2 - (b.x + b.width / 2));
+    const dy = Math.abs(a.y + a.height / 2 - (b.y + b.height / 2));
     return dx + dy;
   }
 
@@ -395,7 +403,7 @@ export class HierarchicalAStar {
       const nextSectorId = abstractPath[i + 1];
 
       // Find the entrance to the next sector
-      const entrance = currentSector.entrances.find(e => e.neighborSectorId === nextSectorId);
+      const entrance = currentSector.entrances.find((e) => e.neighborSectorId === nextSectorId);
       if (entrance) {
         // Convert grid coords to world coords (center of cell)
         waypoints.push({
@@ -477,5 +485,19 @@ export class HierarchicalAStar {
   public clearBlockedArea(x: number, y: number, width: number, height: number): void {
     this.baseAStar.clearBlockedArea(x, y, width, height);
     this.invalidate();
+  }
+
+  /**
+   * Set movement cost - proxied to base AStar
+   */
+  public setMoveCost(x: number, y: number, cost: number): void {
+    this.baseAStar.setMoveCost(x, y, cost);
+  }
+
+  /**
+   * Get the base AStar instance for direct access if needed
+   */
+  public getBaseAStar(): AStar {
+    return this.baseAStar;
   }
 }

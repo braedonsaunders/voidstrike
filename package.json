@@ -17,6 +17,7 @@
     "@supabase/supabase-js": "^2.39.0",
     "howler": "^2.2.4",
     "next": "14.0.4",
+    "pathfinding": "^0.4.18",
     "phaser": "^4.0.0-rc.6",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
@@ -26,6 +27,7 @@
   "devDependencies": {
     "@types/howler": "^2.2.11",
     "@types/node": "^20.10.5",
+    "@types/pathfinding": "^0.1.0",
     "@types/react": "^18.2.45",
     "@types/react-dom": "^18.2.18",
     "@types/three": "^0.160.0",

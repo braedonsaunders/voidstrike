@@ -5,11 +5,16 @@ import { Health } from '../components/Health';
 import { Selectable } from '../components/Selectable';
 import { Building } from '../components/Building';
 import { Game, GameCommand } from '../core/Game';
+import { BehaviorTreeRunner, Blackboard, globalBlackboard } from '../ai/BehaviorTree';
 import {
-  BehaviorTreeRunner,
   createCombatMicroTree,
-  calculateThreatScore,
-} from '../ai/BehaviorTree';
+  createRangedCombatTree,
+  createMeleeCombatTree,
+  createUtilityCombatTree,
+  isRangedUnit,
+  UnitBehaviorType,
+  createBehaviorTree,
+} from '../ai/UnitBehaviors';
 import { UNIT_DEFINITIONS } from '@/data/units/dominion';
 
 // Configuration
@@ -99,6 +104,34 @@ export class AIMicroSystem extends System {
     this.aiPlayerIds.add(playerId);
   }
 
+  /**
+   * Select the appropriate behavior tree type based on unit characteristics
+   */
+  private selectBehaviorType(unit: Unit): UnitBehaviorType {
+    // Workers use worker behavior
+    if (unit.isWorker) {
+      return 'worker';
+    }
+
+    // Flying units - use utility-based decision making
+    if (unit.isFlying) {
+      return 'utility';
+    }
+
+    // Ranged units (attack range >= 3) use ranged combat with kiting
+    if (unit.attackRange >= 3) {
+      return 'ranged_combat';
+    }
+
+    // Melee units use aggressive melee combat
+    if (unit.attackRange < 3) {
+      return 'melee_combat';
+    }
+
+    // Default to standard combat
+    return 'combat';
+  }
+
   public update(deltaTime: number): void {
     const currentTick = this.game.getCurrentTick();
 
@@ -130,8 +163,15 @@ export class AIMicroSystem extends System {
       // Get or create micro state
       let state = this.unitStates.get(entity.id);
       if (!state) {
+        // Select behavior tree based on unit type
+        const behaviorType = this.selectBehaviorType(unit);
+        const tree = createBehaviorTree(behaviorType);
+
+        // Create runner with shared blackboard scope for focus fire coordination
+        const playerBlackboard = globalBlackboard.getScope(`player_${selectable.playerId}`);
+
         state = {
-          behaviorTree: new BehaviorTreeRunner(createCombatMicroTree()),
+          behaviorTree: new BehaviorTreeRunner(tree, playerBlackboard),
           lastKiteTick: 0,
           lastThreatAssessment: 0,
           threatScore: 0,
@@ -151,13 +191,13 @@ export class AIMicroSystem extends System {
       );
 
       // Handle kiting with cooldown
-      const shouldKite = state.behaviorTree.getBlackboard<boolean>('shouldKite');
+      const shouldKite = state.behaviorTree.get<boolean>('shouldKite');
       if (shouldKite && currentTick - state.lastKiteTick > KITE_COOLDOWN_TICKS) {
         this.executeKiting(entity.id, state, currentTick);
       }
 
       // Handle retreat
-      const shouldRetreat = state.behaviorTree.getBlackboard<boolean>('shouldRetreat');
+      const shouldRetreat = state.behaviorTree.get<boolean>('shouldRetreat');
       if (shouldRetreat && !state.retreating) {
         this.executeRetreat(entity.id, selectable.playerId, state);
       }
@@ -181,8 +221,8 @@ export class AIMicroSystem extends System {
     const unit = entity.get<Unit>('Unit')!;
     const transform = entity.get<Transform>('Transform')!;
 
-    const kiteFromX = state.behaviorTree.getBlackboard<number>('kiteFromX');
-    const kiteFromY = state.behaviorTree.getBlackboard<number>('kiteFromY');
+    const kiteFromX = state.behaviorTree.get<number>('kiteFromX');
+    const kiteFromY = state.behaviorTree.get<number>('kiteFromY');
 
     if (kiteFromX === undefined || kiteFromY === undefined) return;
 
@@ -308,7 +348,7 @@ export class AIMicroSystem extends System {
       if (state.retreating && state.retreatEndTick !== null && currentTick >= state.retreatEndTick) {
         state.retreating = false;
         state.retreatEndTick = null;
-        state.behaviorTree.setBlackboard('shouldRetreat', false);
+        state.behaviorTree.set('shouldRetreat', false);
       }
     }
   }
@@ -404,8 +444,8 @@ export class AIMicroSystem extends System {
     state.lastThreatAssessment = currentTick;
 
     // Store in blackboard for behavior tree
-    state.behaviorTree.setBlackboard('threats', threats);
-    state.behaviorTree.setBlackboard('threatScore', state.threatScore);
+    state.behaviorTree.set('threats', threats);
+    state.behaviorTree.set('threatScore', state.threatScore);
   }
 
   private handleFocusFire(
