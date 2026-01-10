@@ -583,10 +583,10 @@ export class AssetManager {
    * Load custom 3D models from public/models folder
    * Replaces procedural meshes with custom GLB models when available
    * Logs animation names to console for debugging
-   * @param onProgress Optional callback for loading progress (loaded: number, total: number, assetId: string)
+   * @param onProgress Optional callback for loading progress (loaded: number, total: number, assetId: string) - can be async
    */
   static async loadCustomModels(
-    onProgress?: (loaded: number, total: number, assetId: string) => void
+    onProgress?: (loaded: number, total: number, assetId: string) => void | Promise<void>
   ): Promise<void> {
     // Define custom model paths - add more as models are created
     const customModels: Array<{ path: string; assetId: string; targetHeight: number }> = [
@@ -656,7 +656,8 @@ export class AssetManager {
         if (!response.ok) {
           console.log(`[AssetManager] No custom model found at ${model.path}, using procedural mesh`);
           processedCount++;
-          onProgress?.(processedCount, totalModels, model.assetId);
+          // Await the callback in case it's async (for UI throttling)
+          await onProgress?.(processedCount, totalModels, model.assetId);
           continue;
         }
 
@@ -665,11 +666,13 @@ export class AssetManager {
         console.log(`[AssetManager] ✓ Loaded custom model: ${model.assetId} from ${model.path}`);
         loadedCount++;
         processedCount++;
-        onProgress?.(processedCount, totalModels, model.assetId);
+        // Await the callback in case it's async (for UI throttling)
+        await onProgress?.(processedCount, totalModels, model.assetId);
       } catch (error) {
         console.log(`[AssetManager] Could not load ${model.path}:`, error);
         processedCount++;
-        onProgress?.(processedCount, totalModels, model.assetId);
+        // Await the callback in case it's async (for UI throttling)
+        await onProgress?.(processedCount, totalModels, model.assetId);
       }
     }
 

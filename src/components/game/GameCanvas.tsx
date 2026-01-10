@@ -77,37 +77,46 @@ export function GameCanvas() {
       CURRENT_MAP = getMapById(selectedMapId) || DEFAULT_MAP;
       console.log(`[GameCanvas] Loading map: ${CURRENT_MAP.name} (${CURRENT_MAP.id})`);
 
-      // Stage 1: Loading 3D models (0-45%)
-      setLoadingStatus('Loading 3D models');
-      setLoadingProgress(2);
+      // Helper to ensure React can render between updates
+      const updateProgress = async (progress: number, status: string, minDelay = 80) => {
+        setLoadingProgress(progress);
+        setLoadingStatus(status);
+        await new Promise(resolve => setTimeout(resolve, minDelay));
+      };
 
-      await AssetManager.loadCustomModels((loaded, total, assetId) => {
+      // Stage 1: Loading 3D models (0-45%)
+      await updateProgress(2, 'Initializing asset loader');
+
+      let lastModelUpdate = Date.now();
+      await AssetManager.loadCustomModels(async (loaded, total, assetId) => {
         const modelProgress = Math.floor((loaded / total) * 43);
-        setLoadingProgress(2 + modelProgress);
-        // Show current asset being loaded
         const displayName = assetId.replace(/_/g, ' ');
+        setLoadingProgress(2 + modelProgress);
         setLoadingStatus(`Loading: ${displayName}`);
+
+        // Throttle UI updates to ensure they're visible (at least 50ms between updates)
+        const now = Date.now();
+        if (now - lastModelUpdate < 50) {
+          await new Promise(resolve => setTimeout(resolve, 50 - (now - lastModelUpdate)));
+        }
+        lastModelUpdate = Date.now();
       });
 
       // Stage 2: Initialize game world with progress tracking
-      await initializeGameWorldWithProgress();
+      await initializeGameWorldWithProgress(updateProgress);
 
-      setLoadingProgress(100);
-      setLoadingStatus('Ready');
-
-      // Fade out loading screen
-      await new Promise(resolve => setTimeout(resolve, 500));
+      await updateProgress(100, 'Ready', 300);
       setIsLoading(false);
     };
 
     // Initialize game world with granular progress reporting
-    const initializeGameWorldWithProgress = async () => {
+    const initializeGameWorldWithProgress = async (
+      updateProgress: (progress: number, status: string, minDelay?: number) => Promise<void>
+    ) => {
       if (!canvasRef.current) return;
 
       // Stage 2: Creating WebGL renderer (45-50%)
-      setLoadingStatus('Creating WebGL renderer');
-      setLoadingProgress(47);
-      await new Promise(resolve => setTimeout(resolve, 16)); // Allow UI update
+      await updateProgress(47, 'Creating WebGL renderer', 100);
 
       // Create renderer with performance optimizations
       const renderer = new THREE.WebGLRenderer({
@@ -122,11 +131,8 @@ export function GameCanvas() {
       renderer.shadowMap.enabled = false;
       rendererRef.current = renderer;
 
-      setLoadingProgress(50);
-
       // Stage 3: Creating scene and camera (50-55%)
-      setLoadingStatus('Setting up camera');
-      await new Promise(resolve => setTimeout(resolve, 16));
+      await updateProgress(50, 'Setting up camera', 100);
 
       const scene = new THREE.Scene();
       sceneRef.current = scene;
@@ -145,11 +151,8 @@ export function GameCanvas() {
       camera.setPosition(playerSpawn.x, playerSpawn.y);
       cameraRef.current = camera;
 
-      setLoadingProgress(55);
-
       // Stage 4: Building terrain and environment (55-65%)
-      setLoadingStatus('Generating terrain');
-      await new Promise(resolve => setTimeout(resolve, 16));
+      await updateProgress(55, 'Generating terrain', 150);
 
       const environment = new EnvironmentManager(scene, CURRENT_MAP);
       environmentRef.current = environment;
@@ -157,18 +160,13 @@ export function GameCanvas() {
 
       camera.setTerrainHeightFunction((x, z) => terrain.getHeightAt(x, z));
 
-      setLoadingProgress(60);
-      setLoadingStatus('Placing decorations');
-      await new Promise(resolve => setTimeout(resolve, 16));
+      await updateProgress(60, 'Placing decorations', 150);
 
       const grid = new TerrainGrid(mapWidth, mapHeight, 1);
       scene.add(grid.mesh);
 
-      setLoadingProgress(65);
-
       // Stage 5: Initializing game engine (65-75%)
-      setLoadingStatus('Initializing game engine');
-      await new Promise(resolve => setTimeout(resolve, 16));
+      await updateProgress(65, 'Initializing game engine', 100);
 
       const localPlayerId = getLocalPlayerId();
       const game = Game.getInstance({
@@ -183,15 +181,10 @@ export function GameCanvas() {
 
       game.setDecorationCollisions(environment.getRockCollisions());
 
-      setLoadingProgress(72);
-      setLoadingStatus('Registering game systems');
-      await new Promise(resolve => setTimeout(resolve, 16));
-
-      setLoadingProgress(75);
+      await updateProgress(72, 'Registering game systems', 100);
 
       // Stage 6: Creating renderers (75-85%)
-      setLoadingStatus('Creating unit renderer');
-      await new Promise(resolve => setTimeout(resolve, 16));
+      await updateProgress(75, 'Creating unit renderer', 80);
 
       const fogOfWarEnabled = useGameSetupStore.getState().fogOfWar;
 
@@ -202,9 +195,7 @@ export function GameCanvas() {
         terrain
       );
 
-      setLoadingProgress(78);
-      setLoadingStatus('Creating building renderer');
-      await new Promise(resolve => setTimeout(resolve, 16));
+      await updateProgress(78, 'Creating building renderer', 80);
 
       buildingRendererRef.current = new BuildingRenderer(
         scene,
@@ -213,17 +204,13 @@ export function GameCanvas() {
         terrain
       );
 
-      setLoadingProgress(80);
-      setLoadingStatus('Creating resource renderer');
-      await new Promise(resolve => setTimeout(resolve, 16));
+      await updateProgress(80, 'Creating resource renderer', 80);
 
       resourceRendererRef.current = new ResourceRenderer(scene, game.world, terrain);
 
       // Create fog of war overlay only if enabled (and not spectating)
       if (fogOfWarEnabled && !isSpectatorMode()) {
-        setLoadingProgress(82);
-        setLoadingStatus('Setting up fog of war');
-        await new Promise(resolve => setTimeout(resolve, 16));
+        await updateProgress(82, 'Setting up fog of war', 80);
 
         const fogOfWar = new FogOfWar({ mapWidth, mapHeight });
         fogOfWar.setVisionSystem(game.visionSystem);
@@ -232,9 +219,7 @@ export function GameCanvas() {
         fogOfWarRef.current = fogOfWar;
       }
 
-      setLoadingProgress(84);
-      setLoadingStatus('Creating effects renderer');
-      await new Promise(resolve => setTimeout(resolve, 16));
+      await updateProgress(84, 'Creating effects renderer', 80);
 
       const effectsRenderer = new EffectsRenderer(scene, game.eventBus);
       effectsRendererRef.current = effectsRenderer;
@@ -242,37 +227,25 @@ export function GameCanvas() {
       const rallyPointRenderer = new RallyPointRenderer(scene, game.eventBus, game.world, localPlayerId);
       rallyPointRendererRef.current = rallyPointRenderer;
 
-      setLoadingProgress(85);
-
       // Stage 7: Spawning entities (85-90%)
-      setLoadingStatus('Spawning units and buildings');
-      await new Promise(resolve => setTimeout(resolve, 16));
+      await updateProgress(85, 'Spawning units and buildings', 120);
 
       spawnInitialEntities(game, CURRENT_MAP);
 
-      setLoadingProgress(88);
-
       if (CURRENT_MAP.watchTowers && CURRENT_MAP.watchTowers.length > 0) {
-        setLoadingStatus('Setting up watch towers');
-        await new Promise(resolve => setTimeout(resolve, 16));
+        await updateProgress(88, 'Setting up watch towers', 80);
 
         game.visionSystem.setWatchTowers(CURRENT_MAP.watchTowers);
         watchTowerRendererRef.current = new WatchTowerRenderer(scene, game.visionSystem);
       }
 
-      setLoadingProgress(90);
-
       // Stage 8: Initializing audio (90-95%)
-      setLoadingStatus('Initializing audio system');
-      await new Promise(resolve => setTimeout(resolve, 16));
+      await updateProgress(90, 'Initializing audio system', 100);
 
       game.audioSystem.initialize(camera.camera, CURRENT_MAP.biome);
 
-      setLoadingProgress(95);
-
       // Stage 9: Starting game (95-100%)
-      setLoadingStatus('Starting game engine');
-      await new Promise(resolve => setTimeout(resolve, 16));
+      await updateProgress(95, 'Starting game engine', 100);
 
       game.start();
 
