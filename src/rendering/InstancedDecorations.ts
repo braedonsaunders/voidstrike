@@ -94,23 +94,53 @@ export class InstancedTrees {
       }
     }
 
-    // Also avoid the center corridor (main pathway between bases)
-    const mapCenterX = mapData.width / 2;
-    const mapCenterY = mapData.height / 2;
+    // Find elevated cliff edges (for placing some trees on base edges)
+    const cliffEdgePositions: Array<{ x: number; y: number }> = [];
+    for (let cy = 1; cy < mapData.height - 1; cy++) {
+      for (let cx = 1; cx < mapData.width - 1; cx++) {
+        // Skip if in ramp clearance zone
+        if (rampClearance.has(`${cx},${cy}`)) continue;
+
+        const cell = mapData.terrain[cy][cx];
+        if (cell.terrain === 'unbuildable') {
+          // Check if this is near a cliff edge (adjacent to ground)
+          const neighbors = [
+            mapData.terrain[cy - 1]?.[cx],
+            mapData.terrain[cy + 1]?.[cx],
+            mapData.terrain[cy]?.[cx - 1],
+            mapData.terrain[cy]?.[cx + 1],
+          ];
+          const nearGround = neighbors.some(n => n && n.terrain === 'ground');
+          if (nearGround) {
+            cliffEdgePositions.push({ x: cx + Math.random() * 0.5, y: cy + Math.random() * 0.5 });
+          }
+        }
+      }
+    }
 
     let treesPlaced = 0;
 
-    // Place trees primarily on the outer edges of the map (70%)
-    const edgeTreeCount = Math.floor(maxTrees * 0.7);
-    for (let i = 0; i < edgeTreeCount * 3 && treesPlaced < edgeTreeCount; i++) {
+    // Place some trees on cliff edges (20%) - gives bases some tree cover
+    const cliffTreeCount = Math.min(Math.floor(maxTrees * 0.2), cliffEdgePositions.length);
+    for (let i = 0; i < cliffTreeCount && treesPlaced < cliffTreeCount; i++) {
+      const idx = Math.floor(Math.random() * cliffEdgePositions.length);
+      const pos = cliffEdgePositions.splice(idx, 1)[0];
+      if (this.placeTree(pos.x, pos.y, mapData, getHeightAt, treeModelIds, biome)) {
+        treesPlaced++;
+      }
+    }
+
+    // Place trees on the outer edges of the map (50%)
+    const edgeTreeCount = Math.floor(maxTrees * 0.5);
+    for (let i = 0; i < edgeTreeCount * 3 && treesPlaced < edgeTreeCount + cliffTreeCount; i++) {
       let x: number, y: number;
       const edge = Math.floor(Math.random() * 4);
-      // Place in outer 15 cells of each edge
+      // Place in outer 12 cells of each edge
       switch (edge) {
-        case 0: x = 2 + Math.random() * 12; y = 5 + Math.random() * (mapData.height - 10); break;
-        case 1: x = mapData.width - 14 + Math.random() * 12; y = 5 + Math.random() * (mapData.height - 10); break;
-        case 2: x = 5 + Math.random() * (mapData.width - 10); y = 2 + Math.random() * 12; break;
-        default: x = 5 + Math.random() * (mapData.width - 10); y = mapData.height - 14 + Math.random() * 12; break;
+        case 0: x = 2 + Math.random() * 10; y = 5 + Math.random() * (mapData.height - 10); break;
+        case 1: x = mapData.width - 12 + Math.random() * 10; y = 5 + Math.random() * (mapData.height - 10); break;
+        case 2: x = 5 + Math.random() * (mapData.width - 10); y = 2 + Math.random() * 10; break;
+        default: x = 5 + Math.random() * (mapData.width - 10); y = mapData.height - 12 + Math.random() * 10; break;
       }
 
       // Check clearance
@@ -121,25 +151,20 @@ export class InstancedTrees {
       }
     }
 
-    // Scatter remaining trees in corners and far edges (30%)
-    const cornerTrees = maxTrees - treesPlaced;
-    for (let i = 0; i < cornerTrees * 3 && treesPlaced < maxTrees; i++) {
+    // Scatter remaining trees in corners (30%)
+    for (let i = 0; i < maxTrees * 2 && treesPlaced < maxTrees; i++) {
       // Pick a corner
       const corner = Math.floor(Math.random() * 4);
       let x: number, y: number;
       switch (corner) {
-        case 0: x = 3 + Math.random() * 20; y = 3 + Math.random() * 20; break;
-        case 1: x = mapData.width - 23 + Math.random() * 20; y = 3 + Math.random() * 20; break;
-        case 2: x = 3 + Math.random() * 20; y = mapData.height - 23 + Math.random() * 20; break;
-        default: x = mapData.width - 23 + Math.random() * 20; y = mapData.height - 23 + Math.random() * 20; break;
+        case 0: x = 3 + Math.random() * 18; y = 3 + Math.random() * 18; break;
+        case 1: x = mapData.width - 21 + Math.random() * 18; y = 3 + Math.random() * 18; break;
+        case 2: x = 3 + Math.random() * 18; y = mapData.height - 21 + Math.random() * 18; break;
+        default: x = mapData.width - 21 + Math.random() * 18; y = mapData.height - 21 + Math.random() * 18; break;
       }
 
       // Check clearance
       if (rampClearance.has(`${Math.floor(x)},${Math.floor(y)}`)) continue;
-
-      // Avoid center corridor
-      const distFromCenter = Math.abs(x - mapCenterX) + Math.abs(y - mapCenterY);
-      if (distFromCenter < mapData.width * 0.3) continue;
 
       if (this.placeTree(x, y, mapData, getHeightAt, treeModelIds, biome)) {
         treesPlaced++;
