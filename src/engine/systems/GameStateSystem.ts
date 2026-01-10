@@ -198,14 +198,16 @@ export class GameStateSystem extends System {
       players.add(selectable.playerId);
     }
 
-    // Check which players still have buildings
+    // Check which players still have complete buildings (not blueprints)
     const buildings = this.world.getEntitiesWith('Building', 'Selectable', 'Health');
     for (const entity of buildings) {
+      const building = entity.get<Building>('Building');
       const selectable = entity.get<Selectable>('Selectable');
       const health = entity.get<Health>('Health');
 
-      if (!selectable || !health) continue;
-      if (!health.isDead()) {
+      if (!building || !selectable || !health) continue;
+      // Only count complete buildings, not blueprints (waiting_for_worker or constructing)
+      if (!health.isDead() && building.isComplete()) {
         playersWithBuildings.add(selectable.playerId);
       }
     }

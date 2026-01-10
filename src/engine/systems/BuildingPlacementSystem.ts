@@ -550,6 +550,9 @@ export class BuildingPlacementSystem extends System {
 
     // Update construction progress for buildings with workers present
     this.updateBuildingConstruction(dt);
+
+    // Cancel orphaned blueprints (buildings with no workers assigned)
+    this.cancelOrphanedBlueprints();
   }
 
   /**
@@ -694,5 +697,71 @@ export class BuildingPlacementSystem extends System {
     }
 
     return false;
+  }
+
+  /**
+   * Check if any worker is assigned to a building (even if not close yet)
+   */
+  private hasWorkerAssigned(buildingEntityId: number): boolean {
+    const workers = this.world.getEntitiesWith('Unit');
+
+    for (const entity of workers) {
+      const unit = entity.get<Unit>('Unit');
+      if (!unit) continue;
+
+      if (unit.constructingBuildingId === buildingEntityId && unit.state === 'building') {
+        return true;
+      }
+    }
+
+    return false;
+  }
+
+  /**
+   * Cancel orphaned blueprints (buildings in waiting_for_worker state with no workers assigned)
+   * and refund resources to the player.
+   */
+  private cancelOrphanedBlueprints(): void {
+    const buildings = this.world.getEntitiesWith('Building', 'Selectable', 'Transform');
+
+    for (const entity of buildings) {
+      const building = entity.get<Building>('Building')!;
+      const selectable = entity.get<Selectable>('Selectable')!;
+      const transform = entity.get<Transform>('Transform')!;
+
+      // Only check blueprints that are waiting for a worker
+      if (building.state !== 'waiting_for_worker') {
+        continue;
+      }
+
+      // Check if any worker is assigned to this building
+      if (this.hasWorkerAssigned(entity.id)) {
+        continue;
+      }
+
+      // No worker assigned - cancel the blueprint
+      const definition = BUILDING_DEFINITIONS[building.buildingId];
+      if (definition) {
+        // Refund resources to the player (only for local player)
+        if (isLocalPlayer(selectable.playerId)) {
+          const store = useGameStore.getState();
+          store.addResources(definition.mineralCost, definition.vespeneCost);
+          console.log(`BuildingPlacementSystem: Refunded ${definition.mineralCost} minerals, ${definition.vespeneCost} vespene for cancelled ${building.name}`);
+        }
+
+        // Emit cancellation event
+        this.game.eventBus.emit('building:cancelled', {
+          entityId: entity.id,
+          buildingType: building.buildingId,
+          playerId: selectable.playerId,
+          position: { x: transform.x, y: transform.y },
+        });
+
+        console.log(`BuildingPlacementSystem: Cancelled orphaned blueprint ${building.name} at (${transform.x}, ${transform.y}) - no workers assigned`);
+      }
+
+      // Remove the building entity
+      this.world.destroyEntity(entity.id);
+    }
   }
 }

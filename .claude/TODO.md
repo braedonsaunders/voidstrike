@@ -84,6 +84,7 @@
 - [x] **Instanced rendering scale bug** - Buildings using instanced rendering appeared extremely small because the geometry was used without the model's normalization scale. Fixed by tracking and applying modelScale to instance matrices.
 - [x] **Layer-by-layer construction reveal** - Replaced opacity-only animation with clipping plane reveal. Buildings now reveal from bottom to top with construction particles at the build height.
 - [x] **Supply depot/refinery heights** - Fixed target heights (supply_depot: 0.9→1.8, refinery: 2.0→2.5) to match procedural versions and prevent buildings from appearing half in the ground.
+- [x] **Orphaned blueprint defeat bug** - Players could avoid defeat by having building blueprints (waiting_for_worker state) even with no complete buildings. Fixed by: (1) Victory condition now only counts complete buildings, not blueprints. (2) Blueprints are automatically cancelled and resources refunded when the assigned worker is reassigned to another task.
 
 ### Resource Rendering Fixes (January 2026)
 - [x] **Debug logging for resource rendering** - Added comprehensive logging to trace mineral/vespene spawning and instanced mesh creation
