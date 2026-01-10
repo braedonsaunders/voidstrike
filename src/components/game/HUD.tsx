@@ -1,14 +1,14 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useCallback } from 'react';
 import { useGameStore } from '@/store/gameStore';
 import { useUIStore } from '@/store/uiStore';
+import { setEdgeScrollEnabled } from '@/store/cameraStore';
 import { Minimap } from './Minimap';
 import { ResourcePanel } from './ResourcePanel';
 import { SelectionPanel } from './SelectionPanel';
 import { CommandCard } from './CommandCard';
 import { TechTreePanel } from './TechTreePanel';
-import { ProductionQueuePanel } from './ProductionQueuePanel';
 import { IdleWorkerButton } from './IdleWorkerButton';
 import { KeyboardShortcutsPanel } from './KeyboardShortcutsPanel';
 import { PlayerStatusPanel } from './PlayerStatusPanel';
@@ -17,6 +17,16 @@ export function HUD() {
   const { isPaused, togglePause, setShowTechTree, setShowKeyboardShortcuts } = useGameStore();
   const { toggleFPS, showFPS, toggleGraphicsOptions, showGraphicsOptions } = useUIStore();
   const [showOptionsMenu, setShowOptionsMenu] = useState(false);
+  const [showPlayerStatus, setShowPlayerStatus] = useState(true);
+
+  // Disable edge scrolling when mouse is over the bottom UI
+  const handleBottomUIMouseEnter = useCallback(() => {
+    setEdgeScrollEnabled(false);
+  }, []);
+
+  const handleBottomUIMouseLeave = useCallback(() => {
+    setEdgeScrollEnabled(true);
+  }, []);
 
   return (
     <div className="absolute inset-0 pointer-events-none">
@@ -29,6 +39,13 @@ export function HUD() {
         {/* Menu buttons */}
         <div className="flex gap-2">
           <IdleWorkerButton />
+          <button
+            onClick={() => setShowPlayerStatus(!showPlayerStatus)}
+            className={`game-button text-sm ${showPlayerStatus ? 'bg-void-700' : ''}`}
+            title="Toggle Player Status Panel"
+          >
+            Players
+          </button>
           <button
             onClick={() => setShowTechTree(true)}
             className="game-button text-sm"
@@ -111,7 +128,11 @@ export function HUD() {
       </div>
 
       {/* Bottom bar */}
-      <div className="absolute bottom-0 left-0 right-0 flex justify-between items-end p-2 pointer-events-auto">
+      <div
+        className="absolute bottom-0 left-0 right-0 flex justify-between items-end p-2 pointer-events-auto"
+        onMouseEnter={handleBottomUIMouseEnter}
+        onMouseLeave={handleBottomUIMouseLeave}
+      >
         {/* Minimap */}
         <Minimap />
 
@@ -124,15 +145,12 @@ export function HUD() {
         <CommandCard />
       </div>
 
-      {/* Player Status Panel - top right */}
-      <div className="absolute top-12 right-2 pointer-events-auto">
-        <PlayerStatusPanel />
-      </div>
-
-      {/* Production Queue Panel - right side, below player status */}
-      <div className="absolute top-32 right-2 pointer-events-auto">
-        <ProductionQueuePanel />
-      </div>
+      {/* Player Status Panel - top right (toggleable) */}
+      {showPlayerStatus && (
+        <div className="absolute top-12 right-2 pointer-events-auto">
+          <PlayerStatusPanel />
+        </div>
+      )}
 
       {/* Tech Tree Modal */}
       <TechTreePanel />
