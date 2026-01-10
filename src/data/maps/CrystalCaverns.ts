@@ -7,6 +7,15 @@ import {
   fillTerrainRect,
   fillTerrainCircle,
   createRampInTerrain,
+  createForestCorridor,
+  createRiver,
+  createLake,
+  createRoad,
+  createVoidChasm,
+  fillFeatureCircle,
+  fillFeatureRect,
+  scatterForests,
+  createMudArea,
 } from './MapTypes';
 
 /**
@@ -268,6 +277,51 @@ function generateCrystalCaverns(): MapData {
   // Additional chokepoint cliffs
   fillTerrainCircle(terrain, 60, 90, 8, 'unwalkable');
   fillTerrainCircle(terrain, 140, 90, 8, 'unwalkable');
+
+  // ========================================
+  // NEW TERRAIN FEATURES - Frozen theme
+  // ========================================
+
+  // VOID CHASMS at map corners - icy abysses
+  createVoidChasm(terrain, 0, 0, 18, 18, 2);
+  createVoidChasm(terrain, MAP_WIDTH - 18, 0, 18, 18, 2);
+  createVoidChasm(terrain, 0, MAP_HEIGHT - 18, 18, 18, 2);
+  createVoidChasm(terrain, MAP_WIDTH - 18, MAP_HEIGHT - 18, 18, 18, 2);
+
+  // FROZEN LAKES - Impassable ice crevasses
+  createLake(terrain, 100, 50, 10, 2);   // Top center lake
+  createLake(terrain, 100, 130, 10, 2);  // Bottom center lake
+
+  // FOREST CORRIDORS (frozen dead trees) - Strategic paths
+  // P1 side corridor from natural to third
+  createForestCorridor(terrain, 55, 68, 35, 35, 16, 5, true);
+  // P2 side corridor from natural to third
+  createForestCorridor(terrain, 145, 112, 165, 145, 16, 5, true);
+
+  // Side forest walls creating chokepoints
+  createForestCorridor(terrain, 15, 55, 15, 125, 12, 4, true);   // P1 west flank
+  createForestCorridor(terrain, 185, 55, 185, 125, 12, 4, true); // P2 east flank
+
+  // ROADS - Fast movement paths
+  // Main routes from bases
+  createRoad(terrain, 30, 90, 55, 90, 4);   // P1 main to ramp area
+  createRoad(terrain, 170, 90, 145, 90, 4); // P2 main to ramp area
+  // Cross map highway
+  createRoad(terrain, 55, 90, 145, 90, 3);
+
+  // SCATTERED FORESTS - Frozen forest cover
+  scatterForests(terrain, MAP_WIDTH, MAP_HEIGHT, 20, 4, 8, BASE_EXCLUSION_ZONES, 456, 0.35);
+
+  // DENSE FOREST ambush positions near thirds
+  fillFeatureCircle(terrain, 20, 45, 6, 'forest_dense');   // Near P1 third
+  fillFeatureCircle(terrain, 180, 135, 6, 'forest_dense'); // Near P2 third
+
+  // MUD/ICE SLICK areas in contested zones (slippery slow zones)
+  createMudArea(terrain, 100, 90, 10);  // Center contested
+
+  // Light forests for cover
+  fillFeatureCircle(terrain, 75, 65, 7, 'forest_light');
+  fillFeatureCircle(terrain, 125, 115, 7, 'forest_light');
 
   // ========================================
   // RAMPS - Narrow for defensibility (6-8 tiles)

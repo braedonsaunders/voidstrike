@@ -7,6 +7,14 @@ import {
   fillTerrainRect,
   fillTerrainCircle,
   createRampInTerrain,
+  createForestCorridor,
+  createRiver,
+  createLake,
+  createRoad,
+  createVoidChasm,
+  fillFeatureCircle,
+  fillFeatureRect,
+  scatterForests,
 } from './MapTypes';
 
 /**
@@ -342,7 +350,7 @@ function generateContestedFrontier(): MapData {
   fillTerrainRect(terrain, 168, 148, 24, 24, 'unwalkable');
 
   // ========================================
-  // TERRAIN FEATURES - Chokepoints
+  // TERRAIN FEATURES - Chokepoints & Cliffs
   // ========================================
 
   // Side cliffs
@@ -352,6 +360,72 @@ function generateContestedFrontier(): MapData {
   // Inner chokepoint cliffs
   fillTerrainCircle(terrain, 130, 160, 10, 'unwalkable');
   fillTerrainCircle(terrain, 230, 160, 10, 'unwalkable');
+
+  // ========================================
+  // NEW TERRAIN FEATURES - Strategic variety
+  // ========================================
+
+  // VOID CHASMS at map corners - impassable areas
+  createVoidChasm(terrain, 0, 0, 25, 25, 3);      // Top-left corner
+  createVoidChasm(terrain, MAP_WIDTH - 25, 0, 25, 25, 3);  // Top-right corner
+  createVoidChasm(terrain, 0, MAP_HEIGHT - 25, 25, 25, 3); // Bottom-left corner
+  createVoidChasm(terrain, MAP_WIDTH - 25, MAP_HEIGHT - 25, 25, 25, 3); // Bottom-right corner
+
+  // RIVERS - Force routing decisions, create chokepoints
+  // Central east-west river with two bridge crossings
+  createRiver(terrain, 90, 160, 145, 160, 10, 0.5, 8);   // Left section with bridge
+  createRiver(terrain, 215, 160, 270, 160, 10, 0.5, 8);  // Right section with bridge
+
+  // LAKES - Block direct paths, force detours
+  createLake(terrain, 85, 55, 12, 3);   // Between P1 and P2
+  createLake(terrain, 250, 55, 12, 3);  // Between P2 and P3
+  createLake(terrain, 85, 265, 12, 3);  // Between P4 and P5
+  createLake(terrain, 250, 265, 12, 3); // Between P5 and P6
+
+  // FOREST CORRIDORS - Dense forests with paths through them
+  // Connect naturals to mid-map through forest corridors
+  createForestCorridor(terrain, 70, 110, 100, 145, 18, 6, true);   // P1 nat to center
+  createForestCorridor(terrain, 290, 110, 260, 145, 18, 6, true);  // P3 nat to center
+  createForestCorridor(terrain, 70, 210, 100, 175, 18, 6, true);   // P4 nat to center
+  createForestCorridor(terrain, 290, 210, 260, 175, 18, 6, true);  // P6 nat to center
+
+  // Side forest corridors
+  createForestCorridor(terrain, 25, 90, 25, 130, 14, 5, true);     // West upper
+  createForestCorridor(terrain, 25, 190, 25, 230, 14, 5, true);    // West lower
+  createForestCorridor(terrain, 335, 90, 335, 130, 14, 5, true);   // East upper
+  createForestCorridor(terrain, 335, 190, 335, 230, 14, 5, true);  // East lower
+
+  // ROADS - Fast movement corridors connecting key areas
+  // Main highways
+  createRoad(terrain, 50, 45, 50, 90, 5);    // P1 to nat
+  createRoad(terrain, 180, 45, 180, 90, 5);  // P2 to nat
+  createRoad(terrain, 310, 45, 310, 90, 5);  // P3 to nat
+  createRoad(terrain, 50, 275, 50, 230, 5);  // P4 to nat
+  createRoad(terrain, 180, 275, 180, 230, 5);// P5 to nat
+  createRoad(terrain, 310, 275, 310, 230, 5);// P6 to nat
+
+  // Cross roads connecting thirds
+  createRoad(terrain, 40, 160, 130, 160, 4);   // West third to center-ish
+  createRoad(terrain, 230, 160, 320, 160, 4);  // Center-ish to east third
+
+  // SCATTERED FORESTS - Fill open areas with strategic cover
+  scatterForests(terrain, MAP_WIDTH, MAP_HEIGHT, 35, 5, 12, BASE_EXCLUSION_ZONES, 777, 0.25);
+
+  // DENSE FOREST patches at key flanking positions
+  fillFeatureCircle(terrain, 30, 130, 8, 'forest_dense');   // West flank upper
+  fillFeatureCircle(terrain, 30, 190, 8, 'forest_dense');   // West flank lower
+  fillFeatureCircle(terrain, 330, 130, 8, 'forest_dense');  // East flank upper
+  fillFeatureCircle(terrain, 330, 190, 8, 'forest_dense');  // East flank lower
+
+  // Light forests around gold expansions (cover for harassment)
+  fillFeatureCircle(terrain, 100, 145, 10, 'forest_light');
+  fillFeatureCircle(terrain, 260, 145, 10, 'forest_light');
+  fillFeatureCircle(terrain, 100, 175, 10, 'forest_light');
+  fillFeatureCircle(terrain, 260, 175, 10, 'forest_light');
+
+  // MUD areas in contested center (slow down engagement)
+  fillFeatureCircle(terrain, 180, 140, 8, 'mud');
+  fillFeatureCircle(terrain, 180, 180, 8, 'mud');
 
   // ========================================
   // RAMPS

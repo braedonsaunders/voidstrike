@@ -7,6 +7,15 @@ import {
   fillTerrainRect,
   fillTerrainCircle,
   createRampInTerrain,
+  createForestCorridor,
+  createRiver,
+  createLake,
+  createRoad,
+  createVoidChasm,
+  fillFeatureCircle,
+  fillFeatureRect,
+  scatterForests,
+  createMudArea,
 } from './MapTypes';
 
 /**
@@ -297,6 +306,63 @@ function generateVoidAssault(): MapData {
   // Additional chokepoint creators
   fillTerrainCircle(terrain, 85, 140, 10, 'unwalkable');
   fillTerrainCircle(terrain, 135, 80, 10, 'unwalkable');
+
+  // ========================================
+  // NEW TERRAIN FEATURES - Void/Alien theme
+  // ========================================
+
+  // VOID CHASMS - Massive void areas at edges (alien dimension tears)
+  createVoidChasm(terrain, 0, 0, 22, 22, 3);          // Top-left
+  createVoidChasm(terrain, MAP_WIDTH - 22, MAP_HEIGHT - 22, 22, 22, 3);  // Bottom-right
+  // Side void areas
+  createVoidChasm(terrain, 0, 100, 18, 40, 2);       // West void
+  createVoidChasm(terrain, MAP_WIDTH - 18, 80, 18, 40, 2);  // East void
+
+  // VOID LAKES - Alien energy pools
+  createLake(terrain, 55, 110, 10, 2);   // P1 side
+  createLake(terrain, 165, 110, 10, 2);  // P2 side
+  createLake(terrain, 110, 55, 8, 2);    // North
+  createLake(terrain, 110, 165, 8, 2);   // South
+
+  // FOREST CORRIDORS (alien vegetation) - Strategic paths
+  // Main attack routes
+  createForestCorridor(terrain, 35, 160, 85, 110, 16, 5, true);   // P1 to center
+  createForestCorridor(terrain, 185, 60, 135, 110, 16, 5, true);  // P2 to center
+
+  // Flanking corridors
+  createForestCorridor(terrain, 35, 50, 75, 90, 14, 4, true);     // P1 third route
+  createForestCorridor(terrain, 185, 170, 145, 130, 14, 4, true); // P2 third route
+
+  // Side forests for cover
+  createForestCorridor(terrain, 18, 100, 18, 150, 12, 4, true);
+  createForestCorridor(terrain, 202, 70, 202, 120, 12, 4, true);
+
+  // ROADS - Fast movement paths (void-touched roads)
+  // Main routes from bases
+  createRoad(terrain, 35, 185, 60, 145, 4);  // P1 main to nat
+  createRoad(terrain, 185, 35, 160, 75, 4);  // P2 main to nat
+  // Cross-map diagonal
+  createRoad(terrain, 75, 135, 145, 85, 3);
+
+  // SCATTERED FORESTS - Alien growths
+  scatterForests(terrain, MAP_WIDTH, MAP_HEIGHT, 25, 4, 10, BASE_EXCLUSION_ZONES, 789, 0.35);
+
+  // DENSE FOREST ambush points
+  fillFeatureCircle(terrain, 45, 75, 7, 'forest_dense');   // P1 flank
+  fillFeatureCircle(terrain, 175, 145, 7, 'forest_dense'); // P2 flank
+  fillFeatureCircle(terrain, 95, 55, 6, 'forest_dense');   // Gold approach
+  fillFeatureCircle(terrain, 125, 165, 6, 'forest_dense'); // Gold approach
+
+  // MUD areas (void-corrupted ground)
+  createMudArea(terrain, 110, 110, 12);  // Center
+  createMudArea(terrain, 70, 70, 6);     // P1 side
+  createMudArea(terrain, 150, 150, 6);   // P2 side
+
+  // Light forests for cover
+  fillFeatureCircle(terrain, 55, 125, 6, 'forest_light');
+  fillFeatureCircle(terrain, 165, 95, 6, 'forest_light');
+  fillFeatureCircle(terrain, 110, 80, 5, 'forest_light');
+  fillFeatureCircle(terrain, 110, 140, 5, 'forest_light');
 
   // ========================================
   // RAMPS - Narrow for defensibility (6-8 tiles)

@@ -329,6 +329,7 @@ Located in `src/rendering/`:
    - Subsurface scattering approximation for grass
 
 5. **Terrain.ts** - Enhanced terrain geometry with THREE.Terrain-style algorithms
+   - **256-level elevation system** (0-255, like StarCraft 2)
    - Proper Perlin noise with gradient interpolation
    - Fractal Brownian Motion (fBM) for multi-octave noise
    - Ridged multi-fractal noise for mountain ridges
@@ -337,6 +338,9 @@ Located in `src/rendering/`:
    - Gaussian smoothing pass for natural transitions
    - Bilinear height interpolation for smooth unit movement
    - Per-biome configuration with distinct visual styles
+   - **Terrain feature rendering** with color tints for water, forests, mud, roads
+   - **Speed modifier queries** for movement system integration
+   - **Vision blocking queries** for forest concealment
 
 ### Three.js Scene Graph
 
@@ -541,6 +545,85 @@ private checkBuildingDependencies(requirements: string[], playerId: string) {
   }
   return null; // All requirements met
 }
+```
+
+## Terrain Feature System
+
+### MapTypes.ts - Terrain Data Structures
+
+```typescript
+// 256-level elevation (like SC2)
+type Elevation = number; // 0-255
+
+// Gameplay elevation zones
+function elevationToZone(elevation: Elevation): 'low' | 'mid' | 'high';
+
+// Terrain features overlay terrain types
+type TerrainFeature =
+  | 'none'           // Normal terrain
+  | 'water_shallow'  // 0.6x speed, unbuildable
+  | 'water_deep'     // Impassable
+  | 'forest_light'   // 0.85x speed, partial vision
+  | 'forest_dense'   // 0.5x speed, blocks vision
+  | 'mud'            // 0.4x speed
+  | 'road'           // 1.25x speed
+  | 'void'           // Impassable
+  | 'cliff';         // Impassable, blocks vision
+
+// Feature configuration
+interface TerrainFeatureConfig {
+  walkable: boolean;
+  buildable: boolean;
+  speedModifier: number;
+  blocksVision: boolean;
+  partialVision: boolean;
+  flyingIgnores: boolean;
+}
+```
+
+### Map Helper Functions
+
+```typescript
+// Forest corridors with clear paths
+createForestCorridor(grid, x1, y1, x2, y2, width, pathWidth, denseEdges);
+
+// Rivers with optional bridge crossings
+createRiver(grid, x1, y1, x2, y2, width, bridgePosition, bridgeWidth);
+
+// Circular lakes with shallow edges
+createLake(grid, centerX, centerY, radius, shallowEdgeWidth);
+
+// Impassable void areas
+createVoidChasm(grid, x, y, width, height, edgeWidth);
+
+// Fast movement roads
+createRoad(grid, x1, y1, x2, y2, width);
+
+// Mud/swamp areas
+createMudArea(grid, centerX, centerY, radius);
+
+// Procedural forest scattering
+scatterForests(grid, mapWidth, mapHeight, count, minRadius, maxRadius, exclusionZones, seed, denseChance);
+```
+
+### Pathfinding Integration (AStar.ts)
+
+```typescript
+// Movement costs per cell
+interface PathNode {
+  moveCost: number;  // 1.0 = normal, <1 = faster (road), >1 = slower (mud/forest)
+}
+
+// Cost calculation
+const terrainCost = baseCost * neighbor.moveCost;
+```
+
+### Movement System Integration
+
+```typescript
+// Speed modifiers applied in MovementSystem
+const terrainSpeedMod = getTerrainSpeedModifier(x, y, isFlying);
+targetSpeed *= terrainSpeedMod;
 ```
 
 ## Biome & Environment System
