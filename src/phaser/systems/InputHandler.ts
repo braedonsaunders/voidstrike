@@ -210,6 +210,39 @@ export class InputHandler extends Phaser.Events.EventEmitter {
         const building = entity.get<Building>('Building');
         const targetUnit = entity.get<Unit>('Unit');
 
+        // Check if clicking on a friendly under-construction building (SC2-style resume construction)
+        if (building && selectable && localPlayerId && selectable.playerId === localPlayerId) {
+          const isUnderConstruction = building.state === 'waiting_for_worker' ||
+                                       building.state === 'constructing' ||
+                                       building.state === 'paused';
+
+          if (isUnderConstruction) {
+            // Check if selected units include workers
+            const constructionWorkers = selectedUnits.filter(id => {
+              const e = this.game.world.getEntity(id);
+              const unit = e?.get<Unit>('Unit');
+              return unit?.isWorker;
+            });
+
+            if (constructionWorkers.length > 0) {
+              // Issue resume construction command to all workers
+              for (const workerId of constructionWorkers) {
+                this.game.eventBus.emit('command:resume_construction', {
+                  workerId,
+                  buildingId: clickedEntity.id,
+                });
+              }
+              // Show visual feedback - flash selection ring on building
+              this.game.eventBus.emit('ui:flash_selection', {
+                entityId: clickedEntity.id,
+                color: 0xffff00, // Yellow for construction
+                duration: 300,
+              });
+              return;
+            }
+          }
+        }
+
         // Check if clicking on a friendly damaged building/mechanical unit (for repair)
         if (selectable && localPlayerId && selectable.playerId === localPlayerId && health && !health.isDead()) {
           // Can repair buildings or mechanical units

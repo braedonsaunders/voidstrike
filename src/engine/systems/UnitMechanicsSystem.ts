@@ -408,6 +408,11 @@ export class UnitMechanicsSystem extends System {
     const repairerUnit = repairer.get<Unit>('Unit');
     if (!repairerUnit || !repairerUnit.canRepair) return;
 
+    // If worker is currently constructing, release them from construction (SC2-style)
+    if (repairerUnit.state === 'building' && repairerUnit.constructingBuildingId !== null) {
+      repairerUnit.cancelBuilding();
+    }
+
     repairerUnit.setRepairTarget(command.targetId);
   }
 

@@ -43,6 +43,75 @@ export class BuildingPlacementSystem extends System {
 
     // Handle addon construction
     this.game.eventBus.on('building:build_addon', this.handleBuildAddon.bind(this));
+
+    // Handle worker resuming construction on a paused/in-progress building (SC2-style)
+    this.game.eventBus.on('command:resume_construction', this.handleResumeConstruction.bind(this));
+  }
+
+  /**
+   * Handle a worker being commanded to resume construction on a paused or in-progress building (SC2-style)
+   */
+  private handleResumeConstruction(data: {
+    workerId: number;
+    buildingId: number;
+  }): void {
+    const { workerId, buildingId } = data;
+
+    // Get the worker entity
+    const workerEntity = this.world.getEntity(workerId);
+    if (!workerEntity) {
+      debugBuildingPlacement.warn(`BuildingPlacementSystem: Worker ${workerId} not found for resume construction`);
+      return;
+    }
+
+    const unit = workerEntity.get<Unit>('Unit');
+    if (!unit || !unit.isWorker) {
+      debugBuildingPlacement.warn(`BuildingPlacementSystem: Entity ${workerId} is not a worker`);
+      return;
+    }
+
+    // Get the building entity
+    const buildingEntity = this.world.getEntity(buildingId);
+    if (!buildingEntity) {
+      debugBuildingPlacement.warn(`BuildingPlacementSystem: Building ${buildingId} not found for resume construction`);
+      return;
+    }
+
+    const building = buildingEntity.get<Building>('Building');
+    const buildingTransform = buildingEntity.get<Transform>('Transform');
+    const buildingSelectable = buildingEntity.get<Selectable>('Selectable');
+    const workerSelectable = workerEntity.get<Selectable>('Selectable');
+
+    if (!building || !buildingTransform || !buildingSelectable) {
+      debugBuildingPlacement.warn(`BuildingPlacementSystem: Building ${buildingId} missing required components`);
+      return;
+    }
+
+    // Verify building is under construction (waiting, constructing, or paused)
+    if (building.state !== 'waiting_for_worker' && building.state !== 'constructing' && building.state !== 'paused') {
+      debugBuildingPlacement.log(`BuildingPlacementSystem: Building ${buildingId} is not under construction (state: ${building.state})`);
+      return;
+    }
+
+    // Verify worker and building belong to same player
+    if (workerSelectable?.playerId !== buildingSelectable.playerId) {
+      debugBuildingPlacement.log(`BuildingPlacementSystem: Worker ${workerId} cannot construct enemy building`);
+      return;
+    }
+
+    // Assign the worker to this construction
+    unit.constructingBuildingId = buildingId;
+    unit.buildingType = building.buildingId;
+    unit.buildTargetX = buildingTransform.x;
+    unit.buildTargetY = buildingTransform.y;
+    unit.state = 'building';
+    unit.targetX = buildingTransform.x;
+    unit.targetY = buildingTransform.y;
+    unit.gatherTargetId = null;
+    unit.carryingMinerals = 0;
+    unit.carryingVespene = 0;
+
+    debugBuildingPlacement.log(`BuildingPlacementSystem: Worker ${workerId} assigned to resume construction of ${building.name} at ${Math.round(building.buildProgress * 100)}%`);
   }
 
   private handleBuildingPlace(data: {
@@ -602,6 +671,8 @@ export class BuildingPlacementSystem extends System {
 
   /**
    * Update construction progress for buildings based on worker presence
+   * SC2-style: Construction only progresses while a worker is actively constructing.
+   * If worker leaves, construction pauses but does NOT cancel.
    */
   private updateBuildingConstruction(dt: number): void {
     const buildings = this.world.getEntitiesWith('Building', 'Health', 'Transform');
@@ -611,8 +682,8 @@ export class BuildingPlacementSystem extends System {
       const health = entity.get<Health>('Health')!;
       const buildingTransform = entity.get<Transform>('Transform')!;
 
-      // Skip buildings that are not waiting or constructing
-      if (building.state !== 'waiting_for_worker' && building.state !== 'constructing') {
+      // Skip buildings that are not in an under-construction state
+      if (building.state !== 'waiting_for_worker' && building.state !== 'constructing' && building.state !== 'paused') {
         continue;
       }
 
@@ -629,6 +700,18 @@ export class BuildingPlacementSystem extends System {
             position: { x: buildingTransform.x, y: buildingTransform.y },
           });
           debugBuildingPlacement.log(`BuildingPlacementSystem: ${building.name} construction started - worker arrived!`);
+        }
+
+        // If building was paused, resume construction (SC2-style)
+        if (building.state === 'paused') {
+          building.resumeConstruction();
+          this.game.eventBus.emit('building:construction_resumed', {
+            entityId: entity.id,
+            buildingType: building.buildingId,
+            position: { x: buildingTransform.x, y: buildingTransform.y },
+            progress: building.buildProgress,
+          });
+          debugBuildingPlacement.log(`BuildingPlacementSystem: ${building.name} construction resumed at ${Math.round(building.buildProgress * 100)}%!`);
         }
 
         // Progress construction
@@ -672,6 +755,18 @@ export class BuildingPlacementSystem extends System {
           });
 
           debugBuildingPlacement.log(`BuildingPlacementSystem: ${building.name} construction complete!`);
+        }
+      } else {
+        // No worker is constructing - pause if construction had started (SC2-style)
+        if (building.state === 'constructing') {
+          building.pauseConstruction();
+          this.game.eventBus.emit('building:construction_paused', {
+            entityId: entity.id,
+            buildingType: building.buildingId,
+            position: { x: buildingTransform.x, y: buildingTransform.y },
+            progress: building.buildProgress,
+          });
+          debugBuildingPlacement.log(`BuildingPlacementSystem: ${building.name} construction paused at ${Math.round(building.buildProgress * 100)}% - no worker present`);
         }
       }
     }

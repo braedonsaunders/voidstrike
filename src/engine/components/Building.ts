@@ -1,6 +1,6 @@
 import { Component } from '../ecs/Component';
 
-export type BuildingState = 'waiting_for_worker' | 'constructing' | 'complete' | 'destroyed' | 'lifting' | 'flying' | 'landing';
+export type BuildingState = 'waiting_for_worker' | 'constructing' | 'paused' | 'complete' | 'destroyed' | 'lifting' | 'flying' | 'landing';
 export type AddonType = 'tech_lab' | 'reactor' | null;
 
 export interface BuildingDefinition {
@@ -178,10 +178,36 @@ export class Building extends Component {
   }
 
   /**
-   * Check if construction has started (worker has arrived)
+   * Check if construction has started (worker has arrived at least once)
    */
   public hasConstructionStarted(): boolean {
-    return this.state === 'constructing' || this.state === 'complete';
+    return this.state === 'constructing' || this.state === 'paused' || this.state === 'complete';
+  }
+
+  /**
+   * Pause construction when worker leaves (SC2-style)
+   * Construction will remain paused until another worker resumes it
+   */
+  public pauseConstruction(): void {
+    if (this.state === 'constructing') {
+      this.state = 'paused';
+    }
+  }
+
+  /**
+   * Resume construction when a worker arrives at a paused building (SC2-style)
+   */
+  public resumeConstruction(): void {
+    if (this.state === 'paused') {
+      this.state = 'constructing';
+    }
+  }
+
+  /**
+   * Check if construction is paused (waiting for worker to resume)
+   */
+  public isConstructionPaused(): boolean {
+    return this.state === 'paused';
   }
 
   public updateConstruction(deltaTime: number): boolean {

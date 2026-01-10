@@ -133,6 +133,11 @@ export class CombatSystem extends System {
           });
         }
       } else {
+        // If worker is currently constructing, release them from construction (SC2-style)
+        if (unit.state === 'building' && unit.constructingBuildingId !== null) {
+          unit.cancelBuilding();
+        }
+
         if (command.targetEntityId !== undefined) {
           unit.setAttackTarget(command.targetEntityId);
         } else if (command.targetPosition) {

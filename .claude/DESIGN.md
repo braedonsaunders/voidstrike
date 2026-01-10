@@ -222,6 +222,48 @@ The combat system uses the elevation system:
 - AI and human players are assigned to main bases only
 - Expansion locations are never spawn points
 
+## Building Construction System (SC2-Style)
+
+### Dominion Construction Mechanics
+
+The Dominion faction uses StarCraft 2 Terran-style construction where workers (Fabricators) physically construct buildings:
+
+**Construction Flow:**
+1. Player selects a worker and places a building blueprint
+2. Worker is assigned and moves to the construction site
+3. Worker is "locked" to construction - they stay there building unless explicitly commanded to move
+4. Construction progresses only while a worker is actively present at the site
+5. When complete, the worker is released and returns to idle state
+
+**Paused Construction:**
+- If a worker is moved away from a construction site (via move command, gather, attack, repair), construction pauses
+- The building remains at its current progress and health, waiting for a worker
+- Any worker can resume construction by right-clicking on the paused building
+- Paused buildings are NOT cancelled automatically - they persist indefinitely
+
+**Worker Assignment:**
+- Multiple workers can be assigned to the same building for faster construction
+- Workers are automatically released when construction completes
+- If the building is destroyed, assigned workers are released
+
+**Building States:**
+| State | Description |
+|-------|-------------|
+| `waiting_for_worker` | Blueprint placed, worker assigned but not arrived |
+| `constructing` | Worker actively building, health increasing |
+| `paused` | Construction started but no worker present |
+| `complete` | Building finished, fully operational |
+
+**Right-Click on Buildings:**
+- Right-clicking a friendly under-construction building with workers selected assigns them to resume construction
+- This works for `waiting_for_worker`, `constructing`, and `paused` buildings
+- Visual feedback: yellow flash on building when construction is resumed
+
+**Blueprint Cancellation:**
+- Only blueprints in `waiting_for_worker` state (never started) are cancelled if no worker is assigned
+- Resources are fully refunded for cancelled blueprints
+- Once construction starts (`constructing` or `paused`), the building persists
+
 ## Performance Targets
 
 - 60 FPS with 200 units on screen

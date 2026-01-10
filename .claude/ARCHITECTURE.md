@@ -746,6 +746,40 @@ handleLowerCommand(entityIds);
 processBuildingAttacks(building, deltaTime);
 ```
 
+### Building Placement System (`BuildingPlacementSystem.ts`)
+
+Handles SC2-style Terran construction:
+
+```typescript
+// Building states
+type BuildingState =
+  | 'waiting_for_worker'  // Blueprint placed, worker en route
+  | 'constructing'        // Worker present, construction progressing
+  | 'paused'              // Started but no worker present
+  | 'complete'            // Finished
+  | 'destroyed';          // Destroyed
+
+// Construction flow
+handleBuildingPlace(buildingType, position, workerId);  // Place blueprint
+handleResumeConstruction(workerId, buildingId);         // Resume paused building
+updateBuildingConstruction(dt);                          // Progress/pause logic
+cancelOrphanedBlueprints();                              // Only cancel waiting_for_worker
+
+// Events emitted
+'building:placed'              // Building blueprint created
+'building:construction_started' // Worker arrived, construction begins
+'building:construction_paused'  // Worker left, construction paused
+'building:construction_resumed' // Worker resumed construction
+'building:complete'             // Construction finished
+'building:cancelled'            // Blueprint cancelled (refunded)
+```
+
+Key features:
+- **Pause/Resume**: Construction pauses when worker leaves, resumes when assigned
+- **Right-click Resume**: Workers can right-click paused buildings to resume
+- **No Auto-Cancel**: Paused buildings persist until manually resumed or destroyed
+- **Multiple Workers**: Multiple workers can speed up construction
+
 ### Enhanced AI System (`EnhancedAISystem.ts`)
 
 5-tier difficulty system with strategic behaviors:
