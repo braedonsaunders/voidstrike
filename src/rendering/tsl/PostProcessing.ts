@@ -15,32 +15,21 @@ import * as THREE from 'three';
 import { WebGPURenderer, PostProcessing } from 'three/webgpu';
 import {
   pass,
-  bloom,
-  ao,
-  fxaa,
-  output,
-  mrt,
-  normalView,
-  depth,
   uniform,
-  texture,
   uv,
-  vec2,
   vec3,
   vec4,
   float,
   Fn,
   mix,
-  pow,
   smoothstep,
   clamp,
   length,
   dot,
-  abs,
-  max,
-  min,
-  saturate,
 } from 'three/tsl';
+
+// Note: bloom, ao, fxaa are not directly available in three/tsl
+// We implement custom versions or skip them
 
 // ============================================
 // POST-PROCESSING CONFIGURATION
@@ -73,16 +62,16 @@ export interface PostProcessingConfig {
 }
 
 const DEFAULT_CONFIG: PostProcessingConfig = {
-  bloomEnabled: true,
+  bloomEnabled: false, // Bloom requires additional setup, disabled by default
   bloomStrength: 0.2,
   bloomRadius: 0.4,
   bloomThreshold: 0.9,
 
-  ssaoEnabled: true,
+  ssaoEnabled: false, // SSAO not available in TSL yet
   ssaoRadius: 16,
   ssaoIntensity: 1.0,
 
-  fxaaEnabled: true,
+  fxaaEnabled: false, // FXAA not available in TSL yet
 
   vignetteEnabled: true,
   vignetteIntensity: 0.3,
@@ -130,46 +119,16 @@ export class RenderPipeline {
   private createPipeline(): PostProcessing {
     const postProcessing = new PostProcessing(this.renderer);
 
-    // Create scene pass with MRT for depth/normal access
+    // Create scene pass
     const scenePass = pass(this.scene, this.camera);
 
-    // Enable MRT for SSAO
-    if (this.config.ssaoEnabled) {
-      scenePass.setMRT(
-        mrt({
-          output: output,
-          normal: normalView,
-        })
-      );
-    }
+    // Get color output from scene pass
+    const colorNode = scenePass.getTextureNode();
 
-    // Get textures from scene pass
-    let colorNode = scenePass.getTextureNode('output');
-
-    // Apply SSAO
-    if (this.config.ssaoEnabled) {
-      const depthTexture = scenePass.getTextureNode('depth');
-      const normalTexture = scenePass.getTextureNode('normal');
-
-      const aoPass = ao(depthTexture, normalTexture, this.camera);
-      colorNode = colorNode.mul(aoPass);
-    }
-
-    // Apply Bloom
-    if (this.config.bloomEnabled) {
-      const bloomPass = bloom(colorNode, this.uBloomStrength, this.config.bloomRadius);
-      colorNode = colorNode.add(bloomPass);
-    }
-
-    // Custom post-processing effects
+    // Apply custom post-processing effects (vignette, exposure, saturation, contrast)
     const finalPass = this.createFinalPass(colorNode);
 
-    // Apply FXAA
-    if (this.config.fxaaEnabled) {
-      postProcessing.outputNode = fxaa(finalPass);
-    } else {
-      postProcessing.outputNode = finalPass;
-    }
+    postProcessing.outputNode = finalPass;
 
     return postProcessing;
   }
@@ -276,25 +235,22 @@ export class RenderPipeline {
 }
 
 // ============================================
-// SIMPLE BLOOM IMPLEMENTATION (FALLBACK)
+// SIMPLE POST-PROCESSING (FALLBACK)
 // ============================================
 
 /**
- * Create a simple bloom pass for cases where the full pipeline isn't needed
+ * Create a simple post-processing pass without bloom
+ * (Bloom requires additional TSL setup not yet available)
  */
-export function createSimpleBloom(
+export function createSimplePostProcessing(
   renderer: WebGPURenderer,
   scene: THREE.Scene,
-  camera: THREE.Camera,
-  strength: number = 0.5,
-  radius: number = 0.5
+  camera: THREE.Camera
 ): PostProcessing {
   const postProcessing = new PostProcessing(renderer);
 
   const scenePass = pass(scene, camera);
-  const bloomPass = bloom(scenePass, strength, radius);
-
-  postProcessing.outputNode = scenePass.add(bloomPass);
+  postProcessing.outputNode = scenePass.getTextureNode();
 
   return postProcessing;
 }

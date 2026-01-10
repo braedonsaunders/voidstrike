@@ -71,7 +71,7 @@ export {
 // Post-processing
 export {
   RenderPipeline,
-  createSimpleBloom,
+  createSimplePostProcessing,
   createOutlinePass,
   ScreenShake,
   DamageVignette,
