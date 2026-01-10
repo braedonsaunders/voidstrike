@@ -279,31 +279,99 @@ export class PathfindingSystem extends System {
 
   private requestPath(request: PathRequest): void {
     // Calculate path immediately for now (could be batched later)
-    const result = this.pathfinder.findPath(
+    let result = this.pathfinder.findPath(
       request.startX,
       request.startY,
       request.endX,
       request.endY
     );
 
-    if (result.found && result.path.length > 0) {
-      const entity = this.world.getEntity(request.entityId);
-      if (entity) {
-        const unit = entity.get<Unit>('Unit');
-        if (unit) {
-          unit.setPath(result.path);
+    const entity = this.world.getEntity(request.entityId);
+    if (!entity) return;
 
-          // Track the destination for repath checks
-          this.unitPathStates.set(request.entityId, {
-            lastPosition: { x: request.startX, y: request.startY },
-            lastMoveTick: this.game.getCurrentTick(),
-            lastRepathTick: this.game.getCurrentTick(),
-            destinationX: request.endX,
-            destinationY: request.endY,
-          });
+    const unit = entity.get<Unit>('Unit');
+    if (!unit) return;
+
+    // If no path found, try to find path to nearest walkable cell from destination
+    if (!result.found || result.path.length === 0) {
+      debugPathfinding.log(`[PathfindingSystem] No path from (${request.startX.toFixed(1)}, ${request.startY.toFixed(1)}) to (${request.endX.toFixed(1)}, ${request.endY.toFixed(1)}), trying alternate destination`);
+
+      // Try to find a nearby walkable destination
+      const alternateEnd = this.findNearbyWalkableCell(request.endX, request.endY, 10);
+      if (alternateEnd) {
+        result = this.pathfinder.findPath(
+          request.startX,
+          request.startY,
+          alternateEnd.x,
+          alternateEnd.y
+        );
+      }
+
+      // If still no path, check if the start position is the problem
+      if (!result.found || result.path.length === 0) {
+        // Try to find path from nearby walkable cell (unit might be stuck)
+        const alternateStart = this.findNearbyWalkableCell(request.startX, request.startY, 5);
+        if (alternateStart && alternateEnd) {
+          result = this.pathfinder.findPath(
+            alternateStart.x,
+            alternateStart.y,
+            alternateEnd.x,
+            alternateEnd.y
+          );
+          // Prepend a waypoint to get to the alternate start
+          if (result.found && result.path.length > 0) {
+            result.path.unshift({ x: alternateStart.x, y: alternateStart.y });
+          }
         }
       }
     }
+
+    if (result.found && result.path.length > 0) {
+      unit.setPath(result.path);
+
+      // Track the destination for repath checks
+      this.unitPathStates.set(request.entityId, {
+        lastPosition: { x: request.startX, y: request.startY },
+        lastMoveTick: this.game.getCurrentTick(),
+        lastRepathTick: this.game.getCurrentTick(),
+        destinationX: request.endX,
+        destinationY: request.endY,
+      });
+    } else {
+      // Path completely failed - log for debugging
+      debugPathfinding.warn(`[PathfindingSystem] Failed to find any path for entity ${request.entityId} from (${request.startX.toFixed(1)}, ${request.startY.toFixed(1)}) to (${request.endX.toFixed(1)}, ${request.endY.toFixed(1)})`);
+    }
+  }
+
+  /**
+   * Find a nearby walkable cell using spiral search pattern.
+   */
+  private findNearbyWalkableCell(x: number, y: number, maxRadius: number): { x: number; y: number } | null {
+    const gridX = Math.floor(x);
+    const gridY = Math.floor(y);
+
+    // Check if original position is walkable
+    if (this.pathfinder.isWalkable(gridX, gridY)) {
+      return { x: gridX + 0.5, y: gridY + 0.5 };
+    }
+
+    // Spiral search for nearby walkable cell
+    for (let radius = 1; radius <= maxRadius; radius++) {
+      for (let dy = -radius; dy <= radius; dy++) {
+        for (let dx = -radius; dx <= radius; dx++) {
+          if (Math.abs(dx) !== radius && Math.abs(dy) !== radius) continue; // Only check perimeter
+
+          const checkX = gridX + dx;
+          const checkY = gridY + dy;
+
+          if (this.pathfinder.isWalkable(checkX, checkY)) {
+            return { x: checkX + 0.5, y: checkY + 0.5 };
+          }
+        }
+      }
+    }
+
+    return null;
   }
 
   public findPath(startX: number, startY: number, endX: number, endY: number): PathResult {
