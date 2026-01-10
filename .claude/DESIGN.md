@@ -144,17 +144,43 @@ All maps follow StarCraft 2-inspired design principles:
 3. **Contested Center** - Central area with watch towers for map control
 4. **Multiple Expansion Tiers** - Main → Natural → Third → Fourth → Gold bases
 5. **Narrow Ramps** - 6-10 tile wide ramps for wall-offs and defense
-6. **Elevation Variety** - Multiple elevation levels (0, 1, 2) for strategic positioning
+6. **256-Level Elevation System** - SC2-style 0-255 height levels for smooth terrain (gameplay zones: low 0-85, mid 86-170, high 171-255)
+
+### Terrain Feature System
+
+Maps now include diverse terrain features that affect gameplay:
+
+| Feature | Walkable | Buildable | Speed | Vision | Notes |
+|---------|----------|-----------|-------|--------|-------|
+| **Water (shallow)** | Yes | No | 0.6x | Clear | Rivers, ponds |
+| **Water (deep)** | No | No | - | Clear | Lakes, impassable |
+| **Forest (light)** | Yes | No | 0.85x | Partial | Small trees, slight cover |
+| **Forest (dense)** | Yes | No | 0.5x | Blocked | Hides units, ambush positions |
+| **Mud/Swamp** | Yes | No | 0.4x | Clear | Significant slow zone |
+| **Road** | Yes | No | 1.25x | Clear | Fast movement corridors |
+| **Void** | No | No | - | Clear | Map edges, chasms |
+| **Cliff** | No | No | - | Blocked | Sheer drops |
+
+### Strategic Terrain Elements
+
+Each map now includes:
+
+- **Forest Corridors** - Paths with dense trees on sides, clear roads in center
+- **River Crossings** - Water barriers with bridge chokepoints
+- **Void Chasms** - Impassable areas at map edges/corners
+- **Road Networks** - Fast movement highways connecting key areas
+- **Ambush Forests** - Dense forest patches for hiding armies
+- **Mud Zones** - Contested areas with movement penalties
 
 ### Available Maps
 
-| Map | Players | Size | Biome | Description |
-|-----|---------|------|-------|-------------|
-| Crystal Caverns | 2 | 200×180 | Frozen | Horizontal 1v1 with protected bases and center gold |
-| Void Assault | 2 | 220×220 | Void | Diagonal 1v1 with multiple attack paths |
-| Scorched Basin | 4 | 280×280 | Desert | 4-player corner spawns with shared expansions |
-| Contested Frontier | 6 | 360×320 | Jungle | 3v3 team map with two rows facing off |
-| Titan's Colosseum | 8 | 400×400 | Volcanic | 8-player FFA/4v4 with central arena |
+| Map | Players | Size | Biome | Terrain Features |
+|-----|---------|------|-------|------------------|
+| Crystal Caverns | 2 | 200×180 | Frozen | Frozen lakes, ice corridors, icy slow zones |
+| Void Assault | 2 | 220×220 | Void | Void chasms, alien forests, energy pools |
+| Scorched Basin | 4 | 280×280 | Desert | Lava lakes, scorched forests, sand slow zones |
+| Contested Frontier | 6 | 360×320 | Jungle | Rivers with bridges, dense jungle, mud pits |
+| Titan's Colosseum | 8 | 400×400 | Volcanic | Lava moats, volcanic pits, highway system |
 
 ### Expansion Types
 - **Main Base** - Starting location, rich minerals (1800), protected by cliffs
@@ -162,6 +188,14 @@ All maps follow StarCraft 2-inspired design principles:
 - **Third** - Contested, requires army presence, moderate minerals (1500)
 - **Gold** - High-risk high-reward, rich gold minerals (1000), exposed
 - **Center** - Highly contested, limited resources (750)
+
+### High Ground Advantage
+
+The combat system uses the elevation system:
+- Attacking from low → high ground: 30% miss chance
+- Attacking from low → mid ground: 15% miss chance
+- Attacking from mid → high ground: 15% miss chance
+- Same or higher elevation: No penalty
 
 ### Spawn Point Rules
 - Only main base locations are valid spawn points

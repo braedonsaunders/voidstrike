@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { MapData, MapCell, TerrainType, ElevationLevel } from '@/data/maps';
+import { MapData, MapCell, TerrainType, ElevationLevel, Elevation, TerrainFeature, TERRAIN_FEATURE_CONFIG } from '@/data/maps';
 import { BiomeConfig, BIOMES, blendBiomeColors, BiomeType, getBiomeShaderConfig } from './Biomes';
 import { createTerrainShaderMaterial, updateTerrainShader } from './shaders/TerrainShader';
 import { createSC2TerrainShaderMaterial, getSC2BiomeConfig, updateSC2TerrainShader } from './shaders/SC2TerrainShader';
@@ -13,11 +13,34 @@ type TerrainShaderMode = 'texture' | 'basic' | 'sc2';
 // Terrain subdivision for smoother rendering
 const SUBDIVISIONS = 2; // 2x2 subdivisions per cell for better quality
 
-// Height for each elevation level - reduced for less dramatic cliffs
+/**
+ * Convert 256-level elevation (0-255) to physical world height.
+ * Range: 0 to ~6.4 units (0.025 per level)
+ */
+function elevationToHeight(elevation: Elevation): number {
+  return elevation * 0.025;
+}
+
+// Legacy height lookup for backwards compatibility
 const ELEVATION_HEIGHTS: Record<ElevationLevel, number> = {
-  0: 0,
-  1: 1.8,
-  2: 3.5,
+  0: elevationToHeight(60),   // ~1.5
+  1: elevationToHeight(140),  // ~3.5
+  2: elevationToHeight(220),  // ~5.5
+};
+
+/**
+ * Feature color tints for rendering
+ */
+const FEATURE_COLOR_TINTS: Record<TerrainFeature, THREE.Color> = {
+  none: new THREE.Color(1, 1, 1),           // No tint
+  water_shallow: new THREE.Color(0.6, 0.8, 1.0),    // Blue tint
+  water_deep: new THREE.Color(0.2, 0.4, 0.7),       // Deep blue
+  forest_light: new THREE.Color(0.7, 0.9, 0.6),     // Light green
+  forest_dense: new THREE.Color(0.4, 0.6, 0.3),     // Dark green
+  mud: new THREE.Color(0.6, 0.5, 0.3),              // Brown
+  road: new THREE.Color(0.85, 0.8, 0.7),            // Tan/beige
+  void: new THREE.Color(0.15, 0.1, 0.25),           // Dark purple
+  cliff: new THREE.Color(0.5, 0.45, 0.4),           // Gray-brown
 };
 
 export interface TerrainConfig {
@@ -287,7 +310,8 @@ export class Terrain {
       vertexGrid[y] = [];
       for (let x = 0; x <= width; x++) {
         const cell = this.sampleTerrain(terrain, x, y, width, height);
-        const baseHeight = ELEVATION_HEIGHTS[cell.elevation];
+        // Use new 256-level elevation system
+        const baseHeight = elevationToHeight(cell.elevation);
 
         // Calculate edge factor for cliff handling
         const edgeFactor = this.calculateElevationEdgeFactor(terrain, x, y, width, height);
@@ -383,8 +407,14 @@ export class Terrain {
                                   cell.terrain === 'ramp' ? 'ramp' : 'ground';
         const baseColor = blendBiomeColors(this.biome, x, y, terrainColorType);
 
-        // Adjust color based on elevation
-        const elevationBrightness = 1 + cell.elevation * 0.08;
+        // Apply terrain feature color tint
+        const feature = cell.feature || 'none';
+        const featureTint = FEATURE_COLOR_TINTS[feature];
+        baseColor.multiply(featureTint);
+
+        // Adjust color based on elevation (normalized to 0-255 range)
+        const normalizedElevation = cell.elevation / 255;
+        const elevationBrightness = 1 + normalizedElevation * 0.15;
         baseColor.multiplyScalar(elevationBrightness);
 
         // Get cell corners
@@ -546,8 +576,9 @@ export class Terrain {
     }
 
     // Prioritize certain terrain types for smooth blending
-    let maxElevation: ElevationLevel = 0;
+    let maxElevation: Elevation = 0;
     let dominantTerrain: TerrainType = 'ground';
+    let dominantFeature: TerrainFeature = 'none';
     let hasRamp = false;
 
     for (const sample of samples) {
@@ -555,20 +586,22 @@ export class Terrain {
       if (sample.elevation > maxElevation) {
         maxElevation = sample.elevation;
         dominantTerrain = sample.terrain;
+        dominantFeature = sample.feature || 'none';
       }
     }
 
     // Ramps should smooth between elevations
     if (hasRamp) {
       dominantTerrain = 'ramp';
-      // Average elevation for smooth ramp
+      // Average elevation for smooth ramp transition
       const avgElevation = samples.reduce((sum, s) => sum + s.elevation, 0) / samples.length;
-      maxElevation = Math.round(avgElevation) as ElevationLevel;
+      maxElevation = Math.round(avgElevation);
     }
 
     return {
       terrain: dominantTerrain,
       elevation: maxElevation,
+      feature: dominantFeature,
       textureId: samples[0].textureId,
     };
   }
@@ -612,16 +645,80 @@ export class Terrain {
     return this.mapData.terrain[y][x];
   }
 
-  public isWalkable(worldX: number, worldY: number): boolean {
+  public isWalkable(worldX: number, worldY: number, isFlying: boolean = false): boolean {
     const cell = this.getTerrainAt(worldX, worldY);
     if (!cell) return false;
-    return cell.terrain !== 'unwalkable';
+
+    // Check terrain type first
+    if (cell.terrain === 'unwalkable') {
+      // Flying units can cross some unwalkable terrain
+      return isFlying;
+    }
+
+    // Check terrain feature
+    const feature = cell.feature || 'none';
+    const config = TERRAIN_FEATURE_CONFIG[feature];
+
+    // Flying units ignore most features
+    if (isFlying && config.flyingIgnores) {
+      return true;
+    }
+
+    return config.walkable;
   }
 
   public isBuildable(worldX: number, worldY: number): boolean {
     const cell = this.getTerrainAt(worldX, worldY);
     if (!cell) return false;
-    return cell.terrain === 'ground';
+
+    // Must be ground terrain type
+    if (cell.terrain !== 'ground') return false;
+
+    // Check feature buildability
+    const feature = cell.feature || 'none';
+    const config = TERRAIN_FEATURE_CONFIG[feature];
+
+    return config.buildable;
+  }
+
+  /**
+   * Get speed modifier for terrain at position
+   */
+  public getSpeedModifier(worldX: number, worldY: number, isFlying: boolean = false): number {
+    const cell = this.getTerrainAt(worldX, worldY);
+    if (!cell) return 1.0;
+
+    const feature = cell.feature || 'none';
+    const config = TERRAIN_FEATURE_CONFIG[feature];
+
+    // Flying units ignore terrain speed modifiers
+    if (isFlying && config.flyingIgnores) {
+      return 1.0;
+    }
+
+    return config.speedModifier;
+  }
+
+  /**
+   * Check if terrain blocks vision
+   */
+  public blocksVision(worldX: number, worldY: number): boolean {
+    const cell = this.getTerrainAt(worldX, worldY);
+    if (!cell) return false;
+
+    const feature = cell.feature || 'none';
+    return TERRAIN_FEATURE_CONFIG[feature].blocksVision;
+  }
+
+  /**
+   * Check if terrain provides partial vision cover
+   */
+  public hasPartialVisionCover(worldX: number, worldY: number): boolean {
+    const cell = this.getTerrainAt(worldX, worldY);
+    if (!cell) return false;
+
+    const feature = cell.feature || 'none';
+    return TERRAIN_FEATURE_CONFIG[feature].partialVision;
   }
 
   public getWidth(): number {

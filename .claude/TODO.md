@@ -221,6 +221,44 @@
 
 ---
 
+## Phase 1.7: Enhanced Terrain System (COMPLETE ✓)
+
+### 256-Level Elevation System (SC2 Parity)
+- [x] Expanded elevation from 3 levels (0-2) to 256 levels (0-255)
+- [x] Gameplay zones (low: 0-85, mid: 86-170, high: 171-255)
+- [x] Smooth elevation gradients for natural terrain
+- [x] High-ground advantage combat integration
+
+### Terrain Features
+- [x] TerrainFeature type system (water, forest, mud, road, void, cliff)
+- [x] Feature configurations (walkable, buildable, speed modifier, vision blocking)
+- [x] Terrain color tinting for feature rendering
+- [x] Flying unit feature bypass
+
+### Movement & Pathfinding Integration
+- [x] Terrain speed modifiers in MovementSystem
+- [x] Pathfinding cost modifiers in AStar.ts
+- [x] Feature-aware walkability checks in Terrain.ts
+
+### Map Helper Functions
+- [x] createForestCorridor() - Forest paths with clear center
+- [x] createRiver() - Water barriers with optional bridges
+- [x] createLake() - Circular water bodies with shallow edges
+- [x] createVoidChasm() - Impassable void areas
+- [x] createRoad() - Fast movement corridors
+- [x] createMudArea() - Slow movement zones
+- [x] scatterForests() - Procedural forest placement
+- [x] fillFeatureRect/Circle() - General feature painting
+
+### All Maps Redesigned
+- [x] Crystal Caverns - Frozen lakes, ice corridors, icy slow zones
+- [x] Void Assault - Void chasms, alien forests, energy pools
+- [x] Scorched Basin - Lava lakes, scorched forests, sand slow zones
+- [x] Contested Frontier - Rivers with bridges, dense jungle, mud pits
+- [x] Titan's Colosseum - Lava moats, volcanic pits, highway system
+
+---
+
 ## Phase 2: Combat & Abilities (COMPLETE ✓)
 
 ### Combat System

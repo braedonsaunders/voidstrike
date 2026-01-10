@@ -26,7 +26,8 @@ export type GameState = 'initializing' | 'running' | 'paused' | 'ended';
 // Terrain cell for building placement validation
 export interface TerrainCell {
   terrain: 'ground' | 'unwalkable' | 'ramp' | 'unbuildable' | 'creep';
-  elevation: 0 | 1 | 2;
+  elevation: number; // 0-255 for new terrain system
+  feature?: 'none' | 'water_shallow' | 'water_deep' | 'forest_light' | 'forest_dense' | 'mud' | 'road' | 'void' | 'cliff';
 }
 
 export interface GameConfig {
@@ -64,8 +65,32 @@ export class Game {
   public pathfindingSystem: PathfindingSystem;
   public aiMicroSystem: AIMicroSystem;
 
-  // Terrain grid for building placement validation
+  // Terrain grid for building placement validation and terrain features
   private terrainGrid: TerrainCell[][] | null = null;
+
+  /**
+   * Get the terrain grid (read-only access for systems)
+   */
+  public getTerrainGrid(): TerrainCell[][] | null {
+    return this.terrainGrid;
+  }
+
+  /**
+   * Get terrain cell at a specific world position
+   */
+  public getTerrainAt(worldX: number, worldY: number): TerrainCell | null {
+    if (!this.terrainGrid) return null;
+
+    const gridX = Math.floor(worldX);
+    const gridY = Math.floor(worldY);
+
+    if (gridY < 0 || gridY >= this.terrainGrid.length ||
+        gridX < 0 || gridX >= this.terrainGrid[0].length) {
+      return null;
+    }
+
+    return this.terrainGrid[gridY][gridX];
+  }
 
   // Decoration collision data for building placement (rocks, trees)
   private decorationCollisions: Array<{ x: number; z: number; radius: number }> = [];

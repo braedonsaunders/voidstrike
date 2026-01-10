@@ -6,6 +6,7 @@ export interface PathNode {
   f: number; // Total cost (g + h)
   parent: PathNode | null;
   walkable: boolean;
+  moveCost: number; // Terrain movement cost modifier (1.0 = normal, higher = slower)
 }
 
 export interface PathResult {
@@ -39,7 +40,46 @@ export class AStar {
           f: 0,
           parent: null,
           walkable: true,
+          moveCost: 1.0, // Default normal movement cost
         };
+      }
+    }
+  }
+
+  /**
+   * Set terrain movement cost for a cell.
+   * Higher values make the cell less desirable for pathfinding.
+   * Roads should have cost < 1.0, forests/mud should have cost > 1.0
+   */
+  public setMoveCost(x: number, y: number, cost: number): void {
+    const gridX = Math.floor(x / this.cellSize);
+    const gridY = Math.floor(y / this.cellSize);
+
+    if (this.isInBounds(gridX, gridY)) {
+      this.grid[gridY][gridX].moveCost = cost;
+    }
+  }
+
+  /**
+   * Set movement cost for a rectangular area
+   */
+  public setMoveCostArea(
+    x: number,
+    y: number,
+    width: number,
+    height: number,
+    cost: number
+  ): void {
+    const startX = Math.floor(x / this.cellSize);
+    const startY = Math.floor(y / this.cellSize);
+    const endX = Math.floor((x + width) / this.cellSize);
+    const endY = Math.floor((y + height) / this.cellSize);
+
+    for (let gy = startY; gy <= endY; gy++) {
+      for (let gx = startX; gx <= endX; gx++) {
+        if (this.isInBounds(gx, gy)) {
+          this.grid[gy][gx].moveCost = cost;
+        }
       }
     }
   }
@@ -168,11 +208,13 @@ export class AStar {
         if (closedSet.has(`${neighbor.x},${neighbor.y}`)) continue;
         if (!neighbor.walkable) continue;
 
-        // Calculate tentative g score
+        // Calculate tentative g score with terrain cost modifier
         const isDiagonal =
           neighbor.x !== current.x && neighbor.y !== current.y;
-        const moveCost = isDiagonal ? 1.414 : 1;
-        const tentativeG = current.g + moveCost;
+        const baseCost = isDiagonal ? 1.414 : 1;
+        // Apply terrain movement cost (roads < 1, forests/mud > 1)
+        const terrainCost = baseCost * neighbor.moveCost;
+        const tentativeG = current.g + terrainCost;
 
         const isInOpen = openList.includes(neighbor);
 
@@ -204,8 +246,20 @@ export class AStar {
         this.grid[y][x].h = 0;
         this.grid[y][x].f = 0;
         this.grid[y][x].parent = null;
+        // Note: walkable and moveCost are preserved across pathfinding calls
       }
     }
+  }
+
+  /**
+   * Get the movement cost at a position
+   */
+  public getMoveCost(x: number, y: number): number {
+    const gridX = Math.floor(x / this.cellSize);
+    const gridY = Math.floor(y / this.cellSize);
+
+    if (!this.isInBounds(gridX, gridY)) return 1.0;
+    return this.grid[gridY][gridX].moveCost;
   }
 
   private getNeighbors(node: PathNode): PathNode[] {

@@ -7,6 +7,15 @@ import {
   fillTerrainRect,
   fillTerrainCircle,
   createRampInTerrain,
+  createForestCorridor,
+  createRiver,
+  createLake,
+  createRoad,
+  createVoidChasm,
+  fillFeatureCircle,
+  fillFeatureRect,
+  scatterForests,
+  createMudArea,
 } from './MapTypes';
 
 /**
@@ -358,6 +367,63 @@ function generateScorchedBasin(): MapData {
   fillTerrainCircle(terrain, 210, 140, 10, 'unwalkable');
   fillTerrainCircle(terrain, 140, 70, 10, 'unwalkable');
   fillTerrainCircle(terrain, 140, 210, 10, 'unwalkable');
+
+  // ========================================
+  // NEW TERRAIN FEATURES - Desert/Volcanic theme
+  // ========================================
+
+  // LAVA LAKES (void) - Impassable volcanic hazards
+  createLake(terrain, 60, 60, 8, 2);     // NW corner
+  createLake(terrain, 220, 60, 8, 2);    // NE corner
+  createLake(terrain, 60, 220, 8, 2);    // SW corner
+  createLake(terrain, 220, 220, 8, 2);   // SE corner
+
+  // RIVERS of lava - Cross map barriers with bridges
+  createRiver(terrain, 140, 40, 140, 100, 8, 0.5, 6);   // North river
+  createRiver(terrain, 140, 180, 140, 240, 8, 0.5, 6);  // South river
+  createRiver(terrain, 40, 140, 100, 140, 8, 0.5, 6);   // West river
+  createRiver(terrain, 180, 140, 240, 140, 8, 0.5, 6);  // East river
+
+  // FOREST CORRIDORS (dead scorched trees) - Flanking routes
+  // Diagonal corridors between player bases
+  createForestCorridor(terrain, 60, 100, 100, 60, 14, 5, true);   // P1-P2 diagonal
+  createForestCorridor(terrain, 180, 60, 220, 100, 14, 5, true);  // P2-P4 diagonal
+  createForestCorridor(terrain, 60, 180, 100, 220, 14, 5, true);  // P1-P3 diagonal
+  createForestCorridor(terrain, 180, 220, 220, 180, 14, 5, true); // P3-P4 diagonal
+
+  // ROADS - Fast movement main paths
+  // Cross roads through center
+  createRoad(terrain, 40, 140, 100, 140, 4);
+  createRoad(terrain, 180, 140, 240, 140, 4);
+  createRoad(terrain, 140, 40, 140, 100, 4);
+  createRoad(terrain, 140, 180, 140, 240, 4);
+  // Diagonal express routes
+  createRoad(terrain, 75, 75, 90, 90, 3);
+  createRoad(terrain, 205, 75, 190, 90, 3);
+  createRoad(terrain, 75, 205, 90, 190, 3);
+  createRoad(terrain, 205, 205, 190, 190, 3);
+
+  // SCATTERED FORESTS - Sparse desert scrub
+  scatterForests(terrain, MAP_WIDTH, MAP_HEIGHT, 25, 4, 9, BASE_EXCLUSION_ZONES, 333, 0.2);
+
+  // DENSE FORESTS - Oasis-like cover points near gold bases
+  fillFeatureCircle(terrain, 90, 90, 8, 'forest_dense');
+  fillFeatureCircle(terrain, 190, 90, 8, 'forest_dense');
+  fillFeatureCircle(terrain, 90, 190, 8, 'forest_dense');
+  fillFeatureCircle(terrain, 190, 190, 8, 'forest_dense');
+
+  // MUD/SAND areas - Scorched earth slow zones
+  createMudArea(terrain, 140, 140, 15);  // Center contested
+  createMudArea(terrain, 110, 110, 6);
+  createMudArea(terrain, 170, 110, 6);
+  createMudArea(terrain, 110, 170, 6);
+  createMudArea(terrain, 170, 170, 6);
+
+  // Light forest cover along edges
+  fillFeatureCircle(terrain, 40, 100, 6, 'forest_light');
+  fillFeatureCircle(terrain, 40, 180, 6, 'forest_light');
+  fillFeatureCircle(terrain, 240, 100, 6, 'forest_light');
+  fillFeatureCircle(terrain, 240, 180, 6, 'forest_light');
 
   // ========================================
   // RAMPS - Narrow (8 tiles)

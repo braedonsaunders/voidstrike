@@ -7,6 +7,15 @@ import {
   fillTerrainRect,
   fillTerrainCircle,
   createRampInTerrain,
+  createForestCorridor,
+  createRiver,
+  createLake,
+  createRoad,
+  createVoidChasm,
+  fillFeatureCircle,
+  fillFeatureRect,
+  scatterForests,
+  createMudArea,
 } from './MapTypes';
 
 /**
@@ -361,6 +370,74 @@ function generateTitansColosseum(): MapData {
   fillTerrainCircle(terrain, 280, 200, 10, 'unwalkable');
   fillTerrainCircle(terrain, 200, 120, 10, 'unwalkable');
   fillTerrainCircle(terrain, 200, 280, 10, 'unwalkable');
+
+  // ========================================
+  // NEW TERRAIN FEATURES - Epic volcanic arena
+  // ========================================
+
+  // LAVA MOAT around center colosseum - Ring of fire
+  createRiver(terrain, 160, 160, 160, 240, 10, undefined, 0);  // West arc
+  createRiver(terrain, 240, 160, 240, 240, 10, undefined, 0);  // East arc
+
+  // Corner void chasms - Volcanic pits
+  createVoidChasm(terrain, 0, 0, 30, 30, 3);
+  createVoidChasm(terrain, MAP_WIDTH - 30, 0, 30, 30, 3);
+  createVoidChasm(terrain, 0, MAP_HEIGHT - 30, 30, 30, 3);
+  createVoidChasm(terrain, MAP_WIDTH - 30, MAP_HEIGHT - 30, 30, 30, 3);
+
+  // LAKES - Tactical water hazards
+  createLake(terrain, 100, 100, 12, 3);   // NW quadrant
+  createLake(terrain, 300, 100, 12, 3);   // NE quadrant
+  createLake(terrain, 100, 300, 12, 3);   // SW quadrant
+  createLake(terrain, 300, 300, 12, 3);   // SE quadrant
+
+  // FOREST CORRIDORS - Create lanes between spawn points
+  // Outer ring corridors
+  createForestCorridor(terrain, 80, 80, 120, 80, 18, 6, true);
+  createForestCorridor(terrain, 280, 80, 320, 80, 18, 6, true);
+  createForestCorridor(terrain, 80, 320, 120, 320, 18, 6, true);
+  createForestCorridor(terrain, 280, 320, 320, 320, 18, 6, true);
+  // Side corridors
+  createForestCorridor(terrain, 60, 180, 60, 220, 16, 5, true);
+  createForestCorridor(terrain, 340, 180, 340, 220, 16, 5, true);
+
+  // ROADS - Highway system connecting all 8 spawn points
+  // Outer ring road
+  createRoad(terrain, 80, 45, 320, 45, 4);      // Top
+  createRoad(terrain, 80, 355, 320, 355, 4);    // Bottom
+  createRoad(terrain, 45, 130, 45, 270, 4);     // Left
+  createRoad(terrain, 355, 130, 355, 270, 4);   // Right
+  // Diagonal approach roads to center
+  createRoad(terrain, 100, 100, 160, 160, 3);
+  createRoad(terrain, 300, 100, 240, 160, 3);
+  createRoad(terrain, 100, 300, 160, 240, 3);
+  createRoad(terrain, 300, 300, 240, 240, 3);
+
+  // SCATTERED FORESTS - Moderate cover
+  scatterForests(terrain, MAP_WIDTH, MAP_HEIGHT, 50, 5, 12, BASE_EXCLUSION_ZONES, 1234, 0.3);
+
+  // DENSE FORESTS - Ambush positions at gold expansions
+  fillFeatureCircle(terrain, 140, 140, 10, 'forest_dense');
+  fillFeatureCircle(terrain, 260, 140, 10, 'forest_dense');
+  fillFeatureCircle(terrain, 140, 260, 10, 'forest_dense');
+  fillFeatureCircle(terrain, 260, 260, 10, 'forest_dense');
+
+  // MUD areas - Contested slow zones
+  createMudArea(terrain, 200, 200, 20);  // Center arena
+  createMudArea(terrain, 200, 100, 8);   // North approach
+  createMudArea(terrain, 200, 300, 8);   // South approach
+  createMudArea(terrain, 100, 200, 8);   // West approach
+  createMudArea(terrain, 300, 200, 8);   // East approach
+
+  // Light forests for flanking cover
+  fillFeatureCircle(terrain, 150, 100, 8, 'forest_light');
+  fillFeatureCircle(terrain, 250, 100, 8, 'forest_light');
+  fillFeatureCircle(terrain, 150, 300, 8, 'forest_light');
+  fillFeatureCircle(terrain, 250, 300, 8, 'forest_light');
+  fillFeatureCircle(terrain, 100, 150, 8, 'forest_light');
+  fillFeatureCircle(terrain, 100, 250, 8, 'forest_light');
+  fillFeatureCircle(terrain, 300, 150, 8, 'forest_light');
+  fillFeatureCircle(terrain, 300, 250, 8, 'forest_light');
 
   // ========================================
   // RAMPS

@@ -5,6 +5,7 @@ import { Velocity } from '../components/Velocity';
 import { Building } from '../components/Building';
 import { Game } from '../core/Game';
 import { PooledVector2 } from '@/utils/VectorPool';
+import { TERRAIN_FEATURE_CONFIG, TerrainFeature } from '@/data/maps';
 
 // Steering behavior constants - SC2-style soft separation (units can overlap and clump)
 const SEPARATION_RADIUS = 1.0; // Units only avoid when nearly overlapping
@@ -519,10 +520,15 @@ export class MovementSystem extends System {
 
       // Calculate target speed with deceleration near destination
       let targetSpeed = unit.maxSpeed;
+
+      // Apply terrain speed modifier based on current position
+      const terrainSpeedMod = this.getTerrainSpeedModifier(transform.x, transform.y, unit.isFlying);
+      targetSpeed *= terrainSpeedMod;
+
       if (distance < this.decelerationThreshold) {
         // Smooth deceleration as we approach target
-        targetSpeed = unit.maxSpeed * (distance / this.decelerationThreshold);
-        targetSpeed = Math.max(targetSpeed, unit.maxSpeed * 0.3); // Minimum speed
+        targetSpeed = targetSpeed * (distance / this.decelerationThreshold);
+        targetSpeed = Math.max(targetSpeed, unit.maxSpeed * terrainSpeedMod * 0.3); // Minimum speed
       }
 
       // Accelerate or decelerate toward target speed
@@ -563,6 +569,30 @@ export class MovementSystem extends System {
         this.resolveHardBuildingCollision(transform, unit);
       }
     }
+  }
+
+  /**
+   * Get terrain speed modifier at a given position.
+   * Returns a multiplier for unit movement speed based on terrain features.
+   */
+  private getTerrainSpeedModifier(x: number, y: number, isFlying: boolean): number {
+    // Flying units ignore terrain speed modifiers
+    if (isFlying) return 1.0;
+
+    // Get terrain cell at position using Game's method
+    const cell = this.game.getTerrainAt(x, y);
+    if (!cell) return 1.0;
+
+    // Get feature configuration
+    const feature: TerrainFeature = (cell.feature as TerrainFeature) || 'none';
+    const config = TERRAIN_FEATURE_CONFIG[feature];
+
+    // Flying units can ignore most features
+    if (isFlying && config.flyingIgnores) {
+      return 1.0;
+    }
+
+    return config.speedModifier;
   }
 
   /**
