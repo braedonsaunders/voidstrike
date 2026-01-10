@@ -42,16 +42,16 @@ export class SC2PostProcessing {
   private compositeMaterial: THREE.ShaderMaterial;
   private depthMaterial: THREE.MeshDepthMaterial;
 
-  // Settings
-  private bloomStrength = 0.8;
-  private bloomThreshold = 0.7;
+  // Settings - tuned for subtle enhancement without overexposure
+  private bloomStrength = 0.4; // Reduced from 0.8
+  private bloomThreshold = 0.85; // Higher threshold = less bloom
   private bloomRadius = 0.5;
-  private vignetteStrength = 0.3;
-  private saturation = 1.1;
-  private contrast = 1.05;
-  private ssaoStrength = 0.5;
-  private ssaoRadius = 0.5;
-  private godRaysStrength = 0.3;
+  private vignetteStrength = 0.2; // Reduced
+  private saturation = 1.05; // More subtle
+  private contrast = 1.02; // More subtle
+  private ssaoStrength = 0.3; // Reduced from 0.5
+  private ssaoRadius = 0.4;
+  private godRaysStrength = 0.15; // Reduced from 0.3
   private sunPosition = new THREE.Vector3(0.5, 0.8, 0.3);
 
   constructor(renderer: THREE.WebGLRenderer, scene: THREE.Scene, camera: THREE.Camera) {
