@@ -32,6 +32,9 @@ export function spawnInitialEntities(game: Game, mapData: MapData): void {
     slot => slot.type === 'human' || slot.type === 'ai'
   );
 
+  console.log(`[gameSetup] localPlayerId: ${setupStore.localPlayerId}`);
+  console.log(`[gameSetup] Active player slots: ${playerSlots.map(s => `${s.id}(${s.type})`).join(', ')}`);
+
   // Spawn bases for each active player
   // Track used spawns to prevent multiple players at same location
   const usedSpawnIndices = new Set<number>();
@@ -63,6 +66,7 @@ export function spawnInitialEntities(game: Game, mapData: MapData): void {
 
     // Register AI players
     if (slot.type === 'ai') {
+      console.log(`[gameSetup] Registering AI for ${slot.id} (${slot.faction}, ${slot.aiDifficulty})`);
       registerAIPlayer(game, slot.id, slot.faction, slot.aiDifficulty);
     }
   });

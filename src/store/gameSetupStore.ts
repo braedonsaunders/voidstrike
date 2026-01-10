@@ -272,7 +272,9 @@ export const useGameSetupStore = create<GameSetupState>((set, get) => ({
   },
 
   getAIPlayerIds: (): string[] => {
-    return get().playerSlots.filter(s => s.type === 'ai').map(s => s.id);
+    const aiIds = get().playerSlots.filter(s => s.type === 'ai').map(s => s.id);
+    console.log(`[gameSetupStore] getAIPlayerIds called, returning: ${aiIds.join(', ')}`);
+    return aiIds;
   },
 
   getHumanPlayerIds: (): string[] => {
