@@ -2,7 +2,7 @@
 
 import { useRef, useEffect, useState, useCallback } from 'react';
 import { useGameStore } from '@/store/gameStore';
-import { useGameSetupStore, getPlayerColor } from '@/store/gameSetupStore';
+import { useGameSetupStore, getPlayerColor, getLocalPlayerId, isSpectatorMode } from '@/store/gameSetupStore';
 import { Game } from '@/engine/core/Game';
 import { Transform } from '@/engine/components/Transform';
 import { Unit } from '@/engine/components/Unit';
@@ -124,13 +124,14 @@ export function Minimap() {
       }
 
       // Draw fog of war (simplified) - skip in spectator mode
-      const isSpectatorMode = useGameSetupStore.getState().isSpectator();
-      if (game.visionSystem && !isSpectatorMode) {
+      const isSpectating = isSpectatorMode();
+      const localPlayer = getLocalPlayerId();
+      if (game.visionSystem && !isSpectating && localPlayer) {
         ctx.fillStyle = 'rgba(0, 0, 0, 0.5)';
         const visionScale = 4; // Check every 4 units
         for (let mapX = 0; mapX < mapWidth; mapX += visionScale) {
           for (let mapY = 0; mapY < mapHeight; mapY += visionScale) {
-            if (!game.visionSystem.isExplored('player1', mapX, mapY)) {
+            if (!game.visionSystem.isExplored(localPlayer, mapX, mapY)) {
               ctx.fillRect(
                 mapX * scale,
                 mapY * scale,
@@ -172,8 +173,8 @@ export function Minimap() {
 
         // Skip enemy buildings that are not visible due to fog of war (unless spectator)
         const fogOfWarEnabled = useGameSetupStore.getState().fogOfWar;
-        if (selectable.playerId !== 'player1' && fogOfWarEnabled && game.visionSystem && !isSpectatorMode) {
-          if (!game.visionSystem.isVisible('player1', transform.x, transform.y)) {
+        if (localPlayer && selectable.playerId !== localPlayer && fogOfWarEnabled && game.visionSystem && !isSpectating) {
+          if (!game.visionSystem.isVisible(localPlayer, transform.x, transform.y)) {
             continue;
           }
         }
@@ -208,8 +209,8 @@ export function Minimap() {
 
         // Skip enemy units that are not visible due to fog of war (unless spectator)
         const fogEnabled = useGameSetupStore.getState().fogOfWar;
-        if (selectable.playerId !== 'player1' && fogEnabled && game.visionSystem && !isSpectatorMode) {
-          if (!game.visionSystem.isVisible('player1', transform.x, transform.y)) {
+        if (localPlayer && selectable.playerId !== localPlayer && fogEnabled && game.visionSystem && !isSpectating) {
+          if (!game.visionSystem.isVisible(localPlayer, transform.x, transform.y)) {
             continue;
           }
         }
@@ -351,13 +352,16 @@ export function Minimap() {
 
       if (hasUnits) {
         // Issue move command
-        game.processCommand({
-          tick: game.getCurrentTick(),
-          playerId: 'player1',
-          type: 'MOVE',
-          entityIds: selectedIds,
-          targetPosition: { x: pos.x, y: pos.y },
-        });
+        const localPlayerForMove = getLocalPlayerId();
+        if (localPlayerForMove) {
+          game.processCommand({
+            tick: game.getCurrentTick(),
+            playerId: localPlayerForMove,
+            type: 'MOVE',
+            entityIds: selectedIds,
+            targetPosition: { x: pos.x, y: pos.y },
+          });
+        }
 
         // Add ping animation
         setPings((prev) => [...prev, {

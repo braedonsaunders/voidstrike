@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { VisionSystem, VisionState } from '@/engine/systems/VisionSystem';
+import { getLocalPlayerId, isSpectatorMode } from '@/store/gameSetupStore';
 
 export interface FogOfWarConfig {
   mapWidth: number;
@@ -24,7 +25,7 @@ export class FogOfWar {
   private textureData: Uint8Array;
 
   private visionSystem: VisionSystem | null = null;
-  private playerId: string = 'player1';
+  private playerId: string | null = null;
 
   // PERFORMANCE: Throttle updates to reduce CPU load
   private lastUpdateTime: number = 0;
@@ -116,12 +117,19 @@ export class FogOfWar {
     this.visionSystem = visionSystem;
   }
 
-  public setPlayerId(playerId: string): void {
+  public setPlayerId(playerId: string | null): void {
     this.playerId = playerId;
   }
 
   public update(): void {
     if (!this.visionSystem) return;
+
+    // In spectator mode, hide the fog mesh entirely (see everything)
+    if (isSpectatorMode() || !this.playerId) {
+      this.mesh.visible = false;
+      return;
+    }
+    this.mesh.visible = true;
 
     // PERFORMANCE: Throttle updates - fog doesn't need to update every frame
     const now = performance.now();
@@ -173,7 +181,7 @@ export class MinimapFog {
   public canvas: HTMLCanvasElement;
   private ctx: CanvasRenderingContext2D;
   private visionSystem: VisionSystem | null = null;
-  private playerId: string = 'player1';
+  private playerId: string | null = null;
 
   constructor(width: number, height: number) {
     this.canvas = document.createElement('canvas');
@@ -186,12 +194,18 @@ export class MinimapFog {
     this.visionSystem = visionSystem;
   }
 
-  public setPlayerId(playerId: string): void {
+  public setPlayerId(playerId: string | null): void {
     this.playerId = playerId;
   }
 
   public update(): void {
     if (!this.visionSystem) return;
+
+    // In spectator mode, clear the fog canvas (see everything)
+    if (isSpectatorMode() || !this.playerId) {
+      this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
+      return;
+    }
 
     const width = this.canvas.width;
     const height = this.canvas.height;

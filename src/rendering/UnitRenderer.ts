@@ -8,7 +8,7 @@ import { Velocity } from '@/engine/components/Velocity';
 import { VisionSystem } from '@/engine/systems/VisionSystem';
 import { AssetManager } from '@/assets/AssetManager';
 import { Terrain } from './Terrain';
-import { getPlayerColor } from '@/store/gameSetupStore';
+import { getPlayerColor, getLocalPlayerId, isSpectatorMode } from '@/store/gameSetupStore';
 
 // Instance data for a single unit type + player combo (non-animated units)
 interface InstancedUnitGroup {
@@ -43,7 +43,7 @@ export class UnitRenderer {
   private world: World;
   private visionSystem: VisionSystem | null;
   private terrain: Terrain | null;
-  private playerId: string = 'player1';
+  private playerId: string | null = null;
 
   // Instanced mesh groups: key = "unitType_playerId" (for non-animated units)
   private instancedGroups: Map<string, InstancedUnitGroup> = new Map();
@@ -107,7 +107,7 @@ export class UnitRenderer {
     });
   }
 
-  public setPlayerId(playerId: string): void {
+  public setPlayerId(playerId: string | null): void {
     this.playerId = playerId;
   }
 
@@ -350,12 +350,13 @@ export class UnitRenderer {
       const velocity = entity.get<Velocity>('Velocity');
 
       const ownerId = selectable?.playerId ?? 'unknown';
-      const isOwned = ownerId === this.playerId;
-      const isEnemy = selectable && ownerId !== this.playerId;
+      const isSpectating = isSpectatorMode() || !this.playerId;
+      const isOwned = !isSpectating && ownerId === this.playerId;
+      const isEnemy = !isSpectating && selectable && ownerId !== this.playerId;
 
-      // Check visibility for enemy units
+      // Check visibility for enemy units (skip in spectator mode - show all)
       let shouldShow = true;
-      if (isEnemy && this.visionSystem) {
+      if (isEnemy && this.visionSystem && this.playerId) {
         shouldShow = this.visionSystem.isVisible(this.playerId, transform.x, transform.y);
       }
 

@@ -5,6 +5,7 @@ import { Selectable } from '@/engine/components/Selectable';
 import { Unit } from '@/engine/components/Unit';
 import { Building } from '@/engine/components/Building';
 import { CELL_SIZE, DEPTH } from '../constants';
+import { getLocalPlayerId, isSpectatorMode } from '@/store/gameSetupStore';
 
 export class SelectionRenderer {
   private scene: Phaser.Scene;
@@ -34,7 +35,9 @@ export class SelectionRenderer {
       const unit = entity.get<Unit>('Unit');
       const building = entity.get<Building>('Building');
 
-      const isOwned = selectable.playerId === 'player1';
+      const localPlayerId = getLocalPlayerId();
+      const isSpectating = isSpectatorMode() || !localPlayerId;
+      const isOwned = !isSpectating && selectable.playerId === localPlayerId;
       const color = isOwned ? 0x00ff00 : 0xff0000;
 
       // Convert grid coordinates to pixel coordinates

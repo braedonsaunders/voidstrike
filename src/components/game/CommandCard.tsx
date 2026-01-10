@@ -1,6 +1,7 @@
 'use client';
 
 import { useGameStore } from '@/store/gameStore';
+import { getLocalPlayerId } from '@/store/gameSetupStore';
 import { Game } from '@/engine/core/Game';
 import { Unit } from '@/engine/components/Unit';
 import { Building } from '@/engine/components/Building';
@@ -149,12 +150,15 @@ export function CommandCard() {
           label: 'Stop',
           shortcut: 'S',
           action: () => {
-            game.processCommand({
-              tick: game.getCurrentTick(),
-              playerId: 'player1',
-              type: 'STOP',
-              entityIds: selectedUnits,
-            });
+            const localPlayer = getLocalPlayerId();
+            if (localPlayer) {
+              game.processCommand({
+                tick: game.getCurrentTick(),
+                playerId: localPlayer,
+                type: 'STOP',
+                entityIds: selectedUnits,
+              });
+            }
           },
           tooltip: 'Stop current action',
         });
@@ -164,12 +168,15 @@ export function CommandCard() {
           label: 'Hold',
           shortcut: 'H',
           action: () => {
-            game.processCommand({
-              tick: game.getCurrentTick(),
-              playerId: 'player1',
-              type: 'HOLD',
-              entityIds: selectedUnits,
-            });
+            const localPlayer = getLocalPlayerId();
+            if (localPlayer) {
+              game.processCommand({
+                tick: game.getCurrentTick(),
+                playerId: localPlayer,
+                type: 'HOLD',
+                entityIds: selectedUnits,
+              });
+            }
           },
           tooltip: 'Hold position - do not move to attack',
         });
@@ -368,17 +375,18 @@ export function CommandCard() {
       };
 
       const availableResearch = researchMap[building.buildingId] || [];
+      const localPlayerForResearch = getLocalPlayerId() ?? 'player1';
       availableResearch.forEach((upgradeId) => {
         const upgrade = RESEARCH_DEFINITIONS[upgradeId];
         if (!upgrade) return;
 
-        const isResearched = store.hasResearch('player1', upgradeId);
+        const isResearched = store.hasResearch(localPlayerForResearch, upgradeId);
         if (isResearched) return;
 
         let reqMet = true;
         if (upgrade.requirements) {
           for (const req of upgrade.requirements) {
-            if (RESEARCH_DEFINITIONS[req] && !store.hasResearch('player1', req)) {
+            if (RESEARCH_DEFINITIONS[req] && !store.hasResearch(localPlayerForResearch, req)) {
               reqMet = false;
               break;
             }

@@ -10,7 +10,7 @@ import { Selectable } from '@/engine/components/Selectable';
 import { Health } from '@/engine/components/Health';
 import { useGameStore } from '@/store/gameStore';
 import { CELL_SIZE, DEPTH } from '../constants';
-import { getPlayerColor } from '@/store/gameSetupStore';
+import { getPlayerColor, getLocalPlayerId, isSpectatorMode } from '@/store/gameSetupStore';
 
 export class MinimapRenderer {
   private scene: Phaser.Scene;
@@ -18,7 +18,7 @@ export class MinimapRenderer {
   private world: World;
   private visionSystem: VisionSystem | null;
   private fogOfWarEnabled: boolean;
-  private playerId = 'player1';
+  private playerId: string | null = null;
 
   // Minimap size and position
   private readonly MINIMAP_SIZE = 180;
@@ -201,8 +201,9 @@ export class MinimapRenderer {
 
       if (health.isDead()) continue;
 
-      // Check visibility for enemy buildings
-      if (selectable.playerId !== this.playerId && this.fogOfWarEnabled && this.visionSystem) {
+      // Check visibility for enemy buildings (spectators see everything)
+      const isSpectating = isSpectatorMode() || !this.playerId;
+      if (!isSpectating && this.playerId && selectable.playerId !== this.playerId && this.fogOfWarEnabled && this.visionSystem) {
         if (!this.visionSystem.isExplored(this.playerId, transform.x, transform.y)) {
           continue;
         }
@@ -225,8 +226,9 @@ export class MinimapRenderer {
 
       if (health.isDead()) continue;
 
-      // Check visibility for enemy units
-      if (selectable.playerId !== this.playerId && this.fogOfWarEnabled && this.visionSystem) {
+      // Check visibility for enemy units (spectators see everything)
+      const isSpectatingUnits = isSpectatorMode() || !this.playerId;
+      if (!isSpectatingUnits && this.playerId && selectable.playerId !== this.playerId && this.fogOfWarEnabled && this.visionSystem) {
         if (!this.visionSystem.isVisible(this.playerId, transform.x, transform.y)) {
           continue;
         }
@@ -242,6 +244,12 @@ export class MinimapRenderer {
   }
 
   private drawFog(): void {
+    // In spectator mode, don't draw fog
+    if (isSpectatorMode() || !this.playerId) {
+      this.fogGraphics.clear();
+      return;
+    }
+
     if (!this.fogOfWarEnabled || !this.visionSystem) return;
 
     this.fogGraphics.clear();
@@ -294,7 +302,7 @@ export class MinimapRenderer {
     this.container.setPosition(x, y);
   }
 
-  setPlayerId(playerId: string): void {
+  setPlayerId(playerId: string | null): void {
     this.playerId = playerId;
   }
 

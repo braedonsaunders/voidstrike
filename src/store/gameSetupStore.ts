@@ -69,6 +69,9 @@ export interface GameSetupState {
 
   // Check if current session is spectator mode (no human players or local player is not set)
   isSpectator: () => boolean;
+
+  // Get the slot number (1-8) for the local player (for spawn point selection)
+  getLocalPlayerSlot: () => number;
 }
 
 export const STARTING_RESOURCES_VALUES: Record<StartingResources, { minerals: number; vespene: number }> = {
@@ -292,6 +295,14 @@ export const useGameSetupStore = create<GameSetupState>((set, get) => ({
     // Check if there's no local player (all players are AI)
     const state = get();
     return state.localPlayerId === null || !state.playerSlots.some(s => s.type === 'human');
+  },
+
+  getLocalPlayerSlot: (): number => {
+    const state = get();
+    if (!state.localPlayerId) return 1; // Default to slot 1 if spectating
+    // Extract slot number from player ID (e.g., 'player1' -> 1, 'player2' -> 2)
+    const match = state.localPlayerId.match(/player(\d+)/);
+    return match ? parseInt(match[1], 10) : 1;
   },
 }));
 

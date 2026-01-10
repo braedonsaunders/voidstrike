@@ -7,7 +7,7 @@ import { Selectable } from '@/engine/components/Selectable';
 import { VisionSystem } from '@/engine/systems/VisionSystem';
 import { BUILDING_DEFINITIONS } from '@/data/buildings/dominion';
 import { CELL_SIZE, DEPTH } from '../constants';
-import { getPlayerColor } from '@/store/gameSetupStore';
+import { getPlayerColor, getLocalPlayerId, isSpectatorMode } from '@/store/gameSetupStore';
 
 interface BuildingSprite {
   container: Phaser.GameObjects.Container;
@@ -23,7 +23,7 @@ export class BuildingRenderer {
   private world: World;
   private visionSystem: VisionSystem | null;
   private fogOfWarEnabled: boolean;
-  private playerId = 'player1';
+  private playerId: string | null = null;
 
   private buildingSprites: Map<number, BuildingSprite> = new Map();
   private container: Phaser.GameObjects.Container;
@@ -57,12 +57,13 @@ export class BuildingRenderer {
       const selectable = entity.get<Selectable>('Selectable');
 
       const ownerId = selectable?.playerId ?? 'unknown';
-      const isOwned = ownerId === this.playerId;
-      const isEnemy = selectable && ownerId !== this.playerId;
+      const isSpectating = isSpectatorMode() || !this.playerId;
+      const isOwned = !isSpectating && ownerId === this.playerId;
+      const isEnemy = !isSpectating && selectable && ownerId !== this.playerId;
 
-      // Check visibility
+      // Check visibility (spectators see everything)
       let shouldShow = true;
-      if (isEnemy && this.fogOfWarEnabled && this.visionSystem) {
+      if (isEnemy && this.fogOfWarEnabled && this.visionSystem && this.playerId) {
         shouldShow = this.visionSystem.isVisible(this.playerId, transform.x, transform.y);
       }
 
@@ -292,7 +293,7 @@ export class BuildingRenderer {
     graphics.fillRect(-width / 2, 0, width * building.buildProgress, height);
   }
 
-  setPlayerId(playerId: string): void {
+  setPlayerId(playerId: string | null): void {
     this.playerId = playerId;
   }
 
