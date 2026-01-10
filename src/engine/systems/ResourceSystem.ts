@@ -121,11 +121,6 @@ export class ResourceSystem extends System {
       // Move to assigned resource
       unit.moveToPosition(assignedTransform.x, assignedTransform.y);
 
-      // Debug: log gather command for player1 workers
-      const selectable = entity.get<Selectable>('Selectable');
-      if (selectable?.playerId === 'player1') {
-        console.log(`[ResourceSystem] player1 worker ${entityId} assigned to gather resource ${assignedTargetId}, moving to (${assignedTransform.x.toFixed(1)}, ${assignedTransform.y.toFixed(1)})`);
-      }
     }
   }
 
@@ -251,12 +246,6 @@ export class ResourceSystem extends System {
         }
 
         const distance = transform.distanceTo(resourceTransform);
-
-        // Debug: log distance for player1 workers periodically
-        const selectable = entity.get<Selectable>('Selectable');
-        if (selectable?.playerId === 'player1' && Math.random() < 0.01) {
-          console.log(`[ResourceSystem] player1 worker ${entity.id}: distance to resource=${distance.toFixed(2)}, isMining=${unit.isMining}, gatherTargetId=${unit.gatherTargetId}`);
-        }
 
         if (distance <= 2) {
           // At resource - start or continue mining

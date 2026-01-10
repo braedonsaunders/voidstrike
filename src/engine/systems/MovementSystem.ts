@@ -222,6 +222,14 @@ export class MovementSystem extends System {
       return;
     }
 
+    // SC2-style: gathering workers walk through buildings when mining
+    // This allows workers to reach minerals on the far side of their HQ
+    if (selfUnit.state === 'gathering') {
+      out.x = 0;
+      out.y = 0;
+      return;
+    }
+
     let forceX = 0;
     let forceY = 0;
 
@@ -600,6 +608,11 @@ export class MovementSystem extends System {
    * This is a hard collision resolution that runs after movement.
    */
   private resolveHardBuildingCollision(transform: Transform, unit: Unit): void {
+    // SC2-style: gathering workers can walk through buildings
+    if (unit.state === 'gathering') {
+      return;
+    }
+
     const nearbyBuildingIds = this.world.buildingGrid.queryRadius(
       transform.x,
       transform.y,
