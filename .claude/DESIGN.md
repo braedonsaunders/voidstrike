@@ -157,6 +157,13 @@ Hold **Shift** while issuing commands to queue them in sequence:
 - Green waypoint indicators show queued destinations for selected units
 - Press **S** (Stop) to clear all queued commands
 
+### Building Placement Queuing (Shift-Click)
+Hold **Shift** while placing buildings to queue multiple placements:
+- Each shift-click places a building and stays in placement mode
+- Green dashed path lines connect queued building positions (rally point style)
+- Workers are assigned to each building as they become available
+- Release shift and click to place final building and exit placement mode
+
 ## Map Design
 
 ### Map Design Principles
