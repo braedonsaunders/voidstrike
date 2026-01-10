@@ -144,20 +144,45 @@ export class UnitRenderer {
 
       // Get animations from asset manager and create actions
       const clips = AssetManager.getAnimations(unitType);
+
+      // First pass: collect and classify all animations
+      const classifiedAnims: { idle?: THREE.AnimationAction; walk?: THREE.AnimationAction; attack?: THREE.AnimationAction; death?: THREE.AnimationAction } = {};
+
       for (const clip of clips) {
+        // Remove root motion (position tracks) from animations to prevent jolt/warping
+        // This fixes the issue where walk animations move the model and conflict with programmatic positioning
+        this.removeRootMotion(clip);
+
         const action = mixer.clipAction(clip);
-        const name = clip.name.toLowerCase();
+        // Normalize name: lowercase and strip common prefixes like "Armature|"
+        let name = clip.name.toLowerCase();
+        // Handle Blender-style naming (e.g., "Armature|idle" -> "idle")
+        if (name.includes('|')) {
+          name = name.split('|').pop() || name;
+        }
+        // Also handle underscore prefixes (e.g., "char_idle" -> check for "idle")
+
         animations.set(name, action);
+        console.log(`[UnitRenderer] ${unitType}: Found animation "${clip.name}" -> normalized "${name}"`);
 
         // Map common aliases - use separate ifs so animations can match multiple aliases
+        // Check idle FIRST to establish the base animation
         if (name.includes('idle') || name.includes('stand') || name === 'pose') {
           animations.set('idle', action);
+          classifiedAnims.idle = action;
         }
         if (name.includes('walk') || name.includes('run') || name.includes('move') || name.includes('locomotion')) {
           animations.set('walk', action);
+          classifiedAnims.walk = action;
         }
         if (name.includes('attack') || name.includes('shoot') || name.includes('fire') || name.includes('combat')) {
           animations.set('attack', action);
+          classifiedAnims.attack = action;
+        }
+        // Explicitly detect death animation to prevent it from being used as fallback
+        if (name.includes('death') || name.includes('die') || name.includes('dead')) {
+          animations.set('death', action);
+          classifiedAnims.death = action;
         }
       }
 
@@ -174,10 +199,20 @@ export class UnitRenderer {
       if (idleAction) {
         idleAction.play();
       } else if (clips.length > 0) {
-        // Fall back to first animation
-        const firstAction = mixer.clipAction(clips[0]);
+        // Fall back to first NON-DEATH animation to avoid playing death as idle
+        let fallbackClip = clips[0];
+        for (const clip of clips) {
+          const lowerName = clip.name.toLowerCase();
+          // Skip death animations as fallback
+          if (!lowerName.includes('death') && !lowerName.includes('die') && !lowerName.includes('dead')) {
+            fallbackClip = clip;
+            break;
+          }
+        }
+        const firstAction = mixer.clipAction(fallbackClip);
         firstAction.play();
         animations.set('idle', firstAction);
+        console.log(`[UnitRenderer] ${unitType}: No idle animation found, using fallback: ${fallbackClip.name}`);
       }
 
       animUnit = {
@@ -191,6 +226,47 @@ export class UnitRenderer {
     }
 
     return animUnit;
+  }
+
+  /**
+   * Remove root motion (position/translation tracks) from an animation clip.
+   * This prevents animations from moving the model, which would conflict with
+   * programmatic position updates and cause jolting/warping effects.
+   */
+  private removeRootMotion(clip: THREE.AnimationClip): void {
+    // Filter out position tracks that affect the root bone
+    // Keep rotation and scale tracks, but remove position/translation
+    const tracksToRemove: number[] = [];
+
+    for (let i = 0; i < clip.tracks.length; i++) {
+      const track = clip.tracks[i];
+      const trackName = track.name.toLowerCase();
+
+      // Check if this is a position/translation track on a root-level bone
+      // Common patterns: ".position", "[position]", "position" in track names
+      // Root bones are often named: "root", "hips", "pelvis", "armature", or just the first bone
+      const isPositionTrack = trackName.includes('.position') ||
+                               trackName.includes('[position]') ||
+                               trackName.endsWith('position');
+
+      // Only remove position tracks for root-level bones (not child bones)
+      // Root bones typically have short paths without many "." separators
+      const isRootLevel = trackName.split('.').length <= 2 ||
+                          trackName.includes('root') ||
+                          trackName.includes('hips') ||
+                          trackName.includes('pelvis') ||
+                          trackName.includes('armature');
+
+      if (isPositionTrack && isRootLevel) {
+        tracksToRemove.push(i);
+      }
+    }
+
+    // Remove tracks in reverse order to maintain correct indices
+    for (let i = tracksToRemove.length - 1; i >= 0; i--) {
+      const removedTrack = clip.tracks.splice(tracksToRemove[i], 1)[0];
+      console.log(`[UnitRenderer] Removed root motion track: ${removedTrack.name} from ${clip.name}`);
+    }
   }
 
   /**
