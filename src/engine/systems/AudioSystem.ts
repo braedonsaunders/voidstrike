@@ -3,7 +3,9 @@ import { Game } from '../core/Game';
 import { Transform } from '../components/Transform';
 import { Unit } from '../components/Unit';
 import { AudioManager, UNIT_VOICES, BIOME_AMBIENT } from '@/audio/AudioManager';
+import { MusicPlayer } from '@/audio/MusicPlayer';
 import { useGameSetupStore, isLocalPlayer } from '@/store/gameSetupStore';
+import { useUIStore } from '@/store/uiStore';
 import * as THREE from 'three';
 
 export class AudioSystem extends System {
@@ -24,13 +26,29 @@ export class AudioSystem extends System {
   }
 
   // Call this after camera is created (camera is optional for 2D audio only)
-  public initialize(camera?: THREE.Camera, biome?: string): void {
+  public async initialize(camera?: THREE.Camera, biome?: string): Promise<void> {
     if (this.initialized) return;
 
     this.camera = camera ?? null;
     AudioManager.initialize(camera);
     this.setupEventListeners();
     this.initialized = true;
+
+    // Initialize and sync with UI store settings
+    const uiState = useUIStore.getState();
+    AudioManager.setCategoryVolume('music', uiState.musicVolume);
+    AudioManager.setCategoryVolume('combat', uiState.soundVolume);
+    AudioManager.setCategoryVolume('ui', uiState.soundVolume);
+    AudioManager.setCategoryVolume('unit', uiState.soundVolume);
+    AudioManager.setCategoryVolume('building', uiState.soundVolume);
+    AudioManager.setCategoryVolume('ambient', uiState.soundVolume);
+    AudioManager.setCategoryVolume('voice', uiState.soundVolume);
+    AudioManager.setCategoryVolume('alert', uiState.soundVolume);
+
+    // Initialize MusicPlayer with settings from store
+    await MusicPlayer.initialize();
+    MusicPlayer.setVolume(uiState.musicVolume);
+    MusicPlayer.setMuted(!uiState.musicEnabled);
 
     // Preload common sounds
     AudioManager.preload([
@@ -69,6 +87,23 @@ export class AudioSystem extends System {
     if (biome) {
       this.startAmbient(biome);
     }
+
+    // Start gameplay music
+    this.startGameplayMusic();
+  }
+
+  // Start gameplay music (discovers and plays random tracks from gameplay folder)
+  public async startGameplayMusic(): Promise<void> {
+    const uiState = useUIStore.getState();
+    if (!uiState.musicEnabled) return;
+
+    await MusicPlayer.discoverTracks();
+    MusicPlayer.play('gameplay');
+  }
+
+  // Stop gameplay music
+  public stopGameplayMusic(): void {
+    MusicPlayer.stop();
   }
 
   // Start ambient sound for a biome
@@ -364,6 +399,7 @@ export class AudioSystem extends System {
   }
 
   public dispose(): void {
+    MusicPlayer.dispose();
     AudioManager.dispose();
   }
 }

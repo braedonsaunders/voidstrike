@@ -13,10 +13,11 @@ import { TechTreePanel } from './TechTreePanel';
 import { IdleWorkerButton } from './IdleWorkerButton';
 import { KeyboardShortcutsPanel } from './KeyboardShortcutsPanel';
 import { PlayerStatusPanel } from './PlayerStatusPanel';
+import { SoundOptionsPanel } from './SoundOptionsPanel';
 
 export function HUD() {
   const { isPaused, togglePause, setShowTechTree, setShowKeyboardShortcuts } = useGameStore();
-  const { toggleFPS, showFPS, toggleGraphicsOptions, showGraphicsOptions, toggleDebugMenu, showDebugMenu } = useUIStore();
+  const { toggleFPS, showFPS, toggleGraphicsOptions, showGraphicsOptions, toggleSoundOptions, showSoundOptions, toggleDebugMenu, showDebugMenu } = useUIStore();
   const [showOptionsMenu, setShowOptionsMenu] = useState(false);
   const [showPlayerStatus, setShowPlayerStatus] = useState(false);
 
@@ -112,6 +113,16 @@ export function HUD() {
                   <span>Graphics</span>
                   <span className={showGraphicsOptions ? 'text-green-400' : 'text-void-500'}>{showGraphicsOptions ? 'OPEN' : ''}</span>
                 </button>
+                <button
+                  onClick={() => {
+                    setShowOptionsMenu(false);
+                    toggleSoundOptions();
+                  }}
+                  className="w-full px-4 py-2 text-left text-sm text-void-200 hover:bg-void-800 transition-colors flex justify-between items-center"
+                >
+                  <span>Sound</span>
+                  <span className={showSoundOptions ? 'text-green-400' : 'text-void-500'}>{showSoundOptions ? 'OPEN' : ''}</span>
+                </button>
                 {/* Debug menu only available in single player (not in multiplayer with multiple humans) */}
                 {!isMultiplayerMode() && (
                   <button
@@ -172,6 +183,9 @@ export function HUD() {
 
       {/* Keyboard Shortcuts Modal */}
       <KeyboardShortcutsPanel />
+
+      {/* Sound Options Panel */}
+      <SoundOptionsPanel />
 
       {/* Pause overlay */}
       {isPaused && (

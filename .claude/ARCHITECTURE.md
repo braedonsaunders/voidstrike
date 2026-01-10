@@ -17,6 +17,7 @@ voidstrike/
 │   │   ├── lobby/
 │   │   │   └── page.tsx       # Multiplayer lobby
 │   │   └── api/               # API routes
+│   │       └── music/         # Music discovery endpoint
 │   ├── components/
 │   │   ├── game/              # Game-specific components
 │   │   │   ├── GameCanvas.tsx
@@ -27,6 +28,7 @@ voidstrike/
 │   │   │   ├── ProductionQueuePanel.tsx # Building production UI
 │   │   │   ├── ResourcePanel.tsx
 │   │   │   ├── GraphicsOptionsPanel.tsx # Graphics settings panel
+│   │   │   ├── SoundOptionsPanel.tsx    # Audio settings panel with music controls
 │   │   │   └── DebugMenuPanel.tsx       # Debug logging settings (disabled in multiplayer)
 │   │   └── ui/                # Reusable UI components
 │   ├── engine/
@@ -71,6 +73,9 @@ voidstrike/
 │   │       ├── AStar.ts
 │   │       ├── Grid.ts
 │   │       └── pathfinder.worker.ts
+│   ├── audio/
+│   │   ├── AudioManager.ts    # Sound effects management
+│   │   └── MusicPlayer.ts     # Dynamic music system with auto-discovery
 │   ├── assets/
 │   │   └── AssetManager.ts    # 3D asset generation & loading
 │   ├── rendering/
@@ -1018,6 +1023,64 @@ Features:
 - **Composable**: Build complex behaviors from simple nodes
 - **Stateful**: Blackboard stores per-unit decision data
 - **Reusable**: Same tree works for multiple units
+
+## Audio System
+
+### MusicPlayer (`src/audio/MusicPlayer.ts`)
+
+Dynamic music system that discovers and plays MP3 files randomly:
+
+```typescript
+// Initialize and play menu music
+await MusicPlayer.initialize();
+await MusicPlayer.discoverTracks();
+MusicPlayer.play('menu');
+
+// Switch to gameplay music
+MusicPlayer.play('gameplay');
+
+// Playback controls
+MusicPlayer.pause();
+MusicPlayer.resume();
+MusicPlayer.skip();
+
+// Volume control
+MusicPlayer.setVolume(0.5);
+MusicPlayer.setMuted(false);
+```
+
+Features:
+- **Auto-discovery**: Scans `/audio/music/menu/` and `/audio/music/gameplay/` for MP3 files
+- **Shuffle playback**: Tracks play in random order, reshuffles when all played
+- **Crossfading**: 2-second crossfade between tracks
+- **Category switching**: Separate playlists for menu and gameplay
+
+### API Route (`src/app/api/music/route.ts`)
+
+Server-side endpoint for discovering music files:
+- `GET /api/music` - Returns list of available tracks in menu and gameplay folders
+
+### SoundOptionsPanel (`src/components/game/SoundOptionsPanel.tsx`)
+
+In-game sound settings UI:
+- Music volume slider
+- Sound effects volume slider
+- Music on/off toggle
+- SFX on/off toggle
+- Now playing display with track name
+- Play/pause and skip buttons
+
+### AudioManager Integration
+
+The AudioManager handles all game sound effects with category-based volume:
+- `music`: Background music (controlled separately by MusicPlayer)
+- `combat`: Weapon sounds, explosions, impacts
+- `ui`: Click, error, notification sounds
+- `unit`: Movement, attack confirmations
+- `building`: Construction, production sounds
+- `ambient`: Biome-specific ambient loops
+- `voice`: Unit voice lines
+- `alert`: Under attack, supply blocked alerts
 
 ## Audio Asset Guidelines
 
