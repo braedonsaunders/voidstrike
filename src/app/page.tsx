@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { MusicPlayer } from '@/audio/MusicPlayer';
 import { useUIStore } from '@/store/uiStore';
 
@@ -9,6 +9,18 @@ export default function Home() {
   const [hoveredFaction, setHoveredFaction] = useState<string | null>(null);
   const musicEnabled = useUIStore((state) => state.musicEnabled);
   const musicVolume = useUIStore((state) => state.musicVolume);
+  const toggleMusic = useUIStore((state) => state.toggleMusic);
+
+  const handleMusicToggle = useCallback(() => {
+    toggleMusic();
+    const newEnabled = !musicEnabled;
+    MusicPlayer.setMuted(!newEnabled);
+    if (!newEnabled) {
+      MusicPlayer.pause();
+    } else {
+      MusicPlayer.resume();
+    }
+  }, [toggleMusic, musicEnabled]);
 
   // Initialize and play menu music
   useEffect(() => {
@@ -123,6 +135,35 @@ export default function Home() {
             ))}
           </div>
         </div>
+      </div>
+
+      {/* Music Toggle Button */}
+      <div className="fixed bottom-20 left-1/2 -translate-x-1/2 z-20">
+        <button
+          onClick={handleMusicToggle}
+          className="flex items-center gap-2 px-4 py-2 rounded-full transition-all duration-200 hover:scale-105"
+          style={{
+            backgroundColor: 'rgba(10, 10, 15, 0.9)',
+            border: `1px solid ${musicEnabled ? '#4a8a4a' : '#8a4a4a'}`,
+            backdropFilter: 'blur(10px)',
+            boxShadow: '0 4px 20px rgba(0, 0, 0, 0.4)',
+          }}
+          title={musicEnabled ? 'Mute Music' : 'Unmute Music'}
+        >
+          {/* Music Icon */}
+          <span style={{ fontSize: '16px' }}>
+            {musicEnabled ? '🔊' : '🔇'}
+          </span>
+          <span
+            style={{
+              fontSize: '12px',
+              fontWeight: 500,
+              color: musicEnabled ? '#8fc88f' : '#c88f8f',
+            }}
+          >
+            Music: {musicEnabled ? 'ON' : 'OFF'}
+          </span>
+        </button>
       </div>
 
       {/* Footer */}
