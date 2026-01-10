@@ -543,6 +543,7 @@ export class CombatSystem extends System {
     const targetHeight = targetBuilding ? Math.max(targetBuilding.width, targetBuilding.height) : 0;
 
     // Emit attack event
+    const targetSelectable = targetEntity?.get<Selectable>('Selectable');
     this.game.eventBus.emit('combat:attack', {
       attackerId: attacker.unitId,
       attackerPos: { x: attackerTransform.x, y: attackerTransform.y },
@@ -550,10 +551,10 @@ export class CombatSystem extends System {
       damage: finalDamage,
       damageType: attacker.damageType,
       targetHeight,
+      targetPlayerId: targetSelectable?.playerId,
     });
 
     // Emit player:damage for Phaser overlay effects when local player's unit takes damage
-    const targetSelectable = targetEntity?.get<Selectable>('Selectable');
     if (targetSelectable?.playerId && isLocalPlayer(targetSelectable.playerId)) {
       this.game.eventBus.emit('player:damage', {
         damage: finalDamage,

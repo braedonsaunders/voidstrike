@@ -1,5 +1,7 @@
 import * as Phaser from 'phaser';
 import { EventBus } from '@/engine/core/EventBus';
+import { Game } from '@/engine/core/Game';
+import { Transform } from '@/engine/components/Transform';
 import { useGameStore } from '@/store/gameStore';
 import { useGameSetupStore, isLocalPlayer, getLocalPlayerId, enableSpectatorMode } from '@/store/gameSetupStore';
 import { useProjectionStore } from '@/store/projectionStore';
@@ -62,6 +64,12 @@ interface AbilitySplash {
   container?: Phaser.GameObjects.Container;
 }
 
+interface AttackTargetIndicator {
+  entityId: number;
+  startTime: number;
+  duration: number;
+}
+
 export class OverlayScene extends Phaser.Scene {
   private eventBus: EventBus | null = null;
 
@@ -110,6 +118,10 @@ export class OverlayScene extends Phaser.Scene {
   private countdownActive = false;
   private countdownContainer: Phaser.GameObjects.Container | null = null;
 
+  // Attack target indicators (animated circles when right-clicking to attack)
+  private attackTargetIndicators: AttackTargetIndicator[] = [];
+  private attackTargetGraphics!: Phaser.GameObjects.Graphics;
+
   constructor() {
     super({ key: 'OverlayScene' });
   }
@@ -133,6 +145,10 @@ export class OverlayScene extends Phaser.Scene {
 
     this.rallyPathGraphics = this.add.graphics();
     this.rallyPathGraphics.setDepth(30);
+
+    // Attack target indicator graphics
+    this.attackTargetGraphics = this.add.graphics();
+    this.attackTargetGraphics.setDepth(35);
 
     // Ability splash container
     this.splashContainer = this.add.container(0, 0);
@@ -168,7 +184,8 @@ export class OverlayScene extends Phaser.Scene {
       if (this.isSpectator()) return;
 
       // Only show intensity/warnings when local player's units are targeted
-      if (data.targetPlayerId && !isLocalPlayer(data.targetPlayerId)) return;
+      // If targetPlayerId is not provided or not the local player, skip
+      if (!data.targetPlayerId || !isLocalPlayer(data.targetPlayerId)) return;
 
       // Increase combat intensity
       this.combatIntensity = Math.min(1, this.combatIntensity + 0.05);
@@ -353,6 +370,26 @@ export class OverlayScene extends Phaser.Scene {
     // Match start countdown
     this.eventBus.on('game:countdown', () => {
       this.showMatchCountdown();
+    });
+
+    // Attack target indicator - shows animated circle when right-clicking to attack
+    this.eventBus.on('command:attack', (data: {
+      entityIds?: number[];
+      targetEntityId?: number;
+      targetPosition?: { x: number; y: number };
+      queue?: boolean;
+    }) => {
+      // Only show indicator when attacking a specific target entity
+      if (data.targetEntityId !== undefined) {
+        this.addAttackTargetIndicator(data.targetEntityId);
+      }
+    });
+
+    // UI error messages - show as alerts so user can see what went wrong
+    this.eventBus.on('ui:error', (data: { message: string }) => {
+      // Skip in spectator mode
+      if (this.isSpectator()) return;
+      this.showAlert(data.message.toUpperCase(), 0xff4444, 2000);
     });
   }
 
@@ -1052,6 +1089,9 @@ export class OverlayScene extends Phaser.Scene {
 
     // Cleanup expired splashes
     this.cleanupSplashes(now);
+
+    // Draw and update attack target indicators
+    this.updateAttackTargetIndicators(now);
   }
 
   /**
@@ -1312,6 +1352,131 @@ export class OverlayScene extends Phaser.Scene {
     }
   }
 
+  /**
+   * Add an attack target indicator for the specified entity
+   * Shows an animated red circle under the target like StarCraft 2
+   */
+  private addAttackTargetIndicator(entityId: number): void {
+    // Remove any existing indicator for this entity
+    this.attackTargetIndicators = this.attackTargetIndicators.filter(
+      (indicator) => indicator.entityId !== entityId
+    );
+
+    // Add new indicator
+    this.attackTargetIndicators.push({
+      entityId,
+      startTime: Date.now(),
+      duration: 600, // 600ms animation
+    });
+  }
+
+  /**
+   * Update and draw attack target indicators
+   * Draws animated expanding/fading circles at target positions
+   */
+  private updateAttackTargetIndicators(now: number): void {
+    this.attackTargetGraphics.clear();
+
+    const projectionStore = useProjectionStore.getState();
+
+    // Process indicators in reverse to safely remove expired ones
+    for (let i = this.attackTargetIndicators.length - 1; i >= 0; i--) {
+      const indicator = this.attackTargetIndicators[i];
+      const elapsed = now - indicator.startTime;
+      const progress = elapsed / indicator.duration;
+
+      // Remove expired indicators
+      if (progress >= 1) {
+        this.attackTargetIndicators.splice(i, 1);
+        continue;
+      }
+
+      // Get entity position from game world
+      const game = Game.getInstance();
+      if (!game) continue;
+
+      let entityPos: { x: number; y: number } | null = null;
+      const entity = game.world.getEntity(indicator.entityId);
+      if (entity) {
+        const transform = entity.get<Transform>('Transform');
+        if (transform) {
+          entityPos = { x: transform.x, y: transform.y };
+        }
+      }
+
+      if (!entityPos) {
+        // Entity no longer exists, remove indicator
+        this.attackTargetIndicators.splice(i, 1);
+        continue;
+      }
+
+      // Project world position to screen
+      const screenPos = projectionStore.projectToScreen(entityPos.x, entityPos.y);
+
+      // Draw animated indicator - multiple rings that expand and fade
+      const baseRadius = 25;
+      const maxRadius = 50;
+
+      // Ring 1: Primary expanding ring
+      const ring1Progress = Math.min(1, progress * 1.5);
+      const ring1Radius = baseRadius + (maxRadius - baseRadius) * ring1Progress;
+      const ring1Alpha = (1 - ring1Progress) * 0.8;
+
+      if (ring1Alpha > 0.01) {
+        this.attackTargetGraphics.lineStyle(3, 0xff3333, ring1Alpha);
+        this.attackTargetGraphics.strokeCircle(screenPos.x, screenPos.y, ring1Radius);
+      }
+
+      // Ring 2: Secondary ring (delayed)
+      if (progress > 0.15) {
+        const ring2Progress = Math.min(1, (progress - 0.15) * 1.8);
+        const ring2Radius = baseRadius * 0.7 + (maxRadius * 0.8 - baseRadius * 0.7) * ring2Progress;
+        const ring2Alpha = (1 - ring2Progress) * 0.5;
+
+        if (ring2Alpha > 0.01) {
+          this.attackTargetGraphics.lineStyle(2, 0xff6666, ring2Alpha);
+          this.attackTargetGraphics.strokeCircle(screenPos.x, screenPos.y, ring2Radius);
+        }
+      }
+
+      // Inner fill pulse (quick flash at start)
+      if (progress < 0.3) {
+        const fillProgress = progress / 0.3;
+        const fillAlpha = (1 - fillProgress) * 0.25;
+        this.attackTargetGraphics.fillStyle(0xff0000, fillAlpha);
+        this.attackTargetGraphics.fillCircle(screenPos.x, screenPos.y, baseRadius * (1 - fillProgress * 0.3));
+      }
+
+      // Crosshair lines (X pattern) that fade
+      if (progress < 0.5) {
+        const lineProgress = progress / 0.5;
+        const lineAlpha = (1 - lineProgress) * 0.6;
+        const lineLength = 15 + 10 * lineProgress;
+
+        this.attackTargetGraphics.lineStyle(2, 0xff4444, lineAlpha);
+
+        // Diagonal lines forming X
+        const offset = baseRadius * 0.5 + lineLength * lineProgress;
+        this.attackTargetGraphics.lineBetween(
+          screenPos.x - offset, screenPos.y - offset,
+          screenPos.x - offset + lineLength, screenPos.y - offset + lineLength
+        );
+        this.attackTargetGraphics.lineBetween(
+          screenPos.x + offset, screenPos.y - offset,
+          screenPos.x + offset - lineLength, screenPos.y - offset + lineLength
+        );
+        this.attackTargetGraphics.lineBetween(
+          screenPos.x - offset, screenPos.y + offset,
+          screenPos.x - offset + lineLength, screenPos.y + offset - lineLength
+        );
+        this.attackTargetGraphics.lineBetween(
+          screenPos.x + offset, screenPos.y + offset,
+          screenPos.x + offset - lineLength, screenPos.y + offset - lineLength
+        );
+      }
+    }
+  }
+
   setTacticalMode(enabled: boolean): void {
     this.tacticalMode = enabled;
 
@@ -1336,6 +1501,7 @@ export class OverlayScene extends Phaser.Scene {
     this.alertContainer?.destroy();
     this.splashContainer?.destroy();
     this.countdownContainer?.destroy();
+    this.attackTargetGraphics?.destroy();
 
     for (const alert of this.alerts) {
       alert.graphics?.destroy();
@@ -1346,6 +1512,7 @@ export class OverlayScene extends Phaser.Scene {
 
     this.alerts = [];
     this.abilitySplashes = [];
+    this.attackTargetIndicators = [];
     this.edgeWarnings.clear();
     this.vignetteTexture = null;
     this.countdownContainer = null;

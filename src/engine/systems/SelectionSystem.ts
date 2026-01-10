@@ -2,6 +2,7 @@ import { System } from '../ecs/System';
 import { Transform } from '../components/Transform';
 import { Selectable } from '../components/Selectable';
 import { Unit } from '../components/Unit';
+import { Building } from '../components/Building';
 import { Health } from '../components/Health';
 import { Game } from '../core/Game';
 import { useGameStore } from '@/store/gameStore';
@@ -40,7 +41,6 @@ export class SelectionSystem extends System {
     const maxY = Math.max(startY, endY);
 
     const entities = this.world.getEntitiesWith('Transform', 'Selectable');
-    const selectedIds: number[] = [];
 
     // First, deselect all if not additive
     if (!additive) {
@@ -50,16 +50,21 @@ export class SelectionSystem extends System {
       }
     }
 
-    // Select entities within box
+    // Collect entities within box, separating units from buildings
+    const unitIds: number[] = [];
+    const buildingIds: number[] = [];
+
     for (const entity of entities) {
       const transform = entity.get<Transform>('Transform')!;
       const selectable = entity.get<Selectable>('Selectable')!;
       const health = entity.get<Health>('Health');
+      const unit = entity.get<Unit>('Unit');
+      const building = entity.get<Building>('Building');
 
-      // Only select own units
+      // Only select own units/buildings
       if (selectable.playerId !== playerId) continue;
 
-      // Skip dead units
+      // Skip dead entities
       if (health && health.isDead()) continue;
 
       if (
@@ -68,8 +73,25 @@ export class SelectionSystem extends System {
         transform.y >= minY &&
         transform.y <= maxY
       ) {
-        selectable.select();
-        selectedIds.push(entity.id);
+        if (unit) {
+          unitIds.push(entity.id);
+        } else if (building) {
+          buildingIds.push(entity.id);
+        }
+      }
+    }
+
+    // Prioritize units over buildings - if any units are selected, ignore buildings
+    const selectedIds = unitIds.length > 0 ? unitIds : buildingIds;
+
+    // Mark entities as selected
+    for (const entityId of selectedIds) {
+      const entity = this.world.getEntity(entityId);
+      if (entity) {
+        const selectable = entity.get<Selectable>('Selectable');
+        if (selectable) {
+          selectable.select();
+        }
       }
     }
 
