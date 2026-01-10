@@ -7,6 +7,7 @@ import { Selectable } from '../components/Selectable';
 import { Building } from '../components/Building';
 import { Resource } from '../components/Resource';
 import { PooledVector2 } from '@/utils/VectorPool';
+import { isLocalPlayer } from '@/store/gameSetupStore';
 
 // Static temp vectors to avoid allocations in hot loops
 const tempTargetScore: { id: number; score: number } | null = null;
@@ -171,7 +172,7 @@ export class CombatSystem extends System {
           this.game.eventBus.emit('unit:died', {
             entityId: attacker.id,
             position: { x: transform.x, y: transform.y },
-            isPlayerUnit: selectable?.playerId === 'player1',
+            isPlayerUnit: selectable?.playerId ? isLocalPlayer(selectable.playerId) : false,
           });
         }
         continue;
@@ -526,9 +527,9 @@ export class CombatSystem extends System {
       targetHeight,
     });
 
-    // Emit player:damage for Phaser overlay effects when player unit takes damage
+    // Emit player:damage for Phaser overlay effects when local player's unit takes damage
     const targetSelectable = targetEntity?.get<Selectable>('Selectable');
-    if (targetSelectable?.playerId === 'player1') {
+    if (targetSelectable?.playerId && isLocalPlayer(targetSelectable.playerId)) {
       this.game.eventBus.emit('player:damage', {
         damage: finalDamage,
         position: { x: targetTransform.x, y: targetTransform.y },

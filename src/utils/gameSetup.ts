@@ -12,7 +12,7 @@ import { AISystem } from '@/engine/systems/AISystem';
 import { EnhancedAISystem } from '@/engine/systems/EnhancedAISystem';
 import { MapData, Expansion } from '@/data/maps';
 import { useGameStore } from '@/store/gameStore';
-import { useGameSetupStore, STARTING_RESOURCES_VALUES, AIDifficulty } from '@/store/gameSetupStore';
+import { useGameSetupStore, STARTING_RESOURCES_VALUES, AIDifficulty, isLocalPlayer } from '@/store/gameSetupStore';
 
 export function spawnInitialEntities(game: Game, mapData: MapData): void {
   const world = game.world;
@@ -58,9 +58,8 @@ export function spawnInitialEntities(game: Game, mapData: MapData): void {
 
     console.log(`Spawning ${slot.id} at spawn index ${spawnIndex} (${spawn.x}, ${spawn.y})`);
 
-    // Only treat as human player if slot type is 'human' (not based on slot ID)
-    const isHumanPlayer = slot.type === 'human';
-    spawnBase(game, slot.id, spawn.x, spawn.y, isHumanPlayer);
+    // Spawn base for this player
+    spawnBase(game, slot.id, spawn.x, spawn.y);
 
     // Register AI players
     if (slot.type === 'ai') {
@@ -97,8 +96,11 @@ function registerAIPlayer(
   }
 }
 
-function spawnBase(game: Game, playerId: string, x: number, y: number, isHumanPlayer: boolean = false): void {
+function spawnBase(game: Game, playerId: string, x: number, y: number): void {
   const world = game.world;
+
+  // Check if this is the local player (the player this client controls)
+  const isLocal = isLocalPlayer(playerId);
 
   // Spawn Headquarters
   const ccDef = BUILDING_DEFINITIONS['headquarters'];
@@ -118,8 +120,8 @@ function spawnBase(game: Game, playerId: string, x: number, y: number, isHumanPl
     building.setRallyPoint(x + ccDef.width / 2 + 3, y);
   }
 
-  // Set up initial supply for human player
-  if (isHumanPlayer) {
+  // Set up initial supply for local player
+  if (isLocal) {
     const store = useGameStore.getState();
     // Set initial max supply from command center
     store.addMaxSupply(ccDef.supplyProvided || 11);
@@ -141,8 +143,8 @@ function spawnBase(game: Game, playerId: string, x: number, y: number, isHumanPl
     const pos = workerPositions[i];
     spawnUnit(game, scvDef, x + pos.x, y + pos.y, playerId);
 
-    // Track supply for human player units
-    if (isHumanPlayer) {
+    // Track supply for local player units
+    if (isLocal) {
       useGameStore.getState().addSupply(scvDef.supplyCost);
     }
   }

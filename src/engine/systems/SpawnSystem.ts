@@ -9,6 +9,7 @@ import { Ability } from '../components/Ability';
 import { UNIT_DEFINITIONS } from '@/data/units/dominion';
 import { DOMINION_ABILITIES } from '../components/Ability';
 import { useGameStore } from '@/store/gameStore';
+import { isLocalPlayer } from '@/store/gameSetupStore';
 
 /**
  * SpawnSystem handles creating new units when production completes
@@ -112,11 +113,11 @@ export class SpawnSystem extends System {
   private handleUnitDeath(data: { entityId: number }): void {
     const entity = this.world.getEntity(data.entityId);
     if (entity) {
-      // Reduce supply for player units
+      // Reduce supply for local player's units
       const unit = entity.get<Unit>('Unit');
       const selectable = entity.get<Selectable>('Selectable');
 
-      if (unit && selectable && selectable.playerId === 'player1') {
+      if (unit && selectable && selectable.playerId && isLocalPlayer(selectable.playerId)) {
         const definition = UNIT_DEFINITIONS[unit.unitId];
         if (definition && definition.supplyCost > 0) {
           useGameStore.getState().addSupply(-definition.supplyCost);

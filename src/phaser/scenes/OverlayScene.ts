@@ -1,7 +1,7 @@
 import * as Phaser from 'phaser';
 import { EventBus } from '@/engine/core/EventBus';
 import { useGameStore } from '@/store/gameStore';
-import { useGameSetupStore } from '@/store/gameSetupStore';
+import { useGameSetupStore, isLocalPlayer, getLocalPlayerId } from '@/store/gameSetupStore';
 
 /**
  * Phaser 4 Overlay Scene
@@ -136,8 +136,8 @@ export class OverlayScene extends Phaser.Scene {
       // Skip combat feedback in spectator mode
       if (this.isSpectator()) return;
 
-      // Only show intensity/warnings when player1's units are targeted
-      if (data.targetPlayerId && data.targetPlayerId !== 'player1') return;
+      // Only show intensity/warnings when local player's units are targeted
+      if (data.targetPlayerId && !isLocalPlayer(data.targetPlayerId)) return;
 
       // Increase combat intensity
       this.combatIntensity = Math.min(1, this.combatIntensity + 0.05);
@@ -148,11 +148,11 @@ export class OverlayScene extends Phaser.Scene {
       }
     });
 
-    // Player takes damage - show vignette (only for player1)
+    // Player takes damage - show vignette (only for local player)
     this.eventBus.on('player:damage', (data: { damage: number; position?: { x: number; y: number }; playerId?: string }) => {
-      // Skip in spectator mode or if not player1
+      // Skip in spectator mode or if not local player
       if (this.isSpectator()) return;
-      if (data.playerId && data.playerId !== 'player1') return;
+      if (data.playerId && !isLocalPlayer(data.playerId)) return;
 
       this.addScreenEffect({
         type: 'damage_vignette',
@@ -176,11 +176,11 @@ export class OverlayScene extends Phaser.Scene {
       });
     });
 
-    // Base under attack (only for player1)
+    // Base under attack (only for local player)
     this.eventBus.on('alert:underAttack', (data: { position?: { x: number; y: number }; playerId?: string }) => {
-      // Skip in spectator mode or if not player1
+      // Skip in spectator mode or if not local player
       if (this.isSpectator()) return;
-      if (data.playerId && data.playerId !== 'player1') return;
+      if (data.playerId && !isLocalPlayer(data.playerId)) return;
 
       this.showAlert('YOUR BASE IS UNDER ATTACK', 0xff4444, 3000);
       if (data.position) {
@@ -188,14 +188,14 @@ export class OverlayScene extends Phaser.Scene {
       }
     });
 
-    // Unit died (only show vignette for player1 units)
+    // Unit died (only show vignette for local player's units)
     this.eventBus.on('unit:died', (data: { position?: { x: number; y: number }; isPlayerUnit?: boolean; playerId?: string }) => {
       // Skip screen effects in spectator mode
       if (this.isSpectator()) return;
 
-      // Check if this is player1's unit
-      const isPlayer1Unit = data.isPlayerUnit || data.playerId === 'player1';
-      if (isPlayer1Unit) {
+      // Check if this is local player's unit
+      const isLocalPlayerUnit = data.isPlayerUnit || (data.playerId && isLocalPlayer(data.playerId));
+      if (isLocalPlayerUnit) {
         this.combatIntensity = Math.min(1, this.combatIntensity + 0.1);
         // Show damage vignette when player unit dies
         this.addScreenEffect({
@@ -207,12 +207,12 @@ export class OverlayScene extends Phaser.Scene {
       }
     });
 
-    // Player unit takes damage - show vignette (only for player1)
+    // Player unit takes damage - show vignette (only for local player)
     // NOTE: This is a second listener for the same event - both will fire
     this.eventBus.on('player:damage', (data: { damage: number; position?: { x: number; y: number }; playerId?: string }) => {
-      // Skip in spectator mode or if not player1
+      // Skip in spectator mode or if not local player
       if (this.isSpectator()) return;
-      if (data.playerId && data.playerId !== 'player1') return;
+      if (data.playerId && !isLocalPlayer(data.playerId)) return;
 
       this.addScreenEffect({
         type: 'damage_vignette',
@@ -224,29 +224,29 @@ export class OverlayScene extends Phaser.Scene {
       this.screenShakeIntensity = Math.min(12, this.screenShakeIntensity + data.damage / 15);
     });
 
-    // Production complete notifications (only for player1)
+    // Production complete notifications (only for local player)
     this.eventBus.on('production:complete', (data: { unitName: string; buildingName?: string; playerId?: string }) => {
-      // Skip in spectator mode or if not player1
+      // Skip in spectator mode or if not local player
       if (this.isSpectator()) return;
-      if (data.playerId && data.playerId !== 'player1') return;
+      if (data.playerId && !isLocalPlayer(data.playerId)) return;
 
       this.showAlert(`${data.unitName.toUpperCase()} READY`, 0x00ff88, 2000);
     });
 
-    // Research complete (only for player1)
+    // Research complete (only for local player)
     this.eventBus.on('research:complete', (data: { researchName: string; playerId?: string }) => {
-      // Skip in spectator mode or if not player1
+      // Skip in spectator mode or if not local player
       if (this.isSpectator()) return;
-      if (data.playerId && data.playerId !== 'player1') return;
+      if (data.playerId && !isLocalPlayer(data.playerId)) return;
 
       this.showAlert(`RESEARCH COMPLETE: ${data.researchName.toUpperCase()}`, 0x00ffff, 3000);
     });
 
-    // Building complete - only show for player's buildings
+    // Building complete - only show for local player's buildings
     this.eventBus.on('building:complete', (data: { buildingName?: string; buildingType?: string; playerId?: string }) => {
-      // Skip in spectator mode or if not player1
+      // Skip in spectator mode or if not local player
       if (this.isSpectator()) return;
-      if (data.playerId && data.playerId !== 'player1') return;
+      if (data.playerId && !isLocalPlayer(data.playerId)) return;
 
       const name = data.buildingName || data.buildingType || 'BUILDING';
       this.showAlert(`${name.toUpperCase()} COMPLETE`, 0x88ff00, 2000);
@@ -288,7 +288,8 @@ export class OverlayScene extends Phaser.Scene {
       reason: string;
       duration: number;
     }) => {
-      const isVictory = data.winner === 'player1';
+      const localPlayerId = getLocalPlayerId();
+      const isVictory = localPlayerId ? data.winner === localPlayerId : null;
       this.showGameEndOverlay(isVictory, data.duration, data.reason);
     });
 

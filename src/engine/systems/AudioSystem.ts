@@ -3,7 +3,7 @@ import { Game } from '../core/Game';
 import { Transform } from '../components/Transform';
 import { Unit } from '../components/Unit';
 import { AudioManager, UNIT_VOICES, BIOME_AMBIENT } from '@/audio/AudioManager';
-import { useGameSetupStore } from '@/store/gameSetupStore';
+import { useGameSetupStore, isLocalPlayer } from '@/store/gameSetupStore';
 import * as THREE from 'three';
 
 export class AudioSystem extends System {
@@ -236,8 +236,8 @@ export class AudioSystem extends System {
       }
       AudioManager.playAt(deathSound, pos);
 
-      // Play alert for player's units
-      if (data.playerId === 'player1') {
+      // Play alert for local player's units
+      if (data.playerId && isLocalPlayer(data.playerId)) {
         AudioManager.play('alert_unit_lost');
       }
     });
@@ -251,8 +251,8 @@ export class AudioSystem extends System {
       const pos = new THREE.Vector3(data.x, 0, data.y);
       AudioManager.playAt('explosion_building', pos);
 
-      // Play alert for player's buildings
-      if (data.playerId === 'player1') {
+      // Play alert for local player's buildings
+      if (data.playerId && isLocalPlayer(data.playerId)) {
         AudioManager.play('alert_building_lost');
       }
     });
@@ -263,7 +263,7 @@ export class AudioSystem extends System {
       y: number;
       playerId?: string;
     }) => {
-      if (data.playerId === 'player1') {
+      if (data.playerId && isLocalPlayer(data.playerId)) {
         AudioManager.play('alert_under_attack');
       }
     });
@@ -275,17 +275,17 @@ export class AudioSystem extends System {
       AudioManager.play('alert_supply_blocked');
     });
 
-    // Production events (only for player1)
+    // Production events (only for local player)
     this.game.eventBus.on('production:started', (data: { playerId?: string }) => {
-      // Only play for player1's production, not AI
-      if (data?.playerId && data.playerId !== 'player1') return;
+      // Only play for local player's production, not AI
+      if (data?.playerId && !isLocalPlayer(data.playerId)) return;
       if (this.isSpectator()) return;
       AudioManager.play('production_start');
     });
 
     this.game.eventBus.on('production:complete', (data: { unitId?: string; playerId?: string }) => {
-      // Only play for player1's production, not AI
-      if (data?.playerId && data.playerId !== 'player1') return;
+      // Only play for local player's production, not AI
+      if (data?.playerId && !isLocalPlayer(data.playerId)) return;
       if (this.isSpectator()) return;
 
       AudioManager.play('unit_ready');
@@ -296,32 +296,32 @@ export class AudioSystem extends System {
       }
     });
 
-    // Building events (only for player1)
+    // Building events (only for local player)
     this.game.eventBus.on('building:place', (data: { playerId?: string }) => {
-      // Only play for player1's buildings, not AI
-      if (data?.playerId && data.playerId !== 'player1') return;
+      // Only play for local player's buildings, not AI
+      if (data?.playerId && !isLocalPlayer(data.playerId)) return;
       if (this.isSpectator()) return;
       AudioManager.play('building_place');
     });
 
     this.game.eventBus.on('building:complete', (data: { playerId?: string }) => {
-      // Only play sound for player's buildings, not AI
-      if (data?.playerId !== 'player1') return;
+      // Only play sound for local player's buildings, not AI
+      if (data?.playerId && !isLocalPlayer(data.playerId)) return;
       if (this.isSpectator()) return;
       AudioManager.play('ui_building_complete');
     });
 
-    // Research events (only for player1)
+    // Research events (only for local player)
     this.game.eventBus.on('research:started', (data: { playerId?: string }) => {
-      // Only play for player1's research, not AI
-      if (data?.playerId && data.playerId !== 'player1') return;
+      // Only play for local player's research, not AI
+      if (data?.playerId && !isLocalPlayer(data.playerId)) return;
       if (this.isSpectator()) return;
       AudioManager.play('production_start');
     });
 
     this.game.eventBus.on('research:complete', (data: { playerId?: string }) => {
-      // Only play for player1's research, not AI
-      if (data?.playerId && data.playerId !== 'player1') return;
+      // Only play for local player's research, not AI
+      if (data?.playerId && !isLocalPlayer(data.playerId)) return;
       if (this.isSpectator()) return;
       AudioManager.play('ui_research_complete');
     });
