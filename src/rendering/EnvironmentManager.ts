@@ -212,6 +212,20 @@ export class EnvironmentManager {
   }
 
   /**
+   * Get ground fog mesh for visibility toggling
+   */
+  public getGroundFog(): GroundFog | null {
+    return this.groundFog;
+  }
+
+  /**
+   * Get particles system for visibility toggling
+   */
+  public getParticles(): EnvironmentParticles | null {
+    return this.particles;
+  }
+
+  /**
    * Check if position is walkable
    */
   public isWalkable(x: number, y: number): boolean {

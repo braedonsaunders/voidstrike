@@ -22,7 +22,9 @@ import { useGameStore } from '@/store/gameStore';
 import { useGameSetupStore } from '@/store/gameSetupStore';
 import { SelectionBox } from './SelectionBox';
 import { LoadingScreen } from './LoadingScreen';
+import { GraphicsOptionsPanel } from './GraphicsOptionsPanel';
 import { spawnInitialEntities } from '@/utils/gameSetup';
+import { useUIStore } from '@/store/uiStore';
 import { DEFAULT_MAP, MapData, getMapById } from '@/data/maps';
 import { Resource } from '@/engine/components/Resource';
 import { Unit } from '@/engine/components/Unit';
@@ -386,8 +388,9 @@ export function HybridGameCanvas() {
           useGameStore.getState().setCamera(pos.x, pos.z, camera.getZoom());
         }
 
-        // Render Three.js with post-processing
-        if (postProcessingRef.current) {
+        // Render Three.js with post-processing (if enabled)
+        const postProcessingEnabled = useUIStore.getState().graphicsSettings.postProcessingEnabled;
+        if (postProcessingRef.current && postProcessingEnabled) {
           postProcessingRef.current.render();
         } else {
           renderer.render(scene, camera.camera);
@@ -765,6 +768,12 @@ export function HybridGameCanvas() {
       const camera = cameraRef.current;
       if (!game) return;
 
+      if (e.key === 'F10') {
+        e.preventDefault();
+        useUIStore.getState().toggleGraphicsOptions();
+        return;
+      }
+
       if (e.key === 'F1') {
         e.preventDefault();
         const workers = game.world.getEntitiesWith('Unit', 'Transform', 'Selectable');
@@ -922,6 +931,40 @@ export function HybridGameCanvas() {
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [isBuilding, isAttackMove, isPatrolMode, isSettingRallyPoint, abilityTargetMode]);
 
+  // Subscribe to graphics settings changes and update renderers
+  useEffect(() => {
+    const unsubscribe = useUIStore.subscribe((state, prevState) => {
+      const settings = state.graphicsSettings;
+      const prevSettings = prevState.graphicsSettings;
+
+      // Only update if settings changed
+      if (settings === prevSettings) return;
+
+      // Update post-processing
+      if (postProcessingRef.current) {
+        postProcessingRef.current.setSSAOEnabled(settings.postProcessingEnabled && settings.ssaoEnabled);
+        postProcessingRef.current.setGodRaysEnabled(settings.postProcessingEnabled && settings.godRaysEnabled);
+        postProcessingRef.current.setBloomStrength(settings.postProcessingEnabled && settings.bloomEnabled ? settings.bloomStrength : 0);
+        postProcessingRef.current.setSSAOStrength(settings.ssaoStrength);
+        postProcessingRef.current.setGodRaysStrength(settings.godRaysStrength);
+      }
+
+      // Update ground fog visibility
+      if (environmentRef.current) {
+        const groundFog = environmentRef.current.getGroundFog();
+        if (groundFog) {
+          groundFog.mesh.visible = settings.groundFogEnabled;
+        }
+        const particles = environmentRef.current.getParticles();
+        if (particles) {
+          particles.points.visible = settings.particlesEnabled;
+        }
+      }
+    });
+
+    return () => unsubscribe();
+  }, []);
+
   return (
     <div
       ref={containerRef}
@@ -999,6 +1042,9 @@ export function HybridGameCanvas() {
           </span>
         </div>
       )}
+
+      {/* Graphics Options Panel */}
+      <GraphicsOptionsPanel />
     </div>
   );
 }
