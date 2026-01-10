@@ -254,7 +254,7 @@ export function HybridGameCanvas() {
         fogOfWarRef.current = fogOfWar;
       }
 
-      effectsRendererRef.current = new EffectsRenderer(scene, game.eventBus);
+      effectsRendererRef.current = new EffectsRenderer(scene, game.eventBus, (x, z) => terrain.getHeightAt(x, z));
       rallyPointRendererRef.current = new RallyPointRenderer(
         scene,
         game.eventBus,
