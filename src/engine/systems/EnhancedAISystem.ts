@@ -9,6 +9,7 @@ import { Game, GameCommand } from '../core/Game';
 import { UNIT_DEFINITIONS } from '@/data/units/dominion';
 import { BUILDING_DEFINITIONS, RESEARCH_MODULE_UNITS } from '@/data/buildings/dominion';
 import { getCounterRecommendation } from './AIMicroSystem';
+import { debugAI } from '@/utils/debugLogger';
 
 type AIState = 'building' | 'expanding' | 'attacking' | 'defending' | 'scouting' | 'harassing';
 export type AIDifficulty = 'easy' | 'medium' | 'hard' | 'very_hard' | 'insane';
@@ -165,7 +166,7 @@ export class EnhancedAISystem extends System {
     faction: string,
     difficulty: AIDifficulty = 'medium'
   ): void {
-    console.log(`[EnhancedAI] Registering AI: ${playerId}, faction: ${faction}, difficulty: ${difficulty}`);
+    debugAI.log(`[EnhancedAI] Registering AI: ${playerId}, faction: ${faction}, difficulty: ${difficulty}`);
     const config = this.getDifficultyConfig(difficulty);
 
     this.aiPlayers.set(playerId, {
@@ -294,7 +295,7 @@ export class EnhancedAISystem extends System {
 
     // Log once at first tick
     if (currentTick === 1) {
-      console.log(`[EnhancedAI] Registered AI players: ${Array.from(this.aiPlayers.keys()).join(', ')}`);
+      debugAI.log(`[EnhancedAI] Registered AI players: ${Array.from(this.aiPlayers.keys()).join(', ')}`);
     }
 
     for (const [playerId, ai] of this.aiPlayers) {
@@ -311,14 +312,14 @@ export class EnhancedAISystem extends System {
       if (totalBuildings === 0) {
         // AI is defeated - stop all activity
         if (currentTick % 100 === 0) {
-          console.log(`[EnhancedAI] ${playerId} has no buildings, skipping`);
+          debugAI.log(`[EnhancedAI] ${playerId} has no buildings, skipping`);
         }
         continue;
       }
 
       // Debug log periodically
       if (currentTick % 200 === 0) {
-        console.log(`[EnhancedAI] ${playerId}: workers=${ai.workerCount}, buildings=${totalBuildings}, minerals=${Math.floor(ai.minerals)}, state=${ai.state}`);
+        debugAI.log(`[EnhancedAI] ${playerId}: workers=${ai.workerCount}, buildings=${totalBuildings}, minerals=${Math.floor(ai.minerals)}, state=${ai.state}`);
       }
 
       // Resource bonus for harder difficulties
@@ -776,7 +777,7 @@ export class EnhancedAISystem extends System {
     // The addon system uses 'tech_lab' internally for production capability
     parentBuilding.attachAddon('tech_lab', -1); // -1 will be updated when addon entity is created
 
-    console.log(`EnhancedAI: ${ai.playerId} building tech_lab on ${target.buildingId}`);
+    debugAI.log(`EnhancedAI: ${ai.playerId} building tech_lab on ${target.buildingId}`);
     return true;
   }
 
@@ -873,7 +874,7 @@ export class EnhancedAISystem extends System {
       if (expansionPos) {
         // Try to build headquarters at expansion
         if (this.tryBuildBuildingAt(ai, 'headquarters', expansionPos)) {
-          console.log(`EnhancedAI: ${ai.playerId} expanding to base #${totalBases + 1} at (${expansionPos.x.toFixed(1)}, ${expansionPos.y.toFixed(1)})`);
+          debugAI.log(`EnhancedAI: ${ai.playerId} expanding to base #${totalBases + 1} at (${expansionPos.x.toFixed(1)}, ${expansionPos.y.toFixed(1)})`);
           ai.lastExpansionTick = currentTick;
           ai.state = 'building';
           return;
@@ -1662,7 +1663,7 @@ export class EnhancedAISystem extends System {
       }
     }
     if (!foundForPlayer) {
-      console.log(`[EnhancedAI] findAIBase: No buildings at all for ${playerId}`);
+      debugAI.log(`[EnhancedAI] findAIBase: No buildings at all for ${playerId}`);
     }
     return null;
   }
@@ -2050,13 +2051,8 @@ export class EnhancedAISystem extends System {
     // Find AI's base position
     const basePos = this.findAIBase(ai.playerId);
     if (!basePos) {
-      console.log(`[EnhancedAI] ${ai.playerId}: No base found for gathering!`);
+      debugAI.log(`[EnhancedAI] ${ai.playerId}: No base found for gathering!`);
       return;
-    }
-
-    // Debug log base position for player1
-    if (ai.playerId === 'player1' && this.game.getCurrentTick() === 20) {
-      console.log(`[EnhancedAI] ${ai.playerId}: Base at (${basePos.x.toFixed(1)}, ${basePos.y.toFixed(1)})`);
     }
 
     // Find nearby mineral patches
@@ -2114,6 +2110,9 @@ export class EnhancedAISystem extends System {
     const idleWorkers: number[] = [];
     let gasWorkers = 0;
 
+    // Track all worker states for debugging
+    const workerStates: Record<string, number> = {};
+
     for (const entity of units) {
       const selectable = entity.get<Selectable>('Selectable');
       const unit = entity.get<Unit>('Unit');
@@ -2124,6 +2123,9 @@ export class EnhancedAISystem extends System {
       if (selectable.playerId !== ai.playerId) continue;
       if (!unit.isWorker) continue;
       if (health.isDead()) continue;
+
+      // Track worker state counts
+      workerStates[unit.state] = (workerStates[unit.state] || 0) + 1;
 
       // Count workers on gas
       if (unit.state === 'gathering' && unit.gatherTargetId !== null) {
@@ -2140,18 +2142,14 @@ export class EnhancedAISystem extends System {
       if (unit.state === 'idle') {
         idleWorkers.push(entity.id);
       }
-
-      // Debug: log worker states for player1
-      if (ai.playerId === 'player1' && this.game.getCurrentTick() === 20) {
-        console.log(`[EnhancedAI] ${ai.playerId} worker ${entity.id}: state=${unit.state}`);
-      }
     }
 
     if (nearbyMinerals.length === 0 && refineries.length === 0) return;
 
     // Debug log for player1
     if (ai.playerId === 'player1' && this.game.getCurrentTick() % 100 === 0) {
-      console.log(`[EnhancedAI] ${ai.playerId}: idle workers=${idleWorkers.length}, nearby minerals=${nearbyMinerals.length}`);
+      const statesStr = Object.entries(workerStates).map(([k, v]) => `${k}:${v}`).join(', ');
+      debugAI.log(`[EnhancedAI] ${ai.playerId}: worker states=[${statesStr}], nearby minerals=${nearbyMinerals.length}`);
     }
 
     // Assign idle workers - prioritize getting 3 workers per refinery first

@@ -85,9 +85,30 @@ export class UnitMechanicsSystem extends System {
     // Healing/Repair commands
     this.game.eventBus.on('command:heal', this.handleHealCommand.bind(this));
     this.game.eventBus.on('command:repair', this.handleRepairCommand.bind(this));
+    this.game.eventBus.on('command:toggleAutocastRepair', this.handleToggleAutocastRepair.bind(this));
 
     // Buff application
     this.game.eventBus.on('buff:apply', this.handleBuffApply.bind(this));
+  }
+
+  // ==================== AUTOCAST REPAIR TOGGLE ====================
+
+  private handleToggleAutocastRepair(data: { entityIds: number[] }): void {
+    for (const entityId of data.entityIds) {
+      const entity = this.world.getEntity(entityId);
+      if (!entity) continue;
+
+      const unit = entity.get<Unit>('Unit');
+      if (!unit || !unit.canRepair) continue;
+
+      unit.autocastRepair = !unit.autocastRepair;
+
+      this.game.eventBus.emit('unit:autocastToggled', {
+        entityId,
+        ability: 'repair',
+        enabled: unit.autocastRepair,
+      });
+    }
   }
 
   // ==================== TRANSFORM HANDLING ====================
@@ -465,10 +486,108 @@ export class UnitMechanicsSystem extends System {
 
       // Process repair
       this.processRepair(entity, unit, dt);
+
+      // Process autocast repair (look for nearby damaged buildings/mechanical units)
+      this.processAutocastRepair(entity, unit);
     }
 
     // Process bunker attacks
     this.processBunkerAttacks(gameTime);
+  }
+
+  private processAutocastRepair(entity: { id: number }, unit: Unit): void {
+    // Skip if autocast is disabled or unit can't repair
+    if (!unit.autocastRepair || !unit.canRepair) return;
+
+    // Skip if unit is already repairing something
+    if (unit.repairTargetId !== null) return;
+
+    // Skip if unit is busy (building, gathering, attacking, etc.)
+    if (unit.state !== 'idle') return;
+
+    const repairer = this.world.getEntity(entity.id);
+    if (!repairer) return;
+
+    const repairerTransform = repairer.get<Transform>('Transform');
+    const repairerSelectable = repairer.get<Selectable>('Selectable');
+
+    if (!repairerTransform || !repairerSelectable) return;
+
+    const autocastRange = 8; // Range to look for damaged things to repair
+    let closestTarget: { id: number; distance: number } | null = null;
+
+    // Look for damaged buildings
+    const buildings = this.world.getEntitiesWith('Building', 'Transform', 'Health', 'Selectable');
+    for (const buildingEntity of buildings) {
+      const buildingSelectable = buildingEntity.get<Selectable>('Selectable')!;
+      const buildingHealth = buildingEntity.get<Health>('Health')!;
+      const buildingTransform = buildingEntity.get<Transform>('Transform')!;
+      const building = buildingEntity.get<Building>('Building')!;
+
+      // Only repair own buildings
+      if (buildingSelectable.playerId !== repairerSelectable.playerId) continue;
+
+      // Only repair damaged buildings
+      if (buildingHealth.current >= buildingHealth.max) continue;
+
+      // Only repair completed buildings
+      if (!building.isComplete()) continue;
+
+      // Skip dead buildings
+      if (buildingHealth.isDead()) continue;
+
+      // Calculate distance to building edge
+      const halfW = building.width / 2;
+      const halfH = building.height / 2;
+      const clampedX = Math.max(buildingTransform.x - halfW, Math.min(repairerTransform.x, buildingTransform.x + halfW));
+      const clampedY = Math.max(buildingTransform.y - halfH, Math.min(repairerTransform.y, buildingTransform.y + halfH));
+      const dx = repairerTransform.x - clampedX;
+      const dy = repairerTransform.y - clampedY;
+      const distance = Math.sqrt(dx * dx + dy * dy);
+
+      if (distance <= autocastRange) {
+        if (!closestTarget || distance < closestTarget.distance) {
+          closestTarget = { id: buildingEntity.id, distance };
+        }
+      }
+    }
+
+    // Look for damaged mechanical units
+    const units = this.world.getEntitiesWith('Unit', 'Transform', 'Health', 'Selectable');
+    for (const unitEntity of units) {
+      if (unitEntity.id === entity.id) continue; // Skip self
+
+      const targetUnit = unitEntity.get<Unit>('Unit')!;
+      const targetSelectable = unitEntity.get<Selectable>('Selectable')!;
+      const targetHealth = unitEntity.get<Health>('Health')!;
+      const targetTransform = unitEntity.get<Transform>('Transform')!;
+
+      // Only repair own mechanical units
+      if (targetSelectable.playerId !== repairerSelectable.playerId) continue;
+      if (!targetUnit.isMechanical) continue;
+
+      // Only repair damaged units
+      if (targetHealth.current >= targetHealth.max) continue;
+
+      // Skip dead units
+      if (targetHealth.isDead()) continue;
+
+      // Calculate distance
+      const dx = targetTransform.x - repairerTransform.x;
+      const dy = targetTransform.y - repairerTransform.y;
+      const distance = Math.sqrt(dx * dx + dy * dy);
+
+      if (distance <= autocastRange) {
+        if (!closestTarget || distance < closestTarget.distance) {
+          closestTarget = { id: unitEntity.id, distance };
+        }
+      }
+    }
+
+    // Auto-repair the closest target
+    if (closestTarget) {
+      unit.setRepairTarget(closestTarget.id);
+    }
   }
 
   private processHealing(

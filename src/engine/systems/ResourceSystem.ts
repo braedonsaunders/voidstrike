@@ -8,6 +8,7 @@ import { Selectable } from '../components/Selectable';
 import { Game } from '../core/Game';
 import { World } from '../ecs/World';
 import { useGameStore } from '@/store/gameStore';
+import { debugResources } from '@/utils/debugLogger';
 import { isLocalPlayer } from '@/store/gameSetupStore';
 
 // Mining time in seconds
@@ -120,6 +121,12 @@ export class ResourceSystem extends System {
 
       // Move to assigned resource
       unit.moveToPosition(assignedTransform.x, assignedTransform.y);
+
+      // Debug: log gather command for player1 workers
+      const selectable = entity.get<Selectable>('Selectable');
+      if (selectable?.playerId === 'player1') {
+        debugResources.log(`[ResourceSystem] player1 worker ${entityId} assigned to gather resource ${assignedTargetId}, moving to (${assignedTransform.x.toFixed(1)}, ${assignedTransform.y.toFixed(1)})`);
+      }
     }
   }
 
@@ -246,6 +253,12 @@ export class ResourceSystem extends System {
 
         const distance = transform.distanceTo(resourceTransform);
 
+        // Debug: log distance for player1 workers periodically
+        const selectable = entity.get<Selectable>('Selectable');
+        if (selectable?.playerId === 'player1' && Math.random() < 0.01) {
+          console.log(`[ResourceSystem] player1 worker ${entity.id}: distance to resource=${distance.toFixed(2)}, isMining=${unit.isMining}, gatherTargetId=${unit.gatherTargetId}`);
+        }
+
         if (distance <= 2) {
           // At resource - start or continue mining
           if (!unit.isMining) {
@@ -354,7 +367,7 @@ export class ResourceSystem extends System {
     // Calculate drop-off range based on building size
     // Must be larger than building avoidance zone (halfWidth + 1.0) to allow workers to reach
     const buildingHalfWidth = (nearestBase.building.width || 5) / 2;
-    const dropOffRange = buildingHalfWidth + 3.5; // Generous range outside avoidance zone
+    const dropOffRange = buildingHalfWidth + 1.75; // Closer range for drop-off
 
     if (nearestDistance <= dropOffRange) {
       // At base - deposit resources (only for local player, AI tracks separately)

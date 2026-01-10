@@ -1,4 +1,5 @@
 import { create } from 'zustand';
+import { debugInitialization } from '@/utils/debugLogger';
 
 export type StartingResources = 'normal' | 'high' | 'insane';
 export type GameSpeed = 'slower' | 'normal' | 'faster' | 'fastest';
@@ -273,7 +274,7 @@ export const useGameSetupStore = create<GameSetupState>((set, get) => ({
 
   getAIPlayerIds: (): string[] => {
     const aiIds = get().playerSlots.filter(s => s.type === 'ai').map(s => s.id);
-    console.log(`[gameSetupStore] getAIPlayerIds called, returning: ${aiIds.join(', ')}`);
+    debugInitialization.log(`[gameSetupStore] getAIPlayerIds called, returning: ${aiIds.join(', ')}`);
     return aiIds;
   },
 
@@ -336,4 +337,13 @@ export function getAIPlayerIds(): string[] {
 
 export function isSpectatorMode(): boolean {
   return useGameSetupStore.getState().isSpectator();
+}
+
+/**
+ * Returns true if there are multiple human players (true multiplayer mode).
+ * Used to disable debug features in competitive play.
+ */
+export function isMultiplayerMode(): boolean {
+  const humanPlayerIds = useGameSetupStore.getState().getHumanPlayerIds();
+  return humanPlayerIds.length > 1;
 }

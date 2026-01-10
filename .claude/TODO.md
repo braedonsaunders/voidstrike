@@ -85,6 +85,7 @@
 - [x] **Layer-by-layer construction reveal** - Replaced opacity-only animation with clipping plane reveal. Buildings now reveal from bottom to top with construction particles at the build height.
 - [x] **Supply depot/refinery heights** - Fixed target heights (supply_depot: 0.9→1.8, refinery: 2.0→2.5) to match procedural versions and prevent buildings from appearing half in the ground.
 - [x] **Orphaned blueprint defeat bug** - Players could avoid defeat by having building blueprints (waiting_for_worker state) even with no complete buildings. Fixed by: (1) Victory condition now only counts complete buildings, not blueprints. (2) Blueprints are automatically cancelled and resources refunded when the assigned worker is reassigned to another task.
+- [x] **Building completion health bug** - Buildings completed at low health and on fire because ProductionSystem was also calling updateConstruction() without updating health, racing with BuildingPlacementSystem. Fixed by removing duplicate construction handling from ProductionSystem.
 
 ### Resource Rendering Fixes (January 2026)
 - [x] **Debug logging for resource rendering** - Added comprehensive logging to trace mineral/vespene spawning and instanced mesh creation
@@ -92,6 +93,14 @@
 - [x] **yOffset/baseScale clamping** - Prevent resources from rendering underground or at invisible scales due to bad model transforms
 - [x] **Natural expansion minerals not visible** - Fixed by clamping baseScale to >= 0.1. The minerals.glb model normalization was causing baseScale to be ~0.02, making minerals invisible.
 - [x] **Watch tower vision ring artifacts** - Removed decorative vision range rings from MapDecorations that were causing "eye-shaped shadow" visual artifacts on maps with multiple watch towers.
+
+### SCV Repair System Fixes (January 2026)
+- [x] **Right-click repair on buildings** - SCVs can now right-click on friendly damaged buildings/mechanical units to repair them. Previously only move command was issued.
+- [x] **Repair visual feedback** - Green pulsing selection ring flash appears on target when repair command is issued.
+- [x] **Autocast repair toggle** - Added autocastRepair property to workers. When enabled, idle SCVs automatically repair nearby damaged buildings/mechanical units within 8 range.
+
+### Camera & Input Fixes (January 2026)
+- [x] **WASD keys removed from camera** - WASD was conflicting with shortcuts (A=attack move, S=stop, etc.). Camera now uses arrow keys only for keyboard panning.
 
 ### UI Improvements
 - [x] **Options menu** - Replaced Menu button with dropdown (Controls, Tech Tree, Exit to Menu)
@@ -434,7 +443,7 @@
 ### Settings
 - [ ] Custom hotkeys
 - [ ] Graphics settings (quality presets)
-- [ ] Audio settings (volume sliders)
+- [x] Audio settings (volume sliders, music player, SFX controls)
 - [ ] Gameplay settings
 
 ### Skirmish Options

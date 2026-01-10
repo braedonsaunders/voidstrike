@@ -3,6 +3,7 @@
 import { useState, useCallback } from 'react';
 import { useGameStore } from '@/store/gameStore';
 import { useUIStore } from '@/store/uiStore';
+import { isMultiplayerMode } from '@/store/gameSetupStore';
 import { setEdgeScrollEnabled } from '@/store/cameraStore';
 import { Minimap } from './Minimap';
 import { ResourcePanel } from './ResourcePanel';
@@ -12,19 +13,20 @@ import { TechTreePanel } from './TechTreePanel';
 import { IdleWorkerButton } from './IdleWorkerButton';
 import { KeyboardShortcutsPanel } from './KeyboardShortcutsPanel';
 import { PlayerStatusPanel } from './PlayerStatusPanel';
+import { SoundOptionsPanel } from './SoundOptionsPanel';
 
 export function HUD() {
   const { isPaused, togglePause, setShowTechTree, setShowKeyboardShortcuts } = useGameStore();
-  const { toggleFPS, showFPS, toggleGraphicsOptions, showGraphicsOptions } = useUIStore();
+  const { toggleFPS, showFPS, toggleGraphicsOptions, showGraphicsOptions, toggleSoundOptions, showSoundOptions, toggleDebugMenu, showDebugMenu } = useUIStore();
   const [showOptionsMenu, setShowOptionsMenu] = useState(false);
-  const [showPlayerStatus, setShowPlayerStatus] = useState(true);
+  const [showPlayerStatus, setShowPlayerStatus] = useState(false);
 
-  // Disable edge scrolling when mouse is over minimap or command card (not selection panel)
-  const handleEdgeUIMouseEnter = useCallback(() => {
+  // Disable edge scrolling when mouse is over UI elements
+  const handleUIMouseEnter = useCallback(() => {
     setEdgeScrollEnabled(false);
   }, []);
 
-  const handleEdgeUIMouseLeave = useCallback(() => {
+  const handleUIMouseLeave = useCallback(() => {
     setEdgeScrollEnabled(true);
   }, []);
 
@@ -37,7 +39,11 @@ export function HUD() {
         <ResourcePanel />
 
         {/* Menu buttons */}
-        <div className="flex gap-2">
+        <div
+          className="flex gap-2"
+          onMouseEnter={handleUIMouseEnter}
+          onMouseLeave={handleUIMouseLeave}
+        >
           <IdleWorkerButton />
           <button
             onClick={() => setShowPlayerStatus(!showPlayerStatus)}
@@ -53,19 +59,6 @@ export function HUD() {
           >
             Tech
           </button>
-          <button
-            onClick={() => setShowKeyboardShortcuts(true)}
-            className="game-button text-sm"
-            title="Keyboard Shortcuts (?)"
-          >
-            ?
-          </button>
-          <button
-            onClick={togglePause}
-            className="game-button text-sm"
-          >
-            {isPaused ? 'Resume' : 'Pause'}
-          </button>
           <div className="relative">
             <button
               onClick={() => setShowOptionsMenu(!showOptionsMenu)}
@@ -75,6 +68,16 @@ export function HUD() {
             </button>
             {showOptionsMenu && (
               <div className="absolute right-0 top-full mt-1 bg-void-900 border border-void-700 rounded shadow-lg z-50 min-w-[150px]">
+                <button
+                  onClick={() => {
+                    setShowOptionsMenu(false);
+                    togglePause();
+                  }}
+                  className="w-full px-4 py-2 text-left text-sm text-void-200 hover:bg-void-800 transition-colors"
+                >
+                  {isPaused ? 'Resume' : 'Pause'}
+                </button>
+                <div className="border-t border-void-700 my-1" />
                 <button
                   onClick={() => {
                     setShowOptionsMenu(false);
@@ -110,6 +113,29 @@ export function HUD() {
                   <span>Graphics</span>
                   <span className={showGraphicsOptions ? 'text-green-400' : 'text-void-500'}>{showGraphicsOptions ? 'OPEN' : ''}</span>
                 </button>
+                <button
+                  onClick={() => {
+                    setShowOptionsMenu(false);
+                    toggleSoundOptions();
+                  }}
+                  className="w-full px-4 py-2 text-left text-sm text-void-200 hover:bg-void-800 transition-colors flex justify-between items-center"
+                >
+                  <span>Sound</span>
+                  <span className={showSoundOptions ? 'text-green-400' : 'text-void-500'}>{showSoundOptions ? 'OPEN' : ''}</span>
+                </button>
+                {/* Debug menu only available in single player (not in multiplayer with multiple humans) */}
+                {!isMultiplayerMode() && (
+                  <button
+                    onClick={() => {
+                      setShowOptionsMenu(false);
+                      toggleDebugMenu();
+                    }}
+                    className="w-full px-4 py-2 text-left text-sm text-void-200 hover:bg-void-800 transition-colors flex justify-between items-center"
+                  >
+                    <span>Debug</span>
+                    <span className={showDebugMenu ? 'text-green-400' : 'text-void-500'}>{showDebugMenu ? 'OPEN' : ''}</span>
+                  </button>
+                )}
                 <div className="border-t border-void-700 my-1" />
                 <button
                   onClick={() => {
@@ -130,7 +156,7 @@ export function HUD() {
       {/* Bottom bar */}
       <div className="absolute bottom-0 left-0 right-0 flex justify-between items-end p-2 pointer-events-auto">
         {/* Minimap - disable edge scroll when hovering */}
-        <div onMouseEnter={handleEdgeUIMouseEnter} onMouseLeave={handleEdgeUIMouseLeave}>
+        <div onMouseEnter={handleUIMouseEnter} onMouseLeave={handleUIMouseLeave}>
           <Minimap />
         </div>
 
@@ -140,7 +166,7 @@ export function HUD() {
         </div>
 
         {/* Command card - disable edge scroll when hovering */}
-        <div onMouseEnter={handleEdgeUIMouseEnter} onMouseLeave={handleEdgeUIMouseLeave}>
+        <div onMouseEnter={handleUIMouseEnter} onMouseLeave={handleUIMouseLeave}>
           <CommandCard />
         </div>
       </div>
@@ -157,6 +183,9 @@ export function HUD() {
 
       {/* Keyboard Shortcuts Modal */}
       <KeyboardShortcutsPanel />
+
+      {/* Sound Options Panel */}
+      <SoundOptionsPanel />
 
       {/* Pause overlay */}
       {isPaused && (

@@ -8,6 +8,7 @@ import { Building } from '../components/Building';
 import { Resource } from '../components/Resource';
 import { PooledVector2 } from '@/utils/VectorPool';
 import { isLocalPlayer } from '@/store/gameSetupStore';
+import { debugCombat } from '@/utils/debugLogger';
 
 // Static temp vectors to avoid allocations in hot loops
 const tempTargetScore: { id: number; score: number } | null = null;
@@ -90,6 +91,18 @@ export class CombatSystem extends System {
     this.game.eventBus.on('command:attack', this.handleAttackCommand.bind(this));
     this.game.eventBus.on('command:stop', this.handleStopCommand.bind(this));
     this.game.eventBus.on('command:hold', this.handleHoldCommand.bind(this));
+
+    // Clean up target caches when units are destroyed to prevent memory leaks
+    this.game.eventBus.on('unit:died', this.handleUnitDeath.bind(this));
+    this.game.eventBus.on('unit:destroyed', this.handleUnitDeath.bind(this));
+  }
+
+  /**
+   * Clean up target caches when a unit dies to prevent memory leaks
+   */
+  private handleUnitDeath(data: { entityId: number }): void {
+    this.cachedTargets.delete(data.entityId);
+    this.lastTargetSearchTick.delete(data.entityId);
   }
 
   private handleAttackCommand(command: {
@@ -301,13 +314,13 @@ export class CombatSystem extends System {
             const resource = resourceEntity.get<Resource>('Resource');
             if (resource && resource.extractorEntityId === building.id) {
               resource.extractorEntityId = null;
-              console.log(`CombatSystem: Extractor destroyed, vespene geyser ${resourceEntity.id} restored`);
+              debugCombat.log(`CombatSystem: Extractor destroyed, vespene geyser ${resourceEntity.id} restored`);
               break;
             }
           }
         }
 
-        console.log(`CombatSystem: Building ${buildingComp.buildingId} (${building.id}) destroyed at (${transform.x.toFixed(1)}, ${transform.y.toFixed(1)})`);
+        debugCombat.log(`CombatSystem: Building ${buildingComp.buildingId} (${building.id}) destroyed at (${transform.x.toFixed(1)}, ${transform.y.toFixed(1)})`);
 
         this.game.eventBus.emit('building:destroyed', {
           entityId: building.id,

@@ -10,19 +10,47 @@ export interface Notification {
   duration: number;
 }
 
+// Debug settings for console logging groups
+export interface DebugSettings {
+  // Master toggle
+  debugEnabled: boolean;
+  // Rendering
+  debugAnimation: boolean;
+  debugMesh: boolean;
+  debugTerrain: boolean;
+  debugShaders: boolean;
+  debugPostProcessing: boolean;
+  // Gameplay
+  debugBuildingPlacement: boolean;
+  debugCombat: boolean;
+  debugResources: boolean;
+  debugProduction: boolean;
+  debugSpawning: boolean;
+  // Systems
+  debugAI: boolean;
+  debugPathfinding: boolean;
+  // Assets & Initialization
+  debugAssets: boolean;
+  debugInitialization: boolean;
+  // Audio
+  debugAudio: boolean;
+}
+
 // Graphics settings for post-processing and visual effects
 export interface GraphicsSettings {
   postProcessingEnabled: boolean;
+  toneMappingExposure: number;
   ssaoEnabled: boolean;
   ssaoRadius: number;
   bloomEnabled: boolean;
+  bloomStrength: number;
+  bloomThreshold: number;
+  bloomRadius: number;
   outlineEnabled: boolean;
   outlineStrength: number;
   fxaaEnabled: boolean;
-  groundFogEnabled: boolean;
   particlesEnabled: boolean;
-  bloomStrength: number;
-  bloomThreshold: number;
+  particleDensity: number;
 }
 
 export interface UIState {
@@ -58,6 +86,13 @@ export interface UIState {
   graphicsSettings: GraphicsSettings;
   showGraphicsOptions: boolean;
 
+  // Sound settings
+  showSoundOptions: boolean;
+
+  // Debug settings
+  debugSettings: DebugSettings;
+  showDebugMenu: boolean;
+
   // Actions
   setScreen: (screen: ScreenType) => void;
   goBack: () => void;
@@ -83,6 +118,12 @@ export interface UIState {
   toggleGraphicsOptions: () => void;
   setGraphicsSetting: <K extends keyof GraphicsSettings>(key: K, value: GraphicsSettings[K]) => void;
   toggleGraphicsSetting: (key: keyof GraphicsSettings) => void;
+  // Sound settings actions
+  toggleSoundOptions: () => void;
+  // Debug settings actions
+  toggleDebugMenu: () => void;
+  toggleDebugSetting: (key: keyof DebugSettings) => void;
+  setAllDebugSettings: (enabled: boolean) => void;
 }
 
 export const useUIStore = create<UIState>((set, get) => ({
@@ -103,18 +144,45 @@ export const useUIStore = create<UIState>((set, get) => ({
   showFPS: false,
   showPing: true,
   showGraphicsOptions: false,
+  showSoundOptions: false,
   graphicsSettings: {
     postProcessingEnabled: true,
+    toneMappingExposure: 1.0,
     ssaoEnabled: true,
     ssaoRadius: 16,
     bloomEnabled: true,
+    bloomStrength: 0.2,
+    bloomThreshold: 0.9,
+    bloomRadius: 0.4,
     outlineEnabled: true,
     outlineStrength: 2,
     fxaaEnabled: true,
-    groundFogEnabled: true,
     particlesEnabled: true,
-    bloomStrength: 0.2,
-    bloomThreshold: 0.9,
+    particleDensity: 1.0,
+  },
+  showDebugMenu: false,
+  debugSettings: {
+    debugEnabled: false,
+    // Rendering
+    debugAnimation: false,
+    debugMesh: false,
+    debugTerrain: false,
+    debugShaders: false,
+    debugPostProcessing: false,
+    // Gameplay
+    debugBuildingPlacement: false,
+    debugCombat: false,
+    debugResources: false,
+    debugProduction: false,
+    debugSpawning: false,
+    // Systems
+    debugAI: false,
+    debugPathfinding: false,
+    // Assets & Initialization
+    debugAssets: false,
+    debugInitialization: false,
+    // Audio
+    debugAudio: false,
   },
 
   setScreen: (screen) =>
@@ -194,6 +262,8 @@ export const useUIStore = create<UIState>((set, get) => ({
 
   toggleGraphicsOptions: () => set((state) => ({ showGraphicsOptions: !state.showGraphicsOptions })),
 
+  toggleSoundOptions: () => set((state) => ({ showSoundOptions: !state.showSoundOptions })),
+
   setGraphicsSetting: (key, value) =>
     set((state) => ({
       graphicsSettings: { ...state.graphicsSettings, [key]: value },
@@ -204,6 +274,38 @@ export const useUIStore = create<UIState>((set, get) => ({
       graphicsSettings: {
         ...state.graphicsSettings,
         [key]: !state.graphicsSettings[key],
+      },
+    })),
+
+  toggleDebugMenu: () => set((state) => ({ showDebugMenu: !state.showDebugMenu })),
+
+  toggleDebugSetting: (key) =>
+    set((state) => ({
+      debugSettings: {
+        ...state.debugSettings,
+        [key]: !state.debugSettings[key],
+      },
+    })),
+
+  setAllDebugSettings: (enabled) =>
+    set((state) => ({
+      debugSettings: {
+        debugEnabled: enabled,
+        debugAnimation: enabled,
+        debugMesh: enabled,
+        debugTerrain: enabled,
+        debugShaders: enabled,
+        debugPostProcessing: enabled,
+        debugBuildingPlacement: enabled,
+        debugCombat: enabled,
+        debugResources: enabled,
+        debugProduction: enabled,
+        debugSpawning: enabled,
+        debugAI: enabled,
+        debugPathfinding: enabled,
+        debugAssets: enabled,
+        debugInitialization: enabled,
+        debugAudio: enabled,
       },
     })),
 }));

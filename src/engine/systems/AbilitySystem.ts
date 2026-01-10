@@ -14,8 +14,25 @@ interface AbilityCommand {
   targetEntityId?: number;
 }
 
+// Delayed ability effect to be processed at a specific tick (replaces setTimeout)
+interface DelayedAbilityEffect {
+  executeTick: number;
+  type: 'nuke' | 'nova_cannon';
+  data: {
+    position?: { x: number; y: number };
+    damage?: number;
+    radius?: number;
+    casterId?: number;
+    targetId?: number;
+    targetPos?: { x: number; y: number } | null;
+  };
+}
+
 export class AbilitySystem extends System {
   public priority = 25;
+
+  // Queue for delayed ability effects (replaces setTimeout)
+  private pendingEffects: DelayedAbilityEffect[] = [];
 
   constructor(game: Game) {
     super(game);
@@ -345,31 +362,13 @@ export class AbilitySystem extends System {
       delay: 10, // 10 seconds to impact
     });
 
-    // Schedule the actual damage
-    setTimeout(() => {
-      const entities = this.world.getEntitiesWith('Transform', 'Health');
-
-      for (const entity of entities) {
-        const transform = entity.get<Transform>('Transform')!;
-        const health = entity.get<Health>('Health')!;
-
-        const dx = transform.x - position.x;
-        const dy = transform.y - position.y;
-        const distance = Math.sqrt(dx * dx + dy * dy);
-
-        if (distance <= radius) {
-          // Calculate damage falloff from center
-          const falloff = 1 - (distance / radius) * 0.5;
-          health.takeDamage(damage * falloff, this.game.getGameTime());
-        }
-      }
-
-      this.game.eventBus.emit('ability:nuke_impact', {
-        position,
-        radius,
-        damage,
-      });
-    }, 10000); // 10 second delay
+    // Schedule the actual damage using tick-based delay (200 ticks = 10 seconds at 20 TPS)
+    // This replaces setTimeout with deterministic tick-based timing
+    this.pendingEffects.push({
+      executeTick: this.game.getCurrentTick() + 200,
+      type: 'nuke',
+      data: { position, damage, radius },
+    });
   }
 
   private executeNovaCannon(
@@ -401,34 +400,18 @@ export class AbilitySystem extends System {
       });
     }
 
-    // Schedule the damage after channel completes
-    setTimeout(() => {
-      const currentTarget = this.world.getEntity(targetId);
-      if (!currentTarget) return;
-
-      const targetHealth = currentTarget.get<Health>('Health');
-      if (!targetHealth) return;
-
-      // Deal massive damage to single target
-      targetHealth.takeDamage(damage, this.game.getGameTime());
-
-      this.game.eventBus.emit('ability:effect', {
-        type: 'nova_cannon',
+    // Schedule the damage after channel completes using tick-based delay (60 ticks = 3 seconds at 20 TPS)
+    // This replaces setTimeout with deterministic tick-based timing
+    this.pendingEffects.push({
+      executeTick: this.game.getCurrentTick() + 60,
+      type: 'nova_cannon',
+      data: {
         casterId: caster.id,
         targetId,
         damage,
-        position: targetTransform ? { x: targetTransform.x, y: targetTransform.y } : null,
-      });
-
-      // Impact effect for Phaser overlay
-      if (targetTransform) {
-        this.game.eventBus.emit('ability:major', {
-          abilityName: 'NOVA IMPACT',
-          position: { x: targetTransform.x, y: targetTransform.y },
-          color: 0xff6600,
-        });
-      }
-    }, 3000);
+        targetPos: targetTransform ? { x: targetTransform.x, y: targetTransform.y } : null,
+      },
+    });
   }
 
   private executeTacticalJump(
@@ -544,6 +527,10 @@ export class AbilitySystem extends System {
 
   public update(deltaTime: number): void {
     const dt = deltaTime / 1000; // Convert to seconds
+    const currentTick = this.game.getCurrentTick();
+
+    // Process pending delayed ability effects (replaces setTimeout)
+    this.processPendingEffects(currentTick);
 
     // Update cooldowns and energy for all entities with abilities
     const entities = this.world.getEntitiesWith('Ability');
@@ -555,6 +542,94 @@ export class AbilitySystem extends System {
 
     // Process auto-cast abilities
     this.processAutoCast(dt);
+  }
+
+  /**
+   * Process pending delayed ability effects (replaces setTimeout)
+   */
+  private processPendingEffects(currentTick: number): void {
+    let i = 0;
+    while (i < this.pendingEffects.length) {
+      const effect = this.pendingEffects[i];
+      if (effect.executeTick <= currentTick) {
+        // Execute the effect
+        if (effect.type === 'nuke') {
+          this.executeNukeImpact(effect.data);
+        } else if (effect.type === 'nova_cannon') {
+          this.executeNovaCannonImpact(effect.data);
+        }
+        // Remove from queue (swap with last for O(1) removal)
+        this.pendingEffects[i] = this.pendingEffects[this.pendingEffects.length - 1];
+        this.pendingEffects.pop();
+      } else {
+        i++;
+      }
+    }
+  }
+
+  /**
+   * Execute nuke impact damage (called from tick-based delay)
+   */
+  private executeNukeImpact(data: DelayedAbilityEffect['data']): void {
+    const { position, damage, radius } = data;
+    if (!position || damage === undefined || radius === undefined) return;
+
+    const entities = this.world.getEntitiesWith('Transform', 'Health');
+
+    for (const entity of entities) {
+      const transform = entity.get<Transform>('Transform')!;
+      const health = entity.get<Health>('Health')!;
+
+      const dx = transform.x - position.x;
+      const dy = transform.y - position.y;
+      const distance = Math.sqrt(dx * dx + dy * dy);
+
+      if (distance <= radius) {
+        // Calculate damage falloff from center
+        const falloff = 1 - (distance / radius) * 0.5;
+        health.takeDamage(damage * falloff, this.game.getGameTime());
+      }
+    }
+
+    this.game.eventBus.emit('ability:nuke_impact', {
+      position,
+      radius,
+      damage,
+    });
+  }
+
+  /**
+   * Execute nova cannon impact damage (called from tick-based delay)
+   */
+  private executeNovaCannonImpact(data: DelayedAbilityEffect['data']): void {
+    const { casterId, targetId, damage, targetPos } = data;
+    if (targetId === undefined || damage === undefined) return;
+
+    const currentTarget = this.world.getEntity(targetId);
+    if (!currentTarget) return;
+
+    const targetHealth = currentTarget.get<Health>('Health');
+    if (!targetHealth) return;
+
+    // Deal massive damage to single target
+    targetHealth.takeDamage(damage, this.game.getGameTime());
+
+    this.game.eventBus.emit('ability:effect', {
+      type: 'nova_cannon',
+      casterId,
+      targetId,
+      damage,
+      position: targetPos,
+    });
+
+    // Impact effect for Phaser overlay
+    if (targetPos) {
+      this.game.eventBus.emit('ability:major', {
+        abilityName: 'NOVA IMPACT',
+        position: targetPos,
+        color: 0xff6600,
+      });
+    }
   }
 
   private processAutoCast(deltaTime: number): void {

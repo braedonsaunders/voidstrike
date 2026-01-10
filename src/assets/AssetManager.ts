@@ -20,6 +20,7 @@ import * as THREE from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { DRACOLoader } from 'three/examples/jsm/loaders/DRACOLoader.js';
 import * as SkeletonUtils from 'three/examples/jsm/utils/SkeletonUtils.js';
+import { debugAssets } from '@/utils/debugLogger';
 
 // Reference Frame Contract Constants
 // Per threejs-builder skill: document these upfront to avoid reference-frame bugs
@@ -98,20 +99,20 @@ function normalizeModel(root: THREE.Object3D, targetHeight: number): void {
 
   // Check if the bounding box is valid
   if (box.isEmpty()) {
-    console.warn('[AssetManager] normalizeModel: Empty bounding box, skipping normalization');
+    debugAssets.warn('[AssetManager] normalizeModel: Empty bounding box, skipping normalization');
     return;
   }
 
   const size = box.getSize(new THREE.Vector3());
 
   // Log model info for debugging
-  console.log(`[AssetManager] Model bounds: size=(${size.x.toFixed(2)}, ${size.y.toFixed(2)}, ${size.z.toFixed(2)}), min.y=${box.min.y.toFixed(2)}`);
+  debugAssets.log(`[AssetManager] Model bounds: size=(${size.x.toFixed(2)}, ${size.y.toFixed(2)}, ${size.z.toFixed(2)}), min.y=${box.min.y.toFixed(2)}`);
 
   // Scale to target height if model has height
   if (size.y > 0.001) {
     const scale = targetHeight / size.y;
     root.scale.setScalar(scale);
-    console.log(`[AssetManager] Applied scale: ${scale.toFixed(4)} to achieve height ${targetHeight}`);
+    debugAssets.log(`[AssetManager] Applied scale: ${scale.toFixed(4)} to achieve height ${targetHeight}`);
   }
 
   // Update matrices after scaling
@@ -123,7 +124,7 @@ function normalizeModel(root: THREE.Object3D, targetHeight: number): void {
   // Ground the model (set bottom at y=0) - minY anchor
   if (isFinite(box.min.y)) {
     root.position.y = -box.min.y;
-    console.log(`[AssetManager] Grounded model: position.y = ${root.position.y.toFixed(4)}`);
+    debugAssets.log(`[AssetManager] Grounded model: position.y = ${root.position.y.toFixed(4)}`);
   }
 }
 
@@ -281,7 +282,7 @@ export class AssetManager {
       wrapper.add(cloned);
       wrapper.updateMatrixWorld(true);
 
-      console.log(`[AssetManager] Custom ${unitId}: ${meshCount} meshes, inner pos.y=${cloned.position.y.toFixed(3)}, scale=${cloned.scale.x.toFixed(4)}`);
+      debugAssets.log(`[AssetManager] Custom ${unitId}: ${meshCount} meshes, inner pos.y=${cloned.position.y.toFixed(3)}, scale=${cloned.scale.x.toFixed(4)}`);
 
       return wrapper;
     }
@@ -341,7 +342,7 @@ export class AssetManager {
       wrapper.add(cloned);
       wrapper.updateMatrixWorld(true);
 
-      console.log(`[AssetManager] Custom building ${buildingId}: ${meshCount} meshes, inner pos.y=${cloned.position.y.toFixed(3)}, scale=${cloned.scale.x.toFixed(4)}`);
+      debugAssets.log(`[AssetManager] Custom building ${buildingId}: ${meshCount} meshes, inner pos.y=${cloned.position.y.toFixed(3)}, scale=${cloned.scale.x.toFixed(4)}`);
 
       return wrapper;
     }
@@ -482,12 +483,12 @@ export class AssetManager {
 
           if (options.isAnimated || hasAnimations || hasSkinning) {
             animatedAssets.add(assetId);
-            console.log(`[AssetManager] Registered ${assetId} as animated model`);
+            debugAssets.log(`[AssetManager] Registered ${assetId} as animated model`);
           }
 
           // Log animation names and store them per threejs-builder skill
           if (hasAnimations) {
-            console.log(`[AssetManager] ${assetId} animations:`, gltf.animations.map(a => a.name));
+            debugAssets.log(`[AssetManager] ${assetId} animations:`, gltf.animations.map(a => a.name));
             assetAnimations.set(assetId, gltf.animations);
           }
 
@@ -654,7 +655,7 @@ export class AssetManager {
         // Check if file exists by trying to fetch headers
         const response = await fetch(model.path, { method: 'HEAD' });
         if (!response.ok) {
-          console.log(`[AssetManager] No custom model found at ${model.path}, using procedural mesh`);
+          debugAssets.log(`[AssetManager] No custom model found at ${model.path}, using procedural mesh`);
           processedCount++;
           // Await the callback in case it's async (for UI throttling)
           await onProgress?.(processedCount, totalModels, model.assetId);
@@ -663,29 +664,29 @@ export class AssetManager {
 
         // Load the GLTF model
         await this.loadGLTF(model.path, model.assetId, { targetHeight: model.targetHeight });
-        console.log(`[AssetManager] ✓ Loaded custom model: ${model.assetId} from ${model.path}`);
+        debugAssets.log(`[AssetManager] ✓ Loaded custom model: ${model.assetId} from ${model.path}`);
         loadedCount++;
         processedCount++;
         // Await the callback in case it's async (for UI throttling)
         await onProgress?.(processedCount, totalModels, model.assetId);
       } catch (error) {
-        console.log(`[AssetManager] Could not load ${model.path}:`, error);
+        debugAssets.log(`[AssetManager] Could not load ${model.path}:`, error);
         processedCount++;
         // Await the callback in case it's async (for UI throttling)
         await onProgress?.(processedCount, totalModels, model.assetId);
       }
     }
 
-    console.log(`[AssetManager] Custom model loading complete (${loadedCount} models loaded)`);
+    debugAssets.log(`[AssetManager] Custom model loading complete (${loadedCount} models loaded)`);
 
     // Notify all listeners that models have been loaded
     if (loadedCount > 0) {
-      console.log(`[AssetManager] Notifying ${onModelsLoadedCallbacks.length} listeners to refresh meshes`);
+      debugAssets.log(`[AssetManager] Notifying ${onModelsLoadedCallbacks.length} listeners to refresh meshes`);
       for (const callback of onModelsLoadedCallbacks) {
         try {
           callback();
         } catch (err) {
-          console.error('[AssetManager] Error in onModelsLoaded callback:', err);
+          debugAssets.error('[AssetManager] Error in onModelsLoaded callback:', err);
         }
       }
     }

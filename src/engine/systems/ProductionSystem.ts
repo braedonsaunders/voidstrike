@@ -9,6 +9,7 @@ import { useGameStore } from '@/store/gameStore';
 import { isLocalPlayer } from '@/store/gameSetupStore';
 import { UNIT_DEFINITIONS } from '@/data/units/dominion';
 import { BUILDING_DEFINITIONS } from '@/data/buildings/dominion';
+import { debugProduction } from '@/utils/debugLogger';
 
 export class ProductionSystem extends System {
   public priority = 30;
@@ -32,7 +33,7 @@ export class ProductionSystem extends System {
     const unitDef = UNIT_DEFINITIONS[unitType];
 
     if (!unitDef) {
-      console.warn(`Unknown unit type: ${unitType}`);
+      debugProduction.warn(`Unknown unit type: ${unitType}`);
       return;
     }
 
@@ -105,7 +106,7 @@ export class ProductionSystem extends System {
     const upgradeDef = BUILDING_DEFINITIONS[upgradeTo];
 
     if (!upgradeDef) {
-      console.warn(`Unknown building type: ${upgradeTo}`);
+      debugProduction.warn(`Unknown building type: ${upgradeTo}`);
       return;
     }
 
@@ -170,39 +171,10 @@ export class ProductionSystem extends System {
       // Skip destroyed buildings
       if (health.isDead()) continue;
 
-      // Update construction
-      if (building.state === 'constructing') {
-        const wasComplete = building.isComplete();
-        building.updateConstruction(dt);
-
-        if (!wasComplete && building.isComplete()) {
-          const selectable = entity.get<Selectable>('Selectable');
-          const buildingDef = BUILDING_DEFINITIONS[building.buildingId];
-          const ownerPlayerId = selectable?.playerId;
-
-          // Emit building complete for Phaser overlay (local player's buildings only)
-          if (ownerPlayerId && isLocalPlayer(ownerPlayerId)) {
-            this.game.eventBus.emit('building:complete', {
-              entityId: entity.id,
-              buildingType: building.buildingId,
-              buildingName: buildingDef?.name ?? building.buildingId,
-            });
-          }
-
-          // Add supply if applicable - only for local player's buildings
-          if (building.supplyProvided > 0 && ownerPlayerId && isLocalPlayer(ownerPlayerId)) {
-            useGameStore.getState().addMaxSupply(building.supplyProvided);
-          }
-
-          // Set default rally point for production buildings
-          if (building.canProduce.length > 0 && building.rallyX === null) {
-            // Default rally point is in front of the building (offset by building size)
-            building.setRallyPoint(
-              transform.x + building.width / 2 + 3,
-              transform.y
-            );
-          }
-        }
+      // NOTE: Construction is handled by BuildingPlacementSystem which properly updates health
+      // Skip buildings still under construction
+      if (building.state === 'constructing' || building.state === 'waiting_for_worker') {
+        continue;
       }
 
       // Update production
@@ -312,7 +284,7 @@ export class ProductionSystem extends System {
         const abilityComponent = new Ability(200, 0.5625, orbitalAbilities);
         abilityComponent.energy = 50; // Start with 50 energy
         entity.add(abilityComponent);
-        console.log(`[ProductionSystem] Added abilities to Orbital Station ${buildingId}`);
+        debugProduction.log(`[ProductionSystem] Added abilities to Orbital Station ${buildingId}`);
       }
     }
 
@@ -321,6 +293,6 @@ export class ProductionSystem extends System {
       newType: newBuildingType,
     });
 
-    console.log(`[ProductionSystem] Building ${buildingId} upgraded to ${newDef.name}`);
+    debugProduction.log(`[ProductionSystem] Building ${buildingId} upgraded to ${newDef.name}`);
   }
 }

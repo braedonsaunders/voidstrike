@@ -23,8 +23,10 @@ import { useGameSetupStore, getLocalPlayerId, isSpectatorMode } from '@/store/ga
 import { SelectionBox } from './SelectionBox';
 import { LoadingScreen } from './LoadingScreen';
 import { GraphicsOptionsPanel } from './GraphicsOptionsPanel';
+import { DebugMenuPanel } from './DebugMenuPanel';
 import { spawnInitialEntities } from '@/utils/gameSetup';
 import { useUIStore } from '@/store/uiStore';
+import { debugInitialization } from '@/utils/debugLogger';
 import { DEFAULT_MAP, MapData, getMapById } from '@/data/maps';
 import { Resource } from '@/engine/components/Resource';
 import { Unit } from '@/engine/components/Unit';
@@ -119,7 +121,7 @@ export function HybridGameCanvas() {
       // Load selected map from store
       const selectedMapId = useGameSetupStore.getState().selectedMapId;
       CURRENT_MAP = getMapById(selectedMapId) || DEFAULT_MAP;
-      console.log(`[HybridGameCanvas] Loading map: ${CURRENT_MAP.name} (${CURRENT_MAP.id})`);
+      debugInitialization.log(`[HybridGameCanvas] Loading map: ${CURRENT_MAP.name} (${CURRENT_MAP.id})`);
 
       setLoadingStatus('Loading 3D models');
       setLoadingProgress(10);
@@ -161,9 +163,9 @@ export function HybridGameCanvas() {
       renderer.setSize(window.innerWidth, window.innerHeight);
       renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
       renderer.outputColorSpace = THREE.SRGBColorSpace;
-      // Note: Don't set toneMapping here - OutputPass handles it when post-processing is enabled
-      // This avoids double tone mapping (once by renderer, once by OutputPass)
-      renderer.toneMapping = THREE.NoToneMapping;
+      // Use ACES tone mapping with controllable exposure via graphics settings
+      renderer.toneMapping = THREE.ACESFilmicToneMapping;
+      renderer.toneMappingExposure = useUIStore.getState().graphicsSettings.toneMappingExposure;
       // Enable local clipping for construction animations
       renderer.localClippingEnabled = true;
       renderer.shadowMap.enabled = true;
@@ -252,7 +254,7 @@ export function HybridGameCanvas() {
         fogOfWarRef.current = fogOfWar;
       }
 
-      effectsRendererRef.current = new EffectsRenderer(scene, game.eventBus);
+      effectsRendererRef.current = new EffectsRenderer(scene, game.eventBus, (x, z) => terrain.getHeightAt(x, z));
       rallyPointRendererRef.current = new RallyPointRenderer(
         scene,
         game.eventBus,
@@ -296,20 +298,19 @@ export function HybridGameCanvas() {
       // Apply initial graphics settings
       const initialSettings = useUIStore.getState().graphicsSettings;
       if (postProcessingRef.current) {
+        postProcessingRef.current.setToneMappingExposure(initialSettings.toneMappingExposure);
         postProcessingRef.current.setSSAOEnabled(initialSettings.postProcessingEnabled && initialSettings.ssaoEnabled);
         postProcessingRef.current.setSSAOKernelRadius(initialSettings.ssaoRadius);
         postProcessingRef.current.setBloomEnabled(initialSettings.postProcessingEnabled && initialSettings.bloomEnabled);
         postProcessingRef.current.setBloomStrength(initialSettings.bloomStrength);
         postProcessingRef.current.setBloomThreshold(initialSettings.bloomThreshold);
+        postProcessingRef.current.setBloomRadius(initialSettings.bloomRadius);
         postProcessingRef.current.setOutlineEnabled(initialSettings.postProcessingEnabled && initialSettings.outlineEnabled);
         postProcessingRef.current.setOutlineStrength(initialSettings.outlineStrength);
         postProcessingRef.current.setFXAAEnabled(initialSettings.postProcessingEnabled && initialSettings.fxaaEnabled);
       }
+      // Apply particle settings
       if (environmentRef.current) {
-        const groundFog = environmentRef.current.getGroundFog();
-        if (groundFog) {
-          groundFog.mesh.visible = initialSettings.groundFogEnabled;
-        }
         const particles = environmentRef.current.getParticles();
         if (particles) {
           particles.points.visible = initialSettings.particlesEnabled;
@@ -323,8 +324,11 @@ export function HybridGameCanvas() {
         damageType?: string;
       }) => {
         if (data.attackerPos && data.targetPos && particleSystemRef.current) {
-          const startPos = new THREE.Vector3(data.attackerPos.x, 0.5, data.attackerPos.y);
-          const endPos = new THREE.Vector3(data.targetPos.x, 0.5, data.targetPos.y);
+          // Get terrain height for proper positioning on elevated terrain
+          const startHeight = terrain.getHeightAt(data.attackerPos.x, data.attackerPos.y) + 0.5;
+          const endHeight = terrain.getHeightAt(data.targetPos.x, data.targetPos.y) + 0.5;
+          const startPos = new THREE.Vector3(data.attackerPos.x, startHeight, data.attackerPos.y);
+          const endPos = new THREE.Vector3(data.targetPos.x, endHeight, data.targetPos.y);
           const direction = endPos.clone().sub(startPos).normalize();
 
           // Muzzle flash
@@ -341,7 +345,8 @@ export function HybridGameCanvas() {
 
       game.eventBus.on('unit:died', (data: { position?: { x: number; y: number } }) => {
         if (data.position && particleSystemRef.current) {
-          const pos = new THREE.Vector3(data.position.x, 0.5, data.position.y);
+          const terrainHeight = terrain.getHeightAt(data.position.x, data.position.y);
+          const pos = new THREE.Vector3(data.position.x, terrainHeight + 0.5, data.position.y);
           particleSystemRef.current.spawnDeathEffect(pos, 1);
         }
       });
@@ -1063,22 +1068,20 @@ export function HybridGameCanvas() {
 
       // Update post-processing
       if (postProcessingRef.current) {
+        postProcessingRef.current.setToneMappingExposure(settings.toneMappingExposure);
         postProcessingRef.current.setSSAOEnabled(settings.postProcessingEnabled && settings.ssaoEnabled);
         postProcessingRef.current.setSSAOKernelRadius(settings.ssaoRadius);
         postProcessingRef.current.setBloomEnabled(settings.postProcessingEnabled && settings.bloomEnabled);
         postProcessingRef.current.setBloomStrength(settings.bloomStrength);
         postProcessingRef.current.setBloomThreshold(settings.bloomThreshold);
+        postProcessingRef.current.setBloomRadius(settings.bloomRadius);
         postProcessingRef.current.setOutlineEnabled(settings.postProcessingEnabled && settings.outlineEnabled);
         postProcessingRef.current.setOutlineStrength(settings.outlineStrength);
         postProcessingRef.current.setFXAAEnabled(settings.postProcessingEnabled && settings.fxaaEnabled);
       }
 
-      // Update ground fog visibility
+      // Update particle visibility
       if (environmentRef.current) {
-        const groundFog = environmentRef.current.getGroundFog();
-        if (groundFog) {
-          groundFog.mesh.visible = settings.groundFogEnabled;
-        }
         const particles = environmentRef.current.getParticles();
         if (particles) {
           particles.points.visible = settings.particlesEnabled;
@@ -1177,6 +1180,9 @@ export function HybridGameCanvas() {
 
       {/* Graphics Options Panel */}
       <GraphicsOptionsPanel />
+
+      {/* Debug Menu Panel */}
+      <DebugMenuPanel />
     </div>
   );
 }

@@ -13,6 +13,7 @@ import { VisionSystem } from '../systems/VisionSystem';
 import { AbilitySystem } from '../systems/AbilitySystem';
 import { SpawnSystem } from '../systems/SpawnSystem';
 import { BuildingPlacementSystem } from '../systems/BuildingPlacementSystem';
+import { debugInitialization } from '@/utils/debugLogger';
 import { AudioSystem } from '../systems/AudioSystem';
 import { UnitMechanicsSystem } from '../systems/UnitMechanicsSystem';
 import { BuildingMechanicsSystem } from '../systems/BuildingMechanicsSystem';
@@ -137,7 +138,7 @@ export class Game {
       // This handles cases where components access Game before GameCanvas initializes it
       if (config.mapWidth) Game.instance.config.mapWidth = config.mapWidth;
       if (config.mapHeight) Game.instance.config.mapHeight = config.mapHeight;
-      console.log(`[Game] Updated map dimensions to ${Game.instance.config.mapWidth}x${Game.instance.config.mapHeight}`);
+      debugInitialization.log(`[Game] Updated map dimensions to ${Game.instance.config.mapWidth}x${Game.instance.config.mapHeight}`);
     }
     return Game.instance;
   }

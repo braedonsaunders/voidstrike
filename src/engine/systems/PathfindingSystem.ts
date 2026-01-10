@@ -6,6 +6,7 @@ import { Game } from '../core/Game';
 import { AStar, PathResult } from '../pathfinding/AStar';
 import { HierarchicalAStar } from '../pathfinding/HierarchicalAStar';
 import { MapData } from '@/data/maps';
+import { debugPathfinding } from '@/utils/debugLogger';
 
 // Configuration for path invalidation
 const REPATH_INTERVAL_TICKS = 40; // Check for repath every 2 seconds at 20 TPS
@@ -63,7 +64,7 @@ export class PathfindingSystem extends System {
   public loadTerrainData(): void {
     const terrainGrid = this.game.getTerrainGrid();
     if (!terrainGrid) {
-      console.warn('[PathfindingSystem] No terrain grid available');
+      debugPathfinding.warn('[PathfindingSystem] No terrain grid available');
       return;
     }
 
@@ -111,7 +112,7 @@ export class PathfindingSystem extends System {
       }
     }
 
-    console.log(`[PathfindingSystem] Loaded terrain: ${blockedCount} cells blocked`);
+    debugPathfinding.log(`[PathfindingSystem] Loaded terrain: ${blockedCount} cells blocked`);
   }
 
   /**
@@ -145,7 +146,7 @@ export class PathfindingSystem extends System {
       }
     }
 
-    console.log(`[PathfindingSystem] Marked ${blockedCount} cells as unwalkable`);
+    debugPathfinding.log(`[PathfindingSystem] Marked ${blockedCount} cells as unwalkable`);
   }
 
   private setupEventListeners(): void {
@@ -177,6 +178,14 @@ export class PathfindingSystem extends System {
       height: number;
     }) => {
       this.blockArea(data.position.x, data.position.y, data.width, data.height);
+    });
+
+    // Clean up path states when units die to prevent memory leaks
+    this.game.eventBus.on('unit:died', (data: { entityId: number }) => {
+      this.unitPathStates.delete(data.entityId);
+    });
+    this.game.eventBus.on('unit:destroyed', (data: { entityId: number }) => {
+      this.unitPathStates.delete(data.entityId);
     });
 
     // Handle move commands - calculate paths

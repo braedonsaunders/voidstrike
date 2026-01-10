@@ -477,6 +477,15 @@ export class MovementSystem extends System {
             continue;
           }
 
+          // Workers building should stay locked to construction site
+          if (unit.state === 'building') {
+            unit.targetX = null;
+            unit.targetY = null;
+            unit.currentSpeed = 0;
+            velocity.zero();
+            continue;
+          }
+
           // Check for queued commands before going idle
           if (!unit.executeNextCommand()) {
             unit.clearTarget();

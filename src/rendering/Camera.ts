@@ -49,6 +49,7 @@ export class RTSCamera {
   private isMiddleMouseDown = false;
   private lastMousePosition = { x: 0, y: 0 };
   private edgeScrollEnabled = true;
+  private mouseInViewport = true;
 
   // Screen dimensions
   private screenWidth = 0;
@@ -59,6 +60,9 @@ export class RTSCamera {
 
   // Terrain height function for accurate screen-to-world conversion
   private getTerrainHeight: ((x: number, z: number) => number) | null = null;
+
+  // Cached terrain-based minimum zoom (updated when camera pans)
+  private terrainMinZoom: number = 0;
 
   constructor(
     aspect: number,
@@ -113,8 +117,20 @@ export class RTSCamera {
     window.addEventListener('wheel', this.handleWheel.bind(this), { passive: false });
     window.addEventListener('resize', this.handleResize.bind(this));
 
+    // Track when cursor leaves/enters the viewport
+    document.addEventListener('mouseleave', this.handleMouseLeaveViewport.bind(this));
+    document.addEventListener('mouseenter', this.handleMouseEnterViewport.bind(this));
+
     this.screenWidth = window.innerWidth;
     this.screenHeight = window.innerHeight;
+  }
+
+  private handleMouseLeaveViewport(): void {
+    this.mouseInViewport = false;
+  }
+
+  private handleMouseEnterViewport(): void {
+    this.mouseInViewport = true;
   }
 
   private handleKeyDown(e: KeyboardEvent): void {
@@ -169,12 +185,53 @@ export class RTSCamera {
   private handleWheel(e: WheelEvent): void {
     e.preventDefault();
 
+    // Use cached terrain minimum zoom (updated when camera position changes)
+    const effectiveMinZoom = Math.max(this.config.minZoom, this.terrainMinZoom);
+
     // Set target zoom - actual zoom will smoothly interpolate in update()
     const zoomDelta = e.deltaY * 0.08;
-    this.targetZoom = Math.max(
-      this.config.minZoom,
+    const newTargetZoom = Math.max(
+      effectiveMinZoom,
       Math.min(this.config.maxZoom, this.targetZoom + zoomDelta)
     );
+
+    // Only update if actually changing (prevents jitter at limits)
+    if (Math.abs(newTargetZoom - this.targetZoom) > 0.01) {
+      this.targetZoom = newTargetZoom;
+    }
+  }
+
+  // Update the cached terrain minimum zoom based on current camera position
+  private updateTerrainMinZoom(): void {
+    if (!this.getTerrainHeight) {
+      this.terrainMinZoom = this.config.minZoom;
+      return;
+    }
+
+    const sinAngle = Math.sin(this.currentAngle);
+    const cosAngle = Math.cos(this.currentAngle);
+    const cosPitch = Math.cos(this.currentPitch);
+    const sinPitch = Math.sin(this.currentPitch);
+
+    // Binary search for minimum safe zoom
+    let low = this.config.minZoom;
+    let high = this.config.maxZoom;
+
+    while (high - low > 0.5) {
+      const mid = (low + high) / 2;
+      const x = this.target.x + mid * sinAngle * cosPitch;
+      const z = this.target.z + mid * cosAngle * cosPitch;
+      const y = mid * sinPitch;
+      const terrainHeight = this.getTerrainHeight(x, z);
+
+      if (y < terrainHeight + 2) {
+        low = mid; // Need more zoom (camera higher)
+      } else {
+        high = mid; // Can zoom in more
+      }
+    }
+
+    this.terrainMinZoom = high;
   }
 
   private handleResize(): void {
@@ -203,8 +260,8 @@ export class RTSCamera {
       dx += this.config.panSpeed * dt;
     }
 
-    // Edge scrolling (disabled when mouse is over UI)
-    if (!this.isMiddleMouseDown && this.edgeScrollEnabled) {
+    // Edge scrolling (disabled when mouse is over UI or outside viewport)
+    if (!this.isMiddleMouseDown && this.edgeScrollEnabled && this.mouseInViewport) {
       const { edgeScrollThreshold, edgeScrollSpeed } = this.config;
 
       if (this.mousePosition.x < edgeScrollThreshold) {
@@ -254,38 +311,25 @@ export class RTSCamera {
       this.target.x = Math.max(viewHalfWidth, Math.min(this.mapWidth - viewHalfWidth, this.target.x));
       this.target.z = Math.max(viewHalfHeight, Math.min(this.mapHeight - viewHalfHeight, this.target.z));
 
+      // Update terrain min zoom when camera position changes
+      this.updateTerrainMinZoom();
+
+      // If we panned to higher terrain, ensure zoom respects new limit
+      const effectiveMinZoom = Math.max(this.config.minZoom, this.terrainMinZoom);
+      if (this.currentZoom < effectiveMinZoom) {
+        this.currentZoom = effectiveMinZoom;
+        this.targetZoom = effectiveMinZoom;
+      }
+
       this.updateCameraPosition();
     }
   }
 
   private updateCameraPosition(): void {
-    // Calculate camera position based on current zoom
-    let x = this.target.x + this.currentZoom * Math.sin(this.currentAngle) * Math.cos(this.currentPitch);
-    let y = this.currentZoom * Math.sin(this.currentPitch);
-    let z = this.target.z + this.currentZoom * Math.cos(this.currentAngle) * Math.cos(this.currentPitch);
-
-    // Prevent camera from clipping through terrain by limiting zoom
-    if (this.getTerrainHeight) {
-      const terrainHeightAtCamera = this.getTerrainHeight(x, z);
-      const minCameraHeight = terrainHeightAtCamera + 2; // Keep at least 2 units above terrain
-
-      if (y < minCameraHeight) {
-        // Calculate the minimum zoom needed to stay above terrain
-        // y = zoom * sin(pitch), so zoom = y / sin(pitch)
-        const sinPitch = Math.sin(this.currentPitch);
-        if (sinPitch > 0.01) { // Avoid division by near-zero
-          const minZoom = minCameraHeight / sinPitch;
-          // Clamp current zoom to this terrain-based minimum
-          this.currentZoom = Math.max(this.currentZoom, minZoom);
-          this.targetZoom = Math.max(this.targetZoom, minZoom);
-
-          // Recalculate position with clamped zoom
-          x = this.target.x + this.currentZoom * Math.sin(this.currentAngle) * Math.cos(this.currentPitch);
-          y = this.currentZoom * Math.sin(this.currentPitch);
-          z = this.target.z + this.currentZoom * Math.cos(this.currentAngle) * Math.cos(this.currentPitch);
-        }
-      }
-    }
+    // Calculate camera position
+    const x = this.target.x + this.currentZoom * Math.sin(this.currentAngle) * Math.cos(this.currentPitch);
+    const y = this.currentZoom * Math.sin(this.currentPitch);
+    const z = this.target.z + this.currentZoom * Math.cos(this.currentAngle) * Math.cos(this.currentPitch);
 
     this.camera.position.set(x, y, z);
     this.camera.lookAt(this.target);
@@ -299,6 +343,17 @@ export class RTSCamera {
     // Clamp position while allowing camera to get close to edges
     this.target.x = Math.max(viewHalfWidth, Math.min(this.mapWidth - viewHalfWidth, x));
     this.target.z = Math.max(viewHalfHeight, Math.min(this.mapHeight - viewHalfHeight, z));
+
+    // Update terrain min zoom for new position
+    this.updateTerrainMinZoom();
+
+    // Ensure zoom respects terrain limit at new position
+    const effectiveMinZoom = Math.max(this.config.minZoom, this.terrainMinZoom);
+    if (this.currentZoom < effectiveMinZoom) {
+      this.currentZoom = effectiveMinZoom;
+      this.targetZoom = effectiveMinZoom;
+    }
+
     this.updateCameraPosition();
   }
 
@@ -335,6 +390,8 @@ export class RTSCamera {
   // Set the terrain height function for accurate screen-to-world conversion
   public setTerrainHeightFunction(fn: (x: number, z: number) => number): void {
     this.getTerrainHeight = fn;
+    // Calculate initial terrain min zoom now that we have the height function
+    this.updateTerrainMinZoom();
   }
 
   // Save current camera location to a slot (F5-F8)
@@ -431,5 +488,7 @@ export class RTSCamera {
     window.removeEventListener('mouseup', this.handleMouseUp.bind(this));
     window.removeEventListener('wheel', this.handleWheel.bind(this));
     window.removeEventListener('resize', this.handleResize.bind(this));
+    document.removeEventListener('mouseleave', this.handleMouseLeaveViewport.bind(this));
+    document.removeEventListener('mouseenter', this.handleMouseEnterViewport.bind(this));
   }
 }
