@@ -173,8 +173,8 @@ export class InstancedTrees {
     }
 
     const cell = mapData.terrain[cellY][cellX];
-    // Allow trees on ground, unbuildable, and cliff terrain
-    if (cell.terrain === 'ramp' || cell.terrain === 'blocked') {
+    // Don't place trees on ramps (keep pathways clear)
+    if (cell.terrain === 'ramp') {
       return false;
     }
 
