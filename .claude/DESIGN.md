@@ -156,12 +156,17 @@ All maps follow StarCraft 2-inspired design principles:
 | Contested Frontier | 6 | 360×320 | Jungle | 3v3 team map with two rows facing off |
 | Titan's Colosseum | 8 | 400×400 | Volcanic | 8-player FFA/4v4 with central arena |
 
-### Expansion Types
-- **Main Base** - Starting location, rich minerals (1800), protected by cliffs
-- **Natural** - Close to main, moderate minerals (1500), semi-protected
-- **Third** - Contested, requires army presence, moderate minerals (1500)
-- **Gold** - High-risk high-reward, rich gold minerals (1000), exposed
-- **Center** - Highly contested, limited resources (750)
+### Expansion Types (SC2-Accurate Resource Amounts)
+- **Standard Bases** (Main/Natural/Third) - 8 mineral patches: 6× 1500 + 2× 900 (close patches) = 10,800 total minerals
+- **Gold Bases** - 8 mineral patches: 8× 900 = 7,200 total minerals (higher mining rate per patch)
+- **Gas Geysers** - All geysers contain 2,250 vespene gas
+
+Base Protection Levels:
+- **Main Base** - Starting location, protected by cliffs with single ramp
+- **Natural** - Close to main, semi-protected chokepoint
+- **Third** - Contested, requires army presence
+- **Gold** - High-risk high-reward, exposed position
+- **Center** - Highly contested map control position
 
 ### Spawn Point Rules
 - Only main base locations are valid spawn points

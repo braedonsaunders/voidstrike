@@ -315,18 +315,20 @@ function generateVoidAssault(): MapData {
   ramps.forEach(ramp => createRampInTerrain(terrain, ramp));
 
   // ========================================
-  // EXPANSIONS WITH RESOURCES (uniform 7-unit mineral distance)
+  // EXPANSIONS WITH RESOURCES (SC2-accurate amounts)
+  // SC2 values: 6x 1500 + 2x 900 minerals per base, 2250 gas per geyser
+  // Gold bases: all 8 patches at 900 minerals
   // ========================================
-  const p1Main = createBaseResources(35, 185, DIR.DOWN_LEFT, 1800, 2500);
-  const p1Nat = createBaseResources(60, 145, DIR.DOWN_LEFT, 1500, 2500);
-  const p1Third = createBaseResources(35, 35, DIR.UP_LEFT, 1500, 2500);
-  const p1Fourth = createBaseResources(35, 110, DIR.LEFT, 1200, 2500);
-  const p2Main = createBaseResources(185, 35, DIR.UP_RIGHT, 1800, 2500);
-  const p2Nat = createBaseResources(160, 75, DIR.UP_RIGHT, 1500, 2500);
-  const p2Third = createBaseResources(185, 185, DIR.DOWN_RIGHT, 1500, 2500);
-  const p2Fourth = createBaseResources(185, 110, DIR.RIGHT, 1200, 2500);
-  const goldNorth = createBaseResources(80, 60, DIR.UP, 1000, 2500);
-  const goldSouth = createBaseResources(140, 160, DIR.DOWN, 1000, 2500);
+  const p1Main = createBaseResources(35, 185, DIR.DOWN_LEFT);     // Standard: 6x1500 + 2x900
+  const p1Nat = createBaseResources(60, 145, DIR.DOWN_LEFT);      // Standard
+  const p1Third = createBaseResources(35, 35, DIR.UP_LEFT);       // Standard
+  const p1Fourth = createBaseResources(35, 110, DIR.LEFT);        // Standard
+  const p2Main = createBaseResources(185, 35, DIR.UP_RIGHT);      // Standard
+  const p2Nat = createBaseResources(160, 75, DIR.UP_RIGHT);       // Standard
+  const p2Third = createBaseResources(185, 185, DIR.DOWN_RIGHT);  // Standard
+  const p2Fourth = createBaseResources(185, 110, DIR.RIGHT);      // Standard
+  const goldNorth = createBaseResources(80, 60, DIR.UP, 1500, 2250, true);   // Gold: all 8x900
+  const goldSouth = createBaseResources(140, 160, DIR.DOWN, 1500, 2250, true); // Gold: all 8x900
 
   const expansions = [
     { name: 'P1 Main', x: 35, y: 185, isMain: true, ...p1Main },
