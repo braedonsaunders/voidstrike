@@ -100,6 +100,7 @@ export interface UIState {
   graphicsSettings: GraphicsSettings;
   showGraphicsOptions: boolean;
   rendererAPI: RendererAPI;
+  preferWebGPU: boolean; // User preference for renderer (true = try WebGPU, false = force WebGL)
 
   // Sound settings
   showSoundOptions: boolean;
@@ -140,6 +141,7 @@ export interface UIState {
   setGraphicsSetting: <K extends keyof GraphicsSettings>(key: K, value: GraphicsSettings[K]) => void;
   toggleGraphicsSetting: (key: keyof GraphicsSettings) => void;
   setRendererAPI: (api: RendererAPI) => void;
+  setPreferWebGPU: (prefer: boolean) => void;
   // Sound settings actions
   toggleSoundOptions: () => void;
   // Fullscreen actions
@@ -174,6 +176,7 @@ export const useUIStore = create<UIState>((set, get) => ({
   showPing: true,
   showGraphicsOptions: false,
   rendererAPI: null,
+  preferWebGPU: false, // Default to WebGL for stability (WebGPU has TSL build issues)
   showSoundOptions: false,
   isFullscreen: false,
   graphicsSettings: {
@@ -300,6 +303,8 @@ export const useUIStore = create<UIState>((set, get) => ({
   toggleGraphicsOptions: () => set((state) => ({ showGraphicsOptions: !state.showGraphicsOptions })),
 
   setRendererAPI: (api) => set({ rendererAPI: api }),
+
+  setPreferWebGPU: (prefer) => set({ preferWebGPU: prefer }),
 
   toggleSoundOptions: () => set((state) => ({ showSoundOptions: !state.showSoundOptions })),
 
