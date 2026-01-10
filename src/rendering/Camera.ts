@@ -366,6 +366,36 @@ export class RTSCamera {
     return target;
   }
 
+  // Convert world coordinates to screen coordinates
+  // Takes world position (x, y for ground plane, optionally z for height)
+  // Returns screen position { x, y } in pixels, or null if behind camera
+  public worldToScreen(worldX: number, worldZ: number, worldY?: number): { x: number; y: number } | null {
+    // Use provided height or get terrain height
+    const height = worldY ?? (this.getTerrainHeight ? this.getTerrainHeight(worldX, worldZ) : 0);
+
+    // Create 3D position (Three.js uses Y for up)
+    const worldPos = new THREE.Vector3(worldX, height, worldZ);
+
+    // Project to normalized device coordinates (-1 to 1)
+    const projected = worldPos.clone().project(this.camera);
+
+    // Check if behind camera
+    if (projected.z > 1) {
+      return null;
+    }
+
+    // Convert to screen coordinates
+    const screenX = (projected.x * 0.5 + 0.5) * this.screenWidth;
+    const screenY = (-projected.y * 0.5 + 0.5) * this.screenHeight;
+
+    return { x: screenX, y: screenY };
+  }
+
+  // Get screen dimensions
+  public getScreenDimensions(): { width: number; height: number } {
+    return { width: this.screenWidth, height: this.screenHeight };
+  }
+
   public dispose(): void {
     if (typeof window === 'undefined') return;
 

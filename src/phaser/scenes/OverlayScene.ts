@@ -2,6 +2,7 @@ import * as Phaser from 'phaser';
 import { EventBus } from '@/engine/core/EventBus';
 import { useGameStore } from '@/store/gameStore';
 import { useGameSetupStore, isLocalPlayer, getLocalPlayerId } from '@/store/gameSetupStore';
+import { useProjectionStore } from '@/store/projectionStore';
 
 /**
  * Phaser 4 Overlay Scene
@@ -277,7 +278,10 @@ export class OverlayScene extends Phaser.Scene {
       position: { x: number; y: number };
       color?: number;
     }) => {
-      this.addAbilitySplash(data.position.x, data.position.y, data.abilityName, data.color ?? 0xffffff);
+      // Project world coordinates to screen space
+      const projectionStore = useProjectionStore.getState();
+      const screenPos = projectionStore.projectToScreen(data.position.x, data.position.y);
+      this.addAbilitySplash(screenPos.x, screenPos.y, data.abilityName, data.color ?? 0xffffff);
       this.showAlert(data.abilityName.toUpperCase(), data.color ?? 0xffffff, 2000);
     });
 
