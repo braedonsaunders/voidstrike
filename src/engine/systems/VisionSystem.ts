@@ -25,7 +25,8 @@ export interface VisionMap {
   // Vision state per cell per player: Map<playerId, state[][]>
   playerVision: Map<string, VisionState[][]>;
   // Track which cells are currently visible (for performance)
-  currentlyVisible: Map<string, Set<string>>; // Set of "x,y" keys
+  // OPTIMIZED: Use numeric keys (y * width + x) instead of string keys to avoid GC pressure
+  currentlyVisible: Map<string, Set<number>>; // Set of numeric cell keys
 }
 
 export class VisionSystem extends System {
@@ -120,6 +121,9 @@ export class VisionSystem extends System {
     this.tickCounter = 0;
 
     // Clear currently visible cells
+    // OPTIMIZED: Use numeric cell keys to avoid string allocation/parsing GC pressure
+    const gridWidth = this.visionMap.width;
+
     for (const playerId of this.knownPlayers) {
       const currentVisible = this.visionMap.currentlyVisible.get(playerId);
       const visionGrid = this.visionMap.playerVision.get(playerId);
@@ -128,8 +132,10 @@ export class VisionSystem extends System {
       if (!currentVisible || !visionGrid) continue;
 
       // Mark previously visible cells as 'explored' (not 'visible')
-      for (const key of currentVisible) {
-        const [x, y] = key.split(',').map(Number);
+      for (const cellKey of currentVisible) {
+        // Decode numeric key back to x,y (no string parsing needed)
+        const x = cellKey % gridWidth;
+        const y = Math.floor(cellKey / gridWidth);
         if (visionGrid[y] && visionGrid[y][x] === 'visible') {
           visionGrid[y][x] = 'explored';
         }
@@ -217,12 +223,15 @@ export class VisionSystem extends System {
 
     const visionGrid = this.visionMap.playerVision.get(playerId)!;
     const currentVisible = this.visionMap.currentlyVisible.get(playerId)!;
+    const gridWidth = this.visionMap.width;
+    const gridHeight = this.visionMap.height;
 
     const cellX = Math.floor(worldX / this.cellSize);
     const cellY = Math.floor(worldY / this.cellSize);
     const cellRange = Math.ceil(range / this.cellSize);
 
     // Reveal cells in a circle
+    // OPTIMIZED: Use numeric cell keys (y * width + x) instead of string templates
     for (let dy = -cellRange; dy <= cellRange; dy++) {
       for (let dx = -cellRange; dx <= cellRange; dx++) {
         const dist = Math.sqrt(dx * dx + dy * dy);
@@ -230,9 +239,10 @@ export class VisionSystem extends System {
           const x = cellX + dx;
           const y = cellY + dy;
 
-          if (x >= 0 && x < this.visionMap.width && y >= 0 && y < this.visionMap.height) {
+          if (x >= 0 && x < gridWidth && y >= 0 && y < gridHeight) {
             visionGrid[y][x] = 'visible';
-            currentVisible.add(`${x},${y}`);
+            // Use numeric key: y * width + x (no string allocation)
+            currentVisible.add(y * gridWidth + x);
           }
         }
       }
