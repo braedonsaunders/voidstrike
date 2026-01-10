@@ -48,6 +48,7 @@ export class RTSCamera {
   private mousePosition = { x: 0, y: 0 };
   private isMiddleMouseDown = false;
   private lastMousePosition = { x: 0, y: 0 };
+  private edgeScrollEnabled = true;
 
   // Screen dimensions
   private screenWidth = 0;
@@ -232,8 +233,8 @@ export class RTSCamera {
       dx += this.config.panSpeed * dt;
     }
 
-    // Edge scrolling
-    if (!this.isMiddleMouseDown) {
+    // Edge scrolling (disabled when mouse is over UI)
+    if (!this.isMiddleMouseDown && this.edgeScrollEnabled) {
       const { edgeScrollThreshold, edgeScrollSpeed } = this.config;
 
       if (this.mousePosition.x < edgeScrollThreshold) {
@@ -346,6 +347,15 @@ export class RTSCamera {
 
   public getZoom(): number {
     return this.currentZoom;
+  }
+
+  // Enable/disable edge scrolling (used when mouse is over UI elements)
+  public setEdgeScrollEnabled(enabled: boolean): void {
+    this.edgeScrollEnabled = enabled;
+  }
+
+  public isEdgeScrollEnabled(): boolean {
+    return this.edgeScrollEnabled;
   }
 
   public getPosition(): { x: number; z: number } {

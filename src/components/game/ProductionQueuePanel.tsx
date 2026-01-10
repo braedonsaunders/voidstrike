@@ -5,6 +5,7 @@ import { Game } from '@/engine/core/Game';
 import { Building } from '@/engine/components/Building';
 import { useEffect, useState, useCallback } from 'react';
 import { UNIT_DEFINITIONS } from '@/data/units/dominion';
+import { getUnitIcon } from './icons';
 
 interface QueueItemDisplay {
   index: number;
@@ -369,24 +370,6 @@ function MultiBuildingQueue({
       </div>
     </div>
   );
-}
-
-function getUnitIcon(unitId: string): string {
-  const icons: Record<string, string> = {
-    scv: '⛏️',
-    marine: '🎖️',
-    marauder: '💪',
-    reaper: '💀',
-    ghost: '👻',
-    hellion: '🔥',
-    siege_tank: '🛡️',
-    thor: '⚡',
-    medivac: '➕',
-    viking: '✈️',
-    banshee: '🦇',
-    battlecruiser: '🚀',
-  };
-  return icons[unitId] ?? '❓';
 }
 
 function formatTimeRemaining(seconds: number): string {
