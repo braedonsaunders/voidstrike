@@ -7,7 +7,7 @@ import { Selectable } from '../components/Selectable';
 import { Resource } from '../components/Resource';
 import { Game, GameCommand } from '../core/Game';
 import { UNIT_DEFINITIONS } from '@/data/units/dominion';
-import { BUILDING_DEFINITIONS } from '@/data/buildings/dominion';
+import { BUILDING_DEFINITIONS, RESEARCH_MODULE_UNITS } from '@/data/buildings/dominion';
 import { getCounterRecommendation } from './AIMicroSystem';
 
 type AIState = 'building' | 'expanding' | 'attacking' | 'defending' | 'scouting' | 'harassing';
@@ -28,6 +28,7 @@ interface AIPlayer {
   lastActionTick: number;
   lastScoutTick: number;
   lastHarassTick: number;
+  lastExpansionTick: number;
 
   // Economy
   minerals: number;
@@ -61,9 +62,11 @@ interface AIPlayer {
   lastAttackTick: number;
   harassCooldown: number;
   scoutCooldown: number;
+  expansionCooldown: number;
 }
 
 // Build order definitions for different difficulties
+// Includes tech progression with research modules for advanced units
 const BUILD_ORDERS: Record<AIDifficulty, BuildOrderStep[]> = {
   easy: [
     { type: 'unit', id: 'fabricator' },
@@ -71,6 +74,8 @@ const BUILD_ORDERS: Record<AIDifficulty, BuildOrderStep[]> = {
     { type: 'building', id: 'supply_cache', supply: 10 },
     { type: 'building', id: 'infantry_bay', supply: 12 },
     { type: 'unit', id: 'trooper' },
+    { type: 'unit', id: 'trooper' },
+    { type: 'building', id: 'extractor', supply: 18 },
   ],
   medium: [
     { type: 'unit', id: 'fabricator' },
@@ -81,6 +86,8 @@ const BUILD_ORDERS: Record<AIDifficulty, BuildOrderStep[]> = {
     { type: 'building', id: 'extractor', supply: 16 },
     { type: 'unit', id: 'trooper' },
     { type: 'building', id: 'infantry_bay', supply: 20 },
+    { type: 'building', id: 'forge', supply: 24 },
+    { type: 'building', id: 'research_module', supply: 28 }, // For breachers/devastators
   ],
   hard: [
     { type: 'unit', id: 'fabricator' },
@@ -89,8 +96,10 @@ const BUILD_ORDERS: Record<AIDifficulty, BuildOrderStep[]> = {
     { type: 'building', id: 'supply_cache', supply: 14 },
     { type: 'building', id: 'infantry_bay', supply: 15 },
     { type: 'building', id: 'extractor', supply: 16 },
+    { type: 'building', id: 'research_module', supply: 20 }, // Early tech for breachers
     { type: 'building', id: 'forge', supply: 22 },
-    { type: 'unit', id: 'scorcher' },
+    { type: 'unit', id: 'breacher' },
+    { type: 'building', id: 'research_module', supply: 26 }, // Tech on forge for devastators
     { type: 'building', id: 'hangar', supply: 30 },
   ],
   very_hard: [
@@ -99,17 +108,23 @@ const BUILD_ORDERS: Record<AIDifficulty, BuildOrderStep[]> = {
     { type: 'building', id: 'supply_cache', supply: 13 },
     { type: 'building', id: 'infantry_bay', supply: 14 },
     { type: 'building', id: 'extractor', supply: 15 },
+    { type: 'building', id: 'research_module', supply: 18 }, // Early tech
     { type: 'building', id: 'forge', supply: 20 },
+    { type: 'building', id: 'research_module', supply: 24 }, // Forge tech
     { type: 'building', id: 'hangar', supply: 28 },
     { type: 'building', id: 'infantry_bay', supply: 30 },
+    { type: 'building', id: 'research_module', supply: 34 }, // Hangar tech
   ],
   insane: [
     { type: 'unit', id: 'fabricator' },
     { type: 'building', id: 'supply_cache', supply: 12 },
     { type: 'building', id: 'infantry_bay', supply: 13 },
     { type: 'building', id: 'extractor', supply: 14 },
+    { type: 'building', id: 'research_module', supply: 16 }, // Immediate tech
     { type: 'building', id: 'forge', supply: 18 },
+    { type: 'building', id: 'research_module', supply: 20 }, // Forge tech
     { type: 'building', id: 'hangar', supply: 24 },
+    { type: 'building', id: 'research_module', supply: 26 }, // Hangar tech
     { type: 'building', id: 'arsenal', supply: 30 },
   ],
 };
@@ -160,6 +175,7 @@ export class EnhancedAISystem extends System {
       lastActionTick: 0,
       lastScoutTick: 0,
       lastHarassTick: 0,
+      lastExpansionTick: 0,
 
       minerals: 50,
       vespene: 0,
@@ -187,6 +203,7 @@ export class EnhancedAISystem extends System {
       lastAttackTick: 0,
       harassCooldown: config.harassCooldown,
       scoutCooldown: config.scoutCooldown,
+      expansionCooldown: config.expansionCooldown,
     });
   }
 
@@ -196,18 +213,78 @@ export class EnhancedAISystem extends System {
     harassCooldown: number;
     scoutCooldown: number;
     resourceBonus: number;
+    expansionCooldown: number;
+    maxBases: number;
+    minArmyForExpansion: number;
+    minWorkersForExpansion: number;
   } {
+    // Expansion timings based on SC2 AI behavior:
+    // - Easy: Slower expansion, max 2 bases
+    // - Medium: Natural expansion around 3-4 minutes, max 3 bases
+    // - Hard: Aggressive expansion, max 4 bases
+    // - Very Hard: Very aggressive, max 5 bases
+    // - Insane: Immediate expansion, max 6 bases
     switch (difficulty) {
       case 'easy':
-        return { targetWorkers: 16, attackCooldown: 800, harassCooldown: 0, scoutCooldown: 0, resourceBonus: 0 };
+        return {
+          targetWorkers: 16,
+          attackCooldown: 800,
+          harassCooldown: 0,
+          scoutCooldown: 0,
+          resourceBonus: 0,
+          expansionCooldown: 1200, // ~60 seconds at 20 ticks/sec
+          maxBases: 2,
+          minArmyForExpansion: 8,
+          minWorkersForExpansion: 12,
+        };
       case 'medium':
-        return { targetWorkers: 20, attackCooldown: 500, harassCooldown: 0, scoutCooldown: 600, resourceBonus: 0 };
+        return {
+          targetWorkers: 20,
+          attackCooldown: 500,
+          harassCooldown: 0,
+          scoutCooldown: 600,
+          resourceBonus: 0,
+          expansionCooldown: 800, // ~40 seconds
+          maxBases: 3,
+          minArmyForExpansion: 6,
+          minWorkersForExpansion: 10,
+        };
       case 'hard':
-        return { targetWorkers: 24, attackCooldown: 350, harassCooldown: 400, scoutCooldown: 400, resourceBonus: 0 };
+        return {
+          targetWorkers: 24,
+          attackCooldown: 350,
+          harassCooldown: 400,
+          scoutCooldown: 400,
+          resourceBonus: 0,
+          expansionCooldown: 600, // ~30 seconds
+          maxBases: 4,
+          minArmyForExpansion: 4,
+          minWorkersForExpansion: 8,
+        };
       case 'very_hard':
-        return { targetWorkers: 28, attackCooldown: 250, harassCooldown: 300, scoutCooldown: 300, resourceBonus: 0.25 };
+        return {
+          targetWorkers: 28,
+          attackCooldown: 250,
+          harassCooldown: 300,
+          scoutCooldown: 300,
+          resourceBonus: 0.25,
+          expansionCooldown: 500, // ~25 seconds
+          maxBases: 5,
+          minArmyForExpansion: 2,
+          minWorkersForExpansion: 6,
+        };
       case 'insane':
-        return { targetWorkers: 32, attackCooldown: 150, harassCooldown: 200, scoutCooldown: 200, resourceBonus: 0.5 };
+        return {
+          targetWorkers: 32,
+          attackCooldown: 150,
+          harassCooldown: 200,
+          scoutCooldown: 200,
+          resourceBonus: 0.5,
+          expansionCooldown: 400, // ~20 seconds
+          maxBases: 6,
+          minArmyForExpansion: 0, // Expands even without army
+          minWorkersForExpansion: 4,
+        };
     }
   }
 
@@ -326,7 +403,8 @@ export class EnhancedAISystem extends System {
   }
 
   private updateAIState(ai: AIPlayer, currentTick: number): void {
-    // Priority: Defending > Attacking > Harassing > Expanding > Building
+    // Priority: Defending > Attacking > Harassing > Expanding > Scouting > Building
+    const config = this.getDifficultyConfig(ai.difficulty);
 
     if (this.isUnderAttack(ai.playerId)) {
       ai.state = 'defending';
@@ -360,19 +438,60 @@ export class EnhancedAISystem extends System {
       }
     }
 
+    // Check if should expand - SC2-style expansion timing
+    // AI considers expansion if:
+    // 1. Cooldown has elapsed since last expansion
+    // 2. Has enough workers to justify expansion
+    // 3. Has some army for defense (configurable by difficulty)
+    // 4. Has enough minerals
+    // 5. Below max base count
+    const totalBases = this.countPlayerBases(ai.playerId);
+    const shouldConsiderExpansion =
+      currentTick - ai.lastExpansionTick >= ai.expansionCooldown &&
+      ai.workerCount >= config.minWorkersForExpansion &&
+      ai.armySupply >= config.minArmyForExpansion &&
+      ai.minerals >= 400 &&
+      totalBases < config.maxBases;
+
+    // More aggressive expansion for saturated bases
+    // If workers are near saturation (3 per mineral patch = ~24 per base), expand
+    const optimalWorkersPerBase = 22;
+    const isSaturated = ai.workerCount >= totalBases * optimalWorkersPerBase * 0.8;
+
+    if (shouldConsiderExpansion || (isSaturated && ai.minerals >= 400 && totalBases < config.maxBases)) {
+      ai.state = 'expanding';
+      return;
+    }
+
     // Check if should scout
     if (ai.scoutCooldown > 0 && currentTick - ai.lastScoutTick >= ai.scoutCooldown) {
       ai.state = 'scouting';
       return;
     }
 
-    // Check if should expand
-    if (ai.workerCount >= ai.targetWorkerCount * 0.8 && ai.armySupply >= 10) {
-      ai.state = 'expanding';
-      return;
-    }
-
     ai.state = 'building';
+  }
+
+  /**
+   * Count total command center type buildings for a player
+   */
+  private countPlayerBases(playerId: string): number {
+    let count = 0;
+    const buildings = this.world.getEntitiesWith('Building', 'Selectable', 'Health');
+    for (const entity of buildings) {
+      const selectable = entity.get<Selectable>('Selectable');
+      const building = entity.get<Building>('Building');
+      const health = entity.get<Health>('Health');
+
+      if (!selectable || !building || !health) continue;
+      if (selectable.playerId !== playerId) continue;
+      if (health.isDead()) continue;
+
+      if (['headquarters', 'orbital_station', 'bastion'].includes(building.buildingId)) {
+        count++;
+      }
+    }
+    return count;
   }
 
   private getMinArmyForAttack(difficulty: AIDifficulty): number {
@@ -471,6 +590,7 @@ export class EnhancedAISystem extends System {
     const hasHangar = (ai.buildingCounts.get('hangar') || 0) > 0;
     const hasExtractor = (ai.buildingCounts.get('extractor') || 0) > 0;
     const infantryBayCount = ai.buildingCounts.get('infantry_bay') || 0;
+    const researchModuleCount = ai.buildingCounts.get('research_module') || 0;
 
     // Build extractor early to get vespene for tech
     if (!hasExtractor && ai.workerCount >= 14) {
@@ -497,6 +617,15 @@ export class EnhancedAISystem extends System {
       if (this.tryBuildBuilding(ai, 'hangar')) return;
     }
 
+    // Build Research Module for tech units (medium+ difficulty)
+    // This is critical for producing breachers, devastators, colossus, etc.
+    if (ai.difficulty !== 'easy' && hasExtractor && ai.vespene >= 25) {
+      const buildingNeedingModule = this.findBuildingNeedingResearchModule(ai);
+      if (buildingNeedingModule && researchModuleCount < 3) { // Max 3 research modules
+        if (this.tryBuildResearchModule(ai, buildingNeedingModule)) return;
+      }
+    }
+
     // Use counter-building logic for harder difficulties
     if (ai.difficulty === 'hard' || ai.difficulty === 'very_hard' || ai.difficulty === 'insane') {
       const recommendation = getCounterRecommendation(this.world, ai.playerId, ai.buildingCounts);
@@ -519,65 +648,220 @@ export class EnhancedAISystem extends System {
       }
     }
 
-    // Produce units based on available buildings and resources
-    if (hasHangar && ai.vespene >= 100 && Math.random() < 0.25) {
-      if (this.tryTrainUnit(ai, 'lifter')) return;
+    // Produce tech units with higher probability (when we can)
+    // Priority: Heavy units > Medium units > Basic units
+
+    // Try to build Colossus (heavy unit - best tank)
+    if (hasForge && this.canProduceUnit(ai, 'colossus') && ai.vespene >= 200 && ai.minerals >= 300) {
+      if (Math.random() < 0.4) {
+        if (this.tryTrainUnit(ai, 'colossus')) return;
+      }
     }
 
-    if (hasForge && ai.vespene >= 25) {
-      if (Math.random() < 0.35) {
-        if (this.tryTrainUnit(ai, 'scorcher')) return;
-      }
-      if (ai.vespene >= 125 && Math.random() < 0.25) {
+    // Try to build Devastator (medium-heavy tank)
+    if (hasForge && this.canProduceUnit(ai, 'devastator') && ai.vespene >= 125) {
+      if (Math.random() < 0.5) {
         if (this.tryTrainUnit(ai, 'devastator')) return;
       }
     }
 
-    if (hasInfantryBay) {
-      // Troopers don't need vespene - always a good choice
-      if (ai.vespene >= 25 && Math.random() < 0.35 && ai.difficulty !== 'easy') {
-        // Breachers need vespene
-        this.tryTrainUnit(ai, 'breacher');
-      } else {
-        this.tryTrainUnit(ai, 'trooper');
+    // Try to build air units from Hangar
+    if (hasHangar) {
+      // Specter (cloaked air unit)
+      if (this.canProduceUnit(ai, 'specter') && ai.vespene >= 100 && Math.random() < 0.3) {
+        if (this.tryTrainUnit(ai, 'specter')) return;
+      }
+      // Valkyrie (good anti-air)
+      if (ai.vespene >= 75 && Math.random() < 0.35) {
+        if (this.tryTrainUnit(ai, 'valkyrie')) return;
+      }
+      // Lifter (transport/healer)
+      if (ai.vespene >= 100 && Math.random() < 0.2) {
+        if (this.tryTrainUnit(ai, 'lifter')) return;
       }
     }
+
+    // Produce vehicles from Forge
+    if (hasForge && ai.vespene >= 25) {
+      // Scorcher - fast harassment unit (doesn't need research module)
+      if (Math.random() < 0.4) {
+        if (this.tryTrainUnit(ai, 'scorcher')) return;
+      }
+    }
+
+    // Produce infantry from Infantry Bay
+    if (hasInfantryBay) {
+      // Breacher (needs research module) - anti-armor infantry
+      if (this.canProduceUnit(ai, 'breacher') && ai.vespene >= 25 && Math.random() < 0.5) {
+        if (this.tryTrainUnit(ai, 'breacher')) return;
+      }
+
+      // Operative (needs research module) - stealth/sniper unit
+      if (this.canProduceUnit(ai, 'operative') && ai.vespene >= 125 && Math.random() < 0.25) {
+        if (this.tryTrainUnit(ai, 'operative')) return;
+      }
+
+      // Vanguard - jetpack unit for harassment
+      if (ai.vespene >= 50 && Math.random() < 0.3) {
+        if (this.tryTrainUnit(ai, 'vanguard')) return;
+      }
+
+      // Trooper - basic unit (fallback, no vespene needed)
+      this.tryTrainUnit(ai, 'trooper');
+    }
+  }
+
+  /**
+   * Try to build a tech lab addon on a production building
+   * Tech lab allows building of advanced units (devastator, colossus, breacher, etc.)
+   */
+  private tryBuildResearchModule(ai: AIPlayer, target: { entityId: number; buildingId: string; position: { x: number; y: number } }): boolean {
+    const moduleDef = BUILDING_DEFINITIONS['research_module'];
+    if (!moduleDef) return false;
+
+    if (ai.minerals < moduleDef.mineralCost || ai.vespene < moduleDef.vespeneCost) return false;
+
+    // Tech lab is placed adjacent to the building (to the right)
+    const modulePos = {
+      x: target.position.x + 3, // Right side of building
+      y: target.position.y
+    };
+
+    // Check if position is valid
+    if (!this.isValidBuildingSpot(modulePos.x, modulePos.y, moduleDef.width, moduleDef.height)) {
+      return false;
+    }
+
+    // Get the parent building and attach the addon directly
+    const parentEntity = this.world.getEntity(target.entityId);
+    if (!parentEntity) return false;
+
+    const parentBuilding = parentEntity.get<Building>('Building');
+    if (!parentBuilding || !parentBuilding.canHaveAddon || parentBuilding.hasAddon()) return false;
+
+    ai.minerals -= moduleDef.mineralCost;
+    ai.vespene -= moduleDef.vespeneCost;
+
+    // Create the addon building and attach it
+    // Use the building:place event with a special flag for addon
+    this.game.eventBus.emit('building:place', {
+      buildingType: 'research_module',
+      position: modulePos,
+      playerId: ai.playerId,
+      isAddon: true,
+      parentBuildingId: target.entityId,
+    });
+
+    // Directly attach the tech_lab addon type to the parent building
+    // The addon system uses 'tech_lab' internally for production capability
+    parentBuilding.attachAddon('tech_lab', -1); // -1 will be updated when addon entity is created
+
+    console.log(`EnhancedAI: ${ai.playerId} building tech_lab on ${target.buildingId}`);
+    return true;
   }
 
   private canProduceUnit(ai: AIPlayer, unitId: string): boolean {
     // Check what buildings can produce this unit
     const buildings = this.world.getEntitiesWith('Building', 'Selectable');
+
+    // Check if this unit requires a research module
+    const requiresResearchModule = this.unitRequiresResearchModule(unitId);
+
     for (const entity of buildings) {
       const selectable = entity.get<Selectable>('Selectable')!;
       const building = entity.get<Building>('Building')!;
 
       if (selectable.playerId !== ai.playerId) continue;
       if (!building.isComplete()) continue;
-      if (building.canProduce.includes(unitId)) return true;
+
+      // Check if the building can produce this unit
+      if (building.canProduce.includes(unitId)) {
+        // Basic units don't need research module
+        if (!requiresResearchModule) return true;
+        // Tech units need research module attached (tech_lab in the current system)
+        if (building.hasAddon() && building.hasTechLab()) return true;
+      }
+
+      // Check if building with tech lab can produce tech units
+      if (requiresResearchModule && building.hasAddon() && building.hasTechLab()) {
+        // Look up what units this building type can make with research module
+        const buildingType = building.buildingId;
+        const techUnits = RESEARCH_MODULE_UNITS[buildingType] || [];
+        if (techUnits.includes(unitId)) return true;
+      }
     }
     return false;
   }
 
-  private executeExpandingPhase(ai: AIPlayer): void {
-    // Try to build expansion command center
-    const hqCount = ai.buildingCounts.get('headquarters') || 0;
-    const orbitalCount = ai.buildingCounts.get('orbital_station') || 0;
-    const totalBases = hqCount + orbitalCount;
+  /**
+   * Check if a unit requires a research module addon to be produced
+   */
+  private unitRequiresResearchModule(unitId: string): boolean {
+    for (const units of Object.values(RESEARCH_MODULE_UNITS)) {
+      if (units.includes(unitId)) return true;
+    }
+    return false;
+  }
 
-    // Only expand if we have enough economy and army
-    if (totalBases < 3 && ai.minerals >= 400 && ai.armySupply >= 8) {
+  /**
+   * Find a production building that can build research module (tech lab)
+   * Returns the building that needs an addon most (for tech units)
+   */
+  private findBuildingNeedingResearchModule(ai: AIPlayer): { entityId: number; buildingId: string; position: { x: number; y: number } } | null {
+    const buildings = this.world.getEntitiesWith('Building', 'Selectable', 'Transform');
+    const candidates: { entityId: number; buildingId: string; position: { x: number; y: number }; priority: number }[] = [];
+
+    for (const entity of buildings) {
+      const selectable = entity.get<Selectable>('Selectable')!;
+      const building = entity.get<Building>('Building')!;
+      const transform = entity.get<Transform>('Transform')!;
+
+      if (selectable.playerId !== ai.playerId) continue;
+      if (!building.isComplete()) continue;
+      if (building.hasAddon()) continue; // Already has addon
+      if (!building.canHaveAddon) continue;
+
+      // Priority: forge > infantry_bay > hangar (for better tech units)
+      let priority = 0;
+      if (building.buildingId === 'forge') priority = 3; // Devastator, Colossus
+      else if (building.buildingId === 'infantry_bay') priority = 2; // Breacher, Operative
+      else if (building.buildingId === 'hangar') priority = 1; // Specter, Dreadnought
+
+      if (priority > 0) {
+        candidates.push({
+          entityId: entity.id,
+          buildingId: building.buildingId,
+          position: { x: transform.x, y: transform.y },
+          priority
+        });
+      }
+    }
+
+    // Return highest priority building
+    candidates.sort((a, b) => b.priority - a.priority);
+    return candidates.length > 0 ? candidates[0] : null;
+  }
+
+  private executeExpandingPhase(ai: AIPlayer): void {
+    const config = this.getDifficultyConfig(ai.difficulty);
+    const totalBases = this.countPlayerBases(ai.playerId);
+    const currentTick = this.game.getCurrentTick();
+
+    // Check if expansion is possible
+    if (totalBases < config.maxBases && ai.minerals >= 400) {
       const expansionPos = this.findExpansionLocation(ai);
       if (expansionPos) {
         // Try to build headquarters at expansion
         if (this.tryBuildBuildingAt(ai, 'headquarters', expansionPos)) {
-          console.log(`EnhancedAI: ${ai.playerId} expanding to (${expansionPos.x}, ${expansionPos.y})`);
+          console.log(`EnhancedAI: ${ai.playerId} expanding to base #${totalBases + 1} at (${expansionPos.x.toFixed(1)}, ${expansionPos.y.toFixed(1)})`);
+          ai.lastExpansionTick = currentTick;
           ai.state = 'building';
           return;
         }
       }
     }
 
-    // Continue normal building phase
+    // Continue normal building phase if expansion failed or not possible
     this.executeBuildingPhase(ai);
   }
 

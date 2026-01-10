@@ -105,6 +105,10 @@
 - [x] **AI expansion support** - AI now builds expansion command centers at resource clusters without nearby bases, enabling multi-base strategies.
 - [x] **AI repair functionality** - Workers automatically repair damaged buildings (<90% health) and mechanical units. Prioritizes critically damaged buildings first.
 - [x] **Building destruction bug** - Fixed buildings with 0 health (on fire) not being destroyed. Added floating-point safety check for death detection.
+- [x] **SC2-style AI expansion timing** - AI now expands more aggressively based on difficulty: Easy (2 bases max), Medium (3), Hard (4), Very Hard (5), Insane (6). Expansion triggers based on worker saturation and cooldowns similar to SC2 AI.
+- [x] **AI tech unit production** - AI now builds tech labs and produces advanced units (devastator, colossus, breacher, operative, specter, valkyrie). Build orders updated to include research modules. Tech unit production probability significantly increased.
+- [x] **Player1 AI spectator fix** - Fixed bug where player1 as AI was treated as human player due to ID-based check instead of type-based check. This could cause AI player1 to not function correctly.
+- [x] **Player status panel ordering** - Fixed player list ordering in spectator mode to sort by player ID (Player 1, Player 2, etc.) instead of array insertion order.
 
 ### Future Optimizations
 - [ ] Instanced decorations (trees, rocks, debris - 1000s of draw calls)
