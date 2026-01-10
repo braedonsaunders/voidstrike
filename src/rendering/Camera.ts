@@ -259,8 +259,17 @@ export class RTSCamera {
 
   private updateCameraPosition(): void {
     const x = this.target.x + this.currentZoom * Math.sin(this.currentAngle) * Math.cos(this.currentPitch);
-    const y = this.currentZoom * Math.sin(this.currentPitch);
+    let y = this.currentZoom * Math.sin(this.currentPitch);
     const z = this.target.z + this.currentZoom * Math.cos(this.currentAngle) * Math.cos(this.currentPitch);
+
+    // Ensure camera doesn't clip through terrain
+    if (this.getTerrainHeight) {
+      const terrainHeightAtCamera = this.getTerrainHeight(x, z);
+      const minCameraHeight = terrainHeightAtCamera + 2; // Keep at least 2 units above terrain
+      if (y < minCameraHeight) {
+        y = minCameraHeight;
+      }
+    }
 
     this.camera.position.set(x, y, z);
     this.camera.lookAt(this.target);
