@@ -258,16 +258,31 @@ export class RTSCamera {
   }
 
   private updateCameraPosition(): void {
-    const x = this.target.x + this.currentZoom * Math.sin(this.currentAngle) * Math.cos(this.currentPitch);
+    // Calculate camera position based on current zoom
+    let x = this.target.x + this.currentZoom * Math.sin(this.currentAngle) * Math.cos(this.currentPitch);
     let y = this.currentZoom * Math.sin(this.currentPitch);
-    const z = this.target.z + this.currentZoom * Math.cos(this.currentAngle) * Math.cos(this.currentPitch);
+    let z = this.target.z + this.currentZoom * Math.cos(this.currentAngle) * Math.cos(this.currentPitch);
 
-    // Ensure camera doesn't clip through terrain
+    // Prevent camera from clipping through terrain by limiting zoom
     if (this.getTerrainHeight) {
       const terrainHeightAtCamera = this.getTerrainHeight(x, z);
       const minCameraHeight = terrainHeightAtCamera + 2; // Keep at least 2 units above terrain
+
       if (y < minCameraHeight) {
-        y = minCameraHeight;
+        // Calculate the minimum zoom needed to stay above terrain
+        // y = zoom * sin(pitch), so zoom = y / sin(pitch)
+        const sinPitch = Math.sin(this.currentPitch);
+        if (sinPitch > 0.01) { // Avoid division by near-zero
+          const minZoom = minCameraHeight / sinPitch;
+          // Clamp current zoom to this terrain-based minimum
+          this.currentZoom = Math.max(this.currentZoom, minZoom);
+          this.targetZoom = Math.max(this.targetZoom, minZoom);
+
+          // Recalculate position with clamped zoom
+          x = this.target.x + this.currentZoom * Math.sin(this.currentAngle) * Math.cos(this.currentPitch);
+          y = this.currentZoom * Math.sin(this.currentPitch);
+          z = this.target.z + this.currentZoom * Math.cos(this.currentAngle) * Math.cos(this.currentPitch);
+        }
       }
     }
 
