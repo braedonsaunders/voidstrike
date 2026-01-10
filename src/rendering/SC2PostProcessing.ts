@@ -364,6 +364,7 @@ export class SC2PostProcessing {
         contrast: { value: this.contrast },
         ssaoEnabled: { value: true },
         godRaysEnabled: { value: true },
+        colorGradingEnabled: { value: true },
         resolution: { value: new THREE.Vector2() },
       },
       vertexShader: `
@@ -384,6 +385,7 @@ export class SC2PostProcessing {
         uniform float contrast;
         uniform bool ssaoEnabled;
         uniform bool godRaysEnabled;
+        uniform bool colorGradingEnabled;
         uniform vec2 resolution;
         varying vec2 vUv;
 
@@ -407,28 +409,30 @@ export class SC2PostProcessing {
             color.rgb += godRays.rgb - texture2D(tDiffuse, vUv).rgb; // Add just the god rays contribution
           }
 
-          vec4 bloom = texture2D(tBloom, vUv);
+          vec3 result = color.rgb;
 
-          // Add bloom
-          vec3 result = color.rgb + bloom.rgb * bloomStrength;
+          // Add bloom only if strength > 0
+          if (bloomStrength > 0.001) {
+            vec4 bloom = texture2D(tBloom, vUv);
+            result += bloom.rgb * bloomStrength;
+          }
 
-          // Apply color grading
-          result = adjustSaturation(result, saturation);
-          result = adjustContrast(result, contrast);
+          // Only apply color grading if enabled
+          if (colorGradingEnabled) {
+            // Apply color grading
+            result = adjustSaturation(result, saturation);
+            result = adjustContrast(result, contrast);
 
-          // Vignette
-          vec2 center = vUv - 0.5;
-          float dist = length(center);
-          float vignette = 1.0 - smoothstep(0.3, 0.9, dist) * vignetteStrength;
-          result *= vignette;
+            // Vignette
+            vec2 center = vUv - 0.5;
+            float dist = length(center);
+            float vignette = 1.0 - smoothstep(0.3, 0.9, dist) * vignetteStrength;
+            result *= vignette;
 
-          // Subtle film grain for texture (very subtle)
-          float grain = (fract(sin(dot(vUv * resolution + fract(float(gl_FragCoord.x)), vec2(12.9898, 78.233))) * 43758.5453) - 0.5) * 0.015;
-          result += grain;
-
-          // Tone mapping (ACES approximation)
-          result = result / (result + vec3(1.0));
-          result = pow(result, vec3(1.0 / 2.2)); // Gamma correction
+            // Subtle film grain for texture (very subtle)
+            float grain = (fract(sin(dot(vUv * resolution + fract(float(gl_FragCoord.x)), vec2(12.9898, 78.233))) * 43758.5453) - 0.5) * 0.015;
+            result += grain;
+          }
 
           gl_FragColor = vec4(clamp(result, 0.0, 1.0), 1.0);
         }
@@ -586,6 +590,10 @@ export class SC2PostProcessing {
 
   setGodRaysEnabled(enabled: boolean): void {
     this.compositeMaterial.uniforms.godRaysEnabled.value = enabled;
+  }
+
+  setColorGradingEnabled(enabled: boolean): void {
+    this.compositeMaterial.uniforms.colorGradingEnabled.value = enabled;
   }
 
   setBloomStrength(strength: number): void {
