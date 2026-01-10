@@ -1321,7 +1321,7 @@ The AssetManager will automatically use custom models when available, falling ba
 - [ ] Dreadnought *(capital battleship)*
 - [ ] Overseer *(support drone)*
 
-### Buildings (17 total) - 13 complete
+### Buildings (17 total) - 16 complete
 - [x] Headquarters *(main base)* `headquarters.glb`
 - [x] Orbital Station *(HQ upgrade)* `orbital_station.glb`
 - [x] Bastion *(HQ defensive upgrade)* `bastion.glb`
@@ -1331,9 +1331,9 @@ The AssetManager will automatically use custom models when available, falling ba
 - [x] Tech Center *(infantry upgrades)* `tech_center.glb`
 - [x] Garrison *(defensive bunker)* `garrison.glb`
 - [x] Forge *(vehicle production)* `forge.glb`
-- [ ] Arsenal *(vehicle upgrades)*
-- [ ] Hangar *(air production)*
-- [ ] Power Core *(advanced tech)*
+- [x] Arsenal *(vehicle upgrades)* `arsenal.glb`
+- [x] Hangar *(air production)* `hangar.glb`
+- [x] Power Core *(advanced tech)* `power_core.glb`
 - [x] Ops Center *(special ops)* `ops_center.glb`
 - [ ] Radar Array *(detection tower)*
 - [x] Defense Turret *(anti-air turret)* `defense_turret.glb`
@@ -1374,11 +1374,11 @@ The AssetManager will automatically use custom models when available, falling ba
 | Category | Complete | Total | Progress |
 |----------|----------|-------|----------|
 | Units | 4 | 13 | 31% |
-| Buildings | 13 | 17 | 76% |
+| Buildings | 16 | 17 | 94% |
 | Resources | 2 | 2 | 100% |
 | Projectiles | 0 | 3 | 0% |
 | Decorations | 16 | 16 | 100% |
-| **Total** | **35** | **51** | **69%** |
+| **Total** | **38** | **51** | **75%** |
 
 ---
 
@@ -1388,17 +1388,14 @@ The AssetManager will automatically use custom models when available, falling ba
 1. **Vanguard** - Jetpack infantry for early game aggression
 2. **Scorcher** - Fast harassment unit
 3. **Lifter** - Essential support unit
-4. **Hangar** - Required for air units
-5. **Arsenal** - Required for vehicle upgrades
 
 ### Medium Priority (Mid-Game Units)
-6. **Operative** - Stealth/sniper unit
-7. **Valkyrie** - Transforming air/ground fighter
-8. **Specter** - Stealth air attacker
-9. **Power Core** - Tech building for capital ships
+4. **Operative** - Stealth/sniper unit
+5. **Valkyrie** - Transforming air/ground fighter
+6. **Specter** - Stealth air attacker
 
 ### Lower Priority (Late-Game)
-10. **Colossus** - Heavy mech
-11. **Dreadnought** - Capital ship
-12. **Overseer** - Support drone
-13. **Radar Array** - Detection building
+7. **Colossus** - Heavy mech
+8. **Dreadnought** - Capital ship
+9. **Overseer** - Support drone
+10. **Radar Array** - Detection building
