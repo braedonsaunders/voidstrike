@@ -404,28 +404,28 @@ export class GroundFog {
     switch (biome.name) {
       case 'Jungle':
         fogColor = new THREE.Color(0x90b090); // Green-tinted mist
-        fogDensity = 0.6;
-        fogHeight = 0.8;
+        fogDensity = 0.15; // Very subtle
+        fogHeight = 0.3;
         break;
       case 'Frozen Wastes':
         fogColor = new THREE.Color(0xd0e8ff); // Cold blue-white
-        fogDensity = 0.5;
-        fogHeight = 0.5;
+        fogDensity = 0.12;
+        fogHeight = 0.2;
         break;
       case 'Volcanic':
         fogColor = new THREE.Color(0x302020); // Dark smoke
-        fogDensity = 0.4;
-        fogHeight = 1.0;
+        fogDensity = 0.1;
+        fogHeight = 0.4;
         break;
       case 'Void':
         fogColor = new THREE.Color(0x301050); // Purple ethereal
-        fogDensity = 0.7;
-        fogHeight = 1.2;
+        fogDensity = 0.15;
+        fogHeight = 0.5;
         break;
       case 'Grassland':
         fogColor = new THREE.Color(0xc8d8e8); // Light morning mist
-        fogDensity = 0.25;
-        fogHeight = 0.3;
+        fogDensity = 0.08;
+        fogHeight = 0.15;
         break;
       case 'Desert':
         // No ground fog in desert
@@ -436,8 +436,8 @@ export class GroundFog {
         break;
       default:
         fogColor = new THREE.Color(0xc0c8d0);
-        fogDensity = 0.3;
-        fogHeight = 0.4;
+        fogDensity = 0.1;
+        fogHeight = 0.2;
     }
 
     const geometry = new THREE.PlaneGeometry(mapData.width, mapData.height, 1, 1);
@@ -515,7 +515,7 @@ export class GroundFog {
 
           // Final alpha with noise and density
           float alpha = noise * fogDensity * edgeFade;
-          alpha = clamp(alpha, 0.0, 0.6); // Cap max opacity
+          alpha = clamp(alpha, 0.0, 0.2); // Cap max opacity - keep very subtle
 
           gl_FragColor = vec4(fogColor, alpha);
         }
