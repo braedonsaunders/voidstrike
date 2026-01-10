@@ -82,41 +82,30 @@ export class ResourceRenderer {
       let yOffset = 0;
       let baseScale = 1;
 
-      // Debug: count meshes in the model and log their details
+      // Count meshes in the model
       let meshCount = 0;
-      const meshDetails: string[] = [];
       baseMesh.traverse((child: THREE.Object3D) => {
-        if (child instanceof THREE.Mesh) {
-          const geo = child.geometry;
-          const vertCount = geo?.attributes?.position?.count ?? 0;
-          const hasIndex = !!geo?.index;
-          const hasNormal = !!geo?.attributes?.normal;
-          meshDetails.push(`mesh${meshCount}: verts=${vertCount}, indexed=${hasIndex}, normals=${hasNormal}`);
-          meshCount++;
-        }
+        if (child instanceof THREE.Mesh) meshCount++;
       });
-      console.log(`[ResourceRenderer] ${resourceType} model has ${meshCount} meshes: ${meshDetails.join(', ')}`);
 
-      // baseMesh is a wrapper Group containing the normalized model
-      // The inner model has position.y set for grounding and scale set for sizing
+      // Extract geometry, material, and transform info from first mesh
       baseMesh.traverse((child: THREE.Object3D) => {
         if (child instanceof THREE.Mesh && !geometry) {
           geometry = child.geometry;
           material = child.material;
-          console.log(`[ResourceRenderer] ${resourceType} using mesh: geometry vertices=${geometry?.attributes?.position?.count ?? 'unknown'}, material=${material ? 'present' : 'missing'}`);
-          // Get the accumulated y-offset and scale from the transform chain
           // Walk up the parent chain to accumulate transforms
           let obj: THREE.Object3D | null = child;
-          let depth = 0;
           while (obj && obj !== baseMesh) {
-            console.log(`[ResourceRenderer] ${resourceType} transform chain[${depth}]: pos.y=${obj.position.y.toFixed(2)}, scale.y=${obj.scale.y.toFixed(4)}`);
             yOffset += obj.position.y * (obj.parent?.scale.y ?? 1);
             baseScale *= obj.scale.y;
             obj = obj.parent;
-            depth++;
           }
         }
       });
+
+      // Single consolidated log for model loading
+      const vertCount = (geometry as THREE.BufferGeometry | null)?.attributes?.position?.count ?? 0;
+      console.log(`[ResourceRenderer] ${resourceType}: meshes=${meshCount}, verts=${vertCount}, yOffset=${yOffset.toFixed(2)}, baseScale=${baseScale.toFixed(4)}`);
 
       // Fallback to procedural geometry if model has no geometry or invalid geometry
       const geomToCheck = geometry as THREE.BufferGeometry | null;
@@ -166,11 +155,9 @@ export class ResourceRenderer {
       // baseScale must be in a reasonable range - too small makes resources invisible
       // If model normalization resulted in tiny scale, use 1.0 instead
       if (baseScale <= 0.1 || baseScale > 10) {
-        console.warn(`[ResourceRenderer] ${resourceType}: Invalid baseScale ${baseScale.toFixed(4)} clamped to 1.0`);
+        console.warn(`[ResourceRenderer] ${resourceType}: baseScale ${baseScale.toFixed(4)} clamped to 1.0`);
         baseScale = 1;
       }
-
-      console.log(`[ResourceRenderer] Created instanced group for ${resourceType}: yOffset=${yOffset.toFixed(2)}, baseScale=${baseScale.toFixed(3)}, geometry=${!!geometry}, material=${!!material}`);
 
       group = {
         mesh: instancedMesh,
@@ -214,20 +201,6 @@ export class ResourceRenderer {
     const entities = this.world.getEntitiesWith('Transform', 'Resource');
     const currentIds = new Set<number>();
 
-    // Count resources by type for debugging
-    let mineralCount = 0;
-    let vespeneCount = 0;
-    for (const entity of entities) {
-      const resource = entity.get<Resource>('Resource');
-      if (resource?.resourceType === 'minerals') mineralCount++;
-      else if (resource?.resourceType === 'vespene') vespeneCount++;
-    }
-    // Only log once at startup or when counts change
-    if (!this._lastMineralCount || this._lastMineralCount !== mineralCount) {
-      console.log(`[ResourceRenderer] Found ${mineralCount} minerals, ${vespeneCount} vespene entities`);
-      this._lastMineralCount = mineralCount;
-    }
-
     // Reset instance counts
     for (const group of this.instancedGroups.values()) {
       group.mesh.count = 0;
@@ -238,6 +211,7 @@ export class ResourceRenderer {
     let debugMineralEntities = 0;
     let debugMineralSkippedDepleted = 0;
     let debugMineralAdded = 0;
+    const debugMineralPositions: string[] = [];
 
     for (const entity of entities) {
       currentIds.add(entity.id);
@@ -299,9 +273,9 @@ export class ResourceRenderer {
         this.tempMatrix.compose(this.tempPosition, this.tempQuaternion, this.tempScale);
         group.mesh.setMatrixAt(instanceIndex, this.tempMatrix);
 
-        // Debug: log first few mineral instances
-        if (resource.resourceType === 'minerals' && instanceIndex < 5) {
-          console.log(`[ResourceRenderer] mineral instance ${instanceIndex}: pos=(${transform.x.toFixed(1)}, ${yPos.toFixed(2)}, ${transform.y.toFixed(1)}), scale=${finalScale.toFixed(3)}, terrainH=${terrainHeight.toFixed(2)}`);
+        // Collect debug info for first few mineral instances (logged once below)
+        if (resource.resourceType === 'minerals' && !this._debugLoggedThisSession && debugMineralPositions.length < 8) {
+          debugMineralPositions.push(`(${transform.x.toFixed(0)},${transform.y.toFixed(0)}) h=${terrainHeight.toFixed(1)} s=${finalScale.toFixed(2)}`);
         }
 
         group.mesh.count++;
@@ -310,21 +284,25 @@ export class ResourceRenderer {
 
     // Debug log once per session
     if (!this._debugLoggedThisSession && debugMineralEntities > 0) {
-      console.log(`[ResourceRenderer] MINERAL DEBUG: entities=${debugMineralEntities}, skippedDepleted=${debugMineralSkippedDepleted}, addedToInstance=${debugMineralAdded}`);
+      const mineralGroup = this.instancedGroups.get('minerals');
+      const vespeneGroup = this.instancedGroups.get('vespene');
+      console.log(`[ResourceRenderer] === MINERAL DEBUG (one-time) ===`);
+      console.log(`  Entities: ${debugMineralEntities} total, ${debugMineralSkippedDepleted} depleted, ${debugMineralAdded} added to instance`);
+      if (mineralGroup) {
+        console.log(`  Minerals instanced: count=${mineralGroup.mesh.count}, baseScale=${mineralGroup.baseScale.toFixed(3)}, yOffset=${mineralGroup.yOffset.toFixed(2)}`);
+      }
+      if (vespeneGroup) {
+        console.log(`  Vespene instanced: count=${vespeneGroup.mesh.count}, baseScale=${vespeneGroup.baseScale.toFixed(3)}, yOffset=${vespeneGroup.yOffset.toFixed(2)}`);
+      }
+      console.log(`  First ${debugMineralPositions.length} mineral positions: ${debugMineralPositions.join(', ')}`);
+      console.log(`[ResourceRenderer] === END DEBUG ===`);
       this._debugLoggedThisSession = true;
     }
 
-    // Mark instance matrices as needing update and log counts
+    // Mark instance matrices as needing update
     for (const group of this.instancedGroups.values()) {
       if (group.mesh.count > 0) {
         group.mesh.instanceMatrix.needsUpdate = true;
-      }
-      // Log instance counts on first frame or when they change
-      const key = `_last${group.resourceType}Count`;
-      const self = this as unknown as Record<string, number>;
-      if (self[key] !== group.mesh.count) {
-        console.log(`[ResourceRenderer] ${group.resourceType} instance count: ${group.mesh.count}, baseScale=${group.baseScale.toFixed(3)}, yOffset=${group.yOffset.toFixed(2)}`);
-        self[key] = group.mesh.count;
       }
     }
 
