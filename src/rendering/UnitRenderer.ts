@@ -139,27 +139,21 @@ export class UnitRenderer {
       const mesh = AssetManager.getUnitMesh(unitType, playerColor);
       this.scene.add(mesh);
 
-      // Create animation mixer
-      const mixer = new THREE.AnimationMixer(mesh);
+      // Find the actual model inside the wrapper for proper animation binding
+      // AssetManager wraps models in a Group, so get the first child (the actual model)
+      const animationRoot = mesh.children.length > 0 ? mesh.children[0] : mesh;
+
+      // Create animation mixer with the actual model (not the wrapper)
+      const mixer = new THREE.AnimationMixer(animationRoot);
       const animations = new Map<string, THREE.AnimationAction>();
 
       // Get animations from asset manager and create actions
       const clips = AssetManager.getAnimations(unitType);
 
-      // First pass: create all actions and store by normalized name
       // Track which canonical names have exact matches to prefer them over partial matches
       const exactMatches = { idle: false, walk: false, attack: false, death: false };
 
       for (const clip of clips) {
-        // TEMPORARILY DISABLED: Remove root motion - let's see if this is causing the issue
-        // this.removeRootMotion(clip);
-
-        // Log all track names to understand the structure
-        if (clips.indexOf(clip) === 0) {
-          console.log(`[UnitRenderer] ${unitType}: Sample tracks from "${clip.name}":`);
-          clip.tracks.slice(0, 5).forEach(t => console.log(`[UnitRenderer]   Track: "${t.name}"`));
-        }
-
         const action = mixer.clipAction(clip);
         // Normalize name: lowercase and strip common prefixes like "Armature|"
         let name = clip.name.toLowerCase();
