@@ -124,6 +124,11 @@ export class ResourceSystem extends System {
           targetEntityId: assignedTargetId,
         });
       } else {
+        // If worker is currently constructing, release them from construction (SC2-style)
+        if (unit.state === 'building' && unit.constructingBuildingId !== null) {
+          unit.cancelBuilding();
+        }
+
         // Execute immediately
         unit.gatherTargetId = assignedTargetId;
         unit.state = 'gathering';

@@ -95,6 +95,12 @@ export class MovementSystem extends System {
           targetY: pos.y,
         });
       } else {
+        // If worker is currently constructing, release them from construction (SC2-style)
+        // The building will pause and can be resumed by another worker
+        if (unit.state === 'building' && unit.constructingBuildingId !== null) {
+          unit.cancelBuilding();
+        }
+
         // Execute immediately
         unit.setMoveTarget(pos.x, pos.y);
         unit.path = [];
