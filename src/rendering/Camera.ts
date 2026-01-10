@@ -160,6 +160,16 @@ export class RTSCamera {
       // Recalculate pitch with new offset
       this.currentPitch = this.calculateZoomBasedPitch(this.currentZoom);
 
+      // Update terrain min zoom since rotation changes camera position
+      this.updateTerrainMinZoom();
+
+      // Ensure current zoom respects terrain limit after rotation
+      const effectiveMinZoom = Math.max(this.config.minZoom, this.terrainMinZoom);
+      if (this.currentZoom < effectiveMinZoom) {
+        this.currentZoom = effectiveMinZoom;
+        this.targetZoom = effectiveMinZoom;
+      }
+
       this.updateCameraPosition();
     }
 
@@ -210,15 +220,19 @@ export class RTSCamera {
 
     const sinAngle = Math.sin(this.currentAngle);
     const cosAngle = Math.cos(this.currentAngle);
-    const cosPitch = Math.cos(this.currentPitch);
-    const sinPitch = Math.sin(this.currentPitch);
 
     // Binary search for minimum safe zoom
+    // Important: recalculate pitch for each zoom level since pitch varies with zoom
     let low = this.config.minZoom;
     let high = this.config.maxZoom;
 
     while (high - low > 0.5) {
       const mid = (low + high) / 2;
+      // Calculate the pitch that would be used at this zoom level
+      const pitchAtZoom = this.calculateZoomBasedPitch(mid);
+      const cosPitch = Math.cos(pitchAtZoom);
+      const sinPitch = Math.sin(pitchAtZoom);
+
       const x = this.target.x + mid * sinAngle * cosPitch;
       const z = this.target.z + mid * cosAngle * cosPitch;
       const y = mid * sinPitch;
@@ -328,8 +342,17 @@ export class RTSCamera {
   private updateCameraPosition(): void {
     // Calculate camera position
     const x = this.target.x + this.currentZoom * Math.sin(this.currentAngle) * Math.cos(this.currentPitch);
-    const y = this.currentZoom * Math.sin(this.currentPitch);
+    let y = this.currentZoom * Math.sin(this.currentPitch);
     const z = this.target.z + this.currentZoom * Math.cos(this.currentAngle) * Math.cos(this.currentPitch);
+
+    // Ensure camera stays above terrain at its position
+    if (this.getTerrainHeight) {
+      const terrainHeight = this.getTerrainHeight(x, z);
+      const minCameraHeight = terrainHeight + 2; // Minimum 2 units above terrain
+      if (y < minCameraHeight) {
+        y = minCameraHeight;
+      }
+    }
 
     this.camera.position.set(x, y, z);
     this.camera.lookAt(this.target);
