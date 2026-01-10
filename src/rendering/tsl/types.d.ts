@@ -110,8 +110,9 @@ declare module 'three/tsl' {
   export function transpose(mat: any): ShaderNodeObject<any>;
   export function inverse(mat: any): ShaderNodeObject<any>;
 
-  // Function definition
-  export function Fn(fn: (args: any[]) => any): (...args: any[]) => ShaderNodeObject<any>;
+  // Function definition - accepts any function signature
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  export function Fn<T extends (...args: any[]) => any>(fn: T): (...args: any[]) => ShaderNodeObject<any>;
 
   // Control flow
   export function If(condition: any, thenFn: () => void): { Else: (elseFn: () => void) => void };
@@ -127,32 +128,36 @@ declare module 'three/tsl' {
   export function normalView(): ShaderNodeObject<any>;
   export function depth(): ShaderNodeObject<any>;
 
-  // Materials
-  export class MeshBasicNodeMaterial {
+  // Materials - extend THREE.Material for compatibility
+  import { Material, Side, Blending } from 'three';
+
+  export class MeshBasicNodeMaterial extends Material {
     transparent: boolean;
-    side: number;
+    side: Side;
     depthWrite: boolean;
-    blending: number;
+    blending: Blending;
     colorNode: ShaderNodeObject<any>;
     positionNode: ShaderNodeObject<any>;
+    opacity: number;
   }
 
-  export class MeshStandardNodeMaterial {
+  export class MeshStandardNodeMaterial extends Material {
     transparent: boolean;
-    side: number;
+    side: Side;
     depthWrite: boolean;
-    blending: number;
+    blending: Blending;
     colorNode: ShaderNodeObject<any>;
     positionNode: ShaderNodeObject<any>;
     normalNode: ShaderNodeObject<any>;
     roughnessNode: ShaderNodeObject<any>;
     metalnessNode: ShaderNodeObject<any>;
     emissiveNode: ShaderNodeObject<any>;
+    opacity: number;
   }
 }
 
 declare module 'three/addons/renderers/webgpu/WebGPURenderer.js' {
-  import { Camera, Scene, WebGLRenderer } from 'three';
+  import { Camera, Scene, ToneMapping } from 'three';
 
   interface WebGPURendererParameters {
     canvas?: HTMLCanvasElement;
@@ -162,13 +167,74 @@ declare module 'three/addons/renderers/webgpu/WebGPURenderer.js' {
     logarithmicDepthBuffer?: boolean;
   }
 
-  export default class WebGPURenderer extends WebGLRenderer {
+  export default class WebGPURenderer {
     constructor(parameters?: WebGPURendererParameters);
+
+    // Initialization
     init(): Promise<void>;
+
+    // Backend info
     backend?: { isWebGPUBackend?: boolean };
+
+    // Size and display
+    setSize(width: number, height: number, updateStyle?: boolean): void;
+    setPixelRatio(ratio: number): void;
+    getSize(target: { width: number; height: number }): { width: number; height: number };
+
+    // Tone mapping
+    toneMapping: ToneMapping;
+    toneMappingExposure: number;
+
+    // Rendering
+    render(scene: Scene, camera: Camera): void;
+    renderAsync(scene: Scene, camera: Camera): Promise<void>;
+
+    // Compute
     compute(computeNode: any): void;
     computeAsync(computeNode: any): Promise<void>;
-    renderAsync(scene: Scene, camera: Camera): Promise<void>;
+
+    // Clear
+    setClearColor(color: any, alpha?: number): void;
+    getClearColor(): any;
+    setClearAlpha(alpha: number): void;
+    getClearAlpha(): number;
+    clear(color?: boolean, depth?: boolean, stencil?: boolean): void;
+
+    // Capabilities
+    capabilities: {
+      isWebGPU: boolean;
+      maxTextures: number;
+      maxVertexUniformVectors: number;
+    };
+
+    // DOM element
+    domElement: HTMLCanvasElement;
+
+    // Dispose
+    dispose(): void;
+
+    // Info
+    info: {
+      autoReset: boolean;
+      memory: { geometries: number; textures: number };
+      render: { calls: number; triangles: number; points: number; lines: number };
+      reset(): void;
+    };
+
+    // Output encoding
+    outputColorSpace: string;
+
+    // Shadow map
+    shadowMap: {
+      enabled: boolean;
+      type: number;
+    };
+
+    // Auto clear
+    autoClear: boolean;
+    autoClearColor: boolean;
+    autoClearDepth: boolean;
+    autoClearStencil: boolean;
   }
 }
 

@@ -1,9 +1,9 @@
 import * as THREE from 'three';
 
 /**
- * SC2-LEVEL SELECTION SYSTEM
+ * VOIDSTRIKE SELECTION SYSTEM
  *
- * Creates beautiful, animated selection rings like StarCraft 2:
+ * Creates beautiful, animated selection rings:
  * - Glowing team-colored rings with pulsing animation
  * - Multiple concentric rings for selected units
  * - Subtle rotation animation
@@ -11,7 +11,7 @@ import * as THREE from 'three';
  * - Formation preview indicators
  */
 
-// Team colors matching SC2 palette
+// Team colors
 export const TEAM_COLORS = {
   player1: new THREE.Color(0x00d4ff), // Bright cyan blue
   player2: new THREE.Color(0xff3030), // Bright red
@@ -29,7 +29,7 @@ interface SelectionRingData {
   baseScale: number;
 }
 
-export class SC2SelectionSystem {
+export class VoidstrikeSelectionSystem {
   private scene: THREE.Scene;
   private selectionRings: Map<number, SelectionRingData> = new Map();
   private hoverRing: THREE.Mesh | null = null;

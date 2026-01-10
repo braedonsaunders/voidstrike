@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 
 /**
- * SC2-LEVEL PARTICLE SYSTEM
+ * VOIDSTRIKE PARTICLE SYSTEM
  *
  * High-performance GPU-based particle system for:
  * - Projectile trails with glow
@@ -231,7 +231,7 @@ const EFFECT_PRESETS = {
   },
 };
 
-export class SC2ParticleSystem {
+export class VoidstrikeParticleSystem {
   private scene: THREE.Scene;
   private emitters: Map<string, ParticleEmitter> = new Map();
 
