@@ -277,14 +277,8 @@ export const textureTerrainFragmentShader = /* glsl */ `
 
     vec3 finalColor = diffuse + specular + ambient + vec3(rim);
 
-    // Tone mapping (simple Reinhard)
-    finalColor = finalColor / (finalColor + vec3(1.0));
-
-    // Gamma correction
-    finalColor = pow(finalColor, vec3(1.0 / 2.2));
-
-    // Subtle warm tint
-    finalColor = mix(finalColor, finalColor * vec3(1.02, 1.0, 0.98), 0.2);
+    // Note: No tone mapping or gamma correction here - OutputPass handles that
+    // uniformly for the entire scene to avoid double correction
 
     gl_FragColor = vec4(finalColor, 1.0);
   }
