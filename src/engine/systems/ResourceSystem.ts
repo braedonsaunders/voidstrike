@@ -120,6 +120,12 @@ export class ResourceSystem extends System {
 
       // Move to assigned resource
       unit.moveToPosition(assignedTransform.x, assignedTransform.y);
+
+      // Debug: log gather command for player1 workers
+      const selectable = entity.get<Selectable>('Selectable');
+      if (selectable?.playerId === 'player1') {
+        console.log(`[ResourceSystem] player1 worker ${entityId} assigned to gather resource ${assignedTargetId}, moving to (${assignedTransform.x.toFixed(1)}, ${assignedTransform.y.toFixed(1)})`);
+      }
     }
   }
 
