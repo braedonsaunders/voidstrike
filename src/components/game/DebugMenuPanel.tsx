@@ -36,29 +36,18 @@ const otherSettings: DebugSettingInfo[] = [
   { key: 'debugAudio', label: 'Audio' },
 ];
 
-/**
- * In-game debug menu panel
- * Access via Options menu -> Debug
- * Controls which debug logging categories are enabled
- */
-export function DebugMenuPanel() {
-  const {
-    showDebugMenu,
-    debugSettings,
-    toggleDebugMenu,
-    toggleDebugSetting,
-    setAllDebugSettings,
-  } = useUIStore();
+const sectionStyle: React.CSSProperties = { marginBottom: '16px', paddingBottom: '12px', borderBottom: '1px solid #333' };
+const labelStyle: React.CSSProperties = { fontSize: '11px', color: '#888' };
 
-  // Hide debug menu in multiplayer mode (multiple human players)
-  if (!showDebugMenu || isMultiplayerMode()) return null;
-
-  const sectionStyle = { marginBottom: '16px', paddingBottom: '12px', borderBottom: '1px solid #333' };
-  const labelStyle = { fontSize: '11px', color: '#888' };
-
-  const ToggleButton = ({ enabled, onClick, small = false }: { enabled: boolean; onClick: () => void; small?: boolean }) => (
+// Extracted toggle button component
+function ToggleButton({ enabled, onClick, small = false }: { enabled: boolean; onClick: () => void; small?: boolean }) {
+  return (
     <button
-      onClick={onClick}
+      onClick={(e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        onClick();
+      }}
       style={{
         padding: small ? '2px 8px' : '4px 12px',
         backgroundColor: enabled ? '#2a5a2a' : '#5a2a2a',
@@ -73,27 +62,57 @@ export function DebugMenuPanel() {
       {enabled ? 'ON' : 'OFF'}
     </button>
   );
+}
 
-  const SettingRow = ({ setting }: { setting: DebugSettingInfo }) => (
+// Extracted setting row component
+function SettingRow({
+  setting,
+  enabled,
+  onToggle
+}: {
+  setting: DebugSettingInfo;
+  enabled: boolean;
+  onToggle: () => void;
+}) {
+  return (
     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
       <span style={{ fontSize: '12px' }}>{setting.label}</span>
-      <ToggleButton
-        enabled={debugSettings[setting.key] as boolean}
-        onClick={() => toggleDebugSetting(setting.key)}
-        small
-      />
+      <ToggleButton enabled={enabled} onClick={onToggle} small />
     </div>
   );
+}
 
-  const SectionHeader = ({ title }: { title: string }) => (
+// Section header component
+function SectionHeader({ title }: { title: string }) {
+  return (
     <div style={{ marginBottom: '8px', fontWeight: 'bold', fontSize: '12px', color: '#aaa' }}>
       {title}
     </div>
   );
+}
+
+/**
+ * In-game debug menu panel
+ * Access via Options menu -> Debug
+ * Controls which debug logging categories are enabled
+ */
+export function DebugMenuPanel() {
+  const showDebugMenu = useUIStore((state) => state.showDebugMenu);
+  const debugSettings = useUIStore((state) => state.debugSettings);
+  const toggleDebugMenu = useUIStore((state) => state.toggleDebugMenu);
+  const toggleDebugSetting = useUIStore((state) => state.toggleDebugSetting);
+  const setAllDebugSettings = useUIStore((state) => state.setAllDebugSettings);
+
+  // Hide debug menu in multiplayer mode (multiple human players)
+  if (!showDebugMenu || isMultiplayerMode()) return null;
 
   // Count enabled settings
   const enabledCount = Object.values(debugSettings).filter(Boolean).length - (debugSettings.debugEnabled ? 1 : 0);
   const totalSettings = Object.keys(debugSettings).length - 1; // Exclude master toggle
+
+  const handleToggleSetting = (key: keyof DebugSettings) => {
+    toggleDebugSetting(key);
+  };
 
   return (
     <div
@@ -118,7 +137,10 @@ export function DebugMenuPanel() {
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
         <h3 style={{ margin: 0, fontSize: '14px' }}>Debug Menu</h3>
         <button
-          onClick={toggleDebugMenu}
+          onClick={(e) => {
+            e.preventDefault();
+            toggleDebugMenu();
+          }}
           style={{
             background: 'none',
             border: 'none',
@@ -127,7 +149,7 @@ export function DebugMenuPanel() {
             fontSize: '16px',
           }}
         >
-          X
+          ✕
         </button>
       </div>
 
@@ -137,15 +159,18 @@ export function DebugMenuPanel() {
           <span style={{ fontWeight: 'bold' }}>Debug Logging (Master)</span>
           <ToggleButton
             enabled={debugSettings.debugEnabled}
-            onClick={() => toggleDebugSetting('debugEnabled')}
+            onClick={() => handleToggleSetting('debugEnabled')}
           />
         </div>
-        <div style={labelStyle}>
+        <div style={labelStyle as React.CSSProperties}>
           {enabledCount}/{totalSettings} categories enabled
         </div>
         <div style={{ display: 'flex', gap: '8px', marginTop: '8px' }}>
           <button
-            onClick={() => setAllDebugSettings(true)}
+            onClick={(e) => {
+              e.preventDefault();
+              setAllDebugSettings(true);
+            }}
             style={{
               flex: 1,
               padding: '4px 8px',
@@ -160,7 +185,10 @@ export function DebugMenuPanel() {
             Enable All
           </button>
           <button
-            onClick={() => setAllDebugSettings(false)}
+            onClick={(e) => {
+              e.preventDefault();
+              setAllDebugSettings(false);
+            }}
             style={{
               flex: 1,
               padding: '4px 8px',
@@ -181,7 +209,12 @@ export function DebugMenuPanel() {
       <div style={sectionStyle}>
         <SectionHeader title="Rendering" />
         {renderingSettings.map((setting) => (
-          <SettingRow key={setting.key} setting={setting} />
+          <SettingRow
+            key={setting.key}
+            setting={setting}
+            enabled={debugSettings[setting.key] as boolean}
+            onToggle={() => handleToggleSetting(setting.key)}
+          />
         ))}
       </div>
 
@@ -189,7 +222,12 @@ export function DebugMenuPanel() {
       <div style={sectionStyle}>
         <SectionHeader title="Gameplay" />
         {gameplaySettings.map((setting) => (
-          <SettingRow key={setting.key} setting={setting} />
+          <SettingRow
+            key={setting.key}
+            setting={setting}
+            enabled={debugSettings[setting.key] as boolean}
+            onToggle={() => handleToggleSetting(setting.key)}
+          />
         ))}
       </div>
 
@@ -197,7 +235,12 @@ export function DebugMenuPanel() {
       <div style={sectionStyle}>
         <SectionHeader title="Systems" />
         {systemSettings.map((setting) => (
-          <SettingRow key={setting.key} setting={setting} />
+          <SettingRow
+            key={setting.key}
+            setting={setting}
+            enabled={debugSettings[setting.key] as boolean}
+            onToggle={() => handleToggleSetting(setting.key)}
+          />
         ))}
       </div>
 
@@ -205,7 +248,12 @@ export function DebugMenuPanel() {
       <div style={{ marginBottom: '8px' }}>
         <SectionHeader title="Other" />
         {otherSettings.map((setting) => (
-          <SettingRow key={setting.key} setting={setting} />
+          <SettingRow
+            key={setting.key}
+            setting={setting}
+            enabled={debugSettings[setting.key] as boolean}
+            onToggle={() => handleToggleSetting(setting.key)}
+          />
         ))}
       </div>
 
