@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { debugShaders } from '@/utils/debugLogger';
 
 /**
  * SC2-LEVEL TERRAIN SHADER
@@ -514,7 +515,7 @@ export interface SC2TerrainShaderConfig {
 }
 
 export function createSC2TerrainShaderMaterial(config: SC2TerrainShaderConfig): THREE.ShaderMaterial {
-  console.log('[SC2TerrainShader] Creating material with config:', {
+  debugShaders.log('[SC2TerrainShader] Creating material with config:', {
     groundColor1: '#' + config.groundColor1.getHexString(),
     groundColor2: '#' + config.groundColor2.getHexString(),
     rockColor: '#' + config.rockColor.getHexString(),
@@ -549,9 +550,9 @@ export function createSC2TerrainShaderMaterial(config: SC2TerrainShaderConfig): 
     // Cast to any to access internal program property
     const prog = (material as unknown as { program?: unknown }).program;
     if (prog) {
-      console.log('[SC2TerrainShader] Shader compiled successfully');
+      debugShaders.log('[SC2TerrainShader] Shader compiled successfully');
     } else {
-      console.warn('[SC2TerrainShader] Shader may not have compiled yet or has errors');
+      debugShaders.warn('[SC2TerrainShader] Shader may not have compiled yet or has errors');
     }
   }, 1000);
 

@@ -7,6 +7,7 @@ import { OutputPass } from 'three/examples/jsm/postprocessing/OutputPass.js';
 import { OutlinePass } from 'three/examples/jsm/postprocessing/OutlinePass.js';
 import { SSAOPass } from 'three/examples/jsm/postprocessing/SSAOPass.js';
 import { FXAAShader } from 'three/examples/jsm/shaders/FXAAShader.js';
+import { debugPostProcessing } from '@/utils/debugLogger';
 
 /**
  * SC2-LEVEL POST-PROCESSING
@@ -92,7 +93,7 @@ export class SC2PostProcessing {
     this.outputPass = new OutputPass();
     this.composer.addPass(this.outputPass);
 
-    console.log('[SC2PostProcessing] Initialized with SSAO, Bloom, Outline, FXAA');
+    debugPostProcessing.log('[SC2PostProcessing] Initialized with SSAO, Bloom, Outline, FXAA');
   }
 
   render(): void {

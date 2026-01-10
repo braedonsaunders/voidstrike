@@ -10,6 +10,7 @@ import { Resource } from '../components/Resource';
 import { BUILDING_DEFINITIONS } from '@/data/buildings/dominion';
 import { useGameStore } from '@/store/gameStore';
 import { isLocalPlayer, getLocalPlayerId } from '@/store/gameSetupStore';
+import { debugBuildingPlacement } from '@/utils/debugLogger';
 
 /**
  * BuildingPlacementSystem handles placing new buildings when workers construct them.
@@ -54,14 +55,14 @@ export class BuildingPlacementSystem extends System {
     const definition = BUILDING_DEFINITIONS[buildingType];
 
     if (!definition) {
-      console.warn(`BuildingPlacementSystem: Unknown building type: ${buildingType}`);
+      debugBuildingPlacement.warn(`BuildingPlacementSystem: Unknown building type: ${buildingType}`);
       this.game.eventBus.emit('ui:error', { message: `Unknown building: ${buildingType}` });
       return;
     }
 
     // Validate position exists
     if (!data.position || typeof data.position.x !== 'number' || typeof data.position.y !== 'number') {
-      console.warn(`BuildingPlacementSystem: Invalid position for ${buildingType}:`, data.position);
+      debugBuildingPlacement.warn(`BuildingPlacementSystem: Invalid position for ${buildingType}:`, data.position);
       return;
     }
 
@@ -142,7 +143,7 @@ export class BuildingPlacementSystem extends System {
     if (vespeneGeyserEntity) {
       const resource = vespeneGeyserEntity.get<Resource>('Resource')!;
       resource.extractorEntityId = buildingEntity.id;
-      console.log(`BuildingPlacementSystem: Extractor ${buildingEntity.id} associated with vespene geyser ${vespeneGeyserEntity.id}`);
+      debugBuildingPlacement.log(`BuildingPlacementSystem: Extractor ${buildingEntity.id} associated with vespene geyser ${vespeneGeyserEntity.id}`);
     }
 
     // Assign the worker to this construction
@@ -162,7 +163,7 @@ export class BuildingPlacementSystem extends System {
       vespeneGeyserId: vespeneGeyserEntity?.id,
     });
 
-    console.log(`BuildingPlacementSystem: ${definition.name} placed at (${snappedX}, ${snappedY}), SCV ${worker.entity.id} assigned`);
+    debugBuildingPlacement.log(`BuildingPlacementSystem: ${definition.name} placed at (${snappedX}, ${snappedY}), SCV ${worker.entity.id} assigned`);
   }
 
   /**
@@ -309,7 +310,7 @@ export class BuildingPlacementSystem extends System {
     // Get the parent building entity
     const parentEntity = this.world.getEntity(buildingId);
     if (!parentEntity) {
-      console.warn(`BuildingPlacementSystem: Parent building ${buildingId} not found`);
+      debugBuildingPlacement.warn(`BuildingPlacementSystem: Parent building ${buildingId} not found`);
       return;
     }
 
@@ -318,7 +319,7 @@ export class BuildingPlacementSystem extends System {
     const parentSelectable = parentEntity.get<Selectable>('Selectable');
 
     if (!parentBuilding || !parentTransform || !parentSelectable) {
-      console.warn(`BuildingPlacementSystem: Parent building missing components`);
+      debugBuildingPlacement.warn(`BuildingPlacementSystem: Parent building missing components`);
       return;
     }
 
@@ -343,7 +344,7 @@ export class BuildingPlacementSystem extends System {
     // Get the addon definition
     const addonDef = BUILDING_DEFINITIONS[addonType];
     if (!addonDef) {
-      console.warn(`BuildingPlacementSystem: Unknown addon type: ${addonType}`);
+      debugBuildingPlacement.warn(`BuildingPlacementSystem: Unknown addon type: ${addonType}`);
       return;
     }
 
@@ -402,7 +403,7 @@ export class BuildingPlacementSystem extends System {
       playerId,
     });
 
-    console.log(`BuildingPlacementSystem: ${addonDef.name} built for ${parentBuilding.name} at (${addonX}, ${addonY})`);
+    debugBuildingPlacement.log(`BuildingPlacementSystem: ${addonDef.name} built for ${parentBuilding.name} at (${addonX}, ${addonY})`);
   }
 
   /**
@@ -414,7 +415,7 @@ export class BuildingPlacementSystem extends System {
       const unit = entity.get<Unit>('Unit')!;
       if (unit.constructingBuildingId === buildingEntityId) {
         unit.cancelBuilding();
-        console.log(`Worker ${entity.id} released from construction`);
+        debugBuildingPlacement.log(`Worker ${entity.id} released from construction`);
       }
     }
   }
@@ -455,18 +456,18 @@ export class BuildingPlacementSystem extends System {
     const halfH = height / 2;
 
     // Debug: log placement attempt
-    console.log(`BuildingPlacement: Attempting at (${centerX.toFixed(1)}, ${centerY.toFixed(1)}), size ${width}x${height}, map bounds: ${config.mapWidth}x${config.mapHeight}`);
+    debugBuildingPlacement.log(`BuildingPlacement: Attempting at (${centerX.toFixed(1)}, ${centerY.toFixed(1)}), size ${width}x${height}, map bounds: ${config.mapWidth}x${config.mapHeight}`);
 
     // Check map bounds
     if (centerX - halfW < 0 || centerY - halfH < 0 ||
         centerX + halfW > config.mapWidth || centerY + halfH > config.mapHeight) {
-      console.log(`BuildingPlacement: Failed - out of map bounds (centerX-halfW=${(centerX - halfW).toFixed(1)}, centerY-halfH=${(centerY - halfH).toFixed(1)}, centerX+halfW=${(centerX + halfW).toFixed(1)}, centerY+halfH=${(centerY + halfH).toFixed(1)})`);
+      debugBuildingPlacement.log(`BuildingPlacement: Failed - out of map bounds (centerX-halfW=${(centerX - halfW).toFixed(1)}, centerY-halfH=${(centerY - halfH).toFixed(1)}, centerX+halfW=${(centerX + halfW).toFixed(1)}, centerY+halfH=${(centerY + halfH).toFixed(1)})`);
       return false;
     }
 
     // Check terrain validity (must be on ground, same elevation, not on ramps/cliffs)
     if (!this.game.isValidTerrainForBuilding(centerX, centerY, width, height)) {
-      console.log(`BuildingPlacement: Failed - invalid terrain (cliff edge, ramp, or elevation mismatch)`);
+      debugBuildingPlacement.log(`BuildingPlacement: Failed - invalid terrain (cliff edge, ramp, or elevation mismatch)`);
       return false;
     }
 
@@ -483,7 +484,7 @@ export class BuildingPlacementSystem extends System {
       const dy = Math.abs(centerY - transform.y);
 
       if (dx < halfW + existingHalfW + 0.5 && dy < halfH + existingHalfH + 0.5) {
-        console.log(`BuildingPlacement: Failed - overlaps building at (${transform.x}, ${transform.y})`);
+        debugBuildingPlacement.log(`BuildingPlacement: Failed - overlaps building at (${transform.x}, ${transform.y})`);
         return false;
       }
     }
@@ -498,7 +499,7 @@ export class BuildingPlacementSystem extends System {
       const dy = Math.abs(centerY - transform.y);
 
       if (dx < halfW + 1.5 && dy < halfH + 1.5) {
-        console.log(`BuildingPlacement: Failed - overlaps resource at (${transform.x}, ${transform.y})`);
+        debugBuildingPlacement.log(`BuildingPlacement: Failed - overlaps resource at (${transform.x}, ${transform.y})`);
         return false;
       }
     }
@@ -518,14 +519,14 @@ export class BuildingPlacementSystem extends System {
       const dy = Math.abs(centerY - transform.y);
 
       if (dx < halfW + 0.5 && dy < halfH + 0.5) {
-        console.log(`BuildingPlacement: Failed - overlaps unit ${entity.id} at (${transform.x}, ${transform.y})`);
+        debugBuildingPlacement.log(`BuildingPlacement: Failed - overlaps unit ${entity.id} at (${transform.x}, ${transform.y})`);
         return false;
       }
     }
 
     // Check for overlapping decorations (rocks, trees, etc.)
     if (!this.game.isPositionClearOfDecorations(centerX, centerY, width, height)) {
-      console.log(`BuildingPlacement: Failed - overlaps decoration at (${centerX}, ${centerY})`);
+      debugBuildingPlacement.log(`BuildingPlacement: Failed - overlaps decoration at (${centerX}, ${centerY})`);
       return false;
     }
 
@@ -627,7 +628,7 @@ export class BuildingPlacementSystem extends System {
             buildingType: building.buildingId,
             position: { x: buildingTransform.x, y: buildingTransform.y },
           });
-          console.log(`BuildingPlacementSystem: ${building.name} construction started - worker arrived!`);
+          debugBuildingPlacement.log(`BuildingPlacementSystem: ${building.name} construction started - worker arrived!`);
         }
 
         // Progress construction
@@ -660,7 +661,7 @@ export class BuildingPlacementSystem extends System {
             playerId: selectable?.playerId,
           });
 
-          console.log(`BuildingPlacementSystem: ${building.name} construction complete!`);
+          debugBuildingPlacement.log(`BuildingPlacementSystem: ${building.name} construction complete!`);
         }
       }
     }
@@ -746,7 +747,7 @@ export class BuildingPlacementSystem extends System {
         if (isLocalPlayer(selectable.playerId)) {
           const store = useGameStore.getState();
           store.addResources(definition.mineralCost, definition.vespeneCost);
-          console.log(`BuildingPlacementSystem: Refunded ${definition.mineralCost} minerals, ${definition.vespeneCost} vespene for cancelled ${building.name}`);
+          debugBuildingPlacement.log(`BuildingPlacementSystem: Refunded ${definition.mineralCost} minerals, ${definition.vespeneCost} vespene for cancelled ${building.name}`);
         }
 
         // Emit cancellation event
@@ -757,7 +758,7 @@ export class BuildingPlacementSystem extends System {
           position: { x: transform.x, y: transform.y },
         });
 
-        console.log(`BuildingPlacementSystem: Cancelled orphaned blueprint ${building.name} at (${transform.x}, ${transform.y}) - no workers assigned`);
+        debugBuildingPlacement.log(`BuildingPlacementSystem: Cancelled orphaned blueprint ${building.name} at (${transform.x}, ${transform.y}) - no workers assigned`);
       }
 
       // Remove the building entity

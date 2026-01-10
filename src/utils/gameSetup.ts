@@ -13,6 +13,7 @@ import { EnhancedAISystem } from '@/engine/systems/EnhancedAISystem';
 import { PathfindingSystem } from '@/engine/systems/PathfindingSystem';
 import { MapData, Expansion } from '@/data/maps';
 import { useGameStore } from '@/store/gameStore';
+import { debugInitialization } from '@/utils/debugLogger';
 import { useGameSetupStore, STARTING_RESOURCES_VALUES, AIDifficulty, isLocalPlayer } from '@/store/gameSetupStore';
 
 export function spawnInitialEntities(game: Game, mapData: MapData): void {
@@ -39,8 +40,8 @@ export function spawnInitialEntities(game: Game, mapData: MapData): void {
     slot => slot.type === 'human' || slot.type === 'ai'
   );
 
-  console.log(`[gameSetup] localPlayerId: ${setupStore.localPlayerId}`);
-  console.log(`[gameSetup] Active player slots: ${playerSlots.map(s => `${s.id}(${s.type})`).join(', ')}`);
+  debugInitialization.log(`[gameSetup] localPlayerId: ${setupStore.localPlayerId}`);
+  debugInitialization.log(`[gameSetup] Active player slots: ${playerSlots.map(s => `${s.id}(${s.type})`).join(', ')}`);
 
   // Spawn bases for each active player
   // Track used spawns to prevent multiple players at same location
@@ -59,21 +60,21 @@ export function spawnInitialEntities(game: Game, mapData: MapData): void {
     }
 
     if (spawnIndex === -1) {
-      console.warn(`No available spawn point for ${slot.id}`);
+      debugInitialization.warn(`No available spawn point for ${slot.id}`);
       return;
     }
 
     const spawn = spawns[spawnIndex];
     usedSpawnIndices.add(spawnIndex);
 
-    console.log(`Spawning ${slot.id} at spawn index ${spawnIndex} (${spawn.x}, ${spawn.y})`);
+    debugInitialization.log(`Spawning ${slot.id} at spawn index ${spawnIndex} (${spawn.x}, ${spawn.y})`);
 
     // Spawn base for this player
     spawnBase(game, slot.id, spawn.x, spawn.y);
 
     // Register AI players
     if (slot.type === 'ai') {
-      console.log(`[gameSetup] Registering AI for ${slot.id} (${slot.faction}, ${slot.aiDifficulty})`);
+      debugInitialization.log(`[gameSetup] Registering AI for ${slot.id} (${slot.faction}, ${slot.aiDifficulty})`);
       registerAIPlayer(game, slot.id, slot.faction, slot.aiDifficulty);
     }
   });
@@ -162,28 +163,28 @@ function spawnBase(game: Game, playerId: string, x: number, y: number): void {
 }
 
 function spawnExpansionResources(game: Game, expansion: Expansion): void {
-  console.log(`[gameSetup] Spawning resources for expansion: ${expansion.name}`);
-  console.log(`[gameSetup]   Minerals: ${expansion.minerals?.length ?? 0} patches`);
-  console.log(`[gameSetup]   Vespene: ${expansion.vespene?.length ?? 0} geysers`);
+  debugInitialization.log(`[gameSetup] Spawning resources for expansion: ${expansion.name}`);
+  debugInitialization.log(`[gameSetup]   Minerals: ${expansion.minerals?.length ?? 0} patches`);
+  debugInitialization.log(`[gameSetup]   Vespene: ${expansion.vespene?.length ?? 0} geysers`);
 
   // Spawn mineral patches
   if (expansion.minerals) {
     for (const mineral of expansion.minerals) {
-      console.log(`[gameSetup]   Creating mineral at (${mineral.x.toFixed(1)}, ${mineral.y.toFixed(1)}) amount=${mineral.amount}`);
+      debugInitialization.log(`[gameSetup]   Creating mineral at (${mineral.x.toFixed(1)}, ${mineral.y.toFixed(1)}) amount=${mineral.amount}`);
       spawnMineralPatch(game, mineral.x, mineral.y, mineral.amount);
     }
   } else {
-    console.warn(`[gameSetup]   WARNING: expansion.minerals is undefined!`);
+    debugInitialization.warn(`[gameSetup]   WARNING: expansion.minerals is undefined!`);
   }
 
   // Spawn vespene geysers
   if (expansion.vespene) {
     for (const geyser of expansion.vespene) {
-      console.log(`[gameSetup]   Creating vespene at (${geyser.x.toFixed(1)}, ${geyser.y.toFixed(1)}) amount=${geyser.amount}`);
+      debugInitialization.log(`[gameSetup]   Creating vespene at (${geyser.x.toFixed(1)}, ${geyser.y.toFixed(1)}) amount=${geyser.amount}`);
       spawnVespeneGeyser(game, geyser.x, geyser.y, geyser.amount);
     }
   } else {
-    console.warn(`[gameSetup]   WARNING: expansion.vespene is undefined!`);
+    debugInitialization.warn(`[gameSetup]   WARNING: expansion.vespene is undefined!`);
   }
 }
 
@@ -240,7 +241,7 @@ export function spawnBuildingAtPosition(
   const definition = BUILDING_DEFINITIONS[buildingId];
 
   if (!definition) {
-    console.warn(`Unknown building type: ${buildingId}`);
+    debugInitialization.warn(`Unknown building type: ${buildingId}`);
     return;
   }
 
@@ -262,7 +263,7 @@ export function spawnUnitAtPosition(
   const definition = UNIT_DEFINITIONS[unitId];
 
   if (!definition) {
-    console.warn(`Unknown unit type: ${unitId}`);
+    debugInitialization.warn(`Unknown unit type: ${unitId}`);
     return;
   }
 

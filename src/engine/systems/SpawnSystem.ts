@@ -8,6 +8,7 @@ import { Velocity } from '../components/Velocity';
 import { Ability } from '../components/Ability';
 import { UNIT_DEFINITIONS } from '@/data/units/dominion';
 import { DOMINION_ABILITIES } from '../components/Ability';
+import { debugSpawning } from '@/utils/debugLogger';
 import { useGameStore } from '@/store/gameStore';
 import { isLocalPlayer } from '@/store/gameSetupStore';
 
@@ -44,7 +45,7 @@ export class SpawnSystem extends System {
     const definition = UNIT_DEFINITIONS[unitType];
 
     if (!definition) {
-      console.warn(`SpawnSystem: Unknown unit type: ${unitType}`);
+      debugSpawning.warn(`SpawnSystem: Unknown unit type: ${unitType}`);
       return;
     }
 
@@ -87,7 +88,7 @@ export class SpawnSystem extends System {
             entityIds: [entity.id],
             targetEntityId: rallyTargetId,
           });
-          console.log(`SpawnSystem: Auto-gather for ${definition.name} to resource ${rallyTargetId}`);
+          debugSpawning.log(`SpawnSystem: Auto-gather for ${definition.name} to resource ${rallyTargetId}`);
         }
       }
     } else if (rallyX != null && rallyY != null) {
@@ -96,7 +97,7 @@ export class SpawnSystem extends System {
         entityIds: [entity.id],
         targetPosition: { x: rallyX, y: rallyY },
       });
-      console.log(`SpawnSystem: Moving ${definition.name} to rally point (${rallyX.toFixed(1)}, ${rallyY.toFixed(1)})`);
+      debugSpawning.log(`SpawnSystem: Moving ${definition.name} to rally point (${rallyX.toFixed(1)}, ${rallyY.toFixed(1)})`);
     }
 
     // Emit spawn complete event for UI feedback
@@ -107,7 +108,7 @@ export class SpawnSystem extends System {
       position: { x, y },
     });
 
-    console.log(`SpawnSystem: Spawned ${definition.name} at (${x.toFixed(1)}, ${y.toFixed(1)}) for ${playerId}`);
+    debugSpawning.log(`SpawnSystem: Spawned ${definition.name} at (${x.toFixed(1)}, ${y.toFixed(1)}) for ${playerId}`);
   }
 
   private handleUnitDeath(data: { entityId: number }): void {

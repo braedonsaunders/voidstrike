@@ -23,8 +23,10 @@ import { useGameSetupStore, getLocalPlayerId, isSpectatorMode } from '@/store/ga
 import { SelectionBox } from './SelectionBox';
 import { LoadingScreen } from './LoadingScreen';
 import { GraphicsOptionsPanel } from './GraphicsOptionsPanel';
+import { DebugMenuPanel } from './DebugMenuPanel';
 import { spawnInitialEntities } from '@/utils/gameSetup';
 import { useUIStore } from '@/store/uiStore';
+import { debugInitialization } from '@/utils/debugLogger';
 import { DEFAULT_MAP, MapData, getMapById } from '@/data/maps';
 import { Resource } from '@/engine/components/Resource';
 import { Unit } from '@/engine/components/Unit';
@@ -118,7 +120,7 @@ export function HybridGameCanvas() {
       // Load selected map from store
       const selectedMapId = useGameSetupStore.getState().selectedMapId;
       CURRENT_MAP = getMapById(selectedMapId) || DEFAULT_MAP;
-      console.log(`[HybridGameCanvas] Loading map: ${CURRENT_MAP.name} (${CURRENT_MAP.id})`);
+      debugInitialization.log(`[HybridGameCanvas] Loading map: ${CURRENT_MAP.name} (${CURRENT_MAP.id})`);
 
       setLoadingStatus('Loading 3D models');
       setLoadingProgress(10);
@@ -1169,6 +1171,9 @@ export function HybridGameCanvas() {
 
       {/* Graphics Options Panel */}
       <GraphicsOptionsPanel />
+
+      {/* Debug Menu Panel */}
+      <DebugMenuPanel />
     </div>
   );
 }

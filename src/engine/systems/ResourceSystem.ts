@@ -8,6 +8,7 @@ import { Selectable } from '../components/Selectable';
 import { Game } from '../core/Game';
 import { World } from '../ecs/World';
 import { useGameStore } from '@/store/gameStore';
+import { debugResources } from '@/utils/debugLogger';
 import { isLocalPlayer } from '@/store/gameSetupStore';
 
 // Mining time in seconds
@@ -124,7 +125,7 @@ export class ResourceSystem extends System {
       // Debug: log gather command for player1 workers
       const selectable = entity.get<Selectable>('Selectable');
       if (selectable?.playerId === 'player1') {
-        console.log(`[ResourceSystem] player1 worker ${entityId} assigned to gather resource ${assignedTargetId}, moving to (${assignedTransform.x.toFixed(1)}, ${assignedTransform.y.toFixed(1)})`);
+        debugResources.log(`[ResourceSystem] player1 worker ${entityId} assigned to gather resource ${assignedTargetId}, moving to (${assignedTransform.x.toFixed(1)}, ${assignedTransform.y.toFixed(1)})`);
       }
     }
   }

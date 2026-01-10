@@ -5,6 +5,7 @@ import { Resource } from '@/engine/components/Resource';
 import { Selectable } from '@/engine/components/Selectable';
 import { Terrain } from './Terrain';
 import AssetManager from '@/assets/AssetManager';
+import { debugMesh } from '@/utils/debugLogger';
 
 interface InstancedResourceGroup {
   mesh: THREE.InstancedMesh;
@@ -109,13 +110,13 @@ export class ResourceRenderer {
 
       // Single consolidated log for model loading
       const vertCount = (geometry as THREE.BufferGeometry | null)?.attributes?.position?.count ?? 0;
-      console.log(`[ResourceRenderer] ${resourceType}: meshes=${meshCount}, verts=${vertCount}, yOffset=${yOffset.toFixed(2)}, baseScale=${baseScale.toFixed(4)}`);
+      debugMesh.log(`[ResourceRenderer] ${resourceType}: meshes=${meshCount}, verts=${vertCount}, yOffset=${yOffset.toFixed(2)}, baseScale=${baseScale.toFixed(4)}`);
 
       // Fallback to procedural geometry if model has no geometry or invalid geometry
       const geomToCheck = geometry as THREE.BufferGeometry | null;
       const vertexCount = geomToCheck?.attributes?.position?.count ?? 0;
       if (!geomToCheck || vertexCount < 3) {
-        console.log(`[ResourceRenderer] ${resourceType}: Using procedural fallback (geometry ${geomToCheck ? 'has ' + vertexCount + ' vertices' : 'missing'})`);
+        debugMesh.log(`[ResourceRenderer] ${resourceType}: Using procedural fallback (geometry ${geomToCheck ? 'has ' + vertexCount + ' vertices' : 'missing'})`);
         // Fallback: create a simple shape
         if (resourceType === 'minerals') {
           geometry = new THREE.ConeGeometry(0.4, 1.2, 6);
@@ -153,13 +154,13 @@ export class ResourceRenderer {
 
       // Clamp values to reasonable ranges to prevent underground rendering or invisible scales
       if (yOffset < 0) {
-        console.warn(`[ResourceRenderer] ${resourceType}: Negative yOffset ${yOffset.toFixed(2)} clamped to 0`);
+        debugMesh.warn(`[ResourceRenderer] ${resourceType}: Negative yOffset ${yOffset.toFixed(2)} clamped to 0`);
         yOffset = 0;
       }
       // baseScale must be in a reasonable range - too small makes resources invisible
       // If model normalization resulted in tiny scale, use 1.0 instead
       if (baseScale <= 0.1 || baseScale > 10) {
-        console.warn(`[ResourceRenderer] ${resourceType}: baseScale ${baseScale.toFixed(4)} clamped to 1.0`);
+        debugMesh.warn(`[ResourceRenderer] ${resourceType}: baseScale ${baseScale.toFixed(4)} clamped to 1.0`);
         baseScale = 1;
       }
 
@@ -285,7 +286,7 @@ export class ResourceRenderer {
         group.mesh.count++;
       } else if (!this._warnedInstanceLimit.has(resource.resourceType)) {
         // Warn once per resource type if we hit the instance limit
-        console.warn(`[ResourceRenderer] ${resource.resourceType} instance limit (${group.maxInstances}) reached! Some resources will not render.`);
+        debugMesh.warn(`[ResourceRenderer] ${resource.resourceType} instance limit (${group.maxInstances}) reached! Some resources will not render.`);
         this._warnedInstanceLimit.add(resource.resourceType);
       }
     }
@@ -294,16 +295,16 @@ export class ResourceRenderer {
     if (!this._debugLoggedThisSession && debugMineralEntities > 0) {
       const mineralGroup = this.instancedGroups.get('minerals');
       const vespeneGroup = this.instancedGroups.get('vespene');
-      console.log(`[ResourceRenderer] === MINERAL DEBUG (one-time) ===`);
-      console.log(`  Entities: ${debugMineralEntities} total, ${debugMineralSkippedDepleted} depleted, ${debugMineralAdded} added to instance`);
+      debugMesh.log(`[ResourceRenderer] === MINERAL DEBUG (one-time) ===`);
+      debugMesh.log(`  Entities: ${debugMineralEntities} total, ${debugMineralSkippedDepleted} depleted, ${debugMineralAdded} added to instance`);
       if (mineralGroup) {
-        console.log(`  Minerals instanced: count=${mineralGroup.mesh.count}, baseScale=${mineralGroup.baseScale.toFixed(3)}, yOffset=${mineralGroup.yOffset.toFixed(2)}`);
+        debugMesh.log(`  Minerals instanced: count=${mineralGroup.mesh.count}, baseScale=${mineralGroup.baseScale.toFixed(3)}, yOffset=${mineralGroup.yOffset.toFixed(2)}`);
       }
       if (vespeneGroup) {
-        console.log(`  Vespene instanced: count=${vespeneGroup.mesh.count}, baseScale=${vespeneGroup.baseScale.toFixed(3)}, yOffset=${vespeneGroup.yOffset.toFixed(2)}`);
+        debugMesh.log(`  Vespene instanced: count=${vespeneGroup.mesh.count}, baseScale=${vespeneGroup.baseScale.toFixed(3)}, yOffset=${vespeneGroup.yOffset.toFixed(2)}`);
       }
-      console.log(`  First ${debugMineralPositions.length} mineral positions: ${debugMineralPositions.join(', ')}`);
-      console.log(`[ResourceRenderer] === END DEBUG ===`);
+      debugMesh.log(`  First ${debugMineralPositions.length} mineral positions: ${debugMineralPositions.join(', ')}`);
+      debugMesh.log(`[ResourceRenderer] === END DEBUG ===`);
       this._debugLoggedThisSession = true;
     }
 

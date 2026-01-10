@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { debugAudio } from '@/utils/debugLogger';
 
 export type SoundCategory = 'ui' | 'combat' | 'unit' | 'building' | 'ambient' | 'music' | 'voice' | 'alert';
 
@@ -243,7 +244,7 @@ class AudioManagerClass {
     const loadPromises = soundIds.map(async (soundId) => {
       const config = SOUNDS[soundId];
       if (!config) {
-        console.warn(`Unknown sound: ${soundId}`);
+        debugAudio.warn(`Unknown sound: ${soundId}`);
         return;
       }
 
@@ -254,7 +255,7 @@ class AudioManagerClass {
         this.loadedBuffers.set(soundId, buffer);
       } catch (error) {
         // Sound file not found - create silent placeholder
-        console.warn(`Failed to load sound: ${config.url}`);
+        debugAudio.warn(`Failed to load sound: ${config.url}`);
       }
     });
 
