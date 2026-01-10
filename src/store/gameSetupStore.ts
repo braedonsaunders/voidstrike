@@ -73,6 +73,9 @@ export interface GameSetupState {
 
   // Get the slot number (1-8) for the local player (for spawn point selection)
   getLocalPlayerSlot: () => number;
+
+  // Enable spectator mode (used when player is defeated but wants to continue watching)
+  enableSpectatorMode: () => void;
 }
 
 export const STARTING_RESOURCES_VALUES: Record<StartingResources, { minerals: number; vespene: number }> = {
@@ -307,6 +310,11 @@ export const useGameSetupStore = create<GameSetupState>((set, get) => ({
     const match = state.localPlayerId.match(/player(\d+)/);
     return match ? parseInt(match[1], 10) : 1;
   },
+
+  enableSpectatorMode: (): void => {
+    set({ localPlayerId: null });
+    debugInitialization.log('[gameSetupStore] Spectator mode enabled - player can now spectate the game');
+  },
 }));
 
 // Export a function to get player color that can be used outside React
@@ -337,6 +345,10 @@ export function getAIPlayerIds(): string[] {
 
 export function isSpectatorMode(): boolean {
   return useGameSetupStore.getState().isSpectator();
+}
+
+export function enableSpectatorMode(): void {
+  useGameSetupStore.getState().enableSpectatorMode();
 }
 
 /**

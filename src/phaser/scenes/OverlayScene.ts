@@ -1,8 +1,9 @@
 import * as Phaser from 'phaser';
 import { EventBus } from '@/engine/core/EventBus';
 import { useGameStore } from '@/store/gameStore';
-import { useGameSetupStore, isLocalPlayer, getLocalPlayerId } from '@/store/gameSetupStore';
+import { useGameSetupStore, isLocalPlayer, getLocalPlayerId, enableSpectatorMode } from '@/store/gameSetupStore';
 import { useProjectionStore } from '@/store/projectionStore';
+import { MusicPlayer } from '@/audio/MusicPlayer';
 
 /**
  * Phaser 4 Overlay Scene
@@ -82,6 +83,11 @@ export class OverlayScene extends Phaser.Scene {
 
   // Screen edge warning indicators
   private edgeWarnings: Map<string, { x: number; y: number; time: number }> = new Map();
+
+  // Game end overlay elements (for hiding when continuing to spectate)
+  private gameEndOverlay: Phaser.GameObjects.Graphics | null = null;
+  private gameEndContainer: Phaser.GameObjects.Container | null = null;
+  private escKeyListener: Phaser.Input.Keyboard.Key | null = null;
 
   constructor() {
     super({ key: 'OverlayScene' });
@@ -360,33 +366,37 @@ export class OverlayScene extends Phaser.Scene {
     const screenWidth = this.scale.width;
     const screenHeight = this.scale.height;
 
+    // Play victory or defeat music
+    const musicUrl = isVictory === true
+      ? '/audio/music/victory/victory.mp3'
+      : '/audio/music/defeat/defeat.mp3';
+    MusicPlayer.playOneShot(musicUrl);
+
     // Create dark overlay
     const overlay = this.add.graphics();
     overlay.setDepth(500);
     overlay.fillStyle(0x000000, 0.85);
     overlay.fillRect(0, 0, screenWidth, screenHeight);
+    this.gameEndOverlay = overlay;
 
     // Create container for all elements
     const container = this.add.container(screenWidth / 2, screenHeight / 2);
     container.setDepth(501);
+    this.gameEndContainer = container;
 
     // Determine text and colors based on result
     let mainText: string;
     let mainColor: number;
-    let subColor: number;
 
     if (isVictory === null) {
       mainText = 'DRAW';
       mainColor = 0xffff00;
-      subColor = 0xcccc00;
     } else if (isVictory) {
       mainText = 'VICTORY';
       mainColor = 0x00ff00;
-      subColor = 0x00cc00;
     } else {
       mainText = 'DEFEAT';
       mainColor = 0xff0000;
-      subColor = 0xcc0000;
     }
 
     // Create main title with glow effect
@@ -430,14 +440,58 @@ export class OverlayScene extends Phaser.Scene {
     durationText.setOrigin(0.5, 0.5);
     container.add(durationText);
 
-    // Return to menu hint
-    const hintText = this.add.text(0, 120, 'Press ESCAPE to return to menu', {
-      fontSize: '20px',
-      fontFamily: 'Inter, sans-serif',
-      color: '#666666',
-    });
-    hintText.setOrigin(0.5, 0.5);
-    container.add(hintText);
+    // For defeats (not victory or draw), show "Continue Spectating" button
+    // This allows player to dismiss the overlay and watch the rest of the game
+    if (isVictory === false) {
+      // Continue Spectating button
+      const spectateButton = this.add.text(0, 110, '[ CONTINUE SPECTATING ]', {
+        fontSize: '24px',
+        fontFamily: 'Orbitron, sans-serif',
+        color: '#00aaff',
+        stroke: '#000000',
+        strokeThickness: 2,
+      });
+      spectateButton.setOrigin(0.5, 0.5);
+      spectateButton.setInteractive({ useHandCursor: true });
+
+      // Hover effects
+      spectateButton.on('pointerover', () => {
+        spectateButton.setColor('#00ffff');
+        spectateButton.setScale(1.05);
+      });
+      spectateButton.on('pointerout', () => {
+        spectateButton.setColor('#00aaff');
+        spectateButton.setScale(1);
+      });
+
+      // Click handler - hide overlay and enable spectator mode
+      spectateButton.on('pointerdown', () => {
+        this.hideGameEndOverlay();
+        enableSpectatorMode();
+        // Transition back to gameplay music
+        MusicPlayer.play('gameplay');
+      });
+
+      container.add(spectateButton);
+
+      // Return to menu hint (positioned lower)
+      const hintText = this.add.text(0, 160, 'Press ESCAPE to return to menu', {
+        fontSize: '20px',
+        fontFamily: 'Inter, sans-serif',
+        color: '#666666',
+      });
+      hintText.setOrigin(0.5, 0.5);
+      container.add(hintText);
+    } else {
+      // Victory or draw - just show return to menu hint
+      const hintText = this.add.text(0, 120, 'Press ESCAPE to return to menu', {
+        fontSize: '20px',
+        fontFamily: 'Inter, sans-serif',
+        color: '#666666',
+      });
+      hintText.setOrigin(0.5, 0.5);
+      container.add(hintText);
+    }
 
     // Animate elements in
     container.setAlpha(0);
@@ -461,9 +515,47 @@ export class OverlayScene extends Phaser.Scene {
 
     // Listen for escape key to return to menu
     if (this.input.keyboard) {
-      const escKey = this.input.keyboard.addKey('ESC');
-      escKey.once('down', () => {
+      this.escKeyListener = this.input.keyboard.addKey('ESC');
+      this.escKeyListener.once('down', () => {
         window.location.href = '/';
+      });
+    }
+  }
+
+  /**
+   * Hide the game end overlay (used when continuing to spectate)
+   */
+  private hideGameEndOverlay(): void {
+    // Remove ESC key listener
+    if (this.escKeyListener && this.input.keyboard) {
+      this.input.keyboard.removeKey('ESC');
+      this.escKeyListener = null;
+    }
+
+    // Animate out and destroy overlay elements
+    if (this.gameEndContainer) {
+      this.tweens.add({
+        targets: this.gameEndContainer,
+        alpha: 0,
+        duration: 300,
+        ease: 'Power2',
+        onComplete: () => {
+          this.gameEndContainer?.destroy();
+          this.gameEndContainer = null;
+        },
+      });
+    }
+
+    if (this.gameEndOverlay) {
+      this.tweens.add({
+        targets: this.gameEndOverlay,
+        alpha: 0,
+        duration: 300,
+        ease: 'Power2',
+        onComplete: () => {
+          this.gameEndOverlay?.destroy();
+          this.gameEndOverlay = null;
+        },
       });
     }
   }

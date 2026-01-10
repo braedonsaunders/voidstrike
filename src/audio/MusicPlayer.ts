@@ -306,6 +306,56 @@ class MusicPlayerClass {
   }
 
   /**
+   * Play a one-shot music track (like victory/defeat music)
+   * This stops any current music and plays the specified track once
+   */
+  public async playOneShot(url: string, onComplete?: () => void): Promise<void> {
+    if (!this.initialized) {
+      await this.initialize();
+    }
+
+    // Stop current music with crossfade
+    this.cleanupCrossfade();
+
+    const audio = new Audio(url);
+    audio.volume = this.muted ? 0 : this.volume;
+    audio.loop = false;
+
+    // Set up completion handler
+    audio.addEventListener('ended', () => {
+      this.currentAudio = null;
+      this.isPlaying = false;
+      this.currentTrackName = null;
+      onComplete?.();
+    });
+
+    // Handle load errors
+    audio.addEventListener('error', (e) => {
+      debugAudio.warn(`Failed to load one-shot track: ${url}`, e);
+      onComplete?.();
+    });
+
+    // Crossfade if there's current music playing
+    if (this.currentAudio && this.isPlaying) {
+      this.crossfade(this.currentAudio, audio);
+    } else {
+      try {
+        await audio.play();
+        this.currentAudio = audio;
+        this.isPlaying = true;
+      } catch (error) {
+        debugAudio.warn('Failed to play one-shot track:', error);
+        onComplete?.();
+      }
+    }
+
+    // Clear category since this is a one-shot
+    this.currentCategory = null;
+    this.currentTrackName = url.split('/').pop() || 'one-shot';
+    debugAudio.log(`Playing one-shot track: ${this.currentTrackName}`);
+  }
+
+  /**
    * Set music volume (0-1)
    */
   public setVolume(volume: number): void {
