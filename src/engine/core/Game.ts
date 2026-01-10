@@ -255,11 +255,16 @@ export class Game {
   }
 
   /**
-   * Set decoration collision data for building placement validation
-   * Should be called after environment is loaded
+   * Set decoration collision data for building placement validation and pathfinding.
+   * Should be called after environment is loaded.
+   * Large decorations (radius > 1) will also block pathfinding cells.
    */
   public setDecorationCollisions(collisions: Array<{ x: number; z: number; radius: number }>): void {
     this.decorationCollisions = collisions;
+
+    // Register large decorations with pathfinding system
+    // This prevents units from trying to path through rock formations
+    this.pathfindingSystem.registerDecorationCollisions(collisions);
   }
 
   /**
