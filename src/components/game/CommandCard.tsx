@@ -377,15 +377,22 @@ export function CommandCard() {
         const moduleDef = BUILDING_DEFINITIONS['research_module'];
         if (moduleDef) {
           const canAffordModule = minerals >= moduleDef.mineralCost && vespene >= moduleDef.vespeneCost;
+          const localPlayer = getLocalPlayerId();
           buttons.push({
             id: 'build_research_module',
             label: 'Tech Lab',
             shortcut: 'T',
             action: () => {
-              game.eventBus.emit('building:build_addon', {
-                buildingId: selectedUnits[0],
-                addonType: 'research_module',
-              });
+              // Get fresh game instance and selected units to avoid stale closure
+              const currentGame = Game.getInstance();
+              const currentSelectedUnits = useGameStore.getState().selectedUnits;
+              if (currentGame && currentSelectedUnits.length > 0) {
+                currentGame.eventBus.emit('building:build_addon', {
+                  buildingId: currentSelectedUnits[0],
+                  addonType: 'research_module',
+                  playerId: localPlayer,
+                });
+              }
             },
             isDisabled: !canAffordModule,
             tooltip: moduleDef.description || 'Addon that unlocks advanced units and research.',
