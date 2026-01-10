@@ -1,8 +1,9 @@
 /**
  * Type declarations for Three.js WebGPU and TSL modules
  *
- * These declarations provide type support for the experimental
- * Three.js WebGPU renderer and TSL (Three.js Shading Language).
+ * These declarations provide type support for the Three.js
+ * WebGPU renderer and TSL (Three.js Shading Language).
+ * Updated for Three.js r172+
  */
 
 declare module 'three/tsl' {
@@ -28,6 +29,8 @@ declare module 'three/tsl' {
     xy: ShaderNodeObject<any>;
     xz: ShaderNodeObject<any>;
     yz: ShaderNodeObject<any>;
+    zy: ShaderNodeObject<any>;
+    xzyw: ShaderNodeObject<any>;
     xyz: ShaderNodeObject<any>;
     rgb: ShaderNodeObject<any>;
     rgba: ShaderNodeObject<any>;
@@ -35,6 +38,8 @@ declare module 'three/tsl' {
     g: ShaderNodeObject<any>;
     b: ShaderNodeObject<any>;
     a: ShaderNodeObject<any>;
+    zw: ShaderNodeObject<any>;
+    yzx: ShaderNodeObject<any>;
     lessThan(value: any): ShaderNodeObject<any>;
     greaterThan(value: any): ShaderNodeObject<any>;
     select(a: any, b: any): ShaderNodeObject<any>;
@@ -118,8 +123,11 @@ declare module 'three/tsl' {
   export function If(condition: any, thenFn: () => void): { Else: (elseFn: () => void) => void };
   export function Loop(count: number | ShaderNodeObject<any>, fn: () => void): void;
 
-  // Post-processing
-  export function pass(scene: any, camera: any): ShaderNodeObject<any>;
+  // Post-processing nodes (used with PostProcessing class)
+  export function pass(scene: any, camera: any): ShaderNodeObject<any> & {
+    setMRT(config: any): void;
+    getTextureNode(name: string): ShaderNodeObject<any>;
+  };
   export function bloom(input: any, strength?: any, radius?: any): ShaderNodeObject<any>;
   export function ao(depth: any, normal: any, camera?: any): ShaderNodeObject<any>;
   export function fxaa(input: any): ShaderNodeObject<any>;
@@ -127,38 +135,12 @@ declare module 'three/tsl' {
   export function mrt(config: Record<string, any>): any;
   export function normalView(): ShaderNodeObject<any>;
   export function depth(): ShaderNodeObject<any>;
-
-  // Materials - extend THREE.Material for compatibility
-  import { Material, Side, Blending } from 'three';
-
-  export class MeshBasicNodeMaterial extends Material {
-    transparent: boolean;
-    side: Side;
-    depthWrite: boolean;
-    blending: Blending;
-    colorNode: ShaderNodeObject<any>;
-    positionNode: ShaderNodeObject<any>;
-    opacity: number;
-  }
-
-  export class MeshStandardNodeMaterial extends Material {
-    transparent: boolean;
-    side: Side;
-    depthWrite: boolean;
-    blending: Blending;
-    colorNode: ShaderNodeObject<any>;
-    positionNode: ShaderNodeObject<any>;
-    normalNode: ShaderNodeObject<any>;
-    roughnessNode: ShaderNodeObject<any>;
-    metalnessNode: ShaderNodeObject<any>;
-    emissiveNode: ShaderNodeObject<any>;
-    opacity: number;
-  }
 }
 
-declare module 'three/addons/renderers/webgpu/WebGPURenderer.js' {
-  import { Camera, Scene, ToneMapping } from 'three';
+declare module 'three/webgpu' {
+  import { Camera, Scene, ToneMapping, Material, Side, Blending } from 'three';
 
+  // WebGPURenderer
   interface WebGPURendererParameters {
     canvas?: HTMLCanvasElement;
     antialias?: boolean;
@@ -167,7 +149,7 @@ declare module 'three/addons/renderers/webgpu/WebGPURenderer.js' {
     logarithmicDepthBuffer?: boolean;
   }
 
-  export default class WebGPURenderer {
+  export class WebGPURenderer {
     constructor(parameters?: WebGPURendererParameters);
 
     // Initialization
@@ -236,15 +218,37 @@ declare module 'three/addons/renderers/webgpu/WebGPURenderer.js' {
     autoClearDepth: boolean;
     autoClearStencil: boolean;
   }
-}
 
-declare module 'three/addons/renderers/common/PostProcessing.js' {
-  import WebGPURenderer from 'three/addons/renderers/webgpu/WebGPURenderer.js';
-
+  // PostProcessing
   export class PostProcessing {
     constructor(renderer: WebGPURenderer);
     outputNode: any;
     render(): void;
     renderAsync(): Promise<void>;
+  }
+
+  // Node Materials
+  export class MeshBasicNodeMaterial extends Material {
+    transparent: boolean;
+    side: Side;
+    depthWrite: boolean;
+    blending: Blending;
+    colorNode: any;
+    positionNode: any;
+    opacity: number;
+  }
+
+  export class MeshStandardNodeMaterial extends Material {
+    transparent: boolean;
+    side: Side;
+    depthWrite: boolean;
+    blending: Blending;
+    colorNode: any;
+    positionNode: any;
+    normalNode: any;
+    roughnessNode: any;
+    metalnessNode: any;
+    emissiveNode: any;
+    opacity: number;
   }
 }

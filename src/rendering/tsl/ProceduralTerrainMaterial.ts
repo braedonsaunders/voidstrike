@@ -12,11 +12,10 @@
  */
 
 import * as THREE from 'three';
+import { MeshStandardNodeMaterial } from 'three/webgpu';
 import {
-  MeshStandardNodeMaterial,
   uniform,
   attribute,
-  varying,
   varyingProperty,
   positionLocal,
   positionWorld,

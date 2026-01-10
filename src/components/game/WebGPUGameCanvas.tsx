@@ -20,7 +20,6 @@
 import { useRef, useEffect, useCallback, useState } from 'react';
 import * as THREE from 'three';
 import * as Phaser from 'phaser';
-import WebGPURenderer from 'three/addons/renderers/webgpu/WebGPURenderer.js';
 
 import { Game } from '@/engine/core/Game';
 import { RTSCamera } from '@/rendering/Camera';
@@ -34,6 +33,8 @@ import { EffectsRenderer } from '@/rendering/EffectsRenderer';
 import { RallyPointRenderer } from '@/rendering/RallyPointRenderer';
 import { WatchTowerRenderer } from '@/rendering/WatchTowerRenderer';
 import { BuildingPlacementPreview } from '@/rendering/BuildingPlacementPreview';
+import { GameOverlayManager } from '@/rendering/GameOverlayManager';
+import { CommandQueueRenderer } from '@/rendering/CommandQueueRenderer';
 
 // TSL Components (WebGPU-compatible)
 import {
@@ -90,6 +91,10 @@ export function WebGPUGameCanvas() {
   const watchTowerRendererRef = useRef<WatchTowerRenderer | null>(null);
   const placementPreviewRef = useRef<BuildingPlacementPreview | null>(null);
   const environmentRef = useRef<EnvironmentManager | null>(null);
+
+  // Strategic overlays and command queue
+  const overlayManagerRef = useRef<GameOverlayManager | null>(null);
+  const commandQueueRendererRef = useRef<CommandQueueRenderer | null>(null);
 
   // TSL Visual Systems (WebGPU-compatible)
   const selectionSystemRef = useRef<SelectionSystem | null>(null);
@@ -343,6 +348,23 @@ export function WebGPUGameCanvas() {
         );
       }
 
+      // Initialize strategic overlays (terrain, elevation, threat)
+      overlayManagerRef.current = new GameOverlayManager(
+        scene,
+        CURRENT_MAP,
+        (x, y) => terrain.getHeightAt(x, y)
+      );
+      overlayManagerRef.current.setWorld(game.world);
+
+      // Initialize command queue waypoint visualization
+      commandQueueRendererRef.current = new CommandQueueRenderer(
+        scene,
+        game.eventBus,
+        game.world,
+        localPlayerId,
+        (x, y) => terrain.getHeightAt(x, y)
+      );
+
       // Hook particle system to combat events
       game.eventBus.on('combat:attack', (data: {
         attackerPos?: { x: number; y: number };
@@ -415,6 +437,10 @@ export function WebGPUGameCanvas() {
         // Update TSL visual systems
         selectionSystemRef.current?.update(deltaTime);
         effectEmitterRef.current?.update(deltaTime / 1000);
+
+        // Update strategic overlays and command queue
+        overlayManagerRef.current?.update(deltaTime);
+        commandQueueRendererRef.current?.update();
 
         // Update selection rings
         const selectedUnits = useGameStore.getState().selectedUnits;
@@ -543,6 +569,8 @@ export function WebGPUGameCanvas() {
       selectionSystemRef.current?.dispose();
       effectEmitterRef.current?.dispose();
       renderPipelineRef.current?.dispose();
+      overlayManagerRef.current?.dispose();
+      commandQueueRendererRef.current?.dispose();
 
       phaserGameRef.current?.destroy(true);
 
@@ -653,6 +681,33 @@ export function WebGPUGameCanvas() {
         });
       }
       useGameStore.getState().setRallyPointMode(false);
+      return;
+    }
+
+    // Handle repair mode - right-click on repairable target
+    if (isRepairMode) {
+      const clickedEntity = findEntityAtPosition(game, worldPos.x, worldPos.z);
+      if (clickedEntity) {
+        const building = clickedEntity.entity.get<Building>('Building');
+        const unit = clickedEntity.entity.get<Unit>('Unit');
+        const health = clickedEntity.entity.get<Health>('Health');
+        const selectable = clickedEntity.entity.get<Selectable>('Selectable');
+
+        // Can repair own buildings or mechanical units
+        const localPlayerForRepair = getLocalPlayerId();
+        if (localPlayerForRepair && selectable?.playerId === localPlayerForRepair && health && !health.isDead()) {
+          if (building || unit?.isMechanical) {
+            game.eventBus.emit('command:repair', {
+              entityIds: selectedUnits,
+              targetId: clickedEntity.entity.id,
+            });
+            useGameStore.getState().setRepairMode(false);
+            return;
+          }
+        }
+      }
+      // Clicked on invalid target - cancel repair mode
+      useGameStore.getState().setRepairMode(false);
       return;
     }
 
@@ -829,6 +884,167 @@ export function WebGPUGameCanvas() {
       placementPreviewRef.current.setQueuedPlacements(buildingPlacementQueue);
     }
   }, [buildingPlacementQueue]);
+
+  // Keyboard handlers
+  useEffect(() => {
+    const game = gameRef.current;
+    if (!game) return;
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      // Ignore if typing in input
+      if ((e.target as HTMLElement).tagName === 'INPUT') return;
+
+      const key = e.key.toLowerCase();
+
+      switch (key) {
+        case 'escape':
+          if (isAttackMove) setIsAttackMove(false);
+          else if (isPatrolMode) setIsPatrolMode(false);
+          else if (isRepairMode) useGameStore.getState().setRepairMode(false);
+          else if (isSettingRallyPoint) useGameStore.getState().setRallyPointMode(false);
+          else if (abilityTargetMode) useGameStore.getState().setAbilityTargetMode(null);
+          else if (isBuilding) useGameStore.getState().setBuildingMode(null);
+          else game.eventBus.emit('selection:clear');
+          break;
+        case 'r':
+          {
+            const store = useGameStore.getState();
+            if (store.selectedUnits.length > 0) {
+              // Check if selected units are workers (repair) or buildings (rally)
+              const firstEntity = game.world.getEntity(store.selectedUnits[0]);
+              const unit = firstEntity?.get<Unit>('Unit');
+              const building = firstEntity?.get<Building>('Building');
+
+              if (unit?.isWorker && unit?.canRepair) {
+                store.setRepairMode(true);
+              } else if (building) {
+                store.setRallyPointMode(true);
+              }
+            }
+          }
+          break;
+        case 'o':
+          {
+            // Cycle through overlays: none -> terrain -> elevation -> threat -> none
+            const uiStore = useUIStore.getState();
+            const currentOverlay = uiStore.overlaySettings.activeOverlay;
+            const overlayOrder: Array<'none' | 'terrain' | 'elevation' | 'threat'> = ['none', 'terrain', 'elevation', 'threat'];
+            const currentIndex = overlayOrder.indexOf(currentOverlay);
+            const nextIndex = (currentIndex + 1) % overlayOrder.length;
+            uiStore.setActiveOverlay(overlayOrder[nextIndex]);
+          }
+          break;
+        case 'a':
+          if (!isBuilding) {
+            setIsAttackMove(true);
+          }
+          break;
+        case 'p':
+          if (!isBuilding) {
+            setIsPatrolMode(true);
+          }
+          break;
+        case 's':
+          game.eventBus.emit('command:stop', {
+            entityIds: useGameStore.getState().selectedUnits,
+          });
+          break;
+        case 'h':
+          game.eventBus.emit('command:holdPosition', {
+            entityIds: useGameStore.getState().selectedUnits,
+          });
+          break;
+        case '?':
+          {
+            const store = useGameStore.getState();
+            store.setShowKeyboardShortcuts(!store.showKeyboardShortcuts);
+          }
+          break;
+      }
+
+      // Control groups (0-9)
+      if (/^[0-9]$/.test(key)) {
+        const groupNumber = parseInt(key);
+        const store = useGameStore.getState();
+
+        if (e.ctrlKey || e.metaKey) {
+          // Assign control group
+          store.setControlGroup(groupNumber, store.selectedUnits);
+        } else if (e.shiftKey) {
+          // Add to control group
+          const existing = store.controlGroups.get(groupNumber) || [];
+          const combined = [...new Set([...existing, ...store.selectedUnits])];
+          store.setControlGroup(groupNumber, combined);
+        } else {
+          // Select control group (double-tap to center camera)
+          const group = store.controlGroups.get(groupNumber);
+          if (group && group.length > 0) {
+            const now = Date.now();
+            const lastTap = lastControlGroupTap.current;
+
+            if (lastTap && lastTap.group === groupNumber && now - lastTap.time < 300) {
+              // Double-tap: center camera on first unit
+              const firstEntity = game.world.getEntity(group[0]);
+              const transform = firstEntity?.get<Transform>('Transform');
+              if (transform && cameraRef.current) {
+                cameraRef.current.setPosition(transform.x, transform.y);
+              }
+            }
+
+            lastControlGroupTap.current = { group: groupNumber, time: now };
+            store.selectUnits(group);
+          }
+        }
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [isBuilding, isAttackMove, isPatrolMode, isRepairMode, isSettingRallyPoint, abilityTargetMode]);
+
+  // Subscribe to overlay settings changes
+  useEffect(() => {
+    const unsubscribe = useUIStore.subscribe((state, prevState) => {
+      const overlaySettings = state.overlaySettings;
+      const prevOverlaySettings = prevState.overlaySettings;
+
+      // Only update if overlay settings changed
+      if (overlaySettings === prevOverlaySettings) return;
+
+      // Update overlay manager
+      if (overlayManagerRef.current) {
+        overlayManagerRef.current.setActiveOverlay(overlaySettings.activeOverlay);
+
+        // Update opacity based on active overlay
+        const opacityKey = `${overlaySettings.activeOverlay}OverlayOpacity` as keyof typeof overlaySettings;
+        if (opacityKey in overlaySettings && typeof overlaySettings[opacityKey] === 'number') {
+          overlayManagerRef.current.setOpacity(overlaySettings[opacityKey] as number);
+        }
+      }
+    });
+
+    return () => unsubscribe();
+  }, []);
+
+  // Subscribe to graphics settings changes
+  useEffect(() => {
+    const unsubscribe = useUIStore.subscribe((state, prevState) => {
+      const settings = state.graphicsSettings;
+      const prevSettings = prevState.graphicsSettings;
+
+      if (settings === prevSettings) return;
+
+      // Update renderer exposure
+      if (renderContextRef.current) {
+        renderContextRef.current.renderer.toneMappingExposure = settings.toneMappingExposure;
+      }
+
+      // Note: Post-processing settings require rebuild of the pipeline
+      // For now, only exposure is updated dynamically
+    });
+
+    return () => unsubscribe();
+  }, []);
 
   return (
     <div

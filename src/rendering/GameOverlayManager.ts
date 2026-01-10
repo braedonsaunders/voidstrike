@@ -92,7 +92,7 @@ export class GameOverlayManager {
     }
 
     this.terrainTexture = new THREE.DataTexture(
-      textureData as unknown as BufferSource,
+      textureData ,
       width,
       height,
       THREE.RGBAFormat
@@ -250,7 +250,7 @@ export class GameOverlayManager {
     }
 
     this.elevationTexture = new THREE.DataTexture(
-      textureData as unknown as BufferSource,
+      textureData ,
       width,
       height,
       THREE.RGBAFormat
@@ -314,7 +314,7 @@ export class GameOverlayManager {
     }
 
     this.threatTexture = new THREE.DataTexture(
-      this.threatTextureData as unknown as BufferSource,
+      this.threatTextureData ,
       width,
       height,
       THREE.RGBAFormat

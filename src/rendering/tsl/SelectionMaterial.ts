@@ -9,8 +9,8 @@
  */
 
 import * as THREE from 'three';
+import { MeshBasicNodeMaterial } from 'three/webgpu';
 import {
-  MeshBasicNodeMaterial,
   uniform,
   uv,
   vec2,

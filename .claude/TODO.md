@@ -6,6 +6,37 @@
 
 ---
 
+## WebGPU Renderer Migration (January 2026) ✓
+
+### Three.js r182 Upgrade
+- [x] Upgraded Three.js from r160 to r182 (latest stable)
+- [x] Updated TSL imports to new `three/webgpu` and `three/tsl` paths
+- [x] Fixed breaking API changes (BufferSource types)
+
+### WebGPU Feature Parity
+- [x] Ported GameOverlayManager to WebGPUGameCanvas (terrain, elevation, threat overlays)
+- [x] Ported CommandQueueRenderer to WebGPUGameCanvas (shift-click waypoint visualization)
+- [x] Added keyboard handlers for repair mode ('R') and overlay cycling ('O')
+- [x] Added graphics settings reactivity (exposure, post-processing)
+- [x] Added control group support with double-tap camera centering
+
+### Codebase Cleanup
+- [x] Deleted legacy GameCanvas.tsx (original WebGL-only)
+- [x] Deleted HybridGameCanvas.tsx (replaced by WebGPUGameCanvas)
+- [x] Deleted VoidstrikePostProcessing.ts (replaced by TSL RenderPipeline)
+- [x] Deleted VoidstrikeSelectionSystem.ts (replaced by TSL SelectionSystem)
+- [x] Deleted VoidstrikeParticleSystem.ts (replaced by TSL GPUParticleSystem)
+- [x] Updated /app/game/page.tsx to use WebGPUGameCanvas as primary
+
+### TSL Visual Systems
+- [x] SelectionSystem (TSL) - Team-colored selection rings with animations
+- [x] GPUParticleSystem (TSL) - GPU-instanced particles via EffectEmitter
+- [x] RenderPipeline (TSL) - Post-processing (bloom, SSAO, FXAA, vignette)
+- [x] ProceduralTerrainMaterial (TSL) - Unused but available
+- [x] TextureTerrainMaterial (TSL) - Unused but available
+
+---
+
 ## SC2-Level Visual Overhaul (January 2026) ✓
 
 ### Cinematic Homescreen (January 2026) ✓

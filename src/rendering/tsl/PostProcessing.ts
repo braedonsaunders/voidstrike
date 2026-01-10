@@ -12,7 +12,7 @@
  */
 
 import * as THREE from 'three';
-import { PostProcessing } from 'three/addons/renderers/common/PostProcessing.js';
+import { WebGPURenderer, PostProcessing } from 'three/webgpu';
 import {
   pass,
   bloom,
@@ -41,8 +41,6 @@ import {
   min,
   saturate,
 } from 'three/tsl';
-
-import type WebGPURenderer from 'three/addons/renderers/webgpu/WebGPURenderer.js';
 
 // ============================================
 // POST-PROCESSING CONFIGURATION
