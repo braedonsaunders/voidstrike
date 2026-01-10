@@ -13,15 +13,14 @@ export interface Notification {
 // Graphics settings for post-processing and visual effects
 export interface GraphicsSettings {
   postProcessingEnabled: boolean;
-  bloomEnabled: boolean;
   ssaoEnabled: boolean;
-  godRaysEnabled: boolean;
-  colorGradingEnabled: boolean;
+  bloomEnabled: boolean;
+  outlineEnabled: boolean;
+  fxaaEnabled: boolean;
   groundFogEnabled: boolean;
   particlesEnabled: boolean;
   bloomStrength: number;
-  ssaoStrength: number;
-  godRaysStrength: number;
+  bloomThreshold: number;
 }
 
 export interface UIState {
@@ -104,15 +103,14 @@ export const useUIStore = create<UIState>((set, get) => ({
   showGraphicsOptions: false,
   graphicsSettings: {
     postProcessingEnabled: true,
-    bloomEnabled: true,
     ssaoEnabled: true,
-    godRaysEnabled: true,
-    colorGradingEnabled: true,
-    groundFogEnabled: true,
+    bloomEnabled: true,
+    outlineEnabled: true,
+    fxaaEnabled: true,
+    groundFogEnabled: false,
     particlesEnabled: true,
-    bloomStrength: 0.4,
-    ssaoStrength: 0.3,
-    godRaysStrength: 0.15,
+    bloomStrength: 0.3,
+    bloomThreshold: 0.85,
   },
 
   setScreen: (screen) =>
