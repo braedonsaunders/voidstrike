@@ -6,6 +6,7 @@ import { Building } from '../components/Building';
 import { Game } from '../core/Game';
 import { PooledVector2 } from '@/utils/VectorPool';
 import { TERRAIN_FEATURE_CONFIG, TerrainFeature } from '@/data/maps';
+import { computeORCAVelocity } from '../pathfinding/RVO';
 
 // Steering behavior constants - SC2-style soft separation (units can overlap and clump)
 const SEPARATION_RADIUS = 1.0; // Units only avoid when nearly overlapping
@@ -13,6 +14,11 @@ const SEPARATION_STRENGTH = 2.0; // Very soft push - allows clumping like SC2
 const MAX_AVOIDANCE_FORCE = 1.5; // Low cap - units can stack
 const BUILDING_AVOIDANCE_STRENGTH = 25.0; // Push from buildings (still solid)
 const BUILDING_AVOIDANCE_MARGIN = 0.25; // Minimal margin around buildings - hitbox should match model
+
+// RVO/ORCA settings
+const USE_RVO_AVOIDANCE = true; // Enable ORCA-based local avoidance (recast-style)
+const RVO_NEIGHBOR_RADIUS = 5.0; // How far to look for neighbors
+const RVO_TIME_HORIZON = 1.5; // How far ahead to plan avoidance (seconds)
 
 // Path request cooldown to prevent spamming
 const PATH_REQUEST_COOLDOWN_MS = 500; // Minimum time between path requests per unit
@@ -575,38 +581,6 @@ export class MovementSystem extends System {
         }
       }
 
-      // Calculate separation force for unit avoidance
-      // Reduce separation for units close to destination to prevent twitching
-      const separationWeight = distance > this.decelerationThreshold ? 0.5 : 0.1;
-      if (distance > this.arrivalThreshold * 2) {
-        this.calculateSeparationForce(entity.id, transform, unit, tempSeparation);
-      } else {
-        tempSeparation.x = 0;
-        tempSeparation.y = 0;
-      }
-
-      // Calculate building avoidance (always active)
-      this.calculateBuildingAvoidanceForce(transform, unit, tempBuildingAvoid);
-
-      // Normalize direction to target
-      let dirX = distance > 0.01 ? dx / distance : 0;
-      let dirY = distance > 0.01 ? dy / distance : 0;
-
-      // Add separation force to direction (reduced near destination)
-      dirX += tempSeparation.x * separationWeight;
-      dirY += tempSeparation.y * separationWeight;
-
-      // Add building avoidance (with full weight - buildings are solid)
-      dirX += tempBuildingAvoid.x;
-      dirY += tempBuildingAvoid.y;
-
-      // Re-normalize
-      const newMag = Math.sqrt(dirX * dirX + dirY * dirY);
-      if (newMag > 0.01) {
-        dirX /= newMag;
-        dirY /= newMag;
-      }
-
       // Calculate target speed with deceleration near destination
       let targetSpeed = unit.maxSpeed;
 
@@ -627,11 +601,126 @@ export class MovementSystem extends System {
         unit.currentSpeed = Math.max(targetSpeed, unit.currentSpeed - unit.acceleration * dt * 2);
       }
 
+      // Calculate preferred velocity toward target
+      let prefVx = 0;
+      let prefVy = 0;
+      if (distance > 0.01) {
+        prefVx = (dx / distance) * unit.currentSpeed;
+        prefVy = (dy / distance) * unit.currentSpeed;
+      }
+
+      // Final velocity calculation
+      let finalVx = prefVx;
+      let finalVy = prefVy;
+
+      // Use RVO/ORCA for local collision avoidance (recast-style)
+      if (USE_RVO_AVOIDANCE && distance > this.arrivalThreshold * 2 && !unit.isFlying) {
+        // Gathering workers skip RVO (they walk through each other like SC2)
+        if (unit.state !== 'gathering') {
+          // Get nearby units for ORCA
+          const nearbyIds = this.world.unitGrid.queryRadius(
+            transform.x,
+            transform.y,
+            RVO_NEIGHBOR_RADIUS
+          );
+
+          const neighbors: Array<{
+            x: number;
+            y: number;
+            vx: number;
+            vy: number;
+            radius: number;
+          }> = [];
+
+          for (const neighborId of nearbyIds) {
+            if (neighborId === entity.id) continue;
+
+            const neighborEntity = this.world.getEntity(neighborId);
+            if (!neighborEntity) continue;
+
+            const neighborTransform = neighborEntity.get<Transform>('Transform');
+            const neighborUnit = neighborEntity.get<Unit>('Unit');
+            const neighborVelocity = neighborEntity.get<Velocity>('Velocity');
+            if (!neighborTransform || !neighborUnit || !neighborVelocity) continue;
+
+            // Skip dead units
+            if (neighborUnit.state === 'dead') continue;
+
+            // Flying units don't collide with ground units
+            if (neighborUnit.isFlying !== unit.isFlying) continue;
+
+            // Skip gathering workers (they walk through)
+            if (neighborUnit.state === 'gathering') continue;
+
+            neighbors.push({
+              x: neighborTransform.x,
+              y: neighborTransform.y,
+              vx: neighborVelocity.x,
+              vy: neighborVelocity.y,
+              radius: neighborUnit.collisionRadius,
+            });
+          }
+
+          // Compute ORCA velocity
+          const orcaResult = computeORCAVelocity(
+            {
+              x: transform.x,
+              y: transform.y,
+              vx: velocity.x,
+              vy: velocity.y,
+              prefVx,
+              prefVy,
+              radius: unit.collisionRadius,
+              maxSpeed: unit.currentSpeed,
+            },
+            neighbors,
+            RVO_TIME_HORIZON
+          );
+
+          finalVx = orcaResult.vx;
+          finalVy = orcaResult.vy;
+        }
+      } else if (!USE_RVO_AVOIDANCE) {
+        // Fallback to simple separation force
+        const separationWeight = distance > this.decelerationThreshold ? 0.5 : 0.1;
+        if (distance > this.arrivalThreshold * 2) {
+          this.calculateSeparationForce(entity.id, transform, unit, tempSeparation);
+        } else {
+          tempSeparation.x = 0;
+          tempSeparation.y = 0;
+        }
+
+        // Normalize direction to target
+        let dirX = distance > 0.01 ? dx / distance : 0;
+        let dirY = distance > 0.01 ? dy / distance : 0;
+
+        // Add separation force to direction (reduced near destination)
+        dirX += tempSeparation.x * separationWeight;
+        dirY += tempSeparation.y * separationWeight;
+
+        // Re-normalize
+        const newMag = Math.sqrt(dirX * dirX + dirY * dirY);
+        if (newMag > 0.01) {
+          dirX /= newMag;
+          dirY /= newMag;
+        }
+
+        finalVx = dirX * unit.currentSpeed;
+        finalVy = dirY * unit.currentSpeed;
+      }
+
+      // Calculate building avoidance (always active, not handled by RVO)
+      this.calculateBuildingAvoidanceForce(transform, unit, tempBuildingAvoid);
+
+      // Add building avoidance force
+      finalVx += tempBuildingAvoid.x;
+      finalVy += tempBuildingAvoid.y;
+
       // Apply velocity with damping for nearly-stopped units
       // This prevents oscillation/twitching when units are at rest
       const speedDamping = unit.currentSpeed < unit.maxSpeed * 0.2 ? 0.5 : 1.0;
-      velocity.x = dirX * unit.currentSpeed * speedDamping;
-      velocity.y = dirY * unit.currentSpeed * speedDamping;
+      velocity.x = finalVx * speedDamping;
+      velocity.y = finalVy * speedDamping;
 
       // Update rotation to face movement direction (smooth rotation)
       const targetRotation = Math.atan2(dy, dx);

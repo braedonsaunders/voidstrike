@@ -1,5 +1,5 @@
 /**
- * Hierarchical Pathfinding A* (HPA*) using pathfinding.js
+ * Hierarchical Pathfinding A* (HPA*)
  *
  * Optimizes long-distance pathfinding by:
  * 1. Dividing the map into sectors (clusters)
@@ -7,10 +7,9 @@
  * 3. Caching frequently used paths with LRU eviction
  * 4. Using hierarchical search for long paths
  *
- * For short paths (within same/adjacent sectors), falls back to JPS/A*
+ * For short paths (within same/adjacent sectors), falls back to regular A*
  */
 
-import * as PF from 'pathfinding';
 import { AStar, PathResult } from './AStar';
 
 interface Sector {
@@ -29,13 +28,6 @@ interface SectorEntrance {
   neighborEntranceIndex: number;
 }
 
-interface AbstractEdge {
-  fromSector: number;
-  toSector: number;
-  cost: number;
-  entranceIndex: number;
-}
-
 interface CachedPath {
   path: Array<{ x: number; y: number }>;
   timestamp: number;
@@ -51,11 +43,9 @@ export class HierarchicalAStar {
   private height: number;
   private sectors: Sector[] = [];
   private sectorGrid: (number | null)[][] = [];
-  private abstractGraph: Map<number, AbstractEdge[]> = new Map();
   private pathCache: Map<string, CachedPath> = new Map();
   private cacheKeys: string[] = [];
 
-  // Use pathfinding.js for abstract graph search
   private abstractGridWidth: number = 0;
   private abstractGridHeight: number = 0;
 
@@ -70,7 +60,7 @@ export class HierarchicalAStar {
   }
 
   /**
-   * Initialize sectors and build initial abstract graph
+   * Initialize sectors
    */
   private initializeSectors(): void {
     const sectorsX = Math.ceil(this.width / SECTOR_SIZE);
@@ -113,7 +103,6 @@ export class HierarchicalAStar {
    * Rebuild abstract graph (called when walkability changes)
    */
   public rebuildAbstractGraph(): void {
-    this.abstractGraph.clear();
     this.pathCache.clear();
     this.cacheKeys = [];
 
@@ -121,27 +110,6 @@ export class HierarchicalAStar {
     for (const sector of this.sectors) {
       sector.entrances = [];
       this.findSectorEntrances(sector);
-    }
-
-    // Build edges between sectors
-    for (const sector of this.sectors) {
-      const edges: AbstractEdge[] = [];
-
-      for (let i = 0; i < sector.entrances.length; i++) {
-        const entrance = sector.entrances[i];
-
-        // Calculate cost to neighbor through this entrance
-        const cost = this.estimateCrossingSectorCost(sector, entrance);
-
-        edges.push({
-          fromSector: sector.id,
-          toSector: entrance.neighborSectorId,
-          cost,
-          entranceIndex: i,
-        });
-      }
-
-      this.abstractGraph.set(sector.id, edges);
     }
 
     this.needsRebuild = false;
@@ -216,11 +184,9 @@ export class HierarchicalAStar {
       const isWalkable = i < length && this.baseAStar.isWalkable(x, y);
 
       if (isWalkable && !inEntrance) {
-        // Start of entrance
         entranceStart = i;
         inEntrance = true;
       } else if (!isWalkable && inEntrance) {
-        // End of entrance - use middle point
         const midpoint = Math.floor((entranceStart + i - 1) / 2);
         const entranceX = startX + dx * midpoint;
         const entranceY = startY + dy * midpoint;
@@ -229,13 +195,12 @@ export class HierarchicalAStar {
           x: entranceX,
           y: entranceY,
           neighborSectorId: neighborId,
-          neighborEntranceIndex: -1, // Will be linked later
+          neighborEntranceIndex: -1,
         });
         inEntrance = false;
       }
     }
 
-    // Handle entrance at end of border
     if (inEntrance) {
       const midpoint = Math.floor((entranceStart + length - 1) / 2);
       const entranceX = startX + dx * midpoint;
@@ -248,14 +213,6 @@ export class HierarchicalAStar {
         neighborEntranceIndex: -1,
       });
     }
-  }
-
-  /**
-   * Estimate cost to cross a sector
-   */
-  private estimateCrossingSectorCost(_sector: Sector, _entrance: SectorEntrance): number {
-    // Simple heuristic based on sector size
-    return SECTOR_SIZE * 0.7;
   }
 
   /**
@@ -301,14 +258,12 @@ export class HierarchicalAStar {
     // For longer paths, use hierarchical search
     const abstractPath = this.findAbstractPath(startSector, endSector);
     if (abstractPath.length === 0) {
-      // Fallback to direct A*
       return this.baseAStar.findPath(startX, startY, endX, endY);
     }
 
     // Refine abstract path into detailed path
     const result = this.refineAbstractPath(startX, startY, endX, endY, abstractPath);
 
-    // Cache the result
     if (result.found) {
       this.addToCache(cacheKey, result.path);
     }
@@ -326,62 +281,45 @@ export class HierarchicalAStar {
   }
 
   /**
-   * Find abstract path through sectors using A* with binary heap
+   * Simple BFS for abstract path through sectors (sector graph is small)
    */
   private findAbstractPath(startSector: number, endSector: number): number[] {
-    // Use pathfinding.js AStarFinder on the abstract graph
-    // Create a temporary grid for sector-level pathfinding
-    const abstractGrid = new (PF.Grid as unknown as new (w: number, h: number) => PF.Grid)(this.abstractGridWidth, this.abstractGridHeight);
+    // BFS is fine for the small abstract graph
+    const visited = new Set<number>();
+    const queue: Array<{ sector: number; path: number[] }> = [];
 
-    // Mark sectors without any entrances as unwalkable
-    for (const sector of this.sectors) {
-      const sx = sector.id % this.abstractGridWidth;
-      const sy = Math.floor(sector.id / this.abstractGridWidth);
-      const hasEntrances = sector.entrances.length > 0;
-      // A sector is walkable if it has entrances OR is the start/end sector
-      abstractGrid.setWalkableAt(
-        sx,
-        sy,
-        hasEntrances || sector.id === startSector || sector.id === endSector
-      );
+    queue.push({ sector: startSector, path: [startSector] });
+    visited.add(startSector);
+
+    while (queue.length > 0) {
+      const { sector, path } = queue.shift()!;
+
+      if (sector === endSector) {
+        return path;
+      }
+
+      const sectorObj = this.sectors[sector];
+      if (!sectorObj) continue;
+
+      // Get neighbors through entrances
+      const neighbors = new Set<number>();
+      for (const entrance of sectorObj.entrances) {
+        neighbors.add(entrance.neighborSectorId);
+      }
+
+      for (const neighbor of neighbors) {
+        if (!visited.has(neighbor)) {
+          visited.add(neighbor);
+          queue.push({ sector: neighbor, path: [...path, neighbor] });
+        }
+      }
     }
 
-    const startSx = startSector % this.abstractGridWidth;
-    const startSy = Math.floor(startSector / this.abstractGridWidth);
-    const endSx = endSector % this.abstractGridWidth;
-    const endSy = Math.floor(endSector / this.abstractGridWidth);
-
-    // Use A* with binary heap for abstract pathfinding
-    const finder = new (PF.AStarFinder as unknown as new (opts: PF.FinderOptions) => {
-      findPath(sx: number, sy: number, ex: number, ey: number, grid: PF.Grid): number[][];
-    })({
-      diagonalMovement: PF.DiagonalMovement.Never, // Sectors connect orthogonally
-    });
-
-    const rawPath = finder.findPath(startSx, startSy, endSx, endSy, abstractGrid);
-
-    if (rawPath.length === 0) {
-      return [];
-    }
-
-    // Convert grid coordinates back to sector IDs
-    return rawPath.map(([x, y]) => y * this.abstractGridWidth + x);
+    return [];
   }
 
   /**
-   * Heuristic for sector-level pathfinding
-   */
-  private sectorHeuristic(sectorA: number, sectorB: number): number {
-    const a = this.sectors[sectorA];
-    const b = this.sectors[sectorB];
-    const dx = Math.abs(a.x + a.width / 2 - (b.x + b.width / 2));
-    const dy = Math.abs(a.y + a.height / 2 - (b.y + b.height / 2));
-    return dx + dy;
-  }
-
-  /**
-   * Refine abstract path into detailed path by pathfinding through sector entrances.
-   * This breaks the long path into smaller segments for efficiency.
+   * Refine abstract path into detailed path
    */
   private refineAbstractPath(
     startX: number,
@@ -394,7 +332,6 @@ export class HierarchicalAStar {
       return { path: [], found: false };
     }
 
-    // Collect waypoints: start -> sector entrances -> end
     const waypoints: Array<{ x: number; y: number }> = [{ x: startX, y: startY }];
 
     // Add entrance points between sectors
@@ -402,10 +339,8 @@ export class HierarchicalAStar {
       const currentSector = this.sectors[abstractPath[i]];
       const nextSectorId = abstractPath[i + 1];
 
-      // Find the entrance to the next sector
       const entrance = currentSector.entrances.find((e) => e.neighborSectorId === nextSectorId);
       if (entrance) {
-        // Convert grid coords to world coords (center of cell)
         waypoints.push({
           x: entrance.x + 0.5,
           y: entrance.y + 0.5,
@@ -415,7 +350,7 @@ export class HierarchicalAStar {
 
     waypoints.push({ x: endX, y: endY });
 
-    // Now pathfind between consecutive waypoints
+    // Pathfind between consecutive waypoints
     const fullPath: Array<{ x: number; y: number }> = [];
 
     for (let i = 0; i < waypoints.length - 1; i++) {
@@ -425,11 +360,9 @@ export class HierarchicalAStar {
       const segment = this.baseAStar.findPath(from.x, from.y, to.x, to.y);
 
       if (!segment.found) {
-        // If any segment fails, fall back to direct A* for the whole path
         return this.baseAStar.findPath(startX, startY, endX, endY);
       }
 
-      // Add segment to full path (skip first point of subsequent segments to avoid duplicates)
       if (i === 0) {
         fullPath.push(...segment.path);
       } else if (segment.path.length > 1) {
@@ -445,7 +378,6 @@ export class HierarchicalAStar {
    */
   private addToCache(key: string, path: Array<{ x: number; y: number }>): void {
     if (this.pathCache.size >= PATH_CACHE_SIZE) {
-      // Evict oldest
       const oldestKey = this.cacheKeys.shift();
       if (oldestKey) {
         this.pathCache.delete(oldestKey);
@@ -465,9 +397,7 @@ export class HierarchicalAStar {
     this.cacheKeys = [];
   }
 
-  /**
-   * Proxy methods to base AStar
-   */
+  // Proxy methods to base AStar
   public setWalkable(x: number, y: number, walkable: boolean): void {
     this.baseAStar.setWalkable(x, y, walkable);
     this.invalidate();
@@ -487,16 +417,10 @@ export class HierarchicalAStar {
     this.invalidate();
   }
 
-  /**
-   * Set movement cost - proxied to base AStar
-   */
   public setMoveCost(x: number, y: number, cost: number): void {
     this.baseAStar.setMoveCost(x, y, cost);
   }
 
-  /**
-   * Get the base AStar instance for direct access if needed
-   */
   public getBaseAStar(): AStar {
     return this.baseAStar;
   }

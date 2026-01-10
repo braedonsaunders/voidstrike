@@ -131,6 +131,16 @@ function spawnBase(game: Game, playerId: string, x: number, y: number): void {
   building.buildProgress = 1;
   building.state = 'complete';
 
+  // Emit building placed event for pathfinding grid update
+  game.eventBus.emit('building:placed', {
+    entityId: cc.id,
+    buildingType: 'headquarters',
+    playerId,
+    position: { x, y },
+    width: ccDef.width,
+    height: ccDef.height,
+  });
+
   // Set default rally point for production buildings
   if (building.canProduce.length > 0) {
     building.setRallyPoint(x + ccDef.width / 2 + 3, y);
