@@ -8,6 +8,7 @@ import { Selectable } from '../components/Selectable';
 import { Game } from '../core/Game';
 import { World } from '../ecs/World';
 import { useGameStore } from '@/store/gameStore';
+import { isLocalPlayer } from '@/store/gameSetupStore';
 
 // Mining time in seconds
 const MINING_TIME = 2.5;
@@ -356,8 +357,8 @@ export class ResourceSystem extends System {
     const dropOffRange = buildingHalfWidth + 3.5; // Generous range outside avoidance zone
 
     if (nearestDistance <= dropOffRange) {
-      // At base - deposit resources (only for player, AI tracks separately)
-      if (workerOwner === 'player1') {
+      // At base - deposit resources (only for local player, AI tracks separately)
+      if (workerOwner && isLocalPlayer(workerOwner)) {
         const store = useGameStore.getState();
         store.addResources(unit.carryingMinerals, unit.carryingVespene);
       }

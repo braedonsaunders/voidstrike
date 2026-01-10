@@ -7,6 +7,7 @@ import { Unit } from '@/engine/components/Unit';
 import { Resource } from '@/engine/components/Resource';
 import { Selectable } from '@/engine/components/Selectable';
 import { Health } from '@/engine/components/Health';
+import { getLocalPlayerId } from '@/store/gameSetupStore';
 
 export class InputHandler extends Phaser.Events.EventEmitter {
   private scene: Phaser.Scene;
@@ -204,7 +205,8 @@ export class InputHandler extends Phaser.Events.EventEmitter {
         }
 
         // Check if clicking on an enemy unit/building (for attacking)
-        if (selectable && selectable.playerId !== 'player1' && health && !health.isDead()) {
+        const localPlayerId = getLocalPlayerId();
+        if (selectable && localPlayerId && selectable.playerId !== localPlayerId && health && !health.isDead()) {
           this.game.eventBus.emit('command:attack', {
             entityIds: selectedUnits,
             targetEntityId: clickedEntity.id,
@@ -245,6 +247,9 @@ export class InputHandler extends Phaser.Events.EventEmitter {
     this.lastClickTime = now;
     this.lastClickPos = { x: pointer.x, y: pointer.y };
 
+    // Get the local player ID for selection filtering
+    const localPlayerId = getLocalPlayerId();
+
     if (dx > 1 || dy > 1) {
       // Box selection
       this.game.eventBus.emit('selection:box', {
@@ -253,7 +258,7 @@ export class InputHandler extends Phaser.Events.EventEmitter {
         endX: Math.max(startWorld.x, endWorld.x),
         endY: Math.max(startWorld.y, endWorld.y),
         additive: pointer.event.shiftKey,
-        playerId: 'player1',
+        playerId: localPlayerId,
       });
     } else {
       // Click selection - double-click selects all of same type
@@ -262,7 +267,7 @@ export class InputHandler extends Phaser.Events.EventEmitter {
         y: endWorld.y,
         additive: pointer.event.shiftKey,
         selectAllOfType: pointer.event.ctrlKey || isDoubleClick,
-        playerId: 'player1',
+        playerId: localPlayerId,
       });
     }
   }

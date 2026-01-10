@@ -9,6 +9,7 @@ import { Unit } from '../components/Unit';
 import { Resource } from '../components/Resource';
 import { BUILDING_DEFINITIONS } from '@/data/buildings/dominion';
 import { useGameStore } from '@/store/gameStore';
+import { isLocalPlayer, getLocalPlayerId } from '@/store/gameSetupStore';
 
 /**
  * BuildingPlacementSystem handles placing new buildings when workers construct them.
@@ -49,7 +50,7 @@ export class BuildingPlacementSystem extends System {
     workerId?: number;
     playerId?: string;
   }): void {
-    const { buildingType, playerId = 'player1' } = data;
+    const { buildingType, playerId = getLocalPlayerId() ?? 'player1' } = data;
     const definition = BUILDING_DEFINITIONS[buildingType];
 
     if (!definition) {
@@ -69,10 +70,10 @@ export class BuildingPlacementSystem extends System {
     const snappedY = Math.round(data.position.y);
 
     const store = useGameStore.getState();
-    const isPlayer = playerId === 'player1';
+    const isPlayerLocal = isLocalPlayer(playerId);
 
-    // Check resources (only for human player - AI handles its own resources)
-    if (isPlayer) {
+    // Check resources (only for local player - AI handles its own resources)
+    if (isPlayerLocal) {
       if (store.minerals < definition.mineralCost || store.vespene < definition.vespeneCost) {
         this.game.eventBus.emit('ui:error', { message: 'Not enough resources' });
         return;
@@ -118,8 +119,8 @@ export class BuildingPlacementSystem extends System {
       return;
     }
 
-    // Deduct resources (only for human player - AI handles its own resources)
-    if (isPlayer) {
+    // Deduct resources (only for local player - AI handles its own resources)
+    if (isPlayerLocal) {
       store.addResources(-definition.mineralCost, -definition.vespeneCost);
     }
 
@@ -281,9 +282,9 @@ export class BuildingPlacementSystem extends System {
       building.state = 'complete';
       health.current = health.max;
 
-      // Add supply if applicable - only for player1 buildings
+      // Add supply if applicable - only for local player's buildings
       const selectable = entity.get<Selectable>('Selectable');
-      if (building.supplyProvided > 0 && selectable?.playerId === 'player1') {
+      if (building.supplyProvided > 0 && selectable?.playerId && isLocalPlayer(selectable.playerId)) {
         useGameStore.getState().addMaxSupply(building.supplyProvided);
       }
 
@@ -303,7 +304,7 @@ export class BuildingPlacementSystem extends System {
     addonType: string;
     playerId?: string;
   }): void {
-    const { buildingId, addonType, playerId = 'player1' } = data;
+    const { buildingId, addonType, playerId = getLocalPlayerId() ?? 'player1' } = data;
 
     // Get the parent building entity
     const parentEntity = this.world.getEntity(buildingId);
@@ -346,10 +347,10 @@ export class BuildingPlacementSystem extends System {
       return;
     }
 
-    // Check resources (only for human player)
+    // Check resources (only for local player)
     const store = useGameStore.getState();
-    const isPlayer = playerId === 'player1';
-    if (isPlayer) {
+    const isPlayerLocal = isLocalPlayer(playerId);
+    if (isPlayerLocal) {
       if (store.minerals < addonDef.mineralCost || store.vespene < addonDef.vespeneCost) {
         this.game.eventBus.emit('ui:error', { message: 'Not enough resources' });
         return;
@@ -366,8 +367,8 @@ export class BuildingPlacementSystem extends System {
       return;
     }
 
-    // Deduct resources (only for human player)
-    if (isPlayer) {
+    // Deduct resources (only for local player)
+    if (isPlayerLocal) {
       store.addResources(-addonDef.mineralCost, -addonDef.vespeneCost);
     }
 
@@ -642,8 +643,8 @@ export class BuildingPlacementSystem extends System {
           // Get the building's owner
           const selectable = entity.get<Selectable>('Selectable');
 
-          // Add supply if applicable - only for player1 buildings
-          if (building.supplyProvided > 0 && selectable?.playerId === 'player1') {
+          // Add supply if applicable - only for local player's buildings
+          if (building.supplyProvided > 0 && selectable?.playerId && isLocalPlayer(selectable.playerId)) {
             useGameStore.getState().addMaxSupply(building.supplyProvided);
           }
 

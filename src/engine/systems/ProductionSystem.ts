@@ -6,6 +6,7 @@ import { Selectable } from '../components/Selectable';
 import { Ability, DOMINION_ABILITIES } from '../components/Ability';
 import { Game } from '../core/Game';
 import { useGameStore } from '@/store/gameStore';
+import { isLocalPlayer } from '@/store/gameSetupStore';
 import { UNIT_DEFINITIONS } from '@/data/units/dominion';
 import { BUILDING_DEFINITIONS } from '@/data/buildings/dominion';
 
@@ -177,9 +178,10 @@ export class ProductionSystem extends System {
         if (!wasComplete && building.isComplete()) {
           const selectable = entity.get<Selectable>('Selectable');
           const buildingDef = BUILDING_DEFINITIONS[building.buildingId];
+          const ownerPlayerId = selectable?.playerId;
 
-          // Emit building complete for Phaser overlay (player buildings only)
-          if (selectable?.playerId === 'player1') {
+          // Emit building complete for Phaser overlay (local player's buildings only)
+          if (ownerPlayerId && isLocalPlayer(ownerPlayerId)) {
             this.game.eventBus.emit('building:complete', {
               entityId: entity.id,
               buildingType: building.buildingId,
@@ -187,8 +189,8 @@ export class ProductionSystem extends System {
             });
           }
 
-          // Add supply if applicable - only for player1 buildings
-          if (building.supplyProvided > 0 && selectable?.playerId === 'player1') {
+          // Add supply if applicable - only for local player's buildings
+          if (building.supplyProvided > 0 && ownerPlayerId && isLocalPlayer(ownerPlayerId)) {
             useGameStore.getState().addMaxSupply(building.supplyProvided);
           }
 
@@ -225,7 +227,7 @@ export class ProductionSystem extends System {
       // Get the building's owner from its Selectable component
       const buildingEntity = this.world.getEntity(buildingId);
       const selectable = buildingEntity?.get<Selectable>('Selectable');
-      const ownerPlayerId = selectable?.playerId ?? 'player1';
+      const ownerPlayerId = selectable?.playerId;
 
       this.game.eventBus.emit('unit:spawn', {
         unitType: item.id,
@@ -239,8 +241,8 @@ export class ProductionSystem extends System {
         rallyTargetId: building.rallyTargetId,
       });
 
-      // Emit production complete for Phaser overlay (player units only)
-      if (ownerPlayerId === 'player1') {
+      // Emit production complete for Phaser overlay (local player's units only)
+      if (ownerPlayerId && isLocalPlayer(ownerPlayerId)) {
         const unitDef = UNIT_DEFINITIONS[item.id];
         this.game.eventBus.emit('production:complete', {
           buildingId,
@@ -258,7 +260,7 @@ export class ProductionSystem extends System {
         // This is a research upgrade - emit for Phaser overlay
         const buildingEntity = this.world.getEntity(buildingId);
         const buildingSelectable = buildingEntity?.get<Selectable>('Selectable');
-        if (buildingSelectable?.playerId === 'player1') {
+        if (buildingSelectable?.playerId && isLocalPlayer(buildingSelectable.playerId)) {
           this.game.eventBus.emit('research:complete', {
             buildingId,
             upgradeId: item.id,

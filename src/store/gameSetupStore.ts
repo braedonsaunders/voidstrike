@@ -31,6 +31,9 @@ export interface GameSetupState {
   // Player slots (max 8 players)
   playerSlots: PlayerSlot[];
 
+  // Local player ID - the player controlled by this client (null if spectating)
+  localPlayerId: string | null;
+
   // Game session flag - must be true to enter /game
   gameStarted: boolean;
 
@@ -53,11 +56,18 @@ export interface GameSetupState {
   // Get player color hex by player ID
   getPlayerColorHex: (playerId: string) => number;
 
+  // Player type helpers
+  isHumanPlayer: (playerId: string) => boolean;
+  isAIPlayer: (playerId: string) => boolean;
+  getLocalPlayerId: () => string | null;
+  getAIPlayerIds: () => string[];
+  getHumanPlayerIds: () => string[];
+
   startGame: () => void;
   endGame: () => void;
   reset: () => void;
 
-  // Check if current session is spectator mode (no human players)
+  // Check if current session is spectator mode (no human players or local player is not set)
   isSpectator: () => boolean;
 }
 
@@ -118,7 +128,7 @@ const defaultPlayerSlots: PlayerSlot[] = [
     faction: 'dominion',
     colorId: 'red',
     aiDifficulty: 'medium',
-    name: 'AI Player',
+    name: 'Player 2',
     team: 0, // FFA by default
   },
 ];
@@ -129,6 +139,7 @@ const initialState = {
   gameSpeed: 'normal' as GameSpeed,
   fogOfWar: true,
   playerSlots: [...defaultPlayerSlots],
+  localPlayerId: 'player1' as string | null, // Default to player1, updated when game starts
   gameStarted: false,
 };
 
@@ -242,18 +253,74 @@ export const useGameSetupStore = create<GameSetupState>((set, get) => ({
     return 0x808080; // Default gray
   },
 
-  startGame: () => set({ gameStarted: true }),
+  // Player type helpers
+  isHumanPlayer: (playerId: string): boolean => {
+    const slot = get().playerSlots.find(s => s.id === playerId);
+    return slot?.type === 'human';
+  },
+
+  isAIPlayer: (playerId: string): boolean => {
+    const slot = get().playerSlots.find(s => s.id === playerId);
+    return slot?.type === 'ai';
+  },
+
+  getLocalPlayerId: (): string | null => {
+    return get().localPlayerId;
+  },
+
+  getAIPlayerIds: (): string[] => {
+    return get().playerSlots.filter(s => s.type === 'ai').map(s => s.id);
+  },
+
+  getHumanPlayerIds: (): string[] => {
+    return get().playerSlots.filter(s => s.type === 'human').map(s => s.id);
+  },
+
+  startGame: () => {
+    const state = get();
+    // Find the first human player to be the local player, or null if spectating
+    const firstHumanSlot = state.playerSlots.find(s => s.type === 'human');
+    set({
+      gameStarted: true,
+      localPlayerId: firstHumanSlot?.id ?? null,
+    });
+  },
   endGame: () => set({ gameStarted: false }),
-  reset: () => set({ ...initialState, playerSlots: [...defaultPlayerSlots] }),
+  reset: () => set({ ...initialState, playerSlots: [...defaultPlayerSlots], localPlayerId: 'player1' }),
 
   isSpectator: (): boolean => {
-    // Check if player1 slot is not human - this means we're spectating
-    const player1Slot = get().playerSlots.find(s => s.id === 'player1');
-    return player1Slot?.type !== 'human';
+    // Check if there's no local player (all players are AI)
+    const state = get();
+    return state.localPlayerId === null || !state.playerSlots.some(s => s.type === 'human');
   },
 }));
 
 // Export a function to get player color that can be used outside React
 export function getPlayerColor(playerId: string): number {
   return useGameSetupStore.getState().getPlayerColorHex(playerId);
+}
+
+// Export utility functions for use outside React components
+export function getLocalPlayerId(): string | null {
+  return useGameSetupStore.getState().localPlayerId;
+}
+
+export function isLocalPlayer(playerId: string): boolean {
+  return useGameSetupStore.getState().localPlayerId === playerId;
+}
+
+export function isHumanPlayer(playerId: string): boolean {
+  return useGameSetupStore.getState().isHumanPlayer(playerId);
+}
+
+export function isAIPlayer(playerId: string): boolean {
+  return useGameSetupStore.getState().isAIPlayer(playerId);
+}
+
+export function getAIPlayerIds(): string[] {
+  return useGameSetupStore.getState().getAIPlayerIds();
+}
+
+export function isSpectatorMode(): boolean {
+  return useGameSetupStore.getState().isSpectator();
 }

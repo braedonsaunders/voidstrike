@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import { UpgradeEffect } from '@/data/research/dominion';
 import { Game } from '@/engine/core/Game';
+import { getLocalPlayerId } from '@/store/gameSetupStore';
 
 export interface ResearchedUpgrade {
   id: string;
@@ -73,6 +74,8 @@ export interface GameState {
   getUpgradeBonus: (playerId: string, unitId: string, effectType: UpgradeEffect['type']) => number;
   setShowTechTree: (show: boolean) => void;
   setShowKeyboardShortcuts: (show: boolean) => void;
+  setPlayerId: (playerId: string) => void;
+  syncWithGameSetup: () => void;
   reset: () => void;
 }
 
@@ -260,6 +263,15 @@ export const useGameStore = create<GameState>((set, get) => ({
   setShowTechTree: (show) => set({ showTechTree: show }),
 
   setShowKeyboardShortcuts: (show) => set({ showKeyboardShortcuts: show }),
+
+  setPlayerId: (playerId) => set({ playerId }),
+
+  syncWithGameSetup: () => {
+    const localPlayerId = getLocalPlayerId();
+    if (localPlayerId) {
+      set({ playerId: localPlayerId });
+    }
+  },
 
   reset: () => set(initialState),
 }));
