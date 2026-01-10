@@ -110,6 +110,7 @@ export function SoundOptionsPanel() {
         minWidth: '260px',
         backdropFilter: 'blur(10px)',
         boxShadow: '0 4px 20px rgba(0, 0, 0, 0.4)',
+        pointerEvents: 'auto',
       }}
     >
       {/* Header */}
