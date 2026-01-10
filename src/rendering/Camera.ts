@@ -261,17 +261,17 @@ export class RTSCamera {
     let dx = 0;
     let dz = 0;
 
-    // Keyboard input
-    if (this.keys.has('KeyW') || this.keys.has('ArrowUp')) {
+    // Keyboard input (arrow keys only - WASD reserved for unit commands)
+    if (this.keys.has('ArrowUp')) {
       dz -= this.config.panSpeed * dt;
     }
-    if (this.keys.has('KeyS') || this.keys.has('ArrowDown')) {
+    if (this.keys.has('ArrowDown')) {
       dz += this.config.panSpeed * dt;
     }
-    if (this.keys.has('KeyA') || this.keys.has('ArrowLeft')) {
+    if (this.keys.has('ArrowLeft')) {
       dx -= this.config.panSpeed * dt;
     }
-    if (this.keys.has('KeyD') || this.keys.has('ArrowRight')) {
+    if (this.keys.has('ArrowRight')) {
       dx += this.config.panSpeed * dt;
     }
 
