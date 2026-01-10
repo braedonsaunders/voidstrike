@@ -186,7 +186,7 @@ export function TechTreePanel() {
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/70"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 pointer-events-auto"
       onClick={(e) => {
         // Close when clicking backdrop
         if (e.target === e.currentTarget) {
