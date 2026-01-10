@@ -140,16 +140,23 @@ export const textureTerrainFragmentShader = /* glsl */ `
     mat3 TBN = mat3(T, B, N);
     vec3 viewDirTangent = normalize(transpose(TBN) * V);
 
+    // Calculate distance from camera for parallax falloff
+    float cameraDist = length(cameraPosition - vWorldPosition);
+    // Parallax fades out between 20-60 units from camera
+    float parallaxFade = 1.0 - smoothstep(20.0, 60.0, cameraDist);
+
     // Apply parallax offset to UVs if displacement is enabled
     vec2 uv = vUv;
-    if (uUseDisplacement) {
+    if (uUseDisplacement && parallaxFade > 0.01) {
       // Sample average height to determine offset
       float avgHeight = (
         texture2D(uGrassDisplacement, vUv).r +
         texture2D(uDirtDisplacement, vUv).r +
         texture2D(uRockDisplacement, vUv).r
       ) / 3.0;
-      vec2 p = viewDirTangent.xy / max(viewDirTangent.z, 0.1) * (avgHeight * uParallaxScale);
+      // Scale down effect and apply distance fade
+      float effectiveScale = uParallaxScale * parallaxFade * 0.5;
+      vec2 p = viewDirTangent.xy / max(viewDirTangent.z, 0.5) * (avgHeight * effectiveScale);
       uv = vUv - p;
     }
 
@@ -175,9 +182,10 @@ export const textureTerrainFragmentShader = /* glsl */ `
     vec2 uvX = vWorldPosition.zy * 0.5;
     vec2 uvY = vWorldPosition.xz * 0.5;
     vec2 uvZ = vWorldPosition.xy * 0.5;
-    if (uUseDisplacement) {
+    if (uUseDisplacement && parallaxFade > 0.01) {
       float cliffHeight = texture2D(uCliffDisplacement, uvY).r;
-      vec2 offset = viewDirTangent.xy / max(viewDirTangent.z, 0.1) * (cliffHeight * uParallaxScale);
+      float effectiveScale = uParallaxScale * parallaxFade * 0.5;
+      vec2 offset = viewDirTangent.xy / max(viewDirTangent.z, 0.5) * (cliffHeight * effectiveScale);
       uvX -= offset;
       uvY -= offset;
       uvZ -= offset;
@@ -517,7 +525,7 @@ export function getBiomeTextureConfig(biome: BiomeTextureType): TextureTerrainCo
     cliffNormal: `${basePath}${prefixes.cliff}_normal.png`,
     cliffRoughness: `${basePath}${prefixes.cliff}_roughness.png`,
     cliffDisplacement: `${basePath}${prefixes.cliff}_displacement.png`,
-    parallaxScale: 0.12, // Increased for more visible texture depth
+    parallaxScale: 0.06, // Subtle depth effect, fades with distance
   };
 }
 
