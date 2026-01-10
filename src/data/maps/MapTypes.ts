@@ -538,7 +538,26 @@ export function createRampInTerrain(
 // ============================================
 
 /**
+ * Check if a cell is a ramp or near a ramp (protected area)
+ */
+function isRampOrNearRamp(grid: MapCell[][], x: number, y: number, buffer: number = 2): boolean {
+  for (let dy = -buffer; dy <= buffer; dy++) {
+    for (let dx = -buffer; dx <= buffer; dx++) {
+      const px = x + dx;
+      const py = y + dy;
+      if (py >= 0 && py < grid.length && px >= 0 && px < grid[0].length) {
+        if (grid[py][px].terrain === 'ramp') {
+          return true;
+        }
+      }
+    }
+  }
+  return false;
+}
+
+/**
  * Fill a rectangular area with a terrain feature (preserves terrain type and elevation)
+ * PROTECTED: Will not overwrite ramps or areas near ramps
  */
 export function fillFeatureRect(
   grid: MapCell[][],
@@ -554,6 +573,11 @@ export function fillFeatureRect(
       const py = Math.floor(y + dy);
 
       if (py >= 0 && py < grid.length && px >= 0 && px < grid[0].length) {
+        // PROTECT ramps and areas near ramps
+        if (grid[py][px].terrain === 'ramp' || isRampOrNearRamp(grid, px, py, 3)) {
+          continue;
+        }
+
         grid[py][px].feature = feature;
         // Water and void features also affect terrain type
         if (feature === 'water_deep' || feature === 'void') {
@@ -568,6 +592,7 @@ export function fillFeatureRect(
 
 /**
  * Fill a circular area with a terrain feature
+ * PROTECTED: Will not overwrite ramps or areas near ramps
  */
 export function fillFeatureCircle(
   grid: MapCell[][],
@@ -583,6 +608,11 @@ export function fillFeatureCircle(
         const py = Math.floor(centerY + y);
 
         if (py >= 0 && py < grid.length && px >= 0 && px < grid[0].length) {
+          // PROTECT ramps and areas near ramps
+          if (grid[py][px].terrain === 'ramp' || isRampOrNearRamp(grid, px, py, 3)) {
+            continue;
+          }
+
           grid[py][px].feature = feature;
           // Water and void features also affect terrain type
           if (feature === 'water_deep' || feature === 'void') {
@@ -631,6 +661,11 @@ export function createForestCorridor(
       const py = Math.floor(cy + perpY * w);
 
       if (py >= 0 && py < grid.length && px >= 0 && px < grid[0].length) {
+        // PROTECT ramps and areas near ramps
+        if (grid[py][px].terrain === 'ramp' || isRampOrNearRamp(grid, px, py, 3)) {
+          continue;
+        }
+
         const absW = Math.abs(w);
 
         if (absW <= pathWidth / 2) {
@@ -686,6 +721,11 @@ export function createRiver(
       const py = Math.floor(cy + perpY * w);
 
       if (py >= 0 && py < grid.length && px >= 0 && px < grid[0].length) {
+        // PROTECT ramps and areas near ramps
+        if (grid[py][px].terrain === 'ramp' || isRampOrNearRamp(grid, px, py, 3)) {
+          continue;
+        }
+
         const absW = Math.abs(w);
 
         if (isBridge) {
@@ -723,6 +763,11 @@ export function createLake(
       const py = Math.floor(centerY + y);
 
       if (py >= 0 && py < grid.length && px >= 0 && px < grid[0].length) {
+        // PROTECT ramps and areas near ramps
+        if (grid[py][px].terrain === 'ramp' || isRampOrNearRamp(grid, px, py, 3)) {
+          continue;
+        }
+
         if (dist <= radius) {
           // Deep water in center
           grid[py][px].feature = 'water_deep';
@@ -739,6 +784,7 @@ export function createLake(
 
 /**
  * Create a void chasm (impassable area at map edges or between terrain)
+ * PROTECTED: Will not overwrite ramps or areas near ramps
  */
 export function createVoidChasm(
   grid: MapCell[][],
@@ -754,6 +800,11 @@ export function createVoidChasm(
       const py = Math.floor(y + dy);
 
       if (py >= 0 && py < grid.length && px >= 0 && px < grid[0].length) {
+        // PROTECT ramps and areas near ramps
+        if (grid[py][px].terrain === 'ramp' || isRampOrNearRamp(grid, px, py, 3)) {
+          continue;
+        }
+
         const isEdge = dx < 0 || dx >= width || dy < 0 || dy >= height;
 
         if (isEdge) {
@@ -785,6 +836,7 @@ export function createMudArea(
 
 /**
  * Create a road path between two points
+ * PROTECTED: Will not overwrite ramps or areas near ramps
  */
 export function createRoad(
   grid: MapCell[][],
@@ -812,6 +864,11 @@ export function createRoad(
       const py = Math.floor(cy + perpY * w);
 
       if (py >= 0 && py < grid.length && px >= 0 && px < grid[0].length) {
+        // PROTECT ramps and areas near ramps
+        if (grid[py][px].terrain === 'ramp' || isRampOrNearRamp(grid, px, py, 3)) {
+          continue;
+        }
+
         // Only apply to walkable terrain (don't overwrite cliffs/water)
         if (grid[py][px].terrain === 'ground' || grid[py][px].terrain === 'unbuildable') {
           grid[py][px].feature = 'road';

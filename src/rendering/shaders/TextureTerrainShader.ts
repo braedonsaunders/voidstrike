@@ -29,7 +29,9 @@ export const textureTerrainVertexShader = /* glsl */ `
   varying vec3 vColor;
 
   void main() {
-    vUv = uv * 8.0; // Tile textures 8x across terrain
+    // Tile textures 64x across terrain - much smaller texture detail
+    // This ensures leaves/pebbles are appropriately sized relative to buildings
+    vUv = uv * 64.0;
     vColor = color;
 
     vec4 worldPosition = modelMatrix * vec4(position, 1.0);
@@ -179,9 +181,10 @@ export const textureTerrainFragmentShader = /* glsl */ `
     blendWeights /= (blendWeights.x + blendWeights.y + blendWeights.z);
 
     // Apply parallax offset to triplanar UVs as well
-    vec2 uvX = vWorldPosition.zy * 0.5;
-    vec2 uvY = vWorldPosition.xz * 0.5;
-    vec2 uvZ = vWorldPosition.xy * 0.5;
+    // Scale by 4.0 for appropriately-sized cliff textures (smaller than ground)
+    vec2 uvX = vWorldPosition.zy * 4.0;
+    vec2 uvY = vWorldPosition.xz * 4.0;
+    vec2 uvZ = vWorldPosition.xy * 4.0;
     if (uUseDisplacement && parallaxFade > 0.01) {
       float cliffHeight = texture2D(uCliffDisplacement, uvY).r;
       float effectiveScale = uParallaxScale * parallaxFade * 0.5;
@@ -206,16 +209,32 @@ export const textureTerrainFragmentShader = /* glsl */ `
     float cliffRoughZ = uUseRoughness ? texture2D(uCliffRoughness, uvZ).r : 0.75;
     float cliffRough = cliffRoughX * blendWeights.x + cliffRoughY * blendWeights.y + cliffRoughZ * blendWeights.z;
 
-    // Calculate blend weights based on slope and height
-    float grassWeight = smoothstep(0.3, 0.15, vSlope) * smoothstep(-1.0, 1.0, vElevation);
-    float rockWeight = smoothstep(0.15, 0.4, vSlope) * (1.0 - smoothstep(0.5, 0.7, vSlope));
-    float cliffWeight = smoothstep(0.5, 0.7, vSlope);
-    float dirtWeight = (1.0 - grassWeight) * (1.0 - rockWeight) * (1.0 - cliffWeight);
+    // Calculate blend weights based on slope and terrain type (via vertex color)
+    // Vertex colors encode terrain type: ground is brighter, cliff/unwalkable is darker/grayer
+    float colorBrightness = (vColor.r + vColor.g + vColor.b) / 3.0;
+    float colorSaturation = max(max(vColor.r, vColor.g), vColor.b) - min(min(vColor.r, vColor.g), vColor.b);
 
-    // Add some variation using vertex color (from geometry)
-    float variation = (vColor.r + vColor.g + vColor.b) / 3.0;
-    grassWeight *= mix(0.8, 1.2, variation);
-    dirtWeight *= mix(0.7, 1.3, 1.0 - variation);
+    // Terrain type detection from vertex color:
+    // - Cliff terrain has lower brightness and lower saturation (grayish)
+    // - Ground terrain has higher brightness and higher saturation (greenish)
+    float isCliffTerrain = smoothstep(0.5, 0.3, colorBrightness) * smoothstep(0.3, 0.1, colorSaturation);
+    float isGroundTerrain = smoothstep(0.3, 0.5, colorBrightness);
+
+    // Base weights from slope
+    float slopeGrassWeight = smoothstep(0.3, 0.15, vSlope);
+    float slopeRockWeight = smoothstep(0.15, 0.4, vSlope) * (1.0 - smoothstep(0.5, 0.7, vSlope));
+    float slopeCliffWeight = smoothstep(0.5, 0.7, vSlope);
+
+    // Combine slope-based weights with terrain type hints
+    // Cliff terrain should use cliff texture even if geometry is flat
+    float grassWeight = slopeGrassWeight * isGroundTerrain;
+    float rockWeight = slopeRockWeight + isCliffTerrain * 0.3;
+    float cliffWeight = slopeCliffWeight + isCliffTerrain * 0.7;
+    float dirtWeight = (1.0 - grassWeight) * (1.0 - cliffWeight) * (1.0 - min(1.0, rockWeight));
+
+    // Add variation for natural look
+    grassWeight *= mix(0.9, 1.1, colorBrightness);
+    dirtWeight *= mix(0.8, 1.2, 1.0 - colorBrightness);
 
     // Normalize weights
     float totalWeight = grassWeight + dirtWeight + rockWeight + cliffWeight;

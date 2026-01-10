@@ -324,24 +324,23 @@ export class Terrain {
         let detailNoise = 0;
 
         if (cell.terrain === 'unwalkable') {
-          // Cliffs and unwalkable areas: natural rocky terrain with layered noise
-          // Large scale rolling features
-          const largeNoise = fbmNoise(nx * 3, ny * 3, 4, 2.0, 0.5) * 0.4;
+          // Cliffs and unwalkable areas: SMOOTH cliffs with subtle surface texture
+          // Dramatically reduced noise amplitudes to prevent jagged appearance
 
-          // Medium scale variation for rock formations
-          const mediumNoise = ridgedNoise(nx * 8, ny * 8, 3, 2.0, 0.5) * 0.25;
+          // Large scale gentle rolling (reduced from 0.4 to 0.06)
+          const largeNoise = fbmNoise(nx * 2, ny * 2, 3, 2.0, 0.5) * 0.06;
 
-          // Small scale detail for texture
-          const smallNoise = fbmNoise(nx * 20, ny * 20, 2, 2.0, 0.5) * 0.08;
+          // Medium scale subtle variation (reduced from 0.25 to 0.03)
+          const mediumNoise = fbmNoise(nx * 5, ny * 5, 2, 2.0, 0.5) * 0.03;
 
-          // Voronoi for cracked/rocky appearance on cliffs
-          const voronoiDetail = voronoiNoise(nx, ny, 10) * 0.15;
+          // Small scale detail for micro-texture only
+          const smallNoise = fbmNoise(nx * 12, ny * 12, 2, 2.0, 0.5) * 0.015;
 
-          detailNoise = largeNoise + mediumNoise + smallNoise - voronoiDetail * 0.5;
+          detailNoise = largeNoise + mediumNoise + smallNoise;
 
-          // Smoother cliff edge blending
+          // Very gentle cliff edge blending (reduced from 0.3 to 0.04)
           if (edgeFactor > 0) {
-            detailNoise += edgeFactor * 0.3 * fbmNoise(nx * 5, ny * 5, 2, 2.0, 0.5);
+            detailNoise += edgeFactor * 0.04 * fbmNoise(nx * 3, ny * 3, 2, 2.0, 0.5);
           }
         } else if (cell.terrain === 'ramp') {
           // Ramps: very smooth gradient with minimal variation
@@ -385,7 +384,8 @@ export class Terrain {
 
     // Apply smoothing pass to heightmap for more natural transitions
     // This creates smoother cliff edges and more natural terrain flow
-    this.smoothHeightMap(2); // 2 iterations of smoothing
+    // Increased from 2 to 5 iterations for much smoother cliffs
+    this.smoothHeightMap(5);
 
     // Update vertex grid with smoothed heights
     for (let y = 0; y <= height; y++) {
