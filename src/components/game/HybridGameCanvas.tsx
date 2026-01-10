@@ -269,12 +269,9 @@ export function HybridGameCanvas() {
       // Initialize SC2-level visual systems
       selectionSystemRef.current = new SC2SelectionSystem(scene);
       particleSystemRef.current = new SC2ParticleSystem(scene);
-      // PERFORMANCE: Post-processing disabled by default for M1/low-end devices
-      // Can be enabled via settings for high-end devices
-      const enablePostProcessing = false; // TODO: Add to game settings
-      if (enablePostProcessing) {
-        postProcessingRef.current = new SC2PostProcessing(renderer, scene, camera.camera);
-      }
+      // Post-processing enabled for visual polish (bloom, vignette, color grading)
+      // Disable this on very low-end devices if performance is an issue
+      postProcessingRef.current = new SC2PostProcessing(renderer, scene, camera.camera);
 
       // Hook particle system to combat events
       game.eventBus.on('combat:attack', (data: {

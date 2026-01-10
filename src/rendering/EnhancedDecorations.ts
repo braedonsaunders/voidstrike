@@ -457,6 +457,22 @@ export class EnvironmentParticles {
           this.velocities[i * 3 + 1] = 0.1 + Math.random() * 0.2;
           this.velocities[i * 3 + 2] = (Math.random() - 0.5) * 0.3;
           break;
+        case 'fireflies':
+          // Slow, meandering movement with random direction changes
+          this.velocities[i * 3] = (Math.random() - 0.5) * 0.4;
+          this.velocities[i * 3 + 1] = (Math.random() - 0.5) * 0.15;
+          this.velocities[i * 3 + 2] = (Math.random() - 0.5) * 0.4;
+          // Lower initial height for fireflies (1-8 meters)
+          positions[i * 3 + 1] = 1 + Math.random() * 7;
+          break;
+        case 'embers':
+          // Rising embers with slight drift
+          this.velocities[i * 3] = (Math.random() - 0.5) * 0.8;
+          this.velocities[i * 3 + 1] = 0.5 + Math.random() * 1.0; // Rising
+          this.velocities[i * 3 + 2] = (Math.random() - 0.5) * 0.8;
+          // Start lower for embers (ground level to 5m)
+          positions[i * 3 + 1] = Math.random() * 5;
+          break;
       }
     }
 
@@ -488,6 +504,16 @@ export class EnvironmentParticles {
         color = new THREE.Color(0x80ff80);
         size = 0.12;
         opacity = 0.6;
+        break;
+      case 'fireflies':
+        color = new THREE.Color(0xffff40); // Warm yellow glow
+        size = 0.2;
+        opacity = 0.9;
+        break;
+      case 'embers':
+        color = new THREE.Color(0xff6020); // Orange-red hot embers
+        size = 0.15;
+        opacity = 0.85;
         break;
       default:
         color = new THREE.Color(0xffffff);
@@ -523,9 +549,42 @@ export class EnvironmentParticles {
       if (positions[i * 3 + 2] < 0) positions[i * 3 + 2] = this.bounds.height;
       if (positions[i * 3 + 2] > this.bounds.height) positions[i * 3 + 2] = 0;
 
-      // Reset if too high or too low
-      if (positions[i * 3 + 1] < 0 || positions[i * 3 + 1] > 35) {
-        positions[i * 3 + 1] = this.particleType === 'snow' ? 35 : 0;
+      // Reset if too high or too low based on particle type
+      const minHeight = 0;
+      let maxHeight = 35;
+      let resetHeight = 0;
+
+      switch (this.particleType) {
+        case 'snow':
+          resetHeight = 35;
+          break;
+        case 'fireflies':
+          maxHeight = 10;
+          // Fireflies stay in a range, randomly pick new position if out of bounds
+          if (positions[i * 3 + 1] < 1 || positions[i * 3 + 1] > maxHeight) {
+            positions[i * 3 + 1] = 1 + Math.random() * 7;
+            // Also randomize velocity for more organic movement
+            this.velocities[i * 3] = (Math.random() - 0.5) * 0.4;
+            this.velocities[i * 3 + 1] = (Math.random() - 0.5) * 0.15;
+            this.velocities[i * 3 + 2] = (Math.random() - 0.5) * 0.4;
+          }
+          // Occasionally change direction for organic movement
+          if (Math.random() < 0.01) {
+            this.velocities[i * 3] += (Math.random() - 0.5) * 0.2;
+            this.velocities[i * 3 + 1] += (Math.random() - 0.5) * 0.1;
+            this.velocities[i * 3 + 2] += (Math.random() - 0.5) * 0.2;
+          }
+          continue; // Skip the generic reset below
+        case 'embers':
+          maxHeight = 25;
+          resetHeight = 0;
+          break;
+        default:
+          resetHeight = 0;
+      }
+
+      if (positions[i * 3 + 1] < minHeight || positions[i * 3 + 1] > maxHeight) {
+        positions[i * 3 + 1] = resetHeight;
         positions[i * 3] = Math.random() * this.bounds.width;
         positions[i * 3 + 2] = Math.random() * this.bounds.height;
       }
