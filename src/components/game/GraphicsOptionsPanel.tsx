@@ -1,7 +1,22 @@
 'use client';
 
 import React from 'react';
-import { useUIStore } from '@/store/uiStore';
+import { useUIStore, GraphicsSettings } from '@/store/uiStore';
+
+const buttonStyle = (enabled: boolean) => ({
+  padding: '4px 12px',
+  backgroundColor: enabled ? '#2a5a2a' : '#5a2a2a',
+  border: 'none',
+  borderRadius: '4px',
+  color: 'white',
+  cursor: 'pointer',
+  fontSize: '11px',
+  minWidth: '50px',
+});
+
+const sliderStyle = { width: '100%', marginTop: '4px' };
+const labelStyle: React.CSSProperties = { display: 'block', marginBottom: '2px', color: '#888', fontSize: '11px' };
+const sectionStyle: React.CSSProperties = { marginBottom: '16px', paddingBottom: '12px', borderBottom: '1px solid #333' };
 
 /**
  * In-game graphics options panel
@@ -9,37 +24,17 @@ import { useUIStore } from '@/store/uiStore';
  * Each effect has its toggle followed by related sliders
  */
 export function GraphicsOptionsPanel() {
-  const {
-    showGraphicsOptions,
-    graphicsSettings,
-    toggleGraphicsOptions,
-    toggleGraphicsSetting,
-    setGraphicsSetting,
-  } = useUIStore();
+  const showGraphicsOptions = useUIStore((state) => state.showGraphicsOptions);
+  const graphicsSettings = useUIStore((state) => state.graphicsSettings);
+  const toggleGraphicsOptions = useUIStore((state) => state.toggleGraphicsOptions);
+  const toggleGraphicsSetting = useUIStore((state) => state.toggleGraphicsSetting);
+  const setGraphicsSetting = useUIStore((state) => state.setGraphicsSetting);
 
   if (!showGraphicsOptions) return null;
 
-  const sliderStyle = { width: '100%', marginTop: '4px' };
-  const labelStyle = { display: 'block', marginBottom: '2px', color: '#888', fontSize: '11px' };
-  const sectionStyle = { marginBottom: '16px', paddingBottom: '12px', borderBottom: '1px solid #333' };
-
-  const ToggleButton = ({ enabled, onClick }: { enabled: boolean; onClick: () => void }) => (
-    <button
-      onClick={onClick}
-      style={{
-        padding: '4px 12px',
-        backgroundColor: enabled ? '#2a5a2a' : '#5a2a2a',
-        border: 'none',
-        borderRadius: '4px',
-        color: 'white',
-        cursor: 'pointer',
-        fontSize: '11px',
-        minWidth: '50px',
-      }}
-    >
-      {enabled ? 'ON' : 'OFF'}
-    </button>
-  );
+  const handleToggle = (key: keyof GraphicsSettings) => {
+    toggleGraphicsSetting(key);
+  };
 
   return (
     <div
@@ -64,7 +59,7 @@ export function GraphicsOptionsPanel() {
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
         <h3 style={{ margin: 0, fontSize: '14px' }}>Graphics Options</h3>
         <button
-          onClick={toggleGraphicsOptions}
+          onClick={() => toggleGraphicsOptions()}
           style={{
             background: 'none',
             border: 'none',
@@ -81,10 +76,12 @@ export function GraphicsOptionsPanel() {
       <div style={sectionStyle}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
           <span style={{ fontWeight: 'bold' }}>Post-Processing (Master)</span>
-          <ToggleButton
-            enabled={graphicsSettings.postProcessingEnabled}
-            onClick={() => toggleGraphicsSetting('postProcessingEnabled')}
-          />
+          <button
+            onClick={() => handleToggle('postProcessingEnabled')}
+            style={buttonStyle(graphicsSettings.postProcessingEnabled)}
+          >
+            {graphicsSettings.postProcessingEnabled ? 'ON' : 'OFF'}
+          </button>
         </div>
         <div>
           <label style={labelStyle}>
@@ -106,10 +103,12 @@ export function GraphicsOptionsPanel() {
       <div style={sectionStyle}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
           <span>SSAO (Ambient Occlusion)</span>
-          <ToggleButton
-            enabled={graphicsSettings.ssaoEnabled}
-            onClick={() => toggleGraphicsSetting('ssaoEnabled')}
-          />
+          <button
+            onClick={() => handleToggle('ssaoEnabled')}
+            style={buttonStyle(graphicsSettings.ssaoEnabled)}
+          >
+            {graphicsSettings.ssaoEnabled ? 'ON' : 'OFF'}
+          </button>
         </div>
         <div>
           <label style={labelStyle}>
@@ -131,10 +130,12 @@ export function GraphicsOptionsPanel() {
       <div style={sectionStyle}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
           <span>Bloom</span>
-          <ToggleButton
-            enabled={graphicsSettings.bloomEnabled}
-            onClick={() => toggleGraphicsSetting('bloomEnabled')}
-          />
+          <button
+            onClick={() => handleToggle('bloomEnabled')}
+            style={buttonStyle(graphicsSettings.bloomEnabled)}
+          >
+            {graphicsSettings.bloomEnabled ? 'ON' : 'OFF'}
+          </button>
         </div>
         <div style={{ marginBottom: '8px' }}>
           <label style={labelStyle}>
@@ -184,10 +185,12 @@ export function GraphicsOptionsPanel() {
       <div style={sectionStyle}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
           <span>Selection Outline</span>
-          <ToggleButton
-            enabled={graphicsSettings.outlineEnabled}
-            onClick={() => toggleGraphicsSetting('outlineEnabled')}
-          />
+          <button
+            onClick={() => handleToggle('outlineEnabled')}
+            style={buttonStyle(graphicsSettings.outlineEnabled)}
+          >
+            {graphicsSettings.outlineEnabled ? 'ON' : 'OFF'}
+          </button>
         </div>
         <div>
           <label style={labelStyle}>
@@ -209,10 +212,12 @@ export function GraphicsOptionsPanel() {
       <div style={sectionStyle}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
           <span>Anti-Aliasing (FXAA)</span>
-          <ToggleButton
-            enabled={graphicsSettings.fxaaEnabled}
-            onClick={() => toggleGraphicsSetting('fxaaEnabled')}
-          />
+          <button
+            onClick={() => handleToggle('fxaaEnabled')}
+            style={buttonStyle(graphicsSettings.fxaaEnabled)}
+          >
+            {graphicsSettings.fxaaEnabled ? 'ON' : 'OFF'}
+          </button>
         </div>
       </div>
 
@@ -220,10 +225,12 @@ export function GraphicsOptionsPanel() {
       <div style={{ marginBottom: '8px' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
           <span>Ambient Particles</span>
-          <ToggleButton
-            enabled={graphicsSettings.particlesEnabled}
-            onClick={() => toggleGraphicsSetting('particlesEnabled')}
-          />
+          <button
+            onClick={() => handleToggle('particlesEnabled')}
+            style={buttonStyle(graphicsSettings.particlesEnabled)}
+          >
+            {graphicsSettings.particlesEnabled ? 'ON' : 'OFF'}
+          </button>
         </div>
         <div>
           <label style={labelStyle}>
