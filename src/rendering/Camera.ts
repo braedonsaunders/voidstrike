@@ -18,7 +18,7 @@ const DEFAULT_CONFIG: CameraConfig = {
   zoomSpeed: 5,
   rotationSpeed: 2,
   edgeScrollSpeed: 60,
-  edgeScrollThreshold: 40,
+  edgeScrollThreshold: 50,
   boundaryPadding: 10,
 };
 
