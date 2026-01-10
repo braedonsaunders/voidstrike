@@ -180,6 +180,14 @@ export class PathfindingSystem extends System {
       this.blockArea(data.position.x, data.position.y, data.width, data.height);
     });
 
+    // Clean up path states when units die to prevent memory leaks
+    this.game.eventBus.on('unit:died', (data: { entityId: number }) => {
+      this.unitPathStates.delete(data.entityId);
+    });
+    this.game.eventBus.on('unit:destroyed', (data: { entityId: number }) => {
+      this.unitPathStates.delete(data.entityId);
+    });
+
     // Handle move commands - calculate paths
     this.game.eventBus.on('pathfinding:request', (data: {
       entityId: number;

@@ -61,14 +61,19 @@ export class EventBus {
 
   /**
    * Emit an event to all subscribers
+   * OPTIMIZED: Avoid array allocation on every emit by iterating Map directly
    */
   public emit<T = unknown>(event: string, data?: T): void {
     const subscriptions = this.events.get(event);
-    if (!subscriptions) return;
+    if (!subscriptions || subscriptions.size === 0) return;
 
-    // Create a copy to avoid issues if callbacks modify subscriptions during iteration
-    const callbacks = Array.from(subscriptions.values());
-    for (const callback of callbacks) {
+    // Iterate directly over Map entries - avoids Array.from() allocation
+    // Safe because we check if callback still exists before calling
+    // (handles case where callback unsubscribes itself or others)
+    for (const [id, callback] of subscriptions) {
+      // Verify callback still exists (could have been removed by previous callback)
+      if (!subscriptions.has(id)) continue;
+
       try {
         callback(data);
       } catch (error) {

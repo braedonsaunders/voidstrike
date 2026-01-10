@@ -79,9 +79,19 @@ export class AIMicroSystem extends System {
       this.aiPlayerIds.add(data.playerId);
     });
 
-    // Clean up when units are destroyed
+    // Clean up when units die or are destroyed to prevent memory leaks
+    this.game.eventBus.on('unit:died', (data: { entityId: number }) => {
+      this.unitStates.delete(data.entityId);
+      // Also remove any pending commands for this unit
+      this.pendingCommands = this.pendingCommands.filter(
+        cmd => cmd.command.entityIds[0] !== data.entityId
+      );
+    });
     this.game.eventBus.on('unit:destroyed', (data: { entityId: number }) => {
       this.unitStates.delete(data.entityId);
+      this.pendingCommands = this.pendingCommands.filter(
+        cmd => cmd.command.entityIds[0] !== data.entityId
+      );
     });
   }
 
