@@ -280,32 +280,32 @@ export class UnitRenderer {
    * Remove root motion (position/translation tracks) from an animation clip.
    * This prevents animations from moving the model, which would conflict with
    * programmatic position updates and cause jolting/warping effects.
+   *
+   * ONLY removes position/translation tracks from the actual root bone, not child bones.
    */
   private removeRootMotion(clip: THREE.AnimationClip): void {
-    // Filter out position tracks that affect the root bone
-    // Keep rotation and scale tracks, but remove position/translation
+    // Filter out position/translation tracks that affect the root bone ONLY
+    // Keep rotation and scale tracks, and keep position tracks for non-root bones
     const tracksToRemove: number[] = [];
+
+    // Common root bone names in character rigs (case-insensitive matching)
+    const rootBoneNames = ['root', 'rootbone', 'root_bone', 'armature', 'hips', 'mixamorig:hips', 'pelvis'];
 
     for (let i = 0; i < clip.tracks.length; i++) {
       const track = clip.tracks[i];
       const trackName = track.name.toLowerCase();
 
-      // Check if this is a position/translation track on a root-level bone
-      // Common patterns: ".position", "[position]", "position" in track names
-      // Root bones are often named: "root", "hips", "pelvis", "armature", or just the first bone
-      const isPositionTrack = trackName.includes('.position') ||
-                               trackName.includes('[position]') ||
-                               trackName.endsWith('position');
+      // Check if this is a position/translation track (GLTF uses "translation", Three.js uses "position")
+      const isPositionTrack = trackName.includes('.position') || trackName.includes('.translation');
+      if (!isPositionTrack) continue;
 
-      // Only remove position tracks for root-level bones (not child bones)
-      // Root bones typically have short paths without many "." separators
-      const isRootLevel = trackName.split('.').length <= 2 ||
-                          trackName.includes('root') ||
-                          trackName.includes('hips') ||
-                          trackName.includes('pelvis') ||
-                          trackName.includes('armature');
+      // Extract the bone name from the track (format: "BoneName.position" or "BoneName.translation")
+      const boneName = trackName.split('.')[0].toLowerCase();
 
-      if (isPositionTrack && isRootLevel) {
+      // Only remove if it's explicitly a root bone
+      const isRootBone = rootBoneNames.some(root => boneName === root || boneName === `mixamorig:${root}`);
+
+      if (isRootBone) {
         tracksToRemove.push(i);
       }
     }
