@@ -470,17 +470,17 @@ export function GameCanvas() {
 
             // Check if clicking on a resource (for gathering)
             if (resource) {
-              // Check if any selected units are workers
-              const hasWorkers = selectedUnits.some((id) => {
+              // Filter to only include worker entity IDs
+              const workerIds = selectedUnits.filter((id) => {
                 const entity = gameRef.current!.world.getEntity(id);
                 const unit = entity?.get<Unit>('Unit');
                 return unit?.isWorker;
               });
 
-              if (hasWorkers) {
+              if (workerIds.length > 0) {
                 // Issue gather command (queue if shift held)
                 gameRef.current.eventBus.emit('command:gather', {
-                  entityIds: selectedUnits,
+                  entityIds: workerIds,
                   targetEntityId: clickedEntity.entity.id,
                   queue,
                 });
@@ -513,7 +513,9 @@ export function GameCanvas() {
 
   // Helper function to find entity at world position
   const findEntityAtPosition = (game: Game, x: number, z: number): { entity: ReturnType<typeof game.world.getEntity> extends infer T ? NonNullable<T> : never } | null => {
-    const clickRadius = 1.5;
+    // Use larger radius for resources to make them easier to click on
+    const resourceClickRadius = 2.5;
+    const unitClickRadius = 1.5;
 
     // Check resources first
     const resources = game.world.getEntitiesWith('Resource', 'Transform');
@@ -521,7 +523,7 @@ export function GameCanvas() {
       const transform = entity.get<Transform>('Transform')!;
       const dx = transform.x - x;
       const dy = transform.y - z;
-      if (dx * dx + dy * dy < clickRadius * clickRadius) {
+      if (dx * dx + dy * dy < resourceClickRadius * resourceClickRadius) {
         return { entity };
       }
     }
@@ -534,12 +536,13 @@ export function GameCanvas() {
       if (health.isDead()) continue;
       const dx = transform.x - x;
       const dy = transform.y - z;
-      if (dx * dx + dy * dy < clickRadius * clickRadius) {
+      if (dx * dx + dy * dy < unitClickRadius * unitClickRadius) {
         return { entity };
       }
     }
 
-    // Check buildings
+    // Buildings have larger click radius due to their size
+    const buildingClickRadius = 2.0;
     const buildings = game.world.getEntitiesWith('Building', 'Transform', 'Health');
     for (const entity of buildings) {
       const transform = entity.get<Transform>('Transform')!;
@@ -547,7 +550,7 @@ export function GameCanvas() {
       if (health.isDead()) continue;
       const dx = transform.x - x;
       const dy = transform.y - z;
-      if (dx * dx + dy * dy < 4) { // Buildings are larger
+      if (dx * dx + dy * dy < buildingClickRadius * buildingClickRadius) {
         return { entity };
       }
     }

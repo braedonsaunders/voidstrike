@@ -189,15 +189,16 @@ export class InputHandler extends Phaser.Events.EventEmitter {
 
         // Check if clicking on a resource (for gathering)
         if (resource) {
-          const hasWorkers = selectedUnits.some(id => {
+          // Filter to only include worker entity IDs
+          const workerIds = selectedUnits.filter(id => {
             const e = this.game.world.getEntity(id);
             const unit = e?.get<Unit>('Unit');
             return unit?.isWorker;
           });
 
-          if (hasWorkers) {
+          if (workerIds.length > 0) {
             this.game.eventBus.emit('command:gather', {
-              entityIds: selectedUnits,
+              entityIds: workerIds,
               targetEntityId: clickedEntity.id,
               queue,
             });
@@ -310,7 +311,9 @@ export class InputHandler extends Phaser.Events.EventEmitter {
   }
 
   private findEntityAtPosition(x: number, y: number): { id: number } | null {
-    const clickRadius = 1.5;
+    // Use larger radius for resources to make them easier to click on
+    const resourceClickRadius = 2.5;
+    const unitClickRadius = 1.5;
 
     // Check resources first
     const resources = this.game.world.getEntitiesWith('Resource', 'Transform');
@@ -318,7 +321,7 @@ export class InputHandler extends Phaser.Events.EventEmitter {
       const transform = entity.get<Transform>('Transform')!;
       const dx = transform.x - x;
       const dy = transform.y - y;
-      if (dx * dx + dy * dy < clickRadius * clickRadius) {
+      if (dx * dx + dy * dy < resourceClickRadius * resourceClickRadius) {
         return { id: entity.id };
       }
     }
@@ -331,12 +334,13 @@ export class InputHandler extends Phaser.Events.EventEmitter {
       if (health.isDead()) continue;
       const dx = transform.x - x;
       const dy = transform.y - y;
-      if (dx * dx + dy * dy < clickRadius * clickRadius) {
+      if (dx * dx + dy * dy < unitClickRadius * unitClickRadius) {
         return { id: entity.id };
       }
     }
 
-    // Check buildings
+    // Buildings have larger click radius due to their size
+    const buildingClickRadius = 2.0;
     const buildings = this.game.world.getEntitiesWith('Building', 'Transform', 'Health');
     for (const entity of buildings) {
       const transform = entity.get<Transform>('Transform')!;
@@ -344,7 +348,7 @@ export class InputHandler extends Phaser.Events.EventEmitter {
       if (health.isDead()) continue;
       const dx = transform.x - x;
       const dy = transform.y - y;
-      if (dx * dx + dy * dy < 4) {
+      if (dx * dx + dy * dy < buildingClickRadius * buildingClickRadius) {
         return { id: entity.id };
       }
     }
