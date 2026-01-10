@@ -234,9 +234,17 @@ export class UnitRenderer {
         animations.set('attack', animations.get('idle')!);
       }
 
+      // Log final animation mappings
+      console.log(`[UnitRenderer] ${unitType}: Final animation mappings:`);
+      for (const [key, action] of animations) {
+        const clipName = action.getClip().name;
+        console.log(`[UnitRenderer]   '${key}' -> clip "${clipName}"`);
+      }
+
       // Start with idle animation if available
       const idleAction = animations.get('idle');
       if (idleAction) {
+        console.log(`[UnitRenderer] ${unitType}: Starting idle animation, clip name: "${idleAction.getClip().name}"`);
         idleAction.play();
       } else if (clips.length > 0) {
         // Fall back to first NON-DEATH animation to avoid playing death as idle
@@ -324,12 +332,17 @@ export class UnitRenderer {
       const currentActionObj = animUnit.animations.get(animUnit.currentAction);
       const targetActionObj = animUnit.animations.get(targetAction);
 
+      console.log(`[UnitRenderer] Animation switch: ${animUnit.currentAction} -> ${targetAction} (isMoving=${isMoving}, isAttacking=${isAttacking})`);
+      console.log(`[UnitRenderer] Available animations:`, Array.from(animUnit.animations.keys()));
+
       if (targetActionObj) {
         if (currentActionObj) {
           currentActionObj.fadeOut(0.2);
         }
         targetActionObj.reset().fadeIn(0.2).play();
         animUnit.currentAction = targetAction;
+      } else {
+        console.warn(`[UnitRenderer] Target animation '${targetAction}' not found!`);
       }
     }
   }
