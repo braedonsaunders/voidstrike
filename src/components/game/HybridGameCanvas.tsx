@@ -37,6 +37,7 @@ import { Building } from '@/engine/components/Building';
 import AssetManager from '@/assets/AssetManager';
 import { OverlayScene } from '@/phaser/scenes/OverlayScene';
 import { useProjectionStore } from '@/store/projectionStore';
+import { setCameraRef } from '@/store/cameraStore';
 
 /**
  * HYBRID GAME CANVAS
@@ -190,6 +191,9 @@ export function HybridGameCanvas() {
       const playerSpawn = CURRENT_MAP.spawns.find(s => s.playerSlot === localPlayerSlot) || CURRENT_MAP.spawns[0];
       camera.setPosition(playerSpawn.x, playerSpawn.y);
       cameraRef.current = camera;
+
+      // Store camera reference globally for UI components to control edge scrolling
+      setCameraRef(camera);
 
       // Create environment
       const environment = new EnvironmentManager(scene, CURRENT_MAP);
@@ -525,6 +529,7 @@ export function HybridGameCanvas() {
       rallyPointRendererRef.current?.dispose();
       watchTowerRendererRef.current?.dispose();
       cameraRef.current?.dispose();
+      setCameraRef(null); // Clear global camera reference
       unitRendererRef.current?.dispose();
       buildingRendererRef.current?.dispose();
       resourceRendererRef.current?.dispose();

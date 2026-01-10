@@ -113,17 +113,17 @@ export class RTSCamera {
     let dx = 0;
     let dy = 0;
 
-    // Keyboard panning (WASD and arrows)
-    if (this.keys.has('KeyW') || this.keys.has('ArrowUp')) {
+    // Keyboard panning (arrow keys only - WASD reserved for shortcuts)
+    if (this.keys.has('ArrowUp')) {
       dy -= this.panSpeed * dt;
     }
-    if (this.keys.has('KeyS') || this.keys.has('ArrowDown')) {
+    if (this.keys.has('ArrowDown')) {
       dy += this.panSpeed * dt;
     }
-    if (this.keys.has('KeyA') || this.keys.has('ArrowLeft')) {
+    if (this.keys.has('ArrowLeft')) {
       dx -= this.panSpeed * dt;
     }
-    if (this.keys.has('KeyD') || this.keys.has('ArrowRight')) {
+    if (this.keys.has('ArrowRight')) {
       dx += this.panSpeed * dt;
     }
 

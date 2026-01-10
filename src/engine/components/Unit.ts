@@ -162,6 +162,7 @@ export class Unit extends Component {
   public isRepairing: boolean;
   public repairTargetId: number | null;
   public healTargetId: number | null;
+  public autocastRepair: boolean; // Auto-repair nearby damaged buildings/mechanical units
 
   // Buff tracking
   public activeBuffs: Map<string, { duration: number; effects: Record<string, number> }>;
@@ -250,6 +251,7 @@ export class Unit extends Component {
     this.isRepairing = false;
     this.repairTargetId = null;
     this.healTargetId = null;
+    this.autocastRepair = false; // Off by default, player can toggle
 
     // Buff tracking
     this.activeBuffs = new Map();

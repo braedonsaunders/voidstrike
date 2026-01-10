@@ -246,10 +246,12 @@ export function spawnBuildingAtPosition(
   }
 
   const entity = world.createEntity();
+  const health = new Health(definition.maxHealth, definition.armor, 'structure');
+  health.current = definition.maxHealth * 0.1; // Start at 10% health (under construction)
   entity
     .add(new Transform(x, y, 0))
     .add(new Building(definition))
-    .add(new Health(definition.maxHealth * 0.1, definition.armor, 'structure'))
+    .add(health)
     .add(new Selectable(definition.width, 10, playerId));
 }
 
