@@ -98,6 +98,36 @@ export function GraphicsOptionsPanel() {
       <div style={{ marginTop: '16px', borderTop: '1px solid #333', paddingTop: '12px' }}>
         <div style={{ marginBottom: '12px' }}>
           <label style={{ display: 'block', marginBottom: '4px', color: '#aaa', fontSize: '11px' }}>
+            SSAO Radius: {graphicsSettings.ssaoRadius}
+          </label>
+          <input
+            type="range"
+            min="2"
+            max="32"
+            step="2"
+            value={graphicsSettings.ssaoRadius}
+            onChange={(e) => setGraphicsSetting('ssaoRadius', parseFloat(e.target.value))}
+            style={{ width: '100%' }}
+          />
+        </div>
+
+        <div style={{ marginBottom: '12px' }}>
+          <label style={{ display: 'block', marginBottom: '4px', color: '#aaa', fontSize: '11px' }}>
+            Outline Strength: {graphicsSettings.outlineStrength.toFixed(1)}
+          </label>
+          <input
+            type="range"
+            min="0.5"
+            max="5"
+            step="0.5"
+            value={graphicsSettings.outlineStrength}
+            onChange={(e) => setGraphicsSetting('outlineStrength', parseFloat(e.target.value))}
+            style={{ width: '100%' }}
+          />
+        </div>
+
+        <div style={{ marginBottom: '12px' }}>
+          <label style={{ display: 'block', marginBottom: '4px', color: '#aaa', fontSize: '11px' }}>
             Bloom Strength: {graphicsSettings.bloomStrength.toFixed(2)}
           </label>
           <input

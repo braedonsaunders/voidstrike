@@ -14,8 +14,10 @@ export interface Notification {
 export interface GraphicsSettings {
   postProcessingEnabled: boolean;
   ssaoEnabled: boolean;
+  ssaoRadius: number;
   bloomEnabled: boolean;
   outlineEnabled: boolean;
+  outlineStrength: number;
   fxaaEnabled: boolean;
   groundFogEnabled: boolean;
   particlesEnabled: boolean;
@@ -104,13 +106,15 @@ export const useUIStore = create<UIState>((set, get) => ({
   graphicsSettings: {
     postProcessingEnabled: true,
     ssaoEnabled: true,
+    ssaoRadius: 8,
     bloomEnabled: true,
     outlineEnabled: true,
+    outlineStrength: 2,
     fxaaEnabled: true,
-    groundFogEnabled: false,
+    groundFogEnabled: true,
     particlesEnabled: true,
-    bloomStrength: 0.3,
-    bloomThreshold: 0.85,
+    bloomStrength: 0.2,
+    bloomThreshold: 0.9,
   },
 
   setScreen: (screen) =>
