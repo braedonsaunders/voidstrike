@@ -16,6 +16,7 @@ export interface GraphicsSettings {
   bloomEnabled: boolean;
   ssaoEnabled: boolean;
   godRaysEnabled: boolean;
+  colorGradingEnabled: boolean;
   groundFogEnabled: boolean;
   particlesEnabled: boolean;
   bloomStrength: number;
@@ -106,6 +107,7 @@ export const useUIStore = create<UIState>((set, get) => ({
     bloomEnabled: true,
     ssaoEnabled: true,
     godRaysEnabled: true,
+    colorGradingEnabled: true,
     groundFogEnabled: true,
     particlesEnabled: true,
     bloomStrength: 0.4,

@@ -944,6 +944,7 @@ export function HybridGameCanvas() {
       if (postProcessingRef.current) {
         postProcessingRef.current.setSSAOEnabled(settings.postProcessingEnabled && settings.ssaoEnabled);
         postProcessingRef.current.setGodRaysEnabled(settings.postProcessingEnabled && settings.godRaysEnabled);
+        postProcessingRef.current.setColorGradingEnabled(settings.postProcessingEnabled && settings.colorGradingEnabled);
         postProcessingRef.current.setBloomStrength(settings.postProcessingEnabled && settings.bloomEnabled ? settings.bloomStrength : 0);
         postProcessingRef.current.setSSAOStrength(settings.ssaoStrength);
         postProcessingRef.current.setGodRaysStrength(settings.godRaysStrength);

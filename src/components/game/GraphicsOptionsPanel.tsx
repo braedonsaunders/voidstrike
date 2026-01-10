@@ -23,6 +23,7 @@ export function GraphicsOptionsPanel() {
     { key: 'bloomEnabled', label: 'Bloom' },
     { key: 'ssaoEnabled', label: 'SSAO (Ambient Occlusion)' },
     { key: 'godRaysEnabled', label: 'God Rays' },
+    { key: 'colorGradingEnabled', label: 'Color Grading / Vignette' },
     { key: 'groundFogEnabled', label: 'Ground Fog' },
     { key: 'particlesEnabled', label: 'Ambient Particles' },
   ];
