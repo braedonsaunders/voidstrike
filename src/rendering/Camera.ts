@@ -49,6 +49,7 @@ export class RTSCamera {
   private isMiddleMouseDown = false;
   private lastMousePosition = { x: 0, y: 0 };
   private edgeScrollEnabled = true;
+  private mouseInViewport = true;
 
   // Screen dimensions
   private screenWidth = 0;
@@ -116,8 +117,20 @@ export class RTSCamera {
     window.addEventListener('wheel', this.handleWheel.bind(this), { passive: false });
     window.addEventListener('resize', this.handleResize.bind(this));
 
+    // Track when cursor leaves/enters the viewport
+    document.addEventListener('mouseleave', this.handleMouseLeaveViewport.bind(this));
+    document.addEventListener('mouseenter', this.handleMouseEnterViewport.bind(this));
+
     this.screenWidth = window.innerWidth;
     this.screenHeight = window.innerHeight;
+  }
+
+  private handleMouseLeaveViewport(): void {
+    this.mouseInViewport = false;
+  }
+
+  private handleMouseEnterViewport(): void {
+    this.mouseInViewport = true;
   }
 
   private handleKeyDown(e: KeyboardEvent): void {
@@ -247,8 +260,8 @@ export class RTSCamera {
       dx += this.config.panSpeed * dt;
     }
 
-    // Edge scrolling (disabled when mouse is over UI)
-    if (!this.isMiddleMouseDown && this.edgeScrollEnabled) {
+    // Edge scrolling (disabled when mouse is over UI or outside viewport)
+    if (!this.isMiddleMouseDown && this.edgeScrollEnabled && this.mouseInViewport) {
       const { edgeScrollThreshold, edgeScrollSpeed } = this.config;
 
       if (this.mousePosition.x < edgeScrollThreshold) {
@@ -475,5 +488,7 @@ export class RTSCamera {
     window.removeEventListener('mouseup', this.handleMouseUp.bind(this));
     window.removeEventListener('wheel', this.handleWheel.bind(this));
     window.removeEventListener('resize', this.handleResize.bind(this));
+    document.removeEventListener('mouseleave', this.handleMouseLeaveViewport.bind(this));
+    document.removeEventListener('mouseenter', this.handleMouseEnterViewport.bind(this));
   }
 }
