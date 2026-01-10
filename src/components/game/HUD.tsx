@@ -154,21 +154,21 @@ export function HUD() {
       </div>
 
       {/* Bottom bar */}
-      <div
-        className="absolute bottom-0 left-0 right-0 flex justify-between items-end p-2 pointer-events-auto"
-        onMouseEnter={handleUIMouseEnter}
-        onMouseLeave={handleUIMouseLeave}
-      >
-        {/* Minimap */}
-        <Minimap />
+      <div className="absolute bottom-0 left-0 right-0 flex justify-between items-end p-2 pointer-events-auto">
+        {/* Minimap - disable edge scroll when hovering */}
+        <div onMouseEnter={handleUIMouseEnter} onMouseLeave={handleUIMouseLeave}>
+          <Minimap />
+        </div>
 
-        {/* Selection panel */}
+        {/* Selection panel - allow edge scroll through center */}
         <div className="flex-1 mx-4">
           <SelectionPanel />
         </div>
 
-        {/* Command card */}
-        <CommandCard />
+        {/* Command card - disable edge scroll when hovering */}
+        <div onMouseEnter={handleUIMouseEnter} onMouseLeave={handleUIMouseLeave}>
+          <CommandCard />
+        </div>
       </div>
 
       {/* Player Status Panel - top right (toggleable) */}
