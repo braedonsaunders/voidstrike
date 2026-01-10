@@ -137,6 +137,13 @@ export class UnitRenderer {
     if (!animUnit) {
       const playerColor = getPlayerColor(playerId);
       const mesh = AssetManager.getUnitMesh(unitType, playerColor);
+      // Units render AFTER ground effects (5) but BEFORE damage numbers (100)
+      mesh.renderOrder = 50;
+      mesh.traverse((child) => {
+        if ((child as THREE.Mesh).isMesh) {
+          child.renderOrder = 50;
+        }
+      });
       this.scene.add(mesh);
 
       // Find the actual model inside the wrapper for proper animation binding
@@ -387,6 +394,8 @@ export class UnitRenderer {
       instancedMesh.castShadow = true;
       instancedMesh.receiveShadow = true;
       instancedMesh.frustumCulled = false; // We'll handle culling ourselves
+      // Units render AFTER ground effects (5) but BEFORE damage numbers (100)
+      instancedMesh.renderOrder = 50;
 
       this.scene.add(instancedMesh);
 
