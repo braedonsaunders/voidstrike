@@ -120,6 +120,8 @@ export class EffectsRenderer {
       transparent: true,
       opacity: 0.8,
       side: THREE.DoubleSide,
+      depthTest: false,
+      depthWrite: false,
     });
 
     // Death effect geometry - created once, reused per threejs-builder skill
@@ -129,6 +131,8 @@ export class EffectsRenderer {
       transparent: true,
       opacity: 1,
       side: THREE.DoubleSide,
+      depthTest: false,
+      depthWrite: false,
     });
 
     // Focus fire indicator - pulsing ring around targets being attacked by multiple units
@@ -138,6 +142,8 @@ export class EffectsRenderer {
       transparent: true,
       opacity: 0.6,
       side: THREE.DoubleSide,
+      depthTest: false,
+      depthWrite: false,
     });
 
     // Explosion debris particles
@@ -161,6 +167,8 @@ export class EffectsRenderer {
       transparent: true,
       opacity: 0.9,
       side: THREE.DoubleSide,
+      depthTest: false,
+      depthWrite: false,
     });
 
     // Initialize object pools
@@ -174,6 +182,7 @@ export class EffectsRenderer {
       const mesh = new THREE.Mesh(this.hitGeometry, this.hitMaterial.clone());
       mesh.visible = false;
       mesh.rotation.x = -Math.PI / 2;
+      mesh.renderOrder = 998; // Render after terrain but before damage numbers
       return mesh;
     });
 
@@ -420,6 +429,7 @@ export class EffectsRenderer {
     const mesh = new THREE.Mesh(this.deathGeometry, this.deathMaterial.clone());
     mesh.position.copy(position);
     mesh.rotation.x = -Math.PI / 2;
+    mesh.renderOrder = 998; // Render after terrain
     this.scene.add(mesh);
 
     this.hitEffects.push({
@@ -493,11 +503,14 @@ export class EffectsRenderer {
         transparent: true,
         opacity: 0.8,
         side: THREE.DoubleSide,
+        depthTest: false,
+        depthWrite: false,
       })
     );
     ringMesh.position.copy(position);
     ringMesh.position.y = 0.1;
     ringMesh.rotation.x = -Math.PI / 2;
+    ringMesh.renderOrder = 998;
     this.scene.add(ringMesh);
 
     this.hitEffects.push({
@@ -514,10 +527,13 @@ export class EffectsRenderer {
         color: 0xffff88,
         transparent: true,
         opacity: 1,
+        depthTest: false,
+        depthWrite: false,
       })
     );
     flashMesh.position.copy(position);
     flashMesh.position.y = 1;
+    flashMesh.renderOrder = 998;
     this.scene.add(flashMesh);
 
     this.hitEffects.push({
@@ -563,11 +579,13 @@ export class EffectsRenderer {
       map: texture,
       transparent: true,
       depthTest: false,
+      depthWrite: false,
     });
 
     const sprite = new THREE.Sprite(material);
     sprite.position.copy(position);
     sprite.scale.set(1.5, 0.75, 1);
+    sprite.renderOrder = 999; // Render after terrain and other 3D objects
     this.scene.add(sprite);
 
     this.damageNumbers.push({
@@ -600,6 +618,7 @@ export class EffectsRenderer {
       const ring = new THREE.Mesh(ringGeometry, material);
       ring.position.copy(position);
       ring.rotation.x = -Math.PI / 2;
+      ring.renderOrder = 996; // Render after terrain
       this.scene.add(ring);
       rings.push(ring);
     }
@@ -632,6 +651,7 @@ export class EffectsRenderer {
         const mesh = new THREE.Mesh(this.focusFireGeometry, this.focusFireMaterial.clone());
         mesh.position.set(targetPos.x, 0.15, targetPos.y);
         mesh.rotation.x = -Math.PI / 2;
+        mesh.renderOrder = 997; // Render after terrain
         this.scene.add(mesh);
 
         indicator = {
