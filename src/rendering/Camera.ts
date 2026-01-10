@@ -38,6 +38,7 @@ export class RTSCamera {
   private targetZoom: number; // For smooth zoom interpolation
   private currentAngle: number;
   private currentPitch: number;
+  private manualPitchOffset: number; // User's manual pitch adjustment via middle mouse
 
   private mapWidth: number;
   private mapHeight: number;
@@ -74,10 +75,30 @@ export class RTSCamera {
     this.currentZoom = 30;
     this.targetZoom = 30; // Initialize target zoom same as current
     this.currentAngle = 0;
-    this.currentPitch = Math.PI / 4; // 45 degrees
+    this.manualPitchOffset = 0; // User can adjust pitch via middle mouse drag
+    this.currentPitch = this.calculateZoomBasedPitch(this.currentZoom);
 
     this.updateCameraPosition();
     this.setupEventListeners();
+  }
+
+  // Calculate pitch based on zoom level
+  // Zoomed in (minZoom) = looking more horizontally at building sides
+  // Zoomed out (maxZoom) = looking more top-down at the map
+  private calculateZoomBasedPitch(zoom: number): number {
+    const { minZoom, maxZoom } = this.config;
+    // Normalize zoom to 0-1 range (0 = zoomed in, 1 = zoomed out)
+    const t = (zoom - minZoom) / (maxZoom - minZoom);
+
+    // Pitch range: 0.2 (nearly horizontal) to PI/2.5 (~72 degrees, more top-down)
+    const minPitch = 0.2; // Zoomed in: looking at sides of buildings
+    const maxPitch = Math.PI / 2.5; // Zoomed out: more overhead view
+
+    // Interpolate and add manual offset
+    const basePitch = minPitch + t * (maxPitch - minPitch);
+
+    // Clamp final pitch to valid range
+    return Math.max(0.15, Math.min(Math.PI / 2 - 0.1, basePitch + this.manualPitchOffset));
   }
 
   private setupEventListeners(): void {
@@ -111,12 +132,16 @@ export class RTSCamera {
       const deltaX = e.clientX - this.lastMousePosition.x;
       const deltaY = e.clientY - this.lastMousePosition.y;
 
-      // Rotate camera
+      // Rotate camera angle (horizontal rotation)
       this.currentAngle -= deltaX * this.config.rotationSpeed * 0.01;
-      this.currentPitch = Math.max(
-        0.2,
-        Math.min(Math.PI / 2 - 0.1, this.currentPitch + deltaY * 0.01)
-      );
+
+      // Adjust manual pitch offset (vertical rotation)
+      // Clamp offset so total pitch stays within valid range
+      const newOffset = this.manualPitchOffset + deltaY * 0.01;
+      this.manualPitchOffset = Math.max(-0.5, Math.min(0.5, newOffset));
+
+      // Recalculate pitch with new offset
+      this.currentPitch = this.calculateZoomBasedPitch(this.currentZoom);
 
       this.updateCameraPosition();
     }
@@ -199,10 +224,14 @@ export class RTSCamera {
     if (Math.abs(zoomDiff) > 0.01) {
       // Lerp towards target zoom (8 is the smoothing factor - higher = faster)
       this.currentZoom += zoomDiff * Math.min(1, dt * 8);
+      // Update pitch based on new zoom level
+      this.currentPitch = this.calculateZoomBasedPitch(this.currentZoom);
       this.updateCameraPosition();
     } else if (zoomDiff !== 0) {
       // Snap to exact target when close enough
       this.currentZoom = this.targetZoom;
+      // Update pitch based on final zoom level
+      this.currentPitch = this.calculateZoomBasedPitch(this.currentZoom);
       this.updateCameraPosition();
     }
 
@@ -217,9 +246,10 @@ export class RTSCamera {
       this.target.x += rotatedX;
       this.target.z += rotatedZ;
 
-      // Clamp to map boundaries - ensure viewport stays within map
-      const viewHalfWidth = this.currentZoom;
-      const viewHalfHeight = this.currentZoom * 0.75;
+      // Clamp to map boundaries - allow panning close to edges
+      // Use smaller factors to allow panning closer to map edges
+      const viewHalfWidth = this.currentZoom * 0.3;
+      const viewHalfHeight = this.currentZoom * 0.3;
       this.target.x = Math.max(viewHalfWidth, Math.min(this.mapWidth - viewHalfWidth, this.target.x));
       this.target.z = Math.max(viewHalfHeight, Math.min(this.mapHeight - viewHalfHeight, this.target.z));
 
@@ -237,12 +267,11 @@ export class RTSCamera {
   }
 
   public setPosition(x: number, z: number): void {
-    // Calculate viewport half-sizes to ensure camera view stays within map bounds
-    // These values match the minimap viewport calculation
-    const viewHalfWidth = this.currentZoom;
-    const viewHalfHeight = this.currentZoom * 0.75;
+    // Calculate viewport half-sizes - use smaller factors to allow panning close to map edges
+    const viewHalfWidth = this.currentZoom * 0.3;
+    const viewHalfHeight = this.currentZoom * 0.3;
 
-    // Clamp position so the entire viewport stays within map boundaries
+    // Clamp position while allowing camera to get close to edges
     this.target.x = Math.max(viewHalfWidth, Math.min(this.mapWidth - viewHalfWidth, x));
     this.target.z = Math.max(viewHalfHeight, Math.min(this.mapHeight - viewHalfHeight, z));
     this.updateCameraPosition();
