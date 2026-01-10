@@ -227,8 +227,14 @@ class MusicPlayerClass {
    * This prevents interference with the game's render loop
    */
   private crossfade(from: HTMLAudioElement, to: HTMLAudioElement): void {
-    // Clean up any existing crossfade
+    // Clean up any existing crossfade first
     this.cleanupCrossfade();
+
+    // Double-check isLoading is still true (should be, but just in case)
+    if (!this.isLoading) {
+      debugAudio.warn('crossfade called but isLoading is false - aborting');
+      return;
+    }
 
     const startTime = Date.now();
     const startVolume = from.volume;
@@ -345,17 +351,31 @@ class MusicPlayerClass {
    */
   public skip(): void {
     // Don't skip if already loading or no category
-    if (this.isLoading || !this.currentCategory) {
+    if (this.isLoading) {
+      debugAudio.log('Skip ignored: already loading');
+      return;
+    }
+
+    if (!this.currentCategory) {
+      debugAudio.log('Skip ignored: no current category');
       return;
     }
 
     // Don't skip if we've hit max failures (no files)
     if (this.consecutiveFailures >= this.maxConsecutiveFailures) {
+      debugAudio.log('Skip ignored: max failures reached');
+      return;
+    }
+
+    // Don't skip if a crossfade is in progress
+    if (this.crossfadeInterval) {
+      debugAudio.log('Skip ignored: crossfade in progress');
       return;
     }
 
     const track = this.getNextTrack();
     if (track) {
+      debugAudio.log(`Skipping to: ${track.name}`);
       this.playTrack(track);
     }
   }

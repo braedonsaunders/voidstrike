@@ -1,9 +1,10 @@
 'use client';
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useUIStore } from '@/store/uiStore';
 import { AudioManager } from '@/audio/AudioManager';
 import { MusicPlayer } from '@/audio/MusicPlayer';
+import { setEdgeScrollEnabled } from '@/store/cameraStore';
 
 /**
  * Compact and beautiful sound options panel
@@ -23,6 +24,17 @@ export function SoundOptionsPanel() {
 
   const [currentTrack, setCurrentTrack] = useState<string | null>(null);
   const [isPlaying, setIsPlaying] = useState(false);
+  const skipCooldownRef = useRef(false);
+
+  // Disable edge scrolling when panel is open
+  useEffect(() => {
+    if (showSoundOptions) {
+      setEdgeScrollEnabled(false);
+      return () => {
+        setEdgeScrollEnabled(true);
+      };
+    }
+  }, [showSoundOptions]);
 
   // Update current track name periodically
   useEffect(() => {
@@ -84,11 +96,17 @@ export function SoundOptionsPanel() {
   }, [isPlaying]);
 
   const handleSkip = useCallback(() => {
+    // Prevent rapid-fire skips with a cooldown
+    if (skipCooldownRef.current) return;
+
+    skipCooldownRef.current = true;
     MusicPlayer.skip();
-    // Update track name after a short delay
+
+    // Update track name after crossfade starts and reset cooldown
     setTimeout(() => {
       setCurrentTrack(MusicPlayer.getCurrentTrackName());
-    }, 100);
+      skipCooldownRef.current = false;
+    }, 500);
   }, []);
 
   if (!showSoundOptions) return null;
