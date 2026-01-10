@@ -165,6 +165,7 @@ export class EnhancedAISystem extends System {
     faction: string,
     difficulty: AIDifficulty = 'medium'
   ): void {
+    console.log(`[EnhancedAI] Registering AI: ${playerId}, faction: ${faction}, difficulty: ${difficulty}`);
     const config = this.getDifficultyConfig(difficulty);
 
     this.aiPlayers.set(playerId, {
@@ -291,6 +292,11 @@ export class EnhancedAISystem extends System {
   public update(_deltaTime: number): void {
     const currentTick = this.game.getCurrentTick();
 
+    // Log once at first tick
+    if (currentTick === 1) {
+      console.log(`[EnhancedAI] Registered AI players: ${Array.from(this.aiPlayers.keys()).join(', ')}`);
+    }
+
     for (const [playerId, ai] of this.aiPlayers) {
       const actionDelay = this.getActionDelay(ai.difficulty);
       if (currentTick - ai.lastActionTick < actionDelay) continue;
@@ -304,7 +310,15 @@ export class EnhancedAISystem extends System {
       const totalBuildings = Array.from(ai.buildingCounts.values()).reduce((a, b) => a + b, 0);
       if (totalBuildings === 0) {
         // AI is defeated - stop all activity
+        if (currentTick % 100 === 0) {
+          console.log(`[EnhancedAI] ${playerId} has no buildings, skipping`);
+        }
         continue;
+      }
+
+      // Debug log periodically
+      if (currentTick % 200 === 0) {
+        console.log(`[EnhancedAI] ${playerId}: workers=${ai.workerCount}, buildings=${totalBuildings}, minerals=${Math.floor(ai.minerals)}, state=${ai.state}`);
       }
 
       // Resource bonus for harder difficulties
@@ -1532,15 +1546,20 @@ export class EnhancedAISystem extends System {
 
   private findAIBase(playerId: string): { x: number; y: number } | null {
     const buildings = this.world.getEntitiesWith('Building', 'Transform', 'Selectable');
+    let foundForPlayer = false;
     for (const entity of buildings) {
       const selectable = entity.get<Selectable>('Selectable')!;
       const building = entity.get<Building>('Building')!;
       const transform = entity.get<Transform>('Transform')!;
 
       if (selectable.playerId !== playerId) continue;
+      foundForPlayer = true;
       if (building.buildingId === 'headquarters' || building.buildingId === 'orbital_station') {
         return { x: transform.x, y: transform.y };
       }
+    }
+    if (!foundForPlayer) {
+      console.log(`[EnhancedAI] findAIBase: No buildings at all for ${playerId}`);
     }
     return null;
   }
@@ -1927,7 +1946,10 @@ export class EnhancedAISystem extends System {
   private assignIdleWorkersToGather(ai: AIPlayer): void {
     // Find AI's base position
     const basePos = this.findAIBase(ai.playerId);
-    if (!basePos) return;
+    if (!basePos) {
+      console.log(`[EnhancedAI] ${ai.playerId}: No base found for gathering!`);
+      return;
+    }
 
     // Find nearby mineral patches
     const resources = this.world.getEntitiesWith('Resource', 'Transform');

@@ -63,6 +63,7 @@ export function spawnInitialEntities(game: Game, mapData: MapData): void {
 
     // Register AI players
     if (slot.type === 'ai') {
+      console.log(`[gameSetup] Registering AI for ${slot.id} (${slot.faction}, ${slot.aiDifficulty})`);
       registerAIPlayer(game, slot.id, slot.faction, slot.aiDifficulty);
     }
   });
