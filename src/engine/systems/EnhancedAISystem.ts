@@ -2054,6 +2054,11 @@ export class EnhancedAISystem extends System {
       return;
     }
 
+    // Debug log base position for player1
+    if (ai.playerId === 'player1' && this.game.getCurrentTick() === 20) {
+      console.log(`[EnhancedAI] ${ai.playerId}: Base at (${basePos.x.toFixed(1)}, ${basePos.y.toFixed(1)})`);
+    }
+
     // Find nearby mineral patches
     const resources = this.world.getEntitiesWith('Resource', 'Transform');
     const nearbyMinerals: { entityId: number; x: number; y: number; distance: number }[] = [];
@@ -2135,9 +2140,19 @@ export class EnhancedAISystem extends System {
       if (unit.state === 'idle') {
         idleWorkers.push(entity.id);
       }
+
+      // Debug: log worker states for player1
+      if (ai.playerId === 'player1' && this.game.getCurrentTick() === 20) {
+        console.log(`[EnhancedAI] ${ai.playerId} worker ${entity.id}: state=${unit.state}`);
+      }
     }
 
     if (nearbyMinerals.length === 0 && refineries.length === 0) return;
+
+    // Debug log for player1
+    if (ai.playerId === 'player1' && this.game.getCurrentTick() % 100 === 0) {
+      console.log(`[EnhancedAI] ${ai.playerId}: idle workers=${idleWorkers.length}, nearby minerals=${nearbyMinerals.length}`);
+    }
 
     // Assign idle workers - prioritize getting 3 workers per refinery first
     const targetGasWorkers = refineries.length * 3;
