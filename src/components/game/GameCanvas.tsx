@@ -145,10 +145,17 @@ export function GameCanvas() {
         mapWidth,
         mapHeight
       );
-      // Start camera at local player's spawn point (or first spawn if spectating)
-      const localPlayerSlot = useGameSetupStore.getState().getLocalPlayerSlot();
-      const playerSpawn = CURRENT_MAP.spawns.find(s => s.playerSlot === localPlayerSlot) || CURRENT_MAP.spawns[0];
-      camera.setPosition(playerSpawn.x, playerSpawn.y);
+      // Position camera based on whether player or spectator
+      if (isSpectatorMode()) {
+        // Spectators start at map center with zoomed-out view
+        camera.setPosition(mapWidth / 2, mapHeight / 2);
+        camera.setZoom(60, true); // More zoomed out for spectator overview
+      } else {
+        // Players start at their spawn point
+        const localPlayerSlot = useGameSetupStore.getState().getLocalPlayerSlot();
+        const playerSpawn = CURRENT_MAP.spawns.find(s => s.playerSlot === localPlayerSlot) || CURRENT_MAP.spawns[0];
+        camera.setPosition(playerSpawn.x, playerSpawn.y);
+      }
       cameraRef.current = camera;
 
       // Stage 4: Building terrain and environment (55-65%)
