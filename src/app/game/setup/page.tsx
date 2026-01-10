@@ -2,7 +2,10 @@
 
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
+import { useEffect } from 'react';
 import { ALL_MAPS, MapData } from '@/data/maps';
+import { MusicPlayer } from '@/audio/MusicPlayer';
+import { useUIStore } from '@/store/uiStore';
 import { BIOMES } from '@/rendering/Biomes';
 import {
   useGameSetupStore,
@@ -242,6 +245,32 @@ function SettingSelect<T extends string>({
 
 export default function GameSetupPage() {
   const router = useRouter();
+  const musicEnabled = useUIStore((state) => state.musicEnabled);
+  const musicVolume = useUIStore((state) => state.musicVolume);
+
+  // Continue menu music (or start if navigated directly here)
+  useEffect(() => {
+    const continueMenuMusic = async () => {
+      await MusicPlayer.initialize();
+      MusicPlayer.setVolume(musicVolume);
+      MusicPlayer.setMuted(!musicEnabled);
+      await MusicPlayer.discoverTracks();
+      // Only start if not already playing menu music
+      if (musicEnabled && MusicPlayer.getCurrentCategory() !== 'menu') {
+        MusicPlayer.play('menu');
+      }
+    };
+
+    continueMenuMusic();
+    // Don't stop on unmount - music stops when game starts
+  }, []);
+
+  // Sync volume changes
+  useEffect(() => {
+    MusicPlayer.setVolume(musicVolume);
+    MusicPlayer.setMuted(!musicEnabled);
+  }, [musicVolume, musicEnabled]);
+
   const {
     selectedMapId,
     startingResources,

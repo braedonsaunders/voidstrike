@@ -1,7 +1,9 @@
 'use client';
 
 import Link from 'next/link';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
+import { MusicPlayer } from '@/audio/MusicPlayer';
+import { useUIStore } from '@/store/uiStore';
 
 interface LobbyRoom {
   id: string;
@@ -13,6 +15,31 @@ interface LobbyRoom {
 }
 
 export default function LobbyPage() {
+  const musicEnabled = useUIStore((state) => state.musicEnabled);
+  const musicVolume = useUIStore((state) => state.musicVolume);
+
+  // Continue menu music (or start if navigated directly here)
+  useEffect(() => {
+    const continueMenuMusic = async () => {
+      await MusicPlayer.initialize();
+      MusicPlayer.setVolume(musicVolume);
+      MusicPlayer.setMuted(!musicEnabled);
+      await MusicPlayer.discoverTracks();
+      // Only start if not already playing menu music
+      if (musicEnabled && MusicPlayer.getCurrentCategory() !== 'menu') {
+        MusicPlayer.play('menu');
+      }
+    };
+
+    continueMenuMusic();
+  }, []);
+
+  // Sync volume changes
+  useEffect(() => {
+    MusicPlayer.setVolume(musicVolume);
+    MusicPlayer.setMuted(!musicEnabled);
+  }, [musicVolume, musicEnabled]);
+
   const [rooms] = useState<LobbyRoom[]>([
     { id: '1', name: 'Quick Match #1', host: 'Player123', map: 'Void Assault', players: 1, maxPlayers: 2 },
     { id: '2', name: 'Ranked 1v1', host: 'ProGamer', map: 'Crystal Valley', players: 1, maxPlayers: 2 },
