@@ -97,8 +97,26 @@ export class InputManager {
     const binding = this.keybindings.get(keyId);
 
     if (binding) {
-      e.preventDefault();
-      this.executeAction(binding.action);
+      // For cancel action, only prevent default if there's something to cancel
+      // This allows Escape to exit fullscreen when there's no action to cancel
+      if (binding.action === 'cancel') {
+        const store = useGameStore.getState();
+        const hasCancellableAction =
+          store.isBuilding ||
+          store.abilityTargetMode !== null ||
+          store.isSettingRallyPoint ||
+          store.isRepairMode ||
+          store.selectedUnits.length > 0;
+
+        if (hasCancellableAction) {
+          e.preventDefault();
+          this.executeAction(binding.action);
+        }
+        // If nothing to cancel, let browser handle it (exit fullscreen)
+      } else {
+        e.preventDefault();
+        this.executeAction(binding.action);
+      }
     }
   }
 
@@ -112,9 +130,16 @@ export class InputManager {
 
     switch (action) {
       case 'cancel':
+        // Cancel modes in priority order, then clear selection
         if (store.isBuilding) {
           store.setBuildingMode(null);
-        } else {
+        } else if (store.abilityTargetMode !== null) {
+          store.setAbilityTargetMode(null);
+        } else if (store.isSettingRallyPoint) {
+          store.setRallyPointMode(false);
+        } else if (store.isRepairMode) {
+          store.setRepairMode(false);
+        } else if (store.selectedUnits.length > 0) {
           this.game.eventBus.emit('selection:clear');
         }
         this.mode = 'normal';
