@@ -18,14 +18,13 @@ interface MusicDiscoveryResponse {
  * Features:
  * - Discovers MP3 files from /audio/music/menu and /audio/music/gameplay folders
  * - Shuffles and plays tracks randomly within each category
- * - Supports crossfading between tracks
+ * - Supports crossfading between tracks (using setInterval, NOT requestAnimationFrame)
  * - Integrates with AudioManager volume system
  */
 class MusicPlayerClass {
-  private audioContext: AudioContext | null = null;
-  private gainNode: GainNode | null = null;
   private currentAudio: HTMLAudioElement | null = null;
-  private nextAudio: HTMLAudioElement | null = null;
+  private fadingOutAudio: HTMLAudioElement | null = null;
+  private crossfadeInterval: ReturnType<typeof setInterval> | null = null;
 
   private menuTracks: MusicTrack[] = [];
   private gameplayTracks: MusicTrack[] = [];
@@ -40,25 +39,16 @@ class MusicPlayerClass {
   private tracksDiscovered = false;
   private currentTrackName: string | null = null;
 
-  private crossfadeDuration = 2000; // 2 seconds crossfade
+  private crossfadeDuration = 1500; // 1.5 seconds crossfade
+  private crossfadeUpdateInterval = 50; // Update every 50ms (20 updates/sec, NOT 60)
 
   /**
    * Initialize the music player
    */
   public async initialize(): Promise<void> {
     if (this.initialized) return;
-
-    try {
-      this.audioContext = new (window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext)();
-      this.gainNode = this.audioContext.createGain();
-      this.gainNode.connect(this.audioContext.destination);
-      this.gainNode.gain.value = this.volume;
-
-      this.initialized = true;
-      debugAudio.log('MusicPlayer initialized');
-    } catch (error) {
-      debugAudio.warn('Failed to initialize MusicPlayer:', error);
-    }
+    this.initialized = true;
+    debugAudio.log('MusicPlayer initialized');
   }
 
   /**
@@ -137,11 +127,6 @@ class MusicPlayerClass {
       await this.discoverTracks();
     }
 
-    // Resume audio context if suspended
-    if (this.audioContext?.state === 'suspended') {
-      await this.audioContext.resume();
-    }
-
     // If switching categories, prepare new queue
     if (category !== this.currentCategory) {
       this.prepareCategoryQueue(category);
@@ -183,7 +168,7 @@ class MusicPlayerClass {
 
     // Crossfade if there's a current track playing
     if (this.currentAudio && this.isPlaying) {
-      await this.crossfade(this.currentAudio, audio);
+      this.crossfade(this.currentAudio, audio);
     } else {
       // Just play the new track
       try {
@@ -197,9 +182,13 @@ class MusicPlayerClass {
   }
 
   /**
-   * Crossfade between two audio elements
+   * Crossfade between two audio elements using setInterval (NOT requestAnimationFrame)
+   * This prevents interference with the game's render loop
    */
-  private async crossfade(from: HTMLAudioElement, to: HTMLAudioElement): Promise<void> {
+  private crossfade(from: HTMLAudioElement, to: HTMLAudioElement): void {
+    // Clean up any existing crossfade
+    this.cleanupCrossfade();
+
     const startTime = Date.now();
     const startVolume = from.volume;
     const targetVolume = this.muted ? 0 : this.volume;
@@ -207,32 +196,46 @@ class MusicPlayerClass {
     // Start new track at 0 volume
     to.volume = 0;
 
-    try {
-      await to.play();
-    } catch (error) {
+    // Store the fading out audio for cleanup
+    this.fadingOutAudio = from;
+
+    to.play().then(() => {
+      // Use setInterval instead of requestAnimationFrame to avoid interfering with game loop
+      this.crossfadeInterval = setInterval(() => {
+        const elapsed = Date.now() - startTime;
+        const progress = Math.min(elapsed / this.crossfadeDuration, 1);
+
+        // Update volumes
+        if (this.fadingOutAudio) {
+          this.fadingOutAudio.volume = startVolume * (1 - progress);
+        }
+        to.volume = targetVolume * progress;
+
+        if (progress >= 1) {
+          // Crossfade complete
+          this.cleanupCrossfade();
+          this.currentAudio = to;
+        }
+      }, this.crossfadeUpdateInterval);
+    }).catch((error) => {
       debugAudio.warn('Failed to start crossfade:', error);
-      return;
+      this.cleanupCrossfade();
+    });
+  }
+
+  /**
+   * Clean up crossfade resources
+   */
+  private cleanupCrossfade(): void {
+    if (this.crossfadeInterval) {
+      clearInterval(this.crossfadeInterval);
+      this.crossfadeInterval = null;
     }
-
-    // Animate crossfade
-    const animate = () => {
-      const elapsed = Date.now() - startTime;
-      const progress = Math.min(elapsed / this.crossfadeDuration, 1);
-
-      from.volume = startVolume * (1 - progress);
-      to.volume = targetVolume * progress;
-
-      if (progress < 1) {
-        requestAnimationFrame(animate);
-      } else {
-        // Crossfade complete
-        from.pause();
-        from.src = '';
-        this.currentAudio = to;
-      }
-    };
-
-    requestAnimationFrame(animate);
+    if (this.fadingOutAudio) {
+      this.fadingOutAudio.pause();
+      this.fadingOutAudio.src = '';
+      this.fadingOutAudio = null;
+    }
   }
 
   /**
@@ -254,17 +257,15 @@ class MusicPlayerClass {
    * Stop music playback
    */
   public stop(): void {
+    this.cleanupCrossfade();
     if (this.currentAudio) {
       this.currentAudio.pause();
       this.currentAudio.src = '';
       this.currentAudio = null;
     }
-    if (this.nextAudio) {
-      this.nextAudio.pause();
-      this.nextAudio.src = '';
-      this.nextAudio = null;
-    }
     this.isPlaying = false;
+    this.currentTrackName = null;
+    this.currentCategory = null;
     debugAudio.log('Music stopped');
   }
 
@@ -311,9 +312,6 @@ class MusicPlayerClass {
     this.volume = Math.max(0, Math.min(1, volume));
     if (this.currentAudio && !this.muted) {
       this.currentAudio.volume = this.volume;
-    }
-    if (this.gainNode) {
-      this.gainNode.gain.value = this.volume;
     }
     debugAudio.log(`Music volume set to ${(this.volume * 100).toFixed(0)}%`);
   }
@@ -379,11 +377,6 @@ class MusicPlayerClass {
    */
   public dispose(): void {
     this.stop();
-    if (this.audioContext) {
-      this.audioContext.close();
-      this.audioContext = null;
-    }
-    this.gainNode = null;
     this.initialized = false;
     this.tracksDiscovered = false;
     debugAudio.log('MusicPlayer disposed');
