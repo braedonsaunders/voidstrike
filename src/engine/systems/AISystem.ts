@@ -235,18 +235,25 @@ export class AISystem extends System {
     const ccPos = this.findAIBase(playerId);
     if (ccPos) {
       const baseDetectionRange = 20; // Check for enemies within 20 units of base
-      const enemies = this.world.getEntitiesWith('Unit', 'Transform', 'Selectable', 'Health');
 
-      for (const entity of enemies) {
-        const selectable = entity.get<Selectable>('Selectable')!;
-        const health = entity.get<Health>('Health')!;
-        const transform = entity.get<Transform>('Transform')!;
+      // Use spatial grid for O(1) range queries instead of O(n) scan
+      const nearbyUnitIds = this.world.unitGrid.queryRadius(ccPos.x, ccPos.y, baseDetectionRange);
+
+      for (const unitId of nearbyUnitIds) {
+        const entity = this.world.getEntity(unitId);
+        if (!entity) continue;
+
+        const selectable = entity.get<Selectable>('Selectable');
+        const health = entity.get<Health>('Health');
+        const transform = entity.get<Transform>('Transform');
+
+        if (!selectable || !health || !transform) continue;
 
         // Skip own units and dead units
         if (selectable.playerId === playerId) continue;
         if (health.isDead()) continue;
 
-        // Check distance to base
+        // Verify distance (spatial grid returns approximations)
         const dx = transform.x - ccPos.x;
         const dy = transform.y - ccPos.y;
         const distance = Math.sqrt(dx * dx + dy * dy);
