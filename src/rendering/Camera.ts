@@ -168,12 +168,42 @@ export class RTSCamera {
   private handleWheel(e: WheelEvent): void {
     e.preventDefault();
 
+    // Calculate terrain-based minimum zoom
+    const terrainMinZoom = this.getTerrainMinZoom();
+
     // Set target zoom - actual zoom will smoothly interpolate in update()
     const zoomDelta = e.deltaY * 0.08;
     this.targetZoom = Math.max(
-      this.config.minZoom,
+      Math.max(this.config.minZoom, terrainMinZoom),
       Math.min(this.config.maxZoom, this.targetZoom + zoomDelta)
     );
+  }
+
+  // Calculate the minimum zoom needed to keep camera above terrain
+  private getTerrainMinZoom(): number {
+    if (!this.getTerrainHeight) return this.config.minZoom;
+
+    // Calculate where camera would be at current angle/pitch
+    const cosAngle = Math.cos(this.currentAngle);
+    const sinAngle = Math.sin(this.currentAngle);
+    const cosPitch = Math.cos(this.currentPitch);
+    const sinPitch = Math.sin(this.currentPitch);
+
+    // Sample terrain at a few zoom levels to find minimum safe zoom
+    // Start from current zoom and work down
+    for (let testZoom = this.config.minZoom; testZoom <= this.currentZoom; testZoom += 0.5) {
+      const x = this.target.x + testZoom * sinAngle * cosPitch;
+      const z = this.target.z + testZoom * cosAngle * cosPitch;
+      const y = testZoom * sinPitch;
+      const terrainHeight = this.getTerrainHeight(x, z);
+
+      if (y < terrainHeight + 2) {
+        // This zoom would clip, so minimum is slightly higher
+        return testZoom + 0.5;
+      }
+    }
+
+    return this.config.minZoom;
   }
 
   private handleResize(): void {
