@@ -217,6 +217,8 @@ export class BuildingRenderer {
       instancedMesh.castShadow = true;
       instancedMesh.receiveShadow = true;
       instancedMesh.frustumCulled = false;
+      // Buildings render AFTER ground effects (5) but BEFORE damage numbers (100)
+      instancedMesh.renderOrder = 50;
 
       this.scene.add(instancedMesh);
 
@@ -616,8 +618,11 @@ export class BuildingRenderer {
 
     // CRITICAL: Clone materials so each building has its own material instance
     // This prevents transparency changes on one building from affecting others
+    // Buildings render AFTER ground effects (5) but BEFORE damage numbers (100)
+    group.renderOrder = 50;
     group.traverse((child) => {
       if (child instanceof THREE.Mesh) {
+        child.renderOrder = 50;
         if (child.material) {
           if (Array.isArray(child.material)) {
             child.material = child.material.map(mat => mat.clone());
