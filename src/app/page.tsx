@@ -6,20 +6,13 @@ import dynamic from 'next/dynamic';
 import { MusicPlayer } from '@/audio/MusicPlayer';
 import { useUIStore } from '@/store/uiStore';
 
-// Dynamically import the Three.js backgrounds to avoid SSR issues
+// Dynamically import the Three.js background to avoid SSR issues
 const HomeBackground = dynamic(() => import('@/components/home/HomeBackground'), {
   ssr: false,
   loading: () => (
     <div className="fixed inset-0 bg-gradient-to-b from-[#0a0015] via-[#050010] to-black" />
   ),
 });
-
-// Gaussian Splat background - displays 3D splat scenes from /public/splats/
-// Automatically discovers and rotates through .splat, .ply, .ksplat files
-const GaussianSplatBackground = dynamic(
-  () => import('@/components/home/GaussianSplatBackground'),
-  { ssr: false }
-);
 
 // Glowing orb component for ambient atmosphere
 function GlowingOrb({ color, size, position, delay }: {
@@ -124,22 +117,10 @@ export default function Home() {
 
   return (
     <main className="relative min-h-screen bg-black overflow-hidden">
-      {/* Layer 0: 3D Gaussian Splat scenes (if available in /public/splats/) */}
-      {/* Drop .splat, .ply, or .ksplat files in /public/splats/ to enable */}
-      {/* They will auto-rotate every 1.5 minutes with dissolve transitions */}
-      <GaussianSplatBackground
-        rotationInterval={90000}  // 1.5 minutes per scene
-        transitionDuration={3000} // 3 second dissolve transition
-        cameraDistance={5}
-        autoRotate={true}
-        autoRotateSpeed={0.08}
-      />
-
-      {/* Layer 1: Procedural Three.js effects (nebula, stars, particles) */}
-      {/* Shows through when no splat files are present, or blends on top */}
+      {/* Cinematic 3D Background */}
       <HomeBackground />
 
-      {/* Layer 3: Ambient glow orbs */}
+      {/* Ambient glow orbs for atmosphere */}
       <GlowingOrb color="#843dff" size={500} position={{ x: '5%', y: '10%' }} delay={0} />
       <GlowingOrb color="#4A90D9" size={400} position={{ x: '85%', y: '70%' }} delay={1.5} />
       <GlowingOrb color="#9B59B6" size={350} position={{ x: '70%', y: '5%' }} delay={0.5} />

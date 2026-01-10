@@ -131,9 +131,7 @@ const VoidNebulaShader = {
       float pulse = sin(uTime * 0.5) * 0.1 + 0.9;
       color *= pulse;
 
-      // Semi-transparent to blend with splat background beneath
-      float alpha = nebula * 0.7 + 0.2;
-      gl_FragColor = vec4(color, alpha);
+      gl_FragColor = vec4(color, 1.0);
     }
   `,
 };
@@ -494,8 +492,6 @@ export default function HomeBackground() {
       vertexShader: VoidNebulaShader.vertexShader,
       fragmentShader: VoidNebulaShader.fragmentShader,
       side: THREE.DoubleSide,
-      transparent: true,
-      depthWrite: false,
     });
 
     const nebula = new THREE.Mesh(geometry, material);
@@ -602,9 +598,9 @@ export default function HomeBackground() {
   useEffect(() => {
     if (!containerRef.current) return;
 
-    // Scene setup - transparent background to layer over splat scenes
+    // Scene setup
     const scene = new THREE.Scene();
-    scene.fog = new THREE.FogExp2(0x0a0015, 0.015);
+    scene.fog = new THREE.FogExp2(0x0a0015, 0.02);
     sceneRef.current = scene;
 
     // Camera setup
@@ -758,8 +754,8 @@ export default function HomeBackground() {
   return (
     <div
       ref={containerRef}
-      className="fixed inset-0 z-[1] pointer-events-none"
-      style={{ background: 'transparent' }}
+      className="fixed inset-0 z-0"
+      style={{ background: '#050010' }}
     />
   );
 }
