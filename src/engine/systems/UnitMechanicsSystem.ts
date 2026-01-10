@@ -521,13 +521,24 @@ export class UnitMechanicsSystem extends System {
     const autocastRange = 8; // Range to look for damaged things to repair
     let closestTarget: { id: number; distance: number } | null = null;
 
-    // Look for damaged buildings
-    const buildings = this.world.getEntitiesWith('Building', 'Transform', 'Health', 'Selectable');
-    for (const buildingEntity of buildings) {
-      const buildingSelectable = buildingEntity.get<Selectable>('Selectable')!;
-      const buildingHealth = buildingEntity.get<Health>('Health')!;
-      const buildingTransform = buildingEntity.get<Transform>('Transform')!;
-      const building = buildingEntity.get<Building>('Building')!;
+    // Use spatial grid for O(1) lookups instead of O(n) scans
+    // Look for damaged buildings using spatial grid
+    const nearbyBuildingIds = this.world.buildingGrid.queryRadius(
+      repairerTransform.x,
+      repairerTransform.y,
+      autocastRange
+    );
+
+    for (const buildingId of nearbyBuildingIds) {
+      const buildingEntity = this.world.getEntity(buildingId);
+      if (!buildingEntity) continue;
+
+      const buildingSelectable = buildingEntity.get<Selectable>('Selectable');
+      const buildingHealth = buildingEntity.get<Health>('Health');
+      const buildingTransform = buildingEntity.get<Transform>('Transform');
+      const building = buildingEntity.get<Building>('Building');
+
+      if (!buildingSelectable || !buildingHealth || !buildingTransform || !building) continue;
 
       // Only repair own buildings
       if (buildingSelectable.playerId !== repairerSelectable.playerId) continue;
@@ -552,20 +563,30 @@ export class UnitMechanicsSystem extends System {
 
       if (distance <= autocastRange) {
         if (!closestTarget || distance < closestTarget.distance) {
-          closestTarget = { id: buildingEntity.id, distance };
+          closestTarget = { id: buildingId, distance };
         }
       }
     }
 
-    // Look for damaged mechanical units
-    const units = this.world.getEntitiesWith('Unit', 'Transform', 'Health', 'Selectable');
-    for (const unitEntity of units) {
-      if (unitEntity.id === entity.id) continue; // Skip self
+    // Look for damaged mechanical units using spatial grid
+    const nearbyUnitIds = this.world.unitGrid.queryRadius(
+      repairerTransform.x,
+      repairerTransform.y,
+      autocastRange
+    );
 
-      const targetUnit = unitEntity.get<Unit>('Unit')!;
-      const targetSelectable = unitEntity.get<Selectable>('Selectable')!;
-      const targetHealth = unitEntity.get<Health>('Health')!;
-      const targetTransform = unitEntity.get<Transform>('Transform')!;
+    for (const unitId of nearbyUnitIds) {
+      if (unitId === entity.id) continue; // Skip self
+
+      const unitEntity = this.world.getEntity(unitId);
+      if (!unitEntity) continue;
+
+      const targetUnit = unitEntity.get<Unit>('Unit');
+      const targetSelectable = unitEntity.get<Selectable>('Selectable');
+      const targetHealth = unitEntity.get<Health>('Health');
+      const targetTransform = unitEntity.get<Transform>('Transform');
+
+      if (!targetUnit || !targetSelectable || !targetHealth || !targetTransform) continue;
 
       // Only repair own mechanical units
       if (targetSelectable.playerId !== repairerSelectable.playerId) continue;
@@ -584,7 +605,7 @@ export class UnitMechanicsSystem extends System {
 
       if (distance <= autocastRange) {
         if (!closestTarget || distance < closestTarget.distance) {
-          closestTarget = { id: unitEntity.id, distance };
+          closestTarget = { id: unitId, distance };
         }
       }
     }
@@ -840,13 +861,43 @@ export class UnitMechanicsSystem extends System {
     playerId: string
   ): Entity[] {
     const enemies: Entity[] = [];
-    const entities = this.world.getEntitiesWith('Transform', 'Health', 'Selectable');
 
-    for (const entity of entities) {
-      const selectable = entity.get<Selectable>('Selectable')!;
-      const health = entity.get<Health>('Health')!;
-      const transform = entity.get<Transform>('Transform')!;
+    // Use spatial grid for O(1) lookups - check both unit and building grids
+    const nearbyUnitIds = this.world.unitGrid.queryRadius(x, y, range);
+    const nearbyBuildingIds = this.world.buildingGrid.queryRadius(x, y, range);
 
+    // Check units
+    for (const unitId of nearbyUnitIds) {
+      const entity = this.world.getEntity(unitId);
+      if (!entity) continue;
+
+      const selectable = entity.get<Selectable>('Selectable');
+      const health = entity.get<Health>('Health');
+      const transform = entity.get<Transform>('Transform');
+
+      if (!selectable || !health || !transform) continue;
+      if (selectable.playerId === playerId) continue;
+      if (health.isDead()) continue;
+
+      const dx = transform.x - x;
+      const dy = transform.y - y;
+      const distance = Math.sqrt(dx * dx + dy * dy);
+
+      if (distance <= range) {
+        enemies.push(entity);
+      }
+    }
+
+    // Check buildings
+    for (const buildingId of nearbyBuildingIds) {
+      const entity = this.world.getEntity(buildingId);
+      if (!entity) continue;
+
+      const selectable = entity.get<Selectable>('Selectable');
+      const health = entity.get<Health>('Health');
+      const transform = entity.get<Transform>('Transform');
+
+      if (!selectable || !health || !transform) continue;
       if (selectable.playerId === playerId) continue;
       if (health.isDead()) continue;
 
