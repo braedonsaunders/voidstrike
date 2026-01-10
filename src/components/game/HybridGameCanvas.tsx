@@ -942,12 +942,10 @@ export function HybridGameCanvas() {
 
       // Update post-processing
       if (postProcessingRef.current) {
-        postProcessingRef.current.setSSAOEnabled(settings.postProcessingEnabled && settings.ssaoEnabled);
-        postProcessingRef.current.setGodRaysEnabled(settings.postProcessingEnabled && settings.godRaysEnabled);
-        postProcessingRef.current.setColorGradingEnabled(settings.postProcessingEnabled && settings.colorGradingEnabled);
-        postProcessingRef.current.setBloomStrength(settings.postProcessingEnabled && settings.bloomEnabled ? settings.bloomStrength : 0);
-        postProcessingRef.current.setSSAOStrength(settings.ssaoStrength);
-        postProcessingRef.current.setGodRaysStrength(settings.godRaysStrength);
+        postProcessingRef.current.setBloomEnabled(settings.postProcessingEnabled && settings.bloomEnabled);
+        postProcessingRef.current.setBloomStrength(settings.bloomStrength);
+        postProcessingRef.current.setBloomThreshold(settings.bloomThreshold);
+        postProcessingRef.current.setFXAAEnabled(settings.postProcessingEnabled && settings.fxaaEnabled);
       }
 
       // Update ground fog visibility
