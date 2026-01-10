@@ -6,7 +6,7 @@ import dynamic from 'next/dynamic';
 import { MusicPlayer } from '@/audio/MusicPlayer';
 import { useUIStore } from '@/store/uiStore';
 
-// Dynamically import the Three.js background to avoid SSR issues
+// Dynamically import the Three.js backgrounds to avoid SSR issues
 const HomeBackground = dynamic(() => import('@/components/home/HomeBackground'), {
   ssr: false,
   loading: () => (
@@ -14,35 +14,13 @@ const HomeBackground = dynamic(() => import('@/components/home/HomeBackground'),
   ),
 });
 
-// Animated counter for stats
-function AnimatedNumber({ target, duration = 2000 }: { target: number; duration?: number }) {
-  const [count, setCount] = useState(0);
-  const [hasAnimated, setHasAnimated] = useState(false);
+// Optional: Depth parallax layer for pre-rendered images
+// Uncomment when you have images ready in /public/images/homescreen/
+// const DepthParallaxLayer = dynamic(() => import('@/components/home/DepthParallaxLayer'), {
+//   ssr: false,
+// });
 
-  useEffect(() => {
-    if (hasAnimated) return;
-    setHasAnimated(true);
-
-    let start = 0;
-    const end = target;
-    const increment = end / (duration / 16);
-    const timer = setInterval(() => {
-      start += increment;
-      if (start >= end) {
-        setCount(end);
-        clearInterval(timer);
-      } else {
-        setCount(Math.floor(start));
-      }
-    }, 16);
-
-    return () => clearInterval(timer);
-  }, [target, duration, hasAnimated]);
-
-  return <span>{count.toLocaleString()}</span>;
-}
-
-// Glowing orb component for visual interest
+// Glowing orb component for ambient atmosphere
 function GlowingOrb({ color, size, position, delay }: {
   color: string;
   size: number;
@@ -65,8 +43,22 @@ function GlowingOrb({ color, size, position, delay }: {
   );
 }
 
+// Animated scanning line effect
+function ScanLine() {
+  return (
+    <div className="absolute inset-0 pointer-events-none overflow-hidden opacity-20">
+      <div
+        className="absolute w-full h-px bg-gradient-to-r from-transparent via-void-400 to-transparent"
+        style={{
+          animation: 'scanline 4s linear infinite',
+          top: '0%',
+        }}
+      />
+    </div>
+  );
+}
+
 export default function Home() {
-  const [hoveredFaction, setHoveredFaction] = useState<string | null>(null);
   const [isLoaded, setIsLoaded] = useState(false);
   const [mousePosition, setMousePosition] = useState({ x: 0, y: 0 });
   const heroRef = useRef<HTMLDivElement>(null);
@@ -129,52 +121,34 @@ export default function Home() {
     return () => window.removeEventListener('mousemove', handleMouseMove);
   }, []);
 
-  const factions = [
-    {
-      id: 'dominion',
-      name: 'DOMINION',
-      subtitle: 'Human Military Forces',
-      description: 'Versatile, adaptive, and masters of siege warfare. Command the most balanced forces in the galaxy.',
-      color: '#4A90D9',
-      gradient: 'from-blue-600/20 to-blue-900/30',
-      icon: '⚔️',
-      stats: { units: 24, buildings: 16, abilities: 32 },
-    },
-    {
-      id: 'synthesis',
-      name: 'SYNTHESIS',
-      subtitle: 'Machine Consciousness',
-      description: 'Transcendent AI entities. Powerful units protected by regenerating shields and psionic abilities.',
-      color: '#9B59B6',
-      gradient: 'from-purple-600/20 to-purple-900/30',
-      icon: '🔮',
-      stats: { units: 20, buildings: 14, abilities: 28 },
-    },
-    {
-      id: 'swarm',
-      name: 'SWARM',
-      subtitle: 'Organic Hive-Mind',
-      description: 'Overwhelm enemies with cheap, fast-spawning forces. Evolution is your greatest weapon.',
-      color: '#D4A84B',
-      gradient: 'from-amber-600/20 to-amber-900/30',
-      icon: '🦠',
-      stats: { units: 28, buildings: 12, abilities: 24 },
-    },
-  ];
-
   return (
     <main className="relative min-h-screen bg-black overflow-hidden">
-      {/* Cinematic 3D Background */}
+      {/* Layer 1: Optional depth parallax from pre-rendered image */}
+      {/* Uncomment when you have images ready:
+      <DepthParallaxLayer
+        imagePath="/images/homescreen/scene.jpg"
+        depthMapPath="/images/homescreen/scene_depth.jpg"
+        parallaxStrength={0.04}
+        depthScale={1.2}
+        opacity={0.6}
+      />
+      */}
+
+      {/* Layer 2: Procedural Three.js effects */}
       <HomeBackground />
 
-      {/* Ambient glow orbs for atmosphere */}
-      <GlowingOrb color="#843dff" size={400} position={{ x: '10%', y: '20%' }} delay={0} />
-      <GlowingOrb color="#4A90D9" size={300} position={{ x: '80%', y: '60%' }} delay={1} />
-      <GlowingOrb color="#9B59B6" size={350} position={{ x: '60%', y: '10%' }} delay={2} />
+      {/* Layer 3: Ambient glow orbs */}
+      <GlowingOrb color="#843dff" size={500} position={{ x: '5%', y: '10%' }} delay={0} />
+      <GlowingOrb color="#4A90D9" size={400} position={{ x: '85%', y: '70%' }} delay={1.5} />
+      <GlowingOrb color="#9B59B6" size={350} position={{ x: '70%', y: '5%' }} delay={0.5} />
+      <GlowingOrb color="#843dff" size={300} position={{ x: '20%', y: '80%' }} delay={2} />
+
+      {/* Scan line effect */}
+      <ScanLine />
 
       {/* Main Content Container */}
       <div className="relative z-10 min-h-screen flex flex-col">
-        {/* Navigation Bar */}
+        {/* Top Navigation */}
         <nav className={`
           fixed top-0 left-0 right-0 z-50
           px-6 py-4
@@ -185,72 +159,63 @@ export default function Home() {
             {/* Logo */}
             <div className="flex items-center gap-3">
               <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-void-500 to-void-700
-                            flex items-center justify-center shadow-lg shadow-void-500/30">
+                            flex items-center justify-center shadow-lg shadow-void-500/30
+                            border border-void-400/30">
                 <span className="text-white font-bold text-xl">V</span>
               </div>
-              <span className="font-display text-xl tracking-wider text-white/90 hidden sm:block">
-                VOIDSTRIKE
-              </span>
             </div>
 
-            {/* Nav Links */}
-            <div className="flex items-center gap-6">
-              <Link
-                href="/game/setup"
-                className="text-white/70 hover:text-white transition-colors text-sm font-medium"
-              >
-                Play
-              </Link>
-              <Link
-                href="/lobby"
-                className="text-white/70 hover:text-white transition-colors text-sm font-medium"
-              >
-                Multiplayer
-              </Link>
-              <button
-                onClick={handleMusicToggle}
-                className="w-9 h-9 rounded-full flex items-center justify-center
-                         bg-white/5 hover:bg-white/10 border border-white/10
-                         transition-all duration-200 hover:scale-105"
-                title={musicEnabled ? 'Mute Music' : 'Unmute Music'}
-              >
-                <span className="text-sm">{musicEnabled ? '🔊' : '🔇'}</span>
-              </button>
-            </div>
+            {/* Music Toggle */}
+            <button
+              onClick={handleMusicToggle}
+              className="w-10 h-10 rounded-full flex items-center justify-center
+                       bg-white/5 hover:bg-white/10 border border-white/10
+                       transition-all duration-200 hover:scale-105 hover:border-void-500/50"
+              title={musicEnabled ? 'Mute Music' : 'Unmute Music'}
+            >
+              <span className="text-base">{musicEnabled ? '🔊' : '🔇'}</span>
+            </button>
           </div>
         </nav>
 
-        {/* Hero Section */}
+        {/* Hero Section - Full Height */}
         <div
           ref={heroRef}
-          className="flex-1 flex flex-col items-center justify-center px-6 pt-20 pb-10"
+          className="flex-1 flex flex-col items-center justify-center px-6"
         >
           {/* Animated Title */}
           <div
             className={`
-              text-center mb-8
+              text-center mb-12
               transition-all duration-1000 delay-300
               ${isLoaded ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-8'}
             `}
             style={{
-              transform: `translate(${mousePosition.x * -10}px, ${mousePosition.y * -10}px)`,
+              transform: `translate(${mousePosition.x * -15}px, ${mousePosition.y * -15}px)`,
             }}
           >
             {/* Pre-title */}
-            <div className="flex items-center justify-center gap-3 mb-4">
-              <div className="h-px w-12 bg-gradient-to-r from-transparent to-void-500" />
-              <span className="text-void-400 text-sm tracking-[0.3em] uppercase font-light">
-                Browser-Based RTS
+            <div className="flex items-center justify-center gap-4 mb-6">
+              <div className="h-px w-16 bg-gradient-to-r from-transparent to-void-500/70" />
+              <span className="text-void-400/80 text-xs tracking-[0.4em] uppercase font-light">
+                Browser-Based Real-Time Strategy
               </span>
-              <div className="h-px w-12 bg-gradient-to-l from-transparent to-void-500" />
+              <div className="h-px w-16 bg-gradient-to-l from-transparent to-void-500/70" />
             </div>
 
-            {/* Main Title */}
-            <h1 className="font-display text-7xl md:text-9xl font-bold tracking-wider mb-6 relative">
-              <span className="absolute inset-0 bg-gradient-to-r from-void-400 via-white to-void-400
-                             bg-clip-text text-transparent blur-sm opacity-50">
+            {/* Main Title with Layered Glow */}
+            <h1 className="font-display text-8xl md:text-[10rem] lg:text-[12rem] font-bold tracking-wider mb-8 relative leading-none">
+              {/* Deep shadow layer */}
+              <span className="absolute inset-0 bg-gradient-to-r from-void-600 via-void-400 to-void-600
+                             bg-clip-text text-transparent blur-xl opacity-30 scale-105">
                 VOIDSTRIKE
               </span>
+              {/* Mid glow layer */}
+              <span className="absolute inset-0 bg-gradient-to-r from-void-500 via-white to-void-500
+                             bg-clip-text text-transparent blur-sm opacity-60">
+                VOIDSTRIKE
+              </span>
+              {/* Main text */}
               <span className="relative bg-gradient-to-r from-void-400 via-white to-void-400
                              bg-clip-text text-transparent animate-shimmer bg-[length:200%_100%]">
                 VOIDSTRIKE
@@ -258,210 +223,114 @@ export default function Home() {
             </h1>
 
             {/* Tagline */}
-            <p className="text-void-300/80 text-lg md:text-xl max-w-xl mx-auto font-light leading-relaxed">
+            <p className="text-void-300/70 text-xl md:text-2xl max-w-2xl mx-auto font-light leading-relaxed tracking-wide">
               Command your forces. Dominate the void.
-              <br />
-              <span className="text-void-400">Zero downloads. Pure strategy.</span>
+            </p>
+            <p className="text-void-500/50 text-sm mt-3 tracking-widest uppercase">
+              Zero downloads required
             </p>
           </div>
 
-          {/* CTA Buttons */}
-          <div
-            className={`
-              flex flex-col sm:flex-row gap-4 mb-16
-              transition-all duration-1000 delay-500
-              ${isLoaded ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-8'}
-            `}
-          >
-            <Link
-              href="/game/setup"
-              className="group relative px-10 py-4 overflow-hidden rounded-lg
-                       bg-gradient-to-r from-void-600 to-void-700
-                       hover:from-void-500 hover:to-void-600
-                       transition-all duration-300 hover:scale-105 hover:shadow-xl hover:shadow-void-500/30"
-            >
-              <div className="absolute inset-0 bg-gradient-to-r from-white/0 via-white/20 to-white/0
-                            translate-x-[-100%] group-hover:translate-x-[100%] transition-transform duration-700" />
-              <span className="relative font-display text-lg tracking-wider text-white">
-                PLAY NOW
-              </span>
-            </Link>
-            <Link
-              href="/lobby"
-              className="group relative px-10 py-4 overflow-hidden rounded-lg
-                       bg-white/5 backdrop-blur-sm border border-white/10
-                       hover:bg-white/10 hover:border-white/20
-                       transition-all duration-300 hover:scale-105"
-            >
-              <span className="font-display text-lg tracking-wider text-white/90">
-                MULTIPLAYER
-              </span>
-            </Link>
+          {/* Decorative Divider */}
+          <div className={`
+            flex items-center justify-center gap-4 mb-12
+            transition-all duration-1000 delay-500
+            ${isLoaded ? 'opacity-100' : 'opacity-0'}
+          `}>
+            <div className="w-24 h-px bg-gradient-to-r from-transparent via-void-600/50 to-transparent" />
+            <div className="w-2 h-2 rotate-45 border border-void-500/50" />
+            <div className="w-24 h-px bg-gradient-to-r from-transparent via-void-600/50 to-transparent" />
           </div>
 
-          {/* Faction Cards */}
+          {/* CTA Buttons - Bottom of Hero */}
           <div
             className={`
-              w-full max-w-6xl mx-auto
+              flex flex-col sm:flex-row gap-6 items-center
               transition-all duration-1000 delay-700
               ${isLoaded ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-8'}
             `}
           >
-            <div className="text-center mb-8">
-              <h2 className="font-display text-2xl text-white/80 tracking-wide mb-2">
-                CHOOSE YOUR FACTION
-              </h2>
-              <p className="text-void-400/60 text-sm">
-                Each faction offers a unique playstyle and strategic depth
-              </p>
-            </div>
+            {/* Primary Button - Play Now */}
+            <Link
+              href="/game/setup"
+              className="group relative"
+            >
+              {/* Animated border glow */}
+              <div className="absolute -inset-1 bg-gradient-to-r from-void-600 via-void-400 to-void-600
+                            rounded-xl opacity-70 blur-md group-hover:opacity-100 group-hover:blur-lg
+                            transition-all duration-300 animate-pulse-slow" />
 
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-              {factions.map((faction, index) => (
-                <div
-                  key={faction.id}
-                  className={`
-                    group relative overflow-hidden rounded-xl
-                    bg-gradient-to-br ${faction.gradient}
-                    backdrop-blur-md border border-white/10
-                    transition-all duration-500 cursor-pointer
-                    hover:scale-[1.02] hover:border-white/20
-                    ${hoveredFaction === faction.id ? 'shadow-2xl' : 'shadow-lg'}
-                  `}
-                  style={{
-                    boxShadow: hoveredFaction === faction.id
-                      ? `0 25px 50px -12px ${faction.color}40`
-                      : undefined,
-                    transitionDelay: `${index * 100}ms`,
-                  }}
-                  onMouseEnter={() => setHoveredFaction(faction.id)}
-                  onMouseLeave={() => setHoveredFaction(null)}
-                >
-                  {/* Glow effect on hover */}
-                  <div
-                    className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-500"
-                    style={{
-                      background: `radial-gradient(circle at 50% 0%, ${faction.color}30 0%, transparent 60%)`,
-                    }}
-                  />
-
-                  {/* Card content */}
-                  <div className="relative p-6">
-                    {/* Icon and Title */}
-                    <div className="flex items-start justify-between mb-4">
-                      <div>
-                        <h3
-                          className="font-display text-2xl tracking-wider mb-1 transition-colors duration-300"
-                          style={{ color: hoveredFaction === faction.id ? faction.color : 'white' }}
-                        >
-                          {faction.name}
-                        </h3>
-                        <p className="text-white/50 text-sm font-light">
-                          {faction.subtitle}
-                        </p>
-                      </div>
-                      <div
-                        className="w-12 h-12 rounded-lg flex items-center justify-center text-2xl
-                                  bg-black/30 border border-white/10
-                                  group-hover:scale-110 group-hover:border-white/20
-                                  transition-all duration-300"
-                      >
-                        {faction.icon}
-                      </div>
-                    </div>
-
-                    {/* Description */}
-                    <p className="text-white/60 text-sm leading-relaxed mb-6 min-h-[3rem]">
-                      {faction.description}
-                    </p>
-
-                    {/* Stats bar */}
-                    <div className="flex gap-4 pt-4 border-t border-white/10">
-                      <div className="flex-1">
-                        <div className="text-white/40 text-xs mb-1">Units</div>
-                        <div className="font-display text-lg" style={{ color: faction.color }}>
-                          {faction.stats.units}
-                        </div>
-                      </div>
-                      <div className="flex-1">
-                        <div className="text-white/40 text-xs mb-1">Buildings</div>
-                        <div className="font-display text-lg" style={{ color: faction.color }}>
-                          {faction.stats.buildings}
-                        </div>
-                      </div>
-                      <div className="flex-1">
-                        <div className="text-white/40 text-xs mb-1">Abilities</div>
-                        <div className="font-display text-lg" style={{ color: faction.color }}>
-                          {faction.stats.abilities}
-                        </div>
-                      </div>
-                    </div>
-
-                    {/* Select button - appears on hover */}
-                    <div className={`
-                      mt-4 overflow-hidden transition-all duration-300
-                      ${hoveredFaction === faction.id ? 'max-h-12 opacity-100' : 'max-h-0 opacity-0'}
-                    `}>
-                      <Link
-                        href={`/game/setup?faction=${faction.id}`}
-                        className="block w-full py-2 rounded-lg text-center text-sm font-medium
-                                 transition-all duration-200 hover:scale-[1.02]"
-                        style={{
-                          backgroundColor: `${faction.color}30`,
-                          color: faction.color,
-                          border: `1px solid ${faction.color}50`,
-                        }}
-                      >
-                        SELECT FACTION
-                      </Link>
-                    </div>
-                  </div>
+              {/* Button */}
+              <div className="relative px-16 py-5 rounded-xl
+                           bg-gradient-to-b from-void-600 to-void-800
+                           border border-void-400/50
+                           group-hover:from-void-500 group-hover:to-void-700
+                           transition-all duration-300 group-hover:scale-105
+                           shadow-xl shadow-void-900/50">
+                {/* Shine effect */}
+                <div className="absolute inset-0 rounded-xl overflow-hidden">
+                  <div className="absolute inset-0 bg-gradient-to-r from-white/0 via-white/20 to-white/0
+                                translate-x-[-100%] group-hover:translate-x-[100%]
+                                transition-transform duration-700" />
                 </div>
-              ))}
-            </div>
+
+                <span className="relative font-display text-xl tracking-widest text-white">
+                  PLAY NOW
+                </span>
+              </div>
+            </Link>
+
+            {/* Secondary Button - Multiplayer */}
+            <Link
+              href="/lobby"
+              className="group relative px-12 py-4 rounded-xl overflow-hidden
+                       bg-white/5 backdrop-blur-sm border border-white/10
+                       hover:bg-white/10 hover:border-void-500/30
+                       transition-all duration-300 hover:scale-105"
+            >
+              <span className="font-display text-lg tracking-widest text-white/80 group-hover:text-white
+                             transition-colors duration-300">
+                MULTIPLAYER
+              </span>
+            </Link>
           </div>
         </div>
 
-        {/* Bottom Stats Bar */}
+        {/* Bottom Info Bar */}
         <div
           className={`
-            relative z-10 py-6 px-6
-            bg-gradient-to-t from-black/80 to-transparent
+            relative z-10 py-8 px-6
+            bg-gradient-to-t from-black/90 via-black/50 to-transparent
             transition-all duration-1000 delay-1000
             ${isLoaded ? 'opacity-100' : 'opacity-0'}
           `}
         >
-          <div className="max-w-6xl mx-auto flex flex-wrap items-center justify-between gap-4">
-            {/* Stats */}
-            <div className="flex gap-8">
-              <div className="text-center">
-                <div className="font-display text-2xl text-void-400">
-                  <AnimatedNumber target={72} />
-                </div>
-                <div className="text-white/40 text-xs">Total Units</div>
-              </div>
-              <div className="text-center">
-                <div className="font-display text-2xl text-void-400">
-                  <AnimatedNumber target={42} />
-                </div>
-                <div className="text-white/40 text-xs">Buildings</div>
-              </div>
-              <div className="text-center">
-                <div className="font-display text-2xl text-void-400">
-                  <AnimatedNumber target={84} />
-                </div>
-                <div className="text-white/40 text-xs">Abilities</div>
-              </div>
-            </div>
+          <div className="max-w-6xl mx-auto flex flex-wrap items-center justify-center gap-8 text-white/30 text-xs tracking-wider">
+            <span className="flex items-center gap-2">
+              <span className="w-1.5 h-1.5 rounded-full bg-void-500/50" />
+              3 Unique Factions
+            </span>
+            <span className="flex items-center gap-2">
+              <span className="w-1.5 h-1.5 rounded-full bg-void-500/50" />
+              70+ Units & Buildings
+            </span>
+            <span className="flex items-center gap-2">
+              <span className="w-1.5 h-1.5 rounded-full bg-void-500/50" />
+              5 AI Difficulty Levels
+            </span>
+            <span className="flex items-center gap-2">
+              <span className="w-1.5 h-1.5 rounded-full bg-void-500/50" />
+              Multiplayer Ready
+            </span>
+          </div>
 
-            {/* Tech stack */}
-            <div className="flex items-center gap-4 text-white/30 text-xs">
-              <span>Next.js 14</span>
-              <span className="w-1 h-1 rounded-full bg-void-500" />
-              <span>Three.js</span>
-              <span className="w-1 h-1 rounded-full bg-void-500" />
-              <span>TypeScript</span>
-            </div>
+          {/* Tech stack - very subtle */}
+          <div className="flex items-center justify-center gap-3 mt-4 text-white/20 text-[10px] tracking-widest">
+            <span>NEXT.JS</span>
+            <span className="w-0.5 h-0.5 rounded-full bg-void-600" />
+            <span>THREE.JS</span>
+            <span className="w-0.5 h-0.5 rounded-full bg-void-600" />
+            <span>TYPESCRIPT</span>
           </div>
         </div>
       </div>
