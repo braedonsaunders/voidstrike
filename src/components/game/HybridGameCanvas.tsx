@@ -238,12 +238,20 @@ export function HybridGameCanvas() {
         fogOfWarEnabled ? game.visionSystem : undefined,
         terrain
       );
+      // Set player ID for fog of war visibility checks
+      if (fogOfWarEnabled && localPlayerId) {
+        unitRendererRef.current.setPlayerId(localPlayerId);
+      }
       buildingRendererRef.current = new BuildingRenderer(
         scene,
         game.world,
         fogOfWarEnabled ? game.visionSystem : undefined,
         terrain
       );
+      // Set player ID for fog of war visibility checks
+      if (fogOfWarEnabled && localPlayerId) {
+        buildingRendererRef.current.setPlayerId(localPlayerId);
+      }
       resourceRendererRef.current = new ResourceRenderer(scene, game.world, terrain);
 
       if (fogOfWarEnabled && !isSpectatorMode()) {
