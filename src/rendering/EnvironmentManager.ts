@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import { MapData } from '@/data/maps';
 import { BIOMES, BiomeConfig } from './Biomes';
 import { Terrain, MapDecorations } from './Terrain';
-import { CrystalField, WaterPlane } from './GroundDetail';
+import { CrystalField, WaterPlane, GroundFog } from './GroundDetail';
 import { EnvironmentParticles } from './EnhancedDecorations';
 // PERFORMANCE: Use instanced decorations instead of individual meshes
 import { InstancedTrees, InstancedRocks, InstancedGrass, InstancedPebbles } from './InstancedDecorations';
@@ -30,6 +30,7 @@ export class EnvironmentManager {
   private pebbles: InstancedPebbles | null = null;
   private crystals: CrystalField | null = null;
   private water: WaterPlane | null = null;
+  private groundFog: GroundFog | null = null;
   private particles: EnvironmentParticles | null = null;
   private legacyDecorations: MapDecorations | null = null;
 
@@ -77,9 +78,46 @@ export class EnvironmentManager {
     );
     scene.add(hemiLight);
 
-    // Setup fog based on biome
-    const fogNear = mapData.fogNear ?? 60;
-    const fogFar = mapData.fogFar ?? 180;
+    // Setup biome-specific fog (density affects near/far)
+    // Lower fogNear = denser fog closer to camera
+    const biomeType = mapData.biome || 'grassland';
+    let fogNear: number;
+    let fogFar: number;
+
+    switch (biomeType) {
+      case 'jungle':
+        // Thick, humid fog - visibility reduced
+        fogNear = mapData.fogNear ?? 30;
+        fogFar = mapData.fogFar ?? 120;
+        break;
+      case 'volcanic':
+        // Dense smoke and ash - heavy atmosphere
+        fogNear = mapData.fogNear ?? 25;
+        fogFar = mapData.fogFar ?? 100;
+        break;
+      case 'void':
+        // Thick, ethereal mist - mysterious atmosphere
+        fogNear = mapData.fogNear ?? 20;
+        fogFar = mapData.fogFar ?? 90;
+        break;
+      case 'frozen':
+        // Light snow haze - moderate visibility
+        fogNear = mapData.fogNear ?? 50;
+        fogFar = mapData.fogFar ?? 160;
+        break;
+      case 'desert':
+        // Thin heat haze - clear visibility
+        fogNear = mapData.fogNear ?? 80;
+        fogFar = mapData.fogFar ?? 250;
+        break;
+      case 'grassland':
+      default:
+        // Light atmospheric haze - good visibility
+        fogNear = mapData.fogNear ?? 60;
+        fogFar = mapData.fogFar ?? 180;
+        break;
+    }
+
     scene.fog = new THREE.Fog(this.biome.colors.fog, fogNear, fogFar);
     scene.background = this.biome.colors.sky;
 
@@ -132,6 +170,10 @@ export class EnvironmentManager {
       this.scene.add(this.water.mesh);
     }
 
+    // Ground fog/mist layer for atmospheric effect
+    this.groundFog = new GroundFog(this.mapData, this.biome);
+    this.scene.add(this.groundFog.mesh);
+
     // Particle effects
     if (this.biome.particleType !== 'none') {
       this.particles = new EnvironmentParticles(this.mapData, this.biome);
@@ -153,6 +195,9 @@ export class EnvironmentManager {
 
     if (this.water) {
       this.water.update(gameTime);
+    }
+    if (this.groundFog) {
+      this.groundFog.update(gameTime);
     }
     if (this.particles) {
       this.particles.update(deltaTime);
@@ -199,6 +244,7 @@ export class EnvironmentManager {
     this.pebbles?.dispose();
     this.crystals?.dispose();
     this.water?.dispose();
+    this.groundFog?.dispose();
     this.particles?.dispose();
     this.legacyDecorations?.dispose();
 
@@ -212,6 +258,7 @@ export class EnvironmentManager {
     if (this.pebbles) this.scene.remove(this.pebbles.group);
     if (this.crystals) this.scene.remove(this.crystals.group);
     if (this.water) this.scene.remove(this.water.mesh);
+    if (this.groundFog) this.scene.remove(this.groundFog.mesh);
     if (this.particles) this.scene.remove(this.particles.points);
     if (this.legacyDecorations) this.scene.remove(this.legacyDecorations.group);
   }

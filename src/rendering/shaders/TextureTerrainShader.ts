@@ -517,7 +517,7 @@ export function getBiomeTextureConfig(biome: BiomeTextureType): TextureTerrainCo
     cliffNormal: `${basePath}${prefixes.cliff}_normal.png`,
     cliffRoughness: `${basePath}${prefixes.cliff}_roughness.png`,
     cliffDisplacement: `${basePath}${prefixes.cliff}_displacement.png`,
-    parallaxScale: 0.05,
+    parallaxScale: 0.12, // Increased for more visible texture depth
   };
 }
 

@@ -23,7 +23,7 @@ export interface BiomeConfig {
   crystalDensity: number;     // 0-1, crystals per area
   hasWater: boolean;          // Whether to render water bodies
   waterLevel: number;         // Height of water surface
-  particleType: 'none' | 'dust' | 'snow' | 'ash' | 'spores';
+  particleType: 'none' | 'dust' | 'snow' | 'ash' | 'spores' | 'fireflies' | 'embers';
   groundRoughness: number;    // Material roughness
   groundMetalness: number;    // Material metalness
 }
@@ -66,7 +66,7 @@ export const BIOMES: Record<BiomeType, BiomeConfig> = {
     crystalDensity: 0,
     hasWater: true,
     waterLevel: -0.5,
-    particleType: 'none',
+    particleType: 'fireflies', // Floating fireflies at dusk
     groundRoughness: 0.85,
     groundMetalness: 0.02,
   },
@@ -150,7 +150,7 @@ export const BIOMES: Record<BiomeType, BiomeConfig> = {
     crystalDensity: 0.3, // Ice crystals
     hasWater: false,  // Disabled - water plane at 0.2 was visible over low-elevation terrain causing animated diagonal stripe artifacts
     waterLevel: -1,
-    particleType: 'none',  // Disabled - was 'snow'
+    particleType: 'snow', // Gentle snowfall
     groundRoughness: 0.3, // Icy smooth
     groundMetalness: 0.1,
   },
@@ -192,7 +192,7 @@ export const BIOMES: Record<BiomeType, BiomeConfig> = {
     crystalDensity: 0.05,
     hasWater: true, // Lava rivers
     waterLevel: -0.3,
-    particleType: 'none',  // Disabled - was 'ash'
+    particleType: 'embers', // Floating embers and ash
     groundRoughness: 0.9,
     groundMetalness: 0.1,
   },
@@ -276,7 +276,7 @@ export const BIOMES: Record<BiomeType, BiomeConfig> = {
     crystalDensity: 0.05,
     hasWater: false,  // Disabled - water plane at 0.1 was visible over low-elevation terrain causing animated diagonal stripe artifacts
     waterLevel: -1,
-    particleType: 'none',  // Disabled - was 'spores'
+    particleType: 'spores', // Floating spores and pollen
     groundRoughness: 0.8,
     groundMetalness: 0.0,
   },
