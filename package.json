@@ -11,7 +11,6 @@
     "optimize-models": "node scripts/optimize-models.js"
   },
   "dependencies": {
-    "@mkkellogg/gaussian-splats-3d": "^0.4.7",
     "@react-three/drei": "^9.92.7",
     "@react-three/fiber": "^8.15.12",
     "@supabase/supabase-js": "^2.39.0",
