@@ -1,8 +1,9 @@
 'use client';
 
-import React from 'react';
+import React, { useEffect } from 'react';
 import { useUIStore, DebugSettings } from '@/store/uiStore';
 import { isMultiplayerMode } from '@/store/gameSetupStore';
+import { setEdgeScrollEnabled } from '@/store/cameraStore';
 
 interface DebugSettingInfo {
   key: keyof DebugSettings;
@@ -102,6 +103,16 @@ export function DebugMenuPanel() {
   const toggleDebugMenu = useUIStore((state) => state.toggleDebugMenu);
   const toggleDebugSetting = useUIStore((state) => state.toggleDebugSetting);
   const setAllDebugSettings = useUIStore((state) => state.setAllDebugSettings);
+
+  // Disable edge scrolling when panel is open
+  useEffect(() => {
+    if (showDebugMenu) {
+      setEdgeScrollEnabled(false);
+      return () => {
+        setEdgeScrollEnabled(true);
+      };
+    }
+  }, [showDebugMenu]);
 
   // Hide debug menu in multiplayer mode (multiple human players)
   if (!showDebugMenu || isMultiplayerMode()) return null;

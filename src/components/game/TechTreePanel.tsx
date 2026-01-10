@@ -2,6 +2,7 @@
 
 import { useEffect } from 'react';
 import { useGameStore } from '@/store/gameStore';
+import { setEdgeScrollEnabled } from '@/store/cameraStore';
 import { RESEARCH_DEFINITIONS, ResearchDefinition } from '@/data/research/dominion';
 import { BUILDING_DEFINITIONS } from '@/data/buildings/dominion';
 
@@ -170,6 +171,16 @@ function CategorySection({ category }: { category: TechCategory }) {
 
 export function TechTreePanel() {
   const { showTechTree, setShowTechTree } = useGameStore();
+
+  // Disable edge scrolling when panel is open
+  useEffect(() => {
+    if (showTechTree) {
+      setEdgeScrollEnabled(false);
+      return () => {
+        setEdgeScrollEnabled(true);
+      };
+    }
+  }, [showTechTree]);
 
   // Handle ESC key to close
   useEffect(() => {

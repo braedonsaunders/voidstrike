@@ -2,6 +2,7 @@
 
 import { useGameStore } from '@/store/gameStore';
 import { useEffect } from 'react';
+import { setEdgeScrollEnabled } from '@/store/cameraStore';
 
 interface ShortcutCategory {
   name: string;
@@ -68,6 +69,16 @@ const SHORTCUTS: ShortcutCategory[] = [
 
 export function KeyboardShortcutsPanel() {
   const { showKeyboardShortcuts, setShowKeyboardShortcuts } = useGameStore();
+
+  // Disable edge scrolling when panel is open
+  useEffect(() => {
+    if (showKeyboardShortcuts) {
+      setEdgeScrollEnabled(false);
+      return () => {
+        setEdgeScrollEnabled(true);
+      };
+    }
+  }, [showKeyboardShortcuts]);
 
   // Close on escape
   useEffect(() => {

@@ -1,7 +1,8 @@
 'use client';
 
-import React from 'react';
+import React, { useEffect } from 'react';
 import { useUIStore, GraphicsSettings } from '@/store/uiStore';
+import { setEdgeScrollEnabled } from '@/store/cameraStore';
 
 const buttonStyle = (enabled: boolean) => ({
   padding: '4px 12px',
@@ -29,6 +30,16 @@ export function GraphicsOptionsPanel() {
   const toggleGraphicsOptions = useUIStore((state) => state.toggleGraphicsOptions);
   const toggleGraphicsSetting = useUIStore((state) => state.toggleGraphicsSetting);
   const setGraphicsSetting = useUIStore((state) => state.setGraphicsSetting);
+
+  // Disable edge scrolling when panel is open
+  useEffect(() => {
+    if (showGraphicsOptions) {
+      setEdgeScrollEnabled(false);
+      return () => {
+        setEdgeScrollEnabled(true);
+      };
+    }
+  }, [showGraphicsOptions]);
 
   if (!showGraphicsOptions) return null;
 
