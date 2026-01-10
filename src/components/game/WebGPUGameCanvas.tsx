@@ -126,7 +126,7 @@ export function WebGPUGameCanvas() {
   const DOUBLE_CLICK_TIME = 400;
   const DOUBLE_CLICK_DIST = 10;
 
-  const { isBuilding, buildingType, isSettingRallyPoint, isRepairMode, abilityTargetMode } = useGameStore();
+  const { isBuilding, buildingType, buildingPlacementQueue, isSettingRallyPoint, isRepairMode, abilityTargetMode } = useGameStore();
 
   // Initialize both Three.js (WebGPU) and Phaser
   useEffect(() => {
@@ -593,6 +593,7 @@ export function WebGPUGameCanvas() {
         }
         useGameStore.getState().setAbilityTargetMode(null);
       } else if (isBuilding && buildingType) {
+        // Place building (supports shift-click to queue multiple placements)
         const worldPos = cameraRef.current?.screenToWorld(e.clientX, e.clientY);
         if (worldPos && gameRef.current) {
           const selectedUnits = useGameStore.getState().selectedUnits;
@@ -601,7 +602,18 @@ export function WebGPUGameCanvas() {
             position: { x: worldPos.x, y: worldPos.z },
             workerId: selectedUnits.length > 0 ? selectedUnits[0] : undefined,
           });
-          useGameStore.getState().setBuildingMode(null);
+
+          if (e.shiftKey) {
+            // Shift held: add to queue for visual display, stay in building mode
+            useGameStore.getState().addToBuildingQueue({
+              buildingType,
+              x: worldPos.x,
+              y: worldPos.z,
+            });
+          } else {
+            // No shift: exit building mode
+            useGameStore.getState().setBuildingMode(null);
+          }
         }
       } else {
         setIsSelecting(true);
@@ -807,6 +819,13 @@ export function WebGPUGameCanvas() {
       }
     }
   }, [isBuilding, buildingType]);
+
+  // Sync building placement queue to preview for visual path lines
+  useEffect(() => {
+    if (placementPreviewRef.current) {
+      placementPreviewRef.current.setQueuedPlacements(buildingPlacementQueue);
+    }
+  }, [buildingPlacementQueue]);
 
   return (
     <div
