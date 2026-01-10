@@ -10,6 +10,19 @@ export interface Notification {
   duration: number;
 }
 
+// Graphics settings for post-processing and visual effects
+export interface GraphicsSettings {
+  postProcessingEnabled: boolean;
+  bloomEnabled: boolean;
+  ssaoEnabled: boolean;
+  godRaysEnabled: boolean;
+  groundFogEnabled: boolean;
+  particlesEnabled: boolean;
+  bloomStrength: number;
+  ssaoStrength: number;
+  godRaysStrength: number;
+}
+
 export interface UIState {
   // Screen management
   currentScreen: ScreenType;
@@ -39,6 +52,10 @@ export interface UIState {
   showFPS: boolean;
   showPing: boolean;
 
+  // Graphics settings
+  graphicsSettings: GraphicsSettings;
+  showGraphicsOptions: boolean;
+
   // Actions
   setScreen: (screen: ScreenType) => void;
   goBack: () => void;
@@ -60,6 +77,10 @@ export interface UIState {
   setMusicVolume: (volume: number) => void;
   toggleFPS: () => void;
   togglePing: () => void;
+  // Graphics settings actions
+  toggleGraphicsOptions: () => void;
+  setGraphicsSetting: <K extends keyof GraphicsSettings>(key: K, value: GraphicsSettings[K]) => void;
+  toggleGraphicsSetting: (key: keyof GraphicsSettings) => void;
 }
 
 export const useUIStore = create<UIState>((set, get) => ({
@@ -79,6 +100,18 @@ export const useUIStore = create<UIState>((set, get) => ({
   musicVolume: 0.5,
   showFPS: false,
   showPing: true,
+  showGraphicsOptions: false,
+  graphicsSettings: {
+    postProcessingEnabled: true,
+    bloomEnabled: true,
+    ssaoEnabled: true,
+    godRaysEnabled: true,
+    groundFogEnabled: true,
+    particlesEnabled: true,
+    bloomStrength: 0.4,
+    ssaoStrength: 0.3,
+    godRaysStrength: 0.15,
+  },
 
   setScreen: (screen) =>
     set((state) => ({
@@ -154,4 +187,19 @@ export const useUIStore = create<UIState>((set, get) => ({
   toggleFPS: () => set((state) => ({ showFPS: !state.showFPS })),
 
   togglePing: () => set((state) => ({ showPing: !state.showPing })),
+
+  toggleGraphicsOptions: () => set((state) => ({ showGraphicsOptions: !state.showGraphicsOptions })),
+
+  setGraphicsSetting: (key, value) =>
+    set((state) => ({
+      graphicsSettings: { ...state.graphicsSettings, [key]: value },
+    })),
+
+  toggleGraphicsSetting: (key) =>
+    set((state) => ({
+      graphicsSettings: {
+        ...state.graphicsSettings,
+        [key]: !state.graphicsSettings[key],
+      },
+    })),
 }));
