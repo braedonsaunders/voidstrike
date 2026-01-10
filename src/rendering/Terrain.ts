@@ -517,7 +517,9 @@ export class Terrain {
       if (nx >= 0 && nx < width && ny >= 0 && ny < height) {
         const neighbor = terrain[ny][nx];
         if (neighbor.elevation !== cell.elevation) {
-          edgeFactor = Math.max(edgeFactor, Math.abs(neighbor.elevation - cell.elevation) * 0.5);
+          // Normalize elevation difference to 0-1 range (max diff is 255)
+          const normalizedDiff = Math.abs(neighbor.elevation - cell.elevation) / 255;
+          edgeFactor = Math.max(edgeFactor, normalizedDiff);
         }
         if (neighbor.terrain === 'unwalkable' && cell.terrain !== 'unwalkable') {
           edgeFactor = Math.max(edgeFactor, 0.3);
@@ -555,7 +557,8 @@ export class Terrain {
       }
     }
 
-    return maxElevationDiff;
+    // Normalize to 0-1 range (max possible diff is 255)
+    return maxElevationDiff / 255;
   }
 
   private sampleTerrain(
