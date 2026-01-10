@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import { useGameStore } from '@/store/gameStore';
 import { useUIStore } from '@/store/uiStore';
 import { isMultiplayerMode } from '@/store/gameSetupStore';
@@ -29,6 +29,16 @@ export function HUD() {
   const handleUIMouseLeave = useCallback(() => {
     setEdgeScrollEnabled(true);
   }, []);
+
+  // Disable edge scrolling when game is paused
+  useEffect(() => {
+    if (isPaused) {
+      setEdgeScrollEnabled(false);
+      return () => {
+        setEdgeScrollEnabled(true);
+      };
+    }
+  }, [isPaused]);
 
   return (
     <div className="absolute inset-0 pointer-events-none">
