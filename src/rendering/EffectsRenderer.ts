@@ -38,6 +38,7 @@ interface ExplosionParticle {
   velocity: THREE.Vector3;
   progress: number;
   duration: number;
+  groundY: number; // Terrain height for ground collision
 }
 
 interface FireEffect {
@@ -434,7 +435,9 @@ export class EffectsRenderer {
     if (!mesh) return; // Pool exhausted
 
     mesh.position.copy(position);
-    mesh.position.y = 0.1;
+    // Keep the Y position from the input (already includes terrain height + offset)
+    // Just add small offset to prevent z-fighting with ground
+    mesh.position.y = position.y + 0.1;
     mesh.scale.set(1, 1, 1);
     (mesh.material as THREE.MeshBasicMaterial).opacity = 0.8;
 
@@ -498,7 +501,8 @@ export class EffectsRenderer {
       mat.opacity = 1;
 
       mesh.position.copy(position);
-      mesh.position.y = 0.5 + Math.random() * 1.5; // Start at various heights
+      // Start debris at terrain height + random offset for natural look
+      mesh.position.y = position.y + 0.5 + Math.random() * 1.5;
       mesh.scale.setScalar(0.3 + Math.random() * 0.5);
 
       // Random outward velocity
@@ -515,6 +519,7 @@ export class EffectsRenderer {
         ),
         progress: 0,
         duration: 0.8 + Math.random() * 0.4,
+        groundY: position.y, // Store terrain height for ground collision
       });
     }
 
@@ -531,7 +536,8 @@ export class EffectsRenderer {
       })
     );
     ringMesh.position.copy(position);
-    ringMesh.position.y = 0.1;
+    // Keep terrain height, add small offset to prevent z-fighting
+    ringMesh.position.y = position.y + 0.1;
     ringMesh.rotation.x = -Math.PI / 2;
     ringMesh.renderOrder = 998;
     this.scene.add(ringMesh);
@@ -555,7 +561,8 @@ export class EffectsRenderer {
       })
     );
     flashMesh.position.copy(position);
-    flashMesh.position.y = 1;
+    // Flash at terrain height + 1 for visibility
+    flashMesh.position.y = position.y + 1;
     flashMesh.renderOrder = 998;
     this.scene.add(flashMesh);
 
@@ -813,9 +820,10 @@ export class EffectsRenderer {
         particle.mesh.position.y += particle.velocity.y * dt;
         particle.mesh.position.z += particle.velocity.z * dt;
 
-        // Don't let particles go below ground
-        if (particle.mesh.position.y < 0.1) {
-          particle.mesh.position.y = 0.1;
+        // Don't let particles go below terrain ground level
+        const groundLevel = particle.groundY + 0.1;
+        if (particle.mesh.position.y < groundLevel) {
+          particle.mesh.position.y = groundLevel;
           particle.velocity.y = 0;
           particle.velocity.x *= 0.5; // Friction
           particle.velocity.z *= 0.5;
