@@ -294,6 +294,75 @@ export function HybridGameCanvas() {
         }
         return false;
       });
+      // Set up placement validator for SC2-style collision checking
+      // This checks buildings, resources, units, and decorations
+      placementPreviewRef.current.setPlacementValidator((centerX, centerY, width, height) => {
+        const halfW = width / 2;
+        const halfH = height / 2;
+
+        // Check map bounds
+        if (centerX - halfW < 0 || centerY - halfH < 0 ||
+            centerX + halfW > CURRENT_MAP.width || centerY + halfH > CURRENT_MAP.height) {
+          return false;
+        }
+
+        // Check terrain validity (elevation consistency, no ramps/cliffs)
+        if (!game.isValidTerrainForBuilding(centerX, centerY, width, height)) {
+          return false;
+        }
+
+        // Check for overlapping buildings (including blueprints under construction)
+        const buildings = game.world.getEntitiesWith('Building', 'Transform');
+        for (const entity of buildings) {
+          const transform = entity.get<Transform>('Transform');
+          const building = entity.get<Building>('Building');
+          if (!transform || !building) continue;
+
+          const existingHalfW = building.width / 2;
+          const existingHalfH = building.height / 2;
+          const dx = Math.abs(centerX - transform.x);
+          const dy = Math.abs(centerY - transform.y);
+
+          if (dx < halfW + existingHalfW + 0.5 && dy < halfH + existingHalfH + 0.5) {
+            return false;
+          }
+        }
+
+        // Check for overlapping resources (minerals, vespene)
+        const resources = game.world.getEntitiesWith('Resource', 'Transform');
+        for (const entity of resources) {
+          const transform = entity.get<Transform>('Transform');
+          if (!transform) continue;
+
+          const dx = Math.abs(centerX - transform.x);
+          const dy = Math.abs(centerY - transform.y);
+
+          if (dx < halfW + 1.5 && dy < halfH + 1.5) {
+            return false;
+          }
+        }
+
+        // Check for overlapping units
+        const units = game.world.getEntitiesWith('Unit', 'Transform');
+        for (const entity of units) {
+          const transform = entity.get<Transform>('Transform');
+          if (!transform) continue;
+
+          const dx = Math.abs(centerX - transform.x);
+          const dy = Math.abs(centerY - transform.y);
+
+          if (dx < halfW + 0.5 && dy < halfH + 0.5) {
+            return false;
+          }
+        }
+
+        // Check for overlapping decorations (rocks, trees, etc.)
+        if (!game.isPositionClearOfDecorations(centerX, centerY, width, height)) {
+          return false;
+        }
+
+        return true;
+      });
       scene.add(placementPreviewRef.current.group);
 
       // Initialize SC2-level visual systems
