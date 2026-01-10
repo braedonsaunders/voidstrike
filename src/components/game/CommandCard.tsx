@@ -6,6 +6,7 @@ import { Game } from '@/engine/core/Game';
 import { Unit } from '@/engine/components/Unit';
 import { Building } from '@/engine/components/Building';
 import { Ability } from '@/engine/components/Ability';
+import { Selectable } from '@/engine/components/Selectable';
 import { useEffect, useState } from 'react';
 import { UNIT_DEFINITIONS } from '@/data/units/dominion';
 import { BUILDING_DEFINITIONS, RESEARCH_MODULE_UNITS } from '@/data/buildings/dominion';
@@ -251,17 +252,44 @@ export function CommandCard() {
         // Building buttons for the selected category
         const buildingList = menuMode === 'build_basic' ? BASIC_BUILDINGS : ADVANCED_BUILDINGS;
 
+        // Helper to check if player has completed required buildings
+        const checkRequirementsMet = (requirements: string[] | undefined): { met: boolean; missing: string[] } => {
+          if (!requirements || requirements.length === 0) {
+            return { met: true, missing: [] };
+          }
+
+          const localPlayerId = getLocalPlayerId();
+          if (!localPlayerId) return { met: false, missing: requirements };
+
+          const playerBuildings = game.world.getEntitiesWith('Building', 'Selectable');
+          const missing: string[] = [];
+
+          for (const reqBuildingId of requirements) {
+            let found = false;
+            for (const buildingEntity of playerBuildings) {
+              const b = buildingEntity.get<Building>('Building')!;
+              const sel = buildingEntity.get<Selectable>('Selectable')!;
+              if (sel.playerId === localPlayerId && b.buildingId === reqBuildingId && b.isComplete()) {
+                found = true;
+                break;
+              }
+            }
+            if (!found) {
+              missing.push(BUILDING_DEFINITIONS[reqBuildingId]?.name || reqBuildingId);
+            }
+          }
+
+          return { met: missing.length === 0, missing };
+        };
+
         buildingList.forEach((buildingId) => {
           const def = BUILDING_DEFINITIONS[buildingId];
           if (!def) return;
 
-          // Check tech requirements
-          let requirementsMet = true;
-          let reqText = '';
-          if (def.requirements && def.requirements.length > 0) {
-            // For now, simplified check - in full implementation, check actual player buildings
-            reqText = `Requires: ${def.requirements.map(r => BUILDING_DEFINITIONS[r]?.name || r).join(', ')}`;
-          }
+          // Check tech requirements against actual player buildings
+          const reqCheck = checkRequirementsMet(def.requirements);
+          const requirementsMet = reqCheck.met;
+          const reqText = reqCheck.missing.length > 0 ? `Requires: ${reqCheck.missing.join(', ')}` : '';
 
           const canAfford = minerals >= def.mineralCost && vespene >= def.vespeneCost;
 
@@ -276,9 +304,11 @@ export function CommandCard() {
             label: def.name,
             shortcut: def.name.charAt(0).toUpperCase(),
             action: () => {
-              useGameStore.getState().setBuildingMode(buildingId);
+              if (requirementsMet) {
+                useGameStore.getState().setBuildingMode(buildingId);
+              }
             },
-            isDisabled: !canAfford,
+            isDisabled: !canAfford || !requirementsMet,
             tooltip,
             cost: { minerals: def.mineralCost, vespene: def.vespeneCost },
           });
