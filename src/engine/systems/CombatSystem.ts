@@ -178,11 +178,17 @@ export class CombatSystem extends System {
         continue;
       }
 
-      // Auto-acquire targets for idle, patrolling, attackmoving, or holding units
-      if (
-        (unit.state === 'idle' || unit.state === 'patrolling' || unit.state === 'attackmoving' || unit.isHoldingPosition) &&
-        unit.targetEntityId === null
-      ) {
+      // Auto-acquire targets for units that need them
+      // Includes: idle, patrolling, attackmoving, holding, or 'attacking' with invalid target
+      const needsTarget = unit.targetEntityId === null && (
+        unit.state === 'idle' ||
+        unit.state === 'patrolling' ||
+        unit.state === 'attackmoving' ||
+        unit.state === 'attacking' ||  // Edge case: attacking but lost target
+        unit.isHoldingPosition
+      );
+
+      if (needsTarget) {
         // Use throttled/cached target search for performance
         const target = this.getTargetThrottled(attacker.id, transform, unit, currentTick);
         if (target && !unit.isHoldingPosition) {
@@ -345,8 +351,9 @@ export class CombatSystem extends System {
           return cached.targetId;
         }
       }
-      // Cached target invalid, remove it
+      // Cached target invalid, remove it and allow immediate re-search
       this.cachedTargets.delete(selfId);
+      this.lastTargetSearchTick.delete(selfId); // Allow immediate re-targeting
     }
 
     // Check if enough time has passed since last search
