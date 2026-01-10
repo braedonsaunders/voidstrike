@@ -205,8 +205,8 @@ class MusicPlayerClass {
 
     // Crossfade if there's a current track playing
     if (this.currentAudio && this.isPlaying) {
+      // Note: isLoading will be reset in crossfade completion
       this.crossfade(this.currentAudio, audio);
-      this.isLoading = false;
     } else {
       // Just play the new track
       try {
@@ -214,12 +214,11 @@ class MusicPlayerClass {
         this.currentAudio = audio;
         this.isPlaying = true;
         this.consecutiveFailures = 0; // Reset on success
-        this.isLoading = false;
       } catch (error) {
         debugAudio.warn('Failed to play track:', error);
         this.consecutiveFailures++;
-        this.isLoading = false;
       }
+      this.isLoading = false;
     }
   }
 
@@ -257,11 +256,15 @@ class MusicPlayerClass {
           // Crossfade complete
           this.cleanupCrossfade();
           this.currentAudio = to;
+          this.isLoading = false; // Reset loading flag now that crossfade is done
+          this.consecutiveFailures = 0; // Reset on successful play
         }
       }, this.crossfadeUpdateInterval);
     }).catch((error) => {
       debugAudio.warn('Failed to start crossfade:', error);
       this.cleanupCrossfade();
+      this.isLoading = false; // Reset loading flag on failure
+      this.consecutiveFailures++;
     });
   }
 
