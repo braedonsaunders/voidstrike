@@ -49,9 +49,9 @@ export class SC2PostProcessing {
 
     // 2. SSAO - Screen Space Ambient Occlusion
     this.ssaoPass = new SSAOPass(scene, camera, size.x, size.y);
-    this.ssaoPass.kernelRadius = 8;  // Reduced for subtler effect
-    this.ssaoPass.minDistance = 0.005;
-    this.ssaoPass.maxDistance = 0.08;
+    this.ssaoPass.kernelRadius = 16;  // Stronger AO for better depth
+    this.ssaoPass.minDistance = 0.001;
+    this.ssaoPass.maxDistance = 0.15;
     this.ssaoPass.enabled = true;
     this.composer.addPass(this.ssaoPass);
 

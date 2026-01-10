@@ -106,7 +106,7 @@ export const useUIStore = create<UIState>((set, get) => ({
   graphicsSettings: {
     postProcessingEnabled: true,
     ssaoEnabled: true,
-    ssaoRadius: 8,
+    ssaoRadius: 16,
     bloomEnabled: true,
     outlineEnabled: true,
     outlineStrength: 2,

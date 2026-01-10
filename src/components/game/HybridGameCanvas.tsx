@@ -154,8 +154,9 @@ export function HybridGameCanvas() {
       renderer.setSize(window.innerWidth, window.innerHeight);
       renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
       renderer.outputColorSpace = THREE.SRGBColorSpace;
-      renderer.toneMapping = THREE.ACESFilmicToneMapping;
-      renderer.toneMappingExposure = 1.1;
+      // Note: Don't set toneMapping here - OutputPass handles it when post-processing is enabled
+      // This avoids double tone mapping (once by renderer, once by OutputPass)
+      renderer.toneMapping = THREE.NoToneMapping;
       // Enable local clipping for construction animations
       renderer.localClippingEnabled = true;
       renderer.shadowMap.enabled = true;
