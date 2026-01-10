@@ -115,8 +115,9 @@ export class MovementSystem extends System {
   private handlePatrolCommand(data: {
     entityIds: number[];
     targetPosition: { x: number; y: number };
+    queue?: boolean;
   }): void {
-    const { entityIds, targetPosition } = data;
+    const { entityIds, targetPosition, queue } = data;
 
     for (const entityId of entityIds) {
       const entity = this.world.getEntity(entityId);
@@ -126,11 +127,20 @@ export class MovementSystem extends System {
       const transform = entity.get<Transform>('Transform');
       if (!unit || !transform) continue;
 
-      // Set patrol between current position and target
-      unit.setPatrol(transform.x, transform.y, targetPosition.x, targetPosition.y);
+      if (queue) {
+        // Queue the patrol command instead of executing immediately
+        unit.queueCommand({
+          type: 'patrol',
+          targetX: targetPosition.x,
+          targetY: targetPosition.y,
+        });
+      } else {
+        // Set patrol between current position and target
+        unit.setPatrol(transform.x, transform.y, targetPosition.x, targetPosition.y);
 
-      // Request path to first patrol destination (force=true for user commands)
-      this.requestPathWithCooldown(entityId, targetPosition.x, targetPosition.y, true);
+        // Request path to first patrol destination (force=true for user commands)
+        this.requestPathWithCooldown(entityId, targetPosition.x, targetPosition.y, true);
+      }
     }
   }
 

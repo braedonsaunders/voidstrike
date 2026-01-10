@@ -358,9 +358,22 @@ export class Unit extends Component {
           this.addPatrolPoint(command.targetX, command.targetY);
         }
         break;
+      case 'gather':
+        if (command.targetEntityId !== undefined) {
+          this.setGatherTarget(command.targetEntityId);
+        }
+        break;
     }
 
     return true;
+  }
+
+  // Set gather target for workers
+  public setGatherTarget(targetEntityId: number): void {
+    if (!this.isWorker) return;
+    this.gatherTargetId = targetEntityId;
+    this.state = 'gathering';
+    // Movement will be handled by ResourceSystem
   }
 
   // Set patrol between current position and target

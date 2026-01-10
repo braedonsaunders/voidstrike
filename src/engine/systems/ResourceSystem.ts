@@ -69,6 +69,7 @@ export class ResourceSystem extends System {
   private handleGatherCommand(command: {
     entityIds: number[];
     targetEntityId: number;
+    queue?: boolean;
   }): void {
     const targetEntity = this.world.getEntity(command.targetEntityId);
     if (!targetEntity) return;
@@ -116,21 +117,30 @@ export class ResourceSystem extends System {
         }
       }
 
-      // If worker is currently constructing, release them from construction (SC2-style)
-      if (unit.state === 'building' && unit.constructingBuildingId !== null) {
-        unit.cancelBuilding();
-      }
+      if (command.queue) {
+        // Queue the gather command instead of executing immediately
+        unit.queueCommand({
+          type: 'gather',
+          targetEntityId: assignedTargetId,
+        });
+      } else {
+        // If worker is currently constructing, release them from construction (SC2-style)
+        if (unit.state === 'building' && unit.constructingBuildingId !== null) {
+          unit.cancelBuilding();
+        }
 
-      unit.gatherTargetId = assignedTargetId;
-      unit.state = 'gathering';
+        // Execute immediately
+        unit.gatherTargetId = assignedTargetId;
+        unit.state = 'gathering';
 
-      // Move to assigned resource
-      unit.moveToPosition(assignedTransform.x, assignedTransform.y);
+        // Move to assigned resource
+        unit.moveToPosition(assignedTransform.x, assignedTransform.y);
 
-      // Debug: log gather command for player1 workers
-      const selectable = entity.get<Selectable>('Selectable');
-      if (selectable?.playerId === 'player1') {
-        debugResources.log(`[ResourceSystem] player1 worker ${entityId} assigned to gather resource ${assignedTargetId}, moving to (${assignedTransform.x.toFixed(1)}, ${assignedTransform.y.toFixed(1)})`);
+        // Debug: log gather command for player1 workers
+        const selectable = entity.get<Selectable>('Selectable');
+        if (selectable?.playerId === 'player1') {
+          debugResources.log(`[ResourceSystem] player1 worker ${entityId} assigned to gather resource ${assignedTargetId}, moving to (${assignedTransform.x.toFixed(1)}, ${assignedTransform.y.toFixed(1)})`);
+        }
       }
     }
   }
