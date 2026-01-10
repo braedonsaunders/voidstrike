@@ -253,8 +253,18 @@ export class PathfindingSystem extends System {
     const halfW = width / 2;
     const halfH = height / 2;
 
-    for (let y = Math.floor(centerY - halfH); y <= Math.ceil(centerY + halfH); y++) {
-      for (let x = Math.floor(centerX - halfW); x <= Math.ceil(centerX + halfW); x++) {
+    // Calculate grid cell bounds (cells are unit squares)
+    // For a building from (47.5, 47.5) to (52.5, 52.5), we block cells 47-52
+    const minX = Math.floor(centerX - halfW);
+    const maxX = Math.ceil(centerX + halfW) - 1; // -1 because cell 53 starts at 53.0
+    const minY = Math.floor(centerY - halfH);
+    const maxY = Math.ceil(centerY + halfH) - 1;
+
+    for (let y = minY; y <= maxY; y++) {
+      for (let x = minX; x <= maxX; x++) {
+        // Bounds check
+        if (x < 0 || x >= this.mapWidth || y < 0 || y >= this.mapHeight) continue;
+
         const key = this.cellKey(x, y);
         this.blockedCells.add(key);
         this.cellsChangedThisTick.add(key);
@@ -268,8 +278,17 @@ export class PathfindingSystem extends System {
     const halfW = width / 2;
     const halfH = height / 2;
 
-    for (let y = Math.floor(centerY - halfH); y <= Math.ceil(centerY + halfH); y++) {
-      for (let x = Math.floor(centerX - halfW); x <= Math.ceil(centerX + halfW); x++) {
+    // Calculate grid cell bounds (cells are unit squares)
+    const minX = Math.floor(centerX - halfW);
+    const maxX = Math.ceil(centerX + halfW) - 1;
+    const minY = Math.floor(centerY - halfH);
+    const maxY = Math.ceil(centerY + halfH) - 1;
+
+    for (let y = minY; y <= maxY; y++) {
+      for (let x = minX; x <= maxX; x++) {
+        // Bounds check
+        if (x < 0 || x >= this.mapWidth || y < 0 || y >= this.mapHeight) continue;
+
         const key = this.cellKey(x, y);
         this.blockedCells.delete(key);
         this.cellsChangedThisTick.add(key);
@@ -413,12 +432,26 @@ export class PathfindingSystem extends System {
 
   private syncBlockedCellsWithBuildings(): void {
     const buildings = this.world.getEntitiesWith('Building', 'Transform');
+    let blockedBuildingCount = 0;
+
     for (const entity of buildings) {
       const building = entity.get<Building>('Building')!;
       const transform = entity.get<Transform>('Transform')!;
+
+      // Only block complete or under-construction buildings (not destroyed/flying)
+      if (building.state === 'destroyed' || building.isFlying) continue;
+
       this.blockArea(transform.x, transform.y, building.width, building.height);
+      blockedBuildingCount++;
+      debugPathfinding.log(`[PathfindingSystem] Blocked ${building.name} at (${transform.x}, ${transform.y}), size ${building.width}x${building.height}`);
     }
+
+    debugPathfinding.log(`[PathfindingSystem] Synced ${blockedBuildingCount} buildings as obstacles`);
+
     this.cellsChangedThisTick.clear(); // Don't trigger invalidation on initial sync
+
+    // Rebuild hierarchical graph after syncing all buildings
+    this.hierarchicalPathfinder.rebuildAbstractGraph();
   }
 
   private invalidateAffectedPaths(): void {

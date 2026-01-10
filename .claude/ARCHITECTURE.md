@@ -974,27 +974,63 @@ Features:
 
 ### AStar Algorithm (`AStar.ts`)
 
-Grid-based A* pathfinding with terrain cost support:
+High-performance grid-based A* pathfinding with industry-standard optimizations:
 
 ```typescript
+// Binary Min-Heap for O(log n) open list operations
+class BinaryHeap {
+  push(node): void;    // O(log n) insert
+  pop(): PathNode;     // O(log n) extract-min
+  update(node): void;  // O(log n) decrease-key
+}
+
+// Version-based node reset - no grid cloning between searches
+interface PathNode {
+  version: number;  // Only valid if matches current searchVersion
+  heapIndex: number; // For O(log n) heap updates
+}
+
 // Line-of-sight validated path smoothing
 private smoothPath(path) {
   // Uses Bresenham's line algorithm to verify direct paths are clear
   // Only removes waypoints when hasLineOfSight() confirms no obstacles
 }
-
-// Corner-cutting prevention
-private hasLineOfSight(x1, y1, x2, y2) {
-  // Checks all cells along line using Bresenham's algorithm
-  // Also validates diagonal movement doesn't cut through corners
-}
 ```
 
-Features:
+Key Optimizations:
+- **Binary Heap**: O(log n) open list operations vs O(n) linear search
+- **Version-Based Reset**: No grid cloning between searches (O(1) reset vs O(n))
+- **No Allocations**: Reuses node objects via version tagging
 - **Terrain Movement Costs**: Roads (0.7x), forests (1.3-1.8x), mud (1.5x), water (2.0x)
 - **Octile Distance Heuristic**: Accurate cost estimation for 8-directional movement
 - **Line-of-Sight Path Smoothing**: Removes redundant waypoints only when clear path exists
 - **Nearest Walkable Fallback**: Finds alternative destination if target is blocked
+
+### RVO Local Avoidance (`RVO.ts`)
+
+ORCA (Optimal Reciprocal Collision Avoidance) implementation for recast-navigation style local avoidance:
+
+```typescript
+// Each agent computes velocity obstacles from neighbors
+function computeORCAVelocity(
+  agent: { x, y, vx, vy, prefVx, prefVy, radius, maxSpeed },
+  neighbors: Array<{ x, y, vx, vy, radius }>,
+  timeHorizon: number
+): { vx: number; vy: number }
+
+// ORCA half-planes define allowed velocity space
+interface ORCALine {
+  px, py: number;  // Point on line
+  dx, dy: number;  // Direction into allowed half-plane
+}
+```
+
+Features:
+- **Reciprocal**: Both agents adjust, splitting responsibility 50/50
+- **Optimal**: Finds velocity closest to preferred via linear programming
+- **Scalable**: O(n) per agent with spatial hashing
+- **Smooth**: No jittering or oscillation
+- **SC2-Style Exceptions**: Gathering workers ignore RVO (walk through each other)
 
 ### HierarchicalAStar (`HierarchicalAStar.ts`)
 
