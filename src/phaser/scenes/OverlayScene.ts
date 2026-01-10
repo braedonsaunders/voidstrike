@@ -106,6 +106,10 @@ export class OverlayScene extends Phaser.Scene {
   private gameEndContainer: Phaser.GameObjects.Container | null = null;
   private escKeyListener: Phaser.Input.Keyboard.Key | null = null;
 
+  // Match start countdown
+  private countdownActive = false;
+  private countdownContainer: Phaser.GameObjects.Container | null = null;
+
   constructor() {
     super({ key: 'OverlayScene' });
   }
@@ -345,6 +349,11 @@ export class OverlayScene extends Phaser.Scene {
       // Game is over - no spectating option
       this.showGameEndOverlay(null, data.duration, 'draw', false);
     });
+
+    // Match start countdown
+    this.eventBus.on('game:countdown', () => {
+      this.showMatchCountdown();
+    });
   }
 
   private setupKeyboardShortcuts(): void {
@@ -359,6 +368,136 @@ export class OverlayScene extends Phaser.Scene {
         1000
       );
     });
+  }
+
+  /**
+   * Show SC2-style match start countdown: 3, 2, 1, GO!
+   */
+  public showMatchCountdown(): void {
+    if (this.countdownActive) return;
+    this.countdownActive = true;
+
+    const screenWidth = this.scale.width;
+    const screenHeight = this.scale.height;
+
+    // Create container for countdown elements
+    this.countdownContainer = this.add.container(screenWidth / 2, screenHeight / 2);
+    this.countdownContainer.setDepth(400);
+
+    // Countdown sequence: 3, 2, 1, GO!
+    const sequence = ['3', '2', '1', 'GO!'];
+    let currentIndex = 0;
+
+    const showNumber = () => {
+      if (currentIndex >= sequence.length) {
+        // Countdown complete - cleanup
+        this.countdownActive = false;
+        if (this.countdownContainer) {
+          this.countdownContainer.destroy();
+          this.countdownContainer = null;
+        }
+        return;
+      }
+
+      const value = sequence[currentIndex];
+      const isGo = value === 'GO!';
+
+      // Create the countdown text
+      const countText = this.add.text(0, 0, value, {
+        fontSize: isGo ? '120px' : '180px',
+        fontFamily: 'Orbitron, Arial Black, sans-serif',
+        color: isGo ? '#00ff00' : '#ffffff',
+        stroke: '#000000',
+        strokeThickness: isGo ? 8 : 12,
+        shadow: {
+          offsetX: 4,
+          offsetY: 4,
+          color: isGo ? '#004400' : '#333333',
+          blur: 15,
+          fill: true,
+        },
+      });
+      countText.setOrigin(0.5, 0.5);
+
+      // Add glow effect behind the text
+      const glow = this.add.graphics();
+      const glowColor = isGo ? 0x00ff00 : 0x4488ff;
+      const glowRadius = isGo ? 150 : 180;
+
+      for (let i = 0; i < 5; i++) {
+        const alpha = 0.15 - i * 0.025;
+        const radius = glowRadius - i * 20;
+        glow.fillStyle(glowColor, alpha);
+        glow.fillCircle(0, 0, radius);
+      }
+
+      // Add elements to container
+      this.countdownContainer!.add(glow);
+      this.countdownContainer!.add(countText);
+
+      // Animate: scale up and fade in, then scale up more and fade out
+      countText.setScale(0.3);
+      countText.setAlpha(0);
+      glow.setScale(0.3);
+      glow.setAlpha(0);
+
+      // Entrance animation
+      this.tweens.add({
+        targets: [countText, glow],
+        scale: 1,
+        alpha: 1,
+        duration: 200,
+        ease: 'Back.easeOut',
+        onComplete: () => {
+          // Hold briefly, then exit
+          this.time.delayedCall(isGo ? 400 : 500, () => {
+            // Exit animation
+            this.tweens.add({
+              targets: countText,
+              scale: isGo ? 2 : 1.5,
+              alpha: 0,
+              duration: isGo ? 400 : 300,
+              ease: 'Quad.easeIn',
+              onComplete: () => {
+                countText.destroy();
+              },
+            });
+            this.tweens.add({
+              targets: glow,
+              scale: 2,
+              alpha: 0,
+              duration: isGo ? 400 : 300,
+              ease: 'Quad.easeIn',
+              onComplete: () => {
+                glow.destroy();
+                currentIndex++;
+                if (currentIndex < sequence.length) {
+                  showNumber();
+                } else {
+                  // Final cleanup
+                  this.countdownActive = false;
+                  if (this.countdownContainer) {
+                    this.countdownContainer.destroy();
+                    this.countdownContainer = null;
+                  }
+                }
+              },
+            });
+          });
+        },
+      });
+
+      // Add screen pulse effect on each number
+      if (!isGo) {
+        this.cameras.main.flash(100, 255, 255, 255, false, undefined, 0.1);
+      } else {
+        // Bigger flash for GO!
+        this.cameras.main.flash(200, 0, 255, 0, false, undefined, 0.15);
+      }
+    };
+
+    // Start the countdown
+    showNumber();
   }
 
   /**
@@ -1196,6 +1335,7 @@ export class OverlayScene extends Phaser.Scene {
     this.vignetteTexture?.destroy();
     this.alertContainer?.destroy();
     this.splashContainer?.destroy();
+    this.countdownContainer?.destroy();
 
     for (const alert of this.alerts) {
       alert.graphics?.destroy();
@@ -1208,5 +1348,6 @@ export class OverlayScene extends Phaser.Scene {
     this.abilitySplashes = [];
     this.edgeWarnings.clear();
     this.vignetteTexture = null;
+    this.countdownContainer = null;
   }
 }
