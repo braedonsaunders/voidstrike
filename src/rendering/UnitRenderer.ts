@@ -151,9 +151,14 @@ export class UnitRenderer {
       const exactMatches = { idle: false, walk: false, attack: false, death: false };
 
       for (const clip of clips) {
-        // Remove root motion (position tracks) from animations to prevent jolt/warping
-        // This fixes the issue where walk animations move the model and conflict with programmatic positioning
-        this.removeRootMotion(clip);
+        // TEMPORARILY DISABLED: Remove root motion - let's see if this is causing the issue
+        // this.removeRootMotion(clip);
+
+        // Log all track names to understand the structure
+        if (clips.indexOf(clip) === 0) {
+          console.log(`[UnitRenderer] ${unitType}: Sample tracks from "${clip.name}":`);
+          clip.tracks.slice(0, 5).forEach(t => console.log(`[UnitRenderer]   Track: "${t.name}"`));
+        }
 
         const action = mixer.clipAction(clip);
         // Normalize name: lowercase and strip common prefixes like "Armature|"
