@@ -221,7 +221,7 @@ export function GameCanvas() {
 
       await updateProgress(84, 'Creating effects renderer', 80);
 
-      const effectsRenderer = new EffectsRenderer(scene, game.eventBus);
+      const effectsRenderer = new EffectsRenderer(scene, game.eventBus, (x, z) => terrain.getHeightAt(x, z));
       effectsRendererRef.current = effectsRenderer;
 
       const rallyPointRenderer = new RallyPointRenderer(scene, game.eventBus, game.world, localPlayerId);

@@ -65,6 +65,7 @@ const POOL_SIZE = 50;
 export class EffectsRenderer {
   private scene: THREE.Scene;
   private eventBus: EventBus;
+  private getTerrainHeight: ((x: number, z: number) => number) | null = null;
   private attackEffects: AttackEffect[] = [];
   private hitEffects: HitEffect[] = [];
   private damageNumbers: DamageNumber[] = [];
@@ -96,9 +97,10 @@ export class EffectsRenderer {
   private moveIndicatorGeometry: THREE.RingGeometry;
   private moveIndicatorMaterial: THREE.MeshBasicMaterial;
 
-  constructor(scene: THREE.Scene, eventBus: EventBus) {
+  constructor(scene: THREE.Scene, eventBus: EventBus, getTerrainHeight?: (x: number, z: number) => number) {
     this.scene = scene;
     this.eventBus = eventBus;
+    this.getTerrainHeight = getTerrainHeight ?? null;
 
     // Create shared resources
     this.projectileGeometry = new THREE.SphereGeometry(0.15, 8, 8);
@@ -196,6 +198,20 @@ export class EffectsRenderer {
   }
 
   /**
+   * Set the terrain height function for proper effect positioning on elevated terrain
+   */
+  public setTerrainHeightFunction(fn: (x: number, z: number) => number): void {
+    this.getTerrainHeight = fn;
+  }
+
+  /**
+   * Get terrain height at a position, with fallback to 0
+   */
+  private getHeightAt(x: number, z: number): number {
+    return this.getTerrainHeight ? this.getTerrainHeight(x, z) : 0;
+  }
+
+  /**
    * Create an object pool with pre-allocated meshes
    */
   private createPool(size: number, factory: () => THREE.Mesh): MeshPool {
@@ -279,15 +295,19 @@ export class EffectsRenderer {
       targetHeight?: number;
     }) => {
       if (data.attackerPos && data.targetPos) {
+        // Get terrain height at attacker and target positions
+        const attackerTerrainHeight = this.getHeightAt(data.attackerPos.x, data.attackerPos.y);
+        const targetTerrainHeight = this.getHeightAt(data.targetPos.x, data.targetPos.y);
+
         this.createAttackEffect(
-          new THREE.Vector3(data.attackerPos.x, 0.5, data.attackerPos.y),
-          new THREE.Vector3(data.targetPos.x, 0.5, data.targetPos.y),
+          new THREE.Vector3(data.attackerPos.x, attackerTerrainHeight + 0.5, data.attackerPos.y),
+          new THREE.Vector3(data.targetPos.x, targetTerrainHeight + 0.5, data.targetPos.y),
           data.damageType
         );
 
         // Create floating damage number ABOVE the target
-        // Use targetHeight for buildings, default 2.5 for units
-        const damageNumberY = (data.targetHeight && data.targetHeight > 0) ? data.targetHeight + 1.5 : 2.5;
+        // Use targetHeight for buildings, default 2.5 for units (relative to terrain)
+        const damageNumberY = targetTerrainHeight + ((data.targetHeight && data.targetHeight > 0) ? data.targetHeight + 1.5 : 2.5);
         this.createDamageNumber(
           new THREE.Vector3(data.targetPos.x, damageNumberY, data.targetPos.y),
           data.damage
@@ -305,7 +325,8 @@ export class EffectsRenderer {
       position?: { x: number; y: number };
     }) => {
       if (data.position) {
-        this.createDeathEffect(new THREE.Vector3(data.position.x, 0.1, data.position.y));
+        const terrainHeight = this.getHeightAt(data.position.x, data.position.y);
+        this.createDeathEffect(new THREE.Vector3(data.position.x, terrainHeight + 0.1, data.position.y));
       }
       // Clear focus fire tracking for dead unit
       if (data.entityId !== undefined) {
@@ -327,8 +348,9 @@ export class EffectsRenderer {
       buildingType: string;
       position: { x: number; y: number };
     }) => {
+      const terrainHeight = this.getHeightAt(data.position.x, data.position.y);
       this.createBuildingExplosion(
-        new THREE.Vector3(data.position.x, 0, data.position.y),
+        new THREE.Vector3(data.position.x, terrainHeight, data.position.y),
         data.buildingType
       );
       // Clear any focus fire on this building
@@ -341,8 +363,9 @@ export class EffectsRenderer {
       targetPosition?: { x: number; y: number };
     }) => {
       if (data.entityIds.length > 0 && data.targetPosition) {
+        const terrainHeight = this.getHeightAt(data.targetPosition.x, data.targetPosition.y);
         this.createMoveIndicator(
-          new THREE.Vector3(data.targetPosition.x, 0.15, data.targetPosition.y)
+          new THREE.Vector3(data.targetPosition.x, terrainHeight + 0.15, data.targetPosition.y)
         );
       }
     });
@@ -642,6 +665,9 @@ export class EffectsRenderer {
     // Add this attacker
     attackers.add(attackerId);
 
+    // Get terrain height at target position
+    const terrainHeight = this.getHeightAt(targetPos.x, targetPos.y);
+
     // If 2+ attackers, show/update focus fire indicator
     if (attackers.size >= 2) {
       let indicator = this.focusFireIndicators.get(targetId);
@@ -649,7 +675,7 @@ export class EffectsRenderer {
       if (!indicator) {
         // Create new indicator
         const mesh = new THREE.Mesh(this.focusFireGeometry, this.focusFireMaterial.clone());
-        mesh.position.set(targetPos.x, 0.15, targetPos.y);
+        mesh.position.set(targetPos.x, terrainHeight + 0.15, targetPos.y);
         mesh.rotation.x = -Math.PI / 2;
         mesh.renderOrder = 997; // Render after terrain
         this.scene.add(mesh);
@@ -663,7 +689,7 @@ export class EffectsRenderer {
         this.focusFireIndicators.set(targetId, indicator);
       } else {
         // Update existing indicator position
-        indicator.mesh.position.set(targetPos.x, 0.15, targetPos.y);
+        indicator.mesh.position.set(targetPos.x, terrainHeight + 0.15, targetPos.y);
         indicator.attackerCount = attackers.size;
       }
     }
