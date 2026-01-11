@@ -518,9 +518,9 @@ export function createRampInTerrain(
             break;
         }
 
-        // Smooth interpolation using ease function for natural slope
-        const smoothT = t * t * (3 - 2 * t); // smoothstep
-        const elevationValue = fromElev256 + (toElev256 - fromElev256) * smoothT;
+        // LINEAR interpolation for STRAIGHT ramps - no curves, just a clean slope
+        // This creates a straight line from top to bottom
+        const elevationValue = fromElev256 + (toElev256 - fromElev256) * t;
 
         grid[py][px] = {
           terrain: 'ramp',

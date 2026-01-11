@@ -671,12 +671,12 @@ export class Terrain {
         // The pre-calculated slopes might not match the cell's actual terrain type
         // because they're based on sampleTerrain() which uses a different lookup
         if (cell.terrain === 'ramp') {
-          // Ramps need minimum slope of 0.2 to show dirt/rock textures
-          const minRampSlope = 0.25;
-          slope00 = Math.max(slope00, minRampSlope);
-          slope10 = Math.max(slope10, minRampSlope);
-          slope01 = Math.max(slope01, minRampSlope);
-          slope11 = Math.max(slope11, minRampSlope);
+          // RAMPS MUST HAVE ZERO SLOPE - they should show FLAT GROUND TEXTURE (grass/snow)
+          // Ramps are walkable paths and must look like flat ground, not rocky slopes
+          slope00 = 0;
+          slope10 = 0;
+          slope01 = 0;
+          slope11 = 0;
         } else if (cell.terrain === 'unwalkable') {
           // Unwalkable terrain gets a boost to show rock/cliff textures
           // Flat unwalkable (like plateaus) still need some slope for texture blending
