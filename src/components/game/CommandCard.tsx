@@ -495,12 +495,16 @@ function CommandCardInner() {
             label: unitDef.name,
             shortcut: unitDef.name.charAt(0).toUpperCase(),
             action: () => {
+              // Play supply alert if queuing while supply blocked (unit will still queue)
+              if (!hasSupply) {
+                game.eventBus.emit('alert:supplyBlocked', {});
+              }
               game.eventBus.emit('command:train', {
                 entityIds: selectedUnits,
                 unitType: unitId,
               });
             },
-            isDisabled: !canAfford || !hasSupply,
+            isDisabled: !canAfford,
             tooltip: (unitDef.description || `Train ${unitDef.name}`) + (!hasSupply ? ' (Need more supply)' : ''),
             cost: { minerals: unitDef.mineralCost, vespene: unitDef.vespeneCost, supply: unitDef.supplyCost },
           });
@@ -516,7 +520,7 @@ function CommandCardInner() {
 
           const canAfford = minerals >= unitDef.mineralCost && vespene >= unitDef.vespeneCost;
           const hasSupply = supply + unitDef.supplyCost <= maxSupply;
-          const canTrain = hasTechLab && canAfford && hasSupply;
+          const canTrain = hasTechLab && canAfford;
 
           buttons.push({
             id: `train_${unitId}`,
@@ -524,6 +528,10 @@ function CommandCardInner() {
             shortcut: unitDef.name.charAt(0).toUpperCase(),
             action: () => {
               if (hasTechLab) {
+                // Play supply alert if queuing while supply blocked (unit will still queue)
+                if (!hasSupply) {
+                  game.eventBus.emit('alert:supplyBlocked', {});
+                }
                 game.eventBus.emit('command:train', {
                   entityIds: selectedUnits,
                   unitType: unitId,
