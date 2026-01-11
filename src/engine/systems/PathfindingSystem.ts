@@ -64,6 +64,7 @@ export class PathfindingSystem extends System {
     this.hierarchicalPathfinder = new HierarchicalAStar(mapWidth, mapHeight, 1);
     this.setupEventListeners();
     // Note: loadTerrainData() is called by Game.setTerrainGrid() when map is loaded
+    console.log(`[PathfindingSystem] CONSTRUCTOR: dimensions ${mapWidth}x${mapHeight}`);
   }
 
   /**
@@ -71,6 +72,7 @@ export class PathfindingSystem extends System {
    * Call this when map dimensions change.
    */
   public reinitialize(mapWidth: number, mapHeight: number): void {
+    console.log(`[PathfindingSystem] REINITIALIZE: from ${this.mapWidth}x${this.mapHeight} to ${mapWidth}x${mapHeight}`);
     this.mapWidth = mapWidth;
     this.mapHeight = mapHeight;
     this.pathfinder = new AStar(mapWidth, mapHeight, 1);
@@ -88,11 +90,16 @@ export class PathfindingSystem extends System {
    * Adds buffer zones around unwalkable terrain to prevent units getting stuck on edges.
    */
   public loadTerrainData(): void {
+    console.log(`[PathfindingSystem] LOAD_TERRAIN_DATA: called with mapWidth=${this.mapWidth}, mapHeight=${this.mapHeight}`);
+    const startTime = performance.now();
+
     const terrainGrid = this.game.getTerrainGrid();
     if (!terrainGrid) {
+      console.warn('[PathfindingSystem] LOAD_TERRAIN_DATA: No terrain grid available');
       debugPathfinding.warn('[PathfindingSystem] No terrain grid available');
       return;
     }
+    console.log(`[PathfindingSystem] LOAD_TERRAIN_DATA: terrain grid is ${terrainGrid[0]?.length}x${terrainGrid.length}`);
 
     // First pass: identify all unwalkable cells
     const unwalkableCells = new Set<number>();
@@ -201,6 +208,8 @@ export class PathfindingSystem extends System {
       }
     }
 
+    const elapsed = performance.now() - startTime;
+    console.log(`[PathfindingSystem] LOAD_TERRAIN_DATA: completed in ${elapsed.toFixed(1)}ms - ${blockedCount} blocked, ${bufferedCount} buffered`);
     debugPathfinding.log(`[PathfindingSystem] Loaded terrain: ${blockedCount} cells blocked, ${bufferedCount} cells buffered`);
 
     // Rebuild hierarchical pathfinding graph after terrain is loaded
@@ -355,17 +364,24 @@ export class PathfindingSystem extends System {
     if (this.pendingRequests.length === 0) return;
 
     const queueSize = this.pendingRequests.length;
-    debugPathfinding.log(`[Pathfinding] Processing queue: ${queueSize} pending, processing ${Math.min(MAX_PATHS_PER_FRAME, queueSize)}`);
+    const toProcess = Math.min(MAX_PATHS_PER_FRAME, queueSize);
+    console.log(`[PathfindingSystem] PROCESS_QUEUE: ${queueSize} pending, processing ${toProcess} this frame`);
+    debugPathfinding.log(`[Pathfinding] Processing queue: ${queueSize} pending, processing ${toProcess}`);
+
+    const queueStart = performance.now();
 
     // Sort by priority (higher first) - only sort when we have requests
     this.pendingRequests.sort((a, b) => b.priority - a.priority);
 
     // Process up to MAX_PATHS_PER_FRAME requests
-    const toProcess = Math.min(MAX_PATHS_PER_FRAME, this.pendingRequests.length);
-
     for (let i = 0; i < toProcess; i++) {
       const request = this.pendingRequests.shift()!;
       this.processPathRequest(request);
+    }
+
+    const queueElapsed = performance.now() - queueStart;
+    if (queueElapsed > 10) {
+      console.warn(`[PathfindingSystem] PROCESS_QUEUE: ${toProcess} paths took ${queueElapsed.toFixed(1)}ms (${(queueElapsed/toProcess).toFixed(1)}ms each)`);
     }
   }
 
@@ -516,16 +532,29 @@ export class PathfindingSystem extends System {
   }
 
   public findPath(startX: number, startY: number, endX: number, endY: number): PathResult {
+    const findStart = performance.now();
+
     // Use hierarchical pathfinding for long distances
     const dx = endX - startX;
     const dy = endY - startY;
     const distance = Math.sqrt(dx * dx + dy * dy);
 
+    let result: PathResult;
+    let useHierarchical = false;
+
     if (distance > HIERARCHICAL_PATH_THRESHOLD) {
-      return this.hierarchicalPathfinder.findPath(startX, startY, endX, endY);
+      useHierarchical = true;
+      result = this.hierarchicalPathfinder.findPath(startX, startY, endX, endY);
+    } else {
+      result = this.pathfinder.findPath(startX, startY, endX, endY);
     }
 
-    return this.pathfinder.findPath(startX, startY, endX, endY);
+    const findElapsed = performance.now() - findStart;
+    if (findElapsed > 5) { // Only log if > 5ms
+      console.log(`[PathfindingSystem] FIND_PATH: ${useHierarchical ? 'HIER' : 'BASE'} (${startX.toFixed(0)},${startY.toFixed(0)}) -> (${endX.toFixed(0)},${endY.toFixed(0)}) dist=${distance.toFixed(0)} took ${findElapsed.toFixed(1)}ms found=${result.found} pathLen=${result.path.length}`);
+    }
+
+    return result;
   }
 
   public isWalkable(x: number, y: number): boolean {

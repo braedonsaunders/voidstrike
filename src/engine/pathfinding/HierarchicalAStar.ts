@@ -231,6 +231,8 @@ export class HierarchicalAStar {
    * Find path with hierarchical optimization
    */
   public findPath(startX: number, startY: number, endX: number, endY: number): PathResult {
+    const hpaStart = performance.now();
+
     // Check cache first
     const cacheKey = `${Math.floor(startX)},${Math.floor(startY)}_${Math.floor(endX)},${Math.floor(endY)}`;
     const cached = this.pathCache.get(cacheKey);
@@ -240,6 +242,7 @@ export class HierarchicalAStar {
 
     // Rebuild abstract graph if needed
     if (this.needsRebuild) {
+      console.log(`[HPA*] Rebuilding abstract graph for ${this.width}x${this.height} (${this.sectors.length} sectors)`);
       this.rebuildAbstractGraph();
     }
 
@@ -248,6 +251,7 @@ export class HierarchicalAStar {
 
     // If coordinates are out of bounds, return no path (don't waste time on full A*)
     if (startSector === null || endSector === null) {
+      console.warn(`[HPA*] OUT OF BOUNDS: start=(${startX.toFixed(1)},${startY.toFixed(1)}) sector=${startSector}, end=(${endX.toFixed(1)},${endY.toFixed(1)}) sector=${endSector}, grid=${this.width}x${this.height}`);
       return { path: [], found: false };
     }
 
@@ -335,6 +339,8 @@ export class HierarchicalAStar {
       return { path: [], found: false };
     }
 
+    const refineStart = performance.now();
+
     const waypoints: Array<{ x: number; y: number }> = [{ x: startX, y: startY }];
 
     // Add entrance points between sectors
@@ -355,14 +361,17 @@ export class HierarchicalAStar {
 
     // Pathfind between consecutive waypoints
     const fullPath: Array<{ x: number; y: number }> = [];
+    const numSegments = waypoints.length - 1;
 
-    for (let i = 0; i < waypoints.length - 1; i++) {
+    for (let i = 0; i < numSegments; i++) {
       const from = waypoints[i];
       const to = waypoints[i + 1];
 
       const segment = this.baseAStar.findPath(from.x, from.y, to.x, to.y);
 
       if (!segment.found) {
+        // Segment failed - fall back to direct path (expensive!)
+        console.warn(`[HPA*] refineAbstractPath: segment ${i}/${numSegments} failed, falling back to full A*`);
         return this.baseAStar.findPath(startX, startY, endX, endY);
       }
 
@@ -371,6 +380,11 @@ export class HierarchicalAStar {
       } else if (segment.path.length > 1) {
         fullPath.push(...segment.path.slice(1));
       }
+    }
+
+    const refineElapsed = performance.now() - refineStart;
+    if (refineElapsed > 10) {
+      console.warn(`[HPA*] refineAbstractPath: ${numSegments} segments took ${refineElapsed.toFixed(1)}ms (${(refineElapsed/numSegments).toFixed(1)}ms each)`);
     }
 
     return { path: fullPath, found: true };
