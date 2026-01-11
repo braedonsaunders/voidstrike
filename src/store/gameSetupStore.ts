@@ -305,6 +305,7 @@ export const useGameSetupStore = create<GameSetupState>((set, get) => ({
       isBattleSimulator: true,
       fogOfWar: false,
       localPlayerId: 'player1',
+      selectedMapId: 'battle_arena', // Use simple arena map
       // Set up two empty teams for simulator
       playerSlots: [
         { id: 'player1', type: 'human', faction: 'dominion', colorId: 'blue', aiDifficulty: 'medium', name: 'Team 1', team: 1 },

@@ -5,6 +5,7 @@ import { Unit } from '../components/Unit';
 import { Health } from '../components/Health';
 import { Selectable } from '../components/Selectable';
 import { useGameSetupStore, TeamNumber } from '@/store/gameSetupStore';
+import { isBattleSimulatorMode } from '@/store/gameSetupStore';
 
 export interface PlayerStats {
   playerId: string;
@@ -189,6 +190,9 @@ export class GameStateSystem extends System {
   }
 
   private checkVictoryConditions(): void {
+    // Skip victory conditions in battle simulator mode
+    if (isBattleSimulatorMode()) return;
+
     const players = new Set<string>();
     const playersWithBuildings = new Set<string>();
 
