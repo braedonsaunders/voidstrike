@@ -240,42 +240,32 @@ export class HierarchicalAStar {
 
     // Rebuild abstract graph if needed
     if (this.needsRebuild) {
-      const t0 = performance.now();
       this.rebuildAbstractGraph();
-      console.log(`[HPA*] rebuildAbstractGraph took ${(performance.now() - t0).toFixed(1)}ms`);
     }
 
     const startSector = this.getSectorId(startX, startY);
     const endSector = this.getSectorId(endX, endY);
 
-    // If same or adjacent sectors, use direct A*
+    // If coordinates are out of bounds, return no path (don't waste time on full A*)
     if (startSector === null || endSector === null) {
-      console.log(`[HPA*] Fallback: null sector`);
-      return this.baseAStar.findPath(startX, startY, endX, endY);
+      return { path: [], found: false };
     }
 
+    // If same or adjacent sectors, use direct A*
     if (startSector === endSector || this.areAdjacentSectors(startSector, endSector)) {
       return this.baseAStar.findPath(startX, startY, endX, endY);
     }
 
     // For longer paths, use hierarchical search
-    const t1 = performance.now();
     const abstractPath = this.findAbstractPath(startSector, endSector);
-    const abstractTime = performance.now() - t1;
 
     if (abstractPath.length === 0) {
-      console.log(`[HPA*] Fallback: no abstract path from sector ${startSector} to ${endSector}, abstractTime=${abstractTime.toFixed(1)}ms`);
-      return this.baseAStar.findPath(startX, startY, endX, endY);
+      // No abstract path found - sectors not connected, return no path
+      return { path: [], found: false };
     }
 
     // Refine abstract path into detailed path
-    const t2 = performance.now();
     const result = this.refineAbstractPath(startX, startY, endX, endY, abstractPath);
-    const refineTime = performance.now() - t2;
-
-    if (abstractTime > 1 || refineTime > 1) {
-      console.log(`[HPA*] abstractPath=${abstractPath.length} sectors, abstractTime=${abstractTime.toFixed(1)}ms, refineTime=${refineTime.toFixed(1)}ms`);
-    }
 
     if (result.found) {
       this.addToCache(cacheKey, result.path);
