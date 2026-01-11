@@ -13,6 +13,7 @@
   "dependencies": {
     "@react-three/drei": "^9.92.7",
     "@react-three/fiber": "^8.15.12",
+    "@recast-navigation/three": "^0.43.0",
     "@supabase/supabase-js": "^2.39.0",
     "howler": "^2.2.4",
     "next": "14.0.4",
@@ -20,6 +21,7 @@
     "phaser": "^4.0.0-rc.6",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
+    "recast-navigation": "^0.43.0",
     "three": "^0.182.0",
     "zustand": "^4.4.7"
   },

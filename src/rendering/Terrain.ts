@@ -1070,6 +1070,90 @@ export class Terrain {
       this.material.dispose();
     }
   }
+
+  /**
+   * Generate walkable geometry for navmesh generation.
+   * Returns only triangles from walkable terrain (ground and ramps).
+   * Used by recast-navigation for navmesh generation.
+   */
+  public generateWalkableGeometry(): { positions: Float32Array; indices: Uint32Array } {
+    const terrain = this.mapData.terrain;
+    const width = this.mapData.width;
+    const height = this.mapData.height;
+
+    const walkableVertices: number[] = [];
+    const walkableIndices: number[] = [];
+    let vertexIndex = 0;
+
+    for (let y = 0; y < height; y++) {
+      for (let x = 0; x < width; x++) {
+        const cell = terrain[y][x];
+
+        // Only include walkable terrain (ground and ramps)
+        if (cell.terrain === 'unwalkable') continue;
+
+        // Check terrain features that make cells unwalkable
+        const feature = cell.feature || 'none';
+        const featureConfig = TERRAIN_FEATURE_CONFIG[feature];
+        if (!featureConfig.walkable) continue;
+
+        // Get heights at the 4 corners of this cell
+        const h00 = this.heightMap[y * this.gridWidth + x];
+        const h10 = this.heightMap[y * this.gridWidth + (x + 1)];
+        const h01 = this.heightMap[(y + 1) * this.gridWidth + x];
+        const h11 = this.heightMap[(y + 1) * this.gridWidth + (x + 1)];
+
+        // Create two triangles for this cell
+        // Triangle 1: (x,y), (x+1,y), (x,y+1)
+        walkableVertices.push(x, h00, y);        // Note: y becomes z for navmesh
+        walkableVertices.push(x + 1, h10, y);
+        walkableVertices.push(x, h01, y + 1);
+
+        walkableIndices.push(vertexIndex, vertexIndex + 1, vertexIndex + 2);
+        vertexIndex += 3;
+
+        // Triangle 2: (x+1,y), (x+1,y+1), (x,y+1)
+        walkableVertices.push(x + 1, h10, y);
+        walkableVertices.push(x + 1, h11, y + 1);
+        walkableVertices.push(x, h01, y + 1);
+
+        walkableIndices.push(vertexIndex, vertexIndex + 1, vertexIndex + 2);
+        vertexIndex += 3;
+      }
+    }
+
+    debugTerrain.log(
+      `[Terrain] Generated walkable geometry: ${walkableVertices.length / 3} vertices, ${walkableIndices.length / 3} triangles`
+    );
+
+    return {
+      positions: new Float32Array(walkableVertices),
+      indices: new Uint32Array(walkableIndices),
+    };
+  }
+
+  /**
+   * Create a Three.js mesh from walkable geometry (for debugging)
+   */
+  public createWalkableMesh(): THREE.Mesh {
+    const { positions, indices } = this.generateWalkableGeometry();
+
+    const geometry = new THREE.BufferGeometry();
+    geometry.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
+    geometry.setIndex(new THREE.Uint32BufferAttribute(indices, 1));
+    geometry.computeVertexNormals();
+
+    const material = new THREE.MeshBasicMaterial({
+      color: 0x00ff00,
+      wireframe: true,
+      transparent: true,
+      opacity: 0.3,
+    });
+
+    const mesh = new THREE.Mesh(geometry, material);
+    mesh.rotation.x = -Math.PI / 2; // Match terrain rotation
+    return mesh;
+  }
 }
 
 // Grid overlay for building placement

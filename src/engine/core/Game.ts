@@ -266,8 +266,20 @@ export class Game {
   public setTerrainGrid(terrain: TerrainCell[][]): void {
     debugInitialization.log(`[Game] SET_TERRAIN_GRID: ${terrain[0]?.length}x${terrain.length}, pathfinding dimensions: ${this.config.mapWidth}x${this.config.mapHeight}`);
     this.terrainGrid = terrain;
-    // Load terrain walkability into pathfinding system
+    // Legacy call - navmesh is now initialized separately via initializeNavMesh
     this.pathfindingSystem.loadTerrainData();
+  }
+
+  /**
+   * Initialize the navmesh for pathfinding from terrain walkable geometry.
+   * Should be called after terrain is created.
+   */
+  public async initializeNavMesh(
+    positions: Float32Array,
+    indices: Uint32Array
+  ): Promise<boolean> {
+    debugInitialization.log(`[Game] INITIALIZING_NAVMESH: ${positions.length / 3} vertices, ${indices.length / 3} triangles`);
+    return this.pathfindingSystem.initializeNavMesh(positions, indices);
   }
 
   /**
