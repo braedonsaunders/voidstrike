@@ -278,7 +278,11 @@ export class ResourceSystem extends System {
           debugResources.log(`[ResourceSystem] player1 worker ${entity.id}: distance to resource=${distance.toFixed(2)}, isMining=${unit.isMining}, gatherTargetId=${unit.gatherTargetId}`);
         }
 
-        if (distance <= 2) {
+        // Vespene extractors are 2x2 buildings - workers need larger gathering distance
+        // Minerals are single tiles - workers can get close
+        const gatherDistance = resource.resourceType === 'vespene' ? 3.5 : 2;
+
+        if (distance <= gatherDistance) {
           // At resource - start or continue mining
           if (!unit.isMining) {
             // Start mining
@@ -304,7 +308,25 @@ export class ResourceSystem extends System {
             unit.isMining = false;
             unit.miningTimer = 0;
           }
-          unit.moveToPosition(resourceTransform.x, resourceTransform.y);
+
+          // For vespene, target a position outside the extractor (which blocks the center)
+          // Calculate a point on the edge of the extractor closest to the worker
+          if (resource.resourceType === 'vespene') {
+            const dx = transform.x - resourceTransform.x;
+            const dy = transform.y - resourceTransform.y;
+            const dist = Math.sqrt(dx * dx + dy * dy);
+            if (dist > 0.1) {
+              // Target a point 2 units from center (just outside 2x2 extractor)
+              const targetX = resourceTransform.x + (dx / dist) * 2;
+              const targetY = resourceTransform.y + (dy / dist) * 2;
+              unit.moveToPosition(targetX, targetY);
+            } else {
+              // Worker is at center somehow, move to a default edge
+              unit.moveToPosition(resourceTransform.x + 2, resourceTransform.y);
+            }
+          } else {
+            unit.moveToPosition(resourceTransform.x, resourceTransform.y);
+          }
         }
       }
     }

@@ -3,6 +3,7 @@ import { Transform } from '../components/Transform';
 import { Unit } from '../components/Unit';
 import { Velocity } from '../components/Velocity';
 import { Building } from '../components/Building';
+import { Resource } from '../components/Resource';
 import { Game } from '../core/Game';
 import { PooledVector2 } from '@/utils/VectorPool';
 import { TERRAIN_FEATURE_CONFIG, TerrainFeature } from '@/data/maps';
@@ -296,9 +297,26 @@ export class MovementSystem extends System {
     const isCarryingResources = selfUnit.isWorker &&
       (selfUnit.carryingMinerals > 0 || selfUnit.carryingVespene > 0);
 
+    // For workers gathering vespene, find the extractor they're targeting
+    let gatheringExtractorId: number | null = null;
+    if (selfUnit.isWorker && selfUnit.state === 'gathering' && selfUnit.gatherTargetId !== null) {
+      const resourceEntity = this.world.getEntity(selfUnit.gatherTargetId);
+      if (resourceEntity) {
+        const resource = resourceEntity.get<Resource>('Resource');
+        if (resource && resource.resourceType === 'vespene' && resource.extractorEntityId !== null) {
+          gatheringExtractorId = resource.extractorEntityId;
+        }
+      }
+    }
+
     for (const buildingId of nearbyBuildingIds) {
       // Skip the building this worker is constructing - they need to get close to it
       if (selfUnit.constructingBuildingId === buildingId) {
+        continue;
+      }
+
+      // Skip the extractor this worker is gathering from - they need to get close to it
+      if (gatheringExtractorId === buildingId) {
         continue;
       }
 
