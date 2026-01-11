@@ -124,9 +124,12 @@ export class TSLTerrainMaterial {
     const loader = new THREE.TextureLoader();
     const biomeTextures = getBiomeTextures(config.biome);
 
-    // Calculate repeat based on map size - larger maps need more repetition
+    // Calculate repeat based on map size
+    // Lower values = larger texture tiles = higher apparent resolution
+    // Each tile covers approximately (mapSize / repeat) world units
     const mapSize = Math.max(config.mapWidth, config.mapHeight);
-    const repeat = config.textureRepeat ?? Math.max(16, mapSize / 4);
+    // Aim for each texture tile to cover ~8-16 world units for good detail
+    const repeat = config.textureRepeat ?? Math.max(4, Math.floor(mapSize / 12));
 
     // Load all textures
     const grassDiffuse = loadTerrainTexture(loader, `/textures/terrain/${biomeTextures.grass}_diffuse.png`, repeat, true);
