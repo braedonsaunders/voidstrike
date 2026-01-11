@@ -101,7 +101,6 @@ export class MovementSystem extends System {
     queue?: boolean;
   }): void {
     const { entityIds, targetPosition, queue } = data;
-    console.log('[MovementSystem] handleMoveCommand:', { entityIds, targetPosition, queue });
 
     const positions = this.calculateFormationPositions(
       targetPosition.x,
@@ -130,9 +129,7 @@ export class MovementSystem extends System {
           unit.cancelBuilding();
         }
 
-        console.log('[MovementSystem] Before setMoveTarget, unit.state=', unit.state);
         unit.setMoveTarget(pos.x, pos.y);
-        console.log('[MovementSystem] After setMoveTarget, unit.state=', unit.state);
         unit.path = [];
         unit.pathIndex = 0;
         this.requestPathWithCooldown(entityId, pos.x, pos.y, true);
@@ -225,8 +222,6 @@ export class MovementSystem extends System {
       unit.collisionRadius,
       unit.maxSpeed
     );
-
-    console.log('[MovementSystem] addAgent result for entity', entityId, ':', agentIndex);
 
     if (agentIndex >= 0) {
       this.crowdAgents.add(entityId);
@@ -444,12 +439,6 @@ export class MovementSystem extends System {
     // PERF: Track current tick for separation force throttling
     this.currentTick = this.game.getCurrentTick();
 
-    // Debug: Log entity IDs being processed (only once every 100 frames)
-    if (this.game.getCurrentTick() % 100 === 1) {
-      const entityIds = Array.from(entities).map(e => e.id);
-      console.log('[MovementSystem] Processing entities:', entityIds.slice(0, 30));
-    }
-
     // Update spatial grid
     for (const entity of entities) {
       const transform = entity.get<Transform>('Transform');
@@ -488,10 +477,6 @@ export class MovementSystem extends System {
         unit.state === 'building';
 
       if (!canMove) {
-        // DEBUG: Only log SKIPPED on every 100th tick to reduce spam
-        // if (this.currentTick % 100 === 0 && entity.id < 10) {
-        //   console.log('[MovementSystem] Entity', entity.id, 'SKIPPED - state:', unit.state);
-        // }
         if (unit.currentSpeed > 0) {
           unit.currentSpeed = Math.max(
             0,
@@ -619,10 +604,6 @@ export class MovementSystem extends System {
       }
 
       if (targetX === null || targetY === null) {
-        // Debug: log why we have no target
-        if (unit.state === 'moving') {
-          console.log('[MovementSystem] Unit', entity.id, 'moving but no target! unit.targetX:', unit.targetX, 'unit.targetY:', unit.targetY, 'path:', unit.path.length);
-        }
         if (unit.executeNextCommand()) {
           if (unit.targetX !== null && unit.targetY !== null) {
             unit.path = [];
@@ -729,11 +710,6 @@ export class MovementSystem extends System {
       let finalVx = 0;
       let finalVy = 0;
 
-      // Debug: Log movement state for the first few moving units
-      if (unit.state === 'moving' && entity.id < 20) {
-        console.log('[MovementSystem] Entity', entity.id, 'processing: inCrowd=', this.crowdAgents.has(entity.id), 'isFlying=', unit.isFlying, 'targetX=', targetX, 'targetY=', targetY, 'currentSpeed=', unit.currentSpeed);
-      }
-
       if (USE_RECAST_CROWD && this.crowdAgents.has(entity.id) && !unit.isFlying) {
         // Use Recast crowd velocity
         this.recast.setAgentTarget(entity.id, targetX, targetY);
@@ -747,11 +723,6 @@ export class MovementSystem extends System {
           finalVx = state.vx;
           finalVy = state.vy;
 
-          // Debug velocity for first few entities
-          if (entity.id < 20) {
-            console.log('[MovementSystem] Entity', entity.id, 'crowd velocity: vx=', finalVx.toFixed(2), 'vy=', finalVy.toFixed(2));
-          }
-
           // Sync position if significantly different (teleport recovery)
           const posDx = state.x - transform.x;
           const posDy = state.y - transform.y;
@@ -763,9 +734,6 @@ export class MovementSystem extends System {
           if (distance > 0.01) {
             finalVx = (dx / distance) * unit.currentSpeed;
             finalVy = (dy / distance) * unit.currentSpeed;
-          }
-          if (entity.id < 20) {
-            console.log('[MovementSystem] Entity', entity.id, 'NO crowd state, fallback velocity: vx=', finalVx.toFixed(2), 'vy=', finalVy.toFixed(2));
           }
         }
       } else {
@@ -800,11 +768,6 @@ export class MovementSystem extends System {
         } else {
           finalVx = prefVx;
           finalVy = prefVy;
-        }
-
-        // Debug non-crowd movement
-        if (unit.state === 'moving' && entity.id < 20) {
-          console.log('[MovementSystem] Entity', entity.id, 'non-crowd velocity: vx=', finalVx.toFixed(2), 'vy=', finalVy.toFixed(2));
         }
       }
 

@@ -123,6 +123,8 @@ export class PathfindingSystem extends System {
 
     if (success) {
       debugPathfinding.log('[PathfindingSystem] NavMesh ready');
+      // Register any pending decoration obstacles now that navmesh is ready
+      this.onNavMeshReady();
     } else {
       debugPathfinding.warn('[PathfindingSystem] NavMesh generation failed');
     }
@@ -145,6 +147,12 @@ export class PathfindingSystem extends System {
     );
 
     this.navMeshReady = success;
+
+    if (success) {
+      // Register any pending decoration obstacles now that navmesh is ready
+      this.onNavMeshReady();
+    }
+
     return success;
   }
 
@@ -241,28 +249,17 @@ export class PathfindingSystem extends System {
   }
 
   private queuePathRequest(request: PathRequest): void {
-    console.log('[PathfindingSystem] queuePathRequest:', {
-      entityId: request.entityId,
-      from: `(${request.startX.toFixed(1)}, ${request.startY.toFixed(1)})`,
-      to: `(${request.endX.toFixed(1)}, ${request.endY.toFixed(1)})`,
-      navMeshReady: this.navMeshReady,
-    });
-
     // Check failed path cache
     if (this.isPathRecentlyFailed(request.entityId, request.endX, request.endY)) {
-      console.log('[PathfindingSystem] Path recently failed, clearing target for entity', request.entityId);
       this.clearUnitMovementTarget(request.entityId);
       return;
     }
 
     // Check if destination is reachable
     const isWalkable = this.recast.isWalkable(request.endX, request.endY);
-    console.log('[PathfindingSystem] isWalkable check:', isWalkable);
     if (!isWalkable) {
       const nearby = this.recast.findNearestPoint(request.endX, request.endY);
-      console.log('[PathfindingSystem] findNearestPoint result:', nearby);
       if (!nearby) {
-        console.log('[PathfindingSystem] No nearby walkable point, clearing target');
         this.recordFailedPath(request.entityId, request.endX, request.endY);
         this.clearUnitMovementTarget(request.entityId);
         return;
@@ -381,15 +378,10 @@ export class PathfindingSystem extends System {
         destinationY: request.endY,
       });
     } else {
-      console.log('[PathfindingSystem] Path FAILED for entity', request.entityId,
-        'from', request.startX.toFixed(1), request.startY.toFixed(1),
-        'to', request.endX.toFixed(1), request.endY.toFixed(1),
-        '- state was:', unit.state);
       this.recordFailedPath(request.entityId, request.endX, request.endY);
 
-      // IMPORTANT: Don't reset target or state when pathfinding fails
+      // Don't reset target or state when pathfinding fails for nearby targets
       // Let MovementSystem try direct movement instead
-      // This is a fallback while navmesh issues are being debugged
       unit.path = [];
       unit.pathIndex = 0;
 
@@ -401,7 +393,6 @@ export class PathfindingSystem extends System {
 
       if (dist > 30) {
         // Target is far, truly unreachable - reset
-        console.log('[PathfindingSystem] Target too far, resetting entity', request.entityId, 'to idle');
         unit.targetX = null;
         unit.targetY = null;
         if (unit.state === 'moving') {
@@ -413,10 +404,8 @@ export class PathfindingSystem extends System {
           unit.isMining = false;
           unit.state = 'idle';
         }
-      } else {
-        // Target is close - allow direct movement even without path
-        console.log('[PathfindingSystem] Target close enough, allowing direct movement for entity', request.entityId);
       }
+      // If dist <= 30, target is close - allow direct movement even without path
 
       this.unitPathStates.delete(request.entityId);
     }
@@ -610,14 +599,69 @@ export class PathfindingSystem extends System {
 
   /**
    * Register decoration collisions as obstacles
+   * Decorations like rocks and trees block pathfinding
    */
   public registerDecorationCollisions(
     collisions: Array<{ x: number; z: number; radius: number }>
   ): void {
-    // Decorations are handled by navmesh generation from terrain mesh
-    // Large decorations are excluded from walkable geometry
+    if (!this.navMeshReady) {
+      debugPathfinding.log(
+        `[PathfindingSystem] NavMesh not ready, deferring ${collisions.length} decoration obstacles`
+      );
+      // Store for later registration when navmesh is ready
+      this.pendingDecorations = collisions;
+      return;
+    }
+
+    this.addDecorationObstacles(collisions);
+  }
+
+  private pendingDecorations: Array<{ x: number; z: number; radius: number }> | null = null;
+
+  /**
+   * Add decorations as TileCache obstacles
+   * Called after navmesh is ready
+   */
+  private addDecorationObstacles(
+    collisions: Array<{ x: number; z: number; radius: number }>
+  ): void {
+    let addedCount = 0;
+
+    for (let i = 0; i < collisions.length; i++) {
+      const deco = collisions[i];
+
+      // Only add obstacles for decorations with significant radius
+      // Small decorations (grass, small bushes) don't need to block pathfinding
+      if (deco.radius < 0.5) continue;
+
+      // Use negative entity IDs for decorations to avoid collision with unit/building IDs
+      // Start at -10000 to leave room for other negative ID uses
+      const decorationEntityId = -10000 - i;
+
+      // Add cylinder obstacle for the decoration
+      this.recast.addObstacle(
+        decorationEntityId,
+        deco.x,
+        deco.z, // Note: z is the world Y coordinate in game space
+        deco.radius * 2, // width (diameter)
+        deco.radius * 2  // height (diameter)
+      );
+      addedCount++;
+    }
+
     debugPathfinding.log(
-      `[PathfindingSystem] Registered ${collisions.length} decorations (handled by navmesh)`
+      `[PathfindingSystem] Added ${addedCount} decoration obstacles (of ${collisions.length} total decorations)`
     );
+  }
+
+  /**
+   * Called when navmesh initialization completes
+   * Registers any pending decorations that were deferred
+   */
+  private onNavMeshReady(): void {
+    if (this.pendingDecorations) {
+      this.addDecorationObstacles(this.pendingDecorations);
+      this.pendingDecorations = null;
+    }
   }
 }
