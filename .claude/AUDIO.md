@@ -103,8 +103,6 @@ These are spoken voice announcements that play to notify the player of important
 | `ui/click.mp3` | 0.1s | "Clean UI click, interface button press, satisfying digital click" |
 | `ui/error.mp3` | 0.3s | "Error buzzer, action denied, cannot perform, low negative tone" |
 | `ui/select.mp3` | 0.15s | "Unit selection confirmation, positive click, selection made" |
-| `ui/research.mp3` | 0.4s | "Research complete notification, positive technology chime, achievement feeling" |
-| `ui/building_complete.mp3` | 0.5s | "Building complete notification, construction finished, positive industrial tone" |
 | `ui/notification.mp3` | 0.3s | "General notification sound, attention chime, neutral alert" |
 
 ---

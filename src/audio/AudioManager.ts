@@ -50,8 +50,6 @@ export const SOUNDS: Record<string, SoundConfig> = {
   ui_click: { id: 'ui_click', url: '/audio/ui/click.mp3', category: 'ui', volume: 0.5, priority: SoundPriority.CRITICAL },
   ui_error: { id: 'ui_error', url: '/audio/ui/error.mp3', category: 'ui', volume: 0.6, priority: SoundPriority.CRITICAL },
   ui_select: { id: 'ui_select', url: '/audio/ui/select.mp3', category: 'ui', volume: 0.4, priority: SoundPriority.CRITICAL },
-  ui_research_complete: { id: 'ui_research_complete', url: '/audio/ui/research.mp3', category: 'ui', volume: 0.7, priority: SoundPriority.CRITICAL },
-  ui_building_complete: { id: 'ui_building_complete', url: '/audio/ui/building_complete.mp3', category: 'ui', volume: 0.7, priority: SoundPriority.CRITICAL },
   ui_notification: { id: 'ui_notification', url: '/audio/ui/notification.mp3', category: 'ui', volume: 0.6, priority: SoundPriority.CRITICAL },
 
   // Alert Sounds (Critical priority - always play)
