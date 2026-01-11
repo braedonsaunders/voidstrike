@@ -502,12 +502,23 @@ export class Terrain {
       }
     }
 
+    // Build terrain type map for slope calculation
+    const terrainTypeMap: TerrainType[] = new Array(this.gridWidth * this.gridHeight);
+    for (let y = 0; y <= height; y++) {
+      for (let x = 0; x <= width; x++) {
+        const cell = this.sampleTerrain(terrain, x, y, width, height);
+        terrainTypeMap[y * this.gridWidth + x] = cell.terrain;
+      }
+    }
+
     // Calculate per-vertex slopes BEFORE smoothing (for texture blending)
     // This captures the actual cliff steepness from terrain cell data
     const slopeMap = new Float32Array(this.gridWidth * this.gridHeight);
     for (let y = 0; y <= height; y++) {
       for (let x = 0; x <= width; x++) {
         const idx = y * this.gridWidth + x;
+        const terrainType = terrainTypeMap[idx];
+
         // Calculate slope from height differences to neighbors
         const h = this.heightMap[idx];
         let maxHeightDiff = 0;
@@ -528,7 +539,40 @@ export class Terrain {
 
         // Convert height difference to slope (0 = flat, 1 = very steep)
         // A height diff of 3+ units over 1 cell = max slope
-        slopeMap[idx] = Math.min(1.0, maxHeightDiff / 3.0);
+        let slope = Math.min(1.0, maxHeightDiff / 3.0);
+
+        // Ramps always have a minimum slope to ensure they show dirt/rock textures
+        // This prevents ramps from looking like flat grass even when gradients are subtle
+        if (terrainType === 'ramp') {
+          // Give ramps a minimum slope of 0.2 (will show dirt texture)
+          // Scale up based on actual slope for steeper ramps
+          slope = Math.max(0.2, slope * 1.5);
+        }
+
+        // Cliff edges (unwalkable adjacent to walkable) should also have increased slope
+        if (terrainType === 'unwalkable') {
+          // Check if this unwalkable is at an edge
+          let isEdge = false;
+          for (let dy = -1; dy <= 1 && !isEdge; dy++) {
+            for (let dx = -1; dx <= 1 && !isEdge; dx++) {
+              if (dx === 0 && dy === 0) continue;
+              const nx = x + dx;
+              const ny = y + dy;
+              if (nx >= 0 && nx <= width && ny >= 0 && ny <= height) {
+                const neighborType = terrainTypeMap[ny * this.gridWidth + nx];
+                if (neighborType === 'ground' || neighborType === 'ramp' || neighborType === 'unbuildable') {
+                  isEdge = true;
+                }
+              }
+            }
+          }
+          if (isEdge) {
+            // Cliff edges should show rock/cliff textures
+            slope = Math.max(0.35, slope);
+          }
+        }
+
+        slopeMap[idx] = Math.min(1.0, slope);
       }
     }
 
@@ -744,50 +788,89 @@ export class Terrain {
     const cell11 = terrain[y1][x1];  // Bottom-right (primary cell)
 
     const samples = [cell00, cell10, cell01, cell11];
+    const elevations = [cell00.elevation, cell10.elevation, cell01.elevation, cell11.elevation];
 
-    // Determine terrain type priority: ramp > unwalkable > unbuildable > ground
+    // Determine terrain type priority and count ramp cells
     let dominantTerrain: TerrainType = 'ground';
     let dominantFeature: TerrainFeature = 'none';
     let hasRamp = false;
     let hasUnwalkable = false;
-    let unwalkableCount = 0;
+    let rampCount = 0;
     let groundCount = 0;
 
+    const rampElevations: number[] = [];
+    const nonRampElevations: number[] = [];
+
     for (const sample of samples) {
-      if (sample.terrain === 'ramp') hasRamp = true;
+      if (sample.terrain === 'ramp') {
+        hasRamp = true;
+        rampCount++;
+        rampElevations.push(sample.elevation);
+      } else {
+        nonRampElevations.push(sample.elevation);
+      }
       if (sample.terrain === 'unwalkable') {
         hasUnwalkable = true;
-        unwalkableCount++;
       }
       if (sample.terrain === 'ground' || sample.terrain === 'unbuildable') {
         groundCount++;
       }
     }
 
-    // Average elevation of all 4 touching cells for smooth cliff transitions
-    const avgElevation = (cell00.elevation + cell10.elevation + cell01.elevation + cell11.elevation) / 4;
+    // Calculate elevation based on terrain type composition
+    let finalElevation: number;
 
-    // For ramps: always use averaged elevation for smooth transitions
     if (hasRamp) {
       dominantTerrain = 'ramp';
       dominantFeature = 'none';
+
+      if (rampCount === 4) {
+        // Fully within ramp - use average of all ramp cells
+        finalElevation = rampElevations.reduce((a, b) => a + b, 0) / rampCount;
+      } else if (rampCount >= 2) {
+        // At ramp edge with multiple ramp cells - heavily weight ramp elevations
+        // This creates smooth transitions at ramp boundaries
+        const rampAvg = rampElevations.reduce((a, b) => a + b, 0) / rampElevations.length;
+        const nonRampAvg = nonRampElevations.reduce((a, b) => a + b, 0) / nonRampElevations.length;
+        // 80% ramp, 20% non-ramp for smooth but ramp-respecting transition
+        finalElevation = rampAvg * 0.8 + nonRampAvg * 0.2;
+      } else {
+        // Only 1 ramp cell - this is at the very edge of the ramp
+        // Use the ramp elevation but blend slightly with nearest matching elevation
+        const rampElev = rampElevations[0];
+        // Find the non-ramp elevation closest to the ramp elevation for smooth blending
+        let closestNonRamp = nonRampElevations[0];
+        let minDiff = Math.abs(rampElev - closestNonRamp);
+        for (const elev of nonRampElevations) {
+          const diff = Math.abs(rampElev - elev);
+          if (diff < minDiff) {
+            minDiff = diff;
+            closestNonRamp = elev;
+          }
+        }
+        // 70% ramp elevation, 30% closest ground for subtle blending at edges
+        finalElevation = rampElev * 0.7 + closestNonRamp * 0.3;
+      }
     } else if (hasUnwalkable && groundCount > 0) {
       // At cliff edges (mix of walkable and unwalkable): this is where slopes should appear
-      // Use average elevation to create the actual cliff slope geometry
       dominantTerrain = 'unwalkable';
       dominantFeature = 'cliff';
+      // Use average elevation to create the actual cliff slope geometry
+      finalElevation = elevations.reduce((a, b) => a + b, 0) / 4;
     } else if (hasUnwalkable) {
       // Fully in unwalkable area
       dominantTerrain = 'unwalkable';
       dominantFeature = cell11.feature || 'cliff';
+      finalElevation = elevations.reduce((a, b) => a + b, 0) / 4;
     } else {
       dominantTerrain = cell11.terrain;
       dominantFeature = cell11.feature || 'none';
+      finalElevation = elevations.reduce((a, b) => a + b, 0) / 4;
     }
 
     return {
       terrain: dominantTerrain,
-      elevation: Math.round(avgElevation),
+      elevation: Math.round(finalElevation),
       feature: dominantFeature,
       textureId: cell11.textureId,
     };
