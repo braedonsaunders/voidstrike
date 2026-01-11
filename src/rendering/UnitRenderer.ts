@@ -607,7 +607,7 @@ export class UnitRenderer {
 
         // Update position and rotation
         animUnit.mesh.position.set(transform.x, unitHeight, transform.y);
-        animUnit.mesh.rotation.y = -transform.rotation + Math.PI / 2;
+        animUnit.mesh.rotation.y = transform.rotation + Math.PI / 2;
 
         // Determine animation state
         // isMoving: unit has non-zero velocity
@@ -632,7 +632,7 @@ export class UnitRenderer {
 
           // Set instance transform - apply offsets to account for model origin position/rotation
           this.tempPosition.set(transform.x, unitHeight + group.yOffset, transform.y);
-          this.tempEuler.set(0, -transform.rotation + Math.PI / 2 + group.rotationOffset, 0);
+          this.tempEuler.set(0, transform.rotation - group.rotationOffset, 0);
           this.tempQuaternion.setFromEuler(this.tempEuler);
           this.tempMatrix.compose(this.tempPosition, this.tempQuaternion, this.tempScale);
           group.mesh.setMatrixAt(instanceIndex, this.tempMatrix);
