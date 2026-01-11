@@ -9,6 +9,10 @@ import { getLocalPlayerId, isSpectatorMode } from '@/store/gameSetupStore';
 interface WaypointVisual {
   line: THREE.LineSegments;
   markers: THREE.Mesh[];
+  // PERFORMANCE: Track max allocated size to avoid frequent buffer resizing
+  maxPoints: number;
+  // Track if line needs update
+  lineNeedsUpdate: boolean;
 }
 
 /**
@@ -30,6 +34,10 @@ export class CommandQueueRenderer {
   private lineMaterial: THREE.LineBasicMaterial;
   private markerMaterial: THREE.MeshBasicMaterial;
   private markerGeometry: THREE.SphereGeometry;
+
+  // PERFORMANCE: Throttle updates - waypoints don't need 60fps updates
+  private lastUpdateTime: number = 0;
+  private readonly UPDATE_INTERVAL_MS: number = 50; // Update at 20fps max
 
   constructor(
     scene: THREE.Scene,
@@ -88,6 +96,13 @@ export class CommandQueueRenderer {
   }
 
   public update(): void {
+    // PERFORMANCE: Throttle updates - waypoints don't need to update every frame
+    const now = performance.now();
+    if (now - this.lastUpdateTime < this.UPDATE_INTERVAL_MS) {
+      return;
+    }
+    this.lastUpdateTime = now;
+
     // Remove visuals for units no longer selected
     for (const [unitId, visual] of this.waypointVisuals.entries()) {
       if (!this.selectedUnitIds.has(unitId)) {
@@ -181,9 +196,23 @@ export class CommandQueueRenderer {
     startY: number,
     waypoints: Array<{ x: number; y: number; type: string }>
   ): WaypointVisual {
-    // Create line connecting all waypoints
+    // PERFORMANCE: Pre-allocate buffer with extra capacity to avoid frequent resizing
+    // Each waypoint needs 2 vertices (start + end of line segment) * 3 components (x, y, z)
+    const initialCapacity = Math.max(waypoints.length * 2, 10);
+    const positions = new Float32Array(initialCapacity * 3);
+
+    // Fill initial positions
     const linePoints = this.createLinePoints(startX, startY, waypoints);
-    const lineGeometry = new THREE.BufferGeometry().setFromPoints(linePoints);
+    for (let i = 0; i < linePoints.length && i < initialCapacity; i++) {
+      positions[i * 3] = linePoints[i].x;
+      positions[i * 3 + 1] = linePoints[i].y;
+      positions[i * 3 + 2] = linePoints[i].z;
+    }
+
+    const lineGeometry = new THREE.BufferGeometry();
+    lineGeometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+    lineGeometry.setDrawRange(0, linePoints.length);
+
     const line = new THREE.LineSegments(lineGeometry, this.lineMaterial);
     this.scene.add(line);
 
@@ -197,7 +226,7 @@ export class CommandQueueRenderer {
       markers.push(marker);
     }
 
-    return { line, markers };
+    return { line, markers, maxPoints: initialCapacity, lineNeedsUpdate: false };
   }
 
   private updateVisual(
@@ -206,10 +235,41 @@ export class CommandQueueRenderer {
     startY: number,
     waypoints: Array<{ x: number; y: number; type: string }>
   ): void {
-    // Update line
+    // PERFORMANCE: Update existing buffer instead of recreating geometry every frame
     const linePoints = this.createLinePoints(startX, startY, waypoints);
-    visual.line.geometry.dispose();
-    visual.line.geometry = new THREE.BufferGeometry().setFromPoints(linePoints);
+    const requiredPoints = linePoints.length;
+
+    const positionAttr = visual.line.geometry.getAttribute('position') as THREE.BufferAttribute;
+
+    // Check if we need to resize the buffer (only when capacity is exceeded)
+    if (requiredPoints > visual.maxPoints) {
+      // Need larger buffer - dispose and recreate
+      visual.line.geometry.dispose();
+      const newCapacity = Math.max(requiredPoints * 2, visual.maxPoints * 2);
+      const positions = new Float32Array(newCapacity * 3);
+
+      for (let i = 0; i < linePoints.length; i++) {
+        positions[i * 3] = linePoints[i].x;
+        positions[i * 3 + 1] = linePoints[i].y;
+        positions[i * 3 + 2] = linePoints[i].z;
+      }
+
+      const newGeometry = new THREE.BufferGeometry();
+      newGeometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+      newGeometry.setDrawRange(0, requiredPoints);
+      visual.line.geometry = newGeometry;
+      visual.maxPoints = newCapacity;
+    } else {
+      // PERFORMANCE: Reuse existing buffer - just update values in place
+      const positions = positionAttr.array as Float32Array;
+      for (let i = 0; i < linePoints.length; i++) {
+        positions[i * 3] = linePoints[i].x;
+        positions[i * 3 + 1] = linePoints[i].y;
+        positions[i * 3 + 2] = linePoints[i].z;
+      }
+      positionAttr.needsUpdate = true;
+      visual.line.geometry.setDrawRange(0, requiredPoints);
+    }
 
     // Update markers - add or remove as needed
     while (visual.markers.length > waypoints.length) {
