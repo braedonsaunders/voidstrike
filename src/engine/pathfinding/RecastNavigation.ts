@@ -244,6 +244,43 @@ export class RecastNavigation {
       this.navMesh = result.navMesh;
       this.navMeshQuery = new NavMeshQuery(this.navMesh);
 
+      // DIAGNOSTIC: Test if we can query any points on the navmesh
+      const testPoints = [
+        { x: mapWidth / 2, z: mapHeight / 2 }, // Center
+        { x: 30, z: 90 }, // Near player spawn
+        { x: 100, z: 100 }, // Middle of map
+        { x: 0, z: 0 }, // Corner
+      ];
+      console.log('[RecastNavigation] Testing navmesh coverage:');
+      for (const pt of testPoints) {
+        const halfExtents = { x: 10, y: 50, z: 10 };
+        const testResult = this.navMeshQuery.findClosestPoint(
+          { x: pt.x, y: 0, z: pt.z },
+          { halfExtents }
+        );
+        console.log(`  Point (${pt.x}, ${pt.z}):`, {
+          success: testResult.success,
+          point: testResult.point ? `(${testResult.point.x.toFixed(1)}, h=${testResult.point.y.toFixed(2)}, ${testResult.point.z.toFixed(1)})` : 'null',
+        });
+      }
+
+      // Also check geometry bounds
+      console.log('[RecastNavigation] Input geometry bounds:');
+      let minX = Infinity, maxX = -Infinity;
+      let minY = Infinity, maxY = -Infinity;
+      let minZ = Infinity, maxZ = -Infinity;
+      for (let i = 0; i < positions.length; i += 3) {
+        minX = Math.min(minX, positions[i]);
+        maxX = Math.max(maxX, positions[i]);
+        minY = Math.min(minY, positions[i + 1]);
+        maxY = Math.max(maxY, positions[i + 1]);
+        minZ = Math.min(minZ, positions[i + 2]);
+        maxZ = Math.max(maxZ, positions[i + 2]);
+      }
+      console.log(`  X: ${minX.toFixed(1)} to ${maxX.toFixed(1)}`);
+      console.log(`  Y (height): ${minY.toFixed(2)} to ${maxY.toFixed(2)}`);
+      console.log(`  Z: ${minZ.toFixed(1)} to ${maxZ.toFixed(1)}`);
+
       this.crowd = new Crowd(this.navMesh, {
         maxAgents: CROWD_CONFIG.maxAgents,
         maxAgentRadius: CROWD_CONFIG.maxAgentRadius,
