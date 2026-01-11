@@ -621,8 +621,8 @@ export class AssetManager {
       { path: '/models/buildings/ops_center.glb', assetId: 'ops_center', targetHeight: 2.8 },
       { path: '/models/buildings/radar_array.glb', assetId: 'radar_array', targetHeight: 4.0 },
       { path: '/models/buildings/defense_turret.glb', assetId: 'defense_turret', targetHeight: 2.5 },
-      { path: '/models/buildings/research_module.glb', assetId: 'research_module', targetHeight: 2.0 },
-      { path: '/models/buildings/production_module.glb', assetId: 'production_module', targetHeight: 2.0 },
+      { path: '/models/buildings/research_module.glb', assetId: 'research_module', targetHeight: 1.0 },
+      { path: '/models/buildings/production_module.glb', assetId: 'production_module', targetHeight: 1.0 },
       // Resources
       { path: '/models/resources/minerals.glb', assetId: 'minerals', targetHeight: 2.0 },
       { path: '/models/resources/vespene.glb', assetId: 'vespene', targetHeight: 2.0 },

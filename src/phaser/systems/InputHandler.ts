@@ -288,6 +288,41 @@ export class InputHandler extends Phaser.Events.EventEmitter {
       }
     }
 
+    // Check if all selected entities are production buildings - if so, set rally point
+    const selectedBuildings: number[] = [];
+    let allAreProductionBuildings = true;
+    for (const id of selectedUnits) {
+      const entity = this.game.world.getEntity(id);
+      const building = entity?.get<Building>('Building');
+      if (building && building.canProduce.length > 0) {
+        selectedBuildings.push(id);
+      } else {
+        allAreProductionBuildings = false;
+        break;
+      }
+    }
+
+    if (allAreProductionBuildings && selectedBuildings.length > 0) {
+      // Set rally point for all selected production buildings
+      // Check if clicking on a resource for auto-gather rally
+      let targetId: number | undefined = undefined;
+      if (clickedEntity) {
+        const entity = this.game.world.getEntity(clickedEntity.id);
+        if (entity?.get<Resource>('Resource')) {
+          targetId = clickedEntity.id;
+        }
+      }
+      for (const buildingId of selectedBuildings) {
+        this.game.eventBus.emit('rally:set', {
+          buildingId,
+          x: worldPos.x,
+          y: worldPos.y,
+          targetId,
+        });
+      }
+      return;
+    }
+
     // Default: move command
     this.game.eventBus.emit('command:move', {
       entityIds: selectedUnits,

@@ -786,6 +786,41 @@ export function WebGPUGameCanvas() {
         }
       }
 
+      // Check if all selected entities are production buildings - if so, set rally point
+      const selectedBuildings: number[] = [];
+      let allAreProductionBuildings = true;
+      for (const id of selectedUnits) {
+        const entity = game.world.getEntity(id);
+        const building = entity?.get<Building>('Building');
+        if (building && building.canProduce.length > 0) {
+          selectedBuildings.push(id);
+        } else {
+          allAreProductionBuildings = false;
+          break;
+        }
+      }
+
+      if (allAreProductionBuildings && selectedBuildings.length > 0) {
+        // Set rally point for all selected production buildings
+        // Check if clicking on a resource for auto-gather rally
+        let targetId: number | undefined = undefined;
+        if (clickedEntity) {
+          const resource = clickedEntity.entity.get<Resource>('Resource');
+          if (resource) {
+            targetId = clickedEntity.entity.id;
+          }
+        }
+        for (const buildingId of selectedBuildings) {
+          game.eventBus.emit('rally:set', {
+            buildingId,
+            x: worldPos.x,
+            y: worldPos.z,
+            targetId,
+          });
+        }
+        return;
+      }
+
       game.eventBus.emit('command:move', {
         entityIds: selectedUnits,
         targetPosition: { x: worldPos.x, y: worldPos.z },
