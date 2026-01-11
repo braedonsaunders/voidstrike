@@ -687,6 +687,11 @@ export class MovementSystem extends System {
       let finalVx = 0;
       let finalVy = 0;
 
+      // Debug: Log movement state for the first few moving units
+      if (unit.state === 'moving' && entity.id < 20) {
+        console.log('[MovementSystem] Entity', entity.id, 'processing: inCrowd=', this.crowdAgents.has(entity.id), 'isFlying=', unit.isFlying, 'targetX=', targetX, 'targetY=', targetY, 'currentSpeed=', unit.currentSpeed);
+      }
+
       if (USE_RECAST_CROWD && this.crowdAgents.has(entity.id) && !unit.isFlying) {
         // Use Recast crowd velocity
         this.recast.setAgentTarget(entity.id, targetX, targetY);
@@ -700,6 +705,11 @@ export class MovementSystem extends System {
           finalVx = state.vx;
           finalVy = state.vy;
 
+          // Debug velocity for first few entities
+          if (entity.id < 20) {
+            console.log('[MovementSystem] Entity', entity.id, 'crowd velocity: vx=', finalVx.toFixed(2), 'vy=', finalVy.toFixed(2));
+          }
+
           // Sync position if significantly different (teleport recovery)
           const posDx = state.x - transform.x;
           const posDy = state.y - transform.y;
@@ -711,6 +721,9 @@ export class MovementSystem extends System {
           if (distance > 0.01) {
             finalVx = (dx / distance) * unit.currentSpeed;
             finalVy = (dy / distance) * unit.currentSpeed;
+          }
+          if (entity.id < 20) {
+            console.log('[MovementSystem] Entity', entity.id, 'NO crowd state, fallback velocity: vx=', finalVx.toFixed(2), 'vy=', finalVy.toFixed(2));
           }
         }
       } else {
@@ -745,6 +758,11 @@ export class MovementSystem extends System {
         } else {
           finalVx = prefVx;
           finalVy = prefVy;
+        }
+
+        // Debug non-crowd movement
+        if (unit.state === 'moving' && entity.id < 20) {
+          console.log('[MovementSystem] Entity', entity.id, 'non-crowd velocity: vx=', finalVx.toFixed(2), 'vy=', finalVy.toFixed(2));
         }
       }
 
