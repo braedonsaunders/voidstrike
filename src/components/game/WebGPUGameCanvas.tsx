@@ -1060,15 +1060,6 @@ export function WebGPUGameCanvas() {
         <LoadingScreen progress={loadingProgress} status={loadingStatus} />
       )}
 
-      {/* WebGPU/WebGL indicator */}
-      {!isLoading && (
-        <div className="absolute top-2 right-2 z-50 bg-black/60 px-2 py-1 rounded text-xs">
-          <span className={isWebGPU ? 'text-green-400' : 'text-yellow-400'}>
-            {isWebGPU ? 'WebGPU' : 'WebGL'}
-          </span>
-        </div>
-      )}
-
       {/* Three.js canvas */}
       <canvas
         ref={threeCanvasRef}

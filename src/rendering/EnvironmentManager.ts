@@ -173,12 +173,16 @@ export class EnvironmentManager {
     }
 
     // Ground fog/mist layer for atmospheric effect
-    this.groundFog = new GroundFog(this.mapData, this.biome);
-    this.scene.add(this.groundFog.mesh);
+    // Note: GroundFog uses ShaderMaterial which may not render correctly with WebGPU
+    // TODO: Convert to TSL material for WebGPU compatibility
+    // this.groundFog = new GroundFog(this.mapData, this.biome);
+    // this.scene.add(this.groundFog.mesh);
 
     // Map border fog - dark smoky effect around map edges (SC2-style)
-    this.mapBorderFog = new MapBorderFog(this.mapData);
-    this.scene.add(this.mapBorderFog.mesh);
+    // Note: MapBorderFog uses ShaderMaterial which doesn't work with WebGPU
+    // TODO: Convert to TSL material or standard material for WebGPU compatibility
+    // this.mapBorderFog = new MapBorderFog(this.mapData);
+    // this.scene.add(this.mapBorderFog.mesh);
 
     // Particle effects
     if (this.biome.particleType !== 'none') {
