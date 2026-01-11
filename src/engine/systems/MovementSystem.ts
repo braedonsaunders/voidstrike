@@ -364,6 +364,7 @@ export class MovementSystem extends System {
   }
 
   public update(deltaTime: number): void {
+    const updateStart = performance.now();
     const entities = this.world.getEntitiesWith('Transform', 'Unit', 'Velocity');
     const dt = deltaTime / 1000; // Convert to seconds
 
@@ -746,6 +747,11 @@ export class MovementSystem extends System {
       if (!unit.isFlying) {
         this.resolveHardBuildingCollision(transform, unit);
       }
+    }
+
+    const updateElapsed = performance.now() - updateStart;
+    if (updateElapsed > 16) { // More than one frame at 60fps
+      console.warn(`[MovementSystem] UPDATE: ${entities.length} entities took ${updateElapsed.toFixed(1)}ms`);
     }
   }
 
