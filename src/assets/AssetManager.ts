@@ -74,6 +74,10 @@ const assetAnimations = new Map<string, THREE.AnimationClip[]>();
 // Track which assets are animated/skinned (require SkeletonUtils.clone)
 const animatedAssets = new Set<string>();
 
+// Store model Y offsets for correct positioning (needed for instanced rendering)
+// This offset is applied during normalization to ground the model
+const modelYOffsets = new Map<string, number>();
+
 // Callbacks to notify when custom models are loaded
 const onModelsLoadedCallbacks: Array<() => void> = [];
 
@@ -89,8 +93,9 @@ gltfLoader.setDRACOLoader(dracoLoader);
 /**
  * Normalize a model to a target height and anchor to ground (minY = 0)
  * Per threejs-builder skill: use one anchor rule per asset class
+ * Stores the Y offset for later use in instanced rendering
  */
-function normalizeModel(root: THREE.Object3D, targetHeight: number): void {
+function normalizeModel(root: THREE.Object3D, targetHeight: number, assetId?: string): void {
   // Update world matrices first
   root.updateMatrixWorld(true);
 
@@ -125,6 +130,12 @@ function normalizeModel(root: THREE.Object3D, targetHeight: number): void {
   if (isFinite(box.min.y)) {
     root.position.y = -box.min.y;
     debugAssets.log(`[AssetManager] Grounded model: position.y = ${root.position.y.toFixed(4)}`);
+
+    // Store the Y offset for instanced rendering
+    if (assetId) {
+      modelYOffsets.set(assetId, root.position.y);
+      debugAssets.log(`[AssetManager] Stored Y offset for ${assetId}: ${root.position.y.toFixed(4)}`);
+    }
   }
 }
 
@@ -494,7 +505,7 @@ export class AssetManager {
 
           // Normalize to target height if specified
           if (options.targetHeight) {
-            normalizeModel(model, options.targetHeight);
+            normalizeModel(model, options.targetHeight, assetId);
           }
 
           // Apply model forward offset if needed
@@ -539,6 +550,14 @@ export class AssetManager {
    */
   static hasAnimations(assetId: string): boolean {
     return animatedAssets.has(assetId);
+  }
+
+  /**
+   * Get the Y offset for a model (used for instanced rendering positioning)
+   * This offset is applied during normalization to ground the model
+   */
+  static getModelYOffset(assetId: string): number {
+    return modelYOffsets.get(assetId) ?? 0;
   }
 
   /**

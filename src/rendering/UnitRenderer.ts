@@ -19,6 +19,7 @@ interface InstancedUnitGroup {
   maxInstances: number;
   entityIds: number[]; // Maps instance index to entity ID
   dummy: THREE.Object3D; // Reusable for matrix calculations
+  yOffset: number; // Y offset to apply when positioning (accounts for model origin)
 }
 
 // Per-unit animated mesh data (for animated units)
@@ -370,14 +371,23 @@ export class UnitRenderer {
       // Get the base mesh from AssetManager
       const baseMesh = AssetManager.getUnitMesh(unitType, playerColor);
 
+      // Update world matrices to get accurate world positions
+      baseMesh.updateMatrixWorld(true);
+
       // Find the actual mesh geometry and material from the group
+      // Also track the mesh's world Y position to use as an offset
       let geometry: THREE.BufferGeometry | null = null;
       let material: THREE.Material | THREE.Material[] | null = null;
+      let meshWorldY = 0;
 
       baseMesh.traverse((child) => {
         if (child instanceof THREE.Mesh && !geometry) {
           geometry = child.geometry;
           material = child.material;
+          // Get the mesh's world position Y - this is lost when extracting geometry
+          const worldPos = new THREE.Vector3();
+          child.getWorldPosition(worldPos);
+          meshWorldY = worldPos.y;
         }
       });
 
@@ -409,7 +419,10 @@ export class UnitRenderer {
         maxInstances: MAX_INSTANCES_PER_TYPE,
         entityIds: [],
         dummy: new THREE.Object3D(),
+        yOffset: meshWorldY,
       };
+
+      debugAssets.log(`[UnitRenderer] Created instanced group for ${unitType}: yOffset=${meshWorldY.toFixed(3)}`);
 
       this.instancedGroups.set(key, group);
     }
@@ -554,8 +567,8 @@ export class UnitRenderer {
           const instanceIndex = group.mesh.count;
           group.entityIds[instanceIndex] = entity.id;
 
-          // Set instance transform
-          this.tempPosition.set(transform.x, terrainHeight, transform.y);
+          // Set instance transform - apply yOffset to account for model origin position
+          this.tempPosition.set(transform.x, terrainHeight + group.yOffset, transform.y);
           this.tempEuler.set(0, -transform.rotation + Math.PI / 2, 0);
           this.tempQuaternion.setFromEuler(this.tempEuler);
           this.tempMatrix.compose(this.tempPosition, this.tempQuaternion, this.tempScale);
