@@ -20,6 +20,7 @@ interface InstancedUnitGroup {
   entityIds: number[]; // Maps instance index to entity ID
   dummy: THREE.Object3D; // Reusable for matrix calculations
   yOffset: number; // Y offset to apply when positioning (accounts for model origin)
+  rotationOffset: number; // Y rotation offset to apply (accounts for model facing direction)
 }
 
 // Per-unit animated mesh data (for animated units)
@@ -375,10 +376,11 @@ export class UnitRenderer {
       baseMesh.updateMatrixWorld(true);
 
       // Find the actual mesh geometry and material from the group
-      // Also track the mesh's world Y position to use as an offset
+      // Also track the mesh's world position/rotation to use as offsets
       let geometry: THREE.BufferGeometry | null = null;
       let material: THREE.Material | THREE.Material[] | null = null;
       let meshWorldY = 0;
+      let meshWorldRotationY = 0;
 
       baseMesh.traverse((child) => {
         if (child instanceof THREE.Mesh && !geometry) {
@@ -388,6 +390,11 @@ export class UnitRenderer {
           const worldPos = new THREE.Vector3();
           child.getWorldPosition(worldPos);
           meshWorldY = worldPos.y;
+          // Get the mesh's world rotation Y - also lost when extracting geometry
+          const worldQuat = new THREE.Quaternion();
+          child.getWorldQuaternion(worldQuat);
+          const worldEuler = new THREE.Euler().setFromQuaternion(worldQuat);
+          meshWorldRotationY = worldEuler.y;
         }
       });
 
@@ -420,9 +427,10 @@ export class UnitRenderer {
         entityIds: [],
         dummy: new THREE.Object3D(),
         yOffset: meshWorldY,
+        rotationOffset: meshWorldRotationY,
       };
 
-      debugAssets.log(`[UnitRenderer] Created instanced group for ${unitType}: yOffset=${meshWorldY.toFixed(3)}`);
+      debugAssets.log(`[UnitRenderer] Created instanced group for ${unitType}: yOffset=${meshWorldY.toFixed(3)}, rotationOffset=${meshWorldRotationY.toFixed(3)}`);
 
       this.instancedGroups.set(key, group);
     }
@@ -567,9 +575,9 @@ export class UnitRenderer {
           const instanceIndex = group.mesh.count;
           group.entityIds[instanceIndex] = entity.id;
 
-          // Set instance transform - apply yOffset to account for model origin position
+          // Set instance transform - apply offsets to account for model origin position/rotation
           this.tempPosition.set(transform.x, terrainHeight + group.yOffset, transform.y);
-          this.tempEuler.set(0, -transform.rotation + Math.PI / 2, 0);
+          this.tempEuler.set(0, -transform.rotation + Math.PI / 2 + group.rotationOffset, 0);
           this.tempQuaternion.setFromEuler(this.tempEuler);
           this.tempMatrix.compose(this.tempPosition, this.tempQuaternion, this.tempScale);
           group.mesh.setMatrixAt(instanceIndex, this.tempMatrix);

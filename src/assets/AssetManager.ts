@@ -26,8 +26,9 @@ import { debugAssets } from '@/utils/debugLogger';
 // Per threejs-builder skill: document these upfront to avoid reference-frame bugs
 export const REFERENCE_FRAME = {
   // World axes: +X right, +Y up, +Z toward camera (Three.js default)
-  // GLTF models face -Z by default
-  MODEL_FORWARD_OFFSET: 0, // radians - adjust if models face wrong direction
+  // GLTF models face -Z by default, but procedural models face +X
+  // Rotate GLTF models by -90 degrees so they face +X like procedural models
+  MODEL_FORWARD_OFFSET: -Math.PI / 2, // radians - rotate GLTF models to face +X
 
   // Unit scale: 1 unit = ~1 meter
   UNIT_HEIGHTS: {
