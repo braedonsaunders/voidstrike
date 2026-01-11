@@ -435,7 +435,8 @@ export function WebGPUGameCanvas() {
           useGameStore.getState().clearPendingCameraMove();
         }
 
-        // Update systems
+        // Update systems with timing (only log if total updates > 10ms)
+        const updatesStart = performance.now();
         camera.update(deltaTime);
         unitRendererRef.current?.update();
         buildingRendererRef.current?.update();
@@ -455,6 +456,11 @@ export function WebGPUGameCanvas() {
         // Update strategic overlays and command queue
         overlayManagerRef.current?.update(deltaTime);
         commandQueueRendererRef.current?.update();
+
+        const updatesElapsed = performance.now() - updatesStart;
+        if (updatesElapsed > 10) {
+          console.warn(`[UPDATES] Total update time: ${updatesElapsed.toFixed(1)}ms`);
+        }
 
         // Update selection rings
         const selectedUnits = useGameStore.getState().selectedUnits;
