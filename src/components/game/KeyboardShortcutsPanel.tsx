@@ -1,6 +1,7 @@
 'use client';
 
 import { useGameStore } from '@/store/gameStore';
+import { useUIStore } from '@/store/uiStore';
 import { useEffect } from 'react';
 import { setEdgeScrollEnabled } from '@/store/cameraStore';
 
@@ -52,7 +53,7 @@ const SHORTCUTS: ShortcutCategory[] = [
       { key: 'B', description: 'Build basic structure' },
       { key: 'V', description: 'Build advanced structure' },
       { key: 'Q W E R', description: 'Train units (slot 1-4)' },
-      { key: 'Escape', description: 'Cancel current action' },
+      { key: 'Escape / Right-Click', description: 'Cancel current action' },
     ],
   },
   {
@@ -86,6 +87,10 @@ export function KeyboardShortcutsPanel() {
 
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === 'Escape' || e.key === '?') {
+        // Prevent ESC from exiting fullscreen when closing the panel
+        if (e.key === 'Escape' && useUIStore.getState().isFullscreen) {
+          e.preventDefault();
+        }
         setShowKeyboardShortcuts(false);
       }
     };
