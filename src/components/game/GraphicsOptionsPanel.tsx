@@ -65,9 +65,11 @@ export function GraphicsOptionsPanel() {
         fontSize: '13px',
         zIndex: 1000,
         minWidth: '300px',
-        maxHeight: '80vh',
-        overflowY: 'auto',
+        maxHeight: '70vh',
+        overflowY: 'scroll',
+        pointerEvents: 'auto',
       }}
+      onWheel={(e) => e.stopPropagation()}
     >
       {/* Header */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
