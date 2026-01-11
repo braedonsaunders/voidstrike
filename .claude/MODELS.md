@@ -1306,22 +1306,22 @@ The AssetManager will automatically use custom models when available, falling ba
 > **Note:** This checklist reflects VOIDSTRIKE's actual unit/building names (not SC2 names).
 > The AI prompts above use SC2-style descriptions as reference for visual style.
 
-### Units (13 total) - 4 complete
+### Units (13 total) - 12 complete
 - [x] Fabricator *(worker unit)* `fabricator.glb`
 - [x] Trooper *(basic infantry)* `trooper.glb`
 - [x] Breacher *(heavy infantry)* `breacher.glb`
-- [ ] Vanguard *(jetpack infantry)*
-- [ ] Operative *(stealth sniper)*
-- [ ] Scorcher *(flame buggy, transforms to Inferno)*
+- [x] Vanguard *(jetpack infantry)* `vanguard.glb`
+- [x] Operative *(stealth sniper)* `operator.glb`
+- [x] Scorcher *(flame buggy, transforms to Inferno)* `scorcher.glb`
 - [x] Devastator *(siege tank)* `devastator.glb`
 - [ ] Colossus *(heavy assault mech)*
-- [ ] Lifter *(medical dropship)*
-- [ ] Valkyrie *(transforming fighter)*
-- [ ] Specter *(stealth aircraft)*
-- [ ] Dreadnought *(capital battleship)*
-- [ ] Overseer *(support drone)*
+- [x] Lifter *(medical dropship)* `lifter.glb`
+- [x] Valkyrie *(transforming fighter)* `valkyrie.glb`
+- [x] Specter *(stealth aircraft)* `specter.glb`
+- [x] Dreadnought *(capital battleship)* `dreadnought.glb`
+- [x] Overseer *(support drone)* `overseer.glb`
 
-### Buildings (17 total) - 16 complete
+### Buildings (17 total) - 17 complete
 - [x] Headquarters *(main base)* `headquarters.glb`
 - [x] Orbital Station *(HQ upgrade)* `orbital_station.glb`
 - [x] Bastion *(HQ defensive upgrade)* `bastion.glb`
@@ -1335,7 +1335,7 @@ The AssetManager will automatically use custom models when available, falling ba
 - [x] Hangar *(air production)* `hangar.glb`
 - [x] Power Core *(advanced tech)* `power_core.glb`
 - [x] Ops Center *(special ops)* `ops_center.glb`
-- [ ] Radar Array *(detection tower)*
+- [x] Radar Array *(detection tower)* `radar_array.glb`
 - [x] Defense Turret *(anti-air turret)* `defense_turret.glb`
 - [x] Research Module *(addon)* `research_module.glb`
 - [x] Production Module *(addon)* `production_module.glb`
@@ -1373,29 +1373,21 @@ The AssetManager will automatically use custom models when available, falling ba
 
 | Category | Complete | Total | Progress |
 |----------|----------|-------|----------|
-| Units | 4 | 13 | 31% |
-| Buildings | 16 | 17 | 94% |
+| Units | 12 | 13 | 92% |
+| Buildings | 17 | 17 | 100% |
 | Resources | 2 | 2 | 100% |
 | Projectiles | 0 | 3 | 0% |
 | Decorations | 16 | 16 | 100% |
-| **Total** | **38** | **51** | **75%** |
+| **Total** | **47** | **51** | **92%** |
 
 ---
 
 ## Missing Models Priority
 
-### High Priority (Core Gameplay)
-1. **Vanguard** - Jetpack infantry for early game aggression
-2. **Scorcher** - Fast harassment unit
-3. **Lifter** - Essential support unit
+### Units (1 remaining)
+1. **Colossus** - Heavy assault mech
 
-### Medium Priority (Mid-Game Units)
-4. **Operative** - Stealth/sniper unit
-5. **Valkyrie** - Transforming air/ground fighter
-6. **Specter** - Stealth air attacker
-
-### Lower Priority (Late-Game)
-7. **Colossus** - Heavy mech
-8. **Dreadnought** - Capital ship
-9. **Overseer** - Support drone
-10. **Radar Array** - Detection building
+### Projectiles (3 remaining)
+1. **Bullet** - Basic projectile
+2. **Missile** - Guided projectile
+3. **Laser** - Energy beam
