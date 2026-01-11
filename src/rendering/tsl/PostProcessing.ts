@@ -4,10 +4,12 @@
  * WebGPU-compatible post-processing using Three.js TSL nodes.
  * Features:
  * - Bloom effect (BloomNode) - HDR glow
- * - GTAO ambient occlusion (GTAONode) - Contact shadows
  * - FXAA anti-aliasing (FXAANode) - Edge smoothing
  * - Vignette - Cinematic edge darkening
  * - Color grading (exposure, saturation, contrast)
+ *
+ * Note: GTAO/SSAO is disabled due to WebGPU WGSL compatibility issues
+ * (textureDimensions doesn't support multisampled depth textures with mip levels)
  */
 
 import * as THREE from 'three';
@@ -29,7 +31,8 @@ import {
 
 // Import WebGPU post-processing nodes from addons
 import { bloom } from 'three/addons/tsl/display/BloomNode.js';
-import { ao } from 'three/addons/tsl/display/GTAONode.js';
+// Note: GTAO disabled - incompatible with WebGPU multisampled depth textures
+// import { ao } from 'three/addons/tsl/display/GTAONode.js';
 import { fxaa } from 'three/addons/tsl/display/FXAANode.js';
 
 // ============================================
@@ -94,12 +97,11 @@ export class RenderPipeline {
 
   // Effect passes
   private bloomPass: ReturnType<typeof bloom> | null = null;
-  private aoPass: ReturnType<typeof ao> | null = null;
+  // Note: AO pass disabled - GTAO incompatible with WebGPU multisampled depth
   private fxaaPass: ReturnType<typeof fxaa> | null = null;
 
   // Uniforms for dynamic updates
   private uVignetteIntensity = uniform(0.25);
-  private uAOIntensity = uniform(1.0);
   private uExposure = uniform(1.0);
   private uSaturation = uniform(1.1);
   private uContrast = uniform(1.05);
@@ -122,35 +124,17 @@ export class RenderPipeline {
   private createPipeline(): PostProcessing {
     const postProcessing = new PostProcessing(this.renderer);
 
-    // Create scene pass - simple setup without MRT for WebGPU compatibility
+    // Create scene pass
     const scenePass = pass(this.scene, this.camera);
     const scenePassColor = scenePass.getTextureNode();
-    const scenePassDepth = scenePass.getTextureNode('depth');
 
     // Build the effect chain
     let outputNode: any = scenePassColor;
 
-    // 1. GTAO Ambient Occlusion (applied first, multiplied with scene)
-    // Pass null for normals - GTAO will reconstruct from depth (more compatible with WebGPU)
-    if (this.config.aoEnabled) {
-      try {
-        // Use null for normal node - GTAO will reconstruct normals from depth
-        this.aoPass = ao(scenePassDepth, null, this.camera);
-        this.aoPass.radius.value = this.config.aoRadius;
+    // Note: GTAO/SSAO is disabled due to WebGPU WGSL compatibility issues
+    // The GTAONode uses textureDimensions with multisampled depth textures which is not supported
 
-        // Apply AO as darkening factor
-        // GTAO outputs occlusion where 1 = fully visible, 0 = fully occluded
-        const aoTexture = this.aoPass.getTextureNode();
-        // Mix between full color and darkened color based on AO and intensity
-        const aoFactor = mix(float(1.0), aoTexture, this.uAOIntensity);
-        outputNode = scenePassColor.mul(vec3(aoFactor));
-      } catch (e) {
-        console.warn('[PostProcessing] GTAO initialization failed, skipping AO:', e);
-        // Continue without AO
-      }
-    }
-
-    // 2. Bloom effect (additive)
+    // 1. Bloom effect (additive)
     if (this.config.bloomEnabled) {
       try {
         this.bloomPass = bloom(outputNode);
@@ -230,7 +214,6 @@ export class RenderPipeline {
   applyConfig(config: Partial<PostProcessingConfig>): void {
     const needsRebuild =
       (config.bloomEnabled !== undefined && config.bloomEnabled !== this.config.bloomEnabled) ||
-      (config.aoEnabled !== undefined && config.aoEnabled !== this.config.aoEnabled) ||
       (config.fxaaEnabled !== undefined && config.fxaaEnabled !== this.config.fxaaEnabled) ||
       (config.vignetteEnabled !== undefined && config.vignetteEnabled !== this.config.vignetteEnabled);
 
@@ -243,12 +226,7 @@ export class RenderPipeline {
       this.bloomPass.radius.value = this.config.bloomRadius;
     }
 
-    // Update SSAO parameters
-    if (this.aoPass) {
-      this.aoPass.radius.value = this.config.aoRadius;
-      // Note: GTAONode uses 'scale' not 'intensity' - we control intensity via mixing uniform
-    }
-    this.uAOIntensity.value = this.config.aoIntensity;
+    // Note: SSAO/AO is disabled due to WebGPU compatibility issues
 
     // Update color grading uniforms
     this.uVignetteIntensity.value = this.config.vignetteIntensity;
