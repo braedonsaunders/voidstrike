@@ -113,11 +113,12 @@ export class MovementSystem extends System {
           unit.cancelBuilding();
         }
 
+        console.log('[MovementSystem] Before setMoveTarget, unit.state=', unit.state);
         unit.setMoveTarget(pos.x, pos.y);
+        console.log('[MovementSystem] After setMoveTarget, unit.state=', unit.state);
         unit.path = [];
         unit.pathIndex = 0;
         this.requestPathWithCooldown(entityId, pos.x, pos.y, true);
-        console.log('[MovementSystem] Unit', entityId, 'setMoveTarget to', pos, 'state:', unit.state);
       }
     }
   }
