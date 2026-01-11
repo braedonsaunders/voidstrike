@@ -88,32 +88,32 @@ This document contains all audio specifications, AI prompts for generation, and 
 - [ ] `ambient/jungle.mp3`
 - [ ] `ambient/battle.mp3`
 
-### Voice Lines - Fabricator (Worker) ⏳ Needs Generation
-- [ ] `voice/fabricator/select1.mp3`
-- [ ] `voice/fabricator/select2.mp3`
-- [ ] `voice/fabricator/select3.mp3`
-- [ ] `voice/fabricator/move1.mp3`
-- [ ] `voice/fabricator/move2.mp3`
-- [ ] `voice/fabricator/attack1.mp3`
-- [ ] `voice/fabricator/ready.mp3`
+### Voice Lines - Fabricator (Worker) ✅ Complete
+- [x] `voice/fabricator/select1.mp3`
+- [x] `voice/fabricator/select2.mp3`
+- [x] `voice/fabricator/select3.mp3`
+- [x] `voice/fabricator/move1.mp3`
+- [x] `voice/fabricator/move2.mp3`
+- [x] `voice/fabricator/attack1.mp3`
+- [x] `voice/fabricator/ready.mp3`
 
-### Voice Lines - Trooper (Basic Infantry) ⏳ Needs Generation
-- [ ] `voice/trooper/select1.mp3`
-- [ ] `voice/trooper/select2.mp3`
-- [ ] `voice/trooper/select3.mp3`
-- [ ] `voice/trooper/move1.mp3`
-- [ ] `voice/trooper/move2.mp3`
-- [ ] `voice/trooper/attack1.mp3`
-- [ ] `voice/trooper/attack2.mp3`
-- [ ] `voice/trooper/ready.mp3`
+### Voice Lines - Trooper (Basic Infantry) ✅ Complete
+- [x] `voice/trooper/select1.mp3`
+- [x] `voice/trooper/select2.mp3`
+- [x] `voice/trooper/select3.mp3`
+- [x] `voice/trooper/move1.mp3`
+- [x] `voice/trooper/move2.mp3`
+- [x] `voice/trooper/attack1.mp3`
+- [x] `voice/trooper/attack2.mp3`
+- [x] `voice/trooper/ready.mp3`
 
-### Voice Lines - Breacher (Heavy Infantry) ⏳ Needs Generation
-- [ ] `voice/breacher/select1.mp3`
-- [ ] `voice/breacher/select2.mp3`
-- [ ] `voice/breacher/move1.mp3`
-- [ ] `voice/breacher/move2.mp3`
-- [ ] `voice/breacher/attack1.mp3`
-- [ ] `voice/breacher/ready.mp3`
+### Voice Lines - Breacher (Heavy Infantry) ✅ Complete
+- [x] `voice/breacher/select1.mp3`
+- [x] `voice/breacher/select2.mp3`
+- [x] `voice/breacher/move1.mp3`
+- [x] `voice/breacher/move2.mp3`
+- [x] `voice/breacher/attack.mp3`
+- [x] `voice/breacher/ready.mp3`
 
 ### Voice Lines - Vanguard (Fast Assault Infantry) ⏳ Needs Generation
 - [ ] `voice/vanguard/select1.mp3`
@@ -129,19 +129,19 @@ This document contains all audio specifications, AI prompts for generation, and 
 - [ ] `voice/operative/attack1.mp3`
 - [ ] `voice/operative/ready.mp3`
 
-### Voice Lines - Scorcher (Fast Attack Vehicle) ⏳ Needs Generation
-- [ ] `voice/scorcher/select1.mp3`
-- [ ] `voice/scorcher/select2.mp3`
-- [ ] `voice/scorcher/move1.mp3`
-- [ ] `voice/scorcher/attack1.mp3`
-- [ ] `voice/scorcher/ready.mp3`
+### Voice Lines - Scorcher (Fast Attack Vehicle) ✅ Complete
+- [x] `voice/scorcher/select1.mp3`
+- [x] `voice/scorcher/select2.mp3`
+- [x] `voice/scorcher/move1.mp3`
+- [x] `voice/scorcher/attack1.mp3`
+- [x] `voice/scorcher/ready.mp3`
 
-### Voice Lines - Devastator (Heavy Siege Tank) ⏳ Needs Generation
-- [ ] `voice/devastator/select1.mp3`
-- [ ] `voice/devastator/select2.mp3`
-- [ ] `voice/devastator/move1.mp3`
-- [ ] `voice/devastator/attack1.mp3`
-- [ ] `voice/devastator/ready.mp3`
+### Voice Lines - Devastator (Heavy Siege Tank) ✅ Complete
+- [x] `voice/devastator/select1.mp3`
+- [x] `voice/devastator/select2.mp3`
+- [x] `voice/devastator/move1.mp3`
+- [x] `voice/devastator/attack1.mp3`
+- [x] `voice/devastator/ready.mp3`
 
 ### Voice Lines - Colossus (Massive Walker Mech) ⏳ Needs Generation
 - [ ] `voice/colossus/select1.mp3`
