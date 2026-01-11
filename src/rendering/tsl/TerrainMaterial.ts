@@ -25,6 +25,8 @@ import {
   abs,
   normalWorld,
   clamp,
+  attribute,
+  max,
 } from 'three/tsl';
 import { MeshStandardNodeMaterial } from 'three/webgpu';
 import { BiomeType } from '@/rendering/Biomes';
@@ -186,15 +188,24 @@ export class TSLTerrainMaterial {
   ): MeshStandardNodeMaterial {
     const material = new MeshStandardNodeMaterial();
 
-    // 4-texture terrain blending based on slope (ported from working GLSL shader)
+    // 4-texture terrain blending based on slope
+    // Uses pre-calculated slope attribute from terrain geometry for accurate cliff detection
     const colorNode = Fn(() => {
       const worldNorm = normalWorld;
 
       // Fixed UV scale (64x) - matches working GLSL shader
       const tiledUV = uv().mul(64.0);
 
-      // Calculate slope from mesh normals (0 = flat, 1 = vertical)
-      const slope = float(1.0).sub(abs(dot(normalize(worldNorm), vec3(0.0, 1.0, 0.0))));
+      // Get pre-calculated slope from vertex attribute (0 = flat, 1 = very steep)
+      // This is calculated before geometry smoothing for accurate cliff detection
+      const vertexSlope = attribute('aSlope', 'float');
+
+      // Also calculate slope from mesh normals as a fallback/blend
+      const geometrySlope = float(1.0).sub(abs(dot(normalize(worldNorm), vec3(0.0, 1.0, 0.0))));
+
+      // Use the maximum of vertex slope and geometry slope for robust detection
+      // This ensures cliffs are detected even after geometry smoothing
+      const slope = max(vertexSlope, geometrySlope);
 
       // Sample all 4 diffuse textures
       const grassColor = texture(grassDiffuse, tiledUV).rgb;
@@ -202,7 +213,7 @@ export class TSLTerrainMaterial {
       const rockColor = texture(rockDiffuse, tiledUV).rgb;
       const cliffColor = texture(cliffDiffuse, tiledUV).rgb;
 
-      // Slope-based weights using bell curves for middle textures (from working GLSL)
+      // Slope-based weights using bell curves for middle textures
       // Grass: flat areas (slope < 0.25)
       const grassWeight = smoothstep(float(0.25), float(0.1), slope);
       // Dirt: slight slopes (0.08-0.35) - bell curve
@@ -233,7 +244,10 @@ export class TSLTerrainMaterial {
       const worldNorm = normalWorld;
       const tiledUV = uv().mul(64.0);
 
-      const slope = float(1.0).sub(abs(dot(normalize(worldNorm), vec3(0.0, 1.0, 0.0))));
+      // Use same slope calculation as color node
+      const vertexSlope = attribute('aSlope', 'float');
+      const geometrySlope = float(1.0).sub(abs(dot(normalize(worldNorm), vec3(0.0, 1.0, 0.0))));
+      const slope = max(vertexSlope, geometrySlope);
 
       const grassR = texture(grassRoughness, tiledUV).r;
       const dirtR = texture(dirtRoughness, tiledUV).r;
@@ -262,7 +276,10 @@ export class TSLTerrainMaterial {
       const worldNorm = normalWorld;
       const tiledUV = uv().mul(64.0);
 
-      const slope = float(1.0).sub(abs(dot(normalize(worldNorm), vec3(0.0, 1.0, 0.0))));
+      // Use same slope calculation as color node
+      const vertexSlope = attribute('aSlope', 'float');
+      const geometrySlope = float(1.0).sub(abs(dot(normalize(worldNorm), vec3(0.0, 1.0, 0.0))));
+      const slope = max(vertexSlope, geometrySlope);
 
       // Sample and unpack normal maps
       const grassN = texture(grassNormal, tiledUV).rgb.mul(2.0).sub(1.0);

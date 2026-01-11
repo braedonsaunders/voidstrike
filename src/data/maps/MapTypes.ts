@@ -1035,3 +1035,371 @@ export function scatterForests(
     }
   }
 }
+
+// ============================================
+// TERRAIN CONNECTIVITY VALIDATION
+// ============================================
+
+/**
+ * Result of terrain connectivity validation
+ */
+export interface ConnectivityValidation {
+  isValid: boolean;
+  connectedRegions: number;
+  unreachableLocations: Array<{ name: string; x: number; y: number }>;
+  warnings: string[];
+}
+
+/**
+ * Check if a cell is walkable (considering terrain type and features)
+ */
+function isCellWalkable(cell: MapCell): boolean {
+  if (cell.terrain === 'unwalkable') return false;
+
+  const feature = cell.feature || 'none';
+  const config = TERRAIN_FEATURE_CONFIG[feature];
+  return config.walkable;
+}
+
+/**
+ * Flood fill to find all cells connected to a starting point.
+ * Returns a Set of cell indices (y * width + x) that are reachable.
+ */
+function floodFill(
+  grid: MapCell[][],
+  startX: number,
+  startY: number,
+  width: number,
+  height: number
+): Set<number> {
+  const visited = new Set<number>();
+  const queue: Array<{ x: number; y: number }> = [];
+
+  // Clamp start position to grid
+  const sx = Math.max(0, Math.min(width - 1, Math.floor(startX)));
+  const sy = Math.max(0, Math.min(height - 1, Math.floor(startY)));
+
+  // Check if start is walkable
+  if (!isCellWalkable(grid[sy][sx])) {
+    // Try to find a nearby walkable cell
+    for (let r = 1; r <= 5; r++) {
+      for (let dy = -r; dy <= r; dy++) {
+        for (let dx = -r; dx <= r; dx++) {
+          const nx = sx + dx;
+          const ny = sy + dy;
+          if (nx >= 0 && nx < width && ny >= 0 && ny < height) {
+            if (isCellWalkable(grid[ny][nx])) {
+              queue.push({ x: nx, y: ny });
+              visited.add(ny * width + nx);
+              break;
+            }
+          }
+        }
+        if (queue.length > 0) break;
+      }
+      if (queue.length > 0) break;
+    }
+  } else {
+    queue.push({ x: sx, y: sy });
+    visited.add(sy * width + sx);
+  }
+
+  // 8-directional flood fill
+  const directions = [
+    { dx: -1, dy: 0 }, { dx: 1, dy: 0 },
+    { dx: 0, dy: -1 }, { dx: 0, dy: 1 },
+    { dx: -1, dy: -1 }, { dx: 1, dy: -1 },
+    { dx: -1, dy: 1 }, { dx: 1, dy: 1 },
+  ];
+
+  while (queue.length > 0) {
+    const current = queue.shift()!;
+
+    for (const { dx, dy } of directions) {
+      const nx = current.x + dx;
+      const ny = current.y + dy;
+      const idx = ny * width + nx;
+
+      if (nx >= 0 && nx < width && ny >= 0 && ny < height && !visited.has(idx)) {
+        if (isCellWalkable(grid[ny][nx])) {
+          visited.add(idx);
+          queue.push({ x: nx, y: ny });
+        }
+      }
+    }
+  }
+
+  return visited;
+}
+
+/**
+ * Validate that all important locations on a map are connected.
+ * This includes spawn points, expansions, watch towers, and ramp endpoints.
+ */
+export function validateMapConnectivity(mapData: MapData): ConnectivityValidation {
+  const { width, height, terrain, spawns, expansions, watchTowers, ramps } = mapData;
+  const warnings: string[] = [];
+  const unreachableLocations: Array<{ name: string; x: number; y: number }> = [];
+
+  // Collect all important locations that should be reachable
+  const locations: Array<{ name: string; x: number; y: number }> = [];
+
+  // Add spawn points
+  for (const spawn of spawns) {
+    locations.push({ name: `Spawn ${spawn.playerSlot}`, x: spawn.x, y: spawn.y });
+  }
+
+  // Add expansion locations
+  for (const exp of expansions) {
+    locations.push({ name: exp.name, x: exp.x, y: exp.y });
+  }
+
+  // Add watch towers
+  for (let i = 0; i < watchTowers.length; i++) {
+    locations.push({ name: `Watch Tower ${i + 1}`, x: watchTowers[i].x, y: watchTowers[i].y });
+  }
+
+  // Add ramp endpoints
+  for (let i = 0; i < ramps.length; i++) {
+    const ramp = ramps[i];
+    const cx = ramp.x + ramp.width / 2;
+    const cy = ramp.y + ramp.height / 2;
+    locations.push({ name: `Ramp ${i + 1}`, x: cx, y: cy });
+  }
+
+  if (locations.length === 0) {
+    return {
+      isValid: true,
+      connectedRegions: 0,
+      unreachableLocations: [],
+      warnings: ['No locations to validate'],
+    };
+  }
+
+  // Flood fill from the first spawn point
+  const firstLocation = locations[0];
+  const reachable = floodFill(terrain, firstLocation.x, firstLocation.y, width, height);
+
+  if (reachable.size === 0) {
+    warnings.push(`Starting location ${firstLocation.name} is not on walkable terrain`);
+  }
+
+  // Check which locations are reachable
+  let connectedCount = 0;
+  for (const loc of locations) {
+    const lx = Math.max(0, Math.min(width - 1, Math.floor(loc.x)));
+    const ly = Math.max(0, Math.min(height - 1, Math.floor(loc.y)));
+    const idx = ly * width + lx;
+
+    // Check if location itself or nearby cells are reachable
+    let isReachable = reachable.has(idx);
+
+    // If not directly reachable, check nearby cells (radius 3)
+    if (!isReachable) {
+      outer: for (let r = 1; r <= 3; r++) {
+        for (let dy = -r; dy <= r; dy++) {
+          for (let dx = -r; dx <= r; dx++) {
+            const nx = lx + dx;
+            const ny = ly + dy;
+            if (nx >= 0 && nx < width && ny >= 0 && ny < height) {
+              if (reachable.has(ny * width + nx)) {
+                isReachable = true;
+                break outer;
+              }
+            }
+          }
+        }
+      }
+    }
+
+    if (isReachable) {
+      connectedCount++;
+    } else {
+      unreachableLocations.push(loc);
+    }
+  }
+
+  // Calculate number of separate connected regions
+  const allWalkable = new Set<number>();
+  for (let y = 0; y < height; y++) {
+    for (let x = 0; x < width; x++) {
+      if (isCellWalkable(terrain[y][x])) {
+        allWalkable.add(y * width + x);
+      }
+    }
+  }
+
+  let connectedRegions = 0;
+  const counted = new Set<number>();
+  for (const idx of allWalkable) {
+    if (!counted.has(idx)) {
+      const y = Math.floor(idx / width);
+      const x = idx % width;
+      const region = floodFill(terrain, x, y, width, height);
+      if (region.size > 10) { // Only count regions larger than 10 cells
+        connectedRegions++;
+        for (const cellIdx of region) {
+          counted.add(cellIdx);
+        }
+      }
+    }
+  }
+
+  // Add warnings for issues found
+  if (unreachableLocations.length > 0) {
+    warnings.push(`${unreachableLocations.length} location(s) are not reachable from Spawn 1`);
+    for (const loc of unreachableLocations) {
+      warnings.push(`  - ${loc.name} at (${Math.floor(loc.x)}, ${Math.floor(loc.y)})`);
+    }
+  }
+
+  if (connectedRegions > 1) {
+    warnings.push(`Map has ${connectedRegions} separate walkable regions - units may be trapped`);
+  }
+
+  return {
+    isValid: unreachableLocations.length === 0 && connectedRegions <= 1,
+    connectedRegions,
+    unreachableLocations,
+    warnings,
+  };
+}
+
+/**
+ * Ensure a path exists between two points by carving a corridor if needed.
+ * This is a last-resort fix for maps with connectivity issues.
+ * PROTECTED: Will not overwrite ramps.
+ */
+export function ensurePathBetween(
+  grid: MapCell[][],
+  x1: number,
+  y1: number,
+  x2: number,
+  y2: number,
+  corridorWidth: number = 4,
+  elevation: Elevation = 140
+): boolean {
+  const width = grid[0].length;
+  const height = grid.length;
+
+  // First check if path already exists
+  const startReachable = floodFill(grid, x1, y1, width, height);
+  const endX = Math.max(0, Math.min(width - 1, Math.floor(x2)));
+  const endY = Math.max(0, Math.min(height - 1, Math.floor(y2)));
+  const endIdx = endY * width + endX;
+
+  if (startReachable.has(endIdx)) {
+    return true; // Already connected
+  }
+
+  // Carve a straight corridor between points
+  const dx = x2 - x1;
+  const dy = y2 - y1;
+  const dist = Math.sqrt(dx * dx + dy * dy);
+  const steps = Math.ceil(dist);
+
+  // Perpendicular direction for corridor width
+  const perpX = -dy / dist;
+  const perpY = dx / dist;
+
+  for (let i = 0; i <= steps; i++) {
+    const t = i / steps;
+    const cx = x1 + dx * t;
+    const cy = y1 + dy * t;
+
+    for (let w = -corridorWidth / 2; w <= corridorWidth / 2; w++) {
+      const px = Math.floor(cx + perpX * w);
+      const py = Math.floor(cy + perpY * w);
+
+      if (px >= 0 && px < width && py >= 0 && py < height) {
+        // Don't overwrite ramps
+        if (grid[py][px].terrain === 'ramp') continue;
+
+        grid[py][px] = {
+          terrain: 'ground',
+          elevation: elevation,
+          feature: 'none',
+          textureId: Math.floor(Math.random() * 4),
+        };
+      }
+    }
+  }
+
+  return true;
+}
+
+/**
+ * Auto-fix connectivity issues by ensuring all spawns and expansions are connected.
+ * Returns the number of corridors carved.
+ */
+export function autoFixConnectivity(mapData: MapData): number {
+  const { terrain, spawns, expansions } = mapData;
+  const width = terrain[0].length;
+  const height = terrain.length;
+  let corridorsCarved = 0;
+
+  // Get all locations that should be connected
+  const locations: Array<{ x: number; y: number }> = [];
+
+  for (const spawn of spawns) {
+    locations.push({ x: spawn.x, y: spawn.y });
+  }
+  for (const exp of expansions) {
+    locations.push({ x: exp.x, y: exp.y });
+  }
+
+  if (locations.length < 2) return 0;
+
+  // Ensure first spawn can reach all other locations
+  const baseLocation = locations[0];
+
+  for (let i = 1; i < locations.length; i++) {
+    const target = locations[i];
+
+    // Check if already reachable
+    const reachable = floodFill(terrain, baseLocation.x, baseLocation.y, width, height);
+    const tx = Math.max(0, Math.min(width - 1, Math.floor(target.x)));
+    const ty = Math.max(0, Math.min(height - 1, Math.floor(target.y)));
+
+    let isReachable = reachable.has(ty * width + tx);
+    if (!isReachable) {
+      // Check nearby cells
+      for (let r = 1; r <= 5 && !isReachable; r++) {
+        for (let dy = -r; dy <= r && !isReachable; dy++) {
+          for (let dx = -r; dx <= r && !isReachable; dx++) {
+            const nx = tx + dx;
+            const ny = ty + dy;
+            if (nx >= 0 && nx < width && ny >= 0 && ny < height) {
+              if (reachable.has(ny * width + nx)) {
+                isReachable = true;
+              }
+            }
+          }
+        }
+      }
+    }
+
+    if (!isReachable) {
+      // Find the closest reachable cell to the target
+      let closestReachable: { x: number; y: number } | null = null;
+      let closestDist = Infinity;
+
+      for (const idx of reachable) {
+        const ry = Math.floor(idx / width);
+        const rx = idx % width;
+        const d = Math.sqrt((rx - tx) * (rx - tx) + (ry - ty) * (ry - ty));
+        if (d < closestDist) {
+          closestDist = d;
+          closestReachable = { x: rx, y: ry };
+        }
+      }
+
+      if (closestReachable) {
+        ensurePathBetween(terrain, closestReachable.x, closestReachable.y, target.x, target.y);
+        corridorsCarved++;
+      }
+    }
+  }
+
+  return corridorsCarved;
+}
