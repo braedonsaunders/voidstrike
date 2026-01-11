@@ -4,6 +4,138 @@ This document contains all audio specifications, AI prompts for generation, and 
 
 ---
 
+## Audio Assets Checklist
+
+### Music ✅ Complete
+- [x] `music/menu/main_theme.mp3`
+- [x] `music/menu/menu_01.mp3`
+- [x] `music/gameplay/gameplay_01.mp3`
+- [x] `music/gameplay/gameplay_02.mp3`
+- [x] `music/gameplay/gameplay_03.mp3`
+- [x] `music/gameplay/gameplay_04.mp3`
+- [x] `music/gameplay/gameplay_05.mp3`
+- [x] `music/gameplay/gameplay_06.mp3`
+- [x] `music/gameplay/gameplay_07.mp3`
+- [x] `music/gameplay/gameplay_08.mp3`
+- [x] `music/victory/victory.mp3`
+- [x] `music/defeat/defeat.mp3`
+
+### Voice Announcements (Alerts) ✅ Complete
+- [x] `alert/under_attack.mp3`
+- [x] `alert/additional_population_required.mp3`
+- [x] `alert/not_enough_minerals.mp3`
+- [x] `alert/not_enough_vespene.mp3`
+- [x] `alert/minerals_depleted.mp3`
+- [x] `alert/building_complete.mp3`
+- [x] `alert/research_complete.mp3`
+- [x] `alert/upgrade_complete.mp3`
+
+### UI Sounds ⏳ Needs Generation
+- [ ] `ui/click.mp3`
+- [ ] `ui/error.mp3`
+- [ ] `ui/select.mp3`
+- [ ] `ui/notification.mp3`
+
+### Combat - Weapons ⏳ Needs Generation
+- [ ] `combat/rifle.mp3`
+- [ ] `combat/cannon.mp3`
+- [ ] `combat/laser.mp3`
+- [ ] `combat/missile.mp3`
+- [ ] `combat/flamethrower.mp3`
+- [ ] `combat/sniper.mp3`
+- [ ] `combat/grenade_launcher.mp3`
+- [ ] `combat/gatling.mp3`
+- [ ] `combat/laser_battery.mp3`
+- [ ] `combat/yamato.mp3`
+
+### Combat - Impacts ⏳ Needs Generation
+- [ ] `combat/hit.mp3`
+- [ ] `combat/hit_armor.mp3`
+- [ ] `combat/hit_shield.mp3`
+- [ ] `combat/energy_impact.mp3`
+
+### Combat - Explosions ⏳ Needs Generation
+- [ ] `combat/explosion_small.mp3`
+- [ ] `combat/explosion_medium.mp3`
+- [ ] `combat/explosion_large.mp3`
+
+### Combat - Deaths ⏳ Needs Generation
+- [ ] `combat/death.mp3`
+- [ ] `combat/death_mech.mp3`
+- [ ] `combat/death_bio.mp3`
+
+### Unit Commands ⏳ Needs Generation
+- [ ] `unit/move.mp3`
+- [ ] `unit/attack.mp3`
+- [ ] `unit/ready.mp3`
+- [ ] `unit/mining.mp3`
+- [ ] `unit/building.mp3`
+
+### Building Sounds ⏳ Needs Generation
+- [ ] `building/place.mp3`
+- [ ] `building/construct.mp3`
+- [ ] `building/production.mp3`
+- [ ] `building/powerup.mp3`
+- [ ] `building/powerdown.mp3`
+
+### Ambient Sounds ⏳ Needs Generation
+- [ ] `ambient/wind.mp3`
+- [ ] `ambient/nature.mp3`
+- [ ] `ambient/desert.mp3`
+- [ ] `ambient/frozen.mp3`
+- [ ] `ambient/volcanic.mp3`
+- [ ] `ambient/void.mp3`
+- [ ] `ambient/jungle.mp3`
+- [ ] `ambient/battle.mp3`
+
+### Voice Lines - SCV ⏳ Needs Generation
+- [ ] `voice/scv/select1.mp3`
+- [ ] `voice/scv/select2.mp3`
+- [ ] `voice/scv/select3.mp3`
+- [ ] `voice/scv/move1.mp3`
+- [ ] `voice/scv/move2.mp3`
+- [ ] `voice/scv/attack1.mp3`
+
+### Voice Lines - Marine ⏳ Needs Generation
+- [ ] `voice/marine/select1.mp3`
+- [ ] `voice/marine/select2.mp3`
+- [ ] `voice/marine/select3.mp3`
+- [ ] `voice/marine/move1.mp3`
+- [ ] `voice/marine/move2.mp3`
+- [ ] `voice/marine/attack1.mp3`
+- [ ] `voice/marine/attack2.mp3`
+- [ ] `voice/marine/ready.mp3`
+
+### Voice Lines - Marauder ⏳ Needs Generation
+- [ ] `voice/marauder/select1.mp3`
+- [ ] `voice/marauder/select2.mp3`
+- [ ] `voice/marauder/move1.mp3`
+- [ ] `voice/marauder/move2.mp3`
+- [ ] `voice/marauder/attack1.mp3`
+- [ ] `voice/marauder/ready.mp3`
+
+### Voice Lines - Hellion ⏳ Needs Generation
+- [ ] `voice/hellion/select1.mp3`
+- [ ] `voice/hellion/select2.mp3`
+- [ ] `voice/hellion/move1.mp3`
+- [ ] `voice/hellion/attack1.mp3`
+- [ ] `voice/hellion/ready.mp3`
+
+### Voice Lines - Siege Tank ⏳ Needs Generation
+- [ ] `voice/tank/select1.mp3`
+- [ ] `voice/tank/select2.mp3`
+- [ ] `voice/tank/move1.mp3`
+- [ ] `voice/tank/attack1.mp3`
+- [ ] `voice/tank/ready.mp3`
+
+### Voice Lines - Medic ⏳ Needs Generation
+- [ ] `voice/medic/select1.mp3`
+- [ ] `voice/medic/select2.mp3`
+- [ ] `voice/medic/move1.mp3`
+- [ ] `voice/medic/ready.mp3`
+
+---
+
 ## Directory Structure
 
 ```
@@ -103,8 +235,6 @@ These are spoken voice announcements that play to notify the player of important
 | `ui/click.mp3` | 0.1s | "Clean UI click, interface button press, satisfying digital click" |
 | `ui/error.mp3` | 0.3s | "Error buzzer, action denied, cannot perform, low negative tone" |
 | `ui/select.mp3` | 0.15s | "Unit selection confirmation, positive click, selection made" |
-| `ui/research.mp3` | 0.4s | "Research complete notification, positive technology chime, achievement feeling" |
-| `ui/building_complete.mp3` | 0.5s | "Building complete notification, construction finished, positive industrial tone" |
 | `ui/notification.mp3` | 0.3s | "General notification sound, attention chime, neutral alert" |
 
 ---
