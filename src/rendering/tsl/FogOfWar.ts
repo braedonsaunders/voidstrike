@@ -15,7 +15,6 @@ import {
   uv,
   mix,
   step,
-  smoothstep,
 } from 'three/tsl';
 import { MeshBasicNodeMaterial } from 'three/webgpu';
 import { VisionSystem } from '@/engine/systems/VisionSystem';
@@ -99,7 +98,8 @@ export class TSLFogOfWar {
     // Create mesh
     this.mesh = new THREE.Mesh(this.geometry, this.material);
     this.mesh.rotation.x = -Math.PI / 2;
-    this.mesh.position.set(this.mapWidth / 2, 0.5, this.mapHeight / 2);
+    // Position fog above all terrain (terrain heights range from 0 to ~10 units based on elevation)
+    this.mesh.position.set(this.mapWidth / 2, 12, this.mapHeight / 2);
     this.mesh.renderOrder = 100; // Render after terrain
   }
 
@@ -109,17 +109,12 @@ export class TSLFogOfWar {
     material.depthWrite = false;
     material.side = THREE.DoubleSide;
 
-    // Create the fog shader using TSL
+    // Use outputNode to control both color and alpha in one vec4
     const outputNode = Fn(() => {
       // Sample fog texture
       const fogData = texture(this.fogTexture, uv());
       // visibility: 0 = unexplored (alpha=255), 0.5 = explored (alpha=128), 1 = visible (alpha=0)
       const visibility = float(1.0).sub(fogData.a);
-
-      // Use step/smoothstep for GPU-friendly branching
-      // Unexplored: visibility < 0.01
-      // Explored: 0.01 <= visibility < 0.75
-      // Visible: visibility >= 0.75
 
       // Step functions to determine state
       const notUnexplored = step(float(0.01), visibility); // 1 if explored or visible
@@ -131,7 +126,6 @@ export class TSLFogOfWar {
       const visibleAlpha = float(0.0);
 
       // Mix alpha based on state
-      // Start with unexplored, mix to explored if notUnexplored, mix to visible if isVisible
       const alpha = mix(
         mix(unexploredAlpha, exploredAlpha, notUnexplored),
         visibleAlpha,
