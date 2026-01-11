@@ -229,19 +229,18 @@ export class TSLTerrainMaterial {
 
       // Apply terrain type constraints:
       // Ground: grass + dirt, rock only on steep areas
-      // Ramp: ALWAYS dirt (visually distinct from cliffs), rock on steep parts
+      // Ramp: ALWAYS flat ground texture (grass/snow) - they are walkable paths
       // Unwalkable: rock + cliff ONLY if steep, grass if flat (obstacles)
 
-      // Grass on walkable ground AND flat unwalkable areas (obstacles/frozen lakes)
-      // This makes flat unwalkable areas look like snow-covered obstacles, not cliffs
+      // Grass on walkable ground, ramps, AND flat unwalkable areas (obstacles/frozen lakes)
+      // RAMPS ALWAYS USE FLAT GROUND TEXTURE - they are walkable paths, not cliffs
       const flatUnwalkable = isUnwalkable.mul(float(1.0).sub(isSteep));
-      const grassWeight = baseGrassWeight.mul(isGround.add(flatUnwalkable)).mul(float(1.0).sub(isSteep));
+      const grassWeight = baseGrassWeight.mul(isGround.add(flatUnwalkable)).mul(float(1.0).sub(isSteep))
+        .add(isRamp.mul(float(1.0)));  // Ramps get STRONG grass weight - flat ground texture
 
-      // Dirt HEAVILY on ramps - this makes ramps visually distinct from cliffs
-      // Ramps should be the MOST dirt-colored terrain to stand out
+      // Dirt only on steep ground areas (not ramps - ramps use grass)
       const dirtWeight = baseDirtWeight.mul(isGround)
-        .add(isRamp.mul(float(1.0)))  // Ramps get STRONG dirt weight
-        .add(isSteep.mul(float(0.2))); // Slight dirt on steep areas
+        .add(isSteep.mul(float(0.2))); // Slight dirt on steep areas only
 
       // Rock on steep slopes - but NOT on flat unwalkable (those get grass)
       const steepRampRock = isRamp.mul(slope).mul(float(0.8));
@@ -312,9 +311,11 @@ export class TSLTerrainMaterial {
       const isVerySteep = smoothstep(float(0.5), float(0.8), slope);
 
       // Apply terrain type constraints (same as color node)
+      // RAMPS ALWAYS USE FLAT GROUND TEXTURE
       const flatUnwalkable = isUnwalkable.mul(float(1.0).sub(isSteep));
-      const grassWeight = baseGrassWeight.mul(isGround.add(flatUnwalkable)).mul(float(1.0).sub(isSteep));
-      const dirtWeight = baseDirtWeight.mul(isGround).add(isRamp.mul(float(1.0))).add(isSteep.mul(float(0.2)));
+      const grassWeight = baseGrassWeight.mul(isGround.add(flatUnwalkable)).mul(float(1.0).sub(isSteep))
+        .add(isRamp.mul(float(1.0)));  // Ramps get grass
+      const dirtWeight = baseDirtWeight.mul(isGround).add(isSteep.mul(float(0.2)));
       const steepRampRock = isRamp.mul(slope).mul(float(0.8));
       const steepUnwalkableRock = isUnwalkable.mul(isSteep).mul(float(0.8));
       const rockWeight = baseRockWeight.add(steepUnwalkableRock).add(steepRampRock).add(isSteep.mul(float(0.3)));
@@ -366,9 +367,11 @@ export class TSLTerrainMaterial {
       const isVerySteep = smoothstep(float(0.5), float(0.8), slope);
 
       // Apply terrain type constraints (same as color node)
+      // RAMPS ALWAYS USE FLAT GROUND TEXTURE
       const flatUnwalkable = isUnwalkable.mul(float(1.0).sub(isSteep));
-      const grassWeight = baseGrassWeight.mul(isGround.add(flatUnwalkable)).mul(float(1.0).sub(isSteep));
-      const dirtWeight = baseDirtWeight.mul(isGround).add(isRamp.mul(float(1.0))).add(isSteep.mul(float(0.2)));
+      const grassWeight = baseGrassWeight.mul(isGround.add(flatUnwalkable)).mul(float(1.0).sub(isSteep))
+        .add(isRamp.mul(float(1.0)));  // Ramps get grass
+      const dirtWeight = baseDirtWeight.mul(isGround).add(isSteep.mul(float(0.2)));
       const steepRampRock = isRamp.mul(slope).mul(float(0.8));
       const steepUnwalkableRock = isUnwalkable.mul(isSteep).mul(float(0.8));
       const rockWeight = baseRockWeight.add(steepUnwalkableRock).add(steepRampRock).add(isSteep.mul(float(0.3)));
