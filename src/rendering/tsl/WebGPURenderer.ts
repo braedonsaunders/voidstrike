@@ -69,9 +69,12 @@ export async function createWebGPURenderer(config: WebGPURendererConfig): Promis
   // Enable local clipping planes for building construction reveal effect
   (renderer as any).localClippingEnabled = true;
 
-  // Enable shadow maps - must be configured before first render
+  // Configure shadow maps - always enabled to keep shadow map depth texture initialized
+  // The directionalLight.castShadow is always true, but we toggle terrain.receiveShadow
+  // and object castShadow/receiveShadow to control shadow visibility
+  // Use BasicShadowMap instead of PCFSoftShadowMap for much better performance
   renderer.shadowMap.enabled = true;
-  renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+  renderer.shadowMap.type = THREE.BasicShadowMap;
 
   return {
     renderer,

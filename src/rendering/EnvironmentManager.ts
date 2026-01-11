@@ -9,12 +9,12 @@ import { EnvironmentParticles } from './EnhancedDecorations';
 // PERFORMANCE: Use instanced decorations instead of individual meshes
 import { InstancedTrees, InstancedRocks, InstancedGrass, InstancedPebbles } from './InstancedDecorations';
 
-// Shadow quality presets
+// Shadow quality presets - radius only applies to PCFSoftShadowMap (we use BasicShadowMap for perf)
 const SHADOW_QUALITY_PRESETS = {
-  low: { mapSize: 512, radius: 2, bias: -0.0005 },
-  medium: { mapSize: 1024, radius: 3, bias: -0.0003 },
-  high: { mapSize: 2048, radius: 4, bias: -0.0002 },
-  ultra: { mapSize: 4096, radius: 5, bias: -0.0001 },
+  low: { mapSize: 256, radius: 1, bias: -0.001 },
+  medium: { mapSize: 512, radius: 2, bias: -0.0005 },
+  high: { mapSize: 1024, radius: 3, bias: -0.0003 },
+  ultra: { mapSize: 2048, radius: 4, bias: -0.0002 },
 } as const;
 
 export type ShadowQuality = keyof typeof SHADOW_QUALITY_PRESETS;
@@ -82,10 +82,13 @@ export class EnvironmentManager {
     // Key light (main sun) - strong directional light with shadow support
     this.directionalLight = new THREE.DirectionalLight(this.biome.colors.sun, 1.8);
     this.directionalLight.position.set(50, 80, 50);
-    this.directionalLight.castShadow = false; // Disabled by default, enabled via setShadowsEnabled()
-    // Pre-configure shadow properties (applied when shadows enabled)
-    this.directionalLight.shadow.mapSize.width = 2048;
-    this.directionalLight.shadow.mapSize.height = 2048;
+    // IMPORTANT: Always set castShadow = true to initialize shadow map depth texture
+    // Control shadow rendering via renderer.shadowMap.enabled instead
+    // This prevents WebGPU "depthTexture is null" errors when toggling shadows
+    this.directionalLight.castShadow = true;
+    // Pre-configure shadow properties - start with medium quality (512) for performance
+    this.directionalLight.shadow.mapSize.width = 512;
+    this.directionalLight.shadow.mapSize.height = 512;
     this.directionalLight.shadow.camera.near = 1;
     this.directionalLight.shadow.camera.far = 200;
     this.directionalLight.shadow.camera.left = -100;
@@ -349,22 +352,21 @@ export class EnvironmentManager {
 
   /**
    * Enable or disable shadows
+   * Note: directionalLight.castShadow is always true to keep shadow map initialized.
+   * We control shadow visibility via renderer.shadowMap.enabled in the game canvas.
    */
   public setShadowsEnabled(enabled: boolean): void {
     this.shadowsEnabled = enabled;
-    this.directionalLight.castShadow = enabled;
+    // Don't toggle castShadow - it must stay true to keep shadow map depth texture valid
+    // The renderer.shadowMap.enabled flag controls whether shadows are actually rendered
 
-    // Enable shadow receiving on terrain
+    // Toggle shadow receiving on terrain
     this.terrain.mesh.receiveShadow = enabled;
 
-    // CRITICAL: Mark shadow map for regeneration when enabling shadows
-    // Without this, shadows won't display until settings are changed
+    // Mark shadow map for update when enabling
     if (enabled) {
       this.directionalLight.shadow.needsUpdate = true;
     }
-
-    // Update renderer shadow map if needed
-    // Note: The renderer's shadowMap.enabled should be set in the game canvas
   }
 
   /**
