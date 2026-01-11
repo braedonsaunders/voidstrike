@@ -250,7 +250,7 @@ export const useUIStore = create<UIState>((set, get) => ({
 
     // Fog
     fogEnabled: true,
-    fogDensity: 1.0,
+    fogDensity: 0.6,
 
     // Environment
     environmentMapEnabled: true,
