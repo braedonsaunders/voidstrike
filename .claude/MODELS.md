@@ -1311,7 +1311,7 @@ The AssetManager will automatically use custom models when available, falling ba
 - [x] Trooper *(basic infantry)* `trooper.glb`
 - [x] Breacher *(heavy infantry)* `breacher.glb`
 - [x] Vanguard *(jetpack infantry)* `vanguard.glb`
-- [x] Operative *(stealth sniper)* `operator.glb`
+- [x] Operative *(stealth sniper)* `operative.glb`
 - [x] Scorcher *(flame buggy, transforms to Inferno)* `scorcher.glb`
 - [x] Devastator *(siege tank)* `devastator.glb`
 - [x] Colossus *(heavy assault mech)* `colossus.glb`
