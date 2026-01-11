@@ -13,8 +13,19 @@ export class AudioSystem extends System {
   private camera: THREE.Camera | null = null;
   private initialized = false;
   private currentAmbient: string | null = null;
-  private lastVoiceTime = 0;
-  private voiceCooldown = 300; // ms between voice lines
+  // Separate cooldowns per action type so they don't block each other
+  private lastVoiceTimes: Record<string, number> = {
+    select: 0,
+    move: 0,
+    attack: 0,
+    ready: 0,
+  };
+  private voiceCooldowns: Record<string, number> = {
+    select: 400,  // Slightly longer for repeated selection clicks
+    move: 100,    // Short - user expects immediate feedback
+    attack: 100,  // Short - user expects immediate feedback
+    ready: 0,     // No cooldown - production complete should always play
+  };
 
   constructor(game: Game) {
     super(game);
@@ -62,8 +73,8 @@ export class AudioSystem extends System {
       }
     }
 
-    // Preload common sounds
-    AudioManager.preload([
+    // Preload common sounds - await to ensure sounds are ready before game starts
+    await AudioManager.preload([
       // UI
       'ui_click',
       'ui_error',
@@ -155,7 +166,10 @@ export class AudioSystem extends System {
   // Play a random voice line for a unit type
   private playVoice(unitId: string, action: 'select' | 'move' | 'attack' | 'ready'): void {
     const now = Date.now();
-    if (now - this.lastVoiceTime < this.voiceCooldown) return;
+    const lastTime = this.lastVoiceTimes[action] || 0;
+    const cooldown = this.voiceCooldowns[action] || 0;
+
+    if (now - lastTime < cooldown) return;
 
     const voices = UNIT_VOICES[unitId];
     if (!voices) return;
@@ -173,7 +187,7 @@ export class AudioSystem extends System {
 
     const soundId = soundIds[Math.floor(Math.random() * soundIds.length)];
     AudioManager.play(soundId);
-    this.lastVoiceTime = now;
+    this.lastVoiceTimes[action] = now;
   }
 
   // Get the first unit type from a selection for voice lines
@@ -207,10 +221,13 @@ export class AudioSystem extends System {
       }
     });
 
-    // Command events - play unit voice on move/attack (only for human player)
-    this.game.eventBus.on('command:move', (data: { entityIds: number[] }) => {
+    // Command events - play unit voice on move/attack (only for local human player)
+    this.game.eventBus.on('command:move', (data: { entityIds: number[]; playerId?: string }) => {
       // Skip command sounds in spectator mode
       if (this.isSpectator()) return;
+
+      // Only play sounds for local player's commands, not AI
+      if (data.playerId && !isLocalPlayer(data.playerId)) return;
 
       if (data.entityIds.length > 0) {
         AudioManager.play('unit_move');
@@ -223,9 +240,12 @@ export class AudioSystem extends System {
       }
     });
 
-    this.game.eventBus.on('command:attack', (data: { entityIds: number[] }) => {
+    this.game.eventBus.on('command:attack', (data: { entityIds: number[]; playerId?: string }) => {
       // Skip command sounds in spectator mode
       if (this.isSpectator()) return;
+
+      // Only play sounds for local player's commands, not AI
+      if (data.playerId && !isLocalPlayer(data.playerId)) return;
 
       if (data.entityIds.length > 0) {
         AudioManager.play('unit_attack');
