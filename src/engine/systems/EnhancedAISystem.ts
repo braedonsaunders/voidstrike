@@ -178,7 +178,7 @@ export class EnhancedAISystem extends System {
    */
   private getCachedUnits() {
     if (!this.entityCache.units) {
-      this.entityCache.units = this.getCachedUnits();
+      this.entityCache.units = this.world.getEntitiesWith('Unit', 'Selectable', 'Health');
     }
     return this.entityCache.units;
   }
@@ -188,7 +188,7 @@ export class EnhancedAISystem extends System {
    */
   private getCachedUnitsWithTransform() {
     if (!this.entityCache.unitsWithTransform) {
-      this.entityCache.unitsWithTransform = this.getCachedUnitsWithTransform();
+      this.entityCache.unitsWithTransform = this.world.getEntitiesWith('Unit', 'Transform', 'Selectable', 'Health');
     }
     return this.entityCache.unitsWithTransform;
   }
@@ -198,7 +198,7 @@ export class EnhancedAISystem extends System {
    */
   private getCachedBuildings() {
     if (!this.entityCache.buildings) {
-      this.entityCache.buildings = this.getCachedBuildings();
+      this.entityCache.buildings = this.world.getEntitiesWith('Building', 'Selectable', 'Health');
     }
     return this.entityCache.buildings;
   }
@@ -208,7 +208,7 @@ export class EnhancedAISystem extends System {
    */
   private getCachedBuildingsWithTransform() {
     if (!this.entityCache.buildingsWithTransform) {
-      this.entityCache.buildingsWithTransform = this.getCachedBuildingsWithTransform();
+      this.entityCache.buildingsWithTransform = this.world.getEntitiesWith('Building', 'Transform', 'Selectable', 'Health');
     }
     return this.entityCache.buildingsWithTransform;
   }
@@ -218,7 +218,7 @@ export class EnhancedAISystem extends System {
    */
   private getCachedResources() {
     if (!this.entityCache.resources) {
-      this.entityCache.resources = this.getCachedResources();
+      this.entityCache.resources = this.world.getEntitiesWith('Resource', 'Transform');
     }
     return this.entityCache.resources;
   }
