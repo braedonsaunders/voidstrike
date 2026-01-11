@@ -972,6 +972,8 @@ export class TerrainGrid {
 export class MapDecorations {
   public group: THREE.Group;
   private terrain: Terrain;
+  // Track rock positions for pathfinding collision
+  private rockCollisions: Array<{ x: number; z: number; radius: number }> = [];
 
   constructor(mapData: MapData, terrain: Terrain) {
     this.group = new THREE.Group();
@@ -986,6 +988,13 @@ export class MapDecorations {
       this.createTrees(mapData);
       this.createRocks(mapData);
     }
+  }
+
+  /**
+   * Get rock collision data for pathfinding
+   */
+  public getRockCollisions(): Array<{ x: number; z: number; radius: number }> {
+    return this.rockCollisions;
   }
 
   // Create explicit decorations from map data using GLB models
@@ -1011,6 +1020,26 @@ export class MapDecorations {
       } else {
         // Fallback to procedural mesh for unloaded decoration types
         this.createProceduralDecoration(decoration, terrainHeight);
+      }
+
+      // Track rock collisions for pathfinding
+      // rocks_large, rocks_small, rock_single should all block pathing
+      if (decoration.type.includes('rock')) {
+        const scale = decoration.scale ?? 1;
+        // Base radius varies by rock type
+        let baseRadius = 1.0;
+        if (decoration.type === 'rocks_large') {
+          baseRadius = 2.0;
+        } else if (decoration.type === 'rocks_small') {
+          baseRadius = 1.2;
+        } else if (decoration.type === 'rock_single') {
+          baseRadius = 0.8;
+        }
+        this.rockCollisions.push({
+          x: decoration.x,
+          z: decoration.y, // Note: decoration.y is world Z coordinate
+          radius: baseRadius * scale,
+        });
       }
     }
   }
