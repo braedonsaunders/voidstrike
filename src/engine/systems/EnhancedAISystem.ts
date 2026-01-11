@@ -1,4 +1,5 @@
 import { System } from '../ecs/System';
+import { Entity } from '../ecs/Entity';
 import { Transform } from '../components/Transform';
 import { Unit } from '../components/Unit';
 import { Building } from '../components/Building';
@@ -137,11 +138,11 @@ const BUILD_ORDERS: Record<AIDifficulty, BuildOrderStep[]> = {
 
 // PERF: Cached entity query results to avoid repeated queries per frame
 interface EntityQueryCache {
-  units: Iterable<{ id: number; get: <T>(name: string) => T | undefined }> | null;
-  unitsWithTransform: Iterable<{ id: number; get: <T>(name: string) => T | undefined }> | null;
-  buildings: Iterable<{ id: number; get: <T>(name: string) => T | undefined }> | null;
-  buildingsWithTransform: Iterable<{ id: number; get: <T>(name: string) => T | undefined }> | null;
-  resources: Iterable<{ id: number; get: <T>(name: string) => T | undefined }> | null;
+  units: Entity[] | null;
+  unitsWithTransform: Entity[] | null;
+  buildings: Entity[] | null;
+  buildingsWithTransform: Entity[] | null;
+  resources: Entity[] | null;
 }
 
 export class EnhancedAISystem extends System {
