@@ -470,6 +470,10 @@ export class EffectsRenderer {
 
     // Also create hit effect at end
     this.createHitEffect(end);
+    // Emit combat:hit event for sound effects (laser hits instantly)
+    this.eventBus.emit('combat:hit', {
+      position: { x: end.x, y: end.z },
+    });
   }
 
   private createHitEffect(position: THREE.Vector3): void {
@@ -825,6 +829,10 @@ export class EffectsRenderer {
           this.releaseToPool(this.projectilePool, effect.mesh);
           // Create hit effect for projectiles
           this.createHitEffect(effect.endPos);
+          // Emit combat:hit event for sound effects
+          this.eventBus.emit('combat:hit', {
+            position: { x: effect.endPos.x, y: effect.endPos.z },
+          });
         } else if (effect.mesh instanceof THREE.Line) {
           this.scene.remove(effect.mesh);
           effect.mesh.geometry.dispose();

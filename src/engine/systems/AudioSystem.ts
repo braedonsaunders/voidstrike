@@ -289,17 +289,35 @@ export class AudioSystem extends System {
     });
 
     this.game.eventBus.on('combat:hit', (data: {
-      targetId: number;
-      damage: number
+      targetId?: number;
+      damage?: number;
+      position?: { x: number; y: number };
     }) => {
-      const target = this.world.getEntity(data.targetId);
-      if (target) {
-        const transform = target.get<Transform>('Transform');
-        if (transform) {
-          const pos = new THREE.Vector3(transform.x, 0, transform.y);
-          AudioManager.playAt('hit_impact', pos);
+      // Use position directly if provided, otherwise lookup from entity
+      if (data.position) {
+        const pos = new THREE.Vector3(data.position.x, 0, data.position.y);
+        AudioManager.playAt('hit_impact', pos);
+      } else if (data.targetId !== undefined) {
+        const target = this.world.getEntity(data.targetId);
+        if (target) {
+          const transform = target.get<Transform>('Transform');
+          if (transform) {
+            const pos = new THREE.Vector3(transform.x, 0, transform.y);
+            AudioManager.playAt('hit_impact', pos);
+          }
         }
       }
+    });
+
+    // Splash damage - play explosion sound at impact location
+    this.game.eventBus.on('combat:splash', (data: {
+      position: { x: number; y: number };
+      damage: number;
+    }) => {
+      const pos = new THREE.Vector3(data.position.x, 0, data.position.y);
+      // Use explosion size based on damage amount
+      const explosionSound = data.damage >= 30 ? 'explosion_medium' : 'explosion_small';
+      AudioManager.playAt(explosionSound, pos);
     });
 
     // Unit/building destroyed - play death sounds and alerts
