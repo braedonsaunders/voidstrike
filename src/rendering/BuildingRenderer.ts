@@ -18,6 +18,8 @@ interface BuildingMeshData {
   buildingId: string;
   // PERFORMANCE: Track completion state to avoid traverse() every frame
   wasComplete: boolean;
+  // PERF: Cached mesh children to avoid traverse() calls during construction animations
+  cachedMeshChildren: THREE.Mesh[];
   // Fire effect for damaged buildings
   fireEffect: THREE.Group | null;
   lastHealthPercent: number;
@@ -388,6 +390,37 @@ export class BuildingRenderer {
   }
 
   /**
+   * PERF: Reset materials using cached mesh children (avoids traverse overhead)
+   */
+  private resetBuildingMaterialsCached(meshChildren: THREE.Mesh[]): void {
+    for (const mesh of meshChildren) {
+      this.setMaterialOpacity(mesh, 1, false);
+    }
+  }
+
+  /**
+   * PERF: Set opacity on cached mesh children (avoids traverse overhead)
+   */
+  private setOpacityOnCachedMeshes(meshChildren: THREE.Mesh[], opacity: number, transparent: boolean): void {
+    for (const mesh of meshChildren) {
+      this.setMaterialOpacity(mesh, opacity, transparent);
+    }
+  }
+
+  /**
+   * PERF: Clear clipping planes on cached mesh children (avoids traverse overhead)
+   */
+  private clearClippingPlanesOnCachedMeshes(meshChildren: THREE.Mesh[]): void {
+    for (const mesh of meshChildren) {
+      const mat = mesh.material as THREE.Material;
+      if (mat) {
+        mat.clippingPlanes = null;
+        mat.needsUpdate = true;
+      }
+    }
+  }
+
+  /**
    * Set opacity on a mesh's material(s), handling both single materials and arrays.
    * Optionally applies a clipping plane for construction reveal effect.
    */
@@ -651,19 +684,12 @@ export class BuildingRenderer {
       if (shouldShowComplete) {
         // Complete/operational building - full opacity, no construction effects
         meshData.group.scale.setScalar(1);
-        this.resetBuildingMaterials(meshData.group);
+        // PERF: Use cached mesh children to avoid traverse()
+        this.resetBuildingMaterialsCached(meshData.cachedMeshChildren);
 
-        // Remove clipping planes from materials
+        // Remove clipping planes from materials - PERF: Use cached mesh children
         if (meshData.clippingPlane) {
-          meshData.group.traverse((child) => {
-            if (child instanceof THREE.Mesh) {
-              const mat = child.material as THREE.Material;
-              if (mat) {
-                mat.clippingPlanes = null;
-                mat.needsUpdate = true;
-              }
-            }
-          });
+          this.clearClippingPlanesOnCachedMeshes(meshData.cachedMeshChildren);
           meshData.clippingPlane = null;
         }
 
@@ -696,13 +722,9 @@ export class BuildingRenderer {
         // Waiting for worker - show holographic blueprint effect
         meshData.group.scale.setScalar(1);
 
-        // Pulse opacity for holographic effect
+        // Pulse opacity for holographic effect - PERF: Use cached mesh children
         const pulseOpacity = 0.25 + Math.sin(this.blueprintPulseTime * 3) * 0.1;
-        meshData.group.traverse((child) => {
-          if (child instanceof THREE.Mesh) {
-            this.setMaterialOpacity(child, pulseOpacity, true);
-          }
-        });
+        this.setOpacityOnCachedMeshes(meshData.cachedMeshChildren, pulseOpacity, true);
 
         // Hide construction effect while waiting
         if (meshData.constructionEffect) {
@@ -739,12 +761,9 @@ export class BuildingRenderer {
         meshData.group.position.set(transform.x, terrainHeight - yOffset, transform.y);
 
         // Slightly more transparent when paused to indicate inactive state
+        // PERF: Use cached mesh children
         const opacity = 0.4 + progress * 0.4;
-        meshData.group.traverse((child) => {
-          if (child instanceof THREE.Mesh) {
-            this.setMaterialOpacity(child, opacity, true);
-          }
-        });
+        this.setOpacityOnCachedMeshes(meshData.cachedMeshChildren, opacity, true);
 
         // Hide construction particles when paused (no active construction)
         if (meshData.constructionEffect) {
@@ -782,23 +801,13 @@ export class BuildingRenderer {
         meshData.group.position.set(transform.x, terrainHeight - yOffset, transform.y);
 
         // Building becomes more opaque as construction progresses
+        // PERF: Use cached mesh children
         const opacity = 0.5 + progress * 0.5;
-        meshData.group.traverse((child) => {
-          if (child instanceof THREE.Mesh) {
-            this.setMaterialOpacity(child, opacity, true);
-          }
-        });
+        this.setOpacityOnCachedMeshes(meshData.cachedMeshChildren, opacity, true);
 
-        // Clear any clipping planes
+        // Clear any clipping planes - PERF: Use cached mesh children
         if (meshData.clippingPlane) {
-          meshData.group.traverse((child) => {
-            if (child instanceof THREE.Mesh) {
-              const mat = child.material as THREE.Material;
-              if (mat) {
-                mat.clippingPlanes = null;
-              }
-            }
-          });
+          this.clearClippingPlanesOnCachedMeshes(meshData.cachedMeshChildren);
           meshData.clippingPlane = null;
         }
 
@@ -984,7 +993,9 @@ export class BuildingRenderer {
     // CRITICAL: Clone materials so each building has its own material instance
     // This prevents transparency changes on one building from affecting others
     // Buildings render AFTER ground effects (5) but BEFORE damage numbers (100)
+    // PERF: Also cache mesh children to avoid traverse() calls during construction
     group.renderOrder = 50;
+    const cachedMeshChildren: THREE.Mesh[] = [];
     group.traverse((child) => {
       if (child instanceof THREE.Mesh) {
         child.renderOrder = 50;
@@ -999,6 +1010,8 @@ export class BuildingRenderer {
         if (mat) {
           mat.side = THREE.DoubleSide; // Required for clipping to look correct
         }
+        // PERF: Cache mesh children for later use
+        cachedMeshChildren.push(child);
       }
     });
 
@@ -1021,6 +1034,7 @@ export class BuildingRenderer {
       progressBar,
       buildingId: building.buildingId,
       wasComplete: false,
+      cachedMeshChildren, // PERF: Pre-cached mesh children
       fireEffect: null,
       lastHealthPercent: 1,
       constructionEffect: null,

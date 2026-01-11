@@ -13,6 +13,40 @@ import { debugCombat } from '@/utils/debugLogger';
 // Static temp vectors to avoid allocations in hot loops
 const tempTargetScore: { id: number; score: number } | null = null;
 
+// PERF: Reusable event payload objects to avoid allocation per attack
+const attackEventPayload = {
+  attackerId: '',
+  attackerPos: { x: 0, y: 0 },
+  targetPos: { x: 0, y: 0 },
+  damage: 0,
+  damageType: 'normal' as import('../components/Unit').DamageType,
+  targetHeight: 0,
+  targetPlayerId: undefined as string | undefined,
+};
+
+const splashEventPayload = {
+  position: { x: 0, y: 0 },
+  damage: 0,
+};
+
+const missEventPayload = {
+  attackerId: '',
+  attackerPos: { x: 0, y: 0 },
+  targetPos: { x: 0, y: 0 },
+  reason: 'high_ground',
+};
+
+const playerDamagePayload = {
+  damage: 0,
+  position: { x: 0, y: 0 },
+};
+
+const underAttackPayload = {
+  playerId: '',
+  position: { x: 0, y: 0 },
+  time: 0,
+};
+
 // Damage multipliers: [damageType][armorType]
 const DAMAGE_MULTIPLIERS: Record<DamageType, Record<ArmorType, number>> = {
   normal: {
@@ -519,13 +553,13 @@ export class CombatSystem extends System {
       const seed = (gameTime * 1000 + attackerId) % 1;
       const missRoll = Math.abs(Math.sin(seed * 12345.6789) % 1);
       if (missRoll < HIGH_GROUND_MISS_CHANCE) {
-        // Attack missed
-        this.game.eventBus.emit('combat:miss', {
-          attackerId: attacker.unitId,
-          attackerPos: { x: attackerTransform.x, y: attackerTransform.y },
-          targetPos: { x: targetTransform.x, y: targetTransform.y },
-          reason: 'high_ground',
-        });
+        // Attack missed - PERF: Use pooled payload object
+        missEventPayload.attackerId = attacker.unitId;
+        missEventPayload.attackerPos.x = attackerTransform.x;
+        missEventPayload.attackerPos.y = attackerTransform.y;
+        missEventPayload.targetPos.x = targetTransform.x;
+        missEventPayload.targetPos.y = targetTransform.y;
+        this.game.eventBus.emit('combat:miss', missEventPayload);
         return;
       }
     }
@@ -548,24 +582,26 @@ export class CombatSystem extends System {
     const targetBuilding = targetEntity?.get<Building>('Building');
     const targetHeight = targetBuilding ? Math.max(targetBuilding.width, targetBuilding.height) : 0;
 
-    // Emit attack event
+    // Emit attack event - PERF: Use pooled payload object
     const targetSelectable = targetEntity?.get<Selectable>('Selectable');
-    this.game.eventBus.emit('combat:attack', {
-      attackerId: attacker.unitId,
-      attackerPos: { x: attackerTransform.x, y: attackerTransform.y },
-      targetPos: { x: targetTransform.x, y: targetTransform.y },
-      damage: finalDamage,
-      damageType: attacker.damageType,
-      targetHeight,
-      targetPlayerId: targetSelectable?.playerId,
-    });
+    attackEventPayload.attackerId = attacker.unitId;
+    attackEventPayload.attackerPos.x = attackerTransform.x;
+    attackEventPayload.attackerPos.y = attackerTransform.y;
+    attackEventPayload.targetPos.x = targetTransform.x;
+    attackEventPayload.targetPos.y = targetTransform.y;
+    attackEventPayload.damage = finalDamage;
+    attackEventPayload.damageType = attacker.damageType;
+    attackEventPayload.targetHeight = targetHeight;
+    attackEventPayload.targetPlayerId = targetSelectable?.playerId;
+    this.game.eventBus.emit('combat:attack', attackEventPayload);
 
     // Emit player:damage for Phaser overlay effects when local player's unit takes damage
+    // PERF: Use pooled payload object
     if (targetSelectable?.playerId && isLocalPlayer(targetSelectable.playerId)) {
-      this.game.eventBus.emit('player:damage', {
-        damage: finalDamage,
-        position: { x: targetTransform.x, y: targetTransform.y },
-      });
+      playerDamagePayload.damage = finalDamage;
+      playerDamagePayload.position.x = targetTransform.x;
+      playerDamagePayload.position.y = targetTransform.y;
+      this.game.eventBus.emit('player:damage', playerDamagePayload);
     }
 
     // Check for under attack alert
@@ -637,11 +673,11 @@ export class CombatSystem extends System {
 
         health.takeDamage(splashDamage, gameTime);
 
-        // Emit splash damage event
-        this.game.eventBus.emit('combat:splash', {
-          position: { x: transform.x, y: transform.y },
-          damage: splashDamage,
-        });
+        // Emit splash damage event - PERF: Use pooled payload
+        splashEventPayload.position.x = transform.x;
+        splashEventPayload.position.y = transform.y;
+        splashEventPayload.damage = splashDamage;
+        this.game.eventBus.emit('combat:splash', splashEventPayload);
 
         // Check for under attack alert for splash victims
         this.checkUnderAttackAlert(entity.id, transform, gameTime);
@@ -683,10 +719,11 @@ export class CombatSystem extends System {
 
         health.takeDamage(splashDamage, gameTime);
 
-        this.game.eventBus.emit('combat:splash', {
-          position: { x: transform.x, y: transform.y },
-          damage: splashDamage,
-        });
+        // PERF: Use pooled payload
+        splashEventPayload.position.x = transform.x;
+        splashEventPayload.position.y = transform.y;
+        splashEventPayload.damage = splashDamage;
+        this.game.eventBus.emit('combat:splash', splashEventPayload);
 
         this.checkUnderAttackAlert(entity.id, transform, gameTime);
       }
@@ -714,11 +751,11 @@ export class CombatSystem extends System {
     // Update last alert time
     this.lastUnderAttackAlert.set(playerId, gameTime);
 
-    // Emit under attack alert
-    this.game.eventBus.emit('alert:underAttack', {
-      playerId,
-      position: { x: targetTransform.x, y: targetTransform.y },
-      time: gameTime,
-    });
+    // Emit under attack alert - PERF: Use pooled payload
+    underAttackPayload.playerId = playerId;
+    underAttackPayload.position.x = targetTransform.x;
+    underAttackPayload.position.y = targetTransform.y;
+    underAttackPayload.time = gameTime;
+    this.game.eventBus.emit('alert:underAttack', underAttackPayload);
   }
 }
