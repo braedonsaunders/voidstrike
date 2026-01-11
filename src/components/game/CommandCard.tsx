@@ -29,6 +29,7 @@ const COMMAND_ICONS: Record<string, string> = {
   build_basic: '🏗',
   build_advanced: '🏭',
   cancel: '✕',
+  demolish: '🗑',
   back: '◀',
   liftoff: '🚀',
   land: '🛬',
@@ -367,6 +368,25 @@ function CommandCardInner() {
           });
         });
       }
+    } else if (building && !building.isComplete() && building.state !== 'destroyed' && building.state !== 'flying' && building.state !== 'lifting' && building.state !== 'landing') {
+      // Building under construction - show cancel/demolish button
+      buttons.push({
+        id: 'demolish',
+        label: 'Cancel',
+        shortcut: 'ESC',
+        action: () => {
+          const localPlayer = getLocalPlayerId();
+          if (localPlayer) {
+            game.processCommand({
+              tick: game.getCurrentTick(),
+              playerId: localPlayer,
+              type: 'DEMOLISH',
+              entityIds: selectedUnits,
+            });
+          }
+        },
+        tooltip: 'Cancel construction (refunds 75% of resources spent)',
+      });
     } else if (building && (building.isComplete() || building.state === 'flying' || building.state === 'lifting' || building.state === 'landing')) {
       // Show commands for complete OR flying buildings
       const isFlying = building.state === 'flying' || building.state === 'lifting' || building.state === 'landing';
@@ -661,6 +681,25 @@ function CommandCardInner() {
             tooltip: 'Set rally point for new units',
           });
         }
+
+        // Demolish button for complete buildings (salvage)
+        buttons.push({
+          id: 'demolish',
+          label: 'Demolish',
+          shortcut: 'DEL',
+          action: () => {
+            const localPlayer = getLocalPlayerId();
+            if (localPlayer) {
+              game.processCommand({
+                tick: game.getCurrentTick(),
+                playerId: localPlayer,
+                type: 'DEMOLISH',
+                entityIds: selectedUnits,
+              });
+            }
+          },
+          tooltip: 'Demolish building (refunds 50% of resources)',
+        });
       }
 
       // Lift-off button for buildings that can fly (and are complete, not flying)

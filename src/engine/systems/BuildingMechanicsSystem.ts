@@ -5,7 +5,8 @@ import { Transform } from '../components/Transform';
 import { Building, AddonType } from '../components/Building';
 import { Health } from '../components/Health';
 import { Selectable } from '../components/Selectable';
-import { RESEARCH_MODULE_UNITS, PRODUCTION_MODULE_UNITS } from '@/data/buildings/dominion';
+import { BUILDING_DEFINITIONS, RESEARCH_MODULE_UNITS, PRODUCTION_MODULE_UNITS } from '@/data/buildings/dominion';
+import { useGameStore } from '@/store/gameStore';
 
 interface LiftOffCommand {
   buildingId: number;
@@ -32,6 +33,10 @@ interface LowerSupplyDepotCommand {
   lower?: boolean;
 }
 
+interface DemolishCommand {
+  entityIds: number[];
+}
+
 export class BuildingMechanicsSystem extends System {
   public priority = 8; // Before UnitMechanicsSystem
 
@@ -47,6 +52,7 @@ export class BuildingMechanicsSystem extends System {
     this.game.eventBus.on('command:lowerSupplyDepot', this.handleLowerSupplyDepotCommand.bind(this));
     this.game.eventBus.on('command:attachToAddon', this.handleAttachToAddonCommand.bind(this));
     this.game.eventBus.on('command:flyingBuildingMove', this.handleFlyingBuildingMoveCommand.bind(this));
+    this.game.eventBus.on('command:demolish', this.handleDemolishCommand.bind(this));
   }
 
   private handleLiftOffCommand(command: LiftOffCommand): void {
@@ -180,6 +186,75 @@ export class BuildingMechanicsSystem extends System {
       buildingId: command.buildingId,
       isLowered: building.isLowered,
     });
+  }
+
+  private handleDemolishCommand(command: DemolishCommand): void {
+    for (const entityId of command.entityIds) {
+      const entity = this.world.getEntity(entityId);
+      if (!entity) continue;
+
+      const building = entity.get<Building>('Building');
+      const transform = entity.get<Transform>('Transform');
+      const selectable = entity.get<Selectable>('Selectable');
+
+      if (!building || !transform || !selectable) continue;
+
+      // Cannot demolish buildings that are destroyed or flying
+      if (building.state === 'destroyed' || building.state === 'lifting' ||
+          building.state === 'flying' || building.state === 'landing') {
+        continue;
+      }
+
+      // Get building definition for cost calculation
+      const buildingDef = BUILDING_DEFINITIONS[building.buildingId];
+      if (!buildingDef) continue;
+
+      // Calculate refund based on building state and progress
+      // Under construction: 75% of resources spent so far
+      // Complete: 50% of total cost (salvage value)
+      let refundMinerals = 0;
+      let refundVespene = 0;
+
+      if (building.isComplete()) {
+        // Complete building: 50% salvage value
+        refundMinerals = Math.floor(buildingDef.mineralCost * 0.5);
+        refundVespene = Math.floor(buildingDef.vespeneCost * 0.5);
+      } else {
+        // Under construction: 75% of resources spent so far
+        const spentMinerals = buildingDef.mineralCost * building.buildProgress;
+        const spentVespene = buildingDef.vespeneCost * building.buildProgress;
+        refundMinerals = Math.floor(spentMinerals * 0.75);
+        refundVespene = Math.floor(spentVespene * 0.75);
+      }
+
+      // Refund supply if building provides supply and is complete
+      if (building.isComplete() && building.supplyProvided > 0) {
+        useGameStore.getState().addMaxSupply(selectable.playerId, -building.supplyProvided);
+      }
+
+      // Refund resources
+      if (refundMinerals > 0 || refundVespene > 0) {
+        useGameStore.getState().addResources(refundMinerals, refundVespene);
+      }
+
+      // Mark as destroyed
+      building.state = 'destroyed';
+
+      // Emit building:destroyed event
+      this.game.eventBus.emit('building:destroyed', {
+        entityId: entityId,
+        playerId: selectable.playerId,
+        buildingType: building.buildingId,
+        position: { x: transform.x, y: transform.y },
+        width: building.width,
+        height: building.height,
+        demolished: true, // Flag to indicate this was a manual demolish
+        refund: { minerals: refundMinerals, vespene: refundVespene },
+      });
+
+      // Destroy the entity
+      this.world.destroyEntity(entityId);
+    }
   }
 
   private isValidLandingSpot(x: number, y: number, width: number, height: number, excludeId: number): boolean {
