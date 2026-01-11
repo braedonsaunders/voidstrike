@@ -65,6 +65,8 @@ export async function createWebGPURenderer(config: WebGPURendererConfig): Promis
   renderer.setSize(canvas.clientWidth, canvas.clientHeight);
   renderer.toneMapping = THREE.ACESFilmicToneMapping;
   renderer.toneMappingExposure = 1.0;
+  // Enable local clipping planes for building construction reveal effect
+  (renderer as any).localClippingEnabled = true;
 
   return {
     renderer,

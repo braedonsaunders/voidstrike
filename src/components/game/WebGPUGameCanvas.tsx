@@ -784,6 +784,28 @@ export function WebGPUGameCanvas() {
           });
           return;
         }
+
+        // Check if clicking on a paused/waiting building to resume construction
+        const building = clickedEntity.entity.get<Building>('Building');
+        if (building && localPlayerId && selectable?.playerId === localPlayerId) {
+          if (building.state === 'paused' || building.state === 'waiting_for_worker' || building.state === 'constructing') {
+            // Find workers in selected units
+            const workerIds = selectedUnits.filter((id) => {
+              const entity = game.world.getEntity(id);
+              const unit = entity?.get<Unit>('Unit');
+              return unit?.isWorker;
+            });
+
+            if (workerIds.length > 0) {
+              // Assign the first worker to resume construction
+              game.eventBus.emit('command:resume_construction', {
+                workerId: workerIds[0],
+                buildingId: clickedEntity.entity.id,
+              });
+              return;
+            }
+          }
+        }
       }
 
       game.eventBus.emit('command:move', {
