@@ -408,8 +408,9 @@ export class MovementSystem extends System {
 
     // Update spatial grid
     for (const entity of entities) {
-      const transform = entity.get<Transform>('Transform')!;
-      const unit = entity.get<Unit>('Unit')!;
+      const transform = entity.get<Transform>('Transform');
+      const unit = entity.get<Unit>('Unit');
+      if (!transform || !unit) continue;
       if (unit.state !== 'dead') {
         this.world.unitGrid.update(
           entity.id,
@@ -421,9 +422,10 @@ export class MovementSystem extends System {
     }
 
     for (const entity of entities) {
-      const transform = entity.get<Transform>('Transform')!;
-      const unit = entity.get<Unit>('Unit')!;
-      const velocity = entity.get<Velocity>('Velocity')!;
+      const transform = entity.get<Transform>('Transform');
+      const unit = entity.get<Unit>('Unit');
+      const velocity = entity.get<Velocity>('Velocity');
+      if (!transform || !unit || !velocity) continue;
 
       // Handle dead units
       if (unit.state === 'dead') {

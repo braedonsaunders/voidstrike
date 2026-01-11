@@ -183,8 +183,9 @@ export class VisionSystem extends System {
 
     // Check which players have units near each tower
     for (const entity of units) {
-      const transform = entity.get<Transform>('Transform')!;
-      const selectable = entity.get<Selectable>('Selectable')!;
+      const transform = entity.get<Transform>('Transform');
+      const selectable = entity.get<Selectable>('Selectable');
+      if (!transform || !selectable) continue;
 
       for (const tower of this.watchTowers) {
         const dx = transform.x - tower.x;
@@ -209,17 +210,23 @@ export class VisionSystem extends System {
   }
 
   private updateEntityVision(entity: Entity): void {
-    const transform = entity.get<Transform>('Transform')!;
-    const unit = entity.get<Unit>('Unit')!;
-    const selectable = entity.get<Selectable>('Selectable')!;
+    const transform = entity.get<Transform>('Transform');
+    const unit = entity.get<Unit>('Unit');
+    const selectable = entity.get<Selectable>('Selectable');
+
+    // Skip if components are missing (entity may have been modified during iteration)
+    if (!transform || !unit || !selectable) return;
 
     this.revealArea(selectable.playerId, transform.x, transform.y, unit.sightRange);
   }
 
   private updateBuildingVision(entity: Entity): void {
-    const transform = entity.get<Transform>('Transform')!;
-    const building = entity.get<Building>('Building')!;
-    const selectable = entity.get<Selectable>('Selectable')!;
+    const transform = entity.get<Transform>('Transform');
+    const building = entity.get<Building>('Building');
+    const selectable = entity.get<Selectable>('Selectable');
+
+    // Skip if components are missing (entity may have been modified during iteration)
+    if (!transform || !building || !selectable) return;
 
     // Only provide vision if building is complete
     if (building.state !== 'complete') return;
