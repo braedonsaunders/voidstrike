@@ -17,6 +17,8 @@ import {
   fillFeatureRect,
   scatterForests,
   createMudArea,
+  autoFixConnectivity,
+  validateMapConnectivity,
 } from './MapTypes';
 
 /**
@@ -599,7 +601,7 @@ function generateVoidAssault(): MapData {
     { name: 'Gold South', x: 140, y: 160, ...goldSouth },
   ];
 
-  return {
+  const mapData: MapData = {
     id: 'void_assault',
     name: 'Void Assault',
     author: 'VOIDSTRIKE Team',
@@ -653,6 +655,27 @@ function generateVoidAssault(): MapData {
     fogNear: 90,
     fogFar: 250,
   };
+
+  // CRITICAL: Validate and fix connectivity to ensure all areas are reachable
+  const validation = validateMapConnectivity(mapData);
+  if (!validation.isValid) {
+    console.warn('[VoidAssault] Map has connectivity issues, attempting auto-fix...');
+    console.warn('[VoidAssault] Unreachable locations:', validation.unreachableLocations);
+    const corridorsCarved = autoFixConnectivity(mapData);
+    console.log(`[VoidAssault] Auto-fix carved ${corridorsCarved} corridors`);
+
+    const postFixValidation = validateMapConnectivity(mapData);
+    if (!postFixValidation.isValid) {
+      console.error('[VoidAssault] CRITICAL: Map still has unreachable areas after auto-fix!');
+      console.error('[VoidAssault] Still unreachable:', postFixValidation.unreachableLocations);
+    } else {
+      console.log('[VoidAssault] Connectivity fixed successfully');
+    }
+  } else {
+    console.log('[VoidAssault] Map connectivity validated - all areas reachable');
+  }
+
+  return mapData;
 }
 
 export const VOID_ASSAULT = generateVoidAssault();

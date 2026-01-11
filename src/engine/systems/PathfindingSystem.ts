@@ -44,6 +44,122 @@ interface PathRequest {
   priority: number;
 }
 
+/**
+ * PERF: Binary max-heap priority queue for path requests
+ * Maintains sorted order on insertion: O(log n) vs O(n log n) for full sort
+ */
+class PathRequestPriorityQueue {
+  private heap: PathRequest[] = [];
+  private entityIndex: Map<number, number> = new Map(); // entityId -> heap index
+
+  get length(): number {
+    return this.heap.length;
+  }
+
+  push(request: PathRequest): void {
+    // Remove existing request for same entity
+    const existingIdx = this.entityIndex.get(request.entityId);
+    if (existingIdx !== undefined) {
+      this.removeAt(existingIdx);
+    }
+
+    // Add to end and bubble up
+    this.heap.push(request);
+    this.entityIndex.set(request.entityId, this.heap.length - 1);
+    this.bubbleUp(this.heap.length - 1);
+  }
+
+  pop(): PathRequest | undefined {
+    if (this.heap.length === 0) return undefined;
+
+    const result = this.heap[0];
+    this.entityIndex.delete(result.entityId);
+
+    if (this.heap.length === 1) {
+      this.heap.pop();
+      return result;
+    }
+
+    // Move last to top and bubble down
+    const last = this.heap.pop()!;
+    this.heap[0] = last;
+    this.entityIndex.set(last.entityId, 0);
+    this.bubbleDown(0);
+
+    return result;
+  }
+
+  clear(): void {
+    this.heap.length = 0;
+    this.entityIndex.clear();
+  }
+
+  private removeAt(index: number): void {
+    if (index >= this.heap.length) return;
+
+    const removed = this.heap[index];
+    this.entityIndex.delete(removed.entityId);
+
+    if (index === this.heap.length - 1) {
+      this.heap.pop();
+      return;
+    }
+
+    const last = this.heap.pop()!;
+    this.heap[index] = last;
+    this.entityIndex.set(last.entityId, index);
+
+    // Reheapify
+    if (index > 0 && this.heap[index].priority > this.heap[this.parent(index)].priority) {
+      this.bubbleUp(index);
+    } else {
+      this.bubbleDown(index);
+    }
+  }
+
+  private bubbleUp(index: number): void {
+    while (index > 0) {
+      const parentIdx = this.parent(index);
+      if (this.heap[index].priority <= this.heap[parentIdx].priority) break;
+
+      this.swap(index, parentIdx);
+      index = parentIdx;
+    }
+  }
+
+  private bubbleDown(index: number): void {
+    while (true) {
+      let largest = index;
+      const left = this.leftChild(index);
+      const right = this.rightChild(index);
+
+      if (left < this.heap.length && this.heap[left].priority > this.heap[largest].priority) {
+        largest = left;
+      }
+      if (right < this.heap.length && this.heap[right].priority > this.heap[largest].priority) {
+        largest = right;
+      }
+
+      if (largest === index) break;
+
+      this.swap(index, largest);
+      index = largest;
+    }
+  }
+
+  private swap(i: number, j: number): void {
+    const temp = this.heap[i];
+    this.heap[i] = this.heap[j];
+    this.heap[j] = temp;
+    this.entityIndex.set(this.heap[i].entityId, i);
+    this.entityIndex.set(this.heap[j].entityId, j);
+  }
+
+  private parent(i: number): number { return Math.floor((i - 1) / 2); }
+  private leftChild(i: number): number { return 2 * i + 1; }
+  private rightChild(i: number): number { return 2 * i + 2; }
+}
+
 interface UnitPathState {
   lastPosition: { x: number; y: number };
   lastMoveTick: number;
@@ -62,7 +178,8 @@ export class PathfindingSystem extends System {
 
   private recast: RecastNavigation;
   private unitPathStates: Map<number, UnitPathState> = new Map();
-  private pendingRequests: PathRequest[] = [];
+  // PERF: Use priority queue instead of array + sort for O(log n) insertion
+  private pendingRequests: PathRequestPriorityQueue = new PathRequestPriorityQueue();
   private mapWidth: number;
   private mapHeight: number;
 
@@ -91,7 +208,7 @@ export class PathfindingSystem extends System {
   public reinitialize(mapWidth: number, mapHeight: number): void {
     this.mapWidth = mapWidth;
     this.mapHeight = mapHeight;
-    this.pendingRequests = [];
+    this.pendingRequests.clear(); // PERF: Use clear() instead of array reassignment
     this.unitPathStates.clear();
     this.failedPathCache.clear();
     this.failedPathCacheKeys = [];
@@ -268,14 +385,7 @@ export class PathfindingSystem extends System {
       request.endY = nearby.y;
     }
 
-    // Remove existing request for this entity
-    const existingIdx = this.pendingRequests.findIndex(
-      (r) => r.entityId === request.entityId
-    );
-    if (existingIdx !== -1) {
-      this.pendingRequests.splice(existingIdx, 1);
-    }
-
+    // PERF: Priority queue handles duplicate removal internally with O(log n) operations
     this.pendingRequests.push(request);
   }
 
@@ -345,11 +455,14 @@ export class PathfindingSystem extends System {
     if (!this.navMeshReady) return;
 
     const toProcess = Math.min(MAX_PATHS_PER_FRAME, this.pendingRequests.length);
-    this.pendingRequests.sort((a, b) => b.priority - a.priority);
+    // PERF: Priority queue maintains sorted order - no need to sort()
+    // pop() returns highest priority first in O(log n)
 
     for (let i = 0; i < toProcess; i++) {
-      const request = this.pendingRequests.shift()!;
-      this.processPathRequest(request);
+      const request = this.pendingRequests.pop();
+      if (request) {
+        this.processPathRequest(request);
+      }
     }
   }
 

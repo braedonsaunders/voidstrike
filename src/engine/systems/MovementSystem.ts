@@ -40,6 +40,9 @@ const USE_RECAST_CROWD = false; // Temporarily disabled - crowd velocity returns
 const tempSeparation: PooledVector2 = { x: 0, y: 0 };
 const tempBuildingAvoid: PooledVector2 = { x: 0, y: 0 };
 
+// PERF: Cached building query results to avoid double spatial grid lookups
+const cachedBuildingQuery: { entityId: number; results: number[] } = { entityId: -1, results: [] };
+
 // PERF: Separation force throttle interval (recalculate every N ticks instead of every frame)
 const SEPARATION_THROTTLE_TICKS = 3;
 
@@ -327,14 +330,42 @@ export class MovementSystem extends System {
   }
 
   /**
+   * PERF: Get cached building query results - avoids duplicate spatial grid lookups
+   * Both calculateBuildingAvoidanceForce and resolveHardBuildingCollision need nearby buildings
+   */
+  private getCachedBuildingQuery(
+    entityId: number,
+    x: number,
+    y: number,
+    radius: number
+  ): number[] {
+    // Return cached results if same entity (called twice per frame for same entity)
+    if (cachedBuildingQuery.entityId === entityId) {
+      return cachedBuildingQuery.results;
+    }
+
+    // New entity - perform query and cache results
+    const results = this.world.buildingGrid.queryRadius(x, y, radius);
+    cachedBuildingQuery.entityId = entityId;
+    cachedBuildingQuery.results.length = 0;
+    for (const id of results) {
+      cachedBuildingQuery.results.push(id);
+    }
+    return cachedBuildingQuery.results;
+  }
+
+  /**
    * Calculate building avoidance force with predictive collision detection
    *
    * Uses three-tier avoidance:
    * 1. Hard avoidance - immediate push when very close (within margin)
    * 2. Soft avoidance - gentle steering when approaching (soft margin zone)
    * 3. Predictive avoidance - steer away from predicted collision points
+   *
+   * PERF: Uses cached building query to avoid duplicate spatial grid lookups
    */
   private calculateBuildingAvoidanceForce(
+    entityId: number,
     selfTransform: Transform,
     selfUnit: Unit,
     out: PooledVector2,
@@ -351,8 +382,10 @@ export class MovementSystem extends System {
     let forceY = 0;
 
     // Query larger radius to include soft avoidance zone
-    const queryRadius = BUILDING_AVOIDANCE_SOFT_MARGIN + selfUnit.collisionRadius + 6;
-    const nearbyBuildingIds = this.world.buildingGrid.queryRadius(
+    // PERF: Use cached query - same query used by resolveHardBuildingCollision
+    const queryRadius = BUILDING_AVOIDANCE_SOFT_MARGIN + selfUnit.collisionRadius + 8;
+    const nearbyBuildingIds = this.getCachedBuildingQuery(
+      entityId,
       selfTransform.x,
       selfTransform.y,
       queryRadius
@@ -533,6 +566,9 @@ export class MovementSystem extends System {
 
     // PERF: Track current tick for separation force throttling
     this.currentTick = this.game.getCurrentTick();
+
+    // PERF: Invalidate building query cache at start of frame
+    cachedBuildingQuery.entityId = -1;
 
     // Update spatial grid
     for (const entity of entities) {
@@ -866,7 +902,8 @@ export class MovementSystem extends System {
       }
 
       // Building avoidance (always active) - pass current velocity for predictive avoidance
-      this.calculateBuildingAvoidanceForce(transform, unit, tempBuildingAvoid, finalVx, finalVy);
+      // PERF: Pass entityId for cached building query (shared with hard collision check)
+      this.calculateBuildingAvoidanceForce(entity.id, transform, unit, tempBuildingAvoid, finalVx, finalVy);
       finalVx += tempBuildingAvoid.x;
       finalVy += tempBuildingAvoid.y;
 
@@ -894,8 +931,9 @@ export class MovementSystem extends System {
       transform.translate(velocity.x * dt, velocity.y * dt);
 
       // Hard collision resolution
+      // PERF: Uses same cached building query as avoidance force above
       if (!unit.isFlying) {
-        this.resolveHardBuildingCollision(transform, unit);
+        this.resolveHardBuildingCollision(entity.id, transform, unit);
       }
     }
 
@@ -932,12 +970,16 @@ export class MovementSystem extends System {
    *
    * Immediately pushes units out of buildings if they somehow got inside.
    * Uses the same margin as building avoidance for consistency.
+   * PERF: Uses cached building query from calculateBuildingAvoidanceForce
    */
-  private resolveHardBuildingCollision(transform: Transform, unit: Unit): void {
-    const nearbyBuildingIds = this.world.buildingGrid.queryRadius(
+  private resolveHardBuildingCollision(entityId: number, transform: Transform, unit: Unit): void {
+    // PERF: Use cached query - same query already performed by calculateBuildingAvoidanceForce
+    const queryRadius = BUILDING_AVOIDANCE_SOFT_MARGIN + unit.collisionRadius + 8;
+    const nearbyBuildingIds = this.getCachedBuildingQuery(
+      entityId,
       transform.x,
       transform.y,
-      unit.collisionRadius + 8
+      queryRadius
     );
 
     const dropOffBuildings = [

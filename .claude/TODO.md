@@ -227,6 +227,13 @@
 - [x] **WallPlacementPreview wireframe geometry reuse** - EdgesGeometry and LineBasicMaterial now shared across all wall segments
 - [x] **AIMicroSystem threat sort replaced with single-pass max** - Changed from O(n log n) full array sort to O(n) single-pass max tracking for threat assessment
 
+### Fixed Issues (Round 6 - Additional FPS Optimizations - January 2026)
+- [x] **MovementSystem double building queries combined** - calculateBuildingAvoidanceForce and resolveHardBuildingCollision now share cached spatial grid query results via getCachedBuildingQuery()
+- [x] **CombatSystem event payload pooling** - combat:attack, combat:splash, combat:miss, player:damage, alert:underAttack events now use pooled static objects instead of allocating per event
+- [x] **PathfindingSystem priority queue** - Replaced O(n log n) array sort with O(log n) binary max-heap for path request prioritization. Built-in duplicate removal via entityIndex Map.
+- [x] **BuildingRenderer traverse() caching** - Pre-cached mesh children during mesh creation (cachedMeshChildren), replacing 5 traverse() calls in construction animation with direct array iteration
+- [x] **CommandCard React memoization** - Wrapped with memo(), using individual selector functions for Zustand state to minimize re-renders
+
 ### Remaining Optimizations
 - [ ] Instanced decorations (trees, rocks, debris - 1000s of draw calls)
 - [ ] Graphics settings UI (shadows optional)
@@ -234,9 +241,7 @@
 - [ ] Damage number texture atlas (pool instead of create)
 - [ ] EffectsRenderer material cloning - reuse materials instead of cloning in combat effects
 - [ ] EnhancedAISystem O(n²) patterns - extractor-geyser matching, mineral sorting in loops
-- [ ] MovementSystem double building collision queries - combine avoidance and hard collision
 - [ ] MovementSystem formation array pooling - reuse position arrays for move commands
-- [ ] CombatSystem event payload pooling - reuse event objects instead of allocating per attack
 
 ---
 

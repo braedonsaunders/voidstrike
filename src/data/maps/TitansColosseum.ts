@@ -17,6 +17,8 @@ import {
   fillFeatureRect,
   scatterForests,
   createMudArea,
+  autoFixConnectivity,
+  validateMapConnectivity,
 } from './MapTypes';
 
 /**
@@ -661,7 +663,7 @@ function generateTitansColosseum(): MapData {
     { name: 'Colosseum Center', x: 200, y: 200, ...center },
   ];
 
-  return {
+  const mapData: MapData = {
     id: 'titans_colosseum',
     name: "Titan's Colosseum",
     author: 'VOIDSTRIKE Team',
@@ -715,6 +717,27 @@ function generateTitansColosseum(): MapData {
     fogNear: 120,
     fogFar: 400,
   };
+
+  // CRITICAL: Validate and fix connectivity to ensure all areas are reachable
+  const validation = validateMapConnectivity(mapData);
+  if (!validation.isValid) {
+    console.warn('[TitansColosseum] Map has connectivity issues, attempting auto-fix...');
+    console.warn('[TitansColosseum] Unreachable locations:', validation.unreachableLocations);
+    const corridorsCarved = autoFixConnectivity(mapData);
+    console.log(`[TitansColosseum] Auto-fix carved ${corridorsCarved} corridors`);
+
+    const postFixValidation = validateMapConnectivity(mapData);
+    if (!postFixValidation.isValid) {
+      console.error('[TitansColosseum] CRITICAL: Map still has unreachable areas after auto-fix!');
+      console.error('[TitansColosseum] Still unreachable:', postFixValidation.unreachableLocations);
+    } else {
+      console.log('[TitansColosseum] Connectivity fixed successfully');
+    }
+  } else {
+    console.log('[TitansColosseum] Map connectivity validated - all areas reachable');
+  }
+
+  return mapData;
 }
 
 export const TITANS_COLOSSEUM = generateTitansColosseum();

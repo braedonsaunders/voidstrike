@@ -16,6 +16,8 @@ import {
   fillFeatureCircle,
   fillFeatureRect,
   scatterForests,
+  autoFixConnectivity,
+  validateMapConnectivity,
 } from './MapTypes';
 
 /**
@@ -672,7 +674,7 @@ function generateContestedFrontier(): MapData {
     { name: 'Center', x: 180, y: 160, ...center },
   ];
 
-  return {
+  const mapData: MapData = {
     id: 'contested_frontier',
     name: 'Contested Frontier',
     author: 'VOIDSTRIKE Team',
@@ -722,6 +724,27 @@ function generateContestedFrontier(): MapData {
     fogNear: 110,
     fogFar: 350,
   };
+
+  // CRITICAL: Validate and fix connectivity to ensure all areas are reachable
+  const validation = validateMapConnectivity(mapData);
+  if (!validation.isValid) {
+    console.warn('[ContestedFrontier] Map has connectivity issues, attempting auto-fix...');
+    console.warn('[ContestedFrontier] Unreachable locations:', validation.unreachableLocations);
+    const corridorsCarved = autoFixConnectivity(mapData);
+    console.log(`[ContestedFrontier] Auto-fix carved ${corridorsCarved} corridors`);
+
+    const postFixValidation = validateMapConnectivity(mapData);
+    if (!postFixValidation.isValid) {
+      console.error('[ContestedFrontier] CRITICAL: Map still has unreachable areas after auto-fix!');
+      console.error('[ContestedFrontier] Still unreachable:', postFixValidation.unreachableLocations);
+    } else {
+      console.log('[ContestedFrontier] Connectivity fixed successfully');
+    }
+  } else {
+    console.log('[ContestedFrontier] Map connectivity validated - all areas reachable');
+  }
+
+  return mapData;
 }
 
 export const CONTESTED_FRONTIER = generateContestedFrontier();
