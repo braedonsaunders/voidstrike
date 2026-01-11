@@ -22,6 +22,8 @@ const attackEventPayload = {
   damageType: 'normal' as import('../components/Unit').DamageType,
   targetHeight: 0,
   targetPlayerId: undefined as string | undefined,
+  attackerIsFlying: false,
+  targetIsFlying: false,
 };
 
 const splashEventPayload = {
@@ -582,6 +584,10 @@ export class CombatSystem extends System {
     const targetBuilding = targetEntity?.get<Building>('Building');
     const targetHeight = targetBuilding ? Math.max(targetBuilding.width, targetBuilding.height) : 0;
 
+    // Check if target is a flying unit
+    const targetUnit = targetEntity?.get<Unit>('Unit');
+    const targetIsFlying = targetUnit?.isFlying ?? false;
+
     // Emit attack event - PERF: Use pooled payload object
     const targetSelectable = targetEntity?.get<Selectable>('Selectable');
     attackEventPayload.attackerId = attacker.unitId;
@@ -593,6 +599,8 @@ export class CombatSystem extends System {
     attackEventPayload.damageType = attacker.damageType;
     attackEventPayload.targetHeight = targetHeight;
     attackEventPayload.targetPlayerId = targetSelectable?.playerId;
+    attackEventPayload.attackerIsFlying = attacker.isFlying;
+    attackEventPayload.targetIsFlying = targetIsFlying;
     this.game.eventBus.emit('combat:attack', attackEventPayload);
 
     // Emit player:damage for Phaser overlay effects when local player's unit takes damage
