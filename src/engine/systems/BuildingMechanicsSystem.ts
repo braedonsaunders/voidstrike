@@ -233,12 +233,18 @@ export class BuildingMechanicsSystem extends System {
       // Update lift/land animations
       if (building.state === 'lifting') {
         if (building.updateLift(dt)) {
+          // Update visualHeight for selection - flying buildings at 8 units height
+          selectable.visualHeight = 8;
+
           this.game.eventBus.emit('building:liftOffComplete', {
             buildingId: entity.id,
           });
         }
       } else if (building.state === 'landing') {
         if (building.updateLanding(dt)) {
+          // Reset visualHeight when landed
+          selectable.visualHeight = 0;
+
           // Check for nearby addon to attach
           this.checkForAddonAttachment(entity.id, transform, building);
 

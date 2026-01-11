@@ -49,7 +49,7 @@ voidstrike/
 │   │   │   ├── PathfindingSystem.ts     # Dynamic pathfinding with obstacle detection
 │   │   │   ├── MovementSystem.ts        # Unit movement & formations
 │   │   │   ├── CombatSystem.ts          # Attack, damage, high ground
-│   │   │   ├── SelectionSystem.ts       # Unit/building selection
+│   │   │   ├── SelectionSystem.ts       # Screen-space selection with flying unit support
 │   │   │   ├── ProductionSystem.ts      # Building production queues
 │   │   │   ├── ResourceSystem.ts        # Resource gathering
 │   │   │   ├── VisionSystem.ts          # Fog of war visibility
@@ -384,6 +384,16 @@ Located in `src/rendering/`:
    - Team-colored rings with shimmer animation
    - Multiple concentric rings per selected unit
    - Hover highlight indicators
+
+### Selection System (`SelectionSystem.ts`)
+
+World-class selection accuracy with multiple improvements:
+- **Screen-space selection** - Box/click selection done in screen coordinates for perspective-accurate selection
+- **Selection radius buffer** - Uses circle-rectangle intersection so partial overlaps count as selected
+- **Visual height support** - Flying units can be selected at their visual position (8 units above ground)
+- **Visual scale support** - Larger units (>300 HP) get 50% bigger hitboxes for easier selection
+- **Iterative terrain convergence** - 6 iterations with early termination for accurate screen-to-world mapping
+- **Priority-based selection** - Units are selected over buildings when both are in the selection box
 
 2. **SC2ParticleSystem.ts** - GPU-instanced particle effects
    - Muzzle flashes, projectile trails
