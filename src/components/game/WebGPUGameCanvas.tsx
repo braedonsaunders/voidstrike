@@ -261,6 +261,11 @@ export function WebGPUGameCanvas() {
         return camera.worldToScreen(worldX, worldZ, worldY);
       });
 
+      // Wire up terrain height lookup for accurate screen projection on elevated terrain
+      game.selectionSystem.setTerrainHeightFunction((x: number, z: number) => {
+        return terrain.getHeightAt(x, z);
+      });
+
       // Set terrain data
       game.setTerrainGrid(CURRENT_MAP.terrain);
       game.setDecorationCollisions(environment.getRockCollisions());

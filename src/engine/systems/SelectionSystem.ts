@@ -22,6 +22,9 @@ export class SelectionSystem extends System {
   // Screen-space selection callback (set by canvas)
   private worldToScreenFn: ((x: number, z: number, y?: number) => { x: number; y: number } | null) | null = null;
 
+  // Terrain height lookup function (set by canvas)
+  private getTerrainHeightFn: ((x: number, z: number) => number) | null = null;
+
   constructor(game: Game) {
     super(game);
     this.setupEventListeners();
@@ -32,6 +35,13 @@ export class SelectionSystem extends System {
    */
   public setWorldToScreen(fn: (x: number, z: number, y?: number) => { x: number; y: number } | null): void {
     this.worldToScreenFn = fn;
+  }
+
+  /**
+   * Set the terrain height lookup function for accurate vertical positioning
+   */
+  public setTerrainHeightFunction(fn: (x: number, z: number) => number): void {
+    this.getTerrainHeightFn = fn;
   }
 
   private setupEventListeners(): void {
@@ -101,11 +111,13 @@ export class SelectionSystem extends System {
       if (health && health.isDead()) continue;
 
       // Convert entity world position to screen space
-      // Use visualHeight for flying units so they can be clicked at their visual position
+      // Must include terrain height + visual height offset for accurate projection
       if (!this.worldToScreenFn) continue;
 
+      const terrainHeight = this.getTerrainHeightFn ? this.getTerrainHeightFn(transform.x, transform.y) : 0;
       const visualHeight = selectable.visualHeight ?? 0;
-      const screenPos = this.worldToScreenFn(transform.x, transform.y, visualHeight);
+      const worldY = terrainHeight + visualHeight;
+      const screenPos = this.worldToScreenFn(transform.x, transform.y, worldY);
       if (!screenPos) continue; // Behind camera
 
       // Calculate screen-space selection buffer based on visual size
@@ -330,9 +342,11 @@ export class SelectionSystem extends System {
       // Skip dead units
       if (health && health.isDead()) continue;
 
-      // Convert entity to screen space using visual height for flying units
+      // Convert entity to screen space - must include terrain height + visual offset
+      const terrainHeight = this.getTerrainHeightFn ? this.getTerrainHeightFn(transform.x, transform.y) : 0;
       const visualHeight = selectable.visualHeight ?? 0;
-      const screenPos = this.worldToScreenFn(transform.x, transform.y, visualHeight);
+      const worldY = terrainHeight + visualHeight;
+      const screenPos = this.worldToScreenFn(transform.x, transform.y, worldY);
       if (!screenPos) continue; // Behind camera
 
       // Calculate screen-space distance
