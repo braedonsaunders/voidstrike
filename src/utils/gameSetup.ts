@@ -9,7 +9,6 @@ import { Velocity } from '@/engine/components/Velocity';
 import { UNIT_DEFINITIONS } from '@/data/units/dominion';
 import { BUILDING_DEFINITIONS } from '@/data/buildings/dominion';
 import { EnhancedAISystem } from '@/engine/systems/EnhancedAISystem';
-import { PathfindingSystem } from '@/engine/systems/PathfindingSystem';
 import { MapData, Expansion } from '@/data/maps';
 import { useGameStore } from '@/store/gameStore';
 import { debugInitialization } from '@/utils/debugLogger';
@@ -18,11 +17,7 @@ import { useGameSetupStore, STARTING_RESOURCES_VALUES, AIDifficulty, isLocalPlay
 export function spawnInitialEntities(game: Game, mapData: MapData): void {
   const world = game.world;
 
-  // Initialize pathfinding with terrain data (mark cliffs/water as unwalkable)
-  const pathfindingSystem = world.getSystem(PathfindingSystem);
-  if (pathfindingSystem) {
-    pathfindingSystem.initializeFromTerrain(mapData);
-  }
+  // NavMesh is now initialized from terrain geometry in WebGPUGameCanvas
 
   // Apply starting resources from game setup
   const setupStore = useGameSetupStore.getState();

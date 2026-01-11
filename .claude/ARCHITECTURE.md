@@ -72,9 +72,9 @@ voidstrike/
 │   │   │   ├── Resource.ts
 │   │   │   └── Ability.ts          # Unit abilities component
 │   │   └── pathfinding/
-│   │       ├── AStar.ts
+│   │       ├── RecastNavigation.ts  # WASM-based navmesh pathfinding & crowd simulation
 │   │       ├── Grid.ts
-│   │       └── pathfinder.worker.ts
+│   │       └── SpatialGrid.ts
 │   ├── audio/
 │   │   ├── AudioManager.ts    # Sound effects management
 │   │   └── MusicPlayer.ts     # Dynamic music system with auto-discovery
@@ -118,7 +118,7 @@ voidstrike/
 │   ├── textures/              # Terrain, unit textures
 │   └── audio/                 # Sound effects, music
 ├── workers/
-│   └── pathfinder.worker.ts   # Web Worker for pathfinding
+│   └── (available for future workers)
 └── tests/
     └── ...                    # Test files
 ```
@@ -217,28 +217,39 @@ interface GameState {
 
 ### Pathfinding Architecture
 
-Web Worker for non-blocking pathfinding:
+Industry-standard WASM-based navigation using **recast-navigation-js** (same core as Unity/Unreal/Godot):
 
 ```typescript
-// Main thread
-const pathfinder = new Worker('pathfinder.worker.ts');
+// RecastNavigation singleton - WASM-powered pathfinding
+const recast = RecastNavigation.getInstance();
 
-function requestPath(unitId: EntityId, target: Vector2) {
-  pathfinder.postMessage({
-    type: 'REQUEST_PATH',
-    unitId,
-    start: getUnitPosition(unitId),
-    target,
-    grid: getNavigationGrid(),
-  });
-}
+// Initialize from terrain geometry
+await recast.generateFromTerrain(walkableMesh, mapWidth, mapHeight);
 
-pathfinder.onmessage = (e) => {
-  if (e.data.type === 'PATH_RESULT') {
-    applyPathToUnit(e.data.unitId, e.data.path);
-  }
-};
+// Fast O(1) path queries via NavMeshQuery
+const path = recast.findPath(startX, startY, endX, endY);
+// Returns: { success: boolean, path: { x: number, y: number }[] }
+
+// Point queries
+recast.findNearestPoint(x, y);  // Snap to navmesh
+recast.isWalkable(x, y);        // Check walkability
+
+// Crowd simulation (replaces custom RVO)
+const agentId = recast.addAgent(entityId, x, y, radius, maxSpeed);
+recast.setAgentTarget(entityId, targetX, targetY);
+recast.updateCrowd(deltaTime);  // Run ORCA collision avoidance
+const state = recast.getAgentState(entityId);  // { x, y, vx, vy }
+
+// Dynamic obstacles for buildings (TileCache)
+recast.addBoxObstacle(buildingId, centerX, centerY, width, height);
+recast.removeObstacle(buildingId);
 ```
+
+Key Components:
+- **NavMesh**: Navigation mesh generated from terrain walkable geometry
+- **NavMeshQuery**: O(1) path lookups with string-pulling path smoothing
+- **DetourCrowd**: RVO/ORCA-based local collision avoidance
+- **TileCache**: Dynamic obstacle support for buildings
 
 ### Multiplayer Sync
 
@@ -516,7 +527,7 @@ To add custom 3D models:
 
 1. **Instanced Rendering**: All units of same type use instanced meshes
 2. **Spatial Hashing**: O(1) lookups for nearby entities
-3. **Web Workers**: Pathfinding runs off main thread
+3. **WASM Pathfinding**: Recast Navigation runs near-native via WebAssembly
 4. **Object Pooling**: Reuse entities, projectiles, particles
 5. **LOD System**: Reduce detail at distance
 6. **Frustum Culling**: Don't render off-screen entities
@@ -1036,121 +1047,135 @@ getEffectiveDamage(); // Base damage * buff modifiers
 - combat_shield: +10 max HP (permanent)
 ```
 
-## Dynamic Pathfinding System
+## Pathfinding System (Recast Navigation)
+
+### Overview
+
+The game uses **recast-navigation-js**, a WASM port of the industry-standard Recast Navigation library used by Unity, Unreal Engine, and Godot. This provides:
+
+- **NavMesh generation** from terrain geometry
+- **O(1) pathfinding** via NavMeshQuery with string-pulling
+- **Crowd simulation** with ORCA collision avoidance
+- **Dynamic obstacles** via TileCache for buildings
+
+### RecastNavigation (`RecastNavigation.ts`)
+
+Singleton wrapper for all navigation functionality:
+
+```typescript
+export class RecastNavigation {
+  // Singleton access
+  public static getInstance(): RecastNavigation;
+  public static async initWasm(): Promise<void>;
+
+  // NavMesh generation from terrain
+  public async generateFromTerrain(
+    walkableMesh: THREE.Mesh,
+    mapWidth: number,
+    mapHeight: number
+  ): Promise<boolean>;
+
+  // Path queries
+  public findPath(startX, startY, endX, endY): PathResult;
+  public findNearestPoint(x, y): { x: number; y: number } | null;
+  public isWalkable(x, y): boolean;
+
+  // Crowd simulation (ORCA collision avoidance)
+  public addAgent(entityId, x, y, radius, maxSpeed): number;
+  public removeAgent(entityId): void;
+  public setAgentTarget(entityId, targetX, targetY): boolean;
+  public getAgentState(entityId): { x, y, vx, vy } | null;
+  public updateCrowd(deltaTime): void;
+
+  // Dynamic obstacles for buildings
+  public addBoxObstacle(buildingId, centerX, centerY, width, height): void;
+  public removeObstacle(buildingId): void;
+}
+```
 
 ### PathfindingSystem (`PathfindingSystem.ts`)
 
-Manages dynamic path calculation with obstacle detection and automatic repathing:
+ECS system that wraps RecastNavigation for game integration:
 
 ```typescript
-// Path invalidation on obstacle changes
+// Dynamic obstacle updates on building changes
 eventBus.on('building:placed', (data) => {
-  blockArea(data.position, data.width, data.height);
-  invalidateAffectedPaths();
+  recast.addBoxObstacle(data.entityId, data.position.x, data.position.y,
+                        data.width, data.height);
 });
 
 eventBus.on('building:destroyed', (data) => {
-  unblockArea(data.position, data.width, data.height);
-  invalidateAffectedPaths();
+  recast.removeObstacle(data.entityId);
 });
-
-// Stuck detection configuration
-const REPATH_INTERVAL_TICKS = 30;    // Check every 1.5 seconds
-const MAX_STUCK_TICKS = 6;           // Repath if no movement for 0.3 seconds
-const PATH_REQUEST_COOLDOWN = 10;    // Prevent repath spam
-const MIN_MOVEMENT_THRESHOLD = 0.05; // Minimum distance to count as movement
 ```
 
 Features:
-- **Path Request Integration**: MovementSystem emits `pathfinding:request` events for all move commands
-- **Path Invalidation**: When buildings are placed/destroyed, affected unit paths are recalculated
-- **Stuck Detection**: Units that haven't moved are automatically repathed with cooldown
-- **Destination Proximity Check**: Skip repathing when units are within 2 units of destination
-- **Terrain Feature Support**: Uses TERRAIN_FEATURE_CONFIG for walkability and movement costs
+- **NavMesh initialization** from terrain walkable geometry
+- **Building obstacle management** via TileCache
+- **Path request handling** for unit movement
 
-### AStar Algorithm (`AStar.ts`)
+### MovementSystem Integration
 
-High-performance grid-based A* pathfinding with industry-standard optimizations:
+The MovementSystem uses Recast's DetourCrowd for collision avoidance:
 
 ```typescript
-// Binary Min-Heap for O(log n) open list operations
-class BinaryHeap {
-  push(node): void;    // O(log n) insert
-  pop(): PathNode;     // O(log n) extract-min
-  update(node): void;  // O(log n) decrease-key
-}
+// Each unit is registered as a crowd agent
+recast.addAgent(entityId, transform.x, transform.y, unit.radius, unit.maxSpeed);
 
-// Version-based node reset - no grid cloning between searches
-interface PathNode {
-  version: number;  // Only valid if matches current searchVersion
-  heapIndex: number; // For O(log n) heap updates
-}
+// Movement targets set via crowd API
+recast.setAgentTarget(entityId, targetX, targetY);
 
-// Line-of-sight validated path smoothing
-private smoothPath(path) {
-  // Uses Bresenham's line algorithm to verify direct paths are clear
-  // Only removes waypoints when hasLineOfSight() confirms no obstacles
+// Crowd simulation updates agent positions/velocities
+recast.updateCrowd(deltaTime);
+
+// Get computed velocity for smooth movement
+const state = recast.getAgentState(entityId);
+if (state) {
+  velocity.x = state.vx;
+  velocity.y = state.vy;
 }
 ```
 
-Key Optimizations:
-- **Binary Heap**: O(log n) open list operations vs O(n) linear search
-- **Version-Based Reset**: No grid cloning between searches (O(1) reset vs O(n))
-- **No Allocations**: Reuses node objects via version tagging
-- **Terrain Movement Costs**: Roads (0.7x), forests (1.3-1.8x), mud (1.5x), water (2.0x)
-- **Octile Distance Heuristic**: Accurate cost estimation for 8-directional movement
-- **Line-of-Sight Path Smoothing**: Removes redundant waypoints only when clear path exists
-- **Nearest Walkable Fallback**: Finds alternative destination if target is blocked
+### NavMesh Configuration
 
-### RVO Local Avoidance (`RVO.ts`)
-
-ORCA (Optimal Reciprocal Collision Avoidance) implementation for recast-navigation style local avoidance:
+Tuned for RTS gameplay:
 
 ```typescript
-// Each agent computes velocity obstacles from neighbors
-function computeORCAVelocity(
-  agent: { x, y, vx, vy, prefVx, prefVy, radius, maxSpeed },
-  neighbors: Array<{ x, y, vx, vy, radius }>,
-  timeHorizon: number
-): { vx: number; vy: number }
+const NAVMESH_CONFIG = {
+  // Cell sizing
+  cs: 0.5,          // Cell size (0.5 world units)
+  ch: 0.2,          // Cell height
 
-// ORCA half-planes define allowed velocity space
-interface ORCALine {
-  px, py: number;  // Point on line
-  dx, dy: number;  // Direction into allowed half-plane
-}
+  // Agent parameters
+  walkableRadius: 0.6,
+  walkableHeight: 2.0,
+  walkableClimb: 0.5,
+  walkableSlopeAngle: 45,
+
+  // NavMesh quality
+  minRegionArea: 8,
+  mergeRegionArea: 20,
+  maxEdgeLen: 12,
+  maxSimplificationError: 1.3,
+  detailSampleDist: 6,
+  detailSampleMaxError: 1,
+};
 ```
 
-Features:
-- **Reciprocal**: Both agents adjust, splitting responsibility 50/50
-- **Optimal**: Finds velocity closest to preferred via linear programming
-- **Scalable**: O(n) per agent with spatial hashing
-- **Smooth**: No jittering or oscillation
-- **SC2-Style Exceptions**: Gathering workers ignore RVO (walk through each other)
+### Terrain Integration (`Terrain.ts`)
 
-### HierarchicalAStar (`HierarchicalAStar.ts`)
-
-Two-level hierarchical pathfinding for long-distance paths:
+The terrain generates walkable geometry for navmesh creation:
 
 ```typescript
-// Sector-based pathfinding for distances > 20 units
-const SECTOR_SIZE = 16;  // 16x16 cell sectors
-const HIERARCHICAL_PATH_THRESHOLD = 20;
-
-// Refine abstract path through sector entrances
-private refineAbstractPath(startX, startY, endX, endY, abstractPath) {
-  // Collect waypoints: start -> sector entrances -> end
-  // Pathfind between consecutive waypoints
-  // Concatenate segments into full path
+// Generate walkable mesh from terrain grid
+public generateWalkableGeometry(): {
+  positions: Float32Array;
+  indices: Uint32Array;
 }
-```
 
-Features:
-- **Sector Graph**: Map divided into 16x16 sectors with entrance detection
-- **Abstract Pathfinding**: A* on sector graph for long-distance routing
-- **Waypoint Refinement**: Detailed A* between sector entrances
-- **Path Caching**: LRU cache with 5-second TTL for frequently used paths
-- **Automatic Fallback**: Uses regular A* for same/adjacent sector paths
+// Only includes walkable cells (ground, ramps)
+// Excludes cliffs, water, void, and blocked areas
+```
 
 ## AI Micro System
 
