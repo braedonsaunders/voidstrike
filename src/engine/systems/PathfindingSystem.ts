@@ -241,16 +241,28 @@ export class PathfindingSystem extends System {
   }
 
   private queuePathRequest(request: PathRequest): void {
+    console.log('[PathfindingSystem] queuePathRequest:', {
+      entityId: request.entityId,
+      from: `(${request.startX.toFixed(1)}, ${request.startY.toFixed(1)})`,
+      to: `(${request.endX.toFixed(1)}, ${request.endY.toFixed(1)})`,
+      navMeshReady: this.navMeshReady,
+    });
+
     // Check failed path cache
     if (this.isPathRecentlyFailed(request.entityId, request.endX, request.endY)) {
+      console.log('[PathfindingSystem] Path recently failed, clearing target for entity', request.entityId);
       this.clearUnitMovementTarget(request.entityId);
       return;
     }
 
     // Check if destination is reachable
-    if (!this.recast.isWalkable(request.endX, request.endY)) {
+    const isWalkable = this.recast.isWalkable(request.endX, request.endY);
+    console.log('[PathfindingSystem] isWalkable check:', isWalkable);
+    if (!isWalkable) {
       const nearby = this.recast.findNearestPoint(request.endX, request.endY);
+      console.log('[PathfindingSystem] findNearestPoint result:', nearby);
       if (!nearby) {
+        console.log('[PathfindingSystem] No nearby walkable point, clearing target');
         this.recordFailedPath(request.entityId, request.endX, request.endY);
         this.clearUnitMovementTarget(request.entityId);
         return;
