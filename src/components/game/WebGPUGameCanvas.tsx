@@ -488,11 +488,52 @@ export function WebGPUGameCanvas() {
         // This avoids each renderer calling updateMatrixWorld() separately
         threeCamera.updateMatrixWorld();
 
-        unitRendererRef.current?.update();
-        buildingRendererRef.current?.update();
-        resourceRendererRef.current?.update();
-        fogOfWarRef.current?.update();
-        effectsRendererRef.current?.update(deltaTime);
+        // PERF: Per-system timing for debugging - set to true to identify bottlenecks
+        const DETAILED_TIMING = true; // Enabled to debug FPS drop issue
+        let unitTime = 0, buildingTime = 0, resourceTime = 0, fogTime = 0, effectsTime = 0;
+
+        // PERF: Monitor scene object count for leak detection
+        const sceneChildCount = scene.children.length;
+
+        if (DETAILED_TIMING) {
+          let t = performance.now();
+          unitRendererRef.current?.update();
+          unitTime = performance.now() - t;
+
+          t = performance.now();
+          buildingRendererRef.current?.update();
+          buildingTime = performance.now() - t;
+
+          t = performance.now();
+          resourceRendererRef.current?.update();
+          resourceTime = performance.now() - t;
+
+          t = performance.now();
+          fogOfWarRef.current?.update();
+          fogTime = performance.now() - t;
+
+          t = performance.now();
+          effectsRendererRef.current?.update(deltaTime);
+          effectsTime = performance.now() - t;
+
+          // Log effects stats periodically
+          if (frameCount === 0 && effectsRendererRef.current) {
+            const stats = effectsRendererRef.current.getDebugStats();
+            debugPerformance.log(
+              `[EFFECTS] Attacks: ${stats.attackEffects}, Hits: ${stats.hitEffects}, ` +
+              `DmgNums: ${stats.damageNumbers}, Move: ${stats.moveIndicators}, ` +
+              `Pools: Proj(${stats.poolStats.projectile.inUse}/${stats.poolStats.projectile.available}) ` +
+              `Hit(${stats.poolStats.hitEffect.inUse}/${stats.poolStats.hitEffect.available})`
+            );
+          }
+        } else {
+          unitRendererRef.current?.update();
+          buildingRendererRef.current?.update();
+          resourceRendererRef.current?.update();
+          fogOfWarRef.current?.update();
+          effectsRendererRef.current?.update(deltaTime);
+        }
+
         rallyPointRendererRef.current?.update();
         watchTowerRendererRef.current?.update(deltaTime);
 
@@ -515,7 +556,24 @@ export function WebGPUGameCanvas() {
 
         const updatesElapsed = performance.now() - updatesStart;
         if (updatesElapsed > 10) {
-          debugPerformance.warn(`[UPDATES] Total update time: ${updatesElapsed.toFixed(1)}ms`);
+          if (DETAILED_TIMING) {
+            debugPerformance.warn(
+              `[UPDATES] Total: ${updatesElapsed.toFixed(1)}ms | ` +
+              `Unit: ${unitTime.toFixed(1)}ms | ` +
+              `Building: ${buildingTime.toFixed(1)}ms | ` +
+              `Resource: ${resourceTime.toFixed(1)}ms | ` +
+              `Fog: ${fogTime.toFixed(1)}ms | ` +
+              `Effects: ${effectsTime.toFixed(1)}ms | ` +
+              `SceneObjects: ${sceneChildCount}`
+            );
+          } else {
+            debugPerformance.warn(`[UPDATES] Total update time: ${updatesElapsed.toFixed(1)}ms`);
+          }
+        }
+
+        // PERF: Monitor for scene object leak (warn if count grows unexpectedly)
+        if (DETAILED_TIMING && sceneChildCount > 500) {
+          debugPerformance.warn(`[LEAK?] Scene has ${sceneChildCount} children - check for object leaks!`);
         }
 
         // PERF: Update selection rings with optimized change detection
