@@ -520,7 +520,8 @@
 
 ### Missing Features
 - [ ] Salvage bunker (return 75%)
-- [ ] Cancel construction (return 75%)
+- [x] Cancel construction (return 75%) - Demolish button added to buildings under construction
+- [x] Demolish complete buildings (return 50%) - Salvage button added to complete buildings
 - [ ] Building burning (low HP damage)
 - [ ] Neosteel Frame research (+2 bunker)
 - [ ] Building Auto-Repair research

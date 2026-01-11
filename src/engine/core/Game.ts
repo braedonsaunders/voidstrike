@@ -450,6 +450,11 @@ export class Game {
           targetId: command.targetEntityId,
         });
         break;
+      case 'DEMOLISH':
+        this.eventBus.emit('command:demolish', {
+          entityIds: command.entityIds,
+        });
+        break;
     }
   }
 }
@@ -474,7 +479,8 @@ export interface GameCommand {
     | 'UNLOAD_BUNKER'
     | 'HEAL'
     | 'REPAIR'
-    | 'PATROL';
+    | 'PATROL'
+    | 'DEMOLISH';
   entityIds: number[];
   targetPosition?: { x: number; y: number };
   targetEntityId?: number;
