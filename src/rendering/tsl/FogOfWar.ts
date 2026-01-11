@@ -8,6 +8,7 @@
 import * as THREE from 'three';
 import {
   Fn,
+  vec4,
   float,
   uniform,
   texture,
@@ -108,37 +109,36 @@ export class TSLFogOfWar {
     material.depthWrite = false;
     material.side = THREE.DoubleSide;
 
-    // Sample fog texture - shared between color and opacity nodes
-    const fogData = texture(this.fogTexture, uv());
-    // visibility: 0 = unexplored (alpha=255), 0.5 = explored (alpha=128), 1 = visible (alpha=0)
-    const visibility = float(1.0).sub(fogData.a);
+    // Use outputNode to control both color and alpha in one vec4
+    const outputNode = Fn(() => {
+      // Sample fog texture
+      const fogData = texture(this.fogTexture, uv());
+      // visibility: 0 = unexplored (alpha=255), 0.5 = explored (alpha=128), 1 = visible (alpha=0)
+      const visibility = float(1.0).sub(fogData.a);
 
-    // Step functions to determine state
-    const notUnexplored = step(float(0.01), visibility); // 1 if explored or visible
-    const isVisible = step(float(0.75), visibility); // 1 if visible
+      // Step functions to determine state
+      const notUnexplored = step(float(0.01), visibility); // 1 if explored or visible
+      const isVisible = step(float(0.75), visibility); // 1 if visible
 
-    // Color node - just the RGB color based on state
-    const colorNode = Fn(() => {
-      return mix(this.uUnexploredColor, this.uExploredColor, notUnexplored);
-    })();
-
-    // Opacity node - alpha based on state
-    const opacityNode = Fn(() => {
       // Alpha values: unexplored=0.7, explored=0.35, visible=0
       const unexploredAlpha = float(0.7);
       const exploredAlpha = float(0.35);
       const visibleAlpha = float(0.0);
 
       // Mix alpha based on state
-      return mix(
+      const alpha = mix(
         mix(unexploredAlpha, exploredAlpha, notUnexplored),
         visibleAlpha,
         isVisible
       );
+
+      // Mix colors based on state
+      const color = mix(this.uUnexploredColor, this.uExploredColor, notUnexplored);
+
+      return vec4(color, alpha);
     })();
 
-    material.colorNode = colorNode;
-    material.opacityNode = opacityNode;
+    material.outputNode = outputNode;
 
     return material;
   }
