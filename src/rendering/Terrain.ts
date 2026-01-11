@@ -4,15 +4,17 @@ import { BiomeConfig, BIOMES, blendBiomeColors, BiomeType, getBiomeShaderConfig 
 import { createTerrainShaderMaterial, updateTerrainShader } from './shaders/TerrainShader';
 import { createVoidstrikeTerrainShaderMaterial, getVoidstrikeBiomeConfig, updateVoidstrikeTerrainShader } from './shaders/VoidstrikeTerrainShader';
 import { createTextureTerrainMaterial, updateTextureTerrainShader, getBiomeTextureConfig, BiomeTextureType } from './shaders/TextureTerrainShader';
+import { TSLTerrainMaterial } from './tsl/TerrainMaterial';
 import AssetManager from '@/assets/AssetManager';
 import { debugTerrain } from '@/utils/debugLogger';
 
 // Shader mode for terrain rendering
-// 'standard': Uses MeshStandardMaterial (WebGPU + WebGL compatible) - RECOMMENDED
+// 'tsl': Uses TSL 4-texture blending (WebGPU + WebGL compatible) - RECOMMENDED
+// 'standard': Uses MeshStandardMaterial single texture (WebGPU + WebGL compatible)
 // 'texture': Uses GLSL ShaderMaterial with textures (WebGL only)
 // 'basic': Uses GLSL ShaderMaterial procedural (WebGL only)
 // 'sc2': Uses GLSL ShaderMaterial full procedural (WebGL only)
-type TerrainShaderMode = 'standard' | 'texture' | 'basic' | 'sc2';
+type TerrainShaderMode = 'tsl' | 'standard' | 'texture' | 'basic' | 'sc2';
 
 
 // Terrain subdivision for smoother rendering
@@ -224,6 +226,7 @@ export class Terrain {
   private cellSize: number;
   private geometry: THREE.BufferGeometry;
   private material: THREE.Material;
+  private tslMaterial: TSLTerrainMaterial | null = null;
 
   // Store heightmap for queries
   private heightMap: Float32Array;
@@ -231,11 +234,12 @@ export class Terrain {
   private gridHeight: number;
 
   // Shader mode selection:
-  // - 'standard': Uses MeshStandardMaterial (WebGPU + WebGL compatible) - RECOMMENDED
+  // - 'tsl': Uses TSL 4-texture blending (WebGPU + WebGL compatible) - RECOMMENDED
+  // - 'standard': Uses MeshStandardMaterial single texture (WebGPU + WebGL compatible)
   // - 'texture': Uses AI-generated textures with GLSL (WebGL only, 60+ FPS)
   // - 'basic': Simple procedural shader (WebGL only, 30-60 FPS)
   // - 'sc2': Full procedural (WebGL only, 10 FPS - too slow)
-  private static SHADER_MODE: TerrainShaderMode = 'standard';
+  private static SHADER_MODE: TerrainShaderMode = 'tsl';
 
   constructor(config: TerrainConfig) {
     this.mapData = config.mapData;
@@ -251,6 +255,16 @@ export class Terrain {
 
     // Create shader material based on mode
     switch (Terrain.SHADER_MODE) {
+      case 'tsl':
+        // Use TSL 4-texture blending material (WebGPU + WebGL compatible)
+        debugTerrain.log('[Terrain] Using TSL 4-texture blending for biome:', this.mapData.biome || 'grassland');
+        this.tslMaterial = new TSLTerrainMaterial({
+          biome: this.mapData.biome || 'grassland',
+          mapWidth: this.mapData.width,
+          mapHeight: this.mapData.height,
+        });
+        this.material = this.tslMaterial.material;
+        break;
       case 'standard':
         // Use standard PBR material (WebGPU + WebGL compatible)
         debugTerrain.log('[Terrain] Using standard PBR material for biome:', this.mapData.biome || 'grassland');
@@ -285,6 +299,12 @@ export class Terrain {
   // Update shader uniforms (call each frame for animated effects)
   public update(deltaTime: number, sunDirection?: THREE.Vector3): void {
     switch (Terrain.SHADER_MODE) {
+      case 'tsl':
+        // Update TSL material uniforms
+        if (this.tslMaterial) {
+          this.tslMaterial.update(deltaTime, sunDirection);
+        }
+        break;
       case 'standard':
         // Standard material doesn't need per-frame updates
         break;
@@ -880,7 +900,11 @@ export class Terrain {
 
   public dispose(): void {
     this.geometry.dispose();
-    this.material.dispose();
+    if (this.tslMaterial) {
+      this.tslMaterial.dispose();
+    } else {
+      this.material.dispose();
+    }
   }
 }
 

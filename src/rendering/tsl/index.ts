@@ -99,3 +99,9 @@ export {
 export {
   TSLGameOverlayManager,
 } from './GameOverlay';
+
+// Terrain Material
+export {
+  TSLTerrainMaterial,
+  type TSLTerrainConfig,
+} from './TerrainMaterial';
