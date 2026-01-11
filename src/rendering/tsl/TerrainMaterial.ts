@@ -127,10 +127,10 @@ export class TSLTerrainMaterial {
     const biomeTextures = getBiomeTextures(config.biome);
 
     // Calculate repeat based on map size
-    // Lower values = larger texture tiles = higher apparent resolution
+    // Higher values = smaller texture tiles = more tiling
     const mapSize = Math.max(config.mapWidth, config.mapHeight);
-    // Aim for each texture tile to cover ~8-16 world units for good detail
-    const repeat = config.textureRepeat ?? Math.max(4, Math.floor(mapSize / 12));
+    // Each texture tile covers ~2-4 world units for detailed ground textures
+    const repeat = config.textureRepeat ?? Math.max(32, Math.floor(mapSize / 2));
 
     // Store repeat as uniform so shader can use it
     this.uTextureRepeat = uniform(repeat);

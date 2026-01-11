@@ -141,11 +141,10 @@ export class Game {
       if (config.mapWidth) Game.instance.config.mapWidth = config.mapWidth;
       if (config.mapHeight) Game.instance.config.mapHeight = config.mapHeight;
 
-      // Reinitialize pathfinding if dimensions changed
+      // Reinitialize pathfinding grids if dimensions changed (keep same instance to preserve event listeners)
       if (Game.instance.config.mapWidth !== oldWidth || Game.instance.config.mapHeight !== oldHeight) {
         debugInitialization.log(`[Game] Map dimensions changed from ${oldWidth}x${oldHeight} to ${Game.instance.config.mapWidth}x${Game.instance.config.mapHeight}, reinitializing pathfinding`);
-        Game.instance.pathfindingSystem = new PathfindingSystem(
-          Game.instance,
+        Game.instance.pathfindingSystem.reinitialize(
           Game.instance.config.mapWidth,
           Game.instance.config.mapHeight
         );
