@@ -75,7 +75,8 @@ export class CrystalField {
               Math.random() * Math.PI * 2,
               (Math.random() - 0.5) * 0.3
             );
-            crystal.castShadow = true;
+            // PERF: Decorations don't cast shadows - major FPS savings
+            crystal.castShadow = false;
             clusterGroup.add(crystal);
           }
 
