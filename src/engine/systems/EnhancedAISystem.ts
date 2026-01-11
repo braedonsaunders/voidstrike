@@ -10,6 +10,7 @@ import { UNIT_DEFINITIONS } from '@/data/units/dominion';
 import { BUILDING_DEFINITIONS, RESEARCH_MODULE_UNITS } from '@/data/buildings/dominion';
 import { getCounterRecommendation } from './AIMicroSystem';
 import { debugAI } from '@/utils/debugLogger';
+import { SeededRandom } from '@/utils/math';
 
 type AIState = 'building' | 'expanding' | 'attacking' | 'defending' | 'scouting' | 'harassing';
 export type AIDifficulty = 'easy' | 'medium' | 'hard' | 'very_hard' | 'insane';
@@ -57,6 +58,7 @@ interface AIPlayer {
   // Build order
   buildOrder: BuildOrderStep[];
   buildOrderIndex: number;
+  buildOrderFailureCount: number; // Track consecutive failures to skip stuck steps
 
   // Timing
   attackCooldown: number;
@@ -139,6 +141,8 @@ export class EnhancedAISystem extends System {
   private aiPlayers: Map<string, AIPlayer> = new Map();
   private ticksBetweenActions = 20; // ~1 second at 20 ticks/sec
   private defaultDifficulty: AIDifficulty;
+  // Deterministic random for multiplayer compatibility - reseeded each update
+  private random: SeededRandom = new SeededRandom(12345);
 
   constructor(game: Game, difficulty: AIDifficulty = 'medium') {
     super(game);
@@ -203,6 +207,7 @@ export class EnhancedAISystem extends System {
 
       buildOrder: [...BUILD_ORDERS[difficulty]],
       buildOrderIndex: 0,
+      buildOrderFailureCount: 0,
 
       attackCooldown: config.attackCooldown,
       lastAttackTick: 0,
@@ -295,6 +300,10 @@ export class EnhancedAISystem extends System {
 
   public update(_deltaTime: number): void {
     const currentTick = this.game.getCurrentTick();
+
+    // Reseed random based on tick for deterministic multiplayer
+    // Using tick ensures same decisions across all clients
+    this.random = new SeededRandom(currentTick * 31337 + 42);
 
     // Log once at first tick
     if (currentTick === 1) {
@@ -415,9 +424,12 @@ export class EnhancedAISystem extends System {
     }
 
     // Update max supply based on buildings
+    // HQ and its upgrades (orbital_station, bastion) all provide 11 supply
     const hqCount = ai.buildingCounts.get('headquarters') || 0;
+    const orbitalCount = ai.buildingCounts.get('orbital_station') || 0;
+    const bastionCount = ai.buildingCounts.get('bastion') || 0;
     const cacheCount = ai.buildingCounts.get('supply_cache') || 0;
-    ai.maxSupply = hqCount * 11 + cacheCount * 8;
+    ai.maxSupply = (hqCount + orbitalCount + bastionCount) * 11 + cacheCount * 8;
   }
 
   private updateAIState(ai: AIPlayer, currentTick: number): void {
@@ -579,10 +591,24 @@ export class EnhancedAISystem extends System {
 
       if (success) {
         ai.buildOrderIndex++;
+        ai.buildOrderFailureCount = 0; // Reset failure counter on success
         debugAI.log(`[EnhancedAI] ${ai.playerId}: Completed build order step ${ai.buildOrderIndex - 1} (${step.type}: ${step.id})`);
-      } else if (this.game.getCurrentTick() % 100 === 0) {
-        // Log when stuck on a build order step (every 5 seconds)
-        debugAI.log(`[EnhancedAI] ${ai.playerId}: Stuck on build order step ${ai.buildOrderIndex} (${step.type}: ${step.id}), minerals=${Math.floor(ai.minerals)}, supply=${ai.supply}/${ai.maxSupply}`);
+      } else {
+        // Track failure - only count once per second (20 ticks) to avoid instant skipping
+        if (this.game.getCurrentTick() % 20 === 0) {
+          ai.buildOrderFailureCount++;
+        }
+
+        // Skip stuck step after 10 consecutive failure checks (~10 seconds)
+        // This prevents permanent stuck states from blocking all progress
+        if (ai.buildOrderFailureCount >= 10) {
+          debugAI.warn(`[EnhancedAI] ${ai.playerId}: Skipping stuck build order step ${ai.buildOrderIndex} (${step.type}: ${step.id}) after ${ai.buildOrderFailureCount} failures`);
+          ai.buildOrderIndex++;
+          ai.buildOrderFailureCount = 0;
+        } else if (this.game.getCurrentTick() % 100 === 0) {
+          // Log when stuck on a build order step (every 5 seconds)
+          debugAI.log(`[EnhancedAI] ${ai.playerId}: Stuck on build order step ${ai.buildOrderIndex} (${step.type}: ${step.id}), minerals=${Math.floor(ai.minerals)}, supply=${ai.supply}/${ai.maxSupply}, failures=${ai.buildOrderFailureCount}`);
+        }
       }
       return;
     }
@@ -675,14 +701,14 @@ export class EnhancedAISystem extends System {
 
     // Try to build Colossus (heavy unit - best tank)
     if (hasForge && this.canProduceUnit(ai, 'colossus') && ai.vespene >= 200 && ai.minerals >= 300) {
-      if (Math.random() < 0.4) {
+      if (this.random.next() < 0.4) {
         if (this.tryTrainUnit(ai, 'colossus')) return;
       }
     }
 
     // Try to build Devastator (medium-heavy tank)
     if (hasForge && this.canProduceUnit(ai, 'devastator') && ai.vespene >= 125) {
-      if (Math.random() < 0.5) {
+      if (this.random.next() < 0.5) {
         if (this.tryTrainUnit(ai, 'devastator')) return;
       }
     }
@@ -690,15 +716,15 @@ export class EnhancedAISystem extends System {
     // Try to build air units from Hangar
     if (hasHangar) {
       // Specter (cloaked air unit)
-      if (this.canProduceUnit(ai, 'specter') && ai.vespene >= 100 && Math.random() < 0.3) {
+      if (this.canProduceUnit(ai, 'specter') && ai.vespene >= 100 && this.random.next() < 0.3) {
         if (this.tryTrainUnit(ai, 'specter')) return;
       }
       // Valkyrie (good anti-air)
-      if (ai.vespene >= 75 && Math.random() < 0.35) {
+      if (ai.vespene >= 75 && this.random.next() < 0.35) {
         if (this.tryTrainUnit(ai, 'valkyrie')) return;
       }
       // Lifter (transport/healer)
-      if (ai.vespene >= 100 && Math.random() < 0.2) {
+      if (ai.vespene >= 100 && this.random.next() < 0.2) {
         if (this.tryTrainUnit(ai, 'lifter')) return;
       }
       // Valkyrie as fallback - always try to produce something from hangar
@@ -710,7 +736,7 @@ export class EnhancedAISystem extends System {
     // Produce vehicles from Forge
     if (hasForge && ai.vespene >= 25) {
       // Scorcher - fast harassment unit (doesn't need research module)
-      if (Math.random() < 0.4) {
+      if (this.random.next() < 0.4) {
         if (this.tryTrainUnit(ai, 'scorcher')) return;
       }
       // Scorcher as fallback - always try to produce something from forge
@@ -720,17 +746,17 @@ export class EnhancedAISystem extends System {
     // Produce infantry from Infantry Bay
     if (hasInfantryBay) {
       // Breacher (needs research module) - anti-armor infantry
-      if (this.canProduceUnit(ai, 'breacher') && ai.vespene >= 25 && Math.random() < 0.5) {
+      if (this.canProduceUnit(ai, 'breacher') && ai.vespene >= 25 && this.random.next() < 0.5) {
         if (this.tryTrainUnit(ai, 'breacher')) return;
       }
 
       // Operative (needs research module) - stealth/sniper unit
-      if (this.canProduceUnit(ai, 'operative') && ai.vespene >= 125 && Math.random() < 0.25) {
+      if (this.canProduceUnit(ai, 'operative') && ai.vespene >= 125 && this.random.next() < 0.25) {
         if (this.tryTrainUnit(ai, 'operative')) return;
       }
 
       // Vanguard - jetpack unit for harassment
-      if (ai.vespene >= 50 && Math.random() < 0.3) {
+      if (ai.vespene >= 50 && this.random.next() < 0.3) {
         if (this.tryTrainUnit(ai, 'vanguard')) return;
       }
 
@@ -1812,7 +1838,7 @@ export class EnhancedAISystem extends System {
     // Add offsets in expanding rings around the base
     for (let radius = 6; radius <= 20; radius += 3) {
       for (let angle = 0; angle < 8; angle++) {
-        const theta = (angle * Math.PI * 2) / 8 + Math.random() * 0.5;
+        const theta = (angle * Math.PI * 2) / 8 + this.random.next() * 0.5;
         const x = Math.round(Math.cos(theta) * radius);
         const y = Math.round(Math.sin(theta) * radius);
         offsets.push({ x, y });
@@ -1821,7 +1847,7 @@ export class EnhancedAISystem extends System {
 
     // Shuffle offsets for variety
     for (let i = offsets.length - 1; i > 0; i--) {
-      const j = Math.floor(Math.random() * (i + 1));
+      const j = Math.floor(this.random.next() * (i + 1));
       [offsets[i], offsets[j]] = [offsets[j], offsets[i]];
     }
 
@@ -1988,8 +2014,8 @@ export class EnhancedAISystem extends System {
 
     // Random location
     return {
-      x: Math.random() * config.mapWidth,
-      y: Math.random() * config.mapHeight,
+      x: this.random.next() * config.mapWidth,
+      y: this.random.next() * config.mapHeight,
     };
   }
 
