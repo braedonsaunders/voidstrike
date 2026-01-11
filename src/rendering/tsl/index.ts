@@ -77,3 +77,9 @@ export {
   DamageVignette,
   type PostProcessingConfig,
 } from './PostProcessing';
+
+// Map effects
+export {
+  TSLMapBorderFog,
+  type MapBorderFogConfig,
+} from './MapBorderFog';
