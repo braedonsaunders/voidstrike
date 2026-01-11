@@ -346,8 +346,8 @@ export class CombatSystem extends System {
     for (const entity of this.world.getEntitiesWith('Health')) {
       const health = entity.get<Health>('Health')!;
       // Skip entities with no regen or already at full health
-      if (health.healthRegen <= 0 && health.shieldRegen <= 0) continue;
-      if (health.current >= health.max && health.shieldCurrent >= health.shieldMax) continue;
+      if (health.regeneration <= 0 && health.shieldRegeneration <= 0) continue;
+      if (health.current >= health.max && health.shield >= health.shieldMax) continue;
       health.regenerate(deltaTime / 1000, gameTime);
     }
   }
