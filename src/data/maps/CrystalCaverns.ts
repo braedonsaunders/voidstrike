@@ -159,6 +159,45 @@ function generateFrozenDecorations(): MapDecoration[] {
     }
   };
 
+  // Helper for massive outer border rocks (2-4x scale) to hide terrain edges
+  const addMassiveBorderRocks = (x1: number, y1: number, x2: number, y2: number, density: number = 5) => {
+    const dx = x2 - x1;
+    const dy = y2 - y1;
+    const length = Math.sqrt(dx * dx + dy * dy);
+    const steps = Math.ceil(length / density);
+    for (let i = 0; i <= steps; i++) {
+      const t = i / steps;
+      const x = x1 + dx * t + (rand() - 0.5) * 3;
+      const y = y1 + dy * t + (rand() - 0.5) * 3;
+      const rockType = rand() < 0.6 ? 'rocks_large' : 'rocks_small';
+      decorations.push({
+        type: rockType,
+        x, y,
+        scale: 2.0 + rand() * 2.0,
+        rotation: rand() * Math.PI * 2,
+      });
+    }
+  };
+
+  // Helper for massive outer border crystals (2-3x scale) for frozen biome
+  const addMassiveBorderCrystals = (x1: number, y1: number, x2: number, y2: number, density: number = 8) => {
+    const dx = x2 - x1;
+    const dy = y2 - y1;
+    const length = Math.sqrt(dx * dx + dy * dy);
+    const steps = Math.ceil(length / density);
+    for (let i = 0; i <= steps; i++) {
+      const t = i / steps;
+      const x = x1 + dx * t + (rand() - 0.5) * 4;
+      const y = y1 + dy * t + (rand() - 0.5) * 4;
+      decorations.push({
+        type: 'crystal_formation',
+        x, y,
+        scale: 1.8 + rand() * 1.5,
+        rotation: rand() * Math.PI * 2,
+      });
+    }
+  };
+
   // Helper to add rocks around a circular base edge
   const addBaseEdgeRocks = (cx: number, cy: number, radius: number, count: number) => {
     for (let i = 0; i < count; i++) {
@@ -224,6 +263,18 @@ function generateFrozenDecorations(): MapDecoration[] {
   addRockCliffLine(188, 12, 188, 168, 3);
   addRockCliffLine(12, 12, 188, 12, 3);
   addRockCliffLine(12, 168, 188, 168, 3);
+
+  // Massive outer border rocks (2-4x scale) to hide terrain edges
+  addMassiveBorderRocks(5, 5, 5, 175, 5);      // Left edge (outer)
+  addMassiveBorderRocks(195, 5, 195, 175, 5);  // Right edge (outer)
+  addMassiveBorderRocks(5, 5, 195, 5, 5);      // Top edge (outer)
+  addMassiveBorderRocks(5, 175, 195, 175, 5);  // Bottom edge (outer)
+
+  // Massive outer border crystals (frozen biome)
+  addMassiveBorderCrystals(3, 3, 3, 177, 10);     // Left edge crystals
+  addMassiveBorderCrystals(197, 3, 197, 177, 10); // Right edge crystals
+  addMassiveBorderCrystals(3, 3, 197, 3, 10);     // Top edge crystals
+  addMassiveBorderCrystals(3, 177, 197, 177, 10); // Bottom edge crystals
 
   // Main base cliff edges - forming walls
   addRockCliffLine(10, 68, 20, 68, 2);
