@@ -258,11 +258,13 @@ export class Unit extends Component {
   }
 
   public setMoveTarget(x: number, y: number, preserveState: boolean = false): void {
+    console.log('[Unit.setMoveTarget] Before: state=', this.state, 'preserveState=', preserveState);
     this.targetX = x;
     this.targetY = y;
     if (!preserveState) {
       this.state = 'moving';
     }
+    console.log('[Unit.setMoveTarget] After: state=', this.state);
     this.targetEntityId = null;
   }
 
