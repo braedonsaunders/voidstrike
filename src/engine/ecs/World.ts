@@ -17,6 +17,9 @@ export class World {
   private currentTick: number = 0;
   private lastCacheTick: number = -1;
 
+  // PERF: Reusable array for cache key generation to avoid allocation
+  private _querySortBuffer: ComponentType[] = [];
+
   // Spatial grids for different entity types
   public readonly unitGrid: SpatialGrid;
   public readonly buildingGrid: SpatialGrid;
@@ -79,9 +82,13 @@ export class World {
       this.lastCacheTick = this.currentTick;
     }
 
-    // Create cache key
-    // PERF: Use slice() before sort() to avoid mutating the input array parameter
-    const cacheKey = componentTypes.slice().sort().join(',');
+    // PERF: Create cache key using reusable buffer to avoid allocation
+    this._querySortBuffer.length = 0;
+    for (let i = 0; i < componentTypes.length; i++) {
+      this._querySortBuffer.push(componentTypes[i]);
+    }
+    this._querySortBuffer.sort();
+    const cacheKey = this._querySortBuffer.join(',');
 
     // Check cache
     const cached = this.queryCache.get(cacheKey);

@@ -187,11 +187,26 @@
   - **Fix**: AI now uses `findNearestEnemyEntity()` to find specific targets and sends direct ATTACK commands with `targetEntityId`, same as player right-click attacks
   - Also fixed: EnhancedAISystem gives orders to 'moving' units, AIMicroSystem preserves targets during kiting, CombatSystem handles edge cases
 
-### Future Optimizations
+### Fixed Issues (Round 4 - FPS Optimization - January 2026)
+- [x] **Console.log removed from MovementSystem** - Debug logging in hot paths was allocating strings every frame for every moving unit
+- [x] **Math.sqrt optimized in MovementSystem** - Using squared distance comparisons first, only computing sqrt when needed for normalization
+- [x] **Camera raycaster cached** - screenToWorld() was allocating new Raycaster, Vector2, Vector3, Plane on every call. Now reuses instance properties.
+- [x] **WallSystem gate proximity optimized** - Changed from O(gates × units) to spatial grid query O(gates × nearby_units)
+- [x] **WallSystem repair drone optimized** - Changed from iterating all walls to spatial grid query
+- [x] **World.ts query cache key optimized** - Reusing sort buffer instead of allocating new array via slice() on every cache miss
+- [x] **SelectionPanel wrapped with React.memo** - Prevents re-renders when parent changes but selection hasn't
+- [x] **MultiSelectEntityIcon component extracted** - Memoized component for multi-select grid to prevent re-renders
+- [x] **useGameStore selector function** - Using `(state) => state.selectedUnits` instead of object destructuring to minimize re-renders
+
+### Remaining Optimizations
 - [ ] Instanced decorations (trees, rocks, debris - 1000s of draw calls)
 - [ ] Graphics settings UI (shadows optional)
 - [ ] Web Worker for AI calculations
 - [ ] Damage number texture atlas (pool instead of create)
+- [ ] EffectsRenderer material cloning - reuse materials instead of cloning in combat effects
+- [ ] EnhancedAISystem O(n²) patterns - extractor-geyser matching, mineral sorting in loops
+- [ ] MovementSystem double building collision queries - combine avoidance and hard collision
+- [ ] VisionSystem watch tower loop - reverse iteration to use spatial grid
 
 ---
 

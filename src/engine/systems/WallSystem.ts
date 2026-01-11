@@ -90,6 +90,7 @@ export class WallSystem extends System {
 
   /**
    * Check if friendly units are near gate and trigger opening
+   * PERF: Uses spatial grid instead of iterating all units
    */
   private updateGateProximity(gateEntity: Entity, wall: Wall): void {
     if (wall.gateState !== 'auto') return;
@@ -97,53 +98,58 @@ export class WallSystem extends System {
     const gateTransform = gateEntity.get<Transform>('Transform')!;
     const gateSelectable = gateEntity.get<Selectable>('Selectable')!;
 
-    // Check for nearby friendly units
-    const units = this.world.getEntitiesWith('Unit', 'Transform', 'Selectable');
+    // PERF: Query only nearby units using spatial grid instead of all units
+    const nearbyUnitIds = this.world.unitGrid.queryRadius(
+      gateTransform.x,
+      gateTransform.y,
+      WallSystem.GATE_TRIGGER_DISTANCE
+    );
 
-    for (const unitEntity of units) {
-      const unitSelectable = unitEntity.get<Selectable>('Selectable')!;
+    for (const unitId of nearbyUnitIds) {
+      const unitEntity = this.world.getEntity(unitId);
+      if (!unitEntity) continue;
 
+      const unitSelectable = unitEntity.get<Selectable>('Selectable');
       // Must be same player
-      if (unitSelectable.playerId !== gateSelectable.playerId) continue;
+      if (!unitSelectable || unitSelectable.playerId !== gateSelectable.playerId) continue;
 
-      const unitTransform = unitEntity.get<Transform>('Transform')!;
-      const dx = unitTransform.x - gateTransform.x;
-      const dy = unitTransform.y - gateTransform.y;
-      const distance = Math.sqrt(dx * dx + dy * dy);
-
-      if (distance <= WallSystem.GATE_TRIGGER_DISTANCE) {
-        wall.triggerOpen();
-        break;
-      }
+      // Unit is within trigger distance (spatial grid already filtered by distance)
+      wall.triggerOpen();
+      break;
     }
   }
 
   /**
    * Repair drone heals adjacent walls
+   * PERF: Uses spatial grid to find nearby buildings instead of all walls
    */
   private updateRepairDrone(droneEntity: Entity, wall: Wall, dt: number): void {
     const droneTransform = droneEntity.get<Transform>('Transform')!;
     const droneSelectable = droneEntity.get<Selectable>('Selectable')!;
 
-    // Find adjacent walls to heal
-    const walls = this.world.getEntitiesWith('Wall', 'Building', 'Transform', 'Health', 'Selectable');
+    // PERF: Query nearby buildings using spatial grid instead of all walls
+    const nearbyBuildingIds = this.world.buildingGrid.queryRadius(
+      droneTransform.x,
+      droneTransform.y,
+      wall.repairRadius
+    );
 
-    for (const wallEntity of walls) {
-      if (wallEntity.id === droneEntity.id) continue;
+    for (const buildingId of nearbyBuildingIds) {
+      if (buildingId === droneEntity.id) continue;
 
-      const wallSelectable = wallEntity.get<Selectable>('Selectable')!;
-      if (wallSelectable.playerId !== droneSelectable.playerId) continue;
+      const wallEntity = this.world.getEntity(buildingId);
+      if (!wallEntity) continue;
 
-      const wallTransform = wallEntity.get<Transform>('Transform')!;
-      const dx = wallTransform.x - droneTransform.x;
-      const dy = wallTransform.y - droneTransform.y;
-      const distance = Math.sqrt(dx * dx + dy * dy);
+      // Check if this is a wall belonging to same player
+      const wallComp = wallEntity.get<Wall>('Wall');
+      if (!wallComp) continue;
 
-      if (distance <= wall.repairRadius) {
-        const wallHealth = wallEntity.get<Health>('Health')!;
-        if (wallHealth.current < wallHealth.max) {
-          wallHealth.current = Math.min(wallHealth.max, wallHealth.current + wall.repairRate * dt);
-        }
+      const wallSelectable = wallEntity.get<Selectable>('Selectable');
+      if (!wallSelectable || wallSelectable.playerId !== droneSelectable.playerId) continue;
+
+      const wallHealth = wallEntity.get<Health>('Health');
+      if (wallHealth && wallHealth.current < wallHealth.max) {
+        wallHealth.current = Math.min(wallHealth.max, wallHealth.current + wall.repairRate * dt);
       }
     }
   }

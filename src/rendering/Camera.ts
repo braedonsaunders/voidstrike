@@ -64,6 +64,12 @@ export class RTSCamera {
   // Cached terrain-based minimum zoom (updated when camera pans)
   private terrainMinZoom: number = 0;
 
+  // PERF: Cached raycaster and vectors for screenToWorld to avoid allocation per call
+  private readonly _raycaster = new THREE.Raycaster();
+  private readonly _raycastMouseVec = new THREE.Vector2();
+  private readonly _raycastPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
+  private readonly _raycastTarget = new THREE.Vector3();
+
   constructor(
     aspect: number,
     mapWidth: number,
@@ -445,31 +451,34 @@ export class RTSCamera {
   }
 
   // Convert screen coordinates to world coordinates
+  // PERF: Reuses cached raycaster/vectors to avoid allocation on every call
   public screenToWorld(screenX: number, screenY: number): THREE.Vector3 {
     const normalizedX = (screenX / this.screenWidth) * 2 - 1;
     const normalizedY = -(screenY / this.screenHeight) * 2 + 1;
 
-    const raycaster = new THREE.Raycaster();
-    raycaster.setFromCamera(new THREE.Vector2(normalizedX, normalizedY), this.camera);
+    // Reuse cached objects instead of allocating new ones
+    this._raycastMouseVec.set(normalizedX, normalizedY);
+    this._raycaster.setFromCamera(this._raycastMouseVec, this.camera);
 
-    const plane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
-    const target = new THREE.Vector3();
+    // Reset plane to y=0
+    this._raycastPlane.normal.set(0, 1, 0);
+    this._raycastPlane.constant = 0;
 
     // Initial intersection with y=0 plane
-    raycaster.ray.intersectPlane(plane, target);
+    this._raycaster.ray.intersectPlane(this._raycastPlane, this._raycastTarget);
 
     // If we have terrain height function, iterate to find accurate intersection
-    if (this.getTerrainHeight && target) {
+    if (this.getTerrainHeight && this._raycastTarget) {
       // Iterate 3 times to converge on correct terrain intersection
       for (let i = 0; i < 3; i++) {
-        const terrainHeight = this.getTerrainHeight(target.x, target.z);
+        const terrainHeight = this.getTerrainHeight(this._raycastTarget.x, this._raycastTarget.z);
         // Create plane at terrain height
-        plane.constant = -terrainHeight;
-        raycaster.ray.intersectPlane(plane, target);
+        this._raycastPlane.constant = -terrainHeight;
+        this._raycaster.ray.intersectPlane(this._raycastPlane, this._raycastTarget);
       }
     }
 
-    return target;
+    return this._raycastTarget.clone(); // Clone to avoid returning internal reference
   }
 
   // Convert world coordinates to screen coordinates
