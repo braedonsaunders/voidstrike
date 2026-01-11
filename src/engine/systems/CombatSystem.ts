@@ -178,9 +178,10 @@ export class CombatSystem extends System {
     const attackers = this.world.getEntitiesWith('Transform', 'Unit', 'Health');
 
     for (const attacker of attackers) {
-      const transform = attacker.get<Transform>('Transform')!;
-      const unit = attacker.get<Unit>('Unit')!;
-      const health = attacker.get<Health>('Health')!;
+      const transform = attacker.get<Transform>('Transform');
+      const unit = attacker.get<Unit>('Unit');
+      const health = attacker.get<Health>('Health');
+      if (!transform || !unit || !health) continue;
 
       // Skip dead units
       if (health.isDead()) {
@@ -298,10 +299,11 @@ export class CombatSystem extends System {
     // Check for building deaths - CRITICAL: Must destroy buildings with 0 health
     const buildings = this.world.getEntitiesWith('Building', 'Transform', 'Health', 'Selectable');
     for (const building of buildings) {
-      const health = building.get<Health>('Health')!;
-      const buildingComp = building.get<Building>('Building')!;
-      const selectable = building.get<Selectable>('Selectable')!;
-      const transform = building.get<Transform>('Transform')!;
+      const health = building.get<Health>('Health');
+      const buildingComp = building.get<Building>('Building');
+      const selectable = building.get<Selectable>('Selectable');
+      const transform = building.get<Transform>('Transform');
+      if (!health || !buildingComp || !selectable || !transform) continue;
 
       // Check multiple conditions for death to ensure we catch all cases
       // Building should be destroyed if: health <= 0, OR if health is very low (floating point safety)

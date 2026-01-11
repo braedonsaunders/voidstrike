@@ -263,10 +263,17 @@ export function WebGPUGameCanvas() {
       // Initialize navmesh for pathfinding (must complete before spawning entities)
       setLoadingStatus('Generating navigation mesh');
       setLoadingProgress(55);
+      console.log('[WebGPUGameCanvas] Generating walkable geometry...');
       const walkableGeometry = terrain.generateWalkableGeometry();
+      console.log('[WebGPUGameCanvas] Walkable geometry generated:', {
+        positions: walkableGeometry.positions.length,
+        indices: walkableGeometry.indices.length,
+      });
+      console.log('[WebGPUGameCanvas] Initializing navmesh...');
       const navMeshSuccess = await game.initializeNavMesh(walkableGeometry.positions, walkableGeometry.indices);
+      console.log('[WebGPUGameCanvas] NavMesh result:', navMeshSuccess);
       if (!navMeshSuccess) {
-        console.warn('[WebGPUGameCanvas] NavMesh initialization failed, pathfinding may not work correctly');
+        console.error('[WebGPUGameCanvas] NavMesh initialization failed!');
       }
 
       const fogOfWarEnabled = useGameSetupStore.getState().fogOfWar;
