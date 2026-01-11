@@ -115,19 +115,19 @@ This document contains all audio specifications, AI prompts for generation, and 
 - [x] `voice/breacher/attack.mp3`
 - [x] `voice/breacher/ready.mp3`
 
-### Voice Lines - Vanguard (Fast Assault Infantry) ⏳ Needs Generation
-- [ ] `voice/vanguard/select1.mp3`
-- [ ] `voice/vanguard/select2.mp3`
-- [ ] `voice/vanguard/move1.mp3`
-- [ ] `voice/vanguard/attack1.mp3`
-- [ ] `voice/vanguard/ready.mp3`
+### Voice Lines - Vanguard (Fast Assault Infantry) ✅ Complete
+- [x] `voice/vanguard/select1.mp3`
+- [x] `voice/vanguard/select2.mp3`
+- [x] `voice/vanguard/move1.mp3`
+- [x] `voice/vanguard/attack1.mp3`
+- [x] `voice/vanguard/ready.mp3`
 
-### Voice Lines - Operative (Elite Stealth) ⏳ Needs Generation
-- [ ] `voice/operative/select1.mp3`
-- [ ] `voice/operative/select2.mp3`
-- [ ] `voice/operative/move1.mp3`
-- [ ] `voice/operative/attack1.mp3`
-- [ ] `voice/operative/ready.mp3`
+### Voice Lines - Operative (Elite Stealth) ✅ Complete
+- [x] `voice/operative/select1.mp3`
+- [x] `voice/operative/select2.mp3`
+- [x] `voice/operative/move1.mp3`
+- [x] `voice/operative/attack1.mp3`
+- [x] `voice/operative/ready.mp3`
 
 ### Voice Lines - Scorcher (Fast Attack Vehicle) ✅ Complete
 - [x] `voice/scorcher/select1.mp3`
@@ -143,18 +143,18 @@ This document contains all audio specifications, AI prompts for generation, and 
 - [x] `voice/devastator/attack1.mp3`
 - [x] `voice/devastator/ready.mp3`
 
-### Voice Lines - Colossus (Massive Walker Mech) ⏳ Needs Generation
-- [ ] `voice/colossus/select1.mp3`
-- [ ] `voice/colossus/select2.mp3`
-- [ ] `voice/colossus/move1.mp3`
-- [ ] `voice/colossus/attack1.mp3`
-- [ ] `voice/colossus/ready.mp3`
+### Voice Lines - Colossus (Massive Walker Mech) ✅ Complete
+- [x] `voice/colossus/select1.mp3`
+- [x] `voice/colossus/select2.mp3`
+- [x] `voice/colossus/move1.mp3`
+- [x] `voice/colossus/attack1.mp3`
+- [x] `voice/colossus/ready.mp3`
 
-### Voice Lines - Lifter (Flying Transport/Medic) ⏳ Needs Generation
-- [ ] `voice/lifter/select1.mp3`
-- [ ] `voice/lifter/select2.mp3`
-- [ ] `voice/lifter/move1.mp3`
-- [ ] `voice/lifter/ready.mp3`
+### Voice Lines - Lifter (Flying Transport/Medic) ✅ Complete
+- [x] `voice/lifter/select1.mp3`
+- [x] `voice/lifter/select2.mp3`
+- [x] `voice/lifter/move1.mp3`
+- [x] `voice/lifter/ready.mp3`
 
 ### Voice Lines - Valkyrie (Transforming Fighter) ⏳ Needs Generation
 - [ ] `voice/valkyrie/select1.mp3`
