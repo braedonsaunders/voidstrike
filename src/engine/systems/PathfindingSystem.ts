@@ -9,14 +9,14 @@ import { MapData, TERRAIN_FEATURE_CONFIG, TerrainFeature } from '@/data/maps';
 import { debugPathfinding } from '@/utils/debugLogger';
 
 // Configuration for path invalidation
-const REPATH_INTERVAL_TICKS = 30; // Check for repath every 1.5 seconds at 20 TPS
+const REPATH_INTERVAL_TICKS = 60; // Check for repath every 3 seconds at 20 TPS
 const BLOCKED_CHECK_RADIUS = 3; // Check cells within this radius for blockage
-const MAX_STUCK_TICKS = 6; // If unit hasn't moved for this many ticks, repath (faster recovery)
-const MIN_MOVEMENT_THRESHOLD = 0.05; // Minimum distance to count as "moved"
-const PATH_REQUEST_COOLDOWN = 10; // Minimum ticks between path requests to prevent spam
+const MAX_STUCK_TICKS = 20; // If unit hasn't moved for 1 second, repath (less aggressive)
+const MIN_MOVEMENT_THRESHOLD = 0.2; // Minimum distance to count as "moved" (20cm)
+const PATH_REQUEST_COOLDOWN = 30; // Minimum ticks between path requests (1.5 seconds)
 
 // Path request batching - spread expensive pathfinding across frames
-const MAX_PATHS_PER_FRAME = 8; // Process at most this many path requests per frame
+const MAX_PATHS_PER_FRAME = 4; // Process at most this many path requests per frame
 
 // Terrain edge buffer - units can't path right next to terrain edges
 // This prevents units from getting stuck on collision with terrain edges
@@ -365,8 +365,11 @@ export class PathfindingSystem extends System {
 
     const queueSize = this.pendingRequests.length;
     const toProcess = Math.min(MAX_PATHS_PER_FRAME, queueSize);
-    console.log(`[PathfindingSystem] PROCESS_QUEUE: ${queueSize} pending, processing ${toProcess} this frame`);
-    debugPathfinding.log(`[Pathfinding] Processing queue: ${queueSize} pending, processing ${toProcess}`);
+
+    // Only log if queue is backing up (more than we can process)
+    if (queueSize > MAX_PATHS_PER_FRAME) {
+      debugPathfinding.log(`[Pathfinding] Processing queue: ${queueSize} pending, processing ${toProcess}`);
+    }
 
     const queueStart = performance.now();
 
@@ -728,7 +731,7 @@ export class PathfindingSystem extends System {
 
           if (needsRepath && (unit.path.length > 0 || (unit.targetX !== null && unit.targetY !== null))) {
             // Clear current path and recalculate
-            console.log(`[PathfindingSystem] STUCK_REPATH: entity ${entity.id} stuck for ${ticksSinceMove} ticks at (${transform.x.toFixed(1)},${transform.y.toFixed(1)})`);
+            debugPathfinding.log(`[PathfindingSystem] STUCK_REPATH: entity ${entity.id} stuck for ${ticksSinceMove} ticks at (${transform.x.toFixed(1)},${transform.y.toFixed(1)})`);
             unit.path = [];
             unit.pathIndex = 0;
 
@@ -752,7 +755,7 @@ export class PathfindingSystem extends System {
 
         // Check if there's a significantly blocked path ahead
         if (this.isPathSignificantlyBlocked(unit.path, unit.pathIndex)) {
-          console.log(`[PathfindingSystem] PERIODIC_REPATH: entity ${entity.id} path blocked, requesting new path`);
+          debugPathfinding.log(`[PathfindingSystem] PERIODIC_REPATH: entity ${entity.id} path blocked, requesting new path`);
           this.queuePathRequest({
             entityId: entity.id,
             startX: transform.x,
@@ -781,7 +784,7 @@ export class PathfindingSystem extends System {
     }
 
     if (blockedCount > 0) {
-      console.log(`[PathfindingSystem] PATH_BLOCKED: ${blockedCount}/${checkCount} waypoints blocked: ${blockedWaypoints.join(', ')}`);
+      debugPathfinding.log(`[PathfindingSystem] PATH_BLOCKED: ${blockedCount}/${checkCount} waypoints blocked: ${blockedWaypoints.join(', ')}`);
     }
 
     return blockedCount > 0;
