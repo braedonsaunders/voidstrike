@@ -112,11 +112,15 @@ export class CombatSystem extends System {
 
   // Target acquisition throttling - don't search every frame
   private lastTargetSearchTick: Map<number, number> = new Map();
-  private readonly TARGET_SEARCH_INTERVAL = 3; // Search every 3 ticks (~150ms) for responsive auto-attack
+  private readonly TARGET_SEARCH_INTERVAL = 3; // Search every 3 ticks (~150ms) for sight-range search
+  private readonly IMMEDIATE_SEARCH_INTERVAL = 1; // Search every 1 tick (~50ms) for attack-range search
 
   // Cache current targets to avoid re-searching
   private cachedTargets: Map<number, { targetId: number; validUntilTick: number }> = new Map();
   private readonly TARGET_CACHE_DURATION = 10; // Cache valid for 10 ticks (~0.5 sec)
+
+  // Separate throttle tracking for immediate attack-range checks
+  private lastImmediateSearchTick: Map<number, number> = new Map();
 
   constructor(game: Game) {
     super(game);
@@ -139,6 +143,7 @@ export class CombatSystem extends System {
   private handleUnitDeath(data: { entityId: number }): void {
     this.cachedTargets.delete(data.entityId);
     this.lastTargetSearchTick.delete(data.entityId);
+    this.lastImmediateSearchTick.delete(data.entityId);
   }
 
   private handleAttackCommand(command: {
@@ -246,10 +251,10 @@ export class CombatSystem extends System {
       if (needsTarget) {
         let target: number | null = null;
 
-        // For idle units, do an immediate check for enemies within ATTACK range
-        // This makes idle units instantly responsive to nearby threats
+        // For idle units, do a fast check for enemies within ATTACK range
+        // Uses light throttle (1 tick = ~50ms) for performance while staying responsive
         if (unit.state === 'idle' || unit.isHoldingPosition) {
-          target = this.findImmediateAttackTarget(attacker.id, transform, unit);
+          target = this.findImmediateAttackTarget(attacker.id, transform, unit, currentTick);
         }
 
         // If no immediate target found, use throttled search within sight range
@@ -393,15 +398,23 @@ export class CombatSystem extends System {
   }
 
   /**
-   * Immediate attack target search for idle/holding units
-   * Checks only within ATTACK range (not sight range) for instant response
-   * No throttling - runs every frame for responsive auto-attack behavior
+   * Fast attack target search for idle/holding units
+   * Checks only within ATTACK range (not sight range) for responsive auto-attack
+   * Uses light throttle (1 tick = ~50ms) for performance
    */
   private findImmediateAttackTarget(
     selfId: number,
     selfTransform: Transform,
-    selfUnit: Unit
+    selfUnit: Unit,
+    currentTick: number
   ): number | null {
+    // Light throttle - check every tick (~50ms) instead of every frame
+    const lastSearch = this.lastImmediateSearchTick.get(selfId) || 0;
+    if (currentTick - lastSearch < this.IMMEDIATE_SEARCH_INTERVAL) {
+      return null;
+    }
+    this.lastImmediateSearchTick.set(selfId, currentTick);
+
     // Get self's player ID
     const selfEntity = this.world.getEntity(selfId);
     const selfSelectable = selfEntity?.get<Selectable>('Selectable');
