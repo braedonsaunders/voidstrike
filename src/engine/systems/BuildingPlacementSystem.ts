@@ -125,7 +125,7 @@ export class BuildingPlacementSystem extends System {
 
     if (!definition) {
       debugBuildingPlacement.warn(`BuildingPlacementSystem: Unknown building type: ${buildingType}`);
-      this.game.eventBus.emit('ui:error', { message: `Unknown building: ${buildingType}` });
+      this.game.eventBus.emit('ui:error', { message: `Unknown building: ${buildingType}`, playerId });
       return;
     }
 
@@ -145,7 +145,7 @@ export class BuildingPlacementSystem extends System {
     // Check resources (only for local player - AI handles its own resources)
     if (isPlayerLocal) {
       if (store.minerals < definition.mineralCost || store.vespene < definition.vespeneCost) {
-        this.game.eventBus.emit('ui:error', { message: 'Not enough resources' });
+        this.game.eventBus.emit('ui:error', { message: 'Not enough resources', playerId });
         return;
       }
     }
@@ -154,7 +154,7 @@ export class BuildingPlacementSystem extends System {
     if (definition.requirements && definition.requirements.length > 0) {
       const missingDep = this.checkBuildingDependencies(definition.requirements, playerId);
       if (missingDep) {
-        this.game.eventBus.emit('ui:error', { message: `Requires ${missingDep}` });
+        this.game.eventBus.emit('ui:error', { message: `Requires ${missingDep}`, playerId });
         return;
       }
     }
@@ -164,12 +164,12 @@ export class BuildingPlacementSystem extends System {
     if (buildingType === 'extractor') {
       vespeneGeyserEntity = this.findVespeneGeyserAt(snappedX, snappedY);
       if (!vespeneGeyserEntity) {
-        this.game.eventBus.emit('ui:error', { message: 'Extractor must be placed on a Vespene Geyser' });
+        this.game.eventBus.emit('ui:error', { message: 'Extractor must be placed on a Vespene Geyser', playerId });
         return;
       }
       const resource = vespeneGeyserEntity.get<Resource>('Resource')!;
       if (resource.hasRefinery()) {
-        this.game.eventBus.emit('ui:error', { message: 'Vespene Geyser already has an Extractor' });
+        this.game.eventBus.emit('ui:error', { message: 'Vespene Geyser already has an Extractor', playerId });
         return;
       }
     }
@@ -178,14 +178,14 @@ export class BuildingPlacementSystem extends System {
     // so we can exclude them from collision detection
     const worker = this.findWorkerForConstruction(data.workerId, playerId);
     if (!worker) {
-      this.game.eventBus.emit('ui:error', { message: 'No worker available' });
+      this.game.eventBus.emit('ui:error', { message: 'No worker available', playerId });
       return;
     }
 
     // Check placement validity using center position (exclude builder from collision)
     // Skip collision check for extractors since they go on vespene geysers
     if (buildingType !== 'extractor' && !this.isValidPlacement(snappedX, snappedY, definition.width, definition.height, worker.entity.id)) {
-      this.game.eventBus.emit('ui:error', { message: 'Cannot build here - area blocked' });
+      this.game.eventBus.emit('ui:error', { message: 'Cannot build here - area blocked', playerId });
       return;
     }
 
@@ -394,19 +394,19 @@ export class BuildingPlacementSystem extends System {
 
     // Verify building can have an addon
     if (!parentBuilding.canHaveAddon) {
-      this.game.eventBus.emit('ui:error', { message: 'This building cannot have addons' });
+      this.game.eventBus.emit('ui:error', { message: 'This building cannot have addons', playerId });
       return;
     }
 
     // Check if building already has an addon
     if (parentBuilding.hasAddon()) {
-      this.game.eventBus.emit('ui:error', { message: 'Building already has an addon' });
+      this.game.eventBus.emit('ui:error', { message: 'Building already has an addon', playerId });
       return;
     }
 
     // Check if building is complete
     if (!parentBuilding.isComplete()) {
-      this.game.eventBus.emit('ui:error', { message: 'Building must be complete first' });
+      this.game.eventBus.emit('ui:error', { message: 'Building must be complete first', playerId });
       return;
     }
 
@@ -422,7 +422,7 @@ export class BuildingPlacementSystem extends System {
     const isPlayerLocal = isLocalPlayer(playerId);
     if (isPlayerLocal) {
       if (store.minerals < addonDef.mineralCost || store.vespene < addonDef.vespeneCost) {
-        this.game.eventBus.emit('ui:error', { message: 'Not enough resources' });
+        this.game.eventBus.emit('ui:error', { message: 'Not enough resources', playerId });
         return;
       }
     }
@@ -433,7 +433,7 @@ export class BuildingPlacementSystem extends System {
 
     // Check if addon position is valid (no collisions - exclude parent building from check)
     if (!this.isValidAddonPlacement(addonX, addonY, addonDef.width, addonDef.height, buildingId)) {
-      this.game.eventBus.emit('ui:error', { message: 'Cannot build addon here - blocked' });
+      this.game.eventBus.emit('ui:error', { message: 'Cannot build addon here - blocked', playerId });
       return;
     }
 
