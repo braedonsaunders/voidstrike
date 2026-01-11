@@ -1263,6 +1263,8 @@ export class MapDecorations {
   private terrain: Terrain;
   // Track rock positions for pathfinding collision
   private rockCollisions: Array<{ x: number; z: number; radius: number }> = [];
+  // Track tree positions for pathfinding collision
+  private treeCollisions: Array<{ x: number; z: number; radius: number }> = [];
 
   constructor(mapData: MapData, terrain: Terrain) {
     this.group = new THREE.Group();
@@ -1284,6 +1286,13 @@ export class MapDecorations {
    */
   public getRockCollisions(): Array<{ x: number; z: number; radius: number }> {
     return this.rockCollisions;
+  }
+
+  /**
+   * Get tree collision data for pathfinding
+   */
+  public getTreeCollisions(): Array<{ x: number; z: number; radius: number }> {
+    return this.treeCollisions;
   }
 
   // Create explicit decorations from map data using GLB models
@@ -1325,6 +1334,30 @@ export class MapDecorations {
           baseRadius = 0.8;
         }
         this.rockCollisions.push({
+          x: decoration.x,
+          z: decoration.y, // Note: decoration.y is world Z coordinate
+          radius: baseRadius * scale,
+        });
+      }
+
+      // Track tree collisions for pathfinding
+      // All tree types should block pathing at their trunk
+      if (decoration.type.includes('tree')) {
+        const scale = decoration.scale ?? 1;
+        // Base trunk collision radius - trees have thinner collision than rocks
+        let baseRadius = 0.6;
+        if (decoration.type === 'tree_pine_tall') {
+          baseRadius = 0.8;
+        } else if (decoration.type === 'tree_pine_medium') {
+          baseRadius = 0.6;
+        } else if (decoration.type === 'tree_palm') {
+          baseRadius = 0.5;
+        } else if (decoration.type === 'tree_dead') {
+          baseRadius = 0.4;
+        } else if (decoration.type === 'tree_alien' || decoration.type === 'tree_mushroom') {
+          baseRadius = 0.7;
+        }
+        this.treeCollisions.push({
           x: decoration.x,
           z: decoration.y, // Note: decoration.y is world Z coordinate
           radius: baseRadius * scale,
@@ -1585,8 +1618,13 @@ export class MapDecorations {
 
       treeGroup.position.set(pos.x, terrainHeight, pos.y);
       treeGroup.rotation.y = Math.random() * Math.PI * 2;
-      treeGroup.scale.setScalar(0.8 + Math.random() * 0.4);
+      const treeScale = 0.8 + Math.random() * 0.4;
+      treeGroup.scale.setScalar(treeScale);
       this.group.add(treeGroup);
+
+      // Track tree collision for pathfinding - trunk collision radius scaled by tree size
+      const collisionRadius = treeScale * 0.6;
+      this.treeCollisions.push({ x: pos.x, z: pos.y, radius: collisionRadius });
     }
   }
 

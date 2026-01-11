@@ -154,6 +154,9 @@ export class InstancedTrees {
   private geometries: THREE.BufferGeometry[] = [];
   private materials: THREE.Material[] = [];
 
+  // Store tree positions for collision detection (x, z are world coords, radius is collision size)
+  private treeCollisions: Array<{ x: number; z: number; radius: number }> = [];
+
   constructor(
     mapData: MapData,
     biome: BiomeConfig,
@@ -234,6 +237,12 @@ export class InstancedTrees {
       } else {
         playableTreesByModel.get(modelId)!.push(treePos);
       }
+
+      // Store collision data for pathfinding - trees have a trunk collision radius
+      // Scale affects collision size: base radius of 0.8 units scaled by tree scale
+      const collisionRadius = scale * 0.8;
+      this.treeCollisions.push({ x, z: y, radius: collisionRadius });
+
       return true;
     };
 
@@ -358,6 +367,14 @@ export class InstancedTrees {
     this.instancedMeshes = [];
     this.geometries = [];
     this.materials = [];
+  }
+
+  /**
+   * Get tree collision data for building placement validation and pathfinding
+   * Returns array of { x, z, radius } for each tree
+   */
+  public getTreeCollisions(): Array<{ x: number; z: number; radius: number }> {
+    return this.treeCollisions;
   }
 }
 
