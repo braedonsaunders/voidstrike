@@ -20,15 +20,15 @@ This document contains all audio specifications, AI prompts for generation, and 
 - [x] `music/victory/victory.mp3`
 - [x] `music/defeat/defeat.mp3`
 
-### Voice Announcements (Alerts) ⏳ Needs Generation
-- [ ] `alert/under_attack.mp3`
-- [ ] `alert/additional_population_required.mp3`
-- [ ] `alert/not_enough_minerals.mp3`
-- [ ] `alert/not_enough_vespene.mp3`
-- [ ] `alert/minerals_depleted.mp3`
-- [ ] `alert/building_complete.mp3`
-- [ ] `alert/research_complete.mp3`
-- [ ] `alert/upgrade_complete.mp3`
+### Voice Announcements (Alerts) ✅ Complete
+- [x] `alert/under_attack.mp3`
+- [x] `alert/additional_population_required.mp3`
+- [x] `alert/not_enough_minerals.mp3`
+- [x] `alert/not_enough_vespene.mp3`
+- [x] `alert/minerals_depleted.mp3`
+- [x] `alert/building_complete.mp3`
+- [x] `alert/research_complete.mp3`
+- [x] `alert/upgrade_complete.mp3`
 
 ### UI Sounds ⏳ Needs Generation
 - [ ] `ui/click.mp3`
