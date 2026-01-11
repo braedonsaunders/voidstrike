@@ -29,6 +29,7 @@ interface AnimatedUnitMesh {
   mixer: THREE.AnimationMixer;
   animations: Map<string, THREE.AnimationAction>;
   currentAction: string;
+  unitType: string; // Track unit type for animation speed multipliers
 }
 
 // Per-unit overlay data (selection ring, health bar, team marker)
@@ -45,6 +46,18 @@ interface UnitOverlay {
 
 const MAX_INSTANCES_PER_TYPE = 100; // Max units of same type per player
 const AIR_UNIT_HEIGHT = 8; // Height for flying units (matches building lift-off height)
+
+// Animation speed multipliers for specific unit types (1.0 = normal speed)
+const ANIMATION_SPEED_MULTIPLIERS: Record<string, number> = {
+  fabricator: 0.4, // Slow down fabricator leg animation to match movement speed
+};
+
+// Per-unit rotation offsets to correct model forward direction (radians)
+// Use this when a model's forward direction doesn't match the expected -Z (GLTF standard)
+// Positive values rotate counter-clockwise when viewed from above
+const MODEL_ROTATION_OFFSETS: Record<string, number> = {
+  fabricator: Math.PI, // Fabricator model faces backwards, rotate 180°
+};
 
 export class UnitRenderer {
   private scene: THREE.Scene;
@@ -321,6 +334,7 @@ export class UnitRenderer {
         mixer,
         animations,
         currentAction: 'idle',
+        unitType,
       };
 
       this.animatedUnits.set(entityId, animUnit);
@@ -633,9 +647,10 @@ export class UnitRenderer {
         // Update position and rotation
         // The inner model already has rotation -π/2 (MODEL_FORWARD_OFFSET) baked in,
         // which converts from GLTF's -Z forward to game's +X forward.
-        // We just need to apply the game rotation directly to the wrapper.
+        // We apply the game rotation plus any per-unit correction offset to the wrapper.
         animUnit.mesh.position.set(transform.x, unitHeight, transform.y);
-        animUnit.mesh.rotation.y = transform.rotation;
+        const rotationOffset = MODEL_ROTATION_OFFSETS[animUnit.unitType] ?? 0;
+        animUnit.mesh.rotation.y = transform.rotation + rotationOffset;
 
         // Determine animation state
         // isMoving: unit has non-zero velocity
@@ -647,8 +662,9 @@ export class UnitRenderer {
         // Update animation
         this.updateAnimationState(animUnit, isMoving, isActuallyAttacking);
 
-        // Update animation mixer
-        animUnit.mixer.update(deltaTime);
+        // Update animation mixer with unit-specific speed multiplier
+        const animSpeedMultiplier = ANIMATION_SPEED_MULTIPLIERS[animUnit.unitType] ?? 1.0;
+        animUnit.mixer.update(deltaTime * animSpeedMultiplier);
       } else {
         // Use instanced rendering for non-animated units
         const group = this.getOrCreateInstancedGroup(unit.unitId, ownerId);
