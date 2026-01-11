@@ -335,8 +335,10 @@ export class EnvironmentManager {
   }
 
   /**
-   * Get rock collision data for building placement validation and pathfinding
-   * Returns array of { x, z, radius } for each rock from both instanced and legacy decorations
+   * Get decoration collision data for building placement validation and pathfinding
+   * Returns array of { x, z, radius } for each blocking decoration (rocks AND trees)
+   * from both instanced and legacy decorations
+   * Note: Method name kept as getRockCollisions for backwards compatibility
    */
   public getRockCollisions(): Array<{ x: number; z: number; radius: number }> {
     const collisions: Array<{ x: number; z: number; radius: number }> = [];
@@ -346,9 +348,15 @@ export class EnvironmentManager {
       collisions.push(...this.rocks.getRockCollisions());
     }
 
-    // Get from legacy/explicit decorations (includes rocks from map data)
+    // Get from instanced trees (if no explicit decorations)
+    if (this.trees) {
+      collisions.push(...this.trees.getTreeCollisions());
+    }
+
+    // Get from legacy/explicit decorations (includes rocks and trees from map data)
     if (this.legacyDecorations) {
       collisions.push(...this.legacyDecorations.getRockCollisions());
+      collisions.push(...this.legacyDecorations.getTreeCollisions());
     }
 
     return collisions;
