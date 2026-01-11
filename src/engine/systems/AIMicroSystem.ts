@@ -523,6 +523,17 @@ export interface EnemyComposition {
   total: number;
 }
 
+export interface ThreatAnalysis {
+  // Number of enemy air units attacking our units that can't fight back
+  uncounterableAirThreats: number;
+  // Number of our units being attacked by air they can't hit
+  unitsUnderAirAttack: number;
+  // Do we have ANY units that can attack air?
+  hasAntiAir: boolean;
+  // Number of anti-air capable units we have
+  antiAirUnitCount: number;
+}
+
 export interface CounterRecommendation {
   unitsToBuild: Array<{ unitId: string; priority: number }>;
   buildingsToBuild: Array<{ buildingId: string; priority: number }>;
@@ -583,18 +594,118 @@ export function analyzeEnemyComposition(
   return composition;
 }
 
+/**
+ * Analyze threats that the AI cannot counter with its current army composition.
+ * This checks if enemy air units are attacking AI units that cannot attack air,
+ * which should urgently trigger building anti-air units.
+ */
+export function analyzeThreatGaps(
+  world: import('../ecs/World').World,
+  myPlayerId: string
+): ThreatAnalysis {
+  const analysis: ThreatAnalysis = {
+    uncounterableAirThreats: 0,
+    unitsUnderAirAttack: 0,
+    hasAntiAir: false,
+    antiAirUnitCount: 0,
+  };
+
+  const units = world.getEntitiesWith('Unit', 'Selectable', 'Health', 'Transform');
+  const myUnits: Array<{ entity: import('../ecs/Entity').Entity; unit: Unit; transform: import('../components/Transform').Transform }> = [];
+  const enemyAirUnits: Array<{ entity: import('../ecs/Entity').Entity; unit: Unit; transform: import('../components/Transform').Transform }> = [];
+
+  // First pass: categorize units
+  for (const entity of units) {
+    const unit = entity.get<Unit>('Unit')!;
+    const selectable = entity.get<Selectable>('Selectable')!;
+    const health = entity.get<Health>('Health')!;
+    const transform = entity.get<import('../components/Transform').Transform>('Transform')!;
+
+    if (health.isDead()) continue;
+
+    if (selectable.playerId === myPlayerId) {
+      myUnits.push({ entity, unit, transform });
+      // Count our anti-air capable units
+      if (unit.canAttackAir) {
+        analysis.hasAntiAir = true;
+        analysis.antiAirUnitCount++;
+      }
+    } else {
+      // Enemy air units
+      if (unit.isFlying && unit.attackDamage > 0) {
+        enemyAirUnits.push({ entity, unit, transform });
+      }
+    }
+  }
+
+  // Second pass: check if enemy air units are near our units that can't fight back
+  const THREAT_RANGE = 15; // Check for threats within this range
+
+  for (const myUnit of myUnits) {
+    // Skip units that can attack air - they can defend themselves
+    if (myUnit.unit.canAttackAir) continue;
+    // Skip workers (less priority)
+    if (myUnit.unit.isWorker) continue;
+
+    for (const enemyAir of enemyAirUnits) {
+      const dx = myUnit.transform.x - enemyAir.transform.x;
+      const dy = myUnit.transform.y - enemyAir.transform.y;
+      const distance = Math.sqrt(dx * dx + dy * dy);
+
+      // Is the enemy air unit close enough to be a threat?
+      if (distance <= THREAT_RANGE) {
+        // Is the enemy air unit targeting our unit or nearby?
+        if (distance <= enemyAir.unit.attackRange * 1.5) {
+          analysis.unitsUnderAirAttack++;
+          analysis.uncounterableAirThreats++;
+          break; // Count each of our units only once
+        }
+      }
+    }
+  }
+
+  return analysis;
+}
+
 export function getCounterRecommendation(
   world: import('../ecs/World').World,
   myPlayerId: string,
   myBuildingCounts: Map<string, number>
 ): CounterRecommendation {
   const enemyComp = analyzeEnemyComposition(world, myPlayerId);
+  const threatGaps = analyzeThreatGaps(world, myPlayerId);
   const recommendation: CounterRecommendation = {
     unitsToBuild: [],
     buildingsToBuild: [],
   };
 
-  // Heavy air -> Build valkyries, colossus, troopers
+  // URGENT: Being attacked by air units we can't hit - highest priority!
+  // This triggers when enemy air is actively threatening our ground-only units
+  if (threatGaps.uncounterableAirThreats > 0 || (enemyComp.air > 0 && !threatGaps.hasAntiAir)) {
+    // Calculate urgency based on how many threats we can't counter
+    const urgency = Math.min(15, 10 + threatGaps.uncounterableAirThreats);
+
+    // Prioritize units that can attack air
+    // Trooper is cheapest and most accessible anti-air
+    recommendation.unitsToBuild.push({ unitId: 'trooper', priority: urgency });
+    // Valkyrie is dedicated anti-air (in fighter mode, air-only)
+    recommendation.unitsToBuild.push({ unitId: 'valkyrie', priority: urgency - 1 });
+    // Colossus can attack both ground and air with heavy damage
+    recommendation.unitsToBuild.push({ unitId: 'colossus', priority: urgency - 2 });
+    // Specter can attack both as well
+    recommendation.unitsToBuild.push({ unitId: 'specter', priority: urgency - 3 });
+
+    // If we don't have a hangar, we need one urgently for valkyries/specters
+    if (!myBuildingCounts.get('hangar')) {
+      recommendation.buildingsToBuild.push({ buildingId: 'hangar', priority: urgency });
+    }
+    // Infantry bay for troopers (usually already have, but just in case)
+    if (!myBuildingCounts.get('infantry_bay')) {
+      recommendation.buildingsToBuild.push({ buildingId: 'infantry_bay', priority: urgency - 1 });
+    }
+  }
+
+  // Heavy air -> Build valkyries, colossus, troopers (general counter, lower priority than urgent)
   if (enemyComp.air > enemyComp.total * 0.3) {
     recommendation.unitsToBuild.push({ unitId: 'valkyrie', priority: 10 });
     recommendation.unitsToBuild.push({ unitId: 'trooper', priority: 8 });
@@ -622,16 +733,29 @@ export function getCounterRecommendation(
     recommendation.unitsToBuild.push({ unitId: 'devastator', priority: 7 });
   }
 
-  // Balanced -> Mixed composition
+  // Balanced -> Mixed composition (but favor units that can attack air for versatility)
   if (recommendation.unitsToBuild.length === 0) {
-    recommendation.unitsToBuild.push({ unitId: 'trooper', priority: 7 });
-    recommendation.unitsToBuild.push({ unitId: 'breacher', priority: 6 });
-    recommendation.unitsToBuild.push({ unitId: 'lifter', priority: 5 });
+    recommendation.unitsToBuild.push({ unitId: 'trooper', priority: 7 }); // Can attack air
+    recommendation.unitsToBuild.push({ unitId: 'breacher', priority: 6 }); // Can attack air
+    recommendation.unitsToBuild.push({ unitId: 'lifter', priority: 5 }); // Support
   }
 
-  // Sort by priority
+  // Sort by priority and remove duplicates (keep highest priority version)
+  const seenUnits = new Set<string>();
   recommendation.unitsToBuild.sort((a, b) => b.priority - a.priority);
+  recommendation.unitsToBuild = recommendation.unitsToBuild.filter(u => {
+    if (seenUnits.has(u.unitId)) return false;
+    seenUnits.add(u.unitId);
+    return true;
+  });
+
+  const seenBuildings = new Set<string>();
   recommendation.buildingsToBuild.sort((a, b) => b.priority - a.priority);
+  recommendation.buildingsToBuild = recommendation.buildingsToBuild.filter(b => {
+    if (seenBuildings.has(b.buildingId)) return false;
+    seenBuildings.add(b.buildingId);
+    return true;
+  });
 
   return recommendation;
 }
