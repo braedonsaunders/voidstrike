@@ -79,6 +79,18 @@ export class VisionSystem extends System {
     this.initializeVisionMap();
   }
 
+  /**
+   * Reinitialize vision system with new map dimensions
+   * Called when Game singleton receives new dimensions
+   */
+  public reinitialize(mapWidth: number, mapHeight: number): void {
+    this.mapWidth = mapWidth;
+    this.mapHeight = mapHeight;
+    this.knownPlayers.clear();
+    this.watchTowers = [];
+    this.initializeVisionMap();
+  }
+
   private initializeVisionMap(): void {
     const gridWidth = Math.ceil(this.mapWidth / this.cellSize);
     const gridHeight = Math.ceil(this.mapHeight / this.cellSize);
