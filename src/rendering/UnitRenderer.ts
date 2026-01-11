@@ -606,8 +606,11 @@ export class UnitRenderer {
         animUnit.mesh.visible = true;
 
         // Update position and rotation
+        // The inner model already has rotation -π/2 (MODEL_FORWARD_OFFSET) baked in,
+        // which converts from GLTF's -Z forward to game's +X forward.
+        // We just need to apply the game rotation directly to the wrapper.
         animUnit.mesh.position.set(transform.x, unitHeight, transform.y);
-        animUnit.mesh.rotation.y = transform.rotation + Math.PI / 2;
+        animUnit.mesh.rotation.y = transform.rotation;
 
         // Determine animation state
         // isMoving: unit has non-zero velocity
@@ -631,8 +634,10 @@ export class UnitRenderer {
           group.entityIds[instanceIndex] = entity.id;
 
           // Set instance transform - apply offsets to account for model origin position/rotation
+          // rotationOffset is the model's baked-in rotation (typically -π/2 for GLTF models).
+          // Adding it converts from game coordinates (+X forward) to Three.js coordinates.
           this.tempPosition.set(transform.x, unitHeight + group.yOffset, transform.y);
-          this.tempEuler.set(0, transform.rotation - group.rotationOffset, 0);
+          this.tempEuler.set(0, transform.rotation + group.rotationOffset, 0);
           this.tempQuaternion.setFromEuler(this.tempEuler);
           this.tempMatrix.compose(this.tempPosition, this.tempQuaternion, this.tempScale);
           group.mesh.setMatrixAt(instanceIndex, this.tempMatrix);
