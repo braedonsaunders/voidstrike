@@ -18,6 +18,8 @@ interface ProductionQueueItem {
   name: string;
   progress: number;
   buildTime: number;
+  index: number; // Track original index for cancel/reorder
+  supplyAllocated: boolean;
 }
 
 interface SelectedEntityInfo {
@@ -91,13 +93,15 @@ export function SelectionPanel() {
           });
         } else if (building && health) {
           // Get production queue info
-          const queue: ProductionQueueItem[] = building.productionQueue.map((item) => {
+          const queue: ProductionQueueItem[] = building.productionQueue.map((item, idx) => {
             const unitDef = UNIT_DEFINITIONS[item.id];
             return {
               id: item.id,
               name: unitDef?.name ?? item.id,
               progress: item.progress,
               buildTime: item.buildTime,
+              index: idx,
+              supplyAllocated: item.supplyAllocated,
             };
           });
 
@@ -267,50 +271,11 @@ export function SelectionPanel() {
 
           {/* Right side: Production queue for buildings (compact inline version) */}
           {isBuilding && entity.isComplete && productionQueue.length > 0 && (
-            <div className="w-32 flex-shrink-0 border-l border-void-700/50 pl-3">
-              <div className="text-[10px] text-void-400 mb-1">Production</div>
-
-              {/* Active item */}
-              {activeItem && (
-                <div className="flex items-center gap-2 mb-2">
-                  <div className="w-8 h-8 bg-void-800 border border-plasma-500/50 rounded flex items-center justify-center flex-shrink-0">
-                    <span className="text-sm">{getUnitIcon(activeItem.id)}</span>
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <div className="text-[10px] text-void-200 truncate">{activeItem.name}</div>
-                    <div className="h-1 bg-void-800 rounded overflow-hidden mt-0.5">
-                      <div
-                        className="h-full bg-gradient-to-r from-plasma-600 to-plasma-400"
-                        style={{ width: `${activeItem.progress * 100}%` }}
-                      />
-                    </div>
-                    <div className="text-[9px] text-void-500 mt-0.5">
-                      {Math.floor(activeItem.progress * 100)}%
-                    </div>
-                  </div>
-                </div>
-              )}
-
-              {/* Queued items */}
-              {queuedItems.length > 0 && (
-                <div className="flex flex-wrap gap-1">
-                  {queuedItems.slice(0, 6).map((item, idx) => (
-                    <div
-                      key={`queue-${idx}`}
-                      className="w-6 h-6 bg-void-900/80 border border-void-600 rounded flex items-center justify-center"
-                      title={item.name}
-                    >
-                      <span className="text-[10px]">{getUnitIcon(item.id)}</span>
-                    </div>
-                  ))}
-                  {queuedItems.length > 6 && (
-                    <div className="w-6 h-6 bg-void-900/80 border border-void-600 rounded flex items-center justify-center text-[9px] text-void-400">
-                      +{queuedItems.length - 6}
-                    </div>
-                  )}
-                </div>
-              )}
-            </div>
+            <ProductionQueueDisplay
+              entityId={entity.id}
+              activeItem={activeItem}
+              queuedItems={queuedItems}
+            />
           )}
         </div>
       </div>
@@ -377,6 +342,175 @@ const StatItem = memo(function StatItem({ label, value, color }: { label: string
     <div className="flex items-center gap-1">
       <span className="text-void-500">{label}:</span>
       <span className={color}>{value ?? '-'}</span>
+    </div>
+  );
+});
+
+// Production queue display with cancel and reorder functionality
+const ProductionQueueDisplay = memo(function ProductionQueueDisplay({
+  entityId,
+  activeItem,
+  queuedItems,
+}: {
+  entityId: number;
+  activeItem: ProductionQueueItem | undefined;
+  queuedItems: ProductionQueueItem[];
+}) {
+  const handleCancelItem = useCallback((index: number) => {
+    const game = Game.getInstance();
+    if (!game) return;
+
+    const entity = game.world.getEntity(entityId);
+    if (!entity) return;
+
+    const building = entity.get<Building>('Building');
+    if (!building) return;
+
+    const cancelled = building.cancelProduction(index);
+    if (cancelled) {
+      const unitDef = UNIT_DEFINITIONS[cancelled.id];
+      if (unitDef) {
+        const store = useGameStore.getState();
+        const refundPercent = cancelled.progress < 0.5 ? 1 : 0.5;
+        store.addResources(
+          Math.floor(unitDef.mineralCost * refundPercent),
+          Math.floor(unitDef.vespeneCost * refundPercent)
+        );
+        // Only refund supply if it was actually allocated
+        if (cancelled.supplyAllocated) {
+          store.addSupply(-unitDef.supplyCost);
+        }
+      }
+
+      game.eventBus.emit('production:cancelled', {
+        buildingId: entityId,
+        itemId: cancelled.id,
+        itemType: cancelled.type,
+      });
+    }
+  }, [entityId]);
+
+  const handleMoveUp = useCallback((index: number) => {
+    const game = Game.getInstance();
+    if (!game) return;
+
+    const entity = game.world.getEntity(entityId);
+    if (!entity) return;
+
+    const building = entity.get<Building>('Building');
+    if (!building) return;
+
+    building.moveQueueItemUp(index);
+  }, [entityId]);
+
+  const handleMoveDown = useCallback((index: number) => {
+    const game = Game.getInstance();
+    if (!game) return;
+
+    const entity = game.world.getEntity(entityId);
+    if (!entity) return;
+
+    const building = entity.get<Building>('Building');
+    if (!building) return;
+
+    building.moveQueueItemDown(index);
+  }, [entityId]);
+
+  return (
+    <div className="w-36 flex-shrink-0 border-l border-void-700/50 pl-3 overflow-y-auto max-h-full">
+      <div className="text-[10px] text-void-400 mb-1 flex justify-between">
+        <span>Production</span>
+        <span className="text-void-500">{(activeItem ? 1 : 0) + queuedItems.length}</span>
+      </div>
+
+      {/* Active item */}
+      {activeItem && (
+        <div className="flex items-center gap-1.5 mb-2 group">
+          <div className="w-8 h-8 bg-void-800 border border-plasma-500/50 rounded flex items-center justify-center flex-shrink-0">
+            <span className="text-sm">{getUnitIcon(activeItem.id)}</span>
+          </div>
+          <div className="flex-1 min-w-0">
+            <div className="text-[10px] text-void-200 truncate">{activeItem.name}</div>
+            <div className="h-1 bg-void-800 rounded overflow-hidden mt-0.5">
+              <div
+                className="h-full bg-gradient-to-r from-plasma-600 to-plasma-400"
+                style={{ width: `${activeItem.progress * 100}%` }}
+              />
+            </div>
+            <div className="text-[9px] text-void-500 mt-0.5">
+              {Math.floor(activeItem.progress * 100)}%
+            </div>
+          </div>
+          <button
+            onClick={() => handleCancelItem(0)}
+            className="w-5 h-5 bg-red-900/50 hover:bg-red-800/70 border border-red-700/50 rounded flex items-center justify-center text-red-400 hover:text-red-300 transition-colors opacity-0 group-hover:opacity-100 text-[10px] flex-shrink-0"
+            title="Cancel production"
+          >
+            ✕
+          </button>
+        </div>
+      )}
+
+      {/* Queued items with reorder controls */}
+      {queuedItems.length > 0 && (
+        <div className="space-y-1">
+          {queuedItems.map((item, displayIdx) => {
+            const isFirst = displayIdx === 0;
+            const isLast = displayIdx === queuedItems.length - 1;
+
+            return (
+              <div key={`queue-${item.index}`} className="flex items-center gap-1 group">
+                <div className="relative flex-shrink-0">
+                  <div className="w-6 h-6 bg-void-900/80 border border-void-600 rounded flex items-center justify-center">
+                    <span className="text-[10px]">{getUnitIcon(item.id)}</span>
+                  </div>
+                  <span className="absolute -top-1 -right-1 w-3 h-3 bg-void-700 border border-void-500 rounded-full text-[7px] flex items-center justify-center text-void-300">
+                    {displayIdx + 2}
+                  </span>
+                </div>
+
+                <span className="text-[9px] text-void-400 flex-1 truncate">{item.name}</span>
+
+                {/* Reorder buttons */}
+                <div className="flex gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
+                  <button
+                    onClick={() => handleMoveUp(item.index)}
+                    disabled={isFirst}
+                    className={`w-4 h-4 rounded flex items-center justify-center text-[8px] transition-colors ${
+                      isFirst
+                        ? 'bg-void-800/30 text-void-600 cursor-not-allowed'
+                        : 'bg-void-700/50 hover:bg-void-600/70 text-void-300 hover:text-void-100'
+                    }`}
+                    title="Move up"
+                  >
+                    ▲
+                  </button>
+                  <button
+                    onClick={() => handleMoveDown(item.index)}
+                    disabled={isLast}
+                    className={`w-4 h-4 rounded flex items-center justify-center text-[8px] transition-colors ${
+                      isLast
+                        ? 'bg-void-800/30 text-void-600 cursor-not-allowed'
+                        : 'bg-void-700/50 hover:bg-void-600/70 text-void-300 hover:text-void-100'
+                    }`}
+                    title="Move down"
+                  >
+                    ▼
+                  </button>
+                </div>
+
+                <button
+                  onClick={() => handleCancelItem(item.index)}
+                  className="w-4 h-4 bg-red-900/50 hover:bg-red-800/70 border border-red-700/50 rounded flex items-center justify-center text-red-400 hover:text-red-300 transition-colors opacity-0 group-hover:opacity-100 text-[8px] flex-shrink-0"
+                  title={`Cancel ${item.name}`}
+                >
+                  ✕
+                </button>
+              </div>
+            );
+          })}
+        </div>
+      )}
     </div>
   );
 });
