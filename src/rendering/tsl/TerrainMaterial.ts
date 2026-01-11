@@ -65,7 +65,7 @@ function getBiomeTextures(biome: BiomeType): {
         grass: 'ash',
         dirt: 'basalt',
         rock: 'basalt',
-        cliff: 'lava_cliff',
+        cliff: 'volcanic_cliff',
       };
     case 'void':
       return {
