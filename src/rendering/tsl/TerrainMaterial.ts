@@ -31,6 +31,7 @@ import {
   sin,
   floor,
   clamp,
+  cross,
 } from 'three/tsl';
 import { MeshStandardNodeMaterial } from 'three/webgpu';
 import { BiomeType } from '@/rendering/Biomes';
@@ -195,7 +196,6 @@ export class TSLTerrainMaterial {
     // AAA-quality color node with all 4 texture layers
     const colorNode = Fn(() => {
       const worldPos = positionWorld;
-      const worldNorm = normalWorld;
 
       // Primary UV scale
       const primaryScale = float(textureRepeat);
@@ -205,9 +205,16 @@ export class TSLTerrainMaterial {
       const detailScale = float(textureRepeat).mul(0.31);
       const detailUV = uv().mul(vec2(detailScale, detailScale)).add(vec2(0.17, 0.31));
 
+      // Compute surface normal from position derivatives (more reliable than normalWorld)
+      const dPdx = worldPos.dFdx();
+      const dPdy = worldPos.dFdy();
+      const computedNormal = normalize(cross(dPdy, dPdx));
+
       // Calculate slope (0 = flat, 1 = vertical)
+      // Use abs of Y component - flat terrain has normal.y close to 1, steep has normal.y close to 0
       const upVector = vec3(0.0, 1.0, 0.0);
-      const slope = float(1.0).sub(abs(dot(normalize(worldNorm), upVector)));
+      const normalDotUp = abs(dot(computedNormal, upVector));
+      const slope = float(1.0).sub(normalDotUp);
 
       // Smooth procedural noise for blend variation (no floor() to avoid checkerboard)
       const noiseScale = float(0.05);
@@ -270,13 +277,19 @@ export class TSLTerrainMaterial {
 
     // Roughness blending based on slope
     const roughnessNode = Fn(() => {
-      const worldNorm = normalWorld;
+      const worldPos = positionWorld;
 
       const primaryScale = float(textureRepeat);
       const primaryUV = uv().mul(vec2(primaryScale, primaryScale));
 
+      // Compute surface normal from position derivatives
+      const dPdx = worldPos.dFdx();
+      const dPdy = worldPos.dFdy();
+      const computedNormal = normalize(cross(dPdy, dPdx));
+
       const upVector = vec3(0.0, 1.0, 0.0);
-      const slope = float(1.0).sub(abs(dot(normalize(worldNorm), upVector)));
+      const normalDotUp = abs(dot(computedNormal, upVector));
+      const slope = float(1.0).sub(normalDotUp);
 
       const grassR = texture(grassRoughness, primaryUV).r;
       const dirtR = texture(dirtRoughness, primaryUV).r;
@@ -297,13 +310,19 @@ export class TSLTerrainMaterial {
 
     // Normal map blending based on slope
     const normalNode = Fn(() => {
-      const worldNorm = normalWorld;
+      const worldPos = positionWorld;
 
       const primaryScale = float(textureRepeat);
       const primaryUV = uv().mul(vec2(primaryScale, primaryScale));
 
+      // Compute surface normal from position derivatives
+      const dPdx = worldPos.dFdx();
+      const dPdy = worldPos.dFdy();
+      const computedNormal = normalize(cross(dPdy, dPdx));
+
       const upVector = vec3(0.0, 1.0, 0.0);
-      const slope = float(1.0).sub(abs(dot(normalize(worldNorm), upVector)));
+      const normalDotUp = abs(dot(computedNormal, upVector));
+      const slope = float(1.0).sub(normalDotUp);
 
       // Sample normal maps
       const grassN = texture(grassNormal, primaryUV).rgb.mul(2.0).sub(1.0);
