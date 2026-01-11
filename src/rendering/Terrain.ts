@@ -8,7 +8,11 @@ import AssetManager from '@/assets/AssetManager';
 import { debugTerrain } from '@/utils/debugLogger';
 
 // Shader mode for terrain rendering
-type TerrainShaderMode = 'texture' | 'basic' | 'sc2';
+// 'standard': Uses MeshStandardMaterial (WebGPU + WebGL compatible) - RECOMMENDED
+// 'texture': Uses GLSL ShaderMaterial with textures (WebGL only)
+// 'basic': Uses GLSL ShaderMaterial procedural (WebGL only)
+// 'sc2': Uses GLSL ShaderMaterial full procedural (WebGL only)
+type TerrainShaderMode = 'standard' | 'texture' | 'basic' | 'sc2';
 
 
 // Terrain subdivision for smoother rendering
@@ -219,7 +223,7 @@ export class Terrain {
 
   private cellSize: number;
   private geometry: THREE.BufferGeometry;
-  private material: THREE.ShaderMaterial;
+  private material: THREE.Material;
 
   // Store heightmap for queries
   private heightMap: Float32Array;
@@ -227,10 +231,11 @@ export class Terrain {
   private gridHeight: number;
 
   // Shader mode selection:
-  // - 'texture': Uses AI-generated textures (60+ FPS) - RECOMMENDED
-  // - 'basic': Simple procedural shader (30-60 FPS)
-  // - 'sc2': Full procedural (10 FPS - too slow)
-  private static SHADER_MODE: TerrainShaderMode = 'texture';
+  // - 'standard': Uses MeshStandardMaterial (WebGPU + WebGL compatible) - RECOMMENDED
+  // - 'texture': Uses AI-generated textures with GLSL (WebGL only, 60+ FPS)
+  // - 'basic': Simple procedural shader (WebGL only, 30-60 FPS)
+  // - 'sc2': Full procedural (WebGL only, 10 FPS - too slow)
+  private static SHADER_MODE: TerrainShaderMode = 'standard';
 
   constructor(config: TerrainConfig) {
     this.mapData = config.mapData;
@@ -246,6 +251,11 @@ export class Terrain {
 
     // Create shader material based on mode
     switch (Terrain.SHADER_MODE) {
+      case 'standard':
+        // Use standard PBR material (WebGPU + WebGL compatible)
+        debugTerrain.log('[Terrain] Using standard PBR material for biome:', this.mapData.biome || 'grassland');
+        this.material = this.createStandardMaterial();
+        break;
       case 'texture':
         // Use biome-specific textures (falls back to grassland if not available)
         const biomeType = (this.mapData.biome || 'grassland') as BiomeTextureType;
@@ -275,17 +285,40 @@ export class Terrain {
   // Update shader uniforms (call each frame for animated effects)
   public update(deltaTime: number, sunDirection?: THREE.Vector3): void {
     switch (Terrain.SHADER_MODE) {
+      case 'standard':
+        // Standard material doesn't need per-frame updates
+        break;
       case 'texture':
-        updateTextureTerrainShader(this.material, deltaTime, sunDirection);
+        updateTextureTerrainShader(this.material as THREE.ShaderMaterial, deltaTime, sunDirection);
         break;
       case 'sc2':
-        updateVoidstrikeTerrainShader(this.material, deltaTime, sunDirection);
+        updateVoidstrikeTerrainShader(this.material as THREE.ShaderMaterial, deltaTime, sunDirection);
         break;
       case 'basic':
       default:
-        updateTerrainShader(this.material, deltaTime, sunDirection);
+        updateTerrainShader(this.material as THREE.ShaderMaterial, deltaTime, sunDirection);
         break;
     }
+  }
+
+  /**
+   * Create a standard PBR material that works with WebGPU and WebGL
+   * Uses vertex colors for terrain coloring
+   */
+  private createStandardMaterial(): THREE.MeshStandardMaterial {
+    const groundColors = this.biome.colors.ground;
+    // Use the first ground color as the base
+    const baseColor = groundColors[0];
+
+    const material = new THREE.MeshStandardMaterial({
+      color: new THREE.Color(baseColor.r, baseColor.g, baseColor.b),
+      vertexColors: true, // Use vertex colors for per-cell coloring
+      roughness: 0.85,
+      metalness: 0.0,
+      flatShading: false,
+    });
+
+    return material;
   }
 
   private createGeometry(): THREE.BufferGeometry {

@@ -87,6 +87,7 @@ declare module 'three/tsl' {
   export function sin(value: any): ShaderNodeObject<any>;
   export function cos(value: any): ShaderNodeObject<any>;
   export function tan(value: any): ShaderNodeObject<any>;
+  export function atan(y: any, x?: any): ShaderNodeObject<any>;
   export function atan2(y: any, x: any): ShaderNodeObject<any>;
   export function sqrt(value: any): ShaderNodeObject<any>;
   export function pow(base: any, exp: any): ShaderNodeObject<any>;
