@@ -27,22 +27,22 @@ This document lists all 3D models required for VOIDSTRIKE, with AI generation pr
 **Units (animated):**
 | Unit Type | Triangle Budget |
 |-----------|----------------|
-| Infantry (Marine, Ghost, Reaper) | 2,000 - 5,000 |
-| Heavy Infantry (Marauder) | 3,000 - 6,000 |
-| Vehicles (Hellion, Siege Tank) | 4,000 - 8,000 |
-| Mechs (Thor) | 6,000 - 10,000 |
-| Aircraft (Viking, Banshee, Medivac) | 4,000 - 8,000 |
-| Capital Ships (Battlecruiser) | 8,000 - 15,000 |
+| Infantry (Trooper, Operative, Vanguard) | 2,000 - 5,000 |
+| Heavy Infantry (Breacher) | 3,000 - 6,000 |
+| Vehicles (Scorcher, Devastator) | 4,000 - 8,000 |
+| Mechs (Colossus) | 6,000 - 10,000 |
+| Aircraft (Valkyrie, Specter, Lifter) | 4,000 - 8,000 |
+| Capital Ships (Dreadnought) | 8,000 - 15,000 |
 
 **Buildings (static):**
 | Building Type | Triangle Budget |
 |---------------|----------------|
-| Command Center, Starport | 25,000 - 35,000 |
-| Barracks, Factory | 15,000 - 25,000 |
-| Refinery, Engineering Bay | 10,000 - 20,000 |
-| Supply Depot, Bunker | 5,000 - 10,000 |
-| Addons (Tech Lab, Reactor) | 3,000 - 5,000 |
-| Turrets (Missile Turret) | 3,000 - 6,000 |
+| Headquarters, Hangar | 25,000 - 35,000 |
+| Infantry Bay, Forge | 15,000 - 25,000 |
+| Extractor, Tech Center | 10,000 - 20,000 |
+| Supply Cache, Garrison | 5,000 - 10,000 |
+| Addons (Research Module, Production Module) | 3,000 - 5,000 |
+| Turrets (Defense Turret) | 3,000 - 6,000 |
 
 ### Color Guidelines
 - **Primary:** Steel blue-gray (#6080a0)
@@ -82,19 +82,19 @@ All animated units should have these **three core animations** embedded in the G
 
 | Unit | idle | walk | attack | Special Notes |
 |------|------|------|--------|---------------|
-| **SCV** | Standing with tools | Walking/hovering | Drill/weld motion | Add `gather` animation for mining if possible |
-| **Marine** | Combat ready stance | Marching walk | Rifle burst fire | |
-| **Marauder** | Heavy stance | Heavy stomping walk | Grenade launch | Slower animations due to bulk |
-| **Reaper** | Light combat stance | Quick agile run | Dual pistol fire | Fast, agile animations |
-| **Ghost** | Stealth ready pose | Stealthy walk | Sniper shot | Slow, deliberate movements |
-| **Hellion** | Engine idle | Wheel rolling | Flame burst | Vehicle - wheels should turn in walk |
-| **Siege Tank** | Tank idle | Treads moving | Cannon fire | Add `siege` for siege mode if possible |
-| **Thor** | Heavy mech idle | Heavy stomping | Arm cannon barrage | Very heavy/slow movements |
-| **Medivac** | Hovering idle | Flying forward | N/A (no attack) | Add `heal` animation if possible |
-| **Viking** | Flying hover | Flying forward | Missile launch | Add `transform` animation if possible |
-| **Banshee** | Stealth hover | Flying forward | Rocket barrage | |
-| **Battlecruiser** | Massive hover | Slow forward flight | Turret fire | Add `yamato` for Yamato Cannon |
-| **Raven** | Drone hover | Flying movement | N/A (no attack) | Support unit, no attack animation needed |
+| **Fabricator** | Standing with tools | Walking/hovering | Drill/weld motion | Add `gather` animation for mining if possible |
+| **Trooper** | Combat ready stance | Marching walk | Rifle burst fire | |
+| **Breacher** | Heavy stance | Heavy stomping walk | Grenade launch | Slower animations due to bulk |
+| **Vanguard** | Light combat stance | Quick agile run | Dual pistol fire | Fast, agile animations |
+| **Operative** | Stealth ready pose | Stealthy walk | Sniper shot | Slow, deliberate movements |
+| **Scorcher** | Engine idle | Wheel rolling | Flame burst | Vehicle - wheels should turn in walk |
+| **Devastator** | Tank idle | Treads moving | Cannon fire | Add `siege` for siege mode if possible |
+| **Colossus** | Heavy mech idle | Heavy stomping | Arm cannon barrage | Very heavy/slow movements |
+| **Lifter** | Hovering idle | Flying forward | N/A (no attack) | Add `heal` animation if possible |
+| **Valkyrie** | Flying hover | Flying forward | Missile launch | Add `transform` animation if possible |
+| **Specter** | Stealth hover | Flying forward | Rocket barrage | |
+| **Dreadnought** | Massive hover | Slow forward flight | Turret fire | Add `nova_cannon` for Nova Cannon |
+| **Overseer** | Drone hover | Flying movement | N/A (no attack) | Support unit, no attack animation needed |
 
 ### Optional Bonus Animations
 
@@ -103,14 +103,14 @@ These are not required but enhance the experience:
 | Animation | Used For | Units |
 |-----------|----------|-------|
 | `death` | Death sequence | All units |
-| `gather` | Mining/gathering | SCV |
-| `build` | Construction | SCV |
-| `heal` | Healing others | Medivac |
-| `siege` | Siege mode pose | Siege Tank |
-| `transform` | Mode transformation | Viking, Hellion, Siege Tank |
-| `yamato` | Yamato Cannon | Battlecruiser |
-| `stim` | Stim Pack effect | Marine, Marauder |
-| `cloak` | Cloaking effect | Ghost, Banshee |
+| `gather` | Mining/gathering | Fabricator |
+| `build` | Construction | Fabricator |
+| `heal` | Healing others | Lifter |
+| `siege` | Siege mode pose | Devastator |
+| `transform` | Mode transformation | Valkyrie, Scorcher, Devastator |
+| `nova_cannon` | Nova Cannon | Dreadnought |
+| `stim` | Stim Pack effect | Trooper, Breacher |
+| `cloak` | Cloaking effect | Operative, Specter |
 
 ### Example Animation Setup (Blender)
 
@@ -128,8 +128,8 @@ These are not required but enhance the experience:
 
 ## UNITS
 
-### 1. SCV (Space Construction Vehicle)
-**File:** `/public/models/units/scv.glb`
+### 1. Fabricator (Worker Unit)
+**File:** `/public/models/units/fabricator.glb`
 
 **Dimensions:** 0.8m wide × 0.8m tall × 0.6m deep
 
@@ -152,8 +152,8 @@ game-ready low poly, isometric view, white background
 
 ---
 
-### 2. Marine
-**File:** `/public/models/units/marine.glb`
+### 2. Trooper (Basic Infantry)
+**File:** `/public/models/units/trooper.glb`
 
 **Dimensions:** 0.5m wide × 1.2m tall × 0.4m deep
 
@@ -176,8 +176,8 @@ game-ready low poly, PBR materials, white background
 
 ---
 
-### 3. Marauder
-**File:** `/public/models/units/marauder.glb`
+### 3. Breacher (Heavy Infantry)
+**File:** `/public/models/units/breacher.glb`
 
 **Dimensions:** 0.7m wide × 1.4m tall × 0.6m deep
 
@@ -200,8 +200,8 @@ blue-gray military colors, game-ready low poly, white background
 
 ---
 
-### 4. Reaper
-**File:** `/public/models/units/reaper.glb`
+### 4. Vanguard (Jetpack Infantry)
+**File:** `/public/models/units/vanguard.glb`
 
 **Dimensions:** 0.5m wide × 1.3m tall × 0.4m deep
 
@@ -224,8 +224,8 @@ game-ready low poly, PBR materials, white background
 
 ---
 
-### 5. Ghost
-**File:** `/public/models/units/ghost.glb`
+### 5. Operative (Stealth Sniper)
+**File:** `/public/models/units/operative.glb`
 
 **Dimensions:** 0.4m wide × 1.3m tall × 0.4m deep
 
@@ -248,8 +248,8 @@ PBR materials, white background
 
 ---
 
-### 6. Hellion
-**File:** `/public/models/units/hellion.glb`
+### 6. Scorcher (Flame Buggy)
+**File:** `/public/models/units/scorcher.glb`
 
 **Dimensions:** 1.2m wide × 0.8m tall × 2.0m long
 
@@ -272,8 +272,8 @@ PBR materials, white background
 
 ---
 
-### 7. Siege Tank
-**File:** `/public/models/units/siege_tank.glb`
+### 7. Devastator (Siege Tank)
+**File:** `/public/models/units/devastator.glb`
 
 **Dimensions:** 1.6m wide × 1.0m tall × 2.2m long
 
@@ -295,8 +295,8 @@ game-ready low poly, PBR materials, side view, white background
 
 ---
 
-### 8. Thor
-**File:** `/public/models/units/thor.glb`
+### 8. Colossus (Heavy Assault Mech)
+**File:** `/public/models/units/colossus.glb`
 
 **Dimensions:** 2.0m wide × 2.5m tall × 1.5m deep
 
@@ -319,8 +319,8 @@ game-ready low poly, PBR materials, white background
 
 ---
 
-### 9. Medivac
-**File:** `/public/models/units/medivac.glb`
+### 9. Lifter (Medical Dropship)
+**File:** `/public/models/units/lifter.glb`
 
 **Dimensions:** 2.0m wide × 1.2m tall × 3.0m long
 
@@ -343,8 +343,8 @@ PBR materials, white background
 
 ---
 
-### 10. Viking
-**File:** `/public/models/units/viking.glb`
+### 10. Valkyrie (Transforming Fighter)
+**File:** `/public/models/units/valkyrie.glb`
 
 **Dimensions:** 1.8m wide × 1.5m tall × 2.5m long (flight mode)
 
@@ -367,8 +367,8 @@ flight mode pose, white background
 
 ---
 
-### 11. Banshee
-**File:** `/public/models/units/banshee.glb`
+### 11. Specter (Stealth Aircraft)
+**File:** `/public/models/units/specter.glb`
 
 **Dimensions:** 1.5m wide × 0.8m tall × 2.5m long
 
@@ -391,8 +391,8 @@ PBR materials, white background
 
 ---
 
-### 12. Battlecruiser
-**File:** `/public/models/units/battlecruiser.glb`
+### 12. Dreadnought (Capital Battleship)
+**File:** `/public/models/units/dreadnought.glb`
 
 **Dimensions:** 4.0m wide × 2.0m tall × 6.0m long
 
@@ -411,13 +411,13 @@ game-ready low poly, PBR materials, white background
 - Large elongated hull (biggest unit)
 - Command bridge/tower
 - Multiple weapon turrets
-- Large main cannon (Yamato - accent color)
+- Large main cannon (Nova Cannon - accent color)
 - Engine array at rear
 
 ---
 
-### 13. Raven
-**File:** `/public/models/units/raven.glb`
+### 13. Overseer (Support Drone)
+**File:** `/public/models/units/overseer.glb`
 
 **Dimensions:** 1.5m wide × 0.8m tall × 2.0m long
 
@@ -443,12 +443,12 @@ game-ready low poly, PBR materials, white background
 
 ## BUILDINGS
 
-### 1. Command Center
-**File:** `/public/models/buildings/command_center.glb`
+### 1. Headquarters (Main Base)
+**File:** `/public/models/buildings/headquarters.glb`
 
 **Dimensions:** 5m × 5m footprint, 4m tall
 
-**Description:** Main base headquarters and worker production facility. Can upgrade to Orbital Command or Planetary Fortress.
+**Description:** Main base headquarters and worker production facility. Can upgrade to Orbital Station or Bastion.
 
 **AI Prompt:**
 ```
@@ -467,12 +467,12 @@ PBR materials, isometric view, white background
 
 ---
 
-### 2. Orbital Command (Command Center Upgrade)
-**File:** `/public/models/buildings/orbital_command.glb`
+### 2. Orbital Station (Headquarters Upgrade)
+**File:** `/public/models/buildings/orbital_station.glb`
 
 **Dimensions:** 5m × 5m footprint, 5m tall
 
-**Description:** Upgraded Command Center with orbital satellite uplink capabilities. Provides MULEs, Scanner Sweep, and Supply Drops.
+**Description:** Upgraded Headquarters with orbital satellite uplink capabilities. Provides enhanced reconnaissance and supply drops.
 
 **AI Prompt:**
 ```
@@ -488,17 +488,17 @@ PBR materials, isometric view, white background
 - Large satellite dish array (accent color)
 - Multiple communication antennas
 - Orbital uplink equipment
-- Upgraded from Command Center appearance
+- Upgraded from Headquarters appearance
 - Glowing holographic elements
 
 ---
 
-### 3. Planetary Fortress (Command Center Upgrade)
-**File:** `/public/models/buildings/planetary_fortress.glb`
+### 3. Bastion (Headquarters Defensive Upgrade)
+**File:** `/public/models/buildings/bastion.glb`
 
 **Dimensions:** 5m × 5m footprint, 4m tall
 
-**Description:** Heavily fortified Command Center upgrade with twin Ibiks cannons. Cannot lift off. Massive defensive structure.
+**Description:** Heavily fortified Headquarters upgrade with twin cannons. Cannot relocate. Massive defensive structure.
 
 **AI Prompt:**
 ```
@@ -514,12 +514,12 @@ game-ready low poly, PBR materials, isometric view, white background
 - Extra thick armored walls
 - Bunker-like defensive appearance
 - No visible landing pad (cannot lift off)
-- More fortified than standard Command Center
+- More fortified than standard Headquarters
 
 ---
 
-### 4. Supply Depot
-**File:** `/public/models/buildings/supply_depot.glb`
+### 4. Supply Cache
+**File:** `/public/models/buildings/supply_cache.glb`
 
 **Dimensions:** 2m × 2m footprint, 1.5m tall
 
@@ -542,8 +542,8 @@ PBR materials, isometric view, white background
 
 ---
 
-### 3. Refinery
-**File:** `/public/models/buildings/refinery.glb`
+### 5. Extractor (Gas Refinery)
+**File:** `/public/models/buildings/extractor.glb`
 
 **Dimensions:** 3m × 3m footprint, 3m tall
 
@@ -566,8 +566,8 @@ PBR materials, isometric view, white background
 
 ---
 
-### 4. Barracks
-**File:** `/public/models/buildings/barracks.glb`
+### 6. Infantry Bay (Infantry Production)
+**File:** `/public/models/buildings/infantry_bay.glb`
 
 **Dimensions:** 3m × 3m footprint, 2.5m tall
 
@@ -590,8 +590,8 @@ PBR materials, isometric view, white background
 
 ---
 
-### 5. Engineering Bay
-**File:** `/public/models/buildings/engineering_bay.glb`
+### 7. Tech Center (Infantry Upgrades)
+**File:** `/public/models/buildings/tech_center.glb`
 
 **Dimensions:** 3m × 3m footprint, 3m tall
 
@@ -614,8 +614,8 @@ PBR materials, isometric view, white background
 
 ---
 
-### 6. Bunker
-**File:** `/public/models/buildings/bunker.glb`
+### 8. Garrison (Defensive Bunker)
+**File:** `/public/models/buildings/garrison.glb`
 
 **Dimensions:** 3m × 3m footprint, 1.5m tall
 
@@ -638,8 +638,8 @@ PBR materials, isometric view, white background
 
 ---
 
-### 7. Factory
-**File:** `/public/models/buildings/factory.glb`
+### 9. Forge (Vehicle Production)
+**File:** `/public/models/buildings/forge.glb`
 
 **Dimensions:** 3m × 3m footprint, 3m tall
 
@@ -662,8 +662,8 @@ PBR materials, isometric view, white background
 
 ---
 
-### 8. Armory
-**File:** `/public/models/buildings/armory.glb`
+### 10. Arsenal (Vehicle Upgrades)
+**File:** `/public/models/buildings/arsenal.glb`
 
 **Dimensions:** 3m × 3m footprint, 2.5m tall
 
@@ -686,8 +686,8 @@ PBR materials, isometric view, white background
 
 ---
 
-### 9. Starport
-**File:** `/public/models/buildings/starport.glb`
+### 11. Hangar (Air Production)
+**File:** `/public/models/buildings/hangar.glb`
 
 **Dimensions:** 3m × 3m footprint, 2.5m tall
 
@@ -709,8 +709,8 @@ game-ready low poly, PBR materials, isometric view, white background
 
 ---
 
-### 10. Fusion Core
-**File:** `/public/models/buildings/fusion_core.glb`
+### 12. Power Core (Advanced Tech)
+**File:** `/public/models/buildings/power_core.glb`
 
 **Dimensions:** 3m × 3m footprint, 4m tall
 
@@ -732,8 +732,8 @@ game-ready low poly, PBR materials, isometric view, white background
 
 ---
 
-### 11. Sensor Tower
-**File:** `/public/models/buildings/sensor_tower.glb`
+### 13. Radar Array (Detection Tower)
+**File:** `/public/models/buildings/radar_array.glb`
 
 **Dimensions:** 2m × 2m footprint, 4m tall
 
@@ -755,8 +755,8 @@ game-ready low poly, PBR materials, isometric view, white background
 
 ---
 
-### 12. Missile Turret
-**File:** `/public/models/buildings/missile_turret.glb`
+### 14. Defense Turret (Anti-Air)
+**File:** `/public/models/buildings/defense_turret.glb`
 
 **Dimensions:** 2m × 2m footprint, 2.5m tall
 
@@ -779,12 +779,12 @@ PBR materials, isometric view, white background
 
 ---
 
-### 13. Ghost Academy
-**File:** `/public/models/buildings/ghost_academy.glb`
+### 15. Ops Center (Special Ops Training)
+**File:** `/public/models/buildings/ops_center.glb`
 
 **Dimensions:** 3m × 3m footprint, 3m tall
 
-**Description:** Covert operations training facility for Ghost production.
+**Description:** Covert operations training facility for Operative production.
 
 **AI Prompt:**
 ```
@@ -805,12 +805,12 @@ PBR materials, isometric view, white background
 
 ---
 
-### 14. Tech Lab (Addon)
-**File:** `/public/models/buildings/tech_lab.glb`
+### 16. Research Module (Addon)
+**File:** `/public/models/buildings/research_module.glb`
 
 **Dimensions:** 2m × 2m footprint, 2m tall
 
-**Description:** Research addon for Barracks/Factory/Starport that enables advanced unit production.
+**Description:** Research addon for Infantry Bay/Forge/Hangar that enables advanced unit production.
 
 **AI Prompt:**
 ```
@@ -830,12 +830,12 @@ PBR materials, isometric view, white background
 
 ---
 
-### 15. Reactor (Addon)
-**File:** `/public/models/buildings/reactor.glb`
+### 17. Production Module (Addon)
+**File:** `/public/models/buildings/production_module.glb`
 
 **Dimensions:** 2m × 2m footprint, 2m tall
 
-**Description:** Power addon for Barracks/Factory/Starport that enables double unit production.
+**Description:** Power addon for Infantry Bay/Forge/Hangar that enables double unit production.
 
 **AI Prompt:**
 ```
@@ -1286,11 +1286,11 @@ import { AssetManager } from '@/assets/AssetManager';
 // During game initialization
 async function loadCustomModels() {
   // Units
-  await AssetManager.loadGLTF('/models/units/marine.glb', 'marine');
-  await AssetManager.loadGLTF('/models/units/scv.glb', 'scv');
+  await AssetManager.loadGLTF('/models/units/trooper.glb', 'trooper');
+  await AssetManager.loadGLTF('/models/units/fabricator.glb', 'fabricator');
 
   // Buildings
-  await AssetManager.loadGLTF('/models/buildings/command_center.glb', 'command_center');
+  await AssetManager.loadGLTF('/models/buildings/headquarters.glb', 'headquarters');
 
   // Resources
   await AssetManager.loadGLTF('/models/resources/minerals.glb', 'minerals');
