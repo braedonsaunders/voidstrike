@@ -176,10 +176,16 @@ export function WebGPUGameCanvas() {
     const initializeThreeJS = async () => {
       if (!threeCanvasRef.current) return;
 
+      const graphicsSettings = useUIStore.getState().graphicsSettings;
+
       // Create WebGPU renderer with automatic fallback
+      // IMPORTANT: Disable hardware MSAA when post-processing is enabled.
+      // GTAO/SSAO doesn't work with multisampled depth textures in WebGPU/WGSL.
+      // We use FXAA in the post-processing pipeline for anti-aliasing instead.
+      const useHardwareAA = !graphicsSettings.postProcessingEnabled;
       const renderContext = await createWebGPURenderer({
         canvas: threeCanvasRef.current,
-        antialias: true,
+        antialias: useHardwareAA,
         powerPreference: 'high-performance',
         forceWebGL: false, // Let it try WebGPU first
       });
@@ -324,7 +330,7 @@ export function WebGPUGameCanvas() {
       effectEmitterRef.current = new EffectEmitter(scene, renderer as any, 10000);
 
       // Post-processing pipeline (TSL-based)
-      const graphicsSettings = useUIStore.getState().graphicsSettings;
+      // Note: graphicsSettings already declared at top of function
       if (graphicsSettings.postProcessingEnabled) {
         renderPipelineRef.current = new RenderPipeline(
           renderer,

@@ -174,8 +174,48 @@ export function GraphicsOptionsPanel() {
       </div>
 
       {/* === AMBIENT OCCLUSION === */}
-      {/* Note: SSAO/GTAO is disabled due to WebGPU WGSL shader compatibility issues */}
-      {/* The GTAO node uses textureDimensions with multisampled depth which is unsupported */}
+      <div style={sectionStyle}>
+        <div style={sectionTitleStyle}>Ambient Occlusion (SSAO)</div>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
+          <span>Enable SSAO</span>
+          <button
+            onClick={() => handleToggle('ssaoEnabled')}
+            style={buttonStyle(graphicsSettings.ssaoEnabled)}
+          >
+            {graphicsSettings.ssaoEnabled ? 'ON' : 'OFF'}
+          </button>
+        </div>
+        <div style={{ marginBottom: '8px' }}>
+          <label style={labelStyle}>
+            Radius: {graphicsSettings.ssaoRadius.toFixed(1)}
+          </label>
+          <input
+            type="range"
+            min="1"
+            max="16"
+            step="0.5"
+            value={graphicsSettings.ssaoRadius}
+            onChange={(e) => setGraphicsSetting('ssaoRadius', parseFloat(e.target.value))}
+            style={sliderStyle}
+            disabled={!graphicsSettings.ssaoEnabled}
+          />
+        </div>
+        <div>
+          <label style={labelStyle}>
+            Intensity: {graphicsSettings.ssaoIntensity.toFixed(2)}
+          </label>
+          <input
+            type="range"
+            min="0"
+            max="2"
+            step="0.1"
+            value={graphicsSettings.ssaoIntensity}
+            onChange={(e) => setGraphicsSetting('ssaoIntensity', parseFloat(e.target.value))}
+            style={sliderStyle}
+            disabled={!graphicsSettings.ssaoEnabled}
+          />
+        </div>
+      </div>
 
       {/* === BLOOM === */}
       <div style={sectionStyle}>
