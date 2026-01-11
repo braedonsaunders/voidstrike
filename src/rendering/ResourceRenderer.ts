@@ -117,10 +117,11 @@ export class ResourceRenderer {
 
   /**
    * Update frustum from camera - call before update loop
+   * PERF: camera.updateMatrixWorld() is called once in main render loop
    */
   private updateFrustum(): void {
     if (!this.camera) return;
-    this.camera.updateMatrixWorld();
+    // PERF: updateMatrixWorld() is now called once in WebGPUGameCanvas before renderer updates
     this.frustumMatrix.multiplyMatrices(
       this.camera.projectionMatrix,
       this.camera.matrixWorldInverse

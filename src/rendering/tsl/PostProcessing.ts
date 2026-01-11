@@ -71,9 +71,11 @@ const DEFAULT_CONFIG: PostProcessingConfig = {
   bloomRadius: 0.5,
   bloomThreshold: 0.8,
 
+  // PERF: Reduced AO radius from 4 to 2 for better performance
+  // GTAO is expensive - disable for low-end devices via graphics settings
   aoEnabled: true,
-  aoRadius: 4,
-  aoIntensity: 1.0,
+  aoRadius: 2,
+  aoIntensity: 0.8,
 
   fxaaEnabled: true,
 

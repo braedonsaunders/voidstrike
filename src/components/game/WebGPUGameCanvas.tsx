@@ -484,6 +484,10 @@ export function WebGPUGameCanvas() {
         buildingRendererRef.current?.setCamera(threeCamera);
         resourceRendererRef.current?.setCamera(threeCamera);
 
+        // PERF: Update camera matrix once before all renderer frustum culling
+        // This avoids each renderer calling updateMatrixWorld() separately
+        threeCamera.updateMatrixWorld();
+
         unitRendererRef.current?.update();
         buildingRendererRef.current?.update();
         resourceRendererRef.current?.update();
@@ -514,30 +518,49 @@ export function WebGPUGameCanvas() {
           debugPerformance.warn(`[UPDATES] Total update time: ${updatesElapsed.toFixed(1)}ms`);
         }
 
-        // Update selection rings
+        // PERF: Update selection rings with optimized change detection
         const selectedUnits = useGameStore.getState().selectedUnits;
         const gameInstance = gameRef.current;
         if (gameInstance && selectionSystemRef.current) {
+          const rings = (selectionSystemRef.current as any).selectionRings as Map<number, unknown> | undefined;
+
+          // PERF: Convert selectedUnits to Set for O(1) lookup
+          const selectedSet = new Set(selectedUnits);
+
+          // PERF: Only create rings for newly selected units (not already in rings)
+          for (const unitId of selectedUnits) {
+            if (!rings?.has(unitId)) {
+              const entity = gameInstance.world.getEntity(unitId);
+              if (entity) {
+                const selectable = entity.get<Selectable>('Selectable');
+                if (selectable) {
+                  selectionSystemRef.current.createSelectionRing(unitId, selectable.playerId, 1);
+                }
+              }
+            }
+          }
+
+          // PERF: Remove rings for deselected units using O(1) Set lookup
+          if (rings) {
+            const toRemove: number[] = [];
+            for (const [id] of rings) {
+              if (!selectedSet.has(id)) {
+                toRemove.push(id);
+              }
+            }
+            for (const id of toRemove) {
+              selectionSystemRef.current.removeSelectionRing(id);
+            }
+          }
+
+          // Update positions for all selected units (units may have moved)
           for (const unitId of selectedUnits) {
             const entity = gameInstance.world.getEntity(unitId);
             if (entity) {
               const transform = entity.get<Transform>('Transform');
-              const selectable = entity.get<Selectable>('Selectable');
-              if (transform && selectable) {
+              if (transform) {
                 const terrainHeight = environmentRef.current?.getHeightAt(transform.x, transform.y) ?? 0;
-                if (!(selectionSystemRef.current as any).selectionRings?.has(unitId)) {
-                  selectionSystemRef.current.createSelectionRing(unitId, selectable.playerId, 1);
-                }
                 selectionSystemRef.current.updateSelectionRing(unitId, transform.x, terrainHeight, transform.y);
-              }
-            }
-          }
-          // Remove rings for deselected units
-          const rings = (selectionSystemRef.current as any).selectionRings;
-          if (rings) {
-            for (const [id] of rings) {
-              if (!selectedUnits.includes(id)) {
-                selectionSystemRef.current.removeSelectionRing(id);
               }
             }
           }
