@@ -28,7 +28,7 @@ const BUILDING_AVOIDANCE_MARGIN = 0.25;
 const PATH_REQUEST_COOLDOWN_MS = 500;
 
 // Use Recast crowd for collision avoidance
-const USE_RECAST_CROWD = true;
+const USE_RECAST_CROWD = false; // Temporarily disabled - crowd velocity returns 0
 
 // Static temp vectors
 const tempSeparation: PooledVector2 = { x: 0, y: 0 };
