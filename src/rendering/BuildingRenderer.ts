@@ -146,7 +146,7 @@ export class BuildingRenderer {
     // Construction dust particles - large size for visibility
     this.constructionDustMaterial = new THREE.PointsMaterial({
       color: 0xccbb99,
-      size: 0.8,
+      size: 2.0,
       transparent: true,
       opacity: 0.6,
       blending: THREE.AdditiveBlending,
@@ -156,7 +156,7 @@ export class BuildingRenderer {
     // Construction sparks (welding/building effect) - larger size for visibility
     this.constructionSparkMaterial = new THREE.PointsMaterial({
       color: 0xffdd55,
-      size: 0.5,
+      size: 1.5,
       transparent: true,
       opacity: 0.9,
       blending: THREE.AdditiveBlending,
@@ -192,7 +192,7 @@ export class BuildingRenderer {
 
     this.blueprintPulseMaterial = new THREE.PointsMaterial({
       color: 0x00ddff,
-      size: 0.3,
+      size: 1.0,
       transparent: true,
       opacity: 0.9,
       blending: THREE.AdditiveBlending,
@@ -210,18 +210,18 @@ export class BuildingRenderer {
     // Ground dust effect material - larger particles for billowing dust clouds
     this.groundDustMaterial = new THREE.PointsMaterial({
       color: 0xaa9977,
-      size: 1.2,
+      size: 3.0,
       transparent: true,
-      opacity: 0.4,
+      opacity: 0.5,
       blending: THREE.NormalBlending,
       sizeAttenuation: true,
       depthWrite: false,
     });
 
-    // Metal debris particles - small bright metallic particles
+    // Metal debris particles - bright metallic particles
     this.metalDebrisMaterial = new THREE.PointsMaterial({
       color: 0xcccccc,
-      size: 0.25,
+      size: 0.8,
       transparent: true,
       opacity: 0.9,
       blending: THREE.AdditiveBlending,
@@ -231,19 +231,19 @@ export class BuildingRenderer {
     // Welding flash material - bright white/yellow bursts
     this.weldingFlashMaterial = new THREE.PointsMaterial({
       color: 0xffffaa,
-      size: 0.6,
+      size: 2.0,
       transparent: true,
       opacity: 1.0,
       blending: THREE.AdditiveBlending,
       sizeAttenuation: true,
     });
 
-    // Scaffold wireframe material
+    // Scaffold wireframe material - brighter for visibility
     this.scaffoldMaterial = new THREE.LineBasicMaterial({
-      color: 0x888888,
+      color: 0xffaa44,
       transparent: true,
-      opacity: 0.6,
-      linewidth: 1,
+      opacity: 0.8,
+      linewidth: 2,
     });
 
     // Register callback to refresh meshes when custom models finish loading
@@ -614,6 +614,7 @@ export class BuildingRenderer {
         if (meshData.scaffoldEffect) {
           this.scene.remove(meshData.scaffoldEffect);
           meshData.scaffoldEffect.geometry.dispose();
+          (meshData.scaffoldEffect.material as THREE.Material).dispose();
           meshData.scaffoldEffect = null;
         }
         meshData.wasComplete = true;
@@ -1355,7 +1356,7 @@ export class BuildingRenderer {
     sparkGeometry.setAttribute('color', new THREE.BufferAttribute(sparkColors, 3));
 
     const sparkMaterial = new THREE.PointsMaterial({
-      size: 0.4,
+      size: 1.2,
       vertexColors: true,
       transparent: true,
       opacity: 0.9,
@@ -1624,9 +1625,9 @@ export class BuildingRenderer {
 
     const hologramParticleMaterial = new THREE.PointsMaterial({
       color: 0x00ccff,
-      size: 0.15,
+      size: 0.5,
       transparent: true,
-      opacity: 0.6,
+      opacity: 0.7,
       blending: THREE.AdditiveBlending,
       sizeAttenuation: true,
     });
@@ -1724,10 +1725,10 @@ export class BuildingRenderer {
     dustGeometry.setAttribute('color', new THREE.BufferAttribute(dustColors, 3));
 
     const dustMaterial = new THREE.PointsMaterial({
-      size: 1.0,
+      size: 2.5,
       vertexColors: true,
       transparent: true,
-      opacity: 0.35,
+      opacity: 0.45,
       blending: THREE.NormalBlending,
       sizeAttenuation: true,
       depthWrite: false,
@@ -1765,9 +1766,9 @@ export class BuildingRenderer {
 
     const lowDustMaterial = new THREE.PointsMaterial({
       color: 0x998866,
-      size: 1.5,
+      size: 4.0,
       transparent: true,
-      opacity: 0.25,
+      opacity: 0.35,
       blending: THREE.NormalBlending,
       sizeAttenuation: true,
       depthWrite: false,
@@ -1866,9 +1867,10 @@ export class BuildingRenderer {
    */
   private createScaffoldEffect(buildingWidth: number, buildingDepth: number, buildingHeight: number): THREE.LineSegments {
     const points: THREE.Vector3[] = [];
-    const hw = buildingWidth * 0.5;
-    const hd = buildingDepth * 0.5;
-    const levels = Math.ceil(buildingHeight / 1.5);
+    // Make scaffold extend beyond building bounds for visibility
+    const hw = buildingWidth * 0.7;
+    const hd = buildingDepth * 0.7;
+    const levels = Math.max(3, Math.ceil(buildingHeight / 1.2));
 
     // Vertical scaffolding poles at corners
     const corners = [
