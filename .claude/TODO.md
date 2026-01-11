@@ -189,6 +189,7 @@
 - [x] **Enhanced loading screen** - Real loading progress with granular stages (models, renderer, terrain, engine, audio), stunning animated particle background with nebulas, geometric shapes, constellation effects, and progress-reactive energy beam
 
 ### AI & Combat Fixes
+- [x] **Idle unit auto-attack responsiveness** - Idle units now immediately attack enemies within attack range (no throttle delay). Uses dedicated `findImmediateAttackTarget()` for instant response when enemies enter attack range, while throttled sight-range search remains for longer-range target acquisition.
 - [x] **VisionSystem multi-player support** - Changed from hardcoded ['player1', 'ai'] to dynamic player registration, enabling proper 4-AI spectator games.
 - [x] **AI attack persistence** - AI now stays in attacking state until all enemies are eliminated, preventing premature retreat when taking losses.
 - [x] **AI proximity-based targeting** - Fixed FFA games where all AI targeted the same enemy. Now each AI targets their CLOSEST enemy (with priority for nearly-defeated enemies with ≤2 buildings).
