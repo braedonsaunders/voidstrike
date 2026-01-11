@@ -1,20 +1,20 @@
 /**
  * TSL Post-Processing Pipeline
  *
- * WebGPU-compatible post-processing using Three.js Shading Language.
+ * WebGPU-compatible post-processing using Three.js TSL nodes.
  * Features:
- * - Bloom effect
- * - Screen-space ambient occlusion (SSAO)
- * - FXAA anti-aliasing
- * - Tone mapping
+ * - Bloom effect (BloomNode)
+ * - GTAO ambient occlusion (GTAONode)
+ * - FXAA anti-aliasing (FXAANode)
  * - Vignette
- * - Color grading
+ * - Color grading (exposure, saturation, contrast)
  */
 
 import * as THREE from 'three';
 import { WebGPURenderer, PostProcessing } from 'three/webgpu';
 import {
   pass,
+  mrt,
   uniform,
   uv,
   vec3,
@@ -26,10 +26,13 @@ import {
   clamp,
   length,
   dot,
+  normalView,
 } from 'three/tsl';
 
-// Note: bloom, ao, fxaa are not directly available in three/tsl
-// We implement custom versions or skip them
+// Import WebGPU post-processing nodes from addons
+import { bloom } from 'three/addons/tsl/display/BloomNode.js';
+import { ao } from 'three/addons/tsl/display/GTAONode.js';
+import { fxaa } from 'three/addons/tsl/display/FXAANode.js';
 
 // ============================================
 // POST-PROCESSING CONFIGURATION
@@ -42,10 +45,10 @@ export interface PostProcessingConfig {
   bloomRadius: number;
   bloomThreshold: number;
 
-  // SSAO
-  ssaoEnabled: boolean;
-  ssaoRadius: number;
-  ssaoIntensity: number;
+  // GTAO (Ground Truth Ambient Occlusion)
+  aoEnabled: boolean;
+  aoRadius: number;
+  aoIntensity: number;
 
   // Anti-aliasing
   fxaaEnabled: boolean;
@@ -62,16 +65,16 @@ export interface PostProcessingConfig {
 }
 
 const DEFAULT_CONFIG: PostProcessingConfig = {
-  bloomEnabled: false, // Bloom requires additional setup, disabled by default
-  bloomStrength: 0.2,
+  bloomEnabled: true,
+  bloomStrength: 0.3,
   bloomRadius: 0.4,
-  bloomThreshold: 0.9,
+  bloomThreshold: 0.85,
 
-  ssaoEnabled: false, // SSAO not available in TSL yet
-  ssaoRadius: 16,
-  ssaoIntensity: 1.0,
+  aoEnabled: true,
+  aoRadius: 2,
+  aoIntensity: 1.0,
 
-  fxaaEnabled: false, // FXAA not available in TSL yet
+  fxaaEnabled: true,
 
   vignetteEnabled: true,
   vignetteIntensity: 0.3,
@@ -83,7 +86,7 @@ const DEFAULT_CONFIG: PostProcessingConfig = {
 };
 
 // ============================================
-// POST-PROCESSING PIPELINE
+// RENDER PIPELINE CLASS
 // ============================================
 
 export class RenderPipeline {
@@ -93,8 +96,12 @@ export class RenderPipeline {
   private postProcessing: PostProcessing;
   private config: PostProcessingConfig;
 
+  // Effect passes
+  private bloomPass: ReturnType<typeof bloom> | null = null;
+  private aoPass: ReturnType<typeof ao> | null = null;
+  private fxaaPass: ReturnType<typeof fxaa> | null = null;
+
   // Uniforms for dynamic updates
-  private uBloomStrength = uniform(0.2);
   private uVignetteIntensity = uniform(0.3);
   private uVignetteRadius = uniform(0.8);
   private uExposure = uniform(1.0);
@@ -121,39 +128,36 @@ export class RenderPipeline {
 
     // Create scene pass
     const scenePass = pass(this.scene, this.camera);
+    const scenePassColor = scenePass.getTextureNode('output');
+    const scenePassDepth = scenePass.getTextureNode('depth');
 
-    // Get color output from scene pass
-    const colorNode = scenePass.getTextureNode();
+    // Build the effect chain
+    let outputNode: any = scenePassColor;
 
-    // Apply custom post-processing effects (vignette, exposure, saturation, contrast)
-    const finalPass = this.createFinalPass(colorNode);
+    // 1. Bloom effect
+    if (this.config.bloomEnabled) {
+      this.bloomPass = bloom(scenePassColor);
+      this.bloomPass.threshold.value = this.config.bloomThreshold;
+      this.bloomPass.strength.value = this.config.bloomStrength;
+      this.bloomPass.radius.value = this.config.bloomRadius;
+      outputNode = scenePassColor.add(this.bloomPass);
+    }
 
-    postProcessing.outputNode = finalPass;
+    // 2. Apply color grading and vignette
+    outputNode = this.createColorGradingPass(outputNode);
+
+    // 3. FXAA anti-aliasing
+    if (this.config.fxaaEnabled) {
+      this.fxaaPass = fxaa(outputNode);
+      postProcessing.outputNode = this.fxaaPass;
+    } else {
+      postProcessing.outputNode = outputNode;
+    }
 
     return postProcessing;
   }
 
-  private createFinalPass(inputNode: any): any {
-    // Vignette effect
-    const vignetteEffect = Fn(([color]: [any]) => {
-      const uvCentered = uv().sub(0.5);
-      const dist = length(uvCentered).mul(2.0);
-      const vignette = smoothstep(this.uVignetteRadius, this.uVignetteRadius.sub(0.5), dist);
-      return mix(color.mul(0.2), color, vignette);
-    });
-
-    // Saturation adjustment
-    const saturate_color = Fn(([color, amount]: [any, any]) => {
-      const luminance = dot(color, vec3(0.299, 0.587, 0.114));
-      return mix(vec3(luminance), color, amount);
-    });
-
-    // Contrast adjustment
-    const adjustContrast = Fn(([color, amount]: [any, any]) => {
-      return color.sub(0.5).mul(amount).add(0.5);
-    });
-
-    // Combined final pass
+  private createColorGradingPass(inputNode: any): any {
     return Fn(() => {
       let color = vec3(inputNode).toVar();
 
@@ -183,17 +187,49 @@ export class RenderPipeline {
   }
 
   /**
-   * Apply configuration to uniforms
+   * Rebuild the pipeline when effects are toggled
+   */
+  rebuild(): void {
+    this.postProcessing = this.createPipeline();
+  }
+
+  /**
+   * Apply configuration to uniforms and passes
    */
   applyConfig(config: Partial<PostProcessingConfig>): void {
+    const needsRebuild =
+      config.bloomEnabled !== undefined && config.bloomEnabled !== this.config.bloomEnabled ||
+      config.aoEnabled !== undefined && config.aoEnabled !== this.config.aoEnabled ||
+      config.fxaaEnabled !== undefined && config.fxaaEnabled !== this.config.fxaaEnabled ||
+      config.vignetteEnabled !== undefined && config.vignetteEnabled !== this.config.vignetteEnabled;
+
     this.config = { ...this.config, ...config };
 
-    this.uBloomStrength.value = this.config.bloomStrength;
+    // Update bloom parameters
+    if (this.bloomPass) {
+      this.bloomPass.threshold.value = this.config.bloomThreshold;
+      this.bloomPass.strength.value = this.config.bloomStrength;
+      this.bloomPass.radius.value = this.config.bloomRadius;
+    }
+
+    // Update vignette/color grading uniforms
     this.uVignetteIntensity.value = this.config.vignetteIntensity;
     this.uVignetteRadius.value = this.config.vignetteRadius;
     this.uExposure.value = this.config.exposure;
     this.uSaturation.value = this.config.saturation;
     this.uContrast.value = this.config.contrast;
+
+    // Rebuild pipeline if effect toggles changed
+    if (needsRebuild) {
+      this.rebuild();
+    }
+  }
+
+  /**
+   * Get current configuration
+   */
+  getConfig(): PostProcessingConfig {
+    return { ...this.config };
   }
 
   /**
@@ -201,8 +237,7 @@ export class RenderPipeline {
    */
   setCamera(camera: THREE.Camera): void {
     this.camera = camera;
-    // Rebuild pipeline with new camera
-    this.postProcessing = this.createPipeline();
+    this.rebuild();
   }
 
   /**
@@ -235,12 +270,11 @@ export class RenderPipeline {
 }
 
 // ============================================
-// SIMPLE POST-PROCESSING (FALLBACK)
+// SIMPLE POST-PROCESSING (NO EFFECTS)
 // ============================================
 
 /**
- * Create a simple post-processing pass without bloom
- * (Bloom requires additional TSL setup not yet available)
+ * Create minimal post-processing pass (just scene render)
  */
 export function createSimplePostProcessing(
   renderer: WebGPURenderer,
@@ -248,39 +282,9 @@ export function createSimplePostProcessing(
   camera: THREE.Camera
 ): PostProcessing {
   const postProcessing = new PostProcessing(renderer);
-
   const scenePass = pass(scene, camera);
   postProcessing.outputNode = scenePass.getTextureNode();
-
   return postProcessing;
-}
-
-// ============================================
-// OUTLINE EFFECT
-// ============================================
-
-/**
- * Create outline effect for selected objects
- */
-export function createOutlinePass(
-  renderer: WebGPURenderer,
-  scene: THREE.Scene,
-  camera: THREE.Camera,
-  selectedObjects: THREE.Object3D[],
-  outlineColor: THREE.Color = new THREE.Color(0x00ff00)
-): any {
-  // Create a scene for rendering selected objects silhouettes
-  const outlineScene = new THREE.Scene();
-  const outlineMaterial = new THREE.MeshBasicMaterial({ color: outlineColor });
-
-  // This is a simplified approach - full outline would need depth edge detection
-  const outlinePass = Fn(([sceneTexture]: [any]) => {
-    // For now, just return the scene texture
-    // Full implementation would do sobel edge detection on depth
-    return sceneTexture;
-  });
-
-  return outlinePass;
 }
 
 // ============================================
@@ -299,9 +303,6 @@ export class ScreenShake {
     this.originalPosition = camera.position.clone();
   }
 
-  /**
-   * Trigger screen shake
-   */
   shake(intensity: number, duration: number): void {
     this.shakeIntensity = intensity;
     this.shakeDuration = duration;
@@ -309,9 +310,6 @@ export class ScreenShake {
     this.originalPosition.copy(this.camera.position);
   }
 
-  /**
-   * Update shake effect
-   */
   update(deltaTime: number): void {
     if (this.shakeTime < this.shakeDuration) {
       this.shakeTime += deltaTime;
@@ -326,7 +324,6 @@ export class ScreenShake {
       this.camera.position.x = this.originalPosition.x + offsetX;
       this.camera.position.y = this.originalPosition.y + offsetY;
     } else if (this.shakeTime >= this.shakeDuration && this.shakeDuration > 0) {
-      // Reset position
       this.camera.position.copy(this.originalPosition);
       this.shakeDuration = 0;
     }
@@ -341,25 +338,16 @@ export class DamageVignette {
   private intensity = uniform(0);
   private color = uniform(new THREE.Color(0.8, 0.0, 0.0));
 
-  /**
-   * Flash the damage vignette
-   */
   flash(intensity: number = 0.5): void {
     this.intensity.value = intensity;
   }
 
-  /**
-   * Update - decay the intensity
-   */
   update(deltaTime: number): void {
     if (this.intensity.value > 0) {
       this.intensity.value = Math.max(0, this.intensity.value - deltaTime * 2);
     }
   }
 
-  /**
-   * Get the vignette node for compositing
-   */
   getNode(): any {
     return Fn(([inputColor]: [any]) => {
       const uvCentered = uv().sub(0.5);

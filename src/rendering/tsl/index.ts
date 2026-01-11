@@ -72,7 +72,6 @@ export {
 export {
   RenderPipeline,
   createSimplePostProcessing,
-  createOutlinePass,
   ScreenShake,
   DamageVignette,
   type PostProcessingConfig,
