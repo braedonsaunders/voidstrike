@@ -166,8 +166,8 @@ function getPerpendicular(v: { x: number; y: number }): { x: number; y: number }
 
 /**
  * Calculate where a ramp should connect two areas.
- * This finds the closest points between two circular areas
- * and determines the appropriate ramp geometry.
+ * Uses TRUE VECTOR GEOMETRY - finds the actual closest points between circles.
+ * This properly handles diagonal connections, not just cardinal directions.
  */
 export function calculateConnectionPoints(
   fromArea: TopologyArea,
@@ -177,34 +177,35 @@ export function calculateConnectionPoints(
   const fromCenter = fromArea.center;
   const toCenter = toArea.center;
 
-  // Calculate direction from fromArea to toArea
-  const direction = connection.direction === 'auto' || !connection.direction
-    ? getCardinalDirection(fromCenter, toCenter)
-    : connection.direction;
+  // Calculate the ACTUAL vector from one center to the other
+  const dx = toCenter.x - fromCenter.x;
+  const dy = toCenter.y - fromCenter.y;
+  const dist = Math.sqrt(dx * dx + dy * dy);
 
-  const dirVec = getDirectionVector(direction);
+  // Normalized direction vector (actual geometric direction, not cardinal)
+  const dirX = dist > 0 ? dx / dist : 0;
+  const dirY = dist > 0 ? dy / dist : 1;
+
   const fromCliffWidth = fromArea.cliffWidth ?? (fromArea.type === 'main' ? 4 : 3);
   const toCliffWidth = toArea.cliffWidth ?? (toArea.type === 'main' ? 4 : 3);
 
-  // Calculate ramp entry/exit points on the edges of the areas
-  // Entry point: on the edge of fromArea's cliff ring, facing toward toArea
-  // Exit point: on the edge of toArea's cliff ring, facing toward fromArea
-
-  // For fromArea: entry point is at the outer edge of cliff ring
+  // Entry point: where the line from fromCenter to toCenter exits fromArea's cliff ring
   const fromOuterRadius = fromArea.radius + fromCliffWidth;
   const entryPoint = {
-    x: fromCenter.x + dirVec.x * fromOuterRadius,
-    y: fromCenter.y + dirVec.y * fromOuterRadius,
+    x: fromCenter.x + dirX * fromOuterRadius,
+    y: fromCenter.y + dirY * fromOuterRadius,
   };
 
-  // For toArea: exit point is at the outer edge of cliff ring, facing back
+  // Exit point: where the line from toCenter to fromCenter exits toArea's cliff ring
   const toOuterRadius = toArea.radius + toCliffWidth;
   const exitPoint = {
-    x: toCenter.x - dirVec.x * toOuterRadius,
-    y: toCenter.y - dirVec.y * toOuterRadius,
+    x: toCenter.x - dirX * toOuterRadius,
+    y: toCenter.y - dirY * toOuterRadius,
   };
 
-  // Determine which area is higher (ramp goes from high to low)
+  // Determine cardinal direction for legacy Ramp object (best approximation)
+  const direction = getCardinalDirection(fromCenter, toCenter);
+
   const fromElevation = fromArea.elevation;
   const toElevation = toArea.elevation;
 
@@ -223,6 +224,7 @@ export function calculateConnectionPoints(
 
 /**
  * Generate a ramp path between two points with proper elevation interpolation.
+ * SUPPORTS DIAGONAL RAMPS - uses vector-based corridor generation.
  * Returns cells to mark as ramp terrain.
  */
 function generateRampPath(
@@ -232,76 +234,81 @@ function generateRampPath(
   width: number,
   fromElevation: ElevationLevel,
   toElevation: ElevationLevel,
-  direction: 'north' | 'south' | 'east' | 'west'
-): { x: number; y: number; width: number; height: number } {
-  // Calculate ramp dimensions based on direction
-  const isVertical = direction === 'north' || direction === 'south';
-
-  // Determine ramp bounds
-  let rampX: number, rampY: number, rampWidth: number, rampHeight: number;
-
-  if (isVertical) {
-    // Vertical ramp: entry and exit differ in Y
-    const minY = Math.min(entry.y, exit.y);
-    const maxY = Math.max(entry.y, exit.y);
-    rampX = Math.floor(entry.x - width / 2);
-    rampY = Math.floor(minY);
-    rampWidth = width;
-    rampHeight = Math.ceil(maxY - minY) + 1;
-  } else {
-    // Horizontal ramp: entry and exit differ in X
-    const minX = Math.min(entry.x, exit.x);
-    const maxX = Math.max(entry.x, exit.x);
-    rampX = Math.floor(minX);
-    rampY = Math.floor(entry.y - width / 2);
-    rampWidth = Math.ceil(maxX - minX) + 1;
-    rampHeight = width;
-  }
-
-  // Ensure minimum ramp size
-  rampWidth = Math.max(rampWidth, width);
-  rampHeight = Math.max(rampHeight, width);
-
+  _direction: 'north' | 'south' | 'east' | 'west' // Legacy param, not used for geometry
+): { x: number; y: number; width: number; height: number; direction: 'north' | 'south' | 'east' | 'west' } {
   const fromElev256 = legacyElevationTo256(fromElevation);
   const toElev256 = legacyElevationTo256(toElevation);
 
-  // Fill ramp cells
-  for (let dy = 0; dy < rampHeight; dy++) {
-    for (let dx = 0; dx < rampWidth; dx++) {
-      const px = rampX + dx;
-      const py = rampY + dy;
+  // Calculate the actual vector from entry to exit
+  const dx = exit.x - entry.x;
+  const dy = exit.y - entry.y;
+  const length = Math.sqrt(dx * dx + dy * dy);
+
+  // Normalized direction along the ramp
+  const dirX = length > 0 ? dx / length : 0;
+  const dirY = length > 0 ? dy / length : 1;
+
+  // Perpendicular vector for ramp width
+  const perpX = -dirY;
+  const perpY = dirX;
+
+  // Track bounding box for the ramp
+  let minX = Infinity, maxX = -Infinity;
+  let minY = Infinity, maxY = -Infinity;
+
+  // Set of cells we've filled (to avoid duplicates)
+  const filledCells = new Set<string>();
+
+  // Generate ramp corridor by stepping along the path
+  const steps = Math.ceil(length) + 1;
+  const halfWidth = width / 2;
+
+  for (let step = 0; step <= steps; step++) {
+    // Position along the ramp centerline
+    const t = step / Math.max(1, steps);
+    const centerX = entry.x + dx * t;
+    const centerY = entry.y + dy * t;
+
+    // Calculate elevation at this point (interpolate from entry to exit)
+    const elevation = Math.round(fromElev256 + (toElev256 - fromElev256) * t);
+
+    // Fill cells across the width of the ramp at this step
+    for (let w = -halfWidth; w <= halfWidth; w++) {
+      const px = Math.floor(centerX + perpX * w);
+      const py = Math.floor(centerY + perpY * w);
+
+      const key = `${px},${py}`;
+      if (filledCells.has(key)) continue;
+      filledCells.add(key);
 
       if (py >= 0 && py < grid.length && px >= 0 && px < grid[0].length) {
-        // Calculate elevation gradient
-        let t = 0;
-        switch (direction) {
-          case 'north':
-            t = 1 - dy / Math.max(1, rampHeight - 1);
-            break;
-          case 'south':
-            t = dy / Math.max(1, rampHeight - 1);
-            break;
-          case 'east':
-            t = 1 - dx / Math.max(1, rampWidth - 1);
-            break;
-          case 'west':
-            t = dx / Math.max(1, rampWidth - 1);
-            break;
-        }
-
-        const elevation = Math.round(fromElev256 + (toElev256 - fromElev256) * t);
-
         grid[py][px] = {
           terrain: 'ramp',
           elevation,
           feature: 'none',
           textureId: Math.floor(Math.random() * 4),
         };
+
+        minX = Math.min(minX, px);
+        maxX = Math.max(maxX, px);
+        minY = Math.min(minY, py);
+        maxY = Math.max(maxY, py);
       }
     }
   }
 
-  return { x: rampX, y: rampY, width: rampWidth, height: rampHeight };
+  // Determine cardinal direction for the Ramp object
+  const direction = Math.abs(dx) > Math.abs(dy)
+    ? (dx > 0 ? 'east' : 'west')
+    : (dy > 0 ? 'south' : 'north');
+
+  return {
+    x: minX,
+    y: minY,
+    width: maxX - minX + 1,
+    height: maxY - minY + 1,
+    direction: direction as 'north' | 'south' | 'east' | 'west',
+  };
 }
 
 // ============================================
@@ -485,49 +492,76 @@ function generateGroundArea(
 /**
  * Build protected zones around ramp paths.
  * These zones prevent cliff generation from blocking ramps.
+ * Uses TRUE VECTOR geometry matching the diagonal ramp generation.
  */
 function buildProtectedZones(
   generatedConnections: GeneratedConnection[],
-  extraBuffer: number = 3
+  extraBuffer: number = 4
 ): Set<string> {
   const zones = new Set<string>();
 
   for (const conn of generatedConnections) {
-    const { ramp } = conn;
+    const { ramp, entryPoint, exitPoint, width } = conn;
 
-    // Mark all cells in and around the ramp as protected
+    // Calculate the actual vector from entry to exit (matches ramp generation)
+    const dx = exitPoint.x - entryPoint.x;
+    const dy = exitPoint.y - entryPoint.y;
+    const length = Math.sqrt(dx * dx + dy * dy);
+
+    // Normalized direction along the ramp
+    const dirX = length > 0 ? dx / length : 0;
+    const dirY = length > 0 ? dy / length : 1;
+
+    // Perpendicular vector for width
+    const perpX = -dirY;
+    const perpY = dirX;
+
+    // Protect along the entire ramp path with extra buffer
+    const halfWidth = width / 2 + extraBuffer;
+    const steps = Math.ceil(length) + 1;
+
+    for (let step = 0; step <= steps; step++) {
+      const t = step / Math.max(1, steps);
+      const centerX = entryPoint.x + dx * t;
+      const centerY = entryPoint.y + dy * t;
+
+      // Fill cells across the width with buffer
+      for (let w = -halfWidth; w <= halfWidth; w++) {
+        const px = Math.floor(centerX + perpX * w);
+        const py = Math.floor(centerY + perpY * w);
+        zones.add(`${px},${py}`);
+      }
+    }
+
+    // Extended protection into the source area (entry side)
+    const entryExtension = 12;
+    for (let i = 0; i < entryExtension; i++) {
+      const cx = entryPoint.x - dirX * i;
+      const cy = entryPoint.y - dirY * i;
+      for (let w = -halfWidth; w <= halfWidth; w++) {
+        const px = Math.floor(cx + perpX * w);
+        const py = Math.floor(cy + perpY * w);
+        zones.add(`${px},${py}`);
+      }
+    }
+
+    // Extended protection into the destination area (exit side)
+    const exitExtension = 12;
+    for (let i = 0; i < exitExtension; i++) {
+      const cx = exitPoint.x + dirX * i;
+      const cy = exitPoint.y + dirY * i;
+      for (let w = -halfWidth; w <= halfWidth; w++) {
+        const px = Math.floor(cx + perpX * w);
+        const py = Math.floor(cy + perpY * w);
+        zones.add(`${px},${py}`);
+      }
+    }
+
+    // Also protect the bounding box of the ramp itself
     for (let dy = -extraBuffer; dy < ramp.height + extraBuffer; dy++) {
       for (let dx = -extraBuffer; dx < ramp.width + extraBuffer; dx++) {
         const px = ramp.x + dx;
         const py = ramp.y + dy;
-        zones.add(`${px},${py}`);
-      }
-    }
-
-    // Also protect extended entry/exit areas in the ramp direction
-    const dirVec = getDirectionVector(ramp.direction);
-    const extensionLength = 8;
-
-    // Entry extension
-    for (let i = 0; i < extensionLength; i++) {
-      const cx = Math.floor(conn.entryPoint.x - dirVec.x * i);
-      const cy = Math.floor(conn.entryPoint.y - dirVec.y * i);
-      for (let w = -Math.ceil(conn.width / 2) - 2; w <= Math.ceil(conn.width / 2) + 2; w++) {
-        const perpVec = getPerpendicular(dirVec);
-        const px = cx + Math.floor(perpVec.x * w);
-        const py = cy + Math.floor(perpVec.y * w);
-        zones.add(`${px},${py}`);
-      }
-    }
-
-    // Exit extension
-    for (let i = 0; i < extensionLength; i++) {
-      const cx = Math.floor(conn.exitPoint.x + dirVec.x * i);
-      const cy = Math.floor(conn.exitPoint.y + dirVec.y * i);
-      for (let w = -Math.ceil(conn.width / 2) - 2; w <= Math.ceil(conn.width / 2) + 2; w++) {
-        const perpVec = getPerpendicular(dirVec);
-        const px = cx + Math.floor(perpVec.x * w);
-        const py = cy + Math.floor(perpVec.y * w);
         zones.add(`${px},${py}`);
       }
     }
@@ -602,13 +636,13 @@ export function generateTerrainFromTopology(
       points.direction
     );
 
-    // Create Ramp object for MapData
+    // Create Ramp object for MapData (use direction computed by rampBounds)
     const ramp: Ramp = {
       x: rampBounds.x,
       y: rampBounds.y,
       width: rampBounds.width,
       height: rampBounds.height,
-      direction: points.direction,
+      direction: rampBounds.direction,
       fromElevation: points.fromElevation,
       toElevation: points.toElevation,
     };
@@ -741,49 +775,71 @@ export function connect(
 /**
  * Get ramp clearance zones for decoration placement.
  * Returns a Set of cell keys that should not have decorations.
+ * Uses TRUE VECTOR geometry for diagonal ramps.
  */
 export function getRampClearanceZones(connections: GeneratedConnection[]): Set<string> {
   const clearance = new Set<string>();
-  const CLEARANCE_RADIUS = 10;
+  const CLEARANCE_BUFFER = 6;
   const EXIT_EXTENSION = 18;
 
   for (const conn of connections) {
-    const { ramp } = conn;
+    const { ramp, entryPoint, exitPoint, width } = conn;
 
-    // Circular clearance around ramp
-    const centerX = ramp.x + ramp.width / 2;
-    const centerY = ramp.y + ramp.height / 2;
+    // Calculate the actual vector from entry to exit
+    const dx = exitPoint.x - entryPoint.x;
+    const dy = exitPoint.y - entryPoint.y;
+    const length = Math.sqrt(dx * dx + dy * dy);
 
-    for (let dy = -CLEARANCE_RADIUS; dy <= CLEARANCE_RADIUS; dy++) {
-      for (let dx = -CLEARANCE_RADIUS; dx <= CLEARANCE_RADIUS; dx++) {
-        const dist = Math.sqrt(dx * dx + dy * dy);
-        if (dist <= CLEARANCE_RADIUS) {
-          clearance.add(`${Math.floor(centerX + dx)},${Math.floor(centerY + dy)}`);
-        }
+    // Normalized direction along the ramp
+    const dirX = length > 0 ? dx / length : 0;
+    const dirY = length > 0 ? dy / length : 1;
+
+    // Perpendicular vector for width
+    const perpX = -dirY;
+    const perpY = dirX;
+
+    const halfWidth = width / 2 + CLEARANCE_BUFFER;
+
+    // Clear along the entire ramp path
+    const steps = Math.ceil(length) + 1;
+    for (let step = 0; step <= steps; step++) {
+      const t = step / Math.max(1, steps);
+      const centerX = entryPoint.x + dx * t;
+      const centerY = entryPoint.y + dy * t;
+
+      for (let w = -halfWidth; w <= halfWidth; w++) {
+        const px = Math.floor(centerX + perpX * w);
+        const py = Math.floor(centerY + perpY * w);
+        clearance.add(`${px},${py}`);
       }
     }
 
-    // Extended clearance in entry/exit direction
-    const dirVec = getDirectionVector(ramp.direction);
-    const halfWidth = Math.max(ramp.width, ramp.height) / 2 + 4;
-
-    // Entry direction
+    // Extended clearance into source area (entry side)
     for (let d = 0; d < EXIT_EXTENSION; d++) {
-      const cx = Math.floor(conn.entryPoint.x - dirVec.x * d);
-      const cy = Math.floor(conn.entryPoint.y - dirVec.y * d);
-      const perpVec = getPerpendicular(dirVec);
+      const cx = entryPoint.x - dirX * d;
+      const cy = entryPoint.y - dirY * d;
       for (let w = -halfWidth; w <= halfWidth; w++) {
-        clearance.add(`${cx + Math.floor(perpVec.x * w)},${cy + Math.floor(perpVec.y * w)}`);
+        const px = Math.floor(cx + perpX * w);
+        const py = Math.floor(cy + perpY * w);
+        clearance.add(`${px},${py}`);
       }
     }
 
-    // Exit direction
+    // Extended clearance into destination area (exit side)
     for (let d = 0; d < EXIT_EXTENSION; d++) {
-      const cx = Math.floor(conn.exitPoint.x + dirVec.x * d);
-      const cy = Math.floor(conn.exitPoint.y + dirVec.y * d);
-      const perpVec = getPerpendicular(dirVec);
+      const cx = exitPoint.x + dirX * d;
+      const cy = exitPoint.y + dirY * d;
       for (let w = -halfWidth; w <= halfWidth; w++) {
-        clearance.add(`${cx + Math.floor(perpVec.x * w)},${cy + Math.floor(perpVec.y * w)}`);
+        const px = Math.floor(cx + perpX * w);
+        const py = Math.floor(cy + perpY * w);
+        clearance.add(`${px},${py}`);
+      }
+    }
+
+    // Also clear the bounding box of the ramp
+    for (let ry = -CLEARANCE_BUFFER; ry < ramp.height + CLEARANCE_BUFFER; ry++) {
+      for (let rx = -CLEARANCE_BUFFER; rx < ramp.width + CLEARANCE_BUFFER; rx++) {
+        clearance.add(`${ramp.x + rx},${ramp.y + ry}`);
       }
     }
   }
