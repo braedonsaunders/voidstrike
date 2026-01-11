@@ -75,7 +75,7 @@ export class InstancedTrees {
 
     // Build a set of cells near ramps that should be avoided (pathways)
     const rampClearance = new Set<string>();
-    const RAMP_CLEARANCE_RADIUS = 8; // Stay far from ramps
+    const RAMP_CLEARANCE_RADIUS = 12; // Stay far from ramps - increased clearance
 
     for (let cy = 0; cy < mapData.height; cy++) {
       for (let cx = 0; cx < mapData.width; cx++) {
@@ -263,7 +263,7 @@ export class InstancedRocks {
 
     // Build ramp clearance set to avoid blocking pathways
     const rampClearance = new Set<string>();
-    const RAMP_CLEARANCE_RADIUS = 6;
+    const RAMP_CLEARANCE_RADIUS = 12; // Increased clearance for ramps
 
     for (let cy = 0; cy < mapData.height; cy++) {
       for (let cx = 0; cx < mapData.width; cx++) {
