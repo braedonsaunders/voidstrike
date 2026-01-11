@@ -260,13 +260,14 @@ export function WebGPUGameCanvas() {
       game.setTerrainGrid(CURRENT_MAP.terrain);
       game.setDecorationCollisions(environment.getRockCollisions());
 
-      // Initialize navmesh for pathfinding (async - non-blocking)
+      // Initialize navmesh for pathfinding (must complete before spawning entities)
+      setLoadingStatus('Generating navigation mesh');
+      setLoadingProgress(55);
       const walkableGeometry = terrain.generateWalkableGeometry();
-      game.initializeNavMesh(walkableGeometry.positions, walkableGeometry.indices).then((success) => {
-        if (!success) {
-          console.warn('[WebGPUGameCanvas] NavMesh initialization failed, pathfinding may not work correctly');
-        }
-      });
+      const navMeshSuccess = await game.initializeNavMesh(walkableGeometry.positions, walkableGeometry.indices);
+      if (!navMeshSuccess) {
+        console.warn('[WebGPUGameCanvas] NavMesh initialization failed, pathfinding may not work correctly');
+      }
 
       const fogOfWarEnabled = useGameSetupStore.getState().fogOfWar;
 
