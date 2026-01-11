@@ -133,6 +133,10 @@ export class ResourceSystem extends System {
         unit.gatherTargetId = assignedTargetId;
         unit.state = 'gathering';
 
+        // Clear any existing path so worker will request new path to resource
+        unit.path = [];
+        unit.pathIndex = 0;
+
         // Move to assigned resource
         unit.moveToPosition(assignedTransform.x, assignedTransform.y);
 

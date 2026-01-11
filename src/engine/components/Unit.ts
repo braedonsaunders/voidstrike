@@ -581,6 +581,9 @@ export class Unit extends Component {
     this.state = 'building';
     this.targetX = targetX;
     this.targetY = targetY;
+    // Clear any existing path so worker will request new path to construction site
+    this.path = [];
+    this.pathIndex = 0;
     this.gatherTargetId = null;
     this.carryingMinerals = 0;
     this.carryingVespene = 0;
