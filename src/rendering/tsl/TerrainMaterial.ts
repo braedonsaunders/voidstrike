@@ -13,25 +13,18 @@
 import * as THREE from 'three';
 import {
   Fn,
-  vec2,
   vec3,
   vec4,
   float,
   uniform,
   texture,
   uv,
-  mix,
   smoothstep,
   normalize,
   dot,
   abs,
   normalWorld,
-  positionWorld,
-  fract,
-  sin,
-  floor,
   clamp,
-  cross,
 } from 'three/tsl';
 import { MeshStandardNodeMaterial } from 'three/webgpu';
 import { BiomeType } from '@/rendering/Biomes';
@@ -84,8 +77,8 @@ function getBiomeTextures(biome: BiomeType): {
     case 'jungle':
       return {
         grass: 'jungle_floor',
-        dirt: 'jungle_dirt',
-        rock: 'jungle_rock',
+        dirt: 'dirt',
+        rock: 'mossy_rock',
         cliff: 'jungle_cliff',
       };
     case 'grassland':
@@ -193,154 +186,106 @@ export class TSLTerrainMaterial {
   ): MeshStandardNodeMaterial {
     const material = new MeshStandardNodeMaterial();
 
-    // AAA-quality color node with all 4 texture layers
+    // 4-texture terrain blending based on slope (ported from working GLSL shader)
     const colorNode = Fn(() => {
-      const worldPos = positionWorld;
+      const worldNorm = normalWorld;
 
-      // Primary UV scale
-      const primaryScale = float(textureRepeat);
-      const primaryUV = uv().mul(vec2(primaryScale, primaryScale));
+      // Fixed UV scale (64x) - matches working GLSL shader
+      const tiledUV = uv().mul(64.0);
 
-      // Secondary UV at different scale to break up tiling (golden ratio offset)
-      const detailScale = float(textureRepeat).mul(0.31);
-      const detailUV = uv().mul(vec2(detailScale, detailScale)).add(vec2(0.17, 0.31));
+      // Calculate slope from mesh normals (0 = flat, 1 = vertical)
+      const slope = float(1.0).sub(abs(dot(normalize(worldNorm), vec3(0.0, 1.0, 0.0))));
 
-      // Compute surface normal from position derivatives (more reliable than normalWorld)
-      const dPdx = worldPos.dFdx();
-      const dPdy = worldPos.dFdy();
-      const computedNormal = normalize(cross(dPdy, dPdx));
+      // Sample all 4 diffuse textures
+      const grassColor = texture(grassDiffuse, tiledUV).rgb;
+      const dirtColor = texture(dirtDiffuse, tiledUV).rgb;
+      const rockColor = texture(rockDiffuse, tiledUV).rgb;
+      const cliffColor = texture(cliffDiffuse, tiledUV).rgb;
 
-      // Calculate slope (0 = flat, 1 = vertical)
-      // Use abs of Y component - flat terrain has normal.y close to 1, steep has normal.y close to 0
-      const upVector = vec3(0.0, 1.0, 0.0);
-      const normalDotUp = abs(dot(computedNormal, upVector));
-      const slope = float(1.0).sub(normalDotUp);
+      // Slope-based weights using bell curves for middle textures (from working GLSL)
+      // Grass: flat areas (slope < 0.25)
+      const grassWeight = smoothstep(float(0.25), float(0.1), slope);
+      // Dirt: slight slopes (0.08-0.35) - bell curve
+      const dirtWeight = smoothstep(float(0.08), float(0.2), slope).mul(smoothstep(float(0.35), float(0.2), slope));
+      // Rock: medium slopes (0.2-0.55) - bell curve
+      const rockWeight = smoothstep(float(0.2), float(0.35), slope).mul(smoothstep(float(0.55), float(0.4), slope));
+      // Cliff: steep slopes (> 0.4)
+      const cliffWeight = smoothstep(float(0.4), float(0.55), slope);
 
-      // Smooth procedural noise for blend variation (no floor() to avoid checkerboard)
-      const noiseScale = float(0.05);
-      const nx = worldPos.x.mul(noiseScale);
-      const nz = worldPos.z.mul(noiseScale);
-      const blendNoise = fract(sin(nx.mul(12.9898).add(nz.mul(78.233))).mul(43758.5453));
+      // Normalize weights so they sum to 1.0
+      const totalWeight = grassWeight.add(dirtWeight).add(rockWeight).add(cliffWeight);
+      const normGrass = grassWeight.div(totalWeight);
+      const normDirt = dirtWeight.div(totalWeight);
+      const normRock = rockWeight.div(totalWeight);
+      const normCliff = cliffWeight.div(totalWeight);
 
-      // Sample primary textures
-      const grassPrimary = texture(grassDiffuse, primaryUV).rgb;
-      const dirtPrimary = texture(dirtDiffuse, primaryUV).rgb;
-      const rockPrimary = texture(rockDiffuse, primaryUV).rgb;
-      const cliffPrimary = texture(cliffDiffuse, primaryUV).rgb;
-
-      // Sample detail textures at different scale for subtle anti-tiling
-      const grassDetail = texture(grassDiffuse, detailUV).rgb;
-      const dirtDetail = texture(dirtDiffuse, detailUV).rgb;
-      const rockDetail = texture(rockDiffuse, detailUV).rgb;
-      const cliffDetail = texture(cliffDiffuse, detailUV).rgb;
-
-      // Subtle detail blending (overlay style but less aggressive)
-      const detailBlend = float(0.15);
-      const grassColor = mix(grassPrimary, grassPrimary.mul(grassDetail.add(0.5)), detailBlend);
-      const dirtColor = mix(dirtPrimary, dirtPrimary.mul(dirtDetail.add(0.5)), detailBlend);
-      const rockColor = mix(rockPrimary, rockPrimary.mul(rockDetail.add(0.5)), detailBlend);
-      const cliffColor = mix(cliffPrimary, cliffPrimary.mul(cliffDetail.add(0.5)), detailBlend);
-
-      // Noise modulated blend thresholds for organic transitions (reduced influence)
-      const noiseOffset = blendNoise.sub(0.5).mul(0.06);
-
-      // Smooth blend factors based on slope
-      const dirtBlend = smoothstep(float(0.05).add(noiseOffset), float(0.20).add(noiseOffset), slope);
-      const rockBlend = smoothstep(float(0.18).add(noiseOffset), float(0.45).add(noiseOffset), slope);
-      const cliffBlend = smoothstep(float(0.40).add(noiseOffset), float(0.70).add(noiseOffset), slope);
-
-      // Cascade the blending
-      let color = mix(grassColor, dirtColor, dirtBlend);
-      color = mix(color, rockColor, rockBlend);
-      color = mix(color, cliffColor, cliffBlend);
-
-      // World height variation (subtle darkening in low areas)
-      const heightFactor = clamp(worldPos.y.mul(0.02).add(0.95), 0.90, 1.05);
-      color = color.mul(heightFactor);
-
-      // === SUBTLE COLOR GRADING ===
-
-      // Slight contrast boost
-      const contrast = float(1.08);
-      color = color.sub(0.5).mul(contrast).add(0.5);
-
-      // Subtle saturation boost
-      const saturation = float(1.1);
-      const luma = dot(color, vec3(0.299, 0.587, 0.114));
-      color = mix(vec3(luma), color, saturation);
-
-      // Clamp to valid range
-      color = clamp(color, 0.0, 1.0);
+      // Blend colors using normalized weights
+      const color = grassColor.mul(normGrass)
+        .add(dirtColor.mul(normDirt))
+        .add(rockColor.mul(normRock))
+        .add(cliffColor.mul(normCliff));
 
       return vec4(color, 1.0);
     })();
 
     // Roughness blending based on slope
     const roughnessNode = Fn(() => {
-      const worldPos = positionWorld;
+      const worldNorm = normalWorld;
+      const tiledUV = uv().mul(64.0);
 
-      const primaryScale = float(textureRepeat);
-      const primaryUV = uv().mul(vec2(primaryScale, primaryScale));
+      const slope = float(1.0).sub(abs(dot(normalize(worldNorm), vec3(0.0, 1.0, 0.0))));
 
-      // Compute surface normal from position derivatives
-      const dPdx = worldPos.dFdx();
-      const dPdy = worldPos.dFdy();
-      const computedNormal = normalize(cross(dPdy, dPdx));
+      const grassR = texture(grassRoughness, tiledUV).r;
+      const dirtR = texture(dirtRoughness, tiledUV).r;
+      const rockR = texture(rockRoughness, tiledUV).r;
+      const cliffR = texture(cliffRoughness, tiledUV).r;
 
-      const upVector = vec3(0.0, 1.0, 0.0);
-      const normalDotUp = abs(dot(computedNormal, upVector));
-      const slope = float(1.0).sub(normalDotUp);
+      // Same weights as color
+      const grassWeight = smoothstep(float(0.25), float(0.1), slope);
+      const dirtWeight = smoothstep(float(0.08), float(0.2), slope).mul(smoothstep(float(0.35), float(0.2), slope));
+      const rockWeight = smoothstep(float(0.2), float(0.35), slope).mul(smoothstep(float(0.55), float(0.4), slope));
+      const cliffWeight = smoothstep(float(0.4), float(0.55), slope);
 
-      const grassR = texture(grassRoughness, primaryUV).r;
-      const dirtR = texture(dirtRoughness, primaryUV).r;
-      const rockR = texture(rockRoughness, primaryUV).r;
-      const cliffR = texture(cliffRoughness, primaryUV).r;
+      const totalWeight = grassWeight.add(dirtWeight).add(rockWeight).add(cliffWeight);
 
-      // Same blend thresholds as color (no noise offset for roughness)
-      const dirtBlend = smoothstep(float(0.05), float(0.20), slope);
-      const rockBlend = smoothstep(float(0.18), float(0.45), slope);
-      const cliffBlend = smoothstep(float(0.40), float(0.70), slope);
-
-      let roughness = mix(grassR, dirtR, dirtBlend);
-      roughness = mix(roughness, rockR, rockBlend);
-      roughness = mix(roughness, cliffR, cliffBlend);
+      const roughness = grassR.mul(grassWeight)
+        .add(dirtR.mul(dirtWeight))
+        .add(rockR.mul(rockWeight))
+        .add(cliffR.mul(cliffWeight))
+        .div(totalWeight);
 
       return clamp(roughness, 0.1, 0.95);
     })();
 
     // Normal map blending based on slope
     const normalNode = Fn(() => {
-      const worldPos = positionWorld;
+      const worldNorm = normalWorld;
+      const tiledUV = uv().mul(64.0);
 
-      const primaryScale = float(textureRepeat);
-      const primaryUV = uv().mul(vec2(primaryScale, primaryScale));
+      const slope = float(1.0).sub(abs(dot(normalize(worldNorm), vec3(0.0, 1.0, 0.0))));
 
-      // Compute surface normal from position derivatives
-      const dPdx = worldPos.dFdx();
-      const dPdy = worldPos.dFdy();
-      const computedNormal = normalize(cross(dPdy, dPdx));
+      // Sample and unpack normal maps
+      const grassN = texture(grassNormal, tiledUV).rgb.mul(2.0).sub(1.0);
+      const dirtN = texture(dirtNormal, tiledUV).rgb.mul(2.0).sub(1.0);
+      const rockN = texture(rockNormal, tiledUV).rgb.mul(2.0).sub(1.0);
+      const cliffN = texture(cliffNormal, tiledUV).rgb.mul(2.0).sub(1.0);
 
-      const upVector = vec3(0.0, 1.0, 0.0);
-      const normalDotUp = abs(dot(computedNormal, upVector));
-      const slope = float(1.0).sub(normalDotUp);
+      // Same weights as color
+      const grassWeight = smoothstep(float(0.25), float(0.1), slope);
+      const dirtWeight = smoothstep(float(0.08), float(0.2), slope).mul(smoothstep(float(0.35), float(0.2), slope));
+      const rockWeight = smoothstep(float(0.2), float(0.35), slope).mul(smoothstep(float(0.55), float(0.4), slope));
+      const cliffWeight = smoothstep(float(0.4), float(0.55), slope);
 
-      // Sample normal maps
-      const grassN = texture(grassNormal, primaryUV).rgb.mul(2.0).sub(1.0);
-      const dirtN = texture(dirtNormal, primaryUV).rgb.mul(2.0).sub(1.0);
-      const rockN = texture(rockNormal, primaryUV).rgb.mul(2.0).sub(1.0);
-      const cliffN = texture(cliffNormal, primaryUV).rgb.mul(2.0).sub(1.0);
+      const totalWeight = grassWeight.add(dirtWeight).add(rockWeight).add(cliffWeight);
 
-      // Same blend thresholds as color
-      const dirtBlend = smoothstep(float(0.05), float(0.20), slope);
-      const rockBlend = smoothstep(float(0.18), float(0.45), slope);
-      const cliffBlend = smoothstep(float(0.40), float(0.70), slope);
+      const blendedNormal = grassN.mul(grassWeight)
+        .add(dirtN.mul(dirtWeight))
+        .add(rockN.mul(rockWeight))
+        .add(cliffN.mul(cliffWeight))
+        .div(totalWeight);
 
-      let normal = mix(grassN, dirtN, dirtBlend);
-      normal = mix(normal, rockN, rockBlend);
-      normal = mix(normal, cliffN, cliffBlend);
-
-      // Convert back to 0-1 range
-      return normal.mul(0.5).add(0.5);
+      // Normalize and convert back to 0-1 range
+      return normalize(blendedNormal).mul(0.5).add(0.5);
     })();
 
     material.colorNode = colorNode;
