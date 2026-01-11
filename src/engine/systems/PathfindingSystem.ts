@@ -467,18 +467,20 @@ export class PathfindingSystem extends System {
   }
 
   private processPathRequest(request: PathRequest): void {
-    const result = this.findPath(
-      request.startX,
-      request.startY,
-      request.endX,
-      request.endY
-    );
-
     const entity = this.world.getEntity(request.entityId);
     if (!entity) return;
 
     const unit = entity.get<Unit>('Unit');
     if (!unit) return;
+
+    // Use unit's collision radius for path query - ensures proper clearance
+    const result = this.findPath(
+      request.startX,
+      request.startY,
+      request.endX,
+      request.endY,
+      unit.collisionRadius
+    );
 
     if (result.found && result.path.length > 0) {
       unit.setPath(result.path);
@@ -528,13 +530,14 @@ export class PathfindingSystem extends System {
     startX: number,
     startY: number,
     endX: number,
-    endY: number
+    endY: number,
+    agentRadius: number = 0.5
   ): PathResult {
     if (!this.navMeshReady) {
       return { path: [], found: false };
     }
 
-    return this.recast.findPath(startX, startY, endX, endY);
+    return this.recast.findPath(startX, startY, endX, endY, agentRadius);
   }
 
   public isWalkable(x: number, y: number): boolean {
