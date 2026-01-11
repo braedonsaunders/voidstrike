@@ -751,86 +751,17 @@ export class BuildingPlacementSystem extends System {
   }
 
   private isValidPlacement(centerX: number, centerY: number, width: number, height: number, excludeEntityId?: number): boolean {
-    const config = this.game.config;
-    const halfW = width / 2;
-    const halfH = height / 2;
-
     // Debug: log placement attempt
-    debugBuildingPlacement.log(`BuildingPlacement: Attempting at (${centerX.toFixed(1)}, ${centerY.toFixed(1)}), size ${width}x${height}, map bounds: ${config.mapWidth}x${config.mapHeight}`);
+    debugBuildingPlacement.log(`BuildingPlacement: Attempting at (${centerX.toFixed(1)}, ${centerY.toFixed(1)}), size ${width}x${height}, map bounds: ${this.game.config.mapWidth}x${this.game.config.mapHeight}`);
 
-    // Check map bounds
-    if (centerX - halfW < 0 || centerY - halfH < 0 ||
-        centerX + halfW > config.mapWidth || centerY + halfH > config.mapHeight) {
-      debugBuildingPlacement.log(`BuildingPlacement: Failed - out of map bounds (centerX-halfW=${(centerX - halfW).toFixed(1)}, centerY-halfH=${(centerY - halfH).toFixed(1)}, centerX+halfW=${(centerX + halfW).toFixed(1)}, centerY+halfH=${(centerY + halfH).toFixed(1)})`);
-      return false;
+    // Use the centralized validation from Game class
+    const isValid = this.game.isValidBuildingPlacement(centerX, centerY, width, height, excludeEntityId);
+
+    if (!isValid) {
+      debugBuildingPlacement.log(`BuildingPlacement: Failed at (${centerX.toFixed(1)}, ${centerY.toFixed(1)})`);
     }
 
-    // Check terrain validity (must be on ground, same elevation, not on ramps/cliffs)
-    if (!this.game.isValidTerrainForBuilding(centerX, centerY, width, height)) {
-      debugBuildingPlacement.log(`BuildingPlacement: Failed - invalid terrain (cliff edge, ramp, or elevation mismatch)`);
-      return false;
-    }
-
-    // Check for overlapping buildings
-    const buildings = this.world.getEntitiesWith('Building', 'Transform');
-    for (const entity of buildings) {
-      const transform = entity.get<Transform>('Transform');
-      const building = entity.get<Building>('Building');
-      if (!transform || !building) continue;
-
-      const existingHalfW = building.width / 2;
-      const existingHalfH = building.height / 2;
-      const dx = Math.abs(centerX - transform.x);
-      const dy = Math.abs(centerY - transform.y);
-
-      if (dx < halfW + existingHalfW + 0.5 && dy < halfH + existingHalfH + 0.5) {
-        debugBuildingPlacement.log(`BuildingPlacement: Failed - overlaps building at (${transform.x}, ${transform.y})`);
-        return false;
-      }
-    }
-
-    // Check for overlapping resources
-    const resources = this.world.getEntitiesWith('Resource', 'Transform');
-    for (const entity of resources) {
-      const transform = entity.get<Transform>('Transform');
-      if (!transform) continue;
-
-      const dx = Math.abs(centerX - transform.x);
-      const dy = Math.abs(centerY - transform.y);
-
-      if (dx < halfW + 1.5 && dy < halfH + 1.5) {
-        debugBuildingPlacement.log(`BuildingPlacement: Failed - overlaps resource at (${transform.x}, ${transform.y})`);
-        return false;
-      }
-    }
-
-    // Check for overlapping units (exclude the builder worker)
-    const units = this.world.getEntitiesWith('Unit', 'Transform');
-    for (const entity of units) {
-      // Skip the worker who will build this structure
-      if (excludeEntityId !== undefined && entity.id === excludeEntityId) {
-        continue;
-      }
-
-      const transform = entity.get<Transform>('Transform');
-      if (!transform) continue;
-
-      const dx = Math.abs(centerX - transform.x);
-      const dy = Math.abs(centerY - transform.y);
-
-      if (dx < halfW + 0.5 && dy < halfH + 0.5) {
-        debugBuildingPlacement.log(`BuildingPlacement: Failed - overlaps unit ${entity.id} at (${transform.x}, ${transform.y})`);
-        return false;
-      }
-    }
-
-    // Check for overlapping decorations (rocks, trees, etc.)
-    if (!this.game.isPositionClearOfDecorations(centerX, centerY, width, height)) {
-      debugBuildingPlacement.log(`BuildingPlacement: Failed - overlaps decoration at (${centerX}, ${centerY})`);
-      return false;
-    }
-
-    return true;
+    return isValid;
   }
 
   /**
