@@ -464,9 +464,10 @@ export class UnitRenderer {
     const currentIds = new Set<number>();
 
     // Reset instance counts for all groups
+    // PERF: Use .length = 0 instead of = [] to avoid GC pressure from allocating new arrays every frame
     for (const group of this.instancedGroups.values()) {
       group.mesh.count = 0;
-      group.entityIds = [];
+      group.entityIds.length = 0;
     }
 
     // Hide animated units that may be hidden
