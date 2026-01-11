@@ -36,6 +36,10 @@ interface BuildingMeshData {
   scaffoldEffect: THREE.Group | null;
   // Clipping plane for construction reveal
   clippingPlane: THREE.Plane | null;
+  // PERF: Cached terrain height to avoid recalculation every frame
+  cachedTerrainHeight: number;
+  lastX: number;
+  lastY: number;
 }
 
 // Instanced building group for same-type completed buildings
@@ -103,6 +107,13 @@ export class BuildingRenderer {
   private weldingFlashMaterial: THREE.PointsMaterial;
   // Scaffold material
   private scaffoldMaterial: THREE.LineBasicMaterial;
+  // PERF: Pre-created scaffold mesh materials (shared across all scaffolds)
+  private scaffoldPoleMaterial: THREE.MeshBasicMaterial;
+  private scaffoldBeamMaterial: THREE.MeshBasicMaterial;
+  // PERF: Pre-created cylinder geometries for scaffolds (reused)
+  private scaffoldPoleGeometry: THREE.CylinderGeometry;
+  private scaffoldBeamGeometry: THREE.CylinderGeometry;
+  private scaffoldDiagonalGeometry: THREE.CylinderGeometry;
 
   // Animation time for effects
   private fireAnimTime: number = 0;
@@ -258,6 +269,22 @@ export class BuildingRenderer {
       opacity: 0.8,
       linewidth: 2,
     });
+
+    // PERF: Pre-create scaffold materials (shared across all scaffolds)
+    this.scaffoldPoleMaterial = new THREE.MeshBasicMaterial({
+      color: 0xdd8833,
+      transparent: false,
+    });
+    this.scaffoldBeamMaterial = new THREE.MeshBasicMaterial({
+      color: 0xaa6622,
+      transparent: false,
+    });
+
+    // PERF: Pre-create scaffold geometries (shared and reused)
+    // Standard pole heights will be scaled per-instance
+    this.scaffoldPoleGeometry = new THREE.CylinderGeometry(0.08, 0.08, 1, 6);
+    this.scaffoldBeamGeometry = new THREE.CylinderGeometry(0.05, 0.05, 1, 6);
+    this.scaffoldDiagonalGeometry = new THREE.CylinderGeometry(0.035, 0.035, 1, 6);
 
     // Register callback to refresh meshes when custom models finish loading
     AssetManager.onModelsLoaded(() => {
@@ -457,10 +484,11 @@ export class BuildingRenderer {
 
   /**
    * Update frustum from camera - call before update loop
+   * PERF: camera.updateMatrixWorld() is called once in main render loop
    */
   private updateFrustum(): void {
     if (!this.camera) return;
-    this.camera.updateMatrixWorld();
+    // PERF: updateMatrixWorld() is now called once in WebGPUGameCanvas before renderer updates
     this.frustumMatrix.multiplyMatrices(
       this.camera.projectionMatrix,
       this.camera.matrixWorldInverse
@@ -553,8 +581,24 @@ export class BuildingRenderer {
         shouldShow = this.visionSystem.isExplored(this.playerId, transform.x, transform.y);
       }
 
-      // Get terrain height early for frustum check
-      const terrainHeight = this.getTerrainHeightAt(transform.x, transform.y);
+      // PERF: Get cached terrain height (buildings rarely move)
+      let meshData = this.buildingMeshes.get(entity.id);
+      let terrainHeight: number;
+      if (meshData) {
+        // Use cached height if position hasn't changed
+        const dx = Math.abs(transform.x - meshData.lastX);
+        const dy = Math.abs(transform.y - meshData.lastY);
+        if (dx < 0.01 && dy < 0.01) {
+          terrainHeight = meshData.cachedTerrainHeight;
+        } else {
+          terrainHeight = this.getTerrainHeightAt(transform.x, transform.y);
+          meshData.cachedTerrainHeight = terrainHeight;
+          meshData.lastX = transform.x;
+          meshData.lastY = transform.y;
+        }
+      } else {
+        terrainHeight = this.getTerrainHeightAt(transform.x, transform.y);
+      }
       const buildingHeight = Math.max(building.width, building.height) + 2; // Approximate height
 
       // PERF: Skip buildings outside camera frustum
@@ -614,7 +658,7 @@ export class BuildingRenderer {
         }
       }
 
-      let meshData = this.buildingMeshes.get(entity.id);
+      // PERF: meshData already retrieved above for terrain height caching
 
       // Check if building was upgraded (buildingId changed) - recreate mesh if so
       if (meshData && meshData.buildingId !== building.buildingId) {
@@ -632,6 +676,10 @@ export class BuildingRenderer {
         meshData = this.createBuildingMesh(building, ownerId);
         // Initialize wasComplete based on actual building state
         meshData.wasComplete = building.isComplete();
+        // PERF: Initialize cached terrain height
+        meshData.cachedTerrainHeight = terrainHeight;
+        meshData.lastX = transform.x;
+        meshData.lastY = transform.y;
         this.buildingMeshes.set(entity.id, meshData);
         this.scene.add(meshData.group);
         this.scene.add(meshData.selectionRing);
@@ -1044,6 +1092,10 @@ export class BuildingRenderer {
       groundDustEffect: null,
       scaffoldEffect: null,
       clippingPlane: null,
+      // PERF: Cached terrain height
+      cachedTerrainHeight: 0,
+      lastX: -99999,
+      lastY: -99999,
     };
   }
 
@@ -1967,6 +2019,7 @@ export class BuildingRenderer {
   /**
    * Create scaffold effect with thick poles and beams using cylinders
    * Shows construction framework that fades as building materializes
+   * PERF: Uses shared materials and geometries to avoid allocation
    */
   private createScaffoldEffect(buildingWidth: number, buildingDepth: number, buildingHeight: number): THREE.Group {
     const scaffoldGroup = new THREE.Group();
@@ -1977,57 +2030,55 @@ export class BuildingRenderer {
     const levelHeight = 1.5;
     const levels = Math.max(2, Math.ceil(buildingHeight / levelHeight));
 
-    // Pole thickness
-    const poleRadius = 0.08;
-    const beamRadius = 0.05;
+    // PERF: Reusable vectors for calculations (avoid allocation in loop)
+    const direction = new THREE.Vector3();
+    const axis = new THREE.Vector3(0, 1, 0);
 
-    // Material for scaffold poles (orange metallic) - fully opaque
-    const poleMaterial = new THREE.MeshBasicMaterial({
-      color: 0xdd8833,
-      transparent: false,
-    });
-
-    // Material for cross beams (darker) - fully opaque
-    const beamMaterial = new THREE.MeshBasicMaterial({
-      color: 0xaa6622,
-      transparent: false,
-    });
-
-    // Helper to create a cylinder between two points
-    const createPole = (start: THREE.Vector3, end: THREE.Vector3, radius: number, material: THREE.Material) => {
-      const direction = new THREE.Vector3().subVectors(end, start);
+    // PERF: Helper to create a cylinder between two points using shared geometry
+    const createPole = (
+      startX: number, startY: number, startZ: number,
+      endX: number, endY: number, endZ: number,
+      geometry: THREE.CylinderGeometry,
+      material: THREE.Material
+    ) => {
+      direction.set(endX - startX, endY - startY, endZ - startZ);
       const length = direction.length();
       if (length < 0.01) return null;
 
-      const geometry = new THREE.CylinderGeometry(radius, radius, length, 6);
+      // PERF: Reuse shared geometry, just scale the mesh
       const mesh = new THREE.Mesh(geometry, material);
+      mesh.scale.y = length;
 
       // Position at midpoint
-      mesh.position.copy(start).add(end).multiplyScalar(0.5);
+      mesh.position.set(
+        (startX + endX) * 0.5,
+        (startY + endY) * 0.5,
+        (startZ + endZ) * 0.5
+      );
 
       // Orient cylinder to point from start to end
-      const axis = new THREE.Vector3(0, 1, 0);
       direction.normalize();
-      const quaternion = new THREE.Quaternion().setFromUnitVectors(axis, direction);
-      mesh.quaternion.copy(quaternion);
+      mesh.quaternion.setFromUnitVectors(axis, direction);
 
       return mesh;
     };
 
-    // Corner positions
+    // Corner positions (as arrays to avoid Vector3 allocation)
     const corners = [
-      new THREE.Vector3(-hw, 0, -hd),
-      new THREE.Vector3(hw, 0, -hd),
-      new THREE.Vector3(hw, 0, hd),
-      new THREE.Vector3(-hw, 0, hd),
+      [-hw, -hd],
+      [hw, -hd],
+      [hw, hd],
+      [-hw, hd],
     ];
 
     // Create vertical poles at corners
-    for (const corner of corners) {
-      const start = corner.clone();
-      const end = corner.clone();
-      end.y = buildingHeight;
-      const pole = createPole(start, end, poleRadius, poleMaterial.clone());
+    for (const [cx, cz] of corners) {
+      const pole = createPole(
+        cx, 0, cz,
+        cx, buildingHeight, cz,
+        this.scaffoldPoleGeometry,
+        this.scaffoldPoleMaterial
+      );
       if (pole) scaffoldGroup.add(pole);
     }
 
@@ -2037,11 +2088,14 @@ export class BuildingRenderer {
 
       // Horizontal beams connecting corners
       for (let i = 0; i < 4; i++) {
-        const start = corners[i].clone();
-        start.y = y;
-        const end = corners[(i + 1) % 4].clone();
-        end.y = y;
-        const beam = createPole(start, end, beamRadius, beamMaterial.clone());
+        const [x1, z1] = corners[i];
+        const [x2, z2] = corners[(i + 1) % 4];
+        const beam = createPole(
+          x1, y, z1,
+          x2, y, z2,
+          this.scaffoldBeamGeometry,
+          this.scaffoldBeamMaterial
+        );
         if (beam) scaffoldGroup.add(beam);
       }
 
@@ -2050,19 +2104,25 @@ export class BuildingRenderer {
         const y2 = Math.min((level + 1) * levelHeight, buildingHeight);
 
         for (let i = 0; i < 4; i++) {
-          const c1 = corners[i];
-          const c2 = corners[(i + 1) % 4];
+          const [c1x, c1z] = corners[i];
+          const [c2x, c2z] = corners[(i + 1) % 4];
 
           // Diagonal 1
-          const d1Start = new THREE.Vector3(c1.x, y, c1.z);
-          const d1End = new THREE.Vector3(c2.x, y2, c2.z);
-          const diag1 = createPole(d1Start, d1End, beamRadius * 0.7, beamMaterial.clone());
+          const diag1 = createPole(
+            c1x, y, c1z,
+            c2x, y2, c2z,
+            this.scaffoldDiagonalGeometry,
+            this.scaffoldBeamMaterial
+          );
           if (diag1) scaffoldGroup.add(diag1);
 
           // Diagonal 2
-          const d2Start = new THREE.Vector3(c2.x, y, c2.z);
-          const d2End = new THREE.Vector3(c1.x, y2, c1.z);
-          const diag2 = createPole(d2Start, d2End, beamRadius * 0.7, beamMaterial.clone());
+          const diag2 = createPole(
+            c2x, y, c2z,
+            c1x, y2, c1z,
+            this.scaffoldDiagonalGeometry,
+            this.scaffoldBeamMaterial
+          );
           if (diag2) scaffoldGroup.add(diag2);
         }
       }
@@ -2073,20 +2133,36 @@ export class BuildingRenderer {
 
   /**
    * Update scaffold opacity for fade effect (only when fading out)
+   * PERF: Only clones materials once when transitioning to transparent mode
    */
   private updateScaffoldOpacity(scaffold: THREE.Group, opacity: number): void {
     // Only apply transparency when fading (opacity < 1)
     const shouldBeTransparent = opacity < 0.99;
-    scaffold.traverse((child) => {
-      if (child instanceof THREE.Mesh) {
-        const mat = child.material as THREE.MeshBasicMaterial;
-        if (mat) {
-          mat.transparent = shouldBeTransparent;
-          mat.opacity = opacity;
-          mat.needsUpdate = true;
+
+    // PERF: If we need transparency but haven't cloned materials yet, do it once
+    if (shouldBeTransparent && !scaffold.userData.hasOwnMaterials) {
+      scaffold.traverse((child) => {
+        if (child instanceof THREE.Mesh) {
+          // Clone the shared material for this scaffold's private use
+          child.material = (child.material as THREE.MeshBasicMaterial).clone();
         }
-      }
-    });
+      });
+      scaffold.userData.hasOwnMaterials = true;
+    }
+
+    // Only update if we have our own materials (transparent mode)
+    if (scaffold.userData.hasOwnMaterials) {
+      scaffold.traverse((child) => {
+        if (child instanceof THREE.Mesh) {
+          const mat = child.material as THREE.MeshBasicMaterial;
+          if (mat) {
+            mat.transparent = shouldBeTransparent;
+            mat.opacity = opacity;
+            mat.needsUpdate = true;
+          }
+        }
+      });
+    }
   }
 
   private createBar(color: number): THREE.Group {

@@ -49,6 +49,11 @@ export class VisionSystem extends System {
   private readonly UPDATE_INTERVAL = 10;
   private tickCounter = 0;
 
+  // PERF: Version counter for dirty checking by FogOfWar renderer
+  private visionVersion = 0;
+  // PERF: Cached vision masks per player to avoid regenerating every frame
+  private visionMaskCache: Map<string, { mask: Float32Array; width: number; height: number; version: number }> = new Map();
+
   constructor(game: Game, mapWidth: number, mapHeight: number, cellSize: number = 2) {
     super(game);
     this.mapWidth = mapWidth;
@@ -170,6 +175,16 @@ export class VisionSystem extends System {
 
     // Update watch towers
     this.updateWatchTowers(units);
+
+    // PERF: Increment version for dirty checking by renderers
+    this.visionVersion++;
+  }
+
+  /**
+   * Get the current vision version for dirty checking
+   */
+  public getVisionVersion(): number {
+    return this.visionVersion;
   }
 
   /**
@@ -321,11 +336,29 @@ export class VisionSystem extends System {
   }
 
   // For minimap rendering - get a downsampled vision mask
+  // PERF: Caches masks per player and only regenerates when vision changes
   public getVisionMask(playerId: string, targetWidth: number, targetHeight: number): Float32Array {
     const visionGrid = this.visionMap.playerVision.get(playerId);
     if (!visionGrid) return new Float32Array(targetWidth * targetHeight);
 
-    const mask = new Float32Array(targetWidth * targetHeight);
+    // PERF: Check cache for existing mask
+    const cacheKey = playerId;
+    const cached = this.visionMaskCache.get(cacheKey);
+    if (cached &&
+        cached.width === targetWidth &&
+        cached.height === targetHeight &&
+        cached.version === this.visionVersion) {
+      return cached.mask;
+    }
+
+    // PERF: Reuse existing array if dimensions match, otherwise allocate new
+    let mask: Float32Array;
+    if (cached && cached.width === targetWidth && cached.height === targetHeight) {
+      mask = cached.mask;
+    } else {
+      mask = new Float32Array(targetWidth * targetHeight);
+    }
+
     const scaleX = this.visionMap.width / targetWidth;
     const scaleY = this.visionMap.height / targetHeight;
 
@@ -341,6 +374,9 @@ export class VisionSystem extends System {
           state === 'visible' ? 1.0 : state === 'explored' ? 0.5 : 0.0;
       }
     }
+
+    // Update cache
+    this.visionMaskCache.set(cacheKey, { mask, width: targetWidth, height: targetHeight, version: this.visionVersion });
 
     return mask;
   }

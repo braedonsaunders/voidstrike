@@ -25,6 +25,7 @@ interface DamageNumber {
   duration: number;
   sprite: THREE.Sprite;
   velocity: THREE.Vector3;
+  targetId?: number; // PERF: Track which entity this damage number belongs to
 }
 
 interface FocusFireIndicator {
@@ -79,6 +80,8 @@ export class EffectsRenderer {
   private hitEffects: HitEffect[] = [];
   private damageNumbers: DamageNumber[] = [];
   private explosionParticles: ExplosionParticle[] = [];
+  // PERF: Track active damage numbers per entity to consolidate multiple hits
+  private activeDamageNumbers: Map<number, DamageNumber> = new Map();
   private focusFireIndicators: Map<number, FocusFireIndicator> = new Map();
   private targetAttackerCounts: Map<number, Set<number>> = new Map(); // targetId -> Set of attackerIds
   private moveIndicators: MoveIndicator[] = [];
@@ -349,9 +352,11 @@ export class EffectsRenderer {
         // Create floating damage number ABOVE the target
         // Use targetHeight for buildings, default 2.5 for units (relative to terrain), add flying offset for air units
         const damageNumberY = targetTerrainHeight + targetFlyingOffset + ((data.targetHeight && data.targetHeight > 0) ? data.targetHeight + 1.5 : 2.5);
+        // PERF: Pass targetId to consolidate multiple hits on same target into one number
         this.createDamageNumber(
           new THREE.Vector3(data.targetPos.x, damageNumberY, data.targetPos.y),
-          data.damage
+          data.damage,
+          data.targetId
         );
 
         // Track focus fire - multiple attackers on same target
@@ -626,7 +631,27 @@ export class EffectsRenderer {
     });
   }
 
-  private createDamageNumber(position: THREE.Vector3, damage: number): void {
+  private createDamageNumber(position: THREE.Vector3, damage: number, targetId?: number): void {
+    // PERF: If we have an active damage number for this target, update it instead of creating new one
+    if (targetId !== undefined) {
+      const existing = this.activeDamageNumbers.get(targetId);
+      if (existing && existing.progress < 0.5) {
+        // Update existing damage number - add to accumulated damage
+        existing.damage += damage;
+        existing.progress = 0; // Reset timer to keep it visible longer
+        existing.position.copy(position); // Update position in case target moved
+        existing.sprite.position.copy(position);
+
+        // Update the sprite texture with new accumulated damage
+        this.updateDamageNumberTexture(existing.sprite, existing.damage);
+
+        // "Pop" effect - briefly scale up to indicate new damage added
+        existing.sprite.scale.set(1.8, 0.9, 1);
+
+        return;
+      }
+    }
+
     // PERF: Try to get sprite from pool instead of creating new texture
     let sprite: THREE.Sprite;
     let poolItem: { sprite: THREE.Sprite; material: THREE.SpriteMaterial; texture: THREE.CanvasTexture } | null = null;
@@ -664,6 +689,10 @@ export class EffectsRenderer {
           // Return to pool if it was from pool, otherwise just hide
           oldest.sprite.visible = false;
           this.damageNumberPool.inUse.delete(oldest.sprite);
+          // Clean up from active tracking
+          if (oldest.targetId !== undefined) {
+            this.activeDamageNumbers.delete(oldest.targetId);
+          }
         }
         return; // Skip creating this damage number
       }
@@ -696,7 +725,7 @@ export class EffectsRenderer {
       this.scene.add(sprite);
     }
 
-    this.damageNumbers.push({
+    const damageNumber: DamageNumber = {
       position: position.clone(),
       damage,
       progress: 0,
@@ -707,7 +736,40 @@ export class EffectsRenderer {
         2.0,
         (Math.random() - 0.5) * 0.5
       ),
-    });
+      targetId,
+    };
+
+    this.damageNumbers.push(damageNumber);
+
+    // Track active damage number for this target
+    if (targetId !== undefined) {
+      this.activeDamageNumbers.set(targetId, damageNumber);
+    }
+  }
+
+  /**
+   * PERF: Update damage number texture without creating new sprite
+   */
+  private updateDamageNumberTexture(sprite: THREE.Sprite, damage: number): void {
+    const material = sprite.material as THREE.SpriteMaterial;
+    const texture = material.map as THREE.CanvasTexture;
+    if (!texture) return;
+
+    const canvas = texture.source.data as HTMLCanvasElement;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+
+    ctx.clearRect(0, 0, 128, 64);
+    ctx.font = 'bold 32px Arial';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.strokeStyle = '#000000';
+    ctx.lineWidth = 4;
+    ctx.strokeText(Math.round(damage).toString(), 64, 32);
+    // Use orange for accumulated damage to distinguish from single hits
+    ctx.fillStyle = '#ff8800';
+    ctx.fillText(Math.round(damage).toString(), 64, 32);
+    texture.needsUpdate = true;
   }
 
   /**
@@ -941,6 +1003,10 @@ export class EffectsRenderer {
           (dmgNum.sprite.material as THREE.SpriteMaterial).map?.dispose();
           (dmgNum.sprite.material as THREE.SpriteMaterial).dispose();
         }
+        // PERF: Clean up from active tracking
+        if (dmgNum.targetId !== undefined) {
+          this.activeDamageNumbers.delete(dmgNum.targetId);
+        }
         this.damageNumbers.splice(i, 1);
       } else {
         // Float upward with deceleration and fade out
@@ -955,9 +1021,13 @@ export class EffectsRenderer {
           (dmgNum.sprite.material as THREE.SpriteMaterial).opacity = 1 - fadeProgress;
         }
 
-        // Scale up slightly as it rises
-        const scale = 1 + dmgNum.progress * 0.3;
-        dmgNum.sprite.scale.set(1.5 * scale, 0.75 * scale, 1);
+        // Scale up slightly as it rises (with smooth return from pop effect)
+        const baseScale = 1 + dmgNum.progress * 0.3;
+        const currentScale = dmgNum.sprite.scale.x / 1.5;
+        const targetScale = baseScale;
+        // Smoothly interpolate from pop scale back to normal
+        const smoothScale = currentScale + (targetScale - currentScale) * Math.min(dt * 8, 1);
+        dmgNum.sprite.scale.set(1.5 * smoothScale, 0.75 * smoothScale, 1);
       }
     }
 
@@ -1076,6 +1146,7 @@ export class EffectsRenderer {
     this.hitEffects = [];
     this.explosionParticles = [];
     this.damageNumbers = [];
+    this.activeDamageNumbers.clear();
     this.focusFireIndicators.clear();
     this.targetAttackerCounts.clear();
     this.moveIndicators = [];

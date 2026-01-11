@@ -37,6 +37,10 @@ interface UnitOverlay {
   healthBar: THREE.Group;
   teamMarker: THREE.Mesh;
   lastHealth: number;
+  // PERF: Cached terrain height to avoid recalculation every frame
+  cachedTerrainHeight: number;
+  lastX: number;
+  lastY: number;
 }
 
 const MAX_INSTANCES_PER_TYPE = 100; // Max units of same type per player
@@ -132,10 +136,11 @@ export class UnitRenderer {
 
   /**
    * Update frustum from camera - call before update loop
+   * PERF: camera.updateMatrixWorld() is called once in main render loop
    */
   private updateFrustum(): void {
     if (!this.camera) return;
-    this.camera.updateMatrixWorld();
+    // PERF: updateMatrixWorld() is now called once in WebGPUGameCanvas before renderer updates
     this.frustumMatrix.multiplyMatrices(
       this.camera.projectionMatrix,
       this.camera.matrixWorldInverse
@@ -510,12 +515,31 @@ export class UnitRenderer {
         healthBar,
         teamMarker,
         lastHealth: 1,
+        // PERF: Initialize cached terrain height
+        cachedTerrainHeight: 0,
+        lastX: -99999,
+        lastY: -99999,
       };
 
       this.unitOverlays.set(entityId, overlay);
     }
 
     return overlay;
+  }
+
+  /**
+   * PERF: Get cached terrain height, only recalculating when position changes significantly
+   */
+  private getCachedTerrainHeight(overlay: UnitOverlay, x: number, y: number): number {
+    // Only recalculate if position changed by more than 0.5 units
+    const dx = Math.abs(x - overlay.lastX);
+    const dy = Math.abs(y - overlay.lastY);
+    if (dx > 0.5 || dy > 0.5) {
+      overlay.cachedTerrainHeight = this.terrain?.getHeightAt(x, y) ?? 0;
+      overlay.lastX = x;
+      overlay.lastY = y;
+    }
+    return overlay.cachedTerrainHeight;
   }
 
   public update(deltaTime: number = 1/60): void {
@@ -580,8 +604,9 @@ export class UnitRenderer {
         continue;
       }
 
-      // Get terrain height
-      const terrainHeight = this.terrain?.getHeightAt(transform.x, transform.y) ?? 0;
+      // PERF: Get cached terrain height (only recalculates when position changes)
+      const overlay = this.getOrCreateOverlay(entity.id, ownerId);
+      const terrainHeight = this.getCachedTerrainHeight(overlay, transform.x, transform.y);
 
       // Calculate flying offset for air units
       const flyingOffset = unit.isFlying ? AIR_UNIT_HEIGHT : 0;
@@ -647,7 +672,7 @@ export class UnitRenderer {
       }
 
       // Update overlay (selection ring, health bar, team marker) for all units
-      const overlay = this.getOrCreateOverlay(entity.id, ownerId);
+      // PERF: Overlay already created above when getting cached terrain height
 
       // Team marker - always visible colored circle beneath unit
       overlay.teamMarker.position.set(transform.x, unitHeight + 0.02, transform.y);

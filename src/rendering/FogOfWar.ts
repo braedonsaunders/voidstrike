@@ -31,6 +31,8 @@ export class FogOfWar {
   private lastUpdateTime: number = 0;
   private updateInterval: number = 100; // Only update every 100ms (10 FPS)
   private isDirty: boolean = true;
+  // PERF: Track vision version for dirty checking
+  private lastVisionVersion: number = -1;
 
   constructor(config: FogOfWarConfig) {
     this.mapWidth = config.mapWidth;
@@ -137,6 +139,13 @@ export class FogOfWar {
       return;
     }
     this.lastUpdateTime = now;
+
+    // PERF: Check if vision has actually changed since last update
+    const currentVersion = this.visionSystem.getVisionVersion();
+    if (currentVersion === this.lastVisionVersion) {
+      return; // Vision hasn't changed, skip texture update
+    }
+    this.lastVisionVersion = currentVersion;
 
     const visionGrid = this.visionSystem.getVisionGridForPlayer(this.playerId);
     if (!visionGrid) return;
