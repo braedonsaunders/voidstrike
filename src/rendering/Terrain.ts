@@ -788,89 +788,43 @@ export class Terrain {
     const cell11 = terrain[y1][x1];  // Bottom-right (primary cell)
 
     const samples = [cell00, cell10, cell01, cell11];
-    const elevations = [cell00.elevation, cell10.elevation, cell01.elevation, cell11.elevation];
 
-    // Determine terrain type priority and count ramp cells
+    // Determine terrain type priority
     let dominantTerrain: TerrainType = 'ground';
     let dominantFeature: TerrainFeature = 'none';
     let hasRamp = false;
     let hasUnwalkable = false;
-    let rampCount = 0;
     let groundCount = 0;
 
-    const rampElevations: number[] = [];
-    const nonRampElevations: number[] = [];
-
     for (const sample of samples) {
-      if (sample.terrain === 'ramp') {
-        hasRamp = true;
-        rampCount++;
-        rampElevations.push(sample.elevation);
-      } else {
-        nonRampElevations.push(sample.elevation);
-      }
-      if (sample.terrain === 'unwalkable') {
-        hasUnwalkable = true;
-      }
-      if (sample.terrain === 'ground' || sample.terrain === 'unbuildable') {
-        groundCount++;
-      }
+      if (sample.terrain === 'ramp') hasRamp = true;
+      if (sample.terrain === 'unwalkable') hasUnwalkable = true;
+      if (sample.terrain === 'ground' || sample.terrain === 'unbuildable') groundCount++;
     }
 
-    // Calculate elevation based on terrain type composition
-    let finalElevation: number;
+    // ALWAYS use simple average elevation - this creates smooth transitions
+    // The slope-based texture blending is handled separately via the aSlope vertex attribute
+    const avgElevation = (cell00.elevation + cell10.elevation + cell01.elevation + cell11.elevation) / 4;
 
+    // Set terrain type for slope calculation (ramps get texture treatment via aSlope)
     if (hasRamp) {
       dominantTerrain = 'ramp';
       dominantFeature = 'none';
-
-      if (rampCount === 4) {
-        // Fully within ramp - use average of all ramp cells
-        finalElevation = rampElevations.reduce((a, b) => a + b, 0) / rampCount;
-      } else if (rampCount >= 2) {
-        // At ramp edge with multiple ramp cells - heavily weight ramp elevations
-        // This creates smooth transitions at ramp boundaries
-        const rampAvg = rampElevations.reduce((a, b) => a + b, 0) / rampElevations.length;
-        const nonRampAvg = nonRampElevations.reduce((a, b) => a + b, 0) / nonRampElevations.length;
-        // 80% ramp, 20% non-ramp for smooth but ramp-respecting transition
-        finalElevation = rampAvg * 0.8 + nonRampAvg * 0.2;
-      } else {
-        // Only 1 ramp cell - this is at the very edge of the ramp
-        // Use the ramp elevation but blend slightly with nearest matching elevation
-        const rampElev = rampElevations[0];
-        // Find the non-ramp elevation closest to the ramp elevation for smooth blending
-        let closestNonRamp = nonRampElevations[0];
-        let minDiff = Math.abs(rampElev - closestNonRamp);
-        for (const elev of nonRampElevations) {
-          const diff = Math.abs(rampElev - elev);
-          if (diff < minDiff) {
-            minDiff = diff;
-            closestNonRamp = elev;
-          }
-        }
-        // 70% ramp elevation, 30% closest ground for subtle blending at edges
-        finalElevation = rampElev * 0.7 + closestNonRamp * 0.3;
-      }
     } else if (hasUnwalkable && groundCount > 0) {
-      // At cliff edges (mix of walkable and unwalkable): this is where slopes should appear
+      // At cliff edges
       dominantTerrain = 'unwalkable';
       dominantFeature = 'cliff';
-      // Use average elevation to create the actual cliff slope geometry
-      finalElevation = elevations.reduce((a, b) => a + b, 0) / 4;
     } else if (hasUnwalkable) {
-      // Fully in unwalkable area
       dominantTerrain = 'unwalkable';
       dominantFeature = cell11.feature || 'cliff';
-      finalElevation = elevations.reduce((a, b) => a + b, 0) / 4;
     } else {
       dominantTerrain = cell11.terrain;
       dominantFeature = cell11.feature || 'none';
-      finalElevation = elevations.reduce((a, b) => a + b, 0) / 4;
     }
 
     return {
       terrain: dominantTerrain,
-      elevation: Math.round(finalElevation),
+      elevation: Math.round(avgElevation),
       feature: dominantFeature,
       textureId: cell11.textureId,
     };
