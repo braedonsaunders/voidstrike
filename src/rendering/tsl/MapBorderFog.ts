@@ -3,7 +3,7 @@
  *
  * WebGPU-compatible map boundary fog effect using Three.js Shading Language.
  * Creates a premium dark, smoky fog around map edges similar to StarCraft 2.
- * Uses a single plane with shader-based distance calculation for clean edges.
+ * Uses UV-based distance calculation for reliable per-fragment effects.
  */
 
 import * as THREE from 'three';
@@ -17,8 +17,9 @@ import {
   clamp,
   sin,
   cos,
-  positionWorld,
+  uv,
   max,
+  abs,
 } from 'three/tsl';
 import { MeshBasicNodeMaterial } from 'three/webgpu';
 import { MapData } from '@/data/maps';
@@ -37,7 +38,7 @@ export interface MapBorderFogConfig {
 const DEFAULT_CONFIG: MapBorderFogConfig = {
   fogColor: new THREE.Color(0x000000),
   borderSize: 100,
-  inwardEncroachment: 30,
+  inwardEncroachment: 25,
   animationSpeed: 1.0,
 };
 
@@ -46,9 +47,15 @@ export class TSLMapBorderFog {
   private material: MeshBasicNodeMaterial;
   private uTime = uniform(0);
   private uFogColor = uniform(new THREE.Color(0x000000));
-  private uMapBounds = uniform(new THREE.Vector4(0, 0, 256, 256)); // minX, minZ, maxX, maxZ
-  private uFadeStart = uniform(0); // Distance from edge where fade starts (negative = inside map)
-  private uFadeEnd = uniform(100); // Distance from edge where fog is fully opaque
+  // Plane dimensions for UV to world conversion
+  private uPlaneSize = uniform(new THREE.Vector2(256, 256));
+  private uPlaneCenter = uniform(new THREE.Vector2(128, 128));
+  // Map bounds relative to plane center
+  private uMapMin = uniform(new THREE.Vector2(0, 0));
+  private uMapMax = uniform(new THREE.Vector2(256, 256));
+  // Fade distances
+  private uFadeStart = uniform(-25); // negative = start inside map
+  private uFadeEnd = uniform(80); // distance to full opacity
 
   constructor(mapData: MapData, config: Partial<MapBorderFogConfig> = {}) {
     const cfg = { ...DEFAULT_CONFIG, ...config };
@@ -56,24 +63,33 @@ export class TSLMapBorderFog {
     const mapWidth = mapData.width;
     const mapHeight = mapData.height;
 
-    // Store map bounds for shader
-    this.uMapBounds.value.set(0, 0, mapWidth, mapHeight);
-    this.uFadeStart.value = -cfg.inwardEncroachment; // Negative means start inside map
-    this.uFadeEnd.value = cfg.borderSize;
+    // Plane extends beyond map in all directions
+    const borderExtent = cfg.borderSize + 20;
+    const planeWidth = mapWidth + borderExtent * 2;
+    const planeHeight = mapHeight + borderExtent * 2;
+    const planeCenterX = mapWidth / 2;
+    const planeCenterZ = mapHeight / 2;
 
-    // Create a single large plane that covers map + border area
-    const planeSize = Math.max(mapWidth, mapHeight) + cfg.borderSize * 2 + 50;
-    const geometry = new THREE.PlaneGeometry(planeSize, planeSize, 1, 1);
+    // Set uniforms
+    this.uPlaneSize.value.set(planeWidth, planeHeight);
+    this.uPlaneCenter.value.set(planeCenterX, planeCenterZ);
+    this.uMapMin.value.set(0, 0);
+    this.uMapMax.value.set(mapWidth, mapHeight);
+    this.uFadeStart.value = -cfg.inwardEncroachment;
+    this.uFadeEnd.value = cfg.borderSize;
+    this.uFogColor.value.copy(cfg.fogColor);
+
+    // Create plane geometry (simple quad is fine - shader does the work)
+    const geometry = new THREE.PlaneGeometry(planeWidth, planeHeight, 1, 1);
 
     // Create TSL material
-    this.uFogColor.value.copy(cfg.fogColor);
     this.material = this.createTSLMaterial();
 
     this.mesh = new THREE.Mesh(geometry, this.material);
     this.mesh.rotation.x = -Math.PI / 2;
-    this.mesh.position.set(mapWidth / 2, 0.15, mapHeight / 2);
-    this.mesh.renderOrder = 100;
-    this.mesh.frustumCulled = false; // Always render - it's the map boundary
+    this.mesh.position.set(planeCenterX, 0.2, planeCenterZ);
+    this.mesh.renderOrder = 999; // Render on top
+    this.mesh.frustumCulled = false;
   }
 
   /**
@@ -88,16 +104,26 @@ export class TSLMapBorderFog {
 
     // Create the color/alpha output node
     const outputNode = Fn(() => {
-      // Get world position
-      const worldPos = positionWorld;
-      const wx = worldPos.x;
-      const wz = worldPos.z;
+      // Get UV coordinates (0-1 range, correctly interpolated per fragment)
+      const uvCoord = uv();
+
+      // Convert UV to world XZ position
+      // UV (0,0) is bottom-left of plane, (1,1) is top-right
+      // After -90 degree X rotation: UV.x -> world X, UV.y -> world Z
+      const planeW = this.uPlaneSize.x;
+      const planeH = this.uPlaneSize.y;
+      const centerX = this.uPlaneCenter.x;
+      const centerZ = this.uPlaneCenter.y;
+
+      // World position from UV
+      const wx = uvCoord.x.sub(0.5).mul(planeW).add(centerX);
+      const wz = uvCoord.y.sub(0.5).mul(planeH).add(centerZ);
 
       // Map bounds
-      const minX = this.uMapBounds.x;
-      const minZ = this.uMapBounds.y;
-      const maxX = this.uMapBounds.z;
-      const maxZ = this.uMapBounds.w;
+      const minX = this.uMapMin.x;
+      const minZ = this.uMapMin.y;
+      const maxX = this.uMapMax.x;
+      const maxZ = this.uMapMax.y;
 
       // Calculate signed distance to map boundary
       // Negative = inside map, Positive = outside map
@@ -110,63 +136,60 @@ export class TSLMapBorderFog {
       const distX = max(distToMinX, distToMaxX);
       const distZ = max(distToMinZ, distToMaxZ);
 
-      // For corners, use the max of both axes
-      // This creates a rectangular boundary that follows map edges
+      // For rectangular boundary, use max of both axes
       const distToEdge = max(distX, distZ);
 
       // Fade parameters
-      const fadeStart = this.uFadeStart; // negative = inside map
-      const fadeEnd = this.uFadeEnd; // positive = outside map
+      const fadeStart = this.uFadeStart;
+      const fadeEnd = this.uFadeEnd;
       const fadeRange = fadeEnd.sub(fadeStart);
 
-      // Calculate base fade (0 = fully inside/transparent, 1 = fully outside/opaque)
+      // Calculate base fade (0 = inside map/transparent, 1 = outside/opaque)
       const baseFade = clamp(distToEdge.sub(fadeStart).div(fadeRange), float(0.0), float(1.0));
 
       // ============================================
       // ANIMATED NOISE FOR ORGANIC FOG MOVEMENT
       // ============================================
 
-      // Noise coordinates - scale position for good detail
-      const noiseScale = float(0.015);
-      const timeScale = float(0.3);
+      const noiseScale = float(0.02);
+      const timeScale = float(0.25);
       const time = this.uTime.mul(timeScale);
 
-      // Multi-octave animated noise using sin waves
+      // Multi-octave animated noise
       // Octave 1 - large scale swirls
-      const n1x = wx.mul(noiseScale).add(time.mul(0.2));
-      const n1z = wz.mul(noiseScale).sub(time.mul(0.15));
+      const n1x = wx.mul(noiseScale).add(time.mul(0.15));
+      const n1z = wz.mul(noiseScale).sub(time.mul(0.1));
       const noise1 = sin(n1x.mul(1.7).add(cos(n1z.mul(2.3))))
         .mul(sin(n1z.mul(1.9).sub(sin(n1x.mul(1.3)))))
         .mul(0.5).add(0.5);
 
       // Octave 2 - medium detail
-      const n2x = wx.mul(noiseScale.mul(2.5)).sub(time.mul(0.1));
-      const n2z = wz.mul(noiseScale.mul(2.5)).add(time.mul(0.25));
+      const n2x = wx.mul(noiseScale.mul(2.0)).sub(time.mul(0.08));
+      const n2z = wz.mul(noiseScale.mul(2.0)).add(time.mul(0.12));
       const noise2 = sin(n2x.mul(3.1).add(sin(n2z.mul(2.7))))
         .mul(cos(n2z.mul(2.1).add(cos(n2x.mul(3.3)))))
         .mul(0.5).add(0.5);
 
       // Octave 3 - fine wisps
-      const n3x = wx.mul(noiseScale.mul(5.0)).add(time.mul(0.35));
-      const n3z = wz.mul(noiseScale.mul(5.0)).sub(time.mul(0.2));
+      const n3x = wx.mul(noiseScale.mul(4.0)).add(time.mul(0.2));
+      const n3z = wz.mul(noiseScale.mul(4.0)).sub(time.mul(0.15));
       const noise3 = sin(n3x.mul(5.7).sub(cos(n3z.mul(4.3))))
         .mul(sin(n3z.mul(6.1).add(sin(n3x.mul(5.9)))))
         .mul(0.5).add(0.5);
 
-      // Combine noise octaves with decreasing weights
+      // Combine octaves
       const combinedNoise = noise1.mul(0.5).add(noise2.mul(0.3)).add(noise3.mul(0.2));
 
-      // Create wispy tendrils effect
-      const wisps = smoothstep(float(0.3), float(0.7), combinedNoise);
+      // Wispy tendrils
+      const wisps = smoothstep(float(0.35), float(0.65), combinedNoise);
 
       // ============================================
-      // APPLY NOISE TO FADE FOR ORGANIC EDGE
+      // APPLY NOISE TO EDGE FOR ORGANIC BOUNDARY
       // ============================================
 
-      // Modulate fade with noise for organic boundary
-      const noiseInfluence = float(0.15); // How much noise affects the edge
+      const noiseInfluence = float(0.12);
       const noisyFade = clamp(
-        baseFade.add(combinedNoise.sub(0.5).mul(noiseInfluence).mul(baseFade)),
+        baseFade.add(combinedNoise.sub(0.5).mul(noiseInfluence).mul(baseFade.mul(2.0).add(0.5))),
         float(0.0),
         float(1.0)
       );
@@ -175,34 +198,33 @@ export class TSLMapBorderFog {
       // PREMIUM FADE CURVE
       // ============================================
 
-      // Use a steep S-curve for quick fog rise at edge
-      // First apply smoothstep for initial transition
-      let alpha = smoothstep(float(0.0), float(0.25), noisyFade);
+      // Steep S-curve for quick fog rise at edge
+      let alpha = smoothstep(float(0.0), float(0.35), noisyFade);
 
-      // Apply power curve for steeper rise
-      alpha = alpha.mul(alpha).mul(float(3.0).sub(alpha.mul(2.0))); // Hermite interpolation
+      // Additional shaping for premium look
+      alpha = alpha.mul(alpha).mul(float(3.0).sub(alpha.mul(2.0)));
 
-      // Add wispy variation to the fog density
-      const wispStrength = float(0.12);
+      // Add wispy variation
+      const wispStrength = float(0.1);
       alpha = alpha.mul(float(1.0).sub(wispStrength).add(wisps.mul(wispStrength)));
 
-      // Clamp and apply final opacity
-      alpha = clamp(alpha, float(0.0), float(0.98));
+      // Final clamp
+      alpha = clamp(alpha, float(0.0), float(0.95));
 
       // ============================================
-      // FOG COLOR WITH SUBTLE VARIATION
+      // FOG COLOR
       // ============================================
 
-      // Add very subtle color variation based on noise
-      const colorVariation = float(0.08);
-      const fogR = this.uFogColor.x.add(combinedNoise.mul(colorVariation).sub(colorVariation.mul(0.5)));
-      const fogG = this.uFogColor.y.add(noise2.mul(colorVariation.mul(0.5)).sub(colorVariation.mul(0.25)));
-      const fogB = this.uFogColor.z.add(noise1.mul(colorVariation).sub(colorVariation.mul(0.5)));
+      // Subtle color variation
+      const colorVar = float(0.05);
+      const fogR = this.uFogColor.x.add(combinedNoise.mul(colorVar).sub(colorVar.mul(0.5)));
+      const fogG = this.uFogColor.y.add(noise2.mul(colorVar.mul(0.5)));
+      const fogB = this.uFogColor.z.add(noise1.mul(colorVar));
 
       const finalColor = vec3(
-        clamp(fogR, float(0.0), float(0.15)),
-        clamp(fogG, float(0.0), float(0.12)),
-        clamp(fogB, float(0.0), float(0.18))
+        clamp(fogR, float(0.0), float(0.1)),
+        clamp(fogG, float(0.0), float(0.08)),
+        clamp(fogB, float(0.0), float(0.12))
       );
 
       return vec4(finalColor, alpha);
