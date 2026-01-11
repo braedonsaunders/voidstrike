@@ -188,8 +188,8 @@ export class TSLTerrainMaterial {
   ): MeshStandardNodeMaterial {
     const material = new MeshStandardNodeMaterial();
 
-    // 4-texture terrain blending based on slope
-    // Uses pre-calculated slope attribute from terrain geometry for accurate cliff detection
+    // 4-texture terrain blending based on slope AND terrain type
+    // Terrain type ensures textures match walkability: ground=walkable, unwalkable=cliff
     const colorNode = Fn(() => {
       const worldNorm = normalWorld;
 
@@ -197,14 +197,15 @@ export class TSLTerrainMaterial {
       const tiledUV = uv().mul(64.0);
 
       // Get pre-calculated slope from vertex attribute (0 = flat, 1 = very steep)
-      // This is calculated before geometry smoothing for accurate cliff detection
       const vertexSlope = attribute('aSlope', 'float');
+
+      // Get terrain type: 0=ground (walkable), 1=ramp, 2=unwalkable
+      const terrainType = attribute('aTerrainType', 'float');
 
       // Also calculate slope from mesh normals as a fallback/blend
       const geometrySlope = float(1.0).sub(abs(dot(normalize(worldNorm), vec3(0.0, 1.0, 0.0))));
 
       // Use the maximum of vertex slope and geometry slope for robust detection
-      // This ensures cliffs are detected even after geometry smoothing
       const slope = max(vertexSlope, geometrySlope);
 
       // Sample all 4 diffuse textures
@@ -213,18 +214,39 @@ export class TSLTerrainMaterial {
       const rockColor = texture(rockDiffuse, tiledUV).rgb;
       const cliffColor = texture(cliffDiffuse, tiledUV).rgb;
 
-      // Slope-based weights using bell curves for middle textures
-      // Grass: flat areas (slope < 0.25)
-      const grassWeight = smoothstep(float(0.25), float(0.1), slope);
-      // Dirt: slight slopes (0.08-0.35) - bell curve
-      const dirtWeight = smoothstep(float(0.08), float(0.2), slope).mul(smoothstep(float(0.35), float(0.2), slope));
-      // Rock: medium slopes (0.2-0.55) - bell curve
-      const rockWeight = smoothstep(float(0.2), float(0.35), slope).mul(smoothstep(float(0.55), float(0.4), slope));
-      // Cliff: steep slopes (> 0.4)
-      const cliffWeight = smoothstep(float(0.4), float(0.55), slope);
+      // Terrain type masks - ensure textures match walkability
+      // isGround: 1.0 if ground (type=0), 0.0 otherwise
+      const isGround = smoothstep(float(0.5), float(0.0), terrainType);
+      // isRamp: 1.0 if ramp (type=1), 0.0 otherwise
+      const isRamp = smoothstep(float(0.5), float(1.0), terrainType).mul(smoothstep(float(1.5), float(1.0), terrainType));
+      // isUnwalkable: 1.0 if unwalkable (type=2), 0.0 otherwise
+      const isUnwalkable = smoothstep(float(1.5), float(2.0), terrainType);
+
+      // Base slope-based weights
+      const baseGrassWeight = smoothstep(float(0.25), float(0.1), slope);
+      const baseDirtWeight = smoothstep(float(0.08), float(0.2), slope).mul(smoothstep(float(0.35), float(0.2), slope));
+      const baseRockWeight = smoothstep(float(0.2), float(0.35), slope).mul(smoothstep(float(0.55), float(0.4), slope));
+      const baseCliffWeight = smoothstep(float(0.4), float(0.55), slope);
+
+      // Apply terrain type constraints:
+      // Ground: grass + dirt + slight rock, NO cliff
+      // Ramp: dirt + rock, NO grass, NO cliff
+      // Unwalkable: rock + cliff, NO grass
+
+      // Grass only on walkable ground
+      const grassWeight = baseGrassWeight.mul(isGround);
+
+      // Dirt on ground and ramps
+      const dirtWeight = baseDirtWeight.mul(isGround.add(isRamp));
+
+      // Rock on all terrain types
+      const rockWeight = baseRockWeight;
+
+      // Cliff ONLY on unwalkable terrain
+      const cliffWeight = baseCliffWeight.mul(isUnwalkable);
 
       // Normalize weights so they sum to 1.0
-      const totalWeight = grassWeight.add(dirtWeight).add(rockWeight).add(cliffWeight);
+      const totalWeight = grassWeight.add(dirtWeight).add(rockWeight).add(cliffWeight).add(float(0.001)); // Prevent div by 0
       const normGrass = grassWeight.div(totalWeight);
       const normDirt = dirtWeight.div(totalWeight);
       const normRock = rockWeight.div(totalWeight);
@@ -239,13 +261,14 @@ export class TSLTerrainMaterial {
       return vec4(color, 1.0);
     })();
 
-    // Roughness blending based on slope
+    // Roughness blending based on slope and terrain type
     const roughnessNode = Fn(() => {
       const worldNorm = normalWorld;
       const tiledUV = uv().mul(64.0);
 
       // Use same slope calculation as color node
       const vertexSlope = attribute('aSlope', 'float');
+      const terrainType = attribute('aTerrainType', 'float');
       const geometrySlope = float(1.0).sub(abs(dot(normalize(worldNorm), vec3(0.0, 1.0, 0.0))));
       const slope = max(vertexSlope, geometrySlope);
 
@@ -254,13 +277,24 @@ export class TSLTerrainMaterial {
       const rockR = texture(rockRoughness, tiledUV).r;
       const cliffR = texture(cliffRoughness, tiledUV).r;
 
-      // Same weights as color
-      const grassWeight = smoothstep(float(0.25), float(0.1), slope);
-      const dirtWeight = smoothstep(float(0.08), float(0.2), slope).mul(smoothstep(float(0.35), float(0.2), slope));
-      const rockWeight = smoothstep(float(0.2), float(0.35), slope).mul(smoothstep(float(0.55), float(0.4), slope));
-      const cliffWeight = smoothstep(float(0.4), float(0.55), slope);
+      // Terrain type masks (same as color node)
+      const isGround = smoothstep(float(0.5), float(0.0), terrainType);
+      const isRamp = smoothstep(float(0.5), float(1.0), terrainType).mul(smoothstep(float(1.5), float(1.0), terrainType));
+      const isUnwalkable = smoothstep(float(1.5), float(2.0), terrainType);
 
-      const totalWeight = grassWeight.add(dirtWeight).add(rockWeight).add(cliffWeight);
+      // Base weights
+      const baseGrassWeight = smoothstep(float(0.25), float(0.1), slope);
+      const baseDirtWeight = smoothstep(float(0.08), float(0.2), slope).mul(smoothstep(float(0.35), float(0.2), slope));
+      const baseRockWeight = smoothstep(float(0.2), float(0.35), slope).mul(smoothstep(float(0.55), float(0.4), slope));
+      const baseCliffWeight = smoothstep(float(0.4), float(0.55), slope);
+
+      // Apply terrain type constraints
+      const grassWeight = baseGrassWeight.mul(isGround);
+      const dirtWeight = baseDirtWeight.mul(isGround.add(isRamp));
+      const rockWeight = baseRockWeight;
+      const cliffWeight = baseCliffWeight.mul(isUnwalkable);
+
+      const totalWeight = grassWeight.add(dirtWeight).add(rockWeight).add(cliffWeight).add(float(0.001));
 
       const roughness = grassR.mul(grassWeight)
         .add(dirtR.mul(dirtWeight))
@@ -271,13 +305,14 @@ export class TSLTerrainMaterial {
       return clamp(roughness, 0.1, 0.95);
     })();
 
-    // Normal map blending based on slope
+    // Normal map blending based on slope and terrain type
     const normalNode = Fn(() => {
       const worldNorm = normalWorld;
       const tiledUV = uv().mul(64.0);
 
       // Use same slope calculation as color node
       const vertexSlope = attribute('aSlope', 'float');
+      const terrainType = attribute('aTerrainType', 'float');
       const geometrySlope = float(1.0).sub(abs(dot(normalize(worldNorm), vec3(0.0, 1.0, 0.0))));
       const slope = max(vertexSlope, geometrySlope);
 
@@ -287,13 +322,24 @@ export class TSLTerrainMaterial {
       const rockN = texture(rockNormal, tiledUV).rgb.mul(2.0).sub(1.0);
       const cliffN = texture(cliffNormal, tiledUV).rgb.mul(2.0).sub(1.0);
 
-      // Same weights as color
-      const grassWeight = smoothstep(float(0.25), float(0.1), slope);
-      const dirtWeight = smoothstep(float(0.08), float(0.2), slope).mul(smoothstep(float(0.35), float(0.2), slope));
-      const rockWeight = smoothstep(float(0.2), float(0.35), slope).mul(smoothstep(float(0.55), float(0.4), slope));
-      const cliffWeight = smoothstep(float(0.4), float(0.55), slope);
+      // Terrain type masks (same as color node)
+      const isGround = smoothstep(float(0.5), float(0.0), terrainType);
+      const isRamp = smoothstep(float(0.5), float(1.0), terrainType).mul(smoothstep(float(1.5), float(1.0), terrainType));
+      const isUnwalkable = smoothstep(float(1.5), float(2.0), terrainType);
 
-      const totalWeight = grassWeight.add(dirtWeight).add(rockWeight).add(cliffWeight);
+      // Base weights
+      const baseGrassWeight = smoothstep(float(0.25), float(0.1), slope);
+      const baseDirtWeight = smoothstep(float(0.08), float(0.2), slope).mul(smoothstep(float(0.35), float(0.2), slope));
+      const baseRockWeight = smoothstep(float(0.2), float(0.35), slope).mul(smoothstep(float(0.55), float(0.4), slope));
+      const baseCliffWeight = smoothstep(float(0.4), float(0.55), slope);
+
+      // Apply terrain type constraints
+      const grassWeight = baseGrassWeight.mul(isGround);
+      const dirtWeight = baseDirtWeight.mul(isGround.add(isRamp));
+      const rockWeight = baseRockWeight;
+      const cliffWeight = baseCliffWeight.mul(isUnwalkable);
+
+      const totalWeight = grassWeight.add(dirtWeight).add(rockWeight).add(cliffWeight).add(float(0.001));
 
       const blendedNormal = grassN.mul(grassWeight)
         .add(dirtN.mul(dirtWeight))
