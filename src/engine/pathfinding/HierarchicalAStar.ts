@@ -370,9 +370,13 @@ export class HierarchicalAStar {
       const segment = this.baseAStar.findPath(from.x, from.y, to.x, to.y);
 
       if (!segment.found) {
-        // Segment failed - fall back to direct path (expensive!)
-        console.warn(`[HPA*] refineAbstractPath: segment ${i}/${numSegments} failed, falling back to full A*`);
-        return this.baseAStar.findPath(startX, startY, endX, endY);
+        // Segment failed - DO NOT fall back to full A* (too expensive!)
+        // The PathfindingSystem will cache this failure and try alternate approaches
+        // Only log once per path (not every segment)
+        if (i === 0) {
+          console.warn(`[HPA*] refineAbstractPath: first segment failed (${from.x.toFixed(0)},${from.y.toFixed(0)}) -> (${to.x.toFixed(0)},${to.y.toFixed(0)}), returning no path`);
+        }
+        return { path: [], found: false };
       }
 
       if (i === 0) {

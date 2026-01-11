@@ -125,7 +125,10 @@ const DIAGONAL_COST = 1.414;
 const STRAIGHT_COST = 1.0;
 
 // Maximum nodes to explore before giving up (prevents freezing on impossible/very long paths)
-const MAX_ITERATIONS = 5000;
+// Base limit for short paths; longer paths get more iterations
+const BASE_MAX_ITERATIONS = 3000;
+const ITERATIONS_PER_DISTANCE = 50; // Extra iterations per unit distance
+const ABSOLUTE_MAX_ITERATIONS = 15000; // Never exceed this
 
 export class AStar {
   private grid: PathNode[][];
@@ -348,15 +351,27 @@ export class AStar {
 
     const endNode = this.grid[gridEndY][gridEndX];
 
+    // Calculate dynamic iteration limit based on distance
+    const dx = Math.abs(gridEndX - gridStartX);
+    const dy = Math.abs(gridEndY - gridStartY);
+    const estimatedDistance = Math.sqrt(dx * dx + dy * dy);
+    const maxIterations = Math.min(
+      ABSOLUTE_MAX_ITERATIONS,
+      Math.floor(BASE_MAX_ITERATIONS + estimatedDistance * ITERATIONS_PER_DISTANCE)
+    );
+
     // Iteration counter to prevent freezing on very long/impossible paths
     let iterations = 0;
 
     // A* main loop
     while (this.openHeap.length > 0) {
       // Early exit if we've searched too long
-      if (++iterations > MAX_ITERATIONS) {
+      if (++iterations > maxIterations) {
         const elapsed = performance.now() - astarStart;
-        console.warn(`[AStar] MAX_ITERATIONS (${MAX_ITERATIONS}) reached! (${gridStartX},${gridStartY}) -> (${gridEndX},${gridEndY}) took ${elapsed.toFixed(1)}ms`);
+        // Only log if this is a significant timeout (not just a short path that failed)
+        if (elapsed > 2) {
+          console.warn(`[AStar] MAX_ITERATIONS (${maxIterations}) reached! (${gridStartX},${gridStartY}) -> (${gridEndX},${gridEndY}) dist=${estimatedDistance.toFixed(0)} took ${elapsed.toFixed(1)}ms`);
+        }
         return { path: [], found: false };
       }
       const current = this.openHeap.pop()!;

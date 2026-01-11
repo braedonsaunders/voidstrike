@@ -22,6 +22,11 @@ const MAX_PATHS_PER_FRAME = 4; // Process at most this many path requests per fr
 // This prevents units from getting stuck on collision with terrain edges
 const TERRAIN_EDGE_BUFFER = 1; // Number of cells to buffer around unwalkable terrain
 
+// Failed path caching - prevent re-requesting impossible paths
+const FAILED_PATH_CACHE_TTL = 3000; // Don't retry failed paths for 3 seconds
+const FAILED_PATH_CACHE_SIZE = 200; // Max number of cached failures
+const MAX_FAILURES_PER_ENTITY = 3; // After this many failures, stop requesting for this destination
+
 interface PathRequest {
   entityId: number;
   startX: number;
@@ -37,6 +42,11 @@ interface UnitPathState {
   lastRepathTick: number;
   destinationX: number;
   destinationY: number;
+}
+
+interface FailedPathEntry {
+  timestamp: number;
+  failureCount: number;
 }
 
 // Distance threshold for using hierarchical pathfinding
@@ -55,6 +65,11 @@ export class PathfindingSystem extends System {
   private cellsChangedThisTick: Set<number> = new Set();
   private mapWidth: number;
   private mapHeight: number;
+
+  // Failed path cache - prevent re-requesting impossible paths
+  // Key format: "entityId_destGridX_destGridY"
+  private failedPathCache: Map<string, FailedPathEntry> = new Map();
+  private failedPathCacheKeys: string[] = []; // For LRU eviction
 
   constructor(game: Game, mapWidth: number, mapHeight: number) {
     super(game);
@@ -345,8 +360,30 @@ export class PathfindingSystem extends System {
   /**
    * Queue a path request for batched processing.
    * Removes any existing request for the same entity.
+   * Skips requests to destinations that recently failed.
    */
   private queuePathRequest(request: PathRequest): void {
+    // Check failed path cache - don't retry paths that recently failed
+    if (this.isPathRecentlyFailed(request.entityId, request.endX, request.endY)) {
+      return; // Skip this request
+    }
+
+    // Early walkability check - skip obviously unreachable destinations
+    const endGridX = Math.floor(request.endX);
+    const endGridY = Math.floor(request.endY);
+    if (!this.pathfinder.isWalkable(endGridX, endGridY)) {
+      // Try to find nearby walkable cell before queueing
+      const nearby = this.findNearbyWalkableCell(request.endX, request.endY, 5);
+      if (!nearby) {
+        // No walkable cell nearby - record as failed
+        this.recordFailedPath(request.entityId, request.endX, request.endY);
+        return;
+      }
+      // Update request to use nearby walkable cell
+      request.endX = nearby.x;
+      request.endY = nearby.y;
+    }
+
     // Remove existing request for this entity (newer request supersedes)
     const existingIdx = this.pendingRequests.findIndex(r => r.entityId === request.entityId);
     if (existingIdx !== -1) {
@@ -355,6 +392,77 @@ export class PathfindingSystem extends System {
 
     // Add to queue - higher priority requests go first
     this.pendingRequests.push(request);
+  }
+
+  /**
+   * Check if a path to this destination recently failed.
+   */
+  private isPathRecentlyFailed(entityId: number, destX: number, destY: number): boolean {
+    const destGridX = Math.floor(destX);
+    const destGridY = Math.floor(destY);
+    const key = `${entityId}_${destGridX}_${destGridY}`;
+
+    const entry = this.failedPathCache.get(key);
+    if (!entry) return false;
+
+    const now = Date.now();
+
+    // If TTL expired, remove from cache
+    if (now - entry.timestamp > FAILED_PATH_CACHE_TTL) {
+      this.failedPathCache.delete(key);
+      const idx = this.failedPathCacheKeys.indexOf(key);
+      if (idx !== -1) this.failedPathCacheKeys.splice(idx, 1);
+      return false;
+    }
+
+    // If too many failures, skip this request
+    if (entry.failureCount >= MAX_FAILURES_PER_ENTITY) {
+      return true;
+    }
+
+    return false;
+  }
+
+  /**
+   * Record a failed path attempt.
+   */
+  private recordFailedPath(entityId: number, destX: number, destY: number): void {
+    const destGridX = Math.floor(destX);
+    const destGridY = Math.floor(destY);
+    const key = `${entityId}_${destGridX}_${destGridY}`;
+
+    const existing = this.failedPathCache.get(key);
+    const now = Date.now();
+
+    if (existing && now - existing.timestamp < FAILED_PATH_CACHE_TTL) {
+      // Increment failure count
+      existing.failureCount++;
+      existing.timestamp = now;
+    } else {
+      // New entry or expired - start fresh
+      if (this.failedPathCache.size >= FAILED_PATH_CACHE_SIZE) {
+        // LRU eviction
+        const oldKey = this.failedPathCacheKeys.shift();
+        if (oldKey) this.failedPathCache.delete(oldKey);
+      }
+
+      this.failedPathCache.set(key, { timestamp: now, failureCount: 1 });
+      this.failedPathCacheKeys.push(key);
+    }
+  }
+
+  /**
+   * Clear failed path cache for an entity (e.g., when destination changes).
+   */
+  private clearFailedPathsForEntity(entityId: number): void {
+    const prefix = `${entityId}_`;
+    for (const key of [...this.failedPathCache.keys()]) {
+      if (key.startsWith(prefix)) {
+        this.failedPathCache.delete(key);
+        const idx = this.failedPathCacheKeys.indexOf(key);
+        if (idx !== -1) this.failedPathCacheKeys.splice(idx, 1);
+      }
+    }
   }
 
   /**
@@ -498,8 +606,18 @@ export class PathfindingSystem extends System {
         destinationY: request.endY,
       });
     } else {
-      // Path completely failed - log for debugging
-      debugPathfinding.warn(`[PathfindingSystem] Failed to find any path for entity ${request.entityId} from (${request.startX.toFixed(1)}, ${request.startY.toFixed(1)}) to (${request.endX.toFixed(1)}, ${request.endY.toFixed(1)})`);
+      // Path failed - record in cache to prevent retry spam
+      this.recordFailedPath(request.entityId, request.endX, request.endY);
+
+      // Clear the unit's current path so it doesn't keep trying
+      unit.path = [];
+      unit.pathIndex = 0;
+
+      // Path completely failed - only log occasionally to avoid spam
+      const failedEntry = this.failedPathCache.get(`${request.entityId}_${Math.floor(request.endX)}_${Math.floor(request.endY)}`);
+      if (failedEntry && failedEntry.failureCount === 1) {
+        debugPathfinding.warn(`[PathfindingSystem] Failed to find path for entity ${request.entityId} from (${request.startX.toFixed(1)}, ${request.startY.toFixed(1)}) to (${request.endX.toFixed(1)}, ${request.endY.toFixed(1)}) - will not retry for ${FAILED_PATH_CACHE_TTL}ms`);
+      }
     }
   }
 
