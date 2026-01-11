@@ -1,13 +1,10 @@
 import {
   MapData,
   MapDecoration,
-  createTerrainGrid,
-  createBaseResources,
   DIR,
+  createBaseResources,
   fillTerrainRect,
   fillTerrainCircle,
-  createRampInTerrain,
-  createRaisedPlatform,
   createForestCorridor,
   createRiver,
   createLake,
@@ -19,6 +16,12 @@ import {
   createMudArea,
   autoFixConnectivity,
   validateMapConnectivity,
+  generateTerrainFromTopology,
+  mainBase,
+  naturalExpansion,
+  expansion,
+  connect,
+  type MapTopology,
 } from './MapTypes';
 
 /**
@@ -61,23 +64,18 @@ function seededRandom(seed: number): () => number {
   };
 }
 
-// 8 main base positions in octagonal arrangement
-const MAIN_POSITIONS = [
-  { x: 80, y: 45, angle: -Math.PI / 2 },     // P1 - top-left
-  { x: 320, y: 45, angle: -Math.PI / 2 },    // P2 - top-right
-  { x: 355, y: 130, angle: 0 },              // P3 - right-top
-  { x: 355, y: 270, angle: 0 },              // P4 - right-bottom
-  { x: 320, y: 355, angle: Math.PI / 2 },    // P5 - bottom-right
-  { x: 80, y: 355, angle: Math.PI / 2 },     // P6 - bottom-left
-  { x: 45, y: 270, angle: Math.PI },         // P7 - left-bottom
-  { x: 45, y: 130, angle: Math.PI },         // P8 - left-top
-];
-
-// Base exclusion zones
+// Base exclusion zones (used by decoration placement)
 const BASE_EXCLUSION_ZONES = [
   // Mains
-  ...MAIN_POSITIONS.map(p => ({ x: p.x, y: p.y, radius: 28 })),
-  // Naturals (offset from mains toward center)
+  { x: 80, y: 45, radius: 28 },
+  { x: 320, y: 45, radius: 28 },
+  { x: 355, y: 130, radius: 28 },
+  { x: 355, y: 270, radius: 28 },
+  { x: 320, y: 355, radius: 28 },
+  { x: 80, y: 355, radius: 28 },
+  { x: 45, y: 270, radius: 28 },
+  { x: 45, y: 130, radius: 28 },
+  // Naturals
   { x: 110, y: 75, radius: 18 },
   { x: 290, y: 75, radius: 18 },
   { x: 325, y: 160, radius: 18 },
@@ -161,7 +159,6 @@ function generateVolcanicDecorations(): MapDecoration[] {
     }
   };
 
-  // Helper to create continuous rock cliff wall
   const addRockCliffLine = (x1: number, y1: number, x2: number, y2: number, density: number = 2) => {
     const dx = x2 - x1;
     const dy = y2 - y1;
@@ -182,7 +179,6 @@ function generateVolcanicDecorations(): MapDecoration[] {
     }
   };
 
-  // Helper for massive outer border rocks (2-4x scale) to hide terrain edges
   const addMassiveBorderRocks = (x1: number, y1: number, x2: number, y2: number, density: number = 5) => {
     const dx = x2 - x1;
     const dy = y2 - y1;
@@ -202,7 +198,6 @@ function generateVolcanicDecorations(): MapDecoration[] {
     }
   };
 
-  // Helper to add rocks around a circular base edge
   const addBaseEdgeRocks = (cx: number, cy: number, radius: number, count: number) => {
     for (let i = 0; i < count; i++) {
       const angle = (i / count) * Math.PI * 2 + rand() * 0.3;
@@ -220,7 +215,6 @@ function generateVolcanicDecorations(): MapDecoration[] {
     }
   };
 
-  // Helper to add trees around a circular base edge
   const addBaseEdgeTrees = (cx: number, cy: number, radius: number, count: number) => {
     for (let i = 0; i < count; i++) {
       const angle = (i / count) * Math.PI * 2 + rand() * 0.4;
@@ -237,17 +231,25 @@ function generateVolcanicDecorations(): MapDecoration[] {
     }
   };
 
-  // ========================================
-  // MAIN BASE EDGE DECORATIONS - 8 bases
-  // ========================================
-  for (const pos of MAIN_POSITIONS) {
+  // Main base positions for edge decorations
+  const mainPositions = [
+    { x: 80, y: 45 },
+    { x: 320, y: 45 },
+    { x: 355, y: 130 },
+    { x: 355, y: 270 },
+    { x: 320, y: 355 },
+    { x: 80, y: 355 },
+    { x: 45, y: 270 },
+    { x: 45, y: 130 },
+  ];
+
+  // MAIN BASE EDGE DECORATIONS
+  for (const pos of mainPositions) {
     addBaseEdgeRocks(pos.x, pos.y, 29, 24);
     addBaseEdgeTrees(pos.x, pos.y, 32, 16);
   }
 
-  // ========================================
   // NATURAL EXPANSION EDGE DECORATIONS
-  // ========================================
   addBaseEdgeRocks(110, 75, 21, 16);
   addBaseEdgeTrees(110, 75, 24, 12);
   addBaseEdgeRocks(290, 75, 21, 16);
@@ -265,21 +267,18 @@ function generateVolcanicDecorations(): MapDecoration[] {
   addBaseEdgeRocks(75, 160, 21, 16);
   addBaseEdgeTrees(75, 160, 24, 12);
 
-  // ========================================
   // CONTINUOUS ROCK CLIFF WALLS
-  // ========================================
-
   // Map border cliffs
   addRockCliffLine(16, 16, 16, 384, 3);
   addRockCliffLine(384, 16, 384, 384, 3);
   addRockCliffLine(16, 16, 384, 16, 3);
   addRockCliffLine(16, 384, 384, 384, 3);
 
-  // Massive outer border rocks (2-4x scale) to hide terrain edges
-  addMassiveBorderRocks(6, 6, 6, 394, 6);      // Left edge (outer)
-  addMassiveBorderRocks(394, 6, 394, 394, 6);  // Right edge (outer)
-  addMassiveBorderRocks(6, 6, 394, 6, 6);      // Top edge (outer)
-  addMassiveBorderRocks(6, 394, 394, 394, 6);  // Bottom edge (outer)
+  // Massive outer border rocks
+  addMassiveBorderRocks(6, 6, 6, 394, 6);
+  addMassiveBorderRocks(394, 6, 394, 394, 6);
+  addMassiveBorderRocks(6, 6, 394, 6, 6);
+  addMassiveBorderRocks(6, 394, 394, 394, 6);
 
   // Central colosseum walls
   addRockCliffLine(170, 170, 230, 170, 2);
@@ -297,10 +296,7 @@ function generateVolcanicDecorations(): MapDecoration[] {
   addRockCliffLine(65, 250, 95, 220, 2);
   addRockCliffLine(65, 150, 95, 180, 2);
 
-  // ========================================
   // ORIGINAL DECORATIONS (enhanced)
-  // ========================================
-
   // Map borders - volcanic rocks
   for (let i = 15; i < MAP_WIDTH - 15; i += 18) {
     addRockCluster(i, 12, 6, 7);
@@ -312,7 +308,7 @@ function generateVolcanicDecorations(): MapDecoration[] {
   }
 
   // Main base surroundings - enhanced
-  for (const pos of MAIN_POSITIONS) {
+  for (const pos of mainPositions) {
     addRockCluster(pos.x - 25, pos.y + 25, 12, 8);
     addRockCluster(pos.x + 25, pos.y - 25, 12, 8);
     addDeadTrees(pos.x - 30, pos.y - 30, 8, 6);
@@ -382,8 +378,90 @@ function generateVolcanicDecorations(): MapDecoration[] {
   return decorations;
 }
 
+// ============================================
+// MAP TOPOLOGY DEFINITION
+// ============================================
+
+const topology: MapTopology = {
+  areas: [
+    // 8 Main bases (elevation 2) - octagonal arrangement
+    mainBase('p1_main', 80, 45, 25, 2, 4),     // P1 - top-left
+    mainBase('p2_main', 320, 45, 25, 2, 4),    // P2 - top-right
+    mainBase('p3_main', 355, 130, 25, 2, 4),   // P3 - right-top
+    mainBase('p4_main', 355, 270, 25, 2, 4),   // P4 - right-bottom
+    mainBase('p5_main', 320, 355, 25, 2, 4),   // P5 - bottom-right
+    mainBase('p6_main', 80, 355, 25, 2, 4),    // P6 - bottom-left
+    mainBase('p7_main', 45, 270, 25, 2, 4),    // P7 - left-bottom
+    mainBase('p8_main', 45, 130, 25, 2, 4),    // P8 - left-top
+
+    // 8 Natural expansions (elevation 1) - offset toward center
+    naturalExpansion('p1_nat', 110, 75, 16, 1, 3),
+    naturalExpansion('p2_nat', 290, 75, 16, 1, 3),
+    naturalExpansion('p3_nat', 325, 160, 16, 1, 3),
+    naturalExpansion('p4_nat', 325, 240, 16, 1, 3),
+    naturalExpansion('p5_nat', 290, 325, 16, 1, 3),
+    naturalExpansion('p6_nat', 110, 325, 16, 1, 3),
+    naturalExpansion('p7_nat', 75, 240, 16, 1, 3),
+    naturalExpansion('p8_nat', 75, 160, 16, 1, 3),
+
+    // 8 Mid-ground transition areas for natural exits (elevation 0)
+    // These connect naturals to the low ground
+    expansion('p1_ground', 'open_ground' as any, 110, 115, 12, 0),
+    expansion('p2_ground', 'open_ground' as any, 290, 115, 12, 0),
+    expansion('p3_ground', 'open_ground' as any, 290, 160, 12, 0),
+    expansion('p4_ground', 'open_ground' as any, 290, 240, 12, 0),
+    expansion('p5_ground', 'open_ground' as any, 290, 285, 12, 0),
+    expansion('p6_ground', 'open_ground' as any, 110, 285, 12, 0),
+    expansion('p7_ground', 'open_ground' as any, 110, 240, 12, 0),
+    expansion('p8_ground', 'open_ground' as any, 110, 160, 12, 0),
+
+    // 4 Gold expansions (inner ring, elevation 0)
+    expansion('gold_nw', 'gold', 140, 140, 16, 0),
+    expansion('gold_ne', 'gold', 260, 140, 16, 0),
+    expansion('gold_se', 'gold', 260, 260, 16, 0),
+    expansion('gold_sw', 'gold', 140, 260, 16, 0),
+
+    // 4 Edge thirds (elevation 0)
+    expansion('north_third', 'third', 200, 60, 16, 0),
+    expansion('south_third', 'third', 200, 340, 16, 0),
+    expansion('west_third', 'third', 60, 200, 16, 0),
+    expansion('east_third', 'third', 340, 200, 16, 0),
+
+    // Center colosseum (elevation 0)
+    expansion('center', 'center', 200, 200, 40, 0),
+  ],
+
+  connections: [
+    // Main to Natural connections (elevation 2 → 1)
+    connect('p1_main', 'p1_nat', 10, 'south'),
+    connect('p2_main', 'p2_nat', 10, 'south'),
+    connect('p3_main', 'p3_nat', 10, 'west'),
+    connect('p4_main', 'p4_nat', 10, 'west'),
+    connect('p5_main', 'p5_nat', 10, 'north'),
+    connect('p6_main', 'p6_nat', 10, 'north'),
+    connect('p7_main', 'p7_nat', 10, 'east'),
+    connect('p8_main', 'p8_nat', 10, 'east'),
+
+    // Natural to low ground connections (elevation 1 → 0)
+    connect('p1_nat', 'p1_ground', 8, 'south'),
+    connect('p2_nat', 'p2_ground', 8, 'south'),
+    connect('p3_nat', 'p3_ground', 8, 'west'),
+    connect('p4_nat', 'p4_ground', 8, 'west'),
+    connect('p5_nat', 'p5_ground', 8, 'north'),
+    connect('p6_nat', 'p6_ground', 8, 'north'),
+    connect('p7_nat', 'p7_ground', 8, 'east'),
+    connect('p8_nat', 'p8_ground', 8, 'east'),
+  ],
+};
+
 function generateTitansColosseum(): MapData {
-  const terrain = createTerrainGrid(MAP_WIDTH, MAP_HEIGHT, 'ground', 0);
+  // Generate terrain from topology
+  const { terrain, ramps } = generateTerrainFromTopology(
+    MAP_WIDTH,
+    MAP_HEIGHT,
+    topology,
+    0 // Default to low ground
+  );
 
   // ========================================
   // MAP BORDERS
@@ -394,81 +472,13 @@ function generateTitansColosseum(): MapData {
   fillTerrainRect(terrain, 0, MAP_HEIGHT - 14, MAP_WIDTH, 14, 'unwalkable');
 
   // ========================================
-  // RAMPS - Must be created BEFORE raised platforms
-  // ========================================
-  const ramps = [
-    // Main ramps (8 total)
-    { x: 95, y: 55, width: 10, height: 10, direction: 'south' as const, fromElevation: 2 as const, toElevation: 1 as const },
-    { x: 295, y: 55, width: 10, height: 10, direction: 'south' as const, fromElevation: 2 as const, toElevation: 1 as const },
-    { x: 340, y: 140, width: 10, height: 10, direction: 'west' as const, fromElevation: 2 as const, toElevation: 1 as const },
-    { x: 340, y: 260, width: 10, height: 10, direction: 'west' as const, fromElevation: 2 as const, toElevation: 1 as const },
-    { x: 295, y: 335, width: 10, height: 10, direction: 'north' as const, fromElevation: 2 as const, toElevation: 1 as const },
-    { x: 95, y: 335, width: 10, height: 10, direction: 'north' as const, fromElevation: 2 as const, toElevation: 1 as const },
-    { x: 50, y: 260, width: 10, height: 10, direction: 'east' as const, fromElevation: 2 as const, toElevation: 1 as const },
-    { x: 50, y: 140, width: 10, height: 10, direction: 'east' as const, fromElevation: 2 as const, toElevation: 1 as const },
-    // Natural to low ground ramps
-    { x: 110, y: 90, width: 8, height: 8, direction: 'south' as const, fromElevation: 1 as const, toElevation: 0 as const },
-    { x: 290, y: 90, width: 8, height: 8, direction: 'south' as const, fromElevation: 1 as const, toElevation: 0 as const },
-    { x: 308, y: 160, width: 8, height: 8, direction: 'west' as const, fromElevation: 1 as const, toElevation: 0 as const },
-    { x: 308, y: 240, width: 8, height: 8, direction: 'west' as const, fromElevation: 1 as const, toElevation: 0 as const },
-    { x: 290, y: 302, width: 8, height: 8, direction: 'north' as const, fromElevation: 1 as const, toElevation: 0 as const },
-    { x: 110, y: 302, width: 8, height: 8, direction: 'north' as const, fromElevation: 1 as const, toElevation: 0 as const },
-    { x: 84, y: 240, width: 8, height: 8, direction: 'east' as const, fromElevation: 1 as const, toElevation: 0 as const },
-    { x: 84, y: 160, width: 8, height: 8, direction: 'east' as const, fromElevation: 1 as const, toElevation: 0 as const },
-  ];
-  ramps.forEach(ramp => createRampInTerrain(terrain, ramp));
-
-  // ========================================
-  // MAIN BASES - Raised platforms with cliff edges (Elevation 2)
-  // ========================================
-
-  createRaisedPlatform(terrain, 80, 45, 25, 2, 4);   // P1 (top-left)
-  createRaisedPlatform(terrain, 320, 45, 25, 2, 4); // P2 (top-right)
-  createRaisedPlatform(terrain, 355, 130, 25, 2, 4); // P3 (right-top)
-  createRaisedPlatform(terrain, 355, 270, 25, 2, 4); // P4 (right-bottom)
-  createRaisedPlatform(terrain, 320, 355, 25, 2, 4); // P5 (bottom-right)
-  createRaisedPlatform(terrain, 80, 355, 25, 2, 4);  // P6 (bottom-left)
-  createRaisedPlatform(terrain, 45, 270, 25, 2, 4);  // P7 (left-bottom)
-  createRaisedPlatform(terrain, 45, 130, 25, 2, 4);  // P8 (left-top)
-
-  // ========================================
-  // NATURAL EXPANSIONS - Raised platforms (Elevation 1)
-  // ========================================
-
-  createRaisedPlatform(terrain, 110, 75, 16, 1, 3);
-  createRaisedPlatform(terrain, 290, 75, 16, 1, 3);
-  createRaisedPlatform(terrain, 325, 160, 16, 1, 3);
-  createRaisedPlatform(terrain, 325, 240, 16, 1, 3);
-  createRaisedPlatform(terrain, 290, 325, 16, 1, 3);
-  createRaisedPlatform(terrain, 110, 325, 16, 1, 3);
-  createRaisedPlatform(terrain, 75, 240, 16, 1, 3);
-  createRaisedPlatform(terrain, 75, 160, 16, 1, 3);
-
-  // ========================================
-  // THIRD/GOLD EXPANSIONS - Elevation 0
-  // ========================================
-
-  fillTerrainCircle(terrain, 140, 140, 16, 'ground', 0);
-  fillTerrainCircle(terrain, 260, 140, 16, 'ground', 0);
-  fillTerrainCircle(terrain, 260, 260, 16, 'ground', 0);
-  fillTerrainCircle(terrain, 140, 260, 16, 'ground', 0);
-
-  // Edge thirds
-  fillTerrainCircle(terrain, 200, 60, 16, 'ground', 0);
-  fillTerrainCircle(terrain, 200, 340, 16, 'ground', 0);
-  fillTerrainCircle(terrain, 60, 200, 16, 'ground', 0);
-  fillTerrainCircle(terrain, 340, 200, 16, 'ground', 0);
-
-  // ========================================
   // CENTER COLOSSEUM - Major contested area
   // ========================================
-  fillTerrainCircle(terrain, 200, 200, 40, 'ground', 0);
   fillTerrainRect(terrain, 185, 185, 30, 30, 'unwalkable');
 
   // ========================================
   // TERRAIN FEATURES - Chokepoints
   // ========================================
-
   // Inner ring cliffs
   fillTerrainCircle(terrain, 160, 160, 12, 'unwalkable');
   fillTerrainCircle(terrain, 240, 160, 12, 'unwalkable');
@@ -484,10 +494,9 @@ function generateTitansColosseum(): MapData {
   // ========================================
   // NEW TERRAIN FEATURES - Epic volcanic arena
   // ========================================
-
   // LAVA MOAT around center colosseum - Ring of fire
-  createRiver(terrain, 160, 160, 160, 240, 10, undefined, 0);  // West arc
-  createRiver(terrain, 240, 160, 240, 240, 10, undefined, 0);  // East arc
+  createRiver(terrain, 160, 160, 160, 240, 10, undefined, 0);
+  createRiver(terrain, 240, 160, 240, 240, 10, undefined, 0);
 
   // Corner void chasms - Volcanic pits
   createVoidChasm(terrain, 0, 0, 30, 30, 3);
@@ -496,87 +505,82 @@ function generateTitansColosseum(): MapData {
   createVoidChasm(terrain, MAP_WIDTH - 30, MAP_HEIGHT - 30, 30, 30, 3);
 
   // LAKES - Tactical water hazards
-  createLake(terrain, 100, 100, 12, 3);   // NW quadrant
-  createLake(terrain, 300, 100, 12, 3);   // NE quadrant
-  createLake(terrain, 100, 300, 12, 3);   // SW quadrant
-  createLake(terrain, 300, 300, 12, 3);   // SE quadrant
+  createLake(terrain, 100, 100, 12, 3);
+  createLake(terrain, 300, 100, 12, 3);
+  createLake(terrain, 100, 300, 12, 3);
+  createLake(terrain, 300, 300, 12, 3);
 
-  // FOREST CORRIDORS - Create lanes between spawn points
-  // Outer ring corridors
+  // FOREST CORRIDORS
   createForestCorridor(terrain, 80, 80, 120, 80, 18, 6, true);
   createForestCorridor(terrain, 280, 80, 320, 80, 18, 6, true);
   createForestCorridor(terrain, 80, 320, 120, 320, 18, 6, true);
   createForestCorridor(terrain, 280, 320, 320, 320, 18, 6, true);
-  // Side corridors
   createForestCorridor(terrain, 60, 180, 60, 220, 16, 5, true);
   createForestCorridor(terrain, 340, 180, 340, 220, 16, 5, true);
 
-  // ROADS - Highway system connecting all 8 spawn points
-  // Outer ring road
-  createRoad(terrain, 80, 45, 320, 45, 4);      // Top
-  createRoad(terrain, 80, 355, 320, 355, 4);    // Bottom
-  createRoad(terrain, 45, 130, 45, 270, 4);     // Left
-  createRoad(terrain, 355, 130, 355, 270, 4);   // Right
-  // Diagonal approach roads to center
+  // ROADS - Highway system
+  createRoad(terrain, 80, 45, 320, 45, 4);
+  createRoad(terrain, 80, 355, 320, 355, 4);
+  createRoad(terrain, 45, 130, 45, 270, 4);
+  createRoad(terrain, 355, 130, 355, 270, 4);
   createRoad(terrain, 100, 100, 160, 160, 3);
   createRoad(terrain, 300, 100, 240, 160, 3);
   createRoad(terrain, 100, 300, 160, 240, 3);
   createRoad(terrain, 300, 300, 240, 240, 3);
 
-  // SCATTERED FORESTS - Ash/dead tree coverage (3x more)
+  // SCATTERED FORESTS
   scatterForests(terrain, MAP_WIDTH, MAP_HEIGHT, 160, 5, 14, BASE_EXCLUSION_ZONES, 1234, 0.3);
 
-  // DENSE FORESTS - Ambush positions at gold expansions
+  // DENSE FORESTS at gold expansions
   fillFeatureCircle(terrain, 140, 140, 10, 'forest_dense');
   fillFeatureCircle(terrain, 260, 140, 10, 'forest_dense');
   fillFeatureCircle(terrain, 140, 260, 10, 'forest_dense');
   fillFeatureCircle(terrain, 260, 260, 10, 'forest_dense');
 
-  // VOLCANIC ASH FOREST WALLS - Create major chokepoints and lanes
-  // Outer ring forest barriers (create 8 approach lanes)
-  fillFeatureRect(terrain, 140, 20, 12, 35, 'forest_dense');   // Top-center wall
-  fillFeatureRect(terrain, 248, 20, 12, 35, 'forest_dense');   // Top-right wall
-  fillFeatureRect(terrain, 140, 345, 12, 35, 'forest_dense');  // Bottom-center wall
-  fillFeatureRect(terrain, 248, 345, 12, 35, 'forest_dense');  // Bottom-right wall
-  fillFeatureRect(terrain, 20, 140, 35, 12, 'forest_dense');   // Left-top wall
-  fillFeatureRect(terrain, 20, 248, 35, 12, 'forest_dense');   // Left-bottom wall
-  fillFeatureRect(terrain, 345, 140, 35, 12, 'forest_dense');  // Right-top wall
-  fillFeatureRect(terrain, 345, 248, 35, 12, 'forest_dense');  // Right-bottom wall
+  // VOLCANIC ASH FOREST WALLS
+  fillFeatureRect(terrain, 140, 20, 12, 35, 'forest_dense');
+  fillFeatureRect(terrain, 248, 20, 12, 35, 'forest_dense');
+  fillFeatureRect(terrain, 140, 345, 12, 35, 'forest_dense');
+  fillFeatureRect(terrain, 248, 345, 12, 35, 'forest_dense');
+  fillFeatureRect(terrain, 20, 140, 35, 12, 'forest_dense');
+  fillFeatureRect(terrain, 20, 248, 35, 12, 'forest_dense');
+  fillFeatureRect(terrain, 345, 140, 35, 12, 'forest_dense');
+  fillFeatureRect(terrain, 345, 248, 35, 12, 'forest_dense');
 
-  // Diagonal forest walls converging on center
-  fillFeatureCircle(terrain, 120, 120, 12, 'forest_dense');    // NW diagonal
-  fillFeatureCircle(terrain, 280, 120, 12, 'forest_dense');    // NE diagonal
-  fillFeatureCircle(terrain, 120, 280, 12, 'forest_dense');    // SW diagonal
-  fillFeatureCircle(terrain, 280, 280, 12, 'forest_dense');    // SE diagonal
+  // Diagonal forest walls
+  fillFeatureCircle(terrain, 120, 120, 12, 'forest_dense');
+  fillFeatureCircle(terrain, 280, 120, 12, 'forest_dense');
+  fillFeatureCircle(terrain, 120, 280, 12, 'forest_dense');
+  fillFeatureCircle(terrain, 280, 280, 12, 'forest_dense');
 
   // Mid-ring ash forest clusters
-  fillFeatureCircle(terrain, 170, 90, 9, 'forest_dense');      // N approach
-  fillFeatureCircle(terrain, 230, 90, 9, 'forest_dense');      // N approach
-  fillFeatureCircle(terrain, 90, 170, 9, 'forest_dense');      // W approach
-  fillFeatureCircle(terrain, 90, 230, 9, 'forest_dense');      // W approach
-  fillFeatureCircle(terrain, 170, 310, 9, 'forest_dense');     // S approach
-  fillFeatureCircle(terrain, 230, 310, 9, 'forest_dense');     // S approach
-  fillFeatureCircle(terrain, 310, 170, 9, 'forest_dense');     // E approach
-  fillFeatureCircle(terrain, 310, 230, 9, 'forest_dense');     // E approach
+  fillFeatureCircle(terrain, 170, 90, 9, 'forest_dense');
+  fillFeatureCircle(terrain, 230, 90, 9, 'forest_dense');
+  fillFeatureCircle(terrain, 90, 170, 9, 'forest_dense');
+  fillFeatureCircle(terrain, 90, 230, 9, 'forest_dense');
+  fillFeatureCircle(terrain, 170, 310, 9, 'forest_dense');
+  fillFeatureCircle(terrain, 230, 310, 9, 'forest_dense');
+  fillFeatureCircle(terrain, 310, 170, 9, 'forest_dense');
+  fillFeatureCircle(terrain, 310, 230, 9, 'forest_dense');
 
-  // Additional inner ring clusters for center control fights
-  fillFeatureCircle(terrain, 180, 150, 7, 'forest_dense');     // Center N
-  fillFeatureCircle(terrain, 220, 150, 7, 'forest_dense');     // Center N
-  fillFeatureCircle(terrain, 180, 250, 7, 'forest_dense');     // Center S
-  fillFeatureCircle(terrain, 220, 250, 7, 'forest_dense');     // Center S
-  fillFeatureCircle(terrain, 150, 180, 7, 'forest_dense');     // Center W
-  fillFeatureCircle(terrain, 150, 220, 7, 'forest_dense');     // Center W
-  fillFeatureCircle(terrain, 250, 180, 7, 'forest_dense');     // Center E
-  fillFeatureCircle(terrain, 250, 220, 7, 'forest_dense');     // Center E
+  // Inner ring clusters
+  fillFeatureCircle(terrain, 180, 150, 7, 'forest_dense');
+  fillFeatureCircle(terrain, 220, 150, 7, 'forest_dense');
+  fillFeatureCircle(terrain, 180, 250, 7, 'forest_dense');
+  fillFeatureCircle(terrain, 220, 250, 7, 'forest_dense');
+  fillFeatureCircle(terrain, 150, 180, 7, 'forest_dense');
+  fillFeatureCircle(terrain, 150, 220, 7, 'forest_dense');
+  fillFeatureCircle(terrain, 250, 180, 7, 'forest_dense');
+  fillFeatureCircle(terrain, 250, 220, 7, 'forest_dense');
 
-  // MUD areas - Contested slow zones
-  createMudArea(terrain, 200, 200, 20);  // Center arena
-  createMudArea(terrain, 200, 100, 8);   // North approach
-  createMudArea(terrain, 200, 300, 8);   // South approach
-  createMudArea(terrain, 100, 200, 8);   // West approach
-  createMudArea(terrain, 300, 200, 8);   // East approach
+  // MUD areas
+  createMudArea(terrain, 200, 200, 20);
+  createMudArea(terrain, 200, 100, 8);
+  createMudArea(terrain, 200, 300, 8);
+  createMudArea(terrain, 100, 200, 8);
+  createMudArea(terrain, 300, 200, 8);
 
-  // Light forests for flanking cover - expanded
+  // Light forests
   fillFeatureCircle(terrain, 150, 100, 8, 'forest_light');
   fillFeatureCircle(terrain, 250, 100, 8, 'forest_light');
   fillFeatureCircle(terrain, 150, 300, 8, 'forest_light');
@@ -585,35 +589,31 @@ function generateTitansColosseum(): MapData {
   fillFeatureCircle(terrain, 100, 250, 8, 'forest_light');
   fillFeatureCircle(terrain, 300, 150, 8, 'forest_light');
   fillFeatureCircle(terrain, 300, 250, 8, 'forest_light');
-  // Additional light forest coverage
-  fillFeatureCircle(terrain, 60, 100, 6, 'forest_light');      // Outer NW
-  fillFeatureCircle(terrain, 100, 60, 6, 'forest_light');      // Outer NW
-  fillFeatureCircle(terrain, 340, 100, 6, 'forest_light');     // Outer NE
-  fillFeatureCircle(terrain, 300, 60, 6, 'forest_light');      // Outer NE
-  fillFeatureCircle(terrain, 60, 300, 6, 'forest_light');      // Outer SW
-  fillFeatureCircle(terrain, 100, 340, 6, 'forest_light');     // Outer SW
-  fillFeatureCircle(terrain, 340, 300, 6, 'forest_light');     // Outer SE
-  fillFeatureCircle(terrain, 300, 340, 6, 'forest_light');     // Outer SE
-  fillFeatureCircle(terrain, 200, 150, 5, 'forest_light');     // Center approaches
-  fillFeatureCircle(terrain, 200, 250, 5, 'forest_light');     // Center approaches
-  fillFeatureCircle(terrain, 150, 200, 5, 'forest_light');     // Center approaches
-  fillFeatureCircle(terrain, 250, 200, 5, 'forest_light');     // Center approaches
+  fillFeatureCircle(terrain, 60, 100, 6, 'forest_light');
+  fillFeatureCircle(terrain, 100, 60, 6, 'forest_light');
+  fillFeatureCircle(terrain, 340, 100, 6, 'forest_light');
+  fillFeatureCircle(terrain, 300, 60, 6, 'forest_light');
+  fillFeatureCircle(terrain, 60, 300, 6, 'forest_light');
+  fillFeatureCircle(terrain, 100, 340, 6, 'forest_light');
+  fillFeatureCircle(terrain, 340, 300, 6, 'forest_light');
+  fillFeatureCircle(terrain, 300, 340, 6, 'forest_light');
+  fillFeatureCircle(terrain, 200, 150, 5, 'forest_light');
+  fillFeatureCircle(terrain, 200, 250, 5, 'forest_light');
+  fillFeatureCircle(terrain, 150, 200, 5, 'forest_light');
+  fillFeatureCircle(terrain, 250, 200, 5, 'forest_light');
 
   // ========================================
   // EXPANSIONS WITH RESOURCES
-  // Standard: 6x 1500 + 2x 900 minerals per base, 2250 gas per geyser
-  // Gold: all 8 patches at 900 minerals
   // ========================================
-  // 8 Main bases (minerals face outward from map center)
-  const p1Main = createBaseResources(80, 45, DIR.UP_LEFT);       // Standard
-  const p2Main = createBaseResources(320, 45, DIR.UP_RIGHT);     // Standard
-  const p3Main = createBaseResources(355, 130, DIR.RIGHT);       // Standard
-  const p4Main = createBaseResources(355, 270, DIR.RIGHT);       // Standard
-  const p5Main = createBaseResources(320, 355, DIR.DOWN_RIGHT);  // Standard
-  const p6Main = createBaseResources(80, 355, DIR.DOWN_LEFT);    // Standard
-  const p7Main = createBaseResources(45, 270, DIR.LEFT);         // Standard
-  const p8Main = createBaseResources(45, 130, DIR.LEFT);         // Standard
-  // 8 Natural expansions (minerals placed further from ramp exits)
+  const p1Main = createBaseResources(80, 45, DIR.UP_LEFT);
+  const p2Main = createBaseResources(320, 45, DIR.UP_RIGHT);
+  const p3Main = createBaseResources(355, 130, DIR.RIGHT);
+  const p4Main = createBaseResources(355, 270, DIR.RIGHT);
+  const p5Main = createBaseResources(320, 355, DIR.DOWN_RIGHT);
+  const p6Main = createBaseResources(80, 355, DIR.DOWN_LEFT);
+  const p7Main = createBaseResources(45, 270, DIR.LEFT);
+  const p8Main = createBaseResources(45, 130, DIR.LEFT);
+
   const p1Nat = createBaseResources(110, 75, DIR.UP, 1500, 2250, false, 10);
   const p2Nat = createBaseResources(290, 75, DIR.UP, 1500, 2250, false, 10);
   const p3Nat = createBaseResources(325, 160, DIR.RIGHT, 1500, 2250, false, 10);
@@ -622,18 +622,18 @@ function generateTitansColosseum(): MapData {
   const p6Nat = createBaseResources(110, 325, DIR.DOWN, 1500, 2250, false, 10);
   const p7Nat = createBaseResources(75, 240, DIR.LEFT, 1500, 2250, false, 10);
   const p8Nat = createBaseResources(75, 160, DIR.LEFT, 1500, 2250, false, 10);
-  // Gold expansions (inner ring)
-  const goldNW = createBaseResources(140, 140, DIR.UP_LEFT, 1500, 2250, true);     // Gold
-  const goldNE = createBaseResources(260, 140, DIR.UP_RIGHT, 1500, 2250, true);    // Gold
-  const goldSE = createBaseResources(260, 260, DIR.DOWN_RIGHT, 1500, 2250, true);  // Gold
-  const goldSW = createBaseResources(140, 260, DIR.DOWN_LEFT, 1500, 2250, true);   // Gold
-  // Edge thirds
-  const northThird = createBaseResources(200, 60, DIR.UP);       // Standard
-  const southThird = createBaseResources(200, 340, DIR.DOWN);    // Standard
-  const westThird = createBaseResources(60, 200, DIR.LEFT);      // Standard
-  const eastThird = createBaseResources(340, 200, DIR.RIGHT);    // Standard
-  // Center
-  const center = createBaseResources(200, 200, DIR.DOWN, 1500, 2250, true);        // Gold (contested)
+
+  const goldNW = createBaseResources(140, 140, DIR.UP_LEFT, 1500, 2250, true);
+  const goldNE = createBaseResources(260, 140, DIR.UP_RIGHT, 1500, 2250, true);
+  const goldSE = createBaseResources(260, 260, DIR.DOWN_RIGHT, 1500, 2250, true);
+  const goldSW = createBaseResources(140, 260, DIR.DOWN_LEFT, 1500, 2250, true);
+
+  const northThird = createBaseResources(200, 60, DIR.UP);
+  const southThird = createBaseResources(200, 340, DIR.DOWN);
+  const westThird = createBaseResources(60, 200, DIR.LEFT);
+  const eastThird = createBaseResources(340, 200, DIR.RIGHT);
+
+  const center = createBaseResources(200, 200, DIR.DOWN, 1500, 2250, true);
 
   const expansions = [
     { name: 'P1 Main', x: 80, y: 45, isMain: true, ...p1Main },
@@ -687,7 +687,7 @@ function generateTitansColosseum(): MapData {
     expansions,
 
     watchTowers: [
-      { x: 200, y: 200, radius: 32 },  // Center
+      { x: 200, y: 200, radius: 32 },
       { x: 140, y: 200, radius: 20 },
       { x: 260, y: 200, radius: 20 },
       { x: 200, y: 140, radius: 20 },
@@ -718,7 +718,7 @@ function generateTitansColosseum(): MapData {
     fogFar: 400,
   };
 
-  // CRITICAL: Validate and fix connectivity to ensure all areas are reachable
+  // Validate and fix connectivity
   const validation = validateMapConnectivity(mapData);
   if (!validation.isValid) {
     console.warn('[TitansColosseum] Map has connectivity issues, attempting auto-fix...');

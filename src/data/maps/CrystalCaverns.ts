@@ -1,15 +1,11 @@
 import {
   MapData,
   MapDecoration,
-  createTerrainGrid,
   createBaseResources,
   DIR,
   fillTerrainRect,
   fillTerrainCircle,
-  createRampInTerrain,
-  createRaisedPlatform,
   createForestCorridor,
-  createRiver,
   createLake,
   createRoad,
   createVoidChasm,
@@ -19,6 +15,13 @@ import {
   createMudArea,
   autoFixConnectivity,
   validateMapConnectivity,
+  // New topology system
+  generateTerrainFromTopology,
+  mainBase,
+  naturalExpansion,
+  expansion,
+  connect,
+  type MapTopology,
 } from './MapTypes';
 
 /**
@@ -48,6 +51,8 @@ import {
  *   │ █ [Fourth] █                        █  [Fourth]  █████ │
  *   │ █████████████                       ██████████████████ │
  *   └─────────────────────────────────────────────────────────┘
+ *
+ * USES NEW TOPOLOGY SYSTEM - Ramp connectivity guaranteed by design
  */
 
 const MAP_WIDTH = 200;
@@ -349,7 +354,53 @@ function generateFrozenDecorations(): MapDecoration[] {
 }
 
 function generateCrystalCaverns(): MapData {
-  const terrain = createTerrainGrid(MAP_WIDTH, MAP_HEIGHT, 'ground', 0);
+  // ========================================
+  // TOPOLOGY DEFINITION - Graph-first terrain generation
+  // ========================================
+  const topology: MapTopology = {
+    areas: [
+      // Main bases - elevated platforms with cliff rings
+      mainBase('p1_main', 30, 90, 20, 2, 4),
+      mainBase('p2_main', 170, 90, 20, 2, 4),
+
+      // Natural expansions - mid-elevation platforms
+      naturalExpansion('p1_nat', 55, 55, 14, 1, 3),
+      naturalExpansion('p2_nat', 145, 125, 14, 1, 3),
+
+      // Third expansions - ground level, no cliffs
+      expansion('p1_third', 'third', 30, 30, 16, 0),
+      expansion('p2_third', 'third', 170, 150, 16, 0),
+
+      // Fourth expansions - ground level, no cliffs
+      expansion('p1_fourth', 'fourth', 30, 150, 14, 0),
+      expansion('p2_fourth', 'fourth', 170, 30, 14, 0),
+
+      // Center gold expansion
+      expansion('center_gold', 'gold', 100, 90, 18, 0),
+    ],
+
+    connections: [
+      // Main to low ground connections (elevation 2 -> 0)
+      // P1 main exits east toward center
+      connect('p1_main', 'center_gold', 10, 'east'),
+      // P2 main exits west toward center
+      connect('p2_main', 'center_gold', 10, 'west'),
+
+      // Natural to low ground connections (elevation 1 -> 0)
+      // P1 natural exits south toward open ground
+      connect('p1_nat', 'p1_third', 8, 'south'),
+      // P2 natural exits north toward open ground
+      connect('p2_nat', 'p2_third', 8, 'north'),
+    ],
+  };
+
+  // Generate base terrain from topology
+  const { terrain, ramps, connections } = generateTerrainFromTopology(
+    MAP_WIDTH,
+    MAP_HEIGHT,
+    topology,
+    0 // Default elevation (low ground)
+  );
 
   // ========================================
   // MAP BORDERS - Thick unwalkable cliffs
@@ -358,66 +409,6 @@ function generateCrystalCaverns(): MapData {
   fillTerrainRect(terrain, MAP_WIDTH - 10, 0, 10, MAP_HEIGHT, 'unwalkable');
   fillTerrainRect(terrain, 0, 0, MAP_WIDTH, 10, 'unwalkable');
   fillTerrainRect(terrain, 0, MAP_HEIGHT - 10, MAP_WIDTH, 10, 'unwalkable');
-
-  // ========================================
-  // RAMPS - Must be created BEFORE raised platforms
-  // ========================================
-  const ramps = [
-    // P1 Main ramp (east exit)
-    { x: 48, y: 85, width: 8, height: 10, direction: 'east' as const, fromElevation: 2 as const, toElevation: 0 as const },
-    // P2 Main ramp (west exit)
-    { x: 144, y: 85, width: 8, height: 10, direction: 'west' as const, fromElevation: 2 as const, toElevation: 0 as const },
-    // P1 Natural ramp
-    { x: 55, y: 68, width: 6, height: 8, direction: 'south' as const, fromElevation: 1 as const, toElevation: 0 as const },
-    // P2 Natural ramp
-    { x: 145, y: 108, width: 6, height: 8, direction: 'north' as const, fromElevation: 1 as const, toElevation: 0 as const },
-  ];
-  ramps.forEach(ramp => createRampInTerrain(terrain, ramp));
-
-  // ========================================
-  // PLAYER 1 MAIN BASE (Left side) - Raised platform with cliff ring (Elevation 2)
-  // ========================================
-  createRaisedPlatform(terrain, 30, 90, 25, 2, 4);
-
-  // ========================================
-  // PLAYER 2 MAIN BASE (Right side) - Raised platform with cliff ring (Elevation 2)
-  // ========================================
-  createRaisedPlatform(terrain, 170, 90, 25, 2, 4);
-
-  // ========================================
-  // NATURAL EXPANSIONS - Raised platforms with cliff ring (Elevation 1)
-  // ========================================
-
-  // P1 Natural (northeast of main)
-  createRaisedPlatform(terrain, 55, 55, 16, 1, 3);
-
-  // P2 Natural (southwest of main)
-  createRaisedPlatform(terrain, 145, 125, 16, 1, 3);
-
-  // ========================================
-  // THIRD EXPANSIONS - Elevation 0
-  // ========================================
-
-  // P1 Third (top-left corner)
-  fillTerrainCircle(terrain, 30, 30, 16, 'ground', 0);
-
-  // P2 Third (bottom-right corner)
-  fillTerrainCircle(terrain, 170, 150, 16, 'ground', 0);
-
-  // ========================================
-  // FOURTH EXPANSIONS - Edge locations
-  // ========================================
-
-  // P1 Fourth (bottom-left)
-  fillTerrainCircle(terrain, 30, 150, 14, 'ground', 0);
-
-  // P2 Fourth (top-right)
-  fillTerrainCircle(terrain, 170, 30, 14, 'ground', 0);
-
-  // ========================================
-  // CENTER GOLD EXPANSION - Highly contested
-  // ========================================
-  fillTerrainCircle(terrain, 100, 90, 18, 'ground', 0);
 
   // ========================================
   // CENTRAL TERRAIN FEATURES - Chokepoints

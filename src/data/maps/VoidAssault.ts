@@ -1,15 +1,11 @@
 import {
   MapData,
   MapDecoration,
-  createTerrainGrid,
   createBaseResources,
   DIR,
   fillTerrainRect,
   fillTerrainCircle,
-  createRampInTerrain,
-  createRaisedPlatform,
   createForestCorridor,
-  createRiver,
   createLake,
   createRoad,
   createVoidChasm,
@@ -19,6 +15,13 @@ import {
   createMudArea,
   autoFixConnectivity,
   validateMapConnectivity,
+  // New topology system
+  generateTerrainFromTopology,
+  mainBase,
+  naturalExpansion,
+  expansion,
+  connect,
+  type MapTopology,
 } from './MapTypes';
 
 /**
@@ -51,6 +54,8 @@ import {
  *   │ ███████ P1 MAIN █       [Fourth]        █████████████████ │
  *   │ █████████████████                                         │
  *   └────────────────────────────────────────────────────────────┘
+ *
+ * USES NEW TOPOLOGY SYSTEM - Ramp connectivity guaranteed by design
  */
 
 const MAP_WIDTH = 220;
@@ -366,7 +371,57 @@ function generateVoidDecorations(): MapDecoration[] {
 }
 
 function generateVoidAssault(): MapData {
-  const terrain = createTerrainGrid(MAP_WIDTH, MAP_HEIGHT, 'ground', 0);
+  // ========================================
+  // TOPOLOGY DEFINITION - Graph-first terrain generation
+  // ========================================
+  const topology: MapTopology = {
+    areas: [
+      // Main bases - elevated platforms with cliff rings
+      mainBase('p1_main', 35, 185, 22, 2, 4),
+      mainBase('p2_main', 185, 35, 22, 2, 4),
+
+      // Natural expansions - mid-elevation platforms
+      naturalExpansion('p1_nat', 60, 145, 14, 1, 3),
+      naturalExpansion('p2_nat', 160, 75, 14, 1, 3),
+
+      // Third expansions - ground level, no cliffs
+      expansion('p1_third', 'third', 35, 35, 18, 0),
+      expansion('p2_third', 'third', 185, 185, 18, 0),
+
+      // Fourth expansions - ground level, no cliffs
+      expansion('p1_fourth', 'fourth', 35, 110, 16, 0),
+      expansion('p2_fourth', 'fourth', 185, 110, 16, 0),
+
+      // Gold expansions
+      expansion('gold_north', 'gold', 80, 60, 14, 0),
+      expansion('gold_south', 'gold', 140, 160, 14, 0),
+
+      // Center contested area
+      expansion('center', 'center', 110, 110, 22, 0),
+    ],
+
+    connections: [
+      // Main to natural connections (elevation 2 -> 1)
+      // P1 main exits north toward natural
+      connect('p1_main', 'p1_nat', 10, 'north'),
+      // P2 main exits south toward natural
+      connect('p2_main', 'p2_nat', 10, 'south'),
+
+      // Natural to low ground connections (elevation 1 -> 0)
+      // P1 natural exits east toward center
+      connect('p1_nat', 'center', 8, 'east'),
+      // P2 natural exits west toward center
+      connect('p2_nat', 'center', 8, 'west'),
+    ],
+  };
+
+  // Generate base terrain from topology
+  const { terrain, ramps } = generateTerrainFromTopology(
+    MAP_WIDTH,
+    MAP_HEIGHT,
+    topology,
+    0 // Default elevation (low ground)
+  );
 
   // ========================================
   // MAP BORDERS - Thick unwalkable cliffs
@@ -377,93 +432,34 @@ function generateVoidAssault(): MapData {
   fillTerrainRect(terrain, 0, MAP_HEIGHT - 12, MAP_WIDTH, 12, 'unwalkable');
 
   // ========================================
-  // RAMPS - Must be created BEFORE raised platforms
+  // NATURAL CHOKEPOINT WALLS
   // ========================================
-  const ramps = [
-    // P1 Main ramp (north exit toward natural)
-    { x: 55, y: 168, width: 8, height: 12, direction: 'north' as const, fromElevation: 2 as const, toElevation: 1 as const },
-    // P2 Main ramp (south exit toward natural)
-    { x: 157, y: 40, width: 8, height: 12, direction: 'south' as const, fromElevation: 2 as const, toElevation: 1 as const },
-    // P1 Natural to low ground
-    { x: 72, y: 135, width: 8, height: 8, direction: 'east' as const, fromElevation: 1 as const, toElevation: 0 as const },
-    // P2 Natural to low ground
-    { x: 140, y: 77, width: 8, height: 8, direction: 'west' as const, fromElevation: 1 as const, toElevation: 0 as const },
-  ];
-  ramps.forEach(ramp => createRampInTerrain(terrain, ramp));
-
-  // ========================================
-  // PLAYER 1 MAIN BASE (Bottom-left) - Raised platform with cliff edges (Elevation 2)
-  // ========================================
-  createRaisedPlatform(terrain, 35, 185, 25, 2, 4);
-
-  // ========================================
-  // PLAYER 2 MAIN BASE (Top-right) - Raised platform with cliff edges (Elevation 2)
-  // ========================================
-  createRaisedPlatform(terrain, 185, 35, 25, 2, 4);
-
-  // ========================================
-  // NATURAL EXPANSIONS - Raised platforms (Elevation 1)
-  // ========================================
-
-  // P1 Natural (north of main)
-  createRaisedPlatform(terrain, 60, 145, 16, 1, 3);
   // Natural chokepoint walls
   fillTerrainRect(terrain, 40, 120, 12, 18, 'unwalkable');
   fillTerrainRect(terrain, 72, 120, 15, 18, 'unwalkable');
 
-  // P2 Natural (south of main)
-  createRaisedPlatform(terrain, 160, 75, 16, 1, 3);
-  // Natural chokepoint walls
+  // P2 Natural chokepoint walls
   fillTerrainRect(terrain, 133, 82, 15, 18, 'unwalkable');
   fillTerrainRect(terrain, 168, 82, 12, 18, 'unwalkable');
 
   // ========================================
-  // THIRD EXPANSIONS - Elevation 0
+  // THIRD EXPANSION PROTECTION
   // ========================================
 
-  // P1 Third (top-left corner)
-  fillTerrainCircle(terrain, 35, 35, 18, 'ground', 0);
-  // Partial protection
+  // P1 Third (top-left corner) - Partial protection
   fillTerrainRect(terrain, 12, 20, 15, 30, 'unwalkable');
   fillTerrainRect(terrain, 20, 12, 30, 15, 'unwalkable');
 
-  // P2 Third (bottom-right corner)
-  fillTerrainCircle(terrain, 185, 185, 18, 'ground', 0);
-  // Partial protection
+  // P2 Third (bottom-right corner) - Partial protection
   fillTerrainRect(terrain, 193, 170, 15, 30, 'unwalkable');
   fillTerrainRect(terrain, 170, 193, 30, 15, 'unwalkable');
 
   // ========================================
-  // FOURTH EXPANSIONS - Side positions
+  // TERRAIN FEATURES - Chokepoints and paths
   // ========================================
-
-  // P1 Fourth (left side, middle)
-  fillTerrainCircle(terrain, 35, 110, 16, 'ground', 0);
-
-  // P2 Fourth (right side, middle)
-  fillTerrainCircle(terrain, 185, 110, 16, 'ground', 0);
-
-  // ========================================
-  // GOLD EXPANSIONS - High risk, high reward
-  // ========================================
-
-  // Gold 1 (top-center, closer to P2)
-  fillTerrainCircle(terrain, 80, 60, 14, 'ground', 0);
-
-  // Gold 2 (bottom-center, closer to P1)
-  fillTerrainCircle(terrain, 140, 160, 14, 'ground', 0);
-
-  // ========================================
-  // CENTER - Major contested area
-  // ========================================
-  fillTerrainCircle(terrain, 110, 110, 22, 'ground', 0);
 
   // Central obstacle (forces army splits)
   fillTerrainRect(terrain, 100, 100, 20, 20, 'unwalkable');
-
-  // ========================================
-  // TERRAIN FEATURES - Chokepoints and paths
-  // ========================================
 
   // Diagonal cliff barriers
   fillTerrainCircle(terrain, 70, 70, 14, 'unwalkable');
