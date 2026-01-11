@@ -170,12 +170,12 @@ This document contains all audio specifications, AI prompts for generation, and 
 - [ ] `voice/specter/attack1.mp3`
 - [ ] `voice/specter/ready.mp3`
 
-### Voice Lines - Dreadnought (Capital Ship) ⏳ Needs Generation
-- [ ] `voice/dreadnought/select1.mp3`
-- [ ] `voice/dreadnought/select2.mp3`
-- [ ] `voice/dreadnought/move1.mp3`
-- [ ] `voice/dreadnought/attack1.mp3`
-- [ ] `voice/dreadnought/ready.mp3`
+### Voice Lines - Dreadnought (Capital Ship) ✅ Complete
+- [x] `voice/dreadnought/select1.mp3`
+- [x] `voice/dreadnought/select2.mp3`
+- [x] `voice/dreadnought/move1.mp3`
+- [x] `voice/dreadnought/attack1.mp3`
+- [x] `voice/dreadnought/ready.mp3`
 
 ### Voice Lines - Overseer (Support/Detector) ⏳ Needs Generation
 - [ ] `voice/overseer/select1.mp3`
