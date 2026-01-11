@@ -206,15 +206,15 @@ export class AudioSystem extends System {
 
   private setupEventListeners(): void {
     // Selection events - play unit voice on select (only for human player)
-    this.game.eventBus.on('selection:changed', (data: { entityIds: number[] }) => {
+    this.game.eventBus.on('selection:changed', (data: { selectedIds: number[] }) => {
       // Skip selection sounds in spectator mode
       if (this.isSpectator()) return;
 
       AudioManager.play('ui_select');
 
-      // Play unit voice line
-      if (data && data.entityIds && data.entityIds.length > 0) {
-        const unitType = this.getFirstUnitType(data.entityIds);
+      // Play unit voice line (only one voice even with multiple units selected)
+      if (data && data.selectedIds && data.selectedIds.length > 0) {
+        const unitType = this.getFirstUnitType(data.selectedIds);
         if (unitType) {
           this.playVoice(unitType, 'select');
         }
