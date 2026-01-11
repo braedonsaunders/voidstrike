@@ -2,8 +2,9 @@ import * as THREE from 'three';
 import { MapData } from '@/data/maps';
 import { BIOMES, BiomeConfig } from './Biomes';
 import { Terrain, MapDecorations } from './Terrain';
-import { CrystalField, WaterPlane, GroundFog } from './GroundDetail';
+import { CrystalField, GroundFog } from './GroundDetail';
 import { TSLMapBorderFog } from './tsl/MapBorderFog';
+import { TSLWaterPlane } from './tsl/WaterPlane';
 import { EnvironmentParticles } from './EnhancedDecorations';
 // PERFORMANCE: Use instanced decorations instead of individual meshes
 import { InstancedTrees, InstancedRocks, InstancedGrass, InstancedPebbles } from './InstancedDecorations';
@@ -30,7 +31,7 @@ export class EnvironmentManager {
   private grass: InstancedGrass | null = null;
   private pebbles: InstancedPebbles | null = null;
   private crystals: CrystalField | null = null;
-  private water: WaterPlane | null = null;
+  private water: TSLWaterPlane | null = null;
   private groundFog: GroundFog | null = null;
   private mapBorderFog: TSLMapBorderFog | null = null;
   private particles: EnvironmentParticles | null = null;
@@ -167,13 +168,11 @@ export class EnvironmentManager {
       this.scene.add(this.crystals.group);
     }
 
-    // Water/lava plane
-    // Note: WaterPlane uses ShaderMaterial which doesn't work with WebGPU
-    // TODO: Convert to TSL material for WebGPU compatibility
-    // if (this.biome.hasWater) {
-    //   this.water = new WaterPlane(this.mapData, this.biome);
-    //   this.scene.add(this.water.mesh);
-    // }
+    // Water/lava plane - TSL WebGPU compatible
+    if (this.biome.hasWater) {
+      this.water = new TSLWaterPlane(this.mapData, this.biome);
+      this.scene.add(this.water.mesh);
+    }
 
     // Ground fog/mist layer for atmospheric effect
     // Note: GroundFog uses ShaderMaterial which may not render correctly with WebGPU

@@ -28,12 +28,10 @@ import { EnvironmentManager } from '@/rendering/EnvironmentManager';
 import { UnitRenderer } from '@/rendering/UnitRenderer';
 import { BuildingRenderer } from '@/rendering/BuildingRenderer';
 import { ResourceRenderer } from '@/rendering/ResourceRenderer';
-import { FogOfWar } from '@/rendering/FogOfWar';
 import { EffectsRenderer } from '@/rendering/EffectsRenderer';
 import { RallyPointRenderer } from '@/rendering/RallyPointRenderer';
 import { WatchTowerRenderer } from '@/rendering/WatchTowerRenderer';
 import { BuildingPlacementPreview } from '@/rendering/BuildingPlacementPreview';
-import { GameOverlayManager } from '@/rendering/GameOverlayManager';
 import { CommandQueueRenderer } from '@/rendering/CommandQueueRenderer';
 
 // TSL Components (WebGPU-compatible)
@@ -44,6 +42,8 @@ import {
   GPUParticleSystem,
   RenderPipeline,
   EffectEmitter,
+  TSLFogOfWar,
+  TSLGameOverlayManager,
 } from '@/rendering/tsl';
 
 import { useGameStore } from '@/store/gameStore';
@@ -85,7 +85,7 @@ export function WebGPUGameCanvas() {
   const unitRendererRef = useRef<UnitRenderer | null>(null);
   const buildingRendererRef = useRef<BuildingRenderer | null>(null);
   const resourceRendererRef = useRef<ResourceRenderer | null>(null);
-  const fogOfWarRef = useRef<FogOfWar | null>(null);
+  const fogOfWarRef = useRef<TSLFogOfWar | null>(null);
   const effectsRendererRef = useRef<EffectsRenderer | null>(null);
   const rallyPointRendererRef = useRef<RallyPointRenderer | null>(null);
   const watchTowerRendererRef = useRef<WatchTowerRenderer | null>(null);
@@ -93,7 +93,7 @@ export function WebGPUGameCanvas() {
   const environmentRef = useRef<EnvironmentManager | null>(null);
 
   // Strategic overlays and command queue
-  const overlayManagerRef = useRef<GameOverlayManager | null>(null);
+  const overlayManagerRef = useRef<TSLGameOverlayManager | null>(null);
   const commandQueueRendererRef = useRef<CommandQueueRenderer | null>(null);
 
   // TSL Visual Systems (WebGPU-compatible)
@@ -278,15 +278,14 @@ export function WebGPUGameCanvas() {
 
       resourceRendererRef.current = new ResourceRenderer(scene, game.world, terrain);
 
-      // Note: FogOfWar uses ShaderMaterial which doesn't work with WebGPU
-      // TODO: Convert to TSL material for WebGPU compatibility
-      // if (fogOfWarEnabled && !isSpectatorMode()) {
-      //   const fogOfWar = new FogOfWar({ mapWidth, mapHeight });
-      //   fogOfWar.setVisionSystem(game.visionSystem);
-      //   fogOfWar.setPlayerId(localPlayerId);
-      //   scene.add(fogOfWar.mesh);
-      //   fogOfWarRef.current = fogOfWar;
-      // }
+      // TSL FogOfWar - WebGPU compatible
+      if (fogOfWarEnabled && !isSpectatorMode()) {
+        const fogOfWar = new TSLFogOfWar({ mapWidth, mapHeight });
+        fogOfWar.setVisionSystem(game.visionSystem);
+        fogOfWar.setPlayerId(localPlayerId);
+        scene.add(fogOfWar.mesh);
+        fogOfWarRef.current = fogOfWar;
+      }
 
       effectsRendererRef.current = new EffectsRenderer(scene, game.eventBus, (x, z) => terrain.getHeightAt(x, z));
       rallyPointRendererRef.current = new RallyPointRenderer(
@@ -350,14 +349,13 @@ export function WebGPUGameCanvas() {
         );
       }
 
-      // Note: GameOverlayManager uses ShaderMaterial which doesn't work with WebGPU
-      // TODO: Convert to TSL material for WebGPU compatibility
-      // overlayManagerRef.current = new GameOverlayManager(
-      //   scene,
-      //   CURRENT_MAP,
-      //   (x, y) => terrain.getHeightAt(x, y)
-      // );
-      // overlayManagerRef.current.setWorld(game.world);
+      // TSL GameOverlayManager - WebGPU compatible
+      overlayManagerRef.current = new TSLGameOverlayManager(
+        scene,
+        CURRENT_MAP,
+        (x, y) => terrain.getHeightAt(x, y)
+      );
+      overlayManagerRef.current.setWorld(game.world);
 
       // Initialize command queue waypoint visualization
       commandQueueRendererRef.current = new CommandQueueRenderer(

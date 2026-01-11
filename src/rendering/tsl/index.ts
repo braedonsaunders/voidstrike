@@ -83,3 +83,19 @@ export {
   TSLMapBorderFog,
   type MapBorderFogConfig,
 } from './MapBorderFog';
+
+// Fog of War
+export {
+  TSLFogOfWar,
+  type TSLFogOfWarConfig,
+} from './FogOfWar';
+
+// Water/Lava
+export {
+  TSLWaterPlane,
+} from './WaterPlane';
+
+// Game Overlays
+export {
+  TSLGameOverlayManager,
+} from './GameOverlay';
