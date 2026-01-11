@@ -337,17 +337,32 @@ export function WebGPUGameCanvas() {
             bloomThreshold: graphicsSettings.bloomThreshold,
             aoEnabled: graphicsSettings.ssaoEnabled,
             aoRadius: graphicsSettings.ssaoRadius,
-            aoIntensity: 1.0,
+            aoIntensity: graphicsSettings.ssaoIntensity,
             fxaaEnabled: graphicsSettings.fxaaEnabled,
-            vignetteEnabled: true,
-            vignetteIntensity: 0.3,
-            vignetteRadius: 0.8,
+            vignetteEnabled: graphicsSettings.vignetteEnabled,
+            vignetteIntensity: graphicsSettings.vignetteIntensity,
             exposure: graphicsSettings.toneMappingExposure,
-            saturation: 1.1,
-            contrast: 1.05,
+            saturation: graphicsSettings.saturation,
+            contrast: graphicsSettings.contrast,
           }
         );
       }
+
+      // Configure shadows based on settings
+      if (graphicsSettings.shadowsEnabled) {
+        renderer.shadowMap.enabled = true;
+        renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+        environmentRef.current?.setShadowsEnabled(true);
+        environmentRef.current?.setShadowQuality(graphicsSettings.shadowQuality);
+        environmentRef.current?.setShadowDistance(graphicsSettings.shadowDistance);
+      }
+
+      // Configure fog
+      environmentRef.current?.setFogEnabled(graphicsSettings.fogEnabled);
+      environmentRef.current?.setFogDensity(graphicsSettings.fogDensity);
+
+      // Configure environment map
+      environmentRef.current?.setEnvironmentMapEnabled(graphicsSettings.environmentMapEnabled);
 
       // TSL GameOverlayManager - WebGPU compatible
       overlayManagerRef.current = new TSLGameOverlayManager(

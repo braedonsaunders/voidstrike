@@ -1,12 +1,12 @@
 /**
- * TSL Post-Processing Pipeline
+ * TSL Post-Processing Pipeline - AAA Quality
  *
  * WebGPU-compatible post-processing using Three.js TSL nodes.
  * Features:
- * - Bloom effect (BloomNode)
- * - GTAO ambient occlusion (GTAONode)
- * - FXAA anti-aliasing (FXAANode)
- * - Vignette
+ * - Bloom effect (BloomNode) - HDR glow
+ * - GTAO ambient occlusion (GTAONode) - Contact shadows
+ * - FXAA anti-aliasing (FXAANode) - Edge smoothing
+ * - Vignette - Cinematic edge darkening
  * - Color grading (exposure, saturation, contrast)
  */
 
@@ -15,6 +15,7 @@ import { WebGPURenderer, PostProcessing } from 'three/webgpu';
 import {
   pass,
   mrt,
+  output,
   uniform,
   uv,
   vec3,
@@ -56,7 +57,6 @@ export interface PostProcessingConfig {
   // Vignette
   vignetteEnabled: boolean;
   vignetteIntensity: number;
-  vignetteRadius: number;
 
   // Color grading
   exposure: number;
@@ -67,18 +67,17 @@ export interface PostProcessingConfig {
 const DEFAULT_CONFIG: PostProcessingConfig = {
   bloomEnabled: true,
   bloomStrength: 0.3,
-  bloomRadius: 0.4,
-  bloomThreshold: 0.85,
+  bloomRadius: 0.5,
+  bloomThreshold: 0.8,
 
   aoEnabled: true,
-  aoRadius: 2,
+  aoRadius: 4,
   aoIntensity: 1.0,
 
   fxaaEnabled: true,
 
   vignetteEnabled: true,
-  vignetteIntensity: 0.3,
-  vignetteRadius: 0.8,
+  vignetteIntensity: 0.25,
 
   exposure: 1.0,
   saturation: 1.1,
@@ -102,8 +101,8 @@ export class RenderPipeline {
   private fxaaPass: ReturnType<typeof fxaa> | null = null;
 
   // Uniforms for dynamic updates
-  private uVignetteIntensity = uniform(0.3);
-  private uVignetteRadius = uniform(0.8);
+  private uVignetteIntensity = uniform(0.25);
+  private uAOIntensity = uniform(1.0);
   private uExposure = uniform(1.0);
   private uSaturation = uniform(1.1);
   private uContrast = uniform(1.05);
@@ -126,27 +125,51 @@ export class RenderPipeline {
   private createPipeline(): PostProcessing {
     const postProcessing = new PostProcessing(this.renderer);
 
-    // Create scene pass
+    // Create scene pass with MRT for depth and normals (needed for SSAO)
     const scenePass = pass(this.scene, this.camera);
+    scenePass.setMRT(
+      mrt({
+        output: output,
+        normal: normalView,
+      })
+    );
     const scenePassColor = scenePass.getTextureNode('output');
     const scenePassDepth = scenePass.getTextureNode('depth');
+    const scenePassNormal = scenePass.getTextureNode('normal');
 
     // Build the effect chain
     let outputNode: any = scenePassColor;
 
-    // 1. Bloom effect
+    // 1. GTAO Ambient Occlusion (applied first, multiplied with scene)
+    if (this.config.aoEnabled) {
+      try {
+        this.aoPass = ao(scenePassDepth, scenePassNormal, this.camera);
+        this.aoPass.radius.value = this.config.aoRadius;
+        // Note: GTAONode uses 'scale' not 'intensity' - we control intensity via mixing
+
+        // Apply AO as darkening factor - AO output is 0-1 where 1 = fully visible
+        // We mix between full visibility (1.0) and AO result based on intensity
+        const aoFactor = mix(float(1.0), this.aoPass.getTextureNode(), this.uAOIntensity);
+        outputNode = scenePassColor.mul(aoFactor);
+      } catch (e) {
+        console.warn('[PostProcessing] GTAO initialization failed, skipping AO:', e);
+        // Continue without AO
+      }
+    }
+
+    // 2. Bloom effect (additive)
     if (this.config.bloomEnabled) {
-      this.bloomPass = bloom(scenePassColor);
+      this.bloomPass = bloom(outputNode);
       this.bloomPass.threshold.value = this.config.bloomThreshold;
       this.bloomPass.strength.value = this.config.bloomStrength;
       this.bloomPass.radius.value = this.config.bloomRadius;
-      outputNode = scenePassColor.add(this.bloomPass);
+      outputNode = outputNode.add(this.bloomPass);
     }
 
-    // 2. Apply color grading and vignette
+    // 3. Apply color grading and vignette
     outputNode = this.createColorGradingPass(outputNode);
 
-    // 3. FXAA anti-aliasing
+    // 4. FXAA anti-aliasing (final pass)
     if (this.config.fxaaEnabled) {
       this.fxaaPass = fxaa(outputNode);
       postProcessing.outputNode = this.fxaaPass;
@@ -161,23 +184,25 @@ export class RenderPipeline {
     return Fn(() => {
       let color = vec3(inputNode).toVar();
 
-      // Apply vignette
-      if (this.config.vignetteEnabled) {
-        const uvCentered = uv().sub(0.5);
-        const dist = length(uvCentered).mul(2.0);
-        const vignette = smoothstep(this.uVignetteRadius, this.uVignetteRadius.sub(0.5), dist);
-        color.assign(mix(color.mul(float(1.0).sub(this.uVignetteIntensity)), color, vignette));
-      }
-
-      // Apply exposure
+      // Apply exposure (HDR to LDR)
       color.mulAssign(this.uExposure);
 
       // Apply saturation
       const luminance = dot(color, vec3(0.299, 0.587, 0.114));
       color.assign(mix(vec3(luminance), color, this.uSaturation));
 
-      // Apply contrast
+      // Apply contrast (around midtones)
       color.assign(color.sub(0.5).mul(this.uContrast).add(0.5));
+
+      // Apply vignette (cinematic edge darkening)
+      if (this.config.vignetteEnabled) {
+        const uvCentered = uv().sub(0.5);
+        const dist = length(uvCentered).mul(2.0);
+        // Smooth falloff from center to edges
+        const vignetteFactor = smoothstep(float(1.4), float(0.5), dist);
+        const vignetteAmount = mix(float(1.0).sub(this.uVignetteIntensity), float(1.0), vignetteFactor);
+        color.mulAssign(vignetteAmount);
+      }
 
       // Clamp to valid range
       color.assign(clamp(color, 0.0, 1.0));
@@ -198,10 +223,10 @@ export class RenderPipeline {
    */
   applyConfig(config: Partial<PostProcessingConfig>): void {
     const needsRebuild =
-      config.bloomEnabled !== undefined && config.bloomEnabled !== this.config.bloomEnabled ||
-      config.aoEnabled !== undefined && config.aoEnabled !== this.config.aoEnabled ||
-      config.fxaaEnabled !== undefined && config.fxaaEnabled !== this.config.fxaaEnabled ||
-      config.vignetteEnabled !== undefined && config.vignetteEnabled !== this.config.vignetteEnabled;
+      (config.bloomEnabled !== undefined && config.bloomEnabled !== this.config.bloomEnabled) ||
+      (config.aoEnabled !== undefined && config.aoEnabled !== this.config.aoEnabled) ||
+      (config.fxaaEnabled !== undefined && config.fxaaEnabled !== this.config.fxaaEnabled) ||
+      (config.vignetteEnabled !== undefined && config.vignetteEnabled !== this.config.vignetteEnabled);
 
     this.config = { ...this.config, ...config };
 
@@ -212,9 +237,15 @@ export class RenderPipeline {
       this.bloomPass.radius.value = this.config.bloomRadius;
     }
 
-    // Update vignette/color grading uniforms
+    // Update SSAO parameters
+    if (this.aoPass) {
+      this.aoPass.radius.value = this.config.aoRadius;
+      // Note: GTAONode uses 'scale' not 'intensity' - we control intensity via mixing uniform
+    }
+    this.uAOIntensity.value = this.config.aoIntensity;
+
+    // Update color grading uniforms
     this.uVignetteIntensity.value = this.config.vignetteIntensity;
-    this.uVignetteRadius.value = this.config.vignetteRadius;
     this.uExposure.value = this.config.exposure;
     this.uSaturation.value = this.config.saturation;
     this.uContrast.value = this.config.contrast;
