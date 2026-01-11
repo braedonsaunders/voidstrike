@@ -410,6 +410,7 @@ export function WebGPUGameCanvas() {
       let lastTime = performance.now();
 
       const animate = (currentTime: number) => {
+        const frameStart = performance.now();
         const deltaTime = currentTime - lastTime;
         const prevTime = lastTime;
         lastTime = currentTime;
@@ -479,10 +480,17 @@ export function WebGPUGameCanvas() {
         }
 
         // Render with post-processing
+        const renderStart = performance.now();
         if (renderPipelineRef.current) {
           renderPipelineRef.current.render();
         } else {
           renderer.render(scene, camera.camera);
+        }
+        const renderElapsed = performance.now() - renderStart;
+
+        const frameElapsed = performance.now() - frameStart;
+        if (frameElapsed > 50) { // Log if frame takes more than 50ms
+          console.warn(`[FRAME] Total: ${frameElapsed.toFixed(1)}ms, Render: ${renderElapsed.toFixed(1)}ms`);
         }
 
         requestAnimationFrame(animate);
