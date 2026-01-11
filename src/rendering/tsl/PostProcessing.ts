@@ -81,7 +81,7 @@ const DEFAULT_CONFIG: PostProcessingConfig = {
   vignetteIntensity: 0.25,
 
   exposure: 1.0,
-  saturation: 1.1,
+  saturation: 0.8,
   contrast: 1.05,
 };
 
@@ -105,7 +105,7 @@ export class RenderPipeline {
   private uVignetteIntensity = uniform(0.25);
   private uAOIntensity = uniform(1.0);
   private uExposure = uniform(1.0);
-  private uSaturation = uniform(1.1);
+  private uSaturation = uniform(0.8);
   private uContrast = uniform(1.05);
 
   constructor(

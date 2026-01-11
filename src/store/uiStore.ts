@@ -221,7 +221,7 @@ export const useUIStore = create<UIState>((set, get) => ({
 
     // Tone mapping & color
     toneMappingExposure: 1.0,
-    saturation: 1.1,
+    saturation: 0.8,
     contrast: 1.05,
 
     // Shadows
