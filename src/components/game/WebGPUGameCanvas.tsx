@@ -892,6 +892,11 @@ export function WebGPUGameCanvas() {
         return;
       }
 
+      console.log('[WebGPUGameCanvas] Emitting command:move', {
+        entityIds: selectedUnits,
+        target: { x: worldPos.x.toFixed(1), y: worldPos.z.toFixed(1) },
+        queue,
+      });
       game.eventBus.emit('command:move', {
         entityIds: selectedUnits,
         targetPosition: { x: worldPos.x, y: worldPos.z },
