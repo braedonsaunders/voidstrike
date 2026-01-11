@@ -229,7 +229,7 @@ export class BuildingMechanicsSystem extends System {
 
       // Refund supply if building provides supply and is complete
       if (building.isComplete() && building.supplyProvided > 0) {
-        useGameStore.getState().addMaxSupply(selectable.playerId, -building.supplyProvided);
+        useGameStore.getState().addMaxSupply(-building.supplyProvided);
       }
 
       // Refund resources
