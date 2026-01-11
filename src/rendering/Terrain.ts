@@ -689,15 +689,18 @@ export class Terrain {
         slopes.push(slope00, slope01, slope10);  // Triangle 1
         slopes.push(slope10, slope01, slope11);  // Triangle 2
 
-        // Get terrain types for each vertex (0=ground, 1=ramp, 2=unwalkable)
-        const type00 = terrainTypeNumeric[y * this.gridWidth + x];
-        const type10 = terrainTypeNumeric[y * this.gridWidth + (x + 1)];
-        const type01 = terrainTypeNumeric[(y + 1) * this.gridWidth + x];
-        const type11 = terrainTypeNumeric[(y + 1) * this.gridWidth + (x + 1)];
-
-        // Add terrain type values
-        terrainTypes.push(type00, type01, type10);  // Triangle 1
-        terrainTypes.push(type10, type01, type11);  // Triangle 2
+        // Use THIS CELL's terrain type for ALL vertices in its triangles
+        // This ensures texture matches walkability - the cell's terrain type determines both
+        // (Don't interpolate terrain types from neighboring cells - that causes mismatches)
+        let cellTerrainType = 0.0;
+        if (cell.terrain === 'unwalkable') {
+          cellTerrainType = 2.0;
+        } else if (cell.terrain === 'ramp') {
+          cellTerrainType = 1.0;
+        }
+        // All 6 vertices of this cell's triangles get the same terrain type
+        terrainTypes.push(cellTerrainType, cellTerrainType, cellTerrainType);  // Triangle 1
+        terrainTypes.push(cellTerrainType, cellTerrainType, cellTerrainType);  // Triangle 2
 
         // Add colors
         for (let i = 0; i < 6; i++) {
