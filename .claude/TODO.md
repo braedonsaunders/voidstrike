@@ -424,6 +424,17 @@
 
 ## Phase 4: Remaining Dominion Polish (IN PROGRESS)
 
+### Fortification System (January 2026) ✓
+- [x] **Wall building definitions** - Wall segment (1x1, 25 minerals), Wall gate (2x1, 75 minerals)
+- [x] **Wall component** - Connections, gate state machine, turret mounting, upgrades
+- [x] **WallSystem** - Auto-connecting walls, gate mechanics, shield regen, repair drones
+- [x] **Line placement mode** - Click+drag to draw wall lines (horizontal, vertical, diagonal)
+- [x] **WallPlacementPreview** - Real-time preview with cost display, valid/invalid highlighting
+- [x] **Gate mechanics** - Open/Close/Auto/Lock states, auto-opens for friendly units
+- [x] **Wall upgrades** - Reinforced (+400 HP), Shielded (+200 shield), Weapon (auto-turret), Repair Drone
+- [x] **Turret mounting** - Defense Turrets can mount on wall segments for +1 range
+- [x] **CommandCard integration** - Build Walls menu (W), gate commands (O/L/A), upgrade buttons
+
 ### Missing Abilities
 - [ ] Auto Turret (Raven)
 - [ ] Interference Matrix (Raven)

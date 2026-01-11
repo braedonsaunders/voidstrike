@@ -280,6 +280,72 @@ The Dominion faction uses StarCraft 2 Terran-style construction where workers (F
 - Resources are fully refunded for cancelled blueprints
 - Once construction starts (`constructing` or `paused`), the building persists
 
+## Fortification System
+
+### Wall Buildings
+
+| Building | Size | Cost | HP | Armor | Description |
+|----------|------|------|-----|-------|-------------|
+| **Wall Segment** | 1×1 | 25 minerals | 400 | 1 | Basic wall, connects to neighbors, can mount turrets |
+| **Wall Gate** | 2×1 | 75 minerals | 500 | 2 | Entrance gate, opens for friendly units |
+
+### Wall Line Placement
+
+Walls use a special **click+drag placement mode**:
+1. Select a worker and choose "Build Walls" (W)
+2. Select wall type (Wall Segment or Gate)
+3. **Click** to start wall line
+4. **Drag** to preview wall path (snaps to straight lines)
+5. **Release** to place all wall segments
+6. Workers are automatically assigned round-robin
+
+**Path Snapping:**
+- Walls draw in straight lines only (horizontal, vertical, or 45° diagonal)
+- Real-time cost display during drag
+- Invalid positions shown in red
+
+### Gate Mechanics
+
+| State | Behavior |
+|-------|----------|
+| **Open** | Allows all units to pass |
+| **Closed** | Blocks all units |
+| **Auto** (default) | Opens for friendly units, closes after 2 seconds |
+| **Locked** | Permanently closed until unlocked |
+
+**Gate Commands:**
+- `O` - Toggle Open/Close
+- `L` - Lock/Unlock
+- `A` - Set to Auto mode
+
+### Wall Connections
+
+Walls automatically connect to adjacent walls:
+- Single segment: `■`
+- Horizontal: `═══`
+- Vertical: `║`
+- Corners: `╔ ╗ ╚ ╝`
+- T-junctions: `╦ ╩ ╠ ╣`
+- Cross: `╬`
+
+### Wall Upgrades
+
+Upgrades are researched at Arsenal/Tech Center, then applied per-segment:
+
+| Upgrade | Research Cost | Apply Cost | Effect |
+|---------|---------------|------------|--------|
+| **Reinforced Plating** | 100/100 | 25/0 | +400 HP, +2 armor |
+| **Shield Generator** | 150/150 | 50/25 | +200 regenerating shield |
+| **Integrated Weapons** | 100/100 | 40/25 | Adds auto-turret (5 dmg, 6 range) |
+| **Repair Drone** | 75/75 | 30/15 | Auto-heals adjacent walls |
+
+### Turret Mounting
+
+- Defense Turrets can be placed **on top of** wall segments
+- Mounted turrets gain +1 range and high-ground advantage
+- Wall with mounted turret cannot be upgraded to Weapon Wall
+- If wall is destroyed, mounted turret is also destroyed
+
 ## Performance Targets
 
 - 60 FPS with 200 units on screen

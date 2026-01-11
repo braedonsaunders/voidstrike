@@ -7,7 +7,9 @@ import { Health } from '../components/Health';
 import { Selectable } from '../components/Selectable';
 import { Unit } from '../components/Unit';
 import { Resource } from '../components/Resource';
+import { Wall } from '../components/Wall';
 import { BUILDING_DEFINITIONS } from '@/data/buildings/dominion';
+import { WALL_DEFINITIONS } from '@/data/buildings/walls';
 import { useGameStore } from '@/store/gameStore';
 import { isLocalPlayer, getLocalPlayerId } from '@/store/gameSetupStore';
 import { debugBuildingPlacement } from '@/utils/debugLogger';
@@ -38,6 +40,9 @@ export class BuildingPlacementSystem extends System {
     // Handle building placement from UI
     this.game.eventBus.on('building:place', this.handleBuildingPlace.bind(this));
 
+    // Handle wall line placement
+    this.game.eventBus.on('wall:place_line', this.handleWallLinePlacement.bind(this));
+
     // Handle instant building completion (for testing/cheats)
     this.game.eventBus.on('building:complete:instant', this.handleInstantComplete.bind(this));
 
@@ -46,6 +51,114 @@ export class BuildingPlacementSystem extends System {
 
     // Handle worker resuming construction on a paused/in-progress building (SC2-style)
     this.game.eventBus.on('command:resume_construction', this.handleResumeConstruction.bind(this));
+  }
+
+  /**
+   * Handle wall line placement - places multiple wall segments at once
+   */
+  private handleWallLinePlacement(data: {
+    positions: Array<{ x: number; y: number; valid: boolean }>;
+    buildingType: string;
+    playerId?: string;
+  }): void {
+    const { positions, buildingType, playerId = getLocalPlayerId() ?? 'player1' } = data;
+    const definition = WALL_DEFINITIONS[buildingType] || BUILDING_DEFINITIONS[buildingType];
+
+    if (!definition) {
+      debugBuildingPlacement.warn(`BuildingPlacementSystem: Unknown wall type: ${buildingType}`);
+      return;
+    }
+
+    // Filter to valid positions only
+    const validPositions = positions.filter(p => p.valid);
+    if (validPositions.length === 0) {
+      this.game.eventBus.emit('ui:error', { message: 'No valid wall positions', playerId });
+      return;
+    }
+
+    // Calculate total cost
+    const totalCost = {
+      minerals: definition.mineralCost * validPositions.length,
+      vespene: definition.vespeneCost * validPositions.length,
+    };
+
+    const store = useGameStore.getState();
+    const isPlayerLocal = isLocalPlayer(playerId);
+
+    // Check resources
+    if (isPlayerLocal) {
+      if (store.minerals < totalCost.minerals || store.vespene < totalCost.vespene) {
+        this.game.eventBus.emit('ui:error', { message: 'Not enough resources for wall line', playerId });
+        return;
+      }
+    }
+
+    // Find workers for construction
+    const availableWorkers: Entity[] = [];
+    const workers = this.world.getEntitiesWith('Unit', 'Selectable', 'Transform', 'Health');
+    for (const entity of workers) {
+      const unit = entity.get<Unit>('Unit')!;
+      const selectable = entity.get<Selectable>('Selectable')!;
+      const health = entity.get<Health>('Health')!;
+
+      if (unit.isWorker && selectable.playerId === playerId && !health.isDead()) {
+        if (unit.state === 'idle' || unit.state === 'gathering' || unit.state === 'moving') {
+          availableWorkers.push(entity);
+        }
+      }
+    }
+
+    if (availableWorkers.length === 0) {
+      this.game.eventBus.emit('ui:error', { message: 'No workers available', playerId });
+      return;
+    }
+
+    // Deduct resources
+    if (isPlayerLocal) {
+      store.addResources(-totalCost.minerals, -totalCost.vespene);
+    }
+
+    // Place wall segments and assign workers round-robin
+    let workerIndex = 0;
+    const placedWalls: number[] = [];
+
+    for (const pos of validPositions) {
+      // Create wall entity
+      const wallEntity = this.world.createEntity();
+      const health = new Health(definition.maxHealth, definition.armor, 'structure');
+      health.current = definition.maxHealth * 0.1; // Start at 10% health
+
+      const building = new Building(definition);
+      const isGate = 'isGate' in definition && definition.isGate;
+      const canMount = 'canMountTurret' in definition ? definition.canMountTurret : true;
+      const wall = new Wall(isGate as boolean, canMount as boolean);
+
+      wallEntity
+        .add(new Transform(pos.x, pos.y, 0))
+        .add(building)
+        .add(health)
+        .add(wall)
+        .add(new Selectable(0.8, 10, playerId));
+
+      placedWalls.push(wallEntity.id);
+
+      // Assign a worker (round-robin)
+      const worker = availableWorkers[workerIndex % availableWorkers.length];
+      const workerUnit = worker.get<Unit>('Unit')!;
+      workerUnit.startBuilding(buildingType, pos.x, pos.y);
+      workerUnit.constructingBuildingId = wallEntity.id;
+
+      // Emit placement event
+      this.game.eventBus.emit('wall:placed', {
+        entityId: wallEntity.id,
+        position: { x: pos.x, y: pos.y },
+        playerId,
+      });
+
+      workerIndex++;
+    }
+
+    debugBuildingPlacement.log(`BuildingPlacementSystem: Placed ${placedWalls.length} wall segments, assigned ${Math.min(availableWorkers.length, validPositions.length)} workers`);
   }
 
   /**
