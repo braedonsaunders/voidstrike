@@ -67,6 +67,22 @@ export class PathfindingSystem extends System {
   }
 
   /**
+   * Reinitialize pathfinding grids with new dimensions.
+   * Call this when map dimensions change.
+   */
+  public reinitialize(mapWidth: number, mapHeight: number): void {
+    this.mapWidth = mapWidth;
+    this.mapHeight = mapHeight;
+    this.pathfinder = new AStar(mapWidth, mapHeight, 1);
+    this.hierarchicalPathfinder = new HierarchicalAStar(mapWidth, mapHeight, 1);
+    this.blockedCells.clear();
+    this.cellsChangedThisTick.clear();
+    this.pendingRequests = [];
+    this.unitPathStates.clear();
+    debugPathfinding.log(`[PathfindingSystem] Reinitialized with dimensions ${mapWidth}x${mapHeight}`);
+  }
+
+  /**
    * Load terrain walkability into the pathfinding grid.
    * Uses TERRAIN_FEATURE_CONFIG to properly determine walkability and movement costs.
    * Adds buffer zones around unwalkable terrain to prevent units getting stuck on edges.
