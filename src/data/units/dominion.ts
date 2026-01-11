@@ -13,6 +13,8 @@ const DEVASTATOR_MODES: TransformMode[] = [
     sightRange: 11,
     canMove: true,
     transformTime: 2,
+    canAttackGround: true,
+    canAttackAir: false, // Artillery - cannot target air
   },
   {
     id: 'siege',
@@ -25,6 +27,8 @@ const DEVASTATOR_MODES: TransformMode[] = [
     sightRange: 11,
     canMove: false,
     transformTime: 2,
+    canAttackGround: true,
+    canAttackAir: false, // Artillery - cannot target air
   },
 ];
 
@@ -41,6 +45,8 @@ const SCORCHER_MODES: TransformMode[] = [
     sightRange: 10,
     canMove: true,
     transformTime: 2,
+    canAttackGround: true,
+    canAttackAir: false, // Flamethrower - cannot target air
   },
   {
     id: 'inferno',
@@ -53,6 +59,8 @@ const SCORCHER_MODES: TransformMode[] = [
     sightRange: 10,
     canMove: true,
     transformTime: 2,
+    canAttackGround: true,
+    canAttackAir: false, // Flamethrower - cannot target air
   },
 ];
 
@@ -69,6 +77,8 @@ const VALKYRIE_MODES: TransformMode[] = [
     isFlying: true,
     canMove: true,
     transformTime: 2.25,
+    canAttackGround: false, // Air superiority fighter - air only
+    canAttackAir: true,
   },
   {
     id: 'assault',
@@ -81,6 +91,8 @@ const VALKYRIE_MODES: TransformMode[] = [
     isFlying: false,
     canMove: true,
     transformTime: 2.25,
+    canAttackGround: true, // Ground assault mode - can attack both
+    canAttackAir: true,
   },
 ];
 
@@ -105,12 +117,14 @@ export const UNIT_DEFINITIONS: Record<string, UnitDefinition> = {
     isWorker: true,
     isMechanical: true,
     canRepair: true,
+    canAttackGround: true,
+    canAttackAir: false, // Melee worker - ground only
   },
 
   trooper: {
     id: 'trooper',
     name: 'Trooper',
-    description: 'Basic infantry unit. Cheap and effective in large numbers.',
+    description: 'Basic infantry unit. Cheap and effective in large numbers. Attacks ground and air.',
     faction: 'dominion',
     mineralCost: 50,
     vespeneCost: 0,
@@ -126,12 +140,14 @@ export const UNIT_DEFINITIONS: Record<string, UnitDefinition> = {
     armor: 0,
     abilities: ['stim_pack'],
     isBiological: true,
+    canAttackGround: true,
+    canAttackAir: true, // Rifle infantry - can shoot air
   },
 
   breacher: {
     id: 'breacher',
     name: 'Breacher',
-    description: 'Heavy armored infantry. Effective against armored units.',
+    description: 'Heavy armored infantry. Effective against armored units. Attacks ground and air.',
     faction: 'dominion',
     mineralCost: 100,
     vespeneCost: 25,
@@ -147,12 +163,14 @@ export const UNIT_DEFINITIONS: Record<string, UnitDefinition> = {
     armor: 1,
     abilities: ['stim_pack', 'concussive_shells'],
     isBiological: true,
+    canAttackGround: true,
+    canAttackAir: true, // Heavy rifle - can shoot air
   },
 
   vanguard: {
     id: 'vanguard',
     name: 'Vanguard',
-    description: 'Fast assault infantry with jetpacks and grenades.',
+    description: 'Fast assault infantry with jetpacks and grenades. Attacks ground and air.',
     faction: 'dominion',
     mineralCost: 50,
     vespeneCost: 50,
@@ -168,12 +186,14 @@ export const UNIT_DEFINITIONS: Record<string, UnitDefinition> = {
     armor: 0,
     abilities: ['jet_pack', 'grenade'],
     isBiological: true,
+    canAttackGround: true,
+    canAttackAir: true, // Jetpack infantry - can engage air
   },
 
   operative: {
     id: 'operative',
     name: 'Operative',
-    description: 'Elite stealth unit. Can cloak, snipe, and call nuclear strikes.',
+    description: 'Elite stealth unit. Can cloak, snipe, and call nuclear strikes. Attacks ground and air.',
     faction: 'dominion',
     mineralCost: 150,
     vespeneCost: 125,
@@ -191,12 +211,14 @@ export const UNIT_DEFINITIONS: Record<string, UnitDefinition> = {
     isBiological: true,
     canCloak: true,
     cloakEnergyCost: 1,
+    canAttackGround: true,
+    canAttackAir: true, // Sniper rifle - can target air
   },
 
   scorcher: {
     id: 'scorcher',
     name: 'Scorcher',
-    description: 'Fast attack vehicle with flame weapons. Transforms into Inferno.',
+    description: 'Fast attack vehicle with flame weapons. Transforms into Inferno. Ground only.',
     faction: 'dominion',
     mineralCost: 100,
     vespeneCost: 0,
@@ -216,12 +238,14 @@ export const UNIT_DEFINITIONS: Record<string, UnitDefinition> = {
     canTransform: true,
     transformModes: SCORCHER_MODES,
     defaultMode: 'scorcher',
+    canAttackGround: true,
+    canAttackAir: false, // Flamethrower - cannot target air
   },
 
   devastator: {
     id: 'devastator',
     name: 'Devastator',
-    description: 'Heavy siege tank. Transforms into siege mode for long-range artillery.',
+    description: 'Heavy siege tank. Transforms into siege mode for long-range artillery. Ground only.',
     faction: 'dominion',
     mineralCost: 150,
     vespeneCost: 125,
@@ -241,12 +265,14 @@ export const UNIT_DEFINITIONS: Record<string, UnitDefinition> = {
     canTransform: true,
     transformModes: DEVASTATOR_MODES,
     defaultMode: 'tank',
+    canAttackGround: true,
+    canAttackAir: false, // Artillery - cannot target air
   },
 
   colossus: {
     id: 'colossus',
     name: 'Colossus',
-    description: 'Massive walker mech. Devastating heavy firepower.',
+    description: 'Massive walker mech. Devastating heavy firepower. Attacks ground and air.',
     faction: 'dominion',
     mineralCost: 300,
     vespeneCost: 200,
@@ -262,12 +288,14 @@ export const UNIT_DEFINITIONS: Record<string, UnitDefinition> = {
     armor: 2,
     abilities: ['high_impact_payload'],
     isMechanical: true,
+    canAttackGround: true,
+    canAttackAir: true, // Heavy weapons platform - can target both
   },
 
   lifter: {
     id: 'lifter',
     name: 'Lifter',
-    description: 'Flying transport and medical support. Heals nearby units.',
+    description: 'Flying transport and medical support. Heals nearby units. No attack.',
     faction: 'dominion',
     mineralCost: 100,
     vespeneCost: 100,
@@ -290,12 +318,14 @@ export const UNIT_DEFINITIONS: Record<string, UnitDefinition> = {
     healRange: 4,
     healRate: 12.6,
     healEnergyCost: 1,
+    canAttackGround: false, // Support unit - no attack
+    canAttackAir: false,
   },
 
   valkyrie: {
     id: 'valkyrie',
     name: 'Valkyrie',
-    description: 'Transforming fighter. Switches between air and ground modes.',
+    description: 'Transforming fighter. Fighter mode: air only. Assault mode: ground and air.',
     faction: 'dominion',
     mineralCost: 150,
     vespeneCost: 75,
@@ -315,12 +345,14 @@ export const UNIT_DEFINITIONS: Record<string, UnitDefinition> = {
     canTransform: true,
     transformModes: VALKYRIE_MODES,
     defaultMode: 'fighter',
+    canAttackGround: false, // Fighter mode starts air-only
+    canAttackAir: true,
   },
 
   specter: {
     id: 'specter',
     name: 'Specter',
-    description: 'Cloakable strike fighter. Stealthy air superiority.',
+    description: 'Cloakable strike fighter. Stealthy air superiority. Attacks ground and air.',
     faction: 'dominion',
     mineralCost: 150,
     vespeneCost: 100,
@@ -339,12 +371,14 @@ export const UNIT_DEFINITIONS: Record<string, UnitDefinition> = {
     isMechanical: true,
     canCloak: true,
     cloakEnergyCost: 1,
+    canAttackGround: true,
+    canAttackAir: true, // Strike fighter - can target both
   },
 
   dreadnought: {
     id: 'dreadnought',
     name: 'Dreadnought',
-    description: 'Capital ship with heavy armor. Nova Cannon devastates areas.',
+    description: 'Capital ship with heavy armor. Nova Cannon devastates areas. Attacks ground and air.',
     faction: 'dominion',
     mineralCost: 400,
     vespeneCost: 300,
@@ -361,13 +395,15 @@ export const UNIT_DEFINITIONS: Record<string, UnitDefinition> = {
     abilities: ['nova_cannon', 'warp_jump'],
     isFlying: true,
     isMechanical: true,
+    canAttackGround: true,
+    canAttackAir: true, // Capital ship - can target both
   },
 
   // Detector unit - Overseer
   overseer: {
     id: 'overseer',
     name: 'Overseer',
-    description: 'Support craft with detection. Reveals cloaked and burrowed units.',
+    description: 'Support craft with detection. Reveals cloaked and burrowed units. No attack.',
     faction: 'dominion',
     mineralCost: 100,
     vespeneCost: 200,
@@ -386,6 +422,8 @@ export const UNIT_DEFINITIONS: Record<string, UnitDefinition> = {
     isMechanical: true,
     isDetector: true,
     detectionRange: 11,
+    canAttackGround: false, // Detector - no attack
+    canAttackAir: false,
   },
 };
 

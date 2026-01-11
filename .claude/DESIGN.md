@@ -129,6 +129,23 @@ Target scoring also considers:
 - **Distance** - Closer enemies are prioritized
 - **Health** - Damaged enemies are prioritized
 
+### Attack Targeting Types
+Units have restrictions on what they can attack based on air/ground targeting:
+
+| Target Type | Can Attack Ground | Can Attack Air | Example Units |
+|-------------|-------------------|----------------|---------------|
+| **Ground & Air** | ✅ | ✅ | Trooper, Breacher, Colossus, Specter, Dreadnought |
+| **Ground Only** | ✅ | ❌ | Fabricator, Scorcher, Devastator |
+| **Air Only** | ❌ | ✅ | Valkyrie (Fighter Mode) |
+| **No Attack** | ❌ | ❌ | Lifter, Overseer |
+
+**Transform Mode Targeting**: Some units change targeting when transforming:
+- **Valkyrie Fighter Mode**: Air only (anti-air specialist)
+- **Valkyrie Assault Mode**: Ground & Air (versatile)
+- **Devastator/Scorcher**: Ground only in all modes (artillery/flamethrower)
+
+**AI Counter-Building**: When AI units are attacked by enemies they cannot hit (e.g., air units attacking ground-only troops), the AI urgently prioritizes building anti-air capable units.
+
 ### Damage Types
 - **Normal** - Standard damage
 - **Explosive** - Bonus vs large, reduced vs small

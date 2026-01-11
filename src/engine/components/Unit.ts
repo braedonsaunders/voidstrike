@@ -16,6 +16,9 @@ export interface TransformMode {
   isFlying?: boolean;
   canMove: boolean;
   transformTime: number; // seconds to transform
+  // Targeting restrictions - which types of units this mode can attack
+  canAttackGround?: boolean; // Can attack ground units/buildings (default: true if has damage)
+  canAttackAir?: boolean; // Can attack flying units (default: false)
 }
 
 export interface UnitDefinition {
@@ -62,6 +65,9 @@ export interface UnitDefinition {
   // Biological flag (for abilities like Snipe)
   isBiological?: boolean;
   isMechanical?: boolean;
+  // Targeting restrictions - which types of units this unit can attack
+  canAttackGround?: boolean; // Can attack ground units/buildings (default: true if has damage)
+  canAttackAir?: boolean; // Can attack flying units (default: false)
 }
 
 // Command queue entry for shift-click queuing
@@ -128,6 +134,10 @@ export class Unit extends Component {
   public isHoldingPosition: boolean;
   public isBiological: boolean;
   public isMechanical: boolean;
+
+  // Targeting restrictions - which types of units this unit can attack
+  public canAttackGround: boolean;
+  public canAttackAir: boolean;
 
   // Collision radius for avoidance
   public collisionRadius: number;
@@ -217,6 +227,11 @@ export class Unit extends Component {
     this.isHoldingPosition = false;
     this.isBiological = definition.isBiological ?? !definition.isMechanical;
     this.isMechanical = definition.isMechanical ?? false;
+
+    // Targeting restrictions - default: can attack ground if has damage, can't attack air by default
+    const hasDamage = definition.attackDamage > 0;
+    this.canAttackGround = definition.canAttackGround ?? hasDamage;
+    this.canAttackAir = definition.canAttackAir ?? false;
 
     // Collision radius based on unit type
     this.collisionRadius = definition.isFlying ? 0.3 : 0.5;
@@ -326,6 +341,18 @@ export class Unit extends Component {
   public canAttack(gameTime: number): boolean {
     const timeSinceLastAttack = gameTime - this.lastAttackTime;
     return timeSinceLastAttack >= 1 / this.attackSpeed;
+  }
+
+  /**
+   * Check if this unit can attack a target based on air/ground restrictions
+   * @param targetIsFlying Whether the target is a flying unit
+   * @returns True if this unit can attack the target type
+   */
+  public canAttackTarget(targetIsFlying: boolean): boolean {
+    if (targetIsFlying) {
+      return this.canAttackAir;
+    }
+    return this.canAttackGround;
   }
 
   // Queue a command (for shift-click)
@@ -479,6 +506,11 @@ export class Unit extends Component {
     this.splashRadius = mode.splashRadius ?? 0;
     this.sightRange = mode.sightRange;
     this.isFlying = mode.isFlying ?? false;
+
+    // Apply targeting restrictions from mode (default: can attack ground if has damage)
+    const hasDamage = mode.attackDamage > 0;
+    this.canAttackGround = mode.canAttackGround ?? hasDamage;
+    this.canAttackAir = mode.canAttackAir ?? false;
 
     // Reset transform state
     this.transformTargetMode = null;
