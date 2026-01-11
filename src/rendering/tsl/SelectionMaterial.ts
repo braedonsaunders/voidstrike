@@ -21,7 +21,7 @@ import {
   Fn,
   sin,
   cos,
-  atan2,
+  atan,
   length,
   smoothstep,
   mix,
@@ -78,7 +78,7 @@ export function createSelectionRingMaterial(config: SelectionRingConfig): MeshBa
 
     // Rotating shimmer effect
     const uvCentered = uv().sub(0.5);
-    const angle = atan2(uvCentered.y, uvCentered.x);
+    const angle = atan(uvCentered.y, uvCentered.x);
     const shimmer = float(0.9).add(sin(angle.mul(8.0).add(uTime.mul(2.0))).mul(0.1));
 
     // Glow falloff for glow ring
