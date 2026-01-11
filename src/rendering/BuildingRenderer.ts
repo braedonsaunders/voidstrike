@@ -241,7 +241,7 @@ export class BuildingRenderer {
 
   /**
    * Check if a building can use instanced rendering.
-   * Requirements: completed, not selected, not damaged (<100% health), visible
+   * Requirements: completed, not selected, not damaged (<100% health), visible, not flying
    */
   private canUseInstancing(building: Building, health: Health | undefined, selectable: Selectable | undefined): boolean {
     if (!building.isComplete()) return false;
@@ -249,6 +249,8 @@ export class BuildingRenderer {
     if (health && health.getHealthPercent() < 1) return false;
     // Buildings with production queue shouldn't use instancing (need progress bar)
     if (building.productionQueue.length > 0) return false;
+    // Flying buildings need individual rendering for height offset
+    if (building.isFlying || building.state === 'lifting' || building.state === 'landing') return false;
     return true;
   }
 
@@ -449,15 +451,29 @@ export class BuildingRenderer {
       // Get terrain height at this position - use safe method with fallback
       const terrainHeight = this.getTerrainHeightAt(transform.x, transform.y);
 
-      // Update position - place building on top of terrain
-      meshData.group.position.set(transform.x, terrainHeight, transform.y);
+      // Calculate flying height offset based on building state
+      let flyingOffset = 0;
+      const FLYING_HEIGHT = 8; // Height when fully flying
+      if (building.state === 'lifting') {
+        flyingOffset = FLYING_HEIGHT * building.liftProgress;
+      } else if (building.state === 'flying') {
+        flyingOffset = FLYING_HEIGHT;
+      } else if (building.state === 'landing') {
+        flyingOffset = FLYING_HEIGHT * building.liftProgress;
+      }
+
+      // Update position - place building on top of terrain (with flying offset)
+      meshData.group.position.set(transform.x, terrainHeight + flyingOffset, transform.y);
 
       // Construction animation based on building state
       // States: 'waiting_for_worker', 'constructing', 'paused', 'complete', 'lifting', 'flying', 'landing', 'destroyed'
       const isConstructing = building.state === 'constructing';
       const isWaitingForWorker = building.state === 'waiting_for_worker';
       const isPaused = building.state === 'paused';
-      // Only truly complete states should show full opacity building (not paused construction)
+      const isLifting = building.state === 'lifting';
+      const isFlying = building.state === 'flying';
+      const isLanding = building.state === 'landing';
+      // Complete, lifting, flying, and landing states should show full opacity building
       const shouldShowComplete = !isConstructing && !isWaitingForWorker && !isPaused;
 
       if (shouldShowComplete) {

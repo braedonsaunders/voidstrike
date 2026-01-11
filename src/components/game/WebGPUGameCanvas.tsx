@@ -131,7 +131,7 @@ export function WebGPUGameCanvas() {
   const DOUBLE_CLICK_TIME = 400;
   const DOUBLE_CLICK_DIST = 10;
 
-  const { isBuilding, buildingType, buildingPlacementQueue, isSettingRallyPoint, isRepairMode, abilityTargetMode } = useGameStore();
+  const { isBuilding, buildingType, buildingPlacementQueue, isSettingRallyPoint, isRepairMode, isLandingMode, landingBuildingId, abilityTargetMode } = useGameStore();
 
   // Initialize both Three.js (WebGPU) and Phaser
   useEffect(() => {
@@ -654,7 +654,7 @@ export function WebGPUGameCanvas() {
     } else if (e.button === 2) {
       handleRightClick(e);
     }
-  }, [isBuilding, buildingType, isAttackMove, isPatrolMode, isSettingRallyPoint, isRepairMode, abilityTargetMode]);
+  }, [isBuilding, buildingType, isAttackMove, isPatrolMode, isSettingRallyPoint, isRepairMode, isLandingMode, landingBuildingId, abilityTargetMode]);
 
   const handleRightClick = (e: React.MouseEvent) => {
     if (isAttackMove) {
@@ -708,6 +708,16 @@ export function WebGPUGameCanvas() {
       }
       // Clicked on invalid target - cancel repair mode
       useGameStore.getState().setRepairMode(false);
+      return;
+    }
+
+    // Handle landing mode - right-click to land flying building
+    if (isLandingMode && landingBuildingId) {
+      game.eventBus.emit('command:land', {
+        buildingId: landingBuildingId,
+        position: { x: worldPos.x, y: worldPos.z },
+      });
+      useGameStore.getState().setLandingMode(false);
       return;
     }
 
@@ -901,10 +911,31 @@ export function WebGPUGameCanvas() {
           if (isAttackMove) setIsAttackMove(false);
           else if (isPatrolMode) setIsPatrolMode(false);
           else if (isRepairMode) useGameStore.getState().setRepairMode(false);
+          else if (isLandingMode) useGameStore.getState().setLandingMode(false);
           else if (isSettingRallyPoint) useGameStore.getState().setRallyPointMode(false);
           else if (abilityTargetMode) useGameStore.getState().setAbilityTargetMode(null);
           else if (isBuilding) useGameStore.getState().setBuildingMode(null);
           else game.eventBus.emit('selection:clear');
+          break;
+        case 'l':
+          {
+            const store = useGameStore.getState();
+            if (store.selectedUnits.length > 0) {
+              const firstEntity = game.world.getEntity(store.selectedUnits[0]);
+              const building = firstEntity?.get<Building>('Building');
+              if (building?.canLiftOff) {
+                if (building.isFlying && building.state === 'flying') {
+                  // Land - enter landing mode
+                  store.setLandingMode(true, store.selectedUnits[0]);
+                } else if (building.state === 'complete' && !building.isFlying && building.productionQueue.length === 0) {
+                  // Lift off
+                  game.eventBus.emit('command:liftOff', {
+                    buildingId: store.selectedUnits[0],
+                  });
+                }
+              }
+            }
+          }
           break;
         case 'r':
           {
@@ -1000,7 +1031,7 @@ export function WebGPUGameCanvas() {
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [isBuilding, isAttackMove, isPatrolMode, isRepairMode, isSettingRallyPoint, abilityTargetMode]);
+  }, [isBuilding, isAttackMove, isPatrolMode, isRepairMode, isLandingMode, isSettingRallyPoint, abilityTargetMode]);
 
   // Subscribe to overlay settings changes
   useEffect(() => {
@@ -1137,6 +1168,14 @@ export function WebGPUGameCanvas() {
         <div className="absolute top-4 left-1/2 transform -translate-x-1/2 bg-black/80 px-4 py-2 rounded border border-purple-600 z-20">
           <span className="text-purple-400">
             Select Target - Click location, ESC to cancel
+          </span>
+        </div>
+      )}
+
+      {isLandingMode && (
+        <div className="absolute top-4 left-1/2 transform -translate-x-1/2 bg-black/80 px-4 py-2 rounded border border-blue-600 z-20">
+          <span className="text-blue-400">
+            Landing Mode - Right-click to select landing location, ESC to cancel
           </span>
         </div>
       )}

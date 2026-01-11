@@ -28,6 +28,8 @@ const COMMAND_ICONS: Record<string, string> = {
   build_advanced: '🏭',
   cancel: '✕',
   back: '◀',
+  liftoff: '🚀',
+  land: '🛬',
   // Units
   fabricator: '🔧',
   trooper: '🎖',
@@ -493,6 +495,38 @@ export function CommandCard() {
             useGameStore.getState().setRallyPointMode(true);
           },
           tooltip: 'Set rally point for new units',
+        });
+      }
+
+      // Lift-off button for buildings that can fly (and are complete, not flying)
+      if (building.canLiftOff && building.state === 'complete' && !building.isFlying) {
+        const hasQueue = building.productionQueue.length > 0;
+        buttons.push({
+          id: 'liftoff',
+          label: 'Lift Off',
+          shortcut: 'L',
+          action: () => {
+            if (!hasQueue) {
+              game.eventBus.emit('command:liftOff', {
+                buildingId: selectedUnits[0],
+              });
+            }
+          },
+          isDisabled: hasQueue,
+          tooltip: hasQueue ? 'Cannot lift off while producing' : 'Lift off to relocate building',
+        });
+      }
+
+      // Land button for flying buildings
+      if (building.canLiftOff && building.isFlying && building.state === 'flying') {
+        buttons.push({
+          id: 'land',
+          label: 'Land',
+          shortcut: 'L',
+          action: () => {
+            useGameStore.getState().setLandingMode(true, selectedUnits[0]);
+          },
+          tooltip: 'Click to choose landing location',
         });
       }
 

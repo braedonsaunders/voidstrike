@@ -132,7 +132,7 @@ export function HUD() {
                     </span>
                   </button>
                   {showOverlayMenu && (
-                    <div className="absolute left-full top-0 ml-1 bg-void-900 border border-void-700 rounded shadow-lg z-50 min-w-[180px]">
+                    <div className="absolute right-full top-0 mr-1 bg-void-900 border border-void-700 rounded shadow-lg z-50 min-w-[180px]">
                       <button
                         onClick={() => {
                           toggleOverlay('terrain');
