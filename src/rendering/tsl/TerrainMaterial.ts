@@ -233,31 +233,38 @@ export class TSLTerrainMaterial {
       // Unwalkable: rock + cliff ONLY if steep, grass if flat (obstacles)
 
       // RAMP MASK - used to completely zero out non-grass textures on ramps
+      // Use terrain type DIRECTLY - don't rely on slope for ramps/unwalkable overrides
       const notRamp = float(1.0).sub(isRamp);
 
-      // Grass on walkable ground, ramps, AND flat unwalkable areas
-      const flatUnwalkable = isUnwalkable.mul(float(1.0).sub(isSteep));
-      const baseGrass = baseGrassWeight.mul(isGround.add(flatUnwalkable)).mul(float(1.0).sub(isSteep));
-      // RAMPS: Override with very strong grass weight (10x to dominate normalization)
-      // FLAT UNWALKABLE: Also gets strong grass weight to prevent cliff bleeding at boundaries
-      const grassWeight = baseGrass
-        .add(isRamp.mul(float(10.0)))
-        .add(flatUnwalkable.mul(float(10.0)));  // Flat unwalkable also gets strong grass
+      // Flat unwalkable: unwalkable terrain that ISN'T steep cliffs
+      // BUT: boundary cells can have high slope from elevation differences
+      // So we use a MORE AGGRESSIVE isSteep threshold for unwalkable override
+      const isVerysteepForCliff = smoothstep(float(0.5), float(0.8), slope);  // Only very steep gets cliff
+      const flatUnwalkable = isUnwalkable.mul(float(1.0).sub(isVerysteepForCliff));
 
-      // Dirt - ONLY on non-ramp, non-flat-unwalkable terrain
+      // Base grass from slope (for ground terrain)
+      const baseGrass = baseGrassWeight.mul(isGround).mul(float(1.0).sub(isSteep));
+
+      // RAMPS and FLAT UNWALKABLE: Override with very strong grass weight (10x)
+      // These should ALWAYS be grass texture regardless of slope
+      const grassWeight = baseGrass
+        .add(isRamp.mul(float(10.0)))           // Ramps get 10x grass
+        .add(flatUnwalkable.mul(float(10.0)));  // Flat unwalkable also gets 10x grass
+
+      // Dirt - ONLY on ground terrain that's somewhat steep
       const notFlatUnwalkable = float(1.0).sub(flatUnwalkable);
       const dirtWeight = baseDirtWeight.mul(isGround).mul(notRamp).mul(notFlatUnwalkable)
-        .add(isSteep.mul(notRamp).mul(notFlatUnwalkable).mul(float(0.2)));
+        .add(isSteep.mul(isGround).mul(float(0.2)));  // Only add steep dirt to GROUND
 
       // Rock - ONLY on non-ramp, non-flat-unwalkable terrain
-      const steepUnwalkableRock = isUnwalkable.mul(isSteep).mul(float(0.8)).mul(notRamp);
+      const steepUnwalkableRock = isUnwalkable.mul(isVerysteepForCliff).mul(float(0.8));  // Only VERY steep unwalkable gets rock
       const rockWeight = baseRockWeight.mul(notRamp).mul(notFlatUnwalkable)
         .add(steepUnwalkableRock)
-        .add(isSteep.mul(notRamp).mul(notFlatUnwalkable).mul(float(0.3)));
+        .add(isSteep.mul(isGround).mul(float(0.3)));  // Only steep GROUND gets rock
 
-      // Cliff - ONLY on STEEP unwalkable terrain (actual cliff faces)
-      const cliffWeight = baseCliffWeight.mul(isUnwalkable).mul(isSteep).mul(notRamp)
-        .add(isUnwalkable.mul(isVerySteep).mul(float(1.5)).mul(notRamp));
+      // Cliff - ONLY on VERY STEEP unwalkable terrain (actual cliff faces)
+      const cliffWeight = baseCliffWeight.mul(isUnwalkable).mul(isVerysteepForCliff)
+        .add(isUnwalkable.mul(isVerySteep).mul(float(1.5)));
 
       // SAFETY: Guarantee minimum total weight to prevent black areas
       // But DON'T add fallback rock to ramps or flat unwalkable - they should stay pure grass
@@ -314,16 +321,17 @@ export class TSLTerrainMaterial {
       const isSteep = smoothstep(float(0.3), float(0.6), slope);
       const isVerySteep = smoothstep(float(0.5), float(0.8), slope);
 
-      // RAMP MASK and FLAT UNWALKABLE MASK
+      // RAMP MASK and FLAT UNWALKABLE MASK - same logic as color node
       const notRamp = float(1.0).sub(isRamp);
-      const flatUnwalkable = isUnwalkable.mul(float(1.0).sub(isSteep));
+      const isVerysteepForCliff = smoothstep(float(0.5), float(0.8), slope);
+      const flatUnwalkable = isUnwalkable.mul(float(1.0).sub(isVerysteepForCliff));
       const notFlatUnwalkable = float(1.0).sub(flatUnwalkable);
-      const baseGrass = baseGrassWeight.mul(isGround.add(flatUnwalkable)).mul(float(1.0).sub(isSteep));
+      const baseGrass = baseGrassWeight.mul(isGround).mul(float(1.0).sub(isSteep));
       const grassWeight = baseGrass.add(isRamp.mul(float(10.0))).add(flatUnwalkable.mul(float(10.0)));
-      const dirtWeight = baseDirtWeight.mul(isGround).mul(notRamp).mul(notFlatUnwalkable).add(isSteep.mul(notRamp).mul(notFlatUnwalkable).mul(float(0.2)));
-      const steepUnwalkableRock = isUnwalkable.mul(isSteep).mul(float(0.8)).mul(notRamp);
-      const rockWeight = baseRockWeight.mul(notRamp).mul(notFlatUnwalkable).add(steepUnwalkableRock).add(isSteep.mul(notRamp).mul(notFlatUnwalkable).mul(float(0.3)));
-      const cliffWeight = baseCliffWeight.mul(isUnwalkable).mul(isSteep).mul(notRamp).add(isUnwalkable.mul(isVerySteep).mul(float(1.5)).mul(notRamp));
+      const dirtWeight = baseDirtWeight.mul(isGround).mul(notRamp).mul(notFlatUnwalkable).add(isSteep.mul(isGround).mul(float(0.2)));
+      const steepUnwalkableRock = isUnwalkable.mul(isVerysteepForCliff).mul(float(0.8));
+      const rockWeight = baseRockWeight.mul(notRamp).mul(notFlatUnwalkable).add(steepUnwalkableRock).add(isSteep.mul(isGround).mul(float(0.3)));
+      const cliffWeight = baseCliffWeight.mul(isUnwalkable).mul(isVerysteepForCliff).add(isUnwalkable.mul(isVerySteep).mul(float(1.5)));
 
       // Safety fallback - but NOT on ramps or flat unwalkable
       const rawTotal = grassWeight.add(dirtWeight).add(rockWeight).add(cliffWeight);
@@ -370,16 +378,17 @@ export class TSLTerrainMaterial {
       const isSteep = smoothstep(float(0.3), float(0.6), slope);
       const isVerySteep = smoothstep(float(0.5), float(0.8), slope);
 
-      // RAMP MASK and FLAT UNWALKABLE MASK
+      // RAMP MASK and FLAT UNWALKABLE MASK - same logic as color node
       const notRamp = float(1.0).sub(isRamp);
-      const flatUnwalkable = isUnwalkable.mul(float(1.0).sub(isSteep));
+      const isVerysteepForCliff = smoothstep(float(0.5), float(0.8), slope);
+      const flatUnwalkable = isUnwalkable.mul(float(1.0).sub(isVerysteepForCliff));
       const notFlatUnwalkable = float(1.0).sub(flatUnwalkable);
-      const baseGrass = baseGrassWeight.mul(isGround.add(flatUnwalkable)).mul(float(1.0).sub(isSteep));
+      const baseGrass = baseGrassWeight.mul(isGround).mul(float(1.0).sub(isSteep));
       const grassWeight = baseGrass.add(isRamp.mul(float(10.0))).add(flatUnwalkable.mul(float(10.0)));
-      const dirtWeight = baseDirtWeight.mul(isGround).mul(notRamp).mul(notFlatUnwalkable).add(isSteep.mul(notRamp).mul(notFlatUnwalkable).mul(float(0.2)));
-      const steepUnwalkableRock = isUnwalkable.mul(isSteep).mul(float(0.8)).mul(notRamp);
-      const rockWeight = baseRockWeight.mul(notRamp).mul(notFlatUnwalkable).add(steepUnwalkableRock).add(isSteep.mul(notRamp).mul(notFlatUnwalkable).mul(float(0.3)));
-      const cliffWeight = baseCliffWeight.mul(isUnwalkable).mul(isSteep).mul(notRamp).add(isUnwalkable.mul(isVerySteep).mul(float(1.5)).mul(notRamp));
+      const dirtWeight = baseDirtWeight.mul(isGround).mul(notRamp).mul(notFlatUnwalkable).add(isSteep.mul(isGround).mul(float(0.2)));
+      const steepUnwalkableRock = isUnwalkable.mul(isVerysteepForCliff).mul(float(0.8));
+      const rockWeight = baseRockWeight.mul(notRamp).mul(notFlatUnwalkable).add(steepUnwalkableRock).add(isSteep.mul(isGround).mul(float(0.3)));
+      const cliffWeight = baseCliffWeight.mul(isUnwalkable).mul(isVerysteepForCliff).add(isUnwalkable.mul(isVerySteep).mul(float(1.5)));
 
       // Safety fallback - but NOT on ramps or flat unwalkable
       const rawTotal = grassWeight.add(dirtWeight).add(rockWeight).add(cliffWeight);
