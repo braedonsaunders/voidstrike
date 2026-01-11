@@ -15,6 +15,9 @@ const MAX_STUCK_TICKS = 6; // If unit hasn't moved for this many ticks, repath (
 const MIN_MOVEMENT_THRESHOLD = 0.05; // Minimum distance to count as "moved"
 const PATH_REQUEST_COOLDOWN = 10; // Minimum ticks between path requests to prevent spam
 
+// Path request batching - spread expensive pathfinding across frames
+const MAX_PATHS_PER_FRAME = 8; // Process at most this many path requests per frame
+
 // Terrain edge buffer - units can't path right next to terrain edges
 // This prevents units from getting stuck on collision with terrain edges
 const TERRAIN_EDGE_BUFFER = 1; // Number of cells to buffer around unwalkable terrain
@@ -289,7 +292,7 @@ export class PathfindingSystem extends System {
       this.unitPathStates.delete(data.entityId);
     });
 
-    // Handle move commands - calculate paths
+    // Handle move commands - queue paths for batched processing
     this.game.eventBus.on('pathfinding:request', (data: {
       entityId: number;
       targetX: number;
@@ -302,7 +305,8 @@ export class PathfindingSystem extends System {
       const transform = entity.get<Transform>('Transform');
       if (!transform) return;
 
-      this.requestPath({
+      // Queue the request instead of processing immediately
+      this.queuePathRequest({
         entityId: data.entityId,
         startX: transform.x,
         startY: transform.y,
@@ -311,6 +315,39 @@ export class PathfindingSystem extends System {
         priority: data.priority ?? 1,
       });
     });
+  }
+
+  /**
+   * Queue a path request for batched processing.
+   * Removes any existing request for the same entity.
+   */
+  private queuePathRequest(request: PathRequest): void {
+    // Remove existing request for this entity (newer request supersedes)
+    const existingIdx = this.pendingRequests.findIndex(r => r.entityId === request.entityId);
+    if (existingIdx !== -1) {
+      this.pendingRequests.splice(existingIdx, 1);
+    }
+
+    // Add to queue - higher priority requests go first
+    this.pendingRequests.push(request);
+  }
+
+  /**
+   * Process queued path requests (up to MAX_PATHS_PER_FRAME).
+   */
+  private processPathQueue(): void {
+    if (this.pendingRequests.length === 0) return;
+
+    // Sort by priority (higher first) - only sort when we have requests
+    this.pendingRequests.sort((a, b) => b.priority - a.priority);
+
+    // Process up to MAX_PATHS_PER_FRAME requests
+    const toProcess = Math.min(MAX_PATHS_PER_FRAME, this.pendingRequests.length);
+
+    for (let i = 0; i < toProcess; i++) {
+      const request = this.pendingRequests.shift()!;
+      this.processPathRequest(request);
+    }
   }
 
   private blockArea(centerX: number, centerY: number, width: number, height: number): void {
@@ -362,7 +399,7 @@ export class PathfindingSystem extends System {
     }
   }
 
-  private requestPath(request: PathRequest): void {
+  private processPathRequest(request: PathRequest): void {
     // Calculate path using the smart routing (hierarchical for long paths, regular for short)
     let result = this.findPath(
       request.startX,
@@ -490,6 +527,9 @@ export class PathfindingSystem extends System {
       this.cellsChangedThisTick.clear();
     }
 
+    // Process queued path requests (batched to avoid freezing)
+    this.processPathQueue();
+
     // Check moving units for stuck detection and periodic repath
     this.checkMovingUnits(currentTick);
   }
@@ -533,7 +573,7 @@ export class PathfindingSystem extends System {
         const state = this.unitPathStates.get(entity.id);
         if (state) {
           // Recalculate path to original destination
-          this.requestPath({
+          this.queuePathRequest({
             entityId: entity.id,
             startX: transform.x,
             startY: transform.y,
@@ -637,7 +677,7 @@ export class PathfindingSystem extends System {
             unit.path = [];
             unit.pathIndex = 0;
 
-            this.requestPath({
+            this.queuePathRequest({
               entityId: entity.id,
               startX: transform.x,
               startY: transform.y,
@@ -657,7 +697,7 @@ export class PathfindingSystem extends System {
 
         // Check if there's a significantly blocked path ahead
         if (this.isPathSignificantlyBlocked(unit.path, unit.pathIndex)) {
-          this.requestPath({
+          this.queuePathRequest({
             entityId: entity.id,
             startX: transform.x,
             startY: transform.y,
