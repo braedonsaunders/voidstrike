@@ -13,7 +13,6 @@
 import * as THREE from 'three';
 import {
   Fn,
-  vec3,
   vec4,
   float,
   uniform,
@@ -21,12 +20,8 @@ import {
   uv,
   smoothstep,
   normalize,
-  dot,
-  abs,
-  normalWorld,
   clamp,
   attribute,
-  max,
 } from 'three/tsl';
 import { MeshStandardNodeMaterial } from 'three/webgpu';
 import { BiomeType } from '@/rendering/Biomes';
@@ -191,22 +186,21 @@ export class TSLTerrainMaterial {
     // 4-texture terrain blending based on slope AND terrain type
     // Terrain type ensures textures match walkability: ground=walkable, unwalkable=cliff
     const colorNode = Fn(() => {
-      const worldNorm = normalWorld;
-
       // Fixed UV scale (64x) - matches working GLSL shader
       const tiledUV = uv().mul(64.0);
 
       // Get pre-calculated slope from vertex attribute (0 = flat, 1 = very steep)
+      // This is computed in Terrain.ts from actual height differences and terrain type
       const vertexSlope = attribute('aSlope', 'float');
 
       // Get terrain type: 0=ground (walkable), 1=ramp, 2=unwalkable
       const terrainType = attribute('aTerrainType', 'float');
 
-      // Also calculate slope from mesh normals as a fallback/blend
-      const geometrySlope = float(1.0).sub(abs(dot(normalize(worldNorm), vec3(0.0, 1.0, 0.0))));
-
-      // Use the maximum of vertex slope and geometry slope for robust detection
-      const slope = max(vertexSlope, geometrySlope);
+      // Use the pre-computed vertex slope directly
+      // Note: Previously we also calculated geometrySlope from normalWorld and took max(),
+      // but normalWorld doesn't correctly account for the terrain mesh rotation at close
+      // camera distances, causing all textures to appear as cliff when zoomed in.
+      const slope = vertexSlope;
 
       // Sample all 4 diffuse textures
       const grassColor = texture(grassDiffuse, tiledUV).rgb;
@@ -284,14 +278,12 @@ export class TSLTerrainMaterial {
 
     // Roughness blending based on slope and terrain type
     const roughnessNode = Fn(() => {
-      const worldNorm = normalWorld;
       const tiledUV = uv().mul(64.0);
 
-      // Use same slope calculation as color node
+      // Use same slope calculation as color node (pre-computed vertex slope only)
       const vertexSlope = attribute('aSlope', 'float');
       const terrainType = attribute('aTerrainType', 'float');
-      const geometrySlope = float(1.0).sub(abs(dot(normalize(worldNorm), vec3(0.0, 1.0, 0.0))));
-      const slope = max(vertexSlope, geometrySlope);
+      const slope = vertexSlope;
 
       const grassR = texture(grassRoughness, tiledUV).r;
       const dirtR = texture(dirtRoughness, tiledUV).r;
@@ -334,14 +326,12 @@ export class TSLTerrainMaterial {
 
     // Normal map blending based on slope and terrain type
     const normalNode = Fn(() => {
-      const worldNorm = normalWorld;
       const tiledUV = uv().mul(64.0);
 
-      // Use same slope calculation as color node
+      // Use same slope calculation as color node (pre-computed vertex slope only)
       const vertexSlope = attribute('aSlope', 'float');
       const terrainType = attribute('aTerrainType', 'float');
-      const geometrySlope = float(1.0).sub(abs(dot(normalize(worldNorm), vec3(0.0, 1.0, 0.0))));
-      const slope = max(vertexSlope, geometrySlope);
+      const slope = vertexSlope;
 
       // Sample and unpack normal maps
       const grassN = texture(grassNormal, tiledUV).rgb.mul(2.0).sub(1.0);
