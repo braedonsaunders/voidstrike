@@ -6,7 +6,7 @@ This document contains all audio specifications, AI prompts for generation, and 
 
 ## Audio Assets Checklist
 
-### Music ✅ Complete
+### Music ⏳ Expansion Planned
 - [x] `music/menu/main_theme.mp3`
 - [x] `music/menu/menu_01.mp3`
 - [x] `music/gameplay/gameplay_01.mp3`
@@ -17,6 +17,22 @@ This document contains all audio specifications, AI prompts for generation, and 
 - [x] `music/gameplay/gameplay_06.mp3`
 - [x] `music/gameplay/gameplay_07.mp3`
 - [x] `music/gameplay/gameplay_08.mp3`
+- [ ] `music/gameplay/gameplay_09.mp3`
+- [ ] `music/gameplay/gameplay_10.mp3`
+- [ ] `music/gameplay/gameplay_11.mp3`
+- [ ] `music/gameplay/gameplay_12.mp3`
+- [ ] `music/gameplay/gameplay_13.mp3`
+- [ ] `music/gameplay/gameplay_14.mp3`
+- [ ] `music/gameplay/gameplay_15.mp3`
+- [ ] `music/gameplay/gameplay_16.mp3`
+- [ ] `music/gameplay/gameplay_17.mp3`
+- [ ] `music/gameplay/gameplay_18.mp3`
+- [ ] `music/gameplay/gameplay_19.mp3`
+- [ ] `music/gameplay/gameplay_20.mp3`
+- [ ] `music/gameplay/gameplay_21.mp3`
+- [ ] `music/gameplay/gameplay_22.mp3`
+- [ ] `music/gameplay/gameplay_23.mp3`
+- [ ] `music/gameplay/gameplay_24.mp3`
 - [x] `music/victory/victory.mp3`
 - [x] `music/defeat/defeat.mp3`
 
@@ -254,11 +270,30 @@ public/audio/
 
 | Filename | Duration | AI Prompt |
 |----------|----------|-----------|
-| `music/gameplay/battle_01.mp3` | 3 min loop | "Intense sci-fi battle music, driving percussion, aggressive brass stabs, electronic elements, military theme, high energy, seamless loop" |
-| `music/gameplay/battle_02.mp3` | 3 min loop | "Epic orchestral combat music, pounding drums, urgent strings, heroic brass motifs, electronic bass, seamless loop" |
-| `music/gameplay/ambient_01.mp3` | 4 min loop | "Calm sci-fi strategy game ambient music, atmospheric synths, subtle military undertones, spacious and contemplative, seamless loop" |
-| `music/gameplay/ambient_02.mp3` | 4 min loop | "Tense sci-fi ambient music, low drones, occasional distant percussion, building anticipation, strategic mood, seamless loop" |
-| `music/gameplay/building.mp3` | 2 min loop | "Industrial construction music, mechanical rhythms, metallic sounds, progress feeling, sci-fi factory ambiance" |
+| `music/gameplay/gameplay_01.mp3` | 3 min loop | "Intense sci-fi battle music, driving percussion, aggressive brass stabs, electronic elements, military theme, high energy, seamless loop, inspired by StarCraft 2 Terran combat" |
+| `music/gameplay/gameplay_02.mp3` | 3 min loop | "Epic orchestral combat music, pounding drums, urgent strings, heroic brass motifs, electronic bass, seamless loop" |
+| `music/gameplay/gameplay_03.mp3` | 4 min loop | "Calm sci-fi strategy game ambient music, atmospheric synths, subtle military undertones, spacious and contemplative, seamless loop" |
+| `music/gameplay/gameplay_04.mp3` | 4 min loop | "Tense sci-fi ambient music, low drones, occasional distant percussion, building anticipation, strategic mood, seamless loop" |
+| `music/gameplay/gameplay_05.mp3` | 3 min loop | "Industrial construction music, mechanical rhythms, metallic sounds, progress feeling, sci-fi factory ambiance, seamless loop" |
+| `music/gameplay/gameplay_06.mp3` | 3 min loop | "Dark electronic military march, synth bass pulses, ominous undertones, tactical operations feel, inspired by Command & Conquer, seamless loop" |
+| `music/gameplay/gameplay_07.mp3` | 4 min loop | "Sweeping orchestral sci-fi exploration theme, wonder and discovery, brass crescendos, electronic textures, moments of tension, seamless loop" |
+| `music/gameplay/gameplay_08.mp3` | 3 min loop | "Aggressive dubstep-influenced battle music, heavy bass drops, glitchy electronic percussion, intense combat energy, seamless loop" |
+| `music/gameplay/gameplay_09.mp3` | 3 min loop | "Cinematic war drums and tribal percussion theme, primal taiko and djembe patterns, intense tom fills building layers of tension, aggressive brass stabs with horn swells, sci-fi military conflict atmosphere, inspired by Mad Max Fury Road, seamless loop" |
+| `music/gameplay/gameplay_10.mp3` | 4 min loop | "Haunting ambient sci-fi outpost music, ethereal reverb-drenched pads, distant radio chatter and static samples, lonely frontier atmosphere, soft bass pulses, subtle tension building with occasional string swells, inspired by Alien isolation, seamless loop" |
+| `music/gameplay/gameplay_11.mp3` | 3 min loop | "High-octane chase music, rapid 16th-note synth arpeggios at 140 BPM, pounding four-on-the-floor kick drums, urgent staccato brass hits, racing strings, pursuit and evasion energy, inspired by Tron Legacy, seamless loop" |
+| `music/gameplay/gameplay_12.mp3` | 3 min loop | "Epic choir and orchestra battle anthem, powerful Latin chanting vocals, massive timpani and bass drum hits, heroic trumpet and French horn fanfares, layered string ostinatos, decisive final battle feeling, inspired by Two Steps From Hell, seamless loop" |
+| `music/gameplay/gameplay_13.mp3` | 4 min loop | "Cyberpunk noir strategic atmosphere, slow brooding analog synth pads, neon-lit tension with subtle arpeggiated sequences, jazzy electric piano undertones mixed with 80s electronic beats, strategic planning mood, inspired by Blade Runner, seamless loop" |
+| `music/gameplay/gameplay_14.mp3` | 3 min loop | "Frantic techno assault at 150 BPM, relentless driving rhythm, distorted saw-wave synth leads, aggressive sidechained bass, chaotic glitch percussion, all-out offensive feeling, inspired by industrial metal and Nine Inch Nails, seamless loop" |
+| `music/gameplay/gameplay_15.mp3` | 4 min loop | "Majestic space opera fleet theme, soaring violin and viola melodies, triumphant French horn fanfares, cosmic scale string swells, electronic texture layers, fleet deployment grandeur, inspired by Star Wars Imperial March energy, seamless loop" |
+| `music/gameplay/gameplay_16.mp3` | 3 min loop | "Gritty frontline infantry combat, distorted electric guitar power riffs mixed with orchestral brass and strings, military snare patterns, boots-on-ground warfare intensity, aggressive and heroic, inspired by Call of Duty combat themes, seamless loop" |
+| `music/gameplay/gameplay_17.mp3` | 3 min loop | "Stealth infiltration sci-fi theme, minimal electronic pulses with soft sub-bass, tense silences punctuated by sudden staccato violin hits, whispered synth pads, covert ops atmosphere, inspired by Metal Gear Solid tension, seamless loop" |
+| `music/gameplay/gameplay_18.mp3` | 4 min loop | "Naval fleet engagement music, deep commanding brass swells, thunderous timpani rolls, layered French horns, oceanic pad textures with sonar pings, capital ship warfare grandeur, inspired by Battlestar Galactica combat, seamless loop" |
+| `music/gameplay/gameplay_19.mp3` | 3 min loop | "Desperate last stand theme, emotional cello and violin melodies over driving military snare percussion, bittersweet brass counter-melodies, heroic sacrifice mood, minor key with moments of major resolution, seamless loop" |
+| `music/gameplay/gameplay_20.mp3` | 3 min loop | "Alien encounter sci-fi theme, unsettling atonal string clusters, otherworldly granular synths, reversed cymbal swells, mysterious and threatening atmosphere, dissonant brass stabs, first contact tension, seamless loop" |
+| `music/gameplay/gameplay_21.mp3` | 4 min loop | "Victory march in progress, triumphant but urgent energy, military snare cadence with rolling fills, bold trumpet fanfares building momentum, driving orchestral strings, pushing advantage battlefield feeling, seamless loop" |
+| `music/gameplay/gameplay_22.mp3` | 3 min loop | "Mech assault combat theme, heavy industrial bass stomps at 100 BPM, hydraulic hiss samples, massive detuned synthesizer drops, distorted power chords, mechanical servo sounds, giant walker Colossus combat feel, seamless loop" |
+| `music/gameplay/gameplay_23.mp3` | 4 min loop | "Deep space patrol ambient, lonely ethereal pads with subtle radar ping samples, vast emptiness atmosphere, distant radio static, soft pulsing bass, occasional tension swells, exploration and vigilance mood, inspired by Mass Effect exploration, seamless loop" |
+| `music/gameplay/gameplay_24.mp3` | 3 min loop | "All-out apocalyptic warfare finale, layered chaos of full orchestra and aggressive electronic elements, pounding taiko drums, screaming brass, distorted synth leads, world-ending battle intensity, climactic final assault energy, inspired by Pacific Rim combat, seamless loop" |
 
 ### Voice Announcements (Alerts)
 
