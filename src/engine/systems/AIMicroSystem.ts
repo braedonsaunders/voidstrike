@@ -18,7 +18,8 @@ import {
 import { UNIT_DEFINITIONS } from '@/data/units/dominion';
 
 // Configuration
-const MICRO_UPDATE_INTERVAL = 5; // Update micro every 5 ticks (250ms at 20 TPS)
+// PERF: Increased from 5 to 8 ticks (400ms at 20 TPS) to reduce behavior tree evaluation frequency
+const MICRO_UPDATE_INTERVAL = 8;
 const KITE_COOLDOWN_TICKS = 10; // Minimum ticks between kite commands
 const THREAT_ASSESSMENT_INTERVAL = 10; // Update threat assessment every 10 ticks
 const FOCUS_FIRE_THRESHOLD = 0.7; // Health threshold for focus fire target selection

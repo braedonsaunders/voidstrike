@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useEffect } from 'react';
+import React, { useEffect, memo } from 'react';
 import { useUIStore, GraphicsSettings, RendererAPI } from '@/store/uiStore';
 import { setEdgeScrollEnabled } from '@/store/cameraStore';
 
@@ -34,8 +34,9 @@ const sectionTitleStyle: React.CSSProperties = { fontWeight: 'bold', marginBotto
  * In-game graphics options panel - AAA Quality Controls
  * Access via Options menu -> Graphics
  * WebGPU-compatible effects only
+ * PERF: Wrapped in memo to prevent unnecessary re-renders
  */
-export function GraphicsOptionsPanel() {
+export const GraphicsOptionsPanel = memo(function GraphicsOptionsPanel() {
   const showGraphicsOptions = useUIStore((state) => state.showGraphicsOptions);
   const graphicsSettings = useUIStore((state) => state.graphicsSettings);
   const rendererAPI = useUIStore((state) => state.rendererAPI);
@@ -453,4 +454,4 @@ export function GraphicsOptionsPanel() {
       </div>
     </div>
   );
-}
+});

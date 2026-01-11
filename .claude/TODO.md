@@ -234,12 +234,21 @@
 - [x] **BuildingRenderer traverse() caching** - Pre-cached mesh children during mesh creation (cachedMeshChildren), replacing 5 traverse() calls in construction animation with direct array iteration
 - [x] **CommandCard React memoization** - Wrapped with memo(), using individual selector functions for Zustand state to minimize re-renders
 
+### Fixed Issues (Round 7 - System Update Throttling - January 2026)
+- [x] **VisionSystem update interval increased** - Changed from 3 ticks (150ms) to 10 ticks (500ms), reducing vision recalculation overhead by 3x
+- [x] **MovementSystem separation throttle increased** - Changed from 3 ticks to 5 ticks, reducing separation force recalculations by 40%
+- [x] **MovementSystem dropOffBuildings static array** - Made array a frozen static constant to eliminate ~200 array allocations per frame in large battles
+- [x] **AIMicroSystem update interval increased** - Changed from 5 ticks (250ms) to 8 ticks (400ms), reducing AI behavior tree evaluations by 37%
+- [x] **SeededRandom reuse in EnhancedAISystem** - Added reseed() method and reuse existing instance instead of allocating new SeededRandom every frame
+- [x] **EffectsRenderer pool size increased** - Doubled effect pool from 50 to 100 to reduce fallback material cloning in large battles
+- [x] **EffectsRenderer temp Vector3 pool** - Added reusable Vector3 objects for attack effect creation to reduce GC pressure
+- [x] **React memo() added to UI components** - Wrapped HUD, GraphicsOptionsPanel, DebugMenuPanel, PlayerStatusPanel in memo() to prevent unnecessary re-renders
+
 ### Remaining Optimizations
 - [ ] Instanced decorations (trees, rocks, debris - 1000s of draw calls)
 - [ ] Graphics settings UI (shadows optional)
 - [ ] Web Worker for AI calculations
 - [ ] Damage number texture atlas (pool instead of create)
-- [ ] EffectsRenderer material cloning - reuse materials instead of cloning in combat effects
 - [ ] EnhancedAISystem O(n²) patterns - extractor-geyser matching, mineral sorting in loops
 - [ ] MovementSystem formation array pooling - reuse position arrays for move commands
 

@@ -386,7 +386,8 @@ export class EnhancedAISystem extends System {
 
     // Reseed random based on tick for deterministic multiplayer
     // Using tick ensures same decisions across all clients
-    this.random = new SeededRandom(currentTick * 31337 + 42);
+    // PERF: Reseed existing instance instead of creating new one every frame
+    this.random.reseed(currentTick * 31337 + 42);
 
     // Log once at first tick
     if (currentTick === 1) {

@@ -44,7 +44,18 @@ const tempBuildingAvoid: PooledVector2 = { x: 0, y: 0 };
 const cachedBuildingQuery: { entityId: number; results: number[] } = { entityId: -1, results: [] };
 
 // PERF: Separation force throttle interval (recalculate every N ticks instead of every frame)
-const SEPARATION_THROTTLE_TICKS = 3;
+const SEPARATION_THROTTLE_TICKS = 5;
+
+// PERF: Static array to avoid allocation on every building avoidance check
+const DROP_OFF_BUILDINGS = Object.freeze([
+  'headquarters',
+  'orbital_station',
+  'bastion',
+  'nexus',
+  'hatchery',
+  'lair',
+  'hive',
+]);
 
 export class MovementSystem extends System {
   public priority = 10;
@@ -391,15 +402,6 @@ export class MovementSystem extends System {
       queryRadius
     );
 
-    const dropOffBuildings = [
-      'headquarters',
-      'orbital_station',
-      'bastion',
-      'nexus',
-      'hatchery',
-      'lair',
-      'hive',
-    ];
     const isCarryingResources =
       selfUnit.isWorker &&
       (selfUnit.carryingMinerals > 0 || selfUnit.carryingVespene > 0);
@@ -439,7 +441,7 @@ export class MovementSystem extends System {
       const building = entity.get<Building>('Building');
       if (!buildingTransform || !building) continue;
 
-      if (isCarryingResources && dropOffBuildings.includes(building.buildingId)) {
+      if (isCarryingResources && DROP_OFF_BUILDINGS.includes(building.buildingId)) {
         continue;
       }
 
@@ -982,15 +984,6 @@ export class MovementSystem extends System {
       queryRadius
     );
 
-    const dropOffBuildings = [
-      'headquarters',
-      'orbital_station',
-      'bastion',
-      'nexus',
-      'hatchery',
-      'lair',
-      'hive',
-    ];
     const isCarryingResources =
       unit.isWorker &&
       (unit.carryingMinerals > 0 || unit.carryingVespene > 0);
@@ -1005,7 +998,7 @@ export class MovementSystem extends System {
       const building = entity.get<Building>('Building');
       if (!buildingTransform || !building) continue;
 
-      if (isCarryingResources && dropOffBuildings.includes(building.buildingId)) {
+      if (isCarryingResources && DROP_OFF_BUILDINGS.includes(building.buildingId)) {
         continue;
       }
 

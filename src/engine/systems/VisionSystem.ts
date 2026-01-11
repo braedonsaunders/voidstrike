@@ -45,7 +45,8 @@ export class VisionSystem extends System {
   private readonly WATCH_TOWER_CAPTURE_RADIUS = 3; // Units within 3 units capture the tower
 
   // Throttle vision updates for performance - update every N ticks
-  private readonly UPDATE_INTERVAL = 3; // Update every 3 ticks instead of every tick
+  // PERF: Increased from 3 to 10 ticks (500ms at 20 TPS) - vision doesn't need 150ms precision
+  private readonly UPDATE_INTERVAL = 10;
   private tickCounter = 0;
 
   constructor(game: Game, mapWidth: number, mapHeight: number, cellSize: number = 2) {
