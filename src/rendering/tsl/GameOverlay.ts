@@ -35,10 +35,12 @@ function createOverlayMaterial(overlayTexture: THREE.DataTexture, opacity: numbe
   const material = new MeshBasicNodeMaterial();
   material.transparent = true;
   material.depthWrite = false;
+  material.depthTest = false; // Render on top of terrain
   material.side = THREE.DoubleSide;
 
   const uOpacity = uniform(opacity);
 
+  // Use vec4 output with colorNode (same pattern as FogOfWar)
   const outputNode = Fn(() => {
     const texColor = texture(overlayTexture, uv());
     const alpha = texColor.a.mul(uOpacity);
@@ -60,11 +62,13 @@ function createThreatMaterial(threatTexture: THREE.DataTexture, opacity: number)
   const material = new MeshBasicNodeMaterial();
   material.transparent = true;
   material.depthWrite = false;
+  material.depthTest = false; // Render on top of terrain
   material.side = THREE.DoubleSide;
 
   const uOpacity = uniform(opacity);
   const uTime = uniform(0);
 
+  // Use vec4 output with colorNode (same pattern as FogOfWar)
   const outputNode = Fn(() => {
     const uvCoord = uv();
     const texColor = texture(threatTexture, uvCoord);
