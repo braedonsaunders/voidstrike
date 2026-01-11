@@ -98,6 +98,26 @@ function getIcon(id: string): string {
   return COMMAND_ICONS.default;
 }
 
+/**
+ * Get attack type indicator text for unit tooltips
+ */
+function getAttackTypeText(unitDef: typeof UNIT_DEFINITIONS[string]): string {
+  if (!unitDef) return '';
+
+  const canAttackGround = unitDef.canAttackGround ?? (unitDef.attackDamage > 0);
+  const canAttackAir = unitDef.canAttackAir ?? false;
+
+  if (!canAttackGround && !canAttackAir) {
+    return '⊘ No attack';
+  } else if (canAttackGround && canAttackAir) {
+    return '⬡ Attacks: Ground & Air';
+  } else if (canAttackGround) {
+    return '⬢ Attacks: Ground only';
+  } else {
+    return '✈ Attacks: Air only';
+  }
+}
+
 interface CommandButton {
   id: string;
   label: string;
@@ -489,6 +509,7 @@ function CommandCardInner() {
 
           const canAfford = minerals >= unitDef.mineralCost && vespene >= unitDef.vespeneCost;
           const hasSupply = supply + unitDef.supplyCost <= maxSupply;
+          const attackTypeText = getAttackTypeText(unitDef);
 
           buttons.push({
             id: `train_${unitId}`,
@@ -505,7 +526,7 @@ function CommandCardInner() {
               });
             },
             isDisabled: !canAfford,
-            tooltip: (unitDef.description || `Train ${unitDef.name}`) + (!hasSupply ? ' (Need more supply)' : ''),
+            tooltip: (unitDef.description || `Train ${unitDef.name}`) + ` [${attackTypeText}]` + (!hasSupply ? ' (Need more supply)' : ''),
             cost: { minerals: unitDef.mineralCost, vespene: unitDef.vespeneCost, supply: unitDef.supplyCost },
           });
         });
@@ -521,6 +542,7 @@ function CommandCardInner() {
           const canAfford = minerals >= unitDef.mineralCost && vespene >= unitDef.vespeneCost;
           const hasSupply = supply + unitDef.supplyCost <= maxSupply;
           const canTrain = hasTechLab && canAfford;
+          const attackTypeText = getAttackTypeText(unitDef);
 
           buttons.push({
             id: `train_${unitId}`,
@@ -540,8 +562,8 @@ function CommandCardInner() {
             },
             isDisabled: !canTrain,
             tooltip: !hasTechLab
-              ? `${unitDef.description || unitDef.name} - Requires Research Module`
-              : (unitDef.description || `Train ${unitDef.name}`) + (!hasSupply ? ' (Need more supply)' : ''),
+              ? `${unitDef.description || unitDef.name} [${attackTypeText}] - Requires Research Module`
+              : (unitDef.description || `Train ${unitDef.name}`) + ` [${attackTypeText}]` + (!hasSupply ? ' (Need more supply)' : ''),
             cost: { minerals: unitDef.mineralCost, vespene: unitDef.vespeneCost, supply: unitDef.supplyCost },
           });
         });

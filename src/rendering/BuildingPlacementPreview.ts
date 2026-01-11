@@ -22,7 +22,7 @@ export class BuildingPlacementPreview {
   public group: THREE.Group;
 
   private gridMesh: THREE.Mesh | null = null;
-  private ghostMesh: THREE.Mesh | null = null;
+  private blueprintEffect: THREE.Group | null = null;
   private mapData: MapData;
   private currentBuildingType: string | null = null;
   private currentPosition: { x: number; y: number } = { x: 0, y: 0 };
@@ -35,10 +35,16 @@ export class BuildingPlacementPreview {
   // Queued placement visualization
   private queuedPlacements: QueuedPlacement[] = [];
   private queueLine: THREE.LineSegments | null = null;
-  private queueMarkers: THREE.Mesh[] = [];
+  private queueMarkers: THREE.Group[] = [];
   private queueLineMaterial: THREE.LineBasicMaterial;
-  private queueMarkerMaterial: THREE.MeshBasicMaterial;
-  private queueMarkerGeometry: THREE.SphereGeometry;
+
+  // Blueprint effect animation state
+  private blueprintPulseTime: number = 0;
+  private currentBuildingHeight: number = 3; // Default building height for effects
+
+  // Blueprint effect materials (SC2-style holographic blue)
+  private static readonly BLUEPRINT_COLOR = 0x00ccff;
+  private static readonly BLUEPRINT_INVALID_COLOR = 0xff4444;
 
   // Grid visualization settings
   private static readonly GRID_OFFSET = 0.15; // Offset above terrain
@@ -60,14 +66,6 @@ export class BuildingPlacementPreview {
       opacity: 0.7,
       linewidth: 2,
     });
-
-    this.queueMarkerMaterial = new THREE.MeshBasicMaterial({
-      color: BuildingPlacementPreview.QUEUE_LINE_COLOR,
-      transparent: true,
-      opacity: 0.8,
-    });
-
-    this.queueMarkerGeometry = new THREE.SphereGeometry(0.4, 8, 8);
   }
 
   /**
@@ -132,21 +130,29 @@ export class BuildingPlacementPreview {
 
     for (const marker of this.queueMarkers) {
       this.group.remove(marker);
-      // Dispose ghost mesh and its children (wireframe)
-      marker.traverse((child) => {
-        if (child instanceof THREE.Mesh || child instanceof THREE.LineSegments) {
-          child.geometry.dispose();
-          if (child.material instanceof THREE.Material) {
-            child.material.dispose();
-          }
-        }
-      });
+      this.disposeGroup(marker);
     }
     this.queueMarkers = [];
   }
 
   /**
-   * Update queue path lines and markers (SC2-style building ghosts)
+   * Dispose all materials and geometries in a group
+   */
+  private disposeGroup(group: THREE.Group | THREE.Object3D): void {
+    group.traverse((child) => {
+      if (child instanceof THREE.Mesh || child instanceof THREE.LineSegments || child instanceof THREE.Points) {
+        child.geometry.dispose();
+        if (child.material instanceof THREE.Material) {
+          child.material.dispose();
+        } else if (Array.isArray(child.material)) {
+          child.material.forEach((m) => m.dispose());
+        }
+      }
+    });
+  }
+
+  /**
+   * Update queue path lines and markers (SC2-style blueprint ghosts)
    */
   private updateQueueVisuals(): void {
     this.clearQueueVisuals();
@@ -176,33 +182,16 @@ export class BuildingPlacementPreview {
       // Get building dimensions from definition
       const definition = BUILDING_DEFINITIONS[placement.buildingType];
       const width = definition?.width ?? 2;
-      const height = definition?.height ?? 2;
+      const depth = definition?.height ?? 2;
+      const buildingHeight = 3; // Standard preview height
 
-      // Create building ghost at this position (same style as main ghost but slightly dimmer)
+      // Create blueprint-style ghost at this position (dimmer than main preview)
       const terrainHeight = this.getTerrainHeight ? this.getTerrainHeight(placement.x, placement.y) : 0;
 
-      // Ghost box mesh
-      const ghostGeometry = new THREE.BoxGeometry(width * 0.9, 2, height * 0.9);
-      const ghostMaterial = new THREE.MeshBasicMaterial({
-        color: BuildingPlacementPreview.QUEUE_LINE_COLOR,
-        transparent: true,
-        opacity: 0.25,
-        wireframe: false,
-      });
-      const ghost = new THREE.Mesh(ghostGeometry, ghostMaterial);
-      ghost.position.set(placement.x, terrainHeight + 1 + BuildingPlacementPreview.GRID_OFFSET, placement.y);
-
-      // Add wireframe outline to ghost
-      const wireGeometry = new THREE.EdgesGeometry(ghostGeometry);
-      const wireMaterial = new THREE.LineBasicMaterial({
-        color: BuildingPlacementPreview.QUEUE_LINE_COLOR,
-        linewidth: 2,
-      });
-      const wireframe = new THREE.LineSegments(wireGeometry, wireMaterial);
-      ghost.add(wireframe);
-
-      this.group.add(ghost);
-      this.queueMarkers.push(ghost);
+      const queuedBlueprint = this.createBlueprintEffect(width, depth, buildingHeight, 0.5);
+      queuedBlueprint.position.set(placement.x, terrainHeight, placement.y);
+      this.group.add(queuedBlueprint);
+      this.queueMarkers.push(queuedBlueprint);
 
       // Add line segment to next placement
       if (nextPlacement) {
@@ -320,16 +309,17 @@ export class BuildingPlacementPreview {
     if (!definition) return;
 
     const width = definition.width;
-    const height = definition.height;
+    const depth = definition.height;
+    this.currentBuildingHeight = 3; // Standard building height for preview
 
     // Check validity of all tiles
-    this.isValid = this.checkPlacementValidity(x, y, width, height);
+    this.isValid = this.checkPlacementValidity(x, y, width, depth);
 
     // Update or create grid mesh
-    this.updateGridMesh(x, y, width, height);
+    this.updateGridMesh(x, y, width, depth);
 
-    // Update or create ghost mesh
-    this.updateGhostMesh(x, y, width, height);
+    // Update or create blueprint effect (SC2-style holographic preview)
+    this.updateBlueprintEffect(x, y, width, depth, this.currentBuildingHeight);
   }
 
   private checkPlacementValidity(centerX: number, centerY: number, width: number, height: number): boolean {
@@ -454,43 +444,227 @@ export class BuildingPlacementPreview {
     this.group.add(this.gridMesh);
   }
 
-  private updateGhostMesh(centerX: number, centerY: number, width: number, height: number): void {
-    // Remove old mesh
-    if (this.ghostMesh) {
-      this.group.remove(this.ghostMesh);
-      this.ghostMesh.geometry.dispose();
-      (this.ghostMesh.material as THREE.Material).dispose();
+  /**
+   * Update or create the blueprint effect (SC2-style holographic preview)
+   */
+  private updateBlueprintEffect(centerX: number, centerY: number, width: number, depth: number, buildingHeight: number): void {
+    // Remove old effect
+    if (this.blueprintEffect) {
+      this.group.remove(this.blueprintEffect);
+      this.disposeGroup(this.blueprintEffect);
+      this.blueprintEffect = null;
     }
-
-    // Create a simple box as ghost preview
-    const geometry = new THREE.BoxGeometry(width * 0.9, 2, height * 0.9);
-    const color = this.isValid ? 0x00ff88 : 0xff4444;
-
-    const material = new THREE.MeshBasicMaterial({
-      color,
-      transparent: true,
-      opacity: 0.3,
-      wireframe: false,
-    });
 
     // Get terrain height at center
     const terrainHeight = this.getTerrainHeight
       ? this.getTerrainHeight(centerX, centerY)
       : 0;
 
-    this.ghostMesh = new THREE.Mesh(geometry, material);
-    this.ghostMesh.position.set(centerX, terrainHeight + 1 + BuildingPlacementPreview.GRID_OFFSET, centerY);
-    this.group.add(this.ghostMesh);
+    // Create new blueprint effect
+    this.blueprintEffect = this.createBlueprintEffect(width, depth, buildingHeight, 1.0);
+    this.blueprintEffect.position.set(centerX, terrainHeight, centerY);
 
-    // Add wireframe outline
-    const wireGeometry = new THREE.EdgesGeometry(geometry);
-    const wireMaterial = new THREE.LineBasicMaterial({
-      color: this.isValid ? 0x00ff00 : 0xff0000,
+    // Store validity state for color updates
+    this.blueprintEffect.userData.isValid = this.isValid;
+
+    // Update colors based on validity
+    this.updateBlueprintColors(this.blueprintEffect, this.isValid);
+
+    this.group.add(this.blueprintEffect);
+  }
+
+  /**
+   * Create SC2-style holographic blueprint effect
+   * Shows wireframe outline, corner markers, scanning plane, and floating particles
+   */
+  private createBlueprintEffect(buildingWidth: number, buildingDepth: number, buildingHeight: number, opacityMultiplier: number = 1.0): THREE.Group {
+    const effectGroup = new THREE.Group();
+    const baseColor = BuildingPlacementPreview.BLUEPRINT_COLOR;
+
+    // Create wireframe box outline (holographic blueprint edge lines)
+    const boxGeometry = new THREE.BoxGeometry(buildingWidth * 0.95, buildingHeight, buildingDepth * 0.95);
+    const edgesGeometry = new THREE.EdgesGeometry(boxGeometry);
+    const wireframeMaterial = new THREE.LineBasicMaterial({
+      color: baseColor,
+      transparent: true,
+      opacity: 0.7 * opacityMultiplier,
       linewidth: 2,
     });
-    const wireframe = new THREE.LineSegments(wireGeometry, wireMaterial);
-    wireframe.position.copy(this.ghostMesh.position);
-    this.ghostMesh.add(wireframe);
+    const wireframe = new THREE.LineSegments(edgesGeometry, wireframeMaterial);
+    wireframe.position.y = buildingHeight / 2;
+    wireframe.userData.isBlueprintWireframe = true;
+    effectGroup.add(wireframe);
+    boxGeometry.dispose();
+
+    // Create corner accent points (holographic corner markers)
+    const cornerCount = 8;
+    const cornerPositions = new Float32Array(cornerCount * 3);
+    const hw = buildingWidth * 0.48;
+    const hh = buildingHeight;
+    const hd = buildingDepth * 0.48;
+    const corners = [
+      [-hw, 0, -hd], [hw, 0, -hd], [-hw, 0, hd], [hw, 0, hd],
+      [-hw, hh, -hd], [hw, hh, -hd], [-hw, hh, hd], [hw, hh, hd],
+    ];
+    for (let i = 0; i < cornerCount; i++) {
+      cornerPositions[i * 3] = corners[i][0];
+      cornerPositions[i * 3 + 1] = corners[i][1];
+      cornerPositions[i * 3 + 2] = corners[i][2];
+    }
+    const cornerGeometry = new THREE.BufferGeometry();
+    cornerGeometry.setAttribute('position', new THREE.BufferAttribute(cornerPositions, 3));
+    const cornerMaterial = new THREE.PointsMaterial({
+      color: baseColor,
+      size: 4.0,
+      transparent: true,
+      opacity: 0.9 * opacityMultiplier,
+      sizeAttenuation: true,
+    });
+    const cornerPoints = new THREE.Points(cornerGeometry, cornerMaterial);
+    cornerPoints.userData.isBlueprintCorners = true;
+    effectGroup.add(cornerPoints);
+
+    // Create scanning plane effect (horizontal plane that moves up - the "2D blue plane")
+    const scanGeometry = new THREE.PlaneGeometry(buildingWidth * 1.1, buildingDepth * 1.1);
+    const scanMaterial = new THREE.MeshBasicMaterial({
+      color: baseColor,
+      transparent: true,
+      opacity: 0.3 * opacityMultiplier,
+      side: THREE.DoubleSide,
+      depthWrite: false,
+    });
+    const scanMesh = new THREE.Mesh(scanGeometry, scanMaterial);
+    scanMesh.rotation.x = -Math.PI / 2;
+    scanMesh.position.y = 0;
+    scanMesh.userData.isBlueprintScan = true;
+    scanMesh.userData.scanY = 0;
+    scanMesh.userData.buildingHeight = buildingHeight;
+    effectGroup.add(scanMesh);
+
+    // Create floating holographic particles around the blueprint
+    const particleCount = 30;
+    const particlePositions = new Float32Array(particleCount * 3);
+    for (let i = 0; i < particleCount; i++) {
+      const angle = (i / particleCount) * Math.PI * 2;
+      const radius = Math.max(buildingWidth, buildingDepth) * 0.6;
+      particlePositions[i * 3] = Math.cos(angle) * radius;
+      particlePositions[i * 3 + 1] = Math.random() * buildingHeight;
+      particlePositions[i * 3 + 2] = Math.sin(angle) * radius;
+    }
+    const particleGeometry = new THREE.BufferGeometry();
+    particleGeometry.setAttribute('position', new THREE.BufferAttribute(particlePositions, 3));
+
+    const particleMaterial = new THREE.PointsMaterial({
+      color: baseColor,
+      size: 2.0,
+      transparent: true,
+      opacity: 0.6 * opacityMultiplier,
+      blending: THREE.AdditiveBlending,
+      sizeAttenuation: true,
+    });
+    const particles = new THREE.Points(particleGeometry, particleMaterial);
+    particles.userData.isBlueprintParticles = true;
+    particles.userData.buildingHeight = buildingHeight;
+    particles.userData.basePositions = particlePositions.slice();
+    effectGroup.add(particles);
+
+    // Store building dimensions for animation
+    effectGroup.userData.buildingHeight = buildingHeight;
+
+    return effectGroup;
+  }
+
+  /**
+   * Update blueprint effect colors based on placement validity
+   */
+  private updateBlueprintColors(effectGroup: THREE.Group, isValid: boolean): void {
+    const color = isValid ? BuildingPlacementPreview.BLUEPRINT_COLOR : BuildingPlacementPreview.BLUEPRINT_INVALID_COLOR;
+
+    effectGroup.traverse((child) => {
+      if (child instanceof THREE.LineSegments && child.userData.isBlueprintWireframe) {
+        (child.material as THREE.LineBasicMaterial).color.setHex(color);
+      } else if (child instanceof THREE.Points) {
+        (child.material as THREE.PointsMaterial).color.setHex(color);
+      } else if (child instanceof THREE.Mesh && child.userData.isBlueprintScan) {
+        (child.material as THREE.MeshBasicMaterial).color.setHex(color);
+      }
+    });
+  }
+
+  /**
+   * Update animation for blueprint effects (call each frame)
+   */
+  public update(dt: number): void {
+    if (!this.group.visible) return;
+
+    this.blueprintPulseTime += dt;
+
+    // Animate main blueprint effect
+    if (this.blueprintEffect) {
+      this.animateBlueprintEffect(this.blueprintEffect, dt);
+    }
+
+    // Animate queued placement blueprints
+    for (const marker of this.queueMarkers) {
+      this.animateBlueprintEffect(marker, dt);
+    }
+  }
+
+  /**
+   * Animate a single blueprint effect group
+   */
+  private animateBlueprintEffect(effectGroup: THREE.Group, dt: number): void {
+    const buildingHeight = effectGroup.userData.buildingHeight ?? 3;
+
+    for (const child of effectGroup.children) {
+      if (child instanceof THREE.LineSegments && child.userData.isBlueprintWireframe) {
+        // Pulse wireframe opacity
+        const mat = child.material as THREE.LineBasicMaterial;
+        const baseOpacity = mat.userData.baseOpacity ?? 0.7;
+        mat.opacity = baseOpacity * (0.7 + Math.sin(this.blueprintPulseTime * 4) * 0.3);
+      } else if (child instanceof THREE.Mesh && child.userData.isBlueprintScan) {
+        // Animate scanning plane moving up
+        const scanY = child.userData.scanY ?? 0;
+        const newY = (scanY + dt * 1.5) % buildingHeight;
+        child.userData.scanY = newY;
+        child.position.y = newY;
+
+        // Pulse scan plane opacity
+        const mat = child.material as THREE.MeshBasicMaterial;
+        mat.opacity = 0.2 + Math.sin(this.blueprintPulseTime * 6) * 0.15;
+      } else if (child instanceof THREE.Points) {
+        if (child.userData.isBlueprintParticles) {
+          // Animate hologram particles - float and rotate around building
+          const positions = (child.geometry.attributes.position as THREE.BufferAttribute).array as Float32Array;
+          const basePositions = child.userData.basePositions as Float32Array;
+          const bh = child.userData.buildingHeight as number;
+
+          for (let i = 0; i < positions.length / 3; i++) {
+            // Rotate around Y axis
+            const angle = this.blueprintPulseTime * 0.5 + (i / (positions.length / 3)) * Math.PI * 2;
+            const baseX = basePositions[i * 3];
+            const baseZ = basePositions[i * 3 + 2];
+            const radius = Math.sqrt(baseX * baseX + baseZ * baseZ);
+            positions[i * 3] = Math.cos(angle) * radius;
+            positions[i * 3 + 2] = Math.sin(angle) * radius;
+
+            // Float up and down
+            const yOffset = Math.sin(this.blueprintPulseTime * 2 + i * 0.5) * 0.3;
+            positions[i * 3 + 1] = (basePositions[i * 3 + 1] + yOffset + bh) % bh;
+          }
+          child.geometry.attributes.position.needsUpdate = true;
+
+          // Pulse particle opacity
+          const mat = child.material as THREE.PointsMaterial;
+          mat.opacity = 0.4 + Math.sin(this.blueprintPulseTime * 5) * 0.2;
+        } else if (child.userData.isBlueprintCorners) {
+          // Corner points - pulse size
+          const mat = child.material as THREE.PointsMaterial;
+          mat.size = 3.0 + Math.sin(this.blueprintPulseTime * 4) * 1.0;
+          mat.opacity = 0.7 + Math.sin(this.blueprintPulseTime * 3) * 0.3;
+        }
+      }
+    }
   }
 
   private clearMeshes(): void {
@@ -501,17 +675,10 @@ export class BuildingPlacementPreview {
       this.gridMesh = null;
     }
 
-    if (this.ghostMesh) {
-      this.group.remove(this.ghostMesh);
-      this.ghostMesh.traverse((child) => {
-        if (child instanceof THREE.Mesh || child instanceof THREE.LineSegments) {
-          child.geometry.dispose();
-          if (child.material instanceof THREE.Material) {
-            child.material.dispose();
-          }
-        }
-      });
-      this.ghostMesh = null;
+    if (this.blueprintEffect) {
+      this.group.remove(this.blueprintEffect);
+      this.disposeGroup(this.blueprintEffect);
+      this.blueprintEffect = null;
     }
   }
 
@@ -519,7 +686,5 @@ export class BuildingPlacementPreview {
     this.clearMeshes();
     this.clearQueueVisuals();
     this.queueLineMaterial.dispose();
-    this.queueMarkerMaterial.dispose();
-    this.queueMarkerGeometry.dispose();
   }
 }

@@ -497,6 +497,7 @@ export function WebGPUGameCanvas() {
         effectsRendererRef.current?.update(deltaTime);
         rallyPointRendererRef.current?.update();
         watchTowerRendererRef.current?.update(deltaTime);
+        placementPreviewRef.current?.update(deltaTime / 1000);
 
         const gameTime = gameRef.current?.getGameTime() ?? 0;
         environmentRef.current?.update(deltaTime / 1000, gameTime);
@@ -770,12 +771,21 @@ export function WebGPUGameCanvas() {
   }, [isBuilding, buildingType, isAttackMove, isPatrolMode, isSettingRallyPoint, isRepairMode, isLandingMode, landingBuildingId, abilityTargetMode]);
 
   const handleRightClick = (e: React.MouseEvent) => {
+    // Right-click cancels command modes (alternative to ESC, especially useful in fullscreen)
     if (isAttackMove) {
       setIsAttackMove(false);
       return;
     }
     if (isPatrolMode) {
       setIsPatrolMode(false);
+      return;
+    }
+    if (isBuilding) {
+      useGameStore.getState().setBuildingMode(null);
+      return;
+    }
+    if (abilityTargetMode) {
+      useGameStore.getState().setAbilityTargetMode(null);
       return;
     }
 
@@ -1083,14 +1093,32 @@ export function WebGPUGameCanvas() {
 
       switch (key) {
         case 'escape':
-          if (isAttackMove) setIsAttackMove(false);
-          else if (isPatrolMode) setIsPatrolMode(false);
-          else if (isRepairMode) useGameStore.getState().setRepairMode(false);
-          else if (isLandingMode) useGameStore.getState().setLandingMode(false);
-          else if (isSettingRallyPoint) useGameStore.getState().setRallyPointMode(false);
-          else if (abilityTargetMode) useGameStore.getState().setAbilityTargetMode(null);
-          else if (isBuilding) useGameStore.getState().setBuildingMode(null);
-          else game.eventBus.emit('selection:clear');
+          {
+            // Check if there's an active command mode that ESC should cancel
+            const hasActiveCommand =
+              isAttackMove ||
+              isPatrolMode ||
+              isRepairMode ||
+              isLandingMode ||
+              isSettingRallyPoint ||
+              abilityTargetMode !== null ||
+              isBuilding;
+
+            // In fullscreen mode, prevent ESC from exiting fullscreen when canceling a command
+            // This allows ESC to cancel commands without accidentally exiting fullscreen
+            if (hasActiveCommand && useUIStore.getState().isFullscreen) {
+              e.preventDefault();
+            }
+
+            if (isAttackMove) setIsAttackMove(false);
+            else if (isPatrolMode) setIsPatrolMode(false);
+            else if (isRepairMode) useGameStore.getState().setRepairMode(false);
+            else if (isLandingMode) useGameStore.getState().setLandingMode(false);
+            else if (isSettingRallyPoint) useGameStore.getState().setRallyPointMode(false);
+            else if (abilityTargetMode) useGameStore.getState().setAbilityTargetMode(null);
+            else if (isBuilding) useGameStore.getState().setBuildingMode(null);
+            else game.eventBus.emit('selection:clear');
+          }
           break;
         case 'l':
           {

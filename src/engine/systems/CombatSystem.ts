@@ -299,6 +299,8 @@ export class CombatSystem extends System {
 
         const targetTransform = targetEntity.get<Transform>('Transform');
         const targetHealth = targetEntity.get<Health>('Health');
+        const targetUnit = targetEntity.get<Unit>('Unit');
+        const targetBuilding = targetEntity.get<Building>('Building');
 
         if (!targetTransform || !targetHealth || targetHealth.isDead()) {
           // Target dead - check if we were attack-moving
@@ -312,9 +314,26 @@ export class CombatSystem extends System {
           continue;
         }
 
+        // Check if attacker can target this entity based on air/ground status
+        // Buildings are always ground targets, units check isFlying
+        const targetIsFlying = targetUnit?.isFlying ?? false;
+        const canAttackThisTarget = targetBuilding
+          ? unit.canAttackGround  // Buildings are ground targets
+          : unit.canAttackTarget(targetIsFlying);  // Units check air/ground
+
+        if (!canAttackThisTarget) {
+          // Cannot attack this target type - clear and find new target
+          if (unit.targetX !== null && unit.targetY !== null) {
+            unit.state = 'attackmoving';
+            unit.targetEntityId = null;
+          } else if (!unit.executeNextCommand()) {
+            unit.clearTarget();
+          }
+          continue;
+        }
+
         // Calculate effective distance (to edge for buildings, center for units)
         let effectiveDistance: number;
-        const targetBuilding = targetEntity.get<Building>('Building');
 
         if (targetBuilding) {
           // Distance to building edge
@@ -445,6 +464,10 @@ export class CombatSystem extends System {
       if (selectable.playerId === selfSelectable.playerId) continue;
       if (health.isDead()) continue;
 
+      // Check if attacker can target this unit based on air/ground status
+      const targetIsFlying = unit?.isFlying ?? false;
+      if (!selfUnit.canAttackTarget(targetIsFlying)) continue;
+
       const distance = selfTransform.distanceTo(transform);
       if (distance > selfUnit.attackRange) continue;
 
@@ -461,44 +484,47 @@ export class CombatSystem extends System {
     }
 
     // Also check nearby buildings within attack range
-    const nearbyBuildingIds = this.world.buildingGrid.queryRadius(
-      selfTransform.x,
-      selfTransform.y,
-      selfUnit.attackRange
-    );
+    // Buildings are ground targets, so require canAttackGround
+    if (selfUnit.canAttackGround) {
+      const nearbyBuildingIds = this.world.buildingGrid.queryRadius(
+        selfTransform.x,
+        selfTransform.y,
+        selfUnit.attackRange
+      );
 
-    for (const entityId of nearbyBuildingIds) {
-      const entity = this.world.getEntity(entityId);
-      if (!entity) continue;
+      for (const entityId of nearbyBuildingIds) {
+        const entity = this.world.getEntity(entityId);
+        if (!entity) continue;
 
-      const transform = entity.get<Transform>('Transform');
-      const health = entity.get<Health>('Health');
-      const selectable = entity.get<Selectable>('Selectable');
-      const building = entity.get<Building>('Building');
+        const transform = entity.get<Transform>('Transform');
+        const health = entity.get<Health>('Health');
+        const selectable = entity.get<Selectable>('Selectable');
+        const building = entity.get<Building>('Building');
 
-      if (!transform || !health || !selectable || !building) continue;
-      if (selectable.playerId === selfSelectable.playerId) continue;
-      if (health.isDead()) continue;
+        if (!transform || !health || !selectable || !building) continue;
+        if (selectable.playerId === selfSelectable.playerId) continue;
+        if (health.isDead()) continue;
 
-      // Distance to building edge
-      const halfW = building.width / 2;
-      const halfH = building.height / 2;
-      const clampedX = Math.max(transform.x - halfW, Math.min(selfTransform.x, transform.x + halfW));
-      const clampedY = Math.max(transform.y - halfH, Math.min(selfTransform.y, transform.y + halfH));
-      const edgeDx = selfTransform.x - clampedX;
-      const edgeDy = selfTransform.y - clampedY;
-      const distance = Math.sqrt(edgeDx * edgeDx + edgeDy * edgeDy);
+        // Distance to building edge
+        const halfW = building.width / 2;
+        const halfH = building.height / 2;
+        const clampedX = Math.max(transform.x - halfW, Math.min(selfTransform.x, transform.x + halfW));
+        const clampedY = Math.max(transform.y - halfH, Math.min(selfTransform.y, transform.y + halfH));
+        const edgeDx = selfTransform.x - clampedX;
+        const edgeDy = selfTransform.y - clampedY;
+        const distance = Math.sqrt(edgeDx * edgeDx + edgeDy * edgeDy);
 
-      if (distance > selfUnit.attackRange) continue;
+        if (distance > selfUnit.attackRange) continue;
 
-      // Buildings have lower priority than combat units
-      const basePriority = 30;
-      const distanceFactor = 1 - (distance / selfUnit.attackRange);
-      const healthFactor = 1 - (health.current / health.max);
-      const score = basePriority * 0.5 + distanceFactor * 30 + healthFactor * 20;
+        // Buildings have lower priority than combat units
+        const basePriority = 30;
+        const distanceFactor = 1 - (distance / selfUnit.attackRange);
+        const healthFactor = 1 - (health.current / health.max);
+        const score = basePriority * 0.5 + distanceFactor * 30 + healthFactor * 20;
 
-      if (!bestTarget || score > bestTarget.score) {
-        bestTarget = { id: entityId, score };
+        if (!bestTarget || score > bestTarget.score) {
+          bestTarget = { id: entityId, score };
+        }
       }
     }
 
@@ -591,6 +617,10 @@ export class CombatSystem extends System {
       if (selectable.playerId === selfSelectable.playerId) continue;
       if (health.isDead()) continue;
 
+      // Check if attacker can target this unit based on air/ground status
+      const targetIsFlying = unit?.isFlying ?? false;
+      if (!selfUnit.canAttackTarget(targetIsFlying)) continue;
+
       const distance = selfTransform.distanceTo(transform);
       if (distance > selfUnit.sightRange) continue;
 
@@ -607,44 +637,47 @@ export class CombatSystem extends System {
     }
 
     // Also check nearby buildings using building grid
-    const nearbyBuildingIds = this.world.buildingGrid.queryRadius(
-      selfTransform.x,
-      selfTransform.y,
-      selfUnit.sightRange
-    );
+    // Buildings are ground targets, so require canAttackGround
+    if (selfUnit.canAttackGround) {
+      const nearbyBuildingIds = this.world.buildingGrid.queryRadius(
+        selfTransform.x,
+        selfTransform.y,
+        selfUnit.sightRange
+      );
 
-    for (const entityId of nearbyBuildingIds) {
-      const entity = this.world.getEntity(entityId);
-      if (!entity) continue;
+      for (const entityId of nearbyBuildingIds) {
+        const entity = this.world.getEntity(entityId);
+        if (!entity) continue;
 
-      const transform = entity.get<Transform>('Transform');
-      const health = entity.get<Health>('Health');
-      const selectable = entity.get<Selectable>('Selectable');
-      const building = entity.get<Building>('Building');
+        const transform = entity.get<Transform>('Transform');
+        const health = entity.get<Health>('Health');
+        const selectable = entity.get<Selectable>('Selectable');
+        const building = entity.get<Building>('Building');
 
-      if (!transform || !health || !selectable || !building) continue;
-      if (selectable.playerId === selfSelectable.playerId) continue;
-      if (health.isDead()) continue;
+        if (!transform || !health || !selectable || !building) continue;
+        if (selectable.playerId === selfSelectable.playerId) continue;
+        if (health.isDead()) continue;
 
-      // Distance to building edge
-      const halfW = building.width / 2;
-      const halfH = building.height / 2;
-      const clampedX = Math.max(transform.x - halfW, Math.min(selfTransform.x, transform.x + halfW));
-      const clampedY = Math.max(transform.y - halfH, Math.min(selfTransform.y, transform.y + halfH));
-      const edgeDx = selfTransform.x - clampedX;
-      const edgeDy = selfTransform.y - clampedY;
-      const distance = Math.sqrt(edgeDx * edgeDx + edgeDy * edgeDy);
+        // Distance to building edge
+        const halfW = building.width / 2;
+        const halfH = building.height / 2;
+        const clampedX = Math.max(transform.x - halfW, Math.min(selfTransform.x, transform.x + halfW));
+        const clampedY = Math.max(transform.y - halfH, Math.min(selfTransform.y, transform.y + halfH));
+        const edgeDx = selfTransform.x - clampedX;
+        const edgeDy = selfTransform.y - clampedY;
+        const distance = Math.sqrt(edgeDx * edgeDx + edgeDy * edgeDy);
 
-      if (distance > selfUnit.sightRange) continue;
+        if (distance > selfUnit.sightRange) continue;
 
-      // Buildings have lower priority than combat units
-      const basePriority = 30;
-      const distanceFactor = 1 - (distance / selfUnit.sightRange);
-      const healthFactor = 1 - (health.current / health.max);
-      const score = basePriority * 0.5 + distanceFactor * 30 + healthFactor * 20;
+        // Buildings have lower priority than combat units
+        const basePriority = 30;
+        const distanceFactor = 1 - (distance / selfUnit.sightRange);
+        const healthFactor = 1 - (health.current / health.max);
+        const score = basePriority * 0.5 + distanceFactor * 30 + healthFactor * 20;
 
-      if (!bestTarget || score > bestTarget.score) {
-        bestTarget = { id: entityId, score };
+        if (!bestTarget || score > bestTarget.score) {
+          bestTarget = { id: entityId, score };
+        }
       }
     }
 
