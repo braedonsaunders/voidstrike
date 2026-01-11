@@ -569,12 +569,18 @@ export function CommandCard() {
     setCommands(buttons.slice(0, 12)); // Max 4x3 grid
   }, [selectedUnits, minerals, vespene, supply, maxSupply, menuMode]);
 
-  // Handle ESC to go back in menus
+  // Handle ESC to go back in menus and building shortcuts
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
+      // Don't handle if typing in an input field
+      if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) {
+        return;
+      }
+
       if (e.key === 'Escape' && menuMode !== 'main') {
         e.stopPropagation();
         setMenuMode('main');
+        return;
       }
       // Hotkey B for Build Basic
       if (e.key.toLowerCase() === 'b' && menuMode === 'main') {
@@ -584,6 +590,7 @@ export function CommandCard() {
           const unit = entity?.get<Unit>('Unit');
           if (unit?.isWorker) {
             setMenuMode('build_basic');
+            return;
           }
         }
       }
@@ -595,14 +602,29 @@ export function CommandCard() {
           const unit = entity?.get<Unit>('Unit');
           if (unit?.isWorker) {
             setMenuMode('build_advanced');
+            return;
           }
+        }
+      }
+
+      // Handle building shortcuts when in build submenus
+      if (menuMode === 'build_basic' || menuMode === 'build_advanced') {
+        const pressedKey = e.key.toUpperCase();
+        // Find a matching command by shortcut (skip the "back" button)
+        const matchingCommand = commands.find(
+          (cmd) => cmd.shortcut === pressedKey && cmd.id !== 'back' && !cmd.isDisabled
+        );
+        if (matchingCommand) {
+          e.preventDefault();
+          e.stopPropagation();
+          matchingCommand.action();
         }
       }
     };
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [menuMode, selectedUnits]);
+  }, [menuMode, selectedUnits, commands]);
 
   if (commands.length === 0) {
     return (
