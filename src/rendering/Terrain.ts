@@ -306,42 +306,58 @@ export class Terrain {
    * Uses textures for high-resolution terrain rendering
    */
   private createStandardMaterial(): THREE.MeshStandardMaterial {
-    const groundColors = this.biome.colors.ground;
-    const baseColor = groundColors[0];
-
     // Load terrain textures based on biome
     const textureLoader = new THREE.TextureLoader();
     const biomeTextures = this.getBiomeTexturePrefix();
 
-    // Load diffuse texture with proper settings
+    // Calculate texture repeat based on map size for good visual density
+    // Aim for each texture tile to cover approximately 4-8 world units
+    const mapSize = Math.max(this.mapData.width, this.mapData.height);
+    const repeatScale = Math.max(8, mapSize / 8); // Larger tiles = better resolution
+
+    // Configure texture settings for maximum quality
+    const configureTexture = (texture: THREE.Texture, isSRGB: boolean = false) => {
+      texture.wrapS = THREE.RepeatWrapping;
+      texture.wrapT = THREE.RepeatWrapping;
+      texture.repeat.set(repeatScale, repeatScale);
+      texture.minFilter = THREE.LinearMipmapLinearFilter;
+      texture.magFilter = THREE.LinearFilter;
+      texture.generateMipmaps = true;
+      // Enable anisotropic filtering for sharper textures at angles
+      texture.anisotropy = 16;
+      if (isSRGB) {
+        texture.colorSpace = THREE.SRGBColorSpace;
+      }
+    };
+
+    // Load diffuse texture
     const diffuseTexture = textureLoader.load(`/textures/terrain/${biomeTextures}_diffuse.png`);
-    diffuseTexture.wrapS = THREE.RepeatWrapping;
-    diffuseTexture.wrapT = THREE.RepeatWrapping;
-    diffuseTexture.repeat.set(32, 32); // Tile the texture across the terrain
-    diffuseTexture.colorSpace = THREE.SRGBColorSpace;
+    configureTexture(diffuseTexture, true);
 
     // Load normal map
     const normalTexture = textureLoader.load(`/textures/terrain/${biomeTextures}_normal.png`);
-    normalTexture.wrapS = THREE.RepeatWrapping;
-    normalTexture.wrapT = THREE.RepeatWrapping;
-    normalTexture.repeat.set(32, 32);
+    configureTexture(normalTexture, false);
 
     // Load roughness map
     const roughnessTexture = textureLoader.load(`/textures/terrain/${biomeTextures}_roughness.png`);
-    roughnessTexture.wrapS = THREE.RepeatWrapping;
-    roughnessTexture.wrapT = THREE.RepeatWrapping;
-    roughnessTexture.repeat.set(32, 32);
+    configureTexture(roughnessTexture, false);
+
+    // Load displacement map for subtle height detail
+    const displacementTexture = textureLoader.load(`/textures/terrain/${biomeTextures}_displacement.png`);
+    configureTexture(displacementTexture, false);
 
     const material = new THREE.MeshStandardMaterial({
       map: diffuseTexture,
       normalMap: normalTexture,
       roughnessMap: roughnessTexture,
-      color: new THREE.Color(baseColor.r, baseColor.g, baseColor.b),
-      vertexColors: true, // Blend vertex colors with texture for terrain features
+      displacementMap: displacementTexture,
+      displacementScale: 0.1, // Subtle displacement for micro-detail
+      // Don't multiply with vertex colors - let textures show properly
+      vertexColors: false,
       roughness: 1.0, // Use roughness map
       metalness: 0.0,
       flatShading: false,
-      normalScale: new THREE.Vector2(0.5, 0.5), // Subtle normal mapping
+      normalScale: new THREE.Vector2(1.0, 1.0), // Full normal mapping strength
     });
 
     return material;

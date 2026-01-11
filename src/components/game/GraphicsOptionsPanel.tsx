@@ -28,6 +28,8 @@ export function GraphicsOptionsPanel() {
   const showGraphicsOptions = useUIStore((state) => state.showGraphicsOptions);
   const graphicsSettings = useUIStore((state) => state.graphicsSettings);
   const rendererAPI = useUIStore((state) => state.rendererAPI);
+  const showFPS = useUIStore((state) => state.showFPS);
+  const toggleFPS = useUIStore((state) => state.toggleFPS);
   const toggleGraphicsOptions = useUIStore((state) => state.toggleGraphicsOptions);
   const toggleGraphicsSetting = useUIStore((state) => state.toggleGraphicsSetting);
   const setGraphicsSetting = useUIStore((state) => state.setGraphicsSetting);
@@ -252,7 +254,7 @@ export function GraphicsOptionsPanel() {
       </div>
 
       {/* === PARTICLES === */}
-      <div style={{ marginBottom: '8px' }}>
+      <div style={sectionStyle}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
           <span>Ambient Particles</span>
           <button
@@ -275,6 +277,19 @@ export function GraphicsOptionsPanel() {
             onChange={(e) => setGraphicsSetting('particleDensity', parseFloat(e.target.value))}
             style={sliderStyle}
           />
+        </div>
+      </div>
+
+      {/* === DISPLAY === */}
+      <div style={{ marginBottom: '8px' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <span>Show FPS Counter</span>
+          <button
+            onClick={() => toggleFPS()}
+            style={buttonStyle(showFPS)}
+          >
+            {showFPS ? 'ON' : 'OFF'}
+          </button>
         </div>
       </div>
     </div>

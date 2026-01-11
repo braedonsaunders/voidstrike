@@ -2,7 +2,8 @@ import * as THREE from 'three';
 import { MapData } from '@/data/maps';
 import { BIOMES, BiomeConfig } from './Biomes';
 import { Terrain, MapDecorations } from './Terrain';
-import { CrystalField, WaterPlane, GroundFog, MapBorderFog } from './GroundDetail';
+import { CrystalField, WaterPlane, GroundFog } from './GroundDetail';
+import { TSLMapBorderFog } from './tsl/MapBorderFog';
 import { EnvironmentParticles } from './EnhancedDecorations';
 // PERFORMANCE: Use instanced decorations instead of individual meshes
 import { InstancedTrees, InstancedRocks, InstancedGrass, InstancedPebbles } from './InstancedDecorations';
@@ -31,7 +32,7 @@ export class EnvironmentManager {
   private crystals: CrystalField | null = null;
   private water: WaterPlane | null = null;
   private groundFog: GroundFog | null = null;
-  private mapBorderFog: MapBorderFog | null = null;
+  private mapBorderFog: TSLMapBorderFog | null = null;
   private particles: EnvironmentParticles | null = null;
   private legacyDecorations: MapDecorations | null = null;
 
@@ -167,10 +168,12 @@ export class EnvironmentManager {
     }
 
     // Water/lava plane
-    if (this.biome.hasWater) {
-      this.water = new WaterPlane(this.mapData, this.biome);
-      this.scene.add(this.water.mesh);
-    }
+    // Note: WaterPlane uses ShaderMaterial which doesn't work with WebGPU
+    // TODO: Convert to TSL material for WebGPU compatibility
+    // if (this.biome.hasWater) {
+    //   this.water = new WaterPlane(this.mapData, this.biome);
+    //   this.scene.add(this.water.mesh);
+    // }
 
     // Ground fog/mist layer for atmospheric effect
     // Note: GroundFog uses ShaderMaterial which may not render correctly with WebGPU
@@ -179,10 +182,9 @@ export class EnvironmentManager {
     // this.scene.add(this.groundFog.mesh);
 
     // Map border fog - dark smoky effect around map edges (SC2-style)
-    // Note: MapBorderFog uses ShaderMaterial which doesn't work with WebGPU
-    // TODO: Convert to TSL material or standard material for WebGPU compatibility
-    // this.mapBorderFog = new MapBorderFog(this.mapData);
-    // this.scene.add(this.mapBorderFog.mesh);
+    // Uses TSL for WebGPU/WebGL compatibility
+    this.mapBorderFog = new TSLMapBorderFog(this.mapData);
+    this.scene.add(this.mapBorderFog.mesh);
 
     // Particle effects
     if (this.biome.particleType !== 'none') {
