@@ -425,9 +425,10 @@ export class ResourceRenderer {
     const currentIds = new Set<number>();
 
     // Reset instance counts
+    // PERF: Use .length = 0 instead of = [] to avoid GC pressure from allocating new arrays every frame
     for (const group of this.instancedGroups.values()) {
       group.mesh.count = 0;
-      group.entityIds = [];
+      group.entityIds.length = 0;
     }
 
     // Build mineral lines on first frame or when minerals change significantly

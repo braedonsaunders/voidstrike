@@ -80,7 +80,8 @@ export class World {
     }
 
     // Create cache key
-    const cacheKey = componentTypes.sort().join(',');
+    // PERF: Use slice() before sort() to avoid mutating the input array parameter
+    const cacheKey = componentTypes.slice().sort().join(',');
 
     // Check cache
     const cached = this.queryCache.get(cacheKey);

@@ -361,9 +361,10 @@ export class BuildingRenderer {
     const currentIds = new Set<number>();
 
     // Reset instanced group counts
+    // PERF: Use .length = 0 instead of = [] to avoid GC pressure from allocating new arrays every frame
     for (const group of this.instancedGroups.values()) {
       group.mesh.count = 0;
-      group.entityIds = [];
+      group.entityIds.length = 0;
     }
 
     // Track which buildings use instancing (to skip individual mesh handling)
