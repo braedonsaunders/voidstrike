@@ -43,8 +43,8 @@ function extractMaterial(object: THREE.Object3D): THREE.Material | null {
     }
   });
   // PERF: Disable IBL on decoration materials - they don't need reflections
-  if (material && material instanceof THREE.MeshStandardMaterial) {
-    material.envMapIntensity = 0;
+  if (material !== null && (material as THREE.MeshStandardMaterial).envMapIntensity !== undefined) {
+    (material as THREE.MeshStandardMaterial).envMapIntensity = 0;
   }
   return material;
 }
