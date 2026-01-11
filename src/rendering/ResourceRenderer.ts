@@ -212,7 +212,8 @@ export class ResourceRenderer {
         MAX_RESOURCES_PER_TYPE
       );
       instancedMesh.count = 0;
-      instancedMesh.castShadow = true;
+      // PERF: Resources receive shadows but don't cast - saves shadow render passes
+      instancedMesh.castShadow = false;
       instancedMesh.receiveShadow = true;
       instancedMesh.frustumCulled = false;
 

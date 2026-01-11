@@ -1422,7 +1422,8 @@ export class MapDecorations {
         Math.random() * 0.3
       );
       mainRock.scale.set(1, 0.8, 1.2);
-      mainRock.castShadow = true;
+      // PERF: Decorations receive shadows but don't cast
+      mainRock.castShadow = false;
       mainRock.receiveShadow = true;
       rockGroup.add(mainRock);
 
@@ -1442,7 +1443,8 @@ export class MapDecorations {
           Math.random() * Math.PI
         );
         smallRock.scale.setScalar(0.5 + Math.random() * 0.5);
-        smallRock.castShadow = true;
+        // PERF: Decorations receive shadows but don't cast
+        smallRock.castShadow = false;
         smallRock.receiveShadow = true;
         rockGroup.add(smallRock);
       }
@@ -1507,7 +1509,9 @@ export class MapDecorations {
       });
       const trunk = new THREE.Mesh(trunkGeometry, trunkMaterial);
       trunk.position.y = height * 0.2;
-      trunk.castShadow = true;
+      // PERF: Decorations receive shadows but don't cast
+      trunk.castShadow = false;
+      trunk.receiveShadow = true;
       treeGroup.add(trunk);
 
       // Foliage (multiple cones for pine tree look)
@@ -1522,7 +1526,8 @@ export class MapDecorations {
         const foliageGeometry = new THREE.ConeGeometry(layerRadius, layerHeight, 8);
         const foliage = new THREE.Mesh(foliageGeometry, foliageMaterial);
         foliage.position.y = height * 0.4 + layer * layerHeight * 0.7;
-        foliage.castShadow = true;
+        // PERF: Decorations receive shadows but don't cast
+        foliage.castShadow = false;
         foliage.receiveShadow = true;
         treeGroup.add(foliage);
       }
@@ -1560,7 +1565,8 @@ export class MapDecorations {
             Math.random() * Math.PI,
             Math.random() * Math.PI
           );
-          rock.castShadow = true;
+          // PERF: Decorations receive shadows but don't cast
+          rock.castShadow = false;
           rock.receiveShadow = true;
           this.group.add(rock);
         }

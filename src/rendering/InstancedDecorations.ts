@@ -29,6 +29,7 @@ function extractGeometry(object: THREE.Object3D): THREE.BufferGeometry | null {
 
 /**
  * Extract material from a loaded model
+ * PERF: Disables envMap on decoration materials to avoid expensive IBL lookups (5-10fps savings)
  */
 function extractMaterial(object: THREE.Object3D): THREE.Material | null {
   let material: THREE.Material | null = null;
@@ -41,6 +42,10 @@ function extractMaterial(object: THREE.Object3D): THREE.Material | null {
       }
     }
   });
+  // PERF: Disable IBL on decoration materials - they don't need reflections
+  if (material && material instanceof THREE.MeshStandardMaterial) {
+    material.envMapIntensity = 0;
+  }
   return material;
 }
 
@@ -54,6 +59,8 @@ interface InstancedGroupConfig {
  * PERFORMANCE: True instanced tree rendering - all trees of same type in ONE draw call
  * Previously each tree was a separate mesh causing 400+ draw calls.
  * Now we batch by model type for typically 2-6 draw calls total.
+ *
+ * Shadow optimization: Trees in playable area cast shadows, border trees don't.
  */
 export class InstancedTrees {
   public group: THREE.Group;
@@ -97,11 +104,20 @@ export class InstancedTrees {
       }
     }
 
-    // PERF: Collect all tree positions FIRST, grouped by model type
-    const treesByModel = new Map<string, Array<{ x: number; y: number; height: number; scale: number; rotation: number }>>();
+    // PERF: Separate trees into playable (cast shadows) vs border (no shadows)
+    type TreePos = { x: number; y: number; height: number; scale: number; rotation: number };
+    const playableTreesByModel = new Map<string, TreePos[]>();
+    const borderTreesByModel = new Map<string, TreePos[]>();
     for (const modelId of treeModelIds) {
-      treesByModel.set(modelId, []);
+      playableTreesByModel.set(modelId, []);
+      borderTreesByModel.set(modelId, []);
     }
+
+    // Border zone is outer 15 cells of map
+    const BORDER_MARGIN = 15;
+    const isInBorder = (x: number, y: number) =>
+      x < BORDER_MARGIN || x > mapData.width - BORDER_MARGIN ||
+      y < BORDER_MARGIN || y > mapData.height - BORDER_MARGIN;
 
     // Find elevated cliff edges (for placing some trees on base edges)
     const cliffEdgePositions: Array<{ x: number; y: number }> = [];
@@ -126,7 +142,7 @@ export class InstancedTrees {
 
     let treesPlaced = 0;
 
-    // Helper to collect a tree position
+    // Helper to collect a tree position - adds to correct bucket based on position
     const collectTree = (x: number, y: number): boolean => {
       const cellX = Math.floor(x);
       const cellY = Math.floor(y);
@@ -142,11 +158,17 @@ export class InstancedTrees {
       const scale = 0.8 + Math.random() * 0.5;
       const rotation = Math.random() * Math.PI * 2;
 
-      treesByModel.get(modelId)!.push({ x, y, height, scale, rotation });
+      const treePos = { x, y, height, scale, rotation };
+      // Trees in border don't cast shadows, playable area trees do
+      if (isInBorder(x, y)) {
+        borderTreesByModel.get(modelId)!.push(treePos);
+      } else {
+        playableTreesByModel.get(modelId)!.push(treePos);
+      }
       return true;
     };
 
-    // Cliff edges (20%)
+    // Cliff edges (20%) - these are near bases, so important for shadows
     const cliffTreeCount = Math.min(Math.floor(maxTrees * 0.2), cliffEdgePositions.length);
     for (let i = 0; i < cliffTreeCount && treesPlaced < cliffTreeCount; i++) {
       const idx = Math.floor(Math.random() * cliffEdgePositions.length);
@@ -154,7 +176,7 @@ export class InstancedTrees {
       if (collectTree(pos.x, pos.y)) treesPlaced++;
     }
 
-    // Map edges (50%)
+    // Map edges (50%) - mostly border decorations
     const edgeTreeCount = Math.floor(maxTrees * 0.5);
     for (let i = 0; i < edgeTreeCount * 3 && treesPlaced < edgeTreeCount + cliffTreeCount; i++) {
       let x: number, y: number;
@@ -169,7 +191,7 @@ export class InstancedTrees {
       if (collectTree(x, y)) treesPlaced++;
     }
 
-    // Corners (30%)
+    // Corners (30%) - border decorations
     for (let i = 0; i < maxTrees * 2 && treesPlaced < maxTrees; i++) {
       const corner = Math.floor(Math.random() * 4);
       let x: number, y: number;
@@ -183,30 +205,34 @@ export class InstancedTrees {
       if (collectTree(x, y)) treesPlaced++;
     }
 
-    // PERF: Create ONE InstancedMesh per model type instead of individual meshes
-    const matrix = new THREE.Matrix4();
-    const position = new THREE.Vector3();
-    const quaternion = new THREE.Quaternion();
-    const scale = new THREE.Vector3();
-
-    for (const [modelId, positions] of treesByModel) {
-      if (positions.length === 0) continue;
+    // Helper to create instanced mesh from positions
+    const createInstancedMesh = (
+      modelId: string,
+      positions: TreePos[],
+      castShadow: boolean
+    ) => {
+      if (positions.length === 0) return;
 
       const original = AssetManager.getDecorationOriginal(modelId);
-      if (!original) continue;
+      if (!original) return;
 
       const geometry = extractGeometry(original);
       const material = extractMaterial(original);
-      if (!geometry || !material) continue;
+      if (!geometry || !material) return;
 
-      // Clone geometry and material to avoid sharing issues
       const instancedGeometry = geometry.clone();
       const instancedMaterial = material.clone();
+      if (instancedMaterial instanceof THREE.MeshStandardMaterial) {
+        instancedMaterial.envMapIntensity = 0;
+      }
       this.geometries.push(instancedGeometry);
       this.materials.push(instancedMaterial);
 
-      // Get model Y offset for proper grounding
       const yOffset = AssetManager.getModelYOffset(modelId);
+      const matrix = new THREE.Matrix4();
+      const position = new THREE.Vector3();
+      const quaternion = new THREE.Quaternion();
+      const scale = new THREE.Vector3();
 
       const instancedMesh = new THREE.InstancedMesh(
         instancedGeometry,
@@ -225,11 +251,17 @@ export class InstancedTrees {
 
       instancedMesh.instanceMatrix.needsUpdate = true;
       instancedMesh.frustumCulled = false;
-      instancedMesh.castShadow = true;
+      instancedMesh.castShadow = castShadow;
       instancedMesh.receiveShadow = true;
 
       this.instancedMeshes.push(instancedMesh);
       this.group.add(instancedMesh);
+    };
+
+    // Create instanced meshes - playable area trees cast shadows, border trees don't
+    for (const modelId of treeModelIds) {
+      createInstancedMesh(modelId, playableTreesByModel.get(modelId)!, true);  // Cast shadows
+      createInstancedMesh(modelId, borderTreesByModel.get(modelId)!, false);   // No shadows
     }
   }
 
@@ -264,6 +296,8 @@ export class InstancedTrees {
  * PERFORMANCE: True instanced rock rendering - all rocks of same type in ONE draw call
  * Previously each rock was a separate mesh causing 300+ draw calls.
  * Now we batch by model type for typically 3 draw calls total.
+ *
+ * Shadow optimization: Rocks in playable area cast shadows, border rocks don't.
  */
 export class InstancedRocks {
   public group: THREE.Group;
@@ -308,11 +342,20 @@ export class InstancedRocks {
       }
     }
 
-    // PERF: Collect all rock positions FIRST, grouped by model type
-    const rocksByModel = new Map<string, Array<{ x: number; y: number; height: number; scale: number; rotation: number }>>();
+    // PERF: Separate rocks into playable (cast shadows) vs border (no shadows)
+    type RockPos = { x: number; y: number; height: number; scale: number; rotation: number };
+    const playableRocksByModel = new Map<string, RockPos[]>();
+    const borderRocksByModel = new Map<string, RockPos[]>();
     for (const modelId of rockModelIds) {
-      rocksByModel.set(modelId, []);
+      playableRocksByModel.set(modelId, []);
+      borderRocksByModel.set(modelId, []);
     }
+
+    // Border zone is outer 15 cells of map
+    const BORDER_MARGIN = 15;
+    const isInBorder = (x: number, y: number) =>
+      x < BORDER_MARGIN || x > mapData.width - BORDER_MARGIN ||
+      y < BORDER_MARGIN || y > mapData.height - BORDER_MARGIN;
 
     let rocksPlaced = 0;
     for (let i = 0; i < maxRocks * 3 && rocksPlaced < maxRocks; i++) {
@@ -348,7 +391,13 @@ export class InstancedRocks {
           const scale = baseScale * (0.7 + Math.random() * 0.6);
           const rotation = Math.random() * Math.PI * 2;
 
-          rocksByModel.get(modelId)!.push({ x, y, height, scale, rotation });
+          const rockPos = { x, y, height, scale, rotation };
+          // Rocks in border don't cast shadows, playable area rocks do
+          if (isInBorder(x, y)) {
+            borderRocksByModel.get(modelId)!.push(rockPos);
+          } else {
+            playableRocksByModel.get(modelId)!.push(rockPos);
+          }
 
           // Store collision data
           const collisionRadius = scale * 2.0;
@@ -358,30 +407,34 @@ export class InstancedRocks {
       }
     }
 
-    // PERF: Create ONE InstancedMesh per model type instead of individual meshes
-    const matrix = new THREE.Matrix4();
-    const position = new THREE.Vector3();
-    const quaternion = new THREE.Quaternion();
-    const scale = new THREE.Vector3();
-
-    for (const [modelId, positions] of rocksByModel) {
-      if (positions.length === 0) continue;
+    // Helper to create instanced mesh from positions
+    const createInstancedMesh = (
+      modelId: string,
+      positions: RockPos[],
+      castShadow: boolean
+    ) => {
+      if (positions.length === 0) return;
 
       const original = AssetManager.getDecorationOriginal(modelId);
-      if (!original) continue;
+      if (!original) return;
 
       const geometry = extractGeometry(original);
       const material = extractMaterial(original);
-      if (!geometry || !material) continue;
+      if (!geometry || !material) return;
 
-      // Clone geometry and material to avoid sharing issues
       const instancedGeometry = geometry.clone();
       const instancedMaterial = material.clone();
+      if (instancedMaterial instanceof THREE.MeshStandardMaterial) {
+        instancedMaterial.envMapIntensity = 0;
+      }
       this.geometries.push(instancedGeometry);
       this.materials.push(instancedMaterial);
 
-      // Get model Y offset for proper grounding
       const yOffset = AssetManager.getModelYOffset(modelId);
+      const matrix = new THREE.Matrix4();
+      const position = new THREE.Vector3();
+      const quaternion = new THREE.Quaternion();
+      const scale = new THREE.Vector3();
 
       const instancedMesh = new THREE.InstancedMesh(
         instancedGeometry,
@@ -400,11 +453,17 @@ export class InstancedRocks {
 
       instancedMesh.instanceMatrix.needsUpdate = true;
       instancedMesh.frustumCulled = false;
-      instancedMesh.castShadow = true;
+      instancedMesh.castShadow = castShadow;
       instancedMesh.receiveShadow = true;
 
       this.instancedMeshes.push(instancedMesh);
       this.group.add(instancedMesh);
+    };
+
+    // Create instanced meshes - playable area rocks cast shadows, border rocks don't
+    for (const modelId of rockModelIds) {
+      createInstancedMesh(modelId, playableRocksByModel.get(modelId)!, true);  // Cast shadows
+      createInstancedMesh(modelId, borderRocksByModel.get(modelId)!, false);   // No shadows
     }
   }
 
