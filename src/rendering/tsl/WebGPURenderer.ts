@@ -69,6 +69,10 @@ export async function createWebGPURenderer(config: WebGPURendererConfig): Promis
   // Enable local clipping planes for building construction reveal effect
   (renderer as any).localClippingEnabled = true;
 
+  // Enable shadow maps - must be configured before first render
+  renderer.shadowMap.enabled = true;
+  renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+
   return {
     renderer,
     isWebGPU,
