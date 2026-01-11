@@ -373,6 +373,8 @@ export function createVespeneGeysers(
 
 // STANDARD mineral distance from CC (SC2-style)
 const MINERAL_DISTANCE = 7; // 7 units from CC center to mineral arc center
+// Natural expansions place minerals further to keep ramp paths clear
+export const MINERAL_DISTANCE_NATURAL = 10;
 
 /**
  * Create minerals and geysers for a base at standardized distance.
@@ -384,6 +386,7 @@ const MINERAL_DISTANCE = 7; // 7 units from CC center to mineral arc center
  * @param mineralAmount - Amount per normal mineral patch (default 1500, close patches always 900)
  * @param gasAmount - Amount per geyser (default 2250)
  * @param isGold - If true, all mineral patches have 900 minerals (gold/rich base)
+ * @param mineralDistance - Distance from base center to mineral arc center (default 7, use MINERAL_DISTANCE_NATURAL=10 for naturals)
  */
 export function createBaseResources(
   baseX: number,
@@ -391,11 +394,12 @@ export function createBaseResources(
   direction: number,
   mineralAmount: number = MINERAL_NORMAL,
   gasAmount: number = GAS_NORMAL,
-  isGold: boolean = false
+  isGold: boolean = false,
+  mineralDistance: number = MINERAL_DISTANCE
 ): { minerals: ResourceNode[]; vespene: ResourceNode[] } {
-  // Place mineral center at standard distance from base
-  const mineralCenterX = baseX + Math.cos(direction) * MINERAL_DISTANCE;
-  const mineralCenterY = baseY + Math.sin(direction) * MINERAL_DISTANCE;
+  // Place mineral center at specified distance from base
+  const mineralCenterX = baseX + Math.cos(direction) * mineralDistance;
+  const mineralCenterY = baseY + Math.sin(direction) * mineralDistance;
 
   return {
     minerals: createMineralLine(mineralCenterX, mineralCenterY, baseX, baseY, mineralAmount, isGold),

@@ -4,6 +4,92 @@ import { MapData } from '@/data/maps';
 import AssetManager from '@/assets/AssetManager';
 
 /**
+ * Build a set of cells that should be cleared near ramps.
+ * Uses circular clearance around ramp cells PLUS extended clearance
+ * in the direction of ramp entry/exit to keep pathways clear.
+ */
+function buildRampClearanceSet(mapData: MapData): Set<string> {
+  const clearance = new Set<string>();
+  const RAMP_CLEARANCE_RADIUS = 10;
+  const RAMP_EXIT_EXTENSION = 18; // Extra clearance in exit direction
+
+  // First pass: circular clearance around all ramp cells
+  for (let cy = 0; cy < mapData.height; cy++) {
+    for (let cx = 0; cx < mapData.width; cx++) {
+      const cell = mapData.terrain[cy][cx];
+      if (cell.terrain === 'ramp') {
+        for (let dy = -RAMP_CLEARANCE_RADIUS; dy <= RAMP_CLEARANCE_RADIUS; dy++) {
+          for (let dx = -RAMP_CLEARANCE_RADIUS; dx <= RAMP_CLEARANCE_RADIUS; dx++) {
+            const dist = Math.sqrt(dx * dx + dy * dy);
+            if (dist <= RAMP_CLEARANCE_RADIUS) {
+              clearance.add(`${cx + dx},${cy + dy}`);
+            }
+          }
+        }
+      }
+    }
+  }
+
+  // Second pass: extended clearance at ramp entry/exit based on ramp direction
+  for (const ramp of mapData.ramps) {
+    // Calculate ramp center
+    const rampCenterX = ramp.x + ramp.width / 2;
+    const rampCenterY = ramp.y + ramp.height / 2;
+
+    // Determine exit direction vectors based on ramp direction
+    let exitDx = 0, exitDy = 0;
+    let perpDx = 0, perpDy = 0; // Perpendicular for width
+    let exitStartX = rampCenterX, exitStartY = rampCenterY;
+    let entryStartX = rampCenterX, entryStartY = rampCenterY;
+
+    switch (ramp.direction) {
+      case 'north':
+        exitDy = -1; perpDx = 1;
+        exitStartY = ramp.y; // Top of ramp
+        entryStartY = ramp.y + ramp.height; // Bottom of ramp
+        break;
+      case 'south':
+        exitDy = 1; perpDx = 1;
+        exitStartY = ramp.y + ramp.height;
+        entryStartY = ramp.y;
+        break;
+      case 'east':
+        exitDx = 1; perpDy = 1;
+        exitStartX = ramp.x + ramp.width;
+        entryStartX = ramp.x;
+        break;
+      case 'west':
+        exitDx = -1; perpDy = 1;
+        exitStartX = ramp.x;
+        entryStartX = ramp.x + ramp.width;
+        break;
+    }
+
+    // Add extended clearance in exit direction (where units walk)
+    const halfWidth = Math.max(ramp.width, ramp.height) / 2 + 4;
+    for (let d = 0; d < RAMP_EXIT_EXTENSION; d++) {
+      const cx = Math.floor(exitStartX + exitDx * d);
+      const cy = Math.floor(exitStartY + exitDy * d);
+      // Add width perpendicular to exit direction
+      for (let w = -halfWidth; w <= halfWidth; w++) {
+        clearance.add(`${cx + perpDx * w},${cy + perpDy * w}`);
+      }
+    }
+
+    // Add extended clearance in entry direction too
+    for (let d = 0; d < RAMP_EXIT_EXTENSION; d++) {
+      const cx = Math.floor(entryStartX - exitDx * d);
+      const cy = Math.floor(entryStartY - exitDy * d);
+      for (let w = -halfWidth; w <= halfWidth; w++) {
+        clearance.add(`${cx + perpDx * w},${cy + perpDy * w}`);
+      }
+    }
+  }
+
+  return clearance;
+}
+
+/**
  * PERFORMANCE: Instanced rendering for decorations
  *
  * Instead of creating individual meshes (1000+ draw calls),
@@ -84,25 +170,8 @@ export class InstancedTrees {
     // Get tree model types based on biome
     const treeModelIds = this.getTreeModelsForBiome(biome);
 
-    // Build a set of cells near ramps that should be avoided (pathways)
-    const rampClearance = new Set<string>();
-    const RAMP_CLEARANCE_RADIUS = 12;
-
-    for (let cy = 0; cy < mapData.height; cy++) {
-      for (let cx = 0; cx < mapData.width; cx++) {
-        const cell = mapData.terrain[cy][cx];
-        if (cell.terrain === 'ramp') {
-          for (let dy = -RAMP_CLEARANCE_RADIUS; dy <= RAMP_CLEARANCE_RADIUS; dy++) {
-            for (let dx = -RAMP_CLEARANCE_RADIUS; dx <= RAMP_CLEARANCE_RADIUS; dx++) {
-              const dist = Math.sqrt(dx * dx + dy * dy);
-              if (dist <= RAMP_CLEARANCE_RADIUS) {
-                rampClearance.add(`${cx + dx},${cy + dy}`);
-              }
-            }
-          }
-        }
-      }
-    }
+    // Build ramp clearance set to avoid blocking pathways (uses extended directional clearance)
+    const rampClearance = buildRampClearanceSet(mapData);
 
     // PERF: Separate trees into playable (cast shadows) vs border (no shadows)
     type TreePos = { x: number; y: number; height: number; scale: number; rotation: number };
@@ -322,25 +391,8 @@ export class InstancedRocks {
     // Rock model types to use for variety
     const rockModelIds = ['rocks_large', 'rocks_small', 'rock_single'];
 
-    // Build ramp clearance set to avoid blocking pathways
-    const rampClearance = new Set<string>();
-    const RAMP_CLEARANCE_RADIUS = 12;
-
-    for (let cy = 0; cy < mapData.height; cy++) {
-      for (let cx = 0; cx < mapData.width; cx++) {
-        const cell = mapData.terrain[cy][cx];
-        if (cell.terrain === 'ramp') {
-          for (let dy = -RAMP_CLEARANCE_RADIUS; dy <= RAMP_CLEARANCE_RADIUS; dy++) {
-            for (let dx = -RAMP_CLEARANCE_RADIUS; dx <= RAMP_CLEARANCE_RADIUS; dx++) {
-              const dist = Math.sqrt(dx * dx + dy * dy);
-              if (dist <= RAMP_CLEARANCE_RADIUS) {
-                rampClearance.add(`${cx + dx},${cy + dy}`);
-              }
-            }
-          }
-        }
-      }
-    }
+    // Build ramp clearance set to avoid blocking pathways (uses extended directional clearance)
+    const rampClearance = buildRampClearanceSet(mapData);
 
     // PERF: Separate rocks into playable (cast shadows) vs border (no shadows)
     type RockPos = { x: number; y: number; height: number; scale: number; rotation: number };

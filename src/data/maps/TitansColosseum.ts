@@ -613,15 +613,15 @@ function generateTitansColosseum(): MapData {
   const p6Main = createBaseResources(80, 355, DIR.DOWN_LEFT);    // Standard
   const p7Main = createBaseResources(45, 270, DIR.LEFT);         // Standard
   const p8Main = createBaseResources(45, 130, DIR.LEFT);         // Standard
-  // 8 Natural expansions
-  const p1Nat = createBaseResources(110, 75, DIR.UP);            // Standard
-  const p2Nat = createBaseResources(290, 75, DIR.UP);            // Standard
-  const p3Nat = createBaseResources(325, 160, DIR.RIGHT);        // Standard
-  const p4Nat = createBaseResources(325, 240, DIR.RIGHT);        // Standard
-  const p5Nat = createBaseResources(290, 325, DIR.DOWN);         // Standard
-  const p6Nat = createBaseResources(110, 325, DIR.DOWN);         // Standard
-  const p7Nat = createBaseResources(75, 240, DIR.LEFT);          // Standard
-  const p8Nat = createBaseResources(75, 160, DIR.LEFT);          // Standard
+  // 8 Natural expansions (minerals placed further from ramp exits)
+  const p1Nat = createBaseResources(110, 75, DIR.UP, 1500, 2250, false, 10);
+  const p2Nat = createBaseResources(290, 75, DIR.UP, 1500, 2250, false, 10);
+  const p3Nat = createBaseResources(325, 160, DIR.RIGHT, 1500, 2250, false, 10);
+  const p4Nat = createBaseResources(325, 240, DIR.RIGHT, 1500, 2250, false, 10);
+  const p5Nat = createBaseResources(290, 325, DIR.DOWN, 1500, 2250, false, 10);
+  const p6Nat = createBaseResources(110, 325, DIR.DOWN, 1500, 2250, false, 10);
+  const p7Nat = createBaseResources(75, 240, DIR.LEFT, 1500, 2250, false, 10);
+  const p8Nat = createBaseResources(75, 160, DIR.LEFT, 1500, 2250, false, 10);
   // Gold expansions (inner ring)
   const goldNW = createBaseResources(140, 140, DIR.UP_LEFT, 1500, 2250, true);     // Gold
   const goldNE = createBaseResources(260, 140, DIR.UP_RIGHT, 1500, 2250, true);    // Gold

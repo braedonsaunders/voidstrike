@@ -987,7 +987,7 @@ export class Terrain {
   /**
    * Smooth the heightmap using Gaussian-like averaging
    * Preserves large features while smoothing rough transitions
-   * IMPORTANT: Skips ramp cells to preserve their clean linear gradient
+   * IMPORTANT: Skips ramp cells and plateau edges to preserve clean geometry
    */
   private smoothHeightMap(iterations: number = 1): void {
     const { width, height, terrain } = this.mapData;
@@ -1012,6 +1012,36 @@ export class Terrain {
       return false;
     };
 
+    // Helper to check if a vertex is on a plateau edge (ground adjacent to cliff)
+    // This preserves the clean circular shape of base plateaus
+    const isPlateauEdgeVertex = (vx: number, vy: number): boolean => {
+      // Check the 4 cells this vertex touches
+      const cellCoords = [
+        { cx: vx - 1, cy: vy - 1 },
+        { cx: vx, cy: vy - 1 },
+        { cx: vx - 1, cy: vy },
+        { cx: vx, cy: vy },
+      ];
+
+      let hasGround = false;
+      let hasUnwalkable = false;
+
+      for (const { cx, cy } of cellCoords) {
+        if (cx >= 0 && cx < width && cy >= 0 && cy < height) {
+          const cellTerrain = terrain[cy][cx].terrain;
+          if (cellTerrain === 'ground' || cellTerrain === 'unbuildable') {
+            hasGround = true;
+          }
+          if (cellTerrain === 'unwalkable') {
+            hasUnwalkable = true;
+          }
+        }
+      }
+
+      // This is a plateau edge if it touches both ground and unwalkable (cliff)
+      return hasGround && hasUnwalkable;
+    };
+
     for (let iter = 0; iter < iterations; iter++) {
       for (let y = 0; y <= height; y++) {
         for (let x = 0; x <= width; x++) {
@@ -1020,6 +1050,13 @@ export class Terrain {
           // SKIP RAMP VERTICES - preserve their exact calculated heights
           // This ensures ramps stay as clean linear slopes, not smoothed flat steps
           if (isRampVertex(x, y)) {
+            temp[idx] = this.heightMap[idx];
+            continue;
+          }
+
+          // SKIP PLATEAU EDGE VERTICES - preserve clean circular base shapes
+          // This prevents the base circle from being deformed by smoothing
+          if (isPlateauEdgeVertex(x, y)) {
             temp[idx] = this.heightMap[idx];
             continue;
           }

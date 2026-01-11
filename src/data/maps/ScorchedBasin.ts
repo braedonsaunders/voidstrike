@@ -583,13 +583,13 @@ function generateScorchedBasin(): MapData {
   // Gold: all 8 patches at 900 minerals
   // ========================================
   const p1Main = createBaseResources(40, 40, DIR.UP_LEFT);       // Standard
-  const p1Nat = createBaseResources(75, 75, DIR.UP_LEFT);        // Standard
+  const p1Nat = createBaseResources(75, 75, DIR.UP_LEFT, 1500, 2250, false, 10);    // Natural: minerals further from ramp
   const p2Main = createBaseResources(240, 40, DIR.UP_RIGHT);     // Standard
-  const p2Nat = createBaseResources(205, 75, DIR.UP_RIGHT);      // Standard
+  const p2Nat = createBaseResources(205, 75, DIR.UP_RIGHT, 1500, 2250, false, 10); // Natural: minerals further from ramp
   const p3Main = createBaseResources(40, 240, DIR.DOWN_LEFT);    // Standard
-  const p3Nat = createBaseResources(75, 205, DIR.DOWN_LEFT);     // Standard
+  const p3Nat = createBaseResources(75, 205, DIR.DOWN_LEFT, 1500, 2250, false, 10); // Natural: minerals further from ramp
   const p4Main = createBaseResources(240, 240, DIR.DOWN_RIGHT);  // Standard
-  const p4Nat = createBaseResources(205, 205, DIR.DOWN_RIGHT);   // Standard
+  const p4Nat = createBaseResources(205, 205, DIR.DOWN_RIGHT, 1500, 2250, false, 10); // Natural: minerals further from ramp
   const westThird = createBaseResources(40, 140, DIR.LEFT);      // Standard
   const eastThird = createBaseResources(240, 140, DIR.RIGHT);    // Standard
   const northThird = createBaseResources(140, 40, DIR.UP);       // Standard
