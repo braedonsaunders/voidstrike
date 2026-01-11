@@ -38,6 +38,9 @@ export interface GameSetupState {
   // Game session flag - must be true to enter /game
   gameStarted: boolean;
 
+  // Battle Simulator mode - sandbox for spawning units
+  isBattleSimulator: boolean;
+
   // Actions
   setSelectedMap: (mapId: string) => void;
   setStartingResources: (resources: StartingResources) => void;
@@ -65,6 +68,7 @@ export interface GameSetupState {
   getHumanPlayerIds: () => string[];
 
   startGame: () => void;
+  startBattleSimulator: () => void;
   endGame: () => void;
   reset: () => void;
 
@@ -148,6 +152,7 @@ const initialState = {
   playerSlots: [...defaultPlayerSlots],
   localPlayerId: 'player1' as string | null, // Default to player1, updated when game starts
   gameStarted: false,
+  isBattleSimulator: false,
 };
 
 export const useGameSetupStore = create<GameSetupState>((set, get) => ({
@@ -294,7 +299,20 @@ export const useGameSetupStore = create<GameSetupState>((set, get) => ({
       localPlayerId: firstHumanSlot?.id ?? null,
     });
   },
-  endGame: () => set({ gameStarted: false }),
+  startBattleSimulator: () => {
+    set({
+      gameStarted: true,
+      isBattleSimulator: true,
+      fogOfWar: false,
+      localPlayerId: 'player1',
+      // Set up two empty teams for simulator
+      playerSlots: [
+        { id: 'player1', type: 'human', faction: 'dominion', colorId: 'blue', aiDifficulty: 'medium', name: 'Team 1', team: 1 },
+        { id: 'player2', type: 'human', faction: 'dominion', colorId: 'red', aiDifficulty: 'medium', name: 'Team 2', team: 2 },
+      ],
+    });
+  },
+  endGame: () => set({ gameStarted: false, isBattleSimulator: false }),
   reset: () => set({ ...initialState, playerSlots: [...defaultPlayerSlots], localPlayerId: 'player1' }),
 
   isSpectator: (): boolean => {
@@ -345,6 +363,10 @@ export function getAIPlayerIds(): string[] {
 
 export function isSpectatorMode(): boolean {
   return useGameSetupStore.getState().isSpectator();
+}
+
+export function isBattleSimulatorMode(): boolean {
+  return useGameSetupStore.getState().isBattleSimulator;
 }
 
 export function enableSpectatorMode(): void {

@@ -47,7 +47,7 @@ import {
 } from '@/rendering/tsl';
 
 import { useGameStore } from '@/store/gameStore';
-import { useGameSetupStore, getLocalPlayerId, isSpectatorMode } from '@/store/gameSetupStore';
+import { useGameSetupStore, getLocalPlayerId, isSpectatorMode, isBattleSimulatorMode } from '@/store/gameSetupStore';
 import { SelectionBox } from './SelectionBox';
 import { LoadingScreen } from './LoadingScreen';
 import { GraphicsOptionsPanel } from './GraphicsOptionsPanel';
@@ -252,7 +252,7 @@ export function WebGPUGameCanvas() {
         tickRate: 20,
         isMultiplayer: false,
         playerId: localPlayerId ?? 'spectator',
-        aiEnabled: true,
+        aiEnabled: !isBattleSimulatorMode(), // Disable AI in battle simulator
       });
       gameRef.current = game;
 
@@ -430,8 +430,10 @@ export function WebGPUGameCanvas() {
         }
       });
 
-      // Spawn entities
-      spawnInitialEntities(game, CURRENT_MAP);
+      // Spawn entities (skip in battle simulator - user spawns manually)
+      if (!isBattleSimulatorMode()) {
+        spawnInitialEntities(game, CURRENT_MAP);
+      }
 
       // Initialize watch towers
       if (CURRENT_MAP.watchTowers && CURRENT_MAP.watchTowers.length > 0) {
@@ -724,6 +726,15 @@ export function WebGPUGameCanvas() {
             // No shift: exit building mode
             useGameStore.getState().setBuildingMode(null);
           }
+        }
+      } else if (isBattleSimulatorMode()) {
+        // In battle simulator, left-click emits spawn event for the panel
+        const worldPos = cameraRef.current?.screenToWorld(e.clientX, e.clientY);
+        if (worldPos && gameRef.current) {
+          gameRef.current.eventBus.emit('simulator:spawn', {
+            worldX: worldPos.x,
+            worldY: worldPos.z,
+          });
         }
       } else {
         setIsSelecting(true);

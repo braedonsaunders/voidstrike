@@ -3,7 +3,7 @@
 import { useState, useCallback, useEffect, useMemo, memo } from 'react';
 import { useGameStore } from '@/store/gameStore';
 import { useUIStore, GameOverlayType } from '@/store/uiStore';
-import { isMultiplayerMode } from '@/store/gameSetupStore';
+import { isMultiplayerMode, useGameSetupStore } from '@/store/gameSetupStore';
 import { setEdgeScrollEnabled } from '@/store/cameraStore';
 import { Minimap } from './Minimap';
 import { ResourcePanel } from './ResourcePanel';
@@ -14,11 +14,13 @@ import { IdleWorkerButton } from './IdleWorkerButton';
 import { KeyboardShortcutsPanel } from './KeyboardShortcutsPanel';
 import { PlayerStatusPanel } from './PlayerStatusPanel';
 import { SoundOptionsPanel } from './SoundOptionsPanel';
+import { BattleSimulatorPanel } from './BattleSimulatorPanel';
 
 // PERF: Wrap HUD in memo to prevent unnecessary re-renders when parent state changes
 export const HUD = memo(function HUD() {
   const { isPaused, togglePause, setShowTechTree, setShowKeyboardShortcuts } = useGameStore();
   const { toggleGraphicsOptions, showGraphicsOptions, toggleSoundOptions, showSoundOptions, toggleDebugMenu, showDebugMenu, isFullscreen, toggleFullscreen, setFullscreen, overlaySettings, toggleOverlay } = useUIStore();
+  const isBattleSimulator = useGameSetupStore((state) => state.isBattleSimulator);
   const [showOptionsMenu, setShowOptionsMenu] = useState(false);
   const [showPlayerStatus, setShowPlayerStatus] = useState(false);
   const [showOverlayMenu, setShowOverlayMenu] = useState(false);
@@ -57,8 +59,9 @@ export const HUD = memo(function HUD() {
 
       {/* Top bar */}
       <div className="absolute top-0 left-0 right-0 flex justify-between items-start p-2 pointer-events-auto">
-        {/* Resources (includes game time) */}
-        <ResourcePanel />
+        {/* Resources (includes game time) - hidden in simulator mode */}
+        {!isBattleSimulator && <ResourcePanel />}
+        {isBattleSimulator && <div />}
 
         {/* Menu buttons */}
         <div
@@ -258,6 +261,9 @@ export const HUD = memo(function HUD() {
           <PlayerStatusPanel />
         </div>
       )}
+
+      {/* Battle Simulator Panel */}
+      {isBattleSimulator && <BattleSimulatorPanel />}
 
       {/* Tech Tree Modal */}
       <TechTreePanel />
