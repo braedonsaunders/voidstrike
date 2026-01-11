@@ -24,8 +24,11 @@ export const BATTLE_ARENA: MapData = {
 
   terrain,
 
-  // No spawns needed - simulator handles spawning
-  spawns: [],
+  // Spawns for camera positioning (placed on opposite sides)
+  spawns: [
+    { x: 16, y: 32, playerSlot: 1, rotation: 0 },
+    { x: 48, y: 32, playerSlot: 2, rotation: Math.PI },
+  ],
 
   // No expansions or resources
   expansions: [],
