@@ -138,7 +138,7 @@ export class TSLFogOfWar {
       return vec4(color, alpha);
     })();
 
-    material.outputNode = outputNode;
+    material.colorNode = outputNode;
 
     return material;
   }
