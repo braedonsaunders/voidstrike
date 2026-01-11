@@ -1104,18 +1104,19 @@ export class Terrain {
         const h11 = this.heightMap[(y + 1) * this.gridWidth + (x + 1)];
 
         // Create two triangles for this cell
-        // Triangle 1: (x,y), (x+1,y), (x,y+1)
-        walkableVertices.push(x, h00, y);        // Note: y becomes z for navmesh
-        walkableVertices.push(x + 1, h10, y);
+        // Recast uses Y-up and expects counter-clockwise winding for upward-facing surfaces
+        // Triangle 1: (x,y), (x,y+1), (x+1,y) - CCW when viewed from above
+        walkableVertices.push(x, h00, y);        // Note: game y becomes navmesh z
         walkableVertices.push(x, h01, y + 1);
+        walkableVertices.push(x + 1, h10, y);
 
         walkableIndices.push(vertexIndex, vertexIndex + 1, vertexIndex + 2);
         vertexIndex += 3;
 
-        // Triangle 2: (x+1,y), (x+1,y+1), (x,y+1)
+        // Triangle 2: (x+1,y), (x,y+1), (x+1,y+1) - CCW when viewed from above
         walkableVertices.push(x + 1, h10, y);
-        walkableVertices.push(x + 1, h11, y + 1);
         walkableVertices.push(x, h01, y + 1);
+        walkableVertices.push(x + 1, h11, y + 1);
 
         walkableIndices.push(vertexIndex, vertexIndex + 1, vertexIndex + 2);
         vertexIndex += 3;
