@@ -1,6 +1,6 @@
 import { System } from '../ecs/System';
 import { Transform } from '../components/Transform';
-import { Building } from '../components/Building';
+import { Building, ProductionQueueItem } from '../components/Building';
 import { Health } from '../components/Health';
 import { Selectable } from '../components/Selectable';
 import { Ability, DOMINION_ABILITIES } from '../components/Ability';
@@ -8,7 +8,7 @@ import { Game } from '../core/Game';
 import { useGameStore } from '@/store/gameStore';
 import { isLocalPlayer } from '@/store/gameSetupStore';
 import { UNIT_DEFINITIONS } from '@/data/units/dominion';
-import { BUILDING_DEFINITIONS } from '@/data/buildings/dominion';
+import { BUILDING_DEFINITIONS, RESEARCH_MODULE_UNITS } from '@/data/buildings/dominion';
 import { debugProduction } from '@/utils/debugLogger';
 
 export class ProductionSystem extends System {
@@ -51,12 +51,8 @@ export class ProductionSystem extends System {
       return;
     }
 
-    // Check supply
-    if (store.supply + unitDef.supplyCost > store.maxSupply) {
-      this.game.eventBus.emit('ui:error', { message: 'Not enough supply' });
-      this.game.eventBus.emit('warning:supplyBlocked', {});
-      return;
-    }
+    // Note: Supply is only checked when unit starts producing, not when queueing.
+    // This allows unlimited queueing - supply is allocated for the active unit only.
 
     // Find first valid building
     for (const entityId of entityIds) {
@@ -66,14 +62,21 @@ export class ProductionSystem extends System {
       const building = entity.get<Building>('Building');
       if (!building || !building.isComplete()) continue;
 
-      if (!building.canProduce.includes(unitType)) continue;
+      // Check if building can produce this unit:
+      // 1. Unit is in canProduce (basic units), OR
+      // 2. Unit is in RESEARCH_MODULE_UNITS for this building type AND building has tech lab
+      const canProduceBasic = building.canProduce.includes(unitType);
+      const techGatedUnits = RESEARCH_MODULE_UNITS[building.buildingId] || [];
+      const canProduceTechGated = techGatedUnits.includes(unitType) && building.hasTechLab();
+
+      if (!canProduceBasic && !canProduceTechGated) continue;
 
       // Deduct resources
       store.addResources(-unitDef.mineralCost, -unitDef.vespeneCost);
-      store.addSupply(unitDef.supplyCost);
 
-      // Add to production queue
-      building.addToProductionQueue('unit', unitType, unitDef.buildTime);
+      // Add to production queue with supply cost stored
+      // Supply allocation is handled in the update() loop when the item starts producing
+      building.addToProductionQueue('unit', unitType, unitDef.buildTime, unitDef.supplyCost);
 
       this.game.eventBus.emit('production:started', {
         buildingId: entityId,
@@ -177,10 +180,33 @@ export class ProductionSystem extends System {
         continue;
       }
 
+      // Check if production is supply-blocked
+      if (building.productionQueue.length > 0) {
+        const currentItem = building.productionQueue[0];
+        const store = useGameStore.getState();
+
+        // Check if we need to allocate supply for this item
+        // An item needs supply allocated if it's a unit with supplyCost > 0
+        // and supply hasn't been allocated yet
+        if (currentItem.type === 'unit' && currentItem.supplyCost > 0 && !currentItem.supplyAllocated) {
+          // Try to allocate supply if there's room
+          if (store.supply + currentItem.supplyCost <= store.maxSupply) {
+            // We have room - allocate supply
+            store.addSupply(currentItem.supplyCost);
+            currentItem.supplyAllocated = true;
+          } else {
+            // No room - skip this building (supply blocked)
+            continue;
+          }
+        }
+      }
+
       // Update production
       const completed = building.updateProduction(dt);
       if (completed) {
         this.handleProductionComplete(entity.id, building, transform, completed);
+        // Note: Supply for the next item (if any) will be allocated on the next update() tick
+        // when the progress === 0 check passes. This avoids duplicate allocation.
       }
     }
   }
@@ -189,7 +215,7 @@ export class ProductionSystem extends System {
     buildingId: number,
     building: Building,
     buildingTransform: Transform,
-    item: { type: string; id: string }
+    item: ProductionQueueItem
   ): void {
     if (item.type === 'unit') {
       // Spawn the unit near the building (not at rally point)
