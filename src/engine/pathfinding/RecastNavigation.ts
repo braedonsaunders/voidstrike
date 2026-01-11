@@ -33,9 +33,11 @@ const NAVMESH_CONFIG: Partial<TileCacheGeneratorConfig> = {
   // Cell height - vertical precision
   ch: 0.2,
   // Agent parameters
-  walkableSlopeAngle: 45,
+  // Increased slope angle to allow units to traverse ramps (which can be steep)
+  walkableSlopeAngle: 60,
   walkableHeight: 2,
-  walkableClimb: 0.5,
+  // Increased climb to handle elevation transitions at ramp boundaries
+  walkableClimb: 1.0,
   walkableRadius: 0.5,
   // Detail mesh
   maxSimplificationError: 1.0,
