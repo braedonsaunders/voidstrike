@@ -25,6 +25,14 @@ This document contains all audio specifications, AI prompts for generation, and 
 - [ ] `music/gameplay/gameplay_14.mp3`
 - [ ] `music/gameplay/gameplay_15.mp3`
 - [ ] `music/gameplay/gameplay_16.mp3`
+- [ ] `music/gameplay/gameplay_17.mp3`
+- [ ] `music/gameplay/gameplay_18.mp3`
+- [ ] `music/gameplay/gameplay_19.mp3`
+- [ ] `music/gameplay/gameplay_20.mp3`
+- [ ] `music/gameplay/gameplay_21.mp3`
+- [ ] `music/gameplay/gameplay_22.mp3`
+- [ ] `music/gameplay/gameplay_23.mp3`
+- [ ] `music/gameplay/gameplay_24.mp3`
 - [x] `music/victory/victory.mp3`
 - [x] `music/defeat/defeat.mp3`
 
@@ -278,6 +286,14 @@ public/audio/
 | `music/gameplay/gameplay_14.mp3` | 3 min loop | "Frantic techno assault, relentless BPM, distorted synth leads, chaotic energy, all-out offensive feeling, inspired by industrial metal, seamless loop" |
 | `music/gameplay/gameplay_15.mp3` | 4 min loop | "Majestic space opera theme, soaring strings, triumphant horns, cosmic scale and grandeur, fleet deployment feeling, seamless loop" |
 | `music/gameplay/gameplay_16.mp3` | 3 min loop | "Gritty frontline combat, distorted guitar riffs mixed with orchestral elements, boots-on-ground warfare intensity, infantry assault theme, seamless loop" |
+| `music/gameplay/gameplay_17.mp3` | 3 min loop | "Stealth infiltration theme, minimal electronic pulses, tense silences, sudden staccato strings, covert ops atmosphere, seamless loop" |
+| `music/gameplay/gameplay_18.mp3` | 4 min loop | "Naval fleet engagement, deep brass swells, thunderous timpani, oceanic synth textures, capital ship warfare grandeur, seamless loop" |
+| `music/gameplay/gameplay_19.mp3` | 3 min loop | "Desperate last stand, emotional strings over driving percussion, heroic sacrifice theme, bittersweet brass melodies, seamless loop" |
+| `music/gameplay/gameplay_20.mp3` | 3 min loop | "Alien encounter theme, unsettling atonal elements, otherworldly synths, mysterious and threatening, first contact tension, seamless loop" |
+| `music/gameplay/gameplay_21.mp3` | 4 min loop | "Victory march in progress, triumphant but urgent, military snare cadence, brass fanfares building momentum, pushing advantage feeling, seamless loop" |
+| `music/gameplay/gameplay_22.mp3` | 3 min loop | "Mech assault theme, heavy industrial stomps, hydraulic hisses, massive synthesizer drops, giant walker combat feel, seamless loop" |
+| `music/gameplay/gameplay_23.mp3` | 4 min loop | "Deep space patrol, lonely ambient with subtle radar pings, vast emptiness punctuated by distant signals, exploration and vigilance, seamless loop" |
+| `music/gameplay/gameplay_24.mp3` | 3 min loop | "All-out apocalyptic warfare, layered chaos of orchestral and electronic elements, world-ending battle intensity, climactic final assault, seamless loop" |
 
 ### Voice Announcements (Alerts)
 
