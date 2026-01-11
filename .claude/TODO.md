@@ -6,6 +6,23 @@
 
 ---
 
+## Selection System Improvements (January 2026) ✓
+
+### Screen-Space Selection
+- [x] **Screen-space box selection** - Selection done in screen coordinates for perspective-accurate selection
+- [x] **Screen-space click selection** - Click detection uses screen coordinates for flying units
+- [x] **Selection radius buffer** - Uses circle-rectangle intersection so partial overlaps count as selected
+- [x] **Visual height support** - Flying units/buildings selectable at their visual position (8 units above ground)
+- [x] **Visual scale support** - Larger units (>300 HP) get 50% bigger hitboxes for easier selection
+- [x] **Dynamic flying detection** - visualHeight updates when units transform or buildings lift off/land
+
+### Improved Accuracy
+- [x] **Terrain convergence** - Increased from 3 to 6 iterations with early termination
+- [x] **Minimum drag threshold** - 10px minimum for box selection, smaller drags become clicks
+- [x] **Priority-based selection** - Units selected over buildings when both in selection box
+
+---
+
 ## WebGPU Renderer Migration (January 2026) ✓
 
 ### Three.js r182 Upgrade

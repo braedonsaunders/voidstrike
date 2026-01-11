@@ -458,6 +458,13 @@ export class UnitMechanicsSystem extends System {
       if (unit.state === 'transforming') {
         const completed = unit.updateTransform(dt);
         if (completed) {
+          // Update visualHeight for selection when flying status changes
+          // Flying units are rendered at AIR_UNIT_HEIGHT (8 units) above ground
+          const selectable = entity.get<Selectable>('Selectable');
+          if (selectable) {
+            selectable.visualHeight = unit.isFlying ? 8 : 0;
+          }
+
           this.game.eventBus.emit('unit:transformComplete', {
             entityId: entity.id,
             mode: unit.currentMode,

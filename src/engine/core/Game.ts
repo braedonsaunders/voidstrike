@@ -68,6 +68,7 @@ export class Game {
   public saveLoadSystem: SaveLoadSystem;
   public pathfindingSystem: PathfindingSystem;
   public aiMicroSystem: AIMicroSystem;
+  public selectionSystem!: SelectionSystem;
 
   // Terrain grid for building placement validation and terrain features
   private terrainGrid: TerrainCell[][] | null = null;
@@ -173,7 +174,8 @@ export class Game {
     // Add systems in order of execution
     this.world.addSystem(new SpawnSystem(this));
     this.world.addSystem(new BuildingPlacementSystem(this));
-    this.world.addSystem(new SelectionSystem(this));
+    this.selectionSystem = new SelectionSystem(this);
+    this.world.addSystem(this.selectionSystem);
     this.world.addSystem(this.pathfindingSystem); // Dynamic pathfinding with obstacle detection
     this.world.addSystem(new BuildingMechanicsSystem(this)); // Lift-off, Addons, Building attacks
     this.world.addSystem(new UnitMechanicsSystem(this)); // Transform, Cloak, Transport, Heal, Repair

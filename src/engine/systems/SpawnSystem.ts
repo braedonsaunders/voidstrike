@@ -12,6 +12,9 @@ import { debugSpawning } from '@/utils/debugLogger';
 import { useGameStore } from '@/store/gameStore';
 import { isLocalPlayer } from '@/store/gameSetupStore';
 
+// Height for flying units - must match UnitRenderer.AIR_UNIT_HEIGHT
+const AIR_UNIT_HEIGHT = 8;
+
 /**
  * SpawnSystem handles creating new units when production completes
  * or when units need to be spawned dynamically (eg. from abilities)
@@ -52,12 +55,25 @@ export class SpawnSystem extends System {
     // Create the entity
     const entity = this.world.createEntity();
 
+    // Calculate visual properties for selection
+    // Flying units need visualHeight to match their rendered position
+    const isFlying = definition.isFlying ?? false;
+    const visualHeight = isFlying ? AIR_UNIT_HEIGHT : 0;
+
+    // Visual scale based on unit size (larger units get bigger hitboxes)
+    // This helps select larger units like battlecruisers more easily
+    const visualScale = definition.maxHealth > 300 ? 1.5 :
+                        definition.maxHealth > 150 ? 1.2 : 1.0;
+
+    // Selection radius based on unit type
+    const selectionRadius = isFlying ? 1.5 : 1.2;
+
     // Add core components
     entity
       .add(new Transform(x, y, 0))
       .add(new Unit(definition))
       .add(new Health(definition.maxHealth, definition.armor, this.getArmorType(definition)))
-      .add(new Selectable(1.2, 5, playerId))
+      .add(new Selectable(selectionRadius, 5, playerId, visualScale, visualHeight))
       .add(new Velocity());
 
     // Add abilities if the unit has any

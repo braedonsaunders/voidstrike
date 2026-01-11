@@ -468,13 +468,29 @@ export class RTSCamera {
     this._raycaster.ray.intersectPlane(this._raycastPlane, this._raycastTarget);
 
     // If we have terrain height function, iterate to find accurate intersection
+    // Use iterative refinement with early termination for efficiency
     if (this.getTerrainHeight && this._raycastTarget) {
-      // Iterate 3 times to converge on correct terrain intersection
-      for (let i = 0; i < 3; i++) {
+      const CONVERGENCE_THRESHOLD = 0.01; // Stop when position change is < this
+      const MAX_ITERATIONS = 6; // More iterations for better accuracy
+
+      let prevX = this._raycastTarget.x;
+      let prevZ = this._raycastTarget.z;
+
+      for (let i = 0; i < MAX_ITERATIONS; i++) {
         const terrainHeight = this.getTerrainHeight(this._raycastTarget.x, this._raycastTarget.z);
         // Create plane at terrain height
         this._raycastPlane.constant = -terrainHeight;
         this._raycaster.ray.intersectPlane(this._raycastPlane, this._raycastTarget);
+
+        // Check for convergence - stop early if position barely changed
+        const dx = Math.abs(this._raycastTarget.x - prevX);
+        const dz = Math.abs(this._raycastTarget.z - prevZ);
+        if (dx < CONVERGENCE_THRESHOLD && dz < CONVERGENCE_THRESHOLD) {
+          break;
+        }
+
+        prevX = this._raycastTarget.x;
+        prevZ = this._raycastTarget.z;
       }
     }
 

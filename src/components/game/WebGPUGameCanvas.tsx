@@ -236,7 +236,7 @@ export function WebGPUGameCanvas() {
       camera.setTerrainHeightFunction((x, z) => terrain.getHeightAt(x, z));
 
       // Set up projection store
-      useProjectionStore.getState().setWorldToScreen((worldX, worldZ, worldY) => {
+      useProjectionStore.getState().setWorldToScreen((worldX: number, worldZ: number, worldY?: number) => {
         return camera.worldToScreen(worldX, worldZ, worldY);
       });
 
@@ -255,6 +255,11 @@ export function WebGPUGameCanvas() {
         aiEnabled: !isBattleSimulatorMode(), // Disable AI in battle simulator
       });
       gameRef.current = game;
+
+      // Wire up screen-space selection for accurate selection of flying units
+      game.selectionSystem.setWorldToScreen((worldX: number, worldZ: number, worldY?: number) => {
+        return camera.worldToScreen(worldX, worldZ, worldY);
+      });
 
       // Set terrain data
       game.setTerrainGrid(CURRENT_MAP.terrain);
@@ -1014,27 +1019,29 @@ export function WebGPUGameCanvas() {
     if (e.button === 0 && isSelecting) {
       setIsSelecting(false);
 
-      const camera = cameraRef.current;
       const game = gameRef.current;
 
-      if (camera && game) {
-        const start = camera.screenToWorld(selectionStart.x, selectionStart.y);
-        const end = camera.screenToWorld(selectionEnd.x, selectionEnd.y);
+      if (game) {
+        // Calculate screen-space box size
+        const screenDx = Math.abs(selectionEnd.x - selectionStart.x);
+        const screenDy = Math.abs(selectionEnd.y - selectionStart.y);
 
-        const dx = Math.abs(end.x - start.x);
-        const dy = Math.abs(end.z - start.z);
+        // Minimum drag distance for box selection (pixels)
+        const MIN_BOX_DRAG = 10;
 
-        if (dx > 1 || dy > 1) {
-          game.eventBus.emit('selection:box', {
-            startX: Math.min(start.x, end.x),
-            startY: Math.min(start.z, end.z),
-            endX: Math.max(start.x, end.x),
-            endY: Math.max(start.z, end.z),
+        if (screenDx > MIN_BOX_DRAG || screenDy > MIN_BOX_DRAG) {
+          // Box selection - use screen-space for accurate perspective handling
+          game.eventBus.emit('selection:boxScreen', {
+            screenStartX: selectionStart.x,
+            screenStartY: selectionStart.y,
+            screenEndX: selectionEnd.x,
+            screenEndY: selectionEnd.y,
             additive: e.shiftKey,
             playerId: getLocalPlayerId(),
           });
           lastClickRef.current = null;
         } else {
+          // Click selection - check for double-click
           const now = Date.now();
           let isDoubleClick = false;
 
@@ -1050,9 +1057,10 @@ export function WebGPUGameCanvas() {
 
           lastClickRef.current = { time: now, x: e.clientX, y: e.clientY };
 
-          game.eventBus.emit('selection:click', {
-            x: end.x,
-            y: end.z,
+          // Use screen-space click selection for accurate flying unit handling
+          game.eventBus.emit('selection:clickScreen', {
+            screenX: e.clientX,
+            screenY: e.clientY,
             additive: e.shiftKey,
             selectAllOfType: e.ctrlKey || isDoubleClick,
             playerId: getLocalPlayerId(),
