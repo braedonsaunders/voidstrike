@@ -378,7 +378,7 @@ export const UNIT_DEFINITIONS: Record<string, UnitDefinition> = {
   dreadnought: {
     id: 'dreadnought',
     name: 'Dreadnought',
-    description: 'Capital ship with heavy armor. Nova Cannon devastates areas. Attacks ground and air.',
+    description: 'Massive capital ship with continuous laser cannon and devastating Power Cannon. Attacks ground and air.',
     faction: 'dominion',
     mineralCost: 400,
     vespeneCost: 300,
@@ -386,13 +386,13 @@ export const UNIT_DEFINITIONS: Record<string, UnitDefinition> = {
     supplyCost: 6,
     speed: 2.62,
     sightRange: 12,
-    attackRange: 6,
-    attackDamage: 8,
-    attackSpeed: 0.16,
-    damageType: 'normal',
+    attackRange: 8,
+    attackDamage: 12,
+    attackSpeed: 2.0, // Continuous laser fire - very fast attack speed
+    damageType: 'psionic', // Uses laser visual effect
     maxHealth: 550,
     armor: 3,
-    abilities: ['nova_cannon', 'warp_jump'],
+    abilities: ['power_cannon', 'warp_jump'],
     isFlying: true,
     isMechanical: true,
     canAttackGround: true,

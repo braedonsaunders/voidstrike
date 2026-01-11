@@ -39,7 +39,7 @@ export const REFERENCE_FRAME = {
     devastator: 1.8, // 1.5x larger
     valkyrie: 1.8,
     specter: 1.5,
-    dreadnought: 7.5, // 3x larger
+    dreadnought: 15.0, // 6x larger - massive capital ship
   } as Record<string, number>,
 
   BUILDING_HEIGHTS: {
