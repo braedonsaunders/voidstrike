@@ -237,6 +237,14 @@ export class Building extends Component {
     return this.state === 'complete';
   }
 
+  /**
+   * Check if building is operational (should count for defeat conditions).
+   * Includes complete buildings and those in flying states (lifting, flying, landing).
+   */
+  public isOperational(): boolean {
+    return this.state === 'complete' || this.state === 'lifting' || this.state === 'flying' || this.state === 'landing';
+  }
+
   public addToProductionQueue(type: 'unit' | 'upgrade', id: string, buildTime: number, supplyCost: number = 0): void {
     this.productionQueue.push({
       type,

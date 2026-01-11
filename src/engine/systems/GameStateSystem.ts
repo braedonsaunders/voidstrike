@@ -207,8 +207,9 @@ export class GameStateSystem extends System {
       const health = entity.get<Health>('Health');
 
       if (!building || !selectable || !health) continue;
-      // Only count complete buildings, not blueprints (waiting_for_worker or constructing)
-      if (!health.isDead() && building.isComplete()) {
+      // Only count operational buildings, not blueprints (waiting_for_worker or constructing)
+      // isOperational() includes complete and flying states (lifting, flying, landing)
+      if (!health.isDead() && building.isOperational()) {
         playersWithBuildings.add(selectable.playerId);
       }
     }
