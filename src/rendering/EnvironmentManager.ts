@@ -308,6 +308,12 @@ export class EnvironmentManager {
     // Enable shadow receiving on terrain
     this.terrain.mesh.receiveShadow = enabled;
 
+    // CRITICAL: Mark shadow map for regeneration when enabling shadows
+    // Without this, shadows won't display until settings are changed
+    if (enabled) {
+      this.directionalLight.shadow.needsUpdate = true;
+    }
+
     // Update renderer shadow map if needed
     // Note: The renderer's shadowMap.enabled should be set in the game canvas
   }
