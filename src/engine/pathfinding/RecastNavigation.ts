@@ -661,10 +661,9 @@ export class RecastNavigation {
   /**
    * Add a building as a cylinder obstacle
    *
-   * IMPORTANT: Obstacles are expanded by agent radius to ensure paths
-   * maintain proper clearance. Prefer addBoxObstacle for rectangular buildings.
-   *
-   * @param agentRadius - Optional custom radius (defaults to DEFAULT_AGENT_RADIUS)
+   * Uses a small precision buffer. The navmesh walkableRadius config already
+   * ensures proper clearance from obstacles. Prefer addBoxObstacle for
+   * rectangular buildings.
    */
   public addObstacle(
     buildingEntityId: number,
@@ -672,7 +671,7 @@ export class RecastNavigation {
     centerY: number,
     width: number,
     height: number,
-    agentRadius: number = DEFAULT_AGENT_RADIUS
+    _agentRadius: number = DEFAULT_AGENT_RADIUS
   ): void {
     if (!this.tileCache || !this.navMesh) return;
 
@@ -683,9 +682,9 @@ export class RecastNavigation {
 
     try {
       // Add cylinder obstacle (approximate rectangular building)
-      // Expand by agent radius to ensure paths maintain clearance
+      // Small buffer for precision tolerance (walkableRadius handles clearance)
       const baseRadius = Math.max(width, height) / 2;
-      const expandedRadius = baseRadius + agentRadius + 0.1; // Extra 0.1 buffer
+      const expandedRadius = baseRadius + 0.1;
 
       const result = this.tileCache.addCylinderObstacle(
         { x: centerX, y: 0, z: centerY },
@@ -712,11 +711,8 @@ export class RecastNavigation {
   /**
    * Add a box obstacle (more accurate for rectangular buildings)
    *
-   * IMPORTANT: Obstacles are expanded by agent radius to ensure paths
-   * maintain proper clearance from buildings. This prevents units from
-   * getting stuck on building edges.
-   *
-   * @param agentRadius - Optional custom radius (defaults to DEFAULT_AGENT_RADIUS)
+   * Uses a small precision buffer. The navmesh walkableRadius config (0.6)
+   * already ensures paths maintain proper clearance from obstacles.
    */
   public addBoxObstacle(
     buildingEntityId: number,
@@ -724,7 +720,7 @@ export class RecastNavigation {
     centerY: number,
     width: number,
     height: number,
-    agentRadius: number = DEFAULT_AGENT_RADIUS
+    _agentRadius: number = DEFAULT_AGENT_RADIUS
   ): void {
     if (!this.tileCache || !this.navMesh) return;
 
@@ -733,9 +729,12 @@ export class RecastNavigation {
     }
 
     try {
-      // Expand obstacle by agent radius to ensure paths maintain clearance
-      // This is critical for preventing units getting stuck on building edges
-      const expansionMargin = agentRadius + 0.1; // Extra 0.1 buffer for safety
+      // Small expansion buffer for precision tolerance
+      // NOTE: walkableRadius (0.6) in NAVMESH_CONFIG already ensures paths maintain
+      // proper clearance from obstacles. We only add a tiny buffer (0.1) to account
+      // for floating point precision, NOT another full agent radius (which would
+      // effectively double the clearance and make gaps between buildings too narrow).
+      const expansionMargin = 0.1;
       const halfExtents = {
         x: (width / 2) + expansionMargin,
         y: 2.0,
@@ -760,7 +759,7 @@ export class RecastNavigation {
       }
     } catch {
       // Fall back to cylinder with expansion
-      this.addObstacle(buildingEntityId, centerX, centerY, width, height, agentRadius);
+      this.addObstacle(buildingEntityId, centerX, centerY, width, height, _agentRadius);
     }
   }
 
