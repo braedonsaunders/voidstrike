@@ -219,10 +219,24 @@ export class RecastNavigation {
       this.mapWidth = mapWidth;
       this.mapHeight = mapHeight;
 
+      console.log('[RecastNavigation] Generating navmesh from geometry...', {
+        positionsLength: positions.length,
+        indicesLength: indices.length,
+        mapWidth,
+        mapHeight,
+      });
+
       const result = generateTileCache(positions, indices, NAVMESH_CONFIG);
+
+      console.log('[RecastNavigation] TileCache result:', {
+        success: result.success,
+        hasTileCache: !!result.tileCache,
+        hasNavMesh: !!result.navMesh,
+      });
 
       if (!result.success || !result.tileCache || !result.navMesh) {
         debugPathfinding.warn('[RecastNavigation] Failed to generate navmesh from geometry');
+        console.error('[RecastNavigation] NavMesh generation failed!');
         return false;
       }
 
@@ -238,12 +252,14 @@ export class RecastNavigation {
       this.initialized = true;
 
       const elapsed = performance.now() - startTime;
+      console.log(`[RecastNavigation] NavMesh and Crowd ready! Generated in ${elapsed.toFixed(1)}ms`);
       debugPathfinding.log(
         `[RecastNavigation] NavMesh generated from geometry in ${elapsed.toFixed(1)}ms`
       );
 
       return true;
     } catch (error) {
+      console.error('[RecastNavigation] Exception during navmesh generation:', error);
       debugPathfinding.warn('[RecastNavigation] Error generating navmesh:', error);
       return false;
     }

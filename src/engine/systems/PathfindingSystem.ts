@@ -438,8 +438,9 @@ export class PathfindingSystem extends System {
     let blockedCount = 0;
 
     for (const entity of buildings) {
-      const building = entity.get<Building>('Building')!;
-      const transform = entity.get<Transform>('Transform')!;
+      const building = entity.get<Building>('Building');
+      const transform = entity.get<Transform>('Transform');
+      if (!building || !transform) continue;
 
       if (building.state === 'destroyed' || building.isFlying) continue;
 
@@ -462,8 +463,9 @@ export class PathfindingSystem extends System {
     const entities = this.world.getEntitiesWith('Unit', 'Transform');
 
     for (const entity of entities) {
-      const unit = entity.get<Unit>('Unit')!;
-      const transform = entity.get<Transform>('Transform')!;
+      const unit = entity.get<Unit>('Unit');
+      const transform = entity.get<Transform>('Transform');
+      if (!unit || !transform) continue;
 
       if (unit.isFlying) {
         this.unitPathStates.delete(entity.id);
