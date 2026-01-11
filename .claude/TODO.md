@@ -430,6 +430,13 @@
 - [ ] Neosteel Frame research (+2 bunker)
 - [ ] Building Auto-Repair research
 
+### Production Queue Improvements (January 2026)
+- [x] Unlimited production queue (no size limit)
+- [x] Supply only allocated for currently producing unit (not entire queue)
+- [x] Queue reorder functionality (move items up/down with ▲▼ buttons)
+- [x] Fixed tech-gated units (Devastator, Colossus) requiring tech lab
+- [x] Supply-blocked production pauses until supply available
+
 ### Visual Polish
 - [ ] Unit wireframes (damage state)
 - [x] Building placement ghost - SC2-style grid + ghost preview when placing

@@ -46,6 +46,8 @@ export interface ProductionQueueItem {
   id: string;
   progress: number;
   buildTime: number;
+  supplyCost: number; // Supply cost for this item (0 for upgrades)
+  supplyAllocated: boolean; // Whether supply has been allocated for this item
 }
 
 export class Building extends Component {
@@ -228,12 +230,14 @@ export class Building extends Component {
     return this.state === 'complete';
   }
 
-  public addToProductionQueue(type: 'unit' | 'upgrade', id: string, buildTime: number): void {
+  public addToProductionQueue(type: 'unit' | 'upgrade', id: string, buildTime: number, supplyCost: number = 0): void {
     this.productionQueue.push({
       type,
       id,
       progress: 0,
       buildTime,
+      supplyCost,
+      supplyAllocated: false,
     });
   }
 
@@ -266,6 +270,42 @@ export class Building extends Component {
   public cancelProduction(index: number): ProductionQueueItem | null {
     if (index < 0 || index >= this.productionQueue.length) return null;
     return this.productionQueue.splice(index, 1)[0];
+  }
+
+  /**
+   * Reorder a production queue item to a new position.
+   * Cannot move items to/from position 0 (active production).
+   * @returns true if reorder was successful
+   */
+  public reorderProduction(fromIndex: number, toIndex: number): boolean {
+    // Cannot reorder the active item (index 0) or move something to position 0
+    if (fromIndex === 0 || toIndex === 0) return false;
+    if (fromIndex < 0 || fromIndex >= this.productionQueue.length) return false;
+    if (toIndex < 0 || toIndex >= this.productionQueue.length) return false;
+    if (fromIndex === toIndex) return false;
+
+    const [item] = this.productionQueue.splice(fromIndex, 1);
+    this.productionQueue.splice(toIndex, 0, item);
+    return true;
+  }
+
+  /**
+   * Move a queued item up in the queue (closer to being produced).
+   * Cannot move item at index 1 to position 0.
+   * @returns true if move was successful
+   */
+  public moveQueueItemUp(index: number): boolean {
+    if (index <= 1 || index >= this.productionQueue.length) return false;
+    return this.reorderProduction(index, index - 1);
+  }
+
+  /**
+   * Move a queued item down in the queue (further from being produced).
+   * @returns true if move was successful
+   */
+  public moveQueueItemDown(index: number): boolean {
+    if (index <= 0 || index >= this.productionQueue.length - 1) return false;
+    return this.reorderProduction(index, index + 1);
   }
 
   // ==================== ADDON MECHANICS ====================

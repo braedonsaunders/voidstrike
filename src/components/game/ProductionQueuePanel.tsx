@@ -143,7 +143,11 @@ export function ProductionQueuePanel() {
           Math.floor(unitDef.mineralCost * refundPercent),
           Math.floor(unitDef.vespeneCost * refundPercent)
         );
-        store.addSupply(-unitDef.supplyCost);
+        // Only refund supply if it was actually allocated for this item
+        // (checked via supplyAllocated flag set by ProductionSystem)
+        if (cancelled.supplyAllocated) {
+          store.addSupply(-unitDef.supplyCost);
+        }
       }
 
       game.eventBus.emit('production:cancelled', {
@@ -152,6 +156,32 @@ export function ProductionQueuePanel() {
         itemType: cancelled.type,
       });
     }
+  };
+
+  const handleMoveItemUp = (buildingId: number, index: number) => {
+    const game = Game.getInstance();
+    if (!game) return;
+
+    const entity = game.world.getEntity(buildingId);
+    if (!entity) return;
+
+    const building = entity.get<Building>('Building');
+    if (!building) return;
+
+    building.moveQueueItemUp(index);
+  };
+
+  const handleMoveItemDown = (buildingId: number, index: number) => {
+    const game = Game.getInstance();
+    if (!game) return;
+
+    const entity = game.world.getEntity(buildingId);
+    if (!entity) return;
+
+    const building = entity.get<Building>('Building');
+    if (!building) return;
+
+    building.moveQueueItemDown(index);
   };
 
   if (!sharedProduction || sharedProduction.totalQueuedItems === 0) {
@@ -164,6 +194,8 @@ export function ProductionQueuePanel() {
       <SingleBuildingQueue
         building={sharedProduction.buildings[0]}
         onCancelItem={handleCancelItem}
+        onMoveItemUp={handleMoveItemUp}
+        onMoveItemDown={handleMoveItemDown}
       />
     );
   }
@@ -180,9 +212,13 @@ export function ProductionQueuePanel() {
 function SingleBuildingQueue({
   building,
   onCancelItem,
+  onMoveItemUp,
+  onMoveItemDown,
 }: {
   building: BuildingProductionInfo;
   onCancelItem: (buildingId: number, index: number) => void;
+  onMoveItemUp: (buildingId: number, index: number) => void;
+  onMoveItemDown: (buildingId: number, index: number) => void;
 }) {
   if (building.queue.length === 0) return null;
 
@@ -233,28 +269,67 @@ function SingleBuildingQueue({
         </div>
       </div>
 
-      {/* Queued items */}
+      {/* Queued items with reorder controls */}
       {queuedItems.length > 0 && (
-        <div className="flex flex-wrap gap-1">
-          {queuedItems.map((item, displayIndex) => (
-            <div key={`queue-${item.index}`} className="relative group">
-              <div className="w-8 h-8 bg-void-900/80 border border-void-600 rounded flex items-center justify-center cursor-pointer hover:border-void-500 transition-colors">
-                <span className="text-xs">{getUnitIcon(item.id)}</span>
+        <div className="space-y-1">
+          {queuedItems.map((item, displayIndex) => {
+            const isFirst = displayIndex === 0;
+            const isLast = displayIndex === queuedItems.length - 1;
+
+            return (
+              <div key={`queue-${item.index}`} className="flex items-center gap-1 group">
+                {/* Queue position and icon */}
+                <div className="relative">
+                  <div className="w-8 h-8 bg-void-900/80 border border-void-600 rounded flex items-center justify-center hover:border-void-500 transition-colors">
+                    <span className="text-xs">{getUnitIcon(item.id)}</span>
+                  </div>
+                  <span className="absolute -top-1 -right-1 w-3 h-3 bg-void-700 border border-void-500 rounded-full text-[8px] flex items-center justify-center text-void-300">
+                    {displayIndex + 2}
+                  </span>
+                </div>
+
+                {/* Item name */}
+                <span className="text-xs text-void-300 flex-1 truncate">{item.name}</span>
+
+                {/* Reorder buttons */}
+                <div className="flex gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
+                  <button
+                    onClick={() => onMoveItemUp(building.buildingId, item.index)}
+                    disabled={isFirst}
+                    className={`w-5 h-5 rounded flex items-center justify-center text-[10px] transition-colors ${
+                      isFirst
+                        ? 'bg-void-800/30 text-void-600 cursor-not-allowed'
+                        : 'bg-void-700/50 hover:bg-void-600/70 text-void-300 hover:text-void-100'
+                    }`}
+                    title="Move up in queue"
+                  >
+                    ▲
+                  </button>
+                  <button
+                    onClick={() => onMoveItemDown(building.buildingId, item.index)}
+                    disabled={isLast}
+                    className={`w-5 h-5 rounded flex items-center justify-center text-[10px] transition-colors ${
+                      isLast
+                        ? 'bg-void-800/30 text-void-600 cursor-not-allowed'
+                        : 'bg-void-700/50 hover:bg-void-600/70 text-void-300 hover:text-void-100'
+                    }`}
+                    title="Move down in queue"
+                  >
+                    ▼
+                  </button>
+                </div>
+
+                {/* Cancel button */}
+                <button
+                  onClick={() => onCancelItem(building.buildingId, item.index)}
+                  className="w-5 h-5 bg-red-900/50 hover:bg-red-800/70 border border-red-700/50 rounded flex items-center justify-center text-red-400 hover:text-red-300 transition-colors opacity-0 group-hover:opacity-100 text-[10px]"
+                  title={`Cancel ${item.name}`}
+                >
+                  ✕
+                </button>
               </div>
-
-              <button
-                onClick={() => onCancelItem(building.buildingId, item.index)}
-                className="absolute inset-0 bg-red-900/80 opacity-0 group-hover:opacity-100 rounded flex items-center justify-center text-red-300 text-xs transition-opacity"
-                title={`Cancel ${item.name}`}
-              >
-                ✕
-              </button>
-
-              <span className="absolute -top-1 -right-1 w-3 h-3 bg-void-700 border border-void-500 rounded-full text-[8px] flex items-center justify-center text-void-300">
-                {displayIndex + 2}
-              </span>
-            </div>
-          ))}
+            );
+          })}
         </div>
       )}
     </div>
