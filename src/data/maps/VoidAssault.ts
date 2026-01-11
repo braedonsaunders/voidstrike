@@ -484,13 +484,13 @@ function generateVoidAssault(): MapData {
   // VOID CHASMS - Massive void areas at edges (alien dimension tears)
   createVoidChasm(terrain, 0, 0, 22, 22, 3);          // Top-left
   createVoidChasm(terrain, MAP_WIDTH - 22, MAP_HEIGHT - 22, 22, 22, 3);  // Bottom-right
-  // Side void areas
-  createVoidChasm(terrain, 0, 100, 18, 40, 2);       // West void
-  createVoidChasm(terrain, MAP_WIDTH - 18, 80, 18, 40, 2);  // East void
+  // Side void areas (reduced to not block fourth expansions)
+  createVoidChasm(terrain, 0, 130, 14, 30, 2);       // West void (moved south, smaller)
+  createVoidChasm(terrain, MAP_WIDTH - 14, 60, 14, 30, 2);  // East void (moved north, smaller)
 
-  // VOID LAKES - Alien energy pools
-  createLake(terrain, 55, 110, 10, 2);   // P1 side
-  createLake(terrain, 165, 110, 10, 2);  // P2 side
+  // VOID LAKES - Alien energy pools (positioned to not block fourth expansions)
+  createLake(terrain, 55, 130, 10, 2);   // P1 side (moved south to not block fourth)
+  createLake(terrain, 165, 90, 10, 2);   // P2 side (moved north to not block fourth)
   createLake(terrain, 110, 55, 8, 2);    // North
   createLake(terrain, 110, 165, 8, 2);   // South
 
@@ -502,6 +502,10 @@ function generateVoidAssault(): MapData {
   // Flanking corridors
   createForestCorridor(terrain, 35, 50, 75, 90, 14, 4, true);     // P1 third route
   createForestCorridor(terrain, 185, 170, 145, 130, 14, 4, true); // P2 third route
+
+  // FOURTH EXPANSION ACCESS PATHS - ensure connectivity
+  createForestCorridor(terrain, 35, 110, 70, 110, 12, 5, true);   // P1 fourth to center area
+  createForestCorridor(terrain, 185, 110, 150, 110, 12, 5, true); // P2 fourth to center area
 
   // Side forests for cover
   createForestCorridor(terrain, 18, 100, 18, 150, 12, 4, true);
