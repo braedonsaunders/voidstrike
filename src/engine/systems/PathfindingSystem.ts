@@ -431,7 +431,17 @@ export class PathfindingSystem extends System {
     unit.targetX = null;
     unit.targetY = null;
 
+    // Reset workers stuck in building/gathering states back to idle
+    // so they can be reassigned by the AI system
     if (unit.state === 'moving') {
+      unit.state = 'idle';
+    } else if (unit.state === 'building') {
+      // Cancel construction assignment so worker becomes available
+      unit.cancelBuilding();
+    } else if (unit.state === 'gathering') {
+      // Clear gather target so worker becomes available
+      unit.gatherTargetId = null;
+      unit.isMining = false;
       unit.state = 'idle';
     }
 
@@ -677,8 +687,17 @@ export class PathfindingSystem extends System {
       unit.targetX = null;
       unit.targetY = null;
 
-      // Set unit back to idle if it was moving
+      // Reset workers stuck in building/gathering states back to idle
+      // so they can be reassigned by the AI system
       if (unit.state === 'moving') {
+        unit.state = 'idle';
+      } else if (unit.state === 'building') {
+        // Cancel construction assignment so worker becomes available
+        unit.cancelBuilding();
+      } else if (unit.state === 'gathering') {
+        // Clear gather target so worker becomes available
+        unit.gatherTargetId = null;
+        unit.isMining = false;
         unit.state = 'idle';
       }
 
