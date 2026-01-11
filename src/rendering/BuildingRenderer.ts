@@ -601,7 +601,7 @@ export class BuildingRenderer {
       // Update health bar and fire effects (for all non-constructing states)
       if (health && shouldShowComplete) {
         const healthPercent = health.getHealthPercent();
-        meshData.healthBar.position.set(transform.x, terrainHeight + building.height + 0.5, transform.y);
+        meshData.healthBar.position.set(transform.x, terrainHeight + building.height + flyingOffset + 0.5, transform.y);
         meshData.healthBar.visible = healthPercent < 1;
         this.updateHealthBar(meshData.healthBar, health);
 
@@ -654,15 +654,16 @@ export class BuildingRenderer {
       }
 
       // Update progress bar (only for own buildings)
+      // Position above health bar to avoid overlap (health bar is at +0.5, progress at +0.75)
       if (isOwned) {
         if (!building.isComplete()) {
-          meshData.progressBar.position.set(transform.x, terrainHeight + building.height + 0.5, transform.y);
+          meshData.progressBar.position.set(transform.x, terrainHeight + building.height + flyingOffset + 0.75, transform.y);
           meshData.progressBar.visible = true;
-          this.updateProgressBar(meshData.progressBar, building.buildProgress);
+          this.updateProgressBar(meshData.progressBar, building.buildProgress, true);
         } else if (building.productionQueue.length > 0) {
-          meshData.progressBar.position.set(transform.x, terrainHeight + building.height + 0.5, transform.y);
+          meshData.progressBar.position.set(transform.x, terrainHeight + building.height + flyingOffset + 0.75, transform.y);
           meshData.progressBar.visible = true;
-          this.updateProgressBar(meshData.progressBar, building.getProductionProgress());
+          this.updateProgressBar(meshData.progressBar, building.getProductionProgress(), false);
         } else {
           meshData.progressBar.visible = false;
         }
@@ -737,8 +738,8 @@ export class BuildingRenderer {
     // Health bar
     const healthBar = this.createBar(0x00ff00);
 
-    // Progress bar
-    const progressBar = this.createBar(0xffff00);
+    // Progress bar - larger and more visible like SC2
+    const progressBar = this.createProgressBar();
 
     return {
       group,
@@ -1231,16 +1232,86 @@ export class BuildingRenderer {
       color: 0x333333,
       transparent: true,
       opacity: 0.8,
+      depthTest: false,
     });
     const bg = new THREE.Mesh(bgGeometry, bgMaterial);
+    bg.renderOrder = 1000;
     group.add(bg);
 
     const fillGeometry = new THREE.PlaneGeometry(2, 0.15);
-    const fillMaterial = new THREE.MeshBasicMaterial({ color });
+    const fillMaterial = new THREE.MeshBasicMaterial({
+      color,
+      depthTest: false,
+    });
     const fill = new THREE.Mesh(fillGeometry, fillMaterial);
     fill.position.z = 0.01;
     fill.name = 'fill';
+    fill.renderOrder = 1001;
     group.add(fill);
+
+    group.lookAt(0, 100, 0);
+    group.visible = false;
+
+    return group;
+  }
+
+  /**
+   * Create a SC2-style production progress bar
+   * Larger and more visible than the health bar with border outline
+   */
+  private createProgressBar(): THREE.Group {
+    const group = new THREE.Group();
+
+    // Outer border (dark outline)
+    const borderGeometry = new THREE.PlaneGeometry(2.2, 0.28);
+    const borderMaterial = new THREE.MeshBasicMaterial({
+      color: 0x000000,
+      transparent: true,
+      opacity: 0.9,
+      depthTest: false,
+    });
+    const border = new THREE.Mesh(borderGeometry, borderMaterial);
+    border.renderOrder = 999;
+    group.add(border);
+
+    // Background (dark gray)
+    const bgGeometry = new THREE.PlaneGeometry(2, 0.2);
+    const bgMaterial = new THREE.MeshBasicMaterial({
+      color: 0x1a1a1a,
+      transparent: true,
+      opacity: 0.95,
+      depthTest: false,
+    });
+    const bg = new THREE.Mesh(bgGeometry, bgMaterial);
+    bg.position.z = 0.01;
+    bg.renderOrder = 1000;
+    group.add(bg);
+
+    // Fill bar (will be colored dynamically)
+    const fillGeometry = new THREE.PlaneGeometry(2, 0.2);
+    const fillMaterial = new THREE.MeshBasicMaterial({
+      color: 0x00ff88, // Default green, will be changed dynamically
+      depthTest: false,
+    });
+    const fill = new THREE.Mesh(fillGeometry, fillMaterial);
+    fill.position.z = 0.02;
+    fill.name = 'fill';
+    fill.renderOrder = 1001;
+    group.add(fill);
+
+    // Inner highlight (subtle glow effect)
+    const highlightGeometry = new THREE.PlaneGeometry(2, 0.08);
+    const highlightMaterial = new THREE.MeshBasicMaterial({
+      color: 0xffffff,
+      transparent: true,
+      opacity: 0.15,
+      depthTest: false,
+    });
+    const highlight = new THREE.Mesh(highlightGeometry, highlightMaterial);
+    highlight.position.y = 0.04;
+    highlight.position.z = 0.03;
+    highlight.renderOrder = 1002;
+    group.add(highlight);
 
     group.lookAt(0, 100, 0);
     group.visible = false;
@@ -1266,11 +1337,21 @@ export class BuildingRenderer {
     }
   }
 
-  private updateProgressBar(progressBar: THREE.Group, progress: number): void {
+  private updateProgressBar(progressBar: THREE.Group, progress: number, isConstruction: boolean = false): void {
     const fill = progressBar.getObjectByName('fill') as THREE.Mesh;
     if (fill) {
-      fill.scale.x = progress;
+      fill.scale.x = Math.max(0.01, progress); // Ensure minimum visibility
       fill.position.x = (progress - 1);
+
+      // Different colors for construction vs production (SC2 style)
+      const material = fill.material as THREE.MeshBasicMaterial;
+      if (isConstruction) {
+        // Blue for building construction
+        material.color.setHex(0x00aaff);
+      } else {
+        // Green for unit production (like SC2)
+        material.color.setHex(0x00ff88);
+      }
     }
   }
 
