@@ -257,11 +257,19 @@ export class MinimapRenderer {
 
     if (!this.fogOfWarEnabled || !this.visionSystem) return;
 
-    const gridWidth = Math.ceil(this.mapData.width / 2);
-    const gridHeight = Math.ceil(this.mapData.height / 2);
-
     const visionGrid = this.visionSystem.getVisionGridForPlayer(this.playerId);
-    if (!visionGrid) return;
+    if (!visionGrid || visionGrid.length === 0) return;
+
+    // Use actual visionGrid dimensions instead of hardcoding division by 2
+    const gridHeight = visionGrid.length;
+    const gridWidth = visionGrid[0]?.length ?? 0;
+    if (gridWidth === 0) return;
+
+    // Calculate cell size from actual grid dimensions (don't hardcode * 2)
+    const cellSizeX = this.mapData.width / gridWidth;
+    const cellSizeY = this.mapData.height / gridHeight;
+    const fogCellWidth = cellSizeX * this.scaleX;
+    const fogCellHeight = cellSizeY * this.scaleY;
 
     // Check if we need a full redraw
     if (this.needsFogRedraw || !this.previousFogState) {
@@ -285,15 +293,15 @@ export class MinimapRenderer {
           const state = visionGrid[gy]?.[gx] ?? 'unexplored';
           this.previousFogState[gy][gx] = state;
 
-          const mx = gx * 2 * this.scaleX;
-          const my = gy * 2 * this.scaleY;
+          const mx = gx * fogCellWidth;
+          const my = gy * fogCellHeight;
 
           if (state === 'unexplored') {
             this.fogGraphics.fillStyle(0x000000, 0.8);
-            this.fogGraphics.fillRect(mx, my, this.scaleX * 2, this.scaleY * 2);
+            this.fogGraphics.fillRect(mx, my, fogCellWidth, fogCellHeight);
           } else if (state === 'explored') {
             this.fogGraphics.fillStyle(0x000000, 0.4);
-            this.fogGraphics.fillRect(mx, my, this.scaleX * 2, this.scaleY * 2);
+            this.fogGraphics.fillRect(mx, my, fogCellWidth, fogCellHeight);
           }
         }
       }
@@ -318,15 +326,15 @@ export class MinimapRenderer {
         for (let gy = 0; gy < gridHeight; gy++) {
           for (let gx = 0; gx < gridWidth; gx++) {
             const state = this.previousFogState[gy][gx];
-            const mx = gx * 2 * this.scaleX;
-            const my = gy * 2 * this.scaleY;
+            const mx = gx * fogCellWidth;
+            const my = gy * fogCellHeight;
 
             if (state === 'unexplored') {
               this.fogGraphics.fillStyle(0x000000, 0.8);
-              this.fogGraphics.fillRect(mx, my, this.scaleX * 2, this.scaleY * 2);
+              this.fogGraphics.fillRect(mx, my, fogCellWidth, fogCellHeight);
             } else if (state === 'explored') {
               this.fogGraphics.fillStyle(0x000000, 0.4);
-              this.fogGraphics.fillRect(mx, my, this.scaleX * 2, this.scaleY * 2);
+              this.fogGraphics.fillRect(mx, my, fogCellWidth, fogCellHeight);
             }
           }
         }

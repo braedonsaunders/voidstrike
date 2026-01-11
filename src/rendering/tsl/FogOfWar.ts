@@ -178,9 +178,12 @@ export class TSLFogOfWar {
     if (!visionGrid) return;
 
     // Update texture data based on vision
+    // Note: Flip Y when writing to texture because after plane rotation (-PI/2 around X),
+    // texture V=0 corresponds to high world Z, but visionGrid[0] is low world Z
     for (let y = 0; y < this.gridHeight; y++) {
       for (let x = 0; x < this.gridWidth; x++) {
-        const i = y * this.gridWidth + x;
+        const textureY = this.gridHeight - 1 - y;
+        const i = textureY * this.gridWidth + x;
         const state = visionGrid[y]?.[x] ?? 'unexplored';
 
         // Alpha determines fog level: 255 = full fog, 0 = no fog
