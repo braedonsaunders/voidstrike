@@ -4,22 +4,34 @@ import { useState, useEffect, useCallback, memo } from 'react';
 import { Game } from '@/engine/core/Game';
 import { UNIT_DEFINITIONS, DOMINION_UNITS } from '@/data/units/dominion';
 import { useGameSetupStore, PLAYER_COLORS } from '@/store/gameSetupStore';
+import { useGameStore } from '@/store/gameStore';
+import { Selectable } from '@/engine/components/Selectable';
 
 type SpawnTeam = 'player1' | 'player2';
 type SpawnQuantity = 1 | 5 | 10 | 20;
 
 const SPAWN_QUANTITIES: SpawnQuantity[] = [1, 5, 10, 20];
 
+// Arena dimensions (must match BattleArena.ts)
+const ARENA_WIDTH = 128;
+const ARENA_HEIGHT = 48;
+
 export const BattleSimulatorPanel = memo(function BattleSimulatorPanel() {
   const [selectedUnit, setSelectedUnit] = useState<string | null>(null);
   const [selectedTeam, setSelectedTeam] = useState<SpawnTeam>('player1');
   const [spawnQuantity, setSpawnQuantity] = useState<SpawnQuantity>(1);
-  const [isPaused, setIsPaused] = useState(false);
+  const [isPaused, setIsPaused] = useState(true); // Start paused so user can place units
   const playerSlots = useGameSetupStore((state) => state.playerSlots);
 
   // Get player colors
   const team1Color = PLAYER_COLORS.find(c => c.id === playerSlots[0]?.colorId);
   const team2Color = PLAYER_COLORS.find(c => c.id === playerSlots[1]?.colorId);
+
+  // Pause game on mount so user can place units
+  useEffect(() => {
+    const game = Game.getInstance();
+    game.pause();
+  }, []);
 
   // Listen for map clicks when a unit is selected
   useEffect(() => {
@@ -60,6 +72,48 @@ export const BattleSimulatorPanel = memo(function BattleSimulatorPanel() {
     };
   }, [selectedUnit, selectedTeam, spawnQuantity]);
 
+  const handleFight = useCallback(() => {
+    const game = Game.getInstance();
+
+    // Get all units
+    const entities = game.world.getEntitiesWith('Unit', 'Selectable');
+
+    const team1Units: number[] = [];
+    const team2Units: number[] = [];
+
+    for (const entity of entities) {
+      const selectable = entity.get<Selectable>('Selectable');
+      if (selectable?.playerId === 'player1') {
+        team1Units.push(entity.id);
+      } else if (selectable?.playerId === 'player2') {
+        team2Units.push(entity.id);
+      }
+    }
+
+    // Team 1 attack-moves to the right side
+    if (team1Units.length > 0) {
+      game.eventBus.emit('command:attack', {
+        entityIds: team1Units,
+        targetPosition: { x: ARENA_WIDTH - 10, y: ARENA_HEIGHT / 2 },
+      });
+    }
+
+    // Team 2 attack-moves to the left side
+    if (team2Units.length > 0) {
+      game.eventBus.emit('command:attack', {
+        entityIds: team2Units,
+        targetPosition: { x: 10, y: ARENA_HEIGHT / 2 },
+      });
+    }
+
+    // Unpause the game
+    game.resume();
+    setIsPaused(false);
+
+    // Deselect unit so user isn't accidentally spawning more
+    setSelectedUnit(null);
+  }, []);
+
   const handlePauseToggle = useCallback(() => {
     const game = Game.getInstance();
     if (isPaused) {
@@ -77,6 +131,23 @@ export const BattleSimulatorPanel = memo(function BattleSimulatorPanel() {
     for (const entity of entities) {
       game.world.destroyEntity(entity.id);
     }
+  }, []);
+
+  const handleSelectTeam = useCallback((team: 'player1' | 'player2') => {
+    const game = Game.getInstance();
+    const entities = game.world.getEntitiesWith('Unit', 'Selectable');
+    const teamUnits: number[] = [];
+
+    for (const entity of entities) {
+      const selectable = entity.get<Selectable>('Selectable');
+      if (selectable?.playerId === team) {
+        teamUnits.push(entity.id);
+      }
+    }
+
+    useGameStore.getState().selectUnits(teamUnits);
+    // Deselect spawning so clicking doesn't place more units
+    setSelectedUnit(null);
   }, []);
 
   // Filter out worker unit for cleaner list
@@ -103,6 +174,41 @@ export const BattleSimulatorPanel = memo(function BattleSimulatorPanel() {
             className="px-2 py-1 text-xs bg-red-600 hover:bg-red-500 text-white rounded transition-colors"
           >
             Clear
+          </button>
+        </div>
+      </div>
+
+      {/* Fight Button */}
+      <div className="px-3 py-2 border-b border-void-800">
+        <button
+          onClick={handleFight}
+          className="w-full px-4 py-2 text-sm font-bold bg-orange-600 hover:bg-orange-500 text-white rounded transition-colors"
+        >
+          FIGHT!
+        </button>
+      </div>
+
+      {/* Control Team Buttons */}
+      <div className="px-3 py-2 border-b border-void-800">
+        <div className="text-void-400 text-xs mb-1.5">Control team:</div>
+        <div className="flex gap-2">
+          <button
+            onClick={() => handleSelectTeam('player1')}
+            className="flex-1 px-2 py-1.5 rounded text-xs font-medium transition-all hover:opacity-80"
+            style={{
+              backgroundColor: `#${(team1Color?.hex ?? 0x4080ff).toString(16).padStart(6, '0')}`,
+            }}
+          >
+            Select All
+          </button>
+          <button
+            onClick={() => handleSelectTeam('player2')}
+            className="flex-1 px-2 py-1.5 rounded text-xs font-medium transition-all hover:opacity-80"
+            style={{
+              backgroundColor: `#${(team2Color?.hex ?? 0xff4040).toString(16).padStart(6, '0')}`,
+            }}
+          >
+            Select All
           </button>
         </div>
       </div>
@@ -162,10 +268,20 @@ export const BattleSimulatorPanel = memo(function BattleSimulatorPanel() {
 
       {/* Unit List */}
       <div className="px-2 py-2 max-h-64 overflow-y-auto">
-        <div className="text-void-400 text-xs mb-1.5 px-1">
-          {selectedUnit
-            ? `Click map to spawn ${spawnQuantity}x ${UNIT_DEFINITIONS[selectedUnit]?.name}`
-            : 'Select a unit:'}
+        <div className="text-void-400 text-xs mb-1.5 px-1 flex justify-between items-center">
+          <span>
+            {selectedUnit
+              ? `Click map to spawn ${spawnQuantity}x ${UNIT_DEFINITIONS[selectedUnit]?.name}`
+              : 'Select a unit:'}
+          </span>
+          {selectedUnit && (
+            <button
+              onClick={() => setSelectedUnit(null)}
+              className="text-void-500 hover:text-white text-[10px] underline"
+            >
+              Deselect
+            </button>
+          )}
         </div>
         <div className="grid grid-cols-2 gap-1">
           {combatUnits.map((unit) => (
@@ -189,7 +305,7 @@ export const BattleSimulatorPanel = memo(function BattleSimulatorPanel() {
 
       {/* Instructions */}
       <div className="px-3 py-2 border-t border-void-800 text-void-500 text-[10px]">
-        Select unit + quantity, then click map. Units auto-attack enemies.
+        Place units on each side, then click FIGHT!
       </div>
     </div>
   );
