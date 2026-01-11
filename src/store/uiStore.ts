@@ -226,7 +226,7 @@ export const useUIStore = create<UIState>((set, get) => ({
     shadowDistance: 100,
 
     // Ambient Occlusion
-    ssaoEnabled: false,
+    ssaoEnabled: true,
     ssaoRadius: 4,
     ssaoIntensity: 1.0,
 
