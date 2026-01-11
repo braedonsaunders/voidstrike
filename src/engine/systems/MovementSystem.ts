@@ -444,6 +444,12 @@ export class MovementSystem extends System {
     // PERF: Track current tick for separation force throttling
     this.currentTick = this.game.getCurrentTick();
 
+    // Debug: Log entity IDs being processed (only once every 100 frames)
+    if (this.game.getCurrentTick() % 100 === 1) {
+      const entityIds = Array.from(entities).map(e => e.id);
+      console.log('[MovementSystem] Processing entities:', entityIds.slice(0, 30));
+    }
+
     // Update spatial grid
     for (const entity of entities) {
       const transform = entity.get<Transform>('Transform');
