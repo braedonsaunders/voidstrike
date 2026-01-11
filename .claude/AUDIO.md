@@ -86,10 +86,13 @@ These are spoken voice announcements that play to notify the player of important
 | Filename | Duration | Voice Line | Style |
 |----------|----------|------------|-------|
 | `alert/under_attack.mp3` | 2-3s | "Your base is under attack!" or "You're under attack!" | Urgent female command voice, military alert tone |
-| `alert/unit_lost.mp3` | 1-2s | "Unit lost." | Calm female command voice, somber acknowledgment |
-| `alert/building_lost.mp3` | 1-2s | "Structure destroyed." | Calm female command voice, somber acknowledgment |
+| `alert/additional_population_required.mp3` | 2s | "Additional supply depots required." or "You require more supply." | Female command voice, slight urgency |
+| `alert/not_enough_minerals.mp3` | 1-2s | "Not enough minerals." or "Insufficient minerals." | Neutral female command voice |
+| `alert/not_enough_vespene.mp3` | 1-2s | "Not enough vespene gas." or "Insufficient vespene." | Neutral female command voice |
 | `alert/minerals_depleted.mp3` | 1-2s | "Mineral field depleted." | Neutral female command voice |
-| `alert/supply_blocked.mp3` | 2s | "Additional supply depots required." or "You require more supply." | Female command voice, slight urgency |
+| `alert/building_complete.mp3` | 1-2s | "Construction complete." | Positive female command voice |
+| `alert/research_complete.mp3` | 1-2s | "Research complete." | Positive female command voice |
+| `alert/upgrade_complete.mp3` | 1-2s | "Upgrade complete." | Positive female command voice |
 
 ---
 
