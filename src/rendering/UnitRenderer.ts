@@ -29,6 +29,7 @@ interface AnimatedUnitMesh {
   mixer: THREE.AnimationMixer;
   animations: Map<string, THREE.AnimationAction>;
   currentAction: string;
+  unitType: string; // Track unit type for animation speed multipliers
 }
 
 // Per-unit overlay data (selection ring, health bar, team marker)
@@ -45,6 +46,11 @@ interface UnitOverlay {
 
 const MAX_INSTANCES_PER_TYPE = 100; // Max units of same type per player
 const AIR_UNIT_HEIGHT = 8; // Height for flying units (matches building lift-off height)
+
+// Animation speed multipliers for specific unit types (1.0 = normal speed)
+const ANIMATION_SPEED_MULTIPLIERS: Record<string, number> = {
+  fabricator: 0.4, // Slow down fabricator leg animation to match movement speed
+};
 
 export class UnitRenderer {
   private scene: THREE.Scene;
@@ -321,6 +327,7 @@ export class UnitRenderer {
         mixer,
         animations,
         currentAction: 'idle',
+        unitType,
       };
 
       this.animatedUnits.set(entityId, animUnit);
@@ -647,8 +654,9 @@ export class UnitRenderer {
         // Update animation
         this.updateAnimationState(animUnit, isMoving, isActuallyAttacking);
 
-        // Update animation mixer
-        animUnit.mixer.update(deltaTime);
+        // Update animation mixer with unit-specific speed multiplier
+        const animSpeedMultiplier = ANIMATION_SPEED_MULTIPLIERS[animUnit.unitType] ?? 1.0;
+        animUnit.mixer.update(deltaTime * animSpeedMultiplier);
       } else {
         // Use instanced rendering for non-animated units
         const group = this.getOrCreateInstancedGroup(unit.unitId, ownerId);

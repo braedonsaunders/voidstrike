@@ -318,6 +318,8 @@ export class MovementSystem extends System {
       if (otherUnit.state === 'dead') continue;
       if (selfUnit.isFlying !== otherUnit.isFlying) continue;
       if (otherUnit.state === 'gathering') continue;
+      // Allow workers to clip into each other for easier mining
+      if (selfUnit.isWorker && otherUnit.isWorker) continue;
 
       const dx = selfTransform.x - otherTransform.x;
       const dy = selfTransform.y - otherTransform.y;
