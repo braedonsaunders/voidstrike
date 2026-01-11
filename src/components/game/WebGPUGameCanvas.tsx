@@ -441,8 +441,8 @@ export function WebGPUGameCanvas() {
         watchTowerRendererRef.current = new WatchTowerRenderer(scene, game.visionSystem);
       }
 
-      // Initialize audio
-      game.audioSystem.initialize(camera.camera, CURRENT_MAP.biome);
+      // Initialize audio (must await to ensure sounds are preloaded before game starts)
+      await game.audioSystem.initialize(camera.camera, CURRENT_MAP.biome);
 
       // Start game
       game.start();
