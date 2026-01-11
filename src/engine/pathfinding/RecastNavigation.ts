@@ -276,16 +276,43 @@ export class RecastNavigation {
     endY: number
   ): PathResult {
     if (!this.navMeshQuery) {
+      console.log('[RecastNavigation.findPath] No navMeshQuery!');
       return { path: [], found: false };
     }
 
     try {
       // Convert 2D game coordinates to 3D navmesh coordinates
       // Game uses (x, y) on ground plane, navmesh uses (x, z) with y as height
-      const start = { x: startX, y: 0, z: startY };
-      const end = { x: endX, y: 0, z: endY };
+      // Use a larger half-extent for height tolerance since terrain has varying heights
+      const halfExtents = { x: 2, y: 10, z: 2 }; // y is vertical (height)
 
-      const result = this.navMeshQuery.computePath(start, end);
+      // First snap to the navmesh to get valid start/end points
+      const startQuery = { x: startX, y: 0, z: startY };
+      const endQuery = { x: endX, y: 0, z: endY };
+
+      const startOnMesh = this.navMeshQuery.findClosestPoint(startQuery, { halfExtents });
+      const endOnMesh = this.navMeshQuery.findClosestPoint(endQuery, { halfExtents });
+
+      // Log for debugging
+      console.log('[RecastNavigation.findPath] Query:', {
+        start: `(${startX.toFixed(1)}, ${startY.toFixed(1)})`,
+        end: `(${endX.toFixed(1)}, ${endY.toFixed(1)})`,
+        startOnMesh: startOnMesh.success ? `(${startOnMesh.point?.x.toFixed(1)}, h=${startOnMesh.point?.y.toFixed(2)}, ${startOnMesh.point?.z.toFixed(1)})` : 'FAILED',
+        endOnMesh: endOnMesh.success ? `(${endOnMesh.point?.x.toFixed(1)}, h=${endOnMesh.point?.y.toFixed(2)}, ${endOnMesh.point?.z.toFixed(1)})` : 'FAILED',
+      });
+
+      // Use the snapped points for pathfinding
+      if (!startOnMesh.success || !startOnMesh.point || !endOnMesh.success || !endOnMesh.point) {
+        console.log('[RecastNavigation.findPath] Could not find valid navmesh points');
+        return { path: [], found: false };
+      }
+
+      const result = this.navMeshQuery.computePath(startOnMesh.point, endOnMesh.point, { halfExtents });
+
+      console.log('[RecastNavigation.findPath] Result:', {
+        success: result.success,
+        pathLength: result.path?.length ?? 0,
+      });
 
       if (!result.success || !result.path || result.path.length === 0) {
         return { path: [], found: false };
@@ -299,6 +326,7 @@ export class RecastNavigation {
 
       return { path, found: true };
     } catch (error) {
+      console.error('[RecastNavigation.findPath] Exception:', error);
       debugPathfinding.warn('[RecastNavigation] Error finding path:', error);
       return { path: [], found: false };
     }

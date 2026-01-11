@@ -488,6 +488,10 @@ export class MovementSystem extends System {
         unit.state === 'building';
 
       if (!canMove) {
+        // DEBUG: Log why units aren't moving
+        if (entity.id < 20) {
+          console.log('[MovementSystem] Entity', entity.id, 'SKIPPED - state:', unit.state, 'targetX:', unit.targetX);
+        }
         if (unit.currentSpeed > 0) {
           unit.currentSpeed = Math.max(
             0,
