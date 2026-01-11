@@ -621,8 +621,7 @@ export class BuildingRenderer {
         continue;
       }
 
-      // Get terrain height at this position - use safe method with fallback
-      const terrainHeight = this.getTerrainHeightAt(transform.x, transform.y);
+      // terrainHeight already computed above for frustum check
 
       // Calculate flying height offset based on building state
       let flyingOffset = 0;
