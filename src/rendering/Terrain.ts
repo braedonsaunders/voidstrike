@@ -1014,6 +1014,7 @@ export class Terrain {
 
     // Helper to check if a vertex is on a plateau edge (ground adjacent to cliff)
     // This preserves the clean circular shape of base plateaus
+    // IMPORTANT: Does NOT apply to vertices near ramps - those need smoothing for proper transitions
     const isPlateauEdgeVertex = (vx: number, vy: number): boolean => {
       // Check the 4 cells this vertex touches
       const cellCoords = [
@@ -1025,6 +1026,7 @@ export class Terrain {
 
       let hasGround = false;
       let hasUnwalkable = false;
+      let hasRamp = false;
 
       for (const { cx, cy } of cellCoords) {
         if (cx >= 0 && cx < width && cy >= 0 && cy < height) {
@@ -1035,11 +1037,15 @@ export class Terrain {
           if (cellTerrain === 'unwalkable') {
             hasUnwalkable = true;
           }
+          if (cellTerrain === 'ramp') {
+            hasRamp = true;
+          }
         }
       }
 
       // This is a plateau edge if it touches both ground and unwalkable (cliff)
-      return hasGround && hasUnwalkable;
+      // BUT NOT if it also touches a ramp - ramp areas need full smoothing
+      return hasGround && hasUnwalkable && !hasRamp;
     };
 
     for (let iter = 0; iter < iterations; iter++) {
