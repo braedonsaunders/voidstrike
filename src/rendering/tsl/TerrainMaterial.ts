@@ -231,20 +231,22 @@ export class TSLTerrainMaterial {
       // Apply terrain type constraints:
       // Ground: grass + dirt + slight rock, NO cliff
       // Ramp: dirt + rock, NO grass, NO cliff
-      // Unwalkable: rock + cliff, NO grass (with guaranteed minimum)
+      // Unwalkable: rock + cliff, NO grass (with STRONG guaranteed minimum)
 
       // Grass only on walkable ground
       const grassWeight = baseGrassWeight.mul(isGround);
 
-      // Dirt on ground and ramps
-      const dirtWeight = baseDirtWeight.mul(isGround.add(isRamp));
+      // Dirt on ground and ramps (with minimum for ramps to ensure visibility)
+      const dirtWeight = baseDirtWeight.mul(isGround.add(isRamp)).add(isRamp.mul(float(0.4)));
 
-      // Rock on all terrain types, but guarantee minimum on unwalkable
+      // Rock on all terrain types, but guarantee STRONG minimum on unwalkable
       // This prevents black areas on flat unwalkable terrain
-      const rockWeight = baseRockWeight.add(isUnwalkable.mul(float(0.3)));
+      // Use 0.6 base + slope contribution for unwalkable
+      const rockWeight = baseRockWeight.add(isUnwalkable.mul(float(0.6))).add(isRamp.mul(float(0.2)));
 
-      // Cliff ONLY on unwalkable terrain, with minimum for steep areas
-      const cliffWeight = baseCliffWeight.mul(isUnwalkable).add(isUnwalkable.mul(slope).mul(float(0.5)));
+      // Cliff ONLY on unwalkable terrain, with strong slope contribution
+      // Use squared slope for cliff to make it appear more dramatically on steep areas
+      const cliffWeight = baseCliffWeight.mul(isUnwalkable).add(isUnwalkable.mul(slope).mul(slope).mul(float(2.0)));
 
       // Normalize weights so they sum to 1.0
       const totalWeight = grassWeight.add(dirtWeight).add(rockWeight).add(cliffWeight).add(float(0.001)); // Prevent div by 0
@@ -291,9 +293,9 @@ export class TSLTerrainMaterial {
 
       // Apply terrain type constraints (same as color node)
       const grassWeight = baseGrassWeight.mul(isGround);
-      const dirtWeight = baseDirtWeight.mul(isGround.add(isRamp));
-      const rockWeight = baseRockWeight.add(isUnwalkable.mul(float(0.3)));
-      const cliffWeight = baseCliffWeight.mul(isUnwalkable).add(isUnwalkable.mul(slope).mul(float(0.5)));
+      const dirtWeight = baseDirtWeight.mul(isGround.add(isRamp)).add(isRamp.mul(float(0.4)));
+      const rockWeight = baseRockWeight.add(isUnwalkable.mul(float(0.6))).add(isRamp.mul(float(0.2)));
+      const cliffWeight = baseCliffWeight.mul(isUnwalkable).add(isUnwalkable.mul(slope).mul(slope).mul(float(2.0)));
 
       const totalWeight = grassWeight.add(dirtWeight).add(rockWeight).add(cliffWeight).add(float(0.001));
 
@@ -336,9 +338,9 @@ export class TSLTerrainMaterial {
 
       // Apply terrain type constraints (same as color node)
       const grassWeight = baseGrassWeight.mul(isGround);
-      const dirtWeight = baseDirtWeight.mul(isGround.add(isRamp));
-      const rockWeight = baseRockWeight.add(isUnwalkable.mul(float(0.3)));
-      const cliffWeight = baseCliffWeight.mul(isUnwalkable).add(isUnwalkable.mul(slope).mul(float(0.5)));
+      const dirtWeight = baseDirtWeight.mul(isGround.add(isRamp)).add(isRamp.mul(float(0.4)));
+      const rockWeight = baseRockWeight.add(isUnwalkable.mul(float(0.6))).add(isRamp.mul(float(0.2)));
+      const cliffWeight = baseCliffWeight.mul(isUnwalkable).add(isUnwalkable.mul(slope).mul(slope).mul(float(2.0)));
 
       const totalWeight = grassWeight.add(dirtWeight).add(rockWeight).add(cliffWeight).add(float(0.001));
 

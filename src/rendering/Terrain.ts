@@ -662,10 +662,30 @@ export class Terrain {
         }
 
         // Get pre-calculated slopes for each vertex
-        const slope00 = vertexSlopes[y * this.gridWidth + x];
-        const slope10 = vertexSlopes[y * this.gridWidth + (x + 1)];
-        const slope01 = vertexSlopes[(y + 1) * this.gridWidth + x];
-        const slope11 = vertexSlopes[(y + 1) * this.gridWidth + (x + 1)];
+        let slope00 = vertexSlopes[y * this.gridWidth + x];
+        let slope10 = vertexSlopes[y * this.gridWidth + (x + 1)];
+        let slope01 = vertexSlopes[(y + 1) * this.gridWidth + x];
+        let slope11 = vertexSlopes[(y + 1) * this.gridWidth + (x + 1)];
+
+        // CRITICAL: Override slopes based on THIS CELL's terrain type to ensure consistency
+        // The pre-calculated slopes might not match the cell's actual terrain type
+        // because they're based on sampleTerrain() which uses a different lookup
+        if (cell.terrain === 'ramp') {
+          // Ramps need minimum slope of 0.2 to show dirt/rock textures
+          const minRampSlope = 0.25;
+          slope00 = Math.max(slope00, minRampSlope);
+          slope10 = Math.max(slope10, minRampSlope);
+          slope01 = Math.max(slope01, minRampSlope);
+          slope11 = Math.max(slope11, minRampSlope);
+        } else if (cell.terrain === 'unwalkable') {
+          // Unwalkable terrain gets a boost to show rock/cliff textures
+          // Flat unwalkable (like plateaus) still need some slope for texture blending
+          const minUnwalkableSlope = 0.15;
+          slope00 = Math.max(slope00, minUnwalkableSlope);
+          slope10 = Math.max(slope10, minUnwalkableSlope);
+          slope01 = Math.max(slope01, minUnwalkableSlope);
+          slope11 = Math.max(slope11, minUnwalkableSlope);
+        }
 
         // Triangle 1 (v00, v01, v10) - reversed winding for correct normals after rotation
         vertices.push(v00.x, v00.y, v00.z);
