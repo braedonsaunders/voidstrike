@@ -129,8 +129,8 @@ export class TSLTerrainMaterial {
     // Calculate repeat based on map size
     // Lower values = larger texture tiles = higher apparent resolution
     const mapSize = Math.max(config.mapWidth, config.mapHeight);
-    // Aim for each texture tile to cover ~8-16 world units for good detail
-    const repeat = config.textureRepeat ?? Math.max(4, Math.floor(mapSize / 12));
+    // Each texture tile covers ~16-24 world units for large, detailed textures
+    const repeat = config.textureRepeat ?? Math.max(2, Math.floor(mapSize / 24));
 
     // Store repeat as uniform so shader can use it
     this.uTextureRepeat = uniform(repeat);
