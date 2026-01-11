@@ -52,6 +52,13 @@ const DROP_OFF_BUILDINGS = Object.freeze([
   'hive',
 ]);
 
+// PERF: Pooled formation position buffer to avoid allocation per move command
+const FORMATION_BUFFER_SIZE = 256; // Max units in a single move command
+const formationBuffer: Array<{ x: number; y: number }> = [];
+for (let i = 0; i < FORMATION_BUFFER_SIZE; i++) {
+  formationBuffer.push({ x: 0, y: 0 });
+}
+
 export class MovementSystem extends System {
   public priority = 10;
 
@@ -190,32 +197,40 @@ export class MovementSystem extends System {
     }
   }
 
+  /**
+   * Calculate formation positions for a group move command
+   * PERF: Uses pooled buffer to avoid array allocation per move command
+   * Returns a slice of the pooled buffer - DO NOT store reference, copy values immediately
+   */
   private calculateFormationPositions(
     targetX: number,
     targetY: number,
     count: number
   ): Array<{ x: number; y: number }> {
-    if (count === 1) {
-      return [{ x: targetX, y: targetY }];
+    // Clamp to buffer size
+    const effectiveCount = Math.min(count, FORMATION_BUFFER_SIZE);
+
+    if (effectiveCount === 1) {
+      formationBuffer[0].x = targetX;
+      formationBuffer[0].y = targetY;
+      return formationBuffer;
     }
 
-    const positions: Array<{ x: number; y: number }> = [];
     const spacing = 1.5;
-    const cols = Math.ceil(Math.sqrt(count));
-    const rows = Math.ceil(count / cols);
+    const cols = Math.ceil(Math.sqrt(effectiveCount));
+    const rows = Math.ceil(effectiveCount / cols);
     const offsetX = ((cols - 1) * spacing) / 2;
     const offsetY = ((rows - 1) * spacing) / 2;
 
-    for (let i = 0; i < count; i++) {
+    // PERF: Reuse pooled buffer objects instead of allocating new ones
+    for (let i = 0; i < effectiveCount; i++) {
       const col = i % cols;
       const row = Math.floor(i / cols);
-      positions.push({
-        x: targetX + col * spacing - offsetX,
-        y: targetY + row * spacing - offsetY,
-      });
+      formationBuffer[i].x = targetX + col * spacing - offsetX;
+      formationBuffer[i].y = targetY + row * spacing - offsetY;
     }
 
-    return positions;
+    return formationBuffer;
   }
 
   /**

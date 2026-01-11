@@ -238,13 +238,18 @@
 - [x] **EffectsRenderer temp Vector3 pool** - Added reusable Vector3 objects for attack effect creation to reduce GC pressure
 - [x] **React memo() added to UI components** - Wrapped HUD, GraphicsOptionsPanel, DebugMenuPanel, PlayerStatusPanel in memo() to prevent unnecessary re-renders
 
+### Fixed Issues (Round 8 - Draw Call & Algorithm Optimization - January 2026)
+- [x] **InstancedTrees true instancing** - Converted from individual meshes (400+ draw calls) to InstancedMesh batched by model type (2-6 draw calls). 98% reduction in tree draw calls.
+- [x] **InstancedRocks true instancing** - Converted from individual meshes (300+ draw calls) to InstancedMesh batched by model type (3 draw calls). 99% reduction in rock draw calls.
+- [x] **MovementSystem formation buffer pooling** - Pre-allocated 256-position formation buffer to eliminate per-move-command array allocations
+- [x] **EffectsRenderer damage number sprite pool** - Pool of 20 pre-created sprites with textures to eliminate canvas/texture allocation per damage number
+- [x] **EnhancedAI findAvailableWorker optimization** - Changed from triple-pass O(3n) to single-pass O(n) with priority tracking
+- [x] **EnhancedAI extractor-geyser O(n²) → O(n+m)** - Built Map<extractorId, resource> for O(1) lookup instead of nested loops
+- [x] **EnhancedAI mineral sorting moved outside loop** - Sort once before worker assignment loop instead of every iteration
+
 ### Remaining Optimizations
-- [ ] Instanced decorations (trees, rocks, debris - 1000s of draw calls)
 - [ ] Graphics settings UI (shadows optional)
 - [ ] Web Worker for AI calculations
-- [ ] Damage number texture atlas (pool instead of create)
-- [ ] EnhancedAISystem O(n²) patterns - extractor-geyser matching, mineral sorting in loops
-- [ ] MovementSystem formation array pooling - reuse position arrays for move commands
 
 ---
 

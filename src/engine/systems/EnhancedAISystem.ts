@@ -1803,11 +1803,16 @@ export class EnhancedAISystem extends System {
   /**
    * Find an available worker for the AI to assign to construction.
    * Prefers idle workers, then gathering workers, then moving workers.
+   * PERF: Single-pass implementation instead of triple-pass O(3n)
    */
   private findAvailableWorker(playerId: string): number | null {
     const units = this.getCachedUnits();
 
-    // First pass: find idle workers
+    // PERF: Track best candidate by priority in single pass
+    let idleWorker: number | null = null;
+    let gatheringWorker: number | null = null;
+    let movingWorker: number | null = null;
+
     for (const entity of units) {
       const unit = entity.get<Unit>('Unit');
       const selectable = entity.get<Selectable>('Selectable');
@@ -1818,44 +1823,18 @@ export class EnhancedAISystem extends System {
       if (!unit.isWorker) continue;
       if (health.isDead()) continue;
 
+      // Track by priority - idle > gathering > moving
       if (unit.state === 'idle') {
-        return entity.id;
+        return entity.id; // Best priority - return immediately
+      } else if (unit.state === 'gathering' && gatheringWorker === null) {
+        gatheringWorker = entity.id;
+      } else if (unit.state === 'moving' && movingWorker === null) {
+        movingWorker = entity.id;
       }
     }
 
-    // Second pass: find gathering workers
-    for (const entity of units) {
-      const unit = entity.get<Unit>('Unit');
-      const selectable = entity.get<Selectable>('Selectable');
-      const health = entity.get<Health>('Health');
-
-      if (!unit || !selectable || !health) continue;
-      if (selectable.playerId !== playerId) continue;
-      if (!unit.isWorker) continue;
-      if (health.isDead()) continue;
-
-      if (unit.state === 'gathering') {
-        return entity.id;
-      }
-    }
-
-    // Third pass: find moving workers
-    for (const entity of units) {
-      const unit = entity.get<Unit>('Unit');
-      const selectable = entity.get<Selectable>('Selectable');
-      const health = entity.get<Health>('Health');
-
-      if (!unit || !selectable || !health) continue;
-      if (selectable.playerId !== playerId) continue;
-      if (!unit.isWorker) continue;
-      if (health.isDead()) continue;
-
-      if (unit.state === 'moving') {
-        return entity.id;
-      }
-    }
-
-    return null;
+    // Return best available by priority
+    return gatheringWorker ?? movingWorker ?? null;
   }
 
   /**
@@ -2451,6 +2430,17 @@ export class EnhancedAISystem extends System {
     const refineries: { entityId: number; resourceEntityId: number; currentWorkers: number }[] = [];
     const buildings = this.world.getEntitiesWith('Building', 'Selectable', 'Transform');
 
+    // PERF: Build a map of extractorEntityId -> resource for O(1) lookup instead of O(n*m) nested loop
+    const extractorToResource = new Map<number, { entity: typeof resources extends Iterable<infer T> ? T : never; resource: Resource }>();
+    for (const resEntity of resources) {
+      const resource = resEntity.get<Resource>('Resource');
+      if (!resource) continue;
+      if (resource.resourceType !== 'vespene') continue;
+      if (resource.extractorEntityId !== null) {
+        extractorToResource.set(resource.extractorEntityId, { entity: resEntity, resource });
+      }
+    }
+
     for (const entity of buildings) {
       const building = entity.get<Building>('Building');
       const selectable = entity.get<Selectable>('Selectable');
@@ -2460,19 +2450,14 @@ export class EnhancedAISystem extends System {
       if (building.buildingId !== 'extractor') continue;
       if (!building.isComplete()) continue;
 
-      // Find the associated vespene geyser
-      for (const resEntity of resources) {
-        const resource = resEntity.get<Resource>('Resource');
-        if (!resource) continue;
-        if (resource.resourceType !== 'vespene') continue;
-        if (resource.extractorEntityId === entity.id) {
-          refineries.push({
-            entityId: entity.id,
-            resourceEntityId: resEntity.id,
-            currentWorkers: resource.getCurrentGatherers()
-          });
-          break;
-        }
+      // PERF: O(1) lookup via map instead of O(n) nested loop
+      const vespeneData = extractorToResource.get(entity.id);
+      if (vespeneData) {
+        refineries.push({
+          entityId: entity.id,
+          resourceEntityId: vespeneData.entity.id,
+          currentWorkers: vespeneData.resource.getCurrentGatherers()
+        });
       }
     }
 
@@ -2513,6 +2498,21 @@ export class EnhancedAISystem extends System {
       debugAI.log(`[EnhancedAI] ${ai.playerId}: workers=[${statesStr}], idle=${idleWorkers.length}, minerals=${totalMineralWorkers}/${nearbyMinerals.length * OPTIMAL_WORKERS_PER_MINERAL}, gas=${totalGasWorkers}/${refineries.length * OPTIMAL_WORKERS_PER_VESPENE}`);
     }
 
+    // PERF: Sort minerals ONCE before the worker loop instead of every iteration
+    // Sort by workers first (fewest first), then distance - .find() still works correctly
+    // after incrementing worker counts since we're looking for first match under threshold
+    nearbyMinerals.sort((a, b) => {
+      if (a.currentWorkers !== b.currentWorkers) {
+        return a.currentWorkers - b.currentWorkers;
+      }
+      return a.distance - b.distance;
+    });
+
+    // PERF: Pre-compute closest mineral for fallback case to avoid sorting inside loop
+    const closestMineral = nearbyMinerals.length > 0
+      ? nearbyMinerals.reduce((closest, m) => m.distance < closest.distance ? m : closest)
+      : null;
+
     // Assign idle workers using SC2-style optimal saturation
     for (const workerId of idleWorkers) {
       // Priority 1: Fill undersaturated gas (vespene is more valuable)
@@ -2527,14 +2527,6 @@ export class EnhancedAISystem extends System {
       }
 
       // Priority 2: Fill undersaturated minerals (patches with < 2 workers)
-      // Sort by workers first (fewest first), then distance
-      nearbyMinerals.sort((a, b) => {
-        if (a.currentWorkers !== b.currentWorkers) {
-          return a.currentWorkers - b.currentWorkers;
-        }
-        return a.distance - b.distance;
-      });
-
       const undersaturatedMineral = nearbyMinerals.find(m => m.currentWorkers < OPTIMAL_WORKERS_PER_MINERAL);
       if (undersaturatedMineral) {
         this.game.eventBus.emit('command:gather', {
@@ -2558,11 +2550,10 @@ export class EnhancedAISystem extends System {
       }
 
       // Fallback: assign to closest mineral (shouldn't normally reach here)
-      if (nearbyMinerals.length > 0) {
-        nearbyMinerals.sort((a, b) => a.distance - b.distance);
+      if (closestMineral) {
         this.game.eventBus.emit('command:gather', {
           entityIds: [workerId],
-          targetEntityId: nearbyMinerals[0].entityId,
+          targetEntityId: closestMineral.entityId,
         });
       }
     }

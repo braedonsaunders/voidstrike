@@ -450,6 +450,15 @@ export class AssetManager {
   }
 
   /**
+   * Get the original decoration model for instanced rendering (NOT cloned).
+   * Returns the cached original model directly - caller must NOT modify it.
+   * Use this for InstancedMesh where we need to extract geometry/material once.
+   */
+  static getDecorationOriginal(decorationType: string): THREE.Object3D | null {
+    return customAssets.get(decorationType) ?? null;
+  }
+
+  /**
    * Get or generate a projectile mesh
    */
   static getProjectileMesh(projectileType: string): THREE.Object3D {
