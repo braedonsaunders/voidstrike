@@ -30,8 +30,10 @@ interface BuildingMeshData {
   blueprintEffect: THREE.Group | null;
   // Ground dust effect for construction
   groundDustEffect: THREE.Group | null;
-  // Scaffold wireframe effect
-  scaffoldEffect: THREE.LineSegments | null;
+  // Scaffold effect (thick poles and beams)
+  scaffoldEffect: THREE.Group | null;
+  // Clipping plane for construction reveal
+  clippingPlane: THREE.Plane | null;
 }
 
 // Instanced building group for same-type completed buildings
@@ -591,6 +593,21 @@ export class BuildingRenderer {
         // Complete/operational building - full opacity, no construction effects
         meshData.group.scale.setScalar(1);
         this.resetBuildingMaterials(meshData.group);
+
+        // Remove clipping planes from materials
+        if (meshData.clippingPlane) {
+          meshData.group.traverse((child) => {
+            if (child instanceof THREE.Mesh) {
+              const mat = child.material as THREE.Material;
+              if (mat) {
+                mat.clippingPlanes = null;
+                mat.needsUpdate = true;
+              }
+            }
+          });
+          meshData.clippingPlane = null;
+        }
+
         // Remove construction effect if present
         if (meshData.constructionEffect) {
           this.scene.remove(meshData.constructionEffect);
@@ -612,8 +629,7 @@ export class BuildingRenderer {
         // Remove scaffold effect if present
         if (meshData.scaffoldEffect) {
           this.scene.remove(meshData.scaffoldEffect);
-          meshData.scaffoldEffect.geometry.dispose();
-          (meshData.scaffoldEffect.material as THREE.Material).dispose();
+          this.disposeGroup(meshData.scaffoldEffect);
           meshData.scaffoldEffect = null;
         }
         meshData.wasComplete = true;
@@ -656,17 +672,30 @@ export class BuildingRenderer {
         // Construction paused (SC2-style) - show partially built state without active effects
         const progress = building.buildProgress;
 
-        // Use Y-scale to show partial construction (same as constructing state)
-        const yScale = Math.max(0.01, progress);
-        const yOffset = meshData.buildingHeight * (1 - yScale) * 0.5;
+        // Building at full size with clipping plane (same as constructing)
+        meshData.group.scale.set(1, 1, 1);
+        meshData.group.position.set(transform.x, terrainHeight, transform.y);
 
-        meshData.group.scale.set(1, yScale, 1);
-        meshData.group.position.set(transform.x, terrainHeight - yOffset, transform.y);
+        // Calculate the clip height - reveals from bottom to top
+        const clipHeight = terrainHeight + meshData.buildingHeight * progress;
+
+        // Create or update clipping plane
+        if (!meshData.clippingPlane) {
+          meshData.clippingPlane = new THREE.Plane(new THREE.Vector3(0, -1, 0), clipHeight);
+        } else {
+          meshData.clippingPlane.constant = clipHeight;
+        }
 
         // Slightly more transparent when paused to indicate inactive state
         const opacity = 0.5 + progress * 0.3;
         meshData.group.traverse((child) => {
           if (child instanceof THREE.Mesh) {
+            const mat = child.material as THREE.Material;
+            if (mat) {
+              mat.clippingPlanes = [meshData.clippingPlane!];
+              mat.clipShadows = true;
+              mat.needsUpdate = true;
+            }
             this.setMaterialOpacity(child, opacity, true);
           }
         });
@@ -688,30 +717,39 @@ export class BuildingRenderer {
 
         // Keep scaffold visible during pause to show partial structure
         if (meshData.scaffoldEffect) {
-          meshData.scaffoldEffect.visible = progress < 0.7; // Hide scaffold at 70% progress
+          meshData.scaffoldEffect.visible = progress < 0.7;
           meshData.scaffoldEffect.position.set(transform.x, terrainHeight, transform.y);
         }
       } else {
         // Construction in progress (state === 'constructing')
-        // Bottom-up reveal using Y-scale animation (more reliable than clipping planes)
+        // Layer-by-layer reveal using clipping planes - building stays at full size on ground
         const progress = building.buildProgress;
 
-        // Scale building from bottom up: at progress=0, scale.y=0.01; at progress=1, scale.y=1
-        // We use a minimum of 0.01 to avoid zero scale issues
-        const yScale = Math.max(0.01, progress);
+        // Building is at full size, positioned on the ground
+        meshData.group.scale.set(1, 1, 1);
+        meshData.group.position.set(transform.x, terrainHeight, transform.y);
 
-        // Position adjustment: anchor building at bottom so it grows upward
-        // When scale.y < 1, we need to offset Y position downward to keep bottom at ground level
-        // The building mesh is positioned at terrainHeight, so we offset based on buildingHeight
-        const yOffset = meshData.buildingHeight * (1 - yScale) * 0.5;
+        // Calculate the clip height - reveals from bottom to top
+        const clipHeight = terrainHeight + meshData.buildingHeight * progress;
 
-        meshData.group.scale.set(1, yScale, 1);
-        meshData.group.position.set(transform.x, terrainHeight - yOffset, transform.y);
+        // Create or update clipping plane (clips everything ABOVE the plane)
+        if (!meshData.clippingPlane) {
+          meshData.clippingPlane = new THREE.Plane(new THREE.Vector3(0, -1, 0), clipHeight);
+        } else {
+          meshData.clippingPlane.constant = clipHeight;
+        }
 
-        // Building is semi-transparent during construction
-        const opacity = 0.6 + progress * 0.4; // 60% to 100% as it builds
+        // Apply clipping plane to all materials in the building
         meshData.group.traverse((child) => {
           if (child instanceof THREE.Mesh) {
+            const mat = child.material as THREE.Material;
+            if (mat) {
+              mat.clippingPlanes = [meshData.clippingPlane!];
+              mat.clipShadows = true;
+              mat.needsUpdate = true;
+            }
+            // Building is semi-transparent during construction
+            const opacity = 0.6 + progress * 0.4;
             this.setMaterialOpacity(child, opacity, true);
           }
         });
@@ -742,7 +780,7 @@ export class BuildingRenderer {
         meshData.groundDustEffect.position.set(transform.x, terrainHeight, transform.y);
         this.updateGroundDustEffect(meshData.groundDustEffect, dt, building.width, building.height, progress);
 
-        // Create/update scaffold wireframe effect (visible during early construction)
+        // Create/update scaffold effect (visible during early construction)
         if (!meshData.scaffoldEffect) {
           meshData.scaffoldEffect = this.createScaffoldEffect(building.width, building.height, meshData.buildingHeight);
           this.scene.add(meshData.scaffoldEffect);
@@ -752,8 +790,7 @@ export class BuildingRenderer {
         if (meshData.scaffoldEffect.visible) {
           meshData.scaffoldEffect.position.set(transform.x, terrainHeight, transform.y);
           // Fade scaffold opacity as construction progresses
-          const scaffoldOpacity = Math.max(0.1, 0.6 - progress * 0.8);
-          (meshData.scaffoldEffect.material as THREE.LineBasicMaterial).opacity = scaffoldOpacity;
+          this.updateScaffoldOpacity(meshData.scaffoldEffect, Math.max(0.2, 0.8 - progress));
         }
       }
 
@@ -873,8 +910,10 @@ export class BuildingRenderer {
         }
         if (meshData.scaffoldEffect) {
           this.scene.remove(meshData.scaffoldEffect);
-          meshData.scaffoldEffect.geometry.dispose();
+          this.disposeGroup(meshData.scaffoldEffect);
         }
+        // Clean up clipping plane reference
+        meshData.clippingPlane = null;
         this.disposeGroup(meshData.group);
         this.buildingMeshes.delete(entityId);
       }
@@ -940,6 +979,7 @@ export class BuildingRenderer {
       blueprintEffect: null,
       groundDustEffect: null,
       scaffoldEffect: null,
+      clippingPlane: null,
     };
   }
 
@@ -1861,62 +1901,127 @@ export class BuildingRenderer {
   }
 
   /**
-   * Create scaffold wireframe effect for early construction
+   * Create scaffold effect with thick poles and beams using cylinders
    * Shows construction framework that fades as building materializes
    */
-  private createScaffoldEffect(buildingWidth: number, buildingDepth: number, buildingHeight: number): THREE.LineSegments {
-    const points: THREE.Vector3[] = [];
-    // Make scaffold extend beyond building bounds for visibility
-    const hw = buildingWidth * 0.7;
-    const hd = buildingDepth * 0.7;
-    const levels = Math.max(3, Math.ceil(buildingHeight / 1.2));
+  private createScaffoldEffect(buildingWidth: number, buildingDepth: number, buildingHeight: number): THREE.Group {
+    const scaffoldGroup = new THREE.Group();
 
-    // Vertical scaffolding poles at corners
+    // Scaffold dimensions - extend beyond building for visibility
+    const hw = buildingWidth * 0.65;
+    const hd = buildingDepth * 0.65;
+    const levelHeight = 1.5;
+    const levels = Math.max(2, Math.ceil(buildingHeight / levelHeight));
+
+    // Pole thickness
+    const poleRadius = 0.08;
+    const beamRadius = 0.05;
+
+    // Material for scaffold poles (orange metallic)
+    const poleMaterial = new THREE.MeshBasicMaterial({
+      color: 0xdd8833,
+      transparent: true,
+      opacity: 0.9,
+    });
+
+    // Material for cross beams (darker)
+    const beamMaterial = new THREE.MeshBasicMaterial({
+      color: 0xaa6622,
+      transparent: true,
+      opacity: 0.85,
+    });
+
+    // Helper to create a cylinder between two points
+    const createPole = (start: THREE.Vector3, end: THREE.Vector3, radius: number, material: THREE.Material) => {
+      const direction = new THREE.Vector3().subVectors(end, start);
+      const length = direction.length();
+      if (length < 0.01) return null;
+
+      const geometry = new THREE.CylinderGeometry(radius, radius, length, 6);
+      const mesh = new THREE.Mesh(geometry, material);
+
+      // Position at midpoint
+      mesh.position.copy(start).add(end).multiplyScalar(0.5);
+
+      // Orient cylinder to point from start to end
+      const axis = new THREE.Vector3(0, 1, 0);
+      direction.normalize();
+      const quaternion = new THREE.Quaternion().setFromUnitVectors(axis, direction);
+      mesh.quaternion.copy(quaternion);
+
+      return mesh;
+    };
+
+    // Corner positions
     const corners = [
-      [-hw, -hd], [hw, -hd], [-hw, hd], [hw, hd],
+      new THREE.Vector3(-hw, 0, -hd),
+      new THREE.Vector3(hw, 0, -hd),
+      new THREE.Vector3(hw, 0, hd),
+      new THREE.Vector3(-hw, 0, hd),
     ];
 
-    for (const [cx, cz] of corners) {
-      for (let level = 0; level < levels; level++) {
-        const y1 = level * 1.5;
-        const y2 = Math.min((level + 1) * 1.5, buildingHeight);
-        points.push(new THREE.Vector3(cx, y1, cz));
-        points.push(new THREE.Vector3(cx, y2, cz));
-      }
+    // Create vertical poles at corners
+    for (const corner of corners) {
+      const start = corner.clone();
+      const end = corner.clone();
+      end.y = buildingHeight;
+      const pole = createPole(start, end, poleRadius, poleMaterial.clone());
+      if (pole) scaffoldGroup.add(pole);
     }
 
-    // Horizontal cross-beams at each level
+    // Create horizontal beams at each level
     for (let level = 0; level <= levels; level++) {
-      const y = Math.min(level * 1.5, buildingHeight);
+      const y = Math.min(level * levelHeight, buildingHeight);
 
-      // Connect corners
-      points.push(new THREE.Vector3(-hw, y, -hd), new THREE.Vector3(hw, y, -hd));
-      points.push(new THREE.Vector3(hw, y, -hd), new THREE.Vector3(hw, y, hd));
-      points.push(new THREE.Vector3(hw, y, hd), new THREE.Vector3(-hw, y, hd));
-      points.push(new THREE.Vector3(-hw, y, hd), new THREE.Vector3(-hw, y, -hd));
+      // Horizontal beams connecting corners
+      for (let i = 0; i < 4; i++) {
+        const start = corners[i].clone();
+        start.y = y;
+        const end = corners[(i + 1) % 4].clone();
+        end.y = y;
+        const beam = createPole(start, end, beamRadius, beamMaterial.clone());
+        if (beam) scaffoldGroup.add(beam);
+      }
 
-      // Diagonal braces (X pattern on each face)
+      // Diagonal braces on each face (X pattern)
       if (level < levels) {
-        const y2 = Math.min((level + 1) * 1.5, buildingHeight);
-        // Front face
-        points.push(new THREE.Vector3(-hw, y, -hd), new THREE.Vector3(hw, y2, -hd));
-        points.push(new THREE.Vector3(hw, y, -hd), new THREE.Vector3(-hw, y2, -hd));
-        // Back face
-        points.push(new THREE.Vector3(-hw, y, hd), new THREE.Vector3(hw, y2, hd));
-        points.push(new THREE.Vector3(hw, y, hd), new THREE.Vector3(-hw, y2, hd));
-        // Left face
-        points.push(new THREE.Vector3(-hw, y, -hd), new THREE.Vector3(-hw, y2, hd));
-        points.push(new THREE.Vector3(-hw, y, hd), new THREE.Vector3(-hw, y2, -hd));
-        // Right face
-        points.push(new THREE.Vector3(hw, y, -hd), new THREE.Vector3(hw, y2, hd));
-        points.push(new THREE.Vector3(hw, y, hd), new THREE.Vector3(hw, y2, -hd));
+        const y2 = Math.min((level + 1) * levelHeight, buildingHeight);
+
+        for (let i = 0; i < 4; i++) {
+          const c1 = corners[i];
+          const c2 = corners[(i + 1) % 4];
+
+          // Diagonal 1
+          const d1Start = new THREE.Vector3(c1.x, y, c1.z);
+          const d1End = new THREE.Vector3(c2.x, y2, c2.z);
+          const diag1 = createPole(d1Start, d1End, beamRadius * 0.7, beamMaterial.clone());
+          if (diag1) scaffoldGroup.add(diag1);
+
+          // Diagonal 2
+          const d2Start = new THREE.Vector3(c2.x, y, c2.z);
+          const d2End = new THREE.Vector3(c1.x, y2, c1.z);
+          const diag2 = createPole(d2Start, d2End, beamRadius * 0.7, beamMaterial.clone());
+          if (diag2) scaffoldGroup.add(diag2);
+        }
       }
     }
 
-    const geometry = new THREE.BufferGeometry().setFromPoints(points);
-    const scaffold = new THREE.LineSegments(geometry, this.scaffoldMaterial.clone());
+    return scaffoldGroup;
+  }
 
-    return scaffold;
+  /**
+   * Update scaffold opacity for fade effect
+   */
+  private updateScaffoldOpacity(scaffold: THREE.Group, opacity: number): void {
+    scaffold.traverse((child) => {
+      if (child instanceof THREE.Mesh) {
+        const mat = child.material as THREE.MeshBasicMaterial;
+        if (mat) {
+          mat.opacity = opacity;
+          mat.needsUpdate = true;
+        }
+      }
+    });
   }
 
   private createBar(color: number): THREE.Group {
@@ -2110,8 +2215,7 @@ export class BuildingRenderer {
       }
       if (meshData.scaffoldEffect) {
         this.scene.remove(meshData.scaffoldEffect);
-        meshData.scaffoldEffect.geometry.dispose();
-        (meshData.scaffoldEffect.material as THREE.Material).dispose();
+        this.disposeGroup(meshData.scaffoldEffect);
       }
     }
     this.buildingMeshes.clear();
