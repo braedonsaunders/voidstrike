@@ -459,6 +459,7 @@ export class UnitRenderer {
   }
 
   public update(deltaTime: number = 1/60): void {
+    const updateStart = performance.now();
     const entities = this.world.getEntitiesWith('Transform', 'Unit');
     const currentIds = new Set<number>();
 
@@ -616,6 +617,11 @@ export class UnitRenderer {
         animUnit.mixer.stopAllAction();
         this.animatedUnits.delete(entityId);
       }
+    }
+
+    const updateElapsed = performance.now() - updateStart;
+    if (updateElapsed > 16) {
+      console.warn(`[UnitRenderer] UPDATE: ${entities.length} entities took ${updateElapsed.toFixed(1)}ms`);
     }
   }
 
