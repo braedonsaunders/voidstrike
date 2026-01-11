@@ -1001,6 +1001,13 @@ export class EnhancedAISystem extends System {
       return false;
     }
 
+    // Find an available worker BEFORE committing to building
+    const workerId = this.findAvailableWorker(ai.playerId);
+    if (workerId === null) {
+      debugAI.log(`[EnhancedAI] ${ai.playerId}: tryBuildBuildingAt failed - no available worker for ${buildingType}`);
+      return false;
+    }
+
     ai.minerals -= buildingDef.mineralCost;
     ai.vespene -= buildingDef.vespeneCost;
 
@@ -1008,7 +1015,10 @@ export class EnhancedAISystem extends System {
       buildingType,
       position,
       playerId: ai.playerId,
+      workerId, // Include workerId so BuildingPlacementSystem uses this specific worker
     });
+
+    debugAI.log(`[EnhancedAI] ${ai.playerId}: Placed ${buildingType} at (${position.x.toFixed(1)}, ${position.y.toFixed(1)}) with worker ${workerId}`);
 
     return true;
   }
@@ -1616,6 +1626,14 @@ export class EnhancedAISystem extends System {
       return false;
     }
 
+    // Find an available worker BEFORE committing to building
+    // This prevents the AI from advancing build order when no worker is available
+    const workerId = this.findAvailableWorker(ai.playerId);
+    if (workerId === null) {
+      debugAI.log(`[EnhancedAI] ${ai.playerId}: tryBuildBuilding failed - no available worker for ${buildingType}`);
+      return false;
+    }
+
     let buildPos: { x: number; y: number } | null = null;
 
     // Special handling for extractors - must be placed on vespene geysers
@@ -1641,9 +1659,70 @@ export class EnhancedAISystem extends System {
       buildingType,
       position: buildPos,
       playerId: ai.playerId,
+      workerId, // Include workerId so BuildingPlacementSystem uses this specific worker
     });
 
+    debugAI.log(`[EnhancedAI] ${ai.playerId}: Placed ${buildingType} at (${buildPos.x.toFixed(1)}, ${buildPos.y.toFixed(1)}) with worker ${workerId}`);
+
     return true;
+  }
+
+  /**
+   * Find an available worker for the AI to assign to construction.
+   * Prefers idle workers, then gathering workers, then moving workers.
+   */
+  private findAvailableWorker(playerId: string): number | null {
+    const units = this.world.getEntitiesWith('Unit', 'Selectable', 'Health');
+
+    // First pass: find idle workers
+    for (const entity of units) {
+      const unit = entity.get<Unit>('Unit');
+      const selectable = entity.get<Selectable>('Selectable');
+      const health = entity.get<Health>('Health');
+
+      if (!unit || !selectable || !health) continue;
+      if (selectable.playerId !== playerId) continue;
+      if (!unit.isWorker) continue;
+      if (health.isDead()) continue;
+
+      if (unit.state === 'idle') {
+        return entity.id;
+      }
+    }
+
+    // Second pass: find gathering workers
+    for (const entity of units) {
+      const unit = entity.get<Unit>('Unit');
+      const selectable = entity.get<Selectable>('Selectable');
+      const health = entity.get<Health>('Health');
+
+      if (!unit || !selectable || !health) continue;
+      if (selectable.playerId !== playerId) continue;
+      if (!unit.isWorker) continue;
+      if (health.isDead()) continue;
+
+      if (unit.state === 'gathering') {
+        return entity.id;
+      }
+    }
+
+    // Third pass: find moving workers
+    for (const entity of units) {
+      const unit = entity.get<Unit>('Unit');
+      const selectable = entity.get<Selectable>('Selectable');
+      const health = entity.get<Health>('Health');
+
+      if (!unit || !selectable || !health) continue;
+      if (selectable.playerId !== playerId) continue;
+      if (!unit.isWorker) continue;
+      if (health.isDead()) continue;
+
+      if (unit.state === 'moving') {
+        return entity.id;
+      }
+    }
+
+    return null;
   }
 
   /**
