@@ -908,11 +908,20 @@ export function WebGPUGameCanvas() {
 
     // Handle landing mode - right-click to land flying building
     if (isLandingMode && landingBuildingId) {
-      game.eventBus.emit('command:land', {
-        buildingId: landingBuildingId,
-        position: { x: worldPos.x, y: worldPos.z },
-      });
-      useGameStore.getState().setLandingMode(false);
+      // Use the placement preview's snapped position and validity check
+      if (placementPreviewRef.current) {
+        const snappedPos = placementPreviewRef.current.getSnappedPosition();
+        const isValid = placementPreviewRef.current.isPlacementValid();
+
+        if (isValid) {
+          game.eventBus.emit('command:land', {
+            buildingId: landingBuildingId,
+            position: { x: snappedPos.x, y: snappedPos.y },
+          });
+          useGameStore.getState().setLandingMode(false);
+        }
+        // If not valid, stay in landing mode - player can try another spot
+      }
       return;
     }
 
@@ -1010,16 +1019,45 @@ export function WebGPUGameCanvas() {
         return;
       }
 
-      console.log('[WebGPUGameCanvas] Emitting command:move', {
-        entityIds: selectedUnits,
-        target: { x: worldPos.x.toFixed(1), y: worldPos.z.toFixed(1) },
-        queue,
-      });
-      game.eventBus.emit('command:move', {
-        entityIds: selectedUnits,
-        targetPosition: { x: worldPos.x, y: worldPos.z },
-        queue,
-      });
+      // Check if selected entities include flying buildings - they need special move handling
+      const flyingBuildingIds: number[] = [];
+      const unitIds: number[] = [];
+
+      for (const id of selectedUnits) {
+        const entity = game.world.getEntity(id);
+        const building = entity?.get<Building>('Building');
+        const unit = entity?.get<Unit>('Unit');
+
+        if (building?.isFlying && building.state === 'flying') {
+          flyingBuildingIds.push(id);
+        } else if (unit) {
+          unitIds.push(id);
+        }
+      }
+
+      // Move flying buildings
+      if (flyingBuildingIds.length > 0) {
+        for (const buildingId of flyingBuildingIds) {
+          game.eventBus.emit('command:flyingBuildingMove', {
+            buildingId,
+            targetPosition: { x: worldPos.x, y: worldPos.z },
+          });
+        }
+      }
+
+      // Move units normally
+      if (unitIds.length > 0) {
+        console.log('[WebGPUGameCanvas] Emitting command:move', {
+          entityIds: unitIds,
+          target: { x: worldPos.x.toFixed(1), y: worldPos.z.toFixed(1) },
+          queue,
+        });
+        game.eventBus.emit('command:move', {
+          entityIds: unitIds,
+          targetPosition: { x: worldPos.x, y: worldPos.z },
+          queue,
+        });
+      }
     }
   };
 
@@ -1070,13 +1108,16 @@ export function WebGPUGameCanvas() {
       setSelectionEnd({ x: e.clientX, y: e.clientY });
     }
 
-    if (isBuilding && buildingType && placementPreviewRef.current && cameraRef.current) {
-      const worldPos = cameraRef.current.screenToWorld(e.clientX, e.clientY);
-      if (worldPos) {
-        placementPreviewRef.current.updatePosition(worldPos.x, worldPos.z);
+    // Update placement preview for both building mode and landing mode
+    if (placementPreviewRef.current && cameraRef.current) {
+      if ((isBuilding && buildingType) || isLandingMode) {
+        const worldPos = cameraRef.current.screenToWorld(e.clientX, e.clientY);
+        if (worldPos) {
+          placementPreviewRef.current.updatePosition(worldPos.x, worldPos.z);
+        }
       }
     }
-  }, [isSelecting, isBuilding, buildingType]);
+  }, [isSelecting, isBuilding, buildingType, isLandingMode]);
 
   const handleMouseUp = useCallback((e: React.MouseEvent) => {
     if (e.button === 0 && isSelecting) {
@@ -1154,6 +1195,23 @@ export function WebGPUGameCanvas() {
       placementPreviewRef.current.setQueuedPlacements(buildingPlacementQueue);
     }
   }, [buildingPlacementQueue]);
+
+  // Landing mode preview - show blueprint when selecting landing spot
+  useEffect(() => {
+    if (placementPreviewRef.current && gameRef.current) {
+      if (isLandingMode && landingBuildingId) {
+        // Get the building type from the landing building entity
+        const entity = gameRef.current.world.getEntity(landingBuildingId);
+        const building = entity?.get<Building>('Building');
+        if (building) {
+          placementPreviewRef.current.startPlacement(building.buildingId);
+        }
+      } else if (!isBuilding) {
+        // Only stop if we're not in regular building mode
+        placementPreviewRef.current.stopPlacement();
+      }
+    }
+  }, [isLandingMode, landingBuildingId, isBuilding]);
 
   // Keyboard handlers
   useEffect(() => {
