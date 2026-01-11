@@ -226,8 +226,8 @@ export class AudioSystem extends System {
       // Skip command sounds in spectator mode
       if (this.isSpectator()) return;
 
-      // Only play sounds for local player's commands, not AI
-      if (data.playerId && !isLocalPlayer(data.playerId)) return;
+      // Only play sounds for local player's commands (skip AI and system-generated commands)
+      if (!data.playerId || !isLocalPlayer(data.playerId)) return;
 
       if (data.entityIds.length > 0) {
         AudioManager.play('unit_move');
@@ -244,8 +244,8 @@ export class AudioSystem extends System {
       // Skip command sounds in spectator mode
       if (this.isSpectator()) return;
 
-      // Only play sounds for local player's commands, not AI
-      if (data.playerId && !isLocalPlayer(data.playerId)) return;
+      // Only play sounds for local player's commands (skip AI and system-generated commands)
+      if (!data.playerId || !isLocalPlayer(data.playerId)) return;
 
       if (data.entityIds.length > 0) {
         AudioManager.play('unit_attack');
