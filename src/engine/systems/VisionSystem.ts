@@ -173,6 +173,7 @@ export class VisionSystem extends System {
 
   /**
    * Update watch tower control and vision
+   * PERF: Uses spatial grid queries per tower instead of O(units × towers) nested loop
    */
   private updateWatchTowers(units: Entity[]): void {
     // Reset all tower controlling players
@@ -181,18 +182,31 @@ export class VisionSystem extends System {
       tower.isActive = false;
     }
 
-    // Check which players have units near each tower
-    for (const entity of units) {
-      const transform = entity.get<Transform>('Transform');
-      const selectable = entity.get<Selectable>('Selectable');
-      if (!transform || !selectable) continue;
+    // PERF: Pre-compute squared capture radius to avoid sqrt in distance checks
+    const captureRadiusSq = this.WATCH_TOWER_CAPTURE_RADIUS * this.WATCH_TOWER_CAPTURE_RADIUS;
 
-      for (const tower of this.watchTowers) {
+    // PERF: For each tower, query spatial grid for nearby units instead of checking all units
+    for (const tower of this.watchTowers) {
+      const nearbyUnitIds = this.world.unitGrid.queryRadius(
+        tower.x,
+        tower.y,
+        this.WATCH_TOWER_CAPTURE_RADIUS
+      );
+
+      for (const unitId of nearbyUnitIds) {
+        const entity = this.world.getEntity(unitId);
+        if (!entity) continue;
+
+        const transform = entity.get<Transform>('Transform');
+        const selectable = entity.get<Selectable>('Selectable');
+        if (!transform || !selectable) continue;
+
+        // PERF: Use squared distance - no sqrt needed
         const dx = transform.x - tower.x;
         const dy = transform.y - tower.y;
-        const dist = Math.sqrt(dx * dx + dy * dy);
+        const distSq = dx * dx + dy * dy;
 
-        if (dist <= this.WATCH_TOWER_CAPTURE_RADIUS) {
+        if (distSq <= captureRadiusSq) {
           tower.controllingPlayers.add(selectable.playerId);
           tower.isActive = true;
         }
@@ -249,12 +263,16 @@ export class VisionSystem extends System {
     const cellY = Math.floor(worldY / this.cellSize);
     const cellRange = Math.ceil(range / this.cellSize);
 
+    // PERF: Pre-compute squared range to avoid sqrt in inner loop
+    const cellRangeSq = cellRange * cellRange;
+
     // Reveal cells in a circle
     // OPTIMIZED: Use numeric cell keys (y * width + x) instead of string templates
     for (let dy = -cellRange; dy <= cellRange; dy++) {
       for (let dx = -cellRange; dx <= cellRange; dx++) {
-        const dist = Math.sqrt(dx * dx + dy * dy);
-        if (dist <= cellRange) {
+        // PERF: Use squared distance - no sqrt needed
+        const distSq = dx * dx + dy * dy;
+        if (distSq <= cellRangeSq) {
           const x = cellX + dx;
           const y = cellY + dy;
 

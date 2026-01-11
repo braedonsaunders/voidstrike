@@ -151,6 +151,9 @@ export class GPUParticleSystem {
   // State
   private activeCount = 0;
 
+  // PERF: Reusable temp vector to avoid allocation in hot loop
+  private readonly _tempVelocity = new THREE.Vector3();
+
   constructor(
     scene: THREE.Scene,
     renderer: THREE.WebGLRenderer,
@@ -295,8 +298,9 @@ export class GPUParticleSystem {
       particle.velocity.y += this.config.gravity * dt;
       particle.velocity.multiplyScalar(this.config.drag);
 
-      // Update position
-      particle.position.add(particle.velocity.clone().multiplyScalar(dt));
+      // Update position - PERF: Reuse temp vector instead of clone()
+      this._tempVelocity.copy(particle.velocity).multiplyScalar(dt);
+      particle.position.add(this._tempVelocity);
 
       // Update buffers
       this.positions[i * 3] = particle.position.x;
