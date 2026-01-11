@@ -51,6 +51,17 @@ export class AudioSystem extends System {
     MusicPlayer.setVolume(uiState.musicVolume);
     MusicPlayer.setMuted(!uiState.musicEnabled);
 
+    // Collect all voice sound IDs from UNIT_VOICES for preloading
+    const voiceSoundIds: string[] = [];
+    for (const unitVoices of Object.values(UNIT_VOICES)) {
+      voiceSoundIds.push(...unitVoices.select);
+      voiceSoundIds.push(...unitVoices.move);
+      voiceSoundIds.push(...unitVoices.attack);
+      if (unitVoices.ready) {
+        voiceSoundIds.push(unitVoices.ready);
+      }
+    }
+
     // Preload common sounds
     AudioManager.preload([
       // UI
@@ -88,6 +99,8 @@ export class AudioSystem extends System {
       // Building
       'building_place',
       'production_start',
+      // Unit voice lines (select, move, attack, ready)
+      ...voiceSoundIds,
     ]);
 
     // Start biome-specific ambient sound
