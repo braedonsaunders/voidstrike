@@ -488,8 +488,8 @@ export function WebGPUGameCanvas() {
         // This avoids each renderer calling updateMatrixWorld() separately
         threeCamera.updateMatrixWorld();
 
-        // PERF: Per-system timing for debugging - set to true to identify bottlenecks
-        const DETAILED_TIMING = true; // Enabled to debug FPS drop issue
+        // PERF: Per-system timing for debugging - gated by debug settings for zero overhead
+        const DETAILED_TIMING = useUIStore.getState().debugSettings.debugPerformance;
         let unitTime = 0, buildingTime = 0, resourceTime = 0, fogTime = 0, effectsTime = 0;
 
         // PERF: Monitor scene object count for leak detection
