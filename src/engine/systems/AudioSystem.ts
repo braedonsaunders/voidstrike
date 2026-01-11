@@ -57,24 +57,30 @@ export class AudioSystem extends System {
       'ui_click',
       'ui_error',
       'ui_select',
-      'ui_research_complete',
-      'ui_building_complete',
       'ui_notification',
-      // Alerts
+      // Alerts (voice announcements)
       'alert_under_attack',
-      'alert_unit_lost',
-      'alert_building_lost',
-      'alert_supply_blocked',
+      'alert_additional_population_required',
+      'alert_not_enough_minerals',
+      'alert_not_enough_vespene',
+      'alert_minerals_depleted',
+      'alert_building_complete',
+      'alert_research_complete',
+      'alert_upgrade_complete',
       // Combat
       'attack_rifle',
       'attack_cannon',
+      'attack_laser',
+      'attack_missile',
       'attack_flamethrower',
       'hit_impact',
+      'hit_armor',
       'unit_death',
       'unit_death_mech',
       'unit_death_bio',
       'explosion_small',
       'explosion_large',
+      'explosion_building',
       // Unit commands
       'unit_move',
       'unit_attack',
@@ -317,7 +323,25 @@ export class AudioSystem extends System {
     this.game.eventBus.on('alert:supplyBlocked', () => {
       // Skip in spectator mode
       if (this.isSpectator()) return;
-      AudioManager.play('alert_supply_blocked');
+      AudioManager.play('alert_additional_population_required');
+    });
+
+    // Not enough resources alerts (only for human player)
+    this.game.eventBus.on('alert:notEnoughMinerals', () => {
+      if (this.isSpectator()) return;
+      AudioManager.play('alert_not_enough_minerals');
+    });
+
+    this.game.eventBus.on('alert:notEnoughVespene', () => {
+      if (this.isSpectator()) return;
+      AudioManager.play('alert_not_enough_vespene');
+    });
+
+    // Minerals depleted alert
+    this.game.eventBus.on('alert:mineralsDepleted', (data: { playerId?: string }) => {
+      if (data?.playerId && !isLocalPlayer(data.playerId)) return;
+      if (this.isSpectator()) return;
+      AudioManager.play('alert_minerals_depleted');
     });
 
     // Production events (only for local player)
@@ -353,7 +377,7 @@ export class AudioSystem extends System {
       // Only play sound for local player's buildings, not AI
       if (data?.playerId && !isLocalPlayer(data.playerId)) return;
       if (this.isSpectator()) return;
-      AudioManager.play('ui_building_complete');
+      AudioManager.play('alert_building_complete');
     });
 
     // Research events (only for local player)
@@ -368,7 +392,14 @@ export class AudioSystem extends System {
       // Only play for local player's research, not AI
       if (data?.playerId && !isLocalPlayer(data.playerId)) return;
       if (this.isSpectator()) return;
-      AudioManager.play('ui_research_complete');
+      AudioManager.play('alert_research_complete');
+    });
+
+    // Upgrade complete event (only for local player)
+    this.game.eventBus.on('upgrade:complete', (data: { playerId?: string }) => {
+      if (data?.playerId && !isLocalPlayer(data.playerId)) return;
+      if (this.isSpectator()) return;
+      AudioManager.play('alert_upgrade_complete');
     });
 
     // UI error events (only for human player)
@@ -387,8 +418,10 @@ export class AudioSystem extends System {
   }
 
   public update(_deltaTime: number): void {
-    // Audio system is event-driven, no per-frame updates needed
-    // Could add ambient sound management here if needed
+    // Update listener position for distance culling
+    if (this.camera) {
+      AudioManager.updateListenerPosition(this.camera.position);
+    }
   }
 
   // Expose AudioManager methods
