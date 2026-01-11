@@ -448,8 +448,9 @@ export class UnitMechanicsSystem extends System {
     const entities = this.world.getEntitiesWith('Unit');
 
     for (const entity of entities) {
-      const unit = entity.get<Unit>('Unit')!;
+      const unit = entity.get<Unit>('Unit');
       const health = entity.get<Health>('Health');
+      if (!unit) continue;
 
       if (health?.isDead()) continue;
 

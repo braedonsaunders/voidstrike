@@ -802,8 +802,9 @@ export class BuildingPlacementSystem extends System {
     // Update building positions in spatial grid (buildings don't move, but ensures all are registered)
     const allBuildings = this.world.getEntitiesWith('Building', 'Transform');
     for (const entity of allBuildings) {
-      const transform = entity.get<Transform>('Transform')!;
-      const building = entity.get<Building>('Building')!;
+      const transform = entity.get<Transform>('Transform');
+      const building = entity.get<Building>('Building');
+      if (!transform || !building) continue;
       // Use larger of width/height as radius for spatial queries
       const radius = Math.max(building.width, building.height) / 2 + 1;
       this.world.buildingGrid.update(entity.id, transform.x, transform.y, radius);

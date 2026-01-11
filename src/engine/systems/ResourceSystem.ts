@@ -240,7 +240,8 @@ export class ResourceSystem extends System {
 
       if (!unit.isWorker || unit.state !== 'gathering') continue;
 
-      const transform = entity.get<Transform>('Transform')!;
+      const transform = entity.get<Transform>('Transform');
+      if (!transform) continue;
 
       // Check if carrying resources
       if (unit.carryingMinerals > 0 || unit.carryingVespene > 0) {
