@@ -23,11 +23,11 @@ const SEPARATION_STRENGTH = 2.0;
 const MAX_AVOIDANCE_FORCE = 1.5;
 const MAX_AVOIDANCE_FORCE_SQ = MAX_AVOIDANCE_FORCE * MAX_AVOIDANCE_FORCE; // PERF: Pre-computed squared
 
-// Building avoidance - CRITICAL for preventing units stuck on building edges
-// Margin must exceed unit collision radius (0.5) for proper clearance
-const BUILDING_AVOIDANCE_STRENGTH = 35.0; // Increased for stronger push
-const BUILDING_AVOIDANCE_MARGIN = 0.6;    // Margin > collision radius
-const BUILDING_AVOIDANCE_SOFT_MARGIN = 1.5; // Early detection zone for smooth steering
+// Building avoidance - runtime steering to handle edge cases
+// The navmesh walkableRadius (0.6) provides primary clearance; these are backup
+const BUILDING_AVOIDANCE_STRENGTH = 25.0; // Moderate push strength
+const BUILDING_AVOIDANCE_MARGIN = 0.3;    // Small safety margin for hard avoidance
+const BUILDING_AVOIDANCE_SOFT_MARGIN = 0.8; // Reduced early detection zone
 const BUILDING_PREDICTION_LOOKAHEAD = 0.5;  // Seconds to look ahead for collision
 
 // Path request cooldown

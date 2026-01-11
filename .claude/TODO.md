@@ -163,10 +163,15 @@
 - [x] **Graceful fallback** - When navmesh path fails for short distances (< 30 units), allows direct movement
 - [x] **Building collision prevention** - Units no longer get stuck on building edges:
   - Reduced NavMesh cell size from 0.5 to 0.25 for 2x precision around obstacles
-  - Building obstacles expanded by agent radius + 0.1 buffer
-  - Three-tier building avoidance (hard, soft, predictive)
+  - Building obstacles expanded by small precision buffer (0.1)
+  - NavMesh walkableRadius (0.6) provides primary clearance - obstacle expansion is minimal to avoid compounding
+  - Three-tier building avoidance (hard, soft, predictive) with reduced margins
   - Path smoothing with direct walkability checks
   - Agent-specific path queries based on unit collision radius
+- [x] **Building gap navigation fix** - Units can now navigate through gaps between buildings:
+  - Fixed compounding margins where walkableRadius + obstacle expansion + avoidance margins were stacking
+  - Reduced obstacle expansion from (agentRadius + 0.1) to just 0.1 since walkableRadius handles clearance
+  - Reduced MovementSystem avoidance margins (0.6→0.3 hard, 1.5→0.8 soft) since navmesh provides primary avoidance
 - [ ] **Debug navmesh visualization** - Visual overlay to verify navmesh coverage
 - [ ] **Re-enable crowd simulation** - Fix crowd velocity returning 0 and re-enable DetourCrowd for collision avoidance
 
