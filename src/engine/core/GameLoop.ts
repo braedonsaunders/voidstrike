@@ -119,11 +119,18 @@ export class GameLoop {
     // Process up to 200 ticks per call (10 seconds at 20 tick/sec)
     let iterations = 0;
     const maxIterations = 200;
+    const tickStart = performance.now();
 
     while (this.accumulator >= this.tickMs && iterations < maxIterations) {
       this.updateCallback(this.tickMs);
       this.accumulator -= this.tickMs;
       iterations++;
+    }
+
+    // Log if we're processing multiple ticks or if tick processing is slow
+    const tickElapsed = performance.now() - tickStart;
+    if (iterations > 1 || tickElapsed > 20) {
+      console.warn(`[GameLoop] tick: ${iterations} iterations in ${tickElapsed.toFixed(1)}ms, accumulator=${this.accumulator.toFixed(1)}ms`);
     }
 
     // If we still have excess after max iterations, it will be processed next tick

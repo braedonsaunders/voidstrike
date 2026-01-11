@@ -138,10 +138,19 @@ export class World {
   }
 
   public update(deltaTime: number): void {
+    const slowSystems: string[] = [];
     for (const system of this.systems) {
       if (system.enabled) {
+        const start = performance.now();
         system.update(deltaTime);
+        const elapsed = performance.now() - start;
+        if (elapsed > 5) {
+          slowSystems.push(`${system.constructor.name}:${elapsed.toFixed(1)}ms`);
+        }
       }
+    }
+    if (slowSystems.length > 0) {
+      console.warn(`[World] Slow systems: ${slowSystems.join(', ')}`);
     }
   }
 

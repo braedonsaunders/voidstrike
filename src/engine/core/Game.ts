@@ -229,6 +229,8 @@ export class Game {
   private update(deltaTime: number): void {
     if (this.state !== 'running') return;
 
+    const tickStart = performance.now();
+
     this.currentTick++;
 
     // Set current tick for query cache invalidation
@@ -242,6 +244,11 @@ export class Game {
       tick: this.currentTick,
       deltaTime,
     });
+
+    const tickElapsed = performance.now() - tickStart;
+    if (tickElapsed > 10) {
+      console.warn(`[Game] TICK ${this.currentTick}: ${tickElapsed.toFixed(1)}ms`);
+    }
   }
 
   public getState(): GameState {
