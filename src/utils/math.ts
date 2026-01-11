@@ -28,59 +28,6 @@ export function angle(x1: number, y1: number, x2: number, y2: number): number {
   return Math.atan2(y2 - y1, x2 - x1);
 }
 
-export function rotatePoint(
-  x: number,
-  y: number,
-  angle: number,
-  cx = 0,
-  cy = 0
-): { x: number; y: number } {
-  const cos = Math.cos(angle);
-  const sin = Math.sin(angle);
-  const dx = x - cx;
-  const dy = y - cy;
-  return {
-    x: cx + dx * cos - dy * sin,
-    y: cy + dx * sin + dy * cos,
-  };
-}
-
-export function pointInRect(
-  px: number,
-  py: number,
-  rx: number,
-  ry: number,
-  rw: number,
-  rh: number
-): boolean {
-  return px >= rx && px <= rx + rw && py >= ry && py <= ry + rh;
-}
-
-export function rectsOverlap(
-  x1: number,
-  y1: number,
-  w1: number,
-  h1: number,
-  x2: number,
-  y2: number,
-  w2: number,
-  h2: number
-): boolean {
-  return x1 < x2 + w2 && x1 + w1 > x2 && y1 < y2 + h2 && y1 + h1 > y2;
-}
-
-export function circlesOverlap(
-  x1: number,
-  y1: number,
-  r1: number,
-  x2: number,
-  y2: number,
-  r2: number
-): boolean {
-  const dist = distance(x1, y1, x2, y2);
-  return dist < r1 + r2;
-}
-
 export function randomRange(min: number, max: number): number {
   return min + Math.random() * (max - min);
 }

@@ -7,7 +7,6 @@ import { CombatSystem } from '../systems/CombatSystem';
 import { ProductionSystem } from '../systems/ProductionSystem';
 import { ResourceSystem } from '../systems/ResourceSystem';
 import { ResearchSystem } from '../systems/ResearchSystem';
-import { AISystem } from '../systems/AISystem';
 import { EnhancedAISystem, AIDifficulty } from '../systems/EnhancedAISystem';
 import { VisionSystem } from '../systems/VisionSystem';
 import { AbilitySystem } from '../systems/AbilitySystem';
@@ -40,7 +39,6 @@ export interface GameConfig {
   playerId: string;
   aiEnabled: boolean;
   aiDifficulty: AIDifficulty;
-  useEnhancedAI: boolean;
 }
 
 const DEFAULT_CONFIG: GameConfig = {
@@ -51,7 +49,6 @@ const DEFAULT_CONFIG: GameConfig = {
   playerId: 'player1',
   aiEnabled: true,
   aiDifficulty: 'medium',
-  useEnhancedAI: true,
 };
 
 export class Game {
@@ -181,16 +178,12 @@ export class Game {
     this.world.addSystem(this.saveLoadSystem); // Save/Load functionality
 
     if (this.config.aiEnabled) {
-      if (this.config.useEnhancedAI) {
-        const enhancedAI = new EnhancedAISystem(this, this.config.aiDifficulty);
-        this.world.addSystem(enhancedAI);
-        this.world.addSystem(this.aiMicroSystem); // AI unit micro (kiting, focus fire)
-        // NOTE: AI player registration with AIMicroSystem happens in spawnInitialEntities()
-        // This ensures the store has the correct player configuration when registration occurs
-        // Do NOT register here as the store may have stale/default state at this point
-      } else {
-        this.world.addSystem(new AISystem(this));
-      }
+      const enhancedAI = new EnhancedAISystem(this, this.config.aiDifficulty);
+      this.world.addSystem(enhancedAI);
+      this.world.addSystem(this.aiMicroSystem); // AI unit micro (kiting, focus fire)
+      // NOTE: AI player registration with AIMicroSystem happens in spawnInitialEntities()
+      // This ensures the store has the correct player configuration when registration occurs
+      // Do NOT register here as the store may have stale/default state at this point
     }
   }
 
