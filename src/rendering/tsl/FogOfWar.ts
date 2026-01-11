@@ -8,14 +8,12 @@
 import * as THREE from 'three';
 import {
   Fn,
-  vec4,
   float,
   uniform,
   texture,
   uv,
   mix,
   step,
-  smoothstep,
 } from 'three/tsl';
 import { MeshBasicNodeMaterial } from 'three/webgpu';
 import { VisionSystem } from '@/engine/systems/VisionSystem';
@@ -99,7 +97,8 @@ export class TSLFogOfWar {
     // Create mesh
     this.mesh = new THREE.Mesh(this.geometry, this.material);
     this.mesh.rotation.x = -Math.PI / 2;
-    this.mesh.position.set(this.mapWidth / 2, 0.5, this.mapHeight / 2);
+    // Position fog above all terrain (terrain heights range from 0 to ~10 units based on elevation)
+    this.mesh.position.set(this.mapWidth / 2, 12, this.mapHeight / 2);
     this.mesh.renderOrder = 100; // Render after terrain
   }
 
@@ -109,42 +108,37 @@ export class TSLFogOfWar {
     material.depthWrite = false;
     material.side = THREE.DoubleSide;
 
-    // Create the fog shader using TSL
-    const outputNode = Fn(() => {
-      // Sample fog texture
-      const fogData = texture(this.fogTexture, uv());
-      // visibility: 0 = unexplored (alpha=255), 0.5 = explored (alpha=128), 1 = visible (alpha=0)
-      const visibility = float(1.0).sub(fogData.a);
+    // Sample fog texture - shared between color and opacity nodes
+    const fogData = texture(this.fogTexture, uv());
+    // visibility: 0 = unexplored (alpha=255), 0.5 = explored (alpha=128), 1 = visible (alpha=0)
+    const visibility = float(1.0).sub(fogData.a);
 
-      // Use step/smoothstep for GPU-friendly branching
-      // Unexplored: visibility < 0.01
-      // Explored: 0.01 <= visibility < 0.75
-      // Visible: visibility >= 0.75
+    // Step functions to determine state
+    const notUnexplored = step(float(0.01), visibility); // 1 if explored or visible
+    const isVisible = step(float(0.75), visibility); // 1 if visible
 
-      // Step functions to determine state
-      const notUnexplored = step(float(0.01), visibility); // 1 if explored or visible
-      const isVisible = step(float(0.75), visibility); // 1 if visible
+    // Color node - just the RGB color based on state
+    const colorNode = Fn(() => {
+      return mix(this.uUnexploredColor, this.uExploredColor, notUnexplored);
+    })();
 
+    // Opacity node - alpha based on state
+    const opacityNode = Fn(() => {
       // Alpha values: unexplored=0.7, explored=0.35, visible=0
       const unexploredAlpha = float(0.7);
       const exploredAlpha = float(0.35);
       const visibleAlpha = float(0.0);
 
       // Mix alpha based on state
-      // Start with unexplored, mix to explored if notUnexplored, mix to visible if isVisible
-      const alpha = mix(
+      return mix(
         mix(unexploredAlpha, exploredAlpha, notUnexplored),
         visibleAlpha,
         isVisible
       );
-
-      // Mix colors based on state
-      const color = mix(this.uUnexploredColor, this.uExploredColor, notUnexplored);
-
-      return vec4(color, alpha);
     })();
 
-    material.colorNode = outputNode;
+    material.colorNode = colorNode;
+    material.opacityNode = opacityNode;
 
     return material;
   }
