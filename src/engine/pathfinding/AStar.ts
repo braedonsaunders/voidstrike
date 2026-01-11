@@ -124,6 +124,9 @@ class BinaryHeap {
 const DIAGONAL_COST = 1.414;
 const STRAIGHT_COST = 1.0;
 
+// Maximum nodes to explore before giving up (prevents freezing on impossible/very long paths)
+const MAX_ITERATIONS = 5000;
+
 export class AStar {
   private grid: PathNode[][];
   private width: number;
@@ -138,6 +141,10 @@ export class AStar {
 
   // Track if we have weighted terrain (for optimization decisions)
   private hasWeightedTerrain: boolean = false;
+
+  // Pre-computed edge penalties to avoid recalculating every search
+  private edgePenalties: Float32Array;
+  private edgePenaltiesValid: boolean = false;
 
   constructor(width: number, height: number, cellSize = 1) {
     this.width = width;
@@ -165,6 +172,38 @@ export class AStar {
         };
       }
     }
+
+    // Initialize edge penalty array
+    this.edgePenalties = new Float32Array(width * height);
+  }
+
+  /**
+   * Recompute all edge penalties. Call this after walkability changes.
+   */
+  public recomputeEdgePenalties(): void {
+    for (let y = 0; y < this.height; y++) {
+      for (let x = 0; x < this.width; x++) {
+        const idx = y * this.width + x;
+        if (!this.grid[y][x].walkable) {
+          this.edgePenalties[idx] = 0;
+          continue;
+        }
+
+        let unwalkableNeighbors = 0;
+        for (let dy = -1; dy <= 1; dy++) {
+          for (let dx = -1; dx <= 1; dx++) {
+            if (dx === 0 && dy === 0) continue;
+            const nx = x + dx;
+            const ny = y + dy;
+            if (!this.isInBounds(nx, ny) || !this.grid[ny][nx].walkable) {
+              unwalkableNeighbors++;
+            }
+          }
+        }
+        this.edgePenalties[idx] = unwalkableNeighbors * 0.3;
+      }
+    }
+    this.edgePenaltiesValid = true;
   }
 
   /**
@@ -190,6 +229,7 @@ export class AStar {
 
     if (this.isInBounds(gridX, gridY)) {
       this.grid[gridY][gridX].walkable = walkable;
+      this.edgePenaltiesValid = false; // Invalidate cached penalties
     }
   }
 
@@ -214,6 +254,7 @@ export class AStar {
         }
       }
     }
+    this.edgePenaltiesValid = false;
   }
 
   public clearBlockedArea(x: number, y: number, width: number, height: number): void {
@@ -229,6 +270,7 @@ export class AStar {
         }
       }
     }
+    this.edgePenaltiesValid = false;
   }
 
   public findPath(startX: number, startY: number, endX: number, endY: number): PathResult {
@@ -274,6 +316,11 @@ export class AStar {
       };
     }
 
+    // Recompute edge penalties if needed
+    if (!this.edgePenaltiesValid) {
+      this.recomputeEdgePenalties();
+    }
+
     // Increment search version (resets all nodes implicitly)
     this.searchVersion++;
 
@@ -294,8 +341,15 @@ export class AStar {
 
     const endNode = this.grid[gridEndY][gridEndX];
 
+    // Iteration counter to prevent freezing on very long/impossible paths
+    let iterations = 0;
+
     // A* main loop
     while (this.openHeap.length > 0) {
+      // Early exit if we've searched too long
+      if (++iterations > MAX_ITERATIONS) {
+        return { path: [], found: false };
+      }
       const current = this.openHeap.pop()!;
       current.closed = true;
 
@@ -348,9 +402,8 @@ export class AStar {
           // Calculate movement cost
           const baseCost = isDiagonal ? DIAGONAL_COST : STRAIGHT_COST;
 
-          // Add edge penalty - check if this cell is near unwalkable terrain
-          // This discourages paths that run right along terrain edges
-          const edgePenalty = this.getEdgePenalty(nx, ny);
+          // Use pre-computed edge penalty (O(1) lookup instead of O(8) computation)
+          const edgePenalty = this.edgePenalties[ny * this.width + nx];
 
           const terrainCost = neighbor.moveCost;
           const tentativeG = current.g + (baseCost + edgePenalty) * terrainCost;
@@ -379,39 +432,6 @@ export class AStar {
 
   private isInBounds(x: number, y: number): boolean {
     return x >= 0 && x < this.width && y >= 0 && y < this.height;
-  }
-
-  /**
-   * Calculate edge penalty for a cell based on proximity to unwalkable terrain.
-   * This discourages paths that run right along terrain edges, preventing units
-   * from getting stuck on collision with terrain.
-   */
-  private getEdgePenalty(x: number, y: number): number {
-    // Check all 8 neighbors for unwalkable cells
-    let unwalkableNeighbors = 0;
-
-    for (let dy = -1; dy <= 1; dy++) {
-      for (let dx = -1; dx <= 1; dx++) {
-        if (dx === 0 && dy === 0) continue;
-
-        const nx = x + dx;
-        const ny = y + dy;
-
-        if (!this.isInBounds(nx, ny) || !this.grid[ny][nx].walkable) {
-          unwalkableNeighbors++;
-        }
-      }
-    }
-
-    // Add penalty proportional to number of unwalkable neighbors
-    // This makes paths prefer to stay away from terrain edges
-    if (unwalkableNeighbors === 0) {
-      return 0; // No penalty if no unwalkable neighbors
-    }
-
-    // More unwalkable neighbors = higher penalty
-    // 1 neighbor: 0.3 extra cost, 8 neighbors: 2.4 extra cost
-    return unwalkableNeighbors * 0.3;
   }
 
   /**
