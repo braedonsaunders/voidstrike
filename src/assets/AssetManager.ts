@@ -645,7 +645,7 @@ export class AssetManager {
       { path: '/models/decorations/ruined_wall.glb', assetId: 'ruined_wall', targetHeight: 5.0 },
     ];
 
-    console.log('[AssetManager] Loading custom models...');
+    debugAssets.log('[AssetManager] Loading custom models...');
     let loadedCount = 0;
     let processedCount = 0;
     const totalModels = customModels.length;

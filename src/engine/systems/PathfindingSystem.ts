@@ -6,7 +6,7 @@ import { Game } from '../core/Game';
 import { AStar, PathResult } from '../pathfinding/AStar';
 import { HierarchicalAStar } from '../pathfinding/HierarchicalAStar';
 import { MapData, TERRAIN_FEATURE_CONFIG, TerrainFeature } from '@/data/maps';
-import { debugPathfinding } from '@/utils/debugLogger';
+import { debugPathfinding, debugPerformance } from '@/utils/debugLogger';
 
 // Configuration for path invalidation
 const REPATH_INTERVAL_TICKS = 60; // Check for repath every 3 seconds at 20 TPS
@@ -79,7 +79,7 @@ export class PathfindingSystem extends System {
     this.hierarchicalPathfinder = new HierarchicalAStar(mapWidth, mapHeight, 1);
     this.setupEventListeners();
     // Note: loadTerrainData() is called by Game.setTerrainGrid() when map is loaded
-    console.log(`[PathfindingSystem] CONSTRUCTOR: dimensions ${mapWidth}x${mapHeight}`);
+    debugPathfinding.log(`[PathfindingSystem] CONSTRUCTOR: dimensions ${mapWidth}x${mapHeight}`);
   }
 
   /**
@@ -87,7 +87,7 @@ export class PathfindingSystem extends System {
    * Call this when map dimensions change.
    */
   public reinitialize(mapWidth: number, mapHeight: number): void {
-    console.log(`[PathfindingSystem] REINITIALIZE: from ${this.mapWidth}x${this.mapHeight} to ${mapWidth}x${mapHeight}`);
+    debugPathfinding.log(`[PathfindingSystem] REINITIALIZE: from ${this.mapWidth}x${this.mapHeight} to ${mapWidth}x${mapHeight}`);
     this.mapWidth = mapWidth;
     this.mapHeight = mapHeight;
     this.pathfinder = new AStar(mapWidth, mapHeight, 1);
@@ -105,16 +105,15 @@ export class PathfindingSystem extends System {
    * Adds buffer zones around unwalkable terrain to prevent units getting stuck on edges.
    */
   public loadTerrainData(): void {
-    console.log(`[PathfindingSystem] LOAD_TERRAIN_DATA: called with mapWidth=${this.mapWidth}, mapHeight=${this.mapHeight}`);
+    debugPathfinding.log(`[PathfindingSystem] LOAD_TERRAIN_DATA: called with mapWidth=${this.mapWidth}, mapHeight=${this.mapHeight}`);
     const startTime = performance.now();
 
     const terrainGrid = this.game.getTerrainGrid();
     if (!terrainGrid) {
-      console.warn('[PathfindingSystem] LOAD_TERRAIN_DATA: No terrain grid available');
-      debugPathfinding.warn('[PathfindingSystem] No terrain grid available');
+      debugPathfinding.warn('[PathfindingSystem] LOAD_TERRAIN_DATA: No terrain grid available');
       return;
     }
-    console.log(`[PathfindingSystem] LOAD_TERRAIN_DATA: terrain grid is ${terrainGrid[0]?.length}x${terrainGrid.length}`);
+    debugPathfinding.log(`[PathfindingSystem] LOAD_TERRAIN_DATA: terrain grid is ${terrainGrid[0]?.length}x${terrainGrid.length}`);
 
     // First pass: identify all unwalkable cells
     const unwalkableCells = new Set<number>();
@@ -224,8 +223,7 @@ export class PathfindingSystem extends System {
     }
 
     const elapsed = performance.now() - startTime;
-    console.log(`[PathfindingSystem] LOAD_TERRAIN_DATA: completed in ${elapsed.toFixed(1)}ms - ${blockedCount} blocked, ${bufferedCount} buffered`);
-    debugPathfinding.log(`[PathfindingSystem] Loaded terrain: ${blockedCount} cells blocked, ${bufferedCount} cells buffered`);
+    debugPathfinding.log(`[PathfindingSystem] LOAD_TERRAIN_DATA: completed in ${elapsed.toFixed(1)}ms - ${blockedCount} blocked, ${bufferedCount} buffered`);
 
     // Rebuild hierarchical pathfinding graph after terrain is loaded
     this.hierarchicalPathfinder.rebuildAbstractGraph();
@@ -244,7 +242,7 @@ export class PathfindingSystem extends System {
    * Uses TERRAIN_FEATURE_CONFIG to properly determine walkability and movement costs.
    */
   public initializeFromTerrain(mapData: MapData): void {
-    console.log('[PathfindingSystem] Initializing from terrain data...');
+    debugPathfinding.log('[PathfindingSystem] Initializing from terrain data...');
     let blockedCount = 0;
 
     for (let y = 0; y < mapData.height; y++) {
@@ -492,7 +490,7 @@ export class PathfindingSystem extends System {
 
     const queueElapsed = performance.now() - queueStart;
     if (queueElapsed > 10) {
-      console.warn(`[PathfindingSystem] PROCESS_QUEUE: ${toProcess} paths took ${queueElapsed.toFixed(1)}ms (${(queueElapsed/toProcess).toFixed(1)}ms each)`);
+      debugPerformance.warn(`[PathfindingSystem] PROCESS_QUEUE: ${toProcess} paths took ${queueElapsed.toFixed(1)}ms (${(queueElapsed/toProcess).toFixed(1)}ms each)`);
     }
   }
 
@@ -672,7 +670,7 @@ export class PathfindingSystem extends System {
 
     const findElapsed = performance.now() - findStart;
     if (findElapsed > 5) { // Only log if > 5ms
-      console.log(`[PathfindingSystem] FIND_PATH: ${useHierarchical ? 'HIER' : 'BASE'} (${startX.toFixed(0)},${startY.toFixed(0)}) -> (${endX.toFixed(0)},${endY.toFixed(0)}) dist=${distance.toFixed(0)} took ${findElapsed.toFixed(1)}ms found=${result.found} pathLen=${result.path.length}`);
+      debugPerformance.log(`[PathfindingSystem] FIND_PATH: ${useHierarchical ? 'HIER' : 'BASE'} (${startX.toFixed(0)},${startY.toFixed(0)}) -> (${endX.toFixed(0)},${endY.toFixed(0)}) dist=${distance.toFixed(0)} took ${findElapsed.toFixed(1)}ms found=${result.found} pathLen=${result.path.length}`);
     }
 
     return result;
@@ -705,7 +703,7 @@ export class PathfindingSystem extends System {
 
     const updateElapsed = performance.now() - updateStart;
     if (updateElapsed > 16) { // More than one frame at 60fps
-      console.warn(`[PathfindingSystem] UPDATE: tick ${currentTick} took ${updateElapsed.toFixed(1)}ms`);
+      debugPerformance.warn(`[PathfindingSystem] UPDATE: tick ${currentTick} took ${updateElapsed.toFixed(1)}ms`);
     }
   }
 

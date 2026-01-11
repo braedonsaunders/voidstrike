@@ -7,6 +7,7 @@ import { Game } from '../core/Game';
 import { PooledVector2 } from '@/utils/VectorPool';
 import { TERRAIN_FEATURE_CONFIG, TerrainFeature } from '@/data/maps';
 import { computeORCAVelocity } from '../pathfinding/RVO';
+import { debugPerformance } from '@/utils/debugLogger';
 
 // Steering behavior constants - SC2-style soft separation (units can overlap and clump)
 const SEPARATION_RADIUS = 1.0; // Units only avoid when nearly overlapping
@@ -751,7 +752,7 @@ export class MovementSystem extends System {
 
     const updateElapsed = performance.now() - updateStart;
     if (updateElapsed > 16) { // More than one frame at 60fps
-      console.warn(`[MovementSystem] UPDATE: ${entities.length} entities took ${updateElapsed.toFixed(1)}ms`);
+      debugPerformance.warn(`[MovementSystem] UPDATE: ${entities.length} entities took ${updateElapsed.toFixed(1)}ms`);
     }
   }
 

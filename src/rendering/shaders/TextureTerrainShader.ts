@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { debugShaders } from '@/utils/debugLogger';
 
 /**
  * Texture-based terrain shader - HIGH PERFORMANCE with PBR
@@ -379,7 +380,7 @@ function loadTextureOrDefault(path: string | undefined, defaultTexture: THREE.Te
 }
 
 export function createTextureTerrainMaterial(config: TextureTerrainConfig): THREE.ShaderMaterial {
-  console.log('[TextureTerrainShader] Loading textures...');
+  debugShaders.log('[TextureTerrainShader] Loading textures...');
 
   const defaultRoughness = createDefaultRoughnessTexture();
   const defaultDisplacement = createDefaultDisplacementTexture();
@@ -420,7 +421,7 @@ export function createTextureTerrainMaterial(config: TextureTerrainConfig): THRE
   const features = [];
   if (hasRoughness) features.push('roughness maps');
   if (hasDisplacement) features.push('parallax displacement');
-  console.log('[TextureTerrainShader] Material created with PBR lighting' + (features.length ? ' + ' + features.join(' + ') : ''));
+  debugShaders.log('[TextureTerrainShader] Material created with PBR lighting' + (features.length ? ' + ' + features.join(' + ') : ''));
   return material;
 }
 

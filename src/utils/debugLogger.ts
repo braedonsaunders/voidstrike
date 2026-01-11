@@ -15,7 +15,9 @@ export type DebugCategory =
   | 'pathfinding'
   | 'assets'
   | 'initialization'
-  | 'audio';
+  | 'audio'
+  | 'networking'
+  | 'performance';
 
 // Map category names to debug settings keys
 const categoryToSettingKey: Record<DebugCategory, keyof DebugSettings> = {
@@ -34,6 +36,8 @@ const categoryToSettingKey: Record<DebugCategory, keyof DebugSettings> = {
   assets: 'debugAssets',
   initialization: 'debugInitialization',
   audio: 'debugAudio',
+  networking: 'debugNetworking',
+  performance: 'debugPerformance',
 };
 
 /**
@@ -195,4 +199,18 @@ export const debugAudio = {
   warn: (...args: unknown[]) => debugLog.warn('audio', ...args),
   error: (...args: unknown[]) => debugLog.error('audio', ...args),
   isEnabled: () => isEnabled('audio'),
+};
+
+export const debugNetworking = {
+  log: (...args: unknown[]) => debugLog.log('networking', ...args),
+  warn: (...args: unknown[]) => debugLog.warn('networking', ...args),
+  error: (...args: unknown[]) => debugLog.error('networking', ...args),
+  isEnabled: () => isEnabled('networking'),
+};
+
+export const debugPerformance = {
+  log: (...args: unknown[]) => debugLog.log('performance', ...args),
+  warn: (...args: unknown[]) => debugLog.warn('performance', ...args),
+  error: (...args: unknown[]) => debugLog.error('performance', ...args),
+  isEnabled: () => isEnabled('performance'),
 };

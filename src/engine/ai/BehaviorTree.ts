@@ -16,6 +16,8 @@
  * - behavior3js patterns
  */
 
+import { debugAI } from '@/utils/debugLogger';
+
 // ==================== CORE TYPES ====================
 
 export type BehaviorStatus = 'success' | 'failure' | 'running';
@@ -807,7 +809,7 @@ export function log(name: string, message: string | ((ctx: BehaviorContext) => s
   return createNode(
     (context: BehaviorContext) => {
       const msg = typeof message === 'function' ? message(context) : message;
-      console.log(`[BT:${context.entityId}] ${msg}`);
+      debugAI.log(`[BT:${context.entityId}] ${msg}`);
       return 'success';
     },
     'log',

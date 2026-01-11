@@ -1,10 +1,11 @@
 import { createClient } from '@supabase/supabase-js';
+import { debugInitialization } from '@/utils/debugLogger';
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
 const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 
 if (!supabaseUrl || !supabaseAnonKey) {
-  console.warn(
+  debugInitialization.warn(
     'Supabase credentials not found. Multiplayer features will be disabled.'
   );
 }

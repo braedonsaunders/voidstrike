@@ -54,7 +54,7 @@ import { GraphicsOptionsPanel } from './GraphicsOptionsPanel';
 import { DebugMenuPanel } from './DebugMenuPanel';
 import { spawnInitialEntities } from '@/utils/gameSetup';
 import { useUIStore } from '@/store/uiStore';
-import { debugInitialization } from '@/utils/debugLogger';
+import { debugInitialization, debugPerformance } from '@/utils/debugLogger';
 import { DEFAULT_MAP, MapData, getMapById } from '@/data/maps';
 import { Resource } from '@/engine/components/Resource';
 import { Unit } from '@/engine/components/Unit';
@@ -168,7 +168,7 @@ export function WebGPUGameCanvas() {
         await new Promise(resolve => setTimeout(resolve, 300));
         setIsLoading(false);
       } catch (error) {
-        console.error('[WebGPUGameCanvas] Initialization failed:', error);
+        debugInitialization.error('[WebGPUGameCanvas] Initialization failed:', error);
         setLoadingStatus('Error - falling back to WebGL');
       }
     };
@@ -190,9 +190,9 @@ export function WebGPUGameCanvas() {
       // Set renderer API in UI store for graphics options display
       useUIStore.getState().setRendererAPI(renderContext.isWebGPU ? 'WebGPU' : 'WebGL');
 
-      console.log(`[WebGPUGameCanvas] Using ${renderContext.isWebGPU ? 'WebGPU' : 'WebGL'} backend`);
+      debugInitialization.log(`[WebGPUGameCanvas] Using ${renderContext.isWebGPU ? 'WebGPU' : 'WebGL'} backend`);
       if (renderContext.supportsCompute) {
-        console.log('[WebGPUGameCanvas] GPU Compute shaders available');
+        debugInitialization.log('[WebGPUGameCanvas] GPU Compute shaders available');
       }
 
       const renderer = renderContext.renderer;
@@ -423,7 +423,7 @@ export function WebGPUGameCanvas() {
         if (currentTime - lastFpsLog > 1000) {
           const actualFps = frameCount / ((currentTime - lastFpsLog) / 1000);
           if (actualFps < 30) {
-            console.warn(`[FPS] Actual: ${actualFps.toFixed(1)}, deltaTime avg: ${((currentTime - lastFpsLog) / frameCount).toFixed(1)}ms`);
+            debugPerformance.warn(`[FPS] Actual: ${actualFps.toFixed(1)}, deltaTime avg: ${((currentTime - lastFpsLog) / frameCount).toFixed(1)}ms`);
           }
           frameCount = 0;
           lastFpsLog = currentTime;
@@ -460,7 +460,7 @@ export function WebGPUGameCanvas() {
 
         const updatesElapsed = performance.now() - updatesStart;
         if (updatesElapsed > 10) {
-          console.warn(`[UPDATES] Total update time: ${updatesElapsed.toFixed(1)}ms`);
+          debugPerformance.warn(`[UPDATES] Total update time: ${updatesElapsed.toFixed(1)}ms`);
         }
 
         // Update selection rings
@@ -510,7 +510,7 @@ export function WebGPUGameCanvas() {
 
         const frameElapsed = performance.now() - frameStart;
         if (frameElapsed > 16) { // Log if frame takes more than 16ms (60fps target)
-          console.warn(`[FRAME] Total: ${frameElapsed.toFixed(1)}ms, Render: ${renderElapsed.toFixed(1)}ms`);
+          debugPerformance.warn(`[FRAME] Total: ${frameElapsed.toFixed(1)}ms, Render: ${renderElapsed.toFixed(1)}ms`);
         }
 
         requestAnimationFrame(animate);
