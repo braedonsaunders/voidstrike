@@ -48,16 +48,16 @@ This document contains all audio specifications, AI prompts for generation, and 
 - [x] `combat/laser_battery.mp3`
 - [x] `combat/yamato.mp3`
 
-### Combat - Impacts ⏳ Needs Generation
-- [ ] `combat/hit.mp3`
-- [ ] `combat/hit_armor.mp3`
-- [ ] `combat/hit_shield.mp3`
-- [ ] `combat/energy_impact.mp3`
+### Combat - Impacts ✅ Complete
+- [x] `combat/hit.mp3`
+- [x] `combat/hit_armor.mp3`
+- [x] `combat/hit_shield.mp3`
+- [x] `combat/energy_impact.mp3`
 
-### Combat - Explosions ⏳ Needs Generation
-- [ ] `combat/explosion_small.mp3`
-- [ ] `combat/explosion_medium.mp3`
-- [ ] `combat/explosion_large.mp3`
+### Combat - Explosions ✅ Complete
+- [x] `combat/small_explosion.mp3`
+- [x] `combat/medium_explosion.mp3`
+- [x] `combat/large_explosion.mp3`
 
 ### Combat - Deaths ⏳ Needs Generation
 - [ ] `combat/death.mp3`

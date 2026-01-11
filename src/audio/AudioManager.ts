@@ -75,9 +75,10 @@ export const SOUNDS: Record<string, SoundConfig> = {
   hit_shield: { id: 'hit_shield', url: '/audio/combat/hit_shield.mp3', category: 'combat', volume: 0.4, spatial: true, maxInstances: 15, cooldown: 30, priority: SoundPriority.LOW, maxDistance: 100, clusterRadius: 10 },
 
   // Combat Sounds - Explosions (High priority)
-  explosion_small: { id: 'explosion_small', url: '/audio/combat/explosion_small.mp3', category: 'combat', volume: 0.6, spatial: true, maxInstances: 10, priority: SoundPriority.HIGH, maxDistance: 180 },
-  explosion_large: { id: 'explosion_large', url: '/audio/combat/explosion_large.mp3', category: 'combat', volume: 0.8, spatial: true, maxInstances: 6, priority: SoundPriority.HIGH, maxDistance: 250 },
-  explosion_building: { id: 'explosion_building', url: '/audio/combat/explosion_building.mp3', category: 'combat', volume: 0.9, spatial: true, maxInstances: 4, priority: SoundPriority.HIGH, maxDistance: 300 },
+  explosion_small: { id: 'explosion_small', url: '/audio/combat/small_explosion.mp3', category: 'combat', volume: 0.6, spatial: true, maxInstances: 10, priority: SoundPriority.HIGH, maxDistance: 180 },
+  explosion_medium: { id: 'explosion_medium', url: '/audio/combat/medium_explosion.mp3', category: 'combat', volume: 0.7, spatial: true, maxInstances: 8, priority: SoundPriority.HIGH, maxDistance: 220 },
+  explosion_large: { id: 'explosion_large', url: '/audio/combat/large_explosion.mp3', category: 'combat', volume: 0.8, spatial: true, maxInstances: 6, priority: SoundPriority.HIGH, maxDistance: 250 },
+  explosion_building: { id: 'explosion_building', url: '/audio/combat/large_explosion.mp3', category: 'combat', volume: 0.9, spatial: true, maxInstances: 4, priority: SoundPriority.HIGH, maxDistance: 300 },
 
   // Combat Sounds - Deaths (Normal priority)
   unit_death: { id: 'unit_death', url: '/audio/combat/death.mp3', category: 'combat', volume: 0.5, spatial: true, maxInstances: 10, priority: SoundPriority.NORMAL, maxDistance: 120, clusterRadius: 15 },
