@@ -30,23 +30,23 @@ This document contains all audio specifications, AI prompts for generation, and 
 - [x] `alert/research_complete.mp3`
 - [x] `alert/upgrade_complete.mp3`
 
-### UI Sounds ⏳ Needs Generation
-- [ ] `ui/click.mp3`
-- [ ] `ui/error.mp3`
-- [ ] `ui/select.mp3`
-- [ ] `ui/notification.mp3`
+### UI Sounds ✅ Complete
+- [x] `ui/click.mp3`
+- [x] `ui/error.mp3`
+- [x] `ui/select.mp3`
+- [x] `ui/notification.mp3`
 
-### Combat - Weapons ⏳ Needs Generation
-- [ ] `combat/rifle.mp3`
-- [ ] `combat/cannon.mp3`
-- [ ] `combat/laser.mp3`
-- [ ] `combat/missile.mp3`
-- [ ] `combat/flamethrower.mp3`
-- [ ] `combat/sniper.mp3`
-- [ ] `combat/grenade_launcher.mp3`
-- [ ] `combat/gatling.mp3`
-- [ ] `combat/laser_battery.mp3`
-- [ ] `combat/yamato.mp3`
+### Combat - Weapons ✅ Complete
+- [x] `combat/rifle.mp3`
+- [x] `combat/cannon.mp3`
+- [x] `combat/laser.mp3`
+- [x] `combat/missile.mp3`
+- [x] `combat/flamethrower.mp3`
+- [x] `combat/sniper.mp3`
+- [x] `combat/grenade_launcher.mp3`
+- [x] `combat/gatling_gun.mp3`
+- [x] `combat/laser_battery.mp3`
+- [x] `combat/yamato.mp3`
 
 ### Combat - Impacts ⏳ Needs Generation
 - [ ] `combat/hit.mp3`
