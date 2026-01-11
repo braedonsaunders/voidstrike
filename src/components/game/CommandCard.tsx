@@ -7,7 +7,7 @@ import { Unit } from '@/engine/components/Unit';
 import { Building } from '@/engine/components/Building';
 import { Ability } from '@/engine/components/Ability';
 import { Selectable } from '@/engine/components/Selectable';
-import { useEffect, useState } from 'react';
+import { useEffect, useState, memo, useCallback, useMemo } from 'react';
 import { UNIT_DEFINITIONS } from '@/data/units/dominion';
 import { BUILDING_DEFINITIONS, RESEARCH_MODULE_UNITS } from '@/data/buildings/dominion';
 import { WALL_DEFINITIONS } from '@/data/buildings/walls';
@@ -117,8 +117,19 @@ const ADVANCED_BUILDINGS = ['forge', 'arsenal', 'hangar', 'power_core', 'ops_cen
 // Wall buildings
 const WALL_BUILDINGS = ['wall_segment', 'wall_gate'];
 
-export function CommandCard() {
-  const { selectedUnits, minerals, vespene, supply, maxSupply, isBuilding } = useGameStore();
+/**
+ * PERF: Memoized CommandCard component to prevent unnecessary re-renders
+ * Only re-renders when selectedUnits, resources, or menu state changes
+ */
+function CommandCardInner() {
+  // PERF: Use selector functions to minimize re-renders from Zustand
+  const selectedUnits = useGameStore((state) => state.selectedUnits);
+  const minerals = useGameStore((state) => state.minerals);
+  const vespene = useGameStore((state) => state.vespene);
+  const supply = useGameStore((state) => state.supply);
+  const maxSupply = useGameStore((state) => state.maxSupply);
+  const isBuilding = useGameStore((state) => state.isBuilding);
+
   const [commands, setCommands] = useState<CommandButton[]>([]);
   const [hoveredCmd, setHoveredCmd] = useState<string | null>(null);
   const [menuMode, setMenuMode] = useState<MenuMode>('main');
@@ -906,3 +917,6 @@ export function CommandCard() {
     </div>
   );
 }
+
+// PERF: Export memoized component to prevent unnecessary re-renders
+export const CommandCard = memo(CommandCardInner);
