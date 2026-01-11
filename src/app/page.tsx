@@ -77,18 +77,61 @@ export default function Home() {
 
   // Initialize and play menu music
   useEffect(() => {
+    let userInteracted = false;
+    let musicStarted = false;
+
     const startMenuMusic = async () => {
       await MusicPlayer.initialize();
       MusicPlayer.setVolume(musicVolume);
       MusicPlayer.setMuted(!musicEnabled);
       await MusicPlayer.discoverTracks();
+
+      // Try to play - if it fails due to autoplay policy, we'll retry on interaction
       if (musicEnabled && MusicPlayer.getCurrentCategory() !== 'menu') {
-        MusicPlayer.play('menu');
+        try {
+          await MusicPlayer.play('menu');
+          musicStarted = true;
+        } catch {
+          // Autoplay likely blocked - will retry on user interaction
+        }
       }
     };
 
+    // Start music immediately on any user interaction (before they click "PLAY NOW")
+    const handleFirstInteraction = async () => {
+      if (userInteracted || musicStarted) return;
+      userInteracted = true;
+
+      // If music hasn't started yet and is enabled, start it now
+      if (musicEnabled && !MusicPlayer.isCurrentlyPlaying() && MusicPlayer.getCurrentCategory() !== 'menu') {
+        MusicPlayer.play('menu');
+      }
+
+      // Remove listeners after first interaction
+      window.removeEventListener('click', handleFirstInteraction);
+      window.removeEventListener('keydown', handleFirstInteraction);
+      window.removeEventListener('touchstart', handleFirstInteraction);
+      window.removeEventListener('mousemove', handleFirstInteraction);
+      window.removeEventListener('scroll', handleFirstInteraction);
+    };
+
+    // Set up listeners BEFORE attempting autoplay
+    window.addEventListener('click', handleFirstInteraction, { once: false });
+    window.addEventListener('keydown', handleFirstInteraction, { once: false });
+    window.addEventListener('touchstart', handleFirstInteraction, { once: false });
+    window.addEventListener('mousemove', handleFirstInteraction, { once: false });
+    window.addEventListener('scroll', handleFirstInteraction, { once: false });
+
     startMenuMusic();
-  }, []);
+
+    return () => {
+      window.removeEventListener('click', handleFirstInteraction);
+      window.removeEventListener('keydown', handleFirstInteraction);
+      window.removeEventListener('touchstart', handleFirstInteraction);
+      window.removeEventListener('mousemove', handleFirstInteraction);
+      window.removeEventListener('scroll', handleFirstInteraction);
+    };
+  }, [musicEnabled, musicVolume]);
 
   // Sync volume changes
   useEffect(() => {

@@ -431,8 +431,8 @@ export class BuildingPlacementSystem extends System {
     const addonX = parentTransform.x + parentBuilding.width / 2 + addonDef.width / 2;
     const addonY = parentTransform.y;
 
-    // Check if addon position is valid (no collisions)
-    if (!this.isValidPlacement(addonX, addonY, addonDef.width, addonDef.height)) {
+    // Check if addon position is valid (no collisions - exclude parent building from check)
+    if (!this.isValidAddonPlacement(addonX, addonY, addonDef.width, addonDef.height, buildingId)) {
       this.game.eventBus.emit('ui:error', { message: 'Cannot build addon here - blocked' });
       return;
     }
@@ -596,6 +596,87 @@ export class BuildingPlacementSystem extends System {
     // Check for overlapping decorations (rocks, trees, etc.)
     if (!this.game.isPositionClearOfDecorations(centerX, centerY, width, height)) {
       debugBuildingPlacement.log(`BuildingPlacement: Failed - overlaps decoration at (${centerX}, ${centerY})`);
+      return false;
+    }
+
+    return true;
+  }
+
+  /**
+   * Check if an addon placement is valid (excludes parent building from collision check)
+   */
+  private isValidAddonPlacement(centerX: number, centerY: number, width: number, height: number, parentBuildingId: number): boolean {
+    const config = this.game.config;
+    const halfW = width / 2;
+    const halfH = height / 2;
+
+    // Check map bounds
+    if (centerX - halfW < 0 || centerY - halfH < 0 ||
+        centerX + halfW > config.mapWidth || centerY + halfH > config.mapHeight) {
+      debugBuildingPlacement.log(`AddonPlacement: Failed - out of map bounds`);
+      return false;
+    }
+
+    // Check terrain validity (must be on ground, same elevation, not on ramps/cliffs)
+    if (!this.game.isValidTerrainForBuilding(centerX, centerY, width, height)) {
+      debugBuildingPlacement.log(`AddonPlacement: Failed - invalid terrain`);
+      return false;
+    }
+
+    // Check for overlapping buildings (exclude parent building)
+    const buildings = this.world.getEntitiesWith('Building', 'Transform');
+    for (const entity of buildings) {
+      // Skip the parent building
+      if (entity.id === parentBuildingId) continue;
+
+      const transform = entity.get<Transform>('Transform');
+      const building = entity.get<Building>('Building');
+      if (!transform || !building) continue;
+
+      const existingHalfW = building.width / 2;
+      const existingHalfH = building.height / 2;
+      const dx = Math.abs(centerX - transform.x);
+      const dy = Math.abs(centerY - transform.y);
+
+      if (dx < halfW + existingHalfW + 0.5 && dy < halfH + existingHalfH + 0.5) {
+        debugBuildingPlacement.log(`AddonPlacement: Failed - overlaps building at (${transform.x}, ${transform.y})`);
+        return false;
+      }
+    }
+
+    // Check for overlapping resources
+    const resources = this.world.getEntitiesWith('Resource', 'Transform');
+    for (const entity of resources) {
+      const transform = entity.get<Transform>('Transform');
+      if (!transform) continue;
+
+      const dx = Math.abs(centerX - transform.x);
+      const dy = Math.abs(centerY - transform.y);
+
+      if (dx < halfW + 1.5 && dy < halfH + 1.5) {
+        debugBuildingPlacement.log(`AddonPlacement: Failed - overlaps resource`);
+        return false;
+      }
+    }
+
+    // Check for overlapping units
+    const units = this.world.getEntitiesWith('Unit', 'Transform');
+    for (const entity of units) {
+      const transform = entity.get<Transform>('Transform');
+      if (!transform) continue;
+
+      const dx = Math.abs(centerX - transform.x);
+      const dy = Math.abs(centerY - transform.y);
+
+      if (dx < halfW + 0.5 && dy < halfH + 0.5) {
+        debugBuildingPlacement.log(`AddonPlacement: Failed - overlaps unit`);
+        return false;
+      }
+    }
+
+    // Check for overlapping decorations
+    if (!this.game.isPositionClearOfDecorations(centerX, centerY, width, height)) {
+      debugBuildingPlacement.log(`AddonPlacement: Failed - overlaps decoration`);
       return false;
     }
 

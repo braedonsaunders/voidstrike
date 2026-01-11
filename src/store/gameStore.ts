@@ -45,6 +45,8 @@ export interface GameState {
   buildingPlacementQueue: QueuedBuildingPlacement[]; // Shift-click queued placements
   isSettingRallyPoint: boolean;
   isRepairMode: boolean; // Repair targeting mode
+  isLandingMode: boolean; // Landing mode for flying buildings
+  landingBuildingId: number | null; // Building ID that is about to land
   abilityTargetMode: string | null; // ability ID being targeted
   showMinimap: boolean;
   showResourcePanel: boolean;
@@ -75,6 +77,7 @@ export interface GameState {
   clearBuildingQueue: () => void;
   setRallyPointMode: (isActive: boolean) => void;
   setRepairMode: (isActive: boolean) => void;
+  setLandingMode: (isActive: boolean, buildingId?: number | null) => void;
   setAbilityTargetMode: (abilityId: string | null) => void;
   setCamera: (x: number, y: number, zoom?: number) => void;
   moveCameraTo: (x: number, y: number) => void;
@@ -107,6 +110,8 @@ const initialState = {
   buildingPlacementQueue: [],
   isSettingRallyPoint: false,
   isRepairMode: false,
+  isLandingMode: false,
+  landingBuildingId: null,
   abilityTargetMode: null,
   showMinimap: true,
   showResourcePanel: true,
@@ -206,6 +211,8 @@ export const useGameStore = create<GameState>((set, get) => ({
       isBuilding: false,
       buildingType: null,
       isRepairMode: false,
+      isLandingMode: false,
+      landingBuildingId: null,
       abilityTargetMode: null,
     }),
 
@@ -215,6 +222,19 @@ export const useGameStore = create<GameState>((set, get) => ({
       isBuilding: false,
       buildingType: null,
       isSettingRallyPoint: false,
+      isLandingMode: false,
+      landingBuildingId: null,
+      abilityTargetMode: null,
+    }),
+
+  setLandingMode: (isActive, buildingId = null) =>
+    set({
+      isLandingMode: isActive,
+      landingBuildingId: isActive ? buildingId ?? null : null,
+      isBuilding: false,
+      buildingType: null,
+      isSettingRallyPoint: false,
+      isRepairMode: false,
       abilityTargetMode: null,
     }),
 
@@ -224,6 +244,8 @@ export const useGameStore = create<GameState>((set, get) => ({
       isBuilding: false,
       buildingType: null,
       isSettingRallyPoint: false,
+      isLandingMode: false,
+      landingBuildingId: null,
       isRepairMode: false,
     }),
 

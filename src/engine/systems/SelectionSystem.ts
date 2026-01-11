@@ -145,13 +145,19 @@ export class SelectionSystem extends System {
       }
     }
 
-    // Handle Ctrl+click - select all of same type
+    // Handle Ctrl+click or double-click - select all of same type
     if (selectAllOfType && closestEntity) {
       const clickedEntity = this.world.getEntity(closestEntity.id);
       if (clickedEntity) {
         const clickedUnit = clickedEntity.get<Unit>('Unit');
         if (clickedUnit) {
           this.selectAllOfUnitType(clickedUnit.unitId, playerId, additive);
+          return;
+        }
+        // Also support buildings for double-click selection
+        const clickedBuilding = clickedEntity.get<Building>('Building');
+        if (clickedBuilding) {
+          this.selectAllOfBuildingType(clickedBuilding.buildingId, playerId, additive);
           return;
         }
       }
@@ -219,6 +225,46 @@ export class SelectionSystem extends System {
       if (health && health.isDead()) continue;
 
       if (unit.unitId === unitId && selectable.playerId === playerId) {
+        selectable.select();
+        selectedIds.push(entity.id);
+      }
+    }
+
+    // Update store
+    if (additive) {
+      const current = useGameStore.getState().selectedUnits;
+      const combined = [...new Set([...current, ...selectedIds])];
+      useGameStore.getState().selectUnits(combined);
+    } else {
+      useGameStore.getState().selectUnits(selectedIds);
+    }
+
+    this.game.eventBus.emit('selection:changed', { selectedIds });
+  }
+
+  private selectAllOfBuildingType(buildingId: string, playerId: string, additive: boolean): void {
+    const entities = this.world.getEntitiesWith('Building', 'Selectable');
+    const selectedIds: number[] = [];
+
+    // Clear selection if not additive (clear all selectable entities, not just buildings)
+    if (!additive) {
+      const allSelectable = this.world.getEntitiesWith('Selectable');
+      for (const entity of allSelectable) {
+        const selectable = entity.get<Selectable>('Selectable')!;
+        selectable.deselect();
+      }
+    }
+
+    // Select all buildings of the same type belonging to the player
+    for (const entity of entities) {
+      const building = entity.get<Building>('Building')!;
+      const selectable = entity.get<Selectable>('Selectable')!;
+      const health = entity.get<Health>('Health');
+
+      // Skip destroyed buildings
+      if (health && health.isDead()) continue;
+
+      if (building.buildingId === buildingId && selectable.playerId === playerId) {
         selectable.select();
         selectedIds.push(entity.id);
       }
