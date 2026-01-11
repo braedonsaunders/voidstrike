@@ -866,29 +866,26 @@ export class EnhancedAISystem extends System {
 
     if (ai.minerals < moduleDef.mineralCost || ai.vespene < moduleDef.vespeneCost) return false;
 
-    // Tech lab is placed adjacent to the building (to the right)
-    const modulePos = {
-      x: target.position.x + 3, // Right side of building
-      y: target.position.y
-    };
-
-    // Check if position is valid
-    if (!this.isValidBuildingSpot(modulePos.x, modulePos.y, moduleDef.width, moduleDef.height)) {
-      return false;
-    }
-
-    // Get the parent building and attach the addon directly
+    // Get the parent building and validate it can have an addon
     const parentEntity = this.world.getEntity(target.entityId);
     if (!parentEntity) return false;
 
     const parentBuilding = parentEntity.get<Building>('Building');
     if (!parentBuilding || !parentBuilding.canHaveAddon || parentBuilding.hasAddon()) return false;
+    if (parentBuilding.state !== 'complete') return false;
+
+    // Tech lab is placed adjacent to the building (to the right)
+    // Use building width to calculate proper offset from center
+    const modulePos = {
+      x: target.position.x + parentBuilding.width, // Right edge of parent + addon center offset
+      y: target.position.y
+    };
 
     ai.minerals -= moduleDef.mineralCost;
     ai.vespene -= moduleDef.vespeneCost;
 
     // Create the addon building via the building:place event
-    // The BuildingPlacementSystem handles addon creation and attachment
+    // The BuildingPlacementSystem's handleAddonPlacement validates placement with parent exclusion
     this.game.eventBus.emit('building:place', {
       buildingType: 'research_module',
       position: modulePos,
@@ -2497,8 +2494,20 @@ export class EnhancedAISystem extends System {
       // Track worker state counts
       workerStates[unit.state] = (workerStates[unit.state] || 0) + 1;
 
-      // Only grab truly idle workers (not already gathering or building)
-      if (unit.state === 'idle') {
+      // Grab workers that are effectively idle:
+      // - Truly idle
+      // - Moving but with no target (finished moving, waiting for orders)
+      // - Not currently building or gathering
+      const isIdle = unit.state === 'idle';
+      const isMovingNoTarget = unit.state === 'moving' &&
+                               unit.targetX === null &&
+                               unit.targetY === null &&
+                               unit.gatherTargetId === null;
+      const isStuckMoving = unit.state === 'moving' &&
+                            unit.constructingBuildingId === null &&
+                            unit.gatherTargetId === null;
+
+      if (isIdle || isMovingNoTarget || isStuckMoving) {
         idleWorkers.push(entity.id);
       }
     }
