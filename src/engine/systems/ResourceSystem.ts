@@ -271,7 +271,7 @@ export class ResourceSystem extends System {
         // Debug: log distance for player1 workers periodically
         const selectable = entity.get<Selectable>('Selectable');
         if (selectable?.playerId === 'player1' && Math.random() < 0.01) {
-          console.log(`[ResourceSystem] player1 worker ${entity.id}: distance to resource=${distance.toFixed(2)}, isMining=${unit.isMining}, gatherTargetId=${unit.gatherTargetId}`);
+          debugResources.log(`[ResourceSystem] player1 worker ${entity.id}: distance to resource=${distance.toFixed(2)}, isMining=${unit.isMining}, gatherTargetId=${unit.gatherTargetId}`);
         }
 
         if (distance <= 2) {

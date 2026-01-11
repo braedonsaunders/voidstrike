@@ -29,6 +29,8 @@ const gameplaySettings: DebugSettingInfo[] = [
 const systemSettings: DebugSettingInfo[] = [
   { key: 'debugAI', label: 'AI' },
   { key: 'debugPathfinding', label: 'Pathfinding' },
+  { key: 'debugNetworking', label: 'Networking' },
+  { key: 'debugPerformance', label: 'Performance' },
 ];
 
 const otherSettings: DebugSettingInfo[] = [

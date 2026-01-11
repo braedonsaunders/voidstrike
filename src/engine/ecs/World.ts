@@ -2,6 +2,7 @@ import { Entity, EntityId } from './Entity';
 import { Component, ComponentType } from './Component';
 import { System } from './System';
 import { SpatialGrid } from '../core/SpatialGrid';
+import { debugPerformance } from '@/utils/debugLogger';
 
 export class World {
   private entities: Map<EntityId, Entity> = new Map();
@@ -150,7 +151,7 @@ export class World {
       }
     }
     if (slowSystems.length > 0) {
-      console.warn(`[World] Slow systems: ${slowSystems.join(', ')}`);
+      debugPerformance.warn(`[World] Slow systems: ${slowSystems.join(', ')}`);
     }
   }
 

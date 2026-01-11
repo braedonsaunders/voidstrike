@@ -12,6 +12,7 @@
 
 import * as THREE from 'three';
 import { MeshStandardNodeMaterial } from 'three/webgpu';
+import { debugShaders } from '@/utils/debugLogger';
 import {
   uniform,
   attribute,
@@ -378,7 +379,7 @@ export function createTextureTerrainMaterial(config: TextureTerrainConfig): Mesh
     uSunIntensity,
   };
 
-  console.log('[TextureTerrainMaterial] Created TSL material with PBR lighting');
+  debugShaders.log('[TextureTerrainMaterial] Created TSL material with PBR lighting');
 
   return material;
 }

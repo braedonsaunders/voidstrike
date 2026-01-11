@@ -34,6 +34,10 @@ export interface DebugSettings {
   debugInitialization: boolean;
   // Audio
   debugAudio: boolean;
+  // Networking
+  debugNetworking: boolean;
+  // Performance
+  debugPerformance: boolean;
 }
 
 // Renderer API type (WebGPU or WebGL)
@@ -223,6 +227,10 @@ export const useUIStore = create<UIState>((set, get) => ({
     debugInitialization: false,
     // Audio
     debugAudio: false,
+    // Networking
+    debugNetworking: false,
+    // Performance
+    debugPerformance: false,
   },
 
   setScreen: (screen) =>
@@ -366,6 +374,8 @@ export const useUIStore = create<UIState>((set, get) => ({
         debugAssets: enabled,
         debugInitialization: enabled,
         debugAudio: enabled,
+        debugNetworking: enabled,
+        debugPerformance: enabled,
       },
     })),
 

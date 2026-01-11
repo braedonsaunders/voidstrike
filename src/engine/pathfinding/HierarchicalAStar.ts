@@ -11,6 +11,7 @@
  */
 
 import { AStar, PathResult } from './AStar';
+import { debugPathfinding, debugPerformance } from '@/utils/debugLogger';
 
 interface Sector {
   id: number;
@@ -242,7 +243,7 @@ export class HierarchicalAStar {
 
     // Rebuild abstract graph if needed
     if (this.needsRebuild) {
-      console.log(`[HPA*] Rebuilding abstract graph for ${this.width}x${this.height} (${this.sectors.length} sectors)`);
+      debugPathfinding.log(`[HPA*] Rebuilding abstract graph for ${this.width}x${this.height} (${this.sectors.length} sectors)`);
       this.rebuildAbstractGraph();
     }
 
@@ -251,7 +252,7 @@ export class HierarchicalAStar {
 
     // If coordinates are out of bounds, return no path (don't waste time on full A*)
     if (startSector === null || endSector === null) {
-      console.warn(`[HPA*] OUT OF BOUNDS: start=(${startX.toFixed(1)},${startY.toFixed(1)}) sector=${startSector}, end=(${endX.toFixed(1)},${endY.toFixed(1)}) sector=${endSector}, grid=${this.width}x${this.height}`);
+      debugPathfinding.warn(`[HPA*] OUT OF BOUNDS: start=(${startX.toFixed(1)},${startY.toFixed(1)}) sector=${startSector}, end=(${endX.toFixed(1)},${endY.toFixed(1)}) sector=${endSector}, grid=${this.width}x${this.height}`);
       return { path: [], found: false };
     }
 
@@ -374,7 +375,7 @@ export class HierarchicalAStar {
         // The PathfindingSystem will cache this failure and try alternate approaches
         // Only log once per path (not every segment)
         if (i === 0) {
-          console.warn(`[HPA*] refineAbstractPath: first segment failed (${from.x.toFixed(0)},${from.y.toFixed(0)}) -> (${to.x.toFixed(0)},${to.y.toFixed(0)}), returning no path`);
+          debugPathfinding.warn(`[HPA*] refineAbstractPath: first segment failed (${from.x.toFixed(0)},${from.y.toFixed(0)}) -> (${to.x.toFixed(0)},${to.y.toFixed(0)}), returning no path`);
         }
         return { path: [], found: false };
       }
@@ -388,7 +389,7 @@ export class HierarchicalAStar {
 
     const refineElapsed = performance.now() - refineStart;
     if (refineElapsed > 10) {
-      console.warn(`[HPA*] refineAbstractPath: ${numSegments} segments took ${refineElapsed.toFixed(1)}ms (${(refineElapsed/numSegments).toFixed(1)}ms each)`);
+      debugPerformance.warn(`[HPA*] refineAbstractPath: ${numSegments} segments took ${refineElapsed.toFixed(1)}ms (${(refineElapsed/numSegments).toFixed(1)}ms each)`);
     }
 
     return { path: fullPath, found: true };

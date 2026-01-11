@@ -18,6 +18,7 @@ import { DEFAULT_MAP, MapData, getMapById } from '@/data/maps';
 import { Transform } from '@/engine/components/Transform';
 import { Unit } from '@/engine/components/Unit';
 import { Selectable } from '@/engine/components/Selectable';
+import { debugInitialization } from '@/utils/debugLogger';
 
 export class GameScene extends Phaser.Scene {
   // Core game engine (named differently to avoid conflict with Phaser.Scene.game)
@@ -62,7 +63,7 @@ export class GameScene extends Phaser.Scene {
     // Load the selected map from the game setup store
     const selectedMapId = useGameSetupStore.getState().selectedMapId;
     this.mapData = getMapById(selectedMapId) || DEFAULT_MAP;
-    console.log(`[GameScene] Loading map: ${this.mapData.name} (${this.mapData.id})`);
+    debugInitialization.log(`[GameScene] Loading map: ${this.mapData.name} (${this.mapData.id})`);
 
     // Initialize game engine
     const localPlayerId = getLocalPlayerId();

@@ -10,6 +10,8 @@
  * - Diagonal movement with corner-cutting prevention
  */
 
+import { debugPathfinding, debugPerformance } from '@/utils/debugLogger';
+
 export interface PathNode {
   x: number;
   y: number;
@@ -210,7 +212,7 @@ export class AStar {
     this.edgePenaltiesValid = true;
     const elapsed = performance.now() - start;
     if (elapsed > 5) {
-      console.log(`[AStar] recomputeEdgePenalties: ${this.width}x${this.height} took ${elapsed.toFixed(1)}ms`);
+      debugPerformance.log(`[AStar] recomputeEdgePenalties: ${this.width}x${this.height} took ${elapsed.toFixed(1)}ms`);
     }
   }
 
@@ -370,7 +372,7 @@ export class AStar {
         const elapsed = performance.now() - astarStart;
         // Only log if this is a significant timeout (not just a short path that failed)
         if (elapsed > 2) {
-          console.warn(`[AStar] MAX_ITERATIONS (${maxIterations}) reached! (${gridStartX},${gridStartY}) -> (${gridEndX},${gridEndY}) dist=${estimatedDistance.toFixed(0)} took ${elapsed.toFixed(1)}ms`);
+          debugPathfinding.warn(`[AStar] MAX_ITERATIONS (${maxIterations}) reached! (${gridStartX},${gridStartY}) -> (${gridEndX},${gridEndY}) dist=${estimatedDistance.toFixed(0)} took ${elapsed.toFixed(1)}ms`);
         }
         return { path: [], found: false };
       }
@@ -383,7 +385,7 @@ export class AStar {
         const smoothedPath = this.smoothPath(path);
         const elapsed = performance.now() - astarStart;
         if (elapsed > 10) { // Only log slow searches
-          console.log(`[AStar] Found path: ${iterations} iterations, ${smoothedPath.length} waypoints, ${elapsed.toFixed(1)}ms`);
+          debugPerformance.log(`[AStar] Found path: ${iterations} iterations, ${smoothedPath.length} waypoints, ${elapsed.toFixed(1)}ms`);
         }
         return { path: smoothedPath, found: true };
       }

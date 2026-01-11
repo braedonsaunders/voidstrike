@@ -7,6 +7,7 @@ import { Selectable } from '../components/Selectable';
 import { Building } from '../components/Building';
 import { Ability } from '../components/Ability';
 import { Resource } from '../components/Resource';
+import { debugInitialization } from '@/utils/debugLogger';
 
 export interface SavedEntity {
   id: number;
@@ -102,7 +103,7 @@ export class SaveLoadSystem extends System {
 
       return true;
     } catch (error) {
-      console.error('Failed to save game:', error);
+      debugInitialization.error('Failed to save game:', error);
       this.game.eventBus.emit('save:failed', { error: String(error) });
       return false;
     }
@@ -129,7 +130,7 @@ export class SaveLoadSystem extends System {
 
       return true;
     } catch (error) {
-      console.error('Failed to load game:', error);
+      debugInitialization.error('Failed to load game:', error);
       this.game.eventBus.emit('load:failed', { error: String(error) });
       return false;
     }
@@ -334,7 +335,7 @@ export class SaveLoadSystem extends System {
   private deserializeGameState(state: SavedGameState): void {
     // Version check
     if (state.version !== SAVE_VERSION) {
-      console.warn(`Save version mismatch: ${state.version} vs ${SAVE_VERSION}`);
+      debugInitialization.warn(`Save version mismatch: ${state.version} vs ${SAVE_VERSION}`);
     }
 
     // Clear existing entities

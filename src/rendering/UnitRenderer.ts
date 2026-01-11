@@ -9,7 +9,7 @@ import { VisionSystem } from '@/engine/systems/VisionSystem';
 import { AssetManager } from '@/assets/AssetManager';
 import { Terrain } from './Terrain';
 import { getPlayerColor, getLocalPlayerId, isSpectatorMode } from '@/store/gameSetupStore';
-import { debugAnimation, debugAssets } from '@/utils/debugLogger';
+import { debugAnimation, debugAssets, debugPerformance } from '@/utils/debugLogger';
 
 // Instance data for a single unit type + player combo (non-animated units)
 interface InstancedUnitGroup {
@@ -621,7 +621,7 @@ export class UnitRenderer {
 
     const updateElapsed = performance.now() - updateStart;
     if (updateElapsed > 16) {
-      console.warn(`[UnitRenderer] UPDATE: ${entities.length} entities took ${updateElapsed.toFixed(1)}ms`);
+      debugPerformance.warn(`[UnitRenderer] UPDATE: ${entities.length} entities took ${updateElapsed.toFixed(1)}ms`);
     }
   }
 

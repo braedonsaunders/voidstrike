@@ -5,6 +5,7 @@ import { Game } from '../core/Game';
 import { useGameStore } from '@/store/gameStore';
 import { RESEARCH_DEFINITIONS, ResearchDefinition } from '@/data/research/dominion';
 import { BUILDING_DEFINITIONS } from '@/data/buildings/dominion';
+import { debugProduction } from '@/utils/debugLogger';
 
 export class ResearchSystem extends System {
   public priority = 32; // After ProductionSystem
@@ -27,7 +28,7 @@ export class ResearchSystem extends System {
     const upgrade = RESEARCH_DEFINITIONS[upgradeId];
 
     if (!upgrade) {
-      console.warn(`Unknown upgrade: ${upgradeId}`);
+      debugProduction.warn(`Unknown upgrade: ${upgradeId}`);
       return;
     }
 

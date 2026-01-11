@@ -8,6 +8,7 @@ import {
 } from './types';
 import { SignalingService } from './SignalingService';
 import { PeerConnection } from './PeerConnection';
+import { debugNetworking } from '@/utils/debugLogger';
 
 /**
  * PeerManager manages all WebRTC connections in a full mesh topology.
@@ -65,7 +66,7 @@ export class PeerManager {
    * Initialize connections to all peers
    */
   async initialize(): Promise<boolean> {
-    console.log(`PeerManager: Initializing with ${this.remotePlayers.length} remote players`);
+    debugNetworking.log(`PeerManager: Initializing with ${this.remotePlayers.length} remote players`);
 
     // Connect to signaling channel
     const connected = await this.signaling.connect();
@@ -93,7 +94,7 @@ export class PeerManager {
     // Lower ID initiates to prevent simultaneous offers
     for (const player of this.remotePlayers) {
       if (this.localPlayer.id < player.id) {
-        console.log(`PeerManager: Initiating connection to ${player.username}`);
+        debugNetworking.log(`PeerManager: Initiating connection to ${player.username}`);
         const peer = this.peers.get(player.id);
         if (peer) {
           await peer.createOffer();
@@ -123,14 +124,14 @@ export class PeerManager {
     };
 
     peer.onConnected = () => {
-      console.log(`PeerManager: Connected to ${player.username}`);
+      debugNetworking.log(`PeerManager: Connected to ${player.username}`);
       this.onPeerConnected?.(player.id);
       this.checkAllConnected();
       this.emitNetworkStateChange();
     };
 
     peer.onDisconnected = (reason) => {
-      console.log(`PeerManager: Disconnected from ${player.username}: ${reason}`);
+      debugNetworking.log(`PeerManager: Disconnected from ${player.username}: ${reason}`);
       this.onPeerDisconnected?.(player.id, reason);
       this.emitNetworkStateChange();
     };
@@ -145,7 +146,7 @@ export class PeerManager {
   private handleSignalingMessage(message: SignalingMessage): void {
     const peer = this.peers.get(message.from);
     if (!peer) {
-      console.warn(`PeerManager: Received message from unknown peer: ${message.from}`);
+      debugNetworking.warn(`PeerManager: Received message from unknown peer: ${message.from}`);
       return;
     }
 
@@ -160,14 +161,14 @@ export class PeerManager {
         peer.handleIceCandidate(message.payload as RTCIceCandidateInit);
         break;
       case 'ready':
-        console.log(`PeerManager: Peer ${message.from} is ready`);
+        debugNetworking.log(`PeerManager: Peer ${message.from} is ready`);
         break;
     }
   }
 
   private checkAllConnected(): void {
     if (this.allConnected) {
-      console.log('PeerManager: All peers connected!');
+      debugNetworking.log('PeerManager: All peers connected!');
 
       // Clear connection timeout
       if (this.connectionTimer) {
@@ -333,7 +334,7 @@ export class PeerManager {
    * Disconnect from all peers and cleanup
    */
   disconnect(): void {
-    console.log('PeerManager: Disconnecting');
+    debugNetworking.log('PeerManager: Disconnecting');
 
     // Clear timers
     if (this.connectionTimer) {

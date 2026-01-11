@@ -1,5 +1,6 @@
 import { GameMessage, ConnectionState, DEFAULT_ICE_SERVERS } from './types';
 import { SignalingService } from './SignalingService';
+import { debugNetworking } from '@/utils/debugLogger';
 
 /**
  * PeerConnection wraps a single WebRTC connection to another player.
@@ -60,7 +61,7 @@ export class PeerConnection {
 
     // ICE connection state
     this.pc.oniceconnectionstatechange = () => {
-      console.log(`PeerConnection [${this.remoteId}]: ICE state: ${this.pc.iceConnectionState}`);
+      debugNetworking.log(`PeerConnection [${this.remoteId}]: ICE state: ${this.pc.iceConnectionState}`);
 
       switch (this.pc.iceConnectionState) {
         case 'checking':
@@ -86,13 +87,13 @@ export class PeerConnection {
 
     // Handle incoming data channel (for non-initiators)
     this.pc.ondatachannel = (event) => {
-      console.log(`PeerConnection [${this.remoteId}]: Received data channel`);
+      debugNetworking.log(`PeerConnection [${this.remoteId}]: Received data channel`);
       this.setupDataChannel(event.channel);
     };
 
     // Connection state changes
     this.pc.onconnectionstatechange = () => {
-      console.log(`PeerConnection [${this.remoteId}]: Connection state: ${this.pc.connectionState}`);
+      debugNetworking.log(`PeerConnection [${this.remoteId}]: Connection state: ${this.pc.connectionState}`);
 
       if (this.pc.connectionState === 'failed') {
         this.setConnectionState('failed');
@@ -106,20 +107,20 @@ export class PeerConnection {
     channel.binaryType = 'arraybuffer';
 
     channel.onopen = () => {
-      console.log(`PeerConnection [${this.remoteId}]: DataChannel open`);
+      debugNetworking.log(`PeerConnection [${this.remoteId}]: DataChannel open`);
       this.setConnectionState('connected');
       this._lastSeen = Date.now();
       this.onConnected?.();
     };
 
     channel.onclose = () => {
-      console.log(`PeerConnection [${this.remoteId}]: DataChannel closed`);
+      debugNetworking.log(`PeerConnection [${this.remoteId}]: DataChannel closed`);
       this.setConnectionState('disconnected');
       this.onDisconnected?.('Data channel closed');
     };
 
     channel.onerror = (error) => {
-      console.error(`PeerConnection [${this.remoteId}]: DataChannel error`, error);
+      debugNetworking.error(`PeerConnection [${this.remoteId}]: DataChannel error`, error);
     };
 
     channel.onmessage = (event) => {
@@ -135,7 +136,7 @@ export class PeerConnection {
           this._latency = Date.now() - pingData.originalTimestamp;
         }
       } catch (error) {
-        console.error(`PeerConnection [${this.remoteId}]: Failed to parse message`, error);
+        debugNetworking.error(`PeerConnection [${this.remoteId}]: Failed to parse message`, error);
       }
     };
   }
@@ -151,7 +152,7 @@ export class PeerConnection {
    * Create and send an SDP offer (for initiator)
    */
   async createOffer(): Promise<void> {
-    console.log(`PeerConnection [${this.remoteId}]: Creating offer`);
+    debugNetworking.log(`PeerConnection [${this.remoteId}]: Creating offer`);
 
     // Create data channel before creating offer
     const channel = this.pc.createDataChannel('game', {
@@ -168,7 +169,7 @@ export class PeerConnection {
         await this.signaling.sendOffer(this.remoteId, this.pc.localDescription);
       }
     } catch (error) {
-      console.error(`PeerConnection [${this.remoteId}]: Failed to create offer`, error);
+      debugNetworking.error(`PeerConnection [${this.remoteId}]: Failed to create offer`, error);
       this.setConnectionState('failed');
     }
   }
@@ -177,7 +178,7 @@ export class PeerConnection {
    * Handle incoming SDP offer (for responder)
    */
   async handleOffer(offer: RTCSessionDescriptionInit): Promise<void> {
-    console.log(`PeerConnection [${this.remoteId}]: Handling offer`);
+    debugNetworking.log(`PeerConnection [${this.remoteId}]: Handling offer`);
 
     try {
       await this.pc.setRemoteDescription(new RTCSessionDescription(offer));
@@ -197,7 +198,7 @@ export class PeerConnection {
         await this.signaling.sendAnswer(this.remoteId, this.pc.localDescription);
       }
     } catch (error) {
-      console.error(`PeerConnection [${this.remoteId}]: Failed to handle offer`, error);
+      debugNetworking.error(`PeerConnection [${this.remoteId}]: Failed to handle offer`, error);
       this.setConnectionState('failed');
     }
   }
@@ -206,7 +207,7 @@ export class PeerConnection {
    * Handle incoming SDP answer
    */
   async handleAnswer(answer: RTCSessionDescriptionInit): Promise<void> {
-    console.log(`PeerConnection [${this.remoteId}]: Handling answer`);
+    debugNetworking.log(`PeerConnection [${this.remoteId}]: Handling answer`);
 
     try {
       await this.pc.setRemoteDescription(new RTCSessionDescription(answer));
@@ -218,7 +219,7 @@ export class PeerConnection {
       }
       this.pendingIceCandidates = [];
     } catch (error) {
-      console.error(`PeerConnection [${this.remoteId}]: Failed to handle answer`, error);
+      debugNetworking.error(`PeerConnection [${this.remoteId}]: Failed to handle answer`, error);
       this.setConnectionState('failed');
     }
   }
@@ -236,7 +237,7 @@ export class PeerConnection {
     try {
       await this.pc.addIceCandidate(new RTCIceCandidate(candidate));
     } catch (error) {
-      console.error(`PeerConnection [${this.remoteId}]: Failed to add ICE candidate`, error);
+      debugNetworking.error(`PeerConnection [${this.remoteId}]: Failed to add ICE candidate`, error);
     }
   }
 
@@ -252,7 +253,7 @@ export class PeerConnection {
       this.dataChannel.send(JSON.stringify(message));
       return true;
     } catch (error) {
-      console.error(`PeerConnection [${this.remoteId}]: Failed to send message`, error);
+      debugNetworking.error(`PeerConnection [${this.remoteId}]: Failed to send message`, error);
       return false;
     }
   }
@@ -275,7 +276,7 @@ export class PeerConnection {
    * Close the connection
    */
   close(): void {
-    console.log(`PeerConnection [${this.remoteId}]: Closing`);
+    debugNetworking.log(`PeerConnection [${this.remoteId}]: Closing`);
 
     if (this.dataChannel) {
       this.dataChannel.close();

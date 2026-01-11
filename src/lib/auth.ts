@@ -1,5 +1,6 @@
 import { supabase, isMultiplayerEnabled } from './supabase';
 import type { User, Session } from '@supabase/supabase-js';
+import { debugNetworking } from '@/utils/debugLogger';
 
 export interface PlayerProfile {
   id: string;
@@ -186,7 +187,7 @@ export async function ensurePlayerProfile(
     .single();
 
   if (error) {
-    console.error('Failed to create player profile:', error);
+    debugNetworking.error('Failed to create player profile:', error);
     return null;
   }
 
@@ -204,7 +205,7 @@ export async function getPlayerProfile(userId: string): Promise<PlayerProfile | 
     .single();
 
   if (error) {
-    console.error('Failed to fetch player profile:', error);
+    debugNetworking.error('Failed to fetch player profile:', error);
     return null;
   }
 
@@ -261,7 +262,7 @@ export async function getOnlinePlayerCount(): Promise<number> {
     .gte('last_online', fiveMinutesAgo);
 
   if (error) {
-    console.error('Failed to get online count:', error);
+    debugNetworking.error('Failed to get online count:', error);
     return 0;
   }
 

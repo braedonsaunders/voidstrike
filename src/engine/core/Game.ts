@@ -13,7 +13,7 @@ import { VisionSystem } from '../systems/VisionSystem';
 import { AbilitySystem } from '../systems/AbilitySystem';
 import { SpawnSystem } from '../systems/SpawnSystem';
 import { BuildingPlacementSystem } from '../systems/BuildingPlacementSystem';
-import { debugInitialization } from '@/utils/debugLogger';
+import { debugInitialization, debugPerformance } from '@/utils/debugLogger';
 import { AudioSystem } from '../systems/AudioSystem';
 import { UnitMechanicsSystem } from '../systems/UnitMechanicsSystem';
 import { BuildingMechanicsSystem } from '../systems/BuildingMechanicsSystem';
@@ -132,7 +132,7 @@ export class Game {
 
   public static getInstance(config?: Partial<GameConfig>): Game {
     if (!Game.instance) {
-      console.log(`[Game] CREATING NEW INSTANCE with config:`, config ? `${config.mapWidth}x${config.mapHeight}` : 'DEFAULT 128x128');
+      debugInitialization.log(`[Game] CREATING NEW INSTANCE with config:`, config ? `${config.mapWidth}x${config.mapHeight}` : 'DEFAULT 128x128');
       Game.instance = new Game(config);
     } else if (config && (config.mapWidth || config.mapHeight)) {
       // Update map dimensions if a new config is provided with map settings
@@ -144,8 +144,7 @@ export class Game {
 
       // Reinitialize pathfinding grids if dimensions changed (keep same instance to preserve event listeners)
       if (Game.instance.config.mapWidth !== oldWidth || Game.instance.config.mapHeight !== oldHeight) {
-        console.log(`[Game] DIMENSION CHANGE: ${oldWidth}x${oldHeight} -> ${Game.instance.config.mapWidth}x${Game.instance.config.mapHeight}, calling reinitialize`);
-        debugInitialization.log(`[Game] Map dimensions changed from ${oldWidth}x${oldHeight} to ${Game.instance.config.mapWidth}x${Game.instance.config.mapHeight}, reinitializing pathfinding`);
+        debugInitialization.log(`[Game] DIMENSION CHANGE: ${oldWidth}x${oldHeight} -> ${Game.instance.config.mapWidth}x${Game.instance.config.mapHeight}, calling reinitialize`);
         Game.instance.pathfindingSystem.reinitialize(
           Game.instance.config.mapWidth,
           Game.instance.config.mapHeight
@@ -247,7 +246,7 @@ export class Game {
 
     const tickElapsed = performance.now() - tickStart;
     if (tickElapsed > 10) {
-      console.warn(`[Game] TICK ${this.currentTick}: ${tickElapsed.toFixed(1)}ms`);
+      debugPerformance.warn(`[Game] TICK ${this.currentTick}: ${tickElapsed.toFixed(1)}ms`);
     }
   }
 
@@ -268,7 +267,7 @@ export class Game {
    * Should be called after map is loaded
    */
   public setTerrainGrid(terrain: TerrainCell[][]): void {
-    console.log(`[Game] SET_TERRAIN_GRID: ${terrain[0]?.length}x${terrain.length}, pathfinding dimensions: ${this.config.mapWidth}x${this.config.mapHeight}`);
+    debugInitialization.log(`[Game] SET_TERRAIN_GRID: ${terrain[0]?.length}x${terrain.length}, pathfinding dimensions: ${this.config.mapWidth}x${this.config.mapHeight}`);
     this.terrainGrid = terrain;
     // Load terrain walkability into pathfinding system
     this.pathfindingSystem.loadTerrainData();

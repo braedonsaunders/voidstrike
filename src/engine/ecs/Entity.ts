@@ -1,5 +1,6 @@
 import { Component, ComponentType } from './Component';
 import { World } from './World';
+import { debugInitialization } from '@/utils/debugLogger';
 
 export type EntityId = number;
 
@@ -17,7 +18,7 @@ export class Entity {
 
   public add<T extends Component>(component: T): this {
     if (this.destroyed) {
-      console.warn(`Cannot add component to destroyed entity ${this.id}`);
+      debugInitialization.warn(`Cannot add component to destroyed entity ${this.id}`);
       return this;
     }
 

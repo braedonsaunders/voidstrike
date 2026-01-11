@@ -1,3 +1,5 @@
+import { debugInitialization } from '@/utils/debugLogger';
+
 type EventCallback<T = unknown> = (data: T) => void;
 
 interface EventSubscription {
@@ -77,7 +79,7 @@ export class EventBus {
       try {
         callback(data);
       } catch (error) {
-        console.error(`Error in event handler for ${event}:`, error);
+        debugInitialization.error(`Error in event handler for ${event}:`, error);
       }
     }
   }

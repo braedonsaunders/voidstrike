@@ -10,6 +10,7 @@
 
 import * as THREE from 'three';
 import { WebGPURenderer, PostProcessing } from 'three/webgpu';
+import { debugInitialization, debugShaders } from '@/utils/debugLogger';
 
 export interface WebGPURendererConfig {
   canvas: HTMLCanvasElement;
@@ -54,7 +55,7 @@ export async function createWebGPURenderer(config: WebGPURendererConfig): Promis
   const isWebGPU = !forceWebGL && renderer.backend?.isWebGPUBackend === true;
   const supportsCompute = isWebGPU; // Compute shaders only work with WebGPU
 
-  console.log(`[WebGPU] Renderer initialized:`, {
+  debugInitialization.log(`[WebGPU] Renderer initialized:`, {
     backend: isWebGPU ? 'WebGPU' : 'WebGL',
     supportsCompute,
     antialias,
@@ -115,7 +116,7 @@ export async function executeCompute(
   computeNode: any
 ): Promise<void> {
   if (!context.supportsCompute) {
-    console.warn('[WebGPU] Compute shaders not supported - skipping');
+    debugShaders.warn('[WebGPU] Compute shaders not supported - skipping');
     return;
   }
 

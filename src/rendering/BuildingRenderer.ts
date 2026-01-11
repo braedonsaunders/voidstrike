@@ -8,6 +8,7 @@ import { VisionSystem } from '@/engine/systems/VisionSystem';
 import { AssetManager } from '@/assets/AssetManager';
 import { Terrain } from './Terrain';
 import { getPlayerColor, getLocalPlayerId, isSpectatorMode } from '@/store/gameSetupStore';
+import { debugMesh } from '@/utils/debugLogger';
 
 interface BuildingMeshData {
   group: THREE.Group;
@@ -172,7 +173,7 @@ export class BuildingRenderer {
    * Called when custom models finish loading.
    */
   public refreshAllMeshes(): void {
-    console.log('[BuildingRenderer] Refreshing all building meshes...');
+    debugMesh.log('[BuildingRenderer] Refreshing all building meshes...');
     for (const [entityId, meshData] of this.buildingMeshes) {
       this.scene.remove(meshData.group);
       this.scene.remove(meshData.selectionRing);

@@ -1,6 +1,7 @@
 import { supabase } from '@/lib/supabase';
 import { SignalingMessage, SignalingMessageType } from './types';
 import type { RealtimeChannel } from '@supabase/supabase-js';
+import { debugNetworking } from '@/utils/debugLogger';
 
 /**
  * SignalingService handles WebRTC signaling through Supabase Realtime.
@@ -31,7 +32,7 @@ export class SignalingService {
    */
   async connect(): Promise<boolean> {
     if (!supabase) {
-      console.error('SignalingService: Supabase not available');
+      debugNetworking.error('SignalingService: Supabase not available');
       return false;
     }
 
@@ -65,10 +66,10 @@ export class SignalingService {
         .subscribe((status) => {
           if (status === 'SUBSCRIBED') {
             this.isConnected = true;
-            console.log(`SignalingService: Connected to channel signaling:${this.lobbyId}`);
+            debugNetworking.log(`SignalingService: Connected to channel signaling:${this.lobbyId}`);
             resolve(true);
           } else if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
-            console.error(`SignalingService: Failed to connect - ${status}`);
+            debugNetworking.error(`SignalingService: Failed to connect - ${status}`);
             resolve(false);
           }
         });
@@ -84,7 +85,7 @@ export class SignalingService {
     payload: RTCSessionDescriptionInit | RTCIceCandidateInit | string
   ): Promise<boolean> {
     if (!this.channel || !this.isConnected) {
-      console.error('SignalingService: Not connected');
+      debugNetworking.error('SignalingService: Not connected');
       return false;
     }
 
@@ -104,7 +105,7 @@ export class SignalingService {
       });
       return true;
     } catch (error) {
-      console.error('SignalingService: Failed to send message', error);
+      debugNetworking.error('SignalingService: Failed to send message', error);
       return false;
     }
   }
@@ -113,7 +114,7 @@ export class SignalingService {
    * Send an SDP offer to a specific peer
    */
   async sendOffer(toPeerId: string, offer: RTCSessionDescriptionInit): Promise<boolean> {
-    console.log(`SignalingService: Sending offer to ${toPeerId}`);
+    debugNetworking.log(`SignalingService: Sending offer to ${toPeerId}`);
     return this.send('offer', toPeerId, offer);
   }
 
@@ -121,7 +122,7 @@ export class SignalingService {
    * Send an SDP answer to a specific peer
    */
   async sendAnswer(toPeerId: string, answer: RTCSessionDescriptionInit): Promise<boolean> {
-    console.log(`SignalingService: Sending answer to ${toPeerId}`);
+    debugNetworking.log(`SignalingService: Sending answer to ${toPeerId}`);
     return this.send('answer', toPeerId, answer);
   }
 
@@ -136,7 +137,7 @@ export class SignalingService {
    * Broadcast ready signal to all peers
    */
   async broadcastReady(): Promise<boolean> {
-    console.log('SignalingService: Broadcasting ready signal');
+    debugNetworking.log('SignalingService: Broadcasting ready signal');
     return this.send('ready', 'all', 'ready');
   }
 
@@ -145,7 +146,7 @@ export class SignalingService {
    */
   disconnect(): void {
     if (this.channel && supabase) {
-      console.log('SignalingService: Disconnecting');
+      debugNetworking.log('SignalingService: Disconnecting');
       supabase.removeChannel(this.channel);
       this.channel = null;
       this.isConnected = false;
