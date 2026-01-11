@@ -426,7 +426,9 @@ export class MovementSystem extends System {
           const directDistance = Math.sqrt(directDx * directDx + directDy * directDy);
 
           // Request path for distances > 3 units (short movements can go direct)
-          if (directDistance > 3 && unit.state === 'moving') {
+          // Include gathering and building states so workers can pathfind to resources/construction sites
+          const needsPath = unit.state === 'moving' || unit.state === 'gathering' || unit.state === 'building';
+          if (directDistance > 3 && needsPath) {
             this.requestPathWithCooldown(entity.id, unit.targetX, unit.targetY);
           }
         }
