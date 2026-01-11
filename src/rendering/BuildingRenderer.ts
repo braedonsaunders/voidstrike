@@ -118,19 +118,19 @@ export class BuildingRenderer {
 
     this.fireGeometry = new THREE.ConeGeometry(0.3, 0.8, 8);
 
-    // Construction dust particles
+    // Construction dust particles - larger size for visibility
     this.constructionDustMaterial = new THREE.PointsMaterial({
       color: 0xaa9977,
-      size: 0.15,
+      size: 0.4,
       transparent: true,
       opacity: 0.7,
       blending: THREE.AdditiveBlending,
     });
 
-    // Construction sparks (welding/building effect)
+    // Construction sparks (welding/building effect) - larger size for visibility
     this.constructionSparkMaterial = new THREE.PointsMaterial({
       color: 0xffcc44,
-      size: 0.08,
+      size: 0.2,
       transparent: true,
       opacity: 0.9,
       blending: THREE.AdditiveBlending,
