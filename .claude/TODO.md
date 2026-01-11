@@ -206,6 +206,13 @@
   - **Root cause**: AI was sending ATTACK commands with `targetPosition` (attack-move) instead of `targetEntityId` (direct attack), relying on broken auto-acquire
   - **Fix**: AI now uses `findNearestEnemyEntity()` to find specific targets and sends direct ATTACK commands with `targetEntityId`, same as player right-click attacks
   - Also fixed: EnhancedAISystem gives orders to 'moving' units, AIMicroSystem preserves targets during kiting, CombatSystem handles edge cases
+- [x] **AI vespene extractor expansion** - AI now builds extractors on ALL available vespene geysers near any base (main and expansions), not just the first one
+- [x] **AI vespene worker overloading** - Fixed workers being over-assigned to refineries by tracking workers moving to resources (gatherTargetId) in addition to registered gatherers
+- [x] **AI expansion improvements** - Multiple fixes to ensure AI expands:
+  - Lowered mineral cluster detection threshold from 4 to 2 for smaller maps
+  - Added time-based fallback expansion (after ~100 seconds) even without full army
+  - Worker gathering now considers all bases (main + expansions) for minerals
+- [x] **AI Lifter not attacking** - Excluded non-combat units (attackDamage=0) like Lifter and Overseer from attack army
 
 ### Fixed Issues (Round 4 - FPS Optimization - January 2026)
 - [x] **Console.log removed from MovementSystem** - Debug logging in hot paths was allocating strings every frame for every moving unit
