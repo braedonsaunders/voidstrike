@@ -582,11 +582,11 @@ function generateVoidAssault(): MapData {
   // Gold: all 8 patches at 900 minerals
   // ========================================
   const p1Main = createBaseResources(35, 185, DIR.DOWN_LEFT);     // Standard: 6x1500 + 2x900
-  const p1Nat = createBaseResources(60, 145, DIR.DOWN_LEFT);      // Standard
+  const p1Nat = createBaseResources(60, 145, DIR.DOWN_LEFT, 1500, 2250, false, 10);  // Natural: minerals further from ramp
   const p1Third = createBaseResources(35, 35, DIR.UP_LEFT);       // Standard
   const p1Fourth = createBaseResources(35, 110, DIR.LEFT);        // Standard
   const p2Main = createBaseResources(185, 35, DIR.UP_RIGHT);      // Standard
-  const p2Nat = createBaseResources(160, 75, DIR.UP_RIGHT);       // Standard
+  const p2Nat = createBaseResources(160, 75, DIR.UP_RIGHT, 1500, 2250, false, 10);  // Natural: minerals further from ramp
   const p2Third = createBaseResources(185, 185, DIR.DOWN_RIGHT);  // Standard
   const p2Fourth = createBaseResources(185, 110, DIR.RIGHT);      // Standard
   const goldNorth = createBaseResources(80, 60, DIR.UP, 1500, 2250, true);   // Gold: all 8x900

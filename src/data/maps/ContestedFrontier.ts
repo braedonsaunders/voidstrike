@@ -621,18 +621,18 @@ function generateContestedFrontier(): MapData {
   // ========================================
   // Top row mains & naturals (minerals face up/away from center)
   const p1Main = createBaseResources(50, 45, DIR.UP_LEFT);       // Standard
-  const p1Nat = createBaseResources(70, 85, DIR.UP_LEFT);        // Standard
+  const p1Nat = createBaseResources(70, 85, DIR.UP_LEFT, 1500, 2250, false, 10);    // Natural: minerals further from ramp
   const p2Main = createBaseResources(180, 45, DIR.UP);           // Standard
-  const p2Nat = createBaseResources(180, 85, DIR.UP);            // Standard
+  const p2Nat = createBaseResources(180, 85, DIR.UP, 1500, 2250, false, 10);        // Natural: minerals further from ramp
   const p3Main = createBaseResources(310, 45, DIR.UP_RIGHT);     // Standard
-  const p3Nat = createBaseResources(290, 85, DIR.UP_RIGHT);      // Standard
+  const p3Nat = createBaseResources(290, 85, DIR.UP_RIGHT, 1500, 2250, false, 10);  // Natural: minerals further from ramp
   // Bottom row mains & naturals (minerals face down/away from center)
   const p4Main = createBaseResources(50, 275, DIR.DOWN_LEFT);    // Standard
-  const p4Nat = createBaseResources(70, 235, DIR.DOWN_LEFT);     // Standard
+  const p4Nat = createBaseResources(70, 235, DIR.DOWN_LEFT, 1500, 2250, false, 10); // Natural: minerals further from ramp
   const p5Main = createBaseResources(180, 275, DIR.DOWN);        // Standard
-  const p5Nat = createBaseResources(180, 235, DIR.DOWN);         // Standard
+  const p5Nat = createBaseResources(180, 235, DIR.DOWN, 1500, 2250, false, 10);     // Natural: minerals further from ramp
   const p6Main = createBaseResources(310, 275, DIR.DOWN_RIGHT);  // Standard
-  const p6Nat = createBaseResources(290, 235, DIR.DOWN_RIGHT);   // Standard
+  const p6Nat = createBaseResources(290, 235, DIR.DOWN_RIGHT, 1500, 2250, false, 10); // Natural: minerals further from ramp
   // Third expansions
   const westThird = createBaseResources(40, 160, DIR.LEFT);      // Standard
   const eastThird = createBaseResources(320, 160, DIR.RIGHT);    // Standard
