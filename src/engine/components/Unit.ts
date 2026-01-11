@@ -270,6 +270,10 @@ export class Unit extends Component {
   public moveToPosition(x: number, y: number): void {
     this.targetX = x;
     this.targetY = y;
+    // Clear any existing path so the new target takes effect
+    // MovementSystem will request a new path if needed
+    this.path = [];
+    this.pathIndex = 0;
     // Don't change state - used for gathering movement
   }
 
