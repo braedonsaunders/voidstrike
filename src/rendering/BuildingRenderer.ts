@@ -148,22 +148,23 @@ export class BuildingRenderer {
 
     this.fireGeometry = new THREE.ConeGeometry(0.3, 0.8, 8);
 
-    // Construction dust particles - large size for visibility
+    // Construction dust particles - very large for visibility
     this.constructionDustMaterial = new THREE.PointsMaterial({
-      color: 0xccbb99,
-      size: 2.0,
+      color: 0xddcc99,
+      size: 8.0,
       transparent: true,
-      opacity: 0.6,
-      blending: THREE.AdditiveBlending,
+      opacity: 0.7,
+      blending: THREE.NormalBlending,
       sizeAttenuation: true,
+      depthWrite: false,
     });
 
-    // Construction sparks (welding/building effect) - larger size for visibility
+    // Construction sparks (welding/building effect) - very large for visibility
     this.constructionSparkMaterial = new THREE.PointsMaterial({
       color: 0xffdd55,
-      size: 1.5,
+      size: 5.0,
       transparent: true,
-      opacity: 0.9,
+      opacity: 1.0,
       blending: THREE.AdditiveBlending,
       sizeAttenuation: true,
     });
@@ -197,7 +198,7 @@ export class BuildingRenderer {
 
     this.blueprintPulseMaterial = new THREE.PointsMaterial({
       color: 0x00ddff,
-      size: 1.0,
+      size: 4.0,
       transparent: true,
       opacity: 0.9,
       blending: THREE.AdditiveBlending,
@@ -212,12 +213,12 @@ export class BuildingRenderer {
       depthWrite: false,
     });
 
-    // Ground dust effect material - larger particles for billowing dust clouds
+    // Ground dust effect material - very large particles for billowing dust clouds
     this.groundDustMaterial = new THREE.PointsMaterial({
-      color: 0xaa9977,
-      size: 3.0,
+      color: 0xccbb99,
+      size: 12.0,
       transparent: true,
-      opacity: 0.5,
+      opacity: 0.6,
       blending: THREE.NormalBlending,
       sizeAttenuation: true,
       depthWrite: false,
@@ -225,18 +226,18 @@ export class BuildingRenderer {
 
     // Metal debris particles - bright metallic particles
     this.metalDebrisMaterial = new THREE.PointsMaterial({
-      color: 0xcccccc,
-      size: 0.8,
+      color: 0xeeeeee,
+      size: 3.0,
       transparent: true,
-      opacity: 0.9,
+      opacity: 1.0,
       blending: THREE.AdditiveBlending,
       sizeAttenuation: true,
     });
 
-    // Welding flash material - bright white/yellow bursts
+    // Welding flash material - very bright white/yellow bursts
     this.weldingFlashMaterial = new THREE.PointsMaterial({
-      color: 0xffffaa,
-      size: 2.0,
+      color: 0xffffcc,
+      size: 6.0,
       transparent: true,
       opacity: 1.0,
       blending: THREE.AdditiveBlending,
@@ -677,30 +678,17 @@ export class BuildingRenderer {
         // Construction paused (SC2-style) - show partially built state without active effects
         const progress = building.buildProgress;
 
-        // Building at full size with clipping plane (same as constructing)
-        meshData.group.scale.set(1, 1, 1);
-        meshData.group.position.set(transform.x, terrainHeight, transform.y);
+        // Same Y-scale approach as constructing state
+        const yScale = Math.max(0.05, progress);
+        const yOffset = meshData.buildingHeight * (1 - yScale) * 0.5;
 
-        // Calculate the clip height - reveals from bottom to top
-        const clipHeight = terrainHeight + meshData.buildingHeight * progress;
-
-        // Create or update clipping plane
-        if (!meshData.clippingPlane) {
-          meshData.clippingPlane = new THREE.Plane(new THREE.Vector3(0, -1, 0), clipHeight);
-        } else {
-          meshData.clippingPlane.constant = clipHeight;
-        }
+        meshData.group.scale.set(1, yScale, 1);
+        meshData.group.position.set(transform.x, terrainHeight - yOffset, transform.y);
 
         // Slightly more transparent when paused to indicate inactive state
-        const opacity = 0.5 + progress * 0.3;
+        const opacity = 0.4 + progress * 0.4;
         meshData.group.traverse((child) => {
           if (child instanceof THREE.Mesh) {
-            const mat = child.material as THREE.Material;
-            if (mat) {
-              mat.clippingPlanes = [meshData.clippingPlane!];
-              mat.clipShadows = true;
-              mat.needsUpdate = true;
-            }
             this.setMaterialOpacity(child, opacity, true);
           }
         });
@@ -722,42 +710,44 @@ export class BuildingRenderer {
 
         // Keep scaffold visible during pause to show partial structure
         if (meshData.scaffoldEffect) {
-          meshData.scaffoldEffect.visible = progress < 0.7;
+          meshData.scaffoldEffect.visible = progress < 0.8;
           meshData.scaffoldEffect.position.set(transform.x, terrainHeight, transform.y);
         }
       } else {
         // Construction in progress (state === 'constructing')
-        // Layer-by-layer reveal using clipping planes - building stays at full size on ground
+        // Building grows from bottom to top using Y-scale with proper positioning
         const progress = building.buildProgress;
 
-        // Building is at full size, positioned on the ground
-        meshData.group.scale.set(1, 1, 1);
-        meshData.group.position.set(transform.x, terrainHeight, transform.y);
+        // Scale building from bottom up
+        const yScale = Math.max(0.05, progress);
 
-        // Calculate the clip height - reveals from bottom to top
-        const clipHeight = terrainHeight + meshData.buildingHeight * progress;
+        // Position building so bottom stays at ground level as it grows
+        // Building mesh origin is at center, so we offset to keep bottom grounded
+        const yOffset = meshData.buildingHeight * (1 - yScale) * 0.5;
 
-        // Create or update clipping plane (clips everything ABOVE the plane)
-        if (!meshData.clippingPlane) {
-          meshData.clippingPlane = new THREE.Plane(new THREE.Vector3(0, -1, 0), clipHeight);
-        } else {
-          meshData.clippingPlane.constant = clipHeight;
-        }
+        meshData.group.scale.set(1, yScale, 1);
+        meshData.group.position.set(transform.x, terrainHeight - yOffset, transform.y);
 
-        // Apply clipping plane to all materials in the building
+        // Building becomes more opaque as construction progresses
+        const opacity = 0.5 + progress * 0.5;
         meshData.group.traverse((child) => {
           if (child instanceof THREE.Mesh) {
-            const mat = child.material as THREE.Material;
-            if (mat) {
-              mat.clippingPlanes = [meshData.clippingPlane!];
-              mat.clipShadows = true;
-              mat.needsUpdate = true;
-            }
-            // Building is semi-transparent during construction
-            const opacity = 0.6 + progress * 0.4;
             this.setMaterialOpacity(child, opacity, true);
           }
         });
+
+        // Clear any clipping planes
+        if (meshData.clippingPlane) {
+          meshData.group.traverse((child) => {
+            if (child instanceof THREE.Mesh) {
+              const mat = child.material as THREE.Material;
+              if (mat) {
+                mat.clippingPlanes = null;
+              }
+            }
+          });
+          meshData.clippingPlane = null;
+        }
 
         // Hide blueprint effect during active construction
         if (meshData.blueprintEffect) {
@@ -791,11 +781,11 @@ export class BuildingRenderer {
           this.scene.add(meshData.scaffoldEffect);
         }
         // Scaffold fades out as building gets more complete
-        meshData.scaffoldEffect.visible = progress < 0.7;
+        meshData.scaffoldEffect.visible = progress < 0.8;
         if (meshData.scaffoldEffect.visible) {
           meshData.scaffoldEffect.position.set(transform.x, terrainHeight, transform.y);
           // Fade scaffold opacity as construction progresses
-          this.updateScaffoldOpacity(meshData.scaffoldEffect, Math.max(0.2, 0.8 - progress));
+          this.updateScaffoldOpacity(meshData.scaffoldEffect, Math.max(0.3, 1.0 - progress));
         }
       }
 
@@ -1400,10 +1390,10 @@ export class BuildingRenderer {
     sparkGeometry.setAttribute('color', new THREE.BufferAttribute(sparkColors, 3));
 
     const sparkMaterial = new THREE.PointsMaterial({
-      size: 1.2,
+      size: 4.0,
       vertexColors: true,
       transparent: true,
-      opacity: 0.9,
+      opacity: 1.0,
       blending: THREE.AdditiveBlending,
       sizeAttenuation: true,
     });
@@ -1669,9 +1659,9 @@ export class BuildingRenderer {
 
     const hologramParticleMaterial = new THREE.PointsMaterial({
       color: 0x00ccff,
-      size: 0.5,
+      size: 2.0,
       transparent: true,
-      opacity: 0.7,
+      opacity: 0.8,
       blending: THREE.AdditiveBlending,
       sizeAttenuation: true,
     });
@@ -1769,10 +1759,10 @@ export class BuildingRenderer {
     dustGeometry.setAttribute('color', new THREE.BufferAttribute(dustColors, 3));
 
     const dustMaterial = new THREE.PointsMaterial({
-      size: 2.5,
+      size: 10.0,
       vertexColors: true,
       transparent: true,
-      opacity: 0.45,
+      opacity: 0.6,
       blending: THREE.NormalBlending,
       sizeAttenuation: true,
       depthWrite: false,
@@ -1809,10 +1799,10 @@ export class BuildingRenderer {
     lowDustGeometry.setAttribute('position', new THREE.BufferAttribute(lowDustPositions, 3));
 
     const lowDustMaterial = new THREE.PointsMaterial({
-      color: 0x998866,
-      size: 4.0,
+      color: 0xbbaa88,
+      size: 15.0,
       transparent: true,
-      opacity: 0.35,
+      opacity: 0.5,
       blending: THREE.NormalBlending,
       sizeAttenuation: true,
       depthWrite: false,
@@ -1922,18 +1912,16 @@ export class BuildingRenderer {
     const poleRadius = 0.08;
     const beamRadius = 0.05;
 
-    // Material for scaffold poles (orange metallic)
+    // Material for scaffold poles (orange metallic) - fully opaque
     const poleMaterial = new THREE.MeshBasicMaterial({
       color: 0xdd8833,
-      transparent: true,
-      opacity: 0.9,
+      transparent: false,
     });
 
-    // Material for cross beams (darker)
+    // Material for cross beams (darker) - fully opaque
     const beamMaterial = new THREE.MeshBasicMaterial({
       color: 0xaa6622,
-      transparent: true,
-      opacity: 0.85,
+      transparent: false,
     });
 
     // Helper to create a cylinder between two points
@@ -2015,13 +2003,16 @@ export class BuildingRenderer {
   }
 
   /**
-   * Update scaffold opacity for fade effect
+   * Update scaffold opacity for fade effect (only when fading out)
    */
   private updateScaffoldOpacity(scaffold: THREE.Group, opacity: number): void {
+    // Only apply transparency when fading (opacity < 1)
+    const shouldBeTransparent = opacity < 0.99;
     scaffold.traverse((child) => {
       if (child instanceof THREE.Mesh) {
         const mat = child.material as THREE.MeshBasicMaterial;
         if (mat) {
+          mat.transparent = shouldBeTransparent;
           mat.opacity = opacity;
           mat.needsUpdate = true;
         }
