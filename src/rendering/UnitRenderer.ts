@@ -52,13 +52,6 @@ const ANIMATION_SPEED_MULTIPLIERS: Record<string, number> = {
   fabricator: 0.4, // Slow down fabricator leg animation to match movement speed
 };
 
-// Per-unit rotation offsets to correct model forward direction (radians)
-// Use this when a model's forward direction doesn't match the expected -Z (GLTF standard)
-// Positive values rotate counter-clockwise when viewed from above
-const MODEL_ROTATION_OFFSETS: Record<string, number> = {
-  fabricator: Math.PI, // Fabricator model faces backwards, rotate 180°
-};
-
 export class UnitRenderer {
   private scene: THREE.Scene;
   private world: World;
@@ -645,12 +638,10 @@ export class UnitRenderer {
         animUnit.mesh.visible = true;
 
         // Update position and rotation
-        // The inner model already has rotation -π/2 (MODEL_FORWARD_OFFSET) baked in,
-        // which converts from GLTF's -Z forward to game's +X forward.
-        // We apply the game rotation plus any per-unit correction offset to the wrapper.
+        // The inner model has MODEL_FORWARD_OFFSET (+π/2) baked in from AssetManager,
+        // which converts from GLTF's +Z forward to game's +X forward (matching atan2 convention).
         animUnit.mesh.position.set(transform.x, unitHeight, transform.y);
-        const rotationOffset = MODEL_ROTATION_OFFSETS[animUnit.unitType] ?? 0;
-        animUnit.mesh.rotation.y = transform.rotation + rotationOffset;
+        animUnit.mesh.rotation.y = transform.rotation;
 
         // Determine animation state
         // isMoving: unit has non-zero velocity
