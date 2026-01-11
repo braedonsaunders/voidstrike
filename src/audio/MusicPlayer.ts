@@ -362,6 +362,10 @@ class MusicPlayerClass {
 
   /**
    * Stop music playback
+   * Note: Preserves the current category and queue so that when music
+   * restarts for the same category, it continues from where it left off
+   * rather than reshuffling. This prevents hearing the same tracks at
+   * the start of every game.
    */
   public stop(): void {
     this.cleanupCrossfade();
@@ -376,9 +380,21 @@ class MusicPlayerClass {
     this.isLoading = false;
     this.consecutiveFailures = 0;
     this.currentTrackName = null;
-    this.currentCategory = null;
+    // Preserve currentCategory and shuffledQueue so next play() continues the queue
     this.pendingCategory = null;
-    debugAudio.log('Music stopped');
+    debugAudio.log('Music stopped (queue preserved)');
+  }
+
+  /**
+   * Stop music playback and reset the queue
+   * Use this when you want to completely reset the music state
+   */
+  public stopAndReset(): void {
+    this.stop();
+    this.currentCategory = null;
+    this.shuffledQueue = [];
+    this.currentTrackIndex = 0;
+    debugAudio.log('Music stopped and queue reset');
   }
 
   /**
