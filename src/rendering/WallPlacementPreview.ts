@@ -43,6 +43,11 @@ export class WallPlacementPreview {
   private lineMaterial: THREE.LineBasicMaterial;
   private segmentGeometry: THREE.BoxGeometry;
 
+  // PERF: Reusable wireframe materials and geometry (shared across all segments)
+  private wireGeometry: THREE.EdgesGeometry;
+  private validWireMaterial: THREE.LineBasicMaterial;
+  private invalidWireMaterial: THREE.LineBasicMaterial;
+
   constructor(mapData: MapData, getTerrainHeight?: (x: number, y: number) => number) {
     this.group = new THREE.Group();
     this.mapData = mapData;
@@ -69,6 +74,11 @@ export class WallPlacementPreview {
 
     // Standard wall segment geometry (1x1)
     this.segmentGeometry = new THREE.BoxGeometry(0.9, 1.5, 0.9);
+
+    // PERF: Pre-create wireframe geometry and materials (reused across all segments)
+    this.wireGeometry = new THREE.EdgesGeometry(this.segmentGeometry);
+    this.validWireMaterial = new THREE.LineBasicMaterial({ color: 0x00ff00 });
+    this.invalidWireMaterial = new THREE.LineBasicMaterial({ color: 0xff0000 });
   }
 
   /**
@@ -195,18 +205,18 @@ export class WallPlacementPreview {
     const valid = this.checkPositionValid(x, y);
     const height = this.getTerrainHeight ? this.getTerrainHeight(x, y) : 0;
 
+    // PERF: Use pre-created materials instead of cloning
     const mesh = new THREE.Mesh(
       this.segmentGeometry,
       valid ? this.validMaterial : this.invalidMaterial
     );
     mesh.position.set(x, height + 0.75 + WallPlacementPreview.GRID_OFFSET, y);
 
-    // Add wireframe
-    const wireGeometry = new THREE.EdgesGeometry(this.segmentGeometry);
-    const wireMaterial = new THREE.LineBasicMaterial({
-      color: valid ? 0x00ff00 : 0xff0000,
-    });
-    const wireframe = new THREE.LineSegments(wireGeometry, wireMaterial);
+    // PERF: Reuse pre-created wireframe geometry and materials
+    const wireframe = new THREE.LineSegments(
+      this.wireGeometry,
+      valid ? this.validWireMaterial : this.invalidWireMaterial
+    );
     mesh.add(wireframe);
 
     this.group.add(mesh);
@@ -237,21 +247,21 @@ export class WallPlacementPreview {
     }));
 
     // Create meshes for each segment
+    // PERF: Use pre-created materials instead of cloning per segment
     for (const pos of this.wallPositions) {
       const height = this.getTerrainHeight ? this.getTerrainHeight(pos.x, pos.y) : 0;
 
       const mesh = new THREE.Mesh(
         this.segmentGeometry,
-        pos.valid ? this.validMaterial.clone() : this.invalidMaterial.clone()
+        pos.valid ? this.validMaterial : this.invalidMaterial
       );
       mesh.position.set(pos.x, height + 0.75 + WallPlacementPreview.GRID_OFFSET, pos.y);
 
-      // Add wireframe
-      const wireGeometry = new THREE.EdgesGeometry(this.segmentGeometry);
-      const wireMaterial = new THREE.LineBasicMaterial({
-        color: pos.valid ? 0x00ff00 : 0xff0000,
-      });
-      const wireframe = new THREE.LineSegments(wireGeometry, wireMaterial);
+      // PERF: Reuse pre-created wireframe geometry and materials
+      const wireframe = new THREE.LineSegments(
+        this.wireGeometry,
+        pos.valid ? this.validWireMaterial : this.invalidWireMaterial
+      );
       mesh.add(wireframe);
 
       this.group.add(mesh);
@@ -352,24 +362,19 @@ export class WallPlacementPreview {
 
   /**
    * Clear all meshes
+   * PERF: Don't dispose shared materials/geometry - they are reused
    */
   private clearMeshes(): void {
     for (const mesh of this.segmentMeshes) {
       this.group.remove(mesh);
-      mesh.traverse((child) => {
-        if (child instanceof THREE.Mesh || child instanceof THREE.LineSegments) {
-          child.geometry.dispose();
-          if (child.material instanceof THREE.Material) {
-            child.material.dispose();
-          }
-        }
-      });
+      // Note: Don't dispose segmentGeometry, wireGeometry, or materials
+      // They are shared and will be disposed in dispose()
     }
     this.segmentMeshes = [];
 
     if (this.lineMesh) {
       this.group.remove(this.lineMesh);
-      this.lineMesh.geometry.dispose();
+      this.lineMesh.geometry.dispose(); // Line geometry is unique per update
       this.lineMesh = null;
     }
 
@@ -390,5 +395,9 @@ export class WallPlacementPreview {
     this.invalidMaterial.dispose();
     this.lineMaterial.dispose();
     this.segmentGeometry.dispose();
+    // PERF: Also dispose shared wireframe resources
+    this.wireGeometry.dispose();
+    this.validWireMaterial.dispose();
+    this.invalidWireMaterial.dispose();
   }
 }

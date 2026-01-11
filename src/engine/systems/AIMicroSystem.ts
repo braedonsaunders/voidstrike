@@ -386,6 +386,10 @@ export class AIMicroSystem extends System {
     const threats: ThreatInfo[] = [];
     const threatRange = unit.sightRange * 1.2;
 
+    // PERF: Track max threat in single pass instead of sorting entire array
+    let maxThreatScore = 0;
+    let maxThreatEntityId: number | null = null;
+
     const nearbyUnits = this.world.unitGrid.queryRadius(
       transform.x,
       transform.y,
@@ -425,6 +429,12 @@ export class AIMicroSystem extends System {
 
       const threatScore = (damageFactor + priorityFactor) * distanceFactor * healthFactor;
 
+      // PERF: Track max in single pass - O(n) instead of O(n log n) sort
+      if (threatScore > maxThreatScore) {
+        maxThreatScore = threatScore;
+        maxThreatEntityId = nearbyId;
+      }
+
       threats.push({
         entityId: nearbyId,
         threatScore,
@@ -435,15 +445,12 @@ export class AIMicroSystem extends System {
       });
     }
 
-    // Sort by threat score
-    threats.sort((a, b) => b.threatScore - a.threatScore);
-
-    // Store top threat
-    state.threatScore = threats.length > 0 ? threats[0].threatScore : 0;
-    state.primaryTarget = threats.length > 0 ? threats[0].entityId : null;
+    // PERF: Use tracked max instead of sorting - avoids O(n log n) sort
+    state.threatScore = maxThreatScore;
+    state.primaryTarget = maxThreatEntityId;
     state.lastThreatAssessment = currentTick;
 
-    // Store in blackboard for behavior tree
+    // Store in blackboard for behavior tree (unsorted - behavior tree can sort if needed)
     state.behaviorTree.set('threats', threats);
     state.behaviorTree.set('threatScore', state.threatScore);
   }

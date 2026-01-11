@@ -5,25 +5,36 @@ interface GridCell {
   walkable: boolean;
 }
 
+/**
+ * Spatial grid for pathfinding entity tracking
+ * PERF: Uses numeric keys (cellY * cols + cellX) instead of string keys to avoid GC pressure
+ */
 export class SpatialGrid {
-  private grid: Map<string, GridCell> = new Map();
+  private grid: Map<number, GridCell> = new Map();
   private cellSize: number;
   private width: number;
   private height: number;
+  private cols: number; // Number of columns in the grid
+
+  // PERF: Reusable result arrays to avoid allocation on every query
+  private readonly _queryResultSet = new Set<EntityId>();
+  private static readonly EMPTY_SET = new Set<EntityId>(); // Shared empty set for cache misses
 
   constructor(width: number, height: number, cellSize = 2) {
     this.width = width;
     this.height = height;
     this.cellSize = cellSize;
+    this.cols = Math.ceil(width / cellSize);
   }
 
-  private getKey(x: number, y: number): string {
+  // PERF: Numeric key instead of string key - no allocation
+  private getKey(x: number, y: number): number {
     const cellX = Math.floor(x / this.cellSize);
     const cellY = Math.floor(y / this.cellSize);
-    return `${cellX},${cellY}`;
+    return cellY * this.cols + cellX;
   }
 
-  private getOrCreateCell(key: string): GridCell {
+  private getOrCreateCell(key: number): GridCell {
     let cell = this.grid.get(key);
     if (!cell) {
       cell = { entities: new Set(), walkable: true };
@@ -67,25 +78,29 @@ export class SpatialGrid {
     y: number,
     radius: number
   ): Set<EntityId> {
-    const result = new Set<EntityId>();
+    // PERF: Reuse the result set instead of allocating new one
+    this._queryResultSet.clear();
     const cellRadius = Math.ceil(radius / this.cellSize);
 
     const centerCellX = Math.floor(x / this.cellSize);
     const centerCellY = Math.floor(y / this.cellSize);
 
     for (let dy = -cellRadius; dy <= cellRadius; dy++) {
+      const cellY = centerCellY + dy;
       for (let dx = -cellRadius; dx <= cellRadius; dx++) {
-        const key = `${centerCellX + dx},${centerCellY + dy}`;
+        const cellX = centerCellX + dx;
+        // PERF: Numeric key - no string allocation
+        const key = cellY * this.cols + cellX;
         const cell = this.grid.get(key);
         if (cell) {
           for (const entityId of cell.entities) {
-            result.add(entityId);
+            this._queryResultSet.add(entityId);
           }
         }
       }
     }
 
-    return result;
+    return this._queryResultSet;
   }
 
   public queryRect(
@@ -94,7 +109,8 @@ export class SpatialGrid {
     maxX: number,
     maxY: number
   ): Set<EntityId> {
-    const result = new Set<EntityId>();
+    // PERF: Reuse the result set instead of allocating new one
+    this._queryResultSet.clear();
 
     const startCellX = Math.floor(minX / this.cellSize);
     const startCellY = Math.floor(minY / this.cellSize);
@@ -103,17 +119,18 @@ export class SpatialGrid {
 
     for (let cy = startCellY; cy <= endCellY; cy++) {
       for (let cx = startCellX; cx <= endCellX; cx++) {
-        const key = `${cx},${cy}`;
+        // PERF: Numeric key - no string allocation
+        const key = cy * this.cols + cx;
         const cell = this.grid.get(key);
         if (cell) {
           for (const entityId of cell.entities) {
-            result.add(entityId);
+            this._queryResultSet.add(entityId);
           }
         }
       }
     }
 
-    return result;
+    return this._queryResultSet;
   }
 
   public setWalkable(x: number, y: number, walkable: boolean): void {
@@ -139,6 +156,7 @@ export class SpatialGrid {
   public getEntitiesInCell(x: number, y: number): Set<EntityId> {
     const key = this.getKey(x, y);
     const cell = this.grid.get(key);
-    return cell ? cell.entities : new Set();
+    // PERF: Return shared empty set instead of allocating new one
+    return cell ? cell.entities : SpatialGrid.EMPTY_SET;
   }
 }

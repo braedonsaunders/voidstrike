@@ -211,6 +211,16 @@
 - [x] **MultiSelectEntityIcon component extracted** - Memoized component for multi-select grid to prevent re-renders
 - [x] **useGameStore selector function** - Using `(state) => state.selectedUnits` instead of object destructuring to minimize re-renders
 
+### Fixed Issues (Round 5 - FPS Deep Optimization - January 2026)
+- [x] **ParticleSystem Vector3.clone() eliminated** - Hot loop was creating 5000+ Vector3 allocations per frame. Now reuses temp vector.
+- [x] **Pathfinding Grid string keys replaced** - Changed from string keys (`${x},${y}`) to numeric keys (`y * cols + x`), eliminating GC pressure from string allocations
+- [x] **Pathfinding Grid query Set reuse** - Query results now reuse a single Set instead of allocating new Set per query
+- [x] **VisionSystem O(n²) watch tower loop fixed** - Changed from iterating all units × all towers to spatial grid queries per tower
+- [x] **VisionSystem sqrt in reveal loop eliminated** - Using squared distance comparison instead of Math.sqrt() in nested reveal area loop
+- [x] **WallPlacementPreview material cloning eliminated** - Was cloning materials per segment per frame during wall placement. Now reuses pre-created materials.
+- [x] **WallPlacementPreview wireframe geometry reuse** - EdgesGeometry and LineBasicMaterial now shared across all wall segments
+- [x] **AIMicroSystem threat sort replaced with single-pass max** - Changed from O(n log n) full array sort to O(n) single-pass max tracking for threat assessment
+
 ### Remaining Optimizations
 - [ ] Instanced decorations (trees, rocks, debris - 1000s of draw calls)
 - [ ] Graphics settings UI (shadows optional)
@@ -219,7 +229,8 @@
 - [ ] EffectsRenderer material cloning - reuse materials instead of cloning in combat effects
 - [ ] EnhancedAISystem O(n²) patterns - extractor-geyser matching, mineral sorting in loops
 - [ ] MovementSystem double building collision queries - combine avoidance and hard collision
-- [ ] VisionSystem watch tower loop - reverse iteration to use spatial grid
+- [ ] MovementSystem formation array pooling - reuse position arrays for move commands
+- [ ] CombatSystem event payload pooling - reuse event objects instead of allocating per attack
 
 ---
 
