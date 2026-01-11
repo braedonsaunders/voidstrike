@@ -5,6 +5,7 @@ export { CRYSTAL_CAVERNS } from './CrystalCaverns';
 export { SCORCHED_BASIN } from './ScorchedBasin';
 export { CONTESTED_FRONTIER } from './ContestedFrontier';
 export { TITANS_COLOSSEUM } from './TitansColosseum';
+export { BATTLE_ARENA } from './BattleArena';
 
 import { MapData } from './MapTypes';
 import { VOID_ASSAULT } from './VoidAssault';
@@ -12,6 +13,7 @@ import { CRYSTAL_CAVERNS } from './CrystalCaverns';
 import { SCORCHED_BASIN } from './ScorchedBasin';
 import { CONTESTED_FRONTIER } from './ContestedFrontier';
 import { TITANS_COLOSSEUM } from './TitansColosseum';
+import { BATTLE_ARENA } from './BattleArena';
 
 // All available maps
 export const ALL_MAPS: Record<string, MapData> = {
@@ -20,6 +22,7 @@ export const ALL_MAPS: Record<string, MapData> = {
   [SCORCHED_BASIN.id]: SCORCHED_BASIN,
   [CONTESTED_FRONTIER.id]: CONTESTED_FRONTIER,
   [TITANS_COLOSSEUM.id]: TITANS_COLOSSEUM,
+  [BATTLE_ARENA.id]: BATTLE_ARENA,
 };
 
 // Maps by player count

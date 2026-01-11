@@ -6,10 +6,14 @@ import { UNIT_DEFINITIONS, DOMINION_UNITS } from '@/data/units/dominion';
 import { useGameSetupStore, PLAYER_COLORS } from '@/store/gameSetupStore';
 
 type SpawnTeam = 'player1' | 'player2';
+type SpawnQuantity = 1 | 5 | 10 | 20;
+
+const SPAWN_QUANTITIES: SpawnQuantity[] = [1, 5, 10, 20];
 
 export const BattleSimulatorPanel = memo(function BattleSimulatorPanel() {
   const [selectedUnit, setSelectedUnit] = useState<string | null>(null);
   const [selectedTeam, setSelectedTeam] = useState<SpawnTeam>('player1');
+  const [spawnQuantity, setSpawnQuantity] = useState<SpawnQuantity>(1);
   const [isPaused, setIsPaused] = useState(false);
   const playerSlots = useGameSetupStore((state) => state.playerSlots);
 
@@ -24,12 +28,28 @@ export const BattleSimulatorPanel = memo(function BattleSimulatorPanel() {
     const game = Game.getInstance();
 
     const handleSpawnClick = (data: { worldX: number; worldY: number }) => {
-      game.eventBus.emit('unit:spawn', {
-        unitType: selectedUnit,
-        x: data.worldX,
-        y: data.worldY,
-        playerId: selectedTeam,
-      });
+      // Spawn units in a grid formation around the click point
+      const spacing = 2; // Units apart
+      const cols = Math.ceil(Math.sqrt(spawnQuantity));
+      const rows = Math.ceil(spawnQuantity / cols);
+      const offsetX = ((cols - 1) * spacing) / 2;
+      const offsetY = ((rows - 1) * spacing) / 2;
+
+      let spawned = 0;
+      for (let row = 0; row < rows && spawned < spawnQuantity; row++) {
+        for (let col = 0; col < cols && spawned < spawnQuantity; col++) {
+          const x = data.worldX - offsetX + col * spacing;
+          const y = data.worldY - offsetY + row * spacing;
+
+          game.eventBus.emit('unit:spawn', {
+            unitType: selectedUnit,
+            x,
+            y,
+            playerId: selectedTeam,
+          });
+          spawned++;
+        }
+      }
     };
 
     // eventBus.on returns an unsubscribe function
@@ -38,7 +58,7 @@ export const BattleSimulatorPanel = memo(function BattleSimulatorPanel() {
     return () => {
       unsubscribe();
     };
-  }, [selectedUnit, selectedTeam]);
+  }, [selectedUnit, selectedTeam, spawnQuantity]);
 
   const handlePauseToggle = useCallback(() => {
     const game = Game.getInstance();
@@ -120,10 +140,32 @@ export const BattleSimulatorPanel = memo(function BattleSimulatorPanel() {
         </div>
       </div>
 
+      {/* Quantity Selector */}
+      <div className="px-3 py-2 border-b border-void-800">
+        <div className="text-void-400 text-xs mb-1.5">Quantity:</div>
+        <div className="flex gap-1">
+          {SPAWN_QUANTITIES.map((qty) => (
+            <button
+              key={qty}
+              onClick={() => setSpawnQuantity(qty)}
+              className={`flex-1 px-2 py-1 rounded text-xs font-medium transition-all ${
+                spawnQuantity === qty
+                  ? 'bg-void-600 text-white'
+                  : 'bg-void-800/50 text-void-400 hover:bg-void-700 hover:text-white'
+              }`}
+            >
+              {qty}
+            </button>
+          ))}
+        </div>
+      </div>
+
       {/* Unit List */}
-      <div className="px-2 py-2 max-h-80 overflow-y-auto">
+      <div className="px-2 py-2 max-h-64 overflow-y-auto">
         <div className="text-void-400 text-xs mb-1.5 px-1">
-          {selectedUnit ? `Click map to spawn ${UNIT_DEFINITIONS[selectedUnit]?.name}` : 'Select a unit:'}
+          {selectedUnit
+            ? `Click map to spawn ${spawnQuantity}x ${UNIT_DEFINITIONS[selectedUnit]?.name}`
+            : 'Select a unit:'}
         </div>
         <div className="grid grid-cols-2 gap-1">
           {combatUnits.map((unit) => (
@@ -147,7 +189,7 @@ export const BattleSimulatorPanel = memo(function BattleSimulatorPanel() {
 
       {/* Instructions */}
       <div className="px-3 py-2 border-t border-void-800 text-void-500 text-[10px]">
-        Select unit, then click on the map to spawn. Units auto-attack enemies.
+        Select unit + quantity, then click map. Units auto-attack enemies.
       </div>
     </div>
   );
