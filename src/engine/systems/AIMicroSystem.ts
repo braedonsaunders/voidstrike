@@ -147,13 +147,13 @@ export class AIMicroSystem extends System {
     const entities = this.world.getEntitiesWith('Unit', 'Transform', 'Selectable', 'Health');
 
     for (const entity of entities) {
-      const selectable = entity.get<Selectable>('Selectable')!;
+      const selectable = entity.get<Selectable>('Selectable');
+      const unit = entity.get<Unit>('Unit');
+      const health = entity.get<Health>('Health');
+      if (!selectable || !unit || !health) continue;
 
       // Only micro AI-controlled units
       if (!this.aiPlayerIds.has(selectable.playerId)) continue;
-
-      const unit = entity.get<Unit>('Unit')!;
-      const health = entity.get<Health>('Health')!;
 
       // Skip dead units, workers, and idle units
       if (health.isDead()) continue;

@@ -222,10 +222,11 @@ export class BuildingMechanicsSystem extends System {
     const buildings = this.world.getEntitiesWith('Building', 'Transform', 'Selectable');
 
     for (const entity of buildings) {
-      const building = entity.get<Building>('Building')!;
-      const transform = entity.get<Transform>('Transform')!;
-      const selectable = entity.get<Selectable>('Selectable')!;
+      const building = entity.get<Building>('Building');
+      const transform = entity.get<Transform>('Transform');
+      const selectable = entity.get<Selectable>('Selectable');
       const health = entity.get<Health>('Health');
+      if (!building || !transform || !selectable) continue;
 
       if (health?.isDead()) continue;
 
