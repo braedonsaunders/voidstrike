@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { EventBus } from '@/engine/core/EventBus';
+import { getLocalPlayerId, isSpectatorMode } from '@/store/gameSetupStore';
 
 interface AttackEffect {
   startPos: THREE.Vector3;
@@ -358,11 +359,19 @@ export class EffectsRenderer {
       this.clearFocusFire(data.entityId);
     });
 
-    // Move command - show indicator on ground
+    // Move command - show indicator on ground (only for local player's commands)
     this.eventBus.on('command:move', (data: {
       entityIds: number[];
       targetPosition?: { x: number; y: number };
+      playerId?: string;
     }) => {
+      // Only show move indicator for local player (or all players if spectating)
+      const localPlayerId = getLocalPlayerId();
+      const spectating = isSpectatorMode();
+      if (!spectating && data.playerId && data.playerId !== localPlayerId) {
+        return; // Don't show indicator for other players' commands
+      }
+
       if (data.entityIds.length > 0 && data.targetPosition) {
         const terrainHeight = this.getHeightAt(data.targetPosition.x, data.targetPosition.y);
         this.createMoveIndicator(
