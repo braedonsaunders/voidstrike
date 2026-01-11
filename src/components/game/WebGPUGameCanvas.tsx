@@ -472,6 +472,10 @@ export function WebGPUGameCanvas() {
         const gameTime = gameRef.current?.getGameTime() ?? 0;
         environmentRef.current?.update(deltaTime / 1000, gameTime);
 
+        // Update shadow camera to follow the game camera for proper shadow rendering
+        // This ensures shadows appear for objects near the camera, not just at map center
+        environmentRef.current?.updateShadowCameraPosition(camera.target.x, camera.target.z);
+
         // Update TSL visual systems
         selectionSystemRef.current?.update(deltaTime);
         effectEmitterRef.current?.update(deltaTime / 1000);

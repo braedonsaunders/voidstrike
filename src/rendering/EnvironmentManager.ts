@@ -61,6 +61,9 @@ export class EnvironmentManager {
   // Shadow state
   private shadowsEnabled = false;
   private shadowQuality: ShadowQuality = 'high';
+  private lastShadowCameraX = 0;
+  private lastShadowCameraZ = 0;
+  private readonly SHADOW_CAMERA_UPDATE_THRESHOLD = 5; // Only update if camera moved more than 5 units
 
   constructor(scene: THREE.Scene, mapData: MapData) {
     this.scene = scene;
@@ -252,6 +255,40 @@ export class EnvironmentManager {
   }
 
   /**
+   * Update shadow camera to follow the game camera position.
+   * This ensures shadows are rendered for objects near the camera, not just near map center.
+   * Should be called each frame with the camera's look-at target position.
+   * PERFORMANCE: Only updates if camera has moved significantly to avoid per-frame overhead.
+   */
+  public updateShadowCameraPosition(targetX: number, targetZ: number): void {
+    if (!this.shadowsEnabled) return;
+
+    // PERFORMANCE: Only update if camera has moved significantly
+    const dx = targetX - this.lastShadowCameraX;
+    const dz = targetZ - this.lastShadowCameraZ;
+    const distMoved = Math.sqrt(dx * dx + dz * dz);
+    if (distMoved < this.SHADOW_CAMERA_UPDATE_THRESHOLD) {
+      return; // Camera hasn't moved enough, skip update
+    }
+
+    this.lastShadowCameraX = targetX;
+    this.lastShadowCameraZ = targetZ;
+
+    // Position the light relative to the camera target, maintaining the same angle
+    // Original offset is (50, 80, 50) from origin
+    const lightOffset = new THREE.Vector3(50, 80, 50);
+    this.directionalLight.position.set(
+      targetX + lightOffset.x,
+      lightOffset.y,
+      targetZ + lightOffset.z
+    );
+
+    // Update the light target to follow camera
+    this.directionalLight.target.position.set(targetX, 0, targetZ);
+    this.directionalLight.target.updateMatrixWorld();
+  }
+
+  /**
    * Get height at world position
    */
   public getHeightAt(x: number, y: number): number {
@@ -287,11 +324,23 @@ export class EnvironmentManager {
   }
 
   /**
-   * Get rock collision data for building placement validation
-   * Returns array of { x, z, radius } for each rock
+   * Get rock collision data for building placement validation and pathfinding
+   * Returns array of { x, z, radius } for each rock from both instanced and legacy decorations
    */
   public getRockCollisions(): Array<{ x: number; z: number; radius: number }> {
-    return this.rocks?.getRockCollisions() || [];
+    const collisions: Array<{ x: number; z: number; radius: number }> = [];
+
+    // Get from instanced rocks (if no explicit decorations)
+    if (this.rocks) {
+      collisions.push(...this.rocks.getRockCollisions());
+    }
+
+    // Get from legacy/explicit decorations (includes rocks from map data)
+    if (this.legacyDecorations) {
+      collisions.push(...this.legacyDecorations.getRockCollisions());
+    }
+
+    return collisions;
   }
 
   // ============================================
