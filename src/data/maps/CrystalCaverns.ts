@@ -17,6 +17,8 @@ import {
   fillFeatureRect,
   scatterForests,
   createMudArea,
+  autoFixConnectivity,
+  validateMapConnectivity,
 } from './MapTypes';
 
 /**
@@ -532,7 +534,7 @@ function generateCrystalCaverns(): MapData {
     { name: 'Center Gold', x: 100, y: 90, ...centerGold },
   ];
 
-  return {
+  const mapData: MapData = {
     id: 'crystal_caverns',
     name: 'Crystal Caverns',
     author: 'VOIDSTRIKE Team',
@@ -582,6 +584,28 @@ function generateCrystalCaverns(): MapData {
     fogNear: 80,
     fogFar: 220,
   };
+
+  // CRITICAL: Validate and fix connectivity to ensure all areas are reachable
+  const validation = validateMapConnectivity(mapData);
+  if (!validation.isValid) {
+    console.warn('[CrystalCaverns] Map has connectivity issues, attempting auto-fix...');
+    console.warn('[CrystalCaverns] Unreachable locations:', validation.unreachableLocations);
+    const corridorsCarved = autoFixConnectivity(mapData);
+    console.log(`[CrystalCaverns] Auto-fix carved ${corridorsCarved} corridors`);
+
+    // Validate again after fix
+    const postFixValidation = validateMapConnectivity(mapData);
+    if (!postFixValidation.isValid) {
+      console.error('[CrystalCaverns] CRITICAL: Map still has unreachable areas after auto-fix!');
+      console.error('[CrystalCaverns] Still unreachable:', postFixValidation.unreachableLocations);
+    } else {
+      console.log('[CrystalCaverns] Connectivity fixed successfully');
+    }
+  } else {
+    console.log('[CrystalCaverns] Map connectivity validated - all areas reachable');
+  }
+
+  return mapData;
 }
 
 export const CRYSTAL_CAVERNS = generateCrystalCaverns();

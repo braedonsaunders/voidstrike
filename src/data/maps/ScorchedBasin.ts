@@ -17,6 +17,8 @@ import {
   fillFeatureRect,
   scatterForests,
   createMudArea,
+  autoFixConnectivity,
+  validateMapConnectivity,
 } from './MapTypes';
 
 /**
@@ -618,7 +620,7 @@ function generateScorchedBasin(): MapData {
     { name: 'Center', x: 140, y: 140, ...center },
   ];
 
-  return {
+  const mapData: MapData = {
     id: 'scorched_basin',
     name: 'Scorched Basin',
     author: 'VOIDSTRIKE Team',
@@ -672,6 +674,27 @@ function generateScorchedBasin(): MapData {
     fogNear: 100,
     fogFar: 300,
   };
+
+  // CRITICAL: Validate and fix connectivity to ensure all areas are reachable
+  const validation = validateMapConnectivity(mapData);
+  if (!validation.isValid) {
+    console.warn('[ScorchedBasin] Map has connectivity issues, attempting auto-fix...');
+    console.warn('[ScorchedBasin] Unreachable locations:', validation.unreachableLocations);
+    const corridorsCarved = autoFixConnectivity(mapData);
+    console.log(`[ScorchedBasin] Auto-fix carved ${corridorsCarved} corridors`);
+
+    const postFixValidation = validateMapConnectivity(mapData);
+    if (!postFixValidation.isValid) {
+      console.error('[ScorchedBasin] CRITICAL: Map still has unreachable areas after auto-fix!');
+      console.error('[ScorchedBasin] Still unreachable:', postFixValidation.unreachableLocations);
+    } else {
+      console.log('[ScorchedBasin] Connectivity fixed successfully');
+    }
+  } else {
+    console.log('[ScorchedBasin] Map connectivity validated - all areas reachable');
+  }
+
+  return mapData;
 }
 
 export const SCORCHED_BASIN = generateScorchedBasin();
