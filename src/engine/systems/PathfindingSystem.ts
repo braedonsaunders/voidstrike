@@ -728,6 +728,7 @@ export class PathfindingSystem extends System {
 
           if (needsRepath && (unit.path.length > 0 || (unit.targetX !== null && unit.targetY !== null))) {
             // Clear current path and recalculate
+            console.log(`[PathfindingSystem] STUCK_REPATH: entity ${entity.id} stuck for ${ticksSinceMove} ticks at (${transform.x.toFixed(1)},${transform.y.toFixed(1)})`);
             unit.path = [];
             unit.pathIndex = 0;
 
@@ -751,6 +752,7 @@ export class PathfindingSystem extends System {
 
         // Check if there's a significantly blocked path ahead
         if (this.isPathSignificantlyBlocked(unit.path, unit.pathIndex)) {
+          console.log(`[PathfindingSystem] PERIODIC_REPATH: entity ${entity.id} path blocked, requesting new path`);
           this.queuePathRequest({
             entityId: entity.id,
             startX: transform.x,
@@ -767,13 +769,19 @@ export class PathfindingSystem extends System {
   private isPathSignificantlyBlocked(path: Array<{ x: number; y: number }>, fromIndex: number): boolean {
     let blockedCount = 0;
     const checkCount = Math.min(5, path.length - fromIndex);
+    const blockedWaypoints: string[] = [];
 
     for (let i = fromIndex; i < fromIndex + checkCount; i++) {
       if (i >= path.length) break;
       const waypoint = path[i];
       if (!this.pathfinder.isWalkable(waypoint.x, waypoint.y)) {
         blockedCount++;
+        blockedWaypoints.push(`(${waypoint.x.toFixed(1)},${waypoint.y.toFixed(1)})`);
       }
+    }
+
+    if (blockedCount > 0) {
+      console.log(`[PathfindingSystem] PATH_BLOCKED: ${blockedCount}/${checkCount} waypoints blocked: ${blockedWaypoints.join(', ')}`);
     }
 
     return blockedCount > 0;
