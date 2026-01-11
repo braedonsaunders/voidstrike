@@ -23,6 +23,8 @@ interface BuildingMeshData {
   // Construction effect (dust particles at build height)
   constructionEffect: THREE.Group | null;
   buildingHeight: number; // Stored for clipping calculation
+  // Thruster effect for flying buildings
+  thrusterEffect: THREE.Group | null;
 }
 
 // Instanced building group for same-type completed buildings
@@ -67,6 +69,8 @@ export class BuildingRenderer {
   private fireGeometry: THREE.ConeGeometry;
   private constructionDustMaterial: THREE.PointsMaterial;
   private constructionSparkMaterial: THREE.PointsMaterial;
+  private thrusterCoreMaterial: THREE.PointsMaterial;
+  private thrusterGlowMaterial: THREE.PointsMaterial;
 
   // Animation time for effects
   private fireAnimTime: number = 0;
@@ -134,6 +138,25 @@ export class BuildingRenderer {
       transparent: true,
       opacity: 0.9,
       blending: THREE.AdditiveBlending,
+    });
+
+    // Thruster effect materials (for flying buildings)
+    this.thrusterCoreMaterial = new THREE.PointsMaterial({
+      color: 0x88ccff,
+      size: 0.4,
+      transparent: true,
+      opacity: 0.95,
+      blending: THREE.AdditiveBlending,
+      depthWrite: false,
+    });
+
+    this.thrusterGlowMaterial = new THREE.PointsMaterial({
+      color: 0x4488ff,
+      size: 0.6,
+      transparent: true,
+      opacity: 0.6,
+      blending: THREE.AdditiveBlending,
+      depthWrite: false,
     });
 
     // Register callback to refresh meshes when custom models finish loading
@@ -557,8 +580,9 @@ export class BuildingRenderer {
       }
 
       // Update selection ring - larger multiplier for better visibility
+      // Include flyingOffset so selection ring follows building when lifted off
       const ringSize = Math.max(building.width, building.height) * 0.9;
-      meshData.selectionRing.position.set(transform.x, terrainHeight + 0.05, transform.y);
+      meshData.selectionRing.position.set(transform.x, terrainHeight + flyingOffset + 0.05, transform.y);
       meshData.selectionRing.scale.set(ringSize, ringSize, 1);
       meshData.selectionRing.visible = selectable?.isSelected ?? false;
 
@@ -603,6 +627,26 @@ export class BuildingRenderer {
         meshData.healthBar.visible = false;
       }
 
+      // Thruster effects for flying buildings (lifting, flying, or landing)
+      const isFlyingState = building.state === 'lifting' || building.state === 'flying' || building.state === 'landing';
+      if (isFlyingState && !meshData.thrusterEffect) {
+        // Create thruster effect
+        meshData.thrusterEffect = this.createThrusterEffect(building.width, building.height);
+        this.scene.add(meshData.thrusterEffect);
+      } else if (!isFlyingState && meshData.thrusterEffect) {
+        // Remove thruster effect when landed
+        this.scene.remove(meshData.thrusterEffect);
+        this.disposeGroup(meshData.thrusterEffect);
+        meshData.thrusterEffect = null;
+      }
+
+      // Animate thruster effect
+      if (meshData.thrusterEffect) {
+        // Position thrusters at the bottom of the building
+        meshData.thrusterEffect.position.set(transform.x, terrainHeight + flyingOffset, transform.y);
+        this.updateThrusterEffect(meshData.thrusterEffect, dt, building.liftProgress);
+      }
+
       // Update progress bar (only for own buildings)
       if (isOwned) {
         if (!building.isComplete()) {
@@ -635,6 +679,10 @@ export class BuildingRenderer {
         if (meshData.constructionEffect) {
           this.scene.remove(meshData.constructionEffect);
           this.disposeGroup(meshData.constructionEffect);
+        }
+        if (meshData.thrusterEffect) {
+          this.scene.remove(meshData.thrusterEffect);
+          this.disposeGroup(meshData.thrusterEffect);
         }
         this.disposeGroup(meshData.group);
         this.buildingMeshes.delete(entityId);
@@ -697,6 +745,7 @@ export class BuildingRenderer {
       lastHealthPercent: 1,
       constructionEffect: null,
       buildingHeight,
+      thrusterEffect: null,
     };
   }
 
@@ -908,6 +957,167 @@ export class BuildingRenderer {
   }
 
   /**
+   * Create thruster effect for flying buildings
+   * Creates downward-pointing engine flames at multiple points under the building
+   */
+  private createThrusterEffect(buildingWidth: number, buildingHeight: number): THREE.Group {
+    const thrusterGroup = new THREE.Group();
+
+    // Create 4 thruster points at corners of the building
+    const thrusterOffsets = [
+      { x: -buildingWidth * 0.35, z: -buildingHeight * 0.35 },
+      { x: buildingWidth * 0.35, z: -buildingHeight * 0.35 },
+      { x: -buildingWidth * 0.35, z: buildingHeight * 0.35 },
+      { x: buildingWidth * 0.35, z: buildingHeight * 0.35 },
+    ];
+
+    // Core flame particles (bright blue-white center)
+    const coreParticleCount = 60;
+    const corePositions = new Float32Array(coreParticleCount * 3);
+    const coreColors = new Float32Array(coreParticleCount * 3);
+
+    for (let i = 0; i < coreParticleCount; i++) {
+      const thruster = thrusterOffsets[i % thrusterOffsets.length];
+      corePositions[i * 3] = thruster.x + (Math.random() - 0.5) * 0.3;
+      corePositions[i * 3 + 1] = -Math.random() * 1.5; // Below building
+      corePositions[i * 3 + 2] = thruster.z + (Math.random() - 0.5) * 0.3;
+
+      // Blue-white core color
+      coreColors[i * 3] = 0.7 + Math.random() * 0.3;
+      coreColors[i * 3 + 1] = 0.85 + Math.random() * 0.15;
+      coreColors[i * 3 + 2] = 1.0;
+    }
+
+    const coreGeometry = new THREE.BufferGeometry();
+    coreGeometry.setAttribute('position', new THREE.BufferAttribute(corePositions, 3));
+    coreGeometry.setAttribute('color', new THREE.BufferAttribute(coreColors, 3));
+
+    const coreMaterial = new THREE.PointsMaterial({
+      size: 0.35,
+      vertexColors: true,
+      transparent: true,
+      opacity: 0.95,
+      blending: THREE.AdditiveBlending,
+      depthWrite: false,
+    });
+
+    const coreParticles = new THREE.Points(coreGeometry, coreMaterial);
+    coreParticles.userData.isThrusterCore = true;
+    coreParticles.userData.thrusterOffsets = thrusterOffsets;
+    coreParticles.userData.lifetimes = new Float32Array(coreParticleCount).fill(0).map(() => Math.random());
+    thrusterGroup.add(coreParticles);
+
+    // Glow/exhaust particles (larger, more diffuse)
+    const glowParticleCount = 40;
+    const glowPositions = new Float32Array(glowParticleCount * 3);
+
+    for (let i = 0; i < glowParticleCount; i++) {
+      const thruster = thrusterOffsets[i % thrusterOffsets.length];
+      glowPositions[i * 3] = thruster.x + (Math.random() - 0.5) * 0.5;
+      glowPositions[i * 3 + 1] = -Math.random() * 2.5; // Further below
+      glowPositions[i * 3 + 2] = thruster.z + (Math.random() - 0.5) * 0.5;
+    }
+
+    const glowGeometry = new THREE.BufferGeometry();
+    glowGeometry.setAttribute('position', new THREE.BufferAttribute(glowPositions, 3));
+
+    const glowMaterial = new THREE.PointsMaterial({
+      color: 0x4488ff,
+      size: 0.6,
+      transparent: true,
+      opacity: 0.5,
+      blending: THREE.AdditiveBlending,
+      depthWrite: false,
+    });
+
+    const glowParticles = new THREE.Points(glowGeometry, glowMaterial);
+    glowParticles.userData.isThrusterGlow = true;
+    glowParticles.userData.thrusterOffsets = thrusterOffsets;
+    glowParticles.userData.lifetimes = new Float32Array(glowParticleCount).fill(0).map(() => Math.random());
+    thrusterGroup.add(glowParticles);
+
+    return thrusterGroup;
+  }
+
+  /**
+   * Animate thruster effect with pulsing flames
+   */
+  private updateThrusterEffect(thrusterGroup: THREE.Group, dt: number, liftProgress: number): void {
+    // Intensity based on lift state (stronger during lift-off/landing, steady when flying)
+    const baseIntensity = 0.7 + liftProgress * 0.3;
+
+    for (const child of thrusterGroup.children) {
+      if (!(child instanceof THREE.Points)) continue;
+
+      const positions = (child.geometry.attributes.position as THREE.BufferAttribute).array as Float32Array;
+      const lifetimes = child.userData.lifetimes as Float32Array;
+      const thrusterOffsets = child.userData.thrusterOffsets as Array<{ x: number; z: number }>;
+
+      if (child.userData.isThrusterCore) {
+        const colors = (child.geometry.attributes.color as THREE.BufferAttribute).array as Float32Array;
+
+        for (let i = 0; i < positions.length / 3; i++) {
+          lifetimes[i] += dt * 4;
+
+          // Move downward rapidly
+          positions[i * 3 + 1] -= dt * 8;
+
+          // Slight horizontal drift
+          positions[i * 3] += (Math.random() - 0.5) * dt * 0.5;
+          positions[i * 3 + 2] += (Math.random() - 0.5) * dt * 0.5;
+
+          // Reset when too far down or lifetime exceeded
+          if (lifetimes[i] > 1 || positions[i * 3 + 1] < -3) {
+            lifetimes[i] = 0;
+            const thruster = thrusterOffsets[i % thrusterOffsets.length];
+            positions[i * 3] = thruster.x + (Math.random() - 0.5) * 0.3;
+            positions[i * 3 + 1] = -0.1 - Math.random() * 0.3;
+            positions[i * 3 + 2] = thruster.z + (Math.random() - 0.5) * 0.3;
+          }
+
+          // Color fades from white-blue to blue as it descends
+          const progress = lifetimes[i];
+          colors[i * 3] = Math.max(0.3, 0.9 - progress * 0.6);
+          colors[i * 3 + 1] = Math.max(0.5, 1.0 - progress * 0.4);
+          colors[i * 3 + 2] = 1.0;
+        }
+        child.geometry.attributes.color.needsUpdate = true;
+
+        // Pulse opacity
+        const mat = child.material as THREE.PointsMaterial;
+        mat.opacity = baseIntensity * (0.85 + Math.sin(this.fireAnimTime * 20) * 0.15);
+
+      } else if (child.userData.isThrusterGlow) {
+        for (let i = 0; i < positions.length / 3; i++) {
+          lifetimes[i] += dt * 2;
+
+          // Move downward slower than core
+          positions[i * 3 + 1] -= dt * 5;
+
+          // More horizontal drift for glow
+          positions[i * 3] += (Math.random() - 0.5) * dt * 1.0;
+          positions[i * 3 + 2] += (Math.random() - 0.5) * dt * 1.0;
+
+          // Reset when too far down
+          if (lifetimes[i] > 1 || positions[i * 3 + 1] < -4) {
+            lifetimes[i] = 0;
+            const thruster = thrusterOffsets[i % thrusterOffsets.length];
+            positions[i * 3] = thruster.x + (Math.random() - 0.5) * 0.5;
+            positions[i * 3 + 1] = -0.2 - Math.random() * 0.5;
+            positions[i * 3 + 2] = thruster.z + (Math.random() - 0.5) * 0.5;
+          }
+        }
+
+        // Pulse glow opacity
+        const mat = child.material as THREE.PointsMaterial;
+        mat.opacity = baseIntensity * (0.4 + Math.sin(this.fireAnimTime * 15 + 0.5) * 0.15);
+      }
+
+      child.geometry.attributes.position.needsUpdate = true;
+    }
+  }
+
+  /**
    * Create construction effect (dust and sparks at build layer)
    */
   private createConstructionEffect(buildingWidth: number, buildingDepth: number, _buildingHeight: number): THREE.Group {
@@ -1080,6 +1290,8 @@ export class BuildingRenderer {
     this.fireGeometry.dispose();
     this.constructionDustMaterial.dispose();
     this.constructionSparkMaterial.dispose();
+    this.thrusterCoreMaterial.dispose();
+    this.thrusterGlowMaterial.dispose();
 
     for (const meshData of this.buildingMeshes.values()) {
       this.disposeGroup(meshData.group);
@@ -1094,6 +1306,10 @@ export class BuildingRenderer {
       if (meshData.constructionEffect) {
         this.scene.remove(meshData.constructionEffect);
         this.disposeGroup(meshData.constructionEffect);
+      }
+      if (meshData.thrusterEffect) {
+        this.scene.remove(meshData.thrusterEffect);
+        this.disposeGroup(meshData.thrusterEffect);
       }
     }
     this.buildingMeshes.clear();

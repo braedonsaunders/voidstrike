@@ -316,186 +316,195 @@ export function CommandCard() {
           });
         });
       }
-    } else if (building && building.isComplete()) {
+    } else if (building && (building.isComplete() || building.state === 'flying' || building.state === 'lifting' || building.state === 'landing')) {
+      // Show commands for complete OR flying buildings
+      const isFlying = building.state === 'flying' || building.state === 'lifting' || building.state === 'landing';
+
       // Get tech-gated units for this building
       const techUnits = RESEARCH_MODULE_UNITS[building.buildingId] || [];
       const hasTechLab = building.hasAddon() && building.hasTechLab();
 
       // Building commands - train units (basic units from canProduce)
-      building.canProduce.forEach((unitId) => {
-        const unitDef = UNIT_DEFINITIONS[unitId];
-        if (!unitDef) return;
+      // Skip training when building is flying
+      if (!isFlying) {
+        building.canProduce.forEach((unitId) => {
+          const unitDef = UNIT_DEFINITIONS[unitId];
+          if (!unitDef) return;
 
-        const canAfford = minerals >= unitDef.mineralCost && vespene >= unitDef.vespeneCost;
-        const hasSupply = supply + unitDef.supplyCost <= maxSupply;
+          const canAfford = minerals >= unitDef.mineralCost && vespene >= unitDef.vespeneCost;
+          const hasSupply = supply + unitDef.supplyCost <= maxSupply;
 
-        buttons.push({
-          id: `train_${unitId}`,
-          label: unitDef.name,
-          shortcut: unitDef.name.charAt(0).toUpperCase(),
-          action: () => {
-            game.eventBus.emit('command:train', {
-              entityIds: selectedUnits,
-              unitType: unitId,
-            });
-          },
-          isDisabled: !canAfford || !hasSupply,
-          tooltip: (unitDef.description || `Train ${unitDef.name}`) + (!hasSupply ? ' (Need more supply)' : ''),
-          cost: { minerals: unitDef.mineralCost, vespene: unitDef.vespeneCost, supply: unitDef.supplyCost },
-        });
-      });
-
-      // Tech-gated units (from Research Module)
-      techUnits.forEach((unitId) => {
-        const unitDef = UNIT_DEFINITIONS[unitId];
-        if (!unitDef) return;
-
-        const canAfford = minerals >= unitDef.mineralCost && vespene >= unitDef.vespeneCost;
-        const hasSupply = supply + unitDef.supplyCost <= maxSupply;
-        const canTrain = hasTechLab && canAfford && hasSupply;
-
-        buttons.push({
-          id: `train_${unitId}`,
-          label: unitDef.name,
-          shortcut: unitDef.name.charAt(0).toUpperCase(),
-          action: () => {
-            if (hasTechLab) {
+          buttons.push({
+            id: `train_${unitId}`,
+            label: unitDef.name,
+            shortcut: unitDef.name.charAt(0).toUpperCase(),
+            action: () => {
               game.eventBus.emit('command:train', {
                 entityIds: selectedUnits,
                 unitType: unitId,
               });
-            }
-          },
-          isDisabled: !canTrain,
-          tooltip: !hasTechLab
-            ? `${unitDef.description || unitDef.name} - Requires Research Module`
-            : (unitDef.description || `Train ${unitDef.name}`) + (!hasSupply ? ' (Need more supply)' : ''),
-          cost: { minerals: unitDef.mineralCost, vespene: unitDef.vespeneCost, supply: unitDef.supplyCost },
+            },
+            isDisabled: !canAfford || !hasSupply,
+            tooltip: (unitDef.description || `Train ${unitDef.name}`) + (!hasSupply ? ' (Need more supply)' : ''),
+            cost: { minerals: unitDef.mineralCost, vespene: unitDef.vespeneCost, supply: unitDef.supplyCost },
+          });
         });
-      });
+      }
 
-      // Build Research Module addon button (if building supports addons and doesn't have one)
-      if (building.canHaveAddon && !building.hasAddon()) {
-        const moduleDef = BUILDING_DEFINITIONS['research_module'];
-        if (moduleDef) {
-          const canAffordModule = minerals >= moduleDef.mineralCost && vespene >= moduleDef.vespeneCost;
-          const localPlayer = getLocalPlayerId();
+      // Skip training, research, and upgrades when building is flying
+      if (!isFlying) {
+        // Tech-gated units (from Research Module)
+        techUnits.forEach((unitId) => {
+          const unitDef = UNIT_DEFINITIONS[unitId];
+          if (!unitDef) return;
+
+          const canAfford = minerals >= unitDef.mineralCost && vespene >= unitDef.vespeneCost;
+          const hasSupply = supply + unitDef.supplyCost <= maxSupply;
+          const canTrain = hasTechLab && canAfford && hasSupply;
+
           buttons.push({
-            id: 'build_research_module',
-            label: 'Tech Lab',
-            shortcut: 'T',
+            id: `train_${unitId}`,
+            label: unitDef.name,
+            shortcut: unitDef.name.charAt(0).toUpperCase(),
             action: () => {
-              // Get fresh game instance and selected units to avoid stale closure
-              const currentGame = Game.getInstance();
-              const currentSelectedUnits = useGameStore.getState().selectedUnits;
-              if (currentGame && currentSelectedUnits.length > 0) {
-                currentGame.eventBus.emit('building:build_addon', {
-                  buildingId: currentSelectedUnits[0],
-                  addonType: 'research_module',
-                  playerId: localPlayer,
+              if (hasTechLab) {
+                game.eventBus.emit('command:train', {
+                  entityIds: selectedUnits,
+                  unitType: unitId,
                 });
               }
             },
-            isDisabled: !canAffordModule,
-            tooltip: moduleDef.description || 'Addon that unlocks advanced units and research.',
-            cost: { minerals: moduleDef.mineralCost, vespene: moduleDef.vespeneCost },
+            isDisabled: !canTrain,
+            tooltip: !hasTechLab
+              ? `${unitDef.description || unitDef.name} - Requires Research Module`
+              : (unitDef.description || `Train ${unitDef.name}`) + (!hasSupply ? ' (Need more supply)' : ''),
+            cost: { minerals: unitDef.mineralCost, vespene: unitDef.vespeneCost, supply: unitDef.supplyCost },
           });
-        }
-      }
+        });
 
-      // Research commands
-      const store = useGameStore.getState();
-      const researchMap: Record<string, string[]> = {
-        tech_center: ['infantry_weapons_1', 'infantry_armor_1'],
-        arsenal: ['vehicle_weapons_1', 'vehicle_armor_1'],
-        infantry_bay: ['combat_stim', 'combat_shield'],
-        forge: ['bombardment_systems'],
-        hangar: ['cloaking_field'],
-      };
-
-      const availableResearch = researchMap[building.buildingId] || [];
-      const localPlayerForResearch = getLocalPlayerId() ?? 'player1';
-      availableResearch.forEach((upgradeId) => {
-        const upgrade = RESEARCH_DEFINITIONS[upgradeId];
-        if (!upgrade) return;
-
-        const isResearched = store.hasResearch(localPlayerForResearch, upgradeId);
-        if (isResearched) return;
-
-        let reqMet = true;
-        if (upgrade.requirements) {
-          for (const req of upgrade.requirements) {
-            if (RESEARCH_DEFINITIONS[req] && !store.hasResearch(localPlayerForResearch, req)) {
-              reqMet = false;
-              break;
-            }
+        // Build Research Module addon button (if building supports addons and doesn't have one)
+        if (building.canHaveAddon && !building.hasAddon()) {
+          const moduleDef = BUILDING_DEFINITIONS['research_module'];
+          if (moduleDef) {
+            const canAffordModule = minerals >= moduleDef.mineralCost && vespene >= moduleDef.vespeneCost;
+            const localPlayer = getLocalPlayerId();
+            buttons.push({
+              id: 'build_research_module',
+              label: 'Tech Lab',
+              shortcut: 'T',
+              action: () => {
+                // Get fresh game instance and selected units to avoid stale closure
+                const currentGame = Game.getInstance();
+                const currentSelectedUnits = useGameStore.getState().selectedUnits;
+                if (currentGame && currentSelectedUnits.length > 0) {
+                  currentGame.eventBus.emit('building:build_addon', {
+                    buildingId: currentSelectedUnits[0],
+                    addonType: 'research_module',
+                    playerId: localPlayer,
+                  });
+                }
+              },
+              isDisabled: !canAffordModule,
+              tooltip: moduleDef.description || 'Addon that unlocks advanced units and research.',
+              cost: { minerals: moduleDef.mineralCost, vespene: moduleDef.vespeneCost },
+            });
           }
         }
 
-        const isResearching = building.productionQueue.some(
-          (item) => item.type === 'upgrade' && item.id === upgradeId
-        );
+        // Research commands
+        const store = useGameStore.getState();
+        const researchMap: Record<string, string[]> = {
+          tech_center: ['infantry_weapons_1', 'infantry_armor_1'],
+          arsenal: ['vehicle_weapons_1', 'vehicle_armor_1'],
+          infantry_bay: ['combat_stim', 'combat_shield'],
+          forge: ['bombardment_systems'],
+          hangar: ['cloaking_field'],
+        };
 
-        buttons.push({
-          id: `research_${upgradeId}`,
-          label: upgrade.name,
-          shortcut: upgrade.name.charAt(0).toUpperCase(),
-          action: () => {
-            game.eventBus.emit('command:research', {
-              entityIds: selectedUnits,
-              upgradeId,
-            });
-          },
-          isDisabled: minerals < upgrade.mineralCost || vespene < upgrade.vespeneCost || !reqMet || isResearching,
-          tooltip: upgrade.description + (isResearching ? ' (In progress)' : ''),
-          cost: { minerals: upgrade.mineralCost, vespene: upgrade.vespeneCost },
-        });
-      });
+        const availableResearch = researchMap[building.buildingId] || [];
+        const localPlayerForResearch = getLocalPlayerId() ?? 'player1';
+        availableResearch.forEach((upgradeId) => {
+          const upgrade = RESEARCH_DEFINITIONS[upgradeId];
+          if (!upgrade) return;
 
-      // Building upgrade buttons (e.g., CC -> Orbital/Planetary)
-      if (building.canUpgradeTo && building.canUpgradeTo.length > 0) {
-        const isUpgrading = building.productionQueue.some(
-          (item) => item.type === 'upgrade' && building.canUpgradeTo.includes(item.id)
-        );
+          const isResearched = store.hasResearch(localPlayerForResearch, upgradeId);
+          if (isResearched) return;
 
-        building.canUpgradeTo.forEach((upgradeBuildingId) => {
-          const upgradeDef = BUILDING_DEFINITIONS[upgradeBuildingId];
-          if (!upgradeDef) return;
+          let reqMet = true;
+          if (upgrade.requirements) {
+            for (const req of upgrade.requirements) {
+              if (RESEARCH_DEFINITIONS[req] && !store.hasResearch(localPlayerForResearch, req)) {
+                reqMet = false;
+                break;
+              }
+            }
+          }
 
-          const canAfford = minerals >= upgradeDef.mineralCost && vespene >= upgradeDef.vespeneCost;
-
-          // Create shortcut from first letter of last word (O for Orbital, P for Planetary)
-          const words = upgradeDef.name.split(' ');
-          const shortcut = words[words.length - 1].charAt(0).toUpperCase();
+          const isResearching = building.productionQueue.some(
+            (item) => item.type === 'upgrade' && item.id === upgradeId
+          );
 
           buttons.push({
-            id: `upgrade_${upgradeBuildingId}`,
-            label: upgradeDef.name,
-            shortcut,
+            id: `research_${upgradeId}`,
+            label: upgrade.name,
+            shortcut: upgrade.name.charAt(0).toUpperCase(),
             action: () => {
-              game.eventBus.emit('command:upgrade_building', {
+              game.eventBus.emit('command:research', {
                 entityIds: selectedUnits,
-                upgradeTo: upgradeBuildingId,
+                upgradeId,
               });
             },
-            isDisabled: !canAfford || isUpgrading,
-            tooltip: (upgradeDef.description || `Upgrade to ${upgradeDef.name}`) + (isUpgrading ? ' (Upgrading...)' : ''),
-            cost: { minerals: upgradeDef.mineralCost, vespene: upgradeDef.vespeneCost },
+            isDisabled: minerals < upgrade.mineralCost || vespene < upgrade.vespeneCost || !reqMet || isResearching,
+            tooltip: upgrade.description + (isResearching ? ' (In progress)' : ''),
+            cost: { minerals: upgrade.mineralCost, vespene: upgrade.vespeneCost },
           });
         });
-      }
 
-      // Rally point for production buildings
-      if (building.canProduce.length > 0) {
-        buttons.push({
-          id: 'rally',
-          label: 'Rally',
-          shortcut: 'R',
-          action: () => {
-            useGameStore.getState().setRallyPointMode(true);
-          },
-          tooltip: 'Set rally point for new units',
-        });
+        // Building upgrade buttons (e.g., CC -> Orbital/Planetary)
+        if (building.canUpgradeTo && building.canUpgradeTo.length > 0) {
+          const isUpgrading = building.productionQueue.some(
+            (item) => item.type === 'upgrade' && building.canUpgradeTo.includes(item.id)
+          );
+
+          building.canUpgradeTo.forEach((upgradeBuildingId) => {
+            const upgradeDef = BUILDING_DEFINITIONS[upgradeBuildingId];
+            if (!upgradeDef) return;
+
+            const canAfford = minerals >= upgradeDef.mineralCost && vespene >= upgradeDef.vespeneCost;
+
+            // Create shortcut from first letter of last word (O for Orbital, P for Planetary)
+            const words = upgradeDef.name.split(' ');
+            const shortcut = words[words.length - 1].charAt(0).toUpperCase();
+
+            buttons.push({
+              id: `upgrade_${upgradeBuildingId}`,
+              label: upgradeDef.name,
+              shortcut,
+              action: () => {
+                game.eventBus.emit('command:upgrade_building', {
+                  entityIds: selectedUnits,
+                  upgradeTo: upgradeBuildingId,
+                });
+              },
+              isDisabled: !canAfford || isUpgrading,
+              tooltip: (upgradeDef.description || `Upgrade to ${upgradeDef.name}`) + (isUpgrading ? ' (Upgrading...)' : ''),
+              cost: { minerals: upgradeDef.mineralCost, vespene: upgradeDef.vespeneCost },
+            });
+          });
+        }
+
+        // Rally point for production buildings
+        if (building.canProduce.length > 0) {
+          buttons.push({
+            id: 'rally',
+            label: 'Rally',
+            shortcut: 'R',
+            action: () => {
+              useGameStore.getState().setRallyPointMode(true);
+            },
+            tooltip: 'Set rally point for new units',
+          });
+        }
       }
 
       // Lift-off button for buildings that can fly (and are complete, not flying)
