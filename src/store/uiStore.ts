@@ -129,6 +129,11 @@ export interface UIState {
   musicEnabled: boolean;
   soundVolume: number;
   musicVolume: number;
+  // Granular audio settings
+  voicesEnabled: boolean;
+  alertsEnabled: boolean;
+  voiceVolume: number;
+  alertVolume: number;
   showFPS: boolean;
   showPing: boolean;
 
@@ -170,6 +175,11 @@ export interface UIState {
   toggleMusic: () => void;
   setSoundVolume: (volume: number) => void;
   setMusicVolume: (volume: number) => void;
+  // Granular audio actions
+  toggleVoices: () => void;
+  toggleAlerts: () => void;
+  setVoiceVolume: (volume: number) => void;
+  setAlertVolume: (volume: number) => void;
   toggleFPS: () => void;
   togglePing: () => void;
   // Graphics settings actions
@@ -208,6 +218,11 @@ export const useUIStore = create<UIState>((set, get) => ({
   musicEnabled: true,
   soundVolume: 0.7,
   musicVolume: 0.25,
+  // Granular audio defaults
+  voicesEnabled: true,
+  alertsEnabled: true,
+  voiceVolume: 0.7,
+  alertVolume: 0.8,
   showFPS: false,
   showPing: true,
   showGraphicsOptions: false,
@@ -368,6 +383,15 @@ export const useUIStore = create<UIState>((set, get) => ({
   setSoundVolume: (volume) => set({ soundVolume: Math.max(0, Math.min(1, volume)) }),
 
   setMusicVolume: (volume) => set({ musicVolume: Math.max(0, Math.min(1, volume)) }),
+
+  // Granular audio actions
+  toggleVoices: () => set((state) => ({ voicesEnabled: !state.voicesEnabled })),
+
+  toggleAlerts: () => set((state) => ({ alertsEnabled: !state.alertsEnabled })),
+
+  setVoiceVolume: (volume) => set({ voiceVolume: Math.max(0, Math.min(1, volume)) }),
+
+  setAlertVolume: (volume) => set({ alertVolume: Math.max(0, Math.min(1, volume)) }),
 
   toggleFPS: () => set((state) => ({ showFPS: !state.showFPS })),
 
