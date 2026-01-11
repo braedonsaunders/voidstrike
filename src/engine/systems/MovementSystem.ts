@@ -419,13 +419,16 @@ export class MovementSystem extends System {
         // No path but has target - request path if distance is significant
         // This handles edge cases where path request was missed or path is empty
         // Uses cooldown to prevent spamming when no path can be found
-        const directDx = unit.targetX - transform.x;
-        const directDy = unit.targetY - transform.y;
-        const directDistance = Math.sqrt(directDx * directDx + directDy * directDy);
+        // Flying units don't need pathfinding - they move direct
+        if (!unit.isFlying) {
+          const directDx = unit.targetX - transform.x;
+          const directDy = unit.targetY - transform.y;
+          const directDistance = Math.sqrt(directDx * directDx + directDy * directDy);
 
-        // Request path for distances > 3 units (short movements can go direct)
-        if (directDistance > 3 && unit.state === 'moving') {
-          this.requestPathWithCooldown(entity.id, unit.targetX, unit.targetY);
+          // Request path for distances > 3 units (short movements can go direct)
+          if (directDistance > 3 && unit.state === 'moving') {
+            this.requestPathWithCooldown(entity.id, unit.targetX, unit.targetY);
+          }
         }
       }
 

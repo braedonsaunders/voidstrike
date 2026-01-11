@@ -23,9 +23,10 @@ const MAX_PATHS_PER_FRAME = 4; // Process at most this many path requests per fr
 const TERRAIN_EDGE_BUFFER = 1; // Number of cells to buffer around unwalkable terrain
 
 // Failed path caching - prevent re-requesting impossible paths
-const FAILED_PATH_CACHE_TTL = 3000; // Don't retry failed paths for 3 seconds
-const FAILED_PATH_CACHE_SIZE = 200; // Max number of cached failures
-const MAX_FAILURES_PER_ENTITY = 3; // After this many failures, stop requesting for this destination
+const FAILED_PATH_CACHE_TTL = 10000; // Don't retry failed paths for 10 seconds
+const FAILED_PATH_CACHE_SIZE = 200; // Max number of per-entity cached failures
+const GLOBAL_UNREACHABLE_TTL = 15000; // Global unreachable destinations persist for 15 seconds
+const GLOBAL_UNREACHABLE_CACHE_SIZE = 100; // Max globally unreachable destinations
 
 interface PathRequest {
   entityId: number;
@@ -49,6 +50,11 @@ interface FailedPathEntry {
   failureCount: number;
 }
 
+interface GlobalUnreachableEntry {
+  timestamp: number;
+  failedEntityCount: number; // How many different entities failed to reach this
+}
+
 // Distance threshold for using hierarchical pathfinding
 const HIERARCHICAL_PATH_THRESHOLD = 20;
 
@@ -70,6 +76,11 @@ export class PathfindingSystem extends System {
   // Key format: "entityId_destGridX_destGridY"
   private failedPathCache: Map<string, FailedPathEntry> = new Map();
   private failedPathCacheKeys: string[] = []; // For LRU eviction
+
+  // Global unreachable destination cache - if multiple units fail to reach a destination,
+  // it's likely unreachable for everyone. Key format: "destGridX_destGridY"
+  private globalUnreachableCache: Map<string, GlobalUnreachableEntry> = new Map();
+  private globalUnreachableCacheKeys: string[] = []; // For LRU eviction
 
   constructor(game: Game, mapWidth: number, mapHeight: number) {
     super(game);
@@ -343,6 +354,16 @@ export class PathfindingSystem extends System {
       const transform = entity.get<Transform>('Transform');
       if (!transform) return;
 
+      const unit = entity.get<Unit>('Unit');
+      if (!unit) return;
+
+      // Flying units don't need pathfinding - they move directly to target
+      if (unit.isFlying) {
+        // Set a direct path for flying units (no pathfinding needed)
+        unit.setPath([{ x: data.targetX, y: data.targetY }]);
+        return;
+      }
+
       // Queue the request instead of processing immediately
       this.queuePathRequest({
         entityId: data.entityId,
@@ -394,16 +415,32 @@ export class PathfindingSystem extends System {
 
   /**
    * Check if a path to this destination recently failed.
+   * Returns TRUE immediately on any failure - no waiting for multiple failures.
    */
   private isPathRecentlyFailed(entityId: number, destX: number, destY: number): boolean {
     const destGridX = Math.floor(destX);
     const destGridY = Math.floor(destY);
-    const key = `${entityId}_${destGridX}_${destGridY}`;
+    const now = Date.now();
 
+    // FIRST: Check global unreachable cache (destination unreachable for everyone)
+    const globalKey = `${destGridX}_${destGridY}`;
+    const globalEntry = this.globalUnreachableCache.get(globalKey);
+    if (globalEntry) {
+      if (now - globalEntry.timestamp > GLOBAL_UNREACHABLE_TTL) {
+        // Expired - remove from cache
+        this.globalUnreachableCache.delete(globalKey);
+        const idx = this.globalUnreachableCacheKeys.indexOf(globalKey);
+        if (idx !== -1) this.globalUnreachableCacheKeys.splice(idx, 1);
+      } else if (globalEntry.failedEntityCount >= 2) {
+        // 2+ units failed to reach this destination - block ALL units
+        return true;
+      }
+    }
+
+    // SECOND: Check per-entity cache
+    const key = `${entityId}_${destGridX}_${destGridY}`;
     const entry = this.failedPathCache.get(key);
     if (!entry) return false;
-
-    const now = Date.now();
 
     // If TTL expired, remove from cache
     if (now - entry.timestamp > FAILED_PATH_CACHE_TTL) {
@@ -413,24 +450,23 @@ export class PathfindingSystem extends System {
       return false;
     }
 
-    // If too many failures, skip this request
-    if (entry.failureCount >= MAX_FAILURES_PER_ENTITY) {
-      return true;
-    }
-
-    return false;
+    // Block on ANY failure - don't wait for multiple failures
+    // This is the key fix: return true immediately on first failure
+    return true;
   }
 
   /**
    * Record a failed path attempt.
+   * Updates both per-entity cache and global unreachable cache.
    */
   private recordFailedPath(entityId: number, destX: number, destY: number): void {
     const destGridX = Math.floor(destX);
     const destGridY = Math.floor(destY);
-    const key = `${entityId}_${destGridX}_${destGridY}`;
-
-    const existing = this.failedPathCache.get(key);
     const now = Date.now();
+
+    // 1. Update per-entity cache
+    const key = `${entityId}_${destGridX}_${destGridY}`;
+    const existing = this.failedPathCache.get(key);
 
     if (existing && now - existing.timestamp < FAILED_PATH_CACHE_TTL) {
       // Increment failure count
@@ -446,6 +482,30 @@ export class PathfindingSystem extends System {
 
       this.failedPathCache.set(key, { timestamp: now, failureCount: 1 });
       this.failedPathCacheKeys.push(key);
+    }
+
+    // 2. Update global unreachable cache
+    // Track that this destination failed for this entity
+    const globalKey = `${destGridX}_${destGridY}`;
+    const globalExisting = this.globalUnreachableCache.get(globalKey);
+
+    if (globalExisting && now - globalExisting.timestamp < GLOBAL_UNREACHABLE_TTL) {
+      // Check if this entity is a new failure for this destination
+      // (Use the per-entity cache to determine if this is a new entity)
+      if (!existing || now - existing.timestamp >= FAILED_PATH_CACHE_TTL) {
+        globalExisting.failedEntityCount++;
+        globalExisting.timestamp = now;
+      }
+    } else {
+      // New entry or expired
+      if (this.globalUnreachableCache.size >= GLOBAL_UNREACHABLE_CACHE_SIZE) {
+        // LRU eviction
+        const oldKey = this.globalUnreachableCacheKeys.shift();
+        if (oldKey) this.globalUnreachableCache.delete(oldKey);
+      }
+
+      this.globalUnreachableCache.set(globalKey, { timestamp: now, failedEntityCount: 1 });
+      this.globalUnreachableCacheKeys.push(globalKey);
     }
   }
 
@@ -611,10 +671,23 @@ export class PathfindingSystem extends System {
       unit.path = [];
       unit.pathIndex = 0;
 
+      // CRITICAL: Clear the unit's target to stop endless path requests
+      // Without this, MovementSystem will keep requesting paths every cooldown
+      unit.targetX = null;
+      unit.targetY = null;
+
+      // Set unit back to idle if it was moving
+      if (unit.state === 'moving') {
+        unit.state = 'idle';
+      }
+
+      // Remove from unitPathStates since the destination is unreachable
+      this.unitPathStates.delete(request.entityId);
+
       // Path completely failed - only log occasionally to avoid spam
       const failedEntry = this.failedPathCache.get(`${request.entityId}_${Math.floor(request.endX)}_${Math.floor(request.endY)}`);
       if (failedEntry && failedEntry.failureCount === 1) {
-        debugPathfinding.warn(`[PathfindingSystem] Failed to find path for entity ${request.entityId} from (${request.startX.toFixed(1)}, ${request.startY.toFixed(1)}) to (${request.endX.toFixed(1)}, ${request.endY.toFixed(1)}) - will not retry for ${FAILED_PATH_CACHE_TTL}ms`);
+        debugPathfinding.warn(`[PathfindingSystem] Failed to find path for entity ${request.entityId} from (${request.startX.toFixed(1)}, ${request.startY.toFixed(1)}) to (${request.endX.toFixed(1)}, ${request.endY.toFixed(1)}) - destination unreachable, clearing target`);
       }
     }
   }
@@ -787,6 +860,12 @@ export class PathfindingSystem extends System {
     for (const entity of entities) {
       const unit = entity.get<Unit>('Unit')!;
       const transform = entity.get<Transform>('Transform')!;
+
+      // Flying units don't need pathfinding stuck detection
+      if (unit.isFlying) {
+        this.unitPathStates.delete(entity.id);
+        continue;
+      }
 
       // Only check units that are trying to move
       if (unit.state !== 'moving' && unit.state !== 'attacking' && unit.state !== 'gathering' && unit.state !== 'attackmoving') {
