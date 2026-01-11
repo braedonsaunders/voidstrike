@@ -35,23 +35,19 @@ function createOverlayMaterial(overlayTexture: THREE.DataTexture, opacity: numbe
   const material = new MeshBasicNodeMaterial();
   material.transparent = true;
   material.depthWrite = false;
+  material.depthTest = false; // Render on top of terrain
   material.side = THREE.DoubleSide;
 
   const uOpacity = uniform(opacity);
 
-  // colorNode expects RGB (vec3), opacityNode expects alpha (float)
-  const colorNode = Fn(() => {
+  // Use vec4 output with colorNode (same pattern as FogOfWar)
+  const outputNode = Fn(() => {
     const texColor = texture(overlayTexture, uv());
-    return texColor.rgb;
+    const alpha = texColor.a.mul(uOpacity);
+    return vec4(texColor.rgb, alpha);
   })();
 
-  const opacityNode = Fn(() => {
-    const texColor = texture(overlayTexture, uv());
-    return texColor.a.mul(uOpacity);
-  })();
-
-  material.colorNode = colorNode;
-  material.opacityNode = opacityNode;
+  material.colorNode = outputNode;
 
   // Store opacity uniform for updates
   (material as any)._uOpacity = uOpacity;
@@ -66,13 +62,14 @@ function createThreatMaterial(threatTexture: THREE.DataTexture, opacity: number)
   const material = new MeshBasicNodeMaterial();
   material.transparent = true;
   material.depthWrite = false;
+  material.depthTest = false; // Render on top of terrain
   material.side = THREE.DoubleSide;
 
   const uOpacity = uniform(opacity);
   const uTime = uniform(0);
 
-  // colorNode expects RGB (vec3), opacityNode expects alpha (float)
-  const colorNode = Fn(() => {
+  // Use vec4 output with colorNode (same pattern as FogOfWar)
+  const outputNode = Fn(() => {
     const uvCoord = uv();
     const texColor = texture(threatTexture, uvCoord);
 
@@ -80,16 +77,13 @@ function createThreatMaterial(threatTexture: THREE.DataTexture, opacity: number)
     const pulse = float(0.85).add(float(0.15).mul(sin(uTime.mul(2.0).add(uvCoord.x.mul(10.0)).add(uvCoord.y.mul(10.0)))));
 
     // Red tint with intensity based on threat level
-    return vec3(0.9, 0.2, 0.1).mul(texColor.r).mul(pulse);
+    const threatColor = vec3(0.9, 0.2, 0.1).mul(texColor.r).mul(pulse);
+    const alpha = texColor.a.mul(uOpacity);
+
+    return vec4(threatColor, alpha);
   })();
 
-  const opacityNode = Fn(() => {
-    const texColor = texture(threatTexture, uv());
-    return texColor.a.mul(uOpacity);
-  })();
-
-  material.colorNode = colorNode;
-  material.opacityNode = opacityNode;
+  material.colorNode = outputNode;
 
   // Store uniforms for updates
   (material as any)._uOpacity = uOpacity;

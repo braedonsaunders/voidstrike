@@ -233,6 +233,7 @@ declare module 'three/webgpu' {
     transparent: boolean;
     side: Side;
     depthWrite: boolean;
+    depthTest: boolean;
     blending: Blending;
     colorNode: any;
     positionNode: any;
