@@ -477,6 +477,13 @@ export function WebGPUGameCanvas() {
         // Update systems with timing (only log if total updates > 10ms)
         const updatesStart = performance.now();
         camera.update(deltaTime);
+
+        // PERF: Set camera reference for frustum culling in renderers
+        const threeCamera = camera.camera;
+        unitRendererRef.current?.setCamera(threeCamera);
+        buildingRendererRef.current?.setCamera(threeCamera);
+        resourceRendererRef.current?.setCamera(threeCamera);
+
         unitRendererRef.current?.update();
         buildingRendererRef.current?.update();
         resourceRendererRef.current?.update();

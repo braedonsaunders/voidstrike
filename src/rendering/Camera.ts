@@ -74,7 +74,7 @@ export class RTSCamera {
     this.mapWidth = mapWidth;
     this.mapHeight = mapHeight;
 
-    this.camera = new THREE.PerspectiveCamera(60, aspect, 0.1, 1000);
+    this.camera = new THREE.PerspectiveCamera(60, aspect, 0.5, 300); // Optimized near/far planes
     this.target = new THREE.Vector3(mapWidth / 2, 0, mapHeight / 2);
 
     this.currentZoom = 45; // SC2-like default: good overview of starting base

@@ -1,4 +1,5 @@
 import { System } from '../ecs/System';
+import { Entity } from '../ecs/Entity';
 import { Transform } from '../components/Transform';
 import { Unit } from '../components/Unit';
 import { Building } from '../components/Building';
@@ -135,6 +136,15 @@ const BUILD_ORDERS: Record<AIDifficulty, BuildOrderStep[]> = {
   ],
 };
 
+// PERF: Cached entity query results to avoid repeated queries per frame
+interface EntityQueryCache {
+  units: Entity[] | null;
+  unitsWithTransform: Entity[] | null;
+  buildings: Entity[] | null;
+  buildingsWithTransform: Entity[] | null;
+  resources: Entity[] | null;
+}
+
 export class EnhancedAISystem extends System {
   public priority = 100;
 
@@ -143,6 +153,76 @@ export class EnhancedAISystem extends System {
   private defaultDifficulty: AIDifficulty;
   // Deterministic random for multiplayer compatibility - reseeded each update
   private random: SeededRandom = new SeededRandom(12345);
+
+  // PERF: Entity query cache - cleared each update cycle
+  private entityCache: EntityQueryCache = {
+    units: null,
+    unitsWithTransform: null,
+    buildings: null,
+    buildingsWithTransform: null,
+    resources: null,
+  };
+
+  /**
+   * Clear entity cache at start of each update cycle
+   */
+  private clearEntityCache(): void {
+    this.entityCache.units = null;
+    this.entityCache.unitsWithTransform = null;
+    this.entityCache.buildings = null;
+    this.entityCache.buildingsWithTransform = null;
+    this.entityCache.resources = null;
+  }
+
+  /**
+   * PERF: Get cached units query - reuses result within same update cycle
+   */
+  private getCachedUnits() {
+    if (!this.entityCache.units) {
+      this.entityCache.units = this.world.getEntitiesWith('Unit', 'Selectable', 'Health');
+    }
+    return this.entityCache.units;
+  }
+
+  /**
+   * PERF: Get cached units with transform - reuses result within same update cycle
+   */
+  private getCachedUnitsWithTransform() {
+    if (!this.entityCache.unitsWithTransform) {
+      this.entityCache.unitsWithTransform = this.world.getEntitiesWith('Unit', 'Transform', 'Selectable', 'Health');
+    }
+    return this.entityCache.unitsWithTransform;
+  }
+
+  /**
+   * PERF: Get cached buildings query - reuses result within same update cycle
+   */
+  private getCachedBuildings() {
+    if (!this.entityCache.buildings) {
+      this.entityCache.buildings = this.world.getEntitiesWith('Building', 'Selectable', 'Health');
+    }
+    return this.entityCache.buildings;
+  }
+
+  /**
+   * PERF: Get cached buildings with transform - reuses result within same update cycle
+   */
+  private getCachedBuildingsWithTransform() {
+    if (!this.entityCache.buildingsWithTransform) {
+      this.entityCache.buildingsWithTransform = this.world.getEntitiesWith('Building', 'Transform', 'Selectable', 'Health');
+    }
+    return this.entityCache.buildingsWithTransform;
+  }
+
+  /**
+   * PERF: Get cached resources query - reuses result within same update cycle
+   */
+  private getCachedResources() {
+    if (!this.entityCache.resources) {
+      this.entityCache.resources = this.world.getEntitiesWith('Resource', 'Transform');
+    }
+    return this.entityCache.resources;
+  }
 
   constructor(game: Game, difficulty: AIDifficulty = 'medium') {
     super(game);
@@ -301,6 +381,9 @@ export class EnhancedAISystem extends System {
   public update(_deltaTime: number): void {
     const currentTick = this.game.getCurrentTick();
 
+    // PERF: Clear entity cache at start of update cycle
+    this.clearEntityCache();
+
     // Reseed random based on tick for deterministic multiplayer
     // Using tick ensures same decisions across all clients
     this.random = new SeededRandom(currentTick * 31337 + 42);
@@ -363,7 +446,7 @@ export class EnhancedAISystem extends System {
     const armyComposition = new Map<string, number>();
     const buildingCounts = new Map<string, number>();
 
-    const units = this.world.getEntitiesWith('Unit', 'Selectable', 'Health');
+    const units = this.getCachedUnits();
     for (const entity of units) {
       const selectable = entity.get<Selectable>('Selectable');
       const unit = entity.get<Unit>('Unit');
@@ -385,7 +468,7 @@ export class EnhancedAISystem extends System {
       }
     }
 
-    const buildings = this.world.getEntitiesWith('Building', 'Selectable', 'Health');
+    const buildings = this.getCachedBuildings();
     for (const entity of buildings) {
       const selectable = entity.get<Selectable>('Selectable');
       const building = entity.get<Building>('Building');
@@ -507,7 +590,7 @@ export class EnhancedAISystem extends System {
    */
   private countPlayerBases(playerId: string): number {
     let count = 0;
-    const buildings = this.world.getEntitiesWith('Building', 'Selectable', 'Health');
+    const buildings = this.getCachedBuildings();
     for (const entity of buildings) {
       const selectable = entity.get<Selectable>('Selectable');
       const building = entity.get<Building>('Building');
@@ -941,7 +1024,7 @@ export class EnhancedAISystem extends System {
     }
 
     // Find mineral patches and group them into clusters
-    const resources = this.world.getEntitiesWith('Resource', 'Transform');
+    const resources = this.getCachedResources();
     const mineralClusters: Array<{ x: number; y: number; count: number }> = [];
 
     for (const resource of resources) {
@@ -1191,7 +1274,7 @@ export class EnhancedAISystem extends System {
       distance: number;
     }> = new Map();
 
-    const buildings = this.world.getEntitiesWith('Building', 'Transform', 'Selectable', 'Health');
+    const buildings = this.getCachedBuildingsWithTransform();
     for (const entity of buildings) {
       const selectable = entity.get<Selectable>('Selectable');
       const health = entity.get<Health>('Health');
@@ -1270,7 +1353,7 @@ export class EnhancedAISystem extends System {
 
     // If no buildings, look for enemy units (also prioritize closest)
     const enemyUnitsByPlayer: Map<string, { x: number; y: number; distance: number }[]> = new Map();
-    const units = this.world.getEntitiesWith('Unit', 'Transform', 'Selectable', 'Health');
+    const units = this.getCachedUnitsWithTransform();
     for (const entity of units) {
       const selectable = entity.get<Selectable>('Selectable');
       const health = entity.get<Health>('Health');
@@ -1369,7 +1452,7 @@ export class EnhancedAISystem extends System {
    */
   private countEnemyBuildings(playerId: string): number {
     let count = 0;
-    const buildings = this.world.getEntitiesWith('Building', 'Selectable', 'Health');
+    const buildings = this.getCachedBuildings();
     for (const entity of buildings) {
       const selectable = entity.get<Selectable>('Selectable');
       const health = entity.get<Health>('Health');
@@ -1390,7 +1473,7 @@ export class EnhancedAISystem extends System {
   private isAnyEnemyNearlyDefeated(playerId: string): boolean {
     const buildingsPerEnemy: Map<string, number> = new Map();
 
-    const buildings = this.world.getEntitiesWith('Building', 'Selectable', 'Health');
+    const buildings = this.getCachedBuildings();
     for (const entity of buildings) {
       const selectable = entity.get<Selectable>('Selectable');
       const health = entity.get<Health>('Health');
@@ -1476,7 +1559,7 @@ export class EnhancedAISystem extends System {
    */
   private findNearbyEnemy(playerId: string, position: { x: number; y: number }, range: number): { x: number; y: number } | null {
     // Look for enemy units first
-    const units = this.world.getEntitiesWith('Unit', 'Transform', 'Selectable', 'Health');
+    const units = this.getCachedUnitsWithTransform();
     for (const entity of units) {
       const selectable = entity.get<Selectable>('Selectable');
       const health = entity.get<Health>('Health');
@@ -1506,7 +1589,7 @@ export class EnhancedAISystem extends System {
     let closestEnemy: { entityId: number; x: number; y: number; distance: number } | null = null;
 
     // Check enemy units first (higher priority)
-    const units = this.world.getEntitiesWith('Unit', 'Transform', 'Selectable', 'Health');
+    const units = this.getCachedUnitsWithTransform();
     for (const entity of units) {
       const selectable = entity.get<Selectable>('Selectable');
       const health = entity.get<Health>('Health');
@@ -1526,7 +1609,7 @@ export class EnhancedAISystem extends System {
     }
 
     // Also check enemy buildings
-    const buildings = this.world.getEntitiesWith('Building', 'Transform', 'Selectable', 'Health');
+    const buildings = this.getCachedBuildingsWithTransform();
     for (const entity of buildings) {
       const selectable = entity.get<Selectable>('Selectable');
       const health = entity.get<Health>('Health');
@@ -1698,7 +1781,7 @@ export class EnhancedAISystem extends System {
    * Prefers idle workers, then gathering workers, then moving workers.
    */
   private findAvailableWorker(playerId: string): number | null {
-    const units = this.world.getEntitiesWith('Unit', 'Selectable', 'Health');
+    const units = this.getCachedUnits();
 
     // First pass: find idle workers
     for (const entity of units) {
@@ -1755,7 +1838,7 @@ export class EnhancedAISystem extends System {
    * Find a vespene geyser near the AI's base that doesn't have a refinery yet
    */
   private findAvailableVespeneGeyser(playerId: string, basePos: { x: number; y: number }): { x: number; y: number } | null {
-    const resources = this.world.getEntitiesWith('Resource', 'Transform');
+    const resources = this.getCachedResources();
     let closestGeyser: { x: number; y: number; distance: number } | null = null;
 
     for (const entity of resources) {
@@ -1889,7 +1972,7 @@ export class EnhancedAISystem extends System {
     }
 
     // Check for overlapping resources
-    const resources = this.world.getEntitiesWith('Resource', 'Transform');
+    const resources = this.getCachedResources();
     for (const entity of resources) {
       const transform = entity.get<Transform>('Transform')!;
       const dx = Math.abs(x - transform.x);
@@ -1909,7 +1992,7 @@ export class EnhancedAISystem extends System {
   }
 
   private isUnderAttack(playerId: string): boolean {
-    const buildings = this.world.getEntitiesWith('Building', 'Selectable', 'Health');
+    const buildings = this.getCachedBuildings();
     for (const entity of buildings) {
       const selectable = entity.get<Selectable>('Selectable')!;
       const health = entity.get<Health>('Health')!;
@@ -1922,7 +2005,7 @@ export class EnhancedAISystem extends System {
 
   private getArmyUnits(playerId: string): number[] {
     const armyUnits: number[] = [];
-    const entities = this.world.getEntitiesWith('Unit', 'Selectable', 'Health');
+    const entities = this.getCachedUnits();
 
     for (const entity of entities) {
       const selectable = entity.get<Selectable>('Selectable')!;
@@ -1942,7 +2025,7 @@ export class EnhancedAISystem extends System {
   private getHarassUnits(ai: AIPlayer): number[] {
     // Get fast units for harass (hellions, reapers)
     const harassUnits: number[] = [];
-    const entities = this.world.getEntitiesWith('Unit', 'Selectable', 'Health');
+    const entities = this.getCachedUnits();
 
     for (const entity of entities) {
       const selectable = entity.get<Selectable>('Selectable')!;
@@ -1961,7 +2044,7 @@ export class EnhancedAISystem extends System {
   }
 
   private getScoutUnit(ai: AIPlayer): number | null {
-    const entities = this.world.getEntitiesWith('Unit', 'Selectable', 'Health');
+    const entities = this.getCachedUnits();
 
     for (const entity of entities) {
       const selectable = entity.get<Selectable>('Selectable')!;
@@ -2021,7 +2104,7 @@ export class EnhancedAISystem extends System {
 
   private findHarassTarget(playerId: string): { x: number; y: number } | null {
     // Find enemy workers or expansion
-    const units = this.world.getEntitiesWith('Unit', 'Transform', 'Selectable', 'Health');
+    const units = this.getCachedUnitsWithTransform();
 
     for (const entity of units) {
       const selectable = entity.get<Selectable>('Selectable')!;
@@ -2046,7 +2129,7 @@ export class EnhancedAISystem extends System {
   private assignWorkersToRepair(ai: AIPlayer): void {
     // Find damaged buildings that need repair (below 90% health)
     const damagedBuildings: { entityId: number; x: number; y: number; healthPercent: number }[] = [];
-    const buildings = this.world.getEntitiesWith('Building', 'Transform', 'Selectable', 'Health');
+    const buildings = this.getCachedBuildingsWithTransform();
 
     for (const entity of buildings) {
       const selectable = entity.get<Selectable>('Selectable')!;
@@ -2071,7 +2154,7 @@ export class EnhancedAISystem extends System {
 
     // Find damaged mechanical units (below 90% health)
     const damagedUnits: { entityId: number; x: number; y: number; healthPercent: number }[] = [];
-    const units = this.world.getEntitiesWith('Unit', 'Transform', 'Selectable', 'Health');
+    const units = this.getCachedUnitsWithTransform();
 
     for (const entity of units) {
       const selectable = entity.get<Selectable>('Selectable')!;
@@ -2190,7 +2273,7 @@ export class EnhancedAISystem extends System {
     }
 
     // Find nearby mineral patches with their current saturation
-    const resources = this.world.getEntitiesWith('Resource', 'Transform');
+    const resources = this.getCachedResources();
     const nearbyMinerals: { entityId: number; x: number; y: number; distance: number; currentWorkers: number }[] = [];
 
     for (const entity of resources) {
@@ -2247,7 +2330,7 @@ export class EnhancedAISystem extends System {
     }
 
     // Find idle AI workers
-    const units = this.world.getEntitiesWith('Unit', 'Selectable', 'Health');
+    const units = this.getCachedUnits();
     const idleWorkers: number[] = [];
 
     // Track all worker states for debugging
