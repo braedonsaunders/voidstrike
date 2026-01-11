@@ -303,22 +303,70 @@ export class Terrain {
 
   /**
    * Create a standard PBR material that works with WebGPU and WebGL
-   * Uses vertex colors for terrain coloring
+   * Uses textures for high-resolution terrain rendering
    */
   private createStandardMaterial(): THREE.MeshStandardMaterial {
     const groundColors = this.biome.colors.ground;
-    // Use the first ground color as the base
     const baseColor = groundColors[0];
 
+    // Load terrain textures based on biome
+    const textureLoader = new THREE.TextureLoader();
+    const biomeTextures = this.getBiomeTexturePrefix();
+
+    // Load diffuse texture with proper settings
+    const diffuseTexture = textureLoader.load(`/textures/terrain/${biomeTextures}_diffuse.png`);
+    diffuseTexture.wrapS = THREE.RepeatWrapping;
+    diffuseTexture.wrapT = THREE.RepeatWrapping;
+    diffuseTexture.repeat.set(32, 32); // Tile the texture across the terrain
+    diffuseTexture.colorSpace = THREE.SRGBColorSpace;
+
+    // Load normal map
+    const normalTexture = textureLoader.load(`/textures/terrain/${biomeTextures}_normal.png`);
+    normalTexture.wrapS = THREE.RepeatWrapping;
+    normalTexture.wrapT = THREE.RepeatWrapping;
+    normalTexture.repeat.set(32, 32);
+
+    // Load roughness map
+    const roughnessTexture = textureLoader.load(`/textures/terrain/${biomeTextures}_roughness.png`);
+    roughnessTexture.wrapS = THREE.RepeatWrapping;
+    roughnessTexture.wrapT = THREE.RepeatWrapping;
+    roughnessTexture.repeat.set(32, 32);
+
     const material = new THREE.MeshStandardMaterial({
+      map: diffuseTexture,
+      normalMap: normalTexture,
+      roughnessMap: roughnessTexture,
       color: new THREE.Color(baseColor.r, baseColor.g, baseColor.b),
-      vertexColors: true, // Use vertex colors for per-cell coloring
-      roughness: 0.85,
+      vertexColors: true, // Blend vertex colors with texture for terrain features
+      roughness: 1.0, // Use roughness map
       metalness: 0.0,
       flatShading: false,
+      normalScale: new THREE.Vector2(0.5, 0.5), // Subtle normal mapping
     });
 
     return material;
+  }
+
+  /**
+   * Get the texture prefix for the current biome
+   */
+  private getBiomeTexturePrefix(): string {
+    const biomeType = this.mapData.biome || 'grassland';
+    switch (biomeType) {
+      case 'desert':
+        return 'sand';
+      case 'frozen':
+        return 'snow';
+      case 'volcanic':
+        return 'basalt';
+      case 'void':
+        return 'void_ground';
+      case 'jungle':
+        return 'jungle_floor';
+      case 'grassland':
+      default:
+        return 'grass';
+    }
   }
 
   private createGeometry(): THREE.BufferGeometry {

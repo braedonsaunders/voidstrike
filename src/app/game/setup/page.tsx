@@ -457,13 +457,6 @@ export default function GameSetupPage() {
                   </button>
                 </div>
 
-                {/* Renderer indicator */}
-                <div className="flex items-center justify-between py-2 border-t border-void-800/50">
-                  <span className="text-void-300 text-sm">Renderer</span>
-                  <span className="px-3 py-1 rounded-full text-xs font-medium bg-green-500/20 text-green-400 border border-green-500/50">
-                    WebGPU
-                  </span>
-                </div>
               </div>
             </div>
 
