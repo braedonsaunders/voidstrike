@@ -423,12 +423,12 @@ export function GraphicsOptionsPanel() {
         </div>
         <div>
           <label style={labelStyle}>
-            Density: {graphicsSettings.particleDensity.toFixed(1)}x
+            Density: {(graphicsSettings.particleDensity / 5).toFixed(1)}x
           </label>
           <input
             type="range"
-            min="0.5"
-            max="5"
+            min="1"
+            max="10"
             step="0.5"
             value={graphicsSettings.particleDensity}
             onChange={(e) => setGraphicsSetting('particleDensity', parseFloat(e.target.value))}

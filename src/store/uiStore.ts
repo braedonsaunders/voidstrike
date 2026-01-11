@@ -260,7 +260,7 @@ export const useUIStore = create<UIState>((set, get) => ({
 
     // Particles
     particlesEnabled: true,
-    particleDensity: 1.0,
+    particleDensity: 5.0, // 5.0 is the baseline (displayed as 1x), range 1-10
   },
   showDebugMenu: false,
   overlaySettings: {

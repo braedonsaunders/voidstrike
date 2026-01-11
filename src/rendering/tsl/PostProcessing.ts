@@ -14,8 +14,6 @@ import * as THREE from 'three';
 import { WebGPURenderer, PostProcessing } from 'three/webgpu';
 import {
   pass,
-  mrt,
-  output,
   uniform,
   uv,
   vec3,
@@ -27,7 +25,6 @@ import {
   clamp,
   length,
   dot,
-  normalView,
 } from 'three/tsl';
 
 // Import WebGPU post-processing nodes from addons
@@ -125,48 +122,28 @@ export class RenderPipeline {
   private createPipeline(): PostProcessing {
     const postProcessing = new PostProcessing(this.renderer);
 
-    // Create scene pass
+    // Create scene pass - simple setup without MRT for WebGPU compatibility
     const scenePass = pass(this.scene, this.camera);
-
-    // Only set up MRT if AO is enabled (MRT can cause issues)
-    let scenePassColor: any;
-    let scenePassDepth: any;
-    let scenePassNormal: any;
-
-    if (this.config.aoEnabled) {
-      try {
-        scenePass.setMRT(
-          mrt({
-            output: output,
-            normal: normalView,
-          })
-        );
-        scenePassColor = scenePass.getTextureNode('output');
-        scenePassDepth = scenePass.getTextureNode('depth');
-        scenePassNormal = scenePass.getTextureNode('normal');
-      } catch (e) {
-        console.warn('[PostProcessing] MRT setup failed, using simple pass:', e);
-        scenePassColor = scenePass.getTextureNode();
-      }
-    } else {
-      // Simple pass without MRT
-      scenePassColor = scenePass.getTextureNode();
-    }
+    const scenePassColor = scenePass.getTextureNode();
+    const scenePassDepth = scenePass.getTextureNode('depth');
 
     // Build the effect chain
     let outputNode: any = scenePassColor;
 
     // 1. GTAO Ambient Occlusion (applied first, multiplied with scene)
-    if (this.config.aoEnabled && scenePassDepth && scenePassNormal) {
+    // Pass null for normals - GTAO will reconstruct from depth (more compatible with WebGPU)
+    if (this.config.aoEnabled) {
       try {
-        this.aoPass = ao(scenePassDepth, scenePassNormal, this.camera);
+        // Use null for normal node - GTAO will reconstruct normals from depth
+        this.aoPass = ao(scenePassDepth, null, this.camera);
         this.aoPass.radius.value = this.config.aoRadius;
-        // Note: GTAONode uses 'scale' not 'intensity' - we control intensity via mixing
 
-        // Apply AO as darkening factor - AO output is 0-1 where 1 = fully visible
-        // We mix between full visibility (1.0) and AO result based on intensity
-        const aoFactor = mix(float(1.0), this.aoPass.getTextureNode(), this.uAOIntensity);
-        outputNode = scenePassColor.mul(aoFactor);
+        // Apply AO as darkening factor
+        // GTAO outputs occlusion where 1 = fully visible, 0 = fully occluded
+        const aoTexture = this.aoPass.getTextureNode();
+        // Mix between full color and darkened color based on AO and intensity
+        const aoFactor = mix(float(1.0), aoTexture, this.uAOIntensity);
+        outputNode = scenePassColor.mul(vec3(aoFactor));
       } catch (e) {
         console.warn('[PostProcessing] GTAO initialization failed, skipping AO:', e);
         // Continue without AO
