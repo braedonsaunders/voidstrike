@@ -840,29 +840,11 @@ export class Terrain {
     let avgElevation: number;
 
     if (hasRamp) {
-      // RAMP PRIORITY: When vertex touches a ramp, use ONLY ramp cell elevations
-      // This prevents stair-stepping at ramp boundaries where unwalkable cells
-      // have different elevations than the ramp gradient
-      if (rampCells.length === 4) {
-        // All 4 cells are ramps - simple average
-        avgElevation = (cell00.elevation + cell10.elevation + cell01.elevation + cell11.elevation) / 4;
-      } else {
-        // Mix of ramp and non-ramp - use ONLY ramp elevations for smooth slopes
-        // This is critical for making ramps visible as gradual slopes
-        let rampSum = 0;
-        let rampCount = 0;
-
-        for (const cell of cells) {
-          if (cell.terrain === 'ramp') {
-            rampSum += cell.elevation;
-            rampCount++;
-          }
-        }
-
-        // Use 100% ramp elevation - don't blend with other cells at all
-        // This ensures the ramp geometry follows the intended gradient exactly
-        avgElevation = rampSum / rampCount;
-      }
+      // RAMP FIX: Use the PRIMARY CELL's elevation directly - DO NOT AVERAGE
+      // Each ramp cell has its own elevation in the gradient (set by createRampInTerrain)
+      // Averaging would flatten the slope into a flat step
+      // The primary cell (cell11) is at position (x,y) which is where this vertex belongs
+      avgElevation = cell11.elevation;
     } else {
       // No ramps - use simple average elevation
       avgElevation = (cell00.elevation + cell10.elevation + cell01.elevation + cell11.elevation) / 4;
