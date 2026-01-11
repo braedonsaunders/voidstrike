@@ -347,7 +347,14 @@ Located in `src/rendering/tsl/`:
    - Multi-texture splatting with TSL
    - PBR material properties
 
-6. **EffectEmitter.ts** - GPU particle system
+6. **TerrainMaterial.ts** - Primary terrain material (WebGPU-compatible)
+   - 4-layer terrain blending (grass, dirt, rock, cliff)
+   - 12 textures total (3 per layer: diffuse, normal, roughness)
+   - Dual-scale texture sampling to reduce tiling artifacts
+   - Macro color variation across the map
+   - **Note**: Displacement maps removed to stay under WebGPU's 16-texture limit
+
+7. **EffectEmitter.ts** - GPU particle system
    - TSL compute shaders for particle simulation
    - Burst and continuous emission modes
    - Physics-based particle movement
@@ -515,6 +522,10 @@ To add custom 3D models:
 6. **Frustum Culling**: Don't render off-screen entities
 7. **Delta Compression**: Only send changed state in multiplayer
 8. **Asset Caching**: Meshes cached and cloned for reuse
+9. **WebGPU Texture Limit**: Fragment shaders limited to 16 sampled textures per stage
+   - `MeshStandardNodeMaterial` uses 1 internal texture for environment/IBL
+   - Terrain materials limited to 12 textures (4 layers × 3 maps each)
+   - Displacement maps removed to stay under limit
 
 ## SC2 Parity Features
 

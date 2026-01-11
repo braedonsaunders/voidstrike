@@ -140,39 +140,37 @@ export class TSLTerrainMaterial {
 
     this.uTextureRepeat = uniform(repeat);
 
-    // Load all 4 texture layers per material (diffuse, normal, roughness, displacement)
+    // Load 3 texture layers per material (diffuse, normal, roughness)
+    // Note: Displacement maps removed to stay under WebGPU's 16 texture limit
+    // (MeshStandardNodeMaterial adds 1 internal texture for environment/IBL)
     const grassDiffuse = loadTerrainTexture(loader, `/textures/terrain/${biomeTextures.grass}_diffuse.png`, true);
     const grassNormal = loadTerrainTexture(loader, `/textures/terrain/${biomeTextures.grass}_normal.png`);
     const grassRoughness = loadTerrainTexture(loader, `/textures/terrain/${biomeTextures.grass}_roughness.png`);
-    const grassDisplacement = loadTerrainTexture(loader, `/textures/terrain/${biomeTextures.grass}_displacement.png`);
 
     const dirtDiffuse = loadTerrainTexture(loader, `/textures/terrain/${biomeTextures.dirt}_diffuse.png`, true);
     const dirtNormal = loadTerrainTexture(loader, `/textures/terrain/${biomeTextures.dirt}_normal.png`);
     const dirtRoughness = loadTerrainTexture(loader, `/textures/terrain/${biomeTextures.dirt}_roughness.png`);
-    const dirtDisplacement = loadTerrainTexture(loader, `/textures/terrain/${biomeTextures.dirt}_displacement.png`);
 
     const rockDiffuse = loadTerrainTexture(loader, `/textures/terrain/${biomeTextures.rock}_diffuse.png`, true);
     const rockNormal = loadTerrainTexture(loader, `/textures/terrain/${biomeTextures.rock}_normal.png`);
     const rockRoughness = loadTerrainTexture(loader, `/textures/terrain/${biomeTextures.rock}_roughness.png`);
-    const rockDisplacement = loadTerrainTexture(loader, `/textures/terrain/${biomeTextures.rock}_displacement.png`);
 
     const cliffDiffuse = loadTerrainTexture(loader, `/textures/terrain/${biomeTextures.cliff}_diffuse.png`, true);
     const cliffNormal = loadTerrainTexture(loader, `/textures/terrain/${biomeTextures.cliff}_normal.png`);
     const cliffRoughness = loadTerrainTexture(loader, `/textures/terrain/${biomeTextures.cliff}_roughness.png`);
-    const cliffDisplacement = loadTerrainTexture(loader, `/textures/terrain/${biomeTextures.cliff}_displacement.png`);
 
     this.textures = [
-      grassDiffuse, grassNormal, grassRoughness, grassDisplacement,
-      dirtDiffuse, dirtNormal, dirtRoughness, dirtDisplacement,
-      rockDiffuse, rockNormal, rockRoughness, rockDisplacement,
-      cliffDiffuse, cliffNormal, cliffRoughness, cliffDisplacement,
+      grassDiffuse, grassNormal, grassRoughness,
+      dirtDiffuse, dirtNormal, dirtRoughness,
+      rockDiffuse, rockNormal, rockRoughness,
+      cliffDiffuse, cliffNormal, cliffRoughness,
     ];
 
     this.material = this.createMaterial(
-      grassDiffuse, grassNormal, grassRoughness, grassDisplacement,
-      dirtDiffuse, dirtNormal, dirtRoughness, dirtDisplacement,
-      rockDiffuse, rockNormal, rockRoughness, rockDisplacement,
-      cliffDiffuse, cliffNormal, cliffRoughness, cliffDisplacement,
+      grassDiffuse, grassNormal, grassRoughness,
+      dirtDiffuse, dirtNormal, dirtRoughness,
+      rockDiffuse, rockNormal, rockRoughness,
+      cliffDiffuse, cliffNormal, cliffRoughness,
       repeat
     );
   }
@@ -181,19 +179,15 @@ export class TSLTerrainMaterial {
     grassDiffuse: THREE.Texture,
     grassNormal: THREE.Texture,
     grassRoughness: THREE.Texture,
-    grassDisplacement: THREE.Texture,
     dirtDiffuse: THREE.Texture,
     dirtNormal: THREE.Texture,
     dirtRoughness: THREE.Texture,
-    dirtDisplacement: THREE.Texture,
     rockDiffuse: THREE.Texture,
     rockNormal: THREE.Texture,
     rockRoughness: THREE.Texture,
-    rockDisplacement: THREE.Texture,
     cliffDiffuse: THREE.Texture,
     cliffNormal: THREE.Texture,
     cliffRoughness: THREE.Texture,
-    cliffDisplacement: THREE.Texture,
     textureRepeat: number
   ): MeshStandardNodeMaterial {
     const material = new MeshStandardNodeMaterial();
@@ -226,12 +220,6 @@ export class TSLTerrainMaterial {
       const noiseFrac = fract(noisePos);
       const blendNoise = mix(mix(noise1, noise2, noiseFrac.x), mix(noise1, noise2, noiseFrac.x), noiseFrac.y);
 
-      // Sample displacement maps for height-based AO
-      const grassHeight = texture(grassDisplacement, primaryUV).r;
-      const dirtHeight = texture(dirtDisplacement, primaryUV).r;
-      const rockHeight = texture(rockDisplacement, primaryUV).r;
-      const cliffHeight = texture(cliffDisplacement, primaryUV).r;
-
       // Sample primary textures
       const grassPrimary = texture(grassDiffuse, primaryUV).rgb;
       const dirtPrimary = texture(dirtDiffuse, primaryUV).rgb;
@@ -248,30 +236,18 @@ export class TSLTerrainMaterial {
       const macroVariation = texture(grassDiffuse, macroUV).rgb;
       const macroLuminance = dot(macroVariation, vec3(0.299, 0.587, 0.114));
 
-      // Height-based micro-AO (darkens crevices using displacement)
-      const grassAO = mix(float(0.7), float(1.0), grassHeight);
-      const dirtAO = mix(float(0.65), float(1.0), dirtHeight);
-      const rockAO = mix(float(0.6), float(1.0), rockHeight);
-      const cliffAO = mix(float(0.55), float(1.0), cliffHeight);
-
       // Blend primary and detail with overlay blend
       const detailBlend = float(0.25);
-      const grassColor = mix(grassPrimary, grassPrimary.mul(grassDetail.mul(1.4)), detailBlend).mul(grassAO);
-      const dirtColor = mix(dirtPrimary, dirtPrimary.mul(dirtDetail.mul(1.4)), detailBlend).mul(dirtAO);
-      const rockColor = mix(rockPrimary, rockPrimary.mul(rockDetail.mul(1.4)), detailBlend).mul(rockAO);
-      const cliffColor = mix(cliffPrimary, cliffPrimary.mul(cliffDetail.mul(1.4)), detailBlend).mul(cliffAO);
+      const grassColor = mix(grassPrimary, grassPrimary.mul(grassDetail.mul(1.4)), detailBlend);
+      const dirtColor = mix(dirtPrimary, dirtPrimary.mul(dirtDetail.mul(1.4)), detailBlend);
+      const rockColor = mix(rockPrimary, rockPrimary.mul(rockDetail.mul(1.4)), detailBlend);
+      const cliffColor = mix(cliffPrimary, cliffPrimary.mul(cliffDetail.mul(1.4)), detailBlend);
 
-      // Height-based blend influence (use displacement to affect transitions)
-      const heightBlendInfluence = float(0.3);
-      const grassBlendHeight = grassHeight.mul(heightBlendInfluence);
-      const dirtBlendHeight = dirtHeight.mul(heightBlendInfluence);
-
-      // Noise + height modulated blend thresholds for organic transitions
+      // Noise modulated blend thresholds for organic transitions
       const noiseOffset = blendNoise.sub(0.5).mul(0.12);
-      const heightOffset = grassBlendHeight.sub(dirtBlendHeight).mul(0.1);
 
       // Smooth blend factors
-      const dirtBlend = smoothstep(float(0.03).add(noiseOffset).add(heightOffset), float(0.20).add(noiseOffset).add(heightOffset), slope);
+      const dirtBlend = smoothstep(float(0.03).add(noiseOffset), float(0.20).add(noiseOffset), slope);
       const rockBlend = smoothstep(float(0.15).add(noiseOffset), float(0.42).add(noiseOffset), slope);
       const cliffBlend = smoothstep(float(0.38).add(noiseOffset), float(0.65).add(noiseOffset), slope);
 
