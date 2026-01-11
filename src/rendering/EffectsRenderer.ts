@@ -64,6 +64,7 @@ interface MeshPool {
 
 // PERF: Increased from 50 to 100 for large battles with many simultaneous effects
 const POOL_SIZE = 100;
+const AIR_UNIT_HEIGHT = 8; // Height for flying units (matches building lift-off and UnitRenderer)
 
 // PERF: Reusable Vector3 objects to avoid allocation in hot paths
 const tempVec3Start = new THREE.Vector3();
@@ -301,20 +302,26 @@ export class EffectsRenderer {
       damage: number;
       damageType: string;
       targetHeight?: number;
+      attackerIsFlying?: boolean;
+      targetIsFlying?: boolean;
     }) => {
       if (data.attackerPos && data.targetPos) {
         // Get terrain height at attacker and target positions
         const attackerTerrainHeight = this.getHeightAt(data.attackerPos.x, data.attackerPos.y);
         const targetTerrainHeight = this.getHeightAt(data.targetPos.x, data.targetPos.y);
 
+        // Add flying offset for air units
+        const attackerFlyingOffset = data.attackerIsFlying ? AIR_UNIT_HEIGHT : 0;
+        const targetFlyingOffset = data.targetIsFlying ? AIR_UNIT_HEIGHT : 0;
+
         // PERF: Use temp vectors to avoid allocation, they get cloned in createAttackEffect
-        tempVec3Start.set(data.attackerPos.x, attackerTerrainHeight + 0.5, data.attackerPos.y);
-        tempVec3End.set(data.targetPos.x, targetTerrainHeight + 0.5, data.targetPos.y);
+        tempVec3Start.set(data.attackerPos.x, attackerTerrainHeight + 0.5 + attackerFlyingOffset, data.attackerPos.y);
+        tempVec3End.set(data.targetPos.x, targetTerrainHeight + 0.5 + targetFlyingOffset, data.targetPos.y);
         this.createAttackEffect(tempVec3Start, tempVec3End, data.damageType);
 
         // Create floating damage number ABOVE the target
-        // Use targetHeight for buildings, default 2.5 for units (relative to terrain)
-        const damageNumberY = targetTerrainHeight + ((data.targetHeight && data.targetHeight > 0) ? data.targetHeight + 1.5 : 2.5);
+        // Use targetHeight for buildings, default 2.5 for units (relative to terrain), add flying offset for air units
+        const damageNumberY = targetTerrainHeight + targetFlyingOffset + ((data.targetHeight && data.targetHeight > 0) ? data.targetHeight + 1.5 : 2.5);
         this.createDamageNumber(
           new THREE.Vector3(data.targetPos.x, damageNumberY, data.targetPos.y),
           data.damage
