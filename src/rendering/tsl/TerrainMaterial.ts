@@ -9,6 +9,7 @@
 import * as THREE from 'three';
 import {
   Fn,
+  vec2,
   vec3,
   vec4,
   float,
@@ -90,17 +91,17 @@ function getBiomeTextures(biome: BiomeType): {
 
 /**
  * Load a texture with proper settings for terrain tiling
+ * Note: We DON'T set repeat here - TSL ignores it, we scale UVs manually in shader
  */
 function loadTerrainTexture(
   loader: THREE.TextureLoader,
   path: string,
-  repeat: number,
   isSRGB: boolean = false
 ): THREE.Texture {
   const tex = loader.load(path);
   tex.wrapS = THREE.RepeatWrapping;
   tex.wrapT = THREE.RepeatWrapping;
-  tex.repeat.set(repeat, repeat);
+  // Don't set repeat - TSL ignores texture.repeat, we scale UVs in shader
   tex.minFilter = THREE.LinearMipmapLinearFilter;
   tex.magFilter = THREE.LinearFilter;
   tex.generateMipmaps = true;
@@ -116,6 +117,7 @@ export class TSLTerrainMaterial {
 
   private uTime = uniform(0);
   private uSunDirection = uniform(new THREE.Vector3(0.5, 0.8, 0.3).normalize());
+  private uTextureRepeat: ReturnType<typeof uniform>;
 
   // Store textures for disposal
   private textures: THREE.Texture[] = [];
@@ -126,27 +128,29 @@ export class TSLTerrainMaterial {
 
     // Calculate repeat based on map size
     // Lower values = larger texture tiles = higher apparent resolution
-    // Each tile covers approximately (mapSize / repeat) world units
     const mapSize = Math.max(config.mapWidth, config.mapHeight);
     // Aim for each texture tile to cover ~8-16 world units for good detail
     const repeat = config.textureRepeat ?? Math.max(4, Math.floor(mapSize / 12));
 
-    // Load all textures
-    const grassDiffuse = loadTerrainTexture(loader, `/textures/terrain/${biomeTextures.grass}_diffuse.png`, repeat, true);
-    const grassNormal = loadTerrainTexture(loader, `/textures/terrain/${biomeTextures.grass}_normal.png`, repeat);
-    const grassRoughness = loadTerrainTexture(loader, `/textures/terrain/${biomeTextures.grass}_roughness.png`, repeat);
+    // Store repeat as uniform so shader can use it
+    this.uTextureRepeat = uniform(repeat);
 
-    const dirtDiffuse = loadTerrainTexture(loader, `/textures/terrain/${biomeTextures.dirt}_diffuse.png`, repeat, true);
-    const dirtNormal = loadTerrainTexture(loader, `/textures/terrain/${biomeTextures.dirt}_normal.png`, repeat);
-    const dirtRoughness = loadTerrainTexture(loader, `/textures/terrain/${biomeTextures.dirt}_roughness.png`, repeat);
+    // Load all textures (without repeat - we handle it in shader)
+    const grassDiffuse = loadTerrainTexture(loader, `/textures/terrain/${biomeTextures.grass}_diffuse.png`, true);
+    const grassNormal = loadTerrainTexture(loader, `/textures/terrain/${biomeTextures.grass}_normal.png`);
+    const grassRoughness = loadTerrainTexture(loader, `/textures/terrain/${biomeTextures.grass}_roughness.png`);
 
-    const rockDiffuse = loadTerrainTexture(loader, `/textures/terrain/${biomeTextures.rock}_diffuse.png`, repeat, true);
-    const rockNormal = loadTerrainTexture(loader, `/textures/terrain/${biomeTextures.rock}_normal.png`, repeat);
-    const rockRoughness = loadTerrainTexture(loader, `/textures/terrain/${biomeTextures.rock}_roughness.png`, repeat);
+    const dirtDiffuse = loadTerrainTexture(loader, `/textures/terrain/${biomeTextures.dirt}_diffuse.png`, true);
+    const dirtNormal = loadTerrainTexture(loader, `/textures/terrain/${biomeTextures.dirt}_normal.png`);
+    const dirtRoughness = loadTerrainTexture(loader, `/textures/terrain/${biomeTextures.dirt}_roughness.png`);
 
-    const cliffDiffuse = loadTerrainTexture(loader, `/textures/terrain/${biomeTextures.cliff}_diffuse.png`, repeat, true);
-    const cliffNormal = loadTerrainTexture(loader, `/textures/terrain/${biomeTextures.cliff}_normal.png`, repeat);
-    const cliffRoughness = loadTerrainTexture(loader, `/textures/terrain/${biomeTextures.cliff}_roughness.png`, repeat);
+    const rockDiffuse = loadTerrainTexture(loader, `/textures/terrain/${biomeTextures.rock}_diffuse.png`, true);
+    const rockNormal = loadTerrainTexture(loader, `/textures/terrain/${biomeTextures.rock}_normal.png`);
+    const rockRoughness = loadTerrainTexture(loader, `/textures/terrain/${biomeTextures.rock}_roughness.png`);
+
+    const cliffDiffuse = loadTerrainTexture(loader, `/textures/terrain/${biomeTextures.cliff}_diffuse.png`, true);
+    const cliffNormal = loadTerrainTexture(loader, `/textures/terrain/${biomeTextures.cliff}_normal.png`);
+    const cliffRoughness = loadTerrainTexture(loader, `/textures/terrain/${biomeTextures.cliff}_roughness.png`);
 
     // Store for disposal
     this.textures = [
@@ -161,7 +165,8 @@ export class TSLTerrainMaterial {
       grassDiffuse, grassNormal, grassRoughness,
       dirtDiffuse, dirtNormal, dirtRoughness,
       rockDiffuse, rockNormal, rockRoughness,
-      cliffDiffuse, cliffNormal, cliffRoughness
+      cliffDiffuse, cliffNormal, cliffRoughness,
+      repeat
     );
   }
 
@@ -177,24 +182,26 @@ export class TSLTerrainMaterial {
     rockRoughness: THREE.Texture,
     cliffDiffuse: THREE.Texture,
     cliffNormal: THREE.Texture,
-    cliffRoughness: THREE.Texture
+    cliffRoughness: THREE.Texture,
+    textureRepeat: number
   ): MeshStandardNodeMaterial {
     const material = new MeshStandardNodeMaterial();
 
     // Calculate blend weights based on slope and elevation
     const colorNode = Fn(() => {
-      const uvCoord = uv();
+      // Scale UV coordinates for texture tiling
+      const scaledUV = uv().mul(vec2(textureRepeat, textureRepeat));
       const worldNormal = normalWorld;
 
       // Calculate slope (0 = flat, 1 = vertical)
       const upVector = vec3(0.0, 1.0, 0.0);
       const slope = float(1.0).sub(abs(dot(normalize(worldNormal), upVector)));
 
-      // Sample all diffuse textures
-      const grassColor = texture(grassDiffuse, uvCoord);
-      const dirtColor = texture(dirtDiffuse, uvCoord);
-      const rockColor = texture(rockDiffuse, uvCoord);
-      const cliffColor = texture(cliffDiffuse, uvCoord);
+      // Sample all diffuse textures with scaled UVs
+      const grassColor = texture(grassDiffuse, scaledUV);
+      const dirtColor = texture(dirtDiffuse, scaledUV);
+      const rockColor = texture(rockDiffuse, scaledUV);
+      const cliffColor = texture(cliffDiffuse, scaledUV);
 
       // Use cascading mix for proper blending (always sums to 1.0)
       // Start with grass as base, then progressively blend in other textures
@@ -219,16 +226,16 @@ export class TSLTerrainMaterial {
 
     // Blend roughness values using same cascading approach
     const roughnessNode = Fn(() => {
-      const uvCoord = uv();
+      const scaledUV = uv().mul(vec2(textureRepeat, textureRepeat));
       const worldNormal = normalWorld;
 
       const upVector = vec3(0.0, 1.0, 0.0);
       const slope = float(1.0).sub(abs(dot(normalize(worldNormal), upVector)));
 
-      const grassR = texture(grassRoughness, uvCoord).r;
-      const dirtR = texture(dirtRoughness, uvCoord).r;
-      const rockR = texture(rockRoughness, uvCoord).r;
-      const cliffR = texture(cliffRoughness, uvCoord).r;
+      const grassR = texture(grassRoughness, scaledUV).r;
+      const dirtR = texture(dirtRoughness, scaledUV).r;
+      const rockR = texture(rockRoughness, scaledUV).r;
+      const cliffR = texture(cliffRoughness, scaledUV).r;
 
       // Same blend factors as color
       const dirtBlend = smoothstep(float(0.05), float(0.2), slope);
