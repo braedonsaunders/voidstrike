@@ -126,14 +126,12 @@ class BinaryHeap {
 const DIAGONAL_COST = 1.414;
 const STRAIGHT_COST = 1.0;
 
-// Maximum nodes to explore before giving up (prevents freezing on impossible/very long paths)
-// Base limit for short paths; longer paths get more iterations
-// Maximum A* iterations - fail fast for unreachable destinations
-// Lower values = faster failure detection but may miss long valid paths
-// Higher values = finds more paths but FPS tanks on unreachable destinations
-const BASE_MAX_ITERATIONS = 2000;
-const ITERATIONS_PER_DISTANCE = 30; // Extra iterations per unit distance
-const ABSOLUTE_MAX_ITERATIONS = 8000; // Never exceed this - was 15000, reduced to prevent FPS death
+// Maximum A* iterations - DRASTICALLY REDUCED to prevent FPS death spiral
+// Unreachable destinations will fail FAST - this is intentional
+// If paths are being missed, we need to fix the abstract graph, not increase iterations
+const BASE_MAX_ITERATIONS = 1000;
+const ITERATIONS_PER_DISTANCE = 15; // Extra iterations per unit distance
+const ABSOLUTE_MAX_ITERATIONS = 3000; // Hard cap - was 15000, now 3000
 
 export class AStar {
   private grid: PathNode[][];
