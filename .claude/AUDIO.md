@@ -17,13 +17,13 @@ This document contains all audio specifications, AI prompts for generation, and 
 - [x] `music/gameplay/gameplay_06.mp3`
 - [x] `music/gameplay/gameplay_07.mp3`
 - [x] `music/gameplay/gameplay_08.mp3`
-- [ ] `music/gameplay/gameplay_09.mp3`
-- [ ] `music/gameplay/gameplay_10.mp3`
-- [ ] `music/gameplay/gameplay_11.mp3`
-- [ ] `music/gameplay/gameplay_12.mp3`
-- [ ] `music/gameplay/gameplay_13.mp3`
-- [ ] `music/gameplay/gameplay_14.mp3`
-- [ ] `music/gameplay/gameplay_15.mp3`
+- [x] `music/gameplay/gameplay_09.mp3`
+- [x] `music/gameplay/gameplay_10.mp3`
+- [x] `music/gameplay/gameplay_11.mp3`
+- [x] `music/gameplay/gameplay_12.mp3`
+- [x] `music/gameplay/gameplay_13.mp3`
+- [x] `music/gameplay/gameplay_14.mp3`
+- [x] `music/gameplay/gameplay_15.mp3`
 - [ ] `music/gameplay/gameplay_16.mp3`
 - [ ] `music/gameplay/gameplay_17.mp3`
 - [ ] `music/gameplay/gameplay_18.mp3`
@@ -172,19 +172,19 @@ This document contains all audio specifications, AI prompts for generation, and 
 - [x] `voice/lifter/move1.mp3`
 - [x] `voice/lifter/ready.mp3`
 
-### Voice Lines - Valkyrie (Transforming Fighter) ⏳ Needs Generation
-- [ ] `voice/valkyrie/select1.mp3`
-- [ ] `voice/valkyrie/select2.mp3`
-- [ ] `voice/valkyrie/move1.mp3`
-- [ ] `voice/valkyrie/attack1.mp3`
-- [ ] `voice/valkyrie/ready.mp3`
+### Voice Lines - Valkyrie (Transforming Fighter) ✅ Complete
+- [x] `voice/valkyrie/select1.mp3`
+- [x] `voice/valkyrie/select2.mp3`
+- [x] `voice/valkyrie/move1.mp3`
+- [x] `voice/valkyrie/attack1.mp3`
+- [x] `voice/valkyrie/ready.mp3`
 
-### Voice Lines - Specter (Cloakable Strike Fighter) ⏳ Needs Generation
-- [ ] `voice/specter/select1.mp3`
-- [ ] `voice/specter/select2.mp3`
-- [ ] `voice/specter/move1.mp3`
-- [ ] `voice/specter/attack1.mp3`
-- [ ] `voice/specter/ready.mp3`
+### Voice Lines - Specter (Cloakable Strike Fighter) ✅ Complete
+- [x] `voice/specter/select1.mp3`
+- [x] `voice/specter/select2.mp3`
+- [x] `voice/specter/move1.mp3`
+- [x] `voice/specter/attack1.mp3`
+- [x] `voice/specter/ready.mp3`
 
 ### Voice Lines - Dreadnought (Capital Ship) ✅ Complete
 - [x] `voice/dreadnought/select1.mp3`
@@ -193,11 +193,11 @@ This document contains all audio specifications, AI prompts for generation, and 
 - [x] `voice/dreadnought/attack1.mp3`
 - [x] `voice/dreadnought/ready.mp3`
 
-### Voice Lines - Overseer (Support/Detector) ⏳ Needs Generation
-- [ ] `voice/overseer/select1.mp3`
-- [ ] `voice/overseer/select2.mp3`
-- [ ] `voice/overseer/move1.mp3`
-- [ ] `voice/overseer/ready.mp3`
+### Voice Lines - Overseer (Support/Detector) ✅ Complete
+- [x] `voice/overseer/select1.mp3`
+- [x] `voice/overseer/select2.mp3`
+- [x] `voice/overseer/move1.mp3`
+- [x] `voice/overseer/ready.mp3`
 
 ---
 
