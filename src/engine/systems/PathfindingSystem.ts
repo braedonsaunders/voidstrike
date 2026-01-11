@@ -562,6 +562,7 @@ export class PathfindingSystem extends System {
   }
 
   public update(_deltaTime: number): void {
+    const updateStart = performance.now();
     const currentTick = this.game.getCurrentTick();
 
     // Sync blocked cells with existing buildings on first tick
@@ -580,6 +581,11 @@ export class PathfindingSystem extends System {
 
     // Check moving units for stuck detection and periodic repath
     this.checkMovingUnits(currentTick);
+
+    const updateElapsed = performance.now() - updateStart;
+    if (updateElapsed > 16) { // More than one frame at 60fps
+      console.warn(`[PathfindingSystem] UPDATE: tick ${currentTick} took ${updateElapsed.toFixed(1)}ms`);
+    }
   }
 
   private syncBlockedCellsWithBuildings(): void {
