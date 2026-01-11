@@ -936,6 +936,19 @@ export class BuildingPlacementSystem extends System {
           debugBuildingPlacement.log(`BuildingPlacementSystem: Refunded ${definition.mineralCost} minerals, ${definition.vespeneCost} vespene for cancelled ${building.name}`);
         }
 
+        // If this is an extractor/refinery, restore the vespene geyser visibility
+        if (building.buildingId === 'extractor' || building.buildingId === 'refinery') {
+          const resources = this.world.getEntitiesWith('Resource', 'Transform');
+          for (const resourceEntity of resources) {
+            const resource = resourceEntity.get<Resource>('Resource');
+            if (resource && resource.extractorEntityId === entity.id) {
+              resource.extractorEntityId = null;
+              debugBuildingPlacement.log(`BuildingPlacementSystem: Extractor cancelled, vespene geyser ${resourceEntity.id} restored`);
+              break;
+            }
+          }
+        }
+
         // Emit cancellation event
         this.game.eventBus.emit('building:cancelled', {
           entityId: entity.id,

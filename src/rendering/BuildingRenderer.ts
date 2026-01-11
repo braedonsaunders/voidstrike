@@ -118,22 +118,24 @@ export class BuildingRenderer {
 
     this.fireGeometry = new THREE.ConeGeometry(0.3, 0.8, 8);
 
-    // Construction dust particles - larger size for visibility
+    // Construction dust particles - large size for visibility
     this.constructionDustMaterial = new THREE.PointsMaterial({
-      color: 0xaa9977,
-      size: 0.4,
+      color: 0xccbb99,
+      size: 0.8,
       transparent: true,
-      opacity: 0.7,
+      opacity: 0.6,
       blending: THREE.AdditiveBlending,
+      sizeAttenuation: true,
     });
 
     // Construction sparks (welding/building effect) - larger size for visibility
     this.constructionSparkMaterial = new THREE.PointsMaterial({
-      color: 0xffcc44,
-      size: 0.2,
+      color: 0xffdd55,
+      size: 0.5,
       transparent: true,
       opacity: 0.9,
       blending: THREE.AdditiveBlending,
+      sizeAttenuation: true,
     });
 
     // Register callback to refresh meshes when custom models finish loading
@@ -502,16 +504,19 @@ export class BuildingRenderer {
       } else if (isPaused) {
         // Construction paused (SC2-style) - show partially built state without active effects
         const progress = building.buildProgress;
-        const buildHeight = meshData.buildingHeight * progress;
-        const clipY = terrainHeight + buildHeight;
-        const clipPlane = new THREE.Plane(new THREE.Vector3(0, -1, 0), clipY);
 
-        // Building is semi-transparent with clipping plane showing partial construction
-        const opacity = 0.7 + progress * 0.3;
-        meshData.group.scale.setScalar(1);
+        // Use Y-scale to show partial construction (same as constructing state)
+        const yScale = Math.max(0.01, progress);
+        const yOffset = meshData.buildingHeight * (1 - yScale) * 0.5;
+
+        meshData.group.scale.set(1, yScale, 1);
+        meshData.group.position.set(transform.x, terrainHeight - yOffset, transform.y);
+
+        // Slightly more transparent when paused to indicate inactive state
+        const opacity = 0.5 + progress * 0.3;
         meshData.group.traverse((child) => {
           if (child instanceof THREE.Mesh) {
-            this.setMaterialOpacity(child, opacity, true, clipPlane);
+            this.setMaterialOpacity(child, opacity, true);
           }
         });
 
@@ -521,26 +526,26 @@ export class BuildingRenderer {
         }
       } else {
         // Construction in progress (state === 'constructing')
-        // Layer-by-layer reveal using clipping plane + semi-transparent effect
+        // Bottom-up reveal using Y-scale animation (more reliable than clipping planes)
         const progress = building.buildProgress;
 
-        // Calculate the current build height (revealed portion)
-        // At progress=0, nothing visible. At progress=1, full building visible.
-        const buildHeight = meshData.buildingHeight * progress;
-        const clipY = terrainHeight + buildHeight;
+        // Scale building from bottom up: at progress=0, scale.y=0.01; at progress=1, scale.y=1
+        // We use a minimum of 0.01 to avoid zero scale issues
+        const yScale = Math.max(0.01, progress);
 
-        // Create clipping plane that hides geometry ABOVE clipY (reveals from bottom up)
-        // Plane equation: dot(point, normal) + constant < 0 means point is clipped
-        // Normal (0, -1, 0) pointing DOWN with constant clipY:
-        //   -point.y + clipY < 0 → point.y > clipY → clips above clipY
-        const clipPlane = new THREE.Plane(new THREE.Vector3(0, -1, 0), clipY);
+        // Position adjustment: anchor building at bottom so it grows upward
+        // When scale.y < 1, we need to offset Y position downward to keep bottom at ground level
+        // The building mesh is positioned at terrainHeight, so we offset based on buildingHeight
+        const yOffset = meshData.buildingHeight * (1 - yScale) * 0.5;
 
-        // Building is semi-transparent with clipping plane for layer reveal
-        const opacity = 0.7 + progress * 0.3; // 70% to 100% as it builds
-        meshData.group.scale.setScalar(1);
+        meshData.group.scale.set(1, yScale, 1);
+        meshData.group.position.set(transform.x, terrainHeight - yOffset, transform.y);
+
+        // Building is semi-transparent during construction
+        const opacity = 0.6 + progress * 0.4; // 60% to 100% as it builds
         meshData.group.traverse((child) => {
           if (child instanceof THREE.Mesh) {
-            this.setMaterialOpacity(child, opacity, true, clipPlane);
+            this.setMaterialOpacity(child, opacity, true);
           }
         });
 
@@ -550,9 +555,10 @@ export class BuildingRenderer {
           this.scene.add(meshData.constructionEffect);
         }
 
-        // Position construction particles at the current build height (construction line)
+        // Position construction particles at the current build height (top of visible building)
+        const buildHeight = meshData.buildingHeight * progress;
         meshData.constructionEffect.visible = true;
-        meshData.constructionEffect.position.set(transform.x, clipY, transform.y);
+        meshData.constructionEffect.position.set(transform.x, terrainHeight + buildHeight, transform.y);
         this.updateConstructionEffect(meshData.constructionEffect, dt, building.width, building.height);
       }
 
