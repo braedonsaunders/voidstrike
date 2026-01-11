@@ -39,13 +39,19 @@ function createOverlayMaterial(overlayTexture: THREE.DataTexture, opacity: numbe
 
   const uOpacity = uniform(opacity);
 
-  const outputNode = Fn(() => {
+  // colorNode expects RGB (vec3), opacityNode expects alpha (float)
+  const colorNode = Fn(() => {
     const texColor = texture(overlayTexture, uv());
-    const alpha = texColor.a.mul(uOpacity);
-    return vec4(texColor.rgb, alpha);
+    return texColor.rgb;
   })();
 
-  material.colorNode = outputNode;
+  const opacityNode = Fn(() => {
+    const texColor = texture(overlayTexture, uv());
+    return texColor.a.mul(uOpacity);
+  })();
+
+  material.colorNode = colorNode;
+  material.opacityNode = opacityNode;
 
   // Store opacity uniform for updates
   (material as any)._uOpacity = uOpacity;
@@ -65,7 +71,8 @@ function createThreatMaterial(threatTexture: THREE.DataTexture, opacity: number)
   const uOpacity = uniform(opacity);
   const uTime = uniform(0);
 
-  const outputNode = Fn(() => {
+  // colorNode expects RGB (vec3), opacityNode expects alpha (float)
+  const colorNode = Fn(() => {
     const uvCoord = uv();
     const texColor = texture(threatTexture, uvCoord);
 
@@ -73,13 +80,16 @@ function createThreatMaterial(threatTexture: THREE.DataTexture, opacity: number)
     const pulse = float(0.85).add(float(0.15).mul(sin(uTime.mul(2.0).add(uvCoord.x.mul(10.0)).add(uvCoord.y.mul(10.0)))));
 
     // Red tint with intensity based on threat level
-    const threatColor = vec3(0.9, 0.2, 0.1).mul(texColor.r).mul(pulse);
-    const alpha = texColor.a.mul(uOpacity);
-
-    return vec4(threatColor, alpha);
+    return vec3(0.9, 0.2, 0.1).mul(texColor.r).mul(pulse);
   })();
 
-  material.colorNode = outputNode;
+  const opacityNode = Fn(() => {
+    const texColor = texture(threatTexture, uv());
+    return texColor.a.mul(uOpacity);
+  })();
+
+  material.colorNode = colorNode;
+  material.opacityNode = opacityNode;
 
   // Store uniforms for updates
   (material as any)._uOpacity = uOpacity;
