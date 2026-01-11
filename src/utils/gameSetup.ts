@@ -8,7 +8,6 @@ import { Selectable } from '@/engine/components/Selectable';
 import { Velocity } from '@/engine/components/Velocity';
 import { UNIT_DEFINITIONS } from '@/data/units/dominion';
 import { BUILDING_DEFINITIONS } from '@/data/buildings/dominion';
-import { AISystem } from '@/engine/systems/AISystem';
 import { EnhancedAISystem } from '@/engine/systems/EnhancedAISystem';
 import { PathfindingSystem } from '@/engine/systems/PathfindingSystem';
 import { MapData, Expansion } from '@/data/maps';
@@ -93,7 +92,6 @@ function registerAIPlayer(
 ): void {
   const world = game.world;
 
-  // Try to find EnhancedAISystem first (default), then fall back to AISystem
   const enhancedAI = world.getSystem(EnhancedAISystem);
   if (enhancedAI) {
     enhancedAI.registerAI(playerId, faction, difficulty);
@@ -101,14 +99,6 @@ function registerAIPlayer(
     // This is critical - without this, AI units won't have proper combat micro
     game.aiMicroSystem.registerAIPlayer(playerId);
     debugInitialization.log(`[gameSetup] Registered ${playerId} with EnhancedAI and AIMicroSystem`);
-  } else {
-    const basicAI = world.getSystem(AISystem);
-    if (basicAI) {
-      // Map 'insane' to 'hard' since basic AISystem only supports easy/medium/hard
-      const aiDifficulty: 'easy' | 'medium' | 'hard' =
-        difficulty === 'insane' ? 'hard' : difficulty;
-      basicAI.registerAI(playerId, faction, aiDifficulty);
-    }
   }
 }
 

@@ -311,82 +311,6 @@ export function parallel(
 }
 
 /**
- * Race - Runs all children, returns first non-running result
- */
-export function race(name: string, ...children: BehaviorNode[]): BehaviorNode {
-  return createNode(
-    (context: BehaviorContext) => {
-      let hasRunning = false;
-
-      for (const child of children) {
-        const status = child(context);
-        if (status === 'success') return 'success';
-        if (status === 'failure') return 'failure';
-        if (status === 'running') hasRunning = true;
-      }
-
-      return hasRunning ? 'running' : 'failure';
-    },
-    'race',
-    name,
-    `Returns first completed result from ${children.length} children`
-  );
-}
-
-/**
- * Random Selector - Shuffles children before trying
- */
-export function randomSelector(name: string, ...children: BehaviorNode[]): BehaviorNode {
-  return createNode(
-    (context: BehaviorContext) => {
-      // Fisher-Yates shuffle
-      const shuffled = [...children];
-      for (let i = shuffled.length - 1; i > 0; i--) {
-        const j = Math.floor(Math.random() * (i + 1));
-        [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
-      }
-
-      for (const child of shuffled) {
-        const status = child(context);
-        if (status === 'success') return 'success';
-        if (status === 'running') return 'running';
-      }
-      return 'failure';
-    },
-    'randomSelector',
-    name,
-    `Randomly orders ${children.length} children before selection`
-  );
-}
-
-/**
- * Priority Selector - Orders children by dynamic priority scores
- */
-export function prioritySelector(
-  name: string,
-  children: Array<{ node: BehaviorNode; priority: (ctx: BehaviorContext) => number }>
-): BehaviorNode {
-  return createNode(
-    (context: BehaviorContext) => {
-      // Sort by priority (highest first)
-      const sorted = [...children].sort(
-        (a, b) => b.priority(context) - a.priority(context)
-      );
-
-      for (const { node } of sorted) {
-        const status = node(context);
-        if (status === 'success') return 'success';
-        if (status === 'running') return 'running';
-      }
-      return 'failure';
-    },
-    'prioritySelector',
-    name,
-    `Selects from ${children.length} children by dynamic priority`
-  );
-}
-
-/**
  * Utility Selector - Scores children and picks the best
  * This is more sophisticated than priority - it evaluates all and picks highest
  */
@@ -453,89 +377,6 @@ export function succeeder(name: string, child: BehaviorNode): BehaviorNode {
     'succeeder',
     name,
     `Always succeeds after running child`
-  );
-}
-
-/**
- * Failer - Always returns failure
- */
-export function failer(name: string, child: BehaviorNode): BehaviorNode {
-  return createNode(
-    (context: BehaviorContext) => {
-      child(context);
-      return 'failure';
-    },
-    'failer',
-    name,
-    `Always fails after running child`
-  );
-}
-
-/**
- * Repeater - Repeats a child node a number of times
- */
-export function repeater(name: string, times: number, child: BehaviorNode): BehaviorNode {
-  const stateKey = `__rep_${name}_${++nodeIdCounter}`;
-
-  return createNode(
-    (context: BehaviorContext) => {
-      let count = context.blackboard.get<number>(stateKey) ?? 0;
-
-      if (count >= times) {
-        context.blackboard.delete(stateKey);
-        return 'success';
-      }
-
-      const status = child(context);
-
-      if (status === 'running') {
-        return 'running';
-      }
-
-      context.blackboard.set(stateKey, count + 1);
-
-      if (count + 1 >= times) {
-        context.blackboard.delete(stateKey);
-        return 'success';
-      }
-
-      return 'running';
-    },
-    'repeater',
-    name,
-    `Repeats child ${times} times`
-  );
-}
-
-/**
- * RepeatUntilFail - Repeats child until it fails
- */
-export function repeatUntilFail(name: string, child: BehaviorNode): BehaviorNode {
-  return createNode(
-    (context: BehaviorContext) => {
-      const status = child(context);
-      if (status === 'failure') return 'success';
-      return 'running';
-    },
-    'repeatUntilFail',
-    name,
-    `Repeats child until failure`
-  );
-}
-
-/**
- * RepeatUntilSuccess - Repeats child until it succeeds
- */
-export function repeatUntilSuccess(name: string, child: BehaviorNode): BehaviorNode {
-  return createNode(
-    (context: BehaviorContext) => {
-      const status = child(context);
-      if (status === 'success') return 'success';
-      return 'running';
-    },
-    'repeatUntilSuccess',
-    name,
-    `Repeats child until success`
   );
 }
 
@@ -839,32 +680,6 @@ export function setBlackboard(
 }
 
 /**
- * CheckBlackboard - Checks if a blackboard value matches
- */
-export function checkBlackboard(
-  name: string,
-  key: string,
-  predicate: (value: unknown) => boolean
-): BehaviorNode {
-  return createNode(
-    (context: BehaviorContext) => {
-      const value = context.blackboard.get(key);
-      return predicate(value) ? 'success' : 'failure';
-    },
-    'checkBlackboard',
-    name,
-    `Checks blackboard key "${key}"`
-  );
-}
-
-/**
- * Noop - Does nothing, returns success
- */
-export function noop(name: string): BehaviorNode {
-  return createNode(() => 'success', 'noop', name, `Does nothing`);
-}
-
-/**
  * Fail - Always fails
  */
 export function fail(name: string): BehaviorNode {
@@ -876,28 +691,6 @@ export function fail(name: string): BehaviorNode {
  */
 export function running(name: string): BehaviorNode {
   return createNode(() => 'running', 'running', name, `Always running`);
-}
-
-// ==================== SUBTREE REFERENCE ====================
-
-/**
- * Subtree - References another behavior tree
- * Useful for reusing common behaviors
- */
-export function subtree(name: string, getTree: () => BehaviorNode): BehaviorNode {
-  let cachedTree: BehaviorNode | null = null;
-
-  return createNode(
-    (context: BehaviorContext) => {
-      if (!cachedTree) {
-        cachedTree = getTree();
-      }
-      return cachedTree(context);
-    },
-    'subtree',
-    name,
-    `References subtree`
-  );
 }
 
 // ==================== BEHAVIOR TREE RUNNER ====================
