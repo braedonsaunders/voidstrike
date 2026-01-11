@@ -109,7 +109,7 @@ function spawnBase(game: Game, playerId: string, x: number, y: number): void {
   cc.add(new Transform(x, y, 0))
     .add(new Building({ ...ccDef, buildTime: 0 })) // Instant build
     .add(new Health(ccDef.maxHealth, ccDef.armor, 'structure'))
-    .add(new Selectable(ccDef.width, 10, playerId));
+    .add(new Selectable(Math.max(ccDef.width, ccDef.height) * 0.6, 10, playerId));
 
   // Mark as complete
   const building = cc.get<Building>('Building')!;
@@ -251,7 +251,7 @@ export function spawnBuildingAtPosition(
     .add(new Transform(x, y, 0))
     .add(new Building(definition))
     .add(health)
-    .add(new Selectable(definition.width, 10, playerId));
+    .add(new Selectable(Math.max(definition.width, definition.height) * 0.6, 10, playerId));
 }
 
 export function spawnUnitAtPosition(

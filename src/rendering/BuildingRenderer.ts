@@ -5,7 +5,7 @@ import { Building } from '@/engine/components/Building';
 import { Health } from '@/engine/components/Health';
 import { Selectable } from '@/engine/components/Selectable';
 import { VisionSystem } from '@/engine/systems/VisionSystem';
-import { AssetManager } from '@/assets/AssetManager';
+import { AssetManager, REFERENCE_FRAME } from '@/assets/AssetManager';
 import { Terrain } from './Terrain';
 import { getPlayerColor, getLocalPlayerId, isSpectatorMode } from '@/store/gameSetupStore';
 import { debugMesh } from '@/utils/debugLogger';
@@ -625,7 +625,8 @@ export class BuildingRenderer {
           // The Y offset ensures buildings are properly grounded (bottom at terrain level)
           this.tempPosition.set(transform.x, terrainHeight + group.modelYOffset, transform.y);
           this.tempScale.copy(group.modelScale); // Apply the normalized model scale
-          this.tempQuaternion.identity(); // CRITICAL: Reset to identity to prevent rotation issues
+          // Apply the same rotation offset as individual meshes (from AssetManager model loading)
+          this.tempQuaternion.setFromAxisAngle(new THREE.Vector3(0, 1, 0), REFERENCE_FRAME.MODEL_FORWARD_OFFSET);
           this.tempMatrix.compose(this.tempPosition, this.tempQuaternion, this.tempScale);
           group.mesh.setMatrixAt(group.mesh.count, this.tempMatrix);
           group.entityIds.push(entity.id);
