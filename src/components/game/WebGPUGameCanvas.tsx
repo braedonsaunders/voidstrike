@@ -32,6 +32,7 @@ import { EffectsRenderer } from '@/rendering/EffectsRenderer';
 import { RallyPointRenderer } from '@/rendering/RallyPointRenderer';
 import { WatchTowerRenderer } from '@/rendering/WatchTowerRenderer';
 import { BuildingPlacementPreview } from '@/rendering/BuildingPlacementPreview';
+import { WallPlacementPreview } from '@/rendering/WallPlacementPreview';
 import { CommandQueueRenderer } from '@/rendering/CommandQueueRenderer';
 
 // TSL Components (WebGPU-compatible)
@@ -90,6 +91,7 @@ export function WebGPUGameCanvas() {
   const rallyPointRendererRef = useRef<RallyPointRenderer | null>(null);
   const watchTowerRendererRef = useRef<WatchTowerRenderer | null>(null);
   const placementPreviewRef = useRef<BuildingPlacementPreview | null>(null);
+  const wallPlacementPreviewRef = useRef<WallPlacementPreview | null>(null);
   const environmentRef = useRef<EnvironmentManager | null>(null);
 
   // Strategic overlays and command queue
@@ -131,7 +133,7 @@ export function WebGPUGameCanvas() {
   const DOUBLE_CLICK_TIME = 400;
   const DOUBLE_CLICK_DIST = 10;
 
-  const { isBuilding, buildingType, buildingPlacementQueue, isSettingRallyPoint, isRepairMode, isLandingMode, landingBuildingId, abilityTargetMode } = useGameStore();
+  const { isBuilding, buildingType, buildingPlacementQueue, isSettingRallyPoint, isRepairMode, isLandingMode, landingBuildingId, abilityTargetMode, isWallPlacementMode } = useGameStore();
 
   // Initialize both Three.js (WebGPU) and Phaser
   useEffect(() => {
@@ -353,6 +355,16 @@ export function WebGPUGameCanvas() {
         return game.isValidBuildingPlacement(centerX, centerY, width, height);
       });
       scene.add(placementPreviewRef.current.group);
+
+      // Wall placement preview for click-and-drag wall lines
+      wallPlacementPreviewRef.current = new WallPlacementPreview(
+        CURRENT_MAP,
+        (x, y) => terrain.getHeightAt(x, y)
+      );
+      wallPlacementPreviewRef.current.setPlacementValidator((x, y, w, h) => {
+        return game.isValidBuildingPlacement(x, y, w, h);
+      });
+      scene.add(wallPlacementPreviewRef.current.group);
 
       // Initialize TSL Visual Systems (WebGPU-compatible)
       selectionSystemRef.current = new SelectionSystem(scene);
@@ -800,6 +812,12 @@ export function WebGPUGameCanvas() {
           });
         }
         useGameStore.getState().setAbilityTargetMode(null);
+      } else if (isWallPlacementMode) {
+        // Wall placement mode - start drag to place wall line
+        const worldPos = cameraRef.current?.screenToWorld(e.clientX, e.clientY);
+        if (worldPos && wallPlacementPreviewRef.current) {
+          wallPlacementPreviewRef.current.startLine(worldPos.x, worldPos.z);
+        }
       } else if (isBuilding && buildingType) {
         // Place building (supports shift-click to queue multiple placements)
         const worldPos = cameraRef.current?.screenToWorld(e.clientX, e.clientY);
@@ -840,7 +858,7 @@ export function WebGPUGameCanvas() {
     } else if (e.button === 2) {
       handleRightClick(e);
     }
-  }, [isBuilding, buildingType, isAttackMove, isPatrolMode, isSettingRallyPoint, isRepairMode, isLandingMode, landingBuildingId, abilityTargetMode]);
+  }, [isBuilding, buildingType, isAttackMove, isPatrolMode, isSettingRallyPoint, isRepairMode, isLandingMode, landingBuildingId, abilityTargetMode, isWallPlacementMode]);
 
   const handleRightClick = (e: React.MouseEvent) => {
     // Right-click cancels command modes (alternative to ESC, especially useful in fullscreen)
@@ -850,6 +868,11 @@ export function WebGPUGameCanvas() {
     }
     if (isPatrolMode) {
       setIsPatrolMode(false);
+      return;
+    }
+    if (isWallPlacementMode) {
+      wallPlacementPreviewRef.current?.cancelLine();
+      useGameStore.getState().setWallPlacementMode(false);
       return;
     }
     if (isBuilding) {
@@ -1108,6 +1131,14 @@ export function WebGPUGameCanvas() {
       setSelectionEnd({ x: e.clientX, y: e.clientY });
     }
 
+    // Wall placement mode - update wall line preview while dragging
+    if (isWallPlacementMode && wallPlacementPreviewRef.current && cameraRef.current) {
+      const worldPos = cameraRef.current.screenToWorld(e.clientX, e.clientY);
+      if (worldPos) {
+        wallPlacementPreviewRef.current.updateLine(worldPos.x, worldPos.z);
+      }
+    }
+
     // Update placement preview for both building mode and landing mode
     if (placementPreviewRef.current && cameraRef.current) {
       if ((isBuilding && buildingType) || isLandingMode) {
@@ -1117,9 +1148,34 @@ export function WebGPUGameCanvas() {
         }
       }
     }
-  }, [isSelecting, isBuilding, buildingType, isLandingMode]);
+  }, [isSelecting, isBuilding, buildingType, isLandingMode, isWallPlacementMode]);
 
   const handleMouseUp = useCallback((e: React.MouseEvent) => {
+    // Handle wall placement finish
+    if (e.button === 0 && isWallPlacementMode && wallPlacementPreviewRef.current?.isCurrentlyDrawing()) {
+      const result = wallPlacementPreviewRef.current.finishLine();
+      const game = gameRef.current;
+
+      if (game && result.positions.length > 0) {
+        // Get the building type from the store
+        const store = useGameStore.getState();
+        const wallBuildingType = store.buildingType || 'wall_segment';
+
+        // Emit the wall placement event
+        game.eventBus.emit('wall:place_line', {
+          positions: result.positions,
+          buildingType: wallBuildingType,
+          playerId: getLocalPlayerId(),
+        });
+
+        // Exit wall placement mode unless shift is held
+        if (!e.shiftKey) {
+          useGameStore.getState().setWallPlacementMode(false);
+        }
+      }
+      return;
+    }
+
     if (e.button === 0 && isSelecting) {
       setIsSelecting(false);
 
@@ -1172,7 +1228,7 @@ export function WebGPUGameCanvas() {
         }
       }
     }
-  }, [isSelecting, selectionStart, selectionEnd]);
+  }, [isSelecting, selectionStart, selectionEnd, isWallPlacementMode]);
 
   const handleContextMenu = useCallback((e: React.MouseEvent) => {
     e.preventDefault();
@@ -1188,6 +1244,18 @@ export function WebGPUGameCanvas() {
       }
     }
   }, [isBuilding, buildingType]);
+
+  // Wall placement preview
+  useEffect(() => {
+    if (wallPlacementPreviewRef.current) {
+      if (isWallPlacementMode) {
+        const wallType = useGameStore.getState().buildingType || 'wall_segment';
+        wallPlacementPreviewRef.current.startPlacement(wallType);
+      } else {
+        wallPlacementPreviewRef.current.stopPlacement();
+      }
+    }
+  }, [isWallPlacementMode]);
 
   // Sync building placement queue to preview for visual path lines
   useEffect(() => {
@@ -1235,7 +1303,8 @@ export function WebGPUGameCanvas() {
               isLandingMode ||
               isSettingRallyPoint ||
               abilityTargetMode !== null ||
-              isBuilding;
+              isBuilding ||
+              isWallPlacementMode;
 
             // In fullscreen mode, prevent ESC from exiting fullscreen when canceling a command
             // This allows ESC to cancel commands without accidentally exiting fullscreen
@@ -1249,6 +1318,10 @@ export function WebGPUGameCanvas() {
             else if (isLandingMode) useGameStore.getState().setLandingMode(false);
             else if (isSettingRallyPoint) useGameStore.getState().setRallyPointMode(false);
             else if (abilityTargetMode) useGameStore.getState().setAbilityTargetMode(null);
+            else if (isWallPlacementMode) {
+              wallPlacementPreviewRef.current?.cancelLine();
+              useGameStore.getState().setWallPlacementMode(false);
+            }
             else if (isBuilding) useGameStore.getState().setBuildingMode(null);
             else game.eventBus.emit('selection:clear');
           }
@@ -1367,7 +1440,7 @@ export function WebGPUGameCanvas() {
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [isBuilding, isAttackMove, isPatrolMode, isRepairMode, isLandingMode, isSettingRallyPoint, abilityTargetMode]);
+  }, [isBuilding, isAttackMove, isPatrolMode, isRepairMode, isLandingMode, isSettingRallyPoint, abilityTargetMode, isWallPlacementMode]);
 
   // Subscribe to overlay settings changes
   useEffect(() => {

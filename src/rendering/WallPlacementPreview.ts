@@ -72,8 +72,8 @@ export class WallPlacementPreview {
       linewidth: 2,
     });
 
-    // Standard wall segment geometry (1x1)
-    this.segmentGeometry = new THREE.BoxGeometry(0.9, 1.5, 0.9);
+    // Standard wall segment geometry (1x1) - half thickness for cleaner preview
+    this.segmentGeometry = new THREE.BoxGeometry(0.45, 1.5, 0.45);
 
     // PERF: Pre-create wireframe geometry and materials (reused across all segments)
     this.wireGeometry = new THREE.EdgesGeometry(this.segmentGeometry);
