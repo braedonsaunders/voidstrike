@@ -833,8 +833,53 @@ export class Terrain {
     const cell01 = terrain[y1][x0];  // Bottom-left
     const cell11 = terrain[y1][x1];  // Bottom-right (primary cell)
 
-    // ALWAYS use simple average elevation - this creates smooth transitions
-    const avgElevation = (cell00.elevation + cell10.elevation + cell01.elevation + cell11.elevation) / 4;
+    const cells = [cell00, cell10, cell01, cell11];
+
+    // Check if any of the 4 cells is a ramp
+    const rampCells = cells.filter(c => c.terrain === 'ramp');
+    const hasRamp = rampCells.length > 0;
+
+    let avgElevation: number;
+
+    if (hasRamp) {
+      // RAMP PRIORITY: When vertex touches a ramp, use ONLY ramp cell elevations
+      // This prevents stair-stepping at ramp boundaries where unwalkable cells
+      // have different elevations than the ramp gradient
+      if (rampCells.length === 4) {
+        // All 4 cells are ramps - simple average
+        avgElevation = (cell00.elevation + cell10.elevation + cell01.elevation + cell11.elevation) / 4;
+      } else {
+        // Mix of ramp and non-ramp - use weighted average favoring ramps
+        // This creates smooth transitions at ramp edges
+        let rampSum = 0;
+        let otherSum = 0;
+        let rampCount = 0;
+        let otherCount = 0;
+
+        for (const cell of cells) {
+          if (cell.terrain === 'ramp') {
+            rampSum += cell.elevation;
+            rampCount++;
+          } else {
+            otherSum += cell.elevation;
+            otherCount++;
+          }
+        }
+
+        // Weight ramps heavily (80%) to follow the ramp gradient
+        const rampAvg = rampCount > 0 ? rampSum / rampCount : 0;
+        const otherAvg = otherCount > 0 ? otherSum / otherCount : 0;
+
+        if (rampCount > 0 && otherCount > 0) {
+          avgElevation = rampAvg * 0.8 + otherAvg * 0.2;
+        } else {
+          avgElevation = rampCount > 0 ? rampAvg : otherAvg;
+        }
+      }
+    } else {
+      // No ramps - use simple average elevation
+      avgElevation = (cell00.elevation + cell10.elevation + cell01.elevation + cell11.elevation) / 4;
+    }
 
     // Use the PRIMARY CELL's terrain type directly - this ensures texture matches walkability
     // A vertex at (x,y) corresponds to cell at (x,y) for pathfinding, so use that cell's type
