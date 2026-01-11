@@ -386,9 +386,11 @@ export class OverlayScene extends Phaser.Scene {
     });
 
     // UI error messages - show as alerts so user can see what went wrong
-    this.eventBus.on('ui:error', (data: { message: string }) => {
+    this.eventBus.on('ui:error', (data: { message: string; playerId?: string }) => {
       // Skip in spectator mode
       if (this.isSpectator()) return;
+      // Only show errors from local player (skip AI player errors)
+      if (data.playerId && !isLocalPlayer(data.playerId)) return;
       this.showAlert(data.message.toUpperCase(), 0xff4444, 2000);
     });
   }
