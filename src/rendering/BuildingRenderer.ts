@@ -58,6 +58,9 @@ export class BuildingRenderer {
   // Reusable objects for matrix calculations
   private tempMatrix: THREE.Matrix4 = new THREE.Matrix4();
   private tempPosition: THREE.Vector3 = new THREE.Vector3();
+
+  // PERF: Pre-allocated Set for tracking current entity IDs to avoid per-frame allocation
+  private readonly _currentIds: Set<number> = new Set();
   private tempQuaternion: THREE.Quaternion = new THREE.Quaternion();
   private tempScale: THREE.Vector3 = new THREE.Vector3(1, 1, 1);
 
@@ -358,7 +361,8 @@ export class BuildingRenderer {
     this.constructionAnimTime += dt;
 
     const entities = this.world.getEntitiesWith('Transform', 'Building');
-    const currentIds = new Set<number>();
+    // PERF: Reuse pre-allocated Set instead of creating new one every frame
+    this._currentIds.clear();
 
     // Reset instanced group counts
     // PERF: Use .length = 0 instead of = [] to avoid GC pressure from allocating new arrays every frame
@@ -371,7 +375,7 @@ export class BuildingRenderer {
     const instancedBuildingIds = new Set<number>();
 
     for (const entity of entities) {
-      currentIds.add(entity.id);
+      this._currentIds.add(entity.id);
 
       const transform = entity.get<Transform>('Transform');
       const building = entity.get<Building>('Building');
@@ -676,7 +680,7 @@ export class BuildingRenderer {
 
     // Remove meshes for destroyed entities
     for (const [entityId, meshData] of this.buildingMeshes) {
-      if (!currentIds.has(entityId)) {
+      if (!this._currentIds.has(entityId)) {
         this.scene.remove(meshData.group);
         this.scene.remove(meshData.selectionRing);
         this.scene.remove(meshData.healthBar);

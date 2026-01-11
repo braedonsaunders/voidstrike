@@ -85,6 +85,9 @@ export class ResourceRenderer {
   private _warnedInstanceLimit: Set<string> = new Set();
   private _mineralLinesBuilt: boolean = false;
 
+  // PERF: Pre-allocated Set for tracking current entity IDs to avoid per-frame allocation
+  private readonly _currentIds: Set<number> = new Set();
+
   constructor(scene: THREE.Scene, world: World, terrain?: Terrain) {
     this.scene = scene;
     this.world = world;
@@ -422,7 +425,8 @@ export class ResourceRenderer {
 
   public update(): void {
     const entities = this.world.getEntitiesWith('Transform', 'Resource');
-    const currentIds = new Set<number>();
+    // PERF: Reuse pre-allocated Set instead of creating new one every frame
+    this._currentIds.clear();
 
     // Reset instance counts
     // PERF: Use .length = 0 instead of = [] to avoid GC pressure from allocating new arrays every frame
@@ -449,7 +453,7 @@ export class ResourceRenderer {
     const debugMineralPositions: string[] = [];
 
     for (const entity of entities) {
-      currentIds.add(entity.id);
+      this._currentIds.add(entity.id);
 
       const transform = entity.get<Transform>('Transform');
       const resource = entity.get<Resource>('Resource');
@@ -526,7 +530,7 @@ export class ResourceRenderer {
       // Check if any patches in this line still exist
       let hasPatches = false;
       for (const patchId of label.patchIds) {
-        if (currentIds.has(patchId)) {
+        if (this._currentIds.has(patchId)) {
           hasPatches = true;
           break;
         }
@@ -636,7 +640,7 @@ export class ResourceRenderer {
 
     // Clean up resource data for destroyed entities
     for (const [entityId, data] of this.resourceData) {
-      if (!currentIds.has(entityId)) {
+      if (!this._currentIds.has(entityId)) {
         if (data.selectionRing) {
           this.scene.remove(data.selectionRing);
         }
