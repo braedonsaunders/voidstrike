@@ -338,6 +338,10 @@ export function WebGPUGameCanvas() {
         }
         return false;
       });
+      // Connect placement preview to game's validation for accurate preview
+      placementPreviewRef.current.setPlacementValidator((centerX, centerY, width, height) => {
+        return game.isValidBuildingPlacement(centerX, centerY, width, height);
+      });
       scene.add(placementPreviewRef.current.group);
 
       // Initialize TSL Visual Systems (WebGPU-compatible)

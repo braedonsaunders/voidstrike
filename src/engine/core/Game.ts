@@ -14,6 +14,10 @@ import { SpawnSystem } from '../systems/SpawnSystem';
 import { BuildingPlacementSystem } from '../systems/BuildingPlacementSystem';
 import { debugInitialization, debugPerformance } from '@/utils/debugLogger';
 import { AudioSystem } from '../systems/AudioSystem';
+import { Transform } from '../components/Transform';
+import { Building } from '../components/Building';
+import { Unit } from '../components/Unit';
+import { Resource } from '../components/Resource';
 import { UnitMechanicsSystem } from '../systems/UnitMechanicsSystem';
 import { BuildingMechanicsSystem } from '../systems/BuildingMechanicsSystem';
 import { GameStateSystem } from '../systems/GameStateSystem';
@@ -365,6 +369,85 @@ export class Game {
           return false;
         }
       }
+    }
+
+    return true;
+  }
+
+  /**
+   * Check if a building can be placed at the given position
+   * This performs all validation checks: terrain, buildings, resources, units, and decorations
+   * Buildings can be placed directly adjacent to each other (no spacing buffer)
+   */
+  public isValidBuildingPlacement(centerX: number, centerY: number, width: number, height: number, excludeEntityId?: number): boolean {
+    const halfW = width / 2;
+    const halfH = height / 2;
+
+    // Check map bounds
+    if (centerX - halfW < 0 || centerY - halfH < 0 ||
+        centerX + halfW > this.config.mapWidth || centerY + halfH > this.config.mapHeight) {
+      return false;
+    }
+
+    // Check terrain validity (must be on ground, same elevation, not on ramps/cliffs)
+    if (!this.isValidTerrainForBuilding(centerX, centerY, width, height)) {
+      return false;
+    }
+
+    // Check for overlapping buildings (no buffer - buildings can touch but not overlap)
+    const buildings = this.world.getEntitiesWith('Building', 'Transform');
+    for (const entity of buildings) {
+      const transform = entity.get<Transform>('Transform');
+      const building = entity.get<Building>('Building');
+      if (!transform || !building) continue;
+
+      const existingHalfW = building.width / 2;
+      const existingHalfH = building.height / 2;
+      const dx = Math.abs(centerX - transform.x);
+      const dy = Math.abs(centerY - transform.y);
+
+      // Buildings can be placed directly adjacent (touching) but not overlapping
+      if (dx < halfW + existingHalfW && dy < halfH + existingHalfH) {
+        return false;
+      }
+    }
+
+    // Check for overlapping resources
+    const resources = this.world.getEntitiesWith('Resource', 'Transform');
+    for (const entity of resources) {
+      const transform = entity.get<Transform>('Transform');
+      if (!transform) continue;
+
+      const dx = Math.abs(centerX - transform.x);
+      const dy = Math.abs(centerY - transform.y);
+
+      if (dx < halfW + 1.5 && dy < halfH + 1.5) {
+        return false;
+      }
+    }
+
+    // Check for overlapping units (exclude the builder worker)
+    const units = this.world.getEntitiesWith('Unit', 'Transform');
+    for (const entity of units) {
+      // Skip the worker who will build this structure
+      if (excludeEntityId !== undefined && entity.id === excludeEntityId) {
+        continue;
+      }
+
+      const transform = entity.get<Transform>('Transform');
+      if (!transform) continue;
+
+      const dx = Math.abs(centerX - transform.x);
+      const dy = Math.abs(centerY - transform.y);
+
+      if (dx < halfW + 0.5 && dy < halfH + 0.5) {
+        return false;
+      }
+    }
+
+    // Check for overlapping decorations (rocks, trees, etc.)
+    if (!this.isPositionClearOfDecorations(centerX, centerY, width, height)) {
+      return false;
     }
 
     return true;
