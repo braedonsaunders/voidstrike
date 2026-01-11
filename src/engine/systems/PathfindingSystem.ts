@@ -315,6 +315,8 @@ export class PathfindingSystem extends System {
         priority: data.priority ?? 1,
       });
     });
+
+    console.log('[PathfindingSystem] Event listeners set up');
   }
 
   /**
