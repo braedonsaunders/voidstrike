@@ -63,6 +63,8 @@ export default function Home() {
   const isFullscreen = useUIStore((state) => state.isFullscreen);
   const toggleFullscreen = useUIStore((state) => state.toggleFullscreen);
   const setFullscreen = useUIStore((state) => state.setFullscreen);
+  const preferWebGPU = useUIStore((state) => state.preferWebGPU);
+  const setPreferWebGPU = useUIStore((state) => state.setPreferWebGPU);
 
   const handleMusicToggle = useCallback(() => {
     toggleMusic();
@@ -382,6 +384,70 @@ export default function Home() {
             <span>THREE.JS</span>
             <span className="w-0.5 h-0.5 rounded-full bg-void-600" />
             <span>TYPESCRIPT</span>
+          </div>
+
+          {/* Renderer Toggle - Premium subtle switch */}
+          <div className="flex items-center justify-center mt-6">
+            <button
+              onClick={() => setPreferWebGPU(!preferWebGPU)}
+              className="group flex items-center gap-3 px-4 py-2 rounded-full
+                       bg-white/[0.02] hover:bg-white/[0.05]
+                       border border-white/[0.05] hover:border-white/[0.1]
+                       transition-all duration-300"
+              title={preferWebGPU ? 'Using WebGPU (experimental)' : 'Using WebGL (stable)'}
+            >
+              {/* Label */}
+              <span className="text-white/30 text-[10px] tracking-widest uppercase group-hover:text-white/50 transition-colors">
+                Renderer
+              </span>
+
+              {/* Toggle Track */}
+              <div className={`
+                relative w-14 h-6 rounded-full transition-all duration-300
+                ${preferWebGPU
+                  ? 'bg-gradient-to-r from-void-600/40 to-void-500/40 border-void-500/30'
+                  : 'bg-white/5 border-white/10'}
+                border
+              `}>
+                {/* Toggle Knob */}
+                <div className={`
+                  absolute top-0.5 w-5 h-5 rounded-full
+                  transition-all duration-300 ease-out
+                  ${preferWebGPU
+                    ? 'left-[calc(100%-22px)] bg-gradient-to-br from-void-400 to-void-600 shadow-lg shadow-void-500/30'
+                    : 'left-0.5 bg-white/30'}
+                `}>
+                  {/* Shine effect on knob */}
+                  <div className="absolute inset-0.5 rounded-full bg-gradient-to-b from-white/20 to-transparent" />
+                </div>
+
+                {/* Labels inside track */}
+                <span className={`
+                  absolute left-1.5 top-1/2 -translate-y-1/2
+                  text-[8px] font-medium tracking-wider
+                  transition-opacity duration-200
+                  ${preferWebGPU ? 'opacity-0' : 'opacity-40'}
+                `}>
+                  GL
+                </span>
+                <span className={`
+                  absolute right-1.5 top-1/2 -translate-y-1/2
+                  text-[8px] font-medium tracking-wider
+                  transition-opacity duration-200
+                  ${preferWebGPU ? 'opacity-60 text-void-200' : 'opacity-0'}
+                `}>
+                  GPU
+                </span>
+              </div>
+
+              {/* Status indicator */}
+              <span className={`
+                text-[10px] tracking-wider transition-colors duration-300
+                ${preferWebGPU ? 'text-void-400/60' : 'text-white/25'}
+              `}>
+                {preferWebGPU ? 'WebGPU' : 'WebGL'}
+              </span>
+            </button>
           </div>
         </div>
       </div>

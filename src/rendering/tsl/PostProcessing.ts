@@ -143,8 +143,10 @@ export class RenderPipeline {
         this.aoPass.radius.value = this.config.aoRadius;
 
         // Apply AO as darkening factor
-        const aoTexture = this.aoPass.getTextureNode();
-        const aoFactor = mix(float(1.0), aoTexture, this.uAOIntensity);
+        // IMPORTANT: GTAONode stores AO only in the RED channel (.r) for optimization
+        // See: https://threejs.org/docs/pages/GTAONode.html
+        const aoValue = this.aoPass.getTextureNode().r; // Only use red channel!
+        const aoFactor = mix(float(1.0), aoValue, this.uAOIntensity);
         outputNode = scenePassColor.mul(vec3(aoFactor));
       } catch (e) {
         console.warn('[PostProcessing] GTAO initialization failed, skipping AO:', e);

@@ -177,6 +177,7 @@ export function WebGPUGameCanvas() {
       if (!threeCanvasRef.current) return;
 
       const graphicsSettings = useUIStore.getState().graphicsSettings;
+      const preferWebGPU = useUIStore.getState().preferWebGPU;
 
       // Create WebGPU renderer with automatic fallback
       // IMPORTANT: Disable hardware MSAA when post-processing is enabled.
@@ -187,7 +188,7 @@ export function WebGPUGameCanvas() {
         canvas: threeCanvasRef.current,
         antialias: useHardwareAA,
         powerPreference: 'high-performance',
-        forceWebGL: false, // Let it try WebGPU first
+        forceWebGL: !preferWebGPU, // Use user preference from main menu toggle
       });
 
       renderContextRef.current = renderContext;
