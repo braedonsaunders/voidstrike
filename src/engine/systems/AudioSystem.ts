@@ -403,7 +403,7 @@ export class AudioSystem extends System {
       AudioManager.play('production_start');
     });
 
-    this.game.eventBus.on('production:complete', (data: { unitId?: string; playerId?: string }) => {
+    this.game.eventBus.on('production:complete', (data: { unitType?: string; playerId?: string }) => {
       // Only play for local player's production, not AI
       if (data?.playerId && !isLocalPlayer(data.playerId)) return;
       if (this.isSpectator()) return;
@@ -411,8 +411,8 @@ export class AudioSystem extends System {
       AudioManager.play('unit_ready');
 
       // Play unit-specific ready voice
-      if (data && data.unitId) {
-        this.playVoice(data.unitId, 'ready');
+      if (data && data.unitType) {
+        this.playVoice(data.unitType, 'ready');
       }
     });
 
