@@ -88,51 +88,100 @@ This document contains all audio specifications, AI prompts for generation, and 
 - [ ] `ambient/jungle.mp3`
 - [ ] `ambient/battle.mp3`
 
-### Voice Lines - SCV ⏳ Needs Generation
-- [ ] `voice/scv/select1.mp3`
-- [ ] `voice/scv/select2.mp3`
-- [ ] `voice/scv/select3.mp3`
-- [ ] `voice/scv/move1.mp3`
-- [ ] `voice/scv/move2.mp3`
-- [ ] `voice/scv/attack1.mp3`
+### Voice Lines - Fabricator (Worker) ⏳ Needs Generation
+- [ ] `voice/fabricator/select1.mp3`
+- [ ] `voice/fabricator/select2.mp3`
+- [ ] `voice/fabricator/select3.mp3`
+- [ ] `voice/fabricator/move1.mp3`
+- [ ] `voice/fabricator/move2.mp3`
+- [ ] `voice/fabricator/attack1.mp3`
+- [ ] `voice/fabricator/ready.mp3`
 
-### Voice Lines - Marine ⏳ Needs Generation
-- [ ] `voice/marine/select1.mp3`
-- [ ] `voice/marine/select2.mp3`
-- [ ] `voice/marine/select3.mp3`
-- [ ] `voice/marine/move1.mp3`
-- [ ] `voice/marine/move2.mp3`
-- [ ] `voice/marine/attack1.mp3`
-- [ ] `voice/marine/attack2.mp3`
-- [ ] `voice/marine/ready.mp3`
+### Voice Lines - Trooper (Basic Infantry) ⏳ Needs Generation
+- [ ] `voice/trooper/select1.mp3`
+- [ ] `voice/trooper/select2.mp3`
+- [ ] `voice/trooper/select3.mp3`
+- [ ] `voice/trooper/move1.mp3`
+- [ ] `voice/trooper/move2.mp3`
+- [ ] `voice/trooper/attack1.mp3`
+- [ ] `voice/trooper/attack2.mp3`
+- [ ] `voice/trooper/ready.mp3`
 
-### Voice Lines - Marauder ⏳ Needs Generation
-- [ ] `voice/marauder/select1.mp3`
-- [ ] `voice/marauder/select2.mp3`
-- [ ] `voice/marauder/move1.mp3`
-- [ ] `voice/marauder/move2.mp3`
-- [ ] `voice/marauder/attack1.mp3`
-- [ ] `voice/marauder/ready.mp3`
+### Voice Lines - Breacher (Heavy Infantry) ⏳ Needs Generation
+- [ ] `voice/breacher/select1.mp3`
+- [ ] `voice/breacher/select2.mp3`
+- [ ] `voice/breacher/move1.mp3`
+- [ ] `voice/breacher/move2.mp3`
+- [ ] `voice/breacher/attack1.mp3`
+- [ ] `voice/breacher/ready.mp3`
 
-### Voice Lines - Hellion ⏳ Needs Generation
-- [ ] `voice/hellion/select1.mp3`
-- [ ] `voice/hellion/select2.mp3`
-- [ ] `voice/hellion/move1.mp3`
-- [ ] `voice/hellion/attack1.mp3`
-- [ ] `voice/hellion/ready.mp3`
+### Voice Lines - Vanguard (Fast Assault Infantry) ⏳ Needs Generation
+- [ ] `voice/vanguard/select1.mp3`
+- [ ] `voice/vanguard/select2.mp3`
+- [ ] `voice/vanguard/move1.mp3`
+- [ ] `voice/vanguard/attack1.mp3`
+- [ ] `voice/vanguard/ready.mp3`
 
-### Voice Lines - Siege Tank ⏳ Needs Generation
-- [ ] `voice/tank/select1.mp3`
-- [ ] `voice/tank/select2.mp3`
-- [ ] `voice/tank/move1.mp3`
-- [ ] `voice/tank/attack1.mp3`
-- [ ] `voice/tank/ready.mp3`
+### Voice Lines - Operative (Elite Stealth) ⏳ Needs Generation
+- [ ] `voice/operative/select1.mp3`
+- [ ] `voice/operative/select2.mp3`
+- [ ] `voice/operative/move1.mp3`
+- [ ] `voice/operative/attack1.mp3`
+- [ ] `voice/operative/ready.mp3`
 
-### Voice Lines - Medic ⏳ Needs Generation
-- [ ] `voice/medic/select1.mp3`
-- [ ] `voice/medic/select2.mp3`
-- [ ] `voice/medic/move1.mp3`
-- [ ] `voice/medic/ready.mp3`
+### Voice Lines - Scorcher (Fast Attack Vehicle) ⏳ Needs Generation
+- [ ] `voice/scorcher/select1.mp3`
+- [ ] `voice/scorcher/select2.mp3`
+- [ ] `voice/scorcher/move1.mp3`
+- [ ] `voice/scorcher/attack1.mp3`
+- [ ] `voice/scorcher/ready.mp3`
+
+### Voice Lines - Devastator (Heavy Siege Tank) ⏳ Needs Generation
+- [ ] `voice/devastator/select1.mp3`
+- [ ] `voice/devastator/select2.mp3`
+- [ ] `voice/devastator/move1.mp3`
+- [ ] `voice/devastator/attack1.mp3`
+- [ ] `voice/devastator/ready.mp3`
+
+### Voice Lines - Colossus (Massive Walker Mech) ⏳ Needs Generation
+- [ ] `voice/colossus/select1.mp3`
+- [ ] `voice/colossus/select2.mp3`
+- [ ] `voice/colossus/move1.mp3`
+- [ ] `voice/colossus/attack1.mp3`
+- [ ] `voice/colossus/ready.mp3`
+
+### Voice Lines - Lifter (Flying Transport/Medic) ⏳ Needs Generation
+- [ ] `voice/lifter/select1.mp3`
+- [ ] `voice/lifter/select2.mp3`
+- [ ] `voice/lifter/move1.mp3`
+- [ ] `voice/lifter/ready.mp3`
+
+### Voice Lines - Valkyrie (Transforming Fighter) ⏳ Needs Generation
+- [ ] `voice/valkyrie/select1.mp3`
+- [ ] `voice/valkyrie/select2.mp3`
+- [ ] `voice/valkyrie/move1.mp3`
+- [ ] `voice/valkyrie/attack1.mp3`
+- [ ] `voice/valkyrie/ready.mp3`
+
+### Voice Lines - Specter (Cloakable Strike Fighter) ⏳ Needs Generation
+- [ ] `voice/specter/select1.mp3`
+- [ ] `voice/specter/select2.mp3`
+- [ ] `voice/specter/move1.mp3`
+- [ ] `voice/specter/attack1.mp3`
+- [ ] `voice/specter/ready.mp3`
+
+### Voice Lines - Dreadnought (Capital Ship) ⏳ Needs Generation
+- [ ] `voice/dreadnought/select1.mp3`
+- [ ] `voice/dreadnought/select2.mp3`
+- [ ] `voice/dreadnought/move1.mp3`
+- [ ] `voice/dreadnought/attack1.mp3`
+- [ ] `voice/dreadnought/ready.mp3`
+
+### Voice Lines - Overseer (Support/Detector) ⏳ Needs Generation
+- [ ] `voice/overseer/select1.mp3`
+- [ ] `voice/overseer/select2.mp3`
+- [ ] `voice/overseer/move1.mp3`
+- [ ] `voice/overseer/ready.mp3`
 
 ---
 
@@ -151,20 +200,20 @@ public/audio/
 ├── building/              # Building sounds (place, construct, complete)
 ├── ambient/               # Environmental/biome sounds
 ├── ui/                    # Interface sounds (click, error, select)
-└── voice/
-    ├── scv/               # SCV voice lines
-    ├── marine/            # Marine voice lines
-    ├── marauder/          # Marauder voice lines
-    ├── hellion/           # Hellion voice lines
-    ├── tank/              # Siege Tank voice lines
-    ├── medic/             # Medic voice lines
-    ├── ghost/             # Ghost voice lines
-    ├── thor/              # Thor voice lines
-    ├── viking/            # Viking voice lines
-    ├── banshee/           # Banshee voice lines
-    ├── battlecruiser/     # Battlecruiser voice lines
-    ├── reaper/            # Reaper voice lines
-    └── raven/             # Raven voice lines
+└── voice/                 # DOMINION faction voice lines
+    ├── fabricator/        # Fabricator (Worker) voice lines
+    ├── trooper/           # Trooper (Basic Infantry) voice lines
+    ├── breacher/          # Breacher (Heavy Infantry) voice lines
+    ├── vanguard/          # Vanguard (Fast Assault) voice lines
+    ├── operative/         # Operative (Elite Stealth) voice lines
+    ├── scorcher/          # Scorcher (Fast Vehicle) voice lines
+    ├── devastator/        # Devastator (Siege Tank) voice lines
+    ├── colossus/          # Colossus (Walker Mech) voice lines
+    ├── lifter/            # Lifter (Transport/Medic) voice lines
+    ├── valkyrie/          # Valkyrie (Transforming Fighter) voice lines
+    ├── specter/           # Specter (Stealth Fighter) voice lines
+    ├── dreadnought/       # Dreadnought (Capital Ship) voice lines
+    └── overseer/          # Overseer (Support/Detector) voice lines
 ```
 
 ---
@@ -330,69 +379,139 @@ All ambient sounds should be **loopable** and approximately **30-60 seconds** lo
 
 Each unit type has a subdirectory containing voice files for select, move, attack, and ready actions.
 
-### SCV (Worker)
+### Fabricator (Worker)
 
 | Filename | Line | Style |
 |----------|------|-------|
-| `voice/scv/select1.mp3` | "SCV good to go, sir!" | Male blue-collar worker voice |
-| `voice/scv/select2.mp3` | "Whaddya want?" | Casual male worker voice |
-| `voice/scv/select3.mp3` | "I'm goin'!" | Eager male worker voice |
-| `voice/scv/move1.mp3` | "Affirmative!" | Male blue-collar worker voice |
-| `voice/scv/move2.mp3` | "Roger that!" | Male blue-collar worker voice |
-| `voice/scv/attack1.mp3` | "This is YOUR plan?" | Annoyed male worker voice |
+| `voice/fabricator/select1.mp3` | "Fabricator online." | Male technician voice, slight robotic filter |
+| `voice/fabricator/select2.mp3` | "Ready to construct." | Professional worker voice |
+| `voice/fabricator/select3.mp3` | "What needs building?" | Eager technician voice |
+| `voice/fabricator/move1.mp3` | "Relocating." | Efficient worker voice |
+| `voice/fabricator/move2.mp3` | "On my way." | Professional acknowledgment |
+| `voice/fabricator/attack1.mp3` | "This isn't in my contract..." | Reluctant worker voice |
+| `voice/fabricator/ready.mp3` | "Fabricator assembled." | Military announcement |
 
-### Marine
-
-| Filename | Line | Style |
-|----------|------|-------|
-| `voice/marine/select1.mp3` | "You want a piece of me, boy?" | Gruff male soldier voice |
-| `voice/marine/select2.mp3` | "Jacked up and good to go!" | Eager soldier voice |
-| `voice/marine/select3.mp3` | "Bring it!" | Aggressive soldier voice |
-| `voice/marine/move1.mp3` | "Go go go!" | Urgent soldier voice |
-| `voice/marine/move2.mp3` | "Outstanding!" | Military acknowledgment |
-| `voice/marine/attack1.mp3` | "Let's move!" | Battle-ready soldier |
-| `voice/marine/attack2.mp3` | "Git some!" | Aggressive soldier voice |
-| `voice/marine/ready.mp3` | "Marine ready for duty!" | Military acknowledgment |
-
-### Marauder
+### Trooper (Basic Infantry)
 
 | Filename | Line | Style |
 |----------|------|-------|
-| `voice/marauder/select1.mp3` | "Got something for me?" | Deep intimidating voice |
-| `voice/marauder/select2.mp3` | "What's the job?" | Gruff professional voice |
-| `voice/marauder/move1.mp3` | "Movin' out!" | Deep commanding voice |
-| `voice/marauder/move2.mp3` | "On my way!" | Professional military voice |
-| `voice/marauder/attack1.mp3` | "Time to die!" | Aggressive deep voice |
-| `voice/marauder/ready.mp3` | "Marauder online!" | Military announcement |
+| `voice/trooper/select1.mp3` | "Ready for duty." | Professional male soldier |
+| `voice/trooper/select2.mp3` | "Trooper standing by." | Military acknowledgment |
+| `voice/trooper/select3.mp3` | "What's the mission?" | Eager soldier voice |
+| `voice/trooper/move1.mp3` | "Moving out!" | Urgent soldier voice |
+| `voice/trooper/move2.mp3` | "On it." | Quick acknowledgment |
+| `voice/trooper/attack1.mp3` | "Opening fire!" | Battle-ready voice |
+| `voice/trooper/attack2.mp3` | "Engaging hostiles!" | Aggressive soldier |
+| `voice/trooper/ready.mp3` | "Trooper reporting for duty." | Military announcement |
 
-### Hellion
-
-| Filename | Line | Style |
-|----------|------|-------|
-| `voice/hellion/select1.mp3` | "Need a light?" | Mischievous voice |
-| `voice/hellion/select2.mp3` | "Fire it up!" | Excited voice |
-| `voice/hellion/move1.mp3` | "Let's burn!" | Eager voice |
-| `voice/hellion/attack1.mp3` | "Burn baby burn!" | Maniacal voice |
-| `voice/hellion/ready.mp3` | "Hellion armed and ready!" | Military announcement |
-
-### Siege Tank
+### Breacher (Heavy Infantry)
 
 | Filename | Line | Style |
 |----------|------|-------|
-| `voice/tank/select1.mp3` | "Ready to roll out!" | Tank commander voice |
-| `voice/tank/select2.mp3` | "Tank standing by!" | Professional military voice |
-| `voice/tank/move1.mp3` | "Rollin' out!" | Tank commander voice |
-| `voice/tank/attack1.mp3` | "Lockdown confirmed!" | Tactical military voice |
-| `voice/tank/ready.mp3` | "Siege tank ready!" | Military announcement |
+| `voice/breacher/select1.mp3` | "Breacher ready." | Deep, intimidating voice |
+| `voice/breacher/select2.mp3` | "Armor's solid." | Confident heavy trooper |
+| `voice/breacher/move1.mp3` | "Moving heavy." | Slow, methodical voice |
+| `voice/breacher/move2.mp3` | "Pushing forward." | Deep commanding voice |
+| `voice/breacher/attack1.mp3` | "Cracking them open!" | Aggressive deep voice |
+| `voice/breacher/ready.mp3` | "Breacher locked and loaded." | Military announcement |
 
-### Medic
+### Vanguard (Fast Assault Infantry)
 
 | Filename | Line | Style |
 |----------|------|-------|
-| `voice/medic/select1.mp3` | "Need a prescription?" | Friendly female medic voice |
-| `voice/medic/select2.mp3` | "Ready to operate!" | Professional female voice |
-| `voice/medic/move1.mp3` | "On my way!" | Caring female voice |
-| `voice/medic/ready.mp3` | "Medic reporting!" | Military announcement |
+| `voice/vanguard/select1.mp3` | "Vanguard here!" | Energetic male voice |
+| `voice/vanguard/select2.mp3` | "Ready to rock!" | Eager, aggressive |
+| `voice/vanguard/move1.mp3` | "Boosters engaged." | Quick, mobile |
+| `voice/vanguard/attack1.mp3` | "Going in hot!" | Aggressive, excited |
+| `voice/vanguard/ready.mp3` | "Vanguard ready to deploy." | Military announcement |
+
+### Operative (Elite Stealth)
+
+| Filename | Line | Style |
+|----------|------|-------|
+| `voice/operative/select1.mp3` | "Operative standing by." | Cold, professional voice |
+| `voice/operative/select2.mp3` | "In the shadows." | Mysterious, quiet |
+| `voice/operative/move1.mp3` | "Moving silently." | Whispered, stealthy |
+| `voice/operative/attack1.mp3` | "Target acquired." | Cold, precise |
+| `voice/operative/ready.mp3` | "Operative ready for insertion." | Military announcement |
+
+### Scorcher (Fast Attack Vehicle)
+
+| Filename | Line | Style |
+|----------|------|-------|
+| `voice/scorcher/select1.mp3` | "Fire it up!" | Excited, pyromanic |
+| `voice/scorcher/select2.mp3` | "Scorcher online." | Eager driver voice |
+| `voice/scorcher/move1.mp3` | "Burning rubber!" | Fast, energetic |
+| `voice/scorcher/attack1.mp3` | "Time to burn!" | Maniacal, excited |
+| `voice/scorcher/ready.mp3` | "Scorcher fueled and ready." | Military announcement |
+
+### Devastator (Heavy Siege Tank)
+
+| Filename | Line | Style |
+|----------|------|-------|
+| `voice/devastator/select1.mp3` | "Devastator standing by." | Calm, methodical commander |
+| `voice/devastator/select2.mp3` | "Tank primed." | Professional, patient |
+| `voice/devastator/move1.mp3` | "Rolling out." | Steady tank commander |
+| `voice/devastator/attack1.mp3` | "Bombardment commencing." | Cold, tactical |
+| `voice/devastator/ready.mp3` | "Devastator battle-ready." | Military announcement |
+
+### Colossus (Massive Walker Mech)
+
+| Filename | Line | Style |
+|----------|------|-------|
+| `voice/colossus/select1.mp3` | "Colossus awakened." | Deep, powerful, ominous |
+| `voice/colossus/select2.mp3` | "Systems nominal." | Mechanical, imposing |
+| `voice/colossus/move1.mp3` | "Advancing." | Heavy, deliberate |
+| `voice/colossus/attack1.mp3` | "Annihilation protocol engaged." | Deep, terrifying |
+| `voice/colossus/ready.mp3` | "Colossus operational." | Military announcement |
+
+### Lifter (Flying Transport/Medic)
+
+| Filename | Line | Style |
+|----------|------|-------|
+| `voice/lifter/select1.mp3` | "Lifter ready." | Calm female pilot voice |
+| `voice/lifter/select2.mp3` | "Medical support here." | Caring, professional |
+| `voice/lifter/move1.mp3` | "Airborne." | Quick pilot acknowledgment |
+| `voice/lifter/ready.mp3` | "Lifter standing by for evacuation." | Military announcement |
+
+### Valkyrie (Transforming Fighter)
+
+| Filename | Line | Style |
+|----------|------|-------|
+| `voice/valkyrie/select1.mp3` | "Valkyrie online." | Confident female pilot |
+| `voice/valkyrie/select2.mp3` | "Ready to transform." | Eager, skilled |
+| `voice/valkyrie/move1.mp3` | "Adjusting vector." | Technical pilot speak |
+| `voice/valkyrie/attack1.mp3` | "Weapons hot!" | Aggressive fighter pilot |
+| `voice/valkyrie/ready.mp3` | "Valkyrie cleared for launch." | Military announcement |
+
+### Specter (Cloakable Strike Fighter)
+
+| Filename | Line | Style |
+|----------|------|-------|
+| `voice/specter/select1.mp3` | "Specter active." | Ghost-like, whispered |
+| `voice/specter/select2.mp3` | "You can't see me." | Mysterious, confident |
+| `voice/specter/move1.mp3` | "Gliding in." | Silent, stealthy |
+| `voice/specter/attack1.mp3` | "From the shadows." | Cold, deadly |
+| `voice/specter/ready.mp3` | "Specter cloaked and ready." | Military announcement |
+
+### Dreadnought (Capital Ship)
+
+| Filename | Line | Style |
+|----------|------|-------|
+| `voice/dreadnought/select1.mp3` | "Dreadnought reporting." | Deep, commanding captain |
+| `voice/dreadnought/select2.mp3` | "All guns ready." | Imposing, authoritative |
+| `voice/dreadnought/move1.mp3` | "Setting course." | Naval command voice |
+| `voice/dreadnought/attack1.mp3` | "Nova Cannon charged." | Terrifying, powerful |
+| `voice/dreadnought/ready.mp3` | "Dreadnought commissioned." | Military announcement |
+
+### Overseer (Support/Detector)
+
+| Filename | Line | Style |
+|----------|------|-------|
+| `voice/overseer/select1.mp3` | "Overseer online." | Analytical, robotic |
+| `voice/overseer/select2.mp3` | "Scanning area." | Technical, vigilant |
+| `voice/overseer/move1.mp3` | "Repositioning sensors." | Calm, methodical |
+| `voice/overseer/ready.mp3` | "Overseer deployed." | Military announcement |
 
 ---
 

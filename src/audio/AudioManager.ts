@@ -92,51 +92,104 @@ export const SOUNDS: Record<string, SoundConfig> = {
   worker_mining: { id: 'worker_mining', url: '/audio/unit/mining.mp3', category: 'unit', volume: 0.3, spatial: true, loop: true, priority: SoundPriority.LOW, maxDistance: 80 },
   worker_building: { id: 'worker_building', url: '/audio/unit/building.mp3', category: 'unit', volume: 0.3, spatial: true, loop: true, priority: SoundPriority.LOW, maxDistance: 80 },
 
-  // Unit Voice Lines - SCV (Worker)
-  voice_scv_select_1: { id: 'voice_scv_select_1', url: '/audio/voice/scv/select1.mp3', category: 'voice', volume: 0.6, priority: SoundPriority.HIGH },
-  voice_scv_select_2: { id: 'voice_scv_select_2', url: '/audio/voice/scv/select2.mp3', category: 'voice', volume: 0.6, priority: SoundPriority.HIGH },
-  voice_scv_select_3: { id: 'voice_scv_select_3', url: '/audio/voice/scv/select3.mp3', category: 'voice', volume: 0.6, priority: SoundPriority.HIGH },
-  voice_scv_move_1: { id: 'voice_scv_move_1', url: '/audio/voice/scv/move1.mp3', category: 'voice', volume: 0.6, priority: SoundPriority.HIGH },
-  voice_scv_move_2: { id: 'voice_scv_move_2', url: '/audio/voice/scv/move2.mp3', category: 'voice', volume: 0.6, priority: SoundPriority.HIGH },
-  voice_scv_attack_1: { id: 'voice_scv_attack_1', url: '/audio/voice/scv/attack1.mp3', category: 'voice', volume: 0.6, priority: SoundPriority.HIGH },
+  // ============================================================================
+  // DOMINION UNIT VOICE LINES
+  // ============================================================================
 
-  // Unit Voice Lines - Marine
-  voice_marine_select_1: { id: 'voice_marine_select_1', url: '/audio/voice/marine/select1.mp3', category: 'voice', volume: 0.6, priority: SoundPriority.HIGH },
-  voice_marine_select_2: { id: 'voice_marine_select_2', url: '/audio/voice/marine/select2.mp3', category: 'voice', volume: 0.6, priority: SoundPriority.HIGH },
-  voice_marine_select_3: { id: 'voice_marine_select_3', url: '/audio/voice/marine/select3.mp3', category: 'voice', volume: 0.6, priority: SoundPriority.HIGH },
-  voice_marine_move_1: { id: 'voice_marine_move_1', url: '/audio/voice/marine/move1.mp3', category: 'voice', volume: 0.6, priority: SoundPriority.HIGH },
-  voice_marine_move_2: { id: 'voice_marine_move_2', url: '/audio/voice/marine/move2.mp3', category: 'voice', volume: 0.6, priority: SoundPriority.HIGH },
-  voice_marine_attack_1: { id: 'voice_marine_attack_1', url: '/audio/voice/marine/attack1.mp3', category: 'voice', volume: 0.6, priority: SoundPriority.HIGH },
-  voice_marine_attack_2: { id: 'voice_marine_attack_2', url: '/audio/voice/marine/attack2.mp3', category: 'voice', volume: 0.6, priority: SoundPriority.HIGH },
-  voice_marine_ready: { id: 'voice_marine_ready', url: '/audio/voice/marine/ready.mp3', category: 'voice', volume: 0.7, priority: SoundPriority.HIGH },
+  // Unit Voice Lines - Fabricator (Worker)
+  voice_fabricator_select_1: { id: 'voice_fabricator_select_1', url: '/audio/voice/fabricator/select1.mp3', category: 'voice', volume: 0.6, priority: SoundPriority.HIGH },
+  voice_fabricator_select_2: { id: 'voice_fabricator_select_2', url: '/audio/voice/fabricator/select2.mp3', category: 'voice', volume: 0.6, priority: SoundPriority.HIGH },
+  voice_fabricator_select_3: { id: 'voice_fabricator_select_3', url: '/audio/voice/fabricator/select3.mp3', category: 'voice', volume: 0.6, priority: SoundPriority.HIGH },
+  voice_fabricator_move_1: { id: 'voice_fabricator_move_1', url: '/audio/voice/fabricator/move1.mp3', category: 'voice', volume: 0.6, priority: SoundPriority.HIGH },
+  voice_fabricator_move_2: { id: 'voice_fabricator_move_2', url: '/audio/voice/fabricator/move2.mp3', category: 'voice', volume: 0.6, priority: SoundPriority.HIGH },
+  voice_fabricator_attack_1: { id: 'voice_fabricator_attack_1', url: '/audio/voice/fabricator/attack1.mp3', category: 'voice', volume: 0.6, priority: SoundPriority.HIGH },
+  voice_fabricator_ready: { id: 'voice_fabricator_ready', url: '/audio/voice/fabricator/ready.mp3', category: 'voice', volume: 0.7, priority: SoundPriority.HIGH },
 
-  // Unit Voice Lines - Marauder
-  voice_marauder_select_1: { id: 'voice_marauder_select_1', url: '/audio/voice/marauder/select1.mp3', category: 'voice', volume: 0.6, priority: SoundPriority.HIGH },
-  voice_marauder_select_2: { id: 'voice_marauder_select_2', url: '/audio/voice/marauder/select2.mp3', category: 'voice', volume: 0.6, priority: SoundPriority.HIGH },
-  voice_marauder_move_1: { id: 'voice_marauder_move_1', url: '/audio/voice/marauder/move1.mp3', category: 'voice', volume: 0.6, priority: SoundPriority.HIGH },
-  voice_marauder_move_2: { id: 'voice_marauder_move_2', url: '/audio/voice/marauder/move2.mp3', category: 'voice', volume: 0.6, priority: SoundPriority.HIGH },
-  voice_marauder_attack_1: { id: 'voice_marauder_attack_1', url: '/audio/voice/marauder/attack1.mp3', category: 'voice', volume: 0.6, priority: SoundPriority.HIGH },
-  voice_marauder_ready: { id: 'voice_marauder_ready', url: '/audio/voice/marauder/ready.mp3', category: 'voice', volume: 0.7, priority: SoundPriority.HIGH },
+  // Unit Voice Lines - Trooper (Basic Infantry)
+  voice_trooper_select_1: { id: 'voice_trooper_select_1', url: '/audio/voice/trooper/select1.mp3', category: 'voice', volume: 0.6, priority: SoundPriority.HIGH },
+  voice_trooper_select_2: { id: 'voice_trooper_select_2', url: '/audio/voice/trooper/select2.mp3', category: 'voice', volume: 0.6, priority: SoundPriority.HIGH },
+  voice_trooper_select_3: { id: 'voice_trooper_select_3', url: '/audio/voice/trooper/select3.mp3', category: 'voice', volume: 0.6, priority: SoundPriority.HIGH },
+  voice_trooper_move_1: { id: 'voice_trooper_move_1', url: '/audio/voice/trooper/move1.mp3', category: 'voice', volume: 0.6, priority: SoundPriority.HIGH },
+  voice_trooper_move_2: { id: 'voice_trooper_move_2', url: '/audio/voice/trooper/move2.mp3', category: 'voice', volume: 0.6, priority: SoundPriority.HIGH },
+  voice_trooper_attack_1: { id: 'voice_trooper_attack_1', url: '/audio/voice/trooper/attack1.mp3', category: 'voice', volume: 0.6, priority: SoundPriority.HIGH },
+  voice_trooper_attack_2: { id: 'voice_trooper_attack_2', url: '/audio/voice/trooper/attack2.mp3', category: 'voice', volume: 0.6, priority: SoundPriority.HIGH },
+  voice_trooper_ready: { id: 'voice_trooper_ready', url: '/audio/voice/trooper/ready.mp3', category: 'voice', volume: 0.7, priority: SoundPriority.HIGH },
 
-  // Unit Voice Lines - Hellion
-  voice_hellion_select_1: { id: 'voice_hellion_select_1', url: '/audio/voice/hellion/select1.mp3', category: 'voice', volume: 0.6, priority: SoundPriority.HIGH },
-  voice_hellion_select_2: { id: 'voice_hellion_select_2', url: '/audio/voice/hellion/select2.mp3', category: 'voice', volume: 0.6, priority: SoundPriority.HIGH },
-  voice_hellion_move_1: { id: 'voice_hellion_move_1', url: '/audio/voice/hellion/move1.mp3', category: 'voice', volume: 0.6, priority: SoundPriority.HIGH },
-  voice_hellion_attack_1: { id: 'voice_hellion_attack_1', url: '/audio/voice/hellion/attack1.mp3', category: 'voice', volume: 0.6, priority: SoundPriority.HIGH },
-  voice_hellion_ready: { id: 'voice_hellion_ready', url: '/audio/voice/hellion/ready.mp3', category: 'voice', volume: 0.7, priority: SoundPriority.HIGH },
+  // Unit Voice Lines - Breacher (Heavy Infantry)
+  voice_breacher_select_1: { id: 'voice_breacher_select_1', url: '/audio/voice/breacher/select1.mp3', category: 'voice', volume: 0.6, priority: SoundPriority.HIGH },
+  voice_breacher_select_2: { id: 'voice_breacher_select_2', url: '/audio/voice/breacher/select2.mp3', category: 'voice', volume: 0.6, priority: SoundPriority.HIGH },
+  voice_breacher_move_1: { id: 'voice_breacher_move_1', url: '/audio/voice/breacher/move1.mp3', category: 'voice', volume: 0.6, priority: SoundPriority.HIGH },
+  voice_breacher_move_2: { id: 'voice_breacher_move_2', url: '/audio/voice/breacher/move2.mp3', category: 'voice', volume: 0.6, priority: SoundPriority.HIGH },
+  voice_breacher_attack_1: { id: 'voice_breacher_attack_1', url: '/audio/voice/breacher/attack1.mp3', category: 'voice', volume: 0.6, priority: SoundPriority.HIGH },
+  voice_breacher_ready: { id: 'voice_breacher_ready', url: '/audio/voice/breacher/ready.mp3', category: 'voice', volume: 0.7, priority: SoundPriority.HIGH },
 
-  // Unit Voice Lines - Siege Tank
-  voice_tank_select_1: { id: 'voice_tank_select_1', url: '/audio/voice/tank/select1.mp3', category: 'voice', volume: 0.6, priority: SoundPriority.HIGH },
-  voice_tank_select_2: { id: 'voice_tank_select_2', url: '/audio/voice/tank/select2.mp3', category: 'voice', volume: 0.6, priority: SoundPriority.HIGH },
-  voice_tank_move_1: { id: 'voice_tank_move_1', url: '/audio/voice/tank/move1.mp3', category: 'voice', volume: 0.6, priority: SoundPriority.HIGH },
-  voice_tank_attack_1: { id: 'voice_tank_attack_1', url: '/audio/voice/tank/attack1.mp3', category: 'voice', volume: 0.6, priority: SoundPriority.HIGH },
-  voice_tank_ready: { id: 'voice_tank_ready', url: '/audio/voice/tank/ready.mp3', category: 'voice', volume: 0.7, priority: SoundPriority.HIGH },
+  // Unit Voice Lines - Vanguard (Fast Assault Infantry)
+  voice_vanguard_select_1: { id: 'voice_vanguard_select_1', url: '/audio/voice/vanguard/select1.mp3', category: 'voice', volume: 0.6, priority: SoundPriority.HIGH },
+  voice_vanguard_select_2: { id: 'voice_vanguard_select_2', url: '/audio/voice/vanguard/select2.mp3', category: 'voice', volume: 0.6, priority: SoundPriority.HIGH },
+  voice_vanguard_move_1: { id: 'voice_vanguard_move_1', url: '/audio/voice/vanguard/move1.mp3', category: 'voice', volume: 0.6, priority: SoundPriority.HIGH },
+  voice_vanguard_attack_1: { id: 'voice_vanguard_attack_1', url: '/audio/voice/vanguard/attack1.mp3', category: 'voice', volume: 0.6, priority: SoundPriority.HIGH },
+  voice_vanguard_ready: { id: 'voice_vanguard_ready', url: '/audio/voice/vanguard/ready.mp3', category: 'voice', volume: 0.7, priority: SoundPriority.HIGH },
 
-  // Unit Voice Lines - Medic
-  voice_medic_select_1: { id: 'voice_medic_select_1', url: '/audio/voice/medic/select1.mp3', category: 'voice', volume: 0.6, priority: SoundPriority.HIGH },
-  voice_medic_select_2: { id: 'voice_medic_select_2', url: '/audio/voice/medic/select2.mp3', category: 'voice', volume: 0.6, priority: SoundPriority.HIGH },
-  voice_medic_move_1: { id: 'voice_medic_move_1', url: '/audio/voice/medic/move1.mp3', category: 'voice', volume: 0.6, priority: SoundPriority.HIGH },
-  voice_medic_ready: { id: 'voice_medic_ready', url: '/audio/voice/medic/ready.mp3', category: 'voice', volume: 0.7, priority: SoundPriority.HIGH },
+  // Unit Voice Lines - Operative (Elite Stealth Unit)
+  voice_operative_select_1: { id: 'voice_operative_select_1', url: '/audio/voice/operative/select1.mp3', category: 'voice', volume: 0.6, priority: SoundPriority.HIGH },
+  voice_operative_select_2: { id: 'voice_operative_select_2', url: '/audio/voice/operative/select2.mp3', category: 'voice', volume: 0.6, priority: SoundPriority.HIGH },
+  voice_operative_move_1: { id: 'voice_operative_move_1', url: '/audio/voice/operative/move1.mp3', category: 'voice', volume: 0.6, priority: SoundPriority.HIGH },
+  voice_operative_attack_1: { id: 'voice_operative_attack_1', url: '/audio/voice/operative/attack1.mp3', category: 'voice', volume: 0.6, priority: SoundPriority.HIGH },
+  voice_operative_ready: { id: 'voice_operative_ready', url: '/audio/voice/operative/ready.mp3', category: 'voice', volume: 0.7, priority: SoundPriority.HIGH },
+
+  // Unit Voice Lines - Scorcher (Fast Attack Vehicle)
+  voice_scorcher_select_1: { id: 'voice_scorcher_select_1', url: '/audio/voice/scorcher/select1.mp3', category: 'voice', volume: 0.6, priority: SoundPriority.HIGH },
+  voice_scorcher_select_2: { id: 'voice_scorcher_select_2', url: '/audio/voice/scorcher/select2.mp3', category: 'voice', volume: 0.6, priority: SoundPriority.HIGH },
+  voice_scorcher_move_1: { id: 'voice_scorcher_move_1', url: '/audio/voice/scorcher/move1.mp3', category: 'voice', volume: 0.6, priority: SoundPriority.HIGH },
+  voice_scorcher_attack_1: { id: 'voice_scorcher_attack_1', url: '/audio/voice/scorcher/attack1.mp3', category: 'voice', volume: 0.6, priority: SoundPriority.HIGH },
+  voice_scorcher_ready: { id: 'voice_scorcher_ready', url: '/audio/voice/scorcher/ready.mp3', category: 'voice', volume: 0.7, priority: SoundPriority.HIGH },
+
+  // Unit Voice Lines - Devastator (Heavy Siege Tank)
+  voice_devastator_select_1: { id: 'voice_devastator_select_1', url: '/audio/voice/devastator/select1.mp3', category: 'voice', volume: 0.6, priority: SoundPriority.HIGH },
+  voice_devastator_select_2: { id: 'voice_devastator_select_2', url: '/audio/voice/devastator/select2.mp3', category: 'voice', volume: 0.6, priority: SoundPriority.HIGH },
+  voice_devastator_move_1: { id: 'voice_devastator_move_1', url: '/audio/voice/devastator/move1.mp3', category: 'voice', volume: 0.6, priority: SoundPriority.HIGH },
+  voice_devastator_attack_1: { id: 'voice_devastator_attack_1', url: '/audio/voice/devastator/attack1.mp3', category: 'voice', volume: 0.6, priority: SoundPriority.HIGH },
+  voice_devastator_ready: { id: 'voice_devastator_ready', url: '/audio/voice/devastator/ready.mp3', category: 'voice', volume: 0.7, priority: SoundPriority.HIGH },
+
+  // Unit Voice Lines - Colossus (Massive Walker Mech)
+  voice_colossus_select_1: { id: 'voice_colossus_select_1', url: '/audio/voice/colossus/select1.mp3', category: 'voice', volume: 0.6, priority: SoundPriority.HIGH },
+  voice_colossus_select_2: { id: 'voice_colossus_select_2', url: '/audio/voice/colossus/select2.mp3', category: 'voice', volume: 0.6, priority: SoundPriority.HIGH },
+  voice_colossus_move_1: { id: 'voice_colossus_move_1', url: '/audio/voice/colossus/move1.mp3', category: 'voice', volume: 0.6, priority: SoundPriority.HIGH },
+  voice_colossus_attack_1: { id: 'voice_colossus_attack_1', url: '/audio/voice/colossus/attack1.mp3', category: 'voice', volume: 0.6, priority: SoundPriority.HIGH },
+  voice_colossus_ready: { id: 'voice_colossus_ready', url: '/audio/voice/colossus/ready.mp3', category: 'voice', volume: 0.7, priority: SoundPriority.HIGH },
+
+  // Unit Voice Lines - Lifter (Flying Transport/Medic)
+  voice_lifter_select_1: { id: 'voice_lifter_select_1', url: '/audio/voice/lifter/select1.mp3', category: 'voice', volume: 0.6, priority: SoundPriority.HIGH },
+  voice_lifter_select_2: { id: 'voice_lifter_select_2', url: '/audio/voice/lifter/select2.mp3', category: 'voice', volume: 0.6, priority: SoundPriority.HIGH },
+  voice_lifter_move_1: { id: 'voice_lifter_move_1', url: '/audio/voice/lifter/move1.mp3', category: 'voice', volume: 0.6, priority: SoundPriority.HIGH },
+  voice_lifter_ready: { id: 'voice_lifter_ready', url: '/audio/voice/lifter/ready.mp3', category: 'voice', volume: 0.7, priority: SoundPriority.HIGH },
+
+  // Unit Voice Lines - Valkyrie (Transforming Fighter)
+  voice_valkyrie_select_1: { id: 'voice_valkyrie_select_1', url: '/audio/voice/valkyrie/select1.mp3', category: 'voice', volume: 0.6, priority: SoundPriority.HIGH },
+  voice_valkyrie_select_2: { id: 'voice_valkyrie_select_2', url: '/audio/voice/valkyrie/select2.mp3', category: 'voice', volume: 0.6, priority: SoundPriority.HIGH },
+  voice_valkyrie_move_1: { id: 'voice_valkyrie_move_1', url: '/audio/voice/valkyrie/move1.mp3', category: 'voice', volume: 0.6, priority: SoundPriority.HIGH },
+  voice_valkyrie_attack_1: { id: 'voice_valkyrie_attack_1', url: '/audio/voice/valkyrie/attack1.mp3', category: 'voice', volume: 0.6, priority: SoundPriority.HIGH },
+  voice_valkyrie_ready: { id: 'voice_valkyrie_ready', url: '/audio/voice/valkyrie/ready.mp3', category: 'voice', volume: 0.7, priority: SoundPriority.HIGH },
+
+  // Unit Voice Lines - Specter (Cloakable Strike Fighter)
+  voice_specter_select_1: { id: 'voice_specter_select_1', url: '/audio/voice/specter/select1.mp3', category: 'voice', volume: 0.6, priority: SoundPriority.HIGH },
+  voice_specter_select_2: { id: 'voice_specter_select_2', url: '/audio/voice/specter/select2.mp3', category: 'voice', volume: 0.6, priority: SoundPriority.HIGH },
+  voice_specter_move_1: { id: 'voice_specter_move_1', url: '/audio/voice/specter/move1.mp3', category: 'voice', volume: 0.6, priority: SoundPriority.HIGH },
+  voice_specter_attack_1: { id: 'voice_specter_attack_1', url: '/audio/voice/specter/attack1.mp3', category: 'voice', volume: 0.6, priority: SoundPriority.HIGH },
+  voice_specter_ready: { id: 'voice_specter_ready', url: '/audio/voice/specter/ready.mp3', category: 'voice', volume: 0.7, priority: SoundPriority.HIGH },
+
+  // Unit Voice Lines - Dreadnought (Capital Ship)
+  voice_dreadnought_select_1: { id: 'voice_dreadnought_select_1', url: '/audio/voice/dreadnought/select1.mp3', category: 'voice', volume: 0.6, priority: SoundPriority.HIGH },
+  voice_dreadnought_select_2: { id: 'voice_dreadnought_select_2', url: '/audio/voice/dreadnought/select2.mp3', category: 'voice', volume: 0.6, priority: SoundPriority.HIGH },
+  voice_dreadnought_move_1: { id: 'voice_dreadnought_move_1', url: '/audio/voice/dreadnought/move1.mp3', category: 'voice', volume: 0.6, priority: SoundPriority.HIGH },
+  voice_dreadnought_attack_1: { id: 'voice_dreadnought_attack_1', url: '/audio/voice/dreadnought/attack1.mp3', category: 'voice', volume: 0.6, priority: SoundPriority.HIGH },
+  voice_dreadnought_ready: { id: 'voice_dreadnought_ready', url: '/audio/voice/dreadnought/ready.mp3', category: 'voice', volume: 0.7, priority: SoundPriority.HIGH },
+
+  // Unit Voice Lines - Overseer (Support/Detector)
+  voice_overseer_select_1: { id: 'voice_overseer_select_1', url: '/audio/voice/overseer/select1.mp3', category: 'voice', volume: 0.6, priority: SoundPriority.HIGH },
+  voice_overseer_select_2: { id: 'voice_overseer_select_2', url: '/audio/voice/overseer/select2.mp3', category: 'voice', volume: 0.6, priority: SoundPriority.HIGH },
+  voice_overseer_move_1: { id: 'voice_overseer_move_1', url: '/audio/voice/overseer/move1.mp3', category: 'voice', volume: 0.6, priority: SoundPriority.HIGH },
+  voice_overseer_ready: { id: 'voice_overseer_ready', url: '/audio/voice/overseer/ready.mp3', category: 'voice', volume: 0.7, priority: SoundPriority.HIGH },
 
   // Building Sounds
   building_place: { id: 'building_place', url: '/audio/building/place.mp3', category: 'building', volume: 0.5, priority: SoundPriority.HIGH },
@@ -163,47 +216,119 @@ export const SOUNDS: Record<string, SoundConfig> = {
   music_defeat: { id: 'music_defeat', url: '/audio/music/defeat.mp3', category: 'music', volume: 0.4, priority: SoundPriority.CRITICAL },
 };
 
-// Unit voice mapping
+// ============================================================================
+// UNIT VOICE MAPPINGS
+// Maps unit IDs to their available voice lines for select/move/attack/ready
+// ============================================================================
+
 export const UNIT_VOICES: Record<string, {
   select: string[];
   move: string[];
   attack: string[];
   ready?: string;
 }> = {
-  scv: {
-    select: ['voice_scv_select_1', 'voice_scv_select_2', 'voice_scv_select_3'],
-    move: ['voice_scv_move_1', 'voice_scv_move_2'],
-    attack: ['voice_scv_attack_1'],
+  // Fabricator - Worker Unit
+  fabricator: {
+    select: ['voice_fabricator_select_1', 'voice_fabricator_select_2', 'voice_fabricator_select_3'],
+    move: ['voice_fabricator_move_1', 'voice_fabricator_move_2'],
+    attack: ['voice_fabricator_attack_1'],
+    ready: 'voice_fabricator_ready',
   },
-  marine: {
-    select: ['voice_marine_select_1', 'voice_marine_select_2', 'voice_marine_select_3'],
-    move: ['voice_marine_move_1', 'voice_marine_move_2'],
-    attack: ['voice_marine_attack_1', 'voice_marine_attack_2'],
-    ready: 'voice_marine_ready',
+
+  // Trooper - Basic Infantry
+  trooper: {
+    select: ['voice_trooper_select_1', 'voice_trooper_select_2', 'voice_trooper_select_3'],
+    move: ['voice_trooper_move_1', 'voice_trooper_move_2'],
+    attack: ['voice_trooper_attack_1', 'voice_trooper_attack_2'],
+    ready: 'voice_trooper_ready',
   },
-  marauder: {
-    select: ['voice_marauder_select_1', 'voice_marauder_select_2'],
-    move: ['voice_marauder_move_1', 'voice_marauder_move_2'],
-    attack: ['voice_marauder_attack_1'],
-    ready: 'voice_marauder_ready',
+
+  // Breacher - Heavy Armored Infantry
+  breacher: {
+    select: ['voice_breacher_select_1', 'voice_breacher_select_2'],
+    move: ['voice_breacher_move_1', 'voice_breacher_move_2'],
+    attack: ['voice_breacher_attack_1'],
+    ready: 'voice_breacher_ready',
   },
-  hellion: {
-    select: ['voice_hellion_select_1', 'voice_hellion_select_2'],
-    move: ['voice_hellion_move_1'],
-    attack: ['voice_hellion_attack_1'],
-    ready: 'voice_hellion_ready',
+
+  // Vanguard - Fast Assault Infantry
+  vanguard: {
+    select: ['voice_vanguard_select_1', 'voice_vanguard_select_2'],
+    move: ['voice_vanguard_move_1'],
+    attack: ['voice_vanguard_attack_1'],
+    ready: 'voice_vanguard_ready',
   },
-  siege_tank: {
-    select: ['voice_tank_select_1', 'voice_tank_select_2'],
-    move: ['voice_tank_move_1'],
-    attack: ['voice_tank_attack_1'],
-    ready: 'voice_tank_ready',
+
+  // Operative - Elite Stealth Unit
+  operative: {
+    select: ['voice_operative_select_1', 'voice_operative_select_2'],
+    move: ['voice_operative_move_1'],
+    attack: ['voice_operative_attack_1'],
+    ready: 'voice_operative_ready',
   },
-  medic: {
-    select: ['voice_medic_select_1', 'voice_medic_select_2'],
-    move: ['voice_medic_move_1'],
-    attack: [],
-    ready: 'voice_medic_ready',
+
+  // Scorcher - Fast Attack Vehicle
+  scorcher: {
+    select: ['voice_scorcher_select_1', 'voice_scorcher_select_2'],
+    move: ['voice_scorcher_move_1'],
+    attack: ['voice_scorcher_attack_1'],
+    ready: 'voice_scorcher_ready',
+  },
+
+  // Devastator - Heavy Siege Tank
+  devastator: {
+    select: ['voice_devastator_select_1', 'voice_devastator_select_2'],
+    move: ['voice_devastator_move_1'],
+    attack: ['voice_devastator_attack_1'],
+    ready: 'voice_devastator_ready',
+  },
+
+  // Colossus - Massive Walker Mech
+  colossus: {
+    select: ['voice_colossus_select_1', 'voice_colossus_select_2'],
+    move: ['voice_colossus_move_1'],
+    attack: ['voice_colossus_attack_1'],
+    ready: 'voice_colossus_ready',
+  },
+
+  // Lifter - Flying Transport/Medic
+  lifter: {
+    select: ['voice_lifter_select_1', 'voice_lifter_select_2'],
+    move: ['voice_lifter_move_1'],
+    attack: [], // Lifter doesn't attack
+    ready: 'voice_lifter_ready',
+  },
+
+  // Valkyrie - Transforming Fighter
+  valkyrie: {
+    select: ['voice_valkyrie_select_1', 'voice_valkyrie_select_2'],
+    move: ['voice_valkyrie_move_1'],
+    attack: ['voice_valkyrie_attack_1'],
+    ready: 'voice_valkyrie_ready',
+  },
+
+  // Specter - Cloakable Strike Fighter
+  specter: {
+    select: ['voice_specter_select_1', 'voice_specter_select_2'],
+    move: ['voice_specter_move_1'],
+    attack: ['voice_specter_attack_1'],
+    ready: 'voice_specter_ready',
+  },
+
+  // Dreadnought - Capital Ship
+  dreadnought: {
+    select: ['voice_dreadnought_select_1', 'voice_dreadnought_select_2'],
+    move: ['voice_dreadnought_move_1'],
+    attack: ['voice_dreadnought_attack_1'],
+    ready: 'voice_dreadnought_ready',
+  },
+
+  // Overseer - Support/Detector
+  overseer: {
+    select: ['voice_overseer_select_1', 'voice_overseer_select_2'],
+    move: ['voice_overseer_move_1'],
+    attack: [], // Overseer doesn't attack
+    ready: 'voice_overseer_ready',
   },
 };
 
