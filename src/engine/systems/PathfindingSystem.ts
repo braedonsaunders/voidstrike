@@ -1001,12 +1001,10 @@ export class PathfindingSystem extends System {
 
   /**
    * Register decoration collisions (rocks, large obstacles) with pathfinding.
-   * Large decorations will have their cells marked with high movement cost
-   * to discourage pathing through them while not completely blocking.
+   * Large decorations are marked as completely unwalkable - units cannot path through rocks.
    */
   public registerDecorationCollisions(collisions: Array<{ x: number; z: number; radius: number }>): void {
     const DECORATION_BLOCKING_RADIUS = 1.0; // Only block decorations with radius >= this value
-    const DECORATION_MOVE_COST = 5.0; // High cost discourages but doesn't completely block
 
     let decorationsBlocked = 0;
 
@@ -1019,7 +1017,7 @@ export class PathfindingSystem extends System {
       const centerY = deco.z;
       const effectiveRadius = Math.ceil(deco.radius);
 
-      // Mark cells covered by this decoration with high movement cost
+      // Mark cells covered by this decoration as completely unwalkable
       for (let dy = -effectiveRadius; dy <= effectiveRadius; dy++) {
         for (let dx = -effectiveRadius; dx <= effectiveRadius; dx++) {
           const dist = Math.sqrt(dx * dx + dy * dy);
@@ -1037,13 +1035,9 @@ export class PathfindingSystem extends System {
               continue;
             }
 
-            // Set high movement cost instead of completely blocking
-            // This allows units to push through if absolutely necessary
-            // but strongly discourages pathing through decorations
-            const currentCost = this.pathfinder.getMoveCost(cellX, cellY);
-            const newCost = Math.max(currentCost, DECORATION_MOVE_COST);
-            this.pathfinder.setMoveCost(cellX, cellY, newCost);
-            this.hierarchicalPathfinder.setMoveCost(cellX, cellY, newCost);
+            // Mark as completely unwalkable - units cannot path through rocks
+            this.pathfinder.setWalkable(cellX, cellY, false);
+            this.hierarchicalPathfinder.setWalkable(cellX, cellY, false);
             decorationsBlocked++;
           }
         }
