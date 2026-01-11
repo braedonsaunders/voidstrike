@@ -490,7 +490,7 @@ export function WebGPUGameCanvas() {
         const renderElapsed = performance.now() - renderStart;
 
         const frameElapsed = performance.now() - frameStart;
-        if (frameElapsed > 50) { // Log if frame takes more than 50ms
+        if (frameElapsed > 16) { // Log if frame takes more than 16ms (60fps target)
           console.warn(`[FRAME] Total: ${frameElapsed.toFixed(1)}ms, Render: ${renderElapsed.toFixed(1)}ms`);
         }
 
