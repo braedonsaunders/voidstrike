@@ -339,7 +339,9 @@ export class RecastNavigation {
     if (!this.navMeshQuery) return null;
 
     try {
-      const result = this.navMeshQuery.findClosestPoint({ x, y: 0, z: y });
+      // Use large halfExtents for height tolerance since terrain has varying heights
+      const halfExtents = { x: 5, y: 20, z: 5 };
+      const result = this.navMeshQuery.findClosestPoint({ x, y: 0, z: y }, { halfExtents });
       if (result.success && result.point) {
         return { x: result.point.x, y: result.point.z };
       }
@@ -356,14 +358,16 @@ export class RecastNavigation {
     if (!this.navMeshQuery) return false;
 
     try {
-      const result = this.navMeshQuery.findClosestPoint({ x, y: 0, z: y });
+      // Use large halfExtents for height tolerance since terrain has varying heights
+      const halfExtents = { x: 2, y: 20, z: 2 };
+      const result = this.navMeshQuery.findClosestPoint({ x, y: 0, z: y }, { halfExtents });
       if (!result.success || !result.point) return false;
 
-      // Check if the closest point is within a small tolerance
+      // Check if the closest point is within a reasonable tolerance
       const dx = result.point.x - x;
       const dz = result.point.z - y;
       const dist = Math.sqrt(dx * dx + dz * dz);
-      return dist < 0.5; // Within half a cell
+      return dist < 2.0; // Within 2 units horizontally
     } catch {
       return false;
     }
