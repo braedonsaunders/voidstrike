@@ -212,7 +212,7 @@ export const useUIStore = create<UIState>((set, get) => ({
   showPing: true,
   showGraphicsOptions: false,
   rendererAPI: null,
-  preferWebGPU: false, // Default to WebGL for stability (WebGPU has TSL build issues)
+  preferWebGPU: true, // Default to WebGPU for best visual quality
   showSoundOptions: false,
   isFullscreen: false,
   graphicsSettings: {
