@@ -40,6 +40,7 @@ interface UnitOverlay {
 }
 
 const MAX_INSTANCES_PER_TYPE = 100; // Max units of same type per player
+const AIR_UNIT_HEIGHT = 8; // Height for flying units (matches building lift-off height)
 
 export class UnitRenderer {
   private scene: THREE.Scene;
@@ -582,8 +583,12 @@ export class UnitRenderer {
       // Get terrain height
       const terrainHeight = this.terrain?.getHeightAt(transform.x, transform.y) ?? 0;
 
+      // Calculate flying offset for air units
+      const flyingOffset = unit.isFlying ? AIR_UNIT_HEIGHT : 0;
+      const unitHeight = terrainHeight + flyingOffset;
+
       // PERF: Skip units outside camera frustum
-      if (!this.isInFrustum(transform.x, terrainHeight + 1, transform.y)) {
+      if (!this.isInFrustum(transform.x, unitHeight + 1, transform.y)) {
         // Hide overlay if exists (but keep unit in system)
         const overlay = this.unitOverlays.get(entity.id);
         if (overlay) {
@@ -601,7 +606,7 @@ export class UnitRenderer {
         animUnit.mesh.visible = true;
 
         // Update position and rotation
-        animUnit.mesh.position.set(transform.x, terrainHeight, transform.y);
+        animUnit.mesh.position.set(transform.x, unitHeight, transform.y);
         animUnit.mesh.rotation.y = -transform.rotation + Math.PI / 2;
 
         // Determine animation state
@@ -626,7 +631,7 @@ export class UnitRenderer {
           group.entityIds[instanceIndex] = entity.id;
 
           // Set instance transform - apply offsets to account for model origin position/rotation
-          this.tempPosition.set(transform.x, terrainHeight + group.yOffset, transform.y);
+          this.tempPosition.set(transform.x, unitHeight + group.yOffset, transform.y);
           this.tempEuler.set(0, -transform.rotation + Math.PI / 2 + group.rotationOffset, 0);
           this.tempQuaternion.setFromEuler(this.tempEuler);
           this.tempMatrix.compose(this.tempPosition, this.tempQuaternion, this.tempScale);
@@ -640,11 +645,11 @@ export class UnitRenderer {
       const overlay = this.getOrCreateOverlay(entity.id, ownerId);
 
       // Team marker - always visible colored circle beneath unit
-      overlay.teamMarker.position.set(transform.x, terrainHeight + 0.02, transform.y);
+      overlay.teamMarker.position.set(transform.x, unitHeight + 0.02, transform.y);
       overlay.teamMarker.visible = true;
 
       // Selection ring
-      overlay.selectionRing.position.set(transform.x, terrainHeight + 0.05, transform.y);
+      overlay.selectionRing.position.set(transform.x, unitHeight + 0.05, transform.y);
       overlay.selectionRing.visible = selectable?.isSelected ?? false;
       if (overlay.selectionRing.visible) {
         (overlay.selectionRing.material as THREE.MeshBasicMaterial) =
@@ -656,7 +661,7 @@ export class UnitRenderer {
         const healthPercent = health.getHealthPercent();
         overlay.healthBar.visible = healthPercent < 1;
         if (overlay.healthBar.visible) {
-          overlay.healthBar.position.set(transform.x, terrainHeight + 1.5, transform.y);
+          overlay.healthBar.position.set(transform.x, unitHeight + 1.5, transform.y);
           // Only update health bar visuals if health changed
           if (Math.abs(overlay.lastHealth - healthPercent) > 0.01) {
             this.updateHealthBar(overlay.healthBar, health);
