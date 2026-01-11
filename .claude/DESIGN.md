@@ -107,6 +107,28 @@ AI prioritizes filling extractors to 3 workers first, then distributes workers e
 
 ## Combat System
 
+### Auto-Attack Behavior
+Units automatically engage enemies based on their state:
+
+| Unit State | Target Acquisition | Notes |
+|------------|-------------------|-------|
+| **Idle** | Immediate within attack range | Instant response, no throttle delay |
+| **Hold Position** | Within attack range only | Won't move to engage |
+| **Patrolling** | Within sight range | Engages then resumes patrol |
+| **Attack-Moving** | Within sight range | Engages then resumes move |
+
+**Targeting Priority** (higher = attacked first):
+1. Devastators, Dreadnoughts, Colossus (90-100) - High threat units
+2. Specters, Operatives, Breachers (70-85) - Tactical threats
+3. Troopers, Scorchers, Valkyries (50-60) - Standard combat
+4. Vanguards, Lifters (40-45) - Support units
+5. Buildings (30) - Structures
+6. Workers (10) - Lowest priority
+
+Target scoring also considers:
+- **Distance** - Closer enemies are prioritized
+- **Health** - Damaged enemies are prioritized
+
 ### Damage Types
 - **Normal** - Standard damage
 - **Explosive** - Bonus vs large, reduced vs small

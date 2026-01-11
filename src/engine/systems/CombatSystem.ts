@@ -244,8 +244,19 @@ export class CombatSystem extends System {
       );
 
       if (needsTarget) {
-        // Use throttled/cached target search for performance
-        const target = this.getTargetThrottled(attacker.id, transform, unit, currentTick);
+        let target: number | null = null;
+
+        // For idle units, do an immediate check for enemies within ATTACK range
+        // This makes idle units instantly responsive to nearby threats
+        if (unit.state === 'idle' || unit.isHoldingPosition) {
+          target = this.findImmediateAttackTarget(attacker.id, transform, unit);
+        }
+
+        // If no immediate target found, use throttled search within sight range
+        if (target === null && !unit.isHoldingPosition) {
+          target = this.getTargetThrottled(attacker.id, transform, unit, currentTick);
+        }
+
         if (target && !unit.isHoldingPosition) {
           // For attackmoving units, save the destination before switching to attacking
           const savedTargetX = unit.targetX;
@@ -260,17 +271,8 @@ export class CombatSystem extends System {
             unit.targetY = savedTargetY;
           }
         } else if (target && unit.isHoldingPosition) {
-          // Only attack if in range
-          const targetEntity = this.world.getEntity(target);
-          if (targetEntity) {
-            const targetTransform = targetEntity.get<Transform>('Transform');
-            if (targetTransform) {
-              const distance = transform.distanceTo(targetTransform);
-              if (distance <= unit.attackRange) {
-                unit.setAttackTarget(target);
-              }
-            }
-          }
+          // Holding position units only attack if in range (already confirmed by findImmediateAttackTarget)
+          unit.setAttackTarget(target);
         }
       }
 
@@ -388,6 +390,106 @@ export class CombatSystem extends System {
       if (health.current >= health.max && health.shield >= health.maxShield) continue;
       health.regenerate(deltaTime / 1000, gameTime);
     }
+  }
+
+  /**
+   * Immediate attack target search for idle/holding units
+   * Checks only within ATTACK range (not sight range) for instant response
+   * No throttling - runs every frame for responsive auto-attack behavior
+   */
+  private findImmediateAttackTarget(
+    selfId: number,
+    selfTransform: Transform,
+    selfUnit: Unit
+  ): number | null {
+    // Get self's player ID
+    const selfEntity = this.world.getEntity(selfId);
+    const selfSelectable = selfEntity?.get<Selectable>('Selectable');
+    if (!selfSelectable) return null;
+
+    let bestTarget: { id: number; score: number } | null = null;
+
+    // Use spatial grid to find nearby units within ATTACK range
+    const nearbyUnitIds = this.world.unitGrid.queryRadius(
+      selfTransform.x,
+      selfTransform.y,
+      selfUnit.attackRange
+    );
+
+    // Check nearby units
+    for (const entityId of nearbyUnitIds) {
+      if (entityId === selfId) continue;
+
+      const entity = this.world.getEntity(entityId);
+      if (!entity) continue;
+
+      const transform = entity.get<Transform>('Transform');
+      const health = entity.get<Health>('Health');
+      const selectable = entity.get<Selectable>('Selectable');
+      const unit = entity.get<Unit>('Unit');
+
+      if (!transform || !health || !selectable) continue;
+      if (selectable.playerId === selfSelectable.playerId) continue;
+      if (health.isDead()) continue;
+
+      const distance = selfTransform.distanceTo(transform);
+      if (distance > selfUnit.attackRange) continue;
+
+      // Calculate target score based on priority and distance
+      const unitId = unit?.unitId || 'default';
+      const basePriority = TARGET_PRIORITY[unitId] || 50;
+      const distanceFactor = 1 - (distance / selfUnit.attackRange);
+      const healthFactor = 1 - (health.current / health.max);
+      const score = basePriority * 0.5 + distanceFactor * 30 + healthFactor * 20;
+
+      if (!bestTarget || score > bestTarget.score) {
+        bestTarget = { id: entityId, score };
+      }
+    }
+
+    // Also check nearby buildings within attack range
+    const nearbyBuildingIds = this.world.buildingGrid.queryRadius(
+      selfTransform.x,
+      selfTransform.y,
+      selfUnit.attackRange
+    );
+
+    for (const entityId of nearbyBuildingIds) {
+      const entity = this.world.getEntity(entityId);
+      if (!entity) continue;
+
+      const transform = entity.get<Transform>('Transform');
+      const health = entity.get<Health>('Health');
+      const selectable = entity.get<Selectable>('Selectable');
+      const building = entity.get<Building>('Building');
+
+      if (!transform || !health || !selectable || !building) continue;
+      if (selectable.playerId === selfSelectable.playerId) continue;
+      if (health.isDead()) continue;
+
+      // Distance to building edge
+      const halfW = building.width / 2;
+      const halfH = building.height / 2;
+      const clampedX = Math.max(transform.x - halfW, Math.min(selfTransform.x, transform.x + halfW));
+      const clampedY = Math.max(transform.y - halfH, Math.min(selfTransform.y, transform.y + halfH));
+      const edgeDx = selfTransform.x - clampedX;
+      const edgeDy = selfTransform.y - clampedY;
+      const distance = Math.sqrt(edgeDx * edgeDx + edgeDy * edgeDy);
+
+      if (distance > selfUnit.attackRange) continue;
+
+      // Buildings have lower priority than combat units
+      const basePriority = 30;
+      const distanceFactor = 1 - (distance / selfUnit.attackRange);
+      const healthFactor = 1 - (health.current / health.max);
+      const score = basePriority * 0.5 + distanceFactor * 30 + healthFactor * 20;
+
+      if (!bestTarget || score > bestTarget.score) {
+        bestTarget = { id: entityId, score };
+      }
+    }
+
+    return bestTarget?.id || null;
   }
 
   /**
