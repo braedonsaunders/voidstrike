@@ -369,20 +369,41 @@ export class PathfindingSystem extends System {
         destinationY: request.endY,
       });
     } else {
+      console.log('[PathfindingSystem] Path FAILED for entity', request.entityId,
+        'from', request.startX.toFixed(1), request.startY.toFixed(1),
+        'to', request.endX.toFixed(1), request.endY.toFixed(1),
+        '- state was:', unit.state);
       this.recordFailedPath(request.entityId, request.endX, request.endY);
+
+      // IMPORTANT: Don't reset target or state when pathfinding fails
+      // Let MovementSystem try direct movement instead
+      // This is a fallback while navmesh issues are being debugged
       unit.path = [];
       unit.pathIndex = 0;
-      unit.targetX = null;
-      unit.targetY = null;
 
-      if (unit.state === 'moving') {
-        unit.state = 'idle';
-      } else if (unit.state === 'building') {
-        unit.cancelBuilding();
-      } else if (unit.state === 'gathering') {
-        unit.gatherTargetId = null;
-        unit.isMining = false;
-        unit.state = 'idle';
+      // Keep targetX/targetY set so unit can move directly
+      // Only clear if target is very far (clearly needs a path)
+      const dx = request.endX - request.startX;
+      const dy = request.endY - request.startY;
+      const dist = Math.sqrt(dx * dx + dy * dy);
+
+      if (dist > 30) {
+        // Target is far, truly unreachable - reset
+        console.log('[PathfindingSystem] Target too far, resetting entity', request.entityId, 'to idle');
+        unit.targetX = null;
+        unit.targetY = null;
+        if (unit.state === 'moving') {
+          unit.state = 'idle';
+        } else if (unit.state === 'building') {
+          unit.cancelBuilding();
+        } else if (unit.state === 'gathering') {
+          unit.gatherTargetId = null;
+          unit.isMining = false;
+          unit.state = 'idle';
+        }
+      } else {
+        // Target is close - allow direct movement even without path
+        console.log('[PathfindingSystem] Target close enough, allowing direct movement for entity', request.entityId);
       }
 
       this.unitPathStates.delete(request.entityId);

@@ -152,6 +152,17 @@
 - [x] **Path request spam prevention** - Added 500ms cooldown per unit to prevent flooding pathfinding system when no path can be found
 - [x] **Alternate path fallback** - When path not found, now tries nearby walkable cells for both start and end positions to escape stuck situations
 
+### Recast Navigation WASM Integration (January 2026)
+- [x] **recast-navigation-js integration** - Replaced custom A*/HPA* with industry-standard WASM pathfinding (same core as Unity/Unreal/Godot)
+- [x] **NavMesh generation from terrain** - Generates TileCache-based navmesh from walkable terrain geometry
+- [x] **NavMeshQuery pathfinding** - O(1) path lookups with automatic height tolerance (halfExtents: {x: 2, y: 10, z: 2})
+- [x] **DetourCrowd collision avoidance** - Built-in RVO/ORCA for unit collision avoidance (currently disabled while debugging)
+- [x] **Dynamic obstacle support** - Buildings added as box obstacles via TileCache
+- [x] **Point snapping to navmesh** - Start/end points snapped to valid navmesh polygons before path computation
+- [x] **Graceful fallback** - When navmesh path fails for short distances (< 30 units), allows direct movement
+- [ ] **Debug navmesh visualization** - Visual overlay to verify navmesh coverage
+- [ ] **Re-enable crowd simulation** - Fix crowd velocity returning 0 and re-enable DetourCrowd for collision avoidance
+
 ### Terrain Generation Improvements (January 2026)
 - [x] **Slope-based texture blending** - Fixed terrain sampleTerrain() to use average elevation instead of MAX, which was flattening cliffs and preventing proper texture blending
 - [x] **Pre-calculated slope attribute** - Added aSlope vertex attribute calculated before geometry smoothing for accurate cliff detection regardless of mesh smoothing

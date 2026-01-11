@@ -300,6 +300,7 @@ export class Unit extends Component {
   }
 
   public clearTarget(): void {
+    console.log('[Unit.clearTarget] Called! Previous state:', this.state, new Error().stack?.split('\n').slice(1, 4).join(' <- '));
     this.targetX = null;
     this.targetY = null;
     this.targetEntityId = null;
