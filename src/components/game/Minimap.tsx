@@ -123,11 +123,12 @@ export function Minimap() {
         ctx.stroke();
       }
 
-      // Draw fog of war (simplified) - skip in spectator mode
+      // Draw fog of war (simplified) - skip in spectator mode or when FOW disabled
       // PERFORMANCE FIX: Use much coarser grid to avoid 4096+ fillRect calls per frame
       const isSpectating = isSpectatorMode();
       const localPlayer = getLocalPlayerId();
-      if (game.visionSystem && !isSpectating && localPlayer) {
+      const fogOfWarEnabled = useGameSetupStore.getState().fogOfWar;
+      if (game.visionSystem && !isSpectating && localPlayer && fogOfWarEnabled) {
         ctx.fillStyle = 'rgba(0, 0, 0, 0.5)';
         // CRITICAL: Changed from 4 to 16 - reduces checks from 4096 to 256 per frame
         const visionScale = 16;

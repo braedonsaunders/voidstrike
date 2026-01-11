@@ -225,9 +225,10 @@ export const useUIStore = create<UIState>((set, get) => ({
     contrast: 1.05,
 
     // Shadows
+    // PERFORMANCE: Default to medium quality (1024x1024) to reduce shadow rendering overhead
     shadowsEnabled: true,
-    shadowQuality: 'high',
-    shadowDistance: 100,
+    shadowQuality: 'medium',
+    shadowDistance: 80,
 
     // Ambient Occlusion
     ssaoEnabled: true,
