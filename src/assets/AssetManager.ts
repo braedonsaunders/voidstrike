@@ -27,8 +27,8 @@ import { debugAssets } from '@/utils/debugLogger';
 export const REFERENCE_FRAME = {
   // World axes: +X right, +Y up, +Z toward camera (Three.js default)
   // GLTF models from Blender face +Z by default (Blender's -Y forward becomes GLTF's +Z)
-  // Rotate GLTF models by +90 degrees so they face +X (matching atan2 convention where 0 = +X)
-  MODEL_FORWARD_OFFSET: Math.PI / 2, // radians - rotate GLTF models from +Z to +X
+  // Rotate by -π/2 to convert +Z forward to +X forward (matching atan2 convention where 0 = +X)
+  MODEL_FORWARD_OFFSET: -Math.PI / 2, // radians - rotate GLTF models from +Z to +X
 
   // Unit scale: 1 unit = ~1 meter
   UNIT_HEIGHTS: {
