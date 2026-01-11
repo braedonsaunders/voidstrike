@@ -886,8 +886,8 @@ export class EnhancedAISystem extends System {
     ai.minerals -= moduleDef.mineralCost;
     ai.vespene -= moduleDef.vespeneCost;
 
-    // Create the addon building and attach it
-    // Use the building:place event with a special flag for addon
+    // Create the addon building via the building:place event
+    // The BuildingPlacementSystem handles addon creation and attachment
     this.game.eventBus.emit('building:place', {
       buildingType: 'research_module',
       position: modulePos,
@@ -895,10 +895,6 @@ export class EnhancedAISystem extends System {
       isAddon: true,
       parentBuildingId: target.entityId,
     });
-
-    // Directly attach the tech_lab addon type to the parent building
-    // The addon system uses 'tech_lab' internally for production capability
-    parentBuilding.attachAddon('tech_lab', -1); // -1 will be updated when addon entity is created
 
     debugAI.log(`EnhancedAI: ${ai.playerId} building tech_lab on ${target.buildingId}`);
     return true;

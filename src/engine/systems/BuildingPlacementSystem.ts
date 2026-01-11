@@ -232,9 +232,14 @@ export class BuildingPlacementSystem extends System {
     position: { x: number; y: number };
     workerId?: number;
     playerId?: string;
+    isAddon?: boolean;
+    attachTo?: number; // Parent building ID for addons
+    parentBuildingId?: number; // Alternative name for parent (used by AI)
   }): void {
     const { buildingType, playerId = getLocalPlayerId() ?? 'player1' } = data;
     const definition = BUILDING_DEFINITIONS[buildingType];
+    const isAddon = data.isAddon === true;
+    const parentBuildingId = data.attachTo ?? data.parentBuildingId;
 
     if (!definition) {
       debugBuildingPlacement.warn(`BuildingPlacementSystem: Unknown building type: ${buildingType}`);
@@ -251,6 +256,12 @@ export class BuildingPlacementSystem extends System {
     // Snap click position to grid for clean placement (center-based)
     const snappedX = Math.round(data.position.x);
     const snappedY = Math.round(data.position.y);
+
+    // Handle addon placement separately (no worker needed, instant build)
+    if (isAddon && parentBuildingId !== undefined) {
+      this.handleAddonPlacement(buildingType, snappedX, snappedY, playerId, parentBuildingId);
+      return;
+    }
 
     const store = useGameStore.getState();
     const isPlayerLocal = isLocalPlayer(playerId);
@@ -346,6 +357,105 @@ export class BuildingPlacementSystem extends System {
     });
 
     debugBuildingPlacement.log(`BuildingPlacementSystem: ${definition.name} placed at (${snappedX}, ${snappedY}), SCV ${worker.entity.id} assigned`);
+  }
+
+  /**
+   * Handle addon placement (research_module, production_module)
+   * Addons don't require workers and are built instantly
+   */
+  private handleAddonPlacement(
+    buildingType: string,
+    x: number,
+    y: number,
+    playerId: string,
+    parentBuildingId: number
+  ): void {
+    const definition = BUILDING_DEFINITIONS[buildingType];
+    if (!definition) {
+      debugBuildingPlacement.warn(`BuildingPlacementSystem: Unknown addon type: ${buildingType}`);
+      return;
+    }
+
+    // Get and validate parent building
+    const parentEntity = this.world.getEntity(parentBuildingId);
+    if (!parentEntity) {
+      debugBuildingPlacement.warn(`BuildingPlacementSystem: Parent building ${parentBuildingId} not found for addon`);
+      return;
+    }
+
+    const parentBuilding = parentEntity.get<Building>('Building');
+    const parentSelectable = parentEntity.get<Selectable>('Selectable');
+    if (!parentBuilding || !parentSelectable) {
+      debugBuildingPlacement.warn(`BuildingPlacementSystem: Parent building ${parentBuildingId} missing components`);
+      return;
+    }
+
+    // Validate parent can have addon and doesn't already have one
+    if (!parentBuilding.canHaveAddon) {
+      debugBuildingPlacement.warn(`BuildingPlacementSystem: ${parentBuilding.name} cannot have addons`);
+      return;
+    }
+    if (parentBuilding.hasAddon()) {
+      debugBuildingPlacement.warn(`BuildingPlacementSystem: ${parentBuilding.name} already has an addon`);
+      return;
+    }
+    if (parentBuilding.state !== 'complete') {
+      debugBuildingPlacement.warn(`BuildingPlacementSystem: ${parentBuilding.name} is not complete`);
+      return;
+    }
+
+    // Check addon placement validity (exclude parent from collision)
+    if (!this.isValidAddonPlacement(x, y, definition.width, definition.height, parentBuildingId)) {
+      debugBuildingPlacement.warn(`BuildingPlacementSystem: Addon position (${x}, ${y}) is blocked`);
+      this.game.eventBus.emit('building:addonFailed', {
+        buildingId: parentBuildingId,
+        reason: 'Addon position blocked',
+      });
+      return;
+    }
+
+    // Create the addon entity (instantly complete, no worker needed)
+    const addonEntity = this.world.createEntity();
+    const addonBuilding = new Building(definition);
+    addonBuilding.buildProgress = 1;
+    addonBuilding.state = 'complete';
+    addonBuilding.attachedToId = parentBuildingId;
+
+    const addonHealth = new Health(definition.maxHealth, definition.armor, 'structure');
+
+    addonEntity
+      .add(new Transform(x, y, 0))
+      .add(addonBuilding)
+      .add(addonHealth)
+      .add(new Selectable(Math.max(definition.width, definition.height) * 0.6, 10, playerId));
+
+    // Attach the addon to the parent building
+    const techLabType = buildingType === 'research_module' ? 'tech_lab' :
+                        buildingType === 'production_module' ? 'reactor' : null;
+    if (techLabType) {
+      parentBuilding.attachAddon(techLabType, addonEntity.id);
+    }
+
+    // Emit success events
+    this.game.eventBus.emit('building:placed', {
+      entityId: addonEntity.id,
+      buildingType,
+      playerId,
+      position: { x, y },
+      width: definition.width,
+      height: definition.height,
+      isAddon: true,
+      parentBuildingId,
+    });
+
+    this.game.eventBus.emit('building:addon_complete', {
+      parentId: parentBuildingId,
+      addonId: addonEntity.id,
+      addonType: buildingType,
+      playerId,
+    });
+
+    debugBuildingPlacement.log(`BuildingPlacementSystem: ${definition.name} addon built for ${parentBuilding.name} at (${x}, ${y})`);
   }
 
   /**
