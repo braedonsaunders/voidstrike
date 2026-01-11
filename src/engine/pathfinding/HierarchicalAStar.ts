@@ -231,6 +231,8 @@ export class HierarchicalAStar {
    * Find path with hierarchical optimization
    */
   public findPath(startX: number, startY: number, endX: number, endY: number): PathResult {
+    const hpaStart = performance.now();
+
     // Check cache first
     const cacheKey = `${Math.floor(startX)},${Math.floor(startY)}_${Math.floor(endX)},${Math.floor(endY)}`;
     const cached = this.pathCache.get(cacheKey);
@@ -240,6 +242,7 @@ export class HierarchicalAStar {
 
     // Rebuild abstract graph if needed
     if (this.needsRebuild) {
+      console.log(`[HPA*] Rebuilding abstract graph for ${this.width}x${this.height} (${this.sectors.length} sectors)`);
       this.rebuildAbstractGraph();
     }
 
@@ -248,6 +251,7 @@ export class HierarchicalAStar {
 
     // If coordinates are out of bounds, return no path (don't waste time on full A*)
     if (startSector === null || endSector === null) {
+      console.warn(`[HPA*] OUT OF BOUNDS: start=(${startX.toFixed(1)},${startY.toFixed(1)}) sector=${startSector}, end=(${endX.toFixed(1)},${endY.toFixed(1)}) sector=${endSector}, grid=${this.width}x${this.height}`);
       return { path: [], found: false };
     }
 

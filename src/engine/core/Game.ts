@@ -132,6 +132,7 @@ export class Game {
 
   public static getInstance(config?: Partial<GameConfig>): Game {
     if (!Game.instance) {
+      console.log(`[Game] CREATING NEW INSTANCE with config:`, config ? `${config.mapWidth}x${config.mapHeight}` : 'DEFAULT 128x128');
       Game.instance = new Game(config);
     } else if (config && (config.mapWidth || config.mapHeight)) {
       // Update map dimensions if a new config is provided with map settings
@@ -143,6 +144,7 @@ export class Game {
 
       // Reinitialize pathfinding grids if dimensions changed (keep same instance to preserve event listeners)
       if (Game.instance.config.mapWidth !== oldWidth || Game.instance.config.mapHeight !== oldHeight) {
+        console.log(`[Game] DIMENSION CHANGE: ${oldWidth}x${oldHeight} -> ${Game.instance.config.mapWidth}x${Game.instance.config.mapHeight}, calling reinitialize`);
         debugInitialization.log(`[Game] Map dimensions changed from ${oldWidth}x${oldHeight} to ${Game.instance.config.mapWidth}x${Game.instance.config.mapHeight}, reinitializing pathfinding`);
         Game.instance.pathfindingSystem.reinitialize(
           Game.instance.config.mapWidth,
@@ -259,6 +261,7 @@ export class Game {
    * Should be called after map is loaded
    */
   public setTerrainGrid(terrain: TerrainCell[][]): void {
+    console.log(`[Game] SET_TERRAIN_GRID: ${terrain[0]?.length}x${terrain.length}, pathfinding dimensions: ${this.config.mapWidth}x${this.config.mapHeight}`);
     this.terrainGrid = terrain;
     // Load terrain walkability into pathfinding system
     this.pathfindingSystem.loadTerrainData();

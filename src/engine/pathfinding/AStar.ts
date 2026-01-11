@@ -181,6 +181,7 @@ export class AStar {
    * Recompute all edge penalties. Call this after walkability changes.
    */
   public recomputeEdgePenalties(): void {
+    const start = performance.now();
     for (let y = 0; y < this.height; y++) {
       for (let x = 0; x < this.width; x++) {
         const idx = y * this.width + x;
@@ -204,6 +205,10 @@ export class AStar {
       }
     }
     this.edgePenaltiesValid = true;
+    const elapsed = performance.now() - start;
+    if (elapsed > 5) {
+      console.log(`[AStar] recomputeEdgePenalties: ${this.width}x${this.height} took ${elapsed.toFixed(1)}ms`);
+    }
   }
 
   /**
@@ -274,6 +279,8 @@ export class AStar {
   }
 
   public findPath(startX: number, startY: number, endX: number, endY: number): PathResult {
+    const astarStart = performance.now();
+
     // Convert world coordinates to grid coordinates
     const gridStartX = Math.floor(startX / this.cellSize);
     const gridStartY = Math.floor(startY / this.cellSize);
@@ -348,6 +355,8 @@ export class AStar {
     while (this.openHeap.length > 0) {
       // Early exit if we've searched too long
       if (++iterations > MAX_ITERATIONS) {
+        const elapsed = performance.now() - astarStart;
+        console.warn(`[AStar] MAX_ITERATIONS (${MAX_ITERATIONS}) reached! (${gridStartX},${gridStartY}) -> (${gridEndX},${gridEndY}) took ${elapsed.toFixed(1)}ms`);
         return { path: [], found: false };
       }
       const current = this.openHeap.pop()!;
@@ -357,6 +366,10 @@ export class AStar {
       if (current === endNode) {
         const path = this.reconstructPath(current);
         const smoothedPath = this.smoothPath(path);
+        const elapsed = performance.now() - astarStart;
+        if (elapsed > 10) { // Only log slow searches
+          console.log(`[AStar] Found path: ${iterations} iterations, ${smoothedPath.length} waypoints, ${elapsed.toFixed(1)}ms`);
+        }
         return { path: smoothedPath, found: true };
       }
 
