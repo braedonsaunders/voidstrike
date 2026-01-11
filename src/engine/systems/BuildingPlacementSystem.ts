@@ -483,7 +483,11 @@ export class BuildingPlacementSystem extends System {
 
   /**
    * Find a worker to assign to construction
-   * Priority: provided workerId > selected workers > any idle worker
+   * Priority: provided workerId (if not already building) > selected workers > any idle worker
+   *
+   * IMPORTANT: Workers already assigned to construction are NEVER reassigned.
+   * This ensures queued buildings are built in order - first building completes before
+   * worker moves to second building.
    */
   private findWorkerForConstruction(
     workerId: number | undefined,
@@ -492,14 +496,18 @@ export class BuildingPlacementSystem extends System {
     const store = useGameStore.getState();
     const selectedUnits = store.selectedUnits;
 
-    // If specific worker ID provided, use that
+    // If specific worker ID provided, use that ONLY if they're not already building
     if (workerId !== undefined) {
       const entity = this.world.getEntity(workerId);
       if (entity) {
         const unit = entity.get<Unit>('Unit');
         const selectable = entity.get<Selectable>('Selectable');
+        // Only use this worker if they're not already constructing something
         if (unit?.isWorker && selectable?.playerId === playerId) {
-          return { entity };
+          if (unit.state !== 'building' && unit.constructingBuildingId === null) {
+            return { entity };
+          }
+          // Worker is busy building - fall through to find another worker
         }
       }
     }

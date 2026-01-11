@@ -497,6 +497,7 @@ export function WebGPUGameCanvas() {
         effectsRendererRef.current?.update(deltaTime);
         rallyPointRendererRef.current?.update();
         watchTowerRendererRef.current?.update(deltaTime);
+        placementPreviewRef.current?.update(deltaTime / 1000);
 
         const gameTime = gameRef.current?.getGameTime() ?? 0;
         environmentRef.current?.update(deltaTime / 1000, gameTime);

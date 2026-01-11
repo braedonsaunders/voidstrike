@@ -625,6 +625,7 @@ export class BuildingRenderer {
           // The Y offset ensures buildings are properly grounded (bottom at terrain level)
           this.tempPosition.set(transform.x, terrainHeight + group.modelYOffset, transform.y);
           this.tempScale.copy(group.modelScale); // Apply the normalized model scale
+          this.tempQuaternion.identity(); // CRITICAL: Reset to identity to prevent rotation issues
           this.tempMatrix.compose(this.tempPosition, this.tempQuaternion, this.tempScale);
           group.mesh.setMatrixAt(group.mesh.count, this.tempMatrix);
           group.entityIds.push(entity.id);
