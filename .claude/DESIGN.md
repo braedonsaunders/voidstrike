@@ -134,7 +134,7 @@ Units have restrictions on what they can attack based on air/ground targeting:
 
 | Target Type | Can Attack Ground | Can Attack Air | Example Units |
 |-------------|-------------------|----------------|---------------|
-| **Ground & Air** | ✅ | ✅ | Trooper, Breacher, Colossus, Specter, Dreadnought |
+| **Ground & Air** | ✅ | ✅ | Trooper, Breacher, Colossus, Specter, Dreadnought (continuous laser) |
 | **Ground Only** | ✅ | ❌ | Fabricator, Scorcher, Devastator |
 | **Air Only** | ❌ | ✅ | Valkyrie (Fighter Mode) |
 | **No Attack** | ❌ | ❌ | Lifter, Overseer |

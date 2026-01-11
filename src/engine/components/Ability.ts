@@ -218,4 +218,26 @@ export const DOMINION_ABILITIES: Record<string, AbilityDefinition> = {
     targetType: 'unit',
     hotkey: 'D',
   },
+  power_cannon: {
+    id: 'power_cannon',
+    name: 'Power Cannon',
+    description: 'Fire a devastating charged shot dealing massive damage to a single target',
+    cooldown: 15,
+    energyCost: 50,
+    range: 10,
+    targetType: 'unit',
+    hotkey: 'E',
+    damage: 200,
+    aoeRadius: 2, // Small splash damage around impact
+  },
+  warp_jump: {
+    id: 'warp_jump',
+    name: 'Warp Jump',
+    description: 'Instantly teleport to a target location',
+    cooldown: 60,
+    energyCost: 100,
+    range: 20,
+    targetType: 'point',
+    hotkey: 'J',
+  },
 };
