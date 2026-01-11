@@ -20,6 +20,7 @@ import { GameStateSystem } from '../systems/GameStateSystem';
 import { SaveLoadSystem } from '../systems/SaveLoadSystem';
 import { PathfindingSystem } from '../systems/PathfindingSystem';
 import { AIMicroSystem } from '../systems/AIMicroSystem';
+import { RecastNavigation } from '../pathfinding/RecastNavigation';
 import { getLocalPlayerId } from '@/store/gameSetupStore';
 
 export type GameState = 'initializing' | 'running' | 'paused' | 'ended';
@@ -160,6 +161,8 @@ export class Game {
       Game.instance.stop();
       Game.instance = null;
     }
+    // Reset navmesh singleton so new game gets fresh navmesh for its map
+    RecastNavigation.resetInstance();
   }
 
   private initializeSystems(): void {
