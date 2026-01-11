@@ -124,14 +124,19 @@ export function Minimap() {
       }
 
       // Draw fog of war (simplified) - skip in spectator mode
+      // PERFORMANCE FIX: Use much coarser grid to avoid 4096+ fillRect calls per frame
       const isSpectating = isSpectatorMode();
       const localPlayer = getLocalPlayerId();
       if (game.visionSystem && !isSpectating && localPlayer) {
         ctx.fillStyle = 'rgba(0, 0, 0, 0.5)';
-        const visionScale = 4; // Check every 4 units
+        // CRITICAL: Changed from 4 to 16 - reduces checks from 4096 to 256 per frame
+        const visionScale = 16;
         for (let mapX = 0; mapX < mapWidth; mapX += visionScale) {
           for (let mapY = 0; mapY < mapHeight; mapY += visionScale) {
-            if (!game.visionSystem.isExplored(localPlayer, mapX, mapY)) {
+            // Sample center of the cell for fog check
+            const sampleX = mapX + visionScale / 2;
+            const sampleY = mapY + visionScale / 2;
+            if (!game.visionSystem.isExplored(localPlayer, sampleX, sampleY)) {
               ctx.fillRect(
                 mapX * scale,
                 mapY * scale,
