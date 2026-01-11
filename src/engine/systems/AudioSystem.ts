@@ -53,8 +53,9 @@ export class AudioSystem extends System {
     AudioManager.setCategoryVolume('unit', uiState.soundVolume);
     AudioManager.setCategoryVolume('building', uiState.soundVolume);
     AudioManager.setCategoryVolume('ambient', uiState.soundVolume);
-    AudioManager.setCategoryVolume('voice', uiState.soundVolume);
-    AudioManager.setCategoryVolume('alert', uiState.soundVolume);
+    // Use granular settings for voices and alerts
+    AudioManager.setCategoryVolume('voice', uiState.voicesEnabled ? uiState.voiceVolume : 0);
+    AudioManager.setCategoryVolume('alert', uiState.alertsEnabled ? uiState.alertVolume : 0);
 
     // Initialize MusicPlayer with settings from store
     // Don't stop menu music - let it crossfade to gameplay music naturally
@@ -89,18 +90,30 @@ export class AudioSystem extends System {
       'alert_building_complete',
       'alert_research_complete',
       'alert_upgrade_complete',
-      // Combat
+      'alert_unit_lost',
+      'alert_building_lost',
+      // Combat - Weapons
       'attack_rifle',
       'attack_cannon',
       'attack_laser',
+      'attack_laser_battery',
       'attack_missile',
       'attack_flamethrower',
+      'attack_gatling',
+      'attack_grenade',
+      'attack_sniper',
+      'attack_yamato',
+      // Combat - Impacts
       'hit_impact',
       'hit_armor',
+      'hit_shield',
+      'hit_energy',
+      // Combat - Explosions & Deaths
       'unit_death',
       'unit_death_mech',
       'unit_death_bio',
       'explosion_small',
+      'explosion_medium',
       'explosion_large',
       'explosion_building',
       // Unit commands
@@ -274,12 +287,39 @@ export class AudioSystem extends System {
           // Choose weapon sound based on unit type
           let weaponSound = 'attack_rifle';
           if (unit) {
-            if (unit.unitId === 'devastator') {
-              weaponSound = 'attack_cannon';
-            } else if (unit.unitId === 'scorcher') {
-              weaponSound = 'attack_flamethrower';
-            } else if (unit.unitId === 'breacher') {
-              weaponSound = 'attack_cannon';
+            switch (unit.unitId) {
+              case 'devastator':
+                weaponSound = 'attack_cannon';
+                break;
+              case 'scorcher':
+                weaponSound = 'attack_flamethrower';
+                break;
+              case 'breacher':
+                weaponSound = 'attack_grenade';
+                break;
+              case 'vanguard':
+                weaponSound = 'attack_gatling';
+                break;
+              case 'operative':
+                weaponSound = 'attack_sniper';
+                break;
+              case 'colossus':
+                weaponSound = 'attack_laser_battery';
+                break;
+              case 'valkyrie':
+                weaponSound = 'attack_missile';
+                break;
+              case 'specter':
+                weaponSound = 'attack_laser';
+                break;
+              case 'dreadnought':
+                weaponSound = 'attack_yamato';
+                break;
+              case 'trooper':
+              case 'fabricator':
+              default:
+                weaponSound = 'attack_rifle';
+                break;
             }
           }
 

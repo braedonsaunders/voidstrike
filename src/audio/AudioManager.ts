@@ -61,18 +61,27 @@ export const SOUNDS: Record<string, SoundConfig> = {
   alert_building_complete: { id: 'alert_building_complete', url: '/audio/alert/building_complete.mp3', category: 'alert', volume: 0.7, priority: SoundPriority.CRITICAL },
   alert_research_complete: { id: 'alert_research_complete', url: '/audio/alert/research_complete.mp3', category: 'alert', volume: 0.7, priority: SoundPriority.CRITICAL },
   alert_upgrade_complete: { id: 'alert_upgrade_complete', url: '/audio/alert/upgrade_complete.mp3', category: 'alert', volume: 0.7, priority: SoundPriority.CRITICAL },
+  // Note: Unit/building lost alerts reuse under_attack sound until dedicated audio is available
+  alert_unit_lost: { id: 'alert_unit_lost', url: '/audio/alert/under_attack.mp3', category: 'alert', volume: 0.6, cooldown: 3000, priority: SoundPriority.HIGH },
+  alert_building_lost: { id: 'alert_building_lost', url: '/audio/alert/under_attack.mp3', category: 'alert', volume: 0.7, cooldown: 3000, priority: SoundPriority.CRITICAL },
 
   // Combat Sounds - Weapons (Normal priority, spatial with clustering)
   attack_rifle: { id: 'attack_rifle', url: '/audio/combat/rifle.mp3', category: 'combat', volume: 0.5, spatial: true, maxInstances: 20, cooldown: 30, priority: SoundPriority.NORMAL, maxDistance: 150, clusterRadius: 8 },
   attack_cannon: { id: 'attack_cannon', url: '/audio/combat/cannon.mp3', category: 'combat', volume: 0.6, spatial: true, maxInstances: 10, cooldown: 80, priority: SoundPriority.HIGH, maxDistance: 200, clusterRadius: 12 },
   attack_laser: { id: 'attack_laser', url: '/audio/combat/laser.mp3', category: 'combat', volume: 0.5, spatial: true, maxInstances: 15, cooldown: 50, priority: SoundPriority.NORMAL, maxDistance: 150, clusterRadius: 8 },
+  attack_laser_battery: { id: 'attack_laser_battery', url: '/audio/combat/laser_battery.mp3', category: 'combat', volume: 0.6, spatial: true, maxInstances: 8, cooldown: 60, priority: SoundPriority.NORMAL, maxDistance: 180, clusterRadius: 10 },
   attack_missile: { id: 'attack_missile', url: '/audio/combat/missile.mp3', category: 'combat', volume: 0.6, spatial: true, maxInstances: 8, cooldown: 150, priority: SoundPriority.HIGH, maxDistance: 180, clusterRadius: 10 },
   attack_flamethrower: { id: 'attack_flamethrower', url: '/audio/combat/flamethrower.mp3', category: 'combat', volume: 0.5, spatial: true, maxInstances: 6, cooldown: 80, priority: SoundPriority.NORMAL, maxDistance: 120, clusterRadius: 6 },
+  attack_gatling: { id: 'attack_gatling', url: '/audio/combat/gatling_gun.mp3', category: 'combat', volume: 0.55, spatial: true, maxInstances: 8, cooldown: 40, priority: SoundPriority.NORMAL, maxDistance: 150, clusterRadius: 8 },
+  attack_grenade: { id: 'attack_grenade', url: '/audio/combat/grenade_launcher.mp3', category: 'combat', volume: 0.6, spatial: true, maxInstances: 8, cooldown: 100, priority: SoundPriority.HIGH, maxDistance: 160, clusterRadius: 10 },
+  attack_sniper: { id: 'attack_sniper', url: '/audio/combat/sniper.mp3', category: 'combat', volume: 0.55, spatial: true, maxInstances: 6, cooldown: 200, priority: SoundPriority.HIGH, maxDistance: 200, clusterRadius: 15 },
+  attack_yamato: { id: 'attack_yamato', url: '/audio/combat/yamato.mp3', category: 'combat', volume: 0.8, spatial: true, maxInstances: 3, cooldown: 500, priority: SoundPriority.CRITICAL, maxDistance: 300, clusterRadius: 20 },
 
   // Combat Sounds - Impacts (Low priority, high clustering)
   hit_impact: { id: 'hit_impact', url: '/audio/combat/hit.mp3', category: 'combat', volume: 0.4, spatial: true, maxInstances: 25, cooldown: 20, priority: SoundPriority.LOW, maxDistance: 100, clusterRadius: 10 },
   hit_armor: { id: 'hit_armor', url: '/audio/combat/hit_armor.mp3', category: 'combat', volume: 0.5, spatial: true, maxInstances: 20, cooldown: 30, priority: SoundPriority.LOW, maxDistance: 100, clusterRadius: 10 },
   hit_shield: { id: 'hit_shield', url: '/audio/combat/hit_shield.mp3', category: 'combat', volume: 0.4, spatial: true, maxInstances: 15, cooldown: 30, priority: SoundPriority.LOW, maxDistance: 100, clusterRadius: 10 },
+  hit_energy: { id: 'hit_energy', url: '/audio/combat/energy_impact.mp3', category: 'combat', volume: 0.45, spatial: true, maxInstances: 15, cooldown: 30, priority: SoundPriority.LOW, maxDistance: 100, clusterRadius: 10 },
 
   // Combat Sounds - Explosions (High priority)
   explosion_small: { id: 'explosion_small', url: '/audio/combat/small_explosion.mp3', category: 'combat', volume: 0.6, spatial: true, maxInstances: 10, priority: SoundPriority.HIGH, maxDistance: 180 },
@@ -81,16 +90,17 @@ export const SOUNDS: Record<string, SoundConfig> = {
   explosion_building: { id: 'explosion_building', url: '/audio/combat/large_explosion.mp3', category: 'combat', volume: 0.9, spatial: true, maxInstances: 4, priority: SoundPriority.HIGH, maxDistance: 300 },
 
   // Combat Sounds - Deaths (Normal priority)
-  unit_death: { id: 'unit_death', url: '/audio/combat/death.mp3', category: 'combat', volume: 0.5, spatial: true, maxInstances: 10, priority: SoundPriority.NORMAL, maxDistance: 120, clusterRadius: 15 },
-  unit_death_mech: { id: 'unit_death_mech', url: '/audio/combat/death_mech.mp3', category: 'combat', volume: 0.6, spatial: true, maxInstances: 6, priority: SoundPriority.HIGH, maxDistance: 150 },
-  unit_death_bio: { id: 'unit_death_bio', url: '/audio/combat/death_bio.mp3', category: 'combat', volume: 0.5, spatial: true, maxInstances: 10, priority: SoundPriority.NORMAL, maxDistance: 120, clusterRadius: 15 },
+  // Note: Death sounds reuse explosion sounds until dedicated death audio is available
+  unit_death: { id: 'unit_death', url: '/audio/combat/small_explosion.mp3', category: 'combat', volume: 0.5, spatial: true, maxInstances: 10, priority: SoundPriority.NORMAL, maxDistance: 120, clusterRadius: 15 },
+  unit_death_mech: { id: 'unit_death_mech', url: '/audio/combat/medium_explosion.mp3', category: 'combat', volume: 0.6, spatial: true, maxInstances: 6, priority: SoundPriority.HIGH, maxDistance: 150 },
+  unit_death_bio: { id: 'unit_death_bio', url: '/audio/combat/small_explosion.mp3', category: 'combat', volume: 0.5, spatial: true, maxInstances: 10, priority: SoundPriority.NORMAL, maxDistance: 120, clusterRadius: 15 },
 
   // Unit Command Sounds (High priority - player feedback)
-  unit_move: { id: 'unit_move', url: '/audio/unit/move.mp3', category: 'unit', volume: 0.3, cooldown: 300, priority: SoundPriority.HIGH },
-  unit_attack: { id: 'unit_attack', url: '/audio/unit/attack.mp3', category: 'unit', volume: 0.3, cooldown: 300, priority: SoundPriority.HIGH },
-  unit_ready: { id: 'unit_ready', url: '/audio/unit/ready.mp3', category: 'unit', volume: 0.5, priority: SoundPriority.HIGH },
-  worker_mining: { id: 'worker_mining', url: '/audio/unit/mining.mp3', category: 'unit', volume: 0.3, spatial: true, loop: true, priority: SoundPriority.LOW, maxDistance: 80 },
-  worker_building: { id: 'worker_building', url: '/audio/unit/building.mp3', category: 'unit', volume: 0.3, spatial: true, loop: true, priority: SoundPriority.LOW, maxDistance: 80 },
+  // Note: These reuse UI sounds since unit-specific command sounds aren't available
+  // Voice lines already provide unit-specific audio feedback for commands
+  unit_move: { id: 'unit_move', url: '/audio/ui/click.mp3', category: 'unit', volume: 0.3, cooldown: 300, priority: SoundPriority.HIGH },
+  unit_attack: { id: 'unit_attack', url: '/audio/ui/click.mp3', category: 'unit', volume: 0.3, cooldown: 300, priority: SoundPriority.HIGH },
+  unit_ready: { id: 'unit_ready', url: '/audio/ui/notification.mp3', category: 'unit', volume: 0.5, priority: SoundPriority.HIGH },
 
   // ============================================================================
   // DOMINION UNIT VOICE LINES
@@ -120,7 +130,7 @@ export const SOUNDS: Record<string, SoundConfig> = {
   voice_breacher_select_2: { id: 'voice_breacher_select_2', url: '/audio/voice/breacher/select2.mp3', category: 'voice', volume: 0.6, priority: SoundPriority.HIGH },
   voice_breacher_move_1: { id: 'voice_breacher_move_1', url: '/audio/voice/breacher/move1.mp3', category: 'voice', volume: 0.6, priority: SoundPriority.HIGH },
   voice_breacher_move_2: { id: 'voice_breacher_move_2', url: '/audio/voice/breacher/move2.mp3', category: 'voice', volume: 0.6, priority: SoundPriority.HIGH },
-  voice_breacher_attack_1: { id: 'voice_breacher_attack_1', url: '/audio/voice/breacher/attack1.mp3', category: 'voice', volume: 0.6, priority: SoundPriority.HIGH },
+  voice_breacher_attack_1: { id: 'voice_breacher_attack_1', url: '/audio/voice/breacher/attack.mp3', category: 'voice', volume: 0.6, priority: SoundPriority.HIGH },
   voice_breacher_ready: { id: 'voice_breacher_ready', url: '/audio/voice/breacher/ready.mp3', category: 'voice', volume: 0.7, priority: SoundPriority.HIGH },
 
   // Unit Voice Lines - Vanguard (Fast Assault Infantry)
@@ -192,28 +202,20 @@ export const SOUNDS: Record<string, SoundConfig> = {
   voice_overseer_ready: { id: 'voice_overseer_ready', url: '/audio/voice/overseer/ready.mp3', category: 'voice', volume: 0.7, priority: SoundPriority.HIGH },
 
   // Building Sounds
-  building_place: { id: 'building_place', url: '/audio/building/place.mp3', category: 'building', volume: 0.5, priority: SoundPriority.HIGH },
-  building_construct: { id: 'building_construct', url: '/audio/building/construct.mp3', category: 'building', volume: 0.4, spatial: true, loop: true, priority: SoundPriority.LOW, maxDistance: 100 },
-  production_start: { id: 'production_start', url: '/audio/building/production.mp3', category: 'building', volume: 0.4, priority: SoundPriority.NORMAL },
-  building_powerup: { id: 'building_powerup', url: '/audio/building/powerup.mp3', category: 'building', volume: 0.5, priority: SoundPriority.NORMAL },
-  building_powerdown: { id: 'building_powerdown', url: '/audio/building/powerdown.mp3', category: 'building', volume: 0.5, priority: SoundPriority.NORMAL },
+  // Note: Building sounds reuse UI sounds until dedicated building audio is available
+  building_place: { id: 'building_place', url: '/audio/ui/click.mp3', category: 'building', volume: 0.5, priority: SoundPriority.HIGH },
+  production_start: { id: 'production_start', url: '/audio/ui/click.mp3', category: 'building', volume: 0.4, priority: SoundPriority.NORMAL },
 
   // Ambient Sounds - Biome specific
-  ambient_wind: { id: 'ambient_wind', url: '/audio/ambient/wind.mp3', category: 'ambient', volume: 0.2, loop: true, priority: SoundPriority.LOW },
-  ambient_nature: { id: 'ambient_nature', url: '/audio/ambient/nature.mp3', category: 'ambient', volume: 0.15, loop: true, priority: SoundPriority.LOW },
-  ambient_desert: { id: 'ambient_desert', url: '/audio/ambient/desert.mp3', category: 'ambient', volume: 0.15, loop: true, priority: SoundPriority.LOW },
-  ambient_frozen: { id: 'ambient_frozen', url: '/audio/ambient/frozen.mp3', category: 'ambient', volume: 0.2, loop: true, priority: SoundPriority.LOW },
-  ambient_volcanic: { id: 'ambient_volcanic', url: '/audio/ambient/volcanic.mp3', category: 'ambient', volume: 0.2, loop: true, priority: SoundPriority.LOW },
-  ambient_void: { id: 'ambient_void', url: '/audio/ambient/void.mp3', category: 'ambient', volume: 0.15, loop: true, priority: SoundPriority.LOW },
-  ambient_jungle: { id: 'ambient_jungle', url: '/audio/ambient/jungle.mp3', category: 'ambient', volume: 0.2, loop: true, priority: SoundPriority.LOW },
-  ambient_battle: { id: 'ambient_battle', url: '/audio/ambient/battle.mp3', category: 'ambient', volume: 0.1, loop: true, priority: SoundPriority.LOW },
+  // Note: Ambient sounds are disabled until dedicated ambient audio is available
+  // The BIOME_AMBIENT mapping below references these IDs, but they won't play without files
 
   // Music
-  music_menu: { id: 'music_menu', url: '/audio/music/menu.mp3', category: 'music', volume: 0.3, loop: true, priority: SoundPriority.NORMAL },
-  music_battle: { id: 'music_battle', url: '/audio/music/battle.mp3', category: 'music', volume: 0.25, loop: true, priority: SoundPriority.NORMAL },
-  music_peace: { id: 'music_peace', url: '/audio/music/peace.mp3', category: 'music', volume: 0.2, loop: true, priority: SoundPriority.NORMAL },
-  music_victory: { id: 'music_victory', url: '/audio/music/victory.mp3', category: 'music', volume: 0.4, priority: SoundPriority.CRITICAL },
-  music_defeat: { id: 'music_defeat', url: '/audio/music/defeat.mp3', category: 'music', volume: 0.4, priority: SoundPriority.CRITICAL },
+  // Note: Music is primarily handled by MusicPlayer which dynamically discovers tracks
+  // These are fallback definitions with correct paths
+  music_menu: { id: 'music_menu', url: '/audio/music/menu/main_theme.mp3', category: 'music', volume: 0.3, loop: true, priority: SoundPriority.NORMAL },
+  music_victory: { id: 'music_victory', url: '/audio/music/victory/victory.mp3', category: 'music', volume: 0.4, priority: SoundPriority.CRITICAL },
+  music_defeat: { id: 'music_defeat', url: '/audio/music/defeat/defeat.mp3', category: 'music', volume: 0.4, priority: SoundPriority.CRITICAL },
 };
 
 // ============================================================================
@@ -333,13 +335,15 @@ export const UNIT_VOICES: Record<string, {
 };
 
 // Biome to ambient sound mapping
+// Note: Ambient sounds are currently disabled - no ambient audio files are available
+// When ambient audio is added, populate this mapping with sound IDs
 export const BIOME_AMBIENT: Record<string, string> = {
-  grassland: 'ambient_nature',
-  desert: 'ambient_desert',
-  frozen: 'ambient_frozen',
-  volcanic: 'ambient_volcanic',
-  void: 'ambient_void',
-  jungle: 'ambient_jungle',
+  // grassland: 'ambient_nature',
+  // desert: 'ambient_desert',
+  // frozen: 'ambient_frozen',
+  // volcanic: 'ambient_volcanic',
+  // void: 'ambient_void',
+  // jungle: 'ambient_jungle',
 };
 
 // ============================================================================

@@ -21,6 +21,15 @@ export function SoundOptionsPanel() {
   const toggleMusic = useUIStore((state) => state.toggleMusic);
   const setSoundVolume = useUIStore((state) => state.setSoundVolume);
   const setMusicVolume = useUIStore((state) => state.setMusicVolume);
+  // Granular audio settings
+  const voicesEnabled = useUIStore((state) => state.voicesEnabled);
+  const alertsEnabled = useUIStore((state) => state.alertsEnabled);
+  const voiceVolume = useUIStore((state) => state.voiceVolume);
+  const alertVolume = useUIStore((state) => state.alertVolume);
+  const toggleVoices = useUIStore((state) => state.toggleVoices);
+  const toggleAlerts = useUIStore((state) => state.toggleAlerts);
+  const setVoiceVolume = useUIStore((state) => state.setVoiceVolume);
+  const setAlertVolume = useUIStore((state) => state.setAlertVolume);
 
   const [currentTrack, setCurrentTrack] = useState<string | null>(null);
   const [isPlaying, setIsPlaying] = useState(false);
@@ -53,14 +62,12 @@ export function SoundOptionsPanel() {
   // Sync volume changes with AudioManager and MusicPlayer
   const handleSoundVolumeChange = useCallback((volume: number) => {
     setSoundVolume(volume);
-    // Update all non-music categories
+    // Update combat and general sound categories
     AudioManager.setCategoryVolume('combat', volume);
     AudioManager.setCategoryVolume('ui', volume);
     AudioManager.setCategoryVolume('unit', volume);
     AudioManager.setCategoryVolume('building', volume);
     AudioManager.setCategoryVolume('ambient', volume);
-    AudioManager.setCategoryVolume('voice', volume);
-    AudioManager.setCategoryVolume('alert', volume);
   }, [setSoundVolume]);
 
   const handleMusicVolumeChange = useCallback((volume: number) => {
@@ -68,6 +75,29 @@ export function SoundOptionsPanel() {
     AudioManager.setCategoryVolume('music', volume);
     MusicPlayer.setVolume(volume);
   }, [setMusicVolume]);
+
+  // Granular audio handlers
+  const handleVoiceVolumeChange = useCallback((volume: number) => {
+    setVoiceVolume(volume);
+    AudioManager.setCategoryVolume('voice', voicesEnabled ? volume : 0);
+  }, [setVoiceVolume, voicesEnabled]);
+
+  const handleAlertVolumeChange = useCallback((volume: number) => {
+    setAlertVolume(volume);
+    AudioManager.setCategoryVolume('alert', alertsEnabled ? volume : 0);
+  }, [setAlertVolume, alertsEnabled]);
+
+  const handleVoicesToggle = useCallback(() => {
+    toggleVoices();
+    const newEnabled = !voicesEnabled;
+    AudioManager.setCategoryVolume('voice', newEnabled ? voiceVolume : 0);
+  }, [toggleVoices, voicesEnabled, voiceVolume]);
+
+  const handleAlertsToggle = useCallback(() => {
+    toggleAlerts();
+    const newEnabled = !alertsEnabled;
+    AudioManager.setCategoryVolume('alert', newEnabled ? alertVolume : 0);
+  }, [toggleAlerts, alertsEnabled, alertVolume]);
 
   const handleSoundToggle = useCallback(() => {
     toggleSound();
@@ -309,7 +339,7 @@ export function SoundOptionsPanel() {
       </div>
 
       {/* SFX Volume */}
-      <div>
+      <div style={{ marginBottom: '14px' }}>
         <div style={{
           display: 'flex',
           justifyContent: 'space-between',
@@ -361,6 +391,135 @@ export function SoundOptionsPanel() {
           }}>
             {Math.round(soundVolume * 100)}%
           </span>
+        </div>
+      </div>
+
+      {/* Granular Audio Controls Divider */}
+      <div style={{
+        borderTop: '1px solid #2a2a3a',
+        paddingTop: '12px',
+        marginTop: '2px',
+      }}>
+        <div style={{
+          fontSize: '10px',
+          color: '#666',
+          textTransform: 'uppercase',
+          letterSpacing: '0.5px',
+          marginBottom: '10px'
+        }}>
+          Advanced
+        </div>
+
+        {/* Voice Lines Volume */}
+        <div style={{ marginBottom: '12px' }}>
+          <div style={{
+            display: 'flex',
+            justifyContent: 'space-between',
+            alignItems: 'center',
+            marginBottom: '4px'
+          }}>
+            <span style={{ fontSize: '11px', color: '#999' }}>Unit Voices</span>
+            <button
+              onClick={handleVoicesToggle}
+              style={{
+                padding: '2px 8px',
+                backgroundColor: voicesEnabled ? 'rgba(80, 160, 80, 0.25)' : 'rgba(160, 80, 80, 0.25)',
+                border: `1px solid ${voicesEnabled ? '#4a8a4a' : '#8a4a4a'}`,
+                borderRadius: '3px',
+                color: voicesEnabled ? '#8fc88f' : '#c88f8f',
+                cursor: 'pointer',
+                fontSize: '9px',
+                fontWeight: 500,
+                transition: 'all 0.2s',
+              }}
+            >
+              {voicesEnabled ? 'ON' : 'OFF'}
+            </button>
+          </div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <input
+              type="range"
+              min="0"
+              max="1"
+              step="0.05"
+              value={voiceVolume}
+              onChange={(e) => handleVoiceVolumeChange(parseFloat(e.target.value))}
+              disabled={!voicesEnabled}
+              style={{
+                flex: 1,
+                height: '3px',
+                appearance: 'none',
+                backgroundColor: '#252530',
+                borderRadius: '2px',
+                cursor: voicesEnabled ? 'pointer' : 'not-allowed',
+                opacity: voicesEnabled ? 1 : 0.4,
+              }}
+            />
+            <span style={{
+              fontSize: '10px',
+              color: '#777',
+              minWidth: '30px',
+              textAlign: 'right'
+            }}>
+              {Math.round(voiceVolume * 100)}%
+            </span>
+          </div>
+        </div>
+
+        {/* Alerts Volume */}
+        <div>
+          <div style={{
+            display: 'flex',
+            justifyContent: 'space-between',
+            alignItems: 'center',
+            marginBottom: '4px'
+          }}>
+            <span style={{ fontSize: '11px', color: '#999' }}>Alerts</span>
+            <button
+              onClick={handleAlertsToggle}
+              style={{
+                padding: '2px 8px',
+                backgroundColor: alertsEnabled ? 'rgba(80, 160, 80, 0.25)' : 'rgba(160, 80, 80, 0.25)',
+                border: `1px solid ${alertsEnabled ? '#4a8a4a' : '#8a4a4a'}`,
+                borderRadius: '3px',
+                color: alertsEnabled ? '#8fc88f' : '#c88f8f',
+                cursor: 'pointer',
+                fontSize: '9px',
+                fontWeight: 500,
+                transition: 'all 0.2s',
+              }}
+            >
+              {alertsEnabled ? 'ON' : 'OFF'}
+            </button>
+          </div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <input
+              type="range"
+              min="0"
+              max="1"
+              step="0.05"
+              value={alertVolume}
+              onChange={(e) => handleAlertVolumeChange(parseFloat(e.target.value))}
+              disabled={!alertsEnabled}
+              style={{
+                flex: 1,
+                height: '3px',
+                appearance: 'none',
+                backgroundColor: '#252530',
+                borderRadius: '2px',
+                cursor: alertsEnabled ? 'pointer' : 'not-allowed',
+                opacity: alertsEnabled ? 1 : 0.4,
+              }}
+            />
+            <span style={{
+              fontSize: '10px',
+              color: '#777',
+              minWidth: '30px',
+              textAlign: 'right'
+            }}>
+              {Math.round(alertVolume * 100)}%
+            </span>
+          </div>
         </div>
       </div>
     </div>
