@@ -59,6 +59,7 @@ voidstrike/
 │   │   │   ├── AIMicroSystem.ts         # AI unit micro (kiting, focus fire, positioning)
 │   │   │   ├── UnitMechanicsSystem.ts   # Transform, cloak, transport, heal
 │   │   │   ├── BuildingMechanicsSystem.ts # Lift-off, addons, lowering
+│   │   │   ├── WallSystem.ts            # Wall connections, gates, upgrades
 │   │   │   ├── GameStateSystem.ts       # Victory/defeat conditions
 │   │   │   └── SaveLoadSystem.ts        # Game save/load functionality
 │   │   ├── ai/
@@ -70,7 +71,8 @@ voidstrike/
 │   │   │   ├── Unit.ts
 │   │   │   ├── Building.ts
 │   │   │   ├── Resource.ts
-│   │   │   └── Ability.ts          # Unit abilities component
+│   │   │   ├── Ability.ts          # Unit abilities component
+│   │   │   └── Wall.ts             # Wall/gate component
 │   │   └── pathfinding/
 │   │       ├── RecastNavigation.ts  # WASM-based navmesh pathfinding & crowd simulation
 │   │       ├── Grid.ts
@@ -90,7 +92,8 @@ voidstrike/
 │   │   ├── EffectsRenderer.ts # Combat effects (projectiles, hits)
 │   │   ├── RallyPointRenderer.ts # Building rally point visuals
 │   │   ├── CommandQueueRenderer.ts # Shift-click waypoint visualization
-│   │   └── BuildingPlacementPreview.ts # SC2-style placement grid + ghost
+│   │   ├── BuildingPlacementPreview.ts # SC2-style placement grid + ghost
+│   │   └── WallPlacementPreview.ts # Wall line drawing preview
 │   ├── input/
 │   │   ├── InputManager.ts    # Input abstraction
 │   │   ├── Selection.ts       # Box selection
@@ -98,6 +101,8 @@ voidstrike/
 │   ├── data/
 │   │   ├── units/             # Unit definitions
 │   │   ├── buildings/         # Building definitions
+│   │   │   ├── dominion.ts    # Dominion faction buildings
+│   │   │   └── walls.ts       # Wall/gate definitions
 │   │   ├── factions/          # Faction configs
 │   │   └── maps/              # Map data
 │   ├── store/
@@ -877,6 +882,138 @@ handleLowerCommand(entityIds);
 
 // Building attacks (Turrets, Planetary Fortress)
 processBuildingAttacks(building, deltaTime);
+```
+
+### Wall/Fortification System
+
+Comprehensive wall building system with line placement and gate mechanics.
+
+#### Wall Component (`Wall.ts`)
+
+```typescript
+// Wall connection types for visual mesh selection
+type WallConnectionType = 'none' | 'horizontal' | 'vertical' |
+  'corner_ne' | 'corner_nw' | 'corner_se' | 'corner_sw' |
+  't_north' | 't_south' | 't_east' | 't_west' | 'cross';
+
+// Gate states
+type GateState = 'closed' | 'open' | 'auto' | 'locked';
+
+// Wall upgrades
+type WallUpgradeType = 'reinforced' | 'shielded' | 'weapon' | 'repair_drone';
+
+class Wall extends Component {
+  connectionType: WallConnectionType;
+  neighborNorth/South/East/West: number | null;
+
+  // Gate mechanics
+  isGate: boolean;
+  gateState: GateState;
+  gateOpenProgress: number; // 0 = closed, 1 = open
+
+  // Turret mounting
+  mountedTurretId: number | null;
+  canMountTurret: boolean;
+
+  // Upgrades
+  appliedUpgrade: WallUpgradeType | null;
+  shield: number; // For shielded walls
+  hasRepairDrone: boolean;
+}
+```
+
+#### WallSystem (`WallSystem.ts`)
+
+```typescript
+// Auto-connecting walls to neighbors
+handleWallPlaced(entityId, position);
+updateWallConnections(entity, wall, transform);
+
+// Gate state machine
+updateGateProximity(gateEntity, wall); // Auto-open for friendlies
+wall.updateGate(deltaTime);            // Animate open/close
+
+// Wall upgrades
+handleWallUpgrade(entityIds, upgradeType, playerId);
+applyWallUpgradeEffects(entity, wall, building, health);
+
+// Shield regeneration
+wall.updateShield(deltaTime);
+
+// Repair drone healing adjacent walls
+updateRepairDrone(droneEntity, wall, deltaTime);
+```
+
+#### Wall Line Placement
+
+Click+drag to place multiple wall segments:
+
+```typescript
+// Game store wall line state
+interface WallLineState {
+  isActive: boolean;
+  startX, startY: number;
+  endX, endY: number;
+  positions: Array<{ x: number; y: number }>;
+  totalCost: { minerals: number; vespene: number };
+}
+
+// Line calculation (straight lines only)
+calculateWallLine(startX, startY, endX, endY): Array<{x, y}>;
+// Returns horizontal, vertical, or 45° diagonal segments
+
+// BuildingPlacementSystem handles wall:place_line events
+handleWallLinePlacement({
+  positions: Array<{ x, y, valid }>,
+  buildingType: string,
+  playerId: string
+});
+// - Validates all positions
+// - Deducts total cost
+// - Assigns workers round-robin
+// - Creates wall entities with Wall component
+```
+
+#### WallPlacementPreview (`WallPlacementPreview.ts`)
+
+Visual preview during wall line drawing:
+
+```typescript
+class WallPlacementPreview {
+  startLine(worldX, worldY);    // Mouse down - start drawing
+  updateLine(worldX, worldY);   // Mouse move - update preview
+  finishLine(): { positions, cost }; // Mouse up - confirm placement
+
+  // Renders:
+  // - Green/red boxes for valid/invalid positions
+  // - Connecting line between segments
+  // - Cost label showing total minerals
+}
+```
+
+#### Wall Buildings (`walls.ts`)
+
+```typescript
+// Basic wall segment (1x1)
+wall_segment: {
+  cost: 25 minerals,
+  hp: 400, armor: 1,
+  canMountTurret: true,
+  wallUpgrades: ['reinforced', 'shielded', 'weapon', 'repair_drone']
+}
+
+// Entrance gate (2x1)
+wall_gate: {
+  cost: 75 minerals,
+  hp: 500, armor: 2,
+  isGate: true,
+  canMountTurret: false
+}
+
+// Upgraded variants (created via upgrade, not built directly)
+wall_reinforced: { hp: 800, armor: 3 }
+wall_shielded: { hp: 400, shield: 200 }
+wall_weapon: { hp: 500, attackRange: 6, attackDamage: 5 }
 ```
 
 ### Building Placement System (`BuildingPlacementSystem.ts`)

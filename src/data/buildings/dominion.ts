@@ -1,6 +1,10 @@
 import { BuildingDefinition } from '@/engine/components/Building';
+import { WALL_DEFINITIONS } from './walls';
 
 export const BUILDING_DEFINITIONS: Record<string, BuildingDefinition> = {
+  // Include wall buildings
+  ...WALL_DEFINITIONS,
+
   headquarters: {
     id: 'headquarters',
     name: 'Headquarters',

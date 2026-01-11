@@ -1,0 +1,394 @@
+import * as THREE from 'three';
+import { MapData } from '@/data/maps';
+import { WALL_DEFINITIONS, calculateWallLine, calculateWallLineCost } from '@/data/buildings/walls';
+
+/**
+ * WallPlacementPreview - Specialized preview for wall line placement
+ *
+ * Features:
+ * - Click and drag to draw wall lines
+ * - Shows all wall segments that will be placed
+ * - Real-time cost calculation
+ * - Valid/invalid placement visualization
+ * - Snaps to grid with straight lines (horizontal, vertical, or 45° diagonal)
+ */
+export class WallPlacementPreview {
+  public group: THREE.Group;
+
+  private mapData: MapData;
+  private currentBuildingType: string = 'wall_segment';
+  private isDrawing: boolean = false;
+  private startPosition: { x: number; y: number } = { x: 0, y: 0 };
+  private endPosition: { x: number; y: number } = { x: 0, y: 0 };
+  private wallPositions: Array<{ x: number; y: number; valid: boolean }> = [];
+
+  // Meshes
+  private segmentMeshes: THREE.Mesh[] = [];
+  private lineMesh: THREE.Line | null = null;
+  private costLabel: THREE.Sprite | null = null;
+
+  // Callbacks
+  private getTerrainHeight: ((x: number, y: number) => number) | null = null;
+  private placementValidator: ((x: number, y: number, w: number, h: number) => boolean) | null = null;
+
+  // Visual settings
+  private static readonly GRID_OFFSET = 0.2;
+  private static readonly VALID_COLOR = new THREE.Color(0x00ff00);
+  private static readonly INVALID_COLOR = new THREE.Color(0xff0000);
+  private static readonly SEGMENT_OPACITY = 0.5;
+
+  // Materials (reused)
+  private validMaterial: THREE.MeshBasicMaterial;
+  private invalidMaterial: THREE.MeshBasicMaterial;
+  private lineMaterial: THREE.LineBasicMaterial;
+  private segmentGeometry: THREE.BoxGeometry;
+
+  constructor(mapData: MapData, getTerrainHeight?: (x: number, y: number) => number) {
+    this.group = new THREE.Group();
+    this.mapData = mapData;
+    this.getTerrainHeight = getTerrainHeight ?? null;
+    this.group.visible = false;
+
+    // Create reusable materials
+    this.validMaterial = new THREE.MeshBasicMaterial({
+      color: WallPlacementPreview.VALID_COLOR,
+      transparent: true,
+      opacity: WallPlacementPreview.SEGMENT_OPACITY,
+    });
+
+    this.invalidMaterial = new THREE.MeshBasicMaterial({
+      color: WallPlacementPreview.INVALID_COLOR,
+      transparent: true,
+      opacity: WallPlacementPreview.SEGMENT_OPACITY,
+    });
+
+    this.lineMaterial = new THREE.LineBasicMaterial({
+      color: 0x00ff88,
+      linewidth: 2,
+    });
+
+    // Standard wall segment geometry (1x1)
+    this.segmentGeometry = new THREE.BoxGeometry(0.9, 1.5, 0.9);
+  }
+
+  /**
+   * Set terrain height function
+   */
+  public setTerrainHeightFunction(fn: (x: number, y: number) => number): void {
+    this.getTerrainHeight = fn;
+  }
+
+  /**
+   * Set placement validator function
+   */
+  public setPlacementValidator(fn: (x: number, y: number, w: number, h: number) => boolean): void {
+    this.placementValidator = fn;
+  }
+
+  /**
+   * Start wall placement mode
+   */
+  public startPlacement(buildingType: string = 'wall_segment'): void {
+    this.currentBuildingType = buildingType;
+    this.group.visible = true;
+    this.isDrawing = false;
+    this.clearMeshes();
+  }
+
+  /**
+   * Stop wall placement mode
+   */
+  public stopPlacement(): void {
+    this.group.visible = false;
+    this.isDrawing = false;
+    this.clearMeshes();
+  }
+
+  /**
+   * Start drawing a wall line (mouse down)
+   */
+  public startLine(worldX: number, worldY: number): void {
+    const snappedX = Math.round(worldX);
+    const snappedY = Math.round(worldY);
+
+    this.isDrawing = true;
+    this.startPosition = { x: snappedX, y: snappedY };
+    this.endPosition = { x: snappedX, y: snappedY };
+
+    this.updateWallPositions();
+  }
+
+  /**
+   * Update wall line endpoint (mouse move while drawing)
+   */
+  public updateLine(worldX: number, worldY: number): void {
+    if (!this.isDrawing) {
+      // Not drawing, just show single segment at cursor
+      const snappedX = Math.round(worldX);
+      const snappedY = Math.round(worldY);
+      this.showSingleSegment(snappedX, snappedY);
+      return;
+    }
+
+    const snappedX = Math.round(worldX);
+    const snappedY = Math.round(worldY);
+
+    if (snappedX !== this.endPosition.x || snappedY !== this.endPosition.y) {
+      this.endPosition = { x: snappedX, y: snappedY };
+      this.updateWallPositions();
+    }
+  }
+
+  /**
+   * Finish drawing wall line (mouse up)
+   * Returns the positions and cost
+   */
+  public finishLine(): { positions: Array<{ x: number; y: number; valid: boolean }>; cost: { minerals: number; vespene: number } } {
+    this.isDrawing = false;
+
+    const positions = [...this.wallPositions];
+    const validPositions = positions.filter(p => p.valid);
+    const cost = calculateWallLineCost(validPositions, this.currentBuildingType);
+
+    this.clearMeshes();
+
+    return { positions, cost };
+  }
+
+  /**
+   * Cancel current wall line
+   */
+  public cancelLine(): void {
+    this.isDrawing = false;
+    this.wallPositions = [];
+    this.clearMeshes();
+  }
+
+  /**
+   * Check if currently drawing
+   */
+  public isCurrentlyDrawing(): boolean {
+    return this.isDrawing;
+  }
+
+  /**
+   * Get current wall positions
+   */
+  public getWallPositions(): Array<{ x: number; y: number; valid: boolean }> {
+    return this.wallPositions;
+  }
+
+  /**
+   * Get current total cost
+   */
+  public getCurrentCost(): { minerals: number; vespene: number } {
+    const validPositions = this.wallPositions.filter(p => p.valid);
+    return calculateWallLineCost(validPositions, this.currentBuildingType);
+  }
+
+  /**
+   * Show single segment at cursor position (when not drawing)
+   */
+  private showSingleSegment(x: number, y: number): void {
+    this.clearMeshes();
+
+    const valid = this.checkPositionValid(x, y);
+    const height = this.getTerrainHeight ? this.getTerrainHeight(x, y) : 0;
+
+    const mesh = new THREE.Mesh(
+      this.segmentGeometry,
+      valid ? this.validMaterial : this.invalidMaterial
+    );
+    mesh.position.set(x, height + 0.75 + WallPlacementPreview.GRID_OFFSET, y);
+
+    // Add wireframe
+    const wireGeometry = new THREE.EdgesGeometry(this.segmentGeometry);
+    const wireMaterial = new THREE.LineBasicMaterial({
+      color: valid ? 0x00ff00 : 0xff0000,
+    });
+    const wireframe = new THREE.LineSegments(wireGeometry, wireMaterial);
+    mesh.add(wireframe);
+
+    this.group.add(mesh);
+    this.segmentMeshes.push(mesh);
+
+    this.wallPositions = [{ x, y, valid }];
+  }
+
+  /**
+   * Update wall positions based on start and end points
+   */
+  private updateWallPositions(): void {
+    this.clearMeshes();
+
+    // Calculate line positions
+    const linePositions = calculateWallLine(
+      this.startPosition.x,
+      this.startPosition.y,
+      this.endPosition.x,
+      this.endPosition.y
+    );
+
+    // Check validity for each position
+    this.wallPositions = linePositions.map(pos => ({
+      x: pos.x,
+      y: pos.y,
+      valid: this.checkPositionValid(pos.x, pos.y),
+    }));
+
+    // Create meshes for each segment
+    for (const pos of this.wallPositions) {
+      const height = this.getTerrainHeight ? this.getTerrainHeight(pos.x, pos.y) : 0;
+
+      const mesh = new THREE.Mesh(
+        this.segmentGeometry,
+        pos.valid ? this.validMaterial.clone() : this.invalidMaterial.clone()
+      );
+      mesh.position.set(pos.x, height + 0.75 + WallPlacementPreview.GRID_OFFSET, pos.y);
+
+      // Add wireframe
+      const wireGeometry = new THREE.EdgesGeometry(this.segmentGeometry);
+      const wireMaterial = new THREE.LineBasicMaterial({
+        color: pos.valid ? 0x00ff00 : 0xff0000,
+      });
+      const wireframe = new THREE.LineSegments(wireGeometry, wireMaterial);
+      mesh.add(wireframe);
+
+      this.group.add(mesh);
+      this.segmentMeshes.push(mesh);
+    }
+
+    // Create connecting line
+    if (this.wallPositions.length > 1) {
+      const linePoints: THREE.Vector3[] = [];
+      for (const pos of this.wallPositions) {
+        const height = this.getTerrainHeight ? this.getTerrainHeight(pos.x, pos.y) : 0;
+        linePoints.push(new THREE.Vector3(pos.x, height + 1.5 + WallPlacementPreview.GRID_OFFSET, pos.y));
+      }
+
+      const lineGeometry = new THREE.BufferGeometry().setFromPoints(linePoints);
+      this.lineMesh = new THREE.Line(lineGeometry, this.lineMaterial);
+      this.group.add(this.lineMesh);
+    }
+
+    // Create cost label
+    this.updateCostLabel();
+  }
+
+  /**
+   * Check if a position is valid for wall placement
+   */
+  private checkPositionValid(x: number, y: number): boolean {
+    // Check map bounds
+    if (x < 0 || x >= this.mapData.width || y < 0 || y >= this.mapData.height) {
+      return false;
+    }
+
+    // Check terrain type
+    const cell = this.mapData.terrain[Math.floor(y)]?.[Math.floor(x)];
+    if (!cell || cell.terrain !== 'ground') {
+      return false;
+    }
+
+    // Check with validator (buildings, units, resources)
+    if (this.placementValidator && !this.placementValidator(x, y, 1, 1)) {
+      return false;
+    }
+
+    return true;
+  }
+
+  /**
+   * Update the cost label sprite
+   */
+  private updateCostLabel(): void {
+    if (this.costLabel) {
+      this.group.remove(this.costLabel);
+      this.costLabel.material.dispose();
+      (this.costLabel.material as THREE.SpriteMaterial).map?.dispose();
+      this.costLabel = null;
+    }
+
+    if (this.wallPositions.length === 0) return;
+
+    const cost = this.getCurrentCost();
+    const validCount = this.wallPositions.filter(p => p.valid).length;
+    const totalCount = this.wallPositions.length;
+
+    // Create canvas for label
+    const canvas = document.createElement('canvas');
+    canvas.width = 256;
+    canvas.height = 64;
+    const ctx = canvas.getContext('2d')!;
+
+    // Background
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
+    ctx.roundRect(0, 0, 256, 64, 8);
+    ctx.fill();
+
+    // Text
+    ctx.font = 'bold 24px Arial';
+    ctx.fillStyle = validCount === totalCount ? '#00ff00' : '#ffff00';
+    ctx.textAlign = 'center';
+    ctx.fillText(`${validCount}/${totalCount} walls`, 128, 28);
+
+    ctx.font = '18px Arial';
+    ctx.fillStyle = '#88ccff';
+    ctx.fillText(`💎 ${cost.minerals}`, 128, 52);
+
+    // Create sprite
+    const texture = new THREE.CanvasTexture(canvas);
+    const material = new THREE.SpriteMaterial({ map: texture, transparent: true });
+    this.costLabel = new THREE.Sprite(material);
+    this.costLabel.scale.set(8, 2, 1);
+
+    // Position above the line
+    const lastPos = this.wallPositions[this.wallPositions.length - 1];
+    const height = this.getTerrainHeight ? this.getTerrainHeight(lastPos.x, lastPos.y) : 0;
+    this.costLabel.position.set(lastPos.x, height + 4, lastPos.y);
+
+    this.group.add(this.costLabel);
+  }
+
+  /**
+   * Clear all meshes
+   */
+  private clearMeshes(): void {
+    for (const mesh of this.segmentMeshes) {
+      this.group.remove(mesh);
+      mesh.traverse((child) => {
+        if (child instanceof THREE.Mesh || child instanceof THREE.LineSegments) {
+          child.geometry.dispose();
+          if (child.material instanceof THREE.Material) {
+            child.material.dispose();
+          }
+        }
+      });
+    }
+    this.segmentMeshes = [];
+
+    if (this.lineMesh) {
+      this.group.remove(this.lineMesh);
+      this.lineMesh.geometry.dispose();
+      this.lineMesh = null;
+    }
+
+    if (this.costLabel) {
+      this.group.remove(this.costLabel);
+      this.costLabel.material.dispose();
+      (this.costLabel.material as THREE.SpriteMaterial).map?.dispose();
+      this.costLabel = null;
+    }
+  }
+
+  /**
+   * Dispose of all resources
+   */
+  public dispose(): void {
+    this.clearMeshes();
+    this.validMaterial.dispose();
+    this.invalidMaterial.dispose();
+    this.lineMaterial.dispose();
+    this.segmentGeometry.dispose();
+  }
+}

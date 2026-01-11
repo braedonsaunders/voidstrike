@@ -16,6 +16,17 @@ export interface QueuedBuildingPlacement {
   y: number;
 }
 
+// Wall line placement for drag-to-build walls
+export interface WallLineState {
+  isActive: boolean;
+  startX: number;
+  startY: number;
+  endX: number;
+  endY: number;
+  positions: Array<{ x: number; y: number }>;
+  totalCost: { minerals: number; vespene: number };
+}
+
 export interface GameState {
   // Resources
   minerals: number;
@@ -43,6 +54,8 @@ export interface GameState {
   isBuilding: boolean;
   buildingType: string | null;
   buildingPlacementQueue: QueuedBuildingPlacement[]; // Shift-click queued placements
+  isWallPlacementMode: boolean; // Wall line drawing mode
+  wallLine: WallLineState; // Current wall line being drawn
   isSettingRallyPoint: boolean;
   isRepairMode: boolean; // Repair targeting mode
   isLandingMode: boolean; // Landing mode for flying buildings
@@ -75,6 +88,11 @@ export interface GameState {
   setBuildingMode: (type: string | null) => void;
   addToBuildingQueue: (placement: QueuedBuildingPlacement) => void;
   clearBuildingQueue: () => void;
+  setWallPlacementMode: (isActive: boolean, buildingType?: string) => void;
+  startWallLine: (x: number, y: number) => void;
+  updateWallLine: (x: number, y: number) => void;
+  finishWallLine: () => WallLineState;
+  cancelWallLine: () => void;
   setRallyPointMode: (isActive: boolean) => void;
   setRepairMode: (isActive: boolean) => void;
   setLandingMode: (isActive: boolean, buildingId?: number | null) => void;
@@ -92,6 +110,16 @@ export interface GameState {
   reset: () => void;
 }
 
+const initialWallLine: WallLineState = {
+  isActive: false,
+  startX: 0,
+  startY: 0,
+  endX: 0,
+  endY: 0,
+  positions: [],
+  totalCost: { minerals: 0, vespene: 0 },
+};
+
 const initialState = {
   minerals: 50,
   vespene: 0,
@@ -108,6 +136,8 @@ const initialState = {
   isBuilding: false,
   buildingType: null,
   buildingPlacementQueue: [],
+  isWallPlacementMode: false,
+  wallLine: { ...initialWallLine },
   isSettingRallyPoint: false,
   isRepairMode: false,
   isLandingMode: false,
@@ -204,6 +234,73 @@ export const useGameStore = create<GameState>((set, get) => ({
 
   clearBuildingQueue: () =>
     set({ buildingPlacementQueue: [] }),
+
+  setWallPlacementMode: (isActive, buildingType = 'wall_segment') =>
+    set({
+      isWallPlacementMode: isActive,
+      isBuilding: isActive,
+      buildingType: isActive ? buildingType : null,
+      wallLine: { ...initialWallLine },
+      isSettingRallyPoint: false,
+      isRepairMode: false,
+      isLandingMode: false,
+      landingBuildingId: null,
+      abilityTargetMode: null,
+    }),
+
+  startWallLine: (x, y) =>
+    set((state) => ({
+      wallLine: {
+        ...state.wallLine,
+        isActive: true,
+        startX: x,
+        startY: y,
+        endX: x,
+        endY: y,
+        positions: [{ x: Math.round(x), y: Math.round(y) }],
+        totalCost: { minerals: 25, vespene: 0 }, // Cost of one segment
+      },
+    })),
+
+  updateWallLine: (x, y) =>
+    set((state) => {
+      if (!state.wallLine.isActive) return state;
+
+      // Import calculateWallLine dynamically to avoid circular deps
+      const { calculateWallLine, calculateWallLineCost } = require('@/data/buildings/walls');
+      const positions = calculateWallLine(state.wallLine.startX, state.wallLine.startY, x, y);
+      const totalCost = calculateWallLineCost(positions, state.buildingType || 'wall_segment');
+
+      return {
+        wallLine: {
+          ...state.wallLine,
+          endX: x,
+          endY: y,
+          positions,
+          totalCost,
+        },
+      };
+    }),
+
+  finishWallLine: () => {
+    const state = get();
+    const wallLine = { ...state.wallLine };
+
+    // Reset wall line state
+    set({
+      wallLine: { ...initialWallLine },
+    });
+
+    return wallLine;
+  },
+
+  cancelWallLine: () =>
+    set({
+      wallLine: { ...initialWallLine },
+      isWallPlacementMode: false,
+      isBuilding: false,
+      buildingType: null,
+    }),
 
   setRallyPointMode: (isActive) =>
     set({

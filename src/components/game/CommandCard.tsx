@@ -10,7 +10,9 @@ import { Selectable } from '@/engine/components/Selectable';
 import { useEffect, useState } from 'react';
 import { UNIT_DEFINITIONS } from '@/data/units/dominion';
 import { BUILDING_DEFINITIONS, RESEARCH_MODULE_UNITS } from '@/data/buildings/dominion';
+import { WALL_DEFINITIONS } from '@/data/buildings/walls';
 import { RESEARCH_DEFINITIONS } from '@/data/research/dominion';
+import { Wall } from '@/engine/components/Wall';
 
 // Icon mappings for commands and units
 const COMMAND_ICONS: Record<string, string> = {
@@ -60,6 +62,17 @@ const COMMAND_ICONS: Record<string, string> = {
   ops_center: '🎓',
   radar_array: '📡',
   defense_turret: '🗼',
+  // Walls
+  wall: '🧱',
+  wall_segment: '🧱',
+  wall_gate: '🚪',
+  gate: '🚪',
+  // Gate commands
+  open: '📖',
+  close: '📕',
+  lock: '🔒',
+  unlock: '🔓',
+  auto: '🔄',
   // Upgrades
   stim: '💉',
   combat: '🛡',
@@ -95,12 +108,14 @@ interface CommandButton {
   cost?: { minerals: number; vespene: number; supply?: number };
 }
 
-type MenuMode = 'main' | 'build_basic' | 'build_advanced';
+type MenuMode = 'main' | 'build_basic' | 'build_advanced' | 'build_walls';
 
 // Basic structures (no tech requirements)
 const BASIC_BUILDINGS = ['headquarters', 'supply_cache', 'extractor', 'infantry_bay', 'tech_center', 'garrison', 'defense_turret'];
 // Advanced structures (tech requirements)
 const ADVANCED_BUILDINGS = ['forge', 'arsenal', 'hangar', 'power_core', 'ops_center', 'radar_array'];
+// Wall buildings
+const WALL_BUILDINGS = ['wall_segment', 'wall_gate'];
 
 export function CommandCard() {
   const { selectedUnits, minerals, vespene, supply, maxSupply, isBuilding } = useGameStore();
@@ -240,8 +255,17 @@ export function CommandCard() {
             action: () => setMenuMode('build_advanced'),
             tooltip: 'Build advanced structures',
           });
+
+          // Build Walls submenu button
+          buttons.push({
+            id: 'build_walls',
+            label: 'Build Walls',
+            shortcut: 'W',
+            action: () => setMenuMode('build_walls'),
+            tooltip: 'Build walls and gates (click+drag for lines)',
+          });
         }
-      } else if (menuMode === 'build_basic' || menuMode === 'build_advanced') {
+      } else if (menuMode === 'build_basic' || menuMode === 'build_advanced' || menuMode === 'build_walls') {
         // Back button
         buttons.push({
           id: 'back',
@@ -252,7 +276,11 @@ export function CommandCard() {
         });
 
         // Building buttons for the selected category
-        const buildingList = menuMode === 'build_basic' ? BASIC_BUILDINGS : ADVANCED_BUILDINGS;
+        const buildingList = menuMode === 'build_basic'
+          ? BASIC_BUILDINGS
+          : menuMode === 'build_advanced'
+            ? ADVANCED_BUILDINGS
+            : WALL_BUILDINGS;
 
         // Helper to check if player has completed required buildings
         const checkRequirementsMet = (requirements: string[] | undefined): { met: boolean; missing: string[] } => {
@@ -285,7 +313,8 @@ export function CommandCard() {
         };
 
         buildingList.forEach((buildingId) => {
-          const def = BUILDING_DEFINITIONS[buildingId];
+          // Check both building and wall definitions
+          const def = BUILDING_DEFINITIONS[buildingId] || WALL_DEFINITIONS[buildingId];
           if (!def) return;
 
           // Check tech requirements against actual player buildings
@@ -301,13 +330,24 @@ export function CommandCard() {
             tooltip += ` (${reqText})`;
           }
 
+          // Check if this is a wall building
+          const isWall = 'isWall' in def && def.isWall;
+          if (isWall) {
+            tooltip += ' (Click+drag to draw wall line)';
+          }
+
           buttons.push({
             id: `build_${buildingId}`,
             label: def.name,
             shortcut: def.name.charAt(0).toUpperCase(),
             action: () => {
               if (requirementsMet) {
-                useGameStore.getState().setBuildingMode(buildingId);
+                // Use wall placement mode for walls, regular mode for other buildings
+                if (isWall) {
+                  useGameStore.getState().setWallPlacementMode(true, buildingId);
+                } else {
+                  useGameStore.getState().setBuildingMode(buildingId);
+                }
               }
             },
             isDisabled: !canAfford || !requirementsMet,
@@ -319,6 +359,111 @@ export function CommandCard() {
     } else if (building && (building.isComplete() || building.state === 'flying' || building.state === 'lifting' || building.state === 'landing')) {
       // Show commands for complete OR flying buildings
       const isFlying = building.state === 'flying' || building.state === 'lifting' || building.state === 'landing';
+
+      // Check if this is a wall or gate
+      const wall = entity.get<Wall>('Wall');
+      if (wall && !isFlying) {
+        // Gate commands
+        if (wall.isGate) {
+          // Open/Close toggle
+          buttons.push({
+            id: 'gate_toggle',
+            label: wall.gateOpenProgress > 0.5 ? 'Close' : 'Open',
+            shortcut: 'O',
+            action: () => {
+              game.eventBus.emit('command:gate_toggle', {
+                entityIds: selectedUnits,
+              });
+            },
+            tooltip: wall.gateOpenProgress > 0.5 ? 'Close the gate' : 'Open the gate',
+          });
+
+          // Lock toggle
+          buttons.push({
+            id: 'gate_lock',
+            label: wall.gateState === 'locked' ? 'Unlock' : 'Lock',
+            shortcut: 'L',
+            action: () => {
+              game.eventBus.emit('command:gate_lock', {
+                entityIds: selectedUnits,
+              });
+            },
+            tooltip: wall.gateState === 'locked' ? 'Unlock the gate' : 'Lock the gate (prevents opening)',
+          });
+
+          // Auto mode
+          if (wall.gateState !== 'auto') {
+            buttons.push({
+              id: 'gate_auto',
+              label: 'Auto',
+              shortcut: 'A',
+              action: () => {
+                game.eventBus.emit('command:gate_auto', {
+                  entityIds: selectedUnits,
+                });
+              },
+              tooltip: 'Set gate to auto-open for friendly units',
+            });
+          }
+        }
+
+        // Wall upgrade buttons (if upgrades are researched)
+        const store = useGameStore.getState();
+        const localPlayer = getLocalPlayerId() ?? 'player1';
+
+        if (!wall.appliedUpgrade && wall.upgradeInProgress === null) {
+          // Reinforced upgrade
+          if (store.hasResearch(localPlayer, 'wall_reinforced')) {
+            buttons.push({
+              id: 'wall_upgrade_reinforced',
+              label: 'Reinforce',
+              shortcut: 'R',
+              action: () => {
+                game.eventBus.emit('command:wall_upgrade', {
+                  entityIds: selectedUnits,
+                  upgradeType: 'reinforced',
+                });
+              },
+              tooltip: 'Reinforce wall: +400 HP, +2 armor',
+              cost: { minerals: 25, vespene: 0 },
+            });
+          }
+
+          // Shield upgrade
+          if (store.hasResearch(localPlayer, 'wall_shielded')) {
+            buttons.push({
+              id: 'wall_upgrade_shielded',
+              label: 'Shield',
+              shortcut: 'S',
+              action: () => {
+                game.eventBus.emit('command:wall_upgrade', {
+                  entityIds: selectedUnits,
+                  upgradeType: 'shielded',
+                });
+              },
+              tooltip: 'Add shield: +200 regenerating shield',
+              cost: { minerals: 50, vespene: 25 },
+            });
+          }
+
+          // Weapon upgrade (if no turret mounted)
+          if (store.hasResearch(localPlayer, 'wall_weapon') && wall.mountedTurretId === null) {
+            buttons.push({
+              id: 'wall_upgrade_weapon',
+              label: 'Weapon',
+              shortcut: 'W',
+              action: () => {
+                game.eventBus.emit('command:wall_upgrade', {
+                  entityIds: selectedUnits,
+                  upgradeType: 'weapon',
+                });
+              },
+              tooltip: 'Add auto-turret: 5 damage, 6 range',
+              cost: { minerals: 40, vespene: 25 },
+            });
+          }
+        }
+      }
 
       // Get tech-gated units for this building
       const techUnits = RESEARCH_MODULE_UNITS[building.buildingId] || [];
@@ -615,9 +760,21 @@ export function CommandCard() {
           }
         }
       }
+      // Hotkey W for Build Walls
+      if (e.key.toLowerCase() === 'w' && menuMode === 'main') {
+        const game = Game.getInstance();
+        if (game && selectedUnits.length > 0) {
+          const entity = game.world.getEntity(selectedUnits[0]);
+          const unit = entity?.get<Unit>('Unit');
+          if (unit?.isWorker) {
+            setMenuMode('build_walls');
+            return;
+          }
+        }
+      }
 
       // Handle building shortcuts when in build submenus
-      if (menuMode === 'build_basic' || menuMode === 'build_advanced') {
+      if (menuMode === 'build_basic' || menuMode === 'build_advanced' || menuMode === 'build_walls') {
         const pressedKey = e.key.toUpperCase();
         // Find a matching command by shortcut (skip the "back" button)
         const matchingCommand = commands.find(
@@ -650,7 +807,7 @@ export function CommandCard() {
       {/* Menu title when in submenu */}
       {menuMode !== 'main' && (
         <div className="absolute -top-6 left-0 text-xs text-void-400">
-          {menuMode === 'build_basic' ? '🏗 Basic Structures' : '🏭 Advanced Structures'}
+          {menuMode === 'build_basic' ? '🏗 Basic Structures' : menuMode === 'build_advanced' ? '🏭 Advanced Structures' : '🧱 Walls & Gates'}
         </div>
       )}
 
