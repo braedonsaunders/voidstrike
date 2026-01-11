@@ -16,6 +16,11 @@ interface LandCommand {
   position: { x: number; y: number };
 }
 
+interface FlyingBuildingMoveCommand {
+  buildingId: number;
+  targetPosition: { x: number; y: number };
+}
+
 interface BuildAddonCommand {
   buildingId: number;
   addonType: 'research_module' | 'production_module';
@@ -41,6 +46,7 @@ export class BuildingMechanicsSystem extends System {
     this.game.eventBus.on('command:buildAddon', this.handleBuildAddonCommand.bind(this));
     this.game.eventBus.on('command:lowerSupplyDepot', this.handleLowerSupplyDepotCommand.bind(this));
     this.game.eventBus.on('command:attachToAddon', this.handleAttachToAddonCommand.bind(this));
+    this.game.eventBus.on('command:flyingBuildingMove', this.handleFlyingBuildingMoveCommand.bind(this));
   }
 
   private handleLiftOffCommand(command: LiftOffCommand): void {
@@ -85,6 +91,19 @@ export class BuildingMechanicsSystem extends System {
         position: command.position,
       });
     }
+  }
+
+  private handleFlyingBuildingMoveCommand(command: FlyingBuildingMoveCommand): void {
+    const entity = this.world.getEntity(command.buildingId);
+    if (!entity) return;
+
+    const building = entity.get<Building>('Building');
+    if (!building) return;
+
+    // Only flying buildings can receive move commands
+    if (building.state !== 'flying') return;
+
+    building.setFlyingTarget(command.targetPosition.x, command.targetPosition.y);
   }
 
   private handleBuildAddonCommand(command: BuildAddonCommand): void {
@@ -225,6 +244,26 @@ export class BuildingMechanicsSystem extends System {
           this.game.eventBus.emit('building:landingComplete', {
             buildingId: entity.id,
           });
+        }
+      } else if (building.state === 'flying' && building.hasFlyingTarget()) {
+        // Update flying building movement
+        const targetX = building.flyingTargetX!;
+        const targetY = building.flyingTargetY!;
+
+        const dx = targetX - transform.x;
+        const dy = targetY - transform.y;
+        const distance = Math.sqrt(dx * dx + dy * dy);
+
+        const arrivalThreshold = 0.5;
+        if (distance < arrivalThreshold) {
+          // Arrived at destination
+          building.clearFlyingTarget();
+        } else {
+          // Move toward target
+          const moveDistance = building.flyingSpeed * dt;
+          const ratio = Math.min(moveDistance / distance, 1);
+          transform.x += dx * ratio;
+          transform.y += dy * ratio;
         }
       }
 

@@ -115,6 +115,17 @@ export class InputHandler extends Phaser.Events.EventEmitter {
       return;
     }
 
+    // Check for landing mode (flying building landing)
+    const { isLandingMode, landingBuildingId } = store;
+    if (isLandingMode && landingBuildingId !== null) {
+      this.game.eventBus.emit('command:land', {
+        buildingId: landingBuildingId,
+        position: worldPos,
+      });
+      store.setLandingMode(false);
+      return;
+    }
+
     // Check for building placement mode
     const { isBuilding, buildingType } = store;
     if (isBuilding && buildingType) {
@@ -289,11 +300,38 @@ export class InputHandler extends Phaser.Events.EventEmitter {
     }
 
     // Default: move command
-    this.game.eventBus.emit('command:move', {
-      entityIds: selectedUnits,
-      targetPosition: worldPos,
-      queue,
-    });
+    // Check if any selected entities are flying buildings - route them to flying building move
+    const flyingBuildingIds: number[] = [];
+    const unitIds: number[] = [];
+
+    for (const entityId of selectedUnits) {
+      const entity = this.game.world.getEntity(entityId);
+      if (!entity) continue;
+
+      const building = entity.get<Building>('Building');
+      if (building && building.state === 'flying') {
+        flyingBuildingIds.push(entityId);
+      } else {
+        unitIds.push(entityId);
+      }
+    }
+
+    // Move flying buildings
+    for (const buildingId of flyingBuildingIds) {
+      this.game.eventBus.emit('command:flyingBuildingMove', {
+        buildingId,
+        targetPosition: worldPos,
+      });
+    }
+
+    // Move regular units
+    if (unitIds.length > 0) {
+      this.game.eventBus.emit('command:move', {
+        entityIds: unitIds,
+        targetPosition: worldPos,
+        queue,
+      });
+    }
   }
 
   private handleSelectionEnd(pointer: Phaser.Input.Pointer): void {

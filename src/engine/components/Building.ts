@@ -89,6 +89,10 @@ export class Building extends Component {
   public isFlying: boolean;
   public liftProgress: number; // 0-1 for lift/land animation
   public landingTarget: { x: number; y: number } | null;
+  // Movement target for flying buildings
+  public flyingTargetX: number | null;
+  public flyingTargetY: number | null;
+  public flyingSpeed: number; // Movement speed when flying
 
   // Supply depot lowered state
   public canLower: boolean;
@@ -145,6 +149,9 @@ export class Building extends Component {
     this.isFlying = false;
     this.liftProgress = 0;
     this.landingTarget = null;
+    this.flyingTargetX = null;
+    this.flyingTargetY = null;
+    this.flyingSpeed = 2.5; // Moderate flying speed
 
     // Supply depot
     this.canLower = definition.canLower ?? false;
@@ -373,6 +380,24 @@ export class Building extends Component {
     }
 
     return false;
+  }
+
+  // ==================== FLYING MOVEMENT MECHANICS ====================
+
+  public setFlyingTarget(x: number, y: number): boolean {
+    if (this.state !== 'flying') return false;
+    this.flyingTargetX = x;
+    this.flyingTargetY = y;
+    return true;
+  }
+
+  public clearFlyingTarget(): void {
+    this.flyingTargetX = null;
+    this.flyingTargetY = null;
+  }
+
+  public hasFlyingTarget(): boolean {
+    return this.flyingTargetX !== null && this.flyingTargetY !== null;
   }
 
   // ==================== SUPPLY DEPOT MECHANICS ====================
