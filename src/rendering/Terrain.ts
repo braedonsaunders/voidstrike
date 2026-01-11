@@ -553,12 +553,10 @@ export class Terrain {
         // A height diff of 3+ units over 1 cell = max slope
         let slope = Math.min(1.0, maxHeightDiff / 3.0);
 
-        // Ramps always have a minimum slope to ensure they show dirt/rock textures
-        // This prevents ramps from looking like flat grass even when gradients are subtle
+        // Ramps should have ZERO slope for texture (flat grass) - the geometry handles the actual slope
+        // We don't boost the texture slope for ramps anymore
         if (terrainType === 'ramp') {
-          // Give ramps a minimum slope of 0.2 (will show dirt texture)
-          // Scale up based on actual slope for steeper ramps
-          slope = Math.max(0.2, slope * 1.5);
+          slope = 0;  // Force flat texture for ramps
         }
 
         // Cliff edges (unwalkable adjacent to walkable) should also have increased slope
@@ -1007,15 +1005,43 @@ export class Terrain {
   /**
    * Smooth the heightmap using Gaussian-like averaging
    * Preserves large features while smoothing rough transitions
+   * IMPORTANT: Skips ramp cells to preserve their clean linear gradient
    */
   private smoothHeightMap(iterations: number = 1): void {
-    const { width, height } = this.mapData;
+    const { width, height, terrain } = this.mapData;
     const temp = new Float32Array(this.heightMap.length);
+
+    // Helper to check if a vertex touches a ramp cell
+    const isRampVertex = (vx: number, vy: number): boolean => {
+      // A vertex at (vx, vy) touches up to 4 cells
+      const cellCoords = [
+        { cx: vx - 1, cy: vy - 1 },
+        { cx: vx, cy: vy - 1 },
+        { cx: vx - 1, cy: vy },
+        { cx: vx, cy: vy },
+      ];
+      for (const { cx, cy } of cellCoords) {
+        if (cx >= 0 && cx < width && cy >= 0 && cy < height) {
+          if (terrain[cy][cx].terrain === 'ramp') {
+            return true;
+          }
+        }
+      }
+      return false;
+    };
 
     for (let iter = 0; iter < iterations; iter++) {
       for (let y = 0; y <= height; y++) {
         for (let x = 0; x <= width; x++) {
           const idx = y * this.gridWidth + x;
+
+          // SKIP RAMP VERTICES - preserve their exact calculated heights
+          // This ensures ramps stay as clean linear slopes, not smoothed flat steps
+          if (isRampVertex(x, y)) {
+            temp[idx] = this.heightMap[idx];
+            continue;
+          }
+
           let sum = this.heightMap[idx] * 4; // Center weight
           let weight = 4;
 
