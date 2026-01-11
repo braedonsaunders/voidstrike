@@ -22,7 +22,7 @@ const sectionStyle: React.CSSProperties = { marginBottom: '16px', paddingBottom:
 /**
  * In-game graphics options panel
  * Access via Options menu -> Graphics
- * Each effect has its toggle followed by related sliders
+ * WebGPU-compatible effects only
  */
 export function GraphicsOptionsPanel() {
   const showGraphicsOptions = useUIStore((state) => state.showGraphicsOptions);
@@ -109,7 +109,7 @@ export function GraphicsOptionsPanel() {
       {/* === POST-PROCESSING MASTER === */}
       <div style={sectionStyle}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
-          <span style={{ fontWeight: 'bold' }}>Post-Processing (Master)</span>
+          <span style={{ fontWeight: 'bold' }}>Post-Processing</span>
           <button
             onClick={() => handleToggle('postProcessingEnabled')}
             style={buttonStyle(graphicsSettings.postProcessingEnabled)}
@@ -119,7 +119,7 @@ export function GraphicsOptionsPanel() {
         </div>
         <div>
           <label style={labelStyle}>
-            Tone Mapping Exposure: {graphicsSettings.toneMappingExposure.toFixed(2)}
+            Exposure: {graphicsSettings.toneMappingExposure.toFixed(2)}
           </label>
           <input
             type="range"
@@ -128,33 +128,6 @@ export function GraphicsOptionsPanel() {
             step="0.05"
             value={graphicsSettings.toneMappingExposure}
             onChange={(e) => setGraphicsSetting('toneMappingExposure', parseFloat(e.target.value))}
-            style={sliderStyle}
-          />
-        </div>
-      </div>
-
-      {/* === SSAO === */}
-      <div style={sectionStyle}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
-          <span>SSAO (Ambient Occlusion)</span>
-          <button
-            onClick={() => handleToggle('ssaoEnabled')}
-            style={buttonStyle(graphicsSettings.ssaoEnabled)}
-          >
-            {graphicsSettings.ssaoEnabled ? 'ON' : 'OFF'}
-          </button>
-        </div>
-        <div>
-          <label style={labelStyle}>
-            Radius: {graphicsSettings.ssaoRadius}
-          </label>
-          <input
-            type="range"
-            min="4"
-            max="32"
-            step="2"
-            value={graphicsSettings.ssaoRadius}
-            onChange={(e) => setGraphicsSetting('ssaoRadius', parseFloat(e.target.value))}
             style={sliderStyle}
           />
         </div>
@@ -210,33 +183,6 @@ export function GraphicsOptionsPanel() {
             step="0.1"
             value={graphicsSettings.bloomRadius}
             onChange={(e) => setGraphicsSetting('bloomRadius', parseFloat(e.target.value))}
-            style={sliderStyle}
-          />
-        </div>
-      </div>
-
-      {/* === OUTLINE === */}
-      <div style={sectionStyle}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
-          <span>Selection Outline</span>
-          <button
-            onClick={() => handleToggle('outlineEnabled')}
-            style={buttonStyle(graphicsSettings.outlineEnabled)}
-          >
-            {graphicsSettings.outlineEnabled ? 'ON' : 'OFF'}
-          </button>
-        </div>
-        <div>
-          <label style={labelStyle}>
-            Strength: {graphicsSettings.outlineStrength.toFixed(1)}
-          </label>
-          <input
-            type="range"
-            min="0.5"
-            max="10"
-            step="0.5"
-            value={graphicsSettings.outlineStrength}
-            onChange={(e) => setGraphicsSetting('outlineStrength', parseFloat(e.target.value))}
             style={sliderStyle}
           />
         </div>
