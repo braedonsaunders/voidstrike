@@ -68,6 +68,14 @@ export class MovementSystem extends System {
     // Handle move commands
     this.game.eventBus.on('command:move', this.handleMoveCommand.bind(this));
     this.game.eventBus.on('command:patrol', this.handlePatrolCommand.bind(this));
+
+    // Clean up path request tracking when units die to prevent memory leaks
+    this.game.eventBus.on('unit:died', (data: { entityId: number }) => {
+      this.lastPathRequestTime.delete(data.entityId);
+    });
+    this.game.eventBus.on('unit:destroyed', (data: { entityId: number }) => {
+      this.lastPathRequestTime.delete(data.entityId);
+    });
   }
 
   /**

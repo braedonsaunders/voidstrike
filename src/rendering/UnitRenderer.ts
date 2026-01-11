@@ -629,7 +629,8 @@ export class UnitRenderer {
         this.scene.remove(overlay.selectionRing);
         this.scene.remove(overlay.healthBar);
         this.scene.remove(overlay.teamMarker);
-        overlay.selectionRing.geometry.dispose();
+        // NOTE: Don't dispose selectionRing.geometry - it's shared (this.selectionGeometry)
+        // The shared geometry is disposed in the class's dispose() method
         (overlay.teamMarker.material as THREE.Material).dispose();
         this.disposeGroup(overlay.healthBar);
         this.unitOverlays.delete(entityId);
