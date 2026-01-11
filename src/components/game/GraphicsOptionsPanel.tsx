@@ -15,12 +15,23 @@ const buttonStyle = (enabled: boolean) => ({
   minWidth: '50px',
 });
 
+const selectStyle: React.CSSProperties = {
+  padding: '4px 8px',
+  backgroundColor: '#333',
+  border: '1px solid #555',
+  borderRadius: '4px',
+  color: 'white',
+  cursor: 'pointer',
+  fontSize: '11px',
+};
+
 const sliderStyle = { width: '100%', marginTop: '4px' };
 const labelStyle: React.CSSProperties = { display: 'block', marginBottom: '2px', color: '#888', fontSize: '11px' };
 const sectionStyle: React.CSSProperties = { marginBottom: '16px', paddingBottom: '12px', borderBottom: '1px solid #333' };
+const sectionTitleStyle: React.CSSProperties = { fontWeight: 'bold', marginBottom: '8px', color: '#ddd', fontSize: '12px' };
 
 /**
- * In-game graphics options panel
+ * In-game graphics options panel - AAA Quality Controls
  * Access via Options menu -> Graphics
  * WebGPU-compatible effects only
  */
@@ -64,16 +75,16 @@ export function GraphicsOptionsPanel() {
         fontFamily: 'monospace',
         fontSize: '13px',
         zIndex: 1000,
-        minWidth: '300px',
-        maxHeight: '70vh',
-        overflowY: 'scroll',
+        minWidth: '320px',
+        maxHeight: '80vh',
+        overflowY: 'auto',
         pointerEvents: 'auto',
       }}
       onWheel={(e) => e.stopPropagation()}
     >
       {/* Header */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
-        <h3 style={{ margin: 0, fontSize: '14px' }}>Graphics Options</h3>
+        <h3 style={{ margin: 0, fontSize: '14px' }}>⚙ Graphics Options</h3>
         <button
           onClick={() => toggleGraphicsOptions()}
           style={{
@@ -109,7 +120,7 @@ export function GraphicsOptionsPanel() {
       {/* === POST-PROCESSING MASTER === */}
       <div style={sectionStyle}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
-          <span style={{ fontWeight: 'bold' }}>Post-Processing</span>
+          <span style={sectionTitleStyle}>Post-Processing</span>
           <button
             onClick={() => handleToggle('postProcessingEnabled')}
             style={buttonStyle(graphicsSettings.postProcessingEnabled)}
@@ -117,26 +128,100 @@ export function GraphicsOptionsPanel() {
             {graphicsSettings.postProcessingEnabled ? 'ON' : 'OFF'}
           </button>
         </div>
+      </div>
+
+      {/* === SHADOWS === */}
+      <div style={sectionStyle}>
+        <div style={sectionTitleStyle}>Shadows</div>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
+          <span>Enable Shadows</span>
+          <button
+            onClick={() => handleToggle('shadowsEnabled')}
+            style={buttonStyle(graphicsSettings.shadowsEnabled)}
+          >
+            {graphicsSettings.shadowsEnabled ? 'ON' : 'OFF'}
+          </button>
+        </div>
+        <div style={{ marginBottom: '8px' }}>
+          <label style={labelStyle}>Quality</label>
+          <select
+            value={graphicsSettings.shadowQuality}
+            onChange={(e) => setGraphicsSetting('shadowQuality', e.target.value as 'low' | 'medium' | 'high' | 'ultra')}
+            style={selectStyle}
+            disabled={!graphicsSettings.shadowsEnabled}
+          >
+            <option value="low">Low (512)</option>
+            <option value="medium">Medium (1024)</option>
+            <option value="high">High (2048)</option>
+            <option value="ultra">Ultra (4096)</option>
+          </select>
+        </div>
         <div>
           <label style={labelStyle}>
-            Exposure: {graphicsSettings.toneMappingExposure.toFixed(2)}
+            Distance: {graphicsSettings.shadowDistance}
           </label>
           <input
             type="range"
-            min="0.5"
-            max="2.0"
-            step="0.05"
-            value={graphicsSettings.toneMappingExposure}
-            onChange={(e) => setGraphicsSetting('toneMappingExposure', parseFloat(e.target.value))}
+            min="50"
+            max="200"
+            step="10"
+            value={graphicsSettings.shadowDistance}
+            onChange={(e) => setGraphicsSetting('shadowDistance', parseFloat(e.target.value))}
             style={sliderStyle}
+            disabled={!graphicsSettings.shadowsEnabled}
+          />
+        </div>
+      </div>
+
+      {/* === AMBIENT OCCLUSION === */}
+      <div style={sectionStyle}>
+        <div style={sectionTitleStyle}>Ambient Occlusion (SSAO)</div>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
+          <span>Enable SSAO</span>
+          <button
+            onClick={() => handleToggle('ssaoEnabled')}
+            style={buttonStyle(graphicsSettings.ssaoEnabled)}
+          >
+            {graphicsSettings.ssaoEnabled ? 'ON' : 'OFF'}
+          </button>
+        </div>
+        <div style={{ marginBottom: '8px' }}>
+          <label style={labelStyle}>
+            Radius: {graphicsSettings.ssaoRadius.toFixed(1)}
+          </label>
+          <input
+            type="range"
+            min="1"
+            max="16"
+            step="0.5"
+            value={graphicsSettings.ssaoRadius}
+            onChange={(e) => setGraphicsSetting('ssaoRadius', parseFloat(e.target.value))}
+            style={sliderStyle}
+            disabled={!graphicsSettings.ssaoEnabled}
+          />
+        </div>
+        <div>
+          <label style={labelStyle}>
+            Intensity: {graphicsSettings.ssaoIntensity.toFixed(2)}
+          </label>
+          <input
+            type="range"
+            min="0"
+            max="2"
+            step="0.1"
+            value={graphicsSettings.ssaoIntensity}
+            onChange={(e) => setGraphicsSetting('ssaoIntensity', parseFloat(e.target.value))}
+            style={sliderStyle}
+            disabled={!graphicsSettings.ssaoEnabled}
           />
         </div>
       </div>
 
       {/* === BLOOM === */}
       <div style={sectionStyle}>
+        <div style={sectionTitleStyle}>Bloom</div>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
-          <span>Bloom</span>
+          <span>Enable Bloom</span>
           <button
             onClick={() => handleToggle('bloomEnabled')}
             style={buttonStyle(graphicsSettings.bloomEnabled)}
@@ -156,6 +241,7 @@ export function GraphicsOptionsPanel() {
             value={graphicsSettings.bloomStrength}
             onChange={(e) => setGraphicsSetting('bloomStrength', parseFloat(e.target.value))}
             style={sliderStyle}
+            disabled={!graphicsSettings.bloomEnabled}
           />
         </div>
         <div style={{ marginBottom: '8px' }}>
@@ -170,6 +256,7 @@ export function GraphicsOptionsPanel() {
             value={graphicsSettings.bloomThreshold}
             onChange={(e) => setGraphicsSetting('bloomThreshold', parseFloat(e.target.value))}
             style={sliderStyle}
+            disabled={!graphicsSettings.bloomEnabled}
           />
         </div>
         <div>
@@ -184,14 +271,92 @@ export function GraphicsOptionsPanel() {
             value={graphicsSettings.bloomRadius}
             onChange={(e) => setGraphicsSetting('bloomRadius', parseFloat(e.target.value))}
             style={sliderStyle}
+            disabled={!graphicsSettings.bloomEnabled}
           />
         </div>
       </div>
 
-      {/* === FXAA === */}
+      {/* === COLOR GRADING === */}
       <div style={sectionStyle}>
+        <div style={sectionTitleStyle}>Color Grading</div>
+        <div style={{ marginBottom: '8px' }}>
+          <label style={labelStyle}>
+            Exposure: {graphicsSettings.toneMappingExposure.toFixed(2)}
+          </label>
+          <input
+            type="range"
+            min="0.5"
+            max="2.0"
+            step="0.05"
+            value={graphicsSettings.toneMappingExposure}
+            onChange={(e) => setGraphicsSetting('toneMappingExposure', parseFloat(e.target.value))}
+            style={sliderStyle}
+          />
+        </div>
+        <div style={{ marginBottom: '8px' }}>
+          <label style={labelStyle}>
+            Saturation: {graphicsSettings.saturation.toFixed(2)}
+          </label>
+          <input
+            type="range"
+            min="0.5"
+            max="1.5"
+            step="0.05"
+            value={graphicsSettings.saturation}
+            onChange={(e) => setGraphicsSetting('saturation', parseFloat(e.target.value))}
+            style={sliderStyle}
+          />
+        </div>
+        <div>
+          <label style={labelStyle}>
+            Contrast: {graphicsSettings.contrast.toFixed(2)}
+          </label>
+          <input
+            type="range"
+            min="0.8"
+            max="1.3"
+            step="0.05"
+            value={graphicsSettings.contrast}
+            onChange={(e) => setGraphicsSetting('contrast', parseFloat(e.target.value))}
+            style={sliderStyle}
+          />
+        </div>
+      </div>
+
+      {/* === VIGNETTE === */}
+      <div style={sectionStyle}>
+        <div style={sectionTitleStyle}>Vignette</div>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
+          <span>Enable Vignette</span>
+          <button
+            onClick={() => handleToggle('vignetteEnabled')}
+            style={buttonStyle(graphicsSettings.vignetteEnabled)}
+          >
+            {graphicsSettings.vignetteEnabled ? 'ON' : 'OFF'}
+          </button>
+        </div>
+        <div>
+          <label style={labelStyle}>
+            Intensity: {graphicsSettings.vignetteIntensity.toFixed(2)}
+          </label>
+          <input
+            type="range"
+            min="0"
+            max="0.6"
+            step="0.05"
+            value={graphicsSettings.vignetteIntensity}
+            onChange={(e) => setGraphicsSetting('vignetteIntensity', parseFloat(e.target.value))}
+            style={sliderStyle}
+            disabled={!graphicsSettings.vignetteEnabled}
+          />
+        </div>
+      </div>
+
+      {/* === ANTI-ALIASING === */}
+      <div style={sectionStyle}>
+        <div style={sectionTitleStyle}>Anti-Aliasing</div>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-          <span>Anti-Aliasing (FXAA)</span>
+          <span>FXAA</span>
           <button
             onClick={() => handleToggle('fxaaEnabled')}
             style={buttonStyle(graphicsSettings.fxaaEnabled)}
@@ -201,8 +366,52 @@ export function GraphicsOptionsPanel() {
         </div>
       </div>
 
+      {/* === FOG === */}
+      <div style={sectionStyle}>
+        <div style={sectionTitleStyle}>Atmospheric Fog</div>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
+          <span>Enable Fog</span>
+          <button
+            onClick={() => handleToggle('fogEnabled')}
+            style={buttonStyle(graphicsSettings.fogEnabled)}
+          >
+            {graphicsSettings.fogEnabled ? 'ON' : 'OFF'}
+          </button>
+        </div>
+        <div>
+          <label style={labelStyle}>
+            Density: {graphicsSettings.fogDensity.toFixed(2)}x
+          </label>
+          <input
+            type="range"
+            min="0.5"
+            max="2"
+            step="0.1"
+            value={graphicsSettings.fogDensity}
+            onChange={(e) => setGraphicsSetting('fogDensity', parseFloat(e.target.value))}
+            style={sliderStyle}
+            disabled={!graphicsSettings.fogEnabled}
+          />
+        </div>
+      </div>
+
+      {/* === ENVIRONMENT === */}
+      <div style={sectionStyle}>
+        <div style={sectionTitleStyle}>Environment</div>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
+          <span>Environment Map (IBL)</span>
+          <button
+            onClick={() => handleToggle('environmentMapEnabled')}
+            style={buttonStyle(graphicsSettings.environmentMapEnabled)}
+          >
+            {graphicsSettings.environmentMapEnabled ? 'ON' : 'OFF'}
+          </button>
+        </div>
+      </div>
+
       {/* === PARTICLES === */}
       <div style={sectionStyle}>
+        <div style={sectionTitleStyle}>Particles</div>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
           <span>Ambient Particles</span>
           <button
@@ -224,12 +433,14 @@ export function GraphicsOptionsPanel() {
             value={graphicsSettings.particleDensity}
             onChange={(e) => setGraphicsSetting('particleDensity', parseFloat(e.target.value))}
             style={sliderStyle}
+            disabled={!graphicsSettings.particlesEnabled}
           />
         </div>
       </div>
 
       {/* === DISPLAY === */}
       <div style={{ marginBottom: '8px' }}>
+        <div style={sectionTitleStyle}>Display</div>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
           <span>Show FPS Counter</span>
           <button

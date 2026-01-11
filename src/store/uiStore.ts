@@ -41,17 +41,49 @@ export type RendererAPI = 'WebGPU' | 'WebGL' | null;
 
 // Graphics settings for post-processing and visual effects
 export interface GraphicsSettings {
+  // Master toggle
   postProcessingEnabled: boolean;
+
+  // Tone mapping & color
   toneMappingExposure: number;
+  saturation: number;
+  contrast: number;
+
+  // Shadows
+  shadowsEnabled: boolean;
+  shadowQuality: 'low' | 'medium' | 'high' | 'ultra';
+  shadowDistance: number;
+
+  // Ambient Occlusion (SSAO/GTAO)
   ssaoEnabled: boolean;
   ssaoRadius: number;
+  ssaoIntensity: number;
+
+  // Bloom
   bloomEnabled: boolean;
   bloomStrength: number;
   bloomThreshold: number;
   bloomRadius: number;
+
+  // Anti-aliasing
+  fxaaEnabled: boolean;
+
+  // Vignette
+  vignetteEnabled: boolean;
+  vignetteIntensity: number;
+
+  // Fog
+  fogEnabled: boolean;
+  fogDensity: number;
+
+  // Environment
+  environmentMapEnabled: boolean;
+
+  // Outline (selection)
   outlineEnabled: boolean;
   outlineStrength: number;
-  fxaaEnabled: boolean;
+
+  // Particles
   particlesEnabled: boolean;
   particleDensity: number;
 }
@@ -180,17 +212,49 @@ export const useUIStore = create<UIState>((set, get) => ({
   showSoundOptions: false,
   isFullscreen: false,
   graphicsSettings: {
+    // Master
     postProcessingEnabled: true,
+
+    // Tone mapping & color
     toneMappingExposure: 1.0,
+    saturation: 1.1,
+    contrast: 1.05,
+
+    // Shadows
+    shadowsEnabled: true,
+    shadowQuality: 'high',
+    shadowDistance: 100,
+
+    // Ambient Occlusion
     ssaoEnabled: true,
-    ssaoRadius: 16,
+    ssaoRadius: 4,
+    ssaoIntensity: 1.0,
+
+    // Bloom
     bloomEnabled: true,
-    bloomStrength: 0.2,
-    bloomThreshold: 0.9,
-    bloomRadius: 0.4,
+    bloomStrength: 0.3,
+    bloomThreshold: 0.8,
+    bloomRadius: 0.5,
+
+    // Anti-aliasing
+    fxaaEnabled: true,
+
+    // Vignette
+    vignetteEnabled: true,
+    vignetteIntensity: 0.25,
+
+    // Fog
+    fogEnabled: true,
+    fogDensity: 1.0,
+
+    // Environment
+    environmentMapEnabled: true,
+
+    // Outline (selection)
     outlineEnabled: true,
     outlineStrength: 2,
-    fxaaEnabled: true,
+
+    // Particles
     particlesEnabled: true,
     particleDensity: 1.0,
   },
