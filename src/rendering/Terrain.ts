@@ -414,6 +414,7 @@ export class Terrain {
     const indices: number[] = [];
     const normals: number[] = [];
     const uvs: number[] = [];
+    const slopes: number[] = [];  // Per-vertex slope for texture blending
 
     // Pre-calculate height map with smooth transitions and natural variation
     // Using enhanced noise functions for more organic terrain
@@ -501,10 +502,39 @@ export class Terrain {
       }
     }
 
-    // Apply smoothing pass to heightmap for more natural transitions
-    // This creates smoother cliff edges and more natural terrain flow
-    // Increased from 2 to 5 iterations for much smoother cliffs
-    this.smoothHeightMap(5);
+    // Calculate per-vertex slopes BEFORE smoothing (for texture blending)
+    // This captures the actual cliff steepness from terrain cell data
+    const slopeMap = new Float32Array(this.gridWidth * this.gridHeight);
+    for (let y = 0; y <= height; y++) {
+      for (let x = 0; x <= width; x++) {
+        const idx = y * this.gridWidth + x;
+        // Calculate slope from height differences to neighbors
+        const h = this.heightMap[idx];
+        let maxHeightDiff = 0;
+
+        // Check all 8 neighbors for maximum height difference
+        for (let dy = -1; dy <= 1; dy++) {
+          for (let dx = -1; dx <= 1; dx++) {
+            if (dx === 0 && dy === 0) continue;
+            const nx = x + dx;
+            const ny = y + dy;
+            if (nx >= 0 && nx <= width && ny >= 0 && ny <= height) {
+              const neighborH = this.heightMap[ny * this.gridWidth + nx];
+              const diff = Math.abs(neighborH - h);
+              maxHeightDiff = Math.max(maxHeightDiff, diff);
+            }
+          }
+        }
+
+        // Convert height difference to slope (0 = flat, 1 = very steep)
+        // A height diff of 3+ units over 1 cell = max slope
+        slopeMap[idx] = Math.min(1.0, maxHeightDiff / 3.0);
+      }
+    }
+
+    // Apply light smoothing pass to heightmap for natural-looking terrain
+    // Reduced from 5 to 2 iterations to preserve cliff geometry for texture blending
+    this.smoothHeightMap(2);
 
     // Update vertex grid with smoothed heights
     for (let y = 0; y <= height; y++) {
@@ -513,6 +543,9 @@ export class Terrain {
         vertexGrid[y][x].z = smoothedHeight;
       }
     }
+
+    // Store slope map for use in geometry creation
+    const vertexSlopes = slopeMap;
 
     // Create triangles with vertex colors
     let vertexIndex = 0;
@@ -572,6 +605,12 @@ export class Terrain {
           colors6.push(color);
         }
 
+        // Get pre-calculated slopes for each vertex
+        const slope00 = vertexSlopes[y * this.gridWidth + x];
+        const slope10 = vertexSlopes[y * this.gridWidth + (x + 1)];
+        const slope01 = vertexSlopes[(y + 1) * this.gridWidth + x];
+        const slope11 = vertexSlopes[(y + 1) * this.gridWidth + (x + 1)];
+
         // Triangle 1 (v00, v01, v10) - reversed winding for correct normals after rotation
         vertices.push(v00.x, v00.y, v00.z);
         vertices.push(v01.x, v01.y, v01.z);
@@ -590,6 +629,10 @@ export class Terrain {
         uvs.push(x / width, (y + 1) / height);
         uvs.push((x + 1) / width, (y + 1) / height);
 
+        // Add slope values for texture blending (per vertex)
+        slopes.push(slope00, slope01, slope10);  // Triangle 1
+        slopes.push(slope10, slope01, slope11);  // Triangle 2
+
         // Add colors
         for (let i = 0; i < 6; i++) {
           colors.push(colors6[i].r, colors6[i].g, colors6[i].b);
@@ -606,6 +649,7 @@ export class Terrain {
     geometry.setAttribute('position', new THREE.Float32BufferAttribute(vertices, 3));
     geometry.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3));
     geometry.setAttribute('uv', new THREE.Float32BufferAttribute(uvs, 2));
+    geometry.setAttribute('aSlope', new THREE.Float32BufferAttribute(slopes, 1));  // Pre-calculated slope for texture blending
     geometry.setIndex(indices);
     geometry.computeVertexNormals();
 
@@ -687,44 +731,65 @@ export class Terrain {
     width: number,
     height: number
   ): MapCell {
-    const samples: MapCell[] = [];
+    // Vertex (x, y) is at the corner of 4 cells: (x-1,y-1), (x-1,y), (x,y-1), (x,y)
+    // Sample all 4 touching cells (clamped to valid indices)
+    const x0 = Math.max(0, Math.min(width - 1, x - 1));
+    const x1 = Math.max(0, Math.min(width - 1, x));
+    const y0 = Math.max(0, Math.min(height - 1, y - 1));
+    const y1 = Math.max(0, Math.min(height - 1, y));
 
-    for (let dy = -1; dy <= 0; dy++) {
-      for (let dx = -1; dx <= 0; dx++) {
-        const sx = Math.max(0, Math.min(width - 1, x + dx));
-        const sy = Math.max(0, Math.min(height - 1, y + dy));
-        samples.push(terrain[sy][sx]);
-      }
-    }
+    const cell00 = terrain[y0][x0];  // Top-left
+    const cell10 = terrain[y0][x1];  // Top-right
+    const cell01 = terrain[y1][x0];  // Bottom-left
+    const cell11 = terrain[y1][x1];  // Bottom-right (primary cell)
 
-    // Prioritize certain terrain types for smooth blending
-    let maxElevation: Elevation = 0;
+    const samples = [cell00, cell10, cell01, cell11];
+
+    // Determine terrain type priority: ramp > unwalkable > unbuildable > ground
     let dominantTerrain: TerrainType = 'ground';
     let dominantFeature: TerrainFeature = 'none';
     let hasRamp = false;
+    let hasUnwalkable = false;
+    let unwalkableCount = 0;
+    let groundCount = 0;
 
     for (const sample of samples) {
       if (sample.terrain === 'ramp') hasRamp = true;
-      if (sample.elevation > maxElevation) {
-        maxElevation = sample.elevation;
-        dominantTerrain = sample.terrain;
-        dominantFeature = sample.feature || 'none';
+      if (sample.terrain === 'unwalkable') {
+        hasUnwalkable = true;
+        unwalkableCount++;
+      }
+      if (sample.terrain === 'ground' || sample.terrain === 'unbuildable') {
+        groundCount++;
       }
     }
 
-    // Ramps should smooth between elevations
+    // Average elevation of all 4 touching cells for smooth cliff transitions
+    const avgElevation = (cell00.elevation + cell10.elevation + cell01.elevation + cell11.elevation) / 4;
+
+    // For ramps: always use averaged elevation for smooth transitions
     if (hasRamp) {
       dominantTerrain = 'ramp';
-      // Average elevation for smooth ramp transition
-      const avgElevation = samples.reduce((sum, s) => sum + s.elevation, 0) / samples.length;
-      maxElevation = Math.round(avgElevation);
+      dominantFeature = 'none';
+    } else if (hasUnwalkable && groundCount > 0) {
+      // At cliff edges (mix of walkable and unwalkable): this is where slopes should appear
+      // Use average elevation to create the actual cliff slope geometry
+      dominantTerrain = 'unwalkable';
+      dominantFeature = 'cliff';
+    } else if (hasUnwalkable) {
+      // Fully in unwalkable area
+      dominantTerrain = 'unwalkable';
+      dominantFeature = cell11.feature || 'cliff';
+    } else {
+      dominantTerrain = cell11.terrain;
+      dominantFeature = cell11.feature || 'none';
     }
 
     return {
       terrain: dominantTerrain,
-      elevation: maxElevation,
+      elevation: Math.round(avgElevation),
       feature: dominantFeature,
-      textureId: samples[0].textureId,
+      textureId: cell11.textureId,
     };
   }
 

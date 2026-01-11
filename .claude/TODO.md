@@ -152,6 +152,15 @@
 - [x] **Path request spam prevention** - Added 500ms cooldown per unit to prevent flooding pathfinding system when no path can be found
 - [x] **Alternate path fallback** - When path not found, now tries nearby walkable cells for both start and end positions to escape stuck situations
 
+### Terrain Generation Improvements (January 2026)
+- [x] **Slope-based texture blending** - Fixed terrain sampleTerrain() to use average elevation instead of MAX, which was flattening cliffs and preventing proper texture blending
+- [x] **Pre-calculated slope attribute** - Added aSlope vertex attribute calculated before geometry smoothing for accurate cliff detection regardless of mesh smoothing
+- [x] **TSL material slope integration** - Updated TerrainMaterial.ts to use both vertex slope attribute and geometry normals for robust slope detection (max of both)
+- [x] **Reduced geometry smoothing** - Changed from 5 to 2 smoothing iterations to preserve cliff geometry while maintaining natural-looking terrain
+- [x] **Terrain connectivity validation** - Added validateMapConnectivity() to verify all spawn points, expansions, and watch towers are reachable
+- [x] **Auto-fix connectivity** - Added autoFixConnectivity() to carve corridors between disconnected regions, ensuring all locations are navigable
+- [x] **Flood fill pathfinding verification** - Added flood fill algorithm to detect separate walkable regions and identify unreachable locations
+
 ### Camera & Input Fixes (January 2026)
 - [x] **WASD keys removed from camera** - WASD was conflicting with shortcuts (A=attack move, S=stop, etc.). Camera now uses arrow keys only for keyboard panning.
 
