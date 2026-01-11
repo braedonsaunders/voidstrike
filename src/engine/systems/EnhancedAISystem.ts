@@ -560,19 +560,30 @@ export class EnhancedAISystem extends System {
     // 4. Has enough minerals
     // 5. Below max base count
     const totalBases = this.countPlayerBases(ai.playerId);
+    const cooldownElapsed = currentTick - ai.lastExpansionTick >= ai.expansionCooldown;
+    const hasEnoughWorkers = ai.workerCount >= config.minWorkersForExpansion;
+    const hasEnoughArmy = ai.armySupply >= config.minArmyForExpansion;
+    const hasEnoughMinerals = ai.minerals >= 400;
+    const belowMaxBases = totalBases < config.maxBases;
+
     const shouldConsiderExpansion =
-      currentTick - ai.lastExpansionTick >= ai.expansionCooldown &&
-      ai.workerCount >= config.minWorkersForExpansion &&
-      ai.armySupply >= config.minArmyForExpansion &&
-      ai.minerals >= 400 &&
-      totalBases < config.maxBases;
+      cooldownElapsed &&
+      hasEnoughWorkers &&
+      hasEnoughArmy &&
+      hasEnoughMinerals &&
+      belowMaxBases;
 
     // More aggressive expansion for saturated bases
     // If workers are near saturation (3 per mineral patch = ~24 per base), expand
     const optimalWorkersPerBase = 22;
     const isSaturated = ai.workerCount >= totalBases * optimalWorkersPerBase * 0.8;
 
-    if (shouldConsiderExpansion || (isSaturated && ai.minerals >= 400 && totalBases < config.maxBases)) {
+    // Time-based fallback: expand after long game time even without full army
+    // This ensures the AI expands eventually even if it's slow to build army
+    const longGameTime = currentTick > 2000; // ~100 seconds at 20 ticks/sec
+    const timeBasedExpansion = longGameTime && cooldownElapsed && hasEnoughMinerals && belowMaxBases;
+
+    if (shouldConsiderExpansion || (isSaturated && hasEnoughMinerals && belowMaxBases) || timeBasedExpansion) {
       ai.state = 'expanding';
       return;
     }
@@ -727,12 +738,15 @@ export class EnhancedAISystem extends System {
     const hasInfantryBay = (ai.buildingCounts.get('infantry_bay') || 0) > 0;
     const hasForge = (ai.buildingCounts.get('forge') || 0) > 0;
     const hasHangar = (ai.buildingCounts.get('hangar') || 0) > 0;
-    const hasExtractor = (ai.buildingCounts.get('extractor') || 0) > 0;
+    const extractorCount = ai.buildingCounts.get('extractor') || 0;
+    const hasExtractor = extractorCount > 0;
     const infantryBayCount = ai.buildingCounts.get('infantry_bay') || 0;
     const researchModuleCount = ai.buildingCounts.get('research_module') || 0;
 
-    // Build extractor early to get vespene for tech
-    if (!hasExtractor && ai.workerCount >= 14) {
+    // Build extractors on available vespene geysers near any base
+    // Count available geysers near all AI bases and build extractors if needed
+    const availableGeysers = this.countAvailableVespeneGeysers(ai.playerId);
+    if (availableGeysers > 0 && ai.workerCount >= 14) {
       if (this.tryBuildBuilding(ai, 'extractor')) return;
     }
 
@@ -1057,8 +1071,8 @@ export class EnhancedAISystem extends System {
     let bestLocation: { x: number; y: number; distance: number } | null = null;
 
     for (const cluster of mineralClusters) {
-      // Skip small clusters (not real bases)
-      if (cluster.count < 4) continue;
+      // Skip very small clusters (not real bases) - lowered to 2 for compatibility with smaller maps
+      if (cluster.count < 2) continue;
 
       // Check if this cluster already has a command center
       let hasCCNearby = false;
@@ -1958,9 +1972,27 @@ export class EnhancedAISystem extends System {
   }
 
   /**
-   * Find a vespene geyser near the AI's base that doesn't have a refinery yet
+   * Find a vespene geyser near any AI base that doesn't have a refinery yet
+   * Searches near main base and all expansion bases
    */
-  private findAvailableVespeneGeyser(playerId: string, basePos: { x: number; y: number }): { x: number; y: number } | null {
+  private findAvailableVespeneGeyser(playerId: string, _basePos: { x: number; y: number }): { x: number; y: number } | null {
+    // Get all AI base positions to search for geysers near expansions too
+    const basePositions: { x: number; y: number }[] = [];
+    const buildings = this.getCachedBuildingsWithTransform();
+
+    for (const entity of buildings) {
+      const selectable = entity.get<Selectable>('Selectable')!;
+      const building = entity.get<Building>('Building')!;
+      const transform = entity.get<Transform>('Transform')!;
+
+      if (selectable.playerId !== playerId) continue;
+      if (['headquarters', 'orbital_station', 'bastion'].includes(building.buildingId)) {
+        basePositions.push({ x: transform.x, y: transform.y });
+      }
+    }
+
+    if (basePositions.length === 0) return null;
+
     const resources = this.getCachedResources();
     let closestGeyser: { x: number; y: number; distance: number } | null = null;
 
@@ -1972,19 +2004,73 @@ export class EnhancedAISystem extends System {
       if (resource.resourceType !== 'vespene') continue;
       if (resource.hasRefinery()) continue; // Already has a refinery
 
-      const dx = transform.x - basePos.x;
-      const dy = transform.y - basePos.y;
-      const distance = Math.sqrt(dx * dx + dy * dy);
+      // Check distance to any base
+      for (const basePos of basePositions) {
+        const dx = transform.x - basePos.x;
+        const dy = transform.y - basePos.y;
+        const distance = Math.sqrt(dx * dx + dy * dy);
 
-      // Only consider geysers within reasonable distance of base (near main or natural)
-      if (distance < 30) {
-        if (!closestGeyser || distance < closestGeyser.distance) {
-          closestGeyser = { x: transform.x, y: transform.y, distance };
+        // Only consider geysers within reasonable distance of any base
+        if (distance < 30) {
+          if (!closestGeyser || distance < closestGeyser.distance) {
+            closestGeyser = { x: transform.x, y: transform.y, distance };
+          }
+          break; // Found a nearby base, no need to check others
         }
       }
     }
 
     return closestGeyser ? { x: closestGeyser.x, y: closestGeyser.y } : null;
+  }
+
+  /**
+   * Count the number of vespene geysers near any AI base that don't have extractors yet
+   * This helps the AI build extractors on all available geysers at main and expansion bases
+   */
+  private countAvailableVespeneGeysers(playerId: string): number {
+    // Get all AI base positions
+    const basePositions: { x: number; y: number }[] = [];
+    const buildings = this.getCachedBuildingsWithTransform();
+
+    for (const entity of buildings) {
+      const selectable = entity.get<Selectable>('Selectable')!;
+      const building = entity.get<Building>('Building')!;
+      const transform = entity.get<Transform>('Transform')!;
+
+      if (selectable.playerId !== playerId) continue;
+      if (['headquarters', 'orbital_station', 'bastion'].includes(building.buildingId)) {
+        basePositions.push({ x: transform.x, y: transform.y });
+      }
+    }
+
+    if (basePositions.length === 0) return 0;
+
+    // Count vespene geysers near any base that don't have extractors
+    const resources = this.getCachedResources();
+    let availableCount = 0;
+
+    for (const entity of resources) {
+      const resource = entity.get<Resource>('Resource');
+      const transform = entity.get<Transform>('Transform');
+
+      if (!resource || !transform) continue;
+      if (resource.resourceType !== 'vespene') continue;
+      if (resource.hasRefinery()) continue; // Already has an extractor
+
+      // Check if this geyser is near any AI base
+      for (const basePos of basePositions) {
+        const dx = transform.x - basePos.x;
+        const dy = transform.y - basePos.y;
+        const distance = Math.sqrt(dx * dx + dy * dy);
+
+        if (distance < 30) {
+          availableCount++;
+          break; // Don't count same geyser multiple times
+        }
+      }
+    }
+
+    return availableCount;
   }
 
   private findAIBase(playerId: string): { x: number; y: number } | null {
@@ -2138,6 +2224,8 @@ export class EnhancedAISystem extends System {
       if (selectable.playerId !== playerId) continue;
       if (unit.isWorker) continue;
       if (health.isDead()) continue;
+      // Exclude non-combat units (0 attack damage) like Lifter, Overseer
+      if (unit.attackDamage === 0) continue;
 
       armyUnits.push(entity.id);
     }
@@ -2386,16 +2474,30 @@ export class EnhancedAISystem extends System {
   /**
    * Find idle workers and send them to gather minerals or vespene
    * Uses SC2-style optimal saturation targeting
+   * Now considers all AI bases (main and expansions)
    */
   private assignIdleWorkersToGather(ai: AIPlayer): void {
-    // Find AI's base position
-    const basePos = this.findAIBase(ai.playerId);
-    if (!basePos) {
+    // Find ALL AI base positions (main and expansions)
+    const basePositions: { x: number; y: number }[] = [];
+    const buildings = this.getCachedBuildingsWithTransform();
+
+    for (const entity of buildings) {
+      const selectable = entity.get<Selectable>('Selectable')!;
+      const building = entity.get<Building>('Building')!;
+      const transform = entity.get<Transform>('Transform')!;
+
+      if (selectable.playerId !== ai.playerId) continue;
+      if (['headquarters', 'orbital_station', 'bastion'].includes(building.buildingId)) {
+        basePositions.push({ x: transform.x, y: transform.y });
+      }
+    }
+
+    if (basePositions.length === 0) {
       debugAI.log(`[EnhancedAI] ${ai.playerId}: No base found for gathering!`);
       return;
     }
 
-    // Find nearby mineral patches with their current saturation
+    // Find mineral patches near ANY base with their current saturation
     const resources = this.getCachedResources();
     const nearbyMinerals: { entityId: number; x: number; y: number; distance: number; currentWorkers: number }[] = [];
 
@@ -2407,17 +2509,24 @@ export class EnhancedAISystem extends System {
       if (resource.resourceType !== 'minerals') continue;
       if (resource.isDepleted()) continue;
 
-      const dx = transform.x - basePos.x;
-      const dy = transform.y - basePos.y;
-      const distance = Math.sqrt(dx * dx + dy * dy);
+      // Check distance to ANY base
+      let minDistance = Infinity;
+      for (const basePos of basePositions) {
+        const dx = transform.x - basePos.x;
+        const dy = transform.y - basePos.y;
+        const distance = Math.sqrt(dx * dx + dy * dy);
+        if (distance < minDistance) {
+          minDistance = distance;
+        }
+      }
 
-      // Only consider minerals within reasonable distance of base
-      if (distance < 30) {
+      // Only consider minerals within reasonable distance of any base
+      if (minDistance < 30) {
         nearbyMinerals.push({
           entityId: entity.id,
           x: transform.x,
           y: transform.y,
-          distance,
+          distance: minDistance,
           currentWorkers: resource.getCurrentGatherers()
         });
       }
@@ -2425,7 +2534,7 @@ export class EnhancedAISystem extends System {
 
     // Find AI's completed refineries for vespene harvesting
     const refineries: { entityId: number; resourceEntityId: number; currentWorkers: number }[] = [];
-    const buildings = this.world.getEntitiesWith('Building', 'Selectable', 'Transform');
+    const extractorBuildings = this.world.getEntitiesWith('Building', 'Selectable', 'Transform');
 
     // PERF: Build a map of extractorEntityId -> resource for O(1) lookup instead of O(n*m) nested loop
     const extractorToResource = new Map<number, { entity: typeof resources extends Iterable<infer T> ? T : never; resource: Resource }>();
@@ -2438,7 +2547,7 @@ export class EnhancedAISystem extends System {
       }
     }
 
-    for (const entity of buildings) {
+    for (const entity of extractorBuildings) {
       const building = entity.get<Building>('Building');
       const selectable = entity.get<Selectable>('Selectable');
 
@@ -2458,12 +2567,15 @@ export class EnhancedAISystem extends System {
       }
     }
 
-    // Find idle AI workers
+    // Find idle AI workers and count workers assigned to each resource
     const units = this.getCachedUnits();
     const idleWorkers: number[] = [];
 
     // Track all worker states for debugging
     const workerStates: Record<string, number> = {};
+
+    // Count workers that are moving to gather (have gatherTargetId set) - these aren't in currentGatherers yet
+    const workersMovingToResource: Map<number, number> = new Map();
 
     for (const entity of units) {
       const selectable = entity.get<Selectable>('Selectable');
@@ -2478,6 +2590,12 @@ export class EnhancedAISystem extends System {
 
       // Track worker state counts
       workerStates[unit.state] = (workerStates[unit.state] || 0) + 1;
+
+      // Track workers that are moving to a gather target (not yet registered as gatherers)
+      if (unit.gatherTargetId !== null && (unit.state === 'moving' || unit.state === 'gathering')) {
+        const count = workersMovingToResource.get(unit.gatherTargetId) || 0;
+        workersMovingToResource.set(unit.gatherTargetId, count + 1);
+      }
 
       // Grab workers that are effectively idle:
       // - Truly idle
@@ -2495,6 +2613,20 @@ export class EnhancedAISystem extends System {
       if (isIdle || isMovingNoTarget || isStuckMoving) {
         idleWorkers.push(entity.id);
       }
+    }
+
+    // Add workers moving to each refinery to the currentWorkers count
+    // This prevents over-assigning workers to the same refinery
+    for (const refinery of refineries) {
+      const movingCount = workersMovingToResource.get(refinery.resourceEntityId) || 0;
+      // Use the higher of registered gatherers or moving workers to avoid double-counting
+      refinery.currentWorkers = Math.max(refinery.currentWorkers, movingCount);
+    }
+
+    // Also update mineral patch counts
+    for (const mineral of nearbyMinerals) {
+      const movingCount = workersMovingToResource.get(mineral.entityId) || 0;
+      mineral.currentWorkers = Math.max(mineral.currentWorkers, movingCount);
     }
 
     if (nearbyMinerals.length === 0 && refineries.length === 0) return;
