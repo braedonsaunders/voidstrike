@@ -161,6 +161,12 @@
 - [x] **Decoration obstacles** - Rocks and large decorations block pathfinding via TileCache cylinder obstacles
 - [x] **Point snapping to navmesh** - Start/end points snapped to valid navmesh polygons before path computation
 - [x] **Graceful fallback** - When navmesh path fails for short distances (< 30 units), allows direct movement
+- [x] **Building collision prevention** - Units no longer get stuck on building edges:
+  - Reduced NavMesh cell size from 0.5 to 0.25 for 2x precision around obstacles
+  - Building obstacles expanded by agent radius + 0.1 buffer
+  - Three-tier building avoidance (hard, soft, predictive)
+  - Path smoothing with direct walkability checks
+  - Agent-specific path queries based on unit collision radius
 - [ ] **Debug navmesh visualization** - Visual overlay to verify navmesh coverage
 - [ ] **Re-enable crowd simulation** - Fix crowd velocity returning 0 and re-enable DetourCrowd for collision avoidance
 

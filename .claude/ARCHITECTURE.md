@@ -1275,28 +1275,56 @@ if (state) {
 
 ### NavMesh Configuration
 
-Tuned for RTS gameplay:
+Tuned for RTS gameplay with building collision prevention:
 
 ```typescript
 const NAVMESH_CONFIG = {
-  // Cell sizing
-  cs: 0.5,          // Cell size (0.5 world units)
+  // Cell sizing - smaller = more precise paths around buildings
+  cs: 0.25,         // Cell size (0.25 world units for 2x precision)
   ch: 0.2,          // Cell height
 
   // Agent parameters
-  walkableRadius: 0.6,
+  walkableRadius: 0.6,    // Must exceed unit collision radius (0.5)
   walkableHeight: 2.0,
-  walkableClimb: 0.5,
-  walkableSlopeAngle: 45,
+  walkableClimb: 1.0,
+  walkableSlopeAngle: 60,
 
-  // NavMesh quality
-  minRegionArea: 8,
-  mergeRegionArea: 20,
-  maxEdgeLen: 12,
-  maxSimplificationError: 1.3,
-  detailSampleDist: 6,
-  detailSampleMaxError: 1,
+  // NavMesh quality - lower error for smoother paths
+  maxSimplificationError: 0.5,
+  tileSize: 32,
+  maxObstacles: 512,
 };
+```
+
+### Building Obstacle Expansion
+
+Critical for preventing units getting stuck on building edges:
+
+```typescript
+// Obstacles are expanded by agent radius + buffer
+public addBoxObstacle(buildingId, centerX, centerY, width, height, agentRadius = 0.5) {
+  const expansionMargin = agentRadius + 0.1;  // Extra buffer for safety
+  const halfExtents = {
+    x: (width / 2) + expansionMargin,
+    z: (height / 2) + expansionMargin
+  };
+  // NavMesh now excludes area around building with proper clearance
+}
+```
+
+### Building Avoidance System
+
+Three-tier avoidance in MovementSystem:
+
+1. **Hard Avoidance** (margin 0.6) - Immediate push when very close
+2. **Soft Avoidance** (margin 1.5) - Gentle steering in approach zone
+3. **Predictive Avoidance** - Steer away from predicted collision points
+
+```typescript
+const BUILDING_AVOIDANCE_STRENGTH = 35.0;
+const BUILDING_AVOIDANCE_MARGIN = 0.6;      // > unit collision radius (0.5)
+const BUILDING_AVOIDANCE_SOFT_MARGIN = 1.5; // Early detection zone
+const BUILDING_PREDICTION_LOOKAHEAD = 0.5;  // Seconds ahead
 ```
 
 ### Terrain Integration (`Terrain.ts`)

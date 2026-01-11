@@ -26,10 +26,11 @@ import * as THREE from 'three';
 import { debugPathfinding } from '@/utils/debugLogger';
 
 // NavMesh generation config - tuned for RTS gameplay
+// IMPORTANT: Cell size determines path precision around obstacles
 const NAVMESH_CONFIG: Partial<TileCacheGeneratorConfig> = {
-  // Cell size - smaller = more precise but slower generation
-  // 0.5 units is good for RTS where units are ~1 unit wide
-  cs: 0.5,
+  // Cell size - smaller = more precise paths around buildings
+  // 0.25 units provides 2x precision for smoother building avoidance
+  cs: 0.25,
   // Cell height - vertical precision
   ch: 0.2,
   // Agent parameters
@@ -38,14 +39,20 @@ const NAVMESH_CONFIG: Partial<TileCacheGeneratorConfig> = {
   walkableHeight: 2,
   // Increased climb to handle elevation transitions at ramp boundaries
   walkableClimb: 1.0,
-  walkableRadius: 0.5,
-  // Detail mesh
-  maxSimplificationError: 1.0,
+  // Walkable radius defines minimum clearance from obstacles
+  // Must match or exceed agent collision radius for proper avoidance
+  walkableRadius: 0.6,
+  // Detail mesh - lower error for smoother paths
+  maxSimplificationError: 0.5,
   // Tile cache specific
   tileSize: 32,
   expectedLayersPerTile: 4,
-  maxObstacles: 256,
+  maxObstacles: 512,
 };
+
+// Standard agent radius for obstacle expansion
+// Buildings are expanded by this amount to ensure paths maintain clearance
+const DEFAULT_AGENT_RADIUS = 0.5;
 
 // Crowd simulation config
 const CROWD_CONFIG = {
@@ -267,19 +274,25 @@ export class RecastNavigation {
   /**
    * Find path between two points
    * Converts 2D game coords (x, y) to 3D navmesh coords (x, 0, y)
+   *
+   * @param agentRadius - Optional agent radius for path query (affects corridor width)
    */
   public findPath(
     startX: number,
     startY: number,
     endX: number,
-    endY: number
+    endY: number,
+    agentRadius: number = DEFAULT_AGENT_RADIUS
   ): PathResult {
     if (!this.navMeshQuery) {
       return { path: [], found: false };
     }
 
     try {
-      const halfExtents = { x: 2, y: 10, z: 2 };
+      // Use agent-specific halfExtents for finding nearest points
+      // Larger search radius ensures we find valid navmesh positions
+      const searchRadius = Math.max(agentRadius * 4, 2);
+      const halfExtents = { x: searchRadius, y: 10, z: searchRadius };
 
       const startQuery = { x: startX, y: 0, z: startY };
       const endQuery = { x: endX, y: 0, z: endY };
@@ -297,15 +310,85 @@ export class RecastNavigation {
         return { path: [], found: false };
       }
 
-      const path: Array<{ x: number; y: number }> = result.path.map((point) => ({
+      // Convert path points and apply smoothing for agent radius
+      const rawPath: Array<{ x: number; y: number }> = result.path.map((point) => ({
         x: point.x,
         y: point.z,
       }));
 
-      return { path, found: true };
+      // Smooth path to remove unnecessary waypoints that could cause edge-hugging
+      const smoothedPath = this.smoothPath(rawPath, agentRadius);
+
+      return { path: smoothedPath, found: true };
     } catch {
       return { path: [], found: false };
     }
+  }
+
+  /**
+   * Smooth path by removing redundant waypoints
+   * Helps units take more direct routes and avoid edge-hugging
+   */
+  private smoothPath(
+    path: Array<{ x: number; y: number }>,
+    agentRadius: number
+  ): Array<{ x: number; y: number }> {
+    if (path.length <= 2) return path;
+
+    const smoothed: Array<{ x: number; y: number }> = [path[0]];
+    let currentIndex = 0;
+
+    while (currentIndex < path.length - 1) {
+      // Try to skip to the farthest reachable point
+      let farthestReachable = currentIndex + 1;
+
+      for (let i = path.length - 1; i > currentIndex + 1; i--) {
+        // Check if we can go directly from current to point i
+        if (this.canWalkDirect(path[currentIndex], path[i], agentRadius)) {
+          farthestReachable = i;
+          break;
+        }
+      }
+
+      smoothed.push(path[farthestReachable]);
+      currentIndex = farthestReachable;
+    }
+
+    return smoothed;
+  }
+
+  /**
+   * Check if a direct path between two points is walkable
+   * Uses raycast-like sampling along the line
+   */
+  private canWalkDirect(
+    from: { x: number; y: number },
+    to: { x: number; y: number },
+    agentRadius: number
+  ): boolean {
+    if (!this.navMeshQuery) return false;
+
+    const dx = to.x - from.x;
+    const dy = to.y - from.y;
+    const distance = Math.sqrt(dx * dx + dy * dy);
+
+    if (distance < 0.5) return true;
+
+    // Sample points along the line
+    const stepSize = agentRadius * 0.5;
+    const steps = Math.ceil(distance / stepSize);
+
+    for (let i = 1; i < steps; i++) {
+      const t = i / steps;
+      const x = from.x + dx * t;
+      const y = from.y + dy * t;
+
+      if (!this.isWalkable(x, y)) {
+        return false;
+      }
+    }
+
+    return true;
   }
 
   /**
@@ -576,14 +659,20 @@ export class RecastNavigation {
   // ==================== DYNAMIC OBSTACLES ====================
 
   /**
-   * Add a building as an obstacle
+   * Add a building as a cylinder obstacle
+   *
+   * IMPORTANT: Obstacles are expanded by agent radius to ensure paths
+   * maintain proper clearance. Prefer addBoxObstacle for rectangular buildings.
+   *
+   * @param agentRadius - Optional custom radius (defaults to DEFAULT_AGENT_RADIUS)
    */
   public addObstacle(
     buildingEntityId: number,
     centerX: number,
     centerY: number,
     width: number,
-    height: number
+    height: number,
+    agentRadius: number = DEFAULT_AGENT_RADIUS
   ): void {
     if (!this.tileCache || !this.navMesh) return;
 
@@ -594,10 +683,13 @@ export class RecastNavigation {
 
     try {
       // Add cylinder obstacle (approximate rectangular building)
-      const radius = Math.max(width, height) / 2;
+      // Expand by agent radius to ensure paths maintain clearance
+      const baseRadius = Math.max(width, height) / 2;
+      const expandedRadius = baseRadius + agentRadius + 0.1; // Extra 0.1 buffer
+
       const result = this.tileCache.addCylinderObstacle(
         { x: centerX, y: 0, z: centerY },
-        radius,
+        expandedRadius,
         2.0 // height
       );
 
@@ -607,7 +699,9 @@ export class RecastNavigation {
         this.tileCache.update(this.navMesh);
 
         debugPathfinding.log(
-          `[RecastNavigation] Added obstacle for building ${buildingEntityId} at (${centerX}, ${centerY})`
+          `[RecastNavigation] Added cylinder obstacle for building ${buildingEntityId} ` +
+          `at (${centerX.toFixed(1)}, ${centerY.toFixed(1)}) ` +
+          `radius ${baseRadius.toFixed(1)} expanded to ${expandedRadius.toFixed(1)}`
         );
       }
     } catch (error) {
@@ -617,13 +711,20 @@ export class RecastNavigation {
 
   /**
    * Add a box obstacle (more accurate for rectangular buildings)
+   *
+   * IMPORTANT: Obstacles are expanded by agent radius to ensure paths
+   * maintain proper clearance from buildings. This prevents units from
+   * getting stuck on building edges.
+   *
+   * @param agentRadius - Optional custom radius (defaults to DEFAULT_AGENT_RADIUS)
    */
   public addBoxObstacle(
     buildingEntityId: number,
     centerX: number,
     centerY: number,
     width: number,
-    height: number
+    height: number,
+    agentRadius: number = DEFAULT_AGENT_RADIUS
   ): void {
     if (!this.tileCache || !this.navMesh) return;
 
@@ -632,7 +733,15 @@ export class RecastNavigation {
     }
 
     try {
-      const halfExtents = { x: width / 2, y: 2.0, z: height / 2 };
+      // Expand obstacle by agent radius to ensure paths maintain clearance
+      // This is critical for preventing units getting stuck on building edges
+      const expansionMargin = agentRadius + 0.1; // Extra 0.1 buffer for safety
+      const halfExtents = {
+        x: (width / 2) + expansionMargin,
+        y: 2.0,
+        z: (height / 2) + expansionMargin
+      };
+
       const result = this.tileCache.addBoxObstacle(
         { x: centerX, y: 0, z: centerY },
         halfExtents,
@@ -642,10 +751,16 @@ export class RecastNavigation {
       if (result.success && result.obstacle) {
         this.obstacleRefs.set(buildingEntityId, result.obstacle);
         this.tileCache.update(this.navMesh);
+
+        debugPathfinding.log(
+          `[RecastNavigation] Added box obstacle for building ${buildingEntityId} ` +
+          `at (${centerX.toFixed(1)}, ${centerY.toFixed(1)}) ` +
+          `size ${width}x${height} expanded to ${(width + expansionMargin * 2).toFixed(1)}x${(height + expansionMargin * 2).toFixed(1)}`
+        );
       }
     } catch {
-      // Fall back to cylinder
-      this.addObstacle(buildingEntityId, centerX, centerY, width, height);
+      // Fall back to cylinder with expansion
+      this.addObstacle(buildingEntityId, centerX, centerY, width, height, agentRadius);
     }
   }
 
