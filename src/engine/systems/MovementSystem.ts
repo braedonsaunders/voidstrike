@@ -101,6 +101,8 @@ export class MovementSystem extends System {
     queue?: boolean;
   }): void {
     const { entityIds, targetPosition, queue } = data;
+    console.log('[MovementSystem] handleMoveCommand:', { entityIds, targetPosition, queue });
+
     const positions = this.calculateFormationPositions(
       targetPosition.x,
       targetPosition.y,
@@ -132,6 +134,7 @@ export class MovementSystem extends System {
         unit.path = [];
         unit.pathIndex = 0;
         this.requestPathWithCooldown(entityId, pos.x, pos.y, true);
+        console.log('[MovementSystem] Unit', entityId, 'setMoveTarget to', pos, 'state:', unit.state);
       }
     }
   }
@@ -221,6 +224,8 @@ export class MovementSystem extends System {
       unit.collisionRadius,
       unit.maxSpeed
     );
+
+    console.log('[MovementSystem] addAgent result for entity', entityId, ':', agentIndex);
 
     if (agentIndex >= 0) {
       this.crowdAgents.add(entityId);
@@ -603,6 +608,10 @@ export class MovementSystem extends System {
       }
 
       if (targetX === null || targetY === null) {
+        // Debug: log why we have no target
+        if (unit.state === 'moving') {
+          console.log('[MovementSystem] Unit', entity.id, 'moving but no target! unit.targetX:', unit.targetX, 'unit.targetY:', unit.targetY, 'path:', unit.path.length);
+        }
         if (unit.executeNextCommand()) {
           if (unit.targetX !== null && unit.targetY !== null) {
             unit.path = [];
