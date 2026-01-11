@@ -483,10 +483,6 @@ export class MovementSystem extends System {
         unit.state === 'building';
 
       if (!canMove) {
-        // DEBUG: Only log SKIPPED on every 100th tick to reduce spam
-        // if (this.currentTick % 100 === 0 && entity.id < 10) {
-        //   console.log('[MovementSystem] Entity', entity.id, 'SKIPPED - state:', unit.state);
-        // }
         if (unit.currentSpeed > 0) {
           unit.currentSpeed = Math.max(
             0,

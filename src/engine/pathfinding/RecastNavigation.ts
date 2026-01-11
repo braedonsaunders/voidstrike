@@ -219,7 +219,7 @@ export class RecastNavigation {
       this.mapWidth = mapWidth;
       this.mapHeight = mapHeight;
 
-      console.log('[RecastNavigation] Generating navmesh from geometry...', {
+      debugPathfinding.log('[RecastNavigation] Generating navmesh from geometry...', {
         positionsLength: positions.length,
         indicesLength: indices.length,
         mapWidth,
@@ -228,7 +228,7 @@ export class RecastNavigation {
 
       const result = generateTileCache(positions, indices, NAVMESH_CONFIG);
 
-      console.log('[RecastNavigation] TileCache result:', {
+      debugPathfinding.log('[RecastNavigation] TileCache result:', {
         success: result.success,
         hasTileCache: !!result.tileCache,
         hasNavMesh: !!result.navMesh,
@@ -236,50 +236,12 @@ export class RecastNavigation {
 
       if (!result.success || !result.tileCache || !result.navMesh) {
         debugPathfinding.warn('[RecastNavigation] Failed to generate navmesh from geometry');
-        console.error('[RecastNavigation] NavMesh generation failed!');
         return false;
       }
 
       this.tileCache = result.tileCache;
       this.navMesh = result.navMesh;
       this.navMeshQuery = new NavMeshQuery(this.navMesh);
-
-      // DIAGNOSTIC: Test if we can query any points on the navmesh
-      const testPoints = [
-        { x: mapWidth / 2, z: mapHeight / 2 }, // Center
-        { x: 30, z: 90 }, // Near player spawn
-        { x: 100, z: 100 }, // Middle of map
-        { x: 0, z: 0 }, // Corner
-      ];
-      console.log('[RecastNavigation] Testing navmesh coverage:');
-      for (const pt of testPoints) {
-        const halfExtents = { x: 10, y: 50, z: 10 };
-        const testResult = this.navMeshQuery.findClosestPoint(
-          { x: pt.x, y: 0, z: pt.z },
-          { halfExtents }
-        );
-        console.log(`  Point (${pt.x}, ${pt.z}):`, {
-          success: testResult.success,
-          point: testResult.point ? `(${testResult.point.x.toFixed(1)}, h=${testResult.point.y.toFixed(2)}, ${testResult.point.z.toFixed(1)})` : 'null',
-        });
-      }
-
-      // Also check geometry bounds
-      console.log('[RecastNavigation] Input geometry bounds:');
-      let minX = Infinity, maxX = -Infinity;
-      let minY = Infinity, maxY = -Infinity;
-      let minZ = Infinity, maxZ = -Infinity;
-      for (let i = 0; i < positions.length; i += 3) {
-        minX = Math.min(minX, positions[i]);
-        maxX = Math.max(maxX, positions[i]);
-        minY = Math.min(minY, positions[i + 1]);
-        maxY = Math.max(maxY, positions[i + 1]);
-        minZ = Math.min(minZ, positions[i + 2]);
-        maxZ = Math.max(maxZ, positions[i + 2]);
-      }
-      console.log(`  X: ${minX.toFixed(1)} to ${maxX.toFixed(1)}`);
-      console.log(`  Y (height): ${minY.toFixed(2)} to ${maxY.toFixed(2)}`);
-      console.log(`  Z: ${minZ.toFixed(1)} to ${maxZ.toFixed(1)}`);
 
       this.crowd = new Crowd(this.navMesh, {
         maxAgents: CROWD_CONFIG.maxAgents,
@@ -289,14 +251,12 @@ export class RecastNavigation {
       this.initialized = true;
 
       const elapsed = performance.now() - startTime;
-      console.log(`[RecastNavigation] NavMesh and Crowd ready! Generated in ${elapsed.toFixed(1)}ms`);
       debugPathfinding.log(
         `[RecastNavigation] NavMesh generated from geometry in ${elapsed.toFixed(1)}ms`
       );
 
       return true;
     } catch (error) {
-      console.error('[RecastNavigation] Exception during navmesh generation:', error);
       debugPathfinding.warn('[RecastNavigation] Error generating navmesh:', error);
       return false;
     }
@@ -313,58 +273,35 @@ export class RecastNavigation {
     endY: number
   ): PathResult {
     if (!this.navMeshQuery) {
-      console.log('[RecastNavigation.findPath] No navMeshQuery!');
       return { path: [], found: false };
     }
 
     try {
-      // Convert 2D game coordinates to 3D navmesh coordinates
-      // Game uses (x, y) on ground plane, navmesh uses (x, z) with y as height
-      // Use a larger half-extent for height tolerance since terrain has varying heights
-      const halfExtents = { x: 2, y: 10, z: 2 }; // y is vertical (height)
+      const halfExtents = { x: 2, y: 10, z: 2 };
 
-      // First snap to the navmesh to get valid start/end points
       const startQuery = { x: startX, y: 0, z: startY };
       const endQuery = { x: endX, y: 0, z: endY };
 
       const startOnMesh = this.navMeshQuery.findClosestPoint(startQuery, { halfExtents });
       const endOnMesh = this.navMeshQuery.findClosestPoint(endQuery, { halfExtents });
 
-      // Log for debugging
-      console.log('[RecastNavigation.findPath] Query:', {
-        start: `(${startX.toFixed(1)}, ${startY.toFixed(1)})`,
-        end: `(${endX.toFixed(1)}, ${endY.toFixed(1)})`,
-        startOnMesh: startOnMesh.success ? `(${startOnMesh.point?.x.toFixed(1)}, h=${startOnMesh.point?.y.toFixed(2)}, ${startOnMesh.point?.z.toFixed(1)})` : 'FAILED',
-        endOnMesh: endOnMesh.success ? `(${endOnMesh.point?.x.toFixed(1)}, h=${endOnMesh.point?.y.toFixed(2)}, ${endOnMesh.point?.z.toFixed(1)})` : 'FAILED',
-      });
-
-      // Use the snapped points for pathfinding
       if (!startOnMesh.success || !startOnMesh.point || !endOnMesh.success || !endOnMesh.point) {
-        console.log('[RecastNavigation.findPath] Could not find valid navmesh points');
         return { path: [], found: false };
       }
 
       const result = this.navMeshQuery.computePath(startOnMesh.point, endOnMesh.point, { halfExtents });
 
-      console.log('[RecastNavigation.findPath] Result:', {
-        success: result.success,
-        pathLength: result.path?.length ?? 0,
-      });
-
       if (!result.success || !result.path || result.path.length === 0) {
         return { path: [], found: false };
       }
 
-      // Convert 3D path back to 2D game coordinates
       const path: Array<{ x: number; y: number }> = result.path.map((point) => ({
         x: point.x,
-        y: point.z, // z in navmesh = y in game
+        y: point.z,
       }));
 
       return { path, found: true };
-    } catch (error) {
-      console.error('[RecastNavigation.findPath] Exception:', error);
-      debugPathfinding.warn('[RecastNavigation] Error finding path:', error);
+    } catch {
       return { path: [], found: false };
     }
   }

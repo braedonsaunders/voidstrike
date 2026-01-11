@@ -158,6 +158,7 @@
 - [x] **NavMeshQuery pathfinding** - O(1) path lookups with automatic height tolerance (halfExtents: {x: 2, y: 10, z: 2})
 - [x] **DetourCrowd collision avoidance** - Built-in RVO/ORCA for unit collision avoidance (currently disabled while debugging)
 - [x] **Dynamic obstacle support** - Buildings added as box obstacles via TileCache
+- [x] **Decoration obstacles** - Rocks and large decorations block pathfinding via TileCache cylinder obstacles
 - [x] **Point snapping to navmesh** - Start/end points snapped to valid navmesh polygons before path computation
 - [x] **Graceful fallback** - When navmesh path fails for short distances (< 30 units), allows direct movement
 - [ ] **Debug navmesh visualization** - Visual overlay to verify navmesh coverage
