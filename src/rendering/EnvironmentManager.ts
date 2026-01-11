@@ -314,6 +314,8 @@ export class EnvironmentManager {
 
   /**
    * Set shadow quality preset
+   * Note: In WebGPU, we can't dispose shadow maps while they may be in use.
+   * The shadow map will be regenerated on the next frame automatically.
    */
   public setShadowQuality(quality: ShadowQuality): void {
     this.shadowQuality = quality;
@@ -324,24 +326,28 @@ export class EnvironmentManager {
     this.directionalLight.shadow.radius = preset.radius;
     this.directionalLight.shadow.bias = preset.bias;
 
-    // Force shadow map regeneration
-    if (this.directionalLight.shadow.map) {
-      this.directionalLight.shadow.map.dispose();
-      this.directionalLight.shadow.map = null as any;
-    }
+    // Mark shadow map for regeneration - don't dispose directly as it may still be in use
+    // Three.js will handle this automatically on the next render
+    this.directionalLight.shadow.needsUpdate = true;
   }
 
   /**
    * Set shadow draw distance
+   * Lower distance = sharper, more detailed shadows (smaller frustum, higher resolution)
+   * Higher distance = softer shadows covering more area (larger frustum, lower resolution)
    */
   public setShadowDistance(distance: number): void {
+    // Use distance directly for the shadow camera frustum
+    // Smaller distance = smaller frustum = sharper shadows on nearby objects
     const halfDist = distance / 2;
     this.directionalLight.shadow.camera.left = -halfDist;
     this.directionalLight.shadow.camera.right = halfDist;
     this.directionalLight.shadow.camera.top = halfDist;
     this.directionalLight.shadow.camera.bottom = -halfDist;
-    this.directionalLight.shadow.camera.far = distance * 2;
+    this.directionalLight.shadow.camera.near = 1;
+    this.directionalLight.shadow.camera.far = distance + 100;
     this.directionalLight.shadow.camera.updateProjectionMatrix();
+    this.directionalLight.shadow.needsUpdate = true;
   }
 
   /**
