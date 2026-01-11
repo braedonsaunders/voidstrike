@@ -1068,6 +1068,33 @@ export class EffectsRenderer {
     }
   }
 
+  /**
+   * PERF: Debug method to get effect counts for leak detection
+   */
+  public getDebugStats(): {
+    attackEffects: number;
+    hitEffects: number;
+    damageNumbers: number;
+    explosionParticles: number;
+    moveIndicators: number;
+    focusFireIndicators: number;
+    poolStats: { projectile: { available: number; inUse: number }; hitEffect: { available: number; inUse: number }; explosion: { available: number; inUse: number } };
+  } {
+    return {
+      attackEffects: this.attackEffects.length,
+      hitEffects: this.hitEffects.length,
+      damageNumbers: this.damageNumbers.length,
+      explosionParticles: this.explosionParticles.length,
+      moveIndicators: this.moveIndicators.length,
+      focusFireIndicators: this.focusFireIndicators.size,
+      poolStats: {
+        projectile: { available: this.projectilePool.available.length, inUse: this.projectilePool.inUse.size },
+        hitEffect: { available: this.hitEffectPool.available.length, inUse: this.hitEffectPool.inUse.size },
+        explosion: { available: this.explosionPool.available.length, inUse: this.explosionPool.inUse.size },
+      },
+    };
+  }
+
   public dispose(): void {
     // Clean up all effects - release pooled meshes first
     for (const effect of this.attackEffects) {

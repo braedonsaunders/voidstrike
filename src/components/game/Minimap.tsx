@@ -59,6 +59,10 @@ export function Minimap() {
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
 
+    // PERF FIX: Use a flag to prevent animation loop accumulation
+    // Without this, multiple animation loops can stack when the effect re-runs
+    let isActive = true;
+
     // PERFORMANCE: Pre-create gradient once instead of every frame
     const terrainGradient = ctx.createLinearGradient(0, 0, MINIMAP_SIZE, MINIMAP_SIZE);
     terrainGradient.addColorStop(0, '#2d4a3a');
@@ -72,6 +76,9 @@ export function Minimap() {
 
     // Draw minimap
     const draw = (timestamp: number) => {
+      // PERF FIX: Stop if this animation loop should no longer be active
+      if (!isActive) return;
+
       // Get game instance - may not be available immediately on mount
       const game = Game.getInstance();
       if (!game) {
@@ -82,7 +89,7 @@ export function Minimap() {
         ctx.font = '12px sans-serif';
         ctx.textAlign = 'center';
         ctx.fillText('Loading...', MINIMAP_SIZE / 2, MINIMAP_SIZE / 2);
-        requestAnimationFrame(draw);
+        if (isActive) requestAnimationFrame(draw);
         return;
       }
 
@@ -92,7 +99,7 @@ export function Minimap() {
       const mapSize = Math.max(mapWidth, mapHeight); // Use largest dimension for scale
       // PERFORMANCE: Skip frame if not enough time has passed
       if (timestamp - lastDrawTime < FRAME_TIME) {
-        requestAnimationFrame(draw);
+        if (isActive) requestAnimationFrame(draw);
         return;
       }
       lastDrawTime = timestamp;
@@ -298,12 +305,20 @@ export function Minimap() {
         setPings(activePings);
       }
 
-      requestAnimationFrame(draw);
+      // PERF FIX: Only schedule next frame if still active
+      if (isActive) {
+        requestAnimationFrame(draw);
+      }
     };
 
     const frameId = requestAnimationFrame(draw);
 
-    return () => cancelAnimationFrame(frameId);
+    // PERF FIX: Set isActive to false to stop the animation loop before canceling the frame
+    // This prevents race conditions where draw() schedules another frame before cleanup runs
+    return () => {
+      isActive = false;
+      cancelAnimationFrame(frameId);
+    };
   }, [selectedUnits, pings]); // Camera position read directly from store in draw loop
 
   // Handle mouse down - start drag or click
