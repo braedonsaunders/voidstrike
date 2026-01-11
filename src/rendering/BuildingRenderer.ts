@@ -26,6 +26,12 @@ interface BuildingMeshData {
   buildingHeight: number; // Stored for clipping calculation
   // Thruster effect for flying buildings
   thrusterEffect: THREE.Group | null;
+  // Blueprint effect for waiting_for_worker state (holographic preview)
+  blueprintEffect: THREE.Group | null;
+  // Ground dust effect for construction
+  groundDustEffect: THREE.Group | null;
+  // Scaffold wireframe effect
+  scaffoldEffect: THREE.LineSegments | null;
 }
 
 // Instanced building group for same-type completed buildings
@@ -73,9 +79,23 @@ export class BuildingRenderer {
   private thrusterCoreMaterial: THREE.PointsMaterial;
   private thrusterGlowMaterial: THREE.PointsMaterial;
 
+  // Blueprint holographic effect materials
+  private blueprintLineMaterial: THREE.LineBasicMaterial;
+  private blueprintPulseMaterial: THREE.PointsMaterial;
+  private blueprintScanMaterial: THREE.MeshBasicMaterial;
+  // Ground dust effect material
+  private groundDustMaterial: THREE.PointsMaterial;
+  // Metal debris material
+  private metalDebrisMaterial: THREE.PointsMaterial;
+  // Welding flash material
+  private weldingFlashMaterial: THREE.PointsMaterial;
+  // Scaffold material
+  private scaffoldMaterial: THREE.LineBasicMaterial;
+
   // Animation time for effects
   private fireAnimTime: number = 0;
   private constructionAnimTime: number = 0;
+  private blueprintPulseTime: number = 0;
 
   // Fallback elevation heights when terrain isn't available
   private static readonly ELEVATION_HEIGHTS = [0, 1.8, 3.5];
@@ -160,6 +180,70 @@ export class BuildingRenderer {
       opacity: 0.6,
       blending: THREE.AdditiveBlending,
       depthWrite: false,
+    });
+
+    // Blueprint holographic effect materials
+    this.blueprintLineMaterial = new THREE.LineBasicMaterial({
+      color: 0x00aaff,
+      transparent: true,
+      opacity: 0.8,
+      linewidth: 1,
+    });
+
+    this.blueprintPulseMaterial = new THREE.PointsMaterial({
+      color: 0x00ddff,
+      size: 0.3,
+      transparent: true,
+      opacity: 0.9,
+      blending: THREE.AdditiveBlending,
+      sizeAttenuation: true,
+    });
+
+    this.blueprintScanMaterial = new THREE.MeshBasicMaterial({
+      color: 0x00ccff,
+      transparent: true,
+      opacity: 0.3,
+      side: THREE.DoubleSide,
+      depthWrite: false,
+    });
+
+    // Ground dust effect material - larger particles for billowing dust clouds
+    this.groundDustMaterial = new THREE.PointsMaterial({
+      color: 0xaa9977,
+      size: 1.2,
+      transparent: true,
+      opacity: 0.4,
+      blending: THREE.NormalBlending,
+      sizeAttenuation: true,
+      depthWrite: false,
+    });
+
+    // Metal debris particles - small bright metallic particles
+    this.metalDebrisMaterial = new THREE.PointsMaterial({
+      color: 0xcccccc,
+      size: 0.25,
+      transparent: true,
+      opacity: 0.9,
+      blending: THREE.AdditiveBlending,
+      sizeAttenuation: true,
+    });
+
+    // Welding flash material - bright white/yellow bursts
+    this.weldingFlashMaterial = new THREE.PointsMaterial({
+      color: 0xffffaa,
+      size: 0.6,
+      transparent: true,
+      opacity: 1.0,
+      blending: THREE.AdditiveBlending,
+      sizeAttenuation: true,
+    });
+
+    // Scaffold wireframe material
+    this.scaffoldMaterial = new THREE.LineBasicMaterial({
+      color: 0x888888,
+      transparent: true,
+      opacity: 0.6,
+      linewidth: 1,
     });
 
     // Register callback to refresh meshes when custom models finish loading
@@ -356,6 +440,7 @@ export class BuildingRenderer {
     const dt = deltaTime / 1000;
     this.fireAnimTime += dt;
     this.constructionAnimTime += dt;
+    this.blueprintPulseTime += dt;
 
     const entities = this.world.getEntitiesWith('Transform', 'Building');
     const currentIds = new Set<number>();
@@ -512,19 +597,60 @@ export class BuildingRenderer {
           this.disposeGroup(meshData.constructionEffect);
           meshData.constructionEffect = null;
         }
+        // Remove blueprint effect if present
+        if (meshData.blueprintEffect) {
+          this.scene.remove(meshData.blueprintEffect);
+          this.disposeGroup(meshData.blueprintEffect);
+          meshData.blueprintEffect = null;
+        }
+        // Remove ground dust effect if present
+        if (meshData.groundDustEffect) {
+          this.scene.remove(meshData.groundDustEffect);
+          this.disposeGroup(meshData.groundDustEffect);
+          meshData.groundDustEffect = null;
+        }
+        // Remove scaffold effect if present
+        if (meshData.scaffoldEffect) {
+          this.scene.remove(meshData.scaffoldEffect);
+          meshData.scaffoldEffect.geometry.dispose();
+          meshData.scaffoldEffect = null;
+        }
         meshData.wasComplete = true;
       } else if (isWaitingForWorker) {
-        // Waiting for worker - faint ghost preview
+        // Waiting for worker - show holographic blueprint effect
         meshData.group.scale.setScalar(1);
+
+        // Pulse opacity for holographic effect
+        const pulseOpacity = 0.25 + Math.sin(this.blueprintPulseTime * 3) * 0.1;
         meshData.group.traverse((child) => {
           if (child instanceof THREE.Mesh) {
-            this.setMaterialOpacity(child, 0.25, true);
+            this.setMaterialOpacity(child, pulseOpacity, true);
           }
         });
+
         // Hide construction effect while waiting
         if (meshData.constructionEffect) {
           meshData.constructionEffect.visible = false;
         }
+
+        // Hide ground dust while waiting
+        if (meshData.groundDustEffect) {
+          meshData.groundDustEffect.visible = false;
+        }
+
+        // Hide scaffold while waiting
+        if (meshData.scaffoldEffect) {
+          meshData.scaffoldEffect.visible = false;
+        }
+
+        // Create/show blueprint effect
+        if (!meshData.blueprintEffect) {
+          meshData.blueprintEffect = this.createBlueprintEffect(building.width, building.height, meshData.buildingHeight);
+          this.scene.add(meshData.blueprintEffect);
+        }
+        meshData.blueprintEffect.visible = true;
+        meshData.blueprintEffect.position.set(transform.x, terrainHeight, transform.y);
+        this.updateBlueprintEffect(meshData.blueprintEffect, dt, meshData.buildingHeight);
       } else if (isPaused) {
         // Construction paused (SC2-style) - show partially built state without active effects
         const progress = building.buildProgress;
@@ -547,6 +673,22 @@ export class BuildingRenderer {
         // Hide construction particles when paused (no active construction)
         if (meshData.constructionEffect) {
           meshData.constructionEffect.visible = false;
+        }
+
+        // Hide ground dust when paused
+        if (meshData.groundDustEffect) {
+          meshData.groundDustEffect.visible = false;
+        }
+
+        // Hide blueprint effect when paused (construction has started)
+        if (meshData.blueprintEffect) {
+          meshData.blueprintEffect.visible = false;
+        }
+
+        // Keep scaffold visible during pause to show partial structure
+        if (meshData.scaffoldEffect) {
+          meshData.scaffoldEffect.visible = progress < 0.7; // Hide scaffold at 70% progress
+          meshData.scaffoldEffect.position.set(transform.x, terrainHeight, transform.y);
         }
       } else {
         // Construction in progress (state === 'constructing')
@@ -573,7 +715,12 @@ export class BuildingRenderer {
           }
         });
 
-        // Create/update construction effect (dust and sparks)
+        // Hide blueprint effect during active construction
+        if (meshData.blueprintEffect) {
+          meshData.blueprintEffect.visible = false;
+        }
+
+        // Create/update construction effect (enhanced with welding, sparks, debris)
         if (!meshData.constructionEffect) {
           meshData.constructionEffect = this.createConstructionEffect(building.width, building.height, meshData.buildingHeight);
           this.scene.add(meshData.constructionEffect);
@@ -584,6 +731,29 @@ export class BuildingRenderer {
         meshData.constructionEffect.visible = true;
         meshData.constructionEffect.position.set(transform.x, terrainHeight + buildHeight, transform.y);
         this.updateConstructionEffect(meshData.constructionEffect, dt, building.width, building.height);
+
+        // Create/update ground dust effect (billowing dust at base)
+        if (!meshData.groundDustEffect) {
+          meshData.groundDustEffect = this.createGroundDustEffect(building.width, building.height);
+          this.scene.add(meshData.groundDustEffect);
+        }
+        meshData.groundDustEffect.visible = true;
+        meshData.groundDustEffect.position.set(transform.x, terrainHeight, transform.y);
+        this.updateGroundDustEffect(meshData.groundDustEffect, dt, building.width, building.height, progress);
+
+        // Create/update scaffold wireframe effect (visible during early construction)
+        if (!meshData.scaffoldEffect) {
+          meshData.scaffoldEffect = this.createScaffoldEffect(building.width, building.height, meshData.buildingHeight);
+          this.scene.add(meshData.scaffoldEffect);
+        }
+        // Scaffold fades out as building gets more complete
+        meshData.scaffoldEffect.visible = progress < 0.7;
+        if (meshData.scaffoldEffect.visible) {
+          meshData.scaffoldEffect.position.set(transform.x, terrainHeight, transform.y);
+          // Fade scaffold opacity as construction progresses
+          const scaffoldOpacity = Math.max(0.1, 0.6 - progress * 0.8);
+          (meshData.scaffoldEffect.material as THREE.LineBasicMaterial).opacity = scaffoldOpacity;
+        }
       }
 
       // Update selection ring - larger multiplier for better visibility
@@ -692,6 +862,18 @@ export class BuildingRenderer {
           this.scene.remove(meshData.thrusterEffect);
           this.disposeGroup(meshData.thrusterEffect);
         }
+        if (meshData.blueprintEffect) {
+          this.scene.remove(meshData.blueprintEffect);
+          this.disposeGroup(meshData.blueprintEffect);
+        }
+        if (meshData.groundDustEffect) {
+          this.scene.remove(meshData.groundDustEffect);
+          this.disposeGroup(meshData.groundDustEffect);
+        }
+        if (meshData.scaffoldEffect) {
+          this.scene.remove(meshData.scaffoldEffect);
+          meshData.scaffoldEffect.geometry.dispose();
+        }
         this.disposeGroup(meshData.group);
         this.buildingMeshes.delete(entityId);
       }
@@ -754,6 +936,9 @@ export class BuildingRenderer {
       constructionEffect: null,
       buildingHeight,
       thrusterEffect: null,
+      blueprintEffect: null,
+      groundDustEffect: null,
+      scaffoldEffect: null,
     };
   }
 
@@ -1126,17 +1311,18 @@ export class BuildingRenderer {
   }
 
   /**
-   * Create construction effect (dust and sparks at build layer)
+   * Create construction effect (dust, sparks, welding flashes, metal debris)
+   * World-class construction particles for professional RTS feel
    */
   private createConstructionEffect(buildingWidth: number, buildingDepth: number, _buildingHeight: number): THREE.Group {
     const effectGroup = new THREE.Group();
 
     // Create dust particles (scattered around construction area)
-    const dustCount = 50;
+    const dustCount = 60;
     const dustPositions = new Float32Array(dustCount * 3);
     for (let i = 0; i < dustCount; i++) {
       dustPositions[i * 3] = (Math.random() - 0.5) * buildingWidth * 1.2;
-      dustPositions[i * 3 + 1] = Math.random() * 0.5; // Slight vertical spread
+      dustPositions[i * 3 + 1] = Math.random() * 0.5;
       dustPositions[i * 3 + 2] = (Math.random() - 0.5) * buildingDepth * 1.2;
     }
     const dustGeometry = new THREE.BufferGeometry();
@@ -1150,79 +1336,585 @@ export class BuildingRenderer {
     }
     effectGroup.add(dustPoints);
 
-    // Create spark particles (welding/building sparks)
-    const sparkCount = 30;
+    // Create spark particles (welding/building sparks) - more sparks for better effect
+    const sparkCount = 50;
     const sparkPositions = new Float32Array(sparkCount * 3);
+    const sparkColors = new Float32Array(sparkCount * 3);
     for (let i = 0; i < sparkCount; i++) {
       sparkPositions[i * 3] = (Math.random() - 0.5) * buildingWidth * 0.8;
       sparkPositions[i * 3 + 1] = Math.random() * 0.3;
       sparkPositions[i * 3 + 2] = (Math.random() - 0.5) * buildingDepth * 0.8;
+      // Yellow to orange spark colors
+      sparkColors[i * 3] = 1.0;
+      sparkColors[i * 3 + 1] = 0.7 + Math.random() * 0.3;
+      sparkColors[i * 3 + 2] = Math.random() * 0.3;
     }
     const sparkGeometry = new THREE.BufferGeometry();
     sparkGeometry.setAttribute('position', new THREE.BufferAttribute(sparkPositions, 3));
+    sparkGeometry.setAttribute('color', new THREE.BufferAttribute(sparkColors, 3));
 
-    const sparkPoints = new THREE.Points(sparkGeometry, this.constructionSparkMaterial.clone());
+    const sparkMaterial = new THREE.PointsMaterial({
+      size: 0.4,
+      vertexColors: true,
+      transparent: true,
+      opacity: 0.9,
+      blending: THREE.AdditiveBlending,
+      sizeAttenuation: true,
+    });
+
+    const sparkPoints = new THREE.Points(sparkGeometry, sparkMaterial);
     sparkPoints.userData.basePositions = sparkPositions.slice();
     sparkPoints.userData.lifetimes = new Float32Array(sparkCount);
+    sparkPoints.userData.velocities = new Float32Array(sparkCount * 3);
     for (let i = 0; i < sparkCount; i++) {
       sparkPoints.userData.lifetimes[i] = Math.random();
+      // Spark velocities - shoot outward with arc
+      sparkPoints.userData.velocities[i * 3] = (Math.random() - 0.5) * 4;
+      sparkPoints.userData.velocities[i * 3 + 1] = 1 + Math.random() * 3;
+      sparkPoints.userData.velocities[i * 3 + 2] = (Math.random() - 0.5) * 4;
     }
     sparkPoints.userData.isSparks = true;
     effectGroup.add(sparkPoints);
+
+    // Create welding flash particles (bright white/yellow bursts at weld points)
+    const flashCount = 8;
+    const flashPositions = new Float32Array(flashCount * 3);
+    for (let i = 0; i < flashCount; i++) {
+      flashPositions[i * 3] = (Math.random() - 0.5) * buildingWidth * 0.6;
+      flashPositions[i * 3 + 1] = 0;
+      flashPositions[i * 3 + 2] = (Math.random() - 0.5) * buildingDepth * 0.6;
+    }
+    const flashGeometry = new THREE.BufferGeometry();
+    flashGeometry.setAttribute('position', new THREE.BufferAttribute(flashPositions, 3));
+
+    const flashPoints = new THREE.Points(flashGeometry, this.weldingFlashMaterial.clone());
+    flashPoints.userData.isFlash = true;
+    flashPoints.userData.lifetimes = new Float32Array(flashCount);
+    flashPoints.userData.activeFlash = new Uint8Array(flashCount);
+    for (let i = 0; i < flashCount; i++) {
+      flashPoints.userData.lifetimes[i] = Math.random() * 2;
+      flashPoints.userData.activeFlash[i] = Math.random() > 0.7 ? 1 : 0;
+    }
+    effectGroup.add(flashPoints);
+
+    // Create metal debris particles (small metallic fragments)
+    const debrisCount = 25;
+    const debrisPositions = new Float32Array(debrisCount * 3);
+    for (let i = 0; i < debrisCount; i++) {
+      debrisPositions[i * 3] = (Math.random() - 0.5) * buildingWidth * 0.7;
+      debrisPositions[i * 3 + 1] = Math.random() * 0.2;
+      debrisPositions[i * 3 + 2] = (Math.random() - 0.5) * buildingDepth * 0.7;
+    }
+    const debrisGeometry = new THREE.BufferGeometry();
+    debrisGeometry.setAttribute('position', new THREE.BufferAttribute(debrisPositions, 3));
+
+    const debrisPoints = new THREE.Points(debrisGeometry, this.metalDebrisMaterial.clone());
+    debrisPoints.userData.isDebris = true;
+    debrisPoints.userData.lifetimes = new Float32Array(debrisCount);
+    debrisPoints.userData.velocities = new Float32Array(debrisCount * 3);
+    for (let i = 0; i < debrisCount; i++) {
+      debrisPoints.userData.lifetimes[i] = Math.random();
+      debrisPoints.userData.velocities[i * 3] = (Math.random() - 0.5) * 3;
+      debrisPoints.userData.velocities[i * 3 + 1] = 1 + Math.random() * 2;
+      debrisPoints.userData.velocities[i * 3 + 2] = (Math.random() - 0.5) * 3;
+    }
+    effectGroup.add(debrisPoints);
 
     return effectGroup;
   }
 
   /**
-   * Update construction effect animation
+   * Update construction effect animation - enhanced with welding flashes and debris
    */
   private updateConstructionEffect(effectGroup: THREE.Group, dt: number, buildingWidth: number, buildingDepth: number): void {
     for (const child of effectGroup.children) {
-      if (child instanceof THREE.Points) {
-        const positions = (child.geometry.attributes.position as THREE.BufferAttribute).array as Float32Array;
-        const basePositions = child.userData.basePositions as Float32Array;
+      if (!(child instanceof THREE.Points)) continue;
 
-        if (child.userData.isSparks) {
-          // Spark animation - quick bursts that fade and respawn
-          const lifetimes = child.userData.lifetimes as Float32Array;
-          for (let i = 0; i < positions.length / 3; i++) {
-            lifetimes[i] += dt * 3;
-            if (lifetimes[i] > 1) {
-              // Respawn spark
-              lifetimes[i] = 0;
-              positions[i * 3] = (Math.random() - 0.5) * buildingWidth * 0.8;
-              positions[i * 3 + 1] = 0;
-              positions[i * 3 + 2] = (Math.random() - 0.5) * buildingDepth * 0.8;
-            } else {
-              // Move spark upward and outward
-              positions[i * 3 + 1] += dt * 2 * (1 - lifetimes[i]);
-              positions[i * 3] += (Math.random() - 0.5) * dt * 0.5;
-              positions[i * 3 + 2] += (Math.random() - 0.5) * dt * 0.5;
+      const positions = (child.geometry.attributes.position as THREE.BufferAttribute).array as Float32Array;
+
+      if (child.userData.isSparks) {
+        // Enhanced spark animation with physics-based arc trajectories
+        const lifetimes = child.userData.lifetimes as Float32Array;
+        const velocities = child.userData.velocities as Float32Array;
+        const colors = child.geometry.attributes.color?.array as Float32Array | undefined;
+
+        for (let i = 0; i < positions.length / 3; i++) {
+          lifetimes[i] += dt * 2.5;
+
+          if (lifetimes[i] > 1) {
+            // Respawn spark at random position
+            lifetimes[i] = 0;
+            positions[i * 3] = (Math.random() - 0.5) * buildingWidth * 0.6;
+            positions[i * 3 + 1] = 0;
+            positions[i * 3 + 2] = (Math.random() - 0.5) * buildingDepth * 0.6;
+            // New random velocity
+            velocities[i * 3] = (Math.random() - 0.5) * 4;
+            velocities[i * 3 + 1] = 1.5 + Math.random() * 3;
+            velocities[i * 3 + 2] = (Math.random() - 0.5) * 4;
+          } else {
+            // Apply velocity with gravity
+            positions[i * 3] += velocities[i * 3] * dt;
+            positions[i * 3 + 1] += velocities[i * 3 + 1] * dt;
+            positions[i * 3 + 2] += velocities[i * 3 + 2] * dt;
+            // Gravity pulls sparks down
+            velocities[i * 3 + 1] -= dt * 6;
+            // Drag slows horizontal movement
+            velocities[i * 3] *= 0.98;
+            velocities[i * 3 + 2] *= 0.98;
+          }
+
+          // Color fades from bright yellow/white to orange/red
+          if (colors) {
+            const fade = 1 - lifetimes[i];
+            colors[i * 3] = 1.0;
+            colors[i * 3 + 1] = 0.5 + fade * 0.5;
+            colors[i * 3 + 2] = fade * 0.3;
+          }
+        }
+
+        if (colors) {
+          child.geometry.attributes.color.needsUpdate = true;
+        }
+
+        // Pulse opacity based on construction activity
+        const mat = child.material as THREE.PointsMaterial;
+        mat.opacity = 0.7 + Math.sin(this.constructionAnimTime * 12) * 0.3;
+
+      } else if (child.userData.isFlash) {
+        // Welding flash animation - random bright bursts
+        const lifetimes = child.userData.lifetimes as Float32Array;
+        const activeFlash = child.userData.activeFlash as Uint8Array;
+        const mat = child.material as THREE.PointsMaterial;
+
+        let anyActive = false;
+        for (let i = 0; i < lifetimes.length; i++) {
+          lifetimes[i] += dt;
+
+          if (lifetimes[i] > 0.3 + Math.random() * 0.5) {
+            // Flash cycle complete, maybe start new flash
+            lifetimes[i] = 0;
+            activeFlash[i] = Math.random() > 0.6 ? 1 : 0;
+            if (activeFlash[i]) {
+              // Move flash to new random position
+              positions[i * 3] = (Math.random() - 0.5) * buildingWidth * 0.6;
+              positions[i * 3 + 2] = (Math.random() - 0.5) * buildingDepth * 0.6;
             }
           }
-          // Pulse opacity based on construction
-          const mat = child.material as THREE.PointsMaterial;
-          mat.opacity = 0.5 + Math.sin(this.constructionAnimTime * 15) * 0.4;
-        } else {
-          // Dust animation - drift upward slowly
-          const velocities = child.userData.velocities as Float32Array;
-          for (let i = 0; i < positions.length / 3; i++) {
-            positions[i * 3] += velocities[i * 3] * dt * 0.2;
-            positions[i * 3 + 1] += dt * 0.5; // Drift upward
-            positions[i * 3 + 2] += velocities[i * 3 + 2] * dt * 0.2;
 
-            // Reset if too far
-            if (positions[i * 3 + 1] > 1 || Math.abs(positions[i * 3]) > buildingWidth) {
-              positions[i * 3] = basePositions[i * 3];
+          if (activeFlash[i]) {
+            anyActive = true;
+          }
+        }
+
+        // Pulse flash intensity with rapid flickering
+        const flicker = Math.sin(this.constructionAnimTime * 50) * 0.5 + 0.5;
+        mat.opacity = anyActive ? 0.6 + flicker * 0.4 : 0;
+        mat.size = 0.5 + flicker * 0.3;
+        child.geometry.attributes.position.needsUpdate = true;
+
+      } else if (child.userData.isDebris) {
+        // Metal debris animation - small fragments with physics
+        const lifetimes = child.userData.lifetimes as Float32Array;
+        const velocities = child.userData.velocities as Float32Array;
+
+        for (let i = 0; i < positions.length / 3; i++) {
+          lifetimes[i] += dt * 1.5;
+
+          if (lifetimes[i] > 1 || positions[i * 3 + 1] < -0.5) {
+            // Respawn debris
+            lifetimes[i] = 0;
+            positions[i * 3] = (Math.random() - 0.5) * buildingWidth * 0.5;
+            positions[i * 3 + 1] = 0;
+            positions[i * 3 + 2] = (Math.random() - 0.5) * buildingDepth * 0.5;
+            velocities[i * 3] = (Math.random() - 0.5) * 3;
+            velocities[i * 3 + 1] = 1 + Math.random() * 2;
+            velocities[i * 3 + 2] = (Math.random() - 0.5) * 3;
+          } else {
+            // Apply velocity with gravity
+            positions[i * 3] += velocities[i * 3] * dt;
+            positions[i * 3 + 1] += velocities[i * 3 + 1] * dt;
+            positions[i * 3 + 2] += velocities[i * 3 + 2] * dt;
+            velocities[i * 3 + 1] -= dt * 8;
+          }
+        }
+
+        // Slight opacity variation
+        const mat = child.material as THREE.PointsMaterial;
+        mat.opacity = 0.7 + Math.sin(this.constructionAnimTime * 8) * 0.2;
+
+      } else {
+        // Dust animation - drift upward slowly
+        const basePositions = child.userData.basePositions as Float32Array;
+        const velocities = child.userData.velocities as Float32Array;
+
+        for (let i = 0; i < positions.length / 3; i++) {
+          positions[i * 3] += velocities[i * 3] * dt * 0.2;
+          positions[i * 3 + 1] += dt * 0.5;
+          positions[i * 3 + 2] += velocities[i * 3 + 2] * dt * 0.2;
+
+          // Reset if too far
+          if (positions[i * 3 + 1] > 1.2 || Math.abs(positions[i * 3]) > buildingWidth) {
+            positions[i * 3] = basePositions[i * 3];
+            positions[i * 3 + 1] = 0;
+            positions[i * 3 + 2] = basePositions[i * 3 + 2];
+          }
+        }
+      }
+
+      child.geometry.attributes.position.needsUpdate = true;
+    }
+  }
+
+  /**
+   * Create blueprint holographic effect for waiting_for_worker state
+   * Shows a pulsing wireframe outline with scanning effect
+   */
+  private createBlueprintEffect(buildingWidth: number, buildingDepth: number, buildingHeight: number): THREE.Group {
+    const effectGroup = new THREE.Group();
+
+    // Create wireframe box outline (holographic blueprint edge lines)
+    const boxGeometry = new THREE.BoxGeometry(buildingWidth * 0.95, buildingHeight, buildingDepth * 0.95);
+    const edgesGeometry = new THREE.EdgesGeometry(boxGeometry);
+    const wireframe = new THREE.LineSegments(edgesGeometry, this.blueprintLineMaterial.clone());
+    wireframe.position.y = buildingHeight / 2;
+    effectGroup.add(wireframe);
+
+    // Create corner accent points (holographic corner markers)
+    const cornerCount = 8;
+    const cornerPositions = new Float32Array(cornerCount * 3);
+    const hw = buildingWidth * 0.48;
+    const hh = buildingHeight;
+    const hd = buildingDepth * 0.48;
+    const corners = [
+      [-hw, 0, -hd], [hw, 0, -hd], [-hw, 0, hd], [hw, 0, hd],
+      [-hw, hh, -hd], [hw, hh, -hd], [-hw, hh, hd], [hw, hh, hd],
+    ];
+    for (let i = 0; i < cornerCount; i++) {
+      cornerPositions[i * 3] = corners[i][0];
+      cornerPositions[i * 3 + 1] = corners[i][1];
+      cornerPositions[i * 3 + 2] = corners[i][2];
+    }
+    const cornerGeometry = new THREE.BufferGeometry();
+    cornerGeometry.setAttribute('position', new THREE.BufferAttribute(cornerPositions, 3));
+    const cornerPoints = new THREE.Points(cornerGeometry, this.blueprintPulseMaterial.clone());
+    effectGroup.add(cornerPoints);
+
+    // Create scanning plane effect (horizontal plane that moves up)
+    const scanGeometry = new THREE.PlaneGeometry(buildingWidth * 1.1, buildingDepth * 1.1);
+    const scanMesh = new THREE.Mesh(scanGeometry, this.blueprintScanMaterial.clone());
+    scanMesh.rotation.x = -Math.PI / 2;
+    scanMesh.position.y = 0;
+    scanMesh.userData.scanY = 0;
+    scanMesh.userData.buildingHeight = buildingHeight;
+    effectGroup.add(scanMesh);
+
+    // Create floating holographic particles around the blueprint
+    const particleCount = 40;
+    const particlePositions = new Float32Array(particleCount * 3);
+    for (let i = 0; i < particleCount; i++) {
+      const angle = (i / particleCount) * Math.PI * 2;
+      const radius = Math.max(buildingWidth, buildingDepth) * 0.6;
+      particlePositions[i * 3] = Math.cos(angle) * radius;
+      particlePositions[i * 3 + 1] = Math.random() * buildingHeight;
+      particlePositions[i * 3 + 2] = Math.sin(angle) * radius;
+    }
+    const particleGeometry = new THREE.BufferGeometry();
+    particleGeometry.setAttribute('position', new THREE.BufferAttribute(particlePositions, 3));
+
+    const hologramParticleMaterial = new THREE.PointsMaterial({
+      color: 0x00ccff,
+      size: 0.15,
+      transparent: true,
+      opacity: 0.6,
+      blending: THREE.AdditiveBlending,
+      sizeAttenuation: true,
+    });
+    const hologramParticles = new THREE.Points(particleGeometry, hologramParticleMaterial);
+    hologramParticles.userData.isHologramParticles = true;
+    hologramParticles.userData.buildingHeight = buildingHeight;
+    hologramParticles.userData.basePositions = particlePositions.slice();
+    effectGroup.add(hologramParticles);
+
+    return effectGroup;
+  }
+
+  /**
+   * Update blueprint effect animation
+   */
+  private updateBlueprintEffect(effectGroup: THREE.Group, dt: number, buildingHeight: number): void {
+    for (const child of effectGroup.children) {
+      if (child instanceof THREE.LineSegments) {
+        // Pulse wireframe opacity
+        const mat = child.material as THREE.LineBasicMaterial;
+        mat.opacity = 0.5 + Math.sin(this.blueprintPulseTime * 4) * 0.3;
+      } else if (child instanceof THREE.Mesh) {
+        // Animate scanning plane
+        const scanY = child.userData.scanY ?? 0;
+        const newY = (scanY + dt * 1.5) % buildingHeight;
+        child.userData.scanY = newY;
+        child.position.y = newY;
+
+        // Pulse scan plane opacity
+        const mat = child.material as THREE.MeshBasicMaterial;
+        mat.opacity = 0.2 + Math.sin(this.blueprintPulseTime * 6) * 0.15;
+      } else if (child instanceof THREE.Points) {
+        if (child.userData.isHologramParticles) {
+          // Animate hologram particles - float and rotate around building
+          const positions = (child.geometry.attributes.position as THREE.BufferAttribute).array as Float32Array;
+          const basePositions = child.userData.basePositions as Float32Array;
+          const bh = child.userData.buildingHeight as number;
+
+          for (let i = 0; i < positions.length / 3; i++) {
+            // Rotate around Y axis
+            const angle = this.blueprintPulseTime * 0.5 + (i / (positions.length / 3)) * Math.PI * 2;
+            const baseX = basePositions[i * 3];
+            const baseZ = basePositions[i * 3 + 2];
+            const radius = Math.sqrt(baseX * baseX + baseZ * baseZ);
+            positions[i * 3] = Math.cos(angle) * radius;
+            positions[i * 3 + 2] = Math.sin(angle) * radius;
+
+            // Float up and down
+            const yOffset = Math.sin(this.blueprintPulseTime * 2 + i * 0.5) * 0.3;
+            positions[i * 3 + 1] = (basePositions[i * 3 + 1] + yOffset + bh) % bh;
+          }
+          child.geometry.attributes.position.needsUpdate = true;
+
+          // Pulse particle opacity
+          const mat = child.material as THREE.PointsMaterial;
+          mat.opacity = 0.4 + Math.sin(this.blueprintPulseTime * 5) * 0.2;
+        } else {
+          // Corner points - pulse size
+          const mat = child.material as THREE.PointsMaterial;
+          mat.size = 0.25 + Math.sin(this.blueprintPulseTime * 4) * 0.1;
+          mat.opacity = 0.7 + Math.sin(this.blueprintPulseTime * 3) * 0.3;
+        }
+      }
+    }
+  }
+
+  /**
+   * Create ground dust effect for construction base
+   * Billowing dust clouds that spread outward from construction site
+   */
+  private createGroundDustEffect(buildingWidth: number, buildingDepth: number): THREE.Group {
+    const effectGroup = new THREE.Group();
+
+    // Large billowing dust particles
+    const dustCount = 80;
+    const dustPositions = new Float32Array(dustCount * 3);
+    const dustColors = new Float32Array(dustCount * 3);
+
+    for (let i = 0; i < dustCount; i++) {
+      const angle = Math.random() * Math.PI * 2;
+      const radius = Math.random() * Math.max(buildingWidth, buildingDepth) * 0.8;
+      dustPositions[i * 3] = Math.cos(angle) * radius;
+      dustPositions[i * 3 + 1] = Math.random() * 0.5;
+      dustPositions[i * 3 + 2] = Math.sin(angle) * radius;
+
+      // Varied dust colors (tan to gray)
+      const colorVariation = 0.8 + Math.random() * 0.2;
+      dustColors[i * 3] = 0.6 * colorVariation;
+      dustColors[i * 3 + 1] = 0.55 * colorVariation;
+      dustColors[i * 3 + 2] = 0.45 * colorVariation;
+    }
+
+    const dustGeometry = new THREE.BufferGeometry();
+    dustGeometry.setAttribute('position', new THREE.BufferAttribute(dustPositions, 3));
+    dustGeometry.setAttribute('color', new THREE.BufferAttribute(dustColors, 3));
+
+    const dustMaterial = new THREE.PointsMaterial({
+      size: 1.0,
+      vertexColors: true,
+      transparent: true,
+      opacity: 0.35,
+      blending: THREE.NormalBlending,
+      sizeAttenuation: true,
+      depthWrite: false,
+    });
+
+    const dustPoints = new THREE.Points(dustGeometry, dustMaterial);
+    dustPoints.userData.velocities = new Float32Array(dustCount * 3);
+    dustPoints.userData.lifetimes = new Float32Array(dustCount);
+    dustPoints.userData.sizes = new Float32Array(dustCount);
+
+    for (let i = 0; i < dustCount; i++) {
+      const angle = Math.random() * Math.PI * 2;
+      const speed = 0.3 + Math.random() * 0.5;
+      dustPoints.userData.velocities[i * 3] = Math.cos(angle) * speed;
+      dustPoints.userData.velocities[i * 3 + 1] = 0.2 + Math.random() * 0.3;
+      dustPoints.userData.velocities[i * 3 + 2] = Math.sin(angle) * speed;
+      dustPoints.userData.lifetimes[i] = Math.random();
+      dustPoints.userData.sizes[i] = 0.8 + Math.random() * 0.6;
+    }
+
+    effectGroup.add(dustPoints);
+
+    // Add low-lying dust cloud particles (very close to ground)
+    const lowDustCount = 40;
+    const lowDustPositions = new Float32Array(lowDustCount * 3);
+
+    for (let i = 0; i < lowDustCount; i++) {
+      lowDustPositions[i * 3] = (Math.random() - 0.5) * buildingWidth * 1.5;
+      lowDustPositions[i * 3 + 1] = Math.random() * 0.15;
+      lowDustPositions[i * 3 + 2] = (Math.random() - 0.5) * buildingDepth * 1.5;
+    }
+
+    const lowDustGeometry = new THREE.BufferGeometry();
+    lowDustGeometry.setAttribute('position', new THREE.BufferAttribute(lowDustPositions, 3));
+
+    const lowDustMaterial = new THREE.PointsMaterial({
+      color: 0x998866,
+      size: 1.5,
+      transparent: true,
+      opacity: 0.25,
+      blending: THREE.NormalBlending,
+      sizeAttenuation: true,
+      depthWrite: false,
+    });
+
+    const lowDustPoints = new THREE.Points(lowDustGeometry, lowDustMaterial);
+    lowDustPoints.userData.isLowDust = true;
+    lowDustPoints.userData.basePositions = lowDustPositions.slice();
+    effectGroup.add(lowDustPoints);
+
+    return effectGroup;
+  }
+
+  /**
+   * Update ground dust effect animation
+   */
+  private updateGroundDustEffect(effectGroup: THREE.Group, dt: number, buildingWidth: number, buildingDepth: number, progress: number): void {
+    // Dust intensity decreases as construction progresses (less ground work later)
+    const intensity = Math.max(0.2, 1 - progress * 0.8);
+
+    for (const child of effectGroup.children) {
+      if (!(child instanceof THREE.Points)) continue;
+
+      const positions = (child.geometry.attributes.position as THREE.BufferAttribute).array as Float32Array;
+
+      if (child.userData.isLowDust) {
+        // Low dust - slow drift and swirl
+        const basePositions = child.userData.basePositions as Float32Array;
+
+        for (let i = 0; i < positions.length / 3; i++) {
+          const swirl = Math.sin(this.constructionAnimTime * 0.5 + i * 0.3) * 0.3;
+          positions[i * 3] = basePositions[i * 3] + swirl;
+          positions[i * 3 + 2] = basePositions[i * 3 + 2] + Math.cos(this.constructionAnimTime * 0.5 + i * 0.3) * 0.3;
+        }
+
+        const mat = child.material as THREE.PointsMaterial;
+        mat.opacity = 0.2 * intensity;
+      } else {
+        // Billowing dust particles
+        const velocities = child.userData.velocities as Float32Array;
+        const lifetimes = child.userData.lifetimes as Float32Array;
+        const maxRadius = Math.max(buildingWidth, buildingDepth) * 1.2;
+
+        for (let i = 0; i < positions.length / 3; i++) {
+          lifetimes[i] += dt * 0.8;
+
+          if (lifetimes[i] > 1) {
+            // Respawn particle near center
+            lifetimes[i] = 0;
+            const angle = Math.random() * Math.PI * 2;
+            const radius = Math.random() * 0.5;
+            positions[i * 3] = Math.cos(angle) * radius;
+            positions[i * 3 + 1] = 0;
+            positions[i * 3 + 2] = Math.sin(angle) * radius;
+
+            // New outward velocity
+            velocities[i * 3] = Math.cos(angle) * (0.3 + Math.random() * 0.5);
+            velocities[i * 3 + 1] = 0.2 + Math.random() * 0.4;
+            velocities[i * 3 + 2] = Math.sin(angle) * (0.3 + Math.random() * 0.5);
+          } else {
+            // Apply velocity
+            positions[i * 3] += velocities[i * 3] * dt;
+            positions[i * 3 + 1] += velocities[i * 3 + 1] * dt;
+            positions[i * 3 + 2] += velocities[i * 3 + 2] * dt;
+
+            // Slow down and settle
+            velocities[i * 3] *= 0.98;
+            velocities[i * 3 + 1] -= dt * 0.3;
+            velocities[i * 3 + 2] *= 0.98;
+
+            // Keep above ground
+            if (positions[i * 3 + 1] < 0) {
               positions[i * 3 + 1] = 0;
-              positions[i * 3 + 2] = basePositions[i * 3 + 2];
+              velocities[i * 3 + 1] *= -0.3;
+            }
+
+            // Force respawn if too far
+            const dist = Math.sqrt(positions[i * 3] ** 2 + positions[i * 3 + 2] ** 2);
+            if (dist > maxRadius) {
+              lifetimes[i] = 1;
             }
           }
         }
 
-        child.geometry.attributes.position.needsUpdate = true;
+        const mat = child.material as THREE.PointsMaterial;
+        mat.opacity = 0.35 * intensity;
+      }
+
+      child.geometry.attributes.position.needsUpdate = true;
+    }
+  }
+
+  /**
+   * Create scaffold wireframe effect for early construction
+   * Shows construction framework that fades as building materializes
+   */
+  private createScaffoldEffect(buildingWidth: number, buildingDepth: number, buildingHeight: number): THREE.LineSegments {
+    const points: THREE.Vector3[] = [];
+    const hw = buildingWidth * 0.5;
+    const hd = buildingDepth * 0.5;
+    const levels = Math.ceil(buildingHeight / 1.5);
+
+    // Vertical scaffolding poles at corners
+    const corners = [
+      [-hw, -hd], [hw, -hd], [-hw, hd], [hw, hd],
+    ];
+
+    for (const [cx, cz] of corners) {
+      for (let level = 0; level < levels; level++) {
+        const y1 = level * 1.5;
+        const y2 = Math.min((level + 1) * 1.5, buildingHeight);
+        points.push(new THREE.Vector3(cx, y1, cz));
+        points.push(new THREE.Vector3(cx, y2, cz));
       }
     }
+
+    // Horizontal cross-beams at each level
+    for (let level = 0; level <= levels; level++) {
+      const y = Math.min(level * 1.5, buildingHeight);
+
+      // Connect corners
+      points.push(new THREE.Vector3(-hw, y, -hd), new THREE.Vector3(hw, y, -hd));
+      points.push(new THREE.Vector3(hw, y, -hd), new THREE.Vector3(hw, y, hd));
+      points.push(new THREE.Vector3(hw, y, hd), new THREE.Vector3(-hw, y, hd));
+      points.push(new THREE.Vector3(-hw, y, hd), new THREE.Vector3(-hw, y, -hd));
+
+      // Diagonal braces (X pattern on each face)
+      if (level < levels) {
+        const y2 = Math.min((level + 1) * 1.5, buildingHeight);
+        // Front face
+        points.push(new THREE.Vector3(-hw, y, -hd), new THREE.Vector3(hw, y2, -hd));
+        points.push(new THREE.Vector3(hw, y, -hd), new THREE.Vector3(-hw, y2, -hd));
+        // Back face
+        points.push(new THREE.Vector3(-hw, y, hd), new THREE.Vector3(hw, y2, hd));
+        points.push(new THREE.Vector3(hw, y, hd), new THREE.Vector3(-hw, y2, hd));
+        // Left face
+        points.push(new THREE.Vector3(-hw, y, -hd), new THREE.Vector3(-hw, y2, hd));
+        points.push(new THREE.Vector3(-hw, y, hd), new THREE.Vector3(-hw, y2, -hd));
+        // Right face
+        points.push(new THREE.Vector3(hw, y, -hd), new THREE.Vector3(hw, y2, hd));
+        points.push(new THREE.Vector3(hw, y, hd), new THREE.Vector3(hw, y2, -hd));
+      }
+    }
+
+    const geometry = new THREE.BufferGeometry().setFromPoints(points);
+    const scaffold = new THREE.LineSegments(geometry, this.scaffoldMaterial.clone());
+
+    return scaffold;
   }
 
   private createBar(color: number): THREE.Group {
@@ -1380,6 +2072,13 @@ export class BuildingRenderer {
     this.constructionSparkMaterial.dispose();
     this.thrusterCoreMaterial.dispose();
     this.thrusterGlowMaterial.dispose();
+    this.blueprintLineMaterial.dispose();
+    this.blueprintPulseMaterial.dispose();
+    this.blueprintScanMaterial.dispose();
+    this.groundDustMaterial.dispose();
+    this.metalDebrisMaterial.dispose();
+    this.weldingFlashMaterial.dispose();
+    this.scaffoldMaterial.dispose();
 
     for (const meshData of this.buildingMeshes.values()) {
       this.disposeGroup(meshData.group);
@@ -1398,6 +2097,19 @@ export class BuildingRenderer {
       if (meshData.thrusterEffect) {
         this.scene.remove(meshData.thrusterEffect);
         this.disposeGroup(meshData.thrusterEffect);
+      }
+      if (meshData.blueprintEffect) {
+        this.scene.remove(meshData.blueprintEffect);
+        this.disposeGroup(meshData.blueprintEffect);
+      }
+      if (meshData.groundDustEffect) {
+        this.scene.remove(meshData.groundDustEffect);
+        this.disposeGroup(meshData.groundDustEffect);
+      }
+      if (meshData.scaffoldEffect) {
+        this.scene.remove(meshData.scaffoldEffect);
+        meshData.scaffoldEffect.geometry.dispose();
+        (meshData.scaffoldEffect.material as THREE.Material).dispose();
       }
     }
     this.buildingMeshes.clear();
