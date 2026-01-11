@@ -278,13 +278,15 @@ export function WebGPUGameCanvas() {
 
       resourceRendererRef.current = new ResourceRenderer(scene, game.world, terrain);
 
-      if (fogOfWarEnabled && !isSpectatorMode()) {
-        const fogOfWar = new FogOfWar({ mapWidth, mapHeight });
-        fogOfWar.setVisionSystem(game.visionSystem);
-        fogOfWar.setPlayerId(localPlayerId);
-        scene.add(fogOfWar.mesh);
-        fogOfWarRef.current = fogOfWar;
-      }
+      // Note: FogOfWar uses ShaderMaterial which doesn't work with WebGPU
+      // TODO: Convert to TSL material for WebGPU compatibility
+      // if (fogOfWarEnabled && !isSpectatorMode()) {
+      //   const fogOfWar = new FogOfWar({ mapWidth, mapHeight });
+      //   fogOfWar.setVisionSystem(game.visionSystem);
+      //   fogOfWar.setPlayerId(localPlayerId);
+      //   scene.add(fogOfWar.mesh);
+      //   fogOfWarRef.current = fogOfWar;
+      // }
 
       effectsRendererRef.current = new EffectsRenderer(scene, game.eventBus, (x, z) => terrain.getHeightAt(x, z));
       rallyPointRendererRef.current = new RallyPointRenderer(
@@ -348,13 +350,14 @@ export function WebGPUGameCanvas() {
         );
       }
 
-      // Initialize strategic overlays (terrain, elevation, threat)
-      overlayManagerRef.current = new GameOverlayManager(
-        scene,
-        CURRENT_MAP,
-        (x, y) => terrain.getHeightAt(x, y)
-      );
-      overlayManagerRef.current.setWorld(game.world);
+      // Note: GameOverlayManager uses ShaderMaterial which doesn't work with WebGPU
+      // TODO: Convert to TSL material for WebGPU compatibility
+      // overlayManagerRef.current = new GameOverlayManager(
+      //   scene,
+      //   CURRENT_MAP,
+      //   (x, y) => terrain.getHeightAt(x, y)
+      // );
+      // overlayManagerRef.current.setWorld(game.world);
 
       // Initialize command queue waypoint visualization
       commandQueueRendererRef.current = new CommandQueueRenderer(

@@ -168,10 +168,12 @@ export class EnvironmentManager {
     }
 
     // Water/lava plane
-    if (this.biome.hasWater) {
-      this.water = new WaterPlane(this.mapData, this.biome);
-      this.scene.add(this.water.mesh);
-    }
+    // Note: WaterPlane uses ShaderMaterial which doesn't work with WebGPU
+    // TODO: Convert to TSL material for WebGPU compatibility
+    // if (this.biome.hasWater) {
+    //   this.water = new WaterPlane(this.mapData, this.biome);
+    //   this.scene.add(this.water.mesh);
+    // }
 
     // Ground fog/mist layer for atmospheric effect
     // Note: GroundFog uses ShaderMaterial which may not render correctly with WebGPU
