@@ -386,6 +386,8 @@ export class PathfindingSystem extends System {
   private queuePathRequest(request: PathRequest): void {
     // Check failed path cache - don't retry paths that recently failed
     if (this.isPathRecentlyFailed(request.entityId, request.endX, request.endY)) {
+      // CRITICAL: Also clear unit's target so it stops requesting
+      this.clearUnitMovementTarget(request.entityId);
       return; // Skip this request
     }
 
@@ -396,8 +398,9 @@ export class PathfindingSystem extends System {
       // Try to find nearby walkable cell before queueing
       const nearby = this.findNearbyWalkableCell(request.endX, request.endY, 5);
       if (!nearby) {
-        // No walkable cell nearby - record as failed
+        // No walkable cell nearby - record as failed and clear target
         this.recordFailedPath(request.entityId, request.endX, request.endY);
+        this.clearUnitMovementTarget(request.entityId);
         return;
       }
       // Update request to use nearby walkable cell
@@ -413,6 +416,28 @@ export class PathfindingSystem extends System {
 
     // Add to queue - higher priority requests go first
     this.pendingRequests.push(request);
+  }
+
+  /**
+   * Clear a unit's movement target to stop it from requesting paths.
+   */
+  private clearUnitMovementTarget(entityId: number): void {
+    const entity = this.world.getEntity(entityId);
+    if (!entity) return;
+
+    const unit = entity.get<Unit>('Unit');
+    if (!unit) return;
+
+    unit.path = [];
+    unit.pathIndex = 0;
+    unit.targetX = null;
+    unit.targetY = null;
+
+    if (unit.state === 'moving') {
+      unit.state = 'idle';
+    }
+
+    this.unitPathStates.delete(entityId);
   }
 
   /**
