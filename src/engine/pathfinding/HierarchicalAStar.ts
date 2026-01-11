@@ -34,8 +34,8 @@ interface CachedPath {
 }
 
 const SECTOR_SIZE = 16; // 16x16 unit sectors
-const PATH_CACHE_SIZE = 100;
-const PATH_CACHE_TTL = 5000; // 5 seconds
+const PATH_CACHE_SIZE = 500; // Increased for RTS with many units
+const PATH_CACHE_TTL = 10000; // 10 seconds - paths stay valid longer
 
 export class HierarchicalAStar {
   private baseAStar: AStar;

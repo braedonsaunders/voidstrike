@@ -363,8 +363,8 @@ export class PathfindingSystem extends System {
   }
 
   private requestPath(request: PathRequest): void {
-    // Calculate path immediately for now (could be batched later)
-    let result = this.pathfinder.findPath(
+    // Calculate path using the smart routing (hierarchical for long paths, regular for short)
+    let result = this.findPath(
       request.startX,
       request.startY,
       request.endX,
@@ -384,7 +384,7 @@ export class PathfindingSystem extends System {
       // Try to find a nearby walkable destination
       const alternateEnd = this.findNearbyWalkableCell(request.endX, request.endY, 10);
       if (alternateEnd) {
-        result = this.pathfinder.findPath(
+        result = this.findPath(
           request.startX,
           request.startY,
           alternateEnd.x,
@@ -397,7 +397,7 @@ export class PathfindingSystem extends System {
         // Try to find path from nearby walkable cell (unit might be stuck)
         const alternateStart = this.findNearbyWalkableCell(request.startX, request.startY, 5);
         if (alternateStart && alternateEnd) {
-          result = this.pathfinder.findPath(
+          result = this.findPath(
             alternateStart.x,
             alternateStart.y,
             alternateEnd.x,
