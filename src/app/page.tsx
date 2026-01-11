@@ -3,8 +3,10 @@
 import Link from 'next/link';
 import { useState, useEffect, useCallback, useRef } from 'react';
 import dynamic from 'next/dynamic';
+import { useRouter } from 'next/navigation';
 import { MusicPlayer } from '@/audio/MusicPlayer';
 import { useUIStore } from '@/store/uiStore';
+import { useGameSetupStore } from '@/store/gameSetupStore';
 
 // Dynamically import the Three.js background to avoid SSR issues
 const HomeBackground = dynamic(() => import('@/components/home/HomeBackground'), {
@@ -56,7 +58,9 @@ export default function Home() {
   const [isLoaded, setIsLoaded] = useState(false);
   const [mousePosition, setMousePosition] = useState({ x: 0, y: 0 });
   const heroRef = useRef<HTMLDivElement>(null);
+  const router = useRouter();
 
+  const startBattleSimulator = useGameSetupStore((state) => state.startBattleSimulator);
   const musicEnabled = useUIStore((state) => state.musicEnabled);
   const musicVolume = useUIStore((state) => state.musicVolume);
   const toggleMusic = useUIStore((state) => state.toggleMusic);
@@ -347,6 +351,22 @@ export default function Home() {
               </span>
             </Link>
           </div>
+
+          {/* Battle Simulator - subtle text link */}
+          <button
+            onClick={() => {
+              startBattleSimulator();
+              router.push('/game');
+            }}
+            className={`
+              mt-6 text-void-500/60 text-sm tracking-wider
+              hover:text-void-400 transition-colors duration-300
+              transition-all duration-1000 delay-900
+              ${isLoaded ? 'opacity-100' : 'opacity-0'}
+            `}
+          >
+            Battle Simulator
+          </button>
         </div>
 
         {/* Bottom Info Bar */}
