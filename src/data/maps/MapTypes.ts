@@ -1254,11 +1254,13 @@ export function validateMapConnectivity(mapData: MapData): ConnectivityValidatio
   }
 
   if (connectedRegions > 1) {
-    warnings.push(`Map has ${connectedRegions} separate walkable regions - units may be trapped`);
+    warnings.push(`Map has ${connectedRegions} separate walkable regions (only matters if important locations are affected)`);
   }
 
+  // IMPORTANT: Map is valid if all important locations are reachable from each other.
+  // Multiple disconnected walkable regions are OK as long as spawns/expansions/towers are connected.
   return {
-    isValid: unreachableLocations.length === 0 && connectedRegions <= 1,
+    isValid: unreachableLocations.length === 0,
     connectedRegions,
     unreachableLocations,
     warnings,
