@@ -1086,8 +1086,84 @@ export function WebGPUGameCanvas() {
         renderContextRef.current.renderer.toneMappingExposure = settings.toneMappingExposure;
       }
 
-      // Note: Post-processing settings require rebuild of the pipeline
-      // For now, only exposure is updated dynamically
+      // Update post-processing pipeline
+      if (renderPipelineRef.current) {
+        renderPipelineRef.current.applyConfig({
+          bloomEnabled: settings.bloomEnabled,
+          bloomStrength: settings.bloomStrength,
+          bloomRadius: settings.bloomRadius,
+          bloomThreshold: settings.bloomThreshold,
+          aoEnabled: settings.ssaoEnabled,
+          aoRadius: settings.ssaoRadius,
+          aoIntensity: settings.ssaoIntensity,
+          fxaaEnabled: settings.fxaaEnabled,
+          vignetteEnabled: settings.vignetteEnabled,
+          vignetteIntensity: settings.vignetteIntensity,
+          exposure: settings.toneMappingExposure,
+          saturation: settings.saturation,
+          contrast: settings.contrast,
+        });
+      }
+
+      // Handle post-processing toggle (enable/disable entire pipeline)
+      if (settings.postProcessingEnabled !== prevSettings.postProcessingEnabled) {
+        if (!settings.postProcessingEnabled) {
+          // Disable post-processing - dispose pipeline
+          renderPipelineRef.current?.dispose();
+          renderPipelineRef.current = null;
+        } else if (renderContextRef.current && sceneRef.current && cameraRef.current) {
+          // Re-enable post-processing - create new pipeline
+          renderPipelineRef.current = new RenderPipeline(
+            renderContextRef.current.renderer,
+            sceneRef.current,
+            cameraRef.current.camera,
+            {
+              bloomEnabled: settings.bloomEnabled,
+              bloomStrength: settings.bloomStrength,
+              bloomRadius: settings.bloomRadius,
+              bloomThreshold: settings.bloomThreshold,
+              aoEnabled: settings.ssaoEnabled,
+              aoRadius: settings.ssaoRadius,
+              aoIntensity: settings.ssaoIntensity,
+              fxaaEnabled: settings.fxaaEnabled,
+              vignetteEnabled: settings.vignetteEnabled,
+              vignetteIntensity: settings.vignetteIntensity,
+              exposure: settings.toneMappingExposure,
+              saturation: settings.saturation,
+              contrast: settings.contrast,
+            }
+          );
+        }
+      }
+
+      // Update shadow settings
+      if (environmentRef.current) {
+        if (settings.shadowsEnabled !== prevSettings.shadowsEnabled) {
+          environmentRef.current.setShadowsEnabled(settings.shadowsEnabled);
+          if (renderContextRef.current) {
+            renderContextRef.current.renderer.shadowMap.enabled = settings.shadowsEnabled;
+          }
+        }
+        if (settings.shadowQuality !== prevSettings.shadowQuality) {
+          environmentRef.current.setShadowQuality(settings.shadowQuality);
+        }
+        if (settings.shadowDistance !== prevSettings.shadowDistance) {
+          environmentRef.current.setShadowDistance(settings.shadowDistance);
+        }
+
+        // Update fog settings
+        if (settings.fogEnabled !== prevSettings.fogEnabled) {
+          environmentRef.current.setFogEnabled(settings.fogEnabled);
+        }
+        if (settings.fogDensity !== prevSettings.fogDensity) {
+          environmentRef.current.setFogDensity(settings.fogDensity);
+        }
+
+        // Update environment map
+        if (settings.environmentMapEnabled !== prevSettings.environmentMapEnabled) {
+          environmentRef.current.setEnvironmentMapEnabled(settings.environmentMapEnabled);
+        }
+      }
     });
 
     return () => unsubscribe();
