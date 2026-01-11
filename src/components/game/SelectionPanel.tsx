@@ -52,8 +52,9 @@ interface SelectedEntityInfo {
   isComplete?: boolean;
 }
 
-export function SelectionPanel() {
-  const { selectedUnits } = useGameStore();
+// PERF: Wrap main component with memo to prevent re-renders when parent changes but props don't
+export const SelectionPanel = memo(function SelectionPanel() {
+  const selectedUnits = useGameStore((state: { selectedUnits: number[] }) => state.selectedUnits);
   const [selectedInfo, setSelectedInfo] = useState<SelectedEntityInfo[]>([]);
 
   useEffect(() => {
@@ -286,46 +287,9 @@ export function SelectionPanel() {
   return (
     <div className="game-panel p-3 h-44 overflow-y-auto">
       <div className="grid grid-cols-8 gap-1.5">
-        {selectedInfo.slice(0, 24).map((entity) => {
-          const hp = (entity.health / entity.maxHealth) * 100;
-          const isResource = entity.type === 'resource';
-          const barColor = isResource
-            ? (entity.resourceType === 'minerals' ? 'bg-blue-500' : 'bg-green-500')
-            : (hp > 60 ? 'bg-green-500' : hp > 30 ? 'bg-yellow-500' : 'bg-red-500');
-
-          // Get icon for entity type - use shared icons
-          const getMultiSelectIcon = () => {
-            if (entity.type === 'unit' && entity.unitId) {
-              return getUnitIcon(entity.unitId);
-            } else if (entity.type === 'building' && entity.buildingId) {
-              return getBuildingIcon(entity.buildingId);
-            } else if (entity.type === 'resource') {
-              return entity.resourceType === 'minerals' ? '💎' : '💚';
-            }
-            return '◆';
-          };
-
-          return (
-            <Tooltip
-              key={entity.id}
-              content={<EntityTooltipContent entity={entity} />}
-              delay={300}
-            >
-              <div
-                className="w-10 h-10 bg-gradient-to-b from-void-800 to-void-900 border border-void-600/50 rounded flex items-center justify-center relative hover:border-blue-500/50 transition-colors cursor-pointer"
-              >
-                <span className="text-base">{getMultiSelectIcon()}</span>
-                {/* Mini health/amount bar */}
-                <div className="absolute bottom-0 left-0.5 right-0.5 h-1 bg-void-900 rounded-full overflow-hidden">
-                  <div
-                    className={`h-full ${barColor}`}
-                    style={{ width: `${hp}%` }}
-                  />
-                </div>
-              </div>
-            </Tooltip>
-          );
-        })}
+        {selectedInfo.slice(0, 24).map((entity) => (
+          <MultiSelectEntityIcon key={entity.id} entity={entity} />
+        ))}
       </div>
       {selectedInfo.length > 24 && (
         <p className="text-xs text-void-400 mt-2 text-center">
@@ -334,7 +298,48 @@ export function SelectionPanel() {
       )}
     </div>
   );
-}
+});
+
+// PERF: Memoized component for multi-select entity icons to prevent re-renders
+const MultiSelectEntityIcon = memo(function MultiSelectEntityIcon({ entity }: { entity: SelectedEntityInfo }) {
+  const hp = (entity.health / entity.maxHealth) * 100;
+  const isResource = entity.type === 'resource';
+  const barColor = isResource
+    ? (entity.resourceType === 'minerals' ? 'bg-blue-500' : 'bg-green-500')
+    : (hp > 60 ? 'bg-green-500' : hp > 30 ? 'bg-yellow-500' : 'bg-red-500');
+
+  // Get icon for entity type - use shared icons
+  const icon = useMemo(() => {
+    if (entity.type === 'unit' && entity.unitId) {
+      return getUnitIcon(entity.unitId);
+    } else if (entity.type === 'building' && entity.buildingId) {
+      return getBuildingIcon(entity.buildingId);
+    } else if (entity.type === 'resource') {
+      return entity.resourceType === 'minerals' ? '💎' : '💚';
+    }
+    return '◆';
+  }, [entity.type, entity.unitId, entity.buildingId, entity.resourceType]);
+
+  return (
+    <Tooltip
+      content={<EntityTooltipContent entity={entity} />}
+      delay={300}
+    >
+      <div
+        className="w-10 h-10 bg-gradient-to-b from-void-800 to-void-900 border border-void-600/50 rounded flex items-center justify-center relative hover:border-blue-500/50 transition-colors cursor-pointer"
+      >
+        <span className="text-base">{icon}</span>
+        {/* Mini health/amount bar */}
+        <div className="absolute bottom-0 left-0.5 right-0.5 h-1 bg-void-900 rounded-full overflow-hidden">
+          <div
+            className={`h-full ${barColor}`}
+            style={{ width: `${hp}%` }}
+          />
+        </div>
+      </div>
+    </Tooltip>
+  );
+});
 
 // PERFORMANCE: Memoized helper component for stat display
 const StatItem = memo(function StatItem({ label, value, color }: { label: string; value: number | string | undefined; color: string }) {
