@@ -74,7 +74,10 @@ export class MovementSystem extends System {
     targetPosition: { x: number; y: number };
     queue?: boolean; // If true, queue the command instead of replacing
   }): void {
+    const t0 = performance.now();
     const { entityIds, targetPosition, queue } = data;
+
+    console.log(`[MovementSystem] Move command for ${entityIds.length} units to (${targetPosition.x.toFixed(0)}, ${targetPosition.y.toFixed(0)})`);
 
     // Calculate formation positions for multiple units
     const positions = this.calculateFormationPositions(
@@ -82,6 +85,9 @@ export class MovementSystem extends System {
       targetPosition.y,
       entityIds.length
     );
+
+    const t1 = performance.now();
+    if (t1 - t0 > 1) console.log(`[MovementSystem] Formation calc took ${(t1 - t0).toFixed(1)}ms`);
 
     for (let i = 0; i < entityIds.length; i++) {
       const entityId = entityIds[i];
@@ -116,6 +122,9 @@ export class MovementSystem extends System {
         this.requestPathWithCooldown(entityId, pos.x, pos.y, true);
       }
     }
+
+    const elapsed = performance.now() - t0;
+    if (elapsed > 1) console.log(`[MovementSystem] handleMoveCommand total: ${elapsed.toFixed(1)}ms for ${entityIds.length} units`);
   }
 
   private handlePatrolCommand(data: {

@@ -315,6 +315,8 @@ export class PathfindingSystem extends System {
         priority: data.priority ?? 1,
       });
     });
+
+    console.log('[PathfindingSystem] Event listeners set up');
   }
 
   /**
@@ -337,6 +339,9 @@ export class PathfindingSystem extends System {
    */
   private processPathQueue(): void {
     if (this.pendingRequests.length === 0) return;
+
+    const queueSize = this.pendingRequests.length;
+    console.log(`[Pathfinding] Processing queue: ${queueSize} pending, processing ${Math.min(MAX_PATHS_PER_FRAME, queueSize)}`);
 
     // Sort by priority (higher first) - only sort when we have requests
     this.pendingRequests.sort((a, b) => b.priority - a.priority);
@@ -400,6 +405,8 @@ export class PathfindingSystem extends System {
   }
 
   private processPathRequest(request: PathRequest): void {
+    const startTime = performance.now();
+
     // Calculate path using the smart routing (hierarchical for long paths, regular for short)
     let result = this.findPath(
       request.startX,
@@ -407,6 +414,11 @@ export class PathfindingSystem extends System {
       request.endX,
       request.endY
     );
+
+    const elapsed = performance.now() - startTime;
+    if (elapsed > 1) {
+      console.log(`[Pathfinding] Path took ${elapsed.toFixed(1)}ms, found=${result.found}, waypoints=${result.path.length}`);
+    }
 
     const entity = this.world.getEntity(request.entityId);
     if (!entity) return;
@@ -502,11 +514,24 @@ export class PathfindingSystem extends System {
     const dy = endY - startY;
     const distance = Math.sqrt(dx * dx + dy * dy);
 
+    const t0 = performance.now();
+    let result: PathResult;
+    let method: string;
+
     if (distance > HIERARCHICAL_PATH_THRESHOLD) {
-      return this.hierarchicalPathfinder.findPath(startX, startY, endX, endY);
+      method = 'hierarchical';
+      result = this.hierarchicalPathfinder.findPath(startX, startY, endX, endY);
+    } else {
+      method = 'direct';
+      result = this.pathfinder.findPath(startX, startY, endX, endY);
     }
 
-    return this.pathfinder.findPath(startX, startY, endX, endY);
+    const elapsed = performance.now() - t0;
+    if (elapsed > 2) {
+      console.log(`[Pathfinding] ${method} dist=${distance.toFixed(0)} took ${elapsed.toFixed(1)}ms found=${result.found}`);
+    }
+
+    return result;
   }
 
   public isWalkable(x: number, y: number): boolean {
