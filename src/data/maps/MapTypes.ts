@@ -502,19 +502,20 @@ export function createRampInTerrain(
 
       if (py >= 0 && py < grid.length && px >= 0 && px < grid[0].length) {
         // Calculate elevation gradient based on direction
+        // t=0 is fromElevation, t=1 is toElevation
         let t = 0;
         switch (direction) {
           case 'north':
-            t = dy / (height - 1);
-            break;
-          case 'south':
             t = 1 - dy / (height - 1);
             break;
+          case 'south':
+            t = dy / (height - 1);
+            break;
           case 'east':
-            t = dx / (width - 1);
+            t = 1 - dx / (width - 1);
             break;
           case 'west':
-            t = 1 - dx / (width - 1);
+            t = dx / (width - 1);
             break;
         }
 
