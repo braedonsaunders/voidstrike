@@ -160,6 +160,7 @@
 - [x] **Terrain connectivity validation** - Added validateMapConnectivity() to verify all spawn points, expansions, and watch towers are reachable
 - [x] **Auto-fix connectivity** - Added autoFixConnectivity() to carve corridors between disconnected regions, ensuring all locations are navigable
 - [x] **Flood fill pathfinding verification** - Added flood fill algorithm to detect separate walkable regions and identify unreachable locations
+- [x] **Ramp texture fix** - Ramps now use flat ground texture (grass/snow) instead of dirt, matching walkable paths visually
 
 ### Camera & Input Fixes (January 2026)
 - [x] **WASD keys removed from camera** - WASD was conflicting with shortcuts (A=attack move, S=stop, etc.). Camera now uses arrow keys only for keyboard panning.

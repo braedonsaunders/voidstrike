@@ -849,32 +849,21 @@ export class Terrain {
         // All 4 cells are ramps - simple average
         avgElevation = (cell00.elevation + cell10.elevation + cell01.elevation + cell11.elevation) / 4;
       } else {
-        // Mix of ramp and non-ramp - use weighted average favoring ramps
-        // This creates smooth transitions at ramp edges
+        // Mix of ramp and non-ramp - use ONLY ramp elevations for smooth slopes
+        // This is critical for making ramps visible as gradual slopes
         let rampSum = 0;
-        let otherSum = 0;
         let rampCount = 0;
-        let otherCount = 0;
 
         for (const cell of cells) {
           if (cell.terrain === 'ramp') {
             rampSum += cell.elevation;
             rampCount++;
-          } else {
-            otherSum += cell.elevation;
-            otherCount++;
           }
         }
 
-        // Weight ramps heavily (80%) to follow the ramp gradient
-        const rampAvg = rampCount > 0 ? rampSum / rampCount : 0;
-        const otherAvg = otherCount > 0 ? otherSum / otherCount : 0;
-
-        if (rampCount > 0 && otherCount > 0) {
-          avgElevation = rampAvg * 0.8 + otherAvg * 0.2;
-        } else {
-          avgElevation = rampCount > 0 ? rampAvg : otherAvg;
-        }
+        // Use 100% ramp elevation - don't blend with other cells at all
+        // This ensures the ramp geometry follows the intended gradient exactly
+        avgElevation = rampSum / rampCount;
       }
     } else {
       // No ramps - use simple average elevation
