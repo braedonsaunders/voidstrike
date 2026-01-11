@@ -202,23 +202,18 @@ export class TSLTerrainMaterial {
       const primaryUV = uv().mul(vec2(primaryScale, primaryScale));
 
       // Secondary UV at different scale to break up tiling (golden ratio offset)
-      const detailScale = float(textureRepeat).mul(0.37);
-      const detailUV = uv().mul(vec2(detailScale, detailScale)).add(vec2(0.5, 0.5));
-
-      // Macro variation UV (very large scale for color variation across map)
-      const macroScale = float(textureRepeat).mul(0.08);
-      const macroUV = uv().mul(vec2(macroScale, macroScale));
+      const detailScale = float(textureRepeat).mul(0.31);
+      const detailUV = uv().mul(vec2(detailScale, detailScale)).add(vec2(0.17, 0.31));
 
       // Calculate slope (0 = flat, 1 = vertical)
       const upVector = vec3(0.0, 1.0, 0.0);
       const slope = float(1.0).sub(abs(dot(normalize(worldNorm), upVector)));
 
-      // Generate procedural noise for blend variation
-      const noisePos = worldPos.xz.mul(0.1);
-      const noise1 = fract(sin(dot(floor(noisePos), vec2(12.9898, 78.233))).mul(43758.5453));
-      const noise2 = fract(sin(dot(floor(noisePos.add(1.0)), vec2(12.9898, 78.233))).mul(43758.5453));
-      const noiseFrac = fract(noisePos);
-      const blendNoise = mix(mix(noise1, noise2, noiseFrac.x), mix(noise1, noise2, noiseFrac.x), noiseFrac.y);
+      // Smooth procedural noise for blend variation (no floor() to avoid checkerboard)
+      const noiseScale = float(0.05);
+      const nx = worldPos.x.mul(noiseScale);
+      const nz = worldPos.z.mul(noiseScale);
+      const blendNoise = fract(sin(nx.mul(12.9898).add(nz.mul(78.233))).mul(43758.5453));
 
       // Sample primary textures
       const grassPrimary = texture(grassDiffuse, primaryUV).rgb;
@@ -226,71 +221,46 @@ export class TSLTerrainMaterial {
       const rockPrimary = texture(rockDiffuse, primaryUV).rgb;
       const cliffPrimary = texture(cliffDiffuse, primaryUV).rgb;
 
-      // Sample detail textures at different scale for anti-tiling
+      // Sample detail textures at different scale for subtle anti-tiling
       const grassDetail = texture(grassDiffuse, detailUV).rgb;
       const dirtDetail = texture(dirtDiffuse, detailUV).rgb;
       const rockDetail = texture(rockDiffuse, detailUV).rgb;
       const cliffDetail = texture(cliffDiffuse, detailUV).rgb;
 
-      // Sample macro variation (very low frequency color shifts)
-      const macroVariation = texture(grassDiffuse, macroUV).rgb;
-      const macroLuminance = dot(macroVariation, vec3(0.299, 0.587, 0.114));
+      // Subtle detail blending (overlay style but less aggressive)
+      const detailBlend = float(0.15);
+      const grassColor = mix(grassPrimary, grassPrimary.mul(grassDetail.add(0.5)), detailBlend);
+      const dirtColor = mix(dirtPrimary, dirtPrimary.mul(dirtDetail.add(0.5)), detailBlend);
+      const rockColor = mix(rockPrimary, rockPrimary.mul(rockDetail.add(0.5)), detailBlend);
+      const cliffColor = mix(cliffPrimary, cliffPrimary.mul(cliffDetail.add(0.5)), detailBlend);
 
-      // Blend primary and detail with overlay blend
-      const detailBlend = float(0.25);
-      const grassColor = mix(grassPrimary, grassPrimary.mul(grassDetail.mul(1.4)), detailBlend);
-      const dirtColor = mix(dirtPrimary, dirtPrimary.mul(dirtDetail.mul(1.4)), detailBlend);
-      const rockColor = mix(rockPrimary, rockPrimary.mul(rockDetail.mul(1.4)), detailBlend);
-      const cliffColor = mix(cliffPrimary, cliffPrimary.mul(cliffDetail.mul(1.4)), detailBlend);
+      // Noise modulated blend thresholds for organic transitions (reduced influence)
+      const noiseOffset = blendNoise.sub(0.5).mul(0.06);
 
-      // Noise modulated blend thresholds for organic transitions
-      const noiseOffset = blendNoise.sub(0.5).mul(0.12);
-
-      // Smooth blend factors
-      const dirtBlend = smoothstep(float(0.03).add(noiseOffset), float(0.20).add(noiseOffset), slope);
-      const rockBlend = smoothstep(float(0.15).add(noiseOffset), float(0.42).add(noiseOffset), slope);
-      const cliffBlend = smoothstep(float(0.38).add(noiseOffset), float(0.65).add(noiseOffset), slope);
+      // Smooth blend factors based on slope
+      const dirtBlend = smoothstep(float(0.05).add(noiseOffset), float(0.20).add(noiseOffset), slope);
+      const rockBlend = smoothstep(float(0.18).add(noiseOffset), float(0.45).add(noiseOffset), slope);
+      const cliffBlend = smoothstep(float(0.40).add(noiseOffset), float(0.70).add(noiseOffset), slope);
 
       // Cascade the blending
       let color = mix(grassColor, dirtColor, dirtBlend);
       color = mix(color, rockColor, rockBlend);
       color = mix(color, cliffColor, cliffBlend);
 
-      // Apply macro color variation (subtle hue/saturation shifts across map)
-      const macroInfluence = float(0.08);
-      color = mix(color, color.mul(macroLuminance.add(0.5)), macroInfluence);
-
       // World height variation (subtle darkening in low areas)
-      const heightFactor = clamp(worldPos.y.mul(0.03).add(0.92), 0.88, 1.08);
+      const heightFactor = clamp(worldPos.y.mul(0.02).add(0.95), 0.90, 1.05);
       color = color.mul(heightFactor);
 
-      // === AAA COLOR GRADING PIPELINE ===
+      // === SUBTLE COLOR GRADING ===
 
-      // 1. Lift-Gamma-Gain style adjustment
-      const shadows = vec3(0.02, 0.01, 0.03); // Slight cool shadows
-      const midtones = vec3(1.0, 0.98, 0.96); // Warm midtones
-      const highlights = vec3(1.02, 1.01, 0.99); // Neutral highlights
-
-      const luma = dot(color, vec3(0.299, 0.587, 0.114));
-      const shadowWeight = clamp(float(1.0).sub(luma.mul(2.0)), 0.0, 1.0);
-      const highlightWeight = clamp(luma.mul(2.0).sub(1.0), 0.0, 1.0);
-      const midtoneWeight = float(1.0).sub(shadowWeight).sub(highlightWeight);
-
-      color = color.add(shadows.mul(shadowWeight));
-      color = color.mul(mix(vec3(1.0), midtones, midtoneWeight));
-      color = color.mul(mix(vec3(1.0), highlights, highlightWeight));
-
-      // 2. Filmic S-curve contrast
-      const contrast = float(1.12);
+      // Slight contrast boost
+      const contrast = float(1.08);
       color = color.sub(0.5).mul(contrast).add(0.5);
 
-      // 3. Saturation boost with luminance preservation
-      const saturation = float(1.18);
-      const finalLuma = dot(color, vec3(0.299, 0.587, 0.114));
-      color = mix(vec3(finalLuma), color, saturation);
-
-      // 4. Subtle vignette-style depth (edges slightly darker)
-      // (handled by height factor above)
+      // Subtle saturation boost
+      const saturation = float(1.1);
+      const luma = dot(color, vec3(0.299, 0.587, 0.114));
+      color = mix(vec3(luma), color, saturation);
 
       // Clamp to valid range
       color = clamp(color, 0.0, 1.0);
@@ -298,9 +268,8 @@ export class TSLTerrainMaterial {
       return vec4(color, 1.0);
     })();
 
-    // Advanced roughness blending
+    // Roughness blending based on slope
     const roughnessNode = Fn(() => {
-      const worldPos = positionWorld;
       const worldNorm = normalWorld;
 
       const primaryScale = float(textureRepeat);
@@ -309,31 +278,24 @@ export class TSLTerrainMaterial {
       const upVector = vec3(0.0, 1.0, 0.0);
       const slope = float(1.0).sub(abs(dot(normalize(worldNorm), upVector)));
 
-      // Noise for variation
-      const noisePos = worldPos.xz.mul(0.1);
-      const noise1 = fract(sin(dot(floor(noisePos), vec2(12.9898, 78.233))).mul(43758.5453));
-      const noiseOffset = noise1.sub(0.5).mul(0.15);
-
       const grassR = texture(grassRoughness, primaryUV).r;
       const dirtR = texture(dirtRoughness, primaryUV).r;
       const rockR = texture(rockRoughness, primaryUV).r;
       const cliffR = texture(cliffRoughness, primaryUV).r;
 
-      const dirtBlend = smoothstep(float(0.03).add(noiseOffset), float(0.18).add(noiseOffset), slope);
-      const rockBlend = smoothstep(float(0.15).add(noiseOffset), float(0.40).add(noiseOffset), slope);
-      const cliffBlend = smoothstep(float(0.35).add(noiseOffset), float(0.60).add(noiseOffset), slope);
+      // Same blend thresholds as color (no noise offset for roughness)
+      const dirtBlend = smoothstep(float(0.05), float(0.20), slope);
+      const rockBlend = smoothstep(float(0.18), float(0.45), slope);
+      const cliffBlend = smoothstep(float(0.40), float(0.70), slope);
 
       let roughness = mix(grassR, dirtR, dirtBlend);
       roughness = mix(roughness, rockR, rockBlend);
       roughness = mix(roughness, cliffR, cliffBlend);
 
-      // Slightly reduce overall roughness for more sheen
-      roughness = roughness.mul(0.9).add(0.05);
-
       return clamp(roughness, 0.1, 0.95);
     })();
 
-    // Normal map blending
+    // Normal map blending based on slope
     const normalNode = Fn(() => {
       const worldNorm = normalWorld;
 
@@ -349,9 +311,10 @@ export class TSLTerrainMaterial {
       const rockN = texture(rockNormal, primaryUV).rgb.mul(2.0).sub(1.0);
       const cliffN = texture(cliffNormal, primaryUV).rgb.mul(2.0).sub(1.0);
 
-      const dirtBlend = smoothstep(float(0.03), float(0.18), slope);
-      const rockBlend = smoothstep(float(0.15), float(0.40), slope);
-      const cliffBlend = smoothstep(float(0.35), float(0.60), slope);
+      // Same blend thresholds as color
+      const dirtBlend = smoothstep(float(0.05), float(0.20), slope);
+      const rockBlend = smoothstep(float(0.18), float(0.45), slope);
+      const cliffBlend = smoothstep(float(0.40), float(0.70), slope);
 
       let normal = mix(grassN, dirtN, dirtBlend);
       normal = mix(normal, rockN, rockBlend);
