@@ -136,9 +136,20 @@ export class Game {
     } else if (config && (config.mapWidth || config.mapHeight)) {
       // Update map dimensions if a new config is provided with map settings
       // This handles cases where components access Game before GameCanvas initializes it
+      const oldWidth = Game.instance.config.mapWidth;
+      const oldHeight = Game.instance.config.mapHeight;
       if (config.mapWidth) Game.instance.config.mapWidth = config.mapWidth;
       if (config.mapHeight) Game.instance.config.mapHeight = config.mapHeight;
-      debugInitialization.log(`[Game] Updated map dimensions to ${Game.instance.config.mapWidth}x${Game.instance.config.mapHeight}`);
+
+      // Reinitialize pathfinding if dimensions changed
+      if (Game.instance.config.mapWidth !== oldWidth || Game.instance.config.mapHeight !== oldHeight) {
+        debugInitialization.log(`[Game] Map dimensions changed from ${oldWidth}x${oldHeight} to ${Game.instance.config.mapWidth}x${Game.instance.config.mapHeight}, reinitializing pathfinding`);
+        Game.instance.pathfindingSystem = new PathfindingSystem(
+          Game.instance,
+          Game.instance.config.mapWidth,
+          Game.instance.config.mapHeight
+        );
+      }
     }
     return Game.instance;
   }
