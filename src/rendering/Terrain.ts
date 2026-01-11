@@ -415,6 +415,7 @@ export class Terrain {
     const normals: number[] = [];
     const uvs: number[] = [];
     const slopes: number[] = [];  // Per-vertex slope for texture blending
+    const terrainTypes: number[] = [];  // Per-vertex terrain type (0=ground, 1=ramp, 2=unwalkable)
 
     // Pre-calculate height map with smooth transitions and natural variation
     // Using enhanced noise functions for more organic terrain
@@ -502,12 +503,23 @@ export class Terrain {
       }
     }
 
-    // Build terrain type map for slope calculation
+    // Build terrain type map for slope calculation and texture selection
+    // Numeric values: 0=ground/unbuildable (walkable), 1=ramp, 2=unwalkable
     const terrainTypeMap: TerrainType[] = new Array(this.gridWidth * this.gridHeight);
+    const terrainTypeNumeric = new Float32Array(this.gridWidth * this.gridHeight);
     for (let y = 0; y <= height; y++) {
       for (let x = 0; x <= width; x++) {
+        const idx = y * this.gridWidth + x;
         const cell = this.sampleTerrain(terrain, x, y, width, height);
-        terrainTypeMap[y * this.gridWidth + x] = cell.terrain;
+        terrainTypeMap[idx] = cell.terrain;
+        // Convert to numeric: 0=walkable ground, 1=ramp, 2=unwalkable
+        if (cell.terrain === 'unwalkable') {
+          terrainTypeNumeric[idx] = 2.0;
+        } else if (cell.terrain === 'ramp') {
+          terrainTypeNumeric[idx] = 1.0;
+        } else {
+          terrainTypeNumeric[idx] = 0.0;  // ground, unbuildable
+        }
       }
     }
 
@@ -677,6 +689,16 @@ export class Terrain {
         slopes.push(slope00, slope01, slope10);  // Triangle 1
         slopes.push(slope10, slope01, slope11);  // Triangle 2
 
+        // Get terrain types for each vertex (0=ground, 1=ramp, 2=unwalkable)
+        const type00 = terrainTypeNumeric[y * this.gridWidth + x];
+        const type10 = terrainTypeNumeric[y * this.gridWidth + (x + 1)];
+        const type01 = terrainTypeNumeric[(y + 1) * this.gridWidth + x];
+        const type11 = terrainTypeNumeric[(y + 1) * this.gridWidth + (x + 1)];
+
+        // Add terrain type values
+        terrainTypes.push(type00, type01, type10);  // Triangle 1
+        terrainTypes.push(type10, type01, type11);  // Triangle 2
+
         // Add colors
         for (let i = 0; i < 6; i++) {
           colors.push(colors6[i].r, colors6[i].g, colors6[i].b);
@@ -694,6 +716,7 @@ export class Terrain {
     geometry.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3));
     geometry.setAttribute('uv', new THREE.Float32BufferAttribute(uvs, 2));
     geometry.setAttribute('aSlope', new THREE.Float32BufferAttribute(slopes, 1));  // Pre-calculated slope for texture blending
+    geometry.setAttribute('aTerrainType', new THREE.Float32BufferAttribute(terrainTypes, 1));  // 0=ground, 1=ramp, 2=unwalkable
     geometry.setIndex(indices);
     geometry.computeVertexNormals();
 
@@ -787,45 +810,16 @@ export class Terrain {
     const cell01 = terrain[y1][x0];  // Bottom-left
     const cell11 = terrain[y1][x1];  // Bottom-right (primary cell)
 
-    const samples = [cell00, cell10, cell01, cell11];
-
-    // Determine terrain type priority
-    let dominantTerrain: TerrainType = 'ground';
-    let dominantFeature: TerrainFeature = 'none';
-    let hasRamp = false;
-    let hasUnwalkable = false;
-    let groundCount = 0;
-
-    for (const sample of samples) {
-      if (sample.terrain === 'ramp') hasRamp = true;
-      if (sample.terrain === 'unwalkable') hasUnwalkable = true;
-      if (sample.terrain === 'ground' || sample.terrain === 'unbuildable') groundCount++;
-    }
-
     // ALWAYS use simple average elevation - this creates smooth transitions
-    // The slope-based texture blending is handled separately via the aSlope vertex attribute
     const avgElevation = (cell00.elevation + cell10.elevation + cell01.elevation + cell11.elevation) / 4;
 
-    // Set terrain type for slope calculation (ramps get texture treatment via aSlope)
-    if (hasRamp) {
-      dominantTerrain = 'ramp';
-      dominantFeature = 'none';
-    } else if (hasUnwalkable && groundCount > 0) {
-      // At cliff edges
-      dominantTerrain = 'unwalkable';
-      dominantFeature = 'cliff';
-    } else if (hasUnwalkable) {
-      dominantTerrain = 'unwalkable';
-      dominantFeature = cell11.feature || 'cliff';
-    } else {
-      dominantTerrain = cell11.terrain;
-      dominantFeature = cell11.feature || 'none';
-    }
-
+    // Use the PRIMARY CELL's terrain type directly - this ensures texture matches walkability
+    // A vertex at (x,y) corresponds to cell at (x,y) for pathfinding, so use that cell's type
+    // This prevents cliff textures from bleeding onto walkable ground at edges
     return {
-      terrain: dominantTerrain,
+      terrain: cell11.terrain,
       elevation: Math.round(avgElevation),
-      feature: dominantFeature,
+      feature: cell11.feature || 'none',
       textureId: cell11.textureId,
     };
   }
