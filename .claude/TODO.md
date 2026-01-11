@@ -449,6 +449,7 @@
 ### Visual Polish
 - [ ] Unit wireframes (damage state)
 - [x] Building placement ghost - SC2-style grid + ghost preview when placing
+- [x] Production progress bar - Fixed visibility and positioning for buildings producing units
 - [ ] Stim Pack visual effect (red tint)
 - [ ] Siege Mode transform animation
 - [ ] Cloak shimmer effect
