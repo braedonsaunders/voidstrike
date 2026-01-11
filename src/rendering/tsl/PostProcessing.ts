@@ -125,23 +125,39 @@ export class RenderPipeline {
   private createPipeline(): PostProcessing {
     const postProcessing = new PostProcessing(this.renderer);
 
-    // Create scene pass with MRT for depth and normals (needed for SSAO)
+    // Create scene pass
     const scenePass = pass(this.scene, this.camera);
-    scenePass.setMRT(
-      mrt({
-        output: output,
-        normal: normalView,
-      })
-    );
-    const scenePassColor = scenePass.getTextureNode('output');
-    const scenePassDepth = scenePass.getTextureNode('depth');
-    const scenePassNormal = scenePass.getTextureNode('normal');
+
+    // Only set up MRT if AO is enabled (MRT can cause issues)
+    let scenePassColor: any;
+    let scenePassDepth: any;
+    let scenePassNormal: any;
+
+    if (this.config.aoEnabled) {
+      try {
+        scenePass.setMRT(
+          mrt({
+            output: output,
+            normal: normalView,
+          })
+        );
+        scenePassColor = scenePass.getTextureNode('output');
+        scenePassDepth = scenePass.getTextureNode('depth');
+        scenePassNormal = scenePass.getTextureNode('normal');
+      } catch (e) {
+        console.warn('[PostProcessing] MRT setup failed, using simple pass:', e);
+        scenePassColor = scenePass.getTextureNode();
+      }
+    } else {
+      // Simple pass without MRT
+      scenePassColor = scenePass.getTextureNode();
+    }
 
     // Build the effect chain
     let outputNode: any = scenePassColor;
 
     // 1. GTAO Ambient Occlusion (applied first, multiplied with scene)
-    if (this.config.aoEnabled) {
+    if (this.config.aoEnabled && scenePassDepth && scenePassNormal) {
       try {
         this.aoPass = ao(scenePassDepth, scenePassNormal, this.camera);
         this.aoPass.radius.value = this.config.aoRadius;
@@ -159,20 +175,33 @@ export class RenderPipeline {
 
     // 2. Bloom effect (additive)
     if (this.config.bloomEnabled) {
-      this.bloomPass = bloom(outputNode);
-      this.bloomPass.threshold.value = this.config.bloomThreshold;
-      this.bloomPass.strength.value = this.config.bloomStrength;
-      this.bloomPass.radius.value = this.config.bloomRadius;
-      outputNode = outputNode.add(this.bloomPass);
+      try {
+        this.bloomPass = bloom(outputNode);
+        this.bloomPass.threshold.value = this.config.bloomThreshold;
+        this.bloomPass.strength.value = this.config.bloomStrength;
+        this.bloomPass.radius.value = this.config.bloomRadius;
+        outputNode = outputNode.add(this.bloomPass);
+      } catch (e) {
+        console.warn('[PostProcessing] Bloom initialization failed:', e);
+      }
     }
 
     // 3. Apply color grading and vignette
-    outputNode = this.createColorGradingPass(outputNode);
+    try {
+      outputNode = this.createColorGradingPass(outputNode);
+    } catch (e) {
+      console.warn('[PostProcessing] Color grading failed:', e);
+    }
 
     // 4. FXAA anti-aliasing (final pass)
     if (this.config.fxaaEnabled) {
-      this.fxaaPass = fxaa(outputNode);
-      postProcessing.outputNode = this.fxaaPass;
+      try {
+        this.fxaaPass = fxaa(outputNode);
+        postProcessing.outputNode = this.fxaaPass;
+      } catch (e) {
+        console.warn('[PostProcessing] FXAA initialization failed:', e);
+        postProcessing.outputNode = outputNode;
+      }
     } else {
       postProcessing.outputNode = outputNode;
     }
