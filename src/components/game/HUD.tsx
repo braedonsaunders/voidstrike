@@ -15,7 +15,8 @@ import { KeyboardShortcutsPanel } from './KeyboardShortcutsPanel';
 import { PlayerStatusPanel } from './PlayerStatusPanel';
 import { SoundOptionsPanel } from './SoundOptionsPanel';
 
-export function HUD() {
+// PERF: Wrap HUD in memo to prevent unnecessary re-renders when parent state changes
+export const HUD = memo(function HUD() {
   const { isPaused, togglePause, setShowTechTree, setShowKeyboardShortcuts } = useGameStore();
   const { toggleGraphicsOptions, showGraphicsOptions, toggleSoundOptions, showSoundOptions, toggleDebugMenu, showDebugMenu, isFullscreen, toggleFullscreen, setFullscreen, overlaySettings, toggleOverlay } = useUIStore();
   const [showOptionsMenu, setShowOptionsMenu] = useState(false);
@@ -283,4 +284,4 @@ export function HUD() {
       )}
     </div>
   );
-}
+});

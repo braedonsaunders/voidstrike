@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, memo } from 'react';
 import { useGameSetupStore, PLAYER_COLORS } from '@/store/gameSetupStore';
 import { Game } from '@/engine/core/Game';
 import { Selectable } from '@/engine/components/Selectable';
@@ -18,7 +18,8 @@ interface PlayerStatus {
   armySupply: number;
 }
 
-export function PlayerStatusPanel() {
+// PERF: Wrapped in memo to prevent unnecessary re-renders from parent state changes
+export const PlayerStatusPanel = memo(function PlayerStatusPanel() {
   const playerSlots = useGameSetupStore(state => state.playerSlots);
   const isSpectator = useGameSetupStore(state => state.isSpectator());
   const [playerStatuses, setPlayerStatuses] = useState<PlayerStatus[]>([]);
@@ -155,4 +156,4 @@ export function PlayerStatusPanel() {
       </div>
     </div>
   );
-}
+});

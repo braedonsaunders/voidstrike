@@ -62,7 +62,13 @@ interface MeshPool {
   maxSize: number;
 }
 
-const POOL_SIZE = 50;
+// PERF: Increased from 50 to 100 for large battles with many simultaneous effects
+const POOL_SIZE = 100;
+
+// PERF: Reusable Vector3 objects to avoid allocation in hot paths
+const tempVec3Start = new THREE.Vector3();
+const tempVec3End = new THREE.Vector3();
+const tempVec3Velocity = new THREE.Vector3();
 
 export class EffectsRenderer {
   private scene: THREE.Scene;
@@ -301,11 +307,10 @@ export class EffectsRenderer {
         const attackerTerrainHeight = this.getHeightAt(data.attackerPos.x, data.attackerPos.y);
         const targetTerrainHeight = this.getHeightAt(data.targetPos.x, data.targetPos.y);
 
-        this.createAttackEffect(
-          new THREE.Vector3(data.attackerPos.x, attackerTerrainHeight + 0.5, data.attackerPos.y),
-          new THREE.Vector3(data.targetPos.x, targetTerrainHeight + 0.5, data.targetPos.y),
-          data.damageType
-        );
+        // PERF: Use temp vectors to avoid allocation, they get cloned in createAttackEffect
+        tempVec3Start.set(data.attackerPos.x, attackerTerrainHeight + 0.5, data.attackerPos.y);
+        tempVec3End.set(data.targetPos.x, targetTerrainHeight + 0.5, data.targetPos.y);
+        this.createAttackEffect(tempVec3Start, tempVec3End, data.damageType);
 
         // Create floating damage number ABOVE the target
         // Use targetHeight for buildings, default 2.5 for units (relative to terrain)

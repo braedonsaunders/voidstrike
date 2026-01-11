@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useEffect } from 'react';
+import React, { useEffect, memo } from 'react';
 import { useUIStore, DebugSettings } from '@/store/uiStore';
 import { isMultiplayerMode } from '@/store/gameSetupStore';
 import { setEdgeScrollEnabled } from '@/store/cameraStore';
@@ -98,8 +98,9 @@ function SectionHeader({ title }: { title: string }) {
  * In-game debug menu panel
  * Access via Options menu -> Debug
  * Controls which debug logging categories are enabled
+ * PERF: Wrapped in memo to prevent unnecessary re-renders
  */
-export function DebugMenuPanel() {
+export const DebugMenuPanel = memo(function DebugMenuPanel() {
   const showDebugMenu = useUIStore((state) => state.showDebugMenu);
   const debugSettings = useUIStore((state) => state.debugSettings);
   const toggleDebugMenu = useUIStore((state) => state.toggleDebugMenu);
@@ -276,4 +277,4 @@ export function DebugMenuPanel() {
       </div>
     </div>
   );
-}
+});

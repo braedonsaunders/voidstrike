@@ -44,6 +44,14 @@ export class SeededRandom {
     this.seed = seed;
   }
 
+  /**
+   * PERF: Reseed without allocating new object
+   * Allows reusing the same SeededRandom instance across frames
+   */
+  public reseed(seed: number): void {
+    this.seed = seed;
+  }
+
   public next(): number {
     this.seed = (this.seed * 1103515245 + 12345) & 0x7fffffff;
     return this.seed / 0x7fffffff;
