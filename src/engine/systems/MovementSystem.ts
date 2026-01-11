@@ -30,6 +30,26 @@ const tempSeparation: PooledVector2 = { x: 0, y: 0 };
 const tempBuildingAvoid: PooledVector2 = { x: 0, y: 0 };
 const zeroVector: PooledVector2 = { x: 0, y: 0 };
 
+// PERF: Pre-allocated neighbors array for RVO to avoid per-frame allocations
+const MAX_RVO_NEIGHBORS = 32;
+const _rvoNeighbors: Array<{ x: number; y: number; vx: number; vy: number; radius: number }> = [];
+for (let i = 0; i < MAX_RVO_NEIGHBORS; i++) {
+  _rvoNeighbors.push({ x: 0, y: 0, vx: 0, vy: 0, radius: 0 });
+}
+let _rvoNeighborCount = 0;
+
+// PERF: Pre-allocated agent object for RVO calls
+const _rvoAgent = {
+  x: 0,
+  y: 0,
+  vx: 0,
+  vy: 0,
+  prefVx: 0,
+  prefVy: 0,
+  radius: 0,
+  maxSpeed: 0,
+};
+
 export class MovementSystem extends System {
   public priority = 10;
 
@@ -649,15 +669,11 @@ export class MovementSystem extends System {
             RVO_NEIGHBOR_RADIUS
           );
 
-          const neighbors: Array<{
-            x: number;
-            y: number;
-            vx: number;
-            vy: number;
-            radius: number;
-          }> = [];
+          // PERF: Reset neighbor count and reuse pre-allocated array
+          _rvoNeighborCount = 0;
 
-          for (const neighborId of nearbyIds) {
+          for (let i = 0; i < nearbyIds.length; i++) {
+            const neighborId = nearbyIds[i];
             if (neighborId === entity.id) continue;
 
             const neighborEntity = this.world.getEntity(neighborId);
@@ -677,29 +693,35 @@ export class MovementSystem extends System {
             // Skip gathering workers (they walk through)
             if (neighborUnit.state === 'gathering') continue;
 
-            neighbors.push({
-              x: neighborTransform.x,
-              y: neighborTransform.y,
-              vx: neighborVelocity.x,
-              vy: neighborVelocity.y,
-              radius: neighborUnit.collisionRadius,
-            });
+            // PERF: Reuse pre-allocated neighbor object instead of creating new one
+            if (_rvoNeighborCount < MAX_RVO_NEIGHBORS) {
+              const neighbor = _rvoNeighbors[_rvoNeighborCount];
+              neighbor.x = neighborTransform.x;
+              neighbor.y = neighborTransform.y;
+              neighbor.vx = neighborVelocity.x;
+              neighbor.vy = neighborVelocity.y;
+              neighbor.radius = neighborUnit.collisionRadius;
+              _rvoNeighborCount++;
+            }
           }
 
+          // PERF: Reuse pre-allocated agent object instead of creating new one
+          _rvoAgent.x = transform.x;
+          _rvoAgent.y = transform.y;
+          _rvoAgent.vx = velocity.x;
+          _rvoAgent.vy = velocity.y;
+          _rvoAgent.prefVx = prefVx;
+          _rvoAgent.prefVy = prefVy;
+          _rvoAgent.radius = unit.collisionRadius;
+          _rvoAgent.maxSpeed = unit.currentSpeed;
+
+          // PERF: Pass the pre-allocated array with count to avoid slice() allocation
           // Compute ORCA velocity
           const orcaResult = computeORCAVelocity(
-            {
-              x: transform.x,
-              y: transform.y,
-              vx: velocity.x,
-              vy: velocity.y,
-              prefVx,
-              prefVy,
-              radius: unit.collisionRadius,
-              maxSpeed: unit.currentSpeed,
-            },
-            neighbors,
-            RVO_TIME_HORIZON
+            _rvoAgent,
+            _rvoNeighbors,
+            RVO_TIME_HORIZON,
+            _rvoNeighborCount
           );
 
           finalVx = orcaResult.vx;

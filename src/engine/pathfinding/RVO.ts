@@ -16,8 +16,22 @@
 const TIME_HORIZON = 2.0; // How far ahead to look for collisions (seconds)
 const EPSILON = 0.00001;
 
+// PERF: Pre-allocated objects to avoid per-frame GC pressure
+// These are reused across all computeORCAVelocity calls
+const MAX_ORCA_LINES = 32; // Max neighbors typically handled
+const _orcaLines: Array<{ px: number; py: number; dx: number; dy: number }> = [];
+for (let i = 0; i < MAX_ORCA_LINES; i++) {
+  _orcaLines.push({ px: 0, py: 0, dx: 0, dy: 0 });
+}
+let _orcaLineCount = 0;
+
+// Pre-allocated result object (reused every call)
+const _result = { vx: 0, vy: 0 };
+
 /**
  * Simplified ORCA for game use - integrates with existing movement system
+ * PERF: Optimized to avoid per-call allocations - uses pre-allocated objects
+ * @param neighborCount Optional count to use instead of neighbors.length (for pre-allocated arrays)
  */
 export function computeORCAVelocity(
   agent: {
@@ -37,24 +51,34 @@ export function computeORCAVelocity(
     vy: number;
     radius: number;
   }>,
-  timeHorizon: number = TIME_HORIZON
+  timeHorizon: number = TIME_HORIZON,
+  neighborCount?: number
 ): { vx: number; vy: number } {
-  if (neighbors.length === 0) {
+  const actualNeighborCount = neighborCount !== undefined ? neighborCount : neighbors.length;
+  if (actualNeighborCount === 0) {
     // No neighbors - use preferred velocity clamped to max speed
     const prefSpeed = Math.sqrt(agent.prefVx * agent.prefVx + agent.prefVy * agent.prefVy);
     if (prefSpeed > agent.maxSpeed) {
-      return {
-        vx: (agent.prefVx / prefSpeed) * agent.maxSpeed,
-        vy: (agent.prefVy / prefSpeed) * agent.maxSpeed,
-      };
+      _result.vx = (agent.prefVx / prefSpeed) * agent.maxSpeed;
+      _result.vy = (agent.prefVy / prefSpeed) * agent.maxSpeed;
+    } else {
+      _result.vx = agent.prefVx;
+      _result.vy = agent.prefVy;
     }
-    return { vx: agent.prefVx, vy: agent.prefVy };
+    return _result;
   }
 
-  // Compute ORCA lines from neighbors
-  const orcaLines: Array<{ px: number; py: number; dx: number; dy: number }> = [];
+  // PERF: Reset orca line count instead of creating new array
+  _orcaLineCount = 0;
 
-  for (const neighbor of neighbors) {
+  // PERF: Use local variables instead of object literals
+  let wX: number, wY: number;
+  let uX: number, uY: number;
+  let lineDirX: number, lineDirY: number;
+  let unitWX: number, unitWY: number;
+
+  for (let n = 0; n < actualNeighborCount; n++) {
+    const neighbor = neighbors[n];
     const relPosX = neighbor.x - agent.x;
     const relPosY = neighbor.y - agent.y;
     const relVelX = agent.vx - neighbor.vx;
@@ -63,29 +87,24 @@ export function computeORCAVelocity(
     const combinedRadius = agent.radius + neighbor.radius;
     const combinedRadiusSq = combinedRadius * combinedRadius;
 
-    let u: { x: number; y: number };
-    let lineDir: { x: number; y: number };
-
     if (distSq > combinedRadiusSq) {
       // No collision
-      const w = {
-        x: relVelX - relPosX / timeHorizon,
-        y: relVelY - relPosY / timeHorizon,
-      };
+      wX = relVelX - relPosX / timeHorizon;
+      wY = relVelY - relPosY / timeHorizon;
 
-      const wLenSq = w.x * w.x + w.y * w.y;
-      const dotProd1 = w.x * relPosX + w.y * relPosY;
+      const wLenSq = wX * wX + wY * wY;
+      const dotProd1 = wX * relPosX + wY * relPosY;
 
       if (dotProd1 < 0 && dotProd1 * dotProd1 > combinedRadiusSq * wLenSq) {
         // Project on cut-off circle
         const wLen = Math.sqrt(wLenSq);
         if (wLen < EPSILON) continue;
-        const unitW = { x: w.x / wLen, y: w.y / wLen };
-        lineDir = { x: unitW.y, y: -unitW.x };
-        u = {
-          x: unitW.x * (combinedRadius / timeHorizon - wLen),
-          y: unitW.y * (combinedRadius / timeHorizon - wLen),
-        };
+        unitWX = wX / wLen;
+        unitWY = wY / wLen;
+        lineDirX = unitWY;
+        lineDirY = -unitWX;
+        uX = unitWX * (combinedRadius / timeHorizon - wLen);
+        uY = unitWY * (combinedRadius / timeHorizon - wLen);
       } else {
         // Project on legs
         const dist = Math.sqrt(distSq);
@@ -94,62 +113,59 @@ export function computeORCAVelocity(
 
         if (relPosX * relVelY - relPosY * relVelX > 0) {
           // Left leg
-          lineDir = {
-            x: (relPosX * leg - relPosY * combinedRadius) / distSq,
-            y: (relPosX * combinedRadius + relPosY * leg) / distSq,
-          };
+          lineDirX = (relPosX * leg - relPosY * combinedRadius) / distSq;
+          lineDirY = (relPosX * combinedRadius + relPosY * leg) / distSq;
         } else {
           // Right leg
-          lineDir = {
-            x: -(relPosX * leg + relPosY * combinedRadius) / distSq,
-            y: -(-relPosX * combinedRadius + relPosY * leg) / distSq,
-          };
+          lineDirX = -(relPosX * leg + relPosY * combinedRadius) / distSq;
+          lineDirY = -(-relPosX * combinedRadius + relPosY * leg) / distSq;
         }
 
-        const dotProd2 = relVelX * lineDir.x + relVelY * lineDir.y;
-        u = {
-          x: dotProd2 * lineDir.x - relVelX,
-          y: dotProd2 * lineDir.y - relVelY,
-        };
+        const dotProd2 = relVelX * lineDirX + relVelY * lineDirY;
+        uX = dotProd2 * lineDirX - relVelX;
+        uY = dotProd2 * lineDirY - relVelY;
       }
     } else {
       // Already colliding - use emergency avoidance
       const dist = Math.sqrt(distSq);
       const invTimeStep = 40; // 40Hz
 
-      const w = {
-        x: relVelX - (dist > EPSILON ? relPosX * invTimeStep / dist * combinedRadius : 0),
-        y: relVelY - (dist > EPSILON ? relPosY * invTimeStep / dist * combinedRadius : 0),
-      };
+      wX = relVelX - (dist > EPSILON ? relPosX * invTimeStep / dist * combinedRadius : 0);
+      wY = relVelY - (dist > EPSILON ? relPosY * invTimeStep / dist * combinedRadius : 0);
 
-      const wLen = Math.sqrt(w.x * w.x + w.y * w.y);
+      const wLen = Math.sqrt(wX * wX + wY * wY);
       if (wLen < EPSILON) {
-        lineDir = { x: 0, y: 1 };
-        u = { x: combinedRadius * invTimeStep, y: 0 };
+        lineDirX = 0;
+        lineDirY = 1;
+        uX = combinedRadius * invTimeStep;
+        uY = 0;
       } else {
-        const unitW = { x: w.x / wLen, y: w.y / wLen };
-        lineDir = { x: unitW.y, y: -unitW.x };
-        u = {
-          x: unitW.x * (combinedRadius * invTimeStep - wLen),
-          y: unitW.y * (combinedRadius * invTimeStep - wLen),
-        };
+        unitWX = wX / wLen;
+        unitWY = wY / wLen;
+        lineDirX = unitWY;
+        lineDirY = -unitWX;
+        uX = unitWX * (combinedRadius * invTimeStep - wLen);
+        uY = unitWY * (combinedRadius * invTimeStep - wLen);
       }
     }
 
-    orcaLines.push({
-      px: agent.vx + 0.5 * u.x,
-      py: agent.vy + 0.5 * u.y,
-      dx: lineDir.x,
-      dy: lineDir.y,
-    });
+    // PERF: Reuse pre-allocated orca line object
+    if (_orcaLineCount < MAX_ORCA_LINES) {
+      const line = _orcaLines[_orcaLineCount];
+      line.px = agent.vx + 0.5 * uX;
+      line.py = agent.vy + 0.5 * uY;
+      line.dx = lineDirX;
+      line.dy = lineDirY;
+      _orcaLineCount++;
+    }
   }
 
   // Solve linear program
   let resultVx = agent.prefVx;
   let resultVy = agent.prefVy;
 
-  for (let i = 0; i < orcaLines.length; i++) {
-    const line = orcaLines[i];
+  for (let i = 0; i < _orcaLineCount; i++) {
+    const line = _orcaLines[i];
     const det = line.dx * (line.py - resultVy) - line.dy * (line.px - resultVx);
 
     if (det > 0) {
@@ -167,5 +183,8 @@ export function computeORCAVelocity(
     resultVy = (resultVy / speed) * agent.maxSpeed;
   }
 
-  return { vx: resultVx, vy: resultVy };
+  // PERF: Reuse pre-allocated result object
+  _result.vx = resultVx;
+  _result.vy = resultVy;
+  return _result;
 }
