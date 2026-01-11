@@ -630,7 +630,7 @@ export class PathfindingSystem extends System {
 
   private processPathRequest(request: PathRequest): void {
     // Calculate path using the smart routing (hierarchical for long paths, regular for short)
-    let result = this.findPath(
+    const result = this.findPath(
       request.startX,
       request.startY,
       request.endX,
@@ -643,39 +643,15 @@ export class PathfindingSystem extends System {
     const unit = entity.get<Unit>('Unit');
     if (!unit) return;
 
-    // If no path found, try to find path to nearest walkable cell from destination
-    if (!result.found || result.path.length === 0) {
-      debugPathfinding.log(`[PathfindingSystem] No path from (${request.startX.toFixed(1)}, ${request.startY.toFixed(1)}) to (${request.endX.toFixed(1)}, ${request.endY.toFixed(1)}), trying alternate destination`);
-
-      // Try to find a nearby walkable destination
-      const alternateEnd = this.findNearbyWalkableCell(request.endX, request.endY, 10);
-      if (alternateEnd) {
-        result = this.findPath(
-          request.startX,
-          request.startY,
-          alternateEnd.x,
-          alternateEnd.y
-        );
-      }
-
-      // If still no path, check if the start position is the problem
-      if (!result.found || result.path.length === 0) {
-        // Try to find path from nearby walkable cell (unit might be stuck)
-        const alternateStart = this.findNearbyWalkableCell(request.startX, request.startY, 5);
-        if (alternateStart && alternateEnd) {
-          result = this.findPath(
-            alternateStart.x,
-            alternateStart.y,
-            alternateEnd.x,
-            alternateEnd.y
-          );
-          // Prepend a waypoint to get to the alternate start
-          if (result.found && result.path.length > 0) {
-            result.path.unshift({ x: alternateStart.x, y: alternateStart.y });
-          }
-        }
-      }
-    }
+    // CRITICAL FIX: Do NOT try expensive fallback pathfinding attempts!
+    // The old code would try up to 3 full pathfinding attempts per request:
+    // 1. Original path (hits MAX_ITERATIONS for unreachable destinations)
+    // 2. Alternate end destination (hits MAX_ITERATIONS again)
+    // 3. Alternate start position (hits MAX_ITERATIONS again)
+    // This caused 45,000+ A* iterations per failed request!
+    //
+    // Instead, if the first attempt fails, we immediately record failure.
+    // The failed path cache will prevent retry spam.
 
     if (result.found && result.path.length > 0) {
       unit.setPath(result.path);
