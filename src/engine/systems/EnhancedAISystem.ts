@@ -1542,14 +1542,34 @@ export class EnhancedAISystem extends System {
         y: baseLocation.y + 8,
       };
 
-      const command: GameCommand = {
-        tick: this.game.getCurrentTick(),
-        playerId: ai.playerId,
-        type: 'MOVE',
-        entityIds: armyUnits,
-        targetPosition: rallyPoint,
-      };
-      this.game.processCommand(command);
+      // Only send move commands to units that aren't already at the rally point
+      const unitsNeedingMove: number[] = [];
+      for (const unitId of armyUnits) {
+        const entity = this.world.getEntity(unitId);
+        if (!entity) continue;
+        const transform = entity.get<Transform>('Transform');
+        if (!transform) continue;
+
+        const dx = transform.x - rallyPoint.x;
+        const dy = transform.y - rallyPoint.y;
+        const distToRally = Math.sqrt(dx * dx + dy * dy);
+
+        // Only issue move command if unit is more than 3 units away from rally point
+        if (distToRally > 3) {
+          unitsNeedingMove.push(unitId);
+        }
+      }
+
+      if (unitsNeedingMove.length > 0) {
+        const command: GameCommand = {
+          tick: this.game.getCurrentTick(),
+          playerId: ai.playerId,
+          type: 'MOVE',
+          entityIds: unitsNeedingMove,
+          targetPosition: rallyPoint,
+        };
+        this.game.processCommand(command);
+      }
 
       // No threat nearby, switch back to building
       ai.state = 'building';
