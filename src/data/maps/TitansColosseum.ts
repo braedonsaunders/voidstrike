@@ -180,6 +180,26 @@ function generateVolcanicDecorations(): MapDecoration[] {
     }
   };
 
+  // Helper for massive outer border rocks (2-4x scale) to hide terrain edges
+  const addMassiveBorderRocks = (x1: number, y1: number, x2: number, y2: number, density: number = 5) => {
+    const dx = x2 - x1;
+    const dy = y2 - y1;
+    const length = Math.sqrt(dx * dx + dy * dy);
+    const steps = Math.ceil(length / density);
+    for (let i = 0; i <= steps; i++) {
+      const t = i / steps;
+      const x = x1 + dx * t + (rand() - 0.5) * 3;
+      const y = y1 + dy * t + (rand() - 0.5) * 3;
+      const rockType = rand() < 0.6 ? 'rocks_large' : 'rocks_small';
+      decorations.push({
+        type: rockType,
+        x, y,
+        scale: 2.0 + rand() * 2.0,
+        rotation: rand() * Math.PI * 2,
+      });
+    }
+  };
+
   // Helper to add rocks around a circular base edge
   const addBaseEdgeRocks = (cx: number, cy: number, radius: number, count: number) => {
     for (let i = 0; i < count; i++) {
@@ -252,6 +272,12 @@ function generateVolcanicDecorations(): MapDecoration[] {
   addRockCliffLine(384, 16, 384, 384, 3);
   addRockCliffLine(16, 16, 384, 16, 3);
   addRockCliffLine(16, 384, 384, 384, 3);
+
+  // Massive outer border rocks (2-4x scale) to hide terrain edges
+  addMassiveBorderRocks(6, 6, 6, 394, 6);      // Left edge (outer)
+  addMassiveBorderRocks(394, 6, 394, 394, 6);  // Right edge (outer)
+  addMassiveBorderRocks(6, 6, 394, 6, 6);      // Top edge (outer)
+  addMassiveBorderRocks(6, 394, 394, 394, 6);  // Bottom edge (outer)
 
   // Central colosseum walls
   addRockCliffLine(170, 170, 230, 170, 2);
