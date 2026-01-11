@@ -58,6 +58,9 @@ export class UnitRenderer {
   // Per-unit overlays (selection rings, health bars)
   private unitOverlays: Map<number, UnitOverlay> = new Map();
 
+  // PERF: Pre-allocated Set for tracking current entity IDs to avoid per-frame allocation
+  private readonly _currentIds: Set<number> = new Set();
+
   // Shared resources
   private selectionGeometry: THREE.RingGeometry;
   private selectionMaterial: THREE.MeshBasicMaterial;
@@ -461,7 +464,8 @@ export class UnitRenderer {
   public update(deltaTime: number = 1/60): void {
     const updateStart = performance.now();
     const entities = this.world.getEntitiesWith('Transform', 'Unit');
-    const currentIds = new Set<number>();
+    // PERF: Reuse pre-allocated Set instead of creating new one every frame
+    this._currentIds.clear();
 
     // Reset instance counts for all groups
     // PERF: Use .length = 0 instead of = [] to avoid GC pressure from allocating new arrays every frame
@@ -477,7 +481,7 @@ export class UnitRenderer {
 
     // Build instance data
     for (const entity of entities) {
-      currentIds.add(entity.id);
+      this._currentIds.add(entity.id);
 
       const transform = entity.get<Transform>('Transform');
       const unit = entity.get<Unit>('Unit');
@@ -600,7 +604,7 @@ export class UnitRenderer {
 
     // Clean up resources for destroyed entities
     for (const [entityId, overlay] of this.unitOverlays) {
-      if (!currentIds.has(entityId)) {
+      if (!this._currentIds.has(entityId)) {
         this.scene.remove(overlay.selectionRing);
         this.scene.remove(overlay.healthBar);
         this.scene.remove(overlay.teamMarker);
@@ -613,7 +617,7 @@ export class UnitRenderer {
 
     // Clean up animated units for destroyed entities
     for (const [entityId, animUnit] of this.animatedUnits) {
-      if (!currentIds.has(entityId)) {
+      if (!this._currentIds.has(entityId)) {
         this.scene.remove(animUnit.mesh);
         animUnit.mixer.stopAllAction();
         this.animatedUnits.delete(entityId);
