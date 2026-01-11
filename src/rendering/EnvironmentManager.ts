@@ -58,6 +58,10 @@ export class EnvironmentManager {
   // Environment map for IBL
   private envMap: THREE.CubeTexture | null = null;
 
+  // Shadow update throttling - only update shadow map every N frames
+  private shadowFrameCounter = 0;
+  private static readonly SHADOW_UPDATE_INTERVAL = 6; // Update every 6 frames (~10fps at 60fps)
+
   // Shadow state
   private shadowsEnabled = false;
   private shadowQuality: ShadowQuality = 'high';
@@ -86,7 +90,7 @@ export class EnvironmentManager {
     // Control shadow rendering via renderer.shadowMap.enabled instead
     // This prevents WebGPU "depthTexture is null" errors when toggling shadows
     this.directionalLight.castShadow = true;
-    // Pre-configure shadow properties - start with medium quality (512) for performance
+    // Pre-configure shadow properties - use 512 for balance of quality/performance
     this.directionalLight.shadow.mapSize.width = 512;
     this.directionalLight.shadow.mapSize.height = 512;
     this.directionalLight.shadow.camera.near = 1;
@@ -96,7 +100,11 @@ export class EnvironmentManager {
     this.directionalLight.shadow.camera.top = 100;
     this.directionalLight.shadow.camera.bottom = -100;
     this.directionalLight.shadow.bias = -0.0002;
-    this.directionalLight.shadow.radius = 4; // Soft shadows
+    this.directionalLight.shadow.radius = 4;
+    // PERF: Disable automatic shadow updates - we'll update manually every N frames
+    // This is the KEY optimization - shadow map doesn't need to update every frame
+    this.directionalLight.shadow.autoUpdate = false;
+    this.directionalLight.shadow.needsUpdate = true; // Initial update
     scene.add(this.directionalLight);
 
     // Fill light - bright cool tint to fill shadows
@@ -351,6 +359,20 @@ export class EnvironmentManager {
   // ============================================
 
   /**
+   * IMPORTANT: Call this every frame to handle throttled shadow updates.
+   * Shadow map only updates every SHADOW_UPDATE_INTERVAL frames for performance.
+   */
+  public updateShadows(): void {
+    if (!this.shadowsEnabled) return;
+
+    this.shadowFrameCounter++;
+    if (this.shadowFrameCounter >= EnvironmentManager.SHADOW_UPDATE_INTERVAL) {
+      this.shadowFrameCounter = 0;
+      this.directionalLight.shadow.needsUpdate = true;
+    }
+  }
+
+  /**
    * Enable or disable shadows
    * Note: directionalLight.castShadow is always true to keep shadow map initialized.
    * We control shadow visibility via renderer.shadowMap.enabled in the game canvas.
@@ -363,27 +385,29 @@ export class EnvironmentManager {
     // Toggle shadow receiving on terrain
     this.terrain.mesh.receiveShadow = enabled;
 
-    // Mark shadow map for update when enabling
+    // Mark shadow map for immediate update when enabling
     if (enabled) {
+      this.shadowFrameCounter = 0;
       this.directionalLight.shadow.needsUpdate = true;
     }
   }
 
   /**
    * Set shadow quality preset
-   * Note: In WebGPU, we can't dispose shadow maps while they may be in use.
-   * The shadow map will be regenerated on the next frame automatically.
+   * WARNING: In WebGPU, changing shadow map size at runtime causes texture destruction errors.
+   * This only updates bias - map size is fixed at initialization (512x512).
    */
   public setShadowQuality(quality: ShadowQuality): void {
     this.shadowQuality = quality;
     const preset = SHADOW_QUALITY_PRESETS[quality];
 
-    this.directionalLight.shadow.mapSize.width = preset.mapSize;
-    this.directionalLight.shadow.mapSize.height = preset.mapSize;
+    // DON'T change mapSize at runtime - causes WebGPU "Destroyed texture" errors
+    // this.directionalLight.shadow.mapSize.width = preset.mapSize;
+    // this.directionalLight.shadow.mapSize.height = preset.mapSize;
     this.directionalLight.shadow.radius = preset.radius;
     this.directionalLight.shadow.bias = preset.bias;
 
-    // Mark shadow map for regeneration - don't dispose directly as it may still be in use
+    // Mark shadow map for update
     // Three.js will handle this automatically on the next render
     this.directionalLight.shadow.needsUpdate = true;
   }

@@ -498,6 +498,8 @@ export function WebGPUGameCanvas() {
         // Update shadow camera to follow the game camera for proper shadow rendering
         // This ensures shadows appear for objects near the camera, not just at map center
         environmentRef.current?.updateShadowCameraPosition(camera.target.x, camera.target.z);
+        // PERF: Throttled shadow updates - only updates shadow map every N frames
+        environmentRef.current?.updateShadows();
 
         // Update TSL visual systems
         selectionSystemRef.current?.update(deltaTime);
