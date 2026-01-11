@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect } from 'react';
+import { useEffect, memo, useMemo } from 'react';
 import { useGameStore } from '@/store/gameStore';
 import { setEdgeScrollEnabled } from '@/store/cameraStore';
 import { RESEARCH_DEFINITIONS, ResearchDefinition } from '@/data/research/dominion';
@@ -64,8 +64,13 @@ const TECH_CATEGORIES: TechCategory[] = [
   },
 ];
 
-function UpgradeCard({ upgradeId }: { upgradeId: string }) {
-  const { playerId, hasResearch, minerals, vespene } = useGameStore();
+// PERF: Memoized UpgradeCard to prevent re-renders when other cards change
+const UpgradeCard = memo(function UpgradeCard({ upgradeId }: { upgradeId: string }) {
+  // PERF: Use individual selectors instead of destructuring to minimize re-renders
+  const playerId = useGameStore((state) => state.playerId);
+  const hasResearch = useGameStore((state) => state.hasResearch);
+  const minerals = useGameStore((state) => state.minerals);
+  const vespene = useGameStore((state) => state.vespene);
   const upgrade = RESEARCH_DEFINITIONS[upgradeId];
 
   if (!upgrade) return null;
@@ -151,9 +156,10 @@ function UpgradeCard({ upgradeId }: { upgradeId: string }) {
       )}
     </div>
   );
-}
+});
 
-function CategorySection({ category }: { category: TechCategory }) {
+// PERF: Memoized CategorySection to prevent re-renders
+const CategorySection = memo(function CategorySection({ category }: { category: TechCategory }) {
   return (
     <div className="mb-4">
       <div className="flex items-center gap-2 mb-2">
@@ -167,7 +173,7 @@ function CategorySection({ category }: { category: TechCategory }) {
       </div>
     </div>
   );
-}
+});
 
 export function TechTreePanel() {
   const { showTechTree, setShowTechTree } = useGameStore();

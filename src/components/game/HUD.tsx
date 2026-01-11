@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useCallback, useEffect } from 'react';
+import { useState, useCallback, useEffect, useMemo, memo } from 'react';
 import { useGameStore } from '@/store/gameStore';
 import { useUIStore, GameOverlayType } from '@/store/uiStore';
 import { isMultiplayerMode } from '@/store/gameSetupStore';

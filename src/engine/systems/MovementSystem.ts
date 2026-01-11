@@ -34,6 +34,9 @@ const USE_RECAST_CROWD = true;
 const tempSeparation: PooledVector2 = { x: 0, y: 0 };
 const tempBuildingAvoid: PooledVector2 = { x: 0, y: 0 };
 
+// PERF: Separation force throttle interval (recalculate every N ticks instead of every frame)
+const SEPARATION_THROTTLE_TICKS = 3;
+
 export class MovementSystem extends System {
   public priority = 10;
 
@@ -45,6 +48,10 @@ export class MovementSystem extends System {
   // Track which units are registered with crowd
   private crowdAgents: Set<number> = new Set();
 
+  // PERF: Cached separation forces to avoid recalculating every frame
+  private separationCache: Map<number, { x: number; y: number; tick: number }> = new Map();
+  private currentTick: number = 0;
+
   constructor(game: Game) {
     super(game);
     this.recast = getRecastNavigation();
@@ -55,12 +62,14 @@ export class MovementSystem extends System {
     this.game.eventBus.on('command:move', this.handleMoveCommand.bind(this));
     this.game.eventBus.on('command:patrol', this.handlePatrolCommand.bind(this));
 
-    // Clean up path request tracking when units die to prevent memory leaks
+    // Clean up path request tracking and separation cache when units die to prevent memory leaks
     this.game.eventBus.on('unit:died', (data: { entityId: number }) => {
       this.lastPathRequestTime.delete(data.entityId);
+      this.separationCache.delete(data.entityId);
     });
     this.game.eventBus.on('unit:destroyed', (data: { entityId: number }) => {
       this.lastPathRequestTime.delete(data.entityId);
+      this.separationCache.delete(data.entityId);
     });
   }
 
@@ -229,6 +238,7 @@ export class MovementSystem extends System {
 
   /**
    * Calculate separation force (SC2-style soft avoidance)
+   * PERF: Results are cached and only recalculated every SEPARATION_THROTTLE_TICKS ticks
    */
   private calculateSeparationForce(
     selfId: number,
@@ -239,6 +249,14 @@ export class MovementSystem extends System {
     if (selfUnit.state === 'gathering') {
       out.x = 0;
       out.y = 0;
+      return;
+    }
+
+    // PERF: Check cache first - reuse result if calculated recently
+    const cached = this.separationCache.get(selfId);
+    if (cached && (this.currentTick - cached.tick) < SEPARATION_THROTTLE_TICKS) {
+      out.x = cached.x;
+      out.y = cached.y;
       return;
     }
 
@@ -288,6 +306,9 @@ export class MovementSystem extends System {
       forceX *= scale;
       forceY *= scale;
     }
+
+    // PERF: Cache the result
+    this.separationCache.set(selfId, { x: forceX, y: forceY, tick: this.currentTick });
 
     out.x = forceX;
     out.y = forceY;
@@ -413,6 +434,9 @@ export class MovementSystem extends System {
     const updateStart = performance.now();
     const entities = this.world.getEntitiesWith('Transform', 'Unit', 'Velocity');
     const dt = deltaTime / 1000;
+
+    // PERF: Track current tick for separation force throttling
+    this.currentTick = this.game.getCurrentTick();
 
     // Update spatial grid
     for (const entity of entities) {

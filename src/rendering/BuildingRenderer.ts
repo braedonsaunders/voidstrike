@@ -72,6 +72,11 @@ export class BuildingRenderer {
   private tempQuaternion: THREE.Quaternion = new THREE.Quaternion();
   private tempScale: THREE.Vector3 = new THREE.Vector3(1, 1, 1);
 
+  // PERF: Frustum culling for instances
+  private frustum: THREE.Frustum = new THREE.Frustum();
+  private frustumMatrix: THREE.Matrix4 = new THREE.Matrix4();
+  private camera: THREE.Camera | null = null;
+
   // Shared materials
   private constructingMaterial: THREE.MeshStandardMaterial;
   private selectionMaterial: THREE.MeshBasicMaterial;
@@ -411,6 +416,35 @@ export class BuildingRenderer {
   }
 
   /**
+   * Set camera reference for frustum culling
+   */
+  public setCamera(camera: THREE.Camera): void {
+    this.camera = camera;
+  }
+
+  /**
+   * Update frustum from camera - call before update loop
+   */
+  private updateFrustum(): void {
+    if (!this.camera) return;
+    this.camera.updateMatrixWorld();
+    this.frustumMatrix.multiplyMatrices(
+      this.camera.projectionMatrix,
+      this.camera.matrixWorldInverse
+    );
+    this.frustum.setFromProjectionMatrix(this.frustumMatrix);
+  }
+
+  /**
+   * Check if a position is within the camera frustum
+   */
+  private isInFrustum(x: number, y: number, z: number): boolean {
+    if (!this.camera) return true;
+    this.tempPosition.set(x, y, z);
+    return this.frustum.containsPoint(this.tempPosition);
+  }
+
+  /**
    * Get terrain height at position with fallback to map data elevation
    * Ensures buildings are never rendered underground
    */
@@ -448,6 +482,9 @@ export class BuildingRenderer {
     this.constructionAnimTime += dt;
     this.blueprintPulseTime += dt;
 
+    // PERF: Update frustum for culling
+    this.updateFrustum();
+
     const entities = this.world.getEntitiesWith('Transform', 'Building');
     // PERF: Reuse pre-allocated Set instead of creating new one every frame
     this._currentIds.clear();
@@ -483,12 +520,29 @@ export class BuildingRenderer {
         shouldShow = this.visionSystem.isExplored(this.playerId, transform.x, transform.y);
       }
 
+      // Get terrain height early for frustum check
+      const terrainHeight = this.getTerrainHeightAt(transform.x, transform.y);
+      const buildingHeight = Math.max(building.width, building.height) + 2; // Approximate height
+
+      // PERF: Skip buildings outside camera frustum
+      if (!this.isInFrustum(transform.x, terrainHeight + buildingHeight / 2, transform.y)) {
+        // Hide existing mesh but keep building tracked
+        const existingMesh = this.buildingMeshes.get(entity.id);
+        if (existingMesh) {
+          existingMesh.group.visible = false;
+          existingMesh.selectionRing.visible = false;
+          existingMesh.healthBar.visible = false;
+          existingMesh.progressBar.visible = false;
+        }
+        continue;
+      }
+
       // PERFORMANCE: Try to use instanced rendering for completed static buildings
       if (shouldShow && this.canUseInstancing(building, health, selectable)) {
         const group = this.getOrCreateInstancedGroup(building.buildingId, ownerId);
 
         if (group.mesh.count < group.maxInstances) {
-          const terrainHeight = this.getTerrainHeightAt(transform.x, transform.y);
+          // terrainHeight already computed above for frustum check
 
           // Set instance matrix - CRITICAL: Use model's scale and Y offset from normalization
           // The Y offset ensures buildings are properly grounded (bottom at terrain level)

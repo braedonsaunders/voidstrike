@@ -344,7 +344,7 @@ export class Terrain {
       texture.magFilter = THREE.LinearFilter;
       texture.generateMipmaps = true;
       // Enable anisotropic filtering for sharper textures at angles
-      texture.anisotropy = 16;
+      texture.anisotropy = 4; // Reduced from 16 for better performance
       if (isSRGB) {
         texture.colorSpace = THREE.SRGBColorSpace;
       }

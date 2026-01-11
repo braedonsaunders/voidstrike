@@ -79,6 +79,11 @@ export class ResourceRenderer {
   private tempScale: THREE.Vector3 = new THREE.Vector3();
   private tempEuler: THREE.Euler = new THREE.Euler();
 
+  // PERF: Frustum culling for instances
+  private frustum: THREE.Frustum = new THREE.Frustum();
+  private frustumMatrix: THREE.Matrix4 = new THREE.Matrix4();
+  private camera: THREE.Camera | null = null;
+
   // Debug tracking
   private _lastMineralCount: number = 0;
   private _debugLoggedThisSession: boolean = false;
@@ -101,6 +106,35 @@ export class ResourceRenderer {
       opacity: 0.6,
       side: THREE.DoubleSide,
     });
+  }
+
+  /**
+   * Set camera reference for frustum culling
+   */
+  public setCamera(camera: THREE.Camera): void {
+    this.camera = camera;
+  }
+
+  /**
+   * Update frustum from camera - call before update loop
+   */
+  private updateFrustum(): void {
+    if (!this.camera) return;
+    this.camera.updateMatrixWorld();
+    this.frustumMatrix.multiplyMatrices(
+      this.camera.projectionMatrix,
+      this.camera.matrixWorldInverse
+    );
+    this.frustum.setFromProjectionMatrix(this.frustumMatrix);
+  }
+
+  /**
+   * Check if a position is within the camera frustum
+   */
+  private isInFrustum(x: number, y: number, z: number): boolean {
+    if (!this.camera) return true;
+    this.tempPosition.set(x, y, z);
+    return this.frustum.containsPoint(this.tempPosition);
   }
 
   /**
@@ -428,6 +462,9 @@ export class ResourceRenderer {
     // PERF: Reuse pre-allocated Set instead of creating new one every frame
     this._currentIds.clear();
 
+    // PERF: Update frustum for culling
+    this.updateFrustum();
+
     // Reset instance counts
     // PERF: Use .length = 0 instead of = [] to avoid GC pressure from allocating new arrays every frame
     for (const group of this.instancedGroups.values()) {
@@ -478,6 +515,19 @@ export class ResourceRenderer {
         continue;
       }
 
+      // Get terrain height early for frustum check
+      const terrainHeight = this.terrain?.getHeightAt(transform.x, transform.y) ?? 0;
+
+      // PERF: Skip resources outside camera frustum
+      if (!this.isInFrustum(transform.x, terrainHeight + 0.5, transform.y)) {
+        // Hide selection ring but keep resource tracked
+        const data = this.resourceData.get(entity.id);
+        if (data?.selectionRing) {
+          data.selectionRing.visible = false;
+        }
+        continue;
+      }
+
       const group = this.getOrCreateInstancedGroup(resource.resourceType);
       const data = this.getOrCreateResourceData(entity.id);
 
@@ -485,8 +535,7 @@ export class ResourceRenderer {
         debugMineralAdded++;
       }
 
-      // Get terrain height
-      const terrainHeight = this.terrain?.getHeightAt(transform.x, transform.y) ?? 0;
+      // terrainHeight already computed above for frustum check
 
       // Update selection ring
       const selectable = entity.get<Selectable>('Selectable');

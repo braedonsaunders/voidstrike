@@ -76,6 +76,11 @@ export class UnitRenderer {
   private tempScale: THREE.Vector3 = new THREE.Vector3(1, 1, 1);
   private tempEuler: THREE.Euler = new THREE.Euler();
 
+  // PERF: Frustum culling for instances
+  private frustum: THREE.Frustum = new THREE.Frustum();
+  private frustumMatrix: THREE.Matrix4 = new THREE.Matrix4();
+  private camera: THREE.Camera | null = null;
+
   constructor(scene: THREE.Scene, world: World, visionSystem?: VisionSystem, terrain?: Terrain) {
     this.scene = scene;
     this.world = world;
@@ -115,6 +120,36 @@ export class UnitRenderer {
 
   public setPlayerId(playerId: string | null): void {
     this.playerId = playerId;
+  }
+
+  /**
+   * Set camera reference for frustum culling
+   */
+  public setCamera(camera: THREE.Camera): void {
+    this.camera = camera;
+  }
+
+  /**
+   * Update frustum from camera - call before update loop
+   */
+  private updateFrustum(): void {
+    if (!this.camera) return;
+    this.camera.updateMatrixWorld();
+    this.frustumMatrix.multiplyMatrices(
+      this.camera.projectionMatrix,
+      this.camera.matrixWorldInverse
+    );
+    this.frustum.setFromProjectionMatrix(this.frustumMatrix);
+  }
+
+  /**
+   * Check if a position is within the camera frustum (with margin for unit size)
+   */
+  private isInFrustum(x: number, y: number, z: number, margin: number = 2): boolean {
+    if (!this.camera) return true; // If no camera, assume visible
+    this.tempPosition.set(x, y, z);
+    // Use containsPoint with a small margin for unit bounding sphere
+    return this.frustum.containsPoint(this.tempPosition);
   }
 
   /**
@@ -488,6 +523,9 @@ export class UnitRenderer {
     // PERF: Reuse pre-allocated Set instead of creating new one every frame
     this._currentIds.clear();
 
+    // PERF: Update frustum for culling
+    this.updateFrustum();
+
     // Reset instance counts for all groups
     // PERF: Use .length = 0 instead of = [] to avoid GC pressure from allocating new arrays every frame
     for (const group of this.instancedGroups.values()) {
@@ -543,6 +581,18 @@ export class UnitRenderer {
 
       // Get terrain height
       const terrainHeight = this.terrain?.getHeightAt(transform.x, transform.y) ?? 0;
+
+      // PERF: Skip units outside camera frustum
+      if (!this.isInFrustum(transform.x, terrainHeight + 1, transform.y)) {
+        // Hide overlay if exists (but keep unit in system)
+        const overlay = this.unitOverlays.get(entity.id);
+        if (overlay) {
+          overlay.selectionRing.visible = false;
+          overlay.healthBar.visible = false;
+          overlay.teamMarker.visible = false;
+        }
+        continue;
+      }
 
       // Check if this is an animated unit type
       if (this.isAnimatedUnitType(unit.unitId)) {
