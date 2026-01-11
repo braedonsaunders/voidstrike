@@ -1306,7 +1306,7 @@ The AssetManager will automatically use custom models when available, falling ba
 > **Note:** This checklist reflects VOIDSTRIKE's actual unit/building names (not SC2 names).
 > The AI prompts above use SC2-style descriptions as reference for visual style.
 
-### Units (13 total) - 12 complete
+### Units (13 total) - 13 complete
 - [x] Fabricator *(worker unit)* `fabricator.glb`
 - [x] Trooper *(basic infantry)* `trooper.glb`
 - [x] Breacher *(heavy infantry)* `breacher.glb`
@@ -1314,7 +1314,7 @@ The AssetManager will automatically use custom models when available, falling ba
 - [x] Operative *(stealth sniper)* `operator.glb`
 - [x] Scorcher *(flame buggy, transforms to Inferno)* `scorcher.glb`
 - [x] Devastator *(siege tank)* `devastator.glb`
-- [ ] Colossus *(heavy assault mech)*
+- [x] Colossus *(heavy assault mech)* `colossus.glb`
 - [x] Lifter *(medical dropship)* `lifter.glb`
 - [x] Valkyrie *(transforming fighter)* `valkyrie.glb`
 - [x] Specter *(stealth aircraft)* `specter.glb`
@@ -1373,19 +1373,16 @@ The AssetManager will automatically use custom models when available, falling ba
 
 | Category | Complete | Total | Progress |
 |----------|----------|-------|----------|
-| Units | 12 | 13 | 92% |
+| Units | 13 | 13 | 100% |
 | Buildings | 17 | 17 | 100% |
 | Resources | 2 | 2 | 100% |
 | Projectiles | 0 | 3 | 0% |
 | Decorations | 16 | 16 | 100% |
-| **Total** | **47** | **51** | **92%** |
+| **Total** | **48** | **51** | **94%** |
 
 ---
 
 ## Missing Models Priority
-
-### Units (1 remaining)
-1. **Colossus** - Heavy assault mech
 
 ### Projectiles (3 remaining)
 1. **Bullet** - Basic projectile
