@@ -641,7 +641,14 @@ export class EnhancedAISystem extends System {
   }
 
   private executeBuildingPhase(ai: AIPlayer): void {
-    // First priority: Repair damaged buildings and units
+    // First priority: Resume incomplete buildings (paused or waiting for worker)
+    // This prevents resources from being wasted on abandoned construction
+    if (this.tryResumeIncompleteBuildings(ai)) {
+      // Only resume one building per tick to avoid pulling all workers
+      // Continue with other tasks after assigning a worker
+    }
+
+    // Second priority: Repair damaged buildings and units
     this.assignWorkersToRepair(ai);
 
     // Send idle workers to gather (instead of just passive income)
@@ -1825,6 +1832,129 @@ export class EnhancedAISystem extends System {
       if (selectable.playerId !== playerId) continue;
       if (!unit.isWorker) continue;
       if (health.isDead()) continue;
+
+      if (unit.state === 'moving') {
+        return entity.id;
+      }
+    }
+
+    return null;
+  }
+
+  /**
+   * Find incomplete buildings (paused or waiting_for_worker) that need workers assigned.
+   * Returns buildings sorted by progress (highest first - prioritize nearly complete buildings).
+   */
+  private findIncompleteBuildings(playerId: string): { buildingId: number; progress: number }[] {
+    const buildings = this.getCachedBuildingsWithTransform();
+    const incomplete: { buildingId: number; progress: number }[] = [];
+
+    for (const entity of buildings) {
+      const building = entity.get<Building>('Building');
+      const selectable = entity.get<Selectable>('Selectable');
+      const health = entity.get<Health>('Health');
+
+      if (!building || !selectable || !health) continue;
+      if (selectable.playerId !== playerId) continue;
+      if (health.isDead()) continue;
+
+      // Check for paused or waiting_for_worker buildings
+      if (building.state === 'paused' || building.state === 'waiting_for_worker') {
+        incomplete.push({
+          buildingId: entity.id,
+          progress: building.buildProgress,
+        });
+      }
+    }
+
+    // Sort by progress descending (prioritize nearly complete buildings)
+    incomplete.sort((a, b) => b.progress - a.progress);
+
+    return incomplete;
+  }
+
+  /**
+   * Try to resume construction on incomplete buildings.
+   * Returns true if a worker was assigned to resume construction.
+   */
+  private tryResumeIncompleteBuildings(ai: AIPlayer): boolean {
+    const incompleteBuildings = this.findIncompleteBuildings(ai.playerId);
+
+    if (incompleteBuildings.length === 0) {
+      return false;
+    }
+
+    // Find a worker that's not already building something
+    const workerId = this.findAvailableWorkerNotBuilding(ai.playerId);
+    if (workerId === null) {
+      return false;
+    }
+
+    // Resume the highest priority incomplete building
+    const target = incompleteBuildings[0];
+
+    debugAI.log(`[EnhancedAI] ${ai.playerId}: Resuming incomplete building ${target.buildingId} at ${Math.round(target.progress * 100)}% with worker ${workerId}`);
+
+    this.game.eventBus.emit('command:resume_construction', {
+      workerId,
+      buildingId: target.buildingId,
+    });
+
+    return true;
+  }
+
+  /**
+   * Find an available worker for the AI that's not already building.
+   * This is stricter than findAvailableWorker - excludes workers in 'building' state.
+   */
+  private findAvailableWorkerNotBuilding(playerId: string): number | null {
+    const units = this.getCachedUnits();
+
+    // First pass: find idle workers
+    for (const entity of units) {
+      const unit = entity.get<Unit>('Unit');
+      const selectable = entity.get<Selectable>('Selectable');
+      const health = entity.get<Health>('Health');
+
+      if (!unit || !selectable || !health) continue;
+      if (selectable.playerId !== playerId) continue;
+      if (!unit.isWorker) continue;
+      if (health.isDead()) continue;
+      if (unit.constructingBuildingId !== null) continue; // Skip workers already assigned to construction
+
+      if (unit.state === 'idle') {
+        return entity.id;
+      }
+    }
+
+    // Second pass: find gathering workers
+    for (const entity of units) {
+      const unit = entity.get<Unit>('Unit');
+      const selectable = entity.get<Selectable>('Selectable');
+      const health = entity.get<Health>('Health');
+
+      if (!unit || !selectable || !health) continue;
+      if (selectable.playerId !== playerId) continue;
+      if (!unit.isWorker) continue;
+      if (health.isDead()) continue;
+      if (unit.constructingBuildingId !== null) continue;
+
+      if (unit.state === 'gathering') {
+        return entity.id;
+      }
+    }
+
+    // Third pass: find moving workers (but not those moving to construct)
+    for (const entity of units) {
+      const unit = entity.get<Unit>('Unit');
+      const selectable = entity.get<Selectable>('Selectable');
+      const health = entity.get<Health>('Health');
+
+      if (!unit || !selectable || !health) continue;
+      if (selectable.playerId !== playerId) continue;
+      if (!unit.isWorker) continue;
+      if (health.isDead()) continue;
+      if (unit.constructingBuildingId !== null) continue;
 
       if (unit.state === 'moving') {
         return entity.id;
