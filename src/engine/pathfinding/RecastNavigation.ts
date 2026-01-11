@@ -759,7 +759,7 @@ export class RecastNavigation {
       }
     } catch {
       // Fall back to cylinder with expansion
-      this.addObstacle(buildingEntityId, centerX, centerY, width, height, agentRadius);
+      this.addObstacle(buildingEntityId, centerX, centerY, width, height, _agentRadius);
     }
   }
 
