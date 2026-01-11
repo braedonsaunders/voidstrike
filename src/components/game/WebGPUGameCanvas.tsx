@@ -408,12 +408,25 @@ export function WebGPUGameCanvas() {
 
       // Animation loop
       let lastTime = performance.now();
+      let frameCount = 0;
+      let lastFpsLog = performance.now();
 
       const animate = (currentTime: number) => {
         const frameStart = performance.now();
         const deltaTime = currentTime - lastTime;
         const prevTime = lastTime;
         lastTime = currentTime;
+
+        // Log actual FPS every second
+        frameCount++;
+        if (currentTime - lastFpsLog > 1000) {
+          const actualFps = frameCount / ((currentTime - lastFpsLog) / 1000);
+          if (actualFps < 30) {
+            console.warn(`[FPS] Actual: ${actualFps.toFixed(1)}, deltaTime avg: ${((currentTime - lastFpsLog) / frameCount).toFixed(1)}ms`);
+          }
+          frameCount = 0;
+          lastFpsLog = currentTime;
+        }
 
         // Handle pending camera moves
         const pendingMove = useGameStore.getState().pendingCameraMove;
