@@ -16,7 +16,7 @@ const MIN_MOVEMENT_THRESHOLD = 0.2; // Minimum distance to count as "moved" (20c
 const PATH_REQUEST_COOLDOWN = 30; // Minimum ticks between path requests (1.5 seconds)
 
 // Path request batching - spread expensive pathfinding across frames
-const MAX_PATHS_PER_FRAME = 2; // REDUCED from 4 to prevent FPS spikes
+const MAX_PATHS_PER_FRAME = 4; // Process at most this many path requests per frame
 
 // Terrain edge buffer - units can't path right next to terrain edges
 // This prevents units from getting stuck on collision with terrain edges
@@ -56,9 +56,7 @@ interface GlobalUnreachableEntry {
 }
 
 // Distance threshold for using hierarchical pathfinding
-// TEMPORARILY DISABLED (set very high) - HPA* may be causing FPS death spiral
-// When HPA* fails a segment, it does multiple A* calls which is expensive
-const HIERARCHICAL_PATH_THRESHOLD = 99999; // Was 20, now effectively disabled
+const HIERARCHICAL_PATH_THRESHOLD = 20;
 
 export class PathfindingSystem extends System {
   public priority = 5; // Run before MovementSystem
