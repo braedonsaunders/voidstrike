@@ -61,6 +61,9 @@ export class EnvironmentManager {
   // Shadow state
   private shadowsEnabled = false;
   private shadowQuality: ShadowQuality = 'high';
+  private lastShadowCameraX = 0;
+  private lastShadowCameraZ = 0;
+  private readonly SHADOW_CAMERA_UPDATE_THRESHOLD = 5; // Only update if camera moved more than 5 units
 
   constructor(scene: THREE.Scene, mapData: MapData) {
     this.scene = scene;
@@ -255,9 +258,21 @@ export class EnvironmentManager {
    * Update shadow camera to follow the game camera position.
    * This ensures shadows are rendered for objects near the camera, not just near map center.
    * Should be called each frame with the camera's look-at target position.
+   * PERFORMANCE: Only updates if camera has moved significantly to avoid per-frame overhead.
    */
   public updateShadowCameraPosition(targetX: number, targetZ: number): void {
     if (!this.shadowsEnabled) return;
+
+    // PERFORMANCE: Only update if camera has moved significantly
+    const dx = targetX - this.lastShadowCameraX;
+    const dz = targetZ - this.lastShadowCameraZ;
+    const distMoved = Math.sqrt(dx * dx + dz * dz);
+    if (distMoved < this.SHADOW_CAMERA_UPDATE_THRESHOLD) {
+      return; // Camera hasn't moved enough, skip update
+    }
+
+    this.lastShadowCameraX = targetX;
+    this.lastShadowCameraZ = targetZ;
 
     // Position the light relative to the camera target, maintaining the same angle
     // Original offset is (50, 80, 50) from origin
