@@ -103,6 +103,11 @@ export class EffectsRenderer {
   private explosionMaterial: THREE.MeshBasicMaterial;
   private damageCanvas: HTMLCanvasElement;
   private damageContext: CanvasRenderingContext2D;
+  // PERF: Pool of pre-created damage number sprites to avoid texture allocation every hit
+  private damageNumberPool: {
+    available: Array<{ sprite: THREE.Sprite; material: THREE.SpriteMaterial; texture: THREE.CanvasTexture }>;
+    inUse: Set<THREE.Sprite>;
+  };
   private moveIndicatorGeometry: THREE.RingGeometry;
   private moveIndicatorMaterial: THREE.MeshBasicMaterial;
 
@@ -170,6 +175,28 @@ export class EffectsRenderer {
     this.damageCanvas.width = 128;
     this.damageCanvas.height = 64;
     this.damageContext = this.damageCanvas.getContext('2d')!;
+
+    // PERF: Pre-create pool of damage number sprites to avoid allocation during combat
+    this.damageNumberPool = { available: [], inUse: new Set() };
+    const DAMAGE_NUMBER_POOL_SIZE = 20;
+    for (let i = 0; i < DAMAGE_NUMBER_POOL_SIZE; i++) {
+      const canvas = document.createElement('canvas');
+      canvas.width = 128;
+      canvas.height = 64;
+      const texture = new THREE.CanvasTexture(canvas);
+      const material = new THREE.SpriteMaterial({
+        map: texture,
+        transparent: true,
+        depthTest: false,
+        depthWrite: false,
+      });
+      const sprite = new THREE.Sprite(material);
+      sprite.scale.set(1.5, 0.75, 1);
+      sprite.renderOrder = 100;
+      sprite.visible = false;
+      this.scene.add(sprite);
+      this.damageNumberPool.available.push({ sprite, material, texture });
+    }
 
     // Move command indicator - green ring that shrinks
     this.moveIndicatorGeometry = new THREE.RingGeometry(0.3, 0.6, 16);
@@ -596,54 +623,80 @@ export class EffectsRenderer {
   }
 
   private createDamageNumber(position: THREE.Vector3, damage: number): void {
-    // PERFORMANCE: Limit max active damage numbers to prevent GPU texture spam
-    // During heavy combat, this prevents creating hundreds of textures
-    const MAX_DAMAGE_NUMBERS = 15;
-    if (this.damageNumbers.length >= MAX_DAMAGE_NUMBERS) {
-      // Remove oldest damage number to make room
-      const oldest = this.damageNumbers.shift();
-      if (oldest) {
-        this.scene.remove(oldest.sprite);
-        (oldest.sprite.material as THREE.SpriteMaterial).map?.dispose();
-        (oldest.sprite.material as THREE.SpriteMaterial).dispose();
+    // PERF: Try to get sprite from pool instead of creating new texture
+    let sprite: THREE.Sprite;
+    let poolItem: { sprite: THREE.Sprite; material: THREE.SpriteMaterial; texture: THREE.CanvasTexture } | null = null;
+
+    if (this.damageNumberPool.available.length > 0) {
+      // Reuse pooled sprite
+      poolItem = this.damageNumberPool.available.pop()!;
+      sprite = poolItem.sprite;
+      this.damageNumberPool.inUse.add(sprite);
+
+      // Draw damage text to the pooled sprite's canvas
+      const canvas = poolItem.texture.source.data as HTMLCanvasElement;
+      const ctx = canvas.getContext('2d')!;
+      ctx.clearRect(0, 0, 128, 64);
+      ctx.font = 'bold 32px Arial';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.strokeStyle = '#000000';
+      ctx.lineWidth = 4;
+      ctx.strokeText(Math.round(damage).toString(), 64, 32);
+      ctx.fillStyle = '#ffff00';
+      ctx.fillText(Math.round(damage).toString(), 64, 32);
+      poolItem.texture.needsUpdate = true;
+
+      sprite.position.copy(position);
+      sprite.visible = true;
+      poolItem.material.opacity = 1;
+    } else {
+      // Pool exhausted - limit max active damage numbers
+      const MAX_DAMAGE_NUMBERS = 15;
+      if (this.damageNumbers.length >= MAX_DAMAGE_NUMBERS) {
+        // Recycle oldest damage number
+        const oldest = this.damageNumbers.shift();
+        if (oldest) {
+          // Return to pool if it was from pool, otherwise just hide
+          oldest.sprite.visible = false;
+          this.damageNumberPool.inUse.delete(oldest.sprite);
+        }
+        return; // Skip creating this damage number
       }
+
+      // Fallback: create new sprite (should rarely happen with pool size 20)
+      this.damageContext.clearRect(0, 0, 128, 64);
+      this.damageContext.font = 'bold 32px Arial';
+      this.damageContext.textAlign = 'center';
+      this.damageContext.textBaseline = 'middle';
+      this.damageContext.strokeStyle = '#000000';
+      this.damageContext.lineWidth = 4;
+      this.damageContext.strokeText(Math.round(damage).toString(), 64, 32);
+      this.damageContext.fillStyle = '#ffff00';
+      this.damageContext.fillText(Math.round(damage).toString(), 64, 32);
+
+      const texture = new THREE.CanvasTexture(this.damageCanvas);
+      texture.needsUpdate = true;
+
+      const material = new THREE.SpriteMaterial({
+        map: texture,
+        transparent: true,
+        depthTest: false,
+        depthWrite: false,
+      });
+
+      sprite = new THREE.Sprite(material);
+      sprite.position.copy(position);
+      sprite.scale.set(1.5, 0.75, 1);
+      sprite.renderOrder = 100;
+      this.scene.add(sprite);
     }
-
-    // Draw damage text to canvas
-    this.damageContext.clearRect(0, 0, 128, 64);
-    this.damageContext.font = 'bold 32px Arial';
-    this.damageContext.textAlign = 'center';
-    this.damageContext.textBaseline = 'middle';
-
-    // Yellow text with black outline for visibility
-    this.damageContext.strokeStyle = '#000000';
-    this.damageContext.lineWidth = 4;
-    this.damageContext.strokeText(Math.round(damage).toString(), 64, 32);
-    this.damageContext.fillStyle = '#ffff00';
-    this.damageContext.fillText(Math.round(damage).toString(), 64, 32);
-
-    // Create texture from canvas
-    const texture = new THREE.CanvasTexture(this.damageCanvas);
-    texture.needsUpdate = true;
-
-    const material = new THREE.SpriteMaterial({
-      map: texture,
-      transparent: true,
-      depthTest: false,
-      depthWrite: false,
-    });
-
-    const sprite = new THREE.Sprite(material);
-    sprite.position.copy(position);
-    sprite.scale.set(1.5, 0.75, 1);
-    sprite.renderOrder = 100; // Damage numbers render AFTER units, always on top
-    this.scene.add(sprite);
 
     this.damageNumbers.push({
       position: position.clone(),
       damage,
       progress: 0,
-      duration: 0.7, // PERFORMANCE: Reduced from 1.0s to 0.7s to cycle faster
+      duration: 0.7,
       sprite,
       velocity: new THREE.Vector3(
         (Math.random() - 0.5) * 0.5,
@@ -866,10 +919,20 @@ export class EffectsRenderer {
       dmgNum.progress += dt / dmgNum.duration;
 
       if (dmgNum.progress >= 1) {
-        // Effect complete
-        this.scene.remove(dmgNum.sprite);
-        (dmgNum.sprite.material as THREE.SpriteMaterial).map?.dispose();
-        (dmgNum.sprite.material as THREE.SpriteMaterial).dispose();
+        // PERF: Return sprite to pool instead of disposing
+        dmgNum.sprite.visible = false;
+        if (this.damageNumberPool.inUse.has(dmgNum.sprite)) {
+          this.damageNumberPool.inUse.delete(dmgNum.sprite);
+          // Find the pool item and return it
+          const material = dmgNum.sprite.material as THREE.SpriteMaterial;
+          const texture = material.map as THREE.CanvasTexture;
+          this.damageNumberPool.available.push({ sprite: dmgNum.sprite, material, texture });
+        } else {
+          // Not from pool - dispose it
+          this.scene.remove(dmgNum.sprite);
+          (dmgNum.sprite.material as THREE.SpriteMaterial).map?.dispose();
+          (dmgNum.sprite.material as THREE.SpriteMaterial).dispose();
+        }
         this.damageNumbers.splice(i, 1);
       } else {
         // Float upward with deceleration and fade out

@@ -51,11 +51,15 @@ interface InstancedGroupConfig {
 }
 
 /**
- * Instanced tree rendering - all trees of same type in one draw call
+ * PERFORMANCE: True instanced tree rendering - all trees of same type in ONE draw call
+ * Previously each tree was a separate mesh causing 400+ draw calls.
+ * Now we batch by model type for typically 2-6 draw calls total.
  */
 export class InstancedTrees {
   public group: THREE.Group;
-  private meshes: THREE.Object3D[] = [];
+  private instancedMeshes: THREE.InstancedMesh[] = [];
+  private geometries: THREE.BufferGeometry[] = [];
+  private materials: THREE.Material[] = [];
 
   constructor(
     mapData: MapData,
@@ -75,13 +79,12 @@ export class InstancedTrees {
 
     // Build a set of cells near ramps that should be avoided (pathways)
     const rampClearance = new Set<string>();
-    const RAMP_CLEARANCE_RADIUS = 12; // Stay far from ramps - increased clearance
+    const RAMP_CLEARANCE_RADIUS = 12;
 
     for (let cy = 0; cy < mapData.height; cy++) {
       for (let cx = 0; cx < mapData.width; cx++) {
         const cell = mapData.terrain[cy][cx];
         if (cell.terrain === 'ramp') {
-          // Mark all cells within clearance radius as blocked
           for (let dy = -RAMP_CLEARANCE_RADIUS; dy <= RAMP_CLEARANCE_RADIUS; dy++) {
             for (let dx = -RAMP_CLEARANCE_RADIUS; dx <= RAMP_CLEARANCE_RADIUS; dx++) {
               const dist = Math.sqrt(dx * dx + dy * dy);
@@ -94,16 +97,19 @@ export class InstancedTrees {
       }
     }
 
+    // PERF: Collect all tree positions FIRST, grouped by model type
+    const treesByModel = new Map<string, Array<{ x: number; y: number; height: number; scale: number; rotation: number }>>();
+    for (const modelId of treeModelIds) {
+      treesByModel.set(modelId, []);
+    }
+
     // Find elevated cliff edges (for placing some trees on base edges)
     const cliffEdgePositions: Array<{ x: number; y: number }> = [];
     for (let cy = 1; cy < mapData.height - 1; cy++) {
       for (let cx = 1; cx < mapData.width - 1; cx++) {
-        // Skip if in ramp clearance zone
         if (rampClearance.has(`${cx},${cy}`)) continue;
-
         const cell = mapData.terrain[cy][cx];
         if (cell.terrain === 'unbuildable') {
-          // Check if this is near a cliff edge (adjacent to ground)
           const neighbors = [
             mapData.terrain[cy - 1]?.[cx],
             mapData.terrain[cy + 1]?.[cx],
@@ -120,40 +126,51 @@ export class InstancedTrees {
 
     let treesPlaced = 0;
 
-    // Place some trees on cliff edges (20%) - gives bases some tree cover
+    // Helper to collect a tree position
+    const collectTree = (x: number, y: number): boolean => {
+      const cellX = Math.floor(x);
+      const cellY = Math.floor(y);
+      if (cellX < 0 || cellX >= mapData.width || cellY < 0 || cellY >= mapData.height) return false;
+
+      const cell = mapData.terrain[cellY][cellX];
+      if (cell.terrain === 'ramp') return false;
+
+      const modelId = treeModelIds[Math.floor(Math.random() * treeModelIds.length)];
+      if (!AssetManager.hasDecorationModel(modelId)) return false;
+
+      const height = getHeightAt(x, y);
+      const scale = 0.8 + Math.random() * 0.5;
+      const rotation = Math.random() * Math.PI * 2;
+
+      treesByModel.get(modelId)!.push({ x, y, height, scale, rotation });
+      return true;
+    };
+
+    // Cliff edges (20%)
     const cliffTreeCount = Math.min(Math.floor(maxTrees * 0.2), cliffEdgePositions.length);
     for (let i = 0; i < cliffTreeCount && treesPlaced < cliffTreeCount; i++) {
       const idx = Math.floor(Math.random() * cliffEdgePositions.length);
       const pos = cliffEdgePositions.splice(idx, 1)[0];
-      if (this.placeTree(pos.x, pos.y, mapData, getHeightAt, treeModelIds, biome)) {
-        treesPlaced++;
-      }
+      if (collectTree(pos.x, pos.y)) treesPlaced++;
     }
 
-    // Place trees on the outer edges of the map (50%)
+    // Map edges (50%)
     const edgeTreeCount = Math.floor(maxTrees * 0.5);
     for (let i = 0; i < edgeTreeCount * 3 && treesPlaced < edgeTreeCount + cliffTreeCount; i++) {
       let x: number, y: number;
       const edge = Math.floor(Math.random() * 4);
-      // Place in outer 12 cells of each edge
       switch (edge) {
         case 0: x = 2 + Math.random() * 10; y = 5 + Math.random() * (mapData.height - 10); break;
         case 1: x = mapData.width - 12 + Math.random() * 10; y = 5 + Math.random() * (mapData.height - 10); break;
         case 2: x = 5 + Math.random() * (mapData.width - 10); y = 2 + Math.random() * 10; break;
         default: x = 5 + Math.random() * (mapData.width - 10); y = mapData.height - 12 + Math.random() * 10; break;
       }
-
-      // Check clearance
       if (rampClearance.has(`${Math.floor(x)},${Math.floor(y)}`)) continue;
-
-      if (this.placeTree(x, y, mapData, getHeightAt, treeModelIds, biome)) {
-        treesPlaced++;
-      }
+      if (collectTree(x, y)) treesPlaced++;
     }
 
-    // Scatter remaining trees in corners (30%)
+    // Corners (30%)
     for (let i = 0; i < maxTrees * 2 && treesPlaced < maxTrees; i++) {
-      // Pick a corner
       const corner = Math.floor(Math.random() * 4);
       let x: number, y: number;
       switch (corner) {
@@ -162,13 +179,57 @@ export class InstancedTrees {
         case 2: x = 3 + Math.random() * 18; y = mapData.height - 21 + Math.random() * 18; break;
         default: x = mapData.width - 21 + Math.random() * 18; y = mapData.height - 21 + Math.random() * 18; break;
       }
-
-      // Check clearance
       if (rampClearance.has(`${Math.floor(x)},${Math.floor(y)}`)) continue;
+      if (collectTree(x, y)) treesPlaced++;
+    }
 
-      if (this.placeTree(x, y, mapData, getHeightAt, treeModelIds, biome)) {
-        treesPlaced++;
+    // PERF: Create ONE InstancedMesh per model type instead of individual meshes
+    const matrix = new THREE.Matrix4();
+    const position = new THREE.Vector3();
+    const quaternion = new THREE.Quaternion();
+    const scale = new THREE.Vector3();
+
+    for (const [modelId, positions] of treesByModel) {
+      if (positions.length === 0) continue;
+
+      const original = AssetManager.getDecorationOriginal(modelId);
+      if (!original) continue;
+
+      const geometry = extractGeometry(original);
+      const material = extractMaterial(original);
+      if (!geometry || !material) continue;
+
+      // Clone geometry and material to avoid sharing issues
+      const instancedGeometry = geometry.clone();
+      const instancedMaterial = material.clone();
+      this.geometries.push(instancedGeometry);
+      this.materials.push(instancedMaterial);
+
+      // Get model Y offset for proper grounding
+      const yOffset = AssetManager.getModelYOffset(modelId);
+
+      const instancedMesh = new THREE.InstancedMesh(
+        instancedGeometry,
+        instancedMaterial,
+        positions.length
+      );
+
+      for (let i = 0; i < positions.length; i++) {
+        const p = positions[i];
+        position.set(p.x, p.height + yOffset * p.scale, p.y);
+        quaternion.setFromEuler(new THREE.Euler(0, p.rotation, 0));
+        scale.set(p.scale, p.scale, p.scale);
+        matrix.compose(position, quaternion, scale);
+        instancedMesh.setMatrixAt(i, matrix);
       }
+
+      instancedMesh.instanceMatrix.needsUpdate = true;
+      instancedMesh.frustumCulled = false;
+      instancedMesh.castShadow = true;
+      instancedMesh.receiveShadow = true;
+
+      this.instancedMeshes.push(instancedMesh);
+      this.group.add(instancedMesh);
     }
   }
 
@@ -183,66 +244,32 @@ export class InstancedTrees {
     }
   }
 
-  private placeTree(
-    x: number,
-    y: number,
-    mapData: MapData,
-    getHeightAt: (x: number, y: number) => number,
-    treeModelIds: string[],
-    biome: BiomeConfig
-  ): boolean {
-    const cellX = Math.floor(x);
-    const cellY = Math.floor(y);
-    if (cellX < 0 || cellX >= mapData.width || cellY < 0 || cellY >= mapData.height) {
-      return false;
-    }
-
-    const cell = mapData.terrain[cellY][cellX];
-    // Don't place trees on ramps (keep pathways clear)
-    if (cell.terrain === 'ramp') {
-      return false;
-    }
-
-    const height = getHeightAt(x, y);
-    const modelId = treeModelIds[Math.floor(Math.random() * treeModelIds.length)];
-    const treeMesh = AssetManager.getDecorationMesh(modelId);
-
-    if (treeMesh) {
-      const scale = 0.8 + Math.random() * 0.5;
-      treeMesh.position.set(x, height, y);
-      treeMesh.rotation.y = Math.random() * Math.PI * 2;
-      treeMesh.scale.setScalar(scale);
-
-      this.group.add(treeMesh);
-      this.meshes.push(treeMesh);
-      return true;
-    }
-
-    return false;
-  }
-
   public dispose(): void {
-    for (const mesh of this.meshes) {
-      mesh.traverse((child) => {
-        if (child instanceof THREE.Mesh) {
-          child.geometry?.dispose();
-          if (child.material instanceof THREE.Material) {
-            child.material.dispose();
-          }
-        }
-      });
+    for (const mesh of this.instancedMeshes) {
+      mesh.dispose();
     }
-    this.meshes = [];
+    for (const geometry of this.geometries) {
+      geometry.dispose();
+    }
+    for (const material of this.materials) {
+      material.dispose();
+    }
+    this.instancedMeshes = [];
+    this.geometries = [];
+    this.materials = [];
   }
 }
 
 /**
- * Rock rendering using GLB models with variety
- * Uses individual meshes for different rock types instead of instancing
+ * PERFORMANCE: True instanced rock rendering - all rocks of same type in ONE draw call
+ * Previously each rock was a separate mesh causing 300+ draw calls.
+ * Now we batch by model type for typically 3 draw calls total.
  */
 export class InstancedRocks {
   public group: THREE.Group;
-  private meshes: THREE.Object3D[] = [];
+  private instancedMeshes: THREE.InstancedMesh[] = [];
+  private geometries: THREE.BufferGeometry[] = [];
+  private materials: THREE.Material[] = [];
 
   // Store rock positions for collision detection (x, z are world coords, radius is collision size)
   private rockCollisions: Array<{ x: number; z: number; radius: number }> = [];
@@ -263,7 +290,7 @@ export class InstancedRocks {
 
     // Build ramp clearance set to avoid blocking pathways
     const rampClearance = new Set<string>();
-    const RAMP_CLEARANCE_RADIUS = 12; // Increased clearance for ramps
+    const RAMP_CLEARANCE_RADIUS = 12;
 
     for (let cy = 0; cy < mapData.height; cy++) {
       for (let cx = 0; cx < mapData.width; cx++) {
@@ -281,13 +308,18 @@ export class InstancedRocks {
       }
     }
 
+    // PERF: Collect all rock positions FIRST, grouped by model type
+    const rocksByModel = new Map<string, Array<{ x: number; y: number; height: number; scale: number; rotation: number }>>();
+    for (const modelId of rockModelIds) {
+      rocksByModel.set(modelId, []);
+    }
+
     let rocksPlaced = 0;
     for (let i = 0; i < maxRocks * 3 && rocksPlaced < maxRocks; i++) {
       let x: number, y: number;
 
       // Place rocks primarily on map edges (60%) and scattered (40%)
       if (Math.random() < 0.6) {
-        // Edge placement - outer 10 cells
         const edge = Math.floor(Math.random() * 4);
         switch (edge) {
           case 0: x = 3 + Math.random() * 10; y = 8 + Math.random() * (mapData.height - 16); break;
@@ -296,7 +328,6 @@ export class InstancedRocks {
           default: x = 8 + Math.random() * (mapData.width - 16); y = mapData.height - 13 + Math.random() * 10; break;
         }
       } else {
-        // Random scattered placement - avoid center
         x = 10 + Math.random() * (mapData.width - 20);
         y = 10 + Math.random() * (mapData.height - 20);
       }
@@ -304,53 +335,92 @@ export class InstancedRocks {
       const cellX = Math.floor(x);
       const cellY = Math.floor(y);
 
-      // Skip if in ramp clearance zone
       if (rampClearance.has(`${cellX},${cellY}`)) continue;
 
       if (cellX >= 0 && cellX < mapData.width && cellY >= 0 && cellY < mapData.height) {
         const cell = mapData.terrain[cellY][cellX];
-        // Only place on ground or unbuildable, NOT on cliff edges near ramps
         if (cell.terrain === 'ground' || cell.terrain === 'unbuildable') {
-          const height = getHeightAt(x, y);
-
-          // Choose random rock model type
           const modelId = rockModelIds[Math.floor(Math.random() * rockModelIds.length)];
-          const rockMesh = AssetManager.getDecorationMesh(modelId);
+          if (!AssetManager.hasDecorationModel(modelId)) continue;
 
-          if (rockMesh) {
-            // Random scale variation
-            const baseScale = modelId === 'rocks_large' ? 1.0 : (modelId === 'rocks_small' ? 0.8 : 0.6);
-            const scale = baseScale * (0.7 + Math.random() * 0.6);
+          const height = getHeightAt(x, y);
+          const baseScale = modelId === 'rocks_large' ? 1.0 : (modelId === 'rocks_small' ? 0.8 : 0.6);
+          const scale = baseScale * (0.7 + Math.random() * 0.6);
+          const rotation = Math.random() * Math.PI * 2;
 
-            rockMesh.position.set(x, height, y);
-            rockMesh.rotation.y = Math.random() * Math.PI * 2;
-            rockMesh.scale.setScalar(scale);
+          rocksByModel.get(modelId)!.push({ x, y, height, scale, rotation });
 
-            this.group.add(rockMesh);
-            this.meshes.push(rockMesh);
-
-            // Store collision data
-            const collisionRadius = scale * 2.0;
-            this.rockCollisions.push({ x, z: y, radius: collisionRadius });
-            rocksPlaced++;
-          }
+          // Store collision data
+          const collisionRadius = scale * 2.0;
+          this.rockCollisions.push({ x, z: y, radius: collisionRadius });
+          rocksPlaced++;
         }
       }
+    }
+
+    // PERF: Create ONE InstancedMesh per model type instead of individual meshes
+    const matrix = new THREE.Matrix4();
+    const position = new THREE.Vector3();
+    const quaternion = new THREE.Quaternion();
+    const scale = new THREE.Vector3();
+
+    for (const [modelId, positions] of rocksByModel) {
+      if (positions.length === 0) continue;
+
+      const original = AssetManager.getDecorationOriginal(modelId);
+      if (!original) continue;
+
+      const geometry = extractGeometry(original);
+      const material = extractMaterial(original);
+      if (!geometry || !material) continue;
+
+      // Clone geometry and material to avoid sharing issues
+      const instancedGeometry = geometry.clone();
+      const instancedMaterial = material.clone();
+      this.geometries.push(instancedGeometry);
+      this.materials.push(instancedMaterial);
+
+      // Get model Y offset for proper grounding
+      const yOffset = AssetManager.getModelYOffset(modelId);
+
+      const instancedMesh = new THREE.InstancedMesh(
+        instancedGeometry,
+        instancedMaterial,
+        positions.length
+      );
+
+      for (let i = 0; i < positions.length; i++) {
+        const p = positions[i];
+        position.set(p.x, p.height + yOffset * p.scale, p.y);
+        quaternion.setFromEuler(new THREE.Euler(0, p.rotation, 0));
+        scale.set(p.scale, p.scale, p.scale);
+        matrix.compose(position, quaternion, scale);
+        instancedMesh.setMatrixAt(i, matrix);
+      }
+
+      instancedMesh.instanceMatrix.needsUpdate = true;
+      instancedMesh.frustumCulled = false;
+      instancedMesh.castShadow = true;
+      instancedMesh.receiveShadow = true;
+
+      this.instancedMeshes.push(instancedMesh);
+      this.group.add(instancedMesh);
     }
   }
 
   public dispose(): void {
-    for (const mesh of this.meshes) {
-      mesh.traverse((child) => {
-        if (child instanceof THREE.Mesh) {
-          child.geometry?.dispose();
-          if (child.material instanceof THREE.Material) {
-            child.material.dispose();
-          }
-        }
-      });
+    for (const mesh of this.instancedMeshes) {
+      mesh.dispose();
     }
-    this.meshes = [];
+    for (const geometry of this.geometries) {
+      geometry.dispose();
+    }
+    for (const material of this.materials) {
+      material.dispose();
+    }
+    this.instancedMeshes = [];
+    this.geometries = [];
+    this.materials = [];
   }
 
   /**
