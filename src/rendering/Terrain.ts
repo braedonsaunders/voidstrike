@@ -1125,8 +1125,6 @@ export class Terrain {
 
         // Only include walkable terrain (ground and ramps)
         // Cliff cells (unwalkable) are excluded, creating physical gaps in the navmesh
-        // The height difference between cliff-adjacent ground and lower ground
-        // prevents Recast from connecting them (via walkableClimb threshold)
         if (cell.terrain === 'unwalkable') continue;
 
         // Check terrain features that make cells unwalkable
@@ -1139,6 +1137,36 @@ export class Terrain {
         const h10 = this.heightMap[y * this.gridWidth + (x + 1)];
         const h01 = this.heightMap[(y + 1) * this.gridWidth + x];
         const h11 = this.heightMap[(y + 1) * this.gridWidth + (x + 1)];
+
+        // Check cell height variation - exclude cells with extreme height differences
+        // This prevents connections at cliff edges where height varies sharply
+        const heights = [h00, h10, h01, h11];
+        const minH = Math.min(...heights);
+        const maxH = Math.max(...heights);
+        const heightRange = maxH - minH;
+
+        // For non-ramp cells, exclude if height varies too much (cliff edge)
+        // Ramps naturally have height variation so they're allowed
+        // Also allow cells adjacent to ramps to maintain connectivity
+        if (cell.terrain !== 'ramp' && heightRange > 1.5) {
+          // Check if this cell is adjacent to a ramp
+          let adjacentToRamp = false;
+          for (let dy = -1; dy <= 1 && !adjacentToRamp; dy++) {
+            for (let dx = -1; dx <= 1 && !adjacentToRamp; dx++) {
+              const nx = x + dx;
+              const ny = y + dy;
+              if (nx >= 0 && nx < width && ny >= 0 && ny < height) {
+                if (terrain[ny][nx].terrain === 'ramp') {
+                  adjacentToRamp = true;
+                }
+              }
+            }
+          }
+          // Skip cells with high height variation unless they connect to ramps
+          if (!adjacentToRamp) {
+            continue;
+          }
+        }
 
         // Create two triangles for this cell
         // Recast uses Y-up and expects counter-clockwise winding for upward-facing surfaces
