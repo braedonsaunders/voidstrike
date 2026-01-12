@@ -361,20 +361,14 @@ function generateCircularPlatform(
       const py = Math.floor(center.y + dy);
 
       if (py >= 0 && py < grid.length && px >= 0 && px < grid[0].length) {
-        const key = `${px},${py}`;
-
-        // Skip protected zones (ramps)
-        if (protectedZones.has(key)) {
-          continue;
-        }
-
-        // Skip if already a ramp
+        // Skip if already a ramp - ramps take priority
         if (grid[py][px].terrain === 'ramp') {
           continue;
         }
 
         if (dist <= radius) {
-          // Inner buildable area
+          // Inner buildable area - ALWAYS set this, regardless of protected zones
+          // This ensures the platform has a complete flat surface
           grid[py][px] = {
             terrain: 'ground',
             elevation: elevation256,
@@ -382,12 +376,23 @@ function generateCircularPlatform(
             textureId: Math.floor(Math.random() * 4),
           };
         } else if (dist <= outerRadius) {
-          // Cliff ring - but check if near a protected zone
-          if (!isNearProtectedZone(px, py, protectedZones, cliffWidth + 2)) {
+          // Cliff ring - only generate cliffs if NOT in/near protected zones
+          // Protected zones are where ramps connect, so no cliffs there
+          const key = `${px},${py}`;
+          if (!protectedZones.has(key) && !isNearProtectedZone(px, py, protectedZones, 2)) {
             grid[py][px] = {
               terrain: 'unwalkable',
               elevation: elevation256,
               feature: 'cliff',
+              textureId: Math.floor(Math.random() * 4),
+            };
+          } else {
+            // In protected zone cliff area - set to ground at platform elevation
+            // This creates a walkable gap in the cliff where the ramp connects
+            grid[py][px] = {
+              terrain: 'ground',
+              elevation: elevation256,
+              feature: 'none',
               textureId: Math.floor(Math.random() * 4),
             };
           }
@@ -420,14 +425,7 @@ function generateRectangularPlatform(
       const py = Math.floor(center.y + dy);
 
       if (py >= 0 && py < grid.length && px >= 0 && px < grid[0].length) {
-        const key = `${px},${py}`;
-
-        // Skip protected zones
-        if (protectedZones.has(key)) {
-          continue;
-        }
-
-        // Skip if already a ramp
+        // Skip if already a ramp - ramps take priority
         if (grid[py][px].terrain === 'ramp') {
           continue;
         }
@@ -435,21 +433,32 @@ function generateRectangularPlatform(
         const isInner = Math.abs(dx) <= halfW && Math.abs(dy) <= halfH;
 
         if (isInner) {
-          // Inner buildable area
+          // Inner buildable area - ALWAYS set this
           grid[py][px] = {
             terrain: 'ground',
             elevation: elevation256,
             feature: 'none',
             textureId: Math.floor(Math.random() * 4),
           };
-        } else if (!isNearProtectedZone(px, py, protectedZones, cliffWidth + 2)) {
-          // Cliff ring
-          grid[py][px] = {
-            terrain: 'unwalkable',
-            elevation: elevation256,
-            feature: 'cliff',
-            textureId: Math.floor(Math.random() * 4),
-          };
+        } else {
+          // Cliff ring - only generate if not in protected zone
+          const key = `${px},${py}`;
+          if (!protectedZones.has(key) && !isNearProtectedZone(px, py, protectedZones, 2)) {
+            grid[py][px] = {
+              terrain: 'unwalkable',
+              elevation: elevation256,
+              feature: 'cliff',
+              textureId: Math.floor(Math.random() * 4),
+            };
+          } else {
+            // In protected zone - set to walkable ground at platform elevation
+            grid[py][px] = {
+              terrain: 'ground',
+              elevation: elevation256,
+              feature: 'none',
+              textureId: Math.floor(Math.random() * 4),
+            };
+          }
         }
       }
     }
