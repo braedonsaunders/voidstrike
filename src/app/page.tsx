@@ -261,7 +261,7 @@ export default function Home() {
             </div>
 
             {/* Main Title with Layered Glow */}
-            <h1 className="font-display text-8xl md:text-[10rem] lg:text-[12rem] font-bold tracking-wider mb-8 relative leading-none">
+            <h1 className="font-display text-4xl sm:text-6xl md:text-8xl lg:text-[10rem] xl:text-[12rem] font-bold tracking-wider mb-8 relative leading-none">
               {/* Deep shadow layer */}
               <span className="absolute inset-0 bg-gradient-to-r from-void-600 via-void-400 to-void-600
                              bg-clip-text text-transparent blur-xl opacity-30 scale-105">
