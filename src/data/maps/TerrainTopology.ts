@@ -168,9 +168,10 @@ function getPerpendicular(v: { x: number; y: number }): { x: number; y: number }
  * Calculate where a ramp should connect two areas.
  * Uses TRUE VECTOR GEOMETRY - finds the actual closest points between circles.
  *
- * IMPORTANT: Connection points are at the INNER (buildable) edge of each area,
- * not the outer cliff edge. This ensures ramps connect the buildable spaces
- * and the protected zones properly clear the cliff ring between them.
+ * CRITICAL: When connecting a platform (with cliff ring) to a ground area (no cliffs),
+ * the ramp must extend THROUGH the cliff ring to ensure proper connectivity.
+ * Entry point is pushed outward to the OUTER cliff edge for platforms.
+ * Exit point uses the radius for ground areas (no cliff ring).
  */
 export function calculateConnectionPoints(
   fromArea: TopologyArea,
@@ -189,21 +190,35 @@ export function calculateConnectionPoints(
   const dirX = dist > 0 ? dx / dist : 0;
   const dirY = dist > 0 ? dy / dist : 1;
 
-  // Use INNER edge (buildable area boundary) for connection points
-  // This ensures ramps connect the playable spaces, not punch through cliffs
-  const fromInnerRadius = fromArea.radius;
-  const toInnerRadius = toArea.radius;
+  // Determine which areas are platforms (have cliff rings) vs ground areas (no cliffs)
+  const platformTypes = ['main', 'natural'];
+  const fromIsPlatform = platformTypes.includes(fromArea.type);
+  const toIsPlatform = platformTypes.includes(toArea.type);
 
-  // Entry point: on fromArea's buildable edge, facing toward toArea
+  // For platforms, get the OUTER cliff edge (radius + cliffWidth)
+  // For ground areas, just use the radius
+  const fromCliffWidth = fromArea.cliffWidth ?? (fromArea.type === 'main' ? 4 : 3);
+  const toCliffWidth = toArea.cliffWidth ?? (toArea.type === 'main' ? 4 : 3);
+
+  // CRITICAL FIX: Ramps should connect from the OUTER cliff edge of platforms
+  // to ensure the full ramp goes through the cliff ring and creates proper connectivity
+  const fromRadius = fromIsPlatform
+    ? fromArea.radius + fromCliffWidth  // Use outer cliff edge for platforms
+    : fromArea.radius;                   // Use inner edge for ground areas
+  const toRadius = toIsPlatform
+    ? toArea.radius + toCliffWidth      // Use outer cliff edge for platforms
+    : toArea.radius;                     // Use inner edge for ground areas
+
+  // Entry point: on fromArea's edge (outer cliff for platforms, inner for ground)
   const entryPoint = {
-    x: fromCenter.x + dirX * fromInnerRadius,
-    y: fromCenter.y + dirY * fromInnerRadius,
+    x: fromCenter.x + dirX * fromRadius,
+    y: fromCenter.y + dirY * fromRadius,
   };
 
-  // Exit point: on toArea's buildable edge, facing toward fromArea
+  // Exit point: on toArea's edge (outer cliff for platforms, inner for ground)
   const exitPoint = {
-    x: toCenter.x - dirX * toInnerRadius,
-    y: toCenter.y - dirY * toInnerRadius,
+    x: toCenter.x - dirX * toRadius,
+    y: toCenter.y - dirY * toRadius,
   };
 
   // Verify the points make sense (entry should be closer to fromCenter than exit)
@@ -404,25 +419,48 @@ function generateCircularPlatform(
               textureId: Math.floor(Math.random() * 4),
             };
           } else {
-            // In protected zone cliff area - check for adjacent ramp to get appropriate elevation
-            // This ensures smooth height transition at ramp boundaries
+            // In protected zone cliff area - find the nearest ramp cell to get appropriate elevation
+            // This ensures smooth height transition across the entire protected corridor
             let useElevation = elevation256;
+            let foundRamp = false;
+            let nearestRampDist = Infinity;
+            let nearestRampElev = elevation256;
 
-            // Look for adjacent ramp cells and use their elevation if found
-            // This creates a smooth walkable transition at the cliff ring edge
-            for (const [rdx, rdy] of [[0, 1], [0, -1], [1, 0], [-1, 0], [1, 1], [1, -1], [-1, 1], [-1, -1]]) {
-              const rx = px + rdx;
-              const ry = py + rdy;
-              if (ry >= 0 && ry < grid.length && rx >= 0 && rx < grid[0].length) {
-                if (grid[ry][rx].terrain === 'ramp') {
-                  useElevation = grid[ry][rx].elevation;
-                  break;
+            // Search outward in expanding rings to find the nearest ramp cell
+            // This handles cells that aren't immediately adjacent to the ramp centerline
+            const searchRadius = 8; // Search up to 8 cells away
+            for (let searchDist = 1; searchDist <= searchRadius && !foundRamp; searchDist++) {
+              for (let rdx = -searchDist; rdx <= searchDist; rdx++) {
+                for (let rdy = -searchDist; rdy <= searchDist; rdy++) {
+                  // Only check cells at this ring distance
+                  if (Math.abs(rdx) !== searchDist && Math.abs(rdy) !== searchDist) continue;
+
+                  const rx = px + rdx;
+                  const ry = py + rdy;
+                  if (ry >= 0 && ry < grid.length && rx >= 0 && rx < grid[0].length) {
+                    if (grid[ry][rx].terrain === 'ramp') {
+                      const rampDist = Math.sqrt(rdx * rdx + rdy * rdy);
+                      if (rampDist < nearestRampDist) {
+                        nearestRampDist = rampDist;
+                        nearestRampElev = grid[ry][rx].elevation;
+                        foundRamp = true;
+                      }
+                    }
+                  }
                 }
               }
             }
 
+            if (foundRamp) {
+              useElevation = nearestRampElev;
+            }
+
+            // Mark this as a ramp cell if it's in the protected zone and connected to the ramp
+            // This ensures the navmesh treats the entire corridor as walkable with proper height
+            const terrainType = foundRamp ? 'ramp' : 'ground';
+
             grid[py][px] = {
-              terrain: 'ground',
+              terrain: terrainType as 'ramp' | 'ground',
               elevation: useElevation,
               feature: 'none',
               textureId: Math.floor(Math.random() * 4),
@@ -483,23 +521,43 @@ function generateRectangularPlatform(
               textureId: Math.floor(Math.random() * 4),
             };
           } else {
-            // In protected zone - check for adjacent ramp to get appropriate elevation
+            // In protected zone - find nearest ramp cell for elevation
             let useElevation = elevation256;
+            let foundRamp = false;
+            let nearestRampDist = Infinity;
+            let nearestRampElev = elevation256;
 
-            // Look for adjacent ramp cells and use their elevation if found
-            for (const [rdx, rdy] of [[0, 1], [0, -1], [1, 0], [-1, 0], [1, 1], [1, -1], [-1, 1], [-1, -1]]) {
-              const rx = px + rdx;
-              const ry = py + rdy;
-              if (ry >= 0 && ry < grid.length && rx >= 0 && rx < grid[0].length) {
-                if (grid[ry][rx].terrain === 'ramp') {
-                  useElevation = grid[ry][rx].elevation;
-                  break;
+            // Search outward to find nearest ramp cell
+            const searchRadius = 8;
+            for (let searchDist = 1; searchDist <= searchRadius && !foundRamp; searchDist++) {
+              for (let rdx = -searchDist; rdx <= searchDist; rdx++) {
+                for (let rdy = -searchDist; rdy <= searchDist; rdy++) {
+                  if (Math.abs(rdx) !== searchDist && Math.abs(rdy) !== searchDist) continue;
+
+                  const rx = px + rdx;
+                  const ry = py + rdy;
+                  if (ry >= 0 && ry < grid.length && rx >= 0 && rx < grid[0].length) {
+                    if (grid[ry][rx].terrain === 'ramp') {
+                      const rampDist = Math.sqrt(rdx * rdx + rdy * rdy);
+                      if (rampDist < nearestRampDist) {
+                        nearestRampDist = rampDist;
+                        nearestRampElev = grid[ry][rx].elevation;
+                        foundRamp = true;
+                      }
+                    }
+                  }
                 }
               }
             }
 
+            if (foundRamp) {
+              useElevation = nearestRampElev;
+            }
+
+            const terrainType = foundRamp ? 'ramp' : 'ground';
+
             grid[py][px] = {
-              terrain: 'ground',
+              terrain: terrainType as 'ramp' | 'ground',
               elevation: useElevation,
               feature: 'none',
               textureId: Math.floor(Math.random() * 4),
@@ -533,6 +591,7 @@ function isNearProtectedZone(
 
 /**
  * Generate a simple ground area (no cliffs)
+ * Handles smooth elevation transitions at ramp boundaries
  */
 function generateGroundArea(
   grid: MapCell[][],
@@ -540,6 +599,9 @@ function generateGroundArea(
 ): void {
   const { center, radius, elevation } = area;
   const elevation256 = legacyElevationTo256(elevation);
+
+  // First pass: identify cells and mark ramp-adjacent cells
+  const cellsToProcess: Array<{ px: number; py: number; dist: number }> = [];
 
   for (let dy = -radius; dy <= radius; dy++) {
     for (let dx = -radius; dx <= radius; dx++) {
@@ -553,16 +615,55 @@ function generateGroundArea(
           if (grid[py][px].terrain === 'ramp') {
             continue;
           }
-
-          grid[py][px] = {
-            terrain: 'ground',
-            elevation: elevation256,
-            feature: 'none',
-            textureId: Math.floor(Math.random() * 4),
-          };
+          cellsToProcess.push({ px, py, dist });
         }
       }
     }
+  }
+
+  // Second pass: fill cells with appropriate elevations
+  for (const { px, py } of cellsToProcess) {
+    // Check if this cell is adjacent to a ramp for smooth transition
+    let isAdjacentToRamp = false;
+    let nearestRampElev = elevation256;
+
+    // Search for nearby ramp cells
+    for (let rdx = -2; rdx <= 2; rdx++) {
+      for (let rdy = -2; rdy <= 2; rdy++) {
+        const rx = px + rdx;
+        const ry = py + rdy;
+        if (ry >= 0 && ry < grid.length && rx >= 0 && rx < grid[0].length) {
+          if (grid[ry][rx].terrain === 'ramp') {
+            isAdjacentToRamp = true;
+            nearestRampElev = grid[ry][rx].elevation;
+            break;
+          }
+        }
+      }
+      if (isAdjacentToRamp) break;
+    }
+
+    // For cells adjacent to ramps, interpolate between ramp elevation and ground elevation
+    // This creates a smooth "landing" zone at the bottom of ramps
+    let useElevation = elevation256;
+    if (isAdjacentToRamp) {
+      // Use the ramp's elevation if it's close to ground level, otherwise blend
+      const elevDiff = Math.abs(nearestRampElev - elevation256);
+      if (elevDiff < 20) {
+        // Close enough - use the lower (ground) elevation for flatness
+        useElevation = elevation256;
+      } else {
+        // Still transitioning - use a value between ramp and ground
+        useElevation = Math.round((nearestRampElev + elevation256) / 2);
+      }
+    }
+
+    grid[py][px] = {
+      terrain: 'ground',
+      elevation: useElevation,
+      feature: 'none',
+      textureId: Math.floor(Math.random() * 4),
+    };
   }
 }
 

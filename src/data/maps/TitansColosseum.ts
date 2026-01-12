@@ -448,14 +448,15 @@ const topology: MapTopology = {
     connect('p8_main', 'p8_nat', 10, 'east'),
 
     // Natural to low ground connections (elevation 1 → 0)
-    connect('p1_nat', 'p1_ground', 8, 'south'),
-    connect('p2_nat', 'p2_ground', 8, 'south'),
-    connect('p3_nat', 'p3_ground', 8, 'west'),
-    connect('p4_nat', 'p4_ground', 8, 'west'),
-    connect('p5_nat', 'p5_ground', 8, 'north'),
-    connect('p6_nat', 'p6_ground', 8, 'north'),
-    connect('p7_nat', 'p7_ground', 8, 'east'),
-    connect('p8_nat', 'p8_ground', 8, 'east'),
+    // CRITICAL: Use same width as main-to-natural ramps (10) for consistent navmesh
+    connect('p1_nat', 'p1_ground', 10, 'south'),
+    connect('p2_nat', 'p2_ground', 10, 'south'),
+    connect('p3_nat', 'p3_ground', 10, 'west'),
+    connect('p4_nat', 'p4_ground', 10, 'west'),
+    connect('p5_nat', 'p5_ground', 10, 'north'),
+    connect('p6_nat', 'p6_ground', 10, 'north'),
+    connect('p7_nat', 'p7_ground', 10, 'east'),
+    connect('p8_nat', 'p8_ground', 10, 'east'),
   ],
 };
 
