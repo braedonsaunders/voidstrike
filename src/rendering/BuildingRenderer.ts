@@ -303,16 +303,21 @@ export class BuildingRenderer {
       this.scene.remove(meshData.selectionRing);
       this.scene.remove(meshData.healthBar);
       this.scene.remove(meshData.progressBar);
-      this.disposeGroup(meshData.group);
+      // Only dispose materials, NOT geometry (geometry is shared with asset cache)
+      this.disposeMaterialsOnly(meshData.group);
     }
     this.buildingMeshes.clear();
 
     // Also clear instanced groups
+    // NOTE: Do NOT dispose geometry here - it's shared with the asset cache.
+    // Disposing shared geometry causes WebGPU "setIndexBuffer" errors.
     for (const group of this.instancedGroups.values()) {
       this.scene.remove(group.mesh);
-      group.mesh.geometry.dispose();
+      // Only dispose materials (they may be cloned)
       if (group.mesh.material instanceof THREE.Material) {
         group.mesh.material.dispose();
+      } else if (Array.isArray(group.mesh.material)) {
+        group.mesh.material.forEach(m => m.dispose());
       }
     }
     this.instancedGroups.clear();
@@ -2310,6 +2315,26 @@ export class BuildingRenderer {
     }
   }
 
+  /**
+   * Dispose only materials in a group, NOT geometry.
+   * Use this for meshes with shared geometry (from asset cache).
+   */
+  private disposeMaterialsOnly(group: THREE.Group | THREE.Object3D): void {
+    group.traverse((child) => {
+      if (child instanceof THREE.Mesh || child instanceof THREE.Points) {
+        if (child.material instanceof THREE.Material) {
+          child.material.dispose();
+        } else if (Array.isArray(child.material)) {
+          child.material.forEach(m => m.dispose());
+        }
+      }
+    });
+  }
+
+  /**
+   * Dispose both geometry and materials in a group.
+   * Only use this for groups with owned geometry (effects, particles, etc.).
+   */
   private disposeGroup(group: THREE.Group): void {
     group.traverse((child) => {
       if (child instanceof THREE.Mesh || child instanceof THREE.Points) {
@@ -2343,11 +2368,13 @@ export class BuildingRenderer {
     this.scaffoldMaterial.dispose();
 
     for (const meshData of this.buildingMeshes.values()) {
-      this.disposeGroup(meshData.group);
+      // Only dispose materials for building meshes (geometry is shared with asset cache)
+      this.disposeMaterialsOnly(meshData.group);
       this.scene.remove(meshData.group);
       this.scene.remove(meshData.selectionRing);
       this.scene.remove(meshData.healthBar);
       this.scene.remove(meshData.progressBar);
+      // Effects have their own geometry, can dispose fully
       if (meshData.fireEffect) {
         this.scene.remove(meshData.fireEffect);
         this.disposeGroup(meshData.fireEffect);
@@ -2376,9 +2403,10 @@ export class BuildingRenderer {
     this.buildingMeshes.clear();
 
     // Dispose instanced groups
+    // NOTE: Do NOT dispose geometry - it's shared with the asset cache
     for (const group of this.instancedGroups.values()) {
       this.scene.remove(group.mesh);
-      group.mesh.geometry.dispose();
+      // Only dispose materials
       if (group.mesh.material instanceof THREE.Material) {
         group.mesh.material.dispose();
       } else if (Array.isArray(group.mesh.material)) {
