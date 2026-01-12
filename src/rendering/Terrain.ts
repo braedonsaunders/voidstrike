@@ -835,20 +835,12 @@ export class Terrain {
     let avgElevation: number;
 
     if (hasRamp) {
-      // RAMP FIX: Use RAMP cell elevations for smooth transitions
-      // If cell11 is a ramp, use its elevation directly
-      // If cell11 is NOT a ramp but adjacent cells are, use the average of ramp cells
-      // This ensures vertices at ramp-ground boundaries get the correct height
-      if (cell11.terrain === 'ramp') {
-        avgElevation = cell11.elevation;
-      } else {
-        // cell11 is ground/other but adjacent cells are ramps
-        // Use the average of ramp cell elevations for smooth transition
-        const rampElevationSum = rampCells.reduce((sum, c) => sum + c.elevation, 0);
-        avgElevation = rampElevationSum / rampCells.length;
-      }
+      // For vertices touching ramps, use the PRIMARY CELL's (cell11) elevation
+      // This ensures each cell's corners reflect its actual terrain elevation
+      // The TerrainTopology system ensures protected zone cells have correct elevations
+      avgElevation = cell11.elevation;
     } else {
-      // No ramps - use simple average elevation
+      // No ramps - use simple average elevation for smooth ground
       avgElevation = (cell00.elevation + cell10.elevation + cell01.elevation + cell11.elevation) / 4;
     }
 
@@ -1132,43 +1124,15 @@ export class Terrain {
         const cell = terrain[y][x];
 
         // Only include walkable terrain (ground and ramps)
-        // Cliff cells (unwalkable) are excluded, creating physical gaps
+        // Cliff cells (unwalkable) are excluded, creating physical gaps in the navmesh
+        // The height difference between cliff-adjacent ground and lower ground
+        // prevents Recast from connecting them (via walkableClimb threshold)
         if (cell.terrain === 'unwalkable') continue;
 
         // Check terrain features that make cells unwalkable
         const feature = cell.feature || 'none';
         const featureConfig = TERRAIN_FEATURE_CONFIG[feature];
         if (!featureConfig.walkable) continue;
-
-        // For non-ramp cells, check if this cell borders a cliff
-        // Exclude cliff-adjacent cells UNLESS they also border a ramp
-        // This prevents units from walking off cliffs while allowing ramp connectivity
-        if (cell.terrain !== 'ramp') {
-          let bordersCliff = false;
-          let bordersRamp = false;
-
-          for (let dy = -1; dy <= 1; dy++) {
-            for (let dx = -1; dx <= 1; dx++) {
-              if (dx === 0 && dy === 0) continue;
-              const nx = x + dx;
-              const ny = y + dy;
-              if (nx >= 0 && nx < width && ny >= 0 && ny < height) {
-                const neighbor = terrain[ny][nx];
-                if (neighbor.terrain === 'unwalkable' && neighbor.feature === 'cliff') {
-                  bordersCliff = true;
-                }
-                if (neighbor.terrain === 'ramp') {
-                  bordersRamp = true;
-                }
-              }
-            }
-          }
-
-          // Skip ground cells at cliff edges (but not if they connect to ramps)
-          if (bordersCliff && !bordersRamp) {
-            continue;
-          }
-        }
 
         // Get heights at the 4 corners of this cell
         const h00 = this.heightMap[y * this.gridWidth + x];
