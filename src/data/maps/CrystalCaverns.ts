@@ -553,8 +553,8 @@ function generateCrystalCaverns(): MapData {
     expansions,
 
     watchTowers: [
-      { x: 100, y: 55, radius: 20 },   // Top center
-      { x: 100, y: 125, radius: 20 },  // Bottom center
+      { x: 100, y: 40, radius: 20 },   // Top center (moved north to avoid natural ramp areas)
+      { x: 100, y: 140, radius: 20 },  // Bottom center (moved south to avoid natural ramp areas)
       { x: 70, y: 90, radius: 16 },    // Left mid
       { x: 130, y: 90, radius: 16 },   // Right mid
     ],
@@ -562,9 +562,9 @@ function generateCrystalCaverns(): MapData {
     ramps,
 
     destructibles: [
-      // Backdoor rocks to third bases
-      { x: 40, y: 42, health: 2000 },
-      { x: 160, y: 138, health: 2000 },
+      // Backdoor rocks to third bases (positioned away from natural-to-third ramps)
+      { x: 15, y: 48, health: 2000 },   // P1 backdoor - west side of third
+      { x: 185, y: 132, health: 2000 }, // P2 backdoor - east side of third
       // Center path rocks
       { x: 85, y: 90, health: 1500 },
       { x: 115, y: 90, health: 1500 },
