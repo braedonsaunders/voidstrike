@@ -428,6 +428,14 @@ export class BuildingPlacementPreview {
       }
     }
 
+    // Defensive check: ensure we have valid geometry data to prevent WebGPU errors
+    if (vertices.length === 0 || indices.length === 0) {
+      // Create minimal valid geometry (single invisible quad)
+      vertices.push(0, 0, 0, 1, 0, 0, 1, 0, 1, 0, 0, 1);
+      colors.push(0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0);
+      indices.push(0, 1, 2, 0, 2, 3);
+    }
+
     geometry.setAttribute('position', new THREE.Float32BufferAttribute(vertices, 3));
     geometry.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3));
     geometry.setIndex(indices);
