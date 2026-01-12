@@ -1152,10 +1152,12 @@ export class Terrain {
           continue;
         }
 
-        // Also check if any adjacent cells are unwalkable cliffs
-        // Skip ground cells that directly border cliffs (but allow ramps)
+        // Check if any adjacent cells are unwalkable cliffs
+        // Skip ground cells that directly border cliffs UNLESS they also border a ramp
+        // (cells adjacent to ramps need to be included to connect ramps to walkable areas)
         if (cell.terrain !== 'ramp') {
           let bordersCliff = false;
+          let bordersRamp = false;
           for (let dy = -1; dy <= 1; dy++) {
             for (let dx = -1; dx <= 1; dx++) {
               if (dx === 0 && dy === 0) continue;
@@ -1165,13 +1167,16 @@ export class Terrain {
                 const neighbor = terrain[ny][nx];
                 if (neighbor.terrain === 'unwalkable' && neighbor.feature === 'cliff') {
                   bordersCliff = true;
-                  break;
+                }
+                if (neighbor.terrain === 'ramp') {
+                  bordersRamp = true;
                 }
               }
             }
-            if (bordersCliff) break;
           }
-          if (bordersCliff) continue;
+          // Only exclude if it borders a cliff but NOT a ramp
+          // Cells adjacent to ramps must be included to connect the ramp to walkable ground
+          if (bordersCliff && !bordersRamp) continue;
         }
 
         // Create two triangles for this cell
