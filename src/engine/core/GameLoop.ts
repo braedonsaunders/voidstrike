@@ -77,9 +77,11 @@ export class GameLoop {
 
     if (this.worker) {
       // Use worker for timing - runs at full speed even in background
+      // PERF: Use tickMs directly instead of tickMs/2 to avoid wasted callbacks
+      // The accumulator pattern handles timing variance; we don't need 2x polling rate
       this.worker.postMessage({
         type: 'start',
-        intervalMs: Math.floor(this.tickMs / 2),
+        intervalMs: this.tickMs,
       });
     } else {
       // Fallback to setInterval if workers unavailable
@@ -90,7 +92,8 @@ export class GameLoop {
   private fallbackIntervalId: ReturnType<typeof setInterval> | null = null;
 
   private startFallback(): void {
-    this.fallbackIntervalId = setInterval(() => this.tick(), Math.floor(this.tickMs / 2));
+    // PERF: Use tickMs directly instead of tickMs/2 to avoid wasted callbacks
+    this.fallbackIntervalId = setInterval(() => this.tick(), this.tickMs);
   }
 
   public stop(): void {
@@ -151,14 +154,14 @@ export class GameLoop {
     if (this.isRunning && this.worker) {
       this.worker.postMessage({
         type: 'setInterval',
-        intervalMs: Math.floor(this.tickMs / 2),
+        intervalMs: this.tickMs,
       });
     }
 
     // Update fallback interval if running
     if (this.isRunning && this.fallbackIntervalId !== null) {
       clearInterval(this.fallbackIntervalId);
-      this.fallbackIntervalId = setInterval(() => this.tick(), Math.floor(this.tickMs / 2));
+      this.fallbackIntervalId = setInterval(() => this.tick(), this.tickMs);
     }
   }
 

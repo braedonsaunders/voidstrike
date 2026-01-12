@@ -172,8 +172,12 @@ export class SelectionSystem extends System {
     // Update store
     if (additive) {
       const current = useGameStore.getState().selectedUnits;
-      const combined = [...new Set([...current, ...selectedIds])];
-      useGameStore.getState().selectUnits(combined);
+      // PERF: Avoid multiple spread operations by using Set directly
+      const combinedSet = new Set(current);
+      for (let i = 0; i < selectedIds.length; i++) {
+        combinedSet.add(selectedIds[i]);
+      }
+      useGameStore.getState().selectUnits(Array.from(combinedSet));
     } else {
       useGameStore.getState().selectUnits(selectedIds);
     }
@@ -301,8 +305,12 @@ export class SelectionSystem extends System {
     // Update store
     if (additive) {
       const current = useGameStore.getState().selectedUnits;
-      const combined = [...new Set([...current, ...selectedIds])];
-      useGameStore.getState().selectUnits(combined);
+      // PERF: Avoid multiple spread operations by using Set directly
+      const combinedSet = new Set(current);
+      for (let i = 0; i < selectedIds.length; i++) {
+        combinedSet.add(selectedIds[i]);
+      }
+      useGameStore.getState().selectUnits(Array.from(combinedSet));
     } else {
       useGameStore.getState().selectUnits(selectedIds);
     }
@@ -573,8 +581,12 @@ export class SelectionSystem extends System {
     // Update store
     if (additive) {
       const current = useGameStore.getState().selectedUnits;
-      const combined = [...new Set([...current, ...selectedIds])];
-      useGameStore.getState().selectUnits(combined);
+      // PERF: Avoid multiple spread operations by using Set directly
+      const combinedSet = new Set(current);
+      for (let i = 0; i < selectedIds.length; i++) {
+        combinedSet.add(selectedIds[i]);
+      }
+      useGameStore.getState().selectUnits(Array.from(combinedSet));
     } else {
       useGameStore.getState().selectUnits(selectedIds);
     }
@@ -613,8 +625,12 @@ export class SelectionSystem extends System {
     // Update store
     if (additive) {
       const current = useGameStore.getState().selectedUnits;
-      const combined = [...new Set([...current, ...selectedIds])];
-      useGameStore.getState().selectUnits(combined);
+      // PERF: Avoid multiple spread operations by using Set directly
+      const combinedSet = new Set(current);
+      for (let i = 0; i < selectedIds.length; i++) {
+        combinedSet.add(selectedIds[i]);
+      }
+      useGameStore.getState().selectUnits(Array.from(combinedSet));
     } else {
       useGameStore.getState().selectUnits(selectedIds);
     }
