@@ -844,11 +844,13 @@ export class Terrain {
       avgElevation = (cell00.elevation + cell10.elevation + cell01.elevation + cell11.elevation) / 4;
     }
 
-    // Use the PRIMARY CELL's terrain type directly - this ensures texture matches walkability
-    // A vertex at (x,y) corresponds to cell at (x,y) for pathfinding, so use that cell's type
-    // This prevents cliff textures from bleeding onto walkable ground at edges
+    // For terrain type: if any adjacent cell is a ramp, treat this vertex as ramp terrain
+    // This prevents noise from being added to ramp-adjacent vertices, which would create holes
+    // The texture system will still use the actual cell type for rendering
+    const terrainType = hasRamp ? 'ramp' : cell11.terrain;
+
     return {
-      terrain: cell11.terrain,
+      terrain: terrainType as typeof cell11.terrain,
       elevation: Math.round(avgElevation),
       feature: cell11.feature || 'none',
       textureId: cell11.textureId,
