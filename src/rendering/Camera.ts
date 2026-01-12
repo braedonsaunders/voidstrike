@@ -55,6 +55,18 @@ export class RTSCamera {
   private screenWidth = 0;
   private screenHeight = 0;
 
+  // PERF: Store bound event handlers to properly remove them later
+  // Using bind() in addEventListener creates new functions that can't be removed
+  private boundHandleKeyDown: (e: KeyboardEvent) => void;
+  private boundHandleKeyUp: (e: KeyboardEvent) => void;
+  private boundHandleMouseMove: (e: MouseEvent) => void;
+  private boundHandleMouseDown: (e: MouseEvent) => void;
+  private boundHandleMouseUp: (e: MouseEvent) => void;
+  private boundHandleWheel: (e: WheelEvent) => void;
+  private boundHandleResize: () => void;
+  private boundHandleMouseLeave: () => void;
+  private boundHandleMouseEnter: () => void;
+
   // Camera location bookmarks (F5-F8)
   private savedLocations: Map<string, CameraLocation> = new Map();
 
@@ -89,6 +101,17 @@ export class RTSCamera {
     this.manualPitchOffset = 0; // User can adjust pitch via middle mouse drag
     this.currentPitch = this.calculateZoomBasedPitch(this.currentZoom);
 
+    // PERF: Bind event handlers once in constructor to enable proper cleanup
+    this.boundHandleKeyDown = this.handleKeyDown.bind(this);
+    this.boundHandleKeyUp = this.handleKeyUp.bind(this);
+    this.boundHandleMouseMove = this.handleMouseMove.bind(this);
+    this.boundHandleMouseDown = this.handleMouseDown.bind(this);
+    this.boundHandleMouseUp = this.handleMouseUp.bind(this);
+    this.boundHandleWheel = this.handleWheel.bind(this);
+    this.boundHandleResize = this.handleResize.bind(this);
+    this.boundHandleMouseLeave = this.handleMouseLeaveViewport.bind(this);
+    this.boundHandleMouseEnter = this.handleMouseEnterViewport.bind(this);
+
     this.updateCameraPosition();
     this.setupEventListeners();
   }
@@ -115,17 +138,18 @@ export class RTSCamera {
   private setupEventListeners(): void {
     if (typeof window === 'undefined') return;
 
-    window.addEventListener('keydown', this.handleKeyDown.bind(this));
-    window.addEventListener('keyup', this.handleKeyUp.bind(this));
-    window.addEventListener('mousemove', this.handleMouseMove.bind(this));
-    window.addEventListener('mousedown', this.handleMouseDown.bind(this));
-    window.addEventListener('mouseup', this.handleMouseUp.bind(this));
-    window.addEventListener('wheel', this.handleWheel.bind(this), { passive: false });
-    window.addEventListener('resize', this.handleResize.bind(this));
+    // Use pre-bound handlers so they can be properly removed in dispose()
+    window.addEventListener('keydown', this.boundHandleKeyDown);
+    window.addEventListener('keyup', this.boundHandleKeyUp);
+    window.addEventListener('mousemove', this.boundHandleMouseMove);
+    window.addEventListener('mousedown', this.boundHandleMouseDown);
+    window.addEventListener('mouseup', this.boundHandleMouseUp);
+    window.addEventListener('wheel', this.boundHandleWheel, { passive: false });
+    window.addEventListener('resize', this.boundHandleResize);
 
     // Track when cursor leaves/enters the viewport
-    document.addEventListener('mouseleave', this.handleMouseLeaveViewport.bind(this));
-    document.addEventListener('mouseenter', this.handleMouseEnterViewport.bind(this));
+    document.addEventListener('mouseleave', this.boundHandleMouseLeave);
+    document.addEventListener('mouseenter', this.boundHandleMouseEnter);
 
     this.screenWidth = window.innerWidth;
     this.screenHeight = window.innerHeight;
@@ -530,14 +554,15 @@ export class RTSCamera {
   public dispose(): void {
     if (typeof window === 'undefined') return;
 
-    window.removeEventListener('keydown', this.handleKeyDown.bind(this));
-    window.removeEventListener('keyup', this.handleKeyUp.bind(this));
-    window.removeEventListener('mousemove', this.handleMouseMove.bind(this));
-    window.removeEventListener('mousedown', this.handleMouseDown.bind(this));
-    window.removeEventListener('mouseup', this.handleMouseUp.bind(this));
-    window.removeEventListener('wheel', this.handleWheel.bind(this));
-    window.removeEventListener('resize', this.handleResize.bind(this));
-    document.removeEventListener('mouseleave', this.handleMouseLeaveViewport.bind(this));
-    document.removeEventListener('mouseenter', this.handleMouseEnterViewport.bind(this));
+    // Use pre-bound handlers - these are the same references used in addEventListener
+    window.removeEventListener('keydown', this.boundHandleKeyDown);
+    window.removeEventListener('keyup', this.boundHandleKeyUp);
+    window.removeEventListener('mousemove', this.boundHandleMouseMove);
+    window.removeEventListener('mousedown', this.boundHandleMouseDown);
+    window.removeEventListener('mouseup', this.boundHandleMouseUp);
+    window.removeEventListener('wheel', this.boundHandleWheel);
+    window.removeEventListener('resize', this.boundHandleResize);
+    document.removeEventListener('mouseleave', this.boundHandleMouseLeave);
+    document.removeEventListener('mouseenter', this.boundHandleMouseEnter);
   }
 }

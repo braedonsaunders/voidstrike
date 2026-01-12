@@ -137,15 +137,46 @@ export class RecastNavigation {
 
   /**
    * Initialize WASM module (call once at app start)
+   *
+   * Note: This requires the server to send proper security headers for SharedArrayBuffer:
+   * - Cross-Origin-Opener-Policy: same-origin
+   * - Cross-Origin-Embedder-Policy: require-corp
+   *
+   * Without these headers, Safari (and other browsers in certain contexts) will fail
+   * to initialize the WASM module.
    */
   public static async initWasm(): Promise<void> {
     if (RecastNavigation.initPromise) {
       return RecastNavigation.initPromise;
     }
 
-    RecastNavigation.initPromise = init().then(() => {
-      debugPathfinding.log('[RecastNavigation] WASM module initialized');
-    });
+    // Check for SharedArrayBuffer availability (required for threaded WASM)
+    const hasSharedArrayBuffer = typeof SharedArrayBuffer !== 'undefined';
+    debugPathfinding.log('[RecastNavigation] SharedArrayBuffer available:', hasSharedArrayBuffer);
+
+    if (!hasSharedArrayBuffer) {
+      console.warn(
+        '[RecastNavigation] SharedArrayBuffer is not available. ' +
+        'This may be due to missing security headers (COOP/COEP). ' +
+        'Navmesh initialization may fail on Safari and other browsers.'
+      );
+    }
+
+    RecastNavigation.initPromise = init()
+      .then(() => {
+        debugPathfinding.log('[RecastNavigation] WASM module initialized successfully');
+      })
+      .catch((error) => {
+        console.error('[RecastNavigation] WASM initialization failed:', error);
+        console.error(
+          '[RecastNavigation] If this is Safari, ensure the server sends these headers:\n' +
+          '  Cross-Origin-Opener-Policy: same-origin\n' +
+          '  Cross-Origin-Embedder-Policy: require-corp'
+        );
+        // Clear the promise so initialization can be retried
+        RecastNavigation.initPromise = null;
+        throw error;
+      });
 
     return RecastNavigation.initPromise;
   }
