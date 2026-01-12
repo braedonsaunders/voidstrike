@@ -33,6 +33,7 @@ export interface GameResult {
 }
 
 export class GameStateSystem extends System {
+  public readonly name = 'GameStateSystem';
   public priority = 200; // Run late, after most other systems
 
   private playerStats: Map<string, PlayerStats> = new Map();

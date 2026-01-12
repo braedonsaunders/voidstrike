@@ -8,6 +8,7 @@ import { BUILDING_DEFINITIONS } from '@/data/buildings/dominion';
 import { debugProduction } from '@/utils/debugLogger';
 
 export class ResearchSystem extends System {
+  public readonly name = 'ResearchSystem';
   public priority = 32; // After ProductionSystem
 
   constructor(game: Game) {

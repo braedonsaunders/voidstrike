@@ -5,6 +5,12 @@ export abstract class System {
   public enabled = true;
   public priority = 0;
 
+  /**
+   * Human-readable system name for debugging and performance monitoring.
+   * Required because constructor.name gets minified in production builds.
+   */
+  public abstract readonly name: string;
+
   protected world!: World;
   protected game: Game;
 

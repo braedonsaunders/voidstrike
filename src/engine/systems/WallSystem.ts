@@ -21,6 +21,7 @@ import { isLocalPlayer, getLocalPlayerId } from '@/store/gameSetupStore';
  * - Wall upgrade application
  */
 export class WallSystem extends System {
+  public readonly name = 'WallSystem';
   public priority = 15; // Run after BuildingPlacementSystem
 
   // Distance to check for gate proximity

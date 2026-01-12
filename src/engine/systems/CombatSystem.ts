@@ -105,6 +105,7 @@ const HIGH_GROUND_MISS_CHANCE = 0.3; // 30% miss chance when attacking uphill
 const HIGH_GROUND_THRESHOLD = 1.5; // Height difference to count as high ground
 
 export class CombatSystem extends System {
+  public readonly name = 'CombatSystem';
   public priority = 20;
 
   // Track last under attack alert time per player

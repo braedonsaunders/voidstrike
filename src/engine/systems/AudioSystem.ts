@@ -9,6 +9,7 @@ import { useUIStore } from '@/store/uiStore';
 import * as THREE from 'three';
 
 export class AudioSystem extends System {
+  public readonly name = 'AudioSystem';
   public priority = 100; // Run after other systems
   private camera: THREE.Camera | null = null;
   private initialized = false;

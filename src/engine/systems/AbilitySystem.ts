@@ -29,6 +29,7 @@ interface DelayedAbilityEffect {
 }
 
 export class AbilitySystem extends System {
+  public readonly name = 'AbilitySystem';
   public priority = 25;
 
   // Queue for delayed ability effects (replaces setTimeout)

@@ -146,6 +146,7 @@ interface EntityQueryCache {
 }
 
 export class EnhancedAISystem extends System {
+  public readonly name = 'EnhancedAISystem';
   public priority = 100;
 
   private aiPlayers: Map<string, AIPlayer> = new Map();

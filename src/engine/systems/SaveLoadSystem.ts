@@ -43,6 +43,7 @@ const AUTO_SAVE_INTERVAL = 60000; // 1 minute
 const MAX_SAVE_SLOTS = 10;
 
 export class SaveLoadSystem extends System {
+  public readonly name = 'SaveLoadSystem';
   public priority = 250; // Run very late
 
   private lastAutoSave: number = 0;

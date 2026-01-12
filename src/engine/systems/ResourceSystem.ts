@@ -15,6 +15,7 @@ import { isLocalPlayer } from '@/store/gameSetupStore';
 const MINING_TIME = 2.5;
 
 export class ResourceSystem extends System {
+  public readonly name = 'ResourceSystem';
   public priority = 25;
 
   // PERF: Cache resources to avoid repeated getEntitiesWith calls

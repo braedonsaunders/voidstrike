@@ -15,6 +15,7 @@ import { useGameStore } from '@/store/gameStore';
  * - Priority-based selection (units over buildings)
  */
 export class SelectionSystem extends System {
+  public readonly name = 'SelectionSystem';
   public priority = 1;
 
   private controlGroups: Map<number, number[]> = new Map();

@@ -12,6 +12,7 @@ import { BUILDING_DEFINITIONS, RESEARCH_MODULE_UNITS } from '@/data/buildings/do
 import { debugProduction } from '@/utils/debugLogger';
 
 export class ProductionSystem extends System {
+  public readonly name = 'ProductionSystem';
   public priority = 30;
 
   constructor(game: Game) {
