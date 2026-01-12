@@ -120,6 +120,7 @@ export interface DesyncReport {
 // =============================================================================
 
 export class ChecksumSystem extends System {
+  public readonly name = 'ChecksumSystem';
   public priority = 200; // Run after all game logic
 
   private config: ChecksumConfig;
