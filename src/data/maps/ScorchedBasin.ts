@@ -21,6 +21,7 @@ import {
   naturalExpansion,
   expansion,
   connect,
+  getRampClearanceZones,
   type MapTopology,
 } from './MapTypes';
 
@@ -100,7 +101,11 @@ function isInBaseArea(x: number, y: number): boolean {
   return false;
 }
 
-function generateDesertDecorations(): MapDecoration[] {
+function isInRampClearance(x: number, y: number, clearanceZones: Set<string>): boolean {
+  return clearanceZones.has(`${Math.floor(x)},${Math.floor(y)}`);
+}
+
+function generateDesertDecorations(rampClearance: Set<string>): MapDecoration[] {
   const decorations: MapDecoration[] = [];
   const rand = seededRandom(789);
 
@@ -110,7 +115,7 @@ function generateDesertDecorations(): MapDecoration[] {
       const dist = rand() * spread;
       const x = cx + Math.cos(angle) * dist;
       const y = cy + Math.sin(angle) * dist;
-      if (isInBaseArea(x, y)) continue;
+      if (isInBaseArea(x, y) || isInRampClearance(x, y, rampClearance)) continue;
       decorations.push({
         type: 'crystal_formation',
         x, y,
@@ -126,7 +131,7 @@ function generateDesertDecorations(): MapDecoration[] {
       const dist = rand() * spread;
       const x = cx + Math.cos(angle) * dist;
       const y = cy + Math.sin(angle) * dist;
-      if (isInBaseArea(x, y)) continue;
+      if (isInBaseArea(x, y) || isInRampClearance(x, y, rampClearance)) continue;
       decorations.push({
         type: 'tree_dead',
         x, y,
@@ -145,7 +150,7 @@ function generateDesertDecorations(): MapDecoration[] {
       const dist = rand() * spread;
       const x = cx + Math.cos(angle) * dist;
       const y = cy + Math.sin(angle) * dist;
-      if (isInBaseArea(x, y)) continue;
+      if (isInBaseArea(x, y) || isInRampClearance(x, y, rampClearance)) continue;
       decorations.push({
         type: rockTypes[Math.floor(rand() * rockTypes.length)],
         x, y,
@@ -165,7 +170,7 @@ function generateDesertDecorations(): MapDecoration[] {
       const t = i / steps;
       const x = x1 + dx * t + (rand() - 0.5) * 2;
       const y = y1 + dy * t + (rand() - 0.5) * 2;
-      if (isInBaseArea(x, y)) continue;
+      if (isInBaseArea(x, y) || isInRampClearance(x, y, rampClearance)) continue;
       const rockType = rand() < 0.4 ? 'rocks_large' : (rand() < 0.7 ? 'rocks_small' : 'rock_single');
       decorations.push({
         type: rockType,
@@ -203,7 +208,7 @@ function generateDesertDecorations(): MapDecoration[] {
       const dist = radius + 2 + rand() * 4;
       const x = cx + Math.cos(angle) * dist;
       const y = cy + Math.sin(angle) * dist;
-      if (isInBaseArea(x, y)) continue;
+      if (isInBaseArea(x, y) || isInRampClearance(x, y, rampClearance)) continue;
       const rockType = rand() < 0.3 ? 'rocks_large' : (rand() < 0.6 ? 'rocks_small' : 'rock_single');
       decorations.push({
         type: rockType,
@@ -221,7 +226,7 @@ function generateDesertDecorations(): MapDecoration[] {
       const dist = radius + 4 + rand() * 6;
       const x = cx + Math.cos(angle) * dist;
       const y = cy + Math.sin(angle) * dist;
-      if (isInBaseArea(x, y)) continue;
+      if (isInBaseArea(x, y) || isInRampClearance(x, y, rampClearance)) continue;
       decorations.push({
         type: 'tree_dead',
         x, y,
@@ -423,12 +428,15 @@ function generateScorchedBasin(): MapData {
   };
 
   // Generate base terrain from topology
-  const { terrain, ramps } = generateTerrainFromTopology(
+  const { terrain, ramps, connections } = generateTerrainFromTopology(
     MAP_WIDTH,
     MAP_HEIGHT,
     topology,
     0 // Default elevation (low ground)
   );
+
+  // Get ramp clearance zones to prevent decorations on ramps
+  const rampClearance = getRampClearanceZones(connections);
 
   // ========================================
   // MAP BORDERS - Thick unwalkable cliffs
@@ -595,7 +603,7 @@ function generateScorchedBasin(): MapData {
       { x: 170, y: 170, health: 1500 },
     ],
 
-    decorations: generateDesertDecorations(),
+    decorations: generateDesertDecorations(rampClearance),
 
     playerCount: 4,
     maxPlayers: 4,

@@ -21,7 +21,9 @@ import {
   naturalExpansion,
   expansion,
   connect,
+  getRampClearanceZones,
   type MapTopology,
+  type GeneratedConnection,
 } from './MapTypes';
 
 /**
@@ -90,7 +92,11 @@ function isInBaseArea(x: number, y: number): boolean {
   return false;
 }
 
-function generateFrozenDecorations(): MapDecoration[] {
+function isInRampClearance(x: number, y: number, clearanceZones: Set<string>): boolean {
+  return clearanceZones.has(`${Math.floor(x)},${Math.floor(y)}`);
+}
+
+function generateFrozenDecorations(rampClearance: Set<string>): MapDecoration[] {
   const decorations: MapDecoration[] = [];
   const rand = seededRandom(123);
 
@@ -100,7 +106,7 @@ function generateFrozenDecorations(): MapDecoration[] {
       const dist = rand() * spread;
       const x = cx + Math.cos(angle) * dist;
       const y = cy + Math.sin(angle) * dist;
-      if (isInBaseArea(x, y)) continue;
+      if (isInBaseArea(x, y) || isInRampClearance(x, y, rampClearance)) continue;
       decorations.push({
         type: 'crystal_formation',
         x, y,
@@ -116,7 +122,7 @@ function generateFrozenDecorations(): MapDecoration[] {
       const dist = rand() * spread;
       const x = cx + Math.cos(angle) * dist;
       const y = cy + Math.sin(angle) * dist;
-      if (isInBaseArea(x, y)) continue;
+      if (isInBaseArea(x, y) || isInRampClearance(x, y, rampClearance)) continue;
       decorations.push({
         type: 'tree_dead',
         x, y,
@@ -135,7 +141,7 @@ function generateFrozenDecorations(): MapDecoration[] {
       const dist = rand() * spread;
       const x = cx + Math.cos(angle) * dist;
       const y = cy + Math.sin(angle) * dist;
-      if (isInBaseArea(x, y)) continue;
+      if (isInBaseArea(x, y) || isInRampClearance(x, y, rampClearance)) continue;
       decorations.push({
         type: rockTypes[Math.floor(rand() * rockTypes.length)],
         x, y,
@@ -155,7 +161,7 @@ function generateFrozenDecorations(): MapDecoration[] {
       const t = i / steps;
       const x = x1 + dx * t + (rand() - 0.5) * 2;
       const y = y1 + dy * t + (rand() - 0.5) * 2;
-      if (isInBaseArea(x, y)) continue;
+      if (isInBaseArea(x, y) || isInRampClearance(x, y, rampClearance)) continue;
       const rockType = rand() < 0.4 ? 'rocks_large' : (rand() < 0.7 ? 'rocks_small' : 'rock_single');
       decorations.push({
         type: rockType,
@@ -212,7 +218,7 @@ function generateFrozenDecorations(): MapDecoration[] {
       const dist = radius + 2 + rand() * 4;
       const x = cx + Math.cos(angle) * dist;
       const y = cy + Math.sin(angle) * dist;
-      if (isInBaseArea(x, y)) continue;
+      if (isInBaseArea(x, y) || isInRampClearance(x, y, rampClearance)) continue;
       const rockType = rand() < 0.3 ? 'rocks_large' : (rand() < 0.6 ? 'rocks_small' : 'rock_single');
       decorations.push({
         type: rockType,
@@ -230,7 +236,7 @@ function generateFrozenDecorations(): MapDecoration[] {
       const dist = radius + 4 + rand() * 6;
       const x = cx + Math.cos(angle) * dist;
       const y = cy + Math.sin(angle) * dist;
-      if (isInBaseArea(x, y)) continue;
+      if (isInBaseArea(x, y) || isInRampClearance(x, y, rampClearance)) continue;
       decorations.push({
         type: 'tree_dead',
         x, y,
@@ -380,17 +386,17 @@ function generateCrystalCaverns(): MapData {
     ],
 
     connections: [
-      // Main to low ground connections (elevation 2 -> 0)
-      // P1 main exits east toward center
-      connect('p1_main', 'center_gold', 10, 'east'),
-      // P2 main exits west toward center
-      connect('p2_main', 'center_gold', 10, 'west'),
+      // Main to Natural connections (elevation 2 -> 1)
+      // P1 main connects to P1 natural
+      connect('p1_main', 'p1_nat', 10, 'auto'),
+      // P2 main connects to P2 natural
+      connect('p2_main', 'p2_nat', 10, 'auto'),
 
-      // Natural to low ground connections (elevation 1 -> 0)
-      // P1 natural exits south toward open ground
-      connect('p1_nat', 'p1_third', 8, 'south'),
-      // P2 natural exits north toward open ground
-      connect('p2_nat', 'p2_third', 8, 'north'),
+      // Natural to Third (ground) connections (elevation 1 -> 0)
+      // P1 natural exits toward P1 third
+      connect('p1_nat', 'p1_third', 8, 'auto'),
+      // P2 natural exits toward P2 third
+      connect('p2_nat', 'p2_third', 8, 'auto'),
     ],
   };
 
@@ -401,6 +407,9 @@ function generateCrystalCaverns(): MapData {
     topology,
     0 // Default elevation (low ground)
   );
+
+  // Get ramp clearance zones to prevent decorations on ramps
+  const rampClearance = getRampClearanceZones(connections);
 
   // ========================================
   // MAP BORDERS - Thick unwalkable cliffs
@@ -561,7 +570,7 @@ function generateCrystalCaverns(): MapData {
       { x: 115, y: 90, health: 1500 },
     ],
 
-    decorations: generateFrozenDecorations(),
+    decorations: generateFrozenDecorations(rampClearance),
 
     playerCount: 2,
     maxPlayers: 2,
