@@ -835,20 +835,12 @@ export class Terrain {
     let avgElevation: number;
 
     if (hasRamp) {
-      // RAMP FIX: Use RAMP cell elevations for smooth transitions
-      // If cell11 is a ramp, use its elevation directly
-      // If cell11 is NOT a ramp but adjacent cells are, use the average of ramp cells
-      // This ensures vertices at ramp-ground boundaries get the correct height
-      if (cell11.terrain === 'ramp') {
-        avgElevation = cell11.elevation;
-      } else {
-        // cell11 is ground/other but adjacent cells are ramps
-        // Use the average of ramp cell elevations for smooth transition
-        const rampElevationSum = rampCells.reduce((sum, c) => sum + c.elevation, 0);
-        avgElevation = rampElevationSum / rampCells.length;
-      }
+      // For vertices touching ramps, use the PRIMARY CELL's (cell11) elevation
+      // This ensures each cell's corners reflect its actual terrain elevation
+      // The TerrainTopology system ensures protected zone cells have correct elevations
+      avgElevation = cell11.elevation;
     } else {
-      // No ramps - use simple average elevation
+      // No ramps - use simple average elevation for smooth ground
       avgElevation = (cell00.elevation + cell10.elevation + cell01.elevation + cell11.elevation) / 4;
     }
 
