@@ -1135,10 +1135,26 @@ export class Terrain {
     // A cliff edge is a walkable cell where:
     // 1. It's adjacent to an unwalkable cell (cliff), AND
     // 2. There's ground at a DIFFERENT elevation within 3 cells (the cliff leads somewhere)
+    // 3. It's NOT near a ramp (ramps handle their own elevation transitions)
     // This prevents navmesh from creating slopes down cliff faces
     const isCliffEdgeCell = (cx: number, cy: number): boolean => {
       const cell = terrain[cy][cx];
       if (cell.terrain === 'ramp') return false; // Ramps should use interpolated heights
+
+      // CRITICAL: Check for nearby ramps FIRST - ramp transition zones should NOT be treated as cliff edges
+      // This is the key fix for ramp walkability - cells near ramps need smooth height transitions
+      const rampSearchRadius = 5; // Generous radius to cover ramp entry/exit zones
+      for (let rdy = -rampSearchRadius; rdy <= rampSearchRadius; rdy++) {
+        for (let rdx = -rampSearchRadius; rdx <= rampSearchRadius; rdx++) {
+          const rx = cx + rdx;
+          const ry = cy + rdy;
+          if (rx >= 0 && rx < width && ry >= 0 && ry < height) {
+            if (terrain[ry][rx].terrain === 'ramp') {
+              return false; // Near a ramp - use heightmap values, not flat cliff edge
+            }
+          }
+        }
+      }
 
       const cellElev = cell.elevation;
       let hasAdjacentCliff = false;
@@ -1185,9 +1201,12 @@ export class Terrain {
     };
 
     // Helper: Check if cell is adjacent to a ramp
+    // CRITICAL: Use larger search radius to properly handle wide ramps (10+ cells)
+    // and ensure transition zones at ramp entry/exit points are walkable
     const isAdjacentToRamp = (cx: number, cy: number): boolean => {
-      for (let dy = -1; dy <= 1; dy++) {
-        for (let dx = -1; dx <= 1; dx++) {
+      const searchRadius = 3; // Expanded from 1 to handle wider ramps
+      for (let dy = -searchRadius; dy <= searchRadius; dy++) {
+        for (let dx = -searchRadius; dx <= searchRadius; dx++) {
           const nx = cx + dx;
           const ny = cy + dy;
           if (nx >= 0 && nx < width && ny >= 0 && ny < height) {
