@@ -38,9 +38,9 @@ const NAVMESH_CONFIG: Partial<TileCacheGeneratorConfig> = {
   // Increased slope angle to allow units to traverse ramps (which can be steep)
   walkableSlopeAngle: 60,
   walkableHeight: 2,
-  // Increased climb to handle elevation transitions at ramp boundaries
-  // 3.0 allows for most ramp-ground boundary steps (max elevation diff ~3.2 units)
-  walkableClimb: 3.0,
+  // Climb height for small steps at ramp boundaries
+  // Keep this low to prevent cliff traversal (full cliff is ~3.2 units)
+  walkableClimb: 1.5,
   // Walkable radius defines minimum clearance from obstacles
   // Must match or exceed agent collision radius for proper avoidance
   walkableRadius: 0.6,

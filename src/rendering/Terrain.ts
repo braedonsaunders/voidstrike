@@ -1133,13 +1133,42 @@ export class Terrain {
 
         // Only include walkable terrain (ground and ramps)
         // Cliff cells (unwalkable) are excluded, creating physical gaps
-        // Recast's walkableClimb setting prevents connecting across elevation differences
         if (cell.terrain === 'unwalkable') continue;
 
         // Check terrain features that make cells unwalkable
         const feature = cell.feature || 'none';
         const featureConfig = TERRAIN_FEATURE_CONFIG[feature];
         if (!featureConfig.walkable) continue;
+
+        // For non-ramp cells, check if this cell borders a cliff
+        // Exclude cliff-adjacent cells UNLESS they also border a ramp
+        // This prevents units from walking off cliffs while allowing ramp connectivity
+        if (cell.terrain !== 'ramp') {
+          let bordersCliff = false;
+          let bordersRamp = false;
+
+          for (let dy = -1; dy <= 1; dy++) {
+            for (let dx = -1; dx <= 1; dx++) {
+              if (dx === 0 && dy === 0) continue;
+              const nx = x + dx;
+              const ny = y + dy;
+              if (nx >= 0 && nx < width && ny >= 0 && ny < height) {
+                const neighbor = terrain[ny][nx];
+                if (neighbor.terrain === 'unwalkable' && neighbor.feature === 'cliff') {
+                  bordersCliff = true;
+                }
+                if (neighbor.terrain === 'ramp') {
+                  bordersRamp = true;
+                }
+              }
+            }
+          }
+
+          // Skip ground cells at cliff edges (but not if they connect to ramps)
+          if (bordersCliff && !bordersRamp) {
+            continue;
+          }
+        }
 
         // Get heights at the 4 corners of this cell
         const h00 = this.heightMap[y * this.gridWidth + x];
