@@ -527,13 +527,13 @@ function generateScorchedBasin(): MapData {
   // EXPANSIONS WITH RESOURCES
   // ========================================
   const p1Main = createBaseResources(40, 40, DIR.UP_LEFT);
-  const p1Nat = createBaseResources(75, 75, DIR.UP_LEFT, 1500, 2250, false, 10);
+  const p1Nat = createBaseResources(75, 75, DIR.DOWN_RIGHT, 1500, 2250, false, 10);  // Opposite of main direction
   const p2Main = createBaseResources(240, 40, DIR.UP_RIGHT);
-  const p2Nat = createBaseResources(205, 75, DIR.UP_RIGHT, 1500, 2250, false, 10);
+  const p2Nat = createBaseResources(205, 75, DIR.DOWN_LEFT, 1500, 2250, false, 10);  // Opposite of main direction
   const p3Main = createBaseResources(40, 240, DIR.DOWN_LEFT);
-  const p3Nat = createBaseResources(75, 205, DIR.DOWN_LEFT, 1500, 2250, false, 10);
+  const p3Nat = createBaseResources(75, 205, DIR.UP_RIGHT, 1500, 2250, false, 10);   // Opposite of main direction
   const p4Main = createBaseResources(240, 240, DIR.DOWN_RIGHT);
-  const p4Nat = createBaseResources(205, 205, DIR.DOWN_RIGHT, 1500, 2250, false, 10);
+  const p4Nat = createBaseResources(205, 205, DIR.UP_LEFT, 1500, 2250, false, 10);   // Opposite of main direction
 
   const thirdLeft = createBaseResources(40, 140, DIR.LEFT);
   const thirdRight = createBaseResources(240, 140, DIR.RIGHT);

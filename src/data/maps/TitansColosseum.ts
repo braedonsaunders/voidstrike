@@ -622,14 +622,14 @@ function generateTitansColosseum(): MapData {
   const p7Main = createBaseResources(45, 270, DIR.LEFT);
   const p8Main = createBaseResources(45, 130, DIR.LEFT);
 
-  const p1Nat = createBaseResources(110, 75, DIR.UP, 1500, 2250, false, 10);
-  const p2Nat = createBaseResources(290, 75, DIR.UP, 1500, 2250, false, 10);
-  const p3Nat = createBaseResources(325, 160, DIR.RIGHT, 1500, 2250, false, 10);
-  const p4Nat = createBaseResources(325, 240, DIR.RIGHT, 1500, 2250, false, 10);
-  const p5Nat = createBaseResources(290, 325, DIR.DOWN, 1500, 2250, false, 10);
-  const p6Nat = createBaseResources(110, 325, DIR.DOWN, 1500, 2250, false, 10);
-  const p7Nat = createBaseResources(75, 240, DIR.LEFT, 1500, 2250, false, 10);
-  const p8Nat = createBaseResources(75, 160, DIR.LEFT, 1500, 2250, false, 10);
+  const p1Nat = createBaseResources(110, 75, DIR.LEFT, 1500, 2250, false, 10);   // Perpendicular to N-S ramp
+  const p2Nat = createBaseResources(290, 75, DIR.RIGHT, 1500, 2250, false, 10);  // Perpendicular to N-S ramp
+  const p3Nat = createBaseResources(325, 160, DIR.UP, 1500, 2250, false, 10);    // Perpendicular to E-W ramp
+  const p4Nat = createBaseResources(325, 240, DIR.DOWN, 1500, 2250, false, 10);  // Perpendicular to E-W ramp
+  const p5Nat = createBaseResources(290, 325, DIR.RIGHT, 1500, 2250, false, 10); // Perpendicular to N-S ramp
+  const p6Nat = createBaseResources(110, 325, DIR.LEFT, 1500, 2250, false, 10);  // Perpendicular to N-S ramp
+  const p7Nat = createBaseResources(75, 240, DIR.DOWN, 1500, 2250, false, 10);   // Perpendicular to E-W ramp
+  const p8Nat = createBaseResources(75, 160, DIR.UP, 1500, 2250, false, 10);     // Perpendicular to E-W ramp
 
   const goldNW = createBaseResources(140, 140, DIR.UP_LEFT, 1500, 2250, true);
   const goldNE = createBaseResources(260, 140, DIR.UP_RIGHT, 1500, 2250, true);

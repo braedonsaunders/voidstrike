@@ -561,12 +561,12 @@ function generateContestedFrontier(): MapData {
   const p5Main = createBaseResources(180, 275, DIR.DOWN);
   const p6Main = createBaseResources(310, 275, DIR.DOWN);
 
-  const p1Nat = createBaseResources(70, 85, DIR.UP, 1500, 2250, false, 10);
-  const p2Nat = createBaseResources(180, 85, DIR.UP, 1500, 2250, false, 10);
-  const p3Nat = createBaseResources(290, 85, DIR.UP, 1500, 2250, false, 10);
-  const p4Nat = createBaseResources(70, 235, DIR.DOWN, 1500, 2250, false, 10);
-  const p5Nat = createBaseResources(180, 235, DIR.DOWN, 1500, 2250, false, 10);
-  const p6Nat = createBaseResources(290, 235, DIR.DOWN, 1500, 2250, false, 10);
+  const p1Nat = createBaseResources(70, 85, DIR.LEFT, 1500, 2250, false, 10);    // Perpendicular to main-nat ramp
+  const p2Nat = createBaseResources(180, 85, DIR.LEFT, 1500, 2250, false, 10);   // Perpendicular to main-nat ramp
+  const p3Nat = createBaseResources(290, 85, DIR.RIGHT, 1500, 2250, false, 10);  // Perpendicular to main-nat ramp
+  const p4Nat = createBaseResources(70, 235, DIR.LEFT, 1500, 2250, false, 10);   // Perpendicular to main-nat ramp
+  const p5Nat = createBaseResources(180, 235, DIR.RIGHT, 1500, 2250, false, 10); // Perpendicular to main-nat ramp
+  const p6Nat = createBaseResources(290, 235, DIR.RIGHT, 1500, 2250, false, 10); // Perpendicular to main-nat ramp
 
   const thirdLeft = createBaseResources(40, 160, DIR.LEFT);
   const thirdRight = createBaseResources(320, 160, DIR.RIGHT);
