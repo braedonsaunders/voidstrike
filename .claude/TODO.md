@@ -208,7 +208,16 @@
 ### UI Improvements
 - [x] **Options menu** - Replaced Menu button with dropdown (Controls, Tech Tree, Exit to Menu)
 - [x] **Increased building avoidance** - Units now properly avoid walking through buildings
-- [x] **Enhanced loading screen** - Real loading progress with granular stages (models, renderer, terrain, engine, audio), stunning animated particle background with nebulas, geometric shapes, constellation effects, and progress-reactive energy beam
+- [x] **Epic Three.js Loading Screen** - Complete redesign using Three.js WebGL renderer with:
+  - Full 3D scene matching HomeBackground quality (4000 twinkling stars, 12 orbiting asteroids)
+  - Central wormhole vortex effect with spiral arms and pulsing rings
+  - 5 rotating energy rings that intensify with loading progress
+  - 300 converging energy particles that accelerate as loading completes
+  - Procedural nebula shader with wormhole distortion that responds to progress
+  - Post-processing pipeline (bloom, chromatic aberration, scanlines, vignette)
+  - Mouse-reactive camera with breathing motion parallax
+  - Progress-reactive visuals (effects intensify as loading approaches 100%)
+  - Sleek UI with gradient title, stage indicators (CORE/RENDER/WORLD/UNITS/SYNC), glowing progress bar
 
 ### AI & Combat Fixes
 - [x] **Idle unit auto-attack responsiveness** - Idle units now immediately attack enemies within attack range (no throttle delay). Uses dedicated `findImmediateAttackTarget()` for instant response when enemies enter attack range, while throttled sight-range search remains for longer-range target acquisition.

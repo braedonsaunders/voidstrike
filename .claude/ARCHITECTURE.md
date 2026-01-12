@@ -1610,3 +1610,96 @@ The homepage uses glassmorphism design with:
 - Shimmer animation on title text
 - Staggered fade-in animations on load
 - Mouse parallax on hero content
+
+## Loading Screen System
+
+### LoadingScreen Component (`src/components/game/LoadingScreen.tsx`)
+
+A world-class Three.js-powered loading screen that creates a cinematic experience while game assets load. Inspired by the HomeBackground but with unique loading-specific effects:
+
+```typescript
+// Key features:
+- Full Three.js WebGL scene with 4000 twinkling stars
+- Central wormhole vortex with spiral arms and rotating rings
+- 12 orbiting asteroids with gentle floating motion
+- 300 converging energy particles that accelerate with progress
+- 5 concentric energy rings that pulse and intensify
+- Procedural nebula shader with wormhole distortion
+- Progress-reactive effects (everything intensifies as loading approaches 100%)
+```
+
+### Visual Systems
+
+1. **Void Nebula Shader** - Custom GLSL fragment shader
+   - Simplex noise with fractal Brownian motion (fBM)
+   - **Wormhole distortion** - spiral pattern that intensifies with loading progress
+   - Central vortex glow that grows as loading progresses
+   - Pulsing ring effect at 25% distance from center
+   - Mouse-reactive position for subtle parallax
+
+2. **Wormhole Effect** - Central portal shader
+   - Rotating tunnel rings with progress-reactive speed
+   - 4 spiral arms rotating at different speeds
+   - Core glow with fade toward edges
+   - Cyan-to-purple color gradient
+
+3. **Star Field** - GPU-instanced points (4000 stars)
+   - Spherical distribution (30-200 unit radius)
+   - Color variation (white 60%, blue 20%, purple 20%)
+   - Twinkle animation via vertex shader
+   - Slow rotation around Y and X axes
+
+4. **Orbiting Asteroids** - Deformed icosahedrons (12 total)
+   - Random vertex deformation for organic shapes
+   - Individual rotation speeds on all axes
+   - Orbital motion around center with varying radii
+   - Dark purple emissive material
+
+5. **Energy Rings** - Concentric ring geometries (5 rings)
+   - Alternate rotation directions
+   - Opacity increases with loading progress
+   - Color shifts from purple to cyan outward
+   - Additive blending for glow effect
+
+6. **Converging Particles** - Point cloud (300 particles)
+   - Spawn at outer edges, flow toward center
+   - Velocity and lifetime accelerate with loading progress
+   - Fade in/out based on particle lifetime
+   - Color shifts from cyan to purple over lifetime
+
+7. **Post-Processing Stack**
+   - UnrealBloomPass (strength: 1.2, radius: 0.5, threshold: 0.7)
+   - ChromaticAberrationShader (reduces as loading completes)
+   - ScanlineShader (subtle CRT effect with moving beam)
+   - Vignette built into scanline shader
+
+### Camera System
+
+```typescript
+// Cinematic camera movement:
+- Base position at (0, 0, 8) looking at (0, 0, -10)
+- Mouse tracking with 0.02 interpolation factor
+- "Breathing" motion via sine/cosine oscillation
+- Parallax effect creates immersive depth
+```
+
+### Progress Integration
+
+All visual effects respond to loading progress (0-100%):
+- Nebula brightness and wormhole distortion increase
+- Wormhole scale grows (1.0 → 1.3)
+- Energy ring rotation speed and opacity increase
+- Particle velocity multiplier increases (1x → 3x)
+- Chromatic aberration decreases (less distortion = cleaner image)
+- Scanline intensity decreases
+
+### UI Overlay
+
+Clean, futuristic loading UI:
+- Large "VOIDSTRIKE" title with gradient and drop-shadow glow
+- "Initializing Combat Systems" subtitle with tracking
+- 5 stage indicators (CORE, RENDER, WORLD, UNITS, SYNC) with active/complete states
+- Sleek progress bar with shimmer animation and glowing tip
+- Status text with animated dots
+- Percentage display with gradient text
+- Inspirational quote at bottom
