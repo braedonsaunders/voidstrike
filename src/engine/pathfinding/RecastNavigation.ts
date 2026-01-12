@@ -20,19 +20,20 @@ import {
   type CrowdAgentParams,
   type Obstacle,
 } from 'recast-navigation';
-import { generateTileCache, type TileCacheGeneratorConfig } from '@recast-navigation/generators';
+import { generateTileCache, generateSoloNavMesh, type TileCacheGeneratorConfig, type SoloNavMeshGeneratorConfig } from '@recast-navigation/generators';
 import { threeToTileCache } from '@recast-navigation/three';
 import * as THREE from 'three';
 import { debugPathfinding } from '@/utils/debugLogger';
 
 // NavMesh generation config - tuned for RTS gameplay
 // IMPORTANT: Cell size determines path precision around obstacles
+// Safari has stricter memory limits, so we use larger cells for compatibility
 const NAVMESH_CONFIG: Partial<TileCacheGeneratorConfig> = {
-  // Cell size - smaller = more precise paths around buildings
-  // 0.25 units provides 2x precision for smoother building avoidance
-  cs: 0.25,
+  // Cell size - larger = less memory usage, better Safari compatibility
+  // 0.5 units provides good precision while staying within memory limits
+  cs: 0.5,
   // Cell height - vertical precision
-  ch: 0.2,
+  ch: 0.3,
   // Agent parameters
   // Increased slope angle to allow units to traverse ramps (which can be steep)
   walkableSlopeAngle: 60,
@@ -42,12 +43,24 @@ const NAVMESH_CONFIG: Partial<TileCacheGeneratorConfig> = {
   // Walkable radius defines minimum clearance from obstacles
   // Must match or exceed agent collision radius for proper avoidance
   walkableRadius: 0.6,
-  // Detail mesh - lower error for smoother paths
-  maxSimplificationError: 0.5,
-  // Tile cache specific
-  tileSize: 32,
-  expectedLayersPerTile: 4,
+  // Detail mesh - higher error tolerance for less memory usage
+  maxSimplificationError: 1.0,
+  // Tile cache specific - larger tiles = fewer tiles = less memory
+  tileSize: 48,
+  expectedLayersPerTile: 2,
   maxObstacles: 512,
+};
+
+// Fallback solo navmesh config (no dynamic obstacles, but more robust)
+// Used when tiled generation fails (e.g., Safari memory limits)
+const SOLO_NAVMESH_CONFIG: Partial<SoloNavMeshGeneratorConfig> = {
+  cs: 0.5,
+  ch: 0.3,
+  walkableSlopeAngle: 60,
+  walkableHeight: 2,
+  walkableClimb: 1.0,
+  walkableRadius: 0.6,
+  maxSimplificationError: 1.0,
 };
 
 // Standard agent radius for obstacle expansion
@@ -268,24 +281,57 @@ export class RecastNavigation {
         mapHeight,
       });
 
+      // Try tile cache generation first (supports dynamic obstacles)
       const result = generateTileCache(positions, indices, NAVMESH_CONFIG);
 
       console.log('[RecastNavigation] TileCache result:', {
         success: result.success,
         hasTileCache: !!result.tileCache,
         hasNavMesh: !!result.navMesh,
-        // Log the error if present (recast-navigation includes this on failure)
         error: (result as { error?: string }).error,
       });
 
-      if (!result.success || !result.tileCache || !result.navMesh) {
-        console.error('[RecastNavigation] Failed to generate navmesh from geometry');
-        console.error('[RecastNavigation] Full result:', result);
+      if (result.success && result.tileCache && result.navMesh) {
+        // Tile cache generation succeeded
+        this.tileCache = result.tileCache;
+        this.navMesh = result.navMesh;
+        this.navMeshQuery = new NavMeshQuery(this.navMesh);
+
+        this.crowd = new Crowd(this.navMesh, {
+          maxAgents: CROWD_CONFIG.maxAgents,
+          maxAgentRadius: CROWD_CONFIG.maxAgentRadius,
+        });
+
+        this.initialized = true;
+
+        const elapsed = performance.now() - startTime;
+        console.log(`[RecastNavigation] TileCache NavMesh generated in ${elapsed.toFixed(1)}ms`);
+        return true;
+      }
+
+      // Tile cache failed - try solo navmesh as fallback
+      // Solo navmesh doesn't support dynamic obstacles but is more robust
+      console.warn('[RecastNavigation] TileCache failed, trying solo navmesh fallback...');
+      console.warn('[RecastNavigation] TileCache error:', (result as { error?: string }).error);
+
+      const soloResult = generateSoloNavMesh(positions, indices, SOLO_NAVMESH_CONFIG);
+
+      console.log('[RecastNavigation] Solo NavMesh result:', {
+        success: soloResult.success,
+        hasNavMesh: !!soloResult.navMesh,
+        error: (soloResult as { error?: string }).error,
+      });
+
+      if (!soloResult.success || !soloResult.navMesh) {
+        console.error('[RecastNavigation] Both TileCache and Solo NavMesh generation failed');
+        console.error('[RecastNavigation] Solo result:', soloResult);
         return false;
       }
 
-      this.tileCache = result.tileCache;
-      this.navMesh = result.navMesh;
+      // Solo navmesh succeeded - use it without tile cache
+      // Dynamic obstacles won't work, but basic pathfinding will
+      this.tileCache = null;
+      this.navMesh = soloResult.navMesh;
       this.navMeshQuery = new NavMeshQuery(this.navMesh);
 
       this.crowd = new Crowd(this.navMesh, {
@@ -296,9 +342,8 @@ export class RecastNavigation {
       this.initialized = true;
 
       const elapsed = performance.now() - startTime;
-      debugPathfinding.log(
-        `[RecastNavigation] NavMesh generated from geometry in ${elapsed.toFixed(1)}ms`
-      );
+      console.log(`[RecastNavigation] Solo NavMesh generated (fallback) in ${elapsed.toFixed(1)}ms`);
+      console.warn('[RecastNavigation] Note: Dynamic obstacles disabled due to solo navmesh fallback');
 
       return true;
     } catch (error) {
