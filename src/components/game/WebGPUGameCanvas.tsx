@@ -610,44 +610,67 @@ export function WebGPUGameCanvas() {
         const gameInstance = gameRef.current;
         if (gameInstance && selectionSystemRef.current) {
           const rings = (selectionSystemRef.current as any).selectionRings as Map<number, unknown> | undefined;
+          const ringsSize = rings?.size ?? 0;
+          const selectedCount = selectedUnits.length;
 
-          // PERF: Convert selectedUnits to Set for O(1) lookup
-          const selectedSet = new Set(selectedUnits);
+          // PERF: Only process if there's something to do
+          if (selectedCount > 0 || ringsSize > 0) {
+            // PERF: Build Set only when we have rings to check against (avoid allocation when empty)
+            // Also reuse approach: check rings directly instead of building intermediate Set
 
-          // PERF: Only create rings for newly selected units (not already in rings)
-          for (const unitId of selectedUnits) {
-            if (!rings?.has(unitId)) {
-              const entity = gameInstance.world.getEntity(unitId);
-              if (entity) {
-                const selectable = entity.get<Selectable>('Selectable');
-                if (selectable) {
-                  selectionSystemRef.current.createSelectionRing(unitId, selectable.playerId, 1);
+            // PERF: Create rings for newly selected units - check directly against rings Map
+            for (let i = 0; i < selectedCount; i++) {
+              const unitId = selectedUnits[i];
+              if (!rings?.has(unitId)) {
+                const entity = gameInstance.world.getEntity(unitId);
+                if (entity) {
+                  const selectable = entity.get<Selectable>('Selectable');
+                  if (selectable) {
+                    selectionSystemRef.current.createSelectionRing(unitId, selectable.playerId, 1);
+                  }
                 }
               }
             }
-          }
 
-          // PERF: Remove rings for deselected units using O(1) Set lookup
-          if (rings) {
-            const toRemove: number[] = [];
-            for (const [id] of rings) {
-              if (!selectedSet.has(id)) {
-                toRemove.push(id);
+            // PERF: Remove rings for deselected units - only if we have rings
+            if (ringsSize > 0) {
+              // PERF: For small selections, iterate rings and check against array (avoid Set allocation)
+              // For large selections, building a Set is worth it
+              if (selectedCount <= 20) {
+                // Small selection: O(rings * selected) but avoids allocation
+                for (const [id] of rings!) {
+                  let found = false;
+                  for (let i = 0; i < selectedCount; i++) {
+                    if (selectedUnits[i] === id) {
+                      found = true;
+                      break;
+                    }
+                  }
+                  if (!found) {
+                    selectionSystemRef.current.removeSelectionRing(id);
+                  }
+                }
+              } else {
+                // Large selection: build Set for O(1) lookup
+                const selectedSet = new Set(selectedUnits);
+                for (const [id] of rings!) {
+                  if (!selectedSet.has(id)) {
+                    selectionSystemRef.current.removeSelectionRing(id);
+                  }
+                }
               }
             }
-            for (const id of toRemove) {
-              selectionSystemRef.current.removeSelectionRing(id);
-            }
-          }
 
-          // Update positions for all selected units (units may have moved)
-          for (const unitId of selectedUnits) {
-            const entity = gameInstance.world.getEntity(unitId);
-            if (entity) {
-              const transform = entity.get<Transform>('Transform');
-              if (transform) {
-                const terrainHeight = environmentRef.current?.getHeightAt(transform.x, transform.y) ?? 0;
-                selectionSystemRef.current.updateSelectionRing(unitId, transform.x, terrainHeight, transform.y);
+            // Update positions for all selected units (units may have moved)
+            for (let i = 0; i < selectedCount; i++) {
+              const unitId = selectedUnits[i];
+              const entity = gameInstance.world.getEntity(unitId);
+              if (entity) {
+                const transform = entity.get<Transform>('Transform');
+                if (transform) {
+                  const terrainHeight = environmentRef.current?.getHeightAt(transform.x, transform.y) ?? 0;
+                  selectionSystemRef.current.updateSelectionRing(unitId, transform.x, terrainHeight, transform.y);
+                }
               }
             }
           }
@@ -1070,11 +1093,6 @@ export function WebGPUGameCanvas() {
 
       // Move units normally
       if (unitIds.length > 0) {
-        console.log('[WebGPUGameCanvas] Emitting command:move', {
-          entityIds: unitIds,
-          target: { x: worldPos.x.toFixed(1), y: worldPos.z.toFixed(1) },
-          queue,
-        });
         game.eventBus.emit('command:move', {
           entityIds: unitIds,
           targetPosition: { x: worldPos.x, y: worldPos.z },
@@ -1411,10 +1429,15 @@ export function WebGPUGameCanvas() {
           // Assign control group
           store.setControlGroup(groupNumber, store.selectedUnits);
         } else if (e.shiftKey) {
-          // Add to control group
+          // Add to control group - optimized to avoid multiple spread operations
           const existing = store.controlGroups.get(groupNumber) || [];
-          const combined = [...new Set([...existing, ...store.selectedUnits])];
-          store.setControlGroup(groupNumber, combined);
+          const selected = store.selectedUnits;
+          // Use Set directly without spreading into array twice
+          const combinedSet = new Set(existing);
+          for (let i = 0; i < selected.length; i++) {
+            combinedSet.add(selected[i]);
+          }
+          store.setControlGroup(groupNumber, Array.from(combinedSet));
         } else {
           // Select control group (double-tap to center camera)
           const group = store.controlGroups.get(groupNumber);

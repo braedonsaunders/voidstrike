@@ -1367,7 +1367,11 @@ export class EnhancedAISystem extends System {
     }
 
     // If no buildings, look for enemy units (also prioritize closest)
-    const enemyUnitsByPlayer: Map<string, { x: number; y: number; distance: number }[]> = new Map();
+    // PERF: Track closest unit per player AND overall closest during iteration
+    // to avoid sorting and nested loops later
+    const closestUnitByPlayer: Map<string, { x: number; y: number; distance: number }> = new Map();
+    let overallClosestUnit: { x: number; y: number; distance: number } | null = null;
+
     const units = this.getCachedUnitsWithTransform();
     for (const entity of units) {
       const selectable = entity.get<Selectable>('Selectable');
@@ -1383,35 +1387,26 @@ export class EnhancedAISystem extends System {
       const dy = transform.y - aiBase.y;
       const distance = Math.sqrt(dx * dx + dy * dy);
 
-      if (!enemyUnitsByPlayer.has(enemyId)) {
-        enemyUnitsByPlayer.set(enemyId, []);
+      // PERF: Track closest unit per player (replaces sort + [0])
+      const existing = closestUnitByPlayer.get(enemyId);
+      if (!existing || distance < existing.distance) {
+        closestUnitByPlayer.set(enemyId, { x: transform.x, y: transform.y, distance });
       }
-      enemyUnitsByPlayer.get(enemyId)!.push({ x: transform.x, y: transform.y, distance });
-    }
 
-    // Target units from the closest enemy
-    if (targetEnemy && enemyUnitsByPlayer.has(targetEnemy)) {
-      const targetUnits = enemyUnitsByPlayer.get(targetEnemy)!;
-      if (targetUnits.length > 0) {
-        // Sort by distance and pick closest
-        targetUnits.sort((a, b) => a.distance - b.distance);
-        return { x: targetUnits[0].x, y: targetUnits[0].y };
+      // PERF: Track overall closest (replaces nested loop)
+      if (!overallClosestUnit || distance < overallClosestUnit.distance) {
+        overallClosestUnit = { x: transform.x, y: transform.y, distance };
       }
     }
 
-    // Fallback: any enemy unit (closest one)
-    let closestUnit: { x: number; y: number } | null = null;
-    let closestUnitDist = Infinity;
-    for (const [, enemyUnits] of enemyUnitsByPlayer) {
-      for (const unit of enemyUnits) {
-        if (unit.distance < closestUnitDist) {
-          closestUnitDist = unit.distance;
-          closestUnit = { x: unit.x, y: unit.y };
-        }
-      }
+    // Target units from the closest enemy - O(1) lookup now instead of O(n log n) sort
+    if (targetEnemy && closestUnitByPlayer.has(targetEnemy)) {
+      const closest = closestUnitByPlayer.get(targetEnemy)!;
+      return { x: closest.x, y: closest.y };
     }
 
-    return closestUnit;
+    // Fallback: any enemy unit (already tracked during iteration)
+    return overallClosestUnit ? { x: overallClosestUnit.x, y: overallClosestUnit.y } : null;
   }
 
   /**
