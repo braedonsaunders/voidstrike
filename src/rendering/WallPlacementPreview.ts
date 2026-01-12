@@ -48,6 +48,10 @@ export class WallPlacementPreview {
   private validWireMaterial: THREE.LineBasicMaterial;
   private invalidWireMaterial: THREE.LineBasicMaterial;
 
+  // PERF: Pool of reusable Vector3 for line points to avoid per-frame allocation
+  private linePointsPool: THREE.Vector3[] = [];
+  private static readonly LINE_POINTS_POOL_SIZE = 100;
+
   constructor(mapData: MapData, getTerrainHeight?: (x: number, y: number) => number) {
     this.group = new THREE.Group();
     this.mapData = mapData;
@@ -79,6 +83,11 @@ export class WallPlacementPreview {
     this.wireGeometry = new THREE.EdgesGeometry(this.segmentGeometry);
     this.validWireMaterial = new THREE.LineBasicMaterial({ color: 0x00ff00 });
     this.invalidWireMaterial = new THREE.LineBasicMaterial({ color: 0xff0000 });
+
+    // PERF: Pre-create pool of Vector3 for line points
+    for (let i = 0; i < WallPlacementPreview.LINE_POINTS_POOL_SIZE; i++) {
+      this.linePointsPool.push(new THREE.Vector3());
+    }
   }
 
   /**
@@ -270,10 +279,14 @@ export class WallPlacementPreview {
 
     // Create connecting line
     if (this.wallPositions.length > 1) {
+      // PERF: Use pooled Vector3s instead of creating new ones
       const linePoints: THREE.Vector3[] = [];
-      for (const pos of this.wallPositions) {
+      const posCount = Math.min(this.wallPositions.length, this.linePointsPool.length);
+      for (let i = 0; i < posCount; i++) {
+        const pos = this.wallPositions[i];
         const height = this.getTerrainHeight ? this.getTerrainHeight(pos.x, pos.y) : 0;
-        linePoints.push(new THREE.Vector3(pos.x, height + 1.5 + WallPlacementPreview.GRID_OFFSET, pos.y));
+        this.linePointsPool[i].set(pos.x, height + 1.5 + WallPlacementPreview.GRID_OFFSET, pos.y);
+        linePoints.push(this.linePointsPool[i]);
       }
 
       const lineGeometry = new THREE.BufferGeometry().setFromPoints(linePoints);
