@@ -393,10 +393,11 @@ function generateCrystalCaverns(): MapData {
       connect('p2_main', 'p2_nat', 10, 'auto'),
 
       // Natural to Third (ground) connections (elevation 1 -> 0)
+      // CRITICAL: Use same width as upper ramps (10) for consistent navmesh generation
       // P1 natural exits toward P1 third
-      connect('p1_nat', 'p1_third', 8, 'auto'),
+      connect('p1_nat', 'p1_third', 10, 'auto'),
       // P2 natural exits toward P2 third
-      connect('p2_nat', 'p2_third', 8, 'auto'),
+      connect('p2_nat', 'p2_third', 10, 'auto'),
     ],
   };
 

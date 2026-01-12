@@ -66,10 +66,13 @@ export class GameOverlayManager {
   /**
    * Create a geometry that follows the terrain height
    * Instead of a flat plane, this creates a mesh that conforms to terrain elevation
+   *
+   * IMPORTANT: Uses finer resolution (step=1) to match terrain mesh exactly
+   * and adds sufficient height offset to prevent z-fighting
    */
   private createTerrainFollowingGeometry(width: number, height: number, heightOffset: number): THREE.BufferGeometry {
-    // Use a lower resolution for the overlay (every 2 cells) to reduce vertex count
-    const step = 2;
+    // Use 1:1 resolution to match terrain mesh exactly
+    const step = 1;
     const segmentsX = Math.ceil(width / step);
     const segmentsY = Math.ceil(height / step);
 
@@ -78,13 +81,17 @@ export class GameOverlayManager {
     const indices: number[] = [];
 
     // Generate vertices with terrain-following heights
+    // Add extra height offset to ensure overlays are always visible above terrain
+    const effectiveOffset = heightOffset + 0.15; // Additional clearance
+
     for (let iy = 0; iy <= segmentsY; iy++) {
       for (let ix = 0; ix <= segmentsX; ix++) {
         const x = Math.min(ix * step, width);
         const z = Math.min(iy * step, height);
 
-        // Get terrain height at this position
-        const y = this.getTerrainHeight(x, z) + heightOffset;
+        // Get terrain height at this position (x = worldX, z = worldZ which maps to gridY)
+        const terrainHeight = this.getTerrainHeight(x, z);
+        const y = terrainHeight + effectiveOffset;
 
         vertices.push(x, y, z);
         uvs.push(x / width, z / height);
