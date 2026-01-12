@@ -734,6 +734,18 @@ export class UnitRenderer {
       if (!this._currentIds.has(entityId)) {
         this.scene.remove(animUnit.mesh);
         animUnit.mixer.stopAllAction();
+        // Properly clean up mixer caches to prevent memory leaks
+        animUnit.mixer.uncacheRoot(animUnit.mesh);
+        // Dispose materials but NOT geometry (geometry is shared with asset cache)
+        animUnit.mesh.traverse((child) => {
+          if (child instanceof THREE.Mesh) {
+            if (child.material instanceof THREE.Material) {
+              child.material.dispose();
+            } else if (Array.isArray(child.material)) {
+              child.material.forEach(m => m.dispose());
+            }
+          }
+        });
         this.animatedUnits.delete(entityId);
       }
     }
@@ -813,11 +825,16 @@ export class UnitRenderer {
     debugAssets.log('[UnitRenderer] Refreshing all unit meshes...');
 
     // Clear instanced groups
+    // NOTE: Do NOT dispose geometry here - it's shared with the asset cache.
+    // Disposing shared geometry causes WebGPU "setIndexBuffer" errors when
+    // other meshes try to use the now-invalid GPU buffer.
     for (const group of this.instancedGroups.values()) {
       this.scene.remove(group.mesh);
-      group.mesh.geometry.dispose();
+      // Only dispose materials (they are cloned per-instance group)
       if (group.mesh.material instanceof THREE.Material) {
         group.mesh.material.dispose();
+      } else if (Array.isArray(group.mesh.material)) {
+        group.mesh.material.forEach(m => m.dispose());
       }
     }
     this.instancedGroups.clear();
@@ -826,6 +843,17 @@ export class UnitRenderer {
     for (const animUnit of this.animatedUnits.values()) {
       this.scene.remove(animUnit.mesh);
       animUnit.mixer.stopAllAction();
+      animUnit.mixer.uncacheRoot(animUnit.mesh);
+      // Dispose materials but NOT geometry (shared with asset cache)
+      animUnit.mesh.traverse((child) => {
+        if (child instanceof THREE.Mesh) {
+          if (child.material instanceof THREE.Material) {
+            child.material.dispose();
+          } else if (Array.isArray(child.material)) {
+            child.material.forEach(m => m.dispose());
+          }
+        }
+      });
     }
     this.animatedUnits.clear();
     this.animatedUnitTypes.clear();
@@ -872,15 +900,32 @@ export class UnitRenderer {
     this.enemySelectionMaterial.dispose();
     this.teamMarkerGeometry.dispose();
 
+    // NOTE: Do NOT dispose geometry - it's shared with the asset cache
     for (const group of this.instancedGroups.values()) {
       this.scene.remove(group.mesh);
-      group.mesh.geometry.dispose();
+      // Only dispose materials
+      if (group.mesh.material instanceof THREE.Material) {
+        group.mesh.material.dispose();
+      } else if (Array.isArray(group.mesh.material)) {
+        group.mesh.material.forEach(m => m.dispose());
+      }
     }
     this.instancedGroups.clear();
 
     for (const animUnit of this.animatedUnits.values()) {
       this.scene.remove(animUnit.mesh);
       animUnit.mixer.stopAllAction();
+      animUnit.mixer.uncacheRoot(animUnit.mesh);
+      // Dispose materials but NOT geometry (shared with asset cache)
+      animUnit.mesh.traverse((child) => {
+        if (child instanceof THREE.Mesh) {
+          if (child.material instanceof THREE.Material) {
+            child.material.dispose();
+          } else if (Array.isArray(child.material)) {
+            child.material.forEach(m => m.dispose());
+          }
+        }
+      });
     }
     this.animatedUnits.clear();
     this.animatedUnitTypes.clear();
