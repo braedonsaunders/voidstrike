@@ -17,6 +17,10 @@ const MINING_TIME = 2.5;
 export class ResourceSystem extends System {
   public priority = 25;
 
+  // PERF: Cache resources to avoid repeated getEntitiesWith calls
+  private cachedResources: Entity[] | null = null;
+  private lastCacheTick: number = -1;
+
   constructor(game: Game) {
     super(game);
     this.setupEventListeners();
@@ -150,6 +154,18 @@ export class ResourceSystem extends System {
   }
 
   /**
+   * PERF: Get cached resources, refreshing if needed
+   */
+  private getCachedResources(): Entity[] {
+    const currentTick = this.game.getCurrentTick();
+    if (this.cachedResources === null || this.lastCacheTick !== currentTick) {
+      this.cachedResources = this.world.getEntitiesWith('Resource', 'Transform');
+      this.lastCacheTick = currentTick;
+    }
+    return this.cachedResources;
+  }
+
+  /**
    * Find all mineral patches within range of a position (SC2-style mineral line)
    */
   private findNearbyMineralPatches(
@@ -158,7 +174,8 @@ export class ResourceSystem extends System {
     range: number
   ): Array<{ entity: Entity; resource: Resource; transform: Transform; gathererCount: number }> {
     const patches: Array<{ entity: Entity; resource: Resource; transform: Transform; gathererCount: number }> = [];
-    const resources = this.world.getEntitiesWith('Resource', 'Transform');
+    // PERF: Use cached resources instead of querying every time
+    const resources = this.getCachedResources();
 
     for (const entity of resources) {
       const resource = entity.get<Resource>('Resource')!;

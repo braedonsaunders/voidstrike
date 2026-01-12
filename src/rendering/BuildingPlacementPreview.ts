@@ -53,6 +53,11 @@ export class BuildingPlacementPreview {
   private static readonly GRID_OPACITY = 0.4;
   private static readonly QUEUE_LINE_COLOR = 0x00ff88; // Same as rally point green
 
+  // PERF: Pool of reusable Vector3 for dashed line points to avoid per-frame allocation
+  private static readonly DASH_POINTS_POOL_SIZE = 200;
+  private dashPointsPool: THREE.Vector3[] = [];
+  private dashPointsPoolIndex: number = 0;
+
   constructor(mapData: MapData, getTerrainHeight?: (x: number, y: number) => number) {
     this.group = new THREE.Group();
     this.mapData = mapData;
@@ -66,6 +71,11 @@ export class BuildingPlacementPreview {
       opacity: 0.7,
       linewidth: 2,
     });
+
+    // PERF: Pre-create pool of Vector3 for dashed line points
+    for (let i = 0; i < BuildingPlacementPreview.DASH_POINTS_POOL_SIZE; i++) {
+      this.dashPointsPool.push(new THREE.Vector3());
+    }
   }
 
   /**
@@ -159,6 +169,9 @@ export class BuildingPlacementPreview {
 
     if (this.queuedPlacements.length === 0) return;
 
+    // PERF: Reset pool index at start of each update cycle
+    this.dashPointsPoolIndex = 0;
+
     // Create dashed line path connecting all queued placements
     const linePoints: THREE.Vector3[] = [];
     const lineOffset = 0.2;
@@ -214,6 +227,15 @@ export class BuildingPlacementPreview {
   }
 
   /**
+   * PERF: Acquire a Vector3 from the pool
+   */
+  private acquireDashPoint(x: number, y: number, z: number): THREE.Vector3 {
+    const vec = this.dashPointsPool[this.dashPointsPoolIndex];
+    this.dashPointsPoolIndex = (this.dashPointsPoolIndex + 1) % BuildingPlacementPreview.DASH_POINTS_POOL_SIZE;
+    return vec.set(x, y, z);
+  }
+
+  /**
    * Create dashed line points between two positions (same style as rally points)
    */
   private createDashedLinePoints(
@@ -248,9 +270,10 @@ export class BuildingPlacementPreview {
       const z2 = startY + dirY * Math.min(segmentEnd, distance);
       const y2 = startHeight + dirH * Math.min(segmentEnd, distance);
 
+      // PERF: Use pooled Vector3s instead of creating new ones
       points.push(
-        new THREE.Vector3(x1, y1, z1),
-        new THREE.Vector3(x2, y2, z2)
+        this.acquireDashPoint(x1, y1, z1),
+        this.acquireDashPoint(x2, y2, z2)
       );
     }
 
@@ -261,9 +284,10 @@ export class BuildingPlacementPreview {
       const z1 = startY + dirY * lastSegmentEnd;
       const y1 = startHeight + dirH * lastSegmentEnd;
 
+      // PERF: Use pooled Vector3s
       points.push(
-        new THREE.Vector3(x1, y1, z1),
-        new THREE.Vector3(endX, endHeight, endY)
+        this.acquireDashPoint(x1, y1, z1),
+        this.acquireDashPoint(endX, endHeight, endY)
       );
     }
 

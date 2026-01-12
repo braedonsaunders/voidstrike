@@ -2649,11 +2649,25 @@ export class EnhancedAISystem extends System {
       ? nearbyMinerals.reduce((closest, m) => m.distance < closest.distance ? m : closest)
       : null;
 
+    // PERF: Sort refineries once too, by current workers
+    refineries.sort((a, b) => a.currentWorkers - b.currentWorkers);
+
+    // PERF: Track indices into sorted arrays instead of calling find() repeatedly
+    // Since arrays are sorted by currentWorkers (ascending), we can use indices
+    // that advance as elements become "full"
+    let gasIndex = 0;
+    let mineralIndex = 0;
+    let oversatIndex = 0;
+
     // Assign idle workers using SC2-style optimal saturation
     for (const workerId of idleWorkers) {
       // Priority 1: Fill undersaturated gas (vespene is more valuable)
-      const undersaturatedGas = refineries.find(r => r.currentWorkers < OPTIMAL_WORKERS_PER_VESPENE);
-      if (undersaturatedGas) {
+      // PERF: Use index instead of find() - advance index past full refineries
+      while (gasIndex < refineries.length && refineries[gasIndex].currentWorkers >= OPTIMAL_WORKERS_PER_VESPENE) {
+        gasIndex++;
+      }
+      if (gasIndex < refineries.length) {
+        const undersaturatedGas = refineries[gasIndex];
         this.game.eventBus.emit('command:gather', {
           entityIds: [workerId],
           targetEntityId: undersaturatedGas.resourceEntityId,
@@ -2663,8 +2677,12 @@ export class EnhancedAISystem extends System {
       }
 
       // Priority 2: Fill undersaturated minerals (patches with < 2 workers)
-      const undersaturatedMineral = nearbyMinerals.find(m => m.currentWorkers < OPTIMAL_WORKERS_PER_MINERAL);
-      if (undersaturatedMineral) {
+      // PERF: Use index instead of find() - advance index past full minerals
+      while (mineralIndex < nearbyMinerals.length && nearbyMinerals[mineralIndex].currentWorkers >= OPTIMAL_WORKERS_PER_MINERAL) {
+        mineralIndex++;
+      }
+      if (mineralIndex < nearbyMinerals.length) {
+        const undersaturatedMineral = nearbyMinerals[mineralIndex];
         this.game.eventBus.emit('command:gather', {
           entityIds: [workerId],
           targetEntityId: undersaturatedMineral.entityId,
@@ -2674,9 +2692,12 @@ export class EnhancedAISystem extends System {
       }
 
       // Priority 3: If all minerals are at optimal (2), assign to patches with 2 workers (allows 3rd worker)
-      // This provides some oversaturation for faster mining when worker count is high
-      const mineralWithRoom = nearbyMinerals.find(m => m.currentWorkers < 3);
-      if (mineralWithRoom) {
+      // PERF: Use index instead of find()
+      while (oversatIndex < nearbyMinerals.length && nearbyMinerals[oversatIndex].currentWorkers >= 3) {
+        oversatIndex++;
+      }
+      if (oversatIndex < nearbyMinerals.length) {
+        const mineralWithRoom = nearbyMinerals[oversatIndex];
         this.game.eventBus.emit('command:gather', {
           entityIds: [workerId],
           targetEntityId: mineralWithRoom.entityId,

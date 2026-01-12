@@ -72,6 +72,20 @@ const tempVec3Start = new THREE.Vector3();
 const tempVec3End = new THREE.Vector3();
 const tempVec3Velocity = new THREE.Vector3();
 
+// PERF: Pool of reusable Vector3 for effect storage (startPos, endPos, velocity)
+const VECTOR3_POOL_SIZE = 200;
+const vector3Pool: THREE.Vector3[] = [];
+let vector3PoolIndex = 0;
+for (let i = 0; i < VECTOR3_POOL_SIZE; i++) {
+  vector3Pool.push(new THREE.Vector3());
+}
+
+function acquireVector3(x = 0, y = 0, z = 0): THREE.Vector3 {
+  const vec = vector3Pool[vector3PoolIndex];
+  vector3PoolIndex = (vector3PoolIndex + 1) % VECTOR3_POOL_SIZE;
+  return vec.set(x, y, z);
+}
+
 export class EffectsRenderer {
   private scene: THREE.Scene;
   private eventBus: EventBus;
@@ -90,6 +104,22 @@ export class EffectsRenderer {
   private projectilePool: MeshPool;
   private hitEffectPool: MeshPool;
   private explosionPool: MeshPool;
+  private deathEffectPool: MeshPool;
+
+  // PERF: Pool for laser line effects
+  private laserPool: {
+    available: THREE.Line[];
+    inUse: Set<THREE.Line>;
+  };
+
+  // PERF: Pool for building explosion shockwave rings
+  private shockwavePool: MeshPool;
+
+  // PERF: Pool for building explosion flash spheres
+  private flashPool: MeshPool;
+
+  // PERF: Pool for move indicator rings
+  private moveRingPool: MeshPool;
 
   // Shared geometries and materials
   // Per threejs-builder skill: create geometries once, don't create in event handlers
@@ -113,6 +143,18 @@ export class EffectsRenderer {
   };
   private moveIndicatorGeometry: THREE.RingGeometry;
   private moveIndicatorMaterial: THREE.MeshBasicMaterial;
+
+  // PERF: Shared geometries for building explosions (created once)
+  private shockwaveGeometrySmall: THREE.RingGeometry;
+  private shockwaveGeometryLarge: THREE.RingGeometry;
+  private shockwaveMaterial: THREE.MeshBasicMaterial;
+  private flashGeometrySmall: THREE.SphereGeometry;
+  private flashGeometryLarge: THREE.SphereGeometry;
+  private flashMaterial: THREE.MeshBasicMaterial;
+
+  // PERF: Shared geometry for laser lines (positions updated per use)
+  private laserGeometry: THREE.BufferGeometry;
+  private laserPositionAttribute: THREE.BufferAttribute;
 
   constructor(scene: THREE.Scene, eventBus: EventBus, getTerrainHeight?: (x: number, z: number) => number) {
     this.scene = scene;
@@ -230,6 +272,80 @@ export class EffectsRenderer {
     this.explosionPool = this.createPool(POOL_SIZE, () => {
       const mesh = new THREE.Mesh(this.explosionGeometry, this.explosionMaterial.clone());
       mesh.visible = false;
+      return mesh;
+    });
+
+    // PERF: Death effect pool
+    this.deathEffectPool = this.createPool(30, () => {
+      const mesh = new THREE.Mesh(this.deathGeometry, this.deathMaterial.clone());
+      mesh.visible = false;
+      mesh.rotation.x = -Math.PI / 2;
+      mesh.renderOrder = 5;
+      return mesh;
+    });
+
+    // PERF: Laser line pool - pre-create Line objects with reusable geometry
+    this.laserGeometry = new THREE.BufferGeometry();
+    this.laserPositionAttribute = new THREE.BufferAttribute(new Float32Array(6), 3); // 2 points * 3 coords
+    this.laserGeometry.setAttribute('position', this.laserPositionAttribute);
+
+    this.laserPool = { available: [], inUse: new Set() };
+    const LASER_POOL_SIZE = 50;
+    for (let i = 0; i < LASER_POOL_SIZE; i++) {
+      const geometry = new THREE.BufferGeometry();
+      const positions = new Float32Array(6);
+      geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+      const line = new THREE.Line(geometry, this.laserMaterial.clone());
+      line.visible = false;
+      this.scene.add(line);
+      this.laserPool.available.push(line);
+    }
+
+    // PERF: Shockwave and flash geometries/materials for building explosions
+    this.shockwaveGeometrySmall = new THREE.RingGeometry(0.5, 2.5, 24);
+    this.shockwaveGeometryLarge = new THREE.RingGeometry(0.5, 4, 24);
+    this.shockwaveMaterial = new THREE.MeshBasicMaterial({
+      color: 0xff4400,
+      transparent: true,
+      opacity: 0.8,
+      side: THREE.DoubleSide,
+      depthTest: false,
+      depthWrite: false,
+    });
+
+    this.flashGeometrySmall = new THREE.SphereGeometry(1.25, 12, 12);
+    this.flashGeometryLarge = new THREE.SphereGeometry(2, 12, 12);
+    this.flashMaterial = new THREE.MeshBasicMaterial({
+      color: 0xffff88,
+      transparent: true,
+      opacity: 1,
+      depthTest: false,
+      depthWrite: false,
+    });
+
+    // PERF: Shockwave pool
+    this.shockwavePool = this.createPool(20, () => {
+      const mesh = new THREE.Mesh(this.shockwaveGeometrySmall, this.shockwaveMaterial.clone());
+      mesh.visible = false;
+      mesh.rotation.x = -Math.PI / 2;
+      mesh.renderOrder = 5;
+      return mesh;
+    });
+
+    // PERF: Flash pool
+    this.flashPool = this.createPool(20, () => {
+      const mesh = new THREE.Mesh(this.flashGeometrySmall, this.flashMaterial.clone());
+      mesh.visible = false;
+      mesh.renderOrder = 6;
+      return mesh;
+    });
+
+    // PERF: Move indicator ring pool
+    this.moveRingPool = this.createPool(30, () => {
+      const mesh = new THREE.Mesh(this.moveIndicatorGeometry, this.moveIndicatorMaterial.clone());
+      mesh.visible = false;
+      mesh.rotation.x = -Math.PI / 2;
+      mesh.renderOrder = 5;
       return mesh;
     });
 
@@ -449,9 +565,10 @@ export class EffectsRenderer {
     mesh.position.copy(start);
     (mesh.material as THREE.MeshBasicMaterial).opacity = 0.9;
 
+    // PERF: Use pooled Vector3 instead of clone()
     this.attackEffects.push({
-      startPos: start.clone(),
-      endPos: end.clone(),
+      startPos: acquireVector3(start.x, start.y, start.z),
+      endPos: acquireVector3(end.x, end.y, end.z),
       progress: 0,
       duration: 0.2, // 200ms travel time
       mesh,
@@ -460,13 +577,33 @@ export class EffectsRenderer {
   }
 
   private createLaserEffect(start: THREE.Vector3, end: THREE.Vector3): void {
-    const geometry = new THREE.BufferGeometry().setFromPoints([start, end]);
-    const line = new THREE.Line(geometry, this.laserMaterial.clone());
-    this.scene.add(line);
+    // PERF: Use laser pool instead of creating new geometry/material
+    let line: THREE.Line;
+    if (this.laserPool.available.length > 0) {
+      line = this.laserPool.available.pop()!;
+      this.laserPool.inUse.add(line);
+      // Update geometry positions
+      const positions = (line.geometry.getAttribute('position') as THREE.BufferAttribute).array as Float32Array;
+      positions[0] = start.x; positions[1] = start.y; positions[2] = start.z;
+      positions[3] = end.x; positions[4] = end.y; positions[5] = end.z;
+      (line.geometry.getAttribute('position') as THREE.BufferAttribute).needsUpdate = true;
+      line.geometry.computeBoundingSphere();
+      (line.material as THREE.LineBasicMaterial).opacity = 0.8;
+      line.visible = true;
+    } else {
+      // Pool exhausted - create new (should be rare)
+      const geometry = new THREE.BufferGeometry();
+      const positions = new Float32Array([start.x, start.y, start.z, end.x, end.y, end.z]);
+      geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+      line = new THREE.Line(geometry, this.laserMaterial.clone());
+      this.scene.add(line);
+      this.laserPool.inUse.add(line);
+    }
 
+    // PERF: Use pooled Vector3 instead of clone()
     this.attackEffects.push({
-      startPos: start.clone(),
-      endPos: end.clone(),
+      startPos: acquireVector3(start.x, start.y, start.z),
+      endPos: acquireVector3(end.x, end.y, end.z),
       progress: 0,
       duration: 0.1, // 100ms flash
       mesh: line,
@@ -498,8 +635,9 @@ export class EffectsRenderer {
     mesh.scale.set(1, 1, 1);
     (mesh.material as THREE.MeshBasicMaterial).opacity = 0.8;
 
+    // PERF: Use pooled Vector3 instead of clone()
     this.hitEffects.push({
-      position: position.clone(),
+      position: acquireVector3(position.x, position.y, position.z),
       progress: 0,
       duration: 0.3,
       mesh,
@@ -507,16 +645,23 @@ export class EffectsRenderer {
   }
 
   private createDeathEffect(position: THREE.Vector3): void {
-    // Use shared geometry, clone material for independent opacity
-    // Per threejs-builder skill: don't create geometry in event handlers
-    const mesh = new THREE.Mesh(this.deathGeometry, this.deathMaterial.clone());
-    mesh.position.copy(position);
-    mesh.rotation.x = -Math.PI / 2;
-    mesh.renderOrder = 5; // Ground effects render BEFORE units
-    this.scene.add(mesh);
+    // PERF: Use death effect pool instead of creating new mesh
+    const mesh = this.acquireFromPool(this.deathEffectPool, () => {
+      const m = new THREE.Mesh(this.deathGeometry, this.deathMaterial.clone());
+      m.rotation.x = -Math.PI / 2;
+      m.renderOrder = 5;
+      return m;
+    });
 
+    if (!mesh) return; // Pool exhausted
+
+    mesh.position.copy(position);
+    mesh.scale.set(1, 1, 1);
+    (mesh.material as THREE.MeshBasicMaterial).opacity = 1;
+
+    // PERF: Use pooled Vector3 instead of clone()
     this.hitEffects.push({
-      position: position.clone(),
+      position: acquireVector3(position.x, position.y, position.z),
       progress: 0,
       duration: 0.5,
       mesh,
@@ -531,7 +676,6 @@ export class EffectsRenderer {
     // Determine explosion size based on building type
     const isLargeBuilding = ['headquarters', 'infantry_bay', 'forge', 'hangar'].includes(buildingType);
     const particleCount = isLargeBuilding ? 20 : 12;
-    const explosionRadius = isLargeBuilding ? 4 : 2.5;
 
     // Create debris particles flying outward - use pool when possible
     for (let i = 0; i < particleCount; i++) {
@@ -567,9 +711,10 @@ export class EffectsRenderer {
       const speed = 3 + Math.random() * 4;
       const upSpeed = 2 + Math.random() * 4;
 
+      // PERF: Use pooled Vector3 for velocity
       this.explosionParticles.push({
         mesh,
-        velocity: new THREE.Vector3(
+        velocity: acquireVector3(
           Math.cos(angle) * speed,
           upSpeed,
           Math.sin(angle) * speed
@@ -580,55 +725,54 @@ export class EffectsRenderer {
       });
     }
 
-    // Create expanding shockwave ring on ground
-    const ringMesh = new THREE.Mesh(
-      new THREE.RingGeometry(0.5, explosionRadius, 24),
-      new THREE.MeshBasicMaterial({
-        color: 0xff4400,
-        transparent: true,
-        opacity: 0.8,
-        side: THREE.DoubleSide,
-        depthTest: false,
-        depthWrite: false,
-      })
-    );
-    ringMesh.position.copy(position);
-    // Keep terrain height, add small offset to prevent z-fighting
-    ringMesh.position.y = position.y + 0.1;
-    ringMesh.rotation.x = -Math.PI / 2;
-    ringMesh.renderOrder = 5; // Ground effects render BEFORE units
-    this.scene.add(ringMesh);
-
-    this.hitEffects.push({
-      position: position.clone(),
-      progress: 0,
-      duration: 0.6,
-      mesh: ringMesh,
+    // PERF: Use shockwave pool instead of creating new geometry/material
+    const ringMesh = this.acquireFromPool(this.shockwavePool, () => {
+      const m = new THREE.Mesh(this.shockwaveGeometrySmall, this.shockwaveMaterial.clone());
+      m.rotation.x = -Math.PI / 2;
+      m.renderOrder = 5;
+      return m;
     });
 
-    // Create bright flash at center
-    const flashMesh = new THREE.Mesh(
-      new THREE.SphereGeometry(explosionRadius * 0.5, 12, 12),
-      new THREE.MeshBasicMaterial({
-        color: 0xffff88,
-        transparent: true,
-        opacity: 1,
-        depthTest: false,
-        depthWrite: false,
-      })
-    );
-    flashMesh.position.copy(position);
-    // Flash at terrain height + 1 for visibility
-    flashMesh.position.y = position.y + 1;
-    flashMesh.renderOrder = 6; // Slightly above ground rings
-    this.scene.add(flashMesh);
+    if (ringMesh) {
+      // Use appropriate geometry based on building size
+      ringMesh.geometry = isLargeBuilding ? this.shockwaveGeometryLarge : this.shockwaveGeometrySmall;
+      ringMesh.position.copy(position);
+      ringMesh.position.y = position.y + 0.1;
+      ringMesh.scale.set(1, 1, 1);
+      (ringMesh.material as THREE.MeshBasicMaterial).opacity = 0.8;
 
-    this.hitEffects.push({
-      position: position.clone(),
-      progress: 0,
-      duration: 0.3,
-      mesh: flashMesh,
+      // PERF: Use pooled Vector3
+      this.hitEffects.push({
+        position: acquireVector3(position.x, position.y, position.z),
+        progress: 0,
+        duration: 0.6,
+        mesh: ringMesh,
+      });
+    }
+
+    // PERF: Use flash pool instead of creating new geometry/material
+    const flashMesh = this.acquireFromPool(this.flashPool, () => {
+      const m = new THREE.Mesh(this.flashGeometrySmall, this.flashMaterial.clone());
+      m.renderOrder = 6;
+      return m;
     });
+
+    if (flashMesh) {
+      // Use appropriate geometry based on building size
+      flashMesh.geometry = isLargeBuilding ? this.flashGeometryLarge : this.flashGeometrySmall;
+      flashMesh.position.copy(position);
+      flashMesh.position.y = position.y + 1;
+      flashMesh.scale.set(1, 1, 1);
+      (flashMesh.material as THREE.MeshBasicMaterial).opacity = 1;
+
+      // PERF: Use pooled Vector3
+      this.hitEffects.push({
+        position: acquireVector3(position.x, position.y, position.z),
+        progress: 0,
+        duration: 0.3,
+        mesh: flashMesh,
+      });
+    }
   }
 
   private createDamageNumber(position: THREE.Vector3, damage: number, targetId?: number): void {
@@ -725,13 +869,14 @@ export class EffectsRenderer {
       this.scene.add(sprite);
     }
 
+    // PERF: Use pooled Vector3s instead of clone/new
     const damageNumber: DamageNumber = {
-      position: position.clone(),
+      position: acquireVector3(position.x, position.y, position.z),
       damage,
       progress: 0,
       duration: 0.7,
       sprite,
-      velocity: new THREE.Vector3(
+      velocity: acquireVector3(
         (Math.random() - 0.5) * 0.5,
         2.0,
         (Math.random() - 0.5) * 0.5
@@ -779,26 +924,34 @@ export class EffectsRenderer {
   private createMoveIndicator(position: THREE.Vector3): void {
     const rings: THREE.Mesh[] = [];
 
-    // Create 3 concentric rings
+    // PERF: Use ring pool instead of creating new geometry/material each time
     for (let i = 0; i < 3; i++) {
-      const ringGeometry = new THREE.RingGeometry(0.4 + i * 0.5, 0.5 + i * 0.5, 16);
-      const material = this.moveIndicatorMaterial.clone();
-      material.opacity = 0.9 - i * 0.2;
+      const ring = this.acquireFromPool(this.moveRingPool, () => {
+        const m = new THREE.Mesh(this.moveIndicatorGeometry, this.moveIndicatorMaterial.clone());
+        m.rotation.x = -Math.PI / 2;
+        m.renderOrder = 5;
+        return m;
+      });
 
-      const ring = new THREE.Mesh(ringGeometry, material);
-      ring.position.copy(position);
-      ring.rotation.x = -Math.PI / 2;
-      ring.renderOrder = 5; // Ground effects render BEFORE units
-      this.scene.add(ring);
-      rings.push(ring);
+      if (ring) {
+        ring.position.copy(position);
+        // Scale to create concentric rings effect
+        const baseScale = 1 + i * 0.8;
+        ring.scale.set(baseScale, baseScale, 1);
+        (ring.material as THREE.MeshBasicMaterial).opacity = 0.9 - i * 0.2;
+        rings.push(ring);
+      }
     }
 
-    this.moveIndicators.push({
-      position: position.clone(),
-      progress: 0,
-      duration: 0.5, // Fast animation
-      rings,
-    });
+    if (rings.length > 0) {
+      // PERF: Use pooled Vector3
+      this.moveIndicators.push({
+        position: acquireVector3(position.x, position.y, position.z),
+        progress: 0,
+        duration: 0.5, // Fast animation
+        rings,
+      });
+    }
   }
 
   private trackFocusFire(attackerId: number, targetId: number, targetPos: { x: number; y: number }): void {
@@ -895,10 +1048,18 @@ export class EffectsRenderer {
           this.eventBus.emit('combat:hit', {
             position: { x: effect.endPos.x, y: effect.endPos.z },
           });
-        } else if (effect.mesh instanceof THREE.Line) {
-          this.scene.remove(effect.mesh);
-          effect.mesh.geometry.dispose();
-          (effect.mesh.material as THREE.Material).dispose();
+        } else if (effect.type === 'laser' && effect.mesh instanceof THREE.Line) {
+          // PERF: Return laser to pool instead of disposing
+          if (this.laserPool.inUse.has(effect.mesh)) {
+            this.laserPool.inUse.delete(effect.mesh);
+            effect.mesh.visible = false;
+            this.laserPool.available.push(effect.mesh);
+          } else {
+            // Non-pooled laser - dispose
+            this.scene.remove(effect.mesh);
+            effect.mesh.geometry.dispose();
+            (effect.mesh.material as THREE.Material).dispose();
+          }
         }
 
         this.attackEffects.splice(i, 1);
@@ -925,10 +1086,17 @@ export class EffectsRenderer {
 
       if (effect.progress >= 1) {
         // Effect complete - return to pool if it's a pooled mesh
+        // PERF: Check all the pools that hit effects can come from
         if (this.hitEffectPool.inUse.has(effect.mesh)) {
           this.releaseToPool(this.hitEffectPool, effect.mesh);
+        } else if (this.deathEffectPool.inUse.has(effect.mesh)) {
+          this.releaseToPool(this.deathEffectPool, effect.mesh);
+        } else if (this.shockwavePool.inUse.has(effect.mesh)) {
+          this.releaseToPool(this.shockwavePool, effect.mesh);
+        } else if (this.flashPool.inUse.has(effect.mesh)) {
+          this.releaseToPool(this.flashPool, effect.mesh);
         } else {
-          // Non-pooled mesh (death effects, etc) - dispose
+          // Non-pooled mesh - dispose
           this.scene.remove(effect.mesh);
           if (effect.mesh.geometry) effect.mesh.geometry.dispose();
           (effect.mesh.material as THREE.Material).dispose();
@@ -1048,19 +1216,25 @@ export class EffectsRenderer {
       indicator.progress += dt / indicator.duration;
 
       if (indicator.progress >= 1) {
-        // Remove all rings
+        // PERF: Return rings to pool instead of disposing
         for (const ring of indicator.rings) {
-          this.scene.remove(ring);
-          ring.geometry.dispose();
-          (ring.material as THREE.Material).dispose();
+          if (this.moveRingPool.inUse.has(ring)) {
+            this.releaseToPool(this.moveRingPool, ring);
+          } else {
+            // Non-pooled ring - dispose
+            this.scene.remove(ring);
+            ring.geometry.dispose();
+            (ring.material as THREE.Material).dispose();
+          }
         }
         this.moveIndicators.splice(i, 1);
       } else {
         // Shrink and fade rings
         for (let j = 0; j < indicator.rings.length; j++) {
           const ring = indicator.rings[j];
+          const baseScale = 1 + j * 0.8; // Match the scale set in createMoveIndicator
           const shrink = 1 - indicator.progress * 0.5;
-          ring.scale.set(shrink, shrink, 1);
+          ring.scale.set(baseScale * shrink, baseScale * shrink, 1);
           const baseOpacity = 0.9 - j * 0.2;
           (ring.material as THREE.MeshBasicMaterial).opacity = baseOpacity * (1 - indicator.progress);
         }
@@ -1100,6 +1274,13 @@ export class EffectsRenderer {
     for (const effect of this.attackEffects) {
       if (effect.type === 'projectile' && effect.mesh instanceof THREE.Mesh) {
         this.releaseToPool(this.projectilePool, effect.mesh);
+      } else if (effect.type === 'laser' && effect.mesh instanceof THREE.Line) {
+        // PERF: Release laser to pool
+        if (this.laserPool.inUse.has(effect.mesh)) {
+          this.laserPool.inUse.delete(effect.mesh);
+          effect.mesh.visible = false;
+          this.laserPool.available.push(effect.mesh);
+        }
       } else {
         this.scene.remove(effect.mesh);
         if (effect.mesh instanceof THREE.Mesh) {
@@ -1108,8 +1289,15 @@ export class EffectsRenderer {
       }
     }
     for (const effect of this.hitEffects) {
+      // PERF: Check all pools
       if (this.hitEffectPool.inUse.has(effect.mesh)) {
         this.releaseToPool(this.hitEffectPool, effect.mesh);
+      } else if (this.deathEffectPool.inUse.has(effect.mesh)) {
+        this.releaseToPool(this.deathEffectPool, effect.mesh);
+      } else if (this.shockwavePool.inUse.has(effect.mesh)) {
+        this.releaseToPool(this.shockwavePool, effect.mesh);
+      } else if (this.flashPool.inUse.has(effect.mesh)) {
+        this.releaseToPool(this.flashPool, effect.mesh);
       } else {
         this.scene.remove(effect.mesh);
         if (effect.mesh.geometry) effect.mesh.geometry.dispose();
@@ -1131,6 +1319,24 @@ export class EffectsRenderer {
     this.disposePool(this.projectilePool);
     this.disposePool(this.hitEffectPool);
     this.disposePool(this.explosionPool);
+    this.disposePool(this.deathEffectPool);
+    this.disposePool(this.shockwavePool);
+    this.disposePool(this.flashPool);
+    this.disposePool(this.moveRingPool);
+
+    // Dispose laser pool
+    for (const line of this.laserPool.available) {
+      this.scene.remove(line);
+      line.geometry.dispose();
+      (line.material as THREE.Material).dispose();
+    }
+    for (const line of this.laserPool.inUse) {
+      this.scene.remove(line);
+      line.geometry.dispose();
+      (line.material as THREE.Material).dispose();
+    }
+    this.laserPool.available = [];
+    this.laserPool.inUse.clear();
 
     // Clean up damage numbers
     for (const dmgNum of this.damageNumbers) {
@@ -1145,12 +1351,16 @@ export class EffectsRenderer {
       (indicator.mesh.material as THREE.Material).dispose();
     }
 
-    // Clean up move indicators
+    // Clean up move indicators - release to pool
     for (const indicator of this.moveIndicators) {
       for (const ring of indicator.rings) {
-        this.scene.remove(ring);
-        ring.geometry.dispose();
-        (ring.material as THREE.Material).dispose();
+        if (this.moveRingPool.inUse.has(ring)) {
+          this.releaseToPool(this.moveRingPool, ring);
+        } else {
+          this.scene.remove(ring);
+          ring.geometry.dispose();
+          (ring.material as THREE.Material).dispose();
+        }
       }
     }
 
@@ -1158,6 +1368,7 @@ export class EffectsRenderer {
     this.projectileGeometry.dispose();
     this.projectileMaterial.dispose();
     this.laserMaterial.dispose();
+    this.laserGeometry.dispose();
     this.hitGeometry.dispose();
     this.hitMaterial.dispose();
     this.deathGeometry.dispose();
@@ -1168,6 +1379,13 @@ export class EffectsRenderer {
     this.explosionMaterial.dispose();
     this.moveIndicatorGeometry.dispose();
     this.moveIndicatorMaterial.dispose();
+    // Dispose new shared geometries/materials
+    this.shockwaveGeometrySmall.dispose();
+    this.shockwaveGeometryLarge.dispose();
+    this.shockwaveMaterial.dispose();
+    this.flashGeometrySmall.dispose();
+    this.flashGeometryLarge.dispose();
+    this.flashMaterial.dispose();
 
     this.attackEffects = [];
     this.hitEffects = [];
