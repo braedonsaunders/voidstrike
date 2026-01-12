@@ -9,6 +9,7 @@ import { Resource } from '../components/Resource';
 import { PooledVector2 } from '@/utils/VectorPool';
 import { isLocalPlayer } from '@/store/gameSetupStore';
 import { debugCombat } from '@/utils/debugLogger';
+import { deterministicDamage, quantize, QUANT_DAMAGE } from '@/utils/FixedPoint';
 
 // Static temp vectors to avoid allocations in hot loops
 const tempTargetScore: { id: number; score: number } | null = null;
@@ -699,11 +700,12 @@ export class CombatSystem extends System {
     // High ground miss chance check
     const heightDifference = targetTransform.z - attackerTransform.z;
     if (heightDifference > HIGH_GROUND_THRESHOLD) {
-      // Target is on high ground - check for miss
-      // Use deterministic pseudo-random based on game time and attacker ID
-      const seed = (gameTime * 1000 + attackerId) % 1;
-      const missRoll = Math.abs(Math.sin(seed * 12345.6789) % 1);
-      if (missRoll < HIGH_GROUND_MISS_CHANCE) {
+      // DETERMINISM: Use integer-based hash for miss chance instead of floating-point Math.sin
+      // This ensures identical results across all platforms/browsers
+      const tick = this.game.getCurrentTick();
+      const seed = ((tick * 1103515245 + attackerId * 12345) >>> 0) % 1000;
+      const missThreshold = Math.floor(HIGH_GROUND_MISS_CHANCE * 1000); // 300 for 30%
+      if (seed < missThreshold) {
         // Attack missed - PERF: Use pooled payload object
         missEventPayload.attackerId = attacker.unitId;
         missEventPayload.attackerPos.x = attackerTransform.x;
@@ -715,15 +717,19 @@ export class CombatSystem extends System {
       }
     }
 
-    // Calculate damage with type multiplier
+    // DETERMINISM: Calculate damage using quantized fixed-point math
+    // This ensures identical damage values across different platforms/browsers
     const multiplier = DAMAGE_MULTIPLIERS[attacker.damageType][targetHealth.armorType];
-    const damage = attacker.attackDamage * multiplier;
 
     // Psionic damage ignores armor
-    const finalDamage =
-      attacker.damageType === 'psionic'
-        ? damage
-        : Math.max(1, damage - targetHealth.armor);
+    const armorReduction = attacker.damageType === 'psionic' ? 0 : targetHealth.armor;
+
+    // Use deterministic damage calculation with quantization
+    const finalDamage = deterministicDamage(
+      attacker.attackDamage,
+      multiplier,
+      armorReduction
+    );
 
     // Apply primary target damage
     targetHealth.takeDamage(finalDamage, gameTime);
@@ -824,9 +830,13 @@ export class CombatSystem extends System {
 
       // Apply splash damage with falloff
       if (distance > 0 && distance <= attacker.splashRadius) {
-        // Linear falloff: 100% at center, 50% at edge
-        const falloff = 1 - (distance / attacker.splashRadius) * 0.5;
-        const splashDamage = Math.max(1, Math.floor(baseDamage * falloff));
+        // DETERMINISM: Linear falloff using quantized calculation
+        // 100% at center, 50% at edge
+        const qDistance = quantize(distance, QUANT_DAMAGE);
+        const qRadius = quantize(attacker.splashRadius, QUANT_DAMAGE);
+        const qFalloff = QUANT_DAMAGE - Math.floor((qDistance * QUANT_DAMAGE * 0.5) / qRadius);
+        const qBaseDamage = quantize(baseDamage, QUANT_DAMAGE);
+        const splashDamage = Math.max(1, Math.floor((qBaseDamage * qFalloff) / (QUANT_DAMAGE * QUANT_DAMAGE)));
 
         health.takeDamage(splashDamage, gameTime);
 
