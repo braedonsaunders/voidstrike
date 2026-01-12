@@ -387,11 +387,26 @@ function generateCircularPlatform(
               textureId: Math.floor(Math.random() * 4),
             };
           } else {
-            // In protected zone cliff area - set to ground at platform elevation
-            // This creates a walkable gap in the cliff where the ramp connects
+            // In protected zone cliff area - check for adjacent ramp to get appropriate elevation
+            // This ensures smooth height transition at ramp boundaries
+            let useElevation = elevation256;
+
+            // Look for adjacent ramp cells and use their elevation if found
+            // This creates a smooth walkable transition at the cliff ring edge
+            for (const [rdx, rdy] of [[0, 1], [0, -1], [1, 0], [-1, 0], [1, 1], [1, -1], [-1, 1], [-1, -1]]) {
+              const rx = px + rdx;
+              const ry = py + rdy;
+              if (ry >= 0 && ry < grid.length && rx >= 0 && rx < grid[0].length) {
+                if (grid[ry][rx].terrain === 'ramp') {
+                  useElevation = grid[ry][rx].elevation;
+                  break;
+                }
+              }
+            }
+
             grid[py][px] = {
               terrain: 'ground',
-              elevation: elevation256,
+              elevation: useElevation,
               feature: 'none',
               textureId: Math.floor(Math.random() * 4),
             };
@@ -451,10 +466,24 @@ function generateRectangularPlatform(
               textureId: Math.floor(Math.random() * 4),
             };
           } else {
-            // In protected zone - set to walkable ground at platform elevation
+            // In protected zone - check for adjacent ramp to get appropriate elevation
+            let useElevation = elevation256;
+
+            // Look for adjacent ramp cells and use their elevation if found
+            for (const [rdx, rdy] of [[0, 1], [0, -1], [1, 0], [-1, 0], [1, 1], [1, -1], [-1, 1], [-1, -1]]) {
+              const rx = px + rdx;
+              const ry = py + rdy;
+              if (ry >= 0 && ry < grid.length && rx >= 0 && rx < grid[0].length) {
+                if (grid[ry][rx].terrain === 'ramp') {
+                  useElevation = grid[ry][rx].elevation;
+                  break;
+                }
+              }
+            }
+
             grid[py][px] = {
               terrain: 'ground',
-              elevation: elevation256,
+              elevation: useElevation,
               feature: 'none',
               textureId: Math.floor(Math.random() * 4),
             };
