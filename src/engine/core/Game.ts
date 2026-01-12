@@ -26,6 +26,7 @@ import { PathfindingSystem } from '../systems/PathfindingSystem';
 import { AIMicroSystem } from '../systems/AIMicroSystem';
 import { RecastNavigation } from '../pathfinding/RecastNavigation';
 import { getLocalPlayerId } from '@/store/gameSetupStore';
+import { PerformanceMonitor } from './PerformanceMonitor';
 
 export type GameState = 'initializing' | 'running' | 'paused' | 'ended';
 
@@ -205,6 +206,7 @@ export class Game {
 
     this.state = 'running';
     this.gameLoop.start();
+    PerformanceMonitor.start(); // Start performance monitoring
     this.eventBus.emit('game:countdown', {}); // SC2-style 3, 2, 1, GO! countdown
     this.eventBus.emit('game:started', { tick: this.currentTick });
   }
@@ -228,6 +230,7 @@ export class Game {
   public stop(): void {
     this.state = 'ended';
     this.gameLoop.stop();
+    PerformanceMonitor.stop(); // Stop performance monitoring
     this.eventBus.emit('game:ended', { tick: this.currentTick });
   }
 
@@ -251,9 +254,37 @@ export class Game {
     });
 
     const tickElapsed = performance.now() - tickStart;
+
+    // Record tick time for performance monitoring
+    PerformanceMonitor.recordTickTime(tickElapsed);
+
+    // Update entity counts every 20 ticks (1 second at 20 tick/sec)
+    if (this.currentTick % 20 === 0) {
+      this.updateEntityCounts();
+    }
+
     if (tickElapsed > 10) {
       debugPerformance.warn(`[Game] TICK ${this.currentTick}: ${tickElapsed.toFixed(1)}ms`);
     }
+  }
+
+  /**
+   * Update entity counts for performance monitoring
+   */
+  private updateEntityCounts(): void {
+    const units = this.world.getEntitiesWith('Unit', 'Transform');
+    const buildings = this.world.getEntitiesWith('Building', 'Transform');
+    const resources = this.world.getEntitiesWith('Resource', 'Transform');
+    const projectiles = this.world.getEntitiesWith('Projectile');
+
+    PerformanceMonitor.updateEntityCounts({
+      total: this.world.getEntityCount(),
+      units: units.length,
+      buildings: buildings.length,
+      resources: resources.length,
+      projectiles: projectiles.length,
+      effects: 0, // Could add effect entity tracking if needed
+    });
   }
 
   public getState(): GameState {

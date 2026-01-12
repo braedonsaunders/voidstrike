@@ -3,6 +3,7 @@ import { Component, ComponentType } from './Component';
 import { System } from './System';
 import { SpatialGrid } from '../core/SpatialGrid';
 import { debugPerformance } from '@/utils/debugLogger';
+import { PerformanceMonitor } from '../core/PerformanceMonitor';
 
 export class World {
   private entities: Map<EntityId, Entity> = new Map();
@@ -148,13 +149,22 @@ export class World {
 
   public update(deltaTime: number): void {
     const slowSystems: string[] = [];
+
+    // Clear previous tick's timings
+    PerformanceMonitor.clearSystemTimings();
+
     for (const system of this.systems) {
       if (system.enabled) {
         const start = performance.now();
         system.update(deltaTime);
         const elapsed = performance.now() - start;
+
+        // Record timing for performance dashboard
+        const systemName = system.constructor.name;
+        PerformanceMonitor.recordSystemTiming(systemName, elapsed);
+
         if (elapsed > 5) {
-          slowSystems.push(`${system.constructor.name}:${elapsed.toFixed(1)}ms`);
+          slowSystems.push(`${systemName}:${elapsed.toFixed(1)}ms`);
         }
       }
     }
