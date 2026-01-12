@@ -835,10 +835,19 @@ export class Terrain {
     let avgElevation: number;
 
     if (hasRamp) {
-      // For vertices touching ramps, use the PRIMARY CELL's (cell11) elevation
-      // This ensures each cell's corners reflect its actual terrain elevation
-      // The TerrainTopology system ensures protected zone cells have correct elevations
-      avgElevation = cell11.elevation;
+      // CRITICAL: Use the average elevation of RAMP cells only
+      // This ensures vertices adjacent to ramps use the ramp's interpolated elevation
+      // and don't get pulled to a different ground/cliff elevation.
+      //
+      // Bug fixed: Previously used cell11.elevation, but cell11 might be ground/cliff
+      // at a different elevation than the ramp. This caused "holes" at ramp edges
+      // where vertices suddenly dropped to ground level.
+      //
+      // For example, at the right edge of a ramp:
+      // - cell00, cell01 = ramp cells at elevation 180
+      // - cell10, cell11 = ground cells at elevation 60
+      // Using cell11.elevation would give height 2.4 instead of 7.2, creating a hole.
+      avgElevation = rampCells.reduce((sum, c) => sum + c.elevation, 0) / rampCells.length;
     } else {
       // No ramps - use simple average elevation for smooth ground
       avgElevation = (cell00.elevation + cell10.elevation + cell01.elevation + cell11.elevation) / 4;
