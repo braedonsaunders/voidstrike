@@ -167,7 +167,10 @@ function getPerpendicular(v: { x: number; y: number }): { x: number; y: number }
 /**
  * Calculate where a ramp should connect two areas.
  * Uses TRUE VECTOR GEOMETRY - finds the actual closest points between circles.
- * This properly handles diagonal connections, not just cardinal directions.
+ *
+ * IMPORTANT: Connection points are at the INNER (buildable) edge of each area,
+ * not the outer cliff edge. This ensures ramps connect the buildable spaces
+ * and the protected zones properly clear the cliff ring between them.
  */
 export function calculateConnectionPoints(
   fromArea: TopologyArea,
@@ -186,22 +189,45 @@ export function calculateConnectionPoints(
   const dirX = dist > 0 ? dx / dist : 0;
   const dirY = dist > 0 ? dy / dist : 1;
 
-  const fromCliffWidth = fromArea.cliffWidth ?? (fromArea.type === 'main' ? 4 : 3);
-  const toCliffWidth = toArea.cliffWidth ?? (toArea.type === 'main' ? 4 : 3);
+  // Use INNER edge (buildable area boundary) for connection points
+  // This ensures ramps connect the playable spaces, not punch through cliffs
+  const fromInnerRadius = fromArea.radius;
+  const toInnerRadius = toArea.radius;
 
-  // Entry point: where the line from fromCenter to toCenter exits fromArea's cliff ring
-  const fromOuterRadius = fromArea.radius + fromCliffWidth;
+  // Entry point: on fromArea's buildable edge, facing toward toArea
   const entryPoint = {
-    x: fromCenter.x + dirX * fromOuterRadius,
-    y: fromCenter.y + dirY * fromOuterRadius,
+    x: fromCenter.x + dirX * fromInnerRadius,
+    y: fromCenter.y + dirY * fromInnerRadius,
   };
 
-  // Exit point: where the line from toCenter to fromCenter exits toArea's cliff ring
-  const toOuterRadius = toArea.radius + toCliffWidth;
+  // Exit point: on toArea's buildable edge, facing toward fromArea
   const exitPoint = {
-    x: toCenter.x - dirX * toOuterRadius,
-    y: toCenter.y - dirY * toOuterRadius,
+    x: toCenter.x - dirX * toInnerRadius,
+    y: toCenter.y - dirY * toInnerRadius,
   };
+
+  // Verify the points make sense (entry should be closer to fromCenter than exit)
+  // If they're crossed, the areas overlap - use midpoint
+  const entryToExitDist = Math.sqrt(
+    Math.pow(exitPoint.x - entryPoint.x, 2) +
+    Math.pow(exitPoint.y - entryPoint.y, 2)
+  );
+
+  // Check if direction from entry to exit matches overall direction (sanity check)
+  const entryExitDx = exitPoint.x - entryPoint.x;
+  const entryExitDy = exitPoint.y - entryPoint.y;
+  const dotProduct = entryExitDx * dirX + entryExitDy * dirY;
+
+  // If dot product is negative, the points are reversed (areas overlap)
+  if (dotProduct < 0 || entryToExitDist < 2) {
+    // Areas are overlapping or very close - use midpoint for both
+    const midX = (fromCenter.x + toCenter.x) / 2;
+    const midY = (fromCenter.y + toCenter.y) / 2;
+    entryPoint.x = midX;
+    entryPoint.y = midY;
+    exitPoint.x = midX;
+    exitPoint.y = midY;
+  }
 
   // Determine cardinal direction for legacy Ramp object (best approximation)
   const direction = getCardinalDirection(fromCenter, toCenter);
