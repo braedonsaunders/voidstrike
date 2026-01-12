@@ -64,6 +64,56 @@ export class GameOverlayManager {
   }
 
   /**
+   * Create a geometry that follows the terrain height
+   * Instead of a flat plane, this creates a mesh that conforms to terrain elevation
+   */
+  private createTerrainFollowingGeometry(width: number, height: number, heightOffset: number): THREE.BufferGeometry {
+    // Use a lower resolution for the overlay (every 2 cells) to reduce vertex count
+    const step = 2;
+    const segmentsX = Math.ceil(width / step);
+    const segmentsY = Math.ceil(height / step);
+
+    const vertices: number[] = [];
+    const uvs: number[] = [];
+    const indices: number[] = [];
+
+    // Generate vertices with terrain-following heights
+    for (let iy = 0; iy <= segmentsY; iy++) {
+      for (let ix = 0; ix <= segmentsX; ix++) {
+        const x = Math.min(ix * step, width);
+        const z = Math.min(iy * step, height);
+
+        // Get terrain height at this position
+        const y = this.getTerrainHeight(x, z) + heightOffset;
+
+        vertices.push(x, y, z);
+        uvs.push(x / width, z / height);
+      }
+    }
+
+    // Generate indices for triangles
+    for (let iy = 0; iy < segmentsY; iy++) {
+      for (let ix = 0; ix < segmentsX; ix++) {
+        const a = iy * (segmentsX + 1) + ix;
+        const b = iy * (segmentsX + 1) + ix + 1;
+        const c = (iy + 1) * (segmentsX + 1) + ix;
+        const d = (iy + 1) * (segmentsX + 1) + ix + 1;
+
+        indices.push(a, c, b);
+        indices.push(b, c, d);
+      }
+    }
+
+    const geometry = new THREE.BufferGeometry();
+    geometry.setAttribute('position', new THREE.Float32BufferAttribute(vertices, 3));
+    geometry.setAttribute('uv', new THREE.Float32BufferAttribute(uvs, 2));
+    geometry.setIndex(indices);
+    geometry.computeVertexNormals();
+
+    return geometry;
+  }
+
+  /**
    * Create the navigable terrain overlay
    * Colors:
    * - Green = normal walkable (1.0x speed)
@@ -130,10 +180,10 @@ export class GameOverlayManager {
       side: THREE.DoubleSide,
     });
 
-    const geometry = new THREE.PlaneGeometry(width, height);
+    // Create geometry that follows terrain height
+    const geometry = this.createTerrainFollowingGeometry(width, height, 0.3);
     this.terrainOverlayMesh = new THREE.Mesh(geometry, material);
-    this.terrainOverlayMesh.rotation.x = -Math.PI / 2;
-    this.terrainOverlayMesh.position.set(width / 2, 0.3, height / 2);
+    // No rotation needed - geometry is already in world coordinates
     this.terrainOverlayMesh.renderOrder = 90;
     this.terrainOverlayMesh.visible = false;
     this.scene.add(this.terrainOverlayMesh);
@@ -286,10 +336,10 @@ export class GameOverlayManager {
       side: THREE.DoubleSide,
     });
 
-    const geometry = new THREE.PlaneGeometry(width, height);
+    // Create geometry that follows terrain height
+    const geometry = this.createTerrainFollowingGeometry(width, height, 0.35);
     this.elevationOverlayMesh = new THREE.Mesh(geometry, material);
-    this.elevationOverlayMesh.rotation.x = -Math.PI / 2;
-    this.elevationOverlayMesh.position.set(width / 2, 0.35, height / 2);
+    // No rotation needed - geometry is already in world coordinates
     this.elevationOverlayMesh.renderOrder = 90;
     this.elevationOverlayMesh.visible = false;
     this.scene.add(this.elevationOverlayMesh);
@@ -360,10 +410,10 @@ export class GameOverlayManager {
       side: THREE.DoubleSide,
     });
 
-    const geometry = new THREE.PlaneGeometry(width, height);
+    // Create geometry that follows terrain height
+    const geometry = this.createTerrainFollowingGeometry(width, height, 0.4);
     this.threatOverlayMesh = new THREE.Mesh(geometry, material);
-    this.threatOverlayMesh.rotation.x = -Math.PI / 2;
-    this.threatOverlayMesh.position.set(width / 2, 0.4, height / 2);
+    // No rotation needed - geometry is already in world coordinates
     this.threatOverlayMesh.renderOrder = 91;
     this.threatOverlayMesh.visible = false;
     this.scene.add(this.threatOverlayMesh);

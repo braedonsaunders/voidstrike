@@ -282,45 +282,62 @@ function generateRampPath(
   let minX = Infinity, maxX = -Infinity;
   let minY = Infinity, maxY = -Infinity;
 
-  // Set of cells we've filled (to avoid duplicates)
-  const filledCells = new Set<string>();
+  // PHASE 1: Identify all cells that will be part of the ramp
+  // Store each cell with its position parameter (t) along the ramp
+  const rampCells = new Map<string, { px: number; py: number; t: number }>();
 
-  // Generate ramp corridor by stepping along the path
-  const steps = Math.ceil(length) + 1;
+  const steps = Math.ceil(length * 2) + 1; // More steps for better coverage
   const halfWidth = width / 2;
 
   for (let step = 0; step <= steps; step++) {
-    // Position along the ramp centerline
     const t = step / Math.max(1, steps);
     const centerX = entry.x + dx * t;
     const centerY = entry.y + dy * t;
 
-    // Calculate elevation at this point (interpolate from entry to exit)
-    const elevation = Math.round(fromElev256 + (toElev256 - fromElev256) * t);
-
-    // Fill cells across the width of the ramp at this step
     for (let w = -halfWidth; w <= halfWidth; w++) {
       const px = Math.floor(centerX + perpX * w);
       const py = Math.floor(centerY + perpY * w);
 
-      const key = `${px},${py}`;
-      if (filledCells.has(key)) continue;
-      filledCells.add(key);
-
       if (py >= 0 && py < grid.length && px >= 0 && px < grid[0].length) {
-        grid[py][px] = {
-          terrain: 'ramp',
-          elevation,
-          feature: 'none',
-          textureId: Math.floor(Math.random() * 4),
-        };
+        const key = `${px},${py}`;
 
-        minX = Math.min(minX, px);
-        maxX = Math.max(maxX, px);
-        minY = Math.min(minY, py);
-        maxY = Math.max(maxY, py);
+        // For each cell, calculate its ACTUAL position parameter based on projection
+        // onto the ramp centerline, not the step that happened to hit it
+        const cellCenterX = px + 0.5;
+        const cellCenterY = py + 0.5;
+
+        // Project cell center onto the ramp line
+        const toCell_x = cellCenterX - entry.x;
+        const toCell_y = cellCenterY - entry.y;
+        const projectedT = length > 0
+          ? Math.max(0, Math.min(1, (toCell_x * dirX + toCell_y * dirY) / length))
+          : 0;
+
+        // Only update if this is a new cell or if this t value is more accurate
+        // (closer to the cell's actual projected position)
+        if (!rampCells.has(key)) {
+          rampCells.set(key, { px, py, t: projectedT });
+        }
       }
     }
+  }
+
+  // PHASE 2: Fill all identified cells with properly interpolated elevations
+  for (const { px, py, t } of rampCells.values()) {
+    // Calculate elevation based on the cell's actual position along the ramp
+    const elevation = Math.round(fromElev256 + (toElev256 - fromElev256) * t);
+
+    grid[py][px] = {
+      terrain: 'ramp',
+      elevation,
+      feature: 'none',
+      textureId: Math.floor(Math.random() * 4),
+    };
+
+    minX = Math.min(minX, px);
+    maxX = Math.max(maxX, px);
+    minY = Math.min(minY, py);
+    maxY = Math.max(maxY, py);
   }
 
   // Determine cardinal direction for the Ramp object
