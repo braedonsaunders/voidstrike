@@ -1130,12 +1130,80 @@ export class Terrain {
     const walkableIndices: number[] = [];
     let vertexIndex = 0;
 
+    // Helper: Check if a cell is at a cliff edge where the navmesh might slope down incorrectly
+    // A cliff edge is a walkable cell where:
+    // 1. It's adjacent to an unwalkable cell (cliff), AND
+    // 2. There's ground at a DIFFERENT elevation within 3 cells (the cliff leads somewhere)
+    // This prevents navmesh from creating slopes down cliff faces
+    const isCliffEdgeCell = (cx: number, cy: number): boolean => {
+      const cell = terrain[cy][cx];
+      if (cell.terrain === 'ramp') return false; // Ramps should use interpolated heights
+
+      const cellElev = cell.elevation;
+      let hasAdjacentCliff = false;
+
+      // First, check if adjacent to any unwalkable cell (cliff/obstacle)
+      for (let dy = -1; dy <= 1; dy++) {
+        for (let dx = -1; dx <= 1; dx++) {
+          if (dx === 0 && dy === 0) continue;
+          const nx = cx + dx;
+          const ny = cy + dy;
+          if (nx >= 0 && nx < width && ny >= 0 && ny < height) {
+            if (terrain[ny][nx].terrain === 'unwalkable') {
+              hasAdjacentCliff = true;
+              break;
+            }
+          }
+        }
+        if (hasAdjacentCliff) break;
+      }
+
+      if (!hasAdjacentCliff) return false;
+
+      // Now check if there's ground at a different elevation within range
+      // This confirms we're at a cliff edge (not just next to a same-level obstacle)
+      const checkRange = 4;
+      for (let dy = -checkRange; dy <= checkRange; dy++) {
+        for (let dx = -checkRange; dx <= checkRange; dx++) {
+          if (dx === 0 && dy === 0) continue;
+          const nx = cx + dx;
+          const ny = cy + dy;
+          if (nx >= 0 && nx < width && ny >= 0 && ny < height) {
+            const neighbor = terrain[ny][nx];
+            // Found walkable ground at different elevation
+            if (neighbor.terrain !== 'unwalkable' && neighbor.terrain !== 'ramp') {
+              const elevDiff = Math.abs(neighbor.elevation - cellElev);
+              if (elevDiff > 30) { // More than ~1.2 height units difference
+                return true;
+              }
+            }
+          }
+        }
+      }
+      return false;
+    };
+
+    // Helper: Check if cell is adjacent to a ramp
+    const isAdjacentToRamp = (cx: number, cy: number): boolean => {
+      for (let dy = -1; dy <= 1; dy++) {
+        for (let dx = -1; dx <= 1; dx++) {
+          const nx = cx + dx;
+          const ny = cy + dy;
+          if (nx >= 0 && nx < width && ny >= 0 && ny < height) {
+            if (terrain[ny][nx].terrain === 'ramp') {
+              return true;
+            }
+          }
+        }
+      }
+      return false;
+    };
+
     for (let y = 0; y < height; y++) {
       for (let x = 0; x < width; x++) {
         const cell = terrain[y][x];
 
         // Only include walkable terrain (ground and ramps)
-        // Cliff cells (unwalkable) are excluded, creating physical gaps in the navmesh
         if (cell.terrain === 'unwalkable') continue;
 
         // Check terrain features that make cells unwalkable
@@ -1143,57 +1211,52 @@ export class Terrain {
         const featureConfig = TERRAIN_FEATURE_CONFIG[feature];
         if (!featureConfig.walkable) continue;
 
-        // Get heights at the 4 corners of this cell
-        const h00 = this.heightMap[y * this.gridWidth + x];
-        const h10 = this.heightMap[y * this.gridWidth + (x + 1)];
-        const h01 = this.heightMap[(y + 1) * this.gridWidth + x];
-        const h11 = this.heightMap[(y + 1) * this.gridWidth + (x + 1)];
+        // Determine heights for this cell's vertices
+        let h00: number, h10: number, h01: number, h11: number;
 
-        // Check cell height variation - exclude cells with extreme height differences
-        // This prevents connections at cliff edges where height varies sharply
+        const adjacentToRamp = isAdjacentToRamp(x, y);
+        const atCliffEdge = isCliffEdgeCell(x, y);
+
+        if (cell.terrain === 'ramp') {
+          // RAMPS: Always use heightMap values for proper slope
+          h00 = this.heightMap[y * this.gridWidth + x];
+          h10 = this.heightMap[y * this.gridWidth + (x + 1)];
+          h01 = this.heightMap[(y + 1) * this.gridWidth + x];
+          h11 = this.heightMap[(y + 1) * this.gridWidth + (x + 1)];
+        } else if (atCliffEdge && !adjacentToRamp) {
+          // CLIFF EDGE (not near ramp): Use FLAT height at cell's elevation
+          // This prevents navmesh from creating slopes down cliffs that units can walk on
+          const flatHeight = elevationToHeight(cell.elevation);
+          h00 = h10 = h01 = h11 = flatHeight;
+        } else {
+          // NORMAL GROUND or RAMP-ADJACENT: Use heightMap values
+          h00 = this.heightMap[y * this.gridWidth + x];
+          h10 = this.heightMap[y * this.gridWidth + (x + 1)];
+          h01 = this.heightMap[(y + 1) * this.gridWidth + x];
+          h11 = this.heightMap[(y + 1) * this.gridWidth + (x + 1)];
+        }
+
+        // Height variation check - exclude cells with extreme differences
         const heights = [h00, h10, h01, h11];
         const minH = Math.min(...heights);
         const maxH = Math.max(...heights);
         const heightRange = maxH - minH;
 
-        // For non-ramp cells, exclude if height varies too much (cliff edge)
-        // Ramps naturally have height variation so they're allowed
-        // Also allow cells adjacent to ramps to maintain connectivity
-        if (cell.terrain !== 'ramp' && heightRange > 1.5) {
-          // Check if this cell is adjacent to a ramp
-          let adjacentToRamp = false;
-          for (let dy = -1; dy <= 1 && !adjacentToRamp; dy++) {
-            for (let dx = -1; dx <= 1 && !adjacentToRamp; dx++) {
-              const nx = x + dx;
-              const ny = y + dy;
-              if (nx >= 0 && nx < width && ny >= 0 && ny < height) {
-                if (terrain[ny][nx].terrain === 'ramp') {
-                  adjacentToRamp = true;
-                }
-              }
-            }
-          }
-          // Skip cells with high height variation unless they connect to ramps
-          if (!adjacentToRamp) {
-            continue;
-          }
+        // Skip non-ramp cells with excessive height variation (unless adjacent to ramp)
+        if (cell.terrain !== 'ramp' && heightRange > 2.0 && !adjacentToRamp) {
+          continue;
         }
 
-        // Create two triangles for this cell
-        // Recast uses Y-up and expects counter-clockwise winding for upward-facing surfaces
-        // Triangle 1: (x,y), (x,y+1), (x+1,y) - CCW when viewed from above
-        walkableVertices.push(x, h00, y);        // Note: game y becomes navmesh z
+        // Create two triangles for this cell (CCW winding for Recast)
+        walkableVertices.push(x, h00, y);
         walkableVertices.push(x, h01, y + 1);
         walkableVertices.push(x + 1, h10, y);
-
         walkableIndices.push(vertexIndex, vertexIndex + 1, vertexIndex + 2);
         vertexIndex += 3;
 
-        // Triangle 2: (x+1,y), (x,y+1), (x+1,y+1) - CCW when viewed from above
         walkableVertices.push(x + 1, h10, y);
         walkableVertices.push(x, h01, y + 1);
         walkableVertices.push(x + 1, h11, y + 1);
-
         walkableIndices.push(vertexIndex, vertexIndex + 1, vertexIndex + 2);
         vertexIndex += 3;
       }
