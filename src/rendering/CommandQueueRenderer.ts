@@ -211,7 +211,9 @@ export class CommandQueueRenderer {
 
     const lineGeometry = new THREE.BufferGeometry();
     lineGeometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
-    lineGeometry.setDrawRange(0, linePoints.length);
+    // Ensure we have at least some geometry to prevent WebGPU errors
+    // setDrawRange(0, 0) can cause issues with some renderers
+    lineGeometry.setDrawRange(0, Math.max(linePoints.length, 2));
 
     const line = new THREE.LineSegments(lineGeometry, this.lineMaterial);
     this.scene.add(line);
@@ -256,7 +258,8 @@ export class CommandQueueRenderer {
 
       const newGeometry = new THREE.BufferGeometry();
       newGeometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
-      newGeometry.setDrawRange(0, requiredPoints);
+      // Ensure we have at least some geometry to prevent WebGPU errors
+      newGeometry.setDrawRange(0, Math.max(requiredPoints, 2));
       visual.line.geometry = newGeometry;
       visual.maxPoints = newCapacity;
     } else {
@@ -268,7 +271,8 @@ export class CommandQueueRenderer {
         positions[i * 3 + 2] = linePoints[i].z;
       }
       positionAttr.needsUpdate = true;
-      visual.line.geometry.setDrawRange(0, requiredPoints);
+      // Ensure we have at least some geometry to prevent WebGPU errors
+      visual.line.geometry.setDrawRange(0, Math.max(requiredPoints, 2));
     }
 
     // Update markers - add or remove as needed

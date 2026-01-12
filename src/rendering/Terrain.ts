@@ -844,11 +844,13 @@ export class Terrain {
       avgElevation = (cell00.elevation + cell10.elevation + cell01.elevation + cell11.elevation) / 4;
     }
 
-    // Use the PRIMARY CELL's terrain type directly - this ensures texture matches walkability
-    // A vertex at (x,y) corresponds to cell at (x,y) for pathfinding, so use that cell's type
-    // This prevents cliff textures from bleeding onto walkable ground at edges
+    // For terrain type: if any adjacent cell is a ramp, treat this vertex as ramp terrain
+    // This prevents noise from being added to ramp-adjacent vertices, which would create holes
+    // The texture system will still use the actual cell type for rendering
+    const terrainType = hasRamp ? 'ramp' : cell11.terrain;
+
     return {
-      terrain: cell11.terrain,
+      terrain: terrainType as typeof cell11.terrain,
       elevation: Math.round(avgElevation),
       feature: cell11.feature || 'none',
       textureId: cell11.textureId,
@@ -1125,8 +1127,6 @@ export class Terrain {
 
         // Only include walkable terrain (ground and ramps)
         // Cliff cells (unwalkable) are excluded, creating physical gaps in the navmesh
-        // The height difference between cliff-adjacent ground and lower ground
-        // prevents Recast from connecting them (via walkableClimb threshold)
         if (cell.terrain === 'unwalkable') continue;
 
         // Check terrain features that make cells unwalkable
@@ -1139,6 +1139,36 @@ export class Terrain {
         const h10 = this.heightMap[y * this.gridWidth + (x + 1)];
         const h01 = this.heightMap[(y + 1) * this.gridWidth + x];
         const h11 = this.heightMap[(y + 1) * this.gridWidth + (x + 1)];
+
+        // Check cell height variation - exclude cells with extreme height differences
+        // This prevents connections at cliff edges where height varies sharply
+        const heights = [h00, h10, h01, h11];
+        const minH = Math.min(...heights);
+        const maxH = Math.max(...heights);
+        const heightRange = maxH - minH;
+
+        // For non-ramp cells, exclude if height varies too much (cliff edge)
+        // Ramps naturally have height variation so they're allowed
+        // Also allow cells adjacent to ramps to maintain connectivity
+        if (cell.terrain !== 'ramp' && heightRange > 1.5) {
+          // Check if this cell is adjacent to a ramp
+          let adjacentToRamp = false;
+          for (let dy = -1; dy <= 1 && !adjacentToRamp; dy++) {
+            for (let dx = -1; dx <= 1 && !adjacentToRamp; dx++) {
+              const nx = x + dx;
+              const ny = y + dy;
+              if (nx >= 0 && nx < width && ny >= 0 && ny < height) {
+                if (terrain[ny][nx].terrain === 'ramp') {
+                  adjacentToRamp = true;
+                }
+              }
+            }
+          }
+          // Skip cells with high height variation unless they connect to ramps
+          if (!adjacentToRamp) {
+            continue;
+          }
+        }
 
         // Create two triangles for this cell
         // Recast uses Y-up and expects counter-clockwise winding for upward-facing surfaces
@@ -1177,8 +1207,19 @@ export class Terrain {
     const { positions, indices } = this.generateWalkableGeometry();
 
     const geometry = new THREE.BufferGeometry();
-    geometry.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
-    geometry.setIndex(new THREE.Uint32BufferAttribute(indices, 1));
+
+    // Defensive check: ensure we have valid geometry data
+    if (positions.length === 0 || indices.length === 0) {
+      debugTerrain.warn('[Terrain] Warning: Empty walkable geometry generated');
+      // Create a minimal valid geometry to prevent WebGPU errors
+      const minimalPositions = new Float32Array([0, 0, 0, 1, 0, 0, 0, 0, 1]);
+      const minimalIndices = new Uint32Array([0, 1, 2]);
+      geometry.setAttribute('position', new THREE.Float32BufferAttribute(minimalPositions, 3));
+      geometry.setIndex(new THREE.Uint32BufferAttribute(minimalIndices, 1));
+    } else {
+      geometry.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
+      geometry.setIndex(new THREE.Uint32BufferAttribute(indices, 1));
+    }
     geometry.computeVertexNormals();
 
     const material = new THREE.MeshBasicMaterial({
