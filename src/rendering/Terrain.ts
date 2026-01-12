@@ -1142,22 +1142,11 @@ export class Terrain {
         const h01 = this.heightMap[(y + 1) * this.gridWidth + x];
         const h11 = this.heightMap[(y + 1) * this.gridWidth + (x + 1)];
 
-        // Skip cells at cliff edges where height varies too much
-        // This prevents creating navmesh triangles that span across elevation changes
-        const heights = [h00, h10, h01, h11];
-        const minH = Math.min(...heights);
-        const maxH = Math.max(...heights);
-        if (maxH - minH > MAX_HEIGHT_DIFF && cell.terrain !== 'ramp') {
-          // Only allow large height differences on actual ramp cells
-          continue;
-        }
-
-        // Check if any adjacent cells are unwalkable cliffs
-        // Skip ground cells that directly border cliffs UNLESS they also border a ramp
-        // (cells adjacent to ramps need to be included to connect ramps to walkable areas)
+        // For non-ramp cells, check adjacency to cliffs and ramps first
+        // This determines whether to apply strict height checks
+        let bordersCliff = false;
+        let bordersRamp = false;
         if (cell.terrain !== 'ramp') {
-          let bordersCliff = false;
-          let bordersRamp = false;
           for (let dy = -1; dy <= 1; dy++) {
             for (let dx = -1; dx <= 1; dx++) {
               if (dx === 0 && dy === 0) continue;
@@ -1174,9 +1163,24 @@ export class Terrain {
               }
             }
           }
-          // Only exclude if it borders a cliff but NOT a ramp
-          // Cells adjacent to ramps must be included to connect the ramp to walkable ground
-          if (bordersCliff && !bordersRamp) continue;
+        }
+
+        // Skip cells at cliff edges where height varies too much
+        // BUT allow cells adjacent to ramps (they need height variation to connect)
+        const heights = [h00, h10, h01, h11];
+        const minH = Math.min(...heights);
+        const maxH = Math.max(...heights);
+        if (maxH - minH > MAX_HEIGHT_DIFF) {
+          // Allow ramp cells and cells adjacent to ramps to have height variation
+          if (cell.terrain !== 'ramp' && !bordersRamp) {
+            continue;
+          }
+        }
+
+        // Skip ground cells that border cliffs but NOT ramps
+        // (prevents walking off cliffs, but allows ramp connections)
+        if (cell.terrain !== 'ramp' && bordersCliff && !bordersRamp) {
+          continue;
         }
 
         // Create two triangles for this cell
