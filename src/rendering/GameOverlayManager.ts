@@ -69,6 +69,10 @@ export class GameOverlayManager {
    *
    * IMPORTANT: Uses finer resolution (step=1) to match terrain mesh exactly
    * and adds sufficient height offset to prevent z-fighting
+   *
+   * CRITICAL FIX: Increased height offset significantly to ensure overlays render
+   * above terrain noise and variations. Previous offset (0.15) was too small and
+   * caused overlays to render below terrain in areas with height noise.
    */
   private createTerrainFollowingGeometry(width: number, height: number, heightOffset: number): THREE.BufferGeometry {
     // Use 1:1 resolution to match terrain mesh exactly
@@ -81,8 +85,9 @@ export class GameOverlayManager {
     const indices: number[] = [];
 
     // Generate vertices with terrain-following heights
-    // Add extra height offset to ensure overlays are always visible above terrain
-    const effectiveOffset = heightOffset + 0.15; // Additional clearance
+    // CRITICAL: Increased offset from 0.15 to 0.5 to ensure overlays are always visible
+    // The terrain has noise variations up to ~0.3 units, so we need more clearance
+    const effectiveOffset = heightOffset + 0.5;
 
     for (let iy = 0; iy <= segmentsY; iy++) {
       for (let ix = 0; ix <= segmentsX; ix++) {
@@ -185,13 +190,19 @@ export class GameOverlayManager {
       transparent: true,
       depthWrite: false,
       side: THREE.DoubleSide,
+      // CRITICAL: Add polygon offset to push overlay above terrain in depth buffer
+      // This prevents z-fighting and ensures overlay is visible even with depth test
+      polygonOffset: true,
+      polygonOffsetFactor: -1,
+      polygonOffsetUnits: -1,
     });
 
     // Create geometry that follows terrain height
-    const geometry = this.createTerrainFollowingGeometry(width, height, 0.3);
+    // Increased base offset from 0.3 to 0.4 for better visibility
+    const geometry = this.createTerrainFollowingGeometry(width, height, 0.4);
     this.terrainOverlayMesh = new THREE.Mesh(geometry, material);
     // No rotation needed - geometry is already in world coordinates
-    this.terrainOverlayMesh.renderOrder = 90;
+    this.terrainOverlayMesh.renderOrder = 100; // Increased from 90 for higher priority
     this.terrainOverlayMesh.visible = false;
     this.scene.add(this.terrainOverlayMesh);
   }
@@ -341,13 +352,18 @@ export class GameOverlayManager {
       transparent: true,
       depthWrite: false,
       side: THREE.DoubleSide,
+      // CRITICAL: Add polygon offset to push overlay above terrain in depth buffer
+      polygonOffset: true,
+      polygonOffsetFactor: -1,
+      polygonOffsetUnits: -1,
     });
 
     // Create geometry that follows terrain height
-    const geometry = this.createTerrainFollowingGeometry(width, height, 0.35);
+    // Increased base offset from 0.35 to 0.45 for better visibility
+    const geometry = this.createTerrainFollowingGeometry(width, height, 0.45);
     this.elevationOverlayMesh = new THREE.Mesh(geometry, material);
     // No rotation needed - geometry is already in world coordinates
-    this.elevationOverlayMesh.renderOrder = 90;
+    this.elevationOverlayMesh.renderOrder = 100; // Increased from 90
     this.elevationOverlayMesh.visible = false;
     this.scene.add(this.elevationOverlayMesh);
   }
@@ -415,13 +431,18 @@ export class GameOverlayManager {
       transparent: true,
       depthWrite: false,
       side: THREE.DoubleSide,
+      // CRITICAL: Add polygon offset to push overlay above terrain in depth buffer
+      polygonOffset: true,
+      polygonOffsetFactor: -1,
+      polygonOffsetUnits: -1,
     });
 
     // Create geometry that follows terrain height
-    const geometry = this.createTerrainFollowingGeometry(width, height, 0.4);
+    // Increased base offset from 0.4 to 0.5 for better visibility
+    const geometry = this.createTerrainFollowingGeometry(width, height, 0.5);
     this.threatOverlayMesh = new THREE.Mesh(geometry, material);
     // No rotation needed - geometry is already in world coordinates
-    this.threatOverlayMesh.renderOrder = 91;
+    this.threatOverlayMesh.renderOrder = 101; // Increased from 91
     this.threatOverlayMesh.visible = false;
     this.scene.add(this.threatOverlayMesh);
   }

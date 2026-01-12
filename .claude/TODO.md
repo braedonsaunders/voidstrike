@@ -201,6 +201,10 @@
 - [x] **Auto-fix connectivity** - Added autoFixConnectivity() to carve corridors between disconnected regions, ensuring all locations are navigable
 - [x] **Flood fill pathfinding verification** - Added flood fill algorithm to detect separate walkable regions and identify unreachable locations
 - [x] **Ramp texture fix** - Ramps now use flat ground texture (grass/snow) instead of dirt, matching walkable paths visually
+- [x] **Ramp walkability fix** - Comprehensive fix for ramp entry/exit zones:
+  - Expanded `isAdjacentToRamp` check radius from 1 to 3 cells to handle wider ramps
+  - Added early ramp proximity check to `isCliffEdgeCell` (5-cell radius) to prevent ground cells at ramp ends from being incorrectly flattened as cliff edges
+  - This ensures cells near ramps use heightmap values for smooth height transitions instead of being treated as cliff edges, guaranteeing ramps are fully walkable at both upper and lower ends
 
 ### Camera & Input Fixes (January 2026)
 - [x] **WASD keys removed from camera** - WASD was conflicting with shortcuts (A=attack move, S=stop, etc.). Camera now uses arrow keys only for keyboard panning.
@@ -208,6 +212,11 @@
 ### UI Improvements
 - [x] **Options menu** - Replaced Menu button with dropdown (Controls, Tech Tree, Exit to Menu)
 - [x] **Increased building avoidance** - Units now properly avoid walking through buildings
+- [x] **Game overlay rendering fix** - Fixed overlays rendering below terrain:
+  - Increased terrain-following geometry height offset from 0.15 to 0.5 units
+  - Added polygonOffset (-1, -1) to all overlay materials to prevent z-fighting
+  - Increased overlay renderOrder values from 90/91 to 100/101
+  - This ensures terrain, elevation, and threat overlays render visibly above the terrain mesh
 - [x] **Epic Three.js Loading Screen** - Complete redesign using Three.js WebGL renderer with:
   - Full 3D scene matching HomeBackground quality (4000 twinkling stars, 12 orbiting asteroids)
   - Central wormhole vortex effect with spiral arms and pulsing rings
