@@ -513,11 +513,11 @@ function generateCrystalCaverns(): MapData {
   // Gold: all 8 patches at 900 minerals
   // ========================================
   const p1Main = createBaseResources(30, 90, DIR.LEFT);          // Standard
-  const p1Nat = createBaseResources(55, 55, DIR.UP_LEFT, 1500, 2250, false, 10);  // Natural: minerals further from ramp
+  const p1Nat = createBaseResources(55, 55, DIR.DOWN_RIGHT, 1500, 2250, false, 10);  // Natural: minerals opposite of ramp to third
   const p1Third = createBaseResources(30, 30, DIR.LEFT);         // Standard
   const p1Fourth = createBaseResources(30, 150, DIR.LEFT);       // Standard
   const p2Main = createBaseResources(170, 90, DIR.RIGHT);        // Standard
-  const p2Nat = createBaseResources(145, 125, DIR.DOWN_RIGHT, 1500, 2250, false, 10); // Natural: minerals further from ramp
+  const p2Nat = createBaseResources(145, 125, DIR.UP_LEFT, 1500, 2250, false, 10); // Natural: minerals opposite of ramp to third
   const p2Third = createBaseResources(170, 150, DIR.RIGHT);      // Standard
   const p2Fourth = createBaseResources(170, 30, DIR.RIGHT);      // Standard
   const centerGold = createBaseResources(100, 90, DIR.UP, 1500, 2250, true);  // Gold
