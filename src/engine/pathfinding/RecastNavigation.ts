@@ -152,7 +152,7 @@ export class RecastNavigation {
 
     // Check for SharedArrayBuffer availability (required for threaded WASM)
     const hasSharedArrayBuffer = typeof SharedArrayBuffer !== 'undefined';
-    debugPathfinding.log('[RecastNavigation] SharedArrayBuffer available:', hasSharedArrayBuffer);
+    console.log('[RecastNavigation] SharedArrayBuffer available:', hasSharedArrayBuffer);
 
     if (!hasSharedArrayBuffer) {
       console.warn(
@@ -162,9 +162,11 @@ export class RecastNavigation {
       );
     }
 
+    console.log('[RecastNavigation] Initializing WASM module...');
+
     RecastNavigation.initPromise = init()
       .then(() => {
-        debugPathfinding.log('[RecastNavigation] WASM module initialized successfully');
+        console.log('[RecastNavigation] WASM module initialized successfully');
       })
       .catch((error) => {
         console.error('[RecastNavigation] WASM initialization failed:', error);
@@ -259,7 +261,7 @@ export class RecastNavigation {
       this.mapWidth = mapWidth;
       this.mapHeight = mapHeight;
 
-      debugPathfinding.log('[RecastNavigation] Generating navmesh from geometry...', {
+      console.log('[RecastNavigation] Generating navmesh from geometry...', {
         positionsLength: positions.length,
         indicesLength: indices.length,
         mapWidth,
@@ -268,14 +270,17 @@ export class RecastNavigation {
 
       const result = generateTileCache(positions, indices, NAVMESH_CONFIG);
 
-      debugPathfinding.log('[RecastNavigation] TileCache result:', {
+      console.log('[RecastNavigation] TileCache result:', {
         success: result.success,
         hasTileCache: !!result.tileCache,
         hasNavMesh: !!result.navMesh,
+        // Log the error if present (recast-navigation includes this on failure)
+        error: (result as { error?: string }).error,
       });
 
       if (!result.success || !result.tileCache || !result.navMesh) {
-        debugPathfinding.warn('[RecastNavigation] Failed to generate navmesh from geometry');
+        console.error('[RecastNavigation] Failed to generate navmesh from geometry');
+        console.error('[RecastNavigation] Full result:', result);
         return false;
       }
 
