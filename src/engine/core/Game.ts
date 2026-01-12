@@ -27,6 +27,8 @@ import { AIMicroSystem } from '../systems/AIMicroSystem';
 import { RecastNavigation } from '../pathfinding/RecastNavigation';
 import { getLocalPlayerId } from '@/store/gameSetupStore';
 import { PerformanceMonitor } from './PerformanceMonitor';
+import { ChecksumSystem, ChecksumConfig } from '../systems/ChecksumSystem';
+import { DesyncDetectionManager, DesyncDetectionConfig } from '../network/DesyncDetection';
 
 export type GameState = 'initializing' | 'running' | 'paused' | 'ended';
 
@@ -70,6 +72,10 @@ export class Game {
   public pathfindingSystem: PathfindingSystem;
   public aiMicroSystem: AIMicroSystem;
   public selectionSystem!: SelectionSystem;
+
+  // Determinism and multiplayer sync systems (only active in multiplayer)
+  public checksumSystem: ChecksumSystem | null = null;
+  public desyncDetection: DesyncDetectionManager | null = null;
 
   // Terrain grid for building placement validation and terrain features
   private terrainGrid: TerrainCell[][] | null = null;
@@ -130,6 +136,23 @@ export class Game {
 
     // Initialize AI micro system
     this.aiMicroSystem = new AIMicroSystem(this);
+
+    // Initialize checksum system ONLY for multiplayer - no overhead in single-player
+    if (this.config.isMultiplayer) {
+      this.checksumSystem = new ChecksumSystem(this, {
+        checksumInterval: 5,
+        emitNetworkChecksums: true,
+        logChecksums: false,
+        autoDumpOnDesync: true,
+      });
+
+      this.desyncDetection = new DesyncDetectionManager(this, {
+        enabled: true,
+        pauseOnDesync: false,
+        showDesyncIndicator: true,
+      });
+      this.desyncDetection.setChecksumSystem(this.checksumSystem);
+    }
 
     this.initializeSystems();
   }
@@ -198,6 +221,12 @@ export class Game {
       // NOTE: AI player registration with AIMicroSystem happens in spawnInitialEntities()
       // This ensures the store has the correct player configuration when registration occurs
       // Do NOT register here as the store may have stale/default state at this point
+    }
+
+    // Checksum system runs LAST to capture final state after all gameplay systems
+    // Only added in multiplayer - no overhead in single-player
+    if (this.checksumSystem) {
+      this.world.addSystem(this.checksumSystem);
     }
   }
 

@@ -16,6 +16,7 @@ import { PooledVector2 } from '@/utils/VectorPool';
 import { TERRAIN_FEATURE_CONFIG, TerrainFeature } from '@/data/maps';
 import { getRecastNavigation, RecastNavigation } from '../pathfinding/RecastNavigation';
 import { debugPerformance } from '@/utils/debugLogger';
+import { snapValue, QUANT_POSITION } from '@/utils/FixedPoint';
 
 // Steering behavior constants - SC2-style soft separation
 const SEPARATION_RADIUS = 1.0;
@@ -949,6 +950,11 @@ export class MovementSystem extends System {
 
       // Apply movement
       transform.translate(velocity.x * dt, velocity.y * dt);
+
+      // DETERMINISM: Snap position to quantization grid to prevent floating-point divergence
+      // This ensures identical positions across different platforms/browsers
+      transform.x = snapValue(transform.x, QUANT_POSITION);
+      transform.y = snapValue(transform.y, QUANT_POSITION);
 
       // Hard collision resolution
       // PERF: Uses same cached building query as avoidance force above

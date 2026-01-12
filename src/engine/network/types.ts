@@ -75,6 +75,9 @@ export type GameMessageType =
   | 'input'                     // Player input commands for a tick
   | 'input-ack'                 // Acknowledgement of received inputs
   | 'checksum'                  // State checksum for desync detection
+  | 'desync'                    // Desync notification with details
+  | 'state-dump-request'        // Request full state dump for debugging
+  | 'state-dump-response'       // Full state dump data
   | 'ping'                      // Latency measurement request
   | 'pong'                      // Latency measurement response
   | 'sync-request'              // Request state sync (reconnection)
@@ -98,11 +101,22 @@ export interface InputMessageData {
   commands: GameCommand[];      // Commands for this tick
 }
 
-// Checksum message data
+// Checksum message data (enhanced for determinism debugging)
 export interface ChecksumMessageData {
-  checksum: number;             // State hash
-  unitCount: number;            // For quick sanity check
-  resourceSum: number;          // For quick sanity check
+  checksum: number;             // Primary state hash (computed from all entity states)
+  unitCount: number;            // Total alive units
+  buildingCount: number;        // Total alive buildings
+  resourceSum: number;          // Sum of all resource amounts
+  unitPositionHash: number;     // Hash of all unit positions (for quick position divergence check)
+  healthSum: number;            // Sum of all health values
+}
+
+// Desync notification data
+export interface DesyncMessageData {
+  tick: number;                 // Tick where desync was detected
+  localChecksum: number;        // Local client's checksum
+  remoteChecksum: number;       // Remote client's checksum
+  requestStateDump: boolean;    // Whether to request full state dump for debugging
 }
 
 // Ping/pong message data
