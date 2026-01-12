@@ -38,6 +38,7 @@ interface DemolishCommand {
 }
 
 export class BuildingMechanicsSystem extends System {
+  public readonly name = 'BuildingMechanicsSystem';
   public priority = 8; // Before UnitMechanicsSystem
 
   constructor(game: Game) {

@@ -65,6 +65,7 @@ for (let i = 0; i < FORMATION_BUFFER_SIZE; i++) {
 }
 
 export class MovementSystem extends System {
+  public readonly name = 'MovementSystem';
   public priority = 10;
 
   private arrivalThreshold = 0.5;

@@ -63,6 +63,9 @@ const SYSTEM_TIMING_HISTORY_SIZE = 60; // 1 second at 60fps for system breakdown
 class PerformanceMonitorClass {
   private static instance: PerformanceMonitorClass | null = null;
 
+  // Collection toggle - when false, recording methods become no-ops
+  private collectingEnabled: boolean = false;
+
   // Frame timing
   private lastFrameTime: number = 0;
   private frameTimeHistory: number[] = [];
@@ -132,6 +135,7 @@ class PerformanceMonitorClass {
   public start(): void {
     if (this.isMonitoring) return;
     this.isMonitoring = true;
+    this.collectingEnabled = true;
     this.lastFrameTime = performance.now();
     this.tick();
   }
@@ -141,10 +145,26 @@ class PerformanceMonitorClass {
    */
   public stop(): void {
     this.isMonitoring = false;
+    this.collectingEnabled = false;
     if (this.animationFrameId !== null) {
       cancelAnimationFrame(this.animationFrameId);
       this.animationFrameId = null;
     }
+  }
+
+  /**
+   * Check if collection is currently enabled
+   */
+  public isCollecting(): boolean {
+    return this.collectingEnabled;
+  }
+
+  /**
+   * Enable or disable data collection without affecting the monitoring loop
+   * Use this to pause collection when the dashboard is hidden
+   */
+  public setCollecting(enabled: boolean): void {
+    this.collectingEnabled = enabled;
   }
 
   private tick = (): void => {
@@ -195,8 +215,10 @@ class PerformanceMonitorClass {
 
   /**
    * Record a game tick's total duration (called by Game.ts)
+   * No-op when collection is disabled for zero overhead
    */
   public recordTickTime(duration: number): void {
+    if (!this.collectingEnabled) return;
     this.lastTickTime = duration;
     this.tickTimeHistory.push(duration);
     if (this.tickTimeHistory.length > HISTORY_SIZE) {
@@ -206,8 +228,10 @@ class PerformanceMonitorClass {
 
   /**
    * Record a system's update duration (called by World.ts)
+   * No-op when collection is disabled for zero overhead
    */
   public recordSystemTiming(systemName: string, duration: number): void {
+    if (!this.collectingEnabled) return;
     this.currentSystemTimings.set(systemName, duration);
 
     // Update history
@@ -223,15 +247,19 @@ class PerformanceMonitorClass {
 
   /**
    * Clear system timings at the start of each tick
+   * No-op when collection is disabled
    */
   public clearSystemTimings(): void {
+    if (!this.collectingEnabled) return;
     this.currentSystemTimings.clear();
   }
 
   /**
    * Update entity counts (called periodically by the game)
+   * No-op when collection is disabled
    */
   public updateEntityCounts(counts: EntityCounts): void {
+    if (!this.collectingEnabled) return;
     this.entityCounts = { ...counts };
   }
 

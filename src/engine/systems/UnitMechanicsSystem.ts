@@ -56,6 +56,7 @@ interface BunkerData {
 }
 
 export class UnitMechanicsSystem extends System {
+  public readonly name = 'UnitMechanicsSystem';
   public priority = 15; // After selection, before movement
 
   // Track bunker data separately since Building component doesn't have it

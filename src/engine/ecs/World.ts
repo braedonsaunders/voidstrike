@@ -159,12 +159,11 @@ export class World {
         system.update(deltaTime);
         const elapsed = performance.now() - start;
 
-        // Record timing for performance dashboard
-        const systemName = system.constructor.name;
-        PerformanceMonitor.recordSystemTiming(systemName, elapsed);
+        // Record timing for performance dashboard (use explicit name, not constructor.name which gets minified)
+        PerformanceMonitor.recordSystemTiming(system.name, elapsed);
 
         if (elapsed > 5) {
-          slowSystems.push(`${systemName}:${elapsed.toFixed(1)}ms`);
+          slowSystems.push(`${system.name}:${elapsed.toFixed(1)}ms`);
         }
       }
     }

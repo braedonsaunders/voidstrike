@@ -174,6 +174,7 @@ interface FailedPathEntry {
 }
 
 export class PathfindingSystem extends System {
+  public readonly name = 'PathfindingSystem';
   public priority = 5;
 
   private recast: RecastNavigation;

@@ -20,6 +20,7 @@ const AIR_UNIT_HEIGHT = 8;
  * or when units need to be spawned dynamically (eg. from abilities)
  */
 export class SpawnSystem extends System {
+  public readonly name = 'SpawnSystem';
   public priority = 5; // Run early
 
   constructor(game: Game) {

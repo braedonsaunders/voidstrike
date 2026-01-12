@@ -66,6 +66,7 @@ const UNIT_PRIORITY: Record<string, number> = {
 };
 
 export class AIMicroSystem extends System {
+  public readonly name = 'AIMicroSystem';
   public priority = 95; // Run after EnhancedAISystem but before movement
 
   private unitStates: Map<number, UnitMicroState> = new Map();
