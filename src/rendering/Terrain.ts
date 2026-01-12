@@ -1141,12 +1141,13 @@ export class Terrain {
         if (!featureConfig.walkable) continue;
 
         // For non-ramp cells, check if this cell borders a cliff
-        // Exclude cliff-adjacent cells UNLESS they also border a ramp
+        // Exclude cliff-adjacent cells UNLESS they are near a ramp
         // This prevents units from walking off cliffs while allowing ramp connectivity
         if (cell.terrain !== 'ramp') {
           let bordersCliff = false;
-          let bordersRamp = false;
+          let nearRamp = false;
 
+          // Check immediate neighbors for cliffs (radius 1)
           for (let dy = -1; dy <= 1; dy++) {
             for (let dx = -1; dx <= 1; dx++) {
               if (dx === 0 && dy === 0) continue;
@@ -1157,15 +1158,28 @@ export class Terrain {
                 if (neighbor.terrain === 'unwalkable' && neighbor.feature === 'cliff') {
                   bordersCliff = true;
                 }
-                if (neighbor.terrain === 'ramp') {
-                  bordersRamp = true;
+              }
+            }
+          }
+
+          // Check wider area for ramps (radius 3) to ensure connectivity
+          // This prevents creating isolated islands near ramp exits
+          const RAMP_CHECK_RADIUS = 3;
+          for (let dy = -RAMP_CHECK_RADIUS; dy <= RAMP_CHECK_RADIUS && !nearRamp; dy++) {
+            for (let dx = -RAMP_CHECK_RADIUS; dx <= RAMP_CHECK_RADIUS && !nearRamp; dx++) {
+              if (dx === 0 && dy === 0) continue;
+              const nx = x + dx;
+              const ny = y + dy;
+              if (nx >= 0 && nx < width && ny >= 0 && ny < height) {
+                if (terrain[ny][nx].terrain === 'ramp') {
+                  nearRamp = true;
                 }
               }
             }
           }
 
-          // Skip ground cells at cliff edges (but not if they connect to ramps)
-          if (bordersCliff && !bordersRamp) {
+          // Skip ground cells at cliff edges (but not if they're near ramps)
+          if (bordersCliff && !nearRamp) {
             continue;
           }
         }
