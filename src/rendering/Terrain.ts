@@ -464,15 +464,10 @@ export class Terrain {
             detailNoise += edgeFactor * 0.04 * fbmNoise(nx * 3, ny * 3, 2, 2.0, 0.5);
           }
         } else if (cell.terrain === 'ramp') {
-          // Ramps: very smooth gradient with minimal variation
-          // Only subtle noise to make ramps feel natural
-          const rampNoise = fbmNoise(nx * 4, ny * 4, 2, 2.0, 0.5) * 0.04;
-          detailNoise = rampNoise;
-
-          // Gentle edge blending to nearby elevations
-          if (edgeFactor > 0) {
-            detailNoise += edgeFactor * 0.2;
-          }
+          // Ramps: completely smooth with NO noise
+          // SC2-style ramps are perfectly flat surfaces with only elevation interpolation
+          // Any noise causes visible spikes and rough surfaces
+          detailNoise = 0;
         } else {
           // Buildable ground: nearly flat with very subtle organic variation
           // Extremely subtle to keep buildable areas clean
@@ -1455,53 +1450,61 @@ export class MapDecorations {
       // Get terrain height at rock position
       const terrainHeight = this.terrain.getHeightAt(rock.x, rock.y);
 
-      // Create more detailed rock formation
-      const rockGroup = new THREE.Group();
+      // Try to use custom rocks_large model for destructibles
+      const customRock = AssetManager.getDecorationMesh('rocks_large');
+      if (customRock) {
+        // Scale up for destructible rocks (they're larger barriers)
+        customRock.scale.setScalar(2.5);
+        customRock.position.set(rock.x, terrainHeight, rock.y);
+        customRock.rotation.y = Math.random() * Math.PI * 2;
+        this.group.add(customRock);
+      } else {
+        // Fallback to procedural rock formation
+        const rockGroup = new THREE.Group();
 
-      // Main rock
-      const mainGeometry = new THREE.DodecahedronGeometry(2);
-      const mainMaterial = new THREE.MeshStandardMaterial({
-        color: 0x7a6a5a,
-        roughness: 0.9,
-        metalness: 0.05,
-      });
-      const mainRock = new THREE.Mesh(mainGeometry, mainMaterial);
-      mainRock.position.y = 1.5;
-      mainRock.rotation.set(
-        Math.random() * 0.5,
-        Math.random() * Math.PI * 2,
-        Math.random() * 0.3
-      );
-      mainRock.scale.set(1, 0.8, 1.2);
-      // PERF: Decorations receive shadows but don't cast
-      mainRock.castShadow = false;
-      mainRock.receiveShadow = true;
-      rockGroup.add(mainRock);
+        // Main rock
+        const mainGeometry = new THREE.DodecahedronGeometry(2);
+        const mainMaterial = new THREE.MeshStandardMaterial({
+          color: 0x7a6a5a,
+          roughness: 0.9,
+          metalness: 0.05,
+        });
+        const mainRock = new THREE.Mesh(mainGeometry, mainMaterial);
+        mainRock.position.y = 1.5;
+        mainRock.rotation.set(
+          Math.random() * 0.5,
+          Math.random() * Math.PI * 2,
+          Math.random() * 0.3
+        );
+        mainRock.scale.set(1, 0.8, 1.2);
+        mainRock.castShadow = false;
+        mainRock.receiveShadow = true;
+        rockGroup.add(mainRock);
 
-      // Smaller rocks around
-      for (let i = 0; i < 3; i++) {
-        const smallGeometry = new THREE.DodecahedronGeometry(0.8);
-        const smallRock = new THREE.Mesh(smallGeometry, mainMaterial);
-        const angle = (i / 3) * Math.PI * 2 + Math.random() * 0.5;
-        smallRock.position.set(
-          Math.cos(angle) * 2,
-          0.5,
-          Math.sin(angle) * 2
-        );
-        smallRock.rotation.set(
-          Math.random() * Math.PI,
-          Math.random() * Math.PI,
-          Math.random() * Math.PI
-        );
-        smallRock.scale.setScalar(0.5 + Math.random() * 0.5);
-        // PERF: Decorations receive shadows but don't cast
-        smallRock.castShadow = false;
-        smallRock.receiveShadow = true;
-        rockGroup.add(smallRock);
+        // Smaller rocks around
+        for (let i = 0; i < 3; i++) {
+          const smallGeometry = new THREE.DodecahedronGeometry(0.8);
+          const smallRock = new THREE.Mesh(smallGeometry, mainMaterial);
+          const angle = (i / 3) * Math.PI * 2 + Math.random() * 0.5;
+          smallRock.position.set(
+            Math.cos(angle) * 2,
+            0.5,
+            Math.sin(angle) * 2
+          );
+          smallRock.rotation.set(
+            Math.random() * Math.PI,
+            Math.random() * Math.PI,
+            Math.random() * Math.PI
+          );
+          smallRock.scale.setScalar(0.5 + Math.random() * 0.5);
+          smallRock.castShadow = false;
+          smallRock.receiveShadow = true;
+          rockGroup.add(smallRock);
+        }
+
+        rockGroup.position.set(rock.x, terrainHeight, rock.y);
+        this.group.add(rockGroup);
       }
-
-      rockGroup.position.set(rock.x, terrainHeight, rock.y);
-      this.group.add(rockGroup);
     }
   }
 
