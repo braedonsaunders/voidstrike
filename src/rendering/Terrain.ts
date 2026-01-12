@@ -1207,8 +1207,19 @@ export class Terrain {
     const { positions, indices } = this.generateWalkableGeometry();
 
     const geometry = new THREE.BufferGeometry();
-    geometry.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
-    geometry.setIndex(new THREE.Uint32BufferAttribute(indices, 1));
+
+    // Defensive check: ensure we have valid geometry data
+    if (positions.length === 0 || indices.length === 0) {
+      debugTerrain.warn('[Terrain] Warning: Empty walkable geometry generated');
+      // Create a minimal valid geometry to prevent WebGPU errors
+      const minimalPositions = new Float32Array([0, 0, 0, 1, 0, 0, 0, 0, 1]);
+      const minimalIndices = new Uint32Array([0, 1, 2]);
+      geometry.setAttribute('position', new THREE.Float32BufferAttribute(minimalPositions, 3));
+      geometry.setIndex(new THREE.Uint32BufferAttribute(minimalIndices, 1));
+    } else {
+      geometry.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
+      geometry.setIndex(new THREE.Uint32BufferAttribute(indices, 1));
+    }
     geometry.computeVertexNormals();
 
     const material = new THREE.MeshBasicMaterial({
