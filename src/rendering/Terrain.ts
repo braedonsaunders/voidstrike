@@ -835,11 +835,18 @@ export class Terrain {
     let avgElevation: number;
 
     if (hasRamp) {
-      // RAMP FIX: Use the PRIMARY CELL's elevation directly - DO NOT AVERAGE
-      // Each ramp cell has its own elevation in the gradient (set by createRampInTerrain)
-      // Averaging would flatten the slope into a flat step
-      // The primary cell (cell11) is at position (x,y) which is where this vertex belongs
-      avgElevation = cell11.elevation;
+      // RAMP FIX: Use RAMP cell elevations for smooth transitions
+      // If cell11 is a ramp, use its elevation directly
+      // If cell11 is NOT a ramp but adjacent cells are, use the average of ramp cells
+      // This ensures vertices at ramp-ground boundaries get the correct height
+      if (cell11.terrain === 'ramp') {
+        avgElevation = cell11.elevation;
+      } else {
+        // cell11 is ground/other but adjacent cells are ramps
+        // Use the average of ramp cell elevations for smooth transition
+        const rampElevationSum = rampCells.reduce((sum, c) => sum + c.elevation, 0);
+        avgElevation = rampElevationSum / rampCells.length;
+      }
     } else {
       // No ramps - use simple average elevation
       avgElevation = (cell00.elevation + cell10.elevation + cell01.elevation + cell11.elevation) / 4;
@@ -1120,15 +1127,13 @@ export class Terrain {
     const walkableIndices: number[] = [];
     let vertexIndex = 0;
 
-    // Maximum height difference allowed within a cell (prevents walking across cliffs)
-    // This should be less than the typical elevation step between ground levels
-    const MAX_HEIGHT_DIFF = 1.5;
-
     for (let y = 0; y < height; y++) {
       for (let x = 0; x < width; x++) {
         const cell = terrain[y][x];
 
         // Only include walkable terrain (ground and ramps)
+        // Cliff cells (unwalkable) are excluded, creating physical gaps
+        // Recast's walkableClimb setting prevents connecting across elevation differences
         if (cell.terrain === 'unwalkable') continue;
 
         // Check terrain features that make cells unwalkable
@@ -1141,47 +1146,6 @@ export class Terrain {
         const h10 = this.heightMap[y * this.gridWidth + (x + 1)];
         const h01 = this.heightMap[(y + 1) * this.gridWidth + x];
         const h11 = this.heightMap[(y + 1) * this.gridWidth + (x + 1)];
-
-        // For non-ramp cells, check adjacency to cliffs and ramps first
-        // This determines whether to apply strict height checks
-        let bordersCliff = false;
-        let bordersRamp = false;
-        if (cell.terrain !== 'ramp') {
-          for (let dy = -1; dy <= 1; dy++) {
-            for (let dx = -1; dx <= 1; dx++) {
-              if (dx === 0 && dy === 0) continue;
-              const nx = x + dx;
-              const ny = y + dy;
-              if (nx >= 0 && nx < width && ny >= 0 && ny < height) {
-                const neighbor = terrain[ny][nx];
-                if (neighbor.terrain === 'unwalkable' && neighbor.feature === 'cliff') {
-                  bordersCliff = true;
-                }
-                if (neighbor.terrain === 'ramp') {
-                  bordersRamp = true;
-                }
-              }
-            }
-          }
-        }
-
-        // Skip cells at cliff edges where height varies too much
-        // BUT allow cells adjacent to ramps (they need height variation to connect)
-        const heights = [h00, h10, h01, h11];
-        const minH = Math.min(...heights);
-        const maxH = Math.max(...heights);
-        if (maxH - minH > MAX_HEIGHT_DIFF) {
-          // Allow ramp cells and cells adjacent to ramps to have height variation
-          if (cell.terrain !== 'ramp' && !bordersRamp) {
-            continue;
-          }
-        }
-
-        // Skip ground cells that border cliffs but NOT ramps
-        // (prevents walking off cliffs, but allows ramp connections)
-        if (cell.terrain !== 'ramp' && bordersCliff && !bordersRamp) {
-          continue;
-        }
 
         // Create two triangles for this cell
         // Recast uses Y-up and expects counter-clockwise winding for upward-facing surfaces
