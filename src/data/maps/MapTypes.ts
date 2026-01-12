@@ -420,6 +420,7 @@ export const DIR = {
 };
 
 // Helper to fill a rectangular area with a terrain type
+// PROTECTED: Will not overwrite ramps (critical for navmesh connectivity)
 export function fillTerrainRect(
   grid: MapCell[][],
   x: number,
@@ -441,6 +442,11 @@ export function fillTerrainRect(
       const py = Math.floor(y + dy);
 
       if (py >= 0 && py < grid.length && px >= 0 && px < grid[0].length) {
+        // PROTECT ramps - never overwrite them as this breaks navmesh connectivity
+        if (grid[py][px].terrain === 'ramp') {
+          continue;
+        }
+
         grid[py][px].terrain = terrain;
         if (elevation256 !== undefined) {
           grid[py][px].elevation = elevation256;
@@ -454,6 +460,7 @@ export function fillTerrainRect(
 }
 
 // Helper to create circular terrain area
+// PROTECTED: Will not overwrite ramps (critical for navmesh connectivity)
 export function fillTerrainCircle(
   grid: MapCell[][],
   centerX: number,
@@ -475,6 +482,11 @@ export function fillTerrainCircle(
         const py = Math.floor(centerY + y);
 
         if (py >= 0 && py < grid.length && px >= 0 && px < grid[0].length) {
+          // PROTECT ramps - never overwrite them as this breaks navmesh connectivity
+          if (grid[py][px].terrain === 'ramp') {
+            continue;
+          }
+
           grid[py][px].terrain = terrain;
           if (elevation256 !== undefined) {
             grid[py][px].elevation = elevation256;
