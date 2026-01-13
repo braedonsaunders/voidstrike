@@ -6,8 +6,9 @@
  * 2. Auto-generates cliffs at elevation boundaries
  * 3. Creates ramp corridors for walkable elevation changes
  * 4. Generates resources for bases
- * 5. Validates connectivity via flood-fill
- * 6. Generates decorations from rules
+ * 5. Validates connectivity via ConnectivityAnalyzer
+ * 6. Auto-fixes issues via ConnectivityFixer
+ * 7. Generates decorations from rules
  */
 
 import {
@@ -37,11 +38,15 @@ import {
   DIR,
   createBaseResources,
   MINERAL_DISTANCE_NATURAL,
-  validateMapConnectivity,
-  autoFixConnectivity,
 } from '../MapTypes';
 
 import { SeededRandom } from '../../../utils/math';
+
+// Connectivity system imports
+import { analyzeConnectivity, getConnectivitySummary } from './ConnectivityAnalyzer';
+import { validateConnectivity, formatValidationResult } from './ConnectivityValidator';
+import { autoFixConnectivity as fixConnectivity, formatFixResult } from './ConnectivityFixer';
+import type { ConnectivityResult } from './ConnectivityGraph';
 
 // ============================================================================
 // INTERNAL GRID TYPES
@@ -902,13 +907,68 @@ function generateDecorations(
 }
 
 // ============================================================================
+// GENERATION OPTIONS
+// ============================================================================
+
+/** Options for map generation */
+export interface GenerateMapOptions {
+  /** Enable/disable connectivity validation (default: true) */
+  validate?: boolean;
+
+  /** Auto-fix connectivity issues (default: true) */
+  autoFix?: boolean;
+
+  /** Log to console (default: true in dev, false in prod) */
+  verbose?: boolean;
+}
+
+/** Result of map generation including connectivity info */
+export interface GenerateMapResult {
+  /** The generated map data */
+  mapData: MapData;
+
+  /** Connectivity validation result (if validation enabled) */
+  connectivity?: ConnectivityResult;
+
+  /** Whether auto-fix was applied */
+  autoFixed: boolean;
+
+  /** Messages from the generation process */
+  messages: string[];
+}
+
+// ============================================================================
 // MAIN GENERATION FUNCTION
 // ============================================================================
 
 /**
  * Generate MapData from a MapBlueprint
+ *
+ * @param blueprint - The map definition
+ * @param options - Optional generation settings
+ * @returns MapData (or GenerateMapResult if options.returnResult is true)
  */
-export function generateMap(blueprint: MapBlueprint): MapData {
+export function generateMap(blueprint: MapBlueprint, options?: GenerateMapOptions): MapData {
+  const result = generateMapWithResult(blueprint, options);
+  return result.mapData;
+}
+
+/**
+ * Generate MapData from a MapBlueprint with full result including connectivity info.
+ *
+ * Use this when you need access to connectivity validation results.
+ */
+export function generateMapWithResult(
+  blueprint: MapBlueprint,
+  options?: GenerateMapOptions
+): GenerateMapResult {
+  const opts: Required<GenerateMapOptions> = {
+    validate: options?.validate ?? true,
+    autoFix: options?.autoFix ?? true,
+    verbose: options?.verbose ?? false,
+  };
+
+  const messages: string[] = [];
   const { meta, canvas, paint, bases, watchTowers, destructibles, decorationRules } = blueprint;
   const { width, height, biome } = canvas;
   const theme = BIOME_THEMES[biome];
@@ -978,23 +1038,62 @@ export function generateMap(blueprint: MapBlueprint): MapData {
     fogFar: theme.fogFar,
   };
 
-  // Validate and auto-fix connectivity
-  const validation = validateMapConnectivity(mapData);
-  if (!validation.isValid) {
-    console.warn(`[${meta.id}] Map has connectivity issues, attempting auto-fix...`);
-    console.warn(`[${meta.id}] Unreachable:`, validation.unreachableLocations);
-    const corridorsCarved = autoFixConnectivity(mapData);
-    console.log(`[${meta.id}] Auto-fix carved ${corridorsCarved} corridors`);
+  // Connectivity validation
+  let connectivity: ConnectivityResult | undefined;
+  let autoFixed = false;
 
-    const postFix = validateMapConnectivity(mapData);
-    if (!postFix.isValid) {
-      console.error(`[${meta.id}] CRITICAL: Still has unreachable areas!`);
-    } else {
-      console.log(`[${meta.id}] Connectivity fixed successfully`);
+  if (opts.validate) {
+    // Analyze connectivity using new system
+    const graph = analyzeConnectivity(mapData);
+    connectivity = validateConnectivity(graph);
+
+    if (opts.verbose) {
+      messages.push(getConnectivitySummary(graph));
     }
-  } else {
-    console.log(`[${meta.id}] Map connectivity validated`);
+
+    if (!connectivity.valid) {
+      messages.push(`[${meta.id}] Connectivity issues detected:`);
+      for (const issue of connectivity.issues) {
+        messages.push(`  ${issue.severity.toUpperCase()}: ${issue.message}`);
+      }
+
+      if (opts.autoFix) {
+        messages.push(`[${meta.id}] Attempting auto-fix...`);
+        const fixResult = fixConnectivity(mapData);
+        autoFixed = fixResult.rampsAdded > 0;
+
+        if (fixResult.rampsAdded > 0) {
+          messages.push(`[${meta.id}] Added ${fixResult.rampsAdded} ramps to fix connectivity`);
+
+          // Re-validate
+          const reGraph = analyzeConnectivity(mapData);
+          connectivity = validateConnectivity(reGraph);
+
+          if (connectivity.valid) {
+            messages.push(`[${meta.id}] Connectivity fixed successfully`);
+          } else {
+            messages.push(`[${meta.id}] WARNING: Some issues remain after auto-fix`);
+          }
+        } else {
+          messages.push(`[${meta.id}] No automatic fixes available`);
+        }
+      }
+    } else {
+      messages.push(`[${meta.id}] Connectivity validated: ${connectivity.stats.connectedPairs} connected pairs`);
+    }
+
+    // Log messages if verbose
+    if (opts.verbose) {
+      for (const msg of messages) {
+        console.log(msg);
+      }
+    }
   }
 
-  return mapData;
+  return {
+    mapData,
+    connectivity,
+    autoFixed,
+    messages,
+  };
 }
