@@ -55,29 +55,6 @@ const _combatEndPos = new THREE.Vector3();
 const _combatDirection = new THREE.Vector3();
 const _deathPos = new THREE.Vector3();
 
-// TAA camera jitter using Halton sequence for sub-pixel sampling
-// This is CRITICAL for TAA to work - without jitter, TAA just blurs the same frame
-const halton = (index: number, base: number): number => {
-  let result = 0;
-  let f = 1 / base;
-  let i = index;
-  while (i > 0) {
-    result += f * (i % base);
-    i = Math.floor(i / base);
-    f /= base;
-  }
-  return result;
-};
-
-// Pre-computed Halton sequence for 16 samples (standard TAA pattern)
-const TAA_JITTER_SAMPLES = 16;
-const taaJitterSequence: Array<{ x: number; y: number }> = [];
-for (let i = 1; i <= TAA_JITTER_SAMPLES; i++) {
-  taaJitterSequence.push({
-    x: halton(i, 2) - 0.5, // Center around 0 (-0.5 to 0.5)
-    y: halton(i, 3) - 0.5,
-  });
-}
 import { useGameSetupStore, getLocalPlayerId, isSpectatorMode, isBattleSimulatorMode } from '@/store/gameSetupStore';
 import { SelectionBox } from './SelectionBox';
 import { LoadingScreen } from './LoadingScreen';
@@ -553,7 +530,6 @@ export function WebGPUGameCanvas() {
       let lastTime = performance.now();
       let frameCount = 0;
       let lastFpsLog = performance.now();
-      let taaJitterIndex = 0; // TAA jitter frame counter
 
       const animate = (currentTime: number) => {
         const frameStart = performance.now();
@@ -760,30 +736,8 @@ export function WebGPUGameCanvas() {
           useGameStore.getState().setCamera(pos.x, pos.z, camera.getZoom());
         }
 
-        // Apply TAA camera jitter before rendering
-        // This sub-pixel offset is essential for temporal anti-aliasing to sample
-        // different parts of pixels across frames, enabling proper edge reconstruction
-        const currentTAAEnabled = renderPipelineRef.current?.isTAAEnabled() ?? false;
-        if (currentTAAEnabled) {
-          const jitter = taaJitterSequence[taaJitterIndex];
-          const width = window.innerWidth;
-          const height = window.innerHeight;
-
-          // Apply jitter as sub-pixel offset in NDC space
-          // Offset is scaled to pixel size then to NDC (-1 to 1)
-          const jitterX = (jitter.x * 2) / width;
-          const jitterY = (jitter.y * 2) / height;
-
-          // Modify projection matrix to include jitter offset
-          threeCamera.projectionMatrix.elements[8] = jitterX;
-          threeCamera.projectionMatrix.elements[9] = jitterY;
-          threeCamera.projectionMatrixInverse.copy(threeCamera.projectionMatrix).invert();
-
-          // Advance to next jitter sample (cycle through sequence)
-          taaJitterIndex = (taaJitterIndex + 1) % TAA_JITTER_SAMPLES;
-        }
-
         // Render with post-processing
+        // Note: TRAANode handles camera jitter internally - don't apply manual jitter
         const renderStart = performance.now();
         if (renderPipelineRef.current) {
           renderPipelineRef.current.render();
@@ -791,13 +745,6 @@ export function WebGPUGameCanvas() {
           renderer.render(scene, camera.camera);
         }
         const renderElapsed = performance.now() - renderStart;
-
-        // Reset jitter offset after rendering (restore clean projection matrix)
-        if (currentTAAEnabled) {
-          threeCamera.projectionMatrix.elements[8] = 0;
-          threeCamera.projectionMatrix.elements[9] = 0;
-          threeCamera.projectionMatrixInverse.copy(threeCamera.projectionMatrix).invert();
-        }
 
         const frameElapsed = performance.now() - frameStart;
         if (frameElapsed > 16) { // Log if frame takes more than 16ms (60fps target)
