@@ -25,6 +25,7 @@ export interface EditorObjectInstance {
   type: string;
   category: string;
   mesh: THREE.Mesh;
+  hitMesh: THREE.Mesh; // Larger invisible mesh for easier selection
   selectionRing: THREE.Mesh;
   label: THREE.Sprite;
   baseScale: number; // Original scale before user modifications
@@ -169,6 +170,17 @@ export class EditorObjects {
     mesh.position.set(obj.x, terrainHeight + (visual.height * scale) / 2, obj.y);
     mesh.scale.set(scale, scale, scale);
 
+    // Create larger invisible hit mesh for easier selection (3x size)
+    const hitGeometry = new THREE.CylinderGeometry(radius * 1.2, radius * 1.2, visual.height * 2, 8);
+    const hitMaterial = new THREE.MeshBasicMaterial({
+      visible: false,
+      transparent: true,
+      opacity: 0,
+    });
+    const hitMesh = new THREE.Mesh(hitGeometry, hitMaterial);
+    hitMesh.position.set(obj.x, terrainHeight + (visual.height * scale) / 2, obj.y);
+    hitMesh.scale.set(scale, scale, scale);
+
     // Create selection ring
     const ringGeometry = new THREE.RingGeometry(radius * 0.9, radius, 24);
     const ringMaterial = new THREE.MeshBasicMaterial({
@@ -183,7 +195,7 @@ export class EditorObjects {
 
     // Create label sprite (positioned above object, accounting for scale)
     const label = this.createLabel(objType?.name || obj.type, objType?.icon || '●');
-    label.position.set(obj.x, terrainHeight + (visual.height * scale) + 1.5, obj.y);
+    label.position.set(obj.x, terrainHeight + (visual.height * scale) + 2.5, obj.y);
 
     // Check category visibility
     const categoryVisible = this.isCategoryVisible(category);
@@ -193,6 +205,7 @@ export class EditorObjects {
 
     // Add to scene
     this.group.add(mesh);
+    this.group.add(hitMesh);
     this.group.add(selectionRing);
     this.group.add(label);
 
@@ -202,6 +215,7 @@ export class EditorObjects {
       type: obj.type,
       category,
       mesh,
+      hitMesh,
       selectionRing,
       label,
       baseScale: 1, // Base scale before user modifications
@@ -220,8 +234,9 @@ export class EditorObjects {
     const visual = OBJECT_VISUALS[instance.type] || { height: 1 };
 
     instance.mesh.position.set(x, terrainHeight + (visual.height * scale) / 2, y);
+    instance.hitMesh.position.set(x, terrainHeight + (visual.height * scale) / 2, y);
     instance.selectionRing.position.set(x, terrainHeight + 0.1, y);
-    instance.label.position.set(x, terrainHeight + (visual.height * scale) + 1.5, y);
+    instance.label.position.set(x, terrainHeight + (visual.height * scale) + 2.5, y);
   }
 
   /**
@@ -240,8 +255,12 @@ export class EditorObjects {
     instance.mesh.scale.set(scale, scale, scale);
     instance.mesh.position.y = terrainHeight + (visual.height * scale) / 2;
 
+    // Update hit mesh scale and position
+    instance.hitMesh.scale.set(scale, scale, scale);
+    instance.hitMesh.position.y = terrainHeight + (visual.height * scale) / 2;
+
     // Update label position
-    instance.label.position.y = terrainHeight + (visual.height * scale) + 1.5;
+    instance.label.position.y = terrainHeight + (visual.height * scale) + 2.5;
   }
 
   /**
@@ -252,11 +271,14 @@ export class EditorObjects {
     if (!instance) return;
 
     this.group.remove(instance.mesh);
+    this.group.remove(instance.hitMesh);
     this.group.remove(instance.selectionRing);
     this.group.remove(instance.label);
 
     (instance.mesh.geometry as THREE.BufferGeometry).dispose();
     (instance.mesh.material as THREE.Material).dispose();
+    (instance.hitMesh.geometry as THREE.BufferGeometry).dispose();
+    (instance.hitMesh.material as THREE.Material).dispose();
     (instance.selectionRing.geometry as THREE.BufferGeometry).dispose();
     (instance.selectionRing.material as THREE.Material).dispose();
 
@@ -293,16 +315,18 @@ export class EditorObjects {
 
   /**
    * Find object at screen position via raycasting
+   * Uses larger hitMesh for easier selection
    */
   public findObjectAt(raycaster: THREE.Raycaster): string | null {
-    const visibleMeshes = Array.from(this.objects.values())
+    // Use hitMesh for easier selection (larger invisible mesh)
+    const hitMeshes = Array.from(this.objects.values())
       .filter((o) => o.mesh.visible)
-      .map((o) => o.mesh);
-    const intersects = raycaster.intersectObjects(visibleMeshes);
+      .map((o) => o.hitMesh);
+    const intersects = raycaster.intersectObjects(hitMeshes);
 
     if (intersects.length > 0) {
       for (const [id, instance] of this.objects) {
-        if (instance.mesh === intersects[0].object) {
+        if (instance.hitMesh === intersects[0].object) {
           return id;
         }
       }
@@ -330,33 +354,46 @@ export class EditorObjects {
   }
 
   /**
-   * Create a text label sprite
+   * Create a text label sprite with high-resolution text
    */
   private createLabel(text: string, icon: string): THREE.Sprite {
+    // Use higher resolution for crisp text (2x scale)
+    const scale = 2;
+    const baseWidth = 256;
+    const baseHeight = 80;
+
     const canvas = document.createElement('canvas');
     const ctx = canvas.getContext('2d')!;
-    canvas.width = 192;
-    canvas.height = 64;
+    canvas.width = baseWidth * scale;
+    canvas.height = baseHeight * scale;
 
-    // Background
-    ctx.fillStyle = 'rgba(0, 0, 0, 0.75)';
-    ctx.roundRect(0, 0, canvas.width, canvas.height, 8);
+    // Scale context for high-DPI rendering
+    ctx.scale(scale, scale);
+
+    // Background with rounded corners
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.85)';
+    ctx.beginPath();
+    ctx.roundRect(4, 4, baseWidth - 8, baseHeight - 8, 10);
     ctx.fill();
 
     // Icon
-    ctx.font = 'bold 28px sans-serif';
+    ctx.font = 'bold 36px sans-serif';
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
     ctx.fillStyle = '#ffffff';
-    ctx.fillText(icon, 28, 32);
+    ctx.fillText(icon, 36, baseHeight / 2);
 
     // Full text (truncated if needed)
-    ctx.font = 'bold 20px sans-serif';
+    ctx.font = 'bold 24px sans-serif';
     ctx.textAlign = 'left';
-    const displayText = text.length > 12 ? text.substring(0, 11) + '…' : text;
-    ctx.fillText(displayText, 50, 32);
+    const displayText = text.length > 14 ? text.substring(0, 13) + '…' : text;
+    ctx.fillText(displayText, 64, baseHeight / 2);
 
     const texture = new THREE.CanvasTexture(canvas);
+    texture.minFilter = THREE.LinearFilter;
+    texture.magFilter = THREE.LinearFilter;
+    texture.anisotropy = 4;
+
     const material = new THREE.SpriteMaterial({
       map: texture,
       transparent: true,
@@ -364,7 +401,7 @@ export class EditorObjects {
     });
 
     const sprite = new THREE.Sprite(material);
-    sprite.scale.set(6, 2, 1); // Larger, readable size
+    sprite.scale.set(8, 2.5, 1); // Larger, readable size
 
     return sprite;
   }

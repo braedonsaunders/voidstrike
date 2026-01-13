@@ -310,13 +310,23 @@ function ObjectsPanel({
     const objType = config.objectTypes.find((t) => t.id === typeId);
     if (!objType) return;
 
+    // Initialize properties with default values from config
+    const defaultProperties: Record<string, unknown> = {};
+    if (objType.properties) {
+      for (const prop of objType.properties) {
+        if (prop.defaultValue !== undefined) {
+          defaultProperties[prop.key] = prop.defaultValue;
+        }
+      }
+    }
+
     // Place at center of map
     onObjectAdd({
       type: typeId,
       x: Math.floor(state.mapData.width / 2),
       y: Math.floor(state.mapData.height / 2),
       radius: objType.defaultRadius,
-      properties: {},
+      properties: defaultProperties,
     });
   };
 
