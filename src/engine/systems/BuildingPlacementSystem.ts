@@ -338,6 +338,7 @@ export class BuildingPlacementSystem extends System {
       const resource = vespeneGeyserEntity.get<Resource>('Resource')!;
       resource.extractorEntityId = buildingEntity.id;
       // PERF: Store reverse lookup for O(1) access when extractor is destroyed
+      const buildingComp = buildingEntity.get<Building>('Building')!;
       buildingComp.linkedResourceId = vespeneGeyserEntity.id;
       debugBuildingPlacement.log(`BuildingPlacementSystem: Extractor ${buildingEntity.id} associated with vespene geyser ${vespeneGeyserEntity.id}`);
     }
