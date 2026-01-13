@@ -498,6 +498,99 @@ class DefinitionRegistryClass {
     this.initialized = false;
     this.loader.clearCache();
   }
+
+  // ==================== DATA-DRIVEN CONFIG ACCESS ====================
+  // These methods provide access to the new data-driven configuration systems.
+  // They re-export from the respective data modules for centralized access.
+
+  /**
+   * Get combat configuration (damage types, armor types, multipliers).
+   * @see @/data/combat/combat.ts
+   */
+  public getCombatConfig() {
+    // Lazy import to avoid circular dependencies
+    const combat = require('@/data/combat/combat');
+    return {
+      damageTypes: combat.DAMAGE_TYPES,
+      armorTypes: combat.ARMOR_TYPES,
+      multipliers: combat.DAMAGE_MULTIPLIERS,
+      config: combat.COMBAT_CONFIG,
+      getDamageMultiplier: combat.getDamageMultiplier,
+    };
+  }
+
+  /**
+   * Get resource type definitions.
+   * @see @/data/resources/resources.ts
+   */
+  public getResourceTypes() {
+    const resources = require('@/data/resources/resources');
+    return {
+      types: resources.RESOURCE_TYPES,
+      config: resources.RESOURCE_SYSTEM_CONFIG,
+      startingResources: resources.STARTING_RESOURCES,
+      getResourceType: resources.getResourceType,
+      getResourceTypeIds: resources.getResourceTypeIds,
+    };
+  }
+
+  /**
+   * Get unit category definitions.
+   * @see @/data/units/categories.ts
+   */
+  public getUnitCategories() {
+    const categories = require('@/data/units/categories');
+    return {
+      categories: categories.UNIT_CATEGORIES,
+      assignments: categories.UNIT_CATEGORY_ASSIGNMENTS,
+      subcategories: categories.UNIT_SUBCATEGORIES,
+      getCategory: categories.getCategory,
+      getUnitCategory: categories.getUnitCategory,
+    };
+  }
+
+  /**
+   * Get formation definitions.
+   * @see @/data/formations/formations.ts
+   */
+  public getFormations() {
+    const formations = require('@/data/formations/formations');
+    return {
+      formations: formations.FORMATION_DEFINITIONS,
+      config: formations.FORMATION_CONFIG,
+      getFormation: formations.getFormation,
+      generateFormationPositions: formations.generateFormationPositions,
+    };
+  }
+
+  /**
+   * Get AI build order configuration.
+   * @see @/data/ai/buildOrders.ts
+   */
+  public getAIConfig() {
+    const ai = require('@/data/ai/buildOrders');
+    return {
+      difficultyConfig: ai.AI_DIFFICULTY_CONFIG,
+      buildOrders: ai.FACTION_BUILD_ORDERS,
+      unitCompositions: ai.FACTION_UNIT_COMPOSITIONS,
+      getAIConfig: ai.getAIConfig,
+      getBuildOrders: ai.getBuildOrders,
+      selectUnitToBuild: ai.selectUnitToBuild,
+    };
+  }
+
+  /**
+   * Get ability definitions.
+   * @see @/data/abilities/abilities.ts
+   */
+  public getAbilityDefinitions() {
+    const abilities = require('@/data/abilities/abilities');
+    return {
+      abilities: abilities.ABILITY_DEFINITIONS,
+      registry: abilities.AbilityRegistry,
+      getAbility: abilities.getAbility,
+    };
+  }
 }
 
 // Export singleton instance

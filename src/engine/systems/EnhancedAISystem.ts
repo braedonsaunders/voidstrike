@@ -12,16 +12,17 @@ import { BUILDING_DEFINITIONS, RESEARCH_MODULE_UNITS } from '@/data/buildings/do
 import { getCounterRecommendation } from './AIMicroSystem';
 import { debugAI } from '@/utils/debugLogger';
 import { SeededRandom } from '@/utils/math';
+import {
+  getRandomBuildOrder,
+  getAIConfig,
+  selectUnitToBuild,
+  type AIDifficulty,
+  type BuildOrderStep,
+  type AIBehaviorConfig,
+} from '@/data/ai/buildOrders';
 
 type AIState = 'building' | 'expanding' | 'attacking' | 'defending' | 'scouting' | 'harassing';
-export type AIDifficulty = 'easy' | 'medium' | 'hard' | 'very_hard' | 'insane';
-
-interface BuildOrderStep {
-  type: 'unit' | 'building';
-  id: string;
-  supply?: number; // Execute at this supply
-  condition?: (ai: AIPlayer) => boolean;
-}
+export type { AIDifficulty }; // Re-export for backwards compatibility
 
 interface AIPlayer {
   playerId: string;
@@ -69,72 +70,8 @@ interface AIPlayer {
   expansionCooldown: number;
 }
 
-// Build order definitions for different difficulties
-// Includes tech progression with research modules for advanced units
-// Build orders with supply conditions that can actually be reached
-// AI starts with 6 workers (supply 6), max supply 11 from HQ
-// Supply conditions should be achievable with the workers trained before that step
-const BUILD_ORDERS: Record<AIDifficulty, BuildOrderStep[]> = {
-  easy: [
-    { type: 'unit', id: 'fabricator' },
-    { type: 'unit', id: 'fabricator' },
-    { type: 'building', id: 'supply_cache' }, // No supply gate - build when affordable
-    { type: 'building', id: 'infantry_bay' }, // Build immediately after supply_cache
-    { type: 'unit', id: 'trooper' },
-    { type: 'unit', id: 'trooper' },
-    { type: 'building', id: 'extractor', supply: 10 }, // After some army is built
-  ],
-  medium: [
-    { type: 'unit', id: 'fabricator' },
-    { type: 'unit', id: 'fabricator' },
-    { type: 'unit', id: 'fabricator' },
-    { type: 'building', id: 'supply_cache' }, // No supply gate
-    { type: 'building', id: 'infantry_bay' },
-    { type: 'building', id: 'extractor' },
-    { type: 'unit', id: 'trooper' },
-    { type: 'building', id: 'infantry_bay', supply: 14 }, // After some economy
-    { type: 'building', id: 'forge', supply: 18 },
-    { type: 'building', id: 'research_module', supply: 22 }, // For breachers/devastators
-  ],
-  hard: [
-    { type: 'unit', id: 'fabricator' },
-    { type: 'unit', id: 'fabricator' },
-    { type: 'unit', id: 'fabricator' },
-    { type: 'building', id: 'supply_cache' }, // No supply gate
-    { type: 'building', id: 'infantry_bay' },
-    { type: 'building', id: 'extractor' },
-    { type: 'building', id: 'research_module', supply: 12 }, // Early tech for breachers
-    { type: 'building', id: 'forge', supply: 16 },
-    { type: 'unit', id: 'breacher' },
-    { type: 'building', id: 'research_module', supply: 20 }, // Tech on forge for devastators
-    { type: 'building', id: 'hangar', supply: 24 },
-  ],
-  very_hard: [
-    { type: 'unit', id: 'fabricator' },
-    { type: 'unit', id: 'fabricator' },
-    { type: 'building', id: 'supply_cache' }, // No supply gate
-    { type: 'building', id: 'infantry_bay' },
-    { type: 'building', id: 'extractor' },
-    { type: 'building', id: 'research_module', supply: 10 }, // Early tech
-    { type: 'building', id: 'forge', supply: 14 },
-    { type: 'building', id: 'research_module', supply: 18 }, // Forge tech
-    { type: 'building', id: 'hangar', supply: 22 },
-    { type: 'building', id: 'infantry_bay', supply: 26 },
-    { type: 'building', id: 'research_module', supply: 30 }, // Hangar tech
-  ],
-  insane: [
-    { type: 'unit', id: 'fabricator' },
-    { type: 'building', id: 'supply_cache' }, // No supply gate - rush
-    { type: 'building', id: 'infantry_bay' },
-    { type: 'building', id: 'extractor' },
-    { type: 'building', id: 'research_module', supply: 9 }, // Immediate tech
-    { type: 'building', id: 'forge', supply: 12 },
-    { type: 'building', id: 'research_module', supply: 16 }, // Forge tech
-    { type: 'building', id: 'hangar', supply: 20 },
-    { type: 'building', id: 'research_module', supply: 24 }, // Hangar tech
-    { type: 'building', id: 'arsenal', supply: 28 },
-  ],
-};
+// Build orders are now loaded from data-driven config (@/data/ai/buildOrders.ts)
+// This allows per-faction build orders and easy modification without code changes
 
 // PERF: Cached entity query results to avoid repeated queries per frame
 interface EntityQueryCache {
@@ -286,7 +223,8 @@ export class EnhancedAISystem extends System {
       lastEnemyContact: 0,
       scoutedLocations: new Set(),
 
-      buildOrder: [...BUILD_ORDERS[difficulty]],
+      // Load build order from data-driven config (allows per-faction customization)
+      buildOrder: this.loadBuildOrder(faction, difficulty),
       buildOrderIndex: 0,
       buildOrderFailureCount: 0,
 
@@ -376,6 +314,64 @@ export class EnhancedAISystem extends System {
           minArmyForExpansion: 0, // Expands even without army
           minWorkersForExpansion: 4,
         };
+    }
+  }
+
+  /**
+   * Load build order from data-driven config for a faction and difficulty.
+   * Falls back to a default generic build order if none is configured.
+   */
+  private loadBuildOrder(faction: string, difficulty: AIDifficulty): BuildOrderStep[] {
+    // Try to get a build order from the data-driven config
+    const buildOrder = getRandomBuildOrder(faction, difficulty, this.random);
+
+    if (buildOrder) {
+      debugAI.log(`[EnhancedAI] Loaded build order: ${buildOrder.name} for ${faction} (${difficulty})`);
+      return [...buildOrder.steps];
+    }
+
+    // Fallback to generic build order if faction has no configured build orders
+    debugAI.warn(`[EnhancedAI] No build order found for ${faction} (${difficulty}), using fallback`);
+    return [
+      { type: 'unit', id: 'fabricator' },
+      { type: 'unit', id: 'fabricator' },
+      { type: 'building', id: 'supply_cache' },
+      { type: 'building', id: 'infantry_bay' },
+      { type: 'unit', id: 'trooper' },
+      { type: 'building', id: 'extractor' },
+    ];
+  }
+
+  /**
+   * Check a named condition for build order steps.
+   * Named conditions allow data-driven build orders without embedding functions.
+   */
+  private checkNamedCondition(conditionName: string, ai: AIPlayer): boolean {
+    switch (conditionName) {
+      case 'hasRefinery':
+      case 'hasExtractor':
+        return (ai.buildingCounts.get('extractor') ?? 0) > 0;
+      case 'hasBarracks':
+      case 'hasInfantryBay':
+        return (ai.buildingCounts.get('infantry_bay') ?? 0) > 0;
+      case 'hasFactory':
+      case 'hasForge':
+        return (ai.buildingCounts.get('forge') ?? 0) > 0;
+      case 'hasStarport':
+      case 'hasHangar':
+        return (ai.buildingCounts.get('hangar') ?? 0) > 0;
+      case 'hasTechLab':
+      case 'hasResearchModule':
+        return (ai.buildingCounts.get('research_module') ?? 0) > 0;
+      case 'lowArmy':
+        return ai.armySupply < 10;
+      case 'hasArmy':
+        return ai.armySupply >= 5;
+      case 'underAttack':
+        return ai.state === 'defending';
+      default:
+        debugAI.warn(`[EnhancedAI] Unknown condition: ${conditionName}`);
+        return true; // Default to true for unknown conditions
     }
   }
 
@@ -678,10 +674,15 @@ export class EnhancedAISystem extends System {
         return;
       }
 
-      // Check custom condition
-      if (step.condition && !step.condition(ai)) {
-        ai.buildOrderIndex++;
-        return;
+      // Check custom condition (supports both function and named string conditions)
+      if (step.condition) {
+        const conditionMet = typeof step.condition === 'function'
+          ? step.condition(ai)
+          : this.checkNamedCondition(step.condition, ai);
+        if (!conditionMet) {
+          ai.buildOrderIndex++;
+          return;
+        }
       }
 
       // Execute build order step

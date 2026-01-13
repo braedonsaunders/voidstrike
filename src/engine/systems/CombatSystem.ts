@@ -10,6 +10,8 @@ import { PooledVector2 } from '@/utils/VectorPool';
 import { isLocalPlayer } from '@/store/gameSetupStore';
 import { debugCombat } from '@/utils/debugLogger';
 import { deterministicDamage, quantize, QUANT_DAMAGE } from '@/utils/FixedPoint';
+import { getDamageMultiplier, COMBAT_CONFIG } from '@/data/combat/combat';
+import { getDefaultTargetPriority } from '@/data/units/categories';
 
 // Static temp vectors to avoid allocations in hot loops
 const tempTargetScore: { id: number; score: number } | null = null;
@@ -50,60 +52,19 @@ const underAttackPayload = {
   time: 0,
 };
 
-// Damage multipliers: [damageType][armorType]
-const DAMAGE_MULTIPLIERS: Record<DamageType, Record<ArmorType, number>> = {
-  normal: {
-    light: 1.0,
-    armored: 1.0,
-    massive: 1.0,
-    structure: 1.0,
-  },
-  explosive: {
-    light: 0.5,
-    armored: 1.5,
-    massive: 1.25,
-    structure: 1.5,
-  },
-  concussive: {
-    light: 1.5,
-    armored: 0.5,
-    massive: 0.25,
-    structure: 0.5,
-  },
-  psionic: {
-    light: 1.0,
-    armored: 1.0,
-    massive: 1.0,
-    structure: 0.5,
-  },
-};
+// Combat constants now loaded from data-driven config (@/data/combat/combat.ts)
+// Target priorities now loaded from unit definitions or categories (@/data/units/categories.ts)
 
-// Target priority - higher = more likely to be attacked first
-const TARGET_PRIORITY: Record<string, number> = {
-  // High threat combat units
-  devastator: 100,
-  dreadnought: 95,
-  colossus: 90,
-  specter: 85,
-  operative: 80,
-  breacher: 70,
-  trooper: 60,
-  scorcher: 55,
-  valkyrie: 50,
-  lifter: 45, // Support units have moderate priority
-  vanguard: 40,
-  // Workers are low priority
-  constructor: 10,
-  probe: 10,
-  drone: 10,
-};
-
-// Cooldown for under attack alerts (prevent spam)
-const UNDER_ATTACK_COOLDOWN = 10000; // 10 seconds
-
-// High ground advantage constants
-const HIGH_GROUND_MISS_CHANCE = 0.3; // 30% miss chance when attacking uphill
-const HIGH_GROUND_THRESHOLD = 1.5; // Height difference to count as high ground
+/**
+ * Get target priority for a unit, checking unit component first, then category defaults.
+ * Higher values = more likely to be targeted first.
+ */
+function getTargetPriority(unitId: string, unit?: Unit): number {
+  // First check if unit has explicit priority set (from unit definition)
+  // The Unit component doesn't store targetPriority directly, so we use category defaults
+  // Fall back to category-based default priority from data config
+  return getDefaultTargetPriority(unitId);
+}
 
 export class CombatSystem extends System {
   public readonly name = 'CombatSystem';
@@ -477,7 +438,7 @@ export class CombatSystem extends System {
 
       // Calculate target score based on priority and distance
       const unitId = unit?.unitId || 'default';
-      const basePriority = TARGET_PRIORITY[unitId] || 50;
+      const basePriority = getTargetPriority(unitId, unit);
       const distanceFactor = 1 - (distance / selfUnit.attackRange);
       const healthFactor = 1 - (health.current / health.max);
       const score = basePriority * 0.5 + distanceFactor * 30 + healthFactor * 20;
@@ -630,7 +591,7 @@ export class CombatSystem extends System {
 
       // Calculate target score based on priority and distance
       const unitId = unit?.unitId || 'default';
-      const basePriority = TARGET_PRIORITY[unitId] || 50;
+      const basePriority = getTargetPriority(unitId, unit);
       const distanceFactor = 1 - (distance / selfUnit.sightRange);
       const healthFactor = 1 - (health.current / health.max);
       const score = basePriority * 0.5 + distanceFactor * 30 + healthFactor * 20;
@@ -699,14 +660,14 @@ export class CombatSystem extends System {
   ): void {
     attacker.lastAttackTime = gameTime;
 
-    // High ground miss chance check
+    // High ground miss chance check (using data-driven config)
     const heightDifference = targetTransform.z - attackerTransform.z;
-    if (heightDifference > HIGH_GROUND_THRESHOLD) {
+    if (heightDifference > COMBAT_CONFIG.highGroundThreshold) {
       // DETERMINISM: Use integer-based hash for miss chance instead of floating-point Math.sin
       // This ensures identical results across all platforms/browsers
       const tick = this.game.getCurrentTick();
       const seed = ((tick * 1103515245 + attackerId * 12345) >>> 0) % 1000;
-      const missThreshold = Math.floor(HIGH_GROUND_MISS_CHANCE * 1000); // 300 for 30%
+      const missThreshold = Math.floor(COMBAT_CONFIG.highGroundMissChance * 1000);
       if (seed < missThreshold) {
         // Attack missed - PERF: Use pooled payload object
         missEventPayload.attackerId = attacker.unitId;
@@ -721,7 +682,8 @@ export class CombatSystem extends System {
 
     // DETERMINISM: Calculate damage using quantized fixed-point math
     // This ensures identical damage values across different platforms/browsers
-    const multiplier = DAMAGE_MULTIPLIERS[attacker.damageType][targetHealth.armorType];
+    // Using data-driven damage multipliers from @/data/combat/combat.ts
+    const multiplier = getDamageMultiplier(attacker.damageType, targetHealth.armorType);
 
     // Psionic damage ignores armor
     const armorReduction = attacker.damageType === 'psionic' ? 0 : targetHealth.armor;
@@ -914,8 +876,8 @@ export class CombatSystem extends System {
     const playerId = targetSelectable.playerId;
     const lastAlert = this.lastUnderAttackAlert.get(playerId) || 0;
 
-    // Check cooldown
-    if (gameTime - lastAlert < UNDER_ATTACK_COOLDOWN) return;
+    // Check cooldown (using data-driven config)
+    if (gameTime - lastAlert < COMBAT_CONFIG.underAttackCooldown) return;
 
     // Update last alert time
     this.lastUnderAttackAlert.set(playerId, gameTime);
