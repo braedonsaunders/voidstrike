@@ -5,15 +5,14 @@
  * Features:
  * - Bloom effect (BloomNode) - HDR glow
  * - GTAO ambient occlusion (GTAONode) - Contact shadows
- * - TAA anti-aliasing (Temporal Anti-Aliasing) - High quality temporal smoothing
+ * - TRAA anti-aliasing (Temporal Reprojection Anti-Aliasing) - High quality temporal smoothing
  * - FXAA anti-aliasing (FXAANode) - Fast edge smoothing (fallback)
- * - RCAS sharpening - Counter TAA blur
  * - Vignette - Cinematic edge darkening
  * - Color grading (exposure, saturation, contrast)
  *
  * IMPORTANT: GTAO requires hardware MSAA to be disabled on the renderer.
  * The WebGPUGameCanvas sets antialias: false when post-processing is enabled.
- * TAA provides superior anti-aliasing with temporal stability.
+ * TRAA provides superior anti-aliasing with temporal stability.
  */
 
 import * as THREE from 'three';
@@ -34,24 +33,13 @@ import {
   dot,
   min,
   max,
-  abs,
-  sqrt,
-  texture,
 } from 'three/tsl';
 
 // Import WebGPU post-processing nodes from addons
 import { bloom } from 'three/addons/tsl/display/BloomNode.js';
 import { ao } from 'three/addons/tsl/display/GTAONode.js';
 import { fxaa } from 'three/addons/tsl/display/FXAANode.js';
-
-// Import TAA system
-import {
-  TAASystem,
-  TAAConfig,
-  DEFAULT_TAA_CONFIG,
-  TAAJitterManager,
-  HALTON_SEQUENCE_16,
-} from './TAA';
+import { traa } from 'three/addons/tsl/display/TRAANode.js';
 
 // ============================================
 // POST-PROCESSING CONFIGURATION
@@ -78,9 +66,9 @@ export interface PostProcessingConfig {
   // FXAA (legacy, derived from antiAliasingMode)
   fxaaEnabled: boolean;
 
-  // TAA settings
+  // TAA/TRAA settings
   taaEnabled: boolean;
-  taaHistoryBlendRate: number;
+  taaHistoryBlendRate: number; // Not used by TRAA but kept for UI compatibility
   taaSharpeningEnabled: boolean;
   taaSharpeningIntensity: number;
 
@@ -106,7 +94,7 @@ const DEFAULT_CONFIG: PostProcessingConfig = {
   aoRadius: 2,
   aoIntensity: 0.8,
 
-  // TAA is the new default for best quality
+  // TRAA is the new default for best quality
   antiAliasingMode: 'taa',
   fxaaEnabled: false,
   taaEnabled: true,
@@ -137,28 +125,7 @@ export class RenderPipeline {
   private bloomPass: ReturnType<typeof bloom> | null = null;
   private aoPass: ReturnType<typeof ao> | null = null;
   private fxaaPass: ReturnType<typeof fxaa> | null = null;
-
-  // TAA system
-  private taaSystem: TAASystem | null = null;
-  private taaHistoryTextures: [THREE.WebGLRenderTarget, THREE.WebGLRenderTarget] | null = null;
-  private taaCurrentBufferIndex = 0;
-  private taaFrameIndex = 0;
-  private taaPreviousViewMatrix = new THREE.Matrix4();
-  private taaPreviousProjectionMatrix = new THREE.Matrix4();
-  private taaHasValidHistory = false;
-
-  // TAA uniforms
-  private uTAAResolution = uniform(new THREE.Vector2(1920, 1080));
-  private uTAAJitterOffset = uniform(new THREE.Vector2(0, 0));
-  private uTAAPrevJitterOffset = uniform(new THREE.Vector2(0, 0));
-  private uTAAHistoryValid = uniform(1.0);
-  private uTAABlendRate = uniform(0.1);
-  private uTAASharpeningIntensity = uniform(0.5);
-  private uPrevViewMatrix = uniform(new THREE.Matrix4());
-  private uPrevProjMatrix = uniform(new THREE.Matrix4());
-  private uCurrViewMatrix = uniform(new THREE.Matrix4());
-  private uCurrProjMatrix = uniform(new THREE.Matrix4());
-  private uInvProjMatrix = uniform(new THREE.Matrix4());
+  private traaPass: ReturnType<typeof traa> | null = null;
 
   // Uniforms for dynamic updates
   private uVignetteIntensity = uniform(0.25);
@@ -166,9 +133,8 @@ export class RenderPipeline {
   private uExposure = uniform(1.0);
   private uSaturation = uniform(0.8);
   private uContrast = uniform(1.05);
-
-  // Jitter projection matrix backup
-  private projectionMatrixBackup = new THREE.Matrix4();
+  private uSharpeningIntensity = uniform(0.5);
+  private uResolution = uniform(new THREE.Vector2(1920, 1080));
 
   constructor(
     renderer: WebGPURenderer,
@@ -181,137 +147,13 @@ export class RenderPipeline {
     this.camera = camera;
     this.config = { ...DEFAULT_CONFIG, ...config };
 
-    // Initialize TAA history buffers
-    this.initTAABuffers();
+    // Get initial resolution
+    const size = new THREE.Vector2();
+    this.renderer.getSize(size);
+    this.uResolution.value.set(Math.max(1, size.x), Math.max(1, size.y));
 
     this.postProcessing = this.createPipeline();
     this.applyConfig(this.config);
-  }
-
-  /**
-   * Initialize TAA history buffers for ping-pong rendering.
-   */
-  private initTAABuffers(): void {
-    const size = new THREE.Vector2();
-    this.renderer.getSize(size);
-    const width = Math.max(1, size.x);
-    const height = Math.max(1, size.y);
-
-    const createTarget = () =>
-      new THREE.WebGLRenderTarget(width, height, {
-        minFilter: THREE.LinearFilter,
-        magFilter: THREE.LinearFilter,
-        format: THREE.RGBAFormat,
-        type: THREE.HalfFloatType,
-        depthBuffer: false,
-        stencilBuffer: false,
-      });
-
-    this.taaHistoryTextures = [createTarget(), createTarget()];
-    this.uTAAResolution.value.set(width, height);
-  }
-
-  /**
-   * Get the TAA history texture from the previous frame.
-   */
-  private getTAAHistoryTexture(): THREE.Texture {
-    if (!this.taaHistoryTextures) return new THREE.Texture();
-    const historyIndex = 1 - this.taaCurrentBufferIndex;
-    return this.taaHistoryTextures[historyIndex].texture;
-  }
-
-  /**
-   * Get the current TAA output target.
-   */
-  private getTAACurrentTarget(): THREE.WebGLRenderTarget | null {
-    if (!this.taaHistoryTextures) return null;
-    return this.taaHistoryTextures[this.taaCurrentBufferIndex];
-  }
-
-  /**
-   * Apply TAA jitter to camera projection matrix.
-   * Call before rendering scene.
-   */
-  public applyTAAJitter(): void {
-    if (!this.config.taaEnabled) return;
-    if (!(this.camera instanceof THREE.PerspectiveCamera || this.camera instanceof THREE.OrthographicCamera)) return;
-
-    const size = new THREE.Vector2();
-    this.renderer.getSize(size);
-    const width = Math.max(1, size.x);
-    const height = Math.max(1, size.y);
-
-    // Store previous jitter
-    this.uTAAPrevJitterOffset.value.copy(this.uTAAJitterOffset.value);
-
-    // Get current jitter from Halton sequence
-    const idx = this.taaFrameIndex % HALTON_SEQUENCE_16.length;
-    const [jx, jy] = HALTON_SEQUENCE_16[idx];
-
-    // Center around 0 and scale to NDC
-    const jitterX = (jx - 0.5) / width;
-    const jitterY = (jy - 0.5) / height;
-    this.uTAAJitterOffset.value.set(jitterX, jitterY);
-
-    // Backup and modify projection matrix
-    this.projectionMatrixBackup.copy(this.camera.projectionMatrix);
-    this.camera.projectionMatrix.elements[8] += jitterX * 2;
-    this.camera.projectionMatrix.elements[9] += jitterY * 2;
-
-    this.taaFrameIndex++;
-  }
-
-  /**
-   * Remove TAA jitter from camera projection matrix.
-   * Call after rendering scene.
-   */
-  public removeTAAJitter(): void {
-    if (!this.config.taaEnabled) return;
-    if (!(this.camera instanceof THREE.PerspectiveCamera || this.camera instanceof THREE.OrthographicCamera)) return;
-
-    this.camera.projectionMatrix.copy(this.projectionMatrixBackup);
-  }
-
-  /**
-   * Update TAA motion vector uniforms.
-   * Call once per frame.
-   */
-  public updateTAAMotionVectors(): void {
-    if (!this.config.taaEnabled) return;
-
-    // Store previous matrices
-    this.uPrevViewMatrix.value.copy(this.taaPreviousViewMatrix);
-    this.uPrevProjMatrix.value.copy(this.taaPreviousProjectionMatrix);
-
-    // Update current matrices
-    this.uCurrViewMatrix.value.copy(this.camera.matrixWorldInverse);
-    this.uCurrProjMatrix.value.copy(this.camera.projectionMatrix);
-    this.uInvProjMatrix.value.copy((this.camera as THREE.PerspectiveCamera).projectionMatrixInverse);
-
-    // Store for next frame
-    this.taaPreviousViewMatrix.copy(this.camera.matrixWorldInverse);
-    this.taaPreviousProjectionMatrix.copy(this.camera.projectionMatrix);
-
-    // Update history validity
-    this.uTAAHistoryValid.value = this.taaHasValidHistory ? 1.0 : 0.0;
-  }
-
-  /**
-   * Swap TAA history buffers after rendering.
-   */
-  public swapTAABuffers(): void {
-    if (!this.config.taaEnabled) return;
-
-    this.taaCurrentBufferIndex = 1 - this.taaCurrentBufferIndex;
-    this.taaHasValidHistory = true;
-  }
-
-  /**
-   * Reset TAA history (e.g., on camera cut).
-   */
-  public resetTAAHistory(): void {
-    this.taaHasValidHistory = false;
-    this.taaFrameIndex = 0;
   }
 
   private createPipeline(): PostProcessing {
@@ -321,6 +163,7 @@ export class RenderPipeline {
     const scenePass = pass(this.scene, this.camera);
     const scenePassColor = scenePass.getTextureNode();
     const scenePassDepth = scenePass.getTextureNode('depth');
+    const scenePassVelocity = scenePass.getTextureNode('velocity');
 
     // Build the effect chain
     let outputNode: any = scenePassColor;
@@ -364,21 +207,25 @@ export class RenderPipeline {
       console.warn('[PostProcessing] Color grading failed:', e);
     }
 
-    // 4. Anti-aliasing (TAA or FXAA)
+    // 4. Anti-aliasing (TRAA or FXAA)
     if (this.config.antiAliasingMode === 'taa' && this.config.taaEnabled) {
       try {
-        // TAA resolve pass with history blending
-        outputNode = this.createTAAResolvePass(outputNode, scenePassDepth);
+        // Use Three.js's proven TRAA (Temporal Reprojection Anti-Aliasing) implementation
+        // This handles all the complexity: Halton jittering, variance clipping,
+        // motion vectors, history management, disocclusion detection, etc.
+        this.traaPass = traa(outputNode, scenePassDepth, scenePassVelocity, this.camera);
 
-        // Apply sharpening if enabled (counters TAA blur)
+        // Apply optional sharpening after TRAA (counters blur)
         if (this.config.taaSharpeningEnabled) {
-          outputNode = this.createSharpeningPass(outputNode);
+          outputNode = this.createSharpeningPass(this.traaPass.getTextureNode());
+        } else {
+          outputNode = this.traaPass.getTextureNode();
         }
 
         postProcessing.outputNode = outputNode;
-        console.log('[PostProcessing] TAA initialized successfully');
+        console.log('[PostProcessing] TRAA initialized successfully');
       } catch (e) {
-        console.warn('[PostProcessing] TAA initialization failed, falling back to FXAA:', e);
+        console.warn('[PostProcessing] TRAA initialization failed, falling back to FXAA:', e);
         // Fallback to FXAA
         try {
           this.fxaaPass = fxaa(outputNode);
@@ -406,167 +253,20 @@ export class RenderPipeline {
   }
 
   /**
-   * Create the TAA resolve pass.
-   * Blends current frame with reprojected history using neighborhood clipping.
-   */
-  private createTAAResolvePass(currentColorNode: any, depthNode: any): any {
-    const historyTexture = this.getTAAHistoryTexture();
-
-    // RGB to YCoCg conversion for better temporal stability
-    const rgb2YCoCg = (rgb: any) => {
-      const r = rgb.x;
-      const g = rgb.y;
-      const b = rgb.z;
-      const y = r.mul(0.25).add(g.mul(0.5)).add(b.mul(0.25));
-      const co = r.mul(0.5).sub(b.mul(0.5));
-      const cg = r.mul(-0.25).add(g.mul(0.5)).sub(b.mul(0.25));
-      return vec3(y, co, cg);
-    };
-
-    // YCoCg to RGB conversion
-    const yCoCg2RGB = (ycocg: any) => {
-      const y = ycocg.x;
-      const co = ycocg.y;
-      const cg = ycocg.z;
-      const r = y.add(co).sub(cg);
-      const g = y.add(cg);
-      const b = y.sub(co).sub(cg);
-      return vec3(r, g, b);
-    };
-
-    return Fn(() => {
-      const fragUV = uv();
-      const texelSize = vec2(1.0).div(this.uTAAResolution);
-
-      // Sample current frame with jitter removed
-      const currentUV = fragUV.sub(this.uTAAJitterOffset);
-      const currentColor = vec3(currentColorNode).toVar();
-
-      // Sample depth for motion vector computation
-      const depth = float(depthNode).toVar();
-
-      // Compute motion vector from camera movement
-      // Reconstruct clip position
-      const ndcX = fragUV.x.mul(2.0).sub(1.0);
-      const ndcY = fragUV.y.mul(2.0).sub(1.0);
-      const ndcZ = depth.mul(2.0).sub(1.0);
-      const clipPos = vec4(ndcX, ndcY, ndcZ, 1.0);
-
-      // Transform to view space
-      const viewPos = this.uInvProjMatrix.mul(clipPos);
-      const viewPosNorm = viewPos.xyz.div(viewPos.w);
-
-      // For camera-only motion, compute reprojection
-      // Previous frame position = prevProj * prevView * invCurrView * currViewPos
-      const currViewInv = this.uCurrViewMatrix.toVar();
-      const worldPos = currViewInv.mul(vec4(viewPosNorm, 1.0));
-      const prevViewPos = this.uPrevViewMatrix.mul(worldPos);
-      const prevClipPos = this.uPrevProjMatrix.mul(prevViewPos);
-      const prevNDC = prevClipPos.xyz.div(prevClipPos.w);
-      const prevUV = prevNDC.xy.mul(0.5).add(0.5);
-
-      // Motion vector
-      const motionVector = prevUV.sub(fragUV);
-
-      // Sample history at reprojected location
-      const historyUV = fragUV.add(motionVector);
-      const historyColor = texture(historyTexture, historyUV).rgb.toVar();
-
-      // Sample 3x3 neighborhood for variance clipping
-      const offsets = [
-        vec2(-1, -1), vec2(0, -1), vec2(1, -1),
-        vec2(-1, 0), vec2(0, 0), vec2(1, 0),
-        vec2(-1, 1), vec2(0, 1), vec2(1, 1),
-      ];
-
-      // Compute neighborhood statistics in YCoCg space
-      const centerYCoCg = rgb2YCoCg(currentColor);
-      let minYCoCg = centerYCoCg.toVar();
-      let maxYCoCg = centerYCoCg.toVar();
-      let meanYCoCg = centerYCoCg.toVar();
-      let m2YCoCg = centerYCoCg.mul(centerYCoCg).toVar();
-
-      // Sample neighbors
-      for (let i = 0; i < 9; i++) {
-        if (i === 4) continue; // Skip center
-        const offset = offsets[i];
-        const neighborUV = fragUV.add(offset.mul(texelSize));
-        const neighborColor = texture(currentColorNode, neighborUV).rgb;
-        const neighborYCoCg = rgb2YCoCg(neighborColor);
-
-        minYCoCg.assign(min(minYCoCg, neighborYCoCg));
-        maxYCoCg.assign(max(maxYCoCg, neighborYCoCg));
-        meanYCoCg.addAssign(neighborYCoCg);
-        m2YCoCg.addAssign(neighborYCoCg.mul(neighborYCoCg));
-      }
-
-      // Compute variance-based AABB
-      meanYCoCg.divAssign(9.0);
-      m2YCoCg.divAssign(9.0);
-      const variance = sqrt(abs(m2YCoCg.sub(meanYCoCg.mul(meanYCoCg))));
-      const gamma = float(1.0); // Variance clip gamma
-
-      const varMin = meanYCoCg.sub(variance.mul(gamma));
-      const varMax = meanYCoCg.add(variance.mul(gamma));
-
-      // Use tighter bounds
-      const boxMin = max(minYCoCg, varMin);
-      const boxMax = min(maxYCoCg, varMax);
-
-      // Clip history to AABB
-      const historyYCoCg = rgb2YCoCg(historyColor);
-      const boxCenter = boxMin.add(boxMax).mul(0.5);
-      const boxExtent = boxMax.sub(boxMin).mul(0.5).add(0.0001);
-      const direction = historyYCoCg.sub(boxCenter);
-      const tClip = abs(direction).div(boxExtent);
-      const maxT = max(max(tClip.x, tClip.y), tClip.z);
-      const clippedYCoCg = mix(
-        historyYCoCg,
-        boxCenter.add(direction.div(max(maxT, float(1.0)))),
-        float(maxT).greaterThan(1.0)
-      );
-      const clippedHistory = yCoCg2RGB(clippedYCoCg);
-
-      // Compute blend factor
-      let blendFactor = this.uTAABlendRate.toVar();
-
-      // Increase blend (favor current) when motion is large
-      const motionMagnitude = motionVector.length().mul(this.uTAAResolution.x);
-      blendFactor.addAssign(clamp(motionMagnitude.mul(0.1), 0.0, 0.3));
-
-      // Favor current when history UV is outside viewport
-      const outsideX = historyUV.x.lessThan(0.0).or(historyUV.x.greaterThan(1.0));
-      const outsideY = historyUV.y.lessThan(0.0).or(historyUV.y.greaterThan(1.0));
-      blendFactor.assign(mix(blendFactor, float(1.0), float(outsideX.or(outsideY))));
-
-      // Favor current when history is invalid
-      blendFactor.assign(mix(blendFactor, float(1.0), float(1.0).sub(this.uTAAHistoryValid)));
-
-      // Clamp blend factor
-      blendFactor.assign(clamp(blendFactor, 0.015, 0.5));
-
-      // Blend current and clipped history
-      const result = mix(clippedHistory, currentColor, blendFactor);
-
-      return vec4(result, 1.0);
-    })();
-  }
-
-  /**
-   * Create RCAS (Robust Contrast-Adaptive Sharpening) pass.
+   * Create RCAS-style (Robust Contrast-Adaptive Sharpening) pass.
    * Counters TAA blur while preserving edges.
    */
   private createSharpeningPass(inputNode: any): any {
     return Fn(() => {
       const fragUV = uv();
-      const texelSize = vec2(1.0).div(this.uTAAResolution);
+      const texelSize = vec2(1.0).div(this.uResolution);
 
       // Sample center and 4 neighbors (cross pattern)
       const center = vec3(inputNode).toVar();
-      const north = texture(inputNode, fragUV.add(vec2(0, -1).mul(texelSize))).rgb;
-      const south = texture(inputNode, fragUV.add(vec2(0, 1).mul(texelSize))).rgb;
-      const west = texture(inputNode, fragUV.add(vec2(-1, 0).mul(texelSize))).rgb;
-      const east = texture(inputNode, fragUV.add(vec2(1, 0).mul(texelSize))).rgb;
+      const north = inputNode.sample(fragUV.add(vec2(0, -1).mul(texelSize))).rgb;
+      const south = inputNode.sample(fragUV.add(vec2(0, 1).mul(texelSize))).rgb;
+      const west = inputNode.sample(fragUV.add(vec2(-1, 0).mul(texelSize))).rgb;
+      const east = inputNode.sample(fragUV.add(vec2(1, 0).mul(texelSize))).rgb;
 
       // Compute local contrast
       const minRGB = min(min(min(north, south), min(west, east)), center);
@@ -579,7 +279,7 @@ export class RenderPipeline {
       // Compute sharpening kernel
       const neighbors = north.add(south).add(west).add(east);
       const sharpenedColor = center.add(
-        center.mul(4.0).sub(neighbors).mul(this.uTAASharpeningIntensity).mul(rcpM)
+        center.mul(4.0).sub(neighbors).mul(this.uSharpeningIntensity).mul(rcpM)
       );
 
       // Clamp to prevent ringing artifacts
@@ -624,6 +324,11 @@ export class RenderPipeline {
    * Rebuild the pipeline when effects are toggled
    */
   rebuild(): void {
+    // Dispose old TRAA pass
+    if (this.traaPass) {
+      this.traaPass.dispose();
+      this.traaPass = null;
+    }
     this.postProcessing = this.createPipeline();
   }
 
@@ -661,9 +366,8 @@ export class RenderPipeline {
     }
     this.uAOIntensity.value = this.config.aoIntensity;
 
-    // Update TAA parameters
-    this.uTAABlendRate.value = this.config.taaHistoryBlendRate;
-    this.uTAASharpeningIntensity.value = this.config.taaSharpeningIntensity;
+    // Update sharpening parameters
+    this.uSharpeningIntensity.value = this.config.taaSharpeningIntensity;
 
     // Update color grading uniforms
     this.uVignetteIntensity.value = this.config.vignetteIntensity;
@@ -689,27 +393,25 @@ export class RenderPipeline {
    */
   setCamera(camera: THREE.Camera): void {
     this.camera = camera;
-    this.resetTAAHistory(); // Reset TAA on camera change
     this.rebuild();
   }
 
   /**
-   * Set render size (for TAA buffer resizing)
+   * Set render size (for sharpening pass resolution uniform)
    */
   setSize(width: number, height: number): void {
-    if (this.taaHistoryTextures) {
-      const currentSize = this.uTAAResolution.value;
-      if (currentSize.x !== width || currentSize.y !== height) {
-        this.taaHistoryTextures[0].setSize(width, height);
-        this.taaHistoryTextures[1].setSize(width, height);
-        this.uTAAResolution.value.set(width, height);
-        this.resetTAAHistory();
+    const currentSize = this.uResolution.value;
+    if (currentSize.x !== width || currentSize.y !== height) {
+      this.uResolution.value.set(width, height);
+      // TRAA handles its own resizing internally
+      if (this.traaPass) {
+        this.traaPass.setSize(width, height);
       }
     }
   }
 
   /**
-   * Check if TAA is enabled
+   * Check if TAA/TRAA is enabled
    */
   isTAAEnabled(): boolean {
     return this.config.taaEnabled && this.config.antiAliasingMode === 'taa';
@@ -747,11 +449,9 @@ export class RenderPipeline {
    * Dispose of resources
    */
   dispose(): void {
-    // Dispose TAA history buffers
-    if (this.taaHistoryTextures) {
-      this.taaHistoryTextures[0].dispose();
-      this.taaHistoryTextures[1].dispose();
-      this.taaHistoryTextures = null;
+    if (this.traaPass) {
+      this.traaPass.dispose();
+      this.traaPass = null;
     }
     // PostProcessing handles its own disposal
   }
