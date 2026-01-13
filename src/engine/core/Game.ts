@@ -29,6 +29,7 @@ import { getLocalPlayerId } from '@/store/gameSetupStore';
 import { PerformanceMonitor } from './PerformanceMonitor';
 import { ChecksumSystem, ChecksumConfig } from '../systems/ChecksumSystem';
 import { DesyncDetectionManager, DesyncDetectionConfig } from '../network/DesyncDetection';
+import { bootstrapDefinitions } from '../definitions';
 
 export type GameState = 'initializing' | 'running' | 'paused' | 'ended';
 
@@ -114,6 +115,11 @@ export class Game {
   private constructor(config: Partial<GameConfig> = {}) {
     this.config = { ...DEFAULT_CONFIG, ...config };
     this.eventBus = new EventBus();
+
+    // Bootstrap definition registry from TypeScript data
+    // This must happen before systems initialize as they depend on definitions
+    bootstrapDefinitions();
+
     // Pass map dimensions for spatial grid initialization
     this.world = new World(this.config.mapWidth, this.config.mapHeight);
     this.gameLoop = new GameLoop(this.config.tickRate, this.update.bind(this));
