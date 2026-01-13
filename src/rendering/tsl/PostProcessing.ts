@@ -381,7 +381,8 @@ export class RenderPipeline {
           scenePassDepth,
           sceneNormal,
           defaultMetalness,
-          defaultRoughness
+          defaultRoughness,
+          this.camera
         );
 
         // Configure SSR parameters

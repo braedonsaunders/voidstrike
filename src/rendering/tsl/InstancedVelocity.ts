@@ -35,6 +35,7 @@ import * as TSL from 'three/tsl';
 const modelWorldMatrix = (TSL as any).modelWorldMatrix;
 const modelViewMatrix = (TSL as any).modelViewMatrix;
 const cameraProjectionMatrix = (TSL as any).cameraProjectionMatrix;
+const cameraViewMatrix = (TSL as any).cameraViewMatrix;
 const select = (TSL as any).select;
 
 // WeakMap to track which meshes have velocity setup
@@ -199,18 +200,21 @@ const VELOCITY_THRESHOLD = 0.0001;
 /**
  * Create a TSL velocity node for InstancedMesh objects.
  *
- * Computes per-instance velocity by:
+ * Computes per-instance velocity by measuring OBJECT motion only (not camera motion):
  * 1. Reading previous instance matrix from our custom attributes (prevInstanceMatrix0-3)
  * 2. Computing previous world position: prevInstanceMatrix * positionLocal
- * 3. Using current world position from Three.js (includes current instance matrix)
- * 4. Projecting both through camera matrices to get NDC positions
+ * 3. Computing current world position: currentInstanceMatrix * positionLocal
+ * 4. Projecting BOTH through the SAME (current) camera matrices
  * 5. Returning the difference as screen-space velocity
+ *
+ * IMPORTANT: We use the SAME camera matrices for both positions. This means:
+ * - Static objects (where prevInstanceMatrix == currentInstanceMatrix) get zero velocity
+ * - Moving objects get velocity based on their motion
+ * - Camera motion is handled by TRAA internally via depth-based reprojection
  *
  * For objects without our velocity attributes (non-instanced meshes), the attributes
  * will default to zeros. We detect this by checking if the matrix is valid (column 3
  * w-component should be 1.0 for affine transforms) and return zero velocity.
- *
- * Includes velocity thresholding to eliminate micro-jitter from floating point precision.
  *
  * Returns a vec2 node representing screen-space velocity in NDC space (-1 to 1).
  */
@@ -231,23 +235,20 @@ export function createInstancedVelocityNode(): any {
     const hasValidMatrix = abs(prevCol3.w.sub(float(1.0))).lessThan(float(0.5));
 
     // Reconstruct the previous instance matrix from columns
-    // mat4 constructor takes columns in order
     const prevInstanceMatrix = mat4(prevCol0, prevCol1, prevCol2, prevCol3);
 
-    // Compute previous world position
-    // prevInstanceMatrix transforms from local to instance space
-    // For InstancedMesh, modelWorldMatrix is typically identity
+    // Compute previous world position using previous instance matrix
     const localPos = vec4(positionLocal, 1.0);
     const prevInstancePos = prevInstanceMatrix.mul(localPos);
     const prevWorldPos = modelWorldMatrix.mul(prevInstancePos);
 
-    // Compute previous clip position using previous camera matrices
-    const prevViewPos = uPreviousViewMatrix.mul(prevWorldPos);
-    const prevClipPos = uPreviousProjectionMatrix.mul(prevViewPos);
+    // Project previous world position through CURRENT camera matrices
+    // This is key: using same camera for both ensures only OBJECT motion is captured
+    // TRAA handles camera motion internally via depth-based reprojection
+    const prevClipPos = cameraProjectionMatrix.mul(cameraViewMatrix.mul(prevWorldPos));
 
-    // Current clip position is computed by the standard pipeline
+    // Current clip position uses the standard pipeline which includes current instanceMatrix
     // modelViewMatrix = viewMatrix * modelWorldMatrix * instanceMatrix (for InstancedMesh)
-    // So we use the standard transform chain
     const currentClipPos = cameraProjectionMatrix.mul(modelViewMatrix.mul(localPos));
 
     // Convert to NDC (divide by w)
@@ -257,14 +258,12 @@ export function createInstancedVelocityNode(): any {
     // Velocity is the difference in NDC space
     const rawVelocity = currentNDC.sub(prevNDC);
 
-    // Apply velocity threshold to eliminate micro-jitter
-    // If velocity magnitude is below threshold, clamp to zero
+    // Apply velocity threshold to eliminate micro-jitter from floating point precision
     const velocityMagnitude = max(abs(rawVelocity.x), abs(rawVelocity.y));
     const aboveThreshold = velocityMagnitude.greaterThan(float(VELOCITY_THRESHOLD));
     const thresholdedVelocity = select(aboveThreshold, rawVelocity, vec2(0.0, 0.0));
 
     // Return computed velocity for valid matrices, zero for invalid/missing attributes
-    // This prevents NaN/infinity from invalid matrix calculations on non-instanced meshes
     const velocity = select(hasValidMatrix, thresholdedVelocity, vec2(0.0, 0.0));
 
     return velocity;
