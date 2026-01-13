@@ -59,6 +59,38 @@ import { easuUpscale, rcasSharpening } from './UpscalerNode';
 import { createInstancedVelocityNode } from './InstancedVelocity';
 
 // ============================================
+// WARNING SUPPRESSION
+// ============================================
+
+// Suppress Three.js AttributeNode warnings for our custom velocity attributes
+// These warnings occur because non-instanced meshes don't have prevInstanceMatrix attributes
+// The shader handles this gracefully by returning zero velocity for missing attributes
+const originalWarn = console.warn;
+const suppressedWarnings = [
+  'THREE.AttributeNode: Vertex attribute "prevInstanceMatrix0" not found',
+  'THREE.AttributeNode: Vertex attribute "prevInstanceMatrix1" not found',
+  'THREE.AttributeNode: Vertex attribute "prevInstanceMatrix2" not found',
+  'THREE.AttributeNode: Vertex attribute "prevInstanceMatrix3" not found',
+];
+
+function suppressAttributeWarnings(): void {
+  console.warn = (...args: unknown[]) => {
+    const message = args[0];
+    if (typeof message === 'string') {
+      for (const suppressed of suppressedWarnings) {
+        if (message.includes(suppressed)) {
+          return; // Suppress this warning
+        }
+      }
+    }
+    originalWarn.apply(console, args);
+  };
+}
+
+// Apply warning suppression immediately
+suppressAttributeWarnings();
+
+// ============================================
 // POST-PROCESSING CONFIGURATION
 // ============================================
 

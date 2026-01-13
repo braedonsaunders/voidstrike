@@ -26,6 +26,7 @@ import {
   uniform,
   float,
   abs,
+  max,
 } from 'three/tsl';
 
 // Import TSL values not in @types/three
@@ -190,6 +191,11 @@ export function disposeInstancedVelocity(mesh: THREE.InstancedMesh): void {
   velocitySetupMeshes.delete(mesh);
 }
 
+// Velocity threshold to eliminate micro-jitter from floating point precision
+// Values below this threshold (in NDC space) are clamped to zero
+// 0.0001 NDC ≈ 0.1 pixel at 1080p, imperceptible but eliminates precision noise
+const VELOCITY_THRESHOLD = 0.0001;
+
 /**
  * Create a TSL velocity node for InstancedMesh objects.
  *
@@ -203,6 +209,8 @@ export function disposeInstancedVelocity(mesh: THREE.InstancedMesh): void {
  * For objects without our velocity attributes (non-instanced meshes), the attributes
  * will default to zeros. We detect this by checking if the matrix is valid (column 3
  * w-component should be 1.0 for affine transforms) and return zero velocity.
+ *
+ * Includes velocity thresholding to eliminate micro-jitter from floating point precision.
  *
  * Returns a vec2 node representing screen-space velocity in NDC space (-1 to 1).
  */
@@ -247,11 +255,17 @@ export function createInstancedVelocityNode(): any {
     const currentNDC = currentClipPos.xy.div(currentClipPos.w);
 
     // Velocity is the difference in NDC space
-    const computedVelocity = currentNDC.sub(prevNDC);
+    const rawVelocity = currentNDC.sub(prevNDC);
+
+    // Apply velocity threshold to eliminate micro-jitter
+    // If velocity magnitude is below threshold, clamp to zero
+    const velocityMagnitude = max(abs(rawVelocity.x), abs(rawVelocity.y));
+    const aboveThreshold = velocityMagnitude.greaterThan(float(VELOCITY_THRESHOLD));
+    const thresholdedVelocity = select(aboveThreshold, rawVelocity, vec2(0.0, 0.0));
 
     // Return computed velocity for valid matrices, zero for invalid/missing attributes
     // This prevents NaN/infinity from invalid matrix calculations on non-instanced meshes
-    const velocity = select(hasValidMatrix, computedVelocity, vec2(0.0, 0.0));
+    const velocity = select(hasValidMatrix, thresholdedVelocity, vec2(0.0, 0.0));
 
     return velocity;
   })();
