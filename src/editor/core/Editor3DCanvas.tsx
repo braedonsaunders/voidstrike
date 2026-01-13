@@ -1,8 +1,16 @@
 /**
  * Editor3DCanvas - The main 3D canvas for the map editor
  *
- * Replaces the 2D EditorCanvas with a full Three.js 3D viewport.
- * Supports terrain painting, object placement, and camera controls.
+ * Uses the game's RTSCamera for familiar controls:
+ * - Scroll wheel: Zoom with smooth interpolation
+ * - Middle mouse drag: Rotate and adjust pitch
+ * - Arrow keys: Pan camera
+ * - Click/drag: Paint terrain or select/move objects
+ *
+ * Performance optimized with:
+ * - Chunked terrain updates
+ * - Throttled rendering
+ * - Optimized renderer settings
  */
 
 'use client';
@@ -16,6 +24,7 @@ import { EditorGrid } from '../rendering3d/EditorGrid';
 import { EditorBrushPreview } from '../rendering3d/EditorBrushPreview';
 import { TerrainBrush } from '../tools/TerrainBrush';
 import { ObjectPlacer } from '../tools/ObjectPlacer';
+import { RTSCamera } from '@/rendering/Camera';
 
 export interface Editor3DCanvasProps {
   config: EditorConfig;
@@ -45,42 +54,40 @@ export function Editor3DCanvas({
 
   // Three.js refs
   const sceneRef = useRef<THREE.Scene | null>(null);
-  const cameraRef = useRef<THREE.PerspectiveCamera | null>(null);
   const rendererRef = useRef<THREE.WebGLRenderer | null>(null);
   const terrainRef = useRef<EditorTerrain | null>(null);
   const objectsRef = useRef<EditorObjects | null>(null);
   const gridRef = useRef<EditorGrid | null>(null);
   const brushPreviewRef = useRef<EditorBrushPreview | null>(null);
 
+  // Use game's RTS camera
+  const rtsCameraRef = useRef<RTSCamera | null>(null);
+
   // Tools
   const terrainBrushRef = useRef<TerrainBrush | null>(null);
   const objectPlacerRef = useRef<ObjectPlacer | null>(null);
 
-  // Raycasting
+  // Raycasting - reuse objects to avoid allocation
   const raycasterRef = useRef<THREE.Raycaster>(new THREE.Raycaster());
   const mouseVecRef = useRef<THREE.Vector2>(new THREE.Vector2());
+  const groundPlaneRef = useRef<THREE.Plane>(new THREE.Plane(new THREE.Vector3(0, 1, 0), 0));
+  const intersectTargetRef = useRef<THREE.Vector3>(new THREE.Vector3());
 
   // State
   const [isInitialized, setIsInitialized] = useState(false);
   const [mouseGridPos, setMouseGridPos] = useState<{ x: number; y: number } | null>(null);
-
-  // Camera state
-  const cameraState = useRef({
-    target: new THREE.Vector3(64, 0, 64),
-    distance: 80,
-    angle: 0,
-    pitch: Math.PI / 4,
-    isPanning: false,
-    isRotating: false,
-    lastMouse: { x: 0, y: 0 },
-  });
+  const [currentZoom, setCurrentZoom] = useState(45);
 
   // Painting state
   const paintingState = useRef({
     isPainting: false,
     isDraggingObject: false,
     draggedObjectId: null as string | null,
+    lastPaintPos: null as { x: number; y: number } | null,
   });
+
+  // Performance: track last frame time
+  const lastFrameTimeRef = useRef(0);
 
   const { mapData, activeTool, selectedElevation, selectedFeature, brushSize, selectedObjects } = state;
 
@@ -88,43 +95,32 @@ export function Editor3DCanvas({
   useEffect(() => {
     if (!containerRef.current || !canvasRef.current) return;
 
+    const container = containerRef.current;
+    const width = container.clientWidth;
+    const height = container.clientHeight;
+
     // Scene
     const scene = new THREE.Scene();
     scene.background = new THREE.Color(config.theme.background);
     sceneRef.current = scene;
 
-    // Camera
-    const aspect = containerRef.current.clientWidth / containerRef.current.clientHeight;
-    const camera = new THREE.PerspectiveCamera(60, aspect, 0.5, 500);
-    cameraRef.current = camera;
-
-    // Renderer
+    // Renderer - optimized settings
     const renderer = new THREE.WebGLRenderer({
       canvas: canvasRef.current,
-      antialias: true,
-      alpha: true,
+      antialias: false, // Disable AA for performance
+      powerPreference: 'high-performance',
     });
-    renderer.setSize(containerRef.current.clientWidth, containerRef.current.clientHeight);
-    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
-    renderer.shadowMap.enabled = true;
-    renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+    renderer.setSize(width, height);
+    renderer.setPixelRatio(1); // Force 1x for performance
+    renderer.shadowMap.enabled = false; // Disable shadows for editor
     rendererRef.current = renderer;
 
-    // Lighting
-    const ambientLight = new THREE.AmbientLight(0x404060, 0.6);
+    // Lighting - simplified for performance
+    const ambientLight = new THREE.AmbientLight(0x606080, 0.8);
     scene.add(ambientLight);
 
-    const directionalLight = new THREE.DirectionalLight(0xfff8e0, 1.2);
+    const directionalLight = new THREE.DirectionalLight(0xfff8e0, 1.0);
     directionalLight.position.set(50, 80, 30);
-    directionalLight.castShadow = true;
-    directionalLight.shadow.mapSize.width = 2048;
-    directionalLight.shadow.mapSize.height = 2048;
-    directionalLight.shadow.camera.near = 0.5;
-    directionalLight.shadow.camera.far = 200;
-    directionalLight.shadow.camera.left = -100;
-    directionalLight.shadow.camera.right = 100;
-    directionalLight.shadow.camera.top = 100;
-    directionalLight.shadow.camera.bottom = -100;
     scene.add(directionalLight);
 
     // Terrain
@@ -150,20 +146,8 @@ export function Editor3DCanvas({
 
     setIsInitialized(true);
 
-    // Animation loop
-    let animationId: number;
-    const animate = () => {
-      animationId = requestAnimationFrame(animate);
-
-      if (rendererRef.current && sceneRef.current && cameraRef.current) {
-        rendererRef.current.render(sceneRef.current, cameraRef.current);
-      }
-    };
-    animate();
-
     // Cleanup
     return () => {
-      cancelAnimationFrame(animationId);
       renderer.dispose();
       terrain.dispose();
       objects.dispose();
@@ -171,36 +155,71 @@ export function Editor3DCanvas({
     };
   }, [config]);
 
-  // Update camera position
-  const updateCamera = useCallback(() => {
-    if (!cameraRef.current) return;
-
-    const { target, distance, angle, pitch } = cameraState.current;
-
-    const x = target.x + distance * Math.sin(angle) * Math.cos(pitch);
-    const y = target.y + distance * Math.sin(pitch);
-    const z = target.z + distance * Math.cos(angle) * Math.cos(pitch);
-
-    cameraRef.current.position.set(x, y, z);
-    cameraRef.current.lookAt(target);
-  }, []);
-
-  // Handle resize
+  // Initialize RTS camera when map loads
   useEffect(() => {
-    const handleResize = () => {
-      if (!containerRef.current || !rendererRef.current || !cameraRef.current) return;
+    if (!isInitialized || !mapData || !rendererRef.current) return;
 
-      const width = containerRef.current.clientWidth;
-      const height = containerRef.current.clientHeight;
+    const container = containerRef.current;
+    if (!container) return;
 
-      cameraRef.current.aspect = width / height;
-      cameraRef.current.updateProjectionMatrix();
-      rendererRef.current.setSize(width, height);
+    const aspect = container.clientWidth / container.clientHeight;
+
+    // Dispose old camera
+    rtsCameraRef.current?.dispose();
+
+    // Create new RTS camera with map dimensions
+    const rtsCamera = new RTSCamera(aspect, mapData.width, mapData.height, {
+      minZoom: 20,
+      maxZoom: 120,
+      panSpeed: 60,
+      zoomSpeed: 5,
+      rotationSpeed: 2,
+      edgeScrollSpeed: 0, // Disable edge scroll in editor
+      edgeScrollThreshold: 0,
+    });
+    rtsCameraRef.current = rtsCamera;
+
+    // Set terrain height function
+    const getHeight = (x: number, z: number) => terrainRef.current?.getHeightAt(x, z) ?? 0;
+    rtsCamera.setTerrainHeightFunction(getHeight);
+
+    // Center camera
+    rtsCamera.setPosition(mapData.width / 2, mapData.height / 2);
+    rtsCamera.setZoom(Math.max(mapData.width, mapData.height) * 0.5, true);
+
+    // Animation loop with throttling
+    let animationId: number;
+    let lastTime = performance.now();
+
+    const animate = (currentTime: number) => {
+      animationId = requestAnimationFrame(animate);
+
+      // Calculate delta time
+      const deltaTime = currentTime - lastTime;
+      lastTime = currentTime;
+
+      // Update camera (handles smooth zoom interpolation)
+      rtsCamera.update(deltaTime);
+
+      // Update zoom display
+      const zoom = rtsCamera.getZoom();
+      if (Math.abs(zoom - currentZoom) > 0.5) {
+        setCurrentZoom(Math.round(zoom));
+      }
+
+      // Render
+      if (rendererRef.current && sceneRef.current) {
+        rendererRef.current.render(sceneRef.current, rtsCamera.camera);
+      }
     };
 
-    window.addEventListener('resize', handleResize);
-    return () => window.removeEventListener('resize', handleResize);
-  }, []);
+    animationId = requestAnimationFrame(animate);
+
+    return () => {
+      cancelAnimationFrame(animationId);
+      rtsCamera.dispose();
+    };
+  }, [isInitialized, mapData?.width, mapData?.height]);
 
   // Load map data
   useEffect(() => {
@@ -217,8 +236,9 @@ export function Editor3DCanvas({
     // Load objects
     objectsRef.current?.loadObjects(mapData.objects);
 
-    // Create grid
+    // Create/update grid
     if (gridRef.current) {
+      sceneRef.current?.remove(gridRef.current.mesh);
       gridRef.current.dispose();
     }
     const grid = new EditorGrid({
@@ -226,7 +246,7 @@ export function Editor3DCanvas({
       height: mapData.height,
       cellSize: 1,
       color: parseInt(config.theme.primary.replace('#', ''), 16),
-      opacity: 0.1,
+      opacity: 0.08,
     });
     gridRef.current = grid;
     sceneRef.current?.add(grid.mesh);
@@ -235,17 +255,26 @@ export function Editor3DCanvas({
     // Update tools
     terrainBrushRef.current?.setMapData(mapData);
     objectPlacerRef.current?.setMapData(mapData);
+  }, [isInitialized, mapData, config.theme.primary]);
 
-    // Center camera on map
-    cameraState.current.target.set(mapData.width / 2, 0, mapData.height / 2);
-    cameraState.current.distance = Math.max(mapData.width, mapData.height) * 0.6;
-    updateCamera();
-  }, [isInitialized, mapData, config.theme.primary, updateCamera]);
-
-  // Update terrain when map changes
+  // Update terrain when map changes - debounced
+  const terrainUpdateTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   useEffect(() => {
     if (!isInitialized || !mapData || !terrainRef.current) return;
-    terrainRef.current.forceUpdate();
+
+    // Debounce terrain updates
+    if (terrainUpdateTimeoutRef.current) {
+      clearTimeout(terrainUpdateTimeoutRef.current);
+    }
+    terrainUpdateTimeoutRef.current = setTimeout(() => {
+      terrainRef.current?.forceUpdate();
+    }, 16); // ~60fps max update rate
+
+    return () => {
+      if (terrainUpdateTimeoutRef.current) {
+        clearTimeout(terrainUpdateTimeoutRef.current);
+      }
+    };
   }, [isInitialized, mapData?.terrain]);
 
   // Update objects when selection changes
@@ -260,26 +289,43 @@ export function Editor3DCanvas({
     terrainRef.current?.setBiome(mapData.biomeId);
   }, [isInitialized, mapData?.biomeId]);
 
-  // Raycast to terrain
+  // Handle resize
+  useEffect(() => {
+    const handleResize = () => {
+      if (!containerRef.current || !rendererRef.current || !rtsCameraRef.current) return;
+
+      const width = containerRef.current.clientWidth;
+      const height = containerRef.current.clientHeight;
+
+      rtsCameraRef.current.camera.aspect = width / height;
+      rtsCameraRef.current.camera.updateProjectionMatrix();
+      rendererRef.current.setSize(width, height);
+    };
+
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
+
+  // Raycast to terrain - optimized to reuse objects
   const raycastToTerrain = useCallback((clientX: number, clientY: number): THREE.Vector3 | null => {
-    if (!containerRef.current || !cameraRef.current || !terrainRef.current) return null;
+    if (!containerRef.current || !rtsCameraRef.current || !terrainRef.current) return null;
 
     const rect = containerRef.current.getBoundingClientRect();
     mouseVecRef.current.x = ((clientX - rect.left) / rect.width) * 2 - 1;
     mouseVecRef.current.y = -((clientY - rect.top) / rect.height) * 2 + 1;
 
-    raycasterRef.current.setFromCamera(mouseVecRef.current, cameraRef.current);
-    const intersects = raycasterRef.current.intersectObject(terrainRef.current.mesh);
+    raycasterRef.current.setFromCamera(mouseVecRef.current, rtsCameraRef.current.camera);
 
+    // Try terrain mesh first
+    const intersects = raycasterRef.current.intersectObject(terrainRef.current.mesh, false);
     if (intersects.length > 0) {
       return intersects[0].point;
     }
 
-    // Fallback: intersect with ground plane
-    const plane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
-    const target = new THREE.Vector3();
-    raycasterRef.current.ray.intersectPlane(plane, target);
-    return target;
+    // Fallback: intersect with ground plane (reuse objects)
+    groundPlaneRef.current.constant = 0;
+    raycasterRef.current.ray.intersectPlane(groundPlaneRef.current, intersectTargetRef.current);
+    return intersectTargetRef.current.clone();
   }, []);
 
   // Get grid position from world position
@@ -296,12 +342,19 @@ export function Editor3DCanvas({
     return { x, y };
   }, [mapData]);
 
-  // Paint at position
+  // Paint at position - optimized to skip redundant updates
   const paintAt = useCallback((worldPos: THREE.Vector3, force: boolean = false) => {
     if (!mapData || !terrainBrushRef.current) return;
 
     const gridPos = worldToGrid(worldPos);
     if (!gridPos) return;
+
+    // Skip if same position as last paint (performance optimization)
+    const lastPos = paintingState.current.lastPaintPos;
+    if (!force && lastPos && lastPos.x === gridPos.x && lastPos.y === gridPos.y) {
+      return;
+    }
+    paintingState.current.lastPaintPos = gridPos;
 
     const tool = config.tools.find((t) => t.id === activeTool);
     if (!tool) return;
@@ -325,7 +378,6 @@ export function Editor3DCanvas({
           paintElevation,
           paintWalkable
         );
-        // Also apply feature
         if (paintFeature !== 'none') {
           const featureUpdates = terrainBrushRef.current.paintFeature(
             gridPos.x,
@@ -377,34 +429,31 @@ export function Editor3DCanvas({
   const handleMouseDown = useCallback((e: React.MouseEvent) => {
     if (!mapData) return;
 
+    // Let RTS camera handle middle mouse button
+    if (e.button === 1) return;
+
+    // Right click - no action in editor (camera handles rotation via middle mouse)
+    if (e.button === 2) return;
+
     const worldPos = raycastToTerrain(e.clientX, e.clientY);
     if (!worldPos) return;
 
-    if (e.button === 1 || (e.button === 0 && e.altKey)) {
-      // Middle button or Alt+click = pan
-      cameraState.current.isPanning = true;
-      cameraState.current.lastMouse = { x: e.clientX, y: e.clientY };
-    } else if (e.button === 2 || (e.button === 0 && e.shiftKey)) {
-      // Right button or Shift+click = rotate
-      cameraState.current.isRotating = true;
-      cameraState.current.lastMouse = { x: e.clientX, y: e.clientY };
-    } else if (e.button === 0) {
-      // Left click
+    // Left click
+    if (e.button === 0) {
       if (activeTool === 'select') {
         // Check if clicking on an object
-        if (cameraRef.current) {
+        if (rtsCameraRef.current) {
           const rect = containerRef.current?.getBoundingClientRect();
           if (rect) {
             mouseVecRef.current.x = ((e.clientX - rect.left) / rect.width) * 2 - 1;
             mouseVecRef.current.y = -((e.clientY - rect.top) / rect.height) * 2 + 1;
-            raycasterRef.current.setFromCamera(mouseVecRef.current, cameraRef.current);
+            raycasterRef.current.setFromCamera(mouseVecRef.current, rtsCameraRef.current.camera);
           }
         }
 
         const clickedObjId = objectsRef.current?.findObjectAt(raycasterRef.current);
         if (clickedObjId) {
           if (e.ctrlKey || e.metaKey) {
-            // Add to selection
             onObjectSelect([...selectedObjects, clickedObjId]);
           } else {
             onObjectSelect([clickedObjId]);
@@ -418,6 +467,7 @@ export function Editor3DCanvas({
         // Painting tools
         onStartBatch();
         paintingState.current.isPainting = true;
+        paintingState.current.lastPaintPos = null;
         paintAt(worldPos, true);
       }
     }
@@ -435,33 +485,7 @@ export function Editor3DCanvas({
       brushPreviewRef.current?.showForTool(activeTool, brushSize);
     }
 
-    if (cameraState.current.isPanning) {
-      const dx = e.clientX - cameraState.current.lastMouse.x;
-      const dy = e.clientY - cameraState.current.lastMouse.y;
-
-      const panSpeed = 0.5;
-      const forward = new THREE.Vector3(0, 0, -1).applyQuaternion(cameraRef.current!.quaternion);
-      forward.y = 0;
-      forward.normalize();
-      const right = new THREE.Vector3(1, 0, 0).applyQuaternion(cameraRef.current!.quaternion);
-      right.y = 0;
-      right.normalize();
-
-      cameraState.current.target.addScaledVector(right, -dx * panSpeed);
-      cameraState.current.target.addScaledVector(forward, dy * panSpeed);
-      cameraState.current.lastMouse = { x: e.clientX, y: e.clientY };
-
-      updateCamera();
-    } else if (cameraState.current.isRotating) {
-      const dx = e.clientX - cameraState.current.lastMouse.x;
-      const dy = e.clientY - cameraState.current.lastMouse.y;
-
-      cameraState.current.angle -= dx * 0.01;
-      cameraState.current.pitch = Math.max(0.2, Math.min(Math.PI / 2 - 0.1, cameraState.current.pitch + dy * 0.01));
-      cameraState.current.lastMouse = { x: e.clientX, y: e.clientY };
-
-      updateCamera();
-    } else if (paintingState.current.isDraggingObject && paintingState.current.draggedObjectId && worldPos) {
+    if (paintingState.current.isDraggingObject && paintingState.current.draggedObjectId && worldPos) {
       const gridPos = worldToGrid(worldPos);
       if (gridPos) {
         onObjectUpdate(paintingState.current.draggedObjectId, { x: gridPos.x, y: gridPos.y });
@@ -470,7 +494,7 @@ export function Editor3DCanvas({
     } else if (paintingState.current.isPainting && worldPos) {
       paintAt(worldPos);
     }
-  }, [activeTool, brushSize, raycastToTerrain, worldToGrid, paintAt, updateCamera, onObjectUpdate]);
+  }, [activeTool, brushSize, raycastToTerrain, worldToGrid, paintAt, onObjectUpdate]);
 
   const handleMouseUp = useCallback(() => {
     if (paintingState.current.isPainting) {
@@ -478,11 +502,10 @@ export function Editor3DCanvas({
       terrainRef.current?.updateDirtyChunks();
     }
 
-    cameraState.current.isPanning = false;
-    cameraState.current.isRotating = false;
     paintingState.current.isPainting = false;
     paintingState.current.isDraggingObject = false;
     paintingState.current.draggedObjectId = null;
+    paintingState.current.lastPaintPos = null;
   }, [onCommitBatch]);
 
   const handleMouseLeave = useCallback(() => {
@@ -494,21 +517,11 @@ export function Editor3DCanvas({
       terrainRef.current?.updateDirtyChunks();
     }
 
-    cameraState.current.isPanning = false;
-    cameraState.current.isRotating = false;
     paintingState.current.isPainting = false;
     paintingState.current.isDraggingObject = false;
     paintingState.current.draggedObjectId = null;
+    paintingState.current.lastPaintPos = null;
   }, [onCommitBatch]);
-
-  const handleWheel = useCallback((e: React.WheelEvent) => {
-    e.preventDefault();
-
-    const delta = e.deltaY > 0 ? 1.1 : 0.9;
-    cameraState.current.distance = Math.max(20, Math.min(200, cameraState.current.distance * delta));
-
-    updateCamera();
-  }, [updateCamera]);
 
   const handleContextMenu = useCallback((e: React.MouseEvent) => {
     e.preventDefault();
@@ -524,7 +537,6 @@ export function Editor3DCanvas({
     const gridPos = worldToGrid(worldPos);
     if (!gridPos) return;
 
-    // Get first object type for quick placement
     const firstObjType = config.objectTypes[0];
     if (firstObjType) {
       onObjectAdd({
@@ -539,8 +551,6 @@ export function Editor3DCanvas({
 
   // Get cursor style
   const getCursor = () => {
-    if (cameraState.current.isPanning) return 'grabbing';
-    if (cameraState.current.isRotating) return 'grabbing';
     if (paintingState.current.isDraggingObject) return 'move';
     if (activeTool === 'select') return 'default';
     return 'crosshair';
@@ -555,7 +565,6 @@ export function Editor3DCanvas({
       onMouseMove={handleMouseMove}
       onMouseUp={handleMouseUp}
       onMouseLeave={handleMouseLeave}
-      onWheel={handleWheel}
       onContextMenu={handleContextMenu}
       onDoubleClick={handleDoubleClick}
     >
@@ -565,7 +574,7 @@ export function Editor3DCanvas({
         style={{ cursor: getCursor() }}
       />
 
-      {/* Camera distance indicator */}
+      {/* Zoom indicator */}
       <div
         className="absolute bottom-3 right-3 px-2 py-1 rounded text-xs"
         style={{
@@ -573,7 +582,7 @@ export function Editor3DCanvas({
           color: config.theme.text.secondary,
         }}
       >
-        Zoom: {Math.round(cameraState.current.distance)}
+        Zoom: {currentZoom}
       </div>
 
       {/* Grid position */}
@@ -597,7 +606,7 @@ export function Editor3DCanvas({
           color: config.theme.text.muted,
         }}
       >
-        Scroll to zoom • Alt+drag to pan • Right-drag to rotate • Click to paint
+        Scroll to zoom • Middle-drag to rotate • Arrow keys to pan • Click to paint
       </div>
     </div>
   );

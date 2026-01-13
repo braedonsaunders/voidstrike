@@ -1,83 +1,58 @@
 /**
- * EditorTerrain - 3D terrain mesh for the map editor
+ * EditorTerrain - High-performance 3D terrain mesh for the map editor
  *
- * Renders EditorMapData as a 3D terrain mesh with real-time updates.
- * Supports chunked updates for efficient painting.
+ * Performance optimizations:
+ * - Pre-allocated typed arrays (no GC pressure)
+ * - In-place buffer updates (no geometry recreation)
+ * - Simplified material (MeshLambertMaterial)
+ * - Chunked partial updates
  */
 
 import * as THREE from 'three';
 import type { EditorMapData, EditorCell } from '../config/EditorConfig';
-import type { BiomeConfig } from '../config/EditorConfig';
-
-// Chunk size for efficient partial updates
-const CHUNK_SIZE = 16;
 
 // Height scale factor (matches game terrain)
 const HEIGHT_SCALE = 0.04;
 
-// Editor biome colors (matches game biomes)
-const EDITOR_BIOME_COLORS: Record<string, { ground: THREE.Color[]; cliff: THREE.Color[] }> = {
+// Editor biome colors (matches game biomes) - pre-computed RGB values
+const BIOME_COLORS: Record<string, { ground: [number, number, number][]; cliff: [number, number, number] }> = {
   grassland: {
-    ground: [
-      new THREE.Color(0x3a6b35),
-      new THREE.Color(0x4a8b45),
-      new THREE.Color(0x2d5a28),
-    ],
-    cliff: [new THREE.Color(0x5a5a5a), new THREE.Color(0x4a4a4a)],
+    ground: [[0.227, 0.420, 0.208], [0.290, 0.545, 0.271], [0.176, 0.353, 0.157]],
+    cliff: [0.353, 0.353, 0.353],
   },
   desert: {
-    ground: [
-      new THREE.Color(0xc4a35a),
-      new THREE.Color(0xd4b36a),
-      new THREE.Color(0xb4934a),
-    ],
-    cliff: [new THREE.Color(0x8b6b4a), new THREE.Color(0x7b5b3a)],
+    ground: [[0.769, 0.639, 0.353], [0.831, 0.702, 0.416], [0.706, 0.576, 0.290]],
+    cliff: [0.545, 0.420, 0.290],
   },
   frozen: {
-    ground: [
-      new THREE.Color(0xc8d8e8),
-      new THREE.Color(0xe0f0ff),
-      new THREE.Color(0xa0b8c8),
-    ],
-    cliff: [new THREE.Color(0x7888a0), new THREE.Color(0x687890)],
+    ground: [[0.784, 0.847, 0.910], [0.878, 0.941, 1.0], [0.627, 0.722, 0.784]],
+    cliff: [0.471, 0.533, 0.627],
   },
   volcanic: {
-    ground: [
-      new THREE.Color(0x2a2a2a),
-      new THREE.Color(0x3a3a3a),
-      new THREE.Color(0x1a1a1a),
-    ],
-    cliff: [new THREE.Color(0x3a3030), new THREE.Color(0x2a2020)],
+    ground: [[0.165, 0.165, 0.165], [0.227, 0.227, 0.227], [0.102, 0.102, 0.102]],
+    cliff: [0.227, 0.188, 0.188],
   },
   void: {
-    ground: [
-      new THREE.Color(0x1a1030),
-      new THREE.Color(0x2a2040),
-      new THREE.Color(0x100820),
-    ],
-    cliff: [new THREE.Color(0x2a2040), new THREE.Color(0x1a1030)],
+    ground: [[0.102, 0.063, 0.188], [0.165, 0.125, 0.251], [0.063, 0.031, 0.125]],
+    cliff: [0.165, 0.125, 0.251],
   },
   jungle: {
-    ground: [
-      new THREE.Color(0x2a4a25),
-      new THREE.Color(0x3a5a35),
-      new THREE.Color(0x1a3a15),
-    ],
-    cliff: [new THREE.Color(0x4a5a4a), new THREE.Color(0x3a4a3a)],
+    ground: [[0.165, 0.290, 0.145], [0.227, 0.353, 0.208], [0.102, 0.227, 0.082]],
+    cliff: [0.290, 0.353, 0.290],
   },
 };
 
-// Feature colors for terrain features
-const FEATURE_COLORS: Record<string, THREE.Color> = {
-  none: new THREE.Color(1, 1, 1),
-  water_shallow: new THREE.Color(0.4, 0.6, 0.9),
-  water_deep: new THREE.Color(0.2, 0.3, 0.7),
-  forest_light: new THREE.Color(0.5, 0.7, 0.4),
-  forest_dense: new THREE.Color(0.3, 0.5, 0.2),
-  mud: new THREE.Color(0.5, 0.4, 0.25),
-  road: new THREE.Color(0.7, 0.65, 0.55),
-  void: new THREE.Color(0.15, 0.1, 0.25),
-  cliff: new THREE.Color(0.45, 0.4, 0.35),
+// Feature color multipliers (RGB)
+const FEATURE_COLORS: Record<string, [number, number, number]> = {
+  none: [1, 1, 1],
+  water_shallow: [0.4, 0.6, 0.9],
+  water_deep: [0.2, 0.3, 0.7],
+  forest_light: [0.5, 0.7, 0.4],
+  forest_dense: [0.3, 0.5, 0.2],
+  mud: [0.5, 0.4, 0.25],
+  road: [0.7, 0.65, 0.55],
+  void: [0.15, 0.1, 0.25],
+  cliff: [0.45, 0.4, 0.35],
 };
 
 export interface EditorTerrainConfig {
@@ -90,71 +65,142 @@ export class EditorTerrain {
 
   private cellSize: number;
   private geometry: THREE.BufferGeometry;
-  private material: THREE.MeshStandardMaterial;
+  private material: THREE.MeshLambertMaterial;
 
-  // Heightmap for raycasting
+  // Pre-allocated buffers
+  private positions: Float32Array | null = null;
+  private colors: Float32Array | null = null;
+  private normals: Float32Array | null = null;
+
+  // Heightmap for raycasting (pre-allocated)
   private heightMap: Float32Array;
   private gridWidth: number = 0;
   private gridHeight: number = 0;
 
-  // Dirty chunks for efficient updates
-  private dirtyChunks: Set<string> = new Set();
+  // Current biome colors
+  private currentBiome: string = 'grassland';
+
+  // Dirty region tracking for partial updates
+  private dirtyMinX: number = Infinity;
+  private dirtyMaxX: number = -Infinity;
+  private dirtyMinY: number = Infinity;
+  private dirtyMaxY: number = -Infinity;
+  private isDirty: boolean = false;
 
   constructor(config: EditorTerrainConfig = {}) {
     this.cellSize = config.cellSize ?? 1;
     this.heightMap = new Float32Array(0);
 
-    // Create initial empty geometry
+    // Create empty geometry
     this.geometry = new THREE.BufferGeometry();
 
-    // Create material with vertex colors
-    this.material = new THREE.MeshStandardMaterial({
+    // Use Lambert material - faster than Standard
+    this.material = new THREE.MeshLambertMaterial({
       vertexColors: true,
-      flatShading: false,
-      roughness: 0.85,
-      metalness: 0.02,
-      side: THREE.DoubleSide,
+      side: THREE.FrontSide,
     });
 
     this.mesh = new THREE.Mesh(this.geometry, this.material);
-    this.mesh.receiveShadow = true;
-    this.mesh.castShadow = false;
     this.mesh.rotation.x = -Math.PI / 2;
+    this.mesh.frustumCulled = false; // Always render (editor viewport)
   }
 
   /**
-   * Load map data and rebuild the entire terrain
+   * Load map data and build terrain
    */
   public loadMap(mapData: EditorMapData): void {
     this.mapData = mapData;
+    this.currentBiome = mapData.biomeId;
     this.gridWidth = mapData.width + 1;
     this.gridHeight = mapData.height + 1;
-    this.heightMap = new Float32Array(this.gridWidth * this.gridHeight);
 
-    this.rebuildGeometry();
+    const vertexCount = this.gridWidth * this.gridHeight;
+
+    // Allocate buffers
+    this.positions = new Float32Array(vertexCount * 3);
+    this.colors = new Float32Array(vertexCount * 3);
+    this.normals = new Float32Array(vertexCount * 3);
+    this.heightMap = new Float32Array(vertexCount);
+
+    // Build indices (never changes)
+    const indexCount = mapData.width * mapData.height * 6;
+    const indices = new Uint32Array(indexCount);
+    let idx = 0;
+
+    for (let y = 0; y < mapData.height; y++) {
+      for (let x = 0; x < mapData.width; x++) {
+        const tl = y * this.gridWidth + x;
+        const tr = tl + 1;
+        const bl = tl + this.gridWidth;
+        const br = bl + 1;
+
+        indices[idx++] = tl;
+        indices[idx++] = bl;
+        indices[idx++] = tr;
+        indices[idx++] = tr;
+        indices[idx++] = bl;
+        indices[idx++] = br;
+      }
+    }
+
+    // Set up geometry with buffers
+    this.geometry.setAttribute('position', new THREE.BufferAttribute(this.positions, 3));
+    this.geometry.setAttribute('color', new THREE.BufferAttribute(this.colors, 3));
+    this.geometry.setAttribute('normal', new THREE.BufferAttribute(this.normals, 3));
+    this.geometry.setIndex(new THREE.BufferAttribute(indices, 1));
+
+    // Build all vertices
+    this.rebuildAllVertices();
   }
 
   /**
-   * Mark cells as dirty for efficient partial updates
+   * Mark cells as dirty for partial updates
    */
   public markCellsDirty(cells: Array<{ x: number; y: number }>): void {
     for (const { x, y } of cells) {
-      const chunkX = Math.floor(x / CHUNK_SIZE);
-      const chunkY = Math.floor(y / CHUNK_SIZE);
-      this.dirtyChunks.add(`${chunkX},${chunkY}`);
+      // Expand dirty region (include neighboring vertices)
+      this.dirtyMinX = Math.min(this.dirtyMinX, Math.max(0, x - 1));
+      this.dirtyMaxX = Math.max(this.dirtyMaxX, Math.min(this.gridWidth - 1, x + 2));
+      this.dirtyMinY = Math.min(this.dirtyMinY, Math.max(0, y - 1));
+      this.dirtyMaxY = Math.max(this.dirtyMaxY, Math.min(this.gridHeight - 1, y + 2));
     }
+    this.isDirty = true;
   }
 
   /**
-   * Update dirty chunks (call after painting)
+   * Update dirty region (call after painting)
    */
   public updateDirtyChunks(): void {
-    if (this.dirtyChunks.size === 0 || !this.mapData) return;
+    if (!this.isDirty || !this.mapData || !this.positions || !this.colors) return;
 
-    // For simplicity, rebuild entire geometry if chunks are dirty
-    // Could be optimized to only update specific vertex ranges
-    this.rebuildGeometry();
-    this.dirtyChunks.clear();
+    const biome = BIOME_COLORS[this.currentBiome] || BIOME_COLORS.grassland;
+    const { terrain, width, height } = this.mapData;
+
+    // Update only dirty vertices
+    for (let y = this.dirtyMinY; y <= this.dirtyMaxY; y++) {
+      for (let x = this.dirtyMinX; x <= this.dirtyMaxX; x++) {
+        this.updateVertex(x, y, terrain, width, height, biome);
+      }
+    }
+
+    // Update normals for dirty region
+    this.updateNormalsInRegion(this.dirtyMinX, this.dirtyMaxX, this.dirtyMinY, this.dirtyMaxY);
+
+    // Mark buffers as needing update
+    const posAttr = this.geometry.getAttribute('position') as THREE.BufferAttribute;
+    const colorAttr = this.geometry.getAttribute('color') as THREE.BufferAttribute;
+    const normalAttr = this.geometry.getAttribute('normal') as THREE.BufferAttribute;
+
+    posAttr.needsUpdate = true;
+    colorAttr.needsUpdate = true;
+    normalAttr.needsUpdate = true;
+
+    // Reset dirty tracking
+    this.dirtyMinX = Infinity;
+    this.dirtyMaxX = -Infinity;
+    this.dirtyMinY = Infinity;
+    this.dirtyMaxY = -Infinity;
+    this.isDirty = false;
   }
 
   /**
@@ -162,62 +208,47 @@ export class EditorTerrain {
    */
   public forceUpdate(): void {
     if (this.mapData) {
-      this.rebuildGeometry();
+      this.rebuildAllVertices();
     }
   }
 
   /**
-   * Get terrain height at world position
+   * Get terrain height at world position (bilinear interpolation)
    */
   public getHeightAt(x: number, z: number): number {
-    if (!this.mapData) return 0;
+    if (!this.mapData || this.heightMap.length === 0) return 0;
 
-    // Convert world to grid coordinates
-    const gridX = Math.floor(x / this.cellSize);
-    const gridZ = Math.floor(z / this.cellSize);
+    const gridX = x / this.cellSize;
+    const gridZ = z / this.cellSize;
 
-    if (gridX < 0 || gridX >= this.gridWidth - 1 || gridZ < 0 || gridZ >= this.gridHeight - 1) {
+    const x0 = Math.floor(gridX);
+    const z0 = Math.floor(gridZ);
+
+    if (x0 < 0 || x0 >= this.gridWidth - 1 || z0 < 0 || z0 >= this.gridHeight - 1) {
       return 0;
     }
 
-    // Bilinear interpolation
-    const fx = (x / this.cellSize) - gridX;
-    const fz = (z / this.cellSize) - gridZ;
+    const fx = gridX - x0;
+    const fz = gridZ - z0;
 
-    const h00 = this.heightMap[gridZ * this.gridWidth + gridX];
-    const h10 = this.heightMap[gridZ * this.gridWidth + gridX + 1];
-    const h01 = this.heightMap[(gridZ + 1) * this.gridWidth + gridX];
-    const h11 = this.heightMap[(gridZ + 1) * this.gridWidth + gridX + 1];
+    const idx00 = z0 * this.gridWidth + x0;
+    const h00 = this.heightMap[idx00];
+    const h10 = this.heightMap[idx00 + 1];
+    const h01 = this.heightMap[idx00 + this.gridWidth];
+    const h11 = this.heightMap[idx00 + this.gridWidth + 1];
 
-    const h0 = h00 * (1 - fx) + h10 * fx;
-    const h1 = h01 * (1 - fx) + h11 * fx;
-
-    return h0 * (1 - fz) + h1 * fz;
-  }
-
-  /**
-   * Convert world position to grid coordinates
-   */
-  public worldToGrid(x: number, z: number): { x: number; y: number } | null {
-    if (!this.mapData) return null;
-
-    const gridX = Math.floor(x / this.cellSize);
-    const gridY = Math.floor(z / this.cellSize);
-
-    if (gridX < 0 || gridX >= this.mapData.width || gridY < 0 || gridY >= this.mapData.height) {
-      return null;
-    }
-
-    return { x: gridX, y: gridY };
+    return (h00 * (1 - fx) + h10 * fx) * (1 - fz) + (h01 * (1 - fx) + h11 * fx) * fz;
   }
 
   /**
    * Change biome and update colors
    */
   public setBiome(biomeId: string): void {
+    if (this.currentBiome === biomeId) return;
+    this.currentBiome = biomeId;
     if (this.mapData) {
       this.mapData.biomeId = biomeId;
-      this.rebuildGeometry();
+      this.rebuildAllVertices();
     }
   }
 
@@ -227,194 +258,128 @@ export class EditorTerrain {
   public dispose(): void {
     this.geometry.dispose();
     this.material.dispose();
+    this.positions = null;
+    this.colors = null;
+    this.normals = null;
   }
 
   /**
-   * Rebuild the entire geometry from map data
+   * Rebuild all vertices (full update)
    */
-  private rebuildGeometry(): void {
-    if (!this.mapData) return;
+  private rebuildAllVertices(): void {
+    if (!this.mapData || !this.positions || !this.colors || !this.normals) return;
 
-    const { width, height, terrain, biomeId } = this.mapData;
-    const cellSize = this.cellSize;
+    const { terrain, width, height } = this.mapData;
+    const biome = BIOME_COLORS[this.currentBiome] || BIOME_COLORS.grassland;
 
-    const biomeColors = EDITOR_BIOME_COLORS[biomeId] || EDITOR_BIOME_COLORS.grassland;
-
-    const vertices: number[] = [];
-    const colors: number[] = [];
-    const indices: number[] = [];
-    const normals: number[] = [];
-    const uvs: number[] = [];
-
-    // Build vertex grid with height values
-    const vertexGrid: THREE.Vector3[][] = [];
-
+    // Update all vertices
     for (let y = 0; y <= height; y++) {
-      vertexGrid[y] = [];
       for (let x = 0; x <= width; x++) {
-        const cell = this.sampleTerrain(terrain, x, y, width, height);
-        const baseHeight = cell.elevation * HEIGHT_SCALE;
-
-        // Add subtle noise for visual interest
-        const noise = this.simpleNoise(x * 0.1, y * 0.1) * 0.02;
-        const finalHeight = baseHeight + (cell.walkable ? noise : noise * 0.5);
-
-        vertexGrid[y][x] = new THREE.Vector3(
-          x * cellSize,
-          -y * cellSize, // Negative Y for correct orientation after rotation
-          finalHeight
-        );
-
-        // Store in heightmap
-        this.heightMap[y * this.gridWidth + x] = finalHeight;
+        this.updateVertex(x, y, terrain, width, height, biome);
       }
     }
 
-    // Generate vertices with smoothed normals
-    let vertexIndex = 0;
-    const vertexIndices: number[][] = [];
+    // Calculate all normals
+    this.updateNormalsInRegion(0, this.gridWidth - 1, 0, this.gridHeight - 1);
 
-    for (let y = 0; y <= height; y++) {
-      vertexIndices[y] = [];
-      for (let x = 0; x <= width; x++) {
-        const pos = vertexGrid[y][x];
-        vertices.push(pos.x, pos.y, pos.z);
+    // Mark all buffers as needing update
+    const posAttr = this.geometry.getAttribute('position') as THREE.BufferAttribute;
+    const colorAttr = this.geometry.getAttribute('color') as THREE.BufferAttribute;
+    const normalAttr = this.geometry.getAttribute('normal') as THREE.BufferAttribute;
 
-        // Calculate color based on cell properties
-        const cell = this.sampleTerrain(terrain, x, y, width, height);
-        const color = this.getCellColor(cell, biomeColors, x, y);
-        colors.push(color.r, color.g, color.b);
+    if (posAttr) posAttr.needsUpdate = true;
+    if (colorAttr) colorAttr.needsUpdate = true;
+    if (normalAttr) normalAttr.needsUpdate = true;
 
-        // UVs for potential texturing
-        uvs.push(x / width, y / height);
-
-        // Calculate normal from neighboring heights
-        const normal = this.calculateNormal(vertexGrid, x, y, width, height);
-        normals.push(normal.x, normal.y, normal.z);
-
-        vertexIndices[y][x] = vertexIndex++;
-      }
-    }
-
-    // Generate triangle indices
-    for (let y = 0; y < height; y++) {
-      for (let x = 0; x < width; x++) {
-        const tl = vertexIndices[y][x];
-        const tr = vertexIndices[y][x + 1];
-        const bl = vertexIndices[y + 1][x];
-        const br = vertexIndices[y + 1][x + 1];
-
-        // Two triangles per quad
-        indices.push(tl, bl, tr);
-        indices.push(tr, bl, br);
-      }
-    }
-
-    // Update geometry
-    this.geometry.dispose();
-    this.geometry = new THREE.BufferGeometry();
-
-    this.geometry.setAttribute('position', new THREE.Float32BufferAttribute(vertices, 3));
-    this.geometry.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3));
-    this.geometry.setAttribute('normal', new THREE.Float32BufferAttribute(normals, 3));
-    this.geometry.setAttribute('uv', new THREE.Float32BufferAttribute(uvs, 2));
-    this.geometry.setIndex(indices);
-
-    this.mesh.geometry = this.geometry;
+    this.geometry.computeBoundingSphere();
   }
 
   /**
-   * Sample terrain cell with bounds checking and interpolation
+   * Update a single vertex
    */
-  private sampleTerrain(
-    terrain: EditorCell[][],
+  private updateVertex(
     x: number,
     y: number,
+    terrain: EditorCell[][],
     width: number,
-    height: number
-  ): EditorCell {
-    // Clamp to valid range
+    height: number,
+    biome: { ground: [number, number, number][]; cliff: [number, number, number] }
+  ): void {
+    if (!this.positions || !this.colors) return;
+
+    const idx = y * this.gridWidth + x;
+    const idx3 = idx * 3;
+
+    // Sample terrain cell
     const cx = Math.min(Math.max(0, x), width - 1);
     const cy = Math.min(Math.max(0, y), height - 1);
+    const cell = terrain[cy]?.[cx] || { elevation: 128, feature: 'none', walkable: true };
 
-    return terrain[cy]?.[cx] || {
-      elevation: 128,
-      feature: 'none',
-      walkable: true,
-    };
+    // Calculate height
+    const h = cell.elevation * HEIGHT_SCALE;
+    this.heightMap[idx] = h;
+
+    // Position
+    this.positions[idx3] = x * this.cellSize;
+    this.positions[idx3 + 1] = -y * this.cellSize;
+    this.positions[idx3 + 2] = h;
+
+    // Color
+    const elevIdx = Math.min(
+      Math.floor((cell.elevation / 255) * biome.ground.length),
+      biome.ground.length - 1
+    );
+    let r = biome.ground[elevIdx][0];
+    let g = biome.ground[elevIdx][1];
+    let b = biome.ground[elevIdx][2];
+
+    // Apply feature color
+    const feature = FEATURE_COLORS[cell.feature] || FEATURE_COLORS.none;
+    r *= feature[0];
+    g *= feature[1];
+    b *= feature[2];
+
+    // Darken unwalkable
+    if (!cell.walkable) {
+      r = r * 0.3 + biome.cliff[0] * 0.7;
+      g = g * 0.3 + biome.cliff[1] * 0.7;
+      b = b * 0.3 + biome.cliff[2] * 0.7;
+    }
+
+    this.colors[idx3] = r;
+    this.colors[idx3 + 1] = g;
+    this.colors[idx3 + 2] = b;
   }
 
   /**
-   * Get color for a cell based on elevation, feature, and biome
+   * Update normals in a region
    */
-  private getCellColor(
-    cell: EditorCell,
-    biomeColors: { ground: THREE.Color[]; cliff: THREE.Color[] },
-    x: number,
-    y: number
-  ): THREE.Color {
-    // Base color from elevation
-    const normalizedElev = cell.elevation / 255;
-    const colorIndex = Math.floor(normalizedElev * biomeColors.ground.length);
-    const baseColor = biomeColors.ground[Math.min(colorIndex, biomeColors.ground.length - 1)].clone();
+  private updateNormalsInRegion(minX: number, maxX: number, minY: number, maxY: number): void {
+    if (!this.normals || !this.positions) return;
 
-    // Apply feature color if present
-    if (cell.feature && cell.feature !== 'none') {
-      const featureColor = FEATURE_COLORS[cell.feature];
-      if (featureColor) {
-        baseColor.multiply(featureColor);
+    for (let y = minY; y <= maxY; y++) {
+      for (let x = minX; x <= maxX; x++) {
+        const idx = y * this.gridWidth + x;
+        const idx3 = idx * 3;
+
+        // Get neighboring heights
+        const hL = x > 0 ? this.heightMap[idx - 1] : this.heightMap[idx];
+        const hR = x < this.gridWidth - 1 ? this.heightMap[idx + 1] : this.heightMap[idx];
+        const hU = y > 0 ? this.heightMap[idx - this.gridWidth] : this.heightMap[idx];
+        const hD = y < this.gridHeight - 1 ? this.heightMap[idx + this.gridWidth] : this.heightMap[idx];
+
+        // Calculate normal
+        const nx = (hL - hR) * 0.5;
+        const ny = (hU - hD) * 0.5;
+        const nz = 1;
+
+        // Normalize
+        const len = Math.sqrt(nx * nx + ny * ny + nz * nz);
+        this.normals[idx3] = nx / len;
+        this.normals[idx3 + 1] = ny / len;
+        this.normals[idx3 + 2] = nz / len;
       }
     }
-
-    // Darken unwalkable areas
-    if (!cell.walkable) {
-      const cliffColor = biomeColors.cliff[0];
-      baseColor.lerp(cliffColor, 0.7);
-    }
-
-    // Add subtle variation
-    const variation = this.simpleNoise(x * 0.3, y * 0.3) * 0.05;
-    baseColor.r = Math.max(0, Math.min(1, baseColor.r + variation));
-    baseColor.g = Math.max(0, Math.min(1, baseColor.g + variation));
-    baseColor.b = Math.max(0, Math.min(1, baseColor.b + variation));
-
-    return baseColor;
-  }
-
-  /**
-   * Calculate normal vector for a vertex
-   */
-  private calculateNormal(
-    grid: THREE.Vector3[][],
-    x: number,
-    y: number,
-    width: number,
-    height: number
-  ): THREE.Vector3 {
-    const current = grid[y][x];
-
-    // Get neighboring heights
-    const left = x > 0 ? grid[y][x - 1] : current;
-    const right = x < width ? grid[y][x + 1] : current;
-    const up = y > 0 ? grid[y - 1][x] : current;
-    const down = y < height ? grid[y + 1][x] : current;
-
-    // Calculate normal from height differences
-    const normal = new THREE.Vector3(
-      (left.z - right.z) * 0.5,
-      (up.z - down.z) * 0.5,
-      1
-    );
-
-    return normal.normalize();
-  }
-
-  /**
-   * Simple noise function for variation
-   */
-  private simpleNoise(x: number, y: number): number {
-    const n = Math.sin(x * 12.9898 + y * 78.233) * 43758.5453;
-    return n - Math.floor(n) - 0.5;
   }
 }
 

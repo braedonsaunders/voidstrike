@@ -672,14 +672,14 @@ export function EditorPanels({
               className="px-1 rounded"
               style={{ backgroundColor: config.theme.background }}
             >
-              Alt+Drag
+              Arrows
             </kbd>{' '}
             Pan •{' '}
             <kbd
               className="px-1 rounded"
               style={{ backgroundColor: config.theme.background }}
             >
-              Right-Drag
+              Mid-Drag
             </kbd>{' '}
             Rotate
           </div>
