@@ -170,16 +170,15 @@ export class EditorObjects {
     mesh.position.set(obj.x, terrainHeight + (visual.height * scale) / 2, obj.y);
     mesh.scale.set(scale, scale, scale);
 
-    // Create larger invisible hit mesh for easier selection (3x size)
-    const hitGeometry = new THREE.CylinderGeometry(radius * 1.2, radius * 1.2, visual.height * 2, 8);
+    // Create slightly larger hit mesh for easier selection (fixed size, doesn't scale with object)
+    const hitSize = Math.max(2, radius * 0.5); // Minimum 2 units, proportional to radius
+    const hitGeometry = new THREE.CylinderGeometry(hitSize, hitSize, visual.height * 1.5, 8);
     const hitMaterial = new THREE.MeshBasicMaterial({
       visible: false,
-      transparent: true,
-      opacity: 0,
     });
     const hitMesh = new THREE.Mesh(hitGeometry, hitMaterial);
     hitMesh.position.set(obj.x, terrainHeight + (visual.height * scale) / 2, obj.y);
-    hitMesh.scale.set(scale, scale, scale);
+    // Don't scale hitMesh - keep it fixed size for consistent selection
 
     // Create selection ring
     const ringGeometry = new THREE.RingGeometry(radius * 0.9, radius, 24);
@@ -255,8 +254,7 @@ export class EditorObjects {
     instance.mesh.scale.set(scale, scale, scale);
     instance.mesh.position.y = terrainHeight + (visual.height * scale) / 2;
 
-    // Update hit mesh scale and position
-    instance.hitMesh.scale.set(scale, scale, scale);
+    // Update hit mesh position only (don't scale - keep fixed for consistent selection)
     instance.hitMesh.position.y = terrainHeight + (visual.height * scale) / 2;
 
     // Update label position
@@ -315,19 +313,22 @@ export class EditorObjects {
 
   /**
    * Find object at screen position via raycasting
-   * Uses larger hitMesh for easier selection
+   * Uses hitMesh for selection, sorted by distance to pick closest object
    */
   public findObjectAt(raycaster: THREE.Raycaster): string | null {
-    // Use hitMesh for easier selection (larger invisible mesh)
+    // Use hitMesh for easier selection
     const hitMeshes = Array.from(this.objects.values())
       .filter((o) => o.mesh.visible)
       .map((o) => o.hitMesh);
     const intersects = raycaster.intersectObjects(hitMeshes);
 
     if (intersects.length > 0) {
-      for (const [id, instance] of this.objects) {
-        if (instance.hitMesh === intersects[0].object) {
-          return id;
+      // Intersects are already sorted by distance, pick the closest one
+      for (const intersect of intersects) {
+        for (const [id, instance] of this.objects) {
+          if (instance.hitMesh === intersect.object) {
+            return id;
+          }
         }
       }
     }
