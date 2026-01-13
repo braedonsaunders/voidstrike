@@ -366,13 +366,16 @@ export const GraphicsOptionsPanel = memo(function GraphicsOptionsPanel() {
             style={selectStyle}
           >
             <option value="off">Off</option>
-            <option value="fxaa">FXAA (Fast)</option>
-            <option value="taa">TAA (Best Quality)</option>
+            <option value="fxaa">FXAA (Recommended)</option>
+            <option value="taa">TAA (Experimental)</option>
           </select>
         </div>
-        {/* TAA-specific settings */}
+        {/* TAA warning - TAA without motion vectors causes blur/ghosting */}
         {graphicsSettings.antiAliasingMode === 'taa' && (
           <>
+            <div style={{ fontSize: '10px', color: '#f59e0b', marginBottom: '8px', padding: '4px', backgroundColor: 'rgba(245, 158, 11, 0.1)', borderRadius: '4px' }}>
+              TAA may cause blur on moving objects. FXAA is recommended for most users.
+            </div>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
               <span>RCAS Sharpening</span>
               <button

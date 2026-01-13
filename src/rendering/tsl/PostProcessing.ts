@@ -234,7 +234,27 @@ export class RenderPipeline {
     // Build the effect chain
     let outputNode: any = scenePassColor;
 
-    // 1. GTAO Ambient Occlusion (applied first, multiplied with scene)
+    // 1. EASU upscaling (Edge-Adaptive Spatial Upsampling)
+    // MUST be applied first while we still have a texture node that supports .sample()
+    // Upscales from render resolution to display resolution before other effects
+    if (this.config.upscalingMode === 'easu' && this.config.renderScale < 1.0) {
+      try {
+        // Calculate render resolution based on scale
+        const renderRes = new THREE.Vector2(
+          Math.floor(this.displayWidth * this.config.renderScale),
+          Math.floor(this.displayHeight * this.config.renderScale)
+        );
+        const displayRes = new THREE.Vector2(this.displayWidth, this.displayHeight);
+
+        this.easuPass = easuUpscale(outputNode, renderRes, displayRes, this.config.easuSharpness);
+        outputNode = this.easuPass.node;
+        console.log(`[PostProcessing] EASU upscaling: ${renderRes.x}x${renderRes.y} → ${displayRes.x}x${displayRes.y}`);
+      } catch (e) {
+        console.warn('[PostProcessing] EASU upscaling failed:', e);
+      }
+    }
+
+    // 2. GTAO Ambient Occlusion (applied after upscaling, multiplied with scene)
     // IMPORTANT: Requires antialias: false on the renderer to avoid multisampled depth texture issues
     if (this.config.aoEnabled) {
       try {
@@ -253,7 +273,7 @@ export class RenderPipeline {
       }
     }
 
-    // 2. Bloom effect (additive)
+    // 3. Bloom effect (additive)
     if (this.config.bloomEnabled) {
       try {
         this.bloomPass = bloom(outputNode);
@@ -266,30 +286,11 @@ export class RenderPipeline {
       }
     }
 
-    // 3. Apply color grading and vignette
+    // 4. Apply color grading and vignette
     try {
       outputNode = this.createColorGradingPass(outputNode);
     } catch (e) {
       console.warn('[PostProcessing] Color grading failed:', e);
-    }
-
-    // 4. EASU upscaling (Edge-Adaptive Spatial Upsampling)
-    // When enabled, applies edge-aware enhancement/upscaling
-    if (this.config.upscalingMode === 'easu' && this.config.renderScale < 1.0) {
-      try {
-        // Calculate render resolution based on scale
-        const renderRes = new THREE.Vector2(
-          Math.floor(this.displayWidth * this.config.renderScale),
-          Math.floor(this.displayHeight * this.config.renderScale)
-        );
-        const displayRes = new THREE.Vector2(this.displayWidth, this.displayHeight);
-
-        this.easuPass = easuUpscale(outputNode, renderRes, displayRes, this.config.easuSharpness);
-        outputNode = this.easuPass.node;
-        console.log(`[PostProcessing] EASU upscaling: ${renderRes.x}x${renderRes.y} → ${displayRes.x}x${displayRes.y}`);
-      } catch (e) {
-        console.warn('[PostProcessing] EASU upscaling failed:', e);
-      }
     }
 
     // 5. Anti-aliasing (TRAA or FXAA)
