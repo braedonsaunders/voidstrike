@@ -370,13 +370,14 @@ export class RenderPipeline {
         })();
 
         // Create SSR pass
-        // SSR(color, depth, normal, metalness, roughness)
+        // SSR(color, depth, normal, metalness, roughness, camera)
         // Using moderate default metalness/roughness since our materials vary
         // Higher metalness = more reflection, lower roughness = sharper reflection
         const defaultMetalness = float(0.5); // Moderate reflectivity
         const defaultRoughness = this.uSSRMaxRoughness; // Configurable via settings
 
-        this.ssrPass = ssr(
+        // Cast to any to bypass outdated @types/three (ssr requires camera as 6th param)
+        this.ssrPass = (ssr as any)(
           outputNode,
           scenePassDepth,
           sceneNormal,
