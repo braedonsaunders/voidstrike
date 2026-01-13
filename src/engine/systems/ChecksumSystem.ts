@@ -134,6 +134,11 @@ export class ChecksumSystem extends System {
   private lastChecksumTime: number = 0;
   private avgChecksumTimeMs: number = 0;
 
+  // PERF: Pre-allocated buffers for sorting to avoid allocation during checksum
+  private _sortBufferUnits: import('../ecs/Entity').Entity[] = [];
+  private _sortBufferBuildings: import('../ecs/Entity').Entity[] = [];
+  private _sortBufferResources: import('../ecs/Entity').Entity[] = [];
+
   constructor(game: Game, config: Partial<ChecksumConfig> = {}) {
     super(game);
     this.config = { ...DEFAULT_CONFIG, ...config };
@@ -386,12 +391,16 @@ export class ChecksumSystem extends System {
     let healthSum = 0;
 
     // Hash units
+    // PERF: Reuse pre-allocated buffer instead of creating new array with spread
     const units = this.world.getEntitiesWith('Unit', 'Transform', 'Health', 'Selectable');
-
+    this._sortBufferUnits.length = 0;
+    for (let i = 0; i < units.length; i++) {
+      this._sortBufferUnits.push(units[i]);
+    }
     // Sort by entity ID for deterministic ordering
-    const sortedUnits = [...units].sort((a, b) => a.id - b.id);
+    this._sortBufferUnits.sort((a, b) => a.id - b.id);
 
-    for (const entity of sortedUnits) {
+    for (const entity of this._sortBufferUnits) {
       const transform = entity.get<Transform>('Transform')!;
       const unit = entity.get<Unit>('Unit')!;
       const health = entity.get<Health>('Health')!;
@@ -434,10 +443,15 @@ export class ChecksumSystem extends System {
     }
 
     // Hash buildings
+    // PERF: Reuse pre-allocated buffer instead of creating new array with spread
     const buildings = this.world.getEntitiesWith('Building', 'Transform', 'Health', 'Selectable');
-    const sortedBuildings = [...buildings].sort((a, b) => a.id - b.id);
+    this._sortBufferBuildings.length = 0;
+    for (let i = 0; i < buildings.length; i++) {
+      this._sortBufferBuildings.push(buildings[i]);
+    }
+    this._sortBufferBuildings.sort((a, b) => a.id - b.id);
 
-    for (const entity of sortedBuildings) {
+    for (const entity of this._sortBufferBuildings) {
       const transform = entity.get<Transform>('Transform')!;
       const building = entity.get<Building>('Building')!;
       const health = entity.get<Health>('Health')!;
@@ -462,10 +476,15 @@ export class ChecksumSystem extends System {
     }
 
     // Hash resources
+    // PERF: Reuse pre-allocated buffer instead of creating new array with spread
     const resources = this.world.getEntitiesWith('Resource', 'Transform');
-    const sortedResources = [...resources].sort((a, b) => a.id - b.id);
+    this._sortBufferResources.length = 0;
+    for (let i = 0; i < resources.length; i++) {
+      this._sortBufferResources.push(resources[i]);
+    }
+    this._sortBufferResources.sort((a, b) => a.id - b.id);
 
-    for (const entity of sortedResources) {
+    for (const entity of this._sortBufferResources) {
       const resource = entity.get<Resource>('Resource')!;
       const transform = entity.get<Transform>('Transform')!;
 

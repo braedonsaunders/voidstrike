@@ -81,6 +81,8 @@ export class AIMicroSystem extends System {
   constructor(game: Game) {
     super(game);
     this.setupEventListeners();
+    // PERF: Set game instance for cache tick tracking
+    setAnalysisCacheGameInstance(game);
   }
 
   private setupEventListeners(): void {
@@ -92,17 +94,25 @@ export class AIMicroSystem extends System {
     // Clean up when units die or are destroyed to prevent memory leaks
     this.game.eventBus.on('unit:died', (data: { entityId: number }) => {
       this.unitStates.delete(data.entityId);
-      // Also remove any pending commands for this unit
-      this.pendingCommands = this.pendingCommands.filter(
-        cmd => cmd.command.entityIds[0] !== data.entityId
-      );
+      // PERF: Use splice instead of filter to avoid array allocation per unit death
+      this.removeCommandsForEntity(data.entityId);
     });
     this.game.eventBus.on('unit:destroyed', (data: { entityId: number }) => {
       this.unitStates.delete(data.entityId);
-      this.pendingCommands = this.pendingCommands.filter(
-        cmd => cmd.command.entityIds[0] !== data.entityId
-      );
+      // PERF: Use splice instead of filter to avoid array allocation per unit death
+      this.removeCommandsForEntity(data.entityId);
     });
+  }
+
+  /**
+   * PERF: Remove commands for entity using splice instead of filter (avoids array allocation)
+   */
+  private removeCommandsForEntity(entityId: number): void {
+    for (let i = this.pendingCommands.length - 1; i >= 0; i--) {
+      if (this.pendingCommands[i].command.entityIds[0] === entityId) {
+        this.pendingCommands.splice(i, 1);
+      }
+    }
   }
 
   public registerAIPlayer(playerId: string): void {
@@ -706,10 +716,41 @@ const COUNTER_MATRIX: Record<string, string[]> = {
   specter: ['trooper', 'valkyrie', 'colossus'],
 };
 
+// PERF: Cache for enemy composition analysis (avoids O(n) scan every AI decision)
+const COMPOSITION_CACHE_DURATION = 40; // Ticks before cache expires
+const compositionCache: Map<string, { tick: number; composition: EnemyComposition }> = new Map();
+const threatGapsCache: Map<string, { tick: number; analysis: ThreatAnalysis }> = new Map();
+const counterRecommendationCache: Map<string, { tick: number; recommendation: CounterRecommendation }> = new Map();
+
+/**
+ * Get current game tick from the global game instance
+ * Used for cache invalidation
+ */
+let _cachedGameInstance: Game | null = null;
+function getCachedGameTick(): number {
+  if (!_cachedGameInstance) return 0;
+  return _cachedGameInstance.getCurrentTick();
+}
+
+/**
+ * Set the game instance for cache tick tracking
+ * Called by AIMicroSystem on init
+ */
+export function setAnalysisCacheGameInstance(game: Game): void {
+  _cachedGameInstance = game;
+}
+
 export function analyzeEnemyComposition(
   world: import('../ecs/World').World,
   myPlayerId: string
 ): EnemyComposition {
+  // PERF: Check cache first
+  const currentTick = getCachedGameTick();
+  const cached = compositionCache.get(myPlayerId);
+  if (cached && currentTick - cached.tick < COMPOSITION_CACHE_DURATION) {
+    return cached.composition;
+  }
+
   const composition: EnemyComposition = {
     infantry: 0,
     vehicles: 0,
@@ -744,6 +785,9 @@ export function analyzeEnemyComposition(
     }
   }
 
+  // PERF: Cache result for future calls
+  compositionCache.set(myPlayerId, { tick: currentTick, composition });
+
   return composition;
 }
 
@@ -756,6 +800,13 @@ export function analyzeThreatGaps(
   world: import('../ecs/World').World,
   myPlayerId: string
 ): ThreatAnalysis {
+  // PERF: Check cache first
+  const currentTick = getCachedGameTick();
+  const cached = threatGapsCache.get(myPlayerId);
+  if (cached && currentTick - cached.tick < COMPOSITION_CACHE_DURATION) {
+    return cached.analysis;
+  }
+
   const analysis: ThreatAnalysis = {
     uncounterableAirThreats: 0,
     unitsUnderAirAttack: 0,
@@ -817,6 +868,9 @@ export function analyzeThreatGaps(
     }
   }
 
+  // PERF: Cache result for future calls
+  threatGapsCache.set(myPlayerId, { tick: currentTick, analysis });
+
   return analysis;
 }
 
@@ -825,6 +879,14 @@ export function getCounterRecommendation(
   myPlayerId: string,
   myBuildingCounts: Map<string, number>
 ): CounterRecommendation {
+  // PERF: Check cache first - recommendation depends on enemy composition which changes slowly
+  // Building counts are passed in but change infrequently, so tick-based cache is still valid
+  const currentTick = getCachedGameTick();
+  const cached = counterRecommendationCache.get(myPlayerId);
+  if (cached && currentTick - cached.tick < COMPOSITION_CACHE_DURATION) {
+    return cached.recommendation;
+  }
+
   const enemyComp = analyzeEnemyComposition(world, myPlayerId);
   const threatGaps = analyzeThreatGaps(world, myPlayerId);
   const recommendation: CounterRecommendation = {
@@ -909,6 +971,9 @@ export function getCounterRecommendation(
     seenBuildings.add(b.buildingId);
     return true;
   });
+
+  // PERF: Cache result for future calls
+  counterRecommendationCache.set(myPlayerId, { tick: currentTick, recommendation });
 
   return recommendation;
 }

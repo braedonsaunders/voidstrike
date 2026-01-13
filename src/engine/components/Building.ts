@@ -117,6 +117,10 @@ export class Building extends Component {
   // Building upgrades (e.g., CC -> Orbital/Planetary)
   public canUpgradeTo: string[];
 
+  // PERF: For extractors - stores the linked resource entity ID for O(1) lookup
+  // instead of O(n) scan through all resources when destroyed
+  public linkedResourceId: number | null;
+
   constructor(definition: BuildingDefinition) {
     super();
     this.buildingId = definition.id;
@@ -175,6 +179,9 @@ export class Building extends Component {
 
     // Building upgrades
     this.canUpgradeTo = definition.canUpgradeTo ?? [];
+
+    // Extractor reverse lookup
+    this.linkedResourceId = null;
   }
 
   /**

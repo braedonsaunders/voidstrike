@@ -1631,6 +1631,7 @@ export class EnhancedAISystem extends System {
    * Find the nearest enemy entity (unit or building) that can be attacked directly
    * Returns both the entity ID and position for more precise targeting
    * @param attacker Optional - if provided, only returns targets this unit can actually attack
+   * PERF: Uses spatial grid for O(nearby) lookup instead of O(n+m) linear scan
    */
   private findNearestEnemyEntity(
     playerId: string,
@@ -1640,9 +1641,14 @@ export class EnhancedAISystem extends System {
   ): { entityId: number; x: number; y: number } | null {
     let closestEnemy: { entityId: number; x: number; y: number; distance: number } | null = null;
 
-    // Check enemy units first (higher priority)
-    const units = this.getCachedUnitsWithTransform();
-    for (const entity of units) {
+    // PERF: Query spatial grids instead of iterating all entities
+    // Units in range
+    const nearbyUnitIds = this.world.unitGrid.queryRadius(position.x, position.y, range);
+    for (let i = 0; i < nearbyUnitIds.length; i++) {
+      const entityId = nearbyUnitIds[i];
+      const entity = this.world.getEntity(entityId);
+      if (!entity) continue;
+
       const selectable = entity.get<Selectable>('Selectable');
       const health = entity.get<Health>('Health');
       const transform = entity.get<Transform>('Transform');
@@ -1667,11 +1673,15 @@ export class EnhancedAISystem extends System {
       }
     }
 
-    // Also check enemy buildings (buildings are always ground targets)
+    // Buildings in range (buildings are always ground targets)
     // If attacker can't attack ground, skip buildings entirely
     if (!attacker || attacker.canAttackGround) {
-      const buildings = this.getCachedBuildingsWithTransform();
-      for (const entity of buildings) {
+      const nearbyBuildingIds = this.world.buildingGrid.queryRadius(position.x, position.y, range);
+      for (let i = 0; i < nearbyBuildingIds.length; i++) {
+        const entityId = nearbyBuildingIds[i];
+        const entity = this.world.getEntity(entityId);
+        if (!entity) continue;
+
         const selectable = entity.get<Selectable>('Selectable');
         const health = entity.get<Health>('Health');
         const transform = entity.get<Transform>('Transform');
@@ -1940,11 +1950,16 @@ export class EnhancedAISystem extends System {
   /**
    * Find an available worker for the AI that's not already building.
    * This is stricter than findAvailableWorker - excludes workers in 'building' state.
+   * PERF: Single-pass implementation instead of triple-pass O(3n) -> O(n)
    */
   private findAvailableWorkerNotBuilding(playerId: string): number | null {
     const units = this.getCachedUnits();
 
-    // First pass: find idle workers
+    // PERF: Track best candidate by priority in single pass
+    // Priority: idle (3) > gathering (2) > moving (1)
+    let bestId: number | null = null;
+    let bestPriority = 0;
+
     for (const entity of units) {
       const unit = entity.get<Unit>('Unit');
       const selectable = entity.get<Selectable>('Selectable');
@@ -1956,46 +1971,26 @@ export class EnhancedAISystem extends System {
       if (health.isDead()) continue;
       if (unit.constructingBuildingId !== null) continue; // Skip workers already assigned to construction
 
+      // Determine priority based on state
+      let priority = 0;
       if (unit.state === 'idle') {
-        return entity.id;
+        priority = 3;
+      } else if (unit.state === 'gathering') {
+        priority = 2;
+      } else if (unit.state === 'moving') {
+        priority = 1;
+      }
+
+      // Update best if this is higher priority
+      if (priority > bestPriority) {
+        bestPriority = priority;
+        bestId = entity.id;
+        // Early exit if we found idle (highest priority)
+        if (priority === 3) return bestId;
       }
     }
 
-    // Second pass: find gathering workers
-    for (const entity of units) {
-      const unit = entity.get<Unit>('Unit');
-      const selectable = entity.get<Selectable>('Selectable');
-      const health = entity.get<Health>('Health');
-
-      if (!unit || !selectable || !health) continue;
-      if (selectable.playerId !== playerId) continue;
-      if (!unit.isWorker) continue;
-      if (health.isDead()) continue;
-      if (unit.constructingBuildingId !== null) continue;
-
-      if (unit.state === 'gathering') {
-        return entity.id;
-      }
-    }
-
-    // Third pass: find moving workers (but not those moving to construct)
-    for (const entity of units) {
-      const unit = entity.get<Unit>('Unit');
-      const selectable = entity.get<Selectable>('Selectable');
-      const health = entity.get<Health>('Health');
-
-      if (!unit || !selectable || !health) continue;
-      if (selectable.playerId !== playerId) continue;
-      if (!unit.isWorker) continue;
-      if (health.isDead()) continue;
-      if (unit.constructingBuildingId !== null) continue;
-
-      if (unit.state === 'moving') {
-        return entity.id;
-      }
-    }
-
-    return null;
+    return bestId;
   }
 
   /**

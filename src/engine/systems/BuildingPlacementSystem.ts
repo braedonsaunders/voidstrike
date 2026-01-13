@@ -337,6 +337,8 @@ export class BuildingPlacementSystem extends System {
     if (vespeneGeyserEntity) {
       const resource = vespeneGeyserEntity.get<Resource>('Resource')!;
       resource.extractorEntityId = buildingEntity.id;
+      // PERF: Store reverse lookup for O(1) access when extractor is destroyed
+      buildingComp.linkedResourceId = vespeneGeyserEntity.id;
       debugBuildingPlacement.log(`BuildingPlacementSystem: Extractor ${buildingEntity.id} associated with vespene geyser ${vespeneGeyserEntity.id}`);
     }
 
@@ -1100,15 +1102,17 @@ export class BuildingPlacementSystem extends System {
           debugBuildingPlacement.log(`BuildingPlacementSystem: Refunded ${definition.mineralCost} minerals, ${definition.vespeneCost} vespene for cancelled ${building.name}`);
         }
 
-        // If this is an extractor/refinery, restore the vespene geyser visibility
+        // PERF: If this is an extractor/refinery, restore the vespene geyser visibility
+        // Uses O(1) reverse lookup via linkedResourceId instead of O(n) scan
         if (building.buildingId === 'extractor' || building.buildingId === 'refinery') {
-          const resources = this.world.getEntitiesWith('Resource', 'Transform');
-          for (const resourceEntity of resources) {
-            const resource = resourceEntity.get<Resource>('Resource');
-            if (resource && resource.extractorEntityId === entity.id) {
-              resource.extractorEntityId = null;
-              debugBuildingPlacement.log(`BuildingPlacementSystem: Extractor cancelled, vespene geyser ${resourceEntity.id} restored`);
-              break;
+          if (building.linkedResourceId !== null) {
+            const resourceEntity = this.world.getEntity(building.linkedResourceId);
+            if (resourceEntity) {
+              const resource = resourceEntity.get<Resource>('Resource');
+              if (resource) {
+                resource.extractorEntityId = null;
+                debugBuildingPlacement.log(`BuildingPlacementSystem: Extractor cancelled, vespene geyser ${building.linkedResourceId} restored`);
+              }
             }
           }
         }
