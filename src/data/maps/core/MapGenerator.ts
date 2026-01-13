@@ -444,8 +444,11 @@ function generateConnections(
 /**
  * Generate a ramp between two regions
  *
- * IMPORTANT: Ramps are generated from EDGE to EDGE of regions, not center to center.
- * This creates shorter, steeper ramps that don't cut into building areas.
+ * Ramps have CONSISTENT SLOPE based on elevation change, not region distance.
+ * This ensures all ramps feel the same regardless of how close regions are.
+ *
+ * Target slope: ~8 units horizontal per 1 level of elevation change
+ * This creates a moderate, comfortable slope similar to SC2 ramps.
  */
 function generateRamp(
   grid: MapCell[][],
@@ -457,6 +460,7 @@ function generateRamp(
 ): void {
   const fromElev = legacyElevationTo256(fromNode.elevation as 0 | 1 | 2);
   const toElev = legacyElevationTo256(toNode.elevation as 0 | 1 | 2);
+  const elevDiff = Math.abs(fromNode.elevation - toNode.elevation);
 
   // Calculate direction from fromNode to toNode
   const dirX = toNode.center.x - fromNode.center.x;
@@ -465,46 +469,45 @@ function generateRamp(
   const normX = dirX / distance;
   const normY = dirY / distance;
 
-  // Calculate edge points of each region (where the ramp actually starts/ends)
-  // Use radius + cliff width (3) to place ramp start OUTSIDE the cliff ring
+  // Consistent ramp length based on elevation change
+  // 8 units per level of elevation = moderate slope (~30 degrees)
+  const RAMP_LENGTH_PER_LEVEL = 8;
+  const targetRampLength = Math.max(elevDiff * RAMP_LENGTH_PER_LEVEL, 6);
+
   const fromRadius = fromNode.radius ?? 16;
   const toRadius = toNode.radius ?? 16;
   const cliffWidth = 3;
 
-  // Start point: at edge of fromNode's cliff ring
-  const fromEdge = {
-    x: fromNode.center.x + normX * (fromRadius + cliffWidth),
-    y: fromNode.center.y + normY * (fromRadius + cliffWidth),
+  // Calculate midpoint between the two regions
+  const midX = (fromNode.center.x + toNode.center.x) / 2;
+  const midY = (fromNode.center.y + toNode.center.y) / 2;
+
+  // Position ramp centered at midpoint with consistent length
+  const rampStart = {
+    x: midX - normX * (targetRampLength / 2),
+    y: midY - normY * (targetRampLength / 2),
+  };
+  const rampEnd = {
+    x: midX + normX * (targetRampLength / 2),
+    y: midY + normY * (targetRampLength / 2),
   };
 
-  // End point: at edge of toNode's cliff ring
-  const toEdge = {
-    x: toNode.center.x - normX * (toRadius + cliffWidth),
-    y: toNode.center.y - normY * (toRadius + cliffWidth),
-  };
-
-  // Calculate ramp length (distance between edges)
-  const rampDx = toEdge.x - fromEdge.x;
-  const rampDy = toEdge.y - fromEdge.y;
-  const rampLength = Math.sqrt(rampDx * rampDx + rampDy * rampDy);
-
-  // If regions are very close or overlapping, use minimum ramp length
-  const minRampLength = 6;
-  const actualLength = Math.max(rampLength, minRampLength);
-  const steps = Math.ceil(actualLength);
+  const rampDx = rampEnd.x - rampStart.x;
+  const rampDy = rampEnd.y - rampStart.y;
+  const steps = Math.ceil(targetRampLength);
 
   // Perpendicular direction for ramp width
   const perpX = -normY;
   const perpY = normX;
 
-  // Draw the ramp from edge to edge
+  // Draw the ramp with consistent slope
   for (let s = 0; s <= steps; s++) {
     const t = s / steps;
     // Elevation interpolates across the ramp length
     const elevation = Math.round(fromElev + (toElev - fromElev) * t);
 
-    const cx = fromEdge.x + rampDx * t;
-    const cy = fromEdge.y + rampDy * t;
+    const cx = rampStart.x + rampDx * t;
+    const cy = rampStart.y + rampDy * t;
 
     for (let w = -conn.width / 2; w <= conn.width / 2; w++) {
       const x = Math.floor(cx + perpX * w);
@@ -521,43 +524,85 @@ function generateRamp(
     }
   }
 
-  // Clear cliffs only along the ramp corridor, not around entire region centers
-  // Extend slightly into the cliff ring to ensure smooth connection
-  const clearExtension = cliffWidth + 2;
+  // Clear path from fromNode to ramp start (at fromNode's elevation)
+  const fromEdgeX = fromNode.center.x + normX * fromRadius;
+  const fromEdgeY = fromNode.center.y + normY * fromRadius;
+  const fromToRampDist = Math.sqrt(
+    (rampStart.x - fromEdgeX) ** 2 + (rampStart.y - fromEdgeY) ** 2
+  );
 
-  // Clear from fromNode center toward the ramp
-  for (let ext = 0; ext <= fromRadius + clearExtension; ext++) {
-    const cx = fromNode.center.x + normX * ext;
-    const cy = fromNode.center.y + normY * ext;
+  for (let ext = 0; ext <= fromToRampDist + cliffWidth + 2; ext++) {
+    const cx = fromEdgeX + normX * ext;
+    const cy = fromEdgeY + normY * ext;
 
     for (let w = -conn.width / 2 - 1; w <= conn.width / 2 + 1; w++) {
       const x = Math.floor(cx + perpX * w);
       const y = Math.floor(cy + perpY * w);
 
       if (x >= 0 && x < width && y >= 0 && y < height) {
-        if (grid[y][x].feature === 'cliff' && grid[y][x].terrain === 'unwalkable') {
-          grid[y][x].terrain = 'ground';
-          grid[y][x].feature = 'none';
-          grid[y][x].elevation = fromElev;
+        const cell = grid[y][x];
+        if (cell.terrain === 'unwalkable' || cell.feature === 'cliff') {
+          grid[y][x] = {
+            terrain: 'ground',
+            elevation: fromElev,
+            feature: 'none',
+            textureId: Math.floor(Math.random() * 4),
+          };
         }
       }
     }
   }
 
-  // Clear from toNode center toward the ramp
-  for (let ext = 0; ext <= toRadius + clearExtension; ext++) {
-    const cx = toNode.center.x - normX * ext;
-    const cy = toNode.center.y - normY * ext;
+  // Clear path from toNode to ramp end (at toNode's elevation)
+  const toEdgeX = toNode.center.x - normX * toRadius;
+  const toEdgeY = toNode.center.y - normY * toRadius;
+  const toToRampDist = Math.sqrt(
+    (rampEnd.x - toEdgeX) ** 2 + (rampEnd.y - toEdgeY) ** 2
+  );
+
+  for (let ext = 0; ext <= toToRampDist + cliffWidth + 2; ext++) {
+    const cx = toEdgeX - normX * ext;
+    const cy = toEdgeY - normY * ext;
 
     for (let w = -conn.width / 2 - 1; w <= conn.width / 2 + 1; w++) {
       const x = Math.floor(cx + perpX * w);
       const y = Math.floor(cy + perpY * w);
 
       if (x >= 0 && x < width && y >= 0 && y < height) {
-        if (grid[y][x].feature === 'cliff' && grid[y][x].terrain === 'unwalkable') {
-          grid[y][x].terrain = 'ground';
-          grid[y][x].feature = 'none';
-          grid[y][x].elevation = toElev;
+        const cell = grid[y][x];
+        if (cell.terrain === 'unwalkable' || cell.feature === 'cliff') {
+          grid[y][x] = {
+            terrain: 'ground',
+            elevation: toElev,
+            feature: 'none',
+            textureId: Math.floor(Math.random() * 4),
+          };
+        }
+      }
+    }
+  }
+
+  // Also clear cliffs directly in the ramp area
+  for (let ext = -2; ext <= 2; ext++) {
+    for (let s = 0; s <= steps; s++) {
+      const t = s / steps;
+      const cx = rampStart.x + rampDx * t + normX * ext;
+      const cy = rampStart.y + rampDy * t + normY * ext;
+
+      for (let w = -conn.width / 2 - 2; w <= conn.width / 2 + 2; w++) {
+        const x = Math.floor(cx + perpX * w);
+        const y = Math.floor(cy + perpY * w);
+
+        if (x >= 0 && x < width && y >= 0 && y < height) {
+          if (grid[y][x].feature === 'cliff') {
+            const elevation = Math.round(fromElev + (toElev - fromElev) * t);
+            grid[y][x] = {
+              terrain: 'ramp',
+              elevation,
+              feature: 'none',
+              textureId: Math.floor(Math.random() * 4),
+            };
+          }
         }
       }
     }
@@ -844,14 +889,16 @@ function generateWatchTowers(definition: MapDefinition): WatchTower[] {
 
 /**
  * Generate ramps data from connections
- * Uses edge-to-edge calculation to match the actual ramp geometry
+ * Uses consistent slope calculation to match the actual ramp geometry
  */
 function generateRamps(
   connections: ConnectionDefinition[],
   graph: ConnectivityGraph
 ): Ramp[] {
   const ramps: Ramp[] = [];
-  const cliffWidth = 3;
+
+  // Must match generateRamp() function constants
+  const RAMP_LENGTH_PER_LEVEL = 8;
 
   for (const conn of connections) {
     if (conn.type !== 'ramp') continue;
@@ -868,23 +915,9 @@ function generateRamps(
     const normX = dx / distance;
     const normY = dy / distance;
 
-    // Calculate edge points (matching generateRamp function)
-    const fromRadius = fromNode.radius ?? 16;
-    const toRadius = toNode.radius ?? 16;
-
-    const fromEdge = {
-      x: fromNode.center.x + normX * (fromRadius + cliffWidth),
-      y: fromNode.center.y + normY * (fromRadius + cliffWidth),
-    };
-    const toEdge = {
-      x: toNode.center.x - normX * (toRadius + cliffWidth),
-      y: toNode.center.y - normY * (toRadius + cliffWidth),
-    };
-
-    // Calculate actual ramp dimensions
-    const rampDx = toEdge.x - fromEdge.x;
-    const rampDy = toEdge.y - fromEdge.y;
-    const rampLength = Math.max(Math.sqrt(rampDx * rampDx + rampDy * rampDy), 6);
+    // Consistent ramp length based on elevation change (matching generateRamp)
+    const elevDiff = Math.abs(fromNode.elevation - toNode.elevation);
+    const rampLength = Math.max(elevDiff * RAMP_LENGTH_PER_LEVEL, 6);
 
     // Determine direction
     let direction: 'north' | 'south' | 'east' | 'west' = 'north';
@@ -894,9 +927,9 @@ function generateRamps(
       direction = dy > 0 ? 'south' : 'north';
     }
 
-    // Ramp center is midpoint between edges
-    const centerX = (fromEdge.x + toEdge.x) / 2;
-    const centerY = (fromEdge.y + toEdge.y) / 2;
+    // Ramp center is midpoint between regions (matching generateRamp)
+    const centerX = (fromNode.center.x + toNode.center.x) / 2;
+    const centerY = (fromNode.center.y + toNode.center.y) / 2;
 
     ramps.push({
       x: centerX - conn.width / 2,
