@@ -367,12 +367,15 @@ export const GraphicsOptionsPanel = memo(function GraphicsOptionsPanel() {
           >
             <option value="off">Off</option>
             <option value="fxaa">FXAA (Fast)</option>
-            <option value="taa">TAA (Best Quality)</option>
+            <option value="taa">TAA (High Quality)</option>
           </select>
         </div>
-        {/* TAA-specific settings */}
+        {/* TAA info - now uses proper MRT velocity buffers */}
         {graphicsSettings.antiAliasingMode === 'taa' && (
           <>
+            <div style={{ fontSize: '10px', color: '#22c55e', marginBottom: '8px', padding: '4px', backgroundColor: 'rgba(34, 197, 94, 0.1)', borderRadius: '4px' }}>
+              TAA uses temporal reprojection with motion vectors for high quality anti-aliasing.
+            </div>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
               <span>RCAS Sharpening</span>
               <button
