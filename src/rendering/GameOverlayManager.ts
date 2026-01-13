@@ -70,9 +70,12 @@ export class GameOverlayManager {
    * IMPORTANT: Uses finer resolution (step=1) to match terrain mesh exactly
    * and adds sufficient height offset to prevent z-fighting
    *
-   * CRITICAL FIX: Increased height offset significantly to ensure overlays render
-   * above terrain noise and variations. Previous offset (0.15) was too small and
-   * caused overlays to render below terrain in areas with height noise.
+   * CRITICAL FIX: Overlays must render ABOVE the terrain mesh at all points.
+   * The terrain mesh has noise variations added during geometry creation that
+   * are NOT reflected in the heightMap. To guarantee visibility:
+   * 1. Use a large base offset (1.0 units minimum)
+   * 2. Add additional per-vertex offset based on terrain type
+   * 3. The offset must exceed the maximum possible terrain noise (~0.5 units)
    */
   private createTerrainFollowingGeometry(width: number, height: number, heightOffset: number): THREE.BufferGeometry {
     // Use 1:1 resolution to match terrain mesh exactly
@@ -85,9 +88,13 @@ export class GameOverlayManager {
     const indices: number[] = [];
 
     // Generate vertices with terrain-following heights
-    // CRITICAL: Increased offset from 0.15 to 0.5 to ensure overlays are always visible
-    // The terrain has noise variations up to ~0.3 units, so we need more clearance
-    const effectiveOffset = heightOffset + 0.5;
+    // CRITICAL: Use a LARGE offset to guarantee overlays are always above terrain
+    // The terrain has:
+    // - Base elevation from heightMap
+    // - Additional noise up to ~0.5 units for unwalkable terrain
+    // - Smoothing that can create local variations
+    // Total safe offset: 1.5 units above heightMap value
+    const effectiveOffset = heightOffset + 1.5;
 
     for (let iy = 0; iy <= segmentsY; iy++) {
       for (let ix = 0; ix <= segmentsX; ix++) {
@@ -189,20 +196,19 @@ export class GameOverlayManager {
       `,
       transparent: true,
       depthWrite: false,
+      depthTest: true, // Keep depth test but use polygon offset
       side: THREE.DoubleSide,
-      // CRITICAL: Add polygon offset to push overlay above terrain in depth buffer
-      // This prevents z-fighting and ensures overlay is visible even with depth test
+      // CRITICAL: Use aggressive polygon offset to push overlay above terrain
       polygonOffset: true,
-      polygonOffsetFactor: -1,
-      polygonOffsetUnits: -1,
+      polygonOffsetFactor: -4,
+      polygonOffsetUnits: -4,
     });
 
-    // Create geometry that follows terrain height
-    // Increased base offset from 0.3 to 0.4 for better visibility
-    const geometry = this.createTerrainFollowingGeometry(width, height, 0.4);
+    // Create geometry that follows terrain height with large offset
+    const geometry = this.createTerrainFollowingGeometry(width, height, 0.1);
     this.terrainOverlayMesh = new THREE.Mesh(geometry, material);
     // No rotation needed - geometry is already in world coordinates
-    this.terrainOverlayMesh.renderOrder = 100; // Increased from 90 for higher priority
+    this.terrainOverlayMesh.renderOrder = 500; // High render order for overlay priority
     this.terrainOverlayMesh.visible = false;
     this.scene.add(this.terrainOverlayMesh);
   }
@@ -351,19 +357,19 @@ export class GameOverlayManager {
       `,
       transparent: true,
       depthWrite: false,
+      depthTest: true,
       side: THREE.DoubleSide,
-      // CRITICAL: Add polygon offset to push overlay above terrain in depth buffer
+      // CRITICAL: Use aggressive polygon offset to push overlay above terrain
       polygonOffset: true,
-      polygonOffsetFactor: -1,
-      polygonOffsetUnits: -1,
+      polygonOffsetFactor: -4,
+      polygonOffsetUnits: -4,
     });
 
-    // Create geometry that follows terrain height
-    // Increased base offset from 0.35 to 0.45 for better visibility
-    const geometry = this.createTerrainFollowingGeometry(width, height, 0.45);
+    // Create geometry that follows terrain height with large offset
+    const geometry = this.createTerrainFollowingGeometry(width, height, 0.15);
     this.elevationOverlayMesh = new THREE.Mesh(geometry, material);
     // No rotation needed - geometry is already in world coordinates
-    this.elevationOverlayMesh.renderOrder = 100; // Increased from 90
+    this.elevationOverlayMesh.renderOrder = 500; // High render order for overlay priority
     this.elevationOverlayMesh.visible = false;
     this.scene.add(this.elevationOverlayMesh);
   }
@@ -430,19 +436,19 @@ export class GameOverlayManager {
       `,
       transparent: true,
       depthWrite: false,
+      depthTest: true,
       side: THREE.DoubleSide,
-      // CRITICAL: Add polygon offset to push overlay above terrain in depth buffer
+      // CRITICAL: Use aggressive polygon offset to push overlay above terrain
       polygonOffset: true,
-      polygonOffsetFactor: -1,
-      polygonOffsetUnits: -1,
+      polygonOffsetFactor: -4,
+      polygonOffsetUnits: -4,
     });
 
-    // Create geometry that follows terrain height
-    // Increased base offset from 0.4 to 0.5 for better visibility
-    const geometry = this.createTerrainFollowingGeometry(width, height, 0.5);
+    // Create geometry that follows terrain height with large offset
+    const geometry = this.createTerrainFollowingGeometry(width, height, 0.2);
     this.threatOverlayMesh = new THREE.Mesh(geometry, material);
     // No rotation needed - geometry is already in world coordinates
-    this.threatOverlayMesh.renderOrder = 101; // Increased from 91
+    this.threatOverlayMesh.renderOrder = 501; // Slightly higher than other overlays
     this.threatOverlayMesh.visible = false;
     this.scene.add(this.threatOverlayMesh);
   }
