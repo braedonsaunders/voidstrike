@@ -192,39 +192,88 @@ export function disposeInstancedVelocity(mesh: THREE.InstancedMesh): void {
   velocitySetupMeshes.delete(mesh);
 }
 
-// Velocity threshold to eliminate micro-jitter from floating point precision
-// Values below this threshold (in NDC space) are clamped to zero
-// 0.0001 NDC ≈ 0.1 pixel at 1080p, imperceptible but eliminates precision noise
-const VELOCITY_THRESHOLD = 0.0001;
+// Velocity threshold to eliminate sub-pixel noise
+// 0.00005 NDC ≈ 0.05 pixel at 1080p - imperceptible but eliminates floating point noise
+const VELOCITY_THRESHOLD = 0.00005;
 
 /**
  * Create a TSL velocity node for InstancedMesh objects.
  *
- * Computes per-instance velocity by measuring OBJECT motion only (not camera motion):
- * 1. Reading previous instance matrix from our custom attributes (prevInstanceMatrix0-3)
- * 2. Computing previous world position: prevInstanceMatrix * positionLocal
- * 3. Computing current world position: currentInstanceMatrix * positionLocal
- * 4. Projecting BOTH through the SAME (current) camera matrices
- * 5. Returning the difference as screen-space velocity
+ * WORLD-CLASS VELOCITY CALCULATION:
+ * The key insight is that floating point precision differences between computation
+ * paths cause micro-jitter. We solve this by:
  *
- * IMPORTANT: We use the SAME camera matrices for both positions. This means:
- * - Static objects (where prevInstanceMatrix == currentInstanceMatrix) get zero velocity
- * - Moving objects get velocity based on their motion
- * - Camera motion is handled by TRAA internally via depth-based reprojection
+ * 1. Reading BOTH current and previous instance matrices as attributes
+ * 2. Computing BOTH positions through IDENTICAL code paths
+ * 3. Using the SAME camera matrices for both
+ * 4. Only the instance matrix differs between the two calculations
  *
- * For objects without our velocity attributes (non-instanced meshes), the attributes
- * will default to zeros. We detect this by checking if the matrix is valid (column 3
- * w-component should be 1.0 for affine transforms) and return zero velocity.
+ * This ensures that for static objects (where matrices are identical),
+ * the velocity is EXACTLY zero due to identical floating point operations.
  *
- * Returns a vec2 node representing screen-space velocity in NDC space (-1 to 1).
+ * For InstancedMesh, Three.js stores instance matrices as:
+ * - instanceMatrix0, instanceMatrix1, instanceMatrix2, instanceMatrix3 (current frame)
+ * - prevInstanceMatrix0-3 (our custom attributes for previous frame)
+ *
+ * Returns a vec2 node representing screen-space velocity in NDC space.
  */
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export function createInstancedVelocityNode(): any {
-  // Return zero velocity - let TRAA handle all motion via depth-based reprojection
-  // This eliminates micro-jitter from floating point precision in velocity calculation
-  // TRAA's internal depth reprojection is more robust for static objects
   return Fn(() => {
-    return vec2(0.0, 0.0);
+    // Read CURRENT instance matrix from Three.js built-in attributes
+    const currCol0 = attribute('instanceMatrix0', 'vec4');
+    const currCol1 = attribute('instanceMatrix1', 'vec4');
+    const currCol2 = attribute('instanceMatrix2', 'vec4');
+    const currCol3 = attribute('instanceMatrix3', 'vec4');
+
+    // Read PREVIOUS instance matrix from our custom attributes
+    const prevCol0 = attribute('prevInstanceMatrix0', 'vec4');
+    const prevCol1 = attribute('prevInstanceMatrix1', 'vec4');
+    const prevCol2 = attribute('prevInstanceMatrix2', 'vec4');
+    const prevCol3 = attribute('prevInstanceMatrix3', 'vec4');
+
+    // Check if this is a valid InstancedMesh with our velocity attributes
+    // Valid matrices have w=1 in column 3; missing attributes return zeros (w=0)
+    const hasCurrentMatrix = abs(currCol3.w.sub(float(1.0))).lessThan(float(0.5));
+    const hasPrevMatrix = abs(prevCol3.w.sub(float(1.0))).lessThan(float(0.5));
+    const hasValidMatrices = hasCurrentMatrix.and(hasPrevMatrix);
+
+    // Reconstruct both matrices from columns
+    const currentInstanceMatrix = mat4(currCol0, currCol1, currCol2, currCol3);
+    const prevInstanceMatrix = mat4(prevCol0, prevCol1, prevCol2, prevCol3);
+
+    // IDENTICAL computation path for both positions
+    // This is crucial - same operations = same floating point rounding
+    const localPos = vec4(positionLocal, 1.0);
+
+    // Transform through instance matrix then world matrix
+    const currentInstancePos = currentInstanceMatrix.mul(localPos);
+    const prevInstancePos = prevInstanceMatrix.mul(localPos);
+
+    const currentWorldPos = modelWorldMatrix.mul(currentInstancePos);
+    const prevWorldPos = modelWorldMatrix.mul(prevInstancePos);
+
+    // Project BOTH through identical camera path
+    const currentViewPos = cameraViewMatrix.mul(currentWorldPos);
+    const prevViewPos = cameraViewMatrix.mul(prevWorldPos);
+
+    const currentClipPos = cameraProjectionMatrix.mul(currentViewPos);
+    const prevClipPos = cameraProjectionMatrix.mul(prevViewPos);
+
+    // Convert to NDC
+    const currentNDC = currentClipPos.xy.div(currentClipPos.w);
+    const prevNDC = prevClipPos.xy.div(prevClipPos.w);
+
+    // Velocity is screen-space motion
+    const rawVelocity = currentNDC.sub(prevNDC);
+
+    // Apply threshold to eliminate floating point noise
+    const velocityMagnitude = max(abs(rawVelocity.x), abs(rawVelocity.y));
+    const aboveThreshold = velocityMagnitude.greaterThan(float(VELOCITY_THRESHOLD));
+    const thresholdedVelocity = select(aboveThreshold, rawVelocity, vec2(0.0, 0.0));
+
+    // Return velocity for valid InstancedMesh, zero otherwise
+    return select(hasValidMatrices, thresholdedVelocity, vec2(0.0, 0.0));
   })();
 }
 
