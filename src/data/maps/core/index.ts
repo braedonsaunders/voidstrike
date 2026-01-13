@@ -112,3 +112,87 @@ export {
   formatValidationResult,
   assertValidMapDefinition,
 } from './MapValidator';
+
+// Declarative Map System (100% JSON-serializable)
+export {
+  // Geometry primitives
+  type Point2D,
+  type Size2D,
+  type Bounds2D,
+  type ShapeType,
+  type CircleShape,
+  type RectShape,
+  type EllipseShape,
+  type PolygonShape,
+  type LineShape,
+  type PathShape,
+  type Shape,
+  // Biome & Theme
+  type BiomeTheme,
+  BIOME_THEMES,
+  // Region & Connection definitions
+  type RegionDef,
+  type ConnectionDef,
+  // Terrain features
+  type VoidArea,
+  type WaterArea,
+  type CliffWall,
+  type UnwalkableArea,
+  type RoadPath,
+  type SlowArea,
+  type TerrainFeatures,
+  // Vegetation
+  type ForestDensity,
+  type VegetationType,
+  type ForestArea,
+  type BushCluster,
+  type VegetationScatter,
+  type VegetationConfig as DeclarativeVegetationConfig,
+  // Decorations
+  type DecorationCategory,
+  type RockType,
+  type CrystalType,
+  type DebrisType,
+  type StructureType,
+  type DecorationCluster as DeclarativeDecorationCluster,
+  type DecorationLine,
+  type ExplicitDecoration as DeclarativeExplicitDecoration,
+  type BorderDecorations,
+  type BaseEdgeDecorations,
+  type DecorationConfig as DeclarativeDecorationConfig,
+  // Resources
+  type ResourceTemplateName,
+  type ResourcePlacement,
+  type ResourceConfig,
+  // Game features
+  type WatchTowerDef,
+  type DestructibleRockDef,
+  type NeutralUnitDef,
+  type GameFeatures,
+  // Symmetry
+  type SymmetryType,
+  type SymmetryConfig,
+  // Map structure
+  type MapMeta as DeclarativeMapMeta,
+  type MapCanvas as DeclarativeMapCanvas,
+  type DeclarativeMapDef,
+  // Helper functions
+  circle,
+  rect,
+  line,
+  path,
+  mainBase as declarativeMainBase,
+  natural,
+  expansion,
+  center,
+  ramp,
+  ground,
+  choke,
+} from './DeclarativeMapTypes';
+
+// Declarative Generator
+export {
+  generateFromDeclarative,
+  validateDeclarativeMap,
+  declarativeToMapDefinition,
+} from './DeclarativeMapGenerator';

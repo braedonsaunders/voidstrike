@@ -92,6 +92,7 @@ export { SCORCHED_BASIN } from './ScorchedBasin';
 export { CONTESTED_FRONTIER } from './ContestedFrontier';
 export { TITANS_COLOSSEUM } from './TitansColosseum';
 export { BATTLE_ARENA } from './BattleArena';
+export { SHATTERED_EXPANSE, SHATTERED_EXPANSE_DEF } from './ShatteredExpanse';
 
 import { MapData } from './MapTypes';
 import { VOID_ASSAULT } from './VoidAssault';
@@ -100,6 +101,7 @@ import { SCORCHED_BASIN } from './ScorchedBasin';
 import { CONTESTED_FRONTIER } from './ContestedFrontier';
 import { TITANS_COLOSSEUM } from './TitansColosseum';
 import { BATTLE_ARENA } from './BattleArena';
+import { SHATTERED_EXPANSE } from './ShatteredExpanse';
 
 // All available maps
 export const ALL_MAPS: Record<string, MapData> = {
@@ -109,11 +111,12 @@ export const ALL_MAPS: Record<string, MapData> = {
   [CONTESTED_FRONTIER.id]: CONTESTED_FRONTIER,
   [TITANS_COLOSSEUM.id]: TITANS_COLOSSEUM,
   [BATTLE_ARENA.id]: BATTLE_ARENA,
+  [SHATTERED_EXPANSE.id]: SHATTERED_EXPANSE,
 };
 
 // Maps by player count
 export const MAPS_BY_PLAYER_COUNT: Record<2 | 4 | 6 | 8, MapData[]> = {
-  2: [CRYSTAL_CAVERNS, VOID_ASSAULT],
+  2: [CRYSTAL_CAVERNS, VOID_ASSAULT, SHATTERED_EXPANSE],
   4: [SCORCHED_BASIN],
   6: [CONTESTED_FRONTIER],
   8: [TITANS_COLOSSEUM],
