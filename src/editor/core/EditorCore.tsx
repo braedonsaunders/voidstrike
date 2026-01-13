@@ -32,7 +32,7 @@ import type {
 import { useEditorState } from '../hooks/useEditorState';
 
 // Components
-import { EditorCanvas } from './EditorCanvas';
+import { Editor3DCanvas } from './Editor3DCanvas';
 import { EditorToolbar } from './EditorToolbar';
 import { EditorPanels } from './EditorPanels';
 import { EditorHeader } from './EditorHeader';
@@ -248,21 +248,18 @@ export function EditorCore({
 
       {/* Main content */}
       <div className="flex-1 flex min-h-0">
-        {/* Canvas area */}
+        {/* 3D Canvas area */}
         <div className="flex-1 p-3">
-          <EditorCanvas
+          <Editor3DCanvas
             config={config}
             state={state}
-            onZoomChange={editorState.setZoom}
-            onOffsetChange={editorState.setOffset}
-            onCellUpdate={editorState.updateCell}
-            onCellsUpdate={editorState.updateCells}
             onCellsUpdateBatched={editorState.updateCellsBatched}
             onStartBatch={editorState.startBatch}
             onCommitBatch={editorState.commitBatch}
             onFillArea={editorState.fillArea}
             onObjectSelect={editorState.selectObjects}
             onObjectUpdate={editorState.updateObject}
+            onObjectAdd={editorState.addObject}
           />
         </div>
 
