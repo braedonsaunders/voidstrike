@@ -372,21 +372,6 @@ export const GraphicsOptionsPanel = memo(function GraphicsOptionsPanel() {
         {/* TAA-specific settings */}
         {graphicsSettings.antiAliasingMode === 'taa' && (
           <>
-            <div style={{ marginBottom: '8px' }}>
-              <label style={labelStyle}>
-                History Blend: {graphicsSettings.taaHistoryBlendRate.toFixed(2)}
-              </label>
-              <input
-                type="range"
-                min="0.015"
-                max="0.5"
-                step="0.01"
-                value={graphicsSettings.taaHistoryBlendRate}
-                onChange={(e) => setGraphicsSetting('taaHistoryBlendRate', parseFloat(e.target.value))}
-                style={sliderStyle}
-              />
-              <span style={{ fontSize: '10px', color: '#666' }}>Lower = smoother, higher = sharper</span>
-            </div>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
               <span>RCAS Sharpening</span>
               <button
