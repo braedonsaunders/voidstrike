@@ -36,8 +36,11 @@ import {
   texture,
   mrt,
   output,
-  velocity,
 } from 'three/tsl';
+// velocity is exported from three/tsl but not in @types/three yet
+// eslint-disable-next-line @typescript-eslint/no-require-imports
+import * as TSL from 'three/tsl';
+const velocity = (TSL as any).velocity;
 
 // Import WebGPU post-processing nodes from addons
 import { bloom } from 'three/addons/tsl/display/BloomNode.js';
