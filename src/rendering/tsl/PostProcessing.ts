@@ -71,6 +71,7 @@ const suppressedWarnings = [
   'THREE.AttributeNode: Vertex attribute "prevInstanceMatrix1" not found',
   'THREE.AttributeNode: Vertex attribute "prevInstanceMatrix2" not found',
   'THREE.AttributeNode: Vertex attribute "prevInstanceMatrix3" not found',
+  'THREE.TSL: Vertex attribute "normal" not found',
 ];
 
 function suppressAttributeWarnings(): void {
@@ -363,11 +364,8 @@ export class RenderPipeline {
     // Applied after AO, before bloom - reflections pick up scene color
     if (this.config.ssrEnabled) {
       try {
-        // Get normal texture from MRT and decode from color back to direction
+        // Get normal texture from MRT - SSR handles decoding internally
         const scenePassNormal = scenePass.getTextureNode('normal');
-        const sceneNormal = Fn(() => {
-          return colorToDirection(scenePassNormal.sample(uv()));
-        })();
 
         // Create SSR pass
         // SSR(color, depth, normal, metalness, roughness, camera)
@@ -380,7 +378,7 @@ export class RenderPipeline {
         this.ssrPass = (ssr as any)(
           outputNode,
           scenePassDepth,
-          sceneNormal,
+          scenePassNormal,
           defaultMetalness,
           defaultRoughness,
           this.camera

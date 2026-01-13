@@ -220,53 +220,11 @@ const VELOCITY_THRESHOLD = 0.0001;
  */
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export function createInstancedVelocityNode(): any {
+  // Return zero velocity - let TRAA handle all motion via depth-based reprojection
+  // This eliminates micro-jitter from floating point precision in velocity calculation
+  // TRAA's internal depth reprojection is more robust for static objects
   return Fn(() => {
-    // Read previous instance matrix from our custom attributes
-    // Each attribute is a vec4 representing one column of the 4x4 matrix
-    // For objects without these attributes, Three.js returns zeros
-    const prevCol0 = attribute('prevInstanceMatrix0', 'vec4');
-    const prevCol1 = attribute('prevInstanceMatrix1', 'vec4');
-    const prevCol2 = attribute('prevInstanceMatrix2', 'vec4');
-    const prevCol3 = attribute('prevInstanceMatrix3', 'vec4');
-
-    // Check if attributes exist by testing if column 3's w component is ~1.0
-    // Valid affine transforms have [x, y, z, 1] in the last column
-    // Zero/missing attributes will have w = 0
-    const hasValidMatrix = abs(prevCol3.w.sub(float(1.0))).lessThan(float(0.5));
-
-    // Reconstruct the previous instance matrix from columns
-    const prevInstanceMatrix = mat4(prevCol0, prevCol1, prevCol2, prevCol3);
-
-    // Compute previous world position using previous instance matrix
-    const localPos = vec4(positionLocal, 1.0);
-    const prevInstancePos = prevInstanceMatrix.mul(localPos);
-    const prevWorldPos = modelWorldMatrix.mul(prevInstancePos);
-
-    // Project previous world position through CURRENT camera matrices
-    // This is key: using same camera for both ensures only OBJECT motion is captured
-    // TRAA handles camera motion internally via depth-based reprojection
-    const prevClipPos = cameraProjectionMatrix.mul(cameraViewMatrix.mul(prevWorldPos));
-
-    // Current clip position uses the standard pipeline which includes current instanceMatrix
-    // modelViewMatrix = viewMatrix * modelWorldMatrix * instanceMatrix (for InstancedMesh)
-    const currentClipPos = cameraProjectionMatrix.mul(modelViewMatrix.mul(localPos));
-
-    // Convert to NDC (divide by w)
-    const prevNDC = prevClipPos.xy.div(prevClipPos.w);
-    const currentNDC = currentClipPos.xy.div(currentClipPos.w);
-
-    // Velocity is the difference in NDC space
-    const rawVelocity = currentNDC.sub(prevNDC);
-
-    // Apply velocity threshold to eliminate micro-jitter from floating point precision
-    const velocityMagnitude = max(abs(rawVelocity.x), abs(rawVelocity.y));
-    const aboveThreshold = velocityMagnitude.greaterThan(float(VELOCITY_THRESHOLD));
-    const thresholdedVelocity = select(aboveThreshold, rawVelocity, vec2(0.0, 0.0));
-
-    // Return computed velocity for valid matrices, zero for invalid/missing attributes
-    const velocity = select(hasValidMatrix, thresholdedVelocity, vec2(0.0, 0.0));
-
-    return velocity;
+    return vec2(0.0, 0.0);
   })();
 }
 
