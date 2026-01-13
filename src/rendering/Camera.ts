@@ -55,6 +55,10 @@ export class RTSCamera {
   private screenWidth = 0;
   private screenHeight = 0;
 
+  // Custom viewport bounds for edge scrolling (offsets from screen edges)
+  // Used in editor where UI panels occupy screen space
+  private edgeScrollRightOffset = 0;
+
   // PERF: Store bound event handlers to properly remove them later
   // Using bind() in addEventListener creates new functions that can't be removed
   private boundHandleKeyDown: (e: KeyboardEvent) => void;
@@ -309,9 +313,12 @@ export class RTSCamera {
     if (!this.isMiddleMouseDown && this.edgeScrollEnabled && this.mouseInViewport) {
       const { edgeScrollThreshold, edgeScrollSpeed } = this.config;
 
+      // Calculate effective right edge (accounting for UI panels)
+      const effectiveRightEdge = this.screenWidth - this.edgeScrollRightOffset;
+
       if (this.mousePosition.x < edgeScrollThreshold) {
         dx -= edgeScrollSpeed * dt;
-      } else if (this.mousePosition.x > this.screenWidth - edgeScrollThreshold) {
+      } else if (this.mousePosition.x > effectiveRightEdge - edgeScrollThreshold) {
         dx += edgeScrollSpeed * dt;
       }
 
@@ -435,6 +442,12 @@ export class RTSCamera {
 
   public isEdgeScrollEnabled(): boolean {
     return this.edgeScrollEnabled;
+  }
+
+  // Set right edge offset for edge scrolling (used in editor with right panel)
+  // Pass the width of UI panels on the right side of the screen
+  public setEdgeScrollRightOffset(offset: number): void {
+    this.edgeScrollRightOffset = offset;
   }
 
   public getPosition(): { x: number; z: number } {

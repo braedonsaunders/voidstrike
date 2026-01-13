@@ -185,6 +185,9 @@ export function Editor3DCanvas({
     });
     rtsCameraRef.current = rtsCamera;
 
+    // Set right edge offset for edge scrolling to account for right panel (256px = w-64)
+    rtsCamera.setEdgeScrollRightOffset(256);
+
     // Set terrain height function
     const getHeight = (x: number, z: number) => terrainRef.current?.getHeightAt(x, z) ?? 0;
     rtsCamera.setTerrainHeightFunction(getHeight);
