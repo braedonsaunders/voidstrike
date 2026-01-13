@@ -1121,6 +1121,10 @@ export class Terrain {
    * Generate walkable geometry for navmesh generation.
    * Returns only triangles from walkable terrain (ground and ramps).
    * Used by recast-navigation for navmesh generation.
+   *
+   * CRITICAL: Cliff edges must use FLAT heights to prevent units walking down.
+   * The heightMap has smoothing applied which creates gentle slopes at cliffs.
+   * We override those with flat elevation for cliff edges, but NOT for ramps.
    */
   public generateWalkableGeometry(): { positions: Float32Array; indices: Uint32Array } {
     const terrain = this.mapData.terrain;
@@ -1131,89 +1135,59 @@ export class Terrain {
     const walkableIndices: number[] = [];
     let vertexIndex = 0;
 
-    // Helper: Check if a cell is at a cliff edge where the navmesh might slope down incorrectly
-    // A cliff edge is a walkable cell where:
-    // 1. It's adjacent to an unwalkable cell (cliff), AND
-    // 2. There's ground at a DIFFERENT elevation within 3 cells (the cliff leads somewhere)
-    // 3. It's NOT near a ramp (ramps handle their own elevation transitions)
-    // This prevents navmesh from creating slopes down cliff faces
-    const isCliffEdgeCell = (cx: number, cy: number): boolean => {
-      const cell = terrain[cy][cx];
-      if (cell.terrain === 'ramp') return false; // Ramps should use interpolated heights
+    // Pre-compute a map of which cells are ramps or adjacent to ramps
+    // This is used to determine when to use heightMap vs flat elevation
+    const rampZone = new Set<string>();
+    const RAMP_ZONE_RADIUS = 2; // Cells within 2 of a ramp use heightMap
 
-      // CRITICAL: Check for nearby ramps FIRST - ramp transition zones should NOT be treated as cliff edges
-      // This is the key fix for ramp walkability - cells near ramps need smooth height transitions
-      const rampSearchRadius = 5; // Generous radius to cover ramp entry/exit zones
-      for (let rdy = -rampSearchRadius; rdy <= rampSearchRadius; rdy++) {
-        for (let rdx = -rampSearchRadius; rdx <= rampSearchRadius; rdx++) {
-          const rx = cx + rdx;
-          const ry = cy + rdy;
-          if (rx >= 0 && rx < width && ry >= 0 && ry < height) {
-            if (terrain[ry][rx].terrain === 'ramp') {
-              return false; // Near a ramp - use heightmap values, not flat cliff edge
+    for (let y = 0; y < height; y++) {
+      for (let x = 0; x < width; x++) {
+        if (terrain[y][x].terrain === 'ramp') {
+          // Mark this ramp cell and surrounding area
+          for (let dy = -RAMP_ZONE_RADIUS; dy <= RAMP_ZONE_RADIUS; dy++) {
+            for (let dx = -RAMP_ZONE_RADIUS; dx <= RAMP_ZONE_RADIUS; dx++) {
+              const nx = x + dx;
+              const ny = y + dy;
+              if (nx >= 0 && nx < width && ny >= 0 && ny < height) {
+                rampZone.add(`${nx},${ny}`);
+              }
             }
           }
         }
       }
+    }
 
+    // Helper: Check if cell is at a cliff edge (adjacent to unwalkable with elevation diff)
+    const isCliffEdge = (cx: number, cy: number): boolean => {
+      const cell = terrain[cy][cx];
       const cellElev = cell.elevation;
-      let hasAdjacentCliff = false;
 
-      // First, check if adjacent to any unwalkable cell (cliff/obstacle)
+      // Check 8 neighbors for unwalkable terrain
       for (let dy = -1; dy <= 1; dy++) {
         for (let dx = -1; dx <= 1; dx++) {
           if (dx === 0 && dy === 0) continue;
           const nx = cx + dx;
           const ny = cy + dy;
           if (nx >= 0 && nx < width && ny >= 0 && ny < height) {
-            if (terrain[ny][nx].terrain === 'unwalkable') {
-              hasAdjacentCliff = true;
-              break;
-            }
-          }
-        }
-        if (hasAdjacentCliff) break;
-      }
-
-      if (!hasAdjacentCliff) return false;
-
-      // Now check if there's ground at a different elevation within range
-      // This confirms we're at a cliff edge (not just next to a same-level obstacle)
-      const checkRange = 4;
-      for (let dy = -checkRange; dy <= checkRange; dy++) {
-        for (let dx = -checkRange; dx <= checkRange; dx++) {
-          if (dx === 0 && dy === 0) continue;
-          const nx = cx + dx;
-          const ny = cy + dy;
-          if (nx >= 0 && nx < width && ny >= 0 && ny < height) {
             const neighbor = terrain[ny][nx];
-            // Found walkable ground at different elevation
-            if (neighbor.terrain !== 'unwalkable' && neighbor.terrain !== 'ramp') {
-              const elevDiff = Math.abs(neighbor.elevation - cellElev);
-              if (elevDiff > 30) { // More than ~1.2 height units difference
-                return true;
+            if (neighbor.terrain === 'unwalkable') {
+              // Check if there's ground at different elevation beyond the cliff
+              // This confirms it's actually a cliff edge, not just a wall
+              for (let dy2 = -3; dy2 <= 3; dy2++) {
+                for (let dx2 = -3; dx2 <= 3; dx2++) {
+                  const nx2 = cx + dx2;
+                  const ny2 = cy + dy2;
+                  if (nx2 >= 0 && nx2 < width && ny2 >= 0 && ny2 < height) {
+                    const farCell = terrain[ny2][nx2];
+                    if (farCell.terrain === 'ground' || farCell.terrain === 'unbuildable') {
+                      const elevDiff = Math.abs(farCell.elevation - cellElev);
+                      if (elevDiff > 40) { // ~1.6 height units difference
+                        return true;
+                      }
+                    }
+                  }
+                }
               }
-            }
-          }
-        }
-      }
-      return false;
-    };
-
-    // Helper: Check if cell is adjacent to a ramp
-    // CRITICAL: Use larger search radius to properly handle wide ramps (10+ cells)
-    // and ensure transition zones at ramp entry/exit points are walkable
-    // The radius MUST match or exceed the rampSearchRadius in isCliffEdgeCell (5)
-    // to ensure consistent behavior between cliff edge detection and ramp adjacency
-    const isAdjacentToRamp = (cx: number, cy: number): boolean => {
-      const searchRadius = 6; // Must be >= rampSearchRadius (5) + 1 for full coverage
-      for (let dy = -searchRadius; dy <= searchRadius; dy++) {
-        for (let dx = -searchRadius; dx <= searchRadius; dx++) {
-          const nx = cx + dx;
-          const ny = cy + dy;
-          if (nx >= 0 && nx < width && ny >= 0 && ny < height) {
-            if (terrain[ny][nx].terrain === 'ramp') {
-              return true;
             }
           }
         }
@@ -1236,43 +1210,25 @@ export class Terrain {
         // Determine heights for this cell's vertices
         let h00: number, h10: number, h01: number, h11: number;
 
-        const adjacentToRamp = isAdjacentToRamp(x, y);
-        const atCliffEdge = isCliffEdgeCell(x, y);
+        const inRampZone = rampZone.has(`${x},${y}`);
+        const atCliffEdge = !inRampZone && isCliffEdge(x, y);
 
-        if (cell.terrain === 'ramp') {
-          // RAMPS: Always use heightMap values for proper slope
+        if (cell.terrain === 'ramp' || inRampZone) {
+          // RAMPS and RAMP-ADJACENT: Use heightMap for smooth slopes
           h00 = this.heightMap[y * this.gridWidth + x];
           h10 = this.heightMap[y * this.gridWidth + (x + 1)];
           h01 = this.heightMap[(y + 1) * this.gridWidth + x];
           h11 = this.heightMap[(y + 1) * this.gridWidth + (x + 1)];
-        } else if (atCliffEdge && !adjacentToRamp) {
-          // CLIFF EDGE (not near ramp): Use FLAT height at cell's elevation
-          // This prevents navmesh from creating slopes down cliffs that units can walk on
+        } else if (atCliffEdge) {
+          // CLIFF EDGE: Use FLAT height to prevent slope down cliff
           const flatHeight = elevationToHeight(cell.elevation);
           h00 = h10 = h01 = h11 = flatHeight;
         } else {
-          // NORMAL GROUND or RAMP-ADJACENT: Use heightMap values
+          // NORMAL GROUND: Use heightMap
           h00 = this.heightMap[y * this.gridWidth + x];
           h10 = this.heightMap[y * this.gridWidth + (x + 1)];
           h01 = this.heightMap[(y + 1) * this.gridWidth + x];
           h11 = this.heightMap[(y + 1) * this.gridWidth + (x + 1)];
-        }
-
-        // Height variation check - exclude cells with extreme differences
-        // CRITICAL: Do NOT skip cells adjacent to ramps or ramp cells themselves
-        // Ramp transition zones often have large height differences by design
-        const heights = [h00, h10, h01, h11];
-        const minH = Math.min(...heights);
-        const maxH = Math.max(...heights);
-        const heightRange = maxH - minH;
-
-        // Skip non-ramp cells with excessive height variation ONLY if:
-        // 1. Not a ramp cell AND
-        // 2. Not adjacent to any ramp AND
-        // 3. Height variation exceeds threshold
-        // The threshold is raised to 3.0 to allow for natural terrain transitions
-        if (cell.terrain !== 'ramp' && !adjacentToRamp && heightRange > 3.0) {
-          continue;
         }
 
         // Create two triangles for this cell (CCW winding for Recast)
