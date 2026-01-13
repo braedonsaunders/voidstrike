@@ -746,6 +746,213 @@ const terrainSpeedMod = getTerrainSpeedModifier(x, y, isFlying);
 targetSpeed *= terrainSpeedMod;
 ```
 
+## Connectivity-First Map System (NEW)
+
+### Overview
+
+The game now features a **connectivity-first map architecture** that solves persistent ramp/cliff pathfinding issues. Instead of inferring walkability from terrain geometry, walkability is defined as an **explicit connectivity graph**.
+
+Key principle: If two regions are connected in the graph, units CAN walk between them. The navmesh is generated FROM this graph, not the other way around.
+
+### Core Components (`src/data/maps/core/`)
+
+```
+core/
+├── MapConnectivity.ts   # Connectivity graph types & algorithms
+├── MapDefinition.ts     # defineMap() DSL and types
+├── MapGenerator.ts      # Terrain generation from definition
+├── MapValidator.ts      # Validation with clear errors
+└── index.ts             # Public API exports
+```
+
+### MapConnectivity.ts - Graph System
+
+```typescript
+// Regions are nodes in the graph
+interface ConnectivityNode {
+  id: NodeId;
+  type: RegionType;  // 'main_base' | 'natural' | 'third' | 'center' | etc.
+  center: { x: number; y: number };
+  elevation: number;  // 0, 1, or 2
+  radius: number;
+  playerSlot?: number;
+  resources?: { minerals: number; vespene: number };
+}
+
+// Connections are edges
+interface ConnectivityEdge {
+  from: NodeId;
+  to: NodeId;
+  type: ConnectionType;  // 'ramp' | 'ground' | 'bridge' | 'narrow' | 'wide'
+  width: number;
+  waypoints?: Array<{ x: number; y: number }>;
+  blockedBy?: string;  // Destructible ID
+}
+
+// Graph queries
+findPath(graph, start, end);           // BFS pathfinding
+getReachableNodes(graph, start);       // Flood fill
+areConnected(graph, nodeA, nodeB);     // Direct connection check
+validateConnectivity(graph);           // Ensure all spawns connected
+```
+
+### MapDefinition.ts - Declarative DSL
+
+```typescript
+// Define a map using the fluent API
+const myMap = defineMap({
+  meta: {
+    id: 'my_map',
+    name: 'My Custom Map',
+    author: 'Player',
+    description: 'A 2-player map',
+  },
+
+  canvas: {
+    width: 200,
+    height: 200,
+    biome: 'volcanic',
+    baseElevation: 1,
+  },
+
+  symmetry: {
+    type: 'mirror_x',
+    playerCount: 2,
+  },
+
+  // Explicit region definitions
+  regions: [
+    mainBase('p1_main', { x: 40, y: 100 }, 1, { elevation: 2 }),
+    mainBase('p2_main', { x: 160, y: 100 }, 2, { elevation: 2 }),
+    naturalExpansion('p1_nat', { x: 60, y: 100 }, 1),
+    naturalExpansion('p2_nat', { x: 140, y: 100 }, 2),
+    mapCenter('center', { x: 100, y: 100 }),
+  ],
+
+  // Explicit connections (ramps, paths)
+  connections: [
+    { from: 'p1_main', to: 'p1_nat', type: 'ramp', width: 8 },
+    { from: 'p2_main', to: 'p2_nat', type: 'ramp', width: 8 },
+    { from: 'p1_nat', to: 'center', type: 'ground', width: 12 },
+    { from: 'p2_nat', to: 'center', type: 'ground', width: 12 },
+  ],
+
+  // Terrain features (obstacles, voids, water)
+  terrain: {
+    obstacles: [{ type: 'rocks', shape: 'circle', position: { x: 100, y: 80 }, radius: 8 }],
+    voids: [{ shape: 'circle', position: { x: 0, y: 0 }, radius: 15 }],
+  },
+
+  // Game features
+  features: {
+    watchTowers: [{ id: 'tower1', position: { x: 100, y: 100 }, visionRadius: 22 }],
+    destructibles: [{ id: 'rocks1', type: 'rocks', position: { x: 100, y: 60 }, health: 1500 }],
+  },
+
+  // Decoration configuration
+  decorations: {
+    borderWalls: { enabled: true, /* ... */ },
+    clusters: [{ type: 'rock', position: { x: 50, y: 50 }, radius: 10, count: { min: 3, max: 6 } }],
+  },
+});
+```
+
+### MapGenerator.ts - Terrain Generation
+
+```typescript
+// Generate complete MapData from definition
+const mapData = generateMapFromDefinition(definition);
+
+// The generator:
+// 1. Creates base terrain grid
+// 2. Applies terrain features (voids, obstacles, water)
+// 3. Generates elevated regions from the graph
+// 4. Creates ramps/paths from connections
+// 5. Ensures connectivity by carving paths if needed
+// 6. Generates resources, spawns, watch towers, decorations
+```
+
+### MapValidator.ts - Validation
+
+```typescript
+// Validate before generation
+const result = validateMapDefinition(definition);
+
+if (!result.valid) {
+  console.error(formatValidationResult(result));
+  // Output:
+  // ✗ Map definition has errors
+  //   2 error(s), 1 warning(s), 0 info
+  //
+  // ERRORS:
+  //   ✗ [BASES_NOT_CONNECTED] Main base "p1_main" cannot reach "p2_main"
+  //     → Ensure all main bases are connected through the map
+}
+```
+
+### Why This Architecture?
+
+**The Problem**: The old system had THREE representations that needed to agree:
+1. Tile Grid (`MapCell[][]`) - logical data
+2. 3D Heightmap - for rendering
+3. NavMesh (Recast) - for pathfinding
+
+Each layer decided walkability independently using heuristics (slope angle, height difference, etc.). When ramps didn't align perfectly, units would either walk off cliffs OR ramps would become unwalkable.
+
+**The Solution**: Connectivity-First means:
+1. Walkability is an **explicit graph** defined at map creation
+2. Terrain is generated **from** the graph, not vice versa
+3. NavMesh uses **permissive settings** (`walkableSlopeAngle: 85`, `walkableClimb: 5.0`)
+4. Cliffs are blocked by **not including them in geometry**, not by slope heuristics
+
+### RecastNavigation Config Updates
+
+```typescript
+// Permissive config - geometry determines walkability
+const NAVMESH_CONFIG = {
+  cs: 0.5,
+  ch: 0.3,
+  walkableSlopeAngle: 85,  // Very permissive - let geometry decide
+  walkableHeight: 2,
+  walkableClimb: 5.0,      // High climb - ramps can be steep
+  walkableRadius: 0.6,
+  maxSimplificationError: 1.0,
+  tileSize: 48,
+};
+```
+
+### Creating New Maps
+
+```typescript
+// 1. Import from core module
+import { defineMap, generateMapFromDefinition, validateMapDefinition } from '@/data/maps/core';
+
+// 2. Define your map
+const MY_MAP_DEF = defineMap({
+  meta: { id: 'my_map', name: 'My Map', author: 'Me', description: '...' },
+  canvas: { width: 200, height: 200, biome: 'grassland' },
+  symmetry: { type: 'mirror_x', playerCount: 2 },
+  regions: [
+    // Use helper functions for common patterns
+    mainBase('p1_main', { x: 40, y: 100 }, 1),
+    // ... more regions
+  ],
+  connections: [
+    { from: 'p1_main', to: 'p1_nat', type: 'ramp', width: 8 },
+    // ... more connections
+  ],
+});
+
+// 3. Validate
+const result = validateMapDefinition(MY_MAP_DEF);
+if (!result.valid) throw new Error(formatValidationResult(result));
+
+// 4. Generate MapData
+export const MY_MAP = generateMapFromDefinition(MY_MAP_DEF);
+```
+
+See `src/data/maps/examples/SimpleArena.ts` for a complete working example.
+
 ## Biome & Environment System
 
 ### Biome Configuration (`src/rendering/Biomes.ts`)

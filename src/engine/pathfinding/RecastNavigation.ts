@@ -28,6 +28,13 @@ import { debugPathfinding } from '@/utils/debugLogger';
 // NavMesh generation config - tuned for RTS gameplay
 // IMPORTANT: Cell size determines path precision around obstacles
 // Safari has stricter memory limits, so we use larger cells for compatibility
+//
+// CONNECTIVITY-FIRST ARCHITECTURE:
+// The walkable geometry passed to navmesh generation is now EXPLICITLY walkable
+// based on the map's connectivity graph. We use PERMISSIVE settings here to let
+// the geometry (not slope/height heuristics) determine what's walkable.
+// Cliffs are blocked by NOT including them in the walkable geometry, not by
+// slope angle limits.
 const NAVMESH_CONFIG: Partial<TileCacheGeneratorConfig> = {
   // Cell size - larger = less memory usage, better Safari compatibility
   // 0.5 units provides good precision while staying within memory limits
@@ -35,13 +42,13 @@ const NAVMESH_CONFIG: Partial<TileCacheGeneratorConfig> = {
   // Cell height - vertical precision
   ch: 0.3,
   // Agent parameters
-  // Increased slope angle to allow units to traverse ramps (which can be steep)
-  walkableSlopeAngle: 60,
+  // PERMISSIVE: High slope angle - ramps ARE walkable by explicit connectivity
+  // The geometry itself determines walkability, not the slope angle
+  walkableSlopeAngle: 85,
   walkableHeight: 2,
-  // Climb height - keep low to prevent cliff traversal
-  // Cells with height variation > 1.5 are excluded from navmesh (see Terrain.ts)
-  // This provides a safety margin
-  walkableClimb: 1.0,
+  // PERMISSIVE: High climb - ramps can have steep transitions
+  // Cliffs are handled by NOT including them in walkable geometry
+  walkableClimb: 5.0,
   // Walkable radius defines minimum clearance from obstacles
   // Must match or exceed agent collision radius for proper avoidance
   walkableRadius: 0.6,
@@ -55,12 +62,15 @@ const NAVMESH_CONFIG: Partial<TileCacheGeneratorConfig> = {
 
 // Fallback solo navmesh config (no dynamic obstacles, but more robust)
 // Used when tiled generation fails (e.g., Safari memory limits)
+// Uses same PERMISSIVE settings as tiled config
 const SOLO_NAVMESH_CONFIG: Partial<SoloNavMeshGeneratorConfig> = {
   cs: 0.5,
   ch: 0.3,
-  walkableSlopeAngle: 60,
+  // PERMISSIVE: High slope angle - geometry determines walkability
+  walkableSlopeAngle: 85,
   walkableHeight: 2,
-  walkableClimb: 1.0,
+  // PERMISSIVE: High climb - ramps can be steep
+  walkableClimb: 5.0,
   walkableRadius: 0.6,
   maxSimplificationError: 1.0,
 };
