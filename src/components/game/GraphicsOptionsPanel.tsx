@@ -220,6 +220,55 @@ export const GraphicsOptionsPanel = memo(function GraphicsOptionsPanel() {
         </div>
       </div>
 
+      {/* === SCREEN SPACE REFLECTIONS === */}
+      <div style={sectionStyle}>
+        <div style={sectionTitleStyle}>Screen Space Reflections (SSR)</div>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
+          <span>Enable SSR</span>
+          <button
+            onClick={() => handleToggle('ssrEnabled')}
+            style={buttonStyle(graphicsSettings.ssrEnabled)}
+          >
+            {graphicsSettings.ssrEnabled ? 'ON' : 'OFF'}
+          </button>
+        </div>
+        {graphicsSettings.ssrEnabled && (
+          <>
+            <div style={{ fontSize: '10px', color: '#22c55e', marginBottom: '8px', padding: '4px', backgroundColor: 'rgba(34, 197, 94, 0.1)', borderRadius: '4px' }}>
+              Real-time reflections on metallic surfaces.
+            </div>
+            <div style={{ marginBottom: '8px' }}>
+              <label style={labelStyle}>
+                Opacity: {graphicsSettings.ssrOpacity.toFixed(2)}
+              </label>
+              <input
+                type="range"
+                min="0"
+                max="1"
+                step="0.1"
+                value={graphicsSettings.ssrOpacity}
+                onChange={(e) => setGraphicsSetting('ssrOpacity', parseFloat(e.target.value))}
+                style={sliderStyle}
+              />
+            </div>
+            <div>
+              <label style={labelStyle}>
+                Max Roughness: {graphicsSettings.ssrMaxRoughness.toFixed(2)}
+              </label>
+              <input
+                type="range"
+                min="0"
+                max="1"
+                step="0.1"
+                value={graphicsSettings.ssrMaxRoughness}
+                onChange={(e) => setGraphicsSetting('ssrMaxRoughness', parseFloat(e.target.value))}
+                style={sliderStyle}
+              />
+            </div>
+          </>
+        )}
+      </div>
+
       {/* === BLOOM === */}
       <div style={sectionStyle}>
         <div style={sectionTitleStyle}>Bloom</div>

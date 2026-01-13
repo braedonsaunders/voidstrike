@@ -85,6 +85,11 @@ export interface GraphicsSettings {
   taaSharpeningEnabled: boolean;
   taaSharpeningIntensity: number; // 0.0-1.0
 
+  // SSR (Screen Space Reflections)
+  ssrEnabled: boolean;
+  ssrOpacity: number; // 0.0-1.0, reflection intensity
+  ssrMaxRoughness: number; // 0.0-1.0, max roughness for reflections
+
   // Resolution upscaling (EASU - Edge-Adaptive Spatial Upsampling)
   upscalingMode: UpscalingMode;
   renderScale: number; // 0.5-1.0, internal render resolution
@@ -284,6 +289,11 @@ export const useUIStore = create<UIState>((set, get) => ({
     taaHistoryBlendRate: 0.1, // Default blend rate (90% history, 10% current)
     taaSharpeningEnabled: true, // Counter TAA blur with RCAS
     taaSharpeningIntensity: 0.5, // Moderate sharpening
+
+    // SSR (Screen Space Reflections) - disabled by default (expensive)
+    ssrEnabled: false,
+    ssrOpacity: 1.0, // Full reflection intensity when enabled
+    ssrMaxRoughness: 0.5, // Only reflect on moderately smooth surfaces
 
     // Resolution upscaling - disabled by default (native resolution)
     upscalingMode: 'off' as UpscalingMode,
