@@ -998,19 +998,19 @@ export class Terrain {
     const { width, height, terrain } = this.mapData;
     const temp = new Float32Array(this.heightMap.length);
 
-    // Helper to check if a vertex touches a ramp cell or is adjacent to one
-    // (protecting adjacent vertices prevents discontinuities at ramp edges)
-    const isRampOrAdjacentVertex = (vx: number, vy: number): boolean => {
+    // Helper to check if a vertex touches a ramp cell
+    const isRampVertex = (vx: number, vy: number): boolean => {
       // A vertex at (vx, vy) touches up to 4 cells
-      // Also check cells that are 1 step further out to protect the ramp boundary
-      for (let dy = -2; dy <= 1; dy++) {
-        for (let dx = -2; dx <= 1; dx++) {
-          const cx = vx + dx;
-          const cy = vy + dy;
-          if (cx >= 0 && cx < width && cy >= 0 && cy < height) {
-            if (terrain[cy][cx].terrain === 'ramp') {
-              return true;
-            }
+      const cellCoords = [
+        { cx: vx - 1, cy: vy - 1 },
+        { cx: vx, cy: vy - 1 },
+        { cx: vx - 1, cy: vy },
+        { cx: vx, cy: vy },
+      ];
+      for (const { cx, cy } of cellCoords) {
+        if (cx >= 0 && cx < width && cy >= 0 && cy < height) {
+          if (terrain[cy][cx].terrain === 'ramp') {
+            return true;
           }
         }
       }
@@ -1058,10 +1058,9 @@ export class Terrain {
         for (let x = 0; x <= width; x++) {
           const idx = y * this.gridWidth + x;
 
-          // SKIP RAMP VERTICES AND ADJACENT - preserve their exact calculated heights
+          // SKIP RAMP VERTICES - preserve their exact calculated heights
           // This ensures ramps stay as clean linear slopes, not smoothed flat steps
-          // Also protects adjacent vertices to prevent discontinuities at ramp boundaries
-          if (isRampOrAdjacentVertex(x, y)) {
+          if (isRampVertex(x, y)) {
             temp[idx] = this.heightMap[idx];
             continue;
           }
