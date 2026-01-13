@@ -566,27 +566,12 @@ export function Editor3DCanvas({
     e.preventDefault();
   }, []);
 
-  // Double click to place object
+  // Double click handler - currently disabled to prevent accidental object creation
+  // Objects should be added from the panel instead
   const handleDoubleClick = useCallback((e: React.MouseEvent) => {
-    if (activeTool !== 'select') return;
-
-    const worldPos = raycastToTerrain(e.clientX, e.clientY);
-    if (!worldPos) return;
-
-    const gridPos = worldToGrid(worldPos);
-    if (!gridPos) return;
-
-    const firstObjType = config.objectTypes[0];
-    if (firstObjType) {
-      onObjectAdd({
-        type: firstObjType.id,
-        x: gridPos.x,
-        y: gridPos.y,
-        radius: firstObjType.defaultRadius,
-        properties: {},
-      });
-    }
-  }, [activeTool, config.objectTypes, raycastToTerrain, worldToGrid, onObjectAdd]);
+    // Intentionally empty - double-click was causing accidental object creation
+    // when trying to select objects quickly
+  }, []);
 
   // Get cursor style
   const getCursor = () => {
