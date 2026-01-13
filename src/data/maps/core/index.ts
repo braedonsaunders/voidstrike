@@ -140,6 +140,8 @@ export {
   type UnwalkableArea,
   type RoadPath,
   type SlowArea,
+  type ElevationArea,
+  type ElevationGradient,
   type TerrainFeatures,
   // Vegetation
   type ForestDensity,
