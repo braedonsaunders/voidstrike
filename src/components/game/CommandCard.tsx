@@ -87,6 +87,11 @@ const COMMAND_ICONS: Record<string, string> = {
   scanner_sweep: '📡',
   supply_drop: '📦',
   scanner: '📡',
+  // Transform modes
+  transform_fighter: '✈',
+  transform_assault: '⬇',
+  fighter: '✈',
+  assault: '⬇',
   default: '◆',
 };
 
@@ -246,6 +251,53 @@ function CommandCardInner() {
           action: () => {},
           tooltip: 'Patrol between points',
         });
+
+        // Transform commands for units that can transform (e.g., Valkyrie)
+        if (unit.canTransform && unit.transformModes.length > 0) {
+          const currentMode = unit.getCurrentMode();
+          const isTransforming = unit.state === 'transforming';
+
+          // Add a button for each available transform mode (except current mode)
+          for (const mode of unit.transformModes) {
+            if (mode.id === unit.currentMode) continue; // Skip current mode
+
+            // Determine icon and shortcut based on mode
+            const isAirMode = mode.isFlying === true;
+            const icon = isAirMode ? '✈' : '⬇';
+            const shortcut = isAirMode ? 'F' : 'E'; // F for Fighter, E for assEmble (ground)
+
+            // Build tooltip with mode stats
+            let tooltip = `Transform to ${mode.name}`;
+            if (isAirMode) {
+              tooltip += ' - Flying, attacks air units only';
+            } else {
+              tooltip += ' - Ground, attacks ground units only';
+            }
+            tooltip += ` (${mode.transformTime}s)`;
+
+            buttons.push({
+              id: `transform_${mode.id}`,
+              label: mode.name.replace(' Mode', ''),
+              shortcut,
+              action: () => {
+                const localPlayer = getLocalPlayerId();
+                if (localPlayer) {
+                  game.processCommand({
+                    tick: game.getCurrentTick(),
+                    playerId: localPlayer,
+                    type: 'TRANSFORM',
+                    entityIds: selectedUnits,
+                    targetMode: mode.id,
+                  });
+                }
+              },
+              isDisabled: isTransforming,
+              tooltip: isTransforming
+                ? `Transforming... (${Math.round(unit.transformProgress * 100)}%)`
+                : tooltip,
+            });
+          }
+        }
 
         // Worker-specific commands
         if (unit.isWorker) {

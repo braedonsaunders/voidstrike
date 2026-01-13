@@ -91,8 +91,8 @@ const VALKYRIE_MODES: TransformMode[] = [
     isFlying: false,
     canMove: true,
     transformTime: 2.25,
-    canAttackGround: true, // Ground assault mode - can attack both
-    canAttackAir: true,
+    canAttackGround: true, // Ground assault mode - ground only
+    canAttackAir: false,   // Cannot attack air in assault mode (like SC2 Viking)
   },
 ];
 
@@ -325,7 +325,7 @@ export const UNIT_DEFINITIONS: Record<string, UnitDefinition> = {
   valkyrie: {
     id: 'valkyrie',
     name: 'Valkyrie',
-    description: 'Transforming fighter. Fighter mode: air only. Assault mode: ground and air.',
+    description: 'Transforming fighter. Fighter mode (flying): attacks air only. Assault mode (ground): attacks ground only.',
     faction: 'dominion',
     mineralCost: 150,
     vespeneCost: 75,
