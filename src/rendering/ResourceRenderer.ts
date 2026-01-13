@@ -7,6 +7,7 @@ import { Selectable } from '@/engine/components/Selectable';
 import { Terrain } from './Terrain';
 import AssetManager from '@/assets/AssetManager';
 import { debugMesh } from '@/utils/debugLogger';
+import { setupInstancedVelocity, swapInstanceMatrices, disposeInstancedVelocity } from './tsl/InstancedVelocity';
 
 interface InstancedResourceGroup {
   mesh: THREE.InstancedMesh;
@@ -219,6 +220,9 @@ export class ResourceRenderer {
       instancedMesh.frustumCulled = false;
 
       this.scene.add(instancedMesh);
+
+      // Set up previous instance matrix attributes for TAA velocity
+      setupInstancedVelocity(instancedMesh);
 
       // Clamp values to reasonable ranges to prevent underground rendering or invisible scales
       if (yOffset < 0) {
@@ -460,12 +464,21 @@ export class ResourceRenderer {
   }
 
   public update(): void {
-    const entities = this.world.getEntitiesWith('Transform', 'Resource');
+    // TAA: Sort entities by ID for stable instance ordering
+    // This ensures previous/current matrix pairs are aligned correctly for velocity
+    const entities = [...this.world.getEntitiesWith('Transform', 'Resource')].sort((a, b) => a.id - b.id);
     // PERF: Reuse pre-allocated Set instead of creating new one every frame
     this._currentIds.clear();
 
     // PERF: Update frustum for culling
     this.updateFrustum();
+
+    // TAA: Copy current instance matrices to previous BEFORE resetting counts
+    for (const group of this.instancedGroups.values()) {
+      if (group.mesh.count > 0) {
+        swapInstanceMatrices(group.mesh);
+      }
+    }
 
     // Reset instance counts
     // PERF: Use .length = 0 instead of = [] to avoid GC pressure from allocating new arrays every frame
@@ -713,6 +726,7 @@ export class ResourceRenderer {
 
   public dispose(): void {
     for (const group of this.instancedGroups.values()) {
+      disposeInstancedVelocity(group.mesh);
       this.scene.remove(group.mesh);
       group.mesh.geometry.dispose();
       if (group.mesh.material instanceof THREE.Material) {

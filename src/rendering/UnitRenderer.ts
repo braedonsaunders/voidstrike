@@ -10,6 +10,7 @@ import { AssetManager, AnimationMappingConfig } from '@/assets/AssetManager';
 import { Terrain } from './Terrain';
 import { getPlayerColor, getLocalPlayerId, isSpectatorMode } from '@/store/gameSetupStore';
 import { debugAnimation, debugAssets, debugPerformance } from '@/utils/debugLogger';
+import { setupInstancedVelocity, swapInstanceMatrices, disposeInstancedVelocity } from './tsl/InstancedVelocity';
 
 // Instance data for a single unit type + player combo (non-animated units)
 interface InstancedUnitGroup {
@@ -453,6 +454,9 @@ export class UnitRenderer {
       // Units render AFTER ground effects (5) but BEFORE damage numbers (100)
       instancedMesh.renderOrder = 50;
 
+      // Set up previous instance matrix attributes for TAA velocity
+      setupInstancedVelocity(instancedMesh);
+
       this.scene.add(instancedMesh);
 
       group = {
@@ -539,12 +543,22 @@ export class UnitRenderer {
 
   public update(deltaTime: number = 1/60): void {
     const updateStart = performance.now();
-    const entities = this.world.getEntitiesWith('Transform', 'Unit');
+    // TAA: Sort entities by ID for stable instance ordering
+    // This ensures previous/current matrix pairs are aligned correctly for velocity
+    const entities = [...this.world.getEntitiesWith('Transform', 'Unit')].sort((a, b) => a.id - b.id);
     // PERF: Reuse pre-allocated Set instead of creating new one every frame
     this._currentIds.clear();
 
     // PERF: Update frustum for culling
     this.updateFrustum();
+
+    // TAA: Copy current instance matrices to previous BEFORE resetting counts
+    // This preserves last frame's transforms for velocity calculation
+    for (const group of this.instancedGroups.values()) {
+      if (group.mesh.count > 0) {
+        swapInstanceMatrices(group.mesh);
+      }
+    }
 
     // Reset instance counts for all groups
     // PERF: Use .length = 0 instead of = [] to avoid GC pressure from allocating new arrays every frame
