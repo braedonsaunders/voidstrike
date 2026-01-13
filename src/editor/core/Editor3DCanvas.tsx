@@ -174,8 +174,8 @@ export function Editor3DCanvas({
       panSpeed: 60,
       zoomSpeed: 5,
       rotationSpeed: 2,
-      edgeScrollSpeed: 0, // Disable edge scroll in editor
-      edgeScrollThreshold: 0,
+      edgeScrollSpeed: 50, // Edge panning enabled
+      edgeScrollThreshold: 40,
     });
     rtsCameraRef.current = rtsCamera;
 
@@ -606,7 +606,7 @@ export function Editor3DCanvas({
           color: config.theme.text.muted,
         }}
       >
-        Scroll to zoom • Middle-drag to rotate • Arrow keys to pan • Click to paint
+        Scroll zoom • Middle-drag rotate • Edge/arrows pan • Click paint
       </div>
     </div>
   );
