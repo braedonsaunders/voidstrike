@@ -24,6 +24,8 @@ import {
   attribute,
   positionLocal,
   uniform,
+  float,
+  abs,
 } from 'three/tsl';
 
 // Import TSL values not in @types/three
@@ -32,6 +34,7 @@ import * as TSL from 'three/tsl';
 const modelWorldMatrix = (TSL as any).modelWorldMatrix;
 const modelViewMatrix = (TSL as any).modelViewMatrix;
 const cameraProjectionMatrix = (TSL as any).cameraProjectionMatrix;
+const select = (TSL as any).select;
 
 // WeakMap to track which meshes have velocity setup
 const velocitySetupMeshes = new WeakSet<THREE.InstancedMesh>();
@@ -197,8 +200,9 @@ export function disposeInstancedVelocity(mesh: THREE.InstancedMesh): void {
  * 4. Projecting both through camera matrices to get NDC positions
  * 5. Returning the difference as screen-space velocity
  *
- * For objects without our velocity attributes, the attributes will read as zero/identity,
- * resulting in zero velocity which TRAA handles via depth-based reprojection.
+ * For objects without our velocity attributes (non-instanced meshes), the attributes
+ * will default to zeros. We detect this by checking if the matrix is valid (column 3
+ * w-component should be 1.0 for affine transforms) and return zero velocity.
  *
  * Returns a vec2 node representing screen-space velocity in NDC space (-1 to 1).
  */
@@ -207,10 +211,16 @@ export function createInstancedVelocityNode(): any {
   return Fn(() => {
     // Read previous instance matrix from our custom attributes
     // Each attribute is a vec4 representing one column of the 4x4 matrix
+    // For objects without these attributes, Three.js returns zeros
     const prevCol0 = attribute('prevInstanceMatrix0', 'vec4');
     const prevCol1 = attribute('prevInstanceMatrix1', 'vec4');
     const prevCol2 = attribute('prevInstanceMatrix2', 'vec4');
     const prevCol3 = attribute('prevInstanceMatrix3', 'vec4');
+
+    // Check if attributes exist by testing if column 3's w component is ~1.0
+    // Valid affine transforms have [x, y, z, 1] in the last column
+    // Zero/missing attributes will have w = 0
+    const hasValidMatrix = abs(prevCol3.w.sub(float(1.0))).lessThan(float(0.5));
 
     // Reconstruct the previous instance matrix from columns
     // mat4 constructor takes columns in order
@@ -237,7 +247,11 @@ export function createInstancedVelocityNode(): any {
     const currentNDC = currentClipPos.xy.div(currentClipPos.w);
 
     // Velocity is the difference in NDC space
-    const velocity = currentNDC.sub(prevNDC);
+    const computedVelocity = currentNDC.sub(prevNDC);
+
+    // Return computed velocity for valid matrices, zero for invalid/missing attributes
+    // This prevents NaN/infinity from invalid matrix calculations on non-instanced meshes
+    const velocity = select(hasValidMatrix, computedVelocity, vec2(0.0, 0.0));
 
     return velocity;
   })();
