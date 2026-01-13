@@ -415,7 +415,8 @@ export class OverlayScene extends Phaser.Scene {
   }
 
   /**
-   * Show SC2-style match start countdown: 3, 2, 1, GO!
+   * World-class match start countdown with sophisticated Phaser 4 effects
+   * Features: particle bursts, energy shockwaves, screen distortion, layered glow
    */
   public showMatchCountdown(): void {
     if (this.countdownActive) return;
@@ -423,19 +424,223 @@ export class OverlayScene extends Phaser.Scene {
 
     const screenWidth = this.scale.width;
     const screenHeight = this.scale.height;
+    const centerX = screenWidth / 2;
+    const centerY = screenHeight / 2;
 
     // Create container for countdown elements
-    this.countdownContainer = this.add.container(screenWidth / 2, screenHeight / 2);
+    this.countdownContainer = this.add.container(centerX, centerY);
     this.countdownContainer.setDepth(400);
+
+    // Create shockwave graphics layer
+    const shockwaveGraphics = this.add.graphics();
+    shockwaveGraphics.setDepth(395);
+
+    // Create particle graphics for energy burst
+    const particleGraphics = this.add.graphics();
+    particleGraphics.setDepth(398);
 
     // Countdown sequence: 3, 2, 1, GO!
     const sequence = ['3', '2', '1', 'GO!'];
     let currentIndex = 0;
 
+    // Particle system for burst effects
+    const createParticleBurst = (color: number, count: number, speed: number) => {
+      const particles: { x: number; y: number; vx: number; vy: number; life: number; size: number; color: number }[] = [];
+
+      for (let i = 0; i < count; i++) {
+        const angle = (i / count) * Math.PI * 2 + Math.random() * 0.3;
+        const velocity = speed * (0.7 + Math.random() * 0.6);
+        particles.push({
+          x: 0,
+          y: 0,
+          vx: Math.cos(angle) * velocity,
+          vy: Math.sin(angle) * velocity,
+          life: 1,
+          size: 3 + Math.random() * 4,
+          color,
+        });
+      }
+
+      // Animate particles
+      const startTime = Date.now();
+      const duration = 800;
+
+      const animateParticles = () => {
+        const elapsed = Date.now() - startTime;
+        const progress = elapsed / duration;
+
+        if (progress >= 1) {
+          return;
+        }
+
+        particleGraphics.clear();
+
+        for (const p of particles) {
+          p.x += p.vx * 0.016 * 60;
+          p.y += p.vy * 0.016 * 60;
+          p.vx *= 0.96;
+          p.vy *= 0.96;
+          p.life = 1 - progress;
+
+          if (p.life > 0.1) {
+            const alpha = p.life * 0.8;
+            particleGraphics.fillStyle(p.color, alpha);
+            particleGraphics.fillCircle(centerX + p.x, centerY + p.y, p.size * p.life);
+
+            // Trailing glow
+            particleGraphics.fillStyle(p.color, alpha * 0.3);
+            particleGraphics.fillCircle(centerX + p.x - p.vx * 2, centerY + p.y - p.vy * 2, p.size * p.life * 0.6);
+          }
+        }
+
+        requestAnimationFrame(animateParticles);
+      };
+
+      animateParticles();
+    };
+
+    // Energy shockwave ring effect
+    const createShockwave = (color: number, maxRadius: number, duration: number) => {
+      const startTime = Date.now();
+
+      const animateShockwave = () => {
+        const elapsed = Date.now() - startTime;
+        const progress = elapsed / duration;
+
+        if (progress >= 1) {
+          return;
+        }
+
+        const radius = maxRadius * this.easeOutQuart(progress);
+        const alpha = (1 - progress) * 0.6;
+        const thickness = 8 * (1 - progress * 0.7);
+
+        shockwaveGraphics.lineStyle(thickness, color, alpha);
+        shockwaveGraphics.strokeCircle(centerX, centerY, radius);
+
+        // Inner energy ring
+        const innerRadius = radius * 0.85;
+        shockwaveGraphics.lineStyle(thickness * 0.5, 0xffffff, alpha * 0.5);
+        shockwaveGraphics.strokeCircle(centerX, centerY, innerRadius);
+
+        requestAnimationFrame(animateShockwave);
+      };
+
+      animateShockwave();
+    };
+
+    // Hexagonal energy burst pattern
+    const createHexBurst = (color: number) => {
+      const hexGraphics = this.add.graphics();
+      hexGraphics.setDepth(396);
+
+      const startTime = Date.now();
+      const duration = 600;
+
+      const animateHex = () => {
+        const elapsed = Date.now() - startTime;
+        const progress = elapsed / duration;
+
+        if (progress >= 1) {
+          hexGraphics.destroy();
+          return;
+        }
+
+        hexGraphics.clear();
+        const alpha = (1 - progress) * 0.4;
+        const scale = 1 + progress * 2;
+
+        hexGraphics.lineStyle(2, color, alpha);
+
+        // Draw expanding hexagon
+        const sides = 6;
+        const radius = 80 * scale;
+
+        hexGraphics.beginPath();
+        for (let i = 0; i <= sides; i++) {
+          const angle = (i / sides) * Math.PI * 2 - Math.PI / 2;
+          const x = centerX + Math.cos(angle) * radius;
+          const y = centerY + Math.sin(angle) * radius;
+          if (i === 0) {
+            hexGraphics.moveTo(x, y);
+          } else {
+            hexGraphics.lineTo(x, y);
+          }
+        }
+        hexGraphics.strokePath();
+
+        // Inner rotating hexagon
+        const innerRadius = 50 * scale;
+        const rotation = progress * Math.PI * 0.5;
+        hexGraphics.lineStyle(1.5, color, alpha * 0.7);
+        hexGraphics.beginPath();
+        for (let i = 0; i <= sides; i++) {
+          const angle = (i / sides) * Math.PI * 2 - Math.PI / 2 + rotation;
+          const x = centerX + Math.cos(angle) * innerRadius;
+          const y = centerY + Math.sin(angle) * innerRadius;
+          if (i === 0) {
+            hexGraphics.moveTo(x, y);
+          } else {
+            hexGraphics.lineTo(x, y);
+          }
+        }
+        hexGraphics.strokePath();
+
+        requestAnimationFrame(animateHex);
+      };
+
+      animateHex();
+    };
+
+    // Radial lines burst
+    const createRadialLines = (color: number) => {
+      const linesGraphics = this.add.graphics();
+      linesGraphics.setDepth(394);
+
+      const startTime = Date.now();
+      const duration = 500;
+      const lineCount = 24;
+
+      const animateLines = () => {
+        const elapsed = Date.now() - startTime;
+        const progress = elapsed / duration;
+
+        if (progress >= 1) {
+          linesGraphics.destroy();
+          return;
+        }
+
+        linesGraphics.clear();
+        const alpha = (1 - progress) * 0.5;
+
+        for (let i = 0; i < lineCount; i++) {
+          const angle = (i / lineCount) * Math.PI * 2;
+          const innerR = 60 + progress * 100;
+          const outerR = innerR + 80 * (1 - progress);
+
+          const lineAlpha = alpha * (0.5 + Math.sin(i * 1.5 + progress * 10) * 0.5);
+          linesGraphics.lineStyle(2, color, lineAlpha);
+
+          const x1 = centerX + Math.cos(angle) * innerR;
+          const y1 = centerY + Math.sin(angle) * innerR;
+          const x2 = centerX + Math.cos(angle) * outerR;
+          const y2 = centerY + Math.sin(angle) * outerR;
+
+          linesGraphics.lineBetween(x1, y1, x2, y2);
+        }
+
+        requestAnimationFrame(animateLines);
+      };
+
+      animateLines();
+    };
+
     const showNumber = () => {
       if (currentIndex >= sequence.length) {
         // Countdown complete - cleanup
         this.countdownActive = false;
+        shockwaveGraphics.destroy();
+        particleGraphics.destroy();
         if (this.countdownContainer) {
           this.countdownContainer.destroy();
           this.countdownContainer = null;
@@ -443,105 +648,220 @@ export class OverlayScene extends Phaser.Scene {
         return;
       }
 
+      // Clear previous effects
+      shockwaveGraphics.clear();
+      particleGraphics.clear();
+
       const value = sequence[currentIndex];
       const isGo = value === 'GO!';
 
-      // Create the countdown text
+      // Color scheme
+      const primaryColor = isGo ? 0x00ffaa : 0x8855ff;
+      const secondaryColor = isGo ? 0x00ff66 : 0x6644ff;
+      const textColor = isGo ? '#00ffaa' : '#ffffff';
+      const strokeColor = isGo ? '#004433' : '#220044';
+
+      // Create layered glow background
+      const glowContainer = this.add.container(0, 0);
+
+      // Outer soft glow
+      for (let i = 0; i < 8; i++) {
+        const glow = this.add.graphics();
+        const radius = 250 - i * 25;
+        const alpha = 0.03 + i * 0.01;
+        glow.fillStyle(primaryColor, alpha);
+        glow.fillCircle(0, 0, radius);
+        glowContainer.add(glow);
+      }
+
+      // Inner intense core glow
+      const coreGlow = this.add.graphics();
+      coreGlow.fillStyle(secondaryColor, 0.15);
+      coreGlow.fillCircle(0, 0, 120);
+      coreGlow.fillStyle(0xffffff, 0.08);
+      coreGlow.fillCircle(0, 0, 60);
+      glowContainer.add(coreGlow);
+
+      // Create the countdown text with premium styling
       const countText = this.add.text(0, 0, value, {
-        fontSize: isGo ? '120px' : '180px',
+        fontSize: isGo ? '140px' : '200px',
         fontFamily: 'Orbitron, Arial Black, sans-serif',
-        color: isGo ? '#00ff00' : '#ffffff',
-        stroke: '#000000',
-        strokeThickness: isGo ? 8 : 12,
+        color: textColor,
+        stroke: strokeColor,
+        strokeThickness: isGo ? 10 : 14,
         shadow: {
-          offsetX: 4,
-          offsetY: 4,
-          color: isGo ? '#004400' : '#333333',
-          blur: 15,
+          offsetX: 0,
+          offsetY: 8,
+          color: strokeColor,
+          blur: 20,
           fill: true,
         },
       });
       countText.setOrigin(0.5, 0.5);
 
-      // Add glow effect behind the text
-      const glow = this.add.graphics();
-      const glowColor = isGo ? 0x00ff00 : 0x4488ff;
-      const glowRadius = isGo ? 150 : 180;
-
-      for (let i = 0; i < 5; i++) {
-        const alpha = 0.15 - i * 0.025;
-        const radius = glowRadius - i * 20;
-        glow.fillStyle(glowColor, alpha);
-        glow.fillCircle(0, 0, radius);
-      }
+      // Add text outline glow
+      const textGlow = this.add.text(0, 0, value, {
+        fontSize: isGo ? '140px' : '200px',
+        fontFamily: 'Orbitron, Arial Black, sans-serif',
+        color: 'transparent',
+        stroke: isGo ? '#00ffaa' : '#aa88ff',
+        strokeThickness: isGo ? 16 : 20,
+      });
+      textGlow.setOrigin(0.5, 0.5);
+      textGlow.setAlpha(0.3);
+      textGlow.setBlendMode(Phaser.BlendModes.ADD);
 
       // Add elements to container
-      this.countdownContainer!.add(glow);
+      this.countdownContainer!.add(glowContainer);
+      this.countdownContainer!.add(textGlow);
       this.countdownContainer!.add(countText);
 
-      // Animate: scale up and fade in, then scale up more and fade out
-      countText.setScale(0.3);
+      // Initial state
+      countText.setScale(0.2);
       countText.setAlpha(0);
-      glow.setScale(0.3);
-      glow.setAlpha(0);
+      textGlow.setScale(0.2);
+      textGlow.setAlpha(0);
+      glowContainer.setScale(0.3);
+      glowContainer.setAlpha(0);
 
-      // Entrance animation
+      // Trigger effects on impact
+      this.time.delayedCall(150, () => {
+        // Particle burst
+        createParticleBurst(primaryColor, 40, 8);
+        createParticleBurst(secondaryColor, 25, 12);
+
+        // Shockwave
+        createShockwave(primaryColor, 350, 700);
+
+        // Hexagonal burst
+        createHexBurst(secondaryColor);
+
+        // Radial lines
+        createRadialLines(primaryColor);
+
+        // Screen shake
+        this.cameras.main.shake(200, isGo ? 0.015 : 0.008);
+
+        // Brief chromatic-style flash
+        if (isGo) {
+          this.cameras.main.flash(300, 0, 255, 170, false, undefined, 0.2);
+        } else {
+          this.cameras.main.flash(150, 136, 85, 255, false, undefined, 0.12);
+        }
+      });
+
+      // Entrance animation - dramatic slam in
       this.tweens.add({
-        targets: [countText, glow],
+        targets: [countText, textGlow],
+        scale: 1,
+        alpha: { value: 1, duration: 100 },
+        duration: 180,
+        ease: 'Back.easeOut',
+        easeParams: [2.5],
+      });
+
+      this.tweens.add({
+        targets: glowContainer,
         scale: 1,
         alpha: 1,
         duration: 200,
-        ease: 'Back.easeOut',
-        onComplete: () => {
-          // Hold briefly, then exit
-          this.time.delayedCall(isGo ? 400 : 500, () => {
-            // Exit animation
-            this.tweens.add({
-              targets: countText,
-              scale: isGo ? 2 : 1.5,
-              alpha: 0,
-              duration: isGo ? 400 : 300,
-              ease: 'Quad.easeIn',
-              onComplete: () => {
-                countText.destroy();
-              },
-            });
-            this.tweens.add({
-              targets: glow,
-              scale: 2,
-              alpha: 0,
-              duration: isGo ? 400 : 300,
-              ease: 'Quad.easeIn',
-              onComplete: () => {
-                glow.destroy();
-                currentIndex++;
-                if (currentIndex < sequence.length) {
-                  showNumber();
-                } else {
-                  // Final cleanup
-                  this.countdownActive = false;
-                  if (this.countdownContainer) {
-                    this.countdownContainer.destroy();
-                    this.countdownContainer = null;
-                  }
-                }
-              },
-            });
-          });
-        },
+        ease: 'Quad.easeOut',
       });
 
-      // Add screen pulse effect on each number
-      if (!isGo) {
-        this.cameras.main.flash(100, 255, 255, 255, false, undefined, 0.1);
-      } else {
-        // Bigger flash for GO!
-        this.cameras.main.flash(200, 0, 255, 0, false, undefined, 0.15);
-      }
+      // Subtle pulse while visible
+      this.tweens.add({
+        targets: glowContainer,
+        scale: 1.05,
+        alpha: 0.9,
+        duration: 400,
+        yoyo: true,
+        ease: 'Sine.easeInOut',
+        delay: 200,
+      });
+
+      // Hold duration based on number
+      const holdDuration = isGo ? 500 : 600;
+
+      // Exit animation
+      this.time.delayedCall(holdDuration, () => {
+        // Text flies up and fades
+        this.tweens.add({
+          targets: countText,
+          scale: isGo ? 1.8 : 1.4,
+          y: isGo ? 0 : -30,
+          alpha: 0,
+          duration: isGo ? 450 : 350,
+          ease: 'Quad.easeIn',
+          onComplete: () => {
+            countText.destroy();
+          },
+        });
+
+        this.tweens.add({
+          targets: textGlow,
+          scale: isGo ? 2.2 : 1.6,
+          alpha: 0,
+          duration: isGo ? 450 : 350,
+          ease: 'Quad.easeIn',
+          onComplete: () => {
+            textGlow.destroy();
+          },
+        });
+
+        // Glow expands and fades
+        this.tweens.add({
+          targets: glowContainer,
+          scale: 1.8,
+          alpha: 0,
+          duration: isGo ? 500 : 400,
+          ease: 'Quad.easeOut',
+          onComplete: () => {
+            glowContainer.destroy();
+            currentIndex++;
+            if (currentIndex < sequence.length) {
+              // Brief pause between numbers
+              this.time.delayedCall(isGo ? 0 : 100, showNumber);
+            } else {
+              // Final cleanup
+              this.countdownActive = false;
+              shockwaveGraphics.destroy();
+              particleGraphics.destroy();
+              if (this.countdownContainer) {
+                this.countdownContainer.destroy();
+                this.countdownContainer = null;
+              }
+            }
+          },
+        });
+      });
     };
 
-    // Start the countdown
-    showNumber();
+    // Brief dark overlay fade before countdown starts (AAA cinematic feel)
+    const darkOverlay = this.add.graphics();
+    darkOverlay.setDepth(390);
+    darkOverlay.fillStyle(0x000000, 0.7);
+    darkOverlay.fillRect(0, 0, screenWidth, screenHeight);
+    darkOverlay.setAlpha(1);
+
+    // Fade out dark overlay as countdown begins
+    this.tweens.add({
+      targets: darkOverlay,
+      alpha: 0,
+      duration: 800,
+      ease: 'Quad.easeOut',
+      delay: 200,
+      onComplete: () => {
+        darkOverlay.destroy();
+      },
+    });
+
+    // Start the countdown after brief pause
+    this.time.delayedCall(300, showNumber);
+  }
+
+  // Easing function for smooth animations
+  private easeOutQuart(t: number): number {
+    return 1 - Math.pow(1 - t, 4);
   }
 
   /**
