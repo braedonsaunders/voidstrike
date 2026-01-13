@@ -497,7 +497,10 @@
 ### Transform Mechanics
 - [x] Siege Tank (Tank ↔ Siege mode)
 - [x] Hellion ↔ Hellbat
-- [x] Viking (Fighter ↔ Assault mode)
+- [x] Viking/Valkyrie (Fighter ↔ Assault mode)
+  - Fighter Mode: Flying, attacks air only (anti-air specialist)
+  - Assault Mode: Ground, attacks ground only (like SC2 Viking)
+  - AI transform intelligence: Auto-transforms based on nearby enemy composition
 
 ### Cloak & Detection
 - [x] Cloak implementation (Ghost, Banshee)

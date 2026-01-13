@@ -135,14 +135,19 @@ Units have restrictions on what they can attack based on air/ground targeting:
 | Target Type | Can Attack Ground | Can Attack Air | Example Units |
 |-------------|-------------------|----------------|---------------|
 | **Ground & Air** | ✅ | ✅ | Trooper, Breacher, Colossus, Specter, Dreadnought (continuous laser) |
-| **Ground Only** | ✅ | ❌ | Fabricator, Scorcher, Devastator |
+| **Ground Only** | ✅ | ❌ | Fabricator, Scorcher, Devastator, Valkyrie (Assault Mode) |
 | **Air Only** | ❌ | ✅ | Valkyrie (Fighter Mode) |
 | **No Attack** | ❌ | ❌ | Lifter, Overseer |
 
 **Transform Mode Targeting**: Some units change targeting when transforming:
-- **Valkyrie Fighter Mode**: Air only (anti-air specialist)
-- **Valkyrie Assault Mode**: Ground & Air (versatile)
+- **Valkyrie Fighter Mode** (flying): Air only - anti-air specialist, like SC2 Viking Fighter Mode
+- **Valkyrie Assault Mode** (ground): Ground only - ground assault, like SC2 Viking Assault Mode
 - **Devastator/Scorcher**: Ground only in all modes (artillery/flamethrower)
+
+**AI Transform Intelligence**: AI-controlled Valkyries will intelligently transform based on nearby enemy composition:
+- Transform to Fighter Mode when air enemies are present and no ground enemies
+- Transform to Assault Mode when ground enemies are present and no air enemies
+- Consider threat scores to make nuanced decisions when both types are present
 
 **AI Counter-Building**: When AI units are attacked by enemies they cannot hit (e.g., air units attacking ground-only troops), the AI urgently prioritizes building anti-air capable units.
 

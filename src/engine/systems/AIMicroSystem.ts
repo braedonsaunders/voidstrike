@@ -23,11 +23,14 @@ const MICRO_UPDATE_INTERVAL = 8;
 const KITE_COOLDOWN_TICKS = 10; // Minimum ticks between kite commands
 const THREAT_ASSESSMENT_INTERVAL = 10; // Update threat assessment every 10 ticks
 const FOCUS_FIRE_THRESHOLD = 0.7; // Health threshold for focus fire target selection
+const TRANSFORM_DECISION_INTERVAL = 20; // Update transform decision every 20 ticks (1 second at 20 TPS)
+const TRANSFORM_SCAN_RANGE = 15; // Range to scan for potential targets when deciding to transform
 
 interface UnitMicroState {
   behaviorTree: BehaviorTreeRunner;
   lastKiteTick: number;
   lastThreatAssessment: number;
+  lastTransformDecision: number; // Tick when last transform decision was made
   threatScore: number;
   primaryTarget: number | null;
   retreating: boolean;
@@ -157,10 +160,14 @@ export class AIMicroSystem extends System {
       // Only micro AI-controlled units
       if (!this.aiPlayerIds.has(selectable.playerId)) continue;
 
-      // Skip dead units, workers, and idle units
+      // Skip dead units and workers
       if (health.isDead()) continue;
       if (unit.isWorker) continue;
-      if (unit.state !== 'attacking' && unit.state !== 'moving') continue;
+
+      // Allow transformable units to be processed even when idle (for transform decisions)
+      const canProcessUnit = unit.state === 'attacking' || unit.state === 'moving' ||
+        (unit.canTransform && unit.state === 'idle');
+      if (!canProcessUnit) continue;
 
       // Get or create micro state
       let state = this.unitStates.get(entity.id);
@@ -176,6 +183,7 @@ export class AIMicroSystem extends System {
           behaviorTree: new BehaviorTreeRunner(tree, playerBlackboard),
           lastKiteTick: 0,
           lastThreatAssessment: 0,
+          lastTransformDecision: 0,
           threatScore: 0,
           primaryTarget: null,
           retreating: false,
@@ -207,6 +215,11 @@ export class AIMicroSystem extends System {
       // Update threat assessment periodically
       if (currentTick - state.lastThreatAssessment > THREAT_ASSESSMENT_INTERVAL) {
         this.updateThreatAssessment(entity.id, state, currentTick);
+      }
+
+      // Transform decision for units like Valkyrie
+      if (unit.canTransform && currentTick - state.lastTransformDecision > TRANSFORM_DECISION_INTERVAL) {
+        this.handleTransformDecision(entity.id, selectable.playerId, unit, state, currentTick);
       }
 
       // Focus fire logic
@@ -511,6 +524,141 @@ export class AIMicroSystem extends System {
       targetEntityId: targetId,
     };
     this.game.processCommand(command);
+  }
+
+  /**
+   * Handle transform decision for units like Valkyrie.
+   * Decides whether to transform based on nearby enemy composition:
+   * - Fighter mode (air): Can only attack air units
+   * - Assault mode (ground): Can only attack ground units
+   */
+  private handleTransformDecision(
+    entityId: number,
+    playerId: string,
+    unit: Unit,
+    state: UnitMicroState,
+    currentTick: number
+  ): void {
+    // Mark that we've made a decision this tick
+    state.lastTransformDecision = currentTick;
+
+    // Don't transform if already transforming
+    if (unit.state === 'transforming') return;
+
+    const entity = this.world.getEntity(entityId);
+    if (!entity) return;
+
+    const transform = entity.get<Transform>('Transform');
+    if (!transform) return;
+
+    // Count nearby enemy units by air/ground status
+    let nearbyAirEnemies = 0;
+    let nearbyGroundEnemies = 0;
+    let airThreatScore = 0;
+    let groundThreatScore = 0;
+
+    const nearbyUnits = this.world.unitGrid.queryRadius(
+      transform.x,
+      transform.y,
+      TRANSFORM_SCAN_RANGE
+    );
+
+    for (const nearbyId of nearbyUnits) {
+      if (nearbyId === entityId) continue;
+
+      const nearbyEntity = this.world.getEntity(nearbyId);
+      if (!nearbyEntity) continue;
+
+      const nearbyUnit = nearbyEntity.get<Unit>('Unit');
+      const nearbySelectable = nearbyEntity.get<Selectable>('Selectable');
+      const nearbyHealth = nearbyEntity.get<Health>('Health');
+      const nearbyTransform = nearbyEntity.get<Transform>('Transform');
+
+      if (!nearbyUnit || !nearbySelectable || !nearbyHealth || !nearbyTransform) continue;
+
+      // Only consider enemies
+      if (nearbySelectable.playerId === playerId) continue;
+      if (nearbyHealth.isDead()) continue;
+
+      // Calculate distance for weighting
+      const dx = nearbyTransform.x - transform.x;
+      const dy = nearbyTransform.y - transform.y;
+      const distance = Math.sqrt(dx * dx + dy * dy);
+      const distanceWeight = Math.max(0, 1 - distance / TRANSFORM_SCAN_RANGE);
+
+      // Calculate threat score (damage potential)
+      const dps = nearbyUnit.attackDamage * nearbyUnit.attackSpeed;
+      const threatScore = dps * distanceWeight;
+
+      if (nearbyUnit.isFlying) {
+        nearbyAirEnemies++;
+        airThreatScore += threatScore;
+      } else {
+        nearbyGroundEnemies++;
+        groundThreatScore += threatScore;
+      }
+    }
+
+    // Determine current mode capabilities
+    const currentMode = unit.getCurrentMode();
+    if (!currentMode) return;
+
+    const isInFighterMode = currentMode.isFlying === true; // Fighter mode = flying
+    const isInAssaultMode = !isInFighterMode; // Assault mode = ground
+
+    // Decision logic:
+    // - In Fighter mode (air-only attacks): Transform to Assault if there are ground enemies and no air enemies
+    // - In Assault mode (ground-only attacks): Transform to Fighter if there are air enemies and no ground enemies
+    // - Also consider threat scores for more nuanced decisions
+
+    let shouldTransform = false;
+    let targetMode = '';
+
+    if (isInFighterMode) {
+      // Currently in Fighter mode (can only attack air)
+      // Transform to Assault if:
+      // 1. There are ground enemies nearby AND no air enemies nearby
+      // 2. OR ground threat score significantly outweighs air threat score
+      if (nearbyGroundEnemies > 0 && nearbyAirEnemies === 0) {
+        shouldTransform = true;
+        targetMode = 'assault';
+      } else if (nearbyGroundEnemies > 0 && groundThreatScore > airThreatScore * 2) {
+        // Ground threat is much higher than air threat - might want to transform
+        // But only if there are no immediate air threats
+        if (nearbyAirEnemies <= 1 && nearbyGroundEnemies >= 3) {
+          shouldTransform = true;
+          targetMode = 'assault';
+        }
+      }
+    } else if (isInAssaultMode) {
+      // Currently in Assault mode (can only attack ground)
+      // Transform to Fighter if:
+      // 1. There are air enemies nearby AND no ground enemies nearby
+      // 2. OR air threat score significantly outweighs ground threat score
+      // 3. OR being attacked by air and can't fight back
+      if (nearbyAirEnemies > 0 && nearbyGroundEnemies === 0) {
+        shouldTransform = true;
+        targetMode = 'fighter';
+      } else if (nearbyAirEnemies > 0 && airThreatScore > groundThreatScore * 2) {
+        // Air threat is much higher than ground threat
+        if (nearbyGroundEnemies <= 1 && nearbyAirEnemies >= 2) {
+          shouldTransform = true;
+          targetMode = 'fighter';
+        }
+      }
+    }
+
+    // Execute transform if decided
+    if (shouldTransform && targetMode) {
+      const command: GameCommand = {
+        tick: currentTick,
+        playerId,
+        type: 'TRANSFORM',
+        entityIds: [entityId],
+        targetMode,
+      };
+      this.game.processCommand(command);
+    }
   }
 }
 
