@@ -315,6 +315,7 @@ export function EditorCore({
           onBiomeChange={editorState.setActiveBiome}
           onObjectAdd={editorState.addObject}
           onObjectRemove={editorState.removeObject}
+          onObjectPropertyUpdate={editorState.updateObjectProperty}
           onMetadataUpdate={editorState.updateMapMetadata}
           onValidate={handleValidate}
           onToggleLabels={toggleLabels}

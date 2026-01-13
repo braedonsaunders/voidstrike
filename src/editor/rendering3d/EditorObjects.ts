@@ -27,6 +27,7 @@ export interface EditorObjectInstance {
   mesh: THREE.Mesh;
   selectionRing: THREE.Mesh;
   label: THREE.Sprite;
+  baseScale: number; // Original scale before user modifications
 }
 
 export class EditorObjects {
@@ -138,6 +139,9 @@ export class EditorObjects {
     const radius = obj.radius || objType?.defaultRadius || 5;
     const category = objType?.category || 'objects';
 
+    // Get scale from properties (default to 1)
+    const scale = (obj.properties?.scale as number) || 1;
+
     // Get terrain height at position
     const terrainHeight = this.getTerrainHeight ? this.getTerrainHeight(obj.x, obj.y) : 0;
 
@@ -162,7 +166,8 @@ export class EditorObjects {
     });
 
     const mesh = new THREE.Mesh(geometry, material);
-    mesh.position.set(obj.x, terrainHeight + visual.height / 2, obj.y);
+    mesh.position.set(obj.x, terrainHeight + (visual.height * scale) / 2, obj.y);
+    mesh.scale.set(scale, scale, scale);
 
     // Create selection ring
     const ringGeometry = new THREE.RingGeometry(radius * 0.9, radius, 24);
@@ -176,9 +181,9 @@ export class EditorObjects {
     selectionRing.rotation.x = -Math.PI / 2;
     selectionRing.position.set(obj.x, terrainHeight + 0.1, obj.y);
 
-    // Create label sprite (positioned above object)
+    // Create label sprite (positioned above object, accounting for scale)
     const label = this.createLabel(objType?.name || obj.type, objType?.icon || '●');
-    label.position.set(obj.x, terrainHeight + visual.height + 1.5, obj.y);
+    label.position.set(obj.x, terrainHeight + (visual.height * scale) + 1.5, obj.y);
 
     // Check category visibility
     const categoryVisible = this.isCategoryVisible(category);
@@ -199,6 +204,7 @@ export class EditorObjects {
       mesh,
       selectionRing,
       label,
+      baseScale: 1, // Base scale before user modifications
     });
   }
 
@@ -210,11 +216,32 @@ export class EditorObjects {
     if (!instance) return;
 
     const terrainHeight = this.getTerrainHeight ? this.getTerrainHeight(x, y) : 0;
-    const currentHeight = instance.mesh.position.y - terrainHeight;
+    const scale = instance.mesh.scale.y; // Current scale
+    const visual = OBJECT_VISUALS[instance.type] || { height: 1 };
 
-    instance.mesh.position.set(x, terrainHeight + currentHeight, y);
+    instance.mesh.position.set(x, terrainHeight + (visual.height * scale) / 2, y);
     instance.selectionRing.position.set(x, terrainHeight + 0.1, y);
-    instance.label.position.set(x, instance.mesh.position.y + 1.5, y);
+    instance.label.position.set(x, terrainHeight + (visual.height * scale) + 1.5, y);
+  }
+
+  /**
+   * Update an object's scale
+   */
+  public updateObjectScale(id: string, scale: number): void {
+    const instance = this.objects.get(id);
+    if (!instance) return;
+
+    const visual = OBJECT_VISUALS[instance.type] || { height: 1 };
+    const x = instance.mesh.position.x;
+    const z = instance.mesh.position.z;
+    const terrainHeight = this.getTerrainHeight ? this.getTerrainHeight(x, z) : 0;
+
+    // Update mesh scale and position
+    instance.mesh.scale.set(scale, scale, scale);
+    instance.mesh.position.y = terrainHeight + (visual.height * scale) / 2;
+
+    // Update label position
+    instance.label.position.y = terrainHeight + (visual.height * scale) + 1.5;
   }
 
   /**
