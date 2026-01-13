@@ -5,6 +5,7 @@
  * Features:
  * - Bloom effect (BloomNode) - HDR glow
  * - GTAO ambient occlusion (GTAONode) - Contact shadows
+ * - SSR (Screen Space Reflections) - Real-time reflections
  * - TRAA anti-aliasing (Temporal Reprojection Anti-Aliasing) - High quality temporal smoothing
  * - FXAA anti-aliasing (FXAANode) - Fast edge smoothing (fallback)
  * - Vignette - Cinematic edge darkening
@@ -36,17 +37,22 @@ import {
   texture,
   mrt,
   output,
+  normalView,
 } from 'three/tsl';
 // velocity is exported from three/tsl but not in @types/three yet
 // eslint-disable-next-line @typescript-eslint/no-require-imports
 import * as TSL from 'three/tsl';
 const velocity = (TSL as any).velocity;
+// directionToColor/colorToDirection for normal encoding in MRT
+const directionToColor = (TSL as any).directionToColor;
+const colorToDirection = (TSL as any).colorToDirection;
 
 // Import WebGPU post-processing nodes from addons
 import { bloom } from 'three/addons/tsl/display/BloomNode.js';
 import { ao } from 'three/addons/tsl/display/GTAONode.js';
 import { fxaa } from 'three/addons/tsl/display/FXAANode.js';
 import { traa } from 'three/addons/tsl/display/TRAANode.js';
+import { ssr } from 'three/addons/tsl/display/SSRNode.js';
 
 // Import EASU upscaling
 import { easuUpscale, rcasSharpening } from './UpscalerNode';
@@ -72,6 +78,13 @@ export interface PostProcessingConfig {
   aoEnabled: boolean;
   aoRadius: number;
   aoIntensity: number;
+
+  // SSR (Screen Space Reflections)
+  ssrEnabled: boolean;
+  ssrMaxDistance: number;    // Max reflection distance
+  ssrOpacity: number;        // Reflection intensity (0-1)
+  ssrThickness: number;      // Ray thickness for hit detection
+  ssrMaxRoughness: number;   // Max roughness for reflections (0-1)
 
   // Anti-aliasing mode ('off', 'fxaa', 'taa')
   antiAliasingMode: AntiAliasingMode;
@@ -112,6 +125,14 @@ const DEFAULT_CONFIG: PostProcessingConfig = {
   aoRadius: 2,
   aoIntensity: 0.8,
 
+  // SSR - Screen Space Reflections for metallic surfaces
+  // Disabled by default - enable for high-end devices
+  ssrEnabled: false,
+  ssrMaxDistance: 100,
+  ssrOpacity: 1.0,
+  ssrThickness: 0.1,
+  ssrMaxRoughness: 0.5,
+
   // FXAA is the safe default - works with all materials
   // TRAA requires velocity output from all materials, which standard materials don't support
   antiAliasingMode: 'fxaa',
@@ -149,6 +170,7 @@ export class RenderPipeline {
   // Effect passes
   private bloomPass: ReturnType<typeof bloom> | null = null;
   private aoPass: ReturnType<typeof ao> | null = null;
+  private ssrPass: ReturnType<typeof ssr> | null = null;
   private fxaaPass: ReturnType<typeof fxaa> | null = null;
   private traaPass: ReturnType<typeof traa> | null = null;
 
@@ -168,6 +190,10 @@ export class RenderPipeline {
   private uContrast = uniform(1.05);
   private uSharpeningIntensity = uniform(0.5);
   private uResolution = uniform(new THREE.Vector2(1920, 1080));
+
+  // SSR uniforms
+  private uSSROpacity = uniform(1.0);
+  private uSSRMaxRoughness = uniform(0.5);
 
   // Resolution tracking for upscaling
   private displayWidth = 1920;
@@ -242,10 +268,18 @@ export class RenderPipeline {
     // which correctly handles the camera jitter without needing per-instance velocity.
     // See: https://github.com/mrdoob/three.js/issues/31892
     //
-    // TODO: Implement custom velocity output for InstancedMesh when Three.js supports it,
-    // or use SSR/SSGI's normal MRT which doesn't have this issue.
+    // SSR uses MRT for normals which doesn't have the InstancedMesh issue.
 
-    // Get texture nodes from scene pass (no MRT - use default outputs)
+    // Enable MRT with normals when SSR is enabled
+    // Normal encoding: direction -> color for storage, color -> direction for retrieval
+    if (this.config.ssrEnabled) {
+      scenePass.setMRT(mrt({
+        output: output,
+        normal: directionToColor(normalView),
+      }));
+    }
+
+    // Get texture nodes from scene pass
     const scenePassColor = scenePass.getTextureNode();
     const scenePassDepth = scenePass.getTextureNode('depth');
 
@@ -291,7 +325,51 @@ export class RenderPipeline {
       }
     }
 
-    // 3. Bloom effect (additive)
+    // 3. SSR (Screen Space Reflections)
+    // Applied after AO, before bloom - reflections pick up scene color
+    if (this.config.ssrEnabled) {
+      try {
+        // Get normal texture from MRT and decode from color back to direction
+        const scenePassNormal = scenePass.getTextureNode('normal');
+        const sceneNormal = Fn(() => {
+          return colorToDirection(scenePassNormal.sample(uv()));
+        })();
+
+        // Create SSR pass
+        // SSR(color, depth, normal, metalness, roughness)
+        // Using moderate default metalness/roughness since our materials vary
+        // Higher metalness = more reflection, lower roughness = sharper reflection
+        const defaultMetalness = float(0.5); // Moderate reflectivity
+        const defaultRoughness = this.uSSRMaxRoughness; // Configurable via settings
+
+        this.ssrPass = ssr(
+          outputNode,
+          scenePassDepth,
+          sceneNormal,
+          defaultMetalness,
+          defaultRoughness
+        );
+
+        // Configure SSR parameters
+        if (this.ssrPass.maxDistance) {
+          this.ssrPass.maxDistance.value = this.config.ssrMaxDistance;
+        }
+        if (this.ssrPass.opacity) {
+          this.ssrPass.opacity.value = this.config.ssrOpacity;
+        }
+        if (this.ssrPass.thickness) {
+          this.ssrPass.thickness.value = this.config.ssrThickness;
+        }
+
+        outputNode = this.ssrPass;
+        console.log('[PostProcessing] SSR initialized successfully');
+      } catch (e) {
+        console.warn('[PostProcessing] SSR initialization failed:', e);
+      }
+    }
+
+    // 4. Bloom effect (additive)
+    // Note: Bloom is numbered 4 despite being after SSR (3) to maintain consistency
     if (this.config.bloomEnabled) {
       try {
         this.bloomPass = bloom(outputNode);
@@ -449,6 +527,7 @@ export class RenderPipeline {
     const needsRebuild =
       (config.bloomEnabled !== undefined && config.bloomEnabled !== this.config.bloomEnabled) ||
       (config.aoEnabled !== undefined && config.aoEnabled !== this.config.aoEnabled) ||
+      (config.ssrEnabled !== undefined && config.ssrEnabled !== this.config.ssrEnabled) ||
       (config.fxaaEnabled !== undefined && config.fxaaEnabled !== this.config.fxaaEnabled) ||
       (config.taaEnabled !== undefined && config.taaEnabled !== this.config.taaEnabled) ||
       (config.antiAliasingMode !== undefined && config.antiAliasingMode !== this.config.antiAliasingMode) ||
@@ -477,6 +556,20 @@ export class RenderPipeline {
       this.aoPass.radius.value = this.config.aoRadius;
     }
     this.uAOIntensity.value = this.config.aoIntensity;
+
+    // Update SSR parameters
+    if (this.ssrPass) {
+      if (this.ssrPass.maxDistance) {
+        this.ssrPass.maxDistance.value = this.config.ssrMaxDistance;
+      }
+      if (this.ssrPass.opacity) {
+        this.ssrPass.opacity.value = this.config.ssrOpacity;
+      }
+      if (this.ssrPass.thickness) {
+        this.ssrPass.thickness.value = this.config.ssrThickness;
+      }
+    }
+    this.uSSRMaxRoughness.value = this.config.ssrMaxRoughness;
 
     // Update sharpening parameters
     this.uSharpeningIntensity.value = this.config.taaSharpeningIntensity;
@@ -545,6 +638,13 @@ export class RenderPipeline {
         this.easuPass.setDisplayResolution(width, height);
       }
     }
+  }
+
+  /**
+   * Check if SSR is enabled
+   */
+  isSSREnabled(): boolean {
+    return this.config.ssrEnabled;
   }
 
   /**
