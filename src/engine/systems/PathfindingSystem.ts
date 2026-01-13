@@ -561,8 +561,8 @@ export class PathfindingSystem extends System {
     // Check for stuck units
     this.checkMovingUnits(currentTick);
 
-    // Update crowd simulation (deltaTime in seconds)
-    this.recast.updateCrowd(_deltaTime / 1000);
+    // NOTE: Crowd simulation is updated in MovementSystem AFTER setting targets
+    // This ensures the crowd has fresh position/target data when it runs
 
     const updateElapsed = performance.now() - updateStart;
     if (updateElapsed > 16) {

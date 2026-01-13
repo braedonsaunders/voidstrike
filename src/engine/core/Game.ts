@@ -440,6 +440,8 @@ export class Game {
    * Check if a building can be placed at the given position
    * This performs all validation checks: terrain, buildings, resources, units, and decorations
    * Buildings can be placed directly adjacent to each other (no spacing buffer)
+   *
+   * PERF: Uses spatial grid queries instead of O(n) loops for buildings and units
    */
   public isValidBuildingPlacement(centerX: number, centerY: number, width: number, height: number, excludeEntityId?: number): boolean {
     const halfW = width / 2;
@@ -456,9 +458,21 @@ export class Game {
       return false;
     }
 
+    // PERF: Use spatial grid query instead of iterating all buildings
+    // Query area slightly larger than building footprint to catch nearby entities
+    const queryPadding = 10; // Max building half-size plus buffer
+    const nearbyBuildingIds = this.world.buildingGrid.queryRect(
+      centerX - halfW - queryPadding,
+      centerY - halfH - queryPadding,
+      centerX + halfW + queryPadding,
+      centerY + halfH + queryPadding
+    );
+
     // Check for overlapping buildings (no buffer - buildings can touch but not overlap)
-    const buildings = this.world.getEntitiesWith('Building', 'Transform');
-    for (const entity of buildings) {
+    for (const buildingId of nearbyBuildingIds) {
+      const entity = this.world.getEntity(buildingId);
+      if (!entity) continue;
+
       const transform = entity.get<Transform>('Transform');
       const building = entity.get<Building>('Building');
       if (!transform || !building) continue;
@@ -474,7 +488,7 @@ export class Game {
       }
     }
 
-    // Check for overlapping resources
+    // Check for overlapping resources (typically ~10-50 per map, so O(n) is acceptable)
     const resources = this.world.getEntitiesWith('Resource', 'Transform');
     for (const entity of resources) {
       const transform = entity.get<Transform>('Transform');
@@ -488,13 +502,23 @@ export class Game {
       }
     }
 
+    // PERF: Use spatial grid query instead of iterating all units
+    const nearbyUnitIds = this.world.unitGrid.queryRect(
+      centerX - halfW - 2,
+      centerY - halfH - 2,
+      centerX + halfW + 2,
+      centerY + halfH + 2
+    );
+
     // Check for overlapping units (exclude the builder worker)
-    const units = this.world.getEntitiesWith('Unit', 'Transform');
-    for (const entity of units) {
+    for (const unitId of nearbyUnitIds) {
       // Skip the worker who will build this structure
-      if (excludeEntityId !== undefined && entity.id === excludeEntityId) {
+      if (excludeEntityId !== undefined && unitId === excludeEntityId) {
         continue;
       }
+
+      const entity = this.world.getEntity(unitId);
+      if (!entity) continue;
 
       const transform = entity.get<Transform>('Transform');
       if (!transform) continue;
