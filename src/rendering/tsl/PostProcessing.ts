@@ -33,6 +33,7 @@ import {
   dot,
   min,
   max,
+  texture,
 } from 'three/tsl';
 
 // Import WebGPU post-processing nodes from addons
@@ -148,6 +149,9 @@ export class RenderPipeline {
   // EASU upscaling pass
   private easuPass: ReturnType<typeof easuUpscale> | null = null;
 
+  // Zero-velocity texture for TRAA (used when materials don't output velocity)
+  private zeroVelocityTexture: THREE.DataTexture | null = null;
+
   // Uniforms for dynamic updates
   private uVignetteIntensity = uniform(0.25);
   private uAOIntensity = uniform(1.0);
@@ -262,17 +266,37 @@ export class RenderPipeline {
     // TRAA's depth threshold and neighborhood clamping handle disocclusion and prevent ghosting.
     if (this.config.antiAliasingMode === 'taa' && this.config.taaEnabled) {
       try {
-        // Use zero velocity instead of scene pass velocity
+        // Create a zero-velocity DataTexture for TRAA
         // This avoids MRT issues with materials that don't output velocity
         // (MeshBasicMaterial, PointsMaterial, SpriteMaterial, etc.)
         // TRAA still works because:
         // 1. Camera jittering provides temporal sampling
         // 2. Depth threshold invalidates history on depth changes
         // 3. Neighborhood clamping prevents ghosting
-        const zeroVelocity = vec2(0, 0);
+
+        // Create a 2x2 RG texture filled with zeros (velocity = 0)
+        // Using RGFormat since velocity is 2D (x, y motion vectors)
+        const velocityData = new Float32Array([
+          0, 0, 0, 0,  // pixel (0,0) RG
+          0, 0, 0, 0,  // pixel (1,0) RG
+          0, 0, 0, 0,  // pixel (0,1) RG
+          0, 0, 0, 0,  // pixel (1,1) RG
+        ]);
+        this.zeroVelocityTexture = new THREE.DataTexture(
+          velocityData,
+          2, 2,
+          THREE.RGBAFormat,
+          THREE.FloatType
+        );
+        this.zeroVelocityTexture.minFilter = THREE.NearestFilter;
+        this.zeroVelocityTexture.magFilter = THREE.NearestFilter;
+        this.zeroVelocityTexture.needsUpdate = true;
+
+        // Wrap texture in TSL texture node
+        const zeroVelocityNode = texture(this.zeroVelocityTexture);
 
         // Use Three.js's proven TRAA (Temporal Reprojection Anti-Aliasing) implementation
-        this.traaPass = traa(outputNode, scenePassDepth, zeroVelocity, this.camera);
+        this.traaPass = traa(outputNode, scenePassDepth, zeroVelocityNode, this.camera);
 
         // Apply optional sharpening after TRAA (counters blur)
         if (this.config.taaSharpeningEnabled) {
@@ -384,10 +408,14 @@ export class RenderPipeline {
    * Rebuild the pipeline when effects are toggled
    */
   rebuild(): void {
-    // Dispose old TRAA pass
+    // Dispose old TRAA pass and zero-velocity texture
     if (this.traaPass) {
       this.traaPass.dispose();
       this.traaPass = null;
+    }
+    if (this.zeroVelocityTexture) {
+      this.zeroVelocityTexture.dispose();
+      this.zeroVelocityTexture = null;
     }
     this.postProcessing = this.createPipeline();
   }
@@ -581,6 +609,10 @@ export class RenderPipeline {
     if (this.traaPass) {
       this.traaPass.dispose();
       this.traaPass = null;
+    }
+    if (this.zeroVelocityTexture) {
+      this.zeroVelocityTexture.dispose();
+      this.zeroVelocityTexture = null;
     }
     // PostProcessing handles its own disposal
   }
