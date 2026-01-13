@@ -1,10 +1,9 @@
 'use client';
 
 import dynamic from 'next/dynamic';
-import { Suspense, useEffect } from 'react';
+import { Suspense, useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { HUD } from '@/components/game/HUD';
-import { LoadingScreen } from '@/components/ui/LoadingScreen';
 import { useGameSetupStore } from '@/store/gameSetupStore';
 
 // Dynamic import for WebGPU game canvas (Three.js + Phaser overlay)
@@ -12,12 +11,22 @@ import { useGameSetupStore } from '@/store/gameSetupStore';
 // No SSR - both Three.js and Phaser require browser
 const WebGPUGameCanvas = dynamic(
   () => import('@/components/game/WebGPUGameCanvas').then((mod) => mod.WebGPUGameCanvas),
-  { ssr: false }
+  { ssr: false, loading: () => null }
 );
+
+// Simple black screen fallback - no content to prevent flash
+function BlackScreen() {
+  return <div className="fixed inset-0 bg-black" />;
+}
 
 export default function GamePage() {
   const router = useRouter();
   const { gameStarted, endGame } = useGameSetupStore();
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
 
   useEffect(() => {
     // Redirect to setup if game wasn't started from pregame lobby
@@ -32,14 +41,14 @@ export default function GamePage() {
     };
   }, [gameStarted, router, endGame]);
 
-  // Don't render game if not started from lobby
-  if (!gameStarted) {
-    return <LoadingScreen />;
+  // Start with black screen, prevent any flash
+  if (!mounted || !gameStarted) {
+    return <BlackScreen />;
   }
 
   return (
     <div className="game-container w-screen h-screen bg-black overflow-hidden">
-      <Suspense fallback={<LoadingScreen />}>
+      <Suspense fallback={<BlackScreen />}>
         <WebGPUGameCanvas />
         <HUD />
       </Suspense>
