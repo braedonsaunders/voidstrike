@@ -70,6 +70,25 @@ export interface TerrainFeatureConfig {
 }
 
 /**
+ * Defines a paintable terrain material/texture type.
+ * Materials are the visual textures applied to terrain (grass, dirt, rock, cliff).
+ */
+export interface MaterialConfig {
+  /** Unique identifier (0 = auto/slope-based, 1+ = explicit) */
+  id: number;
+  /** Display name */
+  name: string;
+  /** Icon or emoji for UI */
+  icon: string;
+  /** Preview color for editor */
+  color: string;
+  /** Keyboard shortcut */
+  shortcut?: string;
+  /** Texture file prefix (e.g., 'grass' for grass_diffuse.png) */
+  texturePrefix?: string;
+}
+
+/**
  * Complete terrain configuration
  */
 export interface TerrainConfig {
@@ -77,10 +96,14 @@ export interface TerrainConfig {
   elevations: ElevationConfig[];
   /** Available terrain features */
   features: TerrainFeatureConfig[];
+  /** Available paintable materials/textures (0=auto must be first) */
+  materials?: MaterialConfig[];
   /** Default elevation for new maps */
   defaultElevation: number;
   /** Default feature for new cells */
   defaultFeature: string;
+  /** Default material (usually 0 for auto) */
+  defaultMaterial?: number;
   /** Elevation range mode: 'discrete' (0,1,2) or 'continuous' (0-255) */
   elevationMode: 'discrete' | 'continuous';
   /** For continuous mode: min value */
@@ -265,8 +288,10 @@ export interface EditorCell {
   feature: string;
   /** Whether walkable */
   walkable: boolean;
-  /** Optional texture/variant ID */
+  /** Optional texture/variant ID (for visual variation within a material) */
   textureId?: number;
+  /** Material/texture type ID (0=auto based on slope, 1+=explicit material from config) */
+  materialId?: number;
 }
 
 /**
@@ -448,6 +473,8 @@ export interface EditorState {
   selectedElevation: number;
   /** Selected feature */
   selectedFeature: string;
+  /** Selected material ID (0=auto, 1+=explicit) */
+  selectedMaterial: number;
   /** Brush size */
   brushSize: number;
   /** Current zoom level */

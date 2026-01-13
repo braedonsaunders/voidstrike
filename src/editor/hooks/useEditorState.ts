@@ -8,7 +8,7 @@
  * - Selection state
  */
 
-import { useState, useCallback, useMemo } from 'react';
+import { useState, useCallback, useRef } from 'react';
 import type {
   EditorConfig,
   EditorState,
@@ -24,6 +24,7 @@ function createInitialState(config: EditorConfig): EditorState {
     activeTool: config.tools[0]?.id || 'brush',
     selectedElevation: config.terrain.defaultElevation,
     selectedFeature: config.terrain.defaultFeature,
+    selectedMaterial: config.terrain.defaultMaterial ?? 0,
     brushSize: config.tools.find((t) => t.hasBrushSize)?.defaultBrushSize || 5,
     zoom: config.canvas.defaultZoom,
     offset: { x: 0, y: 0 },
@@ -53,6 +54,7 @@ export interface UseEditorStateReturn {
   setActiveTool: (toolId: string) => void;
   setSelectedElevation: (elevation: number) => void;
   setSelectedFeature: (feature: string) => void;
+  setSelectedMaterial: (materialId: number) => void;
   setBrushSize: (size: number) => void;
 
   // View actions
@@ -65,6 +67,9 @@ export interface UseEditorStateReturn {
   loadMap: (data: EditorMapData) => void;
   updateCell: (x: number, y: number, updates: Partial<EditorCell>) => void;
   updateCells: (updates: Array<{ x: number; y: number; cell: Partial<EditorCell> }>) => void;
+  updateCellsBatched: (updates: Array<{ x: number; y: number; cell: Partial<EditorCell> }>) => void;
+  startBatch: () => void;
+  commitBatch: () => void;
   fillArea: (startX: number, startY: number, targetElevation: number, newElevation: number) => void;
 
   // Object actions
@@ -89,6 +94,8 @@ export interface UseEditorStateReturn {
 
 export function useEditorState(config: EditorConfig): UseEditorStateReturn {
   const [state, setState] = useState<EditorState>(() => createInitialState(config));
+  const batchStateRef = useRef<EditorMapData | null>(null);
+  const isBatchingRef = useRef(false);
 
   const maxUndoHistory = config.features?.maxUndoHistory ?? 50;
 
@@ -115,6 +122,10 @@ export function useEditorState(config: EditorConfig): UseEditorStateReturn {
 
   const setSelectedFeature = useCallback((feature: string) => {
     setState((prev) => ({ ...prev, selectedFeature: feature }));
+  }, []);
+
+  const setSelectedMaterial = useCallback((materialId: number) => {
+    setState((prev) => ({ ...prev, selectedMaterial: materialId }));
   }, []);
 
   const setBrushSize = useCallback((size: number) => {
@@ -218,6 +229,66 @@ export function useEditorState(config: EditorConfig): UseEditorStateReturn {
     },
     [maxUndoHistory]
   );
+
+  // Batched cell updates - updates without pushing to undo
+  const updateCellsBatched = useCallback(
+    (updates: Array<{ x: number; y: number; cell: Partial<EditorCell> }>) => {
+      setState((prev) => {
+        if (!prev.mapData) return prev;
+
+        // Create a map of updates for efficient lookup
+        const updateMap = new Map<string, Partial<EditorCell>>();
+        for (const { x, y, cell } of updates) {
+          if (y >= 0 && y < prev.mapData.height && x >= 0 && x < prev.mapData.width) {
+            updateMap.set(`${x},${y}`, cell);
+          }
+        }
+
+        const newTerrain = prev.mapData.terrain.map((row, rowY) =>
+          row.map((cell, cellX) => {
+            const update = updateMap.get(`${cellX},${rowY}`);
+            return update ? { ...cell, ...update } : cell;
+          })
+        );
+
+        return {
+          ...prev,
+          mapData: { ...prev.mapData, terrain: newTerrain },
+          isDirty: true,
+        };
+      });
+    },
+    []
+  );
+
+  // Start a batch operation - saves current state for undo
+  const startBatch = useCallback(() => {
+    if (state.mapData && !isBatchingRef.current) {
+      batchStateRef.current = cloneMapData(state.mapData);
+      isBatchingRef.current = true;
+    }
+  }, [state.mapData]);
+
+  // Commit a batch operation - pushes saved state to undo stack
+  const commitBatch = useCallback(() => {
+    if (batchStateRef.current && isBatchingRef.current) {
+      setState((prev) => {
+        if (!prev.mapData) return prev;
+
+        const newUndoStack = [...prev.undoStack.slice(-maxUndoHistory + 1), batchStateRef.current!];
+        batchStateRef.current = null;
+        isBatchingRef.current = false;
+
+        return {
+          ...prev,
+          undoStack: newUndoStack,
+          redoStack: [],
+        };
+      });
+    }
+    isBatchingRef.current = false;
+    batchStateRef.current = null;
+  }, [maxUndoHistory]);
 
   const fillArea = useCallback(
     (startX: number, startY: number, targetElevation: number, newElevation: number) => {
@@ -455,6 +526,7 @@ export function useEditorState(config: EditorConfig): UseEditorStateReturn {
     setActiveTool,
     setSelectedElevation,
     setSelectedFeature,
+    setSelectedMaterial,
     setBrushSize,
     setZoom,
     setOffset,
@@ -463,6 +535,9 @@ export function useEditorState(config: EditorConfig): UseEditorStateReturn {
     loadMap,
     updateCell,
     updateCells,
+    updateCellsBatched,
+    startBatch,
+    commitBatch,
     fillArea,
     addObject,
     updateObject,

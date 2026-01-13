@@ -178,6 +178,53 @@ export const VOIDSTRIKE_TERRAIN: TerrainConfig = {
       blocksVision: true,
     },
   ],
+
+  // Paintable materials/textures
+  // 0 = auto (slope-based), 1+ = explicit material
+  materials: [
+    {
+      id: 0,
+      name: 'Auto (Slope)',
+      icon: '🔄',
+      color: '#888888',
+      shortcut: 'Q',
+      texturePrefix: undefined, // Uses slope-based blending
+    },
+    {
+      id: 1,
+      name: 'Grass',
+      icon: '🌿',
+      color: '#4a6b4a',
+      shortcut: 'A',
+      texturePrefix: 'grass',
+    },
+    {
+      id: 2,
+      name: 'Dirt',
+      icon: '🟫',
+      color: '#8b7355',
+      shortcut: 'S',
+      texturePrefix: 'dirt',
+    },
+    {
+      id: 3,
+      name: 'Rock',
+      icon: '🪨',
+      color: '#6b6b6b',
+      shortcut: 'D',
+      texturePrefix: 'rock',
+    },
+    {
+      id: 4,
+      name: 'Cliff',
+      icon: '🏔',
+      color: '#5a4a3a',
+      shortcut: 'C',
+      texturePrefix: 'cliff',
+    },
+  ],
+
+  defaultMaterial: 0, // Auto by default
 };
 
 // ============================================
@@ -210,6 +257,18 @@ export const VOIDSTRIKE_TOOLS: ToolConfig[] = [
     minBrushSize: 2,
     maxBrushSize: 20,
     options: { feature: 'forest_light' },
+  },
+  {
+    id: 'border',
+    name: 'Border',
+    icon: '🏔',
+    shortcut: 'R',
+    type: 'brush',
+    hasBrushSize: true,
+    defaultBrushSize: 8,
+    minBrushSize: 4,
+    maxBrushSize: 30,
+    options: { elevation: 255, feature: 'cliff', walkable: false },
   },
 ];
 
@@ -357,6 +416,80 @@ export const VOIDSTRIKE_OBJECTS: ObjectTypeConfig[] = [
     defaultRadius: 3,
     movable: true,
   },
+
+  // Decorations
+  {
+    id: 'decoration_tree_pine_tall',
+    category: 'decorations',
+    name: 'Tall Pine Tree',
+    icon: '🌲',
+    color: '#2e7d32',
+    defaultRadius: 2,
+    movable: true,
+  },
+  {
+    id: 'decoration_tree_pine_medium',
+    category: 'decorations',
+    name: 'Medium Pine Tree',
+    icon: '🌲',
+    color: '#388e3c',
+    defaultRadius: 1.5,
+    movable: true,
+  },
+  {
+    id: 'decoration_tree_dead',
+    category: 'decorations',
+    name: 'Dead Tree',
+    icon: '🌳',
+    color: '#5d4037',
+    defaultRadius: 1.5,
+    movable: true,
+  },
+  {
+    id: 'decoration_rocks_large',
+    category: 'decorations',
+    name: 'Large Rocks',
+    icon: '🪨',
+    color: '#757575',
+    defaultRadius: 3,
+    movable: true,
+  },
+  {
+    id: 'decoration_rocks_small',
+    category: 'decorations',
+    name: 'Small Rocks',
+    icon: '⚫',
+    color: '#616161',
+    defaultRadius: 1,
+    movable: true,
+  },
+  {
+    id: 'decoration_crystal_formation',
+    category: 'decorations',
+    name: 'Crystal Formation',
+    icon: '💎',
+    color: '#7c4dff',
+    defaultRadius: 2,
+    movable: true,
+  },
+  {
+    id: 'decoration_bush',
+    category: 'decorations',
+    name: 'Bush',
+    icon: '🌿',
+    color: '#66bb6a',
+    defaultRadius: 1,
+    movable: true,
+  },
+  {
+    id: 'decoration_ruined_wall',
+    category: 'decorations',
+    name: 'Ruined Wall',
+    icon: '🧱',
+    color: '#8d6e63',
+    defaultRadius: 4,
+    movable: true,
+  },
 ];
 
 // ============================================
@@ -434,6 +567,7 @@ export const VOIDSTRIKE_PANELS: PanelConfig[] = [
   { id: 'paint', name: 'Paint', type: 'paint' },
   { id: 'bases', name: 'Bases', type: 'objects' },
   { id: 'objects', name: 'Objects', type: 'objects' },
+  { id: 'decorations', name: 'Decor', type: 'objects' },
   { id: 'settings', name: 'Settings', type: 'settings' },
   { id: 'validate', name: 'Validate', type: 'validate' },
 ];

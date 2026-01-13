@@ -12,7 +12,7 @@ import type {
   EditorObject,
   ValidationResult,
 } from '../config/EditorConfig';
-import type { MapData, MapCell, Expansion, WatchTower, DestructibleRock } from '@/data/maps/MapTypes';
+import type { MapData, MapCell, Expansion, WatchTower, DestructibleRock, MapDecoration } from '@/data/maps/MapTypes';
 import { ALL_MAPS, TERRAIN_FEATURE_CONFIG } from '@/data/maps';
 import type { TerrainFeature } from '@/data/maps/MapTypes';
 
@@ -80,6 +80,21 @@ function mapDataToEditorFormat(map: MapData): EditorMapData {
       y: dest.y,
       properties: {
         health: dest.health,
+      },
+    });
+  });
+
+  // Convert decorations
+  (map.decorations || []).forEach((dec, index) => {
+    objects.push({
+      id: `dec_${index}`,
+      type: `decoration_${dec.type}`,
+      x: dec.x,
+      y: dec.y,
+      properties: {
+        decorationType: dec.type,
+        scale: dec.scale || 1.0,
+        rotation: dec.rotation || 0,
       },
     });
   });
