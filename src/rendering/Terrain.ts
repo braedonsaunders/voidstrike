@@ -1203,8 +1203,10 @@ export class Terrain {
     // Helper: Check if cell is adjacent to a ramp
     // CRITICAL: Use larger search radius to properly handle wide ramps (10+ cells)
     // and ensure transition zones at ramp entry/exit points are walkable
+    // The radius MUST match or exceed the rampSearchRadius in isCliffEdgeCell (5)
+    // to ensure consistent behavior between cliff edge detection and ramp adjacency
     const isAdjacentToRamp = (cx: number, cy: number): boolean => {
-      const searchRadius = 3; // Expanded from 1 to handle wider ramps
+      const searchRadius = 6; // Must be >= rampSearchRadius (5) + 1 for full coverage
       for (let dy = -searchRadius; dy <= searchRadius; dy++) {
         for (let dx = -searchRadius; dx <= searchRadius; dx++) {
           const nx = cx + dx;
@@ -1257,13 +1259,19 @@ export class Terrain {
         }
 
         // Height variation check - exclude cells with extreme differences
+        // CRITICAL: Do NOT skip cells adjacent to ramps or ramp cells themselves
+        // Ramp transition zones often have large height differences by design
         const heights = [h00, h10, h01, h11];
         const minH = Math.min(...heights);
         const maxH = Math.max(...heights);
         const heightRange = maxH - minH;
 
-        // Skip non-ramp cells with excessive height variation (unless adjacent to ramp)
-        if (cell.terrain !== 'ramp' && heightRange > 2.0 && !adjacentToRamp) {
+        // Skip non-ramp cells with excessive height variation ONLY if:
+        // 1. Not a ramp cell AND
+        // 2. Not adjacent to any ramp AND
+        // 3. Height variation exceeds threshold
+        // The threshold is raised to 3.0 to allow for natural terrain transitions
+        if (cell.terrain !== 'ramp' && !adjacentToRamp && heightRange > 3.0) {
           continue;
         }
 
