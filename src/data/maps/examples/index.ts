@@ -5,4 +5,4 @@
  * for creating new maps.
  */
 
-export { SIMPLE_ARENA, SIMPLE_ARENA_DEF } from './SimpleArena';
+// Example maps will be added here as they are created

@@ -159,6 +159,12 @@ const CRYSTAL_CAVERNS_DEF: MapDefinition = defineMap({
     // Natural to Third connections (elevation 1 -> 0)
     { from: 'p1_nat', to: 'p1_third', type: 'ramp', width: 10 },
     { from: 'p2_nat', to: 'p2_third', type: 'ramp', width: 10 },
+
+    // Ground level connections (elevation 0)
+    { from: 'p1_third', to: 'center_gold', type: 'ground', width: 12 },
+    { from: 'p2_third', to: 'center_gold', type: 'ground', width: 12 },
+    { from: 'p1_fourth', to: 'center_gold', type: 'ground', width: 10 },
+    { from: 'p2_fourth', to: 'center_gold', type: 'ground', width: 10 },
   ],
 
   // Terrain features handled in post-processing for exact visual matching

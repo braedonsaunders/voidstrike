@@ -430,6 +430,18 @@ const VOID_ASSAULT_DEF: MapDefinition = defineMap({
     // Natural to low ground connections (elevation 1 -> 0)
     { from: 'p1_nat', to: 'center', type: 'ramp', width: 8 },
     { from: 'p2_nat', to: 'center', type: 'ramp', width: 8 },
+
+    // Third expansions to nearby areas (ground level)
+    { from: 'p1_third', to: 'gold_north', type: 'ground', width: 10 },
+    { from: 'p2_third', to: 'gold_south', type: 'ground', width: 10 },
+
+    // Fourth expansions to center (ground level)
+    { from: 'p1_fourth', to: 'center', type: 'ground', width: 10 },
+    { from: 'p2_fourth', to: 'center', type: 'ground', width: 10 },
+
+    // Gold expansions to center
+    { from: 'gold_north', to: 'center', type: 'ground', width: 8 },
+    { from: 'gold_south', to: 'center', type: 'ground', width: 8 },
   ],
 
   terrain: {},
