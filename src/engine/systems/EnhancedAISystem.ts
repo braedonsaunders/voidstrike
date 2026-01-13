@@ -1238,10 +1238,12 @@ export class EnhancedAISystem extends System {
       if (!transform || !unit) continue;
 
       // Look for a nearby enemy within sight range to directly attack
+      // Pass the attacker unit to filter targets it can actually hit
       const nearbyEnemy = this.findNearestEnemyEntity(
         ai.playerId,
         { x: transform.x, y: transform.y },
-        unit.sightRange
+        unit.sightRange,
+        unit  // Filter targets based on attacker's canAttackGround/canAttackAir
       );
 
       if (nearbyEnemy) {
@@ -1518,17 +1520,28 @@ export class EnhancedAISystem extends System {
 
     const currentTick = this.game.getCurrentTick();
 
-    // Find any nearby enemy entity to defend against - use direct targeting
-    const nearbyEnemy = this.findNearestEnemyEntity(ai.playerId, baseLocation, 30);
-    if (nearbyEnemy) {
-      // Direct attack command with specific target entity for each army unit
-      for (const unitId of armyUnits) {
-        const entity = this.world.getEntity(unitId);
-        if (!entity) continue;
-        const unit = entity.get<Unit>('Unit');
-        // Skip units already attacking with a target
-        if (unit && unit.state === 'attacking' && unit.targetEntityId !== null) continue;
+    // For each army unit, find a nearby enemy it can actually attack
+    let anyEnemyFound = false;
+    for (const unitId of armyUnits) {
+      const entity = this.world.getEntity(unitId);
+      if (!entity) continue;
+      const unit = entity.get<Unit>('Unit');
+      const transform = entity.get<Transform>('Transform');
+      if (!unit || !transform) continue;
 
+      // Skip units already attacking with a target
+      if (unit.state === 'attacking' && unit.targetEntityId !== null) continue;
+
+      // Find a nearby enemy this specific unit can attack (filters by canAttackGround/canAttackAir)
+      const nearbyEnemy = this.findNearestEnemyEntity(
+        ai.playerId,
+        { x: transform.x, y: transform.y },
+        30,
+        unit  // Pass attacker to filter valid targets
+      );
+
+      if (nearbyEnemy) {
+        anyEnemyFound = true;
         const directAttackCommand: GameCommand = {
           tick: currentTick,
           playerId: ai.playerId,
@@ -1538,7 +1551,9 @@ export class EnhancedAISystem extends System {
         };
         this.game.processCommand(directAttackCommand);
       }
-    } else {
+    }
+
+    if (!anyEnemyFound) {
       // No enemy in range - rally units near the base (not AT it) to form a defensive position
       // Position units in front of the base (offset by 8 units)
       const rallyPoint = {
@@ -1615,8 +1630,14 @@ export class EnhancedAISystem extends System {
   /**
    * Find the nearest enemy entity (unit or building) that can be attacked directly
    * Returns both the entity ID and position for more precise targeting
+   * @param attacker Optional - if provided, only returns targets this unit can actually attack
    */
-  private findNearestEnemyEntity(playerId: string, position: { x: number; y: number }, range: number): { entityId: number; x: number; y: number } | null {
+  private findNearestEnemyEntity(
+    playerId: string,
+    position: { x: number; y: number },
+    range: number,
+    attacker?: Unit
+  ): { entityId: number; x: number; y: number } | null {
     let closestEnemy: { entityId: number; x: number; y: number; distance: number } | null = null;
 
     // Check enemy units first (higher priority)
@@ -1625,10 +1646,17 @@ export class EnhancedAISystem extends System {
       const selectable = entity.get<Selectable>('Selectable');
       const health = entity.get<Health>('Health');
       const transform = entity.get<Transform>('Transform');
+      const targetUnit = entity.get<Unit>('Unit');
 
       if (!selectable || !health || !transform) continue;
       if (selectable.playerId === playerId) continue;
       if (health.isDead()) continue;
+
+      // If attacker provided, check if it can actually attack this target type
+      if (attacker && targetUnit) {
+        const targetIsFlying = targetUnit.isFlying;
+        if (!attacker.canAttackTarget(targetIsFlying)) continue;
+      }
 
       const dx = transform.x - position.x;
       const dy = transform.y - position.y;
@@ -1639,23 +1667,26 @@ export class EnhancedAISystem extends System {
       }
     }
 
-    // Also check enemy buildings
-    const buildings = this.getCachedBuildingsWithTransform();
-    for (const entity of buildings) {
-      const selectable = entity.get<Selectable>('Selectable');
-      const health = entity.get<Health>('Health');
-      const transform = entity.get<Transform>('Transform');
+    // Also check enemy buildings (buildings are always ground targets)
+    // If attacker can't attack ground, skip buildings entirely
+    if (!attacker || attacker.canAttackGround) {
+      const buildings = this.getCachedBuildingsWithTransform();
+      for (const entity of buildings) {
+        const selectable = entity.get<Selectable>('Selectable');
+        const health = entity.get<Health>('Health');
+        const transform = entity.get<Transform>('Transform');
 
-      if (!selectable || !health || !transform) continue;
-      if (selectable.playerId === playerId) continue;
-      if (health.isDead()) continue;
+        if (!selectable || !health || !transform) continue;
+        if (selectable.playerId === playerId) continue;
+        if (health.isDead()) continue;
 
-      const dx = transform.x - position.x;
-      const dy = transform.y - position.y;
-      const distance = Math.sqrt(dx * dx + dy * dy);
+        const dx = transform.x - position.x;
+        const dy = transform.y - position.y;
+        const distance = Math.sqrt(dx * dx + dy * dy);
 
-      if (distance <= range && (!closestEnemy || distance < closestEnemy.distance)) {
-        closestEnemy = { entityId: entity.id, x: transform.x, y: transform.y, distance };
+        if (distance <= range && (!closestEnemy || distance < closestEnemy.distance)) {
+          closestEnemy = { entityId: entity.id, x: transform.x, y: transform.y, distance };
+        }
       }
     }
 

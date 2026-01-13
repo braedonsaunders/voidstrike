@@ -428,6 +428,10 @@ export class AIMicroSystem extends System {
       if (nearbySelectable.playerId === mySelectable.playerId) continue;
       if (nearbyHealth.isDead()) continue;
 
+      // Skip targets this unit can't actually attack (air/ground mismatch)
+      const targetIsFlying = nearbyUnit.isFlying;
+      if (!unit.canAttackTarget(targetIsFlying)) continue;
+
       const dx = nearbyTransform.x - transform.x;
       const dy = nearbyTransform.y - transform.y;
       const distance = Math.sqrt(dx * dx + dy * dy);
