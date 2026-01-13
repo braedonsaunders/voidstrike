@@ -119,6 +119,10 @@ export const UNIT_DEFINITIONS: Record<string, UnitDefinition> = {
     canRepair: true,
     canAttackGround: true,
     canAttackAir: false, // Melee worker - ground only
+    // Data-driven fields for abstraction
+    targetPriority: 10, // Low priority - workers are not high-value targets
+    category: 'worker',
+    armorType: 'light',
   },
 
   trooper: {
@@ -142,6 +146,10 @@ export const UNIT_DEFINITIONS: Record<string, UnitDefinition> = {
     isBiological: true,
     canAttackGround: true,
     canAttackAir: true, // Rifle infantry - can shoot air
+    // Data-driven fields for abstraction
+    targetPriority: 60, // Standard infantry priority
+    category: 'infantry',
+    armorType: 'light',
   },
 
   breacher: {
@@ -267,6 +275,10 @@ export const UNIT_DEFINITIONS: Record<string, UnitDefinition> = {
     defaultMode: 'tank',
     canAttackGround: true,
     canAttackAir: false, // Artillery - cannot target air
+    // Data-driven fields for abstraction
+    targetPriority: 100, // High priority - siege units are high-value targets
+    category: 'vehicle',
+    armorType: 'armored',
   },
 
   colossus: {
@@ -397,6 +409,10 @@ export const UNIT_DEFINITIONS: Record<string, UnitDefinition> = {
     isMechanical: true,
     canAttackGround: true,
     canAttackAir: true, // Capital ship - can target both
+    // Data-driven fields for abstraction
+    targetPriority: 95, // Highest priority - capital ships are critical targets
+    category: 'ship',
+    armorType: 'massive',
   },
 
   // Detector unit - Overseer

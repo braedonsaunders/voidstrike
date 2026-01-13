@@ -68,6 +68,15 @@ export interface UnitDefinition {
   // Targeting restrictions - which types of units this unit can attack
   canAttackGround?: boolean; // Can attack ground units/buildings (default: true if has damage)
   canAttackAir?: boolean; // Can attack flying units (default: false)
+  // AI targeting priority (higher = more likely to be targeted first)
+  // If not set, uses category-based default from @/data/units/categories.ts
+  targetPriority?: number;
+  // Unit category for UI organization and upgrades (e.g., 'infantry', 'vehicle', 'ship')
+  // If not set, uses assignment from @/data/units/categories.ts
+  category?: string;
+  // Armor type for damage calculations (e.g., 'light', 'armored', 'massive')
+  // If not set, defaults to 'light'
+  armorType?: string;
 }
 
 // Command queue entry for shift-click queuing

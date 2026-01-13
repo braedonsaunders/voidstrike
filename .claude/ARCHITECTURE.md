@@ -134,6 +134,87 @@ voidstrike/
     └── ...                    # Test files
 ```
 
+## Data-Driven Game Configuration
+
+VOIDSTRIKE uses a **fully data-driven architecture** that separates game-specific values from engine code. This allows forking the codebase to create different RTS games (medieval, fantasy, etc.) by modifying data files without touching engine systems.
+
+### Configuration Modules (`src/data/`)
+
+| Module | File | Purpose |
+|--------|------|---------|
+| **Combat** | `combat/combat.ts` | Damage types, armor types, damage multipliers |
+| **Resources** | `resources/resources.ts` | Resource types, gather rates, starting amounts |
+| **Categories** | `units/categories.ts` | Unit categories, subcategories, target priorities |
+| **Abilities** | `abilities/abilities.ts` | All unit/building abilities with effects |
+| **Formations** | `formations/formations.ts` | Unit formation patterns and positioning |
+| **AI** | `ai/buildOrders.ts` | AI difficulty config, build orders, unit compositions |
+
+### Example: Creating an Age of Empires Clone
+
+To transform VOIDSTRIKE into a medieval RTS:
+
+```typescript
+// 1. Modify combat/combat.ts - Change damage types
+export const DAMAGE_TYPES = {
+  melee: { id: 'melee', name: 'Melee', description: 'Close combat damage' },
+  pierce: { id: 'pierce', name: 'Pierce', description: 'Arrow and bolt damage' },
+  siege: { id: 'siege', name: 'Siege', description: 'Building destruction' },
+};
+
+// 2. Modify resources/resources.ts - Add 4 resources
+export const RESOURCE_TYPES = {
+  food: { id: 'food', gatherRate: 10, ... },
+  wood: { id: 'wood', gatherRate: 8, ... },
+  gold: { id: 'gold', gatherRate: 5, requiresBuilding: true, ... },
+  stone: { id: 'stone', gatherRate: 4, ... },
+};
+
+// 3. Update units/dominion.ts - Define medieval units
+trooper: {
+  name: 'Militia',
+  damageType: 'melee',
+  armorType: 'infantry',
+  targetPriority: 50,
+  category: 'infantry',
+  // ...
+}
+```
+
+### Import Pattern
+
+All data modules are re-exported from a single index:
+
+```typescript
+// Import everything from one place
+import {
+  getDamageMultiplier,
+  RESOURCE_TYPES,
+  getFormation,
+  getAIConfig,
+} from '@/data';
+
+// Or import specific modules
+import { COMBAT_CONFIG } from '@/data/combat/combat';
+```
+
+### DefinitionRegistry Access
+
+The `DefinitionRegistry` provides centralized access to all configuration:
+
+```typescript
+// Access combat config
+const combat = DefinitionRegistry.getCombatConfig();
+console.log(combat.getDamageMultiplier('explosive', 'armored'));
+
+// Access resource types
+const resources = DefinitionRegistry.getResourceTypes();
+console.log(resources.types.minerals.gatherRate);
+
+// Access formations
+const formations = DefinitionRegistry.getFormations();
+const positions = formations.generateFormationPositions('wedge', 10, 0, 0, 0);
+```
+
 ## Core Systems
 
 ### Entity Component System (ECS)
