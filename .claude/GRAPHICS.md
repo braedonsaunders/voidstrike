@@ -19,6 +19,7 @@ VOIDSTRIKE uses Three.js with WebGPU renderer and TSL (Three.js Shading Language
 | **Bloom** | ✅ Implemented | HDR glow effect with threshold/strength/radius controls |
 | **FXAA** | ✅ Implemented | Fast Approximate Anti-Aliasing |
 | **TRAA** | ✅ Implemented | Temporal Reprojection Anti-Aliasing with MRT velocity buffers |
+| **SSR** | ✅ Implemented | Screen Space Reflections for metallic surfaces |
 | **EASU Upscaling** | ✅ Implemented | Edge-Adaptive Spatial Upsampling (FSR 1.0 inspired) |
 | **RCAS Sharpening** | ✅ Implemented | Robust Contrast-Adaptive Sharpening |
 | **Vignette** | ✅ Implemented | Cinematic edge darkening |
@@ -57,6 +58,22 @@ For future MRT velocity support, all InstancedMesh objects store previous frame 
 - Swapped at frame start before updating current matrices
 - Managed by `InstancedVelocity.ts` utility
 
+#### SSR (Screen Space Reflections)
+- Real-time reflections on metallic surfaces
+- Uses MRT to output view-space normals
+- Configurable parameters:
+  - `ssrMaxDistance` - Maximum reflection ray distance
+  - `ssrOpacity` - Reflection intensity (0-1)
+  - `ssrThickness` - Ray thickness for hit detection
+  - `ssrMaxRoughness` - Maximum roughness that still reflects
+
+```typescript
+// Enable SSR in graphics settings
+renderPipeline.applyConfig({ ssrEnabled: true });
+```
+
+**Note:** SSR uses MRT for normals which works correctly with InstancedMesh (unlike velocity).
+
 #### EASU Upscaling
 - Renders at lower resolution, upscales to display resolution
 - 12-tap edge-adaptive filter preserves sharp edges
@@ -65,12 +82,13 @@ For future MRT velocity support, all InstancedMesh objects store previous frame 
 
 ### Effect Pipeline Order
 
-1. **Scene Pass** - Render scene (no MRT currently - see TAA notes above)
+1. **Scene Pass** - Render scene (MRT with normals when SSR enabled)
 2. **EASU Upscaling** - Applied first while we have a texture node (needs `.sample()`)
 3. **GTAO** - Ambient occlusion multiplied with scene
-4. **Bloom** - Additive HDR glow
-5. **Color Grading** - Exposure, saturation, contrast, vignette
-6. **Anti-Aliasing** - TRAA (zero-velocity) or FXAA as final pass
+4. **SSR** - Screen space reflections (when enabled)
+5. **Bloom** - Additive HDR glow
+6. **Color Grading** - Exposure, saturation, contrast, vignette
+7. **Anti-Aliasing** - TRAA (zero-velocity) or FXAA as final pass
 
 ---
 
@@ -78,21 +96,7 @@ For future MRT velocity support, all InstancedMesh objects store previous frame 
 
 ### High Priority (Easy to Add)
 
-#### 1. Screen Space Reflections (SSR)
-Three.js has an official [WebGPU SSR example](https://threejs.org/examples/webgpu_postprocessing_ssr.html).
-
-**Benefits:**
-- Realistic reflections on metallic units, water, floors
-- No extra draw calls (screen-space technique)
-- Works with roughness for blurred reflections
-
-**Implementation:**
-```typescript
-import { ssr } from 'three/addons/tsl/display/SSRNode.js';
-const ssrPass = ssr(scenePassColor, scenePassDepth, scenePassNormal, camera);
-```
-
-#### 2. Motion Blur
+#### 1. Motion Blur
 **Note:** Requires MRT velocity which currently causes jiggling with InstancedMesh. Would need custom velocity solution for instanced objects.
 
 **Benefits:**
@@ -107,7 +111,7 @@ const blurredNode = motionBlur(outputNode, velocityNode);
 
 **Blockers:** Same InstancedMesh velocity issue as TRAA - see TAA notes above.
 
-#### 3. Depth of Field (Bokeh DoF)
+#### 2. Depth of Field (Bokeh DoF)
 ```typescript
 import { dof } from 'three/tsl';
 // dof(node, viewZNode, focusDistance, focalLength, bokehScale)
@@ -119,14 +123,14 @@ const dofNode = dof(outputNode, scenePassDepth, 10, 50, 2.0);
 - Dramatic cutscene moments
 - Menu/pause screen background blur
 
-#### 4. Film Grain & Chromatic Aberration
+#### 3. Film Grain & Chromatic Aberration
 ```typescript
 import { film, chromaticAberration } from 'three/tsl';
 const grainNode = film(outputNode, intensity, grayscale);
 const caNode = chromaticAberration(outputNode, offset);
 ```
 
-#### 5. Anamorphic Lens Flares
+#### 4. Anamorphic Lens Flares
 ```typescript
 import { anamorphic, lensflare } from 'three/tsl';
 const flareNode = anamorphic(outputNode, threshold, scale, samples);
@@ -136,7 +140,7 @@ const flareNode = anamorphic(outputNode, threshold, scale, samples);
 
 ### Medium Priority (More Work, Big Impact)
 
-#### 6. Screen Space Global Illumination (SSGI)
+#### 5. Screen Space Global Illumination (SSGI)
 [Anderson Mancini's SSGI demo](https://ssgi-webgpu-demo.vercel.app/) shows this working with Three.js WebGPU + TSL.
 
 **Features:**
@@ -146,7 +150,7 @@ const flareNode = anamorphic(outputNode, threshold, scale, samples);
 
 **Impact:** Buildings casting colored light, explosions illuminating surroundings - would set VOIDSTRIKE apart from any browser game.
 
-#### 7. Volumetric Lighting / God Rays
+#### 6. Volumetric Lighting / God Rays
 [Official Three.js example](https://threejs.org/examples/webgpu_volume_lighting.html) available.
 
 **Features:**
@@ -156,7 +160,7 @@ const flareNode = anamorphic(outputNode, threshold, scale, samples);
 
 **Impact:** Perfect for battlefield atmosphere, smoke, dust effects.
 
-#### 8. PCSS Soft Shadows
+#### 7. PCSS Soft Shadows
 Percentage-Closer Soft Shadows with variable penumbra.
 
 **Features:**
@@ -164,7 +168,7 @@ Percentage-Closer Soft Shadows with variable penumbra.
 - More realistic than hard shadows
 - Vogel disk sampling for quality
 
-#### 9. Atmospheric Scattering
+#### 8. Atmospheric Scattering
 Based on [Epic's Sebastian Hillaire paper](https://discourse.threejs.org/t/volumetric-lighting-in-webgpu/87959).
 
 **Features:**
@@ -176,12 +180,12 @@ Based on [Epic's Sebastian Hillaire paper](https://discourse.threejs.org/t/volum
 
 ### Cutting-Edge (Research Required)
 
-#### 10. Temporal Super Resolution (TSR/DLSS-like)
+#### 9. Temporal Super Resolution (TSR/DLSS-like)
 Use MRT velocity data for frame interpolation and temporal upscaling beyond EASU.
 
 **Potential:** True industry-first for browsers - neural-network-free temporal upscaling using motion vectors for reconstruction.
 
-#### 11. GPU Particle Systems with Collision
+#### 10. GPU Particle Systems with Collision
 Compute shader particles that interact with depth buffer.
 
 **Features:**
@@ -189,7 +193,7 @@ Compute shader particles that interact with depth buffer.
 - Scene collision via depth testing
 - Thousands of particles at 60fps
 
-#### 12. Deferred Decals
+#### 11. Deferred Decals
 Project damage marks, tire tracks, blast craters onto any surface.
 
 **Features:**
