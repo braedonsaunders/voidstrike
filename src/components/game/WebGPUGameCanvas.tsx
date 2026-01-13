@@ -48,6 +48,12 @@ import {
 } from '@/rendering/tsl';
 
 import { useGameStore } from '@/store/gameStore';
+
+// PERF: Pooled Vector3 objects for combat event handlers (avoids allocation per attack/death)
+const _combatStartPos = new THREE.Vector3();
+const _combatEndPos = new THREE.Vector3();
+const _combatDirection = new THREE.Vector3();
+const _deathPos = new THREE.Vector3();
 import { useGameSetupStore, getLocalPlayerId, isSpectatorMode, isBattleSimulatorMode } from '@/store/gameSetupStore';
 import { SelectionBox } from './SelectionBox';
 import { LoadingScreen } from './LoadingScreen';
@@ -431,6 +437,7 @@ export function WebGPUGameCanvas() {
       );
 
       // Hook particle system to combat events
+      // PERF: Uses pooled Vector3 objects to avoid allocation per attack
       game.eventBus.on('combat:attack', (data: {
         attackerPos?: { x: number; y: number };
         targetPos?: { x: number; y: number };
@@ -439,20 +446,21 @@ export function WebGPUGameCanvas() {
         if (data.attackerPos && data.targetPos && effectEmitterRef.current) {
           const startHeight = terrain.getHeightAt(data.attackerPos.x, data.attackerPos.y) + 0.5;
           const endHeight = terrain.getHeightAt(data.targetPos.x, data.targetPos.y) + 0.5;
-          const startPos = new THREE.Vector3(data.attackerPos.x, startHeight, data.attackerPos.y);
-          const endPos = new THREE.Vector3(data.targetPos.x, endHeight, data.targetPos.y);
-          const direction = endPos.clone().sub(startPos).normalize();
+          _combatStartPos.set(data.attackerPos.x, startHeight, data.attackerPos.y);
+          _combatEndPos.set(data.targetPos.x, endHeight, data.targetPos.y);
+          _combatDirection.copy(_combatEndPos).sub(_combatStartPos).normalize();
 
-          effectEmitterRef.current.muzzleFlash(startPos, direction);
-          effectEmitterRef.current.impact(endPos, direction.negate());
+          effectEmitterRef.current.muzzleFlash(_combatStartPos, _combatDirection);
+          effectEmitterRef.current.impact(_combatEndPos, _combatDirection.negate());
         }
       });
 
+      // PERF: Uses pooled Vector3 to avoid allocation per death
       game.eventBus.on('unit:died', (data: { position?: { x: number; y: number } }) => {
         if (data.position && effectEmitterRef.current) {
           const terrainHeight = terrain.getHeightAt(data.position.x, data.position.y);
-          const pos = new THREE.Vector3(data.position.x, terrainHeight + 0.5, data.position.y);
-          effectEmitterRef.current.explosion(pos, 1);
+          _deathPos.set(data.position.x, terrainHeight + 0.5, data.position.y);
+          effectEmitterRef.current.explosion(_deathPos, 1);
         }
       });
 

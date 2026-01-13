@@ -26,6 +26,10 @@ export class SelectionSystem extends System {
   // Terrain height lookup function (set by canvas)
   private getTerrainHeightFn: ((x: number, z: number) => number) | null = null;
 
+  // PERF: Viewport bounds for culling entities outside visible area (in world space)
+  // Updated by camera system when viewport changes
+  private viewportBounds: { minX: number; maxX: number; minZ: number; maxZ: number } | null = null;
+
   constructor(game: Game) {
     super(game);
     this.setupEventListeners();
@@ -43,6 +47,28 @@ export class SelectionSystem extends System {
    */
   public setTerrainHeightFunction(fn: (x: number, z: number) => number): void {
     this.getTerrainHeightFn = fn;
+  }
+
+  /**
+   * PERF: Set the visible viewport bounds for culling (in world space)
+   * Should be called by camera system when viewport/camera changes
+   */
+  public setViewportBounds(minX: number, maxX: number, minZ: number, maxZ: number): void {
+    this.viewportBounds = { minX, maxX, minZ, maxZ };
+  }
+
+  /**
+   * PERF: Check if a world position is potentially within the viewport
+   * Uses a buffer to account for entity radius and camera perspective
+   */
+  private isInViewport(x: number, z: number, buffer: number = 10): boolean {
+    if (!this.viewportBounds) return true; // No culling if bounds not set
+    return (
+      x >= this.viewportBounds.minX - buffer &&
+      x <= this.viewportBounds.maxX + buffer &&
+      z >= this.viewportBounds.minZ - buffer &&
+      z <= this.viewportBounds.maxZ + buffer
+    );
   }
 
   private setupEventListeners(): void {
@@ -110,6 +136,9 @@ export class SelectionSystem extends System {
 
       // Skip dead entities
       if (health && health.isDead()) continue;
+
+      // PERF: Early reject entities outside viewport bounds (world space culling)
+      if (!this.isInViewport(transform.x, transform.y)) continue;
 
       // Convert entity world position to screen space
       // Must include terrain height + visual height offset for accurate projection
@@ -350,6 +379,9 @@ export class SelectionSystem extends System {
 
       // Skip dead units
       if (health && health.isDead()) continue;
+
+      // PERF: Early reject entities outside viewport bounds (world space culling)
+      if (!this.isInViewport(transform.x, transform.y)) continue;
 
       // Convert entity to screen space - must include terrain height + visual offset
       const terrainHeight = this.getTerrainHeightFn ? this.getTerrainHeightFn(transform.x, transform.y) : 0;

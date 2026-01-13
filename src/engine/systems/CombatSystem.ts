@@ -378,15 +378,17 @@ export class CombatSystem extends System {
         health.current = 0;
         buildingComp.state = 'destroyed';
 
-        // If this is an extractor, restore the vespene geyser visibility
+        // PERF: If this is an extractor, restore the vespene geyser visibility
+        // Uses O(1) reverse lookup via linkedResourceId instead of O(n) scan
         if (buildingComp.buildingId === 'extractor') {
-          const resources = this.world.getEntitiesWith('Resource', 'Transform');
-          for (const resourceEntity of resources) {
-            const resource = resourceEntity.get<Resource>('Resource');
-            if (resource && resource.extractorEntityId === building.id) {
-              resource.extractorEntityId = null;
-              debugCombat.log(`CombatSystem: Extractor destroyed, vespene geyser ${resourceEntity.id} restored`);
-              break;
+          if (buildingComp.linkedResourceId !== null) {
+            const resourceEntity = this.world.getEntity(buildingComp.linkedResourceId);
+            if (resourceEntity) {
+              const resource = resourceEntity.get<Resource>('Resource');
+              if (resource) {
+                resource.extractorEntityId = null;
+                debugCombat.log(`CombatSystem: Extractor destroyed, vespene geyser ${buildingComp.linkedResourceId} restored`);
+              }
             }
           }
         }

@@ -3,6 +3,9 @@ import { BiomeConfig } from './Biomes';
 import { MapData } from '@/data/maps';
 import AssetManager from '@/assets/AssetManager';
 
+// PERF: Reusable Euler object for instanced decoration loops (avoids thousands of allocations)
+const _tempEuler = new THREE.Euler();
+
 /**
  * Build a set of cells that should be cleared near ramps.
  * Uses circular clearance around ramp cells PLUS extended clearance
@@ -321,7 +324,9 @@ export class InstancedTrees {
       for (let i = 0; i < positions.length; i++) {
         const p = positions[i];
         position.set(p.x, p.height + yOffset * p.scale, p.y);
-        quaternion.setFromEuler(new THREE.Euler(0, p.rotation, 0));
+        // PERF: Reuse _tempEuler instead of creating new Euler per instance
+        _tempEuler.set(0, p.rotation, 0);
+        quaternion.setFromEuler(_tempEuler);
         scale.set(p.scale, p.scale, p.scale);
         matrix.compose(position, quaternion, scale);
         instancedMesh.setMatrixAt(i, matrix);
@@ -514,7 +519,9 @@ export class InstancedRocks {
       for (let i = 0; i < positions.length; i++) {
         const p = positions[i];
         position.set(p.x, p.height + yOffset * p.scale, p.y);
-        quaternion.setFromEuler(new THREE.Euler(0, p.rotation, 0));
+        // PERF: Reuse _tempEuler instead of creating new Euler per instance
+        _tempEuler.set(0, p.rotation, 0);
+        quaternion.setFromEuler(_tempEuler);
         scale.set(p.scale, p.scale, p.scale);
         matrix.compose(position, quaternion, scale);
         instancedMesh.setMatrixAt(i, matrix);
@@ -636,7 +643,9 @@ export class InstancedGrass {
       const p = positions[i];
 
       position.set(p.x, p.y + p.scale * 2, p.z);
-      quaternion.setFromEuler(new THREE.Euler(0, p.rotation, 0));
+      // PERF: Reuse _tempEuler instead of creating new Euler per instance
+      _tempEuler.set(0, p.rotation, 0);
+      quaternion.setFromEuler(_tempEuler);
       scale.set(p.scale, p.scale, p.scale);
       matrix.compose(position, quaternion, scale);
       this.instancedMesh.setMatrixAt(i, matrix);
@@ -674,7 +683,8 @@ export class InstancedPebbles {
     const pebbleCount = Math.min(500, mapData.width * mapData.height * 0.04);
 
     // Generate pebble positions
-    const positions: Array<{ x: number; y: number; z: number; scale: number; rotation: THREE.Euler }> = [];
+    // PERF: Store rotation values directly instead of Euler objects to avoid allocations
+    const positions: Array<{ x: number; y: number; z: number; scale: number; rotX: number; rotY: number; rotZ: number }> = [];
 
     for (let i = 0; i < pebbleCount; i++) {
       const x = 5 + Math.random() * (mapData.width - 10);
@@ -692,11 +702,9 @@ export class InstancedPebbles {
             y: height + size * 0.3,
             z,
             scale: size,
-            rotation: new THREE.Euler(
-              Math.random() * Math.PI,
-              Math.random() * Math.PI,
-              Math.random() * Math.PI
-            ),
+            rotX: Math.random() * Math.PI,
+            rotY: Math.random() * Math.PI,
+            rotZ: Math.random() * Math.PI,
           });
         }
       }
@@ -728,7 +736,9 @@ export class InstancedPebbles {
       const p = positions[i];
 
       position.set(p.x, p.y, p.z);
-      quaternion.setFromEuler(p.rotation);
+      // PERF: Reuse _tempEuler instead of storing Euler objects
+      _tempEuler.set(p.rotX, p.rotY, p.rotZ);
+      quaternion.setFromEuler(_tempEuler);
       scale.set(p.scale, p.scale, p.scale);
       matrix.compose(position, quaternion, scale);
       this.instancedMesh.setMatrixAt(i, matrix);
