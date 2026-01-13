@@ -29,6 +29,11 @@ import { RTSCamera } from '@/rendering/Camera';
 export interface Editor3DCanvasProps {
   config: EditorConfig;
   state: EditorState;
+  visibility: {
+    labels: boolean;
+    grid: boolean;
+    categories: Record<string, boolean>;
+  };
   onCellsUpdateBatched: (updates: Array<{ x: number; y: number; cell: Partial<EditorCell> }>) => void;
   onStartBatch: () => void;
   onCommitBatch: () => void;
@@ -41,6 +46,7 @@ export interface Editor3DCanvasProps {
 export function Editor3DCanvas({
   config,
   state,
+  visibility,
   onCellsUpdateBatched,
   onStartBatch,
   onCommitBatch,
@@ -174,8 +180,8 @@ export function Editor3DCanvas({
       panSpeed: 60,
       zoomSpeed: 5,
       rotationSpeed: 2,
-      edgeScrollSpeed: 0, // Disable edge scroll in editor
-      edgeScrollThreshold: 0,
+      edgeScrollSpeed: 50, // Edge panning enabled
+      edgeScrollThreshold: 40,
     });
     rtsCameraRef.current = rtsCamera;
 
@@ -288,6 +294,24 @@ export function Editor3DCanvas({
     if (!isInitialized || !mapData) return;
     terrainRef.current?.setBiome(mapData.biomeId);
   }, [isInitialized, mapData?.biomeId]);
+
+  // Update visibility
+  useEffect(() => {
+    if (!isInitialized) return;
+
+    // Labels visibility
+    objectsRef.current?.setLabelsVisible(visibility.labels);
+
+    // Grid visibility
+    if (gridRef.current) {
+      gridRef.current.mesh.visible = visibility.grid;
+    }
+
+    // Category visibility
+    for (const [category, visible] of Object.entries(visibility.categories)) {
+      objectsRef.current?.setCategoryVisible(category, visible);
+    }
+  }, [isInitialized, visibility]);
 
   // Handle resize
   useEffect(() => {
@@ -606,7 +630,7 @@ export function Editor3DCanvas({
           color: config.theme.text.muted,
         }}
       >
-        Scroll to zoom • Middle-drag to rotate • Arrow keys to pan • Click to paint
+        Scroll zoom • Middle-drag rotate • Edge/arrows pan • Click paint
       </div>
     </div>
   );

@@ -2,6 +2,7 @@
  * EditorObjects - 3D object rendering for the map editor
  *
  * Renders map objects (bases, towers, destructibles) as 3D representations.
+ * Supports category-based visibility toggles.
  */
 
 import * as THREE from 'three';
@@ -21,6 +22,8 @@ const OBJECT_VISUALS: Record<string, { color: number; height: number; shape: 'cy
 
 export interface EditorObjectInstance {
   id: string;
+  type: string;
+  category: string;
   mesh: THREE.Mesh;
   selectionRing: THREE.Mesh;
   label: THREE.Sprite;
@@ -34,6 +37,10 @@ export class EditorObjects {
   private selectedIds: Set<string> = new Set();
   private getTerrainHeight: ((x: number, z: number) => number) | null = null;
 
+  // Visibility by category
+  private categoryVisibility: Map<string, boolean> = new Map();
+  private labelsVisible: boolean = true;
+
   constructor() {
     this.group = new THREE.Group();
   }
@@ -43,6 +50,12 @@ export class EditorObjects {
    */
   public setObjectTypes(types: ObjectTypeConfig[]): void {
     this.objectTypes = types;
+    // Initialize all categories as visible
+    for (const type of types) {
+      if (!this.categoryVisibility.has(type.category)) {
+        this.categoryVisibility.set(type.category, true);
+      }
+    }
   }
 
   /**
@@ -50,6 +63,57 @@ export class EditorObjects {
    */
   public setTerrainHeightFn(fn: (x: number, z: number) => number): void {
     this.getTerrainHeight = fn;
+  }
+
+  /**
+   * Toggle visibility for a category
+   */
+  public setCategoryVisible(category: string, visible: boolean): void {
+    this.categoryVisibility.set(category, visible);
+    this.updateVisibility();
+  }
+
+  /**
+   * Get category visibility
+   */
+  public isCategoryVisible(category: string): boolean {
+    return this.categoryVisibility.get(category) ?? true;
+  }
+
+  /**
+   * Get all categories
+   */
+  public getCategories(): string[] {
+    return Array.from(this.categoryVisibility.keys());
+  }
+
+  /**
+   * Toggle label visibility
+   */
+  public setLabelsVisible(visible: boolean): void {
+    this.labelsVisible = visible;
+    for (const instance of this.objects.values()) {
+      instance.label.visible = visible && this.isCategoryVisible(instance.category);
+    }
+  }
+
+  /**
+   * Check if labels are visible
+   */
+  public areLabelsVisible(): boolean {
+    return this.labelsVisible;
+  }
+
+  /**
+   * Update visibility based on category settings
+   */
+  private updateVisibility(): void {
+    for (const instance of this.objects.values()) {
+      const visible = this.isCategoryVisible(instance.category);
+      instance.mesh.visible = visible;
+      instance.selectionRing.visible = visible && this.selectedIds.has(instance.id);
+      instance.label.visible = visible && this.labelsVisible;
+    }
   }
 
   /**
@@ -72,6 +136,7 @@ export class EditorObjects {
     const objType = this.objectTypes.find((t) => t.id === obj.type);
     const visual = OBJECT_VISUALS[obj.type] || { color: 0xffffff, height: 1, shape: 'cylinder' as const };
     const radius = obj.radius || objType?.defaultRadius || 5;
+    const category = objType?.category || 'objects';
 
     // Get terrain height at position
     const terrainHeight = this.getTerrainHeight ? this.getTerrainHeight(obj.x, obj.y) : 0;
@@ -83,28 +148,24 @@ export class EditorObjects {
         geometry = new THREE.BoxGeometry(radius * 0.4, visual.height, radius * 0.4);
         break;
       case 'sphere':
-        geometry = new THREE.SphereGeometry(radius * 0.3, 16, 12);
+        geometry = new THREE.SphereGeometry(radius * 0.3, 12, 8);
         break;
       case 'cylinder':
       default:
-        geometry = new THREE.CylinderGeometry(radius * 0.3, radius * 0.4, visual.height, 16);
+        geometry = new THREE.CylinderGeometry(radius * 0.3, radius * 0.4, visual.height, 12);
     }
 
-    const material = new THREE.MeshStandardMaterial({
+    const material = new THREE.MeshLambertMaterial({
       color: objType?.color ? parseInt(objType.color.replace('#', ''), 16) : visual.color,
-      roughness: 0.6,
-      metalness: 0.2,
       transparent: true,
       opacity: 0.85,
     });
 
     const mesh = new THREE.Mesh(geometry, material);
     mesh.position.set(obj.x, terrainHeight + visual.height / 2, obj.y);
-    mesh.castShadow = true;
-    mesh.receiveShadow = true;
 
     // Create selection ring
-    const ringGeometry = new THREE.RingGeometry(radius * 0.9, radius, 32);
+    const ringGeometry = new THREE.RingGeometry(radius * 0.9, radius, 24);
     const ringMaterial = new THREE.MeshBasicMaterial({
       color: 0xffffff,
       transparent: true,
@@ -115,9 +176,15 @@ export class EditorObjects {
     selectionRing.rotation.x = -Math.PI / 2;
     selectionRing.position.set(obj.x, terrainHeight + 0.1, obj.y);
 
-    // Create label sprite
+    // Create label sprite (positioned closer to object with smaller labels)
     const label = this.createLabel(objType?.name || obj.type, objType?.icon || '●');
-    label.position.set(obj.x, terrainHeight + visual.height + 1, obj.y);
+    label.position.set(obj.x, terrainHeight + visual.height + 0.3, obj.y);
+
+    // Check category visibility
+    const categoryVisible = this.isCategoryVisible(category);
+    mesh.visible = categoryVisible;
+    selectionRing.visible = false;
+    label.visible = categoryVisible && this.labelsVisible;
 
     // Add to scene
     this.group.add(mesh);
@@ -127,6 +194,8 @@ export class EditorObjects {
     // Store reference
     this.objects.set(obj.id, {
       id: obj.id,
+      type: obj.type,
+      category,
       mesh,
       selectionRing,
       label,
@@ -145,7 +214,7 @@ export class EditorObjects {
 
     instance.mesh.position.set(x, terrainHeight + currentHeight, y);
     instance.selectionRing.position.set(x, terrainHeight + 0.1, y);
-    instance.label.position.set(x, instance.mesh.position.y + 1, y);
+    instance.label.position.set(x, instance.mesh.position.y + 0.3, y);
   }
 
   /**
@@ -177,7 +246,8 @@ export class EditorObjects {
       const instance = this.objects.get(id);
       if (instance) {
         (instance.selectionRing.material as THREE.MeshBasicMaterial).opacity = 0;
-        (instance.mesh.material as THREE.MeshStandardMaterial).emissive.setHex(0x000000);
+        instance.selectionRing.visible = false;
+        (instance.mesh.material as THREE.MeshLambertMaterial).emissive?.setHex(0x000000);
       }
     }
 
@@ -185,10 +255,11 @@ export class EditorObjects {
     this.selectedIds = new Set(ids);
     for (const id of this.selectedIds) {
       const instance = this.objects.get(id);
-      if (instance) {
+      if (instance && this.isCategoryVisible(instance.category)) {
         (instance.selectionRing.material as THREE.MeshBasicMaterial).opacity = 0.8;
         (instance.selectionRing.material as THREE.MeshBasicMaterial).color.setHex(0x00ffff);
-        (instance.mesh.material as THREE.MeshStandardMaterial).emissive.setHex(0x222222);
+        instance.selectionRing.visible = true;
+        (instance.mesh.material as THREE.MeshLambertMaterial).emissive?.setHex(0x222222);
       }
     }
   }
@@ -197,8 +268,10 @@ export class EditorObjects {
    * Find object at screen position via raycasting
    */
   public findObjectAt(raycaster: THREE.Raycaster): string | null {
-    const meshes = Array.from(this.objects.values()).map((o) => o.mesh);
-    const intersects = raycaster.intersectObjects(meshes);
+    const visibleMeshes = Array.from(this.objects.values())
+      .filter((o) => o.mesh.visible)
+      .map((o) => o.mesh);
+    const intersects = raycaster.intersectObjects(visibleMeshes);
 
     if (intersects.length > 0) {
       for (const [id, instance] of this.objects) {
@@ -230,30 +303,31 @@ export class EditorObjects {
   }
 
   /**
-   * Create a text label sprite
+   * Create a text label sprite (minimal size)
    */
   private createLabel(text: string, icon: string): THREE.Sprite {
     const canvas = document.createElement('canvas');
     const ctx = canvas.getContext('2d')!;
-    canvas.width = 128;
-    canvas.height = 64;
+    canvas.width = 64;
+    canvas.height = 24;
 
     // Background
     ctx.fillStyle = 'rgba(0, 0, 0, 0.6)';
-    ctx.roundRect(0, 0, canvas.width, canvas.height, 8);
+    ctx.roundRect(0, 0, canvas.width, canvas.height, 4);
     ctx.fill();
 
-    // Icon
-    ctx.font = '24px sans-serif';
+    // Icon only (text removed for minimal size)
+    ctx.font = 'bold 14px sans-serif';
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
     ctx.fillStyle = '#ffffff';
-    ctx.fillText(icon, 24, 32);
+    ctx.fillText(icon, 12, 12);
 
-    // Text
-    ctx.font = '14px sans-serif';
+    // Short abbreviation
+    ctx.font = '10px sans-serif';
     ctx.textAlign = 'left';
-    ctx.fillText(text, 48, 32);
+    const abbrev = text.substring(0, 4);
+    ctx.fillText(abbrev, 22, 12);
 
     const texture = new THREE.CanvasTexture(canvas);
     const material = new THREE.SpriteMaterial({
@@ -263,7 +337,7 @@ export class EditorObjects {
     });
 
     const sprite = new THREE.Sprite(material);
-    sprite.scale.set(8, 4, 1);
+    sprite.scale.set(2, 0.75, 1); // Very small
 
     return sprite;
   }

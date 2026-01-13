@@ -22,7 +22,7 @@
 
 'use client';
 
-import { useEffect, useCallback, useMemo } from 'react';
+import { useEffect, useCallback, useMemo, useState } from 'react';
 import type {
   EditorConfig,
   EditorDataProvider,
@@ -72,6 +72,43 @@ export function EditorCore({
 }: EditorCoreProps) {
   const editorState = useEditorState(config);
   const { state, loadMap } = editorState;
+
+  // Visibility state for 3D elements
+  const [visibility, setVisibility] = useState({
+    labels: true,
+    grid: true,
+    categories: {} as Record<string, boolean>,
+  });
+
+  // Initialize category visibility when config loads
+  useEffect(() => {
+    const categories: Record<string, boolean> = {};
+    for (const objType of config.objectTypes) {
+      if (!(objType.category in categories)) {
+        categories[objType.category] = true;
+      }
+    }
+    setVisibility((prev) => ({ ...prev, categories }));
+  }, [config.objectTypes]);
+
+  // Visibility toggle handlers
+  const toggleLabels = useCallback(() => {
+    setVisibility((prev) => ({ ...prev, labels: !prev.labels }));
+  }, []);
+
+  const toggleGrid = useCallback(() => {
+    setVisibility((prev) => ({ ...prev, grid: !prev.grid }));
+  }, []);
+
+  const toggleCategory = useCallback((category: string) => {
+    setVisibility((prev) => ({
+      ...prev,
+      categories: {
+        ...prev.categories,
+        [category]: !prev.categories[category],
+      },
+    }));
+  }, []);
 
   // Load map on mount
   useEffect(() => {
@@ -253,6 +290,7 @@ export function EditorCore({
           <Editor3DCanvas
             config={config}
             state={state}
+            visibility={visibility}
             onCellsUpdateBatched={editorState.updateCellsBatched}
             onStartBatch={editorState.startBatch}
             onCommitBatch={editorState.commitBatch}
@@ -267,6 +305,7 @@ export function EditorCore({
         <EditorPanels
           config={config}
           state={state}
+          visibility={visibility}
           onToolSelect={editorState.setActiveTool}
           onElevationSelect={editorState.setSelectedElevation}
           onFeatureSelect={editorState.setSelectedFeature}
@@ -278,6 +317,9 @@ export function EditorCore({
           onObjectRemove={editorState.removeObject}
           onMetadataUpdate={editorState.updateMapMetadata}
           onValidate={handleValidate}
+          onToggleLabels={toggleLabels}
+          onToggleGrid={toggleGrid}
+          onToggleCategory={toggleCategory}
         />
       </div>
     </div>

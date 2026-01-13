@@ -14,6 +14,11 @@ import type {
 export interface EditorPanelsProps {
   config: EditorConfig;
   state: EditorState;
+  visibility: {
+    labels: boolean;
+    grid: boolean;
+    categories: Record<string, boolean>;
+  };
   onToolSelect: (toolId: string) => void;
   onElevationSelect: (elevation: number) => void;
   onFeatureSelect: (feature: string) => void;
@@ -25,6 +30,9 @@ export interface EditorPanelsProps {
   onObjectRemove: (id: string) => void;
   onMetadataUpdate: (updates: Partial<Pick<EditorMapData, 'name' | 'width' | 'height' | 'biomeId'>>) => void;
   onValidate: () => void;
+  onToggleLabels: () => void;
+  onToggleGrid: () => void;
+  onToggleCategory: (category: string) => void;
 }
 
 // Tab button component
@@ -384,22 +392,98 @@ function ObjectsPanel({
   );
 }
 
+// Toggle switch component
+function ToggleSwitch({
+  checked,
+  onChange,
+  label,
+  theme,
+}: {
+  checked: boolean;
+  onChange: () => void;
+  label: string;
+  theme: EditorConfig['theme'];
+}) {
+  return (
+    <label className="flex items-center justify-between cursor-pointer">
+      <span className="text-xs" style={{ color: theme.text.secondary }}>{label}</span>
+      <button
+        onClick={onChange}
+        className="w-8 h-4 rounded-full relative transition-colors"
+        style={{
+          backgroundColor: checked ? theme.primary : theme.border,
+        }}
+      >
+        <span
+          className="absolute top-0.5 w-3 h-3 rounded-full bg-white transition-transform"
+          style={{
+            left: checked ? '17px' : '2px',
+          }}
+        />
+      </button>
+    </label>
+  );
+}
+
 // Settings panel
 function SettingsPanel({
   config,
   state,
+  visibility,
   onBiomeChange,
   onMetadataUpdate,
+  onToggleLabels,
+  onToggleGrid,
+  onToggleCategory,
 }: {
   config: EditorConfig;
   state: EditorState;
+  visibility: { labels: boolean; grid: boolean; categories: Record<string, boolean> };
   onBiomeChange: (biomeId: string) => void;
   onMetadataUpdate: (updates: Partial<Pick<EditorMapData, 'name' | 'width' | 'height' | 'biomeId'>>) => void;
+  onToggleLabels: () => void;
+  onToggleGrid: () => void;
+  onToggleCategory: (category: string) => void;
 }) {
   if (!state.mapData) return null;
 
+  // Get unique categories
+  const categories = Array.from(new Set(config.objectTypes.map((t) => t.category)));
+
   return (
     <div className="space-y-4">
+      {/* Visibility toggles */}
+      <div>
+        <div className="text-xs mb-2" style={{ color: config.theme.text.muted }}>
+          Visibility
+        </div>
+        <div className="space-y-2 p-2 rounded" style={{ backgroundColor: config.theme.background }}>
+          <ToggleSwitch
+            checked={visibility.labels}
+            onChange={onToggleLabels}
+            label="Labels"
+            theme={config.theme}
+          />
+          <ToggleSwitch
+            checked={visibility.grid}
+            onChange={onToggleGrid}
+            label="Grid"
+            theme={config.theme}
+          />
+          <div className="border-t my-2" style={{ borderColor: config.theme.border }} />
+          <div className="text-[10px] mb-1" style={{ color: config.theme.text.muted }}>Categories</div>
+          {categories.map((category) => (
+            <ToggleSwitch
+              key={category}
+              checked={visibility.categories[category] ?? true}
+              onChange={() => onToggleCategory(category)}
+              label={category.charAt(0).toUpperCase() + category.slice(1)}
+              theme={config.theme}
+            />
+          ))}
+        </div>
+      </div>
+
       {/* Map info */}
       <div>
         <div className="text-xs mb-2" style={{ color: config.theme.text.muted }}>
@@ -540,6 +624,7 @@ function ValidatePanel({
 export function EditorPanels({
   config,
   state,
+  visibility,
   onToolSelect,
   onElevationSelect,
   onFeatureSelect,
@@ -551,6 +636,9 @@ export function EditorPanels({
   onObjectRemove,
   onMetadataUpdate,
   onValidate,
+  onToggleLabels,
+  onToggleGrid,
+  onToggleCategory,
 }: EditorPanelsProps) {
   return (
     <div
@@ -618,8 +706,12 @@ export function EditorPanels({
           <SettingsPanel
             config={config}
             state={state}
+            visibility={visibility}
             onBiomeChange={onBiomeChange}
             onMetadataUpdate={onMetadataUpdate}
+            onToggleLabels={onToggleLabels}
+            onToggleGrid={onToggleGrid}
+            onToggleCategory={onToggleCategory}
           />
         )}
         {state.activePanel === 'validate' && <ValidatePanel config={config} onValidate={onValidate} />}
