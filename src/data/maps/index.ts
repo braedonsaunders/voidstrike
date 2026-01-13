@@ -1,7 +1,7 @@
 // Map exports - base types and utilities
 export * from './MapTypes';
 
-// NEW: Paint-Based Elevation Map System
+// NEW: Paint-Based Elevation Map System with Connectivity
 // This is the recommended way to create new maps
 export {
   // Biome types
@@ -82,6 +82,31 @@ export {
 
   // Generator
   generateMap,
+  generateMapWithResult,
+  type GenerateMapOptions,
+  type GenerateMapResult,
+
+  // Connectivity system
+  type ConnectivityGraph,
+  type ConnectivityNode,
+  type ConnectivityEdge,
+  type ConnectivityResult,
+  type ConnectivityIssue,
+  type SuggestedFix,
+  analyzeConnectivity,
+  validateConnectivity,
+  autoFixConnectivity,
+  getConnectivitySummary,
+  formatValidationResult,
+
+  // Map scaffolder
+  type MapScaffold,
+  type ScaffoldConfig,
+  scaffoldMap,
+  scaffold1v1Diagonal,
+  scaffold1v1Horizontal,
+  scaffold4Player,
+  addTerrain,
 } from './core';
 
 // Map exports (all using paint-based elevation system)

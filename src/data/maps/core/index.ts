@@ -1,15 +1,18 @@
 /**
- * Core Map System - Paint-Based Elevation Maps
+ * Core Map System - Paint-Based Elevation Maps with Connectivity
  *
  * A simple, powerful map system where:
  * - Elevation grid IS the terrain (cliffs emerge at height differences)
  * - Paint commands build the map (like Photoshop layers)
  * - Decoration rules create beauty automatically
+ * - Connectivity is validated and auto-fixed
  *
  * Key exports:
  * - MapBlueprint - The complete map definition type
  * - generateMap() - Convert blueprint to MapData
  * - Paint command helpers (plateau, ramp, water, etc.)
+ * - scaffoldMap() - Auto-generate maps from base positions
+ * - Connectivity analysis and validation
  */
 
 // ============================================================================
@@ -98,4 +101,71 @@ export {
 // MAP GENERATOR
 // ============================================================================
 
-export { generateMap } from './ElevationMapGenerator';
+export {
+  generateMap,
+  generateMapWithResult,
+  type GenerateMapOptions,
+  type GenerateMapResult,
+} from './ElevationMapGenerator';
+
+// ============================================================================
+// CONNECTIVITY SYSTEM
+// ============================================================================
+
+// Graph types
+export {
+  type NodeType,
+  type EdgeType,
+  type ConnectivityNode,
+  type ConnectivityEdge,
+  type ConnectivityGraph,
+  type IssueSeverity,
+  type ConnectivityIssue,
+  type SuggestedFix,
+  type ConnectivityResult,
+  nodeId,
+  parseNodeId,
+  edgeKey,
+  distance,
+  createEmptyGraph,
+  createNode,
+  createEdge,
+} from './ConnectivityGraph';
+
+// Analyzer
+export {
+  analyzeConnectivity,
+  getConnectivitySummary,
+} from './ConnectivityAnalyzer';
+
+// Validator
+export {
+  validateConnectivity,
+  getSuggestedFixes,
+  formatValidationResult,
+} from './ConnectivityValidator';
+
+// Fixer
+export {
+  type FixResult,
+  applyFixes,
+  autoFixConnectivity,
+  getRequiredRamps,
+  needsConnectivityFixes,
+  formatFixResult,
+} from './ConnectivityFixer';
+
+// ============================================================================
+// MAP SCAFFOLDER
+// ============================================================================
+
+export {
+  type MapScaffold,
+  type DesiredConnection,
+  type ScaffoldConfig,
+  scaffoldMap,
+  scaffold1v1Diagonal,
+  scaffold1v1Horizontal,
+  scaffold4Player,
+  addTerrain,
+} from './MapScaffolder';
