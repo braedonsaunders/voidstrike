@@ -1,7 +1,8 @@
 /**
  * Map Editor Module
  *
- * A reusable, config-driven map editor for 2D tile-based games.
+ * A reusable, config-driven 3D map editor for tile-based games.
+ * Uses Three.js for full 3D terrain visualization and editing.
  *
  * @example
  * ```tsx
@@ -53,6 +54,9 @@ export type { EditorCoreProps } from './core/EditorCore';
 export { EditorCanvas } from './core/EditorCanvas';
 export type { EditorCanvasProps } from './core/EditorCanvas';
 
+export { Editor3DCanvas } from './core/Editor3DCanvas';
+export type { Editor3DCanvasProps } from './core/Editor3DCanvas';
+
 export { EditorHeader } from './core/EditorHeader';
 export type { EditorHeaderProps } from './core/EditorHeader';
 
@@ -76,3 +80,13 @@ export {
   VOIDSTRIKE_THEME,
   VOIDSTRIKE_PANELS,
 } from './configs/voidstrike';
+
+// 3D Rendering components
+export { EditorTerrain } from './rendering3d/EditorTerrain';
+export { EditorObjects } from './rendering3d/EditorObjects';
+export { EditorGrid } from './rendering3d/EditorGrid';
+export { EditorBrushPreview } from './rendering3d/EditorBrushPreview';
+
+// Tools
+export { TerrainBrush } from './tools/TerrainBrush';
+export { ObjectPlacer } from './tools/ObjectPlacer';

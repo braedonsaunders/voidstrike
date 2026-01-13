@@ -663,9 +663,25 @@ export function EditorPanels({
               className="px-1 rounded"
               style={{ backgroundColor: config.theme.background }}
             >
+              Scroll
+            </kbd>{' '}
+            Zoom
+          </div>
+          <div>
+            <kbd
+              className="px-1 rounded"
+              style={{ backgroundColor: config.theme.background }}
+            >
               Alt+Drag
             </kbd>{' '}
-            Pan
+            Pan •{' '}
+            <kbd
+              className="px-1 rounded"
+              style={{ backgroundColor: config.theme.background }}
+            >
+              Right-Drag
+            </kbd>{' '}
+            Rotate
           </div>
         </div>
       </div>
