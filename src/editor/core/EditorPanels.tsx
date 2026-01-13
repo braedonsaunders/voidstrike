@@ -17,6 +17,7 @@ export interface EditorPanelsProps {
   onToolSelect: (toolId: string) => void;
   onElevationSelect: (elevation: number) => void;
   onFeatureSelect: (feature: string) => void;
+  onMaterialSelect: (materialId: number) => void;
   onBrushSizeChange: (size: number) => void;
   onPanelChange: (panelId: string) => void;
   onBiomeChange: (biomeId: string) => void;
@@ -126,6 +127,7 @@ function PaintPanel({
   onToolSelect,
   onElevationSelect,
   onFeatureSelect,
+  onMaterialSelect,
   onBrushSizeChange,
 }: {
   config: EditorConfig;
@@ -133,9 +135,11 @@ function PaintPanel({
   onToolSelect: (toolId: string) => void;
   onElevationSelect: (elevation: number) => void;
   onFeatureSelect: (feature: string) => void;
+  onMaterialSelect: (materialId: number) => void;
   onBrushSizeChange: (size: number) => void;
 }) {
   const activeTool = config.tools.find((t) => t.id === state.activeTool);
+  const materials = config.terrain.materials;
 
   return (
     <div className="space-y-4">
@@ -206,6 +210,38 @@ function PaintPanel({
           ))}
         </div>
       </div>
+
+      {/* Materials / Textures */}
+      {materials && materials.length > 0 && (
+        <div>
+          <div className="text-xs mb-2" style={{ color: config.theme.text.muted }}>
+            Material
+          </div>
+          <div className="space-y-1">
+            {materials.map((mat) => (
+              <button
+                key={mat.id}
+                onClick={() => onMaterialSelect(mat.id)}
+                className="w-full flex items-center gap-2 px-2 py-1.5 rounded transition-colors"
+                style={{
+                  backgroundColor:
+                    state.selectedMaterial === mat.id ? config.theme.primary + '40' : config.theme.surface,
+                  color:
+                    state.selectedMaterial === mat.id ? config.theme.text.primary : config.theme.text.muted,
+                }}
+              >
+                <span className="text-sm">{mat.icon}</span>
+                <span className="text-xs flex-1 text-left">{mat.name}</span>
+                {mat.shortcut && (
+                  <span className="text-[10px]" style={{ color: config.theme.text.muted }}>
+                    {mat.shortcut}
+                  </span>
+                )}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* Features */}
       <div>
@@ -507,6 +543,7 @@ export function EditorPanels({
   onToolSelect,
   onElevationSelect,
   onFeatureSelect,
+  onMaterialSelect,
   onBrushSizeChange,
   onPanelChange,
   onBiomeChange,
@@ -546,6 +583,7 @@ export function EditorPanels({
             onToolSelect={onToolSelect}
             onElevationSelect={onElevationSelect}
             onFeatureSelect={onFeatureSelect}
+            onMaterialSelect={onMaterialSelect}
             onBrushSizeChange={onBrushSizeChange}
           />
         )}
@@ -563,6 +601,15 @@ export function EditorPanels({
             config={config}
             state={state}
             category="objects"
+            onObjectAdd={onObjectAdd}
+            onObjectRemove={onObjectRemove}
+          />
+        )}
+        {state.activePanel === 'decorations' && (
+          <ObjectsPanel
+            config={config}
+            state={state}
+            category="decorations"
             onObjectAdd={onObjectAdd}
             onObjectRemove={onObjectRemove}
           />

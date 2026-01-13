@@ -14,6 +14,9 @@ export interface EditorCanvasProps {
   onOffsetChange: (offset: { x: number; y: number }) => void;
   onCellUpdate: (x: number, y: number, updates: Partial<EditorCell>) => void;
   onCellsUpdate: (updates: Array<{ x: number; y: number; cell: Partial<EditorCell> }>) => void;
+  onCellsUpdateBatched: (updates: Array<{ x: number; y: number; cell: Partial<EditorCell> }>) => void;
+  onStartBatch: () => void;
+  onCommitBatch: () => void;
   onFillArea: (startX: number, startY: number, targetElevation: number, newElevation: number) => void;
   onObjectSelect: (ids: string[]) => void;
   onObjectUpdate: (id: string, updates: { x?: number; y?: number }) => void;
@@ -24,8 +27,9 @@ export function EditorCanvas({
   state,
   onZoomChange,
   onOffsetChange,
-  onCellUpdate,
-  onCellsUpdate,
+  onCellsUpdateBatched,
+  onStartBatch,
+  onCommitBatch,
   onFillArea,
   onObjectSelect,
   onObjectUpdate,
@@ -34,10 +38,13 @@ export function EditorCanvas({
   const containerRef = useRef<HTMLDivElement>(null);
   const [isPanning, setIsPanning] = useState(false);
   const [isPainting, setIsPainting] = useState(false);
+  const [isDraggingObject, setIsDraggingObject] = useState(false);
+  const [draggedObjectId, setDraggedObjectId] = useState<string | null>(null);
   const [lastMouse, setLastMouse] = useState({ x: 0, y: 0 });
   const [mouseGridPos, setMouseGridPos] = useState<{ x: number; y: number } | null>(null);
+  const lastPaintedRef = useRef<string | null>(null);
 
-  const { mapData, zoom, offset, activeTool, selectedElevation, selectedFeature, brushSize } = state;
+  const { mapData, zoom, offset, activeTool, selectedElevation, selectedFeature, selectedMaterial, brushSize } = state;
 
   // Get biome colors
   const biome = config.biomes.find((b) => b.id === state.activeBiome) || config.biomes[0];
@@ -62,26 +69,61 @@ export function EditorCanvas({
       const gridX = Math.floor((canvasX - startX) / cellSize);
       const gridY = Math.floor((canvasY - startY) / cellSize);
 
-      if (gridX < 0 || gridX >= mapData.width || gridY < 0 || gridY >= mapData.height) {
-        return null;
-      }
-
+      // Return position even if out of bounds for object placement
       return { x: gridX, y: gridY };
     },
     [mapData, zoom, offset]
   );
 
+  // Check if position is within map bounds
+  const isInBounds = useCallback(
+    (x: number, y: number): boolean => {
+      if (!mapData) return false;
+      return x >= 0 && x < mapData.width && y >= 0 && y < mapData.height;
+    },
+    [mapData]
+  );
+
+  // Find object at position
+  const findObjectAt = useCallback(
+    (gridX: number, gridY: number): string | null => {
+      if (!mapData) return null;
+
+      for (const obj of mapData.objects) {
+        const objType = config.objectTypes.find((t) => t.id === obj.type);
+        const radius = obj.radius || objType?.defaultRadius || 5;
+        const dx = obj.x - gridX;
+        const dy = obj.y - gridY;
+        if (dx * dx + dy * dy <= radius * radius) {
+          return obj.id;
+        }
+      }
+      return null;
+    },
+    [mapData, config.objectTypes]
+  );
+
   // Paint at grid position
   const paintAt = useCallback(
-    (gridX: number, gridY: number) => {
+    (gridX: number, gridY: number, force = false) => {
       if (!mapData) return;
+      if (!isInBounds(gridX, gridY)) return;
+
+      // Debounce to avoid painting same cell multiple times in a stroke
+      const key = `${gridX},${gridY}`;
+      if (!force && lastPaintedRef.current === key) return;
+      lastPaintedRef.current = key;
 
       const tool = config.tools.find((t) => t.id === activeTool);
       if (!tool) return;
 
-      // Get the elevation config for walkability
-      const elevConfig = config.terrain.elevations.find((e) => e.id === selectedElevation);
-      const walkable = elevConfig?.walkable ?? true;
+      // Get default values from tool options or current selection
+      const toolOptions = (tool as any).options || {};
+      const paintElevation = toolOptions.elevation ?? selectedElevation;
+      const paintFeature = toolOptions.feature ?? selectedFeature;
+      const paintWalkable = toolOptions.walkable !== undefined
+        ? toolOptions.walkable
+        : (config.terrain.elevations.find((e) => e.id === paintElevation)?.walkable ?? true);
 
       if (tool.type === 'brush' || tool.type === 'eraser') {
         // Brush/eraser: paint in a circular area
@@ -93,7 +135,7 @@ export function EditorCanvas({
             if (dx * dx + dy * dy <= radius * radius) {
               const x = gridX + dx;
               const y = gridY + dy;
-              if (x >= 0 && x < mapData.width && y >= 0 && y < mapData.height) {
+              if (isInBounds(x, y)) {
                 if (tool.type === 'eraser') {
                   updates.push({
                     x,
@@ -102,6 +144,7 @@ export function EditorCanvas({
                       elevation: config.terrain.defaultElevation,
                       feature: config.terrain.defaultFeature,
                       walkable: true,
+                      materialId: 0,
                     },
                   });
                 } else {
@@ -109,9 +152,10 @@ export function EditorCanvas({
                     x,
                     y,
                     cell: {
-                      elevation: selectedElevation,
-                      feature: selectedFeature,
-                      walkable,
+                      elevation: paintElevation,
+                      feature: paintFeature,
+                      walkable: paintWalkable,
+                      materialId: selectedMaterial,
                     },
                   });
                 }
@@ -121,7 +165,7 @@ export function EditorCanvas({
         }
 
         if (updates.length > 0) {
-          onCellsUpdate(updates);
+          onCellsUpdateBatched(updates);
         }
       } else if (tool.type === 'fill') {
         // Flood fill
@@ -139,13 +183,14 @@ export function EditorCanvas({
             if (dx * dx + dy * dy <= radius * radius) {
               const x = gridX + dx;
               const y = gridY + dy;
-              if (x >= 0 && x < mapData.width && y >= 0 && y < mapData.height) {
+              if (isInBounds(x, y)) {
                 updates.push({
                   x,
                   y,
                   cell: {
                     elevation: selectedElevation,
                     walkable,
+                    materialId: selectedMaterial,
                   },
                 });
               }
@@ -154,11 +199,11 @@ export function EditorCanvas({
         }
 
         if (updates.length > 0) {
-          onCellsUpdate(updates);
+          onCellsUpdateBatched(updates);
         }
       }
     },
-    [mapData, config, activeTool, selectedElevation, selectedFeature, brushSize, onCellsUpdate, onFillArea]
+    [mapData, config, activeTool, selectedElevation, selectedFeature, selectedMaterial, brushSize, isInBounds, onCellsUpdateBatched, onFillArea]
   );
 
   // Draw the canvas
@@ -200,6 +245,14 @@ export function EditorCanvas({
             biome.groundColors.length - 1
           );
           color = biome.groundColors[Math.max(0, colorIndex)];
+
+          // If explicit material is set (not 0/auto), use material color
+          if (cell.materialId && cell.materialId > 0) {
+            const material = config.terrain.materials?.find((m) => m.id === cell.materialId);
+            if (material) {
+              color = material.color;
+            }
+          }
         }
 
         // Apply feature color overlay
@@ -244,17 +297,26 @@ export function EditorCanvas({
       const objY = startY + obj.y * cellSize;
       const radius = (obj.radius || objType.defaultRadius || 5) * (cellSize / 4);
 
-      // Draw object circle
-      ctx.strokeStyle = objType.color;
-      ctx.lineWidth = 2;
+      // Draw object fill
+      ctx.fillStyle = `${objType.color}40`;
       ctx.beginPath();
       ctx.arc(objX, objY, radius, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Draw object circle
+      ctx.strokeStyle = objType.color;
+      ctx.lineWidth = state.selectedObjects.includes(obj.id) ? 3 : 2;
       ctx.stroke();
 
-      // Draw fill for selected objects
+      // Draw selection highlight
       if (state.selectedObjects.includes(obj.id)) {
-        ctx.fillStyle = `${objType.color}40`;
-        ctx.fill();
+        ctx.strokeStyle = config.theme.selection;
+        ctx.lineWidth = 1;
+        ctx.setLineDash([3, 3]);
+        ctx.beginPath();
+        ctx.arc(objX, objY, radius + 5, 0, Math.PI * 2);
+        ctx.stroke();
+        ctx.setLineDash([]);
       }
 
       // Draw object icon/label
@@ -287,44 +349,41 @@ export function EditorCanvas({
   // Mouse event handlers
   const handleMouseDown = useCallback(
     (e: React.MouseEvent) => {
+      const gridPos = screenToGrid(e.clientX, e.clientY);
+
       if (e.button === 1 || (e.button === 0 && e.altKey)) {
         // Middle button or Alt+click = pan
         setIsPanning(true);
         setLastMouse({ x: e.clientX, y: e.clientY });
-      } else if (e.button === 0) {
-        // Left click = tool action
-        const gridPos = screenToGrid(e.clientX, e.clientY);
-        if (gridPos) {
-          if (activeTool === 'select') {
-            // Check if clicking on an object
-            const clickedObj = mapData?.objects.find((obj) => {
-              const dx = obj.x - gridPos.x;
-              const dy = obj.y - gridPos.y;
-              const objType = config.objectTypes.find((t) => t.id === obj.type);
-              const radius = obj.radius || objType?.defaultRadius || 5;
-              return dx * dx + dy * dy <= radius * radius;
-            });
+      } else if (e.button === 0 && gridPos) {
+        if (activeTool === 'select') {
+          // Check if clicking on an object
+          const clickedObjId = findObjectAt(gridPos.x, gridPos.y);
 
-            if (clickedObj) {
-              if (e.shiftKey) {
-                // Add to selection
-                onObjectSelect([...state.selectedObjects, clickedObj.id]);
-              } else {
-                // Replace selection
-                onObjectSelect([clickedObj.id]);
-              }
-            } else if (!e.shiftKey) {
-              onObjectSelect([]);
+          if (clickedObjId) {
+            if (e.shiftKey) {
+              // Add to selection
+              onObjectSelect([...state.selectedObjects, clickedObjId]);
+            } else {
+              // Replace selection and start dragging
+              onObjectSelect([clickedObjId]);
+              setIsDraggingObject(true);
+              setDraggedObjectId(clickedObjId);
             }
-          } else {
-            // Painting tools
-            setIsPainting(true);
-            paintAt(gridPos.x, gridPos.y);
+            setLastMouse({ x: e.clientX, y: e.clientY });
+          } else if (!e.shiftKey) {
+            onObjectSelect([]);
           }
+        } else if (isInBounds(gridPos.x, gridPos.y)) {
+          // Painting tools - start batch for undo
+          onStartBatch();
+          setIsPainting(true);
+          lastPaintedRef.current = null; // Reset debounce
+          paintAt(gridPos.x, gridPos.y, true);
         }
       }
     },
-    [screenToGrid, activeTool, mapData, config.objectTypes, state.selectedObjects, onObjectSelect, paintAt]
+    [screenToGrid, activeTool, findObjectAt, state.selectedObjects, onObjectSelect, isInBounds, paintAt, onStartBatch]
   );
 
   const handleMouseMove = useCallback(
@@ -338,23 +397,42 @@ export function EditorCanvas({
         const dy = e.clientY - lastMouse.y;
         onOffsetChange({ x: offset.x + dx, y: offset.y + dy });
         setLastMouse({ x: e.clientX, y: e.clientY });
+      } else if (isDraggingObject && draggedObjectId && gridPos) {
+        // Move the dragged object
+        if (isInBounds(gridPos.x, gridPos.y)) {
+          onObjectUpdate(draggedObjectId, { x: gridPos.x, y: gridPos.y });
+        }
       } else if (isPainting && gridPos) {
         paintAt(gridPos.x, gridPos.y);
       }
     },
-    [screenToGrid, isPanning, isPainting, lastMouse, offset, onOffsetChange, paintAt]
+    [screenToGrid, isPanning, isDraggingObject, draggedObjectId, isPainting, lastMouse, offset, onOffsetChange, onObjectUpdate, isInBounds, paintAt]
   );
 
   const handleMouseUp = useCallback(() => {
+    // Commit batch if we were painting
+    if (isPainting) {
+      onCommitBatch();
+    }
     setIsPanning(false);
     setIsPainting(false);
-  }, []);
+    setIsDraggingObject(false);
+    setDraggedObjectId(null);
+    lastPaintedRef.current = null;
+  }, [isPainting, onCommitBatch]);
 
   const handleMouseLeave = useCallback(() => {
+    // Commit batch if we were painting
+    if (isPainting) {
+      onCommitBatch();
+    }
     setIsPanning(false);
     setIsPainting(false);
+    setIsDraggingObject(false);
+    setDraggedObjectId(null);
     setMouseGridPos(null);
-  }, []);
+    lastPaintedRef.current = null;
+  }, [isPainting, onCommitBatch]);
 
   const handleWheel = useCallback(
     (e: React.WheelEvent) => {
@@ -368,7 +446,14 @@ export function EditorCanvas({
   // Get cursor style
   const getCursor = () => {
     if (isPanning) return 'grabbing';
-    if (activeTool === 'select') return 'default';
+    if (isDraggingObject) return 'move';
+    if (activeTool === 'select') {
+      // Check if hovering over an object
+      if (mouseGridPos && findObjectAt(mouseGridPos.x, mouseGridPos.y)) {
+        return 'move';
+      }
+      return 'default';
+    }
     return 'crosshair';
   };
 
@@ -423,7 +508,7 @@ export function EditorCanvas({
           color: config.theme.text.muted,
         }}
       >
-        Scroll to zoom • Alt+drag or middle-click to pan
+        Scroll to zoom • Alt+drag or middle-click to pan • Select tool to move objects
       </div>
     </div>
   );

@@ -257,6 +257,9 @@ export function EditorCore({
             onOffsetChange={editorState.setOffset}
             onCellUpdate={editorState.updateCell}
             onCellsUpdate={editorState.updateCells}
+            onCellsUpdateBatched={editorState.updateCellsBatched}
+            onStartBatch={editorState.startBatch}
+            onCommitBatch={editorState.commitBatch}
             onFillArea={editorState.fillArea}
             onObjectSelect={editorState.selectObjects}
             onObjectUpdate={editorState.updateObject}
@@ -270,6 +273,7 @@ export function EditorCore({
           onToolSelect={editorState.setActiveTool}
           onElevationSelect={editorState.setSelectedElevation}
           onFeatureSelect={editorState.setSelectedFeature}
+          onMaterialSelect={editorState.setSelectedMaterial}
           onBrushSizeChange={editorState.setBrushSize}
           onPanelChange={editorState.setActivePanel}
           onBiomeChange={editorState.setActiveBiome}
