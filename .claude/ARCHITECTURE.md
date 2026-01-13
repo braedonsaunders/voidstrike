@@ -104,7 +104,15 @@ voidstrike/
 │   │   │   ├── dominion.ts    # Dominion faction buildings
 │   │   │   └── walls.ts       # Wall/gate definitions
 │   │   ├── factions/          # Faction configs
-│   │   └── maps/              # Map data
+│   │   └── maps/              # Map data & generation
+│   │       └── core/          # Map system core (elevation, connectivity, scaffolding)
+│   ├── editor/                # 3D Map Editor
+│   │   ├── core/              # Editor UI components (EditorCore, Canvas, Toolbar, Panels)
+│   │   ├── config/            # Editor configuration types
+│   │   ├── hooks/             # React hooks (useEditorState)
+│   │   ├── providers/         # Game-specific data providers (voidstrike.ts)
+│   │   ├── rendering3d/       # 3D rendering (EditorTerrain, EditorGrid, BrushPreview)
+│   │   └── tools/             # Editing tools (TerrainBrush, ObjectPlacer)
 │   ├── store/
 │   │   ├── gameStore.ts       # Zustand game state
 │   │   └── uiStore.ts         # UI state
@@ -928,212 +936,381 @@ const terrainSpeedMod = getTerrainSpeedModifier(x, y, isFlying);
 targetSpeed *= terrainSpeedMod;
 ```
 
-## Connectivity-First Map System (NEW)
+## Map System Architecture
 
 ### Overview
 
-The game now features a **connectivity-first map architecture** that solves persistent ramp/cliff pathfinding issues. Instead of inferring walkability from terrain geometry, walkability is defined as an **explicit connectivity graph**.
+The map system uses a **paint-based elevation approach with connectivity validation**. Maps can be created two ways:
 
-Key principle: If two regions are connected in the graph, units CAN walk between them. The navmesh is generated FROM this graph, not the other way around.
+1. **Code-defined maps** via `MapBlueprint` and paint commands
+2. **Hand-painted maps** via the 3D Map Editor
+
+Both approaches share the same underlying `MapData` format and connectivity validation layer.
 
 ### Core Components (`src/data/maps/core/`)
 
 ```
 core/
-├── MapConnectivity.ts   # Connectivity graph types & algorithms
-├── MapDefinition.ts     # defineMap() DSL and types
-├── MapGenerator.ts      # Terrain generation from definition
-├── MapValidator.ts      # Validation with clear errors
-└── index.ts             # Public API exports
+├── ElevationMap.ts          # Paint command types & helpers (plateau, ramp, water, etc.)
+├── ElevationMapGenerator.ts # Generates MapData from MapBlueprint
+├── ConnectivityGraph.ts     # Graph types for walkability analysis
+├── ConnectivityAnalyzer.ts  # Analyzes painted maps for connectivity
+├── ConnectivityValidator.ts # Reports connectivity issues
+├── ConnectivityFixer.ts     # Auto-fixes ramps and connections
+├── MapScaffolder.ts         # Auto-generate maps from base positions
+└── index.ts                 # Public API exports
 ```
 
-### MapConnectivity.ts - Graph System
+### Two Map Creation Approaches
+
+#### Approach 1: Code-Defined Maps (MapBlueprint)
+
+Define maps declaratively using paint commands:
 
 ```typescript
-// Regions are nodes in the graph
-interface ConnectivityNode {
-  id: NodeId;
-  type: RegionType;  // 'main_base' | 'natural' | 'third' | 'center' | etc.
-  center: { x: number; y: number };
-  elevation: number;  // 0, 1, or 2
-  radius: number;
-  playerSlot?: number;
-  resources?: { minerals: number; vespene: number };
-}
+import { generateMap, plateau, ramp, water, mainBase } from '@/data/maps/core';
 
-// Connections are edges
-interface ConnectivityEdge {
-  from: NodeId;
-  to: NodeId;
-  type: ConnectionType;  // 'ramp' | 'ground' | 'bridge' | 'narrow' | 'wide'
-  width: number;
-  waypoints?: Array<{ x: number; y: number }>;
-  blockedBy?: string;  // Destructible ID
-}
+const MY_MAP = generateMap({
+  meta: { id: 'my_map', name: 'My Map', author: 'Me' },
+  canvas: { width: 200, height: 200, biome: 'grassland', baseElevation: 128 },
 
-// Graph queries
-findPath(graph, start, end);           // BFS pathfinding
-getReachableNodes(graph, start);       // Flood fill
-areConnected(graph, nodeA, nodeB);     // Direct connection check
-validateConnectivity(graph);           // Ensure all spawns connected
-```
+  // Paint commands execute in order
+  paint: [
+    // Create high-ground main bases
+    plateau({ x: 40, y: 100 }, 25, 200),   // Player 1 main
+    plateau({ x: 160, y: 100 }, 25, 200),  // Player 2 main
 
-### MapDefinition.ts - Declarative DSL
+    // Create ramps connecting to mid-ground
+    ramp({ x: 40, y: 100 }, { x: 60, y: 100 }, 8),
+    ramp({ x: 160, y: 100 }, { x: 140, y: 100 }, 8),
 
-```typescript
-// Define a map using the fluent API
-const myMap = defineMap({
-  meta: {
-    id: 'my_map',
-    name: 'My Custom Map',
-    author: 'Player',
-    description: 'A 2-player map',
-  },
-
-  canvas: {
-    width: 200,
-    height: 200,
-    biome: 'volcanic',
-    baseElevation: 1,
-  },
-
-  symmetry: {
-    type: 'mirror_x',
-    playerCount: 2,
-  },
-
-  // Explicit region definitions
-  regions: [
-    mainBase('p1_main', { x: 40, y: 100 }, 1, { elevation: 2 }),
-    mainBase('p2_main', { x: 160, y: 100 }, 2, { elevation: 2 }),
-    naturalExpansion('p1_nat', { x: 60, y: 100 }, 1),
-    naturalExpansion('p2_nat', { x: 140, y: 100 }, 2),
-    mapCenter('center', { x: 100, y: 100 }),
+    // Add water features
+    water({ x: 100, y: 50 }, 15, 'deep'),
   ],
 
-  // Explicit connections (ramps, paths)
-  connections: [
-    { from: 'p1_main', to: 'p1_nat', type: 'ramp', width: 8 },
-    { from: 'p2_main', to: 'p2_nat', type: 'ramp', width: 8 },
-    { from: 'p1_nat', to: 'center', type: 'ground', width: 12 },
-    { from: 'p2_nat', to: 'center', type: 'ground', width: 12 },
+  // Base locations with resources
+  bases: [
+    mainBase({ x: 40, y: 100 }, 1),
+    mainBase({ x: 160, y: 100 }, 2),
   ],
-
-  // Terrain features (obstacles, voids, water)
-  terrain: {
-    obstacles: [{ type: 'rocks', shape: 'circle', position: { x: 100, y: 80 }, radius: 8 }],
-    voids: [{ shape: 'circle', position: { x: 0, y: 0 }, radius: 15 }],
-  },
-
-  // Game features
-  features: {
-    watchTowers: [{ id: 'tower1', position: { x: 100, y: 100 }, visionRadius: 22 }],
-    destructibles: [{ id: 'rocks1', type: 'rocks', position: { x: 100, y: 60 }, health: 1500 }],
-  },
-
-  // Decoration configuration
-  decorations: {
-    borderWalls: { enabled: true, /* ... */ },
-    clusters: [{ type: 'rock', position: { x: 50, y: 50 }, radius: 10, count: { min: 3, max: 6 } }],
-  },
 });
 ```
 
-### MapGenerator.ts - Terrain Generation
+**Available paint commands:**
+- `fill(elevation)` - Fill entire map
+- `plateau(center, radius, elevation)` - Circular elevated area
+- `rect(x, y, width, height, elevation)` - Rectangular area
+- `ramp(from, to, width)` - Walkable connection between elevations
+- `water(center, radius, 'shallow'|'deep')` - Water features
+- `forest(center, radius, 'light'|'dense')` - Forests
+- `voidArea(center, radius)` - Impassable void
+- `road(from, to, width)` - Speed-boosting roads
+- `mud(center, radius)` - Slow terrain
+
+#### Approach 2: 3D Map Editor (Hand-Painted)
+
+The editor (`src/editor/`) allows direct terrain painting:
 
 ```typescript
-// Generate complete MapData from definition
-const mapData = generateMapFromDefinition(definition);
-
-// The generator:
-// 1. Creates base terrain grid
-// 2. Applies terrain features (voids, obstacles, water)
-// 3. Generates elevated regions from the graph
-// 4. Creates ramps/paths from connections
-// 5. Ensures connectivity by carving paths if needed
-// 6. Generates resources, spawns, watch towers, decorations
-```
-
-### MapValidator.ts - Validation
-
-```typescript
-// Validate before generation
-const result = validateMapDefinition(definition);
-
-if (!result.valid) {
-  console.error(formatValidationResult(result));
-  // Output:
-  // ✗ Map definition has errors
-  //   2 error(s), 1 warning(s), 0 info
-  //
-  // ERRORS:
-  //   ✗ [BASES_NOT_CONNECTED] Main base "p1_main" cannot reach "p2_main"
-  //     → Ensure all main bases are connected through the map
+// Editor uses EditorMapData format
+interface EditorMapData {
+  id: string;
+  name: string;
+  width: number;
+  height: number;
+  terrain: EditorCell[][];  // Per-cell elevation, feature, walkability
+  objects: EditorObject[];  // Bases, towers, destructibles
+  biomeId: string;
+  metadata: { author, description, playerCount };
 }
+
+// TerrainBrush tools
+brush.paintElevation(x, y, radius, elevation, walkable);
+brush.paintFeature(x, y, radius, 'forest_light');
+brush.raiseElevation(x, y, radius, amount);
+brush.lowerElevation(x, y, radius, amount);
+brush.smoothTerrain(x, y, radius);
+brush.flattenTerrain(x, y, radius);
 ```
 
-### Why This Architecture?
+### Connectivity Validation Layer
 
-**The Problem**: The old system had THREE representations that needed to agree:
-1. Tile Grid (`MapCell[][]`) - logical data
-2. 3D Heightmap - for rendering
-3. NavMesh (Recast) - for pathfinding
-
-Each layer decided walkability independently using heuristics (slope angle, height difference, etc.). When ramps didn't align perfectly, units would either walk off cliffs OR ramps would become unwalkable.
-
-**The Solution**: Connectivity-First means:
-1. Walkability is an **explicit graph** defined at map creation
-2. Terrain is generated **from** the graph, not vice versa
-3. NavMesh uses **permissive settings** (`walkableSlopeAngle: 85`, `walkableClimb: 5.0`)
-4. Cliffs are blocked by **not including them in geometry**, not by slope heuristics
-
-### RecastNavigation Config Updates
+**Both approaches** use connectivity validation to ensure maps are playable:
 
 ```typescript
-// Permissive config - geometry determines walkability
+// 1. Analyze connectivity from painted terrain
+import { analyzeConnectivity, validateConnectivity, autoFixConnectivity } from '@/data/maps/core';
+
+const analysis = analyzeConnectivity(mapData);
+// Returns: ConnectivityGraph with nodes for bases and edges for paths
+
+// 2. Validate that all bases are connected
+const result = validateConnectivity(analysis.graph);
+if (!result.valid) {
+  console.log(formatValidationResult(result));
+  // Output:
+  // ✗ [BASES_NOT_CONNECTED] Main base "p1_main" cannot reach "p2_main"
+  //   → Add a ramp or ground connection between these bases
+}
+
+// 3. Auto-fix issues by adding ramps
+const fixed = autoFixConnectivity(mapData, analysis);
+console.log(formatFixResult(fixed));
+// Output: Added 2 ramps to connect isolated regions
+```
+
+### How Cliffs Work
+
+Cliffs emerge automatically from elevation differences:
+
+```typescript
+// CLIFF_THRESHOLD = 30 elevation units
+// If neighboring cells differ by > 30, a cliff forms
+
+// Example:
+// Cell A: elevation 200 (high ground)
+// Cell B: elevation 128 (mid ground)
+// Difference: 72 > 30 → CLIFF (unwalkable)
+
+// Ramps explicitly mark cells as walkable despite elevation change
+```
+
+### NavMesh Integration
+
+The terrain generates walkable geometry for Recast NavMesh:
+
+```typescript
+// Permissive NavMesh config - let geometry decide walkability
 const NAVMESH_CONFIG = {
   cs: 0.5,
   ch: 0.3,
-  walkableSlopeAngle: 85,  // Very permissive - let geometry decide
-  walkableHeight: 2,
-  walkableClimb: 5.0,      // High climb - ramps can be steep
+  walkableSlopeAngle: 85,  // Very permissive
+  walkableClimb: 5.0,      // High climb for steep ramps
   walkableRadius: 0.6,
-  maxSimplificationError: 1.0,
-  tileSize: 48,
+};
+
+// Cliffs are blocked by NOT including them in walkable geometry
+// Ramps ARE included because they're explicitly marked walkable
+```
+
+### Map Scaffolder (Auto-Generation)
+
+For quick map creation, use the scaffolder:
+
+```typescript
+import { scaffoldMap, scaffold1v1Diagonal, addTerrain } from '@/data/maps/core';
+
+// Generate a standard 1v1 map layout
+const scaffold = scaffold1v1Diagonal({
+  width: 200,
+  height: 200,
+  biome: 'volcanic',
+});
+
+// Add custom terrain features
+addTerrain(scaffold, [
+  water({ x: 100, y: 100 }, 20, 'deep'),
+  forest({ x: 50, y: 150 }, 15, 'dense'),
+]);
+
+// Generate final MapData
+const mapData = scaffoldMap(scaffold);
+```
+
+### Editor ↔ Game Format Conversion
+
+The editor provider handles format conversion:
+
+```typescript
+// voidstrike.ts provider
+const provider: EditorDataProvider = {
+  // Load game map into editor format
+  async loadMap(id: string): Promise<EditorMapData> {
+    const map = ALL_MAPS[id];
+    return mapDataToEditorFormat(map);
+  },
+
+  // Export editor map to game format
+  exportForGame(data: EditorMapData): MapData {
+    return editorFormatToMapData(data);
+  },
+
+  // Validate using connectivity system
+  async validateMap(data: EditorMapData): Promise<ValidationResult> {
+    const mapData = editorFormatToMapData(data);
+    const analysis = analyzeConnectivity(mapData);
+    return validateConnectivity(analysis.graph);
+  },
 };
 ```
 
-### Creating New Maps
+### Key Insight: Connectivity Matters
 
-```typescript
-// 1. Import from core module
-import { defineMap, generateMapFromDefinition, validateMapDefinition } from '@/data/maps/core';
+The critical insight preserved from the original architecture:
 
-// 2. Define your map
-const MY_MAP_DEF = defineMap({
-  meta: { id: 'my_map', name: 'My Map', author: 'Me', description: '...' },
-  canvas: { width: 200, height: 200, biome: 'grassland' },
-  symmetry: { type: 'mirror_x', playerCount: 2 },
-  regions: [
-    // Use helper functions for common patterns
-    mainBase('p1_main', { x: 40, y: 100 }, 1),
-    // ... more regions
-  ],
-  connections: [
-    { from: 'p1_main', to: 'p1_nat', type: 'ramp', width: 8 },
-    // ... more connections
-  ],
-});
+> **Walkability must be explicitly validated, not inferred from geometry.**
 
-// 3. Validate
-const result = validateMapDefinition(MY_MAP_DEF);
-if (!result.valid) throw new Error(formatValidationResult(result));
+Whether you paint terrain by hand or define it in code, the connectivity validation layer ensures:
+1. All player bases can reach each other
+2. Ramps exist where needed between elevation levels
+3. No isolated regions exist that would trap units
 
-// 4. Generate MapData
-export const MY_MAP = generateMapFromDefinition(MY_MAP_DEF);
+This solves the classic RTS problem where slight terrain misalignment causes pathfinding failures.
+
+## 3D Map Editor
+
+### Overview
+
+The map editor (`src/editor/`) provides a visual interface for creating and editing maps. It uses a generic editor framework with game-specific data providers.
+
+### Architecture
+
+```
+editor/
+├── core/                    # Editor UI (React components)
+│   ├── EditorCore.tsx       # Main editor container
+│   ├── Editor3DCanvas.tsx   # Three.js canvas wrapper
+│   ├── EditorHeader.tsx     # Title bar, file menu
+│   ├── EditorToolbar.tsx    # Tool selection
+│   └── EditorPanels.tsx     # Side panels (properties, layers)
+├── config/
+│   └── EditorConfig.ts      # Type definitions for editor data
+├── hooks/
+│   └── useEditorState.ts    # Zustand store for editor state
+├── providers/
+│   └── voidstrike.ts        # VOIDSTRIKE-specific data provider
+├── rendering3d/             # Three.js rendering
+│   ├── EditorTerrain.ts     # 3D terrain mesh from EditorMapData
+│   ├── EditorGrid.ts        # Grid overlay
+│   ├── EditorBrushPreview.ts # Brush cursor preview
+│   └── EditorObjects.ts     # Base/tower/destructible rendering
+└── tools/                   # Editing tools
+    ├── TerrainBrush.ts      # Elevation/feature painting
+    └── ObjectPlacer.ts      # Object placement tool
 ```
 
-See `src/data/maps/examples/SimpleArena.ts` for a complete working example.
+### Editor State (`useEditorState.ts`)
+
+```typescript
+interface EditorState {
+  // Current map being edited
+  mapData: EditorMapData | null;
+  isDirty: boolean;
+
+  // Active tool and settings
+  activeTool: 'select' | 'elevation' | 'feature' | 'object';
+  brushRadius: number;
+  brushElevation: number;
+  selectedFeature: string;
+  selectedObject: string;
+
+  // Selection
+  selectedCells: Array<{ x: number; y: number }>;
+  selectedObjects: string[];
+
+  // Actions
+  loadMap: (id: string) => Promise<void>;
+  saveMap: () => Promise<void>;
+  createMap: (width, height, name) => void;
+  applyBrush: (x, y) => void;
+  undo: () => void;
+  redo: () => void;
+}
+```
+
+### EditorTerrain Rendering
+
+The 3D terrain renders `EditorMapData` as a mesh with real-time updates:
+
+```typescript
+class EditorTerrain {
+  // Load map and build initial geometry
+  loadMap(mapData: EditorMapData): void;
+
+  // Efficient partial updates via dirty chunks
+  markCellsDirty(cells: Array<{ x, y }>): void;
+  updateDirtyChunks(): void;
+
+  // Height queries for tools
+  getHeightAt(x: number, z: number): number;
+  worldToGrid(x: number, z: number): { x, y } | null;
+
+  // Biome switching
+  setBiome(biomeId: string): void;
+}
+```
+
+Features:
+- **Chunked updates** - Only rebuild geometry for modified regions
+- **Vertex colors** - Per-cell coloring based on elevation, feature, biome
+- **Heightmap** - Stored for accurate brush positioning
+- **Biome themes** - 6 visual themes (grassland, desert, frozen, volcanic, void, jungle)
+
+### TerrainBrush Tools
+
+```typescript
+class TerrainBrush {
+  // Set elevation directly
+  paintElevation(x, y, radius, elevation, walkable): CellUpdate[];
+
+  // Paint terrain features
+  paintFeature(x, y, radius, feature): CellUpdate[];
+
+  // Sculpting tools
+  raiseElevation(x, y, radius, amount): CellUpdate[];
+  lowerElevation(x, y, radius, amount): CellUpdate[];
+  smoothTerrain(x, y, radius): CellUpdate[];
+  flattenTerrain(x, y, radius, targetElevation?): CellUpdate[];
+
+  // Special operations
+  createPlateau(x, y, radius, elevation, walkable): CellUpdate[];
+  floodFill(startX, startY, targetElevation, newElevation): CellUpdate[];
+  erase(x, y, radius): CellUpdate[];
+}
+```
+
+### Data Provider Pattern
+
+The editor is decoupled from game-specific data via providers:
+
+```typescript
+interface EditorDataProvider {
+  // Map management
+  getMapList(): Promise<Array<{ id, name, thumbnail }>>;
+  loadMap(id: string): Promise<EditorMapData>;
+  saveMap(data: EditorMapData): Promise<void>;
+  createMap(width, height, name): EditorMapData;
+
+  // Validation (uses connectivity system)
+  validateMap(data: EditorMapData): Promise<ValidationResult>;
+
+  // Export to game format
+  exportForGame(data: EditorMapData): MapData;
+}
+
+// VOIDSTRIKE implementation
+const voidstrikeDataProvider: EditorDataProvider = {
+  async loadMap(id) {
+    const map = ALL_MAPS[id];
+    return mapDataToEditorFormat(map);
+  },
+  exportForGame(data) {
+    return editorFormatToMapData(data);
+  },
+  // ...
+};
+```
+
+### Editor URL
+
+Access the editor at `/game/setup/editor`:
+
+```typescript
+// src/app/game/setup/editor/page.tsx
+export default function EditorPage() {
+  return <EditorCore config={voidstrikeEditorConfig} />;
+}
+```
 
 ## Biome & Environment System
 
