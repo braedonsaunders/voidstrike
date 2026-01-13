@@ -256,20 +256,23 @@ export class RenderPipeline {
     }
 
     // 5. Anti-aliasing (TRAA or FXAA)
-    // NOTE: TRAA is disabled by default because it requires velocity output from ALL materials.
-    // Standard Three.js materials (MeshBasicMaterial, PointsMaterial, SpriteMaterial, etc.)
-    // don't output velocity, causing WebGPU MRT validation errors.
-    // Use FXAA for compatibility with mixed material scenes.
+    // TRAA provides high-quality temporal anti-aliasing with camera jittering.
+    // We use a zero-velocity approach since standard Three.js materials don't output velocity.
+    // This works well for RTS games where the scene is mostly static with camera movement.
+    // TRAA's depth threshold and neighborhood clamping handle disocclusion and prevent ghosting.
     if (this.config.antiAliasingMode === 'taa' && this.config.taaEnabled) {
       try {
-        // Request velocity texture only when TRAA is enabled
-        // WARNING: This will fail if ANY material in the scene doesn't output velocity!
-        const scenePassVelocity = scenePass.getTextureNode('velocity');
+        // Use zero velocity instead of scene pass velocity
+        // This avoids MRT issues with materials that don't output velocity
+        // (MeshBasicMaterial, PointsMaterial, SpriteMaterial, etc.)
+        // TRAA still works because:
+        // 1. Camera jittering provides temporal sampling
+        // 2. Depth threshold invalidates history on depth changes
+        // 3. Neighborhood clamping prevents ghosting
+        const zeroVelocity = vec2(0, 0);
 
         // Use Three.js's proven TRAA (Temporal Reprojection Anti-Aliasing) implementation
-        // This handles all the complexity: Halton jittering, variance clipping,
-        // motion vectors, history management, disocclusion detection, etc.
-        this.traaPass = traa(outputNode, scenePassDepth, scenePassVelocity, this.camera);
+        this.traaPass = traa(outputNode, scenePassDepth, zeroVelocity, this.camera);
 
         // Apply optional sharpening after TRAA (counters blur)
         if (this.config.taaSharpeningEnabled) {
@@ -279,9 +282,9 @@ export class RenderPipeline {
         }
 
         postProcessing.outputNode = outputNode;
-        console.log('[PostProcessing] TRAA initialized successfully');
+        console.log('[PostProcessing] TRAA initialized successfully (zero-velocity mode)');
       } catch (e) {
-        console.warn('[PostProcessing] TRAA initialization failed (likely velocity MRT issue), falling back to FXAA:', e);
+        console.warn('[PostProcessing] TRAA initialization failed, falling back to FXAA:', e);
         // Fallback to FXAA - guaranteed to work with all materials
         try {
           this.fxaaPass = fxaa(outputNode);
