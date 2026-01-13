@@ -1,0 +1,393 @@
+{
+  "$schema": "./assets.schema.json",
+  "_comment": "VOIDSTRIKE Asset Configuration - Edit this file to customize models and animations",
+
+  "units": {
+    "fabricator": {
+      "model": "/models/units/fabricator.glb",
+      "height": 1.0,
+      "animationSpeed": 0.4,
+      "animations": {
+        "idle": ["idle", "stand", "pose"],
+        "walk": ["walk", "run", "move", "locomotion"],
+        "attack": ["attack", "shoot", "fire", "combat"],
+        "death": ["death", "die", "dead"]
+      }
+    },
+    "trooper": {
+      "model": "/models/units/trooper.glb",
+      "height": 1.2,
+      "animations": {
+        "idle": ["idle", "stand", "pose"],
+        "walk": ["walk", "run", "move"],
+        "attack": ["attack", "shoot", "fire"],
+        "death": ["death", "die", "dead"]
+      }
+    },
+    "breacher": {
+      "model": "/models/units/breacher.glb",
+      "height": 1.5,
+      "animations": {
+        "idle": ["idle", "stand"],
+        "walk": ["walk", "run", "move"],
+        "attack": ["attack", "shoot", "fire", "grenade"],
+        "death": ["death", "die"]
+      }
+    },
+    "vanguard": {
+      "model": "/models/units/vanguard.glb",
+      "height": 1.3,
+      "animations": {
+        "idle": ["idle", "stand"],
+        "walk": ["walk", "run"],
+        "attack": ["attack", "melee", "strike"],
+        "death": ["death", "die"]
+      }
+    },
+    "operative": {
+      "model": "/models/units/operative.glb",
+      "height": 1.3,
+      "animations": {
+        "idle": ["idle", "stealth_idle", "stand"],
+        "walk": ["walk", "sneak", "run"],
+        "attack": ["attack", "snipe", "shoot"],
+        "death": ["death", "die"]
+      }
+    },
+    "scorcher": {
+      "model": "/models/units/scorcher.glb",
+      "height": 1.0,
+      "animations": {
+        "idle": ["idle", "stand"],
+        "walk": ["walk", "roll", "move"],
+        "attack": ["attack", "flame", "fire"],
+        "death": ["death", "explode"]
+      }
+    },
+    "devastator": {
+      "model": "/models/units/devastator.glb",
+      "height": 1.8,
+      "animations": {
+        "idle": ["idle", "stand"],
+        "walk": ["walk", "drive", "move"],
+        "attack": ["attack", "cannon", "fire"],
+        "death": ["death", "explode"]
+      }
+    },
+    "colossus": {
+      "model": "/models/units/colossus.glb",
+      "height": 2.5,
+      "animations": {
+        "idle": ["idle", "stand"],
+        "walk": ["walk", "stomp", "move"],
+        "attack": ["attack", "crush", "laser"],
+        "death": ["death", "collapse"]
+      }
+    },
+    "valkyrie": {
+      "model": "/models/units/valkyrie.glb",
+      "height": 1.8,
+      "animations": {
+        "idle": ["idle", "hover", "stand"],
+        "walk": ["walk", "fly", "move", "flight"],
+        "attack": ["attack", "missiles", "fire"],
+        "death": ["death", "crash"]
+      }
+    },
+    "lifter": {
+      "model": "/models/units/lifter.glb",
+      "height": 1.5,
+      "animations": {
+        "idle": ["idle", "hover"],
+        "walk": ["walk", "fly", "move"],
+        "attack": ["attack"],
+        "death": ["death", "crash"]
+      }
+    },
+    "specter": {
+      "model": "/models/units/specter.glb",
+      "height": 1.5,
+      "animations": {
+        "idle": ["idle", "hover", "cloak"],
+        "walk": ["walk", "fly", "move"],
+        "attack": ["attack", "strike", "bomb"],
+        "death": ["death", "explode"]
+      }
+    },
+    "overseer": {
+      "model": "/models/units/overseer.glb",
+      "height": 1.5,
+      "animations": {
+        "idle": ["idle", "scan", "hover"],
+        "walk": ["walk", "fly", "patrol"],
+        "attack": ["attack"],
+        "death": ["death", "crash"]
+      }
+    },
+    "dreadnought": {
+      "model": "/models/units/dreadnought.glb",
+      "height": 15.0,
+      "animations": {
+        "idle": ["idle", "hover", "cruise"],
+        "walk": ["walk", "fly", "move", "cruise"],
+        "attack": ["attack", "broadside", "nova_cannon"],
+        "death": ["death", "explode", "crash"]
+      }
+    },
+    "medic": {
+      "model": "/models/units/medic.glb",
+      "height": 1.2,
+      "animations": {
+        "idle": ["idle", "stand"],
+        "walk": ["walk", "run"],
+        "attack": ["heal", "attack"],
+        "death": ["death", "die"]
+      }
+    }
+  },
+
+  "buildings": {
+    "headquarters": {
+      "model": "/models/buildings/headquarters.glb",
+      "height": 4.5,
+      "animations": {
+        "idle": ["idle", "active"],
+        "construct": ["construct", "build"],
+        "liftoff": ["liftoff", "takeoff"],
+        "land": ["land", "landing"]
+      }
+    },
+    "orbital_station": {
+      "model": "/models/buildings/orbital_station.glb",
+      "height": 4.5,
+      "animations": {
+        "idle": ["idle", "orbit"],
+        "construct": ["construct"]
+      }
+    },
+    "bastion": {
+      "model": "/models/buildings/bastion.glb",
+      "height": 4.5,
+      "animations": {
+        "idle": ["idle"],
+        "construct": ["construct"]
+      }
+    },
+    "supply_cache": {
+      "model": "/models/buildings/supply_cache.glb",
+      "height": 0.9,
+      "animations": {
+        "idle": ["idle"],
+        "construct": ["construct"]
+      }
+    },
+    "extractor": {
+      "model": "/models/buildings/extractor.glb",
+      "height": 2.5,
+      "animations": {
+        "idle": ["idle", "extract", "pump"],
+        "construct": ["construct"]
+      }
+    },
+    "infantry_bay": {
+      "model": "/models/buildings/infantry_bay.glb",
+      "height": 2.8,
+      "animations": {
+        "idle": ["idle"],
+        "construct": ["construct"],
+        "train": ["train", "produce"]
+      }
+    },
+    "tech_center": {
+      "model": "/models/buildings/tech_center.glb",
+      "height": 2.5,
+      "animations": {
+        "idle": ["idle", "scan"],
+        "construct": ["construct"]
+      }
+    },
+    "garrison": {
+      "model": "/models/buildings/garrison.glb",
+      "height": 2.0,
+      "animations": {
+        "idle": ["idle"],
+        "construct": ["construct"]
+      }
+    },
+    "forge": {
+      "model": "/models/buildings/forge.glb",
+      "height": 4.2,
+      "animations": {
+        "idle": ["idle", "forge", "work"],
+        "construct": ["construct"],
+        "produce": ["produce", "manufacture"]
+      }
+    },
+    "arsenal": {
+      "model": "/models/buildings/arsenal.glb",
+      "height": 2.8,
+      "animations": {
+        "idle": ["idle"],
+        "construct": ["construct"]
+      }
+    },
+    "hangar": {
+      "model": "/models/buildings/hangar.glb",
+      "height": 2.2,
+      "animations": {
+        "idle": ["idle"],
+        "construct": ["construct"],
+        "launch": ["launch", "deploy"]
+      }
+    },
+    "power_core": {
+      "model": "/models/buildings/power_core.glb",
+      "height": 3.0,
+      "animations": {
+        "idle": ["idle", "pulse", "glow"],
+        "construct": ["construct"]
+      }
+    },
+    "ops_center": {
+      "model": "/models/buildings/ops_center.glb",
+      "height": 2.8,
+      "animations": {
+        "idle": ["idle", "active"],
+        "construct": ["construct"]
+      }
+    },
+    "radar_array": {
+      "model": "/models/buildings/radar_array.glb",
+      "height": 4.0,
+      "animations": {
+        "idle": ["idle", "spin", "rotate"],
+        "construct": ["construct"]
+      }
+    },
+    "defense_turret": {
+      "model": "/models/buildings/defense_turret.glb",
+      "height": 2.5,
+      "animations": {
+        "idle": ["idle", "scan"],
+        "attack": ["attack", "fire", "shoot"],
+        "construct": ["construct"]
+      }
+    },
+    "research_module": {
+      "model": "/models/buildings/research_module.glb",
+      "height": 1.0,
+      "animations": {
+        "idle": ["idle"],
+        "construct": ["construct"]
+      }
+    },
+    "production_module": {
+      "model": "/models/buildings/production_module.glb",
+      "height": 1.0,
+      "animations": {
+        "idle": ["idle"],
+        "construct": ["construct"]
+      }
+    }
+  },
+
+  "resources": {
+    "minerals": {
+      "model": "/models/resources/minerals.glb",
+      "height": 2.0,
+      "animations": {
+        "idle": ["idle", "glow", "shimmer"]
+      }
+    },
+    "vespene": {
+      "model": "/models/resources/vespene.glb",
+      "height": 2.0,
+      "animations": {
+        "idle": ["idle", "vent", "smoke"]
+      }
+    }
+  },
+
+  "decorations": {
+    "alien_tower": {
+      "model": "/models/decorations/alien_tower.glb",
+      "height": 14.0
+    },
+    "rocks_large": {
+      "model": "/models/decorations/rocks_large.glb",
+      "height": 5.0
+    },
+    "rocks_small": {
+      "model": "/models/decorations/rocks_small.glb",
+      "height": 3.0
+    },
+    "rock_single": {
+      "model": "/models/decorations/rock_single.glb",
+      "height": 2.5
+    },
+    "tree_pine_tall": {
+      "model": "/models/decorations/tree_pine_tall.glb",
+      "height": 14.0
+    },
+    "tree_pine_medium": {
+      "model": "/models/decorations/tree_pine_medium.glb",
+      "height": 10.0
+    },
+    "tree_dead": {
+      "model": "/models/decorations/tree_dead.glb",
+      "height": 9.0
+    },
+    "tree_alien": {
+      "model": "/models/decorations/tree_alien.glb",
+      "height": 11.0
+    },
+    "tree_palm": {
+      "model": "/models/decorations/tree_palm.glb",
+      "height": 11.0
+    },
+    "tree_mushroom": {
+      "model": "/models/decorations/tree_mushroom.glb",
+      "height": 8.0
+    },
+    "crystal_formation": {
+      "model": "/models/decorations/crystal_formation.glb",
+      "height": 4.0
+    },
+    "bush": {
+      "model": "/models/decorations/bush.glb",
+      "height": 1.5
+    },
+    "grass_clump": {
+      "model": "/models/decorations/grass_clump.glb",
+      "height": 0.8
+    },
+    "debris": {
+      "model": "/models/decorations/debris.glb",
+      "height": 1.5
+    },
+    "escape_pod": {
+      "model": "/models/decorations/escape_pod.glb",
+      "height": 4.0
+    },
+    "ruined_wall": {
+      "model": "/models/decorations/ruined_wall.glb",
+      "height": 5.0
+    }
+  },
+
+  "_documentation": {
+    "animations": {
+      "description": "Animation mappings let you define which animation clips in your GLB files correspond to game actions",
+      "format": "\"gameAction\": [\"clipName1\", \"clipName2\", ...]",
+      "example": "If your walk animation is named 'my_walk_cycle', add it: \"walk\": [\"my_walk_cycle\", \"walk\", \"run\"]",
+      "priority": "First matching clip name wins, so put your preferred animation first in the array"
+    },
+    "animationSpeed": {
+      "description": "Optional multiplier for animation playback speed (default: 1.0)",
+      "example": "Use 0.5 for half speed, 2.0 for double speed"
+    },
+    "height": {
+      "description": "Target height in game units. Models are automatically scaled to match this height."
+    }
+  }
+}

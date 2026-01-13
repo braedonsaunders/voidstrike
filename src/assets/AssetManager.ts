@@ -65,6 +65,45 @@ export interface AssetDefinition {
   receiveShadow: boolean;
 }
 
+// ============================================================================
+// Asset Configuration Types (loaded from public/config/assets.json)
+// ============================================================================
+
+/** Animation mapping config - maps game actions to animation clip names */
+export interface AnimationMappingConfig {
+  idle?: string[];
+  walk?: string[];
+  attack?: string[];
+  death?: string[];
+  construct?: string[];
+  liftoff?: string[];
+  land?: string[];
+  train?: string[];
+  produce?: string[];
+  launch?: string[];
+  [key: string]: string[] | undefined; // Allow custom animation types
+}
+
+/** Single asset configuration */
+export interface AssetConfig {
+  model: string;
+  height: number;
+  animationSpeed?: number;
+  animations?: AnimationMappingConfig;
+}
+
+/** Full assets.json structure */
+export interface AssetsJsonConfig {
+  units: Record<string, AssetConfig>;
+  buildings: Record<string, AssetConfig>;
+  resources: Record<string, AssetConfig>;
+  decorations: Record<string, AssetConfig>;
+}
+
+// ============================================================================
+// Internal State
+// ============================================================================
+
 // Cache for loaded/generated assets
 const assetCache = new Map<string, THREE.Object3D>();
 const customAssets = new Map<string, THREE.Object3D>();
@@ -81,6 +120,15 @@ const modelYOffsets = new Map<string, number>();
 
 // Callbacks to notify when custom models are loaded
 const onModelsLoadedCallbacks: Array<() => void> = [];
+
+// Store loaded asset configuration (from JSON)
+let assetsConfig: AssetsJsonConfig | null = null;
+
+// Store animation speed multipliers from config
+const animationSpeedMultipliers = new Map<string, number>();
+
+// Store animation mappings from config for each asset
+const animationMappings = new Map<string, AnimationMappingConfig>();
 
 // DRACO loader for compressed meshes
 const dracoLoader = new DRACOLoader();
@@ -610,69 +658,213 @@ export class AssetManager {
   }
 
   /**
+   * Get animation mappings for an asset (from JSON config).
+   * Returns the configured mapping of game actions to animation clip names.
+   */
+  static getAnimationMappings(assetId: string): AnimationMappingConfig | null {
+    return animationMappings.get(assetId) ?? null;
+  }
+
+  /**
+   * Get animation speed multiplier for an asset (from JSON config).
+   * Returns 1.0 if not configured.
+   */
+  static getAnimationSpeed(assetId: string): number {
+    return animationSpeedMultipliers.get(assetId) ?? 1.0;
+  }
+
+  /**
+   * Get the loaded assets configuration.
+   * Returns null if config hasn't been loaded yet.
+   */
+  static getConfig(): AssetsJsonConfig | null {
+    return assetsConfig;
+  }
+
+  /**
+   * Load asset configuration from public/config/assets.json.
+   * This should be called before loadCustomModels().
+   */
+  static async loadConfig(): Promise<AssetsJsonConfig | null> {
+    if (assetsConfig) {
+      return assetsConfig; // Already loaded
+    }
+
+    try {
+      const response = await fetch('/config/assets.json');
+      if (!response.ok) {
+        debugAssets.warn('[AssetManager] Could not load assets.json, using defaults');
+        return null;
+      }
+
+      assetsConfig = await response.json();
+      debugAssets.log('[AssetManager] Loaded asset configuration from assets.json');
+
+      // Extract animation speeds and mappings from config
+      if (assetsConfig) {
+        // Process units
+        for (const [assetId, config] of Object.entries(assetsConfig.units)) {
+          if (config.animationSpeed !== undefined) {
+            animationSpeedMultipliers.set(assetId, config.animationSpeed);
+          }
+          if (config.animations) {
+            animationMappings.set(assetId, config.animations);
+          }
+        }
+        // Process buildings
+        for (const [assetId, config] of Object.entries(assetsConfig.buildings)) {
+          if (config.animationSpeed !== undefined) {
+            animationSpeedMultipliers.set(assetId, config.animationSpeed);
+          }
+          if (config.animations) {
+            animationMappings.set(assetId, config.animations);
+          }
+        }
+        // Process resources
+        for (const [assetId, config] of Object.entries(assetsConfig.resources)) {
+          if (config.animationSpeed !== undefined) {
+            animationSpeedMultipliers.set(assetId, config.animationSpeed);
+          }
+          if (config.animations) {
+            animationMappings.set(assetId, config.animations);
+          }
+        }
+      }
+
+      return assetsConfig;
+    } catch (error) {
+      debugAssets.warn('[AssetManager] Error loading assets.json:', error);
+      return null;
+    }
+  }
+
+  /**
    * Load custom 3D models from public/models folder
    * Replaces procedural meshes with custom GLB models when available
    * Logs animation names to console for debugging
+   *
+   * Models and their configurations are loaded from public/config/assets.json.
+   * If assets.json doesn't exist, falls back to hardcoded defaults.
+   *
    * @param onProgress Optional callback for loading progress (loaded: number, total: number, assetId: string) - can be async
    */
   static async loadCustomModels(
     onProgress?: (loaded: number, total: number, assetId: string) => void | Promise<void>
   ): Promise<void> {
-    // Define custom model paths - add more as models are created
-    const customModels: Array<{ path: string; assetId: string; targetHeight: number }> = [
+    // Try to load config from JSON first
+    await this.loadConfig();
+
+    // Build model list from config or use hardcoded defaults
+    const customModels: Array<{ path: string; assetId: string; targetHeight: number }> = [];
+
+    if (assetsConfig) {
+      // Use JSON config
+      debugAssets.log('[AssetManager] Building model list from assets.json');
+
+      // Add units from config
+      for (const [assetId, config] of Object.entries(assetsConfig.units)) {
+        customModels.push({
+          path: config.model,
+          assetId,
+          targetHeight: config.height,
+        });
+      }
+
+      // Add buildings from config
+      for (const [assetId, config] of Object.entries(assetsConfig.buildings)) {
+        customModels.push({
+          path: config.model,
+          assetId,
+          targetHeight: config.height,
+        });
+      }
+
+      // Add resources from config
+      for (const [assetId, config] of Object.entries(assetsConfig.resources)) {
+        customModels.push({
+          path: config.model,
+          assetId,
+          targetHeight: config.height,
+        });
+      }
+
+      // Add decorations from config
+      for (const [assetId, config] of Object.entries(assetsConfig.decorations)) {
+        customModels.push({
+          path: config.model,
+          assetId,
+          targetHeight: config.height,
+        });
+      }
+    } else {
+      // Fallback to hardcoded defaults if config not available
+      debugAssets.log('[AssetManager] Using hardcoded model list (assets.json not found)');
+
       // Units
-      { path: '/models/units/fabricator.glb', assetId: 'fabricator', targetHeight: REFERENCE_FRAME.UNIT_HEIGHTS.fabricator || 1.0 },
-      { path: '/models/units/trooper.glb', assetId: 'trooper', targetHeight: REFERENCE_FRAME.UNIT_HEIGHTS.trooper || 1.2 },
-      { path: '/models/units/breacher.glb', assetId: 'breacher', targetHeight: REFERENCE_FRAME.UNIT_HEIGHTS.breacher || 1.5 },
-      { path: '/models/units/vanguard.glb', assetId: 'vanguard', targetHeight: 1.3 },
-      { path: '/models/units/operative.glb', assetId: 'operative', targetHeight: 1.3 },
-      { path: '/models/units/scorcher.glb', assetId: 'scorcher', targetHeight: 1.0 },
-      { path: '/models/units/devastator.glb', assetId: 'devastator', targetHeight: REFERENCE_FRAME.UNIT_HEIGHTS.devastator || 1.2 },
-      { path: '/models/units/colossus.glb', assetId: 'colossus', targetHeight: 2.5 },
-      { path: '/models/units/valkyrie.glb', assetId: 'valkyrie', targetHeight: REFERENCE_FRAME.UNIT_HEIGHTS.valkyrie || 1.8 },
-      { path: '/models/units/lifter.glb', assetId: 'lifter', targetHeight: 1.5 },
-      { path: '/models/units/specter.glb', assetId: 'specter', targetHeight: REFERENCE_FRAME.UNIT_HEIGHTS.specter || 1.5 },
-      { path: '/models/units/overseer.glb', assetId: 'overseer', targetHeight: 1.5 },
-      { path: '/models/units/dreadnought.glb', assetId: 'dreadnought', targetHeight: REFERENCE_FRAME.UNIT_HEIGHTS.dreadnought || 2.5 },
+      customModels.push(
+        { path: '/models/units/fabricator.glb', assetId: 'fabricator', targetHeight: REFERENCE_FRAME.UNIT_HEIGHTS.fabricator || 1.0 },
+        { path: '/models/units/trooper.glb', assetId: 'trooper', targetHeight: REFERENCE_FRAME.UNIT_HEIGHTS.trooper || 1.2 },
+        { path: '/models/units/breacher.glb', assetId: 'breacher', targetHeight: REFERENCE_FRAME.UNIT_HEIGHTS.breacher || 1.5 },
+        { path: '/models/units/vanguard.glb', assetId: 'vanguard', targetHeight: 1.3 },
+        { path: '/models/units/operative.glb', assetId: 'operative', targetHeight: 1.3 },
+        { path: '/models/units/scorcher.glb', assetId: 'scorcher', targetHeight: 1.0 },
+        { path: '/models/units/devastator.glb', assetId: 'devastator', targetHeight: REFERENCE_FRAME.UNIT_HEIGHTS.devastator || 1.2 },
+        { path: '/models/units/colossus.glb', assetId: 'colossus', targetHeight: 2.5 },
+        { path: '/models/units/valkyrie.glb', assetId: 'valkyrie', targetHeight: REFERENCE_FRAME.UNIT_HEIGHTS.valkyrie || 1.8 },
+        { path: '/models/units/lifter.glb', assetId: 'lifter', targetHeight: 1.5 },
+        { path: '/models/units/specter.glb', assetId: 'specter', targetHeight: REFERENCE_FRAME.UNIT_HEIGHTS.specter || 1.5 },
+        { path: '/models/units/overseer.glb', assetId: 'overseer', targetHeight: 1.5 },
+        { path: '/models/units/dreadnought.glb', assetId: 'dreadnought', targetHeight: REFERENCE_FRAME.UNIT_HEIGHTS.dreadnought || 2.5 },
+        { path: '/models/units/medic.glb', assetId: 'medic', targetHeight: REFERENCE_FRAME.UNIT_HEIGHTS.medic || 1.2 }
+      );
+
       // Buildings
-      { path: '/models/buildings/headquarters.glb', assetId: 'headquarters', targetHeight: REFERENCE_FRAME.BUILDING_HEIGHTS.headquarters || 4.5 },
-      { path: '/models/buildings/orbital_station.glb', assetId: 'orbital_station', targetHeight: 4.5 },
-      { path: '/models/buildings/bastion.glb', assetId: 'bastion', targetHeight: 4.5 },
-      { path: '/models/buildings/supply_cache.glb', assetId: 'supply_cache', targetHeight: REFERENCE_FRAME.BUILDING_HEIGHTS.supply_cache || 1.8 },
-      { path: '/models/buildings/extractor.glb', assetId: 'extractor', targetHeight: REFERENCE_FRAME.BUILDING_HEIGHTS.extractor || 2.0 },
-      { path: '/models/buildings/infantry_bay.glb', assetId: 'infantry_bay', targetHeight: REFERENCE_FRAME.BUILDING_HEIGHTS.infantry_bay || 2.8 },
-      { path: '/models/buildings/tech_center.glb', assetId: 'tech_center', targetHeight: 2.5 },
-      { path: '/models/buildings/garrison.glb', assetId: 'garrison', targetHeight: 2.0 },
-      { path: '/models/buildings/forge.glb', assetId: 'forge', targetHeight: REFERENCE_FRAME.BUILDING_HEIGHTS.forge || 2.8 },
-      { path: '/models/buildings/arsenal.glb', assetId: 'arsenal', targetHeight: 2.8 },
-      { path: '/models/buildings/hangar.glb', assetId: 'hangar', targetHeight: REFERENCE_FRAME.BUILDING_HEIGHTS.hangar || 2.2 },
-      { path: '/models/buildings/power_core.glb', assetId: 'power_core', targetHeight: 3.0 },
-      { path: '/models/buildings/ops_center.glb', assetId: 'ops_center', targetHeight: 2.8 },
-      { path: '/models/buildings/radar_array.glb', assetId: 'radar_array', targetHeight: 4.0 },
-      { path: '/models/buildings/defense_turret.glb', assetId: 'defense_turret', targetHeight: 2.5 },
-      { path: '/models/buildings/research_module.glb', assetId: 'research_module', targetHeight: 1.0 },
-      { path: '/models/buildings/production_module.glb', assetId: 'production_module', targetHeight: 1.0 },
+      customModels.push(
+        { path: '/models/buildings/headquarters.glb', assetId: 'headquarters', targetHeight: REFERENCE_FRAME.BUILDING_HEIGHTS.headquarters || 4.5 },
+        { path: '/models/buildings/orbital_station.glb', assetId: 'orbital_station', targetHeight: 4.5 },
+        { path: '/models/buildings/bastion.glb', assetId: 'bastion', targetHeight: 4.5 },
+        { path: '/models/buildings/supply_cache.glb', assetId: 'supply_cache', targetHeight: REFERENCE_FRAME.BUILDING_HEIGHTS.supply_cache || 1.8 },
+        { path: '/models/buildings/extractor.glb', assetId: 'extractor', targetHeight: REFERENCE_FRAME.BUILDING_HEIGHTS.extractor || 2.0 },
+        { path: '/models/buildings/infantry_bay.glb', assetId: 'infantry_bay', targetHeight: REFERENCE_FRAME.BUILDING_HEIGHTS.infantry_bay || 2.8 },
+        { path: '/models/buildings/tech_center.glb', assetId: 'tech_center', targetHeight: 2.5 },
+        { path: '/models/buildings/garrison.glb', assetId: 'garrison', targetHeight: 2.0 },
+        { path: '/models/buildings/forge.glb', assetId: 'forge', targetHeight: REFERENCE_FRAME.BUILDING_HEIGHTS.forge || 2.8 },
+        { path: '/models/buildings/arsenal.glb', assetId: 'arsenal', targetHeight: 2.8 },
+        { path: '/models/buildings/hangar.glb', assetId: 'hangar', targetHeight: REFERENCE_FRAME.BUILDING_HEIGHTS.hangar || 2.2 },
+        { path: '/models/buildings/power_core.glb', assetId: 'power_core', targetHeight: 3.0 },
+        { path: '/models/buildings/ops_center.glb', assetId: 'ops_center', targetHeight: 2.8 },
+        { path: '/models/buildings/radar_array.glb', assetId: 'radar_array', targetHeight: 4.0 },
+        { path: '/models/buildings/defense_turret.glb', assetId: 'defense_turret', targetHeight: 2.5 },
+        { path: '/models/buildings/research_module.glb', assetId: 'research_module', targetHeight: 1.0 },
+        { path: '/models/buildings/production_module.glb', assetId: 'production_module', targetHeight: 1.0 }
+      );
+
       // Resources
-      { path: '/models/resources/minerals.glb', assetId: 'minerals', targetHeight: 2.0 },
-      { path: '/models/resources/vespene.glb', assetId: 'vespene', targetHeight: 2.0 },
-      // Decorations - scaled up 2-3x for better visibility
-      { path: '/models/decorations/alien_tower.glb', assetId: 'alien_tower', targetHeight: 14.0 },
-      { path: '/models/decorations/rocks_large.glb', assetId: 'rocks_large', targetHeight: 5.0 },
-      { path: '/models/decorations/rocks_small.glb', assetId: 'rocks_small', targetHeight: 3.0 },
-      { path: '/models/decorations/rock_single.glb', assetId: 'rock_single', targetHeight: 2.5 },
-      { path: '/models/decorations/tree_pine_tall.glb', assetId: 'tree_pine_tall', targetHeight: 14.0 },
-      { path: '/models/decorations/tree_pine_medium.glb', assetId: 'tree_pine_medium', targetHeight: 10.0 },
-      { path: '/models/decorations/tree_dead.glb', assetId: 'tree_dead', targetHeight: 9.0 },
-      { path: '/models/decorations/tree_alien.glb', assetId: 'tree_alien', targetHeight: 11.0 },
-      { path: '/models/decorations/tree_palm.glb', assetId: 'tree_palm', targetHeight: 11.0 },
-      { path: '/models/decorations/tree_mushroom.glb', assetId: 'tree_mushroom', targetHeight: 8.0 },
-      { path: '/models/decorations/crystal_formation.glb', assetId: 'crystal_formation', targetHeight: 4.0 },
-      { path: '/models/decorations/bush.glb', assetId: 'bush', targetHeight: 1.5 },
-      { path: '/models/decorations/grass_clump.glb', assetId: 'grass_clump', targetHeight: 0.8 },
-      { path: '/models/decorations/debris.glb', assetId: 'debris', targetHeight: 1.5 },
-      { path: '/models/decorations/escape_pod.glb', assetId: 'escape_pod', targetHeight: 4.0 },
-      { path: '/models/decorations/ruined_wall.glb', assetId: 'ruined_wall', targetHeight: 5.0 },
-    ];
+      customModels.push(
+        { path: '/models/resources/minerals.glb', assetId: 'minerals', targetHeight: 2.0 },
+        { path: '/models/resources/vespene.glb', assetId: 'vespene', targetHeight: 2.0 }
+      );
+
+      // Decorations
+      customModels.push(
+        { path: '/models/decorations/alien_tower.glb', assetId: 'alien_tower', targetHeight: 14.0 },
+        { path: '/models/decorations/rocks_large.glb', assetId: 'rocks_large', targetHeight: 5.0 },
+        { path: '/models/decorations/rocks_small.glb', assetId: 'rocks_small', targetHeight: 3.0 },
+        { path: '/models/decorations/rock_single.glb', assetId: 'rock_single', targetHeight: 2.5 },
+        { path: '/models/decorations/tree_pine_tall.glb', assetId: 'tree_pine_tall', targetHeight: 14.0 },
+        { path: '/models/decorations/tree_pine_medium.glb', assetId: 'tree_pine_medium', targetHeight: 10.0 },
+        { path: '/models/decorations/tree_dead.glb', assetId: 'tree_dead', targetHeight: 9.0 },
+        { path: '/models/decorations/tree_alien.glb', assetId: 'tree_alien', targetHeight: 11.0 },
+        { path: '/models/decorations/tree_palm.glb', assetId: 'tree_palm', targetHeight: 11.0 },
+        { path: '/models/decorations/tree_mushroom.glb', assetId: 'tree_mushroom', targetHeight: 8.0 },
+        { path: '/models/decorations/crystal_formation.glb', assetId: 'crystal_formation', targetHeight: 4.0 },
+        { path: '/models/decorations/bush.glb', assetId: 'bush', targetHeight: 1.5 },
+        { path: '/models/decorations/grass_clump.glb', assetId: 'grass_clump', targetHeight: 0.8 },
+        { path: '/models/decorations/debris.glb', assetId: 'debris', targetHeight: 1.5 },
+        { path: '/models/decorations/escape_pod.glb', assetId: 'escape_pod', targetHeight: 4.0 },
+        { path: '/models/decorations/ruined_wall.glb', assetId: 'ruined_wall', targetHeight: 5.0 }
+      );
+    }
 
     debugAssets.log('[AssetManager] Loading custom models...');
     let loadedCount = 0;
