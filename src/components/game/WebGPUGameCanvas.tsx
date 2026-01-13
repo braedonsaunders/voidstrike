@@ -746,6 +746,28 @@ export function WebGPUGameCanvas() {
         }
         const renderElapsed = performance.now() - renderStart;
 
+        // DEBUG: Check for previousInstanceMatrix after 60 frames (once)
+        if (frameCount === 60) {
+          console.log('[TAA DEBUG] Checking InstancedMesh properties after 60 frames...');
+          scene.traverse((obj) => {
+            if (obj instanceof THREE.InstancedMesh) {
+              const mesh = obj as THREE.InstancedMesh;
+              console.log('[TAA DEBUG] InstancedMesh found:', {
+                name: mesh.name || 'unnamed',
+                count: mesh.count,
+                hasPreviousInstanceMatrix: !!(mesh as any).previousInstanceMatrix,
+                previousInstanceMatrixType: (mesh as any).previousInstanceMatrix?.constructor?.name,
+                // Check if Three.js added any velocity-related properties
+                hasUserData: !!mesh.userData,
+                userData: mesh.userData,
+                // Check material
+                materialType: (mesh.material as any)?.type || 'unknown',
+                isMeshStandardMaterial: mesh.material instanceof THREE.MeshStandardMaterial,
+              });
+            }
+          });
+        }
+
         const frameElapsed = performance.now() - frameStart;
         if (frameElapsed > 16) { // Log if frame takes more than 16ms (60fps target)
           debugPerformance.warn(`[FRAME] Total: ${frameElapsed.toFixed(1)}ms, Render: ${renderElapsed.toFixed(1)}ms`);

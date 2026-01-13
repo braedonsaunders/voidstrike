@@ -263,6 +263,9 @@ export class RenderPipeline {
     // Previously disabled due to InstancedMesh jiggling, but stable entity ordering may have fixed it
     if (this.config.ssrEnabled) {
       // SSR needs normals, TRAA needs velocity
+      console.log('[PostProcessing] Setting up MRT with output + normal + velocity for SSR+TAA');
+      console.log('[PostProcessing] velocity node:', velocity);
+      console.log('[PostProcessing] velocity node type:', velocity?.constructor?.name);
       scenePass.setMRT(mrt({
         output: output,
         normal: directionToColor(normalView),
@@ -270,6 +273,9 @@ export class RenderPipeline {
       }));
     } else if (this.config.taaEnabled) {
       // Just velocity for TRAA
+      console.log('[PostProcessing] Setting up MRT with output + velocity for TAA');
+      console.log('[PostProcessing] velocity node:', velocity);
+      console.log('[PostProcessing] velocity node type:', velocity?.constructor?.name);
       scenePass.setMRT(mrt({
         output: output,
         velocity: velocity,

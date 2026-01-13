@@ -457,6 +457,17 @@ export class UnitRenderer {
       // Set up previous instance matrix attributes for TAA velocity
       setupInstancedVelocity(instancedMesh);
 
+      // DEBUG: Log InstancedMesh properties related to velocity
+      console.log('[UnitRenderer] InstancedMesh created:', {
+        type: unitType,
+        hasInstanceMatrix: !!instancedMesh.instanceMatrix,
+        instanceMatrixCount: instancedMesh.instanceMatrix?.count,
+        // Check for Three.js internal velocity-related properties
+        hasPreviousInstanceMatrix: !!(instancedMesh as any).previousInstanceMatrix,
+        // Check geometry attributes we added
+        geometryAttributes: Object.keys(instancedMesh.geometry.attributes),
+      });
+
       this.scene.add(instancedMesh);
 
       group = {
