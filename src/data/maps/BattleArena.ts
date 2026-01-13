@@ -1,5 +1,3 @@
-import { MapData, MapDecoration, createTerrainGrid } from './MapTypes';
-
 /**
  * BATTLE ARENA - Long horizontal bridge map for Battle Simulator mode
  *
@@ -8,65 +6,102 @@ import { MapData, MapDecoration, createTerrainGrid } from './MapTypes';
  * Designed for spawning and testing unit combat.
  */
 
+import {
+  defineMap,
+  generateMapFromDefinition,
+  type MapDefinition,
+} from './core';
+
 const MAP_WIDTH = 128;
 const MAP_HEIGHT = 48;
 
-// Create flat terrain
-const terrain = createTerrainGrid(MAP_WIDTH, MAP_HEIGHT, 'ground', 1, 'none');
-
-// Sparse decorations along the edges (like pillars on a bridge)
-const decorations: MapDecoration[] = [];
-
-// Add rock pillars along the top and bottom edges
+// Generate explicit decorations (rock pillars along edges)
+const explicitDecorations: Array<{ type: 'rocks_large'; position: { x: number; y: number }; scale: number }> = [];
 for (let x = 16; x < MAP_WIDTH - 16; x += 24) {
   // Top edge
-  decorations.push({
+  explicitDecorations.push({
     type: 'rocks_large',
-    x: x,
-    y: 4,
+    position: { x, y: 4 },
     scale: 0.8,
   });
   // Bottom edge
-  decorations.push({
+  explicitDecorations.push({
     type: 'rocks_large',
-    x: x,
-    y: MAP_HEIGHT - 4,
+    position: { x, y: MAP_HEIGHT - 4 },
     scale: 0.8,
   });
 }
 
-export const BATTLE_ARENA: MapData = {
-  id: 'battle_arena',
-  name: 'Battle Arena',
-  author: 'System',
-  description: 'Long bridge arena for Battle Simulator mode',
+const BATTLE_ARENA_DEF: MapDefinition = defineMap({
+  meta: {
+    id: 'battle_arena',
+    name: 'Battle Arena',
+    author: 'System',
+    description: 'Long bridge arena for Battle Simulator mode',
+  },
 
-  width: MAP_WIDTH,
-  height: MAP_HEIGHT,
+  canvas: {
+    width: MAP_WIDTH,
+    height: MAP_HEIGHT,
+    biome: 'desert',
+    baseElevation: 1,
+  },
 
-  terrain,
+  symmetry: {
+    type: 'mirror_x',
+    playerCount: 2,
+  },
 
-  // Spawns for camera positioning (placed on opposite ends)
-  spawns: [
-    { x: 20, y: MAP_HEIGHT / 2, playerSlot: 1, rotation: 0 },
-    { x: MAP_WIDTH - 20, y: MAP_HEIGHT / 2, playerSlot: 2, rotation: Math.PI },
+  // Simple flat arena - just two spawn regions connected by ground
+  regions: [
+    {
+      id: 'p1_spawn',
+      name: 'Player 1 Spawn',
+      type: 'main_base',
+      position: { x: 20, y: MAP_HEIGHT / 2 },
+      elevation: 1,
+      radius: 15,
+      playerSlot: 1,
+    },
+    {
+      id: 'p2_spawn',
+      name: 'Player 2 Spawn',
+      type: 'main_base',
+      position: { x: MAP_WIDTH - 20, y: MAP_HEIGHT / 2 },
+      elevation: 1,
+      radius: 15,
+      playerSlot: 2,
+    },
+    {
+      id: 'center',
+      name: 'Arena Center',
+      type: 'center',
+      position: { x: MAP_WIDTH / 2, y: MAP_HEIGHT / 2 },
+      elevation: 1,
+      radius: 20,
+    },
   ],
 
-  // No expansions or resources
-  expansions: [],
+  // All same elevation - ground connections
+  connections: [
+    { from: 'p1_spawn', to: 'center', type: 'wide', width: 30 },
+    { from: 'center', to: 'p2_spawn', type: 'wide', width: 30 },
+  ],
 
-  // No towers, ramps, or destructibles
-  watchTowers: [],
-  ramps: [],
-  destructibles: [],
+  // No terrain features - flat arena
+  terrain: {},
 
-  // Sparse decorations
-  decorations,
+  // No watch towers or destructibles
+  features: {},
 
-  playerCount: 2,
-  maxPlayers: 2,
-  isRanked: false,
+  // Sparse decorations - rock pillars
+  decorations: {
+    explicit: explicitDecorations,
+  },
+});
 
-  // Desert biome for clear visibility
-  biome: 'desert',
-};
+// Generate and export the map
+export const BATTLE_ARENA = generateMapFromDefinition(BATTLE_ARENA_DEF);
+
+// Mark as not ranked (battle simulator only)
+BATTLE_ARENA.isRanked = false;

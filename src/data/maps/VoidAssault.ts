@@ -15,15 +15,14 @@ import {
   createMudArea,
   autoFixConnectivity,
   validateMapConnectivity,
-  // New topology system
-  generateTerrainFromTopology,
-  mainBase,
-  naturalExpansion,
-  expansion,
-  connect,
-  getRampClearanceZones,
-  type MapTopology,
 } from './MapTypes';
+
+import {
+  defineMap,
+  generateTerrainWithConnections,
+  getRampClearanceZones,
+  type MapDefinition,
+} from './core';
 
 /**
  * VOID ASSAULT - 2 Player (1v1) Map
@@ -56,7 +55,7 @@ import {
  *   │ █████████████████                                         │
  *   └────────────────────────────────────────────────────────────┘
  *
- * USES NEW TOPOLOGY SYSTEM - Ramp connectivity guaranteed by design
+ * USES CONNECTIVITY-FIRST SYSTEM - Ramp connectivity guaranteed by design
  */
 
 const MAP_WIDTH = 220;
@@ -96,7 +95,7 @@ function isInBaseArea(x: number, y: number): boolean {
   return false;
 }
 
-function isInRampClearance(x: number, y: number, clearanceZones: Set<string>): boolean {
+function isInRampClearanceZone(x: number, y: number, clearanceZones: Set<string>): boolean {
   return clearanceZones.has(`${Math.floor(x)},${Math.floor(y)}`);
 }
 
@@ -110,7 +109,7 @@ function generateVoidDecorations(rampClearance: Set<string>): MapDecoration[] {
       const dist = rand() * spread;
       const x = cx + Math.cos(angle) * dist;
       const y = cy + Math.sin(angle) * dist;
-      if (isInBaseArea(x, y) || isInRampClearance(x, y, rampClearance)) continue;
+      if (isInBaseArea(x, y) || isInRampClearanceZone(x, y, rampClearance)) continue;
       decorations.push({
         type: 'crystal_formation',
         x, y,
@@ -126,7 +125,7 @@ function generateVoidDecorations(rampClearance: Set<string>): MapDecoration[] {
       const dist = rand() * spread;
       const x = cx + Math.cos(angle) * dist;
       const y = cy + Math.sin(angle) * dist;
-      if (isInBaseArea(x, y) || isInRampClearance(x, y, rampClearance)) continue;
+      if (isInBaseArea(x, y) || isInRampClearanceZone(x, y, rampClearance)) continue;
       decorations.push({
         type: 'tree_alien',
         x, y,
@@ -145,7 +144,7 @@ function generateVoidDecorations(rampClearance: Set<string>): MapDecoration[] {
       const dist = rand() * spread;
       const x = cx + Math.cos(angle) * dist;
       const y = cy + Math.sin(angle) * dist;
-      if (isInBaseArea(x, y) || isInRampClearance(x, y, rampClearance)) continue;
+      if (isInBaseArea(x, y) || isInRampClearanceZone(x, y, rampClearance)) continue;
       decorations.push({
         type: rockTypes[Math.floor(rand() * rockTypes.length)],
         x, y,
@@ -165,7 +164,7 @@ function generateVoidDecorations(rampClearance: Set<string>): MapDecoration[] {
       const t = i / steps;
       const x = x1 + dx * t + (rand() - 0.5) * 2;
       const y = y1 + dy * t + (rand() - 0.5) * 2;
-      if (isInBaseArea(x, y) || isInRampClearance(x, y, rampClearance)) continue;
+      if (isInBaseArea(x, y) || isInRampClearanceZone(x, y, rampClearance)) continue;
       const rockType = rand() < 0.4 ? 'rocks_large' : (rand() < 0.7 ? 'rocks_small' : 'rock_single');
       decorations.push({
         type: rockType,
@@ -222,7 +221,7 @@ function generateVoidDecorations(rampClearance: Set<string>): MapDecoration[] {
       const dist = radius + 2 + rand() * 4;
       const x = cx + Math.cos(angle) * dist;
       const y = cy + Math.sin(angle) * dist;
-      if (isInBaseArea(x, y) || isInRampClearance(x, y, rampClearance)) continue;
+      if (isInBaseArea(x, y) || isInRampClearanceZone(x, y, rampClearance)) continue;
       const rockType = rand() < 0.3 ? 'rocks_large' : (rand() < 0.6 ? 'rocks_small' : 'rock_single');
       decorations.push({
         type: rockType,
@@ -240,7 +239,7 @@ function generateVoidDecorations(rampClearance: Set<string>): MapDecoration[] {
       const dist = radius + 4 + rand() * 6;
       const x = cx + Math.cos(angle) * dist;
       const y = cy + Math.sin(angle) * dist;
-      if (isInBaseArea(x, y) || isInRampClearance(x, y, rampClearance)) continue;
+      if (isInBaseArea(x, y) || isInRampClearanceZone(x, y, rampClearance)) continue;
       decorations.push({
         type: 'tree_alien',
         x, y,
@@ -375,58 +374,74 @@ function generateVoidDecorations(rampClearance: Set<string>): MapDecoration[] {
   return decorations;
 }
 
+// ========================================
+// MAP DEFINITION - Connectivity-first terrain generation
+// ========================================
+const VOID_ASSAULT_DEF: MapDefinition = defineMap({
+  meta: {
+    id: 'void_assault',
+    name: 'Void Assault',
+    author: 'VOIDSTRIKE Team',
+    description: 'A competitive 1v1 map with diagonal spawns. Protected main bases lead to natural expansions through narrow ramps. Control the center and gold bases for map dominance.',
+  },
+
+  canvas: {
+    width: MAP_WIDTH,
+    height: MAP_HEIGHT,
+    biome: 'void',
+    baseElevation: 0,
+  },
+
+  symmetry: {
+    type: 'rotational',
+    playerCount: 2,
+  },
+
+  regions: [
+    // Main bases - elevated platforms with cliff rings
+    { id: 'p1_main', name: 'P1 Main', type: 'main_base', position: { x: 35, y: 185 }, elevation: 2, radius: 22, playerSlot: 1 },
+    { id: 'p2_main', name: 'P2 Main', type: 'main_base', position: { x: 185, y: 35 }, elevation: 2, radius: 22, playerSlot: 2 },
+
+    // Natural expansions - mid-elevation platforms
+    { id: 'p1_nat', name: 'P1 Natural', type: 'natural', position: { x: 60, y: 145 }, elevation: 1, radius: 14 },
+    { id: 'p2_nat', name: 'P2 Natural', type: 'natural', position: { x: 160, y: 75 }, elevation: 1, radius: 14 },
+
+    // Third expansions - ground level, no cliffs
+    { id: 'p1_third', name: 'P1 Third', type: 'third', position: { x: 35, y: 35 }, elevation: 0, radius: 18 },
+    { id: 'p2_third', name: 'P2 Third', type: 'third', position: { x: 185, y: 185 }, elevation: 0, radius: 18 },
+
+    // Fourth expansions - ground level, no cliffs
+    { id: 'p1_fourth', name: 'P1 Fourth', type: 'fourth', position: { x: 35, y: 110 }, elevation: 0, radius: 16 },
+    { id: 'p2_fourth', name: 'P2 Fourth', type: 'fourth', position: { x: 185, y: 110 }, elevation: 0, radius: 16 },
+
+    // Gold expansions
+    { id: 'gold_north', name: 'Gold North', type: 'gold', position: { x: 80, y: 60 }, elevation: 0, radius: 14 },
+    { id: 'gold_south', name: 'Gold South', type: 'gold', position: { x: 140, y: 160 }, elevation: 0, radius: 14 },
+
+    // Center contested area
+    { id: 'center', name: 'Center', type: 'center', position: { x: 110, y: 110 }, elevation: 0, radius: 22 },
+  ],
+
+  connections: [
+    // Main to natural connections (elevation 2 -> 1)
+    { from: 'p1_main', to: 'p1_nat', type: 'ramp', width: 10 },
+    { from: 'p2_main', to: 'p2_nat', type: 'ramp', width: 10 },
+
+    // Natural to low ground connections (elevation 1 -> 0)
+    { from: 'p1_nat', to: 'center', type: 'ramp', width: 8 },
+    { from: 'p2_nat', to: 'center', type: 'ramp', width: 8 },
+  ],
+
+  terrain: {},
+
+  features: {},
+
+  decorations: {},
+});
+
 function generateVoidAssault(): MapData {
-  // ========================================
-  // TOPOLOGY DEFINITION - Graph-first terrain generation
-  // ========================================
-  const topology: MapTopology = {
-    areas: [
-      // Main bases - elevated platforms with cliff rings
-      mainBase('p1_main', 35, 185, 22, 2, 4),
-      mainBase('p2_main', 185, 35, 22, 2, 4),
-
-      // Natural expansions - mid-elevation platforms
-      naturalExpansion('p1_nat', 60, 145, 14, 1, 3),
-      naturalExpansion('p2_nat', 160, 75, 14, 1, 3),
-
-      // Third expansions - ground level, no cliffs
-      expansion('p1_third', 'third', 35, 35, 18, 0),
-      expansion('p2_third', 'third', 185, 185, 18, 0),
-
-      // Fourth expansions - ground level, no cliffs
-      expansion('p1_fourth', 'fourth', 35, 110, 16, 0),
-      expansion('p2_fourth', 'fourth', 185, 110, 16, 0),
-
-      // Gold expansions
-      expansion('gold_north', 'gold', 80, 60, 14, 0),
-      expansion('gold_south', 'gold', 140, 160, 14, 0),
-
-      // Center contested area
-      expansion('center', 'center', 110, 110, 22, 0),
-    ],
-
-    connections: [
-      // Main to natural connections (elevation 2 -> 1)
-      // P1 main exits north toward natural
-      connect('p1_main', 'p1_nat', 10, 'north'),
-      // P2 main exits south toward natural
-      connect('p2_main', 'p2_nat', 10, 'south'),
-
-      // Natural to low ground connections (elevation 1 -> 0)
-      // P1 natural exits east toward center
-      connect('p1_nat', 'center', 8, 'east'),
-      // P2 natural exits west toward center
-      connect('p2_nat', 'center', 8, 'west'),
-    ],
-  };
-
-  // Generate base terrain from topology
-  const { terrain, ramps, connections } = generateTerrainFromTopology(
-    MAP_WIDTH,
-    MAP_HEIGHT,
-    topology,
-    0 // Default elevation (low ground)
-  );
+  // Generate base terrain from definition
+  const { terrain, ramps, connections } = generateTerrainWithConnections(VOID_ASSAULT_DEF);
 
   // Get ramp clearance zones to prevent decorations on ramps
   const rampClearance = getRampClearanceZones(connections);

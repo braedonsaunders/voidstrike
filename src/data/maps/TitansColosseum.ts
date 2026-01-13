@@ -16,20 +16,21 @@ import {
   createMudArea,
   autoFixConnectivity,
   validateMapConnectivity,
-  generateTerrainFromTopology,
-  mainBase,
-  naturalExpansion,
-  expansion,
-  connect,
-  getRampClearanceZones,
-  type MapTopology,
 } from './MapTypes';
+
+import {
+  defineMap,
+  generateTerrainWithConnections,
+  getRampClearanceZones,
+  type MapDefinition,
+} from './core';
 
 /**
  * TITAN'S COLOSSEUM - 8 Player Map (4v4 or FFA)
  *
  * A massive 8-player map with octagonal spawn layout.
  * Designed for epic 4v4 team battles or chaotic FFA matches.
+ * MIGRATED TO NEW CONNECTIVITY-FIRST SYSTEM
  *
  * Key Features:
  * - 8 protected main bases around the perimeter
@@ -57,6 +58,346 @@ import {
 
 const MAP_WIDTH = 400;
 const MAP_HEIGHT = 400;
+
+// ============================================
+// MAP DEFINITION - Connectivity-First Architecture
+// ============================================
+
+const TITANS_COLOSSEUM_DEF: MapDefinition = defineMap({
+  meta: {
+    id: 'titans_colosseum',
+    name: "Titan's Colosseum",
+    author: 'VOIDSTRIKE Team',
+    description: 'A massive 8-player map for epic 4v4 battles or chaotic FFA. Eight protected bases surround a central colosseum where armies clash for supremacy.',
+  },
+
+  canvas: {
+    width: MAP_WIDTH,
+    height: MAP_HEIGHT,
+    biome: 'volcanic',
+    baseElevation: 0,
+  },
+
+  symmetry: {
+    type: 'rotational',
+    playerCount: 8,
+  },
+
+  regions: [
+    // 8 Main bases (elevation 2) - octagonal arrangement
+    {
+      id: 'p1_main',
+      name: 'P1 Main',
+      type: 'main_base',
+      position: { x: 80, y: 45 },
+      elevation: 2,
+      radius: 25,
+      playerSlot: 1,
+    },
+    {
+      id: 'p2_main',
+      name: 'P2 Main',
+      type: 'main_base',
+      position: { x: 320, y: 45 },
+      elevation: 2,
+      radius: 25,
+      playerSlot: 2,
+    },
+    {
+      id: 'p3_main',
+      name: 'P3 Main',
+      type: 'main_base',
+      position: { x: 355, y: 130 },
+      elevation: 2,
+      radius: 25,
+      playerSlot: 3,
+    },
+    {
+      id: 'p4_main',
+      name: 'P4 Main',
+      type: 'main_base',
+      position: { x: 355, y: 270 },
+      elevation: 2,
+      radius: 25,
+      playerSlot: 4,
+    },
+    {
+      id: 'p5_main',
+      name: 'P5 Main',
+      type: 'main_base',
+      position: { x: 320, y: 355 },
+      elevation: 2,
+      radius: 25,
+      playerSlot: 5,
+    },
+    {
+      id: 'p6_main',
+      name: 'P6 Main',
+      type: 'main_base',
+      position: { x: 80, y: 355 },
+      elevation: 2,
+      radius: 25,
+      playerSlot: 6,
+    },
+    {
+      id: 'p7_main',
+      name: 'P7 Main',
+      type: 'main_base',
+      position: { x: 45, y: 270 },
+      elevation: 2,
+      radius: 25,
+      playerSlot: 7,
+    },
+    {
+      id: 'p8_main',
+      name: 'P8 Main',
+      type: 'main_base',
+      position: { x: 45, y: 130 },
+      elevation: 2,
+      radius: 25,
+      playerSlot: 8,
+    },
+
+    // 8 Natural expansions (elevation 1) - offset toward center
+    {
+      id: 'p1_nat',
+      name: 'P1 Natural',
+      type: 'natural',
+      position: { x: 110, y: 75 },
+      elevation: 1,
+      radius: 16,
+    },
+    {
+      id: 'p2_nat',
+      name: 'P2 Natural',
+      type: 'natural',
+      position: { x: 290, y: 75 },
+      elevation: 1,
+      radius: 16,
+    },
+    {
+      id: 'p3_nat',
+      name: 'P3 Natural',
+      type: 'natural',
+      position: { x: 325, y: 160 },
+      elevation: 1,
+      radius: 16,
+    },
+    {
+      id: 'p4_nat',
+      name: 'P4 Natural',
+      type: 'natural',
+      position: { x: 325, y: 240 },
+      elevation: 1,
+      radius: 16,
+    },
+    {
+      id: 'p5_nat',
+      name: 'P5 Natural',
+      type: 'natural',
+      position: { x: 290, y: 325 },
+      elevation: 1,
+      radius: 16,
+    },
+    {
+      id: 'p6_nat',
+      name: 'P6 Natural',
+      type: 'natural',
+      position: { x: 110, y: 325 },
+      elevation: 1,
+      radius: 16,
+    },
+    {
+      id: 'p7_nat',
+      name: 'P7 Natural',
+      type: 'natural',
+      position: { x: 75, y: 240 },
+      elevation: 1,
+      radius: 16,
+    },
+    {
+      id: 'p8_nat',
+      name: 'P8 Natural',
+      type: 'natural',
+      position: { x: 75, y: 160 },
+      elevation: 1,
+      radius: 16,
+    },
+
+    // 8 Mid-ground transition areas for natural exits (elevation 0)
+    // These connect naturals to the low ground
+    {
+      id: 'p1_ground',
+      name: 'P1 Ground',
+      type: 'open_ground' as any,
+      position: { x: 110, y: 115 },
+      elevation: 0,
+      radius: 12,
+    },
+    {
+      id: 'p2_ground',
+      name: 'P2 Ground',
+      type: 'open_ground' as any,
+      position: { x: 290, y: 115 },
+      elevation: 0,
+      radius: 12,
+    },
+    {
+      id: 'p3_ground',
+      name: 'P3 Ground',
+      type: 'open_ground' as any,
+      position: { x: 290, y: 160 },
+      elevation: 0,
+      radius: 12,
+    },
+    {
+      id: 'p4_ground',
+      name: 'P4 Ground',
+      type: 'open_ground' as any,
+      position: { x: 290, y: 240 },
+      elevation: 0,
+      radius: 12,
+    },
+    {
+      id: 'p5_ground',
+      name: 'P5 Ground',
+      type: 'open_ground' as any,
+      position: { x: 290, y: 285 },
+      elevation: 0,
+      radius: 12,
+    },
+    {
+      id: 'p6_ground',
+      name: 'P6 Ground',
+      type: 'open_ground' as any,
+      position: { x: 110, y: 285 },
+      elevation: 0,
+      radius: 12,
+    },
+    {
+      id: 'p7_ground',
+      name: 'P7 Ground',
+      type: 'open_ground' as any,
+      position: { x: 110, y: 240 },
+      elevation: 0,
+      radius: 12,
+    },
+    {
+      id: 'p8_ground',
+      name: 'P8 Ground',
+      type: 'open_ground' as any,
+      position: { x: 110, y: 160 },
+      elevation: 0,
+      radius: 12,
+    },
+
+    // 4 Gold expansions (inner ring, elevation 0)
+    {
+      id: 'gold_nw',
+      name: 'Gold NW',
+      type: 'gold',
+      position: { x: 140, y: 140 },
+      elevation: 0,
+      radius: 16,
+    },
+    {
+      id: 'gold_ne',
+      name: 'Gold NE',
+      type: 'gold',
+      position: { x: 260, y: 140 },
+      elevation: 0,
+      radius: 16,
+    },
+    {
+      id: 'gold_se',
+      name: 'Gold SE',
+      type: 'gold',
+      position: { x: 260, y: 260 },
+      elevation: 0,
+      radius: 16,
+    },
+    {
+      id: 'gold_sw',
+      name: 'Gold SW',
+      type: 'gold',
+      position: { x: 140, y: 260 },
+      elevation: 0,
+      radius: 16,
+    },
+
+    // 4 Edge thirds (elevation 0)
+    {
+      id: 'north_third',
+      name: 'North Third',
+      type: 'third',
+      position: { x: 200, y: 60 },
+      elevation: 0,
+      radius: 16,
+    },
+    {
+      id: 'south_third',
+      name: 'South Third',
+      type: 'third',
+      position: { x: 200, y: 340 },
+      elevation: 0,
+      radius: 16,
+    },
+    {
+      id: 'west_third',
+      name: 'West Third',
+      type: 'third',
+      position: { x: 60, y: 200 },
+      elevation: 0,
+      radius: 16,
+    },
+    {
+      id: 'east_third',
+      name: 'East Third',
+      type: 'third',
+      position: { x: 340, y: 200 },
+      elevation: 0,
+      radius: 16,
+    },
+
+    // Center colosseum (elevation 0)
+    {
+      id: 'center',
+      name: 'Colosseum Center',
+      type: 'center',
+      position: { x: 200, y: 200 },
+      elevation: 0,
+      radius: 40,
+    },
+  ],
+
+  connections: [
+    // Main to Natural connections (elevation 2 -> 1)
+    { from: 'p1_main', to: 'p1_nat', type: 'ramp', width: 10 },
+    { from: 'p2_main', to: 'p2_nat', type: 'ramp', width: 10 },
+    { from: 'p3_main', to: 'p3_nat', type: 'ramp', width: 10 },
+    { from: 'p4_main', to: 'p4_nat', type: 'ramp', width: 10 },
+    { from: 'p5_main', to: 'p5_nat', type: 'ramp', width: 10 },
+    { from: 'p6_main', to: 'p6_nat', type: 'ramp', width: 10 },
+    { from: 'p7_main', to: 'p7_nat', type: 'ramp', width: 10 },
+    { from: 'p8_main', to: 'p8_nat', type: 'ramp', width: 10 },
+
+    // Natural to low ground connections (elevation 1 -> 0)
+    // CRITICAL: Use same width as main-to-natural ramps (10) for consistent navmesh
+    { from: 'p1_nat', to: 'p1_ground', type: 'ramp', width: 10 },
+    { from: 'p2_nat', to: 'p2_ground', type: 'ramp', width: 10 },
+    { from: 'p3_nat', to: 'p3_ground', type: 'ramp', width: 10 },
+    { from: 'p4_nat', to: 'p4_ground', type: 'ramp', width: 10 },
+    { from: 'p5_nat', to: 'p5_ground', type: 'ramp', width: 10 },
+    { from: 'p6_nat', to: 'p6_ground', type: 'ramp', width: 10 },
+    { from: 'p7_nat', to: 'p7_ground', type: 'ramp', width: 10 },
+    { from: 'p8_nat', to: 'p8_ground', type: 'ramp', width: 10 },
+  ],
+
+  // Terrain features handled in post-processing for exact visual matching
+  terrain: {},
+  features: {},
+  decorations: {},
+});
 
 function seededRandom(seed: number): () => number {
   return () => {
@@ -105,7 +446,7 @@ function isInBaseArea(x: number, y: number): boolean {
   return false;
 }
 
-function isInRampClearance(x: number, y: number, clearanceZones: Set<string>): boolean {
+function isInRampClearanceZone(x: number, y: number, clearanceZones: Set<string>): boolean {
   return clearanceZones.has(`${Math.floor(x)},${Math.floor(y)}`);
 }
 
@@ -122,7 +463,7 @@ function generateVolcanicDecorations(rampClearance: Set<string>): MapDecoration[
       const dist = rand() * spread;
       const x = cx + Math.cos(angle) * dist;
       const y = cy + Math.sin(angle) * dist;
-      if (isInBaseArea(x, y) || isInRampClearance(x, y, rampClearance)) continue;
+      if (isInBaseArea(x, y) || isInRampClearanceZone(x, y, rampClearance)) continue;
       decorations.push({
         type: rockTypes[Math.floor(rand() * rockTypes.length)],
         x, y,
@@ -138,7 +479,7 @@ function generateVolcanicDecorations(rampClearance: Set<string>): MapDecoration[
       const dist = rand() * spread;
       const x = cx + Math.cos(angle) * dist;
       const y = cy + Math.sin(angle) * dist;
-      if (isInBaseArea(x, y) || isInRampClearance(x, y, rampClearance)) continue;
+      if (isInBaseArea(x, y) || isInRampClearanceZone(x, y, rampClearance)) continue;
       decorations.push({
         type: 'crystal_formation',
         x, y,
@@ -154,7 +495,7 @@ function generateVolcanicDecorations(rampClearance: Set<string>): MapDecoration[
       const dist = rand() * spread;
       const x = cx + Math.cos(angle) * dist;
       const y = cy + Math.sin(angle) * dist;
-      if (isInBaseArea(x, y) || isInRampClearance(x, y, rampClearance)) continue;
+      if (isInBaseArea(x, y) || isInRampClearanceZone(x, y, rampClearance)) continue;
       decorations.push({
         type: 'tree_dead',
         x, y,
@@ -173,7 +514,7 @@ function generateVolcanicDecorations(rampClearance: Set<string>): MapDecoration[
       const t = i / steps;
       const x = x1 + dx * t + (rand() - 0.5) * 2;
       const y = y1 + dy * t + (rand() - 0.5) * 2;
-      if (isInBaseArea(x, y) || isInRampClearance(x, y, rampClearance)) continue;
+      if (isInBaseArea(x, y) || isInRampClearanceZone(x, y, rampClearance)) continue;
       const rockType = rand() < 0.4 ? 'rocks_large' : (rand() < 0.7 ? 'rocks_small' : 'rock_single');
       decorations.push({
         type: rockType,
@@ -209,7 +550,7 @@ function generateVolcanicDecorations(rampClearance: Set<string>): MapDecoration[
       const dist = radius + 2 + rand() * 4;
       const x = cx + Math.cos(angle) * dist;
       const y = cy + Math.sin(angle) * dist;
-      if (isInBaseArea(x, y) || isInRampClearance(x, y, rampClearance)) continue;
+      if (isInBaseArea(x, y) || isInRampClearanceZone(x, y, rampClearance)) continue;
       const rockType = rand() < 0.3 ? 'rocks_large' : (rand() < 0.6 ? 'rocks_small' : 'rock_single');
       decorations.push({
         type: rockType,
@@ -226,7 +567,7 @@ function generateVolcanicDecorations(rampClearance: Set<string>): MapDecoration[
       const dist = radius + 4 + rand() * 6;
       const x = cx + Math.cos(angle) * dist;
       const y = cy + Math.sin(angle) * dist;
-      if (isInBaseArea(x, y) || isInRampClearance(x, y, rampClearance)) continue;
+      if (isInBaseArea(x, y) || isInRampClearanceZone(x, y, rampClearance)) continue;
       decorations.push({
         type: 'tree_dead',
         x, y,
@@ -383,91 +724,9 @@ function generateVolcanicDecorations(rampClearance: Set<string>): MapDecoration[
   return decorations;
 }
 
-// ============================================
-// MAP TOPOLOGY DEFINITION
-// ============================================
-
-const topology: MapTopology = {
-  areas: [
-    // 8 Main bases (elevation 2) - octagonal arrangement
-    mainBase('p1_main', 80, 45, 25, 2, 4),     // P1 - top-left
-    mainBase('p2_main', 320, 45, 25, 2, 4),    // P2 - top-right
-    mainBase('p3_main', 355, 130, 25, 2, 4),   // P3 - right-top
-    mainBase('p4_main', 355, 270, 25, 2, 4),   // P4 - right-bottom
-    mainBase('p5_main', 320, 355, 25, 2, 4),   // P5 - bottom-right
-    mainBase('p6_main', 80, 355, 25, 2, 4),    // P6 - bottom-left
-    mainBase('p7_main', 45, 270, 25, 2, 4),    // P7 - left-bottom
-    mainBase('p8_main', 45, 130, 25, 2, 4),    // P8 - left-top
-
-    // 8 Natural expansions (elevation 1) - offset toward center
-    naturalExpansion('p1_nat', 110, 75, 16, 1, 3),
-    naturalExpansion('p2_nat', 290, 75, 16, 1, 3),
-    naturalExpansion('p3_nat', 325, 160, 16, 1, 3),
-    naturalExpansion('p4_nat', 325, 240, 16, 1, 3),
-    naturalExpansion('p5_nat', 290, 325, 16, 1, 3),
-    naturalExpansion('p6_nat', 110, 325, 16, 1, 3),
-    naturalExpansion('p7_nat', 75, 240, 16, 1, 3),
-    naturalExpansion('p8_nat', 75, 160, 16, 1, 3),
-
-    // 8 Mid-ground transition areas for natural exits (elevation 0)
-    // These connect naturals to the low ground
-    expansion('p1_ground', 'open_ground' as any, 110, 115, 12, 0),
-    expansion('p2_ground', 'open_ground' as any, 290, 115, 12, 0),
-    expansion('p3_ground', 'open_ground' as any, 290, 160, 12, 0),
-    expansion('p4_ground', 'open_ground' as any, 290, 240, 12, 0),
-    expansion('p5_ground', 'open_ground' as any, 290, 285, 12, 0),
-    expansion('p6_ground', 'open_ground' as any, 110, 285, 12, 0),
-    expansion('p7_ground', 'open_ground' as any, 110, 240, 12, 0),
-    expansion('p8_ground', 'open_ground' as any, 110, 160, 12, 0),
-
-    // 4 Gold expansions (inner ring, elevation 0)
-    expansion('gold_nw', 'gold', 140, 140, 16, 0),
-    expansion('gold_ne', 'gold', 260, 140, 16, 0),
-    expansion('gold_se', 'gold', 260, 260, 16, 0),
-    expansion('gold_sw', 'gold', 140, 260, 16, 0),
-
-    // 4 Edge thirds (elevation 0)
-    expansion('north_third', 'third', 200, 60, 16, 0),
-    expansion('south_third', 'third', 200, 340, 16, 0),
-    expansion('west_third', 'third', 60, 200, 16, 0),
-    expansion('east_third', 'third', 340, 200, 16, 0),
-
-    // Center colosseum (elevation 0)
-    expansion('center', 'center', 200, 200, 40, 0),
-  ],
-
-  connections: [
-    // Main to Natural connections (elevation 2 → 1)
-    connect('p1_main', 'p1_nat', 10, 'south'),
-    connect('p2_main', 'p2_nat', 10, 'south'),
-    connect('p3_main', 'p3_nat', 10, 'west'),
-    connect('p4_main', 'p4_nat', 10, 'west'),
-    connect('p5_main', 'p5_nat', 10, 'north'),
-    connect('p6_main', 'p6_nat', 10, 'north'),
-    connect('p7_main', 'p7_nat', 10, 'east'),
-    connect('p8_main', 'p8_nat', 10, 'east'),
-
-    // Natural to low ground connections (elevation 1 → 0)
-    // CRITICAL: Use same width as main-to-natural ramps (10) for consistent navmesh
-    connect('p1_nat', 'p1_ground', 10, 'south'),
-    connect('p2_nat', 'p2_ground', 10, 'south'),
-    connect('p3_nat', 'p3_ground', 10, 'west'),
-    connect('p4_nat', 'p4_ground', 10, 'west'),
-    connect('p5_nat', 'p5_ground', 10, 'north'),
-    connect('p6_nat', 'p6_ground', 10, 'north'),
-    connect('p7_nat', 'p7_ground', 10, 'east'),
-    connect('p8_nat', 'p8_ground', 10, 'east'),
-  ],
-};
-
 function generateTitansColosseum(): MapData {
-  // Generate terrain from topology
-  const { terrain, ramps, connections } = generateTerrainFromTopology(
-    MAP_WIDTH,
-    MAP_HEIGHT,
-    topology,
-    0 // Default to low ground
-  );
+  // Generate terrain from connectivity-first definition
+  const { terrain, ramps, connections } = generateTerrainWithConnections(TITANS_COLOSSEUM_DEF);
 
   // Get ramp clearance zones to prevent decorations on ramps
   const rampClearance = getRampClearanceZones(connections);

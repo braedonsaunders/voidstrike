@@ -1031,6 +1031,203 @@ function getDefaultClusterTypes(type: string): DefDecorationType[] {
 }
 
 // ============================================================================
+// RAMP CLEARANCE ZONES (for decoration placement)
+// ============================================================================
+
+/**
+ * Generated connection data (matches old TerrainTopology interface)
+ */
+export interface GeneratedConnection {
+  ramp: Ramp;
+  fromAreaId: string;
+  toAreaId: string;
+  entryPoint: { x: number; y: number };
+  exitPoint: { x: number; y: number };
+  width: number;
+}
+
+/**
+ * Result of terrain generation (matches old TopologyGenerationResult)
+ * Use this when you need post-processing of terrain with custom features
+ */
+export interface TerrainGenerationResult {
+  terrain: MapCell[][];
+  ramps: Ramp[];
+  connections: GeneratedConnection[];
+}
+
+/**
+ * Generate terrain with ramps and connections for post-processing.
+ * This is the equivalent of the old generateTerrainFromTopology() function.
+ * Use this when maps need to apply custom terrain features after base generation.
+ */
+export function generateTerrainWithConnections(
+  definition: MapDefinition
+): TerrainGenerationResult {
+  const graph = definitionToGraph(definition);
+  const terrain = generateTerrain(definition, graph);
+
+  // Generate ramp and connection data
+  const ramps = generateRamps(definition.connections, graph);
+  const connections = generateConnectionData(definition.connections, graph);
+
+  return { terrain, ramps, connections };
+}
+
+/**
+ * Generate connection data for ramp clearance zones
+ */
+function generateConnectionData(
+  connections: ConnectionDefinition[],
+  graph: ConnectivityGraph
+): GeneratedConnection[] {
+  const result: GeneratedConnection[] = [];
+
+  for (const conn of connections) {
+    const fromNode = graph.nodes.get(conn.from);
+    const toNode = graph.nodes.get(conn.to);
+
+    if (!fromNode || !toNode) continue;
+
+    const dx = toNode.center.x - fromNode.center.x;
+    const dy = toNode.center.y - fromNode.center.y;
+    const length = Math.sqrt(dx * dx + dy * dy);
+
+    // Calculate entry and exit points
+    const dirX = length > 0 ? dx / length : 0;
+    const dirY = length > 0 ? dy / length : 1;
+
+    const fromRadius = fromNode.radius + 3; // Account for cliff width
+    const toRadius = toNode.radius + 3;
+
+    const entryPoint = {
+      x: fromNode.center.x + dirX * fromRadius,
+      y: fromNode.center.y + dirY * fromRadius,
+    };
+
+    const exitPoint = {
+      x: toNode.center.x - dirX * toRadius,
+      y: toNode.center.y - dirY * toRadius,
+    };
+
+    // Determine direction
+    let direction: 'north' | 'south' | 'east' | 'west' = 'north';
+    if (Math.abs(dx) > Math.abs(dy)) {
+      direction = dx > 0 ? 'east' : 'west';
+    } else {
+      direction = dy > 0 ? 'south' : 'north';
+    }
+
+    const centerX = (fromNode.center.x + toNode.center.x) / 2;
+    const centerY = (fromNode.center.y + toNode.center.y) / 2;
+
+    result.push({
+      ramp: {
+        x: centerX - conn.width / 2,
+        y: centerY - length / 4,
+        width: conn.width,
+        height: length / 2,
+        direction,
+        fromElevation: fromNode.elevation as 0 | 1 | 2,
+        toElevation: toNode.elevation as 0 | 1 | 2,
+      },
+      fromAreaId: conn.from,
+      toAreaId: conn.to,
+      entryPoint,
+      exitPoint,
+      width: conn.width,
+    });
+  }
+
+  return result;
+}
+
+/**
+ * Get ramp clearance zones for decoration placement.
+ * Returns a Set of cell keys that should not have decorations.
+ */
+export function getRampClearanceZones(connections: GeneratedConnection[]): Set<string> {
+  const clearance = new Set<string>();
+  const CLEARANCE_BUFFER = 6;
+  const EXIT_EXTENSION = 18;
+
+  for (const conn of connections) {
+    const { ramp, entryPoint, exitPoint, width } = conn;
+
+    // Calculate the actual vector from entry to exit
+    const dx = exitPoint.x - entryPoint.x;
+    const dy = exitPoint.y - entryPoint.y;
+    const length = Math.sqrt(dx * dx + dy * dy);
+
+    // Normalized direction along the ramp
+    const dirX = length > 0 ? dx / length : 0;
+    const dirY = length > 0 ? dy / length : 1;
+
+    // Perpendicular vector for width
+    const perpX = -dirY;
+    const perpY = dirX;
+
+    const halfWidth = width / 2 + CLEARANCE_BUFFER;
+
+    // Clear along the entire ramp path
+    const steps = Math.ceil(length) + 1;
+    for (let step = 0; step <= steps; step++) {
+      const t = step / Math.max(1, steps);
+      const centerX = entryPoint.x + dx * t;
+      const centerY = entryPoint.y + dy * t;
+
+      for (let w = -halfWidth; w <= halfWidth; w++) {
+        const px = Math.floor(centerX + perpX * w);
+        const py = Math.floor(centerY + perpY * w);
+        clearance.add(`${px},${py}`);
+      }
+    }
+
+    // Extended clearance into source area (entry side)
+    for (let d = 0; d < EXIT_EXTENSION; d++) {
+      const cx = entryPoint.x - dirX * d;
+      const cy = entryPoint.y - dirY * d;
+      for (let w = -halfWidth; w <= halfWidth; w++) {
+        const px = Math.floor(cx + perpX * w);
+        const py = Math.floor(cy + perpY * w);
+        clearance.add(`${px},${py}`);
+      }
+    }
+
+    // Extended clearance into destination area (exit side)
+    for (let d = 0; d < EXIT_EXTENSION; d++) {
+      const cx = exitPoint.x + dirX * d;
+      const cy = exitPoint.y + dirY * d;
+      for (let w = -halfWidth; w <= halfWidth; w++) {
+        const px = Math.floor(cx + perpX * w);
+        const py = Math.floor(cy + perpY * w);
+        clearance.add(`${px},${py}`);
+      }
+    }
+
+    // Also clear the bounding box of the ramp
+    for (let ry = -CLEARANCE_BUFFER; ry < ramp.height + CLEARANCE_BUFFER; ry++) {
+      for (let rx = -CLEARANCE_BUFFER; rx < ramp.width + CLEARANCE_BUFFER; rx++) {
+        clearance.add(`${ramp.x + rx},${ramp.y + ry}`);
+      }
+    }
+  }
+
+  return clearance;
+}
+
+/**
+ * Check if a point is within ramp clearance zones
+ */
+export function isInRampClearance(
+  x: number,
+  y: number,
+  clearanceZones: Set<string>
+): boolean {
+  return clearanceZones.has(`${Math.floor(x)},${Math.floor(y)}`);
+}
+
+// ============================================================================
 // MAIN GENERATION FUNCTION
 // ============================================================================
 

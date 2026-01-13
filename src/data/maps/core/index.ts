@@ -89,8 +89,17 @@ export {
 
 // Map Generator
 export {
+  // Types for post-processing
+  type GeneratedConnection,
+  type TerrainGenerationResult,
+  // Main functions
   generateMapFromDefinition,
   generateTerrain,
+  generateTerrainWithConnections,
+  // Ramp clearance utilities
+  getRampClearanceZones,
+  isInRampClearance,
+  // Debug
   exportGraphDebug,
 } from './MapGenerator';
 
