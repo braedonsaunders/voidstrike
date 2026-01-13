@@ -188,8 +188,8 @@ export function EditorCanvas({
                   x,
                   y,
                   cell: {
-                    elevation: selectedElevation,
-                    walkable,
+                    elevation: paintElevation,
+                    walkable: paintWalkable,
                     materialId: selectedMaterial,
                   },
                 });
