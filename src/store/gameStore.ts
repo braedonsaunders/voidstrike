@@ -28,6 +28,9 @@ export interface WallLineState {
 }
 
 export interface GameState {
+  // Loading state
+  isGameReady: boolean;
+
   // Resources
   minerals: number;
   vespene: number;
@@ -105,6 +108,7 @@ export interface GameState {
   getUpgradeBonus: (playerId: string, unitId: string, effectType: UpgradeEffect['type']) => number;
   setShowTechTree: (show: boolean) => void;
   setShowKeyboardShortcuts: (show: boolean) => void;
+  setGameReady: (ready: boolean) => void;
   setPlayerId: (playerId: string) => void;
   syncWithGameSetup: () => void;
   reset: () => void;
@@ -121,6 +125,7 @@ const initialWallLine: WallLineState = {
 };
 
 const initialState = {
+  isGameReady: false,
   minerals: 50,
   vespene: 0,
   supply: 0,
@@ -403,6 +408,8 @@ export const useGameStore = create<GameState>((set, get) => ({
   setShowTechTree: (show) => set({ showTechTree: show }),
 
   setShowKeyboardShortcuts: (show) => set({ showKeyboardShortcuts: show }),
+
+  setGameReady: (ready) => set({ isGameReady: ready }),
 
   setPlayerId: (playerId) => set({ playerId }),
 
