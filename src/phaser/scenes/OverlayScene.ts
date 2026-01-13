@@ -377,8 +377,13 @@ export class OverlayScene extends Phaser.Scene {
       entityIds?: number[];
       targetEntityId?: number;
       targetPosition?: { x: number; y: number };
+      playerId?: string;
       queue?: boolean;
     }) => {
+      // Only show indicator for local player's commands (not AI)
+      if (data.playerId && !isLocalPlayer(data.playerId)) return;
+      // Skip in spectator mode (would show all players' indicators)
+      if (this.isSpectator()) return;
       // Only show indicator when attacking a specific target entity
       if (data.targetEntityId !== undefined) {
         this.addAttackTargetIndicator(data.targetEntityId);
