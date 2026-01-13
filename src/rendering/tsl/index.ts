@@ -68,7 +68,7 @@ export {
   type ParticleEffectConfig,
 } from './ParticleSystem';
 
-// Post-processing
+// Post-processing (includes TRAA from Three.js)
 export {
   RenderPipeline,
   createSimplePostProcessing,
@@ -77,19 +77,6 @@ export {
   type PostProcessingConfig,
   type AntiAliasingMode,
 } from './PostProcessing';
-
-// Temporal Anti-Aliasing (TAA)
-export {
-  TAASystem,
-  TAAJitterManager,
-  TAAHistoryManager,
-  TAAMotionVectorGenerator,
-  createTAAResolvePass,
-  createRCASPass,
-  HALTON_SEQUENCE_16,
-  DEFAULT_TAA_CONFIG,
-  type TAAConfig,
-} from './TAA';
 
 // Map effects
 export {

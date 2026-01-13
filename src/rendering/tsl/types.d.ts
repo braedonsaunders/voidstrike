@@ -138,6 +138,31 @@ declare module 'three/tsl' {
   export function depth(): ShaderNodeObject<any>;
 }
 
+// TRAANode - Temporal Reprojection Anti-Aliasing
+declare module 'three/addons/tsl/display/TRAANode.js' {
+  import type { Camera } from 'three';
+
+  export interface TRAANode {
+    isTRAANode: boolean;
+    depthThreshold: number;
+    edgeDepthDiff: number;
+    maxVelocityLength: number;
+    useSubpixelCorrection: boolean;
+    getTextureNode(): any;
+    setSize(width: number, height: number): void;
+    setViewOffset(width: number, height: number): void;
+    clearViewOffset(): void;
+    dispose(): void;
+  }
+
+  export function traa(
+    beautyNode: any,
+    depthNode: any,
+    velocityNode: any,
+    camera: Camera
+  ): TRAANode;
+}
+
 declare module 'three/webgpu' {
   import { Camera, Scene, ToneMapping, Material, Side, Blending } from 'three';
 
