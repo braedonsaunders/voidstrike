@@ -33,53 +33,71 @@ function hexToCSS(hex: number): string {
 }
 
 // Map preview component
-function MapPreview({ map, isSelected, onSelect }: {
+function MapPreview({ map, isSelected, onSelect, onEdit }: {
   map: MapData;
   isSelected: boolean;
   onSelect: () => void;
+  onEdit: () => void;
 }) {
   const biome = BIOMES[map.biome || 'grassland'];
   const groundColors = biome.colors.ground;
   const accentColor = colorToHex(biome.colors.accent[0]);
 
   return (
-    <button
-      onClick={onSelect}
-      className={`relative overflow-hidden rounded-lg border-2 transition-all duration-300 text-left
+    <div
+      className={`relative overflow-hidden rounded-lg border-2 transition-all duration-300
         ${isSelected
           ? 'border-void-400 shadow-[0_0_20px_rgba(132,61,255,0.4)]'
           : 'border-void-800/50 hover:border-void-600'
         }`}
     >
-      <div
-        className="h-20 w-full relative"
-        style={{
-          background: `linear-gradient(135deg,
-            ${colorToHex(groundColors[2])},
-            ${colorToHex(groundColors[0])},
-            ${colorToHex(groundColors[1])})`
-        }}
+      <button
+        onClick={onSelect}
+        className="w-full text-left"
       >
-        <div className="absolute top-1 right-1 bg-black/60 px-1.5 py-0.5 rounded text-[10px] text-void-300">
-          {map.width}x{map.height}
+        <div
+          className="h-20 w-full relative"
+          style={{
+            background: `linear-gradient(135deg,
+              ${colorToHex(groundColors[2])},
+              ${colorToHex(groundColors[0])},
+              ${colorToHex(groundColors[1])})`
+          }}
+        >
+          <div className="absolute top-1 right-1 bg-black/60 px-1.5 py-0.5 rounded text-[10px] text-void-300">
+            {map.width}x{map.height}
+          </div>
+          <div className="absolute bottom-1 left-1 bg-black/60 px-1.5 py-0.5 rounded text-[10px] capitalize"
+               style={{ color: accentColor }}>
+            {map.biome || 'grassland'}
+          </div>
         </div>
-        <div className="absolute bottom-1 left-1 bg-black/60 px-1.5 py-0.5 rounded text-[10px] capitalize"
-             style={{ color: accentColor }}>
-          {map.biome || 'grassland'}
-        </div>
-      </div>
 
-      <div className="p-2 bg-void-950">
-        <h3 className="font-display text-white text-xs mb-0.5">{map.name}</h3>
-        <p className="text-void-400 text-[10px] line-clamp-1">{map.description}</p>
-      </div>
+        <div className="p-2 bg-void-950">
+          <h3 className="font-display text-white text-xs mb-0.5">{map.name}</h3>
+          <p className="text-void-400 text-[10px] line-clamp-1">{map.description}</p>
+        </div>
+      </button>
+
+      {/* Edit button */}
+      <button
+        onClick={(e) => {
+          e.stopPropagation();
+          onEdit();
+        }}
+        className="absolute bottom-2 right-2 px-2 py-0.5 bg-void-700/80 hover:bg-void-600
+                   text-void-200 text-[10px] rounded transition-colors backdrop-blur-sm"
+        title="Edit map"
+      >
+        Edit
+      </button>
 
       {isSelected && (
         <div className="absolute top-1 left-1 bg-void-500 text-white px-1.5 py-0.5 rounded text-[10px] font-bold">
           ✓
         </div>
       )}
-    </button>
+    </div>
   );
 }
 
@@ -364,6 +382,7 @@ export default function GameSetupPage() {
                   map={map}
                   isSelected={selectedMapId === map.id}
                   onSelect={() => handleMapSelect(map.id)}
+                  onEdit={() => router.push(`/game/setup/editor?map=${map.id}`)}
                 />
               ))}
             </div>
