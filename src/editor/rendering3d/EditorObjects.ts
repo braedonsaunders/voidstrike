@@ -176,9 +176,9 @@ export class EditorObjects {
     selectionRing.rotation.x = -Math.PI / 2;
     selectionRing.position.set(obj.x, terrainHeight + 0.1, obj.y);
 
-    // Create label sprite (positioned closer to object with smaller labels)
+    // Create label sprite (positioned above object)
     const label = this.createLabel(objType?.name || obj.type, objType?.icon || '●');
-    label.position.set(obj.x, terrainHeight + visual.height + 0.3, obj.y);
+    label.position.set(obj.x, terrainHeight + visual.height + 1.5, obj.y);
 
     // Check category visibility
     const categoryVisible = this.isCategoryVisible(category);
@@ -214,7 +214,7 @@ export class EditorObjects {
 
     instance.mesh.position.set(x, terrainHeight + currentHeight, y);
     instance.selectionRing.position.set(x, terrainHeight + 0.1, y);
-    instance.label.position.set(x, instance.mesh.position.y + 0.3, y);
+    instance.label.position.set(x, instance.mesh.position.y + 1.5, y);
   }
 
   /**
@@ -303,31 +303,31 @@ export class EditorObjects {
   }
 
   /**
-   * Create a text label sprite (minimal size)
+   * Create a text label sprite
    */
   private createLabel(text: string, icon: string): THREE.Sprite {
     const canvas = document.createElement('canvas');
     const ctx = canvas.getContext('2d')!;
-    canvas.width = 64;
-    canvas.height = 24;
+    canvas.width = 192;
+    canvas.height = 64;
 
     // Background
-    ctx.fillStyle = 'rgba(0, 0, 0, 0.6)';
-    ctx.roundRect(0, 0, canvas.width, canvas.height, 4);
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.75)';
+    ctx.roundRect(0, 0, canvas.width, canvas.height, 8);
     ctx.fill();
 
-    // Icon only (text removed for minimal size)
-    ctx.font = 'bold 14px sans-serif';
+    // Icon
+    ctx.font = 'bold 28px sans-serif';
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
     ctx.fillStyle = '#ffffff';
-    ctx.fillText(icon, 12, 12);
+    ctx.fillText(icon, 28, 32);
 
-    // Short abbreviation
-    ctx.font = '10px sans-serif';
+    // Full text (truncated if needed)
+    ctx.font = 'bold 20px sans-serif';
     ctx.textAlign = 'left';
-    const abbrev = text.substring(0, 4);
-    ctx.fillText(abbrev, 22, 12);
+    const displayText = text.length > 12 ? text.substring(0, 11) + '…' : text;
+    ctx.fillText(displayText, 50, 32);
 
     const texture = new THREE.CanvasTexture(canvas);
     const material = new THREE.SpriteMaterial({
@@ -337,7 +337,7 @@ export class EditorObjects {
     });
 
     const sprite = new THREE.Sprite(material);
-    sprite.scale.set(2, 0.75, 1); // Very small
+    sprite.scale.set(6, 2, 1); // Larger, readable size
 
     return sprite;
   }
