@@ -35,28 +35,31 @@ export interface EditorPanelsProps {
   onToggleCategory: (category: string) => void;
 }
 
-// Tab button component
+// Tab button component with icon
 function PanelTab({
   active,
   onClick,
-  children,
+  icon,
+  name,
   theme,
 }: {
   active: boolean;
   onClick: () => void;
-  children: React.ReactNode;
+  icon?: string;
+  name: string;
   theme: EditorConfig['theme'];
 }) {
   return (
     <button
       onClick={onClick}
-      className="px-2 py-2 text-[11px] font-medium transition-colors border-b-2 whitespace-nowrap flex-shrink-0"
+      title={name}
+      className="px-3 py-2 text-base transition-colors border-b-2 flex-shrink-0"
       style={{
         color: active ? theme.text.primary : theme.text.muted,
         borderColor: active ? theme.primary : 'transparent',
       }}
     >
-      {children}
+      {icon || name.charAt(0)}
     </button>
   );
 }
@@ -662,10 +665,10 @@ export function EditorPanels({
             key={panel.id}
             active={state.activePanel === panel.id}
             onClick={() => onPanelChange(panel.id)}
+            icon={panel.icon}
+            name={panel.name}
             theme={config.theme}
-          >
-            {panel.name}
-          </PanelTab>
+          />
         ))}
       </div>
 
