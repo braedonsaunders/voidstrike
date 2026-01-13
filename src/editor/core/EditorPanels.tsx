@@ -418,8 +418,10 @@ function ToggleSwitch({
         }}
       >
         <span
-          className="absolute top-0.5 w-3 h-3 rounded-full bg-white transition-transform"
+          className="w-3 h-3 rounded-full bg-white transition-all absolute"
           style={{
+            top: '50%',
+            transform: 'translateY(-50%)',
             left: checked ? '17px' : '2px',
           }}
         />
