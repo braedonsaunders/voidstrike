@@ -46,6 +46,9 @@ export type RendererAPI = 'WebGPU' | 'WebGL' | null;
 // Anti-aliasing mode selection
 export type AntiAliasingMode = 'off' | 'fxaa' | 'taa';
 
+// Upscaling mode selection (EASU = Edge-Adaptive Spatial Upsampling)
+export type UpscalingMode = 'off' | 'easu' | 'bilinear';
+
 // Graphics settings for post-processing and visual effects
 export interface GraphicsSettings {
   // Master toggle
@@ -81,6 +84,11 @@ export interface GraphicsSettings {
   taaHistoryBlendRate: number; // 0.0-1.0, lower = more smoothing
   taaSharpeningEnabled: boolean;
   taaSharpeningIntensity: number; // 0.0-1.0
+
+  // Resolution upscaling (EASU - Edge-Adaptive Spatial Upsampling)
+  upscalingMode: UpscalingMode;
+  renderScale: number; // 0.5-1.0, internal render resolution
+  easuSharpness: number; // 0.0-1.0, edge enhancement strength
 
   // Vignette
   vignetteEnabled: boolean;
@@ -197,6 +205,7 @@ export interface UIState {
   setGraphicsSetting: <K extends keyof GraphicsSettings>(key: K, value: GraphicsSettings[K]) => void;
   toggleGraphicsSetting: (key: keyof GraphicsSettings) => void;
   setAntiAliasingMode: (mode: AntiAliasingMode) => void;
+  setUpscalingMode: (mode: UpscalingMode) => void;
   setRendererAPI: (api: RendererAPI) => void;
   setPreferWebGPU: (prefer: boolean) => void;
   // Sound settings actions
@@ -274,6 +283,11 @@ export const useUIStore = create<UIState>((set, get) => ({
     taaHistoryBlendRate: 0.1, // Default blend rate (90% history, 10% current)
     taaSharpeningEnabled: true, // Counter TAA blur with RCAS
     taaSharpeningIntensity: 0.5, // Moderate sharpening
+
+    // Resolution upscaling - disabled by default (native resolution)
+    upscalingMode: 'off' as UpscalingMode,
+    renderScale: 1.0, // 100% resolution
+    easuSharpness: 0.5, // Moderate edge enhancement
 
     // Vignette
     vignetteEnabled: true,
@@ -457,6 +471,14 @@ export const useUIStore = create<UIState>((set, get) => ({
         antiAliasingMode: mode,
         fxaaEnabled: mode === 'fxaa',
         taaEnabled: mode === 'taa',
+      },
+    })),
+
+  setUpscalingMode: (mode) =>
+    set((state) => ({
+      graphicsSettings: {
+        ...state.graphicsSettings,
+        upscalingMode: mode,
       },
     })),
 
