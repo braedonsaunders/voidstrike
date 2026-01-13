@@ -19,7 +19,19 @@ import * as THREE from 'three';
 import {
   Fn,
   vec2,
+  vec4,
+  mat4,
+  attribute,
+  positionLocal,
+  uniform,
 } from 'three/tsl';
+
+// Import TSL values not in @types/three
+// eslint-disable-next-line @typescript-eslint/no-require-imports
+import * as TSL from 'three/tsl';
+const modelWorldMatrix = (TSL as any).modelWorldMatrix;
+const modelViewMatrix = (TSL as any).modelViewMatrix;
+const cameraProjectionMatrix = (TSL as any).cameraProjectionMatrix;
 
 // WeakMap to track which meshes have velocity setup
 const velocitySetupMeshes = new WeakSet<THREE.InstancedMesh>();
@@ -29,6 +41,10 @@ let previousProjectionMatrix = new THREE.Matrix4();
 let previousViewMatrix = new THREE.Matrix4();
 let currentProjectionMatrix = new THREE.Matrix4();
 let currentViewMatrix = new THREE.Matrix4();
+
+// TSL uniforms for camera matrices (used by velocity node)
+const uPreviousProjectionMatrix = uniform(previousProjectionMatrix);
+const uPreviousViewMatrix = uniform(previousViewMatrix);
 
 // Note: Previous instance matrix attributes are stored as:
 // prevInstanceMatrix0, prevInstanceMatrix1, prevInstanceMatrix2, prevInstanceMatrix3
@@ -45,18 +61,8 @@ export function setupInstancedVelocity(mesh: THREE.InstancedMesh): void {
 
   const maxInstances = mesh.instanceMatrix.count;
 
-  // Create previous instance matrix attribute (16 floats per matrix)
-  const previousMatrixArray = new Float32Array(maxInstances * 16);
-
-  // Initialize with identity matrices
-  const identity = new THREE.Matrix4();
-  for (let i = 0; i < maxInstances; i++) {
-    identity.toArray(previousMatrixArray, i * 16);
-  }
-
-  // Add as instanced buffer attribute
-  // Note: We use itemSize=16 for mat4, but Three.js handles this specially
-  // We need to add it as 4 separate vec4 attributes
+  // Create 4 vec4 attributes for previous instance matrix columns
+  // TSL will reconstruct mat4 from these 4 columns
   const prevMatrixAttr0 = new THREE.InstancedBufferAttribute(
     new Float32Array(maxInstances * 4), 4
   );
@@ -132,6 +138,10 @@ export function updateCameraMatrices(camera: THREE.Camera): void {
   // Update current
   currentProjectionMatrix.copy(camera.projectionMatrix);
   currentViewMatrix.copy(camera.matrixWorldInverse);
+
+  // Update TSL uniforms
+  uPreviousProjectionMatrix.value.copy(previousProjectionMatrix);
+  uPreviousViewMatrix.value.copy(previousViewMatrix);
 }
 
 /**
@@ -152,6 +162,10 @@ export function initCameraMatrices(camera: THREE.Camera): void {
   currentViewMatrix.copy(camera.matrixWorldInverse);
   previousProjectionMatrix.copy(currentProjectionMatrix);
   previousViewMatrix.copy(currentViewMatrix);
+
+  // Initialize TSL uniforms
+  uPreviousProjectionMatrix.value.copy(previousProjectionMatrix);
+  uPreviousViewMatrix.value.copy(previousViewMatrix);
 }
 
 /**
@@ -174,23 +188,58 @@ export function disposeInstancedVelocity(mesh: THREE.InstancedMesh): void {
 }
 
 /**
- * Create a TSL zero-velocity node for InstancedMesh objects.
+ * Create a TSL velocity node for InstancedMesh objects.
  *
- * NOTE: Computing proper per-instance velocity would require modifying the vertex shader
- * to use the previousInstanceMatrix attributes. For now, we return zero velocity and
- * rely on TRAA's depth-based reprojection which works correctly for static instances.
+ * Computes per-instance velocity by:
+ * 1. Reading previous instance matrix from our custom attributes (prevInstanceMatrix0-3)
+ * 2. Computing previous world position: prevInstanceMatrix * positionLocal
+ * 3. Using current world position from Three.js (includes current instance matrix)
+ * 4. Projecting both through camera matrices to get NDC positions
+ * 5. Returning the difference as screen-space velocity
  *
- * With stable entity ordering (entities sorted by ID), the previous/current matrix pairs
- * are properly aligned, so the depth-based reprojection should work well.
+ * For objects without our velocity attributes, the attributes will read as zero/identity,
+ * resulting in zero velocity which TRAA handles via depth-based reprojection.
  *
- * Returns a vec2 node representing zero screen-space velocity.
+ * Returns a vec2 node representing screen-space velocity in NDC space (-1 to 1).
  */
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export function createInstancedVelocityNode(): any {
   return Fn(() => {
-    // Return zero velocity - TRAA will use depth-based reprojection
-    // This works correctly for static instances with stable ordering
-    return vec2(0.0, 0.0);
+    // Read previous instance matrix from our custom attributes
+    // Each attribute is a vec4 representing one column of the 4x4 matrix
+    const prevCol0 = attribute('prevInstanceMatrix0', 'vec4');
+    const prevCol1 = attribute('prevInstanceMatrix1', 'vec4');
+    const prevCol2 = attribute('prevInstanceMatrix2', 'vec4');
+    const prevCol3 = attribute('prevInstanceMatrix3', 'vec4');
+
+    // Reconstruct the previous instance matrix from columns
+    // mat4 constructor takes columns in order
+    const prevInstanceMatrix = mat4(prevCol0, prevCol1, prevCol2, prevCol3);
+
+    // Compute previous world position
+    // prevInstanceMatrix transforms from local to instance space
+    // For InstancedMesh, modelWorldMatrix is typically identity
+    const localPos = vec4(positionLocal, 1.0);
+    const prevInstancePos = prevInstanceMatrix.mul(localPos);
+    const prevWorldPos = modelWorldMatrix.mul(prevInstancePos);
+
+    // Compute previous clip position using previous camera matrices
+    const prevViewPos = uPreviousViewMatrix.mul(prevWorldPos);
+    const prevClipPos = uPreviousProjectionMatrix.mul(prevViewPos);
+
+    // Current clip position is computed by the standard pipeline
+    // modelViewMatrix = viewMatrix * modelWorldMatrix * instanceMatrix (for InstancedMesh)
+    // So we use the standard transform chain
+    const currentClipPos = cameraProjectionMatrix.mul(modelViewMatrix.mul(localPos));
+
+    // Convert to NDC (divide by w)
+    const prevNDC = prevClipPos.xy.div(prevClipPos.w);
+    const currentNDC = currentClipPos.xy.div(currentClipPos.w);
+
+    // Velocity is the difference in NDC space
+    const velocity = currentNDC.sub(prevNDC);
+
+    return velocity;
   })();
 }
 

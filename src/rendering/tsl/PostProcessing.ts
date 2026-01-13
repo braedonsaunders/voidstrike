@@ -39,11 +39,9 @@ import {
   output,
   normalView,
 } from 'three/tsl';
-// velocity is exported from three/tsl but not in @types/three yet
+// directionToColor/colorToDirection for normal encoding in MRT
 // eslint-disable-next-line @typescript-eslint/no-require-imports
 import * as TSL from 'three/tsl';
-const velocity = (TSL as any).velocity;
-// directionToColor/colorToDirection for normal encoding in MRT
 const directionToColor = (TSL as any).directionToColor;
 const colorToDirection = (TSL as any).colorToDirection;
 
@@ -56,6 +54,9 @@ import { ssr } from 'three/addons/tsl/display/SSRNode.js';
 
 // Import EASU upscaling
 import { easuUpscale, rcasSharpening } from './UpscalerNode';
+
+// Import custom instanced velocity node
+import { createInstancedVelocityNode } from './InstancedVelocity';
 
 // ============================================
 // POST-PROCESSING CONFIGURATION
@@ -259,27 +260,26 @@ export class RenderPipeline {
     const scenePass = pass(this.scene, this.camera);
 
     // Enable MRT with velocity for TRAA and optionally normals for SSR
-    // Testing: Using Three.js built-in velocity instead of zero-velocity mode
-    // Previously disabled due to InstancedMesh jiggling, but stable entity ordering may have fixed it
-    if (this.config.ssrEnabled) {
-      // SSR needs normals, TRAA needs velocity
-      console.log('[PostProcessing] Setting up MRT with output + normal + velocity for SSR+TAA');
-      console.log('[PostProcessing] velocity node:', velocity);
-      console.log('[PostProcessing] velocity node type:', velocity?.constructor?.name);
-      scenePass.setMRT(mrt({
-        output: output,
-        normal: directionToColor(normalView),
-        velocity: velocity,
-      }));
-    } else if (this.config.taaEnabled) {
-      // Just velocity for TRAA
-      console.log('[PostProcessing] Setting up MRT with output + velocity for TAA');
-      console.log('[PostProcessing] velocity node:', velocity);
-      console.log('[PostProcessing] velocity node type:', velocity?.constructor?.name);
-      scenePass.setMRT(mrt({
-        output: output,
-        velocity: velocity,
-      }));
+    // Using custom velocity node that properly handles InstancedMesh via our prevInstanceMatrix attributes
+    // This avoids the jiggling issue caused by Three.js's built-in velocity not tracking per-instance transforms
+    if (this.config.ssrEnabled || this.config.taaEnabled) {
+      // Create custom velocity node for proper InstancedMesh velocity
+      const customVelocity = createInstancedVelocityNode();
+
+      if (this.config.ssrEnabled) {
+        // SSR needs normals, TRAA needs velocity
+        scenePass.setMRT(mrt({
+          output: output,
+          normal: directionToColor(normalView),
+          velocity: customVelocity,
+        }));
+      } else {
+        // Just velocity for TRAA
+        scenePass.setMRT(mrt({
+          output: output,
+          velocity: customVelocity,
+        }));
+      }
     }
 
     // Get texture nodes from scene pass
@@ -303,7 +303,6 @@ export class RenderPipeline {
 
         this.easuPass = easuUpscale(outputNode, renderRes, displayRes, this.config.easuSharpness);
         outputNode = this.easuPass.node;
-        console.log(`[PostProcessing] EASU upscaling: ${renderRes.x}x${renderRes.y} → ${displayRes.x}x${displayRes.y}`);
       } catch (e) {
         console.warn('[PostProcessing] EASU upscaling failed:', e);
       }
@@ -365,7 +364,6 @@ export class RenderPipeline {
         }
 
         outputNode = this.ssrPass;
-        console.log('[PostProcessing] SSR initialized successfully');
       } catch (e) {
         console.warn('[PostProcessing] SSR initialization failed:', e);
       }
@@ -411,14 +409,12 @@ export class RenderPipeline {
         }
 
         postProcessing.outputNode = outputNode;
-        console.log('[PostProcessing] TRAA initialized successfully with MRT velocity');
       } catch (e) {
         console.warn('[PostProcessing] TRAA initialization failed, falling back to FXAA:', e);
         // Fallback to FXAA - guaranteed to work with all materials
         try {
           this.fxaaPass = fxaa(outputNode);
           postProcessing.outputNode = this.fxaaPass;
-          console.log('[PostProcessing] Fell back to FXAA successfully');
         } catch (fxaaError) {
           console.warn('[PostProcessing] FXAA fallback also failed:', fxaaError);
           postProcessing.outputNode = outputNode;
