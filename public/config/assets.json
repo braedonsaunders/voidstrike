@@ -133,16 +133,6 @@
         "attack": ["attack", "broadside", "nova_cannon"],
         "death": ["death", "explode", "crash"]
       }
-    },
-    "medic": {
-      "model": "/models/units/medic.glb",
-      "height": 1.2,
-      "animations": {
-        "idle": ["idle", "stand"],
-        "walk": ["walk", "run"],
-        "attack": ["heal", "attack"],
-        "death": ["death", "die"]
-      }
     }
   },
 
