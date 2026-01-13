@@ -258,24 +258,21 @@ export class RenderPipeline {
     // Create scene pass
     const scenePass = pass(this.scene, this.camera);
 
-    // NOTE: MRT velocity is disabled because it causes jiggling with InstancedMesh
-    // Three.js's velocity buffer calculates motion from matrixWorld, but InstancedMesh
-    // stores per-instance transforms in a separate instanceMatrix buffer. This causes
-    // wrong velocity for dynamic instances (buildings, units, resources), resulting in
-    // failed jitter reprojection and visible jiggling.
-    //
-    // Zero-velocity mode works better because TRAA uses depth-based reprojection,
-    // which correctly handles the camera jitter without needing per-instance velocity.
-    // See: https://github.com/mrdoob/three.js/issues/31892
-    //
-    // SSR uses MRT for normals which doesn't have the InstancedMesh issue.
-
-    // Enable MRT with normals when SSR is enabled
-    // Normal encoding: direction -> color for storage, color -> direction for retrieval
+    // Enable MRT with velocity for TRAA and optionally normals for SSR
+    // Testing: Using Three.js built-in velocity instead of zero-velocity mode
+    // Previously disabled due to InstancedMesh jiggling, but stable entity ordering may have fixed it
     if (this.config.ssrEnabled) {
+      // SSR needs normals, TRAA needs velocity
       scenePass.setMRT(mrt({
         output: output,
         normal: directionToColor(normalView),
+        velocity: velocity,
+      }));
+    } else if (this.config.taaEnabled) {
+      // Just velocity for TRAA
+      scenePass.setMRT(mrt({
+        output: output,
+        velocity: velocity,
       }));
     }
 
@@ -390,15 +387,15 @@ export class RenderPipeline {
     }
 
     // 5. Anti-aliasing (TRAA or FXAA)
-    // TRAA provides high-quality temporal anti-aliasing with depth-based reprojection.
-    // Using zero-velocity mode because MRT velocity doesn't work with InstancedMesh.
-    // See comment above about why MRT velocity causes jiggling.
+    // TRAA provides high-quality temporal anti-aliasing with motion-aware reprojection.
+    // Using Three.js built-in velocity from MRT for proper motion handling.
     if (this.config.antiAliasingMode === 'taa' && this.config.taaEnabled) {
       try {
-        // Use zero-velocity texture - TRAA will use depth-based reprojection
-        // This works correctly with InstancedMesh and avoids jiggling artifacts
-        // Use Three.js's TRAA (Temporal Reprojection Anti-Aliasing) implementation
-        this.traaPass = traa(outputNode, scenePassDepth, this.zeroVelocityNode, this.camera);
+        // Get velocity from MRT (set up above when taaEnabled or ssrEnabled)
+        const scenePassVelocity = scenePass.getTextureNode('velocity');
+
+        // Use Three.js's TRAA with real velocity vectors
+        this.traaPass = traa(outputNode, scenePassDepth, scenePassVelocity, this.camera);
 
         // Apply optional sharpening after TRAA (counters blur)
         if (this.config.taaSharpeningEnabled) {
@@ -408,7 +405,7 @@ export class RenderPipeline {
         }
 
         postProcessing.outputNode = outputNode;
-        console.log('[PostProcessing] TRAA initialized successfully (zero-velocity mode)');
+        console.log('[PostProcessing] TRAA initialized successfully with MRT velocity');
       } catch (e) {
         console.warn('[PostProcessing] TRAA initialization failed, falling back to FXAA:', e);
         // Fallback to FXAA - guaranteed to work with all materials
