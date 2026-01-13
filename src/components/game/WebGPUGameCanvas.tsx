@@ -130,9 +130,17 @@ export function WebGPUGameCanvas() {
   const [loadingStatus, setLoadingStatus] = useState('Initializing');
   const [isWebGPU, setIsWebGPU] = useState(false);
 
-  // Callback for when loading screen completes (after countdown)
+  // Callback for when loading screen completes (after fade to black)
+  // This triggers the Phaser countdown overlay with the game visible in background
   const handleLoadingComplete = useCallback(() => {
     setIsLoading(false);
+    // Trigger the sophisticated Phaser countdown overlay
+    // Small delay to ensure Phaser scene is fully ready
+    setTimeout(() => {
+      if (gameRef.current?.eventBus) {
+        gameRef.current.eventBus.emit('game:countdown');
+      }
+    }, 100);
   }, []);
 
   // Control group tracking

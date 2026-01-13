@@ -14,7 +14,7 @@ interface LoadingScreenProps {
 }
 
 // Phase of the loading screen
-type LoadingPhase = 'loading' | 'fadeOut' | 'countdown' | 'complete';
+type LoadingPhase = 'loading' | 'fadeOut' | 'complete';
 
 // Epic void nebula shader with wormhole effect
 const VoidNebulaShader = {
@@ -337,7 +337,6 @@ export function LoadingScreen({ progress, status, onComplete }: LoadingScreenPro
   const [visualBrightness, setVisualBrightness] = useState(0);
   const [flickerValue, setFlickerValue] = useState(0);
   const [phase, setPhase] = useState<LoadingPhase>('loading');
-  const [countdownNumber, setCountdownNumber] = useState<number | null>(null);
   const [fadeOpacity, setFadeOpacity] = useState(0);
   const [dots, setDots] = useState('');
   const [isVisible, setIsVisible] = useState(false);
@@ -438,7 +437,7 @@ export function LoadingScreen({ progress, status, onComplete }: LoadingScreenPro
     if (phase !== 'fadeOut') return;
 
     const startTime = Date.now();
-    const duration = 1500; // 1.5 second fade to black
+    const duration = 1200; // 1.2 second fade to black
 
     const animateFade = () => {
       const elapsed = Date.now() - startTime;
@@ -450,33 +449,14 @@ export function LoadingScreen({ progress, status, onComplete }: LoadingScreenPro
       if (t < 1) {
         requestAnimationFrame(animateFade);
       } else {
-        // Fade complete, start countdown
-        setPhase('countdown');
-        setCountdownNumber(3);
+        // Fade complete - signal completion, Phaser overlay will handle countdown
+        setPhase('complete');
+        onComplete?.();
       }
     };
 
     requestAnimationFrame(animateFade);
-  }, [phase]);
-
-  // Countdown sequence
-  useEffect(() => {
-    if (phase !== 'countdown' || countdownNumber === null) return;
-
-    if (countdownNumber > 0) {
-      const timer = setTimeout(() => {
-        setCountdownNumber(countdownNumber - 1);
-      }, 800);
-      return () => clearTimeout(timer);
-    } else {
-      // Countdown complete
-      const timer = setTimeout(() => {
-        setPhase('complete');
-        onComplete?.();
-      }, 500);
-      return () => clearTimeout(timer);
-    }
-  }, [phase, countdownNumber, onComplete]);
+  }, [phase, onComplete]);
 
   // Loading stage thresholds
   const loadingStages = useMemo(() => [
@@ -1038,38 +1018,6 @@ export function LoadingScreen({ progress, status, onComplete }: LoadingScreenPro
     updateParticles,
   ]);
 
-  // Render countdown number with dramatic styling
-  const renderCountdown = () => {
-    if (countdownNumber === null) return null;
-
-    const number = countdownNumber === 0 ? 'GO' : countdownNumber.toString();
-    const color = countdownNumber === 0 ? '#40ffff' : '#a855f7';
-
-    return (
-      <div
-        key={countdownNumber}
-        className="absolute inset-0 flex items-center justify-center z-30"
-        style={{
-          animation: 'countdownPulse 0.8s ease-out forwards',
-        }}
-      >
-        <span
-          className="font-black tracking-wider"
-          style={{
-            fontSize: countdownNumber === 0 ? '20vw' : '25vw',
-            background: `linear-gradient(135deg, ${color} 0%, #60a0ff 50%, ${color} 100%)`,
-            WebkitBackgroundClip: 'text',
-            WebkitTextFillColor: 'transparent',
-            filter: `drop-shadow(0 0 60px ${color}) drop-shadow(0 0 120px ${color})`,
-            textShadow: `0 0 100px ${color}`,
-          }}
-        >
-          {number}
-        </span>
-      </div>
-    );
-  };
-
   return (
     <div className="fixed inset-0 z-50 overflow-hidden">
       {/* Three.js canvas container */}
@@ -1225,28 +1173,11 @@ export function LoadingScreen({ progress, status, onComplete }: LoadingScreenPro
         style={{ opacity: fadeOpacity }}
       />
 
-      {/* Countdown display */}
-      {phase === 'countdown' && renderCountdown()}
-
       {/* Animations */}
       <style jsx>{`
         @keyframes shimmer {
           0% { background-position: 200% 0; }
           100% { background-position: -200% 0; }
-        }
-        @keyframes countdownPulse {
-          0% {
-            transform: scale(0.5);
-            opacity: 0;
-          }
-          30% {
-            transform: scale(1.1);
-            opacity: 1;
-          }
-          100% {
-            transform: scale(1);
-            opacity: 1;
-          }
         }
       `}</style>
     </div>
