@@ -232,28 +232,22 @@ export class RenderPipeline {
     // Create scene pass
     const scenePass = pass(this.scene, this.camera);
 
-    // Set up MRT (Multiple Render Targets) for TRAA velocity tracking
-    // This enables proper temporal anti-aliasing with motion vectors
-    // See: https://threejs.org/examples/webgpu_postprocessing_traa.html
-    const useTRAA = this.config.antiAliasingMode === 'taa' && this.config.taaEnabled;
-    if (useTRAA) {
-      try {
-        scenePass.setMRT(mrt({
-          output: output,
-          velocity: velocity,
-        }));
-        console.log('[PostProcessing] MRT enabled with velocity output for TRAA');
-      } catch (e) {
-        console.warn('[PostProcessing] MRT setup failed, TRAA may have reduced quality:', e);
-      }
-    }
+    // NOTE: MRT velocity is disabled because it causes jiggling with InstancedMesh
+    // Three.js's velocity buffer calculates motion from matrixWorld, but InstancedMesh
+    // stores per-instance transforms in a separate instanceMatrix buffer. This causes
+    // wrong velocity for dynamic instances (buildings, units, resources), resulting in
+    // failed jitter reprojection and visible jiggling.
+    //
+    // Zero-velocity mode works better because TRAA uses depth-based reprojection,
+    // which correctly handles the camera jitter without needing per-instance velocity.
+    // See: https://github.com/mrdoob/three.js/issues/31892
+    //
+    // TODO: Implement custom velocity output for InstancedMesh when Three.js supports it,
+    // or use SSR/SSGI's normal MRT which doesn't have this issue.
 
-    // Get texture nodes from scene pass
-    // When MRT is enabled, use 'output' for color; otherwise use default
-    const scenePassColor = useTRAA ? scenePass.getTextureNode('output') : scenePass.getTextureNode();
+    // Get texture nodes from scene pass (no MRT - use default outputs)
+    const scenePassColor = scenePass.getTextureNode();
     const scenePassDepth = scenePass.getTextureNode('depth');
-    // Velocity is only available when MRT is enabled
-    const scenePassVelocity = useTRAA ? scenePass.getTextureNode('velocity') : null;
 
     // Build the effect chain
     let outputNode: any = scenePassColor;
@@ -318,19 +312,15 @@ export class RenderPipeline {
     }
 
     // 5. Anti-aliasing (TRAA or FXAA)
-    // TRAA provides high-quality temporal anti-aliasing with motion vector reprojection.
-    // When MRT is enabled, we use proper velocity data for accurate motion tracking.
-    // See: https://threejs.org/examples/webgpu_postprocessing_traa.html
+    // TRAA provides high-quality temporal anti-aliasing with depth-based reprojection.
+    // Using zero-velocity mode because MRT velocity doesn't work with InstancedMesh.
+    // See comment above about why MRT velocity causes jiggling.
     if (this.config.antiAliasingMode === 'taa' && this.config.taaEnabled) {
       try {
-        // Use velocity from MRT if available, otherwise fall back to zero-velocity
-        // MRT velocity tracks per-pixel motion vectors for proper temporal reprojection
-        // Zero-velocity mode is a fallback that still works via depth rejection
-        const velocityNode = scenePassVelocity ?? this.zeroVelocityNode;
-        const velocityMode = scenePassVelocity ? 'MRT velocity' : 'zero-velocity fallback';
-
+        // Use zero-velocity texture - TRAA will use depth-based reprojection
+        // This works correctly with InstancedMesh and avoids jiggling artifacts
         // Use Three.js's TRAA (Temporal Reprojection Anti-Aliasing) implementation
-        this.traaPass = traa(outputNode, scenePassDepth, velocityNode, this.camera);
+        this.traaPass = traa(outputNode, scenePassDepth, this.zeroVelocityNode, this.camera);
 
         // Apply optional sharpening after TRAA (counters blur)
         if (this.config.taaSharpeningEnabled) {
@@ -340,7 +330,7 @@ export class RenderPipeline {
         }
 
         postProcessing.outputNode = outputNode;
-        console.log(`[PostProcessing] TRAA initialized successfully (${velocityMode})`);
+        console.log('[PostProcessing] TRAA initialized successfully (zero-velocity mode)');
       } catch (e) {
         console.warn('[PostProcessing] TRAA initialization failed, falling back to FXAA:', e);
         // Fallback to FXAA - guaranteed to work with all materials
