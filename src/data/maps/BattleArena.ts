@@ -7,101 +7,101 @@
  */
 
 import {
-  defineMap,
-  generateMapFromDefinition,
-  type MapDefinition,
+  type MapBlueprint,
+  generateMap,
+  fill,
+  plateau,
+  border,
+  mainBase,
+  ELEVATION,
 } from './core';
 
 const MAP_WIDTH = 128;
 const MAP_HEIGHT = 48;
 
 // Generate explicit decorations (rock pillars along edges)
-const explicitDecorations: Array<{ type: 'rocks_large'; position: { x: number; y: number }; scale: number }> = [];
+const explicitDecorations: MapBlueprint['explicitDecorations'] = [];
 for (let x = 16; x < MAP_WIDTH - 16; x += 24) {
-  // Top edge
   explicitDecorations.push({
     type: 'rocks_large',
-    position: { x, y: 4 },
-    scale: 0.8,
+    x,
+    y: 6,
+    scale: 1.2,
   });
-  // Bottom edge
   explicitDecorations.push({
     type: 'rocks_large',
-    position: { x, y: MAP_HEIGHT - 4 },
-    scale: 0.8,
+    x,
+    y: MAP_HEIGHT - 6,
+    scale: 1.2,
   });
 }
 
-const BATTLE_ARENA_DEF: MapDefinition = defineMap({
+/**
+ * Battle Arena - Paint-based map definition
+ */
+const BATTLE_ARENA_BLUEPRINT: MapBlueprint = {
   meta: {
     id: 'battle_arena',
     name: 'Battle Arena',
     author: 'System',
     description: 'Long bridge arena for Battle Simulator mode',
+    players: 2,
   },
 
   canvas: {
     width: MAP_WIDTH,
     height: MAP_HEIGHT,
     biome: 'desert',
-    baseElevation: 1,
   },
 
-  symmetry: {
-    type: 'mirror_x',
-    playerCount: 2,
-  },
+  // Paint commands executed in order
+  paint: [
+    // 1. Fill with mid-level ground (flat arena)
+    fill(ELEVATION.MID),
 
-  // Simple flat arena - just two spawn regions connected by ground
-  regions: [
-    {
-      id: 'p1_spawn',
-      name: 'Player 1 Spawn',
-      type: 'main_base',
-      position: { x: 20, y: MAP_HEIGHT / 2 },
-      elevation: 1,
-      radius: 15,
-      playerSlot: 1,
-    },
-    {
-      id: 'p2_spawn',
-      name: 'Player 2 Spawn',
-      type: 'main_base',
-      position: { x: MAP_WIDTH - 20, y: MAP_HEIGHT / 2 },
-      elevation: 1,
-      radius: 15,
-      playerSlot: 2,
-    },
-    {
-      id: 'center',
-      name: 'Arena Center',
-      type: 'center',
-      position: { x: MAP_WIDTH / 2, y: MAP_HEIGHT / 2 },
-      elevation: 1,
-      radius: 20,
-    },
+    // 2. Player spawn plateaus (same elevation, just for clarity)
+    plateau(20, MAP_HEIGHT / 2, 15, ELEVATION.MID),
+    plateau(MAP_WIDTH - 20, MAP_HEIGHT / 2, 15, ELEVATION.MID),
+
+    // 3. Center area
+    plateau(MAP_WIDTH / 2, MAP_HEIGHT / 2, 20, ELEVATION.MID),
+
+    // 4. Map border (unwalkable edges)
+    border(6),
   ],
 
-  // All same elevation - ground connections
-  connections: [
-    { from: 'p1_spawn', to: 'center', type: 'wide', width: 30 },
-    { from: 'center', to: 'p2_spawn', type: 'wide', width: 30 },
+  // Base locations
+  bases: [
+    mainBase(20, MAP_HEIGHT / 2, 1, 'right'),
+    mainBase(MAP_WIDTH - 20, MAP_HEIGHT / 2, 2, 'left'),
   ],
 
-  // No terrain features - flat arena
-  terrain: {},
+  // No watch towers or destructibles for battle arena
+  watchTowers: [],
+  destructibles: [],
 
-  // No watch towers or destructibles
-  features: {},
-
-  // Sparse decorations - rock pillars
-  decorations: {
-    explicit: explicitDecorations,
+  // Decoration rules
+  decorationRules: {
+    border: {
+      style: 'rocks',
+      density: 0.6,
+      scale: [1.5, 2.5],
+      innerOffset: 8,
+      outerOffset: 3,
+    },
+    scatter: {
+      rocks: 0.1,
+      debris: 0.05,
+    },
+    seed: 42,
   },
-});
+
+  // Explicit decorations (rock pillars)
+  explicitDecorations,
+};
 
 // Generate and export the map
-export const BATTLE_ARENA = generateMapFromDefinition(BATTLE_ARENA_DEF);
+export const BATTLE_ARENA = generateMap(BATTLE_ARENA_BLUEPRINT);
 
 // Mark as not ranked (battle simulator only)
 BATTLE_ARENA.isRanked = false;

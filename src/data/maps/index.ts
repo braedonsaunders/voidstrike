@@ -1,98 +1,96 @@
 // Map exports - base types and utilities
 export * from './MapTypes';
 
-// NEW: Connectivity-First Map System
+// NEW: Paint-Based Elevation Map System
 // This is the recommended way to create new maps
-// Re-export with explicit names to avoid conflicts with MapTypes
 export {
-  // Connectivity Graph (from MapConnectivity)
-  type NodeId,
-  type RegionType,
-  type ConnectionType,
-  type ConnectivityNode,
-  type ConnectivityEdge,
-  type ConnectivityGraph,
-  type ConnectivityValidation as GraphValidation, // Renamed to avoid conflict with MapTypes.ConnectivityValidation
-  createConnectivityGraph,
-  addNode,
-  addEdge,
-  getConnectedNodes,
-  getEdgesFrom,
-  getEdgesTo,
-  areConnected,
-  findPath,
-  getReachableNodes,
-  validateConnectivity,
-  generateConnectionGeometry,
-  getConnectionBounds,
-  getNodesByType,
-  getPlayerNodes,
-  getEdgesByType,
-  graphToJSON,
-  graphFromJSON,
-  // Map Definition DSL (from MapDefinition) - DecorationType omitted, use MapTypes version
+  // Biome types
   type BiomeType,
-  type TerrainSurface,
+  type BiomeTheme,
+  BIOME_THEMES,
+
+  // Elevation constants
+  ELEVATION,
+  CLIFF_THRESHOLD,
+
+  // Point helpers
+  type Point,
+  toXY,
+
+  // Paint command types
+  type PaintCommand,
+  type FillCommand,
+  type PlateauCommand,
+  type RectCommand,
+  type RampCommand,
+  type GradientCommand,
+  type WaterCommand,
+  type ForestCommand,
+  type VoidCommand,
+  type RoadCommand,
+  type UnwalkableCommand,
+  type BorderCommand,
+  type MudCommand,
+
+  // Base & resource types
+  type BaseType,
+  type ResourceDirection,
+  type BaseLocation,
+  type WatchTowerDef,
+  type DestructibleDef,
+
+  // Decoration rules
+  type DecorationStyle,
+  type BorderDecorationRule,
+  type CliffEdgeDecorationRule,
+  type ScatterDecorationRule,
+  type BaseRingDecorationRule,
+  type DecorationRules,
+
+  // Explicit decoration
+  type DecorationTypeString,
+  type ExplicitDecoration,
+
+  // Map blueprint (the main type)
   type MapMeta,
   type MapCanvas,
-  type MapSymmetry,
-  type RegionDefinition,
-  type ConnectionDefinition,
-  type ObstacleDefinition,
-  type VoidDefinition,
-  type WaterDefinition,
-  type RoadDefinition,
-  type TerrainModifierDefinition,
-  type ForestDefinition,
-  type WatchTowerDefinition,
-  type DestructibleDefinition,
-  type BorderWallConfig,
-  type BaseEdgeConfig,
-  type CliffLineConfig,
-  type DecorationCluster,
-  type VegetationConfig,
-  type ExplicitDecoration,
-  type DecorationConfig,
-  type MapDefinition,
-  defineMap,
-  definitionToGraph,
-  createMapBuilder,
-  applySymmetryToRegions,
-  applySymmetryToConnections,
+  type MapBlueprint,
+
+  // Helper functions for building bases
   mainBase,
-  naturalExpansion,
-  thirdExpansion,
-  goldExpansion,
-  mapCenter,
-  chokePoint,
-  watchTowerRegion,
-  MapBuilder,
-  // Map Generator (from MapGenerator)
-  type GeneratedConnection,
-  type TerrainGenerationResult,
-  generateMapFromDefinition,
-  generateTerrain,
-  generateTerrainWithConnections,
-  getRampClearanceZones,
-  isInRampClearance,
-  exportGraphDebug,
-  // Map Validator (from MapValidator)
-  type ValidationSeverity,
-  type ValidationIssue,
-  type ValidationResult,
-  validateMapDefinition,
-  formatValidationResult,
-  assertValidMapDefinition,
+  naturalBase,
+  thirdBase,
+  fourthBase,
+  goldBase,
+
+  // Paint command shortcuts
+  fill,
+  plateau,
+  rect,
+  ramp,
+  water,
+  waterRect,
+  forest,
+  forestRect,
+  voidArea,
+  voidRect,
+  road,
+  unwalkable,
+  unwalkableRect,
+  border,
+  mud,
+
+  // Generator
+  generateMap,
 } from './core';
 
-// Map exports (all using connectivity-first system)
+// Map exports (all using paint-based elevation system)
 export { VOID_ASSAULT } from './VoidAssault';
 export { CRYSTAL_CAVERNS } from './CrystalCaverns';
 export { SCORCHED_BASIN } from './ScorchedBasin';
 export { CONTESTED_FRONTIER } from './ContestedFrontier';
 export { TITANS_COLOSSEUM } from './TitansColosseum';
 export { BATTLE_ARENA } from './BattleArena';
-export { SHATTERED_EXPANSE, SHATTERED_EXPANSE_DEF } from './ShatteredExpanse';
 
 import { MapData } from './MapTypes';
 import { VOID_ASSAULT } from './VoidAssault';
@@ -101,7 +99,6 @@ import { SCORCHED_BASIN } from './ScorchedBasin';
 import { CONTESTED_FRONTIER } from './ContestedFrontier';
 import { TITANS_COLOSSEUM } from './TitansColosseum';
 import { BATTLE_ARENA } from './BattleArena';
-import { SHATTERED_EXPANSE } from './ShatteredExpanse';
 
 // All available maps
 export const ALL_MAPS: Record<string, MapData> = {
@@ -111,12 +108,11 @@ export const ALL_MAPS: Record<string, MapData> = {
   [CONTESTED_FRONTIER.id]: CONTESTED_FRONTIER,
   [TITANS_COLOSSEUM.id]: TITANS_COLOSSEUM,
   [BATTLE_ARENA.id]: BATTLE_ARENA,
-  [SHATTERED_EXPANSE.id]: SHATTERED_EXPANSE,
 };
 
 // Maps by player count
 export const MAPS_BY_PLAYER_COUNT: Record<2 | 4 | 6 | 8, MapData[]> = {
-  2: [CRYSTAL_CAVERNS, VOID_ASSAULT, SHATTERED_EXPANSE],
+  2: [CRYSTAL_CAVERNS, VOID_ASSAULT, BATTLE_ARENA],
   4: [SCORCHED_BASIN],
   6: [CONTESTED_FRONTIER],
   8: [TITANS_COLOSSEUM],
