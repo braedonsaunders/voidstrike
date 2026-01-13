@@ -119,7 +119,13 @@ voidstrike/
 │       ├── gameSetup.ts       # Initial game entity spawning
 │       └── debugLogger.ts     # Category-based debug logging utility
 ├── public/
-│   ├── models/                # 3D models (GLTF)
+│   ├── config/
+│   │   └── assets.json        # Model & animation configuration (JSON)
+│   ├── models/                # 3D models (GLTF/GLB)
+│   │   ├── units/             # Unit models
+│   │   ├── buildings/         # Building models
+│   │   ├── resources/         # Resource models
+│   │   └── decorations/       # Decoration models
 │   ├── textures/              # Terrain, unit textures
 │   └── audio/                 # Sound effects, music
 ├── workers/
@@ -499,28 +505,96 @@ HUD Update (React state sync)
 
 ### AssetManager
 
-Centralized 3D asset management with procedural generation and GLTF loading:
+Centralized 3D asset management with procedural generation and GLTF loading. The system is fully **JSON-configurable** for easy forking as an RTS engine.
 
 ```typescript
-// Get procedural mesh for a unit
+// Get mesh for a unit (auto-loads from GLB if available)
 const mesh = AssetManager.getUnitMesh('marine', playerColor);
 
-// Get procedural mesh for a building
+// Get mesh for a building
 const buildingMesh = AssetManager.getBuildingMesh('barracks', playerColor);
 
-// Load custom GLTF model
+// Load custom GLTF model manually
 await AssetManager.loadGLTF('/models/custom_unit.glb', 'custom_unit');
 
-// Register custom asset override
-AssetManager.registerCustomAsset('marine', customMarineMesh);
+// Get animation mappings from JSON config
+const mappings = AssetManager.getAnimationMappings('fabricator');
+// Returns: { idle: ['idle', 'stand'], walk: ['walk', 'run'], ... }
+
+// Get animation speed multiplier
+const speed = AssetManager.getAnimationSpeed('fabricator'); // 0.4
 ```
+
+### JSON Asset Configuration (`public/config/assets.json`)
+
+All models and animation mappings are configured via a single JSON file, making the engine forkable without code changes:
+
+```json
+{
+  "units": {
+    "fabricator": {
+      "model": "/models/units/fabricator.glb",
+      "height": 1.0,
+      "animationSpeed": 0.4,
+      "animations": {
+        "idle": ["idle", "stand", "pose"],
+        "walk": ["walk", "run", "move", "locomotion"],
+        "attack": ["attack", "shoot", "fire"],
+        "death": ["death", "die"]
+      }
+    },
+    "trooper": {
+      "model": "/models/units/trooper.glb",
+      "height": 1.2,
+      "animations": {
+        "idle": ["idle", "stand"],
+        "walk": ["walk", "run"],
+        "attack": ["attack", "shoot"],
+        "death": ["death"]
+      }
+    }
+  },
+  "buildings": { ... },
+  "resources": { ... },
+  "decorations": { ... }
+}
+```
+
+**Key Configuration Options:**
+
+| Field | Description |
+|-------|-------------|
+| `model` | Path to GLB file relative to `public/` |
+| `height` | Target height in game units (auto-scaled) |
+| `animationSpeed` | Playback speed multiplier (default: 1.0) |
+| `animations` | Map of game actions to animation clip names |
+
+**Animation Mapping Priority:**
+
+1. **JSON config** - Explicit mappings from `assets.json` (first matching name wins)
+2. **Exact match** - Animation clip name matches exactly
+3. **Partial match** - Animation clip name contains the search term
+4. **Fallback** - Uses `idle` animation if walk/attack not found
+
+**Example: Custom Animation Names**
+
+If your GLB has animations named `"CustomWalk_v2"` and `"MyIdleAnim"`:
+
+```json
+"animations": {
+  "idle": ["MyIdleAnim", "idle", "stand"],
+  "walk": ["CustomWalk_v2", "walk", "run"]
+}
+```
+
+The system will find `"MyIdleAnim"` for idle and `"CustomWalk_v2"` for walk because they match the first entry in each array.
 
 ### Procedural Generator
 
-Built-in procedural mesh generation for all unit types:
+Built-in procedural mesh generation for all unit types (fallback when GLB not found):
 
-- **Units**: SCV, Marine, Marauder, Siege Tank, Medivac, etc.
-- **Buildings**: Command Center, Barracks, Factory, Starport, etc.
+- **Units**: Fabricator, Trooper, Breacher, Devastator, Valkyrie, etc.
+- **Buildings**: Headquarters, Supply Cache, Infantry Bay, Forge, etc.
 - **Resources**: Mineral patches, Vespene geysers
 - **Decorations**: Trees, rocks, grass
 
@@ -533,10 +607,37 @@ Each procedural mesh:
 
 To add custom 3D models:
 
-1. Export from Blender/Maya as GLTF/GLB
-2. Place in `public/models/`
-3. Load via `AssetManager.loadGLTF(url, assetId)`
-4. Register as override: `AssetManager.registerCustomAsset(unitId, mesh)`
+1. Export from Blender/Maya as GLTF/GLB with embedded animations
+2. Place in `public/models/{category}/{name}.glb`
+3. Add entry to `public/config/assets.json`:
+   ```json
+   "my_unit": {
+     "model": "/models/units/my_unit.glb",
+     "height": 1.5,
+     "animations": {
+       "idle": ["my_idle_anim"],
+       "walk": ["my_walk_cycle"],
+       "attack": ["my_attack"]
+     }
+   }
+   ```
+4. The system automatically loads and maps animations on startup
+
+### Animation System
+
+Animations are loaded from GLB files and mapped to game actions:
+
+| Game Action | Used When | Fallback |
+|-------------|-----------|----------|
+| `idle` | Unit stationary | First non-death animation |
+| `walk` | Unit moving | `idle` |
+| `attack` | Unit attacking (and stationary) | `idle` |
+| `death` | Unit dying | None |
+
+**Blender Export Tips:**
+- Name animations clearly (e.g., `idle`, `walk`, `attack`)
+- The system strips `Armature|` prefixes automatically
+- Use lowercase names for best matching
 
 ## Performance Considerations
 

@@ -6,7 +6,7 @@ import { Health } from '@/engine/components/Health';
 import { Selectable } from '@/engine/components/Selectable';
 import { Velocity } from '@/engine/components/Velocity';
 import { VisionSystem } from '@/engine/systems/VisionSystem';
-import { AssetManager } from '@/assets/AssetManager';
+import { AssetManager, AnimationMappingConfig } from '@/assets/AssetManager';
 import { Terrain } from './Terrain';
 import { getPlayerColor, getLocalPlayerId, isSpectatorMode } from '@/store/gameSetupStore';
 import { debugAnimation, debugAssets, debugPerformance } from '@/utils/debugLogger';
@@ -47,9 +47,13 @@ interface UnitOverlay {
 const MAX_INSTANCES_PER_TYPE = 100; // Max units of same type per player
 const AIR_UNIT_HEIGHT = 8; // Height for flying units (matches building lift-off height)
 
-// Animation speed multipliers for specific unit types (1.0 = normal speed)
-const ANIMATION_SPEED_MULTIPLIERS: Record<string, number> = {
-  fabricator: 0.4, // Slow down fabricator leg animation to match movement speed
+// Default animation name mappings (used when JSON config not available)
+// Each game action maps to a list of possible animation clip names to search for
+const DEFAULT_ANIMATION_MAPPINGS: AnimationMappingConfig = {
+  idle: ['idle', 'stand', 'pose'],
+  walk: ['walk', 'run', 'move', 'locomotion'],
+  attack: ['attack', 'shoot', 'fire', 'combat'],
+  death: ['death', 'die', 'dead'],
 };
 
 export class UnitRenderer {
@@ -181,7 +185,13 @@ export class UnitRenderer {
   }
 
   /**
-   * Get or create an animated mesh for a specific unit entity
+   * Get or create an animated mesh for a specific unit entity.
+   *
+   * Animation mapping priority:
+   * 1. JSON config (public/config/assets.json) - explicit mappings per asset
+   * 2. Exact name matches from default mappings
+   * 3. Partial name matches (e.g., "walk_cycle" matches "walk")
+   * 4. Fallback to idle animation
    */
   private getOrCreateAnimatedUnit(entityId: number, unitType: string, playerId: string): AnimatedUnitMesh {
     let animUnit = this.animatedUnits.get(entityId);
@@ -209,9 +219,14 @@ export class UnitRenderer {
       // Get animations from asset manager and create actions
       const clips = AssetManager.getAnimations(unitType);
 
-      // Track which canonical names have exact matches to prefer them over partial matches
-      const exactMatches = { idle: false, walk: false, attack: false, death: false };
+      // Get animation mappings - prefer JSON config, fall back to defaults
+      const configMappings = AssetManager.getAnimationMappings(unitType);
+      const animMappings = configMappings ?? DEFAULT_ANIMATION_MAPPINGS;
 
+      debugAnimation.log(`[UnitRenderer] ${unitType}: Using ${configMappings ? 'JSON config' : 'default'} animation mappings`);
+
+      // Build a map of normalized clip names to actions for lookup
+      const clipNameToAction = new Map<string, THREE.AnimationAction>();
       for (const clip of clips) {
         const action = mixer.clipAction(clip);
         // Normalize name: lowercase and strip common prefixes like "Armature|"
@@ -220,77 +235,50 @@ export class UnitRenderer {
         if (name.includes('|')) {
           name = name.split('|').pop() || name;
         }
-
-        animations.set(name, action);
-        debugAnimation.log(`[UnitRenderer] ${unitType}: Found animation "${clip.name}" -> normalized "${name}"`);
-
-        // Map to canonical animation names, preferring EXACT matches over partial matches
-        // This prevents "idle_4" from overwriting "idle", or "running" from overwriting "walk"
-
-        // Check for EXACT matches first (these always win)
-        if (name === 'idle' || name === 'stand' || name === 'pose') {
-          animations.set('idle', action);
-          exactMatches.idle = true;
-          debugAnimation.log(`[UnitRenderer] ${unitType}: Mapped "${name}" -> 'idle' (exact match)`);
-        }
-        if (name === 'walk' || name === 'run' || name === 'move') {
-          animations.set('walk', action);
-          exactMatches.walk = true;
-          debugAnimation.log(`[UnitRenderer] ${unitType}: Mapped "${name}" -> 'walk' (exact match)`);
-        }
-        if (name === 'attack' || name === 'shoot' || name === 'fire' || name === 'combat') {
-          animations.set('attack', action);
-          exactMatches.attack = true;
-          debugAnimation.log(`[UnitRenderer] ${unitType}: Mapped "${name}" -> 'attack' (exact match)`);
-        }
-        if (name === 'death' || name === 'die' || name === 'dead') {
-          animations.set('death', action);
-          exactMatches.death = true;
-          debugAnimation.log(`[UnitRenderer] ${unitType}: Mapped "${name}" -> 'death' (exact match)`);
-        }
+        clipNameToAction.set(name, action);
+        // Also store original clip name for exact matches
+        clipNameToAction.set(clip.name.toLowerCase(), action);
+        debugAnimation.log(`[UnitRenderer] ${unitType}: Found animation clip "${clip.name}" -> normalized "${name}"`);
       }
 
-      // Second pass: fill in missing canonical names with partial matches (only if no exact match exists)
-      for (const clip of clips) {
-        let name = clip.name.toLowerCase();
-        if (name.includes('|')) {
-          name = name.split('|').pop() || name;
-        }
-        const action = animations.get(name)!;
+      // Map game actions to animation clips using the configured mappings
+      // The first matching name in the array wins (priority order)
+      for (const [gameAction, clipNames] of Object.entries(animMappings)) {
+        if (!clipNames) continue;
 
-        // Only use partial matches if we don't have an exact match
-        if (!exactMatches.idle && !animations.has('idle')) {
-          if (name.includes('idle') || name.includes('stand')) {
-            animations.set('idle', action);
-            debugAnimation.log(`[UnitRenderer] ${unitType}: Mapped "${name}" -> 'idle' (partial match)`);
+        // Try each configured clip name in order
+        for (const clipName of clipNames) {
+          const normalizedName = clipName.toLowerCase();
+
+          // First try exact match
+          if (clipNameToAction.has(normalizedName)) {
+            animations.set(gameAction, clipNameToAction.get(normalizedName)!);
+            debugAnimation.log(`[UnitRenderer] ${unitType}: Mapped '${gameAction}' -> "${clipName}" (exact match)`);
+            break;
           }
-        }
-        if (!exactMatches.walk && !animations.has('walk')) {
-          if (name.includes('walk') || name.includes('run') || name.includes('move') || name.includes('locomotion')) {
-            animations.set('walk', action);
-            debugAnimation.log(`[UnitRenderer] ${unitType}: Mapped "${name}" -> 'walk' (partial match)`);
+
+          // Then try partial match (clip name contains the search term)
+          for (const [clipKey, action] of clipNameToAction) {
+            if (clipKey.includes(normalizedName)) {
+              animations.set(gameAction, action);
+              debugAnimation.log(`[UnitRenderer] ${unitType}: Mapped '${gameAction}' -> "${clipKey}" (partial match for "${clipName}")`);
+              break;
+            }
           }
-        }
-        if (!exactMatches.attack && !animations.has('attack')) {
-          if (name.includes('attack') || name.includes('shoot') || name.includes('fire') || name.includes('combat')) {
-            animations.set('attack', action);
-            debugAnimation.log(`[UnitRenderer] ${unitType}: Mapped "${name}" -> 'attack' (partial match)`);
-          }
-        }
-        if (!exactMatches.death && !animations.has('death')) {
-          if (name.includes('death') || name.includes('die') || name.includes('dead')) {
-            animations.set('death', action);
-            debugAnimation.log(`[UnitRenderer] ${unitType}: Mapped "${name}" -> 'death' (partial match)`);
-          }
+
+          // If we found a match, stop searching
+          if (animations.has(gameAction)) break;
         }
       }
 
       // Ensure we have fallbacks for missing animations
       if (!animations.has('walk') && animations.has('idle')) {
         animations.set('walk', animations.get('idle')!);
+        debugAnimation.log(`[UnitRenderer] ${unitType}: Using 'idle' as fallback for 'walk'`);
       }
       if (!animations.has('attack') && animations.has('idle')) {
         animations.set('attack', animations.get('idle')!);
+        debugAnimation.log(`[UnitRenderer] ${unitType}: Using 'idle' as fallback for 'attack'`);
       }
 
       // Log final animation mappings
@@ -653,8 +641,8 @@ export class UnitRenderer {
         // Update animation
         this.updateAnimationState(animUnit, isMoving, isActuallyAttacking);
 
-        // Update animation mixer with unit-specific speed multiplier
-        const animSpeedMultiplier = ANIMATION_SPEED_MULTIPLIERS[animUnit.unitType] ?? 1.0;
+        // Update animation mixer with unit-specific speed multiplier (from JSON config or default 1.0)
+        const animSpeedMultiplier = AssetManager.getAnimationSpeed(animUnit.unitType);
         animUnit.mixer.update(deltaTime * animSpeedMultiplier);
       } else {
         // Use instanced rendering for non-animated units
