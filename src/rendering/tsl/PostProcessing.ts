@@ -387,17 +387,19 @@ export class RenderPipeline {
         );
 
         // Configure SSR parameters
-        if (this.ssrPass.maxDistance) {
+        if (this.ssrPass?.maxDistance) {
           this.ssrPass.maxDistance.value = this.config.ssrMaxDistance;
         }
-        if (this.ssrPass.opacity) {
+        if (this.ssrPass?.opacity) {
           this.ssrPass.opacity.value = this.config.ssrOpacity;
         }
-        if (this.ssrPass.thickness) {
+        if (this.ssrPass?.thickness) {
           this.ssrPass.thickness.value = this.config.ssrThickness;
         }
 
-        outputNode = this.ssrPass;
+        if (this.ssrPass) {
+          outputNode = this.ssrPass;
+        }
       } catch (e) {
         console.warn('[PostProcessing] SSR initialization failed:', e);
       }
