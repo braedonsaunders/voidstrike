@@ -25,12 +25,8 @@ export const HUD = memo(function HUD() {
   const [showPlayerStatus, setShowPlayerStatus] = useState(false);
   const [showOverlayMenu, setShowOverlayMenu] = useState(false);
 
-  // Don't render HUD until game is ready (prevents flash during loading)
-  if (!isGameReady) {
-    return null;
-  }
-
   // Disable edge scrolling when mouse is over UI elements
+  // IMPORTANT: All hooks must be called before any early returns to comply with React's rules of hooks
   const handleUIMouseEnter = useCallback(() => {
     setEdgeScrollEnabled(false);
   }, []);
@@ -58,6 +54,12 @@ export const HUD = memo(function HUD() {
     setFullscreen(!!document.fullscreenElement);
     return () => document.removeEventListener('fullscreenchange', handleFullscreenChange);
   }, [setFullscreen]);
+
+  // Don't render HUD until game is ready (prevents flash during loading)
+  // This early return is placed AFTER all hooks to comply with React's rules of hooks
+  if (!isGameReady) {
+    return null;
+  }
 
   return (
     <div className="absolute inset-0 pointer-events-none">
