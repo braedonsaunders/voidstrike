@@ -1,0 +1,37 @@
+{
+  "id": "dominion",
+  "name": "Dominion",
+  "description": "The Terran Dominion - A militaristic human faction with versatile units and powerful siege capabilities.",
+  "color": "#4A90D9",
+  "unitsFile": "units.json",
+  "buildingsFile": "buildings.json",
+  "researchFile": "research.json",
+  "abilitiesFile": "abilities.json",
+  "unitTypes": {
+    "fabricator": "infantry",
+    "trooper": "infantry",
+    "breacher": "infantry",
+    "vanguard": "infantry",
+    "operative": "infantry",
+    "scorcher": "vehicle",
+    "devastator": "vehicle",
+    "colossus": "vehicle",
+    "lifter": "ship",
+    "valkyrie": "ship",
+    "specter": "ship",
+    "dreadnought": "ship",
+    "overseer": "ship"
+  },
+  "addonUnits": {
+    "researchModule": {
+      "infantry_bay": ["breacher", "operative"],
+      "forge": ["devastator", "colossus"],
+      "hangar": ["overseer", "specter", "dreadnought"]
+    },
+    "productionModule": {
+      "infantry_bay": ["trooper", "vanguard"],
+      "forge": ["scorcher"],
+      "hangar": ["lifter", "valkyrie"]
+    }
+  }
+}

@@ -1,0 +1,9 @@
+{
+  "name": "VOIDSTRIKE",
+  "version": "0.1.0",
+  "description": "A browser-based RTS game built with Next.js and Three.js",
+  "factions": [
+    "dominion"
+  ],
+  "defaultFaction": "dominion"
+}
