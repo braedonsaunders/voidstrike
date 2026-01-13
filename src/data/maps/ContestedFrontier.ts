@@ -1,36 +1,9 @@
-import {
-  MapData,
-  MapDecoration,
-  createBaseResources,
-  DIR,
-  fillTerrainRect,
-  fillTerrainCircle,
-  createForestCorridor,
-  createRiver,
-  createLake,
-  createRoad,
-  createVoidChasm,
-  fillFeatureCircle,
-  fillFeatureRect,
-  scatterForests,
-  createMudArea,
-  autoFixConnectivity,
-  validateMapConnectivity,
-  // New topology system
-  generateTerrainFromTopology,
-  mainBase,
-  naturalExpansion,
-  expansion,
-  connect,
-  getRampClearanceZones,
-  type MapTopology,
-} from './MapTypes';
-
 /**
  * CONTESTED FRONTIER - 6 Player (3v3) Map
  *
  * A large-scale team map with jungle biome.
  * Designed for 3v3 battles with team positions on opposite sides.
+ * MIGRATED TO NEW CONNECTIVITY-FIRST SYSTEM
  *
  * Key Features:
  * - 6 spawn positions (3 per side, top vs bottom)
@@ -54,12 +27,299 @@ import {
  *   │ ███↑███        ███↑███        ███↑███                              │
  *   │ ██P4██         ██P5██         ██P6██                              │
  *   └────────────────────────────────────────────────────────────────────┘
- *
- * USES NEW TOPOLOGY SYSTEM - Ramp connectivity guaranteed by design
  */
+
+import {
+  MapData,
+  MapDecoration,
+  createBaseResources,
+  DIR,
+  fillTerrainRect,
+  fillTerrainCircle,
+  createForestCorridor,
+  createRiver,
+  createLake,
+  createRoad,
+  createVoidChasm,
+  fillFeatureCircle,
+  fillFeatureRect,
+  scatterForests,
+  createMudArea,
+  autoFixConnectivity,
+  validateMapConnectivity,
+} from './MapTypes';
+
+import {
+  defineMap,
+  generateTerrainWithConnections,
+  getRampClearanceZones,
+  type MapDefinition,
+} from './core';
 
 const MAP_WIDTH = 360;
 const MAP_HEIGHT = 320;
+
+// ============================================
+// MAP DEFINITION - Connectivity-First Architecture
+// ============================================
+
+const CONTESTED_FRONTIER_DEF: MapDefinition = defineMap({
+  meta: {
+    id: 'contested_frontier',
+    name: 'Contested Frontier',
+    author: 'VOIDSTRIKE Team',
+    description: 'A large 6-player map for 3v3 team battles. Team positions on opposite sides with shared strategic resources in the center.',
+  },
+
+  canvas: {
+    width: MAP_WIDTH,
+    height: MAP_HEIGHT,
+    biome: 'jungle',
+    baseElevation: 0,
+  },
+
+  symmetry: {
+    type: 'mirror_y',
+    playerCount: 6,
+  },
+
+  regions: [
+    // Top row main bases
+    {
+      id: 'p1_main',
+      name: 'P1 Main',
+      type: 'main_base',
+      position: { x: 50, y: 45 },
+      elevation: 2,
+      radius: 22,
+      playerSlot: 1,
+    },
+    {
+      id: 'p2_main',
+      name: 'P2 Main',
+      type: 'main_base',
+      position: { x: 180, y: 45 },
+      elevation: 2,
+      radius: 22,
+      playerSlot: 2,
+    },
+    {
+      id: 'p3_main',
+      name: 'P3 Main',
+      type: 'main_base',
+      position: { x: 310, y: 45 },
+      elevation: 2,
+      radius: 22,
+      playerSlot: 3,
+    },
+
+    // Bottom row main bases
+    {
+      id: 'p4_main',
+      name: 'P4 Main',
+      type: 'main_base',
+      position: { x: 50, y: 275 },
+      elevation: 2,
+      radius: 22,
+      playerSlot: 4,
+    },
+    {
+      id: 'p5_main',
+      name: 'P5 Main',
+      type: 'main_base',
+      position: { x: 180, y: 275 },
+      elevation: 2,
+      radius: 22,
+      playerSlot: 5,
+    },
+    {
+      id: 'p6_main',
+      name: 'P6 Main',
+      type: 'main_base',
+      position: { x: 310, y: 275 },
+      elevation: 2,
+      radius: 22,
+      playerSlot: 6,
+    },
+
+    // Top naturals
+    {
+      id: 'p1_nat',
+      name: 'P1 Natural',
+      type: 'natural',
+      position: { x: 70, y: 85 },
+      elevation: 1,
+      radius: 14,
+    },
+    {
+      id: 'p2_nat',
+      name: 'P2 Natural',
+      type: 'natural',
+      position: { x: 180, y: 85 },
+      elevation: 1,
+      radius: 14,
+    },
+    {
+      id: 'p3_nat',
+      name: 'P3 Natural',
+      type: 'natural',
+      position: { x: 290, y: 85 },
+      elevation: 1,
+      radius: 14,
+    },
+
+    // Bottom naturals
+    {
+      id: 'p4_nat',
+      name: 'P4 Natural',
+      type: 'natural',
+      position: { x: 70, y: 235 },
+      elevation: 1,
+      radius: 14,
+    },
+    {
+      id: 'p5_nat',
+      name: 'P5 Natural',
+      type: 'natural',
+      position: { x: 180, y: 235 },
+      elevation: 1,
+      radius: 14,
+    },
+    {
+      id: 'p6_nat',
+      name: 'P6 Natural',
+      type: 'natural',
+      position: { x: 290, y: 235 },
+      elevation: 1,
+      radius: 14,
+    },
+
+    // Side thirds
+    {
+      id: 'third_left',
+      name: 'Third Left',
+      type: 'third',
+      position: { x: 40, y: 160 },
+      elevation: 0,
+      radius: 16,
+    },
+    {
+      id: 'third_right',
+      name: 'Third Right',
+      type: 'third',
+      position: { x: 320, y: 160 },
+      elevation: 0,
+      radius: 16,
+    },
+
+    // Mid thirds
+    {
+      id: 'mid_tl',
+      name: 'Mid TL',
+      type: 'third',
+      position: { x: 120, y: 130 },
+      elevation: 0,
+      radius: 14,
+    },
+    {
+      id: 'mid_tr',
+      name: 'Mid TR',
+      type: 'third',
+      position: { x: 240, y: 130 },
+      elevation: 0,
+      radius: 14,
+    },
+    {
+      id: 'mid_bl',
+      name: 'Mid BL',
+      type: 'third',
+      position: { x: 120, y: 190 },
+      elevation: 0,
+      radius: 14,
+    },
+    {
+      id: 'mid_br',
+      name: 'Mid BR',
+      type: 'third',
+      position: { x: 240, y: 190 },
+      elevation: 0,
+      radius: 14,
+    },
+
+    // Gold expansions
+    {
+      id: 'gold_tl',
+      name: 'Gold TL',
+      type: 'gold',
+      position: { x: 100, y: 130 },
+      elevation: 0,
+      radius: 14,
+    },
+    {
+      id: 'gold_tr',
+      name: 'Gold TR',
+      type: 'gold',
+      position: { x: 260, y: 130 },
+      elevation: 0,
+      radius: 14,
+    },
+    {
+      id: 'gold_bl',
+      name: 'Gold BL',
+      type: 'gold',
+      position: { x: 100, y: 190 },
+      elevation: 0,
+      radius: 14,
+    },
+    {
+      id: 'gold_br',
+      name: 'Gold BR',
+      type: 'gold',
+      position: { x: 260, y: 190 },
+      elevation: 0,
+      radius: 14,
+    },
+
+    // Center
+    {
+      id: 'center',
+      name: 'Center',
+      type: 'center',
+      position: { x: 180, y: 160 },
+      elevation: 0,
+      radius: 26,
+    },
+  ],
+
+  connections: [
+    // Top row: Main to natural (elevation 2 -> 1)
+    { from: 'p1_main', to: 'p1_nat', type: 'ramp', width: 10 },
+    { from: 'p2_main', to: 'p2_nat', type: 'ramp', width: 10 },
+    { from: 'p3_main', to: 'p3_nat', type: 'ramp', width: 10 },
+
+    // Bottom row: Main to natural (elevation 2 -> 1)
+    { from: 'p4_main', to: 'p4_nat', type: 'ramp', width: 10 },
+    { from: 'p5_main', to: 'p5_nat', type: 'ramp', width: 10 },
+    { from: 'p6_main', to: 'p6_nat', type: 'ramp', width: 10 },
+
+    // Natural to low ground (elevation 1 -> 0)
+    { from: 'p1_nat', to: 'gold_tl', type: 'ramp', width: 8 },
+    { from: 'p2_nat', to: 'center', type: 'ramp', width: 8 },
+    { from: 'p3_nat', to: 'gold_tr', type: 'ramp', width: 8 },
+    { from: 'p4_nat', to: 'gold_bl', type: 'ramp', width: 8 },
+    { from: 'p5_nat', to: 'center', type: 'ramp', width: 8 },
+    { from: 'p6_nat', to: 'gold_br', type: 'ramp', width: 8 },
+  ],
+
+  // Terrain features handled in post-processing for exact visual matching
+  terrain: {},
+  features: {},
+  decorations: {},
+});
+
+// ============================================
+// DECORATION GENERATION
+// ============================================
 
 // Seeded random for consistent decorations
 function seededRandom(seed: number): () => number {
@@ -110,7 +370,7 @@ function isInBaseArea(x: number, y: number): boolean {
   return false;
 }
 
-function isInRampClearance(x: number, y: number, clearanceZones: Set<string>): boolean {
+function isInRampClearanceZone(x: number, y: number, clearanceZones: Set<string>): boolean {
   return clearanceZones.has(`${Math.floor(x)},${Math.floor(y)}`);
 }
 
@@ -125,7 +385,7 @@ function generateJungleDecorations(rampClearance: Set<string>): MapDecoration[] 
       const dist = rand() * spread;
       const x = cx + Math.cos(angle) * dist;
       const y = cy + Math.sin(angle) * dist;
-      if (isInBaseArea(x, y) || isInRampClearance(x, y, rampClearance)) continue;
+      if (isInBaseArea(x, y) || isInRampClearanceZone(x, y, rampClearance)) continue;
       decorations.push({
         type: treeTypes[Math.floor(rand() * treeTypes.length)],
         x, y,
@@ -142,7 +402,7 @@ function generateJungleDecorations(rampClearance: Set<string>): MapDecoration[] 
       const dist = rand() * spread;
       const x = cx + Math.cos(angle) * dist;
       const y = cy + Math.sin(angle) * dist;
-      if (isInBaseArea(x, y) || isInRampClearance(x, y, rampClearance)) continue;
+      if (isInBaseArea(x, y) || isInRampClearanceZone(x, y, rampClearance)) continue;
       decorations.push({
         type: rockTypes[Math.floor(rand() * rockTypes.length)],
         x, y,
@@ -158,7 +418,7 @@ function generateJungleDecorations(rampClearance: Set<string>): MapDecoration[] 
       const dist = rand() * spread;
       const x = cx + Math.cos(angle) * dist;
       const y = cy + Math.sin(angle) * dist;
-      if (isInBaseArea(x, y) || isInRampClearance(x, y, rampClearance)) continue;
+      if (isInBaseArea(x, y) || isInRampClearanceZone(x, y, rampClearance)) continue;
       decorations.push({
         type: 'crystal_formation',
         x, y,
@@ -177,7 +437,7 @@ function generateJungleDecorations(rampClearance: Set<string>): MapDecoration[] 
       const t = i / steps;
       const x = x1 + dx * t + (rand() - 0.5) * 2;
       const y = y1 + dy * t + (rand() - 0.5) * 2;
-      if (isInBaseArea(x, y) || isInRampClearance(x, y, rampClearance)) continue;
+      if (isInBaseArea(x, y) || isInRampClearanceZone(x, y, rampClearance)) continue;
       const rockType = rand() < 0.4 ? 'rocks_large' : (rand() < 0.7 ? 'rocks_small' : 'rock_single');
       decorations.push({
         type: rockType,
@@ -213,7 +473,7 @@ function generateJungleDecorations(rampClearance: Set<string>): MapDecoration[] 
       const dist = radius + 2 + rand() * 4;
       const x = cx + Math.cos(angle) * dist;
       const y = cy + Math.sin(angle) * dist;
-      if (isInBaseArea(x, y) || isInRampClearance(x, y, rampClearance)) continue;
+      if (isInBaseArea(x, y) || isInRampClearanceZone(x, y, rampClearance)) continue;
       const rockType = rand() < 0.3 ? 'rocks_large' : (rand() < 0.6 ? 'rocks_small' : 'rock_single');
       decorations.push({
         type: rockType,
@@ -230,7 +490,7 @@ function generateJungleDecorations(rampClearance: Set<string>): MapDecoration[] 
       const dist = radius + 4 + rand() * 6;
       const x = cx + Math.cos(angle) * dist;
       const y = cy + Math.sin(angle) * dist;
-      if (isInBaseArea(x, y) || isInRampClearance(x, y, rampClearance)) continue;
+      if (isInBaseArea(x, y) || isInRampClearanceZone(x, y, rampClearance)) continue;
       const treeTypes: Array<'tree_pine_tall' | 'tree_pine_medium'> = ['tree_pine_tall', 'tree_pine_medium'];
       decorations.push({
         type: treeTypes[Math.floor(rand() * treeTypes.length)],
@@ -377,80 +637,13 @@ function generateJungleDecorations(rampClearance: Set<string>): MapDecoration[] 
   return decorations;
 }
 
+// ============================================
+// MAP GENERATION
+// ============================================
+
 function generateContestedFrontier(): MapData {
-  // ========================================
-  // TOPOLOGY DEFINITION - Graph-first terrain generation
-  // ========================================
-  const topology: MapTopology = {
-    areas: [
-      // Top row main bases
-      mainBase('p1_main', 50, 45, 22, 2, 4),
-      mainBase('p2_main', 180, 45, 22, 2, 4),
-      mainBase('p3_main', 310, 45, 22, 2, 4),
-
-      // Bottom row main bases
-      mainBase('p4_main', 50, 275, 22, 2, 4),
-      mainBase('p5_main', 180, 275, 22, 2, 4),
-      mainBase('p6_main', 310, 275, 22, 2, 4),
-
-      // Top naturals
-      naturalExpansion('p1_nat', 70, 85, 14, 1, 3),
-      naturalExpansion('p2_nat', 180, 85, 14, 1, 3),
-      naturalExpansion('p3_nat', 290, 85, 14, 1, 3),
-
-      // Bottom naturals
-      naturalExpansion('p4_nat', 70, 235, 14, 1, 3),
-      naturalExpansion('p5_nat', 180, 235, 14, 1, 3),
-      naturalExpansion('p6_nat', 290, 235, 14, 1, 3),
-
-      // Side thirds
-      expansion('third_left', 'third', 40, 160, 16, 0),
-      expansion('third_right', 'third', 320, 160, 16, 0),
-
-      // Mid thirds
-      expansion('mid_tl', 'third', 120, 130, 14, 0),
-      expansion('mid_tr', 'third', 240, 130, 14, 0),
-      expansion('mid_bl', 'third', 120, 190, 14, 0),
-      expansion('mid_br', 'third', 240, 190, 14, 0),
-
-      // Gold expansions
-      expansion('gold_tl', 'gold', 100, 130, 14, 0),
-      expansion('gold_tr', 'gold', 260, 130, 14, 0),
-      expansion('gold_bl', 'gold', 100, 190, 14, 0),
-      expansion('gold_br', 'gold', 260, 190, 14, 0),
-
-      // Center
-      expansion('center', 'center', 180, 160, 26, 0),
-    ],
-
-    connections: [
-      // Top row: Main to natural (elevation 2 -> 1)
-      connect('p1_main', 'p1_nat', 10, 'south'),
-      connect('p2_main', 'p2_nat', 10, 'south'),
-      connect('p3_main', 'p3_nat', 10, 'south'),
-
-      // Bottom row: Main to natural (elevation 2 -> 1)
-      connect('p4_main', 'p4_nat', 10, 'north'),
-      connect('p5_main', 'p5_nat', 10, 'north'),
-      connect('p6_main', 'p6_nat', 10, 'north'),
-
-      // Natural to low ground (elevation 1 -> 0)
-      connect('p1_nat', 'gold_tl', 8, 'south'),
-      connect('p2_nat', 'center', 8, 'south'),
-      connect('p3_nat', 'gold_tr', 8, 'south'),
-      connect('p4_nat', 'gold_bl', 8, 'north'),
-      connect('p5_nat', 'center', 8, 'north'),
-      connect('p6_nat', 'gold_br', 8, 'north'),
-    ],
-  };
-
-  // Generate base terrain from topology
-  const { terrain, ramps, connections } = generateTerrainFromTopology(
-    MAP_WIDTH,
-    MAP_HEIGHT,
-    topology,
-    0 // Default elevation (low ground)
-  );
+  // Generate base terrain from connectivity-first definition
+  const { terrain, ramps, connections } = generateTerrainWithConnections(CONTESTED_FRONTIER_DEF);
 
   // Get ramp clearance zones to prevent decorations on ramps
   const rampClearance = getRampClearanceZones(connections);

@@ -15,15 +15,15 @@ import {
   createMudArea,
   autoFixConnectivity,
   validateMapConnectivity,
-  // New topology system
-  generateTerrainFromTopology,
-  mainBase,
-  naturalExpansion,
-  expansion,
-  connect,
-  getRampClearanceZones,
-  type MapTopology,
 } from './MapTypes';
+
+import {
+  defineMap,
+  generateTerrainWithConnections,
+  getRampClearanceZones,
+  isInRampClearance,
+  type MapDefinition,
+} from './core';
 
 /**
  * SCORCHED BASIN - 4 Player (2v2 / FFA) Map
@@ -99,10 +99,6 @@ function isInBaseArea(x: number, y: number): boolean {
     }
   }
   return false;
-}
-
-function isInRampClearance(x: number, y: number, clearanceZones: Set<string>): boolean {
-  return clearanceZones.has(`${Math.floor(x)},${Math.floor(y)}`);
 }
 
 function generateDesertDecorations(rampClearance: Set<string>): MapDecoration[] {
@@ -378,62 +374,75 @@ function generateDesertDecorations(rampClearance: Set<string>): MapDecoration[] 
   return decorations;
 }
 
+// ========================================
+// MAP DEFINITION - Connectivity-first terrain generation
+// ========================================
+const SCORCHED_BASIN_DEF: MapDefinition = defineMap({
+  meta: {
+    id: 'scorched_basin',
+    name: 'Scorched Basin',
+    author: 'VOIDSTRIKE Team',
+    description: 'A balanced 4-player map designed for 2v2 team games or Free-For-All. Symmetrical corner spawns with shared third expansions between adjacent players.',
+  },
+  canvas: {
+    width: MAP_WIDTH,
+    height: MAP_HEIGHT,
+    biome: 'desert',
+    baseElevation: 0,
+  },
+  symmetry: {
+    type: 'rotational',
+    playerCount: 4,
+  },
+  regions: [
+    // Main bases - elevated platforms (4 corners)
+    { id: 'p1_main', name: 'P1 Main', type: 'main_base', position: { x: 40, y: 40 }, elevation: 2, radius: 22, playerSlot: 1 },
+    { id: 'p2_main', name: 'P2 Main', type: 'main_base', position: { x: 240, y: 40 }, elevation: 2, radius: 22, playerSlot: 2 },
+    { id: 'p3_main', name: 'P3 Main', type: 'main_base', position: { x: 40, y: 240 }, elevation: 2, radius: 22, playerSlot: 3 },
+    { id: 'p4_main', name: 'P4 Main', type: 'main_base', position: { x: 240, y: 240 }, elevation: 2, radius: 22, playerSlot: 4 },
+
+    // Natural expansions - mid-elevation platforms
+    { id: 'p1_nat', name: 'P1 Natural', type: 'natural', position: { x: 75, y: 75 }, elevation: 1, radius: 14 },
+    { id: 'p2_nat', name: 'P2 Natural', type: 'natural', position: { x: 205, y: 75 }, elevation: 1, radius: 14 },
+    { id: 'p3_nat', name: 'P3 Natural', type: 'natural', position: { x: 75, y: 205 }, elevation: 1, radius: 14 },
+    { id: 'p4_nat', name: 'P4 Natural', type: 'natural', position: { x: 205, y: 205 }, elevation: 1, radius: 14 },
+
+    // Third expansions - ground level, shared between adjacent players
+    { id: 'third_left', name: 'Third Left', type: 'third', position: { x: 40, y: 140 }, elevation: 0, radius: 18 },
+    { id: 'third_right', name: 'Third Right', type: 'third', position: { x: 240, y: 140 }, elevation: 0, radius: 18 },
+    { id: 'third_top', name: 'Third Top', type: 'third', position: { x: 140, y: 40 }, elevation: 0, radius: 18 },
+    { id: 'third_bottom', name: 'Third Bottom', type: 'third', position: { x: 140, y: 240 }, elevation: 0, radius: 18 },
+
+    // Gold expansions - inner quadrants
+    { id: 'gold_nw', name: 'Gold NW', type: 'gold', position: { x: 90, y: 90 }, elevation: 0, radius: 14 },
+    { id: 'gold_ne', name: 'Gold NE', type: 'gold', position: { x: 190, y: 90 }, elevation: 0, radius: 14 },
+    { id: 'gold_sw', name: 'Gold SW', type: 'gold', position: { x: 90, y: 190 }, elevation: 0, radius: 14 },
+    { id: 'gold_se', name: 'Gold SE', type: 'gold', position: { x: 190, y: 190 }, elevation: 0, radius: 14 },
+
+    // Center contested area
+    { id: 'center', name: 'Center', type: 'center', position: { x: 140, y: 140 }, elevation: 0, radius: 24 },
+  ],
+  connections: [
+    // Main to natural connections (elevation 2 -> 1)
+    { from: 'p1_main', to: 'p1_nat', type: 'ramp', width: 10 },
+    { from: 'p2_main', to: 'p2_nat', type: 'ramp', width: 10 },
+    { from: 'p3_main', to: 'p3_nat', type: 'ramp', width: 10 },
+    { from: 'p4_main', to: 'p4_nat', type: 'ramp', width: 10 },
+
+    // Natural to low ground connections (elevation 1 -> 0)
+    { from: 'p1_nat', to: 'gold_nw', type: 'ramp', width: 8 },
+    { from: 'p2_nat', to: 'gold_ne', type: 'ramp', width: 8 },
+    { from: 'p3_nat', to: 'gold_sw', type: 'ramp', width: 8 },
+    { from: 'p4_nat', to: 'gold_se', type: 'ramp', width: 8 },
+  ],
+  terrain: {},
+  features: {},
+  decorations: {},
+});
+
 function generateScorchedBasin(): MapData {
-  // ========================================
-  // TOPOLOGY DEFINITION - Graph-first terrain generation
-  // ========================================
-  const topology: MapTopology = {
-    areas: [
-      // Main bases - elevated platforms with cliff rings (4 corners)
-      mainBase('p1_main', 40, 40, 22, 2, 4),
-      mainBase('p2_main', 240, 40, 22, 2, 4),
-      mainBase('p3_main', 40, 240, 22, 2, 4),
-      mainBase('p4_main', 240, 240, 22, 2, 4),
-
-      // Natural expansions - mid-elevation platforms
-      naturalExpansion('p1_nat', 75, 75, 14, 1, 3),
-      naturalExpansion('p2_nat', 205, 75, 14, 1, 3),
-      naturalExpansion('p3_nat', 75, 205, 14, 1, 3),
-      naturalExpansion('p4_nat', 205, 205, 14, 1, 3),
-
-      // Third expansions - ground level, shared between adjacent players
-      expansion('third_left', 'third', 40, 140, 18, 0),
-      expansion('third_right', 'third', 240, 140, 18, 0),
-      expansion('third_top', 'third', 140, 40, 18, 0),
-      expansion('third_bottom', 'third', 140, 240, 18, 0),
-
-      // Gold expansions - inner quadrants
-      expansion('gold_nw', 'gold', 90, 90, 14, 0),
-      expansion('gold_ne', 'gold', 190, 90, 14, 0),
-      expansion('gold_sw', 'gold', 90, 190, 14, 0),
-      expansion('gold_se', 'gold', 190, 190, 14, 0),
-
-      // Center contested area
-      expansion('center', 'center', 140, 140, 24, 0),
-    ],
-
-    connections: [
-      // Main to natural connections (elevation 2 -> 1)
-      connect('p1_main', 'p1_nat', 10, 'east'),   // P1 exits southeast
-      connect('p2_main', 'p2_nat', 10, 'west'),   // P2 exits southwest
-      connect('p3_main', 'p3_nat', 10, 'east'),   // P3 exits northeast
-      connect('p4_main', 'p4_nat', 10, 'west'),   // P4 exits northwest
-
-      // Natural to low ground connections (elevation 1 -> 0)
-      connect('p1_nat', 'gold_nw', 8, 'east'),
-      connect('p2_nat', 'gold_ne', 8, 'west'),
-      connect('p3_nat', 'gold_sw', 8, 'east'),
-      connect('p4_nat', 'gold_se', 8, 'west'),
-    ],
-  };
-
-  // Generate base terrain from topology
-  const { terrain, ramps, connections } = generateTerrainFromTopology(
-    MAP_WIDTH,
-    MAP_HEIGHT,
-    topology,
-    0 // Default elevation (low ground)
-  );
+  // Generate base terrain from definition
+  const { terrain, ramps, connections } = generateTerrainWithConnections(SCORCHED_BASIN_DEF);
 
   // Get ramp clearance zones to prevent decorations on ramps
   const rampClearance = getRampClearanceZones(connections);

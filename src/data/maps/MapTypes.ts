@@ -1423,28 +1423,3 @@ export function autoFixConnectivity(mapData: MapData): number {
   return corridorsCarved;
 }
 
-// ============================================
-// RE-EXPORT TOPOLOGY SYSTEM
-// ============================================
-// These exports provide the new graph-first terrain generation system
-// that guarantees ramp connectivity by design.
-
-export {
-  // Core types
-  type TopologyArea,
-  type TopologyConnection,
-  type MapTopology,
-  type GeneratedConnection,
-  type TopologyGenerationResult,
-  // Main generation function
-  generateTerrainFromTopology,
-  // Helper functions for map authors
-  mainBase,
-  naturalExpansion,
-  expansion,
-  connect,
-  // Utility functions
-  calculateConnectionPoints,
-  getRampClearanceZones,
-  isInRampClearance,
-} from './TerrainTopology';
