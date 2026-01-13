@@ -6,6 +6,7 @@
  */
 
 import { System } from '../ecs/System';
+import { Entity } from '../ecs/Entity';
 import { Transform } from '../components/Transform';
 import { Unit } from '../components/Unit';
 import { Velocity } from '../components/Velocity';
@@ -35,7 +36,8 @@ const BUILDING_PREDICTION_LOOKAHEAD = 0.5;  // Seconds to look ahead for collisi
 const PATH_REQUEST_COOLDOWN_MS = 500;
 
 // Use Recast crowd for collision avoidance
-const USE_RECAST_CROWD = false; // Temporarily disabled - crowd velocity returns 0
+// Re-enabled with fixes: proper position sync and crowd update timing
+const USE_RECAST_CROWD = true;
 
 // Static temp vectors
 const tempSeparation: PooledVector2 = { x: 0, y: 0 };
@@ -385,6 +387,68 @@ export class MovementSystem extends System {
   }
 
   /**
+   * CROWD FIX: Prepare all crowd agents before the crowd simulation update.
+   * This syncs positions and sets targets so the crowd has fresh data.
+   */
+  private prepareCrowdAgents(entities: Entity[], dt: number): void {
+    for (const entity of entities) {
+      const transform = entity.get<Transform>('Transform');
+      const unit = entity.get<Unit>('Unit');
+      if (!transform || !unit) continue;
+
+      // Skip dead units and flying units (crowd is for ground collision avoidance)
+      if (unit.state === 'dead' || unit.isFlying) {
+        this.removeAgentIfRegistered(entity.id);
+        continue;
+      }
+
+      // Only register moving units
+      const canMove =
+        unit.state === 'moving' ||
+        unit.state === 'attackmoving' ||
+        unit.state === 'attacking' ||
+        unit.state === 'gathering' ||
+        unit.state === 'patrolling' ||
+        unit.state === 'building';
+
+      if (!canMove) {
+        this.removeAgentIfRegistered(entity.id);
+        continue;
+      }
+
+      // Ensure agent is registered
+      this.ensureAgentRegistered(entity.id, transform, unit);
+
+      // Sync agent position to entity position (handles external movement like knockback)
+      if (this.crowdAgents.has(entity.id)) {
+        this.recast.updateAgentPosition(entity.id, transform.x, transform.y);
+
+        // Calculate target for this unit
+        let targetX: number | null = null;
+        let targetY: number | null = null;
+
+        if (unit.path.length > 0 && unit.pathIndex < unit.path.length) {
+          const waypoint = unit.path[unit.pathIndex];
+          targetX = waypoint.x;
+          targetY = waypoint.y;
+        } else if (unit.targetX !== null && unit.targetY !== null) {
+          targetX = unit.targetX;
+          targetY = unit.targetY;
+        }
+
+        // Set target if we have one
+        if (targetX !== null && targetY !== null) {
+          this.recast.setAgentTarget(entity.id, targetX, targetY);
+          this.recast.updateAgentParams(entity.id, {
+            maxSpeed: unit.currentSpeed > 0 ? unit.currentSpeed : unit.maxSpeed,
+            radius: unit.collisionRadius,
+          });
+        }
+      }
+    }
+  }
+
+  /**
    * Calculate building avoidance force with predictive collision detection
    *
    * Uses three-tier avoidance:
@@ -604,6 +668,14 @@ export class MovementSystem extends System {
           unit.collisionRadius
         );
       }
+    }
+
+    // CROWD FIX: First pass - sync positions and set targets BEFORE crowd update
+    // This ensures the crowd simulation has fresh data when it runs
+    if (USE_RECAST_CROWD) {
+      this.prepareCrowdAgents(entities, dt);
+      // Now update the crowd with all agents synced and targets set
+      this.recast.updateCrowd(dt);
     }
 
     for (const entity of entities) {
@@ -862,26 +934,26 @@ export class MovementSystem extends System {
       let finalVy = 0;
 
       if (USE_RECAST_CROWD && this.crowdAgents.has(entity.id) && !unit.isFlying) {
-        // Use Recast crowd velocity
-        this.recast.setAgentTarget(entity.id, targetX, targetY);
-        this.recast.updateAgentParams(entity.id, {
-          maxSpeed: unit.currentSpeed,
-          radius: unit.collisionRadius,
-        });
-
+        // CROWD FIX: Targets and positions are already synced in prepareCrowdAgents()
+        // and crowd was updated before this loop. Just read the computed velocity.
         const state = this.recast.getAgentState(entity.id);
         if (state) {
           finalVx = state.vx;
           finalVy = state.vy;
 
-          // Sync position if significantly different (teleport recovery)
-          const posDx = state.x - transform.x;
-          const posDy = state.y - transform.y;
-          if (Math.abs(posDx) > 0.5 || Math.abs(posDy) > 0.5) {
-            this.recast.updateAgentPosition(entity.id, transform.x, transform.y);
+          // CROWD FIX: If velocity is very small but we should be moving,
+          // fall back to direct movement (handles edge cases like first frame after agent add)
+          const velMagSq = finalVx * finalVx + finalVy * finalVy;
+          const minVelSq = 0.01 * 0.01;
+          if (velMagSq < minVelSq && distance > this.arrivalThreshold) {
+            // Crowd returned near-zero velocity - use direct movement as fallback
+            if (distance > 0.01) {
+              finalVx = (dx / distance) * unit.currentSpeed;
+              finalVy = (dy / distance) * unit.currentSpeed;
+            }
           }
         } else {
-          // Fallback to direct movement
+          // Agent not in crowd or state unavailable - fallback to direct movement
           if (distance > 0.01) {
             finalVx = (dx / distance) * unit.currentSpeed;
             finalVy = (dy / distance) * unit.currentSpeed;

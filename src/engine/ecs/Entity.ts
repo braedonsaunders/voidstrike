@@ -50,6 +50,17 @@ export class Entity {
     return Array.from(this.components.values());
   }
 
+  /**
+   * Get all component types into a provided array (avoids allocation)
+   * Used by archetype system for efficient signature computation
+   */
+  public getComponentTypes(out: ComponentType[]): void {
+    out.length = 0;
+    for (const type of this.components.keys()) {
+      out.push(type);
+    }
+  }
+
   public destroy(): void {
     this.destroyed = true;
     this.components.clear();
