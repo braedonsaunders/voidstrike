@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useEffect, memo } from 'react';
-import { useUIStore, GraphicsSettings, RendererAPI } from '@/store/uiStore';
+import { useUIStore, GraphicsSettings, RendererAPI, AntiAliasingMode } from '@/store/uiStore';
 import { setEdgeScrollEnabled } from '@/store/cameraStore';
 
 const buttonStyle = (enabled: boolean) => ({
@@ -45,6 +45,7 @@ export const GraphicsOptionsPanel = memo(function GraphicsOptionsPanel() {
   const toggleGraphicsOptions = useUIStore((state) => state.toggleGraphicsOptions);
   const toggleGraphicsSetting = useUIStore((state) => state.toggleGraphicsSetting);
   const setGraphicsSetting = useUIStore((state) => state.setGraphicsSetting);
+  const setAntiAliasingMode = useUIStore((state) => state.setAntiAliasingMode);
 
   // Disable edge scrolling when panel is open
   useEffect(() => {
@@ -356,15 +357,63 @@ export const GraphicsOptionsPanel = memo(function GraphicsOptionsPanel() {
       {/* === ANTI-ALIASING === */}
       <div style={sectionStyle}>
         <div style={sectionTitleStyle}>Anti-Aliasing</div>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-          <span>FXAA</span>
-          <button
-            onClick={() => handleToggle('fxaaEnabled')}
-            style={buttonStyle(graphicsSettings.fxaaEnabled)}
+        <div style={{ marginBottom: '8px' }}>
+          <label style={labelStyle}>Mode</label>
+          <select
+            value={graphicsSettings.antiAliasingMode}
+            onChange={(e) => setAntiAliasingMode(e.target.value as AntiAliasingMode)}
+            style={selectStyle}
           >
-            {graphicsSettings.fxaaEnabled ? 'ON' : 'OFF'}
-          </button>
+            <option value="off">Off</option>
+            <option value="fxaa">FXAA (Fast)</option>
+            <option value="taa">TAA (Best Quality)</option>
+          </select>
         </div>
+        {/* TAA-specific settings */}
+        {graphicsSettings.antiAliasingMode === 'taa' && (
+          <>
+            <div style={{ marginBottom: '8px' }}>
+              <label style={labelStyle}>
+                History Blend: {graphicsSettings.taaHistoryBlendRate.toFixed(2)}
+              </label>
+              <input
+                type="range"
+                min="0.015"
+                max="0.5"
+                step="0.01"
+                value={graphicsSettings.taaHistoryBlendRate}
+                onChange={(e) => setGraphicsSetting('taaHistoryBlendRate', parseFloat(e.target.value))}
+                style={sliderStyle}
+              />
+              <span style={{ fontSize: '10px', color: '#666' }}>Lower = smoother, higher = sharper</span>
+            </div>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
+              <span>RCAS Sharpening</span>
+              <button
+                onClick={() => handleToggle('taaSharpeningEnabled')}
+                style={buttonStyle(graphicsSettings.taaSharpeningEnabled)}
+              >
+                {graphicsSettings.taaSharpeningEnabled ? 'ON' : 'OFF'}
+              </button>
+            </div>
+            {graphicsSettings.taaSharpeningEnabled && (
+              <div>
+                <label style={labelStyle}>
+                  Sharpening Intensity: {graphicsSettings.taaSharpeningIntensity.toFixed(2)}
+                </label>
+                <input
+                  type="range"
+                  min="0"
+                  max="1"
+                  step="0.05"
+                  value={graphicsSettings.taaSharpeningIntensity}
+                  onChange={(e) => setGraphicsSetting('taaSharpeningIntensity', parseFloat(e.target.value))}
+                  style={sliderStyle}
+                />
+              </div>
+            )}
+          </>
+        )}
       </div>
 
       {/* === FOG === */}

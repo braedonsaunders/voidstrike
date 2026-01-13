@@ -75,7 +75,21 @@ export {
   ScreenShake,
   DamageVignette,
   type PostProcessingConfig,
+  type AntiAliasingMode,
 } from './PostProcessing';
+
+// Temporal Anti-Aliasing (TAA)
+export {
+  TAASystem,
+  TAAJitterManager,
+  TAAHistoryManager,
+  TAAMotionVectorGenerator,
+  createTAAResolvePass,
+  createRCASPass,
+  HALTON_SEQUENCE_16,
+  DEFAULT_TAA_CONFIG,
+  type TAAConfig,
+} from './TAA';
 
 // Map effects
 export {

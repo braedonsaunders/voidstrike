@@ -43,6 +43,9 @@ export interface DebugSettings {
 // Renderer API type (WebGPU or WebGL)
 export type RendererAPI = 'WebGPU' | 'WebGL' | null;
 
+// Anti-aliasing mode selection
+export type AntiAliasingMode = 'off' | 'fxaa' | 'taa';
+
 // Graphics settings for post-processing and visual effects
 export interface GraphicsSettings {
   // Master toggle
@@ -69,8 +72,15 @@ export interface GraphicsSettings {
   bloomThreshold: number;
   bloomRadius: number;
 
-  // Anti-aliasing
-  fxaaEnabled: boolean;
+  // Anti-aliasing (FXAA or TAA)
+  antiAliasingMode: AntiAliasingMode;
+  fxaaEnabled: boolean; // Legacy - derived from antiAliasingMode
+
+  // TAA-specific settings
+  taaEnabled: boolean; // Derived from antiAliasingMode
+  taaHistoryBlendRate: number; // 0.0-1.0, lower = more smoothing
+  taaSharpeningEnabled: boolean;
+  taaSharpeningIntensity: number; // 0.0-1.0
 
   // Vignette
   vignetteEnabled: boolean;
@@ -186,6 +196,7 @@ export interface UIState {
   toggleGraphicsOptions: () => void;
   setGraphicsSetting: <K extends keyof GraphicsSettings>(key: K, value: GraphicsSettings[K]) => void;
   toggleGraphicsSetting: (key: keyof GraphicsSettings) => void;
+  setAntiAliasingMode: (mode: AntiAliasingMode) => void;
   setRendererAPI: (api: RendererAPI) => void;
   setPreferWebGPU: (prefer: boolean) => void;
   // Sound settings actions
@@ -256,8 +267,13 @@ export const useUIStore = create<UIState>((set, get) => ({
     bloomThreshold: 0.8,
     bloomRadius: 0.5,
 
-    // Anti-aliasing
-    fxaaEnabled: true,
+    // Anti-aliasing - TAA is the new default for best quality
+    antiAliasingMode: 'taa' as AntiAliasingMode,
+    fxaaEnabled: false, // Legacy, derived from antiAliasingMode
+    taaEnabled: true, // Derived from antiAliasingMode
+    taaHistoryBlendRate: 0.1, // Default blend rate (90% history, 10% current)
+    taaSharpeningEnabled: true, // Counter TAA blur with RCAS
+    taaSharpeningIntensity: 0.5, // Moderate sharpening
 
     // Vignette
     vignetteEnabled: true,
@@ -431,6 +447,16 @@ export const useUIStore = create<UIState>((set, get) => ({
       graphicsSettings: {
         ...state.graphicsSettings,
         [key]: !state.graphicsSettings[key],
+      },
+    })),
+
+  setAntiAliasingMode: (mode) =>
+    set((state) => ({
+      graphicsSettings: {
+        ...state.graphicsSettings,
+        antiAliasingMode: mode,
+        fxaaEnabled: mode === 'fxaa',
+        taaEnabled: mode === 'taa',
       },
     })),
 
