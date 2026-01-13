@@ -24,7 +24,6 @@ import {
   attribute,
   positionLocal,
   uniform,
-  select,
   float,
   abs,
 } from 'three/tsl';
@@ -35,6 +34,7 @@ import * as TSL from 'three/tsl';
 const modelWorldMatrix = (TSL as any).modelWorldMatrix;
 const modelViewMatrix = (TSL as any).modelViewMatrix;
 const cameraProjectionMatrix = (TSL as any).cameraProjectionMatrix;
+const select = (TSL as any).select;
 
 // WeakMap to track which meshes have velocity setup
 const velocitySetupMeshes = new WeakSet<THREE.InstancedMesh>();
