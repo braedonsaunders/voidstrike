@@ -276,10 +276,11 @@ export const useUIStore = create<UIState>((set, get) => ({
     bloomThreshold: 0.8,
     bloomRadius: 0.5,
 
-    // Anti-aliasing - TAA is the new default for best quality
-    antiAliasingMode: 'taa' as AntiAliasingMode,
-    fxaaEnabled: false, // Legacy, derived from antiAliasingMode
-    taaEnabled: true, // Derived from antiAliasingMode
+    // Anti-aliasing - FXAA is the safe default (works with all materials)
+    // TAA/TRAA requires velocity output from all materials, which standard materials don't support
+    antiAliasingMode: 'fxaa' as AntiAliasingMode,
+    fxaaEnabled: true, // Legacy, derived from antiAliasingMode
+    taaEnabled: false, // Derived from antiAliasingMode
     taaHistoryBlendRate: 0.1, // Default blend rate (90% history, 10% current)
     taaSharpeningEnabled: true, // Counter TAA blur with RCAS
     taaSharpeningIntensity: 0.5, // Moderate sharpening
