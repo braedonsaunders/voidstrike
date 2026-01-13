@@ -413,7 +413,7 @@ export default function Home() {
               className="group flex items-center gap-3 px-4 py-2 rounded-full
                        bg-white/[0.02] hover:bg-white/[0.05]
                        border border-white/[0.05] hover:border-white/[0.1]
-                       transition-all duration-300"
+                       transition-all duration-300 active:scale-[0.98]"
               title={preferWebGPU ? 'Using WebGPU (experimental)' : 'Using WebGL (stable)'}
             >
               {/* Label */}
@@ -423,38 +423,62 @@ export default function Home() {
 
               {/* Toggle Track */}
               <div className={`
-                relative w-14 h-6 rounded-full transition-all duration-300
+                relative w-[52px] h-7 rounded-full transition-all duration-300
                 ${preferWebGPU
-                  ? 'bg-gradient-to-r from-void-600/40 to-void-500/40 border-void-500/30'
-                  : 'bg-white/5 border-white/10'}
+                  ? 'bg-gradient-to-r from-void-600/50 to-void-500/50 border-void-500/40 shadow-[0_0_12px_rgba(132,61,255,0.15)]'
+                  : 'bg-white/[0.06] border-white/10'}
                 border
               `}>
-                {/* Toggle Knob */}
+                {/* Glow pulse on toggle */}
                 <div className={`
-                  absolute top-0.5 w-5 h-5 rounded-full
-                  transition-all duration-300 ease-out
-                  ${preferWebGPU
-                    ? 'left-[calc(100%-22px)] bg-gradient-to-br from-void-400 to-void-600 shadow-lg shadow-void-500/30'
-                    : 'left-0.5 bg-white/30'}
-                `}>
+                  absolute inset-0 rounded-full transition-opacity duration-500
+                  ${preferWebGPU ? 'opacity-100' : 'opacity-0'}
+                  bg-gradient-to-r from-void-500/20 to-void-400/20
+                  animate-pulse
+                `} style={{ animationDuration: '2s' }} />
+
+                {/* Toggle Knob */}
+                <div
+                  className={`
+                    absolute top-1 w-5 h-5 rounded-full
+                    transition-all duration-500
+                    ${preferWebGPU
+                      ? 'left-[27px] bg-gradient-to-br from-void-400 to-void-600 shadow-[0_0_8px_rgba(132,61,255,0.5)]'
+                      : 'left-1 bg-gradient-to-br from-white/50 to-white/30'}
+                  `}
+                  style={{
+                    transitionTimingFunction: 'cubic-bezier(0.34, 1.56, 0.64, 1)',
+                  }}
+                >
                   {/* Shine effect on knob */}
-                  <div className="absolute inset-0.5 rounded-full bg-gradient-to-b from-white/20 to-transparent" />
+                  <div className="absolute inset-0.5 rounded-full bg-gradient-to-b from-white/30 to-transparent" />
+                  {/* Inner dot */}
+                  <div className={`
+                    absolute inset-0 flex items-center justify-center
+                    transition-opacity duration-300
+                    ${preferWebGPU ? 'opacity-100' : 'opacity-50'}
+                  `}>
+                    <div className={`
+                      w-1.5 h-1.5 rounded-full
+                      ${preferWebGPU ? 'bg-white/40' : 'bg-white/20'}
+                    `} />
+                  </div>
                 </div>
 
-                {/* Labels inside track */}
+                {/* Labels inside track - positioned to avoid knob */}
                 <span className={`
-                  absolute left-1.5 top-1/2 -translate-y-1/2
-                  text-[8px] font-medium tracking-wider
-                  transition-opacity duration-200
-                  ${preferWebGPU ? 'opacity-0' : 'opacity-40'}
+                  absolute left-[7px] top-1/2 -translate-y-1/2
+                  text-[9px] font-semibold tracking-wide leading-none
+                  transition-all duration-300
+                  ${preferWebGPU ? 'opacity-50 text-void-300' : 'opacity-0 translate-x-1'}
                 `}>
                   GL
                 </span>
                 <span className={`
-                  absolute right-1.5 top-1/2 -translate-y-1/2
-                  text-[8px] font-medium tracking-wider
-                  transition-opacity duration-200
-                  ${preferWebGPU ? 'opacity-60 text-void-200' : 'opacity-0'}
+                  absolute right-[5px] top-1/2 -translate-y-1/2
+                  text-[9px] font-semibold tracking-wide leading-none
+                  transition-all duration-300
+                  ${preferWebGPU ? 'opacity-0 -translate-x-1' : 'opacity-40 text-white'}
                 `}>
                   GPU
                 </span>
@@ -462,8 +486,8 @@ export default function Home() {
 
               {/* Status indicator */}
               <span className={`
-                text-[10px] tracking-wider transition-colors duration-300
-                ${preferWebGPU ? 'text-void-400/60' : 'text-white/25'}
+                text-[10px] tracking-wider transition-all duration-300
+                ${preferWebGPU ? 'text-void-400/70' : 'text-white/30'}
               `}>
                 {preferWebGPU ? 'WebGPU' : 'WebGL'}
               </span>
