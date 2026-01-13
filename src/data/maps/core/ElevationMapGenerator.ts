@@ -963,7 +963,7 @@ export function generateMapWithResult(
   options?: GenerateMapOptions
 ): GenerateMapResult {
   const opts: Required<GenerateMapOptions> = {
-    validate: options?.validate ?? true,
+    validate: options?.validate ?? false,  // Disabled by default - expensive for static generation
     autoFix: options?.autoFix ?? true,
     verbose: options?.verbose ?? false,
   };
