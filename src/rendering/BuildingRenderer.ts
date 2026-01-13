@@ -379,15 +379,6 @@ export class BuildingRenderer {
       // Set up previous instance matrix attributes for TAA velocity
       setupInstancedVelocity(instancedMesh);
 
-      // DEBUG: Log InstancedMesh properties related to velocity
-      console.log('[BuildingRenderer] InstancedMesh created:', {
-        type: buildingType,
-        hasInstanceMatrix: !!instancedMesh.instanceMatrix,
-        instanceMatrixCount: instancedMesh.instanceMatrix?.count,
-        hasPreviousInstanceMatrix: !!(instancedMesh as any).previousInstanceMatrix,
-        geometryAttributes: Object.keys(instancedMesh.geometry.attributes),
-      });
-
       this.scene.add(instancedMesh);
 
       group = {

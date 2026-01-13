@@ -46,6 +46,7 @@ import {
   TSLFogOfWar,
   TSLGameOverlayManager,
 } from '@/rendering/tsl';
+import { initCameraMatrices, updateCameraMatrices } from '@/rendering/tsl/InstancedVelocity';
 
 import { useGameStore } from '@/store/gameStore';
 
@@ -446,6 +447,11 @@ export function WebGPUGameCanvas() {
             contrast: graphicsSettings.contrast,
           }
         );
+
+        // Initialize camera matrices for TAA velocity calculation
+        if (graphicsSettings.taaEnabled) {
+          initCameraMatrices(camera.camera);
+        }
       }
 
       // Configure shadows based on settings
@@ -746,26 +752,9 @@ export function WebGPUGameCanvas() {
         }
         const renderElapsed = performance.now() - renderStart;
 
-        // DEBUG: Check for previousInstanceMatrix after 60 frames (once)
-        if (frameCount === 60) {
-          console.log('[TAA DEBUG] Checking InstancedMesh properties after 60 frames...');
-          scene.traverse((obj) => {
-            if (obj instanceof THREE.InstancedMesh) {
-              const mesh = obj as THREE.InstancedMesh;
-              console.log('[TAA DEBUG] InstancedMesh found:', {
-                name: mesh.name || 'unnamed',
-                count: mesh.count,
-                hasPreviousInstanceMatrix: !!(mesh as any).previousInstanceMatrix,
-                previousInstanceMatrixType: (mesh as any).previousInstanceMatrix?.constructor?.name,
-                // Check if Three.js added any velocity-related properties
-                hasUserData: !!mesh.userData,
-                userData: mesh.userData,
-                // Check material
-                materialType: (mesh.material as any)?.type || 'unknown',
-                isMeshStandardMaterial: mesh.material instanceof THREE.MeshStandardMaterial,
-              });
-            }
-          });
+        // Update camera matrices for TAA velocity calculation (after render, for next frame)
+        if (renderPipelineRef.current?.isTAAEnabled()) {
+          updateCameraMatrices(camera.camera);
         }
 
         const frameElapsed = performance.now() - frameStart;
@@ -1645,6 +1634,11 @@ export function WebGPUGameCanvas() {
               contrast: settings.contrast,
             }
           );
+
+          // Initialize camera matrices for TAA velocity calculation
+          if (settings.taaEnabled) {
+            initCameraMatrices(cameraRef.current.camera);
+          }
         }
       }
 
