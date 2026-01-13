@@ -183,8 +183,35 @@ export class RenderPipeline {
     this.renderer.getSize(size);
     this.uResolution.value.set(Math.max(1, size.x), Math.max(1, size.y));
 
+    // Create zero-velocity texture once for TRAA (reused across rebuilds)
+    // This avoids MRT issues with materials that don't output velocity
+    this.initZeroVelocityTexture();
+
     this.postProcessing = this.createPipeline();
     this.applyConfig(this.config);
+  }
+
+  /**
+   * Initialize zero-velocity texture for TRAA
+   * Created once and reused to avoid WebGPU texture re-initialization errors
+   */
+  private initZeroVelocityTexture(): void {
+    // Create a 2x2 RGBA texture filled with zeros (velocity = 0)
+    const velocityData = new Float32Array([
+      0, 0, 0, 0,  // pixel (0,0)
+      0, 0, 0, 0,  // pixel (1,0)
+      0, 0, 0, 0,  // pixel (0,1)
+      0, 0, 0, 0,  // pixel (1,1)
+    ]);
+    this.zeroVelocityTexture = new THREE.DataTexture(
+      velocityData,
+      2, 2,
+      THREE.RGBAFormat,
+      THREE.FloatType
+    );
+    this.zeroVelocityTexture.minFilter = THREE.NearestFilter;
+    this.zeroVelocityTexture.magFilter = THREE.NearestFilter;
+    this.zeroVelocityTexture.needsUpdate = true;
   }
 
   private createPipeline(): PostProcessing {
@@ -266,7 +293,7 @@ export class RenderPipeline {
     // TRAA's depth threshold and neighborhood clamping handle disocclusion and prevent ghosting.
     if (this.config.antiAliasingMode === 'taa' && this.config.taaEnabled) {
       try {
-        // Create a zero-velocity DataTexture for TRAA
+        // Use zero-velocity texture for TRAA
         // This avoids MRT issues with materials that don't output velocity
         // (MeshBasicMaterial, PointsMaterial, SpriteMaterial, etc.)
         // TRAA still works because:
@@ -274,26 +301,9 @@ export class RenderPipeline {
         // 2. Depth threshold invalidates history on depth changes
         // 3. Neighborhood clamping prevents ghosting
 
-        // Create a 2x2 RG texture filled with zeros (velocity = 0)
-        // Using RGFormat since velocity is 2D (x, y motion vectors)
-        const velocityData = new Float32Array([
-          0, 0, 0, 0,  // pixel (0,0) RG
-          0, 0, 0, 0,  // pixel (1,0) RG
-          0, 0, 0, 0,  // pixel (0,1) RG
-          0, 0, 0, 0,  // pixel (1,1) RG
-        ]);
-        this.zeroVelocityTexture = new THREE.DataTexture(
-          velocityData,
-          2, 2,
-          THREE.RGBAFormat,
-          THREE.FloatType
-        );
-        this.zeroVelocityTexture.minFilter = THREE.NearestFilter;
-        this.zeroVelocityTexture.magFilter = THREE.NearestFilter;
-        this.zeroVelocityTexture.needsUpdate = true;
-
-        // Wrap texture in TSL texture node
-        const zeroVelocityNode = texture(this.zeroVelocityTexture);
+        // Wrap the pre-created texture in TSL texture node
+        // (texture is created once in constructor to avoid WebGPU re-init errors)
+        const zeroVelocityNode = texture(this.zeroVelocityTexture!);
 
         // Use Three.js's proven TRAA (Temporal Reprojection Anti-Aliasing) implementation
         this.traaPass = traa(outputNode, scenePassDepth, zeroVelocityNode, this.camera);
@@ -408,15 +418,13 @@ export class RenderPipeline {
    * Rebuild the pipeline when effects are toggled
    */
   rebuild(): void {
-    // Dispose old TRAA pass and zero-velocity texture
+    // Dispose old TRAA pass (but keep zero-velocity texture - it's reused)
     if (this.traaPass) {
       this.traaPass.dispose();
       this.traaPass = null;
     }
-    if (this.zeroVelocityTexture) {
-      this.zeroVelocityTexture.dispose();
-      this.zeroVelocityTexture = null;
-    }
+    // Note: zeroVelocityTexture is NOT disposed here - it's reused across rebuilds
+    // to avoid WebGPU "Texture already initialized" errors
     this.postProcessing = this.createPipeline();
   }
 
