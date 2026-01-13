@@ -688,7 +688,7 @@ function SelectedObjectPanel({
                   <div className="flex justify-between text-[10px] mb-1">
                     <span style={{ color: config.theme.text.muted }}>{prop.name}</span>
                     <span className="font-mono" style={{ color: config.theme.text.secondary }}>
-                      {typeof currentValue === 'number' ? currentValue.toFixed(2) : currentValue}
+                      {typeof currentValue === 'number' ? currentValue.toFixed(2) : String(currentValue)}
                     </span>
                   </div>
                   <input
