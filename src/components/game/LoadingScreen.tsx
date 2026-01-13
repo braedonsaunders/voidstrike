@@ -10,13 +10,19 @@ import { ShaderPass } from 'three/examples/jsm/postprocessing/ShaderPass.js';
 interface LoadingScreenProps {
   progress: number;
   status: string;
+  onComplete?: () => void;
 }
+
+// Phase of the loading screen
+type LoadingPhase = 'loading' | 'fadeOut' | 'countdown' | 'complete';
 
 // Epic void nebula shader with wormhole effect
 const VoidNebulaShader = {
   uniforms: {
     uTime: { value: 0 },
     uProgress: { value: 0 },
+    uBrightness: { value: 0 },
+    uFlicker: { value: 0 },
     uMouse: { value: new THREE.Vector2(0.5, 0.5) },
   },
   vertexShader: `
@@ -29,6 +35,8 @@ const VoidNebulaShader = {
   fragmentShader: `
     uniform float uTime;
     uniform float uProgress;
+    uniform float uBrightness;
+    uniform float uFlicker;
     uniform vec2 uMouse;
     varying vec2 vUv;
 
@@ -98,9 +106,9 @@ const VoidNebulaShader = {
       float dist = length(toCenter);
       float angle = atan(toCenter.y, toCenter.x);
 
-      // Wormhole distortion - intensifies with progress
-      float wormholeStrength = 0.15 + uProgress * 0.25;
-      float spiral = angle + dist * 5.0 - uTime * (0.3 + uProgress * 0.5);
+      // Wormhole distortion - intensifies with brightness (not loading progress)
+      float wormholeStrength = 0.15 + uBrightness * 0.25;
+      float spiral = angle + dist * 5.0 - uTime * (0.3 + uBrightness * 0.5);
       float wormholeEffect = sin(spiral * 3.0) * wormholeStrength * (1.0 - dist * 1.5);
 
       vec2 distortedUv = uv + normalize(toCenter) * wormholeEffect * 0.1;
@@ -124,14 +132,14 @@ const VoidNebulaShader = {
       vec3 color = mix(color1, color2, nebula);
       color = mix(color, color3, pow(nebula, 2.0) * 0.4);
 
-      // Central vortex glow - increases with progress
-      float vortexIntensity = 0.3 + uProgress * 0.7;
-      float vortex = 1.0 - smoothstep(0.0, 0.4 + uProgress * 0.1, dist);
+      // Central vortex glow - increases with brightness
+      float vortexIntensity = 0.3 + uBrightness * 0.7;
+      float vortex = 1.0 - smoothstep(0.0, 0.4 + uBrightness * 0.1, dist);
       vortex *= vortexIntensity;
 
       // Pulsing ring effect
       float ringDist = abs(dist - 0.25 - sin(uTime * 2.0) * 0.03);
-      float ring = smoothstep(0.02 + uProgress * 0.01, 0.0, ringDist) * (0.5 + uProgress * 0.5);
+      float ring = smoothstep(0.02 + uBrightness * 0.01, 0.0, ringDist) * (0.5 + uBrightness * 0.5);
 
       // Add energy color to vortex center
       vec3 energyColor = vec3(0.4, 0.6, 1.0);
@@ -146,8 +154,12 @@ const VoidNebulaShader = {
       float vignette = 1.0 - smoothstep(0.3, 0.9, dist);
       color *= vignette;
 
-      // Progress-based brightness boost
-      color *= 0.8 + uProgress * 0.4;
+      // Brightness-based intensity boost (decoupled from loading)
+      float brightnessBoost = 0.6 + uBrightness * 0.6;
+      color *= brightnessBoost;
+
+      // Flicker effect - subtle random brightness variation
+      color *= (1.0 + uFlicker * 0.15);
 
       gl_FragColor = vec4(color, 1.0);
     }
@@ -159,6 +171,7 @@ const WormholeShader = {
   uniforms: {
     uTime: { value: 0 },
     uProgress: { value: 0 },
+    uBrightness: { value: 0 },
   },
   vertexShader: `
     varying vec2 vUv;
@@ -170,6 +183,7 @@ const WormholeShader = {
   fragmentShader: `
     uniform float uTime;
     uniform float uProgress;
+    uniform float uBrightness;
     varying vec2 vUv;
 
     void main() {
@@ -178,8 +192,8 @@ const WormholeShader = {
       float dist = length(uv);
       float angle = atan(uv.y, uv.x);
 
-      // Rotating tunnel rings
-      float tunnelSpeed = 2.0 + uProgress * 3.0;
+      // Rotating tunnel rings - use brightness for intensity
+      float tunnelSpeed = 2.0 + uBrightness * 3.0;
       float rings = sin((dist * 20.0 - uTime * tunnelSpeed) + angle * 2.0);
       rings = smoothstep(0.0, 1.0, rings);
 
@@ -196,9 +210,9 @@ const WormholeShader = {
       float core = 1.0 - smoothstep(0.0, 0.15, dist);
       core = pow(core, 2.0);
 
-      // Combine effects
+      // Combine effects - use brightness
       float intensity = (rings * 0.3 + spiral * 0.5 + core) * fade;
-      intensity *= 0.5 + uProgress * 0.5;
+      intensity *= 0.5 + uBrightness * 0.5;
 
       // Color gradient: cyan core -> purple edges
       vec3 coreColor = vec3(0.3, 0.8, 1.0);
@@ -216,7 +230,7 @@ const ChromaticAberrationShader = {
     tDiffuse: { value: null },
     uIntensity: { value: 0.004 },
     uTime: { value: 0 },
-    uProgress: { value: 0 },
+    uBrightness: { value: 0 },
   },
   vertexShader: `
     varying vec2 vUv;
@@ -229,7 +243,7 @@ const ChromaticAberrationShader = {
     uniform sampler2D tDiffuse;
     uniform float uIntensity;
     uniform float uTime;
-    uniform float uProgress;
+    uniform float uBrightness;
     varying vec2 vUv;
 
     void main() {
@@ -237,8 +251,8 @@ const ChromaticAberrationShader = {
       vec2 dir = vUv - center;
       float dist = length(dir);
 
-      // Reduce aberration as loading completes
-      float intensity = uIntensity * (1.5 - uProgress * 0.5);
+      // Aberration varies with brightness
+      float intensity = uIntensity * (1.5 - uBrightness * 0.3);
       intensity *= (1.0 + sin(uTime * 0.5) * 0.15);
       vec2 offset = dir * dist * intensity;
 
@@ -256,7 +270,7 @@ const ScanlineShader = {
   uniforms: {
     tDiffuse: { value: null },
     uTime: { value: 0 },
-    uProgress: { value: 0 },
+    uBrightness: { value: 0 },
   },
   vertexShader: `
     varying vec2 vUv;
@@ -268,14 +282,14 @@ const ScanlineShader = {
   fragmentShader: `
     uniform sampler2D tDiffuse;
     uniform float uTime;
-    uniform float uProgress;
+    uniform float uBrightness;
     varying vec2 vUv;
 
     void main() {
       vec4 color = texture2D(tDiffuse, vUv);
 
-      // Subtle scanlines
-      float scanline = sin(vUv.y * 400.0) * 0.02 * (1.0 - uProgress * 0.5);
+      // Subtle scanlines - reduce as brightness increases
+      float scanline = sin(vUv.y * 400.0) * 0.02 * (1.0 - uBrightness * 0.5);
       color.rgb -= scanline;
 
       // Moving scan beam
@@ -302,14 +316,7 @@ interface Asteroid {
   verticalOffset: number;
 }
 
-interface EnergyParticle {
-  position: THREE.Vector3;
-  velocity: THREE.Vector3;
-  life: number;
-  maxLife: number;
-}
-
-export function LoadingScreen({ progress, status }: LoadingScreenProps) {
+export function LoadingScreen({ progress, status, onComplete }: LoadingScreenProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const sceneRef = useRef<THREE.Scene | null>(null);
   const cameraRef = useRef<THREE.PerspectiveCamera | null>(null);
@@ -325,13 +332,36 @@ export function LoadingScreen({ progress, status }: LoadingScreenProps) {
   const energyRingsRef = useRef<THREE.Mesh[]>([]);
   const particleSystemRef = useRef<THREE.Points | null>(null);
   const progressRef = useRef(progress);
+
+  // Independent visual animation state
+  const [visualBrightness, setVisualBrightness] = useState(0);
+  const [flickerValue, setFlickerValue] = useState(0);
+  const [phase, setPhase] = useState<LoadingPhase>('loading');
+  const [countdownNumber, setCountdownNumber] = useState<number | null>(null);
+  const [fadeOpacity, setFadeOpacity] = useState(0);
   const [dots, setDots] = useState('');
   const [isVisible, setIsVisible] = useState(false);
 
-  // Update progress ref for animation loop
+  const visualBrightnessRef = useRef(0);
+  const flickerRef = useRef(0);
+  const phaseRef = useRef<LoadingPhase>('loading');
+
+  // Update refs for animation loop
   useEffect(() => {
     progressRef.current = progress;
   }, [progress]);
+
+  useEffect(() => {
+    visualBrightnessRef.current = visualBrightness;
+  }, [visualBrightness]);
+
+  useEffect(() => {
+    flickerRef.current = flickerValue;
+  }, [flickerValue]);
+
+  useEffect(() => {
+    phaseRef.current = phase;
+  }, [phase]);
 
   // Entrance animation
   useEffect(() => {
@@ -341,11 +371,112 @@ export function LoadingScreen({ progress, status }: LoadingScreenProps) {
 
   // Animate loading dots
   useEffect(() => {
+    if (phase !== 'loading') return;
     const interval = setInterval(() => {
       setDots((prev) => (prev.length >= 3 ? '' : prev + '.'));
     }, 350);
     return () => clearInterval(interval);
+  }, [phase]);
+
+  // Independent brightness animation - smooth ramp over ~8 seconds with easing
+  useEffect(() => {
+    const startTime = Date.now();
+    const duration = 8000; // 8 seconds to reach full brightness
+
+    const animateBrightness = () => {
+      if (phaseRef.current !== 'loading') return;
+
+      const elapsed = Date.now() - startTime;
+      const t = Math.min(elapsed / duration, 1);
+      // Ease-out cubic for smooth deceleration
+      const eased = 1 - Math.pow(1 - t, 3);
+      setVisualBrightness(eased);
+
+      if (t < 1) {
+        requestAnimationFrame(animateBrightness);
+      }
+    };
+
+    requestAnimationFrame(animateBrightness);
   }, []);
+
+  // Flicker effect - random subtle brightness variations
+  useEffect(() => {
+    if (phase !== 'loading') return;
+
+    const flickerInterval = setInterval(() => {
+      // Random flicker: mostly subtle, occasionally more intense
+      const intensity = Math.random();
+      if (intensity > 0.95) {
+        // Rare bright flash
+        setFlickerValue(0.3 + Math.random() * 0.2);
+      } else if (intensity > 0.85) {
+        // Occasional medium flicker
+        setFlickerValue(0.1 + Math.random() * 0.15);
+      } else {
+        // Normal subtle variation
+        setFlickerValue((Math.random() - 0.5) * 0.1);
+      }
+    }, 100);
+
+    return () => clearInterval(flickerInterval);
+  }, [phase]);
+
+  // Transition to fadeOut when loading completes
+  useEffect(() => {
+    if (progress >= 100 && phase === 'loading') {
+      // Brief pause at full brightness, then start fade
+      const timer = setTimeout(() => {
+        setPhase('fadeOut');
+      }, 500);
+      return () => clearTimeout(timer);
+    }
+  }, [progress, phase]);
+
+  // Fade to black animation
+  useEffect(() => {
+    if (phase !== 'fadeOut') return;
+
+    const startTime = Date.now();
+    const duration = 1500; // 1.5 second fade to black
+
+    const animateFade = () => {
+      const elapsed = Date.now() - startTime;
+      const t = Math.min(elapsed / duration, 1);
+      // Ease-in for dramatic effect
+      const eased = t * t;
+      setFadeOpacity(eased);
+
+      if (t < 1) {
+        requestAnimationFrame(animateFade);
+      } else {
+        // Fade complete, start countdown
+        setPhase('countdown');
+        setCountdownNumber(3);
+      }
+    };
+
+    requestAnimationFrame(animateFade);
+  }, [phase]);
+
+  // Countdown sequence
+  useEffect(() => {
+    if (phase !== 'countdown' || countdownNumber === null) return;
+
+    if (countdownNumber > 0) {
+      const timer = setTimeout(() => {
+        setCountdownNumber(countdownNumber - 1);
+      }, 800);
+      return () => clearTimeout(timer);
+    } else {
+      // Countdown complete
+      const timer = setTimeout(() => {
+        setPhase('complete');
+        onComplete?.();
+      }, 500);
+      return () => clearTimeout(timer);
+    }
+  }, [phase, countdownNumber, onComplete]);
 
   // Loading stage thresholds
   const loadingStages = useMemo(() => [
@@ -601,14 +732,14 @@ export function LoadingScreen({ progress, status }: LoadingScreenProps) {
     const material = new THREE.ShaderMaterial({
       uniforms: {
         uTime: { value: 0 },
-        uProgress: { value: 0 },
+        uBrightness: { value: 0 },
         uPixelRatio: { value: Math.min(window.devicePixelRatio, 2) },
       },
       vertexShader: `
         attribute float size;
         attribute float lifetime;
         uniform float uTime;
-        uniform float uProgress;
+        uniform float uBrightness;
         uniform float uPixelRatio;
         varying float vAlpha;
         varying float vLife;
@@ -619,10 +750,10 @@ export function LoadingScreen({ progress, status }: LoadingScreenProps) {
 
           float fadeIn = smoothstep(0.0, 0.2, lifetime);
           float fadeOut = 1.0 - smoothstep(0.8, 1.0, lifetime);
-          vAlpha = fadeIn * fadeOut * (0.5 + uProgress * 0.5);
+          vAlpha = fadeIn * fadeOut * (0.5 + uBrightness * 0.5);
 
-          float speedMultiplier = 1.0 + uProgress * 2.0;
-          gl_PointSize = size * uPixelRatio * (80.0 / -mvPosition.z) * (1.0 + uProgress * 0.5);
+          float speedMultiplier = 1.0 + uBrightness * 2.0;
+          gl_PointSize = size * uPixelRatio * (80.0 / -mvPosition.z) * (1.0 + uBrightness * 0.5);
           gl_Position = projectionMatrix * mvPosition;
         }
       `,
@@ -710,7 +841,7 @@ export function LoadingScreen({ progress, status }: LoadingScreenProps) {
     const velArray = velocities.array as Float32Array;
     const lifeArray = lifetimes.array as Float32Array;
 
-    const speedMult = 1 + progressRef.current / 100 * 2;
+    const speedMult = 1 + visualBrightnessRef.current * 2;
 
     for (let i = 0; i < lifeArray.length; i++) {
       const i3 = i * 3;
@@ -804,22 +935,24 @@ export function LoadingScreen({ progress, status }: LoadingScreenProps) {
       animationRef.current = requestAnimationFrame(animate);
       timeRef.current += 0.016;
       const time = timeRef.current;
-      const prog = progressRef.current / 100;
+      const brightness = visualBrightnessRef.current;
+      const flicker = flickerRef.current;
 
-      // Update nebula
+      // Update nebula with independent brightness
       if (nebulaRef.current) {
         const mat = nebulaRef.current.material as THREE.ShaderMaterial;
         mat.uniforms.uTime.value = time;
-        mat.uniforms.uProgress.value = prog;
+        mat.uniforms.uBrightness.value = brightness;
+        mat.uniforms.uFlicker.value = flicker;
         mat.uniforms.uMouse.value.set(mouseRef.current.x, mouseRef.current.y);
       }
 
-      // Update wormhole
+      // Update wormhole with brightness
       if (wormholeRef.current) {
         const mat = wormholeRef.current.material as THREE.ShaderMaterial;
         mat.uniforms.uTime.value = time;
-        mat.uniforms.uProgress.value = prog;
-        wormholeRef.current.scale.setScalar(1 + prog * 0.3);
+        mat.uniforms.uBrightness.value = brightness;
+        wormholeRef.current.scale.setScalar(1 + brightness * 0.3);
       }
 
       // Update stars
@@ -833,9 +966,9 @@ export function LoadingScreen({ progress, status }: LoadingScreenProps) {
       // Update energy rings
       energyRingsRef.current.forEach((ring, i) => {
         const direction = i % 2 === 0 ? 1 : -1;
-        ring.rotation.z += 0.002 * direction * (1 + prog * 2);
+        ring.rotation.z += 0.002 * direction * (1 + brightness * 2);
         const mat = ring.material as THREE.MeshBasicMaterial;
-        mat.opacity = (0.3 - i * 0.05) * (0.5 + prog * 0.5);
+        mat.opacity = (0.3 - i * 0.05) * (0.5 + brightness * 0.5);
       });
 
       // Update asteroids
@@ -855,7 +988,7 @@ export function LoadingScreen({ progress, status }: LoadingScreenProps) {
       if (particleSystemRef.current) {
         const mat = particleSystemRef.current.material as THREE.ShaderMaterial;
         mat.uniforms.uTime.value = time;
-        mat.uniforms.uProgress.value = prog;
+        mat.uniforms.uBrightness.value = brightness;
       }
 
       // Camera breathing and mouse follow
@@ -867,16 +1000,16 @@ export function LoadingScreen({ progress, status }: LoadingScreenProps) {
       camera.position.y += Math.cos(time * 0.2) * 0.015;
       camera.lookAt(0, 0, -10);
 
-      // Update post-processing
+      // Update post-processing with brightness
       const chromaticPass = composer.passes[2] as ShaderPass;
       if (chromaticPass?.uniforms) {
         chromaticPass.uniforms.uTime.value = time;
-        chromaticPass.uniforms.uProgress.value = prog;
+        chromaticPass.uniforms.uBrightness.value = brightness;
       }
       const scanlinePass = composer.passes[3] as ShaderPass;
       if (scanlinePass?.uniforms) {
         scanlinePass.uniforms.uTime.value = time;
-        scanlinePass.uniforms.uProgress.value = prog;
+        scanlinePass.uniforms.uBrightness.value = brightness;
       }
 
       composer.render();
@@ -905,158 +1038,215 @@ export function LoadingScreen({ progress, status }: LoadingScreenProps) {
     updateParticles,
   ]);
 
+  // Render countdown number with dramatic styling
+  const renderCountdown = () => {
+    if (countdownNumber === null) return null;
+
+    const number = countdownNumber === 0 ? 'GO' : countdownNumber.toString();
+    const color = countdownNumber === 0 ? '#40ffff' : '#a855f7';
+
+    return (
+      <div
+        key={countdownNumber}
+        className="absolute inset-0 flex items-center justify-center z-30"
+        style={{
+          animation: 'countdownPulse 0.8s ease-out forwards',
+        }}
+      >
+        <span
+          className="font-black tracking-wider"
+          style={{
+            fontSize: countdownNumber === 0 ? '20vw' : '25vw',
+            background: `linear-gradient(135deg, ${color} 0%, #60a0ff 50%, ${color} 100%)`,
+            WebkitBackgroundClip: 'text',
+            WebkitTextFillColor: 'transparent',
+            filter: `drop-shadow(0 0 60px ${color}) drop-shadow(0 0 120px ${color})`,
+            textShadow: `0 0 100px ${color}`,
+          }}
+        >
+          {number}
+        </span>
+      </div>
+    );
+  };
+
   return (
     <div className="fixed inset-0 z-50 overflow-hidden">
       {/* Three.js canvas container */}
       <div ref={containerRef} className="absolute inset-0" style={{ background: '#030008' }} />
 
-      {/* UI Overlay */}
-      <div
-        className={`absolute inset-0 flex items-center justify-center transition-opacity duration-1000 ${
-          isVisible ? 'opacity-100' : 'opacity-0'
-        }`}
-      >
-        <div className="relative z-10 flex flex-col items-center gap-6 p-8 max-w-2xl w-full">
-          {/* Title */}
-          <div className="text-center mb-4">
-            <h1
-              className="text-7xl font-black tracking-[0.2em] mb-3 relative"
-              style={{
-                background: 'linear-gradient(135deg, #60a0ff 0%, #a855f7 50%, #40ffff 100%)',
-                WebkitBackgroundClip: 'text',
-                WebkitTextFillColor: 'transparent',
-                filter: 'drop-shadow(0 0 30px rgba(168, 85, 247, 0.6)) drop-shadow(0 0 60px rgba(96, 160, 255, 0.4))',
-              }}
-            >
-              VOIDSTRIKE
-            </h1>
-            <div
-              className="text-sm tracking-[0.4em] uppercase font-medium"
-              style={{
-                color: 'rgba(160, 180, 255, 0.8)',
-                textShadow: '0 0 20px rgba(160, 180, 255, 0.4)',
-              }}
-            >
-              Initializing Combat Systems
-            </div>
-          </div>
-
-          {/* Loading stages */}
-          <div className="flex gap-3 mb-4">
-            {loadingStages.map((stage, i) => {
-              const isComplete = progress >= stage.threshold;
-              const isActive = progress >= (loadingStages[i - 1]?.threshold || 0) && progress < stage.threshold;
-              return (
-                <div
-                  key={stage.name}
-                  className={`relative px-4 py-2 rounded-sm text-xs font-mono font-bold tracking-wider transition-all duration-500 border ${
-                    isComplete
-                      ? 'bg-cyan-500/20 text-cyan-300 border-cyan-500/50'
-                      : isActive
-                      ? 'bg-purple-500/20 text-purple-300 border-purple-500/50'
-                      : 'bg-void-900/30 text-void-600 border-void-700/30'
-                  }`}
-                  style={{
-                    boxShadow: isComplete
-                      ? '0 0 20px rgba(6, 182, 212, 0.3), inset 0 0 10px rgba(6, 182, 212, 0.1)'
-                      : isActive
-                      ? '0 0 20px rgba(168, 85, 247, 0.3), inset 0 0 10px rgba(168, 85, 247, 0.1)'
-                      : 'none',
-                  }}
-                >
-                  {stage.name}
-                  {isActive && (
-                    <div className="absolute inset-0 rounded-sm animate-pulse bg-purple-500/10" />
-                  )}
-                </div>
-              );
-            })}
-          </div>
-
-          {/* Progress bar */}
-          <div className="w-full max-w-md">
-            <div
-              className="relative h-2 rounded-full overflow-hidden"
-              style={{
-                background: 'rgba(10, 10, 30, 0.8)',
-                border: '1px solid rgba(100, 130, 200, 0.2)',
-                boxShadow: 'inset 0 2px 8px rgba(0, 0, 0, 0.5)',
-              }}
-            >
-              {/* Animated background */}
-              <div
-                className="absolute inset-0"
+      {/* UI Overlay - only show during loading phase */}
+      {phase === 'loading' && (
+        <div
+          className={`absolute inset-0 flex items-center justify-center transition-opacity duration-1000 ${
+            isVisible ? 'opacity-100' : 'opacity-0'
+          }`}
+        >
+          <div className="relative z-10 flex flex-col items-center gap-6 p-8 max-w-2xl w-full">
+            {/* Title */}
+            <div className="text-center mb-4">
+              <h1
+                className="text-7xl font-black tracking-[0.2em] mb-3 relative"
                 style={{
-                  background: 'linear-gradient(90deg, transparent, rgba(100, 150, 255, 0.1), transparent)',
-                  backgroundSize: '200% 100%',
-                  animation: 'shimmer 1.5s infinite linear',
-                }}
-              />
-              {/* Progress fill */}
-              <div
-                className="h-full rounded-full transition-all duration-300 ease-out relative"
-                style={{
-                  width: `${progress}%`,
-                  background: 'linear-gradient(90deg, #3b82f6, #8b5cf6, #06b6d4)',
-                  boxShadow: '0 0 20px rgba(139, 92, 246, 0.6), 0 0 40px rgba(96, 160, 255, 0.4)',
+                  background: 'linear-gradient(135deg, #60a0ff 0%, #a855f7 50%, #40ffff 100%)',
+                  WebkitBackgroundClip: 'text',
+                  WebkitTextFillColor: 'transparent',
+                  filter: 'drop-shadow(0 0 30px rgba(168, 85, 247, 0.6)) drop-shadow(0 0 60px rgba(96, 160, 255, 0.4))',
                 }}
               >
-                {/* Glow tip */}
-                <div
-                  className="absolute right-0 top-1/2 -translate-y-1/2 w-4 h-4 -mr-2 rounded-full"
-                  style={{
-                    background: 'radial-gradient(circle, rgba(255,255,255,0.9) 0%, rgba(6,182,212,0.5) 50%, transparent 70%)',
-                    filter: 'blur(2px)',
-                  }}
-                />
+                VOIDSTRIKE
+              </h1>
+              <div
+                className="text-sm tracking-[0.4em] uppercase font-medium"
+                style={{
+                  color: 'rgba(160, 180, 255, 0.8)',
+                  textShadow: '0 0 20px rgba(160, 180, 255, 0.4)',
+                }}
+              >
+                Initializing Combat Systems
               </div>
             </div>
 
-            {/* Status and percentage */}
-            <div className="flex items-center justify-between mt-3 px-1">
-              <span
-                className="text-sm font-medium tracking-wide"
+            {/* Loading stages */}
+            <div className="flex gap-3 mb-4">
+              {loadingStages.map((stage, i) => {
+                const isComplete = progress >= stage.threshold;
+                const isActive = progress >= (loadingStages[i - 1]?.threshold || 0) && progress < stage.threshold;
+                return (
+                  <div
+                    key={stage.name}
+                    className={`relative px-4 py-2 rounded-sm text-xs font-mono font-bold tracking-wider transition-all duration-500 border ${
+                      isComplete
+                        ? 'bg-cyan-500/20 text-cyan-300 border-cyan-500/50'
+                        : isActive
+                        ? 'bg-purple-500/20 text-purple-300 border-purple-500/50'
+                        : 'bg-void-900/30 text-void-600 border-void-700/30'
+                    }`}
+                    style={{
+                      boxShadow: isComplete
+                        ? '0 0 20px rgba(6, 182, 212, 0.3), inset 0 0 10px rgba(6, 182, 212, 0.1)'
+                        : isActive
+                        ? '0 0 20px rgba(168, 85, 247, 0.3), inset 0 0 10px rgba(168, 85, 247, 0.1)'
+                        : 'none',
+                    }}
+                  >
+                    {stage.name}
+                    {isActive && (
+                      <div className="absolute inset-0 rounded-sm animate-pulse bg-purple-500/10" />
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+
+            {/* Progress bar */}
+            <div className="w-full max-w-md">
+              <div
+                className="relative h-2 rounded-full overflow-hidden"
                 style={{
-                  color: 'rgba(180, 190, 220, 0.9)',
-                  textShadow: '0 0 10px rgba(100, 150, 255, 0.3)',
+                  background: 'rgba(10, 10, 30, 0.8)',
+                  border: '1px solid rgba(100, 130, 200, 0.2)',
+                  boxShadow: 'inset 0 2px 8px rgba(0, 0, 0, 0.5)',
                 }}
               >
-                {status}{dots}
-              </span>
-              <span
-                className="text-lg font-mono font-bold tracking-wider"
+                {/* Animated background */}
+                <div
+                  className="absolute inset-0"
+                  style={{
+                    background: 'linear-gradient(90deg, transparent, rgba(100, 150, 255, 0.1), transparent)',
+                    backgroundSize: '200% 100%',
+                    animation: 'shimmer 1.5s infinite linear',
+                  }}
+                />
+                {/* Progress fill */}
+                <div
+                  className="h-full rounded-full transition-all duration-300 ease-out relative"
+                  style={{
+                    width: `${progress}%`,
+                    background: 'linear-gradient(90deg, #3b82f6, #8b5cf6, #06b6d4)',
+                    boxShadow: '0 0 20px rgba(139, 92, 246, 0.6), 0 0 40px rgba(96, 160, 255, 0.4)',
+                  }}
+                >
+                  {/* Glow tip */}
+                  <div
+                    className="absolute right-0 top-1/2 -translate-y-1/2 w-4 h-4 -mr-2 rounded-full"
+                    style={{
+                      background: 'radial-gradient(circle, rgba(255,255,255,0.9) 0%, rgba(6,182,212,0.5) 50%, transparent 70%)',
+                      filter: 'blur(2px)',
+                    }}
+                  />
+                </div>
+              </div>
+
+              {/* Status and percentage */}
+              <div className="flex items-center justify-between mt-3 px-1">
+                <span
+                  className="text-sm font-medium tracking-wide"
+                  style={{
+                    color: 'rgba(180, 190, 220, 0.9)',
+                    textShadow: '0 0 10px rgba(100, 150, 255, 0.3)',
+                  }}
+                >
+                  {status}{dots}
+                </span>
+                <span
+                  className="text-lg font-mono font-bold tracking-wider"
+                  style={{
+                    background: 'linear-gradient(135deg, #40ffff, #60a0ff)',
+                    WebkitBackgroundClip: 'text',
+                    WebkitTextFillColor: 'transparent',
+                    filter: 'drop-shadow(0 0 8px rgba(64, 255, 255, 0.5))',
+                  }}
+                >
+                  {Math.round(progress)}%
+                </span>
+              </div>
+            </div>
+
+            {/* Quote */}
+            <div className="mt-8 text-center">
+              <p
+                className="text-xs italic tracking-wide"
                 style={{
-                  background: 'linear-gradient(135deg, #40ffff, #60a0ff)',
-                  WebkitBackgroundClip: 'text',
-                  WebkitTextFillColor: 'transparent',
-                  filter: 'drop-shadow(0 0 8px rgba(64, 255, 255, 0.5))',
+                  color: 'rgba(140, 150, 180, 0.6)',
+                  textShadow: '0 0 10px rgba(0, 0, 0, 0.5)',
                 }}
               >
-                {Math.round(progress)}%
-              </span>
+                &quot;In the void, only the prepared survive.&quot;
+              </p>
             </div>
           </div>
-
-          {/* Quote */}
-          <div className="mt-8 text-center">
-            <p
-              className="text-xs italic tracking-wide"
-              style={{
-                color: 'rgba(140, 150, 180, 0.6)',
-                textShadow: '0 0 10px rgba(0, 0, 0, 0.5)',
-              }}
-            >
-              &quot;In the void, only the prepared survive.&quot;
-            </p>
-          </div>
         </div>
-      </div>
+      )}
 
-      {/* Shimmer animation */}
+      {/* Fade to black overlay */}
+      <div
+        className="absolute inset-0 bg-black pointer-events-none z-20 transition-opacity"
+        style={{ opacity: fadeOpacity }}
+      />
+
+      {/* Countdown display */}
+      {phase === 'countdown' && renderCountdown()}
+
+      {/* Animations */}
       <style jsx>{`
         @keyframes shimmer {
           0% { background-position: 200% 0; }
           100% { background-position: -200% 0; }
+        }
+        @keyframes countdownPulse {
+          0% {
+            transform: scale(0.5);
+            opacity: 0;
+          }
+          30% {
+            transform: scale(1.1);
+            opacity: 1;
+          }
+          100% {
+            transform: scale(1);
+            opacity: 1;
+          }
         }
       `}</style>
     </div>
