@@ -16,6 +16,8 @@ import {
   DecorationLine,
   ResourceTemplateName,
   Point2D,
+  ElevationArea,
+  ElevationGradient,
 } from './DeclarativeMapTypes';
 
 import {
@@ -50,13 +52,14 @@ import { SeededRandom } from '../../../utils/math';
 export function declarativeToMapDefinition(def: DeclarativeMapDef): MapDefinition {
   const theme = typeof def.theme === 'string' ? BIOME_THEMES[def.theme] : def.theme;
 
-  // Convert regions
+  // Convert regions - use elevation256 if provided, otherwise convert simple level
   const regions: RegionDefinition[] = def.regions.map((r) => ({
     id: r.id,
     type: convertRegionType(r.type),
     position: r.position,
     radius: r.radius,
-    elevation: r.elevation,
+    // Support both simple 0/1/2 levels and custom 256-level elevation
+    elevation: r.elevation256 !== undefined ? r.elevation256 : convertSimpleElevation(r.elevation),
     playerSlot: r.playerSlot,
   }));
 
@@ -183,6 +186,19 @@ export function declarativeToMapDefinition(def: DeclarativeMapDef): MapDefinitio
 }
 
 type ValidBiome = 'grassland' | 'desert' | 'frozen' | 'volcanic' | 'void' | 'jungle';
+
+/**
+ * Convert simple 0/1/2 elevation to 256-level values
+ * Matches the legacyElevationTo256 function in MapTypes.ts
+ */
+function convertSimpleElevation(level: 0 | 1 | 2): number {
+  const mapping: Record<0 | 1 | 2, number> = {
+    0: 60,   // Low ground
+    1: 140,  // Mid ground
+    2: 220,  // High ground
+  };
+  return mapping[level];
+}
 
 function convertBiomeType(biome: string): ValidBiome {
   // Map extended biomes to the 6 core biomes
@@ -859,6 +875,11 @@ export function generateFromDeclarative(def: DeclarativeMapDef): MapData {
   // Use existing generator for terrain
   const baseMapData = generateMapFromDefinition(mapDefinition);
 
+  // Apply custom elevation features (256-level terrain sculpting)
+  if (def.terrain?.elevationAreas || def.terrain?.elevationGradients) {
+    applyCustomElevation(baseMapData.terrain, def.terrain);
+  }
+
   // Generate additional decorations from declarative config
   const seed = def.options?.seed ?? def.decorations?.seed ?? Date.now();
   const random = new SeededRandom(seed);
@@ -880,6 +901,119 @@ export function generateFromDeclarative(def: DeclarativeMapDef): MapData {
     decorations: allDecorations,
     expansions: finalExpansions,
   };
+}
+
+/**
+ * Apply custom elevation areas and gradients to the terrain
+ */
+function applyCustomElevation(
+  terrain: MapCell[][],
+  terrainFeatures: DeclarativeMapDef['terrain']
+): void {
+  if (!terrainFeatures) return;
+
+  const height = terrain.length;
+  const width = terrain[0]?.length ?? 0;
+
+  // Apply elevation areas
+  if (terrainFeatures.elevationAreas) {
+    for (const area of terrainFeatures.elevationAreas) {
+      const elevation = Math.max(0, Math.min(255, Math.round(area.elevation)));
+      const blend = area.blend !== false;
+      const blendRadius = area.blendRadius ?? 2;
+
+      for (let y = 0; y < height; y++) {
+        for (let x = 0; x < width; x++) {
+          const dist = getDistanceToShape(x, y, area.shape);
+
+          if (dist <= 0) {
+            // Inside shape - set elevation
+            terrain[y][x].elevation = elevation;
+          } else if (blend && dist <= blendRadius) {
+            // In blend zone - interpolate
+            const t = dist / blendRadius;
+            const currentElev = terrain[y][x].elevation;
+            terrain[y][x].elevation = Math.round(currentElev * t + elevation * (1 - t));
+          }
+        }
+      }
+    }
+  }
+
+  // Apply elevation gradients
+  if (terrainFeatures.elevationGradients) {
+    for (const gradient of terrainFeatures.elevationGradients) {
+      const dx = gradient.to.x - gradient.from.x;
+      const dy = gradient.to.y - gradient.from.y;
+      const length = Math.sqrt(dx * dx + dy * dy);
+      if (length === 0) continue;
+
+      const normX = dx / length;
+      const normY = dy / length;
+      const perpX = -normY;
+      const perpY = normX;
+
+      for (let y = 0; y < height; y++) {
+        for (let x = 0; x < width; x++) {
+          // Project point onto gradient line
+          const relX = x - gradient.from.x;
+          const relY = y - gradient.from.y;
+
+          // Distance along gradient
+          const alongDist = relX * normX + relY * normY;
+          // Perpendicular distance from gradient line
+          const perpDist = Math.abs(relX * perpX + relY * perpY);
+
+          // Check if point is within gradient width and length
+          if (perpDist <= gradient.width / 2 && alongDist >= 0 && alongDist <= length) {
+            const t = alongDist / length;
+            let elevation: number;
+
+            if (gradient.smooth !== false) {
+              // Smooth interpolation (ease in-out)
+              const smoothT = t * t * (3 - 2 * t);
+              elevation = gradient.fromElevation + (gradient.toElevation - gradient.fromElevation) * smoothT;
+            } else {
+              // Linear interpolation
+              elevation = gradient.fromElevation + (gradient.toElevation - gradient.fromElevation) * t;
+            }
+
+            terrain[y][x].elevation = Math.max(0, Math.min(255, Math.round(elevation)));
+          }
+        }
+      }
+    }
+  }
+}
+
+/**
+ * Calculate distance from point to shape (negative = inside)
+ */
+function getDistanceToShape(x: number, y: number, shape: Shape): number {
+  switch (shape.type) {
+    case 'circle': {
+      const dx = x - shape.center.x;
+      const dy = y - shape.center.y;
+      return Math.sqrt(dx * dx + dy * dy) - shape.radius;
+    }
+    case 'rect': {
+      const cx = shape.position.x + shape.size.width / 2;
+      const cy = shape.position.y + shape.size.height / 2;
+      const hw = shape.size.width / 2;
+      const hh = shape.size.height / 2;
+      const dx = Math.max(Math.abs(x - cx) - hw, 0);
+      const dy = Math.max(Math.abs(y - cy) - hh, 0);
+      return Math.sqrt(dx * dx + dy * dy);
+    }
+    case 'ellipse': {
+      const dx = (x - shape.center.x) / shape.radiusX;
+      const dy = (y - shape.center.y) / shape.radiusY;
+      const dist = Math.sqrt(dx * dx + dy * dy);
+      return (dist - 1) * Math.min(shape.radiusX, shape.radiusY);
+    }
+    default:
+      return 0;
+  }
 }
 
 /**

@@ -221,15 +221,21 @@ export type RegionType =
   | 'pathway'
   | 'open';
 
+/**
+ * Elevation can be specified as:
+ * - Simple level (0, 1, 2) - maps to 60, 140, 220 respectively
+ * - Custom 256-level value (0-255) using elevation256 field
+ */
 export interface RegionDef {
   id: string;
   name: string;
   type: RegionType;
   position: Point2D;
-  elevation: 0 | 1 | 2;
+  elevation: 0 | 1 | 2;           // Simple 3-level elevation (default)
+  elevation256?: number;          // Custom 256-level elevation (0-255), overrides elevation
   radius: number;
-  playerSlot?: number;        // 1-8 for spawn regions
-  buildable?: boolean;        // Can place buildings (default true for bases)
+  playerSlot?: number;            // 1-8 for spawn regions
+  buildable?: boolean;            // Can place buildings (default true for bases)
   resourceTemplate?: ResourceTemplateName;  // Auto-generate resources
   customResources?: ResourcePlacement[];    // Or specify manually
 }
@@ -304,6 +310,31 @@ export interface SlowArea {
   style?: 'mud' | 'snow' | 'sand' | 'creep';
 }
 
+/**
+ * Custom elevation area - allows 256-level terrain sculpting
+ * Can create gradual slopes, plateaus, depressions, etc.
+ */
+export interface ElevationArea {
+  id?: string;
+  shape: Shape;
+  elevation: number;     // 0-255 elevation value
+  blend?: boolean;       // Smooth blend edges (default true)
+  blendRadius?: number;  // Edge blend distance (default 2)
+}
+
+/**
+ * Elevation gradient - creates smooth elevation transitions
+ */
+export interface ElevationGradient {
+  id?: string;
+  from: Point2D;
+  to: Point2D;
+  width: number;
+  fromElevation: number; // 0-255
+  toElevation: number;   // 0-255
+  smooth?: boolean;      // Use smooth interpolation (default true)
+}
+
 export interface TerrainFeatures {
   voids?: VoidArea[];
   water?: WaterArea[];
@@ -311,6 +342,8 @@ export interface TerrainFeatures {
   unwalkable?: UnwalkableArea[];
   roads?: RoadPath[];
   slowAreas?: SlowArea[];
+  elevationAreas?: ElevationArea[];       // Custom elevation patches
+  elevationGradients?: ElevationGradient[]; // Smooth elevation transitions
 }
 
 // ============================================================================
