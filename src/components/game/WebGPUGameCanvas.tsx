@@ -129,18 +129,35 @@ export function WebGPUGameCanvas() {
   const [loadingProgress, setLoadingProgress] = useState(0);
   const [loadingStatus, setLoadingStatus] = useState('Initializing');
   const [isWebGPU, setIsWebGPU] = useState(false);
+  const [fadeInOpacity, setFadeInOpacity] = useState(1); // Starts black, fades to transparent
 
   // Callback for when loading screen completes (after fade to black)
   // This triggers the Phaser countdown overlay with the game visible in background
   const handleLoadingComplete = useCallback(() => {
     setIsLoading(false);
-    // Trigger the sophisticated Phaser countdown overlay
-    // Small delay to ensure Phaser scene is fully ready
-    setTimeout(() => {
-      if (gameRef.current?.eventBus) {
-        gameRef.current.eventBus.emit('game:countdown');
+
+    // Smooth fade in from black - animate opacity from 1 to 0
+    const startTime = Date.now();
+    const duration = 800; // 800ms fade in
+
+    const animateFadeIn = () => {
+      const elapsed = Date.now() - startTime;
+      const progress = Math.min(elapsed / duration, 1);
+      // Ease-out for smooth reveal
+      const eased = 1 - Math.pow(1 - progress, 2);
+      setFadeInOpacity(1 - eased);
+
+      if (progress < 1) {
+        requestAnimationFrame(animateFadeIn);
+      } else {
+        // Trigger countdown after fade completes
+        if (gameRef.current?.eventBus) {
+          gameRef.current.eventBus.emit('game:countdown');
+        }
       }
-    }, 100);
+    };
+
+    requestAnimationFrame(animateFadeIn);
   }, []);
 
   // Control group tracking
@@ -1638,6 +1655,14 @@ export function WebGPUGameCanvas() {
       {/* Loading screen */}
       {isLoading && (
         <LoadingScreen progress={loadingProgress} status={loadingStatus} onComplete={handleLoadingComplete} />
+      )}
+
+      {/* Fade-in from black overlay - smooth transition after loading */}
+      {!isLoading && fadeInOpacity > 0 && (
+        <div
+          className="absolute inset-0 bg-black pointer-events-none"
+          style={{ zIndex: 100, opacity: fadeInOpacity }}
+        />
       )}
 
       {/* Three.js canvas */}
