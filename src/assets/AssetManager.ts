@@ -814,8 +814,7 @@ export class AssetManager {
         { path: '/models/units/lifter.glb', assetId: 'lifter', targetHeight: 1.5 },
         { path: '/models/units/specter.glb', assetId: 'specter', targetHeight: REFERENCE_FRAME.UNIT_HEIGHTS.specter || 1.5 },
         { path: '/models/units/overseer.glb', assetId: 'overseer', targetHeight: 1.5 },
-        { path: '/models/units/dreadnought.glb', assetId: 'dreadnought', targetHeight: REFERENCE_FRAME.UNIT_HEIGHTS.dreadnought || 2.5 },
-        { path: '/models/units/medic.glb', assetId: 'medic', targetHeight: REFERENCE_FRAME.UNIT_HEIGHTS.medic || 1.2 }
+        { path: '/models/units/dreadnought.glb', assetId: 'dreadnought', targetHeight: REFERENCE_FRAME.UNIT_HEIGHTS.dreadnought || 2.5 }
       );
 
       // Buildings
