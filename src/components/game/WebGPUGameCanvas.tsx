@@ -132,13 +132,23 @@ export function WebGPUGameCanvas() {
   const [fadeInOpacity, setFadeInOpacity] = useState(1); // Starts black, fades to transparent
 
   // Callback for when loading screen completes (after fade to black)
-  // This triggers the Phaser countdown overlay with the game visible in background
+  // Game world fades in while countdown plays on top
   const handleLoadingComplete = useCallback(() => {
     setIsLoading(false);
 
+    // Mark game as ready (HUD will now show)
+    useGameStore.getState().setGameReady(true);
+
+    // Trigger countdown immediately - it plays while game fades in
+    setTimeout(() => {
+      if (gameRef.current?.eventBus) {
+        gameRef.current.eventBus.emit('game:countdown');
+      }
+    }, 50);
+
     // Smooth fade in from black - animate opacity from 1 to 0
     const startTime = Date.now();
-    const duration = 800; // 800ms fade in
+    const duration = 1000; // 1 second fade in (countdown runs during this)
 
     const animateFadeIn = () => {
       const elapsed = Date.now() - startTime;
@@ -149,11 +159,6 @@ export function WebGPUGameCanvas() {
 
       if (progress < 1) {
         requestAnimationFrame(animateFadeIn);
-      } else {
-        // Trigger countdown after fade completes
-        if (gameRef.current?.eventBus) {
-          gameRef.current.eventBus.emit('game:countdown');
-        }
       }
     };
 

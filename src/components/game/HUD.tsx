@@ -18,12 +18,17 @@ import { BattleSimulatorPanel } from './BattleSimulatorPanel';
 
 // PERF: Wrap HUD in memo to prevent unnecessary re-renders when parent state changes
 export const HUD = memo(function HUD() {
-  const { isPaused, togglePause, setShowTechTree, setShowKeyboardShortcuts } = useGameStore();
+  const { isPaused, togglePause, setShowTechTree, setShowKeyboardShortcuts, isGameReady } = useGameStore();
   const { toggleGraphicsOptions, showGraphicsOptions, toggleSoundOptions, showSoundOptions, toggleDebugMenu, showDebugMenu, isFullscreen, toggleFullscreen, setFullscreen, overlaySettings, toggleOverlay } = useUIStore();
   const isBattleSimulator = useGameSetupStore((state) => state.isBattleSimulator);
   const [showOptionsMenu, setShowOptionsMenu] = useState(false);
   const [showPlayerStatus, setShowPlayerStatus] = useState(false);
   const [showOverlayMenu, setShowOverlayMenu] = useState(false);
+
+  // Don't render HUD until game is ready (prevents flash during loading)
+  if (!isGameReady) {
+    return null;
+  }
 
   // Disable edge scrolling when mouse is over UI elements
   const handleUIMouseEnter = useCallback(() => {
