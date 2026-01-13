@@ -75,6 +75,7 @@ export interface UseEditorStateReturn {
   // Object actions
   addObject: (obj: Omit<EditorObject, 'id'>) => string;
   updateObject: (id: string, updates: Partial<EditorObject>) => void;
+  updateObjectProperty: (id: string, key: string, value: unknown) => void;
   removeObject: (id: string) => void;
   selectObjects: (ids: string[]) => void;
   clearSelection: () => void;
@@ -393,6 +394,32 @@ export function useEditorState(config: EditorConfig): UseEditorStateReturn {
     });
   }, [maxUndoHistory]);
 
+  const updateObjectProperty = useCallback((id: string, key: string, value: unknown) => {
+    setState((prev) => {
+      if (!prev.mapData) return prev;
+
+      const objIndex = prev.mapData.objects.findIndex((o) => o.id === id);
+      if (objIndex === -1) return prev;
+
+      const obj = prev.mapData.objects[objIndex];
+      const newProperties = { ...obj.properties, [key]: value };
+
+      const newUndoStack = [...prev.undoStack.slice(-maxUndoHistory + 1), cloneMapData(prev.mapData)];
+
+      const newObjects = prev.mapData.objects.map((o, i) =>
+        i === objIndex ? { ...o, properties: newProperties } : o
+      );
+
+      return {
+        ...prev,
+        mapData: { ...prev.mapData, objects: newObjects },
+        undoStack: newUndoStack,
+        redoStack: [],
+        isDirty: true,
+      };
+    });
+  }, [maxUndoHistory]);
+
   const removeObject = useCallback((id: string) => {
     setState((prev) => {
       if (!prev.mapData) return prev;
@@ -541,6 +568,7 @@ export function useEditorState(config: EditorConfig): UseEditorStateReturn {
     fillArea,
     addObject,
     updateObject,
+    updateObjectProperty,
     removeObject,
     selectObjects,
     clearSelection,

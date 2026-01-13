@@ -417,7 +417,7 @@ export const VOIDSTRIKE_OBJECTS: ObjectTypeConfig[] = [
     movable: true,
   },
 
-  // Decorations
+  // Decorations - all have scale property
   {
     id: 'decoration_tree_pine_tall',
     category: 'decorations',
@@ -426,6 +426,9 @@ export const VOIDSTRIKE_OBJECTS: ObjectTypeConfig[] = [
     color: '#2e7d32',
     defaultRadius: 2,
     movable: true,
+    properties: [
+      { key: 'scale', name: 'Scale', type: 'number', defaultValue: 1, min: 0.25, max: 3 },
+    ],
   },
   {
     id: 'decoration_tree_pine_medium',
@@ -435,6 +438,9 @@ export const VOIDSTRIKE_OBJECTS: ObjectTypeConfig[] = [
     color: '#388e3c',
     defaultRadius: 1.5,
     movable: true,
+    properties: [
+      { key: 'scale', name: 'Scale', type: 'number', defaultValue: 1, min: 0.25, max: 3 },
+    ],
   },
   {
     id: 'decoration_tree_dead',
@@ -444,6 +450,9 @@ export const VOIDSTRIKE_OBJECTS: ObjectTypeConfig[] = [
     color: '#5d4037',
     defaultRadius: 1.5,
     movable: true,
+    properties: [
+      { key: 'scale', name: 'Scale', type: 'number', defaultValue: 1, min: 0.25, max: 3 },
+    ],
   },
   {
     id: 'decoration_rocks_large',
@@ -453,6 +462,9 @@ export const VOIDSTRIKE_OBJECTS: ObjectTypeConfig[] = [
     color: '#757575',
     defaultRadius: 3,
     movable: true,
+    properties: [
+      { key: 'scale', name: 'Scale', type: 'number', defaultValue: 1, min: 0.25, max: 3 },
+    ],
   },
   {
     id: 'decoration_rocks_small',
@@ -462,6 +474,9 @@ export const VOIDSTRIKE_OBJECTS: ObjectTypeConfig[] = [
     color: '#616161',
     defaultRadius: 1,
     movable: true,
+    properties: [
+      { key: 'scale', name: 'Scale', type: 'number', defaultValue: 1, min: 0.25, max: 3 },
+    ],
   },
   {
     id: 'decoration_crystal_formation',
@@ -471,6 +486,9 @@ export const VOIDSTRIKE_OBJECTS: ObjectTypeConfig[] = [
     color: '#7c4dff',
     defaultRadius: 2,
     movable: true,
+    properties: [
+      { key: 'scale', name: 'Scale', type: 'number', defaultValue: 1, min: 0.25, max: 3 },
+    ],
   },
   {
     id: 'decoration_bush',
@@ -480,6 +498,9 @@ export const VOIDSTRIKE_OBJECTS: ObjectTypeConfig[] = [
     color: '#66bb6a',
     defaultRadius: 1,
     movable: true,
+    properties: [
+      { key: 'scale', name: 'Scale', type: 'number', defaultValue: 1, min: 0.25, max: 3 },
+    ],
   },
   {
     id: 'decoration_ruined_wall',
@@ -489,6 +510,9 @@ export const VOIDSTRIKE_OBJECTS: ObjectTypeConfig[] = [
     color: '#8d6e63',
     defaultRadius: 4,
     movable: true,
+    properties: [
+      { key: 'scale', name: 'Scale', type: 'number', defaultValue: 1, min: 0.25, max: 3 },
+    ],
   },
 ];
 

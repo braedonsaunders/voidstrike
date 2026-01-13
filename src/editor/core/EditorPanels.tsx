@@ -28,6 +28,7 @@ export interface EditorPanelsProps {
   onBiomeChange: (biomeId: string) => void;
   onObjectAdd: (obj: Omit<EditorObject, 'id'>) => string;
   onObjectRemove: (id: string) => void;
+  onObjectPropertyUpdate: (id: string, key: string, value: unknown) => void;
   onMetadataUpdate: (updates: Partial<Pick<EditorMapData, 'name' | 'width' | 'height' | 'biomeId'>>) => void;
   onValidate: () => void;
   onToggleLabels: () => void;
@@ -625,6 +626,125 @@ function ValidatePanel({
   );
 }
 
+// Selected object properties panel
+function SelectedObjectPanel({
+  config,
+  state,
+  onPropertyUpdate,
+  onRemove,
+}: {
+  config: EditorConfig;
+  state: EditorState;
+  onPropertyUpdate: (id: string, key: string, value: unknown) => void;
+  onRemove: (id: string) => void;
+}) {
+  if (state.selectedObjects.length === 0 || !state.mapData) return null;
+
+  // Get the first selected object
+  const selectedId = state.selectedObjects[0];
+  const selectedObj = state.mapData.objects.find((o) => o.id === selectedId);
+  if (!selectedObj) return null;
+
+  const objType = config.objectTypes.find((t) => t.id === selectedObj.type);
+  if (!objType) return null;
+
+  const properties = objType.properties || [];
+
+  return (
+    <div
+      className="border-t p-3 space-y-3"
+      style={{ borderColor: config.theme.border }}
+    >
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-2">
+          <span>{objType.icon}</span>
+          <span className="text-xs font-medium" style={{ color: config.theme.text.primary }}>
+            {objType.name}
+          </span>
+        </div>
+        <button
+          onClick={() => onRemove(selectedId)}
+          className="text-xs px-2 py-1 rounded"
+          style={{ color: config.theme.error }}
+        >
+          Delete
+        </button>
+      </div>
+
+      {/* Position display */}
+      <div className="text-[10px] font-mono" style={{ color: config.theme.text.muted }}>
+        Position: {Math.round(selectedObj.x)}, {Math.round(selectedObj.y)}
+      </div>
+
+      {/* Properties */}
+      {properties.length > 0 && (
+        <div className="space-y-2">
+          {properties.map((prop) => {
+            const currentValue = selectedObj.properties?.[prop.key] ?? prop.defaultValue;
+
+            if (prop.type === 'number') {
+              return (
+                <div key={prop.key}>
+                  <div className="flex justify-between text-[10px] mb-1">
+                    <span style={{ color: config.theme.text.muted }}>{prop.name}</span>
+                    <span className="font-mono" style={{ color: config.theme.text.secondary }}>
+                      {typeof currentValue === 'number' ? currentValue.toFixed(2) : String(currentValue)}
+                    </span>
+                  </div>
+                  <input
+                    type="range"
+                    min={prop.min ?? 0}
+                    max={prop.max ?? 100}
+                    step={0.1}
+                    value={currentValue as number}
+                    onChange={(e) => onPropertyUpdate(selectedId, prop.key, Number(e.target.value))}
+                    className="w-full h-1.5 rounded-lg appearance-none cursor-pointer"
+                    style={{ backgroundColor: config.theme.border }}
+                  />
+                </div>
+              );
+            }
+
+            if (prop.type === 'select' && prop.options) {
+              return (
+                <div key={prop.key}>
+                  <label className="text-[10px]" style={{ color: config.theme.text.muted }}>
+                    {prop.name}
+                  </label>
+                  <select
+                    value={currentValue as string}
+                    onChange={(e) => onPropertyUpdate(selectedId, prop.key, e.target.value)}
+                    className="w-full mt-1 px-2 py-1 rounded text-xs"
+                    style={{
+                      backgroundColor: config.theme.surface,
+                      border: `1px solid ${config.theme.border}`,
+                      color: config.theme.text.primary,
+                    }}
+                  >
+                    {prop.options.map((opt) => (
+                      <option key={opt.value} value={opt.value}>
+                        {opt.label}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              );
+            }
+
+            return null;
+          })}
+        </div>
+      )}
+
+      {state.selectedObjects.length > 1 && (
+        <div className="text-[10px] italic" style={{ color: config.theme.text.muted }}>
+          +{state.selectedObjects.length - 1} more selected
+        </div>
+      )}
+    </div>
+  );
+}
+
 // Main panels component
 export function EditorPanels({
   config,
@@ -639,6 +759,7 @@ export function EditorPanels({
   onBiomeChange,
   onObjectAdd,
   onObjectRemove,
+  onObjectPropertyUpdate,
   onMetadataUpdate,
   onValidate,
   onToggleLabels,
@@ -728,6 +849,14 @@ export function EditorPanels({
         )}
         {state.activePanel === 'validate' && <ValidatePanel config={config} onValidate={onValidate} />}
       </div>
+
+      {/* Selected object properties */}
+      <SelectedObjectPanel
+        config={config}
+        state={state}
+        onPropertyUpdate={onObjectPropertyUpdate}
+        onRemove={onObjectRemove}
+      />
 
       {/* Keyboard shortcuts hint */}
       <div className="flex-shrink-0 p-3 border-t" style={{ borderColor: config.theme.border }}>
