@@ -130,6 +130,11 @@ export function WebGPUGameCanvas() {
   const [loadingStatus, setLoadingStatus] = useState('Initializing');
   const [isWebGPU, setIsWebGPU] = useState(false);
 
+  // Callback for when loading screen completes (after countdown)
+  const handleLoadingComplete = useCallback(() => {
+    setIsLoading(false);
+  }, []);
+
   // Control group tracking
   const lastControlGroupTap = useRef<{ group: number; time: number } | null>(null);
   const subgroupIndexRef = useRef(0);
@@ -172,9 +177,8 @@ export function WebGPUGameCanvas() {
 
         setLoadingProgress(100);
         setLoadingStatus('Ready');
-
-        await new Promise(resolve => setTimeout(resolve, 300));
-        setIsLoading(false);
+        // LoadingScreen will handle the fade-to-black and countdown sequence
+        // then call onComplete to hide the loading screen
       } catch (error) {
         debugInitialization.error('[WebGPUGameCanvas] Initialization failed:', error);
         setLoadingStatus('Error - falling back to WebGL');
@@ -1604,7 +1608,7 @@ export function WebGPUGameCanvas() {
     >
       {/* Loading screen */}
       {isLoading && (
-        <LoadingScreen progress={loadingProgress} status={loadingStatus} />
+        <LoadingScreen progress={loadingProgress} status={loadingStatus} onComplete={handleLoadingComplete} />
       )}
 
       {/* Three.js canvas */}
