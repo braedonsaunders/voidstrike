@@ -382,7 +382,6 @@ const TITANS_COLOSSEUM_DEF: MapDefinition = defineMap({
     { from: 'p8_main', to: 'p8_nat', type: 'ramp', width: 10 },
 
     // Natural to low ground connections (elevation 1 -> 0)
-    // CRITICAL: Use same width as main-to-natural ramps (10) for consistent navmesh
     { from: 'p1_nat', to: 'p1_ground', type: 'ramp', width: 10 },
     { from: 'p2_nat', to: 'p2_ground', type: 'ramp', width: 10 },
     { from: 'p3_nat', to: 'p3_ground', type: 'ramp', width: 10 },
@@ -391,6 +390,28 @@ const TITANS_COLOSSEUM_DEF: MapDefinition = defineMap({
     { from: 'p6_nat', to: 'p6_ground', type: 'ramp', width: 10 },
     { from: 'p7_nat', to: 'p7_ground', type: 'ramp', width: 10 },
     { from: 'p8_nat', to: 'p8_ground', type: 'ramp', width: 10 },
+
+    // Ground level connections (elevation 0) - connect player grounds to center
+    { from: 'p1_ground', to: 'center', type: 'ground', width: 12 },
+    { from: 'p2_ground', to: 'center', type: 'ground', width: 12 },
+    { from: 'p3_ground', to: 'center', type: 'ground', width: 12 },
+    { from: 'p4_ground', to: 'center', type: 'ground', width: 12 },
+    { from: 'p5_ground', to: 'center', type: 'ground', width: 12 },
+    { from: 'p6_ground', to: 'center', type: 'ground', width: 12 },
+    { from: 'p7_ground', to: 'center', type: 'ground', width: 12 },
+    { from: 'p8_ground', to: 'center', type: 'ground', width: 12 },
+
+    // Gold expansions to center
+    { from: 'gold_nw', to: 'center', type: 'ground', width: 10 },
+    { from: 'gold_ne', to: 'center', type: 'ground', width: 10 },
+    { from: 'gold_se', to: 'center', type: 'ground', width: 10 },
+    { from: 'gold_sw', to: 'center', type: 'ground', width: 10 },
+
+    // Third expansions to center
+    { from: 'north_third', to: 'center', type: 'ground', width: 10 },
+    { from: 'south_third', to: 'center', type: 'ground', width: 10 },
+    { from: 'west_third', to: 'center', type: 'ground', width: 10 },
+    { from: 'east_third', to: 'center', type: 'ground', width: 10 },
   ],
 
   // Terrain features handled in post-processing for exact visual matching

@@ -309,6 +309,23 @@ const CONTESTED_FRONTIER_DEF: MapDefinition = defineMap({
     { from: 'p4_nat', to: 'gold_bl', type: 'ramp', width: 8 },
     { from: 'p5_nat', to: 'center', type: 'ramp', width: 8 },
     { from: 'p6_nat', to: 'gold_br', type: 'ramp', width: 8 },
+
+    // Ground level connections (elevation 0)
+    // Golds to center
+    { from: 'gold_tl', to: 'center', type: 'ground', width: 10 },
+    { from: 'gold_tr', to: 'center', type: 'ground', width: 10 },
+    { from: 'gold_bl', to: 'center', type: 'ground', width: 10 },
+    { from: 'gold_br', to: 'center', type: 'ground', width: 10 },
+
+    // Thirds to center
+    { from: 'third_left', to: 'center', type: 'ground', width: 12 },
+    { from: 'third_right', to: 'center', type: 'ground', width: 12 },
+
+    // Mid areas to center
+    { from: 'mid_tl', to: 'center', type: 'ground', width: 10 },
+    { from: 'mid_tr', to: 'center', type: 'ground', width: 10 },
+    { from: 'mid_bl', to: 'center', type: 'ground', width: 10 },
+    { from: 'mid_br', to: 'center', type: 'ground', width: 10 },
   ],
 
   // Terrain features handled in post-processing for exact visual matching

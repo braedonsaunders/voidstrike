@@ -434,6 +434,16 @@ const SCORCHED_BASIN_DEF: MapDefinition = defineMap({
     { from: 'p2_nat', to: 'gold_ne', type: 'ramp', width: 8 },
     { from: 'p3_nat', to: 'gold_sw', type: 'ramp', width: 8 },
     { from: 'p4_nat', to: 'gold_se', type: 'ramp', width: 8 },
+
+    // Ground level connections (elevation 0) - connect thirds and golds to center
+    { from: 'third_left', to: 'center', type: 'ground', width: 12 },
+    { from: 'third_right', to: 'center', type: 'ground', width: 12 },
+    { from: 'third_top', to: 'center', type: 'ground', width: 12 },
+    { from: 'third_bottom', to: 'center', type: 'ground', width: 12 },
+    { from: 'gold_nw', to: 'center', type: 'ground', width: 10 },
+    { from: 'gold_ne', to: 'center', type: 'ground', width: 10 },
+    { from: 'gold_sw', to: 'center', type: 'ground', width: 10 },
+    { from: 'gold_se', to: 'center', type: 'ground', width: 10 },
   ],
   terrain: {},
   features: {},
