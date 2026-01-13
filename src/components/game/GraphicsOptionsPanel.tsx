@@ -366,40 +366,12 @@ export const GraphicsOptionsPanel = memo(function GraphicsOptionsPanel() {
             style={selectStyle}
           >
             <option value="off">Off</option>
-            <option value="fxaa">FXAA (Fast)</option>
-            <option value="taa">TAA (Best Quality)</option>
+            <option value="fxaa">FXAA (Recommended)</option>
           </select>
+          <div style={{ fontSize: '10px', color: '#666', marginTop: '4px' }}>
+            FXAA provides fast edge smoothing with minimal performance cost
+          </div>
         </div>
-        {/* TAA-specific settings */}
-        {graphicsSettings.antiAliasingMode === 'taa' && (
-          <>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
-              <span>RCAS Sharpening</span>
-              <button
-                onClick={() => handleToggle('taaSharpeningEnabled')}
-                style={buttonStyle(graphicsSettings.taaSharpeningEnabled)}
-              >
-                {graphicsSettings.taaSharpeningEnabled ? 'ON' : 'OFF'}
-              </button>
-            </div>
-            {graphicsSettings.taaSharpeningEnabled && (
-              <div>
-                <label style={labelStyle}>
-                  Sharpening Intensity: {graphicsSettings.taaSharpeningIntensity.toFixed(2)}
-                </label>
-                <input
-                  type="range"
-                  min="0"
-                  max="1"
-                  step="0.05"
-                  value={graphicsSettings.taaSharpeningIntensity}
-                  onChange={(e) => setGraphicsSetting('taaSharpeningIntensity', parseFloat(e.target.value))}
-                  style={sliderStyle}
-                />
-              </div>
-            )}
-          </>
-        )}
       </div>
 
       {/* === RESOLUTION UPSCALING === */}
