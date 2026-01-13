@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useEffect, memo } from 'react';
-import { useUIStore, GraphicsSettings, RendererAPI, AntiAliasingMode } from '@/store/uiStore';
+import { useUIStore, GraphicsSettings, RendererAPI, AntiAliasingMode, UpscalingMode } from '@/store/uiStore';
 import { setEdgeScrollEnabled } from '@/store/cameraStore';
 
 const buttonStyle = (enabled: boolean) => ({
@@ -46,6 +46,7 @@ export const GraphicsOptionsPanel = memo(function GraphicsOptionsPanel() {
   const toggleGraphicsSetting = useUIStore((state) => state.toggleGraphicsSetting);
   const setGraphicsSetting = useUIStore((state) => state.setGraphicsSetting);
   const setAntiAliasingMode = useUIStore((state) => state.setAntiAliasingMode);
+  const setUpscalingMode = useUIStore((state) => state.setUpscalingMode);
 
   // Disable edge scrolling when panel is open
   useEffect(() => {
@@ -393,6 +394,60 @@ export const GraphicsOptionsPanel = memo(function GraphicsOptionsPanel() {
                   step="0.05"
                   value={graphicsSettings.taaSharpeningIntensity}
                   onChange={(e) => setGraphicsSetting('taaSharpeningIntensity', parseFloat(e.target.value))}
+                  style={sliderStyle}
+                />
+              </div>
+            )}
+          </>
+        )}
+      </div>
+
+      {/* === RESOLUTION UPSCALING === */}
+      <div style={sectionStyle}>
+        <div style={sectionTitleStyle}>Resolution Upscaling (EASU)</div>
+        <div style={{ marginBottom: '8px' }}>
+          <label style={labelStyle}>Mode</label>
+          <select
+            value={graphicsSettings.upscalingMode}
+            onChange={(e) => setUpscalingMode(e.target.value as UpscalingMode)}
+            style={selectStyle}
+          >
+            <option value="off">Off (Native)</option>
+            <option value="easu">EASU (Quality)</option>
+            <option value="bilinear">Bilinear (Fast)</option>
+          </select>
+        </div>
+        {graphicsSettings.upscalingMode !== 'off' && (
+          <>
+            <div style={{ marginBottom: '8px' }}>
+              <label style={labelStyle}>
+                Render Scale: {Math.round(graphicsSettings.renderScale * 100)}%
+              </label>
+              <input
+                type="range"
+                min="0.5"
+                max="1"
+                step="0.05"
+                value={graphicsSettings.renderScale}
+                onChange={(e) => setGraphicsSetting('renderScale', parseFloat(e.target.value))}
+                style={sliderStyle}
+              />
+              <div style={{ fontSize: '10px', color: '#666', marginTop: '2px' }}>
+                {graphicsSettings.renderScale < 0.75 ? 'Performance' : graphicsSettings.renderScale < 0.9 ? 'Balanced' : 'Quality'}
+              </div>
+            </div>
+            {graphicsSettings.upscalingMode === 'easu' && (
+              <div>
+                <label style={labelStyle}>
+                  Edge Sharpness: {graphicsSettings.easuSharpness.toFixed(2)}
+                </label>
+                <input
+                  type="range"
+                  min="0"
+                  max="1"
+                  step="0.05"
+                  value={graphicsSettings.easuSharpness}
+                  onChange={(e) => setGraphicsSetting('easuSharpness', parseFloat(e.target.value))}
                   style={sliderStyle}
                 />
               </div>

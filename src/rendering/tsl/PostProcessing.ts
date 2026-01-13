@@ -41,12 +41,18 @@ import { ao } from 'three/addons/tsl/display/GTAONode.js';
 import { fxaa } from 'three/addons/tsl/display/FXAANode.js';
 import { traa } from 'three/addons/tsl/display/TRAANode.js';
 
+// Import EASU upscaling
+import { easuUpscale, rcasSharpening } from './UpscalerNode';
+
 // ============================================
 // POST-PROCESSING CONFIGURATION
 // ============================================
 
 // Anti-aliasing mode
 export type AntiAliasingMode = 'off' | 'fxaa' | 'taa';
+
+// Upscaling mode
+export type UpscalingMode = 'off' | 'easu' | 'bilinear';
 
 export interface PostProcessingConfig {
   // Bloom
@@ -72,6 +78,11 @@ export interface PostProcessingConfig {
   taaSharpeningEnabled: boolean;
   taaSharpeningIntensity: number;
 
+  // Resolution upscaling (EASU - Edge-Adaptive Spatial Upsampling)
+  upscalingMode: UpscalingMode;
+  renderScale: number; // 0.5 - 1.0, internal render resolution
+  easuSharpness: number; // 0.0 - 1.0, edge enhancement strength
+
   // Vignette
   vignetteEnabled: boolean;
   vignetteIntensity: number;
@@ -94,13 +105,20 @@ const DEFAULT_CONFIG: PostProcessingConfig = {
   aoRadius: 2,
   aoIntensity: 0.8,
 
-  // TRAA is the new default for best quality
-  antiAliasingMode: 'taa',
-  fxaaEnabled: false,
-  taaEnabled: true,
+  // FXAA is the safe default - works with all materials
+  // TRAA requires velocity output from all materials, which standard materials don't support
+  antiAliasingMode: 'fxaa',
+  fxaaEnabled: true,
+  taaEnabled: false,
   taaHistoryBlendRate: 0.1,
   taaSharpeningEnabled: true,
   taaSharpeningIntensity: 0.5,
+
+  // EASU upscaling - disabled by default (native resolution)
+  // Enable for performance boost: 0.75 = 75% res = ~1.8x faster
+  upscalingMode: 'off',
+  renderScale: 1.0,
+  easuSharpness: 0.5,
 
   vignetteEnabled: true,
   vignetteIntensity: 0.25,
@@ -127,6 +145,9 @@ export class RenderPipeline {
   private fxaaPass: ReturnType<typeof fxaa> | null = null;
   private traaPass: ReturnType<typeof traa> | null = null;
 
+  // EASU upscaling pass
+  private easuPass: ReturnType<typeof easuUpscale> | null = null;
+
   // Uniforms for dynamic updates
   private uVignetteIntensity = uniform(0.25);
   private uAOIntensity = uniform(1.0);
@@ -135,6 +156,12 @@ export class RenderPipeline {
   private uContrast = uniform(1.05);
   private uSharpeningIntensity = uniform(0.5);
   private uResolution = uniform(new THREE.Vector2(1920, 1080));
+
+  // Resolution tracking for upscaling
+  private displayWidth = 1920;
+  private displayHeight = 1080;
+  private renderWidth = 1920;
+  private renderHeight = 1080;
 
   constructor(
     renderer: WebGPURenderer,
@@ -163,7 +190,9 @@ export class RenderPipeline {
     const scenePass = pass(this.scene, this.camera);
     const scenePassColor = scenePass.getTextureNode();
     const scenePassDepth = scenePass.getTextureNode('depth');
-    const scenePassVelocity = scenePass.getTextureNode('velocity');
+    // NOTE: Velocity texture is only requested when TRAA is enabled
+    // Requesting it unconditionally causes MRT failures for standard materials
+    // (MeshBasicMaterial, PointsMaterial, SpriteMaterial, etc. don't output velocity)
 
     // Build the effect chain
     let outputNode: any = scenePassColor;
@@ -207,9 +236,36 @@ export class RenderPipeline {
       console.warn('[PostProcessing] Color grading failed:', e);
     }
 
-    // 4. Anti-aliasing (TRAA or FXAA)
+    // 4. EASU upscaling (Edge-Adaptive Spatial Upsampling)
+    // When enabled, applies edge-aware enhancement/upscaling
+    if (this.config.upscalingMode === 'easu' && this.config.renderScale < 1.0) {
+      try {
+        // Calculate render resolution based on scale
+        const renderRes = new THREE.Vector2(
+          Math.floor(this.displayWidth * this.config.renderScale),
+          Math.floor(this.displayHeight * this.config.renderScale)
+        );
+        const displayRes = new THREE.Vector2(this.displayWidth, this.displayHeight);
+
+        this.easuPass = easuUpscale(outputNode, renderRes, displayRes, this.config.easuSharpness);
+        outputNode = this.easuPass.node;
+        console.log(`[PostProcessing] EASU upscaling: ${renderRes.x}x${renderRes.y} → ${displayRes.x}x${displayRes.y}`);
+      } catch (e) {
+        console.warn('[PostProcessing] EASU upscaling failed:', e);
+      }
+    }
+
+    // 5. Anti-aliasing (TRAA or FXAA)
+    // NOTE: TRAA is disabled by default because it requires velocity output from ALL materials.
+    // Standard Three.js materials (MeshBasicMaterial, PointsMaterial, SpriteMaterial, etc.)
+    // don't output velocity, causing WebGPU MRT validation errors.
+    // Use FXAA for compatibility with mixed material scenes.
     if (this.config.antiAliasingMode === 'taa' && this.config.taaEnabled) {
       try {
+        // Request velocity texture only when TRAA is enabled
+        // WARNING: This will fail if ANY material in the scene doesn't output velocity!
+        const scenePassVelocity = scenePass.getTextureNode('velocity');
+
         // Use Three.js's proven TRAA (Temporal Reprojection Anti-Aliasing) implementation
         // This handles all the complexity: Halton jittering, variance clipping,
         // motion vectors, history management, disocclusion detection, etc.
@@ -225,11 +281,12 @@ export class RenderPipeline {
         postProcessing.outputNode = outputNode;
         console.log('[PostProcessing] TRAA initialized successfully');
       } catch (e) {
-        console.warn('[PostProcessing] TRAA initialization failed, falling back to FXAA:', e);
-        // Fallback to FXAA
+        console.warn('[PostProcessing] TRAA initialization failed (likely velocity MRT issue), falling back to FXAA:', e);
+        // Fallback to FXAA - guaranteed to work with all materials
         try {
           this.fxaaPass = fxaa(outputNode);
           postProcessing.outputNode = this.fxaaPass;
+          console.log('[PostProcessing] Fell back to FXAA successfully');
         } catch (fxaaError) {
           console.warn('[PostProcessing] FXAA fallback also failed:', fxaaError);
           postProcessing.outputNode = outputNode;
@@ -343,7 +400,9 @@ export class RenderPipeline {
       (config.taaEnabled !== undefined && config.taaEnabled !== this.config.taaEnabled) ||
       (config.antiAliasingMode !== undefined && config.antiAliasingMode !== this.config.antiAliasingMode) ||
       (config.taaSharpeningEnabled !== undefined && config.taaSharpeningEnabled !== this.config.taaSharpeningEnabled) ||
-      (config.vignetteEnabled !== undefined && config.vignetteEnabled !== this.config.vignetteEnabled);
+      (config.vignetteEnabled !== undefined && config.vignetteEnabled !== this.config.vignetteEnabled) ||
+      (config.upscalingMode !== undefined && config.upscalingMode !== this.config.upscalingMode) ||
+      (config.renderScale !== undefined && config.renderScale !== this.config.renderScale);
 
     this.config = { ...this.config, ...config };
 
@@ -368,6 +427,17 @@ export class RenderPipeline {
 
     // Update sharpening parameters
     this.uSharpeningIntensity.value = this.config.taaSharpeningIntensity;
+
+    // Update EASU parameters
+    if (this.easuPass) {
+      this.easuPass.setSharpness(this.config.easuSharpness);
+      // Update resolutions if scale changed
+      if (config.renderScale !== undefined) {
+        this.renderWidth = Math.floor(this.displayWidth * this.config.renderScale);
+        this.renderHeight = Math.floor(this.displayHeight * this.config.renderScale);
+        this.easuPass.setRenderResolution(this.renderWidth, this.renderHeight);
+      }
+    }
 
     // Update color grading uniforms
     this.uVignetteIntensity.value = this.config.vignetteIntensity;
@@ -397,15 +467,29 @@ export class RenderPipeline {
   }
 
   /**
-   * Set render size (for sharpening pass resolution uniform)
+   * Set display size (for sharpening and upscaling resolution uniforms)
    */
   setSize(width: number, height: number): void {
     const currentSize = this.uResolution.value;
     if (currentSize.x !== width || currentSize.y !== height) {
+      // Update display resolution
+      this.displayWidth = width;
+      this.displayHeight = height;
       this.uResolution.value.set(width, height);
+
+      // Update render resolution based on scale
+      this.renderWidth = Math.floor(width * this.config.renderScale);
+      this.renderHeight = Math.floor(height * this.config.renderScale);
+
       // TRAA handles its own resizing internally
       if (this.traaPass) {
         this.traaPass.setSize(width, height);
+      }
+
+      // Update EASU resolutions
+      if (this.easuPass) {
+        this.easuPass.setRenderResolution(this.renderWidth, this.renderHeight);
+        this.easuPass.setDisplayResolution(width, height);
       }
     }
   }
@@ -422,6 +506,48 @@ export class RenderPipeline {
    */
   getAntiAliasingMode(): AntiAliasingMode {
     return this.config.antiAliasingMode;
+  }
+
+  /**
+   * Check if upscaling is enabled
+   */
+  isUpscalingEnabled(): boolean {
+    return this.config.upscalingMode !== 'off' && this.config.renderScale < 1.0;
+  }
+
+  /**
+   * Get current upscaling mode
+   */
+  getUpscalingMode(): UpscalingMode {
+    return this.config.upscalingMode;
+  }
+
+  /**
+   * Get current render scale (0.5 - 1.0)
+   */
+  getRenderScale(): number {
+    return this.config.renderScale;
+  }
+
+  /**
+   * Get render scale as percentage (50 - 100)
+   */
+  getRenderScalePercent(): number {
+    return Math.round(this.config.renderScale * 100);
+  }
+
+  /**
+   * Get current render resolution (internal)
+   */
+  getRenderResolution(): { width: number; height: number } {
+    return { width: this.renderWidth, height: this.renderHeight };
+  }
+
+  /**
+   * Get current display resolution
+   */
+  getDisplayResolution(): { width: number; height: number } {
+    return { width: this.displayWidth, height: this.displayHeight };
   }
 
   /**

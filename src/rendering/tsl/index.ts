@@ -76,6 +76,7 @@ export {
   DamageVignette,
   type PostProcessingConfig,
   type AntiAliasingMode,
+  type UpscalingMode,
 } from './PostProcessing';
 
 // Map effects
@@ -105,3 +106,15 @@ export {
   TSLTerrainMaterial,
   type TSLTerrainConfig,
 } from './TerrainMaterial';
+
+// Resolution Upscaling (EASU/RCAS - FSR-inspired)
+export {
+  easuUpscale,
+  rcasSharpening,
+  createEASUPass,
+  createRCASPass,
+  TemporalSpatialUpscaler,
+  type EASUConfig,
+  type RCASConfig,
+  type TSUConfig,
+} from './UpscalerNode';
