@@ -27,21 +27,35 @@ VOIDSTRIKE uses Three.js with WebGPU renderer and TSL (Three.js Shading Language
 ### Anti-Aliasing Details
 
 #### TRAA (Temporal Reprojection Anti-Aliasing)
-- Uses MRT (Multiple Render Targets) with velocity output
-- Proper motion vector tracking via `velocity` TSL constant
-- Falls back to zero-velocity mode if MRT setup fails
+- Uses **zero-velocity mode** with depth-based reprojection
 - Optional RCAS sharpening to counter temporal blur
+- Halton sequence camera jittering for temporal sampling
+- **Stable entity ordering** ensures consistent instance indices across frames
+
+**Why zero-velocity instead of MRT velocity:**
+Three.js's velocity buffer calculates motion from `matrixWorld`, but `InstancedMesh` stores per-instance transforms in a separate `instanceMatrix` buffer. This causes incorrect velocity for dynamic instances (buildings, units, resources), resulting in visible jiggling. Zero-velocity mode uses depth-based reprojection which works correctly with InstancedMesh.
+
+See: [GitHub Issue #31892](https://github.com/mrdoob/three.js/issues/31892)
+
+**Stable Entity Ordering:**
+To prevent jiggling artifacts with TAA, all renderers (UnitRenderer, BuildingRenderer, ResourceRenderer) sort entities by ID before processing. This ensures that:
+1. Each entity maintains the same instance index across frames
+2. Previous/current matrix pairs are properly aligned
+3. Depth-based reprojection produces consistent results
 
 ```typescript
-// MRT setup for TRAA
-scenePass.setMRT(mrt({
-  output: output,
-  velocity: velocity,
-}));
+// Sort entities by ID for stable instance ordering
+const entities = [...world.getEntitiesWith('Transform', 'Building')].sort((a, b) => a.id - b.id);
 
-const scenePassVelocity = scenePass.getTextureNode('velocity');
-const traaPass = traa(outputNode, scenePassDepth, scenePassVelocity, camera);
+// Zero-velocity mode - works correctly with InstancedMesh
+const traaPass = traa(outputNode, scenePassDepth, zeroVelocityNode, camera);
 ```
+
+**Previous Instance Matrix Storage:**
+For future MRT velocity support, all InstancedMesh objects store previous frame matrices:
+- `prevInstanceMatrix0-3` attributes (4 vec4s = mat4)
+- Swapped at frame start before updating current matrices
+- Managed by `InstancedVelocity.ts` utility
 
 #### EASU Upscaling
 - Renders at lower resolution, upscales to display resolution
@@ -51,12 +65,12 @@ const traaPass = traa(outputNode, scenePassDepth, scenePassVelocity, camera);
 
 ### Effect Pipeline Order
 
-1. **Scene Pass** - Render scene with MRT (output + velocity when TAA enabled)
+1. **Scene Pass** - Render scene (no MRT currently - see TAA notes above)
 2. **EASU Upscaling** - Applied first while we have a texture node (needs `.sample()`)
 3. **GTAO** - Ambient occlusion multiplied with scene
 4. **Bloom** - Additive HDR glow
 5. **Color Grading** - Exposure, saturation, contrast, vignette
-6. **Anti-Aliasing** - TRAA or FXAA as final pass
+6. **Anti-Aliasing** - TRAA (zero-velocity) or FXAA as final pass
 
 ---
 
@@ -79,17 +93,19 @@ const ssrPass = ssr(scenePassColor, scenePassDepth, scenePassNormal, camera);
 ```
 
 #### 2. Motion Blur
-Already have MRT velocity setup from TRAA work!
+**Note:** Requires MRT velocity which currently causes jiggling with InstancedMesh. Would need custom velocity solution for instanced objects.
 
 **Benefits:**
 - Cinematic feel for fast-moving units/projectiles
-- Uses existing velocity buffer infrastructure
+- Per-pixel blur based on motion vectors
 
-**Implementation:**
+**Implementation (when velocity is available):**
 ```typescript
 import { motionBlur } from 'three/tsl';
-const blurredNode = motionBlur(outputNode, scenePassVelocity);
+const blurredNode = motionBlur(outputNode, velocityNode);
 ```
+
+**Blockers:** Same InstancedMesh velocity issue as TRAA - see TAA notes above.
 
 #### 3. Depth of Field (Bokeh DoF)
 ```typescript

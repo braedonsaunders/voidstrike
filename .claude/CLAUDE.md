@@ -34,6 +34,13 @@ VOIDSTRIKE is a browser-based RTS game built with Next.js 14, Three.js, and Type
    - Adding new rendering pipelines
    - Modifying the ECS structure
 
+5. **Update the GRAPHICS.md file** in `.claude/GRAPHICS.md` when:
+   - Adding new post-processing effects
+   - Modifying the render pipeline
+   - Adding new shaders or TSL nodes
+   - Changing graphics settings/options
+   - Implementing new visual features (SSR, SSGI, etc.)
+
 ## File Organization
 
 ```
@@ -42,7 +49,8 @@ VOIDSTRIKE is a browser-based RTS game built with Next.js 14, Three.js, and Type
 ├── DESIGN.md       # Game design document
 ├── SCHEMA.md       # Database schema documentation
 ├── TODO.md         # Development roadmap and task tracking
-└── ARCHITECTURE.md # Technical architecture overview
+├── ARCHITECTURE.md # Technical architecture overview
+└── GRAPHICS.md     # Graphics pipeline and effects documentation
 ```
 
 ## Code Standards
