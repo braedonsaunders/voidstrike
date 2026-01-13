@@ -151,6 +151,8 @@ export class RenderPipeline {
 
   // Zero-velocity texture for TRAA (used when materials don't output velocity)
   private zeroVelocityTexture: THREE.DataTexture | null = null;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  private zeroVelocityNode: any = null; // TSL texture node - reused across rebuilds
 
   // Uniforms for dynamic updates
   private uVignetteIntensity = uniform(0.25);
@@ -212,6 +214,10 @@ export class RenderPipeline {
     this.zeroVelocityTexture.minFilter = THREE.NearestFilter;
     this.zeroVelocityTexture.magFilter = THREE.NearestFilter;
     this.zeroVelocityTexture.needsUpdate = true;
+
+    // Create the TSL texture node once - reused across rebuilds
+    // This prevents WebGPU "Texture already initialized" errors
+    this.zeroVelocityNode = texture(this.zeroVelocityTexture);
   }
 
   private createPipeline(): PostProcessing {
@@ -301,12 +307,10 @@ export class RenderPipeline {
         // 2. Depth threshold invalidates history on depth changes
         // 3. Neighborhood clamping prevents ghosting
 
-        // Wrap the pre-created texture in TSL texture node
-        // (texture is created once in constructor to avoid WebGPU re-init errors)
-        const zeroVelocityNode = texture(this.zeroVelocityTexture!);
-
+        // Use pre-created TSL texture node (created once in constructor)
+        // This prevents WebGPU "Texture already initialized" errors on rebuild
         // Use Three.js's proven TRAA (Temporal Reprojection Anti-Aliasing) implementation
-        this.traaPass = traa(outputNode, scenePassDepth, zeroVelocityNode, this.camera);
+        this.traaPass = traa(outputNode, scenePassDepth, this.zeroVelocityNode, this.camera);
 
         // Apply optional sharpening after TRAA (counters blur)
         if (this.config.taaSharpeningEnabled) {
@@ -622,6 +626,7 @@ export class RenderPipeline {
       this.zeroVelocityTexture.dispose();
       this.zeroVelocityTexture = null;
     }
+    this.zeroVelocityNode = null;
     // PostProcessing handles its own disposal
   }
 }
