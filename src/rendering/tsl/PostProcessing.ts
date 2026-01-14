@@ -309,10 +309,13 @@ export class RenderPipeline {
 
       // Step 1: Create RenderTarget at render resolution
       // This is where the internal pipeline will render to
+      // IMPORTANT: Use LinearSRGBColorSpace because the internal pipeline outputs linear HDR data.
+      // Using SRGBColorSpace would cause Three.js to apply an unwanted sRGB-to-linear conversion
+      // when sampling, resulting in washed out colors (double linearization).
       this.internalRenderTarget = new THREE.RenderTarget(this.renderWidth, this.renderHeight, {
         type: THREE.HalfFloatType,
         format: THREE.RGBAFormat,
-        colorSpace: THREE.SRGBColorSpace,
+        colorSpace: THREE.LinearSRGBColorSpace,
         minFilter: THREE.LinearFilter,
         magFilter: THREE.LinearFilter,
       });

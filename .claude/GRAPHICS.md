@@ -89,6 +89,9 @@ renderPipeline.applyConfig({ ssrEnabled: true });
 - Ring suppression via local min/max clamping
 - Configurable render scale (50%-100%)
 
+**Color Space Handling:**
+The internal render target uses `LinearSRGBColorSpace` because the post-processing pipeline outputs linear HDR data. Using `SRGBColorSpace` would cause double-linearization when sampling (washed out colors with bilinear mode especially).
+
 **AAA Dual-Pipeline Architecture for TAA + FSR:**
 
 The render pipeline uses a dual-pipeline architecture like AAA games:
