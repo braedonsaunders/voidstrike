@@ -36,17 +36,24 @@ VOIDSTRIKE uses Three.js with WebGPU renderer and TSL (Three.js Shading Language
 **Custom Per-Instance Velocity:**
 Three.js's built-in VelocityNode calculates motion from `matrixWorld`, but `InstancedMesh` stores per-instance transforms in a separate `instanceMatrix` buffer. This causes incorrect velocity for dynamic instances (buildings, units, resources), resulting in visible jiggling with the built-in velocity.
 
-Our solution (`InstancedVelocity.ts`) provides custom per-instance velocity:
+Our solution (`InstancedVelocity.ts`) provides custom per-instance velocity with CPU-side movement detection:
+
+**The Floating Point Precision Problem:**
+Computing velocity in the shader requires calculating both current and previous positions. However, Three.js uses `modelViewMatrix` (which includes instanceMatrix internally) for current position, while we manually multiply `prevInstanceMatrix * position` for previous position. Even with identical matrix values, these different code paths produce slightly different floating point results, causing micro-jitter on static objects.
+
+**The Solution - CPU-Side Movement Detection:**
 1. Stores previous frame's instance matrices as geometry attributes (`prevInstanceMatrix0-3`)
-2. TSL velocity node reads these attributes and computes proper per-instance velocity
-3. Camera matrices are tracked separately for accurate motion calculation
+2. **Compares matrices on CPU** (exact comparison, no precision issues)
+3. Sets an `instanceMoved` flag attribute (0 = static, 1 = moved)
+4. Shader uses `select()` to return exactly zero velocity for static instances
+5. Only moving instances compute velocity (actual motion dominates precision noise)
 
 See: [GitHub Issue #31892](https://github.com/mrdoob/three.js/issues/31892)
 
 **Performance Impact:**
-- **Memory:** 4 vec4 attributes per InstancedMesh (~64 bytes/instance)
-- **CPU:** O(n) matrix copy per frame per mesh (negligible for <1000 instances)
-- **GPU:** Additional 4 attribute reads + mat4 reconstruction in velocity shader (~0.1ms overhead)
+- **Memory:** 4 vec4 + 1 float attributes per InstancedMesh (~68 bytes/instance)
+- **CPU:** O(n) matrix comparison + copy per frame per mesh (negligible for <1000 instances)
+- **GPU:** Conditional velocity computation - static objects have zero overhead
 - **Net Impact:** ~0.5-1ms per frame with TAA enabled - minimal compared to TAA quality gain
 
 **Stable Entity Ordering:**
@@ -59,7 +66,7 @@ To ensure velocity accuracy, all renderers (UnitRenderer, BuildingRenderer, Reso
 // Sort entities by ID for stable instance ordering
 const entities = [...world.getEntitiesWith('Transform', 'Building')].sort((a, b) => a.id - b.id);
 
-// Custom velocity mode - proper per-instance velocity
+// Custom velocity mode - proper per-instance velocity with movement detection
 const customVelocity = createInstancedVelocityNode();
 scenePass.setMRT(mrt({ output, velocity: customVelocity }));
 ```
@@ -67,11 +74,11 @@ scenePass.setMRT(mrt({ output, velocity: customVelocity }));
 **Implementation Architecture:**
 ```
 InstancedVelocity.ts
-├── setupInstancedVelocity(mesh)     - Adds prevInstanceMatrix0-3 attributes
-├── swapInstanceMatrices(mesh)       - Copies current→previous at frame start
+├── setupInstancedVelocity(mesh)     - Adds prevInstanceMatrix0-3 and instanceMoved attributes
+├── swapInstanceMatrices(mesh)       - Compares matrices, sets moved flag, copies current→previous
 ├── initCameraMatrices(camera)       - Initializes camera matrix tracking
 ├── updateCameraMatrices(camera)     - Updates camera matrices after render
-└── createInstancedVelocityNode()    - TSL node for MRT velocity output
+└── createInstancedVelocityNode()    - TSL node with conditional velocity (zero for static)
 ```
 
 #### SSR (Screen Space Reflections)

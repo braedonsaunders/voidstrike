@@ -76,6 +76,8 @@ const suppressedWarnings = [
   'Vertex attribute "prevInstanceMatrix1" not found',
   'Vertex attribute "prevInstanceMatrix2" not found',
   'Vertex attribute "prevInstanceMatrix3" not found',
+  // Movement flag - only present on instanced meshes with velocity setup
+  'Vertex attribute "instanceMoved" not found',
   // Normal attribute - some geometries don't have normals
   'Vertex attribute "normal" not found',
 ];
