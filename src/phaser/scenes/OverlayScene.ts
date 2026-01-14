@@ -564,6 +564,8 @@ export class OverlayScene extends Phaser.Scene {
                 this.countdownContainer.destroy();
                 this.countdownContainer = null;
               }
+              // Signal that countdown is complete - game can now start
+              this.eventBus?.emit('game:countdownComplete', {});
             }
           },
         });
