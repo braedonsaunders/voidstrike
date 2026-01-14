@@ -497,6 +497,15 @@ export class RenderPipeline {
         // Use Three.js's TRAA with real velocity vectors
         this.traaPass = traa(outputNode, scenePassDepth, scenePassVelocity, this.camera);
 
+        // IMPORTANT: When upscaling is active, TRAA must operate at render resolution
+        // to match the scene pass output. Otherwise WebGPU will error on depth texture
+        // copy operations (depth textures must be copied in their entirety).
+        if (useUpscaling) {
+          const renderWidth = Math.floor(this.displayWidth * this.config.renderScale);
+          const renderHeight = Math.floor(this.displayHeight * this.config.renderScale);
+          this.traaPass.setSize(renderWidth, renderHeight);
+        }
+
         // Get TRAA's texture output (supports .sample() for further processing)
         const traaTexture = this.traaPass.getTextureNode();
 
@@ -770,13 +779,19 @@ export class RenderPipeline {
 
       // Update render resolution based on effective scale
       // When upscaling is off, use native resolution
-      const effectiveScale = this.config.upscalingMode !== 'off' ? this.config.renderScale : 1.0;
+      const useUpscaling = this.config.upscalingMode !== 'off' && this.config.renderScale < 1.0;
+      const effectiveScale = useUpscaling ? this.config.renderScale : 1.0;
       this.renderWidth = Math.floor(width * effectiveScale);
       this.renderHeight = Math.floor(height * effectiveScale);
 
-      // TRAA handles its own resizing internally
+      // TRAA must match render resolution when upscaling is active
+      // Otherwise WebGPU errors on depth texture copy (must be full copy for depth)
       if (this.traaPass) {
-        this.traaPass.setSize(width, height);
+        if (useUpscaling) {
+          this.traaPass.setSize(this.renderWidth, this.renderHeight);
+        } else {
+          this.traaPass.setSize(width, height);
+        }
       }
 
       // Update EASU resolutions
