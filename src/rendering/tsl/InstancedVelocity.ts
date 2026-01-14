@@ -34,10 +34,9 @@ const uniform = (TSL as any).uniform;
 const velocitySetupMeshes = new WeakSet<THREE.InstancedMesh>();
 
 // Camera matrix uniforms (shared across all meshes)
-const previousProjectionMatrix = new THREE.Matrix4();
-const previousViewMatrix = new THREE.Matrix4();
-const uPrevProjectionMatrix = uniform(previousProjectionMatrix);
-const uPrevViewMatrix = uniform(previousViewMatrix);
+// These are set directly after each frame's render, to be used as "previous" in next frame
+const uPrevProjectionMatrix = uniform(new THREE.Matrix4());
+const uPrevViewMatrix = uniform(new THREE.Matrix4());
 
 /**
  * Set up velocity attributes for an InstancedMesh.
@@ -152,22 +151,23 @@ export function commitInstanceMatrices(mesh: THREE.InstancedMesh): void {
 /**
  * Update camera matrices for velocity calculation.
  * Call at END of frame, after render.
+ *
+ * Sets the uniforms directly to the current camera matrices.
+ * Next frame will use these as "previous" camera position.
  */
 export function updateCameraMatrices(camera: THREE.Camera): void {
-  uPrevProjectionMatrix.value.copy(previousProjectionMatrix);
-  uPrevViewMatrix.value.copy(previousViewMatrix);
-  previousProjectionMatrix.copy(camera.projectionMatrix);
-  previousViewMatrix.copy(camera.matrixWorldInverse);
+  // Store current camera for next frame's "previous" calculation
+  uPrevProjectionMatrix.value.copy(camera.projectionMatrix);
+  uPrevViewMatrix.value.copy(camera.matrixWorldInverse);
 }
 
 /**
  * Initialize camera matrices. Call once at startup.
+ * Sets "previous" to current so first frame has zero velocity.
  */
 export function initCameraMatrices(camera: THREE.Camera): void {
-  previousProjectionMatrix.copy(camera.projectionMatrix);
-  previousViewMatrix.copy(camera.matrixWorldInverse);
-  uPrevProjectionMatrix.value.copy(previousProjectionMatrix);
-  uPrevViewMatrix.value.copy(previousViewMatrix);
+  uPrevProjectionMatrix.value.copy(camera.projectionMatrix);
+  uPrevViewMatrix.value.copy(camera.matrixWorldInverse);
 }
 
 /**

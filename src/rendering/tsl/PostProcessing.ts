@@ -364,6 +364,7 @@ export class RenderPipeline {
 
     // 3. SSR (Screen Space Reflections)
     // Applied after AO, before bloom - reflections pick up scene color
+    // NOTE: SSR needs the raw scene texture (with .sample() method), not processed output
     if (this.config.ssrEnabled) {
       try {
         // Get normal texture from MRT - SSR handles decoding internally
@@ -371,14 +372,12 @@ export class RenderPipeline {
 
         // Create SSR pass
         // SSR(color, depth, normal, metalness, roughness, camera)
-        // Using moderate default metalness/roughness since our materials vary
-        // Higher metalness = more reflection, lower roughness = sharper reflection
-        const defaultMetalness = float(0.5); // Moderate reflectivity
-        const defaultRoughness = this.uSSRMaxRoughness; // Configurable via settings
+        // IMPORTANT: Pass scenePassColor (texture), not outputNode (may be processed)
+        const defaultMetalness = float(0.5);
+        const defaultRoughness = this.uSSRMaxRoughness;
 
-        // Cast to any to bypass outdated @types/three (ssr requires camera as 6th param)
         this.ssrPass = (ssr as any)(
-          outputNode,
+          scenePassColor,  // Must be texture node with .sample()
           scenePassDepth,
           scenePassNormal,
           defaultMetalness,
@@ -397,8 +396,16 @@ export class RenderPipeline {
           this.ssrPass.thickness.value = this.config.ssrThickness;
         }
 
+        // Blend SSR with current output (which may include AO)
         if (this.ssrPass) {
-          outputNode = this.ssrPass;
+          // If AO was applied, we need to apply it to SSR result too
+          if (this.config.aoEnabled && this.aoPass) {
+            const aoValue = this.aoPass.getTextureNode().r;
+            const aoFactor = mix(float(1.0), aoValue, this.uAOIntensity);
+            outputNode = vec3(this.ssrPass).mul(aoFactor);
+          } else {
+            outputNode = this.ssrPass;
+          }
         }
       } catch (e) {
         console.warn('[PostProcessing] SSR initialization failed:', e);
