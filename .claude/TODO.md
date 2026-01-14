@@ -405,6 +405,14 @@
 - [x] Environment manager
 - [x] Map border fog (SC2-style smoky fog effect around map edges)
 
+### JSON-Based Map System (January 2026) ✓
+- [x] **JSON map format** - Compact storage with compressed terrain (elevation array, type string, sparse features)
+- [x] **Map serialization** - MapData → JSON conversion with terrain compression
+- [x] **Map deserialization** - JSON → MapData with terrain decompression
+- [x] **All 6 maps converted** - Crystal Caverns, Void Assault, Scorched Basin, Contested Frontier, Titans Colosseum, Battle Arena
+- [x] **Editor export** - Export button in Map Editor with Copy to Clipboard and Download options
+- [x] **Build-time bundling** - JSON files imported directly for tree-shaking and bundling
+
 ### Pre-Game Setup
 - [x] Game options menu
 - [x] Map preview
