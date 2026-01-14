@@ -2,401 +2,291 @@
 
 # VOIDSTRIKE
 
-### A Browser-Native Real-Time Strategy Game
+**Browser-native RTS engine with WebGPU rendering and deterministic multiplayer**
 
-**Zero downloads. Zero installs. Just click and play.**
-
-[![Built with Next.js](https://img.shields.io/badge/Next.js-15-black?logo=next.js)](https://nextjs.org/)
-[![Three.js](https://img.shields.io/badge/Three.js-r182-orange?logo=three.js)](https://threejs.org/)
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.0-blue?logo=typescript)](https://www.typescriptlang.org/)
-[![WebGPU](https://img.shields.io/badge/WebGPU-Enabled-green)](https://www.w3.org/TR/webgpu/)
+[![Three.js](https://img.shields.io/badge/Three.js-r182-black?logo=three.js)](https://threejs.org/)
+[![WebGPU](https://img.shields.io/badge/WebGPU-First-green)](https://www.w3.org/TR/webgpu/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
-[Play Now](#getting-started) | [Features](#features) | [Technical Deep Dive](#technical-architecture) | [Roadmap](#roadmap)
-
----
+[Quick Start](#quick-start) · [Architecture](#architecture) · [What's Interesting](#whats-interesting) · [Extractable Libraries](#extractable-libraries)
 
 </div>
 
-## The Vision
+---
 
-VOIDSTRIKE brings the depth and intensity of classic RTS games to your browser. No Steam download. No launcher. No waiting. Just open a tab and command your armies.
+## What is this?
 
-Inspired by the strategic depth of StarCraft II, VOIDSTRIKE delivers competitive real-time strategy with modern web technology—playable on any device with a browser.
+VOIDSTRIKE is a fully playable browser RTS inspired by StarCraft II. More importantly for developers, it's a **reference implementation** of modern game architecture patterns running entirely in the browser:
+
+- **WebGPU-first rendering** with TSL shaders and WebGL2 fallback
+- **Deterministic lockstep multiplayer** with fixed-point math
+- **Industry-standard WASM pathfinding** (recast-navigation - same as Unity/Godot/Unreal)
+- **Data-driven architecture** that separates engine from game content
+- **85K lines of TypeScript** with strict mode, no `any` types in engine code
+
+The codebase is structured so you can fork it to make a different RTS, extract individual systems as libraries, or study how specific problems are solved.
 
 ---
 
-## Features
-
-### Three Distinct Factions
-
-<table>
-<tr>
-<td width="33%" valign="top">
-
-#### THE DOMINION
-*Military Industrial Complex*
-
-Versatile human forces with siege warfare and defensive fortifications. Transform your tanks, bunker your marines, and grind enemies down with superior firepower.
-
-**Unique Mechanics:**
-- Siege mode transformations
-- Bunkers & fortifications
-- Healing & repair units
-- Building lift-off
-
-</td>
-<td width="33%" valign="top">
-
-#### THE SYNTHESIS
-*Transcendent AI Collective*
-
-Powerful but expensive machine forces with advanced shields and psionic abilities. Warp units directly into battle and overwhelm with technological superiority.
-
-**Unique Mechanics:**
-- Instant warp-in deployment
-- Regenerating shields
-- Psionic abilities
-- Energy-based economy
-
-</td>
-<td width="33%" valign="top">
-
-#### THE SWARM
-*Adaptive Biological Horror*
-
-Cheap, fast, and overwhelming organic forces. Spread creep across the map, evolve your units mid-battle, and drown enemies in bodies.
-
-**Unique Mechanics:**
-- Creep terrain control
-- Unit morphing & evolution
-- Passive regeneration
-- Burrowing & ambush
-
-</td>
-</tr>
-</table>
-
-### Strategic Depth
-
-- **256-Level Elevation System** — High ground advantage matters. Attack uphill with a 30% miss chance.
-- **Terrain Features** — Forests hide units, roads speed movement, rivers create chokepoints.
-- **Fog of War** — Scout or die. Intel wins games.
-- **Tech Trees** — Research upgrades, unlock advanced units, adapt your strategy.
-- **Command Queuing** — Shift-click to queue complex command sequences.
-
-### Competitive Features
-
-- **Control Groups** — Ctrl+1-9 to create, 1-9 to select, double-tap to center camera.
-- **Smart Casting** — Abilities target automatically or manually.
-- **APM-Friendly Controls** — Designed for high-speed competitive play.
-- **Replay System** — Deterministic simulation means free replays.
-- **5-Tier AI** — From beginner-friendly to brutally challenging.
-
----
-
-## Technical Architecture
-
-VOIDSTRIKE isn't just a game—it's a showcase of cutting-edge web technology pushing the browser to its limits.
-
-### Rendering Engine
-
-```
-┌─────────────────────────────────────────────────────────────────┐
-│                     PHASER OVERLAY LAYER                        │
-│    Tactical overlays • Alert animations • Screen effects        │
-├─────────────────────────────────────────────────────────────────┤
-│                      REACT HUD LAYER                            │
-│    Command Card • Minimap • Resources • Selection Panel         │
-├─────────────────────────────────────────────────────────────────┤
-│                 THREE.JS WEBGPU RENDERER                        │
-│    TSL Shaders • GPU Particles • Node-based Post-Processing     │
-├─────────────────────────────────────────────────────────────────┤
-│                    THREE.JS 3D WORLD                            │
-│    Isometric Camera • Height-mapped Terrain • GLB Models        │
-├─────────────────────────────────────────────────────────────────┤
-│                     ECS GAME ENGINE                             │
-│    20 tick/s Fixed Timestep • Deterministic Simulation          │
-└─────────────────────────────────────────────────────────────────┘
-```
-
-### WebGPU-First Architecture
-
-VOIDSTRIKE uses **Three.js r182 with WebGPU Renderer** and automatic WebGL2 fallback:
-
-- **TSL (Three.js Shading Language)** — Write once, run on WebGPU or WebGL
-- **GPU-Computed Particles** — Thousands of particles via compute shaders
-- **Node-Based Post-Processing** — Bloom, SSAO, FXAA, vignette, color grading
-- **Async Rendering** — Non-blocking frame submission
-
-### Entity Component System
-
-A custom high-performance ECS architecture powers all game logic:
-
-```typescript
-// Pure data components
-interface TransformComponent { x: number; y: number; z: number; rotation: number; }
-interface HealthComponent { current: number; max: number; armor: number; }
-interface CombatComponent { damage: number; range: number; attackSpeed: number; }
-
-// Logic-free systems process entities each tick
-class CombatSystem extends System {
-  update(entities: Entity[], deltaTime: number) {
-    // Acquire targets, calculate damage, apply effects
-  }
-}
-```
-
-**Why ECS?**
-- Cache-friendly memory layout
-- Parallelizable system updates
-- Trivial serialization for save/load and networking
-- Clean separation of data and logic
-
-### Advanced Pathfinding
-
-Three-tier pathfinding system inspired by AAA game engines:
-
-| Layer | Algorithm | Purpose |
-|-------|-----------|---------|
-| **Global** | Hierarchical A* | Long-distance routing through sector graph |
-| **Local** | A* with Binary Heap | Detailed pathing with terrain costs |
-| **Avoidance** | RVO/ORCA | Collision-free local movement |
-
-**Key Features:**
-- **Web Worker Offloading** — Pathfinding never blocks the main thread
-- **Binary Heap Open List** — O(log n) vs O(n) for large searches
-- **Version-Based Node Reset** — O(1) grid reset between searches
-- **Line-of-Sight Smoothing** — Natural-looking paths via Bresenham validation
-- **Dynamic Repathing** — Automatic recalculation when buildings placed/destroyed
-
-### Deterministic Multiplayer
-
-Lockstep simulation architecture enables competitive online play:
-
-```typescript
-// All clients run identical simulations
-// Only player inputs are transmitted—not game state
-interface GameInput {
-  tick: number;
-  playerId: string;
-  type: 'MOVE' | 'ATTACK' | 'BUILD' | 'ABILITY';
-  data: CommandData;
-}
-
-// Periodic checksums detect desync
-const checksum = hashGameState(world, tick);
-broadcast({ type: 'CHECKSUM', tick, hash: checksum });
-```
-
-**Benefits:**
-- Minimal bandwidth (inputs only, ~1KB/s)
-- Free replay system (just replay inputs)
-- Cheat detection via checksum mismatch
-- Scales to 8-player games
-
-### AI System
-
-Five difficulty tiers with distinct behaviors:
-
-| Difficulty | Build Speed | Micro Level | Special Features |
-|------------|-------------|-------------|------------------|
-| Easy | 0.5x | None | Delayed attacks, no scouting |
-| Medium | 0.75x | Basic | Simple build orders |
-| Hard | 1.0x | Good | Counter-building, multi-prong attacks |
-| Very Hard | 1.25x | Advanced | Harassment, focus fire, kiting |
-| Insane | 2.0x | Expert | Resource bonus, full micro, relentless |
-
-**AI Capabilities:**
-- **Behavior Trees** — Composable decision-making for unit micro
-- **Counter-Building** — Analyzes your composition and adapts
-- **Threat Assessment** — Ranks targets by threat score
-- **Kiting Logic** — Ranged units maintain distance from melee
-- **Economy Management** — Optimal worker saturation
-
-### Visual Systems
-
-**Procedural Terrain Shader:**
-- Multi-layer texturing (grass, dirt, rock, cliff)
-- Fractal Brownian Motion for organic noise
-- Triplanar mapping for cliffs (no UV stretching)
-- Real-time normal generation
-- Biome-specific configurations
-
-**Post-Processing Pipeline:**
-- HDR Bloom for energy weapons and explosions
-- Screen-space ambient occlusion (SSAO)
-- FXAA anti-aliasing
-- Cinematic vignette and color grading
-- ACES tone mapping
-
-**Particle Systems:**
-- GPU-instanced (5000+ particles)
-- Muzzle flashes, projectile trails, explosions
-- Impact sparks, death effects, debris
-
----
-
-## Performance
-
-| Metric | Target | Achieved |
-|--------|--------|----------|
-| Frame Rate | 60 FPS | 60 FPS with 200 units |
-| Input Latency | <100ms | ~16ms (local) |
-| Initial Load | <5s | ~3s |
-| Memory Usage | <500MB | ~300MB |
-
-**Optimizations:**
-- Instanced rendering for units
-- Spatial hashing for O(1) proximity queries
-- Object pooling for projectiles and particles
-- Frustum culling for off-screen entities
-- LOD system for distant units
-
----
-
-## Getting Started
-
-### Prerequisites
-
-- Node.js 18+
-- A WebGPU-capable browser (Chrome 113+, Edge 113+, Firefox Nightly)
-  - *Falls back gracefully to WebGL2 on other browsers*
-
-### Installation
+## Quick Start
 
 ```bash
-# Clone the repository
 git clone https://github.com/your-username/voidstrike.git
 cd voidstrike
-
-# Install dependencies
 npm install
-
-# Start development server
 npm run dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) and enter the void.
-
-### Controls
-
-| Action | Input |
-|--------|-------|
-| Select | Left Click |
-| Command | Right Click |
-| Box Select | Left Drag |
-| Queue Command | Shift + Right Click |
-| Attack Move | A + Click |
-| Stop | S |
-| Hold Position | H |
-| Patrol | P + Click |
-| Control Group | Ctrl + 1-9 |
-| Select Group | 1-9 |
-| Camera Pan | WASD / Arrow Keys / Edge Scroll |
-| Camera Zoom | Mouse Wheel |
-| Camera Rotate | Middle Mouse Drag |
+Open http://localhost:3000. Requires Node 18+ and a modern browser (Chrome 113+ for WebGPU, falls back to WebGL2).
 
 ---
 
-## Roadmap
+## Architecture
 
-### Phase 1: Foundation ✅
-- [x] 3D terrain with procedural generation
-- [x] Unit selection and control groups
-- [x] A* pathfinding with RVO avoidance
-- [x] Resource gathering economy
-- [x] Building placement and construction
-- [x] Combat system with damage types
-- [x] Fog of war
-- [x] 5-tier AI opponents
+```
+src/
+├── engine/                 # Reusable game engine (~25K LOC)
+│   ├── ecs/               # Entity-Component-System with archetype caching
+│   ├── core/              # Game loop, EventBus, performance monitoring
+│   ├── systems/           # Combat, movement, production, AI, etc.
+│   ├── pathfinding/       # Recast Navigation WASM wrapper
+│   └── network/           # WebRTC, lockstep, desync detection
+│
+├── rendering/             # Three.js WebGPU rendering (~15K LOC)
+│   ├── tsl/              # TSL post-processing pipeline
+│   └── *Renderer.ts      # Unit, building, terrain, effects
+│
+├── data/                  # Game configuration (swap this to make a different game)
+│   ├── units/            # Unit definitions per faction
+│   ├── buildings/        # Building definitions
+│   ├── abilities/        # Ability definitions
+│   └── maps/             # JSON map format with connectivity validation
+│
+└── components/            # React UI layer
+```
 
-### Phase 2: Combat Depth 🚧
-- [ ] Full ability system
-- [ ] Complete tech trees
-- [ ] All three factions playable
-- [ ] Audio system with spatial sound
-- [ ] Campaign missions
+The key insight: **everything in `src/data/` is game-specific, everything in `src/engine/` is reusable.** You could make a medieval RTS by changing the data files without touching engine code.
 
-### Phase 3: Multiplayer
-- [ ] Supabase real-time integration
-- [ ] Lobby and matchmaking
-- [ ] Ranked ladder
-- [ ] Replay sharing
-- [ ] Spectator mode
+---
 
-### Phase 4: Polish
-- [ ] Custom 3D models
-- [ ] Voice acting
-- [ ] Cinematics
-- [ ] Map editor
-- [ ] Mod support
+## What's Interesting
+
+These are the parts that might be worth studying or extracting:
+
+### Archetype-Based ECS with Query Caching
+
+Most ECS implementations invalidate query caches every frame. This one only invalidates when entity compositions change:
+
+```typescript
+// src/engine/ecs/World.ts
+// Cache is keyed by component signature, invalidated on archetype changes only
+private archetypes: Map<string, Set<Entity>> = new Map();
+private queryCache: Map<string, Entity[]> = new Map();
+private archetypeCacheVersion: number = 0;
+
+getEntitiesWith(...components): Entity[] {
+  const key = components.sort().join(',');
+  if (this.queryCacheVersion === this.archetypeCacheVersion) {
+    const cached = this.queryCache.get(key);
+    if (cached) return cached;
+  }
+  // ... find matching archetypes, cache result
+}
+```
+
+With 500 entities across 10 archetypes, this is ~50x faster than naive set intersection.
+
+### Web Worker Game Loop
+
+Browsers throttle `requestAnimationFrame` in background tabs. This breaks multiplayer games. Solution: use a Web Worker for timing (Workers aren't throttled):
+
+```typescript
+// src/engine/core/GameLoop.ts
+const workerCode = `
+  setInterval(() => {
+    self.postMessage({ type: 'tick', time: performance.now() });
+  }, ${tickMs});
+`;
+this.worker = new Worker(URL.createObjectURL(new Blob([workerCode])));
+this.worker.onmessage = () => this.tick();
+```
+
+### Per-Instance Velocity for TAA
+
+Three.js's built-in `VelocityNode` doesn't work for `InstancedMesh` - it only tracks per-object transforms. This module stores both current and previous instance matrices as vertex attributes:
+
+```typescript
+// src/rendering/tsl/InstancedVelocity.ts
+// Key insight: use IDENTICAL code paths for both matrices to eliminate precision jitter
+const currInstanceMatrix = mat4(
+  attribute('currInstanceMatrix0'),
+  attribute('currInstanceMatrix1'),
+  attribute('currInstanceMatrix2'),
+  attribute('currInstanceMatrix3')
+);
+const prevInstanceMatrix = mat4(
+  attribute('prevInstanceMatrix0'),
+  // ...
+);
+// Velocity = project(curr) - project(prev)
+```
+
+### Dual-Pipeline TAA + Upscaling
+
+Combining TAA with resolution upscaling is notoriously tricky - depth buffer mismatches cause WebGPU errors. Solution: run all depth-dependent effects at render resolution, then upscale in a separate pipeline:
+
+```typescript
+// src/rendering/tsl/PostProcessing.ts
+// INTERNAL PIPELINE @ 1440p: Scene → GTAO → SSR → Bloom → TRAA
+// DISPLAY PIPELINE @ 2160p: Internal output → EASU upscale → Canvas
+```
+
+### Fixed-Point Determinism
+
+For lockstep multiplayer, floating-point arithmetic must produce identical results across browsers/CPUs. Q16.16 fixed-point ensures bitwise identical computations:
+
+```typescript
+// src/utils/FixedPoint.ts
+export const FP_SHIFT = 16;
+export const FP_SCALE = 1 << FP_SHIFT; // 65536
+
+// 0.1 + 0.2 !== 0.3 in floating point
+// But fpAdd(fpFromFloat(0.1), fpFromFloat(0.2)) is always identical everywhere
+```
+
+### Recast Navigation Integration
+
+Uses the same pathfinding library as Unity, Godot, and Unreal Engine via WASM:
+
+```typescript
+// src/engine/pathfinding/RecastNavigation.ts
+import { init, NavMesh, Crowd, TileCache } from 'recast-navigation';
+
+// NavMesh from terrain geometry
+const result = threeToTileCache([walkableMesh], config);
+
+// O(1) path queries
+const path = navMeshQuery.computePath(start, end);
+
+// ORCA collision avoidance via DetourCrowd
+crowd.addAgent(entityId, position, params);
+crowd.update(deltaTime);
+const state = crowd.getAgentState(entityId); // { x, y, vx, vy }
+```
+
+### Map Connectivity Validation
+
+Ensures all player bases can actually reach each other - catches the classic "designer forgot a ramp" problem:
+
+```typescript
+// src/data/maps/core/ConnectivityAnalyzer.ts
+const analysis = analyzeConnectivity(mapData);
+const result = validateConnectivity(analysis.graph);
+// result.valid === false if any base is unreachable
+```
+
+---
+
+## Extractable Libraries
+
+These could be published as standalone npm packages with minimal modification:
+
+| Component | LOC | Dependencies | Notes |
+|-----------|-----|--------------|-------|
+| **ECS + Archetype Caching** | ~300 | None | `src/engine/ecs/World.ts` |
+| **Fixed-Point Math** | ~200 | None | `src/utils/FixedPoint.ts` |
+| **EventBus (O(1) unsubscribe)** | ~110 | None | `src/engine/core/EventBus.ts` |
+| **Web Worker Game Loop** | ~180 | None | `src/engine/core/GameLoop.ts` |
+| **Behavior Trees** | ~300 | None | `src/engine/ai/BehaviorTree.ts` |
+| **TSL Instanced Velocity** | ~280 | Three.js | `src/rendering/tsl/InstancedVelocity.ts` |
+| **Dual-Pipeline Post-Processing** | ~900 | Three.js | `src/rendering/tsl/PostProcessing.ts` |
 
 ---
 
 ## Tech Stack
 
-| Category | Technology |
-|----------|------------|
+| Layer | Technology |
+|-------|------------|
 | Framework | Next.js 15, React 19 |
-| Language | TypeScript 5 (strict mode) |
-| 3D Engine | Three.js r182, React Three Fiber |
-| Graphics | WebGPU (WebGL2 fallback) |
+| Language | TypeScript 5 (strict) |
+| 3D | Three.js r182 (WebGPU + WebGL2) |
 | Shaders | TSL (Three.js Shading Language) |
+| Pathfinding | recast-navigation (WASM) |
 | State | Zustand |
+| Multiplayer | WebRTC + Supabase |
 | Styling | Tailwind CSS |
-| Backend | Supabase (planned) |
-| Deployment | Vercel (planned) |
 
 ---
 
-## Project Structure
+## Game Features
 
-```
-src/
-├── app/                  # Next.js App Router
-├── components/           # React components
-│   ├── game/            # HUD, minimap, command card
-│   └── ui/              # Reusable UI components
-├── engine/              # Game engine core
-│   ├── ecs/             # Entity Component System
-│   ├── systems/         # Game logic systems
-│   ├── pathfinding/     # A*, hierarchical, RVO
-│   └── ai/              # Behavior trees
-├── rendering/           # Three.js rendering
-│   ├── tsl/             # TSL shader materials
-│   └── shaders/         # GLSL shaders
-├── audio/               # Sound and music
-├── data/                # Units, buildings, factions
-└── utils/               # Math, spatial hashing
-```
+Three asymmetric factions with distinct mechanics:
+
+| Faction | Theme | Unique Mechanics |
+|---------|-------|------------------|
+| **Dominion** | Military industrial | Siege transforms, bunkers, building lift-off |
+| **Synthesis** | AI collective | Warp-in deployment, shields, psionic abilities |
+| **Swarm** | Biological horror | Creep spread, unit morphing, burrowing |
+
+Gameplay systems:
+- 256-level elevation with high ground advantage
+- Fog of war with vision mechanics
+- Control groups, command queuing, smart casting
+- 5-tier AI with behavior trees
+- Deterministic replay system
+
+---
+
+## Performance
+
+| Metric | Target | Current |
+|--------|--------|---------|
+| Frame rate | 60 FPS | 60 FPS @ 200 units |
+| Tick rate | 20 Hz | 20 Hz fixed timestep |
+| Memory | <500MB | ~300MB |
+| Initial load | <5s | ~3s |
+
+Optimizations: instanced rendering, spatial hashing, object pooling, archetype query caching, pooled vectors to minimize GC.
+
+---
+
+## Documentation
+
+Detailed docs in `.claude/`:
+
+- **ARCHITECTURE.md** - System design and data flow
+- **DESIGN.md** - Game mechanics and balance
+- **GRAPHICS.md** - Rendering pipeline and shaders
+- **SCHEMA.md** - Data structures
+- **TODO.md** - Development roadmap
 
 ---
 
 ## Contributing
 
-VOIDSTRIKE is open source and contributions are welcome!
-
 1. Fork the repository
-2. Create a feature branch (`git checkout -b feature/amazing-feature`)
-3. Commit your changes (`git commit -m 'Add amazing feature'`)
-4. Push to the branch (`git push origin feature/amazing-feature`)
-5. Open a Pull Request
+2. Create a feature branch
+3. Make your changes
+4. Run `npm run type-check && npm run lint`
+5. Open a PR
 
-Please read the [contribution guidelines](CONTRIBUTING.md) before submitting.
+Areas where contributions would be particularly valuable:
+- Unit tests for ECS and fixed-point math
+- Additional TSL shader effects
+- AI improvements
+- Performance optimizations
 
 ---
 
 ## License
 
-MIT License — see [LICENSE](LICENSE) for details.
+MIT License - see [LICENSE](LICENSE) for details.
 
 ---
 
 <div align="center">
 
-**Built with obsession for RTS games and modern web technology.**
-
-*Inspired by StarCraft II • Powered by Three.js • Runs in your browser*
+*Built because browser games shouldn't have to compromise on architecture.*
 
 </div>
