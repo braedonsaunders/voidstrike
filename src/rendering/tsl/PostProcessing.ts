@@ -267,10 +267,18 @@ export class RenderPipeline {
     this.camera = camera;
     this.config = { ...DEFAULT_CONFIG, ...config };
 
-    // Get initial resolution
+    // Get initial resolution from renderer
     const size = new THREE.Vector2();
     this.renderer.getSize(size);
-    this.uResolution.value.set(Math.max(1, size.x), Math.max(1, size.y));
+    this.displayWidth = Math.max(1, size.x);
+    this.displayHeight = Math.max(1, size.y);
+    this.uResolution.value.set(this.displayWidth, this.displayHeight);
+
+    // Calculate initial render resolution based on upscaling config
+    const useUpscaling = this.config.upscalingMode !== 'off' && this.config.renderScale < 1.0;
+    const effectiveScale = useUpscaling ? this.config.renderScale : 1.0;
+    this.renderWidth = Math.floor(this.displayWidth * effectiveScale);
+    this.renderHeight = Math.floor(this.displayHeight * effectiveScale);
 
     // Create zero-velocity texture once for TRAA (reused across rebuilds)
     // This avoids MRT issues with materials that don't output velocity
@@ -515,15 +523,35 @@ export class RenderPipeline {
         // Get velocity from MRT (set up above when taaEnabled or ssrEnabled)
         const scenePassVelocity = scenePass.getTextureNode('velocity');
 
+        // AAA APPROACH FOR TAA + UPSCALING:
+        // TRAA creates internal render targets (including depth) at the renderer's current size.
+        // When upscaling is active, we must create TRAA at render resolution to ensure:
+        // 1. Internal depth buffers match scene pass depth resolution (avoids WebGPU copy errors)
+        // 2. Jitter offsets are correct for render resolution (avoids camera shake)
+        // 3. History buffer is at render resolution (proper temporal accumulation)
+        //
+        // We temporarily set the renderer to render resolution, create TRAA, then restore.
+        // This is how AAA games handle TAA + FSR/DLSS pipelines.
+
+        let originalRendererSize: THREE.Vector2 | null = null;
+        if (useUpscaling) {
+          originalRendererSize = new THREE.Vector2();
+          this.renderer.getSize(originalRendererSize);
+          // Temporarily set renderer to render resolution for TRAA creation
+          this.renderer.setSize(renderWidth, renderHeight, false);
+        }
+
         // Use Three.js's TRAA with real velocity vectors
+        // Pass depth for proper disocclusion detection - at render resolution it matches
         this.traaPass = traa(outputNode, scenePassDepth, scenePassVelocity, this.camera);
 
-        // IMPORTANT: When upscaling is active, TRAA must operate at render resolution
-        // to match the scene pass output. Otherwise WebGPU will error on depth texture
-        // copy operations (depth textures must be copied in their entirety).
+        // Restore renderer to display resolution after TRAA creation
+        if (originalRendererSize) {
+          this.renderer.setSize(originalRendererSize.x, originalRendererSize.y, false);
+        }
+
+        // Set TRAA size explicitly to ensure internal uniforms are correct
         if (useUpscaling) {
-          const renderWidth = Math.floor(this.displayWidth * this.config.renderScale);
-          const renderHeight = Math.floor(this.displayHeight * this.config.renderScale);
           this.traaPass.setSize(renderWidth, renderHeight);
         }
 
