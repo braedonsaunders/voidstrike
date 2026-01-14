@@ -1,42 +1,248 @@
 'use client';
 
-import React, { useEffect, memo } from 'react';
-import { useUIStore, GraphicsSettings, RendererAPI, AntiAliasingMode, UpscalingMode } from '@/store/uiStore';
+import React, { useEffect, useState, memo, useCallback } from 'react';
+import { useUIStore, GraphicsSettings, AntiAliasingMode, UpscalingMode } from '@/store/uiStore';
 import { setEdgeScrollEnabled } from '@/store/cameraStore';
 
-const buttonStyle = (enabled: boolean) => ({
-  padding: '4px 12px',
-  backgroundColor: enabled ? '#2a5a2a' : '#5a2a2a',
-  border: 'none',
-  borderRadius: '4px',
-  color: 'white',
-  cursor: 'pointer',
-  fontSize: '11px',
-  minWidth: '50px',
+// ============================================
+// COMPACT UI COMPONENTS
+// ============================================
+
+/** Compact toggle switch */
+const Toggle = memo(function Toggle({
+  enabled,
+  onChange,
+  disabled = false
+}: {
+  enabled: boolean;
+  onChange: () => void;
+  disabled?: boolean;
+}) {
+  return (
+    <button
+      onClick={onChange}
+      disabled={disabled}
+      style={{
+        width: '36px',
+        height: '18px',
+        borderRadius: '9px',
+        border: 'none',
+        backgroundColor: disabled ? '#333' : enabled ? '#22c55e' : '#444',
+        cursor: disabled ? 'not-allowed' : 'pointer',
+        position: 'relative',
+        transition: 'background-color 0.15s',
+        opacity: disabled ? 0.5 : 1,
+      }}
+    >
+      <div style={{
+        width: '14px',
+        height: '14px',
+        borderRadius: '7px',
+        backgroundColor: '#fff',
+        position: 'absolute',
+        top: '2px',
+        left: enabled ? '20px' : '2px',
+        transition: 'left 0.15s',
+        boxShadow: '0 1px 2px rgba(0,0,0,0.3)',
+      }} />
+    </button>
+  );
 });
 
-const selectStyle: React.CSSProperties = {
-  padding: '4px 8px',
-  backgroundColor: '#333',
-  border: '1px solid #555',
-  borderRadius: '4px',
-  color: 'white',
-  cursor: 'pointer',
-  fontSize: '11px',
-};
+/** Segmented control for mode selection */
+const SegmentedControl = memo(function SegmentedControl<T extends string>({
+  options,
+  value,
+  onChange,
+  disabled = false,
+}: {
+  options: { value: T; label: string }[];
+  value: T;
+  onChange: (value: T) => void;
+  disabled?: boolean;
+}) {
+  return (
+    <div style={{
+      display: 'flex',
+      backgroundColor: '#222',
+      borderRadius: '4px',
+      padding: '2px',
+      gap: '2px',
+    }}>
+      {options.map((opt) => (
+        <button
+          key={opt.value}
+          onClick={() => onChange(opt.value)}
+          disabled={disabled}
+          style={{
+            flex: 1,
+            padding: '4px 8px',
+            fontSize: '10px',
+            border: 'none',
+            borderRadius: '3px',
+            backgroundColor: value === opt.value ? '#3b82f6' : 'transparent',
+            color: value === opt.value ? '#fff' : '#888',
+            cursor: disabled ? 'not-allowed' : 'pointer',
+            transition: 'all 0.15s',
+            opacity: disabled ? 0.5 : 1,
+          }}
+        >
+          {opt.label}
+        </button>
+      ))}
+    </div>
+  );
+});
 
-const sliderStyle = { width: '100%', marginTop: '4px' };
-const labelStyle: React.CSSProperties = { display: 'block', marginBottom: '2px', color: '#888', fontSize: '11px' };
-const sectionStyle: React.CSSProperties = { marginBottom: '16px', paddingBottom: '12px', borderBottom: '1px solid #333' };
-const sectionTitleStyle: React.CSSProperties = { fontWeight: 'bold', marginBottom: '8px', color: '#ddd', fontSize: '12px' };
+/** Compact slider with inline value */
+const CompactSlider = memo(function CompactSlider({
+  label,
+  value,
+  min,
+  max,
+  step,
+  onChange,
+  disabled = false,
+  format = (v: number) => v.toFixed(2),
+  suffix = '',
+}: {
+  label: string;
+  value: number;
+  min: number;
+  max: number;
+  step: number;
+  onChange: (value: number) => void;
+  disabled?: boolean;
+  format?: (value: number) => string;
+  suffix?: string;
+}) {
+  return (
+    <div style={{ marginBottom: '6px', opacity: disabled ? 0.5 : 1 }}>
+      <div style={{
+        display: 'flex',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        marginBottom: '2px',
+      }}>
+        <span style={{ fontSize: '11px', color: '#999' }}>{label}</span>
+        <span style={{ fontSize: '10px', color: '#666', fontFamily: 'monospace' }}>
+          {format(value)}{suffix}
+        </span>
+      </div>
+      <input
+        type="range"
+        min={min}
+        max={max}
+        step={step}
+        value={value}
+        onChange={(e) => onChange(parseFloat(e.target.value))}
+        disabled={disabled}
+        style={{
+          width: '100%',
+          height: '4px',
+          cursor: disabled ? 'not-allowed' : 'pointer',
+          accentColor: '#3b82f6',
+        }}
+      />
+    </div>
+  );
+});
+
+/** Collapsible section header */
+const SectionHeader = memo(function SectionHeader({
+  title,
+  expanded,
+  onToggle,
+  badge,
+  masterToggle,
+}: {
+  title: string;
+  expanded: boolean;
+  onToggle: () => void;
+  badge?: 'performance' | 'quality';
+  masterToggle?: { enabled: boolean; onChange: () => void };
+}) {
+  return (
+    <div
+      style={{
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        padding: '8px 0',
+        cursor: 'pointer',
+        borderBottom: expanded ? '1px solid #333' : 'none',
+        marginBottom: expanded ? '8px' : 0,
+      }}
+    >
+      <div
+        onClick={onToggle}
+        style={{ display: 'flex', alignItems: 'center', gap: '8px', flex: 1 }}
+      >
+        <span style={{
+          fontSize: '10px',
+          color: '#666',
+          transform: expanded ? 'rotate(90deg)' : 'rotate(0deg)',
+          transition: 'transform 0.15s',
+        }}>▶</span>
+        <span style={{ fontSize: '12px', fontWeight: 500, color: '#ddd' }}>{title}</span>
+        {badge && (
+          <span style={{
+            fontSize: '8px',
+            padding: '1px 4px',
+            borderRadius: '3px',
+            backgroundColor: badge === 'performance' ? 'rgba(234, 179, 8, 0.2)' : 'rgba(34, 197, 94, 0.2)',
+            color: badge === 'performance' ? '#eab308' : '#22c55e',
+            textTransform: 'uppercase',
+          }}>
+            {badge === 'performance' ? 'GPU' : 'Quality'}
+          </span>
+        )}
+      </div>
+      {masterToggle && (
+        <Toggle enabled={masterToggle.enabled} onChange={masterToggle.onChange} />
+      )}
+    </div>
+  );
+});
+
+/** Row with toggle and label */
+const ToggleRow = memo(function ToggleRow({
+  label,
+  enabled,
+  onChange,
+  disabled = false,
+  indent = false,
+}: {
+  label: string;
+  enabled: boolean;
+  onChange: () => void;
+  disabled?: boolean;
+  indent?: boolean;
+}) {
+  return (
+    <div style={{
+      display: 'flex',
+      justifyContent: 'space-between',
+      alignItems: 'center',
+      marginBottom: '6px',
+      marginLeft: indent ? '12px' : 0,
+    }}>
+      <span style={{ fontSize: '11px', color: '#aaa' }}>{label}</span>
+      <Toggle enabled={enabled} onChange={onChange} disabled={disabled} />
+    </div>
+  );
+});
+
+// ============================================
+// MAIN COMPONENT
+// ============================================
 
 /**
- * In-game graphics options panel - AAA Quality Controls
- * Access via Options menu -> Graphics
- * WebGPU-compatible effects only
- * PERF: Wrapped in memo to prevent unnecessary re-renders
+ * Graphics Options Panel - AAA Quality
+ * Compact, organized, professional design
  */
 export const GraphicsOptionsPanel = memo(function GraphicsOptionsPanel() {
+  // Store state
   const showGraphicsOptions = useUIStore((state) => state.showGraphicsOptions);
   const graphicsSettings = useUIStore((state) => state.graphicsSettings);
   const rendererAPI = useUIStore((state) => state.rendererAPI);
@@ -48,13 +254,25 @@ export const GraphicsOptionsPanel = memo(function GraphicsOptionsPanel() {
   const setAntiAliasingMode = useUIStore((state) => state.setAntiAliasingMode);
   const setUpscalingMode = useUIStore((state) => state.setUpscalingMode);
 
+  // Section expansion state
+  const [expanded, setExpanded] = useState<Record<string, boolean>>({
+    performance: true,
+    antialiasing: true,
+    lighting: false,
+    reflections: false,
+    effects: false,
+    color: false,
+  });
+
+  const toggleSection = useCallback((section: string) => {
+    setExpanded(prev => ({ ...prev, [section]: !prev[section] }));
+  }, []);
+
   // Disable edge scrolling when panel is open
   useEffect(() => {
     if (showGraphicsOptions) {
       setEdgeScrollEnabled(false);
-      return () => {
-        setEdgeScrollEnabled(true);
-      };
+      return () => setEdgeScrollEnabled(true);
     }
   }, [showGraphicsOptions]);
 
@@ -64,534 +282,443 @@ export const GraphicsOptionsPanel = memo(function GraphicsOptionsPanel() {
     toggleGraphicsSetting(key);
   };
 
+  const isWebGPU = rendererAPI === 'WebGPU';
+
   return (
     <div
       style={{
         position: 'absolute',
         top: '50px',
         right: '10px',
-        backgroundColor: 'rgba(0, 0, 0, 0.95)',
-        border: '1px solid #444',
+        backgroundColor: 'rgba(10, 10, 12, 0.98)',
+        border: '1px solid #333',
         borderRadius: '8px',
-        padding: '16px',
+        padding: '12px',
         color: 'white',
-        fontFamily: 'monospace',
-        fontSize: '13px',
+        fontFamily: 'system-ui, -apple-system, sans-serif',
+        fontSize: '12px',
         zIndex: 1000,
-        minWidth: '320px',
+        width: '280px',
         maxHeight: '80vh',
         overflowY: 'auto',
         pointerEvents: 'auto',
+        boxShadow: '0 8px 32px rgba(0,0,0,0.5)',
       }}
       onWheel={(e) => e.stopPropagation()}
     >
       {/* Header */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
-        <h3 style={{ margin: 0, fontSize: '14px' }}>⚙ Graphics Options</h3>
+      <div style={{
+        display: 'flex',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        marginBottom: '12px',
+        paddingBottom: '8px',
+        borderBottom: '1px solid #222',
+      }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+          <span style={{ fontSize: '13px', fontWeight: 600 }}>Graphics</span>
+          <span style={{
+            padding: '2px 6px',
+            borderRadius: '4px',
+            fontSize: '9px',
+            fontWeight: 600,
+            backgroundColor: isWebGPU ? 'rgba(34, 197, 94, 0.15)' : 'rgba(234, 179, 8, 0.15)',
+            color: isWebGPU ? '#22c55e' : '#eab308',
+            border: `1px solid ${isWebGPU ? '#22c55e40' : '#eab30840'}`,
+          }}>
+            {rendererAPI || 'Unknown'}
+          </span>
+        </div>
         <button
           onClick={() => toggleGraphicsOptions()}
           style={{
             background: 'none',
             border: 'none',
-            color: '#888',
+            color: '#666',
             cursor: 'pointer',
-            fontSize: '16px',
+            fontSize: '14px',
+            padding: '4px',
+            lineHeight: 1,
           }}
         >
           ✕
         </button>
       </div>
 
-      {/* Renderer API Indicator */}
-      <div style={{ ...sectionStyle, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-        <span style={{ color: '#888', fontSize: '12px' }}>Renderer</span>
-        <span
-          style={{
-            padding: '3px 10px',
-            borderRadius: '12px',
-            fontSize: '11px',
-            fontWeight: 'bold',
-            backgroundColor: rendererAPI === 'WebGPU' ? 'rgba(34, 197, 94, 0.2)' : 'rgba(234, 179, 8, 0.2)',
-            color: rendererAPI === 'WebGPU' ? '#22c55e' : '#eab308',
-            border: `1px solid ${rendererAPI === 'WebGPU' ? '#22c55e' : '#eab308'}`,
-          }}
-        >
-          {rendererAPI || 'Unknown'}
-        </span>
+      {/* Master Post-Processing Toggle */}
+      <div style={{
+        display: 'flex',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        padding: '8px 10px',
+        marginBottom: '12px',
+        backgroundColor: '#1a1a1c',
+        borderRadius: '6px',
+      }}>
+        <span style={{ fontSize: '11px', fontWeight: 500 }}>Post-Processing</span>
+        <Toggle
+          enabled={graphicsSettings.postProcessingEnabled}
+          onChange={() => handleToggle('postProcessingEnabled')}
+        />
       </div>
 
-      {/* === POST-PROCESSING MASTER === */}
-      <div style={sectionStyle}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
-          <span style={sectionTitleStyle}>Post-Processing</span>
-          <button
-            onClick={() => handleToggle('postProcessingEnabled')}
-            style={buttonStyle(graphicsSettings.postProcessingEnabled)}
-          >
-            {graphicsSettings.postProcessingEnabled ? 'ON' : 'OFF'}
-          </button>
-        </div>
-      </div>
-
-      {/* === SHADOWS === */}
-      <div style={sectionStyle}>
-        <div style={sectionTitleStyle}>Shadows</div>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
-          <span>Enable Shadows</span>
-          <button
-            onClick={() => handleToggle('shadowsEnabled')}
-            style={buttonStyle(graphicsSettings.shadowsEnabled)}
-          >
-            {graphicsSettings.shadowsEnabled ? 'ON' : 'OFF'}
-          </button>
-        </div>
-        <div style={{ marginBottom: '8px' }}>
-          <label style={labelStyle}>Quality</label>
-          <select
-            value={graphicsSettings.shadowQuality}
-            onChange={(e) => setGraphicsSetting('shadowQuality', e.target.value as 'low' | 'medium' | 'high' | 'ultra')}
-            style={selectStyle}
-            disabled={!graphicsSettings.shadowsEnabled}
-          >
-            <option value="low">Low (512)</option>
-            <option value="medium">Medium (1024)</option>
-            <option value="high">High (2048)</option>
-            <option value="ultra">Ultra (4096)</option>
-          </select>
-        </div>
-        <div>
-          <label style={labelStyle}>
-            Distance: {graphicsSettings.shadowDistance}
-          </label>
-          <input
-            type="range"
-            min="50"
-            max="200"
-            step="10"
-            value={graphicsSettings.shadowDistance}
-            onChange={(e) => setGraphicsSetting('shadowDistance', parseFloat(e.target.value))}
-            style={sliderStyle}
-            disabled={!graphicsSettings.shadowsEnabled}
-          />
-        </div>
-      </div>
-
-      {/* === AMBIENT OCCLUSION === */}
-      <div style={sectionStyle}>
-        <div style={sectionTitleStyle}>Ambient Occlusion (SSAO)</div>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
-          <span>Enable SSAO</span>
-          <button
-            onClick={() => handleToggle('ssaoEnabled')}
-            style={buttonStyle(graphicsSettings.ssaoEnabled)}
-          >
-            {graphicsSettings.ssaoEnabled ? 'ON' : 'OFF'}
-          </button>
-        </div>
-        <div style={{ marginBottom: '8px' }}>
-          <label style={labelStyle}>
-            Radius: {graphicsSettings.ssaoRadius.toFixed(1)}
-          </label>
-          <input
-            type="range"
-            min="1"
-            max="16"
-            step="0.5"
-            value={graphicsSettings.ssaoRadius}
-            onChange={(e) => setGraphicsSetting('ssaoRadius', parseFloat(e.target.value))}
-            style={sliderStyle}
-            disabled={!graphicsSettings.ssaoEnabled}
-          />
-        </div>
-        <div>
-          <label style={labelStyle}>
-            Intensity: {graphicsSettings.ssaoIntensity.toFixed(2)}
-          </label>
-          <input
-            type="range"
-            min="0"
-            max="2"
-            step="0.1"
-            value={graphicsSettings.ssaoIntensity}
-            onChange={(e) => setGraphicsSetting('ssaoIntensity', parseFloat(e.target.value))}
-            style={sliderStyle}
-            disabled={!graphicsSettings.ssaoEnabled}
-          />
-        </div>
-      </div>
-
-      {/* === SCREEN SPACE REFLECTIONS === */}
-      <div style={sectionStyle}>
-        <div style={sectionTitleStyle}>Screen Space Reflections (SSR)</div>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
-          <span>Enable SSR</span>
-          <button
-            onClick={() => handleToggle('ssrEnabled')}
-            style={buttonStyle(graphicsSettings.ssrEnabled)}
-          >
-            {graphicsSettings.ssrEnabled ? 'ON' : 'OFF'}
-          </button>
-        </div>
-        {graphicsSettings.ssrEnabled && (
-          <>
-            <div style={{ fontSize: '10px', color: '#22c55e', marginBottom: '8px', padding: '4px', backgroundColor: 'rgba(34, 197, 94, 0.1)', borderRadius: '4px' }}>
-              Real-time reflections on metallic surfaces.
-            </div>
-            <div style={{ marginBottom: '8px' }}>
-              <label style={labelStyle}>
-                Opacity: {graphicsSettings.ssrOpacity.toFixed(2)}
-              </label>
-              <input
-                type="range"
-                min="0"
-                max="1"
-                step="0.1"
-                value={graphicsSettings.ssrOpacity}
-                onChange={(e) => setGraphicsSetting('ssrOpacity', parseFloat(e.target.value))}
-                style={sliderStyle}
-              />
-            </div>
-            <div>
-              <label style={labelStyle}>
-                Max Roughness: {graphicsSettings.ssrMaxRoughness.toFixed(2)}
-              </label>
-              <input
-                type="range"
-                min="0"
-                max="1"
-                step="0.1"
-                value={graphicsSettings.ssrMaxRoughness}
-                onChange={(e) => setGraphicsSetting('ssrMaxRoughness', parseFloat(e.target.value))}
-                style={sliderStyle}
-              />
-            </div>
-          </>
-        )}
-      </div>
-
-      {/* === BLOOM === */}
-      <div style={sectionStyle}>
-        <div style={sectionTitleStyle}>Bloom</div>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
-          <span>Enable Bloom</span>
-          <button
-            onClick={() => handleToggle('bloomEnabled')}
-            style={buttonStyle(graphicsSettings.bloomEnabled)}
-          >
-            {graphicsSettings.bloomEnabled ? 'ON' : 'OFF'}
-          </button>
-        </div>
-        <div style={{ marginBottom: '8px' }}>
-          <label style={labelStyle}>
-            Strength: {graphicsSettings.bloomStrength.toFixed(2)}
-          </label>
-          <input
-            type="range"
-            min="0"
-            max="1.5"
-            step="0.05"
-            value={graphicsSettings.bloomStrength}
-            onChange={(e) => setGraphicsSetting('bloomStrength', parseFloat(e.target.value))}
-            style={sliderStyle}
-            disabled={!graphicsSettings.bloomEnabled}
-          />
-        </div>
-        <div style={{ marginBottom: '8px' }}>
-          <label style={labelStyle}>
-            Threshold: {graphicsSettings.bloomThreshold.toFixed(2)}
-          </label>
-          <input
-            type="range"
-            min="0"
-            max="1"
-            step="0.05"
-            value={graphicsSettings.bloomThreshold}
-            onChange={(e) => setGraphicsSetting('bloomThreshold', parseFloat(e.target.value))}
-            style={sliderStyle}
-            disabled={!graphicsSettings.bloomEnabled}
-          />
-        </div>
-        <div>
-          <label style={labelStyle}>
-            Radius: {graphicsSettings.bloomRadius.toFixed(2)}
-          </label>
-          <input
-            type="range"
-            min="0"
-            max="2"
-            step="0.1"
-            value={graphicsSettings.bloomRadius}
-            onChange={(e) => setGraphicsSetting('bloomRadius', parseFloat(e.target.value))}
-            style={sliderStyle}
-            disabled={!graphicsSettings.bloomEnabled}
-          />
-        </div>
-      </div>
-
-      {/* === COLOR GRADING === */}
-      <div style={sectionStyle}>
-        <div style={sectionTitleStyle}>Color Grading</div>
-        <div style={{ marginBottom: '8px' }}>
-          <label style={labelStyle}>
-            Exposure: {graphicsSettings.toneMappingExposure.toFixed(2)}
-          </label>
-          <input
-            type="range"
-            min="0.5"
-            max="2.0"
-            step="0.05"
-            value={graphicsSettings.toneMappingExposure}
-            onChange={(e) => setGraphicsSetting('toneMappingExposure', parseFloat(e.target.value))}
-            style={sliderStyle}
-          />
-        </div>
-        <div style={{ marginBottom: '8px' }}>
-          <label style={labelStyle}>
-            Saturation: {graphicsSettings.saturation.toFixed(2)}
-          </label>
-          <input
-            type="range"
-            min="0.5"
-            max="1.5"
-            step="0.05"
-            value={graphicsSettings.saturation}
-            onChange={(e) => setGraphicsSetting('saturation', parseFloat(e.target.value))}
-            style={sliderStyle}
-          />
-        </div>
-        <div>
-          <label style={labelStyle}>
-            Contrast: {graphicsSettings.contrast.toFixed(2)}
-          </label>
-          <input
-            type="range"
-            min="0.8"
-            max="1.3"
-            step="0.05"
-            value={graphicsSettings.contrast}
-            onChange={(e) => setGraphicsSetting('contrast', parseFloat(e.target.value))}
-            style={sliderStyle}
-          />
-        </div>
-      </div>
-
-      {/* === VIGNETTE === */}
-      <div style={sectionStyle}>
-        <div style={sectionTitleStyle}>Vignette</div>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
-          <span>Enable Vignette</span>
-          <button
-            onClick={() => handleToggle('vignetteEnabled')}
-            style={buttonStyle(graphicsSettings.vignetteEnabled)}
-          >
-            {graphicsSettings.vignetteEnabled ? 'ON' : 'OFF'}
-          </button>
-        </div>
-        <div>
-          <label style={labelStyle}>
-            Intensity: {graphicsSettings.vignetteIntensity.toFixed(2)}
-          </label>
-          <input
-            type="range"
-            min="0"
-            max="0.6"
-            step="0.05"
-            value={graphicsSettings.vignetteIntensity}
-            onChange={(e) => setGraphicsSetting('vignetteIntensity', parseFloat(e.target.value))}
-            style={sliderStyle}
-            disabled={!graphicsSettings.vignetteEnabled}
-          />
-        </div>
-      </div>
-
-      {/* === ANTI-ALIASING === */}
-      <div style={sectionStyle}>
-        <div style={sectionTitleStyle}>Anti-Aliasing</div>
-        <div style={{ marginBottom: '8px' }}>
-          <label style={labelStyle}>Mode</label>
-          <select
-            value={graphicsSettings.antiAliasingMode}
-            onChange={(e) => setAntiAliasingMode(e.target.value as AntiAliasingMode)}
-            style={selectStyle}
-          >
-            <option value="off">Off</option>
-            <option value="fxaa">FXAA (Fast)</option>
-            <option value="taa">TAA (High Quality)</option>
-          </select>
-        </div>
-        {/* TAA info - uses depth-based reprojection (zero-velocity mode for InstancedMesh compatibility) */}
-        {graphicsSettings.antiAliasingMode === 'taa' && (
-          <>
-            <div style={{ fontSize: '10px', color: '#22c55e', marginBottom: '8px', padding: '4px', backgroundColor: 'rgba(34, 197, 94, 0.1)', borderRadius: '4px' }}>
-              TAA uses temporal reprojection for high quality anti-aliasing.
-            </div>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
-              <span>RCAS Sharpening</span>
-              <button
-                onClick={() => handleToggle('taaSharpeningEnabled')}
-                style={buttonStyle(graphicsSettings.taaSharpeningEnabled)}
-              >
-                {graphicsSettings.taaSharpeningEnabled ? 'ON' : 'OFF'}
-              </button>
-            </div>
-            {graphicsSettings.taaSharpeningEnabled && (
-              <div>
-                <label style={labelStyle}>
-                  Sharpening Intensity: {graphicsSettings.taaSharpeningIntensity.toFixed(2)}
-                </label>
-                <input
-                  type="range"
-                  min="0"
-                  max="1"
-                  step="0.05"
-                  value={graphicsSettings.taaSharpeningIntensity}
-                  onChange={(e) => setGraphicsSetting('taaSharpeningIntensity', parseFloat(e.target.value))}
-                  style={sliderStyle}
-                />
-              </div>
-            )}
-          </>
-        )}
-      </div>
-
-      {/* === RESOLUTION UPSCALING === */}
-      <div style={sectionStyle}>
-        <div style={sectionTitleStyle}>Resolution Upscaling (EASU)</div>
-        <div style={{ marginBottom: '8px' }}>
-          <label style={labelStyle}>Mode</label>
-          <select
-            value={graphicsSettings.upscalingMode}
-            onChange={(e) => setUpscalingMode(e.target.value as UpscalingMode)}
-            style={selectStyle}
-          >
-            <option value="off">Off (Native)</option>
-            <option value="easu">EASU (Quality)</option>
-            <option value="bilinear">Bilinear (Fast)</option>
-          </select>
-        </div>
-        {graphicsSettings.upscalingMode !== 'off' && (
-          <>
-            <div style={{ marginBottom: '8px' }}>
-              <label style={labelStyle}>
-                Render Scale: {Math.round(graphicsSettings.renderScale * 100)}%
-              </label>
-              <input
-                type="range"
-                min="0.5"
-                max="1"
-                step="0.05"
+      {/* ===== PERFORMANCE ===== */}
+      <SectionHeader
+        title="Performance"
+        expanded={expanded.performance}
+        onToggle={() => toggleSection('performance')}
+        badge="performance"
+      />
+      {expanded.performance && (
+        <div style={{ marginBottom: '12px' }}>
+          <div style={{ marginBottom: '8px' }}>
+            <span style={{ fontSize: '10px', color: '#666', display: 'block', marginBottom: '4px' }}>
+              Upscaling
+            </span>
+            <SegmentedControl
+              options={[
+                { value: 'off', label: 'Native' },
+                { value: 'easu', label: 'EASU' },
+                { value: 'bilinear', label: 'Bilinear' },
+              ]}
+              value={graphicsSettings.upscalingMode}
+              onChange={(v) => setUpscalingMode(v as UpscalingMode)}
+            />
+          </div>
+          {graphicsSettings.upscalingMode !== 'off' && (
+            <>
+              <CompactSlider
+                label="Render Scale"
                 value={graphicsSettings.renderScale}
-                onChange={(e) => setGraphicsSetting('renderScale', parseFloat(e.target.value))}
-                style={sliderStyle}
+                min={0.5}
+                max={1}
+                step={0.05}
+                onChange={(v) => setGraphicsSetting('renderScale', v)}
+                format={(v) => `${Math.round(v * 100)}`}
+                suffix="%"
               />
-              <div style={{ fontSize: '10px', color: '#666', marginTop: '2px' }}>
-                {graphicsSettings.renderScale < 0.75 ? 'Performance' : graphicsSettings.renderScale < 0.9 ? 'Balanced' : 'Quality'}
-              </div>
-            </div>
-            {graphicsSettings.upscalingMode === 'easu' && (
-              <div>
-                <label style={labelStyle}>
-                  Edge Sharpness: {graphicsSettings.easuSharpness.toFixed(2)}
-                </label>
-                <input
-                  type="range"
-                  min="0"
-                  max="1"
-                  step="0.05"
+              {graphicsSettings.upscalingMode === 'easu' && (
+                <CompactSlider
+                  label="Edge Sharpness"
                   value={graphicsSettings.easuSharpness}
-                  onChange={(e) => setGraphicsSetting('easuSharpness', parseFloat(e.target.value))}
-                  style={sliderStyle}
+                  min={0}
+                  max={1}
+                  step={0.05}
+                  onChange={(v) => setGraphicsSetting('easuSharpness', v)}
+                />
+              )}
+            </>
+          )}
+        </div>
+      )}
+
+      {/* ===== ANTI-ALIASING ===== */}
+      <SectionHeader
+        title="Anti-Aliasing"
+        expanded={expanded.antialiasing}
+        onToggle={() => toggleSection('antialiasing')}
+        badge="quality"
+      />
+      {expanded.antialiasing && (
+        <div style={{ marginBottom: '12px' }}>
+          <div style={{ marginBottom: '8px' }}>
+            <SegmentedControl
+              options={[
+                { value: 'off', label: 'Off' },
+                { value: 'fxaa', label: 'FXAA' },
+                { value: 'taa', label: 'TAA' },
+              ]}
+              value={graphicsSettings.antiAliasingMode}
+              onChange={(v) => setAntiAliasingMode(v as AntiAliasingMode)}
+            />
+          </div>
+          {graphicsSettings.antiAliasingMode === 'taa' && (
+            <>
+              <ToggleRow
+                label="RCAS Sharpening"
+                enabled={graphicsSettings.taaSharpeningEnabled}
+                onChange={() => handleToggle('taaSharpeningEnabled')}
+              />
+              {graphicsSettings.taaSharpeningEnabled && (
+                <CompactSlider
+                  label="Intensity"
+                  value={graphicsSettings.taaSharpeningIntensity}
+                  min={0}
+                  max={1}
+                  step={0.05}
+                  onChange={(v) => setGraphicsSetting('taaSharpeningIntensity', v)}
+                />
+              )}
+            </>
+          )}
+        </div>
+      )}
+
+      {/* ===== LIGHTING ===== */}
+      <SectionHeader
+        title="Lighting & Shadows"
+        expanded={expanded.lighting}
+        onToggle={() => toggleSection('lighting')}
+        badge="performance"
+      />
+      {expanded.lighting && (
+        <div style={{ marginBottom: '12px' }}>
+          {/* Shadows */}
+          <ToggleRow
+            label="Shadows"
+            enabled={graphicsSettings.shadowsEnabled}
+            onChange={() => handleToggle('shadowsEnabled')}
+          />
+          {graphicsSettings.shadowsEnabled && (
+            <div style={{ marginLeft: '12px', marginBottom: '8px' }}>
+              <div style={{ marginBottom: '6px' }}>
+                <span style={{ fontSize: '10px', color: '#666', display: 'block', marginBottom: '4px' }}>
+                  Quality
+                </span>
+                <SegmentedControl
+                  options={[
+                    { value: 'low', label: 'Low' },
+                    { value: 'medium', label: 'Med' },
+                    { value: 'high', label: 'High' },
+                    { value: 'ultra', label: 'Ultra' },
+                  ]}
+                  value={graphicsSettings.shadowQuality}
+                  onChange={(v) => setGraphicsSetting('shadowQuality', v as 'low' | 'medium' | 'high' | 'ultra')}
                 />
               </div>
-            )}
-          </>
-        )}
-      </div>
+              <CompactSlider
+                label="Distance"
+                value={graphicsSettings.shadowDistance}
+                min={50}
+                max={200}
+                step={10}
+                onChange={(v) => setGraphicsSetting('shadowDistance', v)}
+                format={(v) => v.toString()}
+              />
+            </div>
+          )}
 
-      {/* === FOG === */}
-      <div style={sectionStyle}>
-        <div style={sectionTitleStyle}>Atmospheric Fog</div>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
-          <span>Enable Fog</span>
-          <button
-            onClick={() => handleToggle('fogEnabled')}
-            style={buttonStyle(graphicsSettings.fogEnabled)}
-          >
-            {graphicsSettings.fogEnabled ? 'ON' : 'OFF'}
-          </button>
-        </div>
-        <div>
-          <label style={labelStyle}>
-            Density: {graphicsSettings.fogDensity.toFixed(2)}x
-          </label>
-          <input
-            type="range"
-            min="0.5"
-            max="2"
-            step="0.1"
-            value={graphicsSettings.fogDensity}
-            onChange={(e) => setGraphicsSetting('fogDensity', parseFloat(e.target.value))}
-            style={sliderStyle}
-            disabled={!graphicsSettings.fogEnabled}
+          {/* Ambient Occlusion */}
+          <ToggleRow
+            label="Ambient Occlusion"
+            enabled={graphicsSettings.ssaoEnabled}
+            onChange={() => handleToggle('ssaoEnabled')}
+          />
+          {graphicsSettings.ssaoEnabled && (
+            <div style={{ marginLeft: '12px', marginBottom: '8px' }}>
+              <CompactSlider
+                label="Radius"
+                value={graphicsSettings.ssaoRadius}
+                min={1}
+                max={16}
+                step={0.5}
+                onChange={(v) => setGraphicsSetting('ssaoRadius', v)}
+                format={(v) => v.toFixed(1)}
+              />
+              <CompactSlider
+                label="Intensity"
+                value={graphicsSettings.ssaoIntensity}
+                min={0}
+                max={2}
+                step={0.1}
+                onChange={(v) => setGraphicsSetting('ssaoIntensity', v)}
+              />
+            </div>
+          )}
+
+          {/* Environment */}
+          <ToggleRow
+            label="Environment Lighting"
+            enabled={graphicsSettings.environmentMapEnabled}
+            onChange={() => handleToggle('environmentMapEnabled')}
           />
         </div>
-      </div>
+      )}
 
-      {/* === ENVIRONMENT === */}
-      <div style={sectionStyle}>
-        <div style={sectionTitleStyle}>Environment</div>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
-          <span>Environment Map (IBL)</span>
-          <button
-            onClick={() => handleToggle('environmentMapEnabled')}
-            style={buttonStyle(graphicsSettings.environmentMapEnabled)}
-          >
-            {graphicsSettings.environmentMapEnabled ? 'ON' : 'OFF'}
-          </button>
-        </div>
-      </div>
-
-      {/* === PARTICLES === */}
-      <div style={sectionStyle}>
-        <div style={sectionTitleStyle}>Particles</div>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
-          <span>Ambient Particles</span>
-          <button
-            onClick={() => handleToggle('particlesEnabled')}
-            style={buttonStyle(graphicsSettings.particlesEnabled)}
-          >
-            {graphicsSettings.particlesEnabled ? 'ON' : 'OFF'}
-          </button>
-        </div>
-        <div>
-          <label style={labelStyle}>
-            Density: {(graphicsSettings.particleDensity / 5).toFixed(1)}x
-          </label>
-          <input
-            type="range"
-            min="1"
-            max="10"
-            step="0.5"
-            value={graphicsSettings.particleDensity}
-            onChange={(e) => setGraphicsSetting('particleDensity', parseFloat(e.target.value))}
-            style={sliderStyle}
-            disabled={!graphicsSettings.particlesEnabled}
+      {/* ===== REFLECTIONS ===== */}
+      <SectionHeader
+        title="Reflections"
+        expanded={expanded.reflections}
+        onToggle={() => toggleSection('reflections')}
+        badge="performance"
+        masterToggle={{
+          enabled: graphicsSettings.ssrEnabled,
+          onChange: () => handleToggle('ssrEnabled'),
+        }}
+      />
+      {expanded.reflections && graphicsSettings.ssrEnabled && (
+        <div style={{ marginBottom: '12px' }}>
+          <CompactSlider
+            label="Intensity"
+            value={graphicsSettings.ssrOpacity}
+            min={0}
+            max={1}
+            step={0.1}
+            onChange={(v) => setGraphicsSetting('ssrOpacity', v)}
+          />
+          <CompactSlider
+            label="Max Roughness"
+            value={graphicsSettings.ssrMaxRoughness}
+            min={0}
+            max={1}
+            step={0.1}
+            onChange={(v) => setGraphicsSetting('ssrMaxRoughness', v)}
           />
         </div>
-      </div>
+      )}
 
-      {/* === DISPLAY === */}
-      <div style={{ marginBottom: '8px' }}>
-        <div style={sectionTitleStyle}>Display</div>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-          <span>Show FPS Counter</span>
-          <button
-            onClick={() => toggleFPS()}
-            style={buttonStyle(showFPS)}
-          >
-            {showFPS ? 'ON' : 'OFF'}
-          </button>
+      {/* ===== EFFECTS ===== */}
+      <SectionHeader
+        title="Effects"
+        expanded={expanded.effects}
+        onToggle={() => toggleSection('effects')}
+      />
+      {expanded.effects && (
+        <div style={{ marginBottom: '12px' }}>
+          {/* Bloom */}
+          <ToggleRow
+            label="Bloom"
+            enabled={graphicsSettings.bloomEnabled}
+            onChange={() => handleToggle('bloomEnabled')}
+          />
+          {graphicsSettings.bloomEnabled && (
+            <div style={{ marginLeft: '12px', marginBottom: '8px' }}>
+              <CompactSlider
+                label="Strength"
+                value={graphicsSettings.bloomStrength}
+                min={0}
+                max={1.5}
+                step={0.05}
+                onChange={(v) => setGraphicsSetting('bloomStrength', v)}
+              />
+              <CompactSlider
+                label="Threshold"
+                value={graphicsSettings.bloomThreshold}
+                min={0}
+                max={1}
+                step={0.05}
+                onChange={(v) => setGraphicsSetting('bloomThreshold', v)}
+              />
+              <CompactSlider
+                label="Radius"
+                value={graphicsSettings.bloomRadius}
+                min={0}
+                max={2}
+                step={0.1}
+                onChange={(v) => setGraphicsSetting('bloomRadius', v)}
+              />
+            </div>
+          )}
+
+          {/* Fog */}
+          <ToggleRow
+            label="Atmospheric Fog"
+            enabled={graphicsSettings.fogEnabled}
+            onChange={() => handleToggle('fogEnabled')}
+          />
+          {graphicsSettings.fogEnabled && (
+            <div style={{ marginLeft: '12px', marginBottom: '8px' }}>
+              <CompactSlider
+                label="Density"
+                value={graphicsSettings.fogDensity}
+                min={0.5}
+                max={2}
+                step={0.1}
+                onChange={(v) => setGraphicsSetting('fogDensity', v)}
+                format={(v) => v.toFixed(1)}
+                suffix="x"
+              />
+            </div>
+          )}
+
+          {/* Particles */}
+          <ToggleRow
+            label="Particles"
+            enabled={graphicsSettings.particlesEnabled}
+            onChange={() => handleToggle('particlesEnabled')}
+          />
+          {graphicsSettings.particlesEnabled && (
+            <div style={{ marginLeft: '12px', marginBottom: '8px' }}>
+              <CompactSlider
+                label="Density"
+                value={graphicsSettings.particleDensity}
+                min={1}
+                max={10}
+                step={0.5}
+                onChange={(v) => setGraphicsSetting('particleDensity', v)}
+                format={(v) => (v / 5).toFixed(1)}
+                suffix="x"
+              />
+            </div>
+          )}
+
+          {/* Vignette */}
+          <ToggleRow
+            label="Vignette"
+            enabled={graphicsSettings.vignetteEnabled}
+            onChange={() => handleToggle('vignetteEnabled')}
+          />
+          {graphicsSettings.vignetteEnabled && (
+            <div style={{ marginLeft: '12px', marginBottom: '8px' }}>
+              <CompactSlider
+                label="Intensity"
+                value={graphicsSettings.vignetteIntensity}
+                min={0}
+                max={0.6}
+                step={0.05}
+                onChange={(v) => setGraphicsSetting('vignetteIntensity', v)}
+              />
+            </div>
+          )}
         </div>
+      )}
+
+      {/* ===== COLOR GRADING ===== */}
+      <SectionHeader
+        title="Color"
+        expanded={expanded.color}
+        onToggle={() => toggleSection('color')}
+      />
+      {expanded.color && (
+        <div style={{ marginBottom: '12px' }}>
+          <CompactSlider
+            label="Exposure"
+            value={graphicsSettings.toneMappingExposure}
+            min={0.5}
+            max={2}
+            step={0.05}
+            onChange={(v) => setGraphicsSetting('toneMappingExposure', v)}
+          />
+          <CompactSlider
+            label="Saturation"
+            value={graphicsSettings.saturation}
+            min={0.5}
+            max={1.5}
+            step={0.05}
+            onChange={(v) => setGraphicsSetting('saturation', v)}
+          />
+          <CompactSlider
+            label="Contrast"
+            value={graphicsSettings.contrast}
+            min={0.8}
+            max={1.3}
+            step={0.05}
+            onChange={(v) => setGraphicsSetting('contrast', v)}
+          />
+        </div>
+      )}
+
+      {/* ===== DISPLAY ===== */}
+      <div style={{
+        paddingTop: '8px',
+        borderTop: '1px solid #222',
+        marginTop: '4px',
+      }}>
+        <ToggleRow
+          label="FPS Counter"
+          enabled={showFPS}
+          onChange={() => toggleFPS()}
+        />
       </div>
     </div>
   );
