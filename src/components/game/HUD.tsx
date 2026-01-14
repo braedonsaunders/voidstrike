@@ -244,20 +244,20 @@ export const HUD = memo(function HUD() {
         </div>
       </div>
 
-      {/* Bottom bar */}
-      <div className="absolute bottom-0 left-0 right-0 flex justify-between items-end p-2 pointer-events-auto">
+      {/* Bottom bar - pointer-events-none to allow drag selection through empty areas */}
+      <div className="absolute bottom-0 left-0 right-0 flex justify-between items-end p-2 pointer-events-none">
         {/* Minimap - disable edge scroll when hovering */}
-        <div onMouseEnter={handleUIMouseEnter} onMouseLeave={handleUIMouseLeave}>
+        <div className="pointer-events-auto" onMouseEnter={handleUIMouseEnter} onMouseLeave={handleUIMouseLeave}>
           <Minimap />
         </div>
 
-        {/* Selection panel - allow edge scroll through center */}
-        <div className="flex-1 mx-4">
+        {/* Selection panel - allow drag selection through but enable clicks on panel content */}
+        <div className="flex-1 mx-4 pointer-events-auto">
           <SelectionPanel />
         </div>
 
         {/* Command card - disable edge scroll when hovering */}
-        <div onMouseEnter={handleUIMouseEnter} onMouseLeave={handleUIMouseLeave}>
+        <div className="pointer-events-auto" onMouseEnter={handleUIMouseEnter} onMouseLeave={handleUIMouseLeave}>
           <CommandCard />
         </div>
       </div>
