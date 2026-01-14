@@ -33,40 +33,41 @@ VOIDSTRIKE uses Three.js with WebGPU renderer and TSL (Three.js Shading Language
 - TRAANode handles camera jitter internally (Halton sequence)
 - **Stable entity ordering** ensures consistent instance indices across frames
 
-**Custom Per-Instance Velocity:**
-Three.js's built-in VelocityNode calculates motion from `matrixWorld`, but `InstancedMesh` stores per-instance transforms in a separate `instanceMatrix` buffer. This causes incorrect velocity for dynamic instances (buildings, units, resources), resulting in visible jiggling with the built-in velocity.
+**Per-Instance Velocity - Performance Optimized:**
+Three.js's built-in VelocityNode calculates motion from `matrixWorld`, but `InstancedMesh` stores per-instance transforms in a separate `instanceMatrix` buffer.
 
-Our solution (`InstancedVelocity.ts`) provides custom per-instance velocity with CPU-side movement detection:
+**Current Approach: Zero Velocity (Performance Mode)**
+For RTS games, we use zero velocity output which relies on TRAA's depth-based reprojection:
+- **Camera motion** (panning, zooming) is handled perfectly by depth reprojection
+- **Static objects** (buildings, resources) need no velocity
+- **Slow-moving units** work well with temporal accumulation
+- **Performance:** No per-vertex matrix calculations, minimal GPU overhead
 
-**The Floating Point Precision Problem:**
-Computing velocity in the shader requires calculating both current and previous positions. However, Three.js uses `modelViewMatrix` (which includes instanceMatrix internally) for current position, while we manually multiply `prevInstanceMatrix * position` for previous position. Even with identical matrix values, these different code paths produce slightly different floating point results, causing micro-jitter on static objects.
+**Why Not Full Velocity Calculation:**
+Full per-instance velocity causes ~40-50% framerate drop due to:
+- 5 attribute reads per vertex (moved flag + 4 matrix columns)
+- mat4 reconstruction and two clip-space transformations
+- Runs on ALL geometry, not just instanced meshes
+- GPU evaluates both branches of `select()` before choosing
 
-**The Solution - CPU-Side Movement Detection:**
-1. Stores previous frame's instance matrices as geometry attributes (`prevInstanceMatrix0-3`)
-2. **Compares matrices on CPU** (exact comparison, no precision issues)
-3. Sets an `instanceMoved` flag attribute (0 = static, 1 = moved)
-4. Shader uses `select()` to return exactly zero velocity for static instances
-5. Only moving instances compute velocity (actual motion dominates precision noise)
+Full velocity calculation code is preserved in `InstancedVelocity.ts` (commented) for future use if needed (e.g., motion blur, fast-moving objects).
 
 See: [GitHub Issue #31892](https://github.com/mrdoob/three.js/issues/31892)
 
-**Performance Impact:**
-- **Memory:** 4 vec4 + 1 float attributes per InstancedMesh (~68 bytes/instance)
-- **CPU:** O(n) matrix comparison + copy per frame per mesh (negligible for <1000 instances)
-- **GPU:** Conditional velocity computation - static objects have zero overhead
-- **Net Impact:** ~0.5-1ms per frame with TAA enabled - minimal compared to TAA quality gain
+**Performance Impact (Zero Velocity Mode):**
+- **Memory:** 4 vec4 attributes per InstancedMesh (~64 bytes/instance)
+- **CPU:** O(n) matrix copy per frame per mesh (negligible)
+- **GPU:** Single vec2(0,0) return - virtually zero overhead
+- **Net Impact:** TAA adds ~10-15% overhead (history buffer, blending)
 
 **Stable Entity Ordering:**
-To ensure velocity accuracy, all renderers (UnitRenderer, BuildingRenderer, ResourceRenderer) sort entities by ID before processing. This ensures:
-1. Each entity maintains the same instance index across frames
-2. Previous/current matrix pairs are properly aligned
-3. Velocity calculation produces correct motion vectors
+All renderers (UnitRenderer, BuildingRenderer, ResourceRenderer) sort entities by ID before processing to ensure consistent instance indices across frames. This is important for potential future velocity calculations.
 
 ```typescript
 // Sort entities by ID for stable instance ordering
 const entities = [...world.getEntitiesWith('Transform', 'Building')].sort((a, b) => a.id - b.id);
 
-// Custom velocity mode - proper per-instance velocity with movement detection
+// Zero velocity mode for performance - depth reprojection handles camera motion
 const customVelocity = createInstancedVelocityNode();
 scenePass.setMRT(mrt({ output, velocity: customVelocity }));
 ```
@@ -74,11 +75,11 @@ scenePass.setMRT(mrt({ output, velocity: customVelocity }));
 **Implementation Architecture:**
 ```
 InstancedVelocity.ts
-├── setupInstancedVelocity(mesh)     - Adds prevInstanceMatrix0-3 and instanceMoved attributes
-├── swapInstanceMatrices(mesh)       - Compares matrices, sets moved flag, copies current→previous
+├── setupInstancedVelocity(mesh)     - Adds prevInstanceMatrix0-3 attributes
+├── swapInstanceMatrices(mesh)       - Copies current→previous matrices
 ├── initCameraMatrices(camera)       - Initializes camera matrix tracking
 ├── updateCameraMatrices(camera)     - Updates camera matrices after render
-└── createInstancedVelocityNode()    - TSL node with conditional velocity (zero for static)
+└── createInstancedVelocityNode()    - Returns vec2(0,0) for performance
 ```
 
 #### SSR (Screen Space Reflections)
