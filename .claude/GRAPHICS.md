@@ -28,58 +28,24 @@ VOIDSTRIKE uses Three.js with WebGPU renderer and TSL (Three.js Shading Language
 ### Anti-Aliasing Details
 
 #### TRAA (Temporal Reprojection Anti-Aliasing)
-- Uses **custom per-instance velocity** via MRT
+- Uses **zero-velocity mode** via MRT for optimal performance
 - Optional RCAS sharpening to counter temporal blur
 - TRAANode handles camera jitter internally (Halton sequence)
-- **Stable entity ordering** ensures consistent instance indices across frames
+- Depth-based reprojection handles camera motion
 
-**Per-Instance Velocity - Performance Optimized:**
-Three.js's built-in VelocityNode calculates motion from `matrixWorld`, but `InstancedMesh` stores per-instance transforms in a separate `instanceMatrix` buffer.
-
-**Current Approach: Zero Velocity (Performance Mode)**
-For RTS games, we use zero velocity output which relies on TRAA's depth-based reprojection:
-- **Camera motion** (panning, zooming) is handled perfectly by depth reprojection
+**Zero Velocity Mode:**
+TRAA uses zero velocity output for maximum performance:
+- **Camera motion** is handled by depth-based reprojection
 - **Static objects** (buildings, resources) need no velocity
 - **Slow-moving units** work well with temporal accumulation
-- **Performance:** No per-vertex matrix calculations, minimal GPU overhead
-
-**Why Not Full Velocity Calculation:**
-Full per-instance velocity causes ~40-50% framerate drop due to:
-- 5 attribute reads per vertex (moved flag + 4 matrix columns)
-- mat4 reconstruction and two clip-space transformations
-- Runs on ALL geometry, not just instanced meshes
-- GPU evaluates both branches of `select()` before choosing
-
-Full velocity calculation code is preserved in `InstancedVelocity.ts` (commented) for future use if needed (e.g., motion blur, fast-moving objects).
+- **No per-vertex calculations** - just returns vec2(0,0)
 
 See: [GitHub Issue #31892](https://github.com/mrdoob/three.js/issues/31892)
 
-**Performance Impact (Zero Velocity Mode):**
-- **Memory:** 4 vec4 attributes per InstancedMesh (~64 bytes/instance)
-- **CPU:** O(n) matrix copy per frame per mesh (negligible)
-- **GPU:** Single vec2(0,0) return - virtually zero overhead
-- **Net Impact:** TAA adds ~10-15% overhead (history buffer, blending)
-
-**Stable Entity Ordering:**
-All renderers (UnitRenderer, BuildingRenderer, ResourceRenderer) sort entities by ID before processing to ensure consistent instance indices across frames. This is important for potential future velocity calculations.
-
 ```typescript
-// Sort entities by ID for stable instance ordering
-const entities = [...world.getEntitiesWith('Transform', 'Building')].sort((a, b) => a.id - b.id);
-
-// Zero velocity mode for performance - depth reprojection handles camera motion
-const customVelocity = createInstancedVelocityNode();
+// Zero velocity - depth reprojection handles camera motion
+const customVelocity = createInstancedVelocityNode(); // returns vec2(0,0)
 scenePass.setMRT(mrt({ output, velocity: customVelocity }));
-```
-
-**Implementation Architecture:**
-```
-InstancedVelocity.ts
-├── setupInstancedVelocity(mesh)     - Adds prevInstanceMatrix0-3 attributes
-├── swapInstanceMatrices(mesh)       - Copies current→previous matrices
-├── initCameraMatrices(camera)       - Initializes camera matrix tracking
-├── updateCameraMatrices(camera)     - Updates camera matrices after render
-└── createInstancedVelocityNode()    - Returns vec2(0,0) for performance
 ```
 
 #### SSR (Screen Space Reflections)
