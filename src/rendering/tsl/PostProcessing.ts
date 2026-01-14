@@ -357,6 +357,11 @@ export class RenderPipeline {
     // Upscaling is applied LAST for maximum performance
     let outputNode: any = scenePassColor;
 
+    // When upscaling is active, calculate render resolution for effect passes
+    // All depth-dependent effects must operate at render resolution to match the scene pass
+    const renderWidth = useUpscaling ? Math.floor(this.displayWidth * this.config.renderScale) : this.displayWidth;
+    const renderHeight = useUpscaling ? Math.floor(this.displayHeight * this.config.renderScale) : this.displayHeight;
+
     // 1. SSGI (Screen Space Global Illumination) - includes AO
     // Provides realistic light bouncing between surfaces
     // SSGI outputs vec4(giColor, ao) - RGB is indirect light, A is occlusion
@@ -373,6 +378,11 @@ export class RenderPipeline {
           scenePassNormal,
           this.camera
         );
+
+        // Set SSGI to render resolution (must match scene pass depth)
+        if (this.ssgiPass?.setSize) {
+          this.ssgiPass.setSize(renderWidth, renderHeight);
+        }
 
         // Configure SSGI parameters
         if (this.ssgiPass) {
@@ -402,6 +412,12 @@ export class RenderPipeline {
       try {
         // Use null for normal node - GTAO will reconstruct normals from depth
         this.aoPass = ao(scenePassDepth, null, this.camera);
+
+        // Set GTAO to render resolution (must match scene pass depth)
+        if (this.aoPass?.setSize) {
+          this.aoPass.setSize(renderWidth, renderHeight);
+        }
+
         this.aoPass.radius.value = this.config.aoRadius;
 
         // Apply AO as darkening factor
@@ -438,6 +454,11 @@ export class RenderPipeline {
           defaultRoughness,
           this.camera
         );
+
+        // Set SSR to render resolution (must match scene pass depth)
+        if (this.ssrPass?.setSize) {
+          this.ssrPass.setSize(renderWidth, renderHeight);
+        }
 
         // Configure SSR parameters
         if (this.ssrPass?.maxDistance) {
@@ -784,14 +805,21 @@ export class RenderPipeline {
       this.renderWidth = Math.floor(width * effectiveScale);
       this.renderHeight = Math.floor(height * effectiveScale);
 
-      // TRAA must match render resolution when upscaling is active
+      // All depth-dependent passes must match render resolution when upscaling is active
       // Otherwise WebGPU errors on depth texture copy (must be full copy for depth)
-      if (this.traaPass) {
-        if (useUpscaling) {
-          this.traaPass.setSize(this.renderWidth, this.renderHeight);
-        } else {
-          this.traaPass.setSize(width, height);
-        }
+      const effectSize = useUpscaling ? { w: this.renderWidth, h: this.renderHeight } : { w: width, h: height };
+
+      if (this.traaPass?.setSize) {
+        this.traaPass.setSize(effectSize.w, effectSize.h);
+      }
+      if (this.ssgiPass?.setSize) {
+        this.ssgiPass.setSize(effectSize.w, effectSize.h);
+      }
+      if (this.aoPass?.setSize) {
+        this.aoPass.setSize(effectSize.w, effectSize.h);
+      }
+      if (this.ssrPass?.setSize) {
+        this.ssrPass.setSize(effectSize.w, effectSize.h);
       }
 
       // Update EASU resolutions
