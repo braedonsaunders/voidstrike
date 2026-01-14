@@ -1026,37 +1026,55 @@ export function LoadingScreen({ progress, status, onComplete }: LoadingScreenPro
       {/* UI Overlay - only show during loading phase */}
       {phase === 'loading' && (
         <div
-          className={`absolute inset-0 flex items-center justify-center transition-opacity duration-1000 ${
+          className={`absolute inset-0 flex flex-col transition-opacity duration-1000 ${
             isVisible ? 'opacity-100' : 'opacity-0'
           }`}
         >
-          <div className="relative z-10 flex flex-col items-center gap-6 p-8 max-w-2xl w-full">
-            {/* Title */}
-            <div className="text-center mb-4">
-              <h1
-                className="text-7xl font-black tracking-[0.2em] mb-3 relative"
-                style={{
-                  background: 'linear-gradient(135deg, #60a0ff 0%, #a855f7 50%, #40ffff 100%)',
-                  WebkitBackgroundClip: 'text',
-                  WebkitTextFillColor: 'transparent',
-                  filter: 'drop-shadow(0 0 30px rgba(168, 85, 247, 0.6)) drop-shadow(0 0 60px rgba(96, 160, 255, 0.4))',
-                }}
-              >
-                VOIDSTRIKE
-              </h1>
-              <div
-                className="text-sm tracking-[0.4em] uppercase font-medium"
-                style={{
-                  color: 'rgba(160, 180, 255, 0.8)',
-                  textShadow: '0 0 20px rgba(160, 180, 255, 0.4)',
-                }}
-              >
-                Initializing Combat Systems
+          {/* Title - centered in upper area */}
+          <div className="flex-1 flex items-center justify-center">
+            <div className="relative z-10 flex flex-col items-center p-8">
+              <div className="text-center">
+                <h1
+                  className="text-7xl font-black tracking-[0.2em] mb-3 relative"
+                  style={{
+                    background: 'linear-gradient(135deg, #60a0ff 0%, #a855f7 50%, #40ffff 100%)',
+                    WebkitBackgroundClip: 'text',
+                    WebkitTextFillColor: 'transparent',
+                    filter: 'drop-shadow(0 0 30px rgba(168, 85, 247, 0.6)) drop-shadow(0 0 60px rgba(96, 160, 255, 0.4))',
+                  }}
+                >
+                  VOIDSTRIKE
+                </h1>
+                <div
+                  className="text-sm tracking-[0.4em] uppercase font-medium"
+                  style={{
+                    color: 'rgba(160, 180, 255, 0.8)',
+                    textShadow: '0 0 20px rgba(160, 180, 255, 0.4)',
+                  }}
+                >
+                  Initializing Combat Systems
+                </div>
+              </div>
+
+              {/* Quote */}
+              <div className="mt-8 text-center">
+                <p
+                  className="text-xs italic tracking-wide"
+                  style={{
+                    color: 'rgba(140, 150, 180, 0.6)',
+                    textShadow: '0 0 10px rgba(0, 0, 0, 0.5)',
+                  }}
+                >
+                  &quot;In the void, only the prepared survive.&quot;
+                </p>
               </div>
             </div>
+          </div>
 
+          {/* Loading stages and progress bar - bottom third */}
+          <div className="relative z-10 flex flex-col items-center gap-4 p-8 pb-16">
             {/* Loading stages */}
-            <div className="flex gap-3 mb-4">
+            <div className="flex gap-3">
               {loadingStages.map((stage, i) => {
                 const isComplete = progress >= stage.threshold;
                 const isActive = progress >= (loadingStages[i - 1]?.threshold || 0) && progress < stage.threshold;
@@ -1149,19 +1167,6 @@ export function LoadingScreen({ progress, status, onComplete }: LoadingScreenPro
                   {Math.round(progress)}%
                 </span>
               </div>
-            </div>
-
-            {/* Quote */}
-            <div className="mt-8 text-center">
-              <p
-                className="text-xs italic tracking-wide"
-                style={{
-                  color: 'rgba(140, 150, 180, 0.6)',
-                  textShadow: '0 0 10px rgba(0, 0, 0, 0.5)',
-                }}
-              >
-                &quot;In the void, only the prepared survive.&quot;
-              </p>
             </div>
           </div>
         </div>
