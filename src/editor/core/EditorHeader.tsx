@@ -17,6 +17,7 @@ export interface EditorHeaderProps {
   onSave: () => void;
   onCancel: () => void;
   onPlay?: () => void;
+  onExport?: () => void;
 }
 
 export function EditorHeader({
@@ -30,6 +31,7 @@ export function EditorHeader({
   onSave,
   onCancel,
   onPlay,
+  onExport,
 }: EditorHeaderProps) {
   return (
     <header
@@ -109,6 +111,20 @@ export function EditorHeader({
         >
           Cancel
         </button>
+
+        {onExport && (
+          <button
+            onClick={onExport}
+            className="px-4 py-1.5 text-sm font-medium rounded transition-colors hover:opacity-90"
+            style={{
+              backgroundColor: 'var(--editor-surface)',
+              color: 'var(--editor-text)',
+              border: `1px solid var(--editor-border)`,
+            }}
+          >
+            Export
+          </button>
+        )}
 
         <button
           onClick={onSave}

@@ -36,6 +36,10 @@ import { Editor3DCanvas } from './Editor3DCanvas';
 import { EditorToolbar } from './EditorToolbar';
 import { EditorPanels } from './EditorPanels';
 import { EditorHeader } from './EditorHeader';
+import { EditorExportModal } from './EditorExportModal';
+
+// Types
+import type { MapData } from '@/data/maps/MapTypes';
 
 // ============================================
 // TYPES
@@ -79,6 +83,10 @@ export function EditorCore({
     grid: true,
     categories: {} as Record<string, boolean>,
   });
+
+  // Export modal state
+  const [exportModalOpen, setExportModalOpen] = useState(false);
+  const [exportMapData, setExportMapData] = useState<MapData | null>(null);
 
   // Initialize category visibility when config loads
   useEffect(() => {
@@ -177,6 +185,22 @@ export function EditorCore({
     }
     onCancel?.();
   }, [state.isDirty, onCancel]);
+
+  // Handle export
+  const handleExport = useCallback(() => {
+    if (!state.mapData || !dataProvider?.exportForGame) return;
+
+    // Convert editor format to game format
+    const gameData = dataProvider.exportForGame(state.mapData);
+    setExportMapData(gameData as MapData);
+    setExportModalOpen(true);
+  }, [state.mapData, dataProvider]);
+
+  // Handle export modal close
+  const handleExportClose = useCallback(() => {
+    setExportModalOpen(false);
+    setExportMapData(null);
+  }, []);
 
   // Keyboard shortcuts
   useEffect(() => {
@@ -281,6 +305,7 @@ export function EditorCore({
         onSave={handleSave}
         onCancel={handleCancel}
         onPlay={handlePlay}
+        onExport={dataProvider?.exportForGame ? handleExport : undefined}
       />
 
       {/* Main content */}
@@ -323,6 +348,15 @@ export function EditorCore({
           onToggleCategory={toggleCategory}
         />
       </div>
+
+      {/* Export Modal */}
+      {exportMapData && (
+        <EditorExportModal
+          map={exportMapData}
+          isOpen={exportModalOpen}
+          onClose={handleExportClose}
+        />
+      )}
     </div>
   );
 }

@@ -940,32 +940,97 @@ targetSpeed *= terrainSpeedMod;
 
 ### Overview
 
-The map system uses a **paint-based elevation approach with connectivity validation**. Maps can be created two ways:
+The map system uses **JSON files as the primary source of truth** for map definitions. Maps are stored in `src/data/maps/json/*.json` and loaded at build time for bundling. The Map Editor provides visual editing with JSON export for easy iteration.
 
-1. **Code-defined maps** via `MapBlueprint` and paint commands
-2. **Hand-painted maps** via the 3D Map Editor
-
-Both approaches share the same underlying `MapData` format and connectivity validation layer.
-
-### Core Components (`src/data/maps/core/`)
+### Directory Structure
 
 ```
-core/
-├── ElevationMap.ts          # Paint command types & helpers (plateau, ramp, water, etc.)
-├── ElevationMapGenerator.ts # Generates MapData from MapBlueprint
-├── ConnectivityGraph.ts     # Graph types for walkability analysis
-├── ConnectivityAnalyzer.ts  # Analyzes painted maps for connectivity
-├── ConnectivityValidator.ts # Reports connectivity issues
-├── ConnectivityFixer.ts     # Auto-fixes ramps and connections
-├── MapScaffolder.ts         # Auto-generate maps from base positions
-└── index.ts                 # Public API exports
+src/data/maps/
+├── MapTypes.ts              # Core types (MapData, MapCell, etc.)
+├── index.ts                 # Public API exports
+├── loader.ts                # Runtime map loading utilities
+├── json/                    # JSON map files (PRIMARY SOURCE)
+│   ├── index.ts             # Imports and converts all JSON to MapData
+│   ├── crystal_caverns.json
+│   ├── void_assault.json
+│   ├── scorched_basin.json
+│   ├── contested_frontier.json
+│   ├── titans_colosseum.json
+│   └── battle_arena.json
+├── schema/                  # JSON schema types
+│   └── MapJsonSchema.ts     # TypeScript interfaces for JSON format
+├── serialization/           # Convert between formats
+│   ├── serialize.ts         # MapData → JSON
+│   └── deserialize.ts       # JSON → MapData
+└── core/                    # Map generation utilities (legacy)
+    ├── ElevationMap.ts          # Paint command types & helpers
+    ├── ElevationMapGenerator.ts # Generates MapData from MapBlueprint
+    ├── ConnectivityGraph.ts     # Graph types for walkability analysis
+    ├── ConnectivityAnalyzer.ts  # Analyzes maps for connectivity
+    ├── ConnectivityValidator.ts # Reports connectivity issues
+    ├── ConnectivityFixer.ts     # Auto-fixes ramps and connections
+    ├── MapScaffolder.ts         # Auto-generate maps from base positions
+    └── index.ts                 # Public API exports
 ```
 
-### Two Map Creation Approaches
+### JSON Map Format
 
-#### Approach 1: Code-Defined Maps (MapBlueprint)
+Maps use a compact JSON format with compressed terrain data:
 
-Define maps declaratively using paint commands:
+```json
+{
+  "id": "crystal_caverns",
+  "name": "Crystal Caverns",
+  "author": "VOIDSTRIKE Team",
+  "width": 200,
+  "height": 180,
+  "biome": "frozen",
+  "playerCount": 2,
+  "maxPlayers": 2,
+  "isRanked": true,
+
+  "terrain": {
+    "elevation": [140, 140, ...],         // Flat array (row-major)
+    "types": "gggggguuuurrrrgggg...",     // Single char per cell
+    "features": [                          // Sparse (only non-'none')
+      { "x": 50, "y": 30, "f": "water_deep" }
+    ]
+  },
+
+  "spawns": [...],
+  "expansions": [...],
+  "watchTowers": [...],
+  "ramps": [...],
+  "destructibles": [...],
+  "decorations": [...]
+}
+```
+
+**Terrain type characters:** g=ground, u=unwalkable, r=ramp, b=unbuildable, c=creep
+
+### Adding a New Map
+
+1. Create a new JSON file in `src/data/maps/json/my_map.json`
+2. Add the import to `src/data/maps/json/index.ts`:
+   ```typescript
+   import myMapJson from './my_map.json';
+   export const MY_MAP = jsonToMapData(myMapJson as MapJson);
+   ```
+3. Add to `ALL_MAPS` and `MAPS_BY_PLAYER_COUNT` in the same file
+
+### Editor Export Workflow
+
+The Map Editor exports maps as JSON for easy iteration:
+
+1. Open editor: `/game/setup/editor?map=crystal_caverns`
+2. Make visual changes (paint terrain, move bases)
+3. Click **Export** → **Copy to Clipboard**
+4. Paste into `src/data/maps/json/crystal_caverns.json`
+5. Commit and push
+
+### Legacy: Code-Defined Maps (MapBlueprint)
+
+The `core/` directory still contains utilities for defining maps programmatically using paint commands. This can be used to generate initial maps that are then exported to JSON:
 
 ```typescript
 import { generateMap, plateau, ramp, water, mainBase } from '@/data/maps/core';

@@ -109,52 +109,23 @@ export {
   addTerrain,
 } from './core';
 
-// Map exports (all using paint-based elevation system)
-export { VOID_ASSAULT } from './VoidAssault';
-export { CRYSTAL_CAVERNS } from './CrystalCaverns';
-export { SCORCHED_BASIN } from './ScorchedBasin';
-export { CONTESTED_FRONTIER } from './ContestedFrontier';
-export { TITANS_COLOSSEUM } from './TitansColosseum';
-export { BATTLE_ARENA } from './BattleArena';
+// JSON-based map exports (primary source of truth)
+// Maps are defined in src/data/maps/json/*.json
+export {
+  VOID_ASSAULT,
+  CRYSTAL_CAVERNS,
+  SCORCHED_BASIN,
+  CONTESTED_FRONTIER,
+  TITANS_COLOSSEUM,
+  BATTLE_ARENA,
+  ALL_MAPS,
+  MAPS_BY_PLAYER_COUNT,
+  RANKED_MAPS,
+  getMapById,
+  getMapsForPlayerCount,
+  DEFAULT_MAP,
+} from './json';
 
-import { MapData } from './MapTypes';
-import { VOID_ASSAULT } from './VoidAssault';
-import { CRYSTAL_CAVERNS } from './CrystalCaverns';
-import { SCORCHED_BASIN } from './ScorchedBasin';
-import { CONTESTED_FRONTIER } from './ContestedFrontier';
-import { TITANS_COLOSSEUM } from './TitansColosseum';
-import { BATTLE_ARENA } from './BattleArena';
-
-// All available maps
-export const ALL_MAPS: Record<string, MapData> = {
-  [VOID_ASSAULT.id]: VOID_ASSAULT,
-  [CRYSTAL_CAVERNS.id]: CRYSTAL_CAVERNS,
-  [SCORCHED_BASIN.id]: SCORCHED_BASIN,
-  [CONTESTED_FRONTIER.id]: CONTESTED_FRONTIER,
-  [TITANS_COLOSSEUM.id]: TITANS_COLOSSEUM,
-  [BATTLE_ARENA.id]: BATTLE_ARENA,
-};
-
-// Maps by player count
-export const MAPS_BY_PLAYER_COUNT: Record<2 | 4 | 6 | 8, MapData[]> = {
-  2: [CRYSTAL_CAVERNS, VOID_ASSAULT, BATTLE_ARENA],
-  4: [SCORCHED_BASIN],
-  6: [CONTESTED_FRONTIER],
-  8: [TITANS_COLOSSEUM],
-};
-
-// Maps available for ranked play
-export const RANKED_MAPS: MapData[] = Object.values(ALL_MAPS).filter(m => m.isRanked);
-
-// Get map by ID
-export function getMapById(id: string): MapData | undefined {
-  return ALL_MAPS[id];
-}
-
-// Get maps for a specific player count
-export function getMapsForPlayerCount(count: 2 | 4 | 6 | 8): MapData[] {
-  return MAPS_BY_PLAYER_COUNT[count] || [];
-}
-
-// Default map for quick play (2-player 1v1)
-export const DEFAULT_MAP = CRYSTAL_CAVERNS;
+// Serialization utilities for map export/import
+export * from './serialization';
+export * from './schema';
