@@ -89,44 +89,65 @@ renderPipeline.applyConfig({ ssrEnabled: true });
 - Ring suppression via local min/max clamping
 - Configurable render scale (50%-100%)
 
-**AAA Approach for TAA + FSR Integration:**
-TRAA creates internal render targets (including depth) at the renderer's current size. For proper TAA + upscaling:
+**AAA Dual-Pipeline Architecture for TAA + FSR:**
 
-1. Temporarily set renderer to render resolution before creating TRAA
-2. TRAA internal buffers (depth, history) are created at render resolution
+The render pipeline uses a dual-pipeline architecture like AAA games:
+
+```
+┌──────────────────────────────────────────┐
+│     INTERNAL PIPELINE @ Render Res       │
+│     (all buffers at render resolution)   │
+│                                          │
+│  Scene → SSGI → GTAO → SSR → Bloom →    │
+│  Color Grading → TAA                     │
+│                    │                     │
+│                    ▼                     │
+│              TextureNode                 │
+└────────────────────┼─────────────────────┘
+                     │
+                     ▼
+┌──────────────────────────────────────────┐
+│     DISPLAY PIPELINE @ Display Res       │
+│                                          │
+│  EASU Upscale → Canvas                   │
+└──────────────────────────────────────────┘
+```
+
+**Implementation:**
+1. Set renderer to render resolution
+2. Create internal PostProcessing (all buffers at render res)
 3. Restore renderer to display resolution
-4. All depth operations and jitter calculations are correct for render resolution
+4. Create display PostProcessing (EASU only)
+
+**Render Order:**
+1. Temporarily set renderer to render resolution
+2. Render internal pipeline (scene + effects + TAA)
+3. Restore renderer to display resolution
+4. Render display pipeline (EASU upscale to canvas)
 
 This solves:
-- **WebGPU depth copy errors** - Depth textures must be copied in their entirety; matching resolutions fixes this
-- **Camera shake with FSR** - Jitter offsets are now calculated for render resolution, not display
+- **WebGPU depth copy errors** - All depths match (no cross-resolution copies)
+- **Camera shake with FSR** - TAA jitter at render resolution
 - **Proper temporal accumulation** - History buffer at correct resolution
 
-```typescript
-// Implementation in PostProcessing.ts
-if (useUpscaling) {
-  // Temporarily switch to render resolution
-  originalRendererSize = new THREE.Vector2();
-  this.renderer.getSize(originalRendererSize);
-  this.renderer.setSize(renderWidth, renderHeight, false);
-}
-// Create TRAA at render resolution
-this.traaPass = traa(outputNode, scenePassDepth, scenePassVelocity, this.camera);
-// Restore display resolution
-if (originalRendererSize) {
-  this.renderer.setSize(originalRendererSize.x, originalRendererSize.y, false);
-}
-```
+**SSR/SSGI Normal Texture Fix:**
+- Pass raw encoded normal texture from MRT (has `.sample()` method)
+- Do NOT use `colorToDirection()` before passing - returns Fn node without `.sample()`
+- SSR/SSGI handle decoding internally during ray marching
 
 ### Effect Pipeline Order
 
-1. **Scene Pass** - Render scene (MRT with normals when SSR enabled)
-2. **EASU Upscaling** - Applied first while we have a texture node (needs `.sample()`)
-3. **GTAO** - Ambient occlusion multiplied with scene
-4. **SSR** - Screen space reflections (when enabled)
-5. **Bloom** - Additive HDR glow
+**Internal Pipeline (render resolution):**
+1. **Scene Pass** - Render scene with MRT (output, normals, velocity)
+2. **SSGI** - Global illumination + AO (if enabled)
+3. **GTAO** - Ambient occlusion (if SSGI disabled)
+4. **SSR** - Screen space reflections
+5. **Bloom** - HDR glow
 6. **Color Grading** - Exposure, saturation, contrast, vignette
-7. **Anti-Aliasing** - TRAA (zero-velocity) or FXAA as final pass
+7. **TAA/FXAA** - Anti-aliasing
+
+**Display Pipeline (display resolution):**
+1. **EASU** - Edge-adaptive upscaling from internal output
 
 ---
 
