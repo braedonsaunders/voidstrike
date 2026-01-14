@@ -217,15 +217,16 @@ export class RenderPipeline {
 
   // ========== INTERNAL PIPELINE (render resolution) ==========
   // This pipeline runs entirely at render resolution
-  // The renderer is temporarily resized to render resolution during creation
+  // Outputs to internalRenderTarget (NOT the canvas)
   private internalPostProcessing: PostProcessing | null = null;
 
-  // ========== DISPLAY PIPELINE (display resolution) ==========
-  // This pipeline upscales from render to display resolution
-  private displayPostProcessing: PostProcessing | null = null;
+  // Explicit RenderTarget to capture internal pipeline output
+  // This is what the display pipeline samples from
+  private internalRenderTarget: THREE.RenderTarget | null = null;
 
-  // Internal output texture node for display pipeline to sample
-  private internalOutputTexture: any = null;
+  // ========== DISPLAY PIPELINE (display resolution) ==========
+  // This pipeline upscales from internalRenderTarget to canvas
+  private displayPostProcessing: PostProcessing | null = null;
 
   // Effect passes (on internal pipeline)
   private bloomPass: ReturnType<typeof bloom> | null = null;
@@ -306,23 +307,35 @@ export class RenderPipeline {
       const originalSize = new THREE.Vector2();
       this.renderer.getSize(originalSize);
 
-      // Step 1: Set renderer to RENDER resolution
+      // Step 1: Create RenderTarget at render resolution
+      // This is where the internal pipeline will render to
+      this.internalRenderTarget = new THREE.RenderTarget(this.renderWidth, this.renderHeight, {
+        type: THREE.HalfFloatType,
+        format: THREE.RGBAFormat,
+        colorSpace: THREE.SRGBColorSpace,
+        minFilter: THREE.LinearFilter,
+        magFilter: THREE.LinearFilter,
+      });
+
+      // Step 2: Set renderer to RENDER resolution
       // This ensures all PostProcessing internal buffers are created at render resolution
       this.renderer.setSize(this.renderWidth, this.renderHeight, false);
 
-      // Step 2: Create internal pipeline at render resolution
+      // Step 3: Create internal pipeline at render resolution
       this.internalPostProcessing = this.createInternalPipeline();
 
-      // Step 3: Restore renderer to DISPLAY resolution
+      // Step 4: Restore renderer to DISPLAY resolution
       this.renderer.setSize(originalSize.x, originalSize.y, false);
 
-      // Step 4: Create display pipeline for upscaling
+      // Step 5: Create display pipeline for upscaling
+      // This samples from internalRenderTarget.texture
       this.displayPostProcessing = this.createDisplayPipeline();
     } else {
       // ========== SINGLE PIPELINE MODE (no upscaling) ==========
       // Everything runs at native display resolution
       this.internalPostProcessing = this.createInternalPipeline();
       this.displayPostProcessing = null;
+      this.internalRenderTarget = null;
     }
   }
 
@@ -483,11 +496,7 @@ export class RenderPipeline {
         // NO depth copy errors because resolutions match!
         this.traaPass = traa(outputNode, scenePassDepth, scenePassVelocity, this.camera);
 
-        // Get TRAA output - this is what display pipeline will sample
         const traaTexture = this.traaPass.getTextureNode();
-
-        // Store for display pipeline (if upscaling)
-        this.internalOutputTexture = traaTexture;
 
         // Apply sharpening if not upscaling (EASU has its own edge enhancement)
         const useUpscaling = this.config.upscalingMode !== 'off' && this.config.renderScale < 1.0;
@@ -501,23 +510,17 @@ export class RenderPipeline {
         try {
           this.fxaaPass = fxaa(outputNode);
           outputNode = this.fxaaPass;
-          this.internalOutputTexture = this.fxaaPass;
         } catch (fxaaError) {
           console.warn('[PostProcessing] FXAA fallback also failed:', fxaaError);
-          this.internalOutputTexture = outputNode;
         }
       }
     } else if (this.config.antiAliasingMode === 'fxaa' || this.config.fxaaEnabled) {
       try {
         this.fxaaPass = fxaa(outputNode);
         outputNode = this.fxaaPass;
-        this.internalOutputTexture = this.fxaaPass;
       } catch (e) {
         console.warn('[PostProcessing] FXAA initialization failed:', e);
-        this.internalOutputTexture = outputNode;
       }
-    } else {
-      this.internalOutputTexture = outputNode;
     }
 
     postProcessing.outputNode = outputNode;
@@ -527,18 +530,20 @@ export class RenderPipeline {
   /**
    * Create the display pipeline (runs at display resolution)
    * Contains: EASU upscaling only
+   * Samples from internalRenderTarget.texture
    */
   private createDisplayPipeline(): PostProcessing {
     const postProcessing = new PostProcessing(this.renderer);
 
-    // Get the internal pipeline's output texture
-    const inputTexture = this.internalOutputTexture;
-
-    if (!inputTexture) {
-      console.error('[PostProcessing] No internal output texture for display pipeline');
+    // Get the render target texture as a TSL node
+    if (!this.internalRenderTarget) {
+      console.error('[PostProcessing] No internal render target for display pipeline');
       postProcessing.outputNode = vec4(1, 0, 1, 1); // Magenta error color
       return postProcessing;
     }
+
+    // Create TSL texture node from the render target
+    const inputTexture = texture(this.internalRenderTarget.texture);
 
     let outputNode: any;
 
@@ -628,6 +633,12 @@ export class RenderPipeline {
       this.traaPass = null;
     }
 
+    // Dispose old render target
+    if (this.internalRenderTarget) {
+      this.internalRenderTarget.dispose();
+      this.internalRenderTarget = null;
+    }
+
     // Clear all pass references
     this.bloomPass = null;
     this.aoPass = null;
@@ -635,7 +646,6 @@ export class RenderPipeline {
     this.ssgiPass = null;
     this.fxaaPass = null;
     this.easuPass = null;
-    this.internalOutputTexture = null;
 
     // Recreate dual pipeline
     this.createDualPipeline();
@@ -779,29 +789,28 @@ export class RenderPipeline {
    * Render the scene with post-processing
    *
    * DUAL PIPELINE RENDER ORDER:
-   * 1. If upscaling: render internal pipeline (at render res), then display pipeline (upscale)
-   * 2. If no upscaling: render internal pipeline only (at display res)
+   * 1. If upscaling: render internal pipeline to RenderTarget, then display pipeline to canvas
+   * 2. If no upscaling: render internal pipeline directly to canvas
    */
   render(): void {
     const useUpscaling = this.config.upscalingMode !== 'off' && this.config.renderScale < 1.0;
 
-    if (useUpscaling && this.displayPostProcessing) {
+    if (useUpscaling && this.displayPostProcessing && this.internalRenderTarget) {
       // Dual pipeline mode:
-      // Step 1: Render internal pipeline at render resolution
-      // The renderer was set to render resolution when internal pipeline was created
-      // We need to temporarily set it back for rendering
       const originalSize = new THREE.Vector2();
       this.renderer.getSize(originalSize);
 
-      // Set to render resolution for internal pipeline
+      // Step 1: Set renderer to render resolution and render to target
       this.renderer.setSize(this.renderWidth, this.renderHeight, false);
+      (this.renderer as any).setRenderTarget(this.internalRenderTarget);
       this.internalPostProcessing?.render();
 
-      // Restore to display resolution for display pipeline
+      // Step 2: Restore to display resolution and render to canvas
+      (this.renderer as any).setRenderTarget(null);
       this.renderer.setSize(originalSize.x, originalSize.y, false);
       this.displayPostProcessing.render();
     } else {
-      // Single pipeline mode: just render internal
+      // Single pipeline mode: just render internal to canvas
       this.internalPostProcessing?.render();
     }
   }
@@ -812,13 +821,15 @@ export class RenderPipeline {
   async renderAsync(): Promise<void> {
     const useUpscaling = this.config.upscalingMode !== 'off' && this.config.renderScale < 1.0;
 
-    if (useUpscaling && this.displayPostProcessing) {
+    if (useUpscaling && this.displayPostProcessing && this.internalRenderTarget) {
       const originalSize = new THREE.Vector2();
       this.renderer.getSize(originalSize);
 
       this.renderer.setSize(this.renderWidth, this.renderHeight, false);
+      (this.renderer as any).setRenderTarget(this.internalRenderTarget);
       await this.internalPostProcessing?.renderAsync();
 
+      (this.renderer as any).setRenderTarget(null);
       this.renderer.setSize(originalSize.x, originalSize.y, false);
       await this.displayPostProcessing.renderAsync();
     } else {
@@ -841,6 +852,10 @@ export class RenderPipeline {
     if (this.traaPass) {
       this.traaPass.dispose();
       this.traaPass = null;
+    }
+    if (this.internalRenderTarget) {
+      this.internalRenderTarget.dispose();
+      this.internalRenderTarget = null;
     }
   }
 }
