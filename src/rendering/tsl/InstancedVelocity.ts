@@ -8,15 +8,22 @@
  * 1. Storing BOTH current and previous instance matrices as attributes
  * 2. Using IDENTICAL code paths to read and transform both (eliminates precision issues)
  * 3. Only computing velocity for meshes with our attributes (static meshes get zero)
+ * 4. Using UNJITTERED camera matrices for velocity (avoids TAA jitter artifacts)
  *
  * The key insight: Floating-point precision differences between code paths caused
  * micro-jitter. By storing both matrices as attributes and reading them identically,
  * we eliminate any precision differences.
  *
+ * Camera matrices note: TRAA applies sub-pixel jitter to the camera for temporal
+ * super-sampling. We must use UNJITTERED matrices for velocity calculation to avoid
+ * the jitter appearing as screen shake.
+ *
  * Usage:
  * - setupInstancedVelocity(mesh) - Add matrix attributes after creating mesh
  * - swapInstanceMatrices(mesh) - Call at START of frame (prev = curr)
  * - commitInstanceMatrices(mesh) - Call AFTER updating matrices, BEFORE render (curr = mesh.instanceMatrix)
+ * - setCameraMatricesBeforeRender(camera) - Call BEFORE render (saves unjittered current matrices)
+ * - updateCameraMatrices(camera) - Call AFTER render (saves for next frame's "previous")
  */
 
 import * as THREE from 'three';
@@ -34,7 +41,14 @@ const uniform = (TSL as any).uniform;
 const velocitySetupMeshes = new WeakSet<THREE.InstancedMesh>();
 
 // Camera matrix uniforms (shared across all meshes)
-// These are set directly after each frame's render, to be used as "previous" in next frame
+// IMPORTANT: We use our own uniforms instead of Three.js's built-in cameraProjectionMatrix/cameraViewMatrix
+// because TRAA applies sub-pixel jitter to those during render. We need UNJITTERED matrices for velocity.
+
+// Current frame's unjittered camera matrices (set BEFORE render, before TRAA applies jitter)
+const uCurrProjectionMatrix = uniform(new THREE.Matrix4());
+const uCurrViewMatrix = uniform(new THREE.Matrix4());
+
+// Previous frame's camera matrices (set AFTER render, for next frame's "previous")
 const uPrevProjectionMatrix = uniform(new THREE.Matrix4());
 const uPrevViewMatrix = uniform(new THREE.Matrix4());
 
@@ -149,11 +163,29 @@ export function commitInstanceMatrices(mesh: THREE.InstancedMesh): void {
 }
 
 /**
+ * Set current camera matrices BEFORE render (before TRAA applies jitter).
+ * This captures the unjittered matrices for velocity calculation.
+ *
+ * Call at START of render, BEFORE any post-processing that might jitter the camera.
+ */
+export function setCameraMatricesBeforeRender(camera: THREE.Camera): void {
+  // Ensure matrices are up to date
+  camera.updateMatrixWorld();
+  if ((camera as THREE.PerspectiveCamera).isPerspectiveCamera) {
+    (camera as THREE.PerspectiveCamera).updateProjectionMatrix();
+  }
+
+  // Store unjittered matrices for velocity shader
+  uCurrProjectionMatrix.value.copy(camera.projectionMatrix);
+  uCurrViewMatrix.value.copy(camera.matrixWorldInverse);
+}
+
+/**
  * Update camera matrices for velocity calculation.
  * Call at END of frame, after render.
  *
- * Sets the uniforms directly to the current camera matrices.
- * Next frame will use these as "previous" camera position.
+ * Saves current matrices as "previous" for next frame.
+ * At this point, TRAA has cleared its jitter, so matrices are unjittered.
  */
 export function updateCameraMatrices(camera: THREE.Camera): void {
   // Store current camera for next frame's "previous" calculation
@@ -163,9 +195,18 @@ export function updateCameraMatrices(camera: THREE.Camera): void {
 
 /**
  * Initialize camera matrices. Call once at startup.
- * Sets "previous" to current so first frame has zero velocity.
+ * Sets both current and previous to the same values so first frame has zero velocity.
  */
 export function initCameraMatrices(camera: THREE.Camera): void {
+  // Ensure matrices are up to date
+  camera.updateMatrixWorld();
+  if ((camera as THREE.PerspectiveCamera).isPerspectiveCamera) {
+    (camera as THREE.PerspectiveCamera).updateProjectionMatrix();
+  }
+
+  // Initialize all uniforms to current camera state
+  uCurrProjectionMatrix.value.copy(camera.projectionMatrix);
+  uCurrViewMatrix.value.copy(camera.matrixWorldInverse);
   uPrevProjectionMatrix.value.copy(camera.projectionMatrix);
   uPrevViewMatrix.value.copy(camera.matrixWorldInverse);
 }
@@ -210,14 +251,16 @@ export function createInstancedVelocityNode(): any {
     // Get raw vertex position (before any instance transform)
     const rawPosition = positionGeometry;
 
-    // === Current position (identical code path) ===
+    // === Current position (using UNJITTERED camera matrices) ===
+    // We use uCurrViewMatrix/uCurrProjectionMatrix instead of cameraViewMatrix/cameraProjectionMatrix
+    // because TRAA jitters the camera matrices during render, causing screen shake in velocity
     const currInstancePos = currInstanceMatrix.mul(vec4(rawPosition, 1.0));
     const currWorldPos = modelWorldMatrix.mul(currInstancePos);
-    const currViewPos = cameraViewMatrix.mul(currWorldPos);
-    const currClipPos = cameraProjectionMatrix.mul(currViewPos);
+    const currViewPos = uCurrViewMatrix.mul(currWorldPos);
+    const currClipPos = uCurrProjectionMatrix.mul(currViewPos);
     const currNDC = currClipPos.xy.div(currClipPos.w);
 
-    // === Previous position (identical code path) ===
+    // === Previous position (identical code path with previous frame's camera) ===
     const prevInstancePos = prevInstanceMatrix.mul(vec4(rawPosition, 1.0));
     const prevWorldPos = modelWorldMatrix.mul(prevInstancePos); // Assuming object doesn't move
     const prevViewPos = uPrevViewMatrix.mul(prevWorldPos);

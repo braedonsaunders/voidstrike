@@ -46,7 +46,7 @@ import {
   TSLFogOfWar,
   TSLGameOverlayManager,
 } from '@/rendering/tsl';
-import { initCameraMatrices, updateCameraMatrices } from '@/rendering/tsl/InstancedVelocity';
+import { initCameraMatrices, setCameraMatricesBeforeRender, updateCameraMatrices } from '@/rendering/tsl/InstancedVelocity';
 
 import { useGameStore } from '@/store/gameStore';
 
@@ -749,6 +749,14 @@ export function WebGPUGameCanvas() {
         // Render with post-processing
         // Note: TRAANode handles camera jitter internally - don't apply manual jitter
         const renderStart = performance.now();
+
+        // IMPORTANT: Save unjittered camera matrices BEFORE render
+        // TRAA applies sub-pixel jitter during render, which would cause velocity shake
+        // Also needed for SSGI which uses temporal filtering
+        if (renderPipelineRef.current?.isTAAEnabled() || renderPipelineRef.current?.isSSGIEnabled()) {
+          setCameraMatricesBeforeRender(camera.camera);
+        }
+
         if (renderPipelineRef.current) {
           renderPipelineRef.current.render();
         } else {
