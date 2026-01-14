@@ -1,19 +1,24 @@
 /**
  * TSL Post-Processing Pipeline - AAA Quality
  *
- * WebGPU-compatible post-processing using Three.js TSL nodes.
- * Features:
- * - Bloom effect (BloomNode) - HDR glow
- * - GTAO ambient occlusion (GTAONode) - Contact shadows
- * - SSR (Screen Space Reflections) - Real-time reflections
- * - TRAA anti-aliasing (Temporal Reprojection Anti-Aliasing) - High quality temporal smoothing
- * - FXAA anti-aliasing (FXAANode) - Fast edge smoothing (fallback)
- * - Vignette - Cinematic edge darkening
- * - Color grading (exposure, saturation, contrast)
+ * DUAL-PIPELINE ARCHITECTURE:
+ * ===========================
+ * This implements the AAA game approach to TAA + FSR/upscaling:
  *
- * IMPORTANT: GTAO requires hardware MSAA to be disabled on the renderer.
- * The WebGPUGameCanvas sets antialias: false when post-processing is enabled.
- * TRAA provides superior anti-aliasing with temporal stability.
+ * 1. INTERNAL PIPELINE (render resolution):
+ *    - Scene renders to explicit RenderTarget at render resolution
+ *    - All effects (GTAO, SSR, SSGI, Bloom, TAA) operate at render resolution
+ *    - TAA has matching depth buffers - no resolution mismatch errors
+ *
+ * 2. DISPLAY PIPELINE (display resolution):
+ *    - Takes internal pipeline output texture
+ *    - EASU upscales to display resolution
+ *    - Outputs to canvas
+ *
+ * This architecture ensures:
+ * - No WebGPU depth texture copy errors (all depths match)
+ * - Correct TAA jitter at render resolution
+ * - Clean separation between internal rendering and display
  */
 
 import * as THREE from 'three';
@@ -39,11 +44,12 @@ import {
   output,
   normalView,
 } from 'three/tsl';
-// directionToColor/colorToDirection for normal encoding in MRT
+// directionToColor for normal encoding in MRT
+// NOTE: We do NOT use colorToDirection before passing to SSR/SSGI
+// SSR/SSGI need texture nodes with .sample() - colorToDirection returns Fn nodes
 // eslint-disable-next-line @typescript-eslint/no-require-imports
 import * as TSL from 'three/tsl';
 const directionToColor = (TSL as any).directionToColor;
-const colorToDirection = (TSL as any).colorToDirection;
 
 // Import WebGPU post-processing nodes from addons
 import { bloom } from 'three/addons/tsl/display/BloomNode.js';
@@ -55,7 +61,7 @@ import { ssr } from 'three/addons/tsl/display/SSRNode.js';
 import { ssgi } from 'three/addons/tsl/display/SSGINode.js';
 
 // Import EASU upscaling
-import { easuUpscale, rcasSharpening } from './UpscalerNode';
+import { easuUpscale } from './UpscalerNode';
 
 // Import custom instanced velocity node
 import { createInstancedVelocityNode } from './InstancedVelocity';
@@ -165,30 +171,21 @@ const DEFAULT_CONFIG: PostProcessingConfig = {
   bloomRadius: 0.5,
   bloomThreshold: 0.8,
 
-  // PERF: Reduced AO radius from 4 to 2 for better performance
-  // GTAO is expensive - disable for low-end devices via graphics settings
   aoEnabled: true,
   aoRadius: 2,
   aoIntensity: 0.8,
 
-  // SSR - Screen Space Reflections for metallic surfaces
-  // Disabled by default - enable for high-end devices
   ssrEnabled: false,
   ssrMaxDistance: 100,
   ssrOpacity: 1.0,
   ssrThickness: 0.1,
   ssrMaxRoughness: 0.5,
 
-  // SSGI - Screen Space Global Illumination
-  // Provides realistic light bouncing + integrated AO
-  // Expensive - disabled by default, enable for high-end devices
   ssgiEnabled: false,
-  ssgiRadius: 8,        // World-space sampling radius
-  ssgiIntensity: 15,    // GI intensity (subtle by default)
-  ssgiThickness: 1,     // Object thickness
+  ssgiRadius: 8,
+  ssgiIntensity: 15,
+  ssgiThickness: 1,
 
-  // FXAA is the safe default - works with all materials
-  // TRAA requires velocity output from all materials, which standard materials don't support
   antiAliasingMode: 'fxaa',
   fxaaEnabled: true,
   taaEnabled: false,
@@ -196,8 +193,6 @@ const DEFAULT_CONFIG: PostProcessingConfig = {
   taaSharpeningEnabled: true,
   taaSharpeningIntensity: 0.5,
 
-  // EASU upscaling - disabled by default (native resolution)
-  // Enable for performance boost: 0.75 = 75% res = ~1.8x faster
   upscalingMode: 'off',
   renderScale: 1.0,
   easuSharpness: 0.5,
@@ -211,17 +206,28 @@ const DEFAULT_CONFIG: PostProcessingConfig = {
 };
 
 // ============================================
-// RENDER PIPELINE CLASS
+// RENDER PIPELINE CLASS - DUAL PIPELINE
 // ============================================
 
 export class RenderPipeline {
   private renderer: WebGPURenderer;
   private scene: THREE.Scene;
   private camera: THREE.Camera;
-  private postProcessing: PostProcessing;
   private config: PostProcessingConfig;
 
-  // Effect passes
+  // ========== INTERNAL PIPELINE (render resolution) ==========
+  // This pipeline runs entirely at render resolution
+  // The renderer is temporarily resized to render resolution during creation
+  private internalPostProcessing: PostProcessing | null = null;
+
+  // ========== DISPLAY PIPELINE (display resolution) ==========
+  // This pipeline upscales from render to display resolution
+  private displayPostProcessing: PostProcessing | null = null;
+
+  // Internal output texture node for display pipeline to sample
+  private internalOutputTexture: any = null;
+
+  // Effect passes (on internal pipeline)
   private bloomPass: ReturnType<typeof bloom> | null = null;
   private aoPass: ReturnType<typeof ao> | null = null;
   private ssrPass: ReturnType<typeof ssr> | null = null;
@@ -229,13 +235,8 @@ export class RenderPipeline {
   private fxaaPass: ReturnType<typeof fxaa> | null = null;
   private traaPass: ReturnType<typeof traa> | null = null;
 
-  // EASU upscaling pass
+  // EASU upscaling pass (on display pipeline)
   private easuPass: ReturnType<typeof easuUpscale> | null = null;
-
-  // Zero-velocity texture for TRAA (used when materials don't output velocity)
-  private zeroVelocityTexture: THREE.DataTexture | null = null;
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  private zeroVelocityNode: any = null; // TSL texture node - reused across rebuilds
 
   // Uniforms for dynamic updates
   private uVignetteIntensity = uniform(0.25);
@@ -250,7 +251,7 @@ export class RenderPipeline {
   private uSSROpacity = uniform(1.0);
   private uSSRMaxRoughness = uniform(0.5);
 
-  // Resolution tracking for upscaling
+  // Resolution tracking
   private displayWidth = 1920;
   private displayHeight = 1080;
   private renderWidth = 1920;
@@ -267,81 +268,83 @@ export class RenderPipeline {
     this.camera = camera;
     this.config = { ...DEFAULT_CONFIG, ...config };
 
-    // Get initial resolution from renderer
+    // Get initial display resolution from renderer
     const size = new THREE.Vector2();
     this.renderer.getSize(size);
     this.displayWidth = Math.max(1, size.x);
     this.displayHeight = Math.max(1, size.y);
     this.uResolution.value.set(this.displayWidth, this.displayHeight);
 
-    // Calculate initial render resolution based on upscaling config
+    // Calculate render resolution based on upscaling config
     const useUpscaling = this.config.upscalingMode !== 'off' && this.config.renderScale < 1.0;
     const effectiveScale = useUpscaling ? this.config.renderScale : 1.0;
     this.renderWidth = Math.floor(this.displayWidth * effectiveScale);
     this.renderHeight = Math.floor(this.displayHeight * effectiveScale);
 
-    // Create zero-velocity texture once for TRAA (reused across rebuilds)
-    // This avoids MRT issues with materials that don't output velocity
-    this.initZeroVelocityTexture();
-
-    this.postProcessing = this.createPipeline();
+    this.createDualPipeline();
     this.applyConfig(this.config);
   }
 
   /**
-   * Initialize zero-velocity texture for TRAA
-   * Created once and reused to avoid WebGPU texture re-initialization errors
+   * Create the dual-pipeline architecture
+   *
+   * INTERNAL PIPELINE: Runs at render resolution
+   * - Renderer is set to render resolution during creation
+   * - All buffers (scene, effects, TAA) are at render resolution
+   * - No resolution mismatches
+   *
+   * DISPLAY PIPELINE: Runs at display resolution
+   * - Takes internal output and upscales via EASU
+   * - Outputs to canvas
    */
-  private initZeroVelocityTexture(): void {
-    // Create a 2x2 RGBA texture filled with zeros (velocity = 0)
-    const velocityData = new Float32Array([
-      0, 0, 0, 0,  // pixel (0,0)
-      0, 0, 0, 0,  // pixel (1,0)
-      0, 0, 0, 0,  // pixel (0,1)
-      0, 0, 0, 0,  // pixel (1,1)
-    ]);
-    this.zeroVelocityTexture = new THREE.DataTexture(
-      velocityData,
-      2, 2,
-      THREE.RGBAFormat,
-      THREE.FloatType
-    );
-    this.zeroVelocityTexture.minFilter = THREE.NearestFilter;
-    this.zeroVelocityTexture.magFilter = THREE.NearestFilter;
-    this.zeroVelocityTexture.needsUpdate = true;
+  private createDualPipeline(): void {
+    const useUpscaling = this.config.upscalingMode !== 'off' && this.config.renderScale < 1.0;
 
-    // Create the TSL texture node once - reused across rebuilds
-    // This prevents WebGPU "Texture already initialized" errors
-    this.zeroVelocityNode = texture(this.zeroVelocityTexture);
+    if (useUpscaling) {
+      // ========== DUAL PIPELINE MODE ==========
+      // Save original display size
+      const originalSize = new THREE.Vector2();
+      this.renderer.getSize(originalSize);
+
+      // Step 1: Set renderer to RENDER resolution
+      // This ensures all PostProcessing internal buffers are created at render resolution
+      this.renderer.setSize(this.renderWidth, this.renderHeight, false);
+
+      // Step 2: Create internal pipeline at render resolution
+      this.internalPostProcessing = this.createInternalPipeline();
+
+      // Step 3: Restore renderer to DISPLAY resolution
+      this.renderer.setSize(originalSize.x, originalSize.y, false);
+
+      // Step 4: Create display pipeline for upscaling
+      this.displayPostProcessing = this.createDisplayPipeline();
+    } else {
+      // ========== SINGLE PIPELINE MODE (no upscaling) ==========
+      // Everything runs at native display resolution
+      this.internalPostProcessing = this.createInternalPipeline();
+      this.displayPostProcessing = null;
+    }
   }
 
-  private createPipeline(): PostProcessing {
+  /**
+   * Create the internal pipeline (runs at render resolution)
+   * Contains: Scene + Effects + TAA
+   */
+  private createInternalPipeline(): PostProcessing {
     const postProcessing = new PostProcessing(this.renderer);
 
-    // Create scene pass
+    // Create scene pass - NO resolution scale, we're already at render resolution
     const scenePass = pass(this.scene, this.camera);
 
-    // Set resolution scale for upscaling - renders scene at lower resolution
-    // The PassNode will render at (width * scale, height * scale)
-    const useUpscaling = this.config.upscalingMode !== 'off' && this.config.renderScale < 1.0;
-    if (useUpscaling) {
-      scenePass.setResolutionScale(this.config.renderScale);
-    } else {
-      // Explicitly set to 1.0 for native resolution to ensure clean state
-      scenePass.setResolutionScale(1.0);
-    }
-
     // Enable MRT with velocity for TRAA and optionally normals for SSR/SSGI
-    // Using custom velocity node that properly handles InstancedMesh via our prevInstanceMatrix attributes
-    // This avoids the jiggling issue caused by Three.js's built-in velocity not tracking per-instance transforms
     const needsNormals = this.config.ssrEnabled || this.config.ssgiEnabled;
-    const needsVelocity = this.config.taaEnabled || this.config.ssgiEnabled; // SSGI uses temporal filtering with TAA
+    const needsVelocity = this.config.taaEnabled || this.config.ssgiEnabled;
 
     if (needsNormals || needsVelocity) {
       const customVelocity = createInstancedVelocityNode();
 
       if (needsNormals) {
-        // SSR/SSGI need normals
+        // SSR/SSGI need normals - encode with directionToColor
         scenePass.setMRT(mrt({
           output: output,
           normal: directionToColor(normalView),
@@ -360,51 +363,34 @@ export class RenderPipeline {
     const scenePassColor = scenePass.getTextureNode();
     const scenePassDepth = scenePass.getTextureNode('depth');
 
-    // Build the effect chain
-    // NOTE: All effects run at render resolution (which may be lower than display if upscaling)
-    // Upscaling is applied LAST for maximum performance
+    // Build the effect chain - ALL at render resolution
     let outputNode: any = scenePassColor;
 
-    // When upscaling is active, calculate render resolution for effect passes
-    // All depth-dependent effects must operate at render resolution to match the scene pass
-    const renderWidth = useUpscaling ? Math.floor(this.displayWidth * this.config.renderScale) : this.displayWidth;
-    const renderHeight = useUpscaling ? Math.floor(this.displayHeight * this.config.renderScale) : this.displayHeight;
-
-    // 1. SSGI (Screen Space Global Illumination) - includes AO
-    // Provides realistic light bouncing between surfaces
-    // SSGI outputs vec4(giColor, ao) - RGB is indirect light, A is occlusion
+    // 1. SSGI (Screen Space Global Illumination)
     if (this.config.ssgiEnabled) {
       try {
-        // Get normal texture from MRT and DECODE it
-        const scenePassNormalEncoded = scenePass.getTextureNode('normal');
-        const scenePassNormal = colorToDirection(scenePassNormalEncoded);
+        // IMPORTANT: Pass the raw encoded normal texture - DO NOT use colorToDirection()
+        // SSR/SSGI need texture nodes with .sample() method
+        // colorToDirection() returns a Fn node which doesn't have .sample()
+        const scenePassNormal = scenePass.getTextureNode('normal');
 
-        // Create SSGI pass
         this.ssgiPass = (ssgi as any)(
           scenePassColor,
           scenePassDepth,
-          scenePassNormal,
+          scenePassNormal,  // Raw texture node, not decoded
           this.camera
         );
 
-        // Set SSGI to render resolution (must match scene pass depth)
-        if (this.ssgiPass?.setSize) {
-          this.ssgiPass.setSize(renderWidth, renderHeight);
-        }
-
-        // Configure SSGI parameters
         if (this.ssgiPass) {
-          // Use low quality for performance (sliceCount=1, stepCount=12 with temporal)
           this.ssgiPass.sliceCount.value = 1;
           this.ssgiPass.stepCount.value = 12;
           this.ssgiPass.radius.value = this.config.ssgiRadius;
           this.ssgiPass.giIntensity.value = this.config.ssgiIntensity;
           this.ssgiPass.thickness.value = this.config.ssgiThickness;
-          this.ssgiPass.aoIntensity.value = this.config.aoIntensity; // Use AO intensity setting
-          this.ssgiPass.useTemporalFiltering = this.config.taaEnabled; // Works best with TAA
+          this.ssgiPass.aoIntensity.value = this.config.aoIntensity;
+          this.ssgiPass.useTemporalFiltering = this.config.taaEnabled;
         }
 
-        // Apply SSGI: scene * ao + giColor
         const ssgiResult = this.ssgiPass.getTextureNode();
         const giColor = ssgiResult.rgb;
         const aoValue = ssgiResult.a;
@@ -414,61 +400,38 @@ export class RenderPipeline {
       }
     }
 
-    // 3. GTAO Ambient Occlusion (skip if SSGI is enabled - it has built-in AO)
-    // IMPORTANT: Requires antialias: false on the renderer to avoid multisampled depth texture issues
+    // 2. GTAO Ambient Occlusion (skip if SSGI enabled)
     if (this.config.aoEnabled && !this.config.ssgiEnabled) {
       try {
-        // Use null for normal node - GTAO will reconstruct normals from depth
         this.aoPass = ao(scenePassDepth, null, this.camera);
-
-        // Set GTAO to render resolution (must match scene pass depth)
-        if (this.aoPass?.setSize) {
-          this.aoPass.setSize(renderWidth, renderHeight);
-        }
-
         this.aoPass.radius.value = this.config.aoRadius;
 
-        // Apply AO as darkening factor
-        // IMPORTANT: GTAONode stores AO only in the RED channel (.r) for optimization
-        // See: https://threejs.org/docs/pages/GTAONode.html
-        const aoValue = this.aoPass.getTextureNode().r; // Only use red channel!
+        const aoValue = this.aoPass.getTextureNode().r;
         const aoFactor = mix(float(1.0), aoValue, this.uAOIntensity);
         outputNode = scenePassColor.mul(vec3(aoFactor));
       } catch (e) {
-        console.warn('[PostProcessing] GTAO initialization failed, skipping AO:', e);
+        console.warn('[PostProcessing] GTAO initialization failed:', e);
       }
     }
 
     // 3. SSR (Screen Space Reflections)
-    // Applied after AO, before bloom - reflections are ADDED to scene
-    // SSR outputs vec4(reflectionColor, opacity) - must blend with scene
     if (this.config.ssrEnabled) {
       try {
-        // Get normal texture from MRT and DECODE it
-        // We encoded with directionToColor (dir*0.5+0.5), so decode with colorToDirection
-        const scenePassNormalEncoded = scenePass.getTextureNode('normal');
-        const scenePassNormal = colorToDirection(scenePassNormalEncoded);
+        // IMPORTANT: Pass the raw encoded normal texture - DO NOT use colorToDirection()
+        const scenePassNormal = scenePass.getTextureNode('normal');
 
-        // Create SSR pass
-        // SSR(color, depth, normal, metalness, roughness, camera)
-        const defaultMetalness = float(0.9); // High metalness for visible reflections
+        const defaultMetalness = float(0.9);
         const defaultRoughness = this.uSSRMaxRoughness;
 
         this.ssrPass = (ssr as any)(
-          scenePassColor,  // Must be texture node with .sample()
+          scenePassColor,
           scenePassDepth,
-          scenePassNormal,
+          scenePassNormal,  // Raw texture node, not decoded
           defaultMetalness,
           defaultRoughness,
           this.camera
         );
 
-        // Set SSR to render resolution (must match scene pass depth)
-        if (this.ssrPass?.setSize) {
-          this.ssrPass.setSize(renderWidth, renderHeight);
-        }
-
-        // Configure SSR parameters
         if (this.ssrPass?.maxDistance) {
           this.ssrPass.maxDistance.value = this.config.ssrMaxDistance;
         }
@@ -479,13 +442,10 @@ export class RenderPipeline {
           this.ssrPass.thickness.value = this.config.ssrThickness;
         }
 
-        // BLEND SSR with scene - SSR outputs vec4(color, alpha)
-        // Add reflections weighted by their opacity
         if (this.ssrPass) {
           const ssrTexture = this.ssrPass.getTextureNode();
           const ssrColor = ssrTexture.rgb;
           const ssrAlpha = ssrTexture.a;
-          // Additive blend: scene + reflection * opacity
           outputNode = outputNode.add(ssrColor.mul(ssrAlpha));
         }
       } catch (e) {
@@ -493,9 +453,7 @@ export class RenderPipeline {
       }
     }
 
-    // 4. Bloom effect (additive) with soft knee to prevent sparkle
-    // Sparkle occurs when pixels near threshold pop in/out of bloom contribution
-    // Soft knee creates gradual transition for temporal stability
+    // 4. Bloom
     if (this.config.bloomEnabled) {
       try {
         this.bloomPass = bloom(outputNode);
@@ -508,151 +466,130 @@ export class RenderPipeline {
       }
     }
 
-    // 4. Apply color grading and vignette
+    // 5. Color grading and vignette
     try {
       outputNode = this.createColorGradingPass(outputNode);
     } catch (e) {
       console.warn('[PostProcessing] Color grading failed:', e);
     }
 
-    // 5. Anti-aliasing (TRAA or FXAA)
-    // TRAA provides high-quality temporal anti-aliasing with motion-aware reprojection.
-    // Using Three.js built-in velocity from MRT for proper motion handling.
+    // 6. Anti-aliasing (TRAA or FXAA)
     if (this.config.antiAliasingMode === 'taa' && this.config.taaEnabled) {
       try {
-        // Get velocity from MRT (set up above when taaEnabled or ssrEnabled)
         const scenePassVelocity = scenePass.getTextureNode('velocity');
 
-        // AAA APPROACH FOR TAA + UPSCALING:
-        // TRAA creates internal render targets (including depth) at the renderer's current size.
-        // When upscaling is active, we must create TRAA at render resolution to ensure:
-        // 1. Internal depth buffers match scene pass depth resolution (avoids WebGPU copy errors)
-        // 2. Jitter offsets are correct for render resolution (avoids camera shake)
-        // 3. History buffer is at render resolution (proper temporal accumulation)
-        //
-        // We temporarily set the renderer to render resolution, create TRAA, then restore.
-        // This is how AAA games handle TAA + FSR/DLSS pipelines.
-
-        let originalRendererSize: THREE.Vector2 | null = null;
-        if (useUpscaling) {
-          originalRendererSize = new THREE.Vector2();
-          this.renderer.getSize(originalRendererSize);
-          // Temporarily set renderer to render resolution for TRAA creation
-          this.renderer.setSize(renderWidth, renderHeight, false);
-        }
-
-        // Use Three.js's TRAA with real velocity vectors
-        // Pass depth for proper disocclusion detection - at render resolution it matches
+        // TRAA is created with renderer at render resolution
+        // All internal buffers (depth, history) match scene pass resolution
+        // NO depth copy errors because resolutions match!
         this.traaPass = traa(outputNode, scenePassDepth, scenePassVelocity, this.camera);
 
-        // Restore renderer to display resolution after TRAA creation
-        if (originalRendererSize) {
-          this.renderer.setSize(originalRendererSize.x, originalRendererSize.y, false);
-        }
-
-        // Set TRAA size explicitly to ensure internal uniforms are correct
-        if (useUpscaling) {
-          this.traaPass.setSize(renderWidth, renderHeight);
-        }
-
-        // Get TRAA's texture output (supports .sample() for further processing)
+        // Get TRAA output - this is what display pipeline will sample
         const traaTexture = this.traaPass.getTextureNode();
 
-        // IMPORTANT: EASU upscaling requires a texture node with .sample() method.
-        // The sharpening pass returns a Fn() node which doesn't have .sample().
-        // Therefore, when EASU is enabled, we skip sharpening and apply EASU directly
-        // to the TRAA texture. EASU provides its own edge enhancement anyway.
-        if (useUpscaling && this.config.upscalingMode === 'easu') {
-          // Apply EASU directly to TRAA texture (skip sharpening - EASU has edge enhancement)
-          try {
-            const renderRes = new THREE.Vector2(
-              Math.floor(this.displayWidth * this.config.renderScale),
-              Math.floor(this.displayHeight * this.config.renderScale)
-            );
-            const displayRes = new THREE.Vector2(this.displayWidth, this.displayHeight);
+        // Store for display pipeline (if upscaling)
+        this.internalOutputTexture = traaTexture;
 
-            this.easuPass = easuUpscale(traaTexture, renderRes, displayRes, this.config.easuSharpness);
-            outputNode = this.easuPass.node;
-          } catch (e) {
-            console.warn('[PostProcessing] EASU upscaling failed:', e);
-            outputNode = traaTexture;
-          }
+        // Apply sharpening if not upscaling (EASU has its own edge enhancement)
+        const useUpscaling = this.config.upscalingMode !== 'off' && this.config.renderScale < 1.0;
+        if (!useUpscaling && this.config.taaSharpeningEnabled) {
+          outputNode = this.createSharpeningPass(traaTexture);
         } else {
-          // No EASU upscaling - apply optional sharpening after TRAA (counters blur)
-          if (this.config.taaSharpeningEnabled) {
-            outputNode = this.createSharpeningPass(traaTexture);
-          } else {
-            outputNode = traaTexture;
-          }
+          outputNode = traaTexture;
         }
       } catch (e) {
         console.warn('[PostProcessing] TRAA initialization failed, falling back to FXAA:', e);
-        // Fallback to FXAA - guaranteed to work with all materials
         try {
           this.fxaaPass = fxaa(outputNode);
           outputNode = this.fxaaPass;
+          this.internalOutputTexture = this.fxaaPass;
         } catch (fxaaError) {
           console.warn('[PostProcessing] FXAA fallback also failed:', fxaaError);
-          // Keep outputNode as-is
+          this.internalOutputTexture = outputNode;
         }
       }
     } else if (this.config.antiAliasingMode === 'fxaa' || this.config.fxaaEnabled) {
-      // FXAA anti-aliasing
       try {
         this.fxaaPass = fxaa(outputNode);
         outputNode = this.fxaaPass;
+        this.internalOutputTexture = this.fxaaPass;
       } catch (e) {
         console.warn('[PostProcessing] FXAA initialization failed:', e);
+        this.internalOutputTexture = outputNode;
       }
-      // Note: EASU cannot be applied after FXAA because FXAA outputs a Fn() node
-      // which doesn't support .sample(). Bilinear upscaling is used automatically by GPU.
-      if (useUpscaling && this.config.upscalingMode === 'easu') {
-        console.warn('[PostProcessing] EASU upscaling requires TAA mode. Using bilinear upscaling instead.');
-      }
+    } else {
+      this.internalOutputTexture = outputNode;
     }
-    // If no AA, bilinear upscaling is used (EASU requires texture node from TRAA)
-    // Note: For EASU to work, TAA mode must be enabled because TRAA provides a texture
-    // output that supports .sample(), which EASU needs for its 12-tap edge detection.
 
-    // Set final output
     postProcessing.outputNode = outputNode;
-
     return postProcessing;
   }
 
   /**
-   * Create RCAS-style (Robust Contrast-Adaptive Sharpening) pass.
-   * Counters TAA blur while preserving edges.
+   * Create the display pipeline (runs at display resolution)
+   * Contains: EASU upscaling only
+   */
+  private createDisplayPipeline(): PostProcessing {
+    const postProcessing = new PostProcessing(this.renderer);
+
+    // Get the internal pipeline's output texture
+    const inputTexture = this.internalOutputTexture;
+
+    if (!inputTexture) {
+      console.error('[PostProcessing] No internal output texture for display pipeline');
+      postProcessing.outputNode = vec4(1, 0, 1, 1); // Magenta error color
+      return postProcessing;
+    }
+
+    let outputNode: any;
+
+    // Apply EASU upscaling
+    if (this.config.upscalingMode === 'easu') {
+      try {
+        const renderRes = new THREE.Vector2(this.renderWidth, this.renderHeight);
+        const displayRes = new THREE.Vector2(this.displayWidth, this.displayHeight);
+
+        this.easuPass = easuUpscale(inputTexture, renderRes, displayRes, this.config.easuSharpness);
+        outputNode = this.easuPass.node;
+      } catch (e) {
+        console.warn('[PostProcessing] EASU upscaling failed, using bilinear:', e);
+        // Fallback: just sample the texture (GPU does bilinear)
+        outputNode = inputTexture;
+      }
+    } else {
+      // Bilinear upscaling (GPU default when sampling smaller texture)
+      outputNode = inputTexture;
+    }
+
+    postProcessing.outputNode = outputNode;
+    return postProcessing;
+  }
+
+  /**
+   * Create RCAS-style sharpening pass
    */
   private createSharpeningPass(inputNode: any): any {
     return Fn(() => {
       const fragUV = uv();
       const texelSize = vec2(1.0).div(this.uResolution);
 
-      // Sample center and 4 neighbors (cross pattern)
       const center = vec3(inputNode).toVar();
       const north = inputNode.sample(fragUV.add(vec2(0, -1).mul(texelSize))).rgb;
       const south = inputNode.sample(fragUV.add(vec2(0, 1).mul(texelSize))).rgb;
       const west = inputNode.sample(fragUV.add(vec2(-1, 0).mul(texelSize))).rgb;
       const east = inputNode.sample(fragUV.add(vec2(1, 0).mul(texelSize))).rgb;
 
-      // Compute local contrast
       const minRGB = min(min(min(north, south), min(west, east)), center);
       const maxRGB = max(max(max(north, south), max(west, east)), center);
 
-      // Compute sharpening weight based on local contrast
       const contrast = maxRGB.sub(minRGB);
       const rcpM = float(1.0).div(max(max(contrast.r, contrast.g), contrast.b).add(0.25));
 
-      // Compute sharpening kernel
       const neighbors = north.add(south).add(west).add(east);
       const sharpenedColor = center.add(
         center.mul(4.0).sub(neighbors).mul(this.uSharpeningIntensity).mul(rcpM)
       );
 
-      // Clamp to prevent ringing artifacts
       const result = clamp(sharpenedColor, minRGB, maxRGB);
-
       return vec4(result, 1.0);
     })();
   }
@@ -661,29 +598,22 @@ export class RenderPipeline {
     return Fn(() => {
       let color = vec3(inputNode).toVar();
 
-      // Apply exposure (HDR to LDR)
       color.mulAssign(this.uExposure);
 
-      // Apply saturation
       const luminance = dot(color, vec3(0.299, 0.587, 0.114));
       color.assign(mix(vec3(luminance), color, this.uSaturation));
 
-      // Apply contrast (around midtones)
       color.assign(color.sub(0.5).mul(this.uContrast).add(0.5));
 
-      // Apply vignette (cinematic edge darkening)
       if (this.config.vignetteEnabled) {
         const uvCentered = uv().sub(0.5);
         const dist = length(uvCentered).mul(2.0);
-        // Smooth falloff from center to edges
         const vignetteFactor = smoothstep(float(1.4), float(0.5), dist);
         const vignetteAmount = mix(float(1.0).sub(this.uVignetteIntensity), float(1.0), vignetteFactor);
         color.mulAssign(vignetteAmount);
       }
 
-      // Clamp to valid range
       color.assign(clamp(color, 0.0, 1.0));
-
       return vec4(color, 1.0);
     })();
   }
@@ -692,25 +622,23 @@ export class RenderPipeline {
    * Rebuild the pipeline when effects are toggled
    */
   rebuild(): void {
-    // Dispose old TRAA pass (but keep zero-velocity texture - it's reused)
+    // Dispose old passes
     if (this.traaPass) {
       this.traaPass.dispose();
       this.traaPass = null;
     }
 
-    // Reset all pass references to ensure clean state
-    // TSL nodes don't have dispose(), but we must clear references
-    // to prevent stale nodes from interfering with the new pipeline
+    // Clear all pass references
     this.bloomPass = null;
     this.aoPass = null;
     this.ssrPass = null;
     this.ssgiPass = null;
     this.fxaaPass = null;
     this.easuPass = null;
+    this.internalOutputTexture = null;
 
-    // Note: zeroVelocityTexture is NOT disposed here - it's reused across rebuilds
-    // to avoid WebGPU "Texture already initialized" errors
-    this.postProcessing = this.createPipeline();
+    // Recreate dual pipeline
+    this.createDualPipeline();
   }
 
   /**
@@ -738,8 +666,7 @@ export class RenderPipeline {
       this.config.taaEnabled = config.antiAliasingMode === 'taa';
     }
 
-    // Update internal render resolution based on upscaling mode
-    // When upscaling is off, render at native resolution regardless of renderScale value
+    // Update render resolution
     const effectiveScale = this.config.upscalingMode !== 'off' ? this.config.renderScale : 1.0;
     this.renderWidth = Math.floor(this.displayWidth * effectiveScale);
     this.renderHeight = Math.floor(this.displayHeight * effectiveScale);
@@ -808,7 +735,7 @@ export class RenderPipeline {
   }
 
   /**
-   * Update camera reference (needed if camera changes)
+   * Update camera reference
    */
   setCamera(camera: THREE.Camera): void {
     this.camera = camera;
@@ -816,137 +743,95 @@ export class RenderPipeline {
   }
 
   /**
-   * Set display size (for sharpening and upscaling resolution uniforms)
+   * Set display size
    */
   setSize(width: number, height: number): void {
     const currentSize = this.uResolution.value;
     if (currentSize.x !== width || currentSize.y !== height) {
-      // Update display resolution
       this.displayWidth = width;
       this.displayHeight = height;
       this.uResolution.value.set(width, height);
 
-      // Update render resolution based on effective scale
-      // When upscaling is off, use native resolution
+      // Recalculate render resolution
       const useUpscaling = this.config.upscalingMode !== 'off' && this.config.renderScale < 1.0;
       const effectiveScale = useUpscaling ? this.config.renderScale : 1.0;
       this.renderWidth = Math.floor(width * effectiveScale);
       this.renderHeight = Math.floor(height * effectiveScale);
 
-      // All depth-dependent passes must match render resolution when upscaling is active
-      // Otherwise WebGPU errors on depth texture copy (must be full copy for depth)
-      const effectSize = useUpscaling ? { w: this.renderWidth, h: this.renderHeight } : { w: width, h: height };
+      // Must rebuild to recreate pipelines at new sizes
+      this.rebuild();
+    }
+  }
 
-      if (this.traaPass?.setSize) {
-        this.traaPass.setSize(effectSize.w, effectSize.h);
-      }
-      if (this.ssgiPass?.setSize) {
-        this.ssgiPass.setSize(effectSize.w, effectSize.h);
-      }
-      if (this.aoPass?.setSize) {
-        this.aoPass.setSize(effectSize.w, effectSize.h);
-      }
-      if (this.ssrPass?.setSize) {
-        this.ssrPass.setSize(effectSize.w, effectSize.h);
-      }
+  // ========== Status methods ==========
+  isSSREnabled(): boolean { return this.config.ssrEnabled; }
+  isTAAEnabled(): boolean { return this.config.taaEnabled && this.config.antiAliasingMode === 'taa'; }
+  isSSGIEnabled(): boolean { return this.config.ssgiEnabled; }
+  getAntiAliasingMode(): AntiAliasingMode { return this.config.antiAliasingMode; }
+  isUpscalingEnabled(): boolean { return this.config.upscalingMode !== 'off' && this.config.renderScale < 1.0; }
+  getUpscalingMode(): UpscalingMode { return this.config.upscalingMode; }
+  getRenderScale(): number { return this.config.renderScale; }
+  getRenderScalePercent(): number { return Math.round(this.config.renderScale * 100); }
+  getRenderResolution(): { width: number; height: number } { return { width: this.renderWidth, height: this.renderHeight }; }
+  getDisplayResolution(): { width: number; height: number } { return { width: this.displayWidth, height: this.displayHeight }; }
 
-      // Update EASU resolutions
-      if (this.easuPass) {
-        this.easuPass.setRenderResolution(this.renderWidth, this.renderHeight);
-        this.easuPass.setDisplayResolution(width, height);
-      }
+  /**
+   * Render the scene with post-processing
+   *
+   * DUAL PIPELINE RENDER ORDER:
+   * 1. If upscaling: render internal pipeline (at render res), then display pipeline (upscale)
+   * 2. If no upscaling: render internal pipeline only (at display res)
+   */
+  render(): void {
+    const useUpscaling = this.config.upscalingMode !== 'off' && this.config.renderScale < 1.0;
+
+    if (useUpscaling && this.displayPostProcessing) {
+      // Dual pipeline mode:
+      // Step 1: Render internal pipeline at render resolution
+      // The renderer was set to render resolution when internal pipeline was created
+      // We need to temporarily set it back for rendering
+      const originalSize = new THREE.Vector2();
+      this.renderer.getSize(originalSize);
+
+      // Set to render resolution for internal pipeline
+      this.renderer.setSize(this.renderWidth, this.renderHeight, false);
+      this.internalPostProcessing?.render();
+
+      // Restore to display resolution for display pipeline
+      this.renderer.setSize(originalSize.x, originalSize.y, false);
+      this.displayPostProcessing.render();
+    } else {
+      // Single pipeline mode: just render internal
+      this.internalPostProcessing?.render();
     }
   }
 
   /**
-   * Check if SSR is enabled
-   */
-  isSSREnabled(): boolean {
-    return this.config.ssrEnabled;
-  }
-
-  /**
-   * Check if TAA/TRAA is enabled
-   */
-  isTAAEnabled(): boolean {
-    return this.config.taaEnabled && this.config.antiAliasingMode === 'taa';
-  }
-
-  /**
-   * Check if SSGI is enabled
-   */
-  isSSGIEnabled(): boolean {
-    return this.config.ssgiEnabled;
-  }
-
-  /**
-   * Get current anti-aliasing mode
-   */
-  getAntiAliasingMode(): AntiAliasingMode {
-    return this.config.antiAliasingMode;
-  }
-
-  /**
-   * Check if upscaling is enabled
-   */
-  isUpscalingEnabled(): boolean {
-    return this.config.upscalingMode !== 'off' && this.config.renderScale < 1.0;
-  }
-
-  /**
-   * Get current upscaling mode
-   */
-  getUpscalingMode(): UpscalingMode {
-    return this.config.upscalingMode;
-  }
-
-  /**
-   * Get current render scale (0.5 - 1.0)
-   */
-  getRenderScale(): number {
-    return this.config.renderScale;
-  }
-
-  /**
-   * Get render scale as percentage (50 - 100)
-   */
-  getRenderScalePercent(): number {
-    return Math.round(this.config.renderScale * 100);
-  }
-
-  /**
-   * Get current render resolution (internal)
-   */
-  getRenderResolution(): { width: number; height: number } {
-    return { width: this.renderWidth, height: this.renderHeight };
-  }
-
-  /**
-   * Get current display resolution
-   */
-  getDisplayResolution(): { width: number; height: number } {
-    return { width: this.displayWidth, height: this.displayHeight };
-  }
-
-  /**
-   * Render the scene with post-processing
-   */
-  render(): void {
-    this.postProcessing.render();
-  }
-
-  /**
-   * Async render (for compute shader coordination)
+   * Async render
    */
   async renderAsync(): Promise<void> {
-    await this.postProcessing.renderAsync();
+    const useUpscaling = this.config.upscalingMode !== 'off' && this.config.renderScale < 1.0;
+
+    if (useUpscaling && this.displayPostProcessing) {
+      const originalSize = new THREE.Vector2();
+      this.renderer.getSize(originalSize);
+
+      this.renderer.setSize(this.renderWidth, this.renderHeight, false);
+      await this.internalPostProcessing?.renderAsync();
+
+      this.renderer.setSize(originalSize.x, originalSize.y, false);
+      await this.displayPostProcessing.renderAsync();
+    } else {
+      await this.internalPostProcessing?.renderAsync();
+    }
   }
 
   /**
    * Get the PostProcessing instance for direct access
    */
   getPostProcessing(): PostProcessing {
-    return this.postProcessing;
+    // Return display pipeline if upscaling, otherwise internal
+    return this.displayPostProcessing || this.internalPostProcessing!;
   }
 
   /**
@@ -957,12 +842,6 @@ export class RenderPipeline {
       this.traaPass.dispose();
       this.traaPass = null;
     }
-    if (this.zeroVelocityTexture) {
-      this.zeroVelocityTexture.dispose();
-      this.zeroVelocityTexture = null;
-    }
-    this.zeroVelocityNode = null;
-    // PostProcessing handles its own disposal
   }
 }
 
@@ -970,9 +849,6 @@ export class RenderPipeline {
 // SIMPLE POST-PROCESSING (NO EFFECTS)
 // ============================================
 
-/**
- * Create minimal post-processing pass (just scene render)
- */
 export function createSimplePostProcessing(
   renderer: WebGPURenderer,
   scene: THREE.Scene,
