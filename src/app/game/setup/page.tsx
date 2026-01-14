@@ -372,70 +372,70 @@ export default function GameSetupPage() {
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          {/* Map Selection - Takes 2 columns */}
+          {/* Players Section - Takes 2 columns on left */}
           <div className="lg:col-span-2">
-            <h2 className="font-display text-lg text-white mb-2">Select Map</h2>
-            <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
-              {maps.map((map) => (
-                <MapPreview
-                  key={map.id}
-                  map={map}
-                  isSelected={selectedMapId === map.id}
-                  onSelect={() => handleMapSelect(map.id)}
-                  onEdit={() => router.push(`/game/setup/editor?map=${map.id}`)}
+            <div className="flex items-center justify-between mb-2">
+              <h2 className="font-display text-lg text-white">
+                Players ({activePlayerCount}/{maxPlayersForMap})
+              </h2>
+              <button
+                onClick={addPlayerSlot}
+                disabled={!canAddPlayer}
+                className={`text-sm px-2 py-1 rounded border transition-colors
+                  ${canAddPlayer
+                    ? 'text-void-400 hover:text-void-300 border-void-700 hover:border-void-500'
+                    : 'text-void-600 border-void-800 cursor-not-allowed opacity-50'
+                  }`}
+              >
+                + Add Player
+              </button>
+            </div>
+            <div className="space-y-2">
+              {playerSlots.map((slot, index) => (
+                <PlayerSlotRow
+                  key={slot.id}
+                  slot={slot}
+                  index={index}
+                  usedColors={usedColors}
+                  onTypeChange={(type) => setPlayerSlotType(slot.id, type)}
+                  onFactionChange={(faction) => setPlayerSlotFaction(slot.id, faction)}
+                  onColorChange={(colorId) => setPlayerSlotColor(slot.id, colorId)}
+                  onDifficultyChange={(diff) => setPlayerSlotAIDifficulty(slot.id, diff)}
+                  onTeamChange={(team) => setPlayerSlotTeam(slot.id, team)}
+                  onRemove={() => removePlayerSlot(slot.id)}
+                  canRemove={canRemovePlayer}
                 />
               ))}
             </div>
+          </div>
 
-            {/* Selected map details */}
-            <div className="mt-3 p-3 bg-void-900/50 rounded-lg border border-void-800/50">
-              <div className="flex items-center justify-between mb-1">
-                <h3 className="font-display text-base text-white">{selectedMap.name}</h3>
-                <span className="text-void-400 text-xs">{selectedMap.width}x{selectedMap.height} • {selectedMap.maxPlayers}P</span>
-              </div>
-              <p className="text-void-400 text-xs">{selectedMap.description}</p>
-            </div>
-
-            {/* Players Section */}
-            <div className="mt-4">
-              <div className="flex items-center justify-between mb-2">
-                <h2 className="font-display text-lg text-white">
-                  Players ({activePlayerCount}/{maxPlayersForMap})
-                </h2>
-                <button
-                  onClick={addPlayerSlot}
-                  disabled={!canAddPlayer}
-                  className={`text-sm px-2 py-1 rounded border transition-colors
-                    ${canAddPlayer
-                      ? 'text-void-400 hover:text-void-300 border-void-700 hover:border-void-500'
-                      : 'text-void-600 border-void-800 cursor-not-allowed opacity-50'
-                    }`}
-                >
-                  + Add Player
-                </button>
-              </div>
-              <div className="space-y-2">
-                {playerSlots.map((slot, index) => (
-                  <PlayerSlotRow
-                    key={slot.id}
-                    slot={slot}
-                    index={index}
-                    usedColors={usedColors}
-                    onTypeChange={(type) => setPlayerSlotType(slot.id, type)}
-                    onFactionChange={(faction) => setPlayerSlotFaction(slot.id, faction)}
-                    onColorChange={(colorId) => setPlayerSlotColor(slot.id, colorId)}
-                    onDifficultyChange={(diff) => setPlayerSlotAIDifficulty(slot.id, diff)}
-                    onTeamChange={(team) => setPlayerSlotTeam(slot.id, team)}
-                    onRemove={() => removePlayerSlot(slot.id)}
-                    canRemove={canRemovePlayer}
+          {/* Right Column - Maps and Settings */}
+          <div className="space-y-4">
+            {/* Map Selection - Compact */}
+            <div>
+              <h2 className="font-display text-lg text-white mb-2">Select Map</h2>
+              <div className="grid grid-cols-2 gap-2">
+                {maps.map((map) => (
+                  <MapPreview
+                    key={map.id}
+                    map={map}
+                    isSelected={selectedMapId === map.id}
+                    onSelect={() => handleMapSelect(map.id)}
+                    onEdit={() => router.push(`/game/setup/editor?map=${map.id}`)}
                   />
                 ))}
               </div>
-            </div>
-          </div>
 
-          {/* Settings Panel - 1 column */}
-          <div className="space-y-4">
+              {/* Selected map details */}
+              <div className="mt-2 p-2 bg-void-900/50 rounded-lg border border-void-800/50">
+                <div className="flex items-center justify-between mb-0.5">
+                  <h3 className="font-display text-sm text-white">{selectedMap.name}</h3>
+                  <span className="text-void-400 text-[10px]">{selectedMap.width}x{selectedMap.height} • {selectedMap.maxPlayers}P</span>
+                </div>
+                <p className="text-void-400 text-[10px] line-clamp-2">{selectedMap.description}</p>
+              </div>
+            </div>
+
             {/* Game Settings */}
             <div>
               <h2 className="font-display text-lg text-white mb-2">Game Settings</h2>
