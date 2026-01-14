@@ -414,25 +414,8 @@ export class RenderPipeline {
     // Soft knee creates gradual transition for temporal stability
     if (this.config.bloomEnabled) {
       try {
-        // Apply soft-knee pre-filter to prevent bloom sparkle
-        // This creates a smooth transition around the threshold
-        const bloomKnee = 0.1; // Soft transition range
-        const threshold = this.config.bloomThreshold;
-        const softBloomInput = Fn(() => {
-          const color = vec3(outputNode);
-          const luminance = dot(color, vec3(0.2126, 0.7152, 0.0722));
-          // Soft knee: smooth transition from (threshold-knee) to (threshold+knee)
-          const softFactor = smoothstep(
-            float(threshold - bloomKnee),
-            float(threshold + bloomKnee),
-            luminance
-          );
-          // Return color multiplied by soft factor for smooth bloom contribution
-          return vec4(color.mul(softFactor), 1.0);
-        })();
-
-        this.bloomPass = bloom(softBloomInput);
-        this.bloomPass.threshold.value = 0.0; // We handle threshold in soft filter
+        this.bloomPass = bloom(outputNode);
+        this.bloomPass.threshold.value = this.config.bloomThreshold;
         this.bloomPass.strength.value = this.config.bloomStrength;
         this.bloomPass.radius.value = this.config.bloomRadius;
         outputNode = outputNode.add(this.bloomPass);
