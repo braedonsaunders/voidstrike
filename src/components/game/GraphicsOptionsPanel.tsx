@@ -55,11 +55,13 @@ const SegmentedControl = memo(function SegmentedControl<T extends string>({
   value,
   onChange,
   disabled = false,
+  disabledOptions = [],
 }: {
-  options: { value: T; label: string }[];
+  options: { value: T; label: string; hint?: string }[];
   value: T;
   onChange: (value: T) => void;
   disabled?: boolean;
+  disabledOptions?: T[];
 }) {
   return (
     <div style={{
@@ -69,27 +71,31 @@ const SegmentedControl = memo(function SegmentedControl<T extends string>({
       padding: '2px',
       gap: '2px',
     }}>
-      {options.map((opt) => (
-        <button
-          key={opt.value}
-          onClick={() => onChange(opt.value)}
-          disabled={disabled}
-          style={{
-            flex: 1,
-            padding: '4px 8px',
-            fontSize: '10px',
-            border: 'none',
-            borderRadius: '3px',
-            backgroundColor: value === opt.value ? '#3b82f6' : 'transparent',
-            color: value === opt.value ? '#fff' : '#888',
-            cursor: disabled ? 'not-allowed' : 'pointer',
-            transition: 'all 0.15s',
-            opacity: disabled ? 0.5 : 1,
-          }}
-        >
-          {opt.label}
-        </button>
-      ))}
+      {options.map((opt) => {
+        const isDisabled = disabled || disabledOptions.includes(opt.value);
+        return (
+          <button
+            key={opt.value}
+            onClick={() => !isDisabled && onChange(opt.value)}
+            disabled={isDisabled}
+            title={opt.hint}
+            style={{
+              flex: 1,
+              padding: '4px 8px',
+              fontSize: '10px',
+              border: 'none',
+              borderRadius: '3px',
+              backgroundColor: value === opt.value ? '#3b82f6' : 'transparent',
+              color: isDisabled ? '#555' : value === opt.value ? '#fff' : '#888',
+              cursor: isDisabled ? 'not-allowed' : 'pointer',
+              transition: 'all 0.15s',
+              opacity: isDisabled ? 0.5 : 1,
+            }}
+          >
+            {opt.label}
+          </button>
+        );
+      })}
     </div>
   );
 });
@@ -212,12 +218,14 @@ const ToggleRow = memo(function ToggleRow({
   onChange,
   disabled = false,
   indent = false,
+  hint,
 }: {
   label: string;
   enabled: boolean;
   onChange: () => void;
   disabled?: boolean;
   indent?: boolean;
+  hint?: string;
 }) {
   return (
     <div style={{
@@ -227,8 +235,45 @@ const ToggleRow = memo(function ToggleRow({
       marginBottom: '6px',
       marginLeft: indent ? '12px' : 0,
     }}>
-      <span style={{ fontSize: '11px', color: '#aaa' }}>{label}</span>
+      <span
+        style={{ fontSize: '11px', color: disabled ? '#666' : '#aaa' }}
+        title={hint}
+      >
+        {label}
+        {hint && <span style={{ marginLeft: '4px', color: '#555' }}>ⓘ</span>}
+      </span>
       <Toggle enabled={enabled} onChange={onChange} disabled={disabled} />
+    </div>
+  );
+});
+
+/** Info/Warning hint box */
+const HintBox = memo(function HintBox({
+  type = 'info',
+  children,
+}: {
+  type?: 'info' | 'warning';
+  children: React.ReactNode;
+}) {
+  const colors = {
+    info: { bg: 'rgba(59, 130, 246, 0.1)', border: '#3b82f640', text: '#93c5fd' },
+    warning: { bg: 'rgba(234, 179, 8, 0.1)', border: '#eab30840', text: '#fcd34d' },
+  };
+  const c = colors[type];
+
+  return (
+    <div style={{
+      fontSize: '9px',
+      padding: '6px 8px',
+      marginBottom: '8px',
+      borderRadius: '4px',
+      backgroundColor: c.bg,
+      border: `1px solid ${c.border}`,
+      color: c.text,
+      lineHeight: 1.4,
+    }}>
+      {type === 'warning' && '⚠ '}
+      {children}
     </div>
   );
 });
@@ -284,6 +329,11 @@ export const GraphicsOptionsPanel = memo(function GraphicsOptionsPanel() {
   };
 
   const isWebGPU = rendererAPI === 'WebGPU';
+
+  // FSR compatibility checks
+  // FSR (EASU) requires TAA because it needs a texture node with .sample() support
+  const fsrActive = graphicsSettings.upscalingMode === 'easu' && graphicsSettings.renderScale < 1;
+  const fsrRequiresTaa = graphicsSettings.upscalingMode === 'easu';
 
   return (
     <div
@@ -379,11 +429,17 @@ export const GraphicsOptionsPanel = memo(function GraphicsOptionsPanel() {
             <SegmentedControl
               options={[
                 { value: 'off', label: 'Native' },
-                { value: 'easu', label: 'FSR' },
+                { value: 'easu', label: 'FSR', hint: 'Requires TAA anti-aliasing' },
                 { value: 'bilinear', label: 'Bilinear' },
               ]}
               value={graphicsSettings.upscalingMode}
-              onChange={(v) => setUpscalingMode(v as UpscalingMode)}
+              onChange={(v) => {
+                // Auto-enable TAA when FSR is selected
+                if (v === 'easu' && graphicsSettings.antiAliasingMode !== 'taa') {
+                  setAntiAliasingMode('taa');
+                }
+                setUpscalingMode(v as UpscalingMode);
+              }}
             />
             <div style={{ fontSize: '9px', color: '#555', marginTop: '4px' }}>
               {graphicsSettings.upscalingMode === 'off' && 'Full resolution rendering'}
@@ -391,6 +447,14 @@ export const GraphicsOptionsPanel = memo(function GraphicsOptionsPanel() {
               {graphicsSettings.upscalingMode === 'bilinear' && 'Fast GPU bilinear filtering'}
             </div>
           </div>
+
+          {/* FSR requires TAA warning */}
+          {graphicsSettings.upscalingMode === 'easu' && graphicsSettings.antiAliasingMode !== 'taa' && (
+            <HintBox type="warning">
+              FSR requires TAA for edge-adaptive upscaling. TAA has been auto-enabled.
+            </HintBox>
+          )}
+
           {graphicsSettings.upscalingMode !== 'off' && (
             <>
               <CompactSlider
@@ -430,30 +494,51 @@ export const GraphicsOptionsPanel = memo(function GraphicsOptionsPanel() {
           <div style={{ marginBottom: '8px' }}>
             <SegmentedControl
               options={[
-                { value: 'off', label: 'Off' },
-                { value: 'fxaa', label: 'FXAA' },
+                { value: 'off', label: 'Off', hint: fsrRequiresTaa ? 'Disabled: FSR requires TAA' : undefined },
+                { value: 'fxaa', label: 'FXAA', hint: fsrRequiresTaa ? 'Disabled: FSR requires TAA' : undefined },
                 { value: 'taa', label: 'TAA' },
               ]}
               value={graphicsSettings.antiAliasingMode}
-              onChange={(v) => setAntiAliasingMode(v as AntiAliasingMode)}
+              onChange={(v) => {
+                // If FSR is enabled and user tries to switch away from TAA, switch FSR to bilinear
+                if (graphicsSettings.upscalingMode === 'easu' && v !== 'taa') {
+                  setUpscalingMode('bilinear');
+                }
+                setAntiAliasingMode(v as AntiAliasingMode);
+              }}
+              disabledOptions={fsrRequiresTaa ? ['off', 'fxaa'] : []}
             />
+            {fsrRequiresTaa && (
+              <div style={{ fontSize: '9px', color: '#eab308', marginTop: '4px' }}>
+                TAA required for FSR upscaling
+              </div>
+            )}
           </div>
           {graphicsSettings.antiAliasingMode === 'taa' && (
             <>
-              <ToggleRow
-                label="RCAS Sharpening"
-                enabled={graphicsSettings.taaSharpeningEnabled}
-                onChange={() => handleToggle('taaSharpeningEnabled')}
-              />
-              {graphicsSettings.taaSharpeningEnabled && (
-                <CompactSlider
-                  label="Intensity"
-                  value={graphicsSettings.taaSharpeningIntensity}
-                  min={0}
-                  max={1}
-                  step={0.05}
-                  onChange={(v) => setGraphicsSetting('taaSharpeningIntensity', v)}
-                />
+              {/* Sharpening is disabled when FSR is active (FSR has its own edge enhancement) */}
+              {fsrActive ? (
+                <HintBox type="info">
+                  RCAS sharpening disabled when FSR is active (FSR includes edge enhancement)
+                </HintBox>
+              ) : (
+                <>
+                  <ToggleRow
+                    label="RCAS Sharpening"
+                    enabled={graphicsSettings.taaSharpeningEnabled}
+                    onChange={() => handleToggle('taaSharpeningEnabled')}
+                  />
+                  {graphicsSettings.taaSharpeningEnabled && (
+                    <CompactSlider
+                      label="Intensity"
+                      value={graphicsSettings.taaSharpeningIntensity}
+                      min={0}
+                      max={1}
+                      step={0.05}
+                      onChange={(v) => setGraphicsSetting('taaSharpeningIntensity', v)}
+                    />
+                  )}
+                </>
               )}
             </>
           )}

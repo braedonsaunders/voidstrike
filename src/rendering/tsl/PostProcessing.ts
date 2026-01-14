@@ -497,11 +497,35 @@ export class RenderPipeline {
         // Use Three.js's TRAA with real velocity vectors
         this.traaPass = traa(outputNode, scenePassDepth, scenePassVelocity, this.camera);
 
-        // Apply optional sharpening after TRAA (counters blur)
-        if (this.config.taaSharpeningEnabled) {
-          outputNode = this.createSharpeningPass(this.traaPass.getTextureNode());
+        // Get TRAA's texture output (supports .sample() for further processing)
+        const traaTexture = this.traaPass.getTextureNode();
+
+        // IMPORTANT: EASU upscaling requires a texture node with .sample() method.
+        // The sharpening pass returns a Fn() node which doesn't have .sample().
+        // Therefore, when EASU is enabled, we skip sharpening and apply EASU directly
+        // to the TRAA texture. EASU provides its own edge enhancement anyway.
+        if (useUpscaling && this.config.upscalingMode === 'easu') {
+          // Apply EASU directly to TRAA texture (skip sharpening - EASU has edge enhancement)
+          try {
+            const renderRes = new THREE.Vector2(
+              Math.floor(this.displayWidth * this.config.renderScale),
+              Math.floor(this.displayHeight * this.config.renderScale)
+            );
+            const displayRes = new THREE.Vector2(this.displayWidth, this.displayHeight);
+
+            this.easuPass = easuUpscale(traaTexture, renderRes, displayRes, this.config.easuSharpness);
+            outputNode = this.easuPass.node;
+          } catch (e) {
+            console.warn('[PostProcessing] EASU upscaling failed:', e);
+            outputNode = traaTexture;
+          }
         } else {
-          outputNode = this.traaPass.getTextureNode();
+          // No EASU upscaling - apply optional sharpening after TRAA (counters blur)
+          if (this.config.taaSharpeningEnabled) {
+            outputNode = this.createSharpeningPass(traaTexture);
+          } else {
+            outputNode = traaTexture;
+          }
         }
       } catch (e) {
         console.warn('[PostProcessing] TRAA initialization failed, falling back to FXAA:', e);
@@ -522,30 +546,15 @@ export class RenderPipeline {
       } catch (e) {
         console.warn('[PostProcessing] FXAA initialization failed:', e);
       }
-    }
-    // If no AA, outputNode remains as-is
-
-    // FINAL STEP: Upscaling (applied LAST for maximum performance)
-    // All effects above ran at render resolution, now upscale to display resolution
-    if (useUpscaling) {
-      if (this.config.upscalingMode === 'easu') {
-        // EASU - Edge-Adaptive Spatial Upsampling (FSR 1.0 style)
-        try {
-          const renderRes = new THREE.Vector2(
-            Math.floor(this.displayWidth * this.config.renderScale),
-            Math.floor(this.displayHeight * this.config.renderScale)
-          );
-          const displayRes = new THREE.Vector2(this.displayWidth, this.displayHeight);
-
-          this.easuPass = easuUpscale(outputNode, renderRes, displayRes, this.config.easuSharpness);
-          outputNode = this.easuPass.node;
-        } catch (e) {
-          console.warn('[PostProcessing] EASU upscaling failed:', e);
-        }
+      // Note: EASU cannot be applied after FXAA because FXAA outputs a Fn() node
+      // which doesn't support .sample(). Bilinear upscaling is used automatically by GPU.
+      if (useUpscaling && this.config.upscalingMode === 'easu') {
+        console.warn('[PostProcessing] EASU upscaling requires TAA mode. Using bilinear upscaling instead.');
       }
-      // Bilinear mode: GPU's linear texture filtering handles upscaling automatically
-      // when sampling low-res texture at high-res coordinates - no extra pass needed
     }
+    // If no AA, bilinear upscaling is used (EASU requires texture node from TRAA)
+    // Note: For EASU to work, TAA mode must be enabled because TRAA provides a texture
+    // output that supports .sample(), which EASU needs for its 12-tap edge detection.
 
     // Set final output
     postProcessing.outputNode = outputNode;
