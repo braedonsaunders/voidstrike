@@ -533,8 +533,8 @@ export function WebGPUGameCanvas() {
       // Initialize audio (must await to ensure sounds are preloaded before game starts)
       await game.audioSystem.initialize(camera.camera, CURRENT_MAP.biome);
 
-      // Start game
-      game.start();
+      // NOTE: game.start() is called in initializePhaserOverlay after Phaser is ready
+      // This ensures the countdown overlay is visible when it triggers
 
       // Animation loop
       let lastTime = performance.now();
@@ -814,6 +814,13 @@ export function WebGPUGameCanvas() {
 
         if (gameRef.current) {
           phaserGame.scene.start('OverlayScene', { eventBus: gameRef.current.eventBus });
+
+          // Start the game AFTER Phaser overlay is ready
+          // This ensures the countdown is visible when it triggers
+          // Small delay to ensure scene is fully initialized
+          setTimeout(() => {
+            gameRef.current?.start();
+          }, 100);
         }
       });
     };

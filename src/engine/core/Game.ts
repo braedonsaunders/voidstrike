@@ -239,11 +239,35 @@ export class Game {
   public start(): void {
     if (this.state === 'running') return;
 
-    this.state = 'running';
-    this.gameLoop.start();
-    PerformanceMonitor.start(); // Start performance monitoring
-    this.eventBus.emit('game:countdown', {}); // SC2-style 3, 2, 1, GO! countdown
-    this.eventBus.emit('game:started', { tick: this.currentTick });
+    // Set state to 'initializing' so we don't try to start twice
+    // but also don't run game loop yet
+    this.state = 'initializing';
+
+    const startGameLoop = () => {
+      if (this.state === 'running') return; // Already started
+      this.state = 'running';
+      this.gameLoop.start();
+      PerformanceMonitor.start(); // Start performance monitoring
+      this.eventBus.emit('game:started', { tick: this.currentTick });
+    };
+
+    // Wait for countdown to complete before starting the game loop
+    this.eventBus.once('game:countdownComplete', () => {
+      startGameLoop();
+    });
+
+    // Show countdown - SC2-style 3, 2, 1, GO!
+    // The overlay scene will emit 'game:countdownComplete' when done
+    this.eventBus.emit('game:countdown', {});
+
+    // Fallback: if countdown doesn't complete within 5 seconds (e.g., overlay not ready),
+    // start the game anyway to prevent being stuck
+    setTimeout(() => {
+      if (this.state !== 'running') {
+        debugInitialization.log('[Game] Countdown timeout - starting game without countdown');
+        startGameLoop();
+      }
+    }, 5000);
   }
 
   public pause(): void {
