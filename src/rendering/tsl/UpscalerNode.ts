@@ -33,9 +33,6 @@ import {
   floor,
   fract,
   pow,
-  exp,
-  If,
-  select,
 } from 'three/tsl';
 
 // ============================================
