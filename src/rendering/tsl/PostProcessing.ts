@@ -318,6 +318,9 @@ export class RenderPipeline {
     const useUpscaling = this.config.upscalingMode !== 'off' && this.config.renderScale < 1.0;
     if (useUpscaling) {
       scenePass.setResolutionScale(this.config.renderScale);
+    } else {
+      // Explicitly set to 1.0 for native resolution to ensure clean state
+      scenePass.setResolutionScale(1.0);
     }
 
     // Enable MRT with velocity for TRAA and optionally normals for SSR/SSGI
@@ -350,34 +353,11 @@ export class RenderPipeline {
     const scenePassDepth = scenePass.getTextureNode('depth');
 
     // Build the effect chain
+    // NOTE: All effects run at render resolution (which may be lower than display if upscaling)
+    // Upscaling is applied LAST for maximum performance
     let outputNode: any = scenePassColor;
 
-    // 1. Resolution upscaling (if enabled)
-    // Scene was rendered at lower resolution via setResolutionScale() above
-    // Now upscale to display resolution using selected method
-    if (useUpscaling) {
-      if (this.config.upscalingMode === 'easu') {
-        // EASU - Edge-Adaptive Spatial Upsampling (FSR 1.0 style)
-        // Higher quality edge-preserving upscaling
-        try {
-          const renderRes = new THREE.Vector2(
-            Math.floor(this.displayWidth * this.config.renderScale),
-            Math.floor(this.displayHeight * this.config.renderScale)
-          );
-          const displayRes = new THREE.Vector2(this.displayWidth, this.displayHeight);
-
-          this.easuPass = easuUpscale(outputNode, renderRes, displayRes, this.config.easuSharpness);
-          outputNode = this.easuPass.node;
-        } catch (e) {
-          console.warn('[PostProcessing] EASU upscaling failed:', e);
-        }
-      }
-      // Bilinear mode: GPU linear filtering handles it automatically
-      // The lower-res texture is sampled at display resolution with bilinear interpolation
-      // No extra pass needed - just use outputNode as-is
-    }
-
-    // 2. SSGI (Screen Space Global Illumination) - includes AO
+    // 1. SSGI (Screen Space Global Illumination) - includes AO
     // Provides realistic light bouncing between surfaces
     // SSGI outputs vec4(giColor, ao) - RGB is indirect light, A is occlusion
     if (this.config.ssgiEnabled) {
@@ -523,32 +503,52 @@ export class RenderPipeline {
         } else {
           outputNode = this.traaPass.getTextureNode();
         }
-
-        postProcessing.outputNode = outputNode;
       } catch (e) {
         console.warn('[PostProcessing] TRAA initialization failed, falling back to FXAA:', e);
         // Fallback to FXAA - guaranteed to work with all materials
         try {
           this.fxaaPass = fxaa(outputNode);
-          postProcessing.outputNode = this.fxaaPass;
+          outputNode = this.fxaaPass;
         } catch (fxaaError) {
           console.warn('[PostProcessing] FXAA fallback also failed:', fxaaError);
-          postProcessing.outputNode = outputNode;
+          // Keep outputNode as-is
         }
       }
     } else if (this.config.antiAliasingMode === 'fxaa' || this.config.fxaaEnabled) {
       // FXAA anti-aliasing
       try {
         this.fxaaPass = fxaa(outputNode);
-        postProcessing.outputNode = this.fxaaPass;
+        outputNode = this.fxaaPass;
       } catch (e) {
         console.warn('[PostProcessing] FXAA initialization failed:', e);
-        postProcessing.outputNode = outputNode;
       }
-    } else {
-      // No anti-aliasing
-      postProcessing.outputNode = outputNode;
     }
+    // If no AA, outputNode remains as-is
+
+    // FINAL STEP: Upscaling (applied LAST for maximum performance)
+    // All effects above ran at render resolution, now upscale to display resolution
+    if (useUpscaling) {
+      if (this.config.upscalingMode === 'easu') {
+        // EASU - Edge-Adaptive Spatial Upsampling (FSR 1.0 style)
+        try {
+          const renderRes = new THREE.Vector2(
+            Math.floor(this.displayWidth * this.config.renderScale),
+            Math.floor(this.displayHeight * this.config.renderScale)
+          );
+          const displayRes = new THREE.Vector2(this.displayWidth, this.displayHeight);
+
+          this.easuPass = easuUpscale(outputNode, renderRes, displayRes, this.config.easuSharpness);
+          outputNode = this.easuPass.node;
+        } catch (e) {
+          console.warn('[PostProcessing] EASU upscaling failed:', e);
+        }
+      }
+      // Bilinear mode: GPU's linear texture filtering handles upscaling automatically
+      // when sampling low-res texture at high-res coordinates - no extra pass needed
+    }
+
+    // Set final output
+    postProcessing.outputNode = outputNode;
 
     return postProcessing;
   }
@@ -630,6 +630,17 @@ export class RenderPipeline {
       this.traaPass.dispose();
       this.traaPass = null;
     }
+
+    // Reset all pass references to ensure clean state
+    // TSL nodes don't have dispose(), but we must clear references
+    // to prevent stale nodes from interfering with the new pipeline
+    this.bloomPass = null;
+    this.aoPass = null;
+    this.ssrPass = null;
+    this.ssgiPass = null;
+    this.fxaaPass = null;
+    this.easuPass = null;
+
     // Note: zeroVelocityTexture is NOT disposed here - it's reused across rebuilds
     // to avoid WebGPU "Texture already initialized" errors
     this.postProcessing = this.createPipeline();
@@ -659,6 +670,12 @@ export class RenderPipeline {
       this.config.fxaaEnabled = config.antiAliasingMode === 'fxaa';
       this.config.taaEnabled = config.antiAliasingMode === 'taa';
     }
+
+    // Update internal render resolution based on upscaling mode
+    // When upscaling is off, render at native resolution regardless of renderScale value
+    const effectiveScale = this.config.upscalingMode !== 'off' ? this.config.renderScale : 1.0;
+    this.renderWidth = Math.floor(this.displayWidth * effectiveScale);
+    this.renderHeight = Math.floor(this.displayHeight * effectiveScale);
 
     // Update bloom parameters
     if (this.bloomPass) {
@@ -701,12 +718,7 @@ export class RenderPipeline {
     // Update EASU parameters
     if (this.easuPass) {
       this.easuPass.setSharpness(this.config.easuSharpness);
-      // Update resolutions if scale changed
-      if (config.renderScale !== undefined) {
-        this.renderWidth = Math.floor(this.displayWidth * this.config.renderScale);
-        this.renderHeight = Math.floor(this.displayHeight * this.config.renderScale);
-        this.easuPass.setRenderResolution(this.renderWidth, this.renderHeight);
-      }
+      this.easuPass.setRenderResolution(this.renderWidth, this.renderHeight);
     }
 
     // Update color grading uniforms
@@ -747,9 +759,11 @@ export class RenderPipeline {
       this.displayHeight = height;
       this.uResolution.value.set(width, height);
 
-      // Update render resolution based on scale
-      this.renderWidth = Math.floor(width * this.config.renderScale);
-      this.renderHeight = Math.floor(height * this.config.renderScale);
+      // Update render resolution based on effective scale
+      // When upscaling is off, use native resolution
+      const effectiveScale = this.config.upscalingMode !== 'off' ? this.config.renderScale : 1.0;
+      this.renderWidth = Math.floor(width * effectiveScale);
+      this.renderHeight = Math.floor(height * effectiveScale);
 
       // TRAA handles its own resizing internally
       if (this.traaPass) {
@@ -776,6 +790,13 @@ export class RenderPipeline {
    */
   isTAAEnabled(): boolean {
     return this.config.taaEnabled && this.config.antiAliasingMode === 'taa';
+  }
+
+  /**
+   * Check if SSGI is enabled
+   */
+  isSSGIEnabled(): boolean {
+    return this.config.ssgiEnabled;
   }
 
   /**
