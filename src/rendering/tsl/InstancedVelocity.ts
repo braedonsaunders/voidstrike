@@ -6,8 +6,13 @@
  * This module provides proper per-instance velocity by:
  *
  * 1. Storing previous frame's instance matrices
- * 2. Computing velocity per-instance in the vertex shader
- * 3. Outputting via MRT for TRAA to use
+ * 2. Detecting movement CPU-side to avoid floating point precision issues
+ * 3. Computing velocity only for moving instances (static = zero velocity)
+ *
+ * The key insight: Static objects jitter because different code paths for
+ * current vs previous position calculations have floating point precision
+ * differences. By detecting movement on CPU (exact comparison), static
+ * objects get EXACTLY zero velocity with no shader computation.
  *
  * Usage:
  * - Call setupInstancedVelocity(mesh) after creating an InstancedMesh
@@ -25,8 +30,6 @@ import {
   positionLocal,
   uniform,
   float,
-  abs,
-  max,
 } from 'three/tsl';
 
 // Import TSL values not in @types/three
@@ -56,7 +59,7 @@ const uPreviousViewMatrix = uniform(previousViewMatrix);
 // Each is a vec4 representing one column of the 4x4 matrix
 
 /**
- * Set up previous instance matrix attribute for an InstancedMesh
+ * Set up previous instance matrix and movement flag attributes for an InstancedMesh
  * Must be called after creating the mesh, before first render
  */
 export function setupInstancedVelocity(mesh: THREE.InstancedMesh): void {
@@ -81,25 +84,41 @@ export function setupInstancedVelocity(mesh: THREE.InstancedMesh): void {
     new Float32Array(maxInstances * 4), 4
   );
 
+  // Create movement flag attribute (0 = static, 1 = moved)
+  // This allows us to skip velocity computation for static objects entirely,
+  // avoiding floating point precision issues that cause micro-jitter
+  const movedFlagAttr = new THREE.InstancedBufferAttribute(
+    new Float32Array(maxInstances), 1
+  );
+
   // Initialize with identity matrix columns
   for (let i = 0; i < maxInstances; i++) {
     prevMatrixAttr0.setXYZW(i, 1, 0, 0, 0); // Column 0
     prevMatrixAttr1.setXYZW(i, 0, 1, 0, 0); // Column 1
     prevMatrixAttr2.setXYZW(i, 0, 0, 1, 0); // Column 2
     prevMatrixAttr3.setXYZW(i, 0, 0, 0, 1); // Column 3
+    movedFlagAttr.setX(i, 0); // Initially static
   }
 
   mesh.geometry.setAttribute('prevInstanceMatrix0', prevMatrixAttr0);
   mesh.geometry.setAttribute('prevInstanceMatrix1', prevMatrixAttr1);
   mesh.geometry.setAttribute('prevInstanceMatrix2', prevMatrixAttr2);
   mesh.geometry.setAttribute('prevInstanceMatrix3', prevMatrixAttr3);
+  mesh.geometry.setAttribute('instanceMoved', movedFlagAttr);
 
   velocitySetupMeshes.add(mesh);
 }
 
 /**
- * Swap current instance matrices to previous
+ * Swap current instance matrices to previous and detect movement
  * Must be called at the START of each frame, BEFORE updating instance matrices
+ *
+ * This function compares current and previous matrices to set a moved flag.
+ * Static instances (no matrix change) get moved=0 and will output zero velocity.
+ * Moving instances get moved=1 and will have velocity computed in shader.
+ *
+ * The CPU comparison is exact, avoiding floating point precision issues
+ * that cause micro-jitter when computing velocity in the shader.
  */
 export function swapInstanceMatrices(mesh: THREE.InstancedMesh): void {
   if (!velocitySetupMeshes.has(mesh)) {
@@ -114,10 +133,41 @@ export function swapInstanceMatrices(mesh: THREE.InstancedMesh): void {
   const prevAttr1 = mesh.geometry.getAttribute('prevInstanceMatrix1') as THREE.InstancedBufferAttribute;
   const prevAttr2 = mesh.geometry.getAttribute('prevInstanceMatrix2') as THREE.InstancedBufferAttribute;
   const prevAttr3 = mesh.geometry.getAttribute('prevInstanceMatrix3') as THREE.InstancedBufferAttribute;
+  const movedAttr = mesh.geometry.getAttribute('instanceMoved') as THREE.InstancedBufferAttribute;
 
-  // Copy current matrices to previous (column by column)
+  const prevArray0 = prevAttr0.array as Float32Array;
+  const prevArray1 = prevAttr1.array as Float32Array;
+  const prevArray2 = prevAttr2.array as Float32Array;
+  const prevArray3 = prevAttr3.array as Float32Array;
+
+  // Compare matrices and set moved flag, then copy current to previous
   for (let i = 0; i < count; i++) {
     const offset = i * 16;
+    const prevOffset = i * 4;
+
+    // Check if matrix changed (exact comparison works on CPU)
+    // Compare all 16 elements of the 4x4 matrix
+    const moved =
+      currentMatrix[offset] !== prevArray0[prevOffset] ||
+      currentMatrix[offset + 1] !== prevArray0[prevOffset + 1] ||
+      currentMatrix[offset + 2] !== prevArray0[prevOffset + 2] ||
+      currentMatrix[offset + 3] !== prevArray0[prevOffset + 3] ||
+      currentMatrix[offset + 4] !== prevArray1[prevOffset] ||
+      currentMatrix[offset + 5] !== prevArray1[prevOffset + 1] ||
+      currentMatrix[offset + 6] !== prevArray1[prevOffset + 2] ||
+      currentMatrix[offset + 7] !== prevArray1[prevOffset + 3] ||
+      currentMatrix[offset + 8] !== prevArray2[prevOffset] ||
+      currentMatrix[offset + 9] !== prevArray2[prevOffset + 1] ||
+      currentMatrix[offset + 10] !== prevArray2[prevOffset + 2] ||
+      currentMatrix[offset + 11] !== prevArray2[prevOffset + 3] ||
+      currentMatrix[offset + 12] !== prevArray3[prevOffset] ||
+      currentMatrix[offset + 13] !== prevArray3[prevOffset + 1] ||
+      currentMatrix[offset + 14] !== prevArray3[prevOffset + 2] ||
+      currentMatrix[offset + 15] !== prevArray3[prevOffset + 3];
+
+    movedAttr.setX(i, moved ? 1 : 0);
+
+    // Copy current matrices to previous (column by column)
     // Matrix is column-major: elements 0-3 are column 0, 4-7 are column 1, etc.
     prevAttr0.setXYZW(i, currentMatrix[offset], currentMatrix[offset + 1], currentMatrix[offset + 2], currentMatrix[offset + 3]);
     prevAttr1.setXYZW(i, currentMatrix[offset + 4], currentMatrix[offset + 5], currentMatrix[offset + 6], currentMatrix[offset + 7]);
@@ -129,6 +179,7 @@ export function swapInstanceMatrices(mesh: THREE.InstancedMesh): void {
   prevAttr1.needsUpdate = true;
   prevAttr2.needsUpdate = true;
   prevAttr3.needsUpdate = true;
+  movedAttr.needsUpdate = true;
 }
 
 /**
@@ -192,88 +243,66 @@ export function disposeInstancedVelocity(mesh: THREE.InstancedMesh): void {
   velocitySetupMeshes.delete(mesh);
 }
 
-// Velocity threshold to eliminate sub-pixel noise
-// 0.00005 NDC ≈ 0.05 pixel at 1080p - imperceptible but eliminates floating point noise
-const VELOCITY_THRESHOLD = 0.00005;
-
 /**
  * Create a TSL velocity node for InstancedMesh objects.
  *
- * WORLD-CLASS VELOCITY CALCULATION:
- * The key insight is that floating point precision differences between computation
- * paths cause micro-jitter. We solve this by:
+ * Uses a CPU-computed movement flag to avoid floating point precision issues:
+ * - Static instances (moved = 0): Returns exactly vec2(0,0) with no shader math
+ * - Moving instances (moved = 1): Computes proper velocity from matrix transforms
  *
- * 1. Reading BOTH current and previous instance matrices as attributes
- * 2. Computing BOTH positions through IDENTICAL code paths
- * 3. Using the SAME camera matrices for both
- * 4. Only the instance matrix differs between the two calculations
+ * Why this approach works:
+ * - CPU comparison of matrices is exact (no floating point precision issues)
+ * - Static objects get EXACTLY zero velocity (no shader computation at all)
+ * - Moving objects have actual motion that dominates any precision noise
+ * - TRAA's depth reprojection still handles camera motion
  *
- * This ensures that for static objects (where matrices are identical),
- * the velocity is EXACTLY zero due to identical floating point operations.
- *
- * For InstancedMesh, Three.js stores instance matrices as:
- * - instanceMatrix0, instanceMatrix1, instanceMatrix2, instanceMatrix3 (current frame)
- * - prevInstanceMatrix0-3 (our custom attributes for previous frame)
- *
- * Returns a vec2 node representing screen-space velocity in NDC space.
+ * Velocity calculation for moving instances:
+ * - Current position: modelViewMatrix (includes current instanceMatrix) → project
+ * - Previous position: previousViewMatrix * previousInstanceMatrix → project
+ * - Velocity = currentNDC - previousNDC
  */
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export function createInstancedVelocityNode(): any {
   return Fn(() => {
-    // Read CURRENT instance matrix from Three.js built-in attributes
-    const currCol0 = attribute('instanceMatrix0', 'vec4');
-    const currCol1 = attribute('instanceMatrix1', 'vec4');
-    const currCol2 = attribute('instanceMatrix2', 'vec4');
-    const currCol3 = attribute('instanceMatrix3', 'vec4');
+    // Read movement flag from CPU-computed attribute
+    // If the instance didn't move (flag = 0), return zero velocity immediately
+    // This avoids any shader math that could introduce floating point noise
+    const moved = attribute('instanceMoved', 'float');
 
-    // Read PREVIOUS instance matrix from our custom attributes
+    // For static objects, return zero velocity
+    // The select function chooses between two values based on condition
+    // select(condition, trueValue, falseValue) - returns trueValue if condition > 0
+
+    // Read previous instance matrix from attributes
     const prevCol0 = attribute('prevInstanceMatrix0', 'vec4');
     const prevCol1 = attribute('prevInstanceMatrix1', 'vec4');
     const prevCol2 = attribute('prevInstanceMatrix2', 'vec4');
     const prevCol3 = attribute('prevInstanceMatrix3', 'vec4');
 
-    // Check if this is a valid InstancedMesh with our velocity attributes
-    // Valid matrices have w=1 in column 3; missing attributes return zeros (w=0)
-    const hasCurrentMatrix = abs(currCol3.w.sub(float(1.0))).lessThan(float(0.5));
-    const hasPrevMatrix = abs(prevCol3.w.sub(float(1.0))).lessThan(float(0.5));
-    const hasValidMatrices = hasCurrentMatrix.and(hasPrevMatrix);
-
-    // Reconstruct both matrices from columns
-    const currentInstanceMatrix = mat4(currCol0, currCol1, currCol2, currCol3);
+    // Reconstruct previous instance matrix from columns
     const prevInstanceMatrix = mat4(prevCol0, prevCol1, prevCol2, prevCol3);
 
-    // IDENTICAL computation path for both positions
-    // This is crucial - same operations = same floating point rounding
-    const localPos = vec4(positionLocal, 1.0);
-
-    // Transform through instance matrix then world matrix
-    const currentInstancePos = currentInstanceMatrix.mul(localPos);
-    const prevInstancePos = prevInstanceMatrix.mul(localPos);
-
-    const currentWorldPos = modelWorldMatrix.mul(currentInstancePos);
-    const prevWorldPos = modelWorldMatrix.mul(prevInstancePos);
-
-    // Project BOTH through identical camera path
-    const currentViewPos = cameraViewMatrix.mul(currentWorldPos);
-    const prevViewPos = cameraViewMatrix.mul(prevWorldPos);
-
-    const currentClipPos = cameraProjectionMatrix.mul(currentViewPos);
-    const prevClipPos = cameraProjectionMatrix.mul(prevViewPos);
-
-    // Convert to NDC
+    // === Current position calculation ===
+    // modelViewMatrix already includes instanceMatrix via Three.js's internal handling
+    // So: clipPos = projectionMatrix * modelViewMatrix * position
+    const currentClipPos = cameraProjectionMatrix.mul(modelViewMatrix.mul(vec4(positionLocal, 1.0)));
     const currentNDC = currentClipPos.xy.div(currentClipPos.w);
+
+    // === Previous position calculation ===
+    // Compute: prevProjection * prevView * prevInstanceMatrix * position
+    const prevWorldPos = prevInstanceMatrix.mul(vec4(positionLocal, 1.0));
+    const prevViewPos = uPreviousViewMatrix.mul(prevWorldPos);
+    const prevClipPos = uPreviousProjectionMatrix.mul(prevViewPos);
     const prevNDC = prevClipPos.xy.div(prevClipPos.w);
 
-    // Velocity is screen-space motion
-    const rawVelocity = currentNDC.sub(prevNDC);
+    // === Velocity calculation ===
+    // Velocity is the screen-space motion: current - previous
+    const velocity = currentNDC.sub(prevNDC);
 
-    // Apply threshold to eliminate floating point noise
-    const velocityMagnitude = max(abs(rawVelocity.x), abs(rawVelocity.y));
-    const aboveThreshold = velocityMagnitude.greaterThan(float(VELOCITY_THRESHOLD));
-    const thresholdedVelocity = select(aboveThreshold, rawVelocity, vec2(0.0, 0.0));
-
-    // Return velocity for valid InstancedMesh, zero otherwise
-    return select(hasValidMatrices, thresholdedVelocity, vec2(0.0, 0.0));
+    // Use select to conditionally return velocity only for moving instances
+    // For static instances (moved ≈ 0), return zero velocity
+    // For moving instances (moved ≈ 1), return computed velocity
+    return select(moved, velocity, vec2(0.0, 0.0));
   })();
 }
 
