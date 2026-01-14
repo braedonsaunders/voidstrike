@@ -1,28 +1,47 @@
 """
 VOIDSTRIKE Batch Retopology & Baking Pipeline
 ==============================================
-Processes static OBJ models and animated GLB models with user approval.
+Processes mixed folders containing both static (OBJ) and animated (GLB) models.
+
+FILE TYPE DETECTION:
+- .obj files → Static processing (retopo only)
+- .glb/.gltf/.fbx files → Animated processing (preserves rig + animations)
 
 FEATURES:
-- Batch processes entire folders
-- Pauses after each model for user approval
-- Preserves rigs and animations for GLB models
-- Transfers weights from high-poly to low-poly
-- Bakes normal maps and preserves original textures
-- Creates LOD levels
+- Batch processes entire folders with mixed file types
+- Auto-detects static vs animated based on file extension
+- Pauses after each model for user approval (approve/skip/redo/quit)
+- Preserves rigs, vertex weights, and animations for GLB models
+- Transfers weights from high-poly to low-poly via Data Transfer
+- Bakes normal maps and AO from high to low
+- Preserves original textures where possible
+- Creates 3 LOD levels per model
 
 SETUP:
 1. Download Instant Meshes from: https://github.com/wjakob/instant-meshes
-2. Set INSTANT_MESHES_PATH below
+2. Set INSTANT_MESHES_PATH below (or leave empty for auto-detect)
 3. Set INPUT_FOLDERS to your model folders
-4. Run in Blender
+4. Set OUTPUT_FOLDER for processed models
+5. Run in Blender
 
 USAGE:
 1. Open Blender (fresh scene recommended)
-2. Open this script in Text Editor
-3. Adjust settings below
-4. Click "Run Script"
-5. Approve/skip each model as prompted in the console
+2. Window → Toggle System Console (to see prompts)
+3. Open this script in Text Editor
+4. Adjust settings below
+5. Click "Run Script"
+6. Approve/skip each model as prompted in the console
+
+FOLDER STRUCTURE:
+  Input:                      Output:
+  buildings/                  output/buildings/
+    ├── hq.obj         →        ├── hq_LOD0.glb
+    └── turret.glb     →        ├── hq_LOD1.glb
+  units/                        ├── turret_LOD0.glb (with anims)
+    ├── tank.obj       →        └── ...
+    └── soldier.glb    →      output/units/
+                                ├── tank_LOD0.glb
+                                └── soldier_LOD0.glb (with anims)
 """
 
 import bpy
@@ -42,24 +61,25 @@ from pathlib import Path
 INSTANT_MESHES_PATH = ""  # Leave empty for auto-detect
 
 # Input folders containing your models
+# Each folder can contain BOTH OBJ (static) and GLB (animated) files
+# The script auto-detects file type and processes accordingly
 INPUT_FOLDERS = {
-    "buildings": "/path/to/your/buildings/",      # OBJ files
-    "decorations": "/path/to/your/decorations/",  # OBJ files
-    "resources": "/path/to/your/resources/",      # OBJ files
-    "units_static": "/path/to/your/units/",       # OBJ files (static)
-    "units_animated": "/path/to/your/animated/",  # GLB files (with rigs)
+    "buildings": "/path/to/your/buildings/",      # OBJ and/or GLB
+    "decorations": "/path/to/your/decorations/",  # OBJ and/or GLB
+    "resources": "/path/to/your/resources/",      # OBJ and/or GLB
+    "units": "/path/to/your/units/",              # OBJ and/or GLB (mixed)
 }
 
 # Output folder for processed models
 OUTPUT_FOLDER = "/path/to/output/"
 
 # Target face counts for each LOD (quad faces, tris ≈ faces × 2)
+# Applied based on FOLDER category, not file type
 LOD_TARGETS = {
     "buildings": {"lod0": 5000, "lod1": 2000, "lod2": 750},
     "decorations": {"lod0": 250, "lod1": 100, "lod2": 50},
     "resources": {"lod0": 500, "lod1": 200, "lod2": 75},
-    "units_static": {"lod0": 3000, "lod1": 1200, "lod2": 400},
-    "units_animated": {"lod0": 4000, "lod1": 1500, "lod2": 500},
+    "units": {"lod0": 4000, "lod1": 1500, "lod2": 500},  # Works for both static & animated
 }
 
 SETTINGS = {
@@ -927,39 +947,49 @@ def clear_scene():
 # MAIN BATCH PROCESSOR
 # =============================================================================
 
-def process_folder(folder_path, category, is_animated, temp_dir, output_dir):
-    """Process all models in a folder."""
+def process_folder(folder_path, category, temp_dir, output_dir):
+    """
+    Process all models in a folder.
+    Auto-detects file type: OBJ = static, GLB/GLTF = animated with rig.
+    """
     if not os.path.exists(folder_path):
         print(f"  Folder not found: {folder_path}")
         return
 
-    # Get file list
-    if is_animated:
-        extensions = ['.glb', '.gltf']
-    else:
-        extensions = ['.obj']
+    # Get ALL model files (both static and animated)
+    static_extensions = ['.obj']
+    animated_extensions = ['.glb', '.gltf', '.fbx']
 
     files = []
     for f in os.listdir(folder_path):
-        if any(f.lower().endswith(ext) for ext in extensions):
-            files.append(os.path.join(folder_path, f))
+        f_lower = f.lower()
+        if any(f_lower.endswith(ext) for ext in static_extensions):
+            files.append((os.path.join(folder_path, f), "static"))
+        elif any(f_lower.endswith(ext) for ext in animated_extensions):
+            files.append((os.path.join(folder_path, f), "animated"))
 
-    files.sort()
+    files.sort(key=lambda x: x[0])  # Sort by filename
     total = len(files)
+
+    # Count types
+    static_count = sum(1 for f in files if f[1] == "static")
+    animated_count = sum(1 for f in files if f[1] == "animated")
 
     print(f"\n{'='*70}")
     print(f"  PROCESSING FOLDER: {category}")
-    print(f"  Files: {total}")
-    print(f"  Type: {'Animated (GLB)' if is_animated else 'Static (OBJ)'}")
+    print(f"  Total files: {total}")
+    print(f"    Static (OBJ): {static_count}")
+    print(f"    Animated (GLB/FBX): {animated_count}")
     print(f"{'='*70}")
 
-    for i, filepath in enumerate(files):
-        print(f"\n  [{i+1}/{total}] ", end="")
+    for i, (filepath, file_type) in enumerate(files):
+        filename = Path(filepath).stem
+        print(f"\n  [{i+1}/{total}] {filename} ({file_type})")
 
         # Clear scene between models
         clear_scene()
 
-        if is_animated:
+        if file_type == "animated":
             result = process_animated_model(filepath, category, temp_dir, output_dir)
         else:
             result = process_static_model(filepath, category, temp_dir, output_dir)
@@ -990,16 +1020,10 @@ def main():
     temp_dir = tempfile.mkdtemp(prefix="voidstrike_batch_")
     print(f"  Temp directory: {temp_dir}")
 
-    # Process each folder
-    folder_order = [
-        ("decorations", False),    # Static - fastest, test pipeline
-        ("resources", False),       # Static
-        ("buildings", False),       # Static
-        ("units_static", False),    # Static
-        ("units_animated", True),   # Animated - most complex
-    ]
+    # Process each folder in order (smallest/fastest first for testing)
+    folder_order = ["decorations", "resources", "buildings", "units"]
 
-    for folder_key, is_animated in folder_order:
+    for folder_key in folder_order:
         if folder_key not in INPUT_FOLDERS:
             continue
 
@@ -1012,7 +1036,8 @@ def main():
         category_output = os.path.join(OUTPUT_FOLDER, folder_key)
         os.makedirs(category_output, exist_ok=True)
 
-        result = process_folder(folder_path, folder_key, is_animated, temp_dir, category_output)
+        # Process folder - auto-detects OBJ (static) vs GLB (animated)
+        result = process_folder(folder_path, folder_key, temp_dir, category_output)
 
         if result == "quit":
             break
