@@ -89,6 +89,35 @@ renderPipeline.applyConfig({ ssrEnabled: true });
 - Ring suppression via local min/max clamping
 - Configurable render scale (50%-100%)
 
+**AAA Approach for TAA + FSR Integration:**
+TRAA creates internal render targets (including depth) at the renderer's current size. For proper TAA + upscaling:
+
+1. Temporarily set renderer to render resolution before creating TRAA
+2. TRAA internal buffers (depth, history) are created at render resolution
+3. Restore renderer to display resolution
+4. All depth operations and jitter calculations are correct for render resolution
+
+This solves:
+- **WebGPU depth copy errors** - Depth textures must be copied in their entirety; matching resolutions fixes this
+- **Camera shake with FSR** - Jitter offsets are now calculated for render resolution, not display
+- **Proper temporal accumulation** - History buffer at correct resolution
+
+```typescript
+// Implementation in PostProcessing.ts
+if (useUpscaling) {
+  // Temporarily switch to render resolution
+  originalRendererSize = new THREE.Vector2();
+  this.renderer.getSize(originalRendererSize);
+  this.renderer.setSize(renderWidth, renderHeight, false);
+}
+// Create TRAA at render resolution
+this.traaPass = traa(outputNode, scenePassDepth, scenePassVelocity, this.camera);
+// Restore display resolution
+if (originalRendererSize) {
+  this.renderer.setSize(originalRendererSize.x, originalRendererSize.y, false);
+}
+```
+
 ### Effect Pipeline Order
 
 1. **Scene Pass** - Render scene (MRT with normals when SSR enabled)
