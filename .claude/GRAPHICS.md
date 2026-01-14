@@ -10,6 +10,7 @@ VOIDSTRIKE uses Three.js with WebGPU renderer and TSL (Three.js Shading Language
 - **WebGPU Renderer** with WebGL2 fallback
 - **TSL (Three.js Shading Language)** for shader authoring
 - Post-processing pipeline using `three/webgpu` PostProcessing class
+- **Tone Mapping:** Renderer uses `NoToneMapping`; all HDR→SDR conversion handled by PostProcessing via ACES Filmic
 
 ### Post-Processing Effects (Implemented)
 
@@ -20,10 +21,10 @@ VOIDSTRIKE uses Three.js with WebGPU renderer and TSL (Three.js Shading Language
 | **FXAA** | ✅ Implemented | Fast Approximate Anti-Aliasing |
 | **TRAA** | ✅ Implemented | Temporal Reprojection Anti-Aliasing with MRT velocity buffers |
 | **SSR** | ✅ Implemented | Screen Space Reflections for metallic surfaces |
-| **EASU Upscaling** | ✅ Implemented | Edge-Adaptive Spatial Upsampling (FSR 1.0 inspired) |
+| **FSR 1.0 EASU** | ✅ Implemented | FidelityFX Super Resolution upscaling with Lanczos2 kernel |
 | **RCAS Sharpening** | ✅ Implemented | Robust Contrast-Adaptive Sharpening |
 | **Vignette** | ✅ Implemented | Cinematic edge darkening |
-| **Color Grading** | ✅ Implemented | Exposure, saturation, contrast adjustment |
+| **Color Grading** | ✅ Implemented | Exposure, saturation, contrast with ACES Filmic tone mapping |
 
 ### Anti-Aliasing Details
 
@@ -83,14 +84,28 @@ renderPipeline.applyConfig({ ssrEnabled: true });
 
 **Note:** SSR uses MRT for normals which works correctly with InstancedMesh (unlike velocity).
 
-#### EASU Upscaling
-- Renders at lower resolution, upscales to display resolution
-- 12-tap edge-adaptive filter preserves sharp edges
-- Ring suppression via local min/max clamping
+#### FSR 1.0 EASU Upscaling
+- Proper FSR 1.0 (FidelityFX Super Resolution) implementation
+- 12-tap edge-adaptive filter with Lanczos2 kernel
+- Directional filtering: filters ALONG edges, not across them
+- Ring suppression using ALL 12 texels (not just 4)
 - Configurable render scale (50%-100%)
 
+**Algorithm:**
+1. Sample 12 texels in cross pattern around target pixel
+2. Compute luminance gradients for edge direction detection
+3. Apply Lanczos2-weighted directional filtering based on edge orientation
+4. Blend bilinear (flat areas) with directional (edges) based on edge strength
+5. Ring suppression via local min/max from all 12 samples
+
 **Color Space Handling:**
-The internal render target uses `LinearSRGBColorSpace` because the post-processing pipeline outputs linear HDR data. Using `SRGBColorSpace` would cause double-linearization when sampling (washed out colors with bilinear mode especially).
+The internal render target uses `LinearSRGBColorSpace` because the post-processing pipeline outputs linear HDR data. Using `SRGBColorSpace` would cause double-linearization when sampling (washed out colors).
+
+**Tone Mapping Architecture (AAA Standard):**
+- `renderer.toneMapping = NoToneMapping` (disabled on Three.js renderer)
+- PostProcessing handles ALL tone mapping via ACES Filmic in color grading pass
+- Prevents double-application of exposure/tone mapping (was causing washed out colors)
+- Order: Linear HDR → Exposure → Saturation → Contrast → ACES Tone Map → Vignette
 
 **AAA Dual-Pipeline Architecture for TAA + FSR:**
 

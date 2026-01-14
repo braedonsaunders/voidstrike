@@ -15,10 +15,18 @@
  *    - EASU upscales to display resolution
  *    - Outputs to canvas
  *
+ * TONE MAPPING ARCHITECTURE (AAA Standard):
+ * =========================================
+ * - Renderer.toneMapping = NoToneMapping (disabled)
+ * - All tone mapping handled in PostProcessing color grading pass
+ * - Uses ACES Filmic tone mapping for cinematic look
+ * - This prevents double-application of tone mapping/exposure
+ *
  * This architecture ensures:
  * - No WebGPU depth texture copy errors (all depths match)
  * - Correct TAA jitter at render resolution
  * - Clean separation between internal rendering and display
+ * - Proper HDR workflow with single tone mapping pass
  */
 
 import * as THREE from 'three';
@@ -602,17 +610,53 @@ export class RenderPipeline {
     })();
   }
 
+  /**
+   * ACES Filmic Tone Mapping (Narkowicz 2015 approximation)
+   *
+   * This is the industry standard for cinematic color grading.
+   * It provides smooth highlight rolloff and rich shadows.
+   *
+   * The curve: (x * (2.51x + 0.03)) / (x * (2.43x + 0.59) + 0.14)
+   */
+  private acesToneMap(color: any): any {
+    const a = 2.51;
+    const b = 0.03;
+    const c = 2.43;
+    const d = 0.59;
+    const e = 0.14;
+
+    // ACES curve applied per-channel
+    return clamp(
+      color.mul(color.mul(a).add(b)).div(color.mul(color.mul(c).add(d)).add(e)),
+      0.0,
+      1.0
+    );
+  }
+
   private createColorGradingPass(inputNode: any): any {
     return Fn(() => {
       let color = vec3(inputNode).toVar();
 
+      // Apply exposure in linear HDR space (before tone mapping)
       color.mulAssign(this.uExposure);
 
+      // Apply saturation in linear space
       const luminance = dot(color, vec3(0.299, 0.587, 0.114));
       color.assign(mix(vec3(luminance), color, this.uSaturation));
 
-      color.assign(color.sub(0.5).mul(this.uContrast).add(0.5));
+      // Apply contrast in linear space (around mid-gray)
+      // Use 0.18 as mid-gray (18% gray is standard photographic mid-tone)
+      const midGray = 0.18;
+      color.assign(color.sub(midGray).mul(this.uContrast).add(midGray));
 
+      // Ensure no negative values before tone mapping
+      color.assign(max(color, vec3(0.0)));
+
+      // Apply ACES Filmic tone mapping
+      // This converts HDR linear to SDR with cinematic highlight rolloff
+      color.assign(this.acesToneMap(color));
+
+      // Apply vignette after tone mapping (in display space)
       if (this.config.vignetteEnabled) {
         const uvCentered = uv().sub(0.5);
         const dist = length(uvCentered).mul(2.0);
@@ -621,7 +665,6 @@ export class RenderPipeline {
         color.mulAssign(vignetteAmount);
       }
 
-      color.assign(clamp(color, 0.0, 1.0));
       return vec4(color, 1.0);
     })();
   }

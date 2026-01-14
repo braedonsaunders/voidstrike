@@ -248,8 +248,11 @@ export function WebGPUGameCanvas() {
 
       const renderer = renderContext.renderer;
       renderer.setSize(window.innerWidth, window.innerHeight);
-      renderer.toneMapping = THREE.ACESFilmicToneMapping;
-      renderer.toneMappingExposure = useUIStore.getState().graphicsSettings.toneMappingExposure;
+      // IMPORTANT: Disable renderer tone mapping - PostProcessing handles all tone mapping
+      // via ACES Filmic in the color grading pass. This prevents double-application of
+      // exposure and tone mapping which causes washed out colors.
+      renderer.toneMapping = THREE.NoToneMapping;
+      renderer.toneMappingExposure = 1.0; // Neutral, not used when NoToneMapping
 
       // Create scene
       const scene = new THREE.Scene();
@@ -1589,10 +1592,9 @@ export function WebGPUGameCanvas() {
 
       if (settings === prevSettings) return;
 
-      // Update renderer exposure
-      if (renderContextRef.current) {
-        renderContextRef.current.renderer.toneMappingExposure = settings.toneMappingExposure;
-      }
+      // NOTE: Renderer tone mapping is disabled (NoToneMapping).
+      // All tone mapping is handled by PostProcessing via ACES Filmic.
+      // Exposure is passed to the PostProcessing pipeline below.
 
       // Update post-processing pipeline
       if (renderPipelineRef.current) {

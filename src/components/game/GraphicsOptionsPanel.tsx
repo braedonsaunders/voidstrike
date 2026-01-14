@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useEffect, useState, memo, useCallback } from 'react';
-import { useUIStore, GraphicsSettings, AntiAliasingMode, UpscalingMode } from '@/store/uiStore';
+import { useUIStore, GraphicsSettings, AntiAliasingMode, UpscalingMode, ResolutionMode, FixedResolution, FIXED_RESOLUTIONS } from '@/store/uiStore';
 import { setEdgeScrollEnabled } from '@/store/cameraStore';
 
 // ============================================
@@ -298,11 +298,14 @@ export const GraphicsOptionsPanel = memo(function GraphicsOptionsPanel() {
   const setGraphicsSetting = useUIStore((state) => state.setGraphicsSetting);
   const setAntiAliasingMode = useUIStore((state) => state.setAntiAliasingMode);
   const setUpscalingMode = useUIStore((state) => state.setUpscalingMode);
+  const setResolutionMode = useUIStore((state) => state.setResolutionMode);
+  const setFixedResolution = useUIStore((state) => state.setFixedResolution);
 
   // Section expansion state
   const [expanded, setExpanded] = useState<Record<string, boolean>>({
+    resolution: true,
     performance: true,
-    antialiasing: true,
+    antialiasing: false,
     lighting: false,
     reflections: false,
     gi: false,
@@ -413,9 +416,87 @@ export const GraphicsOptionsPanel = memo(function GraphicsOptionsPanel() {
         />
       </div>
 
+      {/* ===== RESOLUTION ===== */}
+      <SectionHeader
+        title="Resolution"
+        expanded={expanded.resolution}
+        onToggle={() => toggleSection('resolution')}
+      />
+      {expanded.resolution && (
+        <div style={{ marginBottom: '12px' }}>
+          <div style={{ marginBottom: '8px' }}>
+            <span style={{ fontSize: '10px', color: '#666', display: 'block', marginBottom: '4px' }}>
+              Resolution Mode
+            </span>
+            <SegmentedControl
+              options={[
+                { value: 'native', label: 'Native' },
+                { value: 'fixed', label: 'Fixed' },
+                { value: 'percentage', label: 'Scale' },
+              ]}
+              value={graphicsSettings.resolutionMode}
+              onChange={(v) => setResolutionMode(v as ResolutionMode)}
+            />
+            <div style={{ fontSize: '9px', color: '#555', marginTop: '4px' }}>
+              {graphicsSettings.resolutionMode === 'native' && 'Uses window size with DPR cap'}
+              {graphicsSettings.resolutionMode === 'fixed' && 'Renders at a fixed resolution'}
+              {graphicsSettings.resolutionMode === 'percentage' && 'Percentage of native resolution'}
+            </div>
+          </div>
+
+          {graphicsSettings.resolutionMode === 'fixed' && (
+            <div style={{ marginBottom: '8px' }}>
+              <span style={{ fontSize: '10px', color: '#666', display: 'block', marginBottom: '4px' }}>
+                Target Resolution
+              </span>
+              <SegmentedControl
+                options={[
+                  { value: '720p', label: '720p' },
+                  { value: '1080p', label: '1080p' },
+                  { value: '1440p', label: '1440p' },
+                  { value: '4k', label: '4K' },
+                ]}
+                value={graphicsSettings.fixedResolution}
+                onChange={(v) => setFixedResolution(v as FixedResolution)}
+              />
+              <div style={{ fontSize: '9px', color: '#555', marginTop: '4px' }}>
+                {FIXED_RESOLUTIONS[graphicsSettings.fixedResolution].label}
+              </div>
+            </div>
+          )}
+
+          {graphicsSettings.resolutionMode === 'percentage' && (
+            <CompactSlider
+              label="Resolution Scale"
+              value={graphicsSettings.resolutionScale}
+              min={0.5}
+              max={1}
+              step={0.05}
+              onChange={(v) => setGraphicsSetting('resolutionScale', v)}
+              format={(v) => `${Math.round(v * 100)}`}
+              suffix="%"
+            />
+          )}
+
+          <CompactSlider
+            label="Max Pixel Ratio"
+            value={graphicsSettings.maxPixelRatio}
+            min={1}
+            max={3}
+            step={0.5}
+            onChange={(v) => setGraphicsSetting('maxPixelRatio', v)}
+            format={(v) => v.toFixed(1)}
+            suffix="x"
+          />
+          <div style={{ fontSize: '9px', color: '#555', marginTop: '2px', marginBottom: '4px' }}>
+            Caps high-DPI rendering (lower = faster on Retina/4K displays)
+          </div>
+        </div>
+      )}
+
       {/* ===== PERFORMANCE ===== */}
       <SectionHeader
-        title="Performance"
+        title="Upscaling"
         expanded={expanded.performance}
         onToggle={() => toggleSection('performance')}
         badge="performance"
