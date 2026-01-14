@@ -49,6 +49,19 @@ export type AntiAliasingMode = 'off' | 'fxaa' | 'taa';
 // Upscaling mode selection (EASU = Edge-Adaptive Spatial Upsampling)
 export type UpscalingMode = 'off' | 'easu' | 'bilinear';
 
+// Resolution mode for display
+export type ResolutionMode = 'native' | 'fixed' | 'percentage';
+
+// Common fixed resolutions
+export type FixedResolution = '720p' | '1080p' | '1440p' | '4k';
+
+export const FIXED_RESOLUTIONS: Record<FixedResolution, { width: number; height: number; label: string }> = {
+  '720p': { width: 1280, height: 720, label: '720p (1280×720)' },
+  '1080p': { width: 1920, height: 1080, label: '1080p (1920×1080)' },
+  '1440p': { width: 2560, height: 1440, label: '1440p (2560×1440)' },
+  '4k': { width: 3840, height: 2160, label: '4K (3840×2160)' },
+};
+
 // Graphics settings for post-processing and visual effects
 export interface GraphicsSettings {
   // Master toggle
@@ -95,9 +108,15 @@ export interface GraphicsSettings {
   ssgiRadius: number; // 1-25, sampling radius in world space
   ssgiIntensity: number; // 0-100, GI intensity
 
+  // Resolution settings
+  resolutionMode: ResolutionMode; // 'native', 'fixed', or 'percentage'
+  fixedResolution: FixedResolution; // Used when resolutionMode is 'fixed'
+  resolutionScale: number; // 0.5-1.0, used when resolutionMode is 'percentage'
+  maxPixelRatio: number; // 1-3, max device pixel ratio (caps high-DPI rendering)
+
   // Resolution upscaling (EASU - Edge-Adaptive Spatial Upsampling)
   upscalingMode: UpscalingMode;
-  renderScale: number; // 0.5-1.0, internal render resolution
+  renderScale: number; // 0.5-1.0, internal render resolution (for FSR/bilinear)
   easuSharpness: number; // 0.0-1.0, edge enhancement strength
 
   // Vignette
@@ -216,6 +235,8 @@ export interface UIState {
   toggleGraphicsSetting: (key: keyof GraphicsSettings) => void;
   setAntiAliasingMode: (mode: AntiAliasingMode) => void;
   setUpscalingMode: (mode: UpscalingMode) => void;
+  setResolutionMode: (mode: ResolutionMode) => void;
+  setFixedResolution: (res: FixedResolution) => void;
   setRendererAPI: (api: RendererAPI) => void;
   setPreferWebGPU: (prefer: boolean) => void;
   // Sound settings actions
@@ -304,6 +325,12 @@ export const useUIStore = create<UIState>((set, get) => ({
     ssgiEnabled: false,
     ssgiRadius: 8, // Sampling radius in world space
     ssgiIntensity: 15, // GI intensity
+
+    // Resolution settings - native by default with DPR cap of 2
+    resolutionMode: 'native' as ResolutionMode,
+    fixedResolution: '1080p' as FixedResolution,
+    resolutionScale: 1.0, // 100% of native
+    maxPixelRatio: 2, // Cap at 2x for performance on high-DPI displays
 
     // Resolution upscaling - disabled by default (native resolution)
     upscalingMode: 'off' as UpscalingMode,
@@ -500,6 +527,22 @@ export const useUIStore = create<UIState>((set, get) => ({
       graphicsSettings: {
         ...state.graphicsSettings,
         upscalingMode: mode,
+      },
+    })),
+
+  setResolutionMode: (mode) =>
+    set((state) => ({
+      graphicsSettings: {
+        ...state.graphicsSettings,
+        resolutionMode: mode,
+      },
+    })),
+
+  setFixedResolution: (res) =>
+    set((state) => ({
+      graphicsSettings: {
+        ...state.graphicsSettings,
+        fixedResolution: res,
       },
     })),
 
