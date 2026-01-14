@@ -373,17 +373,22 @@ export const GraphicsOptionsPanel = memo(function GraphicsOptionsPanel() {
         <div style={{ marginBottom: '12px' }}>
           <div style={{ marginBottom: '8px' }}>
             <span style={{ fontSize: '10px', color: '#666', display: 'block', marginBottom: '4px' }}>
-              Upscaling
+              Upscaling Mode
             </span>
             <SegmentedControl
               options={[
                 { value: 'off', label: 'Native' },
-                { value: 'easu', label: 'EASU' },
+                { value: 'easu', label: 'FSR' },
                 { value: 'bilinear', label: 'Bilinear' },
               ]}
               value={graphicsSettings.upscalingMode}
               onChange={(v) => setUpscalingMode(v as UpscalingMode)}
             />
+            <div style={{ fontSize: '9px', color: '#555', marginTop: '4px' }}>
+              {graphicsSettings.upscalingMode === 'off' && 'Full resolution rendering'}
+              {graphicsSettings.upscalingMode === 'easu' && 'AMD FSR 1.0 edge-adaptive upscaling'}
+              {graphicsSettings.upscalingMode === 'bilinear' && 'Fast GPU bilinear filtering'}
+            </div>
           </div>
           {graphicsSettings.upscalingMode !== 'off' && (
             <>

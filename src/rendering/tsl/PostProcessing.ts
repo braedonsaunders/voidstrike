@@ -294,6 +294,13 @@ export class RenderPipeline {
     // Create scene pass
     const scenePass = pass(this.scene, this.camera);
 
+    // Set resolution scale for upscaling - renders scene at lower resolution
+    // The PassNode will render at (width * scale, height * scale)
+    const useUpscaling = this.config.upscalingMode !== 'off' && this.config.renderScale < 1.0;
+    if (useUpscaling) {
+      scenePass.setResolutionScale(this.config.renderScale);
+    }
+
     // Enable MRT with velocity for TRAA and optionally normals for SSR
     // Using custom velocity node that properly handles InstancedMesh via our prevInstanceMatrix attributes
     // This avoids the jiggling issue caused by Three.js's built-in velocity not tracking per-instance transforms
@@ -324,23 +331,29 @@ export class RenderPipeline {
     // Build the effect chain
     let outputNode: any = scenePassColor;
 
-    // 1. EASU upscaling (Edge-Adaptive Spatial Upsampling)
-    // MUST be applied first while we still have a texture node that supports .sample()
-    // Upscales from render resolution to display resolution before other effects
-    if (this.config.upscalingMode === 'easu' && this.config.renderScale < 1.0) {
-      try {
-        // Calculate render resolution based on scale
-        const renderRes = new THREE.Vector2(
-          Math.floor(this.displayWidth * this.config.renderScale),
-          Math.floor(this.displayHeight * this.config.renderScale)
-        );
-        const displayRes = new THREE.Vector2(this.displayWidth, this.displayHeight);
+    // 1. Resolution upscaling (if enabled)
+    // Scene was rendered at lower resolution via setResolutionScale() above
+    // Now upscale to display resolution using selected method
+    if (useUpscaling) {
+      if (this.config.upscalingMode === 'easu') {
+        // EASU - Edge-Adaptive Spatial Upsampling (FSR 1.0 style)
+        // Higher quality edge-preserving upscaling
+        try {
+          const renderRes = new THREE.Vector2(
+            Math.floor(this.displayWidth * this.config.renderScale),
+            Math.floor(this.displayHeight * this.config.renderScale)
+          );
+          const displayRes = new THREE.Vector2(this.displayWidth, this.displayHeight);
 
-        this.easuPass = easuUpscale(outputNode, renderRes, displayRes, this.config.easuSharpness);
-        outputNode = this.easuPass.node;
-      } catch (e) {
-        console.warn('[PostProcessing] EASU upscaling failed:', e);
+          this.easuPass = easuUpscale(outputNode, renderRes, displayRes, this.config.easuSharpness);
+          outputNode = this.easuPass.node;
+        } catch (e) {
+          console.warn('[PostProcessing] EASU upscaling failed:', e);
+        }
       }
+      // Bilinear mode: GPU linear filtering handles it automatically
+      // The lower-res texture is sampled at display resolution with bilinear interpolation
+      // No extra pass needed - just use outputNode as-is
     }
 
     // 2. GTAO Ambient Occlusion (applied after upscaling, multiplied with scene)
@@ -363,17 +376,18 @@ export class RenderPipeline {
     }
 
     // 3. SSR (Screen Space Reflections)
-    // Applied after AO, before bloom - reflections pick up scene color
-    // NOTE: SSR needs the raw scene texture (with .sample() method), not processed output
+    // Applied after AO, before bloom - reflections are ADDED to scene
+    // SSR outputs vec4(reflectionColor, opacity) - must blend with scene
     if (this.config.ssrEnabled) {
       try {
-        // Get normal texture from MRT - SSR handles decoding internally
-        const scenePassNormal = scenePass.getTextureNode('normal');
+        // Get normal texture from MRT and DECODE it
+        // We encoded with directionToColor (dir*0.5+0.5), so decode with colorToDirection
+        const scenePassNormalEncoded = scenePass.getTextureNode('normal');
+        const scenePassNormal = colorToDirection(scenePassNormalEncoded);
 
         // Create SSR pass
         // SSR(color, depth, normal, metalness, roughness, camera)
-        // IMPORTANT: Pass scenePassColor (texture), not outputNode (may be processed)
-        const defaultMetalness = float(0.5);
+        const defaultMetalness = float(0.9); // High metalness for visible reflections
         const defaultRoughness = this.uSSRMaxRoughness;
 
         this.ssrPass = (ssr as any)(
@@ -396,16 +410,14 @@ export class RenderPipeline {
           this.ssrPass.thickness.value = this.config.ssrThickness;
         }
 
-        // Blend SSR with current output (which may include AO)
+        // BLEND SSR with scene - SSR outputs vec4(color, alpha)
+        // Add reflections weighted by their opacity
         if (this.ssrPass) {
-          // If AO was applied, we need to apply it to SSR result too
-          if (this.config.aoEnabled && this.aoPass) {
-            const aoValue = this.aoPass.getTextureNode().r;
-            const aoFactor = mix(float(1.0), aoValue, this.uAOIntensity);
-            outputNode = vec3(this.ssrPass).mul(aoFactor);
-          } else {
-            outputNode = this.ssrPass;
-          }
+          const ssrTexture = this.ssrPass.getTextureNode();
+          const ssrColor = ssrTexture.rgb;
+          const ssrAlpha = ssrTexture.a;
+          // Additive blend: scene + reflection * opacity
+          outputNode = outputNode.add(ssrColor.mul(ssrAlpha));
         }
       } catch (e) {
         console.warn('[PostProcessing] SSR initialization failed:', e);
