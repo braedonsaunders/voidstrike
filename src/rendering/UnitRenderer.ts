@@ -10,7 +10,7 @@ import { AssetManager, AnimationMappingConfig } from '@/assets/AssetManager';
 import { Terrain } from './Terrain';
 import { getPlayerColor, getLocalPlayerId, isSpectatorMode } from '@/store/gameSetupStore';
 import { debugAnimation, debugAssets, debugPerformance } from '@/utils/debugLogger';
-import { setupInstancedVelocity, swapInstanceMatrices, disposeInstancedVelocity } from './tsl/InstancedVelocity';
+import { setupInstancedVelocity, swapInstanceMatrices, commitInstanceMatrices, disposeInstancedVelocity } from './tsl/InstancedVelocity';
 
 // Instance data for a single unit type + player combo (non-animated units)
 interface InstancedUnitGroup {
@@ -710,10 +710,12 @@ export class UnitRenderer {
       }
     }
 
-    // Mark instance matrices as needing update
+    // Mark instance matrices as needing update and commit for TAA velocity
     for (const group of this.instancedGroups.values()) {
       if (group.mesh.count > 0) {
         group.mesh.instanceMatrix.needsUpdate = true;
+        // TAA: Commit current matrices to velocity attributes AFTER all updates
+        commitInstanceMatrices(group.mesh);
       }
     }
 

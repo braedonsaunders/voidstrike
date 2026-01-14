@@ -1,308 +1,234 @@
 /**
- * InstancedVelocity - Per-instance velocity for TAA with InstancedMesh
+ * InstancedVelocity - Proper per-instance velocity for TAA with InstancedMesh
  *
- * Three.js's built-in velocity buffer calculates motion from matrixWorld,
- * but InstancedMesh stores per-instance transforms in instanceMatrix.
- * This module provides proper per-instance velocity by:
+ * Three.js's built-in VelocityNode doesn't work for InstancedMesh because it only
+ * tracks per-object transforms, not per-instance. This module provides correct
+ * per-instance velocity by:
  *
- * 1. Storing previous frame's instance matrices
- * 2. Detecting movement CPU-side to avoid floating point precision issues
- * 3. Computing velocity only for moving instances (static = zero velocity)
+ * 1. Storing BOTH current and previous instance matrices as attributes
+ * 2. Using IDENTICAL code paths to read and transform both (eliminates precision issues)
+ * 3. Only computing velocity for meshes with our attributes (static meshes get zero)
  *
- * The key insight: Static objects jitter because different code paths for
- * current vs previous position calculations have floating point precision
- * differences. By detecting movement on CPU (exact comparison), static
- * objects get EXACTLY zero velocity with no shader computation.
+ * The key insight: Floating-point precision differences between code paths caused
+ * micro-jitter. By storing both matrices as attributes and reading them identically,
+ * we eliminate any precision differences.
  *
  * Usage:
- * - Call setupInstancedVelocity(mesh) after creating an InstancedMesh
- * - Call swapInstanceMatrices(mesh) at the START of each frame before updating matrices
- * - Enable MRT in PostProcessing with velocity output
+ * - setupInstancedVelocity(mesh) - Add matrix attributes after creating mesh
+ * - swapInstanceMatrices(mesh) - Call at START of frame (prev = curr)
+ * - commitInstanceMatrices(mesh) - Call AFTER updating matrices, BEFORE render (curr = mesh.instanceMatrix)
  */
 
 import * as THREE from 'three';
-import {
-  Fn,
-  vec2,
-  vec4,
-  mat4,
-  attribute,
-  positionLocal,
-  uniform,
-  float,
-} from 'three/tsl';
+import { Fn, vec2, vec4, mat4, attribute } from 'three/tsl';
 
-// Import TSL values not in @types/three
 // eslint-disable-next-line @typescript-eslint/no-require-imports
 import * as TSL from 'three/tsl';
-const modelWorldMatrix = (TSL as any).modelWorldMatrix;
-const modelViewMatrix = (TSL as any).modelViewMatrix;
 const cameraProjectionMatrix = (TSL as any).cameraProjectionMatrix;
 const cameraViewMatrix = (TSL as any).cameraViewMatrix;
-const select = (TSL as any).select;
+const modelWorldMatrix = (TSL as any).modelWorldMatrix;
+const positionGeometry = (TSL as any).positionGeometry;
+const uniform = (TSL as any).uniform;
 
-// WeakMap to track which meshes have velocity setup
+// Track which meshes have velocity setup
 const velocitySetupMeshes = new WeakSet<THREE.InstancedMesh>();
 
-// Previous camera matrices (shared across all meshes)
-let previousProjectionMatrix = new THREE.Matrix4();
-let previousViewMatrix = new THREE.Matrix4();
-let currentProjectionMatrix = new THREE.Matrix4();
-let currentViewMatrix = new THREE.Matrix4();
-
-// TSL uniforms for camera matrices (used by velocity node)
-const uPreviousProjectionMatrix = uniform(previousProjectionMatrix);
-const uPreviousViewMatrix = uniform(previousViewMatrix);
-
-// Note: Previous instance matrix attributes are stored as:
-// prevInstanceMatrix0, prevInstanceMatrix1, prevInstanceMatrix2, prevInstanceMatrix3
-// Each is a vec4 representing one column of the 4x4 matrix
+// Camera matrix uniforms (shared across all meshes)
+const previousProjectionMatrix = new THREE.Matrix4();
+const previousViewMatrix = new THREE.Matrix4();
+const uPrevProjectionMatrix = uniform(previousProjectionMatrix);
+const uPrevViewMatrix = uniform(previousViewMatrix);
 
 /**
- * Set up previous instance matrix and movement flag attributes for an InstancedMesh
- * Must be called after creating the mesh, before first render
+ * Set up velocity attributes for an InstancedMesh.
+ * Creates both current and previous instance matrix attributes.
  */
 export function setupInstancedVelocity(mesh: THREE.InstancedMesh): void {
   if (velocitySetupMeshes.has(mesh)) {
-    return; // Already set up
+    return;
   }
 
-  const maxInstances = mesh.instanceMatrix.count;
+  const count = mesh.instanceMatrix.count;
 
-  // Create 4 vec4 attributes for previous instance matrix columns
-  // TSL will reconstruct mat4 from these 4 columns
-  const prevMatrixAttr0 = new THREE.InstancedBufferAttribute(
-    new Float32Array(maxInstances * 4), 4
-  );
-  const prevMatrixAttr1 = new THREE.InstancedBufferAttribute(
-    new Float32Array(maxInstances * 4), 4
-  );
-  const prevMatrixAttr2 = new THREE.InstancedBufferAttribute(
-    new Float32Array(maxInstances * 4), 4
-  );
-  const prevMatrixAttr3 = new THREE.InstancedBufferAttribute(
-    new Float32Array(maxInstances * 4), 4
-  );
+  // Create current instance matrix attributes (4 vec4 columns)
+  const currAttr0 = new THREE.InstancedBufferAttribute(new Float32Array(count * 4), 4);
+  const currAttr1 = new THREE.InstancedBufferAttribute(new Float32Array(count * 4), 4);
+  const currAttr2 = new THREE.InstancedBufferAttribute(new Float32Array(count * 4), 4);
+  const currAttr3 = new THREE.InstancedBufferAttribute(new Float32Array(count * 4), 4);
 
-  // Create movement flag attribute (0 = static, 1 = moved)
-  // This allows us to skip velocity computation for static objects entirely,
-  // avoiding floating point precision issues that cause micro-jitter
-  const movedFlagAttr = new THREE.InstancedBufferAttribute(
-    new Float32Array(maxInstances), 1
-  );
+  // Create previous instance matrix attributes (4 vec4 columns)
+  const prevAttr0 = new THREE.InstancedBufferAttribute(new Float32Array(count * 4), 4);
+  const prevAttr1 = new THREE.InstancedBufferAttribute(new Float32Array(count * 4), 4);
+  const prevAttr2 = new THREE.InstancedBufferAttribute(new Float32Array(count * 4), 4);
+  const prevAttr3 = new THREE.InstancedBufferAttribute(new Float32Array(count * 4), 4);
 
-  // Initialize with identity matrix columns
-  for (let i = 0; i < maxInstances; i++) {
-    prevMatrixAttr0.setXYZW(i, 1, 0, 0, 0); // Column 0
-    prevMatrixAttr1.setXYZW(i, 0, 1, 0, 0); // Column 1
-    prevMatrixAttr2.setXYZW(i, 0, 0, 1, 0); // Column 2
-    prevMatrixAttr3.setXYZW(i, 0, 0, 0, 1); // Column 3
-    movedFlagAttr.setX(i, 0); // Initially static
+  // Initialize with identity matrices
+  for (let i = 0; i < count; i++) {
+    // Identity matrix columns
+    currAttr0.setXYZW(i, 1, 0, 0, 0);
+    currAttr1.setXYZW(i, 0, 1, 0, 0);
+    currAttr2.setXYZW(i, 0, 0, 1, 0);
+    currAttr3.setXYZW(i, 0, 0, 0, 1);
+    prevAttr0.setXYZW(i, 1, 0, 0, 0);
+    prevAttr1.setXYZW(i, 0, 1, 0, 0);
+    prevAttr2.setXYZW(i, 0, 0, 1, 0);
+    prevAttr3.setXYZW(i, 0, 0, 0, 1);
   }
 
-  mesh.geometry.setAttribute('prevInstanceMatrix0', prevMatrixAttr0);
-  mesh.geometry.setAttribute('prevInstanceMatrix1', prevMatrixAttr1);
-  mesh.geometry.setAttribute('prevInstanceMatrix2', prevMatrixAttr2);
-  mesh.geometry.setAttribute('prevInstanceMatrix3', prevMatrixAttr3);
-  mesh.geometry.setAttribute('instanceMoved', movedFlagAttr);
+  mesh.geometry.setAttribute('currInstanceMatrix0', currAttr0);
+  mesh.geometry.setAttribute('currInstanceMatrix1', currAttr1);
+  mesh.geometry.setAttribute('currInstanceMatrix2', currAttr2);
+  mesh.geometry.setAttribute('currInstanceMatrix3', currAttr3);
+  mesh.geometry.setAttribute('prevInstanceMatrix0', prevAttr0);
+  mesh.geometry.setAttribute('prevInstanceMatrix1', prevAttr1);
+  mesh.geometry.setAttribute('prevInstanceMatrix2', prevAttr2);
+  mesh.geometry.setAttribute('prevInstanceMatrix3', prevAttr3);
 
   velocitySetupMeshes.add(mesh);
 }
 
 /**
- * Swap current instance matrices to previous and detect movement
- * Must be called at the START of each frame, BEFORE updating instance matrices
- *
- * This function compares current and previous matrices to set a moved flag.
- * Static instances (no matrix change) get moved=0 and will output zero velocity.
- * Moving instances get moved=1 and will have velocity computed in shader.
- *
- * The CPU comparison is exact, avoiding floating point precision issues
- * that cause micro-jitter when computing velocity in the shader.
+ * Swap matrices: previous = current
+ * Call at START of frame, BEFORE updating instance matrices.
  */
 export function swapInstanceMatrices(mesh: THREE.InstancedMesh): void {
-  if (!velocitySetupMeshes.has(mesh)) {
-    console.warn('[InstancedVelocity] Mesh not set up for velocity. Call setupInstancedVelocity first.');
-    return;
+  if (!velocitySetupMeshes.has(mesh)) return;
+
+  const count = mesh.count;
+  const curr0 = mesh.geometry.getAttribute('currInstanceMatrix0') as THREE.InstancedBufferAttribute;
+  const curr1 = mesh.geometry.getAttribute('currInstanceMatrix1') as THREE.InstancedBufferAttribute;
+  const curr2 = mesh.geometry.getAttribute('currInstanceMatrix2') as THREE.InstancedBufferAttribute;
+  const curr3 = mesh.geometry.getAttribute('currInstanceMatrix3') as THREE.InstancedBufferAttribute;
+  const prev0 = mesh.geometry.getAttribute('prevInstanceMatrix0') as THREE.InstancedBufferAttribute;
+  const prev1 = mesh.geometry.getAttribute('prevInstanceMatrix1') as THREE.InstancedBufferAttribute;
+  const prev2 = mesh.geometry.getAttribute('prevInstanceMatrix2') as THREE.InstancedBufferAttribute;
+  const prev3 = mesh.geometry.getAttribute('prevInstanceMatrix3') as THREE.InstancedBufferAttribute;
+
+  // Copy current to previous
+  for (let i = 0; i < count; i++) {
+    prev0.setXYZW(i, curr0.getX(i), curr0.getY(i), curr0.getZ(i), curr0.getW(i));
+    prev1.setXYZW(i, curr1.getX(i), curr1.getY(i), curr1.getZ(i), curr1.getW(i));
+    prev2.setXYZW(i, curr2.getX(i), curr2.getY(i), curr2.getZ(i), curr2.getW(i));
+    prev3.setXYZW(i, curr3.getX(i), curr3.getY(i), curr3.getZ(i), curr3.getW(i));
   }
 
-  const currentMatrix = mesh.instanceMatrix.array as Float32Array;
+  prev0.needsUpdate = true;
+  prev1.needsUpdate = true;
+  prev2.needsUpdate = true;
+  prev3.needsUpdate = true;
+}
+
+/**
+ * Commit current matrices: current attrs = mesh.instanceMatrix
+ * Call AFTER updating instance matrices, BEFORE render.
+ */
+export function commitInstanceMatrices(mesh: THREE.InstancedMesh): void {
+  if (!velocitySetupMeshes.has(mesh)) return;
+
+  const instanceMatrix = mesh.instanceMatrix.array as Float32Array;
   const count = mesh.count;
 
-  const prevAttr0 = mesh.geometry.getAttribute('prevInstanceMatrix0') as THREE.InstancedBufferAttribute;
-  const prevAttr1 = mesh.geometry.getAttribute('prevInstanceMatrix1') as THREE.InstancedBufferAttribute;
-  const prevAttr2 = mesh.geometry.getAttribute('prevInstanceMatrix2') as THREE.InstancedBufferAttribute;
-  const prevAttr3 = mesh.geometry.getAttribute('prevInstanceMatrix3') as THREE.InstancedBufferAttribute;
-  const movedAttr = mesh.geometry.getAttribute('instanceMoved') as THREE.InstancedBufferAttribute;
+  const curr0 = mesh.geometry.getAttribute('currInstanceMatrix0') as THREE.InstancedBufferAttribute;
+  const curr1 = mesh.geometry.getAttribute('currInstanceMatrix1') as THREE.InstancedBufferAttribute;
+  const curr2 = mesh.geometry.getAttribute('currInstanceMatrix2') as THREE.InstancedBufferAttribute;
+  const curr3 = mesh.geometry.getAttribute('currInstanceMatrix3') as THREE.InstancedBufferAttribute;
 
-  const prevArray0 = prevAttr0.array as Float32Array;
-  const prevArray1 = prevAttr1.array as Float32Array;
-  const prevArray2 = prevAttr2.array as Float32Array;
-  const prevArray3 = prevAttr3.array as Float32Array;
-
-  // Compare matrices and set moved flag, then copy current to previous
+  // Copy mesh.instanceMatrix to current attributes
   for (let i = 0; i < count; i++) {
     const offset = i * 16;
-    const prevOffset = i * 4;
-
-    // Check if matrix changed (exact comparison works on CPU)
-    // Compare all 16 elements of the 4x4 matrix
-    const moved =
-      currentMatrix[offset] !== prevArray0[prevOffset] ||
-      currentMatrix[offset + 1] !== prevArray0[prevOffset + 1] ||
-      currentMatrix[offset + 2] !== prevArray0[prevOffset + 2] ||
-      currentMatrix[offset + 3] !== prevArray0[prevOffset + 3] ||
-      currentMatrix[offset + 4] !== prevArray1[prevOffset] ||
-      currentMatrix[offset + 5] !== prevArray1[prevOffset + 1] ||
-      currentMatrix[offset + 6] !== prevArray1[prevOffset + 2] ||
-      currentMatrix[offset + 7] !== prevArray1[prevOffset + 3] ||
-      currentMatrix[offset + 8] !== prevArray2[prevOffset] ||
-      currentMatrix[offset + 9] !== prevArray2[prevOffset + 1] ||
-      currentMatrix[offset + 10] !== prevArray2[prevOffset + 2] ||
-      currentMatrix[offset + 11] !== prevArray2[prevOffset + 3] ||
-      currentMatrix[offset + 12] !== prevArray3[prevOffset] ||
-      currentMatrix[offset + 13] !== prevArray3[prevOffset + 1] ||
-      currentMatrix[offset + 14] !== prevArray3[prevOffset + 2] ||
-      currentMatrix[offset + 15] !== prevArray3[prevOffset + 3];
-
-    movedAttr.setX(i, moved ? 1 : 0);
-
-    // Copy current matrices to previous (column by column)
-    // Matrix is column-major: elements 0-3 are column 0, 4-7 are column 1, etc.
-    prevAttr0.setXYZW(i, currentMatrix[offset], currentMatrix[offset + 1], currentMatrix[offset + 2], currentMatrix[offset + 3]);
-    prevAttr1.setXYZW(i, currentMatrix[offset + 4], currentMatrix[offset + 5], currentMatrix[offset + 6], currentMatrix[offset + 7]);
-    prevAttr2.setXYZW(i, currentMatrix[offset + 8], currentMatrix[offset + 9], currentMatrix[offset + 10], currentMatrix[offset + 11]);
-    prevAttr3.setXYZW(i, currentMatrix[offset + 12], currentMatrix[offset + 13], currentMatrix[offset + 14], currentMatrix[offset + 15]);
+    // Matrix is column-major: 0-3 = col0, 4-7 = col1, 8-11 = col2, 12-15 = col3
+    curr0.setXYZW(i, instanceMatrix[offset], instanceMatrix[offset + 1], instanceMatrix[offset + 2], instanceMatrix[offset + 3]);
+    curr1.setXYZW(i, instanceMatrix[offset + 4], instanceMatrix[offset + 5], instanceMatrix[offset + 6], instanceMatrix[offset + 7]);
+    curr2.setXYZW(i, instanceMatrix[offset + 8], instanceMatrix[offset + 9], instanceMatrix[offset + 10], instanceMatrix[offset + 11]);
+    curr3.setXYZW(i, instanceMatrix[offset + 12], instanceMatrix[offset + 13], instanceMatrix[offset + 14], instanceMatrix[offset + 15]);
   }
 
-  prevAttr0.needsUpdate = true;
-  prevAttr1.needsUpdate = true;
-  prevAttr2.needsUpdate = true;
-  prevAttr3.needsUpdate = true;
-  movedAttr.needsUpdate = true;
+  curr0.needsUpdate = true;
+  curr1.needsUpdate = true;
+  curr2.needsUpdate = true;
+  curr3.needsUpdate = true;
 }
 
 /**
- * Update camera matrices for velocity calculation
- * Call this at the END of each frame after rendering
+ * Update camera matrices for velocity calculation.
+ * Call at END of frame, after render.
  */
 export function updateCameraMatrices(camera: THREE.Camera): void {
-  // Store current as previous for next frame
-  previousProjectionMatrix.copy(currentProjectionMatrix);
-  previousViewMatrix.copy(currentViewMatrix);
-
-  // Update current
-  currentProjectionMatrix.copy(camera.projectionMatrix);
-  currentViewMatrix.copy(camera.matrixWorldInverse);
-
-  // Update TSL uniforms
-  uPreviousProjectionMatrix.value.copy(previousProjectionMatrix);
-  uPreviousViewMatrix.value.copy(previousViewMatrix);
+  uPrevProjectionMatrix.value.copy(previousProjectionMatrix);
+  uPrevViewMatrix.value.copy(previousViewMatrix);
+  previousProjectionMatrix.copy(camera.projectionMatrix);
+  previousViewMatrix.copy(camera.matrixWorldInverse);
 }
 
 /**
- * Get previous camera matrices (for uniform updates)
- */
-export function getPreviousCameraMatrices(): { projection: THREE.Matrix4; view: THREE.Matrix4 } {
-  return {
-    projection: previousProjectionMatrix,
-    view: previousViewMatrix,
-  };
-}
-
-/**
- * Initialize camera matrices (call once at startup)
+ * Initialize camera matrices. Call once at startup.
  */
 export function initCameraMatrices(camera: THREE.Camera): void {
-  currentProjectionMatrix.copy(camera.projectionMatrix);
-  currentViewMatrix.copy(camera.matrixWorldInverse);
-  previousProjectionMatrix.copy(currentProjectionMatrix);
-  previousViewMatrix.copy(currentViewMatrix);
-
-  // Initialize TSL uniforms
-  uPreviousProjectionMatrix.value.copy(previousProjectionMatrix);
-  uPreviousViewMatrix.value.copy(previousViewMatrix);
+  previousProjectionMatrix.copy(camera.projectionMatrix);
+  previousViewMatrix.copy(camera.matrixWorldInverse);
+  uPrevProjectionMatrix.value.copy(previousProjectionMatrix);
+  uPrevViewMatrix.value.copy(previousViewMatrix);
 }
 
 /**
- * Check if a mesh has velocity setup
- */
-export function hasVelocitySetup(mesh: THREE.InstancedMesh): boolean {
-  return velocitySetupMeshes.has(mesh);
-}
-
-/**
- * Clean up velocity attributes when disposing a mesh
+ * Clean up velocity attributes.
  */
 export function disposeInstancedVelocity(mesh: THREE.InstancedMesh): void {
-  if (!velocitySetupMeshes.has(mesh)) {
-    return;
-  }
-
-  // Attributes are disposed with the geometry, but we should remove from our tracking
   velocitySetupMeshes.delete(mesh);
 }
 
 /**
- * Create a TSL velocity node for InstancedMesh objects.
+ * Create velocity node for TAA.
  *
- * Uses a CPU-computed movement flag to avoid floating point precision issues:
- * - Static instances (moved = 0): Returns exactly vec2(0,0) with no shader math
- * - Moving instances (moved = 1): Computes proper velocity from matrix transforms
+ * For meshes with velocity setup: Computes proper per-instance velocity using
+ * identical code paths for current and previous (no precision issues).
  *
- * Why this approach works:
- * - CPU comparison of matrices is exact (no floating point precision issues)
- * - Static objects get EXACTLY zero velocity (no shader computation at all)
- * - Moving objects have actual motion that dominates any precision noise
- * - TRAA's depth reprojection still handles camera motion
- *
- * Velocity calculation for moving instances:
- * - Current position: modelViewMatrix (includes current instanceMatrix) → project
- * - Previous position: previousViewMatrix * previousInstanceMatrix → project
- * - Velocity = currentNDC - previousNDC
+ * For meshes without velocity setup: Returns zero velocity (depth reprojection
+ * handles camera motion).
  */
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export function createInstancedVelocityNode(): any {
   return Fn(() => {
-    // Read movement flag from CPU-computed attribute
-    // If the instance didn't move (flag = 0), return zero velocity immediately
-    // This avoids any shader math that could introduce floating point noise
-    const moved = attribute('instanceMoved', 'float');
-
-    // For static objects, return zero velocity
-    // The select function chooses between two values based on condition
-    // select(condition, trueValue, falseValue) - returns trueValue if condition > 0
+    // Read current instance matrix from attributes
+    const currCol0 = attribute('currInstanceMatrix0', 'vec4');
+    const currCol1 = attribute('currInstanceMatrix1', 'vec4');
+    const currCol2 = attribute('currInstanceMatrix2', 'vec4');
+    const currCol3 = attribute('currInstanceMatrix3', 'vec4');
+    const currInstanceMatrix = mat4(currCol0, currCol1, currCol2, currCol3);
 
     // Read previous instance matrix from attributes
     const prevCol0 = attribute('prevInstanceMatrix0', 'vec4');
     const prevCol1 = attribute('prevInstanceMatrix1', 'vec4');
     const prevCol2 = attribute('prevInstanceMatrix2', 'vec4');
     const prevCol3 = attribute('prevInstanceMatrix3', 'vec4');
-
-    // Reconstruct previous instance matrix from columns
     const prevInstanceMatrix = mat4(prevCol0, prevCol1, prevCol2, prevCol3);
 
-    // === Current position calculation ===
-    // modelViewMatrix already includes instanceMatrix via Three.js's internal handling
-    // So: clipPos = projectionMatrix * modelViewMatrix * position
-    const currentClipPos = cameraProjectionMatrix.mul(modelViewMatrix.mul(vec4(positionLocal, 1.0)));
-    const currentNDC = currentClipPos.xy.div(currentClipPos.w);
+    // Check if attributes exist (valid matrix has w=1 in last column)
+    // If not, return zero velocity (non-instanced meshes, or meshes without setup)
+    const hasVelocity = currCol3.w;
 
-    // === Previous position calculation ===
-    // Compute: prevProjection * prevView * prevInstanceMatrix * position
-    const prevWorldPos = prevInstanceMatrix.mul(vec4(positionLocal, 1.0));
-    const prevViewPos = uPreviousViewMatrix.mul(prevWorldPos);
-    const prevClipPos = uPreviousProjectionMatrix.mul(prevViewPos);
+    // Get raw vertex position (before any instance transform)
+    const rawPosition = positionGeometry;
+
+    // === Current position (identical code path) ===
+    const currInstancePos = currInstanceMatrix.mul(vec4(rawPosition, 1.0));
+    const currWorldPos = modelWorldMatrix.mul(currInstancePos);
+    const currViewPos = cameraViewMatrix.mul(currWorldPos);
+    const currClipPos = cameraProjectionMatrix.mul(currViewPos);
+    const currNDC = currClipPos.xy.div(currClipPos.w);
+
+    // === Previous position (identical code path) ===
+    const prevInstancePos = prevInstanceMatrix.mul(vec4(rawPosition, 1.0));
+    const prevWorldPos = modelWorldMatrix.mul(prevInstancePos); // Assuming object doesn't move
+    const prevViewPos = uPrevViewMatrix.mul(prevWorldPos);
+    const prevClipPos = uPrevProjectionMatrix.mul(prevViewPos);
     const prevNDC = prevClipPos.xy.div(prevClipPos.w);
 
-    // === Velocity calculation ===
-    // Velocity is the screen-space motion: current - previous
-    const velocity = currentNDC.sub(prevNDC);
+    // Velocity = current - previous
+    const velocity = currNDC.sub(prevNDC);
 
-    // Use select to conditionally return velocity only for moving instances
-    // For static instances (moved ≈ 0), return zero velocity
-    // For moving instances (moved ≈ 1), return computed velocity
-    return select(moved, velocity, vec2(0.0, 0.0));
+    // Return velocity if we have valid attributes, zero otherwise
+    // hasVelocity will be 1.0 for valid matrices, 0.0 for missing attributes
+    return velocity.mul(hasVelocity);
   })();
 }
-

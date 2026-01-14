@@ -62,24 +62,19 @@ import { createInstancedVelocityNode } from './InstancedVelocity';
 // WARNING SUPPRESSION
 // ============================================
 
-// Suppress Three.js AttributeNode warnings for our custom velocity attributes
-// These warnings occur because non-instanced meshes don't have prevInstanceMatrix attributes
-// The shader handles this gracefully by returning zero velocity for missing attributes
+// Suppress Three.js AttributeNode warnings for missing velocity attributes
+// Non-instanced meshes and static meshes don't have these attributes - they get zero velocity
 const originalWarn = console.warn;
 const suppressedWarnings = [
-  // Instance matrix attributes - not present on non-instanced meshes
-  'Vertex attribute "instanceMatrix0" not found',
-  'Vertex attribute "instanceMatrix1" not found',
-  'Vertex attribute "instanceMatrix2" not found',
-  'Vertex attribute "instanceMatrix3" not found',
+  'Vertex attribute "normal" not found',
+  'Vertex attribute "currInstanceMatrix0" not found',
+  'Vertex attribute "currInstanceMatrix1" not found',
+  'Vertex attribute "currInstanceMatrix2" not found',
+  'Vertex attribute "currInstanceMatrix3" not found',
   'Vertex attribute "prevInstanceMatrix0" not found',
   'Vertex attribute "prevInstanceMatrix1" not found',
   'Vertex attribute "prevInstanceMatrix2" not found',
   'Vertex attribute "prevInstanceMatrix3" not found',
-  // Movement flag - only present on instanced meshes with velocity setup
-  'Vertex attribute "instanceMoved" not found',
-  // Normal attribute - some geometries don't have normals
-  'Vertex attribute "normal" not found',
 ];
 
 function suppressAttributeWarnings(): void {
@@ -88,7 +83,7 @@ function suppressAttributeWarnings(): void {
     if (typeof message === 'string') {
       for (const suppressed of suppressedWarnings) {
         if (message.includes(suppressed)) {
-          return; // Suppress this warning
+          return;
         }
       }
     }
@@ -96,7 +91,6 @@ function suppressAttributeWarnings(): void {
   };
 }
 
-// Apply warning suppression immediately
 suppressAttributeWarnings();
 
 // ============================================

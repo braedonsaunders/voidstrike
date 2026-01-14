@@ -7,7 +7,8 @@ import { Selectable } from '@/engine/components/Selectable';
 import { Terrain } from './Terrain';
 import AssetManager from '@/assets/AssetManager';
 import { debugMesh } from '@/utils/debugLogger';
-import { setupInstancedVelocity, swapInstanceMatrices, disposeInstancedVelocity } from './tsl/InstancedVelocity';
+// NOTE: Resources don't move, so we don't use velocity tracking (AAA optimization)
+// Velocity node returns zero for meshes without velocity attributes
 
 interface InstancedResourceGroup {
   mesh: THREE.InstancedMesh;
@@ -220,9 +221,6 @@ export class ResourceRenderer {
       instancedMesh.frustumCulled = false;
 
       this.scene.add(instancedMesh);
-
-      // Set up previous instance matrix attributes for TAA velocity
-      setupInstancedVelocity(instancedMesh);
 
       // Clamp values to reasonable ranges to prevent underground rendering or invisible scales
       if (yOffset < 0) {
@@ -473,13 +471,6 @@ export class ResourceRenderer {
     // PERF: Update frustum for culling
     this.updateFrustum();
 
-    // TAA: Copy current instance matrices to previous BEFORE resetting counts
-    for (const group of this.instancedGroups.values()) {
-      if (group.mesh.count > 0) {
-        swapInstanceMatrices(group.mesh);
-      }
-    }
-
     // Reset instance counts
     // PERF: Use .length = 0 instead of = [] to avoid GC pressure from allocating new arrays every frame
     for (const group of this.instancedGroups.values()) {
@@ -726,7 +717,6 @@ export class ResourceRenderer {
 
   public dispose(): void {
     for (const group of this.instancedGroups.values()) {
-      disposeInstancedVelocity(group.mesh);
       this.scene.remove(group.mesh);
       group.mesh.geometry.dispose();
       if (group.mesh.material instanceof THREE.Material) {
