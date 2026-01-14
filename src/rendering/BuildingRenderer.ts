@@ -9,7 +9,8 @@ import { AssetManager, REFERENCE_FRAME } from '@/assets/AssetManager';
 import { Terrain } from './Terrain';
 import { getPlayerColor, getLocalPlayerId, isSpectatorMode } from '@/store/gameSetupStore';
 import { debugMesh } from '@/utils/debugLogger';
-import { setupInstancedVelocity, swapInstanceMatrices, disposeInstancedVelocity } from './tsl/InstancedVelocity';
+// NOTE: Buildings don't move, so we don't use velocity tracking (AAA optimization)
+// Velocity node returns zero for meshes without velocity attributes
 
 interface BuildingMeshData {
   group: THREE.Group;
@@ -376,9 +377,6 @@ export class BuildingRenderer {
       // Buildings render AFTER ground effects (5) but BEFORE damage numbers (100)
       instancedMesh.renderOrder = 50;
 
-      // Set up previous instance matrix attributes for TAA velocity
-      setupInstancedVelocity(instancedMesh);
-
       this.scene.add(instancedMesh);
 
       group = {
@@ -560,14 +558,6 @@ export class BuildingRenderer {
     const entities = [...this.world.getEntitiesWith('Transform', 'Building')].sort((a, b) => a.id - b.id);
     // PERF: Reuse pre-allocated Set instead of creating new one every frame
     this._currentIds.clear();
-
-    // TAA: Copy current instance matrices to previous BEFORE resetting counts
-    // This preserves last frame's transforms for velocity calculation
-    for (const group of this.instancedGroups.values()) {
-      if (group.mesh.count > 0) {
-        swapInstanceMatrices(group.mesh);
-      }
-    }
 
     // Reset instanced group counts
     // PERF: Use .length = 0 instead of = [] to avoid GC pressure from allocating new arrays every frame

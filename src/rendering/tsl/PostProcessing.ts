@@ -62,11 +62,19 @@ import { createInstancedVelocityNode } from './InstancedVelocity';
 // WARNING SUPPRESSION
 // ============================================
 
-// Suppress Three.js AttributeNode warnings for missing attributes
-// Some geometries don't have normals, which is fine for our use case
+// Suppress Three.js AttributeNode warnings for missing velocity attributes
+// Non-instanced meshes and static meshes don't have these attributes - they get zero velocity
 const originalWarn = console.warn;
 const suppressedWarnings = [
   'Vertex attribute "normal" not found',
+  'Vertex attribute "currInstanceMatrix0" not found',
+  'Vertex attribute "currInstanceMatrix1" not found',
+  'Vertex attribute "currInstanceMatrix2" not found',
+  'Vertex attribute "currInstanceMatrix3" not found',
+  'Vertex attribute "prevInstanceMatrix0" not found',
+  'Vertex attribute "prevInstanceMatrix1" not found',
+  'Vertex attribute "prevInstanceMatrix2" not found',
+  'Vertex attribute "prevInstanceMatrix3" not found',
 ];
 
 function suppressAttributeWarnings(): void {

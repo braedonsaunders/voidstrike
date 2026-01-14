@@ -28,24 +28,43 @@ VOIDSTRIKE uses Three.js with WebGPU renderer and TSL (Three.js Shading Language
 ### Anti-Aliasing Details
 
 #### TRAA (Temporal Reprojection Anti-Aliasing)
-- Uses **zero-velocity mode** via MRT for optimal performance
+- Uses **per-instance velocity** via MRT for proper motion vectors
 - Optional RCAS sharpening to counter temporal blur
 - TRAANode handles camera jitter internally (Halton sequence)
-- Depth-based reprojection handles camera motion
+- AAA-style optimization: only moving objects pay the velocity cost
 
-**Zero Velocity Mode:**
-TRAA uses zero velocity output for maximum performance:
-- **Camera motion** is handled by depth-based reprojection
-- **Static objects** (buildings, resources) need no velocity
-- **Slow-moving units** work well with temporal accumulation
-- **No per-vertex calculations** - just returns vec2(0,0)
+**Per-Instance Velocity (AAA Optimization):**
+Three.js's built-in VelocityNode doesn't work for InstancedMesh (only tracks per-object, not per-instance). Our solution:
+
+| Renderer | Velocity | Cost |
+|----------|----------|------|
+| UnitRenderer | Full per-instance | ~5-10% overhead |
+| BuildingRenderer | Zero (static) | None |
+| ResourceRenderer | Zero (static) | None |
+
+**Key Insight:** Floating-point precision differences between code paths caused micro-jitter. By storing BOTH current and previous instance matrices as attributes and reading them identically, we eliminate precision issues.
 
 See: [GitHub Issue #31892](https://github.com/mrdoob/three.js/issues/31892)
 
+**Implementation:**
 ```typescript
-// Zero velocity - depth reprojection handles camera motion
-const customVelocity = createInstancedVelocityNode(); // returns vec2(0,0)
-scenePass.setMRT(mrt({ output, velocity: customVelocity }));
+// UnitRenderer: Full velocity tracking
+setupInstancedVelocity(mesh);      // Add 8 vec4 attributes (curr + prev matrices)
+swapInstanceMatrices(mesh);        // At frame START: prev = curr
+commitInstanceMatrices(mesh);      // After updates: curr = mesh.instanceMatrix
+
+// BuildingRenderer/ResourceRenderer: No velocity (static objects)
+// Velocity node returns zero for meshes without attributes
+```
+
+**Velocity Node Architecture:**
+```
+createInstancedVelocityNode()
+├── Read currInstanceMatrix0-3 (current frame transforms)
+├── Read prevInstanceMatrix0-3 (previous frame transforms)
+├── Check hasVelocity (currCol3.w == 1.0 for valid matrices)
+├── Transform positionGeometry identically with both matrices
+└── Return velocity.mul(hasVelocity) (zero if no attributes)
 ```
 
 #### SSR (Screen Space Reflections)
