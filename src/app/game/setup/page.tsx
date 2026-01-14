@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { ALL_MAPS, MapData } from '@/data/maps';
 import { MusicPlayer } from '@/audio/MusicPlayer';
 import { useUIStore } from '@/store/uiStore';
@@ -56,7 +56,7 @@ function MapPreview({ map, isSelected, onSelect, onEdit }: {
         className="w-full text-left"
       >
         <div
-          className="h-20 w-full relative"
+          className="h-10 w-full relative"
           style={{
             background: `linear-gradient(135deg,
               ${colorToHex(groundColors[2])},
@@ -64,18 +64,17 @@ function MapPreview({ map, isSelected, onSelect, onEdit }: {
               ${colorToHex(groundColors[1])})`
           }}
         >
-          <div className="absolute top-1 right-1 bg-black/60 px-1.5 py-0.5 rounded text-[10px] text-void-300">
+          <div className="absolute top-0.5 right-0.5 bg-black/60 px-1 py-0.5 rounded text-[8px] text-void-300">
             {map.width}x{map.height}
           </div>
-          <div className="absolute bottom-1 left-1 bg-black/60 px-1.5 py-0.5 rounded text-[10px] capitalize"
+          <div className="absolute bottom-0.5 left-0.5 bg-black/60 px-1 py-0.5 rounded text-[8px] capitalize"
                style={{ color: accentColor }}>
             {map.biome || 'grassland'}
           </div>
         </div>
 
-        <div className="p-2 bg-void-950">
-          <h3 className="font-display text-white text-xs mb-0.5">{map.name}</h3>
-          <p className="text-void-400 text-[10px] line-clamp-1">{map.description}</p>
+        <div className="px-1.5 py-1 bg-void-950">
+          <h3 className="font-display text-white text-[10px] leading-tight">{map.name}</h3>
         </div>
       </button>
 
@@ -85,15 +84,15 @@ function MapPreview({ map, isSelected, onSelect, onEdit }: {
           e.stopPropagation();
           onEdit();
         }}
-        className="absolute bottom-2 right-2 px-2 py-0.5 bg-void-700/80 hover:bg-void-600
-                   text-void-200 text-[10px] rounded transition-colors backdrop-blur-sm"
+        className="absolute bottom-1 right-1 px-1 py-0.5 bg-void-700/80 hover:bg-void-600
+                   text-void-200 text-[8px] rounded transition-colors backdrop-blur-sm"
         title="Edit map"
       >
         Edit
       </button>
 
       {isSelected && (
-        <div className="absolute top-1 left-1 bg-void-500 text-white px-1.5 py-0.5 rounded text-[10px] font-bold">
+        <div className="absolute top-0.5 left-0.5 bg-void-500 text-white px-1 py-0.5 rounded text-[8px] font-bold">
           ✓
         </div>
       )}
@@ -309,8 +308,13 @@ export default function GameSetupPage() {
     startGame,
   } = useGameSetupStore();
 
-  const maps = Object.values(ALL_MAPS);
-  const selectedMap = ALL_MAPS[selectedMapId] || maps[0];
+  const [mapSearch, setMapSearch] = useState('');
+  const allMaps = Object.values(ALL_MAPS);
+  const maps = allMaps.filter(map =>
+    map.name.toLowerCase().includes(mapSearch.toLowerCase()) ||
+    map.biome?.toLowerCase().includes(mapSearch.toLowerCase())
+  );
+  const selectedMap = ALL_MAPS[selectedMapId] || allMaps[0];
 
   // Get used colors for duplicate prevention
   const usedColors = new Set(
@@ -414,16 +418,28 @@ export default function GameSetupPage() {
             {/* Map Selection - Compact */}
             <div>
               <h2 className="font-display text-lg text-white mb-2">Select Map</h2>
-              <div className="grid grid-cols-2 gap-2">
-                {maps.map((map) => (
-                  <MapPreview
-                    key={map.id}
-                    map={map}
-                    isSelected={selectedMapId === map.id}
-                    onSelect={() => handleMapSelect(map.id)}
-                    onEdit={() => router.push(`/game/setup/editor?map=${map.id}`)}
-                  />
-                ))}
+              {/* Search box */}
+              <input
+                type="text"
+                value={mapSearch}
+                onChange={(e) => setMapSearch(e.target.value)}
+                placeholder="Search maps..."
+                className="w-full bg-void-900 border border-void-700 rounded px-2 py-1 text-white text-xs
+                           placeholder:text-void-500 focus:outline-none focus:border-void-500 mb-2"
+              />
+              {/* Scrollable map grid - max 2 rows visible */}
+              <div className="max-h-[140px] overflow-y-auto">
+                <div className="grid grid-cols-2 gap-1.5">
+                  {maps.map((map) => (
+                    <MapPreview
+                      key={map.id}
+                      map={map}
+                      isSelected={selectedMapId === map.id}
+                      onSelect={() => handleMapSelect(map.id)}
+                      onEdit={() => router.push(`/game/setup/editor?map=${map.id}`)}
+                    />
+                  ))}
+                </div>
               </div>
 
               {/* Selected map details */}
