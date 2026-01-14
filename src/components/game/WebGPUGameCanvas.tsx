@@ -1344,6 +1344,84 @@ export function WebGPUGameCanvas() {
     e.preventDefault();
   }, []);
 
+  // Document-level mouse listeners to handle drag selection over UI elements
+  // Without this, dragging the selection box over the bottom bar (CommandCard, etc.)
+  // would not update properly because mouse events fire on the UI element, not the canvas
+  useEffect(() => {
+    if (!isSelecting) return;
+
+    const handleDocumentMouseMove = (e: MouseEvent) => {
+      setSelectionEnd({ x: e.clientX, y: e.clientY });
+    };
+
+    const handleDocumentMouseUp = (e: MouseEvent) => {
+      if (e.button !== 0) return;
+
+      setIsSelecting(false);
+
+      const game = gameRef.current;
+      if (!game) return;
+
+      // Use the final mouse position for the selection end
+      const finalEndX = e.clientX;
+      const finalEndY = e.clientY;
+
+      // Calculate screen-space box size
+      const screenDx = Math.abs(finalEndX - selectionStart.x);
+      const screenDy = Math.abs(finalEndY - selectionStart.y);
+
+      // Minimum drag distance for box selection (pixels)
+      const MIN_BOX_DRAG = 10;
+
+      if (screenDx > MIN_BOX_DRAG || screenDy > MIN_BOX_DRAG) {
+        // Box selection - use screen-space for accurate perspective handling
+        game.eventBus.emit('selection:boxScreen', {
+          screenStartX: selectionStart.x,
+          screenStartY: selectionStart.y,
+          screenEndX: finalEndX,
+          screenEndY: finalEndY,
+          additive: e.shiftKey,
+          playerId: getLocalPlayerId(),
+        });
+        lastClickRef.current = null;
+      } else {
+        // Click selection - check for double-click
+        const now = Date.now();
+        let isDoubleClick = false;
+
+        if (lastClickRef.current) {
+          const timeDiff = now - lastClickRef.current.time;
+          const clickDx = Math.abs(e.clientX - lastClickRef.current.x);
+          const clickDy = Math.abs(e.clientY - lastClickRef.current.y);
+
+          isDoubleClick = timeDiff < DOUBLE_CLICK_TIME &&
+                         clickDx < DOUBLE_CLICK_DIST &&
+                         clickDy < DOUBLE_CLICK_DIST;
+        }
+
+        lastClickRef.current = { time: now, x: e.clientX, y: e.clientY };
+
+        // Use screen-space click selection for accurate flying unit handling
+        game.eventBus.emit('selection:clickScreen', {
+          screenX: e.clientX,
+          screenY: e.clientY,
+          additive: e.shiftKey,
+          selectAllOfType: e.ctrlKey || isDoubleClick,
+          playerId: getLocalPlayerId(),
+        });
+      }
+    };
+
+    // Add listeners to document to catch mouse events anywhere on the page
+    document.addEventListener('mousemove', handleDocumentMouseMove);
+    document.addEventListener('mouseup', handleDocumentMouseUp);
+
+    return () => {
+      document.removeEventListener('mousemove', handleDocumentMouseMove);
+      document.removeEventListener('mouseup', handleDocumentMouseUp);
+    };
+  }, [isSelecting, selectionStart]);
+
   // Building placement preview
   useEffect(() => {
     if (placementPreviewRef.current) {
