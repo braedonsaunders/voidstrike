@@ -90,6 +90,11 @@ export interface GraphicsSettings {
   ssrOpacity: number; // 0.0-1.0, reflection intensity
   ssrMaxRoughness: number; // 0.0-1.0, max roughness for reflections
 
+  // SSGI (Screen Space Global Illumination)
+  ssgiEnabled: boolean;
+  ssgiRadius: number; // 1-25, sampling radius in world space
+  ssgiIntensity: number; // 0-100, GI intensity
+
   // Resolution upscaling (EASU - Edge-Adaptive Spatial Upsampling)
   upscalingMode: UpscalingMode;
   renderScale: number; // 0.5-1.0, internal render resolution
@@ -294,6 +299,11 @@ export const useUIStore = create<UIState>((set, get) => ({
     ssrEnabled: false,
     ssrOpacity: 1.0, // Full reflection intensity when enabled
     ssrMaxRoughness: 0.5, // Only reflect on moderately smooth surfaces
+
+    // SSGI (Screen Space Global Illumination) - disabled by default (expensive)
+    ssgiEnabled: false,
+    ssgiRadius: 8, // Sampling radius in world space
+    ssgiIntensity: 15, // GI intensity
 
     // Resolution upscaling - disabled by default (native resolution)
     upscalingMode: 'off' as UpscalingMode,

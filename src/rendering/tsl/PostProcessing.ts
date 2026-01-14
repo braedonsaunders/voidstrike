@@ -51,6 +51,8 @@ import { ao } from 'three/addons/tsl/display/GTAONode.js';
 import { fxaa } from 'three/addons/tsl/display/FXAANode.js';
 import { traa } from 'three/addons/tsl/display/TRAANode.js';
 import { ssr } from 'three/addons/tsl/display/SSRNode.js';
+// @ts-expect-error - Three.js addon lacks TypeScript declarations
+import { ssgi } from 'three/addons/tsl/display/SSGINode.js';
 
 // Import EASU upscaling
 import { easuUpscale, rcasSharpening } from './UpscalerNode';
@@ -122,6 +124,14 @@ export interface PostProcessingConfig {
   ssrThickness: number;      // Ray thickness for hit detection
   ssrMaxRoughness: number;   // Max roughness for reflections (0-1)
 
+  // SSGI (Screen Space Global Illumination)
+  // Provides indirect lighting (light bouncing) + built-in AO
+  // When enabled, replaces GTAO with SSGI's integrated AO
+  ssgiEnabled: boolean;
+  ssgiRadius: number;        // Sampling radius in world space (1-25)
+  ssgiIntensity: number;     // GI intensity (0-100)
+  ssgiThickness: number;     // Object thickness for light passing (0.01-10)
+
   // Anti-aliasing mode ('off', 'fxaa', 'taa')
   antiAliasingMode: AntiAliasingMode;
 
@@ -169,6 +179,14 @@ const DEFAULT_CONFIG: PostProcessingConfig = {
   ssrThickness: 0.1,
   ssrMaxRoughness: 0.5,
 
+  // SSGI - Screen Space Global Illumination
+  // Provides realistic light bouncing + integrated AO
+  // Expensive - disabled by default, enable for high-end devices
+  ssgiEnabled: false,
+  ssgiRadius: 8,        // World-space sampling radius
+  ssgiIntensity: 15,    // GI intensity (subtle by default)
+  ssgiThickness: 1,     // Object thickness
+
   // FXAA is the safe default - works with all materials
   // TRAA requires velocity output from all materials, which standard materials don't support
   antiAliasingMode: 'fxaa',
@@ -207,6 +225,7 @@ export class RenderPipeline {
   private bloomPass: ReturnType<typeof bloom> | null = null;
   private aoPass: ReturnType<typeof ao> | null = null;
   private ssrPass: ReturnType<typeof ssr> | null = null;
+  private ssgiPass: any | null = null;
   private fxaaPass: ReturnType<typeof fxaa> | null = null;
   private traaPass: ReturnType<typeof traa> | null = null;
 
@@ -294,15 +313,24 @@ export class RenderPipeline {
     // Create scene pass
     const scenePass = pass(this.scene, this.camera);
 
-    // Enable MRT with velocity for TRAA and optionally normals for SSR
+    // Set resolution scale for upscaling - renders scene at lower resolution
+    // The PassNode will render at (width * scale, height * scale)
+    const useUpscaling = this.config.upscalingMode !== 'off' && this.config.renderScale < 1.0;
+    if (useUpscaling) {
+      scenePass.setResolutionScale(this.config.renderScale);
+    }
+
+    // Enable MRT with velocity for TRAA and optionally normals for SSR/SSGI
     // Using custom velocity node that properly handles InstancedMesh via our prevInstanceMatrix attributes
     // This avoids the jiggling issue caused by Three.js's built-in velocity not tracking per-instance transforms
-    if (this.config.ssrEnabled || this.config.taaEnabled) {
-      // Create custom velocity node for proper InstancedMesh velocity
+    const needsNormals = this.config.ssrEnabled || this.config.ssgiEnabled;
+    const needsVelocity = this.config.taaEnabled || this.config.ssgiEnabled; // SSGI uses temporal filtering with TAA
+
+    if (needsNormals || needsVelocity) {
       const customVelocity = createInstancedVelocityNode();
 
-      if (this.config.ssrEnabled) {
-        // SSR needs normals, TRAA needs velocity
+      if (needsNormals) {
+        // SSR/SSGI need normals
         scenePass.setMRT(mrt({
           output: output,
           normal: directionToColor(normalView),
@@ -324,28 +352,73 @@ export class RenderPipeline {
     // Build the effect chain
     let outputNode: any = scenePassColor;
 
-    // 1. EASU upscaling (Edge-Adaptive Spatial Upsampling)
-    // MUST be applied first while we still have a texture node that supports .sample()
-    // Upscales from render resolution to display resolution before other effects
-    if (this.config.upscalingMode === 'easu' && this.config.renderScale < 1.0) {
-      try {
-        // Calculate render resolution based on scale
-        const renderRes = new THREE.Vector2(
-          Math.floor(this.displayWidth * this.config.renderScale),
-          Math.floor(this.displayHeight * this.config.renderScale)
-        );
-        const displayRes = new THREE.Vector2(this.displayWidth, this.displayHeight);
+    // 1. Resolution upscaling (if enabled)
+    // Scene was rendered at lower resolution via setResolutionScale() above
+    // Now upscale to display resolution using selected method
+    if (useUpscaling) {
+      if (this.config.upscalingMode === 'easu') {
+        // EASU - Edge-Adaptive Spatial Upsampling (FSR 1.0 style)
+        // Higher quality edge-preserving upscaling
+        try {
+          const renderRes = new THREE.Vector2(
+            Math.floor(this.displayWidth * this.config.renderScale),
+            Math.floor(this.displayHeight * this.config.renderScale)
+          );
+          const displayRes = new THREE.Vector2(this.displayWidth, this.displayHeight);
 
-        this.easuPass = easuUpscale(outputNode, renderRes, displayRes, this.config.easuSharpness);
-        outputNode = this.easuPass.node;
+          this.easuPass = easuUpscale(outputNode, renderRes, displayRes, this.config.easuSharpness);
+          outputNode = this.easuPass.node;
+        } catch (e) {
+          console.warn('[PostProcessing] EASU upscaling failed:', e);
+        }
+      }
+      // Bilinear mode: GPU linear filtering handles it automatically
+      // The lower-res texture is sampled at display resolution with bilinear interpolation
+      // No extra pass needed - just use outputNode as-is
+    }
+
+    // 2. SSGI (Screen Space Global Illumination) - includes AO
+    // Provides realistic light bouncing between surfaces
+    // SSGI outputs vec4(giColor, ao) - RGB is indirect light, A is occlusion
+    if (this.config.ssgiEnabled) {
+      try {
+        // Get normal texture from MRT and DECODE it
+        const scenePassNormalEncoded = scenePass.getTextureNode('normal');
+        const scenePassNormal = colorToDirection(scenePassNormalEncoded);
+
+        // Create SSGI pass
+        this.ssgiPass = (ssgi as any)(
+          scenePassColor,
+          scenePassDepth,
+          scenePassNormal,
+          this.camera
+        );
+
+        // Configure SSGI parameters
+        if (this.ssgiPass) {
+          // Use low quality for performance (sliceCount=1, stepCount=12 with temporal)
+          this.ssgiPass.sliceCount.value = 1;
+          this.ssgiPass.stepCount.value = 12;
+          this.ssgiPass.radius.value = this.config.ssgiRadius;
+          this.ssgiPass.giIntensity.value = this.config.ssgiIntensity;
+          this.ssgiPass.thickness.value = this.config.ssgiThickness;
+          this.ssgiPass.aoIntensity.value = this.config.aoIntensity; // Use AO intensity setting
+          this.ssgiPass.useTemporalFiltering = this.config.taaEnabled; // Works best with TAA
+        }
+
+        // Apply SSGI: scene * ao + giColor
+        const ssgiResult = this.ssgiPass.getTextureNode();
+        const giColor = ssgiResult.rgb;
+        const aoValue = ssgiResult.a;
+        outputNode = outputNode.mul(aoValue).add(giColor);
       } catch (e) {
-        console.warn('[PostProcessing] EASU upscaling failed:', e);
+        console.warn('[PostProcessing] SSGI initialization failed:', e);
       }
     }
 
-    // 2. GTAO Ambient Occlusion (applied after upscaling, multiplied with scene)
+    // 3. GTAO Ambient Occlusion (skip if SSGI is enabled - it has built-in AO)
     // IMPORTANT: Requires antialias: false on the renderer to avoid multisampled depth texture issues
-    if (this.config.aoEnabled) {
+    if (this.config.aoEnabled && !this.config.ssgiEnabled) {
       try {
         // Use null for normal node - GTAO will reconstruct normals from depth
         this.aoPass = ao(scenePassDepth, null, this.camera);
@@ -363,17 +436,18 @@ export class RenderPipeline {
     }
 
     // 3. SSR (Screen Space Reflections)
-    // Applied after AO, before bloom - reflections pick up scene color
-    // NOTE: SSR needs the raw scene texture (with .sample() method), not processed output
+    // Applied after AO, before bloom - reflections are ADDED to scene
+    // SSR outputs vec4(reflectionColor, opacity) - must blend with scene
     if (this.config.ssrEnabled) {
       try {
-        // Get normal texture from MRT - SSR handles decoding internally
-        const scenePassNormal = scenePass.getTextureNode('normal');
+        // Get normal texture from MRT and DECODE it
+        // We encoded with directionToColor (dir*0.5+0.5), so decode with colorToDirection
+        const scenePassNormalEncoded = scenePass.getTextureNode('normal');
+        const scenePassNormal = colorToDirection(scenePassNormalEncoded);
 
         // Create SSR pass
         // SSR(color, depth, normal, metalness, roughness, camera)
-        // IMPORTANT: Pass scenePassColor (texture), not outputNode (may be processed)
-        const defaultMetalness = float(0.5);
+        const defaultMetalness = float(0.9); // High metalness for visible reflections
         const defaultRoughness = this.uSSRMaxRoughness;
 
         this.ssrPass = (ssr as any)(
@@ -396,16 +470,14 @@ export class RenderPipeline {
           this.ssrPass.thickness.value = this.config.ssrThickness;
         }
 
-        // Blend SSR with current output (which may include AO)
+        // BLEND SSR with scene - SSR outputs vec4(color, alpha)
+        // Add reflections weighted by their opacity
         if (this.ssrPass) {
-          // If AO was applied, we need to apply it to SSR result too
-          if (this.config.aoEnabled && this.aoPass) {
-            const aoValue = this.aoPass.getTextureNode().r;
-            const aoFactor = mix(float(1.0), aoValue, this.uAOIntensity);
-            outputNode = vec3(this.ssrPass).mul(aoFactor);
-          } else {
-            outputNode = this.ssrPass;
-          }
+          const ssrTexture = this.ssrPass.getTextureNode();
+          const ssrColor = ssrTexture.rgb;
+          const ssrAlpha = ssrTexture.a;
+          // Additive blend: scene + reflection * opacity
+          outputNode = outputNode.add(ssrColor.mul(ssrAlpha));
         }
       } catch (e) {
         console.warn('[PostProcessing] SSR initialization failed:', e);
@@ -571,6 +643,7 @@ export class RenderPipeline {
       (config.bloomEnabled !== undefined && config.bloomEnabled !== this.config.bloomEnabled) ||
       (config.aoEnabled !== undefined && config.aoEnabled !== this.config.aoEnabled) ||
       (config.ssrEnabled !== undefined && config.ssrEnabled !== this.config.ssrEnabled) ||
+      (config.ssgiEnabled !== undefined && config.ssgiEnabled !== this.config.ssgiEnabled) ||
       (config.fxaaEnabled !== undefined && config.fxaaEnabled !== this.config.fxaaEnabled) ||
       (config.taaEnabled !== undefined && config.taaEnabled !== this.config.taaEnabled) ||
       (config.antiAliasingMode !== undefined && config.antiAliasingMode !== this.config.antiAliasingMode) ||
@@ -613,6 +686,14 @@ export class RenderPipeline {
       }
     }
     this.uSSRMaxRoughness.value = this.config.ssrMaxRoughness;
+
+    // Update SSGI parameters
+    if (this.ssgiPass) {
+      this.ssgiPass.radius.value = this.config.ssgiRadius;
+      this.ssgiPass.giIntensity.value = this.config.ssgiIntensity;
+      this.ssgiPass.thickness.value = this.config.ssgiThickness;
+      this.ssgiPass.aoIntensity.value = this.config.aoIntensity;
+    }
 
     // Update sharpening parameters
     this.uSharpeningIntensity.value = this.config.taaSharpeningIntensity;

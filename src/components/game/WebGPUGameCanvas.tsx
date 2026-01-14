@@ -432,6 +432,10 @@ export function WebGPUGameCanvas() {
             ssrEnabled: graphicsSettings.ssrEnabled,
             ssrOpacity: graphicsSettings.ssrOpacity,
             ssrMaxRoughness: graphicsSettings.ssrMaxRoughness,
+            ssgiEnabled: graphicsSettings.ssgiEnabled,
+            ssgiRadius: graphicsSettings.ssgiRadius,
+            ssgiIntensity: graphicsSettings.ssgiIntensity,
+            ssgiThickness: 1,
             antiAliasingMode: graphicsSettings.antiAliasingMode,
             fxaaEnabled: graphicsSettings.fxaaEnabled,
             taaEnabled: graphicsSettings.taaEnabled,
@@ -448,8 +452,8 @@ export function WebGPUGameCanvas() {
           }
         );
 
-        // Initialize camera matrices for TAA velocity calculation
-        if (graphicsSettings.taaEnabled) {
+        // Initialize camera matrices for TAA/SSGI velocity calculation
+        if (graphicsSettings.taaEnabled || graphicsSettings.ssgiEnabled) {
           initCameraMatrices(camera.camera);
         }
       }
@@ -1580,6 +1584,10 @@ export function WebGPUGameCanvas() {
           ssrEnabled: settings.ssrEnabled,
           ssrOpacity: settings.ssrOpacity,
           ssrMaxRoughness: settings.ssrMaxRoughness,
+          ssgiEnabled: settings.ssgiEnabled,
+          ssgiRadius: settings.ssgiRadius,
+          ssgiIntensity: settings.ssgiIntensity,
+          ssgiThickness: 1, // Fixed value, not exposed in UI
           antiAliasingMode: settings.antiAliasingMode,
           fxaaEnabled: settings.fxaaEnabled,
           taaEnabled: settings.taaEnabled,
@@ -1619,6 +1627,10 @@ export function WebGPUGameCanvas() {
               ssrEnabled: settings.ssrEnabled,
               ssrOpacity: settings.ssrOpacity,
               ssrMaxRoughness: settings.ssrMaxRoughness,
+              ssgiEnabled: settings.ssgiEnabled,
+              ssgiRadius: settings.ssgiRadius,
+              ssgiIntensity: settings.ssgiIntensity,
+              ssgiThickness: 1,
               antiAliasingMode: settings.antiAliasingMode,
               fxaaEnabled: settings.fxaaEnabled,
               taaEnabled: settings.taaEnabled,

@@ -260,6 +260,7 @@ export const GraphicsOptionsPanel = memo(function GraphicsOptionsPanel() {
     antialiasing: true,
     lighting: false,
     reflections: false,
+    gi: false,
     effects: false,
     color: false,
   });
@@ -373,17 +374,22 @@ export const GraphicsOptionsPanel = memo(function GraphicsOptionsPanel() {
         <div style={{ marginBottom: '12px' }}>
           <div style={{ marginBottom: '8px' }}>
             <span style={{ fontSize: '10px', color: '#666', display: 'block', marginBottom: '4px' }}>
-              Upscaling
+              Upscaling Mode
             </span>
             <SegmentedControl
               options={[
                 { value: 'off', label: 'Native' },
-                { value: 'easu', label: 'EASU' },
+                { value: 'easu', label: 'FSR' },
                 { value: 'bilinear', label: 'Bilinear' },
               ]}
               value={graphicsSettings.upscalingMode}
               onChange={(v) => setUpscalingMode(v as UpscalingMode)}
             />
+            <div style={{ fontSize: '9px', color: '#555', marginTop: '4px' }}>
+              {graphicsSettings.upscalingMode === 'off' && 'Full resolution rendering'}
+              {graphicsSettings.upscalingMode === 'easu' && 'AMD FSR 1.0 edge-adaptive upscaling'}
+              {graphicsSettings.upscalingMode === 'bilinear' && 'Fast GPU bilinear filtering'}
+            </div>
           </div>
           {graphicsSettings.upscalingMode !== 'off' && (
             <>
@@ -563,6 +569,43 @@ export const GraphicsOptionsPanel = memo(function GraphicsOptionsPanel() {
             max={1}
             step={0.1}
             onChange={(v) => setGraphicsSetting('ssrMaxRoughness', v)}
+          />
+        </div>
+      )}
+
+      {/* ===== GLOBAL ILLUMINATION ===== */}
+      <SectionHeader
+        title="Global Illumination"
+        expanded={expanded.gi}
+        onToggle={() => toggleSection('gi')}
+        badge="performance"
+        masterToggle={{
+          enabled: graphicsSettings.ssgiEnabled,
+          onChange: () => handleToggle('ssgiEnabled'),
+        }}
+      />
+      {expanded.gi && graphicsSettings.ssgiEnabled && (
+        <div style={{ marginBottom: '12px' }}>
+          <div style={{ fontSize: '9px', color: '#555', marginBottom: '8px' }}>
+            Realistic light bouncing between surfaces. Works best with TAA.
+          </div>
+          <CompactSlider
+            label="Radius"
+            value={graphicsSettings.ssgiRadius}
+            min={1}
+            max={25}
+            step={1}
+            onChange={(v) => setGraphicsSetting('ssgiRadius', v)}
+            format={(v) => v.toString()}
+          />
+          <CompactSlider
+            label="Intensity"
+            value={graphicsSettings.ssgiIntensity}
+            min={0}
+            max={50}
+            step={1}
+            onChange={(v) => setGraphicsSetting('ssgiIntensity', v)}
+            format={(v) => v.toString()}
           />
         </div>
       )}
