@@ -740,10 +740,18 @@ export function WebGPUGameCanvas() {
         }
 
         // Throttle zustand store updates
-        if (deltaTime > 0 && Math.floor(currentTime / 100) !== Math.floor(prevTime / 100)) {
-          useGameStore.getState().setGameTime(gameTime);
-          const pos = camera.getPosition();
-          useGameStore.getState().setCamera(pos.x, pos.z, camera.getZoom());
+        if (deltaTime > 0) {
+          // Update game time once per second (only displays MM:SS)
+          if (Math.floor(currentTime / 1000) !== Math.floor(prevTime / 1000)) {
+            if (!gameRef.current?.gameStateSystem.isGameFinished()) {
+              useGameStore.getState().setGameTime(gameTime);
+            }
+          }
+          // Update camera position every 100ms for responsive UI
+          if (Math.floor(currentTime / 100) !== Math.floor(prevTime / 100)) {
+            const pos = camera.getPosition();
+            useGameStore.getState().setCamera(pos.x, pos.z, camera.getZoom());
+          }
         }
 
         // Render with post-processing
