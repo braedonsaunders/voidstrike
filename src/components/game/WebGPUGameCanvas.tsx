@@ -856,6 +856,17 @@ export function WebGPUGameCanvas() {
                   const parent = obj.parent?.name || obj.parent?.type || '';
                   const key = parent ? `${parent}/${name}` : name;
                   breakdown[key] = (breakdown[key] || 0) + tris;
+
+                  // Log any individual mesh with >1M triangles with more detail
+                  if (tris > 1000000) {
+                    const geoUuid = geo.uuid.substring(0, 8);
+                    const meshUuid = obj.uuid.substring(0, 8);
+                    console.warn(`[HIGH POLY MESH] "${name}" (mesh:${meshUuid}, geo:${geoUuid})`);
+                    console.warn(`  Parent: ${obj.parent?.name || obj.parent?.type || 'Scene'}`);
+                    console.warn(`  Triangles: ${(tris/1000000).toFixed(2)}M, Vertices: ${posCount}, Indices: ${indexCount}`);
+                    console.warn(`  Position: (${obj.position.x.toFixed(1)}, ${obj.position.y.toFixed(1)}, ${obj.position.z.toFixed(1)})`);
+                    console.warn(`  userData: ${JSON.stringify(obj.userData || {})}`);
+                  }
                 }
               }
             });
