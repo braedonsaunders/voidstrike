@@ -486,7 +486,7 @@ export default function HomeBackground() {
   }, []);
 
   const createNebulaBackground = useCallback((scene: THREE.Scene) => {
-    const geometry = new THREE.PlaneGeometry(100, 100);
+    const geometry = new THREE.PlaneGeometry(200, 200);
     const material = new THREE.ShaderMaterial({
       uniforms: VoidNebulaShader.uniforms,
       vertexShader: VoidNebulaShader.vertexShader,
