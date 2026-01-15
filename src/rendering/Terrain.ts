@@ -1454,10 +1454,9 @@ export class Terrain {
     const WALL_HEIGHT = 4.0; // Height of cliff walls (taller than walkableClimb)
     const ELEVATION_DIFF_THRESHOLD = 40; // ~1.6 height units difference
 
-    // Pre-compute ramp zones - cells within radius of a ramp don't get walls
-    // Radius of 4 ensures smooth transitions and prevents walls from blocking ramps
+    // Pre-compute ramp zones - cells within radius of a ramp use smooth heightMap
     const rampZone = new Set<string>();
-    const RAMP_ZONE_RADIUS = 4;
+    const RAMP_ZONE_RADIUS = 3;
 
     for (let y = 0; y < height; y++) {
       for (let x = 0; x < width; x++) {
@@ -1475,6 +1474,35 @@ export class Terrain {
       }
     }
 
+    // Pre-compute cliff edge cells - cells adjacent to unwalkable terrain
+    // These need flat heights to prevent the smoothed heightMap from creating slopes
+    const cliffEdgeCells = new Set<string>();
+    for (let y = 0; y < height; y++) {
+      for (let x = 0; x < width; x++) {
+        const cell = terrain[y][x];
+        if (cell.terrain === 'unwalkable' || cell.terrain === 'ramp') continue;
+        if (rampZone.has(`${x},${y}`)) continue;
+
+        // Check 8 neighbors for unwalkable terrain
+        let isCliffEdge = false;
+        for (let dy = -1; dy <= 1 && !isCliffEdge; dy++) {
+          for (let dx = -1; dx <= 1 && !isCliffEdge; dx++) {
+            if (dx === 0 && dy === 0) continue;
+            const nx = x + dx;
+            const ny = y + dy;
+            if (nx >= 0 && nx < width && ny >= 0 && ny < height) {
+              if (terrain[ny][nx].terrain === 'unwalkable') {
+                isCliffEdge = true;
+              }
+            }
+          }
+        }
+        if (isCliffEdge) {
+          cliffEdgeCells.add(`${x},${y}`);
+        }
+      }
+    }
+
     // Helper: Check if a cell is walkable for pathfinding
     const isCellWalkable = (cx: number, cy: number): boolean => {
       if (cx < 0 || cx >= width || cy < 0 || cy >= height) return false;
@@ -1485,13 +1513,23 @@ export class Terrain {
       return featureConfig.walkable;
     };
 
-    // Helper: Get height for a cell from the heightMap
-    // We use smooth heightMap everywhere for natural terrain
-    // Cliff blocking is handled by wall geometry + low walkableClimb
-    const getCellHeight = (cx: number, cy: number): number => {
-      const hx = Math.max(0, Math.min(cx, this.gridWidth - 1));
-      const hy = Math.max(0, Math.min(cy, this.gridHeight - 1));
-      return this.heightMap[hy * this.gridWidth + hx];
+    // Helper: Get height for a vertex
+    const getVertexHeight = (vx: number, vy: number, cellX: number, cellY: number, isRamp: boolean, isCliffEdge: boolean): number => {
+      if (isRamp) {
+        // Ramps use smooth heightMap
+        const hx = Math.max(0, Math.min(vx, this.gridWidth - 1));
+        const hy = Math.max(0, Math.min(vy, this.gridHeight - 1));
+        return this.heightMap[hy * this.gridWidth + hx];
+      } else if (isCliffEdge) {
+        // Cliff edges use FLAT elevation height to prevent slopes
+        const cell = terrain[Math.min(cellY, height - 1)][Math.min(cellX, width - 1)];
+        return elevationToHeight(cell.elevation);
+      } else {
+        // Normal ground uses heightMap
+        const hx = Math.max(0, Math.min(vx, this.gridWidth - 1));
+        const hy = Math.max(0, Math.min(vy, this.gridHeight - 1));
+        return this.heightMap[hy * this.gridWidth + hx];
+      }
     };
 
     // Helper: Check if a cliff wall is needed between two cells
@@ -1499,7 +1537,6 @@ export class Terrain {
       cx: number, cy: number,
       nx: number, ny: number
     ): { needed: boolean; topHeight: number; bottomHeight: number } => {
-      // Out of bounds - no wall
       if (nx < 0 || nx >= width || ny < 0 || ny >= height) {
         return { needed: false, topHeight: 0, bottomHeight: 0 };
       }
@@ -1507,14 +1544,14 @@ export class Terrain {
       const cell = terrain[cy][cx];
       const neighbor = terrain[ny][nx];
 
-      // If either cell is in ramp zone, no walls (ramps handle transitions)
+      // No walls in ramp zones
       if (rampZone.has(`${cx},${cy}`) || rampZone.has(`${nx},${ny}`)) {
         return { needed: false, topHeight: 0, bottomHeight: 0 };
       }
 
-      // If neighbor is unwalkable (cliff face), we need a wall
+      // Wall needed if neighbor is unwalkable (cliff face)
       if (neighbor.terrain === 'unwalkable') {
-        const cellHeight = getCellHeight(cx, cy);
+        const cellHeight = elevationToHeight(cell.elevation);
         return {
           needed: true,
           topHeight: cellHeight,
@@ -1522,14 +1559,12 @@ export class Terrain {
         };
       }
 
-      // If both walkable but at different elevation levels, we need a wall
-      // This catches cases where two walkable areas at different elevations
-      // are adjacent (e.g., across a narrow unwalkable gap)
+      // Wall needed if significant elevation difference between walkable cells
       if (neighbor.terrain !== 'ramp' && cell.terrain !== 'ramp') {
         const elevDiff = Math.abs(cell.elevation - neighbor.elevation);
         if (elevDiff > ELEVATION_DIFF_THRESHOLD) {
-          const cellHeight = getCellHeight(cx, cy);
-          const neighborHeight = getCellHeight(nx, ny);
+          const cellHeight = elevationToHeight(cell.elevation);
+          const neighborHeight = elevationToHeight(neighbor.elevation);
           return {
             needed: true,
             topHeight: Math.max(cellHeight, neighborHeight),
@@ -1548,12 +1583,15 @@ export class Terrain {
       for (let x = 0; x < width; x++) {
         if (!isCellWalkable(x, y)) continue;
 
-        // Get heights for cell corners from heightMap
-        // Smooth terrain everywhere - cliffs blocked by walls + walkableClimb
-        const h00 = getCellHeight(x, y);
-        const h10 = getCellHeight(x + 1, y);
-        const h01 = getCellHeight(x, y + 1);
-        const h11 = getCellHeight(x + 1, y + 1);
+        const cell = terrain[y][x];
+        const isRamp = cell.terrain === 'ramp' || rampZone.has(`${x},${y}`);
+        const isCliffEdge = cliffEdgeCells.has(`${x},${y}`);
+
+        // Get heights for cell corners
+        const h00 = getVertexHeight(x, y, x, y, isRamp, isCliffEdge);
+        const h10 = getVertexHeight(x + 1, y, x, y, isRamp, isCliffEdge);
+        const h01 = getVertexHeight(x, y + 1, x, y, isRamp, isCliffEdge);
+        const h11 = getVertexHeight(x + 1, y + 1, x, y, isRamp, isCliffEdge);
 
         // Create two triangles for floor (CCW winding for Recast)
         vertices.push(x, h00, y);
@@ -1575,29 +1613,24 @@ export class Terrain {
     // ========================================
     // PASS 2: Generate cliff wall geometry
     // ========================================
-    // Walls act as barriers that Recast cannot path through
     for (let y = 0; y < height; y++) {
       for (let x = 0; x < width; x++) {
         if (!isCellWalkable(x, y)) continue;
-
-        // Skip ramps - they don't need walls
         if (terrain[y][x].terrain === 'ramp') continue;
         if (rampZone.has(`${x},${y}`)) continue;
 
-        // Check 4 cardinal directions for cliff edges
         // Vertical edges (left/right walls)
         const verticalEdges = [
-          { nx: x + 1, ny: y, edgeX: x + 1, y1: y, y2: y + 1 },  // Right
-          { nx: x - 1, ny: y, edgeX: x, y1: y, y2: y + 1 },      // Left
+          { nx: x + 1, ny: y, edgeX: x + 1, y1: y, y2: y + 1 },
+          { nx: x - 1, ny: y, edgeX: x, y1: y, y2: y + 1 },
         ];
 
         // Horizontal edges (top/bottom walls)
         const horizontalEdges = [
-          { nx: x, ny: y + 1, edgeY: y + 1, x1: x, x2: x + 1 },  // Bottom
-          { nx: x, ny: y - 1, edgeY: y, x1: x, x2: x + 1 },      // Top
+          { nx: x, ny: y + 1, edgeY: y + 1, x1: x, x2: x + 1 },
+          { nx: x, ny: y - 1, edgeY: y, x1: x, x2: x + 1 },
         ];
 
-        // Process vertical walls
         for (const edge of verticalEdges) {
           const wallInfo = needsCliffWall(x, y, edge.nx, edge.ny);
           if (wallInfo.needed) {
@@ -1607,7 +1640,6 @@ export class Terrain {
               edge.edgeX, wallInfo.bottomHeight, edge.y1,
               edge.edgeX, wallInfo.bottomHeight, edge.y2
             );
-            // Two triangles for the wall quad (both sides for robustness)
             indices.push(vertexIndex, vertexIndex + 1, vertexIndex + 2);
             indices.push(vertexIndex + 1, vertexIndex + 3, vertexIndex + 2);
             indices.push(vertexIndex, vertexIndex + 2, vertexIndex + 1);
@@ -1616,7 +1648,6 @@ export class Terrain {
           }
         }
 
-        // Process horizontal walls
         for (const edge of horizontalEdges) {
           const wallInfo = needsCliffWall(x, y, edge.nx, edge.ny);
           if (wallInfo.needed) {
@@ -1626,7 +1657,6 @@ export class Terrain {
               edge.x1, wallInfo.bottomHeight, edge.edgeY,
               edge.x2, wallInfo.bottomHeight, edge.edgeY
             );
-            // Two triangles for the wall quad (both sides for robustness)
             indices.push(vertexIndex, vertexIndex + 1, vertexIndex + 2);
             indices.push(vertexIndex + 1, vertexIndex + 3, vertexIndex + 2);
             indices.push(vertexIndex, vertexIndex + 2, vertexIndex + 1);
@@ -1641,7 +1671,8 @@ export class Terrain {
 
     debugTerrain.log(
       `[Terrain] Generated walkable geometry: ${vertices.length / 3} vertices, ` +
-      `${floorTriangles} floor triangles, ${wallTriangles} wall triangles`
+      `${floorTriangles} floor triangles, ${wallTriangles} wall triangles, ` +
+      `${cliffEdgeCells.size} cliff edge cells`
     );
 
     return {
