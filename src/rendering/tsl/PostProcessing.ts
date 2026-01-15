@@ -51,15 +51,13 @@ import {
   mrt,
   output,
   normalView,
-  materialMetalness,
-  materialRoughness,
 } from 'three/tsl';
-// directionToColor for normal encoding in MRT
-// NOTE: We do NOT use colorToDirection before passing to SSR/SSGI
-// SSR/SSGI need texture nodes with .sample() - colorToDirection returns Fn nodes
+// Access TSL exports that lack TypeScript declarations
 // eslint-disable-next-line @typescript-eslint/no-require-imports
 import * as TSL from 'three/tsl';
 const directionToColor = (TSL as any).directionToColor;
+const materialMetalness = (TSL as any).materialMetalness;
+const materialRoughness = (TSL as any).materialRoughness;
 
 // Import WebGPU post-processing nodes from addons
 import { bloom } from 'three/addons/tsl/display/BloomNode.js';
