@@ -3,7 +3,6 @@
 import { useGameStore } from '@/store/gameStore';
 import { useUIStore } from '@/store/uiStore';
 import { useEffect } from 'react';
-import { setEdgeScrollEnabled } from '@/store/cameraStore';
 
 interface ShortcutCategory {
   name: string;
@@ -68,18 +67,12 @@ const SHORTCUTS: ShortcutCategory[] = [
   },
 ];
 
+/**
+ * Keyboard shortcuts help panel
+ * NOTE: Edge scrolling is now controlled centrally by HUD.tsx via isAnyMenuOpen selector
+ */
 export function KeyboardShortcutsPanel() {
   const { showKeyboardShortcuts, setShowKeyboardShortcuts } = useGameStore();
-
-  // Disable edge scrolling when panel is open
-  useEffect(() => {
-    if (showKeyboardShortcuts) {
-      setEdgeScrollEnabled(false);
-      return () => {
-        setEdgeScrollEnabled(true);
-      };
-    }
-  }, [showKeyboardShortcuts]);
 
   // Close on escape
   useEffect(() => {

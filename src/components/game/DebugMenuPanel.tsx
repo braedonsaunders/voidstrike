@@ -1,9 +1,8 @@
 'use client';
 
-import React, { useEffect, memo } from 'react';
+import React, { memo } from 'react';
 import { useUIStore, DebugSettings } from '@/store/uiStore';
 import { isMultiplayerMode } from '@/store/gameSetupStore';
-import { setEdgeScrollEnabled } from '@/store/cameraStore';
 
 interface DebugSettingInfo {
   key: keyof DebugSettings;
@@ -98,6 +97,7 @@ function SectionHeader({ title }: { title: string }) {
  * In-game debug menu panel
  * Access via Options menu -> Debug
  * Controls which debug logging categories are enabled
+ * NOTE: Edge scrolling is now controlled centrally by HUD.tsx via isAnyMenuOpen selector
  * PERF: Wrapped in memo to prevent unnecessary re-renders
  */
 export const DebugMenuPanel = memo(function DebugMenuPanel() {
@@ -106,16 +106,6 @@ export const DebugMenuPanel = memo(function DebugMenuPanel() {
   const toggleDebugMenu = useUIStore((state) => state.toggleDebugMenu);
   const toggleDebugSetting = useUIStore((state) => state.toggleDebugSetting);
   const setAllDebugSettings = useUIStore((state) => state.setAllDebugSettings);
-
-  // Disable edge scrolling when panel is open
-  useEffect(() => {
-    if (showDebugMenu) {
-      setEdgeScrollEnabled(false);
-      return () => {
-        setEdgeScrollEnabled(true);
-      };
-    }
-  }, [showDebugMenu]);
 
   // Hide debug menu in multiplayer mode (multiple human players)
   if (!showDebugMenu || isMultiplayerMode()) return null;

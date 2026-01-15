@@ -1,8 +1,8 @@
 'use client';
 
-import { useState, useCallback, useEffect, useMemo, memo } from 'react';
+import { useCallback, useEffect, memo } from 'react';
 import { useGameStore } from '@/store/gameStore';
-import { useUIStore, GameOverlayType } from '@/store/uiStore';
+import { useUIStore, isAnyMenuOpen } from '@/store/uiStore';
 import { isMultiplayerMode, useGameSetupStore } from '@/store/gameSetupStore';
 import { setEdgeScrollEnabled } from '@/store/cameraStore';
 import { Minimap } from './Minimap';
@@ -19,12 +19,24 @@ import { BattleSimulatorPanel } from './BattleSimulatorPanel';
 
 // PERF: Wrap HUD in memo to prevent unnecessary re-renders when parent state changes
 export const HUD = memo(function HUD() {
-  const { isPaused, togglePause, setShowTechTree, setShowKeyboardShortcuts, isGameReady } = useGameStore();
-  const { toggleGraphicsOptions, showGraphicsOptions, toggleSoundOptions, showSoundOptions, toggleDebugMenu, showDebugMenu, togglePerformancePanel, showPerformancePanel, isFullscreen, toggleFullscreen, setFullscreen, overlaySettings, toggleOverlay } = useUIStore();
+  const { isPaused, togglePause, setShowTechTree, setShowKeyboardShortcuts, showKeyboardShortcuts, showTechTree, isGameReady } = useGameStore();
+  const {
+    toggleGraphicsOptions, showGraphicsOptions,
+    toggleSoundOptions, showSoundOptions,
+    toggleDebugMenu, showDebugMenu,
+    togglePerformancePanel, showPerformancePanel,
+    isFullscreen, toggleFullscreen, setFullscreen,
+    overlaySettings, toggleOverlay,
+    // Centralized menu state
+    showOptionsMenu, setShowOptionsMenu,
+    showOverlayMenu, setShowOverlayMenu,
+    showPlayerStatus, setShowPlayerStatus,
+  } = useUIStore();
   const isBattleSimulator = useGameSetupStore((state) => state.isBattleSimulator);
-  const [showOptionsMenu, setShowOptionsMenu] = useState(false);
-  const [showPlayerStatus, setShowPlayerStatus] = useState(false);
-  const [showOverlayMenu, setShowOverlayMenu] = useState(false);
+
+  // Single source of truth for whether any menu is open (for edge scroll control)
+  const anyMenuOpen = useUIStore(isAnyMenuOpen);
+  const anyModalOpen = showKeyboardShortcuts || showTechTree;
 
   // Disable edge scrolling when mouse is over UI elements
   // IMPORTANT: All hooks must be called before any early returns to comply with React's rules of hooks
@@ -36,25 +48,12 @@ export const HUD = memo(function HUD() {
     setEdgeScrollEnabled(true);
   }, []);
 
-  // Disable edge scrolling when game is paused
+  // CENTRALIZED edge scroll control - single source of truth
+  // Disable edge scrolling when game is paused OR any menu/modal is open
   useEffect(() => {
-    if (isPaused) {
-      setEdgeScrollEnabled(false);
-      return () => {
-        setEdgeScrollEnabled(true);
-      };
-    }
-  }, [isPaused]);
-
-  // Disable edge scrolling when any HUD dropdown/panel is open
-  useEffect(() => {
-    if (showOptionsMenu || showOverlayMenu || showPlayerStatus) {
-      setEdgeScrollEnabled(false);
-      return () => {
-        setEdgeScrollEnabled(true);
-      };
-    }
-  }, [showOptionsMenu, showOverlayMenu, showPlayerStatus]);
+    const shouldDisableEdgeScroll = isPaused || anyMenuOpen || anyModalOpen;
+    setEdgeScrollEnabled(!shouldDisableEdgeScroll);
+  }, [isPaused, anyMenuOpen, anyModalOpen]);
 
   // Sync fullscreen state with browser
   useEffect(() => {
@@ -126,9 +125,7 @@ export const HUD = memo(function HUD() {
                   Controls
                 </button>
                 <button
-                  onClick={() => {
-                    setShowPlayerStatus(!showPlayerStatus);
-                  }}
+                  onClick={() => setShowPlayerStatus(!showPlayerStatus)}
                   className="w-full px-4 py-2 text-left text-sm text-void-200 hover:bg-void-800 transition-colors flex justify-between items-center"
                 >
                   <span>Players</span>
