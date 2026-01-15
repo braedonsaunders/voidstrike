@@ -857,6 +857,11 @@ export function WebGPUGameCanvas() {
                   const key = parent ? `${parent}/${name}` : name;
                   breakdown[key] = (breakdown[key] || 0) + tris;
 
+                  // Log meshes named Mesh10 or with >100K triangles
+                  if (name.includes('Mesh10') || name.includes('Mesh') && tris > 100000) {
+                    console.warn(`[MESH DEBUG] "${name}" raw tris: ${tris.toFixed(0)}, vertices: ${posCount}, indices: ${indexCount}`);
+                  }
+
                   // Log any individual mesh with >1M triangles with more detail
                   if (tris > 1000000) {
                     const geoUuid = geo.uuid.substring(0, 8);
