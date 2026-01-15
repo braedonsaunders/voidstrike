@@ -409,27 +409,50 @@ def voxel_remesh_and_decimate(high_poly, target_faces, base_name, lod_name):
     lod = bpy.context.active_object
     lod.name = f"{base_name}_{lod_name}"
 
-    # Calculate voxel size based on mesh bounds
-    # Smaller = more detail preserved, larger = smoother
+    # Calculate voxel size based on mesh bounds AND face count
+    # Larger voxel = faster, less memory, but less detail
     dims = lod.dimensions
     max_dim = max(dims.x, dims.y, dims.z)
+    current_faces = len(lod.data.polygons)
 
-    # Voxel size: aim for roughly 50K faces after remesh, then decimate down
-    # This preserves detail better than going straight to low poly
-    voxel_size = max_dim / 150  # Adjust divisor for detail level
+    # Scale voxel size based on mesh complexity to avoid crashes
+    # More faces = larger voxel size to keep memory manageable
+    if current_faces > 500000:
+        divisor = 80  # Very large mesh - coarse voxels
+    elif current_faces > 200000:
+        divisor = 100  # Large mesh
+    elif current_faces > 100000:
+        divisor = 120  # Medium mesh
+    else:
+        divisor = 150  # Small mesh - finer voxels
 
-    print(f"      Voxel remesh (size: {voxel_size:.4f})...")
+    voxel_size = max_dim / divisor
 
-    # Add Voxel Remesh modifier
-    remesh = lod.modifiers.new("VoxelRemesh", 'REMESH')
-    remesh.mode = 'VOXEL'
-    remesh.voxel_size = voxel_size
-    remesh.adaptivity = 0.1  # Slight adaptivity for efficiency
+    # Ensure minimum voxel size to prevent memory issues
+    min_voxel = max_dim / 200
+    voxel_size = max(voxel_size, min_voxel, 0.01)
 
-    bpy.ops.object.modifier_apply(modifier="VoxelRemesh")
+    print(f"      Voxel remesh (size: {voxel_size:.4f}, faces: {current_faces:,})...")
 
-    post_voxel_faces = len(lod.data.polygons)
-    print(f"      After voxel: {post_voxel_faces:,} faces")
+    try:
+        # Add Voxel Remesh modifier
+        remesh = lod.modifiers.new("VoxelRemesh", 'REMESH')
+        remesh.mode = 'VOXEL'
+        remesh.voxel_size = voxel_size
+        remesh.adaptivity = 0.2  # More adaptivity for efficiency
+
+        bpy.ops.object.modifier_apply(modifier="VoxelRemesh")
+
+        post_voxel_faces = len(lod.data.polygons)
+        print(f"      After voxel: {post_voxel_faces:,} faces")
+
+    except Exception as e:
+        print(f"      Voxel remesh failed: {e}")
+        print(f"      Using direct decimate instead...")
+        # Remove failed modifier if it exists
+        if "VoxelRemesh" in lod.modifiers:
+            lod.modifiers.remove(lod.modifiers["VoxelRemesh"])
+        post_voxel_faces = current_faces
 
     # Now decimate to target
     if post_voxel_faces > target_faces:
@@ -438,10 +461,15 @@ def voxel_remesh_and_decimate(high_poly, target_faces, base_name, lod_name):
 
         decimate = lod.modifiers.new("Decimate", 'DECIMATE')
         decimate.decimate_type = 'COLLAPSE'
-        decimate.ratio = ratio
+        decimate.ratio = max(0.001, ratio)  # Prevent zero ratio
         decimate.use_collapse_triangulate = True
 
-        bpy.ops.object.modifier_apply(modifier="Decimate")
+        try:
+            bpy.ops.object.modifier_apply(modifier="Decimate")
+        except Exception as e:
+            print(f"      Decimate failed: {e}")
+            if "Decimate" in lod.modifiers:
+                lod.modifiers.remove(lod.modifiers["Decimate"])
 
     # Match transform
     lod.location = high_poly.location
