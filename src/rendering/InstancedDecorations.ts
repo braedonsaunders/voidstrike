@@ -11,6 +11,10 @@ const _frustum = new THREE.Frustum();
 const _frustumMatrix = new THREE.Matrix4();
 const _tempVec3 = new THREE.Vector3();
 
+// Debug counter for frustum culling (removed in production)
+let _debugFrameCount = 0;
+const DEBUG_FRUSTUM_CULLING = true; // Set to true to see culling stats
+
 /**
  * Update the shared frustum from camera matrices.
  * Call once per frame before updating all decoration classes.
@@ -19,6 +23,14 @@ export function updateDecorationFrustum(camera: THREE.Camera): void {
   camera.updateMatrixWorld();
   _frustumMatrix.multiplyMatrices(camera.projectionMatrix, camera.matrixWorldInverse);
   _frustum.setFromProjectionMatrix(_frustumMatrix);
+  _debugFrameCount++;
+
+  // Debug: Log frustum planes on first frame
+  if (DEBUG_FRUSTUM_CULLING && _debugFrameCount === 1) {
+    console.log('[Decoration Frustum] Camera position:', camera.position.toArray());
+    console.log('[Decoration Frustum] Camera target:', (camera as any).target?.toArray?.() || 'N/A');
+    console.log('[Decoration Frustum] Frustum planes set');
+  }
 }
 
 /**
@@ -417,8 +429,12 @@ export class InstancedTrees {
    * Call this every frame after updateDecorationFrustum().
    */
   public update(): void {
+    let totalVisible = 0;
+    let totalInstances = 0;
+
     for (const { mesh, instances, maxCount } of this.instancedMeshes) {
       let visibleCount = 0;
+      totalInstances += maxCount;
 
       for (let i = 0; i < maxCount; i++) {
         const inst = instances[i];
@@ -441,6 +457,11 @@ export class InstancedTrees {
 
       mesh.count = visibleCount;
       mesh.instanceMatrix.needsUpdate = true;
+      totalVisible += visibleCount;
+    }
+
+    if (DEBUG_FRUSTUM_CULLING && _debugFrameCount % 60 === 0) {
+      console.log(`[Trees] Visible: ${totalVisible}/${totalInstances} (${((totalVisible/totalInstances)*100).toFixed(1)}%)`);
     }
   }
 
