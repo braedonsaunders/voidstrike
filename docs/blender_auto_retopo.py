@@ -104,6 +104,17 @@ SETTINGS = {
 }
 
 # =============================================================================
+# TEST MODE - Set to True to test with just ONE model
+# =============================================================================
+# When enabled:
+#   - Only processes the FIRST model found
+#   - Keeps all objects in scene (high-poly + LODs) for inspection
+#   - Does NOT export or save anything
+#   - Stops script after processing
+#   - Great for tuning LOD_TARGETS before batch processing
+TEST_MODE = True  # <-- SET TO False FOR FULL BATCH PROCESSING
+
+# =============================================================================
 # USER INTERACTION
 # =============================================================================
 
@@ -405,6 +416,33 @@ def process_static_model(filepath, category, temp_dir, output_dir):
         **lod_stats
     }
 
+    # TEST MODE: Just show results and stop
+    if TEST_MODE:
+        # Arrange objects for easy viewing
+        spacing = 3.0
+        high_poly.location.x = -spacing
+        high_poly.name = f"{filename}_ORIGINAL"
+        for i, lod in enumerate(lods):
+            lod.location.x = i * spacing
+
+        # Frame all objects
+        UserPrompt.refresh_viewport_and_frame([high_poly] + lods)
+
+        print("\n" + "="*60)
+        print("  TEST MODE COMPLETE")
+        print("="*60)
+        print(f"  Model: {filename}")
+        print(f"  Original: {original_faces:,} faces (left)")
+        print(f"  LOD0: {lod_stats.get('lod0_faces', 'N/A'):,} faces")
+        print(f"  LOD1: {lod_stats.get('lod1_faces', 'N/A'):,} faces")
+        print(f"  LOD2: {lod_stats.get('lod2_faces', 'N/A'):,} faces")
+        print("-"*60)
+        print("  Objects kept in scene for inspection.")
+        print("  Nothing was saved or exported.")
+        print("  Set TEST_MODE = False for batch processing.")
+        print("="*60)
+        return "test_done"
+
     # Wait for approval (pass LOD objects so viewport can frame them)
     response = UserPrompt.wait_for_approval(filename, category, stats, lod_objects=lods)
 
@@ -615,6 +653,40 @@ def process_animated_model(filepath, category, temp_dir, output_dir):
         "animation_count": len(bpy.data.actions) if bpy.data.actions else 0,
         **lod_stats
     }
+
+    # TEST MODE: Just show results and stop
+    if TEST_MODE:
+        # Arrange objects for easy viewing
+        spacing = 3.0
+        high_poly.location.x = -spacing
+        high_poly.name = f"{filename}_ORIGINAL"
+        for i, lod in enumerate(lods):
+            lod.location.x = i * spacing
+
+        # Frame all objects (include armature if present)
+        all_objects = [high_poly] + lods
+        if armature_obj:
+            all_objects.append(armature_obj)
+        UserPrompt.refresh_viewport_and_frame(all_objects)
+
+        anim_count = len(bpy.data.actions) if bpy.data.actions else 0
+        print("\n" + "="*60)
+        print("  TEST MODE COMPLETE")
+        print("="*60)
+        print(f"  Model: {filename}")
+        print(f"  Original: {original_faces:,} faces (left)")
+        print(f"  LOD0: {lod_stats.get('lod0_faces', 'N/A'):,} faces")
+        print(f"  LOD1: {lod_stats.get('lod1_faces', 'N/A'):,} faces")
+        print(f"  LOD2: {lod_stats.get('lod2_faces', 'N/A'):,} faces")
+        if armature_obj:
+            print(f"  Armature: {armature_obj.name} ✓")
+            print(f"  Animations: {anim_count} action(s)")
+        print("-"*60)
+        print("  Objects kept in scene for inspection.")
+        print("  Nothing was saved or exported.")
+        print("  Set TEST_MODE = False for batch processing.")
+        print("="*60)
+        return "test_done"
 
     # Wait for approval (pass LOD objects so viewport can frame them)
     response = UserPrompt.wait_for_approval(filename, category, stats, lod_objects=lods)
@@ -1035,8 +1107,9 @@ def process_folder(folder_path, category, temp_dir, output_dir):
         filename = Path(filepath).stem
         print(f"\n  [{i+1}/{total}] {filename} ({file_type})")
 
-        # Clear scene between models
-        clear_scene()
+        # Clear scene between models (skip in test mode to preserve objects)
+        if not TEST_MODE:
+            clear_scene()
 
         if file_type == "animated":
             result = process_animated_model(filepath, category, temp_dir, output_dir)
@@ -1047,11 +1120,19 @@ def process_folder(folder_path, category, temp_dir, output_dir):
             print("\n  Batch processing stopped by user.")
             return "quit"
 
+        # TEST MODE: Stop after first model
+        if result == "test_done":
+            return "test_done"
+
 
 def main():
     """Main entry point."""
     print("\n" + "="*70)
-    print("  VOIDSTRIKE BATCH RETOPOLOGY PIPELINE")
+    if TEST_MODE:
+        print("  VOIDSTRIKE RETOPOLOGY - TEST MODE")
+        print("  (Processing first model only, no saving)")
+    else:
+        print("  VOIDSTRIKE BATCH RETOPOLOGY PIPELINE")
     print("="*70)
 
     # Check Instant Meshes
@@ -1062,7 +1143,7 @@ def main():
         print("\n⚠ Instant Meshes not found - using fallback decimation")
         print("  Download from: https://github.com/wjakob/instant-meshes")
 
-    # Create output directory
+    # Create output directory (even in test mode, for temp baked textures)
     os.makedirs(OUTPUT_FOLDER, exist_ok=True)
 
     # Create temp directory
@@ -1071,6 +1152,7 @@ def main():
 
     # Process each folder in order (smallest/fastest first for testing)
     folder_order = ["decorations", "resources", "buildings", "units"]
+    test_done = False
 
     for folder_key in folder_order:
         if folder_key not in INPUT_FOLDERS:
@@ -1091,16 +1173,22 @@ def main():
         if result == "quit":
             break
 
-    # Cleanup temp
-    try:
-        import shutil
-        shutil.rmtree(temp_dir)
-    except:
-        pass
+        if result == "test_done":
+            test_done = True
+            break
 
-    print("\n" + "="*70)
-    print("  BATCH PROCESSING COMPLETE")
-    print("="*70 + "\n")
+    # Cleanup temp (skip in test mode so baked textures remain viewable)
+    if not TEST_MODE:
+        try:
+            import shutil
+            shutil.rmtree(temp_dir)
+        except:
+            pass
+
+    if not test_done:
+        print("\n" + "="*70)
+        print("  BATCH PROCESSING COMPLETE")
+        print("="*70 + "\n")
 
 
 if __name__ == "__main__":
