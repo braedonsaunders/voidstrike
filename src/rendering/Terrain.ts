@@ -218,13 +218,19 @@ function fractalNoise(x: number, y: number, octaves: number, persistence: number
   return fbmNoise(x * 0.1 + seed * 0.01, y * 0.1 + seed * 0.01, octaves, 2.0, persistence) * 0.5 + 0.5;
 }
 
+// PERF: Terrain chunk size for frustum culling
+// Each chunk is a separate mesh with its own bounding box
+// Chunks outside the camera frustum are automatically culled by Three.js
+const TERRAIN_CHUNK_SIZE = 32; // 32x32 cells per chunk
+
 export class Terrain {
-  public mesh: THREE.Mesh;
+  public mesh: THREE.Group; // Group containing chunk meshes
   public mapData: MapData;
   public biome: BiomeConfig;
 
   private cellSize: number;
-  private geometry: THREE.BufferGeometry;
+  private chunkMeshes: THREE.Mesh[] = []; // Individual chunk meshes
+  private chunkGeometries: THREE.BufferGeometry[] = [];
   private material: THREE.Material;
   private tslMaterial: TSLTerrainMaterial | null = null;
 
@@ -250,8 +256,6 @@ export class Terrain {
 
     // Get biome configuration
     this.biome = BIOMES[this.mapData.biome || 'grassland'];
-
-    this.geometry = this.createGeometry();
 
     // Create shader material based on mode
     switch (Terrain.SHADER_MODE) {
@@ -290,10 +294,291 @@ export class Terrain {
         break;
     }
 
-    this.mesh = new THREE.Mesh(this.geometry, this.material);
-    this.mesh.receiveShadow = true;
-    this.mesh.castShadow = false;
+    // PERF: Create terrain as chunked meshes for frustum culling
+    // Each chunk is a separate mesh that Three.js can cull independently
+    this.mesh = new THREE.Group();
     this.mesh.rotation.x = -Math.PI / 2;
+
+    // Create chunked terrain geometries and meshes
+    this.createChunkedTerrain();
+
+    const numChunks = this.chunkMeshes.length;
+    debugTerrain.log(`[Terrain] Created ${numChunks} terrain chunks for frustum culling`);
+  }
+
+  /**
+   * PERF: Create terrain as multiple chunk meshes for frustum culling.
+   * Each chunk is a separate mesh that Three.js can cull independently.
+   */
+  private createChunkedTerrain(): void {
+    const { width, height, terrain } = this.mapData;
+    const cellSize = this.cellSize;
+
+    // Pre-calculate height map with smooth transitions and natural variation
+    const vertexGrid: THREE.Vector3[][] = [];
+    const mapScale = Math.min(width, height);
+
+    // Build vertex grid and heightmap (same logic as createGeometry)
+    for (let y = 0; y <= height; y++) {
+      vertexGrid[y] = [];
+      for (let x = 0; x <= width; x++) {
+        const cell = this.sampleTerrain(terrain, x, y, width, height);
+        const baseHeight = elevationToHeight(cell.elevation);
+        const edgeFactor = this.calculateElevationEdgeFactor(terrain, x, y, width, height);
+        const nx = x / mapScale;
+        const ny = y / mapScale;
+
+        let detailNoise = 0;
+        if (cell.terrain === 'unwalkable') {
+          const largeNoise = fbmNoise(nx * 2, ny * 2, 3, 2.0, 0.5) * 0.06;
+          const mediumNoise = fbmNoise(nx * 5, ny * 5, 2, 2.0, 0.5) * 0.03;
+          const smallNoise = fbmNoise(nx * 12, ny * 12, 2, 2.0, 0.5) * 0.015;
+          detailNoise = largeNoise + mediumNoise + smallNoise;
+          if (edgeFactor > 0) {
+            detailNoise += edgeFactor * 0.04 * fbmNoise(nx * 3, ny * 3, 2, 2.0, 0.5);
+          }
+        } else if (cell.terrain === 'ramp') {
+          detailNoise = 0;
+        } else {
+          const groundNoise = fbmNoise(nx * 6, ny * 6, 3, 2.0, 0.5) * 0.015;
+          const microDetail = perlinNoise(nx * 30, ny * 30) * 0.008;
+          detailNoise = groundNoise + microDetail;
+          if (edgeFactor > 0) {
+            detailNoise += edgeFactor * 0.12 * fbmNoise(nx * 4, ny * 4, 2, 2.0, 0.5);
+          }
+        }
+
+        const finalHeight = baseHeight + detailNoise;
+        vertexGrid[y][x] = new THREE.Vector3(x * cellSize, -y * cellSize, finalHeight);
+        this.heightMap[y * this.gridWidth + x] = finalHeight;
+      }
+    }
+
+    // Build terrain type map
+    const terrainTypeMap: TerrainType[] = new Array(this.gridWidth * this.gridHeight);
+    for (let y = 0; y <= height; y++) {
+      for (let x = 0; x <= width; x++) {
+        const idx = y * this.gridWidth + x;
+        const cell = this.sampleTerrain(terrain, x, y, width, height);
+        terrainTypeMap[idx] = cell.terrain;
+      }
+    }
+
+    // Calculate per-vertex slopes
+    const slopeMap = new Float32Array(this.gridWidth * this.gridHeight);
+    for (let y = 0; y <= height; y++) {
+      for (let x = 0; x <= width; x++) {
+        const idx = y * this.gridWidth + x;
+        const terrainType = terrainTypeMap[idx];
+        const h = this.heightMap[idx];
+        let maxHeightDiff = 0;
+
+        for (let dy = -1; dy <= 1; dy++) {
+          for (let dx = -1; dx <= 1; dx++) {
+            if (dx === 0 && dy === 0) continue;
+            const nx = x + dx;
+            const ny = y + dy;
+            if (nx >= 0 && nx <= width && ny >= 0 && ny <= height) {
+              const neighborH = this.heightMap[ny * this.gridWidth + nx];
+              maxHeightDiff = Math.max(maxHeightDiff, Math.abs(neighborH - h));
+            }
+          }
+        }
+
+        let slope = Math.min(1.0, maxHeightDiff / 3.0);
+        if (terrainType === 'ramp') {
+          slope = 0;
+        } else if (terrainType === 'unwalkable') {
+          let isEdge = false;
+          for (let dy = -1; dy <= 1 && !isEdge; dy++) {
+            for (let dx = -1; dx <= 1 && !isEdge; dx++) {
+              if (dx === 0 && dy === 0) continue;
+              const nx = x + dx;
+              const ny = y + dy;
+              if (nx >= 0 && nx <= width && ny >= 0 && ny <= height) {
+                const neighborType = terrainTypeMap[ny * this.gridWidth + nx];
+                if (neighborType === 'ground' || neighborType === 'ramp' || neighborType === 'unbuildable') {
+                  isEdge = true;
+                }
+              }
+            }
+          }
+          if (isEdge) {
+            slope = Math.max(0.35, slope);
+          }
+        }
+        slopeMap[idx] = Math.min(1.0, slope);
+      }
+    }
+
+    // Apply smoothing
+    this.smoothHeightMap(2);
+
+    // Update vertex grid with smoothed heights
+    for (let y = 0; y <= height; y++) {
+      for (let x = 0; x <= width; x++) {
+        vertexGrid[y][x].z = this.heightMap[y * this.gridWidth + x];
+      }
+    }
+
+    // Calculate chunk grid dimensions
+    const chunksX = Math.ceil(width / TERRAIN_CHUNK_SIZE);
+    const chunksY = Math.ceil(height / TERRAIN_CHUNK_SIZE);
+
+    // Create a chunk for each grid cell
+    for (let chunkY = 0; chunkY < chunksY; chunkY++) {
+      for (let chunkX = 0; chunkX < chunksX; chunkX++) {
+        const startX = chunkX * TERRAIN_CHUNK_SIZE;
+        const startY = chunkY * TERRAIN_CHUNK_SIZE;
+        const endX = Math.min(startX + TERRAIN_CHUNK_SIZE, width);
+        const endY = Math.min(startY + TERRAIN_CHUNK_SIZE, height);
+
+        const geometry = this.createChunkGeometry(
+          startX, startY, endX, endY,
+          vertexGrid, slopeMap, terrain, width, height
+        );
+
+        const chunkMesh = new THREE.Mesh(geometry, this.material);
+        chunkMesh.receiveShadow = true;
+        chunkMesh.castShadow = false;
+        // frustumCulled defaults to true - Three.js will cull this chunk when outside camera
+
+        // Compute bounding box for proper frustum culling
+        geometry.computeBoundingBox();
+        geometry.computeBoundingSphere();
+
+        this.chunkGeometries.push(geometry);
+        this.chunkMeshes.push(chunkMesh);
+        this.mesh.add(chunkMesh);
+      }
+    }
+  }
+
+  /**
+   * Create geometry for a single terrain chunk.
+   */
+  private createChunkGeometry(
+    startX: number, startY: number, endX: number, endY: number,
+    vertexGrid: THREE.Vector3[][],
+    slopeMap: Float32Array,
+    terrain: MapCell[][],
+    mapWidth: number, mapHeight: number
+  ): THREE.BufferGeometry {
+    const vertices: number[] = [];
+    const colors: number[] = [];
+    const indices: number[] = [];
+    const uvs: number[] = [];
+    const slopes: number[] = [];
+    const terrainTypes: number[] = [];
+
+    let vertexIndex = 0;
+
+    for (let y = startY; y < endY; y++) {
+      for (let x = startX; x < endX; x++) {
+        const cell = terrain[y][x];
+
+        // Get biome-based color
+        const terrainColorType = cell.terrain === 'unwalkable' ? 'cliff' :
+                                  cell.terrain === 'ramp' ? 'ramp' : 'ground';
+        const baseColor = blendBiomeColors(this.biome, x, y, terrainColorType);
+
+        const feature = cell.feature || 'none';
+        const featureTint = FEATURE_COLOR_TINTS[feature];
+        baseColor.multiply(featureTint);
+
+        const normalizedElevation = cell.elevation / 255;
+        baseColor.multiplyScalar(1 + normalizedElevation * 0.15);
+
+        // Get cell corners
+        const v00 = vertexGrid[y][x];
+        const v10 = vertexGrid[y][x + 1];
+        const v01 = vertexGrid[y + 1][x];
+        const v11 = vertexGrid[y + 1][x + 1];
+
+        // Calculate colors with variation
+        const colors6: THREE.Color[] = [];
+        for (let i = 0; i < 6; i++) {
+          const color = baseColor.clone();
+          const noiseVal = noise2D(x + i * 0.1, y + i * 0.1, cell.textureId);
+          const accents = this.biome.colors.accent;
+          if (accents.length > 0 && noiseVal > 0.7) {
+            const accentIndex = Math.floor(noiseVal * accents.length) % accents.length;
+            color.lerp(accents[accentIndex], (noiseVal - 0.7) * 1.5);
+          }
+          const brightVar = (noise2D(x * 2.5, y * 2.5, 789) - 0.5) * 0.12;
+          color.r = Math.max(0, Math.min(1, color.r + brightVar));
+          color.g = Math.max(0, Math.min(1, color.g + brightVar));
+          color.b = Math.max(0, Math.min(1, color.b + brightVar));
+          const edgeFactor = this.getEdgeFactor(terrain, x, y, mapWidth, mapHeight);
+          if (edgeFactor > 0) {
+            color.multiplyScalar(1 - edgeFactor * 0.25);
+          }
+          colors6.push(color);
+        }
+
+        // Get slopes
+        let slope00 = slopeMap[y * this.gridWidth + x];
+        let slope10 = slopeMap[y * this.gridWidth + (x + 1)];
+        let slope01 = slopeMap[(y + 1) * this.gridWidth + x];
+        let slope11 = slopeMap[(y + 1) * this.gridWidth + (x + 1)];
+
+        if (cell.terrain === 'ramp') {
+          slope00 = slope10 = slope01 = slope11 = 0;
+        } else if (cell.terrain === 'unwalkable') {
+          const minSlope = 0.15;
+          slope00 = Math.max(slope00, minSlope);
+          slope10 = Math.max(slope10, minSlope);
+          slope01 = Math.max(slope01, minSlope);
+          slope11 = Math.max(slope11, minSlope);
+        }
+
+        // Triangle 1
+        vertices.push(v00.x, v00.y, v00.z);
+        vertices.push(v01.x, v01.y, v01.z);
+        vertices.push(v10.x, v10.y, v10.z);
+
+        uvs.push(x / mapWidth, y / mapHeight);
+        uvs.push(x / mapWidth, (y + 1) / mapHeight);
+        uvs.push((x + 1) / mapWidth, y / mapHeight);
+
+        // Triangle 2
+        vertices.push(v10.x, v10.y, v10.z);
+        vertices.push(v01.x, v01.y, v01.z);
+        vertices.push(v11.x, v11.y, v11.z);
+
+        uvs.push((x + 1) / mapWidth, y / mapHeight);
+        uvs.push(x / mapWidth, (y + 1) / mapHeight);
+        uvs.push((x + 1) / mapWidth, (y + 1) / mapHeight);
+
+        slopes.push(slope00, slope01, slope10);
+        slopes.push(slope10, slope01, slope11);
+
+        let cellTerrainType = 0.0;
+        if (cell.terrain === 'unwalkable') cellTerrainType = 2.0;
+        else if (cell.terrain === 'ramp') cellTerrainType = 1.0;
+        terrainTypes.push(cellTerrainType, cellTerrainType, cellTerrainType);
+        terrainTypes.push(cellTerrainType, cellTerrainType, cellTerrainType);
+
+        for (let i = 0; i < 6; i++) {
+          colors.push(colors6[i].r, colors6[i].g, colors6[i].b);
+        }
+
+        indices.push(vertexIndex, vertexIndex + 1, vertexIndex + 2);
+        indices.push(vertexIndex + 3, vertexIndex + 4, vertexIndex + 5);
+        vertexIndex += 6;
+      }
+    }
+
+    const geometry = new THREE.BufferGeometry();
+    geometry.setAttribute('position', new THREE.Float32BufferAttribute(vertices, 3));
+    geometry.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3));
+    geometry.setAttribute('uv', new THREE.Float32BufferAttribute(uvs, 2));
+    geometry.setAttribute('aSlope', new THREE.Float32BufferAttribute(slopes, 1));
+    geometry.setAttribute('aTerrainType', new THREE.Float32BufferAttribute(terrainTypes, 1));
+    geometry.setIndex(indices);
+    geometry.computeVertexNormals();
+
+    return geometry;
   }
 
   // Update shader uniforms (call each frame for animated effects)
@@ -1109,7 +1394,13 @@ export class Terrain {
   }
 
   public dispose(): void {
-    this.geometry.dispose();
+    // Dispose all chunk geometries
+    for (const geometry of this.chunkGeometries) {
+      geometry.dispose();
+    }
+    this.chunkGeometries = [];
+    this.chunkMeshes = [];
+
     if (this.tslMaterial) {
       this.tslMaterial.dispose();
     } else {

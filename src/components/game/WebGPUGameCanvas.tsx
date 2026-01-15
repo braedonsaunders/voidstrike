@@ -675,7 +675,8 @@ export function WebGPUGameCanvas() {
         placementPreviewRef.current?.update(deltaTime / 1000);
 
         const gameTime = gameRef.current?.getGameTime() ?? 0;
-        environmentRef.current?.update(deltaTime / 1000, gameTime);
+        // PERF: Pass camera for decoration frustum culling
+        environmentRef.current?.update(deltaTime / 1000, gameTime, camera.camera);
 
         // Update shadow camera to follow the game camera for proper shadow rendering
         // This ensures shadows appear for objects near the camera, not just at map center
