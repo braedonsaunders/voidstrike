@@ -2595,19 +2595,17 @@ export class EnhancedAISystem extends System {
       }
 
       // Grab workers that are effectively idle:
+      // Consider worker idle if:
       // - Truly idle
       // - Moving but with no target (finished moving, waiting for orders)
-      // - Not currently building or gathering
+      // NOTE: Removed buggy 'isStuckMoving' which caught workers actively moving to build
       const isIdle = unit.state === 'idle';
       const isMovingNoTarget = unit.state === 'moving' &&
                                unit.targetX === null &&
                                unit.targetY === null &&
                                unit.gatherTargetId === null;
-      const isStuckMoving = unit.state === 'moving' &&
-                            unit.constructingBuildingId === null &&
-                            unit.gatherTargetId === null;
 
-      if (isIdle || isMovingNoTarget || isStuckMoving) {
+      if (isIdle || isMovingNoTarget) {
         idleWorkers.push(entity.id);
       }
     }

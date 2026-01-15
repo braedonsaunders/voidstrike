@@ -16,13 +16,15 @@ import {
   createBehaviorTree,
 } from '../ai/UnitBehaviors';
 import { UNIT_DEFINITIONS } from '@/data/units/dominion';
+// Import data-driven AI configuration for micro behavior
+import { DOMINION_AI_CONFIG } from '@/data/ai/factions/dominion';
 
-// Configuration
+// Configuration - now uses data-driven config where available
 // PERF: Increased from 5 to 8 ticks (400ms at 20 TPS) to reduce behavior tree evaluation frequency
-const MICRO_UPDATE_INTERVAL = 8;
-const KITE_COOLDOWN_TICKS = 10; // Minimum ticks between kite commands
-const THREAT_ASSESSMENT_INTERVAL = 10; // Update threat assessment every 10 ticks
-const FOCUS_FIRE_THRESHOLD = 0.7; // Health threshold for focus fire target selection
+const MICRO_UPDATE_INTERVAL = DOMINION_AI_CONFIG.micro.global.updateInterval;
+const KITE_COOLDOWN_TICKS = 10; // Will be per-unit from config.micro.unitBehaviors
+const THREAT_ASSESSMENT_INTERVAL = DOMINION_AI_CONFIG.micro.global.threatUpdateInterval;
+const FOCUS_FIRE_THRESHOLD = DOMINION_AI_CONFIG.micro.global.focusFireThreshold;
 const TRANSFORM_DECISION_INTERVAL = 20; // Update transform decision every 20 ticks (1 second at 20 TPS)
 const TRANSFORM_SCAN_RANGE = 15; // Range to scan for potential targets when deciding to transform
 
@@ -52,21 +54,8 @@ interface ThreatInfo {
   unitType: string;
 }
 
-// Unit priority for focus fire (higher = more important to kill)
-const UNIT_PRIORITY: Record<string, number> = {
-  devastator: 100,
-  colossus: 90,
-  lifter: 85,
-  specter: 80,
-  valkyrie: 75,
-  inferno: 70,
-  breacher: 65,
-  trooper: 60,
-  operative: 55,
-  vanguard: 50,
-  scorcher: 45,
-  constructor: 10,
-};
+// Unit priority for focus fire (higher = more important to kill) - from data-driven config
+const UNIT_PRIORITY: Record<string, number> = DOMINION_AI_CONFIG.tactical.unitPriorities;
 
 export class AIMicroSystem extends System {
   public readonly name = 'AIMicroSystem';
@@ -450,11 +439,12 @@ export class AIMicroSystem extends System {
       const priority = UNIT_PRIORITY[nearbyUnit.unitId] || 50;
       const healthPercent = nearbyHealth.getHealthPercent();
 
-      // Threat score calculation
-      const distanceFactor = Math.max(0, 1 - distance / threatRange);
-      const damageFactor = dps / 20;
-      const priorityFactor = priority / 100;
-      const healthFactor = 1 + (1 - healthPercent); // Damaged units are higher threat (about to die, focus)
+      // Threat score calculation using data-driven weights from config
+      const threatWeights = DOMINION_AI_CONFIG.tactical.threatWeights;
+      const distanceFactor = Math.max(0, 1 - distance / threatRange) * threatWeights.distance;
+      const damageFactor = (dps / 20) * threatWeights.damage;
+      const priorityFactor = (priority / 100) * threatWeights.priority;
+      const healthFactor = (1 + (1 - healthPercent)) * threatWeights.health;
 
       const threatScore = (damageFactor + priorityFactor) * distanceFactor * healthFactor;
 
@@ -702,19 +692,8 @@ export interface CounterRecommendation {
   buildingsToBuild: Array<{ buildingId: string; priority: number }>;
 }
 
-// Counter matrix: what counters what
-const COUNTER_MATRIX: Record<string, string[]> = {
-  // Air units counter ground-heavy compositions
-  trooper: ['scorcher', 'inferno', 'devastator'],
-  breacher: ['trooper', 'scorcher'],
-  scorcher: ['devastator', 'colossus'],
-  inferno: ['trooper', 'breacher'],
-  devastator: ['valkyrie', 'specter', 'trooper'],
-  colossus: ['trooper', 'breacher', 'devastator'],
-  valkyrie: ['trooper', 'colossus'],
-  lifter: ['trooper', 'valkyrie'],
-  specter: ['trooper', 'valkyrie', 'colossus'],
-};
+// Counter matrix: what counters what - from data-driven config
+const COUNTER_MATRIX: Record<string, string[]> = DOMINION_AI_CONFIG.tactical.counterMatrix;
 
 // PERF: Cache for enemy composition analysis (avoids O(n) scan every AI decision)
 const COMPOSITION_CACHE_DURATION = 40; // Ticks before cache expires
