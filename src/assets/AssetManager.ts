@@ -89,6 +89,7 @@ export interface AssetConfig {
   model: string;
   height: number;
   animationSpeed?: number;
+  rotation?: number; // Y-axis rotation offset in degrees
   animations?: AnimationMappingConfig;
 }
 
@@ -129,6 +130,9 @@ const animationSpeedMultipliers = new Map<string, number>();
 
 // Store animation mappings from config for each asset
 const animationMappings = new Map<string, AnimationMappingConfig>();
+
+// Store per-asset rotation offsets in degrees (from config)
+const assetRotationOffsets = new Map<string, number>();
 
 // DRACO loader for compressed meshes
 const dracoLoader = new DRACOLoader();
@@ -566,10 +570,13 @@ export class AssetManager {
             normalizeModel(model, options.targetHeight, assetId);
           }
 
-          // Apply model forward offset if needed
-          if (REFERENCE_FRAME.MODEL_FORWARD_OFFSET !== 0) {
-            model.rotation.y = REFERENCE_FRAME.MODEL_FORWARD_OFFSET;
-          }
+          // Apply model forward offset + per-asset rotation offset
+          // Base offset converts GLTF +Z forward to game's +X forward
+          // Per-asset offset allows fixing models that face wrong direction
+          const baseOffset = REFERENCE_FRAME.MODEL_FORWARD_OFFSET;
+          const assetOffset = assetRotationOffsets.get(assetId) ?? 0;
+          const assetOffsetRadians = assetOffset * (Math.PI / 180); // Convert degrees to radians
+          model.rotation.y = baseOffset + assetOffsetRadians;
 
           customAssets.set(assetId, model);
           resolve(model);
@@ -616,6 +623,17 @@ export class AssetManager {
    */
   static getModelYOffset(assetId: string): number {
     return modelYOffsets.get(assetId) ?? 0;
+  }
+
+  /**
+   * Get the rotation offset for a model in radians
+   * Combines base MODEL_FORWARD_OFFSET with per-asset rotation from config
+   */
+  static getModelRotation(assetId: string): number {
+    const baseOffset = REFERENCE_FRAME.MODEL_FORWARD_OFFSET;
+    const assetOffset = assetRotationOffsets.get(assetId) ?? 0;
+    const assetOffsetRadians = assetOffset * (Math.PI / 180);
+    return baseOffset + assetOffsetRadians;
   }
 
   /**
@@ -771,6 +789,10 @@ export class AssetManager {
         assetId,
         targetHeight: config.height,
       });
+      // Store rotation offset if specified (in degrees)
+      if (config.rotation !== undefined) {
+        assetRotationOffsets.set(assetId, config.rotation);
+      }
     }
 
     // Add buildings from config
@@ -780,6 +802,9 @@ export class AssetManager {
         assetId,
         targetHeight: config.height,
       });
+      if (config.rotation !== undefined) {
+        assetRotationOffsets.set(assetId, config.rotation);
+      }
     }
 
     // Add resources from config
@@ -789,6 +814,9 @@ export class AssetManager {
         assetId,
         targetHeight: config.height,
       });
+      if (config.rotation !== undefined) {
+        assetRotationOffsets.set(assetId, config.rotation);
+      }
     }
 
     // Add decorations from config
@@ -798,6 +826,9 @@ export class AssetManager {
         assetId,
         targetHeight: config.height,
       });
+      if (config.rotation !== undefined) {
+        assetRotationOffsets.set(assetId, config.rotation);
+      }
     }
 
     debugAssets.log('[AssetManager] Loading custom models...');
