@@ -224,6 +224,9 @@ export function WebGPUGameCanvas() {
     const initializeThreeJS = async () => {
       if (!threeCanvasRef.current) return;
 
+      // Load saved graphics settings from localStorage
+      useUIStore.getState().loadSavedGraphicsSettings();
+
       const graphicsSettings = useUIStore.getState().graphicsSettings;
       const preferWebGPU = useUIStore.getState().preferWebGPU;
 

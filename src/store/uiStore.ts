@@ -185,6 +185,59 @@ export interface GraphicsSettings {
   // Beyond lodDistance1, LOD2 (lowest detail) is used
 }
 
+// ============================================
+// LOCALSTORAGE PERSISTENCE
+// ============================================
+
+const GRAPHICS_SETTINGS_KEY = 'voidstrike_graphics_settings';
+
+interface SavedGraphicsState {
+  settings: GraphicsSettings;
+  preset: GraphicsPresetName;
+  version: number; // For future migrations
+}
+
+const SETTINGS_VERSION = 1;
+
+function saveGraphicsSettings(settings: GraphicsSettings, preset: GraphicsPresetName): void {
+  if (typeof window === 'undefined') return;
+  try {
+    const state: SavedGraphicsState = {
+      settings,
+      preset,
+      version: SETTINGS_VERSION,
+    };
+    localStorage.setItem(GRAPHICS_SETTINGS_KEY, JSON.stringify(state));
+  } catch (e) {
+    console.warn('Failed to save graphics settings:', e);
+  }
+}
+
+function loadGraphicsSettings(): { settings: Partial<GraphicsSettings>; preset: GraphicsPresetName } | null {
+  if (typeof window === 'undefined') return null;
+  try {
+    const saved = localStorage.getItem(GRAPHICS_SETTINGS_KEY);
+    if (!saved) return null;
+
+    const state = JSON.parse(saved) as SavedGraphicsState;
+
+    // Version check for future migrations
+    if (state.version !== SETTINGS_VERSION) {
+      console.log('Graphics settings version mismatch, using defaults');
+      return null;
+    }
+
+    return { settings: state.settings, preset: state.preset };
+  } catch (e) {
+    console.warn('Failed to load graphics settings:', e);
+    return null;
+  }
+}
+
+// ============================================
+// UI STATE TYPES
+// ============================================
+
 // Game overlay types for strategic information display
 export type GameOverlayType = 'none' | 'terrain' | 'elevation' | 'threat';
 
@@ -298,6 +351,8 @@ export interface UIState {
   loadGraphicsPresets: () => Promise<void>;
   applyGraphicsPreset: (presetName: GraphicsPresetName) => void;
   detectCurrentPreset: () => GraphicsPresetName;
+  // Graphics persistence
+  loadSavedGraphicsSettings: () => void;
   // Sound settings actions
   toggleSoundOptions: () => void;
   // Fullscreen actions
@@ -629,6 +684,9 @@ export const useUIStore = create<UIState>((set, get) => ({
         taaEnabled: presetSettings.antiAliasingMode === 'taa',
       },
     }));
+    // Save to localStorage
+    const newState = get();
+    saveGraphicsSettings(newState.graphicsSettings, newState.currentGraphicsPreset);
   },
 
   detectCurrentPreset: () => {
@@ -662,6 +720,17 @@ export const useUIStore = create<UIState>((set, get) => ({
     return 'custom';
   },
 
+  loadSavedGraphicsSettings: () => {
+    const saved = loadGraphicsSettings();
+    if (saved) {
+      set((state) => ({
+        graphicsSettings: { ...state.graphicsSettings, ...saved.settings },
+        currentGraphicsPreset: saved.preset,
+      }));
+      console.log(`Loaded saved graphics settings (preset: ${saved.preset})`);
+    }
+  },
+
   toggleSoundOptions: () => set((state) => ({ showSoundOptions: !state.showSoundOptions })),
 
   toggleFullscreen: () => {
@@ -691,6 +760,9 @@ export const useUIStore = create<UIState>((set, get) => ({
     if (detected !== 'custom') {
       set({ currentGraphicsPreset: detected });
     }
+    // Save to localStorage
+    const state = get();
+    saveGraphicsSettings(state.graphicsSettings, state.currentGraphicsPreset);
   },
 
   toggleGraphicsSetting: (key) => {
@@ -705,6 +777,9 @@ export const useUIStore = create<UIState>((set, get) => ({
     if (detected !== 'custom') {
       set({ currentGraphicsPreset: detected });
     }
+    // Save to localStorage
+    const state = get();
+    saveGraphicsSettings(state.graphicsSettings, state.currentGraphicsPreset);
   },
 
   setAntiAliasingMode: (mode) => {
@@ -721,6 +796,9 @@ export const useUIStore = create<UIState>((set, get) => ({
     if (detected !== 'custom') {
       set({ currentGraphicsPreset: detected });
     }
+    // Save to localStorage
+    const state = get();
+    saveGraphicsSettings(state.graphicsSettings, state.currentGraphicsPreset);
   },
 
   setUpscalingMode: (mode) => {
@@ -735,6 +813,9 @@ export const useUIStore = create<UIState>((set, get) => ({
     if (detected !== 'custom') {
       set({ currentGraphicsPreset: detected });
     }
+    // Save to localStorage
+    const state = get();
+    saveGraphicsSettings(state.graphicsSettings, state.currentGraphicsPreset);
   },
 
   setResolutionMode: (mode) => {
@@ -749,6 +830,9 @@ export const useUIStore = create<UIState>((set, get) => ({
     if (detected !== 'custom') {
       set({ currentGraphicsPreset: detected });
     }
+    // Save to localStorage
+    const state = get();
+    saveGraphicsSettings(state.graphicsSettings, state.currentGraphicsPreset);
   },
 
   setFixedResolution: (res) => {
@@ -763,6 +847,9 @@ export const useUIStore = create<UIState>((set, get) => ({
     if (detected !== 'custom') {
       set({ currentGraphicsPreset: detected });
     }
+    // Save to localStorage
+    const state = get();
+    saveGraphicsSettings(state.graphicsSettings, state.currentGraphicsPreset);
   },
 
   toggleDebugMenu: () => set((state) => ({ showDebugMenu: !state.showDebugMenu })),
