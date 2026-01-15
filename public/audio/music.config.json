@@ -1,0 +1,42 @@
+{
+  "$schema": "./music.config.schema.json",
+  "_description": "Music system configuration - all music playback is driven by this file",
+
+  "categories": {
+    "menu": {
+      "folder": "/audio/music/menu",
+      "description": "Music for main menu and lobby screens",
+      "shuffle": true,
+      "loop": true,
+      "crossfadeDuration": 1500
+    },
+    "gameplay": {
+      "folder": "/audio/music/gameplay",
+      "description": "Background music during gameplay",
+      "shuffle": true,
+      "loop": true,
+      "crossfadeDuration": 1500
+    }
+  },
+
+  "specialTracks": {
+    "victory": {
+      "url": "/audio/music/victory/victory.mp3",
+      "description": "Plays when the player wins the match",
+      "loop": false,
+      "volume": 1.0
+    },
+    "defeat": {
+      "url": "/audio/music/defeat/defeat.mp3",
+      "description": "Plays when the player loses the match",
+      "loop": false,
+      "volume": 1.0
+    }
+  },
+
+  "defaults": {
+    "volume": 0.25,
+    "crossfadeDuration": 1500,
+    "maxConsecutiveFailures": 3
+  }
+}
