@@ -111,13 +111,59 @@ class UserPrompt:
     """Handle user prompts in Blender's console."""
 
     @staticmethod
-    def wait_for_approval(model_name, category, stats):
+    def refresh_viewport_and_frame(objects):
+        """
+        Force viewport refresh and frame camera on processed objects.
+        This allows the user to see the model before approving.
+        """
+        # Deselect all, then select LOD objects
+        bpy.ops.object.select_all(action='DESELECT')
+
+        for obj in objects:
+            if obj and obj.name in bpy.data.objects:
+                obj.select_set(True)
+
+        # Make sure we're in object mode
+        if bpy.context.mode != 'OBJECT':
+            bpy.ops.object.mode_set(mode='OBJECT')
+
+        # Frame selected objects in all 3D views
+        for area in bpy.context.screen.areas:
+            if area.type == 'VIEW_3D':
+                for region in area.regions:
+                    if region.type == 'WINDOW':
+                        # Override context to target this specific area/region
+                        with bpy.context.temp_override(area=area, region=region):
+                            bpy.ops.view3d.view_selected()
+                        break
+
+        # Set viewport shading to Material Preview for better visualization
+        for area in bpy.context.screen.areas:
+            if area.type == 'VIEW_3D':
+                for space in area.spaces:
+                    if space.type == 'VIEW_3D':
+                        space.shading.type = 'MATERIAL'
+                        break
+
+        # Force redraw all areas
+        for area in bpy.context.screen.areas:
+            area.tag_redraw()
+
+        # Process pending events to update viewport
+        bpy.ops.wm.redraw_timer(type='DRAW_WIN_SWAP', iterations=1)
+
+    @staticmethod
+    def wait_for_approval(model_name, category, stats, lod_objects=None):
         """
         Wait for user approval in Blender.
         Uses a modal operator to pause execution.
         """
         if SETTINGS["auto_approve"]:
             return "approve"
+
+        # Refresh viewport and frame the LOD objects so user can see them
+        if lod_objects:
+            UserPrompt.refresh_viewport_and_frame(lod_objects)
 
         print("\n" + "="*60)
         print(f"  MODEL READY FOR REVIEW: {model_name}")
@@ -130,6 +176,9 @@ class UserPrompt:
         if stats.get('has_armature'):
             print(f"  Armature: Preserved ✓")
             print(f"  Animations: {stats.get('animation_count', 0)} clips")
+        print("-"*60)
+        print("  *** VIEWPORT UPDATED - Check Blender window ***")
+        print("  *** LOD models are selected and framed ***")
         print("-"*60)
         print("  Commands:")
         print("    [a] Approve and continue")
@@ -356,8 +405,8 @@ def process_static_model(filepath, category, temp_dir, output_dir):
         **lod_stats
     }
 
-    # Wait for approval
-    response = UserPrompt.wait_for_approval(filename, category, stats)
+    # Wait for approval (pass LOD objects so viewport can frame them)
+    response = UserPrompt.wait_for_approval(filename, category, stats, lod_objects=lods)
 
     if response == "approve":
         # Export
@@ -567,8 +616,8 @@ def process_animated_model(filepath, category, temp_dir, output_dir):
         **lod_stats
     }
 
-    # Wait for approval
-    response = UserPrompt.wait_for_approval(filename, category, stats)
+    # Wait for approval (pass LOD objects so viewport can frame them)
+    response = UserPrompt.wait_for_approval(filename, category, stats, lod_objects=lods)
 
     if response == "approve":
         # Export with animations
