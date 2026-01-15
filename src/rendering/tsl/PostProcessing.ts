@@ -837,6 +837,13 @@ export class RenderPipeline {
    * DUAL PIPELINE RENDER ORDER:
    * 1. If upscaling: render internal pipeline to RenderTarget, then display pipeline to canvas
    * 2. If no upscaling: render internal pipeline directly to canvas
+   *
+   * COLOR SPACE HANDLING:
+   * - Internal pipeline outputs linear HDR data
+   * - ACES tone mapping converts to display-referred (gamma-corrected) SDR
+   * - We set outputColorSpace = LinearSRGBColorSpace during internal render to prevent
+   *   the renderer from applying ANOTHER gamma conversion (which caused washed out colors)
+   * - Display pipeline samples the linear-stored data and outputs to canvas
    */
   render(): void {
     const useUpscaling = this.config.upscalingMode !== 'off' && this.config.renderScale < 1.0;
@@ -846,13 +853,23 @@ export class RenderPipeline {
       const originalSize = new THREE.Vector2();
       this.renderer.getSize(originalSize);
 
-      // Step 1: Set renderer to render resolution and render to target
+      // Save original color space setting
+      const originalColorSpace = this.renderer.outputColorSpace;
+
+      // Step 1: Set renderer to render resolution and LINEAR color space
+      // IMPORTANT: Use LinearSRGBColorSpace to prevent double gamma correction.
+      // Our ACES tone mapping already outputs display-referred values.
+      // If renderer.outputColorSpace = SRGBColorSpace, it would apply ANOTHER
+      // gamma conversion, causing washed out colors.
+      this.renderer.outputColorSpace = THREE.LinearSRGBColorSpace;
       this.renderer.setSize(this.renderWidth, this.renderHeight, false);
       (this.renderer as any).setRenderTarget(this.internalRenderTarget);
       this.internalPostProcessing?.render();
 
       // Step 2: Restore to display resolution and render to canvas
+      // Restore sRGB color space for canvas output (browser expects sRGB)
       (this.renderer as any).setRenderTarget(null);
+      this.renderer.outputColorSpace = originalColorSpace;
       this.renderer.setSize(originalSize.x, originalSize.y, false);
       this.displayPostProcessing.render();
     } else {
@@ -871,11 +888,16 @@ export class RenderPipeline {
       const originalSize = new THREE.Vector2();
       this.renderer.getSize(originalSize);
 
+      // Save and set linear color space (same as sync render)
+      const originalColorSpace = this.renderer.outputColorSpace;
+      this.renderer.outputColorSpace = THREE.LinearSRGBColorSpace;
+
       this.renderer.setSize(this.renderWidth, this.renderHeight, false);
       (this.renderer as any).setRenderTarget(this.internalRenderTarget);
       await this.internalPostProcessing?.renderAsync();
 
       (this.renderer as any).setRenderTarget(null);
+      this.renderer.outputColorSpace = originalColorSpace;
       this.renderer.setSize(originalSize.x, originalSize.y, false);
       await this.displayPostProcessing.renderAsync();
     } else {

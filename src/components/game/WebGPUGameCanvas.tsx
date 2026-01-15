@@ -62,7 +62,7 @@ import { LoadingScreen } from './LoadingScreen';
 import { GraphicsOptionsPanel } from './GraphicsOptionsPanel';
 import { DebugMenuPanel } from './DebugMenuPanel';
 import { spawnInitialEntities } from '@/utils/gameSetup';
-import { useUIStore } from '@/store/uiStore';
+import { useUIStore, FIXED_RESOLUTIONS } from '@/store/uiStore';
 import { debugInitialization, debugPerformance } from '@/utils/debugLogger';
 import { DEFAULT_MAP, MapData, getMapById } from '@/data/maps';
 import { Resource } from '@/engine/components/Resource';
@@ -247,7 +247,46 @@ export function WebGPUGameCanvas() {
       }
 
       const renderer = renderContext.renderer;
-      renderer.setSize(window.innerWidth, window.innerHeight);
+
+      // Calculate initial display resolution based on settings
+      const initSettings = graphicsSettings;
+      const initWindowWidth = window.innerWidth;
+      const initWindowHeight = window.innerHeight;
+      const initDevicePixelRatio = window.devicePixelRatio || 1;
+
+      let initTargetWidth: number;
+      let initTargetHeight: number;
+
+      switch (initSettings.resolutionMode) {
+        case 'fixed': {
+          const fixedResKey = initSettings.fixedResolution as keyof typeof FIXED_RESOLUTIONS;
+          const fixedRes = FIXED_RESOLUTIONS[fixedResKey];
+          const windowAspect = initWindowWidth / initWindowHeight;
+          const fixedAspect = fixedRes.width / fixedRes.height;
+          if (windowAspect > fixedAspect) {
+            initTargetHeight = Math.min(fixedRes.height, initWindowHeight);
+            initTargetWidth = initTargetHeight * fixedAspect;
+          } else {
+            initTargetWidth = Math.min(fixedRes.width, initWindowWidth);
+            initTargetHeight = initTargetWidth / fixedAspect;
+          }
+          break;
+        }
+        case 'percentage':
+          initTargetWidth = Math.floor(initWindowWidth * initSettings.resolutionScale);
+          initTargetHeight = Math.floor(initWindowHeight * initSettings.resolutionScale);
+          break;
+        case 'native':
+        default:
+          initTargetWidth = initWindowWidth;
+          initTargetHeight = initWindowHeight;
+          break;
+      }
+
+      const initEffectivePixelRatio = Math.min(initDevicePixelRatio, initSettings.maxPixelRatio);
+      renderer.setPixelRatio(initEffectivePixelRatio);
+      renderer.setSize(initTargetWidth, initTargetHeight);
+
       // IMPORTANT: Disable renderer tone mapping - PostProcessing handles all tone mapping
       // via ACES Filmic in the color grading pass. This prevents double-application of
       // exposure and tone mapping which causes washed out colors.
@@ -259,11 +298,11 @@ export function WebGPUGameCanvas() {
       scene.fog = new THREE.Fog(0x1a1a2e, 50, 150);
       sceneRef.current = scene;
 
-      // Create camera
+      // Create camera with calculated aspect ratio
       const mapWidth = CURRENT_MAP.width;
       const mapHeight = CURRENT_MAP.height;
       const camera = new RTSCamera(
-        window.innerWidth / window.innerHeight,
+        initTargetWidth / initTargetHeight,
         mapWidth,
         mapHeight
       );
@@ -836,19 +875,79 @@ export function WebGPUGameCanvas() {
       });
     };
 
-    // Handle resize
-    const handleResize = () => {
-      const width = window.innerWidth;
-      const height = window.innerHeight;
+    // Calculate display resolution based on graphics settings
+    const calculateDisplayResolution = () => {
+      const settings = useUIStore.getState().graphicsSettings;
+      const windowWidth = window.innerWidth;
+      const windowHeight = window.innerHeight;
+      const devicePixelRatio = window.devicePixelRatio || 1;
 
-      if (renderContextRef.current && cameraRef.current) {
-        renderContextRef.current.renderer.setSize(width, height);
-        cameraRef.current.camera.aspect = width / height;
-        cameraRef.current.camera.updateProjectionMatrix();
+      let targetWidth: number;
+      let targetHeight: number;
+
+      switch (settings.resolutionMode) {
+        case 'fixed': {
+          // Use a fixed resolution (720p, 1080p, etc.)
+          const fixedResKey = settings.fixedResolution as keyof typeof FIXED_RESOLUTIONS;
+          const fixedRes = FIXED_RESOLUTIONS[fixedResKey];
+          // Scale to fit window while maintaining aspect ratio
+          const windowAspect = windowWidth / windowHeight;
+          const fixedAspect = fixedRes.width / fixedRes.height;
+
+          if (windowAspect > fixedAspect) {
+            // Window is wider, fit by height
+            targetHeight = Math.min(fixedRes.height, windowHeight);
+            targetWidth = targetHeight * fixedAspect;
+          } else {
+            // Window is taller, fit by width
+            targetWidth = Math.min(fixedRes.width, windowWidth);
+            targetHeight = targetWidth / fixedAspect;
+          }
+          break;
+        }
+        case 'percentage':
+          // Scale the window resolution by a percentage
+          targetWidth = Math.floor(windowWidth * settings.resolutionScale);
+          targetHeight = Math.floor(windowHeight * settings.resolutionScale);
+          break;
+        case 'native':
+        default:
+          // Use full window size
+          targetWidth = windowWidth;
+          targetHeight = windowHeight;
+          break;
       }
 
+      // Apply max pixel ratio cap
+      const effectivePixelRatio = Math.min(devicePixelRatio, settings.maxPixelRatio);
+
+      return {
+        width: targetWidth,
+        height: targetHeight,
+        pixelRatio: effectivePixelRatio,
+      };
+    };
+
+    // Handle resize - applies resolution settings
+    const handleResize = () => {
+      const { width, height, pixelRatio } = calculateDisplayResolution();
+
+      if (renderContextRef.current && cameraRef.current) {
+        const renderer = renderContextRef.current.renderer;
+        renderer.setPixelRatio(pixelRatio);
+        renderer.setSize(width, height);
+        cameraRef.current.camera.aspect = width / height;
+        cameraRef.current.camera.updateProjectionMatrix();
+
+        // Update PostProcessing display size
+        if (renderPipelineRef.current) {
+          renderPipelineRef.current.setSize(width * pixelRatio, height * pixelRatio);
+        }
+      }
+
+      // Phaser always uses full window for overlay
       if (phaserGameRef.current) {
-        phaserGameRef.current.scale.resize(width, height);
+        phaserGameRef.current.scale.resize(window.innerWidth, window.innerHeight);
       }
     };
 
@@ -1783,6 +1882,65 @@ export function WebGPUGameCanvas() {
         // Update environment map
         if (settings.environmentMapEnabled !== prevSettings.environmentMapEnabled) {
           environmentRef.current.setEnvironmentMapEnabled(settings.environmentMapEnabled);
+        }
+      }
+
+      // Handle resolution settings changes
+      const resolutionChanged =
+        settings.resolutionMode !== prevSettings.resolutionMode ||
+        settings.fixedResolution !== prevSettings.fixedResolution ||
+        settings.resolutionScale !== prevSettings.resolutionScale ||
+        settings.maxPixelRatio !== prevSettings.maxPixelRatio;
+
+      if (resolutionChanged && renderContextRef.current && cameraRef.current) {
+        // Re-calculate and apply display resolution
+        const windowWidth = window.innerWidth;
+        const windowHeight = window.innerHeight;
+        const devicePixelRatio = window.devicePixelRatio || 1;
+
+        let targetWidth: number;
+        let targetHeight: number;
+
+        switch (settings.resolutionMode) {
+          case 'fixed': {
+            const fixedResKey = settings.fixedResolution as keyof typeof FIXED_RESOLUTIONS;
+            const fixedRes = FIXED_RESOLUTIONS[fixedResKey];
+            const windowAspect = windowWidth / windowHeight;
+            const fixedAspect = fixedRes.width / fixedRes.height;
+            if (windowAspect > fixedAspect) {
+              targetHeight = Math.min(fixedRes.height, windowHeight);
+              targetWidth = targetHeight * fixedAspect;
+            } else {
+              targetWidth = Math.min(fixedRes.width, windowWidth);
+              targetHeight = targetWidth / fixedAspect;
+            }
+            break;
+          }
+          case 'percentage':
+            targetWidth = Math.floor(windowWidth * settings.resolutionScale);
+            targetHeight = Math.floor(windowHeight * settings.resolutionScale);
+            break;
+          case 'native':
+          default:
+            targetWidth = windowWidth;
+            targetHeight = windowHeight;
+            break;
+        }
+
+        const effectivePixelRatio = Math.min(devicePixelRatio, settings.maxPixelRatio);
+        const renderer = renderContextRef.current.renderer;
+
+        renderer.setPixelRatio(effectivePixelRatio);
+        renderer.setSize(targetWidth, targetHeight);
+        cameraRef.current.camera.aspect = targetWidth / targetHeight;
+        cameraRef.current.camera.updateProjectionMatrix();
+
+        // Update PostProcessing display size
+        if (renderPipelineRef.current) {
+          renderPipelineRef.current.setSize(
+            targetWidth * effectivePixelRatio,
+            targetHeight * effectivePixelRatio
+          );
         }
       }
     });
