@@ -445,9 +445,9 @@ def join_objects(objects, name):
     return result
 
 
-def voxel_remesh_sculpt_mode(obj, voxel_size=0.02):
+def voxel_remesh_modifier(obj, voxel_size=0.02):
     """
-    Apply voxel remesh using Sculpt Mode (more stable than modifier).
+    Apply voxel remesh using the Remesh MODIFIER (correct approach).
 
     This merges all disconnected fragments into a SINGLE WATERTIGHT mesh.
     Essential for AI mesh soup before applying Quadriflow.
@@ -459,6 +459,11 @@ def voxel_remesh_sculpt_mode(obj, voxel_size=0.02):
 
     Returns the remeshed object (modifies in place).
     """
+    # Ensure we're in object mode
+    if bpy.context.mode != 'OBJECT':
+        bpy.ops.object.mode_set(mode='OBJECT')
+
+    # Select and activate the object
     bpy.ops.object.select_all(action='DESELECT')
     obj.select_set(True)
     bpy.context.view_layer.objects.active = obj
@@ -466,15 +471,15 @@ def voxel_remesh_sculpt_mode(obj, voxel_size=0.02):
     # Store original face count
     original_faces = len(obj.data.polygons)
 
-    # Set voxel size on the mesh data
-    obj.data.remesh_voxel_size = voxel_size
-    obj.data.remesh_voxel_adaptivity = 0  # 0 = uniform voxels
+    # Add Remesh modifier in VOXEL mode
+    remesh_mod = obj.modifiers.new(name="VoxelRemesh", type='REMESH')
+    remesh_mod.mode = 'VOXEL'
+    remesh_mod.voxel_size = voxel_size
+    remesh_mod.adaptivity = 0  # Uniform voxels
+    remesh_mod.use_smooth_shade = True
 
-    # Switch to sculpt mode and apply voxel remesh
-    bpy.ops.object.mode_set(mode='SCULPT')
-    bpy.ops.sculpt.detail_flood_fill()  # Optional: adapt detail
-    bpy.ops.object.voxel_remesh()  # This is the key operation
-    bpy.ops.object.mode_set(mode='OBJECT')
+    # Apply the modifier
+    bpy.ops.object.modifier_apply(modifier="VoxelRemesh")
 
     new_faces = len(obj.data.polygons)
     print(f"      Voxel remesh: {original_faces:,} → {new_faces:,} faces (voxel size: {voxel_size})")
@@ -551,7 +556,7 @@ def quadriflow_remesh(high_poly, target_faces, base_name, lod_name):
 
     try:
         # Apply voxel remesh - this merges ALL fragments into one mesh
-        voxel_remesh_sculpt_mode(lod, voxel_size)
+        voxel_remesh_modifier(lod, voxel_size)
 
         voxel_faces = len(lod.data.polygons)
         print(f"      Stage 1 complete: {voxel_faces:,} faces (unified mesh)")
@@ -562,7 +567,7 @@ def quadriflow_remesh(high_poly, target_faces, base_name, lod_name):
 
         try:
             # Try with larger voxel size (coarser, less likely to crash)
-            voxel_remesh_sculpt_mode(lod, voxel_size * 2)
+            voxel_remesh_modifier(lod, voxel_size * 2)
             voxel_faces = len(lod.data.polygons)
             print(f"      Stage 1 recovery: {voxel_faces:,} faces")
         except Exception as e2:
