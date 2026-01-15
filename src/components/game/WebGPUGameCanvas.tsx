@@ -834,6 +834,43 @@ export function WebGPUGameCanvas() {
           const cpuTime = updatesElapsed; // Time spent in JS before render
           const gpuTime = renderElapsed;  // Estimated GPU time (render call duration)
 
+          // DEBUG: Log triangle breakdown every 5 seconds to find the source
+          if (Math.floor(currentTime / 5000) !== Math.floor(prevTime / 5000)) {
+            const breakdown: Record<string, number> = {};
+            scene.traverse((obj) => {
+              if ((obj as THREE.Mesh).isMesh) {
+                const mesh = obj as THREE.Mesh;
+                const geo = mesh.geometry;
+                if (geo) {
+                  const indexCount = geo.index ? geo.index.count : 0;
+                  const posCount = geo.attributes.position?.count || 0;
+                  let tris = indexCount > 0 ? indexCount / 3 : posCount / 3;
+
+                  // For InstancedMesh, multiply by visible instance count
+                  if ((mesh as THREE.InstancedMesh).isInstancedMesh) {
+                    const instMesh = mesh as THREE.InstancedMesh;
+                    tris *= instMesh.count;
+                  }
+
+                  const name = obj.name || obj.type || 'Unknown';
+                  const parent = obj.parent?.name || obj.parent?.type || '';
+                  const key = parent ? `${parent}/${name}` : name;
+                  breakdown[key] = (breakdown[key] || 0) + tris;
+                }
+              }
+            });
+
+            // Sort by triangle count and log top contributors
+            const sorted = Object.entries(breakdown)
+              .sort((a, b) => b[1] - a[1])
+              .slice(0, 15);
+            console.log('[Triangle Breakdown] Top contributors:');
+            sorted.forEach(([name, tris]) => {
+              console.log(`  ${name}: ${(tris / 1000000).toFixed(2)}M`);
+            });
+            console.log(`[Triangle Breakdown] Total from renderer: ${(rendererInfo.render.triangles / 1000000).toFixed(2)}M`);
+          }
+
           // Get render/display resolution
           let renderWidth = 0, renderHeight = 0, displayWidth = 0, displayHeight = 0;
           if (renderPipelineRef.current) {
