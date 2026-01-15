@@ -256,34 +256,31 @@ export function WebGPUGameCanvas() {
 
       let initTargetWidth: number;
       let initTargetHeight: number;
+      let initEffectivePixelRatio: number;
 
       switch (initSettings.resolutionMode) {
         case 'fixed': {
+          // Fixed resolution = exact device pixel count, so pixelRatio = 1
           const fixedResKey = initSettings.fixedResolution as keyof typeof FIXED_RESOLUTIONS;
           const fixedRes = FIXED_RESOLUTIONS[fixedResKey];
-          const windowAspect = initWindowWidth / initWindowHeight;
-          const fixedAspect = fixedRes.width / fixedRes.height;
-          if (windowAspect > fixedAspect) {
-            initTargetHeight = Math.min(fixedRes.height, initWindowHeight);
-            initTargetWidth = initTargetHeight * fixedAspect;
-          } else {
-            initTargetWidth = Math.min(fixedRes.width, initWindowWidth);
-            initTargetHeight = initTargetWidth / fixedAspect;
-          }
+          initEffectivePixelRatio = 1.0;
+          initTargetWidth = fixedRes.width;
+          initTargetHeight = fixedRes.height;
           break;
         }
         case 'percentage':
+          initEffectivePixelRatio = Math.min(initDevicePixelRatio, initSettings.maxPixelRatio);
           initTargetWidth = Math.floor(initWindowWidth * initSettings.resolutionScale);
           initTargetHeight = Math.floor(initWindowHeight * initSettings.resolutionScale);
           break;
         case 'native':
         default:
+          initEffectivePixelRatio = Math.min(initDevicePixelRatio, initSettings.maxPixelRatio);
           initTargetWidth = initWindowWidth;
           initTargetHeight = initWindowHeight;
           break;
       }
 
-      const initEffectivePixelRatio = Math.min(initDevicePixelRatio, initSettings.maxPixelRatio);
       renderer.setPixelRatio(initEffectivePixelRatio);
       renderer.setSize(initTargetWidth, initTargetHeight);
 
@@ -922,42 +919,32 @@ export function WebGPUGameCanvas() {
 
       let targetWidth: number;
       let targetHeight: number;
+      let effectivePixelRatio: number;
 
       switch (settings.resolutionMode) {
         case 'fixed': {
-          // Use a fixed resolution (720p, 1080p, etc.)
+          // Fixed resolution = exact device pixel count, so pixelRatio = 1
           const fixedResKey = settings.fixedResolution as keyof typeof FIXED_RESOLUTIONS;
           const fixedRes = FIXED_RESOLUTIONS[fixedResKey];
-          // Scale to fit window while maintaining aspect ratio
-          const windowAspect = windowWidth / windowHeight;
-          const fixedAspect = fixedRes.width / fixedRes.height;
-
-          if (windowAspect > fixedAspect) {
-            // Window is wider, fit by height
-            targetHeight = Math.min(fixedRes.height, windowHeight);
-            targetWidth = targetHeight * fixedAspect;
-          } else {
-            // Window is taller, fit by width
-            targetWidth = Math.min(fixedRes.width, windowWidth);
-            targetHeight = targetWidth / fixedAspect;
-          }
+          effectivePixelRatio = 1.0;
+          targetWidth = fixedRes.width;
+          targetHeight = fixedRes.height;
           break;
         }
         case 'percentage':
           // Scale the window resolution by a percentage
+          effectivePixelRatio = Math.min(devicePixelRatio, settings.maxPixelRatio);
           targetWidth = Math.floor(windowWidth * settings.resolutionScale);
           targetHeight = Math.floor(windowHeight * settings.resolutionScale);
           break;
         case 'native':
         default:
-          // Use full window size
+          // Use full window size with device pixel ratio
+          effectivePixelRatio = Math.min(devicePixelRatio, settings.maxPixelRatio);
           targetWidth = windowWidth;
           targetHeight = windowHeight;
           break;
       }
-
-      // Apply max pixel ratio cap
-      const effectivePixelRatio = Math.min(devicePixelRatio, settings.maxPixelRatio);
 
       return {
         width: targetWidth,
@@ -1861,33 +1848,33 @@ export function WebGPUGameCanvas() {
         let targetWidth: number;
         let targetHeight: number;
 
+        // For fixed resolutions, use pixelRatio=1 so the fixed res IS the device pixel count
+        // For native/percentage, use device pixel ratio (capped by maxPixelRatio)
+        let effectivePixelRatio: number;
+
         switch (settings.resolutionMode) {
           case 'fixed': {
             const fixedResKey = settings.fixedResolution as keyof typeof FIXED_RESOLUTIONS;
             const fixedRes = FIXED_RESOLUTIONS[fixedResKey];
-            const windowAspect = windowWidth / windowHeight;
-            const fixedAspect = fixedRes.width / fixedRes.height;
-            if (windowAspect > fixedAspect) {
-              targetHeight = Math.min(fixedRes.height, windowHeight);
-              targetWidth = targetHeight * fixedAspect;
-            } else {
-              targetWidth = Math.min(fixedRes.width, windowWidth);
-              targetHeight = targetWidth / fixedAspect;
-            }
+            // Fixed resolution = exact device pixel count, so pixelRatio = 1
+            effectivePixelRatio = 1.0;
+            targetWidth = fixedRes.width;
+            targetHeight = fixedRes.height;
             break;
           }
           case 'percentage':
+            effectivePixelRatio = Math.min(devicePixelRatio, settings.maxPixelRatio);
             targetWidth = Math.floor(windowWidth * settings.resolutionScale);
             targetHeight = Math.floor(windowHeight * settings.resolutionScale);
             break;
           case 'native':
           default:
+            effectivePixelRatio = Math.min(devicePixelRatio, settings.maxPixelRatio);
             targetWidth = windowWidth;
             targetHeight = windowHeight;
             break;
         }
 
-        const effectivePixelRatio = Math.min(devicePixelRatio, settings.maxPixelRatio);
         const renderer = renderContextRef.current.renderer;
 
         renderer.setPixelRatio(effectivePixelRatio);
@@ -1895,7 +1882,7 @@ export function WebGPUGameCanvas() {
         cameraRef.current.camera.aspect = targetWidth / targetHeight;
         cameraRef.current.camera.updateProjectionMatrix();
 
-        // Update PostProcessing display size
+        // Update PostProcessing display size (in device pixels)
         if (renderPipelineRef.current) {
           renderPipelineRef.current.setSize(
             targetWidth * effectivePixelRatio,
