@@ -6,40 +6,70 @@ import AssetManager from '@/assets/AssetManager';
 // PERF: Reusable Euler object for instanced decoration loops (avoids thousands of allocations)
 const _tempEuler = new THREE.Euler();
 
-// PERF: Shared frustum culling utilities for all decoration classes
+// PERF: Shared frustum and distance culling utilities for all decoration classes
 const _frustum = new THREE.Frustum();
 const _frustumMatrix = new THREE.Matrix4();
 const _tempVec3 = new THREE.Vector3();
+
+// Camera position for distance culling - stored on frustum update
+let _cameraX = 0;
+let _cameraY = 0;
+let _cameraZ = 0;
+let _maxDistanceSq = 10000; // Squared distance for faster comparison
 
 // Debug counter for frustum culling (removed in production)
 let _debugFrameCount = 0;
 const DEBUG_FRUSTUM_CULLING = true; // Set to true to see culling stats
 
+// Distance culling multiplier - decorations beyond (camera height * multiplier) are culled
+// Lower = more aggressive culling = better performance, but decorations disappear sooner
+const DISTANCE_CULL_MULTIPLIER = 1.2;
+
 /**
  * Update the shared frustum from camera matrices.
+ * Also stores camera position for distance-based culling.
  * Call once per frame before updating all decoration classes.
  */
 export function updateDecorationFrustum(camera: THREE.Camera): void {
   camera.updateMatrixWorld();
   _frustumMatrix.multiplyMatrices(camera.projectionMatrix, camera.matrixWorldInverse);
   _frustum.setFromProjectionMatrix(_frustumMatrix);
+
+  // Store camera position for distance culling
+  _cameraX = camera.position.x;
+  _cameraY = camera.position.y;
+  _cameraZ = camera.position.z;
+
+  // Calculate max distance based on camera height
+  // Higher camera = see more = larger distance threshold
+  // Using height * multiplier ensures close-up views still show decorations
+  const maxDist = Math.max(40, _cameraY * DISTANCE_CULL_MULTIPLIER);
+  _maxDistanceSq = maxDist * maxDist;
+
   _debugFrameCount++;
 
-  // Debug: Log frustum planes on first frame
-  if (DEBUG_FRUSTUM_CULLING && _debugFrameCount === 1) {
-    console.log('[Decoration Frustum] Camera position:', camera.position.toArray());
-    console.log('[Decoration Frustum] Camera target:', (camera as any).target?.toArray?.() || 'N/A');
-    console.log('[Decoration Frustum] Frustum planes set');
+  // Debug: Log frustum info periodically
+  if (DEBUG_FRUSTUM_CULLING && _debugFrameCount % 300 === 1) {
+    const pos = camera.position;
+    console.log(`[Frustum] Camera at (${pos.x.toFixed(1)}, ${pos.y.toFixed(1)}, ${pos.z.toFixed(1)}), maxDist: ${maxDist.toFixed(1)}`);
   }
 }
 
 /**
- * Check if a point is within the frustum with a margin for object size.
+ * Check if a point is within the frustum AND within distance range.
+ * Distance check is faster (squared comparison) and runs first.
  */
 function isInFrustum(x: number, y: number, z: number, margin: number = 2): boolean {
+  // PERF: Distance check first (faster) - cull decorations far from camera
+  const dx = x - _cameraX;
+  const dz = z - _cameraZ;
+  const distSq = dx * dx + dz * dz;
+  if (distSq > _maxDistanceSq) {
+    return false;
+  }
+
+  // Then frustum check (more expensive)
   _tempVec3.set(x, y, z);
-  // Use containsPoint with a margin by checking sphere intersection
-  // For decorations, a simple point check with generous margin is sufficient
   return _frustum.containsPoint(_tempVec3);
 }
 
@@ -687,8 +717,12 @@ export class InstancedRocks {
    * Call this every frame after updateDecorationFrustum().
    */
   public update(): void {
+    let totalVisible = 0;
+    let totalInstances = 0;
+
     for (const { mesh, instances, maxCount } of this.instancedMeshes) {
       let visibleCount = 0;
+      totalInstances += maxCount;
 
       for (let i = 0; i < maxCount; i++) {
         const inst = instances[i];
@@ -711,6 +745,11 @@ export class InstancedRocks {
 
       mesh.count = visibleCount;
       mesh.instanceMatrix.needsUpdate = true;
+      totalVisible += visibleCount;
+    }
+
+    if (DEBUG_FRUSTUM_CULLING && _debugFrameCount % 60 === 0) {
+      console.log(`[Rocks] Visible: ${totalVisible}/${totalInstances} (${totalInstances > 0 ? ((totalVisible/totalInstances)*100).toFixed(1) : 0}%)`);
     }
   }
 
@@ -867,6 +906,10 @@ export class InstancedGrass {
 
     this.instancedMesh.count = visibleCount;
     this.instancedMesh.instanceMatrix.needsUpdate = true;
+
+    if (DEBUG_FRUSTUM_CULLING && _debugFrameCount % 60 === 0) {
+      console.log(`[Grass] Visible: ${visibleCount}/${this.maxCount} (${this.maxCount > 0 ? ((visibleCount/this.maxCount)*100).toFixed(1) : 0}%)`);
+    }
   }
 
   public dispose(): void {
@@ -999,6 +1042,10 @@ export class InstancedPebbles {
 
     this.instancedMesh.count = visibleCount;
     this.instancedMesh.instanceMatrix.needsUpdate = true;
+
+    if (DEBUG_FRUSTUM_CULLING && _debugFrameCount % 60 === 0) {
+      console.log(`[Pebbles] Visible: ${visibleCount}/${this.maxCount} (${this.maxCount > 0 ? ((visibleCount/this.maxCount)*100).toFixed(1) : 0}%)`);
+    }
   }
 
   public dispose(): void {
