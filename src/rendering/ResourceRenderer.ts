@@ -199,7 +199,8 @@ export class ResourceRenderer {
           }
           // IMPORTANT: Also include baseMesh's own transforms (from normalization)
           // The model root has scale and position.y set by normalizeModel()
-          yOffset += baseMesh.position.y * baseMesh.scale.y;
+          // Note: position.y is already in final space (set after scale), so don't multiply by scale again
+          yOffset += baseMesh.position.y;
           baseScale *= baseMesh.scale.y;
         }
       });
