@@ -25,6 +25,7 @@ VOIDSTRIKE uses Three.js with WebGPU renderer and TSL (Three.js Shading Language
 | **RCAS Sharpening** | ✅ Implemented | Robust Contrast-Adaptive Sharpening |
 | **Vignette** | ✅ Implemented | Cinematic edge darkening |
 | **Color Grading** | ✅ Implemented | Exposure, saturation, contrast with ACES Filmic tone mapping |
+| **Volumetric Fog** | ✅ Implemented | Raymarched atmospheric scattering with quality presets |
 
 ### Anti-Aliasing Details
 
@@ -178,8 +179,9 @@ This solves:
 3. **GTAO** - Ambient occlusion (if SSGI disabled)
 4. **SSR** - Screen space reflections
 5. **Bloom** - HDR glow
-6. **Color Grading** - Exposure, saturation, contrast, vignette
-7. **TAA/FXAA** - Anti-aliasing
+6. **Volumetric Fog** - Raymarched atmospheric scattering (if enabled)
+7. **Color Grading** - Exposure, saturation, contrast, vignette
+8. **TAA/FXAA** - Anti-aliasing
 
 **Display Pipeline (display resolution):**
 1. **EASU** - Edge-adaptive upscaling from internal output
@@ -488,8 +490,12 @@ All working and wired up:
 - Upscaling (mode, render scale, EASU sharpness)
 - Vignette (enabled, intensity)
 - Fog (enabled, density) ✅ Fixed initialization
+- **Volumetric Fog (enabled, quality, density, scattering)** ✅ New - integrated into PostProcessing pipeline
 - Particles (enabled, density) ✅ Fixed - now wired up
 - Environment map (enabled)
+- **Emissive Decorations (enabled, intensity multiplier)** ✅ New - crystals now respond to settings
+- Dynamic lights (enabled, max lights)
+- Shadow fill
 
 ### Disconnected Settings (Not Wired)
 These exist in `uiStore.ts` but have no effect:
@@ -506,11 +512,23 @@ These exist in `uiStore.ts` but have no effect:
 
 ## Proposed Features (Discussion)
 
-### 1. Volumetric Fog System
+### 1. Volumetric Fog System ✅ IMPLEMENTED
 
-**Current State:** Using `THREE.Fog` (linear fog) with biome-specific near/far distances.
+**Status:** Fully implemented and integrated into the PostProcessing pipeline (January 2025).
 
-**Proposed: True Volumetric Fog via Raymarching**
+**Implementation Details:**
+- Raymarched volumetric fog with Henyey-Greenstein phase function for light scattering
+- Quality presets: Low (16 steps), Medium (32), High (64), Ultra (128)
+- Configurable density and scattering intensity
+- Height-based density falloff for realistic atmosphere
+- Integrated into post-processing between Bloom and Color Grading
+
+**Files:**
+- `src/rendering/tsl/VolumetricFog.ts` - TSL implementation
+- `src/rendering/tsl/PostProcessing.ts` - Pipeline integration
+- `src/components/game/WebGPUGameCanvas.tsx` - Reactive settings
+
+**Previous Proposed Approach (for reference):**
 
 #### Implementation Approach
 
@@ -588,7 +606,29 @@ const volumetricFog = Fn(({ sceneColor, depth, lightPos, fogDensity }) => {
 
 ---
 
-### 2. Emissive Decorations (Crystals, Alien Structures)
+### 2. Emissive Decorations (Crystals, Alien Structures) ✅ BASIC IMPLEMENTATION
+
+**Status:** Basic implementation complete (January 2025). Crystals now respond to graphics settings.
+
+**What's Working:**
+- `emissiveDecorationsEnabled` - Toggle emissive glow on/off
+- `emissiveIntensityMultiplier` - Control glow intensity (0.5x - 2.0x)
+- CrystalField class stores material reference and updates emissive properties
+- EnvironmentManager provides methods: `setEmissiveDecorationsEnabled()`, `setEmissiveIntensityMultiplier()`
+- Reactive updates in WebGPUGameCanvas when settings change
+
+**Limitations:**
+- Only CrystalField is currently wired up
+- InstancedDecorations and other emissive objects would need similar treatment
+- No per-object pulsing animation yet
+- Emissive objects don't cast actual point lights (would need LightPool integration)
+
+**Files:**
+- `src/rendering/GroundDetail.ts` - CrystalField with emissive controls
+- `src/rendering/EnvironmentManager.ts` - Manager methods
+- `src/components/game/WebGPUGameCanvas.tsx` - Reactive settings
+
+**Previous Design (for reference):**
 
 **Goal:** Crystals and alien structures that emit light, creating stunning visual effects.
 
@@ -868,20 +908,21 @@ lightPool.spawn('laser_hit', impactPos, new THREE.Color(0x00ffff), 3.0, 100);
 
 ### Summary: Recommended Implementation Order
 
-1. **Immediate (This Session)**
+1. **Immediate (This Session)** ✅ COMPLETED
    - ✅ Fix fog density default (done)
    - ✅ Wire up particle controls (done)
+   - ✅ Volumetric fog system with quality levels (done - January 2025)
+   - ✅ Implement emissive decoration system for crystals (done - January 2025)
    - Fix dark rocks: increase envMapIntensity on decoration materials
 
 2. **Short Term**
-   - Add "Shadow Fill" slider (hemisphere ground boost)
-   - Implement emissive decoration system for crystals
+   - Add "Shadow Fill" slider (hemisphere ground boost) - ✅ Already exists
    - Add per-model rendering hints to assets.json
 
 3. **Medium Term**
-   - Volumetric fog system with quality levels
-   - Light pool for dynamic effects
+   - Light pool for dynamic effects - ✅ Already implemented
    - Building smoke/geyser gas effects
+   - Extend emissive system to InstancedDecorations
 
 4. **Long Term**
    - Clustered deferred lighting

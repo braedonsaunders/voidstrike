@@ -7,6 +7,10 @@ import { MapData } from '@/data/maps';
  */
 export class CrystalField {
   public group: THREE.Group;
+  private material: THREE.MeshStandardMaterial | null = null;
+  private baseEmissiveIntensity: number = 0.5;
+  private emissiveEnabled: boolean = true;
+  private intensityMultiplier: number = 1.0;
 
   constructor(
     mapData: MapData,
@@ -37,10 +41,13 @@ export class CrystalField {
       roughness: 0.1,
       metalness: 0.3,
       emissive: emissiveColor,
-      emissiveIntensity: 0.5,
+      emissiveIntensity: this.baseEmissiveIntensity,
       transparent: true,
       opacity: 0.85,
     });
+
+    // Store material reference for emissive controls
+    this.material = crystalMaterial;
 
     for (let i = 0; i < maxCrystals; i++) {
       const x = 10 + Math.random() * (mapData.width - 20);
@@ -83,6 +90,32 @@ export class CrystalField {
           clusterGroup.position.set(x, height, y);
           this.group.add(clusterGroup);
         }
+      }
+    }
+  }
+
+  /**
+   * Enable or disable emissive glow on crystals
+   */
+  public setEmissiveEnabled(enabled: boolean): void {
+    this.emissiveEnabled = enabled;
+    this.updateEmissive();
+  }
+
+  /**
+   * Set emissive intensity multiplier
+   */
+  public setEmissiveIntensityMultiplier(multiplier: number): void {
+    this.intensityMultiplier = multiplier;
+    this.updateEmissive();
+  }
+
+  private updateEmissive(): void {
+    if (this.material) {
+      if (this.emissiveEnabled) {
+        this.material.emissiveIntensity = this.baseEmissiveIntensity * this.intensityMultiplier;
+      } else {
+        this.material.emissiveIntensity = 0;
       }
     }
   }
