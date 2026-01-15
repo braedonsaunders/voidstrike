@@ -1,28 +1,25 @@
 """
-VOIDSTRIKE Batch Retopology & Baking Pipeline
-==============================================
-Processes mixed folders containing both static (OBJ) and animated (GLB) models.
+VOIDSTRIKE GLB LOD Generator & Compressor
+==========================================
+Takes pre-optimized GLB models (500-5000 polys) and generates LOD levels
+with aggressive Draco compression to reduce file sizes from ~15MB to ~500KB.
 
-FILE TYPE DETECTION:
-- .obj files → Static processing (retopo only)
-- .glb/.gltf/.fbx files → Animated processing (preserves rig + animations)
+INPUT: GLB files (already at correct LOD0 poly count)
+OUTPUT: LOD0, LOD1, LOD2 GLB files with Draco compression
 
 FEATURES:
-- Batch processes entire folders with mixed file types
-- Auto-detects static vs animated based on file extension
-- Pauses after each model for user approval (approve/skip/redo/quit)
-- Preserves rigs, vertex weights, and animations for GLB models
-- Transfers weights from high-poly to low-poly via Data Transfer
-- Bakes normal maps and AO from high to low
-- Preserves original textures where possible
-- Creates 3 LOD levels per model
+- Batch processes folders of GLB files
+- Creates LOD1/LOD2 via decimation (no remeshing needed)
+- Aggressive Draco mesh compression for tiny file sizes
+- WebP texture compression
+- Optional texture downscaling
+- Preview mode to inspect LODs before export
+- Preserves armatures and animations
 
 SETUP:
-1. Download Instant Meshes from: https://github.com/wjakob/instant-meshes
-2. Set INSTANT_MESHES_PATH below (or leave empty for auto-detect)
-3. Set INPUT_FOLDERS to your model folders
-4. Set OUTPUT_FOLDER for processed models
-5. Run in Blender
+1. Set INPUT_FOLDERS to your model folders
+2. Set OUTPUT_FOLDER for processed models
+3. Run in Blender
 
 USAGE:
 1. Open Blender (fresh scene recommended)
@@ -30,93 +27,63 @@ USAGE:
 3. Open this script in Text Editor
 4. Adjust settings below
 5. Click "Run Script"
-6. Approve/skip each model as prompted in the console
-
-FOLDER STRUCTURE:
-  Input:                      Output:
-  buildings/                  output/buildings/
-    ├── hq.obj         →        ├── hq_LOD0.glb
-    └── turret.glb     →        ├── hq_LOD1.glb
-  units/                        ├── turret_LOD0.glb (with anims)
-    ├── tank.obj       →        └── ...
-    └── soldier.glb    →      output/units/
-                                ├── tank_LOD0.glb
-                                └── soldier_LOD0.glb (with anims)
 """
 
 import bpy
-import bmesh
 import os
 import math
-import subprocess
-import tempfile
-import platform
 from pathlib import Path
 
 # =============================================================================
-# CONFIGURATION - ADJUST THESE
+# CONFIGURATION
 # =============================================================================
 
-# Path to Instant Meshes executable
-INSTANT_MESHES_PATH = ""  # Leave empty for auto-detect
-
-# Input folders containing your models
-# Each folder can contain BOTH OBJ (static) and GLB (animated) files
-# The script auto-detects file type and processes accordingly
+# Input folders containing GLB models
 INPUT_FOLDERS = {
-    "buildings": "/path/to/your/buildings/",      # OBJ and/or GLB
-    "decorations": "/path/to/your/decorations/",  # OBJ and/or GLB
-    "resources": "/path/to/your/resources/",      # OBJ and/or GLB
-    "units": "/path/to/your/units/",              # OBJ and/or GLB (mixed)
+    "buildings": "/path/to/your/buildings/",
+    "decorations": "/path/to/your/decorations/",
+    "resources": "/path/to/your/resources/",
+    "units": "/path/to/your/units/",
 }
 
 # Output folder for processed models
 OUTPUT_FOLDER = "/path/to/output/"
 
-# Target face counts for each LOD (quad faces, tris ≈ faces × 2)
-# Applied based on FOLDER category, not file type
-LOD_TARGETS = {
-    "buildings": {"lod0": 5000, "lod1": 2000, "lod2": 750},
-    "decorations": {"lod0": 250, "lod1": 100, "lod2": 50},
-    "resources": {"lod0": 500, "lod1": 200, "lod2": 75},
-    "units": {"lod0": 4000, "lod1": 1500, "lod2": 500},  # Works for both static & animated
+# LOD decimation ratios (LOD0 = original, no decimation)
+# These are RATIOS of the original poly count
+LOD_RATIOS = {
+    "buildings": {"lod1": 0.5, "lod2": 0.25},
+    "decorations": {"lod1": 0.4, "lod2": 0.15},
+    "resources": {"lod1": 0.4, "lod2": 0.15},
+    "units": {"lod1": 0.5, "lod2": 0.25},
 }
 
 SETTINGS = {
-    # Instant Meshes settings
-    "crease_angle": 30,
-    "smooth_iterations": 2,
-    "deterministic": True,
+    # Draco compression settings (aggressive for small files)
+    "draco_compression_level": 10,      # 0-10, higher = more compression (slower)
+    "draco_position_quantization": 14,  # 0-30, lower = more compression (less precision)
+    "draco_normal_quantization": 10,    # 0-30
+    "draco_texcoord_quantization": 12,  # 0-30
+    "draco_color_quantization": 10,     # 0-30
 
     # Texture settings
-    "texture_size": 2048,
-    "bake_normal": True,
-    "bake_ao": True,
-
-    # Baking settings
-    "bake_extrusion": 0.15,
-    "bake_max_ray": 0.25,
+    "texture_format": "WEBP",           # WEBP for best compression, or JPEG/PNG
+    "texture_quality": 80,              # 0-100 for WEBP/JPEG
+    "downscale_textures": True,         # Downscale large textures
+    "max_texture_size": 1024,           # Max texture dimension when downscaling
 
     # Processing options
-    "auto_approve": False,  # Set True to skip approval prompts
-    "keep_high_poly": False,
-    "export_format": "GLB",  # GLB or FBX
-
-    # Optimization - remove hidden geometry (great for hollow AI models)
-    "remove_bottom_faces": True,   # Remove ground-facing faces (never seen in RTS)
-    "remove_interior_faces": True,  # Remove interior faces of hollow shells
+    "auto_approve": False,              # Set True to skip approval prompts
+    "export_lod0": True,                # Export LOD0 (original, just compressed)
+    "export_lod1": True,                # Export LOD1
+    "export_lod2": True,                # Export LOD2
 }
 
 # =============================================================================
 # TEST MODE - Set to True to test with just ONE model
 # =============================================================================
-# When enabled:
-#   - Only processes the FIRST model found
-#   - Keeps all objects in scene (high-poly + LODs) for inspection
-#   - Does NOT export or save anything
-#   - Stops script after processing
-#   - Great for tuning LOD_TARGETS before batch processing
 TEST_MODE = True  # <-- SET TO False FOR FULL BATCH PROCESSING
+
 
 # =============================================================================
 # USER INTERACTION
@@ -127,32 +94,24 @@ class UserPrompt:
 
     @staticmethod
     def refresh_viewport_and_frame(objects):
-        """
-        Force viewport refresh and frame camera on processed objects.
-        This allows the user to see the model before approving.
-        """
-        # Deselect all, then select LOD objects
+        """Force viewport refresh and frame camera on processed objects."""
         bpy.ops.object.select_all(action='DESELECT')
 
         for obj in objects:
             if obj and obj.name in bpy.data.objects:
                 obj.select_set(True)
 
-        # Make sure we're in object mode
         if bpy.context.mode != 'OBJECT':
             bpy.ops.object.mode_set(mode='OBJECT')
 
-        # Frame selected objects in all 3D views
         for area in bpy.context.screen.areas:
             if area.type == 'VIEW_3D':
                 for region in area.regions:
                     if region.type == 'WINDOW':
-                        # Override context to target this specific area/region
                         with bpy.context.temp_override(area=area, region=region):
                             bpy.ops.view3d.view_selected()
                         break
 
-        # Set viewport shading to Material Preview for better visualization
         for area in bpy.context.screen.areas:
             if area.type == 'VIEW_3D':
                 for space in area.spaces:
@@ -160,23 +119,17 @@ class UserPrompt:
                         space.shading.type = 'MATERIAL'
                         break
 
-        # Force redraw all areas
         for area in bpy.context.screen.areas:
             area.tag_redraw()
 
-        # Process pending events to update viewport
         bpy.ops.wm.redraw_timer(type='DRAW_WIN_SWAP', iterations=1)
 
     @staticmethod
     def wait_for_approval(model_name, category, stats, lod_objects=None):
-        """
-        Wait for user approval in Blender.
-        Uses a modal operator to pause execution.
-        """
+        """Wait for user approval in Blender console."""
         if SETTINGS["auto_approve"]:
             return "approve"
 
-        # Refresh viewport and frame the LOD objects so user can see them
         if lod_objects:
             UserPrompt.refresh_viewport_and_frame(lod_objects)
 
@@ -185,185 +138,43 @@ class UserPrompt:
         print("="*60)
         print(f"  Category: {category}")
         print(f"  Original: {stats.get('original_faces', 'N/A'):,} faces")
-        print(f"  LOD0: {stats.get('lod0_faces', 'N/A'):,} faces")
-        print(f"  LOD1: {stats.get('lod1_faces', 'N/A'):,} faces")
-        print(f"  LOD2: {stats.get('lod2_faces', 'N/A'):,} faces")
+        if stats.get('lod0_faces'):
+            print(f"  LOD0: {stats['lod0_faces']:,} faces (original)")
+        if stats.get('lod1_faces'):
+            print(f"  LOD1: {stats['lod1_faces']:,} faces")
+        if stats.get('lod2_faces'):
+            print(f"  LOD2: {stats['lod2_faces']:,} faces")
         if stats.get('has_armature'):
-            print(f"  Armature: Preserved ✓")
+            print(f"  Armature: Preserved")
             print(f"  Animations: {stats.get('animation_count', 0)} clips")
         print("-"*60)
-        print("  *** VIEWPORT UPDATED - Check Blender window ***")
-        print("  *** LOD models are selected and framed ***")
+        print("  *** Check Blender viewport - LODs are displayed ***")
         print("-"*60)
         print("  Commands:")
-        print("    [a] Approve and continue")
+        print("    [a] Approve and export")
         print("    [s] Skip this model")
-        print("    [r] Redo with different settings")
         print("    [q] Quit batch processing")
         print("-"*60)
 
-        # In Blender, we use input() which reads from the system console
-        # User needs to have Blender open with system console visible
         try:
-            response = input("  Enter choice [a/s/r/q]: ").strip().lower()
+            response = input("  Enter choice [a/s/q]: ").strip().lower()
             if response in ['a', 'approve', '']:
                 return "approve"
             elif response in ['s', 'skip']:
                 return "skip"
-            elif response in ['r', 'redo']:
-                return "redo"
             elif response in ['q', 'quit']:
                 return "quit"
             else:
                 print(f"  Unknown response '{response}', defaulting to approve")
                 return "approve"
         except EOFError:
-            # If running without console, auto-approve
             print("  (No console input available, auto-approving)")
             return "approve"
 
 
 # =============================================================================
-# INSTANT MESHES INTEGRATION
-# =============================================================================
-
-def find_instant_meshes():
-    """Auto-detect Instant Meshes installation."""
-    if INSTANT_MESHES_PATH and os.path.exists(INSTANT_MESHES_PATH):
-        return INSTANT_MESHES_PATH
-
-    system = platform.system()
-    paths = []
-
-    if system == "Windows":
-        paths = [
-            "C:/Program Files/Instant Meshes/Instant Meshes.exe",
-            "C:/Tools/InstantMeshes/Instant Meshes.exe",
-            os.path.expanduser("~/Downloads/instant-meshes/Instant Meshes.exe"),
-        ]
-    elif system == "Darwin":
-        paths = [
-            "/Applications/Instant Meshes.app/Contents/MacOS/Instant Meshes",
-            os.path.expanduser("~/Applications/Instant Meshes.app/Contents/MacOS/Instant Meshes"),
-        ]
-    else:
-        paths = [
-            "/usr/local/bin/Instant Meshes",
-            os.path.expanduser("~/tools/instant-meshes/Instant Meshes"),
-            os.path.expanduser("~/.local/bin/Instant Meshes"),
-        ]
-
-    for p in paths:
-        if os.path.exists(p):
-            return p
-    return None
-
-
-def run_instant_meshes(input_path, output_path, target_faces):
-    """Run Instant Meshes CLI on a mesh."""
-    im_path = find_instant_meshes()
-    if not im_path:
-        raise FileNotFoundError("Instant Meshes not found!")
-
-    cmd = [
-        im_path,
-        "-o", output_path,
-        "-f", str(target_faces),
-        "-r", "4",
-        "-p", "4",
-        "-c", str(SETTINGS["crease_angle"]),
-        "-S", str(SETTINGS["smooth_iterations"]),
-        "-b",
-    ]
-    if SETTINGS["deterministic"]:
-        cmd.append("-d")
-    cmd.append(input_path)
-
-    result = subprocess.run(cmd, capture_output=True, text=True, timeout=600)
-
-    if result.returncode != 0 or not os.path.exists(output_path):
-        raise RuntimeError(f"Instant Meshes failed: {result.stderr}")
-
-    return True
-
-
-# =============================================================================
 # MESH UTILITIES
 # =============================================================================
-
-def clean_mesh(obj):
-    """Clean mesh: remove doubles, fix normals."""
-    bpy.context.view_layer.objects.active = obj
-    bpy.ops.object.mode_set(mode='EDIT')
-    bpy.ops.mesh.select_all(action='SELECT')
-    bpy.ops.mesh.remove_doubles(threshold=0.0001)
-    bpy.ops.mesh.normals_make_consistent(inside=False)
-    bpy.ops.object.mode_set(mode='OBJECT')
-
-
-def remove_hidden_geometry(obj, remove_bottom=True, remove_interior=True):
-    """
-    Remove geometry that will never be seen in an RTS game.
-
-    - Bottom faces: faces pointing straight down (ground contact)
-    - Interior faces: faces inside hollow shells
-
-    This can significantly reduce poly count on hollow AI models.
-    """
-    bpy.context.view_layer.objects.active = obj
-    bpy.ops.object.mode_set(mode='EDIT')
-    bpy.ops.mesh.select_all(action='DESELECT')
-
-    bm = bmesh.from_edit_mesh(obj.data)
-    bm.faces.ensure_lookup_table()
-
-    faces_to_delete = []
-
-    if remove_bottom:
-        # Select faces pointing straight down (normal.z < -0.95)
-        for face in bm.faces:
-            if face.normal.z < -0.95:  # Pointing down
-                faces_to_delete.append(face)
-
-    if remove_interior:
-        # Find interior faces using ray casting from face centers
-        # Interior faces are occluded from all directions
-        from mathutils import Vector
-
-        # Simple heuristic: faces with normals pointing inward toward mesh center
-        # Get mesh center
-        center = Vector((0, 0, 0))
-        for v in bm.verts:
-            center += v.co
-        center /= len(bm.verts)
-
-        for face in bm.faces:
-            if face in faces_to_delete:
-                continue
-            # Vector from face center to mesh center
-            face_center = face.calc_center_median()
-            to_center = (center - face_center).normalized()
-            # If face normal points toward center, it's likely interior
-            if face.normal.dot(to_center) > 0.7:
-                faces_to_delete.append(face)
-
-    # Delete the faces
-    if faces_to_delete:
-        bmesh.ops.delete(bm, geom=faces_to_delete, context='FACES')
-        bmesh.update_edit_mesh(obj.data)
-        print(f"      Removed {len(faces_to_delete)} hidden faces")
-
-    bpy.ops.object.mode_set(mode='OBJECT')
-
-
-def triangulate_mesh(obj):
-    """Convert quads to tris for Instant Meshes."""
-    bpy.context.view_layer.objects.active = obj
-    bpy.ops.object.mode_set(mode='EDIT')
-    bpy.ops.mesh.select_all(action='SELECT')
-    bpy.ops.mesh.quads_convert_to_tris()
-    bpy.ops.object.mode_set(mode='OBJECT')
-
 
 def get_mesh_stats(obj):
     """Get mesh statistics."""
@@ -374,1029 +185,305 @@ def get_mesh_stats(obj):
     }
 
 
-def calculate_surface_area(obj):
-    """Calculate total surface area of a mesh."""
-    bm = bmesh.new()
-    bm.from_mesh(obj.data)
-    area = sum(f.calc_area() for f in bm.faces)
-    bm.free()
-    return area
-
-
-def separate_loose_parts(obj):
+def create_decimated_lod(source_obj, ratio, lod_name):
     """
-    Separate mesh into disconnected parts.
-    Returns list of new objects (original is deleted).
-    """
-    # Store original name and transform
-    orig_name = obj.name
-    orig_matrix = obj.matrix_world.copy()
-
-    # Select only this object
-    bpy.ops.object.select_all(action='DESELECT')
-    obj.select_set(True)
-    bpy.context.view_layer.objects.active = obj
-
-    # Separate by loose parts
-    bpy.ops.object.mode_set(mode='EDIT')
-    bpy.ops.mesh.select_all(action='SELECT')
-    bpy.ops.mesh.separate(type='LOOSE')
-    bpy.ops.object.mode_set(mode='OBJECT')
-
-    # Get all resulting objects
-    parts = [o for o in bpy.context.selected_objects if o.type == 'MESH']
-
-    # Name them
-    for i, part in enumerate(parts):
-        part.name = f"{orig_name}_part{i}"
-
-    return parts
-
-
-def join_objects(objects, name):
-    """
-    Join multiple objects into one.
-    Returns the joined object.
-    """
-    if not objects:
-        return None
-
-    if len(objects) == 1:
-        objects[0].name = name
-        return objects[0]
-
-    # Deselect all
-    bpy.ops.object.select_all(action='DESELECT')
-
-    # Select all objects to join
-    for obj in objects:
-        obj.select_set(True)
-
-    # Make first one active
-    bpy.context.view_layer.objects.active = objects[0]
-
-    # Join
-    bpy.ops.object.join()
-
-    # Rename result
-    result = bpy.context.active_object
-    result.name = name
-
-    return result
-
-
-def voxel_remesh_modifier(obj, voxel_size=0.02):
-    """
-    Apply voxel remesh using the Remesh MODIFIER (correct approach).
-
-    This merges all disconnected fragments into a SINGLE WATERTIGHT mesh.
-    Essential for AI mesh soup before applying Quadriflow.
+    Create a decimated LOD from the source mesh.
 
     Args:
-        obj: The mesh object to remesh
-        voxel_size: Size of voxels (smaller = more detail, larger = simpler)
-                    0.01 = high detail, 0.02 = medium, 0.05 = low detail
+        source_obj: Source mesh object
+        ratio: Decimation ratio (0.5 = half the faces)
+        lod_name: Name for the new LOD object
 
-    Returns the remeshed object (modifies in place).
+    Returns:
+        New decimated mesh object
     """
-    # Ensure we're in object mode
-    if bpy.context.mode != 'OBJECT':
-        bpy.ops.object.mode_set(mode='OBJECT')
-
-    # Select and activate the object
+    # Duplicate the source
     bpy.ops.object.select_all(action='DESELECT')
-    obj.select_set(True)
-    bpy.context.view_layer.objects.active = obj
-
-    # Store original face count
-    original_faces = len(obj.data.polygons)
-
-    # Add Remesh modifier in VOXEL mode
-    remesh_mod = obj.modifiers.new(name="VoxelRemesh", type='REMESH')
-    remesh_mod.mode = 'VOXEL'
-    remesh_mod.voxel_size = voxel_size
-    remesh_mod.adaptivity = 0  # Uniform voxels
-    remesh_mod.use_smooth_shade = True
-
-    # Apply the modifier
-    bpy.ops.object.modifier_apply(modifier="VoxelRemesh")
-
-    new_faces = len(obj.data.polygons)
-    print(f"      Voxel remesh: {original_faces:,} → {new_faces:,} faces (voxel size: {voxel_size})")
-
-    return obj
-
-
-def calculate_voxel_size(obj, target_faces):
-    """
-    Calculate appropriate voxel size based on mesh bounds and target face count.
-
-    IMPORTANT: Larger voxel size = fewer faces, smaller = more faces.
-    For 590K→4K reduction, we need LARGE voxels (0.05-0.2 range).
-    """
-    from mathutils import Vector
-
-    # Get mesh bounding box dimensions
-    bbox = [obj.matrix_world @ Vector(corner) for corner in obj.bound_box]
-    min_corner = Vector((min(v.x for v in bbox), min(v.y for v in bbox), min(v.z for v in bbox)))
-    max_corner = Vector((max(v.x for v in bbox), max(v.y for v in bbox), max(v.z for v in bbox)))
-    dimensions = max_corner - min_corner
-
-    # Use the largest dimension to scale voxel size
-    max_dim = max(dimensions.x, dimensions.y, dimensions.z)
-
-    # For game models: we want roughly target_faces on a mesh
-    # Voxel count per dimension ≈ dim / voxel_size
-    # Total voxels ≈ (dim/voxel_size)^2 for surface
-    # So voxel_size ≈ dim / sqrt(target_faces)
-    voxel_size = max_dim / math.sqrt(target_faces)
-
-    # Clamp to reasonable range for game models
-    # Min 0.02 (detailed), Max 0.5 (very coarse)
-    voxel_size = max(0.02, min(0.5, voxel_size))
-
-    print(f"      Calculated voxel size: {voxel_size:.4f} (mesh dim: {max_dim:.2f}, target: {target_faces})")
-
-    return voxel_size
-
-
-def quadriflow_remesh(high_poly, target_faces, base_name, lod_name):
-    """
-    Create clean low-poly using TWO-STAGE approach:
-
-    STAGE 1: Voxel Remesh - merges all disconnected fragments into ONE watertight mesh
-    STAGE 2: Quadriflow - creates clean quad topology from the unified mesh
-
-    This is the CORRECT approach for AI mesh soup (like Meshy.ai models with
-    thousands of disconnected fragments).
-
-    Returns the final mesh object.
-    """
-    from mathutils import Vector
-
-    # Duplicate high poly
-    bpy.ops.object.select_all(action='DESELECT')
-    high_poly.select_set(True)
-    bpy.context.view_layer.objects.active = high_poly
+    source_obj.select_set(True)
+    bpy.context.view_layer.objects.active = source_obj
     bpy.ops.object.duplicate()
 
     lod = bpy.context.active_object
-    lod.name = f"{base_name}_{lod_name}"
+    lod.name = lod_name
 
-    current_faces = len(lod.data.polygons)
-    print(f"      Two-stage remesh ({current_faces:,} → {target_faces} faces)...")
+    original_faces = len(lod.data.polygons)
 
-    # =========================================================================
-    # STAGE 1: Voxel Remesh to merge fragments into watertight mesh
-    # =========================================================================
-    print(f"      Stage 1: Voxel remesh (merging fragments)...")
+    # Apply decimate modifier
+    decimate = lod.modifiers.new("Decimate", 'DECIMATE')
+    decimate.decimate_type = 'COLLAPSE'
+    decimate.ratio = max(0.01, min(ratio, 1.0))
+    decimate.use_collapse_triangulate = False  # Keep quads where possible
 
-    # Calculate voxel size first (outside try block so it's available for retry)
-    intermediate_target = target_faces * 3
-    try:
-        voxel_size = calculate_voxel_size(lod, intermediate_target)
-    except Exception as e:
-        print(f"      Voxel size calculation failed: {e}, using default")
-        voxel_size = 0.02  # Default fallback
+    # Apply the modifier
+    bpy.context.view_layer.objects.active = lod
+    bpy.ops.object.modifier_apply(modifier="Decimate")
 
-    try:
-        # Apply voxel remesh - this merges ALL fragments into one mesh
-        voxel_remesh_modifier(lod, voxel_size)
-
-        voxel_faces = len(lod.data.polygons)
-        print(f"      Stage 1 complete: {voxel_faces:,} faces (unified mesh)")
-
-    except Exception as e:
-        print(f"      Stage 1 (voxel) failed: {e}")
-        print(f"      Trying larger voxel size ({voxel_size * 2})...")
-
-        try:
-            # Try with larger voxel size (coarser, less likely to crash)
-            voxel_remesh_modifier(lod, voxel_size * 2)
-            voxel_faces = len(lod.data.polygons)
-            print(f"      Stage 1 recovery: {voxel_faces:,} faces")
-        except Exception as e2:
-            print(f"      Stage 1 completely failed: {e2}")
-            print(f"      Falling back to decimate only...")
-
-            # Ultimate fallback - just decimate the soup
-            if current_faces > target_faces:
-                ratio = target_faces / current_faces
-                decimate = lod.modifiers.new("Decimate", 'DECIMATE')
-                decimate.decimate_type = 'COLLAPSE'
-                decimate.ratio = max(0.0001, ratio)
-                decimate.use_collapse_triangulate = True
-                try:
-                    bpy.ops.object.modifier_apply(modifier="Decimate")
-                except:
-                    if "Decimate" in lod.modifiers:
-                        lod.modifiers.remove(lod.modifiers["Decimate"])
-
-            lod.location = high_poly.location
-            lod.rotation_euler = high_poly.rotation_euler
-            lod.scale = high_poly.scale
-            return lod
-
-    # =========================================================================
-    # STAGE 2: Quadriflow for clean quad topology
-    # =========================================================================
-    print(f"      Stage 2: Quadriflow (clean topology)...")
-
-    voxel_faces = len(lod.data.polygons)
-
-    try:
-        # Quadriflow remesh - now works because mesh is watertight
-        before_quadriflow = len(lod.data.polygons)
-
-        bpy.ops.object.quadriflow_remesh(
-            target_faces=target_faces,
-            use_mesh_symmetry=False,
-            use_preserve_sharp=True,
-            use_preserve_boundary=False,
-            smooth_normals=True,
-            mode='FACES'
-        )
-
-        final_faces = len(lod.data.polygons)
-
-        # Check if Quadriflow actually did anything
-        if final_faces == before_quadriflow:
-            print(f"      Quadriflow silently failed (face count unchanged)")
-            raise Exception("Quadriflow did not modify mesh")
-
-        print(f"      Stage 2 complete: {final_faces:,} faces (clean quads)")
-
-    except Exception as e:
-        print(f"      Stage 2 (Quadriflow) failed: {e}")
-        print(f"      Using decimate on unified mesh...")
-
-        # Fallback to decimate - but at least the mesh is unified now!
-        if voxel_faces > target_faces:
-            ratio = target_faces / voxel_faces
-            decimate = lod.modifiers.new("Decimate", 'DECIMATE')
-            decimate.decimate_type = 'COLLAPSE'
-            decimate.ratio = max(0.0001, ratio)
-            decimate.use_collapse_triangulate = True
-
-            try:
-                bpy.ops.object.modifier_apply(modifier="Decimate")
-            except:
-                if "Decimate" in lod.modifiers:
-                    lod.modifiers.remove(lod.modifiers["Decimate"])
-
-    # Match transform
-    lod.location = high_poly.location
-    lod.rotation_euler = high_poly.rotation_euler
-    lod.scale = high_poly.scale
-
-    final_faces = len(lod.data.polygons)
-    print(f"      Final: {final_faces:,} faces")
+    new_faces = len(lod.data.polygons)
+    print(f"      Decimated: {original_faces:,} -> {new_faces:,} faces ({ratio:.0%})")
 
     return lod
 
 
-def retopo_with_loose_parts(high_poly, target_faces, temp_dir, base_name, lod_name):
+def downscale_textures(max_size=1024):
     """
-    Smart retopology that handles both clean meshes and AI mesh soup.
-
-    - If mesh has < 50 loose parts: try Instant Meshes (clean topology)
-    - If mesh has >= 50 loose parts: use Voxel Remesh + Decimate (AI soup)
+    Downscale all textures in the scene to max_size.
+    Helps reduce GLB file size significantly.
     """
-    # Count loose parts WITHOUT separating (much faster)
-    bm = bmesh.new()
-    bm.from_mesh(high_poly.data)
+    for img in bpy.data.images:
+        if img.size[0] > max_size or img.size[1] > max_size:
+            # Calculate new size maintaining aspect ratio
+            scale = max_size / max(img.size[0], img.size[1])
+            new_width = int(img.size[0] * scale)
+            new_height = int(img.size[1] * scale)
 
-    # Count islands using linked faces
-    visited = set()
-    num_islands = 0
+            print(f"      Downscaling texture {img.name}: {img.size[0]}x{img.size[1]} -> {new_width}x{new_height}")
 
-    for face in bm.faces:
-        if face.index not in visited:
-            num_islands += 1
-            # BFS to mark all connected faces
-            stack = [face]
-            while stack:
-                f = stack.pop()
-                if f.index in visited:
-                    continue
-                visited.add(f.index)
-                for edge in f.edges:
-                    for linked_face in edge.link_faces:
-                        if linked_face.index not in visited:
-                            stack.append(linked_face)
+            # Scale the image
+            img.scale(new_width, new_height)
 
-    bm.free()
 
-    print(f"      {num_islands:,} mesh islands detected")
+# =============================================================================
+# GLB IMPORT/EXPORT
+# =============================================================================
 
-    # If too many islands, it's AI mesh soup - use Quadriflow
-    if num_islands >= 50:
-        print(f"      Using Quadriflow (AI mesh soup detected)")
-        return quadriflow_remesh(high_poly, target_faces, base_name, lod_name)
+def import_glb(filepath):
+    """
+    Import a GLB file.
 
-    # Otherwise try Instant Meshes for clean quad topology
-    print(f"      Using Instant Meshes (clean mesh)")
-
-    export_path = os.path.join(temp_dir, f"{base_name}_export.obj")
-    result_path = os.path.join(temp_dir, f"{base_name}_{lod_name}.obj")
-
+    Returns:
+        tuple: (mesh_objects, armature_obj) - lists of mesh objects and armature if present
+    """
+    # Clear selection before import
     bpy.ops.object.select_all(action='DESELECT')
-    high_poly.select_set(True)
-    bpy.context.view_layer.objects.active = high_poly
 
-    bpy.ops.wm.obj_export(
-        filepath=export_path,
-        export_selected_objects=True,
-        export_triangulated_mesh=True,
-        export_materials=False,
-    )
-
-    try:
-        run_instant_meshes(export_path, result_path, target_faces)
-
-        bpy.ops.wm.obj_import(filepath=result_path)
-        result = bpy.context.active_object
-        result.name = f"{base_name}_{lod_name}"
-
-        # Match transform
-        result.location = high_poly.location
-        result.rotation_euler = high_poly.rotation_euler
-        result.scale = high_poly.scale
-
-        return result
-
-    except Exception as e:
-        print(f"      Instant Meshes failed: {e}")
-        print(f"      Falling back to Quadriflow")
-        return quadriflow_remesh(high_poly, target_faces, base_name, lod_name)
-
-
-# =============================================================================
-# STATIC MODEL PROCESSING (OBJ)
-# =============================================================================
-
-def process_static_model(filepath, category, temp_dir, output_dir):
-    """Process a static OBJ model through retopology pipeline."""
-    filename = Path(filepath).stem
-    print(f"\n{'='*60}")
-    print(f"Processing STATIC: {filename}")
-    print(f"{'='*60}")
-
-    # Import OBJ
-    bpy.ops.wm.obj_import(filepath=filepath)
-    high_poly = bpy.context.active_object
-    high_poly.name = f"{filename}_highpoly"
-
-    original_faces = len(high_poly.data.polygons)
-    print(f"  Imported: {original_faces:,} faces")
-
-    # Clean mesh
-    clean_mesh(high_poly)
-
-    # Get LOD targets for this category
-    targets = LOD_TARGETS.get(category, LOD_TARGETS["units"])
-
-    # Create LODs via Instant Meshes (handles disconnected parts automatically)
-    lods = []
-    lod_stats = {}
-
-    for lod_name, target in [("LOD0", targets["lod0"]),
-                              ("LOD1", targets["lod1"]),
-                              ("LOD2", targets["lod2"])]:
-        print(f"\n  Creating {lod_name} ({target} faces)...")
-
-        try:
-            # Use the new loose-parts-aware retopo function
-            lod = retopo_with_loose_parts(high_poly, target, temp_dir, filename, lod_name)
-
-            # Remove hidden geometry for buildings (hollow shells waste polygons)
-            if category == "buildings":
-                before_faces = len(lod.data.polygons)
-                remove_hidden_geometry(
-                    lod,
-                    remove_bottom=SETTINGS["remove_bottom_faces"],
-                    remove_interior=SETTINGS["remove_interior_faces"]
-                )
-                after_faces = len(lod.data.polygons)
-                if after_faces < before_faces:
-                    print(f"    Optimized: {before_faces:,} → {after_faces:,} faces")
-
-            lods.append(lod)
-            lod_stats[f"{lod_name.lower()}_faces"] = len(lod.data.polygons)
-            print(f"    Created: {len(lod.data.polygons):,} faces")
-
-        except Exception as e:
-            print(f"    ERROR: {e}")
-            print(f"    Using decimate fallback...")
-            lod = create_decimate_fallback(high_poly, target * 2, f"_{lod_name}")
-            lods.append(lod)
-            lod_stats[f"{lod_name.lower()}_faces"] = len(lod.data.polygons)
-
-    # UV unwrap LODs
-    print(f"\n  UV unwrapping...")
-    for lod in lods:
-        smart_uv_unwrap(lod)
-
-    # Bake textures
-    print(f"\n  Baking textures...")
-    normal_img = None
-    ao_img = None
-
-    if SETTINGS["bake_normal"]:
-        normal_img = bake_normal_map(high_poly, lods[0], output_dir, filename)
-    if SETTINGS["bake_ao"]:
-        ao_img = bake_ao_map(high_poly, lods[0], output_dir, filename)
-
-    # Apply textures to all LODs
-    for lod in lods:
-        apply_baked_textures(lod, normal_img, ao_img)
-
-    # Prepare stats for approval
-    stats = {
-        "original_faces": original_faces,
-        "has_armature": False,
-        **lod_stats
-    }
-
-    # TEST MODE: Just show results and stop
-    if TEST_MODE:
-        # Arrange objects for easy viewing
-        spacing = 3.0
-        high_poly.location.x = -spacing
-        high_poly.name = f"{filename}_ORIGINAL"
-        for i, lod in enumerate(lods):
-            lod.location.x = i * spacing
-
-        # Frame all objects
-        UserPrompt.refresh_viewport_and_frame([high_poly] + lods)
-
-        print("\n" + "="*60)
-        print("  TEST MODE COMPLETE")
-        print("="*60)
-        print(f"  Model: {filename}")
-        print(f"  Original: {original_faces:,} faces (left)")
-        print(f"  LOD0: {lod_stats.get('lod0_faces', 'N/A'):,} faces")
-        print(f"  LOD1: {lod_stats.get('lod1_faces', 'N/A'):,} faces")
-        print(f"  LOD2: {lod_stats.get('lod2_faces', 'N/A'):,} faces")
-        print("-"*60)
-        print("  Objects kept in scene for inspection.")
-        print("  Nothing was saved or exported.")
-        print("  Set TEST_MODE = False for batch processing.")
-        print("="*60)
-        return "test_done"
-
-    # Wait for approval (pass LOD objects so viewport can frame them)
-    response = UserPrompt.wait_for_approval(filename, category, stats, lod_objects=lods)
-
-    if response == "approve":
-        # Export
-        for lod in lods:
-            export_model(lod, output_dir, lod.name)
-        print(f"  ✓ Exported {filename}")
-
-    elif response == "skip":
-        print(f"  ⊘ Skipped {filename}")
-
-    elif response == "quit":
-        return "quit"
-
-    # Cleanup
-    cleanup_scene([high_poly] + lods)
-
-    return response
-
-
-def create_decimate_fallback(obj, target_tris, suffix):
-    """Fallback decimation if Instant Meshes fails."""
-    bpy.ops.object.select_all(action='DESELECT')
-    obj.select_set(True)
-    bpy.context.view_layer.objects.active = obj
-    bpy.ops.object.duplicate()
-
-    dup = bpy.context.active_object
-    dup.name = obj.name.replace("_highpoly", "") + suffix
-
-    current = len(dup.data.polygons)
-    ratio = (target_tris / 2) / current if current > 0 else 0.1
-
-    mod = dup.modifiers.new("Decimate", 'DECIMATE')
-    mod.ratio = max(0.01, min(ratio, 1.0))
-    bpy.ops.object.modifier_apply(modifier="Decimate")
-
-    return dup
-
-
-# =============================================================================
-# ANIMATED MODEL PROCESSING (GLB)
-# =============================================================================
-
-def process_animated_model(filepath, category, temp_dir, output_dir):
-    """
-    Process an animated GLB model while preserving rig and animations.
-
-    Strategy:
-    1. Import GLB (mesh + armature + animations)
-    2. Separate mesh from armature temporarily
-    3. Retopo the mesh via Instant Meshes
-    4. Transfer vertex weights from original to new mesh
-    5. Re-parent to armature
-    6. Bake textures
-    7. Export with animations
-    """
-    filename = Path(filepath).stem
-    print(f"\n{'='*60}")
-    print(f"Processing ANIMATED: {filename}")
-    print(f"{'='*60}")
-
-    # Import GLB
+    # Import
     bpy.ops.import_scene.gltf(filepath=filepath)
 
-    # Find mesh and armature
-    mesh_obj = None
+    # Collect imported objects
+    mesh_objects = []
     armature_obj = None
-    original_materials = []
 
     for obj in bpy.context.selected_objects:
         if obj.type == 'MESH':
-            mesh_obj = obj
-            # Store original materials
-            original_materials = [slot.material for slot in obj.material_slots]
+            mesh_objects.append(obj)
         elif obj.type == 'ARMATURE':
             armature_obj = obj
 
-    if not mesh_obj:
+    return mesh_objects, armature_obj
+
+
+def export_glb(objects, armature, output_path):
+    """
+    Export objects as GLB with aggressive Draco compression.
+
+    Args:
+        objects: List of mesh objects to export
+        armature: Armature object (or None)
+        output_path: Output file path
+    """
+    # Select objects for export
+    bpy.ops.object.select_all(action='DESELECT')
+
+    for obj in objects:
+        obj.select_set(True)
+
+    if armature:
+        armature.select_set(True)
+        bpy.context.view_layer.objects.active = armature
+
+    # Downscale textures if enabled
+    if SETTINGS["downscale_textures"]:
+        downscale_textures(SETTINGS["max_texture_size"])
+
+    # Export with Draco compression
+    bpy.ops.export_scene.gltf(
+        filepath=output_path,
+        use_selection=True,
+        export_format='GLB',
+
+        # Draco mesh compression (key for small file sizes)
+        export_draco_mesh_compression_enable=True,
+        export_draco_mesh_compression_level=SETTINGS["draco_compression_level"],
+        export_draco_position_quantization=SETTINGS["draco_position_quantization"],
+        export_draco_normal_quantization=SETTINGS["draco_normal_quantization"],
+        export_draco_texcoord_quantization=SETTINGS["draco_texcoord_quantization"],
+        export_draco_color_quantization=SETTINGS["draco_color_quantization"],
+
+        # Texture compression
+        export_image_format=SETTINGS["texture_format"],
+
+        # Material export
+        export_materials='EXPORT',
+
+        # Animation (preserve if present)
+        export_animations=True,
+        export_animation_mode='ACTIONS',
+
+        # Other optimizations
+        export_apply=True,  # Apply modifiers
+    )
+
+    # Report file size
+    if os.path.exists(output_path):
+        size_bytes = os.path.getsize(output_path)
+        if size_bytes > 1024 * 1024:
+            size_str = f"{size_bytes / (1024 * 1024):.2f} MB"
+        else:
+            size_str = f"{size_bytes / 1024:.1f} KB"
+        print(f"      Exported: {output_path} ({size_str})")
+
+
+# =============================================================================
+# MODEL PROCESSING
+# =============================================================================
+
+def process_glb_model(filepath, category, output_dir):
+    """
+    Process a GLB model: create LODs and export with compression.
+
+    Args:
+        filepath: Path to input GLB file
+        category: Category name (for LOD ratio lookup)
+        output_dir: Output directory
+
+    Returns:
+        str: "approve", "skip", "quit", or "test_done"
+    """
+    filename = Path(filepath).stem
+    print(f"\n{'='*60}")
+    print(f"Processing: {filename}")
+    print(f"{'='*60}")
+
+    # Import GLB
+    mesh_objects, armature_obj = import_glb(filepath)
+
+    if not mesh_objects:
         print(f"  ERROR: No mesh found in {filename}")
         return "skip"
 
-    high_poly = mesh_obj
-    high_poly.name = f"{filename}_highpoly"
-    original_faces = len(high_poly.data.polygons)
+    # Use first mesh as primary (or could join all)
+    primary_mesh = mesh_objects[0]
+    primary_mesh.name = f"{filename}_LOD0"
 
-    print(f"  Mesh: {original_faces:,} faces")
+    original_faces = len(primary_mesh.data.polygons)
+    print(f"  Imported: {original_faces:,} faces")
+
     if armature_obj:
-        print(f"  Armature: {armature_obj.name} ({len(armature_obj.data.bones)} bones)")
-        # Count animations
-        anim_count = 0
-        if armature_obj.animation_data and armature_obj.animation_data.action:
-            anim_count = 1
-        if bpy.data.actions:
-            anim_count = len(bpy.data.actions)
+        bone_count = len(armature_obj.data.bones)
+        anim_count = len(bpy.data.actions) if bpy.data.actions else 0
+        print(f"  Armature: {armature_obj.name} ({bone_count} bones)")
         print(f"  Animations: {anim_count} action(s)")
 
-    # Store original vertex groups (weights)
-    original_vertex_groups = [vg.name for vg in high_poly.vertex_groups]
-    print(f"  Vertex groups: {len(original_vertex_groups)}")
+    # Get LOD ratios for this category
+    ratios = LOD_RATIOS.get(category, LOD_RATIOS["units"])
 
-    # Store armature modifier settings
-    armature_modifier = None
-    for mod in high_poly.modifiers:
-        if mod.type == 'ARMATURE':
-            armature_modifier = {
-                'object': mod.object,
-                'use_deform_preserve_volume': mod.use_deform_preserve_volume,
-            }
-            break
+    # Track all LODs
+    lods = {"LOD0": primary_mesh}
+    lod_stats = {"original_faces": original_faces, "lod0_faces": original_faces}
 
-    # Get LOD targets
-    targets = LOD_TARGETS.get(category, LOD_TARGETS["units"])
+    # Create LOD1
+    if SETTINGS["export_lod1"]:
+        print(f"\n  Creating LOD1...")
+        lod1 = create_decimated_lod(primary_mesh, ratios["lod1"], f"{filename}_LOD1")
+        lods["LOD1"] = lod1
+        lod_stats["lod1_faces"] = len(lod1.data.polygons)
 
-    # Create LODs (handles disconnected parts automatically)
-    lods = []
-    lod_stats = {}
+        # Copy armature relationship if present
+        if armature_obj:
+            lod1.parent = armature_obj
+            # Copy armature modifier
+            for mod in primary_mesh.modifiers:
+                if mod.type == 'ARMATURE':
+                    new_mod = lod1.modifiers.new("Armature", 'ARMATURE')
+                    new_mod.object = mod.object
+                    break
 
-    for lod_name, target in [("LOD0", targets["lod0"]),
-                              ("LOD1", targets["lod1"]),
-                              ("LOD2", targets["lod2"])]:
-        print(f"\n  Creating {lod_name} ({target} faces)...")
+    # Create LOD2
+    if SETTINGS["export_lod2"]:
+        print(f"\n  Creating LOD2...")
+        lod2 = create_decimated_lod(primary_mesh, ratios["lod2"], f"{filename}_LOD2")
+        lods["LOD2"] = lod2
+        lod_stats["lod2_faces"] = len(lod2.data.polygons)
 
-        try:
-            # Use the new loose-parts-aware retopo function
-            lod = retopo_with_loose_parts(high_poly, target, temp_dir, filename, lod_name)
-
-            # Transfer vertex weights from high-poly to low-poly
-            if armature_obj and original_vertex_groups:
-                print(f"    Transferring weights...")
-                transfer_vertex_weights(high_poly, lod)
-
-                # Add armature modifier
-                arm_mod = lod.modifiers.new("Armature", 'ARMATURE')
-                arm_mod.object = armature_obj
-                if armature_modifier:
-                    arm_mod.use_deform_preserve_volume = armature_modifier['use_deform_preserve_volume']
-
-                # Parent to armature (keep transform)
-                lod.parent = armature_obj
-                lod.matrix_parent_inverse = armature_obj.matrix_world.inverted()
-
-            lods.append(lod)
-            lod_stats[f"{lod_name.lower()}_faces"] = len(lod.data.polygons)
-            print(f"    Created: {len(lod.data.polygons):,} faces")
-
-        except Exception as e:
-            print(f"    ERROR: {e}")
-            print(f"    Using decimate fallback...")
-            lod = create_animated_decimate_fallback(
-                high_poly, target * 2, f"_{lod_name}",
-                armature_obj, armature_modifier
-            )
-            lods.append(lod)
-            lod_stats[f"{lod_name.lower()}_faces"] = len(lod.data.polygons)
-
-    # UV unwrap (preserve existing UVs if good, otherwise smart project)
-    print(f"\n  UV unwrapping...")
-    for lod in lods:
-        smart_uv_unwrap(lod)
-
-    # Bake textures
-    print(f"\n  Baking textures...")
-    normal_img = None
-    ao_img = None
-
-    if SETTINGS["bake_normal"]:
-        normal_img = bake_normal_map(high_poly, lods[0], output_dir, filename)
-    if SETTINGS["bake_ao"]:
-        ao_img = bake_ao_map(high_poly, lods[0], output_dir, filename)
-
-    # Apply baked textures + original textures
-    for lod in lods:
-        apply_baked_textures_with_original(lod, normal_img, ao_img, original_materials)
+        # Copy armature relationship if present
+        if armature_obj:
+            lod2.parent = armature_obj
+            for mod in primary_mesh.modifiers:
+                if mod.type == 'ARMATURE':
+                    new_mod = lod2.modifiers.new("Armature", 'ARMATURE')
+                    new_mod.object = mod.object
+                    break
 
     # Stats for approval
     stats = {
-        "original_faces": original_faces,
         "has_armature": armature_obj is not None,
         "animation_count": len(bpy.data.actions) if bpy.data.actions else 0,
         **lod_stats
     }
 
-    # TEST MODE: Just show results and stop
+    # TEST MODE: Display and stop
     if TEST_MODE:
-        # Arrange objects for easy viewing
+        # Arrange objects for viewing
         spacing = 3.0
-        high_poly.location.x = -spacing
-        high_poly.name = f"{filename}_ORIGINAL"
-        for i, lod in enumerate(lods):
-            lod.location.x = i * spacing
+        for i, (lod_name, lod_obj) in enumerate(lods.items()):
+            lod_obj.location.x = i * spacing
 
-        # Frame all objects (include armature if present)
-        all_objects = [high_poly] + lods
+        # Frame all LODs
+        all_objects = list(lods.values())
         if armature_obj:
             all_objects.append(armature_obj)
         UserPrompt.refresh_viewport_and_frame(all_objects)
 
-        anim_count = len(bpy.data.actions) if bpy.data.actions else 0
         print("\n" + "="*60)
         print("  TEST MODE COMPLETE")
         print("="*60)
         print(f"  Model: {filename}")
-        print(f"  Original: {original_faces:,} faces (left)")
-        print(f"  LOD0: {lod_stats.get('lod0_faces', 'N/A'):,} faces")
-        print(f"  LOD1: {lod_stats.get('lod1_faces', 'N/A'):,} faces")
-        print(f"  LOD2: {lod_stats.get('lod2_faces', 'N/A'):,} faces")
+        print(f"  LOD0: {lod_stats.get('lod0_faces', 'N/A'):,} faces (original)")
+        if 'lod1_faces' in lod_stats:
+            print(f"  LOD1: {lod_stats['lod1_faces']:,} faces")
+        if 'lod2_faces' in lod_stats:
+            print(f"  LOD2: {lod_stats['lod2_faces']:,} faces")
         if armature_obj:
-            print(f"  Armature: {armature_obj.name} ✓")
-            print(f"  Animations: {anim_count} action(s)")
+            print(f"  Armature: {armature_obj.name}")
+            print(f"  Animations: {len(bpy.data.actions) if bpy.data.actions else 0}")
         print("-"*60)
         print("  Objects kept in scene for inspection.")
-        print("  Nothing was saved or exported.")
+        print("  Nothing was exported.")
         print("  Set TEST_MODE = False for batch processing.")
         print("="*60)
         return "test_done"
 
-    # Wait for approval (pass LOD objects so viewport can frame them)
-    response = UserPrompt.wait_for_approval(filename, category, stats, lod_objects=lods)
+    # Wait for approval
+    response = UserPrompt.wait_for_approval(filename, category, stats, list(lods.values()))
 
     if response == "approve":
-        # Export with animations
-        for lod in lods:
-            export_animated_model(lod, armature_obj, output_dir, lod.name)
-        print(f"  ✓ Exported {filename} with animations")
+        print(f"\n  Exporting with Draco compression...")
+
+        # Export each LOD
+        for lod_name, lod_obj in lods.items():
+            if lod_name == "LOD0" and not SETTINGS["export_lod0"]:
+                continue
+            if lod_name == "LOD1" and not SETTINGS["export_lod1"]:
+                continue
+            if lod_name == "LOD2" and not SETTINGS["export_lod2"]:
+                continue
+
+            output_path = os.path.join(output_dir, f"{filename}_{lod_name}.glb")
+            export_glb([lod_obj], armature_obj, output_path)
+
+        print(f"  Done: {filename}")
 
     elif response == "skip":
-        print(f"  ⊘ Skipped {filename}")
+        print(f"  Skipped: {filename}")
 
     elif response == "quit":
         return "quit"
 
-    # Cleanup
-    objects_to_remove = [high_poly] + lods
-    if armature_obj:
-        objects_to_remove.append(armature_obj)
-    cleanup_scene(objects_to_remove)
+    # Cleanup (skip in test mode)
+    if not TEST_MODE:
+        cleanup_scene(list(lods.values()) + ([armature_obj] if armature_obj else []))
 
     return response
-
-
-def transfer_vertex_weights(source, target):
-    """
-    Transfer vertex weights from source mesh to target mesh.
-    Uses Blender's Data Transfer modifier.
-    """
-    # First, copy vertex group structure
-    for vg in source.vertex_groups:
-        if vg.name not in target.vertex_groups:
-            target.vertex_groups.new(name=vg.name)
-
-    # Use Data Transfer modifier
-    bpy.context.view_layer.objects.active = target
-    modifier = target.modifiers.new("WeightTransfer", 'DATA_TRANSFER')
-    modifier.object = source
-    modifier.use_vert_data = True
-    modifier.data_types_verts = {'VGROUP_WEIGHTS'}
-    modifier.vert_mapping = 'POLYINTERP_NEAREST'  # Best for different topology
-
-    # Apply modifier
-    bpy.ops.object.modifier_apply(modifier=modifier.name)
-
-
-def create_animated_decimate_fallback(obj, target_tris, suffix, armature, arm_mod_settings):
-    """Fallback decimation for animated models, preserving rig."""
-    bpy.ops.object.select_all(action='DESELECT')
-    obj.select_set(True)
-    bpy.context.view_layer.objects.active = obj
-    bpy.ops.object.duplicate()
-
-    dup = bpy.context.active_object
-    dup.name = obj.name.replace("_highpoly", "") + suffix
-
-    # Decimate
-    current = len(dup.data.polygons)
-    ratio = (target_tris / 2) / current if current > 0 else 0.1
-
-    mod = dup.modifiers.new("Decimate", 'DECIMATE')
-    mod.ratio = max(0.01, min(ratio, 1.0))
-    bpy.ops.object.modifier_apply(modifier="Decimate")
-
-    # Re-add armature modifier (weights are preserved through duplication)
-    if armature:
-        arm_mod = dup.modifiers.new("Armature", 'ARMATURE')
-        arm_mod.object = armature
-        if arm_mod_settings:
-            arm_mod.use_deform_preserve_volume = arm_mod_settings['use_deform_preserve_volume']
-
-        dup.parent = armature
-        dup.matrix_parent_inverse = armature.matrix_world.inverted()
-
-    return dup
-
-
-# =============================================================================
-# UV & BAKING
-# =============================================================================
-
-def smart_uv_unwrap(obj):
-    """Smart UV project."""
-    bpy.context.view_layer.objects.active = obj
-    bpy.ops.object.mode_set(mode='EDIT')
-    bpy.ops.mesh.select_all(action='SELECT')
-    bpy.ops.uv.smart_project(
-        angle_limit=math.radians(66),
-        island_margin=0.02,
-        correct_aspect=True
-    )
-    bpy.ops.object.mode_set(mode='OBJECT')
-
-
-def create_bake_image(name, size, is_data=False):
-    """Create image for baking."""
-    if name in bpy.data.images:
-        bpy.data.images.remove(bpy.data.images[name])
-
-    img = bpy.data.images.new(
-        name=name,
-        width=size,
-        height=size,
-        alpha=False,
-        float_buffer=is_data
-    )
-    if is_data:
-        img.colorspace_settings.name = 'Non-Color'
-    return img
-
-
-def setup_bake_material(obj, bake_image):
-    """Setup material for baking."""
-    if not obj.data.materials:
-        mat = bpy.data.materials.new(name=f"{obj.name}_Material")
-        obj.data.materials.append(mat)
-    else:
-        mat = obj.data.materials[0]
-
-    mat.use_nodes = True
-    nodes = mat.node_tree.nodes
-
-    tex_node = nodes.new('ShaderNodeTexImage')
-    tex_node.image = bake_image
-    tex_node.select = True
-    nodes.active = tex_node
-
-    return mat
-
-
-def bake_normal_map(high_poly, low_poly, output_dir, base_name):
-    """Bake normal map from high to low."""
-    print(f"    Baking normal map...")
-
-    size = SETTINGS["texture_size"]
-    img = create_bake_image(f"{base_name}_normal", size, is_data=True)
-
-    setup_bake_material(low_poly, img)
-
-    bpy.ops.object.select_all(action='DESELECT')
-    high_poly.select_set(True)
-    low_poly.select_set(True)
-    bpy.context.view_layer.objects.active = low_poly
-
-    bpy.context.scene.render.engine = 'CYCLES'
-    try:
-        bpy.context.scene.cycles.device = 'GPU'
-    except:
-        pass
-    bpy.context.scene.cycles.samples = 64
-
-    bake = bpy.context.scene.render.bake
-    bake.use_selected_to_active = True
-    bake.cage_extrusion = SETTINGS["bake_extrusion"]
-    bake.max_ray_distance = SETTINGS["bake_max_ray"]
-
-    bpy.ops.object.bake(type='NORMAL')
-
-    path = os.path.join(output_dir, f"{base_name}_normal.png")
-    img.filepath_raw = path
-    img.file_format = 'PNG'
-    img.save()
-
-    return img
-
-
-def bake_ao_map(high_poly, low_poly, output_dir, base_name):
-    """Bake AO map."""
-    print(f"    Baking AO map...")
-
-    size = SETTINGS["texture_size"]
-    img = create_bake_image(f"{base_name}_ao", size, is_data=False)
-
-    setup_bake_material(low_poly, img)
-
-    bpy.ops.object.select_all(action='DESELECT')
-    high_poly.select_set(True)
-    low_poly.select_set(True)
-    bpy.context.view_layer.objects.active = low_poly
-
-    bpy.context.scene.cycles.samples = 128
-    bpy.ops.object.bake(type='AO')
-
-    path = os.path.join(output_dir, f"{base_name}_ao.png")
-    img.filepath_raw = path
-    img.file_format = 'PNG'
-    img.save()
-
-    return img
-
-
-def apply_baked_textures(obj, normal_img, ao_img=None):
-    """Apply baked textures to material."""
-    if not obj.data.materials:
-        mat = bpy.data.materials.new(name=f"{obj.name}_Material")
-        obj.data.materials.append(mat)
-    else:
-        mat = obj.data.materials[0]
-
-    mat.use_nodes = True
-    nodes = mat.node_tree.nodes
-    links = mat.node_tree.links
-
-    # Find or create Principled BSDF
-    principled = None
-    for node in nodes:
-        if node.type == 'BSDF_PRINCIPLED':
-            principled = node
-            break
-
-    if not principled:
-        principled = nodes.new('ShaderNodeBsdfPrincipled')
-        for node in nodes:
-            if node.type == 'OUTPUT_MATERIAL':
-                links.new(principled.outputs['BSDF'], node.inputs['Surface'])
-                break
-
-    # Normal map
-    if normal_img:
-        normal_tex = nodes.new('ShaderNodeTexImage')
-        normal_tex.image = normal_img
-        normal_tex.image.colorspace_settings.name = 'Non-Color'
-
-        normal_node = nodes.new('ShaderNodeNormalMap')
-        links.new(normal_tex.outputs['Color'], normal_node.inputs['Color'])
-        links.new(normal_node.outputs['Normal'], principled.inputs['Normal'])
-
-    # AO
-    if ao_img:
-        ao_tex = nodes.new('ShaderNodeTexImage')
-        ao_tex.image = ao_img
-
-        mix = nodes.new('ShaderNodeMix')
-        mix.data_type = 'RGBA'
-        mix.blend_type = 'MULTIPLY'
-        mix.inputs['Factor'].default_value = 0.5
-        mix.inputs['A'].default_value = (0.8, 0.8, 0.8, 1.0)
-        links.new(ao_tex.outputs['Color'], mix.inputs['B'])
-        links.new(mix.outputs['Result'], principled.inputs['Base Color'])
-
-
-def apply_baked_textures_with_original(obj, normal_img, ao_img, original_materials):
-    """Apply baked textures while preserving original diffuse/albedo."""
-    # Start with basic baked textures
-    apply_baked_textures(obj, normal_img, ao_img)
-
-    # If there were original materials with textures, try to preserve base color
-    if original_materials:
-        mat = obj.data.materials[0] if obj.data.materials else None
-        if not mat:
-            return
-
-        nodes = mat.node_tree.nodes
-        links = mat.node_tree.links
-
-        principled = None
-        for node in nodes:
-            if node.type == 'BSDF_PRINCIPLED':
-                principled = node
-                break
-
-        # Check original materials for base color texture
-        for orig_mat in original_materials:
-            if orig_mat and orig_mat.use_nodes:
-                for node in orig_mat.node_tree.nodes:
-                    if node.type == 'TEX_IMAGE' and node.image:
-                        # Check if this was connected to base color
-                        # Copy the texture reference
-                        tex = nodes.new('ShaderNodeTexImage')
-                        tex.image = node.image
-
-                        # Mix with AO if present
-                        if ao_img:
-                            mix = nodes.new('ShaderNodeMix')
-                            mix.data_type = 'RGBA'
-                            mix.blend_type = 'MULTIPLY'
-                            mix.inputs['Factor'].default_value = 0.3
-
-                            # Find existing AO mix node
-                            ao_mix = None
-                            for n in nodes:
-                                if n.type == 'MIX' and n.blend_type == 'MULTIPLY':
-                                    ao_mix = n
-                                    break
-
-                            if ao_mix:
-                                links.new(tex.outputs['Color'], ao_mix.inputs['A'])
-                        else:
-                            links.new(tex.outputs['Color'], principled.inputs['Base Color'])
-                        break
-                break
-
-
-# =============================================================================
-# EXPORT
-# =============================================================================
-
-def export_model(obj, output_dir, filename):
-    """Export static model as GLB."""
-    bpy.ops.object.select_all(action='DESELECT')
-    obj.select_set(True)
-
-    path = os.path.join(output_dir, f"{filename}.glb")
-
-    bpy.ops.export_scene.gltf(
-        filepath=path,
-        use_selection=True,
-        export_format='GLB',
-        export_draco_mesh_compression_enable=True,
-        export_materials='EXPORT',
-        export_image_format='WEBP',
-    )
-
-
-def export_animated_model(mesh_obj, armature_obj, output_dir, filename):
-    """Export animated model with armature and animations."""
-    bpy.ops.object.select_all(action='DESELECT')
-    mesh_obj.select_set(True)
-    if armature_obj:
-        armature_obj.select_set(True)
-        bpy.context.view_layer.objects.active = armature_obj
-
-    path = os.path.join(output_dir, f"{filename}.glb")
-
-    bpy.ops.export_scene.gltf(
-        filepath=path,
-        use_selection=True,
-        export_format='GLB',
-        export_draco_mesh_compression_enable=True,
-        export_materials='EXPORT',
-        export_image_format='WEBP',
-        export_animations=True,
-        export_animation_mode='ACTIONS',
-    )
 
 
 # =============================================================================
@@ -1405,9 +492,6 @@ def export_animated_model(mesh_obj, armature_obj, output_dir, filename):
 
 def cleanup_scene(objects):
     """Remove objects from scene."""
-    if SETTINGS["keep_high_poly"]:
-        return
-
     for obj in objects:
         if obj and obj.name in bpy.data.objects:
             bpy.data.objects.remove(obj, do_unlink=True)
@@ -1420,6 +504,18 @@ def cleanup_scene(objects):
     for block in bpy.data.materials:
         if block.users == 0:
             bpy.data.materials.remove(block)
+
+    for block in bpy.data.images:
+        if block.users == 0:
+            bpy.data.images.remove(block)
+
+    for block in bpy.data.armatures:
+        if block.users == 0:
+            bpy.data.armatures.remove(block)
+
+    for block in bpy.data.actions:
+        if block.users == 0:
+            bpy.data.actions.remove(block)
 
 
 def clear_scene():
@@ -1440,34 +536,25 @@ def clear_scene():
 
 
 # =============================================================================
-# INTERACTIVE TEST MODE
+# FILE DISCOVERY
 # =============================================================================
 
-def get_models_in_folder(folder_path):
-    """Get list of model files in a folder."""
+def get_glb_files(folder_path):
+    """Get list of GLB files in a folder."""
     if not os.path.exists(folder_path):
         return []
 
-    static_extensions = ['.obj']
-    animated_extensions = ['.glb', '.gltf', '.fbx']
-
     files = []
     for f in os.listdir(folder_path):
-        f_lower = f.lower()
-        if any(f_lower.endswith(ext) for ext in static_extensions):
-            files.append((f, "static"))
-        elif any(f_lower.endswith(ext) for ext in animated_extensions):
-            files.append((f, "animated"))
+        if f.lower().endswith(('.glb', '.gltf')):
+            files.append(os.path.join(folder_path, f))
 
-    files.sort(key=lambda x: x[0])
+    files.sort()
     return files
 
 
 def interactive_test_select():
-    """
-    Interactive selection for test mode.
-    Returns (folder_key, filepath, file_type) or None to cancel.
-    """
+    """Interactive selection for test mode."""
     print("\n" + "="*60)
     print("  SELECT MODEL TO TEST")
     print("="*60)
@@ -1476,12 +563,12 @@ def interactive_test_select():
     available_folders = []
     for key, path in INPUT_FOLDERS.items():
         if path and not path.startswith("/path/to") and os.path.exists(path):
-            models = get_models_in_folder(path)
-            if models:
-                available_folders.append((key, path, len(models)))
+            files = get_glb_files(path)
+            if files:
+                available_folders.append((key, path, len(files)))
 
     if not available_folders:
-        print("\n  ERROR: No configured folders with models found!")
+        print("\n  ERROR: No configured folders with GLB models found!")
         print("  Please set INPUT_FOLDERS paths in the script.")
         return None
 
@@ -1489,7 +576,7 @@ def interactive_test_select():
     print("\n  Available folders:")
     print("-"*60)
     for i, (key, path, count) in enumerate(available_folders):
-        print(f"    [{i+1}] {key.upper()} ({count} models)")
+        print(f"    [{i+1}] {key.upper()} ({count} GLB files)")
     print(f"    [q] Quit")
     print("-"*60)
 
@@ -1506,146 +593,104 @@ def interactive_test_select():
 
     folder_key, folder_path, _ = available_folders[folder_idx]
 
-    # List models in selected folder
-    models = get_models_in_folder(folder_path)
+    # List models
+    files = get_glb_files(folder_path)
 
-    print(f"\n  Models in {folder_key.upper()}:")
+    print(f"\n  GLB files in {folder_key.upper()}:")
     print("-"*60)
-    for i, (filename, file_type) in enumerate(models):
-        name = Path(filename).stem
-        type_label = "GLB" if file_type == "animated" else "OBJ"
-        print(f"    [{i+1}] {name} ({type_label})")
-    print(f"    [q] Back to folder selection")
+    for i, filepath in enumerate(files):
+        name = Path(filepath).stem
+        size_bytes = os.path.getsize(filepath)
+        if size_bytes > 1024 * 1024:
+            size_str = f"{size_bytes / (1024 * 1024):.1f} MB"
+        else:
+            size_str = f"{size_bytes / 1024:.0f} KB"
+        print(f"    [{i+1}] {name} ({size_str})")
+    print(f"    [q] Back")
     print("-"*60)
 
     try:
         choice = input("  Select model number: ").strip().lower()
         if choice == 'q':
-            return interactive_test_select()  # Go back to folder selection
+            return interactive_test_select()
         model_idx = int(choice) - 1
-        if model_idx < 0 or model_idx >= len(models):
+        if model_idx < 0 or model_idx >= len(files):
             print("  Invalid selection")
             return None
     except (ValueError, EOFError):
         return None
 
-    filename, file_type = models[model_idx]
-    filepath = os.path.join(folder_path, filename)
-
-    return (folder_key, filepath, file_type)
+    return (folder_key, files[model_idx])
 
 
 # =============================================================================
-# MAIN BATCH PROCESSOR
+# BATCH PROCESSING
 # =============================================================================
 
-def process_folder(folder_path, category, temp_dir, output_dir):
-    """
-    Process all models in a folder.
-    Auto-detects file type: OBJ = static, GLB/GLTF = animated with rig.
-    """
-    if not os.path.exists(folder_path):
-        print(f"  Folder not found: {folder_path}")
-        return
-
-    # Get ALL model files (both static and animated)
-    static_extensions = ['.obj']
-    animated_extensions = ['.glb', '.gltf', '.fbx']
-
-    files = []
-    for f in os.listdir(folder_path):
-        f_lower = f.lower()
-        if any(f_lower.endswith(ext) for ext in static_extensions):
-            files.append((os.path.join(folder_path, f), "static"))
-        elif any(f_lower.endswith(ext) for ext in animated_extensions):
-            files.append((os.path.join(folder_path, f), "animated"))
-
-    files.sort(key=lambda x: x[0])  # Sort by filename
+def process_folder(folder_path, category, output_dir):
+    """Process all GLB files in a folder."""
+    files = get_glb_files(folder_path)
     total = len(files)
 
-    # Count types
-    static_count = sum(1 for f in files if f[1] == "static")
-    animated_count = sum(1 for f in files if f[1] == "animated")
-
     print(f"\n{'='*70}")
-    print(f"  PROCESSING FOLDER: {category}")
-    print(f"  Total files: {total}")
-    print(f"    Static (OBJ): {static_count}")
-    print(f"    Animated (GLB/FBX): {animated_count}")
+    print(f"  PROCESSING FOLDER: {category.upper()}")
+    print(f"  GLB files: {total}")
     print(f"{'='*70}")
 
-    for i, (filepath, file_type) in enumerate(files):
+    for i, filepath in enumerate(files):
         filename = Path(filepath).stem
-        print(f"\n  [{i+1}/{total}] {filename} ({file_type})")
+        print(f"\n  [{i+1}/{total}] {filename}")
 
-        # Clear scene between models (skip in test mode to preserve objects)
         if not TEST_MODE:
             clear_scene()
 
-        if file_type == "animated":
-            result = process_animated_model(filepath, category, temp_dir, output_dir)
-        else:
-            result = process_static_model(filepath, category, temp_dir, output_dir)
+        result = process_glb_model(filepath, category, output_dir)
 
         if result == "quit":
-            print("\n  Batch processing stopped by user.")
             return "quit"
 
-        # TEST MODE: Stop after first model
         if result == "test_done":
             return "test_done"
 
+    return "done"
+
+
+# =============================================================================
+# MAIN
+# =============================================================================
 
 def main():
     """Main entry point."""
     print("\n" + "="*70)
     if TEST_MODE:
-        print("  VOIDSTRIKE RETOPOLOGY - TEST MODE")
-        print("  (Interactive model selection, no saving)")
+        print("  VOIDSTRIKE GLB LOD GENERATOR - TEST MODE")
+        print("  (Preview LODs without exporting)")
     else:
-        print("  VOIDSTRIKE BATCH RETOPOLOGY PIPELINE")
+        print("  VOIDSTRIKE GLB LOD GENERATOR & COMPRESSOR")
     print("="*70)
+    print(f"\n  Draco compression level: {SETTINGS['draco_compression_level']}")
+    print(f"  Texture format: {SETTINGS['texture_format']}")
+    print(f"  Max texture size: {SETTINGS['max_texture_size']}px")
 
-    # Check Instant Meshes
-    im_path = find_instant_meshes()
-    if im_path:
-        print(f"\n✓ Instant Meshes: {im_path}")
-    else:
-        print("\n⚠ Instant Meshes not found - using fallback decimation")
-        print("  Download from: https://github.com/wjakob/instant-meshes")
-
-    # Create output directory (even in test mode, for temp baked textures)
     os.makedirs(OUTPUT_FOLDER, exist_ok=True)
 
-    # Create temp directory
-    temp_dir = tempfile.mkdtemp(prefix="voidstrike_batch_")
-    print(f"  Temp directory: {temp_dir}")
-
-    # TEST MODE: Interactive model selection
+    # TEST MODE
     if TEST_MODE:
         selection = interactive_test_select()
         if selection is None:
             print("\n  Test cancelled.")
             return
 
-        folder_key, filepath, file_type = selection
-        filename = Path(filepath).stem
+        folder_key, filepath = selection
 
-        print(f"\n  Processing: {filename} ({file_type})")
-
-        # Create category output subfolder
+        # Create output folder
         category_output = os.path.join(OUTPUT_FOLDER, folder_key)
         os.makedirs(category_output, exist_ok=True)
 
-        # Process the selected model
-        if file_type == "animated":
-            process_animated_model(filepath, folder_key, temp_dir, category_output)
-        else:
-            process_static_model(filepath, folder_key, temp_dir, category_output)
-
+        process_glb_model(filepath, folder_key, category_output)
         return
 
-    # BATCH MODE: Process each folder in order
+    # BATCH MODE
     folder_order = ["decorations", "resources", "buildings", "units"]
 
     for folder_key in folder_order:
@@ -1657,22 +702,13 @@ def main():
             print(f"\n  Skipping {folder_key} (path not configured)")
             continue
 
-        # Create category output subfolder
         category_output = os.path.join(OUTPUT_FOLDER, folder_key)
         os.makedirs(category_output, exist_ok=True)
 
-        # Process folder - auto-detects OBJ (static) vs GLB (animated)
-        result = process_folder(folder_path, folder_key, temp_dir, category_output)
+        result = process_folder(folder_path, folder_key, category_output)
 
         if result == "quit":
             break
-
-    # Cleanup temp
-    try:
-        import shutil
-        shutil.rmtree(temp_dir)
-    except:
-        pass
 
     print("\n" + "="*70)
     print("  BATCH PROCESSING COMPLETE")
