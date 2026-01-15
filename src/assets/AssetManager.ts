@@ -802,66 +802,63 @@ export class AssetManager {
 
       // Units
       customModels.push(
-        { path: '/models/units/fabricator.glb', assetId: 'fabricator', targetHeight: REFERENCE_FRAME.UNIT_HEIGHTS.fabricator || 1.0 },
-        { path: '/models/units/trooper.glb', assetId: 'trooper', targetHeight: REFERENCE_FRAME.UNIT_HEIGHTS.trooper || 1.2 },
-        { path: '/models/units/breacher.glb', assetId: 'breacher', targetHeight: REFERENCE_FRAME.UNIT_HEIGHTS.breacher || 1.5 },
-        { path: '/models/units/vanguard.glb', assetId: 'vanguard', targetHeight: 1.3 },
-        { path: '/models/units/operative.glb', assetId: 'operative', targetHeight: 1.3 },
-        { path: '/models/units/scorcher.glb', assetId: 'scorcher', targetHeight: 1.0 },
-        { path: '/models/units/devastator.glb', assetId: 'devastator', targetHeight: REFERENCE_FRAME.UNIT_HEIGHTS.devastator || 1.2 },
-        { path: '/models/units/colossus.glb', assetId: 'colossus', targetHeight: 2.5 },
-        { path: '/models/units/valkyrie.glb', assetId: 'valkyrie', targetHeight: REFERENCE_FRAME.UNIT_HEIGHTS.valkyrie || 1.8 },
-        { path: '/models/units/lifter.glb', assetId: 'lifter', targetHeight: 1.5 },
-        { path: '/models/units/specter.glb', assetId: 'specter', targetHeight: REFERENCE_FRAME.UNIT_HEIGHTS.specter || 1.5 },
-        { path: '/models/units/overseer.glb', assetId: 'overseer', targetHeight: 1.5 },
-        { path: '/models/units/dreadnought.glb', assetId: 'dreadnought', targetHeight: REFERENCE_FRAME.UNIT_HEIGHTS.dreadnought || 2.5 }
+        { path: '/models/units/fabricator_LOD0.glb', assetId: 'fabricator', targetHeight: REFERENCE_FRAME.UNIT_HEIGHTS.fabricator || 1.0 },
+        { path: '/models/units/trooper_LOD0.glb', assetId: 'trooper', targetHeight: REFERENCE_FRAME.UNIT_HEIGHTS.trooper || 1.2 },
+        { path: '/models/units/breacher_LOD0.glb', assetId: 'breacher', targetHeight: REFERENCE_FRAME.UNIT_HEIGHTS.breacher || 1.5 },
+        { path: '/models/units/vanguard_LOD0.glb', assetId: 'vanguard', targetHeight: 1.3 },
+        { path: '/models/units/operative_LOD0.glb', assetId: 'operative', targetHeight: 1.3 },
+        { path: '/models/units/scorcher_LOD0.glb', assetId: 'scorcher', targetHeight: 1.0 },
+        { path: '/models/units/devastator_LOD0.glb', assetId: 'devastator', targetHeight: REFERENCE_FRAME.UNIT_HEIGHTS.devastator || 1.8 },
+        { path: '/models/units/colossus_LOD0.glb', assetId: 'colossus', targetHeight: 2.5 },
+        { path: '/models/units/valkyrie_LOD0.glb', assetId: 'valkyrie', targetHeight: REFERENCE_FRAME.UNIT_HEIGHTS.valkyrie || 1.8 },
+        { path: '/models/units/lifter_LOD0.glb', assetId: 'lifter', targetHeight: 1.5 },
+        { path: '/models/units/specter_LOD0.glb', assetId: 'specter', targetHeight: REFERENCE_FRAME.UNIT_HEIGHTS.specter || 1.5 },
+        { path: '/models/units/overseer_LOD0.glb', assetId: 'overseer', targetHeight: 1.5 },
+        { path: '/models/units/dreadnought_LOD0.glb', assetId: 'dreadnought', targetHeight: REFERENCE_FRAME.UNIT_HEIGHTS.dreadnought || 15.0 }
       );
 
       // Buildings
       customModels.push(
-        { path: '/models/buildings/headquarters.glb', assetId: 'headquarters', targetHeight: REFERENCE_FRAME.BUILDING_HEIGHTS.headquarters || 4.5 },
-        { path: '/models/buildings/orbital_station.glb', assetId: 'orbital_station', targetHeight: 4.5 },
-        { path: '/models/buildings/bastion.glb', assetId: 'bastion', targetHeight: 4.5 },
-        { path: '/models/buildings/supply_cache.glb', assetId: 'supply_cache', targetHeight: REFERENCE_FRAME.BUILDING_HEIGHTS.supply_cache || 1.8 },
-        { path: '/models/buildings/extractor.glb', assetId: 'extractor', targetHeight: REFERENCE_FRAME.BUILDING_HEIGHTS.extractor || 2.0 },
-        { path: '/models/buildings/infantry_bay.glb', assetId: 'infantry_bay', targetHeight: REFERENCE_FRAME.BUILDING_HEIGHTS.infantry_bay || 2.8 },
-        { path: '/models/buildings/tech_center.glb', assetId: 'tech_center', targetHeight: 2.5 },
-        { path: '/models/buildings/garrison.glb', assetId: 'garrison', targetHeight: 2.0 },
-        { path: '/models/buildings/forge.glb', assetId: 'forge', targetHeight: REFERENCE_FRAME.BUILDING_HEIGHTS.forge || 2.8 },
-        { path: '/models/buildings/arsenal.glb', assetId: 'arsenal', targetHeight: 2.8 },
-        { path: '/models/buildings/hangar.glb', assetId: 'hangar', targetHeight: REFERENCE_FRAME.BUILDING_HEIGHTS.hangar || 2.2 },
-        { path: '/models/buildings/power_core.glb', assetId: 'power_core', targetHeight: 3.0 },
-        { path: '/models/buildings/ops_center.glb', assetId: 'ops_center', targetHeight: 2.8 },
-        { path: '/models/buildings/radar_array.glb', assetId: 'radar_array', targetHeight: 4.0 },
-        { path: '/models/buildings/defense_turret.glb', assetId: 'defense_turret', targetHeight: 2.5 },
-        { path: '/models/buildings/research_module.glb', assetId: 'research_module', targetHeight: 1.0 },
-        { path: '/models/buildings/production_module.glb', assetId: 'production_module', targetHeight: 1.0 }
+        { path: '/models/buildings/headquarters_LOD0.glb', assetId: 'headquarters', targetHeight: REFERENCE_FRAME.BUILDING_HEIGHTS.headquarters || 4.5 },
+        { path: '/models/buildings/orbital_station_LOD0.glb', assetId: 'orbital_station', targetHeight: 4.5 },
+        { path: '/models/buildings/bastion_LOD0.glb', assetId: 'bastion', targetHeight: 4.5 },
+        { path: '/models/buildings/supply_cache_LOD0.glb', assetId: 'supply_cache', targetHeight: REFERENCE_FRAME.BUILDING_HEIGHTS.supply_cache || 0.9 },
+        { path: '/models/buildings/extractor_LOD0.glb', assetId: 'extractor', targetHeight: REFERENCE_FRAME.BUILDING_HEIGHTS.extractor || 2.5 },
+        { path: '/models/buildings/infantry_bay_LOD0.glb', assetId: 'infantry_bay', targetHeight: REFERENCE_FRAME.BUILDING_HEIGHTS.infantry_bay || 2.8 },
+        { path: '/models/buildings/tech_center_LOD0.glb', assetId: 'tech_center', targetHeight: 2.5 },
+        { path: '/models/buildings/garrison_LOD0.glb', assetId: 'garrison', targetHeight: 2.0 },
+        { path: '/models/buildings/forge_LOD0.glb', assetId: 'forge', targetHeight: REFERENCE_FRAME.BUILDING_HEIGHTS.forge || 4.2 },
+        { path: '/models/buildings/arsenal_LOD0.glb', assetId: 'arsenal', targetHeight: 2.8 },
+        { path: '/models/buildings/hangar_LOD0.glb', assetId: 'hangar', targetHeight: REFERENCE_FRAME.BUILDING_HEIGHTS.hangar || 2.2 },
+        { path: '/models/buildings/power_core_LOD0.glb', assetId: 'power_core', targetHeight: 3.0 },
+        { path: '/models/buildings/ops_center_LOD0.glb', assetId: 'ops_center', targetHeight: 2.8 },
+        { path: '/models/buildings/radar_array_LOD0.glb', assetId: 'radar_array', targetHeight: 4.0 },
+        { path: '/models/buildings/defense_turret_LOD0.glb', assetId: 'defense_turret', targetHeight: 2.5 },
+        { path: '/models/buildings/research_module_LOD0.glb', assetId: 'research_module', targetHeight: 1.0 },
+        { path: '/models/buildings/production_module_LOD0.glb', assetId: 'production_module', targetHeight: 1.0 }
       );
 
       // Resources
       customModels.push(
-        { path: '/models/resources/minerals.glb', assetId: 'minerals', targetHeight: 2.0 },
-        { path: '/models/resources/vespene.glb', assetId: 'vespene', targetHeight: 2.0 }
+        { path: '/models/resources/minerals_LOD0.glb', assetId: 'minerals', targetHeight: 2.0 },
+        { path: '/models/resources/vespene_LOD0.glb', assetId: 'vespene', targetHeight: 2.0 }
       );
 
       // Decorations
       customModels.push(
-        { path: '/models/decorations/alien_tower.glb', assetId: 'alien_tower', targetHeight: 14.0 },
-        { path: '/models/decorations/rocks_large.glb', assetId: 'rocks_large', targetHeight: 5.0 },
-        { path: '/models/decorations/rocks_small.glb', assetId: 'rocks_small', targetHeight: 3.0 },
-        { path: '/models/decorations/rock_single.glb', assetId: 'rock_single', targetHeight: 2.5 },
-        { path: '/models/decorations/tree_pine_tall.glb', assetId: 'tree_pine_tall', targetHeight: 14.0 },
-        { path: '/models/decorations/tree_pine_medium.glb', assetId: 'tree_pine_medium', targetHeight: 10.0 },
-        { path: '/models/decorations/tree_dead.glb', assetId: 'tree_dead', targetHeight: 9.0 },
-        { path: '/models/decorations/tree_alien.glb', assetId: 'tree_alien', targetHeight: 11.0 },
-        { path: '/models/decorations/tree_palm.glb', assetId: 'tree_palm', targetHeight: 11.0 },
-        { path: '/models/decorations/tree_mushroom.glb', assetId: 'tree_mushroom', targetHeight: 8.0 },
-        { path: '/models/decorations/crystal_formation.glb', assetId: 'crystal_formation', targetHeight: 4.0 },
-        { path: '/models/decorations/bush.glb', assetId: 'bush', targetHeight: 1.5 },
-        { path: '/models/decorations/grass_clump.glb', assetId: 'grass_clump', targetHeight: 0.8 },
-        { path: '/models/decorations/debris.glb', assetId: 'debris', targetHeight: 1.5 },
-        { path: '/models/decorations/escape_pod.glb', assetId: 'escape_pod', targetHeight: 4.0 },
-        { path: '/models/decorations/ruined_wall.glb', assetId: 'ruined_wall', targetHeight: 5.0 }
+        { path: '/models/decorations/alien_tower_LOD0.glb', assetId: 'alien_tower', targetHeight: 14.0 },
+        { path: '/models/decorations/rocks_large_LOD0.glb', assetId: 'rocks_large', targetHeight: 5.0 },
+        { path: '/models/decorations/rocks_small_LOD0.glb', assetId: 'rocks_small', targetHeight: 3.0 },
+        { path: '/models/decorations/rock_single_LOD0.glb', assetId: 'rock_single', targetHeight: 2.5 },
+        { path: '/models/decorations/tree_pine_tall_LOD0.glb', assetId: 'tree_pine_tall', targetHeight: 14.0 },
+        { path: '/models/decorations/tree_dead_LOD0.glb', assetId: 'tree_dead', targetHeight: 9.0 },
+        { path: '/models/decorations/tree_alien_LOD0.glb', assetId: 'tree_alien', targetHeight: 11.0 },
+        { path: '/models/decorations/tree_palm_LOD0.glb', assetId: 'tree_palm', targetHeight: 11.0 },
+        { path: '/models/decorations/tree_mushroom_LOD0.glb', assetId: 'tree_mushroom', targetHeight: 8.0 },
+        { path: '/models/decorations/crystal_formation_LOD0.glb', assetId: 'crystal_formation', targetHeight: 4.0 },
+        { path: '/models/decorations/shrub_LOD0.glb', assetId: 'shrub', targetHeight: 1.5 },
+        { path: '/models/decorations/debris_LOD0.glb', assetId: 'debris', targetHeight: 1.5 },
+        { path: '/models/decorations/ruined_wall_LOD0.glb', assetId: 'ruined_wall', targetHeight: 5.0 }
       );
     }
 

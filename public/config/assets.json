@@ -4,7 +4,7 @@
 
   "units": {
     "fabricator": {
-      "model": "/models/units/fabricator.glb",
+      "model": "/models/units/fabricator_LOD0.glb",
       "height": 1.0,
       "animationSpeed": 0.4,
       "animations": {
@@ -15,7 +15,7 @@
       }
     },
     "trooper": {
-      "model": "/models/units/trooper.glb",
+      "model": "/models/units/trooper_LOD0.glb",
       "height": 1.2,
       "animations": {
         "idle": ["idle", "stand", "pose"],
@@ -25,7 +25,7 @@
       }
     },
     "breacher": {
-      "model": "/models/units/breacher.glb",
+      "model": "/models/units/breacher_LOD0.glb",
       "height": 1.5,
       "animations": {
         "idle": ["idle", "stand"],
@@ -35,7 +35,7 @@
       }
     },
     "vanguard": {
-      "model": "/models/units/vanguard.glb",
+      "model": "/models/units/vanguard_LOD0.glb",
       "height": 1.3,
       "animations": {
         "idle": ["idle", "stand"],
@@ -45,7 +45,7 @@
       }
     },
     "operative": {
-      "model": "/models/units/operative.glb",
+      "model": "/models/units/operative_LOD0.glb",
       "height": 1.3,
       "animations": {
         "idle": ["idle", "stealth_idle", "stand"],
@@ -55,7 +55,7 @@
       }
     },
     "scorcher": {
-      "model": "/models/units/scorcher.glb",
+      "model": "/models/units/scorcher_LOD0.glb",
       "height": 1.0,
       "animations": {
         "idle": ["idle", "stand"],
@@ -65,7 +65,7 @@
       }
     },
     "devastator": {
-      "model": "/models/units/devastator.glb",
+      "model": "/models/units/devastator_LOD0.glb",
       "height": 1.8,
       "animations": {
         "idle": ["idle", "stand"],
@@ -75,7 +75,7 @@
       }
     },
     "colossus": {
-      "model": "/models/units/colossus.glb",
+      "model": "/models/units/colossus_LOD0.glb",
       "height": 2.5,
       "animations": {
         "idle": ["idle", "stand"],
@@ -85,7 +85,7 @@
       }
     },
     "valkyrie": {
-      "model": "/models/units/valkyrie.glb",
+      "model": "/models/units/valkyrie_LOD0.glb",
       "height": 1.8,
       "animations": {
         "idle": ["idle", "hover", "stand"],
@@ -95,7 +95,7 @@
       }
     },
     "lifter": {
-      "model": "/models/units/lifter.glb",
+      "model": "/models/units/lifter_LOD0.glb",
       "height": 1.5,
       "animations": {
         "idle": ["idle", "hover"],
@@ -105,7 +105,7 @@
       }
     },
     "specter": {
-      "model": "/models/units/specter.glb",
+      "model": "/models/units/specter_LOD0.glb",
       "height": 1.5,
       "animations": {
         "idle": ["idle", "hover", "cloak"],
@@ -115,7 +115,7 @@
       }
     },
     "overseer": {
-      "model": "/models/units/overseer.glb",
+      "model": "/models/units/overseer_LOD0.glb",
       "height": 1.5,
       "animations": {
         "idle": ["idle", "scan", "hover"],
@@ -125,7 +125,7 @@
       }
     },
     "dreadnought": {
-      "model": "/models/units/dreadnought.glb",
+      "model": "/models/units/dreadnought_LOD0.glb",
       "height": 15.0,
       "animations": {
         "idle": ["idle", "hover", "cruise"],
@@ -138,7 +138,7 @@
 
   "buildings": {
     "headquarters": {
-      "model": "/models/buildings/headquarters.glb",
+      "model": "/models/buildings/headquarters_LOD0.glb",
       "height": 4.5,
       "animations": {
         "idle": ["idle", "active"],
@@ -148,7 +148,7 @@
       }
     },
     "orbital_station": {
-      "model": "/models/buildings/orbital_station.glb",
+      "model": "/models/buildings/orbital_station_LOD0.glb",
       "height": 4.5,
       "animations": {
         "idle": ["idle", "orbit"],
@@ -156,7 +156,7 @@
       }
     },
     "bastion": {
-      "model": "/models/buildings/bastion.glb",
+      "model": "/models/buildings/bastion_LOD0.glb",
       "height": 4.5,
       "animations": {
         "idle": ["idle"],
@@ -164,7 +164,7 @@
       }
     },
     "supply_cache": {
-      "model": "/models/buildings/supply_cache.glb",
+      "model": "/models/buildings/supply_cache_LOD0.glb",
       "height": 0.9,
       "animations": {
         "idle": ["idle"],
@@ -172,7 +172,7 @@
       }
     },
     "extractor": {
-      "model": "/models/buildings/extractor.glb",
+      "model": "/models/buildings/extractor_LOD0.glb",
       "height": 2.5,
       "animations": {
         "idle": ["idle", "extract", "pump"],
@@ -180,7 +180,7 @@
       }
     },
     "infantry_bay": {
-      "model": "/models/buildings/infantry_bay.glb",
+      "model": "/models/buildings/infantry_bay_LOD0.glb",
       "height": 2.8,
       "animations": {
         "idle": ["idle"],
@@ -189,7 +189,7 @@
       }
     },
     "tech_center": {
-      "model": "/models/buildings/tech_center.glb",
+      "model": "/models/buildings/tech_center_LOD0.glb",
       "height": 2.5,
       "animations": {
         "idle": ["idle", "scan"],
@@ -197,7 +197,7 @@
       }
     },
     "garrison": {
-      "model": "/models/buildings/garrison.glb",
+      "model": "/models/buildings/garrison_LOD0.glb",
       "height": 2.0,
       "animations": {
         "idle": ["idle"],
@@ -205,7 +205,7 @@
       }
     },
     "forge": {
-      "model": "/models/buildings/forge.glb",
+      "model": "/models/buildings/forge_LOD0.glb",
       "height": 4.2,
       "animations": {
         "idle": ["idle", "forge", "work"],
@@ -214,7 +214,7 @@
       }
     },
     "arsenal": {
-      "model": "/models/buildings/arsenal.glb",
+      "model": "/models/buildings/arsenal_LOD0.glb",
       "height": 2.8,
       "animations": {
         "idle": ["idle"],
@@ -222,7 +222,7 @@
       }
     },
     "hangar": {
-      "model": "/models/buildings/hangar.glb",
+      "model": "/models/buildings/hangar_LOD0.glb",
       "height": 2.2,
       "animations": {
         "idle": ["idle"],
@@ -231,7 +231,7 @@
       }
     },
     "power_core": {
-      "model": "/models/buildings/power_core.glb",
+      "model": "/models/buildings/power_core_LOD0.glb",
       "height": 3.0,
       "animations": {
         "idle": ["idle", "pulse", "glow"],
@@ -239,7 +239,7 @@
       }
     },
     "ops_center": {
-      "model": "/models/buildings/ops_center.glb",
+      "model": "/models/buildings/ops_center_LOD0.glb",
       "height": 2.8,
       "animations": {
         "idle": ["idle", "active"],
@@ -247,7 +247,7 @@
       }
     },
     "radar_array": {
-      "model": "/models/buildings/radar_array.glb",
+      "model": "/models/buildings/radar_array_LOD0.glb",
       "height": 4.0,
       "animations": {
         "idle": ["idle", "spin", "rotate"],
@@ -255,7 +255,7 @@
       }
     },
     "defense_turret": {
-      "model": "/models/buildings/defense_turret.glb",
+      "model": "/models/buildings/defense_turret_LOD0.glb",
       "height": 2.5,
       "animations": {
         "idle": ["idle", "scan"],
@@ -264,7 +264,7 @@
       }
     },
     "research_module": {
-      "model": "/models/buildings/research_module.glb",
+      "model": "/models/buildings/research_module_LOD0.glb",
       "height": 1.0,
       "animations": {
         "idle": ["idle"],
@@ -272,7 +272,7 @@
       }
     },
     "production_module": {
-      "model": "/models/buildings/production_module.glb",
+      "model": "/models/buildings/production_module_LOD0.glb",
       "height": 1.0,
       "animations": {
         "idle": ["idle"],
@@ -283,14 +283,14 @@
 
   "resources": {
     "minerals": {
-      "model": "/models/resources/minerals.glb",
+      "model": "/models/resources/minerals_LOD0.glb",
       "height": 2.0,
       "animations": {
         "idle": ["idle", "glow", "shimmer"]
       }
     },
     "vespene": {
-      "model": "/models/resources/vespene.glb",
+      "model": "/models/resources/vespene_LOD0.glb",
       "height": 2.0,
       "animations": {
         "idle": ["idle", "vent", "smoke"]
@@ -300,67 +300,55 @@
 
   "decorations": {
     "alien_tower": {
-      "model": "/models/decorations/alien_tower.glb",
+      "model": "/models/decorations/alien_tower_LOD0.glb",
       "height": 14.0
     },
     "rocks_large": {
-      "model": "/models/decorations/rocks_large.glb",
+      "model": "/models/decorations/rocks_large_LOD0.glb",
       "height": 5.0
     },
     "rocks_small": {
-      "model": "/models/decorations/rocks_small.glb",
+      "model": "/models/decorations/rocks_small_LOD0.glb",
       "height": 3.0
     },
     "rock_single": {
-      "model": "/models/decorations/rock_single.glb",
+      "model": "/models/decorations/rock_single_LOD0.glb",
       "height": 2.5
     },
     "tree_pine_tall": {
-      "model": "/models/decorations/tree_pine_tall.glb",
+      "model": "/models/decorations/tree_pine_tall_LOD0.glb",
       "height": 14.0
     },
-    "tree_pine_medium": {
-      "model": "/models/decorations/tree_pine_medium.glb",
-      "height": 10.0
-    },
     "tree_dead": {
-      "model": "/models/decorations/tree_dead.glb",
+      "model": "/models/decorations/tree_dead_LOD0.glb",
       "height": 9.0
     },
     "tree_alien": {
-      "model": "/models/decorations/tree_alien.glb",
+      "model": "/models/decorations/tree_alien_LOD0.glb",
       "height": 11.0
     },
     "tree_palm": {
-      "model": "/models/decorations/tree_palm.glb",
+      "model": "/models/decorations/tree_palm_LOD0.glb",
       "height": 11.0
     },
     "tree_mushroom": {
-      "model": "/models/decorations/tree_mushroom.glb",
+      "model": "/models/decorations/tree_mushroom_LOD0.glb",
       "height": 8.0
     },
     "crystal_formation": {
-      "model": "/models/decorations/crystal_formation.glb",
+      "model": "/models/decorations/crystal_formation_LOD0.glb",
       "height": 4.0
     },
-    "bush": {
-      "model": "/models/decorations/bush.glb",
+    "shrub": {
+      "model": "/models/decorations/shrub_LOD0.glb",
       "height": 1.5
-    },
-    "grass_clump": {
-      "model": "/models/decorations/grass_clump.glb",
-      "height": 0.8
     },
     "debris": {
-      "model": "/models/decorations/debris.glb",
+      "model": "/models/decorations/debris_LOD0.glb",
       "height": 1.5
     },
-    "escape_pod": {
-      "model": "/models/decorations/escape_pod.glb",
-      "height": 4.0
-    },
     "ruined_wall": {
-      "model": "/models/decorations/ruined_wall.glb",
+      "model": "/models/decorations/ruined_wall_LOD0.glb",
       "height": 5.0
     }
   },
@@ -378,6 +366,10 @@
     },
     "height": {
       "description": "Target height in game units. Models are automatically scaled to match this height."
+    },
+    "lod": {
+      "description": "LOD levels are automatically detected. LOD0 is highest detail (default), LOD1 is medium, LOD2 is lowest.",
+      "convention": "Models named modelname_LOD0.glb, modelname_LOD1.glb, modelname_LOD2.glb"
     }
   }
 }
