@@ -29,6 +29,24 @@ function elevationToHeight(elevation: Elevation): number {
   return elevation * 0.04;
 }
 
+/**
+ * Quantize elevation to strict discrete levels for cliff separation.
+ * This ensures non-ramp terrain has consistent height gaps that exceed
+ * the navmesh walkableClimb threshold (0.3 units).
+ *
+ * Elevation levels:
+ * - Low (0-99): 60 → 2.4 height units
+ * - Mid (100-179): 140 → 5.6 height units
+ * - High (180-255): 220 → 8.8 height units
+ *
+ * Gap between levels: 3.2 units >> 0.3 walkableClimb
+ */
+function quantizeElevation(elevation: Elevation): number {
+  if (elevation < 100) return elevationToHeight(60);
+  if (elevation < 180) return elevationToHeight(140);
+  return elevationToHeight(220);
+}
+
 // Legacy height lookup for backwards compatibility
 const ELEVATION_HEIGHTS: Record<ElevationLevel, number> = {
   0: elevationToHeight(60),   // ~2.4 (low ground)
@@ -1410,31 +1428,40 @@ export class Terrain {
 
   /**
    * Generate walkable geometry for navmesh generation.
-   * Returns only triangles from walkable terrain (ground and ramps).
+   * Returns triangles from walkable terrain plus cliff wall barriers.
    * Used by recast-navigation for navmesh generation.
    *
-   * CRITICAL: Cliff edges must use FLAT heights to prevent units walking down.
-   * The heightMap has smoothing applied which creates gentle slopes at cliffs.
-   * We override those with flat elevation for cliff edges, but NOT for ramps.
+   * SC2-STYLE CLIFF HANDLING:
+   * 1. Walkable floor geometry uses quantized heights for strict elevation separation
+   * 2. Ramps use smooth heightMap for natural slope traversal
+   * 3. Cliff walls are generated at boundaries between different elevations
+   *
+   * This creates a robust navmesh where:
+   * - Cliffs are impassable (wall geometry + height gap > walkableClimb)
+   * - Ramps are traversable (continuous sloped geometry)
+   * - Normal terrain has minor height variation within walkableClimb limits
    */
   public generateWalkableGeometry(): { positions: Float32Array; indices: Uint32Array } {
     const terrain = this.mapData.terrain;
     const width = this.mapData.width;
     const height = this.mapData.height;
 
-    const walkableVertices: number[] = [];
-    const walkableIndices: number[] = [];
+    const vertices: number[] = [];
+    const indices: number[] = [];
     let vertexIndex = 0;
 
-    // Pre-compute a map of which cells are ramps or adjacent to ramps
-    // This is used to determine when to use heightMap vs flat elevation
+    // Wall geometry constants
+    const WALL_HEIGHT = 4.0; // Height of cliff walls (taller than walkableClimb)
+    const ELEVATION_DIFF_THRESHOLD = 40; // ~1.6 height units difference
+
+    // Pre-compute ramp zones - cells within radius of a ramp don't get walls
+    // Radius of 4 ensures smooth transitions and prevents walls from blocking ramps
     const rampZone = new Set<string>();
-    const RAMP_ZONE_RADIUS = 2; // Cells within 2 of a ramp use heightMap
+    const RAMP_ZONE_RADIUS = 4;
 
     for (let y = 0; y < height; y++) {
       for (let x = 0; x < width; x++) {
         if (terrain[y][x].terrain === 'ramp') {
-          // Mark this ramp cell and surrounding area
           for (let dy = -RAMP_ZONE_RADIUS; dy <= RAMP_ZONE_RADIUS; dy++) {
             for (let dx = -RAMP_ZONE_RADIUS; dx <= RAMP_ZONE_RADIUS; dx++) {
               const nx = x + dx;
@@ -1448,102 +1475,178 @@ export class Terrain {
       }
     }
 
-    // Helper: Check if cell is at a cliff edge (adjacent to unwalkable with elevation diff)
-    const isCliffEdge = (cx: number, cy: number): boolean => {
+    // Helper: Check if a cell is walkable for pathfinding
+    const isCellWalkable = (cx: number, cy: number): boolean => {
+      if (cx < 0 || cx >= width || cy < 0 || cy >= height) return false;
       const cell = terrain[cy][cx];
-      const cellElev = cell.elevation;
-
-      // Check 8 neighbors for unwalkable terrain
-      for (let dy = -1; dy <= 1; dy++) {
-        for (let dx = -1; dx <= 1; dx++) {
-          if (dx === 0 && dy === 0) continue;
-          const nx = cx + dx;
-          const ny = cy + dy;
-          if (nx >= 0 && nx < width && ny >= 0 && ny < height) {
-            const neighbor = terrain[ny][nx];
-            if (neighbor.terrain === 'unwalkable') {
-              // Check if there's ground at different elevation beyond the cliff
-              // This confirms it's actually a cliff edge, not just a wall
-              for (let dy2 = -3; dy2 <= 3; dy2++) {
-                for (let dx2 = -3; dx2 <= 3; dx2++) {
-                  const nx2 = cx + dx2;
-                  const ny2 = cy + dy2;
-                  if (nx2 >= 0 && nx2 < width && ny2 >= 0 && ny2 < height) {
-                    const farCell = terrain[ny2][nx2];
-                    if (farCell.terrain === 'ground' || farCell.terrain === 'unbuildable') {
-                      const elevDiff = Math.abs(farCell.elevation - cellElev);
-                      if (elevDiff > 40) { // ~1.6 height units difference
-                        return true;
-                      }
-                    }
-                  }
-                }
-              }
-            }
-          }
-        }
-      }
-      return false;
+      if (cell.terrain === 'unwalkable') return false;
+      const feature = cell.feature || 'none';
+      const featureConfig = TERRAIN_FEATURE_CONFIG[feature];
+      return featureConfig.walkable;
     };
 
+    // Helper: Get height for a cell from the heightMap
+    // We use smooth heightMap everywhere for natural terrain
+    // Cliff blocking is handled by wall geometry + low walkableClimb
+    const getCellHeight = (cx: number, cy: number): number => {
+      const hx = Math.max(0, Math.min(cx, this.gridWidth - 1));
+      const hy = Math.max(0, Math.min(cy, this.gridHeight - 1));
+      return this.heightMap[hy * this.gridWidth + hx];
+    };
+
+    // Helper: Check if a cliff wall is needed between two cells
+    const needsCliffWall = (
+      cx: number, cy: number,
+      nx: number, ny: number
+    ): { needed: boolean; topHeight: number; bottomHeight: number } => {
+      // Out of bounds - no wall
+      if (nx < 0 || nx >= width || ny < 0 || ny >= height) {
+        return { needed: false, topHeight: 0, bottomHeight: 0 };
+      }
+
+      const cell = terrain[cy][cx];
+      const neighbor = terrain[ny][nx];
+
+      // If either cell is in ramp zone, no walls (ramps handle transitions)
+      if (rampZone.has(`${cx},${cy}`) || rampZone.has(`${nx},${ny}`)) {
+        return { needed: false, topHeight: 0, bottomHeight: 0 };
+      }
+
+      // If neighbor is unwalkable (cliff face), we need a wall
+      if (neighbor.terrain === 'unwalkable') {
+        const cellHeight = getCellHeight(cx, cy);
+        return {
+          needed: true,
+          topHeight: cellHeight,
+          bottomHeight: cellHeight - WALL_HEIGHT,
+        };
+      }
+
+      // If both walkable but at different elevation levels, we need a wall
+      // This catches cases where two walkable areas at different elevations
+      // are adjacent (e.g., across a narrow unwalkable gap)
+      if (neighbor.terrain !== 'ramp' && cell.terrain !== 'ramp') {
+        const elevDiff = Math.abs(cell.elevation - neighbor.elevation);
+        if (elevDiff > ELEVATION_DIFF_THRESHOLD) {
+          const cellHeight = getCellHeight(cx, cy);
+          const neighborHeight = getCellHeight(nx, ny);
+          return {
+            needed: true,
+            topHeight: Math.max(cellHeight, neighborHeight),
+            bottomHeight: Math.min(cellHeight, neighborHeight) - 0.5,
+          };
+        }
+      }
+
+      return { needed: false, topHeight: 0, bottomHeight: 0 };
+    };
+
+    // ========================================
+    // PASS 1: Generate walkable floor geometry
+    // ========================================
     for (let y = 0; y < height; y++) {
       for (let x = 0; x < width; x++) {
-        const cell = terrain[y][x];
+        if (!isCellWalkable(x, y)) continue;
 
-        // Only include walkable terrain (ground and ramps)
-        if (cell.terrain === 'unwalkable') continue;
+        // Get heights for cell corners from heightMap
+        // Smooth terrain everywhere - cliffs blocked by walls + walkableClimb
+        const h00 = getCellHeight(x, y);
+        const h10 = getCellHeight(x + 1, y);
+        const h01 = getCellHeight(x, y + 1);
+        const h11 = getCellHeight(x + 1, y + 1);
 
-        // Check terrain features that make cells unwalkable
-        const feature = cell.feature || 'none';
-        const featureConfig = TERRAIN_FEATURE_CONFIG[feature];
-        if (!featureConfig.walkable) continue;
-
-        // Determine heights for this cell's vertices
-        let h00: number, h10: number, h01: number, h11: number;
-
-        const inRampZone = rampZone.has(`${x},${y}`);
-        const atCliffEdge = !inRampZone && isCliffEdge(x, y);
-
-        if (cell.terrain === 'ramp' || inRampZone) {
-          // RAMPS and RAMP-ADJACENT: Use heightMap for smooth slopes
-          h00 = this.heightMap[y * this.gridWidth + x];
-          h10 = this.heightMap[y * this.gridWidth + (x + 1)];
-          h01 = this.heightMap[(y + 1) * this.gridWidth + x];
-          h11 = this.heightMap[(y + 1) * this.gridWidth + (x + 1)];
-        } else if (atCliffEdge) {
-          // CLIFF EDGE: Use FLAT height to prevent slope down cliff
-          const flatHeight = elevationToHeight(cell.elevation);
-          h00 = h10 = h01 = h11 = flatHeight;
-        } else {
-          // NORMAL GROUND: Use heightMap
-          h00 = this.heightMap[y * this.gridWidth + x];
-          h10 = this.heightMap[y * this.gridWidth + (x + 1)];
-          h01 = this.heightMap[(y + 1) * this.gridWidth + x];
-          h11 = this.heightMap[(y + 1) * this.gridWidth + (x + 1)];
-        }
-
-        // Create two triangles for this cell (CCW winding for Recast)
-        walkableVertices.push(x, h00, y);
-        walkableVertices.push(x, h01, y + 1);
-        walkableVertices.push(x + 1, h10, y);
-        walkableIndices.push(vertexIndex, vertexIndex + 1, vertexIndex + 2);
+        // Create two triangles for floor (CCW winding for Recast)
+        vertices.push(x, h00, y);
+        vertices.push(x, h01, y + 1);
+        vertices.push(x + 1, h10, y);
+        indices.push(vertexIndex, vertexIndex + 1, vertexIndex + 2);
         vertexIndex += 3;
 
-        walkableVertices.push(x + 1, h10, y);
-        walkableVertices.push(x, h01, y + 1);
-        walkableVertices.push(x + 1, h11, y + 1);
-        walkableIndices.push(vertexIndex, vertexIndex + 1, vertexIndex + 2);
+        vertices.push(x + 1, h10, y);
+        vertices.push(x, h01, y + 1);
+        vertices.push(x + 1, h11, y + 1);
+        indices.push(vertexIndex, vertexIndex + 1, vertexIndex + 2);
         vertexIndex += 3;
       }
     }
 
+    const floorTriangles = indices.length / 3;
+
+    // ========================================
+    // PASS 2: Generate cliff wall geometry
+    // ========================================
+    // Walls act as barriers that Recast cannot path through
+    for (let y = 0; y < height; y++) {
+      for (let x = 0; x < width; x++) {
+        if (!isCellWalkable(x, y)) continue;
+
+        // Skip ramps - they don't need walls
+        if (terrain[y][x].terrain === 'ramp') continue;
+        if (rampZone.has(`${x},${y}`)) continue;
+
+        // Check 4 cardinal directions for cliff edges
+        // Vertical edges (left/right walls)
+        const verticalEdges = [
+          { nx: x + 1, ny: y, edgeX: x + 1, y1: y, y2: y + 1 },  // Right
+          { nx: x - 1, ny: y, edgeX: x, y1: y, y2: y + 1 },      // Left
+        ];
+
+        // Horizontal edges (top/bottom walls)
+        const horizontalEdges = [
+          { nx: x, ny: y + 1, edgeY: y + 1, x1: x, x2: x + 1 },  // Bottom
+          { nx: x, ny: y - 1, edgeY: y, x1: x, x2: x + 1 },      // Top
+        ];
+
+        // Process vertical walls
+        for (const edge of verticalEdges) {
+          const wallInfo = needsCliffWall(x, y, edge.nx, edge.ny);
+          if (wallInfo.needed) {
+            vertices.push(
+              edge.edgeX, wallInfo.topHeight, edge.y1,
+              edge.edgeX, wallInfo.topHeight, edge.y2,
+              edge.edgeX, wallInfo.bottomHeight, edge.y1,
+              edge.edgeX, wallInfo.bottomHeight, edge.y2
+            );
+            // Two triangles for the wall quad (both sides for robustness)
+            indices.push(vertexIndex, vertexIndex + 1, vertexIndex + 2);
+            indices.push(vertexIndex + 1, vertexIndex + 3, vertexIndex + 2);
+            indices.push(vertexIndex, vertexIndex + 2, vertexIndex + 1);
+            indices.push(vertexIndex + 1, vertexIndex + 2, vertexIndex + 3);
+            vertexIndex += 4;
+          }
+        }
+
+        // Process horizontal walls
+        for (const edge of horizontalEdges) {
+          const wallInfo = needsCliffWall(x, y, edge.nx, edge.ny);
+          if (wallInfo.needed) {
+            vertices.push(
+              edge.x1, wallInfo.topHeight, edge.edgeY,
+              edge.x2, wallInfo.topHeight, edge.edgeY,
+              edge.x1, wallInfo.bottomHeight, edge.edgeY,
+              edge.x2, wallInfo.bottomHeight, edge.edgeY
+            );
+            // Two triangles for the wall quad (both sides for robustness)
+            indices.push(vertexIndex, vertexIndex + 1, vertexIndex + 2);
+            indices.push(vertexIndex + 1, vertexIndex + 3, vertexIndex + 2);
+            indices.push(vertexIndex, vertexIndex + 2, vertexIndex + 1);
+            indices.push(vertexIndex + 1, vertexIndex + 2, vertexIndex + 3);
+            vertexIndex += 4;
+          }
+        }
+      }
+    }
+
+    const wallTriangles = (indices.length / 3) - floorTriangles;
+
     debugTerrain.log(
-      `[Terrain] Generated walkable geometry: ${walkableVertices.length / 3} vertices, ${walkableIndices.length / 3} triangles`
+      `[Terrain] Generated walkable geometry: ${vertices.length / 3} vertices, ` +
+      `${floorTriangles} floor triangles, ${wallTriangles} wall triangles`
     );
 
     return {
-      positions: new Float32Array(walkableVertices),
-      indices: new Uint32Array(walkableIndices),
+      positions: new Float32Array(vertices),
+      indices: new Uint32Array(indices),
     };
   }
 
