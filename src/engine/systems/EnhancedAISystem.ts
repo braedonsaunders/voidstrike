@@ -14,12 +14,20 @@ import { debugAI } from '@/utils/debugLogger';
 import { SeededRandom } from '@/utils/math';
 import {
   getRandomBuildOrder,
-  getAIConfig,
-  selectUnitToBuild,
   type AIDifficulty,
   type BuildOrderStep,
-  type AIBehaviorConfig,
 } from '@/data/ai/buildOrders';
+// Import new data-driven AI configuration system
+import {
+  type FactionAIConfig,
+  type AIStateSnapshot,
+  type AIPersonality,
+  type MacroRule,
+  getFactionAIConfig,
+  findBestMacroRule,
+} from '@/data/ai/aiConfig';
+// Ensure faction configs are registered
+import '@/data/ai/factions/dominion';
 
 type AIState = 'building' | 'expanding' | 'attacking' | 'defending' | 'scouting' | 'harassing';
 export type { AIDifficulty }; // Re-export for backwards compatibility
@@ -28,6 +36,7 @@ interface AIPlayer {
   playerId: string;
   faction: string;
   difficulty: AIDifficulty;
+  personality: AIPersonality;
   state: AIState;
   lastActionTick: number;
   lastScoutTick: number;
@@ -54,6 +63,8 @@ interface AIPlayer {
   // Strategic info
   enemyBaseLocation: { x: number; y: number } | null;
   enemyArmyStrength: number;
+  enemyBaseCount: number;
+  enemyAirUnits: number;
   lastEnemyContact: number;
   scoutedLocations: Set<string>;
 
@@ -62,12 +73,16 @@ interface AIPlayer {
   buildOrderIndex: number;
   buildOrderFailureCount: number; // Track consecutive failures to skip stuck steps
 
-  // Timing
+  // Timing (loaded from FactionAIConfig)
   attackCooldown: number;
   lastAttackTick: number;
   harassCooldown: number;
   scoutCooldown: number;
   expansionCooldown: number;
+
+  // Data-driven AI configuration
+  config: FactionAIConfig | null;
+  macroRuleCooldowns: Map<string, number>; // Track cooldowns for macro rules
 }
 
 // Build orders are now loaded from data-driven config (@/data/ai/buildOrders.ts)
@@ -189,15 +204,28 @@ export class EnhancedAISystem extends System {
   public registerAI(
     playerId: string,
     faction: string,
-    difficulty: AIDifficulty = 'medium'
+    difficulty: AIDifficulty = 'medium',
+    personality: AIPersonality = 'balanced'
   ): void {
     debugAI.log(`[EnhancedAI] Registering AI: ${playerId}, faction: ${faction}, difficulty: ${difficulty}`);
-    const config = this.getDifficultyConfig(difficulty);
+
+    // Load faction-specific AI configuration (data-driven) - REQUIRED
+    const factionConfig = getFactionAIConfig(faction);
+    if (!factionConfig) {
+      debugAI.error(`[EnhancedAI] FATAL: No FactionAIConfig found for faction: ${faction}. AI cannot be registered without config.`);
+      throw new Error(`No AI configuration found for faction: ${faction}. Define a FactionAIConfig in src/data/ai/factions/${faction}.ts`);
+    }
+
+    debugAI.log(`[EnhancedAI] Loaded data-driven config for faction: ${faction}`);
+
+    // Get difficulty settings from data-driven config
+    const difficultySettings = factionConfig.difficultyConfig[difficulty];
 
     this.aiPlayers.set(playerId, {
       playerId,
       faction,
       difficulty,
+      personality,
       state: 'building',
       lastActionTick: 0,
       lastScoutTick: 0,
@@ -207,162 +235,127 @@ export class EnhancedAISystem extends System {
       minerals: 50,
       vespene: 0,
       supply: 6,
-      maxSupply: 11,
+      maxSupply: factionConfig.economy.supplyPerMainBase,
       workerCount: 6,
-      targetWorkerCount: config.targetWorkers,
+      targetWorkerCount: difficultySettings.targetWorkers,
 
       armyValue: 0,
       armySupply: 0,
       armyComposition: new Map(),
 
-      buildingCounts: new Map([['headquarters', 1]]),
+      buildingCounts: new Map([[factionConfig.roles.mainBase, 1]]),
       buildingsInProgress: new Map(),
 
       enemyBaseLocation: null,
       enemyArmyStrength: 0,
+      enemyBaseCount: 1,
+      enemyAirUnits: 0,
       lastEnemyContact: 0,
       scoutedLocations: new Set(),
 
-      // Load build order from data-driven config (allows per-faction customization)
+      // Load build order from data-driven config
       buildOrder: this.loadBuildOrder(faction, difficulty),
       buildOrderIndex: 0,
       buildOrderFailureCount: 0,
 
-      attackCooldown: config.attackCooldown,
+      attackCooldown: difficultySettings.attackCooldown,
       lastAttackTick: 0,
-      harassCooldown: config.harassCooldown,
-      scoutCooldown: config.scoutCooldown,
-      expansionCooldown: config.expansionCooldown,
+      harassCooldown: difficultySettings.harassCooldown,
+      scoutCooldown: difficultySettings.scoutCooldown,
+      expansionCooldown: difficultySettings.expansionCooldown,
+
+      // Data-driven configuration - guaranteed to exist
+      config: factionConfig,
+      macroRuleCooldowns: new Map(),
     });
   }
 
-  private getDifficultyConfig(difficulty: AIDifficulty): {
-    targetWorkers: number;
-    attackCooldown: number;
-    harassCooldown: number;
-    scoutCooldown: number;
-    resourceBonus: number;
-    expansionCooldown: number;
-    maxBases: number;
-    minArmyForExpansion: number;
-    minWorkersForExpansion: number;
-  } {
-    // Expansion timings based on SC2 AI behavior:
-    // - Easy: Slower expansion, max 2 bases
-    // - Medium: Natural expansion around 3-4 minutes, max 3 bases
-    // - Hard: Aggressive expansion, max 4 bases
-    // - Very Hard: Very aggressive, max 5 bases
-    // - Insane: Immediate expansion, max 6 bases
-    switch (difficulty) {
-      case 'easy':
-        return {
-          targetWorkers: 16,
-          attackCooldown: 800,
-          harassCooldown: 0,
-          scoutCooldown: 0,
-          resourceBonus: 0,
-          expansionCooldown: 1200, // ~60 seconds at 20 ticks/sec
-          maxBases: 2,
-          minArmyForExpansion: 8,
-          minWorkersForExpansion: 12,
-        };
-      case 'medium':
-        return {
-          targetWorkers: 20,
-          attackCooldown: 500,
-          harassCooldown: 0,
-          scoutCooldown: 600,
-          resourceBonus: 0,
-          expansionCooldown: 800, // ~40 seconds
-          maxBases: 3,
-          minArmyForExpansion: 6,
-          minWorkersForExpansion: 10,
-        };
-      case 'hard':
-        return {
-          targetWorkers: 24,
-          attackCooldown: 350,
-          harassCooldown: 400,
-          scoutCooldown: 400,
-          resourceBonus: 0,
-          expansionCooldown: 600, // ~30 seconds
-          maxBases: 4,
-          minArmyForExpansion: 4,
-          minWorkersForExpansion: 8,
-        };
-      case 'very_hard':
-        return {
-          targetWorkers: 28,
-          attackCooldown: 250,
-          harassCooldown: 300,
-          scoutCooldown: 300,
-          resourceBonus: 0.25,
-          expansionCooldown: 500, // ~25 seconds
-          maxBases: 5,
-          minArmyForExpansion: 2,
-          minWorkersForExpansion: 6,
-        };
-      case 'insane':
-        return {
-          targetWorkers: 32,
-          attackCooldown: 150,
-          harassCooldown: 200,
-          scoutCooldown: 200,
-          resourceBonus: 0.5,
-          expansionCooldown: 400, // ~20 seconds
-          maxBases: 6,
-          minArmyForExpansion: 0, // Expands even without army
-          minWorkersForExpansion: 4,
-        };
+  /**
+   * Create an AIStateSnapshot for macro rule evaluation.
+   * Config is required - no fallbacks.
+   */
+  private createStateSnapshot(ai: AIPlayer, currentTick: number): AIStateSnapshot {
+    const config = ai.config!; // Config is guaranteed by registerAI
+    const baseCount = this.countPlayerBases(ai);
+
+    // Count production buildings from config
+    let productionBuildingsCount = 0;
+    for (const prodConfig of config.production.buildings) {
+      productionBuildingsCount += ai.buildingCounts.get(prodConfig.buildingId) || 0;
     }
+
+    // Check if AI has any anti-air units from config
+    let hasAntiAir = false;
+    for (const unitId of config.roles.antiAir) {
+      if ((ai.armyComposition.get(unitId) || 0) > 0) {
+        hasAntiAir = true;
+        break;
+      }
+    }
+
+    return {
+      playerId: ai.playerId,
+      difficulty: ai.difficulty,
+      personality: ai.personality,
+      currentTick,
+
+      minerals: ai.minerals,
+      vespene: ai.vespene,
+      supply: ai.supply,
+      maxSupply: ai.maxSupply,
+
+      workerCount: ai.workerCount,
+      armySupply: ai.armySupply,
+      armyValue: ai.armyValue,
+      unitCounts: ai.armyComposition,
+
+      baseCount,
+      buildingCounts: ai.buildingCounts,
+      productionBuildingsCount,
+
+      enemyArmyStrength: ai.enemyArmyStrength,
+      enemyBaseCount: ai.enemyBaseCount,
+      enemyAirUnits: ai.enemyAirUnits,
+      underAttack: ai.state === 'defending',
+
+      hasAntiAir,
+
+      config,
+    };
   }
 
   /**
    * Load build order from data-driven config for a faction and difficulty.
-   * Falls back to a default generic build order if none is configured.
+   * Config is required - throws error if not found (no fallbacks).
    */
   private loadBuildOrder(faction: string, difficulty: AIDifficulty): BuildOrderStep[] {
-    // Try to get a build order from the data-driven config
+    // Get build order from data-driven config - config is required
     const buildOrder = getRandomBuildOrder(faction, difficulty, this.random);
 
-    if (buildOrder) {
-      debugAI.log(`[EnhancedAI] Loaded build order: ${buildOrder.name} for ${faction} (${difficulty})`);
-      return [...buildOrder.steps];
+    if (!buildOrder) {
+      throw new Error(`[EnhancedAI] No build order configured for faction ${faction} (${difficulty}). Build orders must be defined in data.`);
     }
 
-    // Fallback to generic build order if faction has no configured build orders
-    debugAI.warn(`[EnhancedAI] No build order found for ${faction} (${difficulty}), using fallback`);
-    return [
-      { type: 'unit', id: 'fabricator' },
-      { type: 'unit', id: 'fabricator' },
-      { type: 'building', id: 'supply_cache' },
-      { type: 'building', id: 'infantry_bay' },
-      { type: 'unit', id: 'trooper' },
-      { type: 'building', id: 'extractor' },
-    ];
+    debugAI.log(`[EnhancedAI] Loaded build order: ${buildOrder.name} for ${faction} (${difficulty})`);
+    return [...buildOrder.steps];
   }
 
   /**
-   * Check a named condition for build order steps.
+   * Check a named condition for build order steps (data-driven).
    * Named conditions allow data-driven build orders without embedding functions.
    */
   private checkNamedCondition(conditionName: string, ai: AIPlayer): boolean {
+    const config = ai.config!;
+
     switch (conditionName) {
       case 'hasRefinery':
       case 'hasExtractor':
-        return (ai.buildingCounts.get('extractor') ?? 0) > 0;
+      case 'hasGasExtractor':
+        return (ai.buildingCounts.get(config.roles.gasExtractor) ?? 0) > 0;
       case 'hasBarracks':
       case 'hasInfantryBay':
-        return (ai.buildingCounts.get('infantry_bay') ?? 0) > 0;
-      case 'hasFactory':
-      case 'hasForge':
-        return (ai.buildingCounts.get('forge') ?? 0) > 0;
-      case 'hasStarport':
-      case 'hasHangar':
-        return (ai.buildingCounts.get('hangar') ?? 0) > 0;
-      case 'hasTechLab':
-      case 'hasResearchModule':
-        return (ai.buildingCounts.get('research_module') ?? 0) > 0;
+      case 'hasBasicProduction':
+        return (ai.buildingCounts.get(config.roles.basicProduction) ?? 0) > 0;
       case 'lowArmy':
         return ai.armySupply < 10;
       case 'hasArmy':
@@ -370,6 +363,13 @@ export class EnhancedAISystem extends System {
       case 'underAttack':
         return ai.state === 'defending';
       default:
+        // Try to match against building ID from config.production.buildings
+        for (const prodBuilding of config.production.buildings) {
+          if (conditionName === `has_${prodBuilding.buildingId}` ||
+              conditionName === prodBuilding.buildingId) {
+            return (ai.buildingCounts.get(prodBuilding.buildingId) ?? 0) > 0;
+          }
+        }
         debugAI.warn(`[EnhancedAI] Unknown condition: ${conditionName}`);
         return true; // Default to true for unknown conditions
     }
@@ -489,59 +489,73 @@ export class EnhancedAISystem extends System {
   }
 
   private applyResourceBonus(ai: AIPlayer): void {
-    const config = this.getDifficultyConfig(ai.difficulty);
+    const config = ai.config!; // Config is guaranteed by registerAI
+    const difficultySettings = config.difficultyConfig[ai.difficulty];
+    const economyConfig = config.economy;
 
     // All AI difficulties get passive income based on workers gathering
-    // This simulates workers mining (since the game store is only for player1)
-    // Base income: ~5 minerals per worker per action tick
-    const baseIncomePerWorker = 5;
-    const incomeMultiplier = 1 + config.resourceBonus;
+    // All values come from data-driven config - no fallbacks
+    const baseIncomePerWorker = economyConfig.workerIncomePerTick;
+    const gasIncomeMultiplier = economyConfig.gasIncomeMultiplier;
+    const incomeMultiplier = difficultySettings.resourceMultiplier;
 
     ai.minerals += ai.workerCount * baseIncomePerWorker * incomeMultiplier;
 
-    // Vespene income if AI has an extractor (simplified: assume 3 workers on gas)
-    if ((ai.buildingCounts.get('extractor') || 0) > 0) {
-      ai.vespene += 3 * baseIncomePerWorker * 0.8 * incomeMultiplier;
+    // Vespene income if AI has an extractor
+    const gasExtractor = config.roles.gasExtractor;
+    const extractorCount = ai.buildingCounts.get(gasExtractor) || 0;
+    if (extractorCount > 0) {
+      const workersPerGas = economyConfig.optimalWorkersPerGas;
+      ai.vespene += extractorCount * workersPerGas * baseIncomePerWorker * gasIncomeMultiplier * incomeMultiplier;
     }
 
-    // Update max supply based on buildings
-    // HQ and its upgrades (orbital_station, bastion) all provide 11 supply
-    const hqCount = ai.buildingCounts.get('headquarters') || 0;
-    const orbitalCount = ai.buildingCounts.get('orbital_station') || 0;
-    const bastionCount = ai.buildingCounts.get('bastion') || 0;
-    const cacheCount = ai.buildingCounts.get('supply_cache') || 0;
-    ai.maxSupply = (hqCount + orbitalCount + bastionCount) * 11 + cacheCount * 8;
+    // Update max supply based on buildings from config
+    const supplyPerBase = economyConfig.supplyPerMainBase;
+    const supplyPerSupplyBuilding = economyConfig.supplyPerSupplyBuilding;
+
+    // Count bases using role mapping from config
+    let baseSupply = 0;
+    for (const baseType of config.roles.baseTypes) {
+      baseSupply += (ai.buildingCounts.get(baseType) || 0) * supplyPerBase;
+    }
+
+    // Count supply buildings using role mapping from config
+    const supplyBuilding = config.roles.supplyBuilding;
+    const supplyBuildingCount = ai.buildingCounts.get(supplyBuilding) || 0;
+
+    ai.maxSupply = baseSupply + supplyBuildingCount * supplyPerSupplyBuilding;
   }
 
   private updateAIState(ai: AIPlayer, currentTick: number): void {
-    // Priority: Defending > Attacking > Harassing > Expanding > Scouting > Building
-    const config = this.getDifficultyConfig(ai.difficulty);
+    const config = ai.config!; // Config is guaranteed by registerAI
+    const difficultySettings = config.difficultyConfig[ai.difficulty];
+    const economyConfig = config.economy;
+    const tacticalConfig = config.tactical;
 
+    // Priority: Defending > Attacking > Harassing > Expanding > Scouting > Building
     if (this.isUnderAttack(ai.playerId)) {
       ai.state = 'defending';
       return;
     }
 
-    // Check if should attack
-    const minArmySize = this.getMinArmyForAttack(ai.difficulty);
+    // Check if should attack using tactical config
+    const minArmySize = tacticalConfig.attackThresholds[ai.difficulty];
     if (ai.armySupply >= minArmySize && currentTick - ai.lastAttackTick >= ai.attackCooldown) {
       ai.state = 'attacking';
       return;
     }
 
     // CRITICAL: Continue attacking if already in attack state and enemies still exist
-    // This prevents the AI from giving up mid-attack when it takes losses
     if (ai.state === 'attacking') {
       const hasArmy = this.getArmyUnits(ai.playerId).length > 0;
-      const hasEnemies = this.findAnyEnemyTarget(ai.playerId) !== null;
+      const hasEnemies = this.findAnyEnemyTarget(ai) !== null;
       if (hasArmy && hasEnemies) {
-        // Stay in attacking state - finish the job!
-        return;
+        return; // Stay in attacking state - finish the job!
       }
     }
 
-    // Check if should harass (hard+ difficulty)
-    if (ai.harassCooldown > 0 && currentTick - ai.lastHarassTick >= ai.harassCooldown) {
+    // Check if should harass (from difficulty settings)
+    if (difficultySettings.harassmentEnabled && currentTick - ai.lastHarassTick >= ai.harassCooldown) {
       const harassUnits = this.getHarassUnits(ai);
       if (harassUnits.length > 0) {
         ai.state = 'harassing';
@@ -549,44 +563,42 @@ export class EnhancedAISystem extends System {
       }
     }
 
-    // Check if should expand - SC2-style expansion timing
-    // AI considers expansion if:
-    // 1. Cooldown has elapsed since last expansion
-    // 2. Has enough workers to justify expansion
-    // 3. Has some army for defense (configurable by difficulty)
-    // 4. Has enough minerals
-    // 5. Below max base count
-    const totalBases = this.countPlayerBases(ai.playerId);
+    // === EXPANSION LOGIC (FIXED) ===
+    // Uses OR logic for some conditions instead of requiring ALL conditions
+    const totalBases = this.countPlayerBases(ai);
     const cooldownElapsed = currentTick - ai.lastExpansionTick >= ai.expansionCooldown;
-    const hasEnoughWorkers = ai.workerCount >= config.minWorkersForExpansion;
-    const hasEnoughArmy = ai.armySupply >= config.minArmyForExpansion;
-    const hasEnoughMinerals = ai.minerals >= 400;
-    const belowMaxBases = totalBases < config.maxBases;
+    const belowMaxBases = totalBases < difficultySettings.maxBases;
 
-    const shouldConsiderExpansion =
-      cooldownElapsed &&
-      hasEnoughWorkers &&
-      hasEnoughArmy &&
-      hasEnoughMinerals &&
-      belowMaxBases;
+    // All values from config - no fallbacks
+    const expansionMineralThreshold = economyConfig.expansionMineralThreshold;
+    const optimalWorkersPerBase = economyConfig.optimalWorkersPerBase;
+    const saturationRatio = economyConfig.saturationExpansionRatio;
 
-    // More aggressive expansion for saturated bases
-    // If workers are near saturation (3 per mineral patch = ~24 per base), expand
-    const optimalWorkersPerBase = 22;
-    const isSaturated = ai.workerCount >= totalBases * optimalWorkersPerBase * 0.8;
+    const hasEnoughMinerals = ai.minerals >= expansionMineralThreshold;
+    const hasEnoughWorkers = ai.workerCount >= difficultySettings.minWorkersForExpansion;
+    const hasEnoughArmy = ai.armySupply >= difficultySettings.minArmyForExpansion;
 
-    // Time-based fallback: expand after long game time even without full army
-    // This ensures the AI expands eventually even if it's slow to build army
-    const longGameTime = currentTick > 2000; // ~100 seconds at 20 ticks/sec
-    const timeBasedExpansion = longGameTime && cooldownElapsed && hasEnoughMinerals && belowMaxBases;
+    // Saturation-based expansion - if workers are saturated, expand regardless of army
+    const isSaturated = ai.workerCount >= totalBases * optimalWorkersPerBase * saturationRatio;
 
-    if (shouldConsiderExpansion || (isSaturated && hasEnoughMinerals && belowMaxBases) || timeBasedExpansion) {
+    // Time-based expansion - expand after long game time even without perfect conditions
+    const longGameTime = currentTick > 2000;
+
+    // Flexible expansion logic:
+    // 1. Standard expansion: cooldown + workers + army + minerals + below max
+    // 2. Saturated bases: cooldown + saturated + minerals + below max (no army requirement)
+    // 3. Late game: cooldown + time + minerals + below max (no worker/army requirement)
+    const standardExpansion = cooldownElapsed && hasEnoughWorkers && hasEnoughArmy && hasEnoughMinerals && belowMaxBases;
+    const saturationExpansion = cooldownElapsed && isSaturated && hasEnoughMinerals && belowMaxBases;
+    const timeBasedExpansion = cooldownElapsed && longGameTime && hasEnoughMinerals && belowMaxBases;
+
+    if (standardExpansion || saturationExpansion || timeBasedExpansion) {
       ai.state = 'expanding';
       return;
     }
 
-    // Check if should scout
-    if (ai.scoutCooldown > 0 && currentTick - ai.lastScoutTick >= ai.scoutCooldown) {
+    // Check if should scout (from difficulty settings)
+    if (difficultySettings.scoutingEnabled && currentTick - ai.lastScoutTick >= ai.scoutCooldown) {
       ai.state = 'scouting';
       return;
     }
@@ -595,9 +607,12 @@ export class EnhancedAISystem extends System {
   }
 
   /**
-   * Count total command center type buildings for a player
+   * Count total command center type buildings for a player (data-driven)
    */
-  private countPlayerBases(playerId: string): number {
+  private countPlayerBases(ai: AIPlayer): number {
+    const config = ai.config!;
+    const baseTypes = config.roles.baseTypes;
+
     let count = 0;
     const buildings = this.getCachedBuildings();
     for (const entity of buildings) {
@@ -606,24 +621,14 @@ export class EnhancedAISystem extends System {
       const health = entity.get<Health>('Health');
 
       if (!selectable || !building || !health) continue;
-      if (selectable.playerId !== playerId) continue;
+      if (selectable.playerId !== ai.playerId) continue;
       if (health.isDead()) continue;
 
-      if (['headquarters', 'orbital_station', 'bastion'].includes(building.buildingId)) {
+      if (baseTypes.includes(building.buildingId)) {
         count++;
       }
     }
     return count;
-  }
-
-  private getMinArmyForAttack(difficulty: AIDifficulty): number {
-    switch (difficulty) {
-      case 'easy': return 20;
-      case 'medium': return 15;
-      case 'hard': return 12;
-      case 'very_hard': return 10;
-      case 'insane': return 8;
-    }
   }
 
   private executeStateBehavior(ai: AIPlayer, currentTick: number): void {
@@ -721,155 +726,100 @@ export class EnhancedAISystem extends System {
     this.doMacro(ai);
   }
 
+  /**
+   * Execute macro decisions using data-driven MacroRules.
+   * 100% data-driven - no fallbacks. Config is required.
+   */
   private doMacro(ai: AIPlayer): void {
-    // Supply check
-    if (ai.supply >= ai.maxSupply - 2) {
-      if (this.tryBuildBuilding(ai, 'supply_cache')) return;
+    if (!ai.config) {
+      debugAI.error(`[EnhancedAI] ${ai.playerId}: No config loaded! AI cannot function without FactionAIConfig.`);
+      return;
     }
 
-    // Worker production
-    if (ai.workerCount < ai.targetWorkerCount) {
-      if (this.tryTrainUnit(ai, 'fabricator')) return;
+    const currentTick = this.game.getCurrentTick();
+
+    // Create state snapshot for rule evaluation
+    const state = this.createStateSnapshot(ai, currentTick);
+
+    // Find best matching macro rule
+    const bestRule = findBestMacroRule(ai.config.macroRules, state, ai.macroRuleCooldowns);
+
+    if (bestRule) {
+      // Execute the rule's action
+      const success = this.executeRuleAction(ai, bestRule);
+
+      // Update cooldown on success
+      if (success) {
+        ai.macroRuleCooldowns.set(bestRule.id, currentTick);
+        debugAI.log(`[EnhancedAI] ${ai.playerId}: Executed macro rule '${bestRule.name}'`);
+        return;
+      }
     }
 
-    // Army production based on difficulty
-    this.produceArmy(ai);
+    // No matching rule or rule failed - produce basic unit if we have production
+    const basicUnit = ai.config.roles.basicUnit;
+    const basicProduction = ai.config.roles.basicProduction;
+    if ((ai.buildingCounts.get(basicProduction) || 0) > 0) {
+      this.tryTrainUnit(ai, basicUnit);
+    }
   }
 
-  private produceArmy(ai: AIPlayer): void {
-    const hasInfantryBay = (ai.buildingCounts.get('infantry_bay') || 0) > 0;
-    const hasForge = (ai.buildingCounts.get('forge') || 0) > 0;
-    const hasHangar = (ai.buildingCounts.get('hangar') || 0) > 0;
-    const extractorCount = ai.buildingCounts.get('extractor') || 0;
-    const hasExtractor = extractorCount > 0;
-    const infantryBayCount = ai.buildingCounts.get('infantry_bay') || 0;
-    const researchModuleCount = ai.buildingCounts.get('research_module') || 0;
+  /**
+   * Execute a macro rule action.
+   */
+  private executeRuleAction(ai: AIPlayer, rule: MacroRule): boolean {
+    if (!ai.config) return false;
 
-    // Build extractors on available vespene geysers near any base
-    // Count available geysers near all AI bases and build extractors if needed
-    const availableGeysers = this.countAvailableVespeneGeysers(ai.playerId);
-    if (availableGeysers > 0 && ai.workerCount >= 14) {
-      if (this.tryBuildBuilding(ai, 'extractor')) return;
+    const action = rule.action;
+
+    switch (action.type) {
+      case 'build':
+        if (action.targetId) {
+          return this.tryBuildBuilding(ai, action.targetId);
+        }
+        return false;
+
+      case 'train':
+        if (action.targetId) {
+          return this.tryTrainUnit(ai, action.targetId);
+        }
+        // Handle weighted random selection
+        if (action.options && action.options.length > 0) {
+          const unitId = this.selectWeightedOption(action.options);
+          if (unitId) {
+            return this.tryTrainUnit(ai, unitId);
+          }
+        }
+        return false;
+
+      case 'expand':
+        // Expansion is handled by state machine
+        return false;
+
+      case 'research':
+        // TODO: Implement research when research system is ready
+        return false;
+
+      default:
+        return false;
     }
+  }
 
-    // Build production buildings if needed
-    if (!hasInfantryBay && ai.workerCount >= 12) {
-      if (this.tryBuildBuilding(ai, 'infantry_bay')) return;
-    }
+  /**
+   * Select a weighted random option from a list.
+   */
+  private selectWeightedOption(options: Array<{ id: string; weight: number }>): string | null {
+    const totalWeight = options.reduce((sum, opt) => sum + opt.weight, 0);
+    if (totalWeight <= 0) return options[0]?.id ?? null;
 
-    // Second infantry bay for more production
-    if (infantryBayCount === 1 && ai.workerCount >= 18 && ai.armySupply >= 4) {
-      if (this.tryBuildBuilding(ai, 'infantry_bay')) return;
-    }
-
-    // Forge for all difficulties except easy (requires extractor for vespene)
-    if (hasInfantryBay && hasExtractor && !hasForge && ai.difficulty !== 'easy' && ai.vespene >= 100) {
-      if (this.tryBuildBuilding(ai, 'forge')) return;
-    }
-
-    // Hangar for medium+ difficulties
-    if (hasForge && !hasHangar && ai.difficulty !== 'easy' && ai.vespene >= 100) {
-      if (this.tryBuildBuilding(ai, 'hangar')) return;
-    }
-
-    // Build Research Module for tech units (medium+ difficulty)
-    // This is critical for producing breachers, devastators, colossus, etc.
-    if (ai.difficulty !== 'easy' && hasExtractor && ai.vespene >= 25) {
-      const buildingNeedingModule = this.findBuildingNeedingResearchModule(ai);
-      if (buildingNeedingModule && researchModuleCount < 3) { // Max 3 research modules
-        if (this.tryBuildResearchModule(ai, buildingNeedingModule)) return;
-      }
-    }
-
-    // Use counter-building logic for harder difficulties
-    if (ai.difficulty === 'hard' || ai.difficulty === 'very_hard' || ai.difficulty === 'insane') {
-      const recommendation = getCounterRecommendation(this.world, ai.playerId, ai.buildingCounts);
-
-      // Try to build recommended buildings first
-      for (const buildingRec of recommendation.buildingsToBuild) {
-        if (this.tryBuildBuilding(ai, buildingRec.buildingId)) return;
-      }
-
-      // Try to train recommended units (with vespene checks)
-      for (const unitRec of recommendation.unitsToBuild) {
-        const unitDef = UNIT_DEFINITIONS[unitRec.unitId];
-        if (!unitDef) continue;
-
-        // Check we have enough vespene for this unit
-        if (ai.vespene < unitDef.vespeneCost) continue;
-
-        const canProduce = this.canProduceUnit(ai, unitRec.unitId);
-        if (canProduce && this.tryTrainUnit(ai, unitRec.unitId)) return;
+    let roll = this.random.next() * totalWeight;
+    for (const option of options) {
+      roll -= option.weight;
+      if (roll <= 0) {
+        return option.id;
       }
     }
-
-    // Produce tech units with higher probability (when we can)
-    // Priority: Heavy units > Medium units > Basic units
-
-    // Try to build Colossus (heavy unit - best tank)
-    if (hasForge && this.canProduceUnit(ai, 'colossus') && ai.vespene >= 200 && ai.minerals >= 300) {
-      if (this.random.next() < 0.4) {
-        if (this.tryTrainUnit(ai, 'colossus')) return;
-      }
-    }
-
-    // Try to build Devastator (medium-heavy tank)
-    if (hasForge && this.canProduceUnit(ai, 'devastator') && ai.vespene >= 125) {
-      if (this.random.next() < 0.5) {
-        if (this.tryTrainUnit(ai, 'devastator')) return;
-      }
-    }
-
-    // Try to build air units from Hangar
-    if (hasHangar) {
-      // Specter (cloaked air unit)
-      if (this.canProduceUnit(ai, 'specter') && ai.vespene >= 100 && this.random.next() < 0.3) {
-        if (this.tryTrainUnit(ai, 'specter')) return;
-      }
-      // Valkyrie (good anti-air)
-      if (ai.vespene >= 75 && this.random.next() < 0.35) {
-        if (this.tryTrainUnit(ai, 'valkyrie')) return;
-      }
-      // Lifter (transport/healer)
-      if (ai.vespene >= 100 && this.random.next() < 0.2) {
-        if (this.tryTrainUnit(ai, 'lifter')) return;
-      }
-      // Valkyrie as fallback - always try to produce something from hangar
-      if (ai.vespene >= 75) {
-        if (this.tryTrainUnit(ai, 'valkyrie')) return;
-      }
-    }
-
-    // Produce vehicles from Forge
-    if (hasForge && ai.vespene >= 25) {
-      // Scorcher - fast harassment unit (doesn't need research module)
-      if (this.random.next() < 0.4) {
-        if (this.tryTrainUnit(ai, 'scorcher')) return;
-      }
-      // Scorcher as fallback - always try to produce something from forge
-      if (this.tryTrainUnit(ai, 'scorcher')) return;
-    }
-
-    // Produce infantry from Infantry Bay
-    if (hasInfantryBay) {
-      // Breacher (needs research module) - anti-armor infantry
-      if (this.canProduceUnit(ai, 'breacher') && ai.vespene >= 25 && this.random.next() < 0.5) {
-        if (this.tryTrainUnit(ai, 'breacher')) return;
-      }
-
-      // Operative (needs research module) - stealth/sniper unit
-      if (this.canProduceUnit(ai, 'operative') && ai.vespene >= 125 && this.random.next() < 0.25) {
-        if (this.tryTrainUnit(ai, 'operative')) return;
-      }
-
-      // Vanguard - jetpack unit for harassment
-      if (ai.vespene >= 50 && this.random.next() < 0.3) {
-        if (this.tryTrainUnit(ai, 'vanguard')) return;
-      }
-
-      // Trooper - basic unit (fallback, no vespene needed)
-      this.tryTrainUnit(ai, 'trooper');
-    }
+    return options[options.length - 1]?.id ?? null;
   }
 
   /**
@@ -958,10 +908,13 @@ export class EnhancedAISystem extends System {
   }
 
   /**
-   * Find a production building that can build research module (tech lab)
-   * Returns the building that needs an addon most (for tech units)
+   * Find a production building that can build research module (tech lab) (data-driven).
+   * Returns the building that needs an addon most (based on config.production.researchModulePriority)
    */
   private findBuildingNeedingResearchModule(ai: AIPlayer): { entityId: number; buildingId: string; position: { x: number; y: number } } | null {
+    const config = ai.config!;
+    const priorityList = config.production.researchModulePriority;
+
     const buildings = this.world.getEntitiesWith('Building', 'Selectable', 'Transform');
     const candidates: { entityId: number; buildingId: string; position: { x: number; y: number }; priority: number }[] = [];
 
@@ -975,18 +928,14 @@ export class EnhancedAISystem extends System {
       if (building.hasAddon()) continue; // Already has addon
       if (!building.canHaveAddon) continue;
 
-      // Priority: forge > infantry_bay > hangar (for better tech units)
-      let priority = 0;
-      if (building.buildingId === 'forge') priority = 3; // Devastator, Colossus
-      else if (building.buildingId === 'infantry_bay') priority = 2; // Breacher, Operative
-      else if (building.buildingId === 'hangar') priority = 1; // Specter, Dreadnought
-
-      if (priority > 0) {
+      // Priority from config (higher index = lower priority, so invert)
+      const priorityIndex = priorityList.indexOf(building.buildingId);
+      if (priorityIndex >= 0) {
         candidates.push({
           entityId: entity.id,
           buildingId: building.buildingId,
           position: { x: transform.x, y: transform.y },
-          priority
+          priority: priorityList.length - priorityIndex // Invert so first in list = highest priority
         });
       }
     }
@@ -997,16 +946,17 @@ export class EnhancedAISystem extends System {
   }
 
   private executeExpandingPhase(ai: AIPlayer): void {
-    const config = this.getDifficultyConfig(ai.difficulty);
-    const totalBases = this.countPlayerBases(ai.playerId);
+    const config = ai.config!;
+    const difficultySettings = config.difficultyConfig[ai.difficulty];
+    const totalBases = this.countPlayerBases(ai);
     const currentTick = this.game.getCurrentTick();
 
     // Check if expansion is possible
-    if (totalBases < config.maxBases && ai.minerals >= 400) {
+    if (totalBases < difficultySettings.maxBases && ai.minerals >= config.economy.expansionMineralThreshold) {
       const expansionPos = this.findExpansionLocation(ai);
       if (expansionPos) {
-        // Try to build headquarters at expansion
-        if (this.tryBuildBuildingAt(ai, 'headquarters', expansionPos)) {
+        // Try to build main base at expansion (data-driven)
+        if (this.tryBuildBuildingAt(ai, config.roles.mainBase, expansionPos)) {
           debugAI.log(`EnhancedAI: ${ai.playerId} expanding to base #${totalBases + 1} at (${expansionPos.x.toFixed(1)}, ${expansionPos.y.toFixed(1)})`);
           ai.lastExpansionTick = currentTick;
           ai.state = 'building';
@@ -1023,10 +973,13 @@ export class EnhancedAISystem extends System {
    * Find a suitable expansion location by locating resource clusters without nearby command centers
    */
   private findExpansionLocation(ai: AIPlayer): { x: number; y: number } | null {
-    const aiBase = this.findAIBase(ai.playerId);
+    const aiBase = this.findAIBase(ai);
     if (!aiBase) return null;
 
-    // Get all existing command center positions for this AI player only
+    const config = ai.config!;
+    const baseTypes = config.roles.baseTypes;
+
+    // Get all existing command center positions for this AI player only (data-driven)
     const existingBases: Array<{ x: number; y: number }> = [];
     const buildings = this.world.getEntitiesWith('Building', 'Transform', 'Selectable');
     for (const entity of buildings) {
@@ -1034,8 +987,7 @@ export class EnhancedAISystem extends System {
       const transform = entity.get<Transform>('Transform')!;
       const selectable = entity.get<Selectable>('Selectable')!;
       // Only count this AI's own bases, not enemy bases
-      if (selectable.playerId === ai.playerId &&
-          ['headquarters', 'orbital_station', 'bastion', 'nexus', 'hatchery'].includes(building.buildingId)) {
+      if (selectable.playerId === ai.playerId && baseTypes.includes(building.buildingId)) {
         existingBases.push({ x: transform.x, y: transform.y });
       }
     }
@@ -1151,7 +1103,7 @@ export class EnhancedAISystem extends System {
 
   private executeAttackingPhase(ai: AIPlayer, currentTick: number): void {
     // Find any enemy target (building or unit)
-    const enemyTarget = this.findAnyEnemyTarget(ai.playerId);
+    const enemyTarget = this.findAnyEnemyTarget(ai);
     if (!enemyTarget) {
       // No enemies left - victory! Go back to building
       ai.state = 'building';
@@ -1281,10 +1233,15 @@ export class EnhancedAISystem extends System {
    * IMPROVED: Each AI targets a different enemy based on proximity to their own base
    * This prevents all AI from ganging up on one player
    */
-  private findAnyEnemyTarget(playerId: string): { x: number; y: number } | null {
+  private findAnyEnemyTarget(ai: AIPlayer): { x: number; y: number } | null {
     // Get AI's base position for calculating closest enemy
-    const aiBase = this.findAIBase(playerId);
+    const aiBase = this.findAIBase(ai);
     if (!aiBase) return null;
+
+    const config = ai.config!;
+    // For enemy base detection, use our own baseTypes (works for symmetric factions)
+    // In a multi-faction game with different base buildings, this should be expanded
+    const baseTypes = config.roles.baseTypes;
 
     // Count buildings per enemy player and track their base locations
     const enemyData: Map<string, {
@@ -1301,7 +1258,7 @@ export class EnhancedAISystem extends System {
       const building = entity.get<Building>('Building');
 
       if (!selectable || !health || !transform || !building) continue;
-      if (selectable.playerId === playerId) continue;
+      if (selectable.playerId === ai.playerId) continue;
       if (health.isDead()) continue;
 
       const enemyId = selectable.playerId;
@@ -1317,8 +1274,8 @@ export class EnhancedAISystem extends System {
         height: building.height
       });
 
-      // Track headquarters position as base location
-      if (building.buildingId === 'headquarters' || building.buildingId === 'orbital_station') {
+      // Track headquarters position as base location (data-driven)
+      if (baseTypes.includes(building.buildingId)) {
         data.basePos = { x: transform.x, y: transform.y };
         // Calculate distance from this AI's base to enemy base
         const dx = transform.x - aiBase.x;
@@ -1383,7 +1340,7 @@ export class EnhancedAISystem extends System {
       const transform = entity.get<Transform>('Transform');
 
       if (!selectable || !health || !transform) continue;
-      if (selectable.playerId === playerId) continue;
+      if (selectable.playerId === ai.playerId) continue;
       if (health.isDead()) continue;
 
       const enemyId = selectable.playerId;
@@ -1510,7 +1467,7 @@ export class EnhancedAISystem extends System {
   }
 
   private executeDefendingPhase(ai: AIPlayer): void {
-    const baseLocation = this.findAIBase(ai.playerId);
+    const baseLocation = this.findAIBase(ai);
     if (!baseLocation) return;
 
     const armyUnits = this.getArmyUnits(ai.playerId);
@@ -1744,7 +1701,7 @@ export class EnhancedAISystem extends System {
     }
 
     // Attack enemy workers or expansion
-    const harassTarget = this.findHarassTarget(ai.playerId);
+    const harassTarget = this.findHarassTarget(ai);
     if (!harassTarget) {
       ai.state = 'building';
       return;
@@ -1791,6 +1748,7 @@ export class EnhancedAISystem extends System {
   }
 
   private tryBuildBuilding(ai: AIPlayer, buildingType: string): boolean {
+    const config = ai.config!;
     const buildingDef = BUILDING_DEFINITIONS[buildingType];
     if (!buildingDef) {
       debugAI.log(`[EnhancedAI] ${ai.playerId}: tryBuildBuilding failed - unknown building type: ${buildingType}`);
@@ -1802,7 +1760,7 @@ export class EnhancedAISystem extends System {
       return false;
     }
 
-    const basePos = this.findAIBase(ai.playerId);
+    const basePos = this.findAIBase(ai);
     if (!basePos) {
       debugAI.log(`[EnhancedAI] ${ai.playerId}: tryBuildBuilding failed - cannot find AI base!`);
       return false;
@@ -1818,9 +1776,9 @@ export class EnhancedAISystem extends System {
 
     let buildPos: { x: number; y: number } | null = null;
 
-    // Special handling for extractors - must be placed on vespene geysers
-    if (buildingType === 'extractor') {
-      buildPos = this.findAvailableVespeneGeyser(ai.playerId, basePos);
+    // Special handling for extractors - must be placed on vespene geysers (data-driven)
+    if (buildingType === config.roles.gasExtractor) {
+      buildPos = this.findAvailableVespeneGeyser(ai, basePos);
       if (!buildPos) {
         // No available vespene geyser nearby, skip building refinery
         debugAI.log(`[EnhancedAI] ${ai.playerId}: tryBuildBuilding failed - no available vespene geyser near base at (${basePos.x}, ${basePos.y})`);
@@ -1996,9 +1954,12 @@ export class EnhancedAISystem extends System {
 
   /**
    * Find a vespene geyser near any AI base that doesn't have a refinery yet
-   * Searches near main base and all expansion bases
+   * Searches near main base and all expansion bases (data-driven)
    */
-  private findAvailableVespeneGeyser(playerId: string, _basePos: { x: number; y: number }): { x: number; y: number } | null {
+  private findAvailableVespeneGeyser(ai: AIPlayer, _basePos: { x: number; y: number }): { x: number; y: number } | null {
+    const config = ai.config!;
+    const baseTypes = config.roles.baseTypes;
+
     // Get all AI base positions to search for geysers near expansions too
     const basePositions: { x: number; y: number }[] = [];
     const buildings = this.getCachedBuildingsWithTransform();
@@ -2008,8 +1969,8 @@ export class EnhancedAISystem extends System {
       const building = entity.get<Building>('Building')!;
       const transform = entity.get<Transform>('Transform')!;
 
-      if (selectable.playerId !== playerId) continue;
-      if (['headquarters', 'orbital_station', 'bastion'].includes(building.buildingId)) {
+      if (selectable.playerId !== ai.playerId) continue;
+      if (baseTypes.includes(building.buildingId)) {
         basePositions.push({ x: transform.x, y: transform.y });
       }
     }
@@ -2048,9 +2009,12 @@ export class EnhancedAISystem extends System {
 
   /**
    * Count the number of vespene geysers near any AI base that don't have extractors yet
-   * This helps the AI build extractors on all available geysers at main and expansion bases
+   * This helps the AI build extractors on all available geysers at main and expansion bases (data-driven)
    */
-  private countAvailableVespeneGeysers(playerId: string): number {
+  private countAvailableVespeneGeysers(ai: AIPlayer): number {
+    const config = ai.config!;
+    const baseTypes = config.roles.baseTypes;
+
     // Get all AI base positions
     const basePositions: { x: number; y: number }[] = [];
     const buildings = this.getCachedBuildingsWithTransform();
@@ -2060,8 +2024,8 @@ export class EnhancedAISystem extends System {
       const building = entity.get<Building>('Building')!;
       const transform = entity.get<Transform>('Transform')!;
 
-      if (selectable.playerId !== playerId) continue;
-      if (['headquarters', 'orbital_station', 'bastion'].includes(building.buildingId)) {
+      if (selectable.playerId !== ai.playerId) continue;
+      if (baseTypes.includes(building.buildingId)) {
         basePositions.push({ x: transform.x, y: transform.y });
       }
     }
@@ -2096,7 +2060,9 @@ export class EnhancedAISystem extends System {
     return availableCount;
   }
 
-  private findAIBase(playerId: string): { x: number; y: number } | null {
+  private findAIBase(ai: AIPlayer): { x: number; y: number } | null {
+    const config = ai.config!;
+    const baseTypes = config.roles.baseTypes;
     const buildings = this.world.getEntitiesWith('Building', 'Transform', 'Selectable');
     let foundForPlayer = false;
     for (const entity of buildings) {
@@ -2104,27 +2070,32 @@ export class EnhancedAISystem extends System {
       const building = entity.get<Building>('Building')!;
       const transform = entity.get<Transform>('Transform')!;
 
-      if (selectable.playerId !== playerId) continue;
+      if (selectable.playerId !== ai.playerId) continue;
       foundForPlayer = true;
-      if (building.buildingId === 'headquarters' || building.buildingId === 'orbital_station') {
+      if (baseTypes.includes(building.buildingId)) {
         return { x: transform.x, y: transform.y };
       }
     }
     if (!foundForPlayer) {
-      debugAI.log(`[EnhancedAI] findAIBase: No buildings at all for ${playerId}`);
+      debugAI.log(`[EnhancedAI] findAIBase: No buildings at all for ${ai.playerId}`);
     }
     return null;
   }
 
-  private findEnemyBase(playerId: string): { x: number; y: number } | null {
+  private findEnemyBase(ai: AIPlayer): { x: number; y: number } | null {
+    const config = ai.config!;
+    // For enemy detection, use our own baseTypes (works for symmetric factions)
+    // For multi-faction games, this would need a global registry of all base types
+    const baseTypes = config.roles.baseTypes;
+
     const buildings = this.world.getEntitiesWith('Building', 'Transform', 'Selectable');
     for (const entity of buildings) {
       const selectable = entity.get<Selectable>('Selectable')!;
       const building = entity.get<Building>('Building')!;
       const transform = entity.get<Transform>('Transform')!;
 
-      if (selectable.playerId === playerId) continue;
-      if (building.buildingId === 'headquarters' || building.buildingId === 'nexus' || building.buildingId === 'hatchery') {
+      if (selectable.playerId === ai.playerId) continue;
+      if (baseTypes.includes(building.buildingId)) {
         return { x: transform.x, y: transform.y };
       }
     }
@@ -2134,7 +2105,7 @@ export class EnhancedAISystem extends System {
       const selectable = entity.get<Selectable>('Selectable')!;
       const transform = entity.get<Transform>('Transform')!;
 
-      if (selectable.playerId === playerId) continue;
+      if (selectable.playerId === ai.playerId) continue;
       return { x: transform.x, y: transform.y };
     }
 
@@ -2336,7 +2307,7 @@ export class EnhancedAISystem extends System {
     };
   }
 
-  private findHarassTarget(playerId: string): { x: number; y: number } | null {
+  private findHarassTarget(ai: AIPlayer): { x: number; y: number } | null {
     // Find enemy workers or expansion
     const units = this.getCachedUnitsWithTransform();
 
@@ -2346,7 +2317,7 @@ export class EnhancedAISystem extends System {
       const transform = entity.get<Transform>('Transform')!;
       const health = entity.get<Health>('Health')!;
 
-      if (selectable.playerId === playerId) continue;
+      if (selectable.playerId === ai.playerId) continue;
       if (health.isDead()) continue;
       if (unit.isWorker) {
         return { x: transform.x, y: transform.y };
@@ -2354,7 +2325,7 @@ export class EnhancedAISystem extends System {
     }
 
     // Otherwise target enemy base
-    return this.findEnemyBase(playerId);
+    return this.findEnemyBase(ai);
   }
 
   /**
@@ -2497,9 +2468,12 @@ export class EnhancedAISystem extends System {
   /**
    * Find idle workers and send them to gather minerals or vespene
    * Uses SC2-style optimal saturation targeting
-   * Now considers all AI bases (main and expansions)
+   * Now considers all AI bases (main and expansions) (data-driven)
    */
   private assignIdleWorkersToGather(ai: AIPlayer): void {
+    const config = ai.config!;
+    const baseTypes = config.roles.baseTypes;
+
     // Find ALL AI base positions (main and expansions)
     const basePositions: { x: number; y: number }[] = [];
     const buildings = this.getCachedBuildingsWithTransform();
@@ -2510,7 +2484,7 @@ export class EnhancedAISystem extends System {
       const transform = entity.get<Transform>('Transform')!;
 
       if (selectable.playerId !== ai.playerId) continue;
-      if (['headquarters', 'orbital_station', 'bastion'].includes(building.buildingId)) {
+      if (baseTypes.includes(building.buildingId)) {
         basePositions.push({ x: transform.x, y: transform.y });
       }
     }
@@ -2576,7 +2550,7 @@ export class EnhancedAISystem extends System {
 
       if (!building || !selectable) continue;
       if (selectable.playerId !== ai.playerId) continue;
-      if (building.buildingId !== 'extractor') continue;
+      if (building.buildingId !== config.roles.gasExtractor) continue; // Data-driven gas extractor
       if (!building.isComplete()) continue;
 
       // PERF: O(1) lookup via map instead of O(n) nested loop
