@@ -101,6 +101,10 @@ SETTINGS = {
     "auto_approve": False,  # Set True to skip approval prompts
     "keep_high_poly": False,
     "export_format": "GLB",  # GLB or FBX
+
+    # Optimization - remove hidden geometry (great for hollow AI models)
+    "remove_bottom_faces": True,   # Remove ground-facing faces (never seen in RTS)
+    "remove_interior_faces": True,  # Remove interior faces of hollow shells
 }
 
 # =============================================================================
@@ -297,6 +301,61 @@ def clean_mesh(obj):
     bpy.ops.object.mode_set(mode='OBJECT')
 
 
+def remove_hidden_geometry(obj, remove_bottom=True, remove_interior=True):
+    """
+    Remove geometry that will never be seen in an RTS game.
+
+    - Bottom faces: faces pointing straight down (ground contact)
+    - Interior faces: faces inside hollow shells
+
+    This can significantly reduce poly count on hollow AI models.
+    """
+    bpy.context.view_layer.objects.active = obj
+    bpy.ops.object.mode_set(mode='EDIT')
+    bpy.ops.mesh.select_all(action='DESELECT')
+
+    bm = bmesh.from_edit_mesh(obj.data)
+    bm.faces.ensure_lookup_table()
+
+    faces_to_delete = []
+
+    if remove_bottom:
+        # Select faces pointing straight down (normal.z < -0.95)
+        for face in bm.faces:
+            if face.normal.z < -0.95:  # Pointing down
+                faces_to_delete.append(face)
+
+    if remove_interior:
+        # Find interior faces using ray casting from face centers
+        # Interior faces are occluded from all directions
+        from mathutils import Vector
+
+        # Simple heuristic: faces with normals pointing inward toward mesh center
+        # Get mesh center
+        center = Vector((0, 0, 0))
+        for v in bm.verts:
+            center += v.co
+        center /= len(bm.verts)
+
+        for face in bm.faces:
+            if face in faces_to_delete:
+                continue
+            # Vector from face center to mesh center
+            face_center = face.calc_center_median()
+            to_center = (center - face_center).normalized()
+            # If face normal points toward center, it's likely interior
+            if face.normal.dot(to_center) > 0.7:
+                faces_to_delete.append(face)
+
+    # Delete the faces
+    if faces_to_delete:
+        bmesh.ops.delete(bm, geom=faces_to_delete, context='FACES')
+        bmesh.update_edit_mesh(obj.data)
+        print(f"      Removed {len(faces_to_delete)} hidden faces")
+
+    bpy.ops.object.mode_set(mode='OBJECT')
+
+
 def triangulate_mesh(obj):
     """Convert quads to tris for Instant Meshes."""
     bpy.context.view_layer.objects.active = obj
@@ -415,7 +474,6 @@ def quadriflow_remesh(high_poly, target_faces, base_name, lod_name):
             use_mesh_symmetry=False,
             use_preserve_sharp=True,
             use_preserve_boundary=False,
-            preserve_paint_mask=False,
             smooth_normals=True,
             mode='FACES'
         )
@@ -565,6 +623,19 @@ def process_static_model(filepath, category, temp_dir, output_dir):
         try:
             # Use the new loose-parts-aware retopo function
             lod = retopo_with_loose_parts(high_poly, target, temp_dir, filename, lod_name)
+
+            # Remove hidden geometry for buildings (hollow shells waste polygons)
+            if category == "buildings":
+                before_faces = len(lod.data.polygons)
+                remove_hidden_geometry(
+                    lod,
+                    remove_bottom=SETTINGS["remove_bottom_faces"],
+                    remove_interior=SETTINGS["remove_interior_faces"]
+                )
+                after_faces = len(lod.data.polygons)
+                if after_faces < before_faces:
+                    print(f"    Optimized: {before_faces:,} → {after_faces:,} faces")
+
             lods.append(lod)
             lod_stats[f"{lod_name.lower()}_faces"] = len(lod.data.polygons)
             print(f"    Created: {len(lod.data.polygons):,} faces")
