@@ -372,7 +372,7 @@ export const useUIStore = create<UIState>((set, get) => ({
 
     // Fog
     fogEnabled: true,
-    fogDensity: 0.6,
+    fogDensity: 1.0, // 1.0 is baseline (1x), range 0.5-2.0
 
     // Environment
     environmentMapEnabled: true,
@@ -383,7 +383,7 @@ export const useUIStore = create<UIState>((set, get) => ({
 
     // Particles
     particlesEnabled: true,
-    particleDensity: 5.0, // 5.0 is the baseline (displayed as 1x), range 1-10
+    particleDensity: 7.5, // 5.0 is baseline (1x), 7.5 = 1.5x, range 1-15
 
     // LOD (Level of Detail)
     lodEnabled: true,

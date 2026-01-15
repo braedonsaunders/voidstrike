@@ -516,6 +516,10 @@ export function WebGPUGameCanvas() {
       environmentRef.current?.setFogEnabled(graphicsSettings.fogEnabled);
       environmentRef.current?.setFogDensity(graphicsSettings.fogDensity);
 
+      // Configure particles
+      environmentRef.current?.setParticlesEnabled(graphicsSettings.particlesEnabled);
+      environmentRef.current?.setParticleDensity(graphicsSettings.particleDensity);
+
       // Configure environment map
       environmentRef.current?.setEnvironmentMapEnabled(graphicsSettings.environmentMapEnabled);
 
@@ -1910,6 +1914,14 @@ export function WebGPUGameCanvas() {
         }
         if (settings.fogDensity !== prevSettings.fogDensity) {
           environmentRef.current.setFogDensity(settings.fogDensity);
+        }
+
+        // Update particle settings
+        if (settings.particlesEnabled !== prevSettings.particlesEnabled) {
+          environmentRef.current.setParticlesEnabled(settings.particlesEnabled);
+        }
+        if (settings.particleDensity !== prevSettings.particleDensity) {
+          environmentRef.current.setParticleDensity(settings.particleDensity);
         }
 
         // Update environment map
