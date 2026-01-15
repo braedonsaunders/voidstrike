@@ -92,6 +92,14 @@ SETTINGS = {
     "export_lod0": True,                # Export LOD0 (original, just compressed)
     "export_lod1": True,                # Export LOD1
     "export_lod2": True,                # Export LOD2
+
+    # WebGPU vertex attribute cleanup (to stay under 8 buffer limit)
+    # Set to False to disable specific cleanups if they cause visual issues
+    "cleanup_extra_uv_layers": True,    # Remove UV1, UV2, etc. (keep only UV0)
+    "cleanup_vertex_colors": True,      # Remove unused vertex color layers
+    "cleanup_shape_keys": True,         # Remove shape keys/morph targets (breaks morph animations!)
+    "cleanup_custom_attributes": True,  # Remove non-standard attributes
+    "cleanup_custom_normals": False,    # Clear custom split normals (can change edge shading)
 }
 
 # =============================================================================
@@ -211,11 +219,11 @@ def cleanup_vertex_attributes(obj):
     - Tangent (1) - for normal mapping
     - Vertex Color (1) - if used
 
-    This function removes:
+    This function removes (based on SETTINGS):
     - Extra UV layers (UV1, UV2, etc.) - keep only first
     - Unused vertex color layers
-    - Shape keys/morph targets (optional)
-    - Custom split normals data
+    - Shape keys/morph targets (optional - can break morph animations)
+    - Custom split normals data (optional - can change edge shading)
 
     Returns:
         dict: Statistics about what was removed
@@ -229,86 +237,92 @@ def cleanup_vertex_attributes(obj):
         "vertex_colors": 0,
         "shape_keys": 0,
         "attributes": 0,
+        "custom_normals": 0,
     }
 
     # Remove extra UV layers (keep only the first one)
-    while len(mesh.uv_layers) > 1:
-        # Remove the last UV layer (keep first)
-        mesh.uv_layers.remove(mesh.uv_layers[-1])
-        removed["uv_layers"] += 1
+    if SETTINGS.get("cleanup_extra_uv_layers", True):
+        while len(mesh.uv_layers) > 1:
+            # Remove the last UV layer (keep first)
+            mesh.uv_layers.remove(mesh.uv_layers[-1])
+            removed["uv_layers"] += 1
 
     # Remove unused vertex color layers (keep at most one if it's actually used)
-    # Check if vertex colors are used in materials
-    vertex_colors_used = False
-    for mat in obj.data.materials:
-        if mat and mat.use_nodes:
-            for node in mat.node_tree.nodes:
-                if node.type == 'VERTEX_COLOR':
-                    vertex_colors_used = True
-                    break
+    if SETTINGS.get("cleanup_vertex_colors", True):
+        # Check if vertex colors are used in materials
+        vertex_colors_used = False
+        for mat in obj.data.materials:
+            if mat and mat.use_nodes:
+                for node in mat.node_tree.nodes:
+                    if node.type == 'VERTEX_COLOR':
+                        vertex_colors_used = True
+                        break
 
-    if not vertex_colors_used:
-        # Remove all vertex color layers if not used
-        while len(mesh.vertex_colors) > 0:
-            mesh.vertex_colors.remove(mesh.vertex_colors[0])
-            removed["vertex_colors"] += 1
-    else:
-        # Keep only one vertex color layer
-        while len(mesh.vertex_colors) > 1:
-            mesh.vertex_colors.remove(mesh.vertex_colors[-1])
-            removed["vertex_colors"] += 1
-
-    # Also check color attributes (Blender 3.2+)
-    if hasattr(mesh, 'color_attributes'):
         if not vertex_colors_used:
-            while len(mesh.color_attributes) > 0:
-                mesh.color_attributes.remove(mesh.color_attributes[0])
+            # Remove all vertex color layers if not used
+            while len(mesh.vertex_colors) > 0:
+                mesh.vertex_colors.remove(mesh.vertex_colors[0])
                 removed["vertex_colors"] += 1
         else:
-            while len(mesh.color_attributes) > 1:
-                mesh.color_attributes.remove(mesh.color_attributes[-1])
+            # Keep only one vertex color layer
+            while len(mesh.vertex_colors) > 1:
+                mesh.vertex_colors.remove(mesh.vertex_colors[-1])
                 removed["vertex_colors"] += 1
 
-    # Remove shape keys if present (they add vertex buffers for morph targets)
-    if mesh.shape_keys:
-        # Store the basis key name
-        basis_name = mesh.shape_keys.key_blocks[0].name if mesh.shape_keys.key_blocks else "Basis"
+        # Also check color attributes (Blender 3.2+)
+        if hasattr(mesh, 'color_attributes'):
+            if not vertex_colors_used:
+                while len(mesh.color_attributes) > 0:
+                    mesh.color_attributes.remove(mesh.color_attributes[0])
+                    removed["vertex_colors"] += 1
+            else:
+                while len(mesh.color_attributes) > 1:
+                    mesh.color_attributes.remove(mesh.color_attributes[-1])
+                    removed["vertex_colors"] += 1
 
-        # Remove all shape keys
-        bpy.context.view_layer.objects.active = obj
-        try:
-            bpy.ops.object.shape_key_remove(all=True)
-            removed["shape_keys"] += 1
-        except:
-            pass  # Shape keys might not be removable in some cases
+    # Remove shape keys if present (they add vertex buffers for morph targets)
+    # WARNING: This will break morph/blend shape animations!
+    if SETTINGS.get("cleanup_shape_keys", True):
+        if mesh.shape_keys:
+            # Remove all shape keys
+            bpy.context.view_layer.objects.active = obj
+            try:
+                bpy.ops.object.shape_key_remove(all=True)
+                removed["shape_keys"] += 1
+            except:
+                pass  # Shape keys might not be removable in some cases
 
     # Remove custom attributes that aren't standard (Blender 3.0+)
-    if hasattr(mesh, 'attributes'):
-        # Standard attributes to keep
-        keep_attrs = {'position', 'normal', 'UVMap', '.corner_vert', '.corner_edge',
-                      '.edge_verts', 'material_index', 'sharp_face', 'sharp_edge'}
+    if SETTINGS.get("cleanup_custom_attributes", True):
+        if hasattr(mesh, 'attributes'):
+            # Standard attributes to keep
+            keep_attrs = {'position', 'normal', 'UVMap', '.corner_vert', '.corner_edge',
+                          '.edge_verts', 'material_index', 'sharp_face', 'sharp_edge'}
 
-        attrs_to_remove = []
-        for attr in mesh.attributes:
-            # Keep standard attributes and the first UV
-            if attr.name not in keep_attrs and not attr.name.startswith('UVMap'):
-                # Don't remove if it's a required internal attribute
-                if not attr.name.startswith('.'):
-                    attrs_to_remove.append(attr.name)
+            attrs_to_remove = []
+            for attr in mesh.attributes:
+                # Keep standard attributes and the first UV
+                if attr.name not in keep_attrs and not attr.name.startswith('UVMap'):
+                    # Don't remove if it's a required internal attribute
+                    if not attr.name.startswith('.'):
+                        attrs_to_remove.append(attr.name)
 
-        for attr_name in attrs_to_remove:
+            for attr_name in attrs_to_remove:
+                try:
+                    mesh.attributes.remove(mesh.attributes[attr_name])
+                    removed["attributes"] += 1
+                except:
+                    pass
+
+    # Clear custom split normals (they can change edge shading appearance)
+    # Disabled by default as it can affect visual quality
+    if SETTINGS.get("cleanup_custom_normals", False):
+        if mesh.has_custom_normals:
             try:
-                mesh.attributes.remove(mesh.attributes[attr_name])
-                removed["attributes"] += 1
+                bpy.ops.mesh.customdata_custom_splitnormals_clear()
+                removed["custom_normals"] += 1
             except:
                 pass
-
-    # Clear custom split normals (they can add vertex data)
-    if mesh.has_custom_normals:
-        try:
-            bpy.ops.mesh.customdata_custom_splitnormals_clear()
-        except:
-            pass
 
     return removed
 
