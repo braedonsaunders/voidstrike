@@ -25,11 +25,14 @@ export function updateDecorationFrustum(camera: THREE.Camera): void {
   _frustum.setFromProjectionMatrix(_frustumMatrix);
   _debugFrameCount++;
 
-  // Debug: Log frustum planes on first frame
-  if (DEBUG_FRUSTUM_CULLING && _debugFrameCount === 1) {
-    console.log('[Decoration Frustum] Camera position:', camera.position.toArray());
-    console.log('[Decoration Frustum] Camera target:', (camera as any).target?.toArray?.() || 'N/A');
-    console.log('[Decoration Frustum] Frustum planes set');
+  // Debug: Log frustum info periodically
+  if (DEBUG_FRUSTUM_CULLING && _debugFrameCount % 300 === 1) {
+    const pos = camera.position;
+    console.log(`[Frustum] Camera at (${pos.x.toFixed(1)}, ${pos.y.toFixed(1)}, ${pos.z.toFixed(1)})`);
+    // Log far plane distance from camera's projection
+    const projMat = camera.projectionMatrix;
+    const far = projMat.elements[14] / (projMat.elements[10] + 1);
+    console.log(`[Frustum] Camera far plane: ${far.toFixed(1)}`);
   }
 }
 
@@ -687,8 +690,12 @@ export class InstancedRocks {
    * Call this every frame after updateDecorationFrustum().
    */
   public update(): void {
+    let totalVisible = 0;
+    let totalInstances = 0;
+
     for (const { mesh, instances, maxCount } of this.instancedMeshes) {
       let visibleCount = 0;
+      totalInstances += maxCount;
 
       for (let i = 0; i < maxCount; i++) {
         const inst = instances[i];
@@ -711,6 +718,11 @@ export class InstancedRocks {
 
       mesh.count = visibleCount;
       mesh.instanceMatrix.needsUpdate = true;
+      totalVisible += visibleCount;
+    }
+
+    if (DEBUG_FRUSTUM_CULLING && _debugFrameCount % 60 === 0) {
+      console.log(`[Rocks] Visible: ${totalVisible}/${totalInstances} (${totalInstances > 0 ? ((totalVisible/totalInstances)*100).toFixed(1) : 0}%)`);
     }
   }
 
@@ -867,6 +879,10 @@ export class InstancedGrass {
 
     this.instancedMesh.count = visibleCount;
     this.instancedMesh.instanceMatrix.needsUpdate = true;
+
+    if (DEBUG_FRUSTUM_CULLING && _debugFrameCount % 60 === 0) {
+      console.log(`[Grass] Visible: ${visibleCount}/${this.maxCount} (${this.maxCount > 0 ? ((visibleCount/this.maxCount)*100).toFixed(1) : 0}%)`);
+    }
   }
 
   public dispose(): void {
@@ -999,6 +1015,10 @@ export class InstancedPebbles {
 
     this.instancedMesh.count = visibleCount;
     this.instancedMesh.instanceMatrix.needsUpdate = true;
+
+    if (DEBUG_FRUSTUM_CULLING && _debugFrameCount % 60 === 0) {
+      console.log(`[Pebbles] Visible: ${visibleCount}/${this.maxCount} (${this.maxCount > 0 ? ((visibleCount/this.maxCount)*100).toFixed(1) : 0}%)`);
+    }
   }
 
   public dispose(): void {
