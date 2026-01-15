@@ -386,13 +386,13 @@ def join_objects(objects, name):
     return result
 
 
-def voxel_remesh_and_decimate(high_poly, target_faces, base_name, lod_name):
+def quadriflow_remesh(high_poly, target_faces, base_name, lod_name):
     """
-    Create clean low-poly using simple Decimate.
+    Create clean low-poly using Blender's Quadriflow Remesh.
 
-    Voxel Remesh crashes GPUs on large fragmented meshes, so we just
-    use Decimate directly. It handles AI mesh soup fine - not as clean
-    topology but won't crash.
+    Quadriflow creates a SINGLE CONNECTED MESH with clean quad topology.
+    This eliminates all the fragment issues from AI mesh soup and
+    drastically reduces draw calls.
 
     Returns the final mesh object.
     """
@@ -406,24 +406,40 @@ def voxel_remesh_and_decimate(high_poly, target_faces, base_name, lod_name):
     lod.name = f"{base_name}_{lod_name}"
 
     current_faces = len(lod.data.polygons)
-    print(f"      Direct decimate (AI mesh soup, {current_faces:,} faces)...")
+    print(f"      Quadriflow remesh ({current_faces:,} → {target_faces} faces)...")
 
-    # Just decimate directly - safe and handles fragments
-    if current_faces > target_faces:
-        ratio = target_faces / current_faces
-        print(f"      Decimating to {target_faces} faces (ratio: {ratio:.4f})...")
+    try:
+        # Quadriflow remesh - creates single connected mesh
+        bpy.ops.object.quadriflow_remesh(
+            target_faces=target_faces,
+            use_mesh_symmetry=False,
+            use_preserve_sharp=True,
+            use_preserve_boundary=False,
+            preserve_paint_mask=False,
+            smooth_normals=True,
+            mode='FACES'
+        )
 
-        decimate = lod.modifiers.new("Decimate", 'DECIMATE')
-        decimate.decimate_type = 'COLLAPSE'
-        decimate.ratio = max(0.0001, ratio)
-        decimate.use_collapse_triangulate = True
+        final_faces = len(lod.data.polygons)
+        print(f"      Quadriflow complete: {final_faces:,} faces")
 
-        try:
-            bpy.ops.object.modifier_apply(modifier="Decimate")
-        except Exception as e:
-            print(f"      Decimate failed: {e}")
-            if "Decimate" in lod.modifiers:
-                lod.modifiers.remove(lod.modifiers["Decimate"])
+    except Exception as e:
+        print(f"      Quadriflow failed: {e}")
+        print(f"      Falling back to decimate...")
+
+        # Fallback to decimate
+        if current_faces > target_faces:
+            ratio = target_faces / current_faces
+            decimate = lod.modifiers.new("Decimate", 'DECIMATE')
+            decimate.decimate_type = 'COLLAPSE'
+            decimate.ratio = max(0.0001, ratio)
+            decimate.use_collapse_triangulate = True
+
+            try:
+                bpy.ops.object.modifier_apply(modifier="Decimate")
+            except:
+                if "Decimate" in lod.modifiers:
+                    lod.modifiers.remove(lod.modifiers["Decimate"])
 
     # Match transform
     lod.location = high_poly.location
@@ -470,10 +486,10 @@ def retopo_with_loose_parts(high_poly, target_faces, temp_dir, base_name, lod_na
 
     print(f"      {num_islands:,} mesh islands detected")
 
-    # If too many islands, it's AI mesh soup - use voxel remesh
+    # If too many islands, it's AI mesh soup - use Quadriflow
     if num_islands >= 50:
-        print(f"      Using Voxel Remesh (AI mesh soup detected)")
-        return voxel_remesh_and_decimate(high_poly, target_faces, base_name, lod_name)
+        print(f"      Using Quadriflow (AI mesh soup detected)")
+        return quadriflow_remesh(high_poly, target_faces, base_name, lod_name)
 
     # Otherwise try Instant Meshes for clean quad topology
     print(f"      Using Instant Meshes (clean mesh)")
@@ -508,8 +524,8 @@ def retopo_with_loose_parts(high_poly, target_faces, temp_dir, base_name, lod_na
 
     except Exception as e:
         print(f"      Instant Meshes failed: {e}")
-        print(f"      Falling back to Voxel Remesh")
-        return voxel_remesh_and_decimate(high_poly, target_faces, base_name, lod_name)
+        print(f"      Falling back to Quadriflow")
+        return quadriflow_remesh(high_poly, target_faces, base_name, lod_name)
 
 
 # =============================================================================
