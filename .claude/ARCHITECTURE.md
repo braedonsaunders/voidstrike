@@ -1916,25 +1916,41 @@ if (state) {
 
 ### NavMesh Configuration
 
-Tuned for RTS gameplay with building collision prevention:
+Tuned for RTS gameplay with SC2-style cliff handling:
 
 ```typescript
 const NAVMESH_CONFIG = {
-  // Cell sizing - smaller = more precise paths around buildings
-  cs: 0.25,         // Cell size (0.25 world units for 2x precision)
-  ch: 0.2,          // Cell height
+  // Cell sizing
+  cs: 0.5,          // Cell size (0.5 units for Safari compatibility)
+  ch: 0.2,          // Cell height (finer vertical precision for cliffs)
 
-  // Agent parameters
-  walkableRadius: 0.6,    // Must exceed unit collision radius (0.5)
+  // Agent parameters - STRICT for cliff blocking
+  walkableRadius: 0.6,     // Must exceed unit collision radius (0.5)
   walkableHeight: 2.0,
-  walkableClimb: 1.0,
-  walkableSlopeAngle: 60,
+  walkableClimb: 0.3,      // CRITICAL: Low value prevents stepping between elevations
+  walkableSlopeAngle: 50,  // Max 50° slopes (cliffs are 90°, ramps are 30-40°)
 
-  // NavMesh quality - lower error for smoother paths
+  // NavMesh quality - tighter for cliff edge precision
   maxSimplificationError: 0.5,
-  tileSize: 32,
+  tileSize: 48,
   maxObstacles: 512,
 };
+```
+
+### SC2-Style Cliff Blocking
+
+Three-layer defense prevents units from walking up/down cliffs:
+
+1. **Low walkableClimb (0.3)** - Elevation level gaps are 3.2+ units, so stepping is impossible
+2. **Reasonable walkableSlopeAngle (50°)** - Rejects near-vertical navmesh connections
+3. **Explicit cliff wall geometry** - Physical barriers generated at elevation boundaries
+
+```typescript
+// Elevation levels and gaps
+// Low ground:  elevation 60  → 2.4 height units
+// Mid ground:  elevation 140 → 5.6 height units
+// High ground: elevation 220 → 8.8 height units
+// Gap between levels: 3.2 units >> 0.3 walkableClimb
 ```
 
 ### Building Obstacle Expansion
@@ -1970,17 +1986,24 @@ const BUILDING_PREDICTION_LOOKAHEAD = 0.5;  // Seconds ahead
 
 ### Terrain Integration (`Terrain.ts`)
 
-The terrain generates walkable geometry for navmesh creation:
+The terrain generates walkable geometry with cliff walls for navmesh creation:
 
 ```typescript
-// Generate walkable mesh from terrain grid
+// Generate walkable mesh with cliff barriers
 public generateWalkableGeometry(): {
   positions: Float32Array;
   indices: Uint32Array;
 }
 
-// Only includes walkable cells (ground, ramps)
-// Excludes cliffs, water, void, and blocked areas
+// Two-pass generation:
+// PASS 1: Floor geometry for walkable cells
+//   - Ramps use smooth heightMap for natural slope traversal
+//   - Non-ramp terrain uses quantized elevation for strict height gaps
+//
+// PASS 2: Cliff wall geometry at elevation boundaries
+//   - Walls generated between cells with elevation diff > 40
+//   - Walls extend 4 units vertically as physical barriers
+//   - Both front and back faces for robust blocking
 ```
 
 ## AI Micro System
