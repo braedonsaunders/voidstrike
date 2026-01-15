@@ -585,6 +585,73 @@ export class EnvironmentManager {
     }
   }
 
+  // ============================================
+  // LIGHTING CONFIGURATION
+  // ============================================
+
+  /**
+   * Set shadow fill intensity (ground bounce light)
+   * @param intensity - Fill intensity from 0 to 1
+   */
+  public setShadowFill(intensity: number): void {
+    // Adjust hemisphere light ground color brightness based on fill intensity
+    // Higher fill = brighter ground color = more light in shadows
+    const baseGroundColor = new THREE.Color(this.biome.colors.ground?.[0] || 0x444444);
+    const boostedColor = baseGroundColor.clone().multiplyScalar(1.0 + intensity * 1.5);
+    this.hemiLight.groundColor = boostedColor;
+
+    // Also slightly boost hemisphere intensity for overall fill
+    this.hemiLight.intensity = 0.5 + intensity * 0.3;
+  }
+
+  /**
+   * Get the hemisphere light for external modification
+   */
+  public getHemisphereLight(): THREE.HemisphereLight {
+    return this.hemiLight;
+  }
+
+  /**
+   * Get the main directional light
+   */
+  public getDirectionalLight(): THREE.DirectionalLight {
+    return this.directionalLight;
+  }
+
+  // ============================================
+  // PARTICLE CONFIGURATION
+  // ============================================
+
+  /**
+   * Enable or disable particles
+   */
+  public setParticlesEnabled(enabled: boolean): void {
+    if (this.particles) {
+      this.particles.points.visible = enabled;
+    }
+  }
+
+  /**
+   * Set particle density multiplier
+   * @param density - Density multiplier where 5.0 = baseline (1x), 1-15 range
+   */
+  public setParticleDensity(density: number): void {
+    if (this.particles && this.particles.points.geometry) {
+      // Scale particle size based on density - more particles = smaller to avoid visual clutter
+      // At baseline (5.0), size is normal. Higher density = slightly smaller particles
+      const material = this.particles.points.material as THREE.PointsMaterial;
+      if (material.size !== undefined) {
+        const baseSize = material.size;
+        // Subtle size reduction at high density (max 30% smaller at 3x density)
+        const sizeMultiplier = Math.max(0.7, 1.0 - (density - 5.0) * 0.03);
+        // Note: We can't easily change particle COUNT without recreating the geometry
+        // For now, adjust opacity to simulate density perception
+        const opacityMultiplier = Math.min(1.0, 0.6 + density * 0.08);
+        material.opacity = Math.min(1.0, material.opacity * opacityMultiplier);
+      }
+    }
+  }
+
   /**
    * Dispose all resources
    */

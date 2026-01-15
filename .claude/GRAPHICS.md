@@ -332,3 +332,558 @@ const cameraProjectionMatrix = (TSL as any).cameraProjectionMatrix;
 - [WebGPU Volumetric Lighting](https://threejs.org/examples/webgpu_volume_lighting.html)
 - [SSGI WebGPU Demo](https://ssgi-webgpu-demo.vercel.app/)
 - [TRAANode Docs](https://threejs.org/docs/pages/TRAANode.html)
+
+---
+
+## Graphics Preset System
+
+### Overview
+
+VOIDSTRIKE implements an AAA-style data-driven graphics preset system, allowing users to select quality levels (Low, Medium, High, Ultra) or customize individual settings. Presets are defined in a JSON configuration file that can be edited to add custom presets or modify existing ones.
+
+### Configuration File
+
+Location: `public/config/graphics-presets.json`
+
+```json
+{
+  "version": "1.0",
+  "description": "Graphics quality presets",
+  "presets": {
+    "low": {
+      "name": "Low",
+      "description": "Best performance, minimal visual effects",
+      "settings": {
+        "postProcessingEnabled": true,
+        "shadowsEnabled": false,
+        "shadowQuality": "low",
+        "ssaoEnabled": false,
+        "bloomEnabled": false,
+        "antiAliasingMode": "fxaa",
+        "ssrEnabled": false,
+        "ssgiEnabled": false,
+        "volumetricFogEnabled": false,
+        "dynamicLightsEnabled": false,
+        "emissiveDecorationsEnabled": false,
+        "particleDensity": 2.5,
+        "maxPixelRatio": 1
+        // ... all GraphicsSettings values
+      }
+    },
+    "medium": { ... },
+    "high": { ... },
+    "ultra": { ... },
+    "custom": {
+      "name": "Custom",
+      "description": "User-defined settings",
+      "settings": null  // Custom doesn't apply settings
+    }
+  },
+  "defaultPreset": "high"
+}
+```
+
+### Preset Behavior
+
+1. **Selection**: Users click a preset button (Low/Medium/High/Ultra) in the Graphics Options panel
+2. **Application**: All settings from the preset's `settings` object are applied at once
+3. **Custom Detection**: When any individual setting is changed, the system:
+   - Temporarily marks preset as "custom"
+   - Checks if new settings match any defined preset
+   - If match found, updates preset indicator to that preset
+4. **Modified Badge**: When preset is "custom", a yellow "Modified" badge appears
+
+### Adding Custom Presets
+
+Edit `public/config/graphics-presets.json` to add new presets:
+
+```json
+{
+  "presets": {
+    // ... existing presets ...
+    "cinematic": {
+      "name": "Cinematic",
+      "description": "Maximum quality for screenshots and videos",
+      "settings": {
+        "postProcessingEnabled": true,
+        "shadowsEnabled": true,
+        "shadowQuality": "ultra",
+        "shadowDistance": 150,
+        "ssaoEnabled": true,
+        "ssaoIntensity": 1.5,
+        "bloomEnabled": true,
+        "bloomStrength": 0.4,
+        "antiAliasingMode": "taa",
+        "ssrEnabled": true,
+        "ssgiEnabled": true,
+        "ssgiIntensity": 25,
+        "volumetricFogEnabled": true,
+        "volumetricFogQuality": "ultra",
+        "dynamicLightsEnabled": true,
+        "maxDynamicLights": 32,
+        "emissiveDecorationsEnabled": true,
+        "emissiveIntensityMultiplier": 1.5,
+        "particleDensity": 12.0,
+        "vignetteEnabled": true,
+        "vignetteIntensity": 0.3
+      }
+    }
+  }
+}
+```
+
+### Implementation Details
+
+**Store Integration** (`uiStore.ts`):
+- `currentGraphicsPreset: GraphicsPresetName` - Tracks active preset
+- `graphicsPresetsConfig: GraphicsPresetsConfig | null` - Loaded presets JSON
+- `loadGraphicsPresets()` - Fetches presets from JSON file
+- `applyGraphicsPreset(name)` - Applies all settings from a preset
+- `detectCurrentPreset()` - Checks if current settings match any preset
+
+**UI Integration** (`GraphicsOptionsPanel.tsx`):
+- Preset selector buttons at top of panel
+- "Modified" badge when custom
+- Description text below buttons
+- Auto-loads presets when panel opens
+
+### Preset Settings Reference
+
+Each preset controls all `GraphicsSettings` values:
+
+| Category | Settings |
+|----------|----------|
+| **Core** | postProcessingEnabled |
+| **Shadows** | shadowsEnabled, shadowQuality, shadowDistance |
+| **Ambient Occlusion** | ssaoEnabled, ssaoRadius, ssaoIntensity |
+| **Bloom** | bloomEnabled, bloomStrength, bloomThreshold, bloomRadius |
+| **Anti-Aliasing** | antiAliasingMode, taaSharpeningEnabled, taaSharpeningIntensity |
+| **Reflections** | ssrEnabled, ssrOpacity, ssrMaxRoughness |
+| **Global Illumination** | ssgiEnabled, ssgiRadius, ssgiIntensity |
+| **Resolution** | resolutionMode, resolutionScale, maxPixelRatio |
+| **Upscaling** | upscalingMode, renderScale, easuSharpness |
+| **Fog** | fogEnabled, fogDensity, volumetricFogEnabled, volumetricFogQuality |
+| **Lighting** | shadowFill, dynamicLightsEnabled, maxDynamicLights |
+| **Effects** | emissiveDecorationsEnabled, particlesEnabled, particleDensity |
+| **Color** | toneMappingExposure, saturation, contrast |
+| **Vignette** | vignetteEnabled, vignetteIntensity |
+| **Environment** | environmentMapEnabled |
+
+---
+
+## Graphics Settings Audit (January 2025)
+
+### Connected Settings
+All working and wired up:
+- Post-processing master toggle
+- Tone mapping (exposure, saturation, contrast)
+- Shadows (enabled, quality, distance)
+- SSAO (enabled, radius, intensity)
+- Bloom (enabled, strength, threshold, radius)
+- Anti-aliasing mode (off, FXAA, TAA)
+- TAA sharpening (enabled, intensity)
+- SSR (enabled, opacity, max roughness)
+- SSGI (enabled, radius, intensity)
+- Resolution settings (mode, scale, max pixel ratio)
+- Upscaling (mode, render scale, EASU sharpness)
+- Vignette (enabled, intensity)
+- Fog (enabled, density) ✅ Fixed initialization
+- Particles (enabled, density) ✅ Fixed - now wired up
+- Environment map (enabled)
+
+### Disconnected Settings (Not Wired)
+These exist in `uiStore.ts` but have no effect:
+
+| Setting | In Store | Has UI | Wired to Code |
+|---------|----------|--------|---------------|
+| `outlineEnabled` | ✅ | ❌ | ❌ |
+| `outlineStrength` | ✅ | ❌ | ❌ |
+| `taaHistoryBlendRate` | ✅ | ❌ | ❌ (comment says "kept for UI compatibility") |
+
+**Recommendation:** Either implement these features or remove from store to avoid confusion.
+
+---
+
+## Proposed Features (Discussion)
+
+### 1. Volumetric Fog System
+
+**Current State:** Using `THREE.Fog` (linear fog) with biome-specific near/far distances.
+
+**Proposed: True Volumetric Fog via Raymarching**
+
+#### Implementation Approach
+
+```typescript
+// TSL Volumetric Fog Node
+const volumetricFog = Fn(({ sceneColor, depth, lightPos, fogDensity }) => {
+  const rayOrigin = cameraPosition;
+  const rayDir = normalize(worldPosition.sub(cameraPosition));
+  const rayLength = length(worldPosition.sub(cameraPosition));
+
+  // Raymarch through fog volume
+  const STEPS = 32; // Performance tunable
+  const stepSize = rayLength / STEPS;
+
+  let transmittance = 1.0;
+  let inScattering = vec3(0);
+
+  for (let i = 0; i < STEPS; i++) {
+    const samplePos = rayOrigin.add(rayDir.mul(stepSize * i));
+
+    // Sample fog density (can be noise-based for realism)
+    const localDensity = fogDensity * heightFalloff(samplePos.y);
+
+    // Light contribution (Henyey-Greenstein phase function)
+    const lightDir = normalize(lightPos.sub(samplePos));
+    const phase = henyeyGreenstein(dot(rayDir, lightDir), 0.3);
+
+    // Shadow sampling (optional, expensive)
+    const shadow = shadowMapSample(samplePos);
+
+    inScattering += transmittance * localDensity * phase * shadow;
+    transmittance *= exp(-localDensity * stepSize);
+  }
+
+  return mix(fogColor.mul(inScattering), sceneColor, transmittance);
+});
+```
+
+#### Performance Impact
+
+| Quality | Steps | Performance Hit | Visual Quality |
+|---------|-------|-----------------|----------------|
+| Low | 16 | ~1-2ms | Basic depth fog |
+| Medium | 32 | ~2-4ms | Good volume feel |
+| High | 64 | ~4-8ms | Cinematic quality |
+| Ultra | 128 | ~8-15ms | Film-quality scattering |
+
+**Optimization Strategies:**
+1. **Half-resolution rendering** - Render fog at 50% res, bilateral upsample
+2. **Temporal reprojection** - Spread samples across frames
+3. **Frustum-aligned volumes** - Only raymarch visible area
+4. **Blue noise dithering** - Better quality at low step counts
+
+#### Use Cases for VOIDSTRIKE
+
+| Effect | Implementation | Performance |
+|--------|----------------|-------------|
+| Production building smoke | Local density volumes at building positions | Low cost if localized |
+| Vespene geyser gas | Animated noise-based density | Medium cost |
+| Battlefield dust/haze | Full-screen low-density fog | Medium cost |
+| Explosion smoke clouds | Temporary high-density spheres | Low (transient) |
+
+#### Proposed UI (Graphics Panel → Atmosphere Section)
+
+```
+[Atmosphere]
+├── [ ] Volumetric Fog           [Performance: Medium]
+│   ├── Quality: [Low|Medium|High|Ultra]
+│   ├── Density: ───●─── 0.8x
+│   └── Light Scattering: ───●─── 1.0
+├── [ ] Building Smoke
+├── [ ] Geyser Effects
+└── [ ] Battlefield Haze
+```
+
+---
+
+### 2. Emissive Decorations (Crystals, Alien Structures)
+
+**Goal:** Crystals and alien structures that emit light, creating stunning visual effects.
+
+#### Implementation Options
+
+**Option A: Material Emissive + Bloom**
+```typescript
+// Simple: Set emissive on material
+crystal.material.emissive = new THREE.Color(0x00ff88);
+crystal.material.emissiveIntensity = 2.0; // > 1.0 triggers bloom
+
+// Animate pulsing
+crystal.material.emissiveIntensity = 1.5 + Math.sin(time) * 0.5;
+```
+- **Pros:** Simple, uses existing bloom pipeline
+- **Cons:** No actual light cast on surroundings
+
+**Option B: Emissive + Point Lights**
+```typescript
+// Create point light at decoration position
+const crystalLight = new THREE.PointLight(0x00ff88, 2.0, 10);
+crystalLight.position.copy(crystal.position);
+scene.add(crystalLight);
+```
+- **Pros:** Actual light affects nearby objects
+- **Cons:** Many point lights = expensive (but see pooling below)
+
+**Option C: SSGI-Based Emission (Best Quality)**
+```typescript
+// Already have SSGI! Just need high emissive values
+crystal.material.emissive = new THREE.Color(0x00ff88);
+crystal.material.emissiveIntensity = 5.0;
+// SSGI automatically handles light bouncing
+```
+- **Pros:** Physically accurate light bleeding, uses existing system
+- **Cons:** Requires SSGI enabled (already high-end option)
+
+#### Proposed Architecture
+
+```typescript
+// In EnvironmentManager or new EmissiveManager
+interface EmissiveDecoration {
+  mesh: THREE.Mesh;
+  baseEmissive: THREE.Color;
+  pulseSpeed: number;
+  pulseAmplitude: number;
+  attachedLight?: THREE.PointLight; // Optional actual light
+}
+
+class EmissiveDecorationManager {
+  private decorations: EmissiveDecoration[] = [];
+  private lightPool: THREE.PointLight[] = [];
+
+  update(time: number) {
+    for (const deco of this.decorations) {
+      const pulse = 1.0 + Math.sin(time * deco.pulseSpeed) * deco.pulseAmplitude;
+      deco.mesh.material.emissiveIntensity = pulse;
+
+      if (deco.attachedLight) {
+        deco.attachedLight.intensity = pulse * 0.5;
+      }
+    }
+  }
+}
+```
+
+#### Proposed UI
+
+```
+[Effects]
+├── [ ] Emissive Decorations
+│   ├── Crystals Glow: [Off|Subtle|Bright|Intense]
+│   ├── Alien Structures: [Off|Subtle|Bright|Intense]
+│   ├── Pulse Animation: [ ] ───●─── 1.0 speed
+│   └── [ ] Cast Light (GPU expensive)
+```
+
+---
+
+### 3. Ground-Up Fill Lighting
+
+**Problem:** Dark rocks and shadowed areas look too dark.
+
+#### Solutions
+
+**Option A: Hemisphere Light Boost (Already Have)**
+```typescript
+// Current setup (EnvironmentManager.ts:121-126)
+this.hemiLight = new THREE.HemisphereLight(
+  skyColor,    // From above
+  groundColor, // From below (THIS IS FILL LIGHT)
+  0.5          // Intensity
+);
+```
+**Quick fix:** Increase intensity to 0.7-0.8, use brighter ground color.
+
+**Option B: Secondary Ambient from Below**
+```typescript
+// Add second ambient light with upward bias
+const groundAmbient = new THREE.AmbientLight(0x404050, 0.3);
+// Or use DirectionalLight pointing UP
+const groundFill = new THREE.DirectionalLight(0x303040, 0.4);
+groundFill.position.set(0, -1, 0); // From below
+```
+
+**Option C: Per-Material Ambient Boost**
+```typescript
+// In decoration material setup (InstancedDecorations.ts)
+if (instancedMaterial instanceof THREE.MeshStandardMaterial) {
+  // Re-enable some environment map contribution
+  instancedMaterial.envMapIntensity = 0.3; // Was 0, contributing to darkness
+}
+```
+
+**Option D: TSL Custom Fill Light Node**
+```typescript
+// In post-processing, add fill light based on surface orientation
+const fillLight = Fn(({ color, normal }) => {
+  const upFactor = clamp(dot(normal, vec3(0, 1, 0)), 0, 1);
+  const fillAmount = 1.0 - upFactor; // More fill on downward-facing
+  return color.add(fillColor.mul(fillAmount * fillIntensity));
+});
+```
+
+#### Recommended Approach
+1. **Immediate:** Increase `envMapIntensity` on rock materials from 0 to 0.2-0.3
+2. **Quick win:** Boost hemisphere light ground color brightness
+3. **Long-term:** Add UI slider for "Shadow Fill" that controls ground ambient
+
+---
+
+### 4. Per-Model Exposure/Material Settings in assets.json
+
+**Proposal:** Add model-specific rendering hints to asset metadata.
+
+```json
+// assets.json
+{
+  "models": {
+    "rocks_large": {
+      "path": "/models/rocks_large.glb",
+      "yOffset": 0.5,
+      "rendering": {
+        "envMapIntensity": 0.3,
+        "emissive": null,
+        "roughnessOverride": null,
+        "metalnessOverride": null,
+        "receiveShadow": true,
+        "castShadow": true
+      }
+    },
+    "crystal_blue": {
+      "path": "/models/crystal_blue.glb",
+      "yOffset": 0,
+      "rendering": {
+        "emissive": "#0088ff",
+        "emissiveIntensity": 2.0,
+        "envMapIntensity": 0.5,
+        "attachLight": {
+          "color": "#0088ff",
+          "intensity": 1.5,
+          "distance": 8
+        }
+      }
+    },
+    "alien_tower": {
+      "path": "/models/alien_tower.glb",
+      "yOffset": 0,
+      "rendering": {
+        "emissive": "#ff4400",
+        "emissiveIntensity": 3.0,
+        "pulseSpeed": 0.5,
+        "pulseAmplitude": 0.3
+      }
+    }
+  }
+}
+```
+
+**Implementation:**
+```typescript
+// AssetManager.ts - Apply rendering hints when loading
+function applyRenderingHints(mesh: THREE.Mesh, hints: RenderingHints) {
+  if (hints.emissive) {
+    mesh.material.emissive = new THREE.Color(hints.emissive);
+    mesh.material.emissiveIntensity = hints.emissiveIntensity ?? 1.0;
+  }
+  if (hints.envMapIntensity !== undefined) {
+    mesh.material.envMapIntensity = hints.envMapIntensity;
+  }
+  // ... etc
+}
+```
+
+---
+
+### 5. Lighting System Recommendations
+
+#### Current State
+5 static lights (ambient, key, fill, back, hemisphere) - traditional 3-point + additions.
+
+#### Recommended Improvements
+
+**Tier 1: Easy Wins (Low Effort)**
+- [ ] Increase hemisphere ground color brightness (+20% for shadow fill)
+- [ ] Re-enable partial envMapIntensity on decorations (0.2-0.3)
+- [ ] Add UI exposure slider range expansion (0.5-2.5 instead of 0.5-2.0)
+
+**Tier 2: Moderate Effort**
+- [ ] **Light Pool System** - Reusable point/spot lights for effects
+- [ ] **Emissive decoration manager** - Crystals/towers that glow
+- [ ] **Per-biome light color presets** - More dramatic biome lighting
+
+**Tier 3: Advanced (High Impact)**
+- [ ] **Clustered lighting** - Efficient many-lights for WebGPU
+- [ ] **Light probes** - Baked indirect lighting for performance
+- [ ] **Dynamic time-of-day** - Moving sun, changing shadows
+
+#### Proposed UI: Lighting Section
+
+```
+[Lighting]
+├── Ambient Brightness: ───●─── 1.0
+├── Shadow Intensity: ───●─── 1.0
+├── Shadow Fill: ───●─── 0.3     [NEW - controls ground bounce]
+├── [ ] Dynamic Lights           [For explosions, abilities]
+│   └── Max Dynamic Lights: [4|8|16|32]
+└── [ ] Emissive Objects Cast Light [GPU intensive]
+```
+
+#### Light Pool Implementation Sketch
+
+```typescript
+class LightPool {
+  private pool: THREE.PointLight[] = [];
+  private active: Map<string, THREE.PointLight> = new Map();
+
+  constructor(scene: THREE.Scene, maxLights: number = 16) {
+    for (let i = 0; i < maxLights; i++) {
+      const light = new THREE.PointLight(0xffffff, 0, 10);
+      light.visible = false;
+      scene.add(light);
+      this.pool.push(light);
+    }
+  }
+
+  spawn(id: string, position: THREE.Vector3, color: THREE.Color, intensity: number, duration: number): void {
+    const light = this.pool.find(l => !l.visible);
+    if (!light) return; // Pool exhausted
+
+    light.position.copy(position);
+    light.color.copy(color);
+    light.intensity = intensity;
+    light.visible = true;
+    this.active.set(id, light);
+
+    // Auto-release after duration
+    setTimeout(() => this.release(id), duration);
+  }
+
+  release(id: string): void {
+    const light = this.active.get(id);
+    if (light) {
+      light.visible = false;
+      light.intensity = 0;
+      this.active.delete(id);
+    }
+  }
+}
+
+// Usage
+lightPool.spawn('explosion_1', explosionPos, new THREE.Color(0xff6600), 5.0, 500);
+lightPool.spawn('laser_hit', impactPos, new THREE.Color(0x00ffff), 3.0, 100);
+```
+
+---
+
+### Summary: Recommended Implementation Order
+
+1. **Immediate (This Session)**
+   - ✅ Fix fog density default (done)
+   - ✅ Wire up particle controls (done)
+   - Fix dark rocks: increase envMapIntensity on decoration materials
+
+2. **Short Term**
+   - Add "Shadow Fill" slider (hemisphere ground boost)
+   - Implement emissive decoration system for crystals
+   - Add per-model rendering hints to assets.json
+
+3. **Medium Term**
+   - Volumetric fog system with quality levels
+   - Light pool for dynamic effects
+   - Building smoke/geyser gas effects
+
+4. **Long Term**
+   - Clustered deferred lighting
+   - Full per-model light attachment system
+   - Dynamic time-of-day

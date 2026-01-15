@@ -173,9 +173,10 @@ function extractGeometry(object: THREE.Object3D): THREE.BufferGeometry | null {
 
 /**
  * Extract material from a loaded model
- * PERF: Disables envMap on decoration materials to avoid expensive IBL lookups (5-10fps savings)
+ * Applies rendering hints from assets.json if available
+ * @param assetId - Asset ID to look up rendering hints
  */
-function extractMaterial(object: THREE.Object3D): THREE.Material | null {
+function extractMaterial(object: THREE.Object3D, assetId?: string): THREE.Material | null {
   let material: THREE.Material | null = null;
   object.traverse((child) => {
     if (child instanceof THREE.Mesh && child.material && !material) {
@@ -186,10 +187,36 @@ function extractMaterial(object: THREE.Object3D): THREE.Material | null {
       }
     }
   });
-  // PERF: Disable IBL on decoration materials - they don't need reflections
-  if (material !== null && (material as THREE.MeshStandardMaterial).envMapIntensity !== undefined) {
-    (material as THREE.MeshStandardMaterial).envMapIntensity = 0;
+
+  // Type guard for MeshStandardMaterial
+  if (material && (material as THREE.MeshStandardMaterial).isMeshStandardMaterial) {
+    const stdMaterial = material as THREE.MeshStandardMaterial;
+    // Check for rendering hints from assets.json
+    const hints = assetId ? AssetManager.getRenderingHints(assetId) : null;
+
+    if (hints) {
+      // Apply envMapIntensity from hints (default was 0 for performance)
+      stdMaterial.envMapIntensity = hints.envMapIntensity ?? 0;
+
+      // Apply emissive properties
+      if (hints.emissive) {
+        stdMaterial.emissive = new THREE.Color(hints.emissive);
+        stdMaterial.emissiveIntensity = hints.emissiveIntensity ?? 1.0;
+      }
+
+      // Apply roughness/metalness overrides
+      if (hints.roughnessOverride !== null && hints.roughnessOverride !== undefined) {
+        stdMaterial.roughness = hints.roughnessOverride;
+      }
+      if (hints.metalnessOverride !== null && hints.metalnessOverride !== undefined) {
+        stdMaterial.metalness = hints.metalnessOverride;
+      }
+    } else {
+      // Default: disable IBL on decoration materials for performance
+      stdMaterial.envMapIntensity = 0;
+    }
   }
+
   return material;
 }
 
@@ -377,14 +404,12 @@ export class InstancedTrees {
       if (!original) return;
 
       const geometry = extractGeometry(original);
-      const material = extractMaterial(original);
+      const material = extractMaterial(original, modelId);
       if (!geometry || !material) return;
 
       const instancedGeometry = geometry.clone();
       const instancedMaterial = material.clone();
-      if (instancedMaterial instanceof THREE.MeshStandardMaterial) {
-        instancedMaterial.envMapIntensity = 0;
-      }
+      // Rendering hints (envMapIntensity, emissive, etc.) are applied in extractMaterial
       this.geometries.push(instancedGeometry);
       this.materials.push(instancedMaterial);
 
@@ -631,14 +656,12 @@ export class InstancedRocks {
       if (!original) return;
 
       const geometry = extractGeometry(original);
-      const material = extractMaterial(original);
+      const material = extractMaterial(original, modelId);
       if (!geometry || !material) return;
 
       const instancedGeometry = geometry.clone();
       const instancedMaterial = material.clone();
-      if (instancedMaterial instanceof THREE.MeshStandardMaterial) {
-        instancedMaterial.envMapIntensity = 0;
-      }
+      // Rendering hints (envMapIntensity, emissive, etc.) are applied in extractMaterial
       this.geometries.push(instancedGeometry);
       this.materials.push(instancedMaterial);
 

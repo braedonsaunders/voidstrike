@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useEffect, useState, memo, useCallback } from 'react';
-import { useUIStore, GraphicsSettings, AntiAliasingMode, UpscalingMode, ResolutionMode, FixedResolution, FIXED_RESOLUTIONS } from '@/store/uiStore';
+import { useUIStore, GraphicsSettings, AntiAliasingMode, UpscalingMode, ResolutionMode, FixedResolution, FIXED_RESOLUTIONS, GraphicsPresetName } from '@/store/uiStore';
 import { setEdgeScrollEnabled } from '@/store/cameraStore';
 
 // ============================================
@@ -298,6 +298,12 @@ export const GraphicsOptionsPanel = memo(function GraphicsOptionsPanel() {
   const setUpscalingMode = useUIStore((state) => state.setUpscalingMode);
   const setResolutionMode = useUIStore((state) => state.setResolutionMode);
   const setFixedResolution = useUIStore((state) => state.setFixedResolution);
+  // Preset state
+  const currentPreset = useUIStore((state) => state.currentGraphicsPreset);
+  const presetsLoaded = useUIStore((state) => state.graphicsPresetsLoaded);
+  const presetsConfig = useUIStore((state) => state.graphicsPresetsConfig);
+  const loadPresets = useUIStore((state) => state.loadGraphicsPresets);
+  const applyPreset = useUIStore((state) => state.applyGraphicsPreset);
 
   // Section expansion state
   const [expanded, setExpanded] = useState<Record<string, boolean>>({
@@ -314,6 +320,13 @@ export const GraphicsOptionsPanel = memo(function GraphicsOptionsPanel() {
   const toggleSection = useCallback((section: string) => {
     setExpanded(prev => ({ ...prev, [section]: !prev[section] }));
   }, []);
+
+  // Load presets when panel opens
+  useEffect(() => {
+    if (showGraphicsOptions && !presetsLoaded) {
+      loadPresets();
+    }
+  }, [showGraphicsOptions, presetsLoaded, loadPresets]);
 
   // Disable edge scrolling when panel is open
   useEffect(() => {
@@ -395,6 +408,69 @@ export const GraphicsOptionsPanel = memo(function GraphicsOptionsPanel() {
         >
           ✕
         </button>
+      </div>
+
+      {/* Preset Selector */}
+      <div style={{
+        marginBottom: '12px',
+        padding: '8px 10px',
+        backgroundColor: '#1a1a1c',
+        borderRadius: '6px',
+      }}>
+        <div style={{
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center',
+          marginBottom: '8px',
+        }}>
+          <span style={{ fontSize: '11px', fontWeight: 500 }}>Quality Preset</span>
+          {currentPreset === 'custom' && (
+            <span style={{
+              fontSize: '9px',
+              padding: '2px 6px',
+              borderRadius: '3px',
+              backgroundColor: 'rgba(234, 179, 8, 0.15)',
+              color: '#eab308',
+            }}>
+              Modified
+            </span>
+          )}
+        </div>
+        <div style={{
+          display: 'flex',
+          gap: '4px',
+        }}>
+          {(['low', 'medium', 'high', 'ultra'] as GraphicsPresetName[]).map((preset) => {
+            const presetInfo = presetsConfig?.presets[preset];
+            const isSelected = currentPreset === preset;
+            return (
+              <button
+                key={preset}
+                onClick={() => applyPreset(preset)}
+                title={presetInfo?.description || preset}
+                style={{
+                  flex: 1,
+                  padding: '6px 4px',
+                  fontSize: '10px',
+                  fontWeight: isSelected ? 600 : 400,
+                  border: 'none',
+                  borderRadius: '4px',
+                  backgroundColor: isSelected ? '#3b82f6' : '#333',
+                  color: isSelected ? '#fff' : '#999',
+                  cursor: 'pointer',
+                  transition: 'all 0.15s',
+                  textTransform: 'capitalize',
+                }}
+              >
+                {preset}
+              </button>
+            );
+          })}
+        </div>
+        <div style={{ fontSize: '9px', color: '#555', marginTop: '6px' }}>
+          {presetsConfig?.presets[currentPreset]?.description ||
+           (currentPreset === 'custom' ? 'Custom user settings' : '')}
+        </div>
       </div>
 
       {/* Master Post-Processing Toggle */}
@@ -696,12 +772,78 @@ export const GraphicsOptionsPanel = memo(function GraphicsOptionsPanel() {
             </div>
           )}
 
+          {/* Shadow Fill - ground bounce light */}
+          <CompactSlider
+            label="Shadow Fill"
+            value={graphicsSettings.shadowFill}
+            min={0}
+            max={1}
+            step={0.05}
+            onChange={(v) => setGraphicsSetting('shadowFill', v)}
+            format={(v) => `${Math.round(v * 100)}%`}
+          />
+          <div style={{ fontSize: '9px', color: '#555', marginTop: '-4px', marginBottom: '8px' }}>
+            Brightens shadowed areas with ground-bounce light
+          </div>
+
           {/* Environment */}
           <ToggleRow
             label="Environment Lighting"
             enabled={graphicsSettings.environmentMapEnabled}
             onChange={() => handleToggle('environmentMapEnabled')}
           />
+
+          {/* Dynamic Lights */}
+          <ToggleRow
+            label="Dynamic Lights"
+            enabled={graphicsSettings.dynamicLightsEnabled}
+            onChange={() => handleToggle('dynamicLightsEnabled')}
+          />
+          {graphicsSettings.dynamicLightsEnabled && (
+            <div style={{ marginLeft: '12px', marginBottom: '8px' }}>
+              <div style={{ marginBottom: '6px' }}>
+                <span style={{ fontSize: '10px', color: '#666', display: 'block', marginBottom: '4px' }}>
+                  Max Lights
+                </span>
+                <SegmentedControl
+                  options={[
+                    { value: '4', label: '4' },
+                    { value: '8', label: '8' },
+                    { value: '16', label: '16' },
+                    { value: '32', label: '32' },
+                  ]}
+                  value={graphicsSettings.maxDynamicLights.toString()}
+                  onChange={(v) => setGraphicsSetting('maxDynamicLights', parseInt(v))}
+                />
+              </div>
+              <div style={{ fontSize: '9px', color: '#555' }}>
+                For explosions, muzzle flash, abilities
+              </div>
+            </div>
+          )}
+
+          {/* Emissive Decorations */}
+          <ToggleRow
+            label="Emissive Decorations"
+            enabled={graphicsSettings.emissiveDecorationsEnabled}
+            onChange={() => handleToggle('emissiveDecorationsEnabled')}
+          />
+          {graphicsSettings.emissiveDecorationsEnabled && (
+            <div style={{ marginLeft: '12px', marginBottom: '8px' }}>
+              <CompactSlider
+                label="Glow Intensity"
+                value={graphicsSettings.emissiveIntensityMultiplier}
+                min={0.5}
+                max={2}
+                step={0.1}
+                onChange={(v) => setGraphicsSetting('emissiveIntensityMultiplier', v)}
+                format={(v) => `${v.toFixed(1)}x`}
+              />
+              <div style={{ fontSize: '9px', color: '#555' }}>
+                Crystals, alien structures glow
+              </div>
+            </div>
+          )}
         </div>
       )}
 
@@ -835,6 +977,55 @@ export const GraphicsOptionsPanel = memo(function GraphicsOptionsPanel() {
                 format={(v) => v.toFixed(1)}
                 suffix="x"
               />
+
+              {/* Volumetric Fog */}
+              <div style={{ marginTop: '8px' }}>
+                <ToggleRow
+                  label="Volumetric Mode"
+                  enabled={graphicsSettings.volumetricFogEnabled}
+                  onChange={() => handleToggle('volumetricFogEnabled')}
+                />
+                {graphicsSettings.volumetricFogEnabled && (
+                  <div style={{ marginLeft: '12px', marginTop: '4px' }}>
+                    <div style={{ marginBottom: '6px' }}>
+                      <span style={{ fontSize: '10px', color: '#666', display: 'block', marginBottom: '4px' }}>
+                        Quality
+                      </span>
+                      <SegmentedControl
+                        options={[
+                          { value: 'low', label: 'Low' },
+                          { value: 'medium', label: 'Med' },
+                          { value: 'high', label: 'High' },
+                          { value: 'ultra', label: 'Ultra' },
+                        ]}
+                        value={graphicsSettings.volumetricFogQuality}
+                        onChange={(v) => setGraphicsSetting('volumetricFogQuality', v as 'low' | 'medium' | 'high' | 'ultra')}
+                      />
+                    </div>
+                    <CompactSlider
+                      label="Volume Density"
+                      value={graphicsSettings.volumetricFogDensity}
+                      min={0.5}
+                      max={2}
+                      step={0.1}
+                      onChange={(v) => setGraphicsSetting('volumetricFogDensity', v)}
+                      format={(v) => v.toFixed(1)}
+                      suffix="x"
+                    />
+                    <CompactSlider
+                      label="Light Scattering"
+                      value={graphicsSettings.volumetricFogScattering}
+                      min={0}
+                      max={2}
+                      step={0.1}
+                      onChange={(v) => setGraphicsSetting('volumetricFogScattering', v)}
+                    />
+                    <div style={{ fontSize: '9px', color: '#555', marginTop: '4px' }}>
+                      Raymarched fog with light shafts
+                    </div>
+                  </div>
+                )}
+              </div>
             </div>
           )}
 
@@ -850,7 +1041,7 @@ export const GraphicsOptionsPanel = memo(function GraphicsOptionsPanel() {
                 label="Density"
                 value={graphicsSettings.particleDensity}
                 min={1}
-                max={10}
+                max={15}
                 step={0.5}
                 onChange={(v) => setGraphicsSetting('particleDensity', v)}
                 format={(v) => (v / 5).toFixed(1)}

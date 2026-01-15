@@ -78,20 +78,6 @@ export const HUD = memo(function HUD() {
           onMouseLeave={handleUIMouseLeave}
         >
           <IdleWorkerButton />
-          <button
-            onClick={() => setShowPlayerStatus(!showPlayerStatus)}
-            className={`game-button text-sm ${showPlayerStatus ? 'bg-void-700' : ''}`}
-            title="Toggle Player Status Panel"
-          >
-            Players
-          </button>
-          <button
-            onClick={() => setShowTechTree(true)}
-            className="game-button text-sm"
-            title="View Tech Tree (T)"
-          >
-            Tech
-          </button>
           <div className="relative">
             <button
               onClick={() => {
@@ -128,6 +114,15 @@ export const HUD = memo(function HUD() {
                   className="w-full px-4 py-2 text-left text-sm text-void-200 hover:bg-void-800 transition-colors"
                 >
                   Controls
+                </button>
+                <button
+                  onClick={() => {
+                    setShowPlayerStatus(!showPlayerStatus);
+                  }}
+                  className="w-full px-4 py-2 text-left text-sm text-void-200 hover:bg-void-800 transition-colors flex justify-between items-center"
+                >
+                  <span>Players</span>
+                  <span className={showPlayerStatus ? 'text-green-400' : 'text-void-500'}>{showPlayerStatus ? 'ON' : 'OFF'}</span>
                 </button>
                 <button
                   onClick={() => {
