@@ -1785,7 +1785,8 @@ export class EnhancedAISystem extends System {
         return false;
       }
     } else {
-      buildPos = this.findBuildingSpot(ai.playerId, basePos, buildingDef.width, buildingDef.height);
+      // Pass workerId to exclude the builder from collision detection
+      buildPos = this.findBuildingSpot(ai.playerId, basePos, buildingDef.width, buildingDef.height, workerId);
       if (!buildPos) {
         debugAI.log(`[EnhancedAI] ${ai.playerId}: tryBuildBuilding failed - no valid building spot for ${buildingType} near base at (${basePos.x}, ${basePos.y})`);
         return false;
@@ -2116,7 +2117,8 @@ export class EnhancedAISystem extends System {
     playerId: string,
     basePos: { x: number; y: number },
     width: number,
-    height: number
+    height: number,
+    excludeEntityId?: number
   ): { x: number; y: number } | null {
     // Generate more varied offsets in a spiral pattern
     const offsets: { x: number; y: number }[] = [];
@@ -2140,7 +2142,7 @@ export class EnhancedAISystem extends System {
     // Try each offset until we find a valid spot
     for (const offset of offsets) {
       const pos = { x: basePos.x + offset.x, y: basePos.y + offset.y };
-      if (this.isValidBuildingSpot(pos.x, pos.y, width, height)) {
+      if (this.isValidBuildingSpot(pos.x, pos.y, width, height, excludeEntityId)) {
         return pos;
       }
     }
@@ -2148,50 +2150,13 @@ export class EnhancedAISystem extends System {
     return null;
   }
 
-  private isValidBuildingSpot(x: number, y: number, width: number, height: number): boolean {
-    const config = this.game.config;
-    const halfW = width / 2;
-    const halfH = height / 2;
-
-    // Check map bounds (position is center-based)
-    if (x - halfW < 0 || y - halfH < 0 || x + halfW > config.mapWidth || y + halfH > config.mapHeight) {
-      return false;
-    }
-
-    // Check for overlapping buildings
-    const buildings = this.world.getEntitiesWith('Building', 'Transform');
-    for (const entity of buildings) {
-      const transform = entity.get<Transform>('Transform')!;
-      const building = entity.get<Building>('Building')!;
-      const existingHalfW = building.width / 2;
-      const existingHalfH = building.height / 2;
-
-      const dx = Math.abs(x - transform.x);
-      const dy = Math.abs(y - transform.y);
-
-      if (dx < halfW + existingHalfW + 1 && dy < halfH + existingHalfH + 1) {
-        return false;
-      }
-    }
-
-    // Check for overlapping resources
-    const resources = this.getCachedResources();
-    for (const entity of resources) {
-      const transform = entity.get<Transform>('Transform')!;
-      const dx = Math.abs(x - transform.x);
-      const dy = Math.abs(y - transform.y);
-
-      if (dx < halfW + 2 && dy < halfH + 2) {
-        return false;
-      }
-    }
-
-    // Check for overlapping decorations (rocks, trees, etc.)
-    if (!this.game.isPositionClearOfDecorations(x, y, width, height)) {
-      return false;
-    }
-
-    return true;
+  /**
+   * FIX: Use Game.isValidBuildingPlacement() for consistent validation with BuildingPlacementSystem.
+   * This ensures AI-chosen spots won't be rejected when the building:place event is handled.
+   * Previous implementation was missing terrain validation and unit overlap checks.
+   */
+  private isValidBuildingSpot(x: number, y: number, width: number, height: number, excludeEntityId?: number): boolean {
+    return this.game.isValidBuildingPlacement(x, y, width, height, excludeEntityId);
   }
 
   private isUnderAttack(playerId: string): boolean {
