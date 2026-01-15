@@ -556,7 +556,7 @@ export function LoadingScreen({ progress, status, onComplete }: LoadingScreenPro
 
   // Create nebula background
   const createNebula = useCallback((scene: THREE.Scene) => {
-    const geometry = new THREE.PlaneGeometry(120, 120);
+    const geometry = new THREE.PlaneGeometry(200, 200);
     const material = new THREE.ShaderMaterial({
       uniforms: { ...VoidNebulaShader.uniforms },
       vertexShader: VoidNebulaShader.vertexShader,
