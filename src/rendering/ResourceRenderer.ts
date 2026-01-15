@@ -18,7 +18,9 @@ interface InstancedResourceGroup {
   rotations: number[]; // Store random rotations per instance
   yOffset: number; // Y offset from model normalization (to ground the model)
   baseScale: number; // Base scale from model normalization
-  modelYRotation: number; // Base Y-axis rotation (MODEL_FORWARD_OFFSET + asset config) - resources stay flat
+  modelXRotation: number; // X rotation from model (to stand upright)
+  modelZRotation: number; // Z rotation from model (to stand upright)
+  modelYRotation: number; // Base Y rotation (MODEL_FORWARD_OFFSET + asset config)
 }
 
 // Track per-resource rotation and selection ring (no individual labels)
@@ -160,9 +162,13 @@ export class ResourceRenderer {
       let material: THREE.Material | THREE.Material[] | null = null;
       let yOffset = 0;
       let baseScale = 1;
-      // For resources, we only use Y-axis rotation to keep them flat on the ground
-      // MODEL_FORWARD_OFFSET + any per-asset rotation config
+      // Extract X/Z rotations from model to keep it upright
+      // Y rotation comes from MODEL_FORWARD_OFFSET + asset config + per-instance random
+      let modelXRotation = 0;
+      let modelZRotation = 0;
       const modelYRotation = AssetManager.getModelRotation(resourceType);
+      const tempQuat = new THREE.Quaternion();
+      const tempEuler = new THREE.Euler();
 
       // Count meshes in the model
       let meshCount = 0;
@@ -175,8 +181,12 @@ export class ResourceRenderer {
         if (child instanceof THREE.Mesh && !geometry) {
           geometry = child.geometry;
           material = child.material;
-          // Walk up the parent chain to accumulate transforms (position/scale only, not rotation)
-          // Resources stay flat - we use modelYRotation for Y-axis orientation only
+          // Get world quaternion to extract X/Z rotations that stand the model upright
+          child.getWorldQuaternion(tempQuat);
+          tempEuler.setFromQuaternion(tempQuat, 'YXZ'); // YXZ order for proper decomposition
+          modelXRotation = tempEuler.x;
+          modelZRotation = tempEuler.z;
+          // Walk up the parent chain to accumulate position/scale transforms
           let obj: THREE.Object3D | null = child;
           while (obj && obj !== baseMesh) {
             yOffset += obj.position.y * (obj.parent?.scale.y ?? 1);
@@ -251,6 +261,8 @@ export class ResourceRenderer {
         rotations: [],
         yOffset,
         baseScale,
+        modelXRotation,
+        modelZRotation,
         modelYRotation,
       };
 
@@ -569,13 +581,13 @@ export class ResourceRenderer {
         const finalScale = amountScale * group.baseScale;
 
         // Set instance transform - apply yOffset scaled appropriately
-        // Resources use only Y-axis rotation to stay flat on the ground
         const yPos = terrainHeight + group.yOffset * amountScale;
         this.tempPosition.set(transform.x, yPos, transform.y);
-        // Combine model's base Y rotation with per-resource random Y rotation
-        // Y-axis only ensures resources stay flat on ground
+        // X/Z rotations from model keep it upright
+        // Y rotation = model forward offset + per-resource random variety
         const totalYRotation = group.modelYRotation + data.rotation;
-        this.tempQuaternion.setFromAxisAngle(this.Y_AXIS, totalYRotation);
+        this.tempEuler.set(group.modelXRotation, totalYRotation, group.modelZRotation, 'YXZ');
+        this.tempQuaternion.setFromEuler(this.tempEuler);
         this.tempScale.set(finalScale, finalScale, finalScale);
         this.tempMatrix.compose(this.tempPosition, this.tempQuaternion, this.tempScale);
         group.mesh.setMatrixAt(instanceIndex, this.tempMatrix);
