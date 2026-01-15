@@ -365,8 +365,6 @@ export const GraphicsOptionsPanel = memo(function GraphicsOptionsPanel() {
   const showGraphicsOptions = useUIStore((state) => state.showGraphicsOptions);
   const graphicsSettings = useUIStore((state) => state.graphicsSettings);
   const rendererAPI = useUIStore((state) => state.rendererAPI);
-  const showFPS = useUIStore((state) => state.showFPS);
-  const toggleFPS = useUIStore((state) => state.toggleFPS);
   const toggleGraphicsOptions = useUIStore((state) => state.toggleGraphicsOptions);
   const toggleGraphicsSetting = useUIStore((state) => state.toggleGraphicsSetting);
   const setGraphicsSetting = useUIStore((state) => state.setGraphicsSetting);
@@ -990,19 +988,6 @@ export const GraphicsOptionsPanel = memo(function GraphicsOptionsPanel() {
           />
         </div>
       )}
-
-      {/* ===== DISPLAY ===== */}
-      <div style={{
-        paddingTop: '8px',
-        borderTop: '1px solid #222',
-        marginTop: '4px',
-      }}>
-        <ToggleRow
-          label="FPS Counter"
-          enabled={showFPS}
-          onChange={() => toggleFPS()}
-        />
-      </div>
 
       {/* ===== PERFORMANCE METRICS ===== */}
       <PerformanceMetricsDisplay />

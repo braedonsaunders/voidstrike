@@ -213,6 +213,9 @@ export interface UIState {
   debugSettings: DebugSettings;
   showDebugMenu: boolean;
 
+  // Performance panel
+  showPerformancePanel: boolean;
+
   // Overlay settings for strategic view
   overlaySettings: OverlaySettings;
 
@@ -264,6 +267,8 @@ export interface UIState {
   toggleDebugMenu: () => void;
   toggleDebugSetting: (key: keyof DebugSettings) => void;
   setAllDebugSettings: (enabled: boolean) => void;
+  // Performance panel actions
+  togglePerformancePanel: () => void;
   // Overlay settings actions
   setActiveOverlay: (overlay: GameOverlayType) => void;
   toggleOverlay: (overlay: GameOverlayType) => void;
@@ -375,6 +380,7 @@ export const useUIStore = create<UIState>((set, get) => ({
     particleDensity: 5.0, // 5.0 is the baseline (displayed as 1x), range 1-10
   },
   showDebugMenu: false,
+  showPerformancePanel: false,
   overlaySettings: {
     activeOverlay: 'none',
     terrainOverlayOpacity: 0.7,
@@ -576,6 +582,8 @@ export const useUIStore = create<UIState>((set, get) => ({
     })),
 
   toggleDebugMenu: () => set((state) => ({ showDebugMenu: !state.showDebugMenu })),
+
+  togglePerformancePanel: () => set((state) => ({ showPerformancePanel: !state.showPerformancePanel })),
 
   toggleDebugSetting: (key) =>
     set((state) => ({

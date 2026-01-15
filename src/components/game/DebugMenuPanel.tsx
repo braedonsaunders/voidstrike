@@ -1,10 +1,9 @@
 'use client';
 
-import React, { useEffect, useState, memo } from 'react';
+import React, { useEffect, memo } from 'react';
 import { useUIStore, DebugSettings } from '@/store/uiStore';
 import { isMultiplayerMode } from '@/store/gameSetupStore';
 import { setEdgeScrollEnabled } from '@/store/cameraStore';
-import { PerformanceDashboard } from './PerformanceDashboard';
 
 interface DebugSettingInfo {
   key: keyof DebugSettings;
@@ -107,7 +106,6 @@ export const DebugMenuPanel = memo(function DebugMenuPanel() {
   const toggleDebugMenu = useUIStore((state) => state.toggleDebugMenu);
   const toggleDebugSetting = useUIStore((state) => state.toggleDebugSetting);
   const setAllDebugSettings = useUIStore((state) => state.setAllDebugSettings);
-  const [showPerformanceDashboard, setShowPerformanceDashboard] = useState(true);
 
   // Disable edge scrolling when panel is open
   useEffect(() => {
@@ -167,27 +165,6 @@ export const DebugMenuPanel = memo(function DebugMenuPanel() {
         >
           ✕
         </button>
-      </div>
-
-      {/* === PERFORMANCE DASHBOARD === */}
-      <div style={sectionStyle}>
-        <div
-          style={{
-            display: 'flex',
-            justifyContent: 'space-between',
-            alignItems: 'center',
-            marginBottom: '8px',
-            cursor: 'pointer',
-          }}
-          onClick={() => setShowPerformanceDashboard(!showPerformanceDashboard)}
-        >
-          <span style={{ fontWeight: 'bold', fontSize: '12px', color: '#4ade80' }}>
-            Performance Dashboard {showPerformanceDashboard ? '▼' : '▶'}
-          </span>
-        </div>
-        {showPerformanceDashboard && (
-          <PerformanceDashboard expanded={true} />
-        )}
       </div>
 
       {/* === MASTER TOGGLE === */}
