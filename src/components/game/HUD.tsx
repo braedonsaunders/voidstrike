@@ -94,6 +94,11 @@ export const HUD = memo(function HUD() {
           <div className="relative">
             <button
               onClick={() => {
+                // Close any open option panels first
+                if (showGraphicsOptions) toggleGraphicsOptions();
+                if (showSoundOptions) toggleSoundOptions();
+                if (showDebugMenu) toggleDebugMenu();
+                // Then toggle the main options menu
                 setShowOptionsMenu(!showOptionsMenu);
                 setShowOverlayMenu(false);
               }}
