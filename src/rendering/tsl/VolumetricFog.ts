@@ -12,6 +12,7 @@ import {
   vec3,
   vec4,
   float,
+  int,
   uniform,
   uv,
   texture,
@@ -131,9 +132,10 @@ export function createVolumetricFogNode(
     const transmittance = float(1.0).toVar();
     const inScattering = vec3(0.0).toVar();
 
-    // Raymarch loop
-    Loop({ start: 0, end: 32, condition: '<' }, ({ i }) => {
-      const t = float(i).mul(stepSize);
+    // Raymarch loop with manual counter
+    const loopIndex = int(0).toVar();
+    Loop(32, () => {
+      const t = float(loopIndex).mul(stepSize);
       const samplePos = uCameraPos.add(rayDir.mul(t));
 
       // Height-based density falloff
@@ -152,6 +154,9 @@ export function createVolumetricFogNode(
 
       // Beer-Lambert absorption
       transmittance.mulAssign(exp(localDensity.mul(stepSize).negate()));
+
+      // Increment loop counter
+      loopIndex.addAssign(1);
     });
 
     // Combine fog with scene
