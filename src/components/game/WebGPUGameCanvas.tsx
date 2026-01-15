@@ -282,7 +282,7 @@ export function WebGPUGameCanvas() {
       }
 
       renderer.setPixelRatio(initEffectivePixelRatio);
-      renderer.setSize(initTargetWidth, initTargetHeight);
+      renderer.setSize(initTargetWidth, initTargetHeight, false); // false = don't update CSS, canvas stays fullscreen
 
       // IMPORTANT: Disable renderer tone mapping - PostProcessing handles all tone mapping
       // via ACES Filmic in the color grading pass. This prevents double-application of
@@ -961,7 +961,7 @@ export function WebGPUGameCanvas() {
       if (renderContextRef.current && cameraRef.current) {
         const renderer = renderContextRef.current.renderer;
         renderer.setPixelRatio(pixelRatio);
-        renderer.setSize(width, height);
+        renderer.setSize(width, height, false); // false = don't update CSS, canvas stays fullscreen
         cameraRef.current.camera.aspect = width / height;
         cameraRef.current.camera.updateProjectionMatrix();
 
@@ -1957,7 +1957,7 @@ export function WebGPUGameCanvas() {
         const renderer = renderContextRef.current.renderer;
 
         renderer.setPixelRatio(effectivePixelRatio);
-        renderer.setSize(targetWidth, targetHeight);
+        renderer.setSize(targetWidth, targetHeight, false); // false = don't update CSS, canvas stays fullscreen
         cameraRef.current.camera.aspect = targetWidth / targetHeight;
         cameraRef.current.camera.updateProjectionMatrix();
 
