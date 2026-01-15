@@ -224,12 +224,21 @@ def create_decimated_lod(source_obj, ratio, lod_name):
     bpy.ops.mesh.normals_make_consistent(inside=False)
     bpy.ops.object.mode_set(mode='OBJECT')
 
-    # Apply smooth shading
-    bpy.ops.object.shade_smooth()
-
-    # Enable auto-smooth for better normal blending (keeps hard edges where needed)
-    lod.data.use_auto_smooth = True
-    lod.data.auto_smooth_angle = 1.0472  # 60 degrees in radians
+    # Apply smooth shading (with auto-smooth for Blender 3.x, without for 4.x)
+    if bpy.app.version < (4, 0, 0):
+        # Blender 3.x - use legacy auto-smooth
+        bpy.ops.object.shade_smooth()
+        lod.data.use_auto_smooth = True
+        lod.data.auto_smooth_angle = 1.0472  # 60 degrees
+    else:
+        # Blender 4.x - auto-smooth is now per-face, just use smooth shading
+        bpy.ops.object.shade_smooth()
+        # Optionally add Smooth by Angle modifier for edge control
+        try:
+            smooth_mod = lod.modifiers.new("SmoothByAngle", 'SMOOTH_BY_ANGLE')
+            smooth_mod.angle = 1.0472  # 60 degrees
+        except:
+            pass  # Modifier may not exist in all Blender 4.x versions
 
     new_faces = len(lod.data.polygons)
     print(f"      Decimated: {original_faces:,} -> {new_faces:,} faces ({ratio:.0%})")
