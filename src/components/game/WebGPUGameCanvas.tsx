@@ -491,6 +491,12 @@ export function WebGPUGameCanvas() {
           }
         );
 
+        // Set the correct display size (renderer.getSize returns CSS pixels, we need device pixels)
+        renderPipelineRef.current.setSize(
+          initTargetWidth * initEffectivePixelRatio,
+          initTargetHeight * initEffectivePixelRatio
+        );
+
         // Initialize camera matrices for TAA/SSGI velocity calculation
         if (graphicsSettings.taaEnabled || graphicsSettings.ssgiEnabled) {
           initCameraMatrices(camera.camera);
