@@ -1,14 +1,18 @@
 import * as THREE from 'three';
 import { debugAudio } from '@/utils/debugLogger';
+import { audioConfig, SoundPriorityName } from './audioConfig';
 
 export type SoundCategory = 'ui' | 'combat' | 'unit' | 'building' | 'ambient' | 'music' | 'voice' | 'alert';
 
-// Priority levels for voice stealing (higher = more important)
+/**
+ * Priority levels for voice stealing (higher = more important)
+ * Values loaded from sounds.config.json
+ */
 export enum SoundPriority {
-  LOW = 0,        // Ambient, minor impacts
-  NORMAL = 1,     // Standard combat sounds
-  HIGH = 2,       // Explosions, deaths
-  CRITICAL = 3,   // Alerts, UI, important events
+  LOW = 0,
+  NORMAL = 1,
+  HIGH = 2,
+  CRITICAL = 3,
 }
 
 export interface SoundConfig {
@@ -21,8 +25,8 @@ export interface SoundConfig {
   maxInstances?: number;
   cooldown?: number;
   priority?: SoundPriority;
-  maxDistance?: number;  // Distance beyond which sound won't play
-  clusterRadius?: number; // Radius for spatial clustering
+  maxDistance?: number;
+  clusterRadius?: number;
 }
 
 interface PooledAudioSource {
@@ -41,321 +45,23 @@ interface SoundInstance {
   priority: SoundPriority;
 }
 
-// ============================================================================
-// SOUND DEFINITIONS
-// ============================================================================
-
-export const SOUNDS: Record<string, SoundConfig> = {
-  // UI Sounds (Critical priority - always play)
-  ui_click: { id: 'ui_click', url: '/audio/ui/click.mp3', category: 'ui', volume: 0.5, priority: SoundPriority.CRITICAL },
-  ui_error: { id: 'ui_error', url: '/audio/ui/error.mp3', category: 'ui', volume: 0.6, priority: SoundPriority.CRITICAL },
-  ui_select: { id: 'ui_select', url: '/audio/ui/select.mp3', category: 'ui', volume: 0.4, priority: SoundPriority.CRITICAL },
-  ui_notification: { id: 'ui_notification', url: '/audio/ui/notification.mp3', category: 'ui', volume: 0.6, priority: SoundPriority.CRITICAL },
-
-  // Alert Sounds (Critical priority - always play)
-  alert_under_attack: { id: 'alert_under_attack', url: '/audio/alert/under_attack.mp3', category: 'alert', volume: 0.8, cooldown: 5000, priority: SoundPriority.CRITICAL },
-  alert_additional_population_required: { id: 'alert_additional_population_required', url: '/audio/alert/additional_population_required.mp3', category: 'alert', volume: 0.7, cooldown: 3000, priority: SoundPriority.CRITICAL },
-  alert_not_enough_minerals: { id: 'alert_not_enough_minerals', url: '/audio/alert/not_enough_minerals.mp3', category: 'alert', volume: 0.7, cooldown: 1000, priority: SoundPriority.CRITICAL },
-  alert_not_enough_vespene: { id: 'alert_not_enough_vespene', url: '/audio/alert/not_enough_vespene.mp3', category: 'alert', volume: 0.7, cooldown: 1000, priority: SoundPriority.CRITICAL },
-  alert_minerals_depleted: { id: 'alert_minerals_depleted', url: '/audio/alert/minerals_depleted.mp3', category: 'alert', volume: 0.6, priority: SoundPriority.CRITICAL },
-  alert_building_complete: { id: 'alert_building_complete', url: '/audio/alert/building_complete.mp3', category: 'alert', volume: 0.7, priority: SoundPriority.CRITICAL },
-  alert_research_complete: { id: 'alert_research_complete', url: '/audio/alert/research_complete.mp3', category: 'alert', volume: 0.7, priority: SoundPriority.CRITICAL },
-  alert_upgrade_complete: { id: 'alert_upgrade_complete', url: '/audio/alert/upgrade_complete.mp3', category: 'alert', volume: 0.7, priority: SoundPriority.CRITICAL },
-  // Note: Unit/building lost alerts reuse under_attack sound until dedicated audio is available
-  alert_unit_lost: { id: 'alert_unit_lost', url: '/audio/alert/under_attack.mp3', category: 'alert', volume: 0.6, cooldown: 3000, priority: SoundPriority.HIGH },
-  alert_building_lost: { id: 'alert_building_lost', url: '/audio/alert/under_attack.mp3', category: 'alert', volume: 0.7, cooldown: 3000, priority: SoundPriority.CRITICAL },
-
-  // Combat Sounds - Weapons (Normal priority, spatial with clustering)
-  attack_rifle: { id: 'attack_rifle', url: '/audio/combat/rifle.mp3', category: 'combat', volume: 0.5, spatial: true, maxInstances: 20, cooldown: 30, priority: SoundPriority.NORMAL, maxDistance: 150, clusterRadius: 8 },
-  attack_cannon: { id: 'attack_cannon', url: '/audio/combat/cannon.mp3', category: 'combat', volume: 0.6, spatial: true, maxInstances: 10, cooldown: 80, priority: SoundPriority.HIGH, maxDistance: 200, clusterRadius: 12 },
-  attack_laser: { id: 'attack_laser', url: '/audio/combat/laser.mp3', category: 'combat', volume: 0.5, spatial: true, maxInstances: 15, cooldown: 50, priority: SoundPriority.NORMAL, maxDistance: 150, clusterRadius: 8 },
-  attack_laser_battery: { id: 'attack_laser_battery', url: '/audio/combat/laser_battery.mp3', category: 'combat', volume: 0.6, spatial: true, maxInstances: 8, cooldown: 60, priority: SoundPriority.NORMAL, maxDistance: 180, clusterRadius: 10 },
-  attack_missile: { id: 'attack_missile', url: '/audio/combat/missile.mp3', category: 'combat', volume: 0.6, spatial: true, maxInstances: 8, cooldown: 150, priority: SoundPriority.HIGH, maxDistance: 180, clusterRadius: 10 },
-  attack_flamethrower: { id: 'attack_flamethrower', url: '/audio/combat/flamethrower.mp3', category: 'combat', volume: 0.5, spatial: true, maxInstances: 6, cooldown: 80, priority: SoundPriority.NORMAL, maxDistance: 120, clusterRadius: 6 },
-  attack_gatling: { id: 'attack_gatling', url: '/audio/combat/gatling_gun.mp3', category: 'combat', volume: 0.55, spatial: true, maxInstances: 8, cooldown: 40, priority: SoundPriority.NORMAL, maxDistance: 150, clusterRadius: 8 },
-  attack_grenade: { id: 'attack_grenade', url: '/audio/combat/grenade_launcher.mp3', category: 'combat', volume: 0.6, spatial: true, maxInstances: 8, cooldown: 100, priority: SoundPriority.HIGH, maxDistance: 160, clusterRadius: 10 },
-  attack_sniper: { id: 'attack_sniper', url: '/audio/combat/sniper.mp3', category: 'combat', volume: 0.55, spatial: true, maxInstances: 6, cooldown: 200, priority: SoundPriority.HIGH, maxDistance: 200, clusterRadius: 15 },
-  attack_yamato: { id: 'attack_yamato', url: '/audio/combat/yamato.mp3', category: 'combat', volume: 0.8, spatial: true, maxInstances: 3, cooldown: 500, priority: SoundPriority.CRITICAL, maxDistance: 300, clusterRadius: 20 },
-
-  // Combat Sounds - Impacts (Low priority, high clustering)
-  hit_impact: { id: 'hit_impact', url: '/audio/combat/hit.mp3', category: 'combat', volume: 0.4, spatial: true, maxInstances: 25, cooldown: 20, priority: SoundPriority.LOW, maxDistance: 100, clusterRadius: 10 },
-  hit_armor: { id: 'hit_armor', url: '/audio/combat/hit_armor.mp3', category: 'combat', volume: 0.5, spatial: true, maxInstances: 20, cooldown: 30, priority: SoundPriority.LOW, maxDistance: 100, clusterRadius: 10 },
-  hit_shield: { id: 'hit_shield', url: '/audio/combat/hit_shield.mp3', category: 'combat', volume: 0.4, spatial: true, maxInstances: 15, cooldown: 30, priority: SoundPriority.LOW, maxDistance: 100, clusterRadius: 10 },
-  hit_energy: { id: 'hit_energy', url: '/audio/combat/energy_impact.mp3', category: 'combat', volume: 0.45, spatial: true, maxInstances: 15, cooldown: 30, priority: SoundPriority.LOW, maxDistance: 100, clusterRadius: 10 },
-
-  // Combat Sounds - Explosions (High priority)
-  explosion_small: { id: 'explosion_small', url: '/audio/combat/small_explosion.mp3', category: 'combat', volume: 0.6, spatial: true, maxInstances: 10, priority: SoundPriority.HIGH, maxDistance: 180 },
-  explosion_medium: { id: 'explosion_medium', url: '/audio/combat/medium_explosion.mp3', category: 'combat', volume: 0.7, spatial: true, maxInstances: 8, priority: SoundPriority.HIGH, maxDistance: 220 },
-  explosion_large: { id: 'explosion_large', url: '/audio/combat/large_explosion.mp3', category: 'combat', volume: 0.8, spatial: true, maxInstances: 6, priority: SoundPriority.HIGH, maxDistance: 250 },
-  explosion_building: { id: 'explosion_building', url: '/audio/combat/large_explosion.mp3', category: 'combat', volume: 0.9, spatial: true, maxInstances: 4, priority: SoundPriority.HIGH, maxDistance: 300 },
-
-  // Combat Sounds - Deaths (Normal priority)
-  // Note: Death sounds reuse explosion sounds until dedicated death audio is available
-  unit_death: { id: 'unit_death', url: '/audio/combat/small_explosion.mp3', category: 'combat', volume: 0.5, spatial: true, maxInstances: 10, priority: SoundPriority.NORMAL, maxDistance: 120, clusterRadius: 15 },
-  unit_death_mech: { id: 'unit_death_mech', url: '/audio/combat/medium_explosion.mp3', category: 'combat', volume: 0.6, spatial: true, maxInstances: 6, priority: SoundPriority.HIGH, maxDistance: 150 },
-  unit_death_bio: { id: 'unit_death_bio', url: '/audio/combat/small_explosion.mp3', category: 'combat', volume: 0.5, spatial: true, maxInstances: 10, priority: SoundPriority.NORMAL, maxDistance: 120, clusterRadius: 15 },
-
-  // Unit Command Sounds (High priority - player feedback)
-  // Note: These reuse UI sounds since unit-specific command sounds aren't available
-  // Voice lines already provide unit-specific audio feedback for commands
-  unit_move: { id: 'unit_move', url: '/audio/ui/click.mp3', category: 'unit', volume: 0.3, cooldown: 300, priority: SoundPriority.HIGH },
-  unit_attack: { id: 'unit_attack', url: '/audio/ui/click.mp3', category: 'unit', volume: 0.3, cooldown: 300, priority: SoundPriority.HIGH },
-  unit_ready: { id: 'unit_ready', url: '/audio/ui/notification.mp3', category: 'unit', volume: 0.5, priority: SoundPriority.HIGH },
-
-  // ============================================================================
-  // DOMINION UNIT VOICE LINES
-  // ============================================================================
-
-  // Unit Voice Lines - Fabricator (Worker)
-  voice_fabricator_select_1: { id: 'voice_fabricator_select_1', url: '/audio/voice/fabricator/select1.mp3', category: 'voice', volume: 0.6, priority: SoundPriority.HIGH },
-  voice_fabricator_select_2: { id: 'voice_fabricator_select_2', url: '/audio/voice/fabricator/select2.mp3', category: 'voice', volume: 0.6, priority: SoundPriority.HIGH },
-  voice_fabricator_select_3: { id: 'voice_fabricator_select_3', url: '/audio/voice/fabricator/select3.mp3', category: 'voice', volume: 0.6, priority: SoundPriority.HIGH },
-  voice_fabricator_move_1: { id: 'voice_fabricator_move_1', url: '/audio/voice/fabricator/move1.mp3', category: 'voice', volume: 0.6, priority: SoundPriority.HIGH },
-  voice_fabricator_move_2: { id: 'voice_fabricator_move_2', url: '/audio/voice/fabricator/move2.mp3', category: 'voice', volume: 0.6, priority: SoundPriority.HIGH },
-  voice_fabricator_attack_1: { id: 'voice_fabricator_attack_1', url: '/audio/voice/fabricator/attack1.mp3', category: 'voice', volume: 0.6, priority: SoundPriority.HIGH },
-  voice_fabricator_ready: { id: 'voice_fabricator_ready', url: '/audio/voice/fabricator/ready.mp3', category: 'voice', volume: 0.7, priority: SoundPriority.HIGH },
-
-  // Unit Voice Lines - Trooper (Basic Infantry)
-  voice_trooper_select_1: { id: 'voice_trooper_select_1', url: '/audio/voice/trooper/select1.mp3', category: 'voice', volume: 0.6, priority: SoundPriority.HIGH },
-  voice_trooper_select_2: { id: 'voice_trooper_select_2', url: '/audio/voice/trooper/select2.mp3', category: 'voice', volume: 0.6, priority: SoundPriority.HIGH },
-  voice_trooper_select_3: { id: 'voice_trooper_select_3', url: '/audio/voice/trooper/select3.mp3', category: 'voice', volume: 0.6, priority: SoundPriority.HIGH },
-  voice_trooper_move_1: { id: 'voice_trooper_move_1', url: '/audio/voice/trooper/move1.mp3', category: 'voice', volume: 0.6, priority: SoundPriority.HIGH },
-  voice_trooper_move_2: { id: 'voice_trooper_move_2', url: '/audio/voice/trooper/move2.mp3', category: 'voice', volume: 0.6, priority: SoundPriority.HIGH },
-  voice_trooper_attack_1: { id: 'voice_trooper_attack_1', url: '/audio/voice/trooper/attack1.mp3', category: 'voice', volume: 0.6, priority: SoundPriority.HIGH },
-  voice_trooper_attack_2: { id: 'voice_trooper_attack_2', url: '/audio/voice/trooper/attack2.mp3', category: 'voice', volume: 0.6, priority: SoundPriority.HIGH },
-  voice_trooper_ready: { id: 'voice_trooper_ready', url: '/audio/voice/trooper/ready.mp3', category: 'voice', volume: 0.7, priority: SoundPriority.HIGH },
-
-  // Unit Voice Lines - Breacher (Heavy Infantry)
-  voice_breacher_select_1: { id: 'voice_breacher_select_1', url: '/audio/voice/breacher/select1.mp3', category: 'voice', volume: 0.6, priority: SoundPriority.HIGH },
-  voice_breacher_select_2: { id: 'voice_breacher_select_2', url: '/audio/voice/breacher/select2.mp3', category: 'voice', volume: 0.6, priority: SoundPriority.HIGH },
-  voice_breacher_move_1: { id: 'voice_breacher_move_1', url: '/audio/voice/breacher/move1.mp3', category: 'voice', volume: 0.6, priority: SoundPriority.HIGH },
-  voice_breacher_move_2: { id: 'voice_breacher_move_2', url: '/audio/voice/breacher/move2.mp3', category: 'voice', volume: 0.6, priority: SoundPriority.HIGH },
-  voice_breacher_attack_1: { id: 'voice_breacher_attack_1', url: '/audio/voice/breacher/attack.mp3', category: 'voice', volume: 0.6, priority: SoundPriority.HIGH },
-  voice_breacher_ready: { id: 'voice_breacher_ready', url: '/audio/voice/breacher/ready.mp3', category: 'voice', volume: 0.7, priority: SoundPriority.HIGH },
-
-  // Unit Voice Lines - Vanguard (Fast Assault Infantry)
-  voice_vanguard_select_1: { id: 'voice_vanguard_select_1', url: '/audio/voice/vanguard/select1.mp3', category: 'voice', volume: 0.6, priority: SoundPriority.HIGH },
-  voice_vanguard_select_2: { id: 'voice_vanguard_select_2', url: '/audio/voice/vanguard/select2.mp3', category: 'voice', volume: 0.6, priority: SoundPriority.HIGH },
-  voice_vanguard_move_1: { id: 'voice_vanguard_move_1', url: '/audio/voice/vanguard/move1.mp3', category: 'voice', volume: 0.6, priority: SoundPriority.HIGH },
-  voice_vanguard_attack_1: { id: 'voice_vanguard_attack_1', url: '/audio/voice/vanguard/attack1.mp3', category: 'voice', volume: 0.6, priority: SoundPriority.HIGH },
-  voice_vanguard_ready: { id: 'voice_vanguard_ready', url: '/audio/voice/vanguard/ready.mp3', category: 'voice', volume: 0.7, priority: SoundPriority.HIGH },
-
-  // Unit Voice Lines - Operative (Elite Stealth Unit)
-  voice_operative_select_1: { id: 'voice_operative_select_1', url: '/audio/voice/operative/select1.mp3', category: 'voice', volume: 0.6, priority: SoundPriority.HIGH },
-  voice_operative_select_2: { id: 'voice_operative_select_2', url: '/audio/voice/operative/select2.mp3', category: 'voice', volume: 0.6, priority: SoundPriority.HIGH },
-  voice_operative_move_1: { id: 'voice_operative_move_1', url: '/audio/voice/operative/move1.mp3', category: 'voice', volume: 0.6, priority: SoundPriority.HIGH },
-  voice_operative_attack_1: { id: 'voice_operative_attack_1', url: '/audio/voice/operative/attack1.mp3', category: 'voice', volume: 0.6, priority: SoundPriority.HIGH },
-  voice_operative_ready: { id: 'voice_operative_ready', url: '/audio/voice/operative/ready.mp3', category: 'voice', volume: 0.7, priority: SoundPriority.HIGH },
-
-  // Unit Voice Lines - Scorcher (Fast Attack Vehicle)
-  voice_scorcher_select_1: { id: 'voice_scorcher_select_1', url: '/audio/voice/scorcher/select1.mp3', category: 'voice', volume: 0.6, priority: SoundPriority.HIGH },
-  voice_scorcher_select_2: { id: 'voice_scorcher_select_2', url: '/audio/voice/scorcher/select2.mp3', category: 'voice', volume: 0.6, priority: SoundPriority.HIGH },
-  voice_scorcher_move_1: { id: 'voice_scorcher_move_1', url: '/audio/voice/scorcher/move1.mp3', category: 'voice', volume: 0.6, priority: SoundPriority.HIGH },
-  voice_scorcher_attack_1: { id: 'voice_scorcher_attack_1', url: '/audio/voice/scorcher/attack1.mp3', category: 'voice', volume: 0.6, priority: SoundPriority.HIGH },
-  voice_scorcher_ready: { id: 'voice_scorcher_ready', url: '/audio/voice/scorcher/ready.mp3', category: 'voice', volume: 0.7, priority: SoundPriority.HIGH },
-
-  // Unit Voice Lines - Devastator (Heavy Siege Tank)
-  voice_devastator_select_1: { id: 'voice_devastator_select_1', url: '/audio/voice/devastator/select1.mp3', category: 'voice', volume: 0.6, priority: SoundPriority.HIGH },
-  voice_devastator_select_2: { id: 'voice_devastator_select_2', url: '/audio/voice/devastator/select2.mp3', category: 'voice', volume: 0.6, priority: SoundPriority.HIGH },
-  voice_devastator_move_1: { id: 'voice_devastator_move_1', url: '/audio/voice/devastator/move1.mp3', category: 'voice', volume: 0.6, priority: SoundPriority.HIGH },
-  voice_devastator_attack_1: { id: 'voice_devastator_attack_1', url: '/audio/voice/devastator/attack1.mp3', category: 'voice', volume: 0.6, priority: SoundPriority.HIGH },
-  voice_devastator_ready: { id: 'voice_devastator_ready', url: '/audio/voice/devastator/ready.mp3', category: 'voice', volume: 0.7, priority: SoundPriority.HIGH },
-
-  // Unit Voice Lines - Colossus (Massive Walker Mech)
-  voice_colossus_select_1: { id: 'voice_colossus_select_1', url: '/audio/voice/colossus/select1.mp3', category: 'voice', volume: 0.6, priority: SoundPriority.HIGH },
-  voice_colossus_select_2: { id: 'voice_colossus_select_2', url: '/audio/voice/colossus/select2.mp3', category: 'voice', volume: 0.6, priority: SoundPriority.HIGH },
-  voice_colossus_move_1: { id: 'voice_colossus_move_1', url: '/audio/voice/colossus/move1.mp3', category: 'voice', volume: 0.6, priority: SoundPriority.HIGH },
-  voice_colossus_attack_1: { id: 'voice_colossus_attack_1', url: '/audio/voice/colossus/attack1.mp3', category: 'voice', volume: 0.6, priority: SoundPriority.HIGH },
-  voice_colossus_ready: { id: 'voice_colossus_ready', url: '/audio/voice/colossus/ready.mp3', category: 'voice', volume: 0.7, priority: SoundPriority.HIGH },
-
-  // Unit Voice Lines - Lifter (Flying Transport/Medic)
-  voice_lifter_select_1: { id: 'voice_lifter_select_1', url: '/audio/voice/lifter/select1.mp3', category: 'voice', volume: 0.6, priority: SoundPriority.HIGH },
-  voice_lifter_select_2: { id: 'voice_lifter_select_2', url: '/audio/voice/lifter/select2.mp3', category: 'voice', volume: 0.6, priority: SoundPriority.HIGH },
-  voice_lifter_move_1: { id: 'voice_lifter_move_1', url: '/audio/voice/lifter/move1.mp3', category: 'voice', volume: 0.6, priority: SoundPriority.HIGH },
-  voice_lifter_ready: { id: 'voice_lifter_ready', url: '/audio/voice/lifter/ready.mp3', category: 'voice', volume: 0.7, priority: SoundPriority.HIGH },
-
-  // Unit Voice Lines - Valkyrie (Transforming Fighter)
-  voice_valkyrie_select_1: { id: 'voice_valkyrie_select_1', url: '/audio/voice/valkyrie/select1.mp3', category: 'voice', volume: 0.6, priority: SoundPriority.HIGH },
-  voice_valkyrie_select_2: { id: 'voice_valkyrie_select_2', url: '/audio/voice/valkyrie/select2.mp3', category: 'voice', volume: 0.6, priority: SoundPriority.HIGH },
-  voice_valkyrie_move_1: { id: 'voice_valkyrie_move_1', url: '/audio/voice/valkyrie/move1.mp3', category: 'voice', volume: 0.6, priority: SoundPriority.HIGH },
-  voice_valkyrie_attack_1: { id: 'voice_valkyrie_attack_1', url: '/audio/voice/valkyrie/attack1.mp3', category: 'voice', volume: 0.6, priority: SoundPriority.HIGH },
-  voice_valkyrie_ready: { id: 'voice_valkyrie_ready', url: '/audio/voice/valkyrie/ready.mp3', category: 'voice', volume: 0.7, priority: SoundPriority.HIGH },
-
-  // Unit Voice Lines - Specter (Cloakable Strike Fighter)
-  voice_specter_select_1: { id: 'voice_specter_select_1', url: '/audio/voice/specter/select1.mp3', category: 'voice', volume: 0.6, priority: SoundPriority.HIGH },
-  voice_specter_select_2: { id: 'voice_specter_select_2', url: '/audio/voice/specter/select2.mp3', category: 'voice', volume: 0.6, priority: SoundPriority.HIGH },
-  voice_specter_move_1: { id: 'voice_specter_move_1', url: '/audio/voice/specter/move1.mp3', category: 'voice', volume: 0.6, priority: SoundPriority.HIGH },
-  voice_specter_attack_1: { id: 'voice_specter_attack_1', url: '/audio/voice/specter/attack1.mp3', category: 'voice', volume: 0.6, priority: SoundPriority.HIGH },
-  voice_specter_ready: { id: 'voice_specter_ready', url: '/audio/voice/specter/ready.mp3', category: 'voice', volume: 0.7, priority: SoundPriority.HIGH },
-
-  // Unit Voice Lines - Dreadnought (Capital Ship)
-  voice_dreadnought_select_1: { id: 'voice_dreadnought_select_1', url: '/audio/voice/dreadnought/select1.mp3', category: 'voice', volume: 0.6, priority: SoundPriority.HIGH },
-  voice_dreadnought_select_2: { id: 'voice_dreadnought_select_2', url: '/audio/voice/dreadnought/select2.mp3', category: 'voice', volume: 0.6, priority: SoundPriority.HIGH },
-  voice_dreadnought_move_1: { id: 'voice_dreadnought_move_1', url: '/audio/voice/dreadnought/move1.mp3', category: 'voice', volume: 0.6, priority: SoundPriority.HIGH },
-  voice_dreadnought_attack_1: { id: 'voice_dreadnought_attack_1', url: '/audio/voice/dreadnought/attack1.mp3', category: 'voice', volume: 0.6, priority: SoundPriority.HIGH },
-  voice_dreadnought_ready: { id: 'voice_dreadnought_ready', url: '/audio/voice/dreadnought/ready.mp3', category: 'voice', volume: 0.7, priority: SoundPriority.HIGH },
-
-  // Unit Voice Lines - Overseer (Support/Detector)
-  voice_overseer_select_1: { id: 'voice_overseer_select_1', url: '/audio/voice/overseer/select1.mp3', category: 'voice', volume: 0.6, priority: SoundPriority.HIGH },
-  voice_overseer_select_2: { id: 'voice_overseer_select_2', url: '/audio/voice/overseer/select2.mp3', category: 'voice', volume: 0.6, priority: SoundPriority.HIGH },
-  voice_overseer_move_1: { id: 'voice_overseer_move_1', url: '/audio/voice/overseer/move1.mp3', category: 'voice', volume: 0.6, priority: SoundPriority.HIGH },
-  voice_overseer_ready: { id: 'voice_overseer_ready', url: '/audio/voice/overseer/ready.mp3', category: 'voice', volume: 0.7, priority: SoundPriority.HIGH },
-
-  // Building Sounds
-  // Note: Building sounds reuse UI sounds until dedicated building audio is available
-  building_place: { id: 'building_place', url: '/audio/ui/click.mp3', category: 'building', volume: 0.5, priority: SoundPriority.HIGH },
-  production_start: { id: 'production_start', url: '/audio/ui/click.mp3', category: 'building', volume: 0.4, priority: SoundPriority.NORMAL },
-
-  // Ambient Sounds - Biome specific
-  // Note: Ambient sounds are disabled until dedicated ambient audio is available
-  // The BIOME_AMBIENT mapping below references these IDs, but they won't play without files
-
-  // Music
-  // Note: Music is primarily handled by MusicPlayer which dynamically discovers tracks
-  // These are fallback definitions with correct paths
-  music_menu: { id: 'music_menu', url: '/audio/music/menu/main_theme.mp3', category: 'music', volume: 0.3, loop: true, priority: SoundPriority.NORMAL },
-  music_victory: { id: 'music_victory', url: '/audio/music/victory/victory.mp3', category: 'music', volume: 0.4, priority: SoundPriority.CRITICAL },
-  music_defeat: { id: 'music_defeat', url: '/audio/music/defeat/defeat.mp3', category: 'music', volume: 0.4, priority: SoundPriority.CRITICAL },
-};
-
-// ============================================================================
-// UNIT VOICE MAPPINGS
-// Maps unit IDs to their available voice lines for select/move/attack/ready
-// ============================================================================
-
-export const UNIT_VOICES: Record<string, {
-  select: string[];
-  move: string[];
-  attack: string[];
-  ready?: string;
-}> = {
-  // Fabricator - Worker Unit
-  fabricator: {
-    select: ['voice_fabricator_select_1', 'voice_fabricator_select_2', 'voice_fabricator_select_3'],
-    move: ['voice_fabricator_move_1', 'voice_fabricator_move_2'],
-    attack: ['voice_fabricator_attack_1'],
-    ready: 'voice_fabricator_ready',
-  },
-
-  // Trooper - Basic Infantry
-  trooper: {
-    select: ['voice_trooper_select_1', 'voice_trooper_select_2', 'voice_trooper_select_3'],
-    move: ['voice_trooper_move_1', 'voice_trooper_move_2'],
-    attack: ['voice_trooper_attack_1', 'voice_trooper_attack_2'],
-    ready: 'voice_trooper_ready',
-  },
-
-  // Breacher - Heavy Armored Infantry
-  breacher: {
-    select: ['voice_breacher_select_1', 'voice_breacher_select_2'],
-    move: ['voice_breacher_move_1', 'voice_breacher_move_2'],
-    attack: ['voice_breacher_attack_1'],
-    ready: 'voice_breacher_ready',
-  },
-
-  // Vanguard - Fast Assault Infantry
-  vanguard: {
-    select: ['voice_vanguard_select_1', 'voice_vanguard_select_2'],
-    move: ['voice_vanguard_move_1'],
-    attack: ['voice_vanguard_attack_1'],
-    ready: 'voice_vanguard_ready',
-  },
-
-  // Operative - Elite Stealth Unit
-  operative: {
-    select: ['voice_operative_select_1', 'voice_operative_select_2'],
-    move: ['voice_operative_move_1'],
-    attack: ['voice_operative_attack_1'],
-    ready: 'voice_operative_ready',
-  },
-
-  // Scorcher - Fast Attack Vehicle
-  scorcher: {
-    select: ['voice_scorcher_select_1', 'voice_scorcher_select_2'],
-    move: ['voice_scorcher_move_1'],
-    attack: ['voice_scorcher_attack_1'],
-    ready: 'voice_scorcher_ready',
-  },
-
-  // Devastator - Heavy Siege Tank
-  devastator: {
-    select: ['voice_devastator_select_1', 'voice_devastator_select_2'],
-    move: ['voice_devastator_move_1'],
-    attack: ['voice_devastator_attack_1'],
-    ready: 'voice_devastator_ready',
-  },
-
-  // Colossus - Massive Walker Mech
-  colossus: {
-    select: ['voice_colossus_select_1', 'voice_colossus_select_2'],
-    move: ['voice_colossus_move_1'],
-    attack: ['voice_colossus_attack_1'],
-    ready: 'voice_colossus_ready',
-  },
-
-  // Lifter - Flying Transport/Medic
-  lifter: {
-    select: ['voice_lifter_select_1', 'voice_lifter_select_2'],
-    move: ['voice_lifter_move_1'],
-    attack: [], // Lifter doesn't attack
-    ready: 'voice_lifter_ready',
-  },
-
-  // Valkyrie - Transforming Fighter
-  valkyrie: {
-    select: ['voice_valkyrie_select_1', 'voice_valkyrie_select_2'],
-    move: ['voice_valkyrie_move_1'],
-    attack: ['voice_valkyrie_attack_1'],
-    ready: 'voice_valkyrie_ready',
-  },
-
-  // Specter - Cloakable Strike Fighter
-  specter: {
-    select: ['voice_specter_select_1', 'voice_specter_select_2'],
-    move: ['voice_specter_move_1'],
-    attack: ['voice_specter_attack_1'],
-    ready: 'voice_specter_ready',
-  },
-
-  // Dreadnought - Capital Ship
-  dreadnought: {
-    select: ['voice_dreadnought_select_1', 'voice_dreadnought_select_2'],
-    move: ['voice_dreadnought_move_1'],
-    attack: ['voice_dreadnought_attack_1'],
-    ready: 'voice_dreadnought_ready',
-  },
-
-  // Overseer - Support/Detector
-  overseer: {
-    select: ['voice_overseer_select_1', 'voice_overseer_select_2'],
-    move: ['voice_overseer_move_1'],
-    attack: [], // Overseer doesn't attack
-    ready: 'voice_overseer_ready',
-  },
-};
-
-// Biome to ambient sound mapping
-// Note: Ambient sounds are currently disabled - no ambient audio files are available
-// When ambient audio is added, populate this mapping with sound IDs
-export const BIOME_AMBIENT: Record<string, string> = {
-  // grassland: 'ambient_nature',
-  // desert: 'ambient_desert',
-  // frozen: 'ambient_frozen',
-  // volcanic: 'ambient_volcanic',
-  // void: 'ambient_void',
-  // jungle: 'ambient_jungle',
-};
-
-// ============================================================================
-// WORLD-CLASS AUDIO MANAGER
-// ============================================================================
-
 // Configuration constants
-const POOL_SIZE = 96;              // Preallocated positional audio sources
-const MAX_CONCURRENT_SOUNDS = 64;  // Global voice budget
-const FADE_OUT_DURATION = 100;     // ms for smooth voice stealing
-const CLUSTER_TIME_WINDOW = 50;    // ms window for spatial clustering
+const POOL_SIZE = 96;
+const MAX_CONCURRENT_SOUNDS = 64;
+const FADE_OUT_DURATION = 100;
+const CLUSTER_TIME_WINDOW = 50;
 
+/**
+ * AudioManager - Fully data-driven sound effects system
+ *
+ * All sound definitions are loaded from public/audio/sounds.config.json.
+ * Voice lines are loaded from public/audio/voices.config.json.
+ *
+ * To add new sounds:
+ * 1. Drop audio files in the appropriate folder
+ * 2. Add entries to sounds.config.json
+ * 3. No code changes required
+ */
 class AudioManagerClass {
   private audioContext: AudioContext | null = null;
   private listener: THREE.AudioListener | null = null;
@@ -391,11 +97,156 @@ class AudioManagerClass {
   private masterVolume = 1;
   private muted = false;
 
+  // Cached sound configs loaded from JSON
+  private soundConfigs: Map<string, SoundConfig> = new Map();
+  private configLoaded = false;
+
   // ============================================================================
   // INITIALIZATION
   // ============================================================================
 
-  public initialize(camera?: THREE.Camera): void {
+  /**
+   * Load sound configurations from JSON files
+   */
+  public async loadConfig(): Promise<void> {
+    if (this.configLoaded) return;
+
+    await audioConfig.load();
+
+    // Build sound configs from the loaded JSON
+    const soundsConfig = audioConfig.getSounds();
+    this.soundConfigs.clear();
+
+    for (const [category, categorySounds] of Object.entries(soundsConfig.sounds)) {
+      for (const [soundId, soundDef] of Object.entries(categorySounds)) {
+        const priorityValue = soundDef.priority
+          ? audioConfig.getPriorityValue(soundDef.priority)
+          : audioConfig.getPriorityValue(soundsConfig.defaults.priority);
+
+        this.soundConfigs.set(soundId, {
+          id: soundId,
+          url: soundDef.url,
+          category: category as SoundCategory,
+          volume: soundDef.volume ?? soundsConfig.defaults.volume,
+          loop: soundDef.loop ?? soundsConfig.defaults.loop,
+          spatial: soundDef.spatial ?? soundsConfig.defaults.spatial,
+          maxInstances: soundDef.maxInstances ?? soundsConfig.defaults.maxInstances,
+          cooldown: soundDef.cooldown ?? soundsConfig.defaults.cooldown,
+          priority: priorityValue,
+          maxDistance: soundDef.maxDistance ?? soundsConfig.defaults.maxDistance,
+          clusterRadius: soundDef.clusterRadius ?? soundsConfig.defaults.clusterRadius,
+        });
+      }
+    }
+
+    // Also load voice sounds from voices.config.json
+    const voicesConfig = audioConfig.getVoices();
+    const voicePriority = audioConfig.getPriorityValue(voicesConfig.defaults.priority);
+    const voiceVolume = voicesConfig.defaults.volume;
+
+    for (const [groupId, group] of Object.entries(voicesConfig.voiceGroups)) {
+      // Add select voices
+      group.select.forEach((file, index) => {
+        const id = `voice_${groupId}_select_${index + 1}`;
+        this.soundConfigs.set(id, {
+          id,
+          url: `${group.basePath}/${file}`,
+          category: 'voice',
+          volume: voiceVolume,
+          priority: voicePriority,
+        });
+      });
+
+      // Add move voices
+      group.move.forEach((file, index) => {
+        const id = `voice_${groupId}_move_${index + 1}`;
+        this.soundConfigs.set(id, {
+          id,
+          url: `${group.basePath}/${file}`,
+          category: 'voice',
+          volume: voiceVolume,
+          priority: voicePriority,
+        });
+      });
+
+      // Add attack voices
+      group.attack.forEach((file, index) => {
+        const id = `voice_${groupId}_attack_${index + 1}`;
+        this.soundConfigs.set(id, {
+          id,
+          url: `${group.basePath}/${file}`,
+          category: 'voice',
+          volume: voiceVolume,
+          priority: voicePriority,
+        });
+      });
+
+      // Add ready voice
+      if (group.ready) {
+        const id = `voice_${groupId}_ready`;
+        this.soundConfigs.set(id, {
+          id,
+          url: `${group.basePath}/${group.ready}`,
+          category: 'voice',
+          volume: voiceVolume + 0.1, // Ready voices slightly louder
+          priority: voicePriority,
+        });
+      }
+    }
+
+    this.configLoaded = true;
+    debugAudio.log(`AudioManager loaded ${this.soundConfigs.size} sound configs`);
+  }
+
+  /**
+   * Get a sound config by ID
+   */
+  public getSoundConfig(soundId: string): SoundConfig | undefined {
+    return this.soundConfigs.get(soundId);
+  }
+
+  /**
+   * Get voice line IDs for a unit
+   */
+  public getVoiceLines(voiceGroupId: string): {
+    select: string[];
+    move: string[];
+    attack: string[];
+    ready?: string;
+  } {
+    const select: string[] = [];
+    const move: string[] = [];
+    const attack: string[] = [];
+    let ready: string | undefined;
+
+    // Find all voice lines for this group
+    for (const [id] of this.soundConfigs) {
+      if (id.startsWith(`voice_${voiceGroupId}_select_`)) {
+        select.push(id);
+      } else if (id.startsWith(`voice_${voiceGroupId}_move_`)) {
+        move.push(id);
+      } else if (id.startsWith(`voice_${voiceGroupId}_attack_`)) {
+        attack.push(id);
+      } else if (id === `voice_${voiceGroupId}_ready`) {
+        ready = id;
+      }
+    }
+
+    return { select, move, attack, ready };
+  }
+
+  /**
+   * Get biome ambient sound mapping from config
+   */
+  public getBiomeAmbient(): Record<string, string> {
+    if (!this.configLoaded) return {};
+    return audioConfig.getBiomeAmbient();
+  }
+
+  public async initialize(camera?: THREE.Camera): Promise<void> {
+    // Load config first
+    await this.loadConfig();
+
     if (camera) {
       this.listener = new THREE.AudioListener();
       camera.add(this.listener);
@@ -462,7 +313,7 @@ class AudioManagerClass {
     const audioLoader = new THREE.AudioLoader();
 
     const loadPromises = soundIds.map(async (soundId) => {
-      const config = SOUNDS[soundId];
+      const config = this.soundConfigs.get(soundId);
       if (!config) {
         debugAudio.warn(`Unknown sound: ${soundId}`);
         return;
@@ -482,6 +333,13 @@ class AudioManagerClass {
     debugAudio.log(`Preloaded ${this.loadedBuffers.size} sounds`);
   }
 
+  /**
+   * Get all sound IDs that should be preloaded
+   */
+  public getPreloadSoundIds(): string[] {
+    return Array.from(this.soundConfigs.keys());
+  }
+
   // ============================================================================
   // 2D SOUND PLAYBACK
   // ============================================================================
@@ -489,17 +347,19 @@ class AudioManagerClass {
   public play(soundId: string, volumeMultiplier = 1): void {
     if (this.muted) return;
 
-    const config = SOUNDS[soundId];
-    if (!config) return;
+    const config = this.soundConfigs.get(soundId);
+    if (!config) {
+      debugAudio.warn(`Unknown sound: ${soundId}`);
+      return;
+    }
 
     // Check cooldown
     if (!this.checkCooldown(soundId, config)) return;
 
     // Check global budget (except for critical sounds)
     if (config.priority !== SoundPriority.CRITICAL && this.activeSoundCount >= MAX_CONCURRENT_SOUNDS) {
-      // Try to steal a lower priority sound
       if (!this.stealLowestPrioritySound(config.priority ?? SoundPriority.NORMAL)) {
-        return; // Couldn't steal, don't play
+        return;
       }
     }
 
@@ -538,7 +398,47 @@ class AudioManagerClass {
         };
       }
     } else {
-      this.playFallback(soundId, config, volumeMultiplier);
+      // No buffer loaded - play directly from URL
+      this.playFromUrl(soundId, config, volumeMultiplier);
+    }
+  }
+
+  /**
+   * Play sound directly from URL (when not preloaded)
+   */
+  private playFromUrl(soundId: string, config: SoundConfig, volumeMultiplier: number): void {
+    const audio = new Audio(config.url);
+    audio.volume = this.getEffectiveVolume(config) * volumeMultiplier;
+    audio.loop = config.loop || false;
+
+    const instance: SoundInstance = {
+      audio,
+      startTime: Date.now(),
+      priority: config.priority ?? SoundPriority.NORMAL,
+    };
+
+    const instances = this.activeInstances.get(soundId) || [];
+    instances.push(instance);
+    this.activeInstances.set(soundId, instances);
+    this.activeSoundCount++;
+
+    audio.play().catch(() => {
+      // Silent fail for sounds that can't play
+      const idx = instances.indexOf(instance);
+      if (idx !== -1) {
+        instances.splice(idx, 1);
+        this.activeSoundCount--;
+      }
+    });
+
+    if (!config.loop) {
+      audio.addEventListener('ended', () => {
+        const idx = instances.indexOf(instance);
+        if (idx !== -1) {
+          instances.splice(idx, 1);
+          this.activeSoundCount--;
+        }
+      });
     }
   }
 
@@ -549,8 +449,13 @@ class AudioManagerClass {
   public playAt(soundId: string, position: THREE.Vector3, volumeMultiplier = 1): void {
     if (this.muted || !this.listener) return;
 
-    const config = SOUNDS[soundId];
-    if (!config || !config.spatial) {
+    const config = this.soundConfigs.get(soundId);
+    if (!config) {
+      debugAudio.warn(`Unknown sound: ${soundId}`);
+      return;
+    }
+
+    if (!config.spatial) {
       this.play(soundId, volumeMultiplier);
       return;
     }
@@ -559,15 +464,15 @@ class AudioManagerClass {
     const distance = position.distanceTo(this.listenerPosition);
     const maxDistance = config.maxDistance ?? 200;
     if (distance > maxDistance) {
-      return; // Too far to hear
+      return;
     }
 
     // Check cooldown
     if (!this.checkCooldown(soundId, config)) return;
 
-    // Spatial clustering - check if similar sound played nearby recently
+    // Spatial clustering
     if (config.clusterRadius && this.isClusteredSound(soundId, position, config.clusterRadius)) {
-      return; // Already a similar sound playing nearby
+      return;
     }
 
     // Check global budget
@@ -583,17 +488,14 @@ class AudioManagerClass {
       return;
     }
 
-    // Get a pooled audio source
     const pooledSource = this.acquirePooledSource(soundId, config.priority ?? SoundPriority.NORMAL, position);
     if (!pooledSource) {
-      return; // No available sources
+      return;
     }
 
-    // Configure and play
     const sound = pooledSource.audio;
     sound.setBuffer(buffer);
 
-    // Volume attenuation based on distance
     const distanceFactor = 1 - Math.min(distance / maxDistance, 1);
     const attenuatedVolume = this.getEffectiveVolume(config) * volumeMultiplier * (0.3 + 0.7 * distanceFactor);
     sound.setVolume(attenuatedVolume);
@@ -604,7 +506,6 @@ class AudioManagerClass {
 
     this.activeSoundCount++;
 
-    // Record cluster position
     if (config.clusterRadius) {
       this.recordClusterPosition(soundId, position);
     }
@@ -621,11 +522,7 @@ class AudioManagerClass {
   // POOL MANAGEMENT
   // ============================================================================
 
-  /**
-   * Acquire a pooled audio source, potentially stealing from lower priority sounds
-   */
   private acquirePooledSource(soundId: string, priority: SoundPriority, position: THREE.Vector3): PooledAudioSource | null {
-    // First, try to find a free source
     for (const source of this.audioPool) {
       if (!source.inUse) {
         source.inUse = true;
@@ -638,16 +535,13 @@ class AudioManagerClass {
       }
     }
 
-    // No free sources - try voice stealing
     let lowestPrioritySource: PooledAudioSource | null = null;
     let lowestPriority = priority;
     let oldestTime = Date.now();
 
     for (const source of this.audioPool) {
-      // Skip if currently fading out
       if (source.fadeOutStart !== null) continue;
 
-      // Find lowest priority, oldest sound
       if (source.priority < lowestPriority ||
           (source.priority === lowestPriority && source.startTime < oldestTime)) {
         lowestPriority = source.priority;
@@ -657,22 +551,17 @@ class AudioManagerClass {
     }
 
     if (lowestPrioritySource && lowestPriority < priority) {
-      // Steal this source with fadeout
       this.fadeOutAndSteal(lowestPrioritySource, soundId, priority, position);
       return lowestPrioritySource;
     }
 
-    return null; // Couldn't acquire a source
+    return null;
   }
 
-  /**
-   * Fade out a sound and prepare it for reuse
-   */
   private fadeOutAndSteal(source: PooledAudioSource, newSoundId: string, newPriority: SoundPriority, newPosition: THREE.Vector3): void {
     source.fadeOutStart = Date.now();
     const originalVolume = source.audio.getVolume();
 
-    // Quick fade out
     const fadeInterval = setInterval(() => {
       const elapsed = Date.now() - (source.fadeOutStart ?? 0);
       const progress = Math.min(elapsed / FADE_OUT_DURATION, 1);
@@ -684,19 +573,15 @@ class AudioManagerClass {
         source.audio.stop();
         source.audio.setVolume(originalVolume);
 
-        // Reassign to new sound
         source.soundId = newSoundId;
         source.priority = newPriority;
         source.position.copy(newPosition);
         source.startTime = Date.now();
         source.fadeOutStart = null;
       }
-    }, 16); // ~60fps
+    }, 16);
   }
 
-  /**
-   * Release a pooled audio source back to the pool
-   */
   private releasePooledSource(source: PooledAudioSource): void {
     source.inUse = false;
     source.soundId = null;
@@ -711,31 +596,23 @@ class AudioManagerClass {
   // SPATIAL CLUSTERING
   // ============================================================================
 
-  /**
-   * Check if a similar sound was played nearby recently
-   */
   private isClusteredSound(soundId: string, position: THREE.Vector3, radius: number): boolean {
     const clusters = this.spatialClusters.get(soundId);
     if (!clusters) return false;
 
     const now = Date.now();
-
-    // Clean old clusters and check for nearby sounds
     const validClusters = clusters.filter(c => now - c.time < CLUSTER_TIME_WINDOW);
     this.spatialClusters.set(soundId, validClusters);
 
     for (const cluster of validClusters) {
       if (position.distanceTo(cluster.position) < radius) {
-        return true; // Found a nearby recent sound
+        return true;
       }
     }
 
     return false;
   }
 
-  /**
-   * Record a sound position for clustering
-   */
   private recordClusterPosition(soundId: string, position: THREE.Vector3): void {
     let clusters = this.spatialClusters.get(soundId);
     if (!clusters) {
@@ -748,7 +625,6 @@ class AudioManagerClass {
       time: Date.now(),
     });
 
-    // Limit cluster history size
     if (clusters.length > 50) {
       clusters.shift();
     }
@@ -758,13 +634,9 @@ class AudioManagerClass {
   // VOICE STEALING & BUDGET MANAGEMENT
   // ============================================================================
 
-  /**
-   * Try to steal a lower priority sound to make room
-   */
   private stealLowestPrioritySound(requiredPriority: SoundPriority): boolean {
-    // Check 2D sounds first
     for (const [soundId, instances] of this.activeInstances) {
-      const config = SOUNDS[soundId];
+      const config = this.soundConfigs.get(soundId);
       if (!config) continue;
 
       const instancePriority = config.priority ?? SoundPriority.NORMAL;
@@ -774,7 +646,6 @@ class AudioManagerClass {
       }
     }
 
-    // Check pooled spatial sounds
     for (const source of this.audioPool) {
       if (source.inUse && source.priority < requiredPriority && source.fadeOutStart === null) {
         this.releasePooledSource(source);
@@ -814,7 +685,6 @@ class AudioManagerClass {
   }
 
   public stop(soundId: string): void {
-    // Stop 2D instances
     const instances = this.activeInstances.get(soundId) || [];
     for (const instance of instances) {
       if (instance.audio instanceof THREE.Audio) {
@@ -827,7 +697,6 @@ class AudioManagerClass {
     }
     this.activeInstances.delete(soundId);
 
-    // Stop pooled instances
     for (const source of this.audioPool) {
       if (source.inUse && source.soundId === soundId) {
         this.releasePooledSource(source);
@@ -837,7 +706,7 @@ class AudioManagerClass {
   }
 
   public stopCategory(category: SoundCategory): void {
-    for (const [soundId, config] of Object.entries(SOUNDS)) {
+    for (const [soundId, config] of this.soundConfigs) {
       if (config.category === category) {
         this.stop(soundId);
       }
@@ -895,7 +764,7 @@ class AudioManagerClass {
 
   private updateAllVolumes(): void {
     for (const [soundId, instances] of this.activeInstances) {
-      const config = SOUNDS[soundId];
+      const config = this.soundConfigs.get(soundId);
       if (!config) continue;
 
       const volume = this.getEffectiveVolume(config);
@@ -909,29 +778,8 @@ class AudioManagerClass {
     }
   }
 
-  private playFallback(soundId: string, config: SoundConfig, volumeMultiplier: number): void {
-    if (!this.audioContext) return;
-
-    const oscillator = this.audioContext.createOscillator();
-    const gainNode = this.audioContext.createGain();
-
-    oscillator.connect(gainNode);
-    gainNode.connect(this.audioContext.destination);
-
-    const frequency = config.category === 'combat' ? 200 : config.category === 'ui' ? 800 : 400;
-    oscillator.frequency.setValueAtTime(frequency, this.audioContext.currentTime);
-    oscillator.type = 'sine';
-
-    const volume = this.getEffectiveVolume(config) * volumeMultiplier * 0.1;
-    gainNode.gain.setValueAtTime(volume, this.audioContext.currentTime);
-    gainNode.gain.exponentialRampToValueAtTime(0.01, this.audioContext.currentTime + 0.1);
-
-    oscillator.start();
-    oscillator.stop(this.audioContext.currentTime + 0.1);
-  }
-
   // ============================================================================
-  // STATISTICS (for debugging)
+  // STATISTICS
   // ============================================================================
 
   public getStats(): { activeSounds: number; poolUsed: number; poolTotal: number } {
@@ -956,6 +804,8 @@ class AudioManagerClass {
     this.loadedBuffers.clear();
     this.activeInstances.clear();
     this.spatialClusters.clear();
+    this.soundConfigs.clear();
+    this.configLoaded = false;
 
     for (const source of this.audioPool) {
       source.audio.disconnect();

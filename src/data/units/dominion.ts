@@ -123,6 +123,12 @@ export const UNIT_DEFINITIONS: Record<string, UnitDefinition> = {
     targetPriority: 10, // Low priority - workers are not high-value targets
     category: 'worker',
     armorType: 'light',
+    // Audio configuration - references config files
+    audio: {
+      voiceGroupId: 'fabricator',
+      weaponSound: 'attack_rifle',
+      deathSound: 'unit_death',
+    },
   },
 
   trooper: {
@@ -150,6 +156,11 @@ export const UNIT_DEFINITIONS: Record<string, UnitDefinition> = {
     targetPriority: 60, // Standard infantry priority
     category: 'infantry',
     armorType: 'light',
+    audio: {
+      voiceGroupId: 'trooper',
+      weaponSound: 'attack_rifle',
+      deathSound: 'unit_death_bio',
+    },
   },
 
   breacher: {
@@ -173,6 +184,11 @@ export const UNIT_DEFINITIONS: Record<string, UnitDefinition> = {
     isBiological: true,
     canAttackGround: true,
     canAttackAir: true, // Heavy rifle - can shoot air
+    audio: {
+      voiceGroupId: 'breacher',
+      weaponSound: 'attack_grenade',
+      deathSound: 'unit_death_bio',
+    },
   },
 
   vanguard: {
@@ -196,6 +212,11 @@ export const UNIT_DEFINITIONS: Record<string, UnitDefinition> = {
     isBiological: true,
     canAttackGround: true,
     canAttackAir: true, // Jetpack infantry - can engage air
+    audio: {
+      voiceGroupId: 'vanguard',
+      weaponSound: 'attack_gatling',
+      deathSound: 'unit_death_bio',
+    },
   },
 
   operative: {
@@ -221,6 +242,11 @@ export const UNIT_DEFINITIONS: Record<string, UnitDefinition> = {
     cloakEnergyCost: 1,
     canAttackGround: true,
     canAttackAir: true, // Sniper rifle - can target air
+    audio: {
+      voiceGroupId: 'operative',
+      weaponSound: 'attack_sniper',
+      deathSound: 'unit_death_bio',
+    },
   },
 
   scorcher: {
@@ -248,6 +274,11 @@ export const UNIT_DEFINITIONS: Record<string, UnitDefinition> = {
     defaultMode: 'scorcher',
     canAttackGround: true,
     canAttackAir: false, // Flamethrower - cannot target air
+    audio: {
+      voiceGroupId: 'scorcher',
+      weaponSound: 'attack_flamethrower',
+      deathSound: 'unit_death_mech',
+    },
   },
 
   devastator: {
@@ -279,6 +310,11 @@ export const UNIT_DEFINITIONS: Record<string, UnitDefinition> = {
     targetPriority: 100, // High priority - siege units are high-value targets
     category: 'vehicle',
     armorType: 'armored',
+    audio: {
+      voiceGroupId: 'devastator',
+      weaponSound: 'attack_cannon',
+      deathSound: 'unit_death_mech',
+    },
   },
 
   colossus: {
@@ -302,6 +338,11 @@ export const UNIT_DEFINITIONS: Record<string, UnitDefinition> = {
     isMechanical: true,
     canAttackGround: true,
     canAttackAir: true, // Heavy weapons platform - can target both
+    audio: {
+      voiceGroupId: 'colossus',
+      weaponSound: 'attack_laser_battery',
+      deathSound: 'unit_death_mech',
+    },
   },
 
   lifter: {
@@ -332,6 +373,10 @@ export const UNIT_DEFINITIONS: Record<string, UnitDefinition> = {
     healEnergyCost: 1,
     canAttackGround: false, // Support unit - no attack
     canAttackAir: false,
+    audio: {
+      voiceGroupId: 'lifter',
+      deathSound: 'unit_death_mech',
+    },
   },
 
   valkyrie: {
@@ -359,6 +404,11 @@ export const UNIT_DEFINITIONS: Record<string, UnitDefinition> = {
     defaultMode: 'fighter',
     canAttackGround: false, // Fighter mode starts air-only
     canAttackAir: true,
+    audio: {
+      voiceGroupId: 'valkyrie',
+      weaponSound: 'attack_missile',
+      deathSound: 'unit_death_mech',
+    },
   },
 
   specter: {
@@ -385,6 +435,11 @@ export const UNIT_DEFINITIONS: Record<string, UnitDefinition> = {
     cloakEnergyCost: 1,
     canAttackGround: true,
     canAttackAir: true, // Strike fighter - can target both
+    audio: {
+      voiceGroupId: 'specter',
+      weaponSound: 'attack_laser',
+      deathSound: 'unit_death_mech',
+    },
   },
 
   dreadnought: {
@@ -413,6 +468,11 @@ export const UNIT_DEFINITIONS: Record<string, UnitDefinition> = {
     targetPriority: 95, // Highest priority - capital ships are critical targets
     category: 'ship',
     armorType: 'massive',
+    audio: {
+      voiceGroupId: 'dreadnought',
+      weaponSound: 'attack_yamato',
+      deathSound: 'explosion_large',
+    },
   },
 
   // Detector unit - Overseer
@@ -440,6 +500,10 @@ export const UNIT_DEFINITIONS: Record<string, UnitDefinition> = {
     detectionRange: 11,
     canAttackGround: false, // Detector - no attack
     canAttackAir: false,
+    audio: {
+      voiceGroupId: 'overseer',
+      deathSound: 'unit_death_mech',
+    },
   },
 };
 

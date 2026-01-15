@@ -1,0 +1,104 @@
+{
+  "$schema": "./voices.config.schema.json",
+  "_description": "Voice line configuration - defines available voice lines for each voice group. Units reference these by voiceGroupId.",
+
+  "defaults": {
+    "volume": 0.6,
+    "priority": "HIGH",
+    "category": "voice"
+  },
+
+  "voiceGroups": {
+    "fabricator": {
+      "basePath": "/audio/voice/fabricator",
+      "select": ["select1.mp3", "select2.mp3", "select3.mp3"],
+      "move": ["move1.mp3", "move2.mp3"],
+      "attack": ["attack1.mp3"],
+      "ready": "ready.mp3"
+    },
+    "trooper": {
+      "basePath": "/audio/voice/trooper",
+      "select": ["select1.mp3", "select2.mp3", "select3.mp3"],
+      "move": ["move1.mp3", "move2.mp3"],
+      "attack": ["attack1.mp3", "attack2.mp3"],
+      "ready": "ready.mp3"
+    },
+    "breacher": {
+      "basePath": "/audio/voice/breacher",
+      "select": ["select1.mp3", "select2.mp3"],
+      "move": ["move1.mp3", "move2.mp3"],
+      "attack": ["attack.mp3"],
+      "ready": "ready.mp3"
+    },
+    "vanguard": {
+      "basePath": "/audio/voice/vanguard",
+      "select": ["select1.mp3", "select2.mp3"],
+      "move": ["move1.mp3"],
+      "attack": ["attack1.mp3"],
+      "ready": "ready.mp3"
+    },
+    "operative": {
+      "basePath": "/audio/voice/operative",
+      "select": ["select1.mp3", "select2.mp3"],
+      "move": ["move1.mp3"],
+      "attack": ["attack1.mp3"],
+      "ready": "ready.mp3"
+    },
+    "scorcher": {
+      "basePath": "/audio/voice/scorcher",
+      "select": ["select1.mp3", "select2.mp3"],
+      "move": ["move1.mp3"],
+      "attack": ["attack1.mp3"],
+      "ready": "ready.mp3"
+    },
+    "devastator": {
+      "basePath": "/audio/voice/devastator",
+      "select": ["select1.mp3", "select2.mp3"],
+      "move": ["move1.mp3"],
+      "attack": ["attack1.mp3"],
+      "ready": "ready.mp3"
+    },
+    "colossus": {
+      "basePath": "/audio/voice/colossus",
+      "select": ["select1.mp3", "select2.mp3"],
+      "move": ["move1.mp3"],
+      "attack": ["attack1.mp3"],
+      "ready": "ready.mp3"
+    },
+    "lifter": {
+      "basePath": "/audio/voice/lifter",
+      "select": ["select1.mp3", "select2.mp3"],
+      "move": ["move1.mp3"],
+      "attack": [],
+      "ready": "ready.mp3"
+    },
+    "valkyrie": {
+      "basePath": "/audio/voice/valkyrie",
+      "select": ["select1.mp3", "select2.mp3"],
+      "move": ["move1.mp3"],
+      "attack": ["attack1.mp3"],
+      "ready": "ready.mp3"
+    },
+    "specter": {
+      "basePath": "/audio/voice/specter",
+      "select": ["select1.mp3", "select2.mp3"],
+      "move": ["move1.mp3"],
+      "attack": ["attack1.mp3"],
+      "ready": "ready.mp3"
+    },
+    "dreadnought": {
+      "basePath": "/audio/voice/dreadnought",
+      "select": ["select1.mp3", "select2.mp3"],
+      "move": ["move1.mp3"],
+      "attack": ["attack1.mp3"],
+      "ready": "ready.mp3"
+    },
+    "overseer": {
+      "basePath": "/audio/voice/overseer",
+      "select": ["select1.mp3", "select2.mp3"],
+      "move": ["move1.mp3"],
+      "attack": [],
+      "ready": "ready.mp3"
+    }
+  }
+}

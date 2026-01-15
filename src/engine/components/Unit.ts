@@ -21,6 +21,19 @@ export interface TransformMode {
   canAttackAir?: boolean; // Can attack flying units (default: false)
 }
 
+// Audio configuration for a unit - references voice groups and sound IDs from config files
+export interface UnitAudioConfig {
+  // Voice group ID from voices.config.json (e.g., 'trooper', 'devastator')
+  // If not set, uses the unit's id as the voice group
+  voiceGroupId?: string;
+  // Weapon sound ID from sounds.config.json (e.g., 'attack_rifle', 'attack_cannon')
+  // If not set, no weapon sound plays
+  weaponSound?: string;
+  // Death sound ID from sounds.config.json (e.g., 'unit_death', 'unit_death_mech')
+  // If not set, no death sound plays
+  deathSound?: string;
+}
+
 export interface UnitDefinition {
   id: string;
   name: string;
@@ -77,6 +90,9 @@ export interface UnitDefinition {
   // Armor type for damage calculations (e.g., 'light', 'armored', 'massive')
   // If not set, defaults to 'light'
   armorType?: string;
+  // Audio configuration - references voice groups and sound IDs from config files
+  // All audio is data-driven via public/audio/*.config.json files
+  audio?: UnitAudioConfig;
 }
 
 // Command queue entry for shift-click queuing

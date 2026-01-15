@@ -2,19 +2,34 @@ import { System } from '../ecs/System';
 import { Game } from '../core/Game';
 import { Transform } from '../components/Transform';
 import { Unit } from '../components/Unit';
-import { AudioManager, UNIT_VOICES, BIOME_AMBIENT } from '@/audio/AudioManager';
+import { AudioManager } from '@/audio/AudioManager';
 import { MusicPlayer } from '@/audio/MusicPlayer';
 import { useGameSetupStore, isLocalPlayer } from '@/store/gameSetupStore';
 import { useUIStore } from '@/store/uiStore';
+import { UNIT_DEFINITIONS } from '@/data/units/dominion';
 import * as THREE from 'three';
 
+/**
+ * AudioSystem - Fully data-driven audio integration
+ *
+ * All audio configuration is loaded from JSON config files.
+ * Unit-specific sounds are defined in unit definitions (audio.weaponSound, audio.deathSound).
+ * Voice lines are referenced via audio.voiceGroupId in unit definitions.
+ *
+ * No hardcoded sound mappings - everything is configurable via:
+ * - public/audio/sounds.config.json
+ * - public/audio/voices.config.json
+ * - public/audio/music.config.json
+ * - src/data/units/*.ts (unit definitions with audio config)
+ */
 export class AudioSystem extends System {
   public readonly name = 'AudioSystem';
-  public priority = 100; // Run after other systems
+  public priority = 100;
   private camera: THREE.Camera | null = null;
   private initialized = false;
   private currentAmbient: string | null = null;
-  // Separate cooldowns per action type so they don't block each other
+
+  // Separate cooldowns per action type
   private lastVoiceTimes: Record<string, number> = {
     select: 0,
     move: 0,
@@ -22,31 +37,60 @@ export class AudioSystem extends System {
     ready: 0,
   };
   private voiceCooldowns: Record<string, number> = {
-    select: 400,  // Slightly longer for repeated selection clicks
-    move: 100,    // Short - user expects immediate feedback
-    attack: 100,  // Short - user expects immediate feedback
-    ready: 0,     // No cooldown - production complete should always play
+    select: 400,
+    move: 100,
+    attack: 100,
+    ready: 0,
   };
 
   constructor(game: Game) {
     super(game);
   }
 
-  // Check if we're in spectator mode (no human player)
   private isSpectator(): boolean {
     return useGameSetupStore.getState().isSpectator();
   }
 
-  // Call this after camera is created (camera is optional for 2D audio only)
+  /**
+   * Get the unit definition for a unit ID
+   */
+  private getUnitDefinition(unitId: string) {
+    return UNIT_DEFINITIONS[unitId];
+  }
+
+  /**
+   * Get the voice group ID for a unit (from unit definition or falls back to unit ID)
+   */
+  private getVoiceGroupId(unitId: string): string {
+    const def = this.getUnitDefinition(unitId);
+    return def?.audio?.voiceGroupId ?? unitId;
+  }
+
+  /**
+   * Get the weapon sound ID for a unit (from unit definition)
+   */
+  private getWeaponSound(unitId: string): string | undefined {
+    const def = this.getUnitDefinition(unitId);
+    return def?.audio?.weaponSound;
+  }
+
+  /**
+   * Get the death sound ID for a unit (from unit definition)
+   */
+  private getDeathSound(unitId: string): string | undefined {
+    const def = this.getUnitDefinition(unitId);
+    return def?.audio?.deathSound;
+  }
+
   public async initialize(camera?: THREE.Camera, biome?: string): Promise<void> {
     if (this.initialized) return;
 
     this.camera = camera ?? null;
-    AudioManager.initialize(camera);
+    await AudioManager.initialize(camera);
     this.setupEventListeners();
     this.initialized = true;
 
-    // Initialize and sync with UI store settings
+    // Sync with UI store settings
     const uiState = useUIStore.getState();
     AudioManager.setCategoryVolume('music', uiState.musicVolume);
     AudioManager.setCategoryVolume('combat', uiState.soundVolume);
@@ -54,100 +98,34 @@ export class AudioSystem extends System {
     AudioManager.setCategoryVolume('unit', uiState.soundVolume);
     AudioManager.setCategoryVolume('building', uiState.soundVolume);
     AudioManager.setCategoryVolume('ambient', uiState.soundVolume);
-    // Use granular settings for voices and alerts
     AudioManager.setCategoryVolume('voice', uiState.voicesEnabled ? uiState.voiceVolume : 0);
     AudioManager.setCategoryVolume('alert', uiState.alertsEnabled ? uiState.alertVolume : 0);
 
-    // Initialize MusicPlayer with settings from store
-    // Don't stop menu music - let it crossfade to gameplay music naturally
+    // Initialize MusicPlayer
     await MusicPlayer.initialize();
     MusicPlayer.setVolume(uiState.musicVolume);
     MusicPlayer.setMuted(!uiState.musicEnabled);
 
-    // Collect all voice sound IDs from UNIT_VOICES for preloading
-    const voiceSoundIds: string[] = [];
-    for (const unitVoices of Object.values(UNIT_VOICES)) {
-      voiceSoundIds.push(...unitVoices.select);
-      voiceSoundIds.push(...unitVoices.move);
-      voiceSoundIds.push(...unitVoices.attack);
-      if (unitVoices.ready) {
-        voiceSoundIds.push(unitVoices.ready);
-      }
-    }
+    // Preload all sounds from config
+    const allSoundIds = AudioManager.getPreloadSoundIds();
+    await AudioManager.preload(allSoundIds);
 
-    // Preload common sounds - await to ensure sounds are ready before game starts
-    await AudioManager.preload([
-      // UI
-      'ui_click',
-      'ui_error',
-      'ui_select',
-      'ui_notification',
-      // Alerts (voice announcements)
-      'alert_under_attack',
-      'alert_additional_population_required',
-      'alert_not_enough_minerals',
-      'alert_not_enough_vespene',
-      'alert_minerals_depleted',
-      'alert_building_complete',
-      'alert_research_complete',
-      'alert_upgrade_complete',
-      'alert_unit_lost',
-      'alert_building_lost',
-      // Combat - Weapons
-      'attack_rifle',
-      'attack_cannon',
-      'attack_laser',
-      'attack_laser_battery',
-      'attack_missile',
-      'attack_flamethrower',
-      'attack_gatling',
-      'attack_grenade',
-      'attack_sniper',
-      'attack_yamato',
-      // Combat - Impacts
-      'hit_impact',
-      'hit_armor',
-      'hit_shield',
-      'hit_energy',
-      // Combat - Explosions & Deaths
-      'unit_death',
-      'unit_death_mech',
-      'unit_death_bio',
-      'explosion_small',
-      'explosion_medium',
-      'explosion_large',
-      'explosion_building',
-      // Unit commands
-      'unit_move',
-      'unit_attack',
-      'unit_ready',
-      // Building
-      'building_place',
-      'production_start',
-      // Unit voice lines (select, move, attack, ready)
-      ...voiceSoundIds,
-    ]);
-
-    // Start biome-specific ambient sound
+    // Start biome ambient
     if (biome) {
       this.startAmbient(biome);
     }
 
-    // Start gameplay music after a short delay to let the game fully initialize first
-    // This prevents any audio operations from blocking the initial render
+    // Start gameplay music
     setTimeout(() => {
       this.startGameplayMusic();
     }, 500);
   }
 
-  // Start gameplay music (discovers and plays random tracks from gameplay folder)
   public async startGameplayMusic(): Promise<void> {
     await MusicPlayer.discoverTracks();
 
     const uiState = useUIStore.getState();
     if (!uiState.musicEnabled) {
-      // Still switch to gameplay category so when music is re-enabled,
-      // it plays gameplay tracks instead of menu tracks
       MusicPlayer.switchToCategory('gameplay');
       return;
     }
@@ -155,29 +133,44 @@ export class AudioSystem extends System {
     MusicPlayer.play('gameplay');
   }
 
-  // Stop gameplay music
   public stopGameplayMusic(): void {
     MusicPlayer.stop();
   }
 
-  // Start ambient sound for a biome
+  /**
+   * Play victory music (data-driven from config)
+   */
+  public playVictoryMusic(onComplete?: () => void): void {
+    MusicPlayer.playSpecialTrack('victory', onComplete);
+  }
+
+  /**
+   * Play defeat music (data-driven from config)
+   */
+  public playDefeatMusic(onComplete?: () => void): void {
+    MusicPlayer.playSpecialTrack('defeat', onComplete);
+  }
+
   public startAmbient(biome: string): void {
-    // Stop current ambient if different
+    const biomeAmbient = AudioManager.getBiomeAmbient();
+
     if (this.currentAmbient && this.currentAmbient !== biome) {
-      const currentSound = BIOME_AMBIENT[this.currentAmbient];
+      const currentSound = biomeAmbient[this.currentAmbient];
       if (currentSound) {
         AudioManager.stop(currentSound);
       }
     }
 
-    const ambientSound = BIOME_AMBIENT[biome];
+    const ambientSound = biomeAmbient[biome];
     if (ambientSound) {
       this.currentAmbient = biome;
       AudioManager.play(ambientSound);
     }
   }
 
-  // Play a random voice line for a unit type
+  /**
+   * Play a random voice line for a unit (data-driven)
+   */
   private playVoice(unitId: string, action: 'select' | 'move' | 'attack' | 'ready'): void {
     const now = Date.now();
     const lastTime = this.lastVoiceTimes[action] || 0;
@@ -185,14 +178,14 @@ export class AudioSystem extends System {
 
     if (now - lastTime < cooldown) return;
 
-    const voices = UNIT_VOICES[unitId];
-    if (!voices) return;
+    const voiceGroupId = this.getVoiceGroupId(unitId);
+    const voices = AudioManager.getVoiceLines(voiceGroupId);
 
     let soundIds: string[];
     if (action === 'ready' && voices.ready) {
       soundIds = [voices.ready];
     } else if (action === 'ready') {
-      return; // No ready sound for this unit
+      return;
     } else {
       soundIds = voices[action];
     }
@@ -204,7 +197,6 @@ export class AudioSystem extends System {
     this.lastVoiceTimes[action] = now;
   }
 
-  // Get the first unit type from a selection for voice lines
   private getFirstUnitType(entityIds: number[]): string | null {
     for (const id of entityIds) {
       const entity = this.world.getEntity(id);
@@ -219,14 +211,12 @@ export class AudioSystem extends System {
   }
 
   private setupEventListeners(): void {
-    // Selection events - play unit voice on select (only for human player)
+    // Selection events
     this.game.eventBus.on('selection:changed', (data: { selectedIds: number[] }) => {
-      // Skip selection sounds in spectator mode
       if (this.isSpectator()) return;
 
       AudioManager.play('ui_select');
 
-      // Play unit voice line (only one voice even with multiple units selected)
       if (data && data.selectedIds && data.selectedIds.length > 0) {
         const unitType = this.getFirstUnitType(data.selectedIds);
         if (unitType) {
@@ -235,18 +225,14 @@ export class AudioSystem extends System {
       }
     });
 
-    // Command events - play unit voice on move/attack (only for local human player)
+    // Command events
     this.game.eventBus.on('command:move', (data: { entityIds: number[]; playerId?: string }) => {
-      // Skip command sounds in spectator mode
       if (this.isSpectator()) return;
-
-      // Only play sounds for local player's commands (skip AI and system-generated commands)
       if (!data.playerId || !isLocalPlayer(data.playerId)) return;
 
       if (data.entityIds.length > 0) {
         AudioManager.play('unit_move');
 
-        // Play unit voice line
         const unitType = this.getFirstUnitType(data.entityIds);
         if (unitType) {
           this.playVoice(unitType, 'move');
@@ -255,16 +241,12 @@ export class AudioSystem extends System {
     });
 
     this.game.eventBus.on('command:attack', (data: { entityIds: number[]; playerId?: string }) => {
-      // Skip command sounds in spectator mode
       if (this.isSpectator()) return;
-
-      // Only play sounds for local player's commands (skip AI and system-generated commands)
       if (!data.playerId || !isLocalPlayer(data.playerId)) return;
 
       if (data.entityIds.length > 0) {
         AudioManager.play('unit_attack');
 
-        // Play unit voice line
         const unitType = this.getFirstUnitType(data.entityIds);
         if (unitType) {
           this.playVoice(unitType, 'attack');
@@ -272,7 +254,7 @@ export class AudioSystem extends System {
       }
     });
 
-    // Combat events - play weapon sounds based on unit type
+    // Combat events - data-driven weapon sounds
     this.game.eventBus.on('combat:attack', (data: {
       attackerId: number;
       targetId: number;
@@ -282,49 +264,14 @@ export class AudioSystem extends System {
       if (attacker) {
         const transform = attacker.get<Transform>('Transform');
         const unit = attacker.get<Unit>('Unit');
-        if (transform) {
+        if (transform && unit) {
           const pos = new THREE.Vector3(transform.x, 0, transform.y);
 
-          // Choose weapon sound based on unit type
-          let weaponSound = 'attack_rifle';
-          if (unit) {
-            switch (unit.unitId) {
-              case 'devastator':
-                weaponSound = 'attack_cannon';
-                break;
-              case 'scorcher':
-                weaponSound = 'attack_flamethrower';
-                break;
-              case 'breacher':
-                weaponSound = 'attack_grenade';
-                break;
-              case 'vanguard':
-                weaponSound = 'attack_gatling';
-                break;
-              case 'operative':
-                weaponSound = 'attack_sniper';
-                break;
-              case 'colossus':
-                weaponSound = 'attack_laser_battery';
-                break;
-              case 'valkyrie':
-                weaponSound = 'attack_missile';
-                break;
-              case 'specter':
-                weaponSound = 'attack_laser';
-                break;
-              case 'dreadnought':
-                weaponSound = 'attack_yamato';
-                break;
-              case 'trooper':
-              case 'fabricator':
-              default:
-                weaponSound = 'attack_rifle';
-                break;
-            }
+          // Get weapon sound from unit definition (data-driven)
+          const weaponSound = this.getWeaponSound(unit.unitId);
+          if (weaponSound) {
+            AudioManager.playAt(weaponSound, pos);
           }
-
-          AudioManager.playAt(weaponSound, pos);
         }
       }
     });
@@ -334,7 +281,6 @@ export class AudioSystem extends System {
       damage?: number;
       position?: { x: number; y: number };
     }) => {
-      // Use position directly if provided, otherwise lookup from entity
       if (data.position) {
         const pos = new THREE.Vector3(data.position.x, 0, data.position.y);
         AudioManager.playAt('hit_impact', pos);
@@ -350,18 +296,16 @@ export class AudioSystem extends System {
       }
     });
 
-    // Splash damage - play explosion sound at impact location
     this.game.eventBus.on('combat:splash', (data: {
       position: { x: number; y: number };
       damage: number;
     }) => {
       const pos = new THREE.Vector3(data.position.x, 0, data.position.y);
-      // Use explosion size based on damage amount
       const explosionSound = data.damage >= 30 ? 'explosion_medium' : 'explosion_small';
       AudioManager.playAt(explosionSound, pos);
     });
 
-    // Unit/building destroyed - play death sounds and alerts
+    // Unit/building destroyed - data-driven death sounds
     this.game.eventBus.on('unit:destroyed', (data: {
       entityId: number;
       x: number;
@@ -371,15 +315,20 @@ export class AudioSystem extends System {
     }) => {
       const pos = new THREE.Vector3(data.x, 0, data.y);
 
-      // Choose death sound based on unit type
-      let deathSound = 'unit_death';
-      if (data.unitId === 'devastator' || data.unitId === 'scorcher') {
-        deathSound = 'unit_death_mech';
-        AudioManager.playAt('explosion_small', pos);
-      }
-      AudioManager.playAt(deathSound, pos);
+      // Get death sound from unit definition (data-driven)
+      if (data.unitId) {
+        const deathSound = this.getDeathSound(data.unitId);
+        if (deathSound) {
+          AudioManager.playAt(deathSound, pos);
 
-      // Play alert for local player's units
+          // Add explosion for mech deaths
+          const def = this.getUnitDefinition(data.unitId);
+          if (def?.isMechanical) {
+            AudioManager.playAt('explosion_small', pos);
+          }
+        }
+      }
+
       if (data.playerId && isLocalPlayer(data.playerId)) {
         AudioManager.play('alert_unit_lost');
       }
@@ -394,13 +343,12 @@ export class AudioSystem extends System {
       const pos = new THREE.Vector3(data.x, 0, data.y);
       AudioManager.playAt('explosion_building', pos);
 
-      // Play alert for local player's buildings
       if (data.playerId && isLocalPlayer(data.playerId)) {
         AudioManager.play('alert_building_lost');
       }
     });
 
-    // Under attack alert
+    // Alert events
     this.game.eventBus.on('alert:underAttack', (data: {
       x: number;
       y: number;
@@ -411,14 +359,11 @@ export class AudioSystem extends System {
       }
     });
 
-    // Supply blocked alert (only for human player)
     this.game.eventBus.on('alert:supplyBlocked', () => {
-      // Skip in spectator mode
       if (this.isSpectator()) return;
       AudioManager.play('alert_additional_population_required');
     });
 
-    // Not enough resources alerts (only for human player)
     this.game.eventBus.on('alert:notEnoughMinerals', () => {
       if (this.isSpectator()) return;
       AudioManager.play('alert_not_enough_minerals');
@@ -429,94 +374,89 @@ export class AudioSystem extends System {
       AudioManager.play('alert_not_enough_vespene');
     });
 
-    // Minerals depleted alert
     this.game.eventBus.on('alert:mineralsDepleted', (data: { playerId?: string }) => {
       if (data?.playerId && !isLocalPlayer(data.playerId)) return;
       if (this.isSpectator()) return;
       AudioManager.play('alert_minerals_depleted');
     });
 
-    // Production events (only for local player)
+    // Production events
     this.game.eventBus.on('production:started', (data: { playerId?: string }) => {
-      // Only play for local player's production, not AI
       if (data?.playerId && !isLocalPlayer(data.playerId)) return;
       if (this.isSpectator()) return;
       AudioManager.play('production_start');
     });
 
     this.game.eventBus.on('production:complete', (data: { unitType?: string; playerId?: string }) => {
-      // Only play for local player's production, not AI
       if (data?.playerId && !isLocalPlayer(data.playerId)) return;
       if (this.isSpectator()) return;
 
       AudioManager.play('unit_ready');
 
-      // Play unit-specific ready voice
       if (data && data.unitType) {
         this.playVoice(data.unitType, 'ready');
       }
     });
 
-    // Building events (only for local player)
+    // Building events
     this.game.eventBus.on('building:place', (data: { playerId?: string }) => {
-      // Only play for local player's buildings, not AI
       if (data?.playerId && !isLocalPlayer(data.playerId)) return;
       if (this.isSpectator()) return;
       AudioManager.play('building_place');
     });
 
     this.game.eventBus.on('building:complete', (data: { playerId?: string }) => {
-      // Only play sound for local player's buildings, not AI
       if (data?.playerId && !isLocalPlayer(data.playerId)) return;
       if (this.isSpectator()) return;
       AudioManager.play('alert_building_complete');
     });
 
-    // Research events (only for local player)
+    // Research events
     this.game.eventBus.on('research:started', (data: { playerId?: string }) => {
-      // Only play for local player's research, not AI
       if (data?.playerId && !isLocalPlayer(data.playerId)) return;
       if (this.isSpectator()) return;
       AudioManager.play('production_start');
     });
 
     this.game.eventBus.on('research:complete', (data: { playerId?: string }) => {
-      // Only play for local player's research, not AI
       if (data?.playerId && !isLocalPlayer(data.playerId)) return;
       if (this.isSpectator()) return;
       AudioManager.play('alert_research_complete');
     });
 
-    // Upgrade complete event (only for local player)
     this.game.eventBus.on('upgrade:complete', (data: { playerId?: string }) => {
       if (data?.playerId && !isLocalPlayer(data.playerId)) return;
       if (this.isSpectator()) return;
       AudioManager.play('alert_upgrade_complete');
     });
 
-    // UI error events (only for human player)
+    // UI events
     this.game.eventBus.on('ui:error', () => {
-      // Skip in spectator mode
       if (this.isSpectator()) return;
       AudioManager.play('ui_error');
     });
 
-    // UI click (can be called from UI components - only for human player)
     this.game.eventBus.on('ui:click', () => {
-      // Skip in spectator mode
       if (this.isSpectator()) return;
       AudioManager.play('ui_click');
+    });
+
+    // Game end events - play victory/defeat music
+    this.game.eventBus.on('game:victory', () => {
+      this.playVictoryMusic();
+    });
+
+    this.game.eventBus.on('game:defeat', () => {
+      this.playDefeatMusic();
     });
   }
 
   public update(_deltaTime: number): void {
-    // Update listener position for distance culling
     if (this.camera) {
       AudioManager.updateListenerPosition(this.camera.position);
     }
   }
 
-  // Expose AudioManager methods
   public play(soundId: string, volumeMultiplier?: number): void {
     AudioManager.play(soundId, volumeMultiplier);
   }

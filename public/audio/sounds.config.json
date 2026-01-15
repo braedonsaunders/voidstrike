@@ -1,0 +1,365 @@
+{
+  "$schema": "./sounds.config.schema.json",
+  "_description": "Sound effects configuration - all SFX playback is driven by this file",
+
+  "categories": ["ui", "combat", "unit", "building", "ambient", "music", "voice", "alert"],
+
+  "priorities": {
+    "LOW": 0,
+    "NORMAL": 1,
+    "HIGH": 2,
+    "CRITICAL": 3
+  },
+
+  "defaults": {
+    "volume": 1.0,
+    "priority": "NORMAL",
+    "loop": false,
+    "spatial": false,
+    "maxInstances": 10,
+    "cooldown": 0,
+    "maxDistance": 200,
+    "clusterRadius": 0
+  },
+
+  "sounds": {
+    "ui": {
+      "ui_click": {
+        "url": "/audio/ui/click.mp3",
+        "volume": 0.5,
+        "priority": "CRITICAL"
+      },
+      "ui_error": {
+        "url": "/audio/ui/error.mp3",
+        "volume": 0.6,
+        "priority": "CRITICAL"
+      },
+      "ui_select": {
+        "url": "/audio/ui/select.mp3",
+        "volume": 0.4,
+        "priority": "CRITICAL"
+      },
+      "ui_notification": {
+        "url": "/audio/ui/notification.mp3",
+        "volume": 0.6,
+        "priority": "CRITICAL"
+      }
+    },
+
+    "alert": {
+      "alert_under_attack": {
+        "url": "/audio/alert/under_attack.mp3",
+        "volume": 0.8,
+        "cooldown": 5000,
+        "priority": "CRITICAL"
+      },
+      "alert_additional_population_required": {
+        "url": "/audio/alert/additional_population_required.mp3",
+        "volume": 0.7,
+        "cooldown": 3000,
+        "priority": "CRITICAL"
+      },
+      "alert_not_enough_minerals": {
+        "url": "/audio/alert/not_enough_minerals.mp3",
+        "volume": 0.7,
+        "cooldown": 1000,
+        "priority": "CRITICAL"
+      },
+      "alert_not_enough_vespene": {
+        "url": "/audio/alert/not_enough_vespene.mp3",
+        "volume": 0.7,
+        "cooldown": 1000,
+        "priority": "CRITICAL"
+      },
+      "alert_minerals_depleted": {
+        "url": "/audio/alert/minerals_depleted.mp3",
+        "volume": 0.6,
+        "priority": "CRITICAL"
+      },
+      "alert_building_complete": {
+        "url": "/audio/alert/building_complete.mp3",
+        "volume": 0.7,
+        "priority": "CRITICAL"
+      },
+      "alert_research_complete": {
+        "url": "/audio/alert/research_complete.mp3",
+        "volume": 0.7,
+        "priority": "CRITICAL"
+      },
+      "alert_upgrade_complete": {
+        "url": "/audio/alert/upgrade_complete.mp3",
+        "volume": 0.7,
+        "priority": "CRITICAL"
+      },
+      "alert_unit_lost": {
+        "url": "/audio/alert/under_attack.mp3",
+        "volume": 0.6,
+        "cooldown": 3000,
+        "priority": "HIGH"
+      },
+      "alert_building_lost": {
+        "url": "/audio/alert/under_attack.mp3",
+        "volume": 0.7,
+        "cooldown": 3000,
+        "priority": "CRITICAL"
+      }
+    },
+
+    "combat": {
+      "attack_rifle": {
+        "url": "/audio/combat/rifle.mp3",
+        "volume": 0.5,
+        "spatial": true,
+        "maxInstances": 20,
+        "cooldown": 30,
+        "priority": "NORMAL",
+        "maxDistance": 150,
+        "clusterRadius": 8
+      },
+      "attack_cannon": {
+        "url": "/audio/combat/cannon.mp3",
+        "volume": 0.6,
+        "spatial": true,
+        "maxInstances": 10,
+        "cooldown": 80,
+        "priority": "HIGH",
+        "maxDistance": 200,
+        "clusterRadius": 12
+      },
+      "attack_laser": {
+        "url": "/audio/combat/laser.mp3",
+        "volume": 0.5,
+        "spatial": true,
+        "maxInstances": 15,
+        "cooldown": 50,
+        "priority": "NORMAL",
+        "maxDistance": 150,
+        "clusterRadius": 8
+      },
+      "attack_laser_battery": {
+        "url": "/audio/combat/laser_battery.mp3",
+        "volume": 0.6,
+        "spatial": true,
+        "maxInstances": 8,
+        "cooldown": 60,
+        "priority": "NORMAL",
+        "maxDistance": 180,
+        "clusterRadius": 10
+      },
+      "attack_missile": {
+        "url": "/audio/combat/missile.mp3",
+        "volume": 0.6,
+        "spatial": true,
+        "maxInstances": 8,
+        "cooldown": 150,
+        "priority": "HIGH",
+        "maxDistance": 180,
+        "clusterRadius": 10
+      },
+      "attack_flamethrower": {
+        "url": "/audio/combat/flamethrower.mp3",
+        "volume": 0.5,
+        "spatial": true,
+        "maxInstances": 6,
+        "cooldown": 80,
+        "priority": "NORMAL",
+        "maxDistance": 120,
+        "clusterRadius": 6
+      },
+      "attack_gatling": {
+        "url": "/audio/combat/gatling_gun.mp3",
+        "volume": 0.55,
+        "spatial": true,
+        "maxInstances": 8,
+        "cooldown": 40,
+        "priority": "NORMAL",
+        "maxDistance": 150,
+        "clusterRadius": 8
+      },
+      "attack_grenade": {
+        "url": "/audio/combat/grenade_launcher.mp3",
+        "volume": 0.6,
+        "spatial": true,
+        "maxInstances": 8,
+        "cooldown": 100,
+        "priority": "HIGH",
+        "maxDistance": 160,
+        "clusterRadius": 10
+      },
+      "attack_sniper": {
+        "url": "/audio/combat/sniper.mp3",
+        "volume": 0.55,
+        "spatial": true,
+        "maxInstances": 6,
+        "cooldown": 200,
+        "priority": "HIGH",
+        "maxDistance": 200,
+        "clusterRadius": 15
+      },
+      "attack_yamato": {
+        "url": "/audio/combat/yamato.mp3",
+        "volume": 0.8,
+        "spatial": true,
+        "maxInstances": 3,
+        "cooldown": 500,
+        "priority": "CRITICAL",
+        "maxDistance": 300,
+        "clusterRadius": 20
+      },
+      "hit_impact": {
+        "url": "/audio/combat/hit.mp3",
+        "volume": 0.4,
+        "spatial": true,
+        "maxInstances": 25,
+        "cooldown": 20,
+        "priority": "LOW",
+        "maxDistance": 100,
+        "clusterRadius": 10
+      },
+      "hit_armor": {
+        "url": "/audio/combat/hit_armor.mp3",
+        "volume": 0.5,
+        "spatial": true,
+        "maxInstances": 20,
+        "cooldown": 30,
+        "priority": "LOW",
+        "maxDistance": 100,
+        "clusterRadius": 10
+      },
+      "hit_shield": {
+        "url": "/audio/combat/hit_shield.mp3",
+        "volume": 0.4,
+        "spatial": true,
+        "maxInstances": 15,
+        "cooldown": 30,
+        "priority": "LOW",
+        "maxDistance": 100,
+        "clusterRadius": 10
+      },
+      "hit_energy": {
+        "url": "/audio/combat/energy_impact.mp3",
+        "volume": 0.45,
+        "spatial": true,
+        "maxInstances": 15,
+        "cooldown": 30,
+        "priority": "LOW",
+        "maxDistance": 100,
+        "clusterRadius": 10
+      },
+      "explosion_small": {
+        "url": "/audio/combat/small_explosion.mp3",
+        "volume": 0.6,
+        "spatial": true,
+        "maxInstances": 10,
+        "priority": "HIGH",
+        "maxDistance": 180
+      },
+      "explosion_medium": {
+        "url": "/audio/combat/medium_explosion.mp3",
+        "volume": 0.7,
+        "spatial": true,
+        "maxInstances": 8,
+        "priority": "HIGH",
+        "maxDistance": 220
+      },
+      "explosion_large": {
+        "url": "/audio/combat/large_explosion.mp3",
+        "volume": 0.8,
+        "spatial": true,
+        "maxInstances": 6,
+        "priority": "HIGH",
+        "maxDistance": 250
+      },
+      "explosion_building": {
+        "url": "/audio/combat/large_explosion.mp3",
+        "volume": 0.9,
+        "spatial": true,
+        "maxInstances": 4,
+        "priority": "HIGH",
+        "maxDistance": 300
+      },
+      "unit_death": {
+        "url": "/audio/combat/small_explosion.mp3",
+        "volume": 0.5,
+        "spatial": true,
+        "maxInstances": 10,
+        "priority": "NORMAL",
+        "maxDistance": 120,
+        "clusterRadius": 15
+      },
+      "unit_death_mech": {
+        "url": "/audio/combat/medium_explosion.mp3",
+        "volume": 0.6,
+        "spatial": true,
+        "maxInstances": 6,
+        "priority": "HIGH",
+        "maxDistance": 150
+      },
+      "unit_death_bio": {
+        "url": "/audio/combat/small_explosion.mp3",
+        "volume": 0.5,
+        "spatial": true,
+        "maxInstances": 10,
+        "priority": "NORMAL",
+        "maxDistance": 120,
+        "clusterRadius": 15
+      }
+    },
+
+    "unit": {
+      "unit_move": {
+        "url": "/audio/ui/click.mp3",
+        "volume": 0.3,
+        "cooldown": 300,
+        "priority": "HIGH"
+      },
+      "unit_attack": {
+        "url": "/audio/ui/click.mp3",
+        "volume": 0.3,
+        "cooldown": 300,
+        "priority": "HIGH"
+      },
+      "unit_ready": {
+        "url": "/audio/ui/notification.mp3",
+        "volume": 0.5,
+        "priority": "HIGH"
+      }
+    },
+
+    "building": {
+      "building_place": {
+        "url": "/audio/ui/click.mp3",
+        "volume": 0.5,
+        "priority": "HIGH"
+      },
+      "production_start": {
+        "url": "/audio/ui/click.mp3",
+        "volume": 0.4,
+        "priority": "NORMAL"
+      }
+    },
+
+    "music": {
+      "music_menu": {
+        "url": "/audio/music/menu/main_theme.mp3",
+        "volume": 0.3,
+        "loop": true,
+        "priority": "NORMAL"
+      },
+      "music_victory": {
+        "url": "/audio/music/victory/victory.mp3",
+        "volume": 0.4,
+        "priority": "CRITICAL"
+      },
+      "music_defeat": {
+        "url": "/audio/music/defeat/defeat.mp3",
+        "volume": 0.4,
+        "priority": "CRITICAL"
+      }
+    },
+
+    "ambient": {}
+  },
+
+  "biomeAmbient": {}
+}
