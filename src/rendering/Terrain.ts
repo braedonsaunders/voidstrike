@@ -1454,9 +1454,10 @@ export class Terrain {
     const WALL_HEIGHT = 4.0; // Height of cliff walls (taller than walkableClimb)
     const ELEVATION_DIFF_THRESHOLD = 40; // ~1.6 height units difference
 
-    // Pre-compute ramp zones - cells within radius of a ramp use smooth heightMap
+    // Pre-compute ramp zones - cells within radius of a ramp don't get walls
+    // Radius of 4 ensures smooth transitions and prevents walls from blocking ramps
     const rampZone = new Set<string>();
-    const RAMP_ZONE_RADIUS = 2;
+    const RAMP_ZONE_RADIUS = 4;
 
     for (let y = 0; y < height; y++) {
       for (let x = 0; x < width; x++) {
@@ -1484,23 +1485,13 @@ export class Terrain {
       return featureConfig.walkable;
     };
 
-    // Helper: Get the quantized height for a cell (for strict elevation separation)
-    const getCellHeight = (cx: number, cy: number, useHeightMap: boolean): number => {
-      if (cx < 0 || cx >= width || cy < 0 || cy >= height) {
-        return 0;
-      }
-      const cell = terrain[Math.min(cy, height - 1)][Math.min(cx, width - 1)];
-
-      if (useHeightMap) {
-        // Use smooth heightMap for ramps
-        const hx = Math.min(cx, this.gridWidth - 1);
-        const hy = Math.min(cy, this.gridHeight - 1);
-        return this.heightMap[hy * this.gridWidth + hx];
-      } else {
-        // Use quantized elevation for non-ramp terrain
-        // This ensures strict height gaps between elevation levels
-        return quantizeElevation(cell.elevation);
-      }
+    // Helper: Get height for a cell from the heightMap
+    // We use smooth heightMap everywhere for natural terrain
+    // Cliff blocking is handled by wall geometry + low walkableClimb
+    const getCellHeight = (cx: number, cy: number): number => {
+      const hx = Math.max(0, Math.min(cx, this.gridWidth - 1));
+      const hy = Math.max(0, Math.min(cy, this.gridHeight - 1));
+      return this.heightMap[hy * this.gridWidth + hx];
     };
 
     // Helper: Check if a cliff wall is needed between two cells
@@ -1516,14 +1507,14 @@ export class Terrain {
       const cell = terrain[cy][cx];
       const neighbor = terrain[ny][nx];
 
-      // If current cell is in ramp zone, no walls (ramps handle transitions)
+      // If either cell is in ramp zone, no walls (ramps handle transitions)
       if (rampZone.has(`${cx},${cy}`) || rampZone.has(`${nx},${ny}`)) {
         return { needed: false, topHeight: 0, bottomHeight: 0 };
       }
 
-      // If neighbor is unwalkable, we need a wall
+      // If neighbor is unwalkable (cliff face), we need a wall
       if (neighbor.terrain === 'unwalkable') {
-        const cellHeight = quantizeElevation(cell.elevation);
+        const cellHeight = getCellHeight(cx, cy);
         return {
           needed: true,
           topHeight: cellHeight,
@@ -1531,16 +1522,18 @@ export class Terrain {
         };
       }
 
-      // If both walkable but at different elevations, we need a wall
+      // If both walkable but at different elevation levels, we need a wall
+      // This catches cases where two walkable areas at different elevations
+      // are adjacent (e.g., across a narrow unwalkable gap)
       if (neighbor.terrain !== 'ramp' && cell.terrain !== 'ramp') {
         const elevDiff = Math.abs(cell.elevation - neighbor.elevation);
         if (elevDiff > ELEVATION_DIFF_THRESHOLD) {
-          const cellHeight = quantizeElevation(cell.elevation);
-          const neighborHeight = quantizeElevation(neighbor.elevation);
+          const cellHeight = getCellHeight(cx, cy);
+          const neighborHeight = getCellHeight(nx, ny);
           return {
             needed: true,
             topHeight: Math.max(cellHeight, neighborHeight),
-            bottomHeight: Math.min(cellHeight, neighborHeight),
+            bottomHeight: Math.min(cellHeight, neighborHeight) - 0.5,
           };
         }
       }
@@ -1555,15 +1548,12 @@ export class Terrain {
       for (let x = 0; x < width; x++) {
         if (!isCellWalkable(x, y)) continue;
 
-        const cell = terrain[y][x];
-        const inRampZone = rampZone.has(`${x},${y}`);
-        const useHeightMap = cell.terrain === 'ramp' || inRampZone;
-
-        // Get heights for cell corners
-        const h00 = getCellHeight(x, y, useHeightMap);
-        const h10 = getCellHeight(x + 1, y, useHeightMap);
-        const h01 = getCellHeight(x, y + 1, useHeightMap);
-        const h11 = getCellHeight(x + 1, y + 1, useHeightMap);
+        // Get heights for cell corners from heightMap
+        // Smooth terrain everywhere - cliffs blocked by walls + walkableClimb
+        const h00 = getCellHeight(x, y);
+        const h10 = getCellHeight(x + 1, y);
+        const h01 = getCellHeight(x, y + 1);
+        const h11 = getCellHeight(x + 1, y + 1);
 
         // Create two triangles for floor (CCW winding for Recast)
         vertices.push(x, h00, y);
