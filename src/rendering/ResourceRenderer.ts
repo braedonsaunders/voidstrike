@@ -197,6 +197,10 @@ export class ResourceRenderer {
             baseScale *= obj.scale.y;
             obj = obj.parent;
           }
+          // IMPORTANT: Also include baseMesh's own transforms (from normalization)
+          // The model root has scale and position.y set by normalizeModel()
+          yOffset += baseMesh.position.y * baseMesh.scale.y;
+          baseScale *= baseMesh.scale.y;
         }
       });
 
