@@ -51,6 +51,8 @@ import {
   mrt,
   output,
   normalView,
+  metalness,
+  roughness,
 } from 'three/tsl';
 // directionToColor for normal encoding in MRT
 // NOTE: We do NOT use colorToDirection before passing to SSR/SSGI
@@ -360,7 +362,7 @@ export class RenderPipeline {
     // Create scene pass - NO resolution scale, we're already at render resolution
     const scenePass = pass(this.scene, this.camera);
 
-    // Enable MRT with velocity for TRAA and optionally normals for SSR/SSGI
+    // Enable MRT with velocity for TRAA and optionally normals/metalrough for SSR/SSGI
     const needsNormals = this.config.ssrEnabled || this.config.ssgiEnabled;
     const needsVelocity = this.config.taaEnabled || this.config.ssgiEnabled;
 
@@ -368,12 +370,20 @@ export class RenderPipeline {
       const customVelocity = createInstancedVelocityNode();
 
       if (needsNormals) {
-        // SSR/SSGI need normals - encode with directionToColor
+        // SSR/SSGI need normals and metalness/roughness per pixel
+        // Pack metalness and roughness into a vec2 for bandwidth optimization
         scenePass.setMRT(mrt({
           output: output,
           normal: directionToColor(normalView),
+          metalrough: vec2(metalness, roughness),
           velocity: customVelocity,
         }));
+
+        // Optimize texture precision - metalrough doesn't need full float precision
+        const metalRoughTexture = scenePass.getTexture('metalrough');
+        if (metalRoughTexture) {
+          metalRoughTexture.type = THREE.UnsignedByteType;
+        }
       } else {
         // Just velocity for TRAA
         scenePass.setMRT(mrt({
@@ -439,20 +449,21 @@ export class RenderPipeline {
     }
 
     // 3. SSR (Screen Space Reflections)
+    // Uses per-pixel metalness/roughness from G-buffer for accurate reflections
     if (this.config.ssrEnabled) {
       try {
-        // IMPORTANT: Pass the raw encoded normal texture - DO NOT use colorToDirection()
+        // Get MRT textures - normals and metalness/roughness per pixel
         const scenePassNormal = scenePass.getTextureNode('normal');
+        const scenePassMetalRough = scenePass.getTextureNode('metalrough');
 
-        const defaultMetalness = float(0.9);
-        const defaultRoughness = this.uSSRMaxRoughness;
-
+        // SSR uses per-pixel metalness (R) and roughness (G) from the G-buffer
+        // This ensures reflections only appear on metallic surfaces with appropriate roughness
         this.ssrPass = (ssr as any)(
           scenePassColor,
           scenePassDepth,
-          scenePassNormal,  // Raw texture node, not decoded
-          defaultMetalness,
-          defaultRoughness,
+          scenePassNormal,
+          scenePassMetalRough.r,  // Per-pixel metalness from material
+          scenePassMetalRough.g,  // Per-pixel roughness from material
           this.camera
         );
 
