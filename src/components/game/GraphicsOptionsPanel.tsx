@@ -696,12 +696,78 @@ export const GraphicsOptionsPanel = memo(function GraphicsOptionsPanel() {
             </div>
           )}
 
+          {/* Shadow Fill - ground bounce light */}
+          <CompactSlider
+            label="Shadow Fill"
+            value={graphicsSettings.shadowFill}
+            min={0}
+            max={1}
+            step={0.05}
+            onChange={(v) => setGraphicsSetting('shadowFill', v)}
+            format={(v) => `${Math.round(v * 100)}%`}
+          />
+          <div style={{ fontSize: '9px', color: '#555', marginTop: '-4px', marginBottom: '8px' }}>
+            Brightens shadowed areas with ground-bounce light
+          </div>
+
           {/* Environment */}
           <ToggleRow
             label="Environment Lighting"
             enabled={graphicsSettings.environmentMapEnabled}
             onChange={() => handleToggle('environmentMapEnabled')}
           />
+
+          {/* Dynamic Lights */}
+          <ToggleRow
+            label="Dynamic Lights"
+            enabled={graphicsSettings.dynamicLightsEnabled}
+            onChange={() => handleToggle('dynamicLightsEnabled')}
+          />
+          {graphicsSettings.dynamicLightsEnabled && (
+            <div style={{ marginLeft: '12px', marginBottom: '8px' }}>
+              <div style={{ marginBottom: '6px' }}>
+                <span style={{ fontSize: '10px', color: '#666', display: 'block', marginBottom: '4px' }}>
+                  Max Lights
+                </span>
+                <SegmentedControl
+                  options={[
+                    { value: '4', label: '4' },
+                    { value: '8', label: '8' },
+                    { value: '16', label: '16' },
+                    { value: '32', label: '32' },
+                  ]}
+                  value={graphicsSettings.maxDynamicLights.toString()}
+                  onChange={(v) => setGraphicsSetting('maxDynamicLights', parseInt(v))}
+                />
+              </div>
+              <div style={{ fontSize: '9px', color: '#555' }}>
+                For explosions, muzzle flash, abilities
+              </div>
+            </div>
+          )}
+
+          {/* Emissive Decorations */}
+          <ToggleRow
+            label="Emissive Decorations"
+            enabled={graphicsSettings.emissiveDecorationsEnabled}
+            onChange={() => handleToggle('emissiveDecorationsEnabled')}
+          />
+          {graphicsSettings.emissiveDecorationsEnabled && (
+            <div style={{ marginLeft: '12px', marginBottom: '8px' }}>
+              <CompactSlider
+                label="Glow Intensity"
+                value={graphicsSettings.emissiveIntensityMultiplier}
+                min={0.5}
+                max={2}
+                step={0.1}
+                onChange={(v) => setGraphicsSetting('emissiveIntensityMultiplier', v)}
+                format={(v) => `${v.toFixed(1)}x`}
+              />
+              <div style={{ fontSize: '9px', color: '#555' }}>
+                Crystals, alien structures glow
+              </div>
+            </div>
+          )}
         </div>
       )}
 
@@ -835,6 +901,55 @@ export const GraphicsOptionsPanel = memo(function GraphicsOptionsPanel() {
                 format={(v) => v.toFixed(1)}
                 suffix="x"
               />
+
+              {/* Volumetric Fog */}
+              <div style={{ marginTop: '8px' }}>
+                <ToggleRow
+                  label="Volumetric Mode"
+                  enabled={graphicsSettings.volumetricFogEnabled}
+                  onChange={() => handleToggle('volumetricFogEnabled')}
+                />
+                {graphicsSettings.volumetricFogEnabled && (
+                  <div style={{ marginLeft: '12px', marginTop: '4px' }}>
+                    <div style={{ marginBottom: '6px' }}>
+                      <span style={{ fontSize: '10px', color: '#666', display: 'block', marginBottom: '4px' }}>
+                        Quality
+                      </span>
+                      <SegmentedControl
+                        options={[
+                          { value: 'low', label: 'Low' },
+                          { value: 'medium', label: 'Med' },
+                          { value: 'high', label: 'High' },
+                          { value: 'ultra', label: 'Ultra' },
+                        ]}
+                        value={graphicsSettings.volumetricFogQuality}
+                        onChange={(v) => setGraphicsSetting('volumetricFogQuality', v as 'low' | 'medium' | 'high' | 'ultra')}
+                      />
+                    </div>
+                    <CompactSlider
+                      label="Volume Density"
+                      value={graphicsSettings.volumetricFogDensity}
+                      min={0.5}
+                      max={2}
+                      step={0.1}
+                      onChange={(v) => setGraphicsSetting('volumetricFogDensity', v)}
+                      format={(v) => v.toFixed(1)}
+                      suffix="x"
+                    />
+                    <CompactSlider
+                      label="Light Scattering"
+                      value={graphicsSettings.volumetricFogScattering}
+                      min={0}
+                      max={2}
+                      step={0.1}
+                      onChange={(v) => setGraphicsSetting('volumetricFogScattering', v)}
+                    />
+                    <div style={{ fontSize: '9px', color: '#555', marginTop: '4px' }}>
+                      Raymarched fog with light shafts
+                    </div>
+                  </div>
+                )}
+              </div>
             </div>
           )}
 

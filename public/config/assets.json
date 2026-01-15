@@ -301,55 +301,126 @@
   "decorations": {
     "alien_tower": {
       "model": "/models/decorations/alien_tower_LOD0.glb",
-      "height": 14.0
+      "height": 14.0,
+      "rendering": {
+        "envMapIntensity": 0.4,
+        "emissive": "#ff4400",
+        "emissiveIntensity": 3.0,
+        "pulseSpeed": 0.5,
+        "pulseAmplitude": 0.3,
+        "attachLight": {
+          "color": "#ff4400",
+          "intensity": 2.0,
+          "distance": 15
+        }
+      }
     },
     "rocks_large": {
       "model": "/models/decorations/rocks_large_LOD0.glb",
-      "height": 3.0
+      "height": 3.0,
+      "rendering": {
+        "envMapIntensity": 0.25,
+        "receiveShadow": true,
+        "castShadow": true
+      }
     },
     "rocks_small": {
       "model": "/models/decorations/rocks_small_LOD0.glb",
-      "height": 2.0
+      "height": 2.0,
+      "rendering": {
+        "envMapIntensity": 0.25,
+        "receiveShadow": true,
+        "castShadow": true
+      }
     },
     "rock_single": {
       "model": "/models/decorations/rock_single_LOD0.glb",
-      "height": 2.5
+      "height": 2.5,
+      "rendering": {
+        "envMapIntensity": 0.25,
+        "receiveShadow": true,
+        "castShadow": true
+      }
     },
     "tree_pine_tall": {
       "model": "/models/decorations/tree_pine_tall_LOD0.glb",
-      "height": 14.0
+      "height": 14.0,
+      "rendering": {
+        "envMapIntensity": 0.15
+      }
     },
     "tree_dead": {
       "model": "/models/decorations/tree_dead_LOD0.glb",
-      "height": 9.0
+      "height": 9.0,
+      "rendering": {
+        "envMapIntensity": 0.1
+      }
     },
     "tree_alien": {
       "model": "/models/decorations/tree_alien_LOD0.glb",
-      "height": 11.0
+      "height": 11.0,
+      "rendering": {
+        "envMapIntensity": 0.2,
+        "emissive": "#44ff88",
+        "emissiveIntensity": 0.5,
+        "pulseSpeed": 0.3,
+        "pulseAmplitude": 0.2
+      }
     },
     "tree_palm": {
       "model": "/models/decorations/tree_palm_LOD0.glb",
-      "height": 11.0
+      "height": 11.0,
+      "rendering": {
+        "envMapIntensity": 0.15
+      }
     },
     "tree_mushroom": {
       "model": "/models/decorations/tree_mushroom_LOD0.glb",
-      "height": 8.0
+      "height": 8.0,
+      "rendering": {
+        "envMapIntensity": 0.2,
+        "emissive": "#88ffaa",
+        "emissiveIntensity": 1.5,
+        "pulseSpeed": 0.2,
+        "pulseAmplitude": 0.3
+      }
     },
     "crystal_formation": {
       "model": "/models/decorations/crystal_formation_LOD0.glb",
-      "height": 4.0
+      "height": 4.0,
+      "rendering": {
+        "envMapIntensity": 0.5,
+        "emissive": "#00aaff",
+        "emissiveIntensity": 2.5,
+        "pulseSpeed": 0.8,
+        "pulseAmplitude": 0.4,
+        "attachLight": {
+          "color": "#00aaff",
+          "intensity": 1.5,
+          "distance": 8
+        }
+      }
     },
     "shrub": {
       "model": "/models/decorations/shrub_LOD0.glb",
-      "height": 1.5
+      "height": 1.5,
+      "rendering": {
+        "envMapIntensity": 0.1
+      }
     },
     "debris": {
       "model": "/models/decorations/debris_LOD0.glb",
-      "height": 1.5
+      "height": 1.5,
+      "rendering": {
+        "envMapIntensity": 0.2
+      }
     },
     "ruined_wall": {
       "model": "/models/decorations/ruined_wall_LOD0.glb",
-      "height": 5.0
+      "height": 5.0,
+      "rendering": {
+        "envMapIntensity": 0.2
+      }
     }
   },
 

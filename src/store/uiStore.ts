@@ -139,6 +139,17 @@ export interface GraphicsSettings {
   // Fog
   fogEnabled: boolean;
   fogDensity: number;
+  volumetricFogEnabled: boolean;
+  volumetricFogQuality: 'low' | 'medium' | 'high' | 'ultra';
+  volumetricFogDensity: number;
+  volumetricFogScattering: number;
+
+  // Lighting
+  shadowFill: number; // 0-1, controls ground bounce light intensity
+  dynamicLightsEnabled: boolean;
+  maxDynamicLights: number; // 4, 8, 16, 32
+  emissiveDecorationsEnabled: boolean;
+  emissiveIntensityMultiplier: number; // 0.5-2.0
 
   // Environment
   environmentMapEnabled: boolean;
@@ -373,6 +384,17 @@ export const useUIStore = create<UIState>((set, get) => ({
     // Fog
     fogEnabled: true,
     fogDensity: 1.0, // 1.0 is baseline (1x), range 0.5-2.0
+    volumetricFogEnabled: false, // Disabled by default (performance)
+    volumetricFogQuality: 'medium' as const,
+    volumetricFogDensity: 1.0,
+    volumetricFogScattering: 1.0,
+
+    // Lighting
+    shadowFill: 0.3, // 30% ground bounce fill light
+    dynamicLightsEnabled: true,
+    maxDynamicLights: 8,
+    emissiveDecorationsEnabled: true,
+    emissiveIntensityMultiplier: 1.0,
 
     // Environment
     environmentMapEnabled: true,

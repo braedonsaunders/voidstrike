@@ -98,6 +98,24 @@ export interface AnimationMappingConfig {
   [key: string]: string[] | undefined; // Allow custom animation types
 }
 
+/** Rendering hints for decorations (per-model visual settings) */
+export interface RenderingHints {
+  envMapIntensity?: number;
+  emissive?: string | null;
+  emissiveIntensity?: number;
+  roughnessOverride?: number | null;
+  metalnessOverride?: number | null;
+  receiveShadow?: boolean;
+  castShadow?: boolean;
+  pulseSpeed?: number;
+  pulseAmplitude?: number;
+  attachLight?: {
+    color: string;
+    intensity: number;
+    distance: number;
+  } | null;
+}
+
 /** Single asset configuration */
 export interface AssetConfig {
   model: string;
@@ -105,6 +123,7 @@ export interface AssetConfig {
   animationSpeed?: number;
   rotation?: number; // Y-axis rotation offset in degrees
   animations?: AnimationMappingConfig;
+  rendering?: RenderingHints; // Per-model rendering hints (decorations)
 }
 
 /** Full assets.json structure */
@@ -157,6 +176,9 @@ const animationMappings = new Map<string, AnimationMappingConfig>();
 
 // Store per-asset rotation offsets in degrees (from config)
 const assetRotationOffsets = new Map<string, number>();
+
+// Store rendering hints for decorations (from config)
+const renderingHints = new Map<string, RenderingHints>();
 
 // DRACO loader for compressed meshes
 const dracoLoader = new DRACOLoader();
@@ -532,6 +554,21 @@ export class AssetManager {
    */
   static getDecorationOriginal(decorationType: string): THREE.Object3D | null {
     return customAssets.get(decorationType) ?? null;
+  }
+
+  /**
+   * Get rendering hints for a decoration type (emissive, envMap, etc.)
+   */
+  static getRenderingHints(assetId: string): RenderingHints | null {
+    return renderingHints.get(assetId) ?? null;
+  }
+
+  /**
+   * Check if a decoration has emissive properties
+   */
+  static hasEmissive(assetId: string): boolean {
+    const hints = renderingHints.get(assetId);
+    return hints?.emissive != null && hints.emissive !== '';
   }
 
   /**
@@ -995,6 +1032,10 @@ export class AssetManager {
       });
       if (config.rotation !== undefined) {
         assetRotationOffsets.set(assetId, config.rotation);
+      }
+      // Store rendering hints for this decoration
+      if (config.rendering) {
+        renderingHints.set(assetId, config.rendering);
       }
     }
 

@@ -586,6 +586,39 @@ export class EnvironmentManager {
   }
 
   // ============================================
+  // LIGHTING CONFIGURATION
+  // ============================================
+
+  /**
+   * Set shadow fill intensity (ground bounce light)
+   * @param intensity - Fill intensity from 0 to 1
+   */
+  public setShadowFill(intensity: number): void {
+    // Adjust hemisphere light ground color brightness based on fill intensity
+    // Higher fill = brighter ground color = more light in shadows
+    const baseGroundColor = new THREE.Color(this.biome.colors.ground?.[0] || 0x444444);
+    const boostedColor = baseGroundColor.clone().multiplyScalar(1.0 + intensity * 1.5);
+    this.hemiLight.groundColor = boostedColor;
+
+    // Also slightly boost hemisphere intensity for overall fill
+    this.hemiLight.intensity = 0.5 + intensity * 0.3;
+  }
+
+  /**
+   * Get the hemisphere light for external modification
+   */
+  public getHemisphereLight(): THREE.HemisphereLight {
+    return this.hemiLight;
+  }
+
+  /**
+   * Get the main directional light
+   */
+  public getDirectionalLight(): THREE.DirectionalLight {
+    return this.directionalLight;
+  }
+
+  // ============================================
   // PARTICLE CONFIGURATION
   // ============================================
 

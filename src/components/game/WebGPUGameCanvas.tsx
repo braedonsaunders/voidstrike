@@ -34,6 +34,7 @@ import { WatchTowerRenderer } from '@/rendering/WatchTowerRenderer';
 import { BuildingPlacementPreview } from '@/rendering/BuildingPlacementPreview';
 import { WallPlacementPreview } from '@/rendering/WallPlacementPreview';
 import { CommandQueueRenderer } from '@/rendering/CommandQueueRenderer';
+import { LightPool } from '@/rendering/LightPool';
 
 // TSL Components (WebGPU-compatible)
 import {
@@ -105,6 +106,9 @@ export function WebGPUGameCanvas() {
   // Strategic overlays and command queue
   const overlayManagerRef = useRef<TSLGameOverlayManager | null>(null);
   const commandQueueRendererRef = useRef<CommandQueueRenderer | null>(null);
+
+  // Dynamic lighting
+  const lightPoolRef = useRef<LightPool | null>(null);
 
   // TSL Visual Systems (WebGPU-compatible)
   const selectionSystemRef = useRef<SelectionSystem | null>(null);
@@ -523,6 +527,14 @@ export function WebGPUGameCanvas() {
       // Configure environment map
       environmentRef.current?.setEnvironmentMapEnabled(graphicsSettings.environmentMapEnabled);
 
+      // Configure shadow fill (ground bounce lighting)
+      environmentRef.current?.setShadowFill(graphicsSettings.shadowFill);
+
+      // Initialize light pool for dynamic effects
+      if (graphicsSettings.dynamicLightsEnabled) {
+        lightPoolRef.current = new LightPool(scene, graphicsSettings.maxDynamicLights);
+      }
+
       // TSL GameOverlayManager - WebGPU compatible
       overlayManagerRef.current = new TSLGameOverlayManager(
         scene,
@@ -691,6 +703,9 @@ export function WebGPUGameCanvas() {
         // Update TSL visual systems
         selectionSystemRef.current?.update(deltaTime);
         effectEmitterRef.current?.update(deltaTime / 1000);
+
+        // Update dynamic lighting pool
+        lightPoolRef.current?.update();
 
         // Update strategic overlays and command queue
         overlayManagerRef.current?.update(deltaTime);
@@ -1014,6 +1029,7 @@ export function WebGPUGameCanvas() {
       renderPipelineRef.current?.dispose();
       overlayManagerRef.current?.dispose();
       commandQueueRendererRef.current?.dispose();
+      lightPoolRef.current?.dispose();
 
       phaserGameRef.current?.destroy(true);
 
@@ -1927,6 +1943,21 @@ export function WebGPUGameCanvas() {
         // Update environment map
         if (settings.environmentMapEnabled !== prevSettings.environmentMapEnabled) {
           environmentRef.current.setEnvironmentMapEnabled(settings.environmentMapEnabled);
+        }
+
+        // Update shadow fill (ground bounce lighting)
+        if (settings.shadowFill !== prevSettings.shadowFill) {
+          environmentRef.current.setShadowFill(settings.shadowFill);
+        }
+      }
+
+      // Update dynamic lights settings
+      if (lightPoolRef.current) {
+        if (settings.dynamicLightsEnabled !== prevSettings.dynamicLightsEnabled) {
+          lightPoolRef.current.setEnabled(settings.dynamicLightsEnabled);
+        }
+        if (settings.maxDynamicLights !== prevSettings.maxDynamicLights) {
+          lightPoolRef.current.setMaxLights(settings.maxDynamicLights);
         }
       }
 
