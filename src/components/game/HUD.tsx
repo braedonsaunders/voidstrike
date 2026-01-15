@@ -14,12 +14,13 @@ import { IdleWorkerButton } from './IdleWorkerButton';
 import { KeyboardShortcutsPanel } from './KeyboardShortcutsPanel';
 import { PlayerStatusPanel } from './PlayerStatusPanel';
 import { SoundOptionsPanel } from './SoundOptionsPanel';
+import { PerformancePanel } from './PerformancePanel';
 import { BattleSimulatorPanel } from './BattleSimulatorPanel';
 
 // PERF: Wrap HUD in memo to prevent unnecessary re-renders when parent state changes
 export const HUD = memo(function HUD() {
   const { isPaused, togglePause, setShowTechTree, setShowKeyboardShortcuts, isGameReady } = useGameStore();
-  const { toggleGraphicsOptions, showGraphicsOptions, toggleSoundOptions, showSoundOptions, toggleDebugMenu, showDebugMenu, isFullscreen, toggleFullscreen, setFullscreen, overlaySettings, toggleOverlay } = useUIStore();
+  const { toggleGraphicsOptions, showGraphicsOptions, toggleSoundOptions, showSoundOptions, toggleDebugMenu, showDebugMenu, togglePerformancePanel, showPerformancePanel, isFullscreen, toggleFullscreen, setFullscreen, overlaySettings, toggleOverlay } = useUIStore();
   const isBattleSimulator = useGameSetupStore((state) => state.isBattleSimulator);
   const [showOptionsMenu, setShowOptionsMenu] = useState(false);
   const [showPlayerStatus, setShowPlayerStatus] = useState(false);
@@ -97,6 +98,7 @@ export const HUD = memo(function HUD() {
                 // Close any open option panels first
                 if (showGraphicsOptions) toggleGraphicsOptions();
                 if (showSoundOptions) toggleSoundOptions();
+                if (showPerformancePanel) togglePerformancePanel();
                 if (showDebugMenu) toggleDebugMenu();
                 // Then toggle the main options menu
                 setShowOptionsMenu(!showOptionsMenu);
@@ -219,6 +221,16 @@ export const HUD = memo(function HUD() {
                   <span>Sound</span>
                   <span className={showSoundOptions ? 'text-green-400' : 'text-void-500'}>{showSoundOptions ? 'OPEN' : ''}</span>
                 </button>
+                <button
+                  onClick={() => {
+                    setShowOptionsMenu(false);
+                    togglePerformancePanel();
+                  }}
+                  className="w-full px-4 py-2 text-left text-sm text-void-200 hover:bg-void-800 transition-colors flex justify-between items-center"
+                >
+                  <span>Performance</span>
+                  <span className={showPerformancePanel ? 'text-green-400' : 'text-void-500'}>{showPerformancePanel ? 'OPEN' : ''}</span>
+                </button>
                 {/* Debug menu only available in single player (not in multiplayer with multiple humans) */}
                 {!isMultiplayerMode() && (
                   <button
@@ -285,6 +297,9 @@ export const HUD = memo(function HUD() {
 
       {/* Sound Options Panel */}
       <SoundOptionsPanel />
+
+      {/* Performance Panel */}
+      <PerformancePanel />
 
       {/* Pause overlay */}
       {isPaused && (
