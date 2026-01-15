@@ -305,11 +305,11 @@
     },
     "rocks_large": {
       "model": "/models/decorations/rocks_large_LOD0.glb",
-      "height": 5.0
+      "height": 3.0
     },
     "rocks_small": {
       "model": "/models/decorations/rocks_small_LOD0.glb",
-      "height": 3.0
+      "height": 2.0
     },
     "rock_single": {
       "model": "/models/decorations/rock_single_LOD0.glb",
