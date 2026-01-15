@@ -17,10 +17,6 @@ let _cameraY = 0;
 let _cameraZ = 0;
 let _maxDistanceSq = 10000; // Squared distance for faster comparison
 
-// Debug counter for frustum culling (removed in production)
-let _debugFrameCount = 0;
-const DEBUG_FRUSTUM_CULLING = true; // Set to true to see culling stats
-
 // Distance culling multiplier - decorations beyond (camera height * multiplier) are culled
 // Lower = more aggressive culling = better performance, but decorations disappear sooner
 const DISTANCE_CULL_MULTIPLIER = 1.2;
@@ -45,14 +41,6 @@ export function updateDecorationFrustum(camera: THREE.Camera): void {
   // Using height * multiplier ensures close-up views still show decorations
   const maxDist = Math.max(40, _cameraY * DISTANCE_CULL_MULTIPLIER);
   _maxDistanceSq = maxDist * maxDist;
-
-  _debugFrameCount++;
-
-  // Debug: Log frustum info periodically
-  if (DEBUG_FRUSTUM_CULLING && _debugFrameCount % 300 === 1) {
-    const pos = camera.position;
-    console.log(`[Frustum] Camera at (${pos.x.toFixed(1)}, ${pos.y.toFixed(1)}, ${pos.z.toFixed(1)}), maxDist: ${maxDist.toFixed(1)}`);
-  }
 }
 
 /**
@@ -489,10 +477,6 @@ export class InstancedTrees {
       mesh.instanceMatrix.needsUpdate = true;
       totalVisible += visibleCount;
     }
-
-    if (DEBUG_FRUSTUM_CULLING && _debugFrameCount % 60 === 0) {
-      console.log(`[Trees] Visible: ${totalVisible}/${totalInstances} (${((totalVisible/totalInstances)*100).toFixed(1)}%)`);
-    }
   }
 
   private getTreeModelsForBiome(biome: BiomeConfig): string[] {
@@ -747,10 +731,6 @@ export class InstancedRocks {
       mesh.instanceMatrix.needsUpdate = true;
       totalVisible += visibleCount;
     }
-
-    if (DEBUG_FRUSTUM_CULLING && _debugFrameCount % 60 === 0) {
-      console.log(`[Rocks] Visible: ${totalVisible}/${totalInstances} (${totalInstances > 0 ? ((totalVisible/totalInstances)*100).toFixed(1) : 0}%)`);
-    }
   }
 
   public dispose(): void {
@@ -906,10 +886,6 @@ export class InstancedGrass {
 
     this.instancedMesh.count = visibleCount;
     this.instancedMesh.instanceMatrix.needsUpdate = true;
-
-    if (DEBUG_FRUSTUM_CULLING && _debugFrameCount % 60 === 0) {
-      console.log(`[Grass] Visible: ${visibleCount}/${this.maxCount} (${this.maxCount > 0 ? ((visibleCount/this.maxCount)*100).toFixed(1) : 0}%)`);
-    }
   }
 
   public dispose(): void {
@@ -1042,10 +1018,6 @@ export class InstancedPebbles {
 
     this.instancedMesh.count = visibleCount;
     this.instancedMesh.instanceMatrix.needsUpdate = true;
-
-    if (DEBUG_FRUSTUM_CULLING && _debugFrameCount % 60 === 0) {
-      console.log(`[Pebbles] Visible: ${visibleCount}/${this.maxCount} (${this.maxCount > 0 ? ((visibleCount/this.maxCount)*100).toFixed(1) : 0}%)`);
-    }
   }
 
   public dispose(): void {

@@ -533,37 +533,6 @@ export class AssetManager {
         (gltf) => {
           const model = gltf.scene;
 
-          // DEBUG: Count triangles in loaded model
-          let totalTriangles = 0;
-          let meshList: Array<{ name: string; tris: number }> = [];
-          let hasGenericMeshNames = false;
-          model.traverse((child) => {
-            if (child instanceof THREE.Mesh) {
-              const geo = child.geometry;
-              const indexCount = geo.index ? geo.index.count : 0;
-              const posCount = geo.attributes.position?.count || 0;
-              const tris = indexCount > 0 ? indexCount / 3 : posCount / 3;
-              totalTriangles += tris;
-              meshList.push({ name: child.name || 'unnamed', tris });
-              // Check for generic mesh naming pattern
-              if ((child.name || '').match(/^Mesh\d*$/)) {
-                hasGenericMeshNames = true;
-              }
-            }
-          });
-
-          // Log all models with generic mesh names (helps identify Mesh10 source)
-          if (hasGenericMeshNames) {
-            console.warn(`[AssetManager] MODEL WITH GENERIC MESH NAMES: ${assetId} (${url})`);
-            console.warn(`  Total: ${(totalTriangles/1000).toFixed(1)}K triangles, ${meshList.length} meshes`);
-            meshList.forEach(m => console.warn(`    - ${m.name}: ${(m.tris/1000).toFixed(1)}K tris`));
-          } else if (totalTriangles > 50000) {
-            console.warn(`[AssetManager] HIGH POLY MODEL: ${assetId} (${url}) has ${(totalTriangles/1000).toFixed(1)}K triangles`);
-            meshList.filter(m => m.tris > 10000).forEach(m => console.warn(`  - ${m.name}: ${(m.tris/1000).toFixed(1)}K tris`));
-          } else {
-            debugAssets.log(`[AssetManager] ${assetId}: ${(totalTriangles/1000).toFixed(1)}K triangles`);
-          }
-
           // Configure shadows
           model.traverse((child) => {
             if (child instanceof THREE.Mesh) {
