@@ -5,7 +5,8 @@ import { Resource, OPTIMAL_WORKERS_PER_MINERAL, OPTIMAL_WORKERS_PER_VESPENE } fr
 import { Unit } from '@/engine/components/Unit';
 import { Selectable } from '@/engine/components/Selectable';
 import { Terrain } from './Terrain';
-import AssetManager from '@/assets/AssetManager';
+import AssetManager, { LODLevel } from '@/assets/AssetManager';
+import { useUIStore } from '@/store/uiStore';
 import { debugMesh } from '@/utils/debugLogger';
 // NOTE: Resources don't move, so we don't use velocity tracking (AAA optimization)
 // Velocity node returns zero for meshes without velocity attributes
@@ -13,6 +14,7 @@ import { debugMesh } from '@/utils/debugLogger';
 interface InstancedResourceGroup {
   mesh: THREE.InstancedMesh;
   resourceType: string;
+  lodLevel: LODLevel; // Which LOD level this group represents
   maxInstances: number;
   entityIds: number[];
   rotations: number[]; // Store random rotations per instance
@@ -147,12 +149,14 @@ export class ResourceRenderer {
   /**
    * Get or create an instanced mesh group for a resource type
    */
-  private getOrCreateInstancedGroup(resourceType: string): InstancedResourceGroup {
-    let group = this.instancedGroups.get(resourceType);
+  private getOrCreateInstancedGroup(resourceType: string, lodLevel: LODLevel = 0): InstancedResourceGroup {
+    const key = `${resourceType}_LOD${lodLevel}`;
+    let group = this.instancedGroups.get(key);
 
     if (!group) {
-      // Get the base mesh from AssetManager
-      const baseMesh = AssetManager.getResourceMesh(resourceType as 'minerals' | 'vespene');
+      // Get the base mesh from AssetManager at the requested LOD level
+      const baseMesh = AssetManager.getModelAtLOD(resourceType, lodLevel)
+        ?? AssetManager.getResourceMesh(resourceType as 'minerals' | 'vespene');
 
       // Update world matrices to get accurate transforms
       baseMesh.updateMatrixWorld(true);
@@ -256,6 +260,7 @@ export class ResourceRenderer {
       group = {
         mesh: instancedMesh,
         resourceType,
+        lodLevel,
         maxInstances: MAX_RESOURCES_PER_TYPE,
         entityIds: [],
         rotations: [],
@@ -266,7 +271,7 @@ export class ResourceRenderer {
         modelYRotation,
       };
 
-      this.instancedGroups.set(resourceType, group);
+      this.instancedGroups.set(key, group);
     }
 
     return group;
@@ -556,7 +561,20 @@ export class ResourceRenderer {
         continue;
       }
 
-      const group = this.getOrCreateInstancedGroup(resource.resourceType);
+      // Calculate LOD level based on distance from camera
+      let lodLevel: LODLevel = 0;
+      const settings = useUIStore.getState().graphicsSettings;
+      if (settings.lodEnabled && this.camera) {
+        const dx = transform.x - this.camera.position.x;
+        const dz = transform.y - this.camera.position.z;
+        const distanceToCamera = Math.sqrt(dx * dx + dz * dz);
+        lodLevel = AssetManager.getBestLODForDistance(resource.resourceType, distanceToCamera, {
+          LOD0_MAX: settings.lodDistance0,
+          LOD1_MAX: settings.lodDistance1,
+        });
+      }
+
+      const group = this.getOrCreateInstancedGroup(resource.resourceType, lodLevel);
       const data = this.getOrCreateResourceData(entity.id);
 
       if (resource.resourceType === 'minerals') {

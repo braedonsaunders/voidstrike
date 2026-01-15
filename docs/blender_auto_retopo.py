@@ -15,6 +15,21 @@ FEATURES:
 - Optional texture downscaling
 - Preview mode to inspect LODs before export
 - Preserves armatures and animations
+- WebGPU vertex buffer cleanup (ensures max 8 vertex buffers)
+  * Removes extra UV layers (keeps only first)
+  * Removes unused vertex color layers
+  * Removes shape keys/morph targets
+  * Removes custom attributes
+  * Validates before export
+
+WEBGPU COMPATIBILITY:
+WebGPU has a limit of 8 vertex buffers. This script automatically cleans up
+excess vertex attributes from ALL LOD levels (including LOD0) to ensure
+compatibility. Common issues with generated models (e.g., from Tripo, Meshy):
+- Multiple UV channels
+- Unused vertex color layers
+- Morph targets/blend shapes
+- Custom attributes from generation process
 
 SETUP:
 1. Set INPUT_FOLDERS to your model folders
@@ -77,6 +92,14 @@ SETTINGS = {
     "export_lod0": True,                # Export LOD0 (original, just compressed)
     "export_lod1": True,                # Export LOD1
     "export_lod2": True,                # Export LOD2
+
+    # WebGPU vertex attribute cleanup (to stay under 8 buffer limit)
+    # Set to False to disable specific cleanups if they cause visual issues
+    "cleanup_extra_uv_layers": True,    # Remove UV1, UV2, etc. (keep only UV0)
+    "cleanup_vertex_colors": True,      # Remove unused vertex color layers
+    "cleanup_shape_keys": True,         # Remove shape keys/morph targets (breaks morph animations!)
+    "cleanup_custom_attributes": True,  # Remove non-standard attributes
+    "cleanup_custom_normals": False,    # Clear custom split normals (can change edge shading)
 }
 
 # =============================================================================
@@ -185,6 +208,188 @@ def get_mesh_stats(obj):
     }
 
 
+def cleanup_vertex_attributes(obj):
+    """
+    Clean up excess vertex attributes to stay under WebGPU's 8 vertex buffer limit.
+
+    WebGPU has a maximum of 8 vertex buffers. Typical required attributes:
+    - Position (1)
+    - Normal (1)
+    - UV0/TexCoord0 (1)
+    - Tangent (1) - for normal mapping
+    - Vertex Color (1) - if used
+
+    This function removes (based on SETTINGS):
+    - Extra UV layers (UV1, UV2, etc.) - keep only first
+    - Unused vertex color layers
+    - Shape keys/morph targets (optional - can break morph animations)
+    - Custom split normals data (optional - can change edge shading)
+
+    Returns:
+        dict: Statistics about what was removed
+    """
+    if obj.type != 'MESH':
+        return {}
+
+    mesh = obj.data
+    removed = {
+        "uv_layers": 0,
+        "vertex_colors": 0,
+        "shape_keys": 0,
+        "attributes": 0,
+        "custom_normals": 0,
+    }
+
+    # Remove extra UV layers (keep only the first one)
+    if SETTINGS.get("cleanup_extra_uv_layers", True):
+        while len(mesh.uv_layers) > 1:
+            # Remove the last UV layer (keep first)
+            mesh.uv_layers.remove(mesh.uv_layers[-1])
+            removed["uv_layers"] += 1
+
+    # Remove unused vertex color layers (keep at most one if it's actually used)
+    if SETTINGS.get("cleanup_vertex_colors", True):
+        # Check if vertex colors are used in materials
+        vertex_colors_used = False
+        for mat in obj.data.materials:
+            if mat and mat.use_nodes:
+                for node in mat.node_tree.nodes:
+                    if node.type == 'VERTEX_COLOR':
+                        vertex_colors_used = True
+                        break
+
+        if not vertex_colors_used:
+            # Remove all vertex color layers if not used
+            while len(mesh.vertex_colors) > 0:
+                mesh.vertex_colors.remove(mesh.vertex_colors[0])
+                removed["vertex_colors"] += 1
+        else:
+            # Keep only one vertex color layer
+            while len(mesh.vertex_colors) > 1:
+                mesh.vertex_colors.remove(mesh.vertex_colors[-1])
+                removed["vertex_colors"] += 1
+
+        # Also check color attributes (Blender 3.2+)
+        if hasattr(mesh, 'color_attributes'):
+            if not vertex_colors_used:
+                while len(mesh.color_attributes) > 0:
+                    mesh.color_attributes.remove(mesh.color_attributes[0])
+                    removed["vertex_colors"] += 1
+            else:
+                while len(mesh.color_attributes) > 1:
+                    mesh.color_attributes.remove(mesh.color_attributes[-1])
+                    removed["vertex_colors"] += 1
+
+    # Remove shape keys if present (they add vertex buffers for morph targets)
+    # WARNING: This will break morph/blend shape animations!
+    if SETTINGS.get("cleanup_shape_keys", True):
+        if mesh.shape_keys:
+            # Remove all shape keys
+            bpy.context.view_layer.objects.active = obj
+            try:
+                bpy.ops.object.shape_key_remove(all=True)
+                removed["shape_keys"] += 1
+            except:
+                pass  # Shape keys might not be removable in some cases
+
+    # Remove custom attributes that aren't standard (Blender 3.0+)
+    if SETTINGS.get("cleanup_custom_attributes", True):
+        if hasattr(mesh, 'attributes'):
+            # Standard attributes to keep
+            keep_attrs = {'position', 'normal', 'UVMap', '.corner_vert', '.corner_edge',
+                          '.edge_verts', 'material_index', 'sharp_face', 'sharp_edge'}
+
+            attrs_to_remove = []
+            for attr in mesh.attributes:
+                # Keep standard attributes and the first UV
+                if attr.name not in keep_attrs and not attr.name.startswith('UVMap'):
+                    # Don't remove if it's a required internal attribute
+                    if not attr.name.startswith('.'):
+                        attrs_to_remove.append(attr.name)
+
+            for attr_name in attrs_to_remove:
+                try:
+                    mesh.attributes.remove(mesh.attributes[attr_name])
+                    removed["attributes"] += 1
+                except:
+                    pass
+
+    # Clear custom split normals (they can change edge shading appearance)
+    # Disabled by default as it can affect visual quality
+    if SETTINGS.get("cleanup_custom_normals", False):
+        if mesh.has_custom_normals:
+            try:
+                bpy.ops.mesh.customdata_custom_splitnormals_clear()
+                removed["custom_normals"] += 1
+            except:
+                pass
+
+    return removed
+
+
+def get_vertex_attribute_count(obj):
+    """
+    Count the approximate number of vertex attributes/buffers a mesh will use.
+
+    Returns:
+        tuple: (count, details_dict)
+    """
+    if obj.type != 'MESH':
+        return 0, {}
+
+    mesh = obj.data
+    details = {}
+    count = 0
+
+    # Position is always present
+    count += 1
+    details['position'] = 1
+
+    # Normals
+    count += 1
+    details['normal'] = 1
+
+    # UV layers
+    uv_count = len(mesh.uv_layers)
+    if uv_count > 0:
+        count += uv_count
+        details['uv_layers'] = uv_count
+
+    # Vertex colors (legacy)
+    vc_count = len(mesh.vertex_colors)
+    if vc_count > 0:
+        count += vc_count
+        details['vertex_colors'] = vc_count
+
+    # Color attributes (Blender 3.2+)
+    if hasattr(mesh, 'color_attributes'):
+        ca_count = len(mesh.color_attributes)
+        if ca_count > 0:
+            count += ca_count
+            details['color_attributes'] = ca_count
+
+    # Shape keys (each adds a buffer for morph targets)
+    if mesh.shape_keys and len(mesh.shape_keys.key_blocks) > 1:
+        sk_count = len(mesh.shape_keys.key_blocks) - 1  # Exclude basis
+        count += sk_count
+        details['shape_keys'] = sk_count
+
+    # Tangents (usually computed at export if normal maps exist)
+    # Check if any material uses normal maps
+    has_normal_map = False
+    for mat in mesh.materials:
+        if mat and mat.use_nodes:
+            for node in mat.node_tree.nodes:
+                if node.type == 'NORMAL_MAP':
+                    has_normal_map = True
+                    break
+    if has_normal_map:
+        count += 1
+        details['tangent'] = 1
+
+    return count, details
+
+
 def create_decimated_lod(source_obj, ratio, lod_name):
     """
     Create a decimated LOD from the source mesh.
@@ -232,6 +437,12 @@ def create_decimated_lod(source_obj, ratio, lod_name):
 
     new_faces = len(lod.data.polygons)
     print(f"      Decimated: {original_faces:,} -> {new_faces:,} faces ({ratio:.0%})")
+
+    # Clean up vertex attributes on the decimated LOD
+    removed = cleanup_vertex_attributes(lod)
+    if sum(removed.values()) > 0:
+        attr_count, _ = get_vertex_attribute_count(lod)
+        print(f"      Cleaned vertex attributes: {attr_count} buffers")
 
     return lod
 
@@ -293,6 +504,21 @@ def export_glb(objects, armature, output_path):
         armature: Armature object (or None)
         output_path: Output file path
     """
+    # Validate vertex attribute count before export
+    for obj in objects:
+        if obj.type == 'MESH':
+            attr_count, details = get_vertex_attribute_count(obj)
+            if attr_count > 8:
+                print(f"      WARNING: {obj.name} has {attr_count} vertex attributes (WebGPU max: 8)")
+                print(f"               Details: {details}")
+                print(f"               Attempting additional cleanup...")
+                cleanup_vertex_attributes(obj)
+                attr_count, _ = get_vertex_attribute_count(obj)
+                if attr_count > 8:
+                    print(f"      ERROR: Still {attr_count} attributes after cleanup!")
+                else:
+                    print(f"      Fixed: Now {attr_count} attributes")
+
     # Select objects for export
     bpy.ops.object.select_all(action='DESELECT')
 
@@ -379,6 +605,30 @@ def process_glb_model(filepath, category, output_dir):
 
     original_faces = len(primary_mesh.data.polygons)
     print(f"  Imported: {original_faces:,} faces")
+
+    # Clean up vertex attributes on ALL meshes to stay under WebGPU's 8 vertex buffer limit
+    print(f"\n  Cleaning vertex attributes (WebGPU max: 8 buffers)...")
+    for mesh_obj in mesh_objects:
+        attr_count_before, attr_details = get_vertex_attribute_count(mesh_obj)
+        if attr_count_before > 8:
+            print(f"    {mesh_obj.name}: {attr_count_before} attributes (OVER LIMIT)")
+            print(f"      Details: {attr_details}")
+
+        removed = cleanup_vertex_attributes(mesh_obj)
+
+        attr_count_after, _ = get_vertex_attribute_count(mesh_obj)
+        if sum(removed.values()) > 0:
+            print(f"    {mesh_obj.name}: {attr_count_before} -> {attr_count_after} attributes")
+            if removed["uv_layers"] > 0:
+                print(f"      Removed {removed['uv_layers']} extra UV layer(s)")
+            if removed["vertex_colors"] > 0:
+                print(f"      Removed {removed['vertex_colors']} vertex color layer(s)")
+            if removed["shape_keys"] > 0:
+                print(f"      Removed shape keys")
+            if removed["attributes"] > 0:
+                print(f"      Removed {removed['attributes']} custom attribute(s)")
+        else:
+            print(f"    {mesh_obj.name}: {attr_count_after} attributes (OK)")
 
     if armature_obj:
         bone_count = len(armature_obj.data.bones)

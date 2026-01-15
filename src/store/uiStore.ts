@@ -150,6 +150,12 @@ export interface GraphicsSettings {
   // Particles
   particlesEnabled: boolean;
   particleDensity: number;
+
+  // LOD (Level of Detail)
+  lodEnabled: boolean;
+  lodDistance0: number; // Distance threshold for LOD0 (highest detail)
+  lodDistance1: number; // Distance threshold for LOD1 (medium detail)
+  // Beyond lodDistance1, LOD2 (lowest detail) is used
 }
 
 // Game overlay types for strategic information display
@@ -378,6 +384,11 @@ export const useUIStore = create<UIState>((set, get) => ({
     // Particles
     particlesEnabled: true,
     particleDensity: 5.0, // 5.0 is the baseline (displayed as 1x), range 1-10
+
+    // LOD (Level of Detail)
+    lodEnabled: true,
+    lodDistance0: 50, // Use LOD0 (highest detail) within 50 units from camera
+    lodDistance1: 120, // Use LOD1 (medium detail) between 50-120 units, LOD2 beyond
   },
   showDebugMenu: false,
   showPerformancePanel: false,

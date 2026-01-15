@@ -55,6 +55,20 @@ export const REFERENCE_FRAME = {
   ANCHOR_MODE: 'minY' as const,
 };
 
+// ============================================================================
+// LOD (Level of Detail) Constants
+// ============================================================================
+
+/** Available LOD levels */
+export type LODLevel = 0 | 1 | 2;
+
+/** Default distance thresholds for LOD switching (in world units) */
+export const DEFAULT_LOD_DISTANCES = {
+  LOD0_MAX: 50,   // Use LOD0 (highest detail) within 50 units
+  LOD1_MAX: 120,  // Use LOD1 (medium detail) between 50-120 units
+  // Beyond 120 units, use LOD2 (lowest detail)
+} as const;
+
 // Asset definition types
 export interface AssetDefinition {
   id: string;
@@ -108,6 +122,16 @@ export interface AssetsJsonConfig {
 // Cache for loaded/generated assets
 const assetCache = new Map<string, THREE.Object3D>();
 const customAssets = new Map<string, THREE.Object3D>();
+
+// LOD storage - separate maps for each LOD level
+// LOD0 = highest detail (default, stored in customAssets for backwards compatibility)
+// LOD1 = medium detail
+// LOD2 = lowest detail (for distant objects)
+const customAssetsLOD1 = new Map<string, THREE.Object3D>();
+const customAssetsLOD2 = new Map<string, THREE.Object3D>();
+
+// Track which LOD levels are available for each asset
+const availableLODLevels = new Map<string, Set<number>>();
 
 // Store animations for custom models
 const assetAnimations = new Map<string, THREE.AnimationClip[]>();
@@ -588,6 +612,56 @@ export class AssetManager {
   }
 
   /**
+   * Load a GLTF model for a specific LOD level (1 or 2).
+   * LOD0 is loaded via regular loadGLTF and stored in customAssets.
+   */
+  private static async loadGLTFForLOD(
+    url: string,
+    assetId: string,
+    lodLevel: 1 | 2,
+    options: { targetHeight?: number } = {}
+  ): Promise<THREE.Object3D> {
+    return new Promise((resolve, reject) => {
+      gltfLoader.load(
+        url,
+        (gltf) => {
+          const model = gltf.scene;
+
+          // Configure shadows (same as LOD0)
+          model.traverse((child) => {
+            if (child instanceof THREE.Mesh) {
+              child.castShadow = true;
+              child.receiveShadow = true;
+            }
+          });
+
+          // Normalize to target height if specified
+          if (options.targetHeight) {
+            normalizeModel(model, options.targetHeight, `${assetId}_LOD${lodLevel}`);
+          }
+
+          // Apply model forward offset + per-asset rotation offset (same as LOD0)
+          const baseOffset = REFERENCE_FRAME.MODEL_FORWARD_OFFSET;
+          const assetOffset = assetRotationOffsets.get(assetId) ?? 0;
+          const assetOffsetRadians = assetOffset * (Math.PI / 180);
+          model.rotation.y = baseOffset + assetOffsetRadians;
+
+          // Store in the appropriate LOD map
+          if (lodLevel === 1) {
+            customAssetsLOD1.set(assetId, model);
+          } else {
+            customAssetsLOD2.set(assetId, model);
+          }
+
+          resolve(model);
+        },
+        undefined,
+        (error) => reject(error)
+      );
+    });
+  }
+
+  /**
    * Register a custom mesh to replace a default asset
    */
   static registerCustomAsset(assetId: string, mesh: THREE.Object3D): void {
@@ -634,6 +708,99 @@ export class AssetManager {
     const assetOffset = assetRotationOffsets.get(assetId) ?? 0;
     const assetOffsetRadians = assetOffset * (Math.PI / 180);
     return baseOffset + assetOffsetRadians;
+  }
+
+  // ============================================================================
+  // LOD (Level of Detail) Methods
+  // ============================================================================
+
+  /**
+   * Get available LOD levels for an asset.
+   * Returns a Set containing 0, 1, and/or 2 depending on what's loaded.
+   */
+  static getAvailableLODLevels(assetId: string): Set<number> {
+    return availableLODLevels.get(assetId) ?? new Set([0]);
+  }
+
+  /**
+   * Check if an asset has a specific LOD level available.
+   */
+  static hasLODLevel(assetId: string, level: LODLevel): boolean {
+    const levels = availableLODLevels.get(assetId);
+    if (!levels) return level === 0 && customAssets.has(assetId);
+    return levels.has(level);
+  }
+
+  /**
+   * Get the best available LOD level for a given distance.
+   * Falls back to the closest available LOD if the ideal one isn't loaded.
+   */
+  static getBestLODForDistance(
+    assetId: string,
+    distance: number,
+    lodDistances: { LOD0_MAX: number; LOD1_MAX: number } = DEFAULT_LOD_DISTANCES
+  ): LODLevel {
+    // Determine ideal LOD based on distance
+    let idealLOD: LODLevel;
+    if (distance <= lodDistances.LOD0_MAX) {
+      idealLOD = 0;
+    } else if (distance <= lodDistances.LOD1_MAX) {
+      idealLOD = 1;
+    } else {
+      idealLOD = 2;
+    }
+
+    // Check if ideal LOD is available
+    const levels = availableLODLevels.get(assetId);
+    if (!levels) return 0; // Only LOD0 available (or procedural)
+
+    if (levels.has(idealLOD)) return idealLOD;
+
+    // Fall back to closest available LOD
+    if (idealLOD === 2) {
+      // Wanted LOD2, try LOD1, then LOD0
+      if (levels.has(1)) return 1;
+      return 0;
+    } else if (idealLOD === 1) {
+      // Wanted LOD1, try LOD2 (lower detail ok), then LOD0
+      if (levels.has(2)) return 2;
+      return 0;
+    }
+
+    return 0;
+  }
+
+  /**
+   * Get the original model at a specific LOD level (NOT cloned).
+   * Returns the cached original model - caller must NOT modify it.
+   * Use for InstancedMesh where we extract geometry/material once.
+   */
+  static getModelOriginalAtLOD(assetId: string, lodLevel: LODLevel): THREE.Object3D | null {
+    switch (lodLevel) {
+      case 0:
+        return customAssets.get(assetId) ?? null;
+      case 1:
+        return customAssetsLOD1.get(assetId) ?? customAssets.get(assetId) ?? null;
+      case 2:
+        return customAssetsLOD2.get(assetId) ?? customAssetsLOD1.get(assetId) ?? customAssets.get(assetId) ?? null;
+      default:
+        return null;
+    }
+  }
+
+  /**
+   * Get a cloned model at a specific LOD level.
+   * Uses SkeletonUtils.clone() for animated models.
+   */
+  static getModelAtLOD(assetId: string, lodLevel: LODLevel): THREE.Object3D | null {
+    const original = this.getModelOriginalAtLOD(assetId, lodLevel);
+    if (!original) return null;
+
+    // Use skeleton-aware cloning for animated assets
+    if (animatedAssets.has(assetId)) {
+      return SkeletonUtils.clone(original);
+    }
+    return original.clone();
   }
 
   /**
@@ -831,37 +998,84 @@ export class AssetManager {
       }
     }
 
-    debugAssets.log('[AssetManager] Loading custom models...');
+    debugAssets.log('[AssetManager] Loading custom models with LOD support...');
     let loadedCount = 0;
     let processedCount = 0;
     const totalModels = customModels.length;
 
     for (const model of customModels) {
       try {
-        // Check if file exists by trying to fetch headers
-        const response = await fetch(model.path, { method: 'HEAD' });
+        // LOD0 path is the base path from config
+        const lod0Path = model.path;
+
+        // Derive LOD1 and LOD2 paths by replacing _LOD0 with _LOD1/_LOD2
+        const lod1Path = lod0Path.replace('_LOD0.glb', '_LOD1.glb');
+        const lod2Path = lod0Path.replace('_LOD0.glb', '_LOD2.glb');
+
+        // Initialize LOD level tracking for this asset
+        const lodLevels = new Set<number>();
+
+        // Check if LOD0 file exists
+        const response = await fetch(lod0Path, { method: 'HEAD' });
         if (!response.ok) {
-          debugAssets.log(`[AssetManager] No custom model found at ${model.path}, using procedural mesh`);
+          debugAssets.log(`[AssetManager] No custom model found at ${lod0Path}, using procedural mesh`);
           processedCount++;
-          // Await the callback in case it's async (for UI throttling)
           await onProgress?.(processedCount, totalModels, model.assetId);
           continue;
         }
 
-        // Load the GLTF model
-        await this.loadGLTF(model.path, model.assetId, { targetHeight: model.targetHeight });
-        debugAssets.log(`[AssetManager] ✓ Loaded custom model: ${model.assetId} from ${model.path}`);
+        // Load LOD0 (highest detail) - this is the main model
+        await this.loadGLTF(lod0Path, model.assetId, { targetHeight: model.targetHeight });
+        lodLevels.add(0);
+        debugAssets.log(`[AssetManager] ✓ Loaded LOD0: ${model.assetId}`);
+
+        // Try to load LOD1 (medium detail) - silent fail if not found
+        try {
+          const lod1Response = await fetch(lod1Path, { method: 'HEAD' });
+          if (lod1Response.ok) {
+            await this.loadGLTFForLOD(lod1Path, model.assetId, 1, { targetHeight: model.targetHeight });
+            lodLevels.add(1);
+            debugAssets.log(`[AssetManager] ✓ Loaded LOD1: ${model.assetId}`);
+          }
+        } catch {
+          // LOD1 not available - that's okay
+        }
+
+        // Try to load LOD2 (lowest detail) - silent fail if not found
+        try {
+          const lod2Response = await fetch(lod2Path, { method: 'HEAD' });
+          if (lod2Response.ok) {
+            await this.loadGLTFForLOD(lod2Path, model.assetId, 2, { targetHeight: model.targetHeight });
+            lodLevels.add(2);
+            debugAssets.log(`[AssetManager] ✓ Loaded LOD2: ${model.assetId}`);
+          }
+        } catch {
+          // LOD2 not available - that's okay
+        }
+
+        // Store available LOD levels for this asset
+        availableLODLevels.set(model.assetId, lodLevels);
+
         loadedCount++;
         processedCount++;
-        // Await the callback in case it's async (for UI throttling)
         await onProgress?.(processedCount, totalModels, model.assetId);
       } catch (error) {
         debugAssets.log(`[AssetManager] Could not load ${model.path}:`, error);
         processedCount++;
-        // Await the callback in case it's async (for UI throttling)
         await onProgress?.(processedCount, totalModels, model.assetId);
       }
     }
+
+    // Log LOD summary
+    let lodSummary = '[AssetManager] LOD Summary: ';
+    let assetsWithAllLODs = 0;
+    let assetsWithSomeLODs = 0;
+    for (const [assetId, levels] of availableLODLevels) {
+      if (levels.size === 3) assetsWithAllLODs++;
+      else if (levels.size > 1) assetsWithSomeLODs++;
+    }
+    lodSummary += `${assetsWithAllLODs} assets with full LOD (0/1/2), ${assetsWithSomeLODs} with partial LOD`;
+    debugAssets.log(lodSummary);
 
     debugAssets.log(`[AssetManager] Custom model loading complete (${loadedCount} models loaded)`);
 

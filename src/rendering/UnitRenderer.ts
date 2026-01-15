@@ -6,17 +6,19 @@ import { Health } from '@/engine/components/Health';
 import { Selectable } from '@/engine/components/Selectable';
 import { Velocity } from '@/engine/components/Velocity';
 import { VisionSystem } from '@/engine/systems/VisionSystem';
-import { AssetManager, AnimationMappingConfig } from '@/assets/AssetManager';
+import { AssetManager, AnimationMappingConfig, LODLevel, DEFAULT_LOD_DISTANCES } from '@/assets/AssetManager';
 import { Terrain } from './Terrain';
 import { getPlayerColor, getLocalPlayerId, isSpectatorMode } from '@/store/gameSetupStore';
+import { useUIStore } from '@/store/uiStore';
 import { debugAnimation, debugAssets, debugPerformance } from '@/utils/debugLogger';
 import { setupInstancedVelocity, swapInstanceMatrices, commitInstanceMatrices, disposeInstancedVelocity } from './tsl/InstancedVelocity';
 
-// Instance data for a single unit type + player combo (non-animated units)
+// Instance data for a single unit type + player combo at a specific LOD level
 interface InstancedUnitGroup {
   mesh: THREE.InstancedMesh;
   unitType: string;
   playerId: string;
+  lodLevel: LODLevel; // Which LOD level this group represents
   maxInstances: number;
   entityIds: number[]; // Maps instance index to entity ID
   dummy: THREE.Object3D; // Reusable for matrix calculations
@@ -64,7 +66,8 @@ export class UnitRenderer {
   private terrain: Terrain | null;
   private playerId: string | null = null;
 
-  // Instanced mesh groups: key = "unitType_playerId" (for non-animated units)
+  // Instanced mesh groups: key = "unitType_playerId_LODx" (for non-animated units)
+  // Each unit type + player combination has up to 3 groups (LOD0, LOD1, LOD2)
   private instancedGroups: Map<string, InstancedUnitGroup> = new Map();
 
   // Animated unit meshes: key = entityId (for animated units)
@@ -397,17 +400,19 @@ export class UnitRenderer {
   }
 
   /**
-   * Get or create an instanced mesh group for a unit type + player combo
+   * Get or create an instanced mesh group for a unit type + player combo at a specific LOD level
    */
-  private getOrCreateInstancedGroup(unitType: string, playerId: string): InstancedUnitGroup {
-    const key = `${unitType}_${playerId}`;
+  private getOrCreateInstancedGroup(unitType: string, playerId: string, lodLevel: LODLevel = 0): InstancedUnitGroup {
+    const key = `${unitType}_${playerId}_LOD${lodLevel}`;
     let group = this.instancedGroups.get(key);
 
     if (!group) {
       const playerColor = getPlayerColor(playerId);
 
-      // Get the base mesh from AssetManager
-      const baseMesh = AssetManager.getUnitMesh(unitType, playerColor);
+      // Get the base mesh from AssetManager at the requested LOD level
+      // Falls back to next best LOD if requested level isn't available
+      const baseMesh = AssetManager.getModelAtLOD(unitType, lodLevel)
+        ?? AssetManager.getUnitMesh(unitType, playerColor);
 
       // Update world matrices to get accurate world positions
       baseMesh.updateMatrixWorld(true);
@@ -463,6 +468,7 @@ export class UnitRenderer {
         mesh: instancedMesh,
         unitType,
         playerId,
+        lodLevel,
         maxInstances: MAX_INSTANCES_PER_TYPE,
         entityIds: [],
         dummy: new THREE.Object3D(),
@@ -470,7 +476,7 @@ export class UnitRenderer {
         rotationOffset: meshWorldRotationY,
       };
 
-      debugAssets.log(`[UnitRenderer] Created instanced group for ${unitType}: yOffset=${meshWorldY.toFixed(3)}, rotationOffset=${meshWorldRotationY.toFixed(3)}`);
+      debugAssets.log(`[UnitRenderer] Created instanced group for ${unitType} LOD${lodLevel}: yOffset=${meshWorldY.toFixed(3)}, rotationOffset=${meshWorldRotationY.toFixed(3)}`);
 
       this.instancedGroups.set(key, group);
     }
@@ -660,7 +666,31 @@ export class UnitRenderer {
         animUnit.mixer.update(deltaTime * animSpeedMultiplier);
       } else {
         // Use instanced rendering for non-animated units
-        const group = this.getOrCreateInstancedGroup(unit.unitId, ownerId);
+        // Calculate distance from camera for LOD selection
+        let lodLevel: LODLevel = 0;
+        const settings = useUIStore.getState().graphicsSettings;
+        if (settings.lodEnabled && this.camera) {
+          const dx = transform.x - this.camera.position.x;
+          const dz = transform.y - this.camera.position.z; // transform.y is world Z
+          const distanceToCamera = Math.sqrt(dx * dx + dz * dz);
+
+          // Select LOD level based on distance thresholds
+          if (distanceToCamera <= settings.lodDistance0) {
+            lodLevel = 0;
+          } else if (distanceToCamera <= settings.lodDistance1) {
+            lodLevel = 1;
+          } else {
+            lodLevel = 2;
+          }
+
+          // Fall back to best available LOD if requested level isn't loaded
+          lodLevel = AssetManager.getBestLODForDistance(unit.unitId, distanceToCamera, {
+            LOD0_MAX: settings.lodDistance0,
+            LOD1_MAX: settings.lodDistance1,
+          });
+        }
+
+        const group = this.getOrCreateInstancedGroup(unit.unitId, ownerId, lodLevel);
 
         // Add instance if we have room
         if (group.mesh.count < group.maxInstances) {
