@@ -5,15 +5,23 @@ import { useUIStore } from '@/store/uiStore';
 import { setEdgeScrollEnabled } from '@/store/cameraStore';
 import { PerformanceDashboard } from './PerformanceDashboard';
 
+// Format number with K/M suffix for large numbers
+function formatNumber(num: number): string {
+  if (num >= 1_000_000) return `${(num / 1_000_000).toFixed(1)}M`;
+  if (num >= 1_000) return `${(num / 1_000).toFixed(1)}K`;
+  return num.toString();
+}
+
 /**
  * Performance Panel - Centralized performance monitoring and display settings
- * Combines FPS counter toggle and detailed performance dashboard
+ * Combines FPS counter toggle, rendering metrics, and detailed performance dashboard
  */
 export const PerformancePanel = memo(function PerformancePanel() {
   const showPerformancePanel = useUIStore((state) => state.showPerformancePanel);
   const togglePerformancePanel = useUIStore((state) => state.togglePerformancePanel);
   const showFPS = useUIStore((state) => state.showFPS);
   const toggleFPS = useUIStore((state) => state.toggleFPS);
+  const performanceMetrics = useUIStore((state) => state.performanceMetrics);
 
   // Disable edge scrolling when panel is open
   useEffect(() => {
@@ -109,6 +117,56 @@ export const PerformancePanel = memo(function PerformancePanel() {
             boxShadow: '0 1px 2px rgba(0,0,0,0.3)',
           }} />
         </button>
+      </div>
+
+      {/* Rendering Metrics */}
+      <div style={{
+        marginBottom: '12px',
+        padding: '10px',
+        backgroundColor: '#1a1a1c',
+        borderRadius: '6px',
+      }}>
+        <div style={{ fontSize: '11px', fontWeight: 600, color: '#888', marginBottom: '8px', textTransform: 'uppercase' }}>
+          Rendering
+        </div>
+        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '11px', padding: '3px 0' }}>
+          <span style={{ color: '#888' }}>CPU Time</span>
+          <span style={{ fontFamily: 'monospace', color: '#22d3ee' }}>{performanceMetrics.cpuTime.toFixed(1)}ms</span>
+        </div>
+        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '11px', padding: '3px 0' }}>
+          <span style={{ color: '#888' }}>GPU Time</span>
+          <span style={{ fontFamily: 'monospace', color: '#fb923c' }}>{performanceMetrics.gpuTime.toFixed(1)}ms</span>
+        </div>
+        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '11px', padding: '3px 0' }}>
+          <span style={{ color: '#888' }}>Frame Time</span>
+          <span style={{ fontFamily: 'monospace', color: '#a3a3a3' }}>{performanceMetrics.frameTime.toFixed(1)}ms</span>
+        </div>
+        <div style={{ borderTop: '1px solid #333', marginTop: '6px', paddingTop: '6px' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '11px', padding: '3px 0' }}>
+            <span style={{ color: '#888' }}>Triangles</span>
+            <span style={{ fontFamily: 'monospace', color: '#c084fc' }}>{formatNumber(performanceMetrics.triangles)}</span>
+          </div>
+          <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '11px', padding: '3px 0' }}>
+            <span style={{ color: '#888' }}>Draw Calls</span>
+            <span style={{ fontFamily: 'monospace', color: '#facc15' }}>{performanceMetrics.drawCalls.toLocaleString()}</span>
+          </div>
+        </div>
+        <div style={{ borderTop: '1px solid #333', marginTop: '6px', paddingTop: '6px' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '11px', padding: '3px 0' }}>
+            <span style={{ color: '#888' }}>Render Res</span>
+            <span style={{ fontFamily: 'monospace', color: '#a3a3a3' }}>
+              {performanceMetrics.renderWidth}×{performanceMetrics.renderHeight}
+            </span>
+          </div>
+          {performanceMetrics.renderWidth !== performanceMetrics.displayWidth && (
+            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '11px', padding: '3px 0' }}>
+              <span style={{ color: '#888' }}>Display Res</span>
+              <span style={{ fontFamily: 'monospace', color: '#a3a3a3' }}>
+                {performanceMetrics.displayWidth}×{performanceMetrics.displayHeight}
+              </span>
+            </div>
+          )}
+        </div>
       </div>
 
       {/* Performance Dashboard */}
