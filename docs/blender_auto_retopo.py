@@ -386,53 +386,131 @@ def join_objects(objects, name):
     return result
 
 
-def retopo_with_loose_parts(high_poly, target_faces, temp_dir, base_name, lod_name):
+def voxel_remesh_and_decimate(high_poly, target_faces, base_name, lod_name):
     """
-    Retopologize a mesh that may have disconnected parts.
+    Create clean low-poly using Voxel Remesh + Decimate.
+
+    This is the ONLY sane approach for AI-generated mesh soup from Meshy.ai.
+    Instant Meshes can't handle fragmented geometry with thousands of
+    disconnected parts.
 
     Strategy:
-    1. Separate into loose parts
-    2. Calculate surface area of each part
-    3. Distribute target faces proportionally by surface area
-    4. Process each part through Instant Meshes
-    5. Rejoin all parts
+    1. Voxel Remesh to create clean watertight topology
+    2. Decimate to target face count
 
-    Returns the final retopologized mesh object.
+    Returns the final mesh object.
     """
-    # First check if mesh has multiple loose parts
+    # Duplicate high poly
+    bpy.ops.object.select_all(action='DESELECT')
+    high_poly.select_set(True)
+    bpy.context.view_layer.objects.active = high_poly
+    bpy.ops.object.duplicate()
+
+    lod = bpy.context.active_object
+    lod.name = f"{base_name}_{lod_name}"
+
+    # Calculate voxel size based on mesh bounds
+    # Smaller = more detail preserved, larger = smoother
+    dims = lod.dimensions
+    max_dim = max(dims.x, dims.y, dims.z)
+
+    # Voxel size: aim for roughly 50K faces after remesh, then decimate down
+    # This preserves detail better than going straight to low poly
+    voxel_size = max_dim / 150  # Adjust divisor for detail level
+
+    print(f"      Voxel remesh (size: {voxel_size:.4f})...")
+
+    # Add Voxel Remesh modifier
+    remesh = lod.modifiers.new("VoxelRemesh", 'REMESH')
+    remesh.mode = 'VOXEL'
+    remesh.voxel_size = voxel_size
+    remesh.adaptivity = 0.1  # Slight adaptivity for efficiency
+
+    bpy.ops.object.modifier_apply(modifier="VoxelRemesh")
+
+    post_voxel_faces = len(lod.data.polygons)
+    print(f"      After voxel: {post_voxel_faces:,} faces")
+
+    # Now decimate to target
+    if post_voxel_faces > target_faces:
+        ratio = target_faces / post_voxel_faces
+        print(f"      Decimating to {target_faces} faces (ratio: {ratio:.3f})...")
+
+        decimate = lod.modifiers.new("Decimate", 'DECIMATE')
+        decimate.decimate_type = 'COLLAPSE'
+        decimate.ratio = ratio
+        decimate.use_collapse_triangulate = True
+
+        bpy.ops.object.modifier_apply(modifier="Decimate")
+
+    # Match transform
+    lod.location = high_poly.location
+    lod.rotation_euler = high_poly.rotation_euler
+    lod.scale = high_poly.scale
+
+    final_faces = len(lod.data.polygons)
+    print(f"      Final: {final_faces:,} faces")
+
+    return lod
+
+
+def retopo_with_loose_parts(high_poly, target_faces, temp_dir, base_name, lod_name):
+    """
+    Smart retopology that handles both clean meshes and AI mesh soup.
+
+    - If mesh has < 50 loose parts: try Instant Meshes (clean topology)
+    - If mesh has >= 50 loose parts: use Voxel Remesh + Decimate (AI soup)
+    """
+    # Count loose parts WITHOUT separating (much faster)
+    bm = bmesh.new()
+    bm.from_mesh(high_poly.data)
+
+    # Count islands using linked faces
+    visited = set()
+    num_islands = 0
+
+    for face in bm.faces:
+        if face.index not in visited:
+            num_islands += 1
+            # BFS to mark all connected faces
+            stack = [face]
+            while stack:
+                f = stack.pop()
+                if f.index in visited:
+                    continue
+                visited.add(f.index)
+                for edge in f.edges:
+                    for linked_face in edge.link_faces:
+                        if linked_face.index not in visited:
+                            stack.append(linked_face)
+
+    bm.free()
+
+    print(f"      {num_islands:,} mesh islands detected")
+
+    # If too many islands, it's AI mesh soup - use voxel remesh
+    if num_islands >= 50:
+        print(f"      Using Voxel Remesh (AI mesh soup detected)")
+        return voxel_remesh_and_decimate(high_poly, target_faces, base_name, lod_name)
+
+    # Otherwise try Instant Meshes for clean quad topology
+    print(f"      Using Instant Meshes (clean mesh)")
+
+    export_path = os.path.join(temp_dir, f"{base_name}_export.obj")
+    result_path = os.path.join(temp_dir, f"{base_name}_{lod_name}.obj")
+
     bpy.ops.object.select_all(action='DESELECT')
     high_poly.select_set(True)
     bpy.context.view_layer.objects.active = high_poly
 
-    # Duplicate for separation (keep original intact)
-    bpy.ops.object.duplicate()
-    temp_obj = bpy.context.active_object
-    temp_obj.name = f"{base_name}_temp_separate"
+    bpy.ops.wm.obj_export(
+        filepath=export_path,
+        export_selected_objects=True,
+        export_triangulated_mesh=True,
+        export_materials=False,
+    )
 
-    # Separate by loose parts
-    parts = separate_loose_parts(temp_obj)
-    num_parts = len(parts)
-
-    if num_parts == 1:
-        # Single connected mesh - process normally
-        print(f"      Single connected mesh")
-        bpy.data.objects.remove(parts[0], do_unlink=True)
-
-        # Export and process original
-        export_path = os.path.join(temp_dir, f"{base_name}_export.obj")
-        result_path = os.path.join(temp_dir, f"{base_name}_{lod_name}.obj")
-
-        bpy.ops.object.select_all(action='DESELECT')
-        high_poly.select_set(True)
-        bpy.context.view_layer.objects.active = high_poly
-
-        bpy.ops.wm.obj_export(
-            filepath=export_path,
-            export_selected_objects=True,
-            export_triangulated_mesh=True,
-            export_materials=False,
-        )
-
+    try:
         run_instant_meshes(export_path, result_path, target_faces)
 
         bpy.ops.wm.obj_import(filepath=result_path)
@@ -446,113 +524,10 @@ def retopo_with_loose_parts(high_poly, target_faces, temp_dir, base_name, lod_na
 
         return result
 
-    # Multiple parts - process each with proportional face budget
-    print(f"      {num_parts} disconnected parts detected")
-
-    # Calculate surface area for each part
-    part_areas = []
-    total_area = 0
-    for part in parts:
-        area = calculate_surface_area(part)
-        part_areas.append((part, area))
-        total_area += area
-
-    # Sort by area (largest first for debugging)
-    part_areas.sort(key=lambda x: x[1], reverse=True)
-
-    # Minimum faces per part (to avoid degenerate meshes)
-    MIN_FACES_PER_PART = 12
-
-    # Calculate face budget for each part
-    remaining_faces = target_faces
-    face_budgets = []
-
-    for part, area in part_areas:
-        if total_area > 0:
-            proportion = area / total_area
-            budget = max(MIN_FACES_PER_PART, int(target_faces * proportion))
-        else:
-            budget = max(MIN_FACES_PER_PART, target_faces // num_parts)
-
-        face_budgets.append((part, budget))
-        remaining_faces -= budget
-
-    # Redistribute any remaining faces to largest parts
-    if remaining_faces > 0:
-        face_budgets[0] = (face_budgets[0][0], face_budgets[0][1] + remaining_faces)
-
-    # Process each part
-    processed_parts = []
-
-    for i, (part, budget) in enumerate(face_budgets):
-        part_name = f"{base_name}_part{i}"
-        export_path = os.path.join(temp_dir, f"{part_name}_export.obj")
-        result_path = os.path.join(temp_dir, f"{part_name}_{lod_name}.obj")
-
-        # Export part
-        bpy.ops.object.select_all(action='DESELECT')
-        part.select_set(True)
-        bpy.context.view_layer.objects.active = part
-
-        bpy.ops.wm.obj_export(
-            filepath=export_path,
-            export_selected_objects=True,
-            export_triangulated_mesh=True,
-            export_materials=False,
-        )
-
-        try:
-            # Run Instant Meshes on this part
-            run_instant_meshes(export_path, result_path, budget)
-
-            # Import result
-            bpy.ops.wm.obj_import(filepath=result_path)
-            processed = bpy.context.active_object
-            processed.name = f"{part_name}_{lod_name}"
-
-            # Copy transform from original part
-            processed.location = part.location
-            processed.rotation_euler = part.rotation_euler
-            processed.scale = part.scale
-
-            processed_parts.append(processed)
-
-        except Exception as e:
-            print(f"        Part {i} failed: {e}, using decimate")
-            # Fallback: decimate this part
-            bpy.ops.object.select_all(action='DESELECT')
-            part.select_set(True)
-            bpy.context.view_layer.objects.active = part
-            bpy.ops.object.duplicate()
-
-            decimated = bpy.context.active_object
-            current_faces = len(decimated.data.polygons)
-            if current_faces > budget:
-                ratio = budget / current_faces
-                mod = decimated.modifiers.new("Decimate", 'DECIMATE')
-                mod.ratio = max(0.01, ratio)
-                bpy.ops.object.modifier_apply(modifier="Decimate")
-
-            decimated.name = f"{part_name}_{lod_name}"
-            processed_parts.append(decimated)
-
-    # Clean up original separated parts
-    for part, _ in face_budgets:
-        if part.name in bpy.data.objects:
-            bpy.data.objects.remove(part, do_unlink=True)
-
-    # Join all processed parts
-    final = join_objects(processed_parts, f"{base_name}_{lod_name}")
-
-    # Match transform to original high poly
-    final.location = high_poly.location
-    final.rotation_euler = high_poly.rotation_euler
-    final.scale = high_poly.scale
-
-    actual_faces = len(final.data.polygons)
-    print(f"      Result: {actual_faces} faces ({num_parts} parts rejoined)")
-
-    return final
+    except Exception as e:
+        print(f"      Instant Meshes failed: {e}")
+        print(f"      Falling back to Voxel Remesh")
+        return voxel_remesh_and_decimate(high_poly, target_faces, base_name, lod_name)
 
 
 # =============================================================================
