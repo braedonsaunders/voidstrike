@@ -1065,6 +1065,102 @@ def clear_scene():
 
 
 # =============================================================================
+# INTERACTIVE TEST MODE
+# =============================================================================
+
+def get_models_in_folder(folder_path):
+    """Get list of model files in a folder."""
+    if not os.path.exists(folder_path):
+        return []
+
+    static_extensions = ['.obj']
+    animated_extensions = ['.glb', '.gltf', '.fbx']
+
+    files = []
+    for f in os.listdir(folder_path):
+        f_lower = f.lower()
+        if any(f_lower.endswith(ext) for ext in static_extensions):
+            files.append((f, "static"))
+        elif any(f_lower.endswith(ext) for ext in animated_extensions):
+            files.append((f, "animated"))
+
+    files.sort(key=lambda x: x[0])
+    return files
+
+
+def interactive_test_select():
+    """
+    Interactive selection for test mode.
+    Returns (folder_key, filepath, file_type) or None to cancel.
+    """
+    print("\n" + "="*60)
+    print("  SELECT MODEL TO TEST")
+    print("="*60)
+
+    # Find available folders
+    available_folders = []
+    for key, path in INPUT_FOLDERS.items():
+        if path and not path.startswith("/path/to") and os.path.exists(path):
+            models = get_models_in_folder(path)
+            if models:
+                available_folders.append((key, path, len(models)))
+
+    if not available_folders:
+        print("\n  ERROR: No configured folders with models found!")
+        print("  Please set INPUT_FOLDERS paths in the script.")
+        return None
+
+    # List folders
+    print("\n  Available folders:")
+    print("-"*60)
+    for i, (key, path, count) in enumerate(available_folders):
+        print(f"    [{i+1}] {key.upper()} ({count} models)")
+    print(f"    [q] Quit")
+    print("-"*60)
+
+    try:
+        choice = input("  Select folder number: ").strip().lower()
+        if choice == 'q':
+            return None
+        folder_idx = int(choice) - 1
+        if folder_idx < 0 or folder_idx >= len(available_folders):
+            print("  Invalid selection")
+            return None
+    except (ValueError, EOFError):
+        return None
+
+    folder_key, folder_path, _ = available_folders[folder_idx]
+
+    # List models in selected folder
+    models = get_models_in_folder(folder_path)
+
+    print(f"\n  Models in {folder_key.upper()}:")
+    print("-"*60)
+    for i, (filename, file_type) in enumerate(models):
+        name = Path(filename).stem
+        type_label = "GLB" if file_type == "animated" else "OBJ"
+        print(f"    [{i+1}] {name} ({type_label})")
+    print(f"    [q] Back to folder selection")
+    print("-"*60)
+
+    try:
+        choice = input("  Select model number: ").strip().lower()
+        if choice == 'q':
+            return interactive_test_select()  # Go back to folder selection
+        model_idx = int(choice) - 1
+        if model_idx < 0 or model_idx >= len(models):
+            print("  Invalid selection")
+            return None
+    except (ValueError, EOFError):
+        return None
+
+    filename, file_type = models[model_idx]
+    filepath = os.path.join(folder_path, filename)
+
+    return (folder_key, filepath, file_type)
+
+
+# =============================================================================
 # MAIN BATCH PROCESSOR
 # =============================================================================
 
@@ -1130,7 +1226,7 @@ def main():
     print("\n" + "="*70)
     if TEST_MODE:
         print("  VOIDSTRIKE RETOPOLOGY - TEST MODE")
-        print("  (Processing first model only, no saving)")
+        print("  (Interactive model selection, no saving)")
     else:
         print("  VOIDSTRIKE BATCH RETOPOLOGY PIPELINE")
     print("="*70)
@@ -1150,9 +1246,32 @@ def main():
     temp_dir = tempfile.mkdtemp(prefix="voidstrike_batch_")
     print(f"  Temp directory: {temp_dir}")
 
-    # Process each folder in order (smallest/fastest first for testing)
+    # TEST MODE: Interactive model selection
+    if TEST_MODE:
+        selection = interactive_test_select()
+        if selection is None:
+            print("\n  Test cancelled.")
+            return
+
+        folder_key, filepath, file_type = selection
+        filename = Path(filepath).stem
+
+        print(f"\n  Processing: {filename} ({file_type})")
+
+        # Create category output subfolder
+        category_output = os.path.join(OUTPUT_FOLDER, folder_key)
+        os.makedirs(category_output, exist_ok=True)
+
+        # Process the selected model
+        if file_type == "animated":
+            process_animated_model(filepath, folder_key, temp_dir, category_output)
+        else:
+            process_static_model(filepath, folder_key, temp_dir, category_output)
+
+        return
+
+    # BATCH MODE: Process each folder in order
     folder_order = ["decorations", "resources", "buildings", "units"]
-    test_done = False
 
     for folder_key in folder_order:
         if folder_key not in INPUT_FOLDERS:
@@ -1173,22 +1292,16 @@ def main():
         if result == "quit":
             break
 
-        if result == "test_done":
-            test_done = True
-            break
+    # Cleanup temp
+    try:
+        import shutil
+        shutil.rmtree(temp_dir)
+    except:
+        pass
 
-    # Cleanup temp (skip in test mode so baked textures remain viewable)
-    if not TEST_MODE:
-        try:
-            import shutil
-            shutil.rmtree(temp_dir)
-        except:
-            pass
-
-    if not test_done:
-        print("\n" + "="*70)
-        print("  BATCH PROCESSING COMPLETE")
-        print("="*70 + "\n")
+    print("\n" + "="*70)
+    print("  BATCH PROCESSING COMPLETE")
+    print("="*70 + "\n")
 
 
 if __name__ == "__main__":
