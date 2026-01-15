@@ -2,6 +2,10 @@
 const nextConfig = {
   reactStrictMode: true,
 
+  // Next.js 16+ uses Turbopack by default
+  // Empty config acknowledges we're okay with Turbopack (it handles workers natively)
+  turbopack: {},
+
   // Security headers required for SharedArrayBuffer (WASM threading)
   // Safari requires these headers for SharedArrayBuffer to be available
   // Without them, WASM modules like recast-navigation will fail to initialize
