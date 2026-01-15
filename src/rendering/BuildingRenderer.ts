@@ -5,9 +5,10 @@ import { Building } from '@/engine/components/Building';
 import { Health } from '@/engine/components/Health';
 import { Selectable } from '@/engine/components/Selectable';
 import { VisionSystem } from '@/engine/systems/VisionSystem';
-import { AssetManager, REFERENCE_FRAME } from '@/assets/AssetManager';
+import { AssetManager, REFERENCE_FRAME, LODLevel } from '@/assets/AssetManager';
 import { Terrain } from './Terrain';
 import { getPlayerColor, getLocalPlayerId, isSpectatorMode } from '@/store/gameSetupStore';
+import { useUIStore } from '@/store/uiStore';
 import { debugMesh } from '@/utils/debugLogger';
 // NOTE: Buildings don't move, so we don't use velocity tracking (AAA optimization)
 // Velocity node returns zero for meshes without velocity attributes
@@ -44,11 +45,12 @@ interface BuildingMeshData {
   lastY: number;
 }
 
-// Instanced building group for same-type completed buildings
+// Instanced building group for same-type completed buildings at a specific LOD level
 interface InstancedBuildingGroup {
   mesh: THREE.InstancedMesh;
   buildingType: string;
   playerId: string;
+  lodLevel: LODLevel; // Which LOD level this group represents
   maxInstances: number;
   entityIds: number[];
   dummy: THREE.Object3D;
@@ -332,13 +334,15 @@ export class BuildingRenderer {
    * Get or create an instanced mesh group for a building type + player combo.
    * Used for completed, non-selected, non-damaged buildings.
    */
-  private getOrCreateInstancedGroup(buildingType: string, playerId: string): InstancedBuildingGroup {
-    const key = `${buildingType}_${playerId}`;
+  private getOrCreateInstancedGroup(buildingType: string, playerId: string, lodLevel: LODLevel = 0): InstancedBuildingGroup {
+    const key = `${buildingType}_${playerId}_LOD${lodLevel}`;
     let group = this.instancedGroups.get(key);
 
     if (!group) {
       const playerColor = getPlayerColor(playerId);
-      const baseMesh = AssetManager.getBuildingMesh(buildingType, playerColor);
+      // Get the base mesh at the requested LOD level, falling back to next best
+      const baseMesh = AssetManager.getModelAtLOD(buildingType, lodLevel)
+        ?? AssetManager.getBuildingMesh(buildingType, playerColor);
 
       // Find geometry, material, and world transforms from the base mesh
       // CRITICAL: Custom models have scale/rotation applied to Object3D, not geometry vertices
@@ -388,6 +392,7 @@ export class BuildingRenderer {
         mesh: instancedMesh,
         buildingType,
         playerId,
+        lodLevel,
         maxInstances: MAX_BUILDING_INSTANCES_PER_TYPE,
         entityIds: [],
         dummy: new THREE.Object3D(),
@@ -631,7 +636,20 @@ export class BuildingRenderer {
 
       // PERFORMANCE: Try to use instanced rendering for completed static buildings
       if (shouldShow && this.canUseInstancing(building, health, selectable)) {
-        const group = this.getOrCreateInstancedGroup(building.buildingId, ownerId);
+        // Calculate LOD level based on distance from camera
+        let lodLevel: LODLevel = 0;
+        const settings = useUIStore.getState().graphicsSettings;
+        if (settings.lodEnabled && this.camera) {
+          const dx = transform.x - this.camera.position.x;
+          const dz = transform.y - this.camera.position.z;
+          const distanceToCamera = Math.sqrt(dx * dx + dz * dz);
+          lodLevel = AssetManager.getBestLODForDistance(building.buildingId, distanceToCamera, {
+            LOD0_MAX: settings.lodDistance0,
+            LOD1_MAX: settings.lodDistance1,
+          });
+        }
+
+        const group = this.getOrCreateInstancedGroup(building.buildingId, ownerId, lodLevel);
 
         if (group.mesh.count < group.maxInstances) {
           // terrainHeight already computed above for frustum check
