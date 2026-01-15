@@ -55,7 +55,6 @@ import {
 // Access TSL exports that lack TypeScript declarations
 // eslint-disable-next-line @typescript-eslint/no-require-imports
 import * as TSL from 'three/tsl';
-const directionToColor = (TSL as any).directionToColor;
 const materialMetalness = (TSL as any).materialMetalness;
 const materialRoughness = (TSL as any).materialRoughness;
 
@@ -371,9 +370,12 @@ export class RenderPipeline {
         // SSR/SSGI need normals and metalness/roughness per pixel
         // Pack metalness and roughness into a vec2 for bandwidth optimization
         // materialMetalness/materialRoughness include texture maps (metalness * metalnessMap, etc.)
+        // IMPORTANT: Use inline math for normal encoding instead of directionToColor()
+        // directionToColor() returns a Fn node which doesn't have .sample() method
+        // SSR/SSGI need texture nodes that support .sample() for ray marching
         scenePass.setMRT(mrt({
           output: output,
-          normal: directionToColor(normalView),
+          normal: normalView().mul(0.5).add(0.5),
           metalrough: vec2(materialMetalness, materialRoughness),
           velocity: customVelocity,
         }));
