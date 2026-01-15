@@ -1099,6 +1099,21 @@ export function WebGPUGameCanvas() {
         if (worldPos && wallPlacementPreviewRef.current) {
           wallPlacementPreviewRef.current.startLine(worldPos.x, worldPos.z);
         }
+      } else if (isLandingMode && landingBuildingId) {
+        // Handle landing mode - left-click to land flying building
+        if (placementPreviewRef.current && gameRef.current) {
+          const snappedPos = placementPreviewRef.current.getSnappedPosition();
+          const isValid = placementPreviewRef.current.isPlacementValid();
+
+          if (isValid) {
+            gameRef.current.eventBus.emit('command:land', {
+              buildingId: landingBuildingId,
+              position: { x: snappedPos.x, y: snappedPos.y },
+            });
+            useGameStore.getState().setLandingMode(false);
+          }
+          // If not valid, stay in landing mode - player can try another spot
+        }
       } else if (isBuilding && buildingType) {
         // Place building (supports shift-click to queue multiple placements)
         const worldPos = cameraRef.current?.screenToWorld(e.clientX, e.clientY);
@@ -1288,43 +1303,9 @@ export function WebGPUGameCanvas() {
         }
       }
 
-      // Check if all selected entities are production buildings - if so, set rally point
-      const selectedBuildings: number[] = [];
-      let allAreProductionBuildings = true;
-      for (const id of selectedUnits) {
-        const entity = game.world.getEntity(id);
-        const building = entity?.get<Building>('Building');
-        if (building && building.canProduce.length > 0) {
-          selectedBuildings.push(id);
-        } else {
-          allAreProductionBuildings = false;
-          break;
-        }
-      }
-
-      if (allAreProductionBuildings && selectedBuildings.length > 0) {
-        // Set rally point for all selected production buildings
-        // Check if clicking on a resource for auto-gather rally
-        let targetId: number | undefined = undefined;
-        if (clickedEntity) {
-          const resource = clickedEntity.entity.get<Resource>('Resource');
-          if (resource) {
-            targetId = clickedEntity.entity.id;
-          }
-        }
-        for (const buildingId of selectedBuildings) {
-          game.eventBus.emit('rally:set', {
-            buildingId,
-            x: worldPos.x,
-            y: worldPos.z,
-            targetId,
-          });
-        }
-        return;
-      }
-
-      // Check if selected entities include flying buildings - they need special move handling
+      // Categorize selected entities: flying buildings, grounded production buildings, and units
       const flyingBuildingIds: number[] = [];
+      const groundedProductionBuildingIds: number[] = [];
       const unitIds: number[] = [];
 
       for (const id of selectedUnits) {
@@ -1333,7 +1314,11 @@ export function WebGPUGameCanvas() {
         const unit = entity?.get<Unit>('Unit');
 
         if (building?.isFlying && building.state === 'flying') {
+          // Flying buildings can be moved
           flyingBuildingIds.push(id);
+        } else if (building && building.canProduce.length > 0 && !building.isFlying) {
+          // Grounded production buildings get rally points
+          groundedProductionBuildingIds.push(id);
         } else if (unit) {
           unitIds.push(id);
         }
@@ -1345,6 +1330,26 @@ export function WebGPUGameCanvas() {
           game.eventBus.emit('command:flyingBuildingMove', {
             buildingId,
             targetPosition: { x: worldPos.x, y: worldPos.z },
+          });
+        }
+      }
+
+      // Set rally point for grounded production buildings
+      if (groundedProductionBuildingIds.length > 0 && flyingBuildingIds.length === 0 && unitIds.length === 0) {
+        // Only set rally when ONLY grounded production buildings are selected
+        let targetId: number | undefined = undefined;
+        if (clickedEntity) {
+          const resource = clickedEntity.entity.get<Resource>('Resource');
+          if (resource) {
+            targetId = clickedEntity.entity.id;
+          }
+        }
+        for (const buildingId of groundedProductionBuildingIds) {
+          game.eventBus.emit('rally:set', {
+            buildingId,
+            x: worldPos.x,
+            y: worldPos.z,
+            targetId,
           });
         }
       }

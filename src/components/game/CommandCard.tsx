@@ -159,6 +159,32 @@ function CommandCardInner() {
   const [commands, setCommands] = useState<CommandButton[]>([]);
   const [hoveredCmd, setHoveredCmd] = useState<string | null>(null);
   const [menuMode, setMenuMode] = useState<MenuMode>('main');
+  // Track building state changes to force re-render when buildings lift off/land
+  const [buildingStateVersion, setBuildingStateVersion] = useState(0);
+
+  // Subscribe to building state change events to update command menu immediately
+  useEffect(() => {
+    const game = Game.getInstance();
+    if (!game) return;
+
+    const handleBuildingStateChange = () => {
+      setBuildingStateVersion((v) => v + 1);
+    };
+
+    // Listen to all building flight state change events
+    // eventBus.on returns an unsubscribe function
+    const unsub1 = game.eventBus.on('building:liftOffStart', handleBuildingStateChange);
+    const unsub2 = game.eventBus.on('building:liftOffComplete', handleBuildingStateChange);
+    const unsub3 = game.eventBus.on('building:landingStart', handleBuildingStateChange);
+    const unsub4 = game.eventBus.on('building:landingComplete', handleBuildingStateChange);
+
+    return () => {
+      unsub1();
+      unsub2();
+      unsub3();
+      unsub4();
+    };
+  }, []);
 
   // Reset menu when selection changes or building mode exits
   useEffect(() => {
@@ -853,7 +879,7 @@ function CommandCardInner() {
     }
 
     setCommands(buttons.slice(0, 12)); // Max 4x3 grid
-  }, [selectedUnits, minerals, vespene, supply, maxSupply, menuMode]);
+  }, [selectedUnits, minerals, vespene, supply, maxSupply, menuMode, buildingStateVersion]);
 
   // Handle ESC to go back in menus and building shortcuts
   useEffect(() => {
