@@ -839,8 +839,9 @@ export function WebGPUGameCanvas() {
           } else {
             const size = new THREE.Vector2();
             renderer.getSize(size);
-            renderWidth = displayWidth = size.x * renderer.getPixelRatio();
-            renderHeight = displayHeight = size.y * renderer.getPixelRatio();
+            const pixelRatio = window.devicePixelRatio || 1;
+            renderWidth = displayWidth = Math.floor(size.x * pixelRatio);
+            renderHeight = displayHeight = Math.floor(size.y * pixelRatio);
           }
 
           useUIStore.getState().updatePerformanceMetrics({
