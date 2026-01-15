@@ -18,7 +18,7 @@ interface InstancedResourceGroup {
   rotations: number[]; // Store random rotations per instance
   yOffset: number; // Y offset from model normalization (to ground the model)
   baseScale: number; // Base scale from model normalization
-  modelQuaternion: THREE.Quaternion; // Base rotation from model (includes MODEL_FORWARD_OFFSET)
+  modelYRotation: number; // Base Y-axis rotation (MODEL_FORWARD_OFFSET + asset config) - resources stay flat
 }
 
 // Track per-resource rotation and selection ring (no individual labels)
@@ -81,6 +81,7 @@ export class ResourceRenderer {
   private tempQuaternion: THREE.Quaternion = new THREE.Quaternion();
   private tempScale: THREE.Vector3 = new THREE.Vector3();
   private tempEuler: THREE.Euler = new THREE.Euler();
+  private readonly Y_AXIS: THREE.Vector3 = new THREE.Vector3(0, 1, 0);
 
   // PERF: Frustum culling for instances
   private frustum: THREE.Frustum = new THREE.Frustum();
@@ -159,7 +160,9 @@ export class ResourceRenderer {
       let material: THREE.Material | THREE.Material[] | null = null;
       let yOffset = 0;
       let baseScale = 1;
-      const modelQuaternion = new THREE.Quaternion();
+      // For resources, we only use Y-axis rotation to keep them flat on the ground
+      // MODEL_FORWARD_OFFSET + any per-asset rotation config
+      const modelYRotation = AssetManager.getModelRotation(resourceType);
 
       // Count meshes in the model
       let meshCount = 0;
@@ -172,9 +175,8 @@ export class ResourceRenderer {
         if (child instanceof THREE.Mesh && !geometry) {
           geometry = child.geometry;
           material = child.material;
-          // Get world quaternion to capture all parent rotations (includes MODEL_FORWARD_OFFSET)
-          child.getWorldQuaternion(modelQuaternion);
-          // Walk up the parent chain to accumulate transforms
+          // Walk up the parent chain to accumulate transforms (position/scale only, not rotation)
+          // Resources stay flat - we use modelYRotation for Y-axis orientation only
           let obj: THREE.Object3D | null = child;
           while (obj && obj !== baseMesh) {
             yOffset += obj.position.y * (obj.parent?.scale.y ?? 1);
@@ -249,7 +251,7 @@ export class ResourceRenderer {
         rotations: [],
         yOffset,
         baseScale,
-        modelQuaternion,
+        modelYRotation,
       };
 
       this.instancedGroups.set(resourceType, group);
@@ -567,15 +569,13 @@ export class ResourceRenderer {
         const finalScale = amountScale * group.baseScale;
 
         // Set instance transform - apply yOffset scaled appropriately
-        // Combine model's base rotation with per-resource random rotation
+        // Resources use only Y-axis rotation to stay flat on the ground
         const yPos = terrainHeight + group.yOffset * amountScale;
         this.tempPosition.set(transform.x, yPos, transform.y);
-        // Start with model's base quaternion (includes MODEL_FORWARD_OFFSET)
-        this.tempQuaternion.copy(group.modelQuaternion);
-        // Apply per-resource random Y rotation on top
-        this.tempEuler.set(0, data.rotation, 0);
-        const randomRotQuat = new THREE.Quaternion().setFromEuler(this.tempEuler);
-        this.tempQuaternion.multiply(randomRotQuat);
+        // Combine model's base Y rotation with per-resource random Y rotation
+        // Y-axis only ensures resources stay flat on ground
+        const totalYRotation = group.modelYRotation + data.rotation;
+        this.tempQuaternion.setFromAxisAngle(this.Y_AXIS, totalYRotation);
         this.tempScale.set(finalScale, finalScale, finalScale);
         this.tempMatrix.compose(this.tempPosition, this.tempQuaternion, this.tempScale);
         group.mesh.setMatrixAt(instanceIndex, this.tempMatrix);
