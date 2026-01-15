@@ -224,8 +224,11 @@ def create_decimated_lod(source_obj, ratio, lod_name):
     bpy.ops.mesh.normals_make_consistent(inside=False)
     bpy.ops.object.mode_set(mode='OBJECT')
 
-    # Apply smooth shading
-    bpy.ops.object.shade_smooth()
+    # Apply smooth shading with angle-based edge preservation (Blender 4+)
+    try:
+        bpy.ops.object.shade_smooth_by_angle(angle=1.0472)  # 60 degrees
+    except:
+        bpy.ops.object.shade_smooth()  # Fallback for older versions
 
     new_faces = len(lod.data.polygons)
     print(f"      Decimated: {original_faces:,} -> {new_faces:,} faces ({ratio:.0%})")
