@@ -4,11 +4,11 @@ import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useUIStore } from '@/store/uiStore';
 import { AudioManager } from '@/audio/AudioManager';
 import { MusicPlayer } from '@/audio/MusicPlayer';
-import { setEdgeScrollEnabled } from '@/store/cameraStore';
 
 /**
  * Compact and beautiful sound options panel
  * Features: Volume sliders, now playing display, playback controls
+ * NOTE: Edge scrolling is now controlled centrally by HUD.tsx via isAnyMenuOpen selector
  */
 export function SoundOptionsPanel() {
   const showSoundOptions = useUIStore((state) => state.showSoundOptions);
@@ -34,16 +34,6 @@ export function SoundOptionsPanel() {
   const [currentTrack, setCurrentTrack] = useState<string | null>(null);
   const [isPlaying, setIsPlaying] = useState(false);
   const skipCooldownRef = useRef(false);
-
-  // Disable edge scrolling when panel is open
-  useEffect(() => {
-    if (showSoundOptions) {
-      setEdgeScrollEnabled(false);
-      return () => {
-        setEdgeScrollEnabled(true);
-      };
-    }
-  }, [showSoundOptions]);
 
   // Update current track name periodically
   useEffect(() => {

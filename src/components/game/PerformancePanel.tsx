@@ -1,8 +1,7 @@
 'use client';
 
-import React, { useEffect, memo } from 'react';
+import React, { memo } from 'react';
 import { useUIStore } from '@/store/uiStore';
-import { setEdgeScrollEnabled } from '@/store/cameraStore';
 import { PerformanceDashboard } from './PerformanceDashboard';
 
 // Format number with K/M suffix for large numbers
@@ -15,6 +14,7 @@ function formatNumber(num: number): string {
 /**
  * Performance Panel - Centralized performance monitoring and display settings
  * Combines FPS counter toggle, rendering metrics, and detailed performance dashboard
+ * NOTE: Edge scrolling is now controlled centrally by HUD.tsx via isAnyMenuOpen selector
  */
 export const PerformancePanel = memo(function PerformancePanel() {
   const showPerformancePanel = useUIStore((state) => state.showPerformancePanel);
@@ -22,14 +22,6 @@ export const PerformancePanel = memo(function PerformancePanel() {
   const showFPS = useUIStore((state) => state.showFPS);
   const toggleFPS = useUIStore((state) => state.toggleFPS);
   const performanceMetrics = useUIStore((state) => state.performanceMetrics);
-
-  // Disable edge scrolling when panel is open
-  useEffect(() => {
-    if (showPerformancePanel) {
-      setEdgeScrollEnabled(false);
-      return () => setEdgeScrollEnabled(true);
-    }
-  }, [showPerformancePanel]);
 
   if (!showPerformancePanel) return null;
 

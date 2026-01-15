@@ -236,12 +236,31 @@ export class Game {
     }
   }
 
-  public start(): void {
+  /**
+   * Start the game with a countdown.
+   *
+   * MULTIPLAYER ARCHITECTURE:
+   * The game start is based on wall-clock time, NOT on the countdown visual.
+   * This ensures all clients start at exactly the same time, even if:
+   * - A client's browser tab is in the background
+   * - The countdown visual is lagging or skipped
+   * - Network latency varies between clients
+   *
+   * For multiplayer, the server will provide a `gameStartTime` that all clients use.
+   * For single player, we calculate it locally as now + countdown duration.
+   *
+   * @param gameStartTime Optional wall-clock time (Date.now()) when game should start.
+   *                      If not provided, starts after countdown duration (4 seconds).
+   */
+  public start(gameStartTime?: number): void {
     if (this.state === 'running') return;
 
     // Set state to 'initializing' so we don't try to start twice
-    // but also don't run game loop yet
     this.state = 'initializing';
+
+    // Calculate when the game should actually start (wall-clock time)
+    const countdownDuration = 4000; // 3, 2, 1, GO = 4 seconds
+    const scheduledStartTime = gameStartTime ?? (Date.now() + countdownDuration);
 
     const startGameLoop = () => {
       if (this.state === 'running') return; // Already started
@@ -251,23 +270,36 @@ export class Game {
       this.eventBus.emit('game:started', { tick: this.currentTick });
     };
 
-    // Wait for countdown to complete before starting the game loop
-    this.eventBus.once('game:countdownComplete', () => {
+    // Show countdown visual - this is purely cosmetic
+    // The countdown uses a Web Worker for timing (not throttled in background tabs)
+    this.eventBus.emit('game:countdown', { startTime: scheduledStartTime });
+
+    // Schedule the actual game start at the predetermined time
+    // This uses setTimeout which works independently of the visual countdown
+    const delayUntilStart = scheduledStartTime - Date.now();
+
+    if (delayUntilStart <= 0) {
+      // Start time is in the past (e.g., tab was backgrounded) - start immediately
+      debugInitialization.log('[Game] Start time already passed - starting immediately');
       startGameLoop();
-    });
+    } else {
+      // Schedule game start at exact wall-clock time
+      debugInitialization.log(`[Game] Scheduling game start in ${delayUntilStart}ms`);
+      setTimeout(() => {
+        if (this.state !== 'running') {
+          startGameLoop();
+        }
+      }, delayUntilStart);
+    }
 
-    // Show countdown - SC2-style 3, 2, 1, GO!
-    // The overlay scene will emit 'game:countdownComplete' when done
-    this.eventBus.emit('game:countdown', {});
-
-    // Fallback: if countdown doesn't complete within 5 seconds (e.g., overlay not ready),
-    // start the game anyway to prevent being stuck
-    setTimeout(() => {
+    // Also listen for countdown complete as a backup (in case setTimeout drifts)
+    // This ensures the game starts even if there's minor timing discrepancy
+    this.eventBus.once('game:countdownComplete', () => {
       if (this.state !== 'running') {
-        debugInitialization.log('[Game] Countdown timeout - starting game without countdown');
+        debugInitialization.log('[Game] Countdown complete - starting game');
         startGameLoop();
       }
-    }, 5000);
+    });
   }
 
   public pause(): void {

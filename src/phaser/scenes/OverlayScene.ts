@@ -114,9 +114,15 @@ export class OverlayScene extends Phaser.Scene {
   private gameEndContainer: Phaser.GameObjects.Container | null = null;
   private escKeyListener: Phaser.Input.Keyboard.Key | null = null;
 
-  // Match start countdown
+  // Match start countdown - Web Worker for timing (not throttled when tab inactive)
   private countdownActive = false;
   private countdownContainer: Phaser.GameObjects.Container | null = null;
+  private countdownWorker: Worker | null = null;
+  private countdownStartTime = 0;
+  private currentCountdownState: 'waiting' | 3 | 2 | 1 | 'GO' | 'done' = 'waiting';
+  private countdownText: Phaser.GameObjects.Text | null = null;
+  private countdownGlow: Phaser.GameObjects.Graphics | null = null;
+  private countdownRingGraphics: Phaser.GameObjects.Graphics | null = null;
 
   // Attack target indicators (animated circles when right-clicking to attack)
   private attackTargetIndicators: AttackTargetIndicator[] = [];
@@ -415,12 +421,18 @@ export class OverlayScene extends Phaser.Scene {
   }
 
   /**
-   * Subtle, elegant match start countdown
-   * Clean and minimal with gentle animations
+   * Subtle, elegant match start countdown using Web Worker for timing.
+   * Web Workers are NOT throttled when browser tab is inactive, ensuring
+   * consistent timing for multiplayer game starts.
+   *
+   * The countdown calculates what to display based on wall-clock time,
+   * so if the tab is backgrounded and refocused, it shows the correct state.
    */
   public showMatchCountdown(): void {
     if (this.countdownActive) return;
     this.countdownActive = true;
+    this.countdownStartTime = Date.now();
+    this.currentCountdownState = 'waiting';
 
     const screenWidth = this.scale.width;
     const screenHeight = this.scale.height;
@@ -431,149 +443,255 @@ export class OverlayScene extends Phaser.Scene {
     this.countdownContainer = this.add.container(centerX, centerY);
     this.countdownContainer.setDepth(400);
 
-    // Single subtle ring graphics
-    const ringGraphics = this.add.graphics();
-    ringGraphics.setDepth(395);
+    // Ring graphics for subtle expanding effect
+    this.countdownRingGraphics = this.add.graphics();
+    this.countdownRingGraphics.setDepth(395);
 
-    // Countdown sequence: 3, 2, 1, GO!
-    const sequence = ['3', '2', '1', 'GO'];
-    let currentIndex = 0;
+    // Create reusable glow graphics
+    this.countdownGlow = this.add.graphics();
+    this.countdownContainer.add(this.countdownGlow);
 
-    // Subtle expanding ring effect
-    const createRing = () => {
-      const startTime = Date.now();
-      const duration = 400;
+    // Create countdown text (will be updated by worker messages)
+    this.countdownText = this.add.text(0, 0, '', {
+      fontSize: '80px',
+      fontFamily: 'Orbitron, Arial, sans-serif',
+      color: '#ffffff',
+      stroke: '#000000',
+      strokeThickness: 2,
+    });
+    this.countdownText.setOrigin(0.5, 0.5);
+    this.countdownText.setAlpha(0);
+    this.countdownContainer.add(this.countdownText);
 
-      const animateRing = () => {
-        const elapsed = Date.now() - startTime;
-        const progress = elapsed / duration;
+    // Initialize Web Worker for timing
+    try {
+      this.countdownWorker = new Worker(
+        new URL('../../workers/countdownWorker.ts', import.meta.url)
+      );
 
-        if (progress >= 1) {
-          ringGraphics.clear();
-          return;
+      this.countdownWorker.onmessage = (event) => {
+        const data = event.data;
+
+        if (data.type === 'tick') {
+          this.handleCountdownTick(data.state, centerX, centerY);
+        } else if (data.type === 'complete') {
+          this.handleCountdownComplete();
         }
-
-        ringGraphics.clear();
-        const radius = 40 + 60 * this.easeOutQuart(progress);
-        const alpha = (1 - progress) * 0.25;
-
-        ringGraphics.lineStyle(1.5, 0xffffff, alpha);
-        ringGraphics.strokeCircle(centerX, centerY, radius);
-
-        requestAnimationFrame(animateRing);
       };
 
-      animateRing();
-    };
+      this.countdownWorker.onerror = (error) => {
+        console.error('[OverlayScene] Countdown worker error:', error);
+        // Fallback: complete immediately on worker error
+        this.handleCountdownComplete();
+      };
 
-    const showNumber = () => {
-      if (currentIndex >= sequence.length) {
-        // Countdown complete - cleanup
-        this.countdownActive = false;
-        ringGraphics.destroy();
-        if (this.countdownContainer) {
-          this.countdownContainer.destroy();
-          this.countdownContainer = null;
-        }
+      // Start the countdown worker
+      this.countdownWorker.postMessage({
+        type: 'start',
+        startTime: this.countdownStartTime,
+        duration: 4000, // 3, 2, 1, GO = 4 seconds
+      });
+    } catch (error) {
+      // Fallback if Worker fails to initialize (e.g., in some environments)
+      console.warn('[OverlayScene] Failed to create countdown worker, using fallback:', error);
+      this.startFallbackCountdown(centerX, centerY);
+    }
+  }
+
+  /**
+   * Handle countdown tick from Web Worker.
+   * Updates the visual display based on the current state.
+   */
+  private handleCountdownTick(
+    state: 'waiting' | 3 | 2 | 1 | 'GO' | 'done',
+    centerX: number,
+    centerY: number
+  ): void {
+    // Only update visual when state changes
+    if (state === this.currentCountdownState) return;
+    if (state === 'done') return; // Handled by complete message
+
+    const previousState = this.currentCountdownState;
+    this.currentCountdownState = state;
+
+    if (!this.countdownText || !this.countdownGlow || !this.countdownContainer) return;
+
+    // Determine text to show
+    let displayText = '';
+    let isGo = false;
+    if (typeof state === 'number') {
+      displayText = state.toString();
+    } else if (state === 'GO') {
+      displayText = 'GO';
+      isGo = true;
+    }
+
+    if (!displayText) return;
+
+    // Update text
+    this.countdownText.setText(displayText);
+    this.countdownText.setFontSize(isGo ? 64 : 80);
+
+    // Animate in the new number
+    this.countdownText.setScale(0.7);
+    this.countdownText.setAlpha(0);
+
+    // Draw glow
+    this.countdownGlow.clear();
+    this.countdownGlow.fillStyle(0xffffff, 0.03);
+    this.countdownGlow.fillCircle(0, 0, 80);
+    this.countdownGlow.fillStyle(0xffffff, 0.02);
+    this.countdownGlow.fillCircle(0, 0, 50);
+    this.countdownGlow.setScale(0.5);
+    this.countdownGlow.setAlpha(0);
+
+    // Create expanding ring effect
+    this.createCountdownRing(centerX, centerY);
+
+    // Entrance animation
+    this.tweens.add({
+      targets: this.countdownText,
+      scale: 1,
+      alpha: 0.9,
+      duration: 150,
+      ease: 'Quad.easeOut',
+    });
+
+    this.tweens.add({
+      targets: this.countdownGlow,
+      scale: 1,
+      alpha: 1,
+      duration: 200,
+      ease: 'Quad.easeOut',
+    });
+
+    // Exit animation (timed to match the 1-second per state)
+    const holdDuration = isGo ? 350 : 650;
+    this.time.delayedCall(holdDuration, () => {
+      if (!this.countdownText || !this.countdownGlow) return;
+
+      this.tweens.add({
+        targets: this.countdownText,
+        scale: 1.15,
+        alpha: 0,
+        duration: 200,
+        ease: 'Quad.easeIn',
+      });
+
+      this.tweens.add({
+        targets: this.countdownGlow,
+        scale: 1.3,
+        alpha: 0,
+        duration: 250,
+        ease: 'Quad.easeOut',
+      });
+    });
+  }
+
+  /**
+   * Create a subtle expanding ring effect for countdown transitions
+   */
+  private createCountdownRing(centerX: number, centerY: number): void {
+    if (!this.countdownRingGraphics) return;
+
+    const startTime = Date.now();
+    const duration = 400;
+
+    const animateRing = () => {
+      if (!this.countdownRingGraphics || !this.countdownActive) return;
+
+      const elapsed = Date.now() - startTime;
+      const progress = elapsed / duration;
+
+      if (progress >= 1) {
+        this.countdownRingGraphics.clear();
         return;
       }
 
-      const value = sequence[currentIndex];
-      const isGo = value === 'GO';
+      this.countdownRingGraphics.clear();
+      const radius = 40 + 60 * this.easeOutQuart(progress);
+      const alpha = (1 - progress) * 0.25;
 
-      // Simple subtle glow
-      const glow = this.add.graphics();
-      glow.fillStyle(0xffffff, 0.03);
-      glow.fillCircle(0, 0, 80);
-      glow.fillStyle(0xffffff, 0.02);
-      glow.fillCircle(0, 0, 50);
+      this.countdownRingGraphics.lineStyle(1.5, 0xffffff, alpha);
+      this.countdownRingGraphics.strokeCircle(centerX, centerY, radius);
 
-      // Clean, minimal text
-      const countText = this.add.text(0, 0, value, {
-        fontSize: isGo ? '64px' : '80px',
-        fontFamily: 'Orbitron, Arial, sans-serif',
-        color: '#ffffff',
-        stroke: '#000000',
-        strokeThickness: 2,
-      });
-      countText.setOrigin(0.5, 0.5);
-      countText.setAlpha(0.9);
-
-      // Add elements to container
-      this.countdownContainer!.add(glow);
-      this.countdownContainer!.add(countText);
-
-      // Initial state
-      countText.setScale(0.7);
-      countText.setAlpha(0);
-      glow.setScale(0.5);
-      glow.setAlpha(0);
-
-      // Trigger subtle ring
-      createRing();
-
-      // Gentle entrance animation
-      this.tweens.add({
-        targets: countText,
-        scale: 1,
-        alpha: 0.9,
-        duration: 150,
-        ease: 'Quad.easeOut',
-      });
-
-      this.tweens.add({
-        targets: glow,
-        scale: 1,
-        alpha: 1,
-        duration: 200,
-        ease: 'Quad.easeOut',
-      });
-
-      // Hold duration
-      const holdDuration = isGo ? 350 : 450;
-
-      // Exit animation
-      this.time.delayedCall(holdDuration, () => {
-        this.tweens.add({
-          targets: countText,
-          scale: 1.15,
-          alpha: 0,
-          duration: 200,
-          ease: 'Quad.easeIn',
-          onComplete: () => {
-            countText.destroy();
-          },
-        });
-
-        this.tweens.add({
-          targets: glow,
-          scale: 1.3,
-          alpha: 0,
-          duration: 250,
-          ease: 'Quad.easeOut',
-          onComplete: () => {
-            glow.destroy();
-            currentIndex++;
-            if (currentIndex < sequence.length) {
-              this.time.delayedCall(50, showNumber);
-            } else {
-              // Final cleanup
-              this.countdownActive = false;
-              ringGraphics.destroy();
-              if (this.countdownContainer) {
-                this.countdownContainer.destroy();
-                this.countdownContainer = null;
-              }
-              // Signal that countdown is complete - game can now start
-              this.eventBus?.emit('game:countdownComplete', {});
-            }
-          },
-        });
-      });
+      requestAnimationFrame(animateRing);
     };
 
-    // Start immediately - no dark overlay
-    showNumber();
+    animateRing();
+  }
+
+  /**
+   * Handle countdown completion from Web Worker
+   */
+  private handleCountdownComplete(): void {
+    // Cleanup worker
+    if (this.countdownWorker) {
+      this.countdownWorker.terminate();
+      this.countdownWorker = null;
+    }
+
+    // Cleanup visual elements
+    this.cleanupCountdown();
+
+    // Signal that countdown is complete - game can now start
+    this.eventBus?.emit('game:countdownComplete', {});
+  }
+
+  /**
+   * Cleanup countdown visual elements
+   */
+  private cleanupCountdown(): void {
+    this.countdownActive = false;
+
+    if (this.countdownRingGraphics) {
+      this.countdownRingGraphics.destroy();
+      this.countdownRingGraphics = null;
+    }
+
+    if (this.countdownContainer) {
+      this.countdownContainer.destroy();
+      this.countdownContainer = null;
+    }
+
+    this.countdownText = null;
+    this.countdownGlow = null;
+    this.currentCountdownState = 'waiting';
+  }
+
+  /**
+   * Fallback countdown using setInterval (for environments where Web Worker fails)
+   * setInterval is throttled to minimum 1000ms in background tabs, but still works
+   */
+  private startFallbackCountdown(centerX: number, centerY: number): void {
+    const startTime = this.countdownStartTime;
+    const duration = 4000;
+
+    const getState = (elapsed: number): 'waiting' | 3 | 2 | 1 | 'GO' | 'done' => {
+      if (elapsed < 0) return 'waiting';
+      if (elapsed < 1000) return 3;
+      if (elapsed < 2000) return 2;
+      if (elapsed < 3000) return 1;
+      if (elapsed < 4000) return 'GO';
+      return 'done';
+    };
+
+    const tick = () => {
+      const elapsed = Date.now() - startTime;
+      const state = getState(elapsed);
+
+      if (state === 'done') {
+        clearInterval(intervalId);
+        this.handleCountdownComplete();
+        return;
+      }
+
+      this.handleCountdownTick(state, centerX, centerY);
+    };
+
+    // Tick immediately, then every 100ms
+    tick();
+    const intervalId = setInterval(tick, 100);
   }
 
   // Easing function for smooth animations

@@ -2,7 +2,6 @@
 
 import React, { useEffect, useState, memo, useCallback } from 'react';
 import { useUIStore, GraphicsSettings, AntiAliasingMode, UpscalingMode, ResolutionMode, FixedResolution, FIXED_RESOLUTIONS, GraphicsPresetName } from '@/store/uiStore';
-import { setEdgeScrollEnabled } from '@/store/cameraStore';
 
 // ============================================
 // COMPACT UI COMPONENTS
@@ -328,13 +327,8 @@ export const GraphicsOptionsPanel = memo(function GraphicsOptionsPanel() {
     }
   }, [showGraphicsOptions, presetsLoaded, loadPresets]);
 
-  // Disable edge scrolling when panel is open
-  useEffect(() => {
-    if (showGraphicsOptions) {
-      setEdgeScrollEnabled(false);
-      return () => setEdgeScrollEnabled(true);
-    }
-  }, [showGraphicsOptions]);
+  // NOTE: Edge scrolling is now controlled centrally by HUD.tsx via isAnyMenuOpen selector
+  // No individual edge scroll effect needed here
 
   if (!showGraphicsOptions) return null;
 

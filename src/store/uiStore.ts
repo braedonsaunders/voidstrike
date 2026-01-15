@@ -258,6 +258,11 @@ export interface UIState {
   isModalOpen: boolean;
   modalContent: React.ReactNode | null;
 
+  // HUD menu state (centralized for edge scroll control)
+  showOptionsMenu: boolean;
+  showOverlayMenu: boolean;
+  showPlayerStatus: boolean;
+
   // Notifications
   notifications: Notification[];
 
@@ -364,6 +369,11 @@ export interface UIState {
   setAllDebugSettings: (enabled: boolean) => void;
   // Performance panel actions
   togglePerformancePanel: () => void;
+  // HUD menu actions
+  setShowOptionsMenu: (show: boolean) => void;
+  setShowOverlayMenu: (show: boolean) => void;
+  setShowPlayerStatus: (show: boolean) => void;
+  closeAllMenus: () => void;
   // Overlay settings actions
   setActiveOverlay: (overlay: GameOverlayType) => void;
   toggleOverlay: (overlay: GameOverlayType) => void;
@@ -377,6 +387,10 @@ export const useUIStore = create<UIState>((set, get) => ({
   previousScreen: null,
   isModalOpen: false,
   modalContent: null,
+  // HUD menu state
+  showOptionsMenu: false,
+  showOverlayMenu: false,
+  showPlayerStatus: false,
   notifications: [],
   tooltipContent: null,
   tooltipPosition: null,
@@ -856,6 +870,20 @@ export const useUIStore = create<UIState>((set, get) => ({
 
   togglePerformancePanel: () => set((state) => ({ showPerformancePanel: !state.showPerformancePanel })),
 
+  // HUD menu actions
+  setShowOptionsMenu: (show: boolean) => set({ showOptionsMenu: show }),
+  setShowOverlayMenu: (show: boolean) => set({ showOverlayMenu: show }),
+  setShowPlayerStatus: (show: boolean) => set({ showPlayerStatus: show }),
+  closeAllMenus: () => set({
+    showOptionsMenu: false,
+    showOverlayMenu: false,
+    showPlayerStatus: false,
+    showGraphicsOptions: false,
+    showSoundOptions: false,
+    showPerformancePanel: false,
+    showDebugMenu: false,
+  }),
+
   toggleDebugSetting: (key) =>
     set((state) => ({
       debugSettings: {
@@ -921,3 +949,19 @@ export const useUIStore = create<UIState>((set, get) => ({
       performanceMetrics: { ...state.performanceMetrics, ...metrics },
     })),
 }));
+
+/**
+ * Selector to check if any menu/panel is open that should disable edge scrolling.
+ * This provides a single source of truth for edge scroll control.
+ */
+export const isAnyMenuOpen = (state: UIState): boolean => {
+  return (
+    state.showOptionsMenu ||
+    state.showOverlayMenu ||
+    state.showPlayerStatus ||
+    state.showGraphicsOptions ||
+    state.showSoundOptions ||
+    state.showPerformancePanel ||
+    state.showDebugMenu
+  );
+};
