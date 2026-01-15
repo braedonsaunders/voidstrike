@@ -188,30 +188,32 @@ function extractMaterial(object: THREE.Object3D, assetId?: string): THREE.Materi
     }
   });
 
-  if (material !== null && material instanceof THREE.MeshStandardMaterial) {
+  // Type guard for MeshStandardMaterial
+  if (material && (material as THREE.MeshStandardMaterial).isMeshStandardMaterial) {
+    const stdMaterial = material as THREE.MeshStandardMaterial;
     // Check for rendering hints from assets.json
     const hints = assetId ? AssetManager.getRenderingHints(assetId) : null;
 
     if (hints) {
       // Apply envMapIntensity from hints (default was 0 for performance)
-      material.envMapIntensity = hints.envMapIntensity ?? 0;
+      stdMaterial.envMapIntensity = hints.envMapIntensity ?? 0;
 
       // Apply emissive properties
       if (hints.emissive) {
-        material.emissive = new THREE.Color(hints.emissive);
-        material.emissiveIntensity = hints.emissiveIntensity ?? 1.0;
+        stdMaterial.emissive = new THREE.Color(hints.emissive);
+        stdMaterial.emissiveIntensity = hints.emissiveIntensity ?? 1.0;
       }
 
       // Apply roughness/metalness overrides
       if (hints.roughnessOverride !== null && hints.roughnessOverride !== undefined) {
-        material.roughness = hints.roughnessOverride;
+        stdMaterial.roughness = hints.roughnessOverride;
       }
       if (hints.metalnessOverride !== null && hints.metalnessOverride !== undefined) {
-        material.metalness = hints.metalnessOverride;
+        stdMaterial.metalness = hints.metalnessOverride;
       }
     } else {
       // Default: disable IBL on decoration materials for performance
-      material.envMapIntensity = 0;
+      stdMaterial.envMapIntensity = 0;
     }
   }
 
