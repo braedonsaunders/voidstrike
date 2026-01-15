@@ -1595,43 +1595,50 @@ export class Terrain {
         if (rampZone.has(`${x},${y}`)) continue;
 
         // Check 4 cardinal directions for cliff edges
-        const edges = [
-          { nx: x + 1, ny: y, edgeX: x + 1, y1: y, y2: y + 1, isVertical: true },   // Right
-          { nx: x - 1, ny: y, edgeX: x, y1: y, y2: y + 1, isVertical: true },       // Left
-          { nx: x, ny: y + 1, edgeY: y + 1, x1: x, x2: x + 1, isVertical: false },  // Bottom
-          { nx: x, ny: y - 1, edgeY: y, x1: x, x2: x + 1, isVertical: false },      // Top
+        // Vertical edges (left/right walls)
+        const verticalEdges = [
+          { nx: x + 1, ny: y, edgeX: x + 1, y1: y, y2: y + 1 },  // Right
+          { nx: x - 1, ny: y, edgeX: x, y1: y, y2: y + 1 },      // Left
         ];
 
-        for (const edge of edges) {
+        // Horizontal edges (top/bottom walls)
+        const horizontalEdges = [
+          { nx: x, ny: y + 1, edgeY: y + 1, x1: x, x2: x + 1 },  // Bottom
+          { nx: x, ny: y - 1, edgeY: y, x1: x, x2: x + 1 },      // Top
+        ];
+
+        // Process vertical walls
+        for (const edge of verticalEdges) {
           const wallInfo = needsCliffWall(x, y, edge.nx, edge.ny);
-
           if (wallInfo.needed) {
-            // Generate wall quad at this edge
-            if (edge.isVertical) {
-              // Vertical wall along X edge (right or left side of cell)
-              const wx = edge.edgeX;
-              vertices.push(
-                wx, wallInfo.topHeight, edge.y1,     // Top-left
-                wx, wallInfo.topHeight, edge.y2,     // Top-right
-                wx, wallInfo.bottomHeight, edge.y1,  // Bottom-left
-                wx, wallInfo.bottomHeight, edge.y2   // Bottom-right
-              );
-            } else {
-              // Horizontal wall along Y edge (top or bottom of cell)
-              const wy = edge.edgeY!;
-              vertices.push(
-                edge.x1!, wallInfo.topHeight, wy,     // Top-left
-                edge.x2!, wallInfo.topHeight, wy,     // Top-right
-                edge.x1!, wallInfo.bottomHeight, wy,  // Bottom-left
-                edge.x2!, wallInfo.bottomHeight, wy   // Bottom-right
-              );
-            }
-
+            vertices.push(
+              edge.edgeX, wallInfo.topHeight, edge.y1,
+              edge.edgeX, wallInfo.topHeight, edge.y2,
+              edge.edgeX, wallInfo.bottomHeight, edge.y1,
+              edge.edgeX, wallInfo.bottomHeight, edge.y2
+            );
             // Two triangles for the wall quad (both sides for robustness)
-            // Front face
             indices.push(vertexIndex, vertexIndex + 1, vertexIndex + 2);
             indices.push(vertexIndex + 1, vertexIndex + 3, vertexIndex + 2);
-            // Back face (reversed winding)
+            indices.push(vertexIndex, vertexIndex + 2, vertexIndex + 1);
+            indices.push(vertexIndex + 1, vertexIndex + 2, vertexIndex + 3);
+            vertexIndex += 4;
+          }
+        }
+
+        // Process horizontal walls
+        for (const edge of horizontalEdges) {
+          const wallInfo = needsCliffWall(x, y, edge.nx, edge.ny);
+          if (wallInfo.needed) {
+            vertices.push(
+              edge.x1, wallInfo.topHeight, edge.edgeY,
+              edge.x2, wallInfo.topHeight, edge.edgeY,
+              edge.x1, wallInfo.bottomHeight, edge.edgeY,
+              edge.x2, wallInfo.bottomHeight, edge.edgeY
+            );
+            // Two triangles for the wall quad (both sides for robustness)
+            indices.push(vertexIndex, vertexIndex + 1, vertexIndex + 2);
+            indices.push(vertexIndex + 1, vertexIndex + 3, vertexIndex + 2);
             indices.push(vertexIndex, vertexIndex + 2, vertexIndex + 1);
             indices.push(vertexIndex + 1, vertexIndex + 2, vertexIndex + 3);
             vertexIndex += 4;
