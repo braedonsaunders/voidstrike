@@ -388,9 +388,10 @@ export class RenderPipeline {
         // IMPORTANT: Use inline math for normal encoding instead of directionToColor()
         // directionToColor() returns a Fn node which doesn't have .sample() method
         // SSR/SSGI need texture nodes that support .sample() for ray marching
+        // Cast normalView to any - TS types say function but it's actually a node at runtime
         scenePass.setMRT(mrt({
           output: output,
-          normal: normalView().mul(0.5).add(0.5),
+          normal: (normalView as any).mul(0.5).add(0.5),
           metalrough: vec2(materialMetalness, materialRoughness),
           velocity: customVelocity,
         }));
