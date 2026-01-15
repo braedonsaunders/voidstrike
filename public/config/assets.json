@@ -367,6 +367,11 @@
     "height": {
       "description": "Target height in game units. Models are automatically scaled to match this height."
     },
+    "rotation": {
+      "description": "Y-axis rotation offset in degrees. Use to fix models facing wrong direction.",
+      "example": "If unit walks backward, add \"rotation\": 180. If sideways, try 90 or -90.",
+      "default": "0 (no additional rotation beyond the engine default)"
+    },
     "lod": {
       "description": "LOD levels are automatically detected. LOD0 is highest detail (default), LOD1 is medium, LOD2 is lowest.",
       "convention": "Models named modelname_LOD0.glb, modelname_LOD1.glb, modelname_LOD2.glb"

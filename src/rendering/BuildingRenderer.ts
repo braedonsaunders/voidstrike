@@ -634,8 +634,9 @@ export class BuildingRenderer {
           // The Y offset ensures buildings are properly grounded (bottom at terrain level)
           this.tempPosition.set(transform.x, terrainHeight + group.modelYOffset, transform.y);
           this.tempScale.copy(group.modelScale); // Apply the normalized model scale
-          // Apply the same rotation offset as individual meshes (from AssetManager model loading)
-          this.tempQuaternion.setFromAxisAngle(new THREE.Vector3(0, 1, 0), REFERENCE_FRAME.MODEL_FORWARD_OFFSET);
+          // Apply the same rotation offset as individual meshes (includes per-asset rotation from config)
+          const modelRotation = AssetManager.getModelRotation(building.buildingId);
+          this.tempQuaternion.setFromAxisAngle(new THREE.Vector3(0, 1, 0), modelRotation);
           this.tempMatrix.compose(this.tempPosition, this.tempQuaternion, this.tempScale);
           group.mesh.setMatrixAt(group.mesh.count, this.tempMatrix);
           group.entityIds.push(entity.id);
