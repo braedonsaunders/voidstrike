@@ -367,8 +367,12 @@ export class PathfindingSystem extends System {
   }
 
   private queuePathRequest(request: PathRequest): void {
-    // Check failed path cache
-    if (this.isPathRecentlyFailed(request.entityId, request.endX, request.endY)) {
+    const entity = this.world.getEntity(request.entityId);
+    const unit = entity?.get<Unit>('Unit');
+    const isBuilding = unit?.state === 'building' && unit?.constructingBuildingId !== null;
+
+    // Check failed path cache - but skip for building workers who need to keep trying
+    if (!isBuilding && this.isPathRecentlyFailed(request.entityId, request.endX, request.endY)) {
       this.clearUnitMovementTarget(request.entityId);
       return;
     }
@@ -378,7 +382,11 @@ export class PathfindingSystem extends System {
     if (!isWalkable) {
       const nearby = this.recast.findNearestPoint(request.endX, request.endY);
       if (!nearby) {
-        this.recordFailedPath(request.entityId, request.endX, request.endY);
+        // For building workers, don't record failure - the building center is expected
+        // to be blocked. They'll keep trying to find a path on subsequent updates.
+        if (!isBuilding) {
+          this.recordFailedPath(request.entityId, request.endX, request.endY);
+        }
         this.clearUnitMovementTarget(request.entityId);
         return;
       }
@@ -399,17 +407,30 @@ export class PathfindingSystem extends System {
 
     unit.path = [];
     unit.pathIndex = 0;
-    unit.targetX = null;
-    unit.targetY = null;
 
     if (unit.state === 'moving') {
+      unit.targetX = null;
+      unit.targetY = null;
       unit.state = 'idle';
     } else if (unit.state === 'building') {
-      unit.cancelBuilding();
+      // FIX: Don't cancel building assignments when path fails!
+      // Workers targeting a building they're constructing will have the path blocked
+      // by the building obstacle. BuildingPlacementSystem will keep setting their
+      // target, and they'll eventually path to a nearby walkable point.
+      // Only clear path state, NOT the target or building assignment.
+      // This prevents the race condition where:
+      // 1. Building placed, obstacle added to navmesh
+      // 2. Worker tries to path to building center (blocked)
+      // 3. Path fails, worker's building assignment incorrectly cancelled
     } else if (unit.state === 'gathering') {
+      unit.targetX = null;
+      unit.targetY = null;
       unit.gatherTargetId = null;
       unit.isMining = false;
       unit.state = 'idle';
+    } else {
+      unit.targetX = null;
+      unit.targetY = null;
     }
 
     this.unitPathStates.delete(entityId);
@@ -508,17 +529,24 @@ export class PathfindingSystem extends System {
       const dist = Math.sqrt(dx * dx + dy * dy);
 
       if (dist > 30) {
-        // Target is far, truly unreachable - reset
-        unit.targetX = null;
-        unit.targetY = null;
+        // Target is far, truly unreachable - reset for non-building units
         if (unit.state === 'moving') {
+          unit.targetX = null;
+          unit.targetY = null;
           unit.state = 'idle';
         } else if (unit.state === 'building') {
-          unit.cancelBuilding();
+          // FIX: Don't cancel building assignments - let workers keep trying.
+          // BuildingPlacementSystem will handle detecting if building is orphaned.
+          // The building center being far doesn't mean the construction site is unreachable.
         } else if (unit.state === 'gathering') {
+          unit.targetX = null;
+          unit.targetY = null;
           unit.gatherTargetId = null;
           unit.isMining = false;
           unit.state = 'idle';
+        } else {
+          unit.targetX = null;
+          unit.targetY = null;
         }
       }
       // If dist <= 30, target is close - allow direct movement even without path
