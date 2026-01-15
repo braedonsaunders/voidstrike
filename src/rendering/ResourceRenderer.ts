@@ -18,6 +18,7 @@ interface InstancedResourceGroup {
   rotations: number[]; // Store random rotations per instance
   yOffset: number; // Y offset from model normalization (to ground the model)
   baseScale: number; // Base scale from model normalization
+  modelQuaternion: THREE.Quaternion; // Base rotation from model (includes MODEL_FORWARD_OFFSET)
 }
 
 // Track per-resource rotation and selection ring (no individual labels)
@@ -150,11 +151,15 @@ export class ResourceRenderer {
       // Get the base mesh from AssetManager
       const baseMesh = AssetManager.getResourceMesh(resourceType as 'minerals' | 'vespene');
 
+      // Update world matrices to get accurate transforms
+      baseMesh.updateMatrixWorld(true);
+
       // Find the actual mesh geometry, material, and extract transforms from the model
       let geometry: THREE.BufferGeometry | null = null;
       let material: THREE.Material | THREE.Material[] | null = null;
       let yOffset = 0;
       let baseScale = 1;
+      const modelQuaternion = new THREE.Quaternion();
 
       // Count meshes in the model
       let meshCount = 0;
@@ -167,6 +172,8 @@ export class ResourceRenderer {
         if (child instanceof THREE.Mesh && !geometry) {
           geometry = child.geometry;
           material = child.material;
+          // Get world quaternion to capture all parent rotations (includes MODEL_FORWARD_OFFSET)
+          child.getWorldQuaternion(modelQuaternion);
           // Walk up the parent chain to accumulate transforms
           let obj: THREE.Object3D | null = child;
           while (obj && obj !== baseMesh) {
@@ -242,6 +249,7 @@ export class ResourceRenderer {
         rotations: [],
         yOffset,
         baseScale,
+        modelQuaternion,
       };
 
       this.instancedGroups.set(resourceType, group);
@@ -559,10 +567,15 @@ export class ResourceRenderer {
         const finalScale = amountScale * group.baseScale;
 
         // Set instance transform - apply yOffset scaled appropriately
+        // Combine model's base rotation with per-resource random rotation
         const yPos = terrainHeight + group.yOffset * amountScale;
         this.tempPosition.set(transform.x, yPos, transform.y);
+        // Start with model's base quaternion (includes MODEL_FORWARD_OFFSET)
+        this.tempQuaternion.copy(group.modelQuaternion);
+        // Apply per-resource random Y rotation on top
         this.tempEuler.set(0, data.rotation, 0);
-        this.tempQuaternion.setFromEuler(this.tempEuler);
+        const randomRotQuat = new THREE.Quaternion().setFromEuler(this.tempEuler);
+        this.tempQuaternion.multiply(randomRotQuat);
         this.tempScale.set(finalScale, finalScale, finalScale);
         this.tempMatrix.compose(this.tempPosition, this.tempQuaternion, this.tempScale);
         group.mesh.setMatrixAt(instanceIndex, this.tempMatrix);

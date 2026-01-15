@@ -56,6 +56,8 @@ interface InstancedBuildingGroup {
   modelScale: THREE.Vector3;
   // CRITICAL: Track model Y offset for proper grounding (models have position.y set to anchor bottom at y=0)
   modelYOffset: number;
+  // CRITICAL: Track model rotation to apply to instances (captures all parent rotations from model hierarchy)
+  modelQuaternion: THREE.Quaternion;
 }
 
 const MAX_BUILDING_INSTANCES_PER_TYPE = 50;
@@ -338,14 +340,15 @@ export class BuildingRenderer {
       const playerColor = getPlayerColor(playerId);
       const baseMesh = AssetManager.getBuildingMesh(buildingType, playerColor);
 
-      // Find geometry, material, and world scale from the base mesh
-      // CRITICAL: Custom models have scale applied to Object3D, not geometry vertices
+      // Find geometry, material, and world transforms from the base mesh
+      // CRITICAL: Custom models have scale/rotation applied to Object3D, not geometry vertices
       let geometry: THREE.BufferGeometry | null = null;
       let material: THREE.Material | THREE.Material[] | null = null;
       const modelScale = new THREE.Vector3(1, 1, 1);
       const modelPosition = new THREE.Vector3();
+      const modelQuaternion = new THREE.Quaternion();
 
-      // Update world matrices to get accurate world scale and position
+      // Update world matrices to get accurate world transforms
       baseMesh.updateMatrixWorld(true);
 
       baseMesh.traverse((child) => {
@@ -356,6 +359,8 @@ export class BuildingRenderer {
           child.getWorldScale(modelScale);
           // Get the world position of this mesh (includes Y offset for grounding)
           child.getWorldPosition(modelPosition);
+          // Get the world rotation of this mesh (includes MODEL_FORWARD_OFFSET and any parent rotations)
+          child.getWorldQuaternion(modelQuaternion);
         }
       });
 
@@ -388,6 +393,7 @@ export class BuildingRenderer {
         dummy: new THREE.Object3D(),
         modelScale, // Store the model's world scale for proper instance sizing
         modelYOffset: modelPosition.y, // Store Y offset for proper grounding
+        modelQuaternion, // Store the model's world rotation for proper orientation
       };
 
       this.instancedGroups.set(key, group);
@@ -630,13 +636,12 @@ export class BuildingRenderer {
         if (group.mesh.count < group.maxInstances) {
           // terrainHeight already computed above for frustum check
 
-          // Set instance matrix - CRITICAL: Use model's scale and Y offset from normalization
+          // Set instance matrix - CRITICAL: Use model's world transforms from normalization
           // The Y offset ensures buildings are properly grounded (bottom at terrain level)
+          // The quaternion captures the full rotation including MODEL_FORWARD_OFFSET and any parent rotations
           this.tempPosition.set(transform.x, terrainHeight + group.modelYOffset, transform.y);
-          this.tempScale.copy(group.modelScale); // Apply the normalized model scale
-          // Apply the same rotation offset as individual meshes (includes per-asset rotation from config)
-          const modelRotation = AssetManager.getModelRotation(building.buildingId);
-          this.tempQuaternion.setFromAxisAngle(new THREE.Vector3(0, 1, 0), modelRotation);
+          this.tempScale.copy(group.modelScale);
+          this.tempQuaternion.copy(group.modelQuaternion);
           this.tempMatrix.compose(this.tempPosition, this.tempQuaternion, this.tempScale);
           group.mesh.setMatrixAt(group.mesh.count, this.tempMatrix);
           group.entityIds.push(entity.id);
