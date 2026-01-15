@@ -101,6 +101,23 @@ renderPipeline.applyConfig({ ssrEnabled: true });
 **Color Space Handling:**
 The internal render target uses `LinearSRGBColorSpace` because the post-processing pipeline outputs linear HDR data. Using `SRGBColorSpace` would cause double-linearization when sampling (washed out colors).
 
+**Critical: Dual-Pipeline Color Space Fix:**
+When rendering the internal pipeline to `internalRenderTarget`, the renderer's `outputColorSpace` must be temporarily set to `LinearSRGBColorSpace`. This is because:
+1. ACES tone mapping already outputs display-referred (gamma-corrected) SDR values
+2. If `outputColorSpace = SRGBColorSpace` (the default), Three.js applies ANOTHER gamma conversion
+3. This caused washed out colors (double gamma correction)
+
+The fix in `PostProcessing.render()`:
+```typescript
+// Save original color space
+const originalColorSpace = this.renderer.outputColorSpace;
+// Set linear for internal pipeline render
+this.renderer.outputColorSpace = THREE.LinearSRGBColorSpace;
+// Render to target...
+// Restore for canvas output
+this.renderer.outputColorSpace = originalColorSpace;
+```
+
 **Tone Mapping Architecture (AAA Standard):**
 - `renderer.toneMapping = NoToneMapping` (disabled on Three.js renderer)
 - PostProcessing handles ALL tone mapping via ACES Filmic in color grading pass
