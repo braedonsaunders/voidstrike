@@ -488,6 +488,8 @@ def calculate_voxel_size(obj, target_faces):
 
     Larger objects need larger voxel sizes to avoid creating too many faces.
     """
+    from mathutils import Vector
+
     # Get mesh bounding box dimensions
     bbox = [obj.matrix_world @ Vector(corner) for corner in obj.bound_box]
     min_corner = Vector((min(v.x for v in bbox), min(v.y for v in bbox), min(v.z for v in bbox)))
@@ -500,7 +502,6 @@ def calculate_voxel_size(obj, target_faces):
     # Estimate voxel size: each voxel face ≈ voxel_size^2
     # target_faces ≈ surface_area / (voxel_size^2)
     # voxel_size ≈ sqrt(surface_area / target_faces)
-    import math
     estimated_voxel = math.sqrt(surface_area / max(target_faces * 2, 100))
 
     # Clamp to reasonable range: 0.005 (very detailed) to 0.1 (very coarse)
@@ -540,12 +541,15 @@ def quadriflow_remesh(high_poly, target_faces, base_name, lod_name):
     # =========================================================================
     print(f"      Stage 1: Voxel remesh (merging fragments)...")
 
+    # Calculate voxel size first (outside try block so it's available for retry)
+    intermediate_target = target_faces * 3
     try:
-        # Calculate voxel size that will give us roughly 2-3x target faces
-        # (we'll reduce further with Quadriflow)
-        intermediate_target = target_faces * 3
         voxel_size = calculate_voxel_size(lod, intermediate_target)
+    except Exception as e:
+        print(f"      Voxel size calculation failed: {e}, using default")
+        voxel_size = 0.02  # Default fallback
 
+    try:
         # Apply voxel remesh - this merges ALL fragments into one mesh
         voxel_remesh_sculpt_mode(lod, voxel_size)
 
@@ -554,7 +558,7 @@ def quadriflow_remesh(high_poly, target_faces, base_name, lod_name):
 
     except Exception as e:
         print(f"      Stage 1 (voxel) failed: {e}")
-        print(f"      Trying larger voxel size...")
+        print(f"      Trying larger voxel size ({voxel_size * 2})...")
 
         try:
             # Try with larger voxel size (coarser, less likely to crash)
