@@ -533,6 +533,28 @@ export class AssetManager {
         (gltf) => {
           const model = gltf.scene;
 
+          // DEBUG: Count triangles in loaded model
+          let totalTriangles = 0;
+          let meshList: Array<{ name: string; tris: number }> = [];
+          model.traverse((child) => {
+            if (child instanceof THREE.Mesh) {
+              const geo = child.geometry;
+              const indexCount = geo.index ? geo.index.count : 0;
+              const posCount = geo.attributes.position?.count || 0;
+              const tris = indexCount > 0 ? indexCount / 3 : posCount / 3;
+              totalTriangles += tris;
+              if (tris > 10000) { // Log meshes with > 10K triangles
+                meshList.push({ name: child.name || 'unnamed', tris });
+              }
+            }
+          });
+          if (totalTriangles > 50000) {
+            console.warn(`[AssetManager] HIGH POLY MODEL: ${assetId} (${url}) has ${(totalTriangles/1000).toFixed(1)}K triangles`);
+            meshList.forEach(m => console.warn(`  - ${m.name}: ${(m.tris/1000).toFixed(1)}K tris`));
+          } else {
+            debugAssets.log(`[AssetManager] ${assetId}: ${(totalTriangles/1000).toFixed(1)}K triangles`);
+          }
+
           // Configure shadows
           model.traverse((child) => {
             if (child instanceof THREE.Mesh) {
