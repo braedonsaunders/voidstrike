@@ -278,7 +278,7 @@ def process_static_model(filepath, category, temp_dir, output_dir):
     clean_mesh(high_poly)
 
     # Get LOD targets for this category
-    targets = LOD_TARGETS.get(category, LOD_TARGETS["units_static"])
+    targets = LOD_TARGETS.get(category, LOD_TARGETS["units"])
 
     # Create LODs via Instant Meshes
     lods = []
@@ -469,7 +469,7 @@ def process_animated_model(filepath, category, temp_dir, output_dir):
             break
 
     # Get LOD targets
-    targets = LOD_TARGETS.get(category, LOD_TARGETS["units_animated"])
+    targets = LOD_TARGETS.get(category, LOD_TARGETS["units"])
 
     # Create LODs
     lods = []
