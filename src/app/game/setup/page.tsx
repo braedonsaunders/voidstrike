@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import { ALL_MAPS, MapData } from '@/data/maps';
 import { MusicPlayer } from '@/audio/MusicPlayer';
 import { useUIStore } from '@/store/uiStore';
@@ -264,6 +264,21 @@ export default function GameSetupPage() {
   const router = useRouter();
   const musicEnabled = useUIStore((state) => state.musicEnabled);
   const musicVolume = useUIStore((state) => state.musicVolume);
+  const toggleMusic = useUIStore((state) => state.toggleMusic);
+  const isFullscreen = useUIStore((state) => state.isFullscreen);
+  const toggleFullscreen = useUIStore((state) => state.toggleFullscreen);
+  const setFullscreen = useUIStore((state) => state.setFullscreen);
+
+  const handleMusicToggle = useCallback(() => {
+    toggleMusic();
+    const newEnabled = !musicEnabled;
+    MusicPlayer.setMuted(!newEnabled);
+    if (!newEnabled) {
+      MusicPlayer.pause();
+    } else {
+      MusicPlayer.resume();
+    }
+  }, [toggleMusic, musicEnabled]);
 
   // Continue menu music (or start if navigated directly here)
   useEffect(() => {
@@ -287,6 +302,16 @@ export default function GameSetupPage() {
     MusicPlayer.setVolume(musicVolume);
     MusicPlayer.setMuted(!musicEnabled);
   }, [musicVolume, musicEnabled]);
+
+  // Sync fullscreen state with browser
+  useEffect(() => {
+    const handleFullscreenChange = () => {
+      setFullscreen(!!document.fullscreenElement);
+    };
+    document.addEventListener('fullscreenchange', handleFullscreenChange);
+    setFullscreen(!!document.fullscreenElement);
+    return () => document.removeEventListener('fullscreenchange', handleFullscreenChange);
+  }, [setFullscreen]);
 
   const {
     selectedMapId,
@@ -372,6 +397,28 @@ export default function GameSetupPage() {
               &larr; Back to Menu
             </Link>
             <h1 className="font-display text-2xl text-white">Game Setup</h1>
+          </div>
+
+          {/* Mute/Fullscreen Buttons */}
+          <div className="flex items-center gap-3">
+            <button
+              onClick={handleMusicToggle}
+              className="w-10 h-10 rounded-full flex items-center justify-center
+                       bg-white/5 hover:bg-white/10 border border-white/10
+                       transition-all duration-200 hover:scale-105 hover:border-void-500/50"
+              title={musicEnabled ? 'Mute Music' : 'Unmute Music'}
+            >
+              <span className="text-base">{musicEnabled ? '🔊' : '🔇'}</span>
+            </button>
+            <button
+              onClick={toggleFullscreen}
+              className="w-10 h-10 rounded-full flex items-center justify-center
+                       bg-white/5 hover:bg-white/10 border border-white/10
+                       transition-all duration-200 hover:scale-105 hover:border-void-500/50"
+              title={isFullscreen ? 'Exit Fullscreen' : 'Enter Fullscreen'}
+            >
+              <span className="text-base">{isFullscreen ? '⛶' : '⛶'}</span>
+            </button>
           </div>
         </div>
 
