@@ -445,16 +445,84 @@ def join_objects(objects, name):
     return result
 
 
+def voxel_remesh_sculpt_mode(obj, voxel_size=0.02):
+    """
+    Apply voxel remesh using Sculpt Mode (more stable than modifier).
+
+    This merges all disconnected fragments into a SINGLE WATERTIGHT mesh.
+    Essential for AI mesh soup before applying Quadriflow.
+
+    Args:
+        obj: The mesh object to remesh
+        voxel_size: Size of voxels (smaller = more detail, larger = simpler)
+                    0.01 = high detail, 0.02 = medium, 0.05 = low detail
+
+    Returns the remeshed object (modifies in place).
+    """
+    bpy.ops.object.select_all(action='DESELECT')
+    obj.select_set(True)
+    bpy.context.view_layer.objects.active = obj
+
+    # Store original face count
+    original_faces = len(obj.data.polygons)
+
+    # Set voxel size on the mesh data
+    obj.data.remesh_voxel_size = voxel_size
+    obj.data.remesh_voxel_adaptivity = 0  # 0 = uniform voxels
+
+    # Switch to sculpt mode and apply voxel remesh
+    bpy.ops.object.mode_set(mode='SCULPT')
+    bpy.ops.sculpt.detail_flood_fill()  # Optional: adapt detail
+    bpy.ops.object.voxel_remesh()  # This is the key operation
+    bpy.ops.object.mode_set(mode='OBJECT')
+
+    new_faces = len(obj.data.polygons)
+    print(f"      Voxel remesh: {original_faces:,} → {new_faces:,} faces (voxel size: {voxel_size})")
+
+    return obj
+
+
+def calculate_voxel_size(obj, target_faces):
+    """
+    Calculate appropriate voxel size based on mesh bounds and target face count.
+
+    Larger objects need larger voxel sizes to avoid creating too many faces.
+    """
+    # Get mesh bounding box dimensions
+    bbox = [obj.matrix_world @ Vector(corner) for corner in obj.bound_box]
+    min_corner = Vector((min(v.x for v in bbox), min(v.y for v in bbox), min(v.z for v in bbox)))
+    max_corner = Vector((max(v.x for v in bbox), max(v.y for v in bbox), max(v.z for v in bbox)))
+    dimensions = max_corner - min_corner
+
+    # Surface area approximation (bounding box surface)
+    surface_area = 2 * (dimensions.x * dimensions.y + dimensions.y * dimensions.z + dimensions.x * dimensions.z)
+
+    # Estimate voxel size: each voxel face ≈ voxel_size^2
+    # target_faces ≈ surface_area / (voxel_size^2)
+    # voxel_size ≈ sqrt(surface_area / target_faces)
+    import math
+    estimated_voxel = math.sqrt(surface_area / max(target_faces * 2, 100))
+
+    # Clamp to reasonable range: 0.005 (very detailed) to 0.1 (very coarse)
+    voxel_size = max(0.005, min(0.1, estimated_voxel))
+
+    return voxel_size
+
+
 def quadriflow_remesh(high_poly, target_faces, base_name, lod_name):
     """
-    Create clean low-poly using Blender's Quadriflow Remesh.
+    Create clean low-poly using TWO-STAGE approach:
 
-    Quadriflow creates a SINGLE CONNECTED MESH with clean quad topology.
-    This eliminates all the fragment issues from AI mesh soup and
-    drastically reduces draw calls.
+    STAGE 1: Voxel Remesh - merges all disconnected fragments into ONE watertight mesh
+    STAGE 2: Quadriflow - creates clean quad topology from the unified mesh
+
+    This is the CORRECT approach for AI mesh soup (like Meshy.ai models with
+    thousands of disconnected fragments).
 
     Returns the final mesh object.
     """
+    from mathutils import Vector
+
     # Duplicate high poly
     bpy.ops.object.select_all(action='DESELECT')
     high_poly.select_set(True)
@@ -465,10 +533,65 @@ def quadriflow_remesh(high_poly, target_faces, base_name, lod_name):
     lod.name = f"{base_name}_{lod_name}"
 
     current_faces = len(lod.data.polygons)
-    print(f"      Quadriflow remesh ({current_faces:,} → {target_faces} faces)...")
+    print(f"      Two-stage remesh ({current_faces:,} → {target_faces} faces)...")
+
+    # =========================================================================
+    # STAGE 1: Voxel Remesh to merge fragments into watertight mesh
+    # =========================================================================
+    print(f"      Stage 1: Voxel remesh (merging fragments)...")
 
     try:
-        # Quadriflow remesh - creates single connected mesh
+        # Calculate voxel size that will give us roughly 2-3x target faces
+        # (we'll reduce further with Quadriflow)
+        intermediate_target = target_faces * 3
+        voxel_size = calculate_voxel_size(lod, intermediate_target)
+
+        # Apply voxel remesh - this merges ALL fragments into one mesh
+        voxel_remesh_sculpt_mode(lod, voxel_size)
+
+        voxel_faces = len(lod.data.polygons)
+        print(f"      Stage 1 complete: {voxel_faces:,} faces (unified mesh)")
+
+    except Exception as e:
+        print(f"      Stage 1 (voxel) failed: {e}")
+        print(f"      Trying larger voxel size...")
+
+        try:
+            # Try with larger voxel size (coarser, less likely to crash)
+            voxel_remesh_sculpt_mode(lod, voxel_size * 2)
+            voxel_faces = len(lod.data.polygons)
+            print(f"      Stage 1 recovery: {voxel_faces:,} faces")
+        except Exception as e2:
+            print(f"      Stage 1 completely failed: {e2}")
+            print(f"      Falling back to decimate only...")
+
+            # Ultimate fallback - just decimate the soup
+            if current_faces > target_faces:
+                ratio = target_faces / current_faces
+                decimate = lod.modifiers.new("Decimate", 'DECIMATE')
+                decimate.decimate_type = 'COLLAPSE'
+                decimate.ratio = max(0.0001, ratio)
+                decimate.use_collapse_triangulate = True
+                try:
+                    bpy.ops.object.modifier_apply(modifier="Decimate")
+                except:
+                    if "Decimate" in lod.modifiers:
+                        lod.modifiers.remove(lod.modifiers["Decimate"])
+
+            lod.location = high_poly.location
+            lod.rotation_euler = high_poly.rotation_euler
+            lod.scale = high_poly.scale
+            return lod
+
+    # =========================================================================
+    # STAGE 2: Quadriflow for clean quad topology
+    # =========================================================================
+    print(f"      Stage 2: Quadriflow (clean topology)...")
+
+    voxel_faces = len(lod.data.polygons)
+
+    try:
+        # Quadriflow remesh - now works because mesh is watertight
         bpy.ops.object.quadriflow_remesh(
             target_faces=target_faces,
             use_mesh_symmetry=False,
@@ -479,15 +602,15 @@ def quadriflow_remesh(high_poly, target_faces, base_name, lod_name):
         )
 
         final_faces = len(lod.data.polygons)
-        print(f"      Quadriflow complete: {final_faces:,} faces")
+        print(f"      Stage 2 complete: {final_faces:,} faces (clean quads)")
 
     except Exception as e:
-        print(f"      Quadriflow failed: {e}")
-        print(f"      Falling back to decimate...")
+        print(f"      Stage 2 (Quadriflow) failed: {e}")
+        print(f"      Using decimate on unified mesh...")
 
-        # Fallback to decimate
-        if current_faces > target_faces:
-            ratio = target_faces / current_faces
+        # Fallback to decimate - but at least the mesh is unified now!
+        if voxel_faces > target_faces:
+            ratio = target_faces / voxel_faces
             decimate = lod.modifiers.new("Decimate", 'DECIMATE')
             decimate.decimate_type = 'COLLAPSE'
             decimate.ratio = max(0.0001, ratio)
