@@ -40,6 +40,19 @@ export interface DebugSettings {
   debugPerformance: boolean;
 }
 
+// Performance metrics for display
+export interface PerformanceMetrics {
+  cpuTime: number;      // milliseconds spent in JS/game logic
+  gpuTime: number;      // estimated GPU time (frame time - cpu time)
+  frameTime: number;    // total frame time in ms
+  triangles: number;    // triangles rendered this frame
+  drawCalls: number;    // draw calls this frame
+  renderWidth: number;  // actual render width in pixels
+  renderHeight: number; // actual render height in pixels
+  displayWidth: number; // display/canvas width in pixels
+  displayHeight: number; // display/canvas height in pixels
+}
+
 // Renderer API type (WebGPU or WebGL)
 export type RendererAPI = 'WebGPU' | 'WebGL' | null;
 
@@ -203,6 +216,9 @@ export interface UIState {
   // Overlay settings for strategic view
   overlaySettings: OverlaySettings;
 
+  // Performance metrics (updated from render loop)
+  performanceMetrics: PerformanceMetrics;
+
   // Actions
   setScreen: (screen: ScreenType) => void;
   goBack: () => void;
@@ -252,6 +268,8 @@ export interface UIState {
   setActiveOverlay: (overlay: GameOverlayType) => void;
   toggleOverlay: (overlay: GameOverlayType) => void;
   setOverlayOpacity: (overlay: GameOverlayType, opacity: number) => void;
+  // Performance metrics action
+  updatePerformanceMetrics: (metrics: Partial<PerformanceMetrics>) => void;
 }
 
 export const useUIStore = create<UIState>((set, get) => ({
@@ -362,6 +380,17 @@ export const useUIStore = create<UIState>((set, get) => ({
     terrainOverlayOpacity: 0.7,
     elevationOverlayOpacity: 0.7,
     threatOverlayOpacity: 0.5,
+  },
+  performanceMetrics: {
+    cpuTime: 0,
+    gpuTime: 0,
+    frameTime: 0,
+    triangles: 0,
+    drawCalls: 0,
+    renderWidth: 0,
+    renderHeight: 0,
+    displayWidth: 0,
+    displayHeight: 0,
   },
   debugSettings: {
     debugEnabled: false,
@@ -607,4 +636,9 @@ export const useUIStore = create<UIState>((set, get) => ({
       }
       return state;
     }),
+
+  updatePerformanceMetrics: (metrics) =>
+    set((state) => ({
+      performanceMetrics: { ...state.performanceMetrics, ...metrics },
+    })),
 }));

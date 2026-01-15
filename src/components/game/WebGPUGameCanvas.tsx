@@ -824,6 +824,44 @@ export function WebGPUGameCanvas() {
           debugPerformance.warn(`[FRAME] Total: ${frameElapsed.toFixed(1)}ms, Render: ${renderElapsed.toFixed(1)}ms`);
         }
 
+        // Update performance metrics for display (throttled to once per second)
+        if (Math.floor(currentTime / 1000) !== Math.floor(prevTime / 1000)) {
+          const rendererInfo = renderer.info;
+          const cpuTime = updatesElapsed; // Time spent in JS before render
+          const gpuTime = renderElapsed;  // Estimated GPU time (render call duration)
+
+          // Get render/display resolution
+          let renderWidth = 0, renderHeight = 0, displayWidth = 0, displayHeight = 0;
+          if (renderPipelineRef.current) {
+            const renderRes = renderPipelineRef.current.getRenderResolution();
+            const displayRes = renderPipelineRef.current.getDisplayResolution();
+            renderWidth = renderRes.width;
+            renderHeight = renderRes.height;
+            displayWidth = displayRes.width;
+            displayHeight = displayRes.height;
+          } else {
+            const size = new THREE.Vector2();
+            renderer.getSize(size);
+            renderWidth = displayWidth = size.x * renderer.getPixelRatio();
+            renderHeight = displayHeight = size.y * renderer.getPixelRatio();
+          }
+
+          useUIStore.getState().updatePerformanceMetrics({
+            cpuTime,
+            gpuTime,
+            frameTime: frameElapsed,
+            triangles: rendererInfo.render.triangles,
+            drawCalls: rendererInfo.render.calls,
+            renderWidth,
+            renderHeight,
+            displayWidth,
+            displayHeight,
+          });
+
+          // Reset renderer info for next frame's accurate count
+          rendererInfo.reset();
+        }
+
         requestAnimationFrame(animate);
       };
 

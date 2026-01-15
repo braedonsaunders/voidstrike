@@ -2,8 +2,15 @@
 
 import { memo, useMemo, useEffect, useRef, useState } from 'react';
 import { useGameStore, GameState } from '@/store/gameStore';
-import { useUIStore } from '@/store/uiStore';
+import { useUIStore, PerformanceMetrics } from '@/store/uiStore';
 import { useGameSetupStore, GameSetupState } from '@/store/gameSetupStore';
+
+// Format number with K/M suffix for large numbers
+function formatNumber(num: number): string {
+  if (num >= 1_000_000) return `${(num / 1_000_000).toFixed(1)}M`;
+  if (num >= 1_000) return `${(num / 1_000).toFixed(1)}K`;
+  return num.toString();
+}
 
 // PERFORMANCE: Memoized ResourcePanel to prevent unnecessary re-renders
 export const ResourcePanel = memo(function ResourcePanel() {
@@ -13,7 +20,8 @@ export const ResourcePanel = memo(function ResourcePanel() {
   const supply = useGameStore((state: GameState) => state.supply);
   const maxSupply = useGameStore((state: GameState) => state.maxSupply);
   const gameTime = useGameStore((state: GameState) => state.gameTime);
-  const { showFPS } = useUIStore();
+  const showFPS = useUIStore((state) => state.showFPS);
+  const performanceMetrics = useUIStore((state) => state.performanceMetrics);
   const isSpectator = useGameSetupStore((state: GameSetupState) => state.isSpectator());
   const [fps, setFps] = useState(0);
   const frameCountRef = useRef(0);
@@ -106,11 +114,44 @@ export const ResourcePanel = memo(function ResourcePanel() {
         </>
       )}
 
-      {/* FPS Counter */}
+      {/* Performance Stats */}
       {showFPS && (
         <>
           <div className="w-px h-4 bg-void-600" />
+          {/* FPS */}
           <span className="font-mono text-green-400 text-xs">{fps} FPS</span>
+
+          {/* CPU/GPU timing */}
+          <div className="flex items-center gap-1">
+            <span className="font-mono text-cyan-400 text-xs" title="CPU time (game logic)">
+              CPU:{performanceMetrics.cpuTime.toFixed(1)}ms
+            </span>
+            <span className="font-mono text-orange-400 text-xs" title="GPU time (rendering)">
+              GPU:{performanceMetrics.gpuTime.toFixed(1)}ms
+            </span>
+          </div>
+
+          {/* Triangles and draw calls */}
+          <div className="flex items-center gap-1">
+            <span className="font-mono text-purple-400 text-xs" title="Triangles rendered">
+              {formatNumber(performanceMetrics.triangles)}△
+            </span>
+            <span className="font-mono text-yellow-400 text-xs" title="Draw calls">
+              {performanceMetrics.drawCalls}dc
+            </span>
+          </div>
+
+          {/* Resolution info - show if render != display (FSR active) */}
+          {performanceMetrics.renderWidth > 0 && performanceMetrics.renderWidth !== performanceMetrics.displayWidth && (
+            <span className="font-mono text-gray-400 text-xs" title="Render → Display resolution">
+              {performanceMetrics.renderWidth}×{performanceMetrics.renderHeight}→{performanceMetrics.displayWidth}×{performanceMetrics.displayHeight}
+            </span>
+          )}
+          {performanceMetrics.renderWidth > 0 && performanceMetrics.renderWidth === performanceMetrics.displayWidth && (
+            <span className="font-mono text-gray-400 text-xs" title="Render resolution">
+              {performanceMetrics.displayWidth}×{performanceMetrics.displayHeight}
+            </span>
+          )}
         </>
       )}
     </div>

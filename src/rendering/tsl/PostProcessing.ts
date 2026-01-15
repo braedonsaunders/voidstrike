@@ -309,14 +309,6 @@ export class RenderPipeline {
   private createDualPipeline(): void {
     const useUpscaling = this.config.upscalingMode !== 'off' && this.config.renderScale < 1.0;
 
-    console.log('[PostProcessing] Creating pipeline:', {
-      useUpscaling,
-      upscalingMode: this.config.upscalingMode,
-      renderScale: this.config.renderScale,
-      displaySize: `${this.displayWidth}x${this.displayHeight}`,
-      renderSize: `${this.renderWidth}x${this.renderHeight}`,
-    });
-
     if (useUpscaling) {
       // ========== DUAL PIPELINE MODE ==========
       // Save original display size
@@ -734,16 +726,6 @@ export class RenderPipeline {
     const effectiveScale = this.config.upscalingMode !== 'off' ? this.config.renderScale : 1.0;
     this.renderWidth = Math.floor(this.displayWidth * effectiveScale);
     this.renderHeight = Math.floor(this.displayHeight * effectiveScale);
-
-    if (config.renderScale !== undefined || config.upscalingMode !== undefined) {
-      console.log('[PostProcessing] Config changed:', {
-        needsRebuild,
-        upscalingMode: this.config.upscalingMode,
-        renderScale: this.config.renderScale,
-        effectiveScale,
-        renderSize: `${this.renderWidth}x${this.renderHeight}`,
-      });
-    }
 
     // Update bloom parameters
     if (this.bloomPass) {
