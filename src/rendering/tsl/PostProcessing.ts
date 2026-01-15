@@ -51,8 +51,8 @@ import {
   mrt,
   output,
   normalView,
-  metalness,
-  roughness,
+  materialMetalness,
+  materialRoughness,
 } from 'three/tsl';
 // directionToColor for normal encoding in MRT
 // NOTE: We do NOT use colorToDirection before passing to SSR/SSGI
@@ -372,10 +372,11 @@ export class RenderPipeline {
       if (needsNormals) {
         // SSR/SSGI need normals and metalness/roughness per pixel
         // Pack metalness and roughness into a vec2 for bandwidth optimization
+        // materialMetalness/materialRoughness include texture maps (metalness * metalnessMap, etc.)
         scenePass.setMRT(mrt({
           output: output,
           normal: directionToColor(normalView),
-          metalrough: vec2(metalness, roughness),
+          metalrough: vec2(materialMetalness, materialRoughness),
           velocity: customVelocity,
         }));
 
