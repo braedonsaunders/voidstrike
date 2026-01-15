@@ -315,6 +315,246 @@ def get_mesh_stats(obj):
     }
 
 
+def calculate_surface_area(obj):
+    """Calculate total surface area of a mesh."""
+    bm = bmesh.new()
+    bm.from_mesh(obj.data)
+    area = sum(f.calc_area() for f in bm.faces)
+    bm.free()
+    return area
+
+
+def separate_loose_parts(obj):
+    """
+    Separate mesh into disconnected parts.
+    Returns list of new objects (original is deleted).
+    """
+    # Store original name and transform
+    orig_name = obj.name
+    orig_matrix = obj.matrix_world.copy()
+
+    # Select only this object
+    bpy.ops.object.select_all(action='DESELECT')
+    obj.select_set(True)
+    bpy.context.view_layer.objects.active = obj
+
+    # Separate by loose parts
+    bpy.ops.object.mode_set(mode='EDIT')
+    bpy.ops.mesh.select_all(action='SELECT')
+    bpy.ops.mesh.separate(type='LOOSE')
+    bpy.ops.object.mode_set(mode='OBJECT')
+
+    # Get all resulting objects
+    parts = [o for o in bpy.context.selected_objects if o.type == 'MESH']
+
+    # Name them
+    for i, part in enumerate(parts):
+        part.name = f"{orig_name}_part{i}"
+
+    return parts
+
+
+def join_objects(objects, name):
+    """
+    Join multiple objects into one.
+    Returns the joined object.
+    """
+    if not objects:
+        return None
+
+    if len(objects) == 1:
+        objects[0].name = name
+        return objects[0]
+
+    # Deselect all
+    bpy.ops.object.select_all(action='DESELECT')
+
+    # Select all objects to join
+    for obj in objects:
+        obj.select_set(True)
+
+    # Make first one active
+    bpy.context.view_layer.objects.active = objects[0]
+
+    # Join
+    bpy.ops.object.join()
+
+    # Rename result
+    result = bpy.context.active_object
+    result.name = name
+
+    return result
+
+
+def retopo_with_loose_parts(high_poly, target_faces, temp_dir, base_name, lod_name):
+    """
+    Retopologize a mesh that may have disconnected parts.
+
+    Strategy:
+    1. Separate into loose parts
+    2. Calculate surface area of each part
+    3. Distribute target faces proportionally by surface area
+    4. Process each part through Instant Meshes
+    5. Rejoin all parts
+
+    Returns the final retopologized mesh object.
+    """
+    # First check if mesh has multiple loose parts
+    bpy.ops.object.select_all(action='DESELECT')
+    high_poly.select_set(True)
+    bpy.context.view_layer.objects.active = high_poly
+
+    # Duplicate for separation (keep original intact)
+    bpy.ops.object.duplicate()
+    temp_obj = bpy.context.active_object
+    temp_obj.name = f"{base_name}_temp_separate"
+
+    # Separate by loose parts
+    parts = separate_loose_parts(temp_obj)
+    num_parts = len(parts)
+
+    if num_parts == 1:
+        # Single connected mesh - process normally
+        print(f"      Single connected mesh")
+        bpy.data.objects.remove(parts[0], do_unlink=True)
+
+        # Export and process original
+        export_path = os.path.join(temp_dir, f"{base_name}_export.obj")
+        result_path = os.path.join(temp_dir, f"{base_name}_{lod_name}.obj")
+
+        bpy.ops.object.select_all(action='DESELECT')
+        high_poly.select_set(True)
+        bpy.context.view_layer.objects.active = high_poly
+
+        bpy.ops.wm.obj_export(
+            filepath=export_path,
+            export_selected_objects=True,
+            export_triangulated_mesh=True,
+            export_materials=False,
+        )
+
+        run_instant_meshes(export_path, result_path, target_faces)
+
+        bpy.ops.wm.obj_import(filepath=result_path)
+        result = bpy.context.active_object
+        result.name = f"{base_name}_{lod_name}"
+
+        # Match transform
+        result.location = high_poly.location
+        result.rotation_euler = high_poly.rotation_euler
+        result.scale = high_poly.scale
+
+        return result
+
+    # Multiple parts - process each with proportional face budget
+    print(f"      {num_parts} disconnected parts detected")
+
+    # Calculate surface area for each part
+    part_areas = []
+    total_area = 0
+    for part in parts:
+        area = calculate_surface_area(part)
+        part_areas.append((part, area))
+        total_area += area
+
+    # Sort by area (largest first for debugging)
+    part_areas.sort(key=lambda x: x[1], reverse=True)
+
+    # Minimum faces per part (to avoid degenerate meshes)
+    MIN_FACES_PER_PART = 12
+
+    # Calculate face budget for each part
+    remaining_faces = target_faces
+    face_budgets = []
+
+    for part, area in part_areas:
+        if total_area > 0:
+            proportion = area / total_area
+            budget = max(MIN_FACES_PER_PART, int(target_faces * proportion))
+        else:
+            budget = max(MIN_FACES_PER_PART, target_faces // num_parts)
+
+        face_budgets.append((part, budget))
+        remaining_faces -= budget
+
+    # Redistribute any remaining faces to largest parts
+    if remaining_faces > 0:
+        face_budgets[0] = (face_budgets[0][0], face_budgets[0][1] + remaining_faces)
+
+    # Process each part
+    processed_parts = []
+
+    for i, (part, budget) in enumerate(face_budgets):
+        part_name = f"{base_name}_part{i}"
+        export_path = os.path.join(temp_dir, f"{part_name}_export.obj")
+        result_path = os.path.join(temp_dir, f"{part_name}_{lod_name}.obj")
+
+        # Export part
+        bpy.ops.object.select_all(action='DESELECT')
+        part.select_set(True)
+        bpy.context.view_layer.objects.active = part
+
+        bpy.ops.wm.obj_export(
+            filepath=export_path,
+            export_selected_objects=True,
+            export_triangulated_mesh=True,
+            export_materials=False,
+        )
+
+        try:
+            # Run Instant Meshes on this part
+            run_instant_meshes(export_path, result_path, budget)
+
+            # Import result
+            bpy.ops.wm.obj_import(filepath=result_path)
+            processed = bpy.context.active_object
+            processed.name = f"{part_name}_{lod_name}"
+
+            # Copy transform from original part
+            processed.location = part.location
+            processed.rotation_euler = part.rotation_euler
+            processed.scale = part.scale
+
+            processed_parts.append(processed)
+
+        except Exception as e:
+            print(f"        Part {i} failed: {e}, using decimate")
+            # Fallback: decimate this part
+            bpy.ops.object.select_all(action='DESELECT')
+            part.select_set(True)
+            bpy.context.view_layer.objects.active = part
+            bpy.ops.object.duplicate()
+
+            decimated = bpy.context.active_object
+            current_faces = len(decimated.data.polygons)
+            if current_faces > budget:
+                ratio = budget / current_faces
+                mod = decimated.modifiers.new("Decimate", 'DECIMATE')
+                mod.ratio = max(0.01, ratio)
+                bpy.ops.object.modifier_apply(modifier="Decimate")
+
+            decimated.name = f"{part_name}_{lod_name}"
+            processed_parts.append(decimated)
+
+    # Clean up original separated parts
+    for part, _ in face_budgets:
+        if part.name in bpy.data.objects:
+            bpy.data.objects.remove(part, do_unlink=True)
+
+    # Join all processed parts
+    final = join_objects(processed_parts, f"{base_name}_{lod_name}")
+
+    # Match transform to original high poly
+    final.location = high_poly.location
+    final.rotation_euler = high_poly.rotation_euler
+    final.scale = high_poly.scale
+
+    actual_faces = len(final.data.polygons)
+    print(f"      Result: {actual_faces} faces ({num_parts} parts rejoined)")
+
+    return final
+
+
 # =============================================================================
 # STATIC MODEL PROCESSING (OBJ)
 # =============================================================================
@@ -340,7 +580,7 @@ def process_static_model(filepath, category, temp_dir, output_dir):
     # Get LOD targets for this category
     targets = LOD_TARGETS.get(category, LOD_TARGETS["units"])
 
-    # Create LODs via Instant Meshes
+    # Create LODs via Instant Meshes (handles disconnected parts automatically)
     lods = []
     lod_stats = {}
 
@@ -349,36 +589,9 @@ def process_static_model(filepath, category, temp_dir, output_dir):
                               ("LOD2", targets["lod2"])]:
         print(f"\n  Creating {lod_name} ({target} faces)...")
 
-        # Export for Instant Meshes (needs triangulated mesh)
-        export_path = os.path.join(temp_dir, f"{filename}_export.obj")
-        result_path = os.path.join(temp_dir, f"{filename}_{lod_name}.obj")
-
-        # Select and export
-        bpy.ops.object.select_all(action='DESELECT')
-        high_poly.select_set(True)
-        bpy.context.view_layer.objects.active = high_poly
-
-        bpy.ops.wm.obj_export(
-            filepath=export_path,
-            export_selected_objects=True,
-            export_triangulated_mesh=True,
-            export_materials=False,
-        )
-
-        # Run Instant Meshes
         try:
-            run_instant_meshes(export_path, result_path, target)
-
-            # Import result
-            bpy.ops.wm.obj_import(filepath=result_path)
-            lod = bpy.context.active_object
-            lod.name = f"{filename}_{lod_name}"
-
-            # Match transform
-            lod.location = high_poly.location
-            lod.rotation_euler = high_poly.rotation_euler
-            lod.scale = high_poly.scale
-
+            # Use the new loose-parts-aware retopo function
+            lod = retopo_with_loose_parts(high_poly, target, temp_dir, filename, lod_name)
             lods.append(lod)
             lod_stats[f"{lod_name.lower()}_faces"] = len(lod.data.polygons)
             print(f"    Created: {len(lod.data.polygons):,} faces")
@@ -558,7 +771,7 @@ def process_animated_model(filepath, category, temp_dir, output_dir):
     # Get LOD targets
     targets = LOD_TARGETS.get(category, LOD_TARGETS["units"])
 
-    # Create LODs
+    # Create LODs (handles disconnected parts automatically)
     lods = []
     lod_stats = {}
 
@@ -567,36 +780,9 @@ def process_animated_model(filepath, category, temp_dir, output_dir):
                               ("LOD2", targets["lod2"])]:
         print(f"\n  Creating {lod_name} ({target} faces)...")
 
-        # Export mesh for Instant Meshes
-        export_path = os.path.join(temp_dir, f"{filename}_export.obj")
-        result_path = os.path.join(temp_dir, f"{filename}_{lod_name}.obj")
-
-        # Temporarily remove armature modifier for clean export
-        bpy.ops.object.select_all(action='DESELECT')
-        high_poly.select_set(True)
-        bpy.context.view_layer.objects.active = high_poly
-
-        # Apply armature to get rest pose mesh
-        bpy.ops.wm.obj_export(
-            filepath=export_path,
-            export_selected_objects=True,
-            export_triangulated_mesh=True,
-            export_materials=False,
-        )
-
-        # Run Instant Meshes
         try:
-            run_instant_meshes(export_path, result_path, target)
-
-            # Import retopo result
-            bpy.ops.wm.obj_import(filepath=result_path)
-            lod = bpy.context.active_object
-            lod.name = f"{filename}_{lod_name}"
-
-            # Match transform
-            lod.location = high_poly.location
-            lod.rotation_euler = high_poly.rotation_euler
-            lod.scale = high_poly.scale
+            # Use the new loose-parts-aware retopo function
+            lod = retopo_with_loose_parts(high_poly, target, temp_dir, filename, lod_name)
 
             # Transfer vertex weights from high-poly to low-poly
             if armature_obj and original_vertex_groups:
