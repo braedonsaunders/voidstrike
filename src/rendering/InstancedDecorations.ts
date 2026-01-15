@@ -6,6 +6,31 @@ import AssetManager from '@/assets/AssetManager';
 // PERF: Reusable Euler object for instanced decoration loops (avoids thousands of allocations)
 const _tempEuler = new THREE.Euler();
 
+// PERF: Shared frustum culling utilities for all decoration classes
+const _frustum = new THREE.Frustum();
+const _frustumMatrix = new THREE.Matrix4();
+const _tempVec3 = new THREE.Vector3();
+
+/**
+ * Update the shared frustum from camera matrices.
+ * Call once per frame before updating all decoration classes.
+ */
+export function updateDecorationFrustum(camera: THREE.Camera): void {
+  camera.updateMatrixWorld();
+  _frustumMatrix.multiplyMatrices(camera.projectionMatrix, camera.matrixWorldInverse);
+  _frustum.setFromProjectionMatrix(_frustumMatrix);
+}
+
+/**
+ * Check if a point is within the frustum with a margin for object size.
+ */
+function isInFrustum(x: number, y: number, z: number, margin: number = 2): boolean {
+  _tempVec3.set(x, y, z);
+  // Use containsPoint with a margin by checking sphere intersection
+  // For decorations, a simple point check with generous margin is sufficient
+  return _frustum.containsPoint(_tempVec3);
+}
+
 /**
  * Build a set of cells that should be cleared near ramps.
  * Uses circular clearance around ramp cells PLUS extended clearance
@@ -144,21 +169,45 @@ interface InstancedGroupConfig {
   maxCount: number;
 }
 
+// Instance data for frustum culling
+interface InstanceData {
+  x: number;
+  y: number;
+  z: number;
+  scale: number;
+  rotation: number;
+  yOffset: number;
+}
+
+// Mesh with associated instance data for frustum culling
+interface CullableInstancedMesh {
+  mesh: THREE.InstancedMesh;
+  instances: InstanceData[];
+  maxCount: number;
+}
+
 /**
  * PERFORMANCE: True instanced tree rendering - all trees of same type in ONE draw call
  * Previously each tree was a separate mesh causing 400+ draw calls.
  * Now we batch by model type for typically 2-6 draw calls total.
  *
  * Shadow optimization: Trees in playable area cast shadows, border trees don't.
+ * Frustum culling: Only visible instances are rendered each frame.
  */
 export class InstancedTrees {
   public group: THREE.Group;
-  private instancedMeshes: THREE.InstancedMesh[] = [];
+  private instancedMeshes: CullableInstancedMesh[] = [];
   private geometries: THREE.BufferGeometry[] = [];
   private materials: THREE.Material[] = [];
 
   // Store tree positions for collision detection (x, z are world coords, radius is collision size)
   private treeCollisions: Array<{ x: number; z: number; radius: number }> = [];
+
+  // Reusable objects for update loop
+  private _tempMatrix = new THREE.Matrix4();
+  private _tempPosition = new THREE.Vector3();
+  private _tempQuaternion = new THREE.Quaternion();
+  private _tempScale = new THREE.Vector3();
 
   constructor(
     mapData: MapData,
@@ -286,7 +335,7 @@ export class InstancedTrees {
       if (collectTree(x, y)) treesPlaced++;
     }
 
-    // Helper to create instanced mesh from positions
+    // Helper to create instanced mesh from positions with frustum culling support
     const createInstancedMesh = (
       modelId: string,
       positions: TreePos[],
@@ -310,10 +359,6 @@ export class InstancedTrees {
       this.materials.push(instancedMaterial);
 
       const yOffset = AssetManager.getModelYOffset(modelId);
-      const matrix = new THREE.Matrix4();
-      const position = new THREE.Vector3();
-      const quaternion = new THREE.Quaternion();
-      const scale = new THREE.Vector3();
 
       const instancedMesh = new THREE.InstancedMesh(
         instancedGeometry,
@@ -321,23 +366,42 @@ export class InstancedTrees {
         positions.length
       );
 
+      // Store instance data for frustum culling
+      const instances: InstanceData[] = positions.map(p => ({
+        x: p.x,
+        y: p.height + yOffset * p.scale,
+        z: p.y, // Note: y in TreePos is z in world space
+        scale: p.scale,
+        rotation: p.rotation,
+        yOffset,
+      }));
+
+      // Initialize with all instances visible (first frame)
+      const matrix = new THREE.Matrix4();
+      const position = new THREE.Vector3();
+      const quaternion = new THREE.Quaternion();
+      const scale = new THREE.Vector3();
+
       for (let i = 0; i < positions.length; i++) {
-        const p = positions[i];
-        position.set(p.x, p.height + yOffset * p.scale, p.y);
-        // PERF: Reuse _tempEuler instead of creating new Euler per instance
-        _tempEuler.set(0, p.rotation, 0);
+        const inst = instances[i];
+        position.set(inst.x, inst.y, inst.z);
+        _tempEuler.set(0, inst.rotation, 0);
         quaternion.setFromEuler(_tempEuler);
-        scale.set(p.scale, p.scale, p.scale);
+        scale.set(inst.scale, inst.scale, inst.scale);
         matrix.compose(position, quaternion, scale);
         instancedMesh.setMatrixAt(i, matrix);
       }
 
       instancedMesh.instanceMatrix.needsUpdate = true;
-      instancedMesh.frustumCulled = false;
+      instancedMesh.frustumCulled = false; // We handle culling manually per-instance
       instancedMesh.castShadow = castShadow;
       instancedMesh.receiveShadow = true;
 
-      this.instancedMeshes.push(instancedMesh);
+      this.instancedMeshes.push({
+        mesh: instancedMesh,
+        instances,
+        maxCount: positions.length,
+      });
       this.group.add(instancedMesh);
     };
 
@@ -345,6 +409,38 @@ export class InstancedTrees {
     for (const modelId of treeModelIds) {
       createInstancedMesh(modelId, playableTreesByModel.get(modelId)!, true);  // Cast shadows
       createInstancedMesh(modelId, borderTreesByModel.get(modelId)!, false);   // No shadows
+    }
+  }
+
+  /**
+   * Update visible instances based on camera frustum.
+   * Call this every frame after updateDecorationFrustum().
+   */
+  public update(): void {
+    for (const { mesh, instances, maxCount } of this.instancedMeshes) {
+      let visibleCount = 0;
+
+      for (let i = 0; i < maxCount; i++) {
+        const inst = instances[i];
+
+        // PERF: Skip instances outside camera frustum
+        if (!isInFrustum(inst.x, inst.y, inst.z)) {
+          continue;
+        }
+
+        // Set matrix for this visible instance
+        this._tempPosition.set(inst.x, inst.y, inst.z);
+        _tempEuler.set(0, inst.rotation, 0);
+        this._tempQuaternion.setFromEuler(_tempEuler);
+        this._tempScale.set(inst.scale, inst.scale, inst.scale);
+        this._tempMatrix.compose(this._tempPosition, this._tempQuaternion, this._tempScale);
+        mesh.setMatrixAt(visibleCount, this._tempMatrix);
+
+        visibleCount++;
+      }
+
+      mesh.count = visibleCount;
+      mesh.instanceMatrix.needsUpdate = true;
     }
   }
 
@@ -360,7 +456,7 @@ export class InstancedTrees {
   }
 
   public dispose(): void {
-    for (const mesh of this.instancedMeshes) {
+    for (const { mesh } of this.instancedMeshes) {
       mesh.dispose();
     }
     for (const geometry of this.geometries) {
@@ -389,15 +485,22 @@ export class InstancedTrees {
  * Now we batch by model type for typically 3 draw calls total.
  *
  * Shadow optimization: Rocks in playable area cast shadows, border rocks don't.
+ * Frustum culling: Only visible instances are rendered each frame.
  */
 export class InstancedRocks {
   public group: THREE.Group;
-  private instancedMeshes: THREE.InstancedMesh[] = [];
+  private instancedMeshes: CullableInstancedMesh[] = [];
   private geometries: THREE.BufferGeometry[] = [];
   private materials: THREE.Material[] = [];
 
   // Store rock positions for collision detection (x, z are world coords, radius is collision size)
   private rockCollisions: Array<{ x: number; z: number; radius: number }> = [];
+
+  // Reusable objects for update loop
+  private _tempMatrix = new THREE.Matrix4();
+  private _tempPosition = new THREE.Vector3();
+  private _tempQuaternion = new THREE.Quaternion();
+  private _tempScale = new THREE.Vector3();
 
   constructor(
     mapData: MapData,
@@ -481,7 +584,7 @@ export class InstancedRocks {
       }
     }
 
-    // Helper to create instanced mesh from positions
+    // Helper to create instanced mesh from positions with frustum culling support
     const createInstancedMesh = (
       modelId: string,
       positions: RockPos[],
@@ -505,10 +608,6 @@ export class InstancedRocks {
       this.materials.push(instancedMaterial);
 
       const yOffset = AssetManager.getModelYOffset(modelId);
-      const matrix = new THREE.Matrix4();
-      const position = new THREE.Vector3();
-      const quaternion = new THREE.Quaternion();
-      const scale = new THREE.Vector3();
 
       const instancedMesh = new THREE.InstancedMesh(
         instancedGeometry,
@@ -516,23 +615,42 @@ export class InstancedRocks {
         positions.length
       );
 
+      // Store instance data for frustum culling
+      const instances: InstanceData[] = positions.map(p => ({
+        x: p.x,
+        y: p.height + yOffset * p.scale,
+        z: p.y, // Note: y in RockPos is z in world space
+        scale: p.scale,
+        rotation: p.rotation,
+        yOffset,
+      }));
+
+      // Initialize with all instances visible (first frame)
+      const matrix = new THREE.Matrix4();
+      const position = new THREE.Vector3();
+      const quaternion = new THREE.Quaternion();
+      const scale = new THREE.Vector3();
+
       for (let i = 0; i < positions.length; i++) {
-        const p = positions[i];
-        position.set(p.x, p.height + yOffset * p.scale, p.y);
-        // PERF: Reuse _tempEuler instead of creating new Euler per instance
-        _tempEuler.set(0, p.rotation, 0);
+        const inst = instances[i];
+        position.set(inst.x, inst.y, inst.z);
+        _tempEuler.set(0, inst.rotation, 0);
         quaternion.setFromEuler(_tempEuler);
-        scale.set(p.scale, p.scale, p.scale);
+        scale.set(inst.scale, inst.scale, inst.scale);
         matrix.compose(position, quaternion, scale);
         instancedMesh.setMatrixAt(i, matrix);
       }
 
       instancedMesh.instanceMatrix.needsUpdate = true;
-      instancedMesh.frustumCulled = false;
+      instancedMesh.frustumCulled = false; // We handle culling manually per-instance
       instancedMesh.castShadow = castShadow;
       instancedMesh.receiveShadow = true;
 
-      this.instancedMeshes.push(instancedMesh);
+      this.instancedMeshes.push({
+        mesh: instancedMesh,
+        instances,
+        maxCount: positions.length,
+      });
       this.group.add(instancedMesh);
     };
 
@@ -543,8 +661,40 @@ export class InstancedRocks {
     }
   }
 
+  /**
+   * Update visible instances based on camera frustum.
+   * Call this every frame after updateDecorationFrustum().
+   */
+  public update(): void {
+    for (const { mesh, instances, maxCount } of this.instancedMeshes) {
+      let visibleCount = 0;
+
+      for (let i = 0; i < maxCount; i++) {
+        const inst = instances[i];
+
+        // PERF: Skip instances outside camera frustum
+        if (!isInFrustum(inst.x, inst.y, inst.z)) {
+          continue;
+        }
+
+        // Set matrix for this visible instance
+        this._tempPosition.set(inst.x, inst.y, inst.z);
+        _tempEuler.set(0, inst.rotation, 0);
+        this._tempQuaternion.setFromEuler(_tempEuler);
+        this._tempScale.set(inst.scale, inst.scale, inst.scale);
+        this._tempMatrix.compose(this._tempPosition, this._tempQuaternion, this._tempScale);
+        mesh.setMatrixAt(visibleCount, this._tempMatrix);
+
+        visibleCount++;
+      }
+
+      mesh.count = visibleCount;
+      mesh.instanceMatrix.needsUpdate = true;
+    }
+  }
+
   public dispose(): void {
-    for (const mesh of this.instancedMeshes) {
+    for (const { mesh } of this.instancedMeshes) {
       mesh.dispose();
     }
     for (const geometry of this.geometries) {
@@ -569,12 +719,23 @@ export class InstancedRocks {
 
 /**
  * Instanced grass/ground debris - thousands of small objects in one draw call
+ * Frustum culling: Only visible instances are rendered each frame.
  */
 export class InstancedGrass {
   public group: THREE.Group;
   private instancedMesh: THREE.InstancedMesh | null = null;
   private geometry: THREE.BufferGeometry | null = null;
   private material: THREE.Material | null = null;
+
+  // Instance data for frustum culling
+  private instances: Array<{ x: number; y: number; z: number; scale: number; rotation: number }> = [];
+  private maxCount = 0;
+
+  // Reusable objects for update loop
+  private _tempMatrix = new THREE.Matrix4();
+  private _tempPosition = new THREE.Vector3();
+  private _tempQuaternion = new THREE.Quaternion();
+  private _tempScale = new THREE.Vector3();
 
   constructor(
     mapData: MapData,
@@ -591,8 +752,6 @@ export class InstancedGrass {
     const grassCount = Math.min(2000, mapData.width * mapData.height * 0.15);
 
     // Generate grass positions
-    const positions: Array<{ x: number; y: number; z: number; scale: number; rotation: number }> = [];
-
     for (let i = 0; i < grassCount; i++) {
       const x = 5 + Math.random() * (mapData.width - 10);
       const z = 5 + Math.random() * (mapData.height - 10);
@@ -603,18 +762,20 @@ export class InstancedGrass {
         const cell = mapData.terrain[cellZ][cellX];
         if (cell.terrain === 'ground') {
           const height = getHeightAt(x, z);
-          positions.push({
+          const scale = 0.1 + Math.random() * 0.15;
+          this.instances.push({
             x,
-            y: height + 0.1,
+            y: height + 0.1 + scale * 2, // Include vertical offset in stored position
             z,
-            scale: 0.1 + Math.random() * 0.15,
+            scale,
             rotation: Math.random() * Math.PI * 2,
           });
         }
       }
     }
 
-    if (positions.length === 0) return;
+    if (this.instances.length === 0) return;
+    this.maxCount = this.instances.length;
 
     // Grass color based on biome
     const grassColor = biome.colors.ground[0].clone().multiplyScalar(0.8);
@@ -630,31 +791,61 @@ export class InstancedGrass {
     this.instancedMesh = new THREE.InstancedMesh(
       this.geometry,
       this.material,
-      positions.length
+      this.maxCount
     );
 
-    // Set up instance matrices
+    // Initialize with all instances visible (first frame)
     const matrix = new THREE.Matrix4();
     const position = new THREE.Vector3();
     const quaternion = new THREE.Quaternion();
     const scale = new THREE.Vector3();
 
-    for (let i = 0; i < positions.length; i++) {
-      const p = positions[i];
-
-      position.set(p.x, p.y + p.scale * 2, p.z);
-      // PERF: Reuse _tempEuler instead of creating new Euler per instance
-      _tempEuler.set(0, p.rotation, 0);
+    for (let i = 0; i < this.maxCount; i++) {
+      const inst = this.instances[i];
+      position.set(inst.x, inst.y, inst.z);
+      _tempEuler.set(0, inst.rotation, 0);
       quaternion.setFromEuler(_tempEuler);
-      scale.set(p.scale, p.scale, p.scale);
+      scale.set(inst.scale, inst.scale, inst.scale);
       matrix.compose(position, quaternion, scale);
       this.instancedMesh.setMatrixAt(i, matrix);
     }
 
     this.instancedMesh.instanceMatrix.needsUpdate = true;
-    this.instancedMesh.frustumCulled = false;
+    this.instancedMesh.frustumCulled = false; // We handle culling manually per-instance
 
     this.group.add(this.instancedMesh);
+  }
+
+  /**
+   * Update visible instances based on camera frustum.
+   * Call this every frame after updateDecorationFrustum().
+   */
+  public update(): void {
+    if (!this.instancedMesh || this.maxCount === 0) return;
+
+    let visibleCount = 0;
+
+    for (let i = 0; i < this.maxCount; i++) {
+      const inst = this.instances[i];
+
+      // PERF: Skip instances outside camera frustum
+      if (!isInFrustum(inst.x, inst.y, inst.z)) {
+        continue;
+      }
+
+      // Set matrix for this visible instance
+      this._tempPosition.set(inst.x, inst.y, inst.z);
+      _tempEuler.set(0, inst.rotation, 0);
+      this._tempQuaternion.setFromEuler(_tempEuler);
+      this._tempScale.set(inst.scale, inst.scale, inst.scale);
+      this._tempMatrix.compose(this._tempPosition, this._tempQuaternion, this._tempScale);
+      this.instancedMesh.setMatrixAt(visibleCount, this._tempMatrix);
+
+      visibleCount++;
+    }
+
+    this.instancedMesh.count = visibleCount;
+    this.instancedMesh.instanceMatrix.needsUpdate = true;
   }
 
   public dispose(): void {
@@ -666,12 +857,23 @@ export class InstancedGrass {
 
 /**
  * Instanced small rocks/pebbles - many small objects in few draw calls
+ * Frustum culling: Only visible instances are rendered each frame.
  */
 export class InstancedPebbles {
   public group: THREE.Group;
   private instancedMesh: THREE.InstancedMesh | null = null;
   private geometry: THREE.BufferGeometry | null = null;
   private material: THREE.Material | null = null;
+
+  // Instance data for frustum culling (pebbles have 3D rotation)
+  private instances: Array<{ x: number; y: number; z: number; scale: number; rotX: number; rotY: number; rotZ: number }> = [];
+  private maxCount = 0;
+
+  // Reusable objects for update loop
+  private _tempMatrix = new THREE.Matrix4();
+  private _tempPosition = new THREE.Vector3();
+  private _tempQuaternion = new THREE.Quaternion();
+  private _tempScale = new THREE.Vector3();
 
   constructor(
     mapData: MapData,
@@ -683,9 +885,6 @@ export class InstancedPebbles {
     const pebbleCount = Math.min(500, mapData.width * mapData.height * 0.04);
 
     // Generate pebble positions
-    // PERF: Store rotation values directly instead of Euler objects to avoid allocations
-    const positions: Array<{ x: number; y: number; z: number; scale: number; rotX: number; rotY: number; rotZ: number }> = [];
-
     for (let i = 0; i < pebbleCount; i++) {
       const x = 5 + Math.random() * (mapData.width - 10);
       const z = 5 + Math.random() * (mapData.height - 10);
@@ -697,7 +896,7 @@ export class InstancedPebbles {
         if (cell.terrain === 'ground' || cell.terrain === 'unbuildable') {
           const height = getHeightAt(x, z);
           const size = 0.1 + Math.random() * 0.2;
-          positions.push({
+          this.instances.push({
             x,
             y: height + size * 0.3,
             z,
@@ -710,7 +909,8 @@ export class InstancedPebbles {
       }
     }
 
-    if (positions.length === 0) return;
+    if (this.instances.length === 0) return;
+    this.maxCount = this.instances.length;
 
     // Pebble material
     const pebbleColor = biome.colors.cliff[0].clone().multiplyScalar(0.7);
@@ -723,31 +923,61 @@ export class InstancedPebbles {
     this.instancedMesh = new THREE.InstancedMesh(
       this.geometry,
       this.material,
-      positions.length
+      this.maxCount
     );
 
-    // Set up instance matrices
+    // Initialize with all instances visible (first frame)
     const matrix = new THREE.Matrix4();
     const position = new THREE.Vector3();
     const quaternion = new THREE.Quaternion();
     const scale = new THREE.Vector3();
 
-    for (let i = 0; i < positions.length; i++) {
-      const p = positions[i];
-
-      position.set(p.x, p.y, p.z);
-      // PERF: Reuse _tempEuler instead of storing Euler objects
-      _tempEuler.set(p.rotX, p.rotY, p.rotZ);
+    for (let i = 0; i < this.maxCount; i++) {
+      const inst = this.instances[i];
+      position.set(inst.x, inst.y, inst.z);
+      _tempEuler.set(inst.rotX, inst.rotY, inst.rotZ);
       quaternion.setFromEuler(_tempEuler);
-      scale.set(p.scale, p.scale, p.scale);
+      scale.set(inst.scale, inst.scale, inst.scale);
       matrix.compose(position, quaternion, scale);
       this.instancedMesh.setMatrixAt(i, matrix);
     }
 
     this.instancedMesh.instanceMatrix.needsUpdate = true;
-    this.instancedMesh.frustumCulled = false;
+    this.instancedMesh.frustumCulled = false; // We handle culling manually per-instance
 
     this.group.add(this.instancedMesh);
+  }
+
+  /**
+   * Update visible instances based on camera frustum.
+   * Call this every frame after updateDecorationFrustum().
+   */
+  public update(): void {
+    if (!this.instancedMesh || this.maxCount === 0) return;
+
+    let visibleCount = 0;
+
+    for (let i = 0; i < this.maxCount; i++) {
+      const inst = this.instances[i];
+
+      // PERF: Skip instances outside camera frustum
+      if (!isInFrustum(inst.x, inst.y, inst.z)) {
+        continue;
+      }
+
+      // Set matrix for this visible instance
+      this._tempPosition.set(inst.x, inst.y, inst.z);
+      _tempEuler.set(inst.rotX, inst.rotY, inst.rotZ);
+      this._tempQuaternion.setFromEuler(_tempEuler);
+      this._tempScale.set(inst.scale, inst.scale, inst.scale);
+      this._tempMatrix.compose(this._tempPosition, this._tempQuaternion, this._tempScale);
+      this.instancedMesh.setMatrixAt(visibleCount, this._tempMatrix);
+
+      visibleCount++;
+    }
+
+    this.instancedMesh.count = visibleCount;
+    this.instancedMesh.instanceMatrix.needsUpdate = true;
   }
 
   public dispose(): void {

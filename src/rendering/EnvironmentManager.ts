@@ -7,7 +7,7 @@ import { TSLMapBorderFog } from './tsl/MapBorderFog';
 import { TSLWaterPlane } from './tsl/WaterPlane';
 import { EnvironmentParticles } from './EnhancedDecorations';
 // PERFORMANCE: Use instanced decorations instead of individual meshes
-import { InstancedTrees, InstancedRocks, InstancedGrass, InstancedPebbles } from './InstancedDecorations';
+import { InstancedTrees, InstancedRocks, InstancedGrass, InstancedPebbles, updateDecorationFrustum } from './InstancedDecorations';
 
 // Shadow quality presets - radius only applies to PCFSoftShadowMap (we use BasicShadowMap for perf)
 const SHADOW_QUALITY_PRESETS = {
@@ -244,9 +244,12 @@ export class EnvironmentManager {
   }
 
   /**
-   * Update animated elements (water, particles, terrain shader)
+   * Update animated elements (water, particles, terrain shader) and decoration frustum culling
+   * @param deltaTime Time since last frame
+   * @param gameTime Total game time
+   * @param camera Camera for frustum culling decorations (optional for backwards compatibility)
    */
-  public update(deltaTime: number, gameTime: number): void {
+  public update(deltaTime: number, gameTime: number, camera?: THREE.Camera): void {
     // Update terrain shader for procedural effects
     const sunDirection = this.directionalLight.position.clone().normalize();
     this.terrain.update(deltaTime, sunDirection);
@@ -262,6 +265,15 @@ export class EnvironmentManager {
     }
     if (this.particles) {
       this.particles.update(deltaTime);
+    }
+
+    // PERF: Update decoration frustum culling - only render visible instances
+    if (camera) {
+      updateDecorationFrustum(camera);
+      this.trees?.update();
+      this.rocks?.update();
+      this.grass?.update();
+      this.pebbles?.update();
     }
   }
 
