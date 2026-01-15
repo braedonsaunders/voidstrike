@@ -278,6 +278,80 @@ const HintBox = memo(function HintBox({
   );
 });
 
+// Format number with K/M suffix for large numbers
+function formatNumber(num: number): string {
+  if (num >= 1_000_000) return `${(num / 1_000_000).toFixed(1)}M`;
+  if (num >= 1_000) return `${(num / 1_000).toFixed(1)}K`;
+  return num.toString();
+}
+
+/** Performance Metrics Display - shows CPU/GPU timing, triangles, resolution */
+const PerformanceMetricsDisplay = memo(function PerformanceMetricsDisplay() {
+  const performanceMetrics = useUIStore((state) => state.performanceMetrics);
+
+  const metricStyle = {
+    display: 'flex',
+    justifyContent: 'space-between',
+    fontSize: '10px',
+    padding: '2px 0',
+  };
+
+  const labelStyle = { color: '#888' };
+  const valueStyle = { fontFamily: 'monospace' };
+
+  return (
+    <div style={{
+      paddingTop: '8px',
+      borderTop: '1px solid #222',
+      marginTop: '4px',
+    }}>
+      <div style={{ fontSize: '10px', fontWeight: 600, color: '#666', marginBottom: '6px', textTransform: 'uppercase' }}>
+        Performance Metrics
+      </div>
+
+      {/* Timing */}
+      <div style={metricStyle}>
+        <span style={labelStyle}>CPU Time</span>
+        <span style={{ ...valueStyle, color: '#22d3ee' }}>{performanceMetrics.cpuTime.toFixed(1)}ms</span>
+      </div>
+      <div style={metricStyle}>
+        <span style={labelStyle}>GPU Time</span>
+        <span style={{ ...valueStyle, color: '#fb923c' }}>{performanceMetrics.gpuTime.toFixed(1)}ms</span>
+      </div>
+      <div style={metricStyle}>
+        <span style={labelStyle}>Frame Time</span>
+        <span style={{ ...valueStyle, color: '#a3a3a3' }}>{performanceMetrics.frameTime.toFixed(1)}ms</span>
+      </div>
+
+      {/* Rendering stats */}
+      <div style={{ ...metricStyle, marginTop: '4px', borderTop: '1px solid #333', paddingTop: '4px' }}>
+        <span style={labelStyle}>Triangles</span>
+        <span style={{ ...valueStyle, color: '#c084fc' }}>{formatNumber(performanceMetrics.triangles)}</span>
+      </div>
+      <div style={metricStyle}>
+        <span style={labelStyle}>Draw Calls</span>
+        <span style={{ ...valueStyle, color: '#facc15' }}>{performanceMetrics.drawCalls}</span>
+      </div>
+
+      {/* Resolution */}
+      <div style={{ ...metricStyle, marginTop: '4px', borderTop: '1px solid #333', paddingTop: '4px' }}>
+        <span style={labelStyle}>Render Res</span>
+        <span style={{ ...valueStyle, color: '#a3a3a3' }}>
+          {performanceMetrics.renderWidth}×{performanceMetrics.renderHeight}
+        </span>
+      </div>
+      {performanceMetrics.renderWidth !== performanceMetrics.displayWidth && (
+        <div style={metricStyle}>
+          <span style={labelStyle}>Display Res</span>
+          <span style={{ ...valueStyle, color: '#a3a3a3' }}>
+            {performanceMetrics.displayWidth}×{performanceMetrics.displayHeight}
+          </span>
+        </div>
+      )}
+    </div>
+  );
+});
+
 // ============================================
 // MAIN COMPONENT
 // ============================================
@@ -929,6 +1003,9 @@ export const GraphicsOptionsPanel = memo(function GraphicsOptionsPanel() {
           onChange={() => toggleFPS()}
         />
       </div>
+
+      {/* ===== PERFORMANCE METRICS ===== */}
+      <PerformanceMetricsDisplay />
     </div>
   );
 });
