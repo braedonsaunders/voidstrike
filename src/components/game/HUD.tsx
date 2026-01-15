@@ -46,6 +46,16 @@ export const HUD = memo(function HUD() {
     }
   }, [isPaused]);
 
+  // Disable edge scrolling when any HUD dropdown/panel is open
+  useEffect(() => {
+    if (showOptionsMenu || showOverlayMenu || showPlayerStatus) {
+      setEdgeScrollEnabled(false);
+      return () => {
+        setEdgeScrollEnabled(true);
+      };
+    }
+  }, [showOptionsMenu, showOverlayMenu, showPlayerStatus]);
+
   // Sync fullscreen state with browser
   useEffect(() => {
     const handleFullscreenChange = () => {

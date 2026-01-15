@@ -307,8 +307,8 @@ export const GraphicsOptionsPanel = memo(function GraphicsOptionsPanel() {
 
   // Section expansion state
   const [expanded, setExpanded] = useState<Record<string, boolean>>({
-    resolution: true,
-    performance: true,
+    resolution: false,
+    performance: false,
     antialiasing: false,
     lighting: false,
     reflections: false,
