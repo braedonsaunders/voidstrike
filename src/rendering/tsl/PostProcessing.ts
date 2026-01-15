@@ -74,6 +74,9 @@ import { easuUpscale } from './UpscalerNode';
 // Import custom instanced velocity node
 import { createInstancedVelocityNode } from './InstancedVelocity';
 
+// Import volumetric fog
+import { createVolumetricFogNode, VolumetricFogNode, VOLUMETRIC_FOG_QUALITY } from './VolumetricFog';
+
 // ============================================
 // WARNING SUPPRESSION
 // ============================================
@@ -171,6 +174,12 @@ export interface PostProcessingConfig {
   exposure: number;
   saturation: number;
   contrast: number;
+
+  // Volumetric Fog
+  volumetricFogEnabled: boolean;
+  volumetricFogQuality: 'low' | 'medium' | 'high' | 'ultra';
+  volumetricFogDensity: number;
+  volumetricFogScattering: number;
 }
 
 const DEFAULT_CONFIG: PostProcessingConfig = {
@@ -211,6 +220,11 @@ const DEFAULT_CONFIG: PostProcessingConfig = {
   exposure: 1.0,
   saturation: 0.8,
   contrast: 1.05,
+
+  volumetricFogEnabled: false,
+  volumetricFogQuality: 'medium',
+  volumetricFogDensity: 1.0,
+  volumetricFogScattering: 1.0,
 };
 
 // ============================================
@@ -243,6 +257,7 @@ export class RenderPipeline {
   private ssgiPass: any | null = null;
   private fxaaPass: ReturnType<typeof fxaa> | null = null;
   private traaPass: ReturnType<typeof traa> | null = null;
+  private volumetricFogPass: VolumetricFogNode | null = null;
 
   // EASU upscaling pass (on display pipeline)
   private easuPass: ReturnType<typeof easuUpscale> | null = null;
@@ -500,14 +515,34 @@ export class RenderPipeline {
       }
     }
 
-    // 5. Color grading and vignette
+    // 5. Volumetric Fog (raymarched atmospheric scattering)
+    if (this.config.volumetricFogEnabled && this.camera instanceof THREE.PerspectiveCamera) {
+      try {
+        this.volumetricFogPass = createVolumetricFogNode(
+          outputNode,
+          scenePassDepth,
+          this.camera
+        );
+        // Apply initial configuration
+        this.volumetricFogPass.applyConfig({
+          quality: this.config.volumetricFogQuality,
+          density: this.config.volumetricFogDensity,
+          scattering: this.config.volumetricFogScattering,
+        });
+        outputNode = this.volumetricFogPass.node;
+      } catch (e) {
+        console.warn('[PostProcessing] Volumetric fog initialization failed:', e);
+      }
+    }
+
+    // 6. Color grading and vignette
     try {
       outputNode = this.createColorGradingPass(outputNode);
     } catch (e) {
       console.warn('[PostProcessing] Color grading failed:', e);
     }
 
-    // 6. Anti-aliasing (TRAA or FXAA)
+    // 7. Anti-aliasing (TRAA or FXAA)
     if (this.config.antiAliasingMode === 'taa' && this.config.taaEnabled) {
       try {
         const scenePassVelocity = scenePass.getTextureNode('velocity');
@@ -702,6 +737,7 @@ export class RenderPipeline {
     this.ssgiPass = null;
     this.fxaaPass = null;
     this.easuPass = null;
+    this.volumetricFogPass = null;
 
     // Recreate dual pipeline
     this.createDualPipeline();
@@ -722,7 +758,8 @@ export class RenderPipeline {
       (config.taaSharpeningEnabled !== undefined && config.taaSharpeningEnabled !== this.config.taaSharpeningEnabled) ||
       (config.vignetteEnabled !== undefined && config.vignetteEnabled !== this.config.vignetteEnabled) ||
       (config.upscalingMode !== undefined && config.upscalingMode !== this.config.upscalingMode) ||
-      (config.renderScale !== undefined && config.renderScale !== this.config.renderScale);
+      (config.renderScale !== undefined && config.renderScale !== this.config.renderScale) ||
+      (config.volumetricFogEnabled !== undefined && config.volumetricFogEnabled !== this.config.volumetricFogEnabled);
 
     this.config = { ...this.config, ...config };
 
@@ -770,6 +807,15 @@ export class RenderPipeline {
       this.ssgiPass.giIntensity.value = this.config.ssgiIntensity;
       this.ssgiPass.thickness.value = this.config.ssgiThickness;
       this.ssgiPass.aoIntensity.value = this.config.aoIntensity;
+    }
+
+    // Update volumetric fog parameters
+    if (this.volumetricFogPass) {
+      this.volumetricFogPass.applyConfig({
+        quality: this.config.volumetricFogQuality,
+        density: this.config.volumetricFogDensity,
+        scattering: this.config.volumetricFogScattering,
+      });
     }
 
     // Update sharpening parameters
@@ -833,6 +879,7 @@ export class RenderPipeline {
   isSSREnabled(): boolean { return this.config.ssrEnabled; }
   isTAAEnabled(): boolean { return this.config.taaEnabled && this.config.antiAliasingMode === 'taa'; }
   isSSGIEnabled(): boolean { return this.config.ssgiEnabled; }
+  isVolumetricFogEnabled(): boolean { return this.config.volumetricFogEnabled; }
   getAntiAliasingMode(): AntiAliasingMode { return this.config.antiAliasingMode; }
   isUpscalingEnabled(): boolean { return this.config.upscalingMode !== 'off' && this.config.renderScale < 1.0; }
   getUpscalingMode(): UpscalingMode { return this.config.upscalingMode; }
@@ -840,6 +887,15 @@ export class RenderPipeline {
   getRenderScalePercent(): number { return Math.round(this.config.renderScale * 100); }
   getRenderResolution(): { width: number; height: number } { return { width: this.renderWidth, height: this.renderHeight }; }
   getDisplayResolution(): { width: number; height: number } { return { width: this.displayWidth, height: this.displayHeight }; }
+
+  /**
+   * Update volumetric fog camera matrices (call each frame before render)
+   */
+  updateVolumetricFogCamera(): void {
+    if (this.volumetricFogPass && this.camera instanceof THREE.PerspectiveCamera) {
+      this.volumetricFogPass.updateCamera(this.camera);
+    }
+  }
 
   /**
    * Render the scene with post-processing
@@ -856,6 +912,9 @@ export class RenderPipeline {
    * - Display pipeline samples the linear-stored data and outputs to canvas
    */
   render(): void {
+    // Update volumetric fog camera matrices before render
+    this.updateVolumetricFogCamera();
+
     const useUpscaling = this.config.upscalingMode !== 'off' && this.config.renderScale < 1.0;
 
     if (useUpscaling && this.displayPostProcessing && this.internalRenderTarget) {

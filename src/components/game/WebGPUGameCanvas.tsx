@@ -495,6 +495,10 @@ export function WebGPUGameCanvas() {
             exposure: graphicsSettings.toneMappingExposure,
             saturation: graphicsSettings.saturation,
             contrast: graphicsSettings.contrast,
+            volumetricFogEnabled: graphicsSettings.volumetricFogEnabled,
+            volumetricFogQuality: graphicsSettings.volumetricFogQuality,
+            volumetricFogDensity: graphicsSettings.volumetricFogDensity,
+            volumetricFogScattering: graphicsSettings.volumetricFogScattering,
           }
         );
 
@@ -532,6 +536,10 @@ export function WebGPUGameCanvas() {
 
       // Configure shadow fill (ground bounce lighting)
       environmentRef.current?.setShadowFill(graphicsSettings.shadowFill);
+
+      // Configure emissive decorations (crystals, alien structures)
+      environmentRef.current?.setEmissiveDecorationsEnabled(graphicsSettings.emissiveDecorationsEnabled);
+      environmentRef.current?.setEmissiveIntensityMultiplier(graphicsSettings.emissiveIntensityMultiplier);
 
       // Initialize light pool for dynamic effects
       if (graphicsSettings.dynamicLightsEnabled) {
@@ -1859,6 +1867,10 @@ export function WebGPUGameCanvas() {
           exposure: settings.toneMappingExposure,
           saturation: settings.saturation,
           contrast: settings.contrast,
+          volumetricFogEnabled: settings.volumetricFogEnabled,
+          volumetricFogQuality: settings.volumetricFogQuality,
+          volumetricFogDensity: settings.volumetricFogDensity,
+          volumetricFogScattering: settings.volumetricFogScattering,
         });
       }
 
@@ -1902,6 +1914,10 @@ export function WebGPUGameCanvas() {
               exposure: settings.toneMappingExposure,
               saturation: settings.saturation,
               contrast: settings.contrast,
+              volumetricFogEnabled: settings.volumetricFogEnabled,
+              volumetricFogQuality: settings.volumetricFogQuality,
+              volumetricFogDensity: settings.volumetricFogDensity,
+              volumetricFogScattering: settings.volumetricFogScattering,
             }
           );
 
@@ -1951,6 +1967,14 @@ export function WebGPUGameCanvas() {
         // Update shadow fill (ground bounce lighting)
         if (settings.shadowFill !== prevSettings.shadowFill) {
           environmentRef.current.setShadowFill(settings.shadowFill);
+        }
+
+        // Update emissive decorations (crystals, alien structures)
+        if (settings.emissiveDecorationsEnabled !== prevSettings.emissiveDecorationsEnabled) {
+          environmentRef.current.setEmissiveDecorationsEnabled(settings.emissiveDecorationsEnabled);
+        }
+        if (settings.emissiveIntensityMultiplier !== prevSettings.emissiveIntensityMultiplier) {
+          environmentRef.current.setEmissiveIntensityMultiplier(settings.emissiveIntensityMultiplier);
         }
       }
 

@@ -653,6 +653,24 @@ export class EnvironmentManager {
   }
 
   /**
+   * Enable or disable emissive decorations (crystals, alien structures)
+   */
+  public setEmissiveDecorationsEnabled(enabled: boolean): void {
+    if (this.crystals) {
+      this.crystals.setEmissiveEnabled(enabled);
+    }
+  }
+
+  /**
+   * Set emissive intensity multiplier for decorations
+   */
+  public setEmissiveIntensityMultiplier(multiplier: number): void {
+    if (this.crystals) {
+      this.crystals.setEmissiveIntensityMultiplier(multiplier);
+    }
+  }
+
+  /**
    * Dispose all resources
    */
   public dispose(): void {
