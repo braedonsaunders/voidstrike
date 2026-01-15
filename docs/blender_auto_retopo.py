@@ -491,7 +491,8 @@ def calculate_voxel_size(obj, target_faces):
     """
     Calculate appropriate voxel size based on mesh bounds and target face count.
 
-    Larger objects need larger voxel sizes to avoid creating too many faces.
+    IMPORTANT: Larger voxel size = fewer faces, smaller = more faces.
+    For 590K→4K reduction, we need LARGE voxels (0.05-0.2 range).
     """
     from mathutils import Vector
 
@@ -501,16 +502,20 @@ def calculate_voxel_size(obj, target_faces):
     max_corner = Vector((max(v.x for v in bbox), max(v.y for v in bbox), max(v.z for v in bbox)))
     dimensions = max_corner - min_corner
 
-    # Surface area approximation (bounding box surface)
-    surface_area = 2 * (dimensions.x * dimensions.y + dimensions.y * dimensions.z + dimensions.x * dimensions.z)
+    # Use the largest dimension to scale voxel size
+    max_dim = max(dimensions.x, dimensions.y, dimensions.z)
 
-    # Estimate voxel size: each voxel face ≈ voxel_size^2
-    # target_faces ≈ surface_area / (voxel_size^2)
-    # voxel_size ≈ sqrt(surface_area / target_faces)
-    estimated_voxel = math.sqrt(surface_area / max(target_faces * 2, 100))
+    # For game models: we want roughly target_faces on a mesh
+    # Voxel count per dimension ≈ dim / voxel_size
+    # Total voxels ≈ (dim/voxel_size)^2 for surface
+    # So voxel_size ≈ dim / sqrt(target_faces)
+    voxel_size = max_dim / math.sqrt(target_faces)
 
-    # Clamp to reasonable range: 0.005 (very detailed) to 0.1 (very coarse)
-    voxel_size = max(0.005, min(0.1, estimated_voxel))
+    # Clamp to reasonable range for game models
+    # Min 0.02 (detailed), Max 0.5 (very coarse)
+    voxel_size = max(0.02, min(0.5, voxel_size))
+
+    print(f"      Calculated voxel size: {voxel_size:.4f} (mesh dim: {max_dim:.2f}, target: {target_faces})")
 
     return voxel_size
 
@@ -601,6 +606,8 @@ def quadriflow_remesh(high_poly, target_faces, base_name, lod_name):
 
     try:
         # Quadriflow remesh - now works because mesh is watertight
+        before_quadriflow = len(lod.data.polygons)
+
         bpy.ops.object.quadriflow_remesh(
             target_faces=target_faces,
             use_mesh_symmetry=False,
@@ -611,6 +618,12 @@ def quadriflow_remesh(high_poly, target_faces, base_name, lod_name):
         )
 
         final_faces = len(lod.data.polygons)
+
+        # Check if Quadriflow actually did anything
+        if final_faces == before_quadriflow:
+            print(f"      Quadriflow silently failed (face count unchanged)")
+            raise Exception("Quadriflow did not modify mesh")
+
         print(f"      Stage 2 complete: {final_faces:,} faces (clean quads)")
 
     except Exception as e:
