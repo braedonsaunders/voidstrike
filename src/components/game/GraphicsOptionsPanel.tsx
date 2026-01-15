@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useEffect, useState, memo, useCallback } from 'react';
-import { useUIStore, GraphicsSettings, AntiAliasingMode, UpscalingMode, ResolutionMode, FixedResolution, FIXED_RESOLUTIONS } from '@/store/uiStore';
+import { useUIStore, GraphicsSettings, AntiAliasingMode, UpscalingMode, ResolutionMode, FixedResolution, FIXED_RESOLUTIONS, GraphicsPresetName } from '@/store/uiStore';
 import { setEdgeScrollEnabled } from '@/store/cameraStore';
 
 // ============================================
@@ -298,6 +298,12 @@ export const GraphicsOptionsPanel = memo(function GraphicsOptionsPanel() {
   const setUpscalingMode = useUIStore((state) => state.setUpscalingMode);
   const setResolutionMode = useUIStore((state) => state.setResolutionMode);
   const setFixedResolution = useUIStore((state) => state.setFixedResolution);
+  // Preset state
+  const currentPreset = useUIStore((state) => state.currentGraphicsPreset);
+  const presetsLoaded = useUIStore((state) => state.graphicsPresetsLoaded);
+  const presetsConfig = useUIStore((state) => state.graphicsPresetsConfig);
+  const loadPresets = useUIStore((state) => state.loadGraphicsPresets);
+  const applyPreset = useUIStore((state) => state.applyGraphicsPreset);
 
   // Section expansion state
   const [expanded, setExpanded] = useState<Record<string, boolean>>({
@@ -314,6 +320,13 @@ export const GraphicsOptionsPanel = memo(function GraphicsOptionsPanel() {
   const toggleSection = useCallback((section: string) => {
     setExpanded(prev => ({ ...prev, [section]: !prev[section] }));
   }, []);
+
+  // Load presets when panel opens
+  useEffect(() => {
+    if (showGraphicsOptions && !presetsLoaded) {
+      loadPresets();
+    }
+  }, [showGraphicsOptions, presetsLoaded, loadPresets]);
 
   // Disable edge scrolling when panel is open
   useEffect(() => {
@@ -395,6 +408,69 @@ export const GraphicsOptionsPanel = memo(function GraphicsOptionsPanel() {
         >
           ✕
         </button>
+      </div>
+
+      {/* Preset Selector */}
+      <div style={{
+        marginBottom: '12px',
+        padding: '8px 10px',
+        backgroundColor: '#1a1a1c',
+        borderRadius: '6px',
+      }}>
+        <div style={{
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center',
+          marginBottom: '8px',
+        }}>
+          <span style={{ fontSize: '11px', fontWeight: 500 }}>Quality Preset</span>
+          {currentPreset === 'custom' && (
+            <span style={{
+              fontSize: '9px',
+              padding: '2px 6px',
+              borderRadius: '3px',
+              backgroundColor: 'rgba(234, 179, 8, 0.15)',
+              color: '#eab308',
+            }}>
+              Modified
+            </span>
+          )}
+        </div>
+        <div style={{
+          display: 'flex',
+          gap: '4px',
+        }}>
+          {(['low', 'medium', 'high', 'ultra'] as GraphicsPresetName[]).map((preset) => {
+            const presetInfo = presetsConfig?.presets[preset];
+            const isSelected = currentPreset === preset;
+            return (
+              <button
+                key={preset}
+                onClick={() => applyPreset(preset)}
+                title={presetInfo?.description || preset}
+                style={{
+                  flex: 1,
+                  padding: '6px 4px',
+                  fontSize: '10px',
+                  fontWeight: isSelected ? 600 : 400,
+                  border: 'none',
+                  borderRadius: '4px',
+                  backgroundColor: isSelected ? '#3b82f6' : '#333',
+                  color: isSelected ? '#fff' : '#999',
+                  cursor: 'pointer',
+                  transition: 'all 0.15s',
+                  textTransform: 'capitalize',
+                }}
+              >
+                {preset}
+              </button>
+            );
+          })}
+        </div>
+        <div style={{ fontSize: '9px', color: '#555', marginTop: '6px' }}>
+          {presetsConfig?.presets[currentPreset]?.description ||
+           (currentPreset === 'custom' ? 'Custom user settings' : '')}
+        </div>
       </div>
 
       {/* Master Post-Processing Toggle */}

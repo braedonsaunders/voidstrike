@@ -335,6 +335,142 @@ const cameraProjectionMatrix = (TSL as any).cameraProjectionMatrix;
 
 ---
 
+## Graphics Preset System
+
+### Overview
+
+VOIDSTRIKE implements an AAA-style data-driven graphics preset system, allowing users to select quality levels (Low, Medium, High, Ultra) or customize individual settings. Presets are defined in a JSON configuration file that can be edited to add custom presets or modify existing ones.
+
+### Configuration File
+
+Location: `public/config/graphics-presets.json`
+
+```json
+{
+  "version": "1.0",
+  "description": "Graphics quality presets",
+  "presets": {
+    "low": {
+      "name": "Low",
+      "description": "Best performance, minimal visual effects",
+      "settings": {
+        "postProcessingEnabled": true,
+        "shadowsEnabled": false,
+        "shadowQuality": "low",
+        "ssaoEnabled": false,
+        "bloomEnabled": false,
+        "antiAliasingMode": "fxaa",
+        "ssrEnabled": false,
+        "ssgiEnabled": false,
+        "volumetricFogEnabled": false,
+        "dynamicLightsEnabled": false,
+        "emissiveDecorationsEnabled": false,
+        "particleDensity": 2.5,
+        "maxPixelRatio": 1
+        // ... all GraphicsSettings values
+      }
+    },
+    "medium": { ... },
+    "high": { ... },
+    "ultra": { ... },
+    "custom": {
+      "name": "Custom",
+      "description": "User-defined settings",
+      "settings": null  // Custom doesn't apply settings
+    }
+  },
+  "defaultPreset": "high"
+}
+```
+
+### Preset Behavior
+
+1. **Selection**: Users click a preset button (Low/Medium/High/Ultra) in the Graphics Options panel
+2. **Application**: All settings from the preset's `settings` object are applied at once
+3. **Custom Detection**: When any individual setting is changed, the system:
+   - Temporarily marks preset as "custom"
+   - Checks if new settings match any defined preset
+   - If match found, updates preset indicator to that preset
+4. **Modified Badge**: When preset is "custom", a yellow "Modified" badge appears
+
+### Adding Custom Presets
+
+Edit `public/config/graphics-presets.json` to add new presets:
+
+```json
+{
+  "presets": {
+    // ... existing presets ...
+    "cinematic": {
+      "name": "Cinematic",
+      "description": "Maximum quality for screenshots and videos",
+      "settings": {
+        "postProcessingEnabled": true,
+        "shadowsEnabled": true,
+        "shadowQuality": "ultra",
+        "shadowDistance": 150,
+        "ssaoEnabled": true,
+        "ssaoIntensity": 1.5,
+        "bloomEnabled": true,
+        "bloomStrength": 0.4,
+        "antiAliasingMode": "taa",
+        "ssrEnabled": true,
+        "ssgiEnabled": true,
+        "ssgiIntensity": 25,
+        "volumetricFogEnabled": true,
+        "volumetricFogQuality": "ultra",
+        "dynamicLightsEnabled": true,
+        "maxDynamicLights": 32,
+        "emissiveDecorationsEnabled": true,
+        "emissiveIntensityMultiplier": 1.5,
+        "particleDensity": 12.0,
+        "vignetteEnabled": true,
+        "vignetteIntensity": 0.3
+      }
+    }
+  }
+}
+```
+
+### Implementation Details
+
+**Store Integration** (`uiStore.ts`):
+- `currentGraphicsPreset: GraphicsPresetName` - Tracks active preset
+- `graphicsPresetsConfig: GraphicsPresetsConfig | null` - Loaded presets JSON
+- `loadGraphicsPresets()` - Fetches presets from JSON file
+- `applyGraphicsPreset(name)` - Applies all settings from a preset
+- `detectCurrentPreset()` - Checks if current settings match any preset
+
+**UI Integration** (`GraphicsOptionsPanel.tsx`):
+- Preset selector buttons at top of panel
+- "Modified" badge when custom
+- Description text below buttons
+- Auto-loads presets when panel opens
+
+### Preset Settings Reference
+
+Each preset controls all `GraphicsSettings` values:
+
+| Category | Settings |
+|----------|----------|
+| **Core** | postProcessingEnabled |
+| **Shadows** | shadowsEnabled, shadowQuality, shadowDistance |
+| **Ambient Occlusion** | ssaoEnabled, ssaoRadius, ssaoIntensity |
+| **Bloom** | bloomEnabled, bloomStrength, bloomThreshold, bloomRadius |
+| **Anti-Aliasing** | antiAliasingMode, taaSharpeningEnabled, taaSharpeningIntensity |
+| **Reflections** | ssrEnabled, ssrOpacity, ssrMaxRoughness |
+| **Global Illumination** | ssgiEnabled, ssgiRadius, ssgiIntensity |
+| **Resolution** | resolutionMode, resolutionScale, maxPixelRatio |
+| **Upscaling** | upscalingMode, renderScale, easuSharpness |
+| **Fog** | fogEnabled, fogDensity, volumetricFogEnabled, volumetricFogQuality |
+| **Lighting** | shadowFill, dynamicLightsEnabled, maxDynamicLights |
+| **Effects** | emissiveDecorationsEnabled, particlesEnabled, particleDensity |
+| **Color** | toneMappingExposure, saturation, contrast |
+| **Vignette** | vignetteEnabled, vignetteIntensity |
+| **Environment** | environmentMapEnabled |
+
+---
+
 ## Graphics Settings Audit (January 2025)
 
 ### Connected Settings

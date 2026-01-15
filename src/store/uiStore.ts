@@ -62,6 +62,22 @@ export type AntiAliasingMode = 'off' | 'fxaa' | 'taa';
 // Upscaling mode selection (EASU = Edge-Adaptive Spatial Upsampling)
 export type UpscalingMode = 'off' | 'easu' | 'bilinear';
 
+// Graphics preset types
+export type GraphicsPresetName = 'low' | 'medium' | 'high' | 'ultra' | 'custom';
+
+export interface GraphicsPreset {
+  name: string;
+  description: string;
+  settings: Partial<GraphicsSettings> | null;
+}
+
+export interface GraphicsPresetsConfig {
+  version: string;
+  description: string;
+  presets: Record<GraphicsPresetName, GraphicsPreset>;
+  defaultPreset: GraphicsPresetName;
+}
+
 // Resolution mode for display
 export type ResolutionMode = 'native' | 'fixed' | 'percentage';
 
@@ -216,6 +232,9 @@ export interface UIState {
 
   // Graphics settings
   graphicsSettings: GraphicsSettings;
+  currentGraphicsPreset: GraphicsPresetName;
+  graphicsPresetsLoaded: boolean;
+  graphicsPresetsConfig: GraphicsPresetsConfig | null;
   showGraphicsOptions: boolean;
   rendererAPI: RendererAPI;
   preferWebGPU: boolean; // User preference for renderer (true = try WebGPU, false = force WebGL)
@@ -275,6 +294,10 @@ export interface UIState {
   setFixedResolution: (res: FixedResolution) => void;
   setRendererAPI: (api: RendererAPI) => void;
   setPreferWebGPU: (prefer: boolean) => void;
+  // Graphics preset actions
+  loadGraphicsPresets: () => Promise<void>;
+  applyGraphicsPreset: (presetName: GraphicsPresetName) => void;
+  detectCurrentPreset: () => GraphicsPresetName;
   // Sound settings actions
   toggleSoundOptions: () => void;
   // Fullscreen actions
@@ -412,6 +435,9 @@ export const useUIStore = create<UIState>((set, get) => ({
     lodDistance0: 50, // Use LOD0 (highest detail) within 50 units from camera
     lodDistance1: 120, // Use LOD1 (medium detail) between 50-120 units, LOD2 beyond
   },
+  currentGraphicsPreset: 'high' as GraphicsPresetName, // Default to High preset
+  graphicsPresetsLoaded: false,
+  graphicsPresetsConfig: null,
   showDebugMenu: false,
   showPerformancePanel: false,
   overlaySettings: {
@@ -549,6 +575,93 @@ export const useUIStore = create<UIState>((set, get) => ({
 
   setPreferWebGPU: (prefer) => set({ preferWebGPU: prefer }),
 
+  // Graphics preset actions
+  loadGraphicsPresets: async () => {
+    const state = get();
+    if (state.graphicsPresetsLoaded) return;
+
+    try {
+      const response = await fetch('/config/graphics-presets.json');
+      if (!response.ok) {
+        console.warn('Failed to load graphics presets, using defaults');
+        return;
+      }
+      const config = await response.json() as GraphicsPresetsConfig;
+      set({
+        graphicsPresetsConfig: config,
+        graphicsPresetsLoaded: true,
+      });
+    } catch (error) {
+      console.warn('Error loading graphics presets:', error);
+    }
+  },
+
+  applyGraphicsPreset: (presetName) => {
+    const state = get();
+    const config = state.graphicsPresetsConfig;
+
+    // For 'custom', just set the preset name without changing settings
+    if (presetName === 'custom') {
+      set({ currentGraphicsPreset: 'custom' });
+      return;
+    }
+
+    // Get preset settings from loaded config or use defaults
+    let presetSettings: Partial<GraphicsSettings> | null = null;
+
+    if (config && config.presets[presetName]) {
+      presetSettings = config.presets[presetName].settings;
+    }
+
+    if (!presetSettings) {
+      console.warn(`Preset "${presetName}" not found or has no settings`);
+      return;
+    }
+
+    // Apply all preset settings at once
+    set((s) => ({
+      currentGraphicsPreset: presetName,
+      graphicsSettings: {
+        ...s.graphicsSettings,
+        ...presetSettings,
+        // Ensure derived AA settings are consistent
+        fxaaEnabled: presetSettings.antiAliasingMode === 'fxaa',
+        taaEnabled: presetSettings.antiAliasingMode === 'taa',
+      },
+    }));
+  },
+
+  detectCurrentPreset: () => {
+    const state = get();
+    const config = state.graphicsPresetsConfig;
+    const currentSettings = state.graphicsSettings;
+
+    if (!config) return 'custom';
+
+    // Check each preset (except custom) to see if current settings match
+    const presetNames: GraphicsPresetName[] = ['low', 'medium', 'high', 'ultra'];
+
+    for (const presetName of presetNames) {
+      const preset = config.presets[presetName];
+      if (!preset?.settings) continue;
+
+      let matches = true;
+      for (const [key, value] of Object.entries(preset.settings)) {
+        // Skip derived settings that are computed
+        if (key === 'fxaaEnabled' || key === 'taaEnabled') continue;
+
+        if (currentSettings[key as keyof GraphicsSettings] !== value) {
+          matches = false;
+          break;
+        }
+      }
+
+      if (matches) return presetName;
+    }
+
+    return 'custom';
+  },
+
   toggleSoundOptions: () => set((state) => ({ showSoundOptions: !state.showSoundOptions })),
 
   toggleFullscreen: () => {
@@ -567,20 +680,34 @@ export const useUIStore = create<UIState>((set, get) => ({
 
   setFullscreen: (isFullscreen) => set({ isFullscreen }),
 
-  setGraphicsSetting: (key, value) =>
+  setGraphicsSetting: (key, value) => {
     set((state) => ({
       graphicsSettings: { ...state.graphicsSettings, [key]: value },
-    })),
+      // Mark as custom when individual settings are changed
+      currentGraphicsPreset: 'custom' as GraphicsPresetName,
+    }));
+    // After setting, detect if it matches a preset
+    const detected = get().detectCurrentPreset();
+    if (detected !== 'custom') {
+      set({ currentGraphicsPreset: detected });
+    }
+  },
 
-  toggleGraphicsSetting: (key) =>
+  toggleGraphicsSetting: (key) => {
     set((state) => ({
       graphicsSettings: {
         ...state.graphicsSettings,
         [key]: !state.graphicsSettings[key],
       },
-    })),
+      currentGraphicsPreset: 'custom' as GraphicsPresetName,
+    }));
+    const detected = get().detectCurrentPreset();
+    if (detected !== 'custom') {
+      set({ currentGraphicsPreset: detected });
+    }
+  },
 
-  setAntiAliasingMode: (mode) =>
+  setAntiAliasingMode: (mode) => {
     set((state) => ({
       graphicsSettings: {
         ...state.graphicsSettings,
@@ -588,31 +715,55 @@ export const useUIStore = create<UIState>((set, get) => ({
         fxaaEnabled: mode === 'fxaa',
         taaEnabled: mode === 'taa',
       },
-    })),
+      currentGraphicsPreset: 'custom' as GraphicsPresetName,
+    }));
+    const detected = get().detectCurrentPreset();
+    if (detected !== 'custom') {
+      set({ currentGraphicsPreset: detected });
+    }
+  },
 
-  setUpscalingMode: (mode) =>
+  setUpscalingMode: (mode) => {
     set((state) => ({
       graphicsSettings: {
         ...state.graphicsSettings,
         upscalingMode: mode,
       },
-    })),
+      currentGraphicsPreset: 'custom' as GraphicsPresetName,
+    }));
+    const detected = get().detectCurrentPreset();
+    if (detected !== 'custom') {
+      set({ currentGraphicsPreset: detected });
+    }
+  },
 
-  setResolutionMode: (mode) =>
+  setResolutionMode: (mode) => {
     set((state) => ({
       graphicsSettings: {
         ...state.graphicsSettings,
         resolutionMode: mode,
       },
-    })),
+      currentGraphicsPreset: 'custom' as GraphicsPresetName,
+    }));
+    const detected = get().detectCurrentPreset();
+    if (detected !== 'custom') {
+      set({ currentGraphicsPreset: detected });
+    }
+  },
 
-  setFixedResolution: (res) =>
+  setFixedResolution: (res) => {
     set((state) => ({
       graphicsSettings: {
         ...state.graphicsSettings,
         fixedResolution: res,
       },
-    })),
+      currentGraphicsPreset: 'custom' as GraphicsPresetName,
+    }));
+    const detected = get().detectCurrentPreset();
+    if (detected !== 'custom') {
+      set({ currentGraphicsPreset: detected });
+    }
+  },
 
   toggleDebugMenu: () => set((state) => ({ showDebugMenu: !state.showDebugMenu })),
 
