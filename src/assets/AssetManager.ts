@@ -115,6 +115,7 @@ export interface RenderingHints {
     intensity: number;
     distance: number;
   } | null;
+  exposure?: number; // Brightness multiplier (default: 1.0). Values > 1 brighten, < 1 darken.
 }
 
 /** Rotation config supporting all 3 axes */
