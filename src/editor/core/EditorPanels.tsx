@@ -34,6 +34,8 @@ export interface EditorPanelsProps {
   onToggleLabels: () => void;
   onToggleGrid: () => void;
   onToggleCategory: (category: string) => void;
+  onMouseEnter?: () => void;
+  onMouseLeave?: () => void;
 }
 
 // Tab button component with icon
@@ -775,6 +777,8 @@ export function EditorPanels({
   onToggleLabels,
   onToggleGrid,
   onToggleCategory,
+  onMouseEnter,
+  onMouseLeave,
 }: EditorPanelsProps) {
   return (
     <div
@@ -783,6 +787,8 @@ export function EditorPanels({
         backgroundColor: config.theme.surface,
         borderColor: config.theme.border,
       }}
+      onMouseEnter={onMouseEnter}
+      onMouseLeave={onMouseLeave}
     >
       {/* Panel tabs */}
       <div

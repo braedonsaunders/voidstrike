@@ -46,11 +46,6 @@ function EditorPageContent() {
     loadMapList();
   }, []);
 
-  const handleSave = (data: EditorMapData) => {
-    console.log('Map saved:', data);
-    // TODO: Persist to storage or state
-  };
-
   const handleCancel = () => {
     // Navigate back to home if came from home page (new=true), otherwise to setup
     if (isNewMap) {
@@ -60,13 +55,13 @@ function EditorPageContent() {
     }
   };
 
-  const handlePlay = (data: EditorMapData) => {
-    // Convert to game format and store in state
+  const handlePreview = (data: EditorMapData) => {
+    // Convert to game format and store in state for preview
     const gameData = voidstrikeDataProvider.exportForGame?.(data);
-    console.log('Playing with edited map:', gameData);
+    console.log('Preview map:', gameData);
 
-    // TODO: Store the edited map data in gameSetupStore
-    // For now, just navigate back to setup
+    // TODO: Store the map data and start preview game
+    // For now, just navigate to game setup
     router.push('/game/setup');
   };
 
@@ -160,9 +155,8 @@ function EditorPageContent() {
         config={VOIDSTRIKE_EDITOR_CONFIG}
         dataProvider={voidstrikeDataProvider}
         mapId={currentMapId}
-        onSave={handleSave}
         onCancel={handleCancel}
-        onPlay={handlePlay}
+        onPlay={handlePreview}
       />
     </div>
   );

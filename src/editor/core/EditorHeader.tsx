@@ -4,7 +4,8 @@
 
 'use client';
 
-import type { EditorConfig } from '../config/EditorConfig';
+import { useRef } from 'react';
+import type { EditorConfig, EditorMapData } from '../config/EditorConfig';
 
 export interface EditorHeaderProps {
   config: EditorConfig;
@@ -12,12 +13,16 @@ export interface EditorHeaderProps {
   isDirty: boolean;
   canUndo: boolean;
   canRedo: boolean;
+  musicEnabled: boolean;
+  isFullscreen: boolean;
   onUndo: () => void;
   onRedo: () => void;
-  onSave: () => void;
   onCancel: () => void;
-  onPlay?: () => void;
+  onPreview?: () => void;
+  onImport?: (data: EditorMapData) => void;
   onExport?: () => void;
+  onToggleMusic: () => void;
+  onToggleFullscreen: () => void;
 }
 
 export function EditorHeader({
@@ -26,13 +31,40 @@ export function EditorHeader({
   isDirty,
   canUndo,
   canRedo,
+  musicEnabled,
+  isFullscreen,
   onUndo,
   onRedo,
-  onSave,
   onCancel,
-  onPlay,
+  onPreview,
+  onImport,
   onExport,
+  onToggleMusic,
+  onToggleFullscreen,
 }: EditorHeaderProps) {
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Handle file import
+  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file || !onImport) return;
+
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      try {
+        const json = JSON.parse(event.target?.result as string);
+        onImport(json);
+      } catch (err) {
+        console.error('Failed to parse map JSON:', err);
+        alert('Invalid map file. Please select a valid JSON map file.');
+      }
+    };
+    reader.readAsText(file);
+
+    // Reset input so same file can be selected again
+    e.target.value = '';
+  };
+
   return (
     <header
       className="flex-shrink-0 h-12 flex items-center px-4 border-b"
@@ -104,50 +136,102 @@ export function EditorHeader({
 
       {/* Right section: Actions */}
       <div className="flex items-center gap-2 ml-4">
+        {/* Import button */}
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept=".json"
+          onChange={handleFileSelect}
+          className="hidden"
+        />
         <button
-          onClick={onCancel}
-          className="px-4 py-1.5 text-sm transition-colors hover:opacity-80"
-          style={{ color: 'var(--editor-text-secondary)' }}
+          onClick={() => fileInputRef.current?.click()}
+          className="px-3 py-1.5 text-sm font-medium rounded transition-colors hover:opacity-90"
+          style={{
+            backgroundColor: 'var(--editor-surface)',
+            color: 'var(--editor-text-secondary)',
+            border: `1px solid var(--editor-border)`,
+          }}
+          title="Import map from JSON file"
         >
-          Cancel
+          Import
         </button>
 
+        {/* Export button */}
         {onExport && (
           <button
             onClick={onExport}
-            className="px-4 py-1.5 text-sm font-medium rounded transition-colors hover:opacity-90"
+            className="px-3 py-1.5 text-sm font-medium rounded transition-colors hover:opacity-90"
             style={{
               backgroundColor: 'var(--editor-surface)',
-              color: 'var(--editor-text)',
+              color: 'var(--editor-text-secondary)',
               border: `1px solid var(--editor-border)`,
             }}
+            title="Export map as JSON file"
           >
             Export
           </button>
         )}
 
+        {/* Divider */}
+        <div
+          className="h-5 w-px mx-1"
+          style={{ backgroundColor: 'var(--editor-border)' }}
+        />
+
+        {/* Mute/Unmute button */}
         <button
-          onClick={onSave}
-          className="px-4 py-1.5 text-sm font-medium rounded transition-colors hover:opacity-90"
+          onClick={onToggleMusic}
+          className="w-8 h-8 rounded flex items-center justify-center text-sm transition-colors hover:opacity-80"
           style={{
-            backgroundColor: 'var(--editor-surface)',
-            color: 'var(--editor-text)',
-            border: `1px solid var(--editor-border)`,
+            backgroundColor: 'var(--editor-bg)',
+            color: 'var(--editor-text-secondary)',
           }}
+          title={musicEnabled ? 'Mute Music' : 'Unmute Music'}
         >
-          Save
+          {musicEnabled ? '🔊' : '🔇'}
         </button>
 
-        {onPlay && (
+        {/* Fullscreen button */}
+        <button
+          onClick={onToggleFullscreen}
+          className="w-8 h-8 rounded flex items-center justify-center text-sm transition-colors hover:opacity-80"
+          style={{
+            backgroundColor: 'var(--editor-bg)',
+            color: 'var(--editor-text-secondary)',
+          }}
+          title={isFullscreen ? 'Exit Fullscreen' : 'Enter Fullscreen'}
+        >
+          ⛶
+        </button>
+
+        {/* Divider */}
+        <div
+          className="h-5 w-px mx-1"
+          style={{ backgroundColor: 'var(--editor-border)' }}
+        />
+
+        {/* Cancel button */}
+        <button
+          onClick={onCancel}
+          className="px-3 py-1.5 text-sm transition-colors hover:opacity-80"
+          style={{ color: 'var(--editor-text-secondary)' }}
+        >
+          Cancel
+        </button>
+
+        {/* Preview button */}
+        {onPreview && (
           <button
-            onClick={onPlay}
+            onClick={onPreview}
             className="px-4 py-1.5 text-sm font-medium rounded transition-colors hover:opacity-90"
             style={{
               backgroundColor: 'var(--editor-primary)',
               color: 'var(--editor-text)',
             }}
+            title="Preview map in game"
           >
-            Save & Play
+            Preview
           </button>
         )}
       </div>

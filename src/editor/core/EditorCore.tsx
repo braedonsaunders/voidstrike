@@ -30,16 +30,13 @@ import type {
   EditorMapData,
 } from '../config/EditorConfig';
 import { useEditorState } from '../hooks/useEditorState';
+import { useUIStore } from '@/store/uiStore';
+import { MusicPlayer } from '@/audio/MusicPlayer';
 
 // Components
 import { Editor3DCanvas } from './Editor3DCanvas';
-import { EditorToolbar } from './EditorToolbar';
 import { EditorPanels } from './EditorPanels';
 import { EditorHeader } from './EditorHeader';
-import { EditorExportModal } from './EditorExportModal';
-
-// Types
-import type { MapData } from '@/data/maps/MapTypes';
 
 // ============================================
 // TYPES
@@ -77,6 +74,13 @@ export function EditorCore({
   const editorState = useEditorState(config);
   const { state, loadMap } = editorState;
 
+  // UI Store for music and fullscreen
+  const musicEnabled = useUIStore((s) => s.musicEnabled);
+  const toggleMusic = useUIStore((s) => s.toggleMusic);
+  const isFullscreen = useUIStore((s) => s.isFullscreen);
+  const toggleFullscreen = useUIStore((s) => s.toggleFullscreen);
+  const setFullscreen = useUIStore((s) => s.setFullscreen);
+
   // Visibility state for 3D elements
   const [visibility, setVisibility] = useState({
     labels: true,
@@ -84,9 +88,8 @@ export function EditorCore({
     categories: {} as Record<string, boolean>,
   });
 
-  // Export modal state
-  const [exportModalOpen, setExportModalOpen] = useState(false);
-  const [exportMapData, setExportMapData] = useState<MapData | null>(null);
+  // Edge scroll control - disabled when mouse is over UI panels
+  const [edgeScrollEnabled, setEdgeScrollEnabled] = useState(true);
 
   // Initialize category visibility when config loads
   useEffect(() => {
@@ -98,6 +101,16 @@ export function EditorCore({
     }
     setVisibility((prev) => ({ ...prev, categories }));
   }, [config.objectTypes]);
+
+  // Sync fullscreen state with browser
+  useEffect(() => {
+    const handleFullscreenChange = () => {
+      setFullscreen(!!document.fullscreenElement);
+    };
+    document.addEventListener('fullscreenchange', handleFullscreenChange);
+    setFullscreen(!!document.fullscreenElement);
+    return () => document.removeEventListener('fullscreenchange', handleFullscreenChange);
+  }, [setFullscreen]);
 
   // Visibility toggle handlers
   const toggleLabels = useCallback(() => {
@@ -116,6 +129,15 @@ export function EditorCore({
         [category]: !prev.categories[category],
       },
     }));
+  }, []);
+
+  // Panel hover handlers for edge scroll control
+  const handlePanelMouseEnter = useCallback(() => {
+    setEdgeScrollEnabled(false);
+  }, []);
+
+  const handlePanelMouseLeave = useCallback(() => {
+    setEdgeScrollEnabled(true);
   }, []);
 
   // Load map on mount
@@ -147,20 +169,53 @@ export function EditorCore({
     }
   }, [state.mapData, onChange]);
 
-  // Handle save
-  const handleSave = useCallback(async () => {
+  // Handle music toggle
+  const handleMusicToggle = useCallback(() => {
+    toggleMusic();
+    const newEnabled = !musicEnabled;
+    MusicPlayer.setMuted(!newEnabled);
+    if (!newEnabled) {
+      MusicPlayer.pause();
+    } else {
+      MusicPlayer.resume();
+    }
+  }, [toggleMusic, musicEnabled]);
+
+  // Handle import
+  const handleImport = useCallback((data: EditorMapData) => {
+    loadMap(data);
+  }, [loadMap]);
+
+  // Handle export
+  const handleExportJson = useCallback(() => {
     if (!state.mapData) return;
 
-    if (dataProvider?.saveMap) {
-      await dataProvider.saveMap(state.mapData);
-    }
+    // Create a clean copy of the map data for export
+    const exportData = {
+      ...state.mapData,
+      // Ensure we have all required fields
+      name: state.mapData.name || 'Untitled Map',
+      width: state.mapData.width,
+      height: state.mapData.height,
+      biomeId: state.mapData.biomeId,
+      terrain: state.mapData.terrain,
+      objects: state.mapData.objects,
+    };
 
-    editorState.markClean();
-    onSave?.(state.mapData);
-  }, [state.mapData, dataProvider, editorState, onSave]);
+    const json = JSON.stringify(exportData, null, 2);
+    const blob = new Blob([json], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `${state.mapData.name || 'map'}.json`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  }, [state.mapData]);
 
-  // Handle play
-  const handlePlay = useCallback(() => {
+  // Handle preview (play without saving)
+  const handlePreview = useCallback(() => {
     if (!state.mapData) return;
     onPlay?.(state.mapData);
   }, [state.mapData, onPlay]);
@@ -185,22 +240,6 @@ export function EditorCore({
     }
     onCancel?.();
   }, [state.isDirty, onCancel]);
-
-  // Handle export
-  const handleExport = useCallback(() => {
-    if (!state.mapData || !dataProvider?.exportForGame) return;
-
-    // Convert editor format to game format
-    const gameData = dataProvider.exportForGame(state.mapData);
-    setExportMapData(gameData as MapData);
-    setExportModalOpen(true);
-  }, [state.mapData, dataProvider]);
-
-  // Handle export modal close
-  const handleExportClose = useCallback(() => {
-    setExportModalOpen(false);
-    setExportMapData(null);
-  }, []);
 
   // Keyboard shortcuts
   useEffect(() => {
@@ -237,10 +276,10 @@ export function EditorCore({
         return;
       }
 
-      // Save
+      // Export (Ctrl+S exports as JSON)
       if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 's') {
         e.preventDefault();
-        handleSave();
+        handleExportJson();
         return;
       }
 
@@ -264,7 +303,7 @@ export function EditorCore({
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [config, editorState, state.selectedObjects, handleSave]);
+  }, [config, editorState, state.selectedObjects, handleExportJson]);
 
   // Theme CSS variables
   const themeStyle = useMemo(
@@ -300,12 +339,16 @@ export function EditorCore({
         isDirty={state.isDirty}
         canUndo={editorState.canUndo}
         canRedo={editorState.canRedo}
+        musicEnabled={musicEnabled}
+        isFullscreen={isFullscreen}
         onUndo={editorState.undo}
         onRedo={editorState.redo}
-        onSave={handleSave}
         onCancel={handleCancel}
-        onPlay={handlePlay}
-        onExport={dataProvider?.exportForGame ? handleExport : undefined}
+        onPreview={onPlay ? handlePreview : undefined}
+        onImport={handleImport}
+        onExport={handleExportJson}
+        onToggleMusic={handleMusicToggle}
+        onToggleFullscreen={toggleFullscreen}
       />
 
       {/* Main content */}
@@ -316,6 +359,7 @@ export function EditorCore({
             config={config}
             state={state}
             visibility={visibility}
+            edgeScrollEnabled={edgeScrollEnabled}
             onCellsUpdateBatched={editorState.updateCellsBatched}
             onStartBatch={editorState.startBatch}
             onCommitBatch={editorState.commitBatch}
@@ -346,17 +390,10 @@ export function EditorCore({
           onToggleLabels={toggleLabels}
           onToggleGrid={toggleGrid}
           onToggleCategory={toggleCategory}
+          onMouseEnter={handlePanelMouseEnter}
+          onMouseLeave={handlePanelMouseLeave}
         />
       </div>
-
-      {/* Export Modal */}
-      {exportMapData && (
-        <EditorExportModal
-          map={exportMapData}
-          isOpen={exportModalOpen}
-          onClose={handleExportClose}
-        />
-      )}
     </div>
   );
 }
