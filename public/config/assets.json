@@ -126,7 +126,7 @@
     },
     "dreadnought": {
       "model": "/models/units/dreadnought_LOD0.glb",
-      "height": 15.0,
+      "height": 45.0,
       "animations": {
         "idle": ["idle", "hover", "cruise"],
         "walk": ["walk", "fly", "move", "cruise"],
