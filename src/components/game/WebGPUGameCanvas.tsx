@@ -22,6 +22,7 @@ import * as THREE from 'three';
 import * as Phaser from 'phaser';
 
 import { Game } from '@/engine/core/Game';
+import { PerformanceMonitor } from '@/engine/core/PerformanceMonitor';
 import { RTSCamera } from '@/rendering/Camera';
 import { TerrainGrid } from '@/rendering/Terrain';
 import { EnvironmentManager } from '@/rendering/EnvironmentManager';
@@ -839,7 +840,9 @@ export function WebGPUGameCanvas() {
         // Update shadow camera to follow the game camera for proper shadow rendering
         // This ensures shadows appear for objects near the camera, not just at map center
         environmentRef.current?.updateShadowCameraPosition(camera.target.x, camera.target.z);
-        // PERF: Throttled shadow updates - only updates shadow map every N frames
+        // PERF: Adaptive shadow updates - fast when units present, slow for empty/static scenes
+        const entityCount = gameRef.current?.world.getEntityCount() ?? 0;
+        environmentRef.current?.setHasMovingEntities(entityCount > 0);
         environmentRef.current?.updateShadows();
 
         // Update TSL visual systems
@@ -1033,6 +1036,15 @@ export function WebGPUGameCanvas() {
             displayWidth,
             displayHeight,
           });
+
+          // Update PerformanceMonitor with per-frame render metrics
+          // Note: triangles/drawCalls are accumulated over 1 second, fps used to calculate per-frame
+          const currentFps = 1000 / frameElapsed;
+          PerformanceMonitor.updateRenderMetrics(
+            rendererInfo.render.calls,
+            rendererInfo.render.triangles,
+            currentFps
+          );
 
           // Reset renderer info for next frame's accurate count
           rendererInfo.reset();
