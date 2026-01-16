@@ -2,7 +2,7 @@
  * EditorCore - The main map editor component
  *
  * A config-driven, reusable map editor that can be customized for any game.
- * Features a floating toolbar, context menu, mini-map, and status bar.
+ * Photoshop-style layout: toolbar at top, properties panel on right.
  */
 
 'use client';
@@ -23,7 +23,7 @@ import { MusicPlayer } from '@/audio/MusicPlayer';
 import { Editor3DCanvas } from './Editor3DCanvas';
 import { EditorPanels } from './EditorPanels';
 import { EditorHeader, type MapListItem } from './EditorHeader';
-import { EditorFloatingToolbar } from './EditorFloatingToolbar';
+import { EditorToolbar } from './EditorToolbar';
 import { EditorContextMenu, buildContextMenuActions, type ContextMenuAction } from './EditorContextMenu';
 import { EditorStatusBar } from './EditorStatusBar';
 import { EditorMiniMap } from './EditorMiniMap';
@@ -486,6 +486,9 @@ export function EditorCore({
     [config.theme]
   ) as React.CSSProperties;
 
+  // Calculate panel width for proper layout
+  const panelWidth = isPanelCollapsed ? 0 : 280;
+
   return (
     <div
       className={`editor-core h-screen flex flex-col overflow-hidden ${className}`}
@@ -519,33 +522,11 @@ export function EditorCore({
       />
 
       {/* Main content */}
-      <div className="flex-1 flex min-h-0 relative">
-        {/* 3D Canvas area */}
-        <div className="flex-1 relative">
-          <Editor3DCanvas
-            config={config}
-            state={state}
-            visibility={visibility}
-            edgeScrollEnabled={edgeScrollEnabled}
-            onCellsUpdateBatched={editorState.updateCellsBatched}
-            onStartBatch={editorState.startBatch}
-            onCommitBatch={editorState.commitBatch}
-            onFillArea={editorState.fillArea}
-            onObjectSelect={editorState.selectObjects}
-            onObjectUpdate={editorState.updateObject}
-            onObjectAdd={editorState.addObject}
-            onCursorMove={(gridPos, worldPos) => {
-              setCursorPosition(gridPos);
-              setCursorWorldPosition(worldPos);
-            }}
-            onObjectHover={setHoveredObject}
-            onContextMenu={handleContextMenu}
-            onViewportChange={setViewportBounds}
-            onNavigateRef={(fn) => { canvasNavigateRef.current = fn; }}
-          />
-
-          {/* Floating Toolbar */}
-          <EditorFloatingToolbar
+      <div className="flex-1 flex min-h-0">
+        {/* Canvas area with toolbar */}
+        <div className="flex-1 flex flex-col min-w-0">
+          {/* Horizontal Toolbar */}
+          <EditorToolbar
             config={config}
             activeTool={state.activeTool}
             selectedElevation={state.selectedElevation}
@@ -555,28 +536,59 @@ export function EditorCore({
             onElevationSelect={editorState.setSelectedElevation}
           />
 
-          {/* Mini-map */}
-          <EditorMiniMap
-            config={config}
-            mapData={state.mapData}
-            objects={state.mapData?.objects || []}
-            viewportBounds={viewportBounds}
-            onNavigate={handleMiniMapNavigate}
-          />
+          {/* 3D Canvas */}
+          <div className="flex-1 relative">
+            <Editor3DCanvas
+              config={config}
+              state={state}
+              visibility={visibility}
+              edgeScrollEnabled={edgeScrollEnabled}
+              onCellsUpdateBatched={editorState.updateCellsBatched}
+              onStartBatch={editorState.startBatch}
+              onCommitBatch={editorState.commitBatch}
+              onFillArea={editorState.fillArea}
+              onObjectSelect={editorState.selectObjects}
+              onObjectUpdate={editorState.updateObject}
+              onObjectAdd={editorState.addObject}
+              onCursorMove={(gridPos, worldPos) => {
+                setCursorPosition(gridPos);
+                setCursorWorldPosition(worldPos);
+              }}
+              onObjectHover={setHoveredObject}
+              onContextMenu={handleContextMenu}
+              onViewportChange={setViewportBounds}
+              onNavigateRef={(fn) => { canvasNavigateRef.current = fn; }}
+            />
 
-          {/* Status Bar */}
-          <EditorStatusBar
-            config={config}
-            state={state}
-            cursorPosition={cursorPosition}
-            cursorWorldPosition={cursorWorldPosition}
-            hoveredObject={hoveredObject}
-          />
+            {/* Mini-map (bottom-right, repositioned for collapsed panel) */}
+            <div
+              className="absolute bottom-14 transition-all duration-300"
+              style={{ right: isPanelCollapsed ? 12 : 12 }}
+            >
+              <EditorMiniMap
+                config={config}
+                mapData={state.mapData}
+                objects={state.mapData?.objects || []}
+                viewportBounds={viewportBounds}
+                onNavigate={handleMiniMapNavigate}
+              />
+            </div>
+
+            {/* Status Bar */}
+            <EditorStatusBar
+              config={config}
+              state={state}
+              cursorPosition={cursorPosition}
+              cursorWorldPosition={cursorWorldPosition}
+              hoveredObject={hoveredObject}
+            />
+          </div>
         </div>
 
         {/* Right panel (collapsible) */}
         <div
-          className={`transition-all duration-300 ${isPanelCollapsed ? 'w-0 overflow-hidden' : ''}`}
+          className="flex-shrink-0 transition-all duration-300 relative"
+          style={{ width: panelWidth }}
           onMouseEnter={handlePanelMouseEnter}
           onMouseLeave={handlePanelMouseLeave}
         >
@@ -602,24 +614,23 @@ export function EditorCore({
               onToggleCategory={toggleCategory}
             />
           )}
-        </div>
 
-        {/* Panel toggle button */}
-        <button
-          onClick={() => setIsPanelCollapsed((prev) => !prev)}
-          className="absolute right-0 top-1/2 -translate-y-1/2 w-6 h-16 flex items-center justify-center rounded-l-lg transition-all z-30"
-          style={{
-            backgroundColor: config.theme.surface,
-            border: `1px solid ${config.theme.border}`,
-            borderRight: 'none',
-            right: isPanelCollapsed ? 0 : 256,
-          }}
-          title={isPanelCollapsed ? 'Show Panel (Tab)' : 'Hide Panel (Tab)'}
-        >
-          <span style={{ color: config.theme.text.muted }}>
-            {isPanelCollapsed ? '◀' : '▶'}
-          </span>
-        </button>
+          {/* Panel toggle button */}
+          <button
+            onClick={() => setIsPanelCollapsed((prev) => !prev)}
+            className="absolute left-0 top-1/2 -translate-y-1/2 -translate-x-full w-6 h-16 flex items-center justify-center rounded-l-lg z-30"
+            style={{
+              backgroundColor: config.theme.surface,
+              border: `1px solid ${config.theme.border}`,
+              borderRight: 'none',
+            }}
+            title={isPanelCollapsed ? 'Show Panel (Tab)' : 'Hide Panel (Tab)'}
+          >
+            <span style={{ color: config.theme.text.muted }}>
+              {isPanelCollapsed ? '◀' : '▶'}
+            </span>
+          </button>
+        </div>
       </div>
 
       {/* Context Menu */}

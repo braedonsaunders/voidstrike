@@ -211,6 +211,10 @@ export interface MapData {
   // Visual - biome determines colors, decorations, particles, etc.
   biome: BiomeType;
 
+  // Skip procedural decoration generation (trees, rocks)
+  // Set to true for custom/editor maps to prevent auto-generated clutter
+  skipProceduralDecorations?: boolean;
+
   // Legacy visual settings (deprecated - use biome instead)
   skyboxColor?: string;
   ambientColor?: string;
