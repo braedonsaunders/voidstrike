@@ -63,7 +63,9 @@ const PATH_REQUEST_COOLDOWN_TICKS = 10;
 
 // Use Recast crowd for collision avoidance
 // Re-enabled with fixes: proper position sync and crowd update timing
-const USE_RECAST_CROWD = true;
+// TEMP DISABLED: Set to false to test if direct movement works correctly
+// If units move at normal speed with this false, the issue is in crowd config
+const USE_RECAST_CROWD = false;
 
 // Static temp vectors for steering behaviors
 const tempSeparation: PooledVector2 = { x: 0, y: 0 };
