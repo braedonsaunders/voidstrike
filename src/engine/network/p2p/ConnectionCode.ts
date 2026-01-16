@@ -6,8 +6,9 @@
 
 import pako from 'pako';
 
-// Alphabet for codes - avoids confusing characters (no 0/O, 1/I/L)
-const ALPHABET = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789';
+// Crockford's Base32 alphabet - exactly 32 chars, avoids confusing chars (no I/L/O/U)
+// This is a standard encoding that's human-readable and case-insensitive
+const ALPHABET = '0123456789ABCDEFGHJKMNPQRSTVWXYZ';
 const CODE_PREFIX = 'VOID';
 const CODE_EXPIRY_MS = 5 * 60 * 1000; // 5 minutes
 
@@ -173,10 +174,20 @@ export async function generateOfferCode(
     .map(c => c.candidate)
     .filter((c): c is string => typeof c === 'string' && c.length > 0);
 
+  // Sanitize SDP - remove any "undefined" strings that might have crept in
+  // This can happen with some WebRTC implementations
+  const sanitizedSdp = offer.sdp.replace(/undefined/gi, '');
+
+  // Also check if SDP looks valid
+  if (!sanitizedSdp.includes('v=0') || !sanitizedSdp.includes('m=')) {
+    console.error('[ConnectionCode] Invalid SDP:', sanitizedSdp.slice(0, 200));
+    throw new ConnectionCodeError('Failed to create offer: invalid SDP format');
+  }
+
   // Build payload - only include defined values
   const payload: ConnectionCodeData = {
     v: 1,
-    sdp: offer.sdp,
+    sdp: sanitizedSdp,
     ice: validCandidates,
     ts: Date.now(),
     type: 'offer',
@@ -188,10 +199,24 @@ export async function generateOfferCode(
 
   // Compress with pako
   const json = JSON.stringify(payload);
+
+  // Debug: check for undefined in JSON
+  if (json.includes('undefined')) {
+    console.error('[ConnectionCode] JSON contains undefined:', json.slice(0, 500));
+    throw new ConnectionCodeError('Internal error: undefined value in connection data');
+  }
+
   const compressed = pako.deflate(json, { level: 9 });
 
   // Encode to alphabet (uppercase only)
   const encoded = encodeToAlphabet(compressed);
+
+  // Final safety check - Crockford's Base32 doesn't have 'I', 'L', 'O', 'U'
+  // If these appear, something went wrong
+  if (/[ILOU]/i.test(encoded)) {
+    console.error('[ConnectionCode] Encoded contains invalid chars:', encoded.slice(0, 100));
+    throw new ConnectionCodeError('Internal error: encoding produced invalid characters');
+  }
 
   // Format with prefix and dashes - ensure uppercase
   const code = formatCode(encoded).toUpperCase();
@@ -287,6 +312,9 @@ export async function generateAnswerCode(
     throw new ConnectionCodeError('Failed to create answer: no SDP');
   }
 
+  // Sanitize SDP
+  const sanitizedSdp = answer.sdp.replace(/undefined/gi, '');
+
   // Gather our ICE candidates
   const iceCandidates = await gatherICECandidates(pc);
 
@@ -298,7 +326,7 @@ export async function generateAnswerCode(
   // Build answer payload - only include defined values
   const payload: ConnectionCodeData = {
     v: 1,
-    sdp: answer.sdp,
+    sdp: sanitizedSdp,
     ice: validCandidates,
     ts: Date.now(),
     type: 'answer',
@@ -310,8 +338,22 @@ export async function generateAnswerCode(
 
   // Compress and encode
   const json = JSON.stringify(payload);
+
+  // Debug: check for undefined in JSON
+  if (json.includes('undefined')) {
+    console.error('[ConnectionCode] JSON contains undefined:', json.slice(0, 500));
+    throw new ConnectionCodeError('Internal error: undefined value in connection data');
+  }
+
   const compressed = pako.deflate(json, { level: 9 });
   const encoded = encodeToAlphabet(compressed);
+
+  // Safety check - Crockford's Base32 doesn't have 'I', 'L', 'O', 'U'
+  if (/[ILOU]/i.test(encoded)) {
+    console.error('[ConnectionCode] Encoded contains invalid chars:', encoded.slice(0, 100));
+    throw new ConnectionCodeError('Internal error: encoding produced invalid characters');
+  }
+
   const code = formatCode(encoded).toUpperCase();
 
   console.log(`[ConnectionCode] Generated answer code: ${code.length} chars`);

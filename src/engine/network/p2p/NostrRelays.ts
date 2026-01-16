@@ -1,12 +1,24 @@
 /**
- * Dynamic Nostr relay discovery
- * Fetches live relay list from nostr.watch API
- * NO hardcoded fallback - throws error if API fails
+ * Nostr relay configuration
+ * Uses well-known public relays that accept anonymous posts
  */
 
-const NOSTR_WATCH_API = 'https://api.nostr.watch/v1/online';
-const API_TIMEOUT = 5000;
-const MIN_RELAYS = 3;
+// Well-known public relays that accept anonymous posts (no auth/whitelist required)
+// These are actively maintained and have good uptime
+const PUBLIC_RELAYS = [
+  'wss://relay.damus.io',
+  'wss://nos.lol',
+  'wss://relay.nostr.band',
+  'wss://relay.snort.social',
+  'wss://nostr.mom',
+  'wss://relay.primal.net',
+  'wss://nostr-pub.wellorder.net',
+  'wss://relay.nostr.bg',
+  'wss://nostr.oxtr.dev',
+  'wss://relay.nostr.net',
+  'wss://nostr.fmt.wiz.biz',
+  'wss://relay.current.fyi',
+];
 
 export class NostrRelayError extends Error {
   constructor(message: string) {
@@ -16,58 +28,20 @@ export class NostrRelayError extends Error {
 }
 
 /**
- * Fetch live relay list from nostr.watch
- * @param count Number of relays to return (default 8)
- * @throws NostrRelayError if API fails or returns insufficient relays
+ * Get a list of public relays for matchmaking
+ * Uses well-known public relays that accept anonymous posts
+ * @param count Number of relays to return (default 6)
  */
-export async function getRelays(count: number = 8): Promise<string[]> {
-  try {
-    const response = await fetch(NOSTR_WATCH_API, {
-      signal: AbortSignal.timeout(API_TIMEOUT),
-      headers: {
-        'Accept': 'application/json',
-      },
-    });
+export async function getRelays(count: number = 6): Promise<string[]> {
+  // Shuffle for load distribution
+  const shuffled = [...PUBLIC_RELAYS].sort(() => Math.random() - 0.5);
 
-    if (!response.ok) {
-      throw new NostrRelayError(
-        `Failed to fetch Nostr relays: HTTP ${response.status} ${response.statusText}`
-      );
-    }
+  // Return requested count
+  const selected = shuffled.slice(0, count);
 
-    const relays: string[] = await response.json();
+  console.log(`[Nostr] Using ${selected.length} public relays:`, selected);
 
-    // Filter for WebSocket Secure relays only
-    const wsRelays = relays.filter(r => r.startsWith('wss://'));
-
-    if (wsRelays.length < MIN_RELAYS) {
-      throw new NostrRelayError(
-        `Insufficient Nostr relays available: got ${wsRelays.length}, need at least ${MIN_RELAYS}`
-      );
-    }
-
-    // Shuffle for load distribution
-    const shuffled = wsRelays.sort(() => Math.random() - 0.5);
-
-    console.log(`[Nostr] Fetched ${shuffled.length} live relays from nostr.watch`);
-
-    return shuffled.slice(0, count);
-  } catch (error) {
-    if (error instanceof NostrRelayError) {
-      throw error;
-    }
-
-    if (error instanceof Error) {
-      if (error.name === 'AbortError' || error.name === 'TimeoutError') {
-        throw new NostrRelayError(
-          `Nostr relay API request timed out after ${API_TIMEOUT}ms. Check your internet connection.`
-        );
-      }
-      throw new NostrRelayError(`Failed to fetch Nostr relays: ${error.message}`);
-    }
-
-    throw new NostrRelayError('Failed to fetch Nostr relays: Unknown error');
-  }
+  return selected;
 }
 
 /**
