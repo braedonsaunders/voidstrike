@@ -1309,11 +1309,16 @@ export function WebGPUGameCanvas() {
         if (placementPreviewRef.current && gameRef.current) {
           const snappedPos = placementPreviewRef.current.getSnappedPosition();
           const isValid = placementPreviewRef.current.isPlacementValid();
+          const localPlayer = getLocalPlayerId();
 
-          if (isValid) {
-            gameRef.current.eventBus.emit('command:land', {
+          if (isValid && localPlayer) {
+            gameRef.current.issueCommand({
+              tick: gameRef.current.getCurrentTick(),
+              playerId: localPlayer,
+              type: 'LAND',
+              entityIds: [landingBuildingId],
               buildingId: landingBuildingId,
-              position: { x: snappedPos.x, y: snappedPos.y },
+              targetPosition: { x: snappedPos.x, y: snappedPos.y },
             });
             useGameStore.getState().setLandingMode(false);
           }
@@ -1436,11 +1441,16 @@ export function WebGPUGameCanvas() {
       if (placementPreviewRef.current) {
         const snappedPos = placementPreviewRef.current.getSnappedPosition();
         const isValid = placementPreviewRef.current.isPlacementValid();
+        const localPlayer = getLocalPlayerId();
 
-        if (isValid) {
-          game.eventBus.emit('command:land', {
+        if (isValid && localPlayer) {
+          game.issueCommand({
+            tick: game.getCurrentTick(),
+            playerId: localPlayer,
+            type: 'LAND',
+            entityIds: [landingBuildingId],
             buildingId: landingBuildingId,
-            position: { x: snappedPos.x, y: snappedPos.y },
+            targetPosition: { x: snappedPos.x, y: snappedPos.y },
           });
           useGameStore.getState().setLandingMode(false);
         }
@@ -1464,12 +1474,15 @@ export function WebGPUGameCanvas() {
             const unit = entity?.get<Unit>('Unit');
             return unit?.isWorker;
           });
+          const localPlayer = getLocalPlayerId();
 
-          if (workerIds.length > 0) {
-            game.eventBus.emit('command:gather', {
+          if (workerIds.length > 0 && localPlayer) {
+            game.issueCommand({
+              tick: game.getCurrentTick(),
+              playerId: localPlayer,
+              type: 'GATHER',
               entityIds: workerIds,
               targetEntityId: clickedEntity.entity.id,
-              queue,
             });
             return;
           }
@@ -1898,7 +1911,8 @@ export function WebGPUGameCanvas() {
         case 'l':
           {
             const store = useGameStore.getState();
-            if (store.selectedUnits.length > 0) {
+            const localPlayer = getLocalPlayerId();
+            if (store.selectedUnits.length > 0 && localPlayer) {
               const firstEntity = game.world.getEntity(store.selectedUnits[0]);
               const building = firstEntity?.get<Building>('Building');
               if (building?.canLiftOff) {
@@ -1906,8 +1920,12 @@ export function WebGPUGameCanvas() {
                   // Land - enter landing mode
                   store.setLandingMode(true, store.selectedUnits[0]);
                 } else if (building.state === 'complete' && !building.isFlying && building.productionQueue.length === 0) {
-                  // Lift off
-                  game.eventBus.emit('command:liftOff', {
+                  // Lift off - use issueCommand for multiplayer sync
+                  game.issueCommand({
+                    tick: game.getCurrentTick(),
+                    playerId: localPlayer,
+                    type: 'LIFTOFF',
+                    entityIds: [store.selectedUnits[0]],
                     buildingId: store.selectedUnits[0],
                   });
                 }

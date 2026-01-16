@@ -129,7 +129,7 @@ async function gatherICE(pc: RTCPeerConnection, timeout = 3000): Promise<string[
 
 /**
  * Publish to multiple relays, succeeding if at least one works
- * Doesn't throw if some relays fail
+ * Doesn't throw if some relays fail (including rate-limit errors)
  */
 async function publishToRelays(
   pool: SimplePool,
@@ -137,11 +137,23 @@ async function publishToRelays(
   event: NostrEvent
 ): Promise<boolean> {
   const results = await Promise.allSettled(
-    relays.map(r => pool.publish([r], event))
+    relays.map(r =>
+      pool.publish([r], event).catch(err => {
+        // Silently ignore rate-limit errors - they're expected with frequent events
+        if (err?.message?.includes('rate-limit')) {
+          return; // Return successfully to not count as failure
+        }
+        throw err;
+      })
+    )
   );
 
   const successCount = results.filter(r => r.status === 'fulfilled').length;
-  console.log(`[Lobby] Published to ${successCount}/${relays.length} relays`);
+  if (successCount > 0) {
+    console.log(`[Lobby] Published to ${successCount}/${relays.length} relays`);
+  } else {
+    console.warn(`[Lobby] Failed to publish to any relay`);
+  }
 
   return successCount > 0;
 }

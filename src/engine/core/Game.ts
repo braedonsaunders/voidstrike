@@ -842,6 +842,34 @@ export class Game {
           entityIds: command.entityIds,
         });
         break;
+      case 'LIFTOFF':
+        this.eventBus.emit('command:liftOff', {
+          buildingId: command.buildingId ?? command.entityIds[0],
+          playerId: command.playerId,
+        });
+        break;
+      case 'LAND':
+        this.eventBus.emit('command:land', {
+          buildingId: command.buildingId ?? command.entityIds[0],
+          targetPosition: command.targetPosition,
+          playerId: command.playerId,
+        });
+        break;
+      case 'RALLY':
+        this.eventBus.emit('command:rally', {
+          buildingId: command.buildingId ?? command.entityIds[0],
+          targetPosition: command.targetPosition,
+          targetEntityId: command.targetEntityId,
+          playerId: command.playerId,
+        });
+        break;
+      case 'GATHER':
+        this.eventBus.emit('command:gather', {
+          entityIds: command.entityIds,
+          targetEntityId: command.targetEntityId,
+          playerId: command.playerId,
+        });
+        break;
     }
   }
 }
@@ -867,7 +895,11 @@ export interface GameCommand {
     | 'HEAL'
     | 'REPAIR'
     | 'PATROL'
-    | 'DEMOLISH';
+    | 'DEMOLISH'
+    | 'LIFTOFF'
+    | 'LAND'
+    | 'RALLY'
+    | 'GATHER';
   entityIds: number[];
   targetPosition?: { x: number; y: number };
   targetEntityId?: number;
@@ -878,4 +910,5 @@ export interface GameCommand {
   targetMode?: string; // For transform
   transportId?: number; // For load/unload
   bunkerId?: number; // For bunker load/unload
+  buildingId?: number; // For liftoff/land
 }

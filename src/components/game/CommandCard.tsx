@@ -819,9 +819,16 @@ function CommandCardInner() {
           shortcut: 'L',
           action: () => {
             if (!hasQueue) {
-              game.eventBus.emit('command:liftOff', {
-                buildingId: selectedUnits[0],
-              });
+              const localPlayer = getLocalPlayerId();
+              if (localPlayer) {
+                game.issueCommand({
+                  tick: game.getCurrentTick(),
+                  playerId: localPlayer,
+                  type: 'LIFTOFF',
+                  entityIds: [selectedUnits[0]],
+                  buildingId: selectedUnits[0],
+                });
+              }
             }
           },
           isDisabled: hasQueue,
