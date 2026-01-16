@@ -2,163 +2,198 @@
 
 ## Project Overview
 
-VOIDSTRIKE is a browser-based RTS game built with Next.js 14, Three.js, and TypeScript. This file contains instructions for LLMs working on this codebase.
+VOIDSTRIKE is a browser-based RTS game built with Next.js 14, Three.js, and TypeScript.
+
+**Tech Stack:** Next.js 14 | Three.js (WebGPU/TSL) | TypeScript | ECS Architecture | P2P Multiplayer
+
+---
+
+## Documentation Index
+
+Load relevant documentation based on your current task. Don't load everything—be selective.
+
+### Core Documentation (in `docs/`)
+
+| Document | Path | Load When |
+|----------|------|-----------|
+| **Architecture Overview** | `docs/architecture/OVERVIEW.md` | Starting new features, understanding codebase structure, working with ECS |
+| **Networking** | `docs/architecture/networking.md` | Multiplayer features, P2P, netcode, synchronization |
+| **Rendering** | `docs/architecture/rendering.md` | Graphics, shaders, post-processing, visual effects |
+| **Game Design** | `docs/design/GAME_DESIGN.md` | Units, buildings, factions, game mechanics, balance |
+| **Audio Design** | `docs/design/audio.md` | Sound effects, music, audio systems |
+| **Schema** | `docs/reference/schema.md` | Database changes, data persistence, entity schemas |
+| **Models** | `docs/reference/models.md` | 3D models, GLTF specs, model requirements |
+| **Textures** | `docs/reference/textures.md` | Texture specs, UV mapping, material setup |
+| **Security** | `docs/security/SECURITY_AUDIT.md` | Security review, vulnerability assessment |
+
+### Project Management (in `.claude/`)
+
+| Document | Path | Purpose |
+|----------|------|---------|
+| **TODO** | `.claude/TODO.md` | Current tasks, roadmap, progress tracking |
+| **Templates** | `.claude/templates/` | Templates for new systems, components, tools, features |
+
+### Tools Documentation (in `docs/tools/`)
+
+| Tool | Path | Purpose |
+|------|------|---------|
+| **Blender Scripts** | `docs/tools/blender/` | Retopology, animation extraction, mesh processing |
+| **Asset Pipeline** | `docs/tools/asset-pipeline/` | Meshy AI extraction, asset conversion |
+| **Debug Tools** | `docs/tools/debug/` | Effect placement, visual debugging |
+
+---
 
 ## Critical Rules
 
-### After EVERY code change, you MUST:
+### After EVERY code change, you MUST update relevant documentation:
 
-1. **Update the TODO.md file** in `.claude/TODO.md`:
-   - Mark completed tasks as `[x]`
-   - Add new tasks as `[ ]`
-   - Move in-progress tasks to the current phase section
-   - Remove obsolete or cancelled tasks
+1. **`.claude/TODO.md`** - Mark completed tasks `[x]`, add new tasks `[ ]`
 
-2. **Update the SCHEMA.md file** in `.claude/SCHEMA.md` when:
-   - Adding new database tables or columns
-   - Modifying existing schema
-   - Adding new data structures that will be persisted
-   - Changing relationships between entities
+2. **`docs/reference/schema.md`** - When changing database tables, data structures, or entity schemas
 
-3. **Update the DESIGN.md file** in `.claude/DESIGN.md` when:
-   - Adding new game mechanics
-   - Changing existing gameplay systems
-   - Adding new unit types, abilities, or buildings
-   - Modifying the faction design
-   - Changing UI/UX patterns
+3. **`docs/design/GAME_DESIGN.md`** - When adding units, buildings, abilities, or game mechanics
 
-4. **Update the ARCHITECTURE.md file** in `.claude/ARCHITECTURE.md` when:
-   - Adding new directories or major files
-   - Creating new systems or modules
-   - Changing data flow patterns
-   - Adding new rendering pipelines
-   - Modifying the ECS structure
+4. **`docs/architecture/OVERVIEW.md`** - When adding systems, modules, or changing architecture
 
-5. **Update the GRAPHICS.md file** in `.claude/GRAPHICS.md` when:
-   - Adding new post-processing effects
-   - Modifying the render pipeline
-   - Adding new shaders or TSL nodes
-   - Changing graphics settings/options
-   - Implementing new visual features (SSR, SSGI, etc.)
+5. **`docs/architecture/rendering.md`** - When adding shaders, effects, or graphics features
 
-## File Organization
+6. **`docs/architecture/networking.md`** - When changing multiplayer or networking code
 
-```
-.claude/
-├── CLAUDE.md       # This file - LLM instructions
-├── DESIGN.md       # Game design document
-├── SCHEMA.md       # Database schema documentation
-├── TODO.md         # Development roadmap and task tracking
-├── ARCHITECTURE.md # Technical architecture overview
-└── GRAPHICS.md     # Graphics pipeline and effects documentation
-```
+### Use templates for consistency:
+- New ECS system → `.claude/templates/system.md`
+- New component → `.claude/templates/component.md`
+- New tool/script → `.claude/templates/tool.md`
+- New feature → `.claude/templates/feature.md`
+
+---
 
 ## Code Standards
 
 ### TypeScript
-- Use strict TypeScript - no `any` types unless absolutely necessary
+- Strict TypeScript—no `any` unless absolutely necessary
 - Prefer interfaces over types for object shapes
 - Use enums for finite sets of values
-- Document complex functions with JSDoc comments
 
 ### React Components
-- Use functional components with hooks
-- Keep components focused and single-purpose
-- Use `'use client'` directive only when needed
-- Prefer composition over prop drilling
+- Functional components with hooks
+- Single-purpose, focused components
+- `'use client'` directive only when needed
 
-### Game Engine
+### Game Engine (ECS)
 - All game state must be deterministic for multiplayer
-- Use the ECS pattern for game entities
-- Keep game logic in Systems, not Components
-- Use the EventBus for cross-system communication
+- Logic in Systems, data in Components
+- Use EventBus for cross-system communication
+- Use `SeededRandom` from `utils/math.ts` for any randomness
 
 ### Naming Conventions
-- Components: PascalCase (e.g., `GameCanvas.tsx`)
-- Utilities: camelCase (e.g., `gameSetup.ts`)
-- Constants: SCREAMING_SNAKE_CASE
-- Interfaces: PascalCase with `I` prefix optional
-- Types: PascalCase
+- Components: `PascalCase.tsx`
+- Utilities: `camelCase.ts`
+- Constants: `SCREAMING_SNAKE_CASE`
+- Interfaces/Types: `PascalCase`
 
 ### Comments
-Write professional, understated comments. Avoid marketing-speak and filler.
+Professional, understated. Explain WHY, not WHAT.
 
-**Never use:**
-- "World-class", "premium", "elegant", "robust", "comprehensive"
-- "Beautiful", "stunning", "cutting-edge", "state-of-the-art"
-- "This function does...", "This method handles..." (the code shows what it does)
-- Overly promotional file headers
-
-**Good comments explain WHY, not WHAT:**
 ```ts
-// Bad: "World-Class Particle System for Premium Combat Effects"
+// Bad: "World-Class Particle System"
 // Good: "GPU Particle System"
 
 // Bad: "// Get the player entity"
-// Good: (no comment needed - code is self-explanatory)
+// Good: (no comment needed)
 
 // Bad: "// This elegant solution handles the edge case"
 // Good: "// Edge case: entity may be destroyed mid-frame"
 ```
 
-**Acceptable comment styles:**
-- `// CRITICAL:` or `// IMPORTANT:` for non-obvious gotchas
-- `// Note:` for explaining unexpected behavior
-- `// TODO:` for future work (with context)
-- Brief JSDoc for public APIs
+Acceptable: `// CRITICAL:`, `// Note:`, `// TODO:`, brief JSDoc
 
-## Common Tasks
+---
 
-### Adding a New Unit Type
-1. Add definition to `src/data/units/{faction}.ts`
-2. Update DESIGN.md with unit stats/abilities
-3. Update TODO.md if this completes a roadmap item
-4. Test spawning in `gameSetup.ts`
+## Common Tasks Quick Reference
 
-### Adding a New Building Type
-1. Add definition to `src/data/buildings/{faction}.ts`
-2. Update DESIGN.md with building details
-3. Update SCHEMA.md if building has new data fields
-4. Update TODO.md
+### Adding a New Unit
+1. Add to `src/data/units/{faction}.ts`
+2. Update `docs/design/GAME_DESIGN.md`
+3. Update `.claude/TODO.md`
+4. Test in `gameSetup.ts`
+
+### Adding a New Building
+1. Add to `src/data/buildings/{faction}.ts`
+2. Update `docs/design/GAME_DESIGN.md`
+3. Update `docs/reference/schema.md` if new data fields
+4. Update `.claude/TODO.md`
 
 ### Adding a New System
-1. Create system in `src/engine/systems/`
-2. Register in `Game.ts` initializeSystems()
-3. Update ARCHITECTURE.md with system description
-4. Update TODO.md
+1. Create in `src/engine/systems/`
+2. Register in `Game.ts` → `initializeSystems()`
+3. Document in `docs/architecture/OVERVIEW.md` (use `.claude/templates/system.md`)
+4. Update `.claude/TODO.md`
 
-### Adding UI Components
-1. Create component in `src/components/game/` or `src/components/ui/`
-2. Update ARCHITECTURE.md if significant
-3. Update TODO.md
+### Adding Visual Effects
+1. Read `docs/architecture/rendering.md` first
+2. Create shader/effect code
+3. Update `docs/architecture/rendering.md`
+4. Update `.claude/TODO.md`
 
-## Multiplayer Considerations
+### Adding Multiplayer Features
+1. Read `docs/architecture/networking.md` first
+2. Ensure deterministic logic
+3. Update `docs/architecture/networking.md`
+4. Update `.claude/TODO.md`
 
-- All game logic must be deterministic
-- Use `SeededRandom` from utils/math.ts for randomness
-- Only player inputs should be transmitted, not state
-- Test with checksums to detect desync
+---
 
-## Testing Changes
+## Testing
 
 Before committing:
-1. Run `npm run type-check` to verify TypeScript
-2. Run `npm run lint` to check code style
-3. Test in browser with `npm run dev`
+```bash
+npm run type-check  # TypeScript validation
+npm run lint        # Code style
+npm run dev         # Browser test
+```
 
-## Commit Messages
+## Commits
 
-Use conventional commits:
-- `feat:` New features
-- `fix:` Bug fixes
-- `docs:` Documentation changes
-- `refactor:` Code refactoring
-- `style:` Formatting changes
-- `test:` Adding tests
-- `chore:` Maintenance tasks
+Use conventional commits: `feat:`, `fix:`, `docs:`, `refactor:`, `style:`, `test:`, `chore:`
+
+---
+
+## File Structure Overview
+
+```
+.claude/
+├── CLAUDE.md           # This file (always loaded)
+├── TODO.md             # Task tracking (update frequently)
+└── templates/          # Doc templates for consistency
+    ├── system.md
+    ├── component.md
+    ├── tool.md
+    └── feature.md
+
+docs/
+├── README.md           # Documentation overview
+├── architecture/       # Technical architecture
+│   ├── OVERVIEW.md     # System architecture (2600 lines)
+│   ├── networking.md   # P2P multiplayer (1500 lines)
+│   └── rendering.md    # Graphics pipeline (1100 lines)
+├── design/             # Game design
+│   ├── GAME_DESIGN.md  # Core design doc
+│   └── audio.md        # Audio system
+├── reference/          # Technical specs
+│   ├── schema.md       # Database schema
+│   ├── models.md       # 3D model specs
+│   └── textures.md     # Texture specs
+├── security/           # Security docs
+│   └── SECURITY_AUDIT.md
+├── tools/              # Development tools
+│   ├── blender/        # Blender scripts
+│   ├── asset-pipeline/ # Asset processing
+│   └── debug/          # Debug utilities
+└── AI_ANALYSIS.md      # AI codebase analysis
+```
+
+---
 
 ## Remember
 
-**ALWAYS update documentation after making changes!**
-
-The documentation files in `.claude/` are the source of truth for project status and design decisions. Keeping them updated ensures continuity across sessions and helps maintain project organization.
+**Documentation is the source of truth.** Always update docs when making changes. Load only the docs you need for your current task to preserve context.
