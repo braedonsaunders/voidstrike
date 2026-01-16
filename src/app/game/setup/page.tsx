@@ -483,13 +483,16 @@ export default function GameSetupPage() {
   // Determine if we're in guest mode (joined someone else's lobby)
   const isGuestMode = lobbyStatus === 'connected' && !isHost;
 
-  // Sync player name with first slot
+  // Sync player name with first slot (only when name changes)
   const setPlayerSlotName = useGameSetupStore((state) => state.setPlayerSlotName);
+  const firstSlotId = playerSlots[0]?.id;
+  const firstSlotName = playerSlots[0]?.name;
   useEffect(() => {
-    if (playerSlots[0] && !isGuestMode) {
-      setPlayerSlotName(playerSlots[0].id, playerName);
+    // Only update if name actually changed to avoid infinite loops
+    if (firstSlotId && !isGuestMode && playerName !== firstSlotName) {
+      setPlayerSlotName(firstSlotId, playerName);
     }
-  }, [playerName, playerSlots, isGuestMode, setPlayerSlotName]);
+  }, [playerName, firstSlotId, firstSlotName, isGuestMode, setPlayerSlotName]);
 
   return (
     <main className="h-screen bg-black overflow-hidden">
