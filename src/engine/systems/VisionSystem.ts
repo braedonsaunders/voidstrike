@@ -261,9 +261,8 @@ export class VisionSystem extends System {
     // Only provide vision if building is complete
     if (building.state !== 'complete') return;
 
-    // Buildings have a base sight range
-    const sightRange = 9;
-    this.revealArea(selectable.playerId, transform.x, transform.y, sightRange);
+    // Use the building's configured sight range from its definition
+    this.revealArea(selectable.playerId, transform.x, transform.y, building.sightRange);
   }
 
   private revealArea(playerId: string, worldX: number, worldY: number, range: number): void {

@@ -17,7 +17,7 @@ export const BUILDING_DEFINITIONS: Record<string, BuildingDefinition> = {
     height: 5,
     maxHealth: 1500,
     armor: 1,
-    sightRange: 11,
+    sightRange: 33, // Large vision radius for main base
     supplyProvided: 11,
     canProduce: ['fabricator'],
     canResearch: [],
@@ -38,7 +38,7 @@ export const BUILDING_DEFINITIONS: Record<string, BuildingDefinition> = {
     height: 5,
     maxHealth: 1500,
     armor: 1,
-    sightRange: 11,
+    sightRange: 33, // Large vision radius for main base
     supplyProvided: 11,
     canProduce: ['fabricator'],
     canResearch: ['sensor_sweep', 'drone', 'supply_drop'],
@@ -58,7 +58,7 @@ export const BUILDING_DEFINITIONS: Record<string, BuildingDefinition> = {
     height: 5,
     maxHealth: 1500,
     armor: 3,
-    sightRange: 11,
+    sightRange: 33, // Large vision radius for main base
     supplyProvided: 11,
     canProduce: ['fabricator'],
     canResearch: [],
