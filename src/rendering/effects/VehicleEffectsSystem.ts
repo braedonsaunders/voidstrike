@@ -42,7 +42,7 @@ interface EffectPreset {
 const EFFECT_PRESETS: Record<VehicleEffectType, EffectPreset> = {
   engine_exhaust: {
     particleType: ParticleType.FIRE,
-    direction: new THREE.Vector3(0, 0, -1), // Backward
+    direction: new THREE.Vector3(-1, 0, 0), // Backward (-X)
     spread: 0.3,
     configOverrides: {
       lifetime: [0.2, 0.5],
@@ -66,7 +66,7 @@ const EFFECT_PRESETS: Record<VehicleEffectType, EffectPreset> = {
   },
   smoke_trail: {
     particleType: ParticleType.SMOKE,
-    direction: new THREE.Vector3(0, 0.2, -1), // Backward and slightly up
+    direction: new THREE.Vector3(-1, 0.2, 0), // Backward (-X) and slightly up
     spread: 0.4,
     configOverrides: {
       lifetime: [0.8, 2.0],
@@ -77,7 +77,7 @@ const EFFECT_PRESETS: Record<VehicleEffectType, EffectPreset> = {
   },
   dust_cloud: {
     particleType: ParticleType.DUST,
-    direction: new THREE.Vector3(0, 0.3, -1), // Backward and up
+    direction: new THREE.Vector3(-1, 0.3, 0), // Backward (-X) and up
     spread: 0.6,
     configOverrides: {
       lifetime: [0.6, 1.2],
@@ -89,7 +89,7 @@ const EFFECT_PRESETS: Record<VehicleEffectType, EffectPreset> = {
   },
   afterburner: {
     particleType: ParticleType.FIRE,
-    direction: new THREE.Vector3(0, 0, -1), // Backward
+    direction: new THREE.Vector3(-1, 0, 0), // Backward (-X)
     spread: 0.2,
     configOverrides: {
       lifetime: [0.1, 0.3],
@@ -112,7 +112,7 @@ const EFFECT_PRESETS: Record<VehicleEffectType, EffectPreset> = {
   },
   sparks: {
     particleType: ParticleType.SPARK,
-    direction: new THREE.Vector3(0, 0.5, -0.5),
+    direction: new THREE.Vector3(-0.5, 0.5, 0), // Backward (-X) and up
     spread: 0.8,
     configOverrides: {
       lifetime: [0.1, 0.3],
