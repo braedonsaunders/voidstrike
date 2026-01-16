@@ -4,10 +4,13 @@ import { debugInitialization } from '@/utils/debugLogger';
 export type StartingResources = 'normal' | 'high' | 'insane';
 export type GameSpeed = 'slower' | 'normal' | 'faster' | 'fastest';
 export type AIDifficulty = 'easy' | 'medium' | 'hard' | 'insane';
-export type PlayerType = 'human' | 'ai' | 'open' | 'closed';
+export type PlayerType = 'human' | 'ai' | 'remote' | 'open' | 'closed';
 
 // Team configuration: 0 = Free For All, 1-4 = team numbers
 export type TeamNumber = 0 | 1 | 2 | 3 | 4;
+
+// Remote connection state for multiplayer
+export type RemoteConnectionState = 'disconnected' | 'hosting' | 'joining' | 'connecting' | 'connected';
 
 // Player slot configuration
 export interface PlayerSlot {
@@ -18,6 +21,9 @@ export interface PlayerSlot {
   aiDifficulty: AIDifficulty;
   name: string;
   team: TeamNumber; // 0 = FFA, 1-4 = team
+  // Remote player fields
+  remoteState?: RemoteConnectionState;
+  gameCode?: string; // Short code for joining (e.g., "ABCD")
 }
 
 export interface GameSetupState {
@@ -268,7 +274,8 @@ export const useGameSetupStore = create<GameSetupState>((set, get) => ({
   // Player type helpers
   isHumanPlayer: (playerId: string): boolean => {
     const slot = get().playerSlots.find(s => s.id === playerId);
-    return slot?.type === 'human';
+    // Both 'human' and 'remote' are human players
+    return slot?.type === 'human' || slot?.type === 'remote';
   },
 
   isAIPlayer: (playerId: string): boolean => {
@@ -287,7 +294,8 @@ export const useGameSetupStore = create<GameSetupState>((set, get) => ({
   },
 
   getHumanPlayerIds: (): string[] => {
-    return get().playerSlots.filter(s => s.type === 'human').map(s => s.id);
+    // Include both local humans and remote humans
+    return get().playerSlots.filter(s => s.type === 'human' || s.type === 'remote').map(s => s.id);
   },
 
   startGame: () => {

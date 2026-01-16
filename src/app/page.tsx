@@ -336,20 +336,6 @@ export default function Home() {
                 </span>
               </div>
             </Link>
-
-            {/* Secondary Button - Multiplayer */}
-            <Link
-              href="/lobby"
-              className="group relative px-12 py-4 rounded-xl overflow-hidden
-                       bg-white/5 backdrop-blur-sm border border-white/10
-                       hover:bg-white/10 hover:border-void-500/30
-                       transition-all duration-300 hover:scale-105"
-            >
-              <span className="font-display text-lg tracking-widest text-white/80 group-hover:text-white
-                             transition-colors duration-300">
-                MULTIPLAYER
-              </span>
-            </Link>
           </div>
 
           {/* Battle Simulator - subtle text link */}
