@@ -128,14 +128,6 @@ export async function createWebGPURenderer(config: WebGPURendererConfig): Promis
   // Query adapter limits first to determine what we can request
   const adapterLimits = await getWebGPULimits();
 
-  // Determine the limits we'll request (min of desired and adapter max)
-  const requestedLimits = {
-    maxVertexBuffers: Math.min(DESIRED_LIMITS.maxVertexBuffers, adapterLimits.maxVertexBuffers),
-    maxTextureDimension2D: Math.min(DESIRED_LIMITS.maxTextureDimension2D, adapterLimits.maxTextureDimension2D),
-    maxStorageBufferBindingSize: Math.min(DESIRED_LIMITS.maxStorageBufferBindingSize, adapterLimits.maxStorageBufferBindingSize),
-    maxBufferSize: Math.min(DESIRED_LIMITS.maxBufferSize, adapterLimits.maxBufferSize),
-  };
-
   // Track actual limits (will be updated after device creation)
   let actualLimits = { ...DEFAULT_LIMITS };
 
@@ -150,22 +142,52 @@ export async function createWebGPURenderer(config: WebGPURendererConfig): Promis
   };
 
   // If WebGPU is supported, create a custom backend with optimized limits
+  // NOTE: adapter.limits often reports spec minimums (8), not hardware maximums
+  // Most GPUs (including integrated) support 16+ vertex buffers via Vulkan/D3D12/Metal
+  // So we request our desired limits directly - device creation will fail if unsupported
   if (!forceWebGL && adapterLimits.supported) {
-    debugInitialization.log(`[WebGPU] Requesting custom device limits:`, requestedLimits);
+    debugInitialization.log(`[WebGPU] Adapter reported limits:`, {
+      maxVertexBuffers: adapterLimits.maxVertexBuffers,
+      maxTextureDimension2D: adapterLimits.maxTextureDimension2D,
+    });
+    debugInitialization.log(`[WebGPU] Requesting optimized limits:`, DESIRED_LIMITS);
 
     try {
       // Create a custom WebGPU backend with all our desired limits
+      // Request our desired limits directly - most modern GPUs support these
       const backend = new WebGPUBackend({
         powerPreference,
-        requiredLimits: requestedLimits,
+        requiredLimits: DESIRED_LIMITS,
       });
 
       rendererOptions.backend = backend;
-      actualLimits = { ...requestedLimits };
+      actualLimits = { ...DESIRED_LIMITS };
 
       debugInitialization.log(`[WebGPU] Custom backend created with optimized limits`);
     } catch (error) {
-      debugInitialization.warn('[WebGPU] Failed to create custom backend, using defaults:', error);
+      // If device creation fails with desired limits, try with adapter-reported limits
+      debugInitialization.warn('[WebGPU] Failed with desired limits, trying adapter limits:', error);
+
+      try {
+        const fallbackLimits = {
+          maxVertexBuffers: adapterLimits.maxVertexBuffers,
+          maxTextureDimension2D: adapterLimits.maxTextureDimension2D,
+          maxStorageBufferBindingSize: adapterLimits.maxStorageBufferBindingSize,
+          maxBufferSize: adapterLimits.maxBufferSize,
+        };
+
+        const backend = new WebGPUBackend({
+          powerPreference,
+          requiredLimits: fallbackLimits,
+        });
+
+        rendererOptions.backend = backend;
+        actualLimits = fallbackLimits;
+
+        debugInitialization.log(`[WebGPU] Fallback backend created with adapter limits`);
+      } catch (fallbackError) {
+        debugInitialization.warn('[WebGPU] Failed to create custom backend, using defaults:', fallbackError);
+      }
     }
   }
 
