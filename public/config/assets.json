@@ -42,7 +42,7 @@
       "rotation": {
         "x": 0,
         "y": 0,
-        "z": 0
+        "z": -90
       },
       "animations": {
         "idle": [
@@ -73,7 +73,7 @@
       "rotation": {
         "x": 0,
         "y": 0,
-        "z": 0
+        "z": -90
       },
       "animations": {
         "idle": [
@@ -103,7 +103,7 @@
       "rotation": {
         "x": 0,
         "y": 0,
-        "z": 0
+        "z": -90
       },
       "animations": {
         "idle": [
@@ -131,7 +131,7 @@
       "rotation": {
         "x": 0,
         "y": 0,
-        "z": 0
+        "z": -90
       },
       "animations": {
         "idle": [
@@ -190,7 +190,7 @@
       "rotation": {
         "x": 0,
         "y": -90,
-        "z": 0
+        "z": -90
       },
       "animations": {
         "idle": [
@@ -216,7 +216,7 @@
     "colossus": {
       "model": "/models/units/colossus_LOD0.glb",
       "scale": 1.5,
-      "rotation": { "x": 0, "y": 0, "z": 0 },
+      "rotation": { "x": 0, "y": 0, "z": -90 },
       "animations": {
         "idle": ["idle", "stand"],
         "walk": ["walk", "stomp", "move"],
@@ -226,9 +226,9 @@
     },
     "valkyrie": {
       "model": "/models/units/valkyrie_LOD0.glb",
-      "scale": 1.8,
+      "scale": 1.2,
       "rotation": {
-        "x": 0,
+        "x": -90,
         "y": 0,
         "z": 0
       },
@@ -258,9 +258,9 @@
     },
     "lifter": {
       "model": "/models/units/lifter_LOD0.glb",
-      "scale": 1.5,
+      "scale": 1.2,
       "rotation": {
-        "x": 0,
+        "x": -90,
         "y": 0,
         "z": 0
       },
@@ -286,9 +286,9 @@
     },
     "specter": {
       "model": "/models/units/specter_LOD0.glb",
-      "scale": 1.5,
+      "scale": 1,
       "rotation": {
-        "x": 0,
+        "x": -90,
         "y": 0,
         "z": 0
       },
@@ -317,9 +317,9 @@
     },
     "overseer": {
       "model": "/models/units/overseer_LOD0.glb",
-      "scale": 1.5,
+      "scale": 0.7,
       "rotation": {
-        "x": 0,
+        "x": -90,
         "y": 0,
         "z": 0
       },
@@ -347,7 +347,7 @@
     "dreadnought": {
       "model": "/models/units/dreadnought_LOD0.glb",
       "scale": 3.0,
-      "rotation": { "x": 0, "y": 0, "z": 0 },
+      "rotation": { "x": -90, "y": 0, "z": 0 },
       "airborneHeight": 15,
       "animations": {
         "idle": [
