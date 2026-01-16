@@ -187,6 +187,13 @@ export class OverlayScene extends Phaser.Scene {
     }
   }
 
+  /**
+   * Set terrain height function for accurate damage number positioning
+   */
+  public setTerrainHeightFunction(fn: (x: number, z: number) => number): void {
+    this.damageNumberSystem?.setTerrainHeightFunction(fn);
+  }
+
   private setupEventListeners(): void {
     if (!this.eventBus) return;
 
