@@ -14,16 +14,17 @@ import { WebGPURenderer, PostProcessing } from 'three/webgpu';
 import { debugInitialization, debugShaders } from '@/utils/debugLogger';
 
 // Desired WebGPU limits for optimal performance
-// Most modern GPUs support these higher limits, but we request them explicitly
+// We'll request the minimum of these and what the adapter supports
 const DESIRED_LIMITS = {
   // Vertex buffers: TAA velocity needs 8 (4 current + 4 prev matrix columns) + mesh attrs (3-5)
   maxVertexBuffers: 16,
   // Texture size: Allow up to 16K textures for high-res shadow maps and terrain
   maxTextureDimension2D: 16384,
-  // Storage buffer size: Allow larger GPU particle systems and compute buffers (256MB -> 1GB)
-  maxStorageBufferBindingSize: 1024 * 1024 * 1024,
-  // Buffer size: Allow very large instance buffers for massive battles
-  maxBufferSize: 1024 * 1024 * 1024,
+  // Storage buffer size: 256MB is a safer limit that most GPUs support
+  // (WebGPU spec default is 128MB, but many GPUs support more)
+  maxStorageBufferBindingSize: 256 * 1024 * 1024,
+  // Buffer size: 256MB matches spec default maximum
+  maxBufferSize: 256 * 1024 * 1024,
 };
 
 export interface WebGPURendererConfig {
@@ -140,16 +141,28 @@ export async function createWebGPURenderer(config: WebGPURendererConfig): Promis
 
   // If WebGPU is supported, request optimized limits directly on the renderer
   // This is the correct way per Three.js GitHub issue #29865
+  // IMPORTANT: Request minimum of desired limits and what adapter supports to avoid device creation failure
   if (!forceWebGL && adapterLimits.supported) {
     debugInitialization.log(`[WebGPU] Adapter reported limits:`, {
       maxVertexBuffers: adapterLimits.maxVertexBuffers,
       maxTextureDimension2D: adapterLimits.maxTextureDimension2D,
+      maxStorageBufferBindingSize: adapterLimits.maxStorageBufferBindingSize,
+      maxBufferSize: adapterLimits.maxBufferSize,
     });
-    debugInitialization.log(`[WebGPU] Requesting optimized limits via WebGPURenderer:`, DESIRED_LIMITS);
+
+    // Request minimum of desired and adapter-supported limits to avoid device creation failure
+    const requestedLimits = {
+      maxVertexBuffers: Math.min(DESIRED_LIMITS.maxVertexBuffers, adapterLimits.maxVertexBuffers),
+      maxTextureDimension2D: Math.min(DESIRED_LIMITS.maxTextureDimension2D, adapterLimits.maxTextureDimension2D),
+      maxStorageBufferBindingSize: Math.min(DESIRED_LIMITS.maxStorageBufferBindingSize, adapterLimits.maxStorageBufferBindingSize),
+      maxBufferSize: Math.min(DESIRED_LIMITS.maxBufferSize, adapterLimits.maxBufferSize),
+    };
+
+    debugInitialization.log(`[WebGPU] Requesting limits (capped to adapter):`, requestedLimits);
 
     // Pass requiredLimits directly to WebGPURenderer constructor
-    rendererOptions.requiredLimits = DESIRED_LIMITS;
-    actualLimits = { ...DESIRED_LIMITS };
+    rendererOptions.requiredLimits = requestedLimits;
+    actualLimits = { ...requestedLimits };
   }
 
   // Create the WebGPU renderer
@@ -161,6 +174,16 @@ export async function createWebGPURenderer(config: WebGPURendererConfig): Promis
   // Detect capabilities
   const isWebGPU = !forceWebGL && renderer.backend?.isWebGPUBackend === true;
   const supportsCompute = isWebGPU; // Compute shaders only work with WebGPU
+
+  // CRITICAL: If we requested WebGPU limits but got WebGL2 fallback, reset to default limits
+  // This can happen when:
+  // 1. WebGPU adapter reported supported, but device creation failed
+  // 2. The requested limits exceeded what the device could provide
+  // Without this, code may assume 16 vertex buffers when WebGL2 only has 8, causing freezes
+  if (!isWebGPU && adapterLimits.supported) {
+    debugInitialization.warn('[WebGPU] Device creation failed, falling back to WebGL2 limits');
+    actualLimits = { ...DEFAULT_LIMITS };
+  }
 
   // Note: We trust our requested limits rather than querying device.limits
   // because device.limits may report spec minimums rather than what we requested
