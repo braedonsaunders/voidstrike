@@ -736,17 +736,18 @@
 - [ ] Code entry UI and validation
 - [ ] Direct P2P connection via codes
 
-**Phase 2: Local Network Discovery (Priority: MEDIUM)**
-- [ ] BroadcastChannel for same-browser play
-- [ ] mDNS/Bonjour for LAN discovery (Electron/Tauri)
+**Phase 2: LAN Discovery (Priority: LOW - Requires Electron/Tauri)**
+- [ ] mDNS/Bonjour for LAN discovery
 - [ ] Local games browser UI
 
-**Phase 3: DHT Global Discovery (Priority: MEDIUM)**
-- [ ] WebTorrent DHT client integration
-- [ ] Game announcement to DHT
-- [ ] DHT-based game browser
-- [ ] Matchmaking via DHT swarms
-- [ ] Skill-based DHT topics
+**Phase 3: Nostr Global Discovery (Priority: HIGH) - 99% Reliable**
+- [ ] NostrMatchmaking class implementation
+- [ ] Ephemeral keypair generation
+- [ ] Game seek event publishing (kind: 20420)
+- [ ] WebRTC offer/answer exchange via Nostr
+- [ ] Skill-based matchmaking filters
+- [ ] "Find Match" UI with status
+- [ ] Relay health monitoring
 
 **Phase 4: Peer Relay Network (Priority: LOW)**
 - [ ] Relay message protocol
