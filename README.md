@@ -63,6 +63,7 @@ A competitive real-time strategy game in the style of StarCraft II, playable dir
 
 - **Browser-native**: Runs in Chrome, Edge, or Firefox. No client download.
 - **WebGPU graphics**: Modern rendering that rivals native games.
+- **Serverless multiplayer**: Peer-to-peer via WebRTC. No game servers to shut down.
 - **Deterministic replays**: Watch every game back, share with friends.
 - **5-tier AI**: Practice against bots from beginner to brutal.
 
@@ -250,6 +251,8 @@ These could be published as standalone npm packages with minimal modification:
 | **EventBus (O(1) unsubscribe)** | ~110 | None | `src/engine/core/EventBus.ts` |
 | **Web Worker Game Loop** | ~180 | None | `src/engine/core/GameLoop.ts` |
 | **Behavior Trees** | ~300 | None | `src/engine/ai/BehaviorTree.ts` |
+| **Nostr Matchmaking** | ~450 | nostr-tools | `src/engine/network/p2p/NostrMatchmaking.ts` |
+| **Connection Codes** | ~450 | pako | `src/engine/network/p2p/ConnectionCode.ts` |
 | **TSL Instanced Velocity** | ~280 | Three.js | `src/rendering/tsl/InstancedVelocity.ts` |
 | **Dual-Pipeline Post-Processing** | ~900 | Three.js | `src/rendering/tsl/PostProcessing.ts` |
 
@@ -265,7 +268,7 @@ These could be published as standalone npm packages with minimal modification:
 | Shaders | TSL (Three.js Shading Language) |
 | Pathfinding | recast-navigation (WASM) |
 | State | Zustand |
-| Multiplayer | WebRTC + Supabase |
+| Multiplayer | WebRTC P2P + Nostr signaling |
 | Styling | Tailwind CSS |
 
 ---
@@ -280,6 +283,87 @@ These could be published as standalone npm packages with minimal modification:
 | Initial load | <5s | ~3s |
 
 Optimizations: instanced rendering, spatial hashing, object pooling, archetype query caching, pooled vectors to minimize GC.
+
+---
+
+## Multiplayer Architecture
+
+VOIDSTRIKE uses a **fully serverless peer-to-peer architecture**. No central game server required - players connect directly to each other.
+
+### Protocol Stack
+
+| Layer | Protocol | Purpose |
+|-------|----------|---------|
+| **Transport** | WebRTC DataChannels | Low-latency P2P data exchange |
+| **Signaling** | Nostr (NIP-01) | Decentralized matchmaking and offer/answer exchange |
+| **Fallback Signaling** | Connection Codes | Serverless manual connection via shareable codes |
+| **NAT Traversal** | STUN + Peer Relay | Punch through NATs, relay when direct fails |
+| **Synchronization** | Deterministic Lockstep | Fixed-point math ensures identical simulation |
+
+### Connection Methods
+
+**1. Nostr Matchmaking (Automatic)**
+- Uses decentralized Nostr relays for game discovery
+- Publishes "game seek" events to find opponents
+- Exchanges WebRTC offers/answers via ephemeral Nostr events
+- No account required - generates ephemeral keypairs per session
+- Relays: `relay.damus.io`, `nos.lol`, `relay.nostr.band`, and others
+
+**2. Connection Codes (Manual)**
+- Human-shareable codes in format: `VOID-XXXX-XXXX-XXXX-...`
+- Encodes compressed SDP + ICE candidates in Crockford Base32
+- No signaling server needed - share code via Discord, text, etc.
+- 5-minute expiry for security
+
+### NAT Traversal
+
+```
+Player A ←→ STUN Server ←→ Player B     (Direct P2P - ideal)
+Player A ←→ Player C ←→ Player B        (Peer Relay - fallback)
+```
+
+- **STUN servers**: Google (`stun.l.google.com`), Cloudflare (`stun.cloudflare.com`)
+- **Peer Relay**: When direct connection fails, routes through other connected players
+- **End-to-end encryption**: ECDH key exchange + AES-GCM for relayed messages
+
+### Deterministic Lockstep
+
+For multiplayer to work, both clients must compute identical game states:
+
+```
+Tick 0: Both players start with same initial state
+Tick N: Both players apply same commands, same order
+        → Identical state guaranteed by determinism
+```
+
+**Determinism guarantees:**
+- **Q16.16 fixed-point math** - No floating-point variance across CPUs
+- **Seeded RNG** - All randomness uses synchronized seeds
+- **Quantized positions** - Sub-unit precision eliminated
+- **Command ordering** - Commands sorted by player ID, then command ID
+
+**Desync detection:**
+- Checksums computed every 10 ticks
+- Compares: entity count, position hashes, health sums, resource totals
+- Visual indicator on desync, optional auto-pause
+- State dump export for debugging
+
+### Message Types
+
+| Type | Purpose |
+|------|---------|
+| `input` | Player commands for a tick |
+| `input-ack` | Acknowledgement of received inputs |
+| `checksum` | State hash for desync detection |
+| `ping`/`pong` | Latency measurement |
+| `sync-request` | Reconnection state sync |
+| `pause`/`resume` | Game flow control |
+
+### Game Modes
+
+- **1v1** - Ranked and unranked
+- **2v2** - Team games (coming soon)
+- **Custom lobbies** - Private games with 6-character join codes
 
 ---
 
