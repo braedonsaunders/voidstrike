@@ -124,6 +124,45 @@ export interface RotationConfig {
   z?: number; // Z-axis rotation offset in degrees (default: 0)
 }
 
+// ============================================================================
+// Vehicle Effects Configuration Types (for VehicleEffectsSystem)
+// ============================================================================
+
+/** Conditions under which a vehicle effect is emitted */
+export type VehicleEffectCondition = 'always' | 'moving' | 'idle' | 'attacking' | 'flying';
+
+/** Types of vehicle effects that can be attached */
+export type VehicleEffectType =
+  | 'engine_exhaust'    // Fire + smoke for engines
+  | 'thruster'          // Blue/energy thruster glow
+  | 'smoke_trail'       // Trailing smoke
+  | 'dust_cloud'        // Ground dust behind wheels/tracks
+  | 'afterburner'       // Intense engine fire
+  | 'hover_dust'        // Dust from hovering/landing
+  | 'sparks';           // Mechanical sparks
+
+/** Attachment point for an effect (local coordinates relative to unit) */
+export interface EffectAttachment {
+  x: number;      // Local offset X (right/left)
+  y: number;      // Local offset Y (up/down)
+  z: number;      // Local offset Z (front/back)
+  scale?: number; // Size multiplier for this attachment (default: 1.0)
+}
+
+/** Definition for a single vehicle effect */
+export interface VehicleEffectDefinition {
+  type: VehicleEffectType;
+  attachments: EffectAttachment[];
+  emitRate: number;           // Particles per second per attachment
+  conditions: VehicleEffectCondition[];
+  speedScale?: boolean;       // Scale emit rate with movement speed
+}
+
+/** Container for all effects on a unit */
+export interface UnitEffectsConfig {
+  effects?: Record<string, VehicleEffectDefinition>;
+}
+
 /** Single asset configuration */
 export interface AssetConfig {
   model: string;
@@ -134,6 +173,7 @@ export interface AssetConfig {
   rotation?: RotationConfig; // Rotation offset in degrees on all axes
   animations?: AnimationMappingConfig;
   rendering?: RenderingHints; // Per-model rendering hints (decorations)
+  effects?: Record<string, VehicleEffectDefinition>; // Vehicle visual effects (engine trails, exhaust, etc.)
 }
 
 /** Default airborne height for flying units (units above terrain) */
@@ -183,6 +223,9 @@ let assetsConfig: AssetsJsonConfig | null = null;
 
 // Store animation speed multipliers from config
 const animationSpeedMultipliers = new Map<string, number>();
+
+// Store vehicle effects configurations from config
+const unitEffectsConfigs = new Map<string, UnitEffectsConfig>();
 
 // Store animation mappings from config for each asset
 const animationMappings = new Map<string, AnimationMappingConfig>();
@@ -1069,6 +1112,23 @@ export class AssetManager {
     return assetScaleMultipliers.get(assetId) ?? 1.0;
   }
 
+  /**
+   * Get vehicle effects configuration for a unit.
+   * Returns the effects config from assets.json, or null if no effects defined.
+   * Used by VehicleEffectsSystem for engine trails, exhaust, dust, etc.
+   */
+  static getUnitEffects(assetId: string): UnitEffectsConfig | null {
+    return unitEffectsConfigs.get(assetId) ?? null;
+  }
+
+  /**
+   * Get the final scale for a unit (for attachment point positioning).
+   * This is the scale multiplier from config, used to position effects correctly.
+   */
+  static getUnitScale(assetId: string): number {
+    return assetScaleMultipliers.get(assetId) ?? 1.0;
+  }
+
   // ============================================================================
   // LOD (Level of Detail) Methods
   // ============================================================================
@@ -1337,6 +1397,11 @@ export class AssetManager {
           }
           if (config.animations) {
             animationMappings.set(assetId, config.animations);
+          }
+          // Store vehicle effects configuration if defined
+          if (config.effects) {
+            unitEffectsConfigs.set(assetId, { effects: config.effects });
+            debugAssets.log(`[AssetManager] Loaded ${Object.keys(config.effects).length} effects for ${assetId}`);
           }
         }
         // Process buildings

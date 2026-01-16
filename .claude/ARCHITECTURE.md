@@ -99,7 +99,8 @@ voidstrike/
 │   │   └── effects/           # World-class battle effects module
 │   │       ├── index.ts       # Module exports
 │   │       ├── BattleEffectsRenderer.ts # Projectile trails, explosions, decals
-│   │       └── AdvancedParticleSystem.ts # GPU instanced particles (fire, smoke, sparks)
+│   │       ├── AdvancedParticleSystem.ts # GPU instanced particles (fire, smoke, sparks)
+│   │       └── VehicleEffectsSystem.ts # Continuous vehicle effects (engine trails, dust)
 │   ├── phaser/               # Phaser 4 2D overlay system
 │   │   ├── index.ts          # Module exports
 │   │   ├── scenes/
@@ -605,7 +606,23 @@ World-class selection accuracy with multiple improvements:
    - Subtle film grain
    - Uses dedicated orthographic camera for fullscreen quad rendering
 
-4. **shaders/SC2TerrainShader.ts** - Advanced terrain rendering
+4. **VehicleEffectsSystem.ts** - Continuous vehicle visual effects
+   - Configuration-driven via assets.json (per-unit effect definitions)
+   - State-aware emission (moving, idle, attacking, flying conditions)
+   - LOD-aware (reduced/skipped effects beyond 120 units distance)
+   - Effect types:
+     - `engine_exhaust` - Fire particles for engines
+     - `thruster` - Blue/energy thruster glow for flying units
+     - `smoke_trail` - Trailing smoke behind vehicles
+     - `dust_cloud` - Ground dust behind wheeled/tracked vehicles
+     - `afterburner` - Intense engine fire effect
+     - `hover_dust` - Dust from hovering/landing
+     - `sparks` - Mechanical sparks
+   - Attachment points for precise effect positioning relative to unit
+   - Speed-scaled emission for dynamic effects
+   - Integrates with AdvancedParticleSystem for GPU-instanced rendering
+
+5. **shaders/SC2TerrainShader.ts** - Advanced terrain rendering
    - Multi-layer procedural texturing (grass, dirt, rock, cliff)
    - Voronoi-based rock cracks and pebble patterns
    - PBR-like lighting with Fresnel and GGX specular

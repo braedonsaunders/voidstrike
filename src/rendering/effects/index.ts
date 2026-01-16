@@ -12,3 +12,4 @@ export {
   PARTICLE_CONFIGS,
   type ParticleConfig,
 } from './AdvancedParticleSystem';
+export { VehicleEffectsSystem } from './VehicleEffectsSystem';
