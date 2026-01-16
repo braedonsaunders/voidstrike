@@ -212,6 +212,9 @@ export class BattleEffectsRenderer {
   private targetAttackerCounts: Map<number, Set<number>> = new Map();
   private moveIndicators: MoveIndicator[] = [];
 
+  // Event listener cleanup
+  private eventUnsubscribers: (() => void)[] = [];
+
   // Spark particle system (instanced)
   private sparkGeometry: THREE.BufferGeometry;
   private sparkMaterial: THREE.PointsMaterial;
@@ -619,7 +622,7 @@ export class BattleEffectsRenderer {
 
   private setupEventListeners(): void {
     // Combat attack - create projectile with trail
-    this.eventBus.on('combat:attack', (data: {
+    this.eventUnsubscribers.push(this.eventBus.on('combat:attack', (data: {
       attackerId?: string; // Unit type ID for attacker (e.g., "valkyrie") - for airborne height lookup
       attackerEntityId?: number; // Entity ID for focus fire tracking
       targetId?: number; // Entity ID for focus fire tracking
@@ -664,10 +667,10 @@ export class BattleEffectsRenderer {
           this.trackFocusFire(data.attackerEntityId, data.targetId, data.targetPos, !!data.targetIsFlying, targetAirborneHeight);
         }
       }
-    });
+    }));
 
     // Unit died - create death effect
-    this.eventBus.on('unit:died', (data: {
+    this.eventUnsubscribers.push(this.eventBus.on('unit:died', (data: {
       entityId?: number;
       position?: { x: number; y: number };
       isFlying?: boolean;
@@ -686,10 +689,10 @@ export class BattleEffectsRenderer {
       if (data.entityId !== undefined) {
         this.clearFocusFire(data.entityId);
       }
-    });
+    }));
 
     // Building destroyed - big explosion
-    this.eventBus.on('building:destroyed', (data: {
+    this.eventUnsubscribers.push(this.eventBus.on('building:destroyed', (data: {
       entityId: number;
       playerId: string;
       buildingType: string;
@@ -702,10 +705,10 @@ export class BattleEffectsRenderer {
         isLarge ? 2.0 : 1.0
       );
       this.clearFocusFire(data.entityId);
-    });
+    }));
 
     // Move command
-    this.eventBus.on('command:move', (data: {
+    this.eventUnsubscribers.push(this.eventBus.on('command:move', (data: {
       entityIds: number[];
       targetPosition?: { x: number; y: number };
       playerId?: string;
@@ -722,14 +725,14 @@ export class BattleEffectsRenderer {
           new THREE.Vector3(data.targetPosition.x, terrainHeight + GROUND_EFFECT_OFFSET, data.targetPosition.y)
         );
       }
-    });
+    }));
 
     // Stop attack tracking
-    this.eventBus.on('unit:stopAttack', (data: { attackerId?: number; targetId?: number }) => {
+    this.eventUnsubscribers.push(this.eventBus.on('unit:stopAttack', (data: { attackerId?: number; targetId?: number }) => {
       if (data.attackerId !== undefined && data.targetId !== undefined) {
         this.removeAttackerFromTarget(data.attackerId, data.targetId);
       }
-    });
+    }));
   }
 
   // ============================================
@@ -1576,6 +1579,12 @@ export class BattleEffectsRenderer {
   }
 
   public dispose(): void {
+    // Unsubscribe from all events
+    for (const unsubscribe of this.eventUnsubscribers) {
+      unsubscribe();
+    }
+    this.eventUnsubscribers = [];
+
     // Cleanup all active effects
     for (const effect of this.projectileEffects.values()) {
       this.scene.remove(effect.trailMesh);

@@ -22,6 +22,10 @@ export class ResourceSystem extends System {
   private cachedResources: Entity[] | null = null;
   private lastCacheTick: number = -1;
 
+  // PERF: Cache bases per tick to avoid O(workers × bases) in handleResourceReturn
+  private cachedBases: Entity[] | null = null;
+  private lastBaseCacheTick: number = -1;
+
   constructor(game: Game) {
     super(game);
     this.setupEventListeners();
@@ -167,6 +171,19 @@ export class ResourceSystem extends System {
   }
 
   /**
+   * PERF: Get cached bases, refreshing once per tick.
+   * Avoids O(workers × bases) when many workers return resources.
+   */
+  private getCachedBases(): Entity[] {
+    const currentTick = this.game.getCurrentTick();
+    if (this.cachedBases === null || this.lastBaseCacheTick !== currentTick) {
+      this.cachedBases = this.world.getEntitiesWith('Building', 'Transform');
+      this.lastBaseCacheTick = currentTick;
+    }
+    return this.cachedBases;
+  }
+
+  /**
    * Find all mineral patches within range of a position (SC2-style mineral line)
    */
   private findNearbyMineralPatches(
@@ -292,8 +309,9 @@ export class ResourceSystem extends System {
         const distance = transform.distanceTo(resourceTransform);
 
         // Debug: log distance for player1 workers periodically
+        // DETERMINISM: Use tick-based sampling instead of Math.random() to avoid multiplayer desync
         const selectable = entity.get<Selectable>('Selectable');
-        if (selectable?.playerId === 'player1' && Math.random() < 0.01) {
+        if (selectable?.playerId === 'player1' && this.game.getCurrentTick() % 100 === 0 && entity.id % 10 === 0) {
           debugResources.log(`[ResourceSystem] player1 worker ${entity.id}: distance to resource=${distance.toFixed(2)}, isMining=${unit.isMining}, gatherTargetId=${unit.gatherTargetId}`);
         }
 
@@ -381,8 +399,8 @@ export class ResourceSystem extends System {
     transform: Transform,
     unit: Unit
   ): void {
-    // Find nearest command center / main building owned by the same player
-    const bases = this.world.getEntitiesWith('Building', 'Transform');
+    // PERF: Use cached bases instead of querying every worker return
+    const bases = this.getCachedBases();
     let nearestBase: { transform: Transform; building: Building } | null = null;
     let nearestDistance = Infinity;
 
@@ -507,8 +525,8 @@ export class ResourceSystem extends System {
 
     if (!transform || !unit) return;
 
-    // Find nearest base
-    const bases = this.world.getEntitiesWith('Building', 'Transform');
+    // PERF: Use cached bases instead of querying every worker
+    const bases = this.getCachedBases();
 
     // Get worker's owner
     const workerSelectable = workerEntity.get<Selectable>('Selectable');

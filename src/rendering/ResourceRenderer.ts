@@ -101,6 +101,13 @@ export class ResourceRenderer {
   // PERF: Pre-allocated Set for tracking current entity IDs to avoid per-frame allocation
   private readonly _currentIds: Set<number> = new Set();
 
+  // PERF: Cached worker counts per resource ID - rebuilt once per frame instead of O(workers) per label
+  private readonly _workerCountCache: Map<number, number> = new Map();
+
+  // PERF: Cached and sorted entity list - only rebuild when entity set changes
+  private _cachedSortedEntities: { id: number; entity: import('@/engine/ecs/Entity').Entity }[] = [];
+  private _lastEntityCount: number = -1;
+
   constructor(scene: THREE.Scene, world: World, terrain?: Terrain) {
     this.scene = scene;
     this.world = world;
@@ -474,34 +481,64 @@ export class ResourceRenderer {
   }
 
   /**
-   * Count workers assigned to a set of resource entity IDs.
-   * Counts by worker's gatherTargetId, so workers returning to CC still count.
+   * PERF: Build worker count cache once per frame.
+   * Maps resourceId -> number of workers assigned to it.
+   * Called once at start of update() instead of scanning workers per label.
    */
-  private countWorkersForResources(resourceIds: Set<number>): number {
-    let count = 0;
+  private buildWorkerCountCache(): void {
+    this._workerCountCache.clear();
     const units = this.world.getEntitiesWith('Unit');
 
     for (const entity of units) {
       const unit = entity.get<Unit>('Unit');
       if (!unit || !unit.isWorker) continue;
       if (unit.state !== 'gathering') continue;
-      if (unit.gatherTargetId !== null && resourceIds.has(unit.gatherTargetId)) {
-        count++;
+      if (unit.gatherTargetId !== null) {
+        const current = this._workerCountCache.get(unit.gatherTargetId) || 0;
+        this._workerCountCache.set(unit.gatherTargetId, current + 1);
       }
     }
+  }
 
+  /**
+   * Get worker count for a single resource ID from cache.
+   */
+  private getWorkerCountForResource(resourceId: number): number {
+    return this._workerCountCache.get(resourceId) || 0;
+  }
+
+  /**
+   * Count workers assigned to a set of resource entity IDs using cached counts.
+   */
+  private countWorkersForResources(resourceIds: Set<number>): number {
+    let count = 0;
+    for (const resourceId of resourceIds) {
+      count += this._workerCountCache.get(resourceId) || 0;
+    }
     return count;
   }
 
   public update(): void {
-    // TAA: Sort entities by ID for stable instance ordering
-    // This ensures previous/current matrix pairs are aligned correctly for velocity
-    const entities = [...this.world.getEntitiesWith('Transform', 'Resource')].sort((a, b) => a.id - b.id);
+    // PERF: Build worker count cache once per frame (O(workers) instead of O(workers × labels))
+    this.buildWorkerCountCache();
+
     // PERF: Reuse pre-allocated Set instead of creating new one every frame
     this._currentIds.clear();
 
     // PERF: Update frustum for culling
     this.updateFrustum();
+
+    // Get entities and check if we need to rebuild sorted cache
+    const rawEntities = this.world.getEntitiesWith('Transform', 'Resource');
+    const entityCount = rawEntities.length;
+
+    // PERF: Only rebuild sorted entity list when entity count changes
+    // TAA requires stable ID-based ordering for velocity tracking
+    if (entityCount !== this._lastEntityCount) {
+      this._cachedSortedEntities = [...rawEntities].map(e => ({ id: e.id, entity: e })).sort((a, b) => a.id - b.id);
+      this._lastEntityCount = entityCount;
+    }
+    const entities = this._cachedSortedEntities.map(e => e.entity);
 
     // Reset instance counts
     // PERF: Use .length = 0 instead of = [] to avoid GC pressure from allocating new arrays every frame
@@ -510,11 +547,14 @@ export class ResourceRenderer {
       group.entityIds.length = 0;
     }
 
-    // Build mineral lines on first frame or when minerals change significantly
-    const mineralCount = [...entities].filter(e => {
-      const r = e.get<Resource>('Resource');
-      return r && r.resourceType === 'minerals' && !r.isDepleted();
-    }).length;
+    // PERF: Count minerals in single pass instead of separate filter
+    let mineralCount = 0;
+    for (const entity of entities) {
+      const r = entity.get<Resource>('Resource');
+      if (r && r.resourceType === 'minerals' && !r.isDepleted()) {
+        mineralCount++;
+      }
+    }
 
     if (!this._mineralLinesBuilt || Math.abs(mineralCount - this._lastMineralCount) > 2) {
       this.buildMineralLines();
@@ -686,9 +726,8 @@ export class ResourceRenderer {
         this.vespeneLabels.set(entity.id, vespeneLabel);
       }
 
-      // Count workers assigned to this geyser
-      const resourceIds = new Set([entity.id]);
-      const currentWorkers = this.countWorkersForResources(resourceIds);
+      // PERF: Count workers using cached lookup (no Set allocation)
+      const currentWorkers = this.getWorkerCountForResource(entity.id);
       const optimalWorkers = OPTIMAL_WORKERS_PER_VESPENE;
 
       // Position label above the extractor
