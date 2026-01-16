@@ -9,11 +9,10 @@
  * less responsiveness during loading.
  */
 
-import type { FetchResponse, BatchFetchResponse, WorkerRequest, WorkerResponse } from './gltfWorker';
+import type { FetchResponse, BatchFetchResponse, WorkerRequest, WorkerResponse } from './gltf.worker';
 
-// Disable worker by default - Next.js has issues with TypeScript module workers
-// Set to true to enable worker (may require Next.js webpack configuration)
-const ENABLE_WORKER = false;
+// Enable worker - file is named *.worker.ts to match webpack worker-loader config
+const ENABLE_WORKER = true;
 
 // Timeout for worker requests (ms) - falls back to main thread if exceeded
 const WORKER_TIMEOUT = 10000;
@@ -46,10 +45,9 @@ class GLTFWorkerManager {
     if (this.worker || !this.isSupported || this.workerFailed) return;
 
     try {
-      // Create worker from module
+      // Create worker - named *.worker.ts to match webpack worker-loader pattern
       this.worker = new Worker(
-        new URL('./gltfWorker.ts', import.meta.url),
-        { type: 'module' }
+        new URL('./gltf.worker.ts', import.meta.url)
       );
 
       this.worker.onmessage = (event: MessageEvent<WorkerResponse>) => {
