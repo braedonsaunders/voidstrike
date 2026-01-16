@@ -74,6 +74,7 @@ function EditorPageContent() {
     // Configure for preview: 1 human vs 1 AI
     store.reset();
     store.setCustomMap(gameData); // Re-set after reset
+    store.setEditorPreview(true); // Mark as editor preview for "Back to Editor" button
     store.setFogOfWar(false); // Disable fog for easier testing
     store.startGame();
 

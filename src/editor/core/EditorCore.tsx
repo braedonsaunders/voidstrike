@@ -486,9 +486,6 @@ export function EditorCore({
     [config.theme]
   ) as React.CSSProperties;
 
-  // Calculate panel width for proper layout
-  const panelWidth = isPanelCollapsed ? 0 : 280;
-
   return (
     <div
       className={`editor-core h-screen flex flex-col overflow-hidden ${className}`}
@@ -522,7 +519,7 @@ export function EditorCore({
       />
 
       {/* Main content */}
-      <div className="flex-1 flex min-h-0">
+      <div className="flex-1 flex min-h-0 relative">
         {/* Canvas area with toolbar */}
         <div className="flex-1 flex flex-col min-w-0">
           {/* Horizontal Toolbar */}
@@ -560,11 +557,8 @@ export function EditorCore({
               onNavigateRef={(fn) => { canvasNavigateRef.current = fn; }}
             />
 
-            {/* Mini-map (bottom-right, repositioned for collapsed panel) */}
-            <div
-              className="absolute bottom-14 transition-all duration-300"
-              style={{ right: isPanelCollapsed ? 12 : 12 }}
-            >
+            {/* Mini-map (bottom-right) */}
+            <div className="absolute bottom-14 right-3">
               <EditorMiniMap
                 config={config}
                 mapData={state.mapData}
@@ -585,14 +579,14 @@ export function EditorCore({
           </div>
         </div>
 
-        {/* Right panel (collapsible) */}
-        <div
-          className="flex-shrink-0 transition-all duration-300 relative"
-          style={{ width: panelWidth }}
-          onMouseEnter={handlePanelMouseEnter}
-          onMouseLeave={handlePanelMouseLeave}
-        >
-          {!isPanelCollapsed && (
+        {/* Right panel (collapsible) - only render when not collapsed */}
+        {!isPanelCollapsed && (
+          <div
+            className="w-[280px] flex-shrink-0 border-l"
+            style={{ borderColor: config.theme.border }}
+            onMouseEnter={handlePanelMouseEnter}
+            onMouseLeave={handlePanelMouseLeave}
+          >
             <EditorPanels
               config={config}
               state={state}
@@ -613,24 +607,25 @@ export function EditorCore({
               onToggleGrid={toggleGrid}
               onToggleCategory={toggleCategory}
             />
-          )}
+          </div>
+        )}
 
-          {/* Panel toggle button */}
-          <button
-            onClick={() => setIsPanelCollapsed((prev) => !prev)}
-            className="absolute left-0 top-1/2 -translate-y-1/2 -translate-x-full w-6 h-16 flex items-center justify-center rounded-l-lg z-30"
-            style={{
-              backgroundColor: config.theme.surface,
-              border: `1px solid ${config.theme.border}`,
-              borderRight: 'none',
-            }}
-            title={isPanelCollapsed ? 'Show Panel (Tab)' : 'Hide Panel (Tab)'}
-          >
-            <span style={{ color: config.theme.text.muted }}>
-              {isPanelCollapsed ? '◀' : '▶'}
-            </span>
-          </button>
-        </div>
+        {/* Panel toggle button - always visible, positioned at right edge */}
+        <button
+          onClick={() => setIsPanelCollapsed((prev) => !prev)}
+          className="absolute top-1/2 -translate-y-1/2 w-6 h-16 flex items-center justify-center rounded-l-lg z-30"
+          style={{
+            backgroundColor: config.theme.surface,
+            border: `1px solid ${config.theme.border}`,
+            borderRight: 'none',
+            right: isPanelCollapsed ? 0 : 280,
+          }}
+          title={isPanelCollapsed ? 'Show Panel (Tab)' : 'Hide Panel (Tab)'}
+        >
+          <span style={{ color: config.theme.text.muted }}>
+            {isPanelCollapsed ? '◀' : '▶'}
+          </span>
+        </button>
       </div>
 
       {/* Context Menu */}
