@@ -303,6 +303,32 @@ Project damage marks, tire tracks, blast craters onto any surface.
 
 ## Technical Notes
 
+### WebGPU Vertex Buffer Limit (Max 8)
+
+**Problem:** WebGPU has a hard limit of 8 vertex buffers per render pipeline. Models from AI generators (Tripo AI, Meshy) often exceed this with extra attributes.
+
+**Error Message:**
+```
+THREE.Vertex buffer count (11) exceeds the maximum number of vertex buffers (8).
+[Invalid RenderPipeline "renderPipeline_tripo_mat_xxx"] is invalid.
+```
+
+**Solution:** Runtime vertex attribute cleanup in `AssetManager.ts` (January 2025)
+
+The `cleanupModelAttributes()` function automatically removes excess vertex attributes when loading GLB models:
+- Keeps essential attributes: `position`, `normal`, `uv`, `tangent`, `color`
+- For skinned meshes also keeps: `skinIndex`, `skinWeight`
+- Removes: extra UV layers (`uv1`, `uv2`, `texcoord_1`), extra color layers, morph targets, custom attributes
+
+**Standard Attribute Budget:**
+| Type | Attributes | Count |
+|------|------------|-------|
+| Static Mesh | position, normal, uv, tangent, color | 5 |
+| Skinned Mesh | position, normal, uv, tangent, skinIndex, skinWeight | 6 |
+| Static + Color | position, normal, uv, tangent, color | 5 |
+
+**Note:** The Blender script (`docs/blender_auto_retopo.py`) should also clean up attributes during export. Runtime cleanup is a safety net for models that weren't processed or have attributes added by Three.js at load time.
+
 ### TSL Type Definitions
 Some TSL exports aren't in `@types/three` yet. Workaround:
 

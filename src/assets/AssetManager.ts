@@ -189,6 +189,146 @@ dracoLoader.setDecoderConfig({ type: 'js' }); // Use JS decoder for compatibilit
 const gltfLoader = new GLTFLoader();
 gltfLoader.setDRACOLoader(dracoLoader);
 
+// WebGPU vertex buffer limit
+const WEBGPU_MAX_VERTEX_BUFFERS = 8;
+
+/**
+ * Clean up excess vertex attributes from a mesh to stay within WebGPU's 8 vertex buffer limit.
+ *
+ * WebGPU has a maximum of 8 vertex buffers. Standard attributes include:
+ * - position (1)
+ * - normal (1)
+ * - uv (1) - first UV set only
+ * - tangent (1) - for normal mapping
+ * - color (1) - if used
+ * - skinIndex (1) - for skinned meshes
+ * - skinWeight (1) - for skinned meshes
+ *
+ * Models from AI generators (Tripo, Meshy) often include excess attributes that exceed this limit.
+ * This function removes:
+ * - Extra UV layers (uv1, uv2, uv3, etc.) - keeps only 'uv'
+ * - Extra color layers - keeps only first 'color' attribute
+ * - Custom/unknown attributes not in the essential list
+ *
+ * @param geometry The BufferGeometry to clean up
+ * @param isSkinned Whether this is a skinned mesh (needs skinIndex/skinWeight)
+ * @returns Object with cleanup stats for debugging
+ */
+function cleanupVertexAttributes(
+  geometry: THREE.BufferGeometry,
+  isSkinned: boolean
+): { removed: string[]; kept: string[]; originalCount: number } {
+  const removed: string[] = [];
+  const kept: string[] = [];
+
+  // Essential attributes that should be kept
+  const essentialAttributes = new Set([
+    'position',
+    'normal',
+    'uv',       // Only first UV set
+    'tangent',
+    'color',    // Only first color attribute
+  ]);
+
+  // Additional attributes for skinned meshes
+  if (isSkinned) {
+    essentialAttributes.add('skinIndex');
+    essentialAttributes.add('skinWeight');
+  }
+
+  // Get all attribute names
+  const attributeNames = Object.keys(geometry.attributes);
+  const originalCount = attributeNames.length;
+
+  // Check each attribute
+  for (const name of attributeNames) {
+    // Keep essential attributes
+    if (essentialAttributes.has(name)) {
+      kept.push(name);
+      continue;
+    }
+
+    // Remove extra UV layers (uv1, uv2, uv3, _uv1, etc.)
+    if (name.match(/^_?uv\d+$/i) || name.match(/^texcoord_?\d+$/i)) {
+      geometry.deleteAttribute(name);
+      removed.push(name);
+      continue;
+    }
+
+    // Remove extra color attributes (color_0, _color_1, etc.)
+    if (name.match(/^_?color_?\d+$/i) && name !== 'color') {
+      geometry.deleteAttribute(name);
+      removed.push(name);
+      continue;
+    }
+
+    // Remove morph target attributes (they use additional buffers)
+    if (name.startsWith('morphTarget') || name.startsWith('morphNormal')) {
+      geometry.deleteAttribute(name);
+      removed.push(name);
+      continue;
+    }
+
+    // Remove custom/unknown attributes that start with underscore (common in AI-generated models)
+    if (name.startsWith('_')) {
+      geometry.deleteAttribute(name);
+      removed.push(name);
+      continue;
+    }
+
+    // Keep anything else we haven't explicitly removed
+    kept.push(name);
+  }
+
+  return { removed, kept, originalCount };
+}
+
+/**
+ * Clean up all meshes in a model to ensure WebGPU compatibility.
+ * Logs warnings if attribute count still exceeds the limit after cleanup.
+ *
+ * @param model The Object3D tree to process
+ * @param assetId Asset identifier for logging
+ */
+function cleanupModelAttributes(model: THREE.Object3D, assetId: string): void {
+  let totalRemoved = 0;
+  let meshCount = 0;
+
+  model.traverse((child: THREE.Object3D) => {
+    if (child instanceof THREE.Mesh || child instanceof THREE.SkinnedMesh) {
+      const isSkinned = child instanceof THREE.SkinnedMesh;
+      const geometry = child.geometry as THREE.BufferGeometry;
+
+      if (!geometry || !geometry.attributes) return;
+
+      const result = cleanupVertexAttributes(geometry, isSkinned);
+
+      if (result.removed.length > 0) {
+        totalRemoved += result.removed.length;
+        debugAssets.log(
+          `[AssetManager] ${assetId}: Cleaned mesh, removed ${result.removed.length} excess attributes: [${result.removed.join(', ')}]`
+        );
+      }
+
+      // Warn if still over limit
+      const finalCount = result.kept.length;
+      if (finalCount > WEBGPU_MAX_VERTEX_BUFFERS) {
+        debugAssets.warn(
+          `[AssetManager] ${assetId}: Still has ${finalCount} vertex attributes after cleanup (limit: ${WEBGPU_MAX_VERTEX_BUFFERS}). Kept: [${result.kept.join(', ')}]`
+        );
+      }
+
+      meshCount++;
+    }
+  });
+
+  if (totalRemoved > 0) {
+    debugAssets.log(
+      `[AssetManager] ${assetId}: Cleaned ${meshCount} mesh(es), removed ${totalRemoved} total excess vertex attributes for WebGPU compatibility`
+    );
+  }
+}
+
 /**
  * Normalize a model to a target height and anchor to ground (minY = 0)
  * Per threejs-builder skill: use one anchor rule per asset class
@@ -598,6 +738,10 @@ export class AssetManager {
         (gltf) => {
           const model = gltf.scene;
 
+          // Clean up excess vertex attributes for WebGPU compatibility (max 8 buffers)
+          // This must happen BEFORE any other processing to avoid render pipeline errors
+          cleanupModelAttributes(model, assetId);
+
           // Configure shadows
           model.traverse((child) => {
             if (child instanceof THREE.Mesh) {
@@ -663,6 +807,9 @@ export class AssetManager {
         url,
         (gltf) => {
           const model = gltf.scene;
+
+          // Clean up excess vertex attributes for WebGPU compatibility (max 8 buffers)
+          cleanupModelAttributes(model, `${assetId}_LOD${lodLevel}`);
 
           // Configure shadows (same as LOD0)
           model.traverse((child) => {
