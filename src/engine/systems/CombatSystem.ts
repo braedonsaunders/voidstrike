@@ -731,7 +731,7 @@ export class CombatSystem extends System {
       targetPos: { x: targetTransform.x, y: targetTransform.y },
       targetHeight,
       targetIsFlying,
-      isKillingBlow: health && health.current <= 0,
+      isKillingBlow: targetHealth && targetHealth.current <= 0,
     });
 
     // Emit player:damage for Phaser overlay effects when local player's unit takes damage
