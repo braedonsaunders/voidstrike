@@ -198,7 +198,17 @@ export function WebGPUGameCanvas() {
         setLoadingStatus('Loading 3D models');
         setLoadingProgress(10);
 
-        await AssetManager.loadCustomModels();
+        // Use preloading system - if assets were preloaded in lobby, this returns immediately
+        // Otherwise starts loading now. Either way, waits for completion.
+        const preloadStarted = AssetManager.isPreloadingStarted();
+        if (preloadStarted) {
+          setLoadingStatus('Finishing 3D model loading');
+          debugInitialization.log('[WebGPUGameCanvas] Waiting for lobby preloading to complete...');
+        }
+        await AssetManager.waitForPreloading();
+        if (preloadStarted) {
+          debugInitialization.log('[WebGPUGameCanvas] Lobby preloading complete, continuing initialization');
+        }
         setLoadingProgress(50);
 
         setLoadingStatus('Initializing WebGPU renderer');
