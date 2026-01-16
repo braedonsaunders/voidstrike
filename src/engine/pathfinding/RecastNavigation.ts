@@ -834,6 +834,20 @@ export class RecastNavigation {
       if (agent) {
         const pos = agent.position();
         const vel = agent.velocity();
+        const maxSpeed = agent.maxSpeed;
+        const target = agent.target();
+
+        // DEBUG: Log raw agent data when velocity seems off
+        const velMag = Math.sqrt(vel.x * vel.x + vel.z * vel.z);
+        if (velMag < maxSpeed * 0.1 && velMag > 0.001) {
+          debugPathfinding.log(
+            `[RecastNav] AGENT STATE: entity=${entityId} vel=(${vel.x.toFixed(3)},${vel.z.toFixed(3)}) ` +
+            `velMag=${velMag.toFixed(3)} maxSpeed=${maxSpeed.toFixed(3)} ` +
+            `pos=(${pos.x.toFixed(1)},${pos.y.toFixed(2)},${pos.z.toFixed(1)}) ` +
+            `target=(${target?.x?.toFixed(1)},${target?.y?.toFixed(2)},${target?.z?.toFixed(1)})`
+          );
+        }
+
         return {
           x: pos.x,
           y: pos.z,
