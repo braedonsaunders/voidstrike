@@ -3,9 +3,20 @@
  *
  * Provides a simple API to fetch GLB files off the main thread.
  * Uses ArrayBuffer transfer for zero-copy data passing.
+ *
+ * NOTE: Worker is disabled by default due to Next.js compatibility issues.
+ * The main thread fallback provides the same functionality with slightly
+ * less responsiveness during loading.
  */
 
 import type { FetchResponse, BatchFetchResponse, WorkerRequest, WorkerResponse } from './gltfWorker';
+
+// Disable worker by default - Next.js has issues with TypeScript module workers
+// Set to true to enable worker (may require Next.js webpack configuration)
+const ENABLE_WORKER = false;
+
+// Timeout for worker requests (ms) - falls back to main thread if exceeded
+const WORKER_TIMEOUT = 10000;
 
 class GLTFWorkerManager {
   private worker: Worker | null = null;
@@ -13,23 +24,26 @@ class GLTFWorkerManager {
   private pendingRequests = new Map<number, {
     resolve: (value: ArrayBuffer | null) => void;
     reject: (error: Error) => void;
+    timeoutId: ReturnType<typeof setTimeout>;
   }>();
   private pendingBatchRequests = new Map<number, {
     resolve: (results: Map<string, ArrayBuffer | null>) => void;
     reject: (error: Error) => void;
+    timeoutId: ReturnType<typeof setTimeout>;
   }>();
   private isSupported = false;
+  private workerFailed = false;
 
   constructor() {
-    // Check if Web Workers are supported
-    this.isSupported = typeof Worker !== 'undefined';
+    // Check if Web Workers are supported and enabled
+    this.isSupported = ENABLE_WORKER && typeof Worker !== 'undefined';
   }
 
   /**
    * Initialize the worker (lazy initialization)
    */
   private initWorker(): void {
-    if (this.worker || !this.isSupported) return;
+    if (this.worker || !this.isSupported || this.workerFailed) return;
 
     try {
       // Create worker from module
@@ -43,19 +57,25 @@ class GLTFWorkerManager {
       };
 
       this.worker.onerror = (error) => {
-        console.error('[GLTFWorkerManager] Worker error:', error);
-        // Reject all pending requests
-        for (const [id, { reject }] of this.pendingRequests) {
+        console.warn('[GLTFWorkerManager] Worker error, falling back to main thread:', error);
+        this.workerFailed = true;
+        this.worker?.terminate();
+        this.worker = null;
+        // Reject all pending requests - they'll be retried on main thread
+        for (const [id, { reject, timeoutId }] of this.pendingRequests) {
+          clearTimeout(timeoutId);
           reject(new Error('Worker error'));
           this.pendingRequests.delete(id);
         }
-        for (const [id, { reject }] of this.pendingBatchRequests) {
+        for (const [id, { reject, timeoutId }] of this.pendingBatchRequests) {
+          clearTimeout(timeoutId);
           reject(new Error('Worker error'));
           this.pendingBatchRequests.delete(id);
         }
       };
     } catch (error) {
-      console.warn('[GLTFWorkerManager] Failed to create worker, falling back to main thread:', error);
+      console.warn('[GLTFWorkerManager] Failed to create worker, using main thread:', error);
+      this.workerFailed = true;
       this.isSupported = false;
     }
   }
@@ -67,6 +87,7 @@ class GLTFWorkerManager {
     if (response.type === 'fetchResult') {
       const pending = this.pendingRequests.get(response.id);
       if (pending) {
+        clearTimeout(pending.timeoutId);
         this.pendingRequests.delete(response.id);
         if (response.success && response.data) {
           pending.resolve(response.data);
@@ -77,6 +98,7 @@ class GLTFWorkerManager {
     } else if (response.type === 'batchFetchResult') {
       const pending = this.pendingBatchRequests.get(response.id);
       if (pending) {
+        clearTimeout(pending.timeoutId);
         this.pendingBatchRequests.delete(response.id);
         const results = new Map<string, ArrayBuffer | null>();
         for (const result of response.results) {
@@ -91,16 +113,16 @@ class GLTFWorkerManager {
    * Check if worker is available
    */
   isAvailable(): boolean {
-    return this.isSupported;
+    return this.isSupported && !this.workerFailed;
   }
 
   /**
-   * Fetch a single GLB file via worker
+   * Fetch a single GLB file via worker (or main thread fallback)
    * Returns null if file doesn't exist or fetch failed
    */
   async fetch(url: string): Promise<ArrayBuffer | null> {
-    // Fallback to main thread if worker not supported
-    if (!this.isSupported) {
+    // Use main thread if worker not supported or failed
+    if (!this.isSupported || this.workerFailed) {
       return this.fetchMainThread(url);
     }
 
@@ -111,8 +133,22 @@ class GLTFWorkerManager {
 
     const id = ++this.requestId;
 
-    return new Promise<ArrayBuffer | null>((resolve, reject) => {
-      this.pendingRequests.set(id, { resolve, reject });
+    return new Promise<ArrayBuffer | null>((resolve) => {
+      // Set timeout to fall back to main thread
+      const timeoutId = setTimeout(() => {
+        this.pendingRequests.delete(id);
+        console.warn(`[GLTFWorkerManager] Worker timeout for ${url}, using main thread`);
+        this.fetchMainThread(url).then(resolve);
+      }, WORKER_TIMEOUT);
+
+      this.pendingRequests.set(id, {
+        resolve,
+        reject: () => {
+          // On reject, fall back to main thread
+          this.fetchMainThread(url).then(resolve);
+        },
+        timeoutId
+      });
 
       const request: WorkerRequest = {
         type: 'fetch',
@@ -133,8 +169,8 @@ class GLTFWorkerManager {
       return new Map();
     }
 
-    // Fallback to main thread if worker not supported
-    if (!this.isSupported) {
+    // Use main thread if worker not supported or failed
+    if (!this.isSupported || this.workerFailed) {
       return this.batchFetchMainThread(urls);
     }
 
@@ -145,8 +181,22 @@ class GLTFWorkerManager {
 
     const id = ++this.requestId;
 
-    return new Promise<Map<string, ArrayBuffer | null>>((resolve, reject) => {
-      this.pendingBatchRequests.set(id, { resolve, reject });
+    return new Promise<Map<string, ArrayBuffer | null>>((resolve) => {
+      // Set timeout to fall back to main thread
+      const timeoutId = setTimeout(() => {
+        this.pendingBatchRequests.delete(id);
+        console.warn(`[GLTFWorkerManager] Worker timeout for batch fetch, using main thread`);
+        this.batchFetchMainThread(urls).then(resolve);
+      }, WORKER_TIMEOUT);
+
+      this.pendingBatchRequests.set(id, {
+        resolve,
+        reject: () => {
+          // On reject, fall back to main thread
+          this.batchFetchMainThread(urls).then(resolve);
+        },
+        timeoutId
+      });
 
       const request: WorkerRequest = {
         type: 'batchFetch',
@@ -191,6 +241,12 @@ class GLTFWorkerManager {
     if (this.worker) {
       this.worker.terminate();
       this.worker = null;
+    }
+    for (const { timeoutId } of this.pendingRequests.values()) {
+      clearTimeout(timeoutId);
+    }
+    for (const { timeoutId } of this.pendingBatchRequests.values()) {
+      clearTimeout(timeoutId);
     }
     this.pendingRequests.clear();
     this.pendingBatchRequests.clear();
