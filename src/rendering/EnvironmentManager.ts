@@ -62,6 +62,9 @@ export class EnvironmentManager {
   // Environment map for IBL
   private envMap: THREE.CubeTexture | null = null;
 
+  // Cached vector for per-frame sun direction calculation (avoids allocation)
+  private readonly _tempSunDirection = new THREE.Vector3();
+
   // Shadow update throttling - adaptive based on scene activity
   private shadowFrameCounter = 0;
   // Base intervals: active (units moving) vs static (empty scene)
@@ -264,8 +267,9 @@ export class EnvironmentManager {
    */
   public update(deltaTime: number, gameTime: number, camera?: THREE.Camera): void {
     // Update terrain shader for procedural effects
-    const sunDirection = this.directionalLight.position.clone().normalize();
-    this.terrain.update(deltaTime, sunDirection);
+    // PERF: Reuse cached vector to avoid per-frame allocation
+    this._tempSunDirection.copy(this.directionalLight.position).normalize();
+    this.terrain.update(deltaTime, this._tempSunDirection);
 
     if (this.water) {
       this.water.update(gameTime);
@@ -507,13 +511,15 @@ export class EnvironmentManager {
    */
   private createEnvironmentMap(): void {
     const size = 64;
-    const cubeRenderTarget = new THREE.WebGLCubeRenderTarget(size);
 
     // Create gradient textures for each face
     const faces: THREE.DataTexture[] = [];
     const skyColor = new THREE.Color(this.biome.colors.sky);
     const horizonColor = new THREE.Color(this.biome.colors.fog);
     const groundColor = new THREE.Color(this.biome.colors.ground?.[0] || 0x333333);
+
+    // PERF: Reuse single Color instance to avoid per-pixel allocation
+    const tempColor = new THREE.Color();
 
     // Generate 6 cube faces with gradient
     for (let face = 0; face < 6; face++) {
@@ -537,16 +543,15 @@ export class EnvironmentManager {
           }
 
           // Interpolate colors
-          const color = new THREE.Color();
           if (t > 0.5) {
-            color.lerpColors(horizonColor, skyColor, (t - 0.5) * 2);
+            tempColor.lerpColors(horizonColor, skyColor, (t - 0.5) * 2);
           } else {
-            color.lerpColors(groundColor, horizonColor, t * 2);
+            tempColor.lerpColors(groundColor, horizonColor, t * 2);
           }
 
-          data[idx] = Math.floor(color.r * 255);
-          data[idx + 1] = Math.floor(color.g * 255);
-          data[idx + 2] = Math.floor(color.b * 255);
+          data[idx] = Math.floor(tempColor.r * 255);
+          data[idx + 1] = Math.floor(tempColor.g * 255);
+          data[idx + 2] = Math.floor(tempColor.b * 255);
           data[idx + 3] = 255;
         }
       }
@@ -556,9 +561,14 @@ export class EnvironmentManager {
       faces.push(texture);
     }
 
-    // Create cube texture from faces
+    // Create cube texture from faces (extracts image data)
     this.envMap = new THREE.CubeTexture(faces.map((t) => t.image));
     this.envMap.needsUpdate = true;
+
+    // Dispose DataTextures now that images are extracted (avoids memory leak)
+    for (const texture of faces) {
+      texture.dispose();
+    }
 
     // Apply to scene
     this.scene.environment = this.envMap;

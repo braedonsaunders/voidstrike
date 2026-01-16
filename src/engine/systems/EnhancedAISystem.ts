@@ -370,8 +370,9 @@ export class EnhancedAISystem extends System {
             return (ai.buildingCounts.get(prodBuilding.buildingId) ?? 0) > 0;
           }
         }
-        debugAI.warn(`[EnhancedAI] Unknown condition: ${conditionName}`);
-        return true; // Default to true for unknown conditions
+        // BUG FIX: Return false for unknown conditions (prevents typos from silently passing)
+        debugAI.warn(`[EnhancedAI] Unknown condition: ${conditionName} - returning false`);
+        return false;
     }
   }
 
@@ -680,12 +681,13 @@ export class EnhancedAISystem extends System {
       }
 
       // Check custom condition (supports both function and named string conditions)
+      // BUG FIX: Wait for condition instead of skipping the step
       if (step.condition) {
         const conditionMet = typeof step.condition === 'function'
           ? step.condition(ai)
           : this.checkNamedCondition(step.condition, ai);
         if (!conditionMet) {
-          ai.buildOrderIndex++;
+          // Wait until condition is met - don't skip the step
           return;
         }
       }
@@ -1727,6 +1729,9 @@ export class EnhancedAISystem extends System {
     if (ai.minerals < unitDef.mineralCost || ai.vespene < unitDef.vespeneCost) return false;
     if (ai.supply + unitDef.supplyCost > ai.maxSupply) return false;
 
+    // BUG FIX: Check if unit requires research module addon (matches canProduceUnit logic)
+    const requiresResearchModule = this.unitRequiresResearchModule(unitType);
+
     const buildings = this.world.getEntitiesWith('Building', 'Selectable');
     for (const entity of buildings) {
       const selectable = entity.get<Selectable>('Selectable')!;
@@ -1736,6 +1741,13 @@ export class EnhancedAISystem extends System {
       if (!building.isComplete()) continue;
       if (!building.canProduce.includes(unitType)) continue;
       if (building.productionQueue.length >= 3) continue;
+
+      // BUG FIX: Check addon requirements for tech units
+      if (requiresResearchModule) {
+        if (!building.hasAddon() || !building.hasTechLab()) {
+          continue; // This building doesn't have required tech lab, try next
+        }
+      }
 
       ai.minerals -= unitDef.mineralCost;
       ai.vespene -= unitDef.vespeneCost;
@@ -2160,13 +2172,25 @@ export class EnhancedAISystem extends System {
   }
 
   private isUnderAttack(playerId: string): boolean {
+    const ai = this.aiPlayers.get(playerId);
+    const currentTick = this.game.getCurrentTick();
+
+    // BUG FIX: Add time-based threat window (200 ticks = ~10 seconds at 20 ticks/sec)
+    // Building damage alone shouldn't lock AI in defending state forever
+    const THREAT_WINDOW_TICKS = 200;
+    const recentEnemyContact = ai ? (currentTick - ai.lastEnemyContact) < THREAT_WINDOW_TICKS : false;
+
     const buildings = this.getCachedBuildings();
     for (const entity of buildings) {
       const selectable = entity.get<Selectable>('Selectable')!;
       const health = entity.get<Health>('Health')!;
 
       if (selectable.playerId !== playerId) continue;
-      if (health.getHealthPercent() < 0.9) return true;
+
+      // Only consider "under attack" if building is damaged AND there was recent enemy contact
+      // Critical damage (< 50%) always counts as under attack to ensure defense response
+      if (health.getHealthPercent() < 0.5) return true;
+      if (health.getHealthPercent() < 0.9 && recentEnemyContact) return true;
     }
     return false;
   }

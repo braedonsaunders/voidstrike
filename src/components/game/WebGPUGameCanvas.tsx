@@ -127,6 +127,9 @@ export function WebGPUGameCanvas() {
   // Game engine ref
   const gameRef = useRef<Game | null>(null);
 
+  // Event listener cleanup
+  const eventUnsubscribersRef = useRef<(() => void)[]>([]);
+
   // UI state
   const [isSelecting, setIsSelecting] = useState(false);
   const [selectionStart, setSelectionStart] = useState({ x: 0, y: 0 });
@@ -416,7 +419,7 @@ export function WebGPUGameCanvas() {
 
         // Listen for local commands and send to peer
         for (const cmdType of commandTypes) {
-          game.eventBus.on(cmdType, (data: unknown) => {
+          const unsubscribe = game.eventBus.on(cmdType, (data: unknown) => {
             // Only send commands from the local player
             const cmd = data as { playerId?: string };
             if (cmd.playerId === localPlayerId) {
@@ -428,6 +431,7 @@ export function WebGPUGameCanvas() {
               });
             }
           });
+          eventUnsubscribersRef.current.push(unsubscribe);
         }
 
         // Receive remote commands and process them
@@ -660,7 +664,7 @@ export function WebGPUGameCanvas() {
 
       // Hook particle system to combat events
       // PERF: Uses pooled Vector3 objects to avoid allocation per attack
-      game.eventBus.on('combat:attack', (data: {
+      eventUnsubscribersRef.current.push(game.eventBus.on('combat:attack', (data: {
         attackerId?: string; // Unit type ID for airborne height lookup
         attackerPos?: { x: number; y: number };
         targetPos?: { x: number; y: number };
@@ -690,10 +694,10 @@ export function WebGPUGameCanvas() {
           effectEmitterRef.current.muzzleFlash(_combatStartPos, _combatDirection);
           effectEmitterRef.current.impact(_combatEndPos, _combatDirection.negate());
         }
-      });
+      }));
 
       // Death explosion - uses AdvancedParticleSystem only (BattleEffectsRenderer handles death rings)
-      game.eventBus.on('unit:died', (data: {
+      eventUnsubscribersRef.current.push(game.eventBus.on('unit:died', (data: {
         position?: { x: number; y: number };
         isFlying?: boolean;
         unitType?: string; // Unit type ID for airborne height lookup
@@ -708,10 +712,10 @@ export function WebGPUGameCanvas() {
           _deathPos.set(data.position.x, effectHeight, data.position.y);
           advancedParticlesRef.current.emitExplosion(_deathPos, 1.2);
         }
-      });
+      }));
 
       // Building destroyed - big explosion with advanced particles
-      game.eventBus.on('building:destroyed', (data: {
+      eventUnsubscribersRef.current.push(game.eventBus.on('building:destroyed', (data: {
         entityId: number;
         playerId: string;
         buildingType: string;
@@ -723,13 +727,13 @@ export function WebGPUGameCanvas() {
           _deathPos.set(data.position.x, terrainHeight + 1, data.position.y);
           advancedParticlesRef.current.emitExplosion(_deathPos, isLarge ? 2.5 : 1.5);
         }
-      });
+      }));
 
       // Multiplayer: Remote player quit
-      game.eventBus.on('multiplayer:playerQuit', () => {
+      eventUnsubscribersRef.current.push(game.eventBus.on('multiplayer:playerQuit', () => {
         debugNetworking.log('[Game] Remote player quit the game');
         useUIStore.getState().addNotification('warning', 'Remote player has left the game', 10000);
-      });
+      }));
 
       // Spawn entities (skip in battle simulator - user spawns manually)
       if (!isBattleSimulatorMode()) {
@@ -1194,6 +1198,12 @@ export function WebGPUGameCanvas() {
     initializeGame();
 
     return () => {
+      // Unsubscribe from all event listeners
+      for (const unsubscribe of eventUnsubscribersRef.current) {
+        unsubscribe();
+      }
+      eventUnsubscribersRef.current = [];
+
       window.removeEventListener('resize', handleResize);
       resizeObserver?.disconnect();
 
