@@ -157,9 +157,9 @@
     },
     "scorcher": {
       "model": "/models/units/scorcher_LOD0.glb",
-      "scale": 1.0,
+      "scale": 1.5,
       "rotation": {
-        "x": 0,
+        "x": -90,
         "y": 0,
         "z": 0
       },
@@ -189,7 +189,7 @@
       "scale": 1.8,
       "rotation": {
         "x": 0,
-        "y": 0,
+        "y": -90,
         "z": 0
       },
       "animations": {
