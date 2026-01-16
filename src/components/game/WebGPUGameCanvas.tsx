@@ -65,7 +65,7 @@ import { GraphicsOptionsPanel } from './GraphicsOptionsPanel';
 import { DebugMenuPanel } from './DebugMenuPanel';
 import { spawnInitialEntities } from '@/utils/gameSetup';
 import { useUIStore, FIXED_RESOLUTIONS } from '@/store/uiStore';
-import { debugInitialization, debugPerformance } from '@/utils/debugLogger';
+import { debugInitialization, debugPerformance, debugNetworking } from '@/utils/debugLogger';
 import { DEFAULT_MAP, MapData, getMapById } from '@/data/maps';
 import { Resource } from '@/engine/components/Resource';
 import { Unit } from '@/engine/components/Unit';
@@ -432,23 +432,23 @@ export function WebGPUGameCanvas() {
           }
         });
 
-        console.log('[Multiplayer] Command sync enabled');
+        debugNetworking.log('[Multiplayer] Command sync enabled');
       }
 
       // Initialize navmesh for pathfinding (must complete before spawning entities)
       setLoadingStatus('Generating navigation mesh');
       setLoadingProgress(55);
-      console.log('[WebGPUGameCanvas] Generating walkable geometry...');
+      debugInitialization.log('[WebGPUGameCanvas] Generating walkable geometry...');
       const walkableGeometry = terrain.generateWalkableGeometry();
-      console.log('[WebGPUGameCanvas] Walkable geometry generated:', {
+      debugInitialization.log('[WebGPUGameCanvas] Walkable geometry generated:', {
         positions: walkableGeometry.positions.length,
         indices: walkableGeometry.indices.length,
       });
-      console.log('[WebGPUGameCanvas] Initializing navmesh...');
+      debugInitialization.log('[WebGPUGameCanvas] Initializing navmesh...');
       const navMeshSuccess = await game.initializeNavMesh(walkableGeometry.positions, walkableGeometry.indices);
-      console.log('[WebGPUGameCanvas] NavMesh result:', navMeshSuccess);
+      debugInitialization.log('[WebGPUGameCanvas] NavMesh result:', navMeshSuccess);
       if (!navMeshSuccess) {
-        console.error('[WebGPUGameCanvas] NavMesh initialization failed!');
+        debugInitialization.error('[WebGPUGameCanvas] NavMesh initialization failed!');
       }
 
       const fogOfWarEnabled = useGameSetupStore.getState().fogOfWar;
@@ -720,7 +720,7 @@ export function WebGPUGameCanvas() {
 
       // Multiplayer: Remote player quit
       game.eventBus.on('multiplayer:playerQuit', () => {
-        console.log('[Game] Remote player quit the game');
+        debugNetworking.log('[Game] Remote player quit the game');
         useUIStore.getState().addNotification('warning', 'Remote player has left the game', 10000);
       });
 

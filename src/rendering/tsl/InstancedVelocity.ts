@@ -28,6 +28,7 @@
 
 import * as THREE from 'three';
 import { Fn, vec2, vec4, mat4, attribute } from 'three/tsl';
+import { debugInitialization } from '@/utils/debugLogger';
 
 // eslint-disable-next-line @typescript-eslint/no-require-imports
 import * as TSL from 'three/tsl';
@@ -54,7 +55,7 @@ const VELOCITY_ATTRIBUTE_COUNT = 8;
  */
 export function setMaxVertexBuffers(limit: number): void {
   maxVertexBuffers = limit;
-  console.log(`[InstancedVelocity] Max vertex buffers set to ${limit}`);
+  debugInitialization.log(`[InstancedVelocity] Max vertex buffers set to ${limit}`);
 }
 
 // Camera matrix uniforms (shared across all meshes)
@@ -90,7 +91,7 @@ export function setupInstancedVelocity(mesh: THREE.InstancedMesh): boolean {
 
   if (totalAfterVelocity > maxVertexBuffers) {
     // Log warning - this mesh won't have per-instance velocity (TAA will use depth reprojection only)
-    console.warn(
+    debugInitialization.warn(
       `[InstancedVelocity] Skipping velocity setup for mesh with ${existingAttributeCount} attributes. ` +
       `Adding ${VELOCITY_ATTRIBUTE_COUNT} velocity attrs would exceed device limit of ${maxVertexBuffers}. ` +
       `Existing attrs: [${Object.keys(mesh.geometry.attributes).join(', ')}]`
