@@ -299,6 +299,7 @@ export default function GameSetupPage() {
   const [showJoinModal, setShowJoinModal] = useState(false);
   const [joinCode, setJoinCode] = useState('');
   const [playerName, setPlayerName] = useState('Player');
+  const [codeCopied, setCodeCopied] = useState(false);
 
   const handleMusicToggle = useCallback(() => {
     toggleMusic();
@@ -680,12 +681,20 @@ export default function GameSetupPage() {
                   )}
                   {lobbyStatus === 'hosting' && lobbyCode && (
                     <button
-                      onClick={() => navigator.clipboard.writeText(lobbyCode)}
-                      className="flex items-center gap-1.5 px-2 py-1 bg-void-700 hover:bg-void-600 rounded transition group"
+                      onClick={() => {
+                        navigator.clipboard.writeText(lobbyCode);
+                        setCodeCopied(true);
+                        setTimeout(() => setCodeCopied(false), 1500);
+                      }}
+                      className="flex items-center gap-1.5 px-2 py-1 bg-void-700 hover:bg-void-600 rounded transition group relative"
                       title="Click to copy"
                     >
                       <span className="font-mono text-base text-white tracking-wider">{lobbyCode}</span>
-                      <span className="text-void-400 group-hover:text-void-300 text-[10px]">📋</span>
+                      {codeCopied ? (
+                        <span className="text-green-400 text-[10px] animate-pulse">Copied!</span>
+                      ) : (
+                        <span className="text-void-400 group-hover:text-void-300 text-[10px]">📋</span>
+                      )}
                     </button>
                   )}
                   {lobbyStatus === 'error' && (
