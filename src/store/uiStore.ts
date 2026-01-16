@@ -183,6 +183,9 @@ export interface GraphicsSettings {
   lodDistance0: number; // Distance threshold for LOD0 (highest detail)
   lodDistance1: number; // Distance threshold for LOD1 (medium detail)
   // Beyond lodDistance1, LOD2 (lowest detail) is used
+
+  // Frame Rate Limit
+  maxFPS: number; // 0 = unlimited, otherwise caps at this value (30, 60, 120, 144)
 }
 
 // ============================================
@@ -350,6 +353,7 @@ export interface UIState {
   setUpscalingMode: (mode: UpscalingMode) => void;
   setResolutionMode: (mode: ResolutionMode) => void;
   setFixedResolution: (res: FixedResolution) => void;
+  setMaxFPS: (fps: number) => void;
   setRendererAPI: (api: RendererAPI) => void;
   setPreferWebGPU: (prefer: boolean) => void;
   // Graphics preset actions
@@ -503,6 +507,9 @@ export const useUIStore = create<UIState>((set, get) => ({
     lodEnabled: true,
     lodDistance0: 50, // Use LOD0 (highest detail) within 50 units from camera
     lodDistance1: 120, // Use LOD1 (medium detail) between 50-120 units, LOD2 beyond
+
+    // Frame Rate Limit
+    maxFPS: 0, // Unlimited by default
   },
   currentGraphicsPreset: 'high' as GraphicsPresetName, // Default to High preset
   graphicsPresetsLoaded: false,
@@ -854,6 +861,23 @@ export const useUIStore = create<UIState>((set, get) => ({
       graphicsSettings: {
         ...state.graphicsSettings,
         fixedResolution: res,
+      },
+      currentGraphicsPreset: 'custom' as GraphicsPresetName,
+    }));
+    const detected = get().detectCurrentPreset();
+    if (detected !== 'custom') {
+      set({ currentGraphicsPreset: detected });
+    }
+    // Save to localStorage
+    const state = get();
+    saveGraphicsSettings(state.graphicsSettings, state.currentGraphicsPreset);
+  },
+
+  setMaxFPS: (fps) => {
+    set((state) => ({
+      graphicsSettings: {
+        ...state.graphicsSettings,
+        maxFPS: fps,
       },
       currentGraphicsPreset: 'custom' as GraphicsPresetName,
     }));

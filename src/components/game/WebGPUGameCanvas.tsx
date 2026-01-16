@@ -610,10 +610,23 @@ export function WebGPUGameCanvas() {
 
       // Animation loop
       let lastTime = performance.now();
+      let lastRenderTime = 0; // For FPS limiting
       let frameCount = 0;
       let lastFpsLog = performance.now();
 
       const animate = (currentTime: number) => {
+        // Frame rate limiting - check before doing any work
+        const maxFPS = useUIStore.getState().graphicsSettings.maxFPS;
+        if (maxFPS > 0) {
+          const minFrameTime = 1000 / maxFPS;
+          if (currentTime - lastRenderTime < minFrameTime) {
+            // Not enough time has passed, skip this frame
+            requestAnimationFrame(animate);
+            return;
+          }
+        }
+        lastRenderTime = currentTime;
+
         const frameStart = performance.now();
         const deltaTime = currentTime - lastTime;
         const prevTime = lastTime;

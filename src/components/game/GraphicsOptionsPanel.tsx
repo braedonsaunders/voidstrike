@@ -297,6 +297,7 @@ export const GraphicsOptionsPanel = memo(function GraphicsOptionsPanel() {
   const setUpscalingMode = useUIStore((state) => state.setUpscalingMode);
   const setResolutionMode = useUIStore((state) => state.setResolutionMode);
   const setFixedResolution = useUIStore((state) => state.setFixedResolution);
+  const setMaxFPS = useUIStore((state) => state.setMaxFPS);
   // Preset state
   const currentPreset = useUIStore((state) => state.currentGraphicsPreset);
   const presetsLoaded = useUIStore((state) => state.graphicsPresetsLoaded);
@@ -556,8 +557,30 @@ export const GraphicsOptionsPanel = memo(function GraphicsOptionsPanel() {
             format={(v) => v.toFixed(1)}
             suffix="x"
           />
-          <div style={{ fontSize: '9px', color: '#555', marginTop: '2px', marginBottom: '4px' }}>
+          <div style={{ fontSize: '9px', color: '#555', marginTop: '2px', marginBottom: '8px' }}>
             Caps high-DPI rendering (lower = faster on Retina/4K displays)
+          </div>
+
+          {/* Frame Rate Limit */}
+          <div style={{ marginTop: '8px' }}>
+            <span style={{ fontSize: '10px', color: '#666', display: 'block', marginBottom: '4px' }}>
+              Frame Rate Limit
+            </span>
+            <SegmentedControl
+              options={[
+                { value: '0', label: 'Off', hint: 'Unlimited frame rate' },
+                { value: '60', label: '60' },
+                { value: '120', label: '120' },
+                { value: '144', label: '144' },
+              ]}
+              value={graphicsSettings.maxFPS.toString()}
+              onChange={(v) => setMaxFPS(parseInt(v))}
+            />
+            <div style={{ fontSize: '9px', color: '#555', marginTop: '4px' }}>
+              {graphicsSettings.maxFPS === 0
+                ? 'No frame rate limit (uses more power)'
+                : `Limits to ${graphicsSettings.maxFPS} FPS (saves power, reduces heat)`}
+            </div>
           </div>
         </div>
       )}
