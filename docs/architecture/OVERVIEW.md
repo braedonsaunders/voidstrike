@@ -4,11 +4,17 @@
 
 ```
 voidstrike/
-├── .claude/                    # Project documentation
-│   ├── DESIGN.md              # Game design document
-│   ├── SCHEMA.md              # Database schema
+├── .claude/                    # Claude Code instructions
+│   ├── CLAUDE.md              # Main instructions file
 │   ├── TODO.md                # Development roadmap
-│   └── ARCHITECTURE.md        # This file
+│   ├── templates/             # Documentation templates
+│   └── skills/                # Custom skills
+├── docs/                       # Project documentation
+│   ├── architecture/          # Architecture docs (this file)
+│   ├── design/                # Game design docs
+│   ├── reference/             # Technical reference
+│   ├── security/              # Security documentation
+│   └── tools/                 # Development tools
 ├── src/
 │   ├── app/                   # Next.js App Router
 │   │   ├── page.tsx           # Landing page
@@ -26,14 +32,18 @@ voidstrike/
 │   │   │   ├── Minimap.tsx
 │   │   │   ├── CommandCard.tsx
 │   │   │   ├── SelectionPanel.tsx
-│   │   │   ├── ProductionQueuePanel.tsx # Building production UI
 │   │   │   ├── ResourcePanel.tsx
 │   │   │   ├── GraphicsOptionsPanel.tsx # Graphics settings panel
 │   │   │   ├── SoundOptionsPanel.tsx    # Audio settings panel with music controls
 │   │   │   ├── DebugMenuPanel.tsx       # Debug logging settings (disabled in multiplayer)
 │   │   │   ├── PerformanceDashboard.tsx # Real-time performance metrics display
 │   │   │   ├── PerformancePanel.tsx     # Performance monitoring panel wrapper
-│   │   │   └── PerformanceRecorder.tsx  # 30-second performance data recorder with export
+│   │   │   ├── PerformanceRecorder.tsx  # 30-second performance data recorder with export
+│   │   │   ├── BattleSimulatorPanel.tsx # Unit battle simulation tool
+│   │   │   ├── TechTreePanel.tsx        # Tech tree visualization
+│   │   │   ├── IdleWorkerButton.tsx     # Idle worker selection button
+│   │   │   ├── KeyboardShortcutsPanel.tsx # Hotkeys reference
+│   │   │   └── MultiplayerOverlay.tsx   # Multiplayer connection status
 │   │   └── ui/                # Reusable UI components
 │   ├── engine/
 │   │   ├── core/
@@ -56,7 +66,6 @@ voidstrike/
 │   │   │   ├── ResourceSystem.ts        # Resource gathering
 │   │   │   ├── VisionSystem.ts          # Fog of war visibility
 │   │   │   ├── AbilitySystem.ts         # Unit abilities & cooldowns
-│   │   │   ├── AISystem.ts              # Basic AI opponent
 │   │   │   ├── EnhancedAISystem.ts      # Advanced AI with build orders & counter-building
 │   │   │   ├── AIMicroSystem.ts         # AI unit micro (kiting, focus fire, positioning)
 │   │   │   ├── UnitMechanicsSystem.ts   # Transform, cloak, transport, heal
@@ -75,27 +84,33 @@ voidstrike/
 │   │   │   ├── Resource.ts
 │   │   │   ├── Ability.ts          # Unit abilities component
 │   │   │   └── Wall.ts             # Wall/gate component
-│   │   └── pathfinding/
-│   │       ├── RecastNavigation.ts  # WASM-based navmesh pathfinding & crowd simulation
-│   │       ├── Grid.ts
-│   │       └── SpatialGrid.ts
+│   │   ├── pathfinding/
+│   │   │   ├── RecastNavigation.ts  # WASM-based navmesh pathfinding & crowd simulation
+│   │   │   ├── Grid.ts
+│   │   │   └── SpatialGrid.ts
+│   │   └── definitions/
+│   │       ├── DefinitionRegistry.ts # Centralized config access
+│   │       ├── DefinitionLoader.ts   # Config loading
+│   │       └── DefinitionValidator.ts # Config validation
 │   ├── audio/
 │   │   ├── AudioManager.ts    # Sound effects management
 │   │   └── MusicPlayer.ts     # Dynamic music system with auto-discovery
 │   ├── assets/
 │   │   └── AssetManager.ts    # 3D asset generation & loading
 │   ├── rendering/
-│   │   ├── Scene.ts           # Three.js scene setup
 │   │   ├── Camera.ts          # RTS camera controller
 │   │   ├── Terrain.ts         # Terrain mesh with procedural details
 │   │   ├── UnitRenderer.ts    # Unit rendering with player colors
 │   │   ├── BuildingRenderer.ts # Building mesh rendering
+│   │   ├── ResourceRenderer.ts # Resource node rendering
 │   │   ├── FogOfWar.ts        # Fog of war visibility system
 │   │   ├── RallyPointRenderer.ts # Building rally point visuals
 │   │   ├── CommandQueueRenderer.ts # Shift-click waypoint visualization
-│   │   ├── BuildingPlacementPreview.ts # SC2-style placement grid + ghost
+│   │   ├── BuildingPlacementPreview.ts # Placement grid + ghost
 │   │   ├── WallPlacementPreview.ts # Wall line drawing preview
-│   │   └── effects/           # World-class battle effects module
+│   │   ├── EnvironmentManager.ts # Sky, lighting, environment
+│   │   ├── LightPool.ts       # Dynamic light pooling
+│   │   └── effects/           # Battle effects module
 │   │       ├── index.ts       # Module exports
 │   │       ├── BattleEffectsRenderer.ts # Projectile trails, explosions, decals
 │   │       ├── AdvancedParticleSystem.ts # GPU instanced particles (fire, smoke, sparks)
@@ -108,10 +123,6 @@ voidstrike/
 │   │       ├── index.ts       # System exports
 │   │       ├── DamageNumberSystem.ts # Consolidated damage number display
 │   │       └── ScreenEffectsSystem.ts # Chromatic aberration, kill streaks, etc.
-│   ├── input/
-│   │   ├── InputManager.ts    # Input abstraction
-│   │   ├── Selection.ts       # Box selection
-│   │   └── Hotkeys.ts         # Keyboard shortcuts
 │   ├── data/
 │   │   ├── units/             # Unit definitions
 │   │   ├── buildings/         # Building definitions
@@ -150,8 +161,8 @@ voidstrike/
 │   │   └── decorations/       # Decoration models
 │   ├── textures/              # Terrain, unit textures
 │   └── audio/                 # Sound effects, music
-├── workers/
-│   └── (available for future workers)
+├── src/workers/
+│   └── countdownWorker.ts     # Countdown timer Web Worker
 └── tests/
     └── ...                    # Test files
 ```
@@ -507,7 +518,7 @@ The game uses Three.js WebGPU Renderer with automatic WebGL fallback, powered by
 │  ┌─────────────────────────────────────────────────────────┐   │
 │  │  • WebGPURenderer with automatic WebGL2 fallback        │   │
 │  │  • TSL (Three.js Shading Language) for all shaders      │   │
-│  │  • GPU-computed particle systems via TSL EffectEmitter  │   │
+│  │  • GPU-computed particle systems via TSL ParticleSystem │   │
 │  │  • Node-based post-processing (bloom, SSAO, FXAA)       │   │
 │  │  • Async rendering for non-blocking frame submission    │   │
 │  └─────────────────────────────────────────────────────────┘   │
@@ -570,24 +581,19 @@ Located in `src/rendering/tsl/`:
    - Macro color variation across the map
    - **Note**: Displacement maps removed to stay under WebGPU's 16-texture limit
 
-7. **EffectEmitter.ts** - GPU particle system
+7. **ParticleSystem.ts** - GPU particle system
    - TSL compute shaders for particle simulation
    - Burst and continuous emission modes
    - Physics-based particle movement
 
-### Visual Systems (GLSL-based)
-
-Located in `src/rendering/`:
-
-1. **SC2SelectionSystem.ts** - Animated glowing selection rings
-   - Custom GLSL shaders for pulsing glow effects
+8. **SelectionMaterial.ts** - Unit selection visuals
+   - Animated glowing selection rings
    - Team-colored rings with shimmer animation
-   - Multiple concentric rings per selected unit
    - Hover highlight indicators
 
 ### Selection System (`SelectionSystem.ts`)
 
-World-class selection accuracy with multiple improvements:
+Selection with multiple improvements:
 - **Screen-space selection** - Box/click selection done in screen coordinates for perspective-accurate selection
 - **Selection radius buffer** - Uses circle-rectangle intersection so partial overlaps count as selected
 - **Visual height support** - Flying units can be selected at their visual position (8 units above ground)
@@ -595,20 +601,22 @@ World-class selection accuracy with multiple improvements:
 - **Iterative terrain convergence** - 6 iterations with early termination for accurate screen-to-world mapping
 - **Priority-based selection** - Units are selected over buildings when both are in the selection box
 
-2. **SC2ParticleSystem.ts** - GPU-instanced particle effects
+### Battle Effects (`src/rendering/effects/`)
+
+1. **AdvancedParticleSystem.ts** - GPU-instanced particle effects
    - Muzzle flashes, projectile trails
    - Explosion particles with debris
    - Impact sparks and energy effects
    - Death explosions with smoke
    - Up to 5000 particles via instanced mesh
 
-3. **SC2PostProcessing.ts** - Cinematic post-processing
+2. **PostProcessing.ts** (`src/rendering/tsl/`) - Cinematic post-processing
    - HDR bloom for energy weapons and explosions
    - Subtle vignette for focus
    - Color grading and contrast
    - ACES tone mapping
-   - Subtle film grain
-   - Uses dedicated orthographic camera for fullscreen quad rendering
+   - GTAO, SSR, SSGI, Volumetric Fog
+   - FXAA/TRAA anti-aliasing
 
 4. **VehicleEffectsSystem.ts** - Continuous vehicle visual effects
    - Configuration-driven via assets.json (per-unit effect definitions)
@@ -626,7 +634,7 @@ World-class selection accuracy with multiple improvements:
    - Speed-scaled emission for dynamic effects
    - Integrates with AdvancedParticleSystem for GPU-instanced rendering
 
-5. **shaders/SC2TerrainShader.ts** - Advanced terrain rendering
+5. **shaders/TerrainShader.ts** - Advanced terrain rendering
    - Multi-layer procedural texturing (grass, dirt, rock, cliff)
    - Voronoi-based rock cracks and pebble patterns
    - PBR-like lighting with Fresnel and GGX specular

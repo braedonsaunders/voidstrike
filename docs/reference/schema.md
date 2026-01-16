@@ -1,6 +1,8 @@
-# VOIDSTRIKE - Database Schema
+# VOIDSTRIKE - Schema Reference
 
-## Supabase PostgreSQL Schema
+> **Note:** The PostgreSQL tables below are reference documentation. The game now uses serverless P2P multiplayer via Nostr relays - no database required. The TypeScript interfaces in the Network Types section are the active schema.
+
+## Historical: PostgreSQL Schema (Not Used)
 
 ### Players Table
 ```sql

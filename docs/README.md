@@ -19,11 +19,10 @@ docs/
 │   └── textures.md     # Texture specifications
 ├── security/           # Security documentation
 │   └── SECURITY_AUDIT.md
-├── tools/              # Development tools and scripts
-│   ├── blender/        # Blender scripts and workflows
-│   ├── asset-pipeline/ # Asset processing tools
-│   └── debug/          # Debug and testing tools
-└── AI_ANALYSIS.md      # AI-generated codebase analysis
+└── tools/              # Development tools and scripts
+    ├── blender/        # Blender scripts and workflows
+    ├── asset-pipeline/ # Asset processing tools
+    └── debug/          # Debug and testing tools
 ```
 
 ## Quick Links

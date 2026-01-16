@@ -1,16 +1,36 @@
 # VOIDSTRIKE Security Audit Report
 
-**Date:** January 15, 2026
-**Scope:** MVP Launch Readiness
-**Auditor:** Automated Security Review
+> ⚠️ **HISTORICAL DOCUMENT - ARCHITECTURE CHANGED**
+>
+> This audit was created for the **old Supabase-based architecture** on January 15, 2026.
+> The same day, the project was refactored to use **serverless P2P multiplayer** via Nostr relays.
+>
+> **What's now irrelevant:**
+> - Supabase authentication (removed)
+> - Database rate limiting (no database)
+> - Password policies (no passwords - Ed25519 keys)
+> - Auth endpoint security (no auth endpoints)
+>
+> **What was fixed:**
+> - ✅ Next.js upgraded from 14.0.4 to 16.1.2 (critical vulnerability fixed)
+>
+> **Still relevant:**
+> - Security headers recommendation (partially implemented)
 
 ---
 
-## Executive Summary
+**Original Date:** January 15, 2026
+**Scope:** MVP Launch Readiness (Pre-Architecture Change)
+**Status:** SUPERSEDED
+
+---
+
+## Executive Summary (Historical)
 
 This application has **one critical vulnerability** that must be fixed before MVP launch, along with several medium-priority security hardening items. The codebase is generally well-structured and avoids many common "slop AI" security mistakes.
 
-### Verdict: NOT READY for MVP launch until Critical issue is fixed
+### Original Verdict: NOT READY for MVP launch until Critical issue is fixed
+### Current Status: Critical issue FIXED (Next.js upgraded)
 
 ---
 

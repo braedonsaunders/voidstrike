@@ -10,6 +10,8 @@ This document lists all 3D models required for VOIDSTRIKE, with AI generation pr
 - **Preferred:** GLB (binary GLTF 2.0)
 - **Alternative:** GLTF with embedded textures
 - **Max file size:** 5MB per model (optimize if larger)
+- **LOD Naming:** Files use `{name}_LOD0.glb`, `{name}_LOD1.glb`, `{name}_LOD2.glb` suffix
+  - Example: `trooper_LOD0.glb`, `trooper_LOD1.glb`, `trooper_LOD2.glb`
 
 ### General Specifications
 | Property | Requirement |

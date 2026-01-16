@@ -144,7 +144,7 @@ This is the magic step - Quadriflow creates clean quad topology automatically.
 
 Save this script and run it in Blender's Text Editor for batch processing.
 
-See: `blender_auto_retopo.py` in this directory.
+See: `auto_retopo.py` in this directory.
 
 ---
 

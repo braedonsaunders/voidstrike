@@ -75,26 +75,26 @@ This document contains all audio specifications, AI prompts for generation, and 
 - [x] `combat/medium_explosion.mp3`
 - [x] `combat/large_explosion.mp3`
 
-### Combat - Deaths ⏳ Needs Generation
-- [ ] `combat/death.mp3`
-- [ ] `combat/death_mech.mp3`
-- [ ] `combat/death_bio.mp3`
+### Combat - Deaths ✅ Uses Explosion Sounds
+- [x] `unit_death` → `combat/small_explosion.mp3`
+- [x] `unit_death_mech` → `combat/medium_explosion.mp3`
+- [x] `unit_death_bio` → `combat/small_explosion.mp3`
 
-### Unit Commands ⏳ Needs Generation
-- [ ] `unit/move.mp3`
-- [ ] `unit/attack.mp3`
-- [ ] `unit/ready.mp3`
+### Unit Commands ⚠️ Using Placeholders
+- [x] `unit_move` → `ui/click.mp3` (placeholder)
+- [x] `unit_attack` → `ui/click.mp3` (placeholder)
+- [x] `unit_ready` → `ui/notification.mp3` (placeholder)
 - [ ] `unit/mining.mp3`
 - [ ] `unit/building.mp3`
 
-### Building Sounds ⏳ Needs Generation
-- [ ] `building/place.mp3`
+### Building Sounds ⚠️ Partial (Using Placeholders)
+- [x] `building_place` → `ui/click.mp3` (placeholder)
+- [x] `production_start` → `ui/click.mp3` (placeholder)
 - [ ] `building/construct.mp3`
-- [ ] `building/production.mp3`
 - [ ] `building/powerup.mp3`
 - [ ] `building/powerdown.mp3`
 
-### Ambient Sounds ⏳ Needs Generation
+### Ambient Sounds ⏳ Not Configured
 - [ ] `ambient/wind.mp3`
 - [ ] `ambient/nature.mp3`
 - [ ] `ambient/desert.mp3`

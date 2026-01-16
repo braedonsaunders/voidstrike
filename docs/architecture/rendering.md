@@ -10,7 +10,7 @@ VOIDSTRIKE uses Three.js with WebGPU renderer and TSL (Three.js Shading Language
 - **WebGPU Renderer** with WebGL2 fallback
 - **TSL (Three.js Shading Language)** for shader authoring
 - Post-processing pipeline using `three/webgpu` PostProcessing class
-- **Tone Mapping:** Renderer uses `NoToneMapping`; all HDR→SDR conversion handled by PostProcessing via ACES Filmic
+- **Tone Mapping:** Renderer uses `ACESFilmicToneMapping` with exposure 1.0
 
 ### Post-Processing Effects (Implemented)
 
@@ -119,10 +119,10 @@ this.renderer.outputColorSpace = THREE.LinearSRGBColorSpace;
 this.renderer.outputColorSpace = originalColorSpace;
 ```
 
-**Tone Mapping Architecture (AAA Standard):**
-- `renderer.toneMapping = NoToneMapping` (disabled on Three.js renderer)
-- PostProcessing handles ALL tone mapping via ACES Filmic in color grading pass
-- Prevents double-application of exposure/tone mapping (was causing washed out colors)
+**Tone Mapping Architecture:**
+- `renderer.toneMapping = ACESFilmicToneMapping` (Three.js renderer)
+- `renderer.toneMappingExposure = 1.0`
+- PostProcessing also applies ACES Filmic in color grading pass
 - Order: Linear HDR → Exposure → Saturation → Contrast → ACES Tone Map → Vignette
 
 **AAA Dual-Pipeline Architecture for TAA + FSR:**
