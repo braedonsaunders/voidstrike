@@ -35,16 +35,13 @@ export async function getRelays(count: number = 6): Promise<string[]> {
   if (healthyRelays.length === 0) {
     // Fallback: return top relays even if health check failed (might work)
     console.warn('[Nostr] No healthy relays found, using fallback list');
-    const fallback = PUBLIC_RELAYS.slice(0, count);
-    console.log(`[Nostr] Using ${fallback.length} fallback relays:`, fallback);
-    return fallback;
+    console.log(`[Nostr] Using ${PUBLIC_RELAYS.length} fallback relays:`, PUBLIC_RELAYS);
+    return PUBLIC_RELAYS; // Return ALL relays as fallback
   }
 
-  // Shuffle healthy relays for load distribution
-  const shuffled = healthyRelays.sort(() => Math.random() - 0.5);
-
-  // Return requested count
-  const selected = shuffled.slice(0, Math.min(count, shuffled.length));
+  // DON'T shuffle - use consistent ordering so both host and guest use same relays
+  // This ensures events propagate correctly between them
+  const selected = healthyRelays.slice(0, Math.min(count, healthyRelays.length));
 
   console.log(`[Nostr] Using ${selected.length} healthy relays:`, selected);
 

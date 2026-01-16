@@ -6,6 +6,11 @@
  * 2. Others can join your lobby using your code
  * 3. When they join, they fill an "Open" slot
  * 4. You can also join someone else's lobby using their code
+ *
+ * IMPORTANT: Uses single-letter tags for relay compatibility.
+ * Nostr relays only index single-letter tags by default (NIP-12).
+ * - 't' tag: lobby code (e.g., ['t', 'ABCD'])
+ * - 'p' tag: target pubkey for direct messages
  */
 
 import { useState, useCallback, useRef, useEffect } from 'react';
@@ -18,6 +23,7 @@ const CODE_ALPHABET = 'ABCDEFGHJKMNPQRSTUVWXYZ';
 const CODE_LENGTH = 4;
 
 // Nostr event kinds for lobby signaling
+// Using high kind numbers to avoid conflicts with standard Nostr apps
 const EVENT_KINDS = {
   LOBBY_HOST: 30430,    // Host announces lobby
   LOBBY_JOIN: 30431,    // Guest requests to join
@@ -149,13 +155,16 @@ export function useLobby(
 
         setLobbyCode(code);
 
+        console.log('[Lobby] Using relays:', relays);
+
         // Publish lobby announcement
+        // Use 't' tag for lobby code (single-letter tags are indexed by relays per NIP-12)
         const lobbyEvent = finalizeEvent({
           kind: EVENT_KINDS.LOBBY_HOST,
           created_at: Math.floor(Date.now() / 1000),
           tags: [
             ['d', `voidstrike-lobby-${code}`],
-            ['code', code],
+            ['t', code], // Use 't' tag for filtering - relays index single-letter tags
           ],
           content: JSON.stringify({ code }),
         }, secretKey);
@@ -166,19 +175,22 @@ export function useLobby(
         }
         console.log('[Lobby] Published lobby with code:', code);
 
-        // Subscribe to join requests FIRST (before publishing)
+        // Subscribe to join requests
         // Use a wide time window to catch events across network delays
         const subscriptionStartTime = Math.floor(Date.now() / 1000) - 300; // 5 minutes back
         const filter: Filter = {
           kinds: [EVENT_KINDS.LOBBY_JOIN],
-          '#code': [code],
+          '#t': [code], // Filter by 't' tag containing lobby code
           since: subscriptionStartTime,
         };
 
-        console.log('[Lobby] Subscribing to join requests for code:', code);
+        console.log('[Lobby] Subscribing to join requests for code:', code, 'with filter:', JSON.stringify(filter));
         const sub = pool.subscribeMany(relays, filter, {
+          oneose: () => {
+            console.log('[Lobby] Join subscription caught up with stored events (EOSE). Now listening for new events.');
+          },
           onevent: async (event: NostrEvent) => {
-            console.log('[Lobby] Received join request');
+            console.log('[Lobby] >>> Received join request event:', event.id.slice(0, 8) + '...', 'tags:', JSON.stringify(event.tags));
             try {
               const data = JSON.parse(event.content);
               const guestPubkey = event.pubkey;
@@ -223,7 +235,7 @@ export function useLobby(
                 created_at: Math.floor(Date.now() / 1000),
                 tags: [
                   ['p', guestPubkey],
-                  ['code', code],
+                  ['t', code], // Use 't' tag for lobby code
                 ],
                 content: JSON.stringify({
                   sdp: offer.sdp,
@@ -320,32 +332,19 @@ export function useLobby(
       const relays = relaysRef.current.length > 0 ? relaysRef.current : await getRelays(6);
       if (relaysRef.current.length === 0) relaysRef.current = relays;
 
-      // Publish join request
-      const joinEvent = finalizeEvent({
-        kind: EVENT_KINDS.LOBBY_JOIN,
-        created_at: Math.floor(Date.now() / 1000),
-        tags: [
-          ['code', normalizedCode],
-        ],
-        content: JSON.stringify({ name: playerName }),
-      }, secretKey);
+      console.log('[Lobby] Guest using relays:', relays);
+      console.log('[Lobby] Guest pubkey:', pubkey.slice(0, 8) + '...');
 
-      const published = await publishToRelays(pool, relays, joinEvent);
-      if (!published) {
-        throw new Error('Failed to publish join request to any relay');
-      }
-      console.log('[Lobby] Sent join request for code:', normalizedCode);
-
-      // Listen for offer from host - start subscription BEFORE sending join request
-      // Wide time window to catch events
+      // Subscribe for offer FIRST (before sending join request)
+      // This ensures we catch the offer even if host responds quickly
       const offerFilter: Filter = {
         kinds: [EVENT_KINDS.WEBRTC_OFFER],
         '#p': [pubkey],
-        '#code': [normalizedCode],
+        '#t': [normalizedCode], // Use 't' tag for lobby code
         since: Math.floor(Date.now() / 1000) - 300, // 5 minutes back
       };
 
-      console.log('[Lobby] Subscribing for offers with pubkey:', pubkey.slice(0, 8) + '...');
+      console.log('[Lobby] Subscribing for offers with filter:', JSON.stringify(offerFilter));
 
       let handled = false;
 
@@ -354,7 +353,7 @@ export function useLobby(
           if (handled) return;
           handled = true;
 
-          console.log('[Lobby] Received offer from host');
+          console.log('[Lobby] Received offer from host:', event.id.slice(0, 8) + '...');
           try {
             const data = JSON.parse(event.content);
             const hostPubkey = event.pubkey;
@@ -411,12 +410,36 @@ export function useLobby(
             console.log('[Lobby] Sent answer to host');
 
           } catch (e) {
-            console.error('[Lobby] Failed to join:', e);
+            console.error('[Lobby] Failed to process offer:', e);
             setError('Failed to connect to host');
             setStatus('error');
           }
         },
+        oneose: () => {
+          console.log('[Lobby] Offer subscription caught up (EOSE)');
+        },
       });
+
+      // Small delay to ensure subscription is active before publishing join request
+      await new Promise(resolve => setTimeout(resolve, 500));
+
+      // Publish join request with 't' tag for lobby code
+      const joinEvent = finalizeEvent({
+        kind: EVENT_KINDS.LOBBY_JOIN,
+        created_at: Math.floor(Date.now() / 1000),
+        tags: [
+          ['t', normalizedCode], // Use 't' tag for filtering by relays
+        ],
+        content: JSON.stringify({ name: playerName }),
+      }, secretKey);
+
+      console.log('[Lobby] Publishing join request with tags:', JSON.stringify(joinEvent.tags));
+      const published = await publishToRelays(pool, relays, joinEvent);
+      if (!published) {
+        offerSub.close();
+        throw new Error('Failed to publish join request to any relay');
+      }
+      console.log('[Lobby] Sent join request for code:', normalizedCode);
 
       // Timeout after 30 seconds
       setTimeout(() => {
