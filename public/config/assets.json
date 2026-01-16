@@ -206,7 +206,7 @@
     },
     "devastator": {
       "model": "/models/units/devastator_LOD0.glb",
-      "scale": 1.8,
+      "scale": 2.4,
       "rotation": {
         "x": 0,
         "y": 180,
@@ -464,7 +464,7 @@
       "model": "/models/units/dreadnought_LOD0.glb",
       "scale": 3.0,
       "rotation": { "x": 0, "y": 90, "z": 0 },
-      "airborneHeight": 18,
+      "airborneHeight": 22,
       "animations": {
         "idle": [
           "idle",
