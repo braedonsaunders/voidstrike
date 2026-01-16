@@ -35,13 +35,14 @@ const AIR_UNIT_HEIGHT = 8;
 const GROUND_EFFECT_OFFSET = 0.15; // Height above terrain for ground effects
 const POOL_SIZE = 150;
 
-// Render order constants
+// Render order constants - units render at 50
 const RENDER_ORDER = {
   GROUND_DECAL: 15,
   GROUND_EFFECT: 25,
-  PROJECTILE: 65,
-  AIR_EFFECT: 85,
-  GLOW: 95,
+  EXPLOSION: 35,       // Explosions below units
+  PROJECTILE: 65,      // Projectiles above units so they're visible
+  AIR_EFFECT: 75,      // Air effects above ground units
+  GLOW: 90,            // Glow effects high but still below UI
   UI: 100,
 } as const;
 
@@ -419,14 +420,14 @@ export class BattleEffectsRenderer {
     this.debrisPool = this.createMeshPool(200, () => {
       const mesh = new THREE.Mesh(this.debrisGeometry, this.debrisMaterial.clone());
       mesh.visible = false;
-      mesh.renderOrder = RENDER_ORDER.PROJECTILE;
+      mesh.renderOrder = RENDER_ORDER.EXPLOSION;
       return mesh;
     });
 
     this.explosionCorePool = this.createMeshPool(30, () => {
       const mesh = new THREE.Mesh(this.explosionCoreGeometry, this.explosionCoreMaterial.clone());
       mesh.visible = false;
-      mesh.renderOrder = RENDER_ORDER.GLOW;
+      mesh.renderOrder = RENDER_ORDER.EXPLOSION;
       return mesh;
     });
 
@@ -434,7 +435,7 @@ export class BattleEffectsRenderer {
       const mesh = new THREE.Mesh(this.shockwaveGeometry, this.shockwaveMaterial.clone());
       mesh.visible = false;
       mesh.rotation.x = -Math.PI / 2;
-      mesh.renderOrder = RENDER_ORDER.GROUND_EFFECT;
+      mesh.renderOrder = RENDER_ORDER.EXPLOSION;
       return mesh;
     });
 

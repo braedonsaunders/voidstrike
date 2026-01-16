@@ -3,7 +3,7 @@ import { EventBus } from '@/engine/core/EventBus';
 import { Game } from '@/engine/core/Game';
 import { Transform } from '@/engine/components/Transform';
 import { useGameStore } from '@/store/gameStore';
-import { useGameSetupStore, isLocalPlayer, getLocalPlayerId, enableSpectatorMode } from '@/store/gameSetupStore';
+import { useGameSetupStore, isLocalPlayer, getLocalPlayerId, enableSpectatorMode, isBattleSimulatorMode } from '@/store/gameSetupStore';
 import { useProjectionStore } from '@/store/projectionStore';
 import { MusicPlayer } from '@/audio/MusicPlayer';
 import { DamageNumberSystem } from '../systems/DamageNumberSystem';
@@ -214,10 +214,11 @@ export class OverlayScene extends Phaser.Scene {
       }
     });
 
-    // Player takes damage - show vignette (only for local player)
+    // Player takes damage - show vignette (only for local player, not in battle simulator)
     this.eventBus.on('player:damage', (data: { damage: number; position?: { x: number; y: number }; playerId?: string }) => {
-      // Skip in spectator mode or if not local player
+      // Skip in spectator mode, battle simulator, or if not local player
       if (this.isSpectator()) return;
+      if (isBattleSimulatorMode()) return;
       if (data.playerId && !isLocalPlayer(data.playerId)) return;
 
       this.addScreenEffect({
@@ -273,11 +274,12 @@ export class OverlayScene extends Phaser.Scene {
       }
     });
 
-    // Player unit takes damage - show vignette (only for local player)
+    // Player unit takes damage - show vignette (only for local player, not in battle simulator)
     // NOTE: This is a second listener for the same event - both will fire
     this.eventBus.on('player:damage', (data: { damage: number; position?: { x: number; y: number }; playerId?: string }) => {
-      // Skip in spectator mode or if not local player
+      // Skip in spectator mode, battle simulator, or if not local player
       if (this.isSpectator()) return;
+      if (isBattleSimulatorMode()) return;
       if (data.playerId && !isLocalPlayer(data.playerId)) return;
 
       this.addScreenEffect({

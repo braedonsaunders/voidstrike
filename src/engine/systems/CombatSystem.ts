@@ -197,6 +197,8 @@ export class CombatSystem extends System {
             entityId: attacker.id,
             position: { x: transform.x, y: transform.y },
             isPlayerUnit: selectable?.playerId ? isLocalPlayer(selectable.playerId) : false,
+            isFlying: unit.isFlying,
+            playerId: selectable?.playerId,
           });
         }
         continue;
