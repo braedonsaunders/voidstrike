@@ -24,6 +24,7 @@ interface InstancedUnitGroup {
   dummy: THREE.Object3D; // Reusable for matrix calculations
   yOffset: number; // Y offset to apply when positioning (accounts for model origin)
   rotationOffset: number; // Y rotation offset to apply (accounts for model facing direction)
+  lastActiveFrame: number; // Frame number when this group was last used (for cleanup)
 }
 
 // Per-unit animated mesh data (for animated units)
@@ -49,6 +50,7 @@ interface UnitOverlay {
 
 const MAX_INSTANCES_PER_TYPE = 100; // Max units of same type per player
 const AIR_UNIT_HEIGHT = 8; // Height for flying units (matches building lift-off height)
+const INACTIVE_MESH_CLEANUP_FRAMES = 180; // Remove meshes after 3 seconds (60fps) of inactivity
 
 // Default animation name mappings (used when JSON config not available)
 // Each game action maps to a list of possible animation clip names to search for
@@ -81,6 +83,9 @@ export class UnitRenderer {
 
   // PERF: Pre-allocated Set for tracking current entity IDs to avoid per-frame allocation
   private readonly _currentIds: Set<number> = new Set();
+
+  // Frame counter for tracking inactive meshes
+  private frameCount: number = 0;
 
   // Shared resources
   private selectionGeometry: THREE.RingGeometry;
@@ -474,6 +479,7 @@ export class UnitRenderer {
         dummy: new THREE.Object3D(),
         yOffset: meshWorldY,
         rotationOffset: meshWorldRotationY,
+        lastActiveFrame: this.frameCount,
       };
 
       debugAssets.log(`[UnitRenderer] Created instanced group for ${unitType} LOD${lodLevel}: yOffset=${meshWorldY.toFixed(3)}, rotationOffset=${meshWorldRotationY.toFixed(3)}`);
@@ -549,6 +555,8 @@ export class UnitRenderer {
 
   public update(deltaTime: number = 1/60): void {
     const updateStart = performance.now();
+    this.frameCount++;
+
     // TAA: Sort entities by ID for stable instance ordering
     // This ensures previous/current matrix pairs are aligned correctly for velocity
     const entities = [...this.world.getEntitiesWith('Transform', 'Unit')].sort((a, b) => a.id - b.id);
@@ -746,6 +754,27 @@ export class UnitRenderer {
         group.mesh.instanceMatrix.needsUpdate = true;
         // TAA: Commit current matrices to velocity attributes AFTER all updates
         commitInstanceMatrices(group.mesh);
+        // Track when this group was last used
+        group.lastActiveFrame = this.frameCount;
+      }
+    }
+
+    // PERF: Clean up instanced groups that have been inactive for too long
+    // This prevents draw call accumulation when units die or change LOD levels
+    for (const [key, group] of this.instancedGroups) {
+      const framesInactive = this.frameCount - group.lastActiveFrame;
+      if (framesInactive > INACTIVE_MESH_CLEANUP_FRAMES) {
+        this.scene.remove(group.mesh);
+        // Dispose velocity buffer attributes
+        disposeInstancedVelocity(group.mesh);
+        // Only dispose materials (geometry is shared with asset cache)
+        if (group.mesh.material instanceof THREE.Material) {
+          group.mesh.material.dispose();
+        } else if (Array.isArray(group.mesh.material)) {
+          group.mesh.material.forEach(m => m.dispose());
+        }
+        this.instancedGroups.delete(key);
+        debugPerformance.log(`[UnitRenderer] Cleaned up inactive mesh: ${key} (inactive for ${framesInactive} frames)`);
       }
     }
 
@@ -864,6 +893,8 @@ export class UnitRenderer {
     // other meshes try to use the now-invalid GPU buffer.
     for (const group of this.instancedGroups.values()) {
       this.scene.remove(group.mesh);
+      // Dispose velocity buffer attributes to prevent memory leak
+      disposeInstancedVelocity(group.mesh);
       // Only dispose materials (they are cloned per-instance group)
       if (group.mesh.material instanceof THREE.Material) {
         group.mesh.material.dispose();
@@ -937,6 +968,8 @@ export class UnitRenderer {
     // NOTE: Do NOT dispose geometry - it's shared with the asset cache
     for (const group of this.instancedGroups.values()) {
       this.scene.remove(group.mesh);
+      // Dispose velocity buffer attributes to prevent memory leak
+      disposeInstancedVelocity(group.mesh);
       // Only dispose materials
       if (group.mesh.material instanceof THREE.Material) {
         group.mesh.material.dispose();
