@@ -107,6 +107,7 @@ export const UNIT_DEFINITIONS: Record<string, UnitDefinition> = {
     buildTime: 12,
     supplyCost: 1,
     speed: 4,
+    acceleration: 50, // Workers have visible but quick acceleration
     sightRange: 8,
     attackRange: 1,
     attackDamage: 5,
@@ -140,7 +141,8 @@ export const UNIT_DEFINITIONS: Record<string, UnitDefinition> = {
     vespeneCost: 0,
     buildTime: 18,
     supplyCost: 1,
-    speed: 4.5,
+    speed: 3.15, // SC2 Marine base speed
+    acceleration: 1000, // Instant acceleration like SC2 ground units
     sightRange: 9,
     attackRange: 5,
     attackDamage: 6,
@@ -172,7 +174,8 @@ export const UNIT_DEFINITIONS: Record<string, UnitDefinition> = {
     vespeneCost: 25,
     buildTime: 21,
     supplyCost: 2,
-    speed: 3.5,
+    speed: 3.15, // SC2 Marauder base speed
+    acceleration: 1000, // Instant acceleration like SC2 ground units
     sightRange: 10,
     attackRange: 6,
     attackDamage: 10,
@@ -200,7 +203,8 @@ export const UNIT_DEFINITIONS: Record<string, UnitDefinition> = {
     vespeneCost: 50,
     buildTime: 32,
     supplyCost: 1,
-    speed: 5.25,
+    speed: 5.25, // SC2 Reaper speed
+    acceleration: 1000, // Instant acceleration like SC2 ground units
     sightRange: 9,
     attackRange: 5,
     attackDamage: 4,
@@ -228,7 +232,8 @@ export const UNIT_DEFINITIONS: Record<string, UnitDefinition> = {
     vespeneCost: 125,
     buildTime: 29,
     supplyCost: 2,
-    speed: 3.94,
+    speed: 3.94, // SC2 Ghost speed
+    acceleration: 1000, // Instant acceleration like SC2 ground units
     sightRange: 11,
     attackRange: 6,
     attackDamage: 10,
@@ -258,7 +263,8 @@ export const UNIT_DEFINITIONS: Record<string, UnitDefinition> = {
     vespeneCost: 0,
     buildTime: 21,
     supplyCost: 2,
-    speed: 5.95,
+    speed: 5.95, // SC2 Hellion speed
+    acceleration: 800, // Vehicles have near-instant but slightly visible acceleration
     sightRange: 10,
     attackRange: 5,
     attackDamage: 8,
@@ -290,7 +296,8 @@ export const UNIT_DEFINITIONS: Record<string, UnitDefinition> = {
     vespeneCost: 125,
     buildTime: 32,
     supplyCost: 3,
-    speed: 3.15,
+    speed: 3.15, // SC2 Siege Tank speed
+    acceleration: 800, // Vehicles have near-instant but slightly visible acceleration
     sightRange: 11,
     attackRange: 7,
     attackDamage: 15,
@@ -326,7 +333,8 @@ export const UNIT_DEFINITIONS: Record<string, UnitDefinition> = {
     vespeneCost: 200,
     buildTime: 43,
     supplyCost: 6,
-    speed: 2.62,
+    speed: 2.62, // SC2 Thor speed
+    acceleration: 600, // Heavy mechs accelerate slower but still responsive
     sightRange: 11,
     attackRange: 7,
     attackDamage: 30,
@@ -354,7 +362,8 @@ export const UNIT_DEFINITIONS: Record<string, UnitDefinition> = {
     vespeneCost: 100,
     buildTime: 30,
     supplyCost: 2,
-    speed: 4.13,
+    speed: 3.5, // SC2 Medivac speed
+    acceleration: 3.15, // SC2 Medivac acceleration - floaty air unit feel
     sightRange: 11,
     attackRange: 0,
     attackDamage: 0,
@@ -388,7 +397,8 @@ export const UNIT_DEFINITIONS: Record<string, UnitDefinition> = {
     vespeneCost: 75,
     buildTime: 30,
     supplyCost: 2,
-    speed: 3.85,
+    speed: 3.85, // SC2 Viking air speed
+    acceleration: 4.55, // SC2-style air acceleration - responsive fighter
     sightRange: 10,
     attackRange: 9,
     attackDamage: 10,
@@ -420,7 +430,8 @@ export const UNIT_DEFINITIONS: Record<string, UnitDefinition> = {
     vespeneCost: 100,
     buildTime: 43,
     supplyCost: 3,
-    speed: 3.85,
+    speed: 3.85, // SC2 Banshee speed
+    acceleration: 4.55, // SC2 Banshee acceleration - responsive strike craft
     sightRange: 10,
     attackRange: 6,
     attackDamage: 12,
@@ -451,7 +462,8 @@ export const UNIT_DEFINITIONS: Record<string, UnitDefinition> = {
     vespeneCost: 300,
     buildTime: 64,
     supplyCost: 6,
-    speed: 2.62,
+    speed: 2.62, // SC2 Battlecruiser speed
+    acceleration: 1.4, // SC2 Battlecruiser acceleration - sluggish capital ship
     sightRange: 12,
     attackRange: 8,
     attackDamage: 12,
@@ -485,7 +497,8 @@ export const UNIT_DEFINITIONS: Record<string, UnitDefinition> = {
     vespeneCost: 200,
     buildTime: 43,
     supplyCost: 2,
-    speed: 3.85,
+    speed: 4.13, // SC2 Raven speed
+    acceleration: 2.975, // SC2-style support craft acceleration
     sightRange: 11,
     attackRange: 0,
     attackDamage: 0,
