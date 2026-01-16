@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { EventBus } from '@/engine/core/EventBus';
 import { getLocalPlayerId, isSpectatorMode } from '@/store/gameSetupStore';
+import { AssetManager, DEFAULT_AIRBORNE_HEIGHT } from '@/assets/AssetManager';
 
 interface AttackEffect {
   startPos: THREE.Vector3;
@@ -65,7 +66,9 @@ interface MeshPool {
 
 // PERF: Increased from 50 to 100 for large battles with many simultaneous effects
 const POOL_SIZE = 100;
-const AIR_UNIT_HEIGHT = 8; // Height for flying units (matches building lift-off and UnitRenderer)
+// Note: Airborne height is now configured per-unit-type in assets.json
+// Use AssetManager.getAirborneHeight(unitType) for the configured height
+// DEFAULT_AIRBORNE_HEIGHT (8) is used when unit type is not available
 
 // PERF: Reusable Vector3 objects to avoid allocation in hot paths
 const tempVec3Start = new THREE.Vector3();
@@ -441,10 +444,12 @@ export class EffectsRenderer {
 
   private setupEventListeners(): void {
     this.eventBus.on('combat:attack', (data: {
-      attackerId?: number;
-      targetId?: number;
+      attackerId?: string; // Unit type ID for attacker (e.g., "valkyrie") - for airborne height lookup
+      attackerEntityId?: number; // Entity ID for focus fire tracking
+      targetId?: number; // Entity ID for focus fire tracking
       attackerPos?: { x: number; y: number };
       targetPos?: { x: number; y: number };
+      targetUnitType?: string; // Unit type ID for target - for airborne height lookup
       damage: number;
       damageType: string;
       targetHeight?: number;
@@ -456,9 +461,11 @@ export class EffectsRenderer {
         const attackerTerrainHeight = this.getHeightAt(data.attackerPos.x, data.attackerPos.y);
         const targetTerrainHeight = this.getHeightAt(data.targetPos.x, data.targetPos.y);
 
-        // Add flying offset for air units
-        const attackerFlyingOffset = data.attackerIsFlying ? AIR_UNIT_HEIGHT : 0;
-        const targetFlyingOffset = data.targetIsFlying ? AIR_UNIT_HEIGHT : 0;
+        // Add flying offset for air units (per-unit-type airborne height from assets.json)
+        const attackerAirborneHeight = data.attackerId ? AssetManager.getAirborneHeight(data.attackerId) : DEFAULT_AIRBORNE_HEIGHT;
+        const targetAirborneHeight = data.targetUnitType ? AssetManager.getAirborneHeight(data.targetUnitType) : DEFAULT_AIRBORNE_HEIGHT;
+        const attackerFlyingOffset = data.attackerIsFlying ? attackerAirborneHeight : 0;
+        const targetFlyingOffset = data.targetIsFlying ? targetAirborneHeight : 0;
 
         // PERF: Use temp vectors to avoid allocation, they get cloned in createAttackEffect
         tempVec3Start.set(data.attackerPos.x, attackerTerrainHeight + 0.5 + attackerFlyingOffset, data.attackerPos.y);
@@ -475,9 +482,9 @@ export class EffectsRenderer {
           data.targetId
         );
 
-        // Track focus fire - multiple attackers on same target
-        if (data.attackerId !== undefined && data.targetId !== undefined) {
-          this.trackFocusFire(data.attackerId, data.targetId, data.targetPos);
+        // Track focus fire - multiple attackers on same target (using entity IDs)
+        if (data.attackerEntityId !== undefined && data.targetId !== undefined) {
+          this.trackFocusFire(data.attackerEntityId, data.targetId, data.targetPos);
         }
       }
     });

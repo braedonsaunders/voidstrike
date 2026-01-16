@@ -6,7 +6,7 @@ import { Health } from '@/engine/components/Health';
 import { Selectable } from '@/engine/components/Selectable';
 import { Velocity } from '@/engine/components/Velocity';
 import { VisionSystem } from '@/engine/systems/VisionSystem';
-import { AssetManager, AnimationMappingConfig, LODLevel, DEFAULT_LOD_DISTANCES } from '@/assets/AssetManager';
+import { AssetManager, AnimationMappingConfig, LODLevel, DEFAULT_LOD_DISTANCES, DEFAULT_AIRBORNE_HEIGHT } from '@/assets/AssetManager';
 import { Terrain } from './Terrain';
 import { getPlayerColor, getLocalPlayerId, isSpectatorMode } from '@/store/gameSetupStore';
 import { useUIStore } from '@/store/uiStore';
@@ -49,7 +49,8 @@ interface UnitOverlay {
 }
 
 const MAX_INSTANCES_PER_TYPE = 100; // Max units of same type per player
-const AIR_UNIT_HEIGHT = 8; // Height for flying units (matches building lift-off height)
+// Note: Airborne height is now configured per-unit-type in assets.json via "airborneHeight" property
+// Use AssetManager.getAirborneHeight(unitId) to get the configured height (defaults to DEFAULT_AIRBORNE_HEIGHT = 8)
 const INACTIVE_MESH_CLEANUP_FRAMES = 180; // Remove meshes after 3 seconds (60fps) of inactivity
 
 // Default animation name mappings (used when JSON config not available)
@@ -631,8 +632,8 @@ export class UnitRenderer {
       const overlay = this.getOrCreateOverlay(entity.id, ownerId);
       const terrainHeight = this.getCachedTerrainHeight(overlay, transform.x, transform.y);
 
-      // Calculate flying offset for air units
-      const flyingOffset = unit.isFlying ? AIR_UNIT_HEIGHT : 0;
+      // Calculate flying offset for air units (per-unit-type airborne height from assets.json)
+      const flyingOffset = unit.isFlying ? AssetManager.getAirborneHeight(unit.unitId) : 0;
       const unitHeight = terrainHeight + flyingOffset;
 
       // PERF: Skip units outside camera frustum
