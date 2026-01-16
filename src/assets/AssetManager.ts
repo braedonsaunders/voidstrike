@@ -1118,7 +1118,9 @@ export class AssetManager {
    * Used by VehicleEffectsSystem for engine trails, exhaust, dust, etc.
    */
   static getUnitEffects(assetId: string): UnitEffectsConfig | null {
-    return unitEffectsConfigs.get(assetId) ?? null;
+    const result = unitEffectsConfigs.get(assetId) ?? null;
+    console.log(`[AssetManager] getUnitEffects('${assetId}') - map size: ${unitEffectsConfigs.size}, result:`, result);
+    return result;
   }
 
   /**
@@ -1386,6 +1388,7 @@ export class AssetManager {
       }
 
       assetsConfig = await response.json();
+      console.log('[AssetManager] Loaded asset configuration from assets.json');
       debugAssets.log('[AssetManager] Loaded asset configuration from assets.json');
 
       // Extract animation speeds and mappings from config
@@ -1401,7 +1404,7 @@ export class AssetManager {
           // Store vehicle effects configuration if defined
           if (config.effects) {
             unitEffectsConfigs.set(assetId, { effects: config.effects });
-            debugAssets.log(`[AssetManager] Loaded ${Object.keys(config.effects).length} effects for ${assetId}`);
+            console.log(`[AssetManager] Loaded ${Object.keys(config.effects).length} effects for ${assetId}`);
           }
         }
         // Process buildings
