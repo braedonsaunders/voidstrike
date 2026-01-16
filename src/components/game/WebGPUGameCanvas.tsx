@@ -337,10 +337,11 @@ export function WebGPUGameCanvas() {
         mapHeight
       );
 
-      // Start at local player's spawn
+      // Start at local player's spawn with correct camera orientation
       const localPlayerSlot = useGameSetupStore.getState().getLocalPlayerSlot();
       const playerSpawn = CURRENT_MAP.spawns.find(s => s.playerSlot === localPlayerSlot) || CURRENT_MAP.spawns[0];
       camera.setPosition(playerSpawn.x, playerSpawn.y);
+      camera.setAngle(playerSpawn.rotation);
       cameraRef.current = camera;
       setCameraRef(camera);
 
