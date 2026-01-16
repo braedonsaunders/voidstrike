@@ -433,8 +433,11 @@ export class RenderPipeline {
         );
 
         if (this.ssgiPass) {
-          this.ssgiPass.sliceCount.value = 1;
-          this.ssgiPass.stepCount.value = 12;
+          // Use medium quality preset (sliceCount 2, stepCount 8) instead of low (1, 12)
+          // Higher slice count significantly reduces temporal instabilities/flickering
+          // See: https://threejs.org/docs/pages/SSGINode.html#recommended-presets
+          this.ssgiPass.sliceCount.value = 2;
+          this.ssgiPass.stepCount.value = 8;
           this.ssgiPass.radius.value = this.config.ssgiRadius;
           this.ssgiPass.giIntensity.value = this.config.ssgiIntensity;
           this.ssgiPass.thickness.value = this.config.ssgiThickness;
