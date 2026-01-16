@@ -45,6 +45,13 @@ export interface NetworkMetrics {
   connected: boolean;
 }
 
+export interface RenderMetrics {
+  drawCalls: number;       // Draw calls this frame
+  triangles: number;       // Triangles rendered this frame
+  drawCallsPerSecond: number; // Accumulated over 1 second
+  trianglesPerSecond: number; // Accumulated over 1 second
+}
+
 export interface PerformanceSnapshot {
   timestamp: number;
   fps: number;
@@ -54,6 +61,7 @@ export interface PerformanceSnapshot {
   entityCounts: EntityCounts;
   memory: MemoryMetrics;
   network: NetworkMetrics;
+  render: RenderMetrics;
 }
 
 // History buffer size (at 60fps, 300 = 5 seconds of history)
@@ -102,6 +110,14 @@ class PerformanceMonitorClass {
     rtt: 0,
     packetLoss: 0,
     connected: false,
+  };
+
+  // Render metrics (GPU)
+  private renderMetrics: RenderMetrics = {
+    drawCalls: 0,
+    triangles: 0,
+    drawCallsPerSecond: 0,
+    trianglesPerSecond: 0,
   };
 
   // Animation frame for continuous monitoring
@@ -271,6 +287,22 @@ class PerformanceMonitorClass {
   }
 
   /**
+   * Update render metrics (called by WebGPUGameCanvas once per second)
+   * @param drawCalls - Draw calls accumulated over the last second
+   * @param triangles - Triangles accumulated over the last second
+   * @param fps - Current FPS to calculate per-frame values
+   */
+  public updateRenderMetrics(drawCalls: number, triangles: number, fps: number): void {
+    if (!this.collectingEnabled) return;
+    // Store both total and per-frame values
+    this.renderMetrics.drawCallsPerSecond = drawCalls;
+    this.renderMetrics.trianglesPerSecond = triangles;
+    // Calculate per-frame values
+    this.renderMetrics.drawCalls = fps > 0 ? Math.round(drawCalls / fps) : drawCalls;
+    this.renderMetrics.triangles = fps > 0 ? Math.round(triangles / fps) : triangles;
+  }
+
+  /**
    * Get current FPS (averaged over recent frames)
    */
   public getFPS(): number {
@@ -371,6 +403,7 @@ class PerformanceMonitorClass {
       entityCounts: { ...this.entityCounts },
       memory: { ...this.memoryMetrics },
       network: { ...this.networkMetrics },
+      render: { ...this.renderMetrics },
     };
   }
 

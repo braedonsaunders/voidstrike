@@ -135,14 +135,26 @@ export const PerformancePanel = memo(function PerformancePanel() {
           <span style={{ fontFamily: 'monospace', color: '#a3a3a3' }}>{performanceMetrics.frameTime.toFixed(1)}ms</span>
         </div>
         <div style={{ borderTop: '1px solid #333', marginTop: '6px', paddingTop: '6px' }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '11px', padding: '3px 0' }}>
-            <span style={{ color: '#888' }}>Triangles</span>
-            <span style={{ fontFamily: 'monospace', color: '#c084fc' }}>{formatNumber(performanceMetrics.triangles)}</span>
-          </div>
-          <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '11px', padding: '3px 0' }}>
-            <span style={{ color: '#888' }}>Draw Calls</span>
-            <span style={{ fontFamily: 'monospace', color: '#facc15' }}>{performanceMetrics.drawCalls.toLocaleString()}</span>
-          </div>
+          {/* Per-frame metrics (calculated from 1-second accumulated values) */}
+          {(() => {
+            const fps = performanceMetrics.frameTime > 0 ? 1000 / performanceMetrics.frameTime : 60;
+            const trianglesPerFrame = Math.round(performanceMetrics.triangles / fps);
+            const drawCallsPerFrame = Math.round(performanceMetrics.drawCalls / fps);
+            return (
+              <>
+                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '11px', padding: '3px 0' }}>
+                  <span style={{ color: '#888' }}>Triangles/Frame</span>
+                  <span style={{ fontFamily: 'monospace', color: '#c084fc' }}>{formatNumber(trianglesPerFrame)}</span>
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '11px', padding: '3px 0' }}>
+                  <span style={{ color: '#888' }}>Draw Calls/Frame</span>
+                  <span style={{ fontFamily: 'monospace', color: drawCallsPerFrame > 1000 ? '#ef4444' : drawCallsPerFrame > 500 ? '#facc15' : '#22c55e' }}>
+                    {drawCallsPerFrame.toLocaleString()}
+                  </span>
+                </div>
+              </>
+            );
+          })()}
         </div>
         <div style={{ borderTop: '1px solid #333', marginTop: '6px', paddingTop: '6px' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '11px', padding: '3px 0' }}>

@@ -3,14 +3,26 @@ import { BiomeConfig } from './Biomes';
 import { MapData } from '@/data/maps';
 
 /**
- * Crystals for void/frozen biomes
+ * Crystals for void/frozen biomes using GPU instancing
+ *
+ * PERF: Uses InstancedMesh to batch all crystals into a single draw call.
+ * Previously created 500-1500 individual meshes = 500-1500 draw calls.
+ * Now uses 1 InstancedMesh = 1 draw call regardless of crystal count.
  */
 export class CrystalField {
   public group: THREE.Group;
   private material: THREE.MeshStandardMaterial | null = null;
+  private instancedMesh: THREE.InstancedMesh | null = null;
   private baseEmissiveIntensity: number = 0.5;
   private emissiveEnabled: boolean = true;
   private intensityMultiplier: number = 1.0;
+
+  // Reusable objects to avoid allocations
+  private static readonly tempMatrix = new THREE.Matrix4();
+  private static readonly tempPosition = new THREE.Vector3();
+  private static readonly tempRotation = new THREE.Euler();
+  private static readonly tempQuaternion = new THREE.Quaternion();
+  private static readonly tempScale = new THREE.Vector3();
 
   constructor(
     mapData: MapData,
@@ -22,7 +34,9 @@ export class CrystalField {
     if (biome.crystalDensity <= 0) return;
 
     const crystalCount = Math.floor(mapData.width * mapData.height * biome.crystalDensity * 0.01);
-    const maxCrystals = Math.min(crystalCount, 500);
+    const maxClusters = Math.min(crystalCount, 500);
+    // Each cluster has 1-3 crystals, average ~2, so max instances = maxClusters * 3
+    const maxInstances = maxClusters * 3;
 
     // Crystal colors based on biome
     let crystalColor = new THREE.Color(0x80c0ff); // Default ice blue
@@ -49,7 +63,24 @@ export class CrystalField {
     // Store material reference for emissive controls
     this.material = crystalMaterial;
 
-    for (let i = 0; i < maxCrystals; i++) {
+    // Create base geometry - unit cone that will be scaled per instance
+    // Base radius 0.15, height 1.0, 6 segments
+    const baseGeometry = new THREE.ConeGeometry(0.15, 1.0, 6);
+    // Translate geometry so origin is at the base (not center)
+    baseGeometry.translate(0, 0.5, 0);
+
+    // Create instanced mesh with maximum capacity
+    this.instancedMesh = new THREE.InstancedMesh(baseGeometry, crystalMaterial, maxInstances);
+    this.instancedMesh.castShadow = false;
+    this.instancedMesh.receiveShadow = false;
+    // Enable frustum culling for the entire batch
+    this.instancedMesh.frustumCulled = true;
+
+    // Collect all crystal transforms
+    let instanceIndex = 0;
+    const { tempMatrix, tempPosition, tempRotation, tempQuaternion, tempScale } = CrystalField;
+
+    for (let i = 0; i < maxClusters && instanceIndex < maxInstances; i++) {
       const x = 10 + Math.random() * (mapData.width - 20);
       const y = 10 + Math.random() * (mapData.height - 20);
 
@@ -60,38 +91,49 @@ export class CrystalField {
         // Crystals appear on unwalkable terrain or random ground
         if (cell.terrain === 'unwalkable' || (cell.terrain === 'ground' && Math.random() < 0.2)) {
           const height = getHeightAt(x, y);
-
-          // Create crystal cluster
-          const clusterGroup = new THREE.Group();
           const clusterCrystalCount = 1 + Math.floor(Math.random() * 3);
 
-          for (let c = 0; c < clusterCrystalCount; c++) {
+          for (let c = 0; c < clusterCrystalCount && instanceIndex < maxInstances; c++) {
+            // Random size variation
             const crystalHeight = 0.5 + Math.random() * 1.5;
-            const crystalWidth = 0.1 + Math.random() * 0.2;
+            const crystalWidth = (0.1 + Math.random() * 0.2) / 0.15; // Scale relative to base geometry
 
-            const geometry = new THREE.ConeGeometry(crystalWidth, crystalHeight, 6);
-            const crystal = new THREE.Mesh(geometry, crystalMaterial);
-
-            crystal.position.set(
-              (Math.random() - 0.5) * 0.5,
-              crystalHeight / 2,
-              (Math.random() - 0.5) * 0.5
+            // Position within cluster + world position
+            tempPosition.set(
+              x + (Math.random() - 0.5) * 0.5,
+              height,
+              y + (Math.random() - 0.5) * 0.5
             );
-            crystal.rotation.set(
+
+            // Random rotation
+            tempRotation.set(
               (Math.random() - 0.5) * 0.3,
               Math.random() * Math.PI * 2,
               (Math.random() - 0.5) * 0.3
             );
-            // PERF: Decorations don't cast shadows - major FPS savings
-            crystal.castShadow = false;
-            clusterGroup.add(crystal);
-          }
+            tempQuaternion.setFromEuler(tempRotation);
 
-          clusterGroup.position.set(x, height, y);
-          this.group.add(clusterGroup);
+            // Scale based on random size
+            tempScale.set(crystalWidth, crystalHeight, crystalWidth);
+
+            // Compose transformation matrix
+            tempMatrix.compose(tempPosition, tempQuaternion, tempScale);
+            this.instancedMesh.setMatrixAt(instanceIndex, tempMatrix);
+
+            instanceIndex++;
+          }
         }
       }
     }
+
+    // Update instance count to actual number used
+    this.instancedMesh.count = instanceIndex;
+    this.instancedMesh.instanceMatrix.needsUpdate = true;
+
+    // Compute bounding sphere for frustum culling
+    this.instancedMesh.computeBoundingSphere();
+
+    this.group.add(this.instancedMesh);
   }
 
   /**
@@ -121,14 +163,14 @@ export class CrystalField {
   }
 
   public dispose(): void {
-    this.group.traverse((child) => {
-      if (child instanceof THREE.Mesh) {
-        child.geometry.dispose();
-        if (child.material instanceof THREE.Material) {
-          child.material.dispose();
-        }
+    if (this.instancedMesh) {
+      this.instancedMesh.geometry.dispose();
+      if (this.instancedMesh.material instanceof THREE.Material) {
+        this.instancedMesh.material.dispose();
       }
-    });
+      this.instancedMesh = null;
+    }
+    this.material = null;
   }
 }
 
