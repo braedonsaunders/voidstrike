@@ -656,7 +656,7 @@ export class RecastNavigation {
 
   /**
    * Add a unit to crowd simulation.
-   * Projects the position onto the navmesh surface for correct crowd behavior.
+   * Uses terrain height for the Y coordinate to place agent at correct elevation.
    */
   public addAgent(
     entityId: number,
@@ -673,12 +673,9 @@ export class RecastNavigation {
     }
 
     try {
-      // Project position onto navmesh surface
-      // This ensures the agent has a valid polygon reference for crowd simulation
-      const projected = this.projectToNavMesh(x, y);
-      const agentPos = projected
-        ? { x: projected.x, y: projected.y, z: projected.z }
-        : { x, y: this.getTerrainHeight(x, y), z: y };
+      // Use terrain height for Y coordinate to place agent at correct elevation
+      // Keep original X/Z (game coords) to avoid position drift between game and crowd
+      const terrainY = this.getTerrainHeight(x, y);
 
       const params: Partial<CrowdAgentParams> = {
         ...DEFAULT_AGENT_PARAMS,
@@ -688,7 +685,7 @@ export class RecastNavigation {
         collisionQueryRange: radius * 5,
       };
 
-      const agent = this.crowd.addAgent(agentPos, params);
+      const agent = this.crowd.addAgent({ x, y: terrainY, z: y }, params);
 
       if (agent) {
         const agentIndex = agent.agentIndex;
@@ -723,7 +720,7 @@ export class RecastNavigation {
 
   /**
    * Set agent move target.
-   * Projects the target onto the navmesh surface for valid corridor computation.
+   * Uses terrain height for Y coordinate at target location.
    */
   public setAgentTarget(entityId: number, targetX: number, targetY: number): boolean {
     if (!this.crowd) return false;
@@ -734,14 +731,10 @@ export class RecastNavigation {
     try {
       const agent = this.crowd.getAgent(agentIndex);
       if (agent) {
-        // Project target onto navmesh surface
-        // Without this, DetourCrowd can't find a valid polygon for the target
-        const projected = this.projectToNavMesh(targetX, targetY);
-        const targetPos = projected
-          ? { x: projected.x, y: projected.y, z: projected.z }
-          : { x: targetX, y: this.getTerrainHeight(targetX, targetY), z: targetY };
-
-        agent.requestMoveTarget(targetPos);
+        // Use terrain height at target for Y coordinate
+        // Keep original X/Z to match game coordinates
+        const terrainY = this.getTerrainHeight(targetX, targetY);
+        agent.requestMoveTarget({ x: targetX, y: terrainY, z: targetY });
         return true;
       }
     } catch (error) {
@@ -772,7 +765,7 @@ export class RecastNavigation {
 
   /**
    * Update agent position (for teleporting or external movement).
-   * Projects the position onto the navmesh surface to maintain valid crowd state.
+   * Uses terrain height for Y coordinate to keep agent at correct elevation.
    */
   public updateAgentPosition(entityId: number, x: number, y: number): void {
     if (!this.crowd) return;
@@ -783,14 +776,10 @@ export class RecastNavigation {
     try {
       const agent = this.crowd.getAgent(agentIndex);
       if (agent) {
-        // Project position onto navmesh surface
-        // Teleporting to an off-mesh position would break crowd simulation
-        const projected = this.projectToNavMesh(x, y);
-        const teleportPos = projected
-          ? { x: projected.x, y: projected.y, z: projected.z }
-          : { x, y: this.getTerrainHeight(x, y), z: y };
-
-        agent.teleport(teleportPos);
+        // Use terrain height for Y coordinate
+        // Keep original X/Z to match game Transform position
+        const terrainY = this.getTerrainHeight(x, y);
+        agent.teleport({ x, y: terrainY, z: y });
       }
     } catch {
       // Ignore
