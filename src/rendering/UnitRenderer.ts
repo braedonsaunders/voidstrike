@@ -23,7 +23,7 @@ interface InstancedUnitGroup {
   entityIds: number[]; // Maps instance index to entity ID
   dummy: THREE.Object3D; // Reusable for matrix calculations
   yOffset: number; // Y offset to apply when positioning (accounts for model origin)
-  rotationOffset: number; // Y rotation offset to apply (accounts for model facing direction)
+  baseRotation: THREE.Quaternion; // Full base rotation (X, Y, Z from model + config)
   modelScale: number; // Scale factor from model normalization (applied to instances)
   lastActiveFrame: number; // Frame number when this group was last used (for cleanup)
 }
@@ -99,6 +99,7 @@ export class UnitRenderer {
   private tempMatrix: THREE.Matrix4 = new THREE.Matrix4();
   private tempPosition: THREE.Vector3 = new THREE.Vector3();
   private tempQuaternion: THREE.Quaternion = new THREE.Quaternion();
+  private tempFacingQuat: THREE.Quaternion = new THREE.Quaternion(); // For unit facing direction
   private tempScale: THREE.Vector3 = new THREE.Vector3(1, 1, 1);
   private tempEuler: THREE.Euler = new THREE.Euler();
 
@@ -429,7 +430,7 @@ export class UnitRenderer {
       let geometry: THREE.BufferGeometry | null = null;
       let material: THREE.Material | THREE.Material[] | null = null;
       let meshWorldY = 0;
-      let meshWorldRotationY = 0;
+      const meshWorldRotation = new THREE.Quaternion(); // Full rotation (X, Y, Z)
       let meshWorldScale = 1;
 
       baseMesh.traverse((child) => {
@@ -440,11 +441,8 @@ export class UnitRenderer {
           const worldPos = new THREE.Vector3();
           child.getWorldPosition(worldPos);
           meshWorldY = worldPos.y;
-          // Get the mesh's world rotation Y - also lost when extracting geometry
-          const worldQuat = new THREE.Quaternion();
-          child.getWorldQuaternion(worldQuat);
-          const worldEuler = new THREE.Euler().setFromQuaternion(worldQuat);
-          meshWorldRotationY = worldEuler.y;
+          // Get the mesh's full world rotation (X, Y, Z) - also lost when extracting geometry
+          child.getWorldQuaternion(meshWorldRotation);
           // Get the mesh's world scale - also lost when extracting geometry
           const worldScale = new THREE.Vector3();
           child.getWorldScale(worldScale);
@@ -485,12 +483,14 @@ export class UnitRenderer {
         entityIds: [],
         dummy: new THREE.Object3D(),
         yOffset: meshWorldY,
-        rotationOffset: meshWorldRotationY,
+        baseRotation: meshWorldRotation.clone(), // Full base rotation (X, Y, Z from model + config)
         modelScale: meshWorldScale,
         lastActiveFrame: this.frameCount,
       };
 
-      debugAssets.log(`[UnitRenderer] Created instanced group for ${unitType} LOD${lodLevel}: yOffset=${meshWorldY.toFixed(3)}, rotationOffset=${meshWorldRotationY.toFixed(3)}, scale=${meshWorldScale.toFixed(3)}`);
+      // Log rotation as Euler for easier debugging
+      const rotEuler = new THREE.Euler().setFromQuaternion(meshWorldRotation);
+      debugAssets.log(`[UnitRenderer] Created instanced group for ${unitType} LOD${lodLevel}: yOffset=${meshWorldY.toFixed(3)}, rotation=(${(rotEuler.x * 180/Math.PI).toFixed(1)}°, ${(rotEuler.y * 180/Math.PI).toFixed(1)}°, ${(rotEuler.z * 180/Math.PI).toFixed(1)}°), scale=${meshWorldScale.toFixed(3)}`);
 
       this.instancedGroups.set(key, group);
     }
@@ -715,12 +715,15 @@ export class UnitRenderer {
           group.entityIds[instanceIndex] = entity.id;
 
           // Set instance transform - apply offsets to account for model origin position/rotation/scale
-          // rotationOffset is the model's baked-in rotation (typically -π/2 for GLTF models).
-          // Adding it converts from game coordinates (+X forward) to Three.js coordinates.
+          // baseRotation is the model's full base rotation (X, Y, Z from assets.json config).
+          // We multiply: unit facing (Y rotation) × base rotation to get final orientation.
           // modelScale is the normalization scale from AssetManager (to achieve target height).
           this.tempPosition.set(transform.x, unitHeight + group.yOffset, transform.y);
-          this.tempEuler.set(0, transform.rotation + group.rotationOffset, 0);
-          this.tempQuaternion.setFromEuler(this.tempEuler);
+          // Create quaternion from unit's facing direction (Y rotation only)
+          this.tempEuler.set(0, transform.rotation, 0);
+          this.tempFacingQuat.setFromEuler(this.tempEuler);
+          // Combine: facing rotation × base rotation (order matters for proper orientation)
+          this.tempQuaternion.copy(this.tempFacingQuat).multiply(group.baseRotation);
           this.tempScale.setScalar(group.modelScale);
           this.tempMatrix.compose(this.tempPosition, this.tempQuaternion, this.tempScale);
           group.mesh.setMatrixAt(instanceIndex, this.tempMatrix);
