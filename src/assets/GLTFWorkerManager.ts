@@ -11,8 +11,9 @@
 
 import type { FetchResponse, BatchFetchResponse, WorkerRequest, WorkerResponse } from './gltf.worker';
 
-// Enable worker - file is named *.worker.ts to match webpack worker-loader config
-const ENABLE_WORKER = true;
+// Disable worker for now - webpack worker-loader may not be working correctly
+// TODO: Debug worker initialization and re-enable
+const ENABLE_WORKER = false;
 
 // Timeout for worker requests (ms) - falls back to main thread if exceeded
 const WORKER_TIMEOUT = 10000;
