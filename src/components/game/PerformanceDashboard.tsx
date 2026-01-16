@@ -195,7 +195,7 @@ export const PerformanceDashboard = memo(function PerformanceDashboard({
           width={240}
           height={24}
           color="#22c55e"
-          maxValue={70}
+          maxValue={Math.max(...fpsHistory, 60) * 1.1} // Dynamic axis with 10% headroom
           thresholds={[
             { value: 0, color: '#ef4444' },
             { value: 20, color: '#f97316' },
@@ -206,7 +206,7 @@ export const PerformanceDashboard = memo(function PerformanceDashboard({
         />
         <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '9px', color: '#666', marginTop: '2px' }}>
           <span>Frame: {snapshot.frameTime.toFixed(1)}ms</span>
-          <span>Target: 60fps (16.7ms)</span>
+          <span>Range: 0-{Math.round(Math.max(...fpsHistory, 60) * 1.1)}</span>
         </div>
       </div>
 

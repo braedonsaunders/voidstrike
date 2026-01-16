@@ -31,7 +31,10 @@ voidstrike/
 │   │   │   ├── ResourcePanel.tsx
 │   │   │   ├── GraphicsOptionsPanel.tsx # Graphics settings panel
 │   │   │   ├── SoundOptionsPanel.tsx    # Audio settings panel with music controls
-│   │   │   └── DebugMenuPanel.tsx       # Debug logging settings (disabled in multiplayer)
+│   │   │   ├── DebugMenuPanel.tsx       # Debug logging settings (disabled in multiplayer)
+│   │   │   ├── PerformanceDashboard.tsx # Real-time performance metrics display
+│   │   │   ├── PerformancePanel.tsx     # Performance monitoring panel wrapper
+│   │   │   └── PerformanceRecorder.tsx  # 30-second performance data recorder with export
 │   │   └── ui/                # Reusable UI components
 │   ├── engine/
 │   │   ├── core/

@@ -3,6 +3,7 @@
 import React, { memo } from 'react';
 import { useUIStore } from '@/store/uiStore';
 import { PerformanceDashboard } from './PerformanceDashboard';
+import { PerformanceRecorder } from './PerformanceRecorder';
 
 // Format number with K/M suffix for large numbers
 function formatNumber(num: number): string {
@@ -170,6 +171,9 @@ export const PerformancePanel = memo(function PerformancePanel() {
           Performance Dashboard
         </div>
         <PerformanceDashboard expanded={true} />
+
+        {/* Performance Recorder */}
+        <PerformanceRecorder />
       </div>
     </div>
   );

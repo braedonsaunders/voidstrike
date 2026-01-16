@@ -489,6 +489,7 @@ Each preset controls all `GraphicsSettings` values:
 | **Reflections** | ssrEnabled, ssrOpacity, ssrMaxRoughness |
 | **Global Illumination** | ssgiEnabled, ssgiRadius, ssgiIntensity |
 | **Resolution** | resolutionMode, resolutionScale, maxPixelRatio |
+| **Frame Rate** | maxFPS (Off/60/120/144) |
 | **Upscaling** | upscalingMode, renderScale, easuSharpness |
 | **Fog** | fogEnabled, fogDensity, volumetricFogEnabled, volumetricFogQuality |
 | **Lighting** | shadowFill, dynamicLightsEnabled, maxDynamicLights |
