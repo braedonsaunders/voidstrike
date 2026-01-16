@@ -157,20 +157,19 @@
         "dustCloud": {
           "type": "dust_cloud",
           "attachments": [
-            { "x": 0, "y": 0.1, "z": -0.8, "scale": 0.8 }
+            { "x": -1.35, "y": 0.65, "z": 0, "scale": 0.8 }
           ],
           "emitRate": 8,
           "conditions": ["moving"],
           "speedScale": true
         },
-        "sparks": {
-          "type": "sparks",
+        "flamethrower": {
+          "type": "engine_exhaust",
           "attachments": [
-            { "x": -0.3, "y": 0.05, "z": -0.5, "scale": 0.4 },
-            { "x": 0.3, "y": 0.05, "z": -0.5, "scale": 0.4 }
+            { "x": 1.41, "y": 0.55, "z": 0, "scale": 0.6 }
           ],
-          "emitRate": 3,
-          "conditions": ["moving"]
+          "emitRate": 15,
+          "conditions": ["attacking"]
         }
       }
     },
@@ -202,8 +201,8 @@
         "dustCloud": {
           "type": "dust_cloud",
           "attachments": [
-            { "x": -0.5, "y": 0.15, "z": -1.0, "scale": 1.2 },
-            { "x": 0.5, "y": 0.15, "z": -1.0, "scale": 1.2 }
+            { "x": -0.01, "y": 0.16, "z": -1.22, "scale": 1.2 },
+            { "x": -0.12, "y": 0.18, "z": -1.18, "scale": 1.2 }
           ],
           "emitRate": 10,
           "conditions": ["moving"],
@@ -212,7 +211,8 @@
         "engineExhaust": {
           "type": "engine_exhaust",
           "attachments": [
-            { "x": 0, "y": 0.3, "z": -1.2, "scale": 0.6 }
+            { "x": -0.01, "y": 0.16, "z": -1.22, "scale": 0.6 },
+            { "x": -0.12, "y": 0.18, "z": -1.18, "scale": 0.6 }
           ],
           "emitRate": 6,
           "conditions": ["moving"]
@@ -232,18 +232,10 @@
         "footDust": {
           "type": "dust_cloud",
           "attachments": [
-            { "x": -0.4, "y": 0.1, "z": 0, "scale": 1.0 },
-            { "x": 0.4, "y": 0.1, "z": 0, "scale": 1.0 }
+            { "x": -0.66, "y": 0.79, "z": -0.89, "scale": 1.0 },
+            { "x": -2.02, "y": 0.77, "z": 1.15, "scale": 1.0 }
           ],
           "emitRate": 6,
-          "conditions": ["moving"]
-        },
-        "engineSparks": {
-          "type": "sparks",
-          "attachments": [
-            { "x": 0, "y": 0.8, "z": -0.3, "scale": 0.5 }
-          ],
-          "emitRate": 2,
           "conditions": ["moving"]
         }
       }
@@ -278,7 +270,8 @@
         "thruster": {
           "type": "thruster",
           "attachments": [
-            { "x": 0, "y": -0.1, "z": -0.8, "scale": 0.8 }
+            { "x": -1.12, "y": 0.64, "z": 0.22, "scale": 0.8 },
+            { "x": -1.12, "y": 0.65, "z": -0.22, "scale": 0.8 }
           ],
           "emitRate": 15,
           "conditions": ["moving", "flying"]
@@ -286,7 +279,8 @@
         "smokeTrail": {
           "type": "smoke_trail",
           "attachments": [
-            { "x": 0, "y": 0, "z": -1.0, "scale": 0.6 }
+            { "x": -1.12, "y": 0.64, "z": 0.22, "scale": 0.6 },
+            { "x": -1.12, "y": 0.65, "z": -0.22, "scale": 0.6 }
           ],
           "emitRate": 6,
           "conditions": ["moving"],
@@ -320,8 +314,8 @@
         "thruster": {
           "type": "thruster",
           "attachments": [
-            { "x": -0.4, "y": -0.3, "z": -0.5, "scale": 0.6 },
-            { "x": 0.4, "y": -0.3, "z": -0.5, "scale": 0.6 }
+            { "x": 0.45, "y": 0.8, "z": 0.94, "scale": 0.6 },
+            { "x": 0.46, "y": 0.79, "z": -0.95, "scale": 0.6 }
           ],
           "emitRate": 10,
           "conditions": ["always"]
@@ -365,7 +359,8 @@
         "thruster": {
           "type": "thruster",
           "attachments": [
-            { "x": 0, "y": -0.1, "z": -0.6, "scale": 0.7 }
+            { "x": -1, "y": 0.23, "z": 0.3, "scale": 0.7 },
+            { "x": -0.99, "y": 0.23, "z": -0.3, "scale": 0.7 }
           ],
           "emitRate": 12,
           "conditions": ["moving", "flying"]
@@ -373,7 +368,8 @@
         "smokeTrail": {
           "type": "smoke_trail",
           "attachments": [
-            { "x": 0, "y": 0, "z": -0.8, "scale": 0.5 }
+            { "x": -1, "y": 0.23, "z": 0.3, "scale": 0.5 },
+            { "x": -0.99, "y": 0.23, "z": -0.3, "scale": 0.5 }
           ],
           "emitRate": 5,
           "conditions": ["moving"],
@@ -436,8 +432,8 @@
         "engineExhaust": {
           "type": "engine_exhaust",
           "attachments": [
-            { "x": -2.0, "y": 0, "z": -0.5, "scale": 1.5 },
-            { "x": -2.0, "y": 0, "z": 0.5, "scale": 1.5 }
+            { "x": -1.49, "y": 0.28, "z": 0.15, "scale": 1.5 },
+            { "x": -1.5, "y": 0.28, "z": -0.15, "scale": 1.5 }
           ],
           "emitRate": 12,
           "conditions": ["always"]
@@ -445,8 +441,8 @@
         "smokeTrail": {
           "type": "smoke_trail",
           "attachments": [
-            { "x": -2.5, "y": 0.2, "z": -0.5, "scale": 2.0 },
-            { "x": -2.5, "y": 0.2, "z": 0.5, "scale": 2.0 }
+            { "x": -1.49, "y": 0.28, "z": 0.15, "scale": 2.0 },
+            { "x": -1.5, "y": 0.28, "z": -0.15, "scale": 2.0 }
           ],
           "emitRate": 8,
           "conditions": ["moving"]
