@@ -83,7 +83,7 @@
     },
     "colossus": {
       "model": "/models/units/colossus_LOD0.glb",
-      "scale": 1.0,
+      "scale": 1.5,
       "rotation": { "x": 0, "y": 0, "z": 0 },
       "animations": {
         "idle": ["idle", "stand"],
@@ -142,7 +142,7 @@
     },
     "dreadnought": {
       "model": "/models/units/dreadnought_LOD0.glb",
-      "scale": 1.0,
+      "scale": 3.0,
       "rotation": { "x": 0, "y": 0, "z": 0 },
       "airborneHeight": 15,
       "animations": {
