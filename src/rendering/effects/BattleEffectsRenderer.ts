@@ -27,6 +27,7 @@ import * as THREE from 'three';
 import { EventBus } from '@/engine/core/EventBus';
 import { getLocalPlayerId, isSpectatorMode } from '@/store/gameSetupStore';
 import { AssetManager, DEFAULT_AIRBORNE_HEIGHT } from '@/assets/AssetManager';
+import { AdvancedParticleSystem } from './AdvancedParticleSystem';
 
 // ============================================
 // CONSTANTS
@@ -199,6 +200,7 @@ export class BattleEffectsRenderer {
   private scene: THREE.Scene;
   private eventBus: EventBus;
   private getTerrainHeight: ((x: number, z: number) => number) | null = null;
+  private particleSystem: AdvancedParticleSystem | null = null;
 
   // Effect tracking
   private projectileIdCounter = 0;
@@ -882,6 +884,12 @@ export class BattleEffectsRenderer {
   // ============================================
 
   private createHitEffect(position: THREE.Vector3, isAirTarget: boolean): void {
+    // Use advanced particle system for impact sparks
+    if (this.particleSystem) {
+      const upDir = new THREE.Vector3(0, 1, 0);
+      this.particleSystem.emitImpact(position, upDir);
+    }
+
     const mesh = this.acquireFromPool(this.groundEffectPool);
     if (!mesh) return;
 
@@ -909,8 +917,8 @@ export class BattleEffectsRenderer {
       heightOffset,
     });
 
-    // Spawn sparks
-    this.spawnSparks(position, 8, 0xffaa00);
+    // Spawn sparks (reduced since particle system also spawns)
+    this.spawnSparks(position, 4, 0xffaa00);
 
     // Create impact decal for ground targets
     if (!isAirTarget) {
@@ -919,6 +927,12 @@ export class BattleEffectsRenderer {
   }
 
   private createDeathEffect(position: THREE.Vector3, heightOffset: number): void {
+    // Use advanced particle system for death explosion
+    if (this.particleSystem) {
+      const effectPos = new THREE.Vector3(position.x, position.y + heightOffset, position.z);
+      this.particleSystem.emitExplosion(effectPos, 0.6); // Smaller explosion for unit death
+    }
+
     const mesh = this.acquireFromPool(this.groundEffectPool);
     if (!mesh) return;
 
@@ -979,6 +993,11 @@ export class BattleEffectsRenderer {
   // ============================================
 
   private createExplosion(position: THREE.Vector3, intensity: number): void {
+    // Use advanced particle system for volumetric explosion
+    if (this.particleSystem) {
+      this.particleSystem.emitExplosion(position, intensity);
+    }
+
     // Core flash
     const coreFlash = this.acquireFromPool(this.explosionCorePool);
     if (coreFlash) {
@@ -1231,6 +1250,17 @@ export class BattleEffectsRenderer {
         rings,
       });
     }
+  }
+
+  // ============================================
+  // PARTICLE SYSTEM INTEGRATION
+  // ============================================
+
+  /**
+   * Set the advanced particle system for volumetric effects
+   */
+  public setParticleSystem(particleSystem: AdvancedParticleSystem): void {
+    this.particleSystem = particleSystem;
   }
 
   // ============================================

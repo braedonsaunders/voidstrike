@@ -484,6 +484,9 @@ export function WebGPUGameCanvas() {
       // Advanced GPU particle system for smoke, fire, debris
       advancedParticlesRef.current = new AdvancedParticleSystem(scene, 15000);
       advancedParticlesRef.current.setTerrainHeightFunction((x, z) => terrain.getHeightAt(x, z));
+
+      // Connect particle system to battle effects for volumetric explosions
+      battleEffectsRef.current.setParticleSystem(advancedParticlesRef.current);
       rallyPointRendererRef.current = new RallyPointRenderer(
         scene,
         game.eventBus,
