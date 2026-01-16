@@ -1,13 +1,10 @@
 import { debugAudio } from '@/utils/debugLogger';
 import { audioConfig, MusicCategoryConfig } from './audioConfig';
+import musicManifest from '@/data/music-manifest.json';
 
 export interface MusicTrack {
   name: string;
   url: string;
-}
-
-interface MusicDiscoveryResponse {
-  categories: Record<string, MusicTrack[]>;
 }
 
 /**
@@ -97,29 +94,18 @@ class MusicPlayerClass {
   }
 
   /**
-   * Discover available music tracks from the server
-   * The API reads from music.config.json to know which folders to scan
+   * Load available music tracks from build-time generated manifest
    */
   public async discoverTracks(): Promise<void> {
     if (this.tracksDiscovered) return;
 
-    try {
-      const response = await fetch('/api/music');
-      if (!response.ok) {
-        throw new Error(`Failed to fetch music tracks: ${response.status}`);
-      }
+    // Use statically imported manifest (generated at build time)
+    this.tracksByCategory = (musicManifest.categories as Record<string, MusicTrack[]>) || {};
+    this.tracksDiscovered = true;
 
-      const data: MusicDiscoveryResponse = await response.json();
-      this.tracksByCategory = data.categories || {};
-      this.tracksDiscovered = true;
-
-      // Log discovered tracks
-      for (const [category, tracks] of Object.entries(this.tracksByCategory)) {
-        debugAudio.log(`Discovered ${tracks.length} ${category} tracks`);
-      }
-    } catch (error) {
-      debugAudio.warn('Failed to discover music tracks:', error);
-      this.tracksDiscovered = false;
+    // Log discovered tracks
+    for (const [category, tracks] of Object.entries(this.tracksByCategory)) {
+      debugAudio.log(`Discovered ${tracks.length} ${category} tracks`);
     }
   }
 
