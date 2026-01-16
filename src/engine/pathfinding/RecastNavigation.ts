@@ -115,6 +115,12 @@ export interface RecastAgentHandle {
 }
 
 /**
+ * Terrain height provider callback type.
+ * Given (x, z) world coordinates, returns approximate terrain height.
+ */
+export type TerrainHeightProvider = (x: number, z: number) => number;
+
+/**
  * Main Recast Navigation Manager
  *
  * Handles navmesh generation, path queries, and crowd simulation.
@@ -141,6 +147,9 @@ export class RecastNavigation {
 
   // Initialization state
   private initialized: boolean = false;
+
+  // Terrain height provider for elevation-aware queries
+  private terrainHeightProvider: TerrainHeightProvider | null = null;
 
   private constructor() {}
 
@@ -217,6 +226,62 @@ export class RecastNavigation {
    */
   public isReady(): boolean {
     return this.initialized && this.navMesh !== null && this.navMeshQuery !== null;
+  }
+
+  /**
+   * Set terrain height provider for elevation-aware queries.
+   * When set, pathfinding queries will start at approximate terrain height
+   * instead of y=0, improving accuracy on multi-elevation terrain.
+   */
+  public setTerrainHeightProvider(provider: TerrainHeightProvider | null): void {
+    this.terrainHeightProvider = provider;
+  }
+
+  /**
+   * Get approximate terrain height at a position.
+   * Returns 0 if no terrain height provider is set.
+   */
+  private getTerrainHeight(x: number, z: number): number {
+    if (this.terrainHeightProvider) {
+      return this.terrainHeightProvider(x, z);
+    }
+    return 0;
+  }
+
+  /**
+   * Project a 2D point onto the navmesh surface.
+   * Returns the 3D navmesh position (x, y, z) or null if no valid point found.
+   *
+   * This is critical for crowd operations - DetourCrowd needs positions that
+   * are actually ON the navmesh surface. Without projection, agents placed at
+   * y=0 on elevated terrain won't have valid polygon references.
+   */
+  public projectToNavMesh(
+    x: number,
+    z: number,
+    halfExtents?: { x: number; y: number; z: number }
+  ): { x: number; y: number; z: number } | null {
+    if (!this.navMeshQuery) return null;
+
+    try {
+      // Start query at approximate terrain height for better accuracy
+      const queryY = this.getTerrainHeight(x, z);
+
+      // Use provided halfExtents or default with generous height tolerance
+      const searchExtents = halfExtents ?? { x: 2, y: 10, z: 2 };
+
+      const result = this.navMeshQuery.findClosestPoint(
+        { x, y: queryY, z },
+        { halfExtents: searchExtents }
+      );
+
+      if (result.success && result.point) {
+        return { x: result.point.x, y: result.point.y, z: result.point.z };
+      }
+      return null;
+    } catch {
+      return null;
+    }
   }
 
   /**
@@ -400,8 +465,8 @@ export class RecastNavigation {
   }
 
   /**
-   * Find path between two points
-   * Converts 2D game coords (x, y) to 3D navmesh coords (x, 0, y)
+   * Find path between two points.
+   * Uses terrain height for better query accuracy on multi-elevation terrain.
    *
    * @param agentRadius - Optional agent radius for path query (affects corridor width)
    */
@@ -422,8 +487,12 @@ export class RecastNavigation {
       const searchRadius = Math.max(agentRadius * 4, 2);
       const halfExtents = { x: searchRadius, y: 10, z: searchRadius };
 
-      const startQuery = { x: startX, y: 0, z: startY };
-      const endQuery = { x: endX, y: 0, z: endY };
+      // Start queries at approximate terrain height for better accuracy
+      const startQueryY = this.getTerrainHeight(startX, startY);
+      const endQueryY = this.getTerrainHeight(endX, endY);
+
+      const startQuery = { x: startX, y: startQueryY, z: startY };
+      const endQuery = { x: endX, y: endQueryY, z: endY };
 
       const startOnMesh = this.navMeshQuery.findClosestPoint(startQuery, { halfExtents });
       const endOnMesh = this.navMeshQuery.findClosestPoint(endQuery, { halfExtents });
@@ -539,15 +608,17 @@ export class RecastNavigation {
   }
 
   /**
-   * Find nearest point on navmesh
+   * Find nearest point on navmesh.
+   * Uses terrain height for better query accuracy.
    */
   public findNearestPoint(x: number, y: number): { x: number; y: number } | null {
     if (!this.navMeshQuery) return null;
 
     try {
-      // Use large halfExtents for height tolerance since terrain has varying heights
+      // Start query at approximate terrain height for better accuracy
+      const queryY = this.getTerrainHeight(x, y);
       const halfExtents = { x: 5, y: 20, z: 5 };
-      const result = this.navMeshQuery.findClosestPoint({ x, y: 0, z: y }, { halfExtents });
+      const result = this.navMeshQuery.findClosestPoint({ x, y: queryY, z: y }, { halfExtents });
       if (result.success && result.point) {
         return { x: result.point.x, y: result.point.z };
       }
@@ -558,15 +629,17 @@ export class RecastNavigation {
   }
 
   /**
-   * Check if a point is on the navmesh (walkable)
+   * Check if a point is on the navmesh (walkable).
+   * Uses terrain height for better query accuracy.
    */
   public isWalkable(x: number, y: number): boolean {
     if (!this.navMeshQuery) return false;
 
     try {
-      // Use large halfExtents for height tolerance since terrain has varying heights
+      // Start query at approximate terrain height for better accuracy
+      const queryY = this.getTerrainHeight(x, y);
       const halfExtents = { x: 2, y: 20, z: 2 };
-      const result = this.navMeshQuery.findClosestPoint({ x, y: 0, z: y }, { halfExtents });
+      const result = this.navMeshQuery.findClosestPoint({ x, y: queryY, z: y }, { halfExtents });
       if (!result.success || !result.point) return false;
 
       // Check if the closest point is within a reasonable tolerance
@@ -582,7 +655,8 @@ export class RecastNavigation {
   // ==================== CROWD SIMULATION ====================
 
   /**
-   * Add a unit to crowd simulation
+   * Add a unit to crowd simulation.
+   * Projects the position onto the navmesh surface for correct crowd behavior.
    */
   public addAgent(
     entityId: number,
@@ -599,6 +673,13 @@ export class RecastNavigation {
     }
 
     try {
+      // Project position onto navmesh surface
+      // This ensures the agent has a valid polygon reference for crowd simulation
+      const projected = this.projectToNavMesh(x, y);
+      const agentPos = projected
+        ? { x: projected.x, y: projected.y, z: projected.z }
+        : { x, y: this.getTerrainHeight(x, y), z: y };
+
       const params: Partial<CrowdAgentParams> = {
         ...DEFAULT_AGENT_PARAMS,
         radius,
@@ -607,7 +688,7 @@ export class RecastNavigation {
         collisionQueryRange: radius * 5,
       };
 
-      const agent = this.crowd.addAgent({ x, y: 0, z: y }, params);
+      const agent = this.crowd.addAgent(agentPos, params);
 
       if (agent) {
         const agentIndex = agent.agentIndex;
@@ -641,7 +722,8 @@ export class RecastNavigation {
   }
 
   /**
-   * Set agent move target
+   * Set agent move target.
+   * Projects the target onto the navmesh surface for valid corridor computation.
    */
   public setAgentTarget(entityId: number, targetX: number, targetY: number): boolean {
     if (!this.crowd) return false;
@@ -652,7 +734,14 @@ export class RecastNavigation {
     try {
       const agent = this.crowd.getAgent(agentIndex);
       if (agent) {
-        agent.requestMoveTarget({ x: targetX, y: 0, z: targetY });
+        // Project target onto navmesh surface
+        // Without this, DetourCrowd can't find a valid polygon for the target
+        const projected = this.projectToNavMesh(targetX, targetY);
+        const targetPos = projected
+          ? { x: projected.x, y: projected.y, z: projected.z }
+          : { x: targetX, y: this.getTerrainHeight(targetX, targetY), z: targetY };
+
+        agent.requestMoveTarget(targetPos);
         return true;
       }
     } catch (error) {
@@ -682,7 +771,8 @@ export class RecastNavigation {
   }
 
   /**
-   * Update agent position (for teleporting or external movement)
+   * Update agent position (for teleporting or external movement).
+   * Projects the position onto the navmesh surface to maintain valid crowd state.
    */
   public updateAgentPosition(entityId: number, x: number, y: number): void {
     if (!this.crowd) return;
@@ -693,7 +783,14 @@ export class RecastNavigation {
     try {
       const agent = this.crowd.getAgent(agentIndex);
       if (agent) {
-        agent.teleport({ x, y: 0, z: y });
+        // Project position onto navmesh surface
+        // Teleporting to an off-mesh position would break crowd simulation
+        const projected = this.projectToNavMesh(x, y);
+        const teleportPos = projected
+          ? { x: projected.x, y: projected.y, z: projected.z }
+          : { x, y: this.getTerrainHeight(x, y), z: y };
+
+        agent.teleport(teleportPos);
       }
     } catch {
       // Ignore
