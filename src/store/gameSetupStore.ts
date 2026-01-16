@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import { debugInitialization } from '@/utils/debugLogger';
 import type { MapData } from '@/data/maps/MapTypes';
+import type { EditorMapData } from '@/editor/config/EditorConfig';
 
 export type StartingResources = 'normal' | 'high' | 'insane';
 export type GameSpeed = 'slower' | 'normal' | 'faster' | 'fastest';
@@ -31,6 +32,9 @@ export interface GameSetupState {
   // Custom map data for preview/testing (takes priority over selectedMapId)
   customMapData: MapData | null;
 
+  // Editor map data for preserving editor state during preview
+  editorMapData: EditorMapData | null;
+
   // Editor preview mode - when true, show "Back to Editor" button
   isEditorPreview: boolean;
 
@@ -54,6 +58,7 @@ export interface GameSetupState {
   // Actions
   setSelectedMap: (mapId: string) => void;
   setCustomMap: (mapData: MapData | null) => void;
+  setEditorMapData: (mapData: EditorMapData | null) => void;
   setEditorPreview: (isPreview: boolean) => void;
   setStartingResources: (resources: StartingResources) => void;
   setGameSpeed: (speed: GameSpeed) => void;
@@ -87,6 +92,7 @@ export interface GameSetupState {
   startBattleSimulator: () => void;
   endGame: () => void;
   reset: () => void;
+  clearEditorPreviewState: () => void;
   setLocalPlayerId: (playerId: string | null) => void;
 
   // Check if current session is spectator mode (no human players or local player is not set)
@@ -164,6 +170,7 @@ const defaultPlayerSlots: PlayerSlot[] = [
 const initialState = {
   selectedMapId: 'crystal_caverns',
   customMapData: null as MapData | null,
+  editorMapData: null as EditorMapData | null,
   isEditorPreview: false,
   startingResources: 'normal' as StartingResources,
   gameSpeed: 'normal' as GameSpeed,
@@ -177,8 +184,19 @@ const initialState = {
 export const useGameSetupStore = create<GameSetupState>((set, get) => ({
   ...initialState,
 
-  setSelectedMap: (mapId) => set({ selectedMapId: mapId, customMapData: null, isEditorPreview: false }),
+  setSelectedMap: (mapId) => set({ selectedMapId: mapId, customMapData: null, editorMapData: null, isEditorPreview: false }),
   setCustomMap: (mapData) => set({ customMapData: mapData }),
+  setEditorMapData: (mapData) => {
+    // Persist to sessionStorage so it survives page reload (when navigating back from preview)
+    if (typeof window !== 'undefined') {
+      if (mapData) {
+        sessionStorage.setItem('voidstrike_editor_map_data', JSON.stringify(mapData));
+      } else {
+        sessionStorage.removeItem('voidstrike_editor_map_data');
+      }
+    }
+    set({ editorMapData: mapData });
+  },
   setEditorPreview: (isPreview) => set({ isEditorPreview: isPreview }),
   setStartingResources: (resources) => set({ startingResources: resources }),
   setGameSpeed: (speed) => set({ gameSpeed: speed }),
@@ -371,6 +389,13 @@ export const useGameSetupStore = create<GameSetupState>((set, get) => ({
   },
   endGame: () => set({ gameStarted: false, isBattleSimulator: false, customMapData: null, isEditorPreview: false }),
   reset: () => set({ ...initialState, playerSlots: [...defaultPlayerSlots], localPlayerId: 'player1', customMapData: null, isEditorPreview: false }),
+  clearEditorPreviewState: () => {
+    // Clear sessionStorage as well
+    if (typeof window !== 'undefined') {
+      sessionStorage.removeItem('voidstrike_editor_map_data');
+    }
+    set({ editorMapData: null, isEditorPreview: false });
+  },
 
   isSpectator: (): boolean => {
     // Check if there's no local player (all players are AI)
@@ -428,6 +453,25 @@ export function isBattleSimulatorMode(): boolean {
 
 export function getCustomMapData(): MapData | null {
   return useGameSetupStore.getState().customMapData;
+}
+
+export function getEditorMapData(): EditorMapData | null {
+  // First check in-memory state
+  const inMemory = useGameSetupStore.getState().editorMapData;
+  if (inMemory) return inMemory;
+
+  // Fall back to sessionStorage (for page reload case)
+  if (typeof window !== 'undefined') {
+    const stored = sessionStorage.getItem('voidstrike_editor_map_data');
+    if (stored) {
+      try {
+        return JSON.parse(stored) as EditorMapData;
+      } catch {
+        return null;
+      }
+    }
+  }
+  return null;
 }
 
 export function enableSpectatorMode(): void {
