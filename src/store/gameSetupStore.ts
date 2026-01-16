@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import { debugInitialization } from '@/utils/debugLogger';
+import type { MapData } from '@/data/maps/MapTypes';
 
 export type StartingResources = 'normal' | 'high' | 'insane';
 export type GameSpeed = 'slower' | 'normal' | 'faster' | 'fastest';
@@ -27,6 +28,9 @@ export interface GameSetupState {
   // Map selection
   selectedMapId: string;
 
+  // Custom map data for preview/testing (takes priority over selectedMapId)
+  customMapData: MapData | null;
+
   // Game settings
   startingResources: StartingResources;
   gameSpeed: GameSpeed;
@@ -46,6 +50,7 @@ export interface GameSetupState {
 
   // Actions
   setSelectedMap: (mapId: string) => void;
+  setCustomMap: (mapData: MapData | null) => void;
   setStartingResources: (resources: StartingResources) => void;
   setGameSpeed: (speed: GameSpeed) => void;
   setFogOfWar: (enabled: boolean) => void;
@@ -154,6 +159,7 @@ const defaultPlayerSlots: PlayerSlot[] = [
 
 const initialState = {
   selectedMapId: 'crystal_caverns',
+  customMapData: null as MapData | null,
   startingResources: 'normal' as StartingResources,
   gameSpeed: 'normal' as GameSpeed,
   fogOfWar: true,
@@ -166,7 +172,8 @@ const initialState = {
 export const useGameSetupStore = create<GameSetupState>((set, get) => ({
   ...initialState,
 
-  setSelectedMap: (mapId) => set({ selectedMapId: mapId }),
+  setSelectedMap: (mapId) => set({ selectedMapId: mapId, customMapData: null }),
+  setCustomMap: (mapData) => set({ customMapData: mapData }),
   setStartingResources: (resources) => set({ startingResources: resources }),
   setGameSpeed: (speed) => set({ gameSpeed: speed }),
   setFogOfWar: (enabled) => set({ fogOfWar: enabled }),
@@ -356,8 +363,8 @@ export const useGameSetupStore = create<GameSetupState>((set, get) => ({
       ],
     });
   },
-  endGame: () => set({ gameStarted: false, isBattleSimulator: false }),
-  reset: () => set({ ...initialState, playerSlots: [...defaultPlayerSlots], localPlayerId: 'player1' }),
+  endGame: () => set({ gameStarted: false, isBattleSimulator: false, customMapData: null }),
+  reset: () => set({ ...initialState, playerSlots: [...defaultPlayerSlots], localPlayerId: 'player1', customMapData: null }),
 
   isSpectator: (): boolean => {
     // Check if there's no local player (all players are AI)
@@ -411,6 +418,10 @@ export function isSpectatorMode(): boolean {
 
 export function isBattleSimulatorMode(): boolean {
   return useGameSetupStore.getState().isBattleSimulator;
+}
+
+export function getCustomMapData(): MapData | null {
+  return useGameSetupStore.getState().customMapData;
 }
 
 export function enableSpectatorMode(): void {

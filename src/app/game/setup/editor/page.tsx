@@ -4,8 +4,10 @@ import { Suspense, useState, useEffect, useCallback } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { EditorCore, VOIDSTRIKE_EDITOR_CONFIG } from '@/editor';
 import { voidstrikeDataProvider } from '@/editor/providers/voidstrike';
+import { useGameSetupStore } from '@/store/gameSetupStore';
 import type { EditorMapData } from '@/editor';
 import type { MapListItem } from '@/editor/core/EditorHeader';
+import type { MapData } from '@/data/maps/MapTypes';
 
 /**
  * Map Editor Page
@@ -50,13 +52,33 @@ function EditorPageContent() {
   };
 
   const handlePreview = (data: EditorMapData) => {
-    // Convert to game format and store in state for preview
-    const gameData = voidstrikeDataProvider.exportForGame?.(data);
+    // Convert editor format to game format
+    const gameData = voidstrikeDataProvider.exportForGame?.(data) as MapData;
+    if (!gameData) {
+      console.error('Failed to convert map to game format');
+      return;
+    }
+
+    // Ensure map has required fields for spawning
+    if (!gameData.spawns || gameData.spawns.length < 2) {
+      alert('Map needs at least 2 spawn points (main bases) to preview. Add main bases to your map.');
+      return;
+    }
+
     console.log('Preview map:', gameData);
 
-    // TODO: Store the map data and start preview game
-    // For now, just navigate to game setup
-    router.push('/game/setup');
+    // Store custom map in game setup store
+    const store = useGameSetupStore.getState();
+    store.setCustomMap(gameData);
+
+    // Configure for preview: 1 human vs 1 AI
+    store.reset();
+    store.setCustomMap(gameData); // Re-set after reset
+    store.setFogOfWar(false); // Disable fog for easier testing
+    store.startGame();
+
+    // Navigate to game
+    router.push('/game');
   };
 
   const handleLoadMap = useCallback((mapId: string) => {
