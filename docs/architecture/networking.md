@@ -29,12 +29,13 @@ A groundbreaking multiplayer architecture that requires **zero servers** to oper
 
 | Component | File | Status |
 |-----------|------|--------|
-| **WebRTC P2P Connections** | `PeerConnection.ts` | ✅ Full mesh topology |
-| **Peer Manager** | `PeerManager.ts` | ✅ Multi-peer orchestration |
+| **Connection Codes** | `ConnectionCode.ts` | ✅ SDP encoding/decoding |
+| **Nostr Matchmaking** | `NostrMatchmaking.ts` | ✅ Relay-based discovery |
+| **Nostr Relays** | `NostrRelays.ts` | ✅ Health-checked relay list |
+| **Peer Relay** | `PeerRelay.ts` | ✅ NAT traversal via peers |
 | **Game Message Protocol** | `types.ts` | ✅ 16 message types |
 | **Checksum System** | `ChecksumSystem.ts` | ✅ State verification |
-| **Desync Detection** | `DesyncDetection.ts` | ✅ 593 lines debugging |
-| **Latency Measurement** | Built into PeerConnection | ✅ Ping/pong every 5s |
+| **Desync Detection** | `DesyncDetection.ts` | ✅ Debugging tools |
 
 ### ⚠️ What's INCOMPLETE (Game Integration)
 
@@ -45,14 +46,14 @@ A groundbreaking multiplayer architecture that requires **zero servers** to oper
 | **Input Buffering** | No lag compensation |
 | **Reconnection** | Types exist, logic missing |
 
-### 🚫 Current Server Dependencies (To Be Removed)
+### ✅ Serverless Architecture (No Backend Required)
 
-| Dependency | Current | Replacement |
-|------------|---------|-------------|
-| **Signaling** | Supabase Realtime | Connection Codes + Nostr |
-| **Lobby Storage** | Supabase Postgres | Nostr events |
-| **Lobby Discovery** | Supabase Queries | Nostr subscriptions |
-| **Player Profiles** | Supabase Auth | Ed25519 keypairs |
+| Feature | Implementation |
+|---------|----------------|
+| **Signaling** | Connection Codes + Nostr relays |
+| **Lobby Storage** | Nostr events (ephemeral) |
+| **Lobby Discovery** | Nostr subscriptions |
+| **Player Identity** | Ed25519 keypairs (nostr-tools) |
 
 ---
 
@@ -201,19 +202,20 @@ VOID-A3K7-F9X2-BMRP-Q8YN-T4LC
 import pako from 'pako';  // ~30KB, pure JS compression
 
 /**
- * Connection code alphabet - avoids confusing characters
- * (no 0/O, 1/I/L to prevent typos)
+ * Connection code alphabet - Crockford's Base32
+ * Avoids confusing characters (no I/L/O/U)
  */
-const ALPHABET = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789';  // 32 chars
+const ALPHABET = '0123456789ABCDEFGHJKMNPQRSTVWXYZ';  // 32 chars
 
 /**
  * Data encoded in a connection code
  */
 interface ConnectionCodeData {
   v: 1;                      // Version
-  sdp: string;               // SDP offer (compressed)
+  sdp: string;               // SDP offer/answer
   ice: string[];             // ICE candidates
   ts: number;                // Timestamp (for expiry check)
+  type: 'offer' | 'answer';  // SDP type
   mode?: '1v1' | '2v2';      // Game mode
   map?: string;              // Map ID
 }
@@ -471,80 +473,67 @@ function formatCode(encoded: string): string {
 | **Tiny package** | `nostr-tools` is ~30KB |
 | **Perfect for signaling** | Designed for real-time event exchange |
 
-### Dynamic Nostr Relay Discovery
+### Nostr Relay Configuration
 
-**No hardcoded lists needed!** Use nostr.watch API for live relay health:
+Uses a curated list of public relays with health-check filtering:
 
 ```typescript
 // src/engine/network/p2p/NostrRelays.ts
 
 /**
- * Hardcoded fallback relays (most stable, always available)
- * Only used if API fetch fails
+ * Public relays that accept anonymous posts (no auth required)
+ * Prioritized by reliability and speed
  */
-const FALLBACK_RELAYS = [
-  'wss://relay.damus.io',        // Most popular, very reliable
-  'wss://nos.lol',               // Fast, reliable
-  'wss://relay.nostr.band',      // Good uptime
-  'wss://relay.snort.social',    // Popular client's relay
-  'wss://nostr.wine',            // Paid relay, high quality
+const PUBLIC_RELAYS = [
+  'wss://relay.damus.io',        // Very reliable
+  'wss://nos.lol',               // Very reliable
+  'wss://relay.primal.net',      // Reliable
+  'wss://nostr.mom',             // Reliable
+  'wss://relay.nostr.band',      // Usually reliable
+  'wss://nostr-pub.wellorder.net',
+  'wss://nostr.oxtr.dev',
+  'wss://relay.nostr.net',
 ];
 
 /**
- * Fetch live relay list from nostr.watch
- * This service monitors relay health in real-time
+ * Get healthy relays for matchmaking
+ * Pre-checks relay connectivity before returning
  */
-export async function getRelays(count: number = 8): Promise<string[]> {
-  try {
-    // nostr.watch provides real-time relay health monitoring
-    const response = await fetch('https://api.nostr.watch/v1/online', {
-      signal: AbortSignal.timeout(5000), // 5 second timeout
-    });
+export async function getRelays(count: number = 6): Promise<string[]> {
+  // Check health of all relays in parallel with short timeout
+  const healthyRelays = await filterHealthyRelays(PUBLIC_RELAYS, 2000);
 
-    if (!response.ok) throw new Error(`HTTP ${response.status}`);
-
-    const relays: string[] = await response.json();
-
-    // Filter for WebSocket relays and shuffle for load distribution
-    const wsRelays = relays
-      .filter(r => r.startsWith('wss://'))
-      .sort(() => Math.random() - 0.5)  // Shuffle
-      .slice(0, count);
-
-    if (wsRelays.length >= 3) {
-      console.log(`[Nostr] Using ${wsRelays.length} live relays from nostr.watch`);
-      return wsRelays;
-    }
-
-    throw new Error('Not enough relays from API');
-
-  } catch (error) {
-    console.warn('[Nostr] API fetch failed, using fallback relays:', error);
-    return FALLBACK_RELAYS;
+  if (healthyRelays.length === 0) {
+    // Fallback: return all relays even if health check failed
+    return PUBLIC_RELAYS;
   }
+
+  // Use consistent ordering so host and guest use same relays
+  return healthyRelays.slice(0, Math.min(count, healthyRelays.length));
 }
 
 /**
- * nostr.watch API endpoints:
- * - /v1/online  - All currently online relays
- * - /v1/public  - Public (free) relays only
- * - /v1/paid    - Paid relays
+ * Check if a relay is reachable via WebSocket
  */
+export async function checkRelayHealth(
+  relayUrl: string,
+  timeout: number = 3000
+): Promise<boolean>;
 ```
 
-### Why Dynamic Relay Lists?
+### Why Health-Check Filtering?
 
 | Benefit | Description |
 |---------|-------------|
-| **Always fresh** | No outdated hardcoded URLs |
-| **Load balanced** | Shuffling distributes load across relays |
+| **Consistent ordering** | Host and guest use same relays for reliable signaling |
 | **Self-healing** | Automatically avoids offline relays |
-| **No maintenance** | List updates itself |
+| **Fast startup** | 2-second timeout ensures quick connection |
+| **Fallback safety** | Uses full list if health checks fail |
 
 ### Technical Implementation
 
 ```typescript
-// src/engine/network/p2p/NostrDiscovery.ts
+// src/engine/network/p2p/NostrMatchmaking.ts
 
 import {
   SimplePool,
@@ -1473,8 +1462,7 @@ src/engine/network/
 │   ├── NostrMatchmaking.ts      # Phase 3: Nostr-based discovery
 │   ├── PeerRelay.ts             # Phase 4: Relay network
 │   └── index.ts                 # Public exports
-├── PeerConnection.ts            # (existing) WebRTC wrapper
-├── PeerManager.ts               # (existing) Full mesh management
-├── SignalingService.ts          # (existing) Supabase signaling (legacy)
-└── types.ts                     # (existing) Network types
+├── DesyncDetection.ts           # Desync debugging tools
+├── index.ts                     # Module exports
+└── types.ts                     # Network types
 ```
