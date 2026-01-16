@@ -86,6 +86,25 @@ async function gatherICE(pc: RTCPeerConnection, timeout = 3000): Promise<string[
   });
 }
 
+/**
+ * Publish to multiple relays, succeeding if at least one works
+ * Doesn't throw if some relays fail
+ */
+async function publishToRelays(
+  pool: SimplePool,
+  relays: string[],
+  event: NostrEvent
+): Promise<boolean> {
+  const results = await Promise.allSettled(
+    relays.map(r => pool.publish([r], event))
+  );
+
+  const successCount = results.filter(r => r.status === 'fulfilled').length;
+  console.log(`[Lobby] Published to ${successCount}/${relays.length} relays`);
+
+  return successCount > 0;
+}
+
 export function useLobby(
   onGuestJoin?: (guestName: string) => string | null, // Returns slot ID or null
   onGuestLeave?: (slotId: string) => void
@@ -141,7 +160,10 @@ export function useLobby(
           content: JSON.stringify({ code }),
         }, secretKey);
 
-        await Promise.any(relays.map(r => pool.publish([r], lobbyEvent)));
+        const published = await publishToRelays(pool, relays, lobbyEvent);
+        if (!published) {
+          throw new Error('Failed to publish lobby to any relay');
+        }
         console.log('[Lobby] Published lobby with code:', code);
 
         // Subscribe to join requests
@@ -207,7 +229,7 @@ export function useLobby(
                 }),
               }, secretKey);
 
-              await Promise.any(relays.map(r => pool.publish([r], offerEvent)));
+              await publishToRelays(pool, relays, offerEvent);
               console.log('[Lobby] Sent offer to guest');
 
               // Listen for answer
@@ -304,7 +326,10 @@ export function useLobby(
         content: JSON.stringify({ name: playerName }),
       }, secretKey);
 
-      await Promise.any(relays.map(r => pool.publish([r], joinEvent)));
+      const published = await publishToRelays(pool, relays, joinEvent);
+      if (!published) {
+        throw new Error('Failed to publish join request to any relay');
+      }
       console.log('[Lobby] Sent join request for code:', normalizedCode);
 
       // Listen for offer from host
@@ -375,7 +400,7 @@ export function useLobby(
               }),
             }, secretKey);
 
-            await Promise.any(relays.map(r => pool.publish([r], answerEvent)));
+            await publishToRelays(pool, relays, answerEvent);
             console.log('[Lobby] Sent answer to host');
 
           } catch (e) {
