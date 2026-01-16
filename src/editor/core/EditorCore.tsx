@@ -2,32 +2,18 @@
  * EditorCore - The main map editor component
  *
  * A config-driven, reusable map editor that can be customized for any game.
- * Provide an EditorConfig and EditorDataProvider to integrate with your game.
- *
- * @example
- * ```tsx
- * import { EditorCore } from '@/editor';
- * import { VOIDSTRIKE_EDITOR_CONFIG } from '@/editor/configs/voidstrike';
- * import { voidstrikeDataProvider } from '@/editor/providers/voidstrike';
- *
- * <EditorCore
- *   config={VOIDSTRIKE_EDITOR_CONFIG}
- *   dataProvider={voidstrikeDataProvider}
- *   mapId="my_map"
- *   onSave={(data) => console.log('Saved', data)}
- *   onCancel={() => router.back()}
- * />
- * ```
+ * Features a floating toolbar, context menu, mini-map, and status bar.
  */
 
 'use client';
 
-import { useEffect, useCallback, useMemo, useState } from 'react';
+import { useEffect, useCallback, useMemo, useState, useRef } from 'react';
 import type {
   EditorConfig,
   EditorDataProvider,
   EditorCallbacks,
   EditorMapData,
+  EditorObject,
 } from '../config/EditorConfig';
 import { useEditorState } from '../hooks/useEditorState';
 import { useUIStore } from '@/store/uiStore';
@@ -37,28 +23,23 @@ import { MusicPlayer } from '@/audio/MusicPlayer';
 import { Editor3DCanvas } from './Editor3DCanvas';
 import { EditorPanels } from './EditorPanels';
 import { EditorHeader, type MapListItem } from './EditorHeader';
+import { EditorFloatingToolbar } from './EditorFloatingToolbar';
+import { EditorContextMenu, buildContextMenuActions, type ContextMenuAction } from './EditorContextMenu';
+import { EditorStatusBar } from './EditorStatusBar';
+import { EditorMiniMap } from './EditorMiniMap';
 
 // ============================================
 // TYPES
 // ============================================
 
 export interface EditorCoreProps extends EditorCallbacks {
-  /** Editor configuration */
   config: EditorConfig;
-  /** Data provider for loading/saving maps */
   dataProvider?: EditorDataProvider;
-  /** Map ID to load (optional) */
   mapId?: string;
-  /** Initial map data (alternative to mapId) */
   initialMapData?: EditorMapData;
-  /** CSS class name */
   className?: string;
-  // Load Map feature props
-  /** List of available maps for the Load Map dropdown */
   mapList?: MapListItem[];
-  /** Callback when user selects a map to load */
   onLoadMap?: (mapId: string) => void;
-  /** Callback when user wants to create a new map */
   onNewMap?: () => void;
 }
 
@@ -100,6 +81,40 @@ export function EditorCore({
 
   // Edge scroll control - disabled when mouse is over UI panels
   const [edgeScrollEnabled, setEdgeScrollEnabled] = useState(true);
+
+  // Right panel collapsed state
+  const [isPanelCollapsed, setIsPanelCollapsed] = useState(false);
+
+  // Cursor tracking for status bar
+  const [cursorPosition, setCursorPosition] = useState<{ x: number; y: number } | null>(null);
+  const [cursorWorldPosition, setCursorWorldPosition] = useState<{ x: number; y: number; z: number } | null>(null);
+  const [hoveredObject, setHoveredObject] = useState<EditorObject | null>(null);
+
+  // Context menu state
+  const [contextMenu, setContextMenu] = useState<{
+    x: number;
+    y: number;
+    gridPos: { x: number; y: number } | null;
+    objectAtPosition: EditorObject | null;
+  } | null>(null);
+
+  // Viewport bounds for mini-map
+  const [viewportBounds, setViewportBounds] = useState<{
+    minX: number;
+    maxX: number;
+    minY: number;
+    maxY: number;
+  } | null>(null);
+
+  // Terrain copy buffer
+  const [copiedTerrain, setCopiedTerrain] = useState<{
+    cells: Array<{ dx: number; dy: number; cell: EditorMapData['terrain'][0][0] }>;
+    centerX: number;
+    centerY: number;
+  } | null>(null);
+
+  // Ref to canvas for navigation
+  const canvasNavigateRef = useRef<((x: number, y: number) => void) | null>(null);
 
   // Initialize category visibility when config loads
   useEffect(() => {
@@ -163,12 +178,10 @@ export function EditorCore({
           console.error('Failed to load map:', error);
         }
       } else if (dataProvider) {
-        // Create new blank map
         const newMap = dataProvider.createMap(128, 128, 'New Map');
         loadMap(newMap);
       }
     };
-
     loadInitialMap();
   }, [mapId, initialMapData, dataProvider, loadMap]);
 
@@ -200,10 +213,8 @@ export function EditorCore({
   const handleExportJson = useCallback(() => {
     if (!state.mapData) return;
 
-    // Create a clean copy of the map data for export
     const exportData = {
       ...state.mapData,
-      // Ensure we have all required fields
       name: state.mapData.name || 'Untitled Map',
       width: state.mapData.width,
       height: state.mapData.height,
@@ -224,7 +235,7 @@ export function EditorCore({
     URL.revokeObjectURL(url);
   }, [state.mapData]);
 
-  // Handle preview (play without saving)
+  // Handle preview
   const handlePreview = useCallback(() => {
     if (!state.mapData) return;
     onPlay?.(state.mapData);
@@ -233,16 +244,14 @@ export function EditorCore({
   // Handle validate
   const handleValidate = useCallback(async () => {
     if (!state.mapData) return;
-
     if (dataProvider?.validateMap) {
       const result = await dataProvider.validateMap(state.mapData);
       console.log('Validation result:', result);
     }
-
     onValidate?.(state.mapData);
   }, [state.mapData, dataProvider, onValidate]);
 
-  // Handle cancel with unsaved changes warning
+  // Handle cancel
   const handleCancel = useCallback(() => {
     if (state.isDirty) {
       const confirmed = window.confirm('You have unsaved changes. Are you sure you want to leave?');
@@ -251,10 +260,122 @@ export function EditorCore({
     onCancel?.();
   }, [state.isDirty, onCancel]);
 
+  // Handle context menu open
+  const handleContextMenu = useCallback((
+    e: { clientX: number; clientY: number },
+    gridPos: { x: number; y: number } | null,
+    objectAtPosition: EditorObject | null
+  ) => {
+    setContextMenu({
+      x: e.clientX,
+      y: e.clientY,
+      gridPos,
+      objectAtPosition,
+    });
+  }, []);
+
+  // Handle mini-map navigation
+  const handleMiniMapNavigate = useCallback((x: number, y: number) => {
+    canvasNavigateRef.current?.(x, y);
+  }, []);
+
+  // Copy terrain around current position
+  const handleCopyTerrain = useCallback(() => {
+    if (!cursorPosition || !state.mapData) return;
+
+    const radius = state.brushSize;
+    const cells: Array<{ dx: number; dy: number; cell: EditorMapData['terrain'][0][0] }> = [];
+
+    for (let dy = -radius; dy <= radius; dy++) {
+      for (let dx = -radius; dx <= radius; dx++) {
+        if (dx * dx + dy * dy > radius * radius) continue;
+        const x = cursorPosition.x + dx;
+        const y = cursorPosition.y + dy;
+        if (x < 0 || x >= state.mapData.width || y < 0 || y >= state.mapData.height) continue;
+        cells.push({
+          dx,
+          dy,
+          cell: { ...state.mapData.terrain[y][x] },
+        });
+      }
+    }
+
+    setCopiedTerrain({
+      cells,
+      centerX: cursorPosition.x,
+      centerY: cursorPosition.y,
+    });
+  }, [cursorPosition, state.mapData, state.brushSize]);
+
+  // Paste terrain at current position
+  const handlePasteTerrain = useCallback(() => {
+    if (!copiedTerrain || !cursorPosition || !state.mapData) return;
+
+    const updates: Array<{ x: number; y: number; cell: Partial<EditorMapData['terrain'][0][0]> }> = [];
+
+    for (const { dx, dy, cell } of copiedTerrain.cells) {
+      const x = cursorPosition.x + dx;
+      const y = cursorPosition.y + dy;
+      if (x < 0 || x >= state.mapData.width || y < 0 || y >= state.mapData.height) continue;
+      updates.push({ x, y, cell });
+    }
+
+    if (updates.length > 0) {
+      editorState.startBatch();
+      editorState.updateCellsBatched(updates);
+      editorState.commitBatch();
+    }
+  }, [copiedTerrain, cursorPosition, state.mapData, editorState]);
+
+  // Add object at position
+  const handleAddObjectAtPosition = useCallback((typeId: string, x: number, y: number) => {
+    const objType = config.objectTypes.find((t) => t.id === typeId);
+    if (!objType) return;
+
+    const defaultProperties: Record<string, unknown> = {};
+    if (objType.properties) {
+      for (const prop of objType.properties) {
+        if (prop.defaultValue !== undefined) {
+          defaultProperties[prop.key] = prop.defaultValue;
+        }
+      }
+    }
+
+    editorState.addObject({
+      type: typeId,
+      x,
+      y,
+      radius: objType.defaultRadius,
+      properties: defaultProperties,
+    });
+  }, [config.objectTypes, editorState]);
+
+  // Build context menu actions
+  const contextMenuActions = useMemo((): ContextMenuAction[] => {
+    if (!contextMenu) return [];
+
+    return buildContextMenuActions({
+      gridPos: contextMenu.gridPos,
+      selectedObjects: state.selectedObjects,
+      objectAtPosition: contextMenu.objectAtPosition,
+      config,
+      onToolSelect: editorState.setActiveTool,
+      onFillArea: () => {
+        if (contextMenu.gridPos) {
+          editorState.setActiveTool('fill');
+        }
+      },
+      onObjectRemove: editorState.removeObject,
+      onCopyTerrain: handleCopyTerrain,
+      onPasteTerrain: handlePasteTerrain,
+      onAddObject: handleAddObjectAtPosition,
+      hasCopiedTerrain: copiedTerrain !== null,
+    });
+  }, [contextMenu, state.selectedObjects, config, editorState, handleCopyTerrain, handlePasteTerrain, handleAddObjectAtPosition, copiedTerrain]);
+
   // Keyboard shortcuts
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      // Ignore if typing in an input
       if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) {
         return;
       }
@@ -286,10 +407,24 @@ export function EditorCore({
         return;
       }
 
-      // Export (Ctrl+S exports as JSON)
+      // Export (Ctrl+S)
       if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 's') {
         e.preventDefault();
         handleExportJson();
+        return;
+      }
+
+      // Copy terrain (Ctrl+C)
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'c') {
+        e.preventDefault();
+        handleCopyTerrain();
+        return;
+      }
+
+      // Paste terrain (Ctrl+V)
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'v') {
+        e.preventDefault();
+        handlePasteTerrain();
         return;
       }
 
@@ -304,16 +439,34 @@ export function EditorCore({
         return;
       }
 
-      // Escape - clear selection
+      // Escape - clear selection / close context menu
       if (e.key === 'Escape') {
+        setContextMenu(null);
         editorState.clearSelection();
+        return;
+      }
+
+      // Tab - toggle panel
+      if (e.key === 'Tab') {
+        e.preventDefault();
+        setIsPanelCollapsed((prev) => !prev);
+        return;
+      }
+
+      // Brush size with [ and ]
+      if (e.key === '[') {
+        editorState.setBrushSize(Math.max(1, state.brushSize - 1));
+        return;
+      }
+      if (e.key === ']') {
+        editorState.setBrushSize(Math.min(20, state.brushSize + 1));
         return;
       }
     };
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [config, editorState, state.selectedObjects, handleExportJson]);
+  }, [config, editorState, state.selectedObjects, state.brushSize, handleExportJson, handleCopyTerrain, handlePasteTerrain]);
 
   // Theme CSS variables
   const themeStyle = useMemo(
@@ -366,9 +519,9 @@ export function EditorCore({
       />
 
       {/* Main content */}
-      <div className="flex-1 flex min-h-0">
+      <div className="flex-1 flex min-h-0 relative">
         {/* 3D Canvas area */}
-        <div className="flex-1 p-3">
+        <div className="flex-1 relative">
           <Editor3DCanvas
             config={config}
             state={state}
@@ -381,33 +534,103 @@ export function EditorCore({
             onObjectSelect={editorState.selectObjects}
             onObjectUpdate={editorState.updateObject}
             onObjectAdd={editorState.addObject}
+            onCursorMove={(gridPos, worldPos) => {
+              setCursorPosition(gridPos);
+              setCursorWorldPosition(worldPos);
+            }}
+            onObjectHover={setHoveredObject}
+            onContextMenu={handleContextMenu}
+            onViewportChange={setViewportBounds}
+            onNavigateRef={(fn) => { canvasNavigateRef.current = fn; }}
+          />
+
+          {/* Floating Toolbar */}
+          <EditorFloatingToolbar
+            config={config}
+            activeTool={state.activeTool}
+            selectedElevation={state.selectedElevation}
+            brushSize={state.brushSize}
+            onToolSelect={editorState.setActiveTool}
+            onBrushSizeChange={editorState.setBrushSize}
+            onElevationSelect={editorState.setSelectedElevation}
+          />
+
+          {/* Mini-map */}
+          <EditorMiniMap
+            config={config}
+            mapData={state.mapData}
+            objects={state.mapData?.objects || []}
+            viewportBounds={viewportBounds}
+            onNavigate={handleMiniMapNavigate}
+          />
+
+          {/* Status Bar */}
+          <EditorStatusBar
+            config={config}
+            state={state}
+            cursorPosition={cursorPosition}
+            cursorWorldPosition={cursorWorldPosition}
+            hoveredObject={hoveredObject}
           />
         </div>
 
-        {/* Right panel */}
-        <EditorPanels
-          config={config}
-          state={state}
-          visibility={visibility}
-          onToolSelect={editorState.setActiveTool}
-          onElevationSelect={editorState.setSelectedElevation}
-          onFeatureSelect={editorState.setSelectedFeature}
-          onMaterialSelect={editorState.setSelectedMaterial}
-          onBrushSizeChange={editorState.setBrushSize}
-          onPanelChange={editorState.setActivePanel}
-          onBiomeChange={editorState.setActiveBiome}
-          onObjectAdd={editorState.addObject}
-          onObjectRemove={editorState.removeObject}
-          onObjectPropertyUpdate={editorState.updateObjectProperty}
-          onMetadataUpdate={editorState.updateMapMetadata}
-          onValidate={handleValidate}
-          onToggleLabels={toggleLabels}
-          onToggleGrid={toggleGrid}
-          onToggleCategory={toggleCategory}
+        {/* Right panel (collapsible) */}
+        <div
+          className={`transition-all duration-300 ${isPanelCollapsed ? 'w-0 overflow-hidden' : ''}`}
           onMouseEnter={handlePanelMouseEnter}
           onMouseLeave={handlePanelMouseLeave}
-        />
+        >
+          {!isPanelCollapsed && (
+            <EditorPanels
+              config={config}
+              state={state}
+              visibility={visibility}
+              onToolSelect={editorState.setActiveTool}
+              onElevationSelect={editorState.setSelectedElevation}
+              onFeatureSelect={editorState.setSelectedFeature}
+              onMaterialSelect={editorState.setSelectedMaterial}
+              onBrushSizeChange={editorState.setBrushSize}
+              onPanelChange={editorState.setActivePanel}
+              onBiomeChange={editorState.setActiveBiome}
+              onObjectAdd={editorState.addObject}
+              onObjectRemove={editorState.removeObject}
+              onObjectPropertyUpdate={editorState.updateObjectProperty}
+              onMetadataUpdate={editorState.updateMapMetadata}
+              onValidate={handleValidate}
+              onToggleLabels={toggleLabels}
+              onToggleGrid={toggleGrid}
+              onToggleCategory={toggleCategory}
+            />
+          )}
+        </div>
+
+        {/* Panel toggle button */}
+        <button
+          onClick={() => setIsPanelCollapsed((prev) => !prev)}
+          className="absolute right-0 top-1/2 -translate-y-1/2 w-6 h-16 flex items-center justify-center rounded-l-lg transition-all z-30"
+          style={{
+            backgroundColor: config.theme.surface,
+            border: `1px solid ${config.theme.border}`,
+            borderRight: 'none',
+            right: isPanelCollapsed ? 0 : 256,
+          }}
+          title={isPanelCollapsed ? 'Show Panel (Tab)' : 'Hide Panel (Tab)'}
+        >
+          <span style={{ color: config.theme.text.muted }}>
+            {isPanelCollapsed ? '◀' : '▶'}
+          </span>
+        </button>
       </div>
+
+      {/* Context Menu */}
+      <EditorContextMenu
+        x={contextMenu?.x || 0}
+        y={contextMenu?.y || 0}
+        isOpen={contextMenu !== null}
+        onClose={() => setContextMenu(null)}
+        actions={contextMenuActions}
+        theme={config.theme}
+      />
     </div>
   );
 }

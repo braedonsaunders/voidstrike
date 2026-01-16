@@ -192,10 +192,16 @@ export function WebGPUGameCanvas() {
 
     const initializeGame = async () => {
       try {
-        // Load selected map from store
-        const selectedMapId = useGameSetupStore.getState().selectedMapId;
-        CURRENT_MAP = getMapById(selectedMapId) || DEFAULT_MAP;
-        debugInitialization.log(`[WebGPUGameCanvas] Loading map: ${CURRENT_MAP.name}`);
+        // Check for custom map first (from editor preview), then fall back to selected map
+        const customMap = useGameSetupStore.getState().customMapData;
+        if (customMap) {
+          CURRENT_MAP = customMap;
+          debugInitialization.log(`[WebGPUGameCanvas] Loading custom/preview map: ${CURRENT_MAP.name}`);
+        } else {
+          const selectedMapId = useGameSetupStore.getState().selectedMapId;
+          CURRENT_MAP = getMapById(selectedMapId) || DEFAULT_MAP;
+          debugInitialization.log(`[WebGPUGameCanvas] Loading map: ${CURRENT_MAP.name}`);
+        }
 
         setLoadingStatus('Loading 3D models');
         setLoadingProgress(10);
