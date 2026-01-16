@@ -190,7 +190,7 @@
   - Reduced obstacle expansion from (agentRadius + 0.1) to just 0.1 since walkableRadius handles clearance
   - Reduced MovementSystem avoidance margins (0.6→0.3 hard, 1.5→0.8 soft) since navmesh provides primary avoidance
 - [ ] **Debug navmesh visualization** - Visual overlay to verify navmesh coverage
-- [ ] **Re-enable crowd simulation** - Fix crowd velocity returning 0 and re-enable DetourCrowd for collision avoidance
+- [x] **Fix crowd velocity returning near-zero** - Root cause: terrain height provider used `game.getTerrainHeightAt()` (raw elevation × 0.04) while navmesh was generated from `terrain.getHeightAt()` (smoothed heightMap). Height mismatch caused agents to be placed slightly off-navmesh, resulting in glacial movement speeds. Fix: PathfindingSystem now accepts custom terrain height function via `setTerrainHeightFunction()`, and WebGPUGameCanvas passes the terrain's heightMap-based function before navmesh init.
 
 ### Terrain Generation Improvements (January 2026)
 - [x] **Slope-based texture blending** - Fixed terrain sampleTerrain() to use average elevation instead of MAX, which was flattening cliffs and preventing proper texture blending

@@ -2024,17 +2024,33 @@ export class RecastNavigation {
 
 ### Elevation-Aware Pathfinding
 
-The pathfinding system uses terrain height for accurate queries on multi-elevation terrain:
+The pathfinding system uses terrain height for accurate queries on multi-elevation terrain.
+
+**Critical: Terrain Height Provider Must Match NavMesh Geometry**
+
+The terrain height provider MUST use the same height values used to generate the
+navmesh geometry. The navmesh is generated from the Terrain class's heightMap (which
+has smoothing applied). Using a different height source (like raw `elevation * 0.04`)
+causes agents to be placed slightly off the navmesh surface, resulting in very slow
+or zero crowd velocities.
 
 ```typescript
-// Terrain height provider wired up on navmesh init
-recast.setTerrainHeightProvider((x, z) => {
-  return game.getTerrainHeightAt(x, z);  // Returns elevation * 0.04
+// In WebGPUGameCanvas - set terrain height BEFORE navmesh init
+// This ensures crowd agents are placed ON the navmesh surface
+game.pathfindingSystem.setTerrainHeightFunction((x: number, z: number) => {
+  return terrain.getHeightAt(x, z);  // Uses smoothed heightMap - matches navmesh!
 });
 
-// All queries now start at approximate terrain height instead of y=0
-// This improves accuracy when navmesh has multiple elevation layers
+// Then initialize navmesh - it will use the terrain height function above
+await game.initializeNavMesh(walkableGeometry.positions, walkableGeometry.indices);
 ```
+
+**Why this matters:**
+- NavMesh geometry uses `terrain.getHeightAt()` which reads from smoothed heightMap
+- If crowd agents are placed at `cell.elevation * 0.04` instead, there can be small
+  height differences due to smoothing
+- Even 0.01 unit height mismatch can cause crowd to return near-zero velocities
+- Result: units appear to move at "glacial pace" despite correct speed settings
 
 **Terrain Height for Crowd Operations:**
 

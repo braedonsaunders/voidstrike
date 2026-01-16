@@ -456,6 +456,15 @@ export function WebGPUGameCanvas() {
         positions: walkableGeometry.positions.length,
         indices: walkableGeometry.indices.length,
       });
+
+      // Set terrain height function BEFORE navmesh init - critical for crowd agent placement
+      // The terrain's heightMap is used to generate navmesh geometry, so the height provider
+      // must return the same values. Using raw elevation * 0.04 (from game.getTerrainHeightAt)
+      // can cause mismatch due to heightMap smoothing, placing agents off the navmesh surface.
+      game.pathfindingSystem.setTerrainHeightFunction((x: number, z: number) => {
+        return terrain.getHeightAt(x, z);
+      });
+
       debugInitialization.log('[WebGPUGameCanvas] Initializing navmesh...');
       const navMeshSuccess = await game.initializeNavMesh(walkableGeometry.positions, walkableGeometry.indices);
       debugInitialization.log('[WebGPUGameCanvas] NavMesh result:', navMeshSuccess);

@@ -191,6 +191,9 @@ export class PathfindingSystem extends System {
   // Track if navmesh is ready
   private navMeshReady: boolean = false;
 
+  // Custom terrain height function (from rendered terrain for accurate heights)
+  private terrainHeightFunction: ((x: number, z: number) => number) | null = null;
+
   constructor(game: Game, mapWidth: number, mapHeight: number) {
     super(game);
     this.mapWidth = mapWidth;
@@ -201,6 +204,23 @@ export class PathfindingSystem extends System {
     debugPathfinding.log(
       `[PathfindingSystem] Initialized for ${mapWidth}x${mapHeight} map`
     );
+  }
+
+  /**
+   * Set the terrain height function used by the crowd simulation.
+   * This should be called with the same height function used to generate
+   * the navmesh geometry to ensure agents are placed on the navmesh surface.
+   *
+   * Critical: Using mismatched heights causes agents to be off-navmesh,
+   * resulting in near-zero velocities from the crowd simulation.
+   */
+  public setTerrainHeightFunction(fn: (x: number, z: number) => number): void {
+    this.terrainHeightFunction = fn;
+    // Update the recast terrain height provider if navmesh is already ready
+    if (this.navMeshReady) {
+      this.recast.setTerrainHeightProvider(fn);
+      debugPathfinding.log('[PathfindingSystem] Updated terrain height provider');
+    }
   }
 
   /**
@@ -243,10 +263,16 @@ export class PathfindingSystem extends System {
       debugPathfinding.log('[PathfindingSystem] NavMesh ready');
 
       // Wire up terrain height provider for elevation-aware pathfinding
-      // This improves query accuracy on multi-elevation terrain
-      this.recast.setTerrainHeightProvider((x, z) => {
-        return this.game.getTerrainHeightAt(x, z);
-      });
+      // Use custom function if set (for accurate heightMap values), else fall back to game
+      if (this.terrainHeightFunction) {
+        this.recast.setTerrainHeightProvider(this.terrainHeightFunction);
+        debugPathfinding.log('[PathfindingSystem] Using custom terrain height function');
+      } else {
+        this.recast.setTerrainHeightProvider((x, z) => {
+          return this.game.getTerrainHeightAt(x, z);
+        });
+        debugPathfinding.log('[PathfindingSystem] Using game terrain height fallback');
+      }
 
       // Register any pending decoration obstacles now that navmesh is ready
       this.onNavMeshReady();
@@ -275,9 +301,16 @@ export class PathfindingSystem extends System {
 
     if (success) {
       // Wire up terrain height provider for elevation-aware pathfinding
-      this.recast.setTerrainHeightProvider((x, z) => {
-        return this.game.getTerrainHeightAt(x, z);
-      });
+      // Use custom function if set (for accurate heightMap values), else fall back to game
+      if (this.terrainHeightFunction) {
+        this.recast.setTerrainHeightProvider(this.terrainHeightFunction);
+        debugPathfinding.log('[PathfindingSystem] Using custom terrain height function');
+      } else {
+        this.recast.setTerrainHeightProvider((x, z) => {
+          return this.game.getTerrainHeightAt(x, z);
+        });
+        debugPathfinding.log('[PathfindingSystem] Using game terrain height fallback');
+      }
 
       // Register any pending decoration obstacles now that navmesh is ready
       this.onNavMeshReady();
