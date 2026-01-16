@@ -1,51 +1,55 @@
 'use client';
 
 import Link from 'next/link';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { MusicPlayer } from '@/audio/MusicPlayer';
 import { useUIStore } from '@/store/uiStore';
-import { useAuth } from '@/hooks/useAuth';
-import { useLobbyBrowser, useLobby } from '@/hooks/useLobby';
-import { AuthModal } from '@/components/auth/AuthModal';
-import { getOnlinePlayerCount } from '@/lib/auth';
-import type { Lobby } from '@/engine/network/types';
+import { useMultiplayerStore } from '@/store/multiplayerStore';
+import { useGameSetupStore } from '@/store/gameSetupStore';
+import { useP2P, P2PStatus } from '@/hooks/useP2P';
+
+type Tab = 'host' | 'join' | 'find';
 
 export default function LobbyPage() {
   const router = useRouter();
   const musicEnabled = useUIStore((state) => state.musicEnabled);
   const musicVolume = useUIStore((state) => state.musicVolume);
 
-  // Auth state
+  // Multiplayer and game setup stores
   const {
-    user,
-    profile,
-    isLoading: authLoading,
-    isAuthenticated,
-    isMultiplayerEnabled,
-  } = useAuth();
+    setMultiplayer,
+    setConnected,
+    setHost,
+    setDataChannel,
+  } = useMultiplayerStore();
 
-  // Lobby browser
-  const { lobbies, isLoading: lobbiesLoading } = useLobbyBrowser();
-
-  // Lobby actions (for creating/joining)
   const {
-    create: createLobby,
-    join: joinLobby,
-    isLoading: lobbyActionLoading,
-    error: lobbyError,
-  } = useLobby(user?.id || null);
+    startGame,
+    setPlayerSlotType,
+  } = useGameSetupStore();
 
-  // UI state
-  const [showAuthModal, setShowAuthModal] = useState(false);
-  const [showJoinModal, setShowJoinModal] = useState(false);
+  const {
+    state: p2pState,
+    hostGame,
+    joinWithCode,
+    completeWithAnswerCode,
+    findMatch,
+    cancelSearch,
+    disconnect,
+    onMessage,
+  } = useP2P();
+
+  const [isHost, setIsHostLocal] = useState(false);
+
+  const [activeTab, setActiveTab] = useState<Tab>('host');
   const [joinCode, setJoinCode] = useState('');
-  const [onlineCount, setOnlineCount] = useState(0);
-  const [selectedLobby, setSelectedLobby] = useState<Lobby | null>(null);
+  const [answerCode, setAnswerCode] = useState('');
+  const [copied, setCopied] = useState(false);
 
   // Continue menu music
   useEffect(() => {
-    const continueMenuMusic = async () => {
+    const initMusic = async () => {
       await MusicPlayer.initialize();
       MusicPlayer.setVolume(musicVolume);
       MusicPlayer.setMuted(!musicEnabled);
@@ -54,392 +58,371 @@ export default function LobbyPage() {
         MusicPlayer.play('menu');
       }
     };
-
-    continueMenuMusic();
+    initMusic();
   }, []);
 
-  // Sync volume changes
   useEffect(() => {
     MusicPlayer.setVolume(musicVolume);
     MusicPlayer.setMuted(!musicEnabled);
   }, [musicVolume, musicEnabled]);
 
-  // Fetch online player count
+  // Navigate to game when connected
   useEffect(() => {
-    const fetchOnlineCount = async () => {
-      const count = await getOnlinePlayerCount();
-      setOnlineCount(count);
-    };
+    if (p2pState.status === 'connected' && p2pState.dataChannel) {
+      // Set up multiplayer store
+      setMultiplayer(true);
+      setConnected(true);
+      setHost(isHost);
+      setDataChannel(p2pState.dataChannel);
 
-    fetchOnlineCount();
-    const interval = setInterval(fetchOnlineCount, 30000); // Update every 30s
+      // Configure game for 2 human players
+      setPlayerSlotType('player1', 'human');
+      setPlayerSlotType('player2', 'human');
 
-    return () => clearInterval(interval);
-  }, []);
+      // Start the game
+      startGame();
 
-  // Handle create game
-  const handleCreateGame = async () => {
-    if (!isAuthenticated) {
-      setShowAuthModal(true);
-      return;
+      // Navigate to game
+      router.push('/game?multiplayer=true');
     }
+  }, [p2pState.status, p2pState.dataChannel, isHost, router, setMultiplayer, setConnected, setHost, setDataChannel, setPlayerSlotType, startGame]);
 
-    if (!profile) return;
+  // Handle message events
+  useEffect(() => {
+    onMessage((data) => {
+      console.log('[Lobby] Received message:', data);
+    });
+  }, [onMessage]);
 
-    const lobby = await createLobby(
-      user!.id,
-      profile.username,
-      profile.elo_rating
-    );
-
-    if (lobby) {
-      router.push(`/lobby/${lobby.code}`);
+  const handleCopyCode = useCallback(() => {
+    if (p2pState.offerCode) {
+      navigator.clipboard.writeText(p2pState.offerCode);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
     }
-  };
+  }, [p2pState.offerCode]);
 
-  // Handle join by code
-  const handleJoinByCode = async () => {
-    if (!isAuthenticated) {
-      setShowAuthModal(true);
-      return;
+  const handleHostGame = useCallback(async () => {
+    setIsHostLocal(true);
+    await hostGame({ mode: '1v1' });
+  }, [hostGame]);
+
+  const handleJoinGame = useCallback(async () => {
+    if (joinCode.trim()) {
+      setIsHostLocal(false);
+      await joinWithCode(joinCode.trim());
     }
+  }, [joinCode, joinWithCode]);
 
-    if (!profile || !joinCode.trim()) return;
-
-    const lobby = await joinLobby(
-      joinCode.trim().toUpperCase(),
-      user!.id,
-      profile.username,
-      profile.elo_rating
-    );
-
-    if (lobby) {
-      router.push(`/lobby/${lobby.code}`);
+  const handleCompleteConnection = useCallback(async () => {
+    if (answerCode.trim()) {
+      await completeWithAnswerCode(answerCode.trim());
     }
-  };
+  }, [answerCode, completeWithAnswerCode]);
 
-  // Handle join from list
-  const handleJoinLobby = async (lobby: Lobby) => {
-    if (!isAuthenticated) {
-      setShowAuthModal(true);
-      return;
-    }
+  const handleFindMatch = useCallback(async () => {
+    await findMatch({ mode: '1v1' });
+  }, [findMatch]);
 
-    if (!profile) return;
+  const handleCancel = useCallback(() => {
+    disconnect();
+    cancelSearch();
+    setJoinCode('');
+    setAnswerCode('');
+  }, [disconnect, cancelSearch]);
 
-    const joined = await joinLobby(
-      lobby.code,
-      user!.id,
-      profile.username,
-      profile.elo_rating
-    );
-
-    if (joined) {
-      router.push(`/lobby/${lobby.code}`);
-    }
-  };
-
-  // Quick match (create public lobby)
-  const handleQuickMatch = async () => {
-    if (!isAuthenticated) {
-      setShowAuthModal(true);
-      return;
-    }
-
-    if (!profile) return;
-
-    // For now, quick match just creates a public lobby
-    // TODO: Implement proper matchmaking queue
-    const lobby = await createLobby(
-      user!.id,
-      profile.username,
-      profile.elo_rating,
-      { isRanked: false },
-      false // public
-    );
-
-    if (lobby) {
-      router.push(`/lobby/${lobby.code}`);
+  const getStatusMessage = (status: P2PStatus): string => {
+    switch (status) {
+      case 'idle': return 'Ready';
+      case 'generating_code': return 'Generating connection code...';
+      case 'waiting_for_peer': return 'Waiting for opponent...';
+      case 'connecting': return 'Connecting...';
+      case 'connected': return 'Connected!';
+      case 'searching': return 'Searching for opponents...';
+      case 'match_found': return 'Match found!';
+      case 'error': return 'Error';
+      default: return '';
     }
   };
 
-  const isLoading = authLoading || lobbyActionLoading;
+  const isLoading = ['generating_code', 'connecting', 'searching', 'match_found'].includes(p2pState.status);
 
   return (
     <main className="min-h-screen bg-black p-8">
-      {/* Auth Modal */}
-      <AuthModal
-        isOpen={showAuthModal}
-        onClose={() => setShowAuthModal(false)}
-        onSuccess={() => setShowAuthModal(false)}
-      />
-
-      {/* Join Modal */}
-      {showJoinModal && (
-        <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50">
-          <div className="game-panel p-8 max-w-md w-full mx-4">
-            <div className="flex items-center justify-between mb-6">
-              <h2 className="font-display text-2xl text-void-300">Join Game</h2>
-              <button
-                onClick={() => setShowJoinModal(false)}
-                className="text-void-500 hover:text-void-300 text-2xl"
-              >
-                &times;
-              </button>
-            </div>
-
-            {lobbyError && (
-              <div className="bg-red-900/30 border border-red-500/50 rounded px-4 py-2 mb-4 text-red-400 text-sm">
-                {lobbyError}
-              </div>
-            )}
-
-            <div className="mb-6">
-              <label className="block text-void-500 text-sm mb-2">Game Code</label>
-              <input
-                type="text"
-                value={joinCode}
-                onChange={(e) => setJoinCode(e.target.value.toUpperCase())}
-                maxLength={6}
-                placeholder="Enter 6-letter code"
-                className="w-full bg-void-900 border border-void-700 rounded px-4 py-3 text-void-200 text-center text-2xl tracking-widest font-mono focus:border-void-500 focus:outline-none"
-              />
-            </div>
-
-            <div className="flex gap-4">
-              <button
-                onClick={() => setShowJoinModal(false)}
-                className="game-button flex-1"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={handleJoinByCode}
-                disabled={joinCode.length !== 6 || isLoading}
-                className="game-button-primary flex-1 disabled:opacity-50"
-              >
-                {isLoading ? 'Joining...' : 'Join'}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Header */}
-      <div className="max-w-6xl mx-auto">
-        <div className="flex items-center justify-between mb-8">
-          <div>
-            <Link href="/" className="text-void-500 hover:text-void-400 transition">
-              ← Back to Menu
-            </Link>
-            <h1 className="font-display text-4xl text-void-300 mt-2">Multiplayer Lobby</h1>
-          </div>
-
-          <div className="flex gap-4">
-            {!isMultiplayerEnabled ? (
-              <div className="text-void-500 text-sm">
-                Multiplayer not configured
-              </div>
-            ) : !isAuthenticated ? (
-              <button
-                onClick={() => setShowAuthModal(true)}
-                className="game-button-primary"
-              >
-                Sign In to Play
-              </button>
-            ) : (
-              <>
-                <button
-                  onClick={() => setShowJoinModal(true)}
-                  className="game-button"
-                >
-                  Join by Code
-                </button>
-                <button
-                  onClick={handleCreateGame}
-                  disabled={isLoading}
-                  className="game-button"
-                >
-                  {isLoading ? 'Creating...' : 'Create Game'}
-                </button>
-                <button
-                  onClick={handleQuickMatch}
-                  disabled={isLoading}
-                  className="game-button-primary"
-                >
-                  Quick Match
-                </button>
-              </>
-            )}
-          </div>
+      <div className="max-w-4xl mx-auto">
+        {/* Header */}
+        <div className="mb-8">
+          <Link href="/" className="text-void-500 hover:text-void-400 transition">
+            ← Back to Menu
+          </Link>
+          <h1 className="font-display text-4xl text-void-300 mt-2">Multiplayer</h1>
+          <p className="text-void-500 mt-1">
+            Play with friends using connection codes, or find opponents via Nostr
+          </p>
         </div>
 
-        {lobbyError && !showJoinModal && (
-          <div className="bg-red-900/30 border border-red-500/50 rounded px-4 py-2 mb-4 text-red-400 text-sm">
-            {lobbyError}
+        {/* Error Display */}
+        {p2pState.error && (
+          <div className="bg-red-900/30 border border-red-500/50 rounded px-4 py-3 mb-6 text-red-400">
+            <div className="font-semibold">Error</div>
+            <div className="text-sm">{p2pState.error}</div>
+            <button
+              onClick={handleCancel}
+              className="mt-2 text-sm text-red-300 hover:text-red-200 underline"
+            >
+              Try again
+            </button>
           </div>
         )}
 
-        {/* Room List */}
-        <div className="game-panel p-4">
-          <div className="grid grid-cols-5 gap-4 text-void-500 text-sm font-medium mb-4 px-4">
-            <span>Host</span>
-            <span>Map</span>
-            <span>Mode</span>
-            <span>Players</span>
-            <span></span>
-          </div>
-
-          <div className="space-y-2">
-            {lobbiesLoading ? (
-              <div className="text-center py-12 text-void-500">
-                Loading games...
-              </div>
-            ) : lobbies.length === 0 ? (
-              <div className="text-center py-12 text-void-500">
-                No games available. Create one to get started!
-              </div>
-            ) : (
-              lobbies.map((lobby) => {
-                const host = lobby.players.find(p => p.isHost);
-                return (
-                  <div
-                    key={lobby.id}
-                    className={`grid grid-cols-5 gap-4 items-center p-4 rounded border transition cursor-pointer
-                      ${selectedLobby?.id === lobby.id
-                        ? 'border-void-500 bg-void-900/50'
-                        : 'border-void-800 hover:border-void-700 hover:bg-void-900/30'
-                      }`}
-                    onClick={() => setSelectedLobby(lobby)}
-                  >
-                    <span className="text-void-200">{host?.username || 'Unknown'}</span>
-                    <span className="text-void-400">{lobby.settings.mapName}</span>
-                    <span className="text-void-400">
-                      {lobby.settings.isRanked ? 'Ranked' : 'Casual'} 1v1
-                    </span>
-                    <span className="text-void-400">
-                      {lobby.players.length}/{lobby.settings.maxPlayers}
-                    </span>
-                    <div className="text-right">
-                      <button
-                        className="game-button text-sm"
-                        disabled={lobby.players.length >= lobby.settings.maxPlayers || isLoading}
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          handleJoinLobby(lobby);
-                        }}
-                      >
-                        {lobby.players.length >= lobby.settings.maxPlayers ? 'Full' : 'Join'}
-                      </button>
-                    </div>
-                  </div>
-                );
-              })
-            )}
-          </div>
+        {/* Tab Buttons */}
+        <div className="flex gap-2 mb-6">
+          <button
+            onClick={() => { handleCancel(); setActiveTab('host'); }}
+            className={`px-6 py-3 rounded font-medium transition ${
+              activeTab === 'host'
+                ? 'bg-void-700 text-void-200'
+                : 'bg-void-900 text-void-500 hover:bg-void-800 hover:text-void-400'
+            }`}
+          >
+            Host Game
+          </button>
+          <button
+            onClick={() => { handleCancel(); setActiveTab('join'); }}
+            className={`px-6 py-3 rounded font-medium transition ${
+              activeTab === 'join'
+                ? 'bg-void-700 text-void-200'
+                : 'bg-void-900 text-void-500 hover:bg-void-800 hover:text-void-400'
+            }`}
+          >
+            Join with Code
+          </button>
+          <button
+            onClick={() => { handleCancel(); setActiveTab('find'); }}
+            className={`px-6 py-3 rounded font-medium transition ${
+              activeTab === 'find'
+                ? 'bg-void-700 text-void-200'
+                : 'bg-void-900 text-void-500 hover:bg-void-800 hover:text-void-400'
+            }`}
+          >
+            Find Match
+          </button>
         </div>
 
-        {/* Selected Room Details */}
-        {selectedLobby && (
-          <div className="game-panel p-6 mt-4">
-            <h2 className="font-display text-xl text-void-300 mb-4">Game Details</h2>
-            <div className="grid grid-cols-3 gap-8">
-              <div>
-                <label className="block text-void-500 text-sm mb-1">Map</label>
-                <div className="text-void-200">{selectedLobby.settings.mapName}</div>
-              </div>
-              <div>
-                <label className="block text-void-500 text-sm mb-1">Game Speed</label>
-                <div className="text-void-200">
-                  {selectedLobby.settings.gameSpeed === 1 ? 'Normal' :
-                   selectedLobby.settings.gameSpeed < 1 ? 'Slower' : 'Faster'}
+        {/* Main Panel */}
+        <div className="game-panel p-8">
+          {/* HOST TAB */}
+          {activeTab === 'host' && (
+            <div>
+              <h2 className="font-display text-2xl text-void-300 mb-4">Host a Game</h2>
+              <p className="text-void-500 mb-6">
+                Generate a connection code and share it with your friend. They&apos;ll send back a response code to complete the connection.
+              </p>
+
+              {p2pState.status === 'idle' && (
+                <button
+                  onClick={handleHostGame}
+                  className="game-button-primary px-8 py-3 text-lg"
+                >
+                  Generate Code
+                </button>
+              )}
+
+              {p2pState.status === 'generating_code' && (
+                <div className="text-void-400">
+                  <div className="animate-pulse">Generating connection code...</div>
                 </div>
-              </div>
-              <div>
-                <label className="block text-void-500 text-sm mb-1">Starting Resources</label>
-                <div className="text-void-200 capitalize">{selectedLobby.settings.startingResources}</div>
-              </div>
-            </div>
+              )}
 
-            <div className="mt-4">
-              <label className="block text-void-500 text-sm mb-2">Players</label>
-              <div className="flex gap-2">
-                {selectedLobby.players.map((player) => (
-                  <div
-                    key={player.id}
-                    className="bg-void-900 border border-void-700 rounded px-3 py-1 text-sm"
-                  >
-                    <span className="text-void-200">{player.username}</span>
-                    {player.isHost && (
-                      <span className="text-void-500 ml-2">(Host)</span>
-                    )}
+              {p2pState.status === 'waiting_for_peer' && p2pState.offerCode && (
+                <div className="space-y-6">
+                  <div>
+                    <label className="block text-void-500 text-sm mb-2">Your Connection Code</label>
+                    <div className="bg-void-900 border border-void-700 rounded p-4">
+                      <div className="font-mono text-void-200 text-lg break-all select-all">
+                        {p2pState.offerCode}
+                      </div>
+                    </div>
+                    <button
+                      onClick={handleCopyCode}
+                      className="mt-2 text-void-400 hover:text-void-300 text-sm"
+                    >
+                      {copied ? '✓ Copied!' : 'Copy to clipboard'}
+                    </button>
                   </div>
-                ))}
+
+                  <div>
+                    <label className="block text-void-500 text-sm mb-2">
+                      Enter Friend&apos;s Response Code
+                    </label>
+                    <textarea
+                      value={answerCode}
+                      onChange={(e) => setAnswerCode(e.target.value)}
+                      placeholder="Paste their response code here..."
+                      className="w-full bg-void-900 border border-void-700 rounded px-4 py-3 text-void-200 font-mono text-sm focus:border-void-500 focus:outline-none h-32 resize-none"
+                    />
+                  </div>
+
+                  <div className="flex gap-4">
+                    <button
+                      onClick={handleCancel}
+                      className="game-button px-6 py-2"
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      onClick={handleCompleteConnection}
+                      disabled={!answerCode.trim() || isLoading}
+                      className="game-button-primary px-6 py-2 disabled:opacity-50"
+                    >
+                      Connect
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {p2pState.status === 'connecting' && (
+                <div className="text-void-400">
+                  <div className="animate-pulse">Connecting to opponent...</div>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* JOIN TAB */}
+          {activeTab === 'join' && (
+            <div>
+              <h2 className="font-display text-2xl text-void-300 mb-4">Join with Code</h2>
+              <p className="text-void-500 mb-6">
+                Enter the connection code from your friend. A response code will be generated for you to send back.
+              </p>
+
+              {(p2pState.status === 'idle' || p2pState.status === 'error') && (
+                <div className="space-y-4">
+                  <div>
+                    <label className="block text-void-500 text-sm mb-2">Connection Code</label>
+                    <textarea
+                      value={joinCode}
+                      onChange={(e) => setJoinCode(e.target.value)}
+                      placeholder="Paste the connection code here..."
+                      className="w-full bg-void-900 border border-void-700 rounded px-4 py-3 text-void-200 font-mono text-sm focus:border-void-500 focus:outline-none h-32 resize-none"
+                    />
+                  </div>
+                  <button
+                    onClick={handleJoinGame}
+                    disabled={!joinCode.trim()}
+                    className="game-button-primary px-8 py-3 disabled:opacity-50"
+                  >
+                    Join Game
+                  </button>
+                </div>
+              )}
+
+              {p2pState.status === 'connecting' && (
+                <div className="text-void-400">
+                  <div className="animate-pulse">Processing code and connecting...</div>
+                </div>
+              )}
+
+              {p2pState.status === 'connected' && p2pState.offerCode && (
+                <div className="space-y-6">
+                  <div className="text-green-400 font-semibold">
+                    ✓ Connected! Redirecting to game...
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* FIND MATCH TAB */}
+          {activeTab === 'find' && (
+            <div>
+              <h2 className="font-display text-2xl text-void-300 mb-4">Find Match</h2>
+              <p className="text-void-500 mb-6">
+                Search for opponents using the Nostr network. This connects you with players worldwide, no server required.
+              </p>
+
+              {p2pState.status === 'idle' && (
+                <button
+                  onClick={handleFindMatch}
+                  className="game-button-primary px-8 py-3 text-lg"
+                >
+                  Find Opponent
+                </button>
+              )}
+
+              {(p2pState.status === 'searching' || p2pState.status === 'match_found') && (
+                <div className="space-y-4">
+                  <div className="flex items-center gap-3">
+                    <div className="w-3 h-3 bg-void-500 rounded-full animate-pulse" />
+                    <span className="text-void-300">
+                      {p2pState.nostrStatus || getStatusMessage(p2pState.status)}
+                    </span>
+                  </div>
+
+                  {p2pState.matchedOpponent && (
+                    <div className="bg-void-900 border border-void-700 rounded p-4">
+                      <div className="text-void-400 text-sm">Matched with:</div>
+                      <div className="text-void-200 font-mono">
+                        {p2pState.matchedOpponent.pubkey.slice(0, 16)}...
+                      </div>
+                      {p2pState.matchedOpponent.skill && (
+                        <div className="text-void-400 text-sm mt-1">
+                          Skill: ~{p2pState.matchedOpponent.skill}
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  <button
+                    onClick={handleCancel}
+                    className="game-button px-6 py-2"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              )}
+
+              {p2pState.status === 'connecting' && (
+                <div className="text-void-400">
+                  <div className="animate-pulse">
+                    {p2pState.nostrStatus || 'Connecting to opponent...'}
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Status Footer */}
+          {p2pState.status !== 'idle' && p2pState.status !== 'error' && (
+            <div className="mt-8 pt-4 border-t border-void-800">
+              <div className="text-void-500 text-sm">
+                Status: <span className="text-void-400">{getStatusMessage(p2pState.status)}</span>
               </div>
             </div>
+          )}
+        </div>
 
-            <div className="flex justify-end gap-4 mt-6">
-              <button
-                className="game-button"
-                onClick={() => setSelectedLobby(null)}
-              >
-                Close
-              </button>
-              <button
-                className="game-button-primary"
-                disabled={selectedLobby.players.length >= selectedLobby.settings.maxPlayers || isLoading}
-                onClick={() => handleJoinLobby(selectedLobby)}
-              >
-                Join Game
-              </button>
-            </div>
-          </div>
-        )}
-
-        {/* Info panel */}
+        {/* Info Cards */}
         <div className="grid grid-cols-3 gap-6 mt-8">
           <div className="game-panel p-4">
-            <h3 className="font-display text-lg text-void-300 mb-2">Your Stats</h3>
-            {profile ? (
-              <div className="space-y-2 text-sm">
-                <div className="flex justify-between">
-                  <span className="text-void-500">Username</span>
-                  <span className="text-void-200">{profile.username}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-void-500">ELO Rating</span>
-                  <span className="text-void-200">{profile.elo_rating}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-void-500">Games Played</span>
-                  <span className="text-void-200">{profile.games_played}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-void-500">Win Rate</span>
-                  <span className="text-void-200">
-                    {profile.games_played > 0
-                      ? `${Math.round((profile.wins / profile.games_played) * 100)}%`
-                      : '-'}
-                  </span>
-                </div>
-              </div>
-            ) : (
-              <div className="text-void-500 text-sm">
-                Sign in to track your stats
-              </div>
-            )}
-          </div>
-
-          <div className="game-panel p-4">
-            <h3 className="font-display text-lg text-void-300 mb-2">Online Players</h3>
-            <div className="text-4xl font-mono text-void-400">{onlineCount}</div>
-            <p className="text-void-500 text-sm mt-1">players online</p>
-          </div>
-
-          <div className="game-panel p-4">
-            <h3 className="font-display text-lg text-void-300 mb-2">How to Play</h3>
+            <h3 className="font-display text-lg text-void-300 mb-2">Connection Codes</h3>
             <p className="text-void-500 text-sm">
-              Create a game or join an existing one. Share your game code with friends, or use Quick Match to find an opponent automatically.
+              Share a code with friends to connect directly. Works with any internet connection.
+            </p>
+          </div>
+
+          <div className="game-panel p-4">
+            <h3 className="font-display text-lg text-void-300 mb-2">Nostr Network</h3>
+            <p className="text-void-500 text-sm">
+              Find opponents worldwide using the decentralized Nostr network. No accounts needed.
+            </p>
+          </div>
+
+          <div className="game-panel p-4">
+            <h3 className="font-display text-lg text-void-300 mb-2">Peer-to-Peer</h3>
+            <p className="text-void-500 text-sm">
+              Direct connection between players. No servers, no lag, no downtime.
             </p>
           </div>
         </div>
