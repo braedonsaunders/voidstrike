@@ -1,7 +1,7 @@
 /**
- * TSL Terrain Material - World Class Quality
+ * TSL Terrain Material
  *
- * WebGPU-compatible terrain material with advanced 4-texture blending.
+ * WebGPU-compatible terrain material with 4-texture blending.
  * Features:
  * - Slope-based texture blending with noise variation
  * - Dual-scale texture sampling to reduce tiling artifacts

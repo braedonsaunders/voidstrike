@@ -1,7 +1,7 @@
 /**
- * VehicleEffectsSystem - World-Class Continuous Vehicle Effects
+ * VehicleEffectsSystem - Continuous Vehicle Effects
  *
- * A performant system for adding continuous visual effects to vehicles:
+ * Adds continuous visual effects to vehicles:
  * - Engine exhaust/fire for capital ships
  * - Smoke trails for aerial units
  * - Dust clouds behind wheeled/tracked vehicles

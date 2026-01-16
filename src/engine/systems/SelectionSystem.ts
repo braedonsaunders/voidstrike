@@ -8,11 +8,8 @@ import { Game } from '../core/Game';
 import { useGameStore } from '@/store/gameStore';
 
 /**
- * World-class selection system with:
- * - Screen-space box selection (perspective-accurate)
- * - Selection radius buffer (partial overlap = selected)
- * - Visual bounds support for larger entities
- * - Priority-based selection (units over buildings)
+ * Selection system with screen-space box selection, selection radius buffer,
+ * visual bounds support, and priority-based selection (units over buildings).
  */
 export class SelectionSystem extends System {
   public readonly name = 'SelectionSystem';

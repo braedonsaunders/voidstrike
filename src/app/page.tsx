@@ -392,7 +392,7 @@ export default function Home() {
             <span>TYPESCRIPT</span>
           </div>
 
-          {/* Renderer Toggle - Premium subtle switch */}
+          {/* Renderer Toggle */}
           <div className="flex items-center justify-center mt-6">
             <button
               onClick={() => setPreferWebGPU(!preferWebGPU)}
