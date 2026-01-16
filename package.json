@@ -4,11 +4,13 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
+    "prebuild": "node scripts/generate-music-manifest.js",
     "build": "next build",
     "start": "next start",
     "lint": "next lint",
     "type-check": "tsc --noEmit",
-    "optimize-models": "node scripts/optimize-models.js"
+    "optimize-models": "node scripts/optimize-models.js",
+    "generate-manifests": "node scripts/generate-music-manifest.js"
   },
   "dependencies": {
     "@react-three/drei": "^10.7.7",

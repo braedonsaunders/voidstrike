@@ -1,0 +1,77 @@
+{
+  "categories": {
+    "menu": [
+      {
+        "name": "main_theme",
+        "url": "/audio/music/menu/main_theme.mp3"
+      },
+      {
+        "name": "menu_01",
+        "url": "/audio/music/menu/menu_01.mp3"
+      }
+    ],
+    "gameplay": [
+      {
+        "name": "gameplay_01",
+        "url": "/audio/music/gameplay/gameplay_01.mp3"
+      },
+      {
+        "name": "gameplay_02",
+        "url": "/audio/music/gameplay/gameplay_02.mp3"
+      },
+      {
+        "name": "gameplay_03",
+        "url": "/audio/music/gameplay/gameplay_03.mp3"
+      },
+      {
+        "name": "gameplay_04",
+        "url": "/audio/music/gameplay/gameplay_04.mp3"
+      },
+      {
+        "name": "gameplay_05",
+        "url": "/audio/music/gameplay/gameplay_05.mp3"
+      },
+      {
+        "name": "gameplay_06",
+        "url": "/audio/music/gameplay/gameplay_06.mp3"
+      },
+      {
+        "name": "gameplay_07",
+        "url": "/audio/music/gameplay/gameplay_07.mp3"
+      },
+      {
+        "name": "gameplay_08",
+        "url": "/audio/music/gameplay/gameplay_08.mp3"
+      },
+      {
+        "name": "gameplay_09",
+        "url": "/audio/music/gameplay/gameplay_09.mp3"
+      },
+      {
+        "name": "gameplay_10",
+        "url": "/audio/music/gameplay/gameplay_10.mp3"
+      },
+      {
+        "name": "gameplay_11",
+        "url": "/audio/music/gameplay/gameplay_11.mp3"
+      },
+      {
+        "name": "gameplay_12",
+        "url": "/audio/music/gameplay/gameplay_12.mp3"
+      },
+      {
+        "name": "gameplay_13",
+        "url": "/audio/music/gameplay/gameplay_13.mp3"
+      },
+      {
+        "name": "gameplay_14",
+        "url": "/audio/music/gameplay/gameplay_14.mp3"
+      },
+      {
+        "name": "gameplay_15",
+        "url": "/audio/music/gameplay/gameplay_15.mp3"
+      }
+    ]
+  },
+  "generatedAt": "2026-01-16T17:38:33.558Z"
+}
