@@ -801,7 +801,7 @@
       "model": "/models/decorations/rocks_large_LOD0.glb",
       "scale": 3.0,
       "rendering": {
-        "exposure": 1.0,
+        "exposure": 1.6,
         "envMapIntensity": 0.25,
         "receiveShadow": true,
         "castShadow": true
