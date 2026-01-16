@@ -732,6 +732,8 @@
 - [x] **Guest stays in lobby fix** - Start button now validates WebRTC connection state before allowing game start. sendGameStart() returns count of guests notified for feedback.
 - [x] **Lobby join error handling fix** - When joining a full lobby, error message now displays in modal, and Join button stays visible for retry. Fixed `isHost` not resetting on join failure.
 - [x] **Multiplayer message format compatibility** - Game.ts now handles both message formats (payload-based and commandType/data-based) for proper command sync between players.
+- [x] **Building commands multiplayer sync** - Added LIFTOFF, LAND, RALLY, GATHER command types to GameCommand. Converted all building command emissions to use `game.issueCommand()` for proper multiplayer synchronization.
+- [x] **Nostr rate-limit error handling** - Silently ignore rate-limit errors from Nostr relays during event publishing to prevent uncaught promise errors.
 
 **⚠️ Game Integration Incomplete:**
 - [ ] Wire lockstep tick synchronization to game loop
