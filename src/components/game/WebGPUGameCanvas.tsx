@@ -1175,10 +1175,21 @@ export function WebGPUGameCanvas() {
 
     window.addEventListener('resize', handleResize);
 
+    // Use ResizeObserver to detect container size changes (e.g., DevTools open/close)
+    // Window resize events don't fire when DevTools changes the available viewport
+    let resizeObserver: ResizeObserver | null = null;
+    if (containerRef.current) {
+      resizeObserver = new ResizeObserver(() => {
+        handleResize();
+      });
+      resizeObserver.observe(containerRef.current);
+    }
+
     initializeGame();
 
     return () => {
       window.removeEventListener('resize', handleResize);
+      resizeObserver?.disconnect();
 
       useProjectionStore.getState().setWorldToScreen(null);
 
