@@ -138,10 +138,11 @@ async function publishToRelays(
 ): Promise<boolean> {
   const results = await Promise.allSettled(
     relays.map(r =>
-      pool.publish([r], event).catch(err => {
+      // pool.publish returns Promise<string>[], wrap in Promise.all to get single Promise
+      Promise.all(pool.publish([r], event)).catch(err => {
         // Silently ignore rate-limit errors - they're expected with frequent events
         if (err?.message?.includes('rate-limit')) {
-          return; // Return successfully to not count as failure
+          return []; // Return empty array to count as success
         }
         throw err;
       })
