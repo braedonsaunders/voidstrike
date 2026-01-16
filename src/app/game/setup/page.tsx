@@ -451,17 +451,27 @@ export default function GameSetupPage() {
 
     onGameStart(() => {
       console.log('[Setup] Game start received, navigating to game...');
+      console.log('[Setup] Guest slot ID:', mySlotId);
+
       // Apply the received lobby state to the store before starting
       if (receivedLobbyState) {
-        useGameSetupStore.getState().setSelectedMap(receivedLobbyState.selectedMapId);
-        useGameSetupStore.getState().setStartingResources(receivedLobbyState.startingResources);
-        useGameSetupStore.getState().setGameSpeed(receivedLobbyState.gameSpeed);
-        useGameSetupStore.getState().setFogOfWar(receivedLobbyState.fogOfWar);
+        const store = useGameSetupStore.getState();
+        store.setSelectedMap(receivedLobbyState.selectedMapId);
+        store.setStartingResources(receivedLobbyState.startingResources);
+        store.setGameSpeed(receivedLobbyState.gameSpeed);
+        store.setFogOfWar(receivedLobbyState.fogOfWar);
+
+        // Apply player slots from host so we have the same player configuration
+        // We need to set playerSlots directly since there's no setter
+        useGameSetupStore.setState({ playerSlots: receivedLobbyState.playerSlots });
       }
-      startGame();
+
+      // Start game with the guest's assigned slot ID
+      // This ensures the guest controls the correct player (e.g., player2 not player1)
+      startGame(mySlotId ?? undefined);
       router.push('/game');
     });
-  }, [isHost, onGameStart, receivedLobbyState, startGame, router]);
+  }, [isHost, onGameStart, receivedLobbyState, mySlotId, startGame, router]);
 
   const [mapSearch, setMapSearch] = useState('');
   const allMaps = Object.values(ALL_MAPS);

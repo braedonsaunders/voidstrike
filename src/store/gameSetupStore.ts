@@ -74,10 +74,11 @@ export interface GameSetupState {
   getAIPlayerIds: () => string[];
   getHumanPlayerIds: () => string[];
 
-  startGame: () => void;
+  startGame: (overrideLocalPlayerId?: string) => void;
   startBattleSimulator: () => void;
   endGame: () => void;
   reset: () => void;
+  setLocalPlayerId: (playerId: string | null) => void;
 
   // Check if current session is spectator mode (no human players or local player is not set)
   isSpectator: () => boolean;
@@ -322,14 +323,24 @@ export const useGameSetupStore = create<GameSetupState>((set, get) => ({
     return get().playerSlots.filter(s => s.type === 'human').map(s => s.id);
   },
 
-  startGame: () => {
+  startGame: (overrideLocalPlayerId?: string) => {
     const state = get();
-    // Find the first human player to be the local player, or null if spectating
-    const firstHumanSlot = state.playerSlots.find(s => s.type === 'human');
+    // Use override if provided (for multiplayer guests), otherwise find first human player
+    let localPlayerId: string | null;
+    if (overrideLocalPlayerId) {
+      localPlayerId = overrideLocalPlayerId;
+    } else {
+      const firstHumanSlot = state.playerSlots.find(s => s.type === 'human');
+      localPlayerId = firstHumanSlot?.id ?? null;
+    }
     set({
       gameStarted: true,
-      localPlayerId: firstHumanSlot?.id ?? null,
+      localPlayerId,
     });
+  },
+
+  setLocalPlayerId: (playerId: string | null) => {
+    set({ localPlayerId: playerId });
   },
   startBattleSimulator: () => {
     set({
