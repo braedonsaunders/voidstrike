@@ -329,6 +329,21 @@ The `cleanupModelAttributes()` function automatically removes excess vertex attr
 
 **Note:** The Blender script (`docs/blender_auto_retopo.py`) should also clean up attributes during export. Runtime cleanup is a safety net for models that weren't processed or have attributes added by Three.js at load time.
 
+### Velocity Tracking Limitation
+
+The per-instance velocity system for TAA requires 8 vertex attributes (4 for current matrix, 4 for previous). Combined with a minimal mesh (position + normal + uv = 3 attributes), this totals 11 - exceeding WebGPU's 8 buffer limit.
+
+**Current Behavior:**
+- `setupInstancedVelocity()` checks attribute count before adding velocity
+- If adding velocity would exceed 8 buffers, velocity setup is skipped
+- TAA falls back to depth-only reprojection for these meshes
+- This may cause slight ghosting on fast-moving units but prevents render crashes
+
+**Future Options:**
+1. **Compact velocity encoding** - Store only position delta (2 vec3 = 2 attrs) instead of full matrices (8 attrs)
+2. **Uniform buffer arrays** - Store matrices in uniform buffers indexed by instance ID
+3. **Selective velocity** - Only add velocity to simpler meshes that have budget
+
 ### TSL Type Definitions
 Some TSL exports aren't in `@types/three` yet. Workaround:
 
