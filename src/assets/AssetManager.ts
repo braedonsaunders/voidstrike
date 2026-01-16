@@ -1402,7 +1402,10 @@ export class AssetManager {
       // Extract animation speeds and mappings from config
       if (assetsConfig) {
         // Process units
-        for (const [assetId, config] of Object.entries(assetsConfig.units)) {
+        const unitEntries = Object.entries(assetsConfig.units);
+        console.log(`[AssetManager] Processing ${unitEntries.length} units from config`);
+        for (const [assetId, config] of unitEntries) {
+          console.log(`[AssetManager] Processing unit: ${assetId}, has effects:`, !!config.effects);
           if (config.animationSpeed !== undefined) {
             animationSpeedMultipliers.set(assetId, config.animationSpeed);
           }
@@ -1433,6 +1436,8 @@ export class AssetManager {
             animationMappings.set(assetId, config.animations);
           }
         }
+
+        console.log(`[AssetManager] loadConfig() complete. unitEffectsConfigs size: ${unitEffectsConfigs.size}`);
       }
 
       return assetsConfig;
