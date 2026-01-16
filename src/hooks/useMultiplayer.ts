@@ -1,12 +1,11 @@
 /**
- * Simplified multiplayer hook using short game codes + Nostr signaling
+ * Lobby-based multiplayer hook
  *
  * Flow:
- * 1. Host generates a 4-char code (e.g., "ABCD")
- * 2. Joiner enters the code
- * 3. Both connect to Nostr and find each other using the code
- * 4. WebRTC signals exchanged automatically via Nostr
- * 5. Direct P2P connection established
+ * 1. Your lobby auto-generates a 4-char code
+ * 2. Others can join your lobby using your code
+ * 3. When they join, they fill an "Open" slot
+ * 4. You can also join someone else's lobby using their code
  */
 
 import { useState, useCallback, useRef, useEffect } from 'react';
@@ -18,12 +17,13 @@ import { getRelays } from '@/engine/network/p2p/NostrRelays';
 const CODE_ALPHABET = 'ABCDEFGHJKMNPQRSTUVWXYZ';
 const CODE_LENGTH = 4;
 
-// Nostr event kinds for game signaling
+// Nostr event kinds for lobby signaling
 const EVENT_KINDS = {
-  GAME_HOST: 30420,    // Host announces game with code
-  GAME_JOIN: 30421,    // Joiner requests to join
-  GAME_OFFER: 30422,   // WebRTC offer
-  GAME_ANSWER: 30423,  // WebRTC answer
+  LOBBY_HOST: 30430,    // Host announces lobby
+  LOBBY_JOIN: 30431,    // Guest requests to join
+  LOBBY_ACCEPT: 30432,  // Host accepts guest
+  WEBRTC_OFFER: 30433,  // WebRTC offer
+  WEBRTC_ANSWER: 30434, // WebRTC answer
 };
 
 // STUN servers
@@ -32,27 +32,36 @@ const ICE_SERVERS: RTCIceServer[] = [
   { urls: 'stun:stun1.l.google.com:19302' },
 ];
 
-export type ConnectionStatus =
-  | 'idle'
-  | 'generating'
-  | 'hosting'
-  | 'joining'
-  | 'connecting'
-  | 'connected'
+export type LobbyStatus =
+  | 'initializing'
+  | 'hosting'      // Your lobby is active, waiting for guests
+  | 'joining'      // Attempting to join another lobby
+  | 'connected'    // Connected to another lobby as guest
   | 'error';
 
-interface UseMultiplayerReturn {
-  status: ConnectionStatus;
-  gameCode: string | null;
-  error: string | null;
+export interface GuestConnection {
+  pubkey: string;
+  name: string;
+  slotId: string;
+  pc: RTCPeerConnection;
   dataChannel: RTCDataChannel | null;
-  isHost: boolean;
-  hostGame: () => Promise<void>;
-  joinGame: (code: string) => Promise<void>;
-  disconnect: () => void;
 }
 
-function generateGameCode(): string {
+interface UseLobbyReturn {
+  status: LobbyStatus;
+  lobbyCode: string | null;
+  error: string | null;
+  guests: GuestConnection[];
+  // As guest, connection to host
+  hostConnection: RTCDataChannel | null;
+  isHost: boolean;
+  // Actions
+  joinLobby: (code: string, playerName: string) => Promise<void>;
+  leaveLobby: () => void;
+  kickGuest: (pubkey: string) => void;
+}
+
+function generateLobbyCode(): string {
   let code = '';
   for (let i = 0; i < CODE_LENGTH; i++) {
     code += CODE_ALPHABET[Math.floor(Math.random() * CODE_ALPHABET.length)];
@@ -77,189 +86,246 @@ async function gatherICE(pc: RTCPeerConnection, timeout = 3000): Promise<string[
   });
 }
 
-export function useMultiplayer(): UseMultiplayerReturn {
-  const [status, setStatus] = useState<ConnectionStatus>('idle');
-  const [gameCode, setGameCode] = useState<string | null>(null);
+export function useLobby(
+  onGuestJoin?: (guestName: string) => string | null, // Returns slot ID or null
+  onGuestLeave?: (slotId: string) => void
+): UseLobbyReturn {
+  const [status, setStatus] = useState<LobbyStatus>('initializing');
+  const [lobbyCode, setLobbyCode] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [dataChannel, setDataChannel] = useState<RTCDataChannel | null>(null);
-  const [isHost, setIsHost] = useState<boolean>(false);
+  const [guests, setGuests] = useState<GuestConnection[]>([]);
+  const [hostConnection, setHostConnection] = useState<RTCDataChannel | null>(null);
+  const [isHost, setIsHost] = useState(true);
 
   const poolRef = useRef<SimplePool | null>(null);
-  const pcRef = useRef<RTCPeerConnection | null>(null);
   const secretKeyRef = useRef<Uint8Array | null>(null);
+  const pubkeyRef = useRef<string | null>(null);
   const relaysRef = useRef<string[]>([]);
-  const cleanupRef = useRef<(() => void) | null>(null);
+  const subRef = useRef<{ close: () => void } | null>(null);
+  const pcRef = useRef<RTCPeerConnection | null>(null); // For guest mode
 
-  // Cleanup on unmount
+  // Initialize lobby (host mode)
   useEffect(() => {
-    return () => {
-      cleanupRef.current?.();
-    };
-  }, []);
+    let mounted = true;
 
-  const cleanup = useCallback(() => {
-    pcRef.current?.close();
-    pcRef.current = null;
-    poolRef.current?.close(relaysRef.current);
-    poolRef.current = null;
-    setDataChannel(null);
-    cleanupRef.current = null;
-  }, []);
+    const initLobby = async () => {
+      try {
+        // Generate keys and code
+        const secretKey = generateSecretKey();
+        const pubkey = getPublicKey(secretKey);
+        const code = generateLobbyCode();
 
-  const disconnect = useCallback(() => {
-    cleanup();
-    setStatus('idle');
-    setGameCode(null);
-    setError(null);
-    setIsHost(false);
-  }, [cleanup]);
+        secretKeyRef.current = secretKey;
+        pubkeyRef.current = pubkey;
 
-  const hostGame = useCallback(async () => {
-    try {
-      cleanup();
-      setIsHost(true);
-      setStatus('generating');
-      setError(null);
+        // Get relays
+        const relays = await getRelays(6);
+        relaysRef.current = relays;
 
-      // Generate code and keys
-      const code = generateGameCode();
-      const secretKey = generateSecretKey();
-      const pubkey = getPublicKey(secretKey);
-      secretKeyRef.current = secretKey;
-      setGameCode(code);
+        // Create pool
+        const pool = new SimplePool();
+        poolRef.current = pool;
 
-      // Get relays
-      const relays = await getRelays(6);
-      relaysRef.current = relays;
+        if (!mounted) return;
 
-      // Create pool
-      const pool = new SimplePool();
-      poolRef.current = pool;
+        setLobbyCode(code);
 
-      // Create peer connection
-      const pc = new RTCPeerConnection({ iceServers: ICE_SERVERS });
-      pcRef.current = pc;
+        // Publish lobby announcement
+        const lobbyEvent = finalizeEvent({
+          kind: EVENT_KINDS.LOBBY_HOST,
+          created_at: Math.floor(Date.now() / 1000),
+          tags: [
+            ['d', `voidstrike-lobby-${code}`],
+            ['code', code],
+          ],
+          content: JSON.stringify({ code }),
+        }, secretKey);
 
-      // Create data channel
-      const channel = pc.createDataChannel('game', { ordered: true });
-      channel.onopen = () => {
-        console.log('[Multiplayer] Data channel open!');
-        setDataChannel(channel);
-        setStatus('connected');
-      };
-      channel.onerror = (e) => console.error('[Multiplayer] Channel error:', e);
+        await Promise.any(relays.map(r => pool.publish([r], lobbyEvent)));
+        console.log('[Lobby] Published lobby with code:', code);
 
-      // Create offer
-      const offer = await pc.createOffer();
-      await pc.setLocalDescription(offer);
-      const iceCandidates = await gatherICE(pc);
+        // Subscribe to join requests
+        const filter: Filter = {
+          kinds: [EVENT_KINDS.LOBBY_JOIN],
+          '#code': [code],
+          since: Math.floor(Date.now() / 1000) - 10,
+        };
 
-      // Publish host event with offer
-      const hostEvent = finalizeEvent({
-        kind: EVENT_KINDS.GAME_HOST,
-        created_at: Math.floor(Date.now() / 1000),
-        tags: [
-          ['d', `voidstrike-${code}`],
-          ['code', code],
-        ],
-        content: JSON.stringify({
-          sdp: offer.sdp,
-          ice: iceCandidates,
-        }),
-      }, secretKey);
+        const sub = pool.subscribeMany(relays, filter, {
+          onevent: async (event: NostrEvent) => {
+            console.log('[Lobby] Received join request');
+            try {
+              const data = JSON.parse(event.content);
+              const guestPubkey = event.pubkey;
+              const guestName = data.name || 'Guest';
 
-      await Promise.any(relays.map(r => pool.publish([r], hostEvent)));
-      console.log('[Multiplayer] Published host event for code:', code);
-
-      setStatus('hosting');
-
-      // Subscribe to join requests
-      const filter: Filter = {
-        kinds: [EVENT_KINDS.GAME_ANSWER],
-        '#d': [`voidstrike-${code}`],
-        since: Math.floor(Date.now() / 1000) - 60,
-      };
-
-      const sub = pool.subscribeMany(relays, filter, {
-        onevent: async (event: NostrEvent) => {
-          console.log('[Multiplayer] Received answer!');
-          try {
-            const data = JSON.parse(event.content);
-
-            // Set remote description
-            await pc.setRemoteDescription({ type: 'answer', sdp: data.sdp });
-
-            // Add ICE candidates
-            for (const ice of data.ice || []) {
-              try {
-                await pc.addIceCandidate({ candidate: ice, sdpMid: '0', sdpMLineIndex: 0 });
-              } catch (e) {
-                console.warn('[Multiplayer] ICE error:', e);
+              // Try to fill an open slot
+              const slotId = onGuestJoin?.(guestName);
+              if (!slotId) {
+                console.log('[Lobby] No open slots available');
+                return;
               }
+
+              // Create peer connection for this guest
+              const pc = new RTCPeerConnection({ iceServers: ICE_SERVERS });
+
+              // Create data channel
+              const channel = pc.createDataChannel('game', { ordered: true });
+              channel.onopen = () => {
+                console.log('[Lobby] Data channel open with guest:', guestName);
+                setGuests(prev => prev.map(g =>
+                  g.pubkey === guestPubkey ? { ...g, dataChannel: channel } : g
+                ));
+              };
+
+              // Add guest to list
+              const guestConn: GuestConnection = {
+                pubkey: guestPubkey,
+                name: guestName,
+                slotId,
+                pc,
+                dataChannel: null,
+              };
+              setGuests(prev => [...prev, guestConn]);
+
+              // Create and send offer
+              const offer = await pc.createOffer();
+              await pc.setLocalDescription(offer);
+              const iceCandidates = await gatherICE(pc);
+
+              const offerEvent = finalizeEvent({
+                kind: EVENT_KINDS.WEBRTC_OFFER,
+                created_at: Math.floor(Date.now() / 1000),
+                tags: [
+                  ['p', guestPubkey],
+                  ['code', code],
+                ],
+                content: JSON.stringify({
+                  sdp: offer.sdp,
+                  ice: iceCandidates,
+                  slotId,
+                }),
+              }, secretKey);
+
+              await Promise.any(relays.map(r => pool.publish([r], offerEvent)));
+              console.log('[Lobby] Sent offer to guest');
+
+              // Listen for answer
+              const answerFilter: Filter = {
+                kinds: [EVENT_KINDS.WEBRTC_ANSWER],
+                authors: [guestPubkey],
+                '#p': [pubkey],
+                since: Math.floor(Date.now() / 1000) - 10,
+              };
+
+              const answerSub = pool.subscribeMany(relays, answerFilter, {
+                onevent: async (answerEvent: NostrEvent) => {
+                  console.log('[Lobby] Received answer from guest');
+                  try {
+                    const answerData = JSON.parse(answerEvent.content);
+                    await pc.setRemoteDescription({ type: 'answer', sdp: answerData.sdp });
+
+                    for (const ice of answerData.ice || []) {
+                      try {
+                        await pc.addIceCandidate({ candidate: ice, sdpMid: '0', sdpMLineIndex: 0 });
+                      } catch (e) {
+                        console.warn('[Lobby] ICE error:', e);
+                      }
+                    }
+                  } catch (e) {
+                    console.error('[Lobby] Failed to process answer:', e);
+                  }
+                },
+              });
+
+              // Handle disconnect
+              pc.onconnectionstatechange = () => {
+                if (pc.connectionState === 'disconnected' || pc.connectionState === 'failed') {
+                  console.log('[Lobby] Guest disconnected:', guestName);
+                  onGuestLeave?.(slotId);
+                  setGuests(prev => prev.filter(g => g.pubkey !== guestPubkey));
+                  answerSub.close();
+                }
+              };
+
+            } catch (e) {
+              console.error('[Lobby] Failed to process join request:', e);
             }
+          },
+        });
 
-            setStatus('connecting');
-          } catch (e) {
-            console.error('[Multiplayer] Failed to process answer:', e);
-          }
-        },
-      });
+        subRef.current = sub;
+        setStatus('hosting');
 
-      cleanupRef.current = () => {
-        sub.close();
-        cleanup();
-      };
+      } catch (e) {
+        console.error('[Lobby] Init error:', e);
+        if (mounted) {
+          setError(e instanceof Error ? e.message : 'Failed to initialize lobby');
+          setStatus('error');
+        }
+      }
+    };
 
-    } catch (e) {
-      console.error('[Multiplayer] Host error:', e);
-      setError(e instanceof Error ? e.message : 'Failed to host game');
-      setStatus('error');
-    }
-  }, [cleanup]);
+    initLobby();
 
-  const joinGame = useCallback(async (code: string) => {
+    return () => {
+      mounted = false;
+      subRef.current?.close();
+      poolRef.current?.close(relaysRef.current);
+      guests.forEach(g => g.pc.close());
+    };
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const joinLobby = useCallback(async (code: string, playerName: string) => {
     try {
-      cleanup();
       setIsHost(false);
       setStatus('joining');
       setError(null);
-      setGameCode(code.toUpperCase());
 
       const normalizedCode = code.toUpperCase().trim();
 
-      // Generate keys
-      const secretKey = generateSecretKey();
-      const pubkey = getPublicKey(secretKey);
-      secretKeyRef.current = secretKey;
+      // Use existing pool or create new one
+      const pool = poolRef.current || new SimplePool();
+      if (!poolRef.current) poolRef.current = pool;
 
-      // Get relays
-      const relays = await getRelays(6);
-      relaysRef.current = relays;
+      const secretKey = secretKeyRef.current || generateSecretKey();
+      const pubkey = pubkeyRef.current || getPublicKey(secretKey);
 
-      // Create pool
-      const pool = new SimplePool();
-      poolRef.current = pool;
+      const relays = relaysRef.current.length > 0 ? relaysRef.current : await getRelays(6);
+      if (relaysRef.current.length === 0) relaysRef.current = relays;
 
-      // Subscribe to host events
-      const filter: Filter = {
-        kinds: [EVENT_KINDS.GAME_HOST],
+      // Publish join request
+      const joinEvent = finalizeEvent({
+        kind: EVENT_KINDS.LOBBY_JOIN,
+        created_at: Math.floor(Date.now() / 1000),
+        tags: [
+          ['code', normalizedCode],
+        ],
+        content: JSON.stringify({ name: playerName }),
+      }, secretKey);
+
+      await Promise.any(relays.map(r => pool.publish([r], joinEvent)));
+      console.log('[Lobby] Sent join request for code:', normalizedCode);
+
+      // Listen for offer from host
+      const offerFilter: Filter = {
+        kinds: [EVENT_KINDS.WEBRTC_OFFER],
+        '#p': [pubkey],
         '#code': [normalizedCode],
-        since: Math.floor(Date.now() / 1000) - 300, // Last 5 minutes
+        since: Math.floor(Date.now() / 1000) - 30,
       };
 
-      console.log('[Multiplayer] Looking for host with code:', normalizedCode);
+      let handled = false;
 
-      let foundHost = false;
-
-      const sub = pool.subscribeMany(relays, filter, {
+      const offerSub = pool.subscribeMany(relays, offerFilter, {
         onevent: async (event: NostrEvent) => {
-          if (foundHost) return;
-          foundHost = true;
+          if (handled) return;
+          handled = true;
 
-          console.log('[Multiplayer] Found host!');
-
+          console.log('[Lobby] Received offer from host');
           try {
             const data = JSON.parse(event.content);
+            const hostPubkey = event.pubkey;
 
             // Create peer connection
             const pc = new RTCPeerConnection({ iceServers: ICE_SERVERS });
@@ -267,11 +333,16 @@ export function useMultiplayer(): UseMultiplayerReturn {
 
             // Handle incoming data channel
             pc.ondatachannel = (e) => {
-              console.log('[Multiplayer] Received data channel!');
+              console.log('[Lobby] Received data channel from host');
               e.channel.onopen = () => {
-                console.log('[Multiplayer] Data channel open!');
-                setDataChannel(e.channel);
+                console.log('[Lobby] Data channel open with host');
+                setHostConnection(e.channel);
                 setStatus('connected');
+              };
+              e.channel.onclose = () => {
+                console.log('[Lobby] Host disconnected');
+                setStatus('error');
+                setError('Host disconnected');
               };
             };
 
@@ -283,7 +354,7 @@ export function useMultiplayer(): UseMultiplayerReturn {
               try {
                 await pc.addIceCandidate({ candidate: ice, sdpMid: '0', sdpMLineIndex: 0 });
               } catch (e) {
-                console.warn('[Multiplayer] ICE error:', e);
+                console.warn('[Lobby] ICE error:', e);
               }
             }
 
@@ -293,11 +364,10 @@ export function useMultiplayer(): UseMultiplayerReturn {
             const iceCandidates = await gatherICE(pc);
 
             const answerEvent = finalizeEvent({
-              kind: EVENT_KINDS.GAME_ANSWER,
+              kind: EVENT_KINDS.WEBRTC_ANSWER,
               created_at: Math.floor(Date.now() / 1000),
               tags: [
-                ['d', `voidstrike-${normalizedCode}`],
-                ['p', event.pubkey],
+                ['p', hostPubkey],
               ],
               content: JSON.stringify({
                 sdp: answer.sdp,
@@ -306,52 +376,61 @@ export function useMultiplayer(): UseMultiplayerReturn {
             }, secretKey);
 
             await Promise.any(relays.map(r => pool.publish([r], answerEvent)));
-            console.log('[Multiplayer] Sent answer!');
-
-            setStatus('connecting');
+            console.log('[Lobby] Sent answer to host');
 
           } catch (e) {
-            console.error('[Multiplayer] Failed to join:', e);
+            console.error('[Lobby] Failed to join:', e);
             setError('Failed to connect to host');
             setStatus('error');
           }
         },
-        oneose: () => {
-          // If no host found after initial scan, keep waiting
-          if (!foundHost) {
-            console.log('[Multiplayer] No host found yet, waiting...');
-          }
-        },
       });
-
-      cleanupRef.current = () => {
-        sub.close();
-        cleanup();
-      };
 
       // Timeout after 30 seconds
       setTimeout(() => {
-        if (!foundHost && status === 'joining') {
-          setError('No game found with that code. Make sure the host is waiting.');
+        if (!handled) {
+          offerSub.close();
+          setError('No lobby found with that code');
           setStatus('error');
         }
       }, 30000);
 
     } catch (e) {
-      console.error('[Multiplayer] Join error:', e);
-      setError(e instanceof Error ? e.message : 'Failed to join game');
+      console.error('[Lobby] Join error:', e);
+      setError(e instanceof Error ? e.message : 'Failed to join lobby');
       setStatus('error');
     }
-  }, [cleanup, status]);
+  }, []);
+
+  const leaveLobby = useCallback(() => {
+    pcRef.current?.close();
+    pcRef.current = null;
+    setHostConnection(null);
+    setIsHost(true);
+    setStatus('hosting');
+  }, []);
+
+  const kickGuest = useCallback((pubkey: string) => {
+    const guest = guests.find(g => g.pubkey === pubkey);
+    if (guest) {
+      guest.pc.close();
+      onGuestLeave?.(guest.slotId);
+      setGuests(prev => prev.filter(g => g.pubkey !== pubkey));
+    }
+  }, [guests, onGuestLeave]);
 
   return {
     status,
-    gameCode,
+    lobbyCode,
     error,
-    dataChannel,
+    guests,
+    hostConnection,
     isHost,
-    hostGame,
-    joinGame,
-    disconnect,
+    joinLobby,
+    leaveLobby,
+    kickGuest,
   };
 }
+
+// Re-export for backwards compatibility
+export { useLobby as useMultiplayer };

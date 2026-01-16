@@ -18,7 +18,7 @@ import {
   PlayerSlot,
   TeamNumber,
 } from '@/store/gameSetupStore';
-import { useMultiplayer } from '@/hooks/useMultiplayer';
+import { useLobby } from '@/hooks/useMultiplayer';
 import { useMultiplayerStore } from '@/store/multiplayerStore';
 
 // Helper to convert THREE.Color to hex string
@@ -114,12 +114,7 @@ function PlayerSlotRow({
   onTeamChange,
   onRemove,
   canRemove,
-  // Multiplayer props
-  multiplayerStatus,
-  gameCode,
-  onHostGame,
-  onJoinGame,
-  onDisconnect,
+  isLocalPlayer,
 }: {
   slot: PlayerSlot;
   index: number;
@@ -131,18 +126,11 @@ function PlayerSlotRow({
   onTeamChange: (team: TeamNumber) => void;
   onRemove: () => void;
   canRemove: boolean;
-  // Multiplayer props
-  multiplayerStatus?: string;
-  gameCode?: string | null;
-  onHostGame?: () => void;
-  onJoinGame?: (code: string) => void;
-  onDisconnect?: () => void;
+  isLocalPlayer: boolean;
 }) {
   const selectedColor = PLAYER_COLORS.find(c => c.id === slot.colorId);
-  const [joinCode, setJoinCode] = useState('');
-  const [showJoinInput, setShowJoinInput] = useState(false);
-
-  const isActive = slot.type === 'human' || slot.type === 'ai' || slot.type === 'remote';
+  const isActive = slot.type === 'human' || slot.type === 'ai';
+  const isGuest = slot.isGuest;
 
   return (
     <div className="flex flex-col gap-2 p-2 bg-void-900/50 rounded-lg border border-void-800/50">
@@ -153,27 +141,39 @@ function PlayerSlotRow({
           {index + 1}
         </div>
 
-        {/* Player type */}
-        <select
-          value={slot.type}
-          onChange={(e) => onTypeChange(e.target.value as PlayerType)}
-          className="bg-void-800 border border-void-700 rounded px-2 py-1 text-white text-xs
-                     focus:outline-none focus:border-void-500 cursor-pointer min-w-[70px]"
-        >
-          <option value="human">Human</option>
-          <option value="ai">AI</option>
-          <option value="remote">Remote</option>
-          <option value="open">Open</option>
-          <option value="closed">Closed</option>
-        </select>
+        {/* Player type selector */}
+        {!isGuest ? (
+          <select
+            value={slot.type}
+            onChange={(e) => onTypeChange(e.target.value as PlayerType)}
+            className="bg-void-800 border border-void-700 rounded px-2 py-1 text-white text-xs
+                       focus:outline-none focus:border-void-500 cursor-pointer min-w-[70px]"
+          >
+            {isLocalPlayer ? (
+              <option value="human">You</option>
+            ) : (
+              <>
+                <option value="ai">AI</option>
+                <option value="open">Open</option>
+                <option value="closed">Closed</option>
+              </>
+            )}
+          </select>
+        ) : (
+          <span className="px-2 py-1 bg-green-800/50 border border-green-600/50 rounded text-green-300 text-xs">
+            {slot.guestName || 'Guest'}
+          </span>
+        )}
 
         {/* Team selection (only for active players) */}
         {isActive && (
           <select
             value={slot.team}
             onChange={(e) => onTeamChange(Number(e.target.value) as TeamNumber)}
+            disabled={isGuest}
             className="bg-void-800 border border-void-700 rounded px-2 py-1 text-white text-xs
-                       focus:outline-none focus:border-void-500 cursor-pointer min-w-[65px]"
+                       focus:outline-none focus:border-void-500 cursor-pointer min-w-[65px]
+                       disabled:opacity-50 disabled:cursor-not-allowed"
             style={{ borderLeftColor: TEAM_COLORS[slot.team].color, borderLeftWidth: '3px' }}
           >
             {Object.entries(TEAM_COLORS).map(([key, { name }]) => (
@@ -187,15 +187,17 @@ function PlayerSlotRow({
           <select
             value={slot.faction}
             onChange={(e) => onFactionChange(e.target.value)}
+            disabled={isGuest}
             className="bg-void-800 border border-void-700 rounded px-2 py-1 text-white text-xs
-                       focus:outline-none focus:border-void-500 cursor-pointer min-w-[80px]"
+                       focus:outline-none focus:border-void-500 cursor-pointer min-w-[80px]
+                       disabled:opacity-50 disabled:cursor-not-allowed"
           >
             <option value="dominion">Dominion</option>
           </select>
         )}
 
         {/* AI Difficulty (only for AI) */}
-        {slot.type === 'ai' && (
+        {slot.type === 'ai' && !isGuest && (
           <select
             value={slot.aiDifficulty}
             onChange={(e) => onDifficultyChange(e.target.value as AIDifficulty)}
@@ -209,149 +211,48 @@ function PlayerSlotRow({
           </select>
         )}
 
+        {/* Open slot indicator */}
+        {slot.type === 'open' && (
+          <span className="text-void-500 text-xs italic">Waiting for player...</span>
+        )}
+
         {/* Color selector (only for active players) */}
         {isActive && (
-          <div className="flex gap-1">
+          <div className="flex gap-1 ml-auto">
             {PLAYER_COLORS.map((color) => {
               const isUsed = usedColors.has(color.id) && slot.colorId !== color.id;
               return (
                 <button
                   key={color.id}
-                onClick={() => !isUsed && onColorChange(color.id)}
-                title={color.name}
-                disabled={isUsed}
-                className={`w-5 h-5 rounded-full transition-all duration-200
-                  ${slot.colorId === color.id
-                    ? 'ring-2 ring-white scale-110'
-                    : isUsed
-                      ? 'opacity-30 cursor-not-allowed'
-                      : 'hover:scale-110'
-                  }`}
-                style={{ backgroundColor: hexToCSS(color.hex) }}
-              />
-            );
-          })}
-        </div>
-      )}
+                  onClick={() => !isUsed && !isGuest && onColorChange(color.id)}
+                  title={color.name}
+                  disabled={isUsed || isGuest}
+                  className={`w-5 h-5 rounded-full transition-all duration-200
+                    ${slot.colorId === color.id
+                      ? 'ring-2 ring-white scale-110'
+                      : isUsed || isGuest
+                        ? 'opacity-30 cursor-not-allowed'
+                        : 'hover:scale-110'
+                    }`}
+                  style={{ backgroundColor: hexToCSS(color.hex) }}
+                />
+              );
+            })}
+          </div>
+        )}
 
         {/* Remove button */}
-        {canRemove && (
+        {canRemove && !isLocalPlayer && (
           <button
             onClick={onRemove}
             className="w-6 h-6 flex items-center justify-center text-void-500 hover:text-red-400
                        hover:bg-red-900/30 rounded transition-colors"
-            title="Remove player"
+            title={isGuest ? 'Kick player' : 'Remove player'}
           >
             ✕
           </button>
         )}
       </div>
-
-      {/* Remote player connection UI */}
-      {slot.type === 'remote' && (
-        <div className="flex items-center gap-2 pl-8">
-          {multiplayerStatus === 'idle' && (
-            <>
-              <button
-                onClick={onHostGame}
-                className="px-3 py-1 bg-void-600 hover:bg-void-500 text-white text-xs rounded transition"
-              >
-                Host
-              </button>
-              <button
-                onClick={() => setShowJoinInput(true)}
-                className="px-3 py-1 bg-void-700 hover:bg-void-600 text-white text-xs rounded transition"
-              >
-                Join
-              </button>
-              {showJoinInput && (
-                <div className="flex items-center gap-1">
-                  <input
-                    type="text"
-                    value={joinCode}
-                    onChange={(e) => setJoinCode(e.target.value.toUpperCase())}
-                    placeholder="CODE"
-                    maxLength={4}
-                    className="w-16 px-2 py-1 bg-void-800 border border-void-600 rounded text-white text-xs uppercase"
-                  />
-                  <button
-                    onClick={() => {
-                      if (joinCode.length === 4 && onJoinGame) {
-                        onJoinGame(joinCode);
-                        setShowJoinInput(false);
-                      }
-                    }}
-                    disabled={joinCode.length !== 4}
-                    className="px-2 py-1 bg-green-600 hover:bg-green-500 disabled:bg-void-700 text-white text-xs rounded"
-                  >
-                    Go
-                  </button>
-                </div>
-              )}
-            </>
-          )}
-
-          {multiplayerStatus === 'generating' && (
-            <span className="text-void-400 text-xs">Generating code...</span>
-          )}
-
-          {multiplayerStatus === 'hosting' && gameCode && (
-            <div className="flex items-center gap-2">
-              <span className="text-void-400 text-xs">Code:</span>
-              <span className="px-2 py-1 bg-void-700 rounded font-mono text-white text-sm tracking-wider">
-                {gameCode}
-              </span>
-              <span className="text-void-500 text-xs">Waiting for player...</span>
-              <button
-                onClick={onDisconnect}
-                className="px-2 py-1 text-red-400 hover:text-red-300 text-xs"
-              >
-                Cancel
-              </button>
-            </div>
-          )}
-
-          {multiplayerStatus === 'joining' && (
-            <div className="flex items-center gap-2">
-              <span className="text-void-400 text-xs">Looking for host...</span>
-              <button
-                onClick={onDisconnect}
-                className="px-2 py-1 text-red-400 hover:text-red-300 text-xs"
-              >
-                Cancel
-              </button>
-            </div>
-          )}
-
-          {multiplayerStatus === 'connecting' && (
-            <span className="text-yellow-400 text-xs">Connecting...</span>
-          )}
-
-          {multiplayerStatus === 'connected' && (
-            <div className="flex items-center gap-2">
-              <span className="text-green-400 text-xs">Connected!</span>
-              <button
-                onClick={onDisconnect}
-                className="px-2 py-1 text-red-400 hover:text-red-300 text-xs"
-              >
-                Disconnect
-              </button>
-            </div>
-          )}
-
-          {multiplayerStatus === 'error' && (
-            <div className="flex items-center gap-2">
-              <span className="text-red-400 text-xs">Connection failed</span>
-              <button
-                onClick={onDisconnect}
-                className="px-2 py-1 text-void-400 hover:text-void-300 text-xs"
-              >
-                Retry
-              </button>
-            </div>
-          )}
-        </div>
-      )}
     </div>
   );
 }
@@ -395,6 +296,11 @@ export default function GameSetupPage() {
   const isFullscreen = useUIStore((state) => state.isFullscreen);
   const toggleFullscreen = useUIStore((state) => state.toggleFullscreen);
   const setFullscreen = useUIStore((state) => state.setFullscreen);
+
+  // Join lobby modal state
+  const [showJoinModal, setShowJoinModal] = useState(false);
+  const [joinCode, setJoinCode] = useState('');
+  const [playerName, setPlayerName] = useState('Player');
 
   const handleMusicToggle = useCallback(() => {
     toggleMusic();
@@ -457,20 +363,31 @@ export default function GameSetupPage() {
     setPlayerSlotTeam,
     addPlayerSlot,
     removePlayerSlot,
+    fillOpenSlotWithGuest,
+    removeGuest,
     startGame,
   } = useGameSetupStore();
 
-  // Multiplayer hook
+  // Lobby hook with callbacks for guest management
+  const handleGuestJoin = useCallback((guestName: string) => {
+    return fillOpenSlotWithGuest(guestName);
+  }, [fillOpenSlotWithGuest]);
+
+  const handleGuestLeave = useCallback((slotId: string) => {
+    removeGuest(slotId);
+  }, [removeGuest]);
+
   const {
-    status: multiplayerStatus,
-    gameCode,
-    error: multiplayerError,
-    dataChannel,
+    status: lobbyStatus,
+    lobbyCode,
+    error: lobbyError,
+    guests,
+    hostConnection,
     isHost,
-    hostGame,
-    joinGame,
-    disconnect: disconnectMultiplayer,
-  } = useMultiplayer();
+    joinLobby,
+    leaveLobby,
+    kickGuest,
+  } = useLobby(handleGuestJoin, handleGuestLeave);
 
   // Multiplayer store for game
   const {
@@ -480,26 +397,33 @@ export default function GameSetupPage() {
     setDataChannel,
   } = useMultiplayerStore();
 
-  // Check if we have a remote player slot
-  const hasRemotePlayer = playerSlots.some(s => s.type === 'remote');
-  const isMultiplayerConnected = multiplayerStatus === 'connected';
+  // Check if we have any open slots
+  const hasOpenSlot = playerSlots.some(s => s.type === 'open');
+  const hasGuests = guests.length > 0;
 
-  // When connected, set up multiplayer store
+  // When connected as guest, set up multiplayer store
   useEffect(() => {
-    if (isMultiplayerConnected && dataChannel) {
+    if (lobbyStatus === 'connected' && hostConnection) {
       setMultiplayer(true);
       setConnected(true);
-      setHost(isHost);
-      setDataChannel(dataChannel);
+      setHost(false);
+      setDataChannel(hostConnection);
     }
-  }, [isMultiplayerConnected, dataChannel, isHost, setMultiplayer, setConnected, setHost, setDataChannel]);
+  }, [lobbyStatus, hostConnection, setMultiplayer, setConnected, setHost, setDataChannel]);
 
-  // Disconnect multiplayer when remote player is removed
+  // When hosting with connected guests, set up multiplayer
   useEffect(() => {
-    if (!hasRemotePlayer && multiplayerStatus !== 'idle') {
-      disconnectMultiplayer();
+    if (isHost && guests.some(g => g.dataChannel)) {
+      setMultiplayer(true);
+      setConnected(true);
+      setHost(true);
+      // For multiple guests, we'd need to handle multiple channels
+      const firstConnectedGuest = guests.find(g => g.dataChannel);
+      if (firstConnectedGuest?.dataChannel) {
+        setDataChannel(firstConnectedGuest.dataChannel);
+      }
     }
-  }, [hasRemotePlayer, multiplayerStatus, disconnectMultiplayer]);
+  }, [isHost, guests, setMultiplayer, setConnected, setHost, setDataChannel]);
 
   const [mapSearch, setMapSearch] = useState('');
   const allMaps = Object.values(ALL_MAPS);
@@ -512,12 +436,12 @@ export default function GameSetupPage() {
   // Get used colors for duplicate prevention
   const usedColors = new Set(
     playerSlots
-      .filter(s => s.type === 'human' || s.type === 'ai' || s.type === 'remote')
+      .filter(s => s.type === 'human' || s.type === 'ai')
       .map(s => s.colorId)
   );
 
   // Count active players
-  const activePlayerCount = playerSlots.filter(s => s.type === 'human' || s.type === 'ai' || s.type === 'remote').length;
+  const activePlayerCount = playerSlots.filter(s => s.type === 'human' || s.type === 'ai').length;
 
   // Handle map selection - trim excess players if new map has fewer slots
   const handleMapSelect = (mapId: string) => {
@@ -544,10 +468,20 @@ export default function GameSetupPage() {
     router.push('/game');
   };
 
+  const handleJoinLobby = async () => {
+    if (joinCode.length === 4) {
+      await joinLobby(joinCode, playerName);
+      setShowJoinModal(false);
+    }
+  };
+
   // Limit players to map's maxPlayers, and global max of 8
   const maxPlayersForMap = selectedMap.maxPlayers;
   const canAddPlayer = playerSlots.length < maxPlayersForMap && playerSlots.length < 8;
   const canRemovePlayer = playerSlots.length > 2;
+
+  // Determine if we're in guest mode (joined someone else's lobby)
+  const isGuestMode = lobbyStatus === 'connected' && !isHost;
 
   return (
     <main className="h-screen bg-black overflow-hidden">
@@ -564,11 +498,35 @@ export default function GameSetupPage() {
             <Link href="/" className="text-void-400 hover:text-void-300 text-sm mb-1 inline-block">
               &larr; Back to Menu
             </Link>
-            <h1 className="font-display text-2xl text-white">Game Setup</h1>
+            <h1 className="font-display text-2xl text-white">
+              {isGuestMode ? 'Joining Lobby' : 'Game Setup'}
+            </h1>
           </div>
 
-          {/* Mute/Fullscreen Buttons */}
+          {/* Header actions */}
           <div className="flex items-center gap-3">
+            {/* Join Game button (only when hosting) */}
+            {isHost && lobbyStatus === 'hosting' && (
+              <button
+                onClick={() => setShowJoinModal(true)}
+                className="px-4 py-2 bg-void-700 hover:bg-void-600 text-white text-sm rounded-lg
+                           border border-void-600 transition-colors"
+              >
+                Join Game
+              </button>
+            )}
+
+            {/* Leave lobby button (when guest) */}
+            {isGuestMode && (
+              <button
+                onClick={leaveLobby}
+                className="px-4 py-2 bg-red-900/50 hover:bg-red-800/50 text-red-300 text-sm rounded-lg
+                           border border-red-700/50 transition-colors"
+              >
+                Leave Lobby
+              </button>
+            )}
+
             <button
               onClick={handleMusicToggle}
               className="w-10 h-10 rounded-full flex items-center justify-center
@@ -597,17 +555,19 @@ export default function GameSetupPage() {
               <h2 className="font-display text-lg text-white">
                 Players ({activePlayerCount}/{maxPlayersForMap})
               </h2>
-              <button
-                onClick={addPlayerSlot}
-                disabled={!canAddPlayer}
-                className={`text-sm px-2 py-1 rounded border transition-colors
-                  ${canAddPlayer
-                    ? 'text-void-400 hover:text-void-300 border-void-700 hover:border-void-500'
-                    : 'text-void-600 border-void-800 cursor-not-allowed opacity-50'
-                  }`}
-              >
-                + Add Player
-              </button>
+              {!isGuestMode && (
+                <button
+                  onClick={addPlayerSlot}
+                  disabled={!canAddPlayer}
+                  className={`text-sm px-2 py-1 rounded border transition-colors
+                    ${canAddPlayer
+                      ? 'text-void-400 hover:text-void-300 border-void-700 hover:border-void-500'
+                      : 'text-void-600 border-void-800 cursor-not-allowed opacity-50'
+                    }`}
+                >
+                  + Add Player
+                </button>
+              )}
             </div>
             <div className="space-y-2">
               {playerSlots.map((slot, index) => (
@@ -621,130 +581,246 @@ export default function GameSetupPage() {
                   onColorChange={(colorId) => setPlayerSlotColor(slot.id, colorId)}
                   onDifficultyChange={(diff) => setPlayerSlotAIDifficulty(slot.id, diff)}
                   onTeamChange={(team) => setPlayerSlotTeam(slot.id, team)}
-                  onRemove={() => removePlayerSlot(slot.id)}
-                  canRemove={canRemovePlayer}
-                  // Multiplayer props (only relevant for remote slots)
-                  multiplayerStatus={slot.type === 'remote' ? multiplayerStatus : undefined}
-                  gameCode={slot.type === 'remote' ? gameCode : undefined}
-                  onHostGame={hostGame}
-                  onJoinGame={joinGame}
-                  onDisconnect={disconnectMultiplayer}
+                  onRemove={() => {
+                    if (slot.isGuest) {
+                      // Find the guest and kick them
+                      const guest = guests.find(g => g.slotId === slot.id);
+                      if (guest) kickGuest(guest.pubkey);
+                    } else {
+                      removePlayerSlot(slot.id);
+                    }
+                  }}
+                  canRemove={canRemovePlayer && !isGuestMode}
+                  isLocalPlayer={index === 0 && !isGuestMode}
                 />
               ))}
             </div>
           </div>
 
-          {/* Right Column - Maps and Settings */}
+          {/* Right Column - Lobby Code, Maps and Settings */}
           <div className="space-y-4">
-            {/* Map Selection - Compact */}
-            <div>
-              <h2 className="font-display text-lg text-white mb-2">Select Map</h2>
-              {/* Search box */}
-              <input
-                type="text"
-                value={mapSearch}
-                onChange={(e) => setMapSearch(e.target.value)}
-                placeholder="Search maps..."
-                className="w-full bg-void-900 border border-void-700 rounded px-2 py-1 text-white text-xs
-                           placeholder:text-void-500 focus:outline-none focus:border-void-500 mb-2"
-              />
-              {/* Scrollable map grid - max 2 rows visible */}
-              <div className="max-h-[140px] overflow-y-auto">
-                <div className="grid grid-cols-2 gap-1.5">
-                  {maps.map((map) => (
-                    <MapPreview
-                      key={map.id}
-                      map={map}
-                      isSelected={selectedMapId === map.id}
-                      onSelect={() => handleMapSelect(map.id)}
-                      onEdit={() => router.push(`/game/setup/editor?map=${map.id}`)}
-                    />
-                  ))}
-                </div>
+            {/* Lobby Code Section - Only show when hosting */}
+            {isHost && (
+              <div className="bg-void-900/50 rounded-lg border border-void-800/50 p-4">
+                <h2 className="font-display text-lg text-white mb-2">Lobby Code</h2>
+                {lobbyStatus === 'initializing' && (
+                  <p className="text-void-400 text-sm">Generating code...</p>
+                )}
+                {lobbyStatus === 'hosting' && lobbyCode && (
+                  <div className="flex flex-col gap-2">
+                    <div className="flex items-center gap-3">
+                      <span className="px-4 py-2 bg-void-700 rounded-lg font-mono text-2xl text-white tracking-widest">
+                        {lobbyCode}
+                      </span>
+                      <button
+                        onClick={() => navigator.clipboard.writeText(lobbyCode)}
+                        className="px-3 py-2 bg-void-800 hover:bg-void-700 text-void-300 text-xs rounded transition"
+                      >
+                        Copy
+                      </button>
+                    </div>
+                    <p className="text-void-500 text-xs">
+                      Share this code with friends to let them join your lobby
+                    </p>
+                    {hasOpenSlot && (
+                      <p className="text-green-400/70 text-xs">
+                        Waiting for players to join open slots...
+                      </p>
+                    )}
+                    {hasGuests && (
+                      <p className="text-green-400 text-xs">
+                        {guests.length} player{guests.length > 1 ? 's' : ''} connected
+                      </p>
+                    )}
+                  </div>
+                )}
+                {lobbyStatus === 'error' && (
+                  <p className="text-red-400 text-sm">{lobbyError || 'Failed to create lobby'}</p>
+                )}
               </div>
-
-              {/* Selected map details */}
-              <div className="mt-2 p-2 bg-void-900/50 rounded-lg border border-void-800/50">
-                <div className="flex items-center justify-between mb-0.5">
-                  <h3 className="font-display text-sm text-white">{selectedMap.name}</h3>
-                  <span className="text-void-400 text-[10px]">{selectedMap.width}x{selectedMap.height} • {selectedMap.maxPlayers}P</span>
-                </div>
-                <p className="text-void-400 text-[10px] line-clamp-2">{selectedMap.description}</p>
-              </div>
-            </div>
-
-            {/* Game Settings */}
-            <div>
-              <h2 className="font-display text-lg text-white mb-2">Game Settings</h2>
-              <div className="bg-void-900/50 rounded-lg border border-void-800/50 p-3">
-                <SettingSelect
-                  label="Starting Resources"
-                  value={startingResources}
-                  options={[
-                    { value: 'normal', label: 'Normal (50 minerals)' },
-                    { value: 'high', label: 'High (500 minerals)' },
-                    { value: 'insane', label: 'Insane (10000 minerals)' },
-                  ]}
-                  onChange={setStartingResources}
-                />
-
-                <SettingSelect
-                  label="Game Speed"
-                  value={gameSpeed}
-                  options={[
-                    { value: 'slower', label: 'Slower (0.5x)' },
-                    { value: 'normal', label: 'Normal (1x)' },
-                    { value: 'faster', label: 'Faster (1.5x)' },
-                    { value: 'fastest', label: 'Fastest (2x)' },
-                  ]}
-                  onChange={setGameSpeed}
-                />
-
-                <div className="flex items-center justify-between py-2">
-                  <span className="text-void-300 text-sm">Fog of War</span>
-                  <button
-                    onClick={() => setFogOfWar(!fogOfWar)}
-                    className={`w-12 h-6 rounded-full transition-all duration-200 relative
-                      ${fogOfWar ? 'bg-void-500' : 'bg-void-800'}`}
-                  >
-                    <div className={`absolute top-1 w-4 h-4 rounded-full bg-white transition-all duration-200
-                      ${fogOfWar ? 'left-7' : 'left-1'}`}
-                    />
-                  </button>
-                </div>
-
-              </div>
-            </div>
-
-            {/* Start Game Button */}
-            <button
-              onClick={handleStartGame}
-              disabled={activePlayerCount < 2 || (hasRemotePlayer && !isMultiplayerConnected)}
-              className="w-full game-button-primary text-lg px-8 py-3 font-display disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              Start Game
-            </button>
-
-            {activePlayerCount < 2 && (
-              <p className="text-center text-red-400 text-xs">
-                At least 2 active players required
-              </p>
             )}
 
-            {hasRemotePlayer && !isMultiplayerConnected && activePlayerCount >= 2 && (
-              <p className="text-center text-yellow-400 text-xs">
-                Waiting for remote player to connect...
-              </p>
+            {/* Guest mode indicator */}
+            {isGuestMode && (
+              <div className="bg-green-900/30 rounded-lg border border-green-700/50 p-4">
+                <h2 className="font-display text-lg text-green-300 mb-1">Connected to Lobby</h2>
+                <p className="text-green-400/70 text-xs">
+                  Waiting for host to start the game...
+                </p>
+              </div>
             )}
 
-            {/* Keyboard hint */}
-            <p className="text-center text-void-600 text-[10px]">
-              Press <kbd className="px-1 py-0.5 bg-void-800 rounded text-[10px]">?</kbd> during game for controls
-            </p>
+            {/* Map Selection - Compact (only for host) */}
+            {!isGuestMode && (
+              <div>
+                <h2 className="font-display text-lg text-white mb-2">Select Map</h2>
+                {/* Search box */}
+                <input
+                  type="text"
+                  value={mapSearch}
+                  onChange={(e) => setMapSearch(e.target.value)}
+                  placeholder="Search maps..."
+                  className="w-full bg-void-900 border border-void-700 rounded px-2 py-1 text-white text-xs
+                             placeholder:text-void-500 focus:outline-none focus:border-void-500 mb-2"
+                />
+                {/* Scrollable map grid - max 2 rows visible */}
+                <div className="max-h-[140px] overflow-y-auto">
+                  <div className="grid grid-cols-2 gap-1.5">
+                    {maps.map((map) => (
+                      <MapPreview
+                        key={map.id}
+                        map={map}
+                        isSelected={selectedMapId === map.id}
+                        onSelect={() => handleMapSelect(map.id)}
+                        onEdit={() => router.push(`/game/setup/editor?map=${map.id}`)}
+                      />
+                    ))}
+                  </div>
+                </div>
+
+                {/* Selected map details */}
+                <div className="mt-2 p-2 bg-void-900/50 rounded-lg border border-void-800/50">
+                  <div className="flex items-center justify-between mb-0.5">
+                    <h3 className="font-display text-sm text-white">{selectedMap.name}</h3>
+                    <span className="text-void-400 text-[10px]">{selectedMap.width}x{selectedMap.height} • {selectedMap.maxPlayers}P</span>
+                  </div>
+                  <p className="text-void-400 text-[10px] line-clamp-2">{selectedMap.description}</p>
+                </div>
+              </div>
+            )}
+
+            {/* Game Settings (only for host) */}
+            {!isGuestMode && (
+              <div>
+                <h2 className="font-display text-lg text-white mb-2">Game Settings</h2>
+                <div className="bg-void-900/50 rounded-lg border border-void-800/50 p-3">
+                  <SettingSelect
+                    label="Starting Resources"
+                    value={startingResources}
+                    options={[
+                      { value: 'normal', label: 'Normal (50 minerals)' },
+                      { value: 'high', label: 'High (500 minerals)' },
+                      { value: 'insane', label: 'Insane (10000 minerals)' },
+                    ]}
+                    onChange={setStartingResources}
+                  />
+
+                  <SettingSelect
+                    label="Game Speed"
+                    value={gameSpeed}
+                    options={[
+                      { value: 'slower', label: 'Slower (0.5x)' },
+                      { value: 'normal', label: 'Normal (1x)' },
+                      { value: 'faster', label: 'Faster (1.5x)' },
+                      { value: 'fastest', label: 'Fastest (2x)' },
+                    ]}
+                    onChange={setGameSpeed}
+                  />
+
+                  <div className="flex items-center justify-between py-2">
+                    <span className="text-void-300 text-sm">Fog of War</span>
+                    <button
+                      onClick={() => setFogOfWar(!fogOfWar)}
+                      className={`w-12 h-6 rounded-full transition-all duration-200 relative
+                        ${fogOfWar ? 'bg-void-500' : 'bg-void-800'}`}
+                    >
+                      <div className={`absolute top-1 w-4 h-4 rounded-full bg-white transition-all duration-200
+                        ${fogOfWar ? 'left-7' : 'left-1'}`}
+                      />
+                    </button>
+                  </div>
+
+                </div>
+              </div>
+            )}
+
+            {/* Start Game Button (only for host) */}
+            {!isGuestMode && (
+              <>
+                <button
+                  onClick={handleStartGame}
+                  disabled={activePlayerCount < 2}
+                  className="w-full game-button-primary text-lg px-8 py-3 font-display disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  Start Game
+                </button>
+
+                {activePlayerCount < 2 && (
+                  <p className="text-center text-red-400 text-xs">
+                    At least 2 active players required
+                  </p>
+                )}
+
+                {/* Keyboard hint */}
+                <p className="text-center text-void-600 text-[10px]">
+                  Press <kbd className="px-1 py-0.5 bg-void-800 rounded text-[10px]">?</kbd> during game for controls
+                </p>
+              </>
+            )}
           </div>
         </div>
         </div>
       </div>
+
+      {/* Join Lobby Modal */}
+      {showJoinModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80">
+          <div className="bg-void-900 border border-void-700 rounded-lg p-6 max-w-sm w-full mx-4">
+            <h2 className="font-display text-xl text-white mb-4">Join Game</h2>
+
+            <div className="space-y-4">
+              <div>
+                <label className="block text-void-300 text-sm mb-1">Your Name</label>
+                <input
+                  type="text"
+                  value={playerName}
+                  onChange={(e) => setPlayerName(e.target.value)}
+                  placeholder="Enter your name"
+                  className="w-full bg-void-800 border border-void-600 rounded px-3 py-2 text-white"
+                />
+              </div>
+
+              <div>
+                <label className="block text-void-300 text-sm mb-1">Lobby Code</label>
+                <input
+                  type="text"
+                  value={joinCode}
+                  onChange={(e) => setJoinCode(e.target.value.toUpperCase())}
+                  placeholder="XXXX"
+                  maxLength={4}
+                  className="w-full bg-void-800 border border-void-600 rounded px-3 py-2 text-white
+                             font-mono text-2xl text-center tracking-widest uppercase"
+                />
+              </div>
+
+              {lobbyStatus === 'joining' && (
+                <p className="text-void-400 text-sm text-center">Looking for lobby...</p>
+              )}
+
+              {lobbyError && (
+                <p className="text-red-400 text-sm text-center">{lobbyError}</p>
+              )}
+            </div>
+
+            <div className="flex gap-3 mt-6">
+              <button
+                onClick={() => setShowJoinModal(false)}
+                className="flex-1 px-4 py-2 bg-void-800 hover:bg-void-700 text-white rounded transition"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleJoinLobby}
+                disabled={joinCode.length !== 4 || lobbyStatus === 'joining'}
+                className="flex-1 px-4 py-2 bg-void-500 hover:bg-void-400 disabled:bg-void-700
+                           disabled:cursor-not-allowed text-white rounded transition"
+              >
+                Join
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </main>
   );
 }
