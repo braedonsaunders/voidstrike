@@ -13,10 +13,6 @@ import * as THREE from 'three';
 import { WebGPURenderer, PostProcessing } from 'three/webgpu';
 import { debugInitialization, debugShaders } from '@/utils/debugLogger';
 
-// We need to import WebGPUBackend to configure custom device limits
-// eslint-disable-next-line @typescript-eslint/no-require-imports
-const WebGPUBackend = require('three/src/renderers/webgpu/WebGPUBackend.js').default;
-
 // Desired WebGPU limits for optimal performance
 // Most modern GPUs support these higher limits, but we request them explicitly
 const DESIRED_LIMITS = {
@@ -131,7 +127,8 @@ export async function createWebGPURenderer(config: WebGPURendererConfig): Promis
   // Track actual limits (will be updated after device creation)
   let actualLimits = { ...DEFAULT_LIMITS };
 
-  // Create renderer options
+  // Create renderer options with requiredLimits passed directly to WebGPURenderer
+  // NOTE: requiredLimits must be passed to WebGPURenderer, NOT WebGPUBackend
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const rendererOptions: any = {
     canvas,
@@ -141,54 +138,18 @@ export async function createWebGPURenderer(config: WebGPURendererConfig): Promis
     logarithmicDepthBuffer,
   };
 
-  // If WebGPU is supported, create a custom backend with optimized limits
-  // NOTE: adapter.limits often reports spec minimums (8), not hardware maximums
-  // Most GPUs (including integrated) support 16+ vertex buffers via Vulkan/D3D12/Metal
-  // So we request our desired limits directly - device creation will fail if unsupported
+  // If WebGPU is supported, request optimized limits directly on the renderer
+  // This is the correct way per Three.js GitHub issue #29865
   if (!forceWebGL && adapterLimits.supported) {
     debugInitialization.log(`[WebGPU] Adapter reported limits:`, {
       maxVertexBuffers: adapterLimits.maxVertexBuffers,
       maxTextureDimension2D: adapterLimits.maxTextureDimension2D,
     });
-    debugInitialization.log(`[WebGPU] Requesting optimized limits:`, DESIRED_LIMITS);
+    debugInitialization.log(`[WebGPU] Requesting optimized limits via WebGPURenderer:`, DESIRED_LIMITS);
 
-    try {
-      // Create a custom WebGPU backend with all our desired limits
-      // Request our desired limits directly - most modern GPUs support these
-      const backend = new WebGPUBackend({
-        powerPreference,
-        requiredLimits: DESIRED_LIMITS,
-      });
-
-      rendererOptions.backend = backend;
-      actualLimits = { ...DESIRED_LIMITS };
-
-      debugInitialization.log(`[WebGPU] Custom backend created with optimized limits`);
-    } catch (error) {
-      // If device creation fails with desired limits, try with adapter-reported limits
-      debugInitialization.warn('[WebGPU] Failed with desired limits, trying adapter limits:', error);
-
-      try {
-        const fallbackLimits = {
-          maxVertexBuffers: adapterLimits.maxVertexBuffers,
-          maxTextureDimension2D: adapterLimits.maxTextureDimension2D,
-          maxStorageBufferBindingSize: adapterLimits.maxStorageBufferBindingSize,
-          maxBufferSize: adapterLimits.maxBufferSize,
-        };
-
-        const backend = new WebGPUBackend({
-          powerPreference,
-          requiredLimits: fallbackLimits,
-        });
-
-        rendererOptions.backend = backend;
-        actualLimits = fallbackLimits;
-
-        debugInitialization.log(`[WebGPU] Fallback backend created with adapter limits`);
-      } catch (fallbackError) {
-        debugInitialization.warn('[WebGPU] Failed to create custom backend, using defaults:', fallbackError);
-      }
-    }
+    // Pass requiredLimits directly to WebGPURenderer constructor
+    rendererOptions.requiredLimits = DESIRED_LIMITS;
+    actualLimits = { ...DESIRED_LIMITS };
   }
 
   // Create the WebGPU renderer
