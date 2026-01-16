@@ -29,6 +29,7 @@ import { UnitRenderer } from '@/rendering/UnitRenderer';
 import { BuildingRenderer } from '@/rendering/BuildingRenderer';
 import { ResourceRenderer } from '@/rendering/ResourceRenderer';
 import { EffectsRenderer } from '@/rendering/EffectsRenderer';
+import { BattleEffectsRenderer, AdvancedParticleSystem, ParticleType } from '@/rendering/effects';
 import { RallyPointRenderer } from '@/rendering/RallyPointRenderer';
 import { WatchTowerRenderer } from '@/rendering/WatchTowerRenderer';
 import { BuildingPlacementPreview } from '@/rendering/BuildingPlacementPreview';
@@ -98,6 +99,8 @@ export function WebGPUGameCanvas() {
   const resourceRendererRef = useRef<ResourceRenderer | null>(null);
   const fogOfWarRef = useRef<TSLFogOfWar | null>(null);
   const effectsRendererRef = useRef<EffectsRenderer | null>(null);
+  const battleEffectsRef = useRef<BattleEffectsRenderer | null>(null);
+  const advancedParticlesRef = useRef<AdvancedParticleSystem | null>(null);
   const rallyPointRendererRef = useRef<RallyPointRenderer | null>(null);
   const watchTowerRendererRef = useRef<WatchTowerRenderer | null>(null);
   const placementPreviewRef = useRef<BuildingPlacementPreview | null>(null);
@@ -474,6 +477,13 @@ export function WebGPUGameCanvas() {
       }
 
       effectsRendererRef.current = new EffectsRenderer(scene, game.eventBus, (x, z) => terrain.getHeightAt(x, z));
+
+      // World-class battle effects (projectile trails, explosions, decals)
+      battleEffectsRef.current = new BattleEffectsRenderer(scene, game.eventBus, (x, z) => terrain.getHeightAt(x, z));
+
+      // Advanced GPU particle system for smoke, fire, debris
+      advancedParticlesRef.current = new AdvancedParticleSystem(scene, 15000);
+      advancedParticlesRef.current.setTerrainHeightFunction((x, z) => terrain.getHeightAt(x, z));
       rallyPointRendererRef.current = new RallyPointRenderer(
         scene,
         game.eventBus,
@@ -652,6 +662,27 @@ export function WebGPUGameCanvas() {
           _deathPos.set(data.position.x, terrainHeight + 0.5, data.position.y);
           effectEmitterRef.current.explosion(_deathPos, 1);
         }
+        // Advanced particle explosion
+        if (data.position && advancedParticlesRef.current) {
+          const terrainHeight = terrain.getHeightAt(data.position.x, data.position.y);
+          _deathPos.set(data.position.x, terrainHeight + 0.5, data.position.y);
+          advancedParticlesRef.current.emitExplosion(_deathPos, 1.2);
+        }
+      });
+
+      // Building destroyed - big explosion with advanced particles
+      game.eventBus.on('building:destroyed', (data: {
+        entityId: number;
+        playerId: string;
+        buildingType: string;
+        position: { x: number; y: number };
+      }) => {
+        if (advancedParticlesRef.current) {
+          const terrainHeight = terrain.getHeightAt(data.position.x, data.position.y);
+          const isLarge = ['headquarters', 'infantry_bay', 'forge', 'hangar'].includes(data.buildingType);
+          _deathPos.set(data.position.x, terrainHeight + 1, data.position.y);
+          advancedParticlesRef.current.emitExplosion(_deathPos, isLarge ? 2.5 : 1.5);
+        }
       });
 
       // Spawn entities (skip in battle simulator - user spawns manually)
@@ -790,6 +821,10 @@ export function WebGPUGameCanvas() {
         // Update TSL visual systems
         selectionSystemRef.current?.update(deltaTime);
         effectEmitterRef.current?.update(deltaTime / 1000);
+
+        // Update world-class battle effects
+        battleEffectsRef.current?.update(deltaTime);
+        advancedParticlesRef.current?.update(deltaTime / 1000, cameraRef.current?.camera);
 
         // Update dynamic lighting pool
         lightPoolRef.current?.update();
@@ -1103,6 +1138,8 @@ export function WebGPUGameCanvas() {
       environmentRef.current?.dispose();
       fogOfWarRef.current?.dispose();
       effectsRendererRef.current?.dispose();
+      battleEffectsRef.current?.dispose();
+      advancedParticlesRef.current?.dispose();
       rallyPointRendererRef.current?.dispose();
       watchTowerRendererRef.current?.dispose();
       cameraRef.current?.dispose();

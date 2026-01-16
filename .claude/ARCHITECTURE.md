@@ -92,11 +92,23 @@ voidstrike/
 │   │   ├── UnitRenderer.ts    # Unit rendering with player colors
 │   │   ├── BuildingRenderer.ts # Building mesh rendering
 │   │   ├── FogOfWar.ts        # Fog of war visibility system
-│   │   ├── EffectsRenderer.ts # Combat effects (projectiles, hits)
+│   │   ├── EffectsRenderer.ts # Combat effects (projectiles, hits) [legacy]
 │   │   ├── RallyPointRenderer.ts # Building rally point visuals
 │   │   ├── CommandQueueRenderer.ts # Shift-click waypoint visualization
 │   │   ├── BuildingPlacementPreview.ts # SC2-style placement grid + ghost
-│   │   └── WallPlacementPreview.ts # Wall line drawing preview
+│   │   ├── WallPlacementPreview.ts # Wall line drawing preview
+│   │   └── effects/           # World-class battle effects module
+│   │       ├── index.ts       # Module exports
+│   │       ├── BattleEffectsRenderer.ts # Projectile trails, explosions, decals
+│   │       └── AdvancedParticleSystem.ts # GPU instanced particles (fire, smoke, sparks)
+│   ├── phaser/               # Phaser 4 2D overlay system
+│   │   ├── index.ts          # Module exports
+│   │   ├── scenes/
+│   │   │   └── OverlayScene.ts # Main 2D overlay (alerts, vignettes, countdown)
+│   │   └── systems/           # Advanced overlay systems
+│   │       ├── index.ts       # System exports
+│   │       ├── DamageNumberSystem.ts # Consolidated damage number display
+│   │       └── ScreenEffectsSystem.ts # Chromatic aberration, kill streaks, etc.
 │   ├── input/
 │   │   ├── InputManager.ts    # Input abstraction
 │   │   ├── Selection.ts       # Box selection

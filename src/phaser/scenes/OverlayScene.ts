@@ -6,6 +6,8 @@ import { useGameStore } from '@/store/gameStore';
 import { useGameSetupStore, isLocalPlayer, getLocalPlayerId, enableSpectatorMode } from '@/store/gameSetupStore';
 import { useProjectionStore } from '@/store/projectionStore';
 import { MusicPlayer } from '@/audio/MusicPlayer';
+import { DamageNumberSystem } from '../systems/DamageNumberSystem';
+import { ScreenEffectsSystem } from '../systems/ScreenEffectsSystem';
 
 /**
  * Phaser 4 Overlay Scene
@@ -128,6 +130,10 @@ export class OverlayScene extends Phaser.Scene {
   private attackTargetIndicators: AttackTargetIndicator[] = [];
   private attackTargetGraphics!: Phaser.GameObjects.Graphics;
 
+  // World-class effect systems
+  private damageNumberSystem: DamageNumberSystem | null = null;
+  private screenEffectsSystem: ScreenEffectsSystem | null = null;
+
   constructor() {
     super({ key: 'OverlayScene' });
   }
@@ -173,6 +179,12 @@ export class OverlayScene extends Phaser.Scene {
 
     this.setupEventListeners();
     this.setupKeyboardShortcuts();
+
+    // Initialize world-class effect systems
+    if (this.eventBus) {
+      this.damageNumberSystem = new DamageNumberSystem(this, this.eventBus);
+      this.screenEffectsSystem = new ScreenEffectsSystem(this, this.eventBus);
+    }
   }
 
   private setupEventListeners(): void {
@@ -1254,6 +1266,19 @@ export class OverlayScene extends Phaser.Scene {
 
     // Draw and update attack target indicators
     this.updateAttackTargetIndicators(now);
+
+    // Update world-class effect systems
+    this.damageNumberSystem?.update();
+    this.screenEffectsSystem?.update(time, delta);
+
+    // Apply screen shake from effects system
+    const effectsShake = this.screenEffectsSystem?.getScreenShakeIntensity() ?? 0;
+    if (effectsShake > 0.1) {
+      const totalShake = this.screenShakeIntensity + effectsShake;
+      const shakeX = (Math.random() - 0.5) * totalShake;
+      const shakeY = (Math.random() - 0.5) * totalShake;
+      this.cameras.main.setScroll(shakeX, shakeY);
+    }
   }
 
   /**
@@ -1678,5 +1703,11 @@ export class OverlayScene extends Phaser.Scene {
     this.edgeWarnings.clear();
     this.vignetteTexture = null;
     this.countdownContainer = null;
+
+    // Dispose world-class effect systems
+    this.damageNumberSystem?.dispose();
+    this.screenEffectsSystem?.dispose();
+    this.damageNumberSystem = null;
+    this.screenEffectsSystem = null;
   }
 }

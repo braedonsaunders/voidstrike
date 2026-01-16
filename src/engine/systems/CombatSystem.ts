@@ -27,6 +27,7 @@ const attackEventPayload = {
   targetPlayerId: undefined as string | undefined,
   attackerIsFlying: false,
   targetIsFlying: false,
+  attackerFaction: 'terran' as string,
 };
 
 const splashEventPayload = {
@@ -720,7 +721,18 @@ export class CombatSystem extends System {
     attackEventPayload.targetPlayerId = targetSelectable?.playerId;
     attackEventPayload.attackerIsFlying = attacker.isFlying;
     attackEventPayload.targetIsFlying = targetIsFlying;
+    attackEventPayload.attackerFaction = attacker.faction || 'terran';
     this.game.eventBus.emit('combat:attack', attackEventPayload);
+
+    // Emit damage:dealt for Phaser damage number system
+    this.game.eventBus.emit('damage:dealt', {
+      targetId,
+      damage: finalDamage,
+      targetPos: { x: targetTransform.x, y: targetTransform.y },
+      targetHeight,
+      targetIsFlying,
+      isKillingBlow: health && health.current <= 0,
+    });
 
     // Emit player:damage for Phaser overlay effects when local player's unit takes damage
     // PERF: Use pooled payload object
