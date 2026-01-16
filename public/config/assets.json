@@ -398,7 +398,12 @@
         "roughnessOverride": 0.1,
         "metalnessOverride": 0.3,
         "pulseSpeed": 0.4,
-        "pulseAmplitude": 0.15
+        "pulseAmplitude": 0.15,
+        "attachLight": {
+          "color": "#9966ff",
+          "intensity": 0.8,
+          "distance": 8
+        }
       }
     },
     "shrub": {
