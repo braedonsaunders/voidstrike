@@ -4,20 +4,16 @@
  */
 
 // Well-known public relays that accept anonymous posts (no auth/whitelist required)
-// These are actively maintained and have good uptime
+// Prioritized by reliability and speed
 const PUBLIC_RELAYS = [
-  'wss://relay.damus.io',
-  'wss://nos.lol',
-  'wss://relay.nostr.band',
-  'wss://relay.snort.social',
-  'wss://nostr.mom',
-  'wss://relay.primal.net',
+  'wss://relay.damus.io',        // Very reliable
+  'wss://nos.lol',               // Very reliable
+  'wss://relay.primal.net',      // Reliable
+  'wss://nostr.mom',             // Reliable
+  'wss://relay.nostr.band',      // Usually reliable
   'wss://nostr-pub.wellorder.net',
-  'wss://relay.nostr.bg',
   'wss://nostr.oxtr.dev',
   'wss://relay.nostr.net',
-  'wss://nostr.fmt.wiz.biz',
-  'wss://relay.current.fyi',
 ];
 
 export class NostrRelayError extends Error {
@@ -29,17 +25,28 @@ export class NostrRelayError extends Error {
 
 /**
  * Get a list of public relays for matchmaking
- * Uses well-known public relays that accept anonymous posts
+ * Pre-checks relay health and returns only working ones
  * @param count Number of relays to return (default 6)
  */
 export async function getRelays(count: number = 6): Promise<string[]> {
-  // Shuffle for load distribution
-  const shuffled = [...PUBLIC_RELAYS].sort(() => Math.random() - 0.5);
+  // Check health of all relays in parallel with short timeout
+  const healthyRelays = await filterHealthyRelays(PUBLIC_RELAYS, 2000);
+
+  if (healthyRelays.length === 0) {
+    // Fallback: return top relays even if health check failed (might work)
+    console.warn('[Nostr] No healthy relays found, using fallback list');
+    const fallback = PUBLIC_RELAYS.slice(0, count);
+    console.log(`[Nostr] Using ${fallback.length} fallback relays:`, fallback);
+    return fallback;
+  }
+
+  // Shuffle healthy relays for load distribution
+  const shuffled = healthyRelays.sort(() => Math.random() - 0.5);
 
   // Return requested count
-  const selected = shuffled.slice(0, count);
+  const selected = shuffled.slice(0, Math.min(count, shuffled.length));
 
-  console.log(`[Nostr] Using ${selected.length} public relays:`, selected);
+  console.log(`[Nostr] Using ${selected.length} healthy relays:`, selected);
 
   return selected;
 }
