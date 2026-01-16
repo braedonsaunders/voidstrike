@@ -1851,6 +1851,7 @@ export class MapDecorations {
 
   /**
    * Update emissive decoration pulsing animation
+   * Uses smooth easing for organic, world-class lighting
    * Call this every frame with deltaTime in milliseconds
    */
   public update(deltaTime: number): void {
@@ -1860,9 +1861,21 @@ export class MapDecorations {
 
     for (const deco of this.emissiveDecorations) {
       if (deco.pulseSpeed > 0 && deco.pulseAmplitude > 0) {
-        // Calculate pulse value: oscillates between (1-amplitude) and (1+amplitude)
-        const pulse = 1.0 + Math.sin(this.animationTime * deco.pulseSpeed * Math.PI * 2) * deco.pulseAmplitude;
-        deco.material.emissiveIntensity = deco.baseIntensity * pulse;
+        // Organic pulsing using smoothed sine wave
+        // Multiple harmonics create more natural, breathing-like rhythm
+        const t = this.animationTime * deco.pulseSpeed;
+        const primary = Math.sin(t * Math.PI * 2);
+        const secondary = Math.sin(t * Math.PI * 2 * 1.7) * 0.3; // Slight variation
+        const rawPulse = (primary + secondary) / 1.3; // Normalize
+
+        // Smooth easing: bias toward brighter (looks more natural for glow)
+        const eased = rawPulse * 0.5 + 0.5; // Map to 0-1
+        const pulse = 1.0 + (eased * 2 - 1) * deco.pulseAmplitude;
+
+        // Update material emissive if present
+        if (deco.material) {
+          deco.material.emissiveIntensity = deco.baseIntensity * pulse;
+        }
 
         // Also pulse the attached light if present
         if (deco.attachedLight && deco.baseLightIntensity !== undefined) {
@@ -1874,7 +1887,11 @@ export class MapDecorations {
 
   /**
    * Apply rendering hints from assets.json to a decoration model
-   * Handles envMapIntensity, emissive, emissiveIntensity, pulsing, and attached lights
+   * World-class lighting approach:
+   * - Preserves model's baked-in emissive colors/maps
+   * - Only boosts intensity, doesn't override colors unless model has none
+   * - Uses subtle values for natural-looking glow
+   * - Positions lights based on model height
    */
   private applyRenderingHintsToModel(
     model: THREE.Object3D,
@@ -1885,6 +1902,10 @@ export class MapDecorations {
   ): void {
     if (!hints) return;
 
+    // Get asset height for proper light positioning
+    const assetHeight = this.getAssetHeight(model) || 2.0;
+    let lightCreatedForPulsing = false;
+
     // Find and modify all MeshStandardMaterial instances in the model
     model.traverse((child: THREE.Object3D) => {
       if (child instanceof THREE.Mesh && child.material) {
@@ -1892,15 +1913,9 @@ export class MapDecorations {
 
         for (const material of materials) {
           if (material instanceof THREE.MeshStandardMaterial) {
-            // Apply envMapIntensity
+            // Apply envMapIntensity for reflections
             if (hints.envMapIntensity !== undefined) {
               material.envMapIntensity = hints.envMapIntensity;
-            }
-
-            // Apply emissive color and intensity
-            if (hints.emissive) {
-              material.emissive = new THREE.Color(hints.emissive);
-              material.emissiveIntensity = hints.emissiveIntensity ?? 1.0;
             }
 
             // Apply roughness/metalness overrides
@@ -1911,49 +1926,88 @@ export class MapDecorations {
               material.metalness = hints.metalnessOverride;
             }
 
-            // Track for pulsing animation if pulse properties are set
-            if (hints.emissive && (hints.pulseSpeed || hints.pulseAmplitude)) {
-              const tracked: TrackedEmissiveDecoration = {
-                material,
-                baseIntensity: hints.emissiveIntensity ?? 1.0,
-                pulseSpeed: hints.pulseSpeed ?? 0,
-                pulseAmplitude: hints.pulseAmplitude ?? 0,
-              };
+            // Smart emissive handling: preserve model's baked-in glow
+            if (hints.emissive || hints.emissiveIntensity !== undefined) {
+              const existingEmissive = material.emissive;
+              const hasExistingEmissive = existingEmissive &&
+                (existingEmissive.r > 0.01 || existingEmissive.g > 0.01 || existingEmissive.b > 0.01);
 
-              // Create attached point light if specified
-              if (hints.attachLight && this.scene) {
-                const light = new THREE.PointLight(
-                  new THREE.Color(hints.attachLight.color),
-                  hints.attachLight.intensity,
-                  hints.attachLight.distance,
-                  2 // decay
-                );
-                light.position.set(x, y + 1, z); // Slightly above ground
-                light.castShadow = false; // Performance: dynamic decoration lights don't cast shadows
-                this.scene.add(light);
-                tracked.attachedLight = light;
-                tracked.baseLightIntensity = hints.attachLight.intensity;
+              if (hasExistingEmissive) {
+                // Model has baked-in emissive - just boost intensity, preserve color
+                const boostFactor = hints.emissiveIntensity ?? 1.0;
+                material.emissiveIntensity = Math.max(material.emissiveIntensity, 0.1) * boostFactor;
+              } else if (hints.emissive) {
+                // Model has no emissive - apply hint color subtly
+                material.emissive = new THREE.Color(hints.emissive);
+                material.emissiveIntensity = hints.emissiveIntensity ?? 0.3;
               }
 
-              this.emissiveDecorations.push(tracked);
+              // Track for pulsing animation if pulse properties are set
+              if (hints.pulseSpeed || hints.pulseAmplitude) {
+                const tracked: TrackedEmissiveDecoration = {
+                  material,
+                  baseIntensity: material.emissiveIntensity,
+                  pulseSpeed: hints.pulseSpeed ?? 0,
+                  pulseAmplitude: hints.pulseAmplitude ?? 0,
+                };
+
+                // Create ONE attached point light per decoration (not per material)
+                if (hints.attachLight && this.scene && !lightCreatedForPulsing) {
+                  const light = new THREE.PointLight(
+                    new THREE.Color(hints.attachLight.color),
+                    hints.attachLight.intensity,
+                    hints.attachLight.distance,
+                    2 // quadratic decay for realistic falloff
+                  );
+                  // Position light at ~60% of model height for natural glow origin
+                  light.position.set(x, y + assetHeight * 0.6, z);
+                  light.castShadow = false;
+                  this.scene.add(light);
+                  tracked.attachedLight = light;
+                  tracked.baseLightIntensity = hints.attachLight.intensity;
+                  lightCreatedForPulsing = true;
+                }
+
+                this.emissiveDecorations.push(tracked);
+              }
             }
           }
         }
       }
     });
 
-    // If attachLight is set but no emissive material was found, still create the light
-    if (hints.attachLight && this.scene && this.emissiveDecorations.length === 0) {
+    // Create standalone light if specified but no emissive materials found
+    if (hints.attachLight && this.scene && !lightCreatedForPulsing) {
       const light = new THREE.PointLight(
         new THREE.Color(hints.attachLight.color),
         hints.attachLight.intensity,
         hints.attachLight.distance,
         2
       );
-      light.position.set(x, y + 1, z);
+      light.position.set(x, y + assetHeight * 0.6, z);
       light.castShadow = false;
       this.scene.add(light);
+
+      // Track for pulsing even without material
+      if (hints.pulseSpeed || hints.pulseAmplitude) {
+        this.emissiveDecorations.push({
+          material: null as unknown as THREE.MeshStandardMaterial, // No material, light-only
+          baseIntensity: 0,
+          pulseSpeed: hints.pulseSpeed ?? 0,
+          pulseAmplitude: hints.pulseAmplitude ?? 0,
+          attachedLight: light,
+          baseLightIntensity: hints.attachLight.intensity,
+        });
+      }
     }
+  }
+
+  /**
+   * Get the bounding box height of a model
+   */
+  private getAssetHeight(model: THREE.Object3D): number {
+    const box = new THREE.Box3().setFromObject(model);
+    return box.max.y - box.min.y;
   }
 
   /**
