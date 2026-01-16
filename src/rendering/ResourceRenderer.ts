@@ -170,7 +170,7 @@ export class ResourceRenderer {
       // Y rotation comes from MODEL_FORWARD_OFFSET + asset config + per-instance random
       let modelXRotation = 0;
       let modelZRotation = 0;
-      const modelYRotation = AssetManager.getModelRotation(resourceType);
+      const modelYRotation = AssetManager.getModelRotationY(resourceType);
       const tempQuat = new THREE.Quaternion();
       const tempEuler = new THREE.Euler();
 

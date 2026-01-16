@@ -6,6 +6,8 @@
     "fabricator": {
       "model": "/models/units/fabricator_LOD0.glb",
       "height": 1.0,
+      "scale": 1.0,
+      "rotation": { "x": 0, "y": 0, "z": 0 },
       "animationSpeed": 0.4,
       "animations": {
         "idle": ["idle", "stand", "pose"],
@@ -17,6 +19,8 @@
     "trooper": {
       "model": "/models/units/trooper_LOD0.glb",
       "height": 1.2,
+      "scale": 1.0,
+      "rotation": { "x": 0, "y": 0, "z": 0 },
       "animations": {
         "idle": ["idle", "stand", "pose"],
         "walk": ["walk", "run", "move"],
@@ -27,6 +31,8 @@
     "breacher": {
       "model": "/models/units/breacher_LOD0.glb",
       "height": 1.5,
+      "scale": 1.0,
+      "rotation": { "x": 0, "y": 0, "z": 0 },
       "animations": {
         "idle": ["idle", "stand"],
         "walk": ["walk", "run", "move"],
@@ -37,6 +43,8 @@
     "vanguard": {
       "model": "/models/units/vanguard_LOD0.glb",
       "height": 1.3,
+      "scale": 1.0,
+      "rotation": { "x": 0, "y": 0, "z": 0 },
       "animations": {
         "idle": ["idle", "stand"],
         "walk": ["walk", "run"],
@@ -47,6 +55,8 @@
     "operative": {
       "model": "/models/units/operative_LOD0.glb",
       "height": 1.3,
+      "scale": 1.0,
+      "rotation": { "x": 0, "y": 0, "z": 0 },
       "animations": {
         "idle": ["idle", "stealth_idle", "stand"],
         "walk": ["walk", "sneak", "run"],
@@ -57,6 +67,8 @@
     "scorcher": {
       "model": "/models/units/scorcher_LOD0.glb",
       "height": 1.0,
+      "scale": 1.0,
+      "rotation": { "x": 0, "y": 0, "z": 0 },
       "animations": {
         "idle": ["idle", "stand"],
         "walk": ["walk", "roll", "move"],
@@ -67,6 +79,8 @@
     "devastator": {
       "model": "/models/units/devastator_LOD0.glb",
       "height": 1.8,
+      "scale": 1.0,
+      "rotation": { "x": 0, "y": 0, "z": 0 },
       "animations": {
         "idle": ["idle", "stand"],
         "walk": ["walk", "drive", "move"],
@@ -77,6 +91,8 @@
     "colossus": {
       "model": "/models/units/colossus_LOD0.glb",
       "height": 2.5,
+      "scale": 1.0,
+      "rotation": { "x": 0, "y": 0, "z": 0 },
       "animations": {
         "idle": ["idle", "stand"],
         "walk": ["walk", "stomp", "move"],
@@ -87,6 +103,8 @@
     "valkyrie": {
       "model": "/models/units/valkyrie_LOD0.glb",
       "height": 1.8,
+      "scale": 1.0,
+      "rotation": { "x": 0, "y": 0, "z": 0 },
       "airborneHeight": 6,
       "animations": {
         "idle": ["idle", "hover", "stand"],
@@ -98,6 +116,8 @@
     "lifter": {
       "model": "/models/units/lifter_LOD0.glb",
       "height": 1.5,
+      "scale": 1.0,
+      "rotation": { "x": 0, "y": 0, "z": 0 },
       "airborneHeight": 5,
       "animations": {
         "idle": ["idle", "hover"],
@@ -109,6 +129,8 @@
     "specter": {
       "model": "/models/units/specter_LOD0.glb",
       "height": 1.5,
+      "scale": 1.0,
+      "rotation": { "x": 0, "y": 0, "z": 0 },
       "airborneHeight": 7,
       "animations": {
         "idle": ["idle", "hover", "cloak"],
@@ -120,6 +142,8 @@
     "overseer": {
       "model": "/models/units/overseer_LOD0.glb",
       "height": 1.5,
+      "scale": 1.0,
+      "rotation": { "x": 0, "y": 0, "z": 0 },
       "airborneHeight": 6,
       "animations": {
         "idle": ["idle", "scan", "hover"],
@@ -130,7 +154,9 @@
     },
     "dreadnought": {
       "model": "/models/units/dreadnought_LOD0.glb",
-      "height": 45.0,
+      "height": 15.0,
+      "scale": 1.0,
+      "rotation": { "x": 0, "y": 0, "z": 0 },
       "airborneHeight": 15,
       "animations": {
         "idle": ["idle", "hover", "cruise"],
@@ -441,13 +467,14 @@
       "example": "Use 0.5 for half speed, 2.0 for double speed"
     },
     "height": {
-      "description": "Target height in game units. Models are automatically scaled so their bounding box height matches this value. This controls the visual SIZE of the model.",
-      "example": "A trooper with height: 1.2 will be scaled to be 1.2 game units tall."
+      "description": "Target height in game units. Models are NORMALIZED so their bounding box height matches this value. If your model is 10 units tall and you set height: 2, it scales down by 5x. If your model is 1 unit tall and you set height: 2, it scales up by 2x.",
+      "example": "A trooper with height: 1.2 will be scaled to be exactly 1.2 game units tall, regardless of the original model size.",
+      "note": "This is for NORMALIZING different source models to consistent sizes. Use 'scale' to simply multiply size."
     },
     "scale": {
-      "description": "Optional additional scale multiplier applied AFTER height normalization. Use for fine-tuning size.",
+      "description": "Scale multiplier applied AFTER height normalization. Use this to make units bigger or smaller.",
       "default": "1.0 (no additional scaling)",
-      "example": "If a model looks too small after height normalization, use \"scale\": 1.2 to make it 20% larger."
+      "example": "Set scale: 3.0 to make the dreadnought 3x larger than its normalized height."
     },
     "airborneHeight": {
       "description": "For flying units only. Height in game units above the terrain surface. This controls how HIGH the unit flies, independent of its visual size.",
@@ -455,9 +482,9 @@
       "example": "A specter with airborneHeight: 7 flies at 7 units above terrain. A dreadnought with airborneHeight: 15 flies higher."
     },
     "rotation": {
-      "description": "Y-axis rotation offset in degrees. Use to fix models facing wrong direction.",
-      "example": "If unit walks backward, add \"rotation\": 180. If sideways, try 90 or -90.",
-      "default": "0 (no additional rotation beyond the engine default)"
+      "description": "Rotation offset in degrees on all 3 axes: { x, y, z }. Use to fix models facing wrong direction or tilted.",
+      "example": "If unit walks backward: { \"x\": 0, \"y\": 180, \"z\": 0 }. Tilt forward: { \"x\": 15, \"y\": 0, \"z\": 0 }",
+      "default": "{ \"x\": 0, \"y\": 0, \"z\": 0 } (no rotation beyond engine default)"
     },
     "lod": {
       "description": "LOD levels are automatically detected. LOD0 is highest detail (default), LOD1 is medium, LOD2 is lowest.",
