@@ -17,6 +17,7 @@
  */
 
 import { DefinitionRegistry } from './DefinitionRegistry';
+import { debugInitialization } from '@/utils/debugLogger';
 
 // Import existing TypeScript definitions
 import { UNIT_DEFINITIONS as DOMINION_UNITS } from '@/data/units/dominion';
@@ -43,11 +44,11 @@ import type { UnitDefinition, BuildingDefinition, ResearchDefinition, AbilityDef
  */
 export function bootstrapDefinitions(): void {
   if (DefinitionRegistry.isInitialized()) {
-    console.log('[Bootstrap] Definitions already initialized, skipping');
+    debugInitialization.log('[Bootstrap] Definitions already initialized, skipping');
     return;
   }
 
-  console.log('[Bootstrap] Registering TypeScript definitions with registry...');
+  debugInitialization.log('[Bootstrap] Registering TypeScript definitions with registry...');
 
   // Merge buildings with walls
   const allBuildings: Record<string, BuildingDefinition> = {
@@ -80,7 +81,7 @@ export function bootstrapDefinitions(): void {
     },
   });
 
-  console.log('[Bootstrap] Definitions registered:', DefinitionRegistry.getStats());
+  debugInitialization.log('[Bootstrap] Definitions registered:', DefinitionRegistry.getStats());
 }
 
 /**
@@ -91,13 +92,13 @@ export function bootstrapDefinitions(): void {
  */
 export async function initializeDefinitions(manifestPath: string = '/data/game.json'): Promise<void> {
   if (DefinitionRegistry.isInitialized()) {
-    console.log('[Bootstrap] Definitions already initialized, skipping');
+    debugInitialization.log('[Bootstrap] Definitions already initialized, skipping');
     return;
   }
 
-  console.log('[Bootstrap] Loading definitions from JSON:', manifestPath);
+  debugInitialization.log('[Bootstrap] Loading definitions from JSON:', manifestPath);
   await DefinitionRegistry.loadFromManifest(manifestPath);
-  console.log('[Bootstrap] Definitions loaded:', DefinitionRegistry.getStats());
+  debugInitialization.log('[Bootstrap] Definitions loaded:', DefinitionRegistry.getStats());
 }
 
 /**

@@ -23,7 +23,7 @@ import {
 import { generateTileCache, generateSoloNavMesh, type TileCacheGeneratorConfig, type SoloNavMeshGeneratorConfig } from '@recast-navigation/generators';
 import { threeToTileCache } from '@recast-navigation/three';
 import * as THREE from 'three';
-import { debugPathfinding } from '@/utils/debugLogger';
+import { debugPathfinding, debugInitialization } from '@/utils/debugLogger';
 
 // NavMesh generation config - tuned for RTS gameplay
 // IMPORTANT: Cell size determines path precision around obstacles
@@ -181,25 +181,25 @@ export class RecastNavigation {
 
     // Check for SharedArrayBuffer availability (required for threaded WASM)
     const hasSharedArrayBuffer = typeof SharedArrayBuffer !== 'undefined';
-    console.log('[RecastNavigation] SharedArrayBuffer available:', hasSharedArrayBuffer);
+    debugInitialization.log('[RecastNavigation] SharedArrayBuffer available:', hasSharedArrayBuffer);
 
     if (!hasSharedArrayBuffer) {
-      console.warn(
+      debugInitialization.warn(
         '[RecastNavigation] SharedArrayBuffer is not available. ' +
         'This may be due to missing security headers (COOP/COEP). ' +
         'Navmesh initialization may fail on Safari and other browsers.'
       );
     }
 
-    console.log('[RecastNavigation] Initializing WASM module...');
+    debugInitialization.log('[RecastNavigation] Initializing WASM module...');
 
     RecastNavigation.initPromise = init()
       .then(() => {
-        console.log('[RecastNavigation] WASM module initialized successfully');
+        debugInitialization.log('[RecastNavigation] WASM module initialized successfully');
       })
       .catch((error) => {
-        console.error('[RecastNavigation] WASM initialization failed:', error);
-        console.error(
+        debugInitialization.error('[RecastNavigation] WASM initialization failed:', error);
+        debugInitialization.error(
           '[RecastNavigation] If this is Safari, ensure the server sends these headers:\n' +
           '  Cross-Origin-Opener-Policy: same-origin\n' +
           '  Cross-Origin-Embedder-Policy: require-corp'
@@ -306,7 +306,7 @@ export class RecastNavigation {
         if (z > maxZ) maxZ = z;
       }
 
-      console.log('[RecastNavigation] Generating navmesh from geometry...', {
+      debugInitialization.log('[RecastNavigation] Generating navmesh from geometry...', {
         positionsLength: positions.length,
         indicesLength: indices.length,
         triangles: indices.length / 3,
@@ -314,12 +314,12 @@ export class RecastNavigation {
         mapWidth,
         mapHeight,
       });
-      console.log('[RecastNavigation] Geometry bounds:', {
+      debugInitialization.log('[RecastNavigation] Geometry bounds:', {
         x: `${minX.toFixed(2)} to ${maxX.toFixed(2)} (${(maxX - minX).toFixed(2)} total)`,
         y: `${minY.toFixed(2)} to ${maxY.toFixed(2)} (${(maxY - minY).toFixed(2)} height range)`,
         z: `${minZ.toFixed(2)} to ${maxZ.toFixed(2)} (${(maxZ - minZ).toFixed(2)} total)`,
       });
-      console.log('[RecastNavigation] Config:', {
+      debugInitialization.log('[RecastNavigation] Config:', {
         cs: NAVMESH_CONFIG.cs,
         ch: NAVMESH_CONFIG.ch,
         tileSize: NAVMESH_CONFIG.tileSize,
@@ -331,7 +331,7 @@ export class RecastNavigation {
       // Try tile cache generation first (supports dynamic obstacles)
       const result = generateTileCache(positions, indices, NAVMESH_CONFIG);
 
-      console.log('[RecastNavigation] TileCache result:', {
+      debugInitialization.log('[RecastNavigation] TileCache result:', {
         success: result.success,
         hasTileCache: !!result.tileCache,
         hasNavMesh: !!result.navMesh,
@@ -352,26 +352,26 @@ export class RecastNavigation {
         this.initialized = true;
 
         const elapsed = performance.now() - startTime;
-        console.log(`[RecastNavigation] TileCache NavMesh generated in ${elapsed.toFixed(1)}ms`);
+        debugInitialization.log(`[RecastNavigation] TileCache NavMesh generated in ${elapsed.toFixed(1)}ms`);
         return true;
       }
 
       // Tile cache failed - try solo navmesh as fallback
       // Solo navmesh doesn't support dynamic obstacles but is more robust
-      console.warn('[RecastNavigation] TileCache failed, trying solo navmesh fallback...');
-      console.warn('[RecastNavigation] TileCache error:', (result as { error?: string }).error);
+      debugInitialization.warn('[RecastNavigation] TileCache failed, trying solo navmesh fallback...');
+      debugInitialization.warn('[RecastNavigation] TileCache error:', (result as { error?: string }).error);
 
       const soloResult = generateSoloNavMesh(positions, indices, SOLO_NAVMESH_CONFIG);
 
-      console.log('[RecastNavigation] Solo NavMesh result:', {
+      debugInitialization.log('[RecastNavigation] Solo NavMesh result:', {
         success: soloResult.success,
         hasNavMesh: !!soloResult.navMesh,
         error: (soloResult as { error?: string }).error,
       });
 
       if (!soloResult.success || !soloResult.navMesh) {
-        console.error('[RecastNavigation] Both TileCache and Solo NavMesh generation failed');
-        console.error('[RecastNavigation] Solo result:', soloResult);
+        debugInitialization.error('[RecastNavigation] Both TileCache and Solo NavMesh generation failed');
+        debugInitialization.error('[RecastNavigation] Solo result:', soloResult);
         return false;
       }
 
@@ -389,8 +389,8 @@ export class RecastNavigation {
       this.initialized = true;
 
       const elapsed = performance.now() - startTime;
-      console.log(`[RecastNavigation] Solo NavMesh generated (fallback) in ${elapsed.toFixed(1)}ms`);
-      console.warn('[RecastNavigation] Note: Dynamic obstacles disabled due to solo navmesh fallback');
+      debugInitialization.log(`[RecastNavigation] Solo NavMesh generated (fallback) in ${elapsed.toFixed(1)}ms`);
+      debugInitialization.warn('[RecastNavigation] Note: Dynamic obstacles disabled due to solo navmesh fallback');
 
       return true;
     } catch (error) {

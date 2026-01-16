@@ -6,6 +6,7 @@
       "model": "/models/units/fabricator_LOD0.glb",
       "scale": 1.0,
       "animationSpeed": 0.4,
+      "rotation": { "y": 90 },
       "animations": {
         "idle": [
           "idle",
@@ -34,6 +35,7 @@
     "trooper": {
       "model": "/models/units/trooper_LOD0.glb",
       "scale": 1.2,
+      "rotation": { "y": 90 },
       "animations": {
         "idle": [
           "idle",
@@ -60,6 +62,7 @@
     "breacher": {
       "model": "/models/units/breacher_LOD0.glb",
       "scale": 1.5,
+      "rotation": { "y": 90 },
       "animations": {
         "idle": [
           "idle",
@@ -85,6 +88,7 @@
     "vanguard": {
       "model": "/models/units/vanguard_LOD0.glb",
       "scale": 1.3,
+      "rotation": { "y": 90 },
       "animations": {
         "idle": [
           "idle",
@@ -108,6 +112,7 @@
     "operative": {
       "model": "/models/units/operative_LOD0.glb",
       "scale": 1.3,
+      "rotation": { "y": 90 },
       "animations": {
         "idle": [
           "idle",
@@ -222,6 +227,7 @@
     "colossus": {
       "model": "/models/units/colossus_LOD0.glb",
       "scale": 2.5,
+      "rotation": { "y": 90 },
       "animations": {
         "idle": ["idle", "stand"],
         "walk": ["walk", "stomp", "move"],

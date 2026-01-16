@@ -16,8 +16,7 @@ voidstrike/
 │   │   │   └── page.tsx       # Main game view
 │   │   ├── lobby/
 │   │   │   └── page.tsx       # Multiplayer lobby
-│   │   └── api/               # API routes
-│   │       └── music/         # Music discovery endpoint
+│   │   └── (no API routes)    # Static site - API routes removed for Vercel compatibility
 │   ├── components/
 │   │   ├── home/              # Homepage/menu components
 │   │   │   └── HomeBackground.tsx  # Cinematic Three.js animated background
@@ -2355,10 +2354,12 @@ Features:
 - **Crossfading**: 2-second crossfade between tracks
 - **Category switching**: Separate playlists for menu and gameplay
 
-### API Route (`src/app/api/music/route.ts`)
+### Build-time Manifest (`scripts/generate-music-manifest.js`)
 
-Server-side endpoint for discovering music files:
-- `GET /api/music` - Returns list of available tracks in menu and gameplay folders
+Music track discovery is performed at build time to avoid serverless function size limits:
+- Runs automatically via `prebuild` script before `next build`
+- Scans folders defined in `public/audio/music.config.json`
+- Outputs to `src/data/music-manifest.json` which is statically imported
 
 ### SoundOptionsPanel (`src/components/game/SoundOptionsPanel.tsx`)
 

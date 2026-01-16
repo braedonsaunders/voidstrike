@@ -1,4 +1,5 @@
 import { create } from 'zustand';
+import { debugInitialization } from '@/utils/debugLogger';
 
 export type ScreenType = 'main-menu' | 'game' | 'lobby' | 'loading' | 'settings';
 export type NotificationType = 'info' | 'warning' | 'error' | 'success';
@@ -226,7 +227,7 @@ function loadGraphicsSettings(): { settings: Partial<GraphicsSettings>; preset: 
 
     // Version check for future migrations
     if (state.version !== SETTINGS_VERSION) {
-      console.log('Graphics settings version mismatch, using defaults');
+      debugInitialization.log('[Graphics] Settings version mismatch, using defaults');
       return null;
     }
 
@@ -236,6 +237,35 @@ function loadGraphicsSettings(): { settings: Partial<GraphicsSettings>; preset: 
     return null;
   }
 }
+
+// ============================================
+// SESSIONSTORAGE PERSISTENCE (Debug Settings)
+// ============================================
+
+const DEBUG_SETTINGS_KEY = 'voidstrike_debug_settings';
+
+function saveDebugSettings(settings: DebugSettings): void {
+  if (typeof window === 'undefined') return;
+  try {
+    sessionStorage.setItem(DEBUG_SETTINGS_KEY, JSON.stringify(settings));
+  } catch {
+    // Silently fail - debug settings not critical
+  }
+}
+
+function loadDebugSettings(): DebugSettings | null {
+  if (typeof window === 'undefined') return null;
+  try {
+    const saved = sessionStorage.getItem(DEBUG_SETTINGS_KEY);
+    if (!saved) return null;
+    return JSON.parse(saved) as DebugSettings;
+  } catch {
+    return null;
+  }
+}
+
+// Load debug settings at module initialization (before store is created)
+const savedDebugSettings = loadDebugSettings();
 
 // ============================================
 // UI STATE TYPES
@@ -533,7 +563,7 @@ export const useUIStore = create<UIState>((set, get) => ({
     displayWidth: 0,
     displayHeight: 0,
   },
-  debugSettings: {
+  debugSettings: savedDebugSettings ?? {
     debugEnabled: false,
     // Rendering
     debugAnimation: false,
@@ -748,7 +778,7 @@ export const useUIStore = create<UIState>((set, get) => ({
         graphicsSettings: { ...state.graphicsSettings, ...saved.settings },
         currentGraphicsPreset: saved.preset,
       }));
-      console.log(`Loaded saved graphics settings (preset: ${saved.preset})`);
+      debugInitialization.log(`[Graphics] Loaded saved settings (preset: ${saved.preset})`);
     }
   },
 
@@ -908,16 +938,19 @@ export const useUIStore = create<UIState>((set, get) => ({
     showDebugMenu: false,
   }),
 
-  toggleDebugSetting: (key) =>
+  toggleDebugSetting: (key) => {
     set((state) => ({
       debugSettings: {
         ...state.debugSettings,
         [key]: !state.debugSettings[key],
       },
-    })),
+    }));
+    // Persist to sessionStorage
+    saveDebugSettings(get().debugSettings);
+  },
 
-  setAllDebugSettings: (enabled) =>
-    set((state) => ({
+  setAllDebugSettings: (enabled) => {
+    set(() => ({
       debugSettings: {
         debugEnabled: enabled,
         debugAnimation: enabled,
@@ -938,7 +971,10 @@ export const useUIStore = create<UIState>((set, get) => ({
         debugNetworking: enabled,
         debugPerformance: enabled,
       },
-    })),
+    }));
+    // Persist to sessionStorage
+    saveDebugSettings(get().debugSettings);
+  },
 
   // Overlay settings actions
   setActiveOverlay: (overlay) =>
