@@ -273,8 +273,8 @@ export class BuildingMechanicsSystem extends System {
       const transform = entity.get<Transform>('Transform')!;
       const building = entity.get<Building>('Building')!;
 
-      // Skip flying buildings
-      if (building.isFlying) continue;
+      // Skip flying buildings (includes lifting, flying, and landing states)
+      if (building.isFlying || building.state === 'lifting' || building.state === 'flying' || building.state === 'landing') continue;
 
       if (
         x < transform.x + building.width + 1 &&
