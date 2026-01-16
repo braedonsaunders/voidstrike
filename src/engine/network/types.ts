@@ -314,9 +314,15 @@ export interface NetworkEvents {
 // Utility Types
 // -----------------------------------------------------------------------------
 
-// For creating unique command IDs
-export function generateCommandId(): string {
-  return `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+// For creating unique command IDs (deterministic counter-based)
+let commandIdCounter = 0;
+export function generateCommandId(playerId: string = 'local'): string {
+  return `${playerId}-${++commandIdCounter}`;
+}
+
+// Reset command ID counter (call at game start for determinism)
+export function resetCommandIdCounter(): void {
+  commandIdCounter = 0;
 }
 
 // For creating unique lobby codes

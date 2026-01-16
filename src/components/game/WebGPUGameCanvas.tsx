@@ -712,6 +712,12 @@ export function WebGPUGameCanvas() {
         }
       });
 
+      // Multiplayer: Remote player quit
+      game.eventBus.on('multiplayer:playerQuit', () => {
+        console.log('[Game] Remote player quit the game');
+        useUIStore.getState().addNotification('warning', 'Remote player has left the game', 10000);
+      });
+
       // Spawn entities (skip in battle simulator - user spawns manually)
       if (!isBattleSimulatorMode()) {
         spawnInitialEntities(game, CURRENT_MAP);
@@ -1187,11 +1193,14 @@ export function WebGPUGameCanvas() {
         const worldPos = cameraRef.current?.screenToWorld(e.clientX, e.clientY);
         if (worldPos && gameRef.current) {
           const selectedUnits = useGameStore.getState().selectedUnits;
-          if (selectedUnits.length > 0) {
-            gameRef.current.eventBus.emit('command:attack', {
+          const localPlayer = getLocalPlayerId();
+          if (selectedUnits.length > 0 && localPlayer) {
+            gameRef.current.issueCommand({
+              tick: gameRef.current.getCurrentTick(),
+              playerId: localPlayer,
+              type: 'ATTACK',
               entityIds: selectedUnits,
               targetPosition: { x: worldPos.x, y: worldPos.z },
-              queue: e.shiftKey,
             });
           }
         }
@@ -1200,8 +1209,12 @@ export function WebGPUGameCanvas() {
         const worldPos = cameraRef.current?.screenToWorld(e.clientX, e.clientY);
         if (worldPos && gameRef.current) {
           const selectedUnits = useGameStore.getState().selectedUnits;
-          if (selectedUnits.length > 0) {
-            gameRef.current.eventBus.emit('command:patrol', {
+          const localPlayer = getLocalPlayerId();
+          if (selectedUnits.length > 0 && localPlayer) {
+            gameRef.current.issueCommand({
+              tick: gameRef.current.getCurrentTick(),
+              playerId: localPlayer,
+              type: 'PATROL',
               entityIds: selectedUnits,
               targetPosition: { x: worldPos.x, y: worldPos.z },
             });
@@ -1213,13 +1226,19 @@ export function WebGPUGameCanvas() {
         if (worldPos && gameRef.current) {
           const selectedUnits = useGameStore.getState().selectedUnits;
           const clickedEntity = findEntityAtPosition(gameRef.current, worldPos.x, worldPos.z);
+          const localPlayer = getLocalPlayerId();
 
-          gameRef.current.eventBus.emit('command:ability', {
-            entityIds: selectedUnits,
-            abilityId: abilityTargetMode,
-            targetPosition: { x: worldPos.x, y: worldPos.z },
-            targetEntityId: clickedEntity?.entity.id,
-          });
+          if (localPlayer) {
+            gameRef.current.issueCommand({
+              tick: gameRef.current.getCurrentTick(),
+              playerId: localPlayer,
+              type: 'ABILITY',
+              entityIds: selectedUnits,
+              abilityId: abilityTargetMode,
+              targetPosition: { x: worldPos.x, y: worldPos.z },
+              targetEntityId: clickedEntity?.entity.id,
+            });
+          }
         }
         useGameStore.getState().setAbilityTargetMode(null);
       } else if (isWallPlacementMode) {
@@ -1485,11 +1504,16 @@ export function WebGPUGameCanvas() {
 
       // Move units normally
       if (unitIds.length > 0) {
-        game.eventBus.emit('command:move', {
-          entityIds: unitIds,
-          targetPosition: { x: worldPos.x, y: worldPos.z },
-          queue,
-        });
+        const localPlayer = getLocalPlayerId();
+        if (localPlayer) {
+          game.issueCommand({
+            tick: game.getCurrentTick(),
+            playerId: localPlayer,
+            type: 'MOVE',
+            entityIds: unitIds,
+            targetPosition: { x: worldPos.x, y: worldPos.z },
+          });
+        }
       }
     }
   };
@@ -1873,14 +1897,32 @@ export function WebGPUGameCanvas() {
           }
           break;
         case 's':
-          game.eventBus.emit('command:stop', {
-            entityIds: useGameStore.getState().selectedUnits,
-          });
+          {
+            const selectedUnits = useGameStore.getState().selectedUnits;
+            const localPlayer = getLocalPlayerId();
+            if (selectedUnits.length > 0 && localPlayer) {
+              game.issueCommand({
+                tick: game.getCurrentTick(),
+                playerId: localPlayer,
+                type: 'STOP',
+                entityIds: selectedUnits,
+              });
+            }
+          }
           break;
         case 'h':
-          game.eventBus.emit('command:holdPosition', {
-            entityIds: useGameStore.getState().selectedUnits,
-          });
+          {
+            const selectedUnits = useGameStore.getState().selectedUnits;
+            const localPlayer = getLocalPlayerId();
+            if (selectedUnits.length > 0 && localPlayer) {
+              game.issueCommand({
+                tick: game.getCurrentTick(),
+                playerId: localPlayer,
+                type: 'HOLD',
+                entityIds: selectedUnits,
+              });
+            }
+          }
           break;
         case '?':
           {

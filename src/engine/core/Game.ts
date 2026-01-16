@@ -28,6 +28,18 @@ import { RecastNavigation } from '../pathfinding/RecastNavigation';
 import { getLocalPlayerId } from '@/store/gameSetupStore';
 import { PerformanceMonitor } from './PerformanceMonitor';
 import { ChecksumSystem, ChecksumConfig } from '../systems/ChecksumSystem';
+import {
+  isMultiplayerMode,
+  sendMultiplayerMessage,
+  addMultiplayerMessageHandler,
+  removeMultiplayerMessageHandler,
+} from '@/store/multiplayerStore';
+
+// Multiplayer message types
+interface MultiplayerMessage {
+  type: 'command' | 'quit';
+  payload: unknown;
+}
 import { DesyncDetectionManager, DesyncDetectionConfig } from '../network/DesyncDetection';
 import { bootstrapDefinitions } from '../definitions';
 
@@ -158,9 +170,31 @@ export class Game {
         showDesyncIndicator: true,
       });
       this.desyncDetection.setChecksumSystem(this.checksumSystem);
+
+      // Set up multiplayer message handler for receiving remote commands
+      this.setupMultiplayerMessageHandler();
     }
 
     this.initializeSystems();
+  }
+
+  // Multiplayer message handler reference (for cleanup)
+  private multiplayerMessageHandler: ((data: unknown) => void) | null = null;
+
+  private setupMultiplayerMessageHandler(): void {
+    this.multiplayerMessageHandler = (data: unknown) => {
+      const message = data as MultiplayerMessage;
+      if (message.type === 'command') {
+        const command = message.payload as GameCommand;
+        console.log('[Game] Received remote command:', command.type, 'from', command.playerId);
+        // Process the remote command locally
+        this.processCommand(command);
+      } else if (message.type === 'quit') {
+        console.log('[Game] Remote player quit');
+        this.eventBus.emit('multiplayer:playerQuit', message.payload);
+      }
+    };
+    addMultiplayerMessageHandler(this.multiplayerMessageHandler);
   }
 
   public static getInstance(config?: Partial<GameConfig>): Game {
@@ -322,6 +356,16 @@ export class Game {
     this.state = 'ended';
     this.gameLoop.stop();
     PerformanceMonitor.stop(); // Stop performance monitoring
+
+    // Notify remote player in multiplayer
+    this.notifyQuit();
+
+    // Clean up multiplayer message handler
+    if (this.multiplayerMessageHandler) {
+      removeMultiplayerMessageHandler(this.multiplayerMessageHandler);
+      this.multiplayerMessageHandler = null;
+    }
+
     this.eventBus.emit('game:ended', { tick: this.currentTick });
   }
 
@@ -599,6 +643,40 @@ export class Game {
     }
 
     return true;
+  }
+
+  /**
+   * Issue a command from the local player.
+   * In multiplayer, this sends the command to the remote player AND processes locally.
+   * In single player, this just processes the command locally.
+   */
+  public issueCommand(command: GameCommand): void {
+    // In multiplayer, send to remote player
+    if (isMultiplayerMode()) {
+      const message: MultiplayerMessage = {
+        type: 'command',
+        payload: command,
+      };
+      sendMultiplayerMessage(message);
+      console.log('[Game] Sent command to remote:', command.type);
+    }
+
+    // Process locally
+    this.processCommand(command);
+  }
+
+  /**
+   * Notify remote player that we're quitting
+   */
+  public notifyQuit(): void {
+    if (isMultiplayerMode()) {
+      const message: MultiplayerMessage = {
+        type: 'quit',
+        payload: { playerId: this.config.playerId },
+      };
+      sendMultiplayerMessage(message);
+      console.log('[Game] Sent quit notification');
+    }
   }
 
   // Command processing for multiplayer lockstep

@@ -375,7 +375,7 @@ export function Minimap() {
         // Issue move command
         const localPlayerForMove = getLocalPlayerId();
         if (localPlayerForMove) {
-          game.processCommand({
+          game.issueCommand({
             tick: game.getCurrentTick(),
             playerId: localPlayerForMove,
             type: 'MOVE',

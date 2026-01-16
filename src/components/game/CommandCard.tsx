@@ -233,7 +233,7 @@ function CommandCardInner() {
           action: () => {
             const localPlayer = getLocalPlayerId();
             if (localPlayer) {
-              game.processCommand({
+              game.issueCommand({
                 tick: game.getCurrentTick(),
                 playerId: localPlayer,
                 type: 'STOP',
@@ -251,7 +251,7 @@ function CommandCardInner() {
           action: () => {
             const localPlayer = getLocalPlayerId();
             if (localPlayer) {
-              game.processCommand({
+              game.issueCommand({
                 tick: game.getCurrentTick(),
                 playerId: localPlayer,
                 type: 'HOLD',
@@ -308,7 +308,7 @@ function CommandCardInner() {
               action: () => {
                 const localPlayer = getLocalPlayerId();
                 if (localPlayer) {
-                  game.processCommand({
+                  game.issueCommand({
                     tick: game.getCurrentTick(),
                     playerId: localPlayer,
                     type: 'TRANSFORM',
@@ -475,7 +475,7 @@ function CommandCardInner() {
         action: () => {
           const localPlayer = getLocalPlayerId();
           if (localPlayer) {
-            game.processCommand({
+            game.issueCommand({
               tick: game.getCurrentTick(),
               playerId: localPlayer,
               type: 'DEMOLISH',
@@ -798,7 +798,7 @@ function CommandCardInner() {
           action: () => {
             const localPlayer = getLocalPlayerId();
             if (localPlayer) {
-              game.processCommand({
+              game.issueCommand({
                 tick: game.getCurrentTick(),
                 playerId: localPlayer,
                 type: 'DEMOLISH',

@@ -58,8 +58,8 @@ const BUILDING_AVOIDANCE_MARGIN = 0.3;    // Small safety margin for hard avoida
 const BUILDING_AVOIDANCE_SOFT_MARGIN = 0.8; // Reduced early detection zone
 const BUILDING_PREDICTION_LOOKAHEAD = 0.5;  // Seconds to look ahead for collision
 
-// Path request cooldown
-const PATH_REQUEST_COOLDOWN_MS = 500;
+// Path request cooldown in ticks (10 ticks @ 20 ticks/sec = 500ms)
+const PATH_REQUEST_COOLDOWN_TICKS = 10;
 
 // Use Recast crowd for collision avoidance
 // Re-enabled with fixes: proper position sync and crowd update timing
@@ -220,14 +220,14 @@ export class MovementSystem extends System {
     targetY: number,
     force: boolean = false
   ): boolean {
-    const now = Date.now();
-    const lastRequest = this.lastPathRequestTime.get(entityId) || 0;
+    const currentTick = this.game.getCurrentTick();
+    const lastRequestTick = this.lastPathRequestTime.get(entityId) || 0;
 
-    if (!force && now - lastRequest < PATH_REQUEST_COOLDOWN_MS) {
+    if (!force && currentTick - lastRequestTick < PATH_REQUEST_COOLDOWN_TICKS) {
       return false;
     }
 
-    this.lastPathRequestTime.set(entityId, now);
+    this.lastPathRequestTime.set(entityId, currentTick);
     this.game.eventBus.emit('pathfinding:request', {
       entityId,
       targetX,
