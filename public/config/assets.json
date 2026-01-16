@@ -41,7 +41,7 @@
       "scale": 1.2,
       "rotation": {
         "x": 0,
-        "y": -90,
+        "y": 0,
         "z": 0
       },
       "animations": {
@@ -71,9 +71,9 @@
       "model": "/models/units/breacher_LOD0.glb",
       "scale": 1.5,
       "rotation": {
-        "x": 0,
+        "x": -90,
         "y": 0,
-        "z": -90
+        "z": 0
       },
       "animations": {
         "idle": [
@@ -102,8 +102,8 @@
       "scale": 1.3,
       "rotation": {
         "x": 0,
-        "y": 0,
-        "z": -90
+        "y": -90,
+        "z": 0
       },
       "animations": {
         "idle": [
@@ -182,26 +182,6 @@
           "death",
           "explode"
         ]
-      },
-      "effects": {
-        "dustCloud": {
-          "type": "dust_cloud",
-          "attachments": [
-            { "x": 0, "y": 0.1, "z": -0.8, "scale": 0.8 }
-          ],
-          "emitRate": 8,
-          "conditions": ["moving"],
-          "speedScale": true
-        },
-        "sparks": {
-          "type": "sparks",
-          "attachments": [
-            { "x": -0.3, "y": 0.05, "z": -0.5, "scale": 0.4 },
-            { "x": 0.3, "y": 0.05, "z": -0.5, "scale": 0.4 }
-          ],
-          "emitRate": 3,
-          "conditions": ["moving"]
-        }
       }
     },
     "devastator": {
@@ -231,26 +211,6 @@
           "death",
           "explode"
         ]
-      },
-      "effects": {
-        "dustCloud": {
-          "type": "dust_cloud",
-          "attachments": [
-            { "x": -0.5, "y": 0.15, "z": -1.0, "scale": 1.2 },
-            { "x": 0.5, "y": 0.15, "z": -1.0, "scale": 1.2 }
-          ],
-          "emitRate": 10,
-          "conditions": ["moving"],
-          "speedScale": true
-        },
-        "engineExhaust": {
-          "type": "engine_exhaust",
-          "attachments": [
-            { "x": 0, "y": 0.3, "z": -1.2, "scale": 0.6 }
-          ],
-          "emitRate": 6,
-          "conditions": ["moving"]
-        }
       }
     },
     "colossus": {
@@ -262,25 +222,6 @@
         "walk": ["walk", "stomp", "move"],
         "attack": ["attack", "crush", "laser"],
         "death": ["death", "collapse"]
-      },
-      "effects": {
-        "footDust": {
-          "type": "dust_cloud",
-          "attachments": [
-            { "x": -0.4, "y": 0.1, "z": 0, "scale": 1.0 },
-            { "x": 0.4, "y": 0.1, "z": 0, "scale": 1.0 }
-          ],
-          "emitRate": 6,
-          "conditions": ["moving"]
-        },
-        "engineSparks": {
-          "type": "sparks",
-          "attachments": [
-            { "x": 0, "y": 0.8, "z": -0.3, "scale": 0.5 }
-          ],
-          "emitRate": 2,
-          "conditions": ["moving"]
-        }
       }
     },
     "valkyrie": {
@@ -313,33 +254,14 @@
           "death",
           "crash"
         ]
-      },
-      "effects": {
-        "thruster": {
-          "type": "thruster",
-          "attachments": [
-            { "x": 0, "y": -0.1, "z": -0.8, "scale": 0.8 }
-          ],
-          "emitRate": 15,
-          "conditions": ["moving", "flying"]
-        },
-        "smokeTrail": {
-          "type": "smoke_trail",
-          "attachments": [
-            { "x": 0, "y": 0, "z": -1.0, "scale": 0.6 }
-          ],
-          "emitRate": 6,
-          "conditions": ["moving"],
-          "speedScale": true
-        }
       }
     },
     "lifter": {
       "model": "/models/units/lifter_LOD0.glb",
       "scale": 1.2,
       "rotation": {
-        "x": -90,
-        "y": 0,
+        "x": 0,
+        "y": 90,
         "z": 0
       },
       "airborneHeight": 5,
@@ -360,25 +282,6 @@
           "death",
           "crash"
         ]
-      },
-      "effects": {
-        "thruster": {
-          "type": "thruster",
-          "attachments": [
-            { "x": -0.4, "y": -0.3, "z": -0.5, "scale": 0.6 },
-            { "x": 0.4, "y": -0.3, "z": -0.5, "scale": 0.6 }
-          ],
-          "emitRate": 10,
-          "conditions": ["always"]
-        },
-        "hoverDust": {
-          "type": "hover_dust",
-          "attachments": [
-            { "x": 0, "y": -0.5, "z": 0, "scale": 1.0 }
-          ],
-          "emitRate": 5,
-          "conditions": ["idle"]
-        }
       }
     },
     "specter": {
@@ -387,7 +290,7 @@
       "rotation": {
         "x": -90,
         "y": 0,
-        "z": 0
+        "z": 90
       },
       "airborneHeight": 7,
       "animations": {
@@ -410,33 +313,14 @@
           "death",
           "explode"
         ]
-      },
-      "effects": {
-        "thruster": {
-          "type": "thruster",
-          "attachments": [
-            { "x": 0, "y": -0.1, "z": -0.6, "scale": 0.7 }
-          ],
-          "emitRate": 12,
-          "conditions": ["moving", "flying"]
-        },
-        "smokeTrail": {
-          "type": "smoke_trail",
-          "attachments": [
-            { "x": 0, "y": 0, "z": -0.8, "scale": 0.5 }
-          ],
-          "emitRate": 5,
-          "conditions": ["moving"],
-          "speedScale": true
-        }
       }
     },
     "overseer": {
       "model": "/models/units/overseer_LOD0.glb",
       "scale": 0.7,
       "rotation": {
-        "x": -90,
-        "y": 0,
+        "x": 90,
+        "y": -90,
         "z": 0
       },
       "airborneHeight": 6,
@@ -463,7 +347,7 @@
     "dreadnought": {
       "model": "/models/units/dreadnought_LOD0.glb",
       "scale": 3.0,
-      "rotation": { "x": 0, "y": 0, "z": -90 },
+      "rotation": { "x": 90, "y": 90, "z": 0 },
       "airborneHeight": 15,
       "animations": {
         "idle": [
@@ -487,26 +371,6 @@
           "explode",
           "crash"
         ]
-      },
-      "effects": {
-        "engineExhaust": {
-          "type": "engine_exhaust",
-          "attachments": [
-            { "x": -1.2, "y": 0, "z": -2.5, "scale": 1.5 },
-            { "x": 1.2, "y": 0, "z": -2.5, "scale": 1.5 }
-          ],
-          "emitRate": 12,
-          "conditions": ["always"]
-        },
-        "smokeTrail": {
-          "type": "smoke_trail",
-          "attachments": [
-            { "x": -1.2, "y": 0.2, "z": -3.0, "scale": 2.0 },
-            { "x": 1.2, "y": 0.2, "z": -3.0, "scale": 2.0 }
-          ],
-          "emitRate": 8,
-          "conditions": ["moving"]
-        }
       }
     }
   },
