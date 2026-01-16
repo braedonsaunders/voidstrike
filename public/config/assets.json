@@ -5,11 +5,6 @@
     "fabricator": {
       "model": "/models/units/fabricator_LOD0.glb",
       "scale": 1.0,
-      "rotation": {
-        "x": 0,
-        "y": 90,
-        "z": 0
-      },
       "animationSpeed": 0.4,
       "animations": {
         "idle": [
@@ -39,11 +34,6 @@
     "trooper": {
       "model": "/models/units/trooper_LOD0.glb",
       "scale": 1.2,
-      "rotation": {
-        "x": 0,
-        "y": 90,
-        "z": 0
-      },
       "animations": {
         "idle": [
           "idle",
@@ -70,11 +60,6 @@
     "breacher": {
       "model": "/models/units/breacher_LOD0.glb",
       "scale": 1.5,
-      "rotation": {
-        "x": 0,
-        "y": 90,
-        "z": 0
-      },
       "animations": {
         "idle": [
           "idle",
@@ -100,11 +85,6 @@
     "vanguard": {
       "model": "/models/units/vanguard_LOD0.glb",
       "scale": 1.3,
-      "rotation": {
-        "x": 0,
-        "y": 90,
-        "z": 0
-      },
       "animations": {
         "idle": [
           "idle",
@@ -128,11 +108,6 @@
     "operative": {
       "model": "/models/units/operative_LOD0.glb",
       "scale": 1.3,
-      "rotation": {
-        "x": 0,
-        "y": 90,
-        "z": 0
-      },
       "animations": {
         "idle": [
           "idle",
@@ -158,11 +133,6 @@
     "scorcher": {
       "model": "/models/units/scorcher_LOD0.glb",
       "scale": 1,
-      "rotation": {
-        "x": 0,
-        "y": 90,
-        "z": 0
-      },
       "animations": {
         "idle": [
           "idle",
@@ -207,11 +177,7 @@
     "devastator": {
       "model": "/models/units/devastator_LOD0.glb",
       "scale": 2.4,
-      "rotation": {
-        "x": 0,
-        "y": 180,
-        "z": 0
-      },
+      "rotation": { "y": 90 },
       "animations": {
         "idle": [
           "idle",
@@ -256,7 +222,6 @@
     "colossus": {
       "model": "/models/units/colossus_LOD0.glb",
       "scale": 2.5,
-      "rotation": { "x": 0, "y": 90, "z": 0 },
       "animations": {
         "idle": ["idle", "stand"],
         "walk": ["walk", "stomp", "move"],
@@ -286,11 +251,6 @@
     "valkyrie": {
       "model": "/models/units/valkyrie_LOD0.glb",
       "scale": 1.2,
-      "rotation": {
-        "x": 0,
-        "y": 90,
-        "z": 0
-      },
       "airborneHeight": 8,
       "animations": {
         "idle": [
@@ -337,11 +297,6 @@
     "lifter": {
       "model": "/models/units/lifter_LOD0.glb",
       "scale": 1.2,
-      "rotation": {
-        "x": 0,
-        "y": 90,
-        "z": 0
-      },
       "airborneHeight": 6,
       "animations": {
         "idle": [
@@ -384,11 +339,6 @@
     "specter": {
       "model": "/models/units/specter_LOD0.glb",
       "scale": 1,
-      "rotation": {
-        "x": 0,
-        "y": 90,
-        "z": 0
-      },
       "airborneHeight": 11,
       "animations": {
         "idle": [
@@ -434,11 +384,6 @@
     "overseer": {
       "model": "/models/units/overseer_LOD0.glb",
       "scale": 0.7,
-      "rotation": {
-        "x": 0,
-        "y": 90,
-        "z": 0
-      },
       "airborneHeight": 6,
       "animations": {
         "idle": [
@@ -463,7 +408,6 @@
     "dreadnought": {
       "model": "/models/units/dreadnought_LOD0.glb",
       "scale": 3.0,
-      "rotation": { "x": 0, "y": 90, "z": 0 },
       "airborneHeight": 22,
       "animations": {
         "idle": [
@@ -492,8 +436,8 @@
         "engineExhaust": {
           "type": "engine_exhaust",
           "attachments": [
-            { "x": -1.2, "y": 0, "z": -2.5, "scale": 1.5 },
-            { "x": 1.2, "y": 0, "z": -2.5, "scale": 1.5 }
+            { "x": -2.5, "y": 0, "z": -1.2, "scale": 1.5 },
+            { "x": -2.5, "y": 0, "z": 1.2, "scale": 1.5 }
           ],
           "emitRate": 12,
           "conditions": ["always"]
@@ -501,8 +445,8 @@
         "smokeTrail": {
           "type": "smoke_trail",
           "attachments": [
-            { "x": -1.2, "y": 0.2, "z": -3.0, "scale": 2.0 },
-            { "x": 1.2, "y": 0.2, "z": -3.0, "scale": 2.0 }
+            { "x": -3.0, "y": 0.2, "z": -1.2, "scale": 2.0 },
+            { "x": -3.0, "y": 0.2, "z": 1.2, "scale": 2.0 }
           ],
           "emitRate": 8,
           "conditions": ["moving"]
@@ -514,6 +458,7 @@
     "headquarters": {
       "model": "/models/buildings/headquarters_LOD0.glb",
       "scale": 4.5,
+      "rotation": { "y": -90 },
       "animations": {
         "idle": [
           "idle",
@@ -536,6 +481,7 @@
     "orbital_station": {
       "model": "/models/buildings/orbital_station_LOD0.glb",
       "scale": 4.5,
+      "rotation": { "y": -90 },
       "animations": {
         "idle": [
           "idle",
@@ -549,6 +495,7 @@
     "bastion": {
       "model": "/models/buildings/bastion_LOD0.glb",
       "scale": 4.5,
+      "rotation": { "y": -90 },
       "animations": {
         "idle": [
           "idle"
@@ -561,6 +508,7 @@
     "supply_cache": {
       "model": "/models/buildings/supply_cache_LOD0.glb",
       "scale": 0.9,
+      "rotation": { "y": -90 },
       "animations": {
         "idle": [
           "idle"
@@ -573,6 +521,7 @@
     "extractor": {
       "model": "/models/buildings/extractor_LOD0.glb",
       "scale": 2.5,
+      "rotation": { "y": -90 },
       "animations": {
         "idle": [
           "idle",
@@ -587,6 +536,7 @@
     "infantry_bay": {
       "model": "/models/buildings/infantry_bay_LOD0.glb",
       "scale": 2.8,
+      "rotation": { "y": -90 },
       "animations": {
         "idle": [
           "idle"
@@ -603,6 +553,7 @@
     "tech_center": {
       "model": "/models/buildings/tech_center_LOD0.glb",
       "scale": 2.5,
+      "rotation": { "y": -90 },
       "animations": {
         "idle": [
           "idle",
@@ -616,6 +567,7 @@
     "garrison": {
       "model": "/models/buildings/garrison_LOD0.glb",
       "scale": 2.0,
+      "rotation": { "y": -90 },
       "animations": {
         "idle": [
           "idle"
@@ -628,6 +580,7 @@
     "forge": {
       "model": "/models/buildings/forge_LOD0.glb",
       "scale": 4.2,
+      "rotation": { "y": -90 },
       "animations": {
         "idle": [
           "idle",
@@ -646,6 +599,7 @@
     "arsenal": {
       "model": "/models/buildings/arsenal_LOD0.glb",
       "scale": 2.8,
+      "rotation": { "y": -90 },
       "animations": {
         "idle": [
           "idle"
@@ -658,6 +612,7 @@
     "hangar": {
       "model": "/models/buildings/hangar_LOD0.glb",
       "scale": 2.2,
+      "rotation": { "y": -90 },
       "animations": {
         "idle": [
           "idle"
@@ -674,6 +629,7 @@
     "power_core": {
       "model": "/models/buildings/power_core_LOD0.glb",
       "scale": 3.0,
+      "rotation": { "y": -90 },
       "animations": {
         "idle": [
           "idle",
@@ -688,6 +644,7 @@
     "ops_center": {
       "model": "/models/buildings/ops_center_LOD0.glb",
       "scale": 2.8,
+      "rotation": { "y": -90 },
       "animations": {
         "idle": [
           "idle",
@@ -701,6 +658,7 @@
     "radar_array": {
       "model": "/models/buildings/radar_array_LOD0.glb",
       "scale": 4.0,
+      "rotation": { "y": -90 },
       "animations": {
         "idle": [
           "idle",
@@ -715,6 +673,7 @@
     "defense_turret": {
       "model": "/models/buildings/defense_turret_LOD0.glb",
       "scale": 2.5,
+      "rotation": { "y": -90 },
       "animations": {
         "idle": [
           "idle",
@@ -733,6 +692,7 @@
     "research_module": {
       "model": "/models/buildings/research_module_LOD0.glb",
       "scale": 1.0,
+      "rotation": { "y": -90 },
       "animations": {
         "idle": [
           "idle"
@@ -745,6 +705,7 @@
     "production_module": {
       "model": "/models/buildings/production_module_LOD0.glb",
       "scale": 1.0,
+      "rotation": { "y": -90 },
       "animations": {
         "idle": [
           "idle"
@@ -759,6 +720,7 @@
     "minerals": {
       "model": "/models/resources/minerals_LOD0.glb",
       "scale": 2.0,
+      "rotation": { "y": -90 },
       "animations": {
         "idle": [
           "idle",
@@ -770,6 +732,7 @@
     "vespene": {
       "model": "/models/resources/vespene_LOD0.glb",
       "scale": 2.0,
+      "rotation": { "y": -90 },
       "animations": {
         "idle": [
           "idle",
@@ -783,6 +746,7 @@
     "alien_tower": {
       "model": "/models/decorations/alien_tower_LOD0.glb",
       "scale": 14.0,
+      "rotation": { "y": -90 },
       "rendering": {
         "exposure": 1.0,
         "envMapIntensity": 0.4,
@@ -800,6 +764,7 @@
     "rocks_large": {
       "model": "/models/decorations/rocks_large_LOD0.glb",
       "scale": 3.0,
+      "rotation": { "y": -90 },
       "rendering": {
         "exposure": 1.6,
         "envMapIntensity": 0.25,
@@ -810,6 +775,7 @@
     "rocks_small": {
       "model": "/models/decorations/rocks_small_LOD0.glb",
       "scale": 2.0,
+      "rotation": { "y": -90 },
       "rendering": {
         "exposure": 1.0,
         "envMapIntensity": 0.25,
@@ -820,6 +786,7 @@
     "rock_single": {
       "model": "/models/decorations/rock_single_LOD0.glb",
       "scale": 2.5,
+      "rotation": { "y": -90 },
       "rendering": {
         "exposure": 1.0,
         "envMapIntensity": 0.25,
@@ -830,6 +797,7 @@
     "tree_pine_tall": {
       "model": "/models/decorations/tree_pine_tall_LOD0.glb",
       "scale": 14.0,
+      "rotation": { "y": -90 },
       "rendering": {
         "exposure": 1.0,
         "envMapIntensity": 0.15
@@ -838,6 +806,7 @@
     "tree_dead": {
       "model": "/models/decorations/tree_dead_LOD0.glb",
       "scale": 9.0,
+      "rotation": { "y": -90 },
       "rendering": {
         "exposure": 1.0,
         "envMapIntensity": 0.1
@@ -846,6 +815,7 @@
     "tree_alien": {
       "model": "/models/decorations/tree_alien_LOD0.glb",
       "scale": 11.0,
+      "rotation": { "y": -90 },
       "rendering": {
         "exposure": 1.0,
         "envMapIntensity": 0.25,
@@ -857,6 +827,7 @@
     "tree_palm": {
       "model": "/models/decorations/tree_palm_LOD0.glb",
       "scale": 11.0,
+      "rotation": { "y": -90 },
       "rendering": {
         "exposure": 1.0,
         "envMapIntensity": 0.15
@@ -865,6 +836,7 @@
     "tree_mushroom": {
       "model": "/models/decorations/tree_mushroom_LOD0.glb",
       "scale": 8.0,
+      "rotation": { "y": -90 },
       "rendering": {
         "exposure": 1.0,
         "envMapIntensity": 0.25,
@@ -876,6 +848,7 @@
     "crystal_formation": {
       "model": "/models/decorations/crystal_formation_LOD0.glb",
       "scale": 4.0,
+      "rotation": { "y": -90 },
       "rendering": {
         "exposure": 1.0,
         "envMapIntensity": 0.8,
@@ -895,6 +868,7 @@
     "shrub": {
       "model": "/models/decorations/shrub_LOD0.glb",
       "scale": 1.5,
+      "rotation": { "y": -90 },
       "rendering": {
         "exposure": 1.0,
         "envMapIntensity": 0.1
@@ -903,6 +877,7 @@
     "debris": {
       "model": "/models/decorations/debris_LOD0.glb",
       "scale": 1.5,
+      "rotation": { "y": -90 },
       "rendering": {
         "exposure": 1.0,
         "envMapIntensity": 0.2
@@ -911,6 +886,7 @@
     "ruined_wall": {
       "model": "/models/decorations/ruined_wall_LOD0.glb",
       "scale": 5.0,
+      "rotation": { "y": -90 },
       "rendering": {
         "exposure": 1.0,
         "envMapIntensity": 0.2
@@ -940,8 +916,8 @@
     },
     "rotation": {
       "description": "Rotation offset in degrees on all 3 axes: { x, y, z }. Use to fix models facing wrong direction or tilted.",
-      "example": "If unit walks backward: { \"x\": 0, \"y\": 180, \"z\": 0 }. Tilt forward: { \"x\": 15, \"y\": 0, \"z\": 0 }",
-      "default": "{ \"x\": 0, \"y\": 0, \"z\": 0 } (no rotation beyond engine default)"
+      "example": "GLTF models from Blender face +Z by default. Use { \"y\": -90 } to rotate to face +X (game forward). If unit walks backward: { \"y\": 180 }. Tilt forward: { \"x\": 15 }",
+      "default": "{ \"x\": 0, \"y\": 0, \"z\": 0 } (no rotation - model should already face +X)"
     },
     "lod": {
       "description": "LOD levels are automatically detected. LOD0 is highest detail (default), LOD1 is medium, LOD2 is lowest.",
