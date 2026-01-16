@@ -259,7 +259,7 @@ These could be published as standalone npm packages with minimal modification:
 
 | Layer | Technology |
 |-------|------------|
-| Framework | Next.js 15, React 19 |
+| Framework | Next.js 16, React 19 |
 | Language | TypeScript 5 (strict) |
 | 3D | Three.js r182 (WebGPU + WebGL2) |
 | Shaders | TSL (Three.js Shading Language) |
