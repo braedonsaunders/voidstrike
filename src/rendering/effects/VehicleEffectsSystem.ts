@@ -182,11 +182,6 @@ export class VehicleEffectsSystem {
     particleSystem: AdvancedParticleSystem,
     assetManager: typeof AssetManager
   ) {
-    console.log('[VehicleEffects] Constructor called, checking unitEffectsConfigs...');
-    // Check effect config state on construction
-    const testConfig = assetManager.getUnitEffects('dreadnought');
-    console.log('[VehicleEffects] Initial dreadnought config test:', testConfig);
-
     this.game = game;
     this.particleSystem = particleSystem;
     this.assetManager = assetManager;
@@ -234,7 +229,6 @@ export class VehicleEffectsSystem {
    * Handle unit spawn event
    */
   private onUnitSpawned(data: { entityId: number; unitType: string }): void {
-    console.log('[VehicleEffects] unit:spawned event received:', data);
     this.tryTrackUnit(data.entityId, data.unitType);
   }
 
@@ -251,8 +245,6 @@ export class VehicleEffectsSystem {
   private tryTrackUnit(entityId: number, unitType: string): void {
     const effectsConfig = this.assetManager.getUnitEffects(unitType);
 
-    console.log(`[VehicleEffects] tryTrackUnit: ${unitType} (entity ${entityId})`, effectsConfig);
-
     if (!effectsConfig || !effectsConfig.effects) {
       return; // No effects defined for this unit type
     }
@@ -261,8 +253,6 @@ export class VehicleEffectsSystem {
     if (effects.length === 0) {
       return;
     }
-
-    console.log(`[VehicleEffects] Tracking ${unitType} with ${effects.length} effects`);
 
     this.trackedUnits.set(entityId, {
       entityId,
@@ -287,10 +277,6 @@ export class VehicleEffectsSystem {
     this.lastUpdateTime = now;
 
     if (!this.camera) {
-      // Log once every 5 seconds
-      if (Math.floor(now / 5000) !== Math.floor(this.lastUpdateTime / 5000)) {
-        console.log('[VehicleEffects] No camera set');
-      }
       return;
     }
 
@@ -491,11 +477,6 @@ export class VehicleEffectsSystem {
         preset.particleType,
         configOverrides
       );
-    }
-
-    // Log occasionally (not every frame to avoid spam)
-    if (Math.random() < 0.01) {
-      console.log(`[VehicleEffects] Emitting ${effect.type} for ${unitType} at`, worldPos.toArray());
     }
   }
 
