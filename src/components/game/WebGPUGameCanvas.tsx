@@ -28,7 +28,7 @@ import { EnvironmentManager } from '@/rendering/EnvironmentManager';
 import { UnitRenderer } from '@/rendering/UnitRenderer';
 import { BuildingRenderer } from '@/rendering/BuildingRenderer';
 import { ResourceRenderer } from '@/rendering/ResourceRenderer';
-import { BattleEffectsRenderer, AdvancedParticleSystem, ParticleType } from '@/rendering/effects';
+import { BattleEffectsRenderer, AdvancedParticleSystem, ParticleType, VehicleEffectsSystem } from '@/rendering/effects';
 import { RallyPointRenderer } from '@/rendering/RallyPointRenderer';
 import { WatchTowerRenderer } from '@/rendering/WatchTowerRenderer';
 import { BuildingPlacementPreview } from '@/rendering/BuildingPlacementPreview';
@@ -99,6 +99,7 @@ export function WebGPUGameCanvas() {
   const fogOfWarRef = useRef<TSLFogOfWar | null>(null);
   const battleEffectsRef = useRef<BattleEffectsRenderer | null>(null);
   const advancedParticlesRef = useRef<AdvancedParticleSystem | null>(null);
+  const vehicleEffectsRef = useRef<VehicleEffectsSystem | null>(null);
   const rallyPointRendererRef = useRef<RallyPointRenderer | null>(null);
   const watchTowerRendererRef = useRef<WatchTowerRenderer | null>(null);
   const placementPreviewRef = useRef<BuildingPlacementPreview | null>(null);
@@ -493,6 +494,11 @@ export function WebGPUGameCanvas() {
 
       // Connect particle system to battle effects for volumetric explosions
       battleEffectsRef.current.setParticleSystem(advancedParticlesRef.current);
+
+      // Vehicle effects system for continuous engine trails, exhaust, dust
+      vehicleEffectsRef.current = new VehicleEffectsSystem(game, advancedParticlesRef.current, AssetManager);
+      vehicleEffectsRef.current.setTerrainHeightFunction((x, z) => terrain.getHeightAt(x, z));
+
       rallyPointRendererRef.current = new RallyPointRenderer(
         scene,
         game.eventBus,
@@ -786,6 +792,7 @@ export function WebGPUGameCanvas() {
         unitRendererRef.current?.setCamera(threeCamera);
         buildingRendererRef.current?.setCamera(threeCamera);
         resourceRendererRef.current?.setCamera(threeCamera);
+        vehicleEffectsRef.current?.setCamera(threeCamera);
 
         // PERF: Update camera matrix once before all renderer frustum culling
         // This avoids each renderer calling updateMatrixWorld() separately
@@ -842,6 +849,9 @@ export function WebGPUGameCanvas() {
         // Update world-class battle effects
         battleEffectsRef.current?.update(deltaTime);
         advancedParticlesRef.current?.update(deltaTime / 1000, cameraRef.current?.camera);
+
+        // Update vehicle effects (engine trails, exhaust, dust)
+        vehicleEffectsRef.current?.update(deltaTime / 1000);
 
         // Update dynamic lighting pool
         lightPoolRef.current?.update();
@@ -1162,6 +1172,7 @@ export function WebGPUGameCanvas() {
       fogOfWarRef.current?.dispose();
       battleEffectsRef.current?.dispose();
       advancedParticlesRef.current?.dispose();
+      vehicleEffectsRef.current?.dispose();
       rallyPointRendererRef.current?.dispose();
       watchTowerRendererRef.current?.dispose();
       cameraRef.current?.dispose();
