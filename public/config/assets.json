@@ -232,7 +232,7 @@
         "y": 90,
         "z": 0
       },
-      "airborneHeight": 6,
+      "airborneHeight": 8,
       "animations": {
         "idle": [
           "idle",
@@ -264,7 +264,7 @@
         "y": 90,
         "z": 0
       },
-      "airborneHeight": 5,
+      "airborneHeight": 6,
       "animations": {
         "idle": [
           "idle",
@@ -292,7 +292,7 @@
         "y": 90,
         "z": 0
       },
-      "airborneHeight": 7,
+      "airborneHeight": 9,
       "animations": {
         "idle": [
           "idle",
