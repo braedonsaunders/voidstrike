@@ -17,7 +17,7 @@
 
 import { useRef, useEffect, useCallback, useState } from 'react';
 import * as THREE from 'three';
-import type { EditorConfig, EditorState, EditorCell } from '../config/EditorConfig';
+import type { EditorConfig, EditorState, EditorCell, EditorObject } from '../config/EditorConfig';
 import { EditorTerrain } from '../rendering3d/EditorTerrain';
 import { EditorObjects } from '../rendering3d/EditorObjects';
 import { EditorGrid } from '../rendering3d/EditorGrid';
@@ -42,6 +42,12 @@ export interface Editor3DCanvasProps {
   onObjectSelect: (ids: string[]) => void;
   onObjectUpdate: (id: string, updates: { x?: number; y?: number }) => void;
   onObjectAdd: (obj: { type: string; x: number; y: number; radius?: number; properties?: Record<string, unknown> }) => string;
+  // Enhanced UI callbacks
+  onCursorMove?: (gridPos: { x: number; y: number } | null, worldPos: { x: number; y: number; z: number } | null) => void;
+  onObjectHover?: (obj: EditorObject | null) => void;
+  onContextMenu?: (e: { clientX: number; clientY: number }, gridPos: { x: number; y: number } | null, objectAtPosition: EditorObject | null) => void;
+  onViewportChange?: (bounds: { minX: number; maxX: number; minY: number; maxY: number }) => void;
+  onNavigateRef?: (fn: (x: number, y: number) => void) => void;
 }
 
 export function Editor3DCanvas({
@@ -56,6 +62,11 @@ export function Editor3DCanvas({
   onObjectSelect,
   onObjectUpdate,
   onObjectAdd,
+  onCursorMove,
+  onObjectHover,
+  onContextMenu,
+  onViewportChange,
+  onNavigateRef,
 }: Editor3DCanvasProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -85,6 +96,7 @@ export function Editor3DCanvas({
   const [isInitialized, setIsInitialized] = useState(false);
   const [mouseGridPos, setMouseGridPos] = useState<{ x: number; y: number } | null>(null);
   const [currentZoom, setCurrentZoom] = useState(45);
+  const hoveredObjectRef = useRef<EditorObject | null>(null);
 
   // Painting state
   const paintingState = useRef({
@@ -354,6 +366,52 @@ export function Editor3DCanvas({
     }
   }, [edgeScrollEnabled]);
 
+  // Expose navigate function for mini-map
+  useEffect(() => {
+    if (!onNavigateRef || !rtsCameraRef.current) return;
+
+    const navigateTo = (x: number, y: number) => {
+      rtsCameraRef.current?.setPosition(x, y);
+    };
+
+    onNavigateRef(navigateTo);
+  }, [onNavigateRef, isInitialized]);
+
+  // Track viewport bounds for mini-map
+  useEffect(() => {
+    if (!onViewportChange || !rtsCameraRef.current || !mapData) return;
+
+    const updateViewport = () => {
+      if (!rtsCameraRef.current || !containerRef.current) return;
+
+      const camera = rtsCameraRef.current.camera;
+      const aspect = containerRef.current.clientWidth / containerRef.current.clientHeight;
+      const fov = camera.fov * (Math.PI / 180);
+      const distance = camera.position.y;
+
+      // Approximate visible area based on camera parameters
+      const visibleHeight = 2 * Math.tan(fov / 2) * distance;
+      const visibleWidth = visibleHeight * aspect;
+
+      const camPos = rtsCameraRef.current.getPosition();
+      const halfWidth = visibleWidth / 2;
+      const halfHeight = visibleHeight / 2;
+
+      onViewportChange({
+        minX: Math.max(0, camPos.x - halfWidth),
+        maxX: Math.min(mapData.width, camPos.x + halfWidth),
+        minY: Math.max(0, camPos.z - halfHeight),
+        maxY: Math.min(mapData.height, camPos.z + halfHeight),
+      });
+    };
+
+    // Update on interval while mounted
+    const intervalId = setInterval(updateViewport, 100);
+    updateViewport(); // Initial update
+
+    return () => clearInterval(intervalId);
+  }, [onViewportChange, mapData?.width, mapData?.height, isInitialized]);
+
   // Raycast to terrain - optimized to reuse objects
   const raycastToTerrain = useCallback((clientX: number, clientY: number): THREE.Vector3 | null => {
     if (!containerRef.current || !rtsCameraRef.current || !terrainRef.current) return null;
@@ -531,9 +589,32 @@ export function Editor3DCanvas({
       const gridPos = worldToGrid(worldPos);
       setMouseGridPos(gridPos);
 
+      // Call cursor move callback for status bar
+      onCursorMove?.(gridPos, { x: worldPos.x, y: worldPos.y, z: worldPos.z });
+
       // Update brush preview
       brushPreviewRef.current?.setPosition(worldPos.x, worldPos.z);
       brushPreviewRef.current?.showForTool(activeTool, brushSize);
+
+      // Track hovered object
+      if (rtsCameraRef.current && containerRef.current) {
+        const rect = containerRef.current.getBoundingClientRect();
+        mouseVecRef.current.x = ((e.clientX - rect.left) / rect.width) * 2 - 1;
+        mouseVecRef.current.y = -((e.clientY - rect.top) / rect.height) * 2 + 1;
+        raycasterRef.current.setFromCamera(mouseVecRef.current, rtsCameraRef.current.camera);
+        const hoveredId = objectsRef.current?.findObjectAt(raycasterRef.current);
+        const hoveredObj = hoveredId ? mapData?.objects.find(o => o.id === hoveredId) || null : null;
+        if (hoveredObj !== hoveredObjectRef.current) {
+          hoveredObjectRef.current = hoveredObj;
+          onObjectHover?.(hoveredObj);
+        }
+      }
+    } else {
+      onCursorMove?.(null, null);
+      if (hoveredObjectRef.current) {
+        hoveredObjectRef.current = null;
+        onObjectHover?.(null);
+      }
     }
 
     if (paintingState.current.isDraggingObject && paintingState.current.draggedObjectId && worldPos) {
@@ -545,7 +626,7 @@ export function Editor3DCanvas({
     } else if (paintingState.current.isPainting && worldPos) {
       paintAt(worldPos);
     }
-  }, [activeTool, brushSize, raycastToTerrain, worldToGrid, paintAt, onObjectUpdate]);
+  }, [activeTool, brushSize, raycastToTerrain, worldToGrid, paintAt, onObjectUpdate, onCursorMove, onObjectHover, mapData?.objects]);
 
   const handleMouseUp = useCallback(() => {
     if (paintingState.current.isPainting) {
@@ -576,7 +657,24 @@ export function Editor3DCanvas({
 
   const handleContextMenu = useCallback((e: React.MouseEvent) => {
     e.preventDefault();
-  }, []);
+
+    // Get world/grid position and object at cursor
+    const worldPos = raycastToTerrain(e.clientX, e.clientY);
+    const gridPos = worldPos ? worldToGrid(worldPos) : null;
+
+    // Check for object at cursor
+    let objectAtPosition: EditorObject | null = null;
+    if (rtsCameraRef.current && containerRef.current) {
+      const rect = containerRef.current.getBoundingClientRect();
+      mouseVecRef.current.x = ((e.clientX - rect.left) / rect.width) * 2 - 1;
+      mouseVecRef.current.y = -((e.clientY - rect.top) / rect.height) * 2 + 1;
+      raycasterRef.current.setFromCamera(mouseVecRef.current, rtsCameraRef.current.camera);
+      const hoveredId = objectsRef.current?.findObjectAt(raycasterRef.current);
+      objectAtPosition = hoveredId ? mapData?.objects.find(o => o.id === hoveredId) || null : null;
+    }
+
+    onContextMenu?.({ clientX: e.clientX, clientY: e.clientY }, gridPos, objectAtPosition);
+  }, [raycastToTerrain, worldToGrid, mapData?.objects, onContextMenu]);
 
   // Double click handler - currently disabled to prevent accidental object creation
   // Objects should be added from the panel instead
