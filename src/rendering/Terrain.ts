@@ -1809,34 +1809,38 @@ export class TerrainGrid {
   }
 }
 
-// Emissive decoration tracking for pulsing animation
+// Emissive decoration tracking for pulsing animation (materials without attached lights)
 interface TrackedEmissiveDecoration {
   material: THREE.MeshStandardMaterial;
   baseIntensity: number;
   pulseSpeed: number;
   pulseAmplitude: number;
-  attachedLight?: THREE.PointLight;
-  baseLightIntensity?: number;
 }
+
+// Import DecorationLightManager type (will be passed in)
+import { DecorationLightManager, DecorationLightConfig } from './DecorationLightManager';
 
 // Decorative elements (watch towers, destructible rocks, trees, etc.)
 export class MapDecorations {
   public group: THREE.Group;
   private terrain: Terrain;
   private scene: THREE.Scene | null = null;
+  // AAA light manager for pooled, frustum-culled decoration lights
+  private lightManager: DecorationLightManager | null = null;
   // Track rock positions for pathfinding collision
   private rockCollisions: Array<{ x: number; z: number; radius: number }> = [];
   // Track tree positions for pathfinding collision
   private treeCollisions: Array<{ x: number; z: number; radius: number }> = [];
-  // Track emissive decorations for pulsing animation
+  // Track emissive decorations for pulsing animation (materials only, no lights)
   private emissiveDecorations: TrackedEmissiveDecoration[] = [];
   // Animation time accumulator
   private animationTime: number = 0;
 
-  constructor(mapData: MapData, terrain: Terrain, scene?: THREE.Scene) {
+  constructor(mapData: MapData, terrain: Terrain, scene?: THREE.Scene, lightManager?: DecorationLightManager) {
     this.group = new THREE.Group();
     this.terrain = terrain;
     this.scene = scene || null;
+    this.lightManager = lightManager || null;
     this.createWatchTowers(mapData);
     this.createDestructibles(mapData);
 
@@ -1853,6 +1857,9 @@ export class MapDecorations {
    * Update emissive decoration pulsing animation
    * Uses smooth easing for organic, world-class lighting
    * Call this every frame with deltaTime in milliseconds
+   *
+   * NOTE: Light pulsing is now handled by DecorationLightManager.
+   * This only updates emissive materials for decorations without attached lights.
    */
   public update(deltaTime: number): void {
     if (this.emissiveDecorations.length === 0) return;
@@ -1872,15 +1879,8 @@ export class MapDecorations {
         const eased = rawPulse * 0.5 + 0.5; // Map to 0-1
         const pulse = 1.0 + (eased * 2 - 1) * deco.pulseAmplitude;
 
-        // Update material emissive if present
-        if (deco.material) {
-          deco.material.emissiveIntensity = deco.baseIntensity * pulse;
-        }
-
-        // Also pulse the attached light if present
-        if (deco.attachedLight && deco.baseLightIntensity !== undefined) {
-          deco.attachedLight.intensity = deco.baseLightIntensity * pulse;
-        }
+        // Update material emissive
+        deco.material.emissiveIntensity = deco.baseIntensity * pulse;
       }
     }
   }
@@ -1891,7 +1891,7 @@ export class MapDecorations {
    * - Preserves model's baked-in emissive colors/maps
    * - Only boosts intensity, doesn't override colors unless model has none
    * - Uses subtle values for natural-looking glow
-   * - Positions lights based on model height
+   * - Registers lights with DecorationLightManager for pooling/culling
    */
   private applyRenderingHintsToModel(
     model: THREE.Object3D,
@@ -1904,7 +1904,9 @@ export class MapDecorations {
 
     // Get asset height for proper light positioning
     const assetHeight = this.getAssetHeight(model) || 2.0;
-    let lightCreatedForPulsing = false;
+    let lightRegistered = false;
+    let firstMaterialForLight: THREE.MeshStandardMaterial | undefined;
+    let firstMaterialBaseIntensity = 0;
 
     // Find and modify all MeshStandardMaterial instances in the model
     model.traverse((child: THREE.Object3D) => {
@@ -1942,33 +1944,20 @@ export class MapDecorations {
                 material.emissiveIntensity = hints.emissiveIntensity ?? 0.3;
               }
 
-              // Track for pulsing animation if pulse properties are set
-              if (hints.pulseSpeed || hints.pulseAmplitude) {
-                const tracked: TrackedEmissiveDecoration = {
+              // Track first material for light synchronization
+              if (!firstMaterialForLight) {
+                firstMaterialForLight = material;
+                firstMaterialBaseIntensity = material.emissiveIntensity;
+              }
+
+              // Track for pulsing animation if pulse properties are set (material only, no light)
+              if ((hints.pulseSpeed || hints.pulseAmplitude) && !hints.attachLight) {
+                this.emissiveDecorations.push({
                   material,
                   baseIntensity: material.emissiveIntensity,
                   pulseSpeed: hints.pulseSpeed ?? 0,
                   pulseAmplitude: hints.pulseAmplitude ?? 0,
-                };
-
-                // Create ONE attached point light per decoration (not per material)
-                if (hints.attachLight && this.scene && !lightCreatedForPulsing) {
-                  const light = new THREE.PointLight(
-                    new THREE.Color(hints.attachLight.color),
-                    hints.attachLight.intensity,
-                    hints.attachLight.distance,
-                    2 // quadratic decay for realistic falloff
-                  );
-                  // Position light at ~60% of model height for natural glow origin
-                  light.position.set(x, y + assetHeight * 0.6, z);
-                  light.castShadow = false;
-                  this.scene.add(light);
-                  tracked.attachedLight = light;
-                  tracked.baseLightIntensity = hints.attachLight.intensity;
-                  lightCreatedForPulsing = true;
-                }
-
-                this.emissiveDecorations.push(tracked);
+                });
               }
             }
           }
@@ -1976,29 +1965,23 @@ export class MapDecorations {
       }
     });
 
-    // Create standalone light if specified but no emissive materials found
-    if (hints.attachLight && this.scene && !lightCreatedForPulsing) {
-      const light = new THREE.PointLight(
-        new THREE.Color(hints.attachLight.color),
-        hints.attachLight.intensity,
-        hints.attachLight.distance,
-        2
-      );
-      light.position.set(x, y + assetHeight * 0.6, z);
-      light.castShadow = false;
-      this.scene.add(light);
+    // Register light with DecorationLightManager (AAA pooling approach)
+    // Only ONE light per decoration, registered with the manager for pooling/culling
+    if (hints.attachLight && this.lightManager && !lightRegistered) {
+      const lightPos = new THREE.Vector3(x, y + assetHeight * 0.6, z);
 
-      // Track for pulsing even without material
-      if (hints.pulseSpeed || hints.pulseAmplitude) {
-        this.emissiveDecorations.push({
-          material: null as unknown as THREE.MeshStandardMaterial, // No material, light-only
-          baseIntensity: 0,
-          pulseSpeed: hints.pulseSpeed ?? 0,
-          pulseAmplitude: hints.pulseAmplitude ?? 0,
-          attachedLight: light,
-          baseLightIntensity: hints.attachLight.intensity,
-        });
-      }
+      this.lightManager.registerDecoration({
+        position: lightPos,
+        color: new THREE.Color(hints.attachLight.color),
+        baseIntensity: hints.attachLight.intensity,
+        distance: hints.attachLight.distance,
+        pulseSpeed: hints.pulseSpeed ?? 0,
+        pulseAmplitude: hints.pulseAmplitude ?? 0,
+        // Pass material reference for synchronized pulsing
+        material: firstMaterialForLight,
+        baseMaterialIntensity: firstMaterialBaseIntensity,
+      });
+      lightRegistered = true;
     }
   }
 
@@ -2408,13 +2391,7 @@ export class MapDecorations {
   }
 
   public dispose(): void {
-    // Clean up attached lights from emissive decorations
-    for (const deco of this.emissiveDecorations) {
-      if (deco.attachedLight && this.scene) {
-        this.scene.remove(deco.attachedLight);
-        deco.attachedLight.dispose();
-      }
-    }
+    // Clear emissive decorations (lights are now managed by DecorationLightManager)
     this.emissiveDecorations = [];
 
     this.group.traverse((child: THREE.Object3D) => {

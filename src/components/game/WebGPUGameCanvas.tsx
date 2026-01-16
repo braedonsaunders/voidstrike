@@ -74,7 +74,7 @@ import { Selectable } from '@/engine/components/Selectable';
 import { Transform } from '@/engine/components/Transform';
 import { Health } from '@/engine/components/Health';
 import { Building } from '@/engine/components/Building';
-import AssetManager from '@/assets/AssetManager';
+import AssetManager, { DEFAULT_AIRBORNE_HEIGHT } from '@/assets/AssetManager';
 import { OverlayScene } from '@/phaser/scenes/OverlayScene';
 import { useProjectionStore } from '@/store/projectionStore';
 import { setCameraRef } from '@/store/cameraStore';
@@ -642,13 +642,28 @@ export function WebGPUGameCanvas() {
       // Hook particle system to combat events
       // PERF: Uses pooled Vector3 objects to avoid allocation per attack
       game.eventBus.on('combat:attack', (data: {
+        attackerId?: string; // Unit type ID for airborne height lookup
         attackerPos?: { x: number; y: number };
         targetPos?: { x: number; y: number };
+        targetUnitType?: string; // Unit type ID for airborne height lookup
         damageType?: string;
+        attackerIsFlying?: boolean;
+        targetIsFlying?: boolean;
       }) => {
         if (data.attackerPos && data.targetPos && effectEmitterRef.current) {
-          const startHeight = terrain.getHeightAt(data.attackerPos.x, data.attackerPos.y) + 0.5;
-          const endHeight = terrain.getHeightAt(data.targetPos.x, data.targetPos.y) + 0.5;
+          // Calculate terrain heights
+          const attackerTerrainHeight = terrain.getHeightAt(data.attackerPos.x, data.attackerPos.y);
+          const targetTerrainHeight = terrain.getHeightAt(data.targetPos.x, data.targetPos.y);
+
+          // Calculate flying offsets using per-unit-type airborne heights from assets.json
+          const attackerAirborneHeight = data.attackerId ? AssetManager.getAirborneHeight(data.attackerId) : DEFAULT_AIRBORNE_HEIGHT;
+          const targetAirborneHeight = data.targetUnitType ? AssetManager.getAirborneHeight(data.targetUnitType) : DEFAULT_AIRBORNE_HEIGHT;
+          const attackerFlyingOffset = data.attackerIsFlying ? attackerAirborneHeight : 0;
+          const targetFlyingOffset = data.targetIsFlying ? targetAirborneHeight : 0;
+
+          const startHeight = attackerTerrainHeight + 0.5 + attackerFlyingOffset;
+          const endHeight = targetTerrainHeight + 0.5 + targetFlyingOffset;
+
           _combatStartPos.set(data.attackerPos.x, startHeight, data.attackerPos.y);
           _combatEndPos.set(data.targetPos.x, endHeight, data.targetPos.y);
           _combatDirection.copy(_combatEndPos).sub(_combatStartPos).normalize();
@@ -659,17 +674,28 @@ export function WebGPUGameCanvas() {
       });
 
       // PERF: Uses pooled Vector3 to avoid allocation per death
-      game.eventBus.on('unit:died', (data: { position?: { x: number; y: number } }) => {
-        if (data.position && effectEmitterRef.current) {
+      game.eventBus.on('unit:died', (data: {
+        position?: { x: number; y: number };
+        isFlying?: boolean;
+        unitType?: string; // Unit type ID for airborne height lookup
+      }) => {
+        if (data.position) {
           const terrainHeight = terrain.getHeightAt(data.position.x, data.position.y);
-          _deathPos.set(data.position.x, terrainHeight + 0.5, data.position.y);
-          effectEmitterRef.current.explosion(_deathPos, 1);
-        }
-        // Advanced particle explosion
-        if (data.position && advancedParticlesRef.current) {
-          const terrainHeight = terrain.getHeightAt(data.position.x, data.position.y);
-          _deathPos.set(data.position.x, terrainHeight + 0.5, data.position.y);
-          advancedParticlesRef.current.emitExplosion(_deathPos, 1.2);
+          // Calculate flying offset using per-unit-type airborne heights from assets.json
+          const airborneHeight = data.unitType ? AssetManager.getAirborneHeight(data.unitType) : DEFAULT_AIRBORNE_HEIGHT;
+          const flyingOffset = data.isFlying ? airborneHeight : 0;
+          const effectHeight = terrainHeight + 0.5 + flyingOffset;
+
+          if (effectEmitterRef.current) {
+            _deathPos.set(data.position.x, effectHeight, data.position.y);
+            effectEmitterRef.current.explosion(_deathPos, 1);
+          }
+
+          // Advanced particle explosion
+          if (advancedParticlesRef.current) {
+            _deathPos.set(data.position.x, effectHeight, data.position.y);
+            advancedParticlesRef.current.emitExplosion(_deathPos, 1.2);
+          }
         }
       });
 
@@ -1051,6 +1077,12 @@ export function WebGPUGameCanvas() {
 
         if (gameRef.current) {
           phaserGame.scene.start('OverlayScene', { eventBus: gameRef.current.eventBus });
+
+          // Wire up terrain height function for accurate damage number positioning
+          if (environmentRef.current) {
+            const terrain = environmentRef.current.terrain;
+            scene.setTerrainHeightFunction((x, z) => terrain.getHeightAt(x, z));
+          }
 
           // Start the game AFTER Phaser overlay is ready
           // This ensures the countdown is visible when it triggers

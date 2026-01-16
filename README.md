@@ -288,43 +288,63 @@ Optimizations: instanced rendering, spatial hashing, object pooling, archetype q
 
 ## Multiplayer Architecture
 
-VOIDSTRIKE uses a **fully serverless peer-to-peer architecture**. No central game server required - players connect directly to each other.
+VOIDSTRIKE uses a **fully serverless peer-to-peer architecture**. No central game server required - players connect directly to each other via WebRTC.
 
 ### Protocol Stack
 
 | Layer | Protocol | Purpose |
 |-------|----------|---------|
-| **Transport** | WebRTC DataChannels | Low-latency P2P data exchange |
-| **Signaling** | Nostr (NIP-01) | Decentralized matchmaking and offer/answer exchange |
-| **Fallback Signaling** | Connection Codes | Serverless manual connection via shareable codes |
-| **NAT Traversal** | STUN + Peer Relay | Punch through NATs, relay when direct fails |
+| **Transport** | WebRTC DataChannels | Low-latency P2P game data exchange |
+| **Signaling** | Nostr Protocol | Decentralized lobby hosting and WebRTC handshake |
+| **NAT Traversal** | STUN (Google) | Punch through NATs for direct P2P |
 | **Synchronization** | Deterministic Lockstep | Fixed-point math ensures identical simulation |
 
-### Connection Methods
+### How It Works
 
-**1. Nostr Matchmaking (Automatic)**
-- Uses decentralized Nostr relays for game discovery
-- Publishes "game seek" events to find opponents
-- Exchanges WebRTC offers/answers via ephemeral Nostr events
-- No account required - generates ephemeral keypairs per session
-- Relays: `relay.damus.io`, `nos.lol`, `relay.nostr.band`, and others
+**Lobby-Based Matchmaking:**
 
-**2. Connection Codes (Manual)**
-- Human-shareable codes in format: `VOID-XXXX-XXXX-XXXX-...`
-- Encodes compressed SDP + ICE candidates in Crockford Base32
-- No signaling server needed - share code via Discord, text, etc.
-- 5-minute expiry for security
+1. **Host creates lobby** → Generates 4-character code (e.g., `ABCD`)
+2. **Lobby announced** → Published to Nostr relays as ephemeral event
+3. **Guest joins** → Enters code, sends join request via Nostr
+4. **WebRTC handshake** → Offer/answer exchanged through Nostr events
+5. **P2P connected** → DataChannel established, game data flows directly
+
+```
+┌─────────────┐      Nostr Relays      ┌─────────────┐
+│    Host     │ ──── Lobby + Offer ──→ │    Guest    │
+│  (Code:ABCD)│ ←───── Answer ──────── │             │
+└──────┬──────┘                        └──────┬──────┘
+       │                                      │
+       └──────── WebRTC DataChannel ──────────┘
+                   (Direct P2P)
+```
+
+**Nostr Event Types:**
+
+| Kind | Name | Purpose |
+|------|------|---------|
+| 30430 | `LOBBY_HOST` | Host announces lobby with code |
+| 30431 | `LOBBY_JOIN` | Guest requests to join |
+| 30433 | `WEBRTC_OFFER` | Host sends WebRTC offer |
+| 30434 | `WEBRTC_ANSWER` | Guest sends WebRTC answer |
+
+**Public Nostr Relays Used:**
+- `relay.damus.io`, `nos.lol`, `relay.nostr.band`
+- `relay.snort.social`, `nostr.mom`, `relay.primal.net`
+- No account required - ephemeral keypairs generated per session
 
 ### NAT Traversal
 
-```
-Player A ←→ STUN Server ←→ Player B     (Direct P2P - ideal)
-Player A ←→ Player C ←→ Player B        (Peer Relay - fallback)
+WebRTC uses STUN servers to discover public IP addresses and punch through NATs:
+
+```typescript
+const ICE_SERVERS = [
+  { urls: 'stun:stun.l.google.com:19302' },
+  { urls: 'stun:stun1.l.google.com:19302' },
+];
 ```
 
-- **STUN servers**: Google (`stun.l.google.com`), Cloudflare (`stun.cloudflare.com`)
-- **Peer Relay**: When direct connection fails, routes through other connected players
-- **End-to-end encryption**: ECDH key exchange + AES-GCM for relayed messages
+Most home networks work with STUN alone. For symmetric NATs, the peer relay system (`PeerRelay.ts`) can route traffic through other connected players with end-to-end encryption (ECDH + AES-GCM).
 
 ### Deterministic Lockstep
 
@@ -343,7 +363,7 @@ Tick N: Both players apply same commands, same order
 - **Command ordering** - Commands sorted by player ID, then command ID
 
 **Desync detection:**
-- Checksums computed every 10 ticks
+- Checksums computed every N ticks
 - Compares: entity count, position hashes, health sums, resource totals
 - Visual indicator on desync, optional auto-pause
 - State dump export for debugging
@@ -361,9 +381,9 @@ Tick N: Both players apply same commands, same order
 
 ### Game Modes
 
-- **1v1** - Ranked and unranked
-- **2v2** - Team games (coming soon)
-- **Custom lobbies** - Private games with 6-character join codes
+- **1v1** - Standard competitive matches
+- **Custom lobbies** - Private games with 4-character join codes
+- **Multiple guests** - Host can have multiple players join open slots
 
 ---
 

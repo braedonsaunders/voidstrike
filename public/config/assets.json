@@ -215,31 +215,13 @@
     },
     "colossus": {
       "model": "/models/units/colossus_LOD0.glb",
-      "scale": 2.5,
-      "rotation": {
-        "x": 0,
-        "y": 0,
-        "z": 0
-      },
+      "scale": 1.5,
+      "rotation": { "x": 0, "y": 0, "z": 0 },
       "animations": {
-        "idle": [
-          "idle",
-          "stand"
-        ],
-        "walk": [
-          "walk",
-          "stomp",
-          "move"
-        ],
-        "attack": [
-          "attack",
-          "crush",
-          "laser"
-        ],
-        "death": [
-          "death",
-          "collapse"
-        ]
+        "idle": ["idle", "stand"],
+        "walk": ["walk", "stomp", "move"],
+        "attack": ["attack", "crush", "laser"],
+        "death": ["death", "collapse"]
       }
     },
     "valkyrie": {
@@ -364,12 +346,8 @@
     },
     "dreadnought": {
       "model": "/models/units/dreadnought_LOD0.glb",
-      "scale": 15.0,
-      "rotation": {
-        "x": 0,
-        "y": 0,
-        "z": 0
-      },
+      "scale": 3.0,
+      "rotation": { "x": 0, "y": 0, "z": 0 },
       "airborneHeight": 15,
       "animations": {
         "idle": [
@@ -762,9 +740,9 @@
         "pulseSpeed": 0.4,
         "pulseAmplitude": 0.15,
         "attachLight": {
-          "color": "#aa77ff",
-          "intensity": 0.4,
-          "distance": 5
+          "color": "#9966ff",
+          "intensity": 0.8,
+          "distance": 8
         }
       }
     },

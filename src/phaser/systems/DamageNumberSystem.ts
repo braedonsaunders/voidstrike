@@ -16,6 +16,7 @@
 import * as Phaser from 'phaser';
 import { EventBus } from '@/engine/core/EventBus';
 import { useProjectionStore } from '@/store/projectionStore';
+import { AssetManager, DEFAULT_AIRBORNE_HEIGHT } from '@/assets/AssetManager';
 
 // ============================================
 // CONSTANTS
@@ -85,6 +86,9 @@ export class DamageNumberSystem {
 
   // Animation tracking
   private tweenMap: Map<number, Phaser.Tweens.Tween[]> = new Map();
+
+  // Terrain height lookup function
+  private getTerrainHeight: ((x: number, z: number) => number) | null = null;
 
   constructor(scene: Phaser.Scene, eventBus: EventBus) {
     this.scene = scene;
@@ -160,6 +164,13 @@ export class DamageNumberSystem {
   }
 
   /**
+   * Set terrain height lookup function for accurate vertical positioning
+   */
+  public setTerrainHeightFunction(fn: (x: number, z: number) => number): void {
+    this.getTerrainHeight = fn;
+  }
+
+  /**
    * Setup event listeners for damage events
    */
   private setupEventListeners(): void {
@@ -172,6 +183,7 @@ export class DamageNumberSystem {
       isKillingBlow?: boolean;
       isCritical?: boolean;
       targetIsFlying?: boolean;
+      targetUnitType?: string; // For airborne height lookup
     }) => {
       this.onDamageDealt(data);
     });
@@ -195,12 +207,19 @@ export class DamageNumberSystem {
     isKillingBlow?: boolean;
     isCritical?: boolean;
     targetIsFlying?: boolean;
+    targetUnitType?: string;
   }): void {
     const now = Date.now();
     const existing = this.activeNumbers.get(data.targetId);
 
-    // Calculate world Y position
-    const worldY = (data.targetHeight ?? 2) + (data.targetIsFlying ? 8 : 0);
+    // Calculate world Y position (terrain height + unit height + flying offset)
+    // targetPos.y is world Z (horizontal), targetPos.x is world X
+    const terrainHeight = this.getTerrainHeight ? this.getTerrainHeight(data.targetPos.x, data.targetPos.y) : 0;
+    const unitHeight = (data.targetHeight ?? 2); // Building height or default unit height
+    // Get per-unit-type airborne height from assets.json
+    const airborneHeight = data.targetUnitType ? AssetManager.getAirborneHeight(data.targetUnitType) : DEFAULT_AIRBORNE_HEIGHT;
+    const flyingOffset = data.targetIsFlying ? airborneHeight : 0;
+    const worldY = terrainHeight + unitHeight + flyingOffset;
 
     if (existing && (now - existing.lastHitTime) < CONSOLIDATION_WINDOW) {
       // Consolidate into existing number

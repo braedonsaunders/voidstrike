@@ -8,6 +8,8 @@ import { TSLWaterPlane } from './tsl/WaterPlane';
 import { EnvironmentParticles } from './EnhancedDecorations';
 // PERFORMANCE: Use instanced decorations instead of individual meshes
 import { InstancedTrees, InstancedRocks, InstancedGrass, InstancedPebbles, updateDecorationFrustum } from './InstancedDecorations';
+// AAA-quality decoration light pooling, frustum culling, and distance falloff
+import { DecorationLightManager } from './DecorationLightManager';
 
 // Shadow quality presets - radius only applies to PCFSoftShadowMap (we use BasicShadowMap for perf)
 const SHADOW_QUALITY_PRESETS = {
@@ -47,6 +49,8 @@ export class EnvironmentManager {
   private mapBorderFog: TSLMapBorderFog | null = null;
   private particles: EnvironmentParticles | null = null;
   private legacyDecorations: MapDecorations | null = null;
+  // AAA decoration light manager - pools 50 lights for hundreds of emissive decorations
+  private decorationLightManager: DecorationLightManager | null = null;
 
   // Lighting
   private ambientLight: THREE.AmbientLight;
@@ -238,9 +242,13 @@ export class EnvironmentManager {
       this.scene.add(this.particles.points);
     }
 
+    // AAA decoration light manager - pools lights for hundreds of emissive decorations
+    // This enables maps like Crystal Caverns (295 crystals) to run at 60+ fps
+    this.decorationLightManager = new DecorationLightManager(this.scene, 50);
+
     // Legacy decorations (watch towers, destructibles)
-    // Pass scene to enable attached lights for emissive decorations
-    this.legacyDecorations = new MapDecorations(this.mapData, this.terrain, this.scene);
+    // Pass scene and light manager to enable pooled lights for emissive decorations
+    this.legacyDecorations = new MapDecorations(this.mapData, this.terrain, this.scene, this.decorationLightManager);
     this.scene.add(this.legacyDecorations.group);
   }
 
@@ -271,6 +279,11 @@ export class EnvironmentManager {
     // Update emissive decoration pulsing animation
     if (this.legacyDecorations) {
       this.legacyDecorations.update(deltaTime);
+    }
+
+    // PERF: Update AAA decoration light manager - frustum culled, distance-sorted, pooled lights
+    if (this.decorationLightManager && camera) {
+      this.decorationLightManager.update(camera, deltaTime);
     }
 
     // PERF: Update decoration frustum culling - only render visible instances
@@ -691,6 +704,7 @@ export class EnvironmentManager {
     this.mapBorderFog?.dispose();
     this.particles?.dispose();
     this.legacyDecorations?.dispose();
+    this.decorationLightManager?.dispose();
 
     this.scene.remove(this.terrain.mesh);
     this.scene.remove(this.ambientLight);

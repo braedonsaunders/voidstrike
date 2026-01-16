@@ -740,6 +740,7 @@ export class CombatSystem extends System {
       targetPos: { x: targetTransform.x, y: targetTransform.y },
       targetHeight,
       targetIsFlying,
+      targetUnitType: targetUnit?.unitId, // For airborne height lookup
       isKillingBlow: targetHealth && targetHealth.current <= 0,
     });
 
