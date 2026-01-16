@@ -229,6 +229,7 @@ export class VehicleEffectsSystem {
    * Handle unit spawn event
    */
   private onUnitSpawned(data: { entityId: number; unitType: string }): void {
+    console.log('[VehicleEffects] unit:spawned event received:', data);
     this.tryTrackUnit(data.entityId, data.unitType);
   }
 
@@ -245,6 +246,8 @@ export class VehicleEffectsSystem {
   private tryTrackUnit(entityId: number, unitType: string): void {
     const effectsConfig = this.assetManager.getUnitEffects(unitType);
 
+    console.log(`[VehicleEffects] tryTrackUnit: ${unitType} (entity ${entityId})`, effectsConfig);
+
     if (!effectsConfig || !effectsConfig.effects) {
       return; // No effects defined for this unit type
     }
@@ -253,6 +256,8 @@ export class VehicleEffectsSystem {
     if (effects.length === 0) {
       return;
     }
+
+    console.log(`[VehicleEffects] Tracking ${unitType} with ${effects.length} effects`);
 
     this.trackedUnits.set(entityId, {
       entityId,
@@ -276,7 +281,15 @@ export class VehicleEffectsSystem {
     }
     this.lastUpdateTime = now;
 
-    if (!this.camera || this.trackedUnits.size === 0) {
+    if (!this.camera) {
+      // Log once every 5 seconds
+      if (Math.floor(now / 5000) !== Math.floor(this.lastUpdateTime / 5000)) {
+        console.log('[VehicleEffects] No camera set');
+      }
+      return;
+    }
+
+    if (this.trackedUnits.size === 0) {
       return;
     }
 
@@ -300,8 +313,9 @@ export class VehicleEffectsSystem {
       // Get world position
       this._worldPos.set(transform.x, 0, transform.y);
 
-      // Add height for flying units
-      const airborneHeight = this.assetManager.getAirborneHeight(tracked.unitType);
+      // Add height for flying units - check if unit has explicit airborneHeight in config
+      // Only apply airborne height if the unit is actually a flying unit
+      const airborneHeight = unit.isFlying ? this.assetManager.getAirborneHeight(tracked.unitType) : 0;
       if (airborneHeight > 0) {
         const terrainY = this.getTerrainHeight?.(transform.x, transform.y) ?? 0;
         this._worldPos.y = terrainY + airborneHeight;
@@ -464,6 +478,7 @@ export class VehicleEffectsSystem {
       }
 
       // Emit particles
+      // Emit particles
       this.particleSystem.emit(
         this._attachPos,
         this._emitDir,
@@ -471,6 +486,11 @@ export class VehicleEffectsSystem {
         preset.particleType,
         configOverrides
       );
+    }
+
+    // Log occasionally (not every frame to avoid spam)
+    if (Math.random() < 0.01) {
+      console.log(`[VehicleEffects] Emitting ${effect.type} for ${unitType} at`, worldPos.toArray());
     }
   }
 
