@@ -119,6 +119,68 @@ A groundbreaking multiplayer architecture that requires **zero servers** to oper
 
 ---
 
+## No "Host" or "Server" Player
+
+**Every player is equal.** No one's computer acts as a server.
+
+### How Deterministic Lockstep Works
+
+```
+┌─────────────────────────────────────────────────────────────────────────────┐
+│              DETERMINISTIC LOCKSTEP - TRUE PEER-TO-PEER                     │
+├─────────────────────────────────────────────────────────────────────────────┤
+│                                                                             │
+│  PLAYER A's Computer                          PLAYER B's Computer           │
+│  ══════════════════                          ══════════════════             │
+│                                                                             │
+│  ┌─────────────────┐                          ┌─────────────────┐           │
+│  │  FULL Game      │                          │  FULL Game      │           │
+│  │  Simulation     │                          │  Simulation     │           │
+│  └────────┬────────┘                          └────────┬────────┘           │
+│           │                                            │                    │
+│           │              ONLY INPUTS                   │                    │
+│           │◄────────────────────────────────────────►│                    │
+│           │           ARE EXCHANGED                    │                    │
+│           │          (~50 bytes each)                  │                    │
+│           │                                            │                    │
+│           ▼                                            ▼                    │
+│  ┌─────────────────┐                          ┌─────────────────┐           │
+│  │ Tick 100:       │      IDENTICAL           │ Tick 100:       │           │
+│  │ Both execute    │◄══════════════════════►│ Both execute    │           │
+│  │ same inputs     │       STATE              │ same inputs     │           │
+│  └─────────────────┘                          └─────────────────┘           │
+│                                                                             │
+│  Key Points:                                                                │
+│  • Both run FULL simulation independently                                   │
+│  • Game STATE is never transmitted (computed locally)                       │
+│  • Only player COMMANDS are sent                                            │
+│  • Checksums verify simulations match                                       │
+│  • No player has latency advantage                                          │
+│                                                                             │
+└─────────────────────────────────────────────────────────────────────────────┘
+```
+
+### What About "Who Goes First"?
+
+For WebRTC setup, someone must send the offer first. We use a simple deterministic rule:
+
+```typescript
+// Lower ID/pubkey sends the offer
+const iAmInitiator = myPubkey < theirPubkey;
+
+if (iAmInitiator) {
+  // I create and send the offer
+  await sendOffer();
+} else {
+  // I wait for their offer, then send answer
+  await waitForOffer();
+}
+```
+
+This is **only for connection setup**. Once connected, both players are completely equal.
+
+---
+
 ## Phase 1: Connection Codes (100% Reliable)
 
 ### The Concept
@@ -409,21 +471,75 @@ function formatCode(encoded: string): string {
 | **Tiny package** | `nostr-tools` is ~30KB |
 | **Perfect for signaling** | Designed for real-time event exchange |
 
-### Nostr Relays (Free, Public, Reliable)
+### Dynamic Nostr Relay Discovery
+
+**No hardcoded lists needed!** Use nostr.watch API for live relay health:
 
 ```typescript
-// Default relay list - any 3 working = success
-export const NOSTR_RELAYS = [
+// src/engine/network/p2p/NostrRelays.ts
+
+/**
+ * Hardcoded fallback relays (most stable, always available)
+ * Only used if API fetch fails
+ */
+const FALLBACK_RELAYS = [
   'wss://relay.damus.io',        // Most popular, very reliable
   'wss://nos.lol',               // Fast, reliable
   'wss://relay.nostr.band',      // Good uptime
   'wss://relay.snort.social',    // Popular client's relay
   'wss://nostr.wine',            // Paid relay, high quality
-  'wss://relay.current.fyi',     // Good coverage
-  'wss://nostr-pub.wellorder.net', // Long-running
-  'wss://relay.nostr.info',      // Stable
 ];
+
+/**
+ * Fetch live relay list from nostr.watch
+ * This service monitors relay health in real-time
+ */
+export async function getRelays(count: number = 8): Promise<string[]> {
+  try {
+    // nostr.watch provides real-time relay health monitoring
+    const response = await fetch('https://api.nostr.watch/v1/online', {
+      signal: AbortSignal.timeout(5000), // 5 second timeout
+    });
+
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+
+    const relays: string[] = await response.json();
+
+    // Filter for WebSocket relays and shuffle for load distribution
+    const wsRelays = relays
+      .filter(r => r.startsWith('wss://'))
+      .sort(() => Math.random() - 0.5)  // Shuffle
+      .slice(0, count);
+
+    if (wsRelays.length >= 3) {
+      console.log(`[Nostr] Using ${wsRelays.length} live relays from nostr.watch`);
+      return wsRelays;
+    }
+
+    throw new Error('Not enough relays from API');
+
+  } catch (error) {
+    console.warn('[Nostr] API fetch failed, using fallback relays:', error);
+    return FALLBACK_RELAYS;
+  }
+}
+
+/**
+ * nostr.watch API endpoints:
+ * - /v1/online  - All currently online relays
+ * - /v1/public  - Public (free) relays only
+ * - /v1/paid    - Paid relays
+ */
 ```
+
+### Why Dynamic Relay Lists?
+
+| Benefit | Description |
+|---------|-------------|
+| **Always fresh** | No outdated hardcoded URLs |
+| **Load balanced** | Shuffling distributes load across relays |
+| **Self-healing** | Automatically avoids offline relays |
+| **No maintenance** | List updates itself |
 
 ### Technical Implementation
 
