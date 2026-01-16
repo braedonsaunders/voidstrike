@@ -16,6 +16,7 @@ import scorchedBasinJson from './scorched_basin.json';
 import contestedFrontierJson from './contested_frontier.json';
 import titansColosseumJson from './titans_colosseum.json';
 import battleArenaJson from './battle_arena.json';
+import shatteredPrismJson from './shattered_prism.json';
 
 // Convert JSON to MapData
 export const CRYSTAL_CAVERNS: MapData = jsonToMapData(crystalCavernsJson as MapJson);
@@ -24,6 +25,7 @@ export const SCORCHED_BASIN: MapData = jsonToMapData(scorchedBasinJson as MapJso
 export const CONTESTED_FRONTIER: MapData = jsonToMapData(contestedFrontierJson as MapJson);
 export const TITANS_COLOSSEUM: MapData = jsonToMapData(titansColosseumJson as MapJson);
 export const BATTLE_ARENA: MapData = jsonToMapData(battleArenaJson as MapJson);
+export const SHATTERED_PRISM: MapData = jsonToMapData(shatteredPrismJson as MapJson);
 
 // All maps registry
 export const ALL_MAPS: Record<string, MapData> = {
@@ -33,12 +35,13 @@ export const ALL_MAPS: Record<string, MapData> = {
   [CONTESTED_FRONTIER.id]: CONTESTED_FRONTIER,
   [TITANS_COLOSSEUM.id]: TITANS_COLOSSEUM,
   [BATTLE_ARENA.id]: BATTLE_ARENA,
+  [SHATTERED_PRISM.id]: SHATTERED_PRISM,
 };
 
 // Maps by player count
 export const MAPS_BY_PLAYER_COUNT: Record<2 | 4 | 6 | 8, MapData[]> = {
   2: [CRYSTAL_CAVERNS, VOID_ASSAULT, BATTLE_ARENA],
-  4: [SCORCHED_BASIN],
+  4: [SCORCHED_BASIN, SHATTERED_PRISM],
   6: [CONTESTED_FRONTIER],
   8: [TITANS_COLOSSEUM],
 };
