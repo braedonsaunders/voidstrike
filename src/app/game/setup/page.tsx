@@ -133,13 +133,12 @@ function PlayerSlotRow({
   const isGuest = slot.isGuest;
 
   return (
-    <div className="flex flex-col gap-2 p-2 bg-void-900/50 rounded-lg border border-void-800/50">
-      <div className="flex items-center gap-2">
-        {/* Player number */}
-        <div className="w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold"
-             style={{ backgroundColor: hexToCSS(selectedColor?.hex ?? 0x808080), color: '#000' }}>
-          {index + 1}
-        </div>
+    <div className="flex items-center gap-2 p-1.5 bg-void-900/50 rounded-lg border border-void-800/50">
+      {/* Player number */}
+      <div className="w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-bold flex-shrink-0"
+           style={{ backgroundColor: hexToCSS(selectedColor?.hex ?? 0x808080), color: '#000' }}>
+        {index + 1}
+      </div>
 
         {/* Player type selector */}
         {!isGuest ? (
@@ -216,43 +215,42 @@ function PlayerSlotRow({
           <span className="text-void-500 text-xs italic">Waiting for player...</span>
         )}
 
-        {/* Color selector (only for active players) */}
-        {isActive && (
-          <div className="flex gap-1 ml-auto">
-            {PLAYER_COLORS.map((color) => {
-              const isUsed = usedColors.has(color.id) && slot.colorId !== color.id;
-              return (
-                <button
-                  key={color.id}
-                  onClick={() => !isUsed && !isGuest && onColorChange(color.id)}
-                  title={color.name}
-                  disabled={isUsed || isGuest}
-                  className={`w-5 h-5 rounded-full transition-all duration-200
-                    ${slot.colorId === color.id
-                      ? 'ring-2 ring-white scale-110'
-                      : isUsed || isGuest
-                        ? 'opacity-30 cursor-not-allowed'
-                        : 'hover:scale-110'
-                    }`}
-                  style={{ backgroundColor: hexToCSS(color.hex) }}
-                />
-              );
-            })}
-          </div>
-        )}
+      {/* Color selector (only for active players) */}
+      {isActive && (
+        <div className="flex gap-0.5 ml-auto">
+          {PLAYER_COLORS.map((color) => {
+            const isUsed = usedColors.has(color.id) && slot.colorId !== color.id;
+            return (
+              <button
+                key={color.id}
+                onClick={() => !isUsed && !isGuest && onColorChange(color.id)}
+                title={color.name}
+                disabled={isUsed || isGuest}
+                className={`w-4 h-4 rounded-full transition-all duration-200
+                  ${slot.colorId === color.id
+                    ? 'ring-2 ring-white scale-110'
+                    : isUsed || isGuest
+                      ? 'opacity-30 cursor-not-allowed'
+                      : 'hover:scale-110'
+                  }`}
+                style={{ backgroundColor: hexToCSS(color.hex) }}
+              />
+            );
+          })}
+        </div>
+      )}
 
-        {/* Remove button */}
-        {canRemove && !isLocalPlayer && (
-          <button
-            onClick={onRemove}
-            className="w-6 h-6 flex items-center justify-center text-void-500 hover:text-red-400
-                       hover:bg-red-900/30 rounded transition-colors"
-            title={isGuest ? 'Kick player' : 'Remove player'}
-          >
-            ✕
-          </button>
-        )}
-      </div>
+      {/* Remove button */}
+      {canRemove && !isLocalPlayer && (
+        <button
+          onClick={onRemove}
+          className="w-5 h-5 flex items-center justify-center text-void-500 hover:text-red-400
+                     hover:bg-red-900/30 rounded transition-colors text-xs flex-shrink-0"
+          title={isGuest ? 'Kick player' : 'Remove player'}
+        >
+          ✕
+        </button>
+      )}
     </div>
   );
 }
@@ -270,12 +268,12 @@ function SettingSelect<T extends string>({
   onChange: (value: T) => void;
 }) {
   return (
-    <div className="flex items-center justify-between py-2 border-b border-void-800/50">
-      <span className="text-void-300 text-sm">{label}</span>
+    <div className="flex items-center justify-between py-1 border-b border-void-800/50 last:border-b-0">
+      <span className="text-void-300 text-xs">{label}</span>
       <select
         value={value}
         onChange={(e) => onChange(e.target.value as T)}
-        className="bg-void-900 border border-void-700 rounded px-3 py-1.5 text-white text-sm
+        className="bg-void-900 border border-void-700 rounded px-2 py-0.5 text-white text-xs
                    focus:outline-none focus:border-void-500 cursor-pointer"
       >
         {options.map((opt) => (
@@ -546,21 +544,21 @@ export default function GameSetupPage() {
   }, [playerName, firstSlotId, firstSlotName, isGuestMode, setPlayerSlotName]);
 
   return (
-    <main className="h-screen bg-black overflow-hidden">
+    <main className="h-screen bg-black overflow-hidden flex flex-col">
       {/* Background */}
       <div className="fixed inset-0 bg-gradient-to-b from-void-950/50 via-black to-black" />
       <div className="fixed inset-0 bg-[radial-gradient(ellipse_at_center,rgba(132,61,255,0.1),transparent_70%)]" />
 
-      {/* Content - scrollable */}
-      <div className="relative z-10 h-full overflow-y-auto">
-        <div className="max-w-6xl mx-auto px-6 py-4 pb-8">
+      {/* Content - fixed height, no scroll */}
+      <div className="relative z-10 flex-1 flex flex-col min-h-0">
+        <div className="max-w-6xl w-full mx-auto px-6 py-3 flex-1 flex flex-col min-h-0">
         {/* Header */}
-        <div className="flex items-center justify-between mb-4">
+        <div className="flex items-center justify-between mb-3 flex-shrink-0">
           <div>
-            <Link href="/" className="text-void-400 hover:text-void-300 text-sm mb-1 inline-block">
+            <Link href="/" className="text-void-400 hover:text-void-300 text-sm mb-0.5 inline-block">
               &larr; Back to Menu
             </Link>
-            <h1 className="font-display text-2xl text-white">
+            <h1 className="font-display text-xl text-white">
               {isGuestMode ? 'Joining Lobby' : 'Game Setup'}
             </h1>
           </div>
@@ -591,37 +589,37 @@ export default function GameSetupPage() {
 
             <button
               onClick={handleMusicToggle}
-              className="w-10 h-10 rounded-full flex items-center justify-center
+              className="w-9 h-9 rounded-full flex items-center justify-center
                        bg-white/5 hover:bg-white/10 border border-white/10
                        transition-all duration-200 hover:scale-105 hover:border-void-500/50"
               title={musicEnabled ? 'Mute Music' : 'Unmute Music'}
             >
-              <span className="text-base">{musicEnabled ? '🔊' : '🔇'}</span>
+              <span className="text-sm">{musicEnabled ? '🔊' : '🔇'}</span>
             </button>
             <button
               onClick={toggleFullscreen}
-              className="w-10 h-10 rounded-full flex items-center justify-center
+              className="w-9 h-9 rounded-full flex items-center justify-center
                        bg-white/5 hover:bg-white/10 border border-white/10
                        transition-all duration-200 hover:scale-105 hover:border-void-500/50"
               title={isFullscreen ? 'Exit Fullscreen' : 'Enter Fullscreen'}
             >
-              <span className="text-base">{isFullscreen ? '⛶' : '⛶'}</span>
+              <span className="text-sm">{isFullscreen ? '⛶' : '⛶'}</span>
             </button>
           </div>
         </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 flex-1 min-h-0">
           {/* Players Section - Takes 2 columns on left */}
-          <div className="lg:col-span-2">
-            <div className="flex items-center justify-between mb-2">
-              <h2 className="font-display text-lg text-white">
+          <div className="lg:col-span-2 flex flex-col min-h-0">
+            <div className="flex items-center justify-between mb-2 flex-shrink-0">
+              <h2 className="font-display text-base text-white">
                 Players ({displayActivePlayerCount}/{displayMap.maxPlayers})
               </h2>
               {!isGuestMode && (
                 <button
                   onClick={addPlayerSlot}
                   disabled={!canAddPlayer}
-                  className={`text-sm px-2 py-1 rounded border transition-colors
+                  className={`text-xs px-2 py-1 rounded border transition-colors
                     ${canAddPlayer
                       ? 'text-void-400 hover:text-void-300 border-void-700 hover:border-void-500'
                       : 'text-void-600 border-void-800 cursor-not-allowed opacity-50'
@@ -631,7 +629,7 @@ export default function GameSetupPage() {
                 </button>
               )}
             </div>
-            <div className="space-y-2">
+            <div className="space-y-1.5 overflow-y-auto flex-1 min-h-0 pr-1">
               {displayPlayerSlots.map((slot, index) => (
                 <PlayerSlotRow
                   key={slot.id}
@@ -660,60 +658,55 @@ export default function GameSetupPage() {
           </div>
 
           {/* Right Column - Lobby Code, Maps and Settings */}
-          <div className="space-y-4">
+          <div className="flex flex-col gap-3 min-h-0">
             {/* Multiplayer Section - Only show when hosting */}
             {isHost && (
-              <div className="bg-void-900/50 rounded-lg border border-void-800/50 p-4">
-                <h2 className="font-display text-lg text-white mb-3">Multiplayer</h2>
+              <div className="bg-void-900/50 rounded-lg border border-void-800/50 p-3 flex-shrink-0">
+                {/* Header with lobby code inline */}
+                <div className="flex items-center justify-between mb-2">
+                  <h2 className="font-display text-base text-white">Multiplayer</h2>
+                  {lobbyStatus === 'initializing' && (
+                    <span className="text-void-500 text-xs">...</span>
+                  )}
+                  {lobbyStatus === 'hosting' && lobbyCode && (
+                    <button
+                      onClick={() => navigator.clipboard.writeText(lobbyCode)}
+                      className="flex items-center gap-1.5 px-2 py-1 bg-void-700 hover:bg-void-600 rounded transition group"
+                      title="Click to copy"
+                    >
+                      <span className="font-mono text-base text-white tracking-wider">{lobbyCode}</span>
+                      <span className="text-void-400 group-hover:text-void-300 text-[10px]">📋</span>
+                    </button>
+                  )}
+                  {lobbyStatus === 'error' && (
+                    <span className="text-red-400 text-xs">Error</span>
+                  )}
+                </div>
 
                 {/* Your Name */}
-                <div className="mb-3">
-                  <label className="block text-void-400 text-xs mb-1">Your Name</label>
+                <div className="mb-2">
+                  <label className="block text-void-400 text-[10px] mb-0.5">Your Name</label>
                   <input
                     type="text"
                     value={playerName}
                     onChange={(e) => setPlayerName(e.target.value)}
                     placeholder="Enter your name"
-                    className="w-full bg-void-800 border border-void-700 rounded px-3 py-1.5 text-white text-sm
+                    className="w-full bg-void-800 border border-void-700 rounded px-2 py-1 text-white text-sm
                                focus:outline-none focus:border-void-500"
                   />
                 </div>
 
-                {/* Lobby Code */}
-                <div className="mb-2">
-                  <label className="block text-void-400 text-xs mb-1">Lobby Code</label>
-                  {lobbyStatus === 'initializing' && (
-                    <p className="text-void-500 text-sm">Generating...</p>
-                  )}
-                  {lobbyStatus === 'hosting' && lobbyCode && (
-                    <div className="flex items-center gap-2">
-                      <span className="px-3 py-1.5 bg-void-700 rounded font-mono text-xl text-white tracking-widest">
-                        {lobbyCode}
-                      </span>
-                      <button
-                        onClick={() => navigator.clipboard.writeText(lobbyCode)}
-                        className="px-2 py-1.5 bg-void-800 hover:bg-void-700 text-void-300 text-xs rounded transition"
-                      >
-                        Copy
-                      </button>
-                    </div>
-                  )}
-                  {lobbyStatus === 'error' && (
-                    <p className="text-red-400 text-sm">{lobbyError || 'Failed to create lobby'}</p>
-                  )}
-                </div>
-
-                <p className="text-void-500 text-xs">
-                  Share this code with friends. Set a slot to "Open" to let them join.
+                <p className="text-void-500 text-[10px]">
+                  Share code with friends. Set slot to "Open" to let them join.
                 </p>
 
                 {hasOpenSlot && (
-                  <p className="text-green-400/70 text-xs mt-1">
-                    Waiting for players to join...
+                  <p className="text-green-400/70 text-[10px] mt-0.5">
+                    Waiting for players...
                   </p>
                 )}
                 {hasGuests && (
-                  <p className="text-green-400 text-xs mt-1">
+                  <p className="text-green-400 text-[10px] mt-0.5">
                     {guests.length} player{guests.length > 1 ? 's' : ''} connected
                   </p>
                 )}
@@ -722,10 +715,10 @@ export default function GameSetupPage() {
 
             {/* Guest mode indicator and settings display */}
             {isGuestMode && (
-              <div className="space-y-4">
-                <div className="bg-green-900/30 rounded-lg border border-green-700/50 p-4">
-                  <h2 className="font-display text-lg text-green-300 mb-1">Connected to Lobby</h2>
-                  <p className="text-green-400/70 text-xs">
+              <div className="flex flex-col gap-3">
+                <div className="bg-green-900/30 rounded-lg border border-green-700/50 p-3 flex-shrink-0">
+                  <h2 className="font-display text-base text-green-300 mb-0.5">Connected to Lobby</h2>
+                  <p className="text-green-400/70 text-[10px]">
                     Waiting for host to start the game...
                   </p>
                 </div>
@@ -733,21 +726,21 @@ export default function GameSetupPage() {
                 {/* Map display for guest (read-only) */}
                 {receivedLobbyState && (
                   <>
-                    <div>
-                      <h2 className="font-display text-lg text-white mb-2">Map</h2>
+                    <div className="flex-shrink-0">
+                      <h2 className="font-display text-base text-white mb-1">Map</h2>
                       <div className="p-2 bg-void-900/50 rounded-lg border border-void-800/50">
                         <div className="flex items-center justify-between mb-0.5">
-                          <h3 className="font-display text-sm text-white">{displayMap.name}</h3>
+                          <h3 className="font-display text-xs text-white">{displayMap.name}</h3>
                           <span className="text-void-400 text-[10px]">{displayMap.width}x{displayMap.height} • {displayMap.maxPlayers}P</span>
                         </div>
-                        <p className="text-void-400 text-[10px] line-clamp-2">{displayMap.description}</p>
+                        <p className="text-void-400 text-[10px] line-clamp-1">{displayMap.description}</p>
                       </div>
                     </div>
 
                     {/* Settings display for guest (read-only) */}
-                    <div>
-                      <h2 className="font-display text-lg text-white mb-2">Game Settings</h2>
-                      <div className="bg-void-900/50 rounded-lg border border-void-800/50 p-3 space-y-2 text-sm">
+                    <div className="flex-shrink-0">
+                      <h2 className="font-display text-base text-white mb-1">Game Settings</h2>
+                      <div className="bg-void-900/50 rounded-lg border border-void-800/50 p-2 space-y-1 text-xs">
                         <div className="flex items-center justify-between text-void-300">
                           <span>Starting Resources</span>
                           <span className="text-white capitalize">{displayStartingResources}</span>
@@ -769,8 +762,8 @@ export default function GameSetupPage() {
 
             {/* Map Selection - Compact (only for host) */}
             {!isGuestMode && (
-              <div>
-                <h2 className="font-display text-lg text-white mb-2">Select Map</h2>
+              <div className="flex-1 flex flex-col min-h-0">
+                <h2 className="font-display text-base text-white mb-1 flex-shrink-0">Select Map</h2>
                 {/* Search box */}
                 <input
                   type="text"
@@ -778,11 +771,11 @@ export default function GameSetupPage() {
                   onChange={(e) => setMapSearch(e.target.value)}
                   placeholder="Search maps..."
                   className="w-full bg-void-900 border border-void-700 rounded px-2 py-1 text-white text-xs
-                             placeholder:text-void-500 focus:outline-none focus:border-void-500 mb-2"
+                             placeholder:text-void-500 focus:outline-none focus:border-void-500 mb-1 flex-shrink-0"
                 />
-                {/* Scrollable map grid - max 2 rows visible */}
-                <div className="max-h-[140px] overflow-y-auto">
-                  <div className="grid grid-cols-2 gap-1.5">
+                {/* Scrollable map grid */}
+                <div className="flex-1 overflow-y-auto min-h-0">
+                  <div className="grid grid-cols-2 gap-1">
                     {maps.map((map) => (
                       <MapPreview
                         key={map.id}
@@ -796,28 +789,27 @@ export default function GameSetupPage() {
                 </div>
 
                 {/* Selected map details */}
-                <div className="mt-2 p-2 bg-void-900/50 rounded-lg border border-void-800/50">
-                  <div className="flex items-center justify-between mb-0.5">
-                    <h3 className="font-display text-sm text-white">{selectedMap.name}</h3>
+                <div className="mt-1 p-1.5 bg-void-900/50 rounded-lg border border-void-800/50 flex-shrink-0">
+                  <div className="flex items-center justify-between">
+                    <h3 className="font-display text-xs text-white">{selectedMap.name}</h3>
                     <span className="text-void-400 text-[10px]">{selectedMap.width}x{selectedMap.height} • {selectedMap.maxPlayers}P</span>
                   </div>
-                  <p className="text-void-400 text-[10px] line-clamp-2">{selectedMap.description}</p>
                 </div>
               </div>
             )}
 
             {/* Game Settings (only for host) */}
             {!isGuestMode && (
-              <div>
-                <h2 className="font-display text-lg text-white mb-2">Game Settings</h2>
-                <div className="bg-void-900/50 rounded-lg border border-void-800/50 p-3">
+              <div className="flex-shrink-0">
+                <h2 className="font-display text-base text-white mb-1">Game Settings</h2>
+                <div className="bg-void-900/50 rounded-lg border border-void-800/50 p-2">
                   <SettingSelect
                     label="Starting Resources"
                     value={startingResources}
                     options={[
-                      { value: 'normal', label: 'Normal (50 minerals)' },
-                      { value: 'high', label: 'High (500 minerals)' },
-                      { value: 'insane', label: 'Insane (10000 minerals)' },
+                      { value: 'normal', label: 'Normal' },
+                      { value: 'high', label: 'High' },
+                      { value: 'insane', label: 'Insane' },
                     ]}
                     onChange={setStartingResources}
                   />
@@ -826,23 +818,23 @@ export default function GameSetupPage() {
                     label="Game Speed"
                     value={gameSpeed}
                     options={[
-                      { value: 'slower', label: 'Slower (0.5x)' },
-                      { value: 'normal', label: 'Normal (1x)' },
-                      { value: 'faster', label: 'Faster (1.5x)' },
-                      { value: 'fastest', label: 'Fastest (2x)' },
+                      { value: 'slower', label: '0.5x' },
+                      { value: 'normal', label: '1x' },
+                      { value: 'faster', label: '1.5x' },
+                      { value: 'fastest', label: '2x' },
                     ]}
                     onChange={setGameSpeed}
                   />
 
-                  <div className="flex items-center justify-between py-2">
-                    <span className="text-void-300 text-sm">Fog of War</span>
+                  <div className="flex items-center justify-between py-1">
+                    <span className="text-void-300 text-xs">Fog of War</span>
                     <button
                       onClick={() => setFogOfWar(!fogOfWar)}
-                      className={`w-12 h-6 rounded-full transition-all duration-200 relative
+                      className={`w-10 h-5 rounded-full transition-all duration-200 relative
                         ${fogOfWar ? 'bg-void-500' : 'bg-void-800'}`}
                     >
-                      <div className={`absolute top-1 w-4 h-4 rounded-full bg-white transition-all duration-200
-                        ${fogOfWar ? 'left-7' : 'left-1'}`}
+                      <div className={`absolute top-0.5 w-4 h-4 rounded-full bg-white transition-all duration-200
+                        ${fogOfWar ? 'left-5' : 'left-0.5'}`}
                       />
                     </button>
                   </div>
@@ -853,26 +845,21 @@ export default function GameSetupPage() {
 
             {/* Start Game Button (only for host) */}
             {!isGuestMode && (
-              <>
+              <div className="flex-shrink-0">
                 <button
                   onClick={handleStartGame}
                   disabled={activePlayerCount < 2}
-                  className="w-full game-button-primary text-lg px-8 py-3 font-display disabled:opacity-50 disabled:cursor-not-allowed"
+                  className="w-full game-button-primary text-base px-6 py-2 font-display disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   Start Game
                 </button>
 
                 {activePlayerCount < 2 && (
-                  <p className="text-center text-red-400 text-xs">
-                    At least 2 active players required
+                  <p className="text-center text-red-400 text-[10px] mt-1">
+                    At least 2 players required
                   </p>
                 )}
-
-                {/* Keyboard hint */}
-                <p className="text-center text-void-600 text-[10px]">
-                  Press <kbd className="px-1 py-0.5 bg-void-800 rounded text-[10px]">?</kbd> during game for controls
-                </p>
-              </>
+              </div>
             )}
           </div>
         </div>
