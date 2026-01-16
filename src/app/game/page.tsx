@@ -4,6 +4,7 @@ import dynamic from 'next/dynamic';
 import { Suspense, useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { HUD } from '@/components/game/HUD';
+import { MultiplayerOverlay } from '@/components/game/MultiplayerOverlay';
 import { useGameSetupStore } from '@/store/gameSetupStore';
 
 // Dynamic import for WebGPU game canvas (Three.js + Phaser overlay)
@@ -51,6 +52,7 @@ export default function GamePage() {
       <Suspense fallback={<BlackScreen />}>
         <WebGPUGameCanvas />
         <HUD />
+        <MultiplayerOverlay />
       </Suspense>
     </div>
   );

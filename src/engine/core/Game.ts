@@ -30,9 +30,12 @@ import { PerformanceMonitor } from './PerformanceMonitor';
 import { ChecksumSystem, ChecksumConfig } from '../systems/ChecksumSystem';
 import {
   isMultiplayerMode,
+  isNetworkPaused,
   sendMultiplayerMessage,
   addMultiplayerMessageHandler,
   removeMultiplayerMessageHandler,
+  reportDesync,
+  getDesyncState,
 } from '@/store/multiplayerStore';
 
 // Multiplayer message types
@@ -173,6 +176,9 @@ export class Game {
 
       // Set up multiplayer message handler for receiving remote commands
       this.setupMultiplayerMessageHandler();
+
+      // Set up desync handler - SC2-style: end game on desync
+      this.setupDesyncHandler();
     }
 
     this.initializeSystems();
@@ -195,6 +201,36 @@ export class Game {
       }
     };
     addMultiplayerMessageHandler(this.multiplayerMessageHandler);
+  }
+
+  /**
+   * Set up desync handler - SC2-style: end game on desync
+   * When a desync is detected, we cannot recover (deterministic simulation diverged)
+   * so we end the game and notify players.
+   */
+  private setupDesyncHandler(): void {
+    this.eventBus.on('desync:detected', (data: {
+      tick: number;
+      localChecksum: number;
+      remoteChecksum: number;
+      remotePeerId: string;
+    }) => {
+      console.error(`[Game] DESYNC at tick ${data.tick}! Game state has diverged.`);
+
+      // Update multiplayer store with desync state
+      reportDesync(data.tick);
+
+      // Emit game-ending desync event for UI
+      this.eventBus.emit('multiplayer:desync', {
+        tick: data.tick,
+        localChecksum: data.localChecksum,
+        remoteChecksum: data.remoteChecksum,
+        message: `Game desynchronized at tick ${data.tick}. The game cannot continue.`,
+      });
+
+      // End the game state (but don't stop() - let UI handle that)
+      this.state = 'ended';
+    });
   }
 
   public static getInstance(config?: Partial<GameConfig>): Game {
@@ -371,6 +407,18 @@ export class Game {
 
   private update(deltaTime: number): void {
     if (this.state !== 'running') return;
+
+    // In multiplayer, pause if network is paused (disconnection/reconnection)
+    if (this.config.isMultiplayer && isNetworkPaused()) {
+      // Don't advance game state while waiting for connection
+      return;
+    }
+
+    // In multiplayer, check for desync state
+    if (this.config.isMultiplayer && getDesyncState() === 'desynced') {
+      // Game should end on desync - don't process any more ticks
+      return;
+    }
 
     const tickStart = performance.now();
 
