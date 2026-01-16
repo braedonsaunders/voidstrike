@@ -18,7 +18,7 @@ import {
   PlayerSlot,
   TeamNumber,
 } from '@/store/gameSetupStore';
-import { useLobby } from '@/hooks/useMultiplayer';
+import { useLobby, LobbyState } from '@/hooks/useMultiplayer';
 import { useMultiplayerStore } from '@/store/multiplayerStore';
 import AssetManager from '@/assets/AssetManager';
 
@@ -392,9 +392,14 @@ export default function GameSetupPage() {
     guests,
     hostConnection,
     isHost,
+    receivedLobbyState,
+    mySlotId,
     joinLobby,
     leaveLobby,
     kickGuest,
+    sendLobbyState,
+    sendGameStart,
+    onGameStart,
   } = useLobby(handleGuestJoin, handleGuestLeave);
 
   // Multiplayer store for game
@@ -432,6 +437,41 @@ export default function GameSetupPage() {
       }
     }
   }, [isHost, guests, setMultiplayer, setConnected, setHost, setDataChannel]);
+
+  // Send lobby state to guests whenever it changes (host only)
+  useEffect(() => {
+    if (!isHost) return;
+    const hasConnectedGuests = guests.some(g => g.dataChannel?.readyState === 'open');
+    if (!hasConnectedGuests) return;
+
+    const lobbyState: LobbyState = {
+      playerSlots,
+      selectedMapId,
+      startingResources,
+      gameSpeed,
+      fogOfWar,
+    };
+
+    sendLobbyState(lobbyState);
+  }, [isHost, guests, playerSlots, selectedMapId, startingResources, gameSpeed, fogOfWar, sendLobbyState]);
+
+  // Register game start callback (guest only)
+  useEffect(() => {
+    if (isHost) return;
+
+    onGameStart(() => {
+      console.log('[Setup] Game start received, navigating to game...');
+      // Apply the received lobby state to the store before starting
+      if (receivedLobbyState) {
+        useGameSetupStore.getState().setSelectedMap(receivedLobbyState.selectedMapId);
+        useGameSetupStore.getState().setStartingResources(receivedLobbyState.startingResources);
+        useGameSetupStore.getState().setGameSpeed(receivedLobbyState.gameSpeed);
+        useGameSetupStore.getState().setFogOfWar(receivedLobbyState.fogOfWar);
+      }
+      startGame();
+      router.push('/game');
+    });
+  }, [isHost, onGameStart, receivedLobbyState, startGame, router]);
 
   const [mapSearch, setMapSearch] = useState('');
   const allMaps = Object.values(ALL_MAPS);
@@ -472,6 +512,8 @@ export default function GameSetupPage() {
   };
 
   const handleStartGame = () => {
+    // Send game start signal to all connected guests
+    sendGameStart();
     startGame();
     router.push('/game');
   };
@@ -490,6 +532,15 @@ export default function GameSetupPage() {
 
   // Determine if we're in guest mode (joined someone else's lobby)
   const isGuestMode = lobbyStatus === 'connected' && !isHost;
+
+  // Display values - use received state for guests, local state for host
+  const displayPlayerSlots = isGuestMode && receivedLobbyState ? receivedLobbyState.playerSlots : playerSlots;
+  const displayMapId = isGuestMode && receivedLobbyState ? receivedLobbyState.selectedMapId : selectedMapId;
+  const displayMap = ALL_MAPS[displayMapId] || allMaps[0];
+  const displayStartingResources = isGuestMode && receivedLobbyState ? receivedLobbyState.startingResources : startingResources;
+  const displayGameSpeed = isGuestMode && receivedLobbyState ? receivedLobbyState.gameSpeed : gameSpeed;
+  const displayFogOfWar = isGuestMode && receivedLobbyState ? receivedLobbyState.fogOfWar : fogOfWar;
+  const displayActivePlayerCount = displayPlayerSlots.filter(s => s.type === 'human' || s.type === 'ai').length;
 
   // Sync player name with first slot (only when name changes)
   const setPlayerSlotName = useGameSetupStore((state) => state.setPlayerSlotName);
@@ -572,7 +623,7 @@ export default function GameSetupPage() {
           <div className="lg:col-span-2">
             <div className="flex items-center justify-between mb-2">
               <h2 className="font-display text-lg text-white">
-                Players ({activePlayerCount}/{maxPlayersForMap})
+                Players ({displayActivePlayerCount}/{displayMap.maxPlayers})
               </h2>
               {!isGuestMode && (
                 <button
@@ -589,7 +640,7 @@ export default function GameSetupPage() {
               )}
             </div>
             <div className="space-y-2">
-              {playerSlots.map((slot, index) => (
+              {displayPlayerSlots.map((slot, index) => (
                 <PlayerSlotRow
                   key={slot.id}
                   slot={slot}
@@ -610,7 +661,7 @@ export default function GameSetupPage() {
                     }
                   }}
                   canRemove={canRemovePlayer && !isGuestMode}
-                  isLocalPlayer={index === 0 && !isGuestMode}
+                  isLocalPlayer={isGuestMode ? slot.id === mySlotId : index === 0}
                 />
               ))}
             </div>
@@ -677,13 +728,50 @@ export default function GameSetupPage() {
               </div>
             )}
 
-            {/* Guest mode indicator */}
+            {/* Guest mode indicator and settings display */}
             {isGuestMode && (
-              <div className="bg-green-900/30 rounded-lg border border-green-700/50 p-4">
-                <h2 className="font-display text-lg text-green-300 mb-1">Connected to Lobby</h2>
-                <p className="text-green-400/70 text-xs">
-                  Waiting for host to start the game...
-                </p>
+              <div className="space-y-4">
+                <div className="bg-green-900/30 rounded-lg border border-green-700/50 p-4">
+                  <h2 className="font-display text-lg text-green-300 mb-1">Connected to Lobby</h2>
+                  <p className="text-green-400/70 text-xs">
+                    Waiting for host to start the game...
+                  </p>
+                </div>
+
+                {/* Map display for guest (read-only) */}
+                {receivedLobbyState && (
+                  <>
+                    <div>
+                      <h2 className="font-display text-lg text-white mb-2">Map</h2>
+                      <div className="p-2 bg-void-900/50 rounded-lg border border-void-800/50">
+                        <div className="flex items-center justify-between mb-0.5">
+                          <h3 className="font-display text-sm text-white">{displayMap.name}</h3>
+                          <span className="text-void-400 text-[10px]">{displayMap.width}x{displayMap.height} • {displayMap.maxPlayers}P</span>
+                        </div>
+                        <p className="text-void-400 text-[10px] line-clamp-2">{displayMap.description}</p>
+                      </div>
+                    </div>
+
+                    {/* Settings display for guest (read-only) */}
+                    <div>
+                      <h2 className="font-display text-lg text-white mb-2">Game Settings</h2>
+                      <div className="bg-void-900/50 rounded-lg border border-void-800/50 p-3 space-y-2 text-sm">
+                        <div className="flex items-center justify-between text-void-300">
+                          <span>Starting Resources</span>
+                          <span className="text-white capitalize">{displayStartingResources}</span>
+                        </div>
+                        <div className="flex items-center justify-between text-void-300">
+                          <span>Game Speed</span>
+                          <span className="text-white capitalize">{displayGameSpeed}</span>
+                        </div>
+                        <div className="flex items-center justify-between text-void-300">
+                          <span>Fog of War</span>
+                          <span className="text-white">{displayFogOfWar ? 'On' : 'Off'}</span>
+                        </div>
+                      </div>
+                    </div>
+                  </>
+                )}
               </div>
             )}
 

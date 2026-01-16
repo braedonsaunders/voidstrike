@@ -17,6 +17,7 @@ import { useState, useCallback, useRef, useEffect } from 'react';
 import { SimplePool, finalizeEvent, generateSecretKey, getPublicKey } from 'nostr-tools';
 import type { Filter, NostrEvent } from 'nostr-tools';
 import { getRelays } from '@/engine/network/p2p/NostrRelays';
+import type { PlayerSlot, StartingResources, GameSpeed } from '@/store/gameSetupStore';
 
 // Short code alphabet (no confusing chars)
 const CODE_ALPHABET = 'ABCDEFGHJKMNPQRSTUVWXYZ';
@@ -31,6 +32,28 @@ const EVENT_KINDS = {
   WEBRTC_OFFER: 30433,  // WebRTC offer
   WEBRTC_ANSWER: 30434, // WebRTC answer
 };
+
+// Data channel message types
+export type LobbyMessageType = 'lobby_state' | 'game_start' | 'chat' | 'ping';
+
+export interface LobbyState {
+  playerSlots: PlayerSlot[];
+  selectedMapId: string;
+  startingResources: StartingResources;
+  gameSpeed: GameSpeed;
+  fogOfWar: boolean;
+  guestSlotId?: string; // Which slot the guest is in
+}
+
+export interface LobbyMessage {
+  type: LobbyMessageType;
+  payload: unknown;
+  timestamp: number;
+}
+
+export interface GameStartPayload {
+  startTime: number;
+}
 
 // STUN servers
 const ICE_SERVERS: RTCIceServer[] = [
@@ -61,10 +84,17 @@ interface UseLobbyReturn {
   // As guest, connection to host
   hostConnection: RTCDataChannel | null;
   isHost: boolean;
+  // Received lobby state (for guests)
+  receivedLobbyState: LobbyState | null;
+  mySlotId: string | null; // Which slot the current player is in
   // Actions
   joinLobby: (code: string, playerName: string) => Promise<void>;
   leaveLobby: () => void;
   kickGuest: (pubkey: string) => void;
+  // Messaging
+  sendLobbyState: (state: LobbyState) => void;
+  sendGameStart: () => void;
+  onGameStart: (callback: () => void) => void;
 }
 
 function generateLobbyCode(): string {
@@ -121,6 +151,8 @@ export function useLobby(
   const [guests, setGuests] = useState<GuestConnection[]>([]);
   const [hostConnection, setHostConnection] = useState<RTCDataChannel | null>(null);
   const [isHost, setIsHost] = useState(true);
+  const [receivedLobbyState, setReceivedLobbyState] = useState<LobbyState | null>(null);
+  const [mySlotId, setMySlotId] = useState<string | null>(null);
 
   const poolRef = useRef<SimplePool | null>(null);
   const secretKeyRef = useRef<Uint8Array | null>(null);
@@ -128,6 +160,40 @@ export function useLobby(
   const relaysRef = useRef<string[]>([]);
   const subRef = useRef<{ close: () => void } | null>(null);
   const pcRef = useRef<RTCPeerConnection | null>(null); // For guest mode
+  const gameStartCallbackRef = useRef<(() => void) | null>(null);
+
+  // Handle incoming messages on the host connection (guest mode)
+  useEffect(() => {
+    if (!hostConnection) return;
+
+    const handleMessage = (event: MessageEvent) => {
+      try {
+        const message: LobbyMessage = JSON.parse(event.data);
+        console.log('[Lobby] Received message from host:', message.type);
+
+        switch (message.type) {
+          case 'lobby_state': {
+            const state = message.payload as LobbyState;
+            setReceivedLobbyState(state);
+            if (state.guestSlotId) {
+              setMySlotId(state.guestSlotId);
+            }
+            break;
+          }
+          case 'game_start': {
+            console.log('[Lobby] Game start signal received!');
+            gameStartCallbackRef.current?.();
+            break;
+          }
+        }
+      } catch (e) {
+        console.error('[Lobby] Failed to parse message:', e);
+      }
+    };
+
+    hostConnection.addEventListener('message', handleMessage);
+    return () => hostConnection.removeEventListener('message', handleMessage);
+  }, [hostConnection]);
 
   // Initialize lobby (host mode)
   useEffect(() => {
@@ -474,6 +540,63 @@ export function useLobby(
     }
   }, [guests, onGuestLeave]);
 
+  // Send lobby state to all connected guests (host only)
+  const sendLobbyState = useCallback((state: LobbyState) => {
+    if (!isHost) return;
+
+    const connectedGuests = guests.filter(g => g.dataChannel?.readyState === 'open');
+    if (connectedGuests.length === 0) return;
+
+    console.log('[Lobby] Sending lobby state to', connectedGuests.length, 'guests');
+
+    connectedGuests.forEach(guest => {
+      // Include guest's slot ID in their message
+      const guestState: LobbyState = {
+        ...state,
+        guestSlotId: guest.slotId,
+      };
+
+      const message: LobbyMessage = {
+        type: 'lobby_state',
+        payload: guestState,
+        timestamp: Date.now(),
+      };
+
+      try {
+        guest.dataChannel!.send(JSON.stringify(message));
+      } catch (e) {
+        console.error('[Lobby] Failed to send to guest:', e);
+      }
+    });
+  }, [isHost, guests]);
+
+  // Send game start signal to all guests (host only)
+  const sendGameStart = useCallback(() => {
+    if (!isHost) return;
+
+    const connectedGuests = guests.filter(g => g.dataChannel?.readyState === 'open');
+    console.log('[Lobby] Sending game start to', connectedGuests.length, 'guests');
+
+    const message: LobbyMessage = {
+      type: 'game_start',
+      payload: { startTime: Date.now() } as GameStartPayload,
+      timestamp: Date.now(),
+    };
+
+    connectedGuests.forEach(guest => {
+      try {
+        guest.dataChannel!.send(JSON.stringify(message));
+      } catch (e) {
+        console.error('[Lobby] Failed to send game start to guest:', e);
+      }
+    });
+  }, [isHost, guests]);
+
+  // Register callback for game start (guest only)
+  const onGameStart = useCallback((callback: () => void) => {
+    gameStartCallbackRef.current = callback;
+  }, []);
+
   return {
     status,
     lobbyCode,
@@ -481,9 +604,14 @@ export function useLobby(
     guests,
     hostConnection,
     isHost,
+    receivedLobbyState,
+    mySlotId,
     joinLobby,
     leaveLobby,
     kickGuest,
+    sendLobbyState,
+    sendGameStart,
+    onGameStart,
   };
 }
 
