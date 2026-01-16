@@ -360,11 +360,10 @@
       "model": "/models/decorations/tree_alien_LOD0.glb",
       "height": 11.0,
       "rendering": {
-        "envMapIntensity": 0.2,
-        "emissive": "#44ff88",
-        "emissiveIntensity": 0.5,
-        "pulseSpeed": 0.3,
-        "pulseAmplitude": 0.2
+        "envMapIntensity": 0.25,
+        "emissiveIntensity": 1.2,
+        "pulseSpeed": 0.15,
+        "pulseAmplitude": 0.08
       }
     },
     "tree_palm": {
@@ -378,26 +377,27 @@
       "model": "/models/decorations/tree_mushroom_LOD0.glb",
       "height": 8.0,
       "rendering": {
-        "envMapIntensity": 0.2,
-        "emissive": "#88ffaa",
+        "envMapIntensity": 0.25,
         "emissiveIntensity": 1.5,
-        "pulseSpeed": 0.2,
-        "pulseAmplitude": 0.3
+        "pulseSpeed": 0.12,
+        "pulseAmplitude": 0.1
       }
     },
     "crystal_formation": {
       "model": "/models/decorations/crystal_formation_LOD0.glb",
       "height": 4.0,
       "rendering": {
-        "envMapIntensity": 0.5,
-        "emissive": "#00aaff",
-        "emissiveIntensity": 2.5,
-        "pulseSpeed": 0.8,
-        "pulseAmplitude": 0.4,
+        "envMapIntensity": 0.8,
+        "emissive": "#9966ff",
+        "emissiveIntensity": 0.6,
+        "roughnessOverride": 0.1,
+        "metalnessOverride": 0.3,
+        "pulseSpeed": 0.4,
+        "pulseAmplitude": 0.15,
         "attachLight": {
-          "color": "#00aaff",
-          "intensity": 1.5,
-          "distance": 8
+          "color": "#aa77ff",
+          "intensity": 0.4,
+          "distance": 5
         }
       }
     },
