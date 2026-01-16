@@ -1297,8 +1297,11 @@ export class AssetManager {
       if (config.airborneHeight !== undefined) {
         assetAirborneHeights.set(assetId, config.airborneHeight);
       }
-      // Store model height for overlay positioning
-      assetModelHeights.set(assetId, config.height);
+      // Store model height for overlay positioning (use height if set, otherwise scale)
+      const modelHeight = config.height ?? config.scale;
+      if (modelHeight !== undefined) {
+        assetModelHeights.set(assetId, modelHeight);
+      }
     }
 
     // Add buildings from config
@@ -1315,8 +1318,11 @@ export class AssetManager {
       if (config.scale !== undefined) {
         assetScaleMultipliers.set(assetId, config.scale);
       }
-      // Store model height for overlay positioning
-      assetModelHeights.set(assetId, config.height);
+      // Store model height for overlay positioning (use height if set, otherwise scale)
+      const buildingHeight = config.height ?? config.scale;
+      if (buildingHeight !== undefined) {
+        assetModelHeights.set(assetId, buildingHeight);
+      }
     }
 
     // Add resources from config
