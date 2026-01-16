@@ -211,6 +211,28 @@ function extractMaterial(object: THREE.Object3D, assetId?: string): THREE.Materi
       if (hints.metalnessOverride !== null && hints.metalnessOverride !== undefined) {
         stdMaterial.metalness = hints.metalnessOverride;
       }
+
+      // Apply exposure (brightness multiplier)
+      // For exposure > 1: Add emissive contribution to brighten
+      // For exposure < 1: Darken the base color
+      const exposure = hints.exposure ?? 1.0;
+      if (exposure !== 1.0) {
+        if (exposure > 1.0) {
+          // Brighten: add emissive contribution based on base color
+          const baseColor = stdMaterial.color.clone();
+          // If already has emissive, blend with it; otherwise set new emissive
+          if (!hints.emissive) {
+            stdMaterial.emissive = baseColor;
+            stdMaterial.emissiveIntensity = exposure - 1.0;
+          } else {
+            // Already has emissive, boost its intensity
+            stdMaterial.emissiveIntensity = (hints.emissiveIntensity ?? 1.0) * exposure;
+          }
+        } else {
+          // Darken: multiply base color by exposure factor
+          stdMaterial.color.multiplyScalar(exposure);
+        }
+      }
     } else {
       // Default: disable IBL on decoration materials for performance
       stdMaterial.envMapIntensity = 0;
