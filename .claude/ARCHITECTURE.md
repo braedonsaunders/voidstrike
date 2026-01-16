@@ -1996,15 +1996,23 @@ export class RecastNavigation {
     mapHeight: number
   ): Promise<boolean>;
 
-  // Path queries
+  // Terrain height provider for elevation-aware queries
+  public setTerrainHeightProvider(provider: (x, z) => number): void;
+
+  // Navmesh projection helper
+  public projectToNavMesh(x, z): { x: number; y: number; z: number } | null;
+
+  // Path queries (use terrain height for better accuracy)
   public findPath(startX, startY, endX, endY): PathResult;
   public findNearestPoint(x, y): { x: number; y: number } | null;
   public isWalkable(x, y): boolean;
 
   // Crowd simulation (ORCA collision avoidance)
+  // All positions projected onto navmesh surface automatically
   public addAgent(entityId, x, y, radius, maxSpeed): number;
   public removeAgent(entityId): void;
   public setAgentTarget(entityId, targetX, targetY): boolean;
+  public updateAgentPosition(entityId, x, y): void;
   public getAgentState(entityId): { x, y, vx, vy } | null;
   public updateCrowd(deltaTime): void;
 
@@ -2012,6 +2020,38 @@ export class RecastNavigation {
   public addBoxObstacle(buildingId, centerX, centerY, width, height): void;
   public removeObstacle(buildingId): void;
 }
+```
+
+### Elevation-Aware Pathfinding
+
+The pathfinding system uses terrain height for accurate queries on multi-elevation terrain:
+
+```typescript
+// Terrain height provider wired up on navmesh init
+recast.setTerrainHeightProvider((x, z) => {
+  return game.getTerrainHeightAt(x, z);  // Returns elevation * 0.04
+});
+
+// All queries now start at approximate terrain height instead of y=0
+// This improves accuracy when navmesh has multiple elevation layers
+```
+
+**Navmesh Projection for Crowd Operations:**
+
+DetourCrowd requires agents and targets to be ON the navmesh surface. Without projection,
+agents placed at y=0 on elevated terrain won't have valid polygon references, causing
+"unit won't move" bugs.
+
+```typescript
+// All crowd operations now project positions onto navmesh:
+// - addAgent() projects initial position
+// - setAgentTarget() projects target position
+// - updateAgentPosition() projects teleport position
+
+const projected = this.projectToNavMesh(x, y);
+const agentPos = projected
+  ? { x: projected.x, y: projected.y, z: projected.z }
+  : { x, y: this.getTerrainHeight(x, y), z: y };
 ```
 
 ### PathfindingSystem (`PathfindingSystem.ts`)

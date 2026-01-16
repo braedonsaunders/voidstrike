@@ -241,6 +241,13 @@ export class PathfindingSystem extends System {
 
     if (success) {
       debugPathfinding.log('[PathfindingSystem] NavMesh ready');
+
+      // Wire up terrain height provider for elevation-aware pathfinding
+      // This improves query accuracy on multi-elevation terrain
+      this.recast.setTerrainHeightProvider((x, z) => {
+        return this.game.getTerrainHeightAt(x, z);
+      });
+
       // Register any pending decoration obstacles now that navmesh is ready
       this.onNavMeshReady();
     } else {
@@ -267,6 +274,11 @@ export class PathfindingSystem extends System {
     this.navMeshReady = success;
 
     if (success) {
+      // Wire up terrain height provider for elevation-aware pathfinding
+      this.recast.setTerrainHeightProvider((x, z) => {
+        return this.game.getTerrainHeightAt(x, z);
+      });
+
       // Register any pending decoration obstacles now that navmesh is ready
       this.onNavMeshReady();
     }
