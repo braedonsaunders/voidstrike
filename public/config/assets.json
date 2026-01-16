@@ -1,305 +1,674 @@
 {
   "$schema": "./assets.schema.json",
   "_comment": "VOIDSTRIKE Asset Configuration - Edit this file to customize models and animations",
-
   "units": {
     "fabricator": {
       "model": "/models/units/fabricator_LOD0.glb",
       "scale": 1.0,
-      "rotation": { "x": 0, "y": 0, "z": 0 },
+      "rotation": {
+        "x": 0,
+        "y": 0,
+        "z": 0
+      },
       "animationSpeed": 0.4,
       "animations": {
-        "idle": ["idle", "stand", "pose"],
-        "walk": ["walk", "run", "move", "locomotion"],
-        "attack": ["attack", "shoot", "fire", "combat"],
-        "death": ["death", "die", "dead"]
+        "idle": [
+          "idle",
+          "stand",
+          "pose"
+        ],
+        "walk": [
+          "walk",
+          "run",
+          "move",
+          "locomotion"
+        ],
+        "attack": [
+          "attack",
+          "shoot",
+          "fire",
+          "combat"
+        ],
+        "death": [
+          "death",
+          "die",
+          "dead"
+        ]
       }
     },
     "trooper": {
       "model": "/models/units/trooper_LOD0.glb",
-      "scale": 1.0,
-      "rotation": { "x": 0, "y": 0, "z": 0 },
+      "scale": 1.2,
+      "rotation": {
+        "x": 0,
+        "y": 0,
+        "z": 0
+      },
       "animations": {
-        "idle": ["idle", "stand", "pose"],
-        "walk": ["walk", "run", "move"],
-        "attack": ["attack", "shoot", "fire"],
-        "death": ["death", "die", "dead"]
+        "idle": [
+          "idle",
+          "stand",
+          "pose"
+        ],
+        "walk": [
+          "walk",
+          "run",
+          "move"
+        ],
+        "attack": [
+          "attack",
+          "shoot",
+          "fire"
+        ],
+        "death": [
+          "death",
+          "die",
+          "dead"
+        ]
       }
     },
     "breacher": {
       "model": "/models/units/breacher_LOD0.glb",
-      "scale": 1.0,
-      "rotation": { "x": 0, "y": 0, "z": 0 },
+      "scale": 1.5,
+      "rotation": {
+        "x": 0,
+        "y": 0,
+        "z": 0
+      },
       "animations": {
-        "idle": ["idle", "stand"],
-        "walk": ["walk", "run", "move"],
-        "attack": ["attack", "shoot", "fire", "grenade"],
-        "death": ["death", "die"]
+        "idle": [
+          "idle",
+          "stand"
+        ],
+        "walk": [
+          "walk",
+          "run",
+          "move"
+        ],
+        "attack": [
+          "attack",
+          "shoot",
+          "fire",
+          "grenade"
+        ],
+        "death": [
+          "death",
+          "die"
+        ]
       }
     },
     "vanguard": {
       "model": "/models/units/vanguard_LOD0.glb",
-      "scale": 1.0,
-      "rotation": { "x": 0, "y": 0, "z": 0 },
+      "scale": 1.3,
+      "rotation": {
+        "x": 0,
+        "y": 0,
+        "z": 0
+      },
       "animations": {
-        "idle": ["idle", "stand"],
-        "walk": ["walk", "run"],
-        "attack": ["attack", "melee", "strike"],
-        "death": ["death", "die"]
+        "idle": [
+          "idle",
+          "stand"
+        ],
+        "walk": [
+          "walk",
+          "run"
+        ],
+        "attack": [
+          "attack",
+          "melee",
+          "strike"
+        ],
+        "death": [
+          "death",
+          "die"
+        ]
       }
     },
     "operative": {
       "model": "/models/units/operative_LOD0.glb",
-      "scale": 1.0,
-      "rotation": { "x": 0, "y": 0, "z": 0 },
+      "scale": 1.3,
+      "rotation": {
+        "x": 0,
+        "y": 0,
+        "z": 0
+      },
       "animations": {
-        "idle": ["idle", "stealth_idle", "stand"],
-        "walk": ["walk", "sneak", "run"],
-        "attack": ["attack", "snipe", "shoot"],
-        "death": ["death", "die"]
+        "idle": [
+          "idle",
+          "stealth_idle",
+          "stand"
+        ],
+        "walk": [
+          "walk",
+          "sneak",
+          "run"
+        ],
+        "attack": [
+          "attack",
+          "snipe",
+          "shoot"
+        ],
+        "death": [
+          "death",
+          "die"
+        ]
       }
     },
     "scorcher": {
       "model": "/models/units/scorcher_LOD0.glb",
       "scale": 1.0,
-      "rotation": { "x": 0, "y": 0, "z": 0 },
+      "rotation": {
+        "x": 0,
+        "y": 0,
+        "z": 0
+      },
       "animations": {
-        "idle": ["idle", "stand"],
-        "walk": ["walk", "roll", "move"],
-        "attack": ["attack", "flame", "fire"],
-        "death": ["death", "explode"]
+        "idle": [
+          "idle",
+          "stand"
+        ],
+        "walk": [
+          "walk",
+          "roll",
+          "move"
+        ],
+        "attack": [
+          "attack",
+          "flame",
+          "fire"
+        ],
+        "death": [
+          "death",
+          "explode"
+        ]
       }
     },
     "devastator": {
       "model": "/models/units/devastator_LOD0.glb",
-      "scale": 1.0,
-      "rotation": { "x": 0, "y": 0, "z": 0 },
+      "scale": 1.8,
+      "rotation": {
+        "x": 0,
+        "y": 0,
+        "z": 0
+      },
       "animations": {
-        "idle": ["idle", "stand"],
-        "walk": ["walk", "drive", "move"],
-        "attack": ["attack", "cannon", "fire"],
-        "death": ["death", "explode"]
+        "idle": [
+          "idle",
+          "stand"
+        ],
+        "walk": [
+          "walk",
+          "drive",
+          "move"
+        ],
+        "attack": [
+          "attack",
+          "cannon",
+          "fire"
+        ],
+        "death": [
+          "death",
+          "explode"
+        ]
       }
     },
     "colossus": {
       "model": "/models/units/colossus_LOD0.glb",
-      "scale": 1.0,
-      "rotation": { "x": 0, "y": 0, "z": 0 },
+      "scale": 2.5,
+      "rotation": {
+        "x": 0,
+        "y": 0,
+        "z": 0
+      },
       "animations": {
-        "idle": ["idle", "stand"],
-        "walk": ["walk", "stomp", "move"],
-        "attack": ["attack", "crush", "laser"],
-        "death": ["death", "collapse"]
+        "idle": [
+          "idle",
+          "stand"
+        ],
+        "walk": [
+          "walk",
+          "stomp",
+          "move"
+        ],
+        "attack": [
+          "attack",
+          "crush",
+          "laser"
+        ],
+        "death": [
+          "death",
+          "collapse"
+        ]
       }
     },
     "valkyrie": {
       "model": "/models/units/valkyrie_LOD0.glb",
-      "scale": 1.0,
-      "rotation": { "x": 0, "y": 0, "z": 0 },
+      "scale": 1.8,
+      "rotation": {
+        "x": 0,
+        "y": 0,
+        "z": 0
+      },
       "airborneHeight": 6,
       "animations": {
-        "idle": ["idle", "hover", "stand"],
-        "walk": ["walk", "fly", "move", "flight"],
-        "attack": ["attack", "missiles", "fire"],
-        "death": ["death", "crash"]
+        "idle": [
+          "idle",
+          "hover",
+          "stand"
+        ],
+        "walk": [
+          "walk",
+          "fly",
+          "move",
+          "flight"
+        ],
+        "attack": [
+          "attack",
+          "missiles",
+          "fire"
+        ],
+        "death": [
+          "death",
+          "crash"
+        ]
       }
     },
     "lifter": {
       "model": "/models/units/lifter_LOD0.glb",
-      "scale": 1.0,
-      "rotation": { "x": 0, "y": 0, "z": 0 },
+      "scale": 1.5,
+      "rotation": {
+        "x": 0,
+        "y": 0,
+        "z": 0
+      },
       "airborneHeight": 5,
       "animations": {
-        "idle": ["idle", "hover"],
-        "walk": ["walk", "fly", "move"],
-        "attack": ["attack"],
-        "death": ["death", "crash"]
+        "idle": [
+          "idle",
+          "hover"
+        ],
+        "walk": [
+          "walk",
+          "fly",
+          "move"
+        ],
+        "attack": [
+          "attack"
+        ],
+        "death": [
+          "death",
+          "crash"
+        ]
       }
     },
     "specter": {
       "model": "/models/units/specter_LOD0.glb",
-      "scale": 1.0,
-      "rotation": { "x": 0, "y": 0, "z": 0 },
+      "scale": 1.5,
+      "rotation": {
+        "x": 0,
+        "y": 0,
+        "z": 0
+      },
       "airborneHeight": 7,
       "animations": {
-        "idle": ["idle", "hover", "cloak"],
-        "walk": ["walk", "fly", "move"],
-        "attack": ["attack", "strike", "bomb"],
-        "death": ["death", "explode"]
+        "idle": [
+          "idle",
+          "hover",
+          "cloak"
+        ],
+        "walk": [
+          "walk",
+          "fly",
+          "move"
+        ],
+        "attack": [
+          "attack",
+          "strike",
+          "bomb"
+        ],
+        "death": [
+          "death",
+          "explode"
+        ]
       }
     },
     "overseer": {
       "model": "/models/units/overseer_LOD0.glb",
-      "scale": 1.0,
-      "rotation": { "x": 0, "y": 0, "z": 0 },
+      "scale": 1.5,
+      "rotation": {
+        "x": 0,
+        "y": 0,
+        "z": 0
+      },
       "airborneHeight": 6,
       "animations": {
-        "idle": ["idle", "scan", "hover"],
-        "walk": ["walk", "fly", "patrol"],
-        "attack": ["attack"],
-        "death": ["death", "crash"]
+        "idle": [
+          "idle",
+          "scan",
+          "hover"
+        ],
+        "walk": [
+          "walk",
+          "fly",
+          "patrol"
+        ],
+        "attack": [
+          "attack"
+        ],
+        "death": [
+          "death",
+          "crash"
+        ]
       }
     },
     "dreadnought": {
       "model": "/models/units/dreadnought_LOD0.glb",
-      "scale": 1.0,
-      "rotation": { "x": 0, "y": 0, "z": 0 },
+      "scale": 15.0,
+      "rotation": {
+        "x": 0,
+        "y": 0,
+        "z": 0
+      },
       "airborneHeight": 15,
       "animations": {
-        "idle": ["idle", "hover", "cruise"],
-        "walk": ["walk", "fly", "move", "cruise"],
-        "attack": ["attack", "broadside", "nova_cannon"],
-        "death": ["death", "explode", "crash"]
+        "idle": [
+          "idle",
+          "hover",
+          "cruise"
+        ],
+        "walk": [
+          "walk",
+          "fly",
+          "move",
+          "cruise"
+        ],
+        "attack": [
+          "attack",
+          "broadside",
+          "nova_cannon"
+        ],
+        "death": [
+          "death",
+          "explode",
+          "crash"
+        ]
       }
     }
   },
-
   "buildings": {
     "headquarters": {
       "model": "/models/buildings/headquarters_LOD0.glb",
+      "scale": 4.5,
       "animations": {
-        "idle": ["idle", "active"],
-        "construct": ["construct", "build"],
-        "liftoff": ["liftoff", "takeoff"],
-        "land": ["land", "landing"]
+        "idle": [
+          "idle",
+          "active"
+        ],
+        "construct": [
+          "construct",
+          "build"
+        ],
+        "liftoff": [
+          "liftoff",
+          "takeoff"
+        ],
+        "land": [
+          "land",
+          "landing"
+        ]
       }
     },
     "orbital_station": {
       "model": "/models/buildings/orbital_station_LOD0.glb",
+      "scale": 4.5,
       "animations": {
-        "idle": ["idle", "orbit"],
-        "construct": ["construct"]
+        "idle": [
+          "idle",
+          "orbit"
+        ],
+        "construct": [
+          "construct"
+        ]
       }
     },
     "bastion": {
       "model": "/models/buildings/bastion_LOD0.glb",
+      "scale": 4.5,
       "animations": {
-        "idle": ["idle"],
-        "construct": ["construct"]
+        "idle": [
+          "idle"
+        ],
+        "construct": [
+          "construct"
+        ]
       }
     },
     "supply_cache": {
       "model": "/models/buildings/supply_cache_LOD0.glb",
+      "scale": 0.9,
       "animations": {
-        "idle": ["idle"],
-        "construct": ["construct"]
+        "idle": [
+          "idle"
+        ],
+        "construct": [
+          "construct"
+        ]
       }
     },
     "extractor": {
       "model": "/models/buildings/extractor_LOD0.glb",
+      "scale": 2.5,
       "animations": {
-        "idle": ["idle", "extract", "pump"],
-        "construct": ["construct"]
+        "idle": [
+          "idle",
+          "extract",
+          "pump"
+        ],
+        "construct": [
+          "construct"
+        ]
       }
     },
     "infantry_bay": {
       "model": "/models/buildings/infantry_bay_LOD0.glb",
+      "scale": 2.8,
       "animations": {
-        "idle": ["idle"],
-        "construct": ["construct"],
-        "train": ["train", "produce"]
+        "idle": [
+          "idle"
+        ],
+        "construct": [
+          "construct"
+        ],
+        "train": [
+          "train",
+          "produce"
+        ]
       }
     },
     "tech_center": {
       "model": "/models/buildings/tech_center_LOD0.glb",
+      "scale": 2.5,
       "animations": {
-        "idle": ["idle", "scan"],
-        "construct": ["construct"]
+        "idle": [
+          "idle",
+          "scan"
+        ],
+        "construct": [
+          "construct"
+        ]
       }
     },
     "garrison": {
       "model": "/models/buildings/garrison_LOD0.glb",
+      "scale": 2.0,
       "animations": {
-        "idle": ["idle"],
-        "construct": ["construct"]
+        "idle": [
+          "idle"
+        ],
+        "construct": [
+          "construct"
+        ]
       }
     },
     "forge": {
       "model": "/models/buildings/forge_LOD0.glb",
+      "scale": 4.2,
       "animations": {
-        "idle": ["idle", "forge", "work"],
-        "construct": ["construct"],
-        "produce": ["produce", "manufacture"]
+        "idle": [
+          "idle",
+          "forge",
+          "work"
+        ],
+        "construct": [
+          "construct"
+        ],
+        "produce": [
+          "produce",
+          "manufacture"
+        ]
       }
     },
     "arsenal": {
       "model": "/models/buildings/arsenal_LOD0.glb",
+      "scale": 2.8,
       "animations": {
-        "idle": ["idle"],
-        "construct": ["construct"]
+        "idle": [
+          "idle"
+        ],
+        "construct": [
+          "construct"
+        ]
       }
     },
     "hangar": {
       "model": "/models/buildings/hangar_LOD0.glb",
+      "scale": 2.2,
       "animations": {
-        "idle": ["idle"],
-        "construct": ["construct"],
-        "launch": ["launch", "deploy"]
+        "idle": [
+          "idle"
+        ],
+        "construct": [
+          "construct"
+        ],
+        "launch": [
+          "launch",
+          "deploy"
+        ]
       }
     },
     "power_core": {
       "model": "/models/buildings/power_core_LOD0.glb",
+      "scale": 3.0,
       "animations": {
-        "idle": ["idle", "pulse", "glow"],
-        "construct": ["construct"]
+        "idle": [
+          "idle",
+          "pulse",
+          "glow"
+        ],
+        "construct": [
+          "construct"
+        ]
       }
     },
     "ops_center": {
       "model": "/models/buildings/ops_center_LOD0.glb",
+      "scale": 2.8,
       "animations": {
-        "idle": ["idle", "active"],
-        "construct": ["construct"]
+        "idle": [
+          "idle",
+          "active"
+        ],
+        "construct": [
+          "construct"
+        ]
       }
     },
     "radar_array": {
       "model": "/models/buildings/radar_array_LOD0.glb",
+      "scale": 4.0,
       "animations": {
-        "idle": ["idle", "spin", "rotate"],
-        "construct": ["construct"]
+        "idle": [
+          "idle",
+          "spin",
+          "rotate"
+        ],
+        "construct": [
+          "construct"
+        ]
       }
     },
     "defense_turret": {
       "model": "/models/buildings/defense_turret_LOD0.glb",
+      "scale": 2.5,
       "animations": {
-        "idle": ["idle", "scan"],
-        "attack": ["attack", "fire", "shoot"],
-        "construct": ["construct"]
+        "idle": [
+          "idle",
+          "scan"
+        ],
+        "attack": [
+          "attack",
+          "fire",
+          "shoot"
+        ],
+        "construct": [
+          "construct"
+        ]
       }
     },
     "research_module": {
       "model": "/models/buildings/research_module_LOD0.glb",
+      "scale": 1.0,
       "animations": {
-        "idle": ["idle"],
-        "construct": ["construct"]
+        "idle": [
+          "idle"
+        ],
+        "construct": [
+          "construct"
+        ]
       }
     },
     "production_module": {
       "model": "/models/buildings/production_module_LOD0.glb",
+      "scale": 1.0,
       "animations": {
-        "idle": ["idle"],
-        "construct": ["construct"]
+        "idle": [
+          "idle"
+        ],
+        "construct": [
+          "construct"
+        ]
       }
     }
   },
-
   "resources": {
     "minerals": {
       "model": "/models/resources/minerals_LOD0.glb",
+      "scale": 2.0,
       "animations": {
-        "idle": ["idle", "glow", "shimmer"]
+        "idle": [
+          "idle",
+          "glow",
+          "shimmer"
+        ]
       }
     },
     "vespene": {
       "model": "/models/resources/vespene_LOD0.glb",
+      "scale": 2.0,
       "animations": {
-        "idle": ["idle", "vent", "smoke"]
+        "idle": [
+          "idle",
+          "vent",
+          "smoke"
+        ]
       }
     }
   },
-
   "decorations": {
     "alien_tower": {
       "model": "/models/decorations/alien_tower_LOD0.glb",
+      "scale": 14.0,
       "rendering": {
         "envMapIntensity": 0.4,
         "emissive": "#ff4400",
@@ -315,6 +684,7 @@
     },
     "rocks_large": {
       "model": "/models/decorations/rocks_large_LOD0.glb",
+      "scale": 3.0,
       "rendering": {
         "envMapIntensity": 0.25,
         "receiveShadow": true,
@@ -323,6 +693,7 @@
     },
     "rocks_small": {
       "model": "/models/decorations/rocks_small_LOD0.glb",
+      "scale": 2.0,
       "rendering": {
         "envMapIntensity": 0.25,
         "receiveShadow": true,
@@ -331,6 +702,7 @@
     },
     "rock_single": {
       "model": "/models/decorations/rock_single_LOD0.glb",
+      "scale": 2.5,
       "rendering": {
         "envMapIntensity": 0.25,
         "receiveShadow": true,
@@ -339,18 +711,21 @@
     },
     "tree_pine_tall": {
       "model": "/models/decorations/tree_pine_tall_LOD0.glb",
+      "scale": 14.0,
       "rendering": {
         "envMapIntensity": 0.15
       }
     },
     "tree_dead": {
       "model": "/models/decorations/tree_dead_LOD0.glb",
+      "scale": 9.0,
       "rendering": {
         "envMapIntensity": 0.1
       }
     },
     "tree_alien": {
       "model": "/models/decorations/tree_alien_LOD0.glb",
+      "scale": 11.0,
       "rendering": {
         "envMapIntensity": 0.25,
         "emissiveIntensity": 1.2,
@@ -360,12 +735,14 @@
     },
     "tree_palm": {
       "model": "/models/decorations/tree_palm_LOD0.glb",
+      "scale": 11.0,
       "rendering": {
         "envMapIntensity": 0.15
       }
     },
     "tree_mushroom": {
       "model": "/models/decorations/tree_mushroom_LOD0.glb",
+      "scale": 8.0,
       "rendering": {
         "envMapIntensity": 0.25,
         "emissiveIntensity": 1.5,
@@ -375,6 +752,7 @@
     },
     "crystal_formation": {
       "model": "/models/decorations/crystal_formation_LOD0.glb",
+      "scale": 4.0,
       "rendering": {
         "envMapIntensity": 0.8,
         "emissive": "#9966ff",
@@ -392,24 +770,26 @@
     },
     "shrub": {
       "model": "/models/decorations/shrub_LOD0.glb",
+      "scale": 1.5,
       "rendering": {
         "envMapIntensity": 0.1
       }
     },
     "debris": {
       "model": "/models/decorations/debris_LOD0.glb",
+      "scale": 1.5,
       "rendering": {
         "envMapIntensity": 0.2
       }
     },
     "ruined_wall": {
       "model": "/models/decorations/ruined_wall_LOD0.glb",
+      "scale": 5.0,
       "rendering": {
         "envMapIntensity": 0.2
       }
     }
   },
-
   "_documentation": {
     "animations": {
       "description": "Animation mappings let you define which animation clips in your GLB files correspond to game actions",
@@ -422,9 +802,9 @@
       "example": "Use 0.5 for half speed, 2.0 for double speed"
     },
     "scale": {
-      "description": "Scale multiplier for the model. Models use their original GLB size, then this multiplier is applied.",
-      "default": "1.0 (no scaling - uses original model size)",
-      "example": "Set scale: 3.0 to make the dreadnought 3x its original size. Set scale: 0.5 to make it half size."
+      "description": "Target size in game units. Models are normalized so their bounding box height equals this value.",
+      "example": "scale: 1.2 makes the model 1.2 game units tall. scale: 15 makes it 15 units tall (for big ships).",
+      "default": "1.0"
     },
     "airborneHeight": {
       "description": "For flying units only. Height in game units above the terrain surface. This controls how HIGH the unit flies, independent of its visual size.",

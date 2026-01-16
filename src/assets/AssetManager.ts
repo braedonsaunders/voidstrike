@@ -126,7 +126,8 @@ export interface RotationConfig {
 /** Single asset configuration */
 export interface AssetConfig {
   model: string;
-  scale?: number; // Scale multiplier for the model (default: 1.0)
+  height?: number; // Target height in game units - model is scaled to this height (optional)
+  scale?: number; // Additional scale multiplier applied after height normalization (default: 1.0)
   airborneHeight?: number; // For flying units: height above terrain in game units (default: 8)
   animationSpeed?: number;
   rotation?: RotationConfig; // Rotation offset in degrees on all axes
@@ -815,7 +816,7 @@ export class AssetManager {
   static async loadGLTF(
     url: string,
     assetId: string,
-    options: { scale?: number; isAnimated?: boolean } = {}
+    options: { targetHeight?: number; scale?: number; isAnimated?: boolean } = {}
   ): Promise<THREE.Object3D> {
     return new Promise((resolve, reject) => {
       gltfLoader.load(
@@ -855,8 +856,17 @@ export class AssetManager {
             assetAnimations.set(assetId, gltf.animations);
           }
 
-          // Apply scale multiplier and ground the model
-          applyScaleAndGround(model, assetId, options.scale ?? 1.0);
+          // Apply scale (normalize model to target size in game units)
+          // If targetHeight is provided, use it for normalization with scale as multiplier
+          // Otherwise, use scale directly as the target size
+          const targetHeight = options.targetHeight ?? options.scale;
+          if (targetHeight && targetHeight > 0) {
+            const scaleMultiplier = options.targetHeight ? (options.scale ?? 1.0) : 1.0;
+            normalizeModel(model, targetHeight, assetId, scaleMultiplier);
+          } else {
+            // Just ground the model without scaling
+            applyScaleAndGround(model, assetId, 1.0);
+          }
 
           // Apply model forward offset + per-asset rotation offset on all 3 axes
           // Base Y offset converts GLTF +Z forward to game's +X forward
@@ -885,7 +895,7 @@ export class AssetManager {
     url: string,
     assetId: string,
     lodLevel: 1 | 2,
-    options: { scale?: number } = {}
+    options: { targetHeight?: number; scale?: number } = {}
   ): Promise<THREE.Object3D> {
     return new Promise((resolve, reject) => {
       gltfLoader.load(
@@ -904,8 +914,14 @@ export class AssetManager {
             }
           });
 
-          // Apply scale multiplier and ground the model (same as LOD0)
-          applyScaleAndGround(model, `${assetId}_LOD${lodLevel}`, options.scale ?? 1.0);
+          // Apply scale (normalize model to target size) - same as LOD0
+          const targetHeight = options.targetHeight ?? options.scale;
+          if (targetHeight && targetHeight > 0) {
+            const scaleMultiplier = options.targetHeight ? (options.scale ?? 1.0) : 1.0;
+            normalizeModel(model, targetHeight, `${assetId}_LOD${lodLevel}`, scaleMultiplier);
+          } else {
+            applyScaleAndGround(model, `${assetId}_LOD${lodLevel}`, 1.0);
+          }
 
           // Apply model forward offset + per-asset rotation offset on all 3 axes (same as LOD0)
           const baseYOffset = REFERENCE_FRAME.MODEL_FORWARD_OFFSET;
@@ -1240,7 +1256,7 @@ export class AssetManager {
     await this.loadConfig();
 
     // Build model list from config or use hardcoded defaults
-    const customModels: Array<{ path: string; assetId: string; scale?: number }> = [];
+    const customModels: Array<{ path: string; assetId: string; targetHeight?: number; scale?: number }> = [];
 
     if (!assetsConfig) {
       debugAssets.warn('[AssetManager] assets.json not found, using procedural meshes only');
@@ -1254,6 +1270,7 @@ export class AssetManager {
       customModels.push({
         path: config.model,
         assetId,
+        targetHeight: config.height,
         scale: config.scale,
       });
       // Store rotation offset if specified (in degrees)
@@ -1275,6 +1292,7 @@ export class AssetManager {
       customModels.push({
         path: config.model,
         assetId,
+        targetHeight: config.height,
         scale: config.scale,
       });
       if (config.rotation !== undefined) {
@@ -1290,6 +1308,7 @@ export class AssetManager {
       customModels.push({
         path: config.model,
         assetId,
+        targetHeight: config.height,
         scale: config.scale,
       });
       if (config.rotation !== undefined) {
@@ -1305,6 +1324,7 @@ export class AssetManager {
       customModels.push({
         path: config.model,
         assetId,
+        targetHeight: config.height,
         scale: config.scale,
       });
       if (config.rotation !== undefined) {
@@ -1346,7 +1366,7 @@ export class AssetManager {
         }
 
         // Load LOD0 (highest detail) - this is the main model
-        await this.loadGLTF(lod0Path, model.assetId, { scale: model.scale });
+        await this.loadGLTF(lod0Path, model.assetId, { targetHeight: model.targetHeight, scale: model.scale });
         lodLevels.add(0);
         debugAssets.log(`[AssetManager] ✓ Loaded LOD0: ${model.assetId}`);
 
@@ -1354,7 +1374,7 @@ export class AssetManager {
         try {
           const lod1Response = await fetch(lod1Path, { method: 'HEAD' });
           if (lod1Response.ok) {
-            await this.loadGLTFForLOD(lod1Path, model.assetId, 1, { scale: model.scale });
+            await this.loadGLTFForLOD(lod1Path, model.assetId, 1, { targetHeight: model.targetHeight, scale: model.scale });
             lodLevels.add(1);
             debugAssets.log(`[AssetManager] ✓ Loaded LOD1: ${model.assetId}`);
           }
@@ -1366,7 +1386,7 @@ export class AssetManager {
         try {
           const lod2Response = await fetch(lod2Path, { method: 'HEAD' });
           if (lod2Response.ok) {
-            await this.loadGLTFForLOD(lod2Path, model.assetId, 2, { scale: model.scale });
+            await this.loadGLTFForLOD(lod2Path, model.assetId, 2, { targetHeight: model.targetHeight, scale: model.scale });
             lodLevels.add(2);
             debugAssets.log(`[AssetManager] ✓ Loaded LOD2: ${model.assetId}`);
           }
