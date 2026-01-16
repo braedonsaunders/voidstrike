@@ -27,9 +27,9 @@ import { gltfWorkerManager } from './GLTFWorkerManager';
 // Per threejs-builder skill: document these upfront to avoid reference-frame bugs
 export const REFERENCE_FRAME = {
   // World axes: +X right, +Y up, +Z toward camera (Three.js default)
-  // GLTF models from Blender face +Z by default (Blender's -Y forward becomes GLTF's +Z)
-  // Rotate by -π/2 to convert +Z forward to +X forward (matching atan2 convention where 0 = +X)
-  MODEL_FORWARD_OFFSET: -Math.PI / 2, // radians - rotate GLTF models from +Z to +X
+  // Game forward direction: +X (matching atan2 convention where angle 0 = +X)
+  // Models should face +X by default. If a model faces wrong direction,
+  // set per-asset rotation in assets.json (e.g., y: -90 for GLTF +Z forward models)
 
   // Unit scale: 1 unit = ~1 meter
   UNIT_HEIGHTS: {
@@ -939,15 +939,14 @@ export class AssetManager {
             applyScaleAndGround(model, assetId, 1.0);
           }
 
-          // Apply model forward offset + per-asset rotation offset on all 3 axes
-          // Base Y offset converts GLTF +Z forward to game's +X forward
-          // Per-asset offsets allow fixing models that face wrong direction or need tilting
-          const baseYOffset = REFERENCE_FRAME.MODEL_FORWARD_OFFSET;
+          // Apply per-asset rotation offset on all 3 axes
+          // Use to fix models that face wrong direction or need tilting
+          // (e.g., y: -90 for GLTF models that face +Z instead of game's +X forward)
           const assetRotation = assetRotationOffsets.get(assetId) ?? { x: 0, y: 0, z: 0 };
           const xOffsetRadians = (assetRotation.x ?? 0) * (Math.PI / 180);
           const yOffsetRadians = (assetRotation.y ?? 0) * (Math.PI / 180);
           const zOffsetRadians = (assetRotation.z ?? 0) * (Math.PI / 180);
-          model.rotation.set(xOffsetRadians, baseYOffset + yOffsetRadians, zOffsetRadians);
+          model.rotation.set(xOffsetRadians, yOffsetRadians, zOffsetRadians);
 
           customAssets.set(assetId, model);
           resolve(model);
@@ -1002,13 +1001,12 @@ export class AssetManager {
             applyScaleAndGround(model, `${assetId}_LOD${lodLevel}`, 1.0);
           }
 
-          // Apply model forward offset + per-asset rotation offset on all 3 axes (same as LOD0)
-          const baseYOffset = REFERENCE_FRAME.MODEL_FORWARD_OFFSET;
+          // Apply per-asset rotation offset on all 3 axes (same as LOD0)
           const assetRotation = assetRotationOffsets.get(assetId) ?? { x: 0, y: 0, z: 0 };
           const xOffsetRadians = (assetRotation.x ?? 0) * (Math.PI / 180);
           const yOffsetRadians = (assetRotation.y ?? 0) * (Math.PI / 180);
           const zOffsetRadians = (assetRotation.z ?? 0) * (Math.PI / 180);
-          model.rotation.set(xOffsetRadians, baseYOffset + yOffsetRadians, zOffsetRadians);
+          model.rotation.set(xOffsetRadians, yOffsetRadians, zOffsetRadians);
 
           // Store in the appropriate LOD map
           if (lodLevel === 1) {
@@ -1064,15 +1062,13 @@ export class AssetManager {
 
   /**
    * Get the rotation offset for a model in radians (all 3 axes)
-   * Combines base MODEL_FORWARD_OFFSET with per-asset rotation from config
-   * Returns { x, y, z } in radians
+   * Returns per-asset rotation from config, converted to radians
    */
   static getModelRotation(assetId: string): { x: number; y: number; z: number } {
-    const baseYOffset = REFERENCE_FRAME.MODEL_FORWARD_OFFSET;
     const assetRotation = assetRotationOffsets.get(assetId) ?? { x: 0, y: 0, z: 0 };
     return {
       x: (assetRotation.x ?? 0) * (Math.PI / 180),
-      y: baseYOffset + (assetRotation.y ?? 0) * (Math.PI / 180),
+      y: (assetRotation.y ?? 0) * (Math.PI / 180),
       z: (assetRotation.z ?? 0) * (Math.PI / 180),
     };
   }
@@ -1082,9 +1078,8 @@ export class AssetManager {
    * Used for instanced rendering where only Y rotation is applied at runtime
    */
   static getModelRotationY(assetId: string): number {
-    const baseYOffset = REFERENCE_FRAME.MODEL_FORWARD_OFFSET;
     const assetRotation = assetRotationOffsets.get(assetId) ?? { x: 0, y: 0, z: 0 };
-    return baseYOffset + (assetRotation.y ?? 0) * (Math.PI / 180);
+    return (assetRotation.y ?? 0) * (Math.PI / 180);
   }
 
   /**

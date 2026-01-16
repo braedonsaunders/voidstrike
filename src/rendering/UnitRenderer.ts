@@ -663,8 +663,8 @@ export class UnitRenderer {
         animUnit.mesh.visible = true;
 
         // Update position and rotation
-        // The inner model has MODEL_FORWARD_OFFSET (-π/2) baked in from AssetManager,
-        // which converts from GLTF's +Z forward to game's +X forward (matching atan2 convention).
+        // Model rotation offset (if any) is baked in from AssetManager during loading.
+        // Game forward is +X (matching atan2 convention where angle 0 = +X).
         animUnit.mesh.position.set(transform.x, unitHeight, transform.y);
         animUnit.mesh.rotation.y = transform.rotation;
 
