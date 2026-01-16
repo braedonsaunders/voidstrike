@@ -2036,23 +2036,23 @@ recast.setTerrainHeightProvider((x, z) => {
 // This improves accuracy when navmesh has multiple elevation layers
 ```
 
-**Navmesh Projection for Crowd Operations:**
+**Terrain Height for Crowd Operations:**
 
-DetourCrowd requires agents and targets to be ON the navmesh surface. Without projection,
-agents placed at y=0 on elevated terrain won't have valid polygon references, causing
-"unit won't move" bugs.
+Crowd operations use terrain height for the Y coordinate instead of y=0, ensuring
+agents are placed at the correct elevation on multi-level terrain.
 
 ```typescript
-// All crowd operations now project positions onto navmesh:
-// - addAgent() projects initial position
-// - setAgentTarget() projects target position
-// - updateAgentPosition() projects teleport position
+// Crowd operations use terrain height for Y, keep original X/Z:
+// - addAgent() places agent at terrain height
+// - setAgentTarget() uses terrain height at target
+// - updateAgentPosition() syncs at terrain height
 
-const projected = this.projectToNavMesh(x, y);
-const agentPos = projected
-  ? { x: projected.x, y: projected.y, z: projected.z }
-  : { x, y: this.getTerrainHeight(x, y), z: y };
+const terrainY = this.getTerrainHeight(x, y);
+agent.teleport({ x, y: terrainY, z: y });
 ```
+
+Note: We keep original X/Z coordinates to avoid position drift between the game's
+Transform component and the crowd agent position.
 
 ### PathfindingSystem (`PathfindingSystem.ts`)
 
