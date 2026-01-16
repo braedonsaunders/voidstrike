@@ -436,8 +436,8 @@
         "engineExhaust": {
           "type": "engine_exhaust",
           "attachments": [
-            { "x": -2.5, "y": 0, "z": -1.2, "scale": 1.5 },
-            { "x": -2.5, "y": 0, "z": 1.2, "scale": 1.5 }
+            { "x": -2.0, "y": 0, "z": -0.5, "scale": 1.5 },
+            { "x": -2.0, "y": 0, "z": 0.5, "scale": 1.5 }
           ],
           "emitRate": 12,
           "conditions": ["always"]
@@ -445,8 +445,8 @@
         "smokeTrail": {
           "type": "smoke_trail",
           "attachments": [
-            { "x": -3.0, "y": 0.2, "z": -1.2, "scale": 2.0 },
-            { "x": -3.0, "y": 0.2, "z": 1.2, "scale": 2.0 }
+            { "x": -2.5, "y": 0.2, "z": -0.5, "scale": 2.0 },
+            { "x": -2.5, "y": 0.2, "z": 0.5, "scale": 2.0 }
           ],
           "emitRate": 8,
           "conditions": ["moving"]
