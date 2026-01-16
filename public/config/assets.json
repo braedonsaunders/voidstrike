@@ -478,6 +478,30 @@
           "land",
           "landing"
         ]
+      },
+      "effects": {
+        "engineExhaust": {
+          "type": "engine_exhaust",
+          "attachments": [
+            { "x": 0, "y": -0.5, "z": 1.5, "scale": 2.0 },
+            { "x": 0, "y": -0.5, "z": -1.5, "scale": 2.0 },
+            { "x": 1.5, "y": -0.5, "z": 0, "scale": 2.0 },
+            { "x": -1.5, "y": -0.5, "z": 0, "scale": 2.0 }
+          ],
+          "emitRate": 15,
+          "conditions": ["flying", "lifting", "landing"]
+        },
+        "smokeTrail": {
+          "type": "smoke_trail",
+          "attachments": [
+            { "x": 0, "y": -0.5, "z": 1.5, "scale": 2.5 },
+            { "x": 0, "y": -0.5, "z": -1.5, "scale": 2.5 },
+            { "x": 1.5, "y": -0.5, "z": 0, "scale": 2.5 },
+            { "x": -1.5, "y": -0.5, "z": 0, "scale": 2.5 }
+          ],
+          "emitRate": 10,
+          "conditions": ["flying"]
+        }
       }
     },
     "orbital_station": {
@@ -492,6 +516,30 @@
         "construct": [
           "construct"
         ]
+      },
+      "effects": {
+        "engineExhaust": {
+          "type": "engine_exhaust",
+          "attachments": [
+            { "x": 0, "y": -0.5, "z": 1.5, "scale": 2.0 },
+            { "x": 0, "y": -0.5, "z": -1.5, "scale": 2.0 },
+            { "x": 1.5, "y": -0.5, "z": 0, "scale": 2.0 },
+            { "x": -1.5, "y": -0.5, "z": 0, "scale": 2.0 }
+          ],
+          "emitRate": 15,
+          "conditions": ["flying", "lifting", "landing"]
+        },
+        "smokeTrail": {
+          "type": "smoke_trail",
+          "attachments": [
+            { "x": 0, "y": -0.5, "z": 1.5, "scale": 2.5 },
+            { "x": 0, "y": -0.5, "z": -1.5, "scale": 2.5 },
+            { "x": 1.5, "y": -0.5, "z": 0, "scale": 2.5 },
+            { "x": -1.5, "y": -0.5, "z": 0, "scale": 2.5 }
+          ],
+          "emitRate": 10,
+          "conditions": ["flying"]
+        }
       }
     },
     "bastion": {
@@ -550,6 +598,28 @@
           "train",
           "produce"
         ]
+      },
+      "effects": {
+        "engineExhaust": {
+          "type": "engine_exhaust",
+          "attachments": [
+            { "x": 0, "y": -0.4, "z": 0.8, "scale": 1.4 },
+            { "x": 0, "y": -0.4, "z": -0.8, "scale": 1.4 },
+            { "x": 0.8, "y": -0.4, "z": 0, "scale": 1.4 },
+            { "x": -0.8, "y": -0.4, "z": 0, "scale": 1.4 }
+          ],
+          "emitRate": 12,
+          "conditions": ["flying", "lifting", "landing"]
+        },
+        "smokeTrail": {
+          "type": "smoke_trail",
+          "attachments": [
+            { "x": 0, "y": -0.4, "z": 0.8, "scale": 1.8 },
+            { "x": 0, "y": -0.4, "z": -0.8, "scale": 1.8 }
+          ],
+          "emitRate": 8,
+          "conditions": ["flying"]
+        }
       }
     },
     "tech_center": {
@@ -596,6 +666,28 @@
           "produce",
           "manufacture"
         ]
+      },
+      "effects": {
+        "engineExhaust": {
+          "type": "engine_exhaust",
+          "attachments": [
+            { "x": 0, "y": -0.4, "z": 1.0, "scale": 1.6 },
+            { "x": 0, "y": -0.4, "z": -1.0, "scale": 1.6 },
+            { "x": 1.0, "y": -0.4, "z": 0, "scale": 1.6 },
+            { "x": -1.0, "y": -0.4, "z": 0, "scale": 1.6 }
+          ],
+          "emitRate": 12,
+          "conditions": ["flying", "lifting", "landing"]
+        },
+        "smokeTrail": {
+          "type": "smoke_trail",
+          "attachments": [
+            { "x": 0, "y": -0.4, "z": 1.0, "scale": 2.0 },
+            { "x": 0, "y": -0.4, "z": -1.0, "scale": 2.0 }
+          ],
+          "emitRate": 8,
+          "conditions": ["flying"]
+        }
       }
     },
     "arsenal": {
@@ -626,6 +718,28 @@
           "launch",
           "deploy"
         ]
+      },
+      "effects": {
+        "engineExhaust": {
+          "type": "engine_exhaust",
+          "attachments": [
+            { "x": 0, "y": -0.4, "z": 0.7, "scale": 1.3 },
+            { "x": 0, "y": -0.4, "z": -0.7, "scale": 1.3 },
+            { "x": 0.7, "y": -0.4, "z": 0, "scale": 1.3 },
+            { "x": -0.7, "y": -0.4, "z": 0, "scale": 1.3 }
+          ],
+          "emitRate": 12,
+          "conditions": ["flying", "lifting", "landing"]
+        },
+        "smokeTrail": {
+          "type": "smoke_trail",
+          "attachments": [
+            { "x": 0, "y": -0.4, "z": 0.7, "scale": 1.6 },
+            { "x": 0, "y": -0.4, "z": -0.7, "scale": 1.6 }
+          ],
+          "emitRate": 8,
+          "conditions": ["flying"]
+        }
       }
     },
     "power_core": {
