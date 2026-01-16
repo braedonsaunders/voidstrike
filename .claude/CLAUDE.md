@@ -80,6 +80,33 @@ VOIDSTRIKE is a browser-based RTS game built with Next.js 14, Three.js, and Type
 - Interfaces: PascalCase with `I` prefix optional
 - Types: PascalCase
 
+### Comments
+Write professional, understated comments. Avoid marketing-speak and filler.
+
+**Never use:**
+- "World-class", "premium", "elegant", "robust", "comprehensive"
+- "Beautiful", "stunning", "cutting-edge", "state-of-the-art"
+- "This function does...", "This method handles..." (the code shows what it does)
+- Overly promotional file headers
+
+**Good comments explain WHY, not WHAT:**
+```ts
+// Bad: "World-Class Particle System for Premium Combat Effects"
+// Good: "GPU Particle System"
+
+// Bad: "// Get the player entity"
+// Good: (no comment needed - code is self-explanatory)
+
+// Bad: "// This elegant solution handles the edge case"
+// Good: "// Edge case: entity may be destroyed mid-frame"
+```
+
+**Acceptable comment styles:**
+- `// CRITICAL:` or `// IMPORTANT:` for non-obvious gotchas
+- `// Note:` for explaining unexpected behavior
+- `// TODO:` for future work (with context)
+- Brief JSDoc for public APIs
+
 ## Common Tasks
 
 ### Adding a New Unit Type
