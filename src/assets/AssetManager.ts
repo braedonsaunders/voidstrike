@@ -120,11 +120,16 @@ export interface RenderingHints {
 export interface AssetConfig {
   model: string;
   height: number;
+  scale?: number; // Additional scale multiplier after height normalization (default: 1.0)
+  airborneHeight?: number; // For flying units: height above terrain in game units (default: 8)
   animationSpeed?: number;
   rotation?: number; // Y-axis rotation offset in degrees
   animations?: AnimationMappingConfig;
   rendering?: RenderingHints; // Per-model rendering hints (decorations)
 }
+
+/** Default airborne height for flying units (units above terrain) */
+export const DEFAULT_AIRBORNE_HEIGHT = 8;
 
 /** Full assets.json structure */
 export interface AssetsJsonConfig {
@@ -176,6 +181,12 @@ const animationMappings = new Map<string, AnimationMappingConfig>();
 
 // Store per-asset rotation offsets in degrees (from config)
 const assetRotationOffsets = new Map<string, number>();
+
+// Store per-asset scale multipliers (from config)
+const assetScaleMultipliers = new Map<string, number>();
+
+// Store per-asset airborne heights for flying units (from config)
+const assetAirborneHeights = new Map<string, number>();
 
 // Store rendering hints for decorations (from config)
 const renderingHints = new Map<string, RenderingHints>();
@@ -333,8 +344,13 @@ function cleanupModelAttributes(model: THREE.Object3D, assetId: string): void {
  * Normalize a model to a target height and anchor to ground (minY = 0)
  * Per threejs-builder skill: use one anchor rule per asset class
  * Stores the Y offset for later use in instanced rendering
+ *
+ * @param root - The model's root Object3D
+ * @param targetHeight - Target height in game units (model will be scaled to this height)
+ * @param assetId - Optional asset ID for caching Y offset
+ * @param scaleMultiplier - Optional additional scale multiplier applied after height normalization
  */
-function normalizeModel(root: THREE.Object3D, targetHeight: number, assetId?: string): void {
+function normalizeModel(root: THREE.Object3D, targetHeight: number, assetId?: string, scaleMultiplier: number = 1.0): void {
   // Update world matrices first
   root.updateMatrixWorld(true);
 
@@ -352,11 +368,12 @@ function normalizeModel(root: THREE.Object3D, targetHeight: number, assetId?: st
   // Log model info for debugging
   debugAssets.log(`[AssetManager] Model bounds: size=(${size.x.toFixed(2)}, ${size.y.toFixed(2)}, ${size.z.toFixed(2)}), min.y=${box.min.y.toFixed(2)}`);
 
-  // Scale to target height if model has height
+  // Scale to target height if model has height, then apply scale multiplier
   if (size.y > 0.001) {
-    const scale = targetHeight / size.y;
-    root.scale.setScalar(scale);
-    debugAssets.log(`[AssetManager] Applied scale: ${scale.toFixed(4)} to achieve height ${targetHeight}`);
+    const heightScale = targetHeight / size.y;
+    const finalScale = heightScale * scaleMultiplier;
+    root.scale.setScalar(finalScale);
+    debugAssets.log(`[AssetManager] Applied scale: ${finalScale.toFixed(4)} (height: ${heightScale.toFixed(4)} × multiplier: ${scaleMultiplier.toFixed(2)}) to achieve height ${(targetHeight * scaleMultiplier).toFixed(2)}`);
   }
 
   // Update matrices after scaling
@@ -730,7 +747,7 @@ export class AssetManager {
   static async loadGLTF(
     url: string,
     assetId: string,
-    options: { targetHeight?: number; isAnimated?: boolean } = {}
+    options: { targetHeight?: number; scale?: number; isAnimated?: boolean } = {}
   ): Promise<THREE.Object3D> {
     return new Promise((resolve, reject) => {
       gltfLoader.load(
@@ -770,9 +787,10 @@ export class AssetManager {
             assetAnimations.set(assetId, gltf.animations);
           }
 
-          // Normalize to target height if specified
+          // Normalize to target height if specified, with optional scale multiplier
           if (options.targetHeight) {
-            normalizeModel(model, options.targetHeight, assetId);
+            const scaleMultiplier = options.scale ?? 1.0;
+            normalizeModel(model, options.targetHeight, assetId, scaleMultiplier);
           }
 
           // Apply model forward offset + per-asset rotation offset
@@ -800,7 +818,7 @@ export class AssetManager {
     url: string,
     assetId: string,
     lodLevel: 1 | 2,
-    options: { targetHeight?: number } = {}
+    options: { targetHeight?: number; scale?: number } = {}
   ): Promise<THREE.Object3D> {
     return new Promise((resolve, reject) => {
       gltfLoader.load(
@@ -819,9 +837,10 @@ export class AssetManager {
             }
           });
 
-          // Normalize to target height if specified
+          // Normalize to target height if specified, with optional scale multiplier
           if (options.targetHeight) {
-            normalizeModel(model, options.targetHeight, `${assetId}_LOD${lodLevel}`);
+            const scaleMultiplier = options.scale ?? 1.0;
+            normalizeModel(model, options.targetHeight, `${assetId}_LOD${lodLevel}`, scaleMultiplier);
           }
 
           // Apply model forward offset + per-asset rotation offset (same as LOD0)
@@ -892,6 +911,23 @@ export class AssetManager {
     const assetOffset = assetRotationOffsets.get(assetId) ?? 0;
     const assetOffsetRadians = assetOffset * (Math.PI / 180);
     return baseOffset + assetOffsetRadians;
+  }
+
+  /**
+   * Get the airborne height for a flying unit (height above terrain in game units).
+   * Returns the configured value from assets.json, or DEFAULT_AIRBORNE_HEIGHT (8) if not specified.
+   * This controls how HIGH a flying unit hovers, independent of its visual size.
+   */
+  static getAirborneHeight(assetId: string): number {
+    return assetAirborneHeights.get(assetId) ?? DEFAULT_AIRBORNE_HEIGHT;
+  }
+
+  /**
+   * Get the scale multiplier for an asset.
+   * Returns 1.0 if not configured. This is applied after height normalization.
+   */
+  static getScaleMultiplier(assetId: string): number {
+    return assetScaleMultipliers.get(assetId) ?? 1.0;
   }
 
   // ============================================================================
@@ -1124,7 +1160,7 @@ export class AssetManager {
     await this.loadConfig();
 
     // Build model list from config or use hardcoded defaults
-    const customModels: Array<{ path: string; assetId: string; targetHeight: number }> = [];
+    const customModels: Array<{ path: string; assetId: string; targetHeight: number; scale?: number }> = [];
 
     if (!assetsConfig) {
       debugAssets.warn('[AssetManager] assets.json not found, using procedural meshes only');
@@ -1139,10 +1175,19 @@ export class AssetManager {
         path: config.model,
         assetId,
         targetHeight: config.height,
+        scale: config.scale,
       });
       // Store rotation offset if specified (in degrees)
       if (config.rotation !== undefined) {
         assetRotationOffsets.set(assetId, config.rotation);
+      }
+      // Store scale multiplier if specified
+      if (config.scale !== undefined) {
+        assetScaleMultipliers.set(assetId, config.scale);
+      }
+      // Store airborne height if specified (for flying units)
+      if (config.airborneHeight !== undefined) {
+        assetAirborneHeights.set(assetId, config.airborneHeight);
       }
     }
 
@@ -1152,9 +1197,13 @@ export class AssetManager {
         path: config.model,
         assetId,
         targetHeight: config.height,
+        scale: config.scale,
       });
       if (config.rotation !== undefined) {
         assetRotationOffsets.set(assetId, config.rotation);
+      }
+      if (config.scale !== undefined) {
+        assetScaleMultipliers.set(assetId, config.scale);
       }
     }
 
@@ -1164,9 +1213,13 @@ export class AssetManager {
         path: config.model,
         assetId,
         targetHeight: config.height,
+        scale: config.scale,
       });
       if (config.rotation !== undefined) {
         assetRotationOffsets.set(assetId, config.rotation);
+      }
+      if (config.scale !== undefined) {
+        assetScaleMultipliers.set(assetId, config.scale);
       }
     }
 
@@ -1176,9 +1229,13 @@ export class AssetManager {
         path: config.model,
         assetId,
         targetHeight: config.height,
+        scale: config.scale,
       });
       if (config.rotation !== undefined) {
         assetRotationOffsets.set(assetId, config.rotation);
+      }
+      if (config.scale !== undefined) {
+        assetScaleMultipliers.set(assetId, config.scale);
       }
       // Store rendering hints for this decoration
       if (config.rendering) {
@@ -1213,7 +1270,7 @@ export class AssetManager {
         }
 
         // Load LOD0 (highest detail) - this is the main model
-        await this.loadGLTF(lod0Path, model.assetId, { targetHeight: model.targetHeight });
+        await this.loadGLTF(lod0Path, model.assetId, { targetHeight: model.targetHeight, scale: model.scale });
         lodLevels.add(0);
         debugAssets.log(`[AssetManager] ✓ Loaded LOD0: ${model.assetId}`);
 
@@ -1221,7 +1278,7 @@ export class AssetManager {
         try {
           const lod1Response = await fetch(lod1Path, { method: 'HEAD' });
           if (lod1Response.ok) {
-            await this.loadGLTFForLOD(lod1Path, model.assetId, 1, { targetHeight: model.targetHeight });
+            await this.loadGLTFForLOD(lod1Path, model.assetId, 1, { targetHeight: model.targetHeight, scale: model.scale });
             lodLevels.add(1);
             debugAssets.log(`[AssetManager] ✓ Loaded LOD1: ${model.assetId}`);
           }
@@ -1233,7 +1290,7 @@ export class AssetManager {
         try {
           const lod2Response = await fetch(lod2Path, { method: 'HEAD' });
           if (lod2Response.ok) {
-            await this.loadGLTFForLOD(lod2Path, model.assetId, 2, { targetHeight: model.targetHeight });
+            await this.loadGLTFForLOD(lod2Path, model.assetId, 2, { targetHeight: model.targetHeight, scale: model.scale });
             lodLevels.add(2);
             debugAssets.log(`[AssetManager] ✓ Loaded LOD2: ${model.assetId}`);
           }

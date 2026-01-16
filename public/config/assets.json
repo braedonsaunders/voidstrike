@@ -87,6 +87,7 @@
     "valkyrie": {
       "model": "/models/units/valkyrie_LOD0.glb",
       "height": 1.8,
+      "airborneHeight": 6,
       "animations": {
         "idle": ["idle", "hover", "stand"],
         "walk": ["walk", "fly", "move", "flight"],
@@ -97,6 +98,7 @@
     "lifter": {
       "model": "/models/units/lifter_LOD0.glb",
       "height": 1.5,
+      "airborneHeight": 5,
       "animations": {
         "idle": ["idle", "hover"],
         "walk": ["walk", "fly", "move"],
@@ -107,6 +109,7 @@
     "specter": {
       "model": "/models/units/specter_LOD0.glb",
       "height": 1.5,
+      "airborneHeight": 7,
       "animations": {
         "idle": ["idle", "hover", "cloak"],
         "walk": ["walk", "fly", "move"],
@@ -117,6 +120,7 @@
     "overseer": {
       "model": "/models/units/overseer_LOD0.glb",
       "height": 1.5,
+      "airborneHeight": 6,
       "animations": {
         "idle": ["idle", "scan", "hover"],
         "walk": ["walk", "fly", "patrol"],
@@ -127,6 +131,7 @@
     "dreadnought": {
       "model": "/models/units/dreadnought_LOD0.glb",
       "height": 45.0,
+      "airborneHeight": 15,
       "animations": {
         "idle": ["idle", "hover", "cruise"],
         "walk": ["walk", "fly", "move", "cruise"],
@@ -436,7 +441,18 @@
       "example": "Use 0.5 for half speed, 2.0 for double speed"
     },
     "height": {
-      "description": "Target height in game units. Models are automatically scaled to match this height."
+      "description": "Target height in game units. Models are automatically scaled so their bounding box height matches this value. This controls the visual SIZE of the model.",
+      "example": "A trooper with height: 1.2 will be scaled to be 1.2 game units tall."
+    },
+    "scale": {
+      "description": "Optional additional scale multiplier applied AFTER height normalization. Use for fine-tuning size.",
+      "default": "1.0 (no additional scaling)",
+      "example": "If a model looks too small after height normalization, use \"scale\": 1.2 to make it 20% larger."
+    },
+    "airborneHeight": {
+      "description": "For flying units only. Height in game units above the terrain surface. This controls how HIGH the unit flies, independent of its visual size.",
+      "default": "8 (standard flight altitude)",
+      "example": "A specter with airborneHeight: 7 flies at 7 units above terrain. A dreadnought with airborneHeight: 15 flies higher."
     },
     "rotation": {
       "description": "Y-axis rotation offset in degrees. Use to fix models facing wrong direction.",
