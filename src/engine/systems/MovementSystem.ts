@@ -1188,8 +1188,36 @@ export class MovementSystem extends System {
             unit.currentSpeed - unit.deceleration * dt
           );
         }
-        velocity.zero();
         this.removeAgentIfRegistered(entity.id);
+
+        // IDLE REPULSION: Apply separation forces to idle units so they spread out
+        // This was previously skipped, causing units to stack on top of each other
+        if (unit.state === 'idle' && !unit.isFlying) {
+          this.calculateSeparationForce(entity.id, transform, unit, tempSeparation, Infinity);
+          const sepMagSq = tempSeparation.x * tempSeparation.x + tempSeparation.y * tempSeparation.y;
+
+          // Only apply movement if there's meaningful separation force
+          if (sepMagSq > 0.001) {
+            // Scale by idle separation strength and apply as velocity
+            const idleRepelSpeed = Math.min(unit.maxSpeed * 0.5, Math.sqrt(sepMagSq) * SEPARATION_STRENGTH_IDLE);
+            const sepMag = Math.sqrt(sepMagSq);
+            velocity.x = (tempSeparation.x / sepMag) * idleRepelSpeed;
+            velocity.y = (tempSeparation.y / sepMag) * idleRepelSpeed;
+
+            // Apply movement
+            transform.translate(velocity.x * dt, velocity.y * dt);
+
+            // Snap position for determinism
+            transform.x = snapValue(transform.x, QUANT_POSITION);
+            transform.y = snapValue(transform.y, QUANT_POSITION);
+
+            // Resolve any building collisions from the push
+            this.resolveHardBuildingCollision(entity.id, transform, unit);
+            continue;
+          }
+        }
+
+        velocity.zero();
         continue;
       }
 
