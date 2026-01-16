@@ -944,9 +944,12 @@ export function WebGPUGameCanvas() {
               const entity = gameInstance.world.getEntity(unitId);
               if (entity) {
                 const transform = entity.get<Transform>('Transform');
+                const unit = entity.get<Unit>('Unit');
                 if (transform) {
                   const terrainHeight = environmentRef.current?.getHeightAt(transform.x, transform.y) ?? 0;
-                  selectionSystemRef.current.updateSelectionRing(unitId, transform.x, terrainHeight, transform.y);
+                  // Add airborne height for flying units so selection ring appears at unit height
+                  const airborneHeight = unit?.isFlying ? AssetManager.getAirborneHeight(unit.unitId) : 0;
+                  selectionSystemRef.current.updateSelectionRing(unitId, transform.x, terrainHeight + airborneHeight, transform.y);
                 }
               }
             }

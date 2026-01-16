@@ -335,7 +335,9 @@ export class VehicleEffectsSystem {
       const isIdle = unit.state === 'idle';
 
       // Calculate rotation matrix for transforming local directions
-      this._tempQuat.setFromAxisAngle(new THREE.Vector3(0, 1, 0), transform.rotation);
+      // Include model rotation offset (from assets.json) to properly orient attachments
+      const modelRotationY = this.assetManager.getModelRotationY(tracked.unitType);
+      this._tempQuat.setFromAxisAngle(new THREE.Vector3(0, 1, 0), transform.rotation + modelRotationY);
       this._rotationMatrix.makeRotationFromQuaternion(this._tempQuat);
 
       // Process each effect
