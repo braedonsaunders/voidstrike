@@ -92,7 +92,6 @@ voidstrike/
 │   │   ├── UnitRenderer.ts    # Unit rendering with player colors
 │   │   ├── BuildingRenderer.ts # Building mesh rendering
 │   │   ├── FogOfWar.ts        # Fog of war visibility system
-│   │   ├── EffectsRenderer.ts # Combat effects (projectiles, hits) [legacy]
 │   │   ├── RallyPointRenderer.ts # Building rally point visuals
 │   │   ├── CommandQueueRenderer.ts # Shift-click waypoint visualization
 │   │   ├── BuildingPlacementPreview.ts # SC2-style placement grid + ghost

@@ -28,7 +28,6 @@ import { EnvironmentManager } from '@/rendering/EnvironmentManager';
 import { UnitRenderer } from '@/rendering/UnitRenderer';
 import { BuildingRenderer } from '@/rendering/BuildingRenderer';
 import { ResourceRenderer } from '@/rendering/ResourceRenderer';
-import { EffectsRenderer } from '@/rendering/EffectsRenderer';
 import { BattleEffectsRenderer, AdvancedParticleSystem, ParticleType } from '@/rendering/effects';
 import { RallyPointRenderer } from '@/rendering/RallyPointRenderer';
 import { WatchTowerRenderer } from '@/rendering/WatchTowerRenderer';
@@ -98,7 +97,6 @@ export function WebGPUGameCanvas() {
   const buildingRendererRef = useRef<BuildingRenderer | null>(null);
   const resourceRendererRef = useRef<ResourceRenderer | null>(null);
   const fogOfWarRef = useRef<TSLFogOfWar | null>(null);
-  const effectsRendererRef = useRef<EffectsRenderer | null>(null);
   const battleEffectsRef = useRef<BattleEffectsRenderer | null>(null);
   const advancedParticlesRef = useRef<AdvancedParticleSystem | null>(null);
   const rallyPointRendererRef = useRef<RallyPointRenderer | null>(null);
@@ -476,8 +474,6 @@ export function WebGPUGameCanvas() {
         fogOfWarRef.current = fogOfWar;
       }
 
-      effectsRendererRef.current = new EffectsRenderer(scene, game.eventBus, (x, z) => terrain.getHeightAt(x, z));
-
       // World-class battle effects (projectile trails, explosions, decals)
       battleEffectsRef.current = new BattleEffectsRenderer(scene, game.eventBus, (x, z) => terrain.getHeightAt(x, z));
 
@@ -673,29 +669,21 @@ export function WebGPUGameCanvas() {
         }
       });
 
-      // PERF: Uses pooled Vector3 to avoid allocation per death
+      // Death explosion - uses AdvancedParticleSystem only (BattleEffectsRenderer handles death rings)
       game.eventBus.on('unit:died', (data: {
         position?: { x: number; y: number };
         isFlying?: boolean;
         unitType?: string; // Unit type ID for airborne height lookup
       }) => {
-        if (data.position) {
+        if (data.position && advancedParticlesRef.current) {
           const terrainHeight = terrain.getHeightAt(data.position.x, data.position.y);
           // Calculate flying offset using per-unit-type airborne heights from assets.json
           const airborneHeight = data.unitType ? AssetManager.getAirborneHeight(data.unitType) : DEFAULT_AIRBORNE_HEIGHT;
           const flyingOffset = data.isFlying ? airborneHeight : 0;
           const effectHeight = terrainHeight + 0.5 + flyingOffset;
 
-          if (effectEmitterRef.current) {
-            _deathPos.set(data.position.x, effectHeight, data.position.y);
-            effectEmitterRef.current.explosion(_deathPos, 1);
-          }
-
-          // Advanced particle explosion
-          if (advancedParticlesRef.current) {
-            _deathPos.set(data.position.x, effectHeight, data.position.y);
-            advancedParticlesRef.current.emitExplosion(_deathPos, 1.2);
-          }
+          _deathPos.set(data.position.x, effectHeight, data.position.y);
+          advancedParticlesRef.current.emitExplosion(_deathPos, 1.2);
         }
       });
 
@@ -810,27 +798,11 @@ export function WebGPUGameCanvas() {
           t = performance.now();
           fogOfWarRef.current?.update();
           fogTime = performance.now() - t;
-
-          t = performance.now();
-          effectsRendererRef.current?.update(deltaTime);
-          effectsTime = performance.now() - t;
-
-          // Log effects stats periodically
-          if (frameCount === 0 && effectsRendererRef.current) {
-            const stats = effectsRendererRef.current.getDebugStats();
-            debugPerformance.log(
-              `[EFFECTS] Attacks: ${stats.attackEffects}, Hits: ${stats.hitEffects}, ` +
-              `DmgNums: ${stats.damageNumbers}, Move: ${stats.moveIndicators}, ` +
-              `Pools: Proj(${stats.poolStats.projectile.inUse}/${stats.poolStats.projectile.available}) ` +
-              `Hit(${stats.poolStats.hitEffect.inUse}/${stats.poolStats.hitEffect.available})`
-            );
-          }
         } else {
           unitRendererRef.current?.update();
           buildingRendererRef.current?.update();
           resourceRendererRef.current?.update();
           fogOfWarRef.current?.update();
-          effectsRendererRef.current?.update(deltaTime);
         }
 
         rallyPointRendererRef.current?.update();
@@ -1172,7 +1144,6 @@ export function WebGPUGameCanvas() {
       renderContextRef.current?.renderer.dispose();
       environmentRef.current?.dispose();
       fogOfWarRef.current?.dispose();
-      effectsRendererRef.current?.dispose();
       battleEffectsRef.current?.dispose();
       advancedParticlesRef.current?.dispose();
       rallyPointRendererRef.current?.dispose();
