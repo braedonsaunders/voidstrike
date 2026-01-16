@@ -39,9 +39,15 @@ import {
 } from '@/store/multiplayerStore';
 
 // Multiplayer message types
+// Supports two formats for backwards compatibility:
+// 1. { type: 'command', payload: GameCommand } - Game.issueCommand format
+// 2. { type: 'command', commandType: string, data: any } - WebGPUGameCanvas format
 interface MultiplayerMessage {
   type: 'command' | 'quit';
-  payload: unknown;
+  payload?: unknown;
+  // Alternative format used by WebGPUGameCanvas
+  commandType?: string;
+  data?: unknown;
 }
 import { DesyncDetectionManager, DesyncDetectionConfig } from '../network/DesyncDetection';
 import { bootstrapDefinitions } from '../definitions';
@@ -205,10 +211,20 @@ export class Game {
     this.multiplayerMessageHandler = (data: unknown) => {
       const message = data as MultiplayerMessage;
       if (message.type === 'command') {
-        const command = message.payload as GameCommand;
-        console.log('[Game] Received remote command:', command.type, 'from', command.playerId);
-        // Process the remote command locally
-        this.processCommand(command);
+        // Handle two message formats:
+        // Format 1: { type: 'command', payload: GameCommand } - from Game.issueCommand
+        // Format 2: { type: 'command', commandType: string, data: any } - from WebGPUGameCanvas
+        if (message.payload) {
+          // Format 1: GameCommand in payload
+          const command = message.payload as GameCommand;
+          console.log('[Game] Received remote command (payload format):', command.type, 'from', command.playerId);
+          this.processCommand(command);
+        } else if (message.commandType && message.data) {
+          // Format 2: Event-based command from WebGPUGameCanvas
+          // Emit directly to event bus for systems to process
+          console.log('[Game] Received remote command (event format):', message.commandType);
+          this.eventBus.emit(message.commandType, message.data);
+        }
       } else if (message.type === 'quit') {
         console.log('[Game] Remote player quit');
         this.eventBus.emit('multiplayer:playerQuit', message.payload);
