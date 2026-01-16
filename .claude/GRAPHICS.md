@@ -171,6 +171,14 @@ This solves:
 - Do NOT use `colorToDirection()` before passing - returns Fn node without `.sample()`
 - SSR/SSGI handle decoding internally during ray marching
 
+**Volumetric Fog Input Type Fix (January 2026):**
+- Volumetric fog must handle both texture nodes AND Fn nodes as input
+- When SSGI/SSR are enabled (ultra preset), previous effects transform `outputNode` from a texture node to a Fn node via `.mul()` and `.add()` operations
+- Fn nodes do NOT have `.sample()` method - only texture nodes do
+- Fix: Use `vec3(sceneColorTexture)` instead of `sceneColorTexture.sample(fragUV)`
+- This works because TSL texture nodes auto-sample at current UV when used directly, and Fn nodes already represent the computed value
+- **Symptom if broken:** Dark screen + "THREE.TSL: TypeError: o.sample is not a function" error on ultra preset
+
 ### Effect Pipeline Order
 
 **Internal Pipeline (render resolution):**

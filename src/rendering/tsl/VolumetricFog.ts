@@ -95,7 +95,9 @@ export function createVolumetricFogNode(
   // Fog node using TSL Fn
   const volumetricFogNode = Fn(() => {
     const fragUV = uv();
-    const sceneColor = vec3(sceneColorTexture.sample(fragUV));
+    // Use sceneColorTexture directly - it works with both texture nodes (auto-sampled at current UV)
+    // and Fn nodes (already computed values from previous effect chain like SSGI/SSR)
+    const sceneColor = vec3(sceneColorTexture);
 
     // Early exit if disabled
     const enabled = uEnabled.greaterThan(0.5);
