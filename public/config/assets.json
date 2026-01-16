@@ -967,18 +967,7 @@
       "rotation": { "y": -90 },
       "rendering": {
         "exposure": 1.0,
-        "envMapIntensity": 0.8,
-        "emissive": "#9966ff",
-        "emissiveIntensity": 0.6,
-        "roughnessOverride": 0.1,
-        "metalnessOverride": 0.3,
-        "pulseSpeed": 0.4,
-        "pulseAmplitude": 0.15,
-        "attachLight": {
-          "color": "#9966ff",
-          "intensity": 0.8,
-          "distance": 8
-        }
+        "envMapIntensity": 0.1
       }
     },
     "shrub": {
