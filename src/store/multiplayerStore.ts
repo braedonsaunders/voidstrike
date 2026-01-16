@@ -145,11 +145,11 @@ export const useMultiplayerStore = create<MultiplayerState>((set, get) => ({
   setReconnectCallback: (callback) => set({ reconnectCallback: callback }),
 
   setDataChannel: (channel) => {
-    const state = get();
-
     // Set up message handler on the channel
+    // IMPORTANT: Use addEventListener instead of onmessage assignment to avoid
+    // overwriting handlers set by other systems (like useLobby for lobby messages)
     if (channel) {
-      channel.onmessage = (event) => {
+      const messageHandler = (event: MessageEvent) => {
         try {
           const data = JSON.parse(event.data);
           const handlers = get().messageHandlers;
@@ -161,7 +161,7 @@ export const useMultiplayerStore = create<MultiplayerState>((set, get) => ({
         }
       };
 
-      channel.onclose = () => {
+      const closeHandler = () => {
         console.log('[Multiplayer] Data channel closed');
         const currentState = get();
 
@@ -183,9 +183,14 @@ export const useMultiplayerStore = create<MultiplayerState>((set, get) => ({
         }
       };
 
-      channel.onerror = (e) => {
+      const errorHandler = (e: Event) => {
         console.error('[Multiplayer] Data channel error:', e);
       };
+
+      // Use addEventListener to not overwrite other handlers
+      channel.addEventListener('message', messageHandler);
+      channel.addEventListener('close', closeHandler);
+      channel.addEventListener('error', errorHandler);
 
       // Connection restored - flush any buffered commands
       set({

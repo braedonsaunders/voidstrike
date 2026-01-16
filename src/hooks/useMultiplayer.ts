@@ -31,6 +31,7 @@ const EVENT_KINDS = {
   LOBBY_ACCEPT: 30432,  // Host accepts guest
   WEBRTC_OFFER: 30433,  // WebRTC offer
   WEBRTC_ANSWER: 30434, // WebRTC answer
+  LOBBY_REJECT: 30435,  // Host rejects guest (no slots available)
 };
 
 // Data channel message types
@@ -95,6 +96,8 @@ interface UseLobbyReturn {
   sendLobbyState: (state: LobbyState) => void;
   sendGameStart: () => void;
   onGameStart: (callback: () => void) => void;
+  // Reconnection
+  reconnect: () => Promise<boolean>;
 }
 
 function generateLobbyCode(): string {
@@ -152,6 +155,10 @@ export function useLobby(
   const [hostConnection, setHostConnection] = useState<RTCDataChannel | null>(null);
   const [isHost, setIsHost] = useState(true);
   const [receivedLobbyState, setReceivedLobbyState] = useState<LobbyState | null>(null);
+
+  // Store joined lobby info for reconnection
+  const joinedCodeRef = useRef<string | null>(null);
+  const joinedNameRef = useRef<string | null>(null);
   const [mySlotId, setMySlotId] = useState<string | null>(null);
 
   const poolRef = useRef<SimplePool | null>(null);
@@ -265,7 +272,18 @@ export function useLobby(
               // Try to fill an open slot
               const slotId = onGuestJoin?.(guestName);
               if (!slotId) {
-                console.log('[Lobby] No open slots available');
+                console.log('[Lobby] No open slots available, sending rejection');
+                // Send rejection to guest
+                const rejectEvent = finalizeEvent({
+                  kind: EVENT_KINDS.LOBBY_REJECT,
+                  created_at: Math.floor(Date.now() / 1000),
+                  tags: [
+                    ['p', guestPubkey],
+                    ['t', code],
+                  ],
+                  content: JSON.stringify({ reason: 'No open slots available' }),
+                }, secretKey);
+                await publishToRelays(pool, relays, rejectEvent);
                 return;
               }
 
@@ -374,9 +392,17 @@ export function useLobby(
 
     return () => {
       mounted = false;
-      subRef.current?.close();
-      poolRef.current?.close(relaysRef.current);
-      guests.forEach(g => g.pc.close());
+      try {
+        subRef.current?.close();
+      } catch { /* ignore close errors */ }
+      try {
+        poolRef.current?.close(relaysRef.current);
+      } catch { /* ignore close errors */ }
+      guests.forEach(g => {
+        try {
+          g.pc.close();
+        } catch { /* ignore close errors */ }
+      });
     };
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -387,6 +413,10 @@ export function useLobby(
       setError(null);
 
       const normalizedCode = code.toUpperCase().trim();
+
+      // Store for reconnection
+      joinedCodeRef.current = normalizedCode;
+      joinedNameRef.current = playerName;
 
       // Use existing pool or create new one
       const pool = poolRef.current || new SimplePool();
@@ -418,6 +448,7 @@ export function useLobby(
         onevent: async (event: NostrEvent) => {
           if (handled) return;
           handled = true;
+          rejectSub.close(); // Close reject subscription since we got accepted
 
           console.log('[Lobby] Received offer from host:', event.id.slice(0, 8) + '...');
           try {
@@ -478,7 +509,7 @@ export function useLobby(
           } catch (e) {
             console.error('[Lobby] Failed to process offer:', e);
             setError('Failed to connect to host');
-            setStatus('error');
+            setStatus('hosting'); // Go back to hosting so user can try again
           }
         },
         oneose: () => {
@@ -486,7 +517,33 @@ export function useLobby(
         },
       });
 
-      // Small delay to ensure subscription is active before publishing join request
+      // Also subscribe for rejection events (no slots available)
+      const rejectFilter: Filter = {
+        kinds: [EVENT_KINDS.LOBBY_REJECT],
+        '#p': [pubkey],
+        '#t': [normalizedCode],
+        since: Math.floor(Date.now() / 1000) - 300,
+      };
+
+      const rejectSub = pool.subscribeMany(relays, rejectFilter, {
+        onevent: (event: NostrEvent) => {
+          if (handled) return;
+          handled = true;
+          offerSub.close(); // Close offer subscription
+
+          console.log('[Lobby] Received rejection from host');
+          try {
+            const data = JSON.parse(event.content);
+            setError(data.reason || 'Lobby is full');
+            setStatus('hosting'); // Go back to hosting so user can try again
+          } catch {
+            setError('Lobby is full - no open slots available');
+            setStatus('hosting');
+          }
+        },
+      });
+
+      // Small delay to ensure subscriptions are active before publishing join request
       await new Promise(resolve => setTimeout(resolve, 500));
 
       // Publish join request with 't' tag for lobby code
@@ -503,6 +560,7 @@ export function useLobby(
       const published = await publishToRelays(pool, relays, joinEvent);
       if (!published) {
         offerSub.close();
+        rejectSub.close();
         throw new Error('Failed to publish join request to any relay');
       }
       console.log('[Lobby] Sent join request for code:', normalizedCode);
@@ -511,15 +569,16 @@ export function useLobby(
       setTimeout(() => {
         if (!handled) {
           offerSub.close();
+          rejectSub.close();
           setError('No lobby found with that code');
-          setStatus('error');
+          setStatus('hosting'); // Go back to hosting so user can try again
         }
       }, 30000);
 
     } catch (e) {
       console.error('[Lobby] Join error:', e);
       setError(e instanceof Error ? e.message : 'Failed to join lobby');
-      setStatus('error');
+      setStatus('hosting'); // Go back to hosting so user can try again
     }
   }, []);
 
@@ -597,6 +656,41 @@ export function useLobby(
     gameStartCallbackRef.current = callback;
   }, []);
 
+  // Reconnection function for guests
+  const reconnect = useCallback(async (): Promise<boolean> => {
+    // Only guests need to reconnect - hosts wait for guests to reconnect to them
+    if (isHost) {
+      console.log('[Lobby] Host does not need to reconnect');
+      return true;
+    }
+
+    const code = joinedCodeRef.current;
+    const name = joinedNameRef.current;
+
+    if (!code || !name) {
+      console.error('[Lobby] Cannot reconnect - no stored lobby info');
+      return false;
+    }
+
+    console.log('[Lobby] Attempting to reconnect to lobby:', code);
+
+    try {
+      // Close existing peer connection
+      pcRef.current?.close();
+      pcRef.current = null;
+      setHostConnection(null);
+
+      // Re-join the lobby
+      await joinLobby(code, name);
+
+      // Check if we successfully connected
+      return status === 'connected';
+    } catch (e) {
+      console.error('[Lobby] Reconnection failed:', e);
+      return false;
+    }
+  }, [isHost, joinLobby, status]);
+
   return {
     status,
     lobbyCode,
@@ -612,6 +706,7 @@ export function useLobby(
     sendLobbyState,
     sendGameStart,
     onGameStart,
+    reconnect,
   };
 }
 
