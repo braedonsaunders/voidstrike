@@ -1292,14 +1292,18 @@ export class AssetManager {
    * Returns immediately if already complete.
    */
   static async waitForPreloading(): Promise<void> {
+    console.log('[AssetManager] waitForPreloading() called, complete:', preloadingComplete, 'started:', preloadingStarted);
     if (preloadingComplete) {
+      console.log('[AssetManager] waitForPreloading() returning early - already complete, unitEffectsConfigs size:', unitEffectsConfigs.size);
       return;
     }
 
     if (!preloadingStarted) {
+      console.log('[AssetManager] waitForPreloading() starting preloading...');
       return this.startPreloading();
     }
 
+    console.log('[AssetManager] waitForPreloading() waiting for existing promise...');
     return preloadingPromise || Promise.resolve();
   }
 
@@ -1376,25 +1380,32 @@ export class AssetManager {
    * This should be called before loadCustomModels().
    */
   static async loadConfig(): Promise<AssetsJsonConfig | null> {
+    console.log('[AssetManager] loadConfig() called, assetsConfig =', !!assetsConfig);
     if (assetsConfig) {
+      console.log('[AssetManager] loadConfig() returning early - already loaded');
       return assetsConfig; // Already loaded
     }
 
     try {
+      console.log('[AssetManager] loadConfig() fetching /config/assets.json...');
       const response = await fetch('/config/assets.json');
       if (!response.ok) {
+        console.warn('[AssetManager] Could not load assets.json, status:', response.status);
         debugAssets.warn('[AssetManager] Could not load assets.json, using defaults');
         return null;
       }
 
       assetsConfig = await response.json();
-      console.log('[AssetManager] Loaded asset configuration from assets.json');
+      console.log('[AssetManager] Loaded asset configuration from assets.json, units:', Object.keys(assetsConfig?.units || {}));
       debugAssets.log('[AssetManager] Loaded asset configuration from assets.json');
 
       // Extract animation speeds and mappings from config
       if (assetsConfig) {
         // Process units
-        for (const [assetId, config] of Object.entries(assetsConfig.units)) {
+        const unitEntries = Object.entries(assetsConfig.units);
+        console.log(`[AssetManager] Processing ${unitEntries.length} units from config`);
+        for (const [assetId, config] of unitEntries) {
+          console.log(`[AssetManager] Processing unit: ${assetId}, has effects:`, !!config.effects);
           if (config.animationSpeed !== undefined) {
             animationSpeedMultipliers.set(assetId, config.animationSpeed);
           }
@@ -1425,6 +1436,8 @@ export class AssetManager {
             animationMappings.set(assetId, config.animations);
           }
         }
+
+        console.log(`[AssetManager] loadConfig() complete. unitEffectsConfigs size: ${unitEffectsConfigs.size}`);
       }
 
       return assetsConfig;

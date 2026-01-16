@@ -182,6 +182,11 @@ export class VehicleEffectsSystem {
     particleSystem: AdvancedParticleSystem,
     assetManager: typeof AssetManager
   ) {
+    console.log('[VehicleEffects] Constructor called, checking unitEffectsConfigs...');
+    // Check effect config state on construction
+    const testConfig = assetManager.getUnitEffects('dreadnought');
+    console.log('[VehicleEffects] Initial dreadnought config test:', testConfig);
+
     this.game = game;
     this.particleSystem = particleSystem;
     this.assetManager = assetManager;
