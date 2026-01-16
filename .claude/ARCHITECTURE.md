@@ -2106,6 +2106,67 @@ const BUILDING_AVOIDANCE_SOFT_MARGIN = 1.5; // Early detection zone
 const BUILDING_PREDICTION_LOOKAHEAD = 0.5;  // Seconds ahead
 ```
 
+### SC2-Style Formation & Clumping System
+
+The MovementSystem implements StarCraft 2-style unit movement behavior:
+
+#### Magic Box Detection
+
+When issuing move commands to multiple units, the system calculates a bounding box around selected units:
+
+- **Target INSIDE box** → **Clump Mode**: All units move to the exact same point. Separation forces spread them naturally on arrival.
+- **Target OUTSIDE box** → **Preserve Spacing Mode**: Each unit maintains its relative offset from group center.
+
+```typescript
+// Magic box check determines clump vs formation behavior
+const box = this.calculateBoundingBox(entityIds);
+const isInsideBox = this.isTargetInsideMagicBox(targetX, targetY, box);
+
+if (isInsideBox) {
+  // All units move to same point - clump
+  this.moveUnitsToSamePoint(entityIds, targetX, targetY);
+} else {
+  // Preserve relative offsets - formation-like
+  this.moveUnitsWithRelativeOffsets(entityIds, targetX, targetY, box);
+}
+```
+
+#### State-Dependent Separation
+
+Separation force strength varies based on unit state:
+
+| State | Strength | Behavior |
+|-------|----------|----------|
+| **Moving** | 1.2 (weak) | Allow clumping for faster group movement |
+| **Idle** | 2.5 (strong) | Spread out for anti-splash |
+| **Arriving** | 3.0 (strongest) | Natural spreading at destination |
+| **Gathering** | 0 | Workers can overlap at resources |
+
+#### Flocking Behaviors
+
+Three steering forces work together (SC2-style):
+
+1. **Separation** - Prevents overlapping, strongest force
+2. **Cohesion** (0.1 weight) - Weak force keeping group together
+3. **Alignment** (0.3 weight) - Matches group heading direction
+
+#### Explicit Formation Commands
+
+Players can issue explicit formation commands using the data-driven formation system:
+
+```typescript
+// Event: command:formation
+{
+  entityIds: number[];      // Units to form up
+  formationId: string;      // e.g., 'wedge', 'box', 'line'
+  targetPosition: { x, y }; // Formation center
+}
+```
+
+Available formations: `box`, `line`, `column`, `wedge`, `scatter`, `circle`, `siege_line`, `air_cover`
+
+Units are automatically sorted (melee front, ranged back, support center) based on formation preferences.
+
 ### Terrain Integration (`Terrain.ts`)
 
 The terrain generates walkable geometry with cliff walls for navmesh creation:
