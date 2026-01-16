@@ -704,14 +704,60 @@
 
 ---
 
-## Future: Multiplayer (Not in SC2 Parity Scope)
+## Future: Multiplayer - P2P Architecture (NEW DIRECTION)
 
-- [ ] Authentication (Supabase)
-- [ ] Lobby system
-- [ ] Lockstep networking
-- [ ] Matchmaking
-- [ ] Ranked system
-- [ ] Leaderboards
+> See **P2P_ARCHITECTURE.md** for comprehensive design document
+
+### Current Multiplayer Status (Supabase-Based)
+
+**✅ Infrastructure Complete:**
+- [x] WebRTC P2P full mesh topology (`PeerConnection.ts`, `PeerManager.ts`)
+- [x] Supabase signaling for WebRTC handshake (`SignalingService.ts`)
+- [x] Lobby CRUD with Supabase Postgres (`lobbyService.ts`)
+- [x] Game message protocol (16 types defined in `types.ts`)
+- [x] Checksum system for desync detection (`ChecksumSystem.ts`)
+- [x] Desync debugging infrastructure (`DesyncDetection.ts`)
+- [x] Latency measurement and connection quality
+
+**⚠️ Game Integration Incomplete:**
+- [ ] Wire lockstep tick synchronization to game loop
+- [ ] Broadcast player commands over network
+- [ ] Input buffering / lag compensation
+- [ ] Reconnection recovery logic
+
+### NEW: Serverless P2P Architecture
+
+**Goal**: Download game → Play with anyone → No servers needed
+
+**Phase 1: Connection Codes (Priority: HIGH)**
+- [ ] SDP offer compression and encoding
+- [ ] Connection code generation (VOID-XXXX-XXXX format)
+- [ ] QR code generation for mobile
+- [ ] Code entry UI and validation
+- [ ] Direct P2P connection via codes
+
+**Phase 2: Local Network Discovery (Priority: MEDIUM)**
+- [ ] BroadcastChannel for same-browser play
+- [ ] mDNS/Bonjour for LAN discovery (Electron/Tauri)
+- [ ] Local games browser UI
+
+**Phase 3: DHT Global Discovery (Priority: MEDIUM)**
+- [ ] WebTorrent DHT client integration
+- [ ] Game announcement to DHT
+- [ ] DHT-based game browser
+- [ ] Matchmaking via DHT swarms
+- [ ] Skill-based DHT topics
+
+**Phase 4: Peer Relay Network (Priority: LOW)**
+- [ ] Relay message protocol
+- [ ] Relay path discovery
+- [ ] End-to-end encryption for relayed data
+
+**Phase 5: Decentralized Identity (Priority: LOW)**
+- [ ] Ed25519 key generation
+- [ ] Signed match results
+- [ ] Local stats storage
+- [ ] Peer stat verification
 
 ---
 
@@ -744,4 +790,5 @@
 | Audio | Framework only | Needs actual assets |
 | Synthesis Faction | 0% | Not started |
 | Swarm Faction | 0% | Not started |
-| Multiplayer | 0% | Excluded from scope |
+| Multiplayer | 60% | Infra complete, game integration needed |
+| P2P Architecture | 0% | Design complete, implementation pending |
