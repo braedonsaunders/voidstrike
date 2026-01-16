@@ -34,6 +34,7 @@ export interface Editor3DCanvasProps {
     grid: boolean;
     categories: Record<string, boolean>;
   };
+  edgeScrollEnabled: boolean;
   onCellsUpdateBatched: (updates: Array<{ x: number; y: number; cell: Partial<EditorCell> }>) => void;
   onStartBatch: () => void;
   onCommitBatch: () => void;
@@ -47,6 +48,7 @@ export function Editor3DCanvas({
   config,
   state,
   visibility,
+  edgeScrollEnabled,
   onCellsUpdateBatched,
   onStartBatch,
   onCommitBatch,
@@ -345,6 +347,13 @@ export function Editor3DCanvas({
     return () => window.removeEventListener('resize', handleResize);
   }, []);
 
+  // Control edge scrolling based on prop
+  useEffect(() => {
+    if (rtsCameraRef.current) {
+      rtsCameraRef.current.setEdgeScrollEnabled(edgeScrollEnabled);
+    }
+  }, [edgeScrollEnabled]);
+
   // Raycast to terrain - optimized to reuse objects
   const raycastToTerrain = useCallback((clientX: number, clientY: number): THREE.Vector3 | null => {
     if (!containerRef.current || !rtsCameraRef.current || !terrainRef.current) return null;
@@ -384,6 +393,9 @@ export function Editor3DCanvas({
   // Paint at position - optimized to skip redundant updates
   const paintAt = useCallback((worldPos: THREE.Vector3, force: boolean = false) => {
     if (!mapData || !terrainBrushRef.current) return;
+
+    // Ensure brush always has the latest mapData
+    terrainBrushRef.current.setMapData(mapData);
 
     const gridPos = worldToGrid(worldPos);
     if (!gridPos) return;

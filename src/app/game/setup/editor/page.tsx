@@ -4,7 +4,8 @@ import { Suspense, useState, useEffect, useCallback } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { EditorCore, VOIDSTRIKE_EDITOR_CONFIG } from '@/editor';
 import { voidstrikeDataProvider } from '@/editor/providers/voidstrike';
-import type { EditorMapData, MapListItem } from '@/editor';
+import type { EditorMapData } from '@/editor';
+import type { MapListItem } from '@/editor/core/EditorHeader';
 
 /**
  * Map Editor Page
@@ -39,11 +40,6 @@ function EditorPageContent() {
     loadMapList();
   }, []);
 
-  const handleSave = (data: EditorMapData) => {
-    console.log('Map saved:', data);
-    // TODO: Persist to storage or state
-  };
-
   const handleCancel = () => {
     // Navigate back to home if came from home page (new=true), otherwise to setup
     if (isNewMap) {
@@ -53,13 +49,13 @@ function EditorPageContent() {
     }
   };
 
-  const handlePlay = (data: EditorMapData) => {
-    // Convert to game format and store in state
+  const handlePreview = (data: EditorMapData) => {
+    // Convert to game format and store in state for preview
     const gameData = voidstrikeDataProvider.exportForGame?.(data);
-    console.log('Playing with edited map:', gameData);
+    console.log('Preview map:', gameData);
 
-    // TODO: Store the edited map data in gameSetupStore
-    // For now, just navigate back to setup
+    // TODO: Store the map data and start preview game
+    // For now, just navigate to game setup
     router.push('/game/setup');
   };
 
@@ -82,9 +78,8 @@ function EditorPageContent() {
       config={VOIDSTRIKE_EDITOR_CONFIG}
       dataProvider={voidstrikeDataProvider}
       mapId={currentMapId}
-      onSave={handleSave}
       onCancel={handleCancel}
-      onPlay={handlePlay}
+      onPlay={handlePreview}
       mapList={mapList}
       onLoadMap={handleLoadMap}
       onNewMap={handleNewMap}
