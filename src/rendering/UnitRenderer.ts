@@ -24,6 +24,7 @@ interface InstancedUnitGroup {
   dummy: THREE.Object3D; // Reusable for matrix calculations
   yOffset: number; // Y offset to apply when positioning (accounts for model origin)
   rotationOffset: number; // Y rotation offset to apply (accounts for model facing direction)
+  modelScale: number; // Scale factor from model normalization (applied to instances)
   lastActiveFrame: number; // Frame number when this group was last used (for cleanup)
 }
 
@@ -424,11 +425,12 @@ export class UnitRenderer {
       baseMesh.updateMatrixWorld(true);
 
       // Find the actual mesh geometry and material from the group
-      // Also track the mesh's world position/rotation to use as offsets
+      // Also track the mesh's world position/rotation/scale to use as offsets
       let geometry: THREE.BufferGeometry | null = null;
       let material: THREE.Material | THREE.Material[] | null = null;
       let meshWorldY = 0;
       let meshWorldRotationY = 0;
+      let meshWorldScale = 1;
 
       baseMesh.traverse((child) => {
         if (child instanceof THREE.Mesh && !geometry) {
@@ -443,6 +445,10 @@ export class UnitRenderer {
           child.getWorldQuaternion(worldQuat);
           const worldEuler = new THREE.Euler().setFromQuaternion(worldQuat);
           meshWorldRotationY = worldEuler.y;
+          // Get the mesh's world scale - also lost when extracting geometry
+          const worldScale = new THREE.Vector3();
+          child.getWorldScale(worldScale);
+          meshWorldScale = worldScale.x; // Assume uniform scale
         }
       });
 
@@ -480,10 +486,11 @@ export class UnitRenderer {
         dummy: new THREE.Object3D(),
         yOffset: meshWorldY,
         rotationOffset: meshWorldRotationY,
+        modelScale: meshWorldScale,
         lastActiveFrame: this.frameCount,
       };
 
-      debugAssets.log(`[UnitRenderer] Created instanced group for ${unitType} LOD${lodLevel}: yOffset=${meshWorldY.toFixed(3)}, rotationOffset=${meshWorldRotationY.toFixed(3)}`);
+      debugAssets.log(`[UnitRenderer] Created instanced group for ${unitType} LOD${lodLevel}: yOffset=${meshWorldY.toFixed(3)}, rotationOffset=${meshWorldRotationY.toFixed(3)}, scale=${meshWorldScale.toFixed(3)}`);
 
       this.instancedGroups.set(key, group);
     }
@@ -707,12 +714,14 @@ export class UnitRenderer {
           const instanceIndex = group.mesh.count;
           group.entityIds[instanceIndex] = entity.id;
 
-          // Set instance transform - apply offsets to account for model origin position/rotation
+          // Set instance transform - apply offsets to account for model origin position/rotation/scale
           // rotationOffset is the model's baked-in rotation (typically -π/2 for GLTF models).
           // Adding it converts from game coordinates (+X forward) to Three.js coordinates.
+          // modelScale is the normalization scale from AssetManager (to achieve target height).
           this.tempPosition.set(transform.x, unitHeight + group.yOffset, transform.y);
           this.tempEuler.set(0, transform.rotation + group.rotationOffset, 0);
           this.tempQuaternion.setFromEuler(this.tempEuler);
+          this.tempScale.setScalar(group.modelScale);
           this.tempMatrix.compose(this.tempPosition, this.tempQuaternion, this.tempScale);
           group.mesh.setMatrixAt(instanceIndex, this.tempMatrix);
 
