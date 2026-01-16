@@ -40,6 +40,23 @@ const uniform = (TSL as any).uniform;
 // Track which meshes have velocity setup
 const velocitySetupMeshes = new WeakSet<THREE.InstancedMesh>();
 
+// WebGPU default limit is 8 vertex buffers, but we request 16 in WebGPURenderer.ts
+// Most modern GPUs support 16+ vertex buffers (Vulkan/D3D12/Metal backends)
+// If the device doesn't support higher limits, velocity setup will gracefully skip
+let maxVertexBuffers = 16; // Updated by setMaxVertexBuffers() from render context
+
+// Velocity tracking requires 8 attributes (4 for current matrix, 4 for previous)
+const VELOCITY_ATTRIBUTE_COUNT = 8;
+
+/**
+ * Set the maximum vertex buffer limit from the render context.
+ * Call this after WebGPU renderer initialization.
+ */
+export function setMaxVertexBuffers(limit: number): void {
+  maxVertexBuffers = limit;
+  console.log(`[InstancedVelocity] Max vertex buffers set to ${limit}`);
+}
+
 // Camera matrix uniforms (shared across all meshes)
 // IMPORTANT: We use our own uniforms instead of Three.js's built-in cameraProjectionMatrix/cameraViewMatrix
 // because TRAA applies sub-pixel jitter to those during render. We need UNJITTERED matrices for velocity.
@@ -55,10 +72,30 @@ const uPrevViewMatrix = uniform(new THREE.Matrix4());
 /**
  * Set up velocity attributes for an InstancedMesh.
  * Creates both current and previous instance matrix attributes.
+ *
+ * NOTE: WebGPU has a limit of 8 vertex buffers. This function adds 8 attributes
+ * for velocity tracking. If the geometry already has attributes that would push
+ * the total over 8, velocity setup is skipped to avoid render pipeline errors.
+ *
+ * @returns true if velocity was set up, false if skipped due to attribute limit
  */
-export function setupInstancedVelocity(mesh: THREE.InstancedMesh): void {
+export function setupInstancedVelocity(mesh: THREE.InstancedMesh): boolean {
   if (velocitySetupMeshes.has(mesh)) {
-    return;
+    return true;
+  }
+
+  // Check if adding velocity attributes would exceed WebGPU's 8 vertex buffer limit
+  const existingAttributeCount = Object.keys(mesh.geometry.attributes).length;
+  const totalAfterVelocity = existingAttributeCount + VELOCITY_ATTRIBUTE_COUNT;
+
+  if (totalAfterVelocity > maxVertexBuffers) {
+    // Log warning - this mesh won't have per-instance velocity (TAA will use depth reprojection only)
+    console.warn(
+      `[InstancedVelocity] Skipping velocity setup for mesh with ${existingAttributeCount} attributes. ` +
+      `Adding ${VELOCITY_ATTRIBUTE_COUNT} velocity attrs would exceed device limit of ${maxVertexBuffers}. ` +
+      `Existing attrs: [${Object.keys(mesh.geometry.attributes).join(', ')}]`
+    );
+    return false;
   }
 
   const count = mesh.instanceMatrix.count;
@@ -98,6 +135,7 @@ export function setupInstancedVelocity(mesh: THREE.InstancedMesh): void {
   mesh.geometry.setAttribute('prevInstanceMatrix3', prevAttr3);
 
   velocitySetupMeshes.add(mesh);
+  return true;
 }
 
 /**

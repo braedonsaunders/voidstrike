@@ -303,31 +303,56 @@ Project damage marks, tire tracks, blast craters onto any surface.
 
 ## Technical Notes
 
-### WebGPU Vertex Buffer Limit (Max 8)
+### WebGPU Device Limits (Custom Backend)
 
-**Problem:** WebGPU has a hard limit of 8 vertex buffers per render pipeline. Models from AI generators (Tripo AI, Meshy) often exceed this with extra attributes.
+**Problem:** WebGPU's default limit is 8 vertex buffers, but TAA velocity tracking requires 8 attributes plus mesh attributes (3-5), totaling 11-13.
 
-**Error Message:**
+**Solution:** Custom WebGPU backend with higher limits (January 2025)
+
+`WebGPURenderer.ts` now requests optimized device limits from the GPU adapter:
+
+```typescript
+const DESIRED_LIMITS = {
+  maxVertexBuffers: 16,         // For TAA velocity (8) + mesh attrs (3-5)
+  maxTextureDimension2D: 16384, // High-res shadow maps and terrain
+  maxStorageBufferBindingSize: 1GB, // Large GPU particle systems
+  maxBufferSize: 1GB,           // Massive instance buffers
+};
 ```
-THREE.Vertex buffer count (11) exceeds the maximum number of vertex buffers (8).
-[Invalid RenderPipeline "renderPipeline_tripo_mat_xxx"] is invalid.
-```
 
-**Solution:** Runtime vertex attribute cleanup in `AssetManager.ts` (January 2025)
+**How it works:**
+1. Query the GPU adapter's maximum supported limits
+2. Request the minimum of desired and adapter-supported limits
+3. Create a custom `WebGPUBackend` with `requiredLimits`
+4. Pass backend to `WebGPURenderer`
+5. Verify actual device limits after initialization
 
-The `cleanupModelAttributes()` function automatically removes excess vertex attributes when loading GLB models:
-- Keeps essential attributes: `position`, `normal`, `uv`, `tangent`, `color`
-- For skinned meshes also keeps: `skinIndex`, `skinWeight`
-- Removes: extra UV layers (`uv1`, `uv2`, `texcoord_1`), extra color layers, morph targets, custom attributes
+Most modern GPUs (Vulkan/D3D12/Metal backends) support 16+ vertex buffers.
+
+**Fallback Behavior:**
+- If limits can't be raised, `setupInstancedVelocity()` checks attribute count
+- Velocity setup skipped if it would exceed device limit
+- TAA uses depth-only reprojection (slight ghosting on fast objects)
+- Console warns which meshes lack velocity tracking
+
+### Runtime Vertex Attribute Cleanup
+
+**Additional Safety:** `AssetManager.ts` also cleans excess attributes from AI-generated models:
+
+The `cleanupModelAttributes()` function removes:
+- Extra UV layers (`uv1`, `uv2`, `texcoord_1`)
+- Extra color layers (`color_0`, `_color_1`)
+- Morph targets
+- Custom attributes starting with `_`
 
 **Standard Attribute Budget:**
 | Type | Attributes | Count |
 |------|------------|-------|
 | Static Mesh | position, normal, uv, tangent, color | 5 |
 | Skinned Mesh | position, normal, uv, tangent, skinIndex, skinWeight | 6 |
-| Static + Color | position, normal, uv, tangent, color | 5 |
+| With Velocity | + currInstanceMatrix0-3, prevInstanceMatrix0-3 | +8 |
 
-**Note:** The Blender script (`docs/blender_auto_retopo.py`) should also clean up attributes during export. Runtime cleanup is a safety net for models that weren't processed or have attributes added by Three.js at load time.
+**Total with velocity:** 13-14 attributes (within 16 limit)
 
 ### TSL Type Definitions
 Some TSL exports aren't in `@types/three` yet. Workaround:
