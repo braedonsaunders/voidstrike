@@ -188,6 +188,9 @@ const assetScaleMultipliers = new Map<string, number>();
 // Store per-asset airborne heights for flying units (from config)
 const assetAirborneHeights = new Map<string, number>();
 
+// Store per-asset model heights (from config) - the visual size of the model
+const assetModelHeights = new Map<string, number>();
+
 // Store rendering hints for decorations (from config)
 const renderingHints = new Map<string, RenderingHints>();
 
@@ -923,6 +926,15 @@ export class AssetManager {
   }
 
   /**
+   * Get the model height for an asset (visual size in game units).
+   * Returns the configured value from assets.json, or 1.5 as default.
+   * This is the height the model is scaled to, useful for positioning overlays.
+   */
+  static getModelHeight(assetId: string): number {
+    return assetModelHeights.get(assetId) ?? 1.5;
+  }
+
+  /**
    * Get the scale multiplier for an asset.
    * Returns 1.0 if not configured. This is applied after height normalization.
    */
@@ -1189,6 +1201,8 @@ export class AssetManager {
       if (config.airborneHeight !== undefined) {
         assetAirborneHeights.set(assetId, config.airborneHeight);
       }
+      // Store model height for overlay positioning
+      assetModelHeights.set(assetId, config.height);
     }
 
     // Add buildings from config
@@ -1205,6 +1219,8 @@ export class AssetManager {
       if (config.scale !== undefined) {
         assetScaleMultipliers.set(assetId, config.scale);
       }
+      // Store model height for overlay positioning
+      assetModelHeights.set(assetId, config.height);
     }
 
     // Add resources from config
