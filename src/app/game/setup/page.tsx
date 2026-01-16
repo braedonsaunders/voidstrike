@@ -400,6 +400,7 @@ export default function GameSetupPage() {
     sendLobbyState,
     sendGameStart,
     onGameStart,
+    connectedGuestCount,
   } = useLobby(handleGuestJoin, handleGuestLeave);
 
   // Multiplayer store for game
@@ -413,6 +414,8 @@ export default function GameSetupPage() {
   // Check if we have any open slots
   const hasOpenSlot = playerSlots.some(s => s.type === 'open');
   const hasGuests = guests.length > 0;
+  // Count guest slots (human players that are guests, not the host)
+  const guestSlotCount = playerSlots.filter(s => s.isGuest).length;
 
   // When connected as guest, set up multiplayer store
   useEffect(() => {
@@ -524,11 +527,28 @@ export default function GameSetupPage() {
     }
   };
 
+  // State for start game errors
+  const [startGameError, setStartGameError] = useState<string | null>(null);
+
   const handleStartGame = () => {
+    // If we have guest slots, make sure they're actually connected
+    if (guestSlotCount > 0 && connectedGuestCount < guestSlotCount) {
+      setStartGameError(`Waiting for ${guestSlotCount - connectedGuestCount} player(s) to connect...`);
+      return;
+    }
+
     // Reset any existing game instance to ensure fresh multiplayer state
     Game.resetInstance();
+
     // Send game start signal to all connected guests
-    sendGameStart();
+    if (guestSlotCount > 0) {
+      const notified = sendGameStart();
+      if (notified < guestSlotCount) {
+        setStartGameError(`Failed to notify all players. Only ${notified}/${guestSlotCount} connected.`);
+        return;
+      }
+    }
+
     startGame();
     router.push('/game');
   };
@@ -881,7 +901,7 @@ export default function GameSetupPage() {
               <div className="flex-shrink-0">
                 <button
                   onClick={handleStartGame}
-                  disabled={activePlayerCount < 2}
+                  disabled={activePlayerCount < 2 || (guestSlotCount > 0 && connectedGuestCount < guestSlotCount)}
                   className="w-full game-button-primary text-base px-6 py-2 font-display disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   Start Game
@@ -890,6 +910,16 @@ export default function GameSetupPage() {
                 {activePlayerCount < 2 && (
                   <p className="text-center text-red-400 text-[10px] mt-1">
                     At least 2 players required
+                  </p>
+                )}
+                {activePlayerCount >= 2 && guestSlotCount > 0 && connectedGuestCount < guestSlotCount && (
+                  <p className="text-center text-yellow-400 text-[10px] mt-1">
+                    Waiting for {guestSlotCount - connectedGuestCount} guest(s) to connect...
+                  </p>
+                )}
+                {startGameError && (
+                  <p className="text-center text-red-400 text-[10px] mt-1">
+                    {startGameError}
                   </p>
                 )}
               </div>

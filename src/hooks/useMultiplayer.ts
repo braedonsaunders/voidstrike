@@ -94,8 +94,10 @@ interface UseLobbyReturn {
   kickGuest: (pubkey: string) => void;
   // Messaging
   sendLobbyState: (state: LobbyState) => void;
-  sendGameStart: () => void;
+  sendGameStart: () => number; // Returns count of guests notified
   onGameStart: (callback: () => void) => void;
+  // Connection status
+  connectedGuestCount: number;
   // Reconnection
   reconnect: () => Promise<boolean>;
 }
@@ -632,11 +634,17 @@ export function useLobby(
   }, [isHost, guests]);
 
   // Send game start signal to all guests (host only)
-  const sendGameStart = useCallback(() => {
-    if (!isHost) return;
+  // Returns number of guests successfully notified
+  const sendGameStart = useCallback((): number => {
+    if (!isHost) return 0;
 
     const connectedGuests = guests.filter(g => g.dataChannel?.readyState === 'open');
     console.log('[Lobby] Sending game start to', connectedGuests.length, 'guests');
+
+    if (connectedGuests.length === 0) {
+      console.warn('[Lobby] No connected guests to send game start to!');
+      return 0;
+    }
 
     const message: LobbyMessage = {
       type: 'game_start',
@@ -644,13 +652,17 @@ export function useLobby(
       timestamp: Date.now(),
     };
 
+    let successCount = 0;
     connectedGuests.forEach(guest => {
       try {
         guest.dataChannel!.send(JSON.stringify(message));
+        successCount++;
       } catch (e) {
         console.error('[Lobby] Failed to send game start to guest:', e);
       }
     });
+
+    return successCount;
   }, [isHost, guests]);
 
   // Register callback for game start (guest only)
@@ -693,6 +705,9 @@ export function useLobby(
     }
   }, [isHost, joinLobby, status]);
 
+  // Count guests with open data channels
+  const connectedGuestCount = guests.filter(g => g.dataChannel?.readyState === 'open').length;
+
   return {
     status,
     lobbyCode,
@@ -709,6 +724,7 @@ export function useLobby(
     sendGameStart,
     onGameStart,
     reconnect,
+    connectedGuestCount,
   };
 }
 

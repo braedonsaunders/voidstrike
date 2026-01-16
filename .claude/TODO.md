@@ -231,6 +231,8 @@
 ### AI & Combat Fixes
 - [x] **Idle unit auto-attack responsiveness** - Idle units now immediately attack enemies within attack range (no throttle delay). Uses dedicated `findImmediateAttackTarget()` for instant response when enemies enter attack range, while throttled sight-range search remains for longer-range target acquisition.
 - [x] **VisionSystem multi-player support** - Changed from hardcoded ['player1', 'ai'] to dynamic player registration, enabling proper 4-AI spectator games.
+- [x] **Building fog of war fix** - VisionSystem was using hardcoded sightRange=9 for all buildings instead of each building's configured sightRange from its definition. Now correctly uses building.sightRange.
+- [x] **HQ building sight range tripled** - headquarters, orbital_station, and bastion now have sightRange=33 (up from 11) for larger vision radius around main bases.
 - [x] **AI attack persistence** - AI now stays in attacking state until all enemies are eliminated, preventing premature retreat when taking losses.
 - [x] **AI proximity-based targeting** - Fixed FFA games where all AI targeted the same enemy. Now each AI targets their CLOSEST enemy (with priority for nearly-defeated enemies with ≤2 buildings).
 - [x] **Units clipping into buildings** - Fixed bug where attacking units would get stuck inside target buildings. Added escape logic to force movement out before stopping to attack.
@@ -726,6 +728,7 @@
 - [x] Checksum system for desync detection (`ChecksumSystem.ts`)
 - [x] Desync debugging infrastructure (`DesyncDetection.ts`)
 - [x] Latency measurement and connection quality
+- [x] **Guest stays in lobby fix** - Start button now validates WebRTC connection state before allowing game start. sendGameStart() returns count of guests notified for feedback.
 
 **⚠️ Game Integration Incomplete:**
 - [ ] Wire lockstep tick synchronization to game loop
