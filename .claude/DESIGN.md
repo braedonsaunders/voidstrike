@@ -235,6 +235,48 @@ Units use **magic box detection** for natural movement behavior:
 - **Circle** - Defensive circle with support center
 - **Siege Line** - Infantry front, artillery back
 
+### Movement Speeds & Acceleration (SC2-Style)
+
+Units have differentiated movement speeds and acceleration rates based on their StarCraft 2 equivalents:
+
+**Unit Speed Reference (Dominion Faction):**
+
+| Unit | SC2 Equivalent | Speed | Acceleration | Feel |
+|------|----------------|-------|--------------|------|
+| **Fabricator** | SCV | 4.0 | 50 | Quick worker |
+| **Trooper** | Marine | 3.15 | 1000 | Instant/snappy |
+| **Breacher** | Marauder | 3.15 | 1000 | Instant/snappy |
+| **Vanguard** | Reaper | 5.25 | 1000 | Fast & snappy |
+| **Operative** | Ghost | 3.94 | 1000 | Instant/snappy |
+| **Scorcher** | Hellion | 5.95 | 800 | Fast vehicle |
+| **Devastator** | Siege Tank | 3.15 | 800 | Heavy vehicle |
+| **Colossus** | Thor | 2.62 | 600 | Slow heavy mech |
+| **Lifter** | Medivac | 3.5 | 3.15 | Floaty transport |
+| **Valkyrie** | Viking | 3.85/3.15 | 4.55 | Responsive fighter |
+| **Specter** | Banshee | 3.85 | 4.55 | Strike craft |
+| **Dreadnought** | Battlecruiser | 2.62 | 1.4 | Sluggish capital |
+| **Overseer** | Raven | 4.13 | 2.975 | Support craft |
+
+**Acceleration System:**
+
+SC2-style acceleration creates distinct unit "feels":
+
+| Unit Type | Acceleration | Deceleration | Behavior |
+|-----------|--------------|--------------|----------|
+| **Ground Combat** | 800-1000 | 2x accel | Near-instant response |
+| **Ground Vehicles** | 600-800 | 2x accel | Slightly visible ramp-up |
+| **Workers** | 50 | 100 | Visible but quick |
+| **Light Air** | 4-5 | 2x accel | Responsive but floaty |
+| **Medium Air** | 2.5-3.5 | 2x accel | Standard air unit |
+| **Heavy Air** | 1.4-1.5 | 2x accel | Sluggish capital ship |
+
+**Key Mechanics:**
+- Ground combat units have effectively instant acceleration (1000) for responsive micro
+- Air units have gradual acceleration (1-5) creating a "floaty" feel
+- Deceleration is typically 2x acceleration for snappy stops
+- Workers have visible acceleration for better game feel
+- Heavy units (Colossus, Dreadnought) feel appropriately weighty
+
 ## Map Design
 
 ### Map Design Principles

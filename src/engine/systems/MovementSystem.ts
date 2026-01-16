@@ -1182,9 +1182,10 @@ export class MovementSystem extends System {
 
       if (!canMove) {
         if (unit.currentSpeed > 0) {
+          // Use unit's deceleration rate for stopping (SC2-style snappy stops)
           unit.currentSpeed = Math.max(
             0,
-            unit.currentSpeed - unit.acceleration * dt * 2
+            unit.currentSpeed - unit.deceleration * dt
           );
         }
         velocity.zero();
@@ -1289,9 +1290,10 @@ export class MovementSystem extends System {
                 targetTransform.y - transform.y,
                 targetTransform.x - transform.x
               );
+              // Use unit's deceleration rate for stopping when in attack range
               unit.currentSpeed = Math.max(
                 0,
-                unit.currentSpeed - unit.acceleration * dt * 2
+                unit.currentSpeed - unit.deceleration * dt
               );
               velocity.zero();
               continue;
@@ -1319,9 +1321,10 @@ export class MovementSystem extends System {
             );
           }
         } else {
+          // Use unit's deceleration rate for stopping when no target
           unit.currentSpeed = Math.max(
             0,
-            unit.currentSpeed - unit.acceleration * dt * 2
+            unit.currentSpeed - unit.deceleration * dt
           );
         }
         velocity.zero();
@@ -1397,15 +1400,18 @@ export class MovementSystem extends System {
         targetSpeed = Math.max(targetSpeed, unit.maxSpeed * terrainSpeedMod * 0.3);
       }
 
+      // SC2-style acceleration: use per-unit rates for smooth/snappy feel
+      // Ground units have instant acceleration (1000), air units have gradual (1-5)
       if (unit.currentSpeed < targetSpeed) {
         unit.currentSpeed = Math.min(
           targetSpeed,
           unit.currentSpeed + unit.acceleration * dt
         );
       } else if (unit.currentSpeed > targetSpeed) {
+        // Use deceleration rate for slowing down (typically faster than acceleration)
         unit.currentSpeed = Math.max(
           targetSpeed,
-          unit.currentSpeed - unit.acceleration * dt * 2
+          unit.currentSpeed - unit.deceleration * dt
         );
       }
 
