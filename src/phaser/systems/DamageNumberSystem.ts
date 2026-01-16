@@ -41,7 +41,10 @@ const COLORS = {
 
 // Font settings - fixed size, no scaling
 const FONT_FAMILY = 'Orbitron, Arial Black, Arial, sans-serif';
-const FONT_SIZE = 18; // Fixed size
+const FONT_SIZE = 14; // Smaller, cleaner size
+
+// Height offset above unit for damage numbers (above health bar)
+const DAMAGE_NUMBER_HEIGHT_OFFSET = 1.5;
 
 // Animation durations - simplified
 const FLOAT_DURATION = 600;
@@ -212,14 +215,18 @@ export class DamageNumberSystem {
     const now = Date.now();
     const existing = this.activeNumbers.get(data.targetId);
 
-    // Calculate world Y position (terrain height + unit height + flying offset)
+    // Calculate world Y position (terrain height + model height + flying offset + extra offset)
     // targetPos.y is world Z (horizontal), targetPos.x is world X
     const terrainHeight = this.getTerrainHeight ? this.getTerrainHeight(data.targetPos.x, data.targetPos.y) : 0;
-    const unitHeight = (data.targetHeight ?? 2); // Building height or default unit height
+    // For units, get model height from assets.json; for buildings, use targetHeight
+    const modelHeight = data.targetUnitType
+      ? AssetManager.getModelHeight(data.targetUnitType)
+      : (data.targetHeight ?? 2);
     // Get per-unit-type airborne height from assets.json
     const airborneHeight = data.targetUnitType ? AssetManager.getAirborneHeight(data.targetUnitType) : DEFAULT_AIRBORNE_HEIGHT;
     const flyingOffset = data.targetIsFlying ? airborneHeight : 0;
-    const worldY = terrainHeight + unitHeight + flyingOffset;
+    // Position damage numbers above health bars (model height + extra offset)
+    const worldY = terrainHeight + flyingOffset + modelHeight + DAMAGE_NUMBER_HEIGHT_OFFSET;
 
     if (existing && (now - existing.lastHitTime) < CONSOLIDATION_WINDOW) {
       // Consolidate into existing number

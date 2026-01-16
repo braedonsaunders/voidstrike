@@ -634,6 +634,7 @@ export class UnitRenderer {
 
       // Calculate flying offset for air units (per-unit-type airborne height from assets.json)
       const flyingOffset = unit.isFlying ? AssetManager.getAirborneHeight(unit.unitId) : 0;
+      const modelHeight = AssetManager.getModelHeight(unit.unitId);
       const unitHeight = terrainHeight + flyingOffset;
 
       // PERF: Skip units outside camera frustum
@@ -734,12 +735,13 @@ export class UnitRenderer {
           isOwned ? this.selectionMaterial : this.enemySelectionMaterial;
       }
 
-      // Health bar - only show if damaged
+      // Health bar - only show if damaged, positioned above the unit model
       if (health) {
         const healthPercent = health.getHealthPercent();
         overlay.healthBar.visible = healthPercent < 1;
         if (overlay.healthBar.visible) {
-          overlay.healthBar.position.set(transform.x, unitHeight + 1.5, transform.y);
+          // Position health bar above the unit model (model height + small offset)
+          overlay.healthBar.position.set(transform.x, unitHeight + modelHeight + 0.3, transform.y);
           // Only update health bar visuals if health changed
           if (Math.abs(overlay.lastHealth - healthPercent) > 0.01) {
             this.updateHealthBar(overlay.healthBar, health);
