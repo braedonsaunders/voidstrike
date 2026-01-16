@@ -55,7 +55,10 @@ export class ProductionSystem extends System {
     // Note: Supply is only checked when unit starts producing, not when queueing.
     // This allows unlimited queueing - supply is allocated for the active unit only.
 
-    // Find first valid building
+    // Find all valid buildings that can produce this unit, then pick the one with shortest queue
+    let bestBuilding: { entityId: number; building: Building } | null = null;
+    let shortestQueueLength = Infinity;
+
     for (const entityId of entityIds) {
       const entity = this.world.getEntity(entityId);
       if (!entity) continue;
@@ -72,20 +75,26 @@ export class ProductionSystem extends System {
 
       if (!canProduceBasic && !canProduceTechGated) continue;
 
-      // Deduct resources
-      store.addResources(-unitDef.mineralCost, -unitDef.vespeneCost);
-
-      // Add to production queue with supply cost stored
-      // Supply allocation is handled in the update() loop when the item starts producing
-      building.addToProductionQueue('unit', unitType, unitDef.buildTime, unitDef.supplyCost);
-
-      this.game.eventBus.emit('production:started', {
-        buildingId: entityId,
-        unitType,
-      });
-
-      return; // Only train from one building
+      // Track building with shortest queue
+      if (building.productionQueue.length < shortestQueueLength) {
+        shortestQueueLength = building.productionQueue.length;
+        bestBuilding = { entityId, building };
+      }
     }
+
+    if (!bestBuilding) return;
+
+    // Deduct resources
+    store.addResources(-unitDef.mineralCost, -unitDef.vespeneCost);
+
+    // Add to production queue with supply cost stored
+    // Supply allocation is handled in the update() loop when the item starts producing
+    bestBuilding.building.addToProductionQueue('unit', unitType, unitDef.buildTime, unitDef.supplyCost);
+
+    this.game.eventBus.emit('production:started', {
+      buildingId: bestBuilding.entityId,
+      unitType,
+    });
   }
 
   private handleBuildCommand(command: {

@@ -105,7 +105,7 @@ export const BIOMES: Record<BiomeType, BiomeConfig> = {
     grassDensity: 0.05,
     treeDensity: 0.02, // Cacti only
     rockDensity: 0.4,
-    crystalDensity: 0.1,
+    crystalDensity: 0, // No crystals in desert biome
     hasWater: false, // Rare oasis only
     waterLevel: -1,
     particleType: 'none',  // Disabled - was 'dust'

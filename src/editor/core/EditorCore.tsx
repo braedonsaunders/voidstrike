@@ -36,7 +36,7 @@ import { MusicPlayer } from '@/audio/MusicPlayer';
 // Components
 import { Editor3DCanvas } from './Editor3DCanvas';
 import { EditorPanels } from './EditorPanels';
-import { EditorHeader } from './EditorHeader';
+import { EditorHeader, type MapListItem } from './EditorHeader';
 
 // ============================================
 // TYPES
@@ -53,6 +53,13 @@ export interface EditorCoreProps extends EditorCallbacks {
   initialMapData?: EditorMapData;
   /** CSS class name */
   className?: string;
+  // Load Map feature props
+  /** List of available maps for the Load Map dropdown */
+  mapList?: MapListItem[];
+  /** Callback when user selects a map to load */
+  onLoadMap?: (mapId: string) => void;
+  /** Callback when user wants to create a new map */
+  onNewMap?: () => void;
 }
 
 // ============================================
@@ -70,6 +77,9 @@ export function EditorCore({
   onChange,
   onValidate,
   className = '',
+  mapList,
+  onLoadMap,
+  onNewMap,
 }: EditorCoreProps) {
   const editorState = useEditorState(config);
   const { state, loadMap } = editorState;
@@ -349,6 +359,10 @@ export function EditorCore({
         onExport={handleExportJson}
         onToggleMusic={handleMusicToggle}
         onToggleFullscreen={toggleFullscreen}
+        mapList={mapList}
+        currentMapId={mapId}
+        onLoadMap={onLoadMap}
+        onNewMap={onNewMap}
       />
 
       {/* Main content */}

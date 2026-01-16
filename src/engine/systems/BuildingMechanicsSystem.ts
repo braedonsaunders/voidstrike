@@ -88,16 +88,14 @@ export class BuildingMechanicsSystem extends System {
       return;
     }
 
-    // Move building to landing position
-    transform.x = command.position.x;
-    transform.y = command.position.y;
+    // Set landing target - building will fly there first, then land when it arrives
+    building.setPendingLanding(command.position.x, command.position.y);
+    building.setFlyingTarget(command.position.x, command.position.y);
 
-    if (building.startLanding(command.position.x, command.position.y)) {
-      this.game.eventBus.emit('building:landingStart', {
-        buildingId: command.buildingId,
-        position: command.position,
-      });
-    }
+    this.game.eventBus.emit('building:landingQueued', {
+      buildingId: command.buildingId,
+      position: command.position,
+    });
   }
 
   private handleFlyingBuildingMoveCommand(command: FlyingBuildingMoveCommand): void {
@@ -328,25 +326,87 @@ export class BuildingMechanicsSystem extends System {
             buildingId: entity.id,
           });
         }
-      } else if (building.state === 'flying' && building.hasFlyingTarget()) {
-        // Update flying building movement
-        const targetX = building.flyingTargetX!;
-        const targetY = building.flyingTargetY!;
+      } else if (building.state === 'flying') {
+        if (building.hasFlyingTarget()) {
+          // Update flying building movement with acceleration/deceleration
+          const targetX = building.flyingTargetX!;
+          const targetY = building.flyingTargetY!;
 
-        const dx = targetX - transform.x;
-        const dy = targetY - transform.y;
-        const distance = Math.sqrt(dx * dx + dy * dy);
+          const dx = targetX - transform.x;
+          const dy = targetY - transform.y;
+          const distance = Math.sqrt(dx * dx + dy * dy);
 
-        const arrivalThreshold = 0.5;
-        if (distance < arrivalThreshold) {
-          // Arrived at destination
-          building.clearFlyingTarget();
-        } else {
-          // Move toward target
-          const moveDistance = building.flyingSpeed * dt;
-          const ratio = Math.min(moveDistance / distance, 1);
-          transform.x += dx * ratio;
-          transform.y += dy * ratio;
+          const arrivalThreshold = 0.5;
+          if (distance < arrivalThreshold) {
+            // Arrived at destination
+            building.clearFlyingTarget();
+
+            // If we have a pending landing, start the landing animation now
+            if (building.hasPendingLanding()) {
+              const landX = building.pendingLandingX!;
+              const landY = building.pendingLandingY!;
+              building.clearPendingLanding();
+
+              // Snap to exact landing position
+              transform.x = landX;
+              transform.y = landY;
+
+              if (building.startLanding(landX, landY)) {
+                this.game.eventBus.emit('building:landingStart', {
+                  buildingId: entity.id,
+                  position: { x: landX, y: landY },
+                });
+              }
+            }
+          } else {
+            // Move toward target with smooth acceleration/deceleration
+            const maxSpeed = building.flyingSpeed;
+            const acceleration = 1.5; // units per second squared
+            const deceleration = 2.0;
+
+            // Calculate stopping distance
+            const currentSpeedSq = building.flyingCurrentSpeed ? building.flyingCurrentSpeed * building.flyingCurrentSpeed : 0;
+            const stoppingDistance = currentSpeedSq / (2 * deceleration);
+
+            let targetSpeed: number;
+            if (distance <= stoppingDistance + 0.5) {
+              // Decelerate as we approach
+              targetSpeed = Math.max(0.3, Math.sqrt(2 * deceleration * distance));
+            } else {
+              // Accelerate toward max speed
+              targetSpeed = maxSpeed;
+            }
+
+            // Smoothly adjust current speed
+            if (!building.flyingCurrentSpeed) {
+              building.flyingCurrentSpeed = 0;
+            }
+
+            if (building.flyingCurrentSpeed < targetSpeed) {
+              building.flyingCurrentSpeed = Math.min(targetSpeed, building.flyingCurrentSpeed + acceleration * dt);
+            } else {
+              building.flyingCurrentSpeed = Math.max(targetSpeed, building.flyingCurrentSpeed - deceleration * dt);
+            }
+
+            const moveDistance = building.flyingCurrentSpeed * dt;
+            const ratio = Math.min(moveDistance / distance, 1);
+            transform.x += dx * ratio;
+            transform.y += dy * ratio;
+          }
+        } else if (building.hasPendingLanding()) {
+          // Edge case: has pending landing but no flying target (shouldn't happen, but handle it)
+          const landX = building.pendingLandingX!;
+          const landY = building.pendingLandingY!;
+          building.clearPendingLanding();
+          transform.x = landX;
+          transform.y = landY;
+
+          if (building.startLanding(landX, landY)) {
+            this.game.eventBus.emit('building:landingStart', {
+              buildingId: entity.id,
+              position: { x: landX, y: landY },
+            });
+          }
         }
       }
 

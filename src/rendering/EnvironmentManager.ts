@@ -62,9 +62,13 @@ export class EnvironmentManager {
   // Environment map for IBL
   private envMap: THREE.CubeTexture | null = null;
 
-  // Shadow update throttling - only update shadow map every N frames
+  // Shadow update throttling - adaptive based on scene activity
   private shadowFrameCounter = 0;
-  private static readonly SHADOW_UPDATE_INTERVAL = 6; // Update every 6 frames (~10fps at 60fps)
+  // Base intervals: active (units moving) vs static (empty scene)
+  private static readonly SHADOW_UPDATE_INTERVAL_ACTIVE = 6; // ~10fps shadow updates during gameplay
+  private static readonly SHADOW_UPDATE_INTERVAL_STATIC = 30; // ~2fps shadow updates for static scenes
+  private shadowUpdateInterval = EnvironmentManager.SHADOW_UPDATE_INTERVAL_STATIC;
+  private hasMovingEntities = false; // Hint from game about scene activity
 
   // Shadow state
   private shadowsEnabled = false;
@@ -398,14 +402,31 @@ export class EnvironmentManager {
   // ============================================
 
   /**
+   * Hint to the shadow system whether there are moving entities.
+   * When true, shadows update more frequently (6 frames).
+   * When false (empty/static scene), shadows update less frequently (30 frames).
+   * This significantly reduces GPU work on empty maps.
+   */
+  public setHasMovingEntities(hasMoving: boolean): void {
+    if (this.hasMovingEntities !== hasMoving) {
+      this.hasMovingEntities = hasMoving;
+      this.shadowUpdateInterval = hasMoving
+        ? EnvironmentManager.SHADOW_UPDATE_INTERVAL_ACTIVE
+        : EnvironmentManager.SHADOW_UPDATE_INTERVAL_STATIC;
+    }
+  }
+
+  /**
    * IMPORTANT: Call this every frame to handle throttled shadow updates.
-   * Shadow map only updates every SHADOW_UPDATE_INTERVAL frames for performance.
+   * Shadow map update frequency is adaptive:
+   * - Active scene (units moving): every 6 frames (~10fps shadow updates)
+   * - Static scene (empty): every 30 frames (~2fps shadow updates)
    */
   public updateShadows(): void {
     if (!this.shadowsEnabled) return;
 
     this.shadowFrameCounter++;
-    if (this.shadowFrameCounter >= EnvironmentManager.SHADOW_UPDATE_INTERVAL) {
+    if (this.shadowFrameCounter >= this.shadowUpdateInterval) {
       this.shadowFrameCounter = 0;
       this.directionalLight.shadow.needsUpdate = true;
     }

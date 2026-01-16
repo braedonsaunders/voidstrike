@@ -94,7 +94,13 @@ export class Building extends Component {
   // Movement target for flying buildings
   public flyingTargetX: number | null;
   public flyingTargetY: number | null;
-  public flyingSpeed: number; // Movement speed when flying
+  public flyingSpeed: number; // Max movement speed when flying
+  public flyingCurrentSpeed: number; // Current flying speed (for accel/decel)
+  // Pending landing - building flies here first, then lands
+  public pendingLandingX: number | null;
+  public pendingLandingY: number | null;
+  // Smooth lift/land animation velocity
+  public liftVelocity: number;
 
   // Supply depot lowered state
   public canLower: boolean;
@@ -157,7 +163,11 @@ export class Building extends Component {
     this.landingTarget = null;
     this.flyingTargetX = null;
     this.flyingTargetY = null;
-    this.flyingSpeed = 2.5; // Moderate flying speed
+    this.flyingSpeed = 2.5; // Max flying speed
+    this.flyingCurrentSpeed = 0; // Starts at rest
+    this.pendingLandingX = null;
+    this.pendingLandingY = null;
+    this.liftVelocity = 0;
 
     // Supply depot
     this.canLower = definition.canLower ?? false;
@@ -385,6 +395,8 @@ export class Building extends Component {
 
     this.state = 'lifting';
     this.liftProgress = 0;
+    this.liftVelocity = 0;
+    this.flyingCurrentSpeed = 0; // Start from rest when lifting
 
     // Detach addon when lifting
     if (this.currentAddon !== null) {
@@ -394,14 +406,31 @@ export class Building extends Component {
     return true;
   }
 
+  // Lift/land animation constants
+  private static readonly LIFT_ACCELERATION = 2.0; // units per second squared
+  private static readonly LIFT_DECELERATION = 3.0;
+  private static readonly MAX_LIFT_VELOCITY = 0.8; // max speed of lift progress per second
+
   public updateLift(deltaTime: number): boolean {
     if (this.state !== 'lifting') return false;
 
-    const liftTime = 2; // seconds to lift off
-    this.liftProgress += deltaTime / liftTime;
+    // Smooth acceleration at start, deceleration near end
+    const distanceToEnd = 1 - this.liftProgress;
+    const stoppingDistance = (this.liftVelocity * this.liftVelocity) / (2 * Building.LIFT_DECELERATION);
+
+    if (distanceToEnd <= stoppingDistance && this.liftVelocity > 0) {
+      // Decelerate as we approach the end
+      this.liftVelocity = Math.max(0.05, this.liftVelocity - Building.LIFT_DECELERATION * deltaTime);
+    } else {
+      // Accelerate toward max velocity
+      this.liftVelocity = Math.min(Building.MAX_LIFT_VELOCITY, this.liftVelocity + Building.LIFT_ACCELERATION * deltaTime);
+    }
+
+    this.liftProgress += this.liftVelocity * deltaTime;
 
     if (this.liftProgress >= 1) {
       this.liftProgress = 1;
+      this.liftVelocity = 0;
       this.state = 'flying';
       this.isFlying = true;
       return true;
@@ -416,6 +445,7 @@ export class Building extends Component {
 
     this.state = 'landing';
     this.liftProgress = 1;
+    this.liftVelocity = 0; // Start from rest
     this.landingTarget = { x: targetX, y: targetY };
     return true;
   }
@@ -423,11 +453,23 @@ export class Building extends Component {
   public updateLanding(deltaTime: number): boolean {
     if (this.state !== 'landing') return false;
 
-    const landTime = 2; // seconds to land
-    this.liftProgress -= deltaTime / landTime;
+    // Smooth acceleration down, deceleration near ground
+    const distanceToGround = this.liftProgress;
+    const stoppingDistance = (this.liftVelocity * this.liftVelocity) / (2 * Building.LIFT_DECELERATION);
+
+    if (distanceToGround <= stoppingDistance && this.liftVelocity > 0) {
+      // Decelerate as we approach ground
+      this.liftVelocity = Math.max(0.05, this.liftVelocity - Building.LIFT_DECELERATION * deltaTime);
+    } else {
+      // Accelerate downward
+      this.liftVelocity = Math.min(Building.MAX_LIFT_VELOCITY, this.liftVelocity + Building.LIFT_ACCELERATION * deltaTime);
+    }
+
+    this.liftProgress -= this.liftVelocity * deltaTime;
 
     if (this.liftProgress <= 0) {
       this.liftProgress = 0;
+      this.liftVelocity = 0;
       this.state = 'complete';
       this.isFlying = false;
       this.landingTarget = null;
@@ -435,6 +477,20 @@ export class Building extends Component {
     }
 
     return false;
+  }
+
+  public setPendingLanding(x: number, y: number): void {
+    this.pendingLandingX = x;
+    this.pendingLandingY = y;
+  }
+
+  public hasPendingLanding(): boolean {
+    return this.pendingLandingX !== null && this.pendingLandingY !== null;
+  }
+
+  public clearPendingLanding(): void {
+    this.pendingLandingX = null;
+    this.pendingLandingY = null;
   }
 
   // ==================== FLYING MOVEMENT MECHANICS ====================
