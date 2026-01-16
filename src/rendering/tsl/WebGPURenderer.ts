@@ -201,23 +201,9 @@ export async function createWebGPURenderer(config: WebGPURendererConfig): Promis
   const isWebGPU = !forceWebGL && renderer.backend?.isWebGPUBackend === true;
   const supportsCompute = isWebGPU; // Compute shaders only work with WebGPU
 
-  // If we got a WebGPU backend, verify the actual limits from the device
-  if (isWebGPU && renderer.backend) {
-    try {
-      const device = (renderer.backend as any).device;
-      if (device?.limits) {
-        actualLimits = {
-          maxVertexBuffers: device.limits.maxVertexBuffers ?? actualLimits.maxVertexBuffers,
-          maxTextureDimension2D: device.limits.maxTextureDimension2D ?? actualLimits.maxTextureDimension2D,
-          maxStorageBufferBindingSize: device.limits.maxStorageBufferBindingSize ?? actualLimits.maxStorageBufferBindingSize,
-          maxBufferSize: device.limits.maxBufferSize ?? actualLimits.maxBufferSize,
-        };
-        debugInitialization.log(`[WebGPU] Verified device limits:`, actualLimits);
-      }
-    } catch {
-      // Device access may not be available, use our requested values
-    }
-  }
+  // Note: We trust our requested limits rather than querying device.limits
+  // because device.limits may report spec minimums rather than what we requested
+  // If device creation succeeded with our requiredLimits, we have at least those limits
 
   debugInitialization.log(`[WebGPU] Renderer initialized:`, {
     backend: isWebGPU ? 'WebGPU' : 'WebGL',
