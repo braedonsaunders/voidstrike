@@ -116,6 +116,13 @@ export interface RenderingHints {
   } | null;
 }
 
+/** Rotation config supporting all 3 axes */
+export interface RotationConfig {
+  x?: number; // X-axis rotation offset in degrees (default: 0)
+  y?: number; // Y-axis rotation offset in degrees (default: 0)
+  z?: number; // Z-axis rotation offset in degrees (default: 0)
+}
+
 /** Single asset configuration */
 export interface AssetConfig {
   model: string;
@@ -123,7 +130,7 @@ export interface AssetConfig {
   scale?: number; // Additional scale multiplier after height normalization (default: 1.0)
   airborneHeight?: number; // For flying units: height above terrain in game units (default: 8)
   animationSpeed?: number;
-  rotation?: number; // Y-axis rotation offset in degrees
+  rotation?: RotationConfig; // Rotation offset in degrees on all axes
   animations?: AnimationMappingConfig;
   rendering?: RenderingHints; // Per-model rendering hints (decorations)
 }
@@ -179,8 +186,8 @@ const animationSpeedMultipliers = new Map<string, number>();
 // Store animation mappings from config for each asset
 const animationMappings = new Map<string, AnimationMappingConfig>();
 
-// Store per-asset rotation offsets in degrees (from config)
-const assetRotationOffsets = new Map<string, number>();
+// Store per-asset rotation offsets in degrees (from config) - supports all 3 axes
+const assetRotationOffsets = new Map<string, RotationConfig>();
 
 // Store per-asset scale multipliers (from config)
 const assetScaleMultipliers = new Map<string, number>();
@@ -562,6 +569,13 @@ export class AssetManager {
 
     const result = assetCache.get(cacheKey)!.clone();
 
+    // Apply scale multiplier from config to procedural meshes
+    const scaleMultiplier = assetScaleMultipliers.get(unitId);
+    if (scaleMultiplier !== undefined && scaleMultiplier !== 1.0) {
+      result.scale.multiplyScalar(scaleMultiplier);
+      debugAssets.log(`[AssetManager] Procedural ${unitId}: applied scale multiplier ${scaleMultiplier}`);
+    }
+
     // Apply player color if provided
     if (playerColor !== undefined) {
       result.traverse((child) => {
@@ -621,6 +635,13 @@ export class AssetManager {
     }
 
     const result = assetCache.get(cacheKey)!.clone();
+
+    // Apply scale multiplier from config to procedural meshes
+    const scaleMultiplier = assetScaleMultipliers.get(buildingId);
+    if (scaleMultiplier !== undefined && scaleMultiplier !== 1.0) {
+      result.scale.multiplyScalar(scaleMultiplier);
+      debugAssets.log(`[AssetManager] Procedural building ${buildingId}: applied scale multiplier ${scaleMultiplier}`);
+    }
 
     if (playerColor !== undefined) {
       result.traverse((child) => {
@@ -793,13 +814,15 @@ export class AssetManager {
             normalizeModel(model, options.targetHeight, assetId, scaleMultiplier);
           }
 
-          // Apply model forward offset + per-asset rotation offset
-          // Base offset converts GLTF +Z forward to game's +X forward
-          // Per-asset offset allows fixing models that face wrong direction
-          const baseOffset = REFERENCE_FRAME.MODEL_FORWARD_OFFSET;
-          const assetOffset = assetRotationOffsets.get(assetId) ?? 0;
-          const assetOffsetRadians = assetOffset * (Math.PI / 180); // Convert degrees to radians
-          model.rotation.y = baseOffset + assetOffsetRadians;
+          // Apply model forward offset + per-asset rotation offset on all 3 axes
+          // Base Y offset converts GLTF +Z forward to game's +X forward
+          // Per-asset offsets allow fixing models that face wrong direction or need tilting
+          const baseYOffset = REFERENCE_FRAME.MODEL_FORWARD_OFFSET;
+          const assetRotation = assetRotationOffsets.get(assetId) ?? { x: 0, y: 0, z: 0 };
+          const xOffsetRadians = (assetRotation.x ?? 0) * (Math.PI / 180);
+          const yOffsetRadians = (assetRotation.y ?? 0) * (Math.PI / 180);
+          const zOffsetRadians = (assetRotation.z ?? 0) * (Math.PI / 180);
+          model.rotation.set(xOffsetRadians, baseYOffset + yOffsetRadians, zOffsetRadians);
 
           customAssets.set(assetId, model);
           resolve(model);
@@ -843,11 +866,13 @@ export class AssetManager {
             normalizeModel(model, options.targetHeight, `${assetId}_LOD${lodLevel}`, scaleMultiplier);
           }
 
-          // Apply model forward offset + per-asset rotation offset (same as LOD0)
-          const baseOffset = REFERENCE_FRAME.MODEL_FORWARD_OFFSET;
-          const assetOffset = assetRotationOffsets.get(assetId) ?? 0;
-          const assetOffsetRadians = assetOffset * (Math.PI / 180);
-          model.rotation.y = baseOffset + assetOffsetRadians;
+          // Apply model forward offset + per-asset rotation offset on all 3 axes (same as LOD0)
+          const baseYOffset = REFERENCE_FRAME.MODEL_FORWARD_OFFSET;
+          const assetRotation = assetRotationOffsets.get(assetId) ?? { x: 0, y: 0, z: 0 };
+          const xOffsetRadians = (assetRotation.x ?? 0) * (Math.PI / 180);
+          const yOffsetRadians = (assetRotation.y ?? 0) * (Math.PI / 180);
+          const zOffsetRadians = (assetRotation.z ?? 0) * (Math.PI / 180);
+          model.rotation.set(xOffsetRadians, baseYOffset + yOffsetRadians, zOffsetRadians);
 
           // Store in the appropriate LOD map
           if (lodLevel === 1) {
@@ -903,14 +928,28 @@ export class AssetManager {
   }
 
   /**
-   * Get the rotation offset for a model in radians
+   * Get the rotation offset for a model in radians (all 3 axes)
    * Combines base MODEL_FORWARD_OFFSET with per-asset rotation from config
+   * Returns { x, y, z } in radians
    */
-  static getModelRotation(assetId: string): number {
-    const baseOffset = REFERENCE_FRAME.MODEL_FORWARD_OFFSET;
-    const assetOffset = assetRotationOffsets.get(assetId) ?? 0;
-    const assetOffsetRadians = assetOffset * (Math.PI / 180);
-    return baseOffset + assetOffsetRadians;
+  static getModelRotation(assetId: string): { x: number; y: number; z: number } {
+    const baseYOffset = REFERENCE_FRAME.MODEL_FORWARD_OFFSET;
+    const assetRotation = assetRotationOffsets.get(assetId) ?? { x: 0, y: 0, z: 0 };
+    return {
+      x: (assetRotation.x ?? 0) * (Math.PI / 180),
+      y: baseYOffset + (assetRotation.y ?? 0) * (Math.PI / 180),
+      z: (assetRotation.z ?? 0) * (Math.PI / 180),
+    };
+  }
+
+  /**
+   * Get just the Y-axis rotation offset for a model in radians
+   * Used for instanced rendering where only Y rotation is applied at runtime
+   */
+  static getModelRotationY(assetId: string): number {
+    const baseYOffset = REFERENCE_FRAME.MODEL_FORWARD_OFFSET;
+    const assetRotation = assetRotationOffsets.get(assetId) ?? { x: 0, y: 0, z: 0 };
+    return baseYOffset + (assetRotation.y ?? 0) * (Math.PI / 180);
   }
 
   /**
