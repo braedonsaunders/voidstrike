@@ -356,6 +356,16 @@ export class Game {
     this.state = 'ended';
     this.gameLoop.stop();
     PerformanceMonitor.stop(); // Stop performance monitoring
+
+    // Notify remote player in multiplayer
+    this.notifyQuit();
+
+    // Clean up multiplayer message handler
+    if (this.multiplayerMessageHandler) {
+      removeMultiplayerMessageHandler(this.multiplayerMessageHandler);
+      this.multiplayerMessageHandler = null;
+    }
+
     this.eventBus.emit('game:ended', { tick: this.currentTick });
   }
 

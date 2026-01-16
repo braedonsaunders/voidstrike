@@ -685,6 +685,12 @@ export function WebGPUGameCanvas() {
         }
       });
 
+      // Multiplayer: Remote player quit
+      game.eventBus.on('multiplayer:playerQuit', () => {
+        console.log('[Game] Remote player quit the game');
+        useUIStore.getState().addNotification('warning', 'Remote player has left the game', 10000);
+      });
+
       // Spawn entities (skip in battle simulator - user spawns manually)
       if (!isBattleSimulatorMode()) {
         spawnInitialEntities(game, CURRENT_MAP);
