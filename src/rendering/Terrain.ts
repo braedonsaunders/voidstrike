@@ -1618,7 +1618,7 @@ export class Terrain {
 
         const cell = terrain[y][x];
         const isRamp = cell.terrain === 'ramp' || rampZone.has(`${x},${y}`);
-        const isCliffEdge = cliffEdgeCells.has(`${x},${y}`);
+        const isCliffEdge = expandedCliffEdgeCells.has(`${x},${y}`);
 
         // Get heights for cell corners
         const h00 = getVertexHeight(x, y, x, y, isRamp, isCliffEdge);
