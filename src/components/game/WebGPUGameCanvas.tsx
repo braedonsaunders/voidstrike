@@ -1052,6 +1052,12 @@ export function WebGPUGameCanvas() {
         if (gameRef.current) {
           phaserGame.scene.start('OverlayScene', { eventBus: gameRef.current.eventBus });
 
+          // Wire up terrain height function for accurate damage number positioning
+          if (environmentRef.current) {
+            const terrain = environmentRef.current.terrain;
+            scene.setTerrainHeightFunction((x, z) => terrain.getHeightAt(x, z));
+          }
+
           // Start the game AFTER Phaser overlay is ready
           // This ensures the countdown is visible when it triggers
           // Small delay to ensure scene is fully initialized
