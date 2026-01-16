@@ -435,6 +435,15 @@ export class RTSCamera {
     return this.currentZoom;
   }
 
+  public setAngle(angle: number): void {
+    this.currentAngle = angle;
+    this.updateCameraPosition();
+  }
+
+  public getAngle(): number {
+    return this.currentAngle;
+  }
+
   // Enable/disable edge scrolling (used when mouse is over UI elements)
   public setEdgeScrollEnabled(enabled: boolean): void {
     this.edgeScrollEnabled = enabled;
