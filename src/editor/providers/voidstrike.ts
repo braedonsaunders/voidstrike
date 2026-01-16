@@ -12,8 +12,8 @@ import type {
   EditorObject,
   ValidationResult,
 } from '../config/EditorConfig';
-import type { MapData, MapCell, Expansion, WatchTower, DestructibleRock, MapDecoration } from '@/data/maps/MapTypes';
-import { ALL_MAPS, TERRAIN_FEATURE_CONFIG } from '@/data/maps';
+import type { MapData, MapCell, Expansion, WatchTower, DestructibleRock, MapDecoration, ResourceNode } from '@/data/maps/MapTypes';
+import { ALL_MAPS, TERRAIN_FEATURE_CONFIG, createBaseResources, DIR, MINERAL_DISTANCE_NATURAL } from '@/data/maps';
 import type { TerrainFeature } from '@/data/maps/MapTypes';
 
 /**
@@ -141,12 +141,38 @@ function editorFormatToMapData(data: EditorMapData): MapData {
 
   for (const obj of data.objects) {
     if (['main_base', 'natural', 'third', 'fourth', 'gold'].includes(obj.type)) {
+      // Get existing minerals/vespene or generate defaults
+      let minerals = obj.properties?.minerals as ResourceNode[] | undefined;
+      let vespene = obj.properties?.vespene as ResourceNode[] | undefined;
+
+      // Auto-generate resources if not defined
+      if (!minerals || minerals.length === 0 || !vespene || vespene.length === 0) {
+        // Determine direction for resource placement (default to right, can be customized later)
+        const direction = (obj.properties?.resourceDirection as number) ?? DIR.RIGHT;
+        const isGold = obj.type === 'gold';
+        const isNatural = obj.type === 'natural';
+        const mineralDistance = isNatural ? MINERAL_DISTANCE_NATURAL : 7;
+
+        const resources = createBaseResources(
+          obj.x,
+          obj.y,
+          direction,
+          undefined, // default mineral amount
+          undefined, // default gas amount
+          isGold,
+          mineralDistance
+        );
+
+        minerals = minerals && minerals.length > 0 ? minerals : resources.minerals;
+        vespene = vespene && vespene.length > 0 ? vespene : resources.vespene;
+      }
+
       expansions.push({
         name: (obj.properties?.name as string) || `Expansion ${expansions.length + 1}`,
         x: obj.x,
         y: obj.y,
-        minerals: (obj.properties?.minerals as any[]) || [],
-        vespene: (obj.properties?.vespene as any[]) || [],
+        minerals: minerals || [],
+        vespene: vespene || [],
         isMain: obj.type === 'main_base',
         isNatural: obj.type === 'natural',
       });

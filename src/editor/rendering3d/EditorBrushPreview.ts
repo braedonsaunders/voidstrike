@@ -39,9 +39,12 @@ export class EditorBrushPreview {
 
   /**
    * Update brush position
+   * @param x World X coordinate
+   * @param z World Z coordinate
+   * @param y Optional Y coordinate from raycast - if provided, uses this instead of terrain lookup
    */
-  public setPosition(x: number, z: number): void {
-    const height = this.getTerrainHeight ? this.getTerrainHeight(x, z) : 0;
+  public setPosition(x: number, z: number, y?: number): void {
+    const height = y !== undefined ? y : (this.getTerrainHeight ? this.getTerrainHeight(x, z) : 0);
     this.mesh.position.set(x, height + 0.15, z);
   }
 

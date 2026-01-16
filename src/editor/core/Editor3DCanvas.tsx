@@ -592,8 +592,8 @@ export function Editor3DCanvas({
       // Call cursor move callback for status bar
       onCursorMove?.(gridPos, { x: worldPos.x, y: worldPos.y, z: worldPos.z });
 
-      // Update brush preview
-      brushPreviewRef.current?.setPosition(worldPos.x, worldPos.z);
+      // Update brush preview - pass Y from raycast to avoid offset on slopes
+      brushPreviewRef.current?.setPosition(worldPos.x, worldPos.z, worldPos.y);
       brushPreviewRef.current?.showForTool(activeTool, brushSize);
 
       // Track hovered object

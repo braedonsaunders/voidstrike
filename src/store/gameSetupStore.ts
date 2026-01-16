@@ -31,6 +31,9 @@ export interface GameSetupState {
   // Custom map data for preview/testing (takes priority over selectedMapId)
   customMapData: MapData | null;
 
+  // Editor preview mode - when true, show "Back to Editor" button
+  isEditorPreview: boolean;
+
   // Game settings
   startingResources: StartingResources;
   gameSpeed: GameSpeed;
@@ -51,6 +54,7 @@ export interface GameSetupState {
   // Actions
   setSelectedMap: (mapId: string) => void;
   setCustomMap: (mapData: MapData | null) => void;
+  setEditorPreview: (isPreview: boolean) => void;
   setStartingResources: (resources: StartingResources) => void;
   setGameSpeed: (speed: GameSpeed) => void;
   setFogOfWar: (enabled: boolean) => void;
@@ -160,6 +164,7 @@ const defaultPlayerSlots: PlayerSlot[] = [
 const initialState = {
   selectedMapId: 'crystal_caverns',
   customMapData: null as MapData | null,
+  isEditorPreview: false,
   startingResources: 'normal' as StartingResources,
   gameSpeed: 'normal' as GameSpeed,
   fogOfWar: true,
@@ -172,8 +177,9 @@ const initialState = {
 export const useGameSetupStore = create<GameSetupState>((set, get) => ({
   ...initialState,
 
-  setSelectedMap: (mapId) => set({ selectedMapId: mapId, customMapData: null }),
+  setSelectedMap: (mapId) => set({ selectedMapId: mapId, customMapData: null, isEditorPreview: false }),
   setCustomMap: (mapData) => set({ customMapData: mapData }),
+  setEditorPreview: (isPreview) => set({ isEditorPreview: isPreview }),
   setStartingResources: (resources) => set({ startingResources: resources }),
   setGameSpeed: (speed) => set({ gameSpeed: speed }),
   setFogOfWar: (enabled) => set({ fogOfWar: enabled }),
@@ -363,8 +369,8 @@ export const useGameSetupStore = create<GameSetupState>((set, get) => ({
       ],
     });
   },
-  endGame: () => set({ gameStarted: false, isBattleSimulator: false, customMapData: null }),
-  reset: () => set({ ...initialState, playerSlots: [...defaultPlayerSlots], localPlayerId: 'player1', customMapData: null }),
+  endGame: () => set({ gameStarted: false, isBattleSimulator: false, customMapData: null, isEditorPreview: false }),
+  reset: () => set({ ...initialState, playerSlots: [...defaultPlayerSlots], localPlayerId: 'player1', customMapData: null, isEditorPreview: false }),
 
   isSpectator: (): boolean => {
     // Check if there's no local player (all players are AI)

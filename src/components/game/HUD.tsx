@@ -33,6 +33,7 @@ export const HUD = memo(function HUD() {
     showPlayerStatus, setShowPlayerStatus,
   } = useUIStore();
   const isBattleSimulator = useGameSetupStore((state) => state.isBattleSimulator);
+  const isEditorPreview = useGameSetupStore((state) => state.isEditorPreview);
 
   // Single source of truth for whether any menu is open (for edge scroll control)
   const anyMenuOpen = useUIStore(isAnyMenuOpen);
@@ -247,6 +248,16 @@ export const HUD = memo(function HUD() {
                   </button>
                 )}
                 <div className="border-t border-void-700 my-1" />
+                {isEditorPreview && (
+                  <button
+                    onClick={() => {
+                      window.location.href = '/game/setup/editor';
+                    }}
+                    className="w-full px-4 py-2 text-left text-sm text-cyan-400 hover:bg-void-800 transition-colors"
+                  >
+                    Back to Editor
+                  </button>
+                )}
                 <button
                   onClick={() => {
                     if (confirm('Return to main menu? Progress will be lost.')) {
