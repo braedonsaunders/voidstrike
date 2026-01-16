@@ -7,6 +7,7 @@ import { ALL_MAPS, MapData } from '@/data/maps';
 import { MusicPlayer } from '@/audio/MusicPlayer';
 import { useUIStore } from '@/store/uiStore';
 import { BIOMES } from '@/rendering/Biomes';
+import { Game } from '@/engine/core/Game';
 import {
   useGameSetupStore,
   PLAYER_COLORS,
@@ -454,6 +455,9 @@ export default function GameSetupPage() {
       console.log('[Setup] Game start received, navigating to game...');
       console.log('[Setup] Guest slot ID:', mySlotId);
 
+      // Reset any existing game instance to ensure fresh multiplayer state
+      Game.resetInstance();
+
       // Apply the received lobby state to the store before starting
       if (receivedLobbyState) {
         const store = useGameSetupStore.getState();
@@ -513,6 +517,8 @@ export default function GameSetupPage() {
   };
 
   const handleStartGame = () => {
+    // Reset any existing game instance to ensure fresh multiplayer state
+    Game.resetInstance();
     // Send game start signal to all connected guests
     sendGameStart();
     startGame();
