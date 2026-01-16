@@ -131,10 +131,10 @@ voidstrike/
 │   ├── store/
 │   │   ├── gameStore.ts       # Zustand game state
 │   │   └── uiStore.ts         # UI state
-│   ├── network/
-│   │   ├── client.ts          # Supabase client
-│   │   ├── multiplayer.ts     # Lockstep sync
-│   │   └── lobby.ts           # Lobby management
+│   ├── hooks/
+│   │   └── useMultiplayer.ts  # Nostr-based lobby & WebRTC hook
+│   ├── store/
+│   │   └── multiplayerStore.ts # P2P connection state
 │   └── utils/
 │       ├── math.ts            # Math utilities
 │       ├── spatial.ts         # Spatial hashing
@@ -366,28 +366,114 @@ Key Components:
 - **DetourCrowd**: RVO/ORCA-based local collision avoidance
 - **TileCache**: Dynamic obstacle support for buildings
 
-### Multiplayer Sync
+### Multiplayer Architecture
 
-Lockstep deterministic simulation:
+VOIDSTRIKE uses a **fully serverless peer-to-peer architecture** with Nostr-based signaling.
+
+#### Protocol Stack
+
+| Layer | Technology | Location |
+|-------|------------|----------|
+| Transport | WebRTC DataChannels | `src/hooks/useMultiplayer.ts` |
+| Signaling | Nostr Protocol | `src/engine/network/p2p/NostrMatchmaking.ts` |
+| NAT Traversal | STUN (Google) | ICE servers in useMultiplayer |
+| Synchronization | Lockstep | `src/engine/network/types.ts` |
+| Desync Detection | Checksums | `src/engine/network/DesyncDetection.ts` |
+
+#### Lobby System (`src/hooks/useMultiplayer.ts`)
+
+The `useLobby` hook manages multiplayer connections:
 
 ```typescript
-// All clients run same simulation
-// Only inputs are transmitted
+// Lobby-based matchmaking flow:
+// 1. Host generates 4-char code (e.g., "ABCD")
+// 2. Lobby published to Nostr relays
+// 3. Guest enters code, sends join request
+// 4. WebRTC offer/answer exchanged via Nostr
+// 5. Direct P2P DataChannel established
 
+const {
+  status,        // 'initializing' | 'hosting' | 'joining' | 'connected' | 'error'
+  lobbyCode,     // 4-char lobby code (e.g., "ABCD")
+  guests,        // Connected guest connections
+  hostConnection, // DataChannel to host (when guest)
+  isHost,
+  joinLobby,     // (code, playerName) => Promise<void>
+  leaveLobby,
+  kickGuest,
+} = useLobby(onGuestJoin, onGuestLeave);
+```
+
+#### Nostr Signaling Events
+
+| Kind | Name | Purpose |
+|------|------|---------|
+| 30430 | `LOBBY_HOST` | Host announces lobby with code |
+| 30431 | `LOBBY_JOIN` | Guest requests to join |
+| 30433 | `WEBRTC_OFFER` | Host sends WebRTC offer |
+| 30434 | `WEBRTC_ANSWER` | Guest sends WebRTC answer |
+
+Public relays used: `relay.damus.io`, `nos.lol`, `relay.nostr.band`, etc.
+
+#### Connection Flow
+
+```
+┌─────────────┐      Nostr Relays      ┌─────────────┐
+│    Host     │ ──── Lobby + Offer ──→ │    Guest    │
+│  (Code:ABCD)│ ←───── Answer ──────── │             │
+└──────┬──────┘                        └──────┬──────┘
+       │                                      │
+       └──────── WebRTC DataChannel ──────────┘
+```
+
+#### Lockstep Synchronization
+
+All clients run identical deterministic simulation:
+
+```typescript
+// Only player inputs are transmitted, not game state
 interface GameInput {
   tick: number;
   playerId: string;
   type: 'MOVE' | 'ATTACK' | 'BUILD' | 'ABILITY';
-  data: any;
+  data: GameCommandData;
 }
 
-// Every N ticks, broadcast checksum
+// Every N ticks, broadcast checksum for desync detection
 interface StateChecksum {
   tick: number;
-  hash: string; // Hash of game state
+  checksum: number;      // Primary state hash
+  unitCount: number;
+  buildingCount: number;
+  resourceSum: number;
+  unitPositionHash: number;
+  healthSum: number;
 }
 
 // On checksum mismatch = desync detected
+// DesyncDetectionManager provides debugging tools
+```
+
+#### NAT Traversal
+
+```typescript
+const ICE_SERVERS: RTCIceServer[] = [
+  { urls: 'stun:stun.l.google.com:19302' },
+  { urls: 'stun:stun1.l.google.com:19302' },
+];
+```
+
+For symmetric NATs, the peer relay system (`PeerRelay.ts`) routes through other players with E2E encryption (ECDH + AES-GCM).
+
+#### Alternative: Connection Codes (`src/engine/network/p2p/ConnectionCode.ts`)
+
+For offline/manual connections, SDP offers can be encoded as shareable codes:
+
+```typescript
+// Format: VOID-XXXX-XXXX-XXXX-...
+// Encodes: SDP + ICE candidates + metadata
+// Compression: pako (zlib) + Crockford Base32
+// Expiry: 5 minutes
 ```
 
 ## Rendering Pipeline
