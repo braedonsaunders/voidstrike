@@ -20,7 +20,7 @@ import { Game } from '../core/Game';
 import { PooledVector2 } from '@/utils/VectorPool';
 import { TERRAIN_FEATURE_CONFIG, TerrainFeature } from '@/data/maps';
 import { getRecastNavigation, RecastNavigation } from '../pathfinding/RecastNavigation';
-import { debugPerformance } from '@/utils/debugLogger';
+import { debugPerformance, debugPathfinding } from '@/utils/debugLogger';
 import { snapValue, QUANT_POSITION } from '@/utils/FixedPoint';
 import {
   generateFormationPositions,
@@ -63,7 +63,9 @@ const PATH_REQUEST_COOLDOWN_TICKS = 10;
 
 // Use Recast crowd for collision avoidance
 // Re-enabled with fixes: proper position sync and crowd update timing
-const USE_RECAST_CROWD = true;
+// TEMP DISABLED: Set to false to test if direct movement works correctly
+// If units move at normal speed with this false, the issue is in crowd config
+const USE_RECAST_CROWD = false;
 
 // Static temp vectors for steering behaviors
 const tempSeparation: PooledVector2 = { x: 0, y: 0 };
@@ -919,10 +921,24 @@ export class MovementSystem extends System {
         // Set target if we have one
         if (targetX !== null && targetY !== null) {
           this.recast.setAgentTarget(entity.id, targetX, targetY);
+          const crowdMaxSpeed = unit.currentSpeed > 0 ? unit.currentSpeed : unit.maxSpeed;
           this.recast.updateAgentParams(entity.id, {
-            maxSpeed: unit.currentSpeed > 0 ? unit.currentSpeed : unit.maxSpeed,
+            maxSpeed: crowdMaxSpeed,
             radius: unit.collisionRadius,
           });
+          // DEBUG: Log crowd agent setup once per unit when speed is set
+          if (unit.currentSpeed === 0) {
+            debugPathfinding.log(
+              `[MovementSystem] CROWD SETUP: entity=${entity.id} crowdMaxSpeed=${crowdMaxSpeed.toFixed(3)} ` +
+              `target=${targetX.toFixed(1)},${targetY.toFixed(1)} pos=${transform.x.toFixed(1)},${transform.y.toFixed(1)}`
+            );
+          }
+        } else {
+          // DEBUG: Log when unit has no target
+          debugPathfinding.log(
+            `[MovementSystem] NO TARGET: entity=${entity.id} state=${unit.state} ` +
+            `pathLen=${unit.path.length} targetX=${unit.targetX} targetY=${unit.targetY}`
+          );
         }
       }
     }
@@ -1455,12 +1471,28 @@ export class MovementSystem extends System {
           finalVx = state.vx;
           finalVy = state.vy;
 
+          // DEBUG: Log crowd velocity to diagnose slow movement
+          const crowdVelMag = Math.sqrt(finalVx * finalVx + finalVy * finalVy);
+          if (crowdVelMag < unit.maxSpeed * 0.5 && distance > 2) {
+            debugPathfinding.log(
+              `[MovementSystem] SLOW CROWD: entity=${entity.id} crowdVel=${crowdVelMag.toFixed(3)} ` +
+              `maxSpeed=${unit.maxSpeed} currentSpeed=${unit.currentSpeed.toFixed(3)} ` +
+              `distance=${distance.toFixed(2)} state=${unit.state} ` +
+              `pathLen=${unit.path.length} pathIdx=${unit.pathIndex} ` +
+              `target=${unit.targetX?.toFixed(1)},${unit.targetY?.toFixed(1)}`
+            );
+          }
+
           // CROWD FIX: If velocity is very small but we should be moving,
           // fall back to direct movement (handles edge cases like first frame after agent add)
           const velMagSq = finalVx * finalVx + finalVy * finalVy;
           const minVelSq = 0.01 * 0.01;
           if (velMagSq < minVelSq && distance > this.arrivalThreshold) {
             // Crowd returned near-zero velocity - use direct movement as fallback
+            debugPathfinding.log(
+              `[MovementSystem] FALLBACK: entity=${entity.id} crowdVel=${Math.sqrt(velMagSq).toFixed(4)} ` +
+              `using currentSpeed=${unit.currentSpeed.toFixed(3)}`
+            );
             if (distance > 0.01) {
               finalVx = (dx / distance) * unit.currentSpeed;
               finalVy = (dy / distance) * unit.currentSpeed;
