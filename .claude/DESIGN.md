@@ -208,6 +208,33 @@ Hold **Shift** while placing buildings to queue multiple placements:
 - Workers are assigned to each building as they become available
 - Release shift and click to place final building and exit placement mode
 
+### Unit Movement Behavior (SC2-Style)
+
+Units use **magic box detection** for natural movement behavior:
+
+| Command Location | Behavior | Description |
+|-----------------|----------|-------------|
+| **Inside Selection Box** | Clump | All units move to the same point, then spread naturally |
+| **Outside Selection Box** | Preserve Spacing | Units maintain their relative positions |
+
+**Arrival Spreading:**
+- Units clump while moving (weak separation) for faster group movement
+- On arrival, strong separation kicks in causing natural spreading
+- Prevents splash damage from grouped units
+
+**Explicit Formations:**
+- `F` + click - Open formation menu (select: box, wedge, line, etc.)
+- Units automatically sort: melee front, ranged back, support center
+
+**Available Formations:**
+- **Box** - Balanced defensive, ranged protected in center
+- **Wedge** - V-shaped aggressive formation
+- **Line** - Horizontal spread, good for narrow chokes
+- **Column** - Single file for narrow passages
+- **Scatter** - Random spread for anti-splash
+- **Circle** - Defensive circle with support center
+- **Siege Line** - Infantry front, artillery back
+
 ## Map Design
 
 ### Map Design Principles

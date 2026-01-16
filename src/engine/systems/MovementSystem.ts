@@ -1,8 +1,12 @@
 /**
- * Movement System - Recast Crowd Integration
+ * Movement System - SC2-Style Clumping & Formations
  *
  * Handles unit movement using Recast's DetourCrowd for collision avoidance.
- * The crowd simulation uses RVO (Reciprocal Velocity Obstacles) internally.
+ * Implements SC2-style "magic box" detection for clump vs formation behavior:
+ * - Target INSIDE selection bounding box → units clump to same point
+ * - Target OUTSIDE bounding box → units preserve relative spacing
+ *
+ * Also supports explicit formation commands using data-driven formations.
  */
 
 import { System } from '../ecs/System';
@@ -18,12 +22,34 @@ import { TERRAIN_FEATURE_CONFIG, TerrainFeature } from '@/data/maps';
 import { getRecastNavigation, RecastNavigation } from '../pathfinding/RecastNavigation';
 import { debugPerformance } from '@/utils/debugLogger';
 import { snapValue, QUANT_POSITION } from '@/utils/FixedPoint';
+import {
+  generateFormationPositions,
+  sortUnitsForFormation,
+  getFormation,
+  FORMATION_CONFIG,
+} from '@/data/formations/formations';
 
-// Steering behavior constants - SC2-style soft separation
+// ==================== SC2-STYLE STEERING CONSTANTS ====================
+
+// Separation - prevents overlapping (strongest force)
 const SEPARATION_RADIUS = 1.0;
-const SEPARATION_STRENGTH = 2.0;
+const SEPARATION_STRENGTH_MOVING = 1.2;      // Weak while moving - allow clumping
+const SEPARATION_STRENGTH_IDLE = 2.5;        // Strong when idle - spread out
+const SEPARATION_STRENGTH_ARRIVING = 3.0;    // Strongest at arrival - natural spreading
 const MAX_AVOIDANCE_FORCE = 1.5;
-const MAX_AVOIDANCE_FORCE_SQ = MAX_AVOIDANCE_FORCE * MAX_AVOIDANCE_FORCE; // PERF: Pre-computed squared
+const MAX_AVOIDANCE_FORCE_SQ = MAX_AVOIDANCE_FORCE * MAX_AVOIDANCE_FORCE;
+
+// Cohesion - keeps group together (weak force)
+const COHESION_RADIUS = 8.0;
+const COHESION_STRENGTH = 0.1;               // Very weak - just prevents extreme spreading
+
+// Alignment - matches group heading (moderate force)
+const ALIGNMENT_RADIUS = 4.0;
+const ALIGNMENT_STRENGTH = 0.3;
+
+// Arrival spreading - units spread out when reaching destination
+const ARRIVAL_SPREAD_RADIUS = 2.5;           // Distance from target where spreading kicks in
+const ARRIVAL_SPREAD_STRENGTH = 2.0;         // Additional separation at arrival
 
 // Building avoidance - runtime steering to handle edge cases
 // The navmesh walkableRadius (0.6) provides primary clearance; these are backup
@@ -39,8 +65,10 @@ const PATH_REQUEST_COOLDOWN_MS = 500;
 // Re-enabled with fixes: proper position sync and crowd update timing
 const USE_RECAST_CROWD = true;
 
-// Static temp vectors
+// Static temp vectors for steering behaviors
 const tempSeparation: PooledVector2 = { x: 0, y: 0 };
+const tempCohesion: PooledVector2 = { x: 0, y: 0 };
+const tempAlignment: PooledVector2 = { x: 0, y: 0 };
 const tempBuildingAvoid: PooledVector2 = { x: 0, y: 0 };
 
 // PERF: Cached building query results to avoid double spatial grid lookups
@@ -92,6 +120,7 @@ export class MovementSystem extends System {
   private setupEventListeners(): void {
     this.game.eventBus.on('command:move', this.handleMoveCommand.bind(this));
     this.game.eventBus.on('command:patrol', this.handlePatrolCommand.bind(this));
+    this.game.eventBus.on('command:formation', this.handleFormationCommand.bind(this));
 
     // Clean up path request tracking and separation cache when units die to prevent memory leaks
     this.game.eventBus.on('unit:died', (data: { entityId: number }) => {
@@ -102,6 +131,87 @@ export class MovementSystem extends System {
       this.lastPathRequestTime.delete(data.entityId);
       this.separationCache.delete(data.entityId);
     });
+  }
+
+  // ==================== MAGIC BOX DETECTION ====================
+
+  /**
+   * Calculate the bounding box of a set of units.
+   * Used for SC2-style "magic box" detection.
+   */
+  private calculateBoundingBox(entityIds: number[]): {
+    minX: number;
+    maxX: number;
+    minY: number;
+    maxY: number;
+    centerX: number;
+    centerY: number;
+  } | null {
+    if (entityIds.length === 0) return null;
+
+    let minX = Infinity;
+    let maxX = -Infinity;
+    let minY = Infinity;
+    let maxY = -Infinity;
+    let validCount = 0;
+
+    for (const entityId of entityIds) {
+      const entity = this.world.getEntity(entityId);
+      if (!entity) continue;
+      const transform = entity.get<Transform>('Transform');
+      if (!transform) continue;
+
+      minX = Math.min(minX, transform.x);
+      maxX = Math.max(maxX, transform.x);
+      minY = Math.min(minY, transform.y);
+      maxY = Math.max(maxY, transform.y);
+      validCount++;
+    }
+
+    if (validCount === 0) return null;
+
+    return {
+      minX,
+      maxX,
+      minY,
+      maxY,
+      centerX: (minX + maxX) / 2,
+      centerY: (minY + maxY) / 2,
+    };
+  }
+
+  /**
+   * Check if a target point is inside the bounding box of selected units.
+   * SC2 behavior: target inside box = clump, target outside = preserve spacing
+   */
+  private isTargetInsideMagicBox(
+    targetX: number,
+    targetY: number,
+    box: { minX: number; maxX: number; minY: number; maxY: number }
+  ): boolean {
+    // Add a small margin to prevent edge-case toggling
+    const margin = 0.5;
+    return (
+      targetX >= box.minX - margin &&
+      targetX <= box.maxX + margin &&
+      targetY >= box.minY - margin &&
+      targetY <= box.maxY + margin
+    );
+  }
+
+  /**
+   * Calculate average facing direction from group center to target.
+   * Used for formation orientation.
+   */
+  private calculateGroupFacing(
+    centerX: number,
+    centerY: number,
+    targetX: number,
+    targetY: number
+  ): number {
+    const dx = targetX - centerX;
+    const dy = targetY - centerY;
+    return Math.atan2(dy, dx);
   }
 
   private requestPathWithCooldown(
@@ -126,6 +236,19 @@ export class MovementSystem extends System {
     return true;
   }
 
+  /**
+   * Handle move command with SC2-style magic box detection.
+   *
+   * Magic Box Behavior:
+   * - Target INSIDE the bounding box of selected units → CLUMP MODE
+   *   All units move to the SAME target point, separation spreads them on arrival.
+   * - Target OUTSIDE the bounding box → PRESERVE SPACING MODE
+   *   Each unit maintains its relative offset from the group center.
+   *
+   * This creates natural SC2-like behavior where:
+   * - Short moves (within group) create tight clumps
+   * - Long moves (outside group) maintain army spread
+   */
   private handleMoveCommand(data: {
     entityIds: number[];
     targetPosition: { x: number; y: number };
@@ -133,21 +256,214 @@ export class MovementSystem extends System {
   }): void {
     const { entityIds, targetPosition, queue } = data;
 
-    const positions = this.calculateFormationPositions(
-      targetPosition.x,
-      targetPosition.y,
-      entityIds.length
-    );
+    // Single unit always goes directly to target
+    if (entityIds.length === 1) {
+      const entityId = entityIds[0];
+      const entity = this.world.getEntity(entityId);
+      if (!entity) return;
 
-    for (let i = 0; i < entityIds.length; i++) {
-      const entityId = entityIds[i];
+      const unit = entity.get<Unit>('Unit');
+      if (!unit) return;
+
+      if (queue) {
+        unit.queueCommand({
+          type: 'move',
+          targetX: targetPosition.x,
+          targetY: targetPosition.y,
+        });
+      } else {
+        if (unit.state === 'building' && unit.constructingBuildingId !== null) {
+          unit.cancelBuilding();
+        }
+        unit.setMoveTarget(targetPosition.x, targetPosition.y);
+        unit.path = [];
+        unit.pathIndex = 0;
+        this.requestPathWithCooldown(entityId, targetPosition.x, targetPosition.y, true);
+      }
+      return;
+    }
+
+    // Multi-unit move: apply magic box logic
+    const box = this.calculateBoundingBox(entityIds);
+    if (!box) return;
+
+    const isInsideBox = this.isTargetInsideMagicBox(targetPosition.x, targetPosition.y, box);
+
+    if (isInsideBox) {
+      // CLUMP MODE: All units move to the same point
+      // Separation forces will spread them naturally on arrival
+      this.moveUnitsToSamePoint(entityIds, targetPosition.x, targetPosition.y, queue);
+    } else {
+      // PRESERVE SPACING MODE: Maintain relative offsets from group center
+      this.moveUnitsWithRelativeOffsets(entityIds, targetPosition.x, targetPosition.y, box, queue);
+    }
+  }
+
+  /**
+   * Clump mode: All units move to the exact same target point.
+   * Separation forces will naturally spread them on arrival (SC2 style).
+   */
+  private moveUnitsToSamePoint(
+    entityIds: number[],
+    targetX: number,
+    targetY: number,
+    queue?: boolean
+  ): void {
+    for (const entityId of entityIds) {
       const entity = this.world.getEntity(entityId);
       if (!entity) continue;
 
       const unit = entity.get<Unit>('Unit');
       if (!unit) continue;
 
-      const pos = positions[i];
+      if (queue) {
+        unit.queueCommand({
+          type: 'move',
+          targetX,
+          targetY,
+        });
+      } else {
+        if (unit.state === 'building' && unit.constructingBuildingId !== null) {
+          unit.cancelBuilding();
+        }
+        unit.setMoveTarget(targetX, targetY);
+        unit.path = [];
+        unit.pathIndex = 0;
+        this.requestPathWithCooldown(entityId, targetX, targetY, true);
+      }
+    }
+  }
+
+  /**
+   * Preserve spacing mode: Each unit maintains its relative offset from the group center.
+   * Creates formation-like movement without explicit formation slots.
+   */
+  private moveUnitsWithRelativeOffsets(
+    entityIds: number[],
+    targetX: number,
+    targetY: number,
+    box: { centerX: number; centerY: number },
+    queue?: boolean
+  ): void {
+    for (const entityId of entityIds) {
+      const entity = this.world.getEntity(entityId);
+      if (!entity) continue;
+
+      const transform = entity.get<Transform>('Transform');
+      const unit = entity.get<Unit>('Unit');
+      if (!transform || !unit) continue;
+
+      // Calculate this unit's offset from group center
+      const offsetX = transform.x - box.centerX;
+      const offsetY = transform.y - box.centerY;
+
+      // Apply offset to target position
+      const unitTargetX = targetX + offsetX;
+      const unitTargetY = targetY + offsetY;
+
+      if (queue) {
+        unit.queueCommand({
+          type: 'move',
+          targetX: unitTargetX,
+          targetY: unitTargetY,
+        });
+      } else {
+        if (unit.state === 'building' && unit.constructingBuildingId !== null) {
+          unit.cancelBuilding();
+        }
+        unit.setMoveTarget(unitTargetX, unitTargetY);
+        unit.path = [];
+        unit.pathIndex = 0;
+        this.requestPathWithCooldown(entityId, unitTargetX, unitTargetY, true);
+      }
+    }
+  }
+
+  /**
+   * Handle explicit formation command - player requested a specific formation.
+   * Uses the data-driven formation system from formations.ts.
+   */
+  private handleFormationCommand(data: {
+    entityIds: number[];
+    formationId: string;
+    targetPosition: { x: number; y: number };
+    queue?: boolean;
+  }): void {
+    const { entityIds, formationId, targetPosition, queue } = data;
+
+    if (entityIds.length === 0) return;
+
+    const formation = getFormation(formationId);
+    if (!formation) {
+      // Fall back to normal move if formation not found
+      this.handleMoveCommand({ entityIds, targetPosition, queue });
+      return;
+    }
+
+    // Calculate group center for facing direction
+    const box = this.calculateBoundingBox(entityIds);
+    if (!box) return;
+
+    const facingAngle = this.calculateGroupFacing(
+      box.centerX,
+      box.centerY,
+      targetPosition.x,
+      targetPosition.y
+    );
+
+    // Build unit info for sorting
+    const unitInfos: Array<{
+      id: number;
+      category: string;
+      isRanged: boolean;
+      isMelee: boolean;
+      isSupport: boolean;
+    }> = [];
+
+    for (const entityId of entityIds) {
+      const entity = this.world.getEntity(entityId);
+      if (!entity) continue;
+
+      const unit = entity.get<Unit>('Unit');
+      if (!unit) continue;
+
+      // Determine unit type based on attack range
+      const isRanged = unit.attackRange >= 5;
+      const isMelee = unit.attackRange < 2 && unit.attackDamage > 0;
+      const isSupport = unit.canHeal || unit.attackDamage === 0;
+
+      unitInfos.push({
+        id: entityId,
+        category: unit.unitId,
+        isRanged,
+        isMelee,
+        isSupport,
+      });
+    }
+
+    // Sort units for formation (melee front, ranged back, etc.)
+    const sortedUnits = sortUnitsForFormation(formationId, unitInfos);
+
+    // Generate formation positions
+    const formationPositions = generateFormationPositions(
+      formationId,
+      sortedUnits.length,
+      targetPosition.x,
+      targetPosition.y,
+      facingAngle
+    );
+
+    // Assign each unit to its formation slot
+    for (let i = 0; i < sortedUnits.length; i++) {
+      const entityId = sortedUnits[i].id;
+      const entity = this.world.getEntity(entityId);
+      if (!entity) continue;
+
+      const unit = entity.get<Unit>('Unit');
+      if (!unit) continue;
+
+      const pos = formationPositions[i];
+      if (!pos) continue;
 
       if (queue) {
         unit.queueCommand({
@@ -159,7 +475,6 @@ export class MovementSystem extends System {
         if (unit.state === 'building' && unit.constructingBuildingId !== null) {
           unit.cancelBuilding();
         }
-
         unit.setMoveTarget(pos.x, pos.y);
         unit.path = [];
         unit.pathIndex = 0;
@@ -277,16 +592,47 @@ export class MovementSystem extends System {
   }
 
   /**
+   * Get state-dependent separation strength.
+   * SC2 style: weak while moving (allow clumping), strong when idle (spread out).
+   */
+  private getSeparationStrength(unit: Unit, distanceToTarget: number): number {
+    // Workers gathering/building have no separation
+    if (unit.state === 'gathering' || unit.state === 'building') {
+      return 0;
+    }
+
+    // Near arrival: strongest separation for natural spreading
+    if (distanceToTarget < ARRIVAL_SPREAD_RADIUS && distanceToTarget > 0) {
+      return SEPARATION_STRENGTH_ARRIVING;
+    }
+
+    // Moving: weak separation, allow clumping for faster group movement
+    if (
+      unit.state === 'moving' ||
+      unit.state === 'attackmoving' ||
+      unit.state === 'patrolling'
+    ) {
+      return SEPARATION_STRENGTH_MOVING;
+    }
+
+    // Idle/attacking: strong separation, spread out
+    return SEPARATION_STRENGTH_IDLE;
+  }
+
+  /**
    * Calculate separation force (SC2-style soft avoidance)
+   * State-dependent: weak while moving (clumping), strong when idle (spreading).
    * PERF: Results are cached and only recalculated every SEPARATION_THROTTLE_TICKS ticks
    */
   private calculateSeparationForce(
     selfId: number,
     selfTransform: Transform,
     selfUnit: Unit,
-    out: PooledVector2
+    out: PooledVector2,
+    distanceToTarget: number = Infinity
   ): void {
-    if (selfUnit.state === 'gathering') {
+    const baseStrength = this.getSeparationStrength(selfUnit, distanceToTarget);
+    if (baseStrength === 0) {
       out.x = 0;
       out.y = 0;
       return;
@@ -295,6 +641,7 @@ export class MovementSystem extends System {
     // PERF: Check cache first - reuse result if calculated recently
     const cached = this.separationCache.get(selfId);
     if (cached && (this.currentTick - cached.tick) < SEPARATION_THROTTLE_TICKS) {
+      // Scale cached result by current strength (state may have changed)
       out.x = cached.x;
       out.y = cached.y;
       return;
@@ -336,7 +683,7 @@ export class MovementSystem extends System {
       // PERF: Use squared distance for threshold check, only sqrt when needed
       if (distanceSq < separationDistSq && distanceSq > 0.0001) {
         const distance = Math.sqrt(distanceSq);
-        const strength = SEPARATION_STRENGTH * (1 - distance / separationDist);
+        const strength = baseStrength * (1 - distance / separationDist);
         const normalizedDx = dx / distance;
         const normalizedDy = dy / distance;
 
@@ -359,6 +706,139 @@ export class MovementSystem extends System {
 
     out.x = forceX;
     out.y = forceY;
+  }
+
+  /**
+   * Calculate cohesion force - steers toward the average position of nearby units.
+   * Keeps groups together but with very weak force (SC2 style).
+   */
+  private calculateCohesionForce(
+    selfId: number,
+    selfTransform: Transform,
+    selfUnit: Unit,
+    out: PooledVector2
+  ): void {
+    out.x = 0;
+    out.y = 0;
+
+    // No cohesion for workers or idle units
+    if (selfUnit.isWorker || selfUnit.state === 'idle' || selfUnit.state === 'gathering') {
+      return;
+    }
+
+    let sumX = 0;
+    let sumY = 0;
+    let count = 0;
+
+    const nearbyIds = this.world.unitGrid.queryRadius(
+      selfTransform.x,
+      selfTransform.y,
+      COHESION_RADIUS
+    );
+
+    for (const entityId of nearbyIds) {
+      if (entityId === selfId) continue;
+
+      const entity = this.world.getEntity(entityId);
+      if (!entity) continue;
+
+      const otherTransform = entity.get<Transform>('Transform');
+      const otherUnit = entity.get<Unit>('Unit');
+      if (!otherTransform || !otherUnit) continue;
+
+      if (otherUnit.state === 'dead') continue;
+      if (selfUnit.isFlying !== otherUnit.isFlying) continue;
+      // Only cohere with units moving in same direction
+      if (otherUnit.state !== selfUnit.state) continue;
+
+      sumX += otherTransform.x;
+      sumY += otherTransform.y;
+      count++;
+    }
+
+    if (count === 0) return;
+
+    // Calculate center of mass
+    const centerX = sumX / count;
+    const centerY = sumY / count;
+
+    // Direction to center of mass
+    const dx = centerX - selfTransform.x;
+    const dy = centerY - selfTransform.y;
+    const dist = Math.sqrt(dx * dx + dy * dy);
+
+    if (dist < 0.1) return;
+
+    // Weak cohesion force toward center
+    out.x = (dx / dist) * COHESION_STRENGTH;
+    out.y = (dy / dist) * COHESION_STRENGTH;
+  }
+
+  /**
+   * Calculate alignment force - steers toward the average heading of nearby units.
+   * Helps groups move together smoothly.
+   */
+  private calculateAlignmentForce(
+    selfId: number,
+    selfTransform: Transform,
+    selfUnit: Unit,
+    selfVelocity: Velocity,
+    out: PooledVector2
+  ): void {
+    out.x = 0;
+    out.y = 0;
+
+    // No alignment for workers or stationary units
+    if (selfUnit.isWorker || selfUnit.state === 'idle' || selfUnit.state === 'gathering') {
+      return;
+    }
+
+    let sumVx = 0;
+    let sumVy = 0;
+    let count = 0;
+
+    const nearbyIds = this.world.unitGrid.queryRadius(
+      selfTransform.x,
+      selfTransform.y,
+      ALIGNMENT_RADIUS
+    );
+
+    for (const entityId of nearbyIds) {
+      if (entityId === selfId) continue;
+
+      const entity = this.world.getEntity(entityId);
+      if (!entity) continue;
+
+      const otherTransform = entity.get<Transform>('Transform');
+      const otherUnit = entity.get<Unit>('Unit');
+      const otherVelocity = entity.get<Velocity>('Velocity');
+      if (!otherTransform || !otherUnit || !otherVelocity) continue;
+
+      if (otherUnit.state === 'dead') continue;
+      if (selfUnit.isFlying !== otherUnit.isFlying) continue;
+
+      // Only align with moving units
+      const otherSpeed = otherVelocity.getMagnitude();
+      if (otherSpeed < 0.1) continue;
+
+      // Add normalized velocity
+      sumVx += otherVelocity.x / otherSpeed;
+      sumVy += otherVelocity.y / otherSpeed;
+      count++;
+    }
+
+    if (count === 0) return;
+
+    // Average heading
+    const avgVx = sumVx / count;
+    const avgVy = sumVy / count;
+    const avgMag = Math.sqrt(avgVx * avgVx + avgVy * avgVy);
+
+    if (avgMag < 0.1) return;
+
+    // Alignment force toward average heading
+    out.x = (avgVx / avgMag) * ALIGNMENT_STRENGTH;
+    out.y = (avgVy / avgMag) * ALIGNMENT_STRENGTH;
   }
 
   /**
@@ -952,6 +1432,32 @@ export class MovementSystem extends System {
               finalVy = (dy / distance) * unit.currentSpeed;
             }
           }
+
+          // SC2-style: add extra separation near arrival for natural spreading
+          // Crowd handles basic separation, but we boost it near destination
+          const distToFinalTarget = unit.targetX !== null && unit.targetY !== null
+            ? Math.sqrt(
+                (unit.targetX - transform.x) * (unit.targetX - transform.x) +
+                (unit.targetY - transform.y) * (unit.targetY - transform.y)
+              )
+            : distance;
+
+          if (distToFinalTarget < ARRIVAL_SPREAD_RADIUS) {
+            this.calculateSeparationForce(entity.id, transform, unit, tempSeparation, distToFinalTarget);
+            // Add arrival spreading force
+            finalVx += tempSeparation.x * ARRIVAL_SPREAD_STRENGTH;
+            finalVy += tempSeparation.y * ARRIVAL_SPREAD_STRENGTH;
+          }
+
+          // Add cohesion and alignment for group movement
+          if (unit.state === 'moving' || unit.state === 'attackmoving' || unit.state === 'patrolling') {
+            this.calculateCohesionForce(entity.id, transform, unit, tempCohesion);
+            this.calculateAlignmentForce(entity.id, transform, unit, velocity, tempAlignment);
+            finalVx += tempCohesion.x;
+            finalVy += tempCohesion.y;
+            finalVx += tempAlignment.x;
+            finalVy += tempAlignment.y;
+          }
         } else {
           // Agent not in crowd or state unavailable - fallback to direct movement
           if (distance > 0.01) {
@@ -968,17 +1474,40 @@ export class MovementSystem extends System {
           prefVy = (dy / distance) * unit.currentSpeed;
         }
 
-        // Simple separation for non-crowd units
-        if (!unit.isFlying && distance > this.arrivalThreshold * 2) {
-          this.calculateSeparationForce(entity.id, transform, unit, tempSeparation);
-          const separationWeight =
-            distance > this.decelerationThreshold ? 0.5 : 0.1;
+        // SC2-style flocking behaviors for non-crowd units
+        if (!unit.isFlying) {
+          // Calculate distance to final target for arrival spreading
+          const distToFinalTarget = unit.targetX !== null && unit.targetY !== null
+            ? Math.sqrt(
+                (unit.targetX - transform.x) * (unit.targetX - transform.x) +
+                (unit.targetY - transform.y) * (unit.targetY - transform.y)
+              )
+            : distance;
 
+          // Separation - state-dependent strength (stronger at arrival)
+          this.calculateSeparationForce(entity.id, transform, unit, tempSeparation, distToFinalTarget);
+
+          // Cohesion - keeps group together (weak force)
+          this.calculateCohesionForce(entity.id, transform, unit, tempCohesion);
+
+          // Alignment - matches group heading (moderate force)
+          this.calculateAlignmentForce(entity.id, transform, unit, velocity, tempAlignment);
+
+          // Blend all forces with direction to target
           let dirX = distance > 0.01 ? dx / distance : 0;
           let dirY = distance > 0.01 ? dy / distance : 0;
 
-          dirX += tempSeparation.x * separationWeight;
-          dirY += tempSeparation.y * separationWeight;
+          // Separation is strongest force - full weight
+          dirX += tempSeparation.x;
+          dirY += tempSeparation.y;
+
+          // Cohesion only while moving
+          if (unit.state === 'moving' || unit.state === 'attackmoving' || unit.state === 'patrolling') {
+            dirX += tempCohesion.x;
+            dirY += tempCohesion.y;
+            dirX += tempAlignment.x;
+            dirY += tempAlignment.y;
+          }
 
           const newMag = Math.sqrt(dirX * dirX + dirY * dirY);
           if (newMag > 0.01) {
@@ -989,6 +1518,7 @@ export class MovementSystem extends System {
           finalVx = dirX * unit.currentSpeed;
           finalVy = dirY * unit.currentSpeed;
         } else {
+          // Flying units - direct movement only
           finalVx = prefVx;
           finalVy = prefVy;
         }
