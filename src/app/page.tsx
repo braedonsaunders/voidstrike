@@ -338,21 +338,31 @@ export default function Home() {
             </Link>
           </div>
 
-          {/* Battle Simulator - subtle text link */}
-          <button
-            onClick={() => {
-              startBattleSimulator();
-              router.push('/game');
-            }}
+          {/* Secondary links - subtle text links */}
+          <div
             className={`
-              mt-6 text-void-500/60 text-sm tracking-wider
-              hover:text-void-400 transition-colors duration-300
+              mt-6 flex items-center gap-4
               transition-all duration-1000 delay-900
               ${isLoaded ? 'opacity-100' : 'opacity-0'}
             `}
           >
-            Battle Simulator
-          </button>
+            <button
+              onClick={() => {
+                startBattleSimulator();
+                router.push('/game');
+              }}
+              className="text-void-500/60 text-sm tracking-wider hover:text-void-400 transition-colors duration-300"
+            >
+              Battle Simulator
+            </button>
+            <span className="text-void-600/40">|</span>
+            <button
+              onClick={() => router.push('/game/setup/editor?new=true')}
+              className="text-void-500/60 text-sm tracking-wider hover:text-void-400 transition-colors duration-300"
+            >
+              Map Editor
+            </button>
+          </div>
         </div>
 
         {/* Bottom Info Bar */}
