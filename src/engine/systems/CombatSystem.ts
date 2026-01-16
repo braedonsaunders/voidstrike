@@ -201,6 +201,7 @@ export class CombatSystem extends System {
             position: { x: transform.x, y: transform.y },
             isPlayerUnit: selectable?.playerId ? isLocalPlayer(selectable.playerId) : false,
             isFlying: unit.isFlying,
+            playerId: selectable?.playerId,
             unitType: unit.unitId, // For airborne height lookup in effects
           });
         }

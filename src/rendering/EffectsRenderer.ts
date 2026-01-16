@@ -443,60 +443,15 @@ export class EffectsRenderer {
   }
 
   private setupEventListeners(): void {
-    this.eventBus.on('combat:attack', (data: {
-      attackerId?: string; // Unit type ID for attacker (e.g., "valkyrie") - for airborne height lookup
-      attackerEntityId?: number; // Entity ID for focus fire tracking
-      targetId?: number; // Entity ID for focus fire tracking
-      attackerPos?: { x: number; y: number };
-      targetPos?: { x: number; y: number };
-      targetUnitType?: string; // Unit type ID for target - for airborne height lookup
-      damage: number;
-      damageType: string;
-      targetHeight?: number;
-      attackerIsFlying?: boolean;
-      targetIsFlying?: boolean;
-    }) => {
-      if (data.attackerPos && data.targetPos) {
-        // Get terrain height at attacker and target positions
-        const attackerTerrainHeight = this.getHeightAt(data.attackerPos.x, data.attackerPos.y);
-        const targetTerrainHeight = this.getHeightAt(data.targetPos.x, data.targetPos.y);
+    // NOTE: Combat effects (projectiles, death effects, damage numbers, explosions)
+    // are now handled by BattleEffectsRenderer and DamageNumberSystem.
+    // This renderer only handles focus fire cleanup now.
 
-        // Add flying offset for air units (per-unit-type airborne height from assets.json)
-        const attackerAirborneHeight = data.attackerId ? AssetManager.getAirborneHeight(data.attackerId) : DEFAULT_AIRBORNE_HEIGHT;
-        const targetAirborneHeight = data.targetUnitType ? AssetManager.getAirborneHeight(data.targetUnitType) : DEFAULT_AIRBORNE_HEIGHT;
-        const attackerFlyingOffset = data.attackerIsFlying ? attackerAirborneHeight : 0;
-        const targetFlyingOffset = data.targetIsFlying ? targetAirborneHeight : 0;
-
-        // PERF: Use temp vectors to avoid allocation, they get cloned in createAttackEffect
-        tempVec3Start.set(data.attackerPos.x, attackerTerrainHeight + 0.5 + attackerFlyingOffset, data.attackerPos.y);
-        tempVec3End.set(data.targetPos.x, targetTerrainHeight + 0.5 + targetFlyingOffset, data.targetPos.y);
-        this.createAttackEffect(tempVec3Start, tempVec3End, data.damageType);
-
-        // Create floating damage number ABOVE the target
-        // Use targetHeight for buildings, default 2.5 for units (relative to terrain), add flying offset for air units
-        const damageNumberY = targetTerrainHeight + targetFlyingOffset + ((data.targetHeight && data.targetHeight > 0) ? data.targetHeight + 1.5 : 2.5);
-        // PERF: Pass targetId to consolidate multiple hits on same target into one number
-        this.createDamageNumber(
-          new THREE.Vector3(data.targetPos.x, damageNumberY, data.targetPos.y),
-          data.damage,
-          data.targetId
-        );
-
-        // Track focus fire - multiple attackers on same target (using entity IDs)
-        if (data.attackerEntityId !== undefined && data.targetId !== undefined) {
-          this.trackFocusFire(data.attackerEntityId, data.targetId, data.targetPos);
-        }
-      }
-    });
-
+    // Focus fire tracking for unit:died (to clear indicators)
     this.eventBus.on('unit:died', (data: {
       entityId?: number;
       position?: { x: number; y: number };
     }) => {
-      if (data.position) {
-        const terrainHeight = this.getHeightAt(data.position.x, data.position.y);
-        this.createDeathEffect(new THREE.Vector3(data.position.x, terrainHeight + 0.1, data.position.y));
-      }
       // Clear focus fire tracking for dead unit
       if (data.entityId !== undefined) {
         this.clearFocusFire(data.entityId);
@@ -510,42 +465,7 @@ export class EffectsRenderer {
       }
     });
 
-    // Building destroyed - create big explosion
-    this.eventBus.on('building:destroyed', (data: {
-      entityId: number;
-      playerId: string;
-      buildingType: string;
-      position: { x: number; y: number };
-    }) => {
-      const terrainHeight = this.getHeightAt(data.position.x, data.position.y);
-      this.createBuildingExplosion(
-        new THREE.Vector3(data.position.x, terrainHeight, data.position.y),
-        data.buildingType
-      );
-      // Clear any focus fire on this building
-      this.clearFocusFire(data.entityId);
-    });
-
-    // Move command - show indicator on ground (only for local player's commands)
-    this.eventBus.on('command:move', (data: {
-      entityIds: number[];
-      targetPosition?: { x: number; y: number };
-      playerId?: string;
-    }) => {
-      // Only show move indicator for local player (or all players if spectating)
-      const localPlayerId = getLocalPlayerId();
-      const spectating = isSpectatorMode();
-      if (!spectating && data.playerId && data.playerId !== localPlayerId) {
-        return; // Don't show indicator for other players' commands
-      }
-
-      if (data.entityIds.length > 0 && data.targetPosition) {
-        const terrainHeight = this.getHeightAt(data.targetPosition.x, data.targetPosition.y);
-        this.createMoveIndicator(
-          new THREE.Vector3(data.targetPosition.x, terrainHeight + 0.15, data.targetPosition.y)
-        );
-      }
-    });
+    // NOTE: Move indicators are now handled by BattleEffectsRenderer
   }
 
   public createAttackEffect(

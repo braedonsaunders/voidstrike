@@ -19,7 +19,7 @@
 import * as Phaser from 'phaser';
 import { EventBus } from '@/engine/core/EventBus';
 import { useProjectionStore } from '@/store/projectionStore';
-import { getLocalPlayerId, isLocalPlayer, isSpectatorMode } from '@/store/gameSetupStore';
+import { getLocalPlayerId, isLocalPlayer, isSpectatorMode, isBattleSimulatorMode } from '@/store/gameSetupStore';
 
 // ============================================
 // CONSTANTS
@@ -151,7 +151,7 @@ export class ScreenEffectsSystem {
    * Setup event listeners
    */
   private setupEventListeners(): void {
-    // Player damage - directional indicator + chromatic
+    // Player damage - directional indicator + chromatic (not in battle simulator)
     this.eventBus.on('player:damage', (data: {
       damage: number;
       position?: { x: number; y: number };
@@ -159,6 +159,7 @@ export class ScreenEffectsSystem {
       sourcePosition?: { x: number; y: number };
     }) => {
       if (isSpectatorMode()) return;
+      if (isBattleSimulatorMode()) return;
       if (data.playerId && !isLocalPlayer(data.playerId)) return;
 
       const intensity = Math.min(data.damage / 50, 1);

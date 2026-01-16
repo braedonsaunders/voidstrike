@@ -22,31 +22,29 @@ import { useProjectionStore } from '@/store/projectionStore';
 // ============================================
 
 // Consolidation window - hits within this time merge into one number
-const CONSOLIDATION_WINDOW = 500; // ms
+const CONSOLIDATION_WINDOW = 400; // ms
 
 // Damage thresholds for color coding
 const HIGH_DAMAGE_THRESHOLD = 30;
 const CRITICAL_THRESHOLD = 50;
 
-// Colors
+// Colors - simple yellow for all damage
 const COLORS = {
   normal: '#ffff00',      // Yellow
-  high: '#ff9900',        // Orange
-  critical: '#ff4400',    // Red-orange
-  killingBlow: '#ff0000', // Red
+  high: '#ffcc00',        // Slightly darker yellow
+  critical: '#ffaa00',    // Orange-yellow
+  killingBlow: '#ff6600', // Orange
   healing: '#00ff88',     // Green (for future use)
   shield: '#00aaff',      // Blue (for future use)
 } as const;
 
-// Font settings
+// Font settings - fixed size, no scaling
 const FONT_FAMILY = 'Orbitron, Arial Black, Arial, sans-serif';
-const BASE_FONT_SIZE = 24;
-const MAX_FONT_SIZE = 42;
+const FONT_SIZE = 18; // Fixed size
 
-// Animation durations
-const POP_DURATION = 150;
-const FLOAT_DURATION = 800;
-const FADE_DURATION = 300;
+// Animation durations - simplified
+const FLOAT_DURATION = 600;
+const FADE_DURATION = 200;
 
 // ============================================
 // INTERFACES
@@ -109,7 +107,7 @@ export class DamageNumberSystem {
   private initializePool(): void {
     for (let i = 0; i < this.poolSize; i++) {
       const shadow = this.scene.add.text(0, 0, '', {
-        fontSize: `${BASE_FONT_SIZE}px`,
+        fontSize: `${FONT_SIZE}px`,
         fontFamily: FONT_FAMILY,
         color: '#000000',
         stroke: '#000000',
@@ -117,21 +115,14 @@ export class DamageNumberSystem {
       });
       shadow.setOrigin(0.5, 0.5);
       shadow.setVisible(false);
-      shadow.setAlpha(0.6);
+      shadow.setAlpha(0.5);
 
       const text = this.scene.add.text(0, 0, '', {
-        fontSize: `${BASE_FONT_SIZE}px`,
+        fontSize: `${FONT_SIZE}px`,
         fontFamily: FONT_FAMILY,
         color: COLORS.normal,
         stroke: '#000000',
-        strokeThickness: 4,
-        shadow: {
-          offsetX: 2,
-          offsetY: 2,
-          color: '#000000',
-          blur: 4,
-          fill: true,
-        },
+        strokeThickness: 3,
       });
       text.setOrigin(0.5, 0.5);
       text.setVisible(false);
@@ -304,18 +295,18 @@ export class DamageNumberSystem {
 
   /**
    * Update the text content and style of a damage number
+   * Simplified: fixed font size, just update the number
    */
   private updateDamageText(damageNumber: ActiveDamageNumber): void {
-    const { text, shadow, totalDamage, hitCount, isKillingBlow } = damageNumber;
+    const { text, shadow, totalDamage, isKillingBlow } = damageNumber;
 
-    // Format damage text
+    // Format damage text - simple number
     const damageStr = Math.round(totalDamage).toString();
-    const displayText = hitCount > 1 ? `${damageStr}` : damageStr;
 
-    text.setText(displayText);
-    shadow.setText(displayText);
+    text.setText(damageStr);
+    shadow.setText(damageStr);
 
-    // Determine color based on damage and state
+    // Simple color based on damage level
     let color: string;
     if (isKillingBlow) {
       color = COLORS.killingBlow;
@@ -329,24 +320,15 @@ export class DamageNumberSystem {
 
     text.setColor(color);
 
-    // Scale font size based on damage (more damage = bigger text)
-    const damageRatio = Math.min(totalDamage / 100, 1);
-    const fontSize = BASE_FONT_SIZE + (MAX_FONT_SIZE - BASE_FONT_SIZE) * damageRatio * 0.5;
-
-    // Add extra size for hit count
-    const hitBonus = Math.min(hitCount * 2, 10);
-    const finalFontSize = Math.min(fontSize + hitBonus, MAX_FONT_SIZE);
-
-    text.setFontSize(finalFontSize);
-    shadow.setFontSize(finalFontSize);
-
-    // Increase stroke for larger text
-    const strokeThickness = 4 + Math.floor(damageRatio * 3);
-    text.setStroke('#000000', strokeThickness);
+    // Fixed font size - no scaling
+    text.setFontSize(FONT_SIZE);
+    shadow.setFontSize(FONT_SIZE);
+    text.setStroke('#000000', 3);
   }
 
   /**
    * Start the entrance animation for a new damage number
+   * Simplified: just fade in and float up
    */
   private startEntranceAnimation(damageNumber: ActiveDamageNumber): void {
     const { text, shadow, targetId } = damageNumber;
@@ -354,32 +336,30 @@ export class DamageNumberSystem {
     // Clear any existing tweens
     this.clearTweens(targetId);
 
-    // Start small and pop up
-    text.setScale(0.5);
-    shadow.setScale(0.5);
+    // Start at normal scale, just fade in
+    text.setScale(1);
+    shadow.setScale(1);
     text.setAlpha(0);
     shadow.setAlpha(0);
 
     const tweens: Phaser.Tweens.Tween[] = [];
 
-    // Pop in animation
-    const popTween = this.scene.tweens.add({
-      targets: [text, shadow],
-      scale: 1.2,
-      alpha: { value: 1, duration: POP_DURATION * 0.5 },
-      duration: POP_DURATION,
-      ease: 'Back.easeOut',
-      onComplete: () => {
-        // Settle to normal scale
-        this.scene.tweens.add({
-          targets: [text, shadow],
-          scale: 1,
-          duration: 100,
-          ease: 'Quad.easeOut',
-        });
-      },
+    // Simple fade in
+    const fadeInTween = this.scene.tweens.add({
+      targets: text,
+      alpha: 1,
+      duration: 100,
+      ease: 'Linear',
     });
-    tweens.push(popTween);
+    tweens.push(fadeInTween);
+
+    const shadowFadeIn = this.scene.tweens.add({
+      targets: shadow,
+      alpha: 0.5,
+      duration: 100,
+      ease: 'Linear',
+    });
+    tweens.push(shadowFadeIn);
 
     // Start float animation
     this.startFloatAnimation(damageNumber, tweens);
@@ -388,7 +368,8 @@ export class DamageNumberSystem {
   }
 
   /**
-   * Trigger a pop animation for consolidated hits
+   * Trigger a subtle pulse when damage is consolidated
+   * Simplified: very subtle scale bump
    */
   private triggerPopAnimation(damageNumber: ActiveDamageNumber): void {
     if (damageNumber.isAnimatingPop) return;
@@ -396,11 +377,11 @@ export class DamageNumberSystem {
     damageNumber.isAnimatingPop = true;
     const { text, shadow } = damageNumber;
 
-    // Quick scale pop
+    // Very subtle scale bump
     this.scene.tweens.add({
       targets: [text, shadow],
-      scale: 1.3,
-      duration: 80,
+      scale: 1.05,
+      duration: 50,
       ease: 'Quad.easeOut',
       yoyo: true,
       onComplete: () => {
@@ -412,12 +393,13 @@ export class DamageNumberSystem {
 
   /**
    * Start the floating animation
+   * Simplified: gentle float up and fade
    */
   private startFloatAnimation(damageNumber: ActiveDamageNumber, tweens: Phaser.Tweens.Tween[]): void {
-    // Float upward over time
+    // Gentle float upward
     const floatTween = this.scene.tweens.add({
       targets: damageNumber,
-      yOffset: -40,
+      yOffset: -25,
       duration: FLOAT_DURATION,
       ease: 'Quad.easeOut',
     });
@@ -439,6 +421,7 @@ export class DamageNumberSystem {
 
   /**
    * Reset float animation when damage is consolidated
+   * Just extends the lifetime of the number
    */
   private resetFloatAnimation(damageNumber: ActiveDamageNumber): void {
     const { targetId } = damageNumber;
@@ -446,23 +429,20 @@ export class DamageNumberSystem {
     // Clear existing tweens
     this.clearTweens(targetId);
 
-    // Reset offset and restart animations
-    damageNumber.yOffset = -10; // Slight offset for the pop
-
     const tweens: Phaser.Tweens.Tween[] = [];
 
-    // New float animation
+    // Continue float animation from current position
     const floatTween = this.scene.tweens.add({
       targets: damageNumber,
-      yOffset: -40,
+      yOffset: -25,
       duration: FLOAT_DURATION,
       ease: 'Quad.easeOut',
     });
     tweens.push(floatTween);
 
-    // Ensure alpha is at 1
+    // Ensure alpha is visible
     damageNumber.text.setAlpha(1);
-    damageNumber.shadow.setAlpha(0.6);
+    damageNumber.shadow.setAlpha(0.5);
 
     // New fade out
     const fadeTween = this.scene.tweens.add({
