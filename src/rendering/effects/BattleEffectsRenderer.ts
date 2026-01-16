@@ -659,9 +659,9 @@ export class BattleEffectsRenderer {
 
         this.createProjectileEffect(startPos, endPos, data.damageType, faction, !!data.targetIsFlying);
 
-        // Track focus fire using entity IDs
+        // Track focus fire using entity IDs (pass airborne height for correct positioning)
         if (data.attackerEntityId !== undefined && data.targetId !== undefined) {
-          this.trackFocusFire(data.attackerEntityId, data.targetId, data.targetPos, !!data.targetIsFlying);
+          this.trackFocusFire(data.attackerEntityId, data.targetId, data.targetPos, !!data.targetIsFlying, targetAirborneHeight);
         }
       }
     });
@@ -1160,7 +1160,7 @@ export class BattleEffectsRenderer {
   // FOCUS FIRE & MOVE INDICATORS
   // ============================================
 
-  private trackFocusFire(attackerId: number, targetId: number, targetPos: { x: number; y: number }, isFlying: boolean): void {
+  private trackFocusFire(attackerId: number, targetId: number, targetPos: { x: number; y: number }, isFlying: boolean, airborneHeight: number = DEFAULT_AIRBORNE_HEIGHT): void {
     let attackers = this.targetAttackerCounts.get(targetId);
     if (!attackers) {
       attackers = new Set();
@@ -1170,8 +1170,8 @@ export class BattleEffectsRenderer {
     attackers.add(attackerId);
 
     const terrainHeight = this.getHeightAt(targetPos.x, targetPos.y);
-    // Focus fire indicator uses default airborne height (unit type not available in this context)
-    const heightOffset = isFlying ? DEFAULT_AIRBORNE_HEIGHT : GROUND_EFFECT_OFFSET;
+    // Use per-unit-type airborne height from assets.json for correct positioning
+    const heightOffset = isFlying ? airborneHeight : GROUND_EFFECT_OFFSET;
 
     if (attackers.size >= 2) {
       let indicator = this.focusFireIndicators.get(targetId);
