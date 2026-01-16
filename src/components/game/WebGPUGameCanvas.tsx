@@ -47,7 +47,7 @@ import {
   TSLFogOfWar,
   TSLGameOverlayManager,
 } from '@/rendering/tsl';
-import { initCameraMatrices, setCameraMatricesBeforeRender, updateCameraMatrices } from '@/rendering/tsl/InstancedVelocity';
+import { initCameraMatrices, setCameraMatricesBeforeRender, updateCameraMatrices, setMaxVertexBuffers } from '@/rendering/tsl/InstancedVelocity';
 
 import { useGameStore } from '@/store/gameStore';
 
@@ -247,6 +247,9 @@ export function WebGPUGameCanvas() {
 
       // Set renderer API in UI store for graphics options display
       useUIStore.getState().setRendererAPI(renderContext.isWebGPU ? 'WebGPU' : 'WebGL');
+
+      // Set the max vertex buffers from the device limits for velocity tracking
+      setMaxVertexBuffers(renderContext.deviceLimits.maxVertexBuffers);
 
       debugInitialization.log(`[WebGPUGameCanvas] Using ${renderContext.isWebGPU ? 'WebGPU' : 'WebGL'} backend`);
       if (renderContext.supportsCompute) {
