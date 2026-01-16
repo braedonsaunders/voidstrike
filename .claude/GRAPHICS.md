@@ -980,3 +980,136 @@ lightPool.spawn('laser_hit', impactPos, new THREE.Color(0x00ffff), 3.0, 100);
    - Clustered deferred lighting
    - Full per-model light attachment system
    - Dynamic time-of-day
+
+---
+
+## Battle Effects System (January 2025)
+
+### Overview
+
+VOIDSTRIKE features a world-class battle effects system with:
+- **Three.js 3D effects**: Projectile trails, explosions, impact decals, ground effects
+- **Phaser 2D overlay**: Damage numbers, screen effects, kill streaks
+- **Proper depth ordering**: Ground effects are now correctly occluded by units
+
+### Architecture
+
+```
+┌────────────────────────────────────────────────────────┐
+│                  PHASER 2D OVERLAY                      │
+│  - DamageNumberSystem (consolidated damage display)     │
+│  - ScreenEffectsSystem (chromatic aberration, shake)    │
+│  - Kill streak announcements                            │
+│  - Directional damage indicators                        │
+├────────────────────────────────────────────────────────┤
+│                THREE.JS 3D EFFECTS                      │
+│  - BattleEffectsRenderer (projectiles, rings, decals)   │
+│  - AdvancedParticleSystem (fire, smoke, sparks, debris) │
+│  - Proper depth testing for ground/air effects          │
+└────────────────────────────────────────────────────────┘
+```
+
+### Render Order
+
+| Order | Layer | Description |
+|-------|-------|-------------|
+| 0-9 | Terrain | Ground geometry |
+| 10-19 | Ground Decals | Scorch marks, impact craters |
+| 20-29 | Ground Effects | Hit rings, shockwaves (`depthTest: true`) |
+| 30-39 | Unit Shadows | Ground shadows |
+| 40-59 | Ground Units | Marines, tanks, buildings |
+| 60-69 | Projectiles | Tracers, plasma bolts, trails |
+| 70-79 | Air Units | Wraiths, carriers |
+| 80-89 | Air Effects | Hit effects at flying unit height |
+| 90-99 | Glow Effects | Additive bloom-interacting effects |
+| 100+ | UI | Damage numbers, indicators |
+
+### Projectile System
+
+**Faction-Specific Styles:**
+| Faction | Primary Color | Trail Color | Glow |
+|---------|---------------|-------------|------|
+| Terran | Orange-yellow | Orange | Bright yellow |
+| Protoss | Blue | Purple | Cyan |
+| Zerg | Acid green | Dark green | Bright green |
+
+**Features:**
+- Ribbon trail geometry that follows projectile path
+- Glow sprites with bloom interaction
+- Muzzle flash at attack origin
+- Impact sparks and decals
+
+### Particle Types
+
+| Type | Use Case | Features |
+|------|----------|----------|
+| FIRE | Explosions | Animated sprite, rises, orange→black |
+| SMOKE | Aftermath | Large soft sprites, slow rise, fades |
+| SPARK | Impacts | Small bright dots, arcs with gravity |
+| DEBRIS | Destruction | Tumbling geometry, bounces on ground |
+| ENERGY | Psionic | Pulsing, blue/purple |
+| PLASMA | Acid | Dripping, green glow |
+| DUST | Movement | Ground cloud, soft edges |
+| ELECTRICITY | Shields | Rapid pulse, branching |
+
+### Damage Numbers (Phaser 2D)
+
+**Consolidation Logic:**
+- Max one damage number per entity
+- Hits within 500ms consolidate into existing number
+- Total damage accumulates, number grows with intensity
+- "Pop" animation on each new hit
+- Float upward and fade over 800ms
+
+**Color Coding:**
+| Damage | Color | Trigger |
+|--------|-------|---------|
+| Normal | Yellow | < 30 damage |
+| High | Orange | >= 30 damage |
+| Critical | Red-orange | >= 50 damage |
+| Killing Blow | Red | Target dies |
+
+### Screen Effects (Phaser 2D)
+
+| Effect | Trigger | Description |
+|--------|---------|-------------|
+| Chromatic Aberration | Heavy damage | RGB channel separation at screen edges |
+| Directional Indicators | Damage received | Arrow pointing toward damage source |
+| Kill Streak | 3/5/10/15/25 kills | "TRIPLE KILL", "RAMPAGE", etc. |
+| Screen Cracks | Health < 30% | Fracture lines from screen edges |
+| Explosion Rings | Building destroyed | Expanding white circles |
+| Screen Flash | Major events | Brief color flash |
+
+**Kill Streak Thresholds:**
+1. 3 kills: "TRIPLE KILL" (orange)
+2. 5 kills: "KILLING SPREE" (red-orange)
+3. 10 kills: "RAMPAGE" (red)
+4. 15 kills: "UNSTOPPABLE" (bright red)
+5. 25 kills: "GODLIKE" (magenta)
+
+### Performance Considerations
+
+- Object pooling for all mesh types (150+ per pool)
+- Vector3 pooling to avoid allocation in hot loops
+- Instanced mesh particles for GPU efficiency
+- Separate render groups for ground vs air effects
+- Lazy geometry/material creation
+
+### Files
+
+| File | Purpose |
+|------|---------|
+| `src/rendering/effects/BattleEffectsRenderer.ts` | Core 3D battle effects |
+| `src/rendering/effects/AdvancedParticleSystem.ts` | GPU particle system |
+| `src/phaser/systems/DamageNumberSystem.ts` | Phaser damage numbers |
+| `src/phaser/systems/ScreenEffectsSystem.ts` | Phaser screen effects |
+| `src/engine/systems/CombatSystem.ts` | Emits `damage:dealt` event |
+
+### Event Flow
+
+```
+CombatSystem.processAttack()
+├── Emit 'combat:attack' → BattleEffectsRenderer creates projectile
+├── Emit 'damage:dealt' → DamageNumberSystem shows/consolidates number
+└── Emit 'player:damage' → ScreenEffectsSystem triggers effects
+```
