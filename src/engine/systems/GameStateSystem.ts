@@ -38,7 +38,6 @@ export class GameStateSystem extends System {
 
   private playerStats: Map<string, PlayerStats> = new Map();
   private playerTeams: Map<string, TeamNumber> = new Map(); // Cache player -> team mapping
-  private gameStartTime: number = 0;
   private isGameOver: boolean = false;
   private gameResult: GameResult | null = null;
   private lastVictoryCheck: number = 0;
@@ -161,7 +160,7 @@ export class GameStateSystem extends System {
 
     // Game start
     this.game.eventBus.on('game:started', () => {
-      this.gameStartTime = Date.now();
+      // Note: gameStartTime is no longer needed - we use tick-based game time
       this.isGameOver = false;
     });
   }
@@ -237,7 +236,7 @@ export class GameStateSystem extends System {
           }
         }
 
-        const duration = (Date.now() - this.gameStartTime) / 1000;
+        const duration = this.game.getGameTime();
         this.game.eventBus.emit('game:playerEliminated', {
           playerId,
           reason: 'elimination',
@@ -297,7 +296,7 @@ export class GameStateSystem extends System {
     if (this.isGameOver) return;
 
     this.isGameOver = true;
-    const duration = (Date.now() - this.gameStartTime) / 1000;
+    const duration = this.game.getGameTime();
 
     this.gameResult = {
       winner,
@@ -320,7 +319,7 @@ export class GameStateSystem extends System {
     if (this.isGameOver) return;
 
     this.isGameOver = true;
-    const duration = (Date.now() - this.gameStartTime) / 1000;
+    const duration = this.game.getGameTime();
 
     this.gameResult = {
       winner: null,
@@ -354,6 +353,6 @@ export class GameStateSystem extends System {
   }
 
   public getGameDuration(): number {
-    return (Date.now() - this.gameStartTime) / 1000;
+    return this.game.getGameTime();
   }
 }
