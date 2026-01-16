@@ -1546,23 +1546,68 @@ export class Terrain {
       return featureConfig.walkable;
     };
 
-    // Helper: Get height for a vertex
-    const getVertexHeight = (vx: number, vy: number, cellX: number, cellY: number, isRamp: boolean, isCliffEdge: boolean): number => {
-      if (isRamp) {
-        // Ramps use smooth heightMap
+    // =================================================================
+    // FIX: Pre-compute CONSISTENT vertex heights based on vertex position
+    // This ensures shared vertices between adjacent cells have the same height,
+    // preventing gaps in the navmesh that would disconnect ramps from platforms.
+    //
+    // A vertex at (vx, vy) is shared by up to 4 cells:
+    //   (vx-1, vy-1), (vx, vy-1), (vx-1, vy), (vx, vy)
+    // The vertex should use heightMap if ANY adjacent cell is in rampZone.
+    // It should only use flat elevation if ALL adjacent cells are cliff edges
+    // and NONE are in rampZone.
+    // =================================================================
+    const vertexHeights = new Float32Array((width + 1) * (height + 1));
+    for (let vy = 0; vy <= height; vy++) {
+      for (let vx = 0; vx <= width; vx++) {
+        // Check if this vertex touches any ramp zone cell
+        let touchesRampZone = false;
+        let allCliffEdge = true;
+        let cliffElevation = 0;
+
+        // Check all 4 cells this vertex touches
+        const adjacentCells = [
+          { cx: vx - 1, cy: vy - 1 },
+          { cx: vx, cy: vy - 1 },
+          { cx: vx - 1, cy: vy },
+          { cx: vx, cy: vy },
+        ];
+
+        for (const { cx, cy } of adjacentCells) {
+          if (cx >= 0 && cx < width && cy >= 0 && cy < height) {
+            if (rampZone.has(`${cx},${cy}`)) {
+              touchesRampZone = true;
+            }
+            if (!expandedCliffEdgeCells.has(`${cx},${cy}`)) {
+              allCliffEdge = false;
+            } else {
+              cliffElevation = terrain[cy][cx].elevation;
+            }
+          }
+        }
+
+        // Determine height: prioritize ramp zone > normal ground > cliff edge
         const hx = Math.max(0, Math.min(vx, this.gridWidth - 1));
         const hy = Math.max(0, Math.min(vy, this.gridHeight - 1));
-        return this.heightMap[hy * this.gridWidth + hx];
-      } else if (isCliffEdge) {
-        // Cliff edges use FLAT elevation height to prevent slopes
-        const cell = terrain[Math.min(cellY, height - 1)][Math.min(cellX, width - 1)];
-        return elevationToHeight(cell.elevation);
-      } else {
-        // Normal ground uses heightMap
-        const hx = Math.max(0, Math.min(vx, this.gridWidth - 1));
-        const hy = Math.max(0, Math.min(vy, this.gridHeight - 1));
-        return this.heightMap[hy * this.gridWidth + hx];
+
+        if (touchesRampZone) {
+          // Vertex near ramp uses smooth heightMap for continuous slope
+          vertexHeights[vy * (width + 1) + vx] = this.heightMap[hy * this.gridWidth + hx];
+        } else if (allCliffEdge) {
+          // Vertex surrounded by cliff edges uses flat elevation
+          vertexHeights[vy * (width + 1) + vx] = elevationToHeight(cliffElevation);
+        } else {
+          // Normal ground uses heightMap
+          vertexHeights[vy * (width + 1) + vx] = this.heightMap[hy * this.gridWidth + hx];
+        }
       }
+    }
+
+    // Helper: Get pre-computed consistent vertex height
+    const getVertexHeight = (vx: number, vy: number): number => {
+      const hx = Math.max(0, Math.min(vx, width));
+      const hy = Math.max(0, Math.min(vy, height));
+      return vertexHeights[hy * (width + 1) + hx];
     };
 
     // Helper: Check if a cliff wall is needed between two cells
@@ -1616,15 +1661,12 @@ export class Terrain {
       for (let x = 0; x < width; x++) {
         if (!isCellWalkable(x, y)) continue;
 
-        const cell = terrain[y][x];
-        const isRamp = cell.terrain === 'ramp' || rampZone.has(`${x},${y}`);
-        const isCliffEdge = expandedCliffEdgeCells.has(`${x},${y}`);
-
-        // Get heights for cell corners
-        const h00 = getVertexHeight(x, y, x, y, isRamp, isCliffEdge);
-        const h10 = getVertexHeight(x + 1, y, x, y, isRamp, isCliffEdge);
-        const h01 = getVertexHeight(x, y + 1, x, y, isRamp, isCliffEdge);
-        const h11 = getVertexHeight(x + 1, y + 1, x, y, isRamp, isCliffEdge);
+        // Get heights for cell corners using pre-computed consistent vertex heights
+        // This ensures adjacent cells share the same vertex height, preventing gaps
+        const h00 = getVertexHeight(x, y);
+        const h10 = getVertexHeight(x + 1, y);
+        const h01 = getVertexHeight(x, y + 1);
+        const h11 = getVertexHeight(x + 1, y + 1);
 
         // Create two triangles for floor (CCW winding for Recast)
         vertices.push(x, h00, y);
@@ -1702,11 +1744,99 @@ export class Terrain {
 
     const wallTriangles = (indices.length / 3) - floorTriangles;
 
+    // Calculate geometry bounds for debugging navmesh issues
+    let minHeight = Infinity;
+    let maxHeight = -Infinity;
+
+    // Diagnostic: Check for height discontinuities at ramp boundaries
+    // This helps identify if ramps are properly connected to adjacent terrain
+    let maxRampBoundaryGap = 0;
+    let rampBoundaryGapLocation = { x: 0, y: 0 };
+
+    for (let y = 0; y < height - 1; y++) {
+      for (let x = 0; x < width - 1; x++) {
+        const cell = terrain[y][x];
+        const rightCell = terrain[y][x + 1];
+        const bottomCell = terrain[y + 1][x];
+
+        // Check horizontal boundary (cell to right neighbor)
+        const isRamp1 = cell.terrain === 'ramp' || rampZone.has(`${x},${y}`);
+        const isRamp2 = rightCell.terrain === 'ramp' || rampZone.has(`${x + 1},${y}`);
+        if (isRamp1 !== isRamp2) {
+          // Boundary between ramp and non-ramp
+          const h1 = this.heightMap[y * this.gridWidth + (x + 1)];
+          const h2 = this.heightMap[y * this.gridWidth + (x + 1)]; // Same vertex
+          const gap = Math.abs(h1 - h2);
+          if (gap > maxRampBoundaryGap) {
+            maxRampBoundaryGap = gap;
+            rampBoundaryGapLocation = { x: x + 1, y };
+          }
+        }
+
+        // Check vertical boundary (cell to bottom neighbor)
+        const isRamp3 = bottomCell.terrain === 'ramp' || rampZone.has(`${x},${y + 1}`);
+        if (isRamp1 !== isRamp3) {
+          const h3 = this.heightMap[(y + 1) * this.gridWidth + x];
+          const h4 = this.heightMap[(y + 1) * this.gridWidth + x]; // Same vertex
+          const gap = Math.abs(h3 - h4);
+          if (gap > maxRampBoundaryGap) {
+            maxRampBoundaryGap = gap;
+            rampBoundaryGapLocation = { x, y: y + 1 };
+          }
+        }
+      }
+    }
+
+    // Sample ramp heights for debugging - find first ramp and log height profile
+    let rampProfile = '';
+    for (let y = 0; y < height && !rampProfile; y++) {
+      for (let x = 0; x < width; x++) {
+        if (terrain[y][x].terrain === 'ramp') {
+          // Found a ramp, sample heights along a vertical line through it
+          const heights: number[] = [];
+          const startY = Math.max(0, y - 5);
+          const endY = Math.min(height, y + 20);
+          for (let sy = startY; sy < endY; sy++) {
+            heights.push(this.heightMap[sy * this.gridWidth + x]);
+          }
+          rampProfile = `Ramp at (${x},${y}): heights from y=${startY} to y=${endY-1}: [${heights.map(h => h.toFixed(2)).join(', ')}]`;
+          break;
+        }
+      }
+    }
+    let rampCellCount = 0;
+    let rampZoneCount = rampZone.size;
+
+    for (let i = 1; i < vertices.length; i += 3) {
+      const h = vertices[i];
+      if (h < minHeight) minHeight = h;
+      if (h > maxHeight) maxHeight = h;
+    }
+
+    for (let y = 0; y < height; y++) {
+      for (let x = 0; x < width; x++) {
+        if (terrain[y][x].terrain === 'ramp') rampCellCount++;
+      }
+    }
+
     debugTerrain.log(
       `[Terrain] Generated walkable geometry: ${vertices.length / 3} vertices, ` +
       `${floorTriangles} floor triangles, ${wallTriangles} wall triangles, ` +
       `${cliffEdgeCells.size} cliff edge cells`
     );
+    debugTerrain.log(
+      `[Terrain] Height range: ${minHeight.toFixed(2)} to ${maxHeight.toFixed(2)} ` +
+      `(${(maxHeight - minHeight).toFixed(2)} total), ` +
+      `${rampCellCount} ramp cells, ${rampZoneCount} ramp zone cells`
+    );
+
+    // Log ramp diagnostic info
+    if (rampProfile) {
+      console.log(`[Terrain] ${rampProfile}`);
+    }
+    if (maxRampBoundaryGap > 0) {
+      console.log(`[Terrain] Max ramp boundary height gap: ${maxRampBoundaryGap.toFixed(3)} at (${rampBoundaryGapLocation.x}, ${rampBoundaryGapLocation.y})`);
+    }
 
     return {
       positions: new Float32Array(vertices),

@@ -56,8 +56,11 @@ const NAVMESH_CONFIG: Partial<TileCacheGeneratorConfig> = {
   // Detail mesh - tighter for better cliff edge precision
   maxSimplificationError: 0.5,
   // Tile cache specific - larger tiles = fewer tiles = less memory
-  tileSize: 48,
-  expectedLayersPerTile: 2,
+  // Using smaller tile size to improve success rate for tiles with partial geometry
+  tileSize: 32,
+  // Increased from 2 to 4 to handle height range of ~6.4 units (elevation 60-220)
+  // With ch=0.2, we have ~32 height bins, which may require more layers
+  expectedLayersPerTile: 4,
   maxObstacles: 512,
 };
 
@@ -287,11 +290,42 @@ export class RecastNavigation {
       this.mapWidth = mapWidth;
       this.mapHeight = mapHeight;
 
+      // Calculate geometry bounds for debugging
+      let minX = Infinity, maxX = -Infinity;
+      let minY = Infinity, maxY = -Infinity;
+      let minZ = Infinity, maxZ = -Infinity;
+      for (let i = 0; i < positions.length; i += 3) {
+        const x = positions[i];
+        const y = positions[i + 1];
+        const z = positions[i + 2];
+        if (x < minX) minX = x;
+        if (x > maxX) maxX = x;
+        if (y < minY) minY = y;
+        if (y > maxY) maxY = y;
+        if (z < minZ) minZ = z;
+        if (z > maxZ) maxZ = z;
+      }
+
       console.log('[RecastNavigation] Generating navmesh from geometry...', {
         positionsLength: positions.length,
         indicesLength: indices.length,
+        triangles: indices.length / 3,
+        vertices: positions.length / 3,
         mapWidth,
         mapHeight,
+      });
+      console.log('[RecastNavigation] Geometry bounds:', {
+        x: `${minX.toFixed(2)} to ${maxX.toFixed(2)} (${(maxX - minX).toFixed(2)} total)`,
+        y: `${minY.toFixed(2)} to ${maxY.toFixed(2)} (${(maxY - minY).toFixed(2)} height range)`,
+        z: `${minZ.toFixed(2)} to ${maxZ.toFixed(2)} (${(maxZ - minZ).toFixed(2)} total)`,
+      });
+      console.log('[RecastNavigation] Config:', {
+        cs: NAVMESH_CONFIG.cs,
+        ch: NAVMESH_CONFIG.ch,
+        tileSize: NAVMESH_CONFIG.tileSize,
+        expectedLayersPerTile: NAVMESH_CONFIG.expectedLayersPerTile,
+        walkableSlopeAngle: NAVMESH_CONFIG.walkableSlopeAngle,
+        walkableClimb: NAVMESH_CONFIG.walkableClimb,
       });
 
       // Try tile cache generation first (supports dynamic obstacles)
@@ -395,12 +429,31 @@ export class RecastNavigation {
       const endOnMesh = this.navMeshQuery.findClosestPoint(endQuery, { halfExtents });
 
       if (!startOnMesh.success || !startOnMesh.point || !endOnMesh.success || !endOnMesh.point) {
+        // Log detailed failure info for debugging ramp issues
+        const dist = Math.sqrt((endX - startX) ** 2 + (endY - startY) ** 2);
+        if (dist > 20) {
+          debugPathfinding.warn(
+            `[RecastNavigation] findClosestPoint failed for long path (${dist.toFixed(1)} units): ` +
+            `start=(${startX.toFixed(1)}, ${startY.toFixed(1)}) success=${startOnMesh.success}, ` +
+            `end=(${endX.toFixed(1)}, ${endY.toFixed(1)}) success=${endOnMesh.success}`
+          );
+        }
         return { path: [], found: false };
       }
 
       const result = this.navMeshQuery.computePath(startOnMesh.point, endOnMesh.point, { halfExtents });
 
       if (!result.success || !result.path || result.path.length === 0) {
+        // Log detailed failure info - this indicates disconnected navmesh regions
+        const startH = startOnMesh.point.y;
+        const endH = endOnMesh.point.y;
+        const heightDiff = Math.abs(startH - endH);
+        debugPathfinding.warn(
+          `[RecastNavigation] computePath failed - possible disconnected regions: ` +
+          `start=(${startOnMesh.point.x.toFixed(1)}, h=${startH.toFixed(2)}, ${startOnMesh.point.z.toFixed(1)}), ` +
+          `end=(${endOnMesh.point.x.toFixed(1)}, h=${endH.toFixed(2)}, ${endOnMesh.point.z.toFixed(1)}), ` +
+          `heightDiff=${heightDiff.toFixed(2)}`
+        );
         return { path: [], found: false };
       }
 

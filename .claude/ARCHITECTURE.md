@@ -365,6 +365,11 @@ Key Components:
 - **DetourCrowd**: RVO/ORCA-based local collision avoidance
 - **TileCache**: Dynamic obstacle support for buildings
 
+**Ramp Connectivity**: The walkable geometry generation pre-computes consistent vertex heights
+to ensure shared vertices between adjacent cells have identical heights. This prevents gaps
+in the navmesh at ramp/platform boundaries that would cause pathfinding to fail across
+elevation transitions. Vertices touching ramp zones always use smooth heightMap interpolation.
+
 ### Multiplayer Architecture
 
 VOIDSTRIKE uses a **fully serverless peer-to-peer architecture** with Nostr-based signaling.
