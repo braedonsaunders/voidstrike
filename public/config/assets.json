@@ -347,7 +347,7 @@
     "dreadnought": {
       "model": "/models/units/dreadnought_LOD0.glb",
       "scale": 3.0,
-      "rotation": { "x": 90, "y": 90, "z": 0 },
+      "rotation": { "x": 90, "y": 180, "z": 0 },
       "airborneHeight": 15,
       "animations": {
         "idle": [
