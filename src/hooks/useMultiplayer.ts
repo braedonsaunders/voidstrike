@@ -166,13 +166,16 @@ export function useLobby(
         }
         console.log('[Lobby] Published lobby with code:', code);
 
-        // Subscribe to join requests
+        // Subscribe to join requests FIRST (before publishing)
+        // Use a wide time window to catch events across network delays
+        const subscriptionStartTime = Math.floor(Date.now() / 1000) - 300; // 5 minutes back
         const filter: Filter = {
           kinds: [EVENT_KINDS.LOBBY_JOIN],
           '#code': [code],
-          since: Math.floor(Date.now() / 1000) - 10,
+          since: subscriptionStartTime,
         };
 
+        console.log('[Lobby] Subscribing to join requests for code:', code);
         const sub = pool.subscribeMany(relays, filter, {
           onevent: async (event: NostrEvent) => {
             console.log('[Lobby] Received join request');
@@ -237,8 +240,9 @@ export function useLobby(
                 kinds: [EVENT_KINDS.WEBRTC_ANSWER],
                 authors: [guestPubkey],
                 '#p': [pubkey],
-                since: Math.floor(Date.now() / 1000) - 10,
+                since: Math.floor(Date.now() / 1000) - 300, // 5 minutes back
               };
+              console.log('[Lobby] Subscribing for answer from guest:', guestPubkey.slice(0, 8) + '...');
 
               const answerSub = pool.subscribeMany(relays, answerFilter, {
                 onevent: async (answerEvent: NostrEvent) => {
@@ -332,13 +336,16 @@ export function useLobby(
       }
       console.log('[Lobby] Sent join request for code:', normalizedCode);
 
-      // Listen for offer from host
+      // Listen for offer from host - start subscription BEFORE sending join request
+      // Wide time window to catch events
       const offerFilter: Filter = {
         kinds: [EVENT_KINDS.WEBRTC_OFFER],
         '#p': [pubkey],
         '#code': [normalizedCode],
-        since: Math.floor(Date.now() / 1000) - 30,
+        since: Math.floor(Date.now() / 1000) - 300, // 5 minutes back
       };
+
+      console.log('[Lobby] Subscribing for offers with pubkey:', pubkey.slice(0, 8) + '...');
 
       let handled = false;
 

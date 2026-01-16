@@ -143,22 +143,22 @@ function PlayerSlotRow({
 
         {/* Player type selector */}
         {!isGuest ? (
-          <select
-            value={slot.type}
-            onChange={(e) => onTypeChange(e.target.value as PlayerType)}
-            className="bg-void-800 border border-void-700 rounded px-2 py-1 text-white text-xs
-                       focus:outline-none focus:border-void-500 cursor-pointer min-w-[70px]"
-          >
-            {isLocalPlayer ? (
-              <option value="human">You</option>
-            ) : (
-              <>
-                <option value="ai">AI</option>
-                <option value="open">Open</option>
-                <option value="closed">Closed</option>
-              </>
-            )}
-          </select>
+          isLocalPlayer ? (
+            <span className="px-2 py-1 bg-void-600/50 border border-void-500/50 rounded text-white text-xs min-w-[70px]">
+              {slot.name || 'You'}
+            </span>
+          ) : (
+            <select
+              value={slot.type}
+              onChange={(e) => onTypeChange(e.target.value as PlayerType)}
+              className="bg-void-800 border border-void-700 rounded px-2 py-1 text-white text-xs
+                         focus:outline-none focus:border-void-500 cursor-pointer min-w-[70px]"
+            >
+              <option value="ai">AI</option>
+              <option value="open">Open</option>
+              <option value="closed">Closed</option>
+            </select>
+          )
         ) : (
           <span className="px-2 py-1 bg-green-800/50 border border-green-600/50 rounded text-green-300 text-xs">
             {slot.guestName || 'Guest'}
@@ -483,6 +483,14 @@ export default function GameSetupPage() {
   // Determine if we're in guest mode (joined someone else's lobby)
   const isGuestMode = lobbyStatus === 'connected' && !isHost;
 
+  // Sync player name with first slot
+  const setPlayerSlotName = useGameSetupStore((state) => state.setPlayerSlotName);
+  useEffect(() => {
+    if (playerSlots[0] && !isGuestMode) {
+      setPlayerSlotName(playerSlots[0].id, playerName);
+    }
+  }, [playerName, playerSlots, isGuestMode, setPlayerSlotName]);
+
   return (
     <main className="h-screen bg-black overflow-hidden">
       {/* Background */}
@@ -599,43 +607,61 @@ export default function GameSetupPage() {
 
           {/* Right Column - Lobby Code, Maps and Settings */}
           <div className="space-y-4">
-            {/* Lobby Code Section - Only show when hosting */}
+            {/* Multiplayer Section - Only show when hosting */}
             {isHost && (
               <div className="bg-void-900/50 rounded-lg border border-void-800/50 p-4">
-                <h2 className="font-display text-lg text-white mb-2">Lobby Code</h2>
-                {lobbyStatus === 'initializing' && (
-                  <p className="text-void-400 text-sm">Generating code...</p>
-                )}
-                {lobbyStatus === 'hosting' && lobbyCode && (
-                  <div className="flex flex-col gap-2">
-                    <div className="flex items-center gap-3">
-                      <span className="px-4 py-2 bg-void-700 rounded-lg font-mono text-2xl text-white tracking-widest">
+                <h2 className="font-display text-lg text-white mb-3">Multiplayer</h2>
+
+                {/* Your Name */}
+                <div className="mb-3">
+                  <label className="block text-void-400 text-xs mb-1">Your Name</label>
+                  <input
+                    type="text"
+                    value={playerName}
+                    onChange={(e) => setPlayerName(e.target.value)}
+                    placeholder="Enter your name"
+                    className="w-full bg-void-800 border border-void-700 rounded px-3 py-1.5 text-white text-sm
+                               focus:outline-none focus:border-void-500"
+                  />
+                </div>
+
+                {/* Lobby Code */}
+                <div className="mb-2">
+                  <label className="block text-void-400 text-xs mb-1">Lobby Code</label>
+                  {lobbyStatus === 'initializing' && (
+                    <p className="text-void-500 text-sm">Generating...</p>
+                  )}
+                  {lobbyStatus === 'hosting' && lobbyCode && (
+                    <div className="flex items-center gap-2">
+                      <span className="px-3 py-1.5 bg-void-700 rounded font-mono text-xl text-white tracking-widest">
                         {lobbyCode}
                       </span>
                       <button
                         onClick={() => navigator.clipboard.writeText(lobbyCode)}
-                        className="px-3 py-2 bg-void-800 hover:bg-void-700 text-void-300 text-xs rounded transition"
+                        className="px-2 py-1.5 bg-void-800 hover:bg-void-700 text-void-300 text-xs rounded transition"
                       >
                         Copy
                       </button>
                     </div>
-                    <p className="text-void-500 text-xs">
-                      Share this code with friends to let them join your lobby
-                    </p>
-                    {hasOpenSlot && (
-                      <p className="text-green-400/70 text-xs">
-                        Waiting for players to join open slots...
-                      </p>
-                    )}
-                    {hasGuests && (
-                      <p className="text-green-400 text-xs">
-                        {guests.length} player{guests.length > 1 ? 's' : ''} connected
-                      </p>
-                    )}
-                  </div>
+                  )}
+                  {lobbyStatus === 'error' && (
+                    <p className="text-red-400 text-sm">{lobbyError || 'Failed to create lobby'}</p>
+                  )}
+                </div>
+
+                <p className="text-void-500 text-xs">
+                  Share this code with friends. Set a slot to "Open" to let them join.
+                </p>
+
+                {hasOpenSlot && (
+                  <p className="text-green-400/70 text-xs mt-1">
+                    Waiting for players to join...
+                  </p>
                 )}
-                {lobbyStatus === 'error' && (
-                  <p className="text-red-400 text-sm">{lobbyError || 'Failed to create lobby'}</p>
+                {hasGuests && (
+                  <p className="text-green-400 text-xs mt-1">
+                    {guests.length} player{guests.length > 1 ? 's' : ''} connected
+                  </p>
                 )}
               </div>
             )}
