@@ -161,29 +161,40 @@ export async function generateOfferCode(
   const offer = await pc.createOffer();
   await pc.setLocalDescription(offer);
 
+  if (!offer.sdp) {
+    throw new ConnectionCodeError('Failed to create offer: no SDP');
+  }
+
   // Gather ICE candidates
   const iceCandidates = await gatherICECandidates(pc);
 
-  // Build payload
+  // Filter out any undefined/null candidates
+  const validCandidates = iceCandidates
+    .map(c => c.candidate)
+    .filter((c): c is string => typeof c === 'string' && c.length > 0);
+
+  // Build payload - only include defined values
   const payload: ConnectionCodeData = {
     v: 1,
-    sdp: offer.sdp!,
-    ice: iceCandidates.map(c => c.candidate),
+    sdp: offer.sdp,
+    ice: validCandidates,
     ts: Date.now(),
     type: 'offer',
-    mode: options?.mode,
-    map: options?.map,
   };
+
+  // Only add mode/map if defined
+  if (options?.mode) payload.mode = options.mode;
+  if (options?.map) payload.map = options.map;
 
   // Compress with pako
   const json = JSON.stringify(payload);
   const compressed = pako.deflate(json, { level: 9 });
 
-  // Encode to alphabet
+  // Encode to alphabet (uppercase only)
   const encoded = encodeToAlphabet(compressed);
 
-  // Format with prefix and dashes
-  const code = formatCode(encoded);
+  // Format with prefix and dashes - ensure uppercase
+  const code = formatCode(encoded).toUpperCase();
 
   console.log(`[ConnectionCode] Generated offer code: ${code.length} chars`);
 
@@ -272,25 +283,36 @@ export async function generateAnswerCode(
   const answer = await pc.createAnswer();
   await pc.setLocalDescription(answer);
 
+  if (!answer.sdp) {
+    throw new ConnectionCodeError('Failed to create answer: no SDP');
+  }
+
   // Gather our ICE candidates
   const iceCandidates = await gatherICECandidates(pc);
 
-  // Build answer payload
+  // Filter out any undefined/null candidates
+  const validCandidates = iceCandidates
+    .map(c => c.candidate)
+    .filter((c): c is string => typeof c === 'string' && c.length > 0);
+
+  // Build answer payload - only include defined values
   const payload: ConnectionCodeData = {
     v: 1,
-    sdp: answer.sdp!,
-    ice: iceCandidates.map(c => c.candidate),
+    sdp: answer.sdp,
+    ice: validCandidates,
     ts: Date.now(),
     type: 'answer',
-    mode: offerData.mode,
-    map: offerData.map,
   };
+
+  // Only add mode/map if defined
+  if (offerData.mode) payload.mode = offerData.mode;
+  if (offerData.map) payload.map = offerData.map;
 
   // Compress and encode
   const json = JSON.stringify(payload);
   const compressed = pako.deflate(json, { level: 9 });
   const encoded = encodeToAlphabet(compressed);
-  const code = formatCode(encoded);
+  const code = formatCode(encoded).toUpperCase();
 
   console.log(`[ConnectionCode] Generated answer code: ${code.length} chars`);
 
