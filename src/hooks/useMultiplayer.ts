@@ -392,16 +392,18 @@ export function useLobby(
 
     return () => {
       mounted = false;
+      // Cleanup subscriptions - close quietly
       try {
         subRef.current?.close();
-      } catch { /* ignore close errors */ }
-      try {
-        poolRef.current?.close(relaysRef.current);
-      } catch { /* ignore close errors */ }
+      } catch { /* ignore */ }
+      // Don't explicitly close the pool - nostr-tools throws unhandled errors
+      // when websockets are already closing. Let browser garbage collect instead.
+      poolRef.current = null;
+      // Close peer connections
       guests.forEach(g => {
         try {
           g.pc.close();
-        } catch { /* ignore close errors */ }
+        } catch { /* ignore */ }
       });
     };
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
