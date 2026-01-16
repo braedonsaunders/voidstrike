@@ -239,7 +239,8 @@ export class EnvironmentManager {
     }
 
     // Legacy decorations (watch towers, destructibles)
-    this.legacyDecorations = new MapDecorations(this.mapData, this.terrain);
+    // Pass scene to enable attached lights for emissive decorations
+    this.legacyDecorations = new MapDecorations(this.mapData, this.terrain, this.scene);
     this.scene.add(this.legacyDecorations.group);
   }
 
@@ -265,6 +266,11 @@ export class EnvironmentManager {
     }
     if (this.particles) {
       this.particles.update(deltaTime);
+    }
+
+    // Update emissive decoration pulsing animation
+    if (this.legacyDecorations) {
+      this.legacyDecorations.update(deltaTime);
     }
 
     // PERF: Update decoration frustum culling - only render visible instances

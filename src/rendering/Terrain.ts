@@ -1809,18 +1809,34 @@ export class TerrainGrid {
   }
 }
 
+// Emissive decoration tracking for pulsing animation
+interface TrackedEmissiveDecoration {
+  material: THREE.MeshStandardMaterial;
+  baseIntensity: number;
+  pulseSpeed: number;
+  pulseAmplitude: number;
+  attachedLight?: THREE.PointLight;
+  baseLightIntensity?: number;
+}
+
 // Decorative elements (watch towers, destructible rocks, trees, etc.)
 export class MapDecorations {
   public group: THREE.Group;
   private terrain: Terrain;
+  private scene: THREE.Scene | null = null;
   // Track rock positions for pathfinding collision
   private rockCollisions: Array<{ x: number; z: number; radius: number }> = [];
   // Track tree positions for pathfinding collision
   private treeCollisions: Array<{ x: number; z: number; radius: number }> = [];
+  // Track emissive decorations for pulsing animation
+  private emissiveDecorations: TrackedEmissiveDecoration[] = [];
+  // Animation time accumulator
+  private animationTime: number = 0;
 
-  constructor(mapData: MapData, terrain: Terrain) {
+  constructor(mapData: MapData, terrain: Terrain, scene?: THREE.Scene) {
     this.group = new THREE.Group();
     this.terrain = terrain;
+    this.scene = scene || null;
     this.createWatchTowers(mapData);
     this.createDestructibles(mapData);
 
@@ -1830,6 +1846,113 @@ export class MapDecorations {
     } else {
       this.createTrees(mapData);
       this.createRocks(mapData);
+    }
+  }
+
+  /**
+   * Update emissive decoration pulsing animation
+   * Call this every frame with deltaTime in milliseconds
+   */
+  public update(deltaTime: number): void {
+    if (this.emissiveDecorations.length === 0) return;
+
+    this.animationTime += deltaTime * 0.001; // Convert to seconds
+
+    for (const deco of this.emissiveDecorations) {
+      if (deco.pulseSpeed > 0 && deco.pulseAmplitude > 0) {
+        // Calculate pulse value: oscillates between (1-amplitude) and (1+amplitude)
+        const pulse = 1.0 + Math.sin(this.animationTime * deco.pulseSpeed * Math.PI * 2) * deco.pulseAmplitude;
+        deco.material.emissiveIntensity = deco.baseIntensity * pulse;
+
+        // Also pulse the attached light if present
+        if (deco.attachedLight && deco.baseLightIntensity !== undefined) {
+          deco.attachedLight.intensity = deco.baseLightIntensity * pulse;
+        }
+      }
+    }
+  }
+
+  /**
+   * Apply rendering hints from assets.json to a decoration model
+   * Handles envMapIntensity, emissive, emissiveIntensity, pulsing, and attached lights
+   */
+  private applyRenderingHintsToModel(
+    model: THREE.Object3D,
+    hints: ReturnType<typeof AssetManager.getRenderingHints>,
+    x: number,
+    y: number,
+    z: number
+  ): void {
+    if (!hints) return;
+
+    // Find and modify all MeshStandardMaterial instances in the model
+    model.traverse((child: THREE.Object3D) => {
+      if (child instanceof THREE.Mesh && child.material) {
+        const materials = Array.isArray(child.material) ? child.material : [child.material];
+
+        for (const material of materials) {
+          if (material instanceof THREE.MeshStandardMaterial) {
+            // Apply envMapIntensity
+            if (hints.envMapIntensity !== undefined) {
+              material.envMapIntensity = hints.envMapIntensity;
+            }
+
+            // Apply emissive color and intensity
+            if (hints.emissive) {
+              material.emissive = new THREE.Color(hints.emissive);
+              material.emissiveIntensity = hints.emissiveIntensity ?? 1.0;
+            }
+
+            // Apply roughness/metalness overrides
+            if (hints.roughnessOverride !== undefined && hints.roughnessOverride !== null) {
+              material.roughness = hints.roughnessOverride;
+            }
+            if (hints.metalnessOverride !== undefined && hints.metalnessOverride !== null) {
+              material.metalness = hints.metalnessOverride;
+            }
+
+            // Track for pulsing animation if pulse properties are set
+            if (hints.emissive && (hints.pulseSpeed || hints.pulseAmplitude)) {
+              const tracked: TrackedEmissiveDecoration = {
+                material,
+                baseIntensity: hints.emissiveIntensity ?? 1.0,
+                pulseSpeed: hints.pulseSpeed ?? 0,
+                pulseAmplitude: hints.pulseAmplitude ?? 0,
+              };
+
+              // Create attached point light if specified
+              if (hints.attachLight && this.scene) {
+                const light = new THREE.PointLight(
+                  new THREE.Color(hints.attachLight.color),
+                  hints.attachLight.intensity,
+                  hints.attachLight.distance,
+                  2 // decay
+                );
+                light.position.set(x, y + 1, z); // Slightly above ground
+                light.castShadow = false; // Performance: dynamic decoration lights don't cast shadows
+                this.scene.add(light);
+                tracked.attachedLight = light;
+                tracked.baseLightIntensity = hints.attachLight.intensity;
+              }
+
+              this.emissiveDecorations.push(tracked);
+            }
+          }
+        }
+      }
+    });
+
+    // If attachLight is set but no emissive material was found, still create the light
+    if (hints.attachLight && this.scene && this.emissiveDecorations.length === 0) {
+      const light = new THREE.PointLight(
+        new THREE.Color(hints.attachLight.color),
+        hints.attachLight.intensity,
+        hints.attachLight.distance,
+        2
+      );
+      light.position.set(x, y + 1, z);
+      light.castShadow = false;
+      this.scene.add(light);
     }
   }
 
@@ -1866,6 +1989,13 @@ export class MapDecorations {
         } else {
           model.rotation.y = Math.random() * Math.PI * 2;
         }
+
+        // Apply rendering hints from assets.json
+        const hints = AssetManager.getRenderingHints(decoration.type);
+        if (hints) {
+          this.applyRenderingHintsToModel(model, hints, decoration.x, terrainHeight, decoration.y);
+        }
+
         this.group.add(model);
       } else {
         // Fallback to procedural mesh for unloaded decoration types
@@ -2224,7 +2354,16 @@ export class MapDecorations {
   }
 
   public dispose(): void {
-    this.group.traverse((child) => {
+    // Clean up attached lights from emissive decorations
+    for (const deco of this.emissiveDecorations) {
+      if (deco.attachedLight && this.scene) {
+        this.scene.remove(deco.attachedLight);
+        deco.attachedLight.dispose();
+      }
+    }
+    this.emissiveDecorations = [];
+
+    this.group.traverse((child: THREE.Object3D) => {
       if (child instanceof THREE.Mesh) {
         child.geometry.dispose();
         if (child.material instanceof THREE.Material) {
