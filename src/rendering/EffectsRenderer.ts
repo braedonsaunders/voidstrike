@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { EventBus } from '@/engine/core/EventBus';
 import { getLocalPlayerId, isSpectatorMode } from '@/store/gameSetupStore';
+import { AssetManager, DEFAULT_AIRBORNE_HEIGHT } from '@/assets/AssetManager';
 
 interface AttackEffect {
   startPos: THREE.Vector3;
@@ -65,7 +66,9 @@ interface MeshPool {
 
 // PERF: Increased from 50 to 100 for large battles with many simultaneous effects
 const POOL_SIZE = 100;
-const AIR_UNIT_HEIGHT = 8; // Height for flying units (matches building lift-off and UnitRenderer)
+// Note: Airborne height is now configured per-unit-type in assets.json
+// Use AssetManager.getAirborneHeight(unitType) for the configured height
+// DEFAULT_AIRBORNE_HEIGHT (8) is used when unit type is not available
 
 // PERF: Reusable Vector3 objects to avoid allocation in hot paths
 const tempVec3Start = new THREE.Vector3();
@@ -442,7 +445,7 @@ export class EffectsRenderer {
   private setupEventListeners(): void {
     // NOTE: Combat effects (projectiles, death effects, damage numbers, explosions)
     // are now handled by BattleEffectsRenderer and DamageNumberSystem.
-    // This renderer only handles move indicators now.
+    // This renderer only handles focus fire cleanup now.
 
     // Focus fire tracking for unit:died (to clear indicators)
     this.eventBus.on('unit:died', (data: {

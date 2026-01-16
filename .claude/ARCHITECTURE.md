@@ -656,6 +656,17 @@ All models and animation mappings are configured via a single JSON file, making 
         "attack": ["attack", "shoot"],
         "death": ["death"]
       }
+    },
+    "valkyrie": {
+      "model": "/models/units/valkyrie.glb",
+      "height": 1.8,
+      "airborneHeight": 6,
+      "animations": {
+        "idle": ["idle", "hover"],
+        "walk": ["walk", "fly", "move"],
+        "attack": ["attack", "missiles"],
+        "death": ["death", "crash"]
+      }
     }
   },
   "buildings": { ... },
@@ -669,9 +680,20 @@ All models and animation mappings are configured via a single JSON file, making 
 | Field | Description |
 |-------|-------------|
 | `model` | Path to GLB file relative to `public/` |
-| `height` | Target height in game units (auto-scaled) |
+| `height` | Target height in game units - models are scaled so their bounding box height matches this value |
+| `scale` | Optional scale multiplier applied after height normalization (default: 1.0) |
+| `airborneHeight` | For flying units: height above terrain in game units (default: 8) |
 | `animationSpeed` | Playback speed multiplier (default: 1.0) |
+| `rotation` | Y-axis rotation offset in degrees to fix model facing direction |
 | `animations` | Map of game actions to animation clip names |
+
+**Model Sizing vs Flight Altitude:**
+
+The system separates visual size from flight altitude:
+- `height` controls how big the model appears (scales the model's bounding box to this height)
+- `airborneHeight` controls how high flying units hover above terrain (doesn't affect size)
+
+Example: A dreadnought might have `"height": 45.0` (massive ship) and `"airborneHeight": 15` (flies high).
 
 **Animation Mapping Priority:**
 

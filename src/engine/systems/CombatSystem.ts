@@ -18,9 +18,12 @@ const tempTargetScore: { id: number; score: number } | null = null;
 
 // PERF: Reusable event payload objects to avoid allocation per attack
 const attackEventPayload = {
-  attackerId: '',
+  attackerId: '', // Unit type ID (e.g., "trooper", "valkyrie") - for airborne height lookup
+  attackerEntityId: 0 as number, // Entity ID - for focus fire tracking
   attackerPos: { x: 0, y: 0 },
+  targetId: 0 as number, // Target entity ID - for focus fire tracking
   targetPos: { x: 0, y: 0 },
+  targetUnitType: '' as string | undefined, // Target unit type ID for airborne height lookup
   damage: 0,
   damageType: 'normal' as import('../components/Unit').DamageType,
   targetHeight: 0,
@@ -199,6 +202,7 @@ export class CombatSystem extends System {
             isPlayerUnit: selectable?.playerId ? isLocalPlayer(selectable.playerId) : false,
             isFlying: unit.isFlying,
             playerId: selectable?.playerId,
+            unitType: unit.unitId, // For airborne height lookup in effects
           });
         }
         continue;
@@ -712,11 +716,14 @@ export class CombatSystem extends System {
 
     // Emit attack event - PERF: Use pooled payload object
     const targetSelectable = targetEntity?.get<Selectable>('Selectable');
-    attackEventPayload.attackerId = attacker.unitId;
+    attackEventPayload.attackerId = attacker.unitId; // Unit type ID for airborne height
+    attackEventPayload.attackerEntityId = attackerId; // Entity ID for focus fire tracking
     attackEventPayload.attackerPos.x = attackerTransform.x;
     attackEventPayload.attackerPos.y = attackerTransform.y;
+    attackEventPayload.targetId = targetId; // Entity ID for focus fire tracking
     attackEventPayload.targetPos.x = targetTransform.x;
     attackEventPayload.targetPos.y = targetTransform.y;
+    attackEventPayload.targetUnitType = targetUnit?.unitId; // For airborne height lookup
     attackEventPayload.damage = finalDamage;
     attackEventPayload.damageType = attacker.damageType;
     attackEventPayload.targetHeight = targetHeight;

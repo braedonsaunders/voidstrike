@@ -18,6 +18,8 @@ import {
   PlayerSlot,
   TeamNumber,
 } from '@/store/gameSetupStore';
+import { useMultiplayer } from '@/hooks/useMultiplayer';
+import { useMultiplayerStore } from '@/store/multiplayerStore';
 
 // Helper to convert THREE.Color to hex string
 function colorToHex(color: { r: number; g: number; b: number }): string {
@@ -112,6 +114,12 @@ function PlayerSlotRow({
   onTeamChange,
   onRemove,
   canRemove,
+  // Multiplayer props
+  multiplayerStatus,
+  gameCode,
+  onHostGame,
+  onJoinGame,
+  onDisconnect,
 }: {
   slot: PlayerSlot;
   index: number;
@@ -123,80 +131,92 @@ function PlayerSlotRow({
   onTeamChange: (team: TeamNumber) => void;
   onRemove: () => void;
   canRemove: boolean;
+  // Multiplayer props
+  multiplayerStatus?: string;
+  gameCode?: string | null;
+  onHostGame?: () => void;
+  onJoinGame?: (code: string) => void;
+  onDisconnect?: () => void;
 }) {
   const selectedColor = PLAYER_COLORS.find(c => c.id === slot.colorId);
+  const [joinCode, setJoinCode] = useState('');
+  const [showJoinInput, setShowJoinInput] = useState(false);
+
+  const isActive = slot.type === 'human' || slot.type === 'ai' || slot.type === 'remote';
 
   return (
-    <div className="flex items-center gap-2 p-2 bg-void-900/50 rounded-lg border border-void-800/50">
-      {/* Player number */}
-      <div className="w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold"
-           style={{ backgroundColor: hexToCSS(selectedColor?.hex ?? 0x808080), color: '#000' }}>
-        {index + 1}
-      </div>
+    <div className="flex flex-col gap-2 p-2 bg-void-900/50 rounded-lg border border-void-800/50">
+      <div className="flex items-center gap-2">
+        {/* Player number */}
+        <div className="w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold"
+             style={{ backgroundColor: hexToCSS(selectedColor?.hex ?? 0x808080), color: '#000' }}>
+          {index + 1}
+        </div>
 
-      {/* Player type */}
-      <select
-        value={slot.type}
-        onChange={(e) => onTypeChange(e.target.value as PlayerType)}
-        className="bg-void-800 border border-void-700 rounded px-2 py-1 text-white text-xs
-                   focus:outline-none focus:border-void-500 cursor-pointer min-w-[70px]"
-      >
-        <option value="human">Human</option>
-        <option value="ai">AI</option>
-        <option value="open">Open</option>
-        <option value="closed">Closed</option>
-      </select>
-
-      {/* Team selection (only for human/ai) */}
-      {(slot.type === 'human' || slot.type === 'ai') && (
+        {/* Player type */}
         <select
-          value={slot.team}
-          onChange={(e) => onTeamChange(Number(e.target.value) as TeamNumber)}
+          value={slot.type}
+          onChange={(e) => onTypeChange(e.target.value as PlayerType)}
           className="bg-void-800 border border-void-700 rounded px-2 py-1 text-white text-xs
-                     focus:outline-none focus:border-void-500 cursor-pointer min-w-[65px]"
-          style={{ borderLeftColor: TEAM_COLORS[slot.team].color, borderLeftWidth: '3px' }}
+                     focus:outline-none focus:border-void-500 cursor-pointer min-w-[70px]"
         >
-          {Object.entries(TEAM_COLORS).map(([key, { name }]) => (
-            <option key={key} value={key}>{name}</option>
-          ))}
+          <option value="human">Human</option>
+          <option value="ai">AI</option>
+          <option value="remote">Remote</option>
+          <option value="open">Open</option>
+          <option value="closed">Closed</option>
         </select>
-      )}
 
-      {/* Faction (only for human/ai) */}
-      {(slot.type === 'human' || slot.type === 'ai') && (
-        <select
-          value={slot.faction}
-          onChange={(e) => onFactionChange(e.target.value)}
-          className="bg-void-800 border border-void-700 rounded px-2 py-1 text-white text-xs
-                     focus:outline-none focus:border-void-500 cursor-pointer min-w-[80px]"
-        >
-          <option value="dominion">Dominion</option>
-        </select>
-      )}
+        {/* Team selection (only for active players) */}
+        {isActive && (
+          <select
+            value={slot.team}
+            onChange={(e) => onTeamChange(Number(e.target.value) as TeamNumber)}
+            className="bg-void-800 border border-void-700 rounded px-2 py-1 text-white text-xs
+                       focus:outline-none focus:border-void-500 cursor-pointer min-w-[65px]"
+            style={{ borderLeftColor: TEAM_COLORS[slot.team].color, borderLeftWidth: '3px' }}
+          >
+            {Object.entries(TEAM_COLORS).map(([key, { name }]) => (
+              <option key={key} value={key}>{name}</option>
+            ))}
+          </select>
+        )}
 
-      {/* AI Difficulty (only for AI) */}
-      {slot.type === 'ai' && (
-        <select
-          value={slot.aiDifficulty}
-          onChange={(e) => onDifficultyChange(e.target.value as AIDifficulty)}
-          className="bg-void-800 border border-void-700 rounded px-2 py-1 text-white text-xs
-                     focus:outline-none focus:border-void-500 cursor-pointer min-w-[65px]"
-        >
-          <option value="easy">Easy</option>
-          <option value="medium">Medium</option>
-          <option value="hard">Hard</option>
-          <option value="insane">Insane</option>
-        </select>
-      )}
+        {/* Faction (only for active players) */}
+        {isActive && (
+          <select
+            value={slot.faction}
+            onChange={(e) => onFactionChange(e.target.value)}
+            className="bg-void-800 border border-void-700 rounded px-2 py-1 text-white text-xs
+                       focus:outline-none focus:border-void-500 cursor-pointer min-w-[80px]"
+          >
+            <option value="dominion">Dominion</option>
+          </select>
+        )}
 
-      {/* Color selector (only for human/ai) */}
-      {(slot.type === 'human' || slot.type === 'ai') && (
-        <div className="flex gap-1">
-          {PLAYER_COLORS.map((color) => {
-            const isUsed = usedColors.has(color.id) && slot.colorId !== color.id;
-            return (
-              <button
-                key={color.id}
+        {/* AI Difficulty (only for AI) */}
+        {slot.type === 'ai' && (
+          <select
+            value={slot.aiDifficulty}
+            onChange={(e) => onDifficultyChange(e.target.value as AIDifficulty)}
+            className="bg-void-800 border border-void-700 rounded px-2 py-1 text-white text-xs
+                       focus:outline-none focus:border-void-500 cursor-pointer min-w-[65px]"
+          >
+            <option value="easy">Easy</option>
+            <option value="medium">Medium</option>
+            <option value="hard">Hard</option>
+            <option value="insane">Insane</option>
+          </select>
+        )}
+
+        {/* Color selector (only for active players) */}
+        {isActive && (
+          <div className="flex gap-1">
+            {PLAYER_COLORS.map((color) => {
+              const isUsed = usedColors.has(color.id) && slot.colorId !== color.id;
+              return (
+                <button
+                  key={color.id}
                 onClick={() => !isUsed && onColorChange(color.id)}
                 title={color.name}
                 disabled={isUsed}
@@ -214,16 +234,123 @@ function PlayerSlotRow({
         </div>
       )}
 
-      {/* Remove button */}
-      {canRemove && (
-        <button
-          onClick={onRemove}
-          className="w-6 h-6 flex items-center justify-center text-void-500 hover:text-red-400
-                     hover:bg-red-900/30 rounded transition-colors"
-          title="Remove player"
-        >
-          ✕
-        </button>
+        {/* Remove button */}
+        {canRemove && (
+          <button
+            onClick={onRemove}
+            className="w-6 h-6 flex items-center justify-center text-void-500 hover:text-red-400
+                       hover:bg-red-900/30 rounded transition-colors"
+            title="Remove player"
+          >
+            ✕
+          </button>
+        )}
+      </div>
+
+      {/* Remote player connection UI */}
+      {slot.type === 'remote' && (
+        <div className="flex items-center gap-2 pl-8">
+          {multiplayerStatus === 'idle' && (
+            <>
+              <button
+                onClick={onHostGame}
+                className="px-3 py-1 bg-void-600 hover:bg-void-500 text-white text-xs rounded transition"
+              >
+                Host
+              </button>
+              <button
+                onClick={() => setShowJoinInput(true)}
+                className="px-3 py-1 bg-void-700 hover:bg-void-600 text-white text-xs rounded transition"
+              >
+                Join
+              </button>
+              {showJoinInput && (
+                <div className="flex items-center gap-1">
+                  <input
+                    type="text"
+                    value={joinCode}
+                    onChange={(e) => setJoinCode(e.target.value.toUpperCase())}
+                    placeholder="CODE"
+                    maxLength={4}
+                    className="w-16 px-2 py-1 bg-void-800 border border-void-600 rounded text-white text-xs uppercase"
+                  />
+                  <button
+                    onClick={() => {
+                      if (joinCode.length === 4 && onJoinGame) {
+                        onJoinGame(joinCode);
+                        setShowJoinInput(false);
+                      }
+                    }}
+                    disabled={joinCode.length !== 4}
+                    className="px-2 py-1 bg-green-600 hover:bg-green-500 disabled:bg-void-700 text-white text-xs rounded"
+                  >
+                    Go
+                  </button>
+                </div>
+              )}
+            </>
+          )}
+
+          {multiplayerStatus === 'generating' && (
+            <span className="text-void-400 text-xs">Generating code...</span>
+          )}
+
+          {multiplayerStatus === 'hosting' && gameCode && (
+            <div className="flex items-center gap-2">
+              <span className="text-void-400 text-xs">Code:</span>
+              <span className="px-2 py-1 bg-void-700 rounded font-mono text-white text-sm tracking-wider">
+                {gameCode}
+              </span>
+              <span className="text-void-500 text-xs">Waiting for player...</span>
+              <button
+                onClick={onDisconnect}
+                className="px-2 py-1 text-red-400 hover:text-red-300 text-xs"
+              >
+                Cancel
+              </button>
+            </div>
+          )}
+
+          {multiplayerStatus === 'joining' && (
+            <div className="flex items-center gap-2">
+              <span className="text-void-400 text-xs">Looking for host...</span>
+              <button
+                onClick={onDisconnect}
+                className="px-2 py-1 text-red-400 hover:text-red-300 text-xs"
+              >
+                Cancel
+              </button>
+            </div>
+          )}
+
+          {multiplayerStatus === 'connecting' && (
+            <span className="text-yellow-400 text-xs">Connecting...</span>
+          )}
+
+          {multiplayerStatus === 'connected' && (
+            <div className="flex items-center gap-2">
+              <span className="text-green-400 text-xs">Connected!</span>
+              <button
+                onClick={onDisconnect}
+                className="px-2 py-1 text-red-400 hover:text-red-300 text-xs"
+              >
+                Disconnect
+              </button>
+            </div>
+          )}
+
+          {multiplayerStatus === 'error' && (
+            <div className="flex items-center gap-2">
+              <span className="text-red-400 text-xs">Connection failed</span>
+              <button
+                onClick={onDisconnect}
+                className="px-2 py-1 text-void-400 hover:text-void-300 text-xs"
+              >
+                Retry
+              </button>
+            </div>
+          )}
+        </div>
       )}
     </div>
   );
@@ -333,6 +460,47 @@ export default function GameSetupPage() {
     startGame,
   } = useGameSetupStore();
 
+  // Multiplayer hook
+  const {
+    status: multiplayerStatus,
+    gameCode,
+    error: multiplayerError,
+    dataChannel,
+    isHost,
+    hostGame,
+    joinGame,
+    disconnect: disconnectMultiplayer,
+  } = useMultiplayer();
+
+  // Multiplayer store for game
+  const {
+    setMultiplayer,
+    setConnected,
+    setHost,
+    setDataChannel,
+  } = useMultiplayerStore();
+
+  // Check if we have a remote player slot
+  const hasRemotePlayer = playerSlots.some(s => s.type === 'remote');
+  const isMultiplayerConnected = multiplayerStatus === 'connected';
+
+  // When connected, set up multiplayer store
+  useEffect(() => {
+    if (isMultiplayerConnected && dataChannel) {
+      setMultiplayer(true);
+      setConnected(true);
+      setHost(isHost);
+      setDataChannel(dataChannel);
+    }
+  }, [isMultiplayerConnected, dataChannel, isHost, setMultiplayer, setConnected, setHost, setDataChannel]);
+
+  // Disconnect multiplayer when remote player is removed
+  useEffect(() => {
+    if (!hasRemotePlayer && multiplayerStatus !== 'idle') {
+      disconnectMultiplayer();
+    }
+  }, [hasRemotePlayer, multiplayerStatus, disconnectMultiplayer]);
+
   const [mapSearch, setMapSearch] = useState('');
   const allMaps = Object.values(ALL_MAPS);
   const maps = allMaps.filter(map =>
@@ -344,12 +512,12 @@ export default function GameSetupPage() {
   // Get used colors for duplicate prevention
   const usedColors = new Set(
     playerSlots
-      .filter(s => s.type === 'human' || s.type === 'ai')
+      .filter(s => s.type === 'human' || s.type === 'ai' || s.type === 'remote')
       .map(s => s.colorId)
   );
 
   // Count active players
-  const activePlayerCount = playerSlots.filter(s => s.type === 'human' || s.type === 'ai').length;
+  const activePlayerCount = playerSlots.filter(s => s.type === 'human' || s.type === 'ai' || s.type === 'remote').length;
 
   // Handle map selection - trim excess players if new map has fewer slots
   const handleMapSelect = (mapId: string) => {
@@ -455,6 +623,12 @@ export default function GameSetupPage() {
                   onTeamChange={(team) => setPlayerSlotTeam(slot.id, team)}
                   onRemove={() => removePlayerSlot(slot.id)}
                   canRemove={canRemovePlayer}
+                  // Multiplayer props (only relevant for remote slots)
+                  multiplayerStatus={slot.type === 'remote' ? multiplayerStatus : undefined}
+                  gameCode={slot.type === 'remote' ? gameCode : undefined}
+                  onHostGame={hostGame}
+                  onJoinGame={joinGame}
+                  onDisconnect={disconnectMultiplayer}
                 />
               ))}
             </div>
@@ -545,7 +719,7 @@ export default function GameSetupPage() {
             {/* Start Game Button */}
             <button
               onClick={handleStartGame}
-              disabled={activePlayerCount < 2}
+              disabled={activePlayerCount < 2 || (hasRemotePlayer && !isMultiplayerConnected)}
               className="w-full game-button-primary text-lg px-8 py-3 font-display disabled:opacity-50 disabled:cursor-not-allowed"
             >
               Start Game
@@ -554,6 +728,12 @@ export default function GameSetupPage() {
             {activePlayerCount < 2 && (
               <p className="text-center text-red-400 text-xs">
                 At least 2 active players required
+              </p>
+            )}
+
+            {hasRemotePlayer && !isMultiplayerConnected && activePlayerCount >= 2 && (
+              <p className="text-center text-yellow-400 text-xs">
+                Waiting for remote player to connect...
               </p>
             )}
 
