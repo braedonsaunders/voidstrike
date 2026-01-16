@@ -1504,7 +1504,6 @@ export class BuildingRenderer {
 
   /**
    * Create construction effect (dust, sparks, welding flashes, metal debris)
-   * World-class construction particles for professional RTS feel
    */
   private createConstructionEffect(buildingWidth: number, buildingDepth: number, _buildingHeight: number): THREE.Group {
     const effectGroup = new THREE.Group();

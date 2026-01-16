@@ -101,7 +101,7 @@ export class OverlayScene extends Phaser.Scene {
   // Screen edge warning indicators
   private edgeWarnings: Map<string, { x: number; y: number; time: number }> = new Map();
 
-  // Premium damage vignette state
+  // Damage vignette state
   private damageVignetteState: DamageVignetteState = {
     currentIntensity: 0,
     targetIntensity: 0,
@@ -130,7 +130,7 @@ export class OverlayScene extends Phaser.Scene {
   private attackTargetIndicators: AttackTargetIndicator[] = [];
   private attackTargetGraphics!: Phaser.GameObjects.Graphics;
 
-  // World-class effect systems
+  // Effect systems
   private damageNumberSystem: DamageNumberSystem | null = null;
   private screenEffectsSystem: ScreenEffectsSystem | null = null;
 
@@ -174,13 +174,13 @@ export class OverlayScene extends Phaser.Scene {
     this.vignetteGraphics = this.add.graphics();
     this.vignetteGraphics.setDepth(300);
 
-    // Create premium damage vignette render texture
+    // Create damage vignette render texture
     this.createDamageVignetteTexture();
 
     this.setupEventListeners();
     this.setupKeyboardShortcuts();
 
-    // Initialize world-class effect systems
+    // Initialize effect systems
     if (this.eventBus) {
       this.damageNumberSystem = new DamageNumberSystem(this, this.eventBus);
       this.screenEffectsSystem = new ScreenEffectsSystem(this, this.eventBus);
@@ -721,8 +721,7 @@ export class OverlayScene extends Phaser.Scene {
   }
 
   /**
-   * Create a premium radial vignette texture for damage overlay
-   * Uses multiple gradient layers for a rich, cinematic effect
+   * Create a radial vignette texture for damage overlay.
    */
   private createDamageVignetteTexture(): void {
     const screenWidth = this.scale.width;
@@ -1253,7 +1252,7 @@ export class OverlayScene extends Phaser.Scene {
       this.drawTacticalOverlay();
     }
 
-    // Update premium damage vignette with smooth animation
+    // Update damage vignette
     this.updateDamageVignette(now, dt);
 
     // Draw other screen effects (ability flash, nuke warning)
@@ -1276,7 +1275,7 @@ export class OverlayScene extends Phaser.Scene {
     // Draw and update attack target indicators
     this.updateAttackTargetIndicators(now);
 
-    // Update world-class effect systems
+    // Update effect systems
     this.damageNumberSystem?.update();
     this.screenEffectsSystem?.update(time, delta);
 
@@ -1291,7 +1290,7 @@ export class OverlayScene extends Phaser.Scene {
   }
 
   /**
-   * Update the premium damage vignette with smooth animations
+   * Update the damage vignette with smooth animations.
    */
   private updateDamageVignette(now: number, dt: number): void {
     if (!this.vignetteTexture) return;
@@ -1403,7 +1402,7 @@ export class OverlayScene extends Phaser.Scene {
 
       switch (effect.type) {
         case 'damage_vignette':
-          // Handled by premium updateDamageVignette - just keep the effect alive for timing
+          // Handled by updateDamageVignette - just keep the effect alive for timing
           break;
 
         case 'ability_flash':
@@ -1713,7 +1712,7 @@ export class OverlayScene extends Phaser.Scene {
     this.vignetteTexture = null;
     this.countdownContainer = null;
 
-    // Dispose world-class effect systems
+    // Dispose effect systems
     this.damageNumberSystem?.dispose();
     this.screenEffectsSystem?.dispose();
     this.damageNumberSystem = null;

@@ -485,7 +485,7 @@ export function WebGPUGameCanvas() {
         fogOfWarRef.current = fogOfWar;
       }
 
-      // World-class battle effects (projectile trails, explosions, decals)
+      // Battle effects (projectile trails, explosions, decals)
       battleEffectsRef.current = new BattleEffectsRenderer(scene, game.eventBus, (x, z) => terrain.getHeightAt(x, z));
 
       // Advanced GPU particle system for smoke, fire, debris
@@ -846,7 +846,7 @@ export function WebGPUGameCanvas() {
         selectionSystemRef.current?.update(deltaTime);
         effectEmitterRef.current?.update(deltaTime / 1000);
 
-        // Update world-class battle effects
+        // Update battle effects
         battleEffectsRef.current?.update(deltaTime);
         advancedParticlesRef.current?.update(deltaTime / 1000, cameraRef.current?.camera);
 

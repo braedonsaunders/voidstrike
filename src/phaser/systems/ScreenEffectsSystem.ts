@@ -1,5 +1,5 @@
 /**
- * Advanced Screen Effects System - World Class Visual Feedback
+ * Screen Effects System
  *
  * Features:
  * - Chromatic aberration on heavy damage

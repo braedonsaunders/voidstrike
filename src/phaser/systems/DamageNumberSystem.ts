@@ -1,5 +1,5 @@
 /**
- * Phaser Damage Number System - World Class 2D Damage Display
+ * Phaser Damage Number System
  *
  * Features:
  * - Per-entity damage consolidation (one number per unit max)

@@ -1,5 +1,5 @@
 /**
- * Advanced GPU Particle System - World Class Combat Effects
+ * Advanced GPU Particle System
  *
  * Features:
  * - TSL shader-based soft particles (depth-aware blending)

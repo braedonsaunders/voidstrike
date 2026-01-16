@@ -1,5 +1,5 @@
 /**
- * World-Class Behavior Tree Implementation for RTS AI
+ * Behavior Tree Implementation for RTS AI
  *
  * Features:
  * - Stateless functional nodes with composable architecture

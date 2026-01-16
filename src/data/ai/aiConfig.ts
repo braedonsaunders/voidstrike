@@ -1,7 +1,7 @@
 /**
- * World-Class Data-Driven AI Configuration System
+ * Data-Driven AI Configuration System
  *
- * This module defines a comprehensive, fully data-driven AI architecture
+ * Defines a fully data-driven AI architecture
  * that allows creating new factions, strategies, and behaviors without
  * touching engine code.
  *

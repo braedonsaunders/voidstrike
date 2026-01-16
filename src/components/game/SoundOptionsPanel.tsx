@@ -6,9 +6,8 @@ import { AudioManager } from '@/audio/AudioManager';
 import { MusicPlayer } from '@/audio/MusicPlayer';
 
 /**
- * Compact and beautiful sound options panel
- * Features: Volume sliders, now playing display, playback controls
- * NOTE: Edge scrolling is now controlled centrally by HUD.tsx via isAnyMenuOpen selector
+ * Sound options panel with volume sliders, now playing display, and playback controls.
+ * NOTE: Edge scrolling is controlled centrally by HUD.tsx via isAnyMenuOpen selector.
  */
 export function SoundOptionsPanel() {
   const showSoundOptions = useUIStore((state) => state.showSoundOptions);

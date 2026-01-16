@@ -1984,9 +1984,8 @@ export class MapDecorations {
   }
 
   /**
-   * Update emissive decoration pulsing animation
-   * Uses smooth easing for organic, world-class lighting
-   * Call this every frame with deltaTime in milliseconds
+   * Update emissive decoration pulsing animation.
+   * Call this every frame with deltaTime in milliseconds.
    *
    * NOTE: Light pulsing is now handled by DecorationLightManager.
    * This only updates emissive materials for decorations without attached lights.
@@ -2016,11 +2015,9 @@ export class MapDecorations {
   }
 
   /**
-   * Apply rendering hints from assets.json to a decoration model
-   * World-class lighting approach:
+   * Apply rendering hints from assets.json to a decoration model.
    * - Preserves model's baked-in emissive colors/maps
    * - Only boosts intensity, doesn't override colors unless model has none
-   * - Uses subtle values for natural-looking glow
    * - Registers lights with DecorationLightManager for pooling/culling
    */
   private applyRenderingHintsToModel(

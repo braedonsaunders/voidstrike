@@ -1,7 +1,7 @@
 /**
- * BattleEffectsRenderer - World-Class Combat Visual Effects
+ * BattleEffectsRenderer - Combat Visual Effects
  *
- * A complete overhaul of the combat effects system featuring:
+ * Combat effects system featuring:
  * - Proper depth-tested ground effects (occluded by units correctly)
  * - Flying unit effect positioning at correct heights
  * - Projectile trails with faction-specific styles
