@@ -556,9 +556,16 @@ export default function GameSetupPage() {
   const handleJoinLobby = async () => {
     if (joinCode.length === 4) {
       await joinLobby(joinCode, playerName);
-      setShowJoinModal(false);
+      // Don't close modal here - let the effect below handle it when connected
     }
   };
+
+  // Close join modal only when successfully connected
+  useEffect(() => {
+    if (lobbyStatus === 'connected' && showJoinModal) {
+      setShowJoinModal(false);
+    }
+  }, [lobbyStatus, showJoinModal]);
 
   // Limit players to map's maxPlayers, and global max of 8
   const maxPlayersForMap = selectedMap.maxPlayers;

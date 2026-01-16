@@ -232,6 +232,7 @@
 - [x] **Idle unit auto-attack responsiveness** - Idle units now immediately attack enemies within attack range (no throttle delay). Uses dedicated `findImmediateAttackTarget()` for instant response when enemies enter attack range, while throttled sight-range search remains for longer-range target acquisition.
 - [x] **VisionSystem multi-player support** - Changed from hardcoded ['player1', 'ai'] to dynamic player registration, enabling proper 4-AI spectator games.
 - [x] **Building fog of war fix** - VisionSystem was using hardcoded sightRange=9 for all buildings instead of each building's configured sightRange from its definition. Now correctly uses building.sightRange.
+- [x] **Flying building fog of war fix** - Buildings in flying state (lifting, flying, landing) now maintain vision. VisionSystem uses `building.isOperational()` instead of checking only for 'complete' state.
 - [x] **HQ building sight range tripled** - headquarters, orbital_station, and bastion now have sightRange=33 (up from 11) for larger vision radius around main bases.
 - [x] **AI attack persistence** - AI now stays in attacking state until all enemies are eliminated, preventing premature retreat when taking losses.
 - [x] **AI proximity-based targeting** - Fixed FFA games where all AI targeted the same enemy. Now each AI targets their CLOSEST enemy (with priority for nearly-defeated enemies with ≤2 buildings).
@@ -729,6 +730,8 @@
 - [x] Desync debugging infrastructure (`DesyncDetection.ts`)
 - [x] Latency measurement and connection quality
 - [x] **Guest stays in lobby fix** - Start button now validates WebRTC connection state before allowing game start. sendGameStart() returns count of guests notified for feedback.
+- [x] **Lobby join error handling fix** - When joining a full lobby, error message now displays in modal, and Join button stays visible for retry. Fixed `isHost` not resetting on join failure.
+- [x] **Multiplayer message format compatibility** - Game.ts now handles both message formats (payload-based and commandType/data-based) for proper command sync between players.
 
 **⚠️ Game Integration Incomplete:**
 - [ ] Wire lockstep tick synchronization to game loop

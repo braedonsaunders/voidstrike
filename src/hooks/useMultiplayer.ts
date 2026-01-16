@@ -513,6 +513,7 @@ export function useLobby(
           } catch (e) {
             console.error('[Lobby] Failed to process offer:', e);
             setError('Failed to connect to host');
+            setIsHost(true); // Reset to host mode
             setStatus('hosting'); // Go back to hosting so user can try again
           }
         },
@@ -539,9 +540,11 @@ export function useLobby(
           try {
             const data = JSON.parse(event.content);
             setError(data.reason || 'Lobby is full');
+            setIsHost(true); // Reset to host mode so Join button reappears
             setStatus('hosting'); // Go back to hosting so user can try again
           } catch {
             setError('Lobby is full - no open slots available');
+            setIsHost(true); // Reset to host mode so Join button reappears
             setStatus('hosting');
           }
         },
@@ -575,6 +578,7 @@ export function useLobby(
           offerSub.close();
           rejectSub.close();
           setError('No lobby found with that code');
+          setIsHost(true); // Reset to host mode so Join button reappears
           setStatus('hosting'); // Go back to hosting so user can try again
         }
       }, 30000);
@@ -582,6 +586,7 @@ export function useLobby(
     } catch (e) {
       console.error('[Lobby] Join error:', e);
       setError(e instanceof Error ? e.message : 'Failed to join lobby');
+      setIsHost(true); // Reset to host mode so Join button reappears
       setStatus('hosting'); // Go back to hosting so user can try again
     }
   }, []);

@@ -435,14 +435,8 @@ export function WebGPUGameCanvas() {
           eventUnsubscribersRef.current.push(unsubscribe);
         }
 
-        // Receive remote commands and process them
-        multiplayerStore.addMessageHandler((msg: unknown) => {
-          const message = msg as { type: string; commandType?: string; data?: unknown };
-          if (message.type === 'command' && message.commandType && message.data) {
-            // Emit the command to the game's event bus
-            game.eventBus.emit(message.commandType, message.data);
-          }
-        });
+        // Note: Receive handler is now in Game.ts setupMultiplayerMessageHandler()
+        // which handles both message formats (payload and commandType/data)
 
         debugNetworking.log('[Multiplayer] Command sync enabled');
       }

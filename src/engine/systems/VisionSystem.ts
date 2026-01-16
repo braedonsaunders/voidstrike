@@ -258,8 +258,9 @@ export class VisionSystem extends System {
     // Skip if components are missing (entity may have been modified during iteration)
     if (!transform || !building || !selectable) return;
 
-    // Only provide vision if building is complete
-    if (building.state !== 'complete') return;
+    // Only provide vision if building is operational (complete, lifting, flying, or landing)
+    // This ensures flying buildings maintain vision while in the air
+    if (!building.isOperational()) return;
 
     // Use the building's configured sight range from its definition
     this.revealArea(selectable.playerId, transform.x, transform.y, building.sightRange);
