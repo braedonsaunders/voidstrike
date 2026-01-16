@@ -1474,16 +1474,20 @@ export class Terrain {
       }
     }
 
-    // Pre-compute cliff edge cells - cells adjacent to unwalkable terrain
-    // These need flat heights to prevent the smoothed heightMap from creating slopes
+    // Pre-compute cliff edge cells - cells that need flat heights
+    // This includes:
+    // 1. Cells adjacent to unwalkable terrain
+    // 2. Cells adjacent to walkable terrain at significantly different elevation
+    // Using flat heights prevents the smoothed heightMap from creating traversable slopes
     const cliffEdgeCells = new Set<string>();
+
     for (let y = 0; y < height; y++) {
       for (let x = 0; x < width; x++) {
         const cell = terrain[y][x];
         if (cell.terrain === 'unwalkable' || cell.terrain === 'ramp') continue;
         if (rampZone.has(`${x},${y}`)) continue;
 
-        // Check 8 neighbors for unwalkable terrain
+        // Check 8 neighbors
         let isCliffEdge = false;
         for (let dy = -1; dy <= 1 && !isCliffEdge; dy++) {
           for (let dx = -1; dx <= 1 && !isCliffEdge; dx++) {
@@ -1491,14 +1495,43 @@ export class Terrain {
             const nx = x + dx;
             const ny = y + dy;
             if (nx >= 0 && nx < width && ny >= 0 && ny < height) {
-              if (terrain[ny][nx].terrain === 'unwalkable') {
+              const neighbor = terrain[ny][nx];
+
+              // Case 1: Adjacent to unwalkable (cliff face)
+              if (neighbor.terrain === 'unwalkable') {
                 isCliffEdge = true;
+              }
+              // Case 2: Adjacent to walkable at different elevation (elevation boundary)
+              else if (neighbor.terrain !== 'ramp' && !rampZone.has(`${nx},${ny}`)) {
+                const elevDiff = Math.abs(neighbor.elevation - cell.elevation);
+                if (elevDiff > ELEVATION_DIFF_THRESHOLD) {
+                  isCliffEdge = true;
+                }
               }
             }
           }
         }
         if (isCliffEdge) {
           cliffEdgeCells.add(`${x},${y}`);
+        }
+      }
+    }
+
+    // SECOND PASS: Also mark cells adjacent to cliff edge cells
+    // This ensures vertices at boundaries have consistent heights
+    const expandedCliffEdgeCells = new Set<string>(cliffEdgeCells);
+    for (const key of cliffEdgeCells) {
+      const [cx, cy] = key.split(',').map(Number);
+      for (let dy = -1; dy <= 1; dy++) {
+        for (let dx = -1; dx <= 1; dx++) {
+          const nx = cx + dx;
+          const ny = cy + dy;
+          if (nx >= 0 && nx < width && ny >= 0 && ny < height) {
+            const neighbor = terrain[ny][nx];
+            if (neighbor.terrain !== 'unwalkable' && neighbor.terrain !== 'ramp' && !rampZone.has(`${nx},${ny}`)) {
+              expandedCliffEdgeCells.add(`${nx},${ny}`);
+            }
+          }
         }
       }
     }
