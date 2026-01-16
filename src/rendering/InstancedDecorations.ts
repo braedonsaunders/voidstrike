@@ -295,6 +295,8 @@ export class InstancedTrees {
   ) {
     this.group = new THREE.Group();
 
+    // Skip procedural generation for custom/editor maps
+    if (mapData.skipProceduralDecorations) return;
     if (biome.treeDensity <= 0) return;
 
     // Tree count - focus on map edges, not cliff edges
@@ -590,6 +592,9 @@ export class InstancedRocks {
     getHeightAt: (x: number, y: number) => number
   ) {
     this.group = new THREE.Group();
+
+    // Skip procedural generation for custom/editor maps
+    if (mapData.skipProceduralDecorations) return;
 
     // Rock count
     const rockCount = Math.floor(mapData.width * mapData.height * biome.rockDensity * 0.012);

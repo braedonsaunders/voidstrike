@@ -193,6 +193,7 @@ function editorFormatToMapData(data: EditorMapData): MapData {
     maxPlayers: (data.metadata?.maxPlayers as number) || 2,
     isRanked: (data.metadata?.isRanked as boolean) || false,
     biome: data.biomeId as any,
+    skipProceduralDecorations: true, // Editor maps don't get auto-generated trees/rocks
   };
 }
 
