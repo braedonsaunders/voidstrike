@@ -17,10 +17,11 @@
  */
 
 import * as THREE from 'three';
-import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
+import { GLTFLoader, type GLTF } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { DRACOLoader } from 'three/examples/jsm/loaders/DRACOLoader.js';
 import * as SkeletonUtils from 'three/examples/jsm/utils/SkeletonUtils.js';
 import { debugAssets } from '@/utils/debugLogger';
+import { gltfWorkerManager } from './GLTFWorkerManager';
 
 // Reference Frame Contract Constants
 // Per threejs-builder skill: document these upfront to avoid reference-frame bugs
@@ -198,9 +199,22 @@ const assetAirborneHeights = new Map<string, number>();
 // Store rendering hints for decorations (from config)
 const renderingHints = new Map<string, RenderingHints>();
 
-// DRACO loader for compressed meshes
+// ============================================================================
+// Preloading State (for lobby preloading)
+// ============================================================================
+
+// Track preloading state for early loading in lobby
+let preloadingStarted = false;
+let preloadingComplete = false;
+let preloadingPromise: Promise<void> | null = null;
+let preloadingProgress = 0; // 0-100
+
+// Callbacks for preloading progress updates
+const preloadingProgressCallbacks: Array<(progress: number) => void> = [];
+
+// DRACO loader for compressed meshes (self-hosted for faster loading)
 const dracoLoader = new DRACOLoader();
-dracoLoader.setDecoderPath('https://www.gstatic.com/draco/versioned/decoders/1.5.6/');
+dracoLoader.setDecoderPath('/draco/'); // Self-hosted decoder - no external CDN latency
 dracoLoader.setDecoderConfig({ type: 'js' }); // Use JS decoder for compatibility
 
 // GLTF loader instance with DRACO support
@@ -812,16 +826,26 @@ export class AssetManager {
   /**
    * Load a custom GLTF/GLB model
    * Per threejs-builder skill: applies scale and tracks if animated
+   *
+   * Uses Web Worker for network I/O to keep main thread responsive.
    */
   static async loadGLTF(
     url: string,
     assetId: string,
     options: { targetHeight?: number; scale?: number; isAnimated?: boolean } = {}
   ): Promise<THREE.Object3D> {
+    // Fetch GLB data via worker (off main thread)
+    const arrayBuffer = await gltfWorkerManager.fetch(url);
+    if (!arrayBuffer) {
+      throw new Error(`Failed to fetch GLB: ${url}`);
+    }
+
+    // Parse the GLB data on main thread (Three.js requires main thread for scene graph)
     return new Promise((resolve, reject) => {
-      gltfLoader.load(
-        url,
-        (gltf) => {
+      gltfLoader.parse(
+        arrayBuffer,
+        '', // resource path (not needed for GLB with embedded resources)
+        (gltf: GLTF) => {
           const model = gltf.scene;
 
           // Clean up excess vertex attributes for WebGPU compatibility (max 8 buffers)
@@ -881,8 +905,7 @@ export class AssetManager {
           customAssets.set(assetId, model);
           resolve(model);
         },
-        undefined,
-        (error) => reject(error)
+        (error: unknown) => reject(error)
       );
     });
   }
@@ -890,6 +913,8 @@ export class AssetManager {
   /**
    * Load a GLTF model for a specific LOD level (1 or 2).
    * LOD0 is loaded via regular loadGLTF and stored in customAssets.
+   *
+   * Uses Web Worker for network I/O to keep main thread responsive.
    */
   private static async loadGLTFForLOD(
     url: string,
@@ -897,10 +922,17 @@ export class AssetManager {
     lodLevel: 1 | 2,
     options: { targetHeight?: number; scale?: number } = {}
   ): Promise<THREE.Object3D> {
+    // Fetch GLB data via worker (off main thread)
+    const arrayBuffer = await gltfWorkerManager.fetch(url);
+    if (!arrayBuffer) {
+      throw new Error(`Failed to fetch LOD${lodLevel} GLB: ${url}`);
+    }
+
     return new Promise((resolve, reject) => {
-      gltfLoader.load(
-        url,
-        (gltf) => {
+      gltfLoader.parse(
+        arrayBuffer,
+        '',
+        (gltf: GLTF) => {
           const model = gltf.scene;
 
           // Clean up excess vertex attributes for WebGPU compatibility (max 8 buffers)
@@ -940,8 +972,7 @@ export class AssetManager {
 
           resolve(model);
         },
-        undefined,
-        (error) => reject(error)
+        (error: unknown) => reject(error)
       );
     });
   }
@@ -1124,6 +1155,90 @@ export class AssetManager {
    */
   static clearCache(): void {
     assetCache.clear();
+  }
+
+  // ============================================================================
+  // Lobby Preloading Methods
+  // ============================================================================
+
+  /**
+   * Start preloading assets in the background (call from lobby/setup page).
+   * This allows assets to load while players configure game settings.
+   * Returns a promise that resolves when preloading is complete.
+   *
+   * Safe to call multiple times - subsequent calls return the existing promise.
+   */
+  static startPreloading(): Promise<void> {
+    if (preloadingPromise) {
+      return preloadingPromise;
+    }
+
+    preloadingStarted = true;
+    debugAssets.log('[AssetManager] Starting lobby preloading...');
+
+    preloadingPromise = this.loadCustomModels((processed, total) => {
+      preloadingProgress = Math.round((processed / total) * 100);
+      // Notify all progress listeners
+      for (const callback of preloadingProgressCallbacks) {
+        callback(preloadingProgress);
+      }
+    }).then(() => {
+      preloadingComplete = true;
+      preloadingProgress = 100;
+      debugAssets.log('[AssetManager] Lobby preloading complete');
+    });
+
+    return preloadingPromise;
+  }
+
+  /**
+   * Check if preloading has already started.
+   */
+  static isPreloadingStarted(): boolean {
+    return preloadingStarted;
+  }
+
+  /**
+   * Check if preloading is complete.
+   */
+  static isPreloadingComplete(): boolean {
+    return preloadingComplete;
+  }
+
+  /**
+   * Get the current preloading progress (0-100).
+   */
+  static getPreloadingProgress(): number {
+    return preloadingProgress;
+  }
+
+  /**
+   * Wait for preloading to complete.
+   * If preloading hasn't started, starts it automatically.
+   * Returns immediately if already complete.
+   */
+  static async waitForPreloading(): Promise<void> {
+    if (preloadingComplete) {
+      return;
+    }
+
+    if (!preloadingStarted) {
+      return this.startPreloading();
+    }
+
+    return preloadingPromise || Promise.resolve();
+  }
+
+  /**
+   * Register a callback to receive preloading progress updates.
+   * Callback receives progress as 0-100.
+   */
+  static onPreloadingProgress(callback: (progress: number) => void): void {
+    preloadingProgressCallbacks.push(callback);
+    // Immediately call with current progress if preloading is in progress
+    if (preloadingStarted) {
+      callback(preloadingProgress);
+    }
   }
 
   /**
@@ -1339,73 +1454,83 @@ export class AssetManager {
       }
     }
 
-    debugAssets.log('[AssetManager] Loading custom models with LOD support...');
-    let loadedCount = 0;
-    let processedCount = 0;
+    debugAssets.log('[AssetManager] Loading custom models with LOD support (parallel)...');
     const totalModels = customModels.length;
+    let processedCount = 0;
+    let loadedCount = 0;
 
-    for (const model of customModels) {
+    // Concurrency limit for parallel loading (saturate connection without overwhelming)
+    const CONCURRENCY_LIMIT = 8;
+
+    /**
+     * Load a single model with all its LOD levels
+     * Uses worker for network I/O - no HEAD requests needed (worker handles 404s gracefully)
+     */
+    const loadModelWithLODs = async (model: { path: string; assetId: string; targetHeight?: number; scale?: number }): Promise<boolean> => {
       try {
-        // LOD0 path is the base path from config
         const lod0Path = model.path;
-
-        // Derive LOD1 and LOD2 paths by replacing _LOD0 with _LOD1/_LOD2
         const lod1Path = lod0Path.replace('_LOD0.glb', '_LOD1.glb');
         const lod2Path = lod0Path.replace('_LOD0.glb', '_LOD2.glb');
 
-        // Initialize LOD level tracking for this asset
+        // Initialize LOD level tracking
         const lodLevels = new Set<number>();
 
-        // Check if LOD0 file exists
-        const response = await fetch(lod0Path, { method: 'HEAD' });
-        if (!response.ok) {
+        // Load LOD0 first (required) - this will throw if file doesn't exist
+        try {
+          await this.loadGLTF(lod0Path, model.assetId, { targetHeight: model.targetHeight, scale: model.scale });
+          lodLevels.add(0);
+        } catch {
+          // LOD0 doesn't exist - use procedural mesh
           debugAssets.log(`[AssetManager] No custom model found at ${lod0Path}, using procedural mesh`);
-          processedCount++;
-          await onProgress?.(processedCount, totalModels, model.assetId);
-          continue;
+          return false;
         }
 
-        // Load LOD0 (highest detail) - this is the main model
-        await this.loadGLTF(lod0Path, model.assetId, { targetHeight: model.targetHeight, scale: model.scale });
-        lodLevels.add(0);
-        debugAssets.log(`[AssetManager] ✓ Loaded LOD0: ${model.assetId}`);
-
-        // Try to load LOD1 (medium detail) - silent fail if not found
-        try {
-          const lod1Response = await fetch(lod1Path, { method: 'HEAD' });
-          if (lod1Response.ok) {
-            await this.loadGLTFForLOD(lod1Path, model.assetId, 1, { targetHeight: model.targetHeight, scale: model.scale });
-            lodLevels.add(1);
-            debugAssets.log(`[AssetManager] ✓ Loaded LOD1: ${model.assetId}`);
-          }
-        } catch {
-          // LOD1 not available - that's okay
-        }
-
-        // Try to load LOD2 (lowest detail) - silent fail if not found
-        try {
-          const lod2Response = await fetch(lod2Path, { method: 'HEAD' });
-          if (lod2Response.ok) {
-            await this.loadGLTFForLOD(lod2Path, model.assetId, 2, { targetHeight: model.targetHeight, scale: model.scale });
-            lodLevels.add(2);
-            debugAssets.log(`[AssetManager] ✓ Loaded LOD2: ${model.assetId}`);
-          }
-        } catch {
-          // LOD2 not available - that's okay
-        }
+        // Load LOD1 and LOD2 in parallel (optional, silent fail)
+        // No HEAD requests - worker fetch returns null for missing files
+        await Promise.all([
+          this.loadGLTFForLOD(lod1Path, model.assetId, 1, { targetHeight: model.targetHeight, scale: model.scale })
+            .then(() => { lodLevels.add(1); })
+            .catch(() => { /* LOD1 not available */ }),
+          this.loadGLTFForLOD(lod2Path, model.assetId, 2, { targetHeight: model.targetHeight, scale: model.scale })
+            .then(() => { lodLevels.add(2); })
+            .catch(() => { /* LOD2 not available */ }),
+        ]);
 
         // Store available LOD levels for this asset
         availableLODLevels.set(model.assetId, lodLevels);
-
-        loadedCount++;
-        processedCount++;
-        await onProgress?.(processedCount, totalModels, model.assetId);
+        debugAssets.log(`[AssetManager] ✓ Loaded ${model.assetId} with LOD levels: [${Array.from(lodLevels).join(', ')}]`);
+        return true;
       } catch (error) {
         debugAssets.log(`[AssetManager] Could not load ${model.path}:`, error);
-        processedCount++;
-        await onProgress?.(processedCount, totalModels, model.assetId);
+        return false;
+      }
+    };
+
+    /**
+     * Process models in parallel with concurrency limit
+     */
+    const processBatch = async (batch: typeof customModels): Promise<number> => {
+      const results = await Promise.all(batch.map(loadModelWithLODs));
+      return results.filter(Boolean).length;
+    };
+
+    // Process models in concurrent batches
+    const startTime = performance.now();
+    for (let i = 0; i < customModels.length; i += CONCURRENCY_LIMIT) {
+      const batch = customModels.slice(i, i + CONCURRENCY_LIMIT);
+      const batchLoaded = await processBatch(batch);
+      loadedCount += batchLoaded;
+      processedCount += batch.length;
+
+      // Report progress after each batch
+      if (onProgress) {
+        for (const model of batch) {
+          await onProgress(processedCount, totalModels, model.assetId);
+        }
       }
     }
+    const loadTime = performance.now() - startTime;
+    debugAssets.log(`[AssetManager] Parallel loading completed in ${loadTime.toFixed(0)}ms (${CONCURRENCY_LIMIT} concurrent)`)
 
     // Log LOD summary
     let lodSummary = '[AssetManager] LOD Summary: ';

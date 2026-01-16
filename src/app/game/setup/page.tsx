@@ -20,6 +20,7 @@ import {
 } from '@/store/gameSetupStore';
 import { useLobby } from '@/hooks/useMultiplayer';
 import { useMultiplayerStore } from '@/store/multiplayerStore';
+import AssetManager from '@/assets/AssetManager';
 
 // Helper to convert THREE.Color to hex string
 function colorToHex(color: { r: number; g: number; b: number }): string {
@@ -314,6 +315,7 @@ export default function GameSetupPage() {
   }, [toggleMusic, musicEnabled]);
 
   // Continue menu music (or start if navigated directly here)
+  // Also start preloading 3D assets in background while player is in lobby
   useEffect(() => {
     const continueMenuMusic = async () => {
       await MusicPlayer.initialize();
@@ -327,6 +329,12 @@ export default function GameSetupPage() {
     };
 
     continueMenuMusic();
+
+    // Start preloading 3D assets in the background while player configures game
+    // This significantly reduces loading time when game starts
+    if (!AssetManager.isPreloadingStarted()) {
+      AssetManager.startPreloading();
+    }
     // Don't stop on unmount - music stops when game starts
   }, []);
 
