@@ -284,18 +284,34 @@ export const SelectionPanel = memo(function SelectionPanel() {
   }
 
   // Multiple selection - improved grid with tooltips
+  // Separate buildings with production queues
+  const buildingsWithQueues = selectedInfo.filter(
+    (e) => e.type === 'building' && e.isComplete && e.productionQueue && e.productionQueue.length > 0
+  );
+  const hasProductionQueues = buildingsWithQueues.length > 0;
+
   return (
     <div className="game-panel p-3 h-44 overflow-y-auto">
-      <div className="grid grid-cols-8 gap-1.5">
-        {selectedInfo.slice(0, 24).map((entity) => (
-          <MultiSelectEntityIcon key={entity.id} entity={entity} />
-        ))}
+      <div className="flex gap-3 h-full">
+        {/* Left side: Entity icons grid */}
+        <div className={`${hasProductionQueues ? 'flex-1' : 'w-full'}`}>
+          <div className="grid grid-cols-8 gap-1.5">
+            {selectedInfo.slice(0, hasProductionQueues ? 16 : 24).map((entity) => (
+              <MultiSelectEntityIcon key={entity.id} entity={entity} />
+            ))}
+          </div>
+          {selectedInfo.length > (hasProductionQueues ? 16 : 24) && (
+            <p className="text-xs text-void-400 mt-2 text-center">
+              +{selectedInfo.length - (hasProductionQueues ? 16 : 24)} more
+            </p>
+          )}
+        </div>
+
+        {/* Right side: Production queues for all selected buildings */}
+        {hasProductionQueues && (
+          <MultiSelectProductionQueues buildings={buildingsWithQueues} />
+        )}
       </div>
-      {selectedInfo.length > 24 && (
-        <p className="text-xs text-void-400 mt-2 text-center">
-          +{selectedInfo.length - 24} more units
-        </p>
-      )}
     </div>
   );
 });
@@ -347,6 +363,114 @@ const StatItem = memo(function StatItem({ label, value, color }: { label: string
     <div className="flex items-center gap-1">
       <span className="text-void-500">{label}:</span>
       <span className={color}>{value ?? '-'}</span>
+    </div>
+  );
+});
+
+// Multi-select production queues - shows all selected buildings' queues
+const MultiSelectProductionQueues = memo(function MultiSelectProductionQueues({
+  buildings,
+}: {
+  buildings: SelectedEntityInfo[];
+}) {
+  const handleCancelItem = useCallback((entityId: number, index: number) => {
+    const game = Game.getInstance();
+    if (!game) return;
+
+    const entity = game.world.getEntity(entityId);
+    if (!entity) return;
+
+    const building = entity.get<Building>('Building');
+    if (!building) return;
+
+    const cancelled = building.cancelProduction(index);
+    if (cancelled) {
+      const unitDef = UNIT_DEFINITIONS[cancelled.id];
+      if (unitDef) {
+        const store = useGameStore.getState();
+        const refundPercent = cancelled.progress < 0.5 ? 1 : 0.5;
+        store.addResources(
+          Math.floor(unitDef.mineralCost * refundPercent),
+          Math.floor(unitDef.vespeneCost * refundPercent)
+        );
+        if (cancelled.supplyAllocated) {
+          store.addSupply(-unitDef.supplyCost);
+        }
+      }
+
+      game.eventBus.emit('production:cancelled', {
+        buildingId: entityId,
+        itemId: cancelled.id,
+        itemType: cancelled.type,
+      });
+    }
+  }, []);
+
+  return (
+    <div className="w-44 flex-shrink-0 border-l border-void-700/50 pl-3 overflow-y-auto max-h-full">
+      <div className="text-[10px] text-void-400 mb-1">
+        Production ({buildings.length} building{buildings.length > 1 ? 's' : ''})
+      </div>
+      <div className="space-y-2">
+        {buildings.map((building) => {
+          const queue = building.productionQueue || [];
+          const activeItem = queue[0];
+          const queuedCount = queue.length - 1;
+
+          return (
+            <div key={building.id} className="group">
+              {/* Building name and queue count */}
+              <div className="flex items-center gap-1 mb-1">
+                <span className="text-[9px]">{getBuildingIcon(building.buildingId || '')}</span>
+                <span className="text-[9px] text-void-300 truncate flex-1">{building.name}</span>
+                <span className="text-[8px] text-void-500">{queue.length}</span>
+              </div>
+
+              {/* Active production item */}
+              {activeItem && (
+                <div className="flex items-center gap-1">
+                  <div className="w-6 h-6 bg-void-800 border border-plasma-500/50 rounded flex items-center justify-center flex-shrink-0">
+                    <span className="text-[10px]">{getUnitIcon(activeItem.id)}</span>
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="h-1 bg-void-800 rounded overflow-hidden">
+                      <div
+                        className="h-full bg-gradient-to-r from-plasma-600 to-plasma-400"
+                        style={{ width: `${activeItem.progress * 100}%` }}
+                      />
+                    </div>
+                    <div className="text-[8px] text-void-500">{Math.floor(activeItem.progress * 100)}%</div>
+                  </div>
+                  <button
+                    onClick={() => handleCancelItem(building.id, 0)}
+                    className="w-4 h-4 bg-red-900/50 hover:bg-red-800/70 border border-red-700/50 rounded flex items-center justify-center text-red-400 hover:text-red-300 transition-colors opacity-0 group-hover:opacity-100 text-[8px] flex-shrink-0"
+                    title="Cancel"
+                  >
+                    ✕
+                  </button>
+                </div>
+              )}
+
+              {/* Queued items indicator */}
+              {queuedCount > 0 && (
+                <div className="flex items-center gap-0.5 mt-1 ml-7">
+                  {queue.slice(1, 5).map((item, idx) => (
+                    <div
+                      key={`${building.id}-q-${idx}`}
+                      className="w-4 h-4 bg-void-900/80 border border-void-600 rounded flex items-center justify-center"
+                    >
+                      <span className="text-[7px]">{getUnitIcon(item.id)}</span>
+                    </div>
+                  ))}
+                  {queuedCount > 4 && (
+                    <span className="text-[8px] text-void-500">+{queuedCount - 4}</span>
+                  )}
+                </div>
+              )}
+            </div>
+          );
+        })}
+      </div>
     </div>
   );
 });

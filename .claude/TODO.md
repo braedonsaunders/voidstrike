@@ -583,6 +583,14 @@
 - [x] Queue reorder functionality (move items up/down with ▲▼ buttons)
 - [x] Fixed tech-gated units (Devastator, Colossus) requiring tech lab
 - [x] Supply-blocked production pauses until supply available
+- [x] Distributed production across multiple selected buildings (shortest queue first)
+- [x] Multi-select production queue display (shows all selected buildings' queues)
+
+### Flying Building Improvements (January 2026)
+- [x] Fixed landing warp - buildings now fly to landing position before landing animation
+- [x] Smooth accel/decel for lift-off and landing animations
+- [x] Thruster effects on all flyable buildings (headquarters, orbital_station, infantry_bay, forge, hangar)
+- [x] Engine exhaust and smoke trail effects during flight
 
 ### Visual Polish
 - [ ] Unit wireframes (damage state)
