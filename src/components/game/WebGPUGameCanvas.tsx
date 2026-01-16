@@ -58,6 +58,7 @@ const _combatDirection = new THREE.Vector3();
 const _deathPos = new THREE.Vector3();
 
 import { useGameSetupStore, getLocalPlayerId, isSpectatorMode, isBattleSimulatorMode } from '@/store/gameSetupStore';
+import { useMultiplayerStore, isMultiplayerMode } from '@/store/multiplayerStore';
 import { SelectionBox } from './SelectionBox';
 import { LoadingScreen } from './LoadingScreen';
 import { GraphicsOptionsPanel } from './GraphicsOptionsPanel';
@@ -339,13 +340,15 @@ export function WebGPUGameCanvas() {
 
       // Initialize game engine
       const localPlayerId = getLocalPlayerId();
+      const isMultiplayer = isMultiplayerMode();
       const game = Game.getInstance({
         mapWidth,
         mapHeight,
         tickRate: 20,
-        isMultiplayer: false,
+        isMultiplayer,
         playerId: localPlayerId ?? 'spectator',
-        aiEnabled: !isBattleSimulatorMode(), // Disable AI in battle simulator
+        // Disable AI in multiplayer and battle simulator
+        aiEnabled: !isBattleSimulatorMode() && !isMultiplayer,
       });
       gameRef.current = game;
 
@@ -362,6 +365,63 @@ export function WebGPUGameCanvas() {
       // Set terrain data
       game.setTerrainGrid(CURRENT_MAP.terrain);
       game.setDecorationCollisions(environment.getRockCollisions());
+
+      // Set up multiplayer command synchronization
+      if (isMultiplayer) {
+        const multiplayerStore = useMultiplayerStore.getState();
+
+        // Commands to sync over network
+        const commandTypes = [
+          'command:move',
+          'command:attack',
+          'command:patrol',
+          'command:stop',
+          'command:holdPosition',
+          'command:build',
+          'command:train',
+          'command:research',
+          'command:ability',
+          'command:gather',
+          'command:repair',
+          'command:heal',
+          'command:transform',
+          'command:cloak',
+          'command:load',
+          'command:unload',
+          'command:loadBunker',
+          'command:unloadBunker',
+          'command:liftOff',
+          'command:land',
+          'command:demolish',
+        ];
+
+        // Listen for local commands and send to peer
+        for (const cmdType of commandTypes) {
+          game.eventBus.on(cmdType, (data: unknown) => {
+            // Only send commands from the local player
+            const cmd = data as { playerId?: string };
+            if (cmd.playerId === localPlayerId) {
+              multiplayerStore.sendMessage({
+                type: 'command',
+                commandType: cmdType,
+                data,
+                tick: game.getCurrentTick(),
+              });
+            }
+          });
+        }
+
+        // Receive remote commands and process them
+        multiplayerStore.addMessageHandler((msg: unknown) => {
+          const message = msg as { type: string; commandType?: string; data?: unknown };
+          if (message.type === 'command' && message.commandType && message.data) {
+            // Emit the command to the game's event bus
+            game.eventBus.emit(message.commandType, message.data);
+          }
+        });
+
+        console.log('[Multiplayer] Command sync enabled');
+      }
 
       // Initialize navmesh for pathfinding (must complete before spawning entities)
       setLoadingStatus('Generating navigation mesh');

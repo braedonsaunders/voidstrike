@@ -1,5 +1,5 @@
 // Network module exports
 export * from './types';
-export { SignalingService } from './SignalingService';
-export { PeerConnection } from './PeerConnection';
-export { PeerManager } from './PeerManager';
+
+// P2P module (serverless multiplayer)
+export * from './p2p';
