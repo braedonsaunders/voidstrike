@@ -578,6 +578,7 @@ export class Terrain {
         let cellTerrainType = 0.0;
         if (cell.terrain === 'unwalkable') cellTerrainType = 2.0;
         else if (cell.terrain === 'ramp') cellTerrainType = 1.0;
+        else if (cell.terrain === 'platform') cellTerrainType = 3.0;
         terrainTypes.push(cellTerrainType, cellTerrainType, cellTerrainType);
         terrainTypes.push(cellTerrainType, cellTerrainType, cellTerrainType);
 
@@ -809,7 +810,6 @@ export class Terrain {
     // Numeric values: 0=ground/unbuildable (walkable), 1=ramp, 2=unwalkable
     const terrainTypeMap: TerrainType[] = new Array(this.gridWidth * this.gridHeight);
     const terrainTypeNumeric = new Float32Array(this.gridWidth * this.gridHeight);
-    let platformCount = 0; // DEBUG
     for (let y = 0; y <= height; y++) {
       for (let x = 0; x <= width; x++) {
         const idx = y * this.gridWidth + x;
@@ -822,13 +822,11 @@ export class Terrain {
           terrainTypeNumeric[idx] = 1.0;
         } else if (cell.terrain === 'platform') {
           terrainTypeNumeric[idx] = 3.0;  // Platform gets distinct rock/concrete texture
-          platformCount++; // DEBUG
         } else {
           terrainTypeNumeric[idx] = 0.0;  // ground, unbuildable
         }
       }
     }
-    console.log('[Terrain] Platform vertices detected:', platformCount); // DEBUG
 
     // Calculate per-vertex slopes BEFORE smoothing (for texture blending)
     // This captures the actual cliff steepness from terrain cell data
@@ -1023,6 +1021,8 @@ export class Terrain {
           cellTerrainType = 2.0;
         } else if (cell.terrain === 'ramp') {
           cellTerrainType = 1.0;
+        } else if (cell.terrain === 'platform') {
+          cellTerrainType = 3.0;
         }
         // All 6 vertices of this cell's triangles get the same terrain type
         terrainTypes.push(cellTerrainType, cellTerrainType, cellTerrainType);  // Triangle 1
@@ -1045,7 +1045,7 @@ export class Terrain {
     geometry.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3));
     geometry.setAttribute('uv', new THREE.Float32BufferAttribute(uvs, 2));
     geometry.setAttribute('aSlope', new THREE.Float32BufferAttribute(slopes, 1));  // Pre-calculated slope for texture blending
-    geometry.setAttribute('aTerrainType', new THREE.Float32BufferAttribute(terrainTypes, 1));  // 0=ground, 1=ramp, 2=unwalkable
+    geometry.setAttribute('aTerrainType', new THREE.Float32BufferAttribute(terrainTypes, 1));  // 0=ground, 1=ramp, 2=unwalkable, 3=platform
     geometry.setIndex(indices);
     geometry.computeVertexNormals();
 
