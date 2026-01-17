@@ -196,6 +196,7 @@ export function useLobby(
   const subRef = useRef<{ close: () => void } | null>(null);
   const pcRef = useRef<RTCPeerConnection | null>(null); // For guest mode
   const gameStartCallbackRef = useRef<(() => void) | null>(null);
+  const joinTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Handle incoming messages on the host connection (guest mode)
   useEffect(() => {
@@ -424,6 +425,11 @@ export function useLobby(
       try {
         subRef.current?.close();
       } catch { /* ignore */ }
+      // Clear any pending join timeout to prevent stale state updates
+      if (joinTimeoutRef.current) {
+        clearTimeout(joinTimeoutRef.current);
+        joinTimeoutRef.current = null;
+      }
       // Don't explicitly close the pool - nostr-tools throws unhandled errors
       // when websockets are already closing. Let browser garbage collect instead.
       poolRef.current = null;
@@ -479,6 +485,11 @@ export function useLobby(
           if (handled) return;
           handled = true;
           rejectSub.close(); // Close reject subscription since we got accepted
+          // Clear join timeout since we got a response
+          if (joinTimeoutRef.current) {
+            clearTimeout(joinTimeoutRef.current);
+            joinTimeoutRef.current = null;
+          }
 
           console.log('[Lobby] Received offer from host:', event.id.slice(0, 8) + '...');
           try {
@@ -561,6 +572,11 @@ export function useLobby(
           if (handled) return;
           handled = true;
           offerSub.close(); // Close offer subscription
+          // Clear join timeout since we got a response
+          if (joinTimeoutRef.current) {
+            clearTimeout(joinTimeoutRef.current);
+            joinTimeoutRef.current = null;
+          }
 
           console.log('[Lobby] Received rejection from host');
           try {
@@ -598,8 +614,8 @@ export function useLobby(
       }
       console.log('[Lobby] Sent join request for code:', normalizedCode);
 
-      // Timeout after 30 seconds
-      setTimeout(() => {
+      // Timeout after 30 seconds - store ref for cleanup on unmount
+      joinTimeoutRef.current = setTimeout(() => {
         if (!handled) {
           offerSub.close();
           rejectSub.close();
@@ -607,6 +623,7 @@ export function useLobby(
           setIsHost(true); // Reset to host mode so Join button reappears
           setStatus('hosting'); // Go back to hosting so user can try again
         }
+        joinTimeoutRef.current = null;
       }, 30000);
 
     } catch (e) {
