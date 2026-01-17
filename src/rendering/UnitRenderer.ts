@@ -37,19 +37,28 @@ interface AnimatedUnitMesh {
   unitType: string; // Track unit type for animation speed multipliers
 }
 
-// Per-unit overlay data (selection ring, health bar, team marker)
+// Per-unit overlay data - now tracks instance indices instead of individual meshes
+// Selection rings and team markers use instanced rendering for ~150 fewer draw calls
 interface UnitOverlay {
-  selectionRing: THREE.Mesh;
-  healthBar: THREE.Group;
-  teamMarker: THREE.Mesh;
+  healthBar: THREE.Group;  // Health bars kept individual due to dynamic width
   lastHealth: number;
+  playerId: string;        // Track player for team marker color grouping
   // PERF: Cached terrain height to avoid recalculation every frame
   cachedTerrainHeight: number;
   lastX: number;
   lastY: number;
 }
 
+// Instanced overlay groups for selection rings and team markers
+interface InstancedOverlayGroup {
+  mesh: THREE.InstancedMesh;
+  entityIds: number[];     // Maps instance index to entity ID
+  positions: THREE.Vector3[]; // Cached positions for matrix updates
+  maxInstances: number;
+}
+
 const MAX_INSTANCES_PER_TYPE = 100; // Max units of same type per player
+const MAX_OVERLAY_INSTANCES = 200;  // Max units for instanced overlays (selection rings, team markers)
 // Note: Airborne height is now configured per-unit-type in assets.json via "airborneHeight" property
 // Use AssetManager.getAirborneHeight(unitId) to get the configured height (defaults to DEFAULT_AIRBORNE_HEIGHT = 8)
 const INACTIVE_MESH_CLEANUP_FRAMES = 180; // Remove meshes after 3 seconds (60fps) of inactivity
@@ -80,8 +89,17 @@ export class UnitRenderer {
   // Track which unit types are animated
   private animatedUnitTypes: Set<string> = new Set();
 
-  // Per-unit overlays (selection rings, health bars)
+  // Per-unit overlays (health bars only - selection rings and team markers are now instanced)
   private unitOverlays: Map<number, UnitOverlay> = new Map();
+
+  // PERF: Instanced overlay groups - greatly reduces draw calls
+  // Selection rings: keyed by 'owned' or 'enemy'
+  private selectionRingGroups: Map<string, InstancedOverlayGroup> = new Map();
+  // Team markers: keyed by playerId
+  private teamMarkerGroups: Map<string, InstancedOverlayGroup> = new Map();
+  // Track which units are selected and visible for instanced rendering
+  private selectedUnits: Map<number, { position: THREE.Vector3; isOwned: boolean }> = new Map();
+  private visibleUnits: Map<number, { position: THREE.Vector3; playerId: string }> = new Map();
 
   // PERF: Pre-allocated Set for tracking current entity IDs to avoid per-frame allocation
   private readonly _currentIds: Set<number> = new Set();
@@ -542,41 +560,21 @@ export class UnitRenderer {
   }
 
   /**
-   * Get or create overlay (selection ring, health bar, team marker) for a unit
+   * Get or create overlay for a unit (health bar only - selection rings and team markers are instanced)
    */
   private getOrCreateOverlay(entityId: number, playerId: string): UnitOverlay {
     let overlay = this.unitOverlays.get(entityId);
 
     if (!overlay) {
-      // Selection ring
-      const selectionRing = new THREE.Mesh(this.selectionGeometry, this.selectionMaterial);
-      selectionRing.rotation.x = -Math.PI / 2;
-      selectionRing.visible = false;
-      this.scene.add(selectionRing);
-
-      // Health bar
+      // Health bar (kept individual due to dynamic width based on health %)
       const healthBar = this.createHealthBar();
       healthBar.visible = false;
       this.scene.add(healthBar);
 
-      // Team marker - always visible colored circle showing team color
-      const teamColor = getPlayerColor(playerId);
-      const teamMarkerMaterial = new THREE.MeshBasicMaterial({
-        color: teamColor,
-        transparent: true,
-        opacity: 0.7,
-        side: THREE.DoubleSide,
-      });
-      const teamMarker = new THREE.Mesh(this.teamMarkerGeometry, teamMarkerMaterial);
-      teamMarker.rotation.x = -Math.PI / 2;
-      teamMarker.visible = true;
-      this.scene.add(teamMarker);
-
       overlay = {
-        selectionRing,
         healthBar,
-        teamMarker,
         lastHealth: 1,
+        playerId,
         // PERF: Initialize cached terrain height
         cachedTerrainHeight: 0,
         lastX: -99999,
@@ -587,6 +585,69 @@ export class UnitRenderer {
     }
 
     return overlay;
+  }
+
+  /**
+   * Get or create an instanced selection ring group (owned=green, enemy=red)
+   */
+  private getOrCreateSelectionRingGroup(isOwned: boolean): InstancedOverlayGroup {
+    const key = isOwned ? 'owned' : 'enemy';
+    let group = this.selectionRingGroups.get(key);
+
+    if (!group) {
+      const material = isOwned ? this.selectionMaterial.clone() : this.enemySelectionMaterial.clone();
+      const mesh = new THREE.InstancedMesh(this.selectionGeometry, material, MAX_OVERLAY_INSTANCES);
+      mesh.count = 0;
+      mesh.frustumCulled = false;
+      mesh.rotation.x = -Math.PI / 2;
+      // Selection rings render at same level as ground effects
+      mesh.renderOrder = 5;
+      this.scene.add(mesh);
+
+      group = {
+        mesh,
+        entityIds: [],
+        positions: [],
+        maxInstances: MAX_OVERLAY_INSTANCES,
+      };
+      this.selectionRingGroups.set(key, group);
+    }
+
+    return group;
+  }
+
+  /**
+   * Get or create an instanced team marker group for a player
+   */
+  private getOrCreateTeamMarkerGroup(playerId: string): InstancedOverlayGroup {
+    let group = this.teamMarkerGroups.get(playerId);
+
+    if (!group) {
+      const teamColor = getPlayerColor(playerId);
+      const material = new THREE.MeshBasicMaterial({
+        color: teamColor,
+        transparent: true,
+        opacity: 0.7,
+        side: THREE.DoubleSide,
+      });
+      const mesh = new THREE.InstancedMesh(this.teamMarkerGeometry, material, MAX_OVERLAY_INSTANCES);
+      mesh.count = 0;
+      mesh.frustumCulled = false;
+      mesh.rotation.x = -Math.PI / 2;
+      // Team markers render just above ground
+      mesh.renderOrder = 4;
+      this.scene.add(mesh);
+
+      group = {
+        mesh,
+        entityIds: [],
+        positions: [],
+        maxInstances: MAX_OVERLAY_INSTANCES,
+      };
+      this.teamMarkerGroups.set(playerId, group);
+    }
+
+    return group;
   }
 
   /**
@@ -643,6 +704,18 @@ export class UnitRenderer {
       group.entityIds.length = 0;
     }
 
+    // PERF: Reset instanced overlay groups
+    for (const group of this.selectionRingGroups.values()) {
+      group.mesh.count = 0;
+      group.entityIds.length = 0;
+    }
+    for (const group of this.teamMarkerGroups.values()) {
+      group.mesh.count = 0;
+      group.entityIds.length = 0;
+    }
+    this.selectedUnits.clear();
+    this.visibleUnits.clear();
+
     // Hide animated units that may be hidden
     for (const animUnit of this.animatedUnits.values()) {
       animUnit.mesh.visible = false;
@@ -679,12 +752,10 @@ export class UnitRenderer {
       }
 
       if (!shouldShow) {
-        // Hide overlay if exists
+        // Hide health bar if exists (selection rings and team markers are instanced)
         const overlay = this.unitOverlays.get(entity.id);
         if (overlay) {
-          overlay.selectionRing.visible = false;
           overlay.healthBar.visible = false;
-          overlay.teamMarker.visible = false;
         }
         continue;
       }
@@ -700,12 +771,10 @@ export class UnitRenderer {
 
       // PERF: Skip units outside camera frustum
       if (!this.isInFrustum(transform.x, unitHeight + 1, transform.y)) {
-        // Hide overlay if exists (but keep unit in system)
+        // Hide health bar if exists (selection rings and team markers are instanced)
         const overlay = this.unitOverlays.get(entity.id);
         if (overlay) {
-          overlay.selectionRing.visible = false;
           overlay.healthBar.visible = false;
-          overlay.teamMarker.visible = false;
         }
         continue;
       }
@@ -787,22 +856,24 @@ export class UnitRenderer {
         }
       }
 
-      // Update overlay (selection ring, health bar, team marker) for all units
+      // Update overlays - now uses instanced rendering for selection rings and team markers
       // PERF: Overlay already created above when getting cached terrain height
 
-      // Team marker - always visible colored circle beneath unit
-      overlay.teamMarker.position.set(transform.x, unitHeight + 0.02, transform.y);
-      overlay.teamMarker.visible = true;
+      // PERF: Track visible unit for instanced team marker rendering
+      this.visibleUnits.set(entity.id, {
+        position: new THREE.Vector3(transform.x, unitHeight + 0.02, transform.y),
+        playerId: ownerId,
+      });
 
-      // Selection ring
-      overlay.selectionRing.position.set(transform.x, unitHeight + 0.05, transform.y);
-      overlay.selectionRing.visible = selectable?.isSelected ?? false;
-      if (overlay.selectionRing.visible) {
-        (overlay.selectionRing.material as THREE.MeshBasicMaterial) =
-          isOwned ? this.selectionMaterial : this.enemySelectionMaterial;
+      // PERF: Track selected unit for instanced selection ring rendering
+      if (selectable?.isSelected) {
+        this.selectedUnits.set(entity.id, {
+          position: new THREE.Vector3(transform.x, unitHeight + 0.05, transform.y),
+          isOwned,
+        });
       }
 
-      // Health bar - only show if damaged, positioned above the unit model
+      // Health bar - only show if damaged, positioned above the unit model (kept individual)
       if (health) {
         const healthPercent = health.getHealthPercent();
         overlay.healthBar.visible = healthPercent < 1;
@@ -815,6 +886,50 @@ export class UnitRenderer {
             overlay.lastHealth = healthPercent;
           }
         }
+      }
+    }
+
+    // PERF: Build instanced team marker matrices
+    for (const [entityId, data] of this.visibleUnits) {
+      const group = this.getOrCreateTeamMarkerGroup(data.playerId);
+      if (group.mesh.count < group.maxInstances) {
+        const idx = group.mesh.count;
+        group.entityIds[idx] = entityId;
+        // Team markers are flat on ground, just need position (rotation handled by mesh.rotation.x)
+        this.tempPosition.copy(data.position);
+        this.tempScale.set(1, 1, 1);
+        this.tempQuaternion.identity();
+        this.tempMatrix.compose(this.tempPosition, this.tempQuaternion, this.tempScale);
+        group.mesh.setMatrixAt(idx, this.tempMatrix);
+        group.mesh.count++;
+      }
+    }
+
+    // PERF: Build instanced selection ring matrices
+    for (const [entityId, data] of this.selectedUnits) {
+      const group = this.getOrCreateSelectionRingGroup(data.isOwned);
+      if (group.mesh.count < group.maxInstances) {
+        const idx = group.mesh.count;
+        group.entityIds[idx] = entityId;
+        // Selection rings are flat on ground, just need position
+        this.tempPosition.copy(data.position);
+        this.tempScale.set(1, 1, 1);
+        this.tempQuaternion.identity();
+        this.tempMatrix.compose(this.tempPosition, this.tempQuaternion, this.tempScale);
+        group.mesh.setMatrixAt(idx, this.tempMatrix);
+        group.mesh.count++;
+      }
+    }
+
+    // Mark instanced overlay matrices as needing update
+    for (const group of this.selectionRingGroups.values()) {
+      if (group.mesh.count > 0) {
+        group.mesh.instanceMatrix.needsUpdate = true;
+      }
+    }
+    for (const group of this.teamMarkerGroups.values()) {
+      if (group.mesh.count > 0) {
+        group.mesh.instanceMatrix.needsUpdate = true;
       }
     }
 
@@ -848,15 +963,10 @@ export class UnitRenderer {
       }
     }
 
-    // Clean up resources for destroyed entities
+    // Clean up resources for destroyed entities (health bars only - overlays are instanced)
     for (const [entityId, overlay] of this.unitOverlays) {
       if (!this._currentIds.has(entityId)) {
-        this.scene.remove(overlay.selectionRing);
         this.scene.remove(overlay.healthBar);
-        this.scene.remove(overlay.teamMarker);
-        // NOTE: Don't dispose selectionRing.geometry - it's shared (this.selectionGeometry)
-        // The shared geometry is disposed in the class's dispose() method
-        (overlay.teamMarker.material as THREE.Material).dispose();
         this.disposeGroup(overlay.healthBar);
         this.unitOverlays.delete(entityId);
         // Clean up visual rotation tracking
@@ -995,17 +1105,34 @@ export class UnitRenderer {
     this.animatedUnits.clear();
     this.animatedUnitTypes.clear();
 
-    // Clear overlays
+    // Clear overlays (health bars only - selection rings and team markers are instanced)
     for (const overlay of this.unitOverlays.values()) {
-      this.scene.remove(overlay.selectionRing);
       this.scene.remove(overlay.healthBar);
-      this.scene.remove(overlay.teamMarker);
-      (overlay.teamMarker.material as THREE.Material).dispose();
+      this.disposeGroup(overlay.healthBar);
     }
     this.unitOverlays.clear();
 
+    // Clear instanced overlay groups
+    for (const group of this.selectionRingGroups.values()) {
+      this.scene.remove(group.mesh);
+      if (group.mesh.material instanceof THREE.Material) {
+        group.mesh.material.dispose();
+      }
+    }
+    this.selectionRingGroups.clear();
+
+    for (const group of this.teamMarkerGroups.values()) {
+      this.scene.remove(group.mesh);
+      if (group.mesh.material instanceof THREE.Material) {
+        group.mesh.material.dispose();
+      }
+    }
+    this.teamMarkerGroups.clear();
+
     // Clear visual rotation tracking
     this.visualRotations.clear();
+    this.selectedUnits.clear();
+    this.visibleUnits.clear();
   }
 
   /**
@@ -1019,16 +1146,9 @@ export class UnitRenderer {
       const animUnit = this.animatedUnits.get(entityId);
       if (animUnit) {
         meshes.push(animUnit.mesh);
-        continue;
       }
-
-      // For instanced units, we can't outline individual instances easily
-      // But we can add the overlay meshes (selection rings, team markers)
-      const overlay = this.unitOverlays.get(entityId);
-      if (overlay) {
-        // Add team marker as a fallback for outline
-        meshes.push(overlay.teamMarker);
-      }
+      // For instanced units, we can't return individual instance meshes
+      // The outline pass would need special handling for instanced meshes
     }
 
     return meshes;
@@ -1072,16 +1192,33 @@ export class UnitRenderer {
     this.animatedUnits.clear();
     this.animatedUnitTypes.clear();
 
+    // Dispose health bars (selection rings and team markers are instanced)
     for (const overlay of this.unitOverlays.values()) {
-      this.scene.remove(overlay.selectionRing);
       this.scene.remove(overlay.healthBar);
-      this.scene.remove(overlay.teamMarker);
-      (overlay.teamMarker.material as THREE.Material).dispose();
       this.disposeGroup(overlay.healthBar);
     }
     this.unitOverlays.clear();
 
+    // Dispose instanced overlay groups
+    for (const group of this.selectionRingGroups.values()) {
+      this.scene.remove(group.mesh);
+      if (group.mesh.material instanceof THREE.Material) {
+        group.mesh.material.dispose();
+      }
+    }
+    this.selectionRingGroups.clear();
+
+    for (const group of this.teamMarkerGroups.values()) {
+      this.scene.remove(group.mesh);
+      if (group.mesh.material instanceof THREE.Material) {
+        group.mesh.material.dispose();
+      }
+    }
+    this.teamMarkerGroups.clear();
+
     // Clear visual rotation tracking
     this.visualRotations.clear();
+    this.selectedUnits.clear();
+    this.visibleUnits.clear();
   }
 }

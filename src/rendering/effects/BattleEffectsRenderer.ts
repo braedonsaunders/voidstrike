@@ -567,34 +567,45 @@ export class BattleEffectsRenderer {
   // POOL MANAGEMENT
   // ============================================
 
+  // PERF: Pools now use lazy scene addition - meshes are only added to scene when acquired
+  // This saves ~810 unnecessary objects in the scene graph at init time
+  private meshFactories: Map<MeshPool<THREE.Object3D>, () => THREE.Object3D> = new Map();
+
   private createMeshPool(size: number, factory: () => THREE.Mesh): MeshPool {
     const pool: MeshPool = { available: [], inUse: new Set(), maxSize: size };
-    for (let i = 0; i < size; i++) {
-      const mesh = factory();
-      this.scene.add(mesh);
-      pool.available.push(mesh);
-    }
+    // PERF: Don't create meshes upfront - create on demand
+    // Store factory for lazy creation
+    this.meshFactories.set(pool as MeshPool<THREE.Object3D>, factory);
     return pool;
   }
 
   private createSpritePool(size: number, factory: () => THREE.Sprite): MeshPool<THREE.Sprite> {
     const pool: MeshPool<THREE.Sprite> = { available: [], inUse: new Set(), maxSize: size };
-    for (let i = 0; i < size; i++) {
-      const sprite = factory();
-      this.scene.add(sprite);
-      pool.available.push(sprite);
-    }
+    // PERF: Don't create sprites upfront - create on demand
+    // Store factory for lazy creation
+    this.meshFactories.set(pool as MeshPool<THREE.Object3D>, factory);
     return pool;
   }
 
   private acquireFromPool<T extends THREE.Object3D>(pool: MeshPool<T>): T | null {
+    let mesh: T;
     if (pool.available.length > 0) {
-      const mesh = pool.available.pop()!;
-      pool.inUse.add(mesh);
-      mesh.visible = true;
-      return mesh;
+      mesh = pool.available.pop()!;
+    } else if (pool.inUse.size < pool.maxSize) {
+      // PERF: Lazy creation - create mesh on first use
+      const factory = this.meshFactories.get(pool as MeshPool<THREE.Object3D>);
+      if (!factory) return null;
+      mesh = factory() as T;
+    } else {
+      return null; // Pool exhausted
     }
-    return null;
+    pool.inUse.add(mesh);
+    mesh.visible = true;
+    // PERF: Only add to scene when acquired (lazy scene addition)
+    if (!mesh.parent) {
+      this.scene.add(mesh);
+    }
+    return mesh;
   }
 
   private releaseToPool<T extends THREE.Object3D>(pool: MeshPool<T>, mesh: T): void {
@@ -609,6 +620,10 @@ export class BattleEffectsRenderer {
       if ('material' in mesh) {
         const mat = (mesh as unknown as THREE.Mesh).material as THREE.MeshBasicMaterial;
         if (mat && mat.opacity !== undefined) mat.opacity = 1;
+      }
+      // PERF: Remove from scene when released to reduce scene graph traversal
+      if (mesh.parent) {
+        this.scene.remove(mesh);
       }
       if (pool.available.length < pool.maxSize) {
         pool.available.push(mesh);
