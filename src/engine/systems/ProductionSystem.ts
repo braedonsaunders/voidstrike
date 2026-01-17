@@ -233,7 +233,7 @@ export class ProductionSystem extends System {
 
       // Check if already upgrading
       const isUpgrading = building.productionQueue.some(
-        (item) => item.type === 'upgrade' && building.canUpgradeTo.includes(item.id)
+        (item) => item.type === 'upgrade' && building.canUpgradeTo?.includes(item.id)
       );
       if (isUpgrading) continue;
 

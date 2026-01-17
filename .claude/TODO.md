@@ -779,9 +779,22 @@
 - [x] **Building commands multiplayer sync** - Added LIFTOFF, LAND, RALLY, GATHER command types to GameCommand. Converted all building command emissions to use `game.issueCommand()` for proper multiplayer synchronization.
 - [x] **Nostr rate-limit error handling** - Silently ignore rate-limit errors from Nostr relays during event publishing to prevent uncaught promise errors.
 
+**✅ Critical Multiplayer Bug Fixes (January 2026):**
+- [x] **Command lockstep synchronization** - Commands now scheduled for future tick execution (COMMAND_DELAY_TICKS=2) ensuring both players execute at same game tick
+- [x] **RTCDataChannel ordered mode** - Changed from `ordered: false` to `ordered: true` to prevent command reordering
+- [x] **Deterministic worker wandering** - Replaced Math.random() with SeededRandom in BuildingPlacementSystem for multiplayer sync
+- [x] **Double game start race fix** - Added mutex flag to prevent race condition between setTimeout and event listener
+- [x] **Command buffer overflow handling** - Buffer overflow now triggers desync state instead of silently dropping commands
+- [x] **terrainGrid bounds checking** - Added null checks to prevent crash on empty terrain
+- [x] **World.getEntity() destroyed filter** - Now returns undefined for destroyed entities
+- [x] **canUpgradeTo null check** - Added optional chaining to prevent null access
+- [x] **Pending desync check logging** - Added warnings when checksums can't be verified
+- [x] **Render loop performance** - Cached sorted entity lists in UnitRenderer and BuildingRenderer to avoid O(n log n) sort every frame
+- [x] **Event listener cleanup** - Game.stop() now clears all event listeners to prevent memory leaks and duplicate handlers
+
 **⚠️ Game Integration Incomplete:**
-- [ ] Wire lockstep tick synchronization to game loop
-- [ ] Broadcast player commands over network
+- [x] Wire lockstep tick synchronization to game loop
+- [x] Broadcast player commands over network (via issueCommand)
 - [ ] Input buffering / lag compensation
 - [ ] Reconnection recovery logic
 

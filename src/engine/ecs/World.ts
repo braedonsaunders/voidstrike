@@ -147,7 +147,12 @@ export class World {
   }
 
   public getEntity(id: EntityId): Entity | undefined {
-    return this.entities.get(id);
+    const entity = this.entities.get(id);
+    // Filter out destroyed entities to prevent systems from modifying dead entities
+    if (entity?.isDestroyed()) {
+      return undefined;
+    }
+    return entity;
   }
 
   public getEntities(): Entity[] {

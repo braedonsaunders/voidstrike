@@ -113,13 +113,14 @@ export class Game {
    * Get terrain cell at a specific world position
    */
   public getTerrainAt(worldX: number, worldY: number): TerrainCell | null {
-    if (!this.terrainGrid) return null;
+    if (!this.terrainGrid || this.terrainGrid.length === 0) return null;
 
     const gridX = Math.floor(worldX);
     const gridY = Math.floor(worldY);
 
-    if (gridY < 0 || gridY >= this.terrainGrid.length ||
-        gridX < 0 || gridX >= this.terrainGrid[0].length) {
+    const firstRow = this.terrainGrid[0];
+    if (!firstRow || gridY < 0 || gridY >= this.terrainGrid.length ||
+        gridX < 0 || gridX >= firstRow.length) {
       return null;
     }
 
@@ -146,6 +147,14 @@ export class Game {
   private gameLoop: GameLoop;
   private state: GameState = 'initializing';
   private currentTick = 0;
+
+  // Mutex flag to prevent double game start race condition
+  private startMutex = false;
+
+  // Command queue for lockstep multiplayer - commands are scheduled for future ticks
+  private commandQueue: Map<number, GameCommand[]> = new Map();
+  // Number of ticks to delay command execution (allows time for network sync)
+  private readonly COMMAND_DELAY_TICKS = 2;
 
   private constructor(config: Partial<GameConfig> = {}) {
     this.config = { ...DEFAULT_CONFIG, ...config };
@@ -215,10 +224,11 @@ export class Game {
         // Format 1: { type: 'command', payload: GameCommand } - from Game.issueCommand
         // Format 2: { type: 'command', commandType: string, data: any } - from WebGPUGameCanvas
         if (message.payload) {
-          // Format 1: GameCommand in payload
+          // Format 1: GameCommand in payload - LOCKSTEP: queue for scheduled tick
           const command = message.payload as GameCommand;
-          console.log('[Game] Received remote command (payload format):', command.type, 'from', command.playerId);
-          this.processCommand(command);
+          console.log('[Game] Received remote command for tick', command.tick, ':', command.type, 'from', command.playerId);
+          // Queue for execution at the scheduled tick (lockstep)
+          this.queueCommand(command);
         } else if (message.commandType && message.data) {
           // Format 2: Event-based command from WebGPUGameCanvas
           // Emit directly to event bus for systems to process
@@ -362,8 +372,12 @@ export class Game {
     const countdownDuration = 4000; // 3, 2, 1, GO = 4 seconds
     const scheduledStartTime = gameStartTime ?? (Date.now() + countdownDuration);
 
+    // Atomic start function with mutex to prevent race condition
     const startGameLoop = () => {
-      if (this.state === 'running') return; // Already started
+      // Use mutex to ensure only one path can start the game
+      if (this.startMutex || this.state === 'running') return;
+      this.startMutex = true;
+
       this.state = 'running';
       this.gameLoop.start();
       PerformanceMonitor.start(); // Start performance monitoring
@@ -386,19 +400,15 @@ export class Game {
       // Schedule game start at exact wall-clock time
       debugInitialization.log(`[Game] Scheduling game start in ${delayUntilStart}ms`);
       setTimeout(() => {
-        if (this.state !== 'running') {
-          startGameLoop();
-        }
+        startGameLoop();
       }, delayUntilStart);
     }
 
     // Also listen for countdown complete as a backup (in case setTimeout drifts)
     // This ensures the game starts even if there's minor timing discrepancy
     this.eventBus.once('game:countdownComplete', () => {
-      if (this.state !== 'running') {
-        debugInitialization.log('[Game] Countdown complete - starting game');
-        startGameLoop();
-      }
+      debugInitialization.log('[Game] Countdown complete - starting game');
+      startGameLoop();
     });
   }
 
@@ -433,6 +443,16 @@ export class Game {
     }
 
     this.eventBus.emit('game:ended', { tick: this.currentTick });
+
+    // Clean up all event listeners to prevent memory leaks and duplicate handlers
+    // This must be done AFTER emitting game:ended so handlers can respond to shutdown
+    this.eventBus.clear();
+
+    // Reset command queue for clean restart
+    this.commandQueue.clear();
+
+    // Reset start mutex so game can be started again
+    this.startMutex = false;
   }
 
   private update(deltaTime: number): void {
@@ -456,6 +476,11 @@ export class Game {
 
     // Set current tick for query cache invalidation
     this.world.setCurrentTick(this.currentTick);
+
+    // LOCKSTEP: Process any commands scheduled for this tick (before systems update)
+    if (this.config.isMultiplayer) {
+      this.processQueuedCommands();
+    }
 
     // Update all systems
     this.world.update(deltaTime);
@@ -590,6 +615,9 @@ export class Game {
     let requiredElevation: number | null = null;
 
     // Check all tiles the building would occupy
+    const firstRow = this.terrainGrid[0];
+    if (!firstRow) return false; // Empty terrain grid
+
     for (let dy = -Math.floor(halfHeight); dy < Math.ceil(halfHeight); dy++) {
       for (let dx = -Math.floor(halfWidth); dx < Math.ceil(halfWidth); dx++) {
         const tileX = Math.floor(centerX + dx);
@@ -597,7 +625,7 @@ export class Game {
 
         // Check bounds
         if (tileY < 0 || tileY >= this.terrainGrid.length ||
-            tileX < 0 || tileX >= this.terrainGrid[0].length) {
+            tileX < 0 || tileX >= firstRow.length) {
           return false;
         }
 
@@ -734,22 +762,64 @@ export class Game {
 
   /**
    * Issue a command from the local player.
-   * In multiplayer, this sends the command to the remote player AND processes locally.
-   * In single player, this just processes the command locally.
+   * In multiplayer, commands are scheduled for a future tick (lockstep) to ensure
+   * both players execute the command at the same game tick.
+   * In single player, commands are processed immediately.
    */
   public issueCommand(command: GameCommand): void {
-    // In multiplayer, send to remote player
     if (isMultiplayerMode()) {
+      // LOCKSTEP: Schedule command for future tick so both players execute at same tick
+      const executionTick = this.currentTick + this.COMMAND_DELAY_TICKS;
+      command.tick = executionTick;
+
+      // Send to remote player with the scheduled execution tick
       const message: MultiplayerMessage = {
         type: 'command',
         payload: command,
       };
       sendMultiplayerMessage(message);
-      console.log('[Game] Sent command to remote:', command.type);
+      console.log('[Game] Sent command to remote for tick', executionTick, ':', command.type);
+
+      // Queue locally for execution at the scheduled tick
+      this.queueCommand(command);
+    } else {
+      // Single player: process immediately
+      this.processCommand(command);
+    }
+  }
+
+  /**
+   * Queue a command for execution at a specific tick (lockstep multiplayer)
+   */
+  private queueCommand(command: GameCommand): void {
+    const tick = command.tick;
+    if (!this.commandQueue.has(tick)) {
+      this.commandQueue.set(tick, []);
+    }
+    this.commandQueue.get(tick)!.push(command);
+  }
+
+  /**
+   * Process all commands scheduled for the current tick
+   */
+  private processQueuedCommands(): void {
+    const commands = this.commandQueue.get(this.currentTick);
+    if (commands) {
+      // Sort by player ID for deterministic ordering
+      commands.sort((a, b) => a.playerId.localeCompare(b.playerId));
+      for (const command of commands) {
+        this.processCommand(command);
+      }
+      this.commandQueue.delete(this.currentTick);
     }
 
-    // Process locally
-    this.processCommand(command);
+    // Clean up old ticks (shouldn't happen, but safety check)
+    for (const tick of this.commandQueue.keys()) {
+      if (tick < this.currentTick) {
+        console.warn(`[Game] Dropping stale commands from tick ${tick}`);
+        this.commandQueue.delete(tick);
+      }
+    }
   }
 
   /**

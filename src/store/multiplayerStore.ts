@@ -113,7 +113,7 @@ const initialState = {
   maxReconnectAttempts: 4,
   lastReconnectTime: null,
   commandBuffer: [] as BufferedCommand[],
-  maxBufferedCommands: 100,
+  maxBufferedCommands: 500, // Increased for longer disconnect tolerance
   desyncState: 'synced' as DesyncState,
   desyncTick: null,
   localPeerId: null,
@@ -242,8 +242,18 @@ export const useMultiplayerStore = create<MultiplayerState>((set, get) => ({
   bufferCommand: (command) => {
     const state = get();
     if (state.commandBuffer.length >= state.maxBufferedCommands) {
-      console.warn('[Multiplayer] Command buffer full, dropping oldest command');
-      state.commandBuffer.shift();
+      // CRITICAL: Buffer overflow means commands will be lost, causing desync
+      // Instead of silently dropping, report this as a fatal error
+      console.error('[Multiplayer] CRITICAL: Command buffer overflow! This will cause desync.');
+      // Mark as desynced since we're about to lose commands
+      set({
+        desyncState: 'desynced',
+        desyncTick: null, // Unknown which tick
+      });
+      // Still buffer the new command, dropping oldest as last resort
+      const newBuffer = [...state.commandBuffer.slice(1), { command, timestamp: Date.now() }];
+      set({ commandBuffer: newBuffer });
+      return;
     }
     set({
       commandBuffer: [
