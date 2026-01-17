@@ -300,7 +300,7 @@ export class AIMicroSystem extends System {
     if (!basePosition) {
       // No base to retreat to - clear retreat state to prevent stuck units
       state.retreating = false;
-      state.retreatEndTick = undefined;
+      state.retreatEndTick = null;
       return;
     }
 
