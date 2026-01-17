@@ -1008,8 +1008,8 @@ export class UnitRenderer {
   private createHealthBar(): THREE.Group {
     const group = new THREE.Group();
 
-    // Background - use simpler geometry
-    const bgGeometry = new THREE.PlaneGeometry(1, 0.1);
+    // Background - slightly larger for better visibility
+    const bgGeometry = new THREE.PlaneGeometry(1.4, 0.18);
     const bgMaterial = new THREE.MeshBasicMaterial({
       color: 0x333333,
       transparent: true,
@@ -1019,7 +1019,7 @@ export class UnitRenderer {
     group.add(bg);
 
     // Health fill
-    const fillGeometry = new THREE.PlaneGeometry(1, 0.1);
+    const fillGeometry = new THREE.PlaneGeometry(1.4, 0.18);
     const fillMaterial = new THREE.MeshBasicMaterial({
       color: 0x00ff00,
     });
