@@ -3,8 +3,8 @@
  *
  * Handles unit movement using Recast's DetourCrowd for collision avoidance.
  * Implements SC2-style "magic box" detection for clump vs formation behavior:
- * - Target INSIDE selection bounding box → units clump to same point
- * - Target OUTSIDE bounding box → units preserve relative spacing
+ * - Target OUTSIDE selection bounding box → units converge to same point (clump)
+ * - Target INSIDE bounding box → units preserve relative spacing (formation nudge)
  *
  * Also supports explicit formation commands using data-driven formations.
  */
@@ -236,7 +236,7 @@ export class MovementSystem extends System {
 
   /**
    * Check if a target point is inside the bounding box of selected units.
-   * SC2 behavior: target inside box = clump, target outside = preserve spacing
+   * SC2 behavior: target outside box = clump (converge), target inside = preserve spacing
    */
   private isTargetInsideMagicBox(
     targetX: number,
@@ -294,14 +294,14 @@ export class MovementSystem extends System {
    * Handle move command with SC2-style magic box detection.
    *
    * Magic Box Behavior:
-   * - Target INSIDE the bounding box of selected units → CLUMP MODE
+   * - Target OUTSIDE the bounding box of selected units → CLUMP MODE
    *   All units move to the SAME target point, separation spreads them on arrival.
-   * - Target OUTSIDE the bounding box → PRESERVE SPACING MODE
+   * - Target INSIDE the bounding box → PRESERVE SPACING MODE
    *   Each unit maintains its relative offset from the group center.
    *
    * This creates natural SC2-like behavior where:
-   * - Short moves (within group) create tight clumps
-   * - Long moves (outside group) maintain army spread
+   * - Long moves (outside group) converge units to the target point
+   * - Short moves (within group) nudge formation while maintaining spacing
    */
   private handleMoveCommand(data: {
     entityIds: number[];
@@ -354,12 +354,13 @@ export class MovementSystem extends System {
     const isInsideBox = this.isTargetInsideMagicBox(targetPosition.x, targetPosition.y, box);
 
     if (isInsideBox) {
-      // CLUMP MODE: All units move to the same point
-      // Separation forces will spread them naturally on arrival
-      this.moveUnitsToSamePoint(entityIds, targetPosition.x, targetPosition.y, queue);
-    } else {
-      // PRESERVE SPACING MODE: Maintain relative offsets from group center
+      // PRESERVE SPACING MODE: Target is within the group - maintain relative offsets
+      // This is for small adjustments where the player wants to nudge formation
       this.moveUnitsWithRelativeOffsets(entityIds, targetPosition.x, targetPosition.y, box, queue);
+    } else {
+      // CLUMP MODE: Target is outside the group - all units converge to same point
+      // Separation forces will spread them naturally on arrival (SC2 style)
+      this.moveUnitsToSamePoint(entityIds, targetPosition.x, targetPosition.y, queue);
     }
   }
 
