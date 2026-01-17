@@ -559,8 +559,10 @@ export class ResourceSystem extends System {
     // Calculate drop-off range based on building size
     // Workers carrying resources skip building avoidance, so they can get close
     // Use a generous range to ensure drop-off succeeds
+    // FIX: Increased from 2.5 to 3.5 to account for arrival threshold (0.8)
+    // Target position is halfWidth + 2.0, so workers can stop at halfWidth + 2.8
     const buildingHalfWidth = (nearestBase.building.width || 5) / 2;
-    const dropOffRange = buildingHalfWidth + 2.5; // Generous range for reliable drop-off
+    const dropOffRange = buildingHalfWidth + 3.5; // Generous range accounting for arrival threshold
 
     if (nearestDistance <= dropOffRange) {
       // At base - deposit resources
