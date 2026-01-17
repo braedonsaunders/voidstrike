@@ -76,13 +76,13 @@ for (const entry of registry.maps) {
   }
 }
 
-// Export individual maps for direct access
-export const CRYSTAL_CAVERNS = ALL_MAPS['crystal-caverns'];
-export const VOID_ASSAULT = ALL_MAPS['void-assault'];
-export const SCORCHED_BASIN = ALL_MAPS['scorched-basin'];
-export const CONTESTED_FRONTIER = ALL_MAPS['contested-frontier'];
-export const TITANS_COLOSSEUM = ALL_MAPS['titans-colosseum'];
-export const BATTLE_ARENA = ALL_MAPS['battle-arena'];
+// Export individual maps for direct access (IDs use underscores to match JSON)
+export const CRYSTAL_CAVERNS = ALL_MAPS['crystal_caverns'];
+export const VOID_ASSAULT = ALL_MAPS['void_assault'];
+export const SCORCHED_BASIN = ALL_MAPS['scorched_basin'];
+export const CONTESTED_FRONTIER = ALL_MAPS['contested_frontier'];
+export const TITANS_COLOSSEUM = ALL_MAPS['titans_colosseum'];
+export const BATTLE_ARENA = ALL_MAPS['battle_arena'];
 
 // Maps available for ranked play
 export const RANKED_MAPS: MapData[] = Object.values(ALL_MAPS).filter(m => m.isRanked);
