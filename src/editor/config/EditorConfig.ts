@@ -120,19 +120,29 @@ export interface TerrainConfig {
  * Built-in tool types supported by the editor
  */
 export type BuiltInToolType =
-  | 'select'    // Select and move objects
-  | 'brush'     // Paint terrain/elevation
-  | 'fill'      // Flood fill area
-  | 'plateau'   // Create circular elevated area
-  | 'ramp'      // Draw ramps between elevations
-  | 'eraser'    // Clear/reset terrain
-  | 'line'      // Draw lines between two points
-  | 'rect'      // Draw rectangles
-  | 'ellipse'   // Draw ellipses
-  | 'raise'     // Raise elevation with falloff
-  | 'lower'     // Lower elevation with falloff
-  | 'smooth'    // Smooth terrain (average neighbors)
-  | 'noise';    // Add procedural elevation noise
+  | 'select'           // Select and move objects
+  | 'brush'            // Paint terrain/elevation
+  | 'fill'             // Flood fill area
+  | 'plateau'          // Create circular elevated area
+  | 'ramp'             // Draw ramps between elevations
+  | 'eraser'           // Clear/reset terrain
+  | 'line'             // Draw lines between two points
+  | 'rect'             // Draw rectangles
+  | 'ellipse'          // Draw ellipses
+  | 'raise'            // Raise elevation with falloff
+  | 'lower'            // Lower elevation with falloff
+  | 'smooth'           // Smooth terrain (average neighbors)
+  | 'noise'            // Add procedural elevation noise
+  | 'platform_brush'   // Paint geometric platform terrain
+  | 'platform_rect'    // Draw rectangular platform
+  | 'platform_polygon' // Draw polygon platform (click vertices)
+  | 'convert_platform' // Convert natural terrain to platform
+  | 'edge_style';      // Edit platform edge styles
+
+/**
+ * Snap mode for angle-constrained tools
+ */
+export type SnapMode = 'none' | 'grid' | 'orthogonal' | '45deg';
 
 /**
  * Tool configuration
@@ -283,6 +293,21 @@ export interface UIThemeConfig {
 // ============================================
 
 /**
+ * Edge style for platform cells
+ */
+export type PlatformEdgeStyle = 'cliff' | 'natural' | 'ramp';
+
+/**
+ * Per-edge style configuration for platform cells
+ */
+export interface PlatformEdges {
+  north?: PlatformEdgeStyle;
+  south?: PlatformEdgeStyle;
+  east?: PlatformEdgeStyle;
+  west?: PlatformEdgeStyle;
+}
+
+/**
  * Generic cell interface that the editor works with
  */
 export interface EditorCell {
@@ -298,6 +323,10 @@ export interface EditorCell {
   materialId?: number;
   /** Whether this cell is part of a ramp (connects different elevations) */
   isRamp?: boolean;
+  /** Whether this is a geometric platform (flat surface with vertical cliff edges) */
+  isPlatform?: boolean;
+  /** Per-edge style overrides for platform cells */
+  edges?: PlatformEdges;
 }
 
 /**
@@ -498,6 +527,10 @@ export interface EditorState {
   activeBiome: string;
   /** Symmetry mode for terrain edits */
   symmetryMode: SymmetryMode;
+  /** Snap mode for platform tools (angle constraints) */
+  snapMode: SnapMode;
+  /** Show guardrails on platform edges */
+  showGuardrails: boolean;
   /** Has unsaved changes */
   isDirty: boolean;
   /** Undo stack */
