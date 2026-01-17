@@ -19,6 +19,30 @@ import { useEditorState } from '../hooks/useEditorState';
 import { useUIStore } from '@/store/uiStore';
 import { MusicPlayer } from '@/audio/MusicPlayer';
 
+// Detailed validation result type for the editor UI
+export interface DetailedValidationResult {
+  valid: boolean;
+  isValidating: boolean;
+  issues: Array<{
+    severity: 'error' | 'warning';
+    message: string;
+    type?: string;
+    affectedNodes?: string[];
+    suggestedFix?: {
+      type: string;
+      description: string;
+    };
+  }>;
+  stats?: {
+    totalNodes: number;
+    totalEdges: number;
+    islandCount: number;
+    connectedPairs: number;
+    blockedPairs: number;
+  };
+  timestamp?: number;
+}
+
 // Components
 import { Editor3DCanvas } from './Editor3DCanvas';
 import { EditorPanels } from './EditorPanels';
@@ -115,6 +139,13 @@ export function EditorCore({
 
   // Ref to canvas for navigation
   const canvasNavigateRef = useRef<((x: number, y: number) => void) | null>(null);
+
+  // Validation state
+  const [validationResult, setValidationResult] = useState<DetailedValidationResult>({
+    valid: true,
+    isValidating: false,
+    issues: [],
+  });
 
   // Initialize category visibility when config loads
   useEffect(() => {
@@ -244,12 +275,66 @@ export function EditorCore({
   // Handle validate
   const handleValidate = useCallback(async () => {
     if (!state.mapData) return;
-    if (dataProvider?.validateMap) {
-      const result = await dataProvider.validateMap(state.mapData);
-      console.log('Validation result:', result);
+
+    // Set validating state
+    setValidationResult(prev => ({ ...prev, isValidating: true }));
+
+    try {
+      if (dataProvider?.validateMap) {
+        const result = await dataProvider.validateMap(state.mapData);
+
+        // Convert to detailed result format
+        setValidationResult({
+          valid: result.valid,
+          isValidating: false,
+          issues: result.issues.map(issue => ({
+            severity: issue.type,
+            message: issue.message,
+            type: (issue as any).issueType,
+            affectedNodes: (issue as any).affectedNodes,
+            suggestedFix: (issue as any).suggestedFix,
+          })),
+          stats: (result as any).stats,
+          timestamp: Date.now(),
+        });
+      }
+      onValidate?.(state.mapData);
+    } catch (error) {
+      console.error('Validation failed:', error);
+      setValidationResult({
+        valid: false,
+        isValidating: false,
+        issues: [{ severity: 'error', message: 'Validation failed unexpectedly' }],
+        timestamp: Date.now(),
+      });
     }
-    onValidate?.(state.mapData);
   }, [state.mapData, dataProvider, onValidate]);
+
+  // Handle auto-fix
+  const handleAutoFix = useCallback(async () => {
+    if (!state.mapData || !dataProvider) return;
+
+    setValidationResult(prev => ({ ...prev, isValidating: true }));
+
+    try {
+      // Check if provider has autoFix method
+      if ((dataProvider as any).autoFixMap) {
+        const fixedData = await (dataProvider as any).autoFixMap(state.mapData);
+        if (fixedData) {
+          loadMap(fixedData);
+          // Re-validate after fix
+          await handleValidate();
+        }
+      }
+    } catch (error) {
+      console.error('Auto-fix failed:', error);
+      setValidationResult(prev => ({
+        ...prev,
+        isValidating: false,
+        issues: [...prev.issues, { severity: 'error', message: 'Auto-fix failed unexpectedly' }],
+      }));
+    }
+  }, [state.mapData, dataProvider, loadMap, handleValidate]);
 
   // Handle cancel
   const handleCancel = useCallback(() => {
@@ -613,6 +698,8 @@ export function EditorCore({
               onObjectPropertyUpdate={editorState.updateObjectProperty}
               onMetadataUpdate={editorState.updateMapMetadata}
               onValidate={handleValidate}
+              onAutoFix={handleAutoFix}
+              validationResult={validationResult}
               onToggleLabels={toggleLabels}
               onToggleGrid={toggleGrid}
               onToggleCategory={toggleCategory}
