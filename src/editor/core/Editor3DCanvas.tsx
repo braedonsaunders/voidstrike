@@ -104,9 +104,10 @@ export function Editor3DCanvas({
     isDraggingObject: false,
     draggedObjectId: null as string | null,
     lastPaintPos: null as { x: number; y: number } | null,
-    // Ramp tool state
-    rampStartPos: null as { x: number; y: number } | null,
-    isDrawingRamp: false,
+    // Shape tool state (ramp, line, rect, ellipse)
+    shapeStartPos: null as { x: number; y: number } | null,
+    isDrawingShape: false,
+    activeShapeType: null as 'ramp' | 'line' | 'rect' | 'ellipse' | null,
   });
 
   // Performance: track last frame time
@@ -161,6 +162,7 @@ export function Editor3DCanvas({
     const brushPreview = new EditorBrushPreview();
     brushPreviewRef.current = brushPreview;
     scene.add(brushPreview.mesh);
+    scene.add(brushPreview.shapeMesh); // Shape preview for line/rect/ellipse/ramp
 
     // Tools
     terrainBrushRef.current = new TerrainBrush(config);
@@ -527,6 +529,48 @@ export function Editor3DCanvas({
         }
         return;
 
+      case 'raise':
+        updates = terrainBrushRef.current.raiseElevation(
+          gridPos.x,
+          gridPos.y,
+          brushSize,
+          (toolOptions.amount as number) ?? 15
+        );
+        break;
+
+      case 'lower':
+        updates = terrainBrushRef.current.lowerElevation(
+          gridPos.x,
+          gridPos.y,
+          brushSize,
+          (toolOptions.amount as number) ?? 15
+        );
+        break;
+
+      case 'smooth':
+        updates = terrainBrushRef.current.smoothTerrain(
+          gridPos.x,
+          gridPos.y,
+          brushSize
+        );
+        break;
+
+      case 'noise':
+        updates = terrainBrushRef.current.paintNoise(
+          gridPos.x,
+          gridPos.y,
+          brushSize,
+          (toolOptions.intensity as number) ?? 20
+        );
+        break;
+
+      // Shape tools are handled in mouseUp, not here
+      case 'ramp':
+      case 'line':
+      case 'rect':
+      case 'ellipse':
+        return;
+
       default:
         return;
     }
@@ -577,17 +621,25 @@ export function Editor3DCanvas({
         }
       } else {
         const tool = config.tools.find((t) => t.id === activeTool);
+        const shapeTypes = ['ramp', 'line', 'rect', 'ellipse'];
 
-        // Ramp tool: click and drag to draw a ramp between two points
-        if (tool?.type === 'ramp') {
+        // Shape tools: click and drag to draw between two points
+        if (tool && shapeTypes.includes(tool.type)) {
           const gridPos = worldToGrid(worldPos);
           if (gridPos) {
-            paintingState.current.rampStartPos = gridPos;
-            paintingState.current.isDrawingRamp = true;
+            paintingState.current.shapeStartPos = gridPos;
+            paintingState.current.isDrawingShape = true;
+            paintingState.current.activeShapeType = tool.type as 'ramp' | 'line' | 'rect' | 'ellipse';
             onStartBatch();
+            // Start shape preview
+            brushPreviewRef.current?.startShapePreview(
+              tool.type as 'ramp' | 'line' | 'rect' | 'ellipse',
+              worldPos.x,
+              worldPos.z
+            );
           }
         } else {
-          // Standard painting tools
+          // Standard painting tools (brush, eraser, plateau, raise, lower, smooth, noise)
           onStartBatch();
           paintingState.current.isPainting = true;
           paintingState.current.lastPaintPos = null;
@@ -641,24 +693,67 @@ export function Editor3DCanvas({
     } else if (paintingState.current.isPainting && worldPos) {
       paintAt(worldPos);
     }
+
+    // Update shape preview while dragging
+    if (paintingState.current.isDrawingShape && worldPos) {
+      brushPreviewRef.current?.updateShapePreview(worldPos.x, worldPos.z);
+    }
   }, [activeTool, brushSize, raycastToTerrain, worldToGrid, paintAt, onObjectUpdate, onCursorMove, onObjectHover, mapData?.objects]);
 
   const handleMouseUp = useCallback((e: React.MouseEvent) => {
-    // Handle ramp tool completion
-    if (paintingState.current.isDrawingRamp && paintingState.current.rampStartPos) {
+    // Handle shape tool completion (ramp, line, rect, ellipse)
+    if (paintingState.current.isDrawingShape && paintingState.current.shapeStartPos) {
       const worldPos = raycastToTerrain(e.clientX, e.clientY);
       if (worldPos && terrainBrushRef.current && mapData) {
         const endPos = worldToGrid(worldPos);
         if (endPos) {
-          const startPos = paintingState.current.rampStartPos;
+          const startPos = paintingState.current.shapeStartPos;
+          const shapeType = paintingState.current.activeShapeType;
           terrainBrushRef.current.setMapData(mapData);
-          const updates = terrainBrushRef.current.paintRamp(
-            startPos.x,
-            startPos.y,
-            endPos.x,
-            endPos.y,
-            brushSize
-          );
+
+          let updates: Array<{ x: number; y: number; cell: Partial<EditorCell> }> = [];
+
+          switch (shapeType) {
+            case 'ramp':
+              updates = terrainBrushRef.current.paintRamp(
+                startPos.x, startPos.y,
+                endPos.x, endPos.y,
+                brushSize
+              );
+              break;
+
+            case 'line':
+              updates = terrainBrushRef.current.paintLine(
+                startPos.x, startPos.y,
+                endPos.x, endPos.y,
+                brushSize,
+                selectedElevation
+              );
+              break;
+
+            case 'rect':
+              updates = terrainBrushRef.current.paintRect(
+                startPos.x, startPos.y,
+                endPos.x, endPos.y,
+                selectedElevation
+              );
+              break;
+
+            case 'ellipse': {
+              // For ellipse, calculate center and radii from drag bounds
+              const centerX = (startPos.x + endPos.x) / 2;
+              const centerY = (startPos.y + endPos.y) / 2;
+              const radiusX = Math.abs(endPos.x - startPos.x) / 2;
+              const radiusY = Math.abs(endPos.y - startPos.y) / 2;
+              updates = terrainBrushRef.current.paintEllipse(
+                centerX, centerY,
+                radiusX, radiusY,
+                selectedElevation
+              );
+              break;
+            }
+          }
+
           if (updates.length > 0) {
             onCellsUpdateBatched(updates);
             terrainRef.current?.markCellsDirty(updates.map((u) => ({ x: u.x, y: u.y })));
@@ -667,8 +762,10 @@ export function Editor3DCanvas({
       }
       onCommitBatch();
       terrainRef.current?.updateDirtyChunks();
-      paintingState.current.isDrawingRamp = false;
-      paintingState.current.rampStartPos = null;
+      paintingState.current.isDrawingShape = false;
+      paintingState.current.shapeStartPos = null;
+      paintingState.current.activeShapeType = null;
+      brushPreviewRef.current?.endShapePreview();
     }
 
     if (paintingState.current.isPainting) {
@@ -680,13 +777,13 @@ export function Editor3DCanvas({
     paintingState.current.isDraggingObject = false;
     paintingState.current.draggedObjectId = null;
     paintingState.current.lastPaintPos = null;
-  }, [onCommitBatch, raycastToTerrain, worldToGrid, mapData, brushSize, onCellsUpdateBatched]);
+  }, [onCommitBatch, raycastToTerrain, worldToGrid, mapData, brushSize, selectedElevation, onCellsUpdateBatched]);
 
   const handleMouseLeave = useCallback(() => {
     brushPreviewRef.current?.setVisible(false);
     setMouseGridPos(null);
 
-    if (paintingState.current.isPainting || paintingState.current.isDrawingRamp) {
+    if (paintingState.current.isPainting || paintingState.current.isDrawingShape) {
       onCommitBatch();
       terrainRef.current?.updateDirtyChunks();
     }
@@ -695,8 +792,10 @@ export function Editor3DCanvas({
     paintingState.current.isDraggingObject = false;
     paintingState.current.draggedObjectId = null;
     paintingState.current.lastPaintPos = null;
-    paintingState.current.isDrawingRamp = false;
-    paintingState.current.rampStartPos = null;
+    paintingState.current.isDrawingShape = false;
+    paintingState.current.shapeStartPos = null;
+    paintingState.current.activeShapeType = null;
+    brushPreviewRef.current?.endShapePreview();
   }, [onCommitBatch]);
 
   const handleContextMenu = useCallback((e: React.MouseEvent) => {
