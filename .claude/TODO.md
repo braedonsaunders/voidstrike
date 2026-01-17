@@ -582,6 +582,10 @@
 - [x] **Wall upgrades** - Reinforced (+400 HP), Shielded (+200 shield), Weapon (auto-turret), Repair Drone
 - [x] **Turret mounting** - Defense Turrets can mount on wall segments for +1 range
 - [x] **CommandCard integration** - Build Walls menu (W), gate commands (O/L/A), upgrade buttons
+- [x] **Smart worker assignment** - Workers assigned to nearest segments (not round-robin) for efficient construction
+- [x] **AoE wall construction** - Workers contribute to ALL wall segments within 3 units (not just their assigned one)
+- [x] **Auto-continue construction** - Workers automatically move to next unfinished segment after completing one
+- [x] **Wall line tracking** - Wall segments placed together are tracked as a "wall line" for intelligent worker behavior
 
 ### Missing Abilities
 - [ ] Auto Turret (Raven)

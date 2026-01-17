@@ -166,6 +166,10 @@ export class Unit extends Component {
   public returnPositionX: number | null; // Position to return to after helping
   public returnPositionY: number | null;
 
+  // Wall line construction - workers build multiple wall segments efficiently
+  public wallLineId: number | null; // Unique ID for the wall line this worker is assigned to
+  public wallLineSegments: number[]; // Entity IDs of all segments in the wall line (for auto-continue)
+
   // Flags
   public isFlying: boolean;
   public isHoldingPosition: boolean;
@@ -266,6 +270,10 @@ export class Unit extends Component {
     this.isHelperWorker = false;
     this.returnPositionX = null;
     this.returnPositionY = null;
+
+    // Wall line construction
+    this.wallLineId = null;
+    this.wallLineSegments = [];
 
     this.isFlying = definition.isFlying ?? false;
     this.isHoldingPosition = false;
@@ -702,6 +710,8 @@ export class Unit extends Component {
     this.buildTargetX = null;
     this.buildTargetY = null;
     this.buildingType = null;
+    this.wallLineId = null;
+    this.wallLineSegments = [];
     this.state = 'idle';
     this.targetX = null;
     this.targetY = null;
