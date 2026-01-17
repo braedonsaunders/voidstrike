@@ -162,7 +162,8 @@ voidstrike/
 │   ├── textures/              # Terrain, unit textures
 │   └── audio/                 # Sound effects, music
 ├── src/workers/
-│   └── countdownWorker.ts     # Countdown timer Web Worker
+│   ├── countdownWorker.ts     # Countdown timer Web Worker
+│   └── phaserLoopWorker.ts    # Phaser overlay loop (background tab immune)
 └── tests/
     └── ...                    # Test files
 ```
@@ -312,6 +313,34 @@ class GameLoop {
   }
 }
 ```
+
+### Background Tab Immunity
+
+Browsers throttle `requestAnimationFrame` and `setInterval` to ~1fps when tabs are in the background. This would cause the game to freeze when tabbed out, breaking multiplayer synchronization.
+
+**Solution:** Use Web Workers for timing-critical operations. Workers are NOT throttled:
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                    Background Tab Immune Loops                  │
+├─────────────────────────────────────────────────────────────────┤
+│  GameLoop Worker (src/engine/core/GameLoop.ts)                  │
+│    - Game state updates at 20 ticks/sec                         │
+│    - Deterministic for multiplayer sync                         │
+│    - Uses inline Worker via Blob URL                            │
+├─────────────────────────────────────────────────────────────────┤
+│  Countdown Worker (src/workers/countdownWorker.ts)              │
+│    - Match start countdown timing                               │
+│    - Wall-clock based state calculation                         │
+├─────────────────────────────────────────────────────────────────┤
+│  Phaser Loop Worker (src/workers/phaserLoopWorker.ts)           │
+│    - Phaser overlay updates (damage numbers, effects)           │
+│    - Only steps Phaser when document.hidden = true              │
+│    - Manually calls scene.sys.step() to bypass RAF              │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+When tab is visible, Phaser uses its normal RAF-based loop. When hidden, the worker takes over to keep overlay state synchronized with game state.
 
 ### State Management
 

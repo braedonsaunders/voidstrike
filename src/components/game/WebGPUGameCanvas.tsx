@@ -124,6 +124,10 @@ export function WebGPUGameCanvas() {
   const phaserGameRef = useRef<Phaser.Game | null>(null);
   const overlaySceneRef = useRef<OverlayScene | null>(null);
 
+  // Phaser loop worker - ensures overlay updates even when tab is in background
+  const phaserLoopWorkerRef = useRef<Worker | null>(null);
+  const lastPhaserUpdateTimeRef = useRef<number>(0);
+
   // Game engine ref
   const gameRef = useRef<Game | null>(null);
 
@@ -1142,6 +1146,50 @@ export function WebGPUGameCanvas() {
             gameRef.current?.start();
           }, 100);
         }
+
+        // Initialize Phaser loop worker for background tab immunity
+        // Web Workers are not throttled when tab is inactive, ensuring overlay stays in sync
+        try {
+          const worker = new Worker(
+            new URL('../../workers/phaserLoopWorker.ts', import.meta.url)
+          );
+
+          worker.onmessage = (e: MessageEvent) => {
+            if (e.data.type === 'tick') {
+              const { time, delta } = e.data;
+
+              // Only step Phaser when the tab is hidden (RAF is throttled)
+              // When tab is visible, Phaser's internal loop handles updates
+              if (document.hidden && phaserGameRef.current) {
+                // Step Phaser's game loop manually
+                // This keeps tweens, timers, and scene updates running
+                const game = phaserGameRef.current;
+                if (game.loop && game.isRunning) {
+                  // Update the game's time delta for accurate timing
+                  game.loop.now = time;
+                  game.loop.delta = delta;
+                  game.loop.rawDelta = delta;
+
+                  // Step all active scenes
+                  game.scene.scenes.forEach((scene: Phaser.Scene) => {
+                    if (scene.sys.isActive() && scene.sys.settings.status === Phaser.Scenes.RUNNING) {
+                      scene.sys.step(time, delta);
+                    }
+                  });
+
+                  lastPhaserUpdateTimeRef.current = time;
+                }
+              }
+            }
+          };
+
+          // Start the worker immediately - it will only step Phaser when tab is hidden
+          worker.postMessage({ type: 'start', intervalMs: 16 }); // 60fps
+          phaserLoopWorkerRef.current = worker;
+        } catch (err) {
+          // Worker failed to initialize - Phaser will still work via RAF when tab is visible
+          console.warn('[WebGPUGameCanvas] Phaser loop worker failed to initialize:', err);
+        }
       });
     };
 
@@ -1262,6 +1310,13 @@ export function WebGPUGameCanvas() {
       overlayManagerRef.current?.dispose();
       commandQueueRendererRef.current?.dispose();
       lightPoolRef.current?.dispose();
+
+      // Stop and terminate Phaser loop worker
+      if (phaserLoopWorkerRef.current) {
+        phaserLoopWorkerRef.current.postMessage({ type: 'stop' });
+        phaserLoopWorkerRef.current.terminate();
+        phaserLoopWorkerRef.current = null;
+      }
 
       phaserGameRef.current?.destroy(true);
 

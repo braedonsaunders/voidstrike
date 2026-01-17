@@ -327,6 +327,9 @@
 - [x] **Smart shadow casting** - Decorations split into playable area (cast shadows) vs border (no shadows). Trees and rocks in the outer 15 cells don't cast shadows. This maintains shadow quality in gameplay areas while reducing shadow casters from 700+ to ~100-200. Major FPS improvement.
 - [x] **IBL disabled on decorations** - Set envMapIntensity=0 on decoration materials to avoid expensive cubemap lookups. 5-10fps improvement when Environment IBL enabled.
 
+### Fixed Issues (Round 10 - Background Tab Immunity - January 2026)
+- [x] **Phaser overlay background tab immunity** - Created phaserLoopWorker.ts to drive Phaser scene updates when tab is inactive. Web Workers aren't throttled by browsers, so the overlay (damage numbers, screen effects, alerts) stays synchronized with game state. Uses document.hidden to detect background state and manually steps Phaser's scene system via scene.sys.step(). Matches the existing GameLoop worker pattern.
+
 ### Remaining Optimizations
 - [ ] Web Worker for AI calculations
 
