@@ -627,7 +627,7 @@ export class Game {
    *
    * PERF: Uses spatial grid queries instead of O(n) loops for buildings and units
    */
-  public isValidBuildingPlacement(centerX: number, centerY: number, width: number, height: number, excludeEntityId?: number): boolean {
+  public isValidBuildingPlacement(centerX: number, centerY: number, width: number, height: number, excludeEntityId?: number, skipUnitCheck: boolean = false): boolean {
     const halfW = width / 2;
     const halfH = height / 2;
 
@@ -693,31 +693,34 @@ export class Game {
     }
 
     // PERF: Use spatial grid query instead of iterating all units
-    const nearbyUnitIds = this.world.unitGrid.queryRect(
-      centerX - halfW - 2,
-      centerY - halfH - 2,
-      centerX + halfW + 2,
-      centerY + halfH + 2
-    );
+    // Skip unit check if requested (units will be pushed away after placement)
+    if (!skipUnitCheck) {
+      const nearbyUnitIds = this.world.unitGrid.queryRect(
+        centerX - halfW - 2,
+        centerY - halfH - 2,
+        centerX + halfW + 2,
+        centerY + halfH + 2
+      );
 
-    // Check for overlapping units (exclude the builder worker)
-    for (const unitId of nearbyUnitIds) {
-      // Skip the worker who will build this structure
-      if (excludeEntityId !== undefined && unitId === excludeEntityId) {
-        continue;
-      }
+      // Check for overlapping units (exclude the builder worker)
+      for (const unitId of nearbyUnitIds) {
+        // Skip the worker who will build this structure
+        if (excludeEntityId !== undefined && unitId === excludeEntityId) {
+          continue;
+        }
 
-      const entity = this.world.getEntity(unitId);
-      if (!entity) continue;
+        const entity = this.world.getEntity(unitId);
+        if (!entity) continue;
 
-      const transform = entity.get<Transform>('Transform');
-      if (!transform) continue;
+        const transform = entity.get<Transform>('Transform');
+        if (!transform) continue;
 
-      const dx = Math.abs(centerX - transform.x);
-      const dy = Math.abs(centerY - transform.y);
+        const dx = Math.abs(centerX - transform.x);
+        const dy = Math.abs(centerY - transform.y);
 
-      if (dx < halfW + 0.5 && dy < halfH + 0.5) {
-        return false;
+        if (dx < halfW + 0.5 && dy < halfH + 0.5) {
+          return false;
+        }
       }
     }
 

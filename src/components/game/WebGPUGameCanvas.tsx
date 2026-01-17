@@ -552,8 +552,9 @@ export function WebGPUGameCanvas() {
         return false;
       });
       // Connect placement preview to game's validation for accurate preview
+      // Skip unit check - units will be pushed away when building is placed
       placementPreviewRef.current.setPlacementValidator((centerX, centerY, width, height) => {
-        return game.isValidBuildingPlacement(centerX, centerY, width, height);
+        return game.isValidBuildingPlacement(centerX, centerY, width, height, undefined, true);
       });
       scene.add(placementPreviewRef.current.group);
 
@@ -562,8 +563,9 @@ export function WebGPUGameCanvas() {
         CURRENT_MAP,
         (x, y) => terrain.getHeightAt(x, y)
       );
+      // Skip unit check - units will be pushed away when building is placed
       wallPlacementPreviewRef.current.setPlacementValidator((x, y, w, h) => {
-        return game.isValidBuildingPlacement(x, y, w, h);
+        return game.isValidBuildingPlacement(x, y, w, h, undefined, true);
       });
       scene.add(wallPlacementPreviewRef.current.group);
 
