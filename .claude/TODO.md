@@ -191,6 +191,13 @@
   - Reduced MovementSystem avoidance margins (0.6→0.3 hard, 1.5→0.8 soft) since navmesh provides primary avoidance
 - [ ] **Debug navmesh visualization** - Visual overlay to verify navmesh coverage
 - [x] **Fix crowd velocity returning near-zero** - Root cause was twofold: (1) Crowd agent maxSpeed was set to unit.currentSpeed (accelerating speed) instead of unit.maxSpeed, artificially capping velocity. (2) Crowd agent maxAcceleration was set to maxSpeed × 1.5 (~4.2) while SC2-style ground units expect instant acceleration (1000). Fixed by always using unit.maxSpeed for crowd and setting maxAcceleration to 100.0 for near-instant acceleration.
+- [x] **SC2-style hybrid steering** - Major overhaul of unit collision avoidance to match SC2's approach:
+  - **Disabled DetourCrowd RVO obstacle avoidance** - Crowd now only provides path corridor direction, not local avoidance (eliminates jitter from RVO oscillation)
+  - **Physics pushing between units** - Units push each other with soft forces instead of avoiding, creating natural flow (PHYSICS_PUSH_STRENGTH=8.0)
+  - **Velocity smoothing** - 3-frame velocity history blending prevents jitter (VELOCITY_SMOOTHING_FACTOR=0.3)
+  - **Direction commitment** - Resists sudden direction reversals to prevent reciprocal dance
+  - **Reduced building avoidance margins** - Trust navmesh more (0.3→0.1 hard, 0.8→0.3 soft)
+  - **Stuck detection with nudge** - If unit hasn't moved for 12 frames, apply deterministic random nudge
 
 ### Terrain Generation Improvements (January 2026)
 - [x] **Slope-based texture blending** - Fixed terrain sampleTerrain() to use average elevation instead of MAX, which was flattening cliffs and preventing proper texture blending
