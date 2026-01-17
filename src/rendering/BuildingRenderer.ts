@@ -863,10 +863,9 @@ export class BuildingRenderer {
           meshData.blueprintEffect.visible = false;
         }
 
-        // Keep scaffold visible during pause to show partial structure
+        // Hide scaffold when paused - only visible during ACTIVE construction
         if (meshData.scaffoldEffect) {
-          meshData.scaffoldEffect.visible = progress < 0.8;
-          meshData.scaffoldEffect.position.set(transform.x, terrainHeight, transform.y);
+          meshData.scaffoldEffect.visible = false;
         }
       } else {
         // Construction in progress (state === 'constructing')

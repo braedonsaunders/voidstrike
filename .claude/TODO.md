@@ -206,6 +206,12 @@
   - Added early ramp proximity check to `isCliffEdgeCell` (5-cell radius) to prevent ground cells at ramp ends from being incorrectly flattened as cliff edges
   - This ensures cells near ramps use heightmap values for smooth height transitions instead of being treated as cliff edges, guaranteeing ramps are fully walkable at both upper and lower ends
 
+### Minimap Targeting (January 2026) ✓
+- [x] **SC2-style minimap command targeting** - Press A (attack), M (move), or P (patrol) then click minimap to issue commands
+- [x] **Unified command target mode** - Shared state between canvas and minimap via `commandTargetMode` in gameStore
+- [x] **Visual feedback** - Minimap border changes color when in targeting mode (red=attack, blue=move, yellow=patrol)
+- [x] **Shift-click queuing** - Hold shift to queue commands without exiting targeting mode
+
 ### Camera & Input Fixes (January 2026)
 - [x] **WASD keys removed from camera** - WASD was conflicting with shortcuts (A=attack move, S=stop, etc.). Camera now uses arrow keys only for keyboard panning.
 
@@ -595,16 +601,19 @@
 - [x] Thruster effects on all flyable buildings (headquarters, orbital_station, infantry_bay, forge, hangar)
 - [x] Engine exhaust and smoke trail effects during flight
 
-### Unit Rendering & Formation Improvements (January 2026)
-- [x] **Smooth rotation interpolation** - Added prevRotation tracking to Transform component and exponential smoothing in UnitRenderer. Units no longer rotate jerkily.
-- [x] **Yamato Cannon ability** - Dreadnought now has SC2-style Yamato Cannon: 300 damage, 10 range, 71s cooldown, 100 energy, 2s charge time. Replaced generic Power Cannon.
-- [x] **Dreadnought range increase** - Attack range increased from 8 to 10 for proper capital ship feel.
-- [x] **collisionScale for large units** - Added collisionScale property to UnitDefinition. Large units (Dreadnought: 2.5x, Colossus: 2.0x, Devastator: 1.8x) now properly spread out in formations instead of overlapping.
+### Building Placement SC2 Polish (January 2026)
+- [x] Fixed green/blue preview offset - Grid tiles now properly centered on building footprint
+- [x] Fixed blueprint persistence bug - Preview clears on invalid placement without shift key
+- [x] SC2-style worker construction - Workers wander inside building footprint during active construction
+- [x] Scaffolding visibility fix - Yellow scaffolding only visible during ACTIVE construction (not paused/waiting)
 
 ### Visual Polish
 - [ ] Unit wireframes (damage state)
 - [x] Building placement ghost - SC2-style grid + ghost preview when placing
 - [x] Production progress bar - Fixed visibility and positioning for buildings producing units
+- [x] Enhanced damage numbers - Glow effects, pop-in animation, horizontal drift, color-coded by damage
+- [x] Premium text alerts - Orbitron font, glow bloom, underline accents, slide animations
+- [x] World-class victory/defeat screen - Animated radial glow burst, decorative lines, title glow bloom, staggered reveal
 - [ ] Stim Pack visual effect (red tint)
 - [ ] Siege Mode transform animation
 - [ ] Cloak shimmer effect

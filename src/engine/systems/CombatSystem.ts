@@ -146,11 +146,33 @@ export class CombatSystem extends System {
           unit.cancelBuilding();
         }
 
+        const transform = entity.get<Transform>('Transform');
+
         if (command.targetEntityId !== undefined) {
           unit.setAttackTarget(command.targetEntityId);
+          // Set initial rotation to face target entity
+          if (transform) {
+            const targetEntity = this.world.getEntity(command.targetEntityId);
+            if (targetEntity) {
+              const targetTransform = targetEntity.get<Transform>('Transform');
+              if (targetTransform) {
+                transform.rotation = Math.atan2(
+                  targetTransform.y - transform.y,
+                  targetTransform.x - transform.x
+                );
+              }
+            }
+          }
         } else if (command.targetPosition) {
           // Attack-move: move toward position while engaging enemies
           unit.setAttackMoveTarget(command.targetPosition.x, command.targetPosition.y);
+          // Set initial rotation to face target direction
+          if (transform) {
+            transform.rotation = Math.atan2(
+              command.targetPosition.y - transform.y,
+              command.targetPosition.x - transform.x
+            );
+          }
         }
       }
     }
