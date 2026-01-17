@@ -198,6 +198,7 @@ export class PathfindingSystem extends System {
   // Web Worker for off-thread path computation
   private pathWorker: Worker | null = null;
   private workerReady: boolean = false;
+  private workerWasmInitialized: boolean = false; // Track if worker WASM is ready
   private workerRequestId: number = 0;
   private pendingWorkerRequests: Map<number, PathRequest> = new Map();
 
@@ -257,8 +258,9 @@ export class PathfindingSystem extends System {
     switch (message.type) {
       case 'initialized':
         if (message.success) {
+          this.workerWasmInitialized = true;
           debugPathfinding.log('[PathfindingSystem] Worker WASM initialized');
-          // If we have cached geometry, send it to worker
+          // If we have cached geometry, send it to worker now that WASM is ready
           if (this.cachedNavMeshGeometry && this.navMeshReady) {
             this.sendGeometryToWorker();
           }
@@ -409,6 +411,7 @@ export class PathfindingSystem extends System {
     this.failedPathCacheKeys = [];
     this.navMeshReady = false;
     this.workerReady = false;
+    this.workerWasmInitialized = false;
     this.pendingWorkerRequests.clear();
     this.cachedNavMeshGeometry = null;
 
@@ -426,6 +429,7 @@ export class PathfindingSystem extends System {
       this.pathWorker = null;
     }
     this.workerReady = false;
+    this.workerWasmInitialized = false;
     this.pendingWorkerRequests.clear();
     this.cachedNavMeshGeometry = null;
   }
@@ -455,8 +459,9 @@ export class PathfindingSystem extends System {
       // Cache geometry for worker
       this.cachedNavMeshGeometry = { positions, indices };
 
-      // Send geometry to worker if it's initialized
-      if (this.pathWorker) {
+      // Send geometry to worker only if WASM is already initialized
+      // Otherwise, handleWorkerMessage will send it when WASM init completes
+      if (this.pathWorker && this.workerWasmInitialized) {
         this.sendGeometryToWorker();
       }
 
