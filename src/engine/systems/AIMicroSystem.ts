@@ -297,7 +297,12 @@ export class AIMicroSystem extends System {
 
     // Find friendly base to retreat to
     const basePosition = this.findFriendlyBase(playerId);
-    if (!basePosition) return;
+    if (!basePosition) {
+      // No base to retreat to - clear retreat state to prevent stuck units
+      state.retreating = false;
+      state.retreatEndTick = null;
+      return;
+    }
 
     // Calculate retreat direction (towards base)
     const dx = basePosition.x - transform.x;

@@ -95,7 +95,11 @@ const suppressedWarnings = [
   'Vertex attribute "prevInstanceMatrix3" not found',
 ];
 
+let warningsSupressed = false;
+
 function suppressAttributeWarnings(): void {
+  if (warningsSupressed) return;
+  warningsSupressed = true;
   console.warn = (...args: unknown[]) => {
     const message = args[0];
     if (typeof message === 'string') {
@@ -107,6 +111,15 @@ function suppressAttributeWarnings(): void {
     }
     originalWarn.apply(console, args);
   };
+}
+
+/**
+ * Restore original console.warn - call during cleanup if needed
+ */
+export function restoreConsoleWarn(): void {
+  if (!warningsSupressed) return;
+  console.warn = originalWarn;
+  warningsSupressed = false;
 }
 
 suppressAttributeWarnings();

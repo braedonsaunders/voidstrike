@@ -44,6 +44,11 @@ export class World {
   private _querySortBuffer: ComponentType[] = [];
   private _componentBuffer: ComponentType[] = [];
 
+  // PERF: Cached entity list to avoid allocation on every getEntities() call
+  private _cachedEntities: Entity[] | null = null;
+  private _entityListVersion: number = 0;
+  private _cachedEntityListVersion: number = -1;
+
   // Spatial grids for different entity types
   public readonly unitGrid: SpatialGrid;
   public readonly buildingGrid: SpatialGrid;
@@ -58,6 +63,8 @@ export class World {
     const id = this.nextEntityId++;
     const entity = new Entity(id, this);
     this.entities.set(id, entity);
+    // Invalidate entity list cache
+    this._entityListVersion++;
     return entity;
   }
 
@@ -80,6 +87,9 @@ export class World {
     // Mark entity as destroyed
     entity.destroy();
     this.entities.delete(id);
+
+    // Invalidate entity list cache
+    this._entityListVersion++;
   }
 
   /**
@@ -156,7 +166,15 @@ export class World {
   }
 
   public getEntities(): Entity[] {
-    return Array.from(this.entities.values()).filter((e) => !e.isDestroyed());
+    // PERF: Return cached list if still valid
+    if (this._cachedEntities && this._cachedEntityListVersion === this._entityListVersion) {
+      return this._cachedEntities;
+    }
+
+    // Rebuild cache
+    this._cachedEntities = Array.from(this.entities.values()).filter((e) => !e.isDestroyed());
+    this._cachedEntityListVersion = this._entityListVersion;
+    return this._cachedEntities;
   }
 
   /**

@@ -68,24 +68,72 @@ export interface PerformanceSnapshot {
 const HISTORY_SIZE = 300;
 const SYSTEM_TIMING_HISTORY_SIZE = 60; // 1 second at 60fps for system breakdown
 
+/**
+ * PERF: Ring buffer for O(1) push/evict instead of O(n) shift()
+ * At 300 entries, shift() moves 299 elements every frame - ring buffer avoids this
+ */
+class RingBuffer {
+  private buffer: number[];
+  private writeIndex: number = 0;
+  private count: number = 0;
+  private capacity: number;
+
+  constructor(capacity: number) {
+    this.capacity = capacity;
+    this.buffer = new Array(capacity).fill(0);
+  }
+
+  push(value: number): void {
+    this.buffer[this.writeIndex] = value;
+    this.writeIndex = (this.writeIndex + 1) % this.capacity;
+    if (this.count < this.capacity) {
+      this.count++;
+    }
+  }
+
+  // Get values in chronological order (oldest first)
+  toArray(): number[] {
+    if (this.count < this.capacity) {
+      return this.buffer.slice(0, this.count);
+    }
+    // Ring wrapped - need to reorder
+    const result = new Array(this.capacity);
+    for (let i = 0; i < this.capacity; i++) {
+      result[i] = this.buffer[(this.writeIndex + i) % this.capacity];
+    }
+    return result;
+  }
+
+  get length(): number {
+    return this.count;
+  }
+
+  // Get the most recent value
+  latest(): number {
+    if (this.count === 0) return 0;
+    const index = (this.writeIndex - 1 + this.capacity) % this.capacity;
+    return this.buffer[index];
+  }
+}
+
 class PerformanceMonitorClass {
   private static instance: PerformanceMonitorClass | null = null;
 
   // Collection toggle - when false, recording methods become no-ops
   private collectingEnabled: boolean = false;
 
-  // Frame timing
+  // Frame timing - use RingBuffer for O(1) insertion
   private lastFrameTime: number = 0;
-  private frameTimeHistory: number[] = [];
-  private fpsHistory: number[] = [];
+  private frameTimeHistory: RingBuffer = new RingBuffer(HISTORY_SIZE);
+  private fpsHistory: RingBuffer = new RingBuffer(HISTORY_SIZE);
 
   // Tick timing from World
   private lastTickTime: number = 0;
-  private tickTimeHistory: number[] = [];
+  private tickTimeHistory: RingBuffer = new RingBuffer(HISTORY_SIZE);
 
   // Per-system timings (updated by World)
   private currentSystemTimings: Map<string, number> = new Map();
-  private systemTimingHistory: Map<string, number[]> = new Map();
+  private systemTimingHistory: Map<string, RingBuffer> = new Map();
 
   // Entity counts
   private entityCounts: EntityCounts = {
@@ -190,18 +238,12 @@ class PerformanceMonitorClass {
     const frameTime = now - this.lastFrameTime;
     this.lastFrameTime = now;
 
-    // Record frame time
+    // Record frame time - RingBuffer handles capacity automatically
     this.frameTimeHistory.push(frameTime);
-    if (this.frameTimeHistory.length > HISTORY_SIZE) {
-      this.frameTimeHistory.shift();
-    }
 
     // Calculate FPS
     const fps = frameTime > 0 ? 1000 / frameTime : 0;
     this.fpsHistory.push(fps);
-    if (this.fpsHistory.length > HISTORY_SIZE) {
-      this.fpsHistory.shift();
-    }
 
     // Update memory metrics (throttled - every 30 frames)
     if (this.memoryMetrics.available && this.frameTimeHistory.length % 30 === 0) {
@@ -237,9 +279,6 @@ class PerformanceMonitorClass {
     if (!this.collectingEnabled) return;
     this.lastTickTime = duration;
     this.tickTimeHistory.push(duration);
-    if (this.tickTimeHistory.length > HISTORY_SIZE) {
-      this.tickTimeHistory.shift();
-    }
   }
 
   /**
@@ -250,15 +289,11 @@ class PerformanceMonitorClass {
     if (!this.collectingEnabled) return;
     this.currentSystemTimings.set(systemName, duration);
 
-    // Update history
+    // Update history - use RingBuffer for O(1) insertion
     if (!this.systemTimingHistory.has(systemName)) {
-      this.systemTimingHistory.set(systemName, []);
+      this.systemTimingHistory.set(systemName, new RingBuffer(SYSTEM_TIMING_HISTORY_SIZE));
     }
-    const history = this.systemTimingHistory.get(systemName)!;
-    history.push(duration);
-    if (history.length > SYSTEM_TIMING_HISTORY_SIZE) {
-      history.shift();
-    }
+    this.systemTimingHistory.get(systemName)!.push(duration);
   }
 
   /**
@@ -307,7 +342,8 @@ class PerformanceMonitorClass {
    */
   public getFPS(): number {
     if (this.fpsHistory.length === 0) return 0;
-    const recent = this.fpsHistory.slice(-30);
+    const all = this.fpsHistory.toArray();
+    const recent = all.slice(-30);
     return recent.reduce((a, b) => a + b, 0) / recent.length;
   }
 
@@ -316,7 +352,8 @@ class PerformanceMonitorClass {
    */
   public getFrameTime(): number {
     if (this.frameTimeHistory.length === 0) return 0;
-    const recent = this.frameTimeHistory.slice(-30);
+    const all = this.frameTimeHistory.toArray();
+    const recent = all.slice(-30);
     return recent.reduce((a, b) => a + b, 0) / recent.length;
   }
 
@@ -324,21 +361,21 @@ class PerformanceMonitorClass {
    * Get frame time history for graphing
    */
   public getFrameTimeHistory(): number[] {
-    return [...this.frameTimeHistory];
+    return this.frameTimeHistory.toArray();
   }
 
   /**
    * Get FPS history for graphing
    */
   public getFPSHistory(): number[] {
-    return [...this.fpsHistory];
+    return this.fpsHistory.toArray();
   }
 
   /**
    * Get tick time history for graphing
    */
   public getTickTimeHistory(): number[] {
-    return [...this.tickTimeHistory];
+    return this.tickTimeHistory.toArray();
   }
 
   /**
@@ -371,7 +408,8 @@ class PerformanceMonitorClass {
 
     for (const [name, history] of this.systemTimingHistory) {
       if (history.length > 0) {
-        const avg = history.reduce((a, b) => a + b, 0) / history.length;
+        const arr = history.toArray();
+        const avg = arr.reduce((a, b) => a + b, 0) / arr.length;
         averages.set(name, avg);
         totalAvg += avg;
       }
