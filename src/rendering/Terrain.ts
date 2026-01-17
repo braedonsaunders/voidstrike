@@ -1455,8 +1455,9 @@ export class Terrain {
     const ELEVATION_DIFF_THRESHOLD = 40; // ~1.6 height units difference
 
     // Pre-compute ramp zones - cells within radius of a ramp use smooth heightMap
+    // Radius of 5 ensures ramp entrance cells on plateaus aren't marked as cliff edges
     const rampZone = new Set<string>();
-    const RAMP_ZONE_RADIUS = 3;
+    const RAMP_ZONE_RADIUS = 5;
 
     for (let y = 0; y < height; y++) {
       for (let x = 0; x < width; x++) {
