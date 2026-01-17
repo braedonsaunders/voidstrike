@@ -48,7 +48,7 @@ export default function GamePage() {
   }
 
   return (
-    <div className="game-container w-screen h-screen bg-black overflow-hidden">
+    <div className="game-container w-full h-full bg-black overflow-hidden">
       <Suspense fallback={<BlackScreen />}>
         <WebGPUGameCanvas />
         <HUD />
