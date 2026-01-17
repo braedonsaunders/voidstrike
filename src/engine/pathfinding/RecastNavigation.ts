@@ -687,21 +687,13 @@ export class RecastNavigation {
         collisionQueryRange: radius * 5,
       };
 
-      debugPathfinding.log(
-        `[Crowd] addAgent e=${entityId} pos=(${x.toFixed(1)},${terrainY.toFixed(2)},${y.toFixed(1)}) ` +
-        `r=${radius.toFixed(2)} mxS=${maxSpeed.toFixed(2)} mxA=100`
-      );
-
       const agent = this.crowd.addAgent({ x, y: terrainY, z: y }, params);
 
       if (agent) {
         const agentIndex = agent.agentIndex;
         this.agentMap.set(entityId, agentIndex);
         this.agentEntityMap.set(agentIndex, entityId);
-        debugPathfinding.log(`[Crowd] addAgent SUCCESS e=${entityId} idx=${agentIndex}`);
         return agentIndex;
-      } else {
-        debugPathfinding.warn(`[Crowd] addAgent FAILED e=${entityId} - crowd.addAgent returned null`);
       }
     } catch (error) {
       debugPathfinding.warn(`[RecastNavigation] Failed to add agent ${entityId}:`, error);
@@ -744,16 +736,11 @@ export class RecastNavigation {
         // Use terrain height at target for Y coordinate
         // Keep original X/Z to match game coordinates
         const terrainY = this.getTerrainHeight(targetX, targetY);
-        const pos = agent.position();
-        debugPathfinding.log(
-          `[Crowd] setTarget e=${entityId} from=(${pos.x.toFixed(1)},${pos.z.toFixed(1)}) ` +
-          `to=(${targetX.toFixed(1)},${targetY.toFixed(1)}) tgtY=${terrainY.toFixed(2)}`
-        );
         agent.requestMoveTarget({ x: targetX, y: terrainY, z: targetY });
         return true;
       }
-    } catch (error) {
-      debugPathfinding.warn(`[RecastNavigation] Failed to set agent target ${entityId}:`, error);
+    } catch {
+      // Ignore
     }
 
     return false;
@@ -849,20 +836,6 @@ export class RecastNavigation {
       if (agent) {
         const pos = agent.position();
         const vel = agent.velocity();
-        const desiredVel = agent.desiredVelocity();
-        const maxSpeed = agent.maxSpeed;
-        const maxAccel = agent.maxAcceleration;
-        const state = agent.state();
-        const target = agent.target();
-
-        // Debug: Always log agent state to diagnose slow movement
-        const velMag = Math.sqrt(vel.x * vel.x + vel.z * vel.z);
-        const desiredMag = Math.sqrt(desiredVel.x * desiredVel.x + desiredVel.z * desiredVel.z);
-        // Log every call to see velocity values
-        debugPathfinding.log(
-          `[Crowd] e=${entityId} st=${state} v=${velMag.toFixed(3)} dv=${desiredMag.toFixed(3)} ` +
-          `mxS=${maxSpeed.toFixed(1)} mxA=${maxAccel.toFixed(1)}`
-        );
 
         return {
           x: pos.x,
@@ -913,10 +886,6 @@ export class RecastNavigation {
     if (!this.crowd) return;
 
     try {
-      // Debug: Log crowd update timing (once every ~60 frames to avoid spam)
-      if (Math.random() < 0.017) {
-        debugPathfinding.log(`[Crowd] update dt=${deltaTime.toFixed(4)}s agents=${this.agentMap.size}`);
-      }
       this.crowd.update(deltaTime);
     } catch {
       // Ignore
