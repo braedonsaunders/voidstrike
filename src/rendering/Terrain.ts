@@ -1790,17 +1790,29 @@ export class Terrain {
 
     // Sample ramp heights for debugging - find first ramp and log height profile
     let rampProfile = '';
+    let maxHeightStep = 0;
+    let maxHeightStepLocation = { x: 0, y: 0 };
     for (let y = 0; y < height && !rampProfile; y++) {
       for (let x = 0; x < width; x++) {
         if (terrain[y][x].terrain === 'ramp') {
-          // Found a ramp, sample heights along a vertical line through it
+          // Found a ramp, sample heights and elevations along a vertical line through it
           const heights: number[] = [];
-          const startY = Math.max(0, y - 5);
-          const endY = Math.min(height, y + 20);
+          const elevations: number[] = [];
+          const startY = Math.max(0, y - 3);
+          const endY = Math.min(height, y + 15);
           for (let sy = startY; sy < endY; sy++) {
             heights.push(this.heightMap[sy * this.gridWidth + x]);
+            elevations.push(terrain[sy]?.[x]?.elevation ?? 0);
           }
-          rampProfile = `Ramp at (${x},${y}): heights from y=${startY} to y=${endY-1}: [${heights.map(h => h.toFixed(2)).join(', ')}]`;
+          // Calculate max height step between adjacent cells
+          for (let i = 1; i < heights.length; i++) {
+            const step = Math.abs(heights[i] - heights[i - 1]);
+            if (step > maxHeightStep) {
+              maxHeightStep = step;
+              maxHeightStepLocation = { x, y: startY + i };
+            }
+          }
+          rampProfile = `Ramp at (${x},${y}): elevations [${elevations.join(', ')}], heights [${heights.map(h => h.toFixed(2)).join(', ')}]`;
           break;
         }
       }
@@ -1834,6 +1846,10 @@ export class Terrain {
     // Log ramp diagnostic info
     if (rampProfile) {
       console.log(`[Terrain] ${rampProfile}`);
+      console.log(`[Terrain] Max height step between adjacent cells: ${maxHeightStep.toFixed(3)} at (${maxHeightStepLocation.x}, ${maxHeightStepLocation.y}) - walkableClimb is 0.8`);
+      if (maxHeightStep > 0.8) {
+        console.warn(`[Terrain] WARNING: Height step ${maxHeightStep.toFixed(3)} exceeds walkableClimb (0.8)! Ramp may not be traversable.`);
+      }
     }
     if (maxRampBoundaryGap > 0) {
       console.log(`[Terrain] Max ramp boundary height gap: ${maxRampBoundaryGap.toFixed(3)} at (${rampBoundaryGapLocation.x}, ${rampBoundaryGapLocation.y})`);
