@@ -63,6 +63,15 @@ interface InstancedBuildingGroup {
 }
 
 const MAX_BUILDING_INSTANCES_PER_TYPE = 50;
+const MAX_SELECTION_RING_INSTANCES = 100;
+
+// PERF: Instanced selection ring group
+interface InstancedSelectionRingGroup {
+  mesh: THREE.InstancedMesh;
+  isOwned: boolean;
+  entityIds: number[];
+  maxInstances: number;
+}
 
 export class BuildingRenderer {
   private scene: THREE.Scene;
@@ -74,6 +83,11 @@ export class BuildingRenderer {
 
   // PERFORMANCE: Instanced mesh groups for completed static buildings
   private instancedGroups: Map<string, InstancedBuildingGroup> = new Map();
+
+  // PERF: Instanced selection rings (saves ~30+ draw calls)
+  private selectionRingGroups: Map<string, InstancedSelectionRingGroup> = new Map();
+  private selectedBuildings: Map<number, { position: THREE.Vector3; scale: number; isOwned: boolean }> = new Map();
+  private selectionRingGeometry: THREE.RingGeometry | null = null;
 
   // Reusable objects for matrix calculations
   private tempMatrix: THREE.Matrix4 = new THREE.Matrix4();
@@ -412,6 +426,38 @@ export class BuildingRenderer {
   }
 
   /**
+   * PERF: Get or create instanced selection ring group (owned=green, enemy=red)
+   */
+  private getOrCreateSelectionRingGroup(isOwned: boolean): InstancedSelectionRingGroup {
+    const key = isOwned ? 'owned' : 'enemy';
+    let group = this.selectionRingGroups.get(key);
+
+    if (!group) {
+      // Create shared geometry if not exists
+      if (!this.selectionRingGeometry) {
+        this.selectionRingGeometry = new THREE.RingGeometry(0.8, 1.0, 32);
+      }
+      const material = isOwned ? this.selectionMaterial.clone() : this.enemySelectionMaterial.clone();
+      const mesh = new THREE.InstancedMesh(this.selectionRingGeometry, material, MAX_SELECTION_RING_INSTANCES);
+      mesh.count = 0;
+      mesh.frustumCulled = false;
+      mesh.rotation.x = -Math.PI / 2;
+      mesh.renderOrder = 5;
+      this.scene.add(mesh);
+
+      group = {
+        mesh,
+        isOwned,
+        entityIds: [],
+        maxInstances: MAX_SELECTION_RING_INSTANCES,
+      };
+      this.selectionRingGroups.set(key, group);
+    }
+
+    return group;
+  }
+
+  /**
    * Check if a building can use instanced rendering.
    * Requirements: completed, not selected, not damaged (<100% health), visible, not flying
    */
@@ -591,6 +637,13 @@ export class BuildingRenderer {
       group.mesh.count = 0;
       group.entityIds.length = 0;
     }
+
+    // PERF: Reset instanced selection ring groups
+    for (const group of this.selectionRingGroups.values()) {
+      group.mesh.count = 0;
+      group.entityIds.length = 0;
+    }
+    this.selectedBuildings.clear();
 
     // Track which buildings use instancing (to skip individual mesh handling)
     const instancedBuildingIds = new Set<number>();
@@ -967,17 +1020,16 @@ export class BuildingRenderer {
         }
       }
 
-      // Update selection ring - larger multiplier for better visibility
-      // Include flyingOffset so selection ring follows building when lifted off
+      // PERF: Track selected buildings for instanced selection ring rendering
+      // Hide individual selection ring - we use instanced rendering instead
       const ringSize = Math.max(building.width, building.height) * 0.9;
-      meshData.selectionRing.position.set(transform.x, terrainHeight + flyingOffset + 0.05, transform.y);
-      meshData.selectionRing.scale.set(ringSize, ringSize, 1);
-      meshData.selectionRing.visible = selectable?.isSelected ?? false;
-
-      // Update selection ring color
-      if (meshData.selectionRing.visible) {
-        (meshData.selectionRing.material as THREE.MeshBasicMaterial) =
-          isOwned ? this.selectionMaterial : this.enemySelectionMaterial;
+      meshData.selectionRing.visible = false; // Always hide individual ring
+      if (selectable?.isSelected) {
+        this.selectedBuildings.set(entity.id, {
+          position: new THREE.Vector3(transform.x, terrainHeight + flyingOffset + 0.05, transform.y),
+          scale: ringSize,
+          isOwned,
+        });
       }
 
       // Update health bar and fire effects (for all non-constructing states)
@@ -1053,6 +1105,28 @@ export class BuildingRenderer {
         }
       } else {
         meshData.progressBar.visible = false;
+      }
+    }
+
+    // PERF: Build instanced selection ring matrices
+    for (const [entityId, data] of this.selectedBuildings) {
+      const group = this.getOrCreateSelectionRingGroup(data.isOwned);
+      if (group.mesh.count < group.maxInstances) {
+        const idx = group.mesh.count;
+        group.entityIds[idx] = entityId;
+        this.tempPosition.copy(data.position);
+        this.tempScale.set(data.scale, data.scale, 1);
+        this.tempQuaternion.identity();
+        this.tempMatrix.compose(this.tempPosition, this.tempQuaternion, this.tempScale);
+        group.mesh.setMatrixAt(idx, this.tempMatrix);
+        group.mesh.count++;
+      }
+    }
+
+    // Mark instanced selection ring matrices as needing update
+    for (const group of this.selectionRingGroups.values()) {
+      if (group.mesh.count > 0) {
+        group.mesh.instanceMatrix.needsUpdate = true;
       }
     }
 
@@ -2474,5 +2548,19 @@ export class BuildingRenderer {
       }
     }
     this.instancedGroups.clear();
+
+    // Dispose instanced selection ring groups
+    for (const group of this.selectionRingGroups.values()) {
+      this.scene.remove(group.mesh);
+      if (group.mesh.material instanceof THREE.Material) {
+        group.mesh.material.dispose();
+      }
+    }
+    this.selectionRingGroups.clear();
+    this.selectedBuildings.clear();
+    if (this.selectionRingGeometry) {
+      this.selectionRingGeometry.dispose();
+      this.selectionRingGeometry = null;
+    }
   }
 }

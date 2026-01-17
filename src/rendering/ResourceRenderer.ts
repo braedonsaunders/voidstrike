@@ -25,11 +25,10 @@ interface InstancedResourceGroup {
   modelYRotation: number; // Base Y rotation (MODEL_FORWARD_OFFSET + asset config)
 }
 
-// Track per-resource rotation and selection ring (no individual labels)
+// Track per-resource rotation (selection rings are now instanced)
 interface ResourceData {
   rotation: number;
   lastScale: number;
-  selectionRing: THREE.Mesh | null;
 }
 
 // Track mineral line worker labels (one label per mineral line)
@@ -75,9 +74,12 @@ export class ResourceRenderer {
   // Vespene labels (one per geyser with extractor)
   private vespeneLabels: Map<number, VespeneLabel> = new Map();
 
-  // Selection ring resources
+  // PERF: Instanced selection ring for all resources (saves ~180 draw calls)
   private selectionGeometry: THREE.RingGeometry;
   private selectionMaterial: THREE.MeshBasicMaterial;
+  private selectionRingMesh: THREE.InstancedMesh | null = null;
+  private selectedResources: Map<number, THREE.Vector3> = new Map();
+  private readonly MAX_SELECTION_INSTANCES = 200;
 
   // Reusable objects for matrix calculations
   private tempMatrix: THREE.Matrix4 = new THREE.Matrix4();
@@ -290,25 +292,37 @@ export class ResourceRenderer {
   }
 
   /**
-   * Get or create per-resource data (rotation, selection ring)
+   * Get or create per-resource data (rotation only - selection rings are instanced)
    */
   private getOrCreateResourceData(entityId: number): ResourceData {
     let data = this.resourceData.get(entityId);
     if (!data) {
-      // Create selection ring
-      const selectionRing = new THREE.Mesh(this.selectionGeometry, this.selectionMaterial);
-      selectionRing.rotation.x = -Math.PI / 2;
-      selectionRing.visible = false;
-      this.scene.add(selectionRing);
-
       data = {
         rotation: Math.random() * Math.PI * 2,
         lastScale: 1,
-        selectionRing,
       };
       this.resourceData.set(entityId, data);
     }
     return data;
+  }
+
+  /**
+   * PERF: Get or create instanced selection ring mesh for all resources
+   */
+  private getOrCreateSelectionRingMesh(): THREE.InstancedMesh {
+    if (!this.selectionRingMesh) {
+      this.selectionRingMesh = new THREE.InstancedMesh(
+        this.selectionGeometry,
+        this.selectionMaterial,
+        this.MAX_SELECTION_INSTANCES
+      );
+      this.selectionRingMesh.count = 0;
+      this.selectionRingMesh.frustumCulled = false;
+      this.selectionRingMesh.rotation.x = -Math.PI / 2;
+      this.selectionRingMesh.renderOrder = 5;
+      this.scene.add(this.selectionRingMesh);
+    }
+    return this.selectionRingMesh;
   }
 
   /**
@@ -547,6 +561,9 @@ export class ResourceRenderer {
       group.entityIds.length = 0;
     }
 
+    // PERF: Clear selected resources for instanced selection ring rendering
+    this.selectedResources.clear();
+
     // PERF: Count minerals in single pass instead of separate filter
     let mineralCount = 0;
     for (const entity of entities) {
@@ -596,13 +613,8 @@ export class ResourceRenderer {
       // Get terrain height early for frustum check
       const terrainHeight = this.terrain?.getHeightAt(transform.x, transform.y) ?? 0;
 
-      // PERF: Skip resources outside camera frustum
+      // PERF: Skip resources outside camera frustum (selection rings are instanced)
       if (!this.isInFrustum(transform.x, terrainHeight + 0.5, transform.y)) {
-        // Hide selection ring but keep resource tracked
-        const data = this.resourceData.get(entity.id);
-        if (data?.selectionRing) {
-          data.selectionRing.visible = false;
-        }
         continue;
       }
 
@@ -628,11 +640,10 @@ export class ResourceRenderer {
 
       // terrainHeight already computed above for frustum check
 
-      // Update selection ring
+      // PERF: Track selected resources for instanced selection ring rendering
       const selectable = entity.get<Selectable>('Selectable');
-      if (data.selectionRing) {
-        data.selectionRing.position.set(transform.x, terrainHeight + 0.05, transform.y);
-        data.selectionRing.visible = selectable?.isSelected ?? false;
+      if (selectable?.isSelected) {
+        this.selectedResources.set(entity.id, new THREE.Vector3(transform.x, terrainHeight + 0.05, transform.y));
       }
 
       if (group.mesh.count < group.maxInstances) {
@@ -780,12 +791,28 @@ export class ResourceRenderer {
       }
     }
 
-    // Clean up resource data for destroyed entities
-    for (const [entityId, data] of this.resourceData) {
+    // PERF: Build instanced selection ring matrices
+    if (this.selectedResources.size > 0) {
+      const selectionMesh = this.getOrCreateSelectionRingMesh();
+      let instanceIdx = 0;
+      for (const [_entityId, position] of this.selectedResources) {
+        if (instanceIdx >= this.MAX_SELECTION_INSTANCES) break;
+        this.tempPosition.copy(position);
+        this.tempScale.set(1, 1, 1);
+        this.tempQuaternion.identity();
+        this.tempMatrix.compose(this.tempPosition, this.tempQuaternion, this.tempScale);
+        selectionMesh.setMatrixAt(instanceIdx, this.tempMatrix);
+        instanceIdx++;
+      }
+      selectionMesh.count = instanceIdx;
+      selectionMesh.instanceMatrix.needsUpdate = true;
+    } else if (this.selectionRingMesh) {
+      this.selectionRingMesh.count = 0;
+    }
+
+    // Clean up resource data for destroyed entities (selection rings are instanced)
+    for (const [entityId] of this.resourceData) {
       if (!this._currentIds.has(entityId)) {
-        if (data.selectionRing) {
-          this.scene.remove(data.selectionRing);
-        }
         this.resourceData.delete(entityId);
       }
     }
@@ -812,12 +839,13 @@ export class ResourceRenderer {
     }
     this.instancedGroups.clear();
 
-    // Clean up selection rings
-    for (const data of this.resourceData.values()) {
-      if (data.selectionRing) {
-        this.scene.remove(data.selectionRing);
-      }
+    // Clean up instanced selection ring mesh
+    if (this.selectionRingMesh) {
+      this.scene.remove(this.selectionRingMesh);
+      // Note: geometry and material are shared (selectionGeometry, selectionMaterial)
+      this.selectionRingMesh = null;
     }
+    this.selectedResources.clear();
     this.resourceData.clear();
 
     // Clean up mineral line labels
