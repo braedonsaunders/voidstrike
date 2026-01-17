@@ -198,6 +198,16 @@ export class AbilitySystem extends System {
         }
         break;
 
+      case 'yamato_cannon':
+        if (command.targetEntityId) {
+          this.executeYamatoCannon(
+            casterEntity,
+            command.targetEntityId,
+            definition.damage || 300
+          );
+        }
+        break;
+
       case 'mule':
         if (command.targetPosition) {
           this.executeMULE(
@@ -539,6 +549,59 @@ export class AbilitySystem extends System {
       abilityName: 'POWER IMPACT',
       position: { x: targetTransform.x, y: targetTransform.y },
       color: 0xff3300,
+    });
+  }
+
+  private executeYamatoCannon(
+    caster: { id: number },
+    targetId: number,
+    damage: number
+  ): void {
+    const target = this.world.getEntity(targetId);
+    if (!target) return;
+
+    const casterEntity = this.world.getEntity(caster.id);
+    const casterTransform = casterEntity?.get<Transform>('Transform');
+    const targetTransform = target.get<Transform>('Transform');
+    const targetHealth = target.get<Health>('Health');
+
+    if (!targetHealth || !targetTransform) return;
+
+    // Emit major ability notification for charge-up
+    if (casterTransform) {
+      this.game.eventBus.emit('ability:major', {
+        abilityName: 'YAMATO CANNON',
+        position: { x: casterTransform.x, y: casterTransform.y },
+        color: 0xffaa00, // Orange-yellow for Yamato
+      });
+    }
+
+    // Deal massive single-target damage
+    targetHealth.takeDamage(damage, this.game.getGameTime());
+
+    // Emit attack event for visual effect (big beam projectile)
+    this.game.eventBus.emit('combat:attack', {
+      attackerId: caster.id,
+      attackerPos: casterTransform ? { x: casterTransform.x, y: casterTransform.y } : null,
+      targetPos: { x: targetTransform.x, y: targetTransform.y },
+      damage,
+      damageType: 'psionic', // Big energy beam
+    });
+
+    // Emit yamato cannon impact effect
+    this.game.eventBus.emit('ability:effect', {
+      type: 'yamato_cannon',
+      casterId: caster.id,
+      targetId,
+      damage,
+      position: { x: targetTransform.x, y: targetTransform.y },
+    });
+
+    // Impact visual notification
+    this.game.eventBus.emit('ability:major', {
+      abilityName: 'YAMATO IMPACT',
+      position: { x: targetTransform.x, y: targetTransform.y },
+      color: 0xff6600,
     });
   }
 

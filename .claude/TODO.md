@@ -595,6 +595,12 @@
 - [x] Thruster effects on all flyable buildings (headquarters, orbital_station, infantry_bay, forge, hangar)
 - [x] Engine exhaust and smoke trail effects during flight
 
+### Unit Rendering & Formation Improvements (January 2026)
+- [x] **Smooth rotation interpolation** - Added prevRotation tracking to Transform component and exponential smoothing in UnitRenderer. Units no longer rotate jerkily.
+- [x] **Yamato Cannon ability** - Dreadnought now has SC2-style Yamato Cannon: 300 damage, 10 range, 71s cooldown, 100 energy, 2s charge time. Replaced generic Power Cannon.
+- [x] **Dreadnought range increase** - Attack range increased from 8 to 10 for proper capital ship feel.
+- [x] **collisionScale for large units** - Added collisionScale property to UnitDefinition. Large units (Dreadnought: 2.5x, Colossus: 2.0x, Devastator: 1.8x) now properly spread out in formations instead of overlapping.
+
 ### Visual Polish
 - [ ] Unit wireframes (damage state)
 - [x] Building placement ghost - SC2-style grid + ghost preview when placing
