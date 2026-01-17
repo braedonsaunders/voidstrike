@@ -371,7 +371,9 @@ export class DamageNumberSystem {
       duration: FLOAT_DURATION,
       ease: 'Quad.easeOut',
       onUpdate: () => {
-        const screenPos = this.worldToScreen(pos.x, worldY + floatOffset.y * 0.02, pos.y);
+        const projectToScreen = useProjectionStore.getState().projectToScreen;
+        if (!projectToScreen) return;
+        const screenPos = projectToScreen(pos.x, pos.y, worldY + floatOffset.y * 0.02);
         if (screenPos) {
           text.setPosition(screenPos.x, screenPos.y);
           shadow.setPosition(screenPos.x + 1, screenPos.y + 1);
