@@ -120,6 +120,10 @@ export class UnitRenderer {
   private tempFacingQuat: THREE.Quaternion = new THREE.Quaternion(); // For unit facing direction
   private tempScale: THREE.Vector3 = new THREE.Vector3(1, 1, 1);
   private tempEuler: THREE.Euler = new THREE.Euler();
+  // Pre-computed rotation for flat ground overlays (rings, markers)
+  private groundOverlayRotation: THREE.Quaternion = new THREE.Quaternion().setFromEuler(
+    new THREE.Euler(-Math.PI / 2, 0, 0)
+  );
 
   // PERF: Frustum culling for instances
   private frustum: THREE.Frustum = new THREE.Frustum();
@@ -599,7 +603,8 @@ export class UnitRenderer {
       const mesh = new THREE.InstancedMesh(this.selectionGeometry, material, MAX_OVERLAY_INSTANCES);
       mesh.count = 0;
       mesh.frustumCulled = false;
-      mesh.rotation.x = -Math.PI / 2;
+      // NOTE: Don't set mesh.rotation here - rotation is applied per-instance to avoid
+      // coordinate transform issues with instanced meshes
       // Selection rings render at same level as ground effects
       mesh.renderOrder = 5;
       this.scene.add(mesh);
@@ -633,7 +638,8 @@ export class UnitRenderer {
       const mesh = new THREE.InstancedMesh(this.teamMarkerGeometry, material, MAX_OVERLAY_INSTANCES);
       mesh.count = 0;
       mesh.frustumCulled = false;
-      mesh.rotation.x = -Math.PI / 2;
+      // NOTE: Don't set mesh.rotation here - rotation is applied per-instance to avoid
+      // coordinate transform issues with instanced meshes
       // Team markers render just above ground
       mesh.renderOrder = 4;
       this.scene.add(mesh);
@@ -895,11 +901,10 @@ export class UnitRenderer {
       if (group.mesh.count < group.maxInstances) {
         const idx = group.mesh.count;
         group.entityIds[idx] = entityId;
-        // Team markers are flat on ground, just need position (rotation handled by mesh.rotation.x)
+        // Team markers are flat on ground - apply rotation per-instance to lay flat
         this.tempPosition.copy(data.position);
         this.tempScale.set(1, 1, 1);
-        this.tempQuaternion.identity();
-        this.tempMatrix.compose(this.tempPosition, this.tempQuaternion, this.tempScale);
+        this.tempMatrix.compose(this.tempPosition, this.groundOverlayRotation, this.tempScale);
         group.mesh.setMatrixAt(idx, this.tempMatrix);
         group.mesh.count++;
       }
@@ -911,11 +916,10 @@ export class UnitRenderer {
       if (group.mesh.count < group.maxInstances) {
         const idx = group.mesh.count;
         group.entityIds[idx] = entityId;
-        // Selection rings are flat on ground, just need position
+        // Selection rings are flat on ground - apply rotation per-instance to lay flat
         this.tempPosition.copy(data.position);
         this.tempScale.set(1, 1, 1);
-        this.tempQuaternion.identity();
-        this.tempMatrix.compose(this.tempPosition, this.tempQuaternion, this.tempScale);
+        this.tempMatrix.compose(this.tempPosition, this.groundOverlayRotation, this.tempScale);
         group.mesh.setMatrixAt(idx, this.tempMatrix);
         group.mesh.count++;
       }
