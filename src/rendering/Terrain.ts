@@ -355,7 +355,9 @@ export class Terrain {
           if (edgeFactor > 0) {
             detailNoise += edgeFactor * 0.04 * fbmNoise(nx * 3, ny * 3, 2, 2.0, 0.5);
           }
-        } else if (cell.terrain === 'ramp') {
+        } else if (cell.terrain === 'ramp' || cell.terrain === 'platform') {
+          // Ramps and platforms: completely smooth with NO noise
+          // SC2-style geometric surfaces are perfectly flat
           detailNoise = 0;
         } else {
           const groundNoise = fbmNoise(nx * 6, ny * 6, 3, 2.0, 0.5) * 0.015;
@@ -404,7 +406,8 @@ export class Terrain {
         }
 
         let slope = Math.min(1.0, maxHeightDiff / 3.0);
-        if (terrainType === 'ramp') {
+        if (terrainType === 'ramp' || terrainType === 'platform') {
+          // Ramps and platforms are flat surfaces
           slope = 0;
         } else if (terrainType === 'unwalkable') {
           let isEdge = false;
@@ -415,7 +418,7 @@ export class Terrain {
               const ny = y + dy;
               if (nx >= 0 && nx <= width && ny >= 0 && ny <= height) {
                 const neighborType = terrainTypeMap[ny * this.gridWidth + nx];
-                if (neighborType === 'ground' || neighborType === 'ramp' || neighborType === 'unbuildable') {
+                if (neighborType === 'ground' || neighborType === 'ramp' || neighborType === 'unbuildable' || neighborType === 'platform') {
                   isEdge = true;
                 }
               }
@@ -497,7 +500,8 @@ export class Terrain {
 
         // Get biome-based color
         const terrainColorType = cell.terrain === 'unwalkable' ? 'cliff' :
-                                  cell.terrain === 'ramp' ? 'ramp' : 'ground';
+                                  cell.terrain === 'ramp' ? 'ramp' :
+                                  cell.terrain === 'platform' ? 'ground' : 'ground';
         const baseColor = blendBiomeColors(this.biome, x, y, terrainColorType);
 
         const feature = cell.feature || 'none';
@@ -766,9 +770,9 @@ export class Terrain {
           if (edgeFactor > 0) {
             detailNoise += edgeFactor * 0.04 * fbmNoise(nx * 3, ny * 3, 2, 2.0, 0.5);
           }
-        } else if (cell.terrain === 'ramp') {
-          // Ramps: completely smooth with NO noise
-          // SC2-style ramps are perfectly flat surfaces with only elevation interpolation
+        } else if (cell.terrain === 'ramp' || cell.terrain === 'platform') {
+          // Ramps and platforms: completely smooth with NO noise
+          // SC2-style geometric surfaces are perfectly flat with only elevation interpolation
           // Any noise causes visible spikes and rough surfaces
           detailNoise = 0;
         } else {
@@ -868,7 +872,7 @@ export class Terrain {
               const ny = y + dy;
               if (nx >= 0 && nx <= width && ny >= 0 && ny <= height) {
                 const neighborType = terrainTypeMap[ny * this.gridWidth + nx];
-                if (neighborType === 'ground' || neighborType === 'ramp' || neighborType === 'unbuildable') {
+                if (neighborType === 'ground' || neighborType === 'ramp' || neighborType === 'unbuildable' || neighborType === 'platform') {
                   isEdge = true;
                 }
               }
@@ -908,7 +912,8 @@ export class Terrain {
 
         // Get biome-based color for this terrain type
         const terrainColorType = cell.terrain === 'unwalkable' ? 'cliff' :
-                                  cell.terrain === 'ramp' ? 'ramp' : 'ground';
+                                  cell.terrain === 'ramp' ? 'ramp' :
+                                  cell.terrain === 'platform' ? 'ground' : 'ground';
         const baseColor = blendBiomeColors(this.biome, x, y, terrainColorType);
 
         // Apply terrain feature color tint
@@ -1301,17 +1306,19 @@ export class Terrain {
     const { width, height, terrain } = this.mapData;
     const temp = new Float32Array(this.heightMap.length);
 
-    // Helper to check if a vertex touches a ramp cell or is adjacent to one
-    // (protecting adjacent vertices prevents discontinuities at ramp edges)
-    const isRampOrAdjacentVertex = (vx: number, vy: number): boolean => {
+    // Helper to check if a vertex touches a ramp/platform cell or is adjacent to one
+    // (protecting adjacent vertices prevents discontinuities at edges)
+    const isRampOrPlatformOrAdjacentVertex = (vx: number, vy: number): boolean => {
       // A vertex at (vx, vy) touches up to 4 cells
-      // Also check cells that are 1 step further out to protect the ramp boundary
+      // Also check cells that are 1 step further out to protect the boundary
       for (let dy = -2; dy <= 1; dy++) {
         for (let dx = -2; dx <= 1; dx++) {
           const cx = vx + dx;
           const cy = vy + dy;
           if (cx >= 0 && cx < width && cy >= 0 && cy < height) {
-            if (terrain[cy][cx].terrain === 'ramp') {
+            const cellTerrain = terrain[cy][cx].terrain;
+            // Ramps and platforms should stay perfectly flat
+            if (cellTerrain === 'ramp' || cellTerrain === 'platform') {
               return true;
             }
           }
@@ -1339,7 +1346,7 @@ export class Terrain {
       for (const { cx, cy } of cellCoords) {
         if (cx >= 0 && cx < width && cy >= 0 && cy < height) {
           const cellTerrain = terrain[cy][cx].terrain;
-          if (cellTerrain === 'ground' || cellTerrain === 'unbuildable') {
+          if (cellTerrain === 'ground' || cellTerrain === 'unbuildable' || cellTerrain === 'platform') {
             hasGround = true;
           }
           if (cellTerrain === 'unwalkable') {
@@ -1364,7 +1371,7 @@ export class Terrain {
           // SKIP RAMP VERTICES AND ADJACENT - preserve their exact calculated heights
           // This ensures ramps stay as clean linear slopes, not smoothed flat steps
           // Also protects adjacent vertices to prevent discontinuities at ramp boundaries
-          if (isRampOrAdjacentVertex(x, y)) {
+          if (isRampOrPlatformOrAdjacentVertex(x, y)) {
             temp[idx] = this.heightMap[idx];
             continue;
           }
@@ -1635,6 +1642,22 @@ export class Terrain {
           topHeight: cellHeight,
           bottomHeight: cellHeight - WALL_HEIGHT,
         };
+      }
+
+      // Platform cells always generate vertical cliff faces to lower terrain
+      // This creates the geometric SC2-style platform look
+      if (cell.terrain === 'platform' && neighbor.terrain !== 'ramp') {
+        const elevDiff = cell.elevation - neighbor.elevation;
+        // Only generate wall if this cell is higher than neighbor
+        if (elevDiff > 20) {  // Small threshold to avoid walls for tiny differences
+          const cellHeight = elevationToHeight(cell.elevation);
+          const neighborHeight = elevationToHeight(neighbor.elevation);
+          return {
+            needed: true,
+            topHeight: cellHeight,
+            bottomHeight: neighborHeight,
+          };
+        }
       }
 
       // Wall needed if significant elevation difference between walkable cells
