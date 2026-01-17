@@ -14,16 +14,31 @@ import { getDamageMultiplier, COMBAT_CONFIG } from '@/data/combat/combat';
 import { getDefaultTargetPriority } from '@/data/units/categories';
 import AssetManager from '@/assets/AssetManager';
 
+// Cache visual radii to avoid repeated lookups in hot loops
+const visualRadiusCache = new Map<string, number>();
+
 /**
  * Get the visual radius of a unit for attack range calculations.
- * Uses the model scale from assets.json (how big the unit LOOKS)
- * rather than just the collision radius (which may be smaller).
+ * Uses actual model bounding box dimensions (industry-standard approach).
+ * Falls back to scale approximation if model not yet loaded.
  */
 function getVisualRadius(unit: Unit): number {
+  // Check cache first for performance
+  const cached = visualRadiusCache.get(unit.unitId);
+  if (cached !== undefined) {
+    return cached;
+  }
+
+  // Try to get actual bounding box radius from loaded model
+  const actualRadius = AssetManager.getModelVisualRadius(unit.unitId);
+  if (actualRadius !== null) {
+    visualRadiusCache.set(unit.unitId, actualRadius);
+    return actualRadius;
+  }
+
+  // Fallback: model not loaded yet, use scale approximation
   const modelScale = AssetManager.getUnitScale(unit.unitId);
-  // Use the larger of collision radius or half the model scale
-  // Model scale of 3.0 means the unit is rendered 3x size, so ~1.5 unit radius
-  return Math.max(unit.collisionRadius, modelScale * 0.5);
+  return Math.max(unit.collisionRadius, modelScale * 2);
 }
 
 // Static temp vectors to avoid allocations in hot loops
