@@ -1322,9 +1322,10 @@ export class Terrain {
     const ELEVATION_DIFF_THRESHOLD = CLIFF_WALL_THRESHOLD_ELEVATION;
 
     // Pre-compute ramp zones - cells within radius of a ramp use smooth heightMap
-    // Radius of 5 ensures ramp entrance cells on plateaus aren't marked as cliff edges
+    // Increased from 5 to 8 to ensure ramp exit cells aren't marked as cliff edges
+    // This is critical for pathfinding continuity at ramp entrances/exits
     const rampZone = new Set<string>();
-    const RAMP_ZONE_RADIUS = 5;
+    const RAMP_ZONE_RADIUS = 8;
 
     for (let y = 0; y < height; y++) {
       for (let x = 0; x < width; x++) {
@@ -1349,11 +1350,32 @@ export class Terrain {
     // Using flat heights prevents the smoothed heightMap from creating traversable slopes
     const cliffEdgeCells = new Set<string>();
 
+    // Also track cells that are adjacent to ramp zones (not in zone, but touching it)
+    // These cells should NOT be marked as cliff edges to ensure smooth ramp transitions
+    const adjacentToRampZone = new Set<string>();
+    for (const key of rampZone) {
+      const [rx, ry] = key.split(',').map(Number);
+      for (let dy = -1; dy <= 1; dy++) {
+        for (let dx = -1; dx <= 1; dx++) {
+          const nx = rx + dx;
+          const ny = ry + dy;
+          if (nx >= 0 && nx < width && ny >= 0 && ny < height) {
+            const neighborKey = `${nx},${ny}`;
+            if (!rampZone.has(neighborKey)) {
+              adjacentToRampZone.add(neighborKey);
+            }
+          }
+        }
+      }
+    }
+
     for (let y = 0; y < height; y++) {
       for (let x = 0; x < width; x++) {
         const cell = terrain[y][x];
         if (cell.terrain === 'unwalkable' || cell.terrain === 'ramp') continue;
         if (rampZone.has(`${x},${y}`)) continue;
+        // NEW: Skip cells adjacent to ramp zones to ensure smooth ramp transitions
+        if (adjacentToRampZone.has(`${x},${y}`)) continue;
 
         // Check 8 neighbors
         let isCliffEdge = false;
@@ -1370,7 +1392,10 @@ export class Terrain {
                 isCliffEdge = true;
               }
               // Case 2: Adjacent to walkable at different elevation (elevation boundary)
-              else if (neighbor.terrain !== 'ramp' && !rampZone.has(`${nx},${ny}`)) {
+              // Skip if neighbor is in or adjacent to ramp zone
+              else if (neighbor.terrain !== 'ramp' &&
+                       !rampZone.has(`${nx},${ny}`) &&
+                       !adjacentToRampZone.has(`${nx},${ny}`)) {
                 const elevDiff = Math.abs(neighbor.elevation - cell.elevation);
                 if (elevDiff > ELEVATION_DIFF_THRESHOLD) {
                   isCliffEdge = true;
@@ -1387,6 +1412,7 @@ export class Terrain {
 
     // SECOND PASS: Also mark cells adjacent to cliff edge cells
     // This ensures vertices at boundaries have consistent heights
+    // BUT: Don't expand into ramp zones or cells adjacent to ramp zones
     const expandedCliffEdgeCells = new Set<string>(cliffEdgeCells);
     for (const key of cliffEdgeCells) {
       const [cx, cy] = key.split(',').map(Number);
@@ -1396,8 +1422,13 @@ export class Terrain {
           const ny = cy + dy;
           if (nx >= 0 && nx < width && ny >= 0 && ny < height) {
             const neighbor = terrain[ny][nx];
-            if (neighbor.terrain !== 'unwalkable' && neighbor.terrain !== 'ramp' && !rampZone.has(`${nx},${ny}`)) {
-              expandedCliffEdgeCells.add(`${nx},${ny}`);
+            const neighborKey = `${nx},${ny}`;
+            // Don't expand into ramp zones or cells adjacent to ramp zones
+            if (neighbor.terrain !== 'unwalkable' &&
+                neighbor.terrain !== 'ramp' &&
+                !rampZone.has(neighborKey) &&
+                !adjacentToRampZone.has(neighborKey)) {
+              expandedCliffEdgeCells.add(neighborKey);
             }
           }
         }
@@ -1423,13 +1454,13 @@ export class Terrain {
     //   (vx-1, vy-1), (vx, vy-1), (vx-1, vy), (vx, vy)
     // The vertex should use heightMap if ANY adjacent cell is in rampZone.
     // It should only use flat elevation if ALL adjacent cells are cliff edges
-    // and NONE are in rampZone.
+    // and NONE are in rampZone or adjacentToRampZone.
     // =================================================================
     const vertexHeights = new Float32Array((width + 1) * (height + 1));
     for (let vy = 0; vy <= height; vy++) {
       for (let vx = 0; vx <= width; vx++) {
-        // Check if this vertex touches any ramp zone cell
-        let touchesRampZone = false;
+        // Check if this vertex touches any ramp zone or adjacent-to-ramp-zone cell
+        let touchesRampArea = false;
         let allCliffEdge = true;
         let cliffElevation = 0;
 
@@ -1443,10 +1474,12 @@ export class Terrain {
 
         for (const { cx, cy } of adjacentCells) {
           if (cx >= 0 && cx < width && cy >= 0 && cy < height) {
-            if (rampZone.has(`${cx},${cy}`)) {
-              touchesRampZone = true;
+            const cellKey = `${cx},${cy}`;
+            // Check ramp zone OR adjacent to ramp zone for smooth transitions
+            if (rampZone.has(cellKey) || adjacentToRampZone.has(cellKey)) {
+              touchesRampArea = true;
             }
-            if (!expandedCliffEdgeCells.has(`${cx},${cy}`)) {
+            if (!expandedCliffEdgeCells.has(cellKey)) {
               allCliffEdge = false;
             } else {
               cliffElevation = terrain[cy][cx].elevation;
@@ -1454,11 +1487,11 @@ export class Terrain {
           }
         }
 
-        // Determine height: prioritize ramp zone > normal ground > cliff edge
+        // Determine height: prioritize ramp area > normal ground > cliff edge
         const hx = Math.max(0, Math.min(vx, this.gridWidth - 1));
         const hy = Math.max(0, Math.min(vy, this.gridHeight - 1));
 
-        if (touchesRampZone) {
+        if (touchesRampArea) {
           // Vertex near ramp uses smooth heightMap for continuous slope
           vertexHeights[vy * (width + 1) + vx] = this.heightMap[hy * this.gridWidth + hx];
         } else if (allCliffEdge) {
