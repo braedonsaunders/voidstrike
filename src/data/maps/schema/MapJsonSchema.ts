@@ -17,6 +17,7 @@ import type {
  */
 export const TERRAIN_CHAR_MAP = {
   'g': 'ground',
+  'p': 'platform',
   'u': 'unwalkable',
   'r': 'ramp',
   'b': 'unbuildable',
@@ -25,6 +26,7 @@ export const TERRAIN_CHAR_MAP = {
 
 export const TERRAIN_TO_CHAR: Record<string, string> = {
   'ground': 'g',
+  'platform': 'p',
   'unwalkable': 'u',
   'ramp': 'r',
   'unbuildable': 'b',
@@ -49,7 +51,7 @@ export interface TerrainJson {
   /** Flat array of elevation values (0-255), row-major order */
   elevation: number[];
 
-  /** Single character per cell string (g=ground, u=unwalkable, r=ramp, b=unbuildable) */
+  /** Single character per cell string (g=ground, p=platform, u=unwalkable, r=ramp, b=unbuildable, c=creep) */
   types: string;
 
   /** Sparse array of non-'none' terrain features */
