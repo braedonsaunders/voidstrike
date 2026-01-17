@@ -126,6 +126,12 @@ export const BattleSimulatorPanel = memo(function BattleSimulatorPanel() {
 
   const handleClearAll = useCallback(() => {
     const game = Game.getInstance();
+
+    // Clear selection first (important: must happen before destroying entities)
+    // This ensures selection rings are properly cleaned up even when game is paused
+    useGameStore.getState().selectUnits([]);
+    game.eventBus.emit('selection:clear', {});
+
     // Get all unit entities and destroy them
     const entities = game.world.getEntitiesWith('Unit', 'Selectable');
     for (const entity of entities) {
