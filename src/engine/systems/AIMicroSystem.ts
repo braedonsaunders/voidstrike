@@ -1,4 +1,5 @@
 import { System } from '../ecs/System';
+import { World } from '../ecs/World';
 import { Transform } from '../components/Transform';
 import { Unit } from '../components/Unit';
 import { Health } from '../components/Health';
@@ -18,6 +19,8 @@ import {
 import { UNIT_DEFINITIONS } from '@/data/units/dominion';
 // Import data-driven AI configuration for micro behavior
 import { DOMINION_AI_CONFIG } from '@/data/ai/factions/dominion';
+// Import AI Worker Manager for off-thread micro decisions
+import { AIWorkerManager, MicroDecision } from '../ai/AIWorkerManager';
 
 // Configuration - now uses data-driven config where available
 // PERF: Increased from 5 to 8 ticks (400ms at 20 TPS) to reduce behavior tree evaluation frequency
@@ -67,17 +70,30 @@ export class AIMicroSystem extends System {
   // Queue for delayed commands (replaces setTimeout)
   private pendingCommands: DelayedCommand[] = [];
 
+  // Web Worker for off-thread micro decisions
+  private workerManager: AIWorkerManager;
+  private useWorker: boolean = true; // Can be disabled for debugging
+
   constructor(game: Game) {
     super(game);
     this.setupEventListeners();
     // PERF: Set game instance for cache tick tracking
     setAnalysisCacheGameInstance(game);
+    // Initialize worker manager
+    this.workerManager = AIWorkerManager.getInstance(game);
+  }
+
+  public init(world: World): void {
+    super.init(world);
+    // Set world reference in worker manager
+    this.workerManager.setWorld(world);
   }
 
   private setupEventListeners(): void {
     // Track which players are AI-controlled
     this.game.eventBus.on('ai:registered', (data: { playerId: string }) => {
       this.aiPlayerIds.add(data.playerId);
+      this.workerManager.registerAIPlayer(data.playerId);
     });
 
     // Clean up when units die or are destroyed to prevent memory leaks
@@ -106,6 +122,7 @@ export class AIMicroSystem extends System {
 
   public registerAIPlayer(playerId: string): void {
     this.aiPlayerIds.add(playerId);
+    this.workerManager.registerAIPlayer(playerId);
   }
 
   /**
@@ -148,6 +165,207 @@ export class AIMicroSystem extends System {
     // Only update micro at intervals to reduce CPU load
     if (currentTick % MICRO_UPDATE_INTERVAL !== 0) return;
 
+    // Try to use worker for micro decisions
+    if (this.useWorker && this.workerManager.isWorkerReady()) {
+      this.updateWithWorker(deltaTime, currentTick);
+    } else {
+      // Fallback to main thread
+      this.updateMainThread(deltaTime, currentTick);
+    }
+  }
+
+  /**
+   * Update micro AI using worker (non-blocking)
+   */
+  private updateWithWorker(deltaTime: number, currentTick: number): void {
+    // Request micro decisions for each AI player
+    for (const playerId of this.aiPlayerIds) {
+      // Fire-and-forget request (non-blocking)
+      this.workerManager.requestMicroDecisionsAsync(playerId);
+
+      // Get cached decisions (may be from previous tick)
+      const decisions = this.workerManager.getCachedMicroDecisions(playerId);
+      if (decisions) {
+        this.applyWorkerDecisions(playerId, decisions, currentTick);
+      }
+    }
+
+    // Still need to run behavior trees for state management (reduced scope)
+    // Worker handles: kiting, focus fire, retreat, transform
+    // Main thread handles: behavior tree state, unit state tracking
+    this.updateBehaviorTreeStates(deltaTime, currentTick);
+  }
+
+  /**
+   * Apply micro decisions from worker
+   */
+  private applyWorkerDecisions(playerId: string, decisions: MicroDecision[], currentTick: number): void {
+    for (const decision of decisions) {
+      if (decision.action === 'none') continue;
+
+      const entity = this.world.getEntity(decision.unitId);
+      if (!entity) continue;
+
+      const unit = entity.get<Unit>('Unit');
+      if (!unit) continue;
+
+      // Get or create micro state for tracking
+      let state = this.unitStates.get(decision.unitId);
+      if (!state) {
+        const behaviorType = this.selectBehaviorType(unit);
+        const tree = createBehaviorTree(behaviorType);
+        const selectable = entity.get<Selectable>('Selectable');
+        const playerBlackboard = globalBlackboard.getScope(`player_${selectable?.playerId}`);
+
+        state = {
+          behaviorTree: new BehaviorTreeRunner(tree, playerBlackboard),
+          lastKiteTick: 0,
+          lastThreatAssessment: currentTick,
+          lastTransformDecision: 0,
+          threatScore: decision.threatScore,
+          primaryTarget: decision.targetId ?? null,
+          retreating: false,
+          retreatEndTick: null,
+        };
+        this.unitStates.set(decision.unitId, state);
+      }
+
+      // Update threat info from worker
+      state.threatScore = decision.threatScore;
+      state.primaryTarget = decision.targetId ?? null;
+      state.lastThreatAssessment = currentTick;
+
+      switch (decision.action) {
+        case 'attack':
+          if (decision.targetId !== undefined) {
+            const command: GameCommand = {
+              tick: currentTick,
+              playerId,
+              type: 'ATTACK',
+              entityIds: [decision.unitId],
+              targetEntityId: decision.targetId,
+            };
+            this.game.processCommand(command);
+          }
+          break;
+
+        case 'kite':
+          if (decision.targetPosition && currentTick - state.lastKiteTick > KITE_COOLDOWN_TICKS) {
+            // Save target before kiting
+            const savedTargetId = decision.targetId;
+
+            const moveCommand: GameCommand = {
+              tick: currentTick,
+              playerId,
+              type: 'MOVE',
+              entityIds: [decision.unitId],
+              targetPosition: decision.targetPosition,
+            };
+            this.game.processCommand(moveCommand);
+            state.lastKiteTick = currentTick;
+
+            // Re-target after kiting (5 ticks delay)
+            if (savedTargetId !== undefined) {
+              const retargetCommand: GameCommand = {
+                tick: currentTick + 5,
+                playerId,
+                type: 'ATTACK',
+                entityIds: [decision.unitId],
+                targetEntityId: savedTargetId,
+              };
+              this.pendingCommands.push({
+                executeTick: currentTick + 5,
+                command: retargetCommand,
+              });
+            }
+          }
+          break;
+
+        case 'retreat':
+          if (!state.retreating && decision.targetPosition) {
+            const command: GameCommand = {
+              tick: currentTick,
+              playerId,
+              type: 'MOVE',
+              entityIds: [decision.unitId],
+              targetPosition: decision.targetPosition,
+            };
+            this.game.processCommand(command);
+            state.retreating = true;
+            state.retreatEndTick = currentTick + 40; // 2 seconds
+          }
+          break;
+
+        case 'transform':
+          if (decision.targetMode) {
+            state.lastTransformDecision = currentTick;
+            const command: GameCommand = {
+              tick: currentTick,
+              playerId,
+              type: 'TRANSFORM',
+              entityIds: [decision.unitId],
+              targetMode: decision.targetMode,
+            };
+            this.game.processCommand(command);
+          }
+          break;
+      }
+    }
+  }
+
+  /**
+   * Update behavior tree states (reduced scope when using worker)
+   */
+  private updateBehaviorTreeStates(deltaTime: number, currentTick: number): void {
+    const entities = this.world.getEntitiesWith('Unit', 'Transform', 'Selectable', 'Health');
+
+    for (const entity of entities) {
+      const selectable = entity.get<Selectable>('Selectable');
+      const unit = entity.get<Unit>('Unit');
+      const health = entity.get<Health>('Health');
+      if (!selectable || !unit || !health) continue;
+
+      // Only process AI-controlled units
+      if (!this.aiPlayerIds.has(selectable.playerId)) continue;
+
+      // Skip dead units and workers
+      if (health.isDead()) continue;
+      if (unit.isWorker) continue;
+
+      // Allow transformable units to be processed even when idle
+      const canProcessUnit = unit.state === 'attacking' || unit.state === 'moving' ||
+        (unit.canTransform && unit.state === 'idle');
+      if (!canProcessUnit) continue;
+
+      // Get or create micro state
+      let state = this.unitStates.get(entity.id);
+      if (!state) {
+        const behaviorType = this.selectBehaviorType(unit);
+        const tree = createBehaviorTree(behaviorType);
+        const playerBlackboard = globalBlackboard.getScope(`player_${selectable.playerId}`);
+
+        state = {
+          behaviorTree: new BehaviorTreeRunner(tree, playerBlackboard),
+          lastKiteTick: 0,
+          lastThreatAssessment: 0,
+          lastTransformDecision: 0,
+          threatScore: 0,
+          primaryTarget: null,
+          retreating: false,
+          retreatEndTick: null,
+        };
+        this.unitStates.set(entity.id, state);
+      }
+
+      // Run behavior tree for state management only (worker handles actions)
+      state.behaviorTree.tick(entity.id, this.world, this.game, deltaTime);
+    }
+  }
+
+  /**
+   * Main thread fallback for micro AI
+   */
+  private updateMainThread(deltaTime: number, currentTick: number): void {
     const entities = this.world.getEntitiesWith('Unit', 'Transform', 'Selectable', 'Health');
 
     for (const entity of entities) {

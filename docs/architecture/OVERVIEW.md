@@ -163,7 +163,15 @@ voidstrike/
 │   └── audio/                 # Sound effects, music
 ├── src/workers/
 │   ├── countdownWorker.ts     # Countdown timer Web Worker
-│   └── phaserLoopWorker.ts    # Phaser overlay loop (background tab immune)
+│   ├── phaserLoopWorker.ts    # Phaser overlay loop (background tab immune)
+│   ├── pathfinding.worker.ts  # Recast Navigation WASM pathfinding
+│   ├── gltf.worker.ts         # GLTF asset loading
+│   ├── vision.worker.ts       # Fog of war vision calculations
+│   └── ai-decisions.worker.ts # AI micro decision-making (threat assessment, kiting)
+├── src/engine/ai/
+│   ├── BehaviorTree.ts        # Behavior tree for unit AI
+│   ├── UnitBehaviors.ts       # Unit-specific behavior trees
+│   └── AIWorkerManager.ts     # Manages AI worker for micro decisions
 └── tests/
     └── ...                    # Test files
 ```
@@ -337,10 +345,57 @@ Browsers throttle `requestAnimationFrame` and `setInterval` to ~1fps when tabs a
 │    - Phaser overlay updates (damage numbers, effects)           │
 │    - Only steps Phaser when document.hidden = true              │
 │    - Manually calls scene.sys.step() to bypass RAF              │
+├─────────────────────────────────────────────────────────────────┤
+│  Pathfinding Worker (src/workers/pathfinding.worker.ts)         │
+│    - Recast Navigation WASM-based navmesh pathfinding           │
+│    - Offloads heavy pathfinding calculations from main thread   │
+│    - Request/response pattern with requestId tracking           │
+├─────────────────────────────────────────────────────────────────┤
+│  Vision Worker (src/workers/vision.worker.ts)                   │
+│    - Fog of war visibility calculations                         │
+│    - Updates every 10 ticks (500ms at 20 TPS)                   │
+│    - Uses TypedArrays for efficient vision map transfer         │
+│    - Saves ~5-8ms per frame in multiplayer games                │
+├─────────────────────────────────────────────────────────────────┤
+│  AI Decisions Worker (src/workers/ai-decisions.worker.ts)       │
+│    - AI micro decision-making (threat assessment, kiting)       │
+│    - Focus fire target selection, retreat decisions             │
+│    - Transform decisions for units like Valkyrie                │
+│    - Managed via AIWorkerManager singleton                      │
+│    - Saves ~8-15ms per frame with many AI units                 │
 └─────────────────────────────────────────────────────────────────┘
 ```
 
 When tab is visible, Phaser uses its normal RAF-based loop. When hidden, the worker takes over to keep overlay state synchronized with game state.
+
+### Performance Workers
+
+Vision and AI workers offload computation from the main thread:
+
+```typescript
+// Vision Worker - off-thread fog of war
+// VisionSystem sends unit positions, receives updated vision maps
+visionWorker.postMessage({
+  type: 'updateVision',
+  units: unitSnapshots,
+  buildings: buildingSnapshots,
+  players: playerIds,
+  version: visionVersion,
+});
+
+// AI Worker - off-thread micro decisions
+// AIMicroSystem sends game state, receives decisions (attack, kite, retreat, transform)
+aiWorker.postMessage({
+  type: 'evaluateMicro',
+  aiPlayerId,
+  aiUnits: unitSnapshots,
+  enemyUnits: enemySnapshots,
+  enemyBuildings: buildingSnapshots,
+  tick: currentTick,
+});
+```
+
+Both workers maintain main thread fallbacks for environments without Web Worker support.
 
 ### State Management
 
