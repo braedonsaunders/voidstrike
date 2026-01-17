@@ -8,6 +8,7 @@ import { ProductionSystem } from '../systems/ProductionSystem';
 import { ResourceSystem } from '../systems/ResourceSystem';
 import { ResearchSystem } from '../systems/ResearchSystem';
 import { EnhancedAISystem, AIDifficulty } from '../systems/EnhancedAISystem';
+import { AIEconomySystem } from '../systems/AIEconomySystem';
 import { VisionSystem } from '../systems/VisionSystem';
 import { AbilitySystem } from '../systems/AbilitySystem';
 import { SpawnSystem } from '../systems/SpawnSystem';
@@ -333,6 +334,7 @@ export class Game {
     if (this.config.aiEnabled) {
       const enhancedAI = new EnhancedAISystem(this, this.config.aiDifficulty);
       this.world.addSystem(enhancedAI);
+      this.world.addSystem(new AIEconomySystem(this)); // AI economy metrics tracking
       this.world.addSystem(this.aiMicroSystem); // AI unit micro (kiting, focus fire)
       // NOTE: AI player registration with AIMicroSystem happens in spawnInitialEntities()
       // This ensures the store has the correct player configuration when registration occurs

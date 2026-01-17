@@ -1873,32 +1873,70 @@ Key features:
 
 ### Enhanced AI System (`EnhancedAISystem.ts`)
 
-5-tier difficulty system with strategic behaviors:
+5-tier difficulty system with strategic behaviors and simulation-based economy:
 
 ```typescript
 type AIDifficulty = 'easy' | 'medium' | 'hard' | 'very_hard' | 'insane';
 
-interface AIConfig {
-  buildOrderSpeed: number;      // 0.5 (easy) to 2.0 (insane)
-  attackTiming: number;         // Time between attacks
+interface DifficultySettings {
+  actionDelayTicks: number;       // 60 (easy) to 10 (insane)
+  targetWorkers: number;          // 16-40 workers
+  maxBases: number;               // 2-6 bases
+  miningSpeedMultiplier: number;  // 1.0 (normal) to 1.5 (insane - SC2-style bonus)
+  buildSpeedMultiplier: number;
   scoutingEnabled: boolean;
-  multiProngEnabled: boolean;
+  microEnabled: boolean;
   harassmentEnabled: boolean;
-  microLevel: number;           // 0-3
-  resourceBonus: number;        // Cheating for insane
-  macroEfficiency: number;      // 0.6-1.0
 }
 
 // State machine
 type AIState = 'building' | 'expanding' | 'attacking' |
                'defending' | 'scouting' | 'harassing';
 
-// Build order system
-const BUILD_ORDERS = {
-  easy: ['supply_depot', 'barracks', 'marine'],
-  hard: ['supply_depot', 'refinery', 'barracks', 'tech_lab', ...],
-  insane: ['supply_depot', 'barracks', 'marine', 'expansion', ...]
-};
+// Simulation-based economy (no passive income)
+// Workers actually gather and return resources to base
+// AI gets resources via aiSystem.creditResources(playerId, minerals, vespene)
+// Higher difficulties get faster mining speed, not fake income
+```
+
+#### Simulation-Based Economy
+
+The AI uses a fully simulated economy matching StarCraft 2:
+
+- **No passive income**: Workers must actually gather and deliver resources
+- **Mining speed bonuses**: Higher difficulties get faster mining (1.25x-1.5x)
+- **Worker death tracking**: AI detects harassment and increases worker production priority
+- **Resource depletion awareness**: AI tracks depleted patches to inform expansion decisions
+- **Auto-reassignment**: Workers automatically find new resources when patches deplete
+
+#### Worker Lifecycle Management
+
+```typescript
+interface AIPlayer {
+  // Worker tracking
+  previousWorkerIds: Set<number>;       // For death detection
+  lastWorkerDeathTick: number;          // Harassment detection
+  recentWorkerDeaths: number;           // Decays over time
+  workerReplacementPriority: number;    // 0-1, triggers emergency production
+  depletedPatchesNearBases: number;     // Informs expansion decisions
+}
+```
+
+### AI Economy System (`AIEconomySystem.ts`)
+
+Metrics tracking for AI economy debugging:
+
+```typescript
+interface AIEconomyMetrics {
+  mineralsPerMinute: number;
+  vespenePerMinute: number;
+  totalMineralsGathered: number;
+  workerCount: number;
+  incomePerWorker: number;
+}
+
+// Logs metrics every ~20 seconds for debugging
+// Tracks income via resource:delivered events
 ```
 
 ### Game State System (`GameStateSystem.ts`)

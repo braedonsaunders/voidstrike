@@ -10,8 +10,9 @@ import { World } from '../ecs/World';
 import { useGameStore } from '@/store/gameStore';
 import { debugResources } from '@/utils/debugLogger';
 import { isLocalPlayer } from '@/store/gameSetupStore';
+import { EnhancedAISystem } from './EnhancedAISystem';
 
-// Mining time in seconds
+// Mining time in seconds (base value - AI may get speed bonuses)
 const MINING_TIME = 2.5;
 
 export class ResourceSystem extends System {
@@ -26,6 +27,9 @@ export class ResourceSystem extends System {
   private cachedBases: Entity[] | null = null;
   private lastBaseCacheTick: number = -1;
 
+  // Cache reference to AI system for mining speed bonuses and resource crediting
+  private aiSystem: EnhancedAISystem | null = null;
+
   constructor(game: Game) {
     super(game);
     this.setupEventListeners();
@@ -34,6 +38,34 @@ export class ResourceSystem extends System {
   public init(world: World): void {
     super.init(world);
     this.setupExtractorCheckers();
+    // Cache AI system reference for mining speed bonuses
+    this.aiSystem = this.world.getSystem(EnhancedAISystem) || null;
+  }
+
+  /**
+   * Get the AI system, lazily initializing if needed
+   */
+  private getAISystem(): EnhancedAISystem | null {
+    if (!this.aiSystem) {
+      this.aiSystem = this.world.getSystem(EnhancedAISystem) || null;
+    }
+    return this.aiSystem;
+  }
+
+  /**
+   * Get the mining time for a player (applies AI speed bonuses)
+   */
+  private getMiningTimeForPlayer(playerId: string | undefined): number {
+    if (!playerId) return MINING_TIME;
+
+    const aiSystem = this.getAISystem();
+    if (!aiSystem || !aiSystem.isAIPlayer(playerId)) {
+      return MINING_TIME;
+    }
+
+    // AI gets faster mining based on difficulty
+    const speedMultiplier = aiSystem.getMiningSpeedMultiplier(playerId);
+    return MINING_TIME / speedMultiplier;
   }
 
   /**
@@ -249,6 +281,67 @@ export class ResourceSystem extends System {
     return sortedPatches[0] || null;
   }
 
+  /**
+   * Find the nearest non-depleted resource of a given type.
+   * Used for auto-reassigning workers when their resource depletes.
+   * For vespene, only returns resources with completed extractors owned by the player.
+   */
+  private findNearestResource(
+    x: number,
+    y: number,
+    resourceType: 'minerals' | 'vespene',
+    playerId: string | undefined
+  ): { entityId: number; x: number; y: number } | null {
+    const resources = this.getCachedResources();
+    let nearest: { entityId: number; x: number; y: number; distance: number } | null = null;
+
+    for (const entity of resources) {
+      const resource = entity.get<Resource>('Resource');
+      const transform = entity.get<Transform>('Transform');
+
+      if (!resource || !transform) continue;
+      if (resource.resourceType !== resourceType) continue;
+      if (resource.isDepleted()) continue;
+
+      // For vespene, check if extractor is built and owned by this player
+      if (resourceType === 'vespene') {
+        if (!resource.hasRefinery()) continue;
+
+        // Verify extractor ownership
+        if (resource.extractorEntityId !== null && playerId) {
+          const extractorEntity = this.world.getEntity(resource.extractorEntityId);
+          if (extractorEntity) {
+            const extractorSelectable = extractorEntity.get<Selectable>('Selectable');
+            if (extractorSelectable?.playerId !== playerId) continue;
+          }
+        }
+      }
+
+      // Prefer resources with fewer gatherers (saturation check)
+      const currentGatherers = resource.getCurrentGatherers();
+      const maxGatherers = resourceType === 'minerals' ? 3 : 3; // Allow some oversaturation
+      if (currentGatherers >= maxGatherers) continue;
+
+      const dx = transform.x - x;
+      const dy = transform.y - y;
+      const distance = Math.sqrt(dx * dx + dy * dy);
+
+      // Limit search range to reasonable distance (60 units = ~2 base widths)
+      if (distance > 60) continue;
+
+      if (!nearest || distance < nearest.distance) {
+        nearest = {
+          entityId: entity.id,
+          x: transform.x,
+          y: transform.y,
+          distance,
+        };
+      }
+    }
+
+    return nearest ? { entityId: nearest.entityId, x: nearest.x, y: nearest.y } : null;
+  }
+
   private handleReturnCommand(command: { entityIds: number[] }): void {
     for (const entityId of command.entityIds) {
       const entity = this.world.getEntity(entityId);
@@ -297,20 +390,41 @@ export class ResourceSystem extends System {
         const resourceTransform = resourceEntity.get<Transform>('Transform');
 
         if (!resource || !resourceTransform || resource.isDepleted()) {
-          unit.gatherTargetId = null;
+          // Resource depleted or destroyed - try to find another nearby resource
           unit.isMining = false;
           unit.miningTimer = 0;
-          unit.state = 'idle';
+
+          const selectable = entity.get<Selectable>('Selectable');
+          const newResource = this.findNearestResource(
+            transform.x,
+            transform.y,
+            resource?.resourceType || 'minerals',
+            selectable?.playerId
+          );
+
+          if (newResource) {
+            // Auto-assign to new resource
+            unit.gatherTargetId = newResource.entityId;
+            unit.moveToPosition(newResource.x, newResource.y);
+            debugResources.log(`[ResourceSystem] Worker ${entity.id} auto-reassigned from depleted resource to ${newResource.entityId}`);
+          } else {
+            // No resources available - go idle
+            unit.gatherTargetId = null;
+            unit.state = 'idle';
+          }
           continue;
         }
 
         const distance = transform.distanceTo(resourceTransform);
 
+        // Get worker's owner for AI speed bonuses and resource crediting
+        const selectable = entity.get<Selectable>('Selectable');
+        const workerId = selectable?.playerId;
+
         // Debug: log distance for all workers periodically
         // DETERMINISM: Use tick-based sampling instead of Math.random() to avoid multiplayer desync
-        const selectable = entity.get<Selectable>('Selectable');
         if (this.game.getCurrentTick() % 100 === 0 && entity.id % 5 === 0) {
-          debugResources.log(`[ResourceSystem] ${selectable?.playerId} worker ${entity.id}: distance=${distance.toFixed(2)}, isMining=${unit.isMining}, gatherTargetId=${unit.gatherTargetId}, targetX=${unit.targetX?.toFixed(1)}, targetY=${unit.targetY?.toFixed(1)}, state=${unit.state}`);
+          debugResources.log(`[ResourceSystem] ${workerId} worker ${entity.id}: distance=${distance.toFixed(2)}, isMining=${unit.isMining}, gatherTargetId=${unit.gatherTargetId}, targetX=${unit.targetX?.toFixed(1)}, targetY=${unit.targetY?.toFixed(1)}, state=${unit.state}`);
         }
 
         // Vespene extractors are 2x2 buildings - workers need larger gathering distance
@@ -320,9 +434,9 @@ export class ResourceSystem extends System {
         if (distance <= gatherDistance) {
           // At resource - start or continue mining
           if (!unit.isMining) {
-            // Start mining
+            // Start mining - use player-specific mining time (AI gets speed bonus)
             unit.isMining = true;
-            unit.miningTimer = MINING_TIME;
+            unit.miningTimer = this.getMiningTimeForPlayer(workerId);
             // Reserve a spot at the resource
             resource.addGatherer(entity.id);
           } else {
@@ -330,7 +444,7 @@ export class ResourceSystem extends System {
             unit.miningTimer -= dt;
             if (unit.miningTimer <= 0) {
               // Mining complete - gather resources
-              this.gatherResource(entity, unit, resource);
+              this.gatherResource(entity, unit, resource, resourceTransform);
               unit.isMining = false;
               unit.miningTimer = 0;
             }
@@ -370,7 +484,8 @@ export class ResourceSystem extends System {
   private gatherResource(
     workerEntity: { id: number },
     unit: Unit,
-    resource: Resource
+    resource: Resource,
+    resourceTransform: Transform
   ): void {
     // Gather the resources (gatherer was already added when mining started)
     const gathered = resource.gather();
@@ -384,10 +499,11 @@ export class ResourceSystem extends System {
     // Remove gatherer - mining complete
     resource.removeGatherer(workerEntity.id);
 
-    // If resource depleted, emit event
+    // If resource depleted, emit event with position for AI expansion tracking
     if (resource.isDepleted()) {
       this.game.eventBus.emit('resource:depleted', {
         resourceType: resource.resourceType,
+        position: { x: resourceTransform.x, y: resourceTransform.y },
       });
     }
   }
@@ -447,16 +563,27 @@ export class ResourceSystem extends System {
     const dropOffRange = buildingHalfWidth + 2.5; // Generous range for reliable drop-off
 
     if (nearestDistance <= dropOffRange) {
-      // At base - deposit resources (only for local player, AI tracks separately)
-      if (workerOwner && isLocalPlayer(workerOwner)) {
-        const store = useGameStore.getState();
-        store.addResources(unit.carryingMinerals, unit.carryingVespene);
-      }
-      // AI resources are tracked internally by AI system
+      // At base - deposit resources
+      const minerals = unit.carryingMinerals;
+      const vespene = unit.carryingVespene;
 
-      this.game.eventBus.emit('resource:gathered', {
-        minerals: unit.carryingMinerals,
-        vespene: unit.carryingVespene,
+      if (workerOwner) {
+        const aiSystem = this.getAISystem();
+        if (aiSystem && aiSystem.isAIPlayer(workerOwner)) {
+          // Credit AI player - this is the ONLY way AI gets resources (simulation-based)
+          aiSystem.creditResources(workerOwner, minerals, vespene);
+        } else if (isLocalPlayer(workerOwner)) {
+          // Credit local human player via game store
+          const store = useGameStore.getState();
+          store.addResources(minerals, vespene);
+        }
+      }
+
+      // Emit event for metrics/UI tracking
+      this.game.eventBus.emit('resource:delivered', {
+        playerId: workerOwner,
+        minerals,
+        vespene,
       });
 
       unit.carryingMinerals = 0;
