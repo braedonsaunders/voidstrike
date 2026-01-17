@@ -1719,8 +1719,19 @@ export class MovementSystem extends System {
           }
         } else {
           if (unit.state === 'gathering') {
-            unit.targetX = null;
-            unit.targetY = null;
+            // FIX: Only clear target if NOT carrying resources
+            // Workers carrying resources need to reach the base for drop-off
+            // ResourceSystem will handle setting new targets after delivery
+            const isCarryingResources = unit.carryingMinerals > 0 || unit.carryingVespene > 0;
+            if (!isCarryingResources) {
+              // At mineral/vespene - clear target, let ResourceSystem handle mining
+              unit.targetX = null;
+              unit.targetY = null;
+              velocity.zero();
+              continue;
+            }
+            // Carrying resources - don't clear target, let ResourceSystem handle delivery
+            // Just zero velocity so we don't overshoot, but keep target for distance checks
             velocity.zero();
             continue;
           }

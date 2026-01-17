@@ -273,6 +273,10 @@
   - Progress-reactive visuals (effects intensify as loading approaches 100%)
   - Sleek UI with gradient title, stage indicators (CORE/RENDER/WORLD/UNITS/SYNC), glowing progress bar
 
+### Worker Resource Delivery Fixes
+- [x] **Workers stuck at mineral delivery** - Workers would get stuck oscillating near the base when trying to deliver resources. Root cause: MovementSystem cleared targetX/targetY when gathering workers arrived at ANY target (including the base edge), but the drop-off range (halfWidth + 2.5) wasn't large enough to account for the arrival threshold (0.8 units). Workers could stop at halfWidth + 2.8 from base center, outside the drop-off range. Fixed by: (1) MovementSystem now only clears targets for gathering workers NOT carrying resources. (2) Increased drop-off range from halfWidth + 2.5 to halfWidth + 3.5 to ensure workers within arrival threshold can still deposit.
+- [x] **AI economy stalled at 0 minerals** - AI couldn't build anything because workers weren't delivering resources due to the above bug. With the fix, AI workers now properly deliver minerals to base.
+
 ### AI & Combat Fixes
 - [x] **Idle unit auto-attack responsiveness** - Idle units now immediately attack enemies within attack range (no throttle delay). Uses dedicated `findImmediateAttackTarget()` for instant response when enemies enter attack range, while throttled sight-range search remains for longer-range target acquisition.
 - [x] **VisionSystem multi-player support** - Changed from hardcoded ['player1', 'ai'] to dynamic player registration, enabling proper 4-AI spectator games.
