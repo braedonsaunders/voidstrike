@@ -34,10 +34,11 @@ import AssetManager from '@/assets/AssetManager';
 /**
  * Get the visual radius of a unit for attack range calculations.
  * Uses the model scale from assets.json (how big the unit LOOKS).
+ * Ships are longer than tall, so multiply by 2 for width approximation.
  */
 function getVisualRadius(unit: Unit): number {
   const modelScale = AssetManager.getUnitScale(unit.unitId);
-  return Math.max(unit.collisionRadius, modelScale * 0.5);
+  return Math.max(unit.collisionRadius, modelScale * 2);
 }
 
 // ==================== SC2-STYLE STEERING CONSTANTS ====================

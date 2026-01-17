@@ -18,12 +18,14 @@ import AssetManager from '@/assets/AssetManager';
  * Get the visual radius of a unit for attack range calculations.
  * Uses the model scale from assets.json (how big the unit LOOKS)
  * rather than just the collision radius (which may be smaller).
+ *
+ * The model scale represents height normalization, but ships are much
+ * longer than tall, so we multiply by 2 to approximate visual width.
  */
 function getVisualRadius(unit: Unit): number {
   const modelScale = AssetManager.getUnitScale(unit.unitId);
-  // Use the larger of collision radius or half the model scale
-  // Model scale of 3.0 means the unit is rendered 3x size, so ~1.5 unit radius
-  return Math.max(unit.collisionRadius, modelScale * 0.5);
+  // Ships and large units are longer than tall - use 2x scale for width approximation
+  return Math.max(unit.collisionRadius, modelScale * 2);
 }
 
 // Static temp vectors to avoid allocations in hot loops
