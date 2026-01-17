@@ -393,6 +393,9 @@ export interface EditorDataProvider {
   /** Validate map connectivity (optional) */
   validateMap?(data: EditorMapData): Promise<ValidationResult>;
 
+  /** Auto-fix connectivity issues (optional) */
+  autoFixMap?(data: EditorMapData): Promise<EditorMapData | null>;
+
   /** Export map to game format (optional, for "save and play") */
   exportForGame?(data: EditorMapData): unknown;
 }

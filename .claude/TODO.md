@@ -512,6 +512,11 @@
 - [x] **Issue display** - Errors and warnings with affected nodes and suggested fixes (e.g., add ramp)
 - [x] **Auto-fix functionality** - Button to automatically add ramps to fix connectivity issues
 - [x] **Real-time feedback** - Loading state during validation, immediate result display
+- [x] **Centralized pathfinding config** - `src/data/pathfinding.config.ts` is single source of truth for:
+  - Recast Navigation navmesh parameters (walkableClimb, walkableSlopeAngle, etc.)
+  - Editor validation thresholds (WALKABLE_CLIMB_ELEVATION)
+  - Terrain generation constants (CLIFF_WALL_THRESHOLD_ELEVATION)
+  - Changing config updates both game pathfinding AND validation automatically
 
 ### Pre-Game Setup
 - [x] Game options menu
