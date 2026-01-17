@@ -37,6 +37,7 @@ const COLORS = {
   killingBlow: '#ff4757', // Vivid red
   healing: '#7bed9f',     // Soft green
   shield: '#70a1ff',      // Sky blue
+  miss: '#888888',        // Gray for misses
 } as const;
 
 // Glow colors (slightly more saturated for bloom effect)
@@ -47,6 +48,7 @@ const GLOW_COLORS = {
   killingBlow: '#ff3838',
   healing: '#2ed573',
   shield: '#1e90ff',
+  miss: '#666666',
 } as const;
 
 // Font settings - sized for visibility and impact
@@ -246,6 +248,14 @@ export class DamageNumberSystem {
         this.markKillingBlow(data.entityId);
       }
     });
+
+    // Listen for combat misses (high-ground miss chance)
+    this.eventBus.on('combat:miss', (data: {
+      targetPos: { x: number; y: number };
+      reason?: string;
+    }) => {
+      this.onMiss(data);
+    });
   }
 
   /**
@@ -290,6 +300,98 @@ export class DamageNumberSystem {
         data.isKillingBlow ?? false
       );
     }
+  }
+
+  /**
+   * Handle combat miss event - show "MISS" text
+   */
+  private onMiss(data: {
+    targetPos: { x: number; y: number };
+    reason?: string;
+  }): void {
+    const terrainHeight = this.getTerrainHeight ? this.getTerrainHeight(data.targetPos.x, data.targetPos.y) : 0;
+    const worldY = terrainHeight + 2 + DAMAGE_NUMBER_HEIGHT_OFFSET;
+
+    // Create a one-off miss text (not consolidated like damage)
+    this.createMissNumber(data.targetPos, worldY);
+  }
+
+  /**
+   * Create a "MISS" floating text
+   */
+  private createMissNumber(
+    pos: { x: number; y: number },
+    worldY: number
+  ): void {
+    // Create text layers
+    const shadow = this.scene.add.text(0, 0, 'MISS', {
+      fontFamily: FONT_FAMILY,
+      fontSize: `${FONT_SIZE}px`,
+      color: '#000000',
+      fontStyle: 'bold',
+    }).setOrigin(0.5).setAlpha(0.5);
+
+    const glow = this.scene.add.text(0, 0, 'MISS', {
+      fontFamily: FONT_FAMILY,
+      fontSize: `${FONT_SIZE}px`,
+      color: GLOW_COLORS.miss,
+      fontStyle: 'bold',
+    }).setOrigin(0.5).setAlpha(0.4);
+
+    const text = this.scene.add.text(0, 0, 'MISS', {
+      fontFamily: FONT_FAMILY,
+      fontSize: `${FONT_SIZE}px`,
+      color: COLORS.miss,
+      fontStyle: 'bold',
+    }).setOrigin(0.5);
+
+    // Add to container
+    this.container.add([shadow, glow, text]);
+
+    // Position and animate
+    const startScale = POP_SCALE;
+    text.setScale(startScale);
+    shadow.setScale(startScale);
+    glow.setScale(startScale);
+
+    // Entrance animation
+    this.scene.tweens.add({
+      targets: [text, shadow, glow],
+      scaleX: 1,
+      scaleY: 1,
+      duration: ENTRANCE_DURATION,
+      ease: 'Back.easeOut',
+    });
+
+    // Float up animation
+    const floatOffset = { y: 0 };
+    this.scene.tweens.add({
+      targets: floatOffset,
+      y: -40,
+      duration: FLOAT_DURATION,
+      ease: 'Quad.easeOut',
+      onUpdate: () => {
+        const screenPos = this.worldToScreen(pos.x, worldY + floatOffset.y * 0.02, pos.y);
+        if (screenPos) {
+          text.setPosition(screenPos.x, screenPos.y);
+          shadow.setPosition(screenPos.x + 1, screenPos.y + 1);
+          glow.setPosition(screenPos.x, screenPos.y);
+        }
+      },
+    });
+
+    // Fade out and destroy
+    this.scene.tweens.add({
+      targets: [text, shadow, glow],
+      alpha: 0,
+      duration: FADE_DURATION,
+      delay: FLOAT_DURATION - FADE_DURATION,
+      onComplete: () => {
+        text.destroy();
+        shadow.destroy();
+        glow.destroy();
+      },
+    });
   }
 
   /**

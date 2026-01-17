@@ -26,6 +26,7 @@ import { GameStateSystem } from '../systems/GameStateSystem';
 import { SaveLoadSystem } from '../systems/SaveLoadSystem';
 import { PathfindingSystem } from '../systems/PathfindingSystem';
 import { AIMicroSystem } from '../systems/AIMicroSystem';
+import { WallSystem } from '../systems/WallSystem';
 import { RecastNavigation } from '../pathfinding/RecastNavigation';
 import { getLocalPlayerId } from '@/store/gameSetupStore';
 import { PerformanceMonitor } from './PerformanceMonitor';
@@ -357,6 +358,7 @@ export class Game {
     this.world.addSystem(this.selectionSystem);
     this.world.addSystem(this.pathfindingSystem); // Dynamic pathfinding with obstacle detection
     this.world.addSystem(new BuildingMechanicsSystem(this)); // Lift-off, Addons, Building attacks
+    this.world.addSystem(new WallSystem(this)); // Wall connections, gates, shields
     this.world.addSystem(new UnitMechanicsSystem(this)); // Transform, Cloak, Transport, Heal, Repair
     this.world.addSystem(new MovementSystem(this));
     this.world.addSystem(new CombatSystem(this));
@@ -1040,6 +1042,9 @@ export class Game {
       case 'ATTACK':
         this.eventBus.emit('command:attack', command);
         break;
+      case 'ATTACK_MOVE':
+        this.eventBus.emit('command:attackMove', command);
+        break;
       case 'BUILD':
         this.eventBus.emit('command:build', command);
         break;
@@ -1220,6 +1225,7 @@ export interface GameCommand {
   type:
     | 'MOVE'
     | 'ATTACK'
+    | 'ATTACK_MOVE'
     | 'BUILD'
     | 'TRAIN'
     | 'ABILITY'
