@@ -607,6 +607,13 @@
 - [x] SC2-style worker construction - Workers wander inside building footprint during active construction
 - [x] Scaffolding visibility fix - Yellow scaffolding only visible during ACTIVE construction (not paused/waiting)
 
+### Addon System Implementation (January 2026)
+- [x] Production Module (Reactor) button added to CommandCard UI
+- [x] Addons now build over time instead of instantly (18s for Tech Lab, 36s for Reactor)
+- [x] Addons auto-construct without workers (SC2 style)
+- [x] Reactor double-production implemented - Halved build time for reactor-eligible units
+- [x] Tech Lab unlocks advanced units (breacher, operative, devastator, colossus, etc.)
+
 ### Visual Polish
 - [ ] Unit wireframes (damage state)
 - [x] Building placement ghost - SC2-style grid + ghost preview when placing
