@@ -873,8 +873,12 @@ export class BuildingPlacementSystem extends System {
     this.cancelOrphanedBlueprints();
   }
 
+  // Track worker wander state for SC2-style construction movement
+  private workerWanderState: Map<number, { targetX: number; targetY: number; timer: number }> = new Map();
+
   /**
    * Handle workers moving to and arriving at construction sites
+   * SC2-style: Workers move around inside the building footprint while constructing
    */
   private updateWorkerConstruction(dt: number): void {
     const workers = this.world.getEntitiesWith('Unit', 'Transform');
@@ -885,6 +889,8 @@ export class BuildingPlacementSystem extends System {
       if (!unit || !transform) continue;
 
       if (unit.state !== 'building' || unit.constructingBuildingId === null) {
+        // Clean up wander state for workers no longer constructing
+        this.workerWanderState.delete(entity.id);
         continue;
       }
 
@@ -893,6 +899,7 @@ export class BuildingPlacementSystem extends System {
       if (!buildingEntity) {
         // Building was destroyed or cancelled
         unit.cancelBuilding();
+        this.workerWanderState.delete(entity.id);
         continue;
       }
 
@@ -904,15 +911,58 @@ export class BuildingPlacementSystem extends System {
       const dy = transform.y - buildingTransform.y;
       const distance = Math.sqrt(dx * dx + dy * dy);
 
-      if (distance <= this.CONSTRUCTION_RANGE + building.width / 2) {
-        // Worker has arrived - stop moving and construct
+      // SC2-style: Move inside building footprint when actively constructing
+      const isCloseEnough = distance <= this.CONSTRUCTION_RANGE + building.width / 2;
+
+      if (isCloseEnough && building.state === 'constructing') {
+        // Worker is actively constructing - move around inside the building
+        let wander = this.workerWanderState.get(entity.id);
+
+        // Initialize or update wander target
+        if (!wander || wander.timer <= 0) {
+          // Pick new random position inside building footprint
+          const halfW = building.width * 0.35;
+          const halfH = building.height * 0.35;
+          const newX = buildingTransform.x + (Math.random() - 0.5) * halfW * 2;
+          const newY = buildingTransform.y + (Math.random() - 0.5) * halfH * 2;
+          wander = {
+            targetX: newX,
+            targetY: newY,
+            timer: 0.8 + Math.random() * 1.2, // Wander to new spot every 0.8-2 seconds
+          };
+          this.workerWanderState.set(entity.id, wander);
+        }
+
+        // Update timer
+        wander.timer -= dt;
+
+        // Move towards wander target at slow speed
+        const wanderDx = wander.targetX - transform.x;
+        const wanderDy = wander.targetY - transform.y;
+        const wanderDist = Math.sqrt(wanderDx * wanderDx + wanderDy * wanderDy);
+
+        if (wanderDist > 0.3) {
+          // Move slowly inside building (1/3 normal speed)
+          const wanderSpeed = unit.speed * 0.33 * dt;
+          transform.x += (wanderDx / wanderDist) * Math.min(wanderSpeed, wanderDist);
+          transform.y += (wanderDy / wanderDist) * Math.min(wanderSpeed, wanderDist);
+        }
+
+        // Clear pathfinding targets (handled manually here)
         unit.targetX = null;
         unit.targetY = null;
         unit.currentSpeed = 0;
+      } else if (isCloseEnough) {
+        // Worker has arrived but construction not active - just wait
+        unit.targetX = null;
+        unit.targetY = null;
+        unit.currentSpeed = 0;
+        this.workerWanderState.delete(entity.id);
       } else {
         // Keep moving towards building
         unit.targetX = buildingTransform.x;
         unit.targetY = buildingTransform.y;
+        this.workerWanderState.delete(entity.id);
       }
     }
   }

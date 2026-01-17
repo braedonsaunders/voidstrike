@@ -595,6 +595,12 @@
 - [x] Thruster effects on all flyable buildings (headquarters, orbital_station, infantry_bay, forge, hangar)
 - [x] Engine exhaust and smoke trail effects during flight
 
+### Building Placement SC2 Polish (January 2026)
+- [x] Fixed green/blue preview offset - Grid tiles now properly centered on building footprint
+- [x] Fixed blueprint persistence bug - Preview clears on invalid placement without shift key
+- [x] SC2-style worker construction - Workers wander inside building footprint during active construction
+- [x] Scaffolding visibility fix - Yellow scaffolding only visible during ACTIVE construction (not paused/waiting)
+
 ### Visual Polish
 - [ ] Unit wireframes (damage state)
 - [x] Building placement ghost - SC2-style grid + ghost preview when placing
