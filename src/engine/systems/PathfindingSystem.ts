@@ -468,11 +468,14 @@ export class PathfindingSystem extends System {
       // 2. Worker tries to path to building center (blocked)
       // 3. Path fails, worker's building assignment incorrectly cancelled
     } else if (unit.state === 'gathering') {
+      // FIX: Same as building workers - don't cancel gather assignments when path fails!
+      // ResourceSystem will keep setting the target, and the worker will eventually
+      // path to a nearby walkable point or use direct movement.
+      // Only clear targetX/targetY so a new path can be requested on next update.
       unit.targetX = null;
       unit.targetY = null;
-      unit.gatherTargetId = null;
-      unit.isMining = false;
-      unit.state = 'idle';
+      // DON'T clear gatherTargetId - let ResourceSystem reassign the target
+      // DON'T change state to idle - worker should keep trying to gather
     } else {
       unit.targetX = null;
       unit.targetY = null;
@@ -586,11 +589,11 @@ export class PathfindingSystem extends System {
           // BuildingPlacementSystem will handle detecting if building is orphaned.
           // The building center being far doesn't mean the construction site is unreachable.
         } else if (unit.state === 'gathering') {
+          // FIX: Same as building workers - don't cancel gather assignments.
+          // ResourceSystem will keep reassigning targets and workers will use direct movement.
           unit.targetX = null;
           unit.targetY = null;
-          unit.gatherTargetId = null;
-          unit.isMining = false;
-          unit.state = 'idle';
+          // DON'T clear gatherTargetId or change state
         } else {
           unit.targetX = null;
           unit.targetY = null;
