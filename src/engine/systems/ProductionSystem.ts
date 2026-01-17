@@ -103,12 +103,12 @@ export class ProductionSystem extends System {
 
     // Check resources
     if (store.minerals < unitDef.mineralCost) {
-      this.game.eventBus.emit('ui:error', { message: 'Not enough minerals' });
+      this.game.eventBus.emit('alert:notEnoughMinerals', {});
       this.game.eventBus.emit('warning:lowMinerals', {});
       return;
     }
     if (store.vespene < unitDef.vespeneCost) {
-      this.game.eventBus.emit('ui:error', { message: 'Not enough vespene' });
+      this.game.eventBus.emit('alert:notEnoughVespene', {});
       this.game.eventBus.emit('warning:lowVespene', {});
       return;
     }
@@ -194,12 +194,12 @@ export class ProductionSystem extends System {
 
     // Check resources
     if (store.minerals < upgradeDef.mineralCost) {
-      this.game.eventBus.emit('ui:error', { message: 'Not enough minerals' });
+      this.game.eventBus.emit('alert:notEnoughMinerals', {});
       this.game.eventBus.emit('warning:lowMinerals', {});
       return;
     }
     if (store.vespene < upgradeDef.vespeneCost) {
-      this.game.eventBus.emit('ui:error', { message: 'Not enough vespene' });
+      this.game.eventBus.emit('alert:notEnoughVespene', {});
       this.game.eventBus.emit('warning:lowVespene', {});
       return;
     }

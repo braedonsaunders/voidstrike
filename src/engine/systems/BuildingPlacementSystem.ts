@@ -91,8 +91,14 @@ export class BuildingPlacementSystem extends System {
 
     // Check resources
     if (isPlayerLocal) {
-      if (store.minerals < totalCost.minerals || store.vespene < totalCost.vespene) {
-        this.game.eventBus.emit('ui:error', { message: 'Not enough resources for wall line', playerId });
+      if (store.minerals < totalCost.minerals) {
+        this.game.eventBus.emit('alert:notEnoughMinerals', {});
+        this.game.eventBus.emit('warning:lowMinerals', {});
+        return;
+      }
+      if (store.vespene < totalCost.vespene) {
+        this.game.eventBus.emit('alert:notEnoughVespene', {});
+        this.game.eventBus.emit('warning:lowVespene', {});
         return;
       }
     }
@@ -272,8 +278,14 @@ export class BuildingPlacementSystem extends System {
 
     // Check resources (only for local player - AI handles its own resources)
     if (isPlayerLocal) {
-      if (store.minerals < definition.mineralCost || store.vespene < definition.vespeneCost) {
-        this.game.eventBus.emit('ui:error', { message: 'Not enough resources', playerId });
+      if (store.minerals < definition.mineralCost) {
+        this.game.eventBus.emit('alert:notEnoughMinerals', {});
+        this.game.eventBus.emit('warning:lowMinerals', {});
+        return;
+      }
+      if (store.vespene < definition.vespeneCost) {
+        this.game.eventBus.emit('alert:notEnoughVespene', {});
+        this.game.eventBus.emit('warning:lowVespene', {});
         return;
       }
     }
@@ -664,8 +676,14 @@ export class BuildingPlacementSystem extends System {
     const store = useGameStore.getState();
     const isPlayerLocal = isLocalPlayer(playerId);
     if (isPlayerLocal) {
-      if (store.minerals < addonDef.mineralCost || store.vespene < addonDef.vespeneCost) {
-        this.game.eventBus.emit('ui:error', { message: 'Not enough resources', playerId });
+      if (store.minerals < addonDef.mineralCost) {
+        this.game.eventBus.emit('alert:notEnoughMinerals', {});
+        this.game.eventBus.emit('warning:lowMinerals', {});
+        return;
+      }
+      if (store.vespene < addonDef.vespeneCost) {
+        this.game.eventBus.emit('alert:notEnoughVespene', {});
+        this.game.eventBus.emit('warning:lowVespene', {});
         return;
       }
     }
