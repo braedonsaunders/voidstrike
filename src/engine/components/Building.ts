@@ -48,6 +48,7 @@ export interface ProductionQueueItem {
   buildTime: number;
   supplyCost: number; // Supply cost for this item (0 for upgrades)
   supplyAllocated: boolean; // Whether supply has been allocated for this item
+  produceCount: number; // Number of units to produce (2 for reactor bonus)
 }
 
 export class Building extends Component {
@@ -262,7 +263,7 @@ export class Building extends Component {
     return this.state === 'complete' || this.state === 'lifting' || this.state === 'flying' || this.state === 'landing';
   }
 
-  public addToProductionQueue(type: 'unit' | 'upgrade', id: string, buildTime: number, supplyCost: number = 0): void {
+  public addToProductionQueue(type: 'unit' | 'upgrade', id: string, buildTime: number, supplyCost: number = 0, produceCount: number = 1): void {
     this.productionQueue.push({
       type,
       id,
@@ -270,6 +271,7 @@ export class Building extends Component {
       buildTime,
       supplyCost,
       supplyAllocated: false,
+      produceCount,
     });
   }
 

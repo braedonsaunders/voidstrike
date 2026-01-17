@@ -102,10 +102,13 @@ export interface UnitDefinition {
 
 // Command queue entry for shift-click queuing
 export interface QueuedCommand {
-  type: 'move' | 'attack' | 'attackmove' | 'patrol' | 'gather';
+  type: 'move' | 'attack' | 'attackmove' | 'patrol' | 'gather' | 'build';
   targetX?: number;
   targetY?: number;
   targetEntityId?: number;
+  // For build commands
+  buildingType?: string;
+  buildingEntityId?: number; // Entity ID of already-placed blueprint
 }
 
 export class Unit extends Component {
@@ -159,6 +162,9 @@ export class Unit extends Component {
   public buildTargetX: number | null; // Target position to build at
   public buildTargetY: number | null;
   public buildingType: string | null; // Type of building to construct
+  public isHelperWorker: boolean; // True if this worker auto-assisted (not primary builder)
+  public returnPositionX: number | null; // Position to return to after helping
+  public returnPositionY: number | null;
 
   // Wall line construction - workers build multiple wall segments efficiently
   public wallLineId: number | null; // Unique ID for the wall line this worker is assigned to
@@ -261,6 +267,9 @@ export class Unit extends Component {
     this.buildTargetX = null;
     this.buildTargetY = null;
     this.buildingType = null;
+    this.isHelperWorker = false;
+    this.returnPositionX = null;
+    this.returnPositionY = null;
 
     // Wall line construction
     this.wallLineId = null;
@@ -437,6 +446,24 @@ export class Unit extends Component {
       case 'gather':
         if (command.targetEntityId !== undefined) {
           this.setGatherTarget(command.targetEntityId);
+        }
+        break;
+      case 'build':
+        if (command.buildingEntityId !== undefined && command.targetX !== undefined && command.targetY !== undefined) {
+          // Resume construction on an existing blueprint
+          this.constructingBuildingId = command.buildingEntityId;
+          this.buildTargetX = command.targetX;
+          this.buildTargetY = command.targetY;
+          this.buildingType = command.buildingType ?? null;
+          this.state = 'building';
+          this.targetX = command.targetX;
+          this.targetY = command.targetY;
+          this.path = [];
+          this.pathIndex = 0;
+          this.gatherTargetId = null;
+          this.carryingMinerals = 0;
+          this.carryingVespene = 0;
+          this.isHelperWorker = false; // Queued builds are intentional, not auto-help
         }
         break;
     }
@@ -688,6 +715,9 @@ export class Unit extends Component {
     this.state = 'idle';
     this.targetX = null;
     this.targetY = null;
+    this.isHelperWorker = false;
+    this.returnPositionX = null;
+    this.returnPositionY = null;
   }
 
   // Check if worker is actively constructing (near building site)

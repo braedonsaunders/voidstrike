@@ -552,8 +552,9 @@ export function WebGPUGameCanvas() {
         return false;
       });
       // Connect placement preview to game's validation for accurate preview
+      // Skip unit check - units will be pushed away when building is placed
       placementPreviewRef.current.setPlacementValidator((centerX, centerY, width, height) => {
-        return game.isValidBuildingPlacement(centerX, centerY, width, height);
+        return game.isValidBuildingPlacement(centerX, centerY, width, height, undefined, true);
       });
       scene.add(placementPreviewRef.current.group);
 
@@ -562,8 +563,9 @@ export function WebGPUGameCanvas() {
         CURRENT_MAP,
         (x, y) => terrain.getHeightAt(x, y)
       );
+      // Skip unit check - units will be pushed away when building is placed
       wallPlacementPreviewRef.current.setPlacementValidator((x, y, w, h) => {
-        return game.isValidBuildingPlacement(x, y, w, h);
+        return game.isValidBuildingPlacement(x, y, w, h, undefined, true);
       });
       scene.add(wallPlacementPreviewRef.current.group);
 
@@ -1270,11 +1272,26 @@ export function WebGPUGameCanvas() {
     };
   }, []);
 
+  // Helper to convert mouse coordinates to container-relative coordinates
+  // Critical for DevTools docking and any case where canvas doesn't fill viewport
+  const getContainerCoords = useCallback((e: React.MouseEvent | MouseEvent): { x: number; y: number } => {
+    if (containerRef.current) {
+      const rect = containerRef.current.getBoundingClientRect();
+      return {
+        x: e.clientX - rect.left,
+        y: e.clientY - rect.top,
+      };
+    }
+    // Fallback to raw clientX/clientY if container not available
+    return { x: e.clientX, y: e.clientY };
+  }, []);
+
   // Mouse handlers (same as HybridGameCanvas)
   const handleMouseDown = useCallback((e: React.MouseEvent) => {
+    const coords = getContainerCoords(e);
     if (e.button === 0) {
       if (commandTargetMode === 'attack') {
-        const worldPos = cameraRef.current?.screenToWorld(e.clientX, e.clientY);
+        const worldPos = cameraRef.current?.screenToWorld(coords.x, coords.y);
         if (worldPos && gameRef.current) {
           const selectedUnits = useGameStore.getState().selectedUnits;
           const localPlayer = getLocalPlayerId();
@@ -1286,11 +1303,16 @@ export function WebGPUGameCanvas() {
               entityIds: selectedUnits,
               targetPosition: { x: worldPos.x, y: worldPos.z },
             });
+            // Visual feedback for attack-ground command
+            gameRef.current.eventBus.emit('command:attackGround', {
+              targetPosition: { x: worldPos.x, y: worldPos.z },
+              playerId: localPlayer,
+            });
           }
         }
         if (!e.shiftKey) useGameStore.getState().setCommandTargetMode(null);
       } else if (commandTargetMode === 'patrol') {
-        const worldPos = cameraRef.current?.screenToWorld(e.clientX, e.clientY);
+        const worldPos = cameraRef.current?.screenToWorld(coords.x, coords.y);
         if (worldPos && gameRef.current) {
           const selectedUnits = useGameStore.getState().selectedUnits;
           const localPlayer = getLocalPlayerId();
@@ -1306,7 +1328,7 @@ export function WebGPUGameCanvas() {
         }
         useGameStore.getState().setCommandTargetMode(null);
       } else if (commandTargetMode === 'move') {
-        const worldPos = cameraRef.current?.screenToWorld(e.clientX, e.clientY);
+        const worldPos = cameraRef.current?.screenToWorld(coords.x, coords.y);
         if (worldPos && gameRef.current) {
           const selectedUnits = useGameStore.getState().selectedUnits;
           const localPlayer = getLocalPlayerId();
@@ -1318,11 +1340,16 @@ export function WebGPUGameCanvas() {
               entityIds: selectedUnits,
               targetPosition: { x: worldPos.x, y: worldPos.z },
             });
+            // Visual feedback for move command
+            gameRef.current.eventBus.emit('command:moveGround', {
+              targetPosition: { x: worldPos.x, y: worldPos.z },
+              playerId: localPlayer,
+            });
           }
         }
         if (!e.shiftKey) useGameStore.getState().setCommandTargetMode(null);
       } else if (abilityTargetMode) {
-        const worldPos = cameraRef.current?.screenToWorld(e.clientX, e.clientY);
+        const worldPos = cameraRef.current?.screenToWorld(coords.x, coords.y);
         if (worldPos && gameRef.current) {
           const selectedUnits = useGameStore.getState().selectedUnits;
           const clickedEntity = findEntityAtPosition(gameRef.current, worldPos.x, worldPos.z);
@@ -1343,7 +1370,7 @@ export function WebGPUGameCanvas() {
         useGameStore.getState().setAbilityTargetMode(null);
       } else if (isWallPlacementMode) {
         // Wall placement mode - start drag to place wall line
-        const worldPos = cameraRef.current?.screenToWorld(e.clientX, e.clientY);
+        const worldPos = cameraRef.current?.screenToWorld(coords.x, coords.y);
         if (worldPos && wallPlacementPreviewRef.current) {
           wallPlacementPreviewRef.current.startLine(worldPos.x, worldPos.z);
         }
@@ -1399,7 +1426,7 @@ export function WebGPUGameCanvas() {
         }
       } else if (isBattleSimulatorMode()) {
         // In battle simulator, left-click emits spawn event for the panel
-        const worldPos = cameraRef.current?.screenToWorld(e.clientX, e.clientY);
+        const worldPos = cameraRef.current?.screenToWorld(coords.x, coords.y);
         if (worldPos && gameRef.current) {
           gameRef.current.eventBus.emit('simulator:spawn', {
             worldX: worldPos.x,
@@ -1408,13 +1435,13 @@ export function WebGPUGameCanvas() {
         }
       } else {
         setIsSelecting(true);
-        setSelectionStart({ x: e.clientX, y: e.clientY });
-        setSelectionEnd({ x: e.clientX, y: e.clientY });
+        setSelectionStart({ x: coords.x, y: coords.y });
+        setSelectionEnd({ x: coords.x, y: coords.y });
       }
     } else if (e.button === 2) {
       handleRightClick(e);
     }
-  }, [isBuilding, buildingType, commandTargetMode, isSettingRallyPoint, isRepairMode, isLandingMode, landingBuildingId, abilityTargetMode, isWallPlacementMode]);
+  }, [isBuilding, buildingType, commandTargetMode, isSettingRallyPoint, isRepairMode, isLandingMode, landingBuildingId, abilityTargetMode, isWallPlacementMode, getContainerCoords]);
 
   const handleRightClick = (e: React.MouseEvent) => {
     // Right-click cancels command modes (alternative to ESC, especially useful in fullscreen)
@@ -1436,7 +1463,8 @@ export function WebGPUGameCanvas() {
       return;
     }
 
-    const worldPos = cameraRef.current?.screenToWorld(e.clientX, e.clientY);
+    const coords = getContainerCoords(e);
+    const worldPos = cameraRef.current?.screenToWorld(coords.x, coords.y);
     if (!worldPos || !gameRef.current) return;
 
     const selectedUnits = useGameStore.getState().selectedUnits;
@@ -1629,6 +1657,11 @@ export function WebGPUGameCanvas() {
             entityIds: unitIds,
             targetPosition: { x: worldPos.x, y: worldPos.z },
           });
+          // Visual feedback for move command
+          game.eventBus.emit('command:moveGround', {
+            targetPosition: { x: worldPos.x, y: worldPos.z },
+            playerId: localPlayer,
+          });
         }
       }
     }
@@ -1677,13 +1710,14 @@ export function WebGPUGameCanvas() {
   };
 
   const handleMouseMove = useCallback((e: React.MouseEvent) => {
+    const coords = getContainerCoords(e);
     if (isSelecting) {
-      setSelectionEnd({ x: e.clientX, y: e.clientY });
+      setSelectionEnd({ x: coords.x, y: coords.y });
     }
 
     // Wall placement mode - update wall line preview while dragging
     if (isWallPlacementMode && wallPlacementPreviewRef.current && cameraRef.current) {
-      const worldPos = cameraRef.current.screenToWorld(e.clientX, e.clientY);
+      const worldPos = cameraRef.current.screenToWorld(coords.x, coords.y);
       if (worldPos) {
         wallPlacementPreviewRef.current.updateLine(worldPos.x, worldPos.z);
       }
@@ -1692,15 +1726,16 @@ export function WebGPUGameCanvas() {
     // Update placement preview for both building mode and landing mode
     if (placementPreviewRef.current && cameraRef.current) {
       if ((isBuilding && buildingType) || isLandingMode) {
-        const worldPos = cameraRef.current.screenToWorld(e.clientX, e.clientY);
+        const worldPos = cameraRef.current.screenToWorld(coords.x, coords.y);
         if (worldPos) {
           placementPreviewRef.current.updatePosition(worldPos.x, worldPos.z);
         }
       }
     }
-  }, [isSelecting, isBuilding, buildingType, isLandingMode, isWallPlacementMode]);
+  }, [isSelecting, isBuilding, buildingType, isLandingMode, isWallPlacementMode, getContainerCoords]);
 
   const handleMouseUp = useCallback((e: React.MouseEvent) => {
+    const coords = getContainerCoords(e);
     // Handle wall placement finish
     if (e.button === 0 && isWallPlacementMode && wallPlacementPreviewRef.current?.isCurrentlyDrawing()) {
       const result = wallPlacementPreviewRef.current.finishLine();
@@ -1757,20 +1792,20 @@ export function WebGPUGameCanvas() {
 
           if (lastClickRef.current) {
             const timeDiff = now - lastClickRef.current.time;
-            const clickDx = Math.abs(e.clientX - lastClickRef.current.x);
-            const clickDy = Math.abs(e.clientY - lastClickRef.current.y);
+            const clickDx = Math.abs(coords.x - lastClickRef.current.x);
+            const clickDy = Math.abs(coords.y - lastClickRef.current.y);
 
             isDoubleClick = timeDiff < DOUBLE_CLICK_TIME &&
                            clickDx < DOUBLE_CLICK_DIST &&
                            clickDy < DOUBLE_CLICK_DIST;
           }
 
-          lastClickRef.current = { time: now, x: e.clientX, y: e.clientY };
+          lastClickRef.current = { time: now, x: coords.x, y: coords.y };
 
           // Use screen-space click selection for accurate flying unit handling
           game.eventBus.emit('selection:clickScreen', {
-            screenX: e.clientX,
-            screenY: e.clientY,
+            screenX: coords.x,
+            screenY: coords.y,
             additive: e.shiftKey,
             selectAllOfType: e.ctrlKey || isDoubleClick,
             playerId: getLocalPlayerId(),
@@ -1778,7 +1813,7 @@ export function WebGPUGameCanvas() {
         }
       }
     }
-  }, [isSelecting, selectionStart, selectionEnd, isWallPlacementMode]);
+  }, [isSelecting, selectionStart, selectionEnd, isWallPlacementMode, getContainerCoords]);
 
   const handleContextMenu = useCallback((e: React.MouseEvent) => {
     e.preventDefault();
@@ -1791,7 +1826,8 @@ export function WebGPUGameCanvas() {
     if (!isSelecting) return;
 
     const handleDocumentMouseMove = (e: MouseEvent) => {
-      setSelectionEnd({ x: e.clientX, y: e.clientY });
+      const coords = getContainerCoords(e);
+      setSelectionEnd({ x: coords.x, y: coords.y });
     };
 
     const handleDocumentMouseUp = (e: MouseEvent) => {
@@ -1802,9 +1838,10 @@ export function WebGPUGameCanvas() {
       const game = gameRef.current;
       if (!game) return;
 
-      // Use the final mouse position for the selection end
-      const finalEndX = e.clientX;
-      const finalEndY = e.clientY;
+      // Use the final mouse position for the selection end (container-relative)
+      const coords = getContainerCoords(e);
+      const finalEndX = coords.x;
+      const finalEndY = coords.y;
 
       // Calculate screen-space box size
       const screenDx = Math.abs(finalEndX - selectionStart.x);
@@ -1831,20 +1868,20 @@ export function WebGPUGameCanvas() {
 
         if (lastClickRef.current) {
           const timeDiff = now - lastClickRef.current.time;
-          const clickDx = Math.abs(e.clientX - lastClickRef.current.x);
-          const clickDy = Math.abs(e.clientY - lastClickRef.current.y);
+          const clickDx = Math.abs(coords.x - lastClickRef.current.x);
+          const clickDy = Math.abs(coords.y - lastClickRef.current.y);
 
           isDoubleClick = timeDiff < DOUBLE_CLICK_TIME &&
                          clickDx < DOUBLE_CLICK_DIST &&
                          clickDy < DOUBLE_CLICK_DIST;
         }
 
-        lastClickRef.current = { time: now, x: e.clientX, y: e.clientY };
+        lastClickRef.current = { time: now, x: coords.x, y: coords.y };
 
         // Use screen-space click selection for accurate flying unit handling
         game.eventBus.emit('selection:clickScreen', {
-          screenX: e.clientX,
-          screenY: e.clientY,
+          screenX: coords.x,
+          screenY: coords.y,
           additive: e.shiftKey,
           selectAllOfType: e.ctrlKey || isDoubleClick,
           playerId: getLocalPlayerId(),
@@ -1860,7 +1897,7 @@ export function WebGPUGameCanvas() {
       document.removeEventListener('mousemove', handleDocumentMouseMove);
       document.removeEventListener('mouseup', handleDocumentMouseUp);
     };
-  }, [isSelecting, selectionStart]);
+  }, [isSelecting, selectionStart, getContainerCoords]);
 
   // Building placement preview
   useEffect(() => {

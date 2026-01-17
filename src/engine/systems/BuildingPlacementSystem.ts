@@ -161,6 +161,9 @@ export class BuildingPlacementSystem extends System {
 
       placedWalls.push({ entityId: wallEntity.id, x: pos.x, y: pos.y });
 
+      // Push any units out of the wall footprint
+      this.pushUnitsFromBuilding(pos.x, pos.y, definition.width, definition.height);
+
       // Emit placement event
       this.game.eventBus.emit('wall:placed', {
         entityId: wallEntity.id,
@@ -425,6 +428,9 @@ export class BuildingPlacementSystem extends System {
       buildingComp.linkedResourceId = vespeneGeyserEntity.id;
       debugBuildingPlacement.log(`BuildingPlacementSystem: Extractor ${buildingEntity.id} associated with vespene geyser ${vespeneGeyserEntity.id}`);
     }
+
+    // Push any units out of the building footprint
+    this.pushUnitsFromBuilding(snappedX, snappedY, definition.width, definition.height, worker.entity.id);
 
     // Assign the worker to this construction
     const workerUnit = worker.entity.get<Unit>('Unit')!;
@@ -811,13 +817,14 @@ export class BuildingPlacementSystem extends System {
   /**
    * Release all workers assigned to a building
    * For walls: supports auto-continue to next unfinished segment in the wall line
+   * For other buildings: Primary workers check for queued build commands, helper workers return to original position
    */
   private releaseWorkersFromBuilding(buildingEntityId: number): void {
     const workers = this.world.getEntitiesWith('Unit', 'Transform');
 
     for (const entity of workers) {
       const unit = entity.get<Unit>('Unit')!;
-      const workerTransform = entity.get<Transform>('Transform')!;
+      const transform = entity.get<Transform>('Transform')!;
 
       if (unit.constructingBuildingId === buildingEntityId) {
         // Check if this worker has wall line segments for auto-continue
@@ -826,8 +833,8 @@ export class BuildingPlacementSystem extends System {
           const nextSegment = this.findNextUnfinishedWallSegment(
             unit.wallLineSegments,
             buildingEntityId,
-            workerTransform.x,
-            workerTransform.y
+            transform.x,
+            transform.y
           );
 
           if (nextSegment) {
@@ -851,8 +858,45 @@ export class BuildingPlacementSystem extends System {
           }
         }
 
-        unit.cancelBuilding();
-        debugBuildingPlacement.log(`Worker ${entity.id} released from construction`);
+        // Check if this is a helper worker that should return to their original position
+        if (unit.isHelperWorker && unit.returnPositionX !== null && unit.returnPositionY !== null) {
+          const returnX = unit.returnPositionX;
+          const returnY = unit.returnPositionY;
+          unit.cancelBuilding();
+          // Move back to original position
+          unit.setMoveTarget(returnX, returnY);
+          debugBuildingPlacement.log(`Helper worker ${entity.id} returning to original position (${returnX.toFixed(1)}, ${returnY.toFixed(1)})`);
+        }
+        // Check if the worker has queued build commands
+        else if (unit.commandQueue.length > 0 && unit.commandQueue[0].type === 'build') {
+          const nextBuild = unit.commandQueue[0];
+          if (nextBuild.buildingEntityId !== undefined) {
+            // Check if the queued building still exists and needs construction
+            const nextBuildingEntity = this.world.getEntity(nextBuild.buildingEntityId);
+            if (nextBuildingEntity) {
+              const nextBuilding = nextBuildingEntity.get<Building>('Building');
+              if (nextBuilding && !nextBuilding.isComplete()) {
+                // Execute the queued build command
+                unit.executeNextCommand();
+                debugBuildingPlacement.log(`Worker ${entity.id} moving to next queued building ${nextBuild.buildingEntityId}`);
+                continue;
+              }
+            }
+            // Building no longer exists or is complete, skip it
+            unit.commandQueue.shift();
+          }
+          // Try to execute remaining commands if any
+          if (unit.commandQueue.length > 0) {
+            unit.cancelBuilding();
+            unit.executeNextCommand();
+          } else {
+            unit.cancelBuilding();
+          }
+          debugBuildingPlacement.log(`Worker ${entity.id} released from construction`);
+        } else {
+          unit.cancelBuilding();
+          debugBuildingPlacement.log(`Worker ${entity.id} released from construction`);
+        }
       }
     }
   }
@@ -931,13 +975,79 @@ export class BuildingPlacementSystem extends System {
     debugBuildingPlacement.log(`BuildingPlacement: Attempting at (${centerX.toFixed(1)}, ${centerY.toFixed(1)}), size ${width}x${height}, map bounds: ${this.game.config.mapWidth}x${this.game.config.mapHeight}`);
 
     // Use the centralized validation from Game class
-    const isValid = this.game.isValidBuildingPlacement(centerX, centerY, width, height, excludeEntityId);
+    // Skip unit check - units will be pushed away after placement
+    const isValid = this.game.isValidBuildingPlacement(centerX, centerY, width, height, excludeEntityId, true);
 
     if (!isValid) {
       debugBuildingPlacement.log(`BuildingPlacement: Failed at (${centerX.toFixed(1)}, ${centerY.toFixed(1)})`);
     }
 
     return isValid;
+  }
+
+  /**
+   * Push all units out of a building footprint.
+   * Units are moved to the nearest edge of the building.
+   */
+  private pushUnitsFromBuilding(centerX: number, centerY: number, width: number, height: number, excludeEntityId?: number): void {
+    const halfW = width / 2 + 0.5; // Add buffer
+    const halfH = height / 2 + 0.5;
+
+    // Query nearby units
+    const nearbyUnitIds = this.world.unitGrid.queryRect(
+      centerX - halfW - 2,
+      centerY - halfH - 2,
+      centerX + halfW + 2,
+      centerY + halfH + 2
+    );
+
+    for (const unitId of nearbyUnitIds) {
+      // Skip the builder worker
+      if (excludeEntityId !== undefined && unitId === excludeEntityId) {
+        continue;
+      }
+
+      const entity = this.world.getEntity(unitId);
+      if (!entity) continue;
+
+      const transform = entity.get<Transform>('Transform');
+      const unit = entity.get<Unit>('Unit');
+      if (!transform || !unit) continue;
+
+      const dx = transform.x - centerX;
+      const dy = transform.y - centerY;
+
+      // Check if unit is inside building footprint
+      if (Math.abs(dx) < halfW && Math.abs(dy) < halfH) {
+        // Calculate push direction - move to nearest edge
+        const pushDistX = halfW - Math.abs(dx);
+        const pushDistY = halfH - Math.abs(dy);
+
+        let pushX = 0;
+        let pushY = 0;
+
+        if (pushDistX < pushDistY) {
+          // Closer to left/right edge
+          pushX = dx >= 0 ? halfW + 0.5 : -halfW - 0.5;
+          pushY = dy;
+        } else {
+          // Closer to top/bottom edge
+          pushX = dx;
+          pushY = dy >= 0 ? halfH + 0.5 : -halfH - 0.5;
+        }
+
+        const newX = centerX + pushX;
+        const newY = centerY + pushY;
+
+        // Clamp to map bounds
+        const clampedX = Math.max(1, Math.min(this.game.config.mapWidth - 1, newX));
+        const clampedY = Math.max(1, Math.min(this.game.config.mapHeight - 1, newY));
+
+        // Move the unit
+        unit.setMoveTarget(clampedX, clampedY);
+        debugBuildingPlacement.log(`Pushed unit ${unitId} from building footprint to (${clampedX.toFixed(1)}, ${clampedY.toFixed(1)})`);
+      }
+    }
   }
 
   /**
@@ -1040,6 +1150,9 @@ export class BuildingPlacementSystem extends System {
 
     // Update construction progress for buildings with workers present
     this.updateBuildingConstruction(dt);
+
+    // Auto-assign nearby idle workers to help with unassigned blueprints
+    this.autoAssignIdleWorkers();
 
     // Cancel orphaned blueprints (buildings with no workers assigned)
     this.cancelOrphanedBlueprints();
@@ -1374,6 +1487,86 @@ export class BuildingPlacementSystem extends System {
     }
 
     return false;
+  }
+
+  // Range within which idle workers will auto-assist with construction
+  private readonly AUTO_ASSIST_RANGE = 15;
+
+  /**
+   * Auto-assign nearby idle workers to help with blueprints that have no workers assigned.
+   * These workers are marked as helpers and will return to their original position when done.
+   */
+  private autoAssignIdleWorkers(): void {
+    const buildings = this.world.getEntitiesWith('Building', 'Transform', 'Selectable');
+    const workers = this.world.getEntitiesWith('Unit', 'Transform', 'Selectable', 'Health');
+
+    for (const buildingEntity of buildings) {
+      const building = buildingEntity.get<Building>('Building')!;
+      const buildingTransform = buildingEntity.get<Transform>('Transform')!;
+      const buildingSelectable = buildingEntity.get<Selectable>('Selectable')!;
+
+      // Only check blueprints that need workers (waiting or paused)
+      if (building.state !== 'waiting_for_worker' && building.state !== 'paused') {
+        continue;
+      }
+
+      // Skip if already has a worker assigned
+      if (this.hasWorkerAssigned(buildingEntity.id)) {
+        continue;
+      }
+
+      // Find a nearby idle worker to auto-assign
+      let closestWorker: Entity | null = null;
+      let closestDistance = this.AUTO_ASSIST_RANGE;
+
+      for (const workerEntity of workers) {
+        const unit = workerEntity.get<Unit>('Unit')!;
+        const workerTransform = workerEntity.get<Transform>('Transform')!;
+        const workerSelectable = workerEntity.get<Selectable>('Selectable')!;
+        const health = workerEntity.get<Health>('Health')!;
+
+        // Must be a worker, same player, idle, and alive
+        if (!unit.isWorker) continue;
+        if (workerSelectable.playerId !== buildingSelectable.playerId) continue;
+        if (unit.state !== 'idle') continue;
+        if (health.isDead()) continue;
+        // Don't auto-assign workers that already have queued commands
+        if (unit.commandQueue.length > 0) continue;
+
+        const dx = workerTransform.x - buildingTransform.x;
+        const dy = workerTransform.y - buildingTransform.y;
+        const distance = Math.sqrt(dx * dx + dy * dy);
+
+        if (distance < closestDistance) {
+          closestDistance = distance;
+          closestWorker = workerEntity;
+        }
+      }
+
+      // Assign the closest idle worker as a helper
+      if (closestWorker) {
+        const unit = closestWorker.get<Unit>('Unit')!;
+        const workerTransform = closestWorker.get<Transform>('Transform')!;
+
+        // Record original position before helping
+        unit.returnPositionX = workerTransform.x;
+        unit.returnPositionY = workerTransform.y;
+        unit.isHelperWorker = true;
+
+        // Assign to construction
+        unit.constructingBuildingId = buildingEntity.id;
+        unit.buildingType = building.buildingId;
+        unit.buildTargetX = buildingTransform.x;
+        unit.buildTargetY = buildingTransform.y;
+        unit.state = 'building';
+        unit.targetX = buildingTransform.x;
+        unit.targetY = buildingTransform.y;
+        unit.path = [];
+        unit.pathIndex = 0;
+
+        debugBuildingPlacement.log(`Auto-assigned idle worker ${closestWorker.id} to help build ${building.name} (will return to ${unit.returnPositionX?.toFixed(1)}, ${unit.returnPositionY?.toFixed(1)})`);
+      }
+    }
   }
 
   /**
