@@ -631,6 +631,10 @@
 ### Visual Polish
 - [ ] Unit wireframes (damage state)
 - [x] Building placement ghost - SC2-style grid + ghost preview when placing
+- [x] Ground click visual feedback - Phaser 2D overlay indicators for move/attack commands:
+  - Move commands: Green expanding ring with inward-pointing chevrons and center dot
+  - Attack-move commands: Red expanding ring with X crosshair pattern
+  - Events: `command:moveGround` and `command:attackGround` emitted from input handlers
 - [x] Production progress bar - Fixed visibility and positioning for buildings producing units
 - [x] Enhanced damage numbers - Glow effects, pop-in animation, horizontal drift, color-coded by damage
 - [x] Premium text alerts - Orbitron font, glow bloom, underline accents, slide animations
