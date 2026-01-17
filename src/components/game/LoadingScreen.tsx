@@ -344,6 +344,8 @@ export function LoadingScreen({ progress, status, onComplete }: LoadingScreenPro
   const visualBrightnessRef = useRef(0);
   const flickerRef = useRef(0);
   const phaseRef = useRef<LoadingPhase>('loading');
+  const brightnessRafRef = useRef<number | null>(null);
+  const fadeRafRef = useRef<number | null>(null);
 
   // Update refs for animation loop
   useEffect(() => {
@@ -392,11 +394,18 @@ export function LoadingScreen({ progress, status, onComplete }: LoadingScreenPro
       setVisualBrightness(eased);
 
       if (t < 1) {
-        requestAnimationFrame(animateBrightness);
+        brightnessRafRef.current = requestAnimationFrame(animateBrightness);
       }
     };
 
-    requestAnimationFrame(animateBrightness);
+    brightnessRafRef.current = requestAnimationFrame(animateBrightness);
+
+    return () => {
+      if (brightnessRafRef.current !== null) {
+        cancelAnimationFrame(brightnessRafRef.current);
+        brightnessRafRef.current = null;
+      }
+    };
   }, []);
 
   // Flicker effect - random subtle brightness variations
@@ -447,7 +456,7 @@ export function LoadingScreen({ progress, status, onComplete }: LoadingScreenPro
       setFadeOpacity(eased);
 
       if (t < 1) {
-        requestAnimationFrame(animateFade);
+        fadeRafRef.current = requestAnimationFrame(animateFade);
       } else {
         // Fade complete - signal completion, Phaser overlay will handle countdown
         setPhase('complete');
@@ -455,7 +464,14 @@ export function LoadingScreen({ progress, status, onComplete }: LoadingScreenPro
       }
     };
 
-    requestAnimationFrame(animateFade);
+    fadeRafRef.current = requestAnimationFrame(animateFade);
+
+    return () => {
+      if (fadeRafRef.current !== null) {
+        cancelAnimationFrame(fadeRafRef.current);
+        fadeRafRef.current = null;
+      }
+    };
   }, [phase, onComplete]);
 
   // Loading stage thresholds
@@ -1001,6 +1017,65 @@ export function LoadingScreen({ progress, status, onComplete }: LoadingScreenPro
       window.removeEventListener('mousemove', handleMouseMove);
       window.removeEventListener('resize', handleResize);
       cancelAnimationFrame(animationRef.current);
+
+      // Dispose star field
+      if (starsRef.current) {
+        starsRef.current.geometry.dispose();
+        (starsRef.current.material as THREE.Material).dispose();
+        scene.remove(starsRef.current);
+        starsRef.current = null;
+      }
+
+      // Dispose nebula
+      if (nebulaRef.current) {
+        nebulaRef.current.geometry.dispose();
+        (nebulaRef.current.material as THREE.Material).dispose();
+        scene.remove(nebulaRef.current);
+        nebulaRef.current = null;
+      }
+
+      // Dispose wormhole
+      if (wormholeRef.current) {
+        wormholeRef.current.geometry.dispose();
+        (wormholeRef.current.material as THREE.Material).dispose();
+        scene.remove(wormholeRef.current);
+        wormholeRef.current = null;
+      }
+
+      // Dispose asteroids
+      for (const asteroid of asteroidsRef.current) {
+        asteroid.mesh.geometry.dispose();
+        (asteroid.mesh.material as THREE.Material).dispose();
+        scene.remove(asteroid.mesh);
+      }
+      asteroidsRef.current = [];
+
+      // Dispose energy rings
+      for (const ring of energyRingsRef.current) {
+        ring.geometry.dispose();
+        (ring.material as THREE.Material).dispose();
+        scene.remove(ring);
+      }
+      energyRingsRef.current = [];
+
+      // Dispose particle system
+      if (particleSystemRef.current) {
+        particleSystemRef.current.geometry.dispose();
+        (particleSystemRef.current.material as THREE.Material).dispose();
+        scene.remove(particleSystemRef.current);
+        particleSystemRef.current = null;
+      }
+
+      // Dispose composer passes
+      if (composerRef.current) {
+        for (const pass of composerRef.current.passes) {
+          if ('dispose' in pass && typeof pass.dispose === 'function') {
+            pass.dispose();
+          }
+        }
+        composerRef.current = null;
+      }
+
       renderer.dispose();
       if (containerRef.current?.contains(renderer.domElement)) {
         containerRef.current.removeChild(renderer.domElement);

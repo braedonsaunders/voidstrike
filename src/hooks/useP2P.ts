@@ -248,11 +248,22 @@ export function useP2P(): UseP2PReturn {
           const iceCandidates: string[] = [];
           await new Promise<void>((resolve) => {
             const timeout = setTimeout(resolve, 3000);
+            const cleanup = () => {
+              clearTimeout(timeout);
+              pc.onicecandidate = null;
+              pc.onicegatheringstatechange = null;
+            };
             pc.onicecandidate = (event) => {
               if (event.candidate) {
                 iceCandidates.push(event.candidate.candidate);
               } else {
-                clearTimeout(timeout);
+                cleanup();
+                resolve();
+              }
+            };
+            pc.onicegatheringstatechange = () => {
+              if (pc.iceGatheringState === 'complete') {
+                cleanup();
                 resolve();
               }
             };
@@ -302,11 +313,22 @@ export function useP2P(): UseP2PReturn {
         const iceCandidates: string[] = [];
         await new Promise<void>((resolve) => {
           const timeout = setTimeout(resolve, 3000);
+          const cleanup = () => {
+            clearTimeout(timeout);
+            pc.onicecandidate = null;
+            pc.onicegatheringstatechange = null;
+          };
           pc.onicecandidate = (event) => {
             if (event.candidate) {
               iceCandidates.push(event.candidate.candidate);
             } else {
-              clearTimeout(timeout);
+              cleanup();
+              resolve();
+            }
+          };
+          pc.onicegatheringstatechange = () => {
+            if (pc.iceGatheringState === 'complete') {
+              cleanup();
               resolve();
             }
           };

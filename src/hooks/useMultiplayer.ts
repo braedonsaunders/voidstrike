@@ -127,13 +127,29 @@ async function gatherICE(pc: RTCPeerConnection, timeout = 3000): Promise<string[
   const candidates: string[] = [];
 
   return new Promise((resolve) => {
-    const timer = setTimeout(() => resolve(candidates), timeout);
+    const timer = setTimeout(() => {
+      cleanup();
+      resolve(candidates);
+    }, timeout);
+
+    const cleanup = () => {
+      clearTimeout(timer);
+      pc.onicecandidate = null;
+      pc.onicegatheringstatechange = null;
+    };
 
     pc.onicecandidate = (e) => {
       if (e.candidate) {
         candidates.push(e.candidate.candidate);
       } else {
-        clearTimeout(timer);
+        cleanup();
+        resolve(candidates);
+      }
+    };
+
+    pc.onicegatheringstatechange = () => {
+      if (pc.iceGatheringState === 'complete') {
+        cleanup();
         resolve(candidates);
       }
     };

@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, useRef } from 'react';
 import { Game } from '@/engine/core/Game';
 import { Unit } from '@/engine/components/Unit';
 import { Transform } from '@/engine/components/Transform';
@@ -14,18 +14,25 @@ export function IdleWorkerButton() {
   const { selectUnits, moveCameraTo, playerId } = useGameStore();
   const isSpectator = useGameSetupStore((state) => state.isSpectator());
 
+  // Cache to avoid redundant scans
+  const lastTickRef = useRef(-1);
+  const cachedCountRef = useRef(0);
+
   // Don't render for spectators
   if (isSpectator) {
     return null;
   }
 
-  // Update idle worker count periodically
+  // Update idle worker count via event-driven approach + throttled polling
   useEffect(() => {
-    const interval = setInterval(() => {
-      const game = Game.getInstance();
-      if (!game) {
-        setIdleWorkerCount(0);
-        return;
+    const game = Game.getInstance();
+    if (!game) return;
+
+    const computeIdleWorkers = () => {
+      const currentTick = game.getCurrentTick();
+      // Skip if already computed for this tick
+      if (currentTick === lastTickRef.current) {
+        return cachedCountRef.current;
       }
 
       const workers = game.world.getEntitiesWith('Unit', 'Transform', 'Selectable');
@@ -44,10 +51,33 @@ export function IdleWorkerButton() {
         }
       }
 
-      setIdleWorkerCount(count);
-    }, 500); // Update every 500ms
+      lastTickRef.current = currentTick;
+      cachedCountRef.current = count;
+      return count;
+    };
 
-    return () => clearInterval(interval);
+    const updateCount = () => {
+      const count = computeIdleWorkers();
+      setIdleWorkerCount(count);
+    };
+
+    // Subscribe to events that could change idle worker count
+    const eventBus = game.eventBus;
+    const unsubSpawned = eventBus.on('unit:spawned', updateCount);
+    const unsubDied = eventBus.on('unit:died', updateCount);
+
+    // Also do an initial update
+    updateCount();
+
+    // Polling at reduced rate (1s) to catch state changes (idle<->working)
+    // The tick-based cache prevents redundant computations within the same tick
+    const interval = setInterval(updateCount, 1000);
+
+    return () => {
+      unsubSpawned();
+      unsubDied();
+      clearInterval(interval);
+    };
   }, [playerId]);
 
   const handleClick = useCallback(() => {

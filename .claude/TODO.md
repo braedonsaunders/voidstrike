@@ -356,6 +356,15 @@
 ### Fixed Issues (Round 10 - Background Tab Immunity - January 2026)
 - [x] **Phaser overlay background tab immunity** - Created phaserLoopWorker.ts to drive Phaser scene updates when tab is inactive. Web Workers aren't throttled by browsers, so the overlay (damage numbers, screen effects, alerts) stays synchronized with game state. Uses document.hidden to detect background state and manually steps Phaser's scene system via scene.sys.step(). Matches the existing GameLoop worker pattern.
 
+### Fixed Issues (Round 11 - UI Polling & Memory Leak Fixes - January 2026)
+- [x] **HomeBackground memory leak** - Added proper disposal for star field, asteroids, energy streams, nebula geometries/materials, and EffectComposer passes on unmount
+- [x] **LoadingScreen memory leak** - Added proper disposal for Three.js resources and RAF cleanup for brightness/fade animations
+- [x] **Public lobby duplicate subscriptions** - Added guard to close existing subscriptions before creating new ones in startBrowsing()
+- [x] **WebRTC ICE handler improvements** - Added onicegatheringstatechange handler and proper cleanup in useP2P and useMultiplayer hooks
+- [x] **IdleWorkerButton optimization** - Changed from 500ms polling to event-driven updates (unit:spawned, unit:died) with tick-based caching and 1s fallback polling
+- [x] **PlayerStatusPanel optimization** - Changed from 1s double entity scan to event-driven updates with tick-based caching and 2s fallback polling
+- [x] **DesyncDetection cleanup batching** - Changed from per-command O(n) cleanup to periodic cleanup every 100 ticks (~5 seconds)
+
 ### Remaining Optimizations
 - [ ] Web Worker for AI calculations
 
