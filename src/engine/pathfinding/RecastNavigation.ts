@@ -90,10 +90,12 @@ const CROWD_CONFIG = {
 };
 
 // Agent config for different unit types
+// SC2-style instant acceleration: use very high maxAcceleration so crowd
+// doesn't artificially limit velocity ramp-up (ground units have accel=1000)
 const DEFAULT_AGENT_PARAMS: Partial<CrowdAgentParams> = {
   radius: 0.5,
   height: 2.0,
-  maxAcceleration: 8.0,
+  maxAcceleration: 100.0, // High for instant acceleration feel
   maxSpeed: 5.0,
   collisionQueryRange: 2.5,
   pathOptimizationRange: 10.0,
@@ -681,13 +683,13 @@ export class RecastNavigation {
         ...DEFAULT_AGENT_PARAMS,
         radius,
         maxSpeed,
-        maxAcceleration: maxSpeed * 1.5,
+        maxAcceleration: 100.0, // High for instant SC2-style acceleration
         collisionQueryRange: radius * 5,
       };
 
       debugPathfinding.log(
         `[Crowd] addAgent e=${entityId} pos=(${x.toFixed(1)},${terrainY.toFixed(2)},${y.toFixed(1)}) ` +
-        `r=${radius.toFixed(2)} mxS=${maxSpeed.toFixed(2)} mxA=${(maxSpeed * 1.5).toFixed(2)}`
+        `r=${radius.toFixed(2)} mxS=${maxSpeed.toFixed(2)} mxA=100`
       );
 
       const agent = this.crowd.addAgent({ x, y: terrainY, z: y }, params);
@@ -816,7 +818,7 @@ export class RecastNavigation {
       if (agent) {
         if (params.maxSpeed !== undefined) {
           agent.maxSpeed = params.maxSpeed;
-          agent.maxAcceleration = params.maxSpeed * 1.5;
+          agent.maxAcceleration = 100.0; // High for instant SC2-style acceleration
         }
         if (params.radius !== undefined) {
           agent.radius = params.radius;
