@@ -21,6 +21,7 @@ import {
 } from '@/store/gameSetupStore';
 import { useLobby, LobbyState } from '@/hooks/useMultiplayer';
 import { useMultiplayerStore } from '@/store/multiplayerStore';
+import { LobbyBrowser } from '@/components/lobby/LobbyBrowser';
 import AssetManager from '@/assets/AssetManager';
 
 // Helper to convert THREE.Color to hex string
@@ -299,9 +300,11 @@ export default function GameSetupPage() {
 
   // Join lobby modal state
   const [showJoinModal, setShowJoinModal] = useState(false);
+  const [showLobbyBrowser, setShowLobbyBrowser] = useState(false);
   const [joinCode, setJoinCode] = useState('');
   const [playerName, setPlayerName] = useState('Player');
   const [codeCopied, setCodeCopied] = useState(false);
+  const [isPublicLobby, setIsPublicLobby] = useState(false);
 
   const handleMusicToggle = useCallback(() => {
     toggleMusic();
@@ -401,6 +404,7 @@ export default function GameSetupPage() {
     sendGameStart,
     onGameStart,
     connectedGuestCount,
+    publishPublicListing,
   } = useLobby(handleGuestJoin, handleGuestLeave);
 
   // Multiplayer store for game
@@ -457,6 +461,33 @@ export default function GameSetupPage() {
 
     sendLobbyState(lobbyState);
   }, [isHost, guests, playerSlots, selectedMapId, startingResources, gameSpeed, fogOfWar, sendLobbyState]);
+
+  // Publish public lobby listing when checkbox is enabled (host only)
+  useEffect(() => {
+    if (!isHost || !isPublicLobby || lobbyStatus !== 'hosting' || !lobbyCode) return;
+
+    const publish = () => {
+      const openSlots = playerSlots.filter(s => s.type === 'open').length;
+      const activeSlots = playerSlots.filter(s => s.type === 'human' || s.type === 'ai').length;
+
+      publishPublicListing({
+        hostName: playerName || 'Unknown Host',
+        mapName: selectedMap.name,
+        mapId: selectedMapId,
+        currentPlayers: activeSlots,
+        maxPlayers: selectedMap.maxPlayers - openSlots + activeSlots,
+        gameMode: 'standard',
+      });
+    };
+
+    // Publish immediately
+    publish();
+
+    // Republish every 60 seconds to keep listing fresh (lobbies expire after 5 minutes)
+    const interval = setInterval(publish, 60000);
+
+    return () => clearInterval(interval);
+  }, [isHost, isPublicLobby, lobbyStatus, lobbyCode, playerSlots, playerName, selectedMap, selectedMapId, publishPublicListing]);
 
   // Register game start callback (guest only)
   useEffect(() => {
@@ -617,15 +648,24 @@ export default function GameSetupPage() {
 
           {/* Header actions */}
           <div className="flex items-center gap-3">
-            {/* Join Game button (only when hosting) */}
+            {/* Browse and Join buttons (only when hosting) */}
             {isHost && lobbyStatus === 'hosting' && (
-              <button
-                onClick={() => setShowJoinModal(true)}
-                className="px-4 py-2 bg-void-700 hover:bg-void-600 text-white text-sm rounded-lg
-                           border border-void-600 transition-colors"
-              >
-                Join Game
-              </button>
+              <>
+                <button
+                  onClick={() => setShowLobbyBrowser(true)}
+                  className="px-4 py-2 bg-plasma-700 hover:bg-plasma-600 text-white text-sm rounded-lg
+                             border border-plasma-600 transition-colors"
+                >
+                  🌐 Browse Lobbies
+                </button>
+                <button
+                  onClick={() => setShowJoinModal(true)}
+                  className="px-4 py-2 bg-void-700 hover:bg-void-600 text-white text-sm rounded-lg
+                             border border-void-600 transition-colors"
+                >
+                  Join Game
+                </button>
+              </>
             )}
 
             {/* Leave lobby button (when guest) */}
@@ -754,6 +794,27 @@ export default function GameSetupPage() {
                     className="w-full bg-void-800 border border-void-700 rounded px-2 py-1 text-white text-sm
                                focus:outline-none focus:border-void-500"
                   />
+                </div>
+
+                {/* Make Public Checkbox */}
+                <div className="mb-2">
+                  <label className="flex items-center gap-2 cursor-pointer group">
+                    <input
+                      type="checkbox"
+                      checked={isPublicLobby}
+                      onChange={(e) => setIsPublicLobby(e.target.checked)}
+                      className="w-4 h-4 rounded border-void-600 bg-void-800 text-plasma-500
+                                 focus:ring-plasma-500 focus:ring-offset-0 cursor-pointer"
+                    />
+                    <span className="text-void-300 text-xs group-hover:text-void-200 transition-colors">
+                      Make lobby public
+                    </span>
+                  </label>
+                  {isPublicLobby && (
+                    <p className="text-plasma-400/70 text-[10px] mt-0.5 ml-6">
+                      Your lobby will appear in the public browser
+                    </p>
+                  )}
                 </div>
 
                 <p className="text-void-500 text-[10px]">
@@ -994,6 +1055,19 @@ export default function GameSetupPage() {
             </div>
           </div>
         </div>
+      )}
+
+      {/* Lobby Browser Modal */}
+      {showLobbyBrowser && (
+        <LobbyBrowser
+          onJoin={(code) => {
+            setJoinCode(code);
+            setShowLobbyBrowser(false);
+            setShowJoinModal(true);
+          }}
+          onClose={() => setShowLobbyBrowser(false)}
+          playerName={playerName}
+        />
       )}
     </main>
   );

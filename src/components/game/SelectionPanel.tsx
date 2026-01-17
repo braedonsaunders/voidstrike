@@ -2,6 +2,7 @@
 
 import { memo, useCallback, useMemo } from 'react';
 import { useGameStore } from '@/store/gameStore';
+import { getLocalPlayerId } from '@/store/gameSetupStore';
 import { Game } from '@/engine/core/Game';
 import { Unit } from '@/engine/components/Unit';
 import { Building } from '@/engine/components/Building';
@@ -377,33 +378,17 @@ const MultiSelectProductionQueues = memo(function MultiSelectProductionQueues({
     const game = Game.getInstance();
     if (!game) return;
 
-    const entity = game.world.getEntity(entityId);
-    if (!entity) return;
+    const localPlayer = getLocalPlayerId();
+    if (!localPlayer) return;
 
-    const building = entity.get<Building>('Building');
-    if (!building) return;
-
-    const cancelled = building.cancelProduction(index);
-    if (cancelled) {
-      const unitDef = UNIT_DEFINITIONS[cancelled.id];
-      if (unitDef) {
-        const store = useGameStore.getState();
-        const refundPercent = cancelled.progress < 0.5 ? 1 : 0.5;
-        store.addResources(
-          Math.floor(unitDef.mineralCost * refundPercent),
-          Math.floor(unitDef.vespeneCost * refundPercent)
-        );
-        if (cancelled.supplyAllocated) {
-          store.addSupply(-unitDef.supplyCost);
-        }
-      }
-
-      game.eventBus.emit('production:cancelled', {
-        buildingId: entityId,
-        itemId: cancelled.id,
-        itemType: cancelled.type,
-      });
-    }
+    // Use issueCommand for multiplayer sync
+    game.issueCommand({
+      tick: game.getCurrentTick(),
+      playerId: localPlayer,
+      type: 'CANCEL_PRODUCTION',
+      entityIds: [entityId],
+      queueIndex: index,
+    });
   }, []);
 
   return (
@@ -489,60 +474,53 @@ const ProductionQueueDisplay = memo(function ProductionQueueDisplay({
     const game = Game.getInstance();
     if (!game) return;
 
-    const entity = game.world.getEntity(entityId);
-    if (!entity) return;
+    const localPlayer = getLocalPlayerId();
+    if (!localPlayer) return;
 
-    const building = entity.get<Building>('Building');
-    if (!building) return;
-
-    const cancelled = building.cancelProduction(index);
-    if (cancelled) {
-      const unitDef = UNIT_DEFINITIONS[cancelled.id];
-      if (unitDef) {
-        const store = useGameStore.getState();
-        const refundPercent = cancelled.progress < 0.5 ? 1 : 0.5;
-        store.addResources(
-          Math.floor(unitDef.mineralCost * refundPercent),
-          Math.floor(unitDef.vespeneCost * refundPercent)
-        );
-        // Only refund supply if it was actually allocated
-        if (cancelled.supplyAllocated) {
-          store.addSupply(-unitDef.supplyCost);
-        }
-      }
-
-      game.eventBus.emit('production:cancelled', {
-        buildingId: entityId,
-        itemId: cancelled.id,
-        itemType: cancelled.type,
-      });
-    }
+    // Use issueCommand for multiplayer sync
+    game.issueCommand({
+      tick: game.getCurrentTick(),
+      playerId: localPlayer,
+      type: 'CANCEL_PRODUCTION',
+      entityIds: [entityId],
+      queueIndex: index,
+    });
   }, [entityId]);
 
   const handleMoveUp = useCallback((index: number) => {
     const game = Game.getInstance();
     if (!game) return;
 
-    const entity = game.world.getEntity(entityId);
-    if (!entity) return;
+    const localPlayer = getLocalPlayerId();
+    if (!localPlayer) return;
 
-    const building = entity.get<Building>('Building');
-    if (!building) return;
-
-    building.moveQueueItemUp(index);
+    // Use issueCommand for multiplayer sync - move up means newIndex = index - 1
+    game.issueCommand({
+      tick: game.getCurrentTick(),
+      playerId: localPlayer,
+      type: 'QUEUE_REORDER',
+      entityIds: [entityId],
+      queueIndex: index,
+      newQueueIndex: index - 1,
+    });
   }, [entityId]);
 
   const handleMoveDown = useCallback((index: number) => {
     const game = Game.getInstance();
     if (!game) return;
 
-    const entity = game.world.getEntity(entityId);
-    if (!entity) return;
+    const localPlayer = getLocalPlayerId();
+    if (!localPlayer) return;
 
-    const building = entity.get<Building>('Building');
-    if (!building) return;
-
-    building.moveQueueItemDown(index);
+    // Use issueCommand for multiplayer sync - move down means newIndex = index + 1
+    game.issueCommand({
+      tick: game.getCurrentTick(),
+      playerId: localPlayer,
+      type: 'QUEUE_REORDER',
+      entityIds: [entityId],
+      queueIndex: index,
+      newQueueIndex: index + 1,
+    });
   }, [entityId]);
 
   return (

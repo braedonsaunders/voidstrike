@@ -87,9 +87,32 @@ export class UnitMechanicsSystem extends System {
     this.game.eventBus.on('command:heal', this.handleHealCommand.bind(this));
     this.game.eventBus.on('command:repair', this.handleRepairCommand.bind(this));
     this.game.eventBus.on('command:toggleAutocastRepair', this.handleToggleAutocastRepair.bind(this));
+    // Generic autocast setter for multiplayer sync
+    this.game.eventBus.on('ability:setAutocast', this.handleSetAutocast.bind(this));
 
     // Buff application
     this.game.eventBus.on('buff:apply', this.handleBuffApply.bind(this));
+  }
+
+  private handleSetAutocast(data: { entityId: number; abilityId?: string; enabled: boolean; playerId?: string }): void {
+    const entity = this.world.getEntity(data.entityId);
+    if (!entity) return;
+
+    const unit = entity.get<Unit>('Unit');
+    if (!unit) return;
+
+    // Handle specific ability autocasts
+    if (data.abilityId === 'repair' || !data.abilityId) {
+      if (unit.canRepair) {
+        unit.autocastRepair = data.enabled;
+        this.game.eventBus.emit('unit:autocastToggled', {
+          entityId: data.entityId,
+          ability: 'repair',
+          enabled: unit.autocastRepair,
+        });
+      }
+    }
+    // Additional abilities can be added here
   }
 
   // ==================== AUTOCAST REPAIR TOGGLE ====================
