@@ -337,11 +337,6 @@ export function WebGPUGameCanvas() {
         mapHeight
       );
 
-      // Start at local player's spawn, always looking north
-      const localPlayerSlot = useGameSetupStore.getState().getLocalPlayerSlot();
-      const playerSpawn = CURRENT_MAP.spawns.find(s => s.playerSlot === localPlayerSlot) || CURRENT_MAP.spawns[0];
-      camera.setPosition(playerSpawn.x, playerSpawn.y);
-      camera.setAngle(0); // Always look north (angle 0 = camera south of target, looking toward -Z)
       cameraRef.current = camera;
       setCameraRef(camera);
 
@@ -351,6 +346,15 @@ export function WebGPUGameCanvas() {
       const terrain = environment.terrain;
 
       camera.setTerrainHeightFunction((x, z) => terrain.getHeightAt(x, z));
+
+      // Position camera at player's spawn AFTER terrain is configured
+      // This ensures terrain height is factored into the initial camera position
+      const localPlayerSlot = useGameSetupStore.getState().getLocalPlayerSlot();
+      const playerSpawn = CURRENT_MAP.spawns?.find(s => s.playerSlot === localPlayerSlot)
+        || CURRENT_MAP.spawns?.[0]
+        || { x: CURRENT_MAP.width / 2, y: CURRENT_MAP.height / 2 }; // Fallback to map center
+      camera.setPosition(playerSpawn.x, playerSpawn.y);
+      camera.setAngle(0); // Always look north
 
       // Set up projection store
       useProjectionStore.getState().setWorldToScreen((worldX: number, worldZ: number, worldY?: number) => {
