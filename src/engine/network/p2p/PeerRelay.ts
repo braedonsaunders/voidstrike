@@ -132,13 +132,23 @@ export class PeerRelayNetwork {
     const payload = JSON.stringify(data);
 
     // Direct connection?
-    if (this.directPeers.has(targetId)) {
-      this.directPeers.get(targetId)!.send(payload);
+    const directChannel = this.directPeers.get(targetId);
+    if (directChannel && directChannel.readyState === 'open') {
+      directChannel.send(payload);
       return;
     }
 
-    // Relayed connection
+    // Relayed connection - validate cached route is still usable
     let route = this.relayRoutes.get(targetId);
+    if (route && route.length > 0) {
+      const firstHopChannel = this.directPeers.get(route[0]);
+      if (!firstHopChannel || firstHopChannel.readyState !== 'open') {
+        // Cached route is stale, clear it
+        this.relayRoutes.delete(targetId);
+        route = undefined;
+      }
+    }
+
     if (!route || route.length === 0) {
       route = await this.findRelayRoute(targetId);
       if (route.length === 0) {
@@ -158,9 +168,16 @@ export class PeerRelayNetwork {
       payload: encrypted,
     };
 
-    // Send to first hop
+    // Send to first hop (already validated above)
     const firstHop = route[0];
-    this.directPeers.get(firstHop)?.send(JSON.stringify(message));
+    const channel = this.directPeers.get(firstHop);
+    if (channel && channel.readyState === 'open') {
+      channel.send(JSON.stringify(message));
+    } else {
+      // Route became invalid between validation and send
+      this.relayRoutes.delete(targetId);
+      throw new Error(`Route to peer ${targetId.slice(0, 8)}... became invalid`);
+    }
   }
 
   /**
@@ -322,15 +339,18 @@ export class PeerRelayNetwork {
         return;
       }
 
-      const timeout = setTimeout(() => resolve([]), 3000);
+      const timeout = setTimeout(() => {
+        channel.removeEventListener('message', messageHandler);
+        resolve([]);
+      }, 3000);
 
-      const originalHandler = channel.onmessage;
-      channel.onmessage = (event) => {
+      // Use addEventListener to avoid overwriting existing handlers
+      const messageHandler = (event: MessageEvent) => {
         try {
           const msg = JSON.parse(event.data) as RelayMessage;
-          if (msg.type === 'peer-list-response') {
+          if (msg.type === 'peer-list-response' && msg.from === peerId) {
             clearTimeout(timeout);
-            channel.onmessage = originalHandler;
+            channel.removeEventListener('message', messageHandler);
 
             // Add their peers to our known peers
             for (const peer of msg.peers || []) {
@@ -338,17 +358,13 @@ export class PeerRelayNetwork {
             }
 
             resolve(msg.peers || []);
-            return;
           }
         } catch {
-          // Not a relay message
-        }
-
-        // Pass through to original handler
-        if (originalHandler) {
-          originalHandler.call(channel, event);
+          // Not a relay message, let other handlers process it
         }
       };
+
+      channel.addEventListener('message', messageHandler);
 
       const request: RelayMessage = {
         type: 'peer-list-request',
@@ -363,8 +379,8 @@ export class PeerRelayNetwork {
   private async encryptForPeer(peerId: string, data: string): Promise<string> {
     const peerPublicKey = this.peerPublicKeys.get(peerId);
     if (!peerPublicKey || !this.keyPair) {
-      // Fall back to unencrypted (not ideal but allows relay to work)
-      return btoa(data);
+      // Encryption is required for relay messages - relay nodes must not read game commands
+      throw new Error(`Cannot encrypt for peer ${peerId.slice(0, 8)}...: missing encryption keys`);
     }
 
     // Derive shared secret
