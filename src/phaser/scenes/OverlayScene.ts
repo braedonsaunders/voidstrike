@@ -927,8 +927,9 @@ export class OverlayScene extends Phaser.Scene {
       duration: 600,
       ease: 'Quad.easeOut',
       onUpdate: (tween) => {
+        const alpha = tween.getValue() ?? 0;
         overlay.clear();
-        overlay.fillStyle(0x000000, tween.getValue());
+        overlay.fillStyle(0x000000, alpha);
         overlay.fillRect(0, 0, screenWidth, screenHeight);
       },
     });
@@ -964,7 +965,7 @@ export class OverlayScene extends Phaser.Scene {
       delay: 200,
       ease: 'Quad.easeOut',
       onUpdate: (tween) => {
-        drawGlow(tween.getValue(), 0.15);
+        drawGlow(tween.getValue() ?? 50, 0.15);
       },
     });
 
