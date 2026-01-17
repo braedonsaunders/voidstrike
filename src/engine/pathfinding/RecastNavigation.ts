@@ -840,17 +840,14 @@ export class RecastNavigation {
         const state = agent.state();
         const target = agent.target();
 
-        // Debug: Log agent state when velocity is unexpectedly low
+        // Debug: Always log agent state to diagnose slow movement
         const velMag = Math.sqrt(vel.x * vel.x + vel.z * vel.z);
         const desiredMag = Math.sqrt(desiredVel.x * desiredVel.x + desiredVel.z * desiredVel.z);
-        if (velMag < maxSpeed * 0.5 && desiredMag > 0.01) {
-          debugPathfinding.log(
-            `[Crowd] entity=${entityId} state=${state} vel=${velMag.toFixed(2)} desired=${desiredMag.toFixed(2)} ` +
-            `maxSpd=${maxSpeed.toFixed(2)} maxAcc=${maxAccel.toFixed(2)} ` +
-            `pos=(${pos.x.toFixed(1)},${pos.y.toFixed(2)},${pos.z.toFixed(1)}) ` +
-            `tgt=(${target?.x?.toFixed(1)},${target?.z?.toFixed(1)})`
-          );
-        }
+        // Log every call to see velocity values
+        debugPathfinding.log(
+          `[Crowd] e=${entityId} st=${state} v=${velMag.toFixed(3)} dv=${desiredMag.toFixed(3)} ` +
+          `mxS=${maxSpeed.toFixed(1)} mxA=${maxAccel.toFixed(1)}`
+        );
 
         return {
           x: pos.x,
