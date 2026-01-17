@@ -333,6 +333,65 @@ export class TerrainBrush {
   }
 
   /**
+   * Paint a ramp between two points
+   * Creates a walkable gradient between different elevations
+   */
+  public paintRamp(
+    fromX: number,
+    fromY: number,
+    toX: number,
+    toY: number,
+    width: number
+  ): CellUpdate[] {
+    if (!this.mapData) return [];
+
+    const updates: CellUpdate[] = [];
+    const visitedCells = new Set<string>();
+
+    const dx = toX - fromX;
+    const dy = toY - fromY;
+    const length = Math.sqrt(dx * dx + dy * dy);
+    if (length === 0) return [];
+
+    const steps = Math.ceil(length);
+    const perpX = -dy / length;
+    const perpY = dx / length;
+
+    // Get elevations at endpoints
+    const fromCell = this.mapData.terrain[Math.floor(fromY)]?.[Math.floor(fromX)];
+    const toCell = this.mapData.terrain[Math.floor(toY)]?.[Math.floor(toX)];
+    const fromElev = fromCell?.elevation ?? this.config.terrain.defaultElevation;
+    const toElev = toCell?.elevation ?? this.config.terrain.defaultElevation;
+
+    for (let i = 0; i <= steps; i++) {
+      const t = i / steps;
+      const cx = fromX + dx * t;
+      const cy = fromY + dy * t;
+      const elevation = Math.round(fromElev + (toElev - fromElev) * t);
+
+      for (let w = -width / 2; w <= width / 2; w++) {
+        const x = Math.floor(cx + perpX * w);
+        const y = Math.floor(cy + perpY * w);
+        const key = `${x},${y}`;
+
+        if (this.isInBounds(x, y) && !visitedCells.has(key)) {
+          visitedCells.add(key);
+          updates.push({
+            x,
+            y,
+            cell: {
+              elevation,
+              walkable: true,
+            },
+          });
+        }
+      }
+    }
+
+    return updates;
+  }
+
+  /**
    * Flood fill area with elevation
    */
   public floodFill(

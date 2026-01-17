@@ -104,6 +104,9 @@ export function Editor3DCanvas({
     isDraggingObject: false,
     draggedObjectId: null as string | null,
     lastPaintPos: null as { x: number; y: number } | null,
+    // Ramp tool state
+    rampStartPos: null as { x: number; y: number } | null,
+    isDrawingRamp: false,
   });
 
   // Performance: track last frame time
@@ -573,14 +576,26 @@ export function Editor3DCanvas({
           onObjectSelect([]);
         }
       } else {
-        // Painting tools
-        onStartBatch();
-        paintingState.current.isPainting = true;
-        paintingState.current.lastPaintPos = null;
-        paintAt(worldPos, true);
+        const tool = config.tools.find((t) => t.id === activeTool);
+
+        // Ramp tool: click and drag to draw a ramp between two points
+        if (tool?.type === 'ramp') {
+          const gridPos = worldToGrid(worldPos);
+          if (gridPos) {
+            paintingState.current.rampStartPos = gridPos;
+            paintingState.current.isDrawingRamp = true;
+            onStartBatch();
+          }
+        } else {
+          // Standard painting tools
+          onStartBatch();
+          paintingState.current.isPainting = true;
+          paintingState.current.lastPaintPos = null;
+          paintAt(worldPos, true);
+        }
       }
     }
-  }, [mapData, activeTool, selectedObjects, raycastToTerrain, paintAt, onObjectSelect, onStartBatch]);
+  }, [mapData, activeTool, selectedObjects, raycastToTerrain, paintAt, onObjectSelect, onStartBatch, config.tools, worldToGrid]);
 
   const handleMouseMove = useCallback((e: React.MouseEvent) => {
     const worldPos = raycastToTerrain(e.clientX, e.clientY);
@@ -628,7 +643,34 @@ export function Editor3DCanvas({
     }
   }, [activeTool, brushSize, raycastToTerrain, worldToGrid, paintAt, onObjectUpdate, onCursorMove, onObjectHover, mapData?.objects]);
 
-  const handleMouseUp = useCallback(() => {
+  const handleMouseUp = useCallback((e: React.MouseEvent) => {
+    // Handle ramp tool completion
+    if (paintingState.current.isDrawingRamp && paintingState.current.rampStartPos) {
+      const worldPos = raycastToTerrain(e.clientX, e.clientY);
+      if (worldPos && terrainBrushRef.current && mapData) {
+        const endPos = worldToGrid(worldPos);
+        if (endPos) {
+          const startPos = paintingState.current.rampStartPos;
+          terrainBrushRef.current.setMapData(mapData);
+          const updates = terrainBrushRef.current.paintRamp(
+            startPos.x,
+            startPos.y,
+            endPos.x,
+            endPos.y,
+            brushSize
+          );
+          if (updates.length > 0) {
+            onCellsUpdateBatched(updates);
+            terrainRef.current?.markCellsDirty(updates.map((u) => ({ x: u.x, y: u.y })));
+          }
+        }
+      }
+      onCommitBatch();
+      terrainRef.current?.updateDirtyChunks();
+      paintingState.current.isDrawingRamp = false;
+      paintingState.current.rampStartPos = null;
+    }
+
     if (paintingState.current.isPainting) {
       onCommitBatch();
       terrainRef.current?.updateDirtyChunks();
@@ -638,13 +680,13 @@ export function Editor3DCanvas({
     paintingState.current.isDraggingObject = false;
     paintingState.current.draggedObjectId = null;
     paintingState.current.lastPaintPos = null;
-  }, [onCommitBatch]);
+  }, [onCommitBatch, raycastToTerrain, worldToGrid, mapData, brushSize, onCellsUpdateBatched]);
 
   const handleMouseLeave = useCallback(() => {
     brushPreviewRef.current?.setVisible(false);
     setMouseGridPos(null);
 
-    if (paintingState.current.isPainting) {
+    if (paintingState.current.isPainting || paintingState.current.isDrawingRamp) {
       onCommitBatch();
       terrainRef.current?.updateDirtyChunks();
     }
@@ -653,6 +695,8 @@ export function Editor3DCanvas({
     paintingState.current.isDraggingObject = false;
     paintingState.current.draggedObjectId = null;
     paintingState.current.lastPaintPos = null;
+    paintingState.current.isDrawingRamp = false;
+    paintingState.current.rampStartPos = null;
   }, [onCommitBatch]);
 
   const handleContextMenu = useCallback((e: React.MouseEvent) => {
