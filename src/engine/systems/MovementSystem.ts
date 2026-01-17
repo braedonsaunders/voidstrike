@@ -281,10 +281,11 @@ export class MovementSystem extends System {
         this.requestPathWithCooldown(entityId, targetPosition.x, targetPosition.y, true);
 
         // Set initial rotation to face target direction
+        // Note: Y is negated for Three.js coordinate system
         const transform = entity.get<Transform>('Transform');
         if (transform) {
           transform.rotation = Math.atan2(
-            targetPosition.y - transform.y,
+            -(targetPosition.y - transform.y),
             targetPosition.x - transform.x
           );
         }
@@ -341,10 +342,11 @@ export class MovementSystem extends System {
         this.requestPathWithCooldown(entityId, targetX, targetY, true);
 
         // Set initial rotation to face target direction
+        // Note: Y is negated for Three.js coordinate system
         const transform = entity.get<Transform>('Transform');
         if (transform) {
           transform.rotation = Math.atan2(
-            targetY - transform.y,
+            -(targetY - transform.y),
             targetX - transform.x
           );
         }
@@ -395,8 +397,9 @@ export class MovementSystem extends System {
         this.requestPathWithCooldown(entityId, unitTargetX, unitTargetY, true);
 
         // Set initial rotation to face target direction
+        // Note: Y is negated for Three.js coordinate system
         transform.rotation = Math.atan2(
-          unitTargetY - transform.y,
+          -(unitTargetY - transform.y),
           unitTargetX - transform.x
         );
       }
@@ -505,8 +508,9 @@ export class MovementSystem extends System {
         unit.pathIndex = 0;
         this.requestPathWithCooldown(entityId, pos.x, pos.y, true);
         // Set initial rotation to face target direction
+        // Note: Y is negated for Three.js coordinate system
         transform.rotation = Math.atan2(
-          pos.y - transform.y,
+          -(pos.y - transform.y),
           pos.x - transform.x
         );
       }
@@ -548,8 +552,9 @@ export class MovementSystem extends System {
           true
         );
         // Set initial rotation to face target direction
+        // Note: Y is negated for Three.js coordinate system
         transform.rotation = Math.atan2(
-          targetPosition.y - transform.y,
+          -(targetPosition.y - transform.y),
           targetPosition.x - transform.x
         );
       }
@@ -1242,7 +1247,8 @@ export class MovementSystem extends System {
             velocity.y = (tempSeparation.y / sepMag) * idleRepelSpeed;
 
             // Update rotation to face movement direction
-            const targetRotation = Math.atan2(velocity.y, velocity.x);
+            // Note: Y is negated for Three.js coordinate system
+            const targetRotation = Math.atan2(-velocity.y, velocity.x);
             const rotationDiff = targetRotation - transform.rotation;
             let normalizedDiff = rotationDiff;
             while (normalizedDiff > Math.PI) normalizedDiff -= Math.PI * 2;
@@ -1364,8 +1370,9 @@ export class MovementSystem extends System {
               targetX = attackTargetX;
               targetY = attackTargetY;
             } else {
+              // Note: Y is negated for Three.js coordinate system
               transform.rotation = Math.atan2(
-                targetTransform.y - transform.y,
+                -(targetTransform.y - transform.y),
                 targetTransform.x - transform.x
               );
               // Use unit's deceleration rate for stopping when in attack range
@@ -1620,7 +1627,9 @@ export class MovementSystem extends System {
       velocity.y = finalVy * speedDamping;
 
       // Update rotation
-      const targetRotation = Math.atan2(dy, dx);
+      // Note: Y is negated because Three.js rotation.y goes CCW (from +X toward +Z),
+      // but game Y maps to Three.js Z, so we need to flip the Y component
+      const targetRotation = Math.atan2(-(dy), dx);
       const rotationDiff = targetRotation - transform.rotation;
 
       let normalizedDiff = rotationDiff;

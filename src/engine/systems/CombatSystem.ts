@@ -151,13 +151,14 @@ export class CombatSystem extends System {
         if (command.targetEntityId !== undefined) {
           unit.setAttackTarget(command.targetEntityId);
           // Set initial rotation to face target entity
+          // Note: Y is negated for Three.js coordinate system
           if (transform) {
             const targetEntity = this.world.getEntity(command.targetEntityId);
             if (targetEntity) {
               const targetTransform = targetEntity.get<Transform>('Transform');
               if (targetTransform) {
                 transform.rotation = Math.atan2(
-                  targetTransform.y - transform.y,
+                  -(targetTransform.y - transform.y),
                   targetTransform.x - transform.x
                 );
               }
@@ -167,9 +168,10 @@ export class CombatSystem extends System {
           // Attack-move: move toward position while engaging enemies
           unit.setAttackMoveTarget(command.targetPosition.x, command.targetPosition.y);
           // Set initial rotation to face target direction
+          // Note: Y is negated for Three.js coordinate system
           if (transform) {
             transform.rotation = Math.atan2(
-              command.targetPosition.y - transform.y,
+              -(command.targetPosition.y - transform.y),
               command.targetPosition.x - transform.x
             );
           }
