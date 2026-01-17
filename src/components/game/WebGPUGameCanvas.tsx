@@ -283,9 +283,10 @@ export function WebGPUGameCanvas() {
       const renderer = renderContext.renderer;
 
       // Calculate initial display resolution based on settings
+      // Use container dimensions for accurate sizing with DevTools docked
       const initSettings = graphicsSettings;
-      const initWindowWidth = window.innerWidth;
-      const initWindowHeight = window.innerHeight;
+      const initContainerWidth = containerRef.current?.clientWidth ?? window.innerWidth;
+      const initContainerHeight = containerRef.current?.clientHeight ?? window.innerHeight;
       const initDevicePixelRatio = window.devicePixelRatio || 1;
 
       let initTargetWidth: number;
@@ -304,14 +305,14 @@ export function WebGPUGameCanvas() {
         }
         case 'percentage':
           initEffectivePixelRatio = Math.min(initDevicePixelRatio, initSettings.maxPixelRatio);
-          initTargetWidth = Math.floor(initWindowWidth * initSettings.resolutionScale);
-          initTargetHeight = Math.floor(initWindowHeight * initSettings.resolutionScale);
+          initTargetWidth = Math.floor(initContainerWidth * initSettings.resolutionScale);
+          initTargetHeight = Math.floor(initContainerHeight * initSettings.resolutionScale);
           break;
         case 'native':
         default:
           initEffectivePixelRatio = Math.min(initDevicePixelRatio, initSettings.maxPixelRatio);
-          initTargetWidth = initWindowWidth;
-          initTargetHeight = initWindowHeight;
+          initTargetWidth = initContainerWidth;
+          initTargetHeight = initContainerHeight;
           break;
       }
 
@@ -340,6 +341,9 @@ export function WebGPUGameCanvas() {
 
       cameraRef.current = camera;
       setCameraRef(camera);
+
+      // Sync camera screen dimensions immediately for accurate screenToWorld conversion
+      camera.setScreenDimensions(initTargetWidth, initTargetHeight);
 
       // Create environment
       const environment = new EnvironmentManager(scene, CURRENT_MAP);
@@ -1087,11 +1091,15 @@ export function WebGPUGameCanvas() {
     const initializePhaserOverlay = () => {
       if (!phaserContainerRef.current || !gameRef.current) return;
 
+      // Use container dimensions for accurate sizing with DevTools docked
+      const phaserWidth = containerRef.current?.clientWidth ?? window.innerWidth;
+      const phaserHeight = containerRef.current?.clientHeight ?? window.innerHeight;
+
       const config: Phaser.Types.Core.GameConfig = {
         type: Phaser.WEBGL,
         parent: phaserContainerRef.current,
-        width: window.innerWidth,
-        height: window.innerHeight,
+        width: phaserWidth,
+        height: phaserHeight,
         transparent: true,
         scale: {
           mode: Phaser.Scale.RESIZE,
@@ -1136,10 +1144,11 @@ export function WebGPUGameCanvas() {
     };
 
     // Calculate display resolution based on graphics settings
+    // Uses container dimensions when available for accurate sizing with DevTools docked
     const calculateDisplayResolution = () => {
       const settings = useUIStore.getState().graphicsSettings;
-      const windowWidth = window.innerWidth;
-      const windowHeight = window.innerHeight;
+      const containerWidth = containerRef.current?.clientWidth ?? window.innerWidth;
+      const containerHeight = containerRef.current?.clientHeight ?? window.innerHeight;
       const devicePixelRatio = window.devicePixelRatio || 1;
 
       let targetWidth: number;
@@ -1157,17 +1166,17 @@ export function WebGPUGameCanvas() {
           break;
         }
         case 'percentage':
-          // Scale the window resolution by a percentage
+          // Scale the container resolution by a percentage
           effectivePixelRatio = Math.min(devicePixelRatio, settings.maxPixelRatio);
-          targetWidth = Math.floor(windowWidth * settings.resolutionScale);
-          targetHeight = Math.floor(windowHeight * settings.resolutionScale);
+          targetWidth = Math.floor(containerWidth * settings.resolutionScale);
+          targetHeight = Math.floor(containerHeight * settings.resolutionScale);
           break;
         case 'native':
         default:
-          // Use full window size with device pixel ratio
+          // Use full container size with device pixel ratio
           effectivePixelRatio = Math.min(devicePixelRatio, settings.maxPixelRatio);
-          targetWidth = windowWidth;
-          targetHeight = windowHeight;
+          targetWidth = containerWidth;
+          targetHeight = containerHeight;
           break;
       }
 
@@ -1197,9 +1206,11 @@ export function WebGPUGameCanvas() {
         }
       }
 
-      // Phaser always uses full window for overlay
+      // Phaser uses container dimensions for accurate sizing with DevTools docked
       if (phaserGameRef.current) {
-        phaserGameRef.current.scale.resize(window.innerWidth, window.innerHeight);
+        const phaserWidth = containerRef.current?.clientWidth ?? window.innerWidth;
+        const phaserHeight = containerRef.current?.clientHeight ?? window.innerHeight;
+        phaserGameRef.current.scale.resize(phaserWidth, phaserHeight);
       }
     };
 
@@ -2287,8 +2298,9 @@ export function WebGPUGameCanvas() {
 
       if (resolutionChanged && renderContextRef.current && cameraRef.current) {
         // Re-calculate and apply display resolution
-        const windowWidth = window.innerWidth;
-        const windowHeight = window.innerHeight;
+        // Use container dimensions for accurate sizing with DevTools docked
+        const containerWidth = containerRef.current?.clientWidth ?? window.innerWidth;
+        const containerHeight = containerRef.current?.clientHeight ?? window.innerHeight;
         const devicePixelRatio = window.devicePixelRatio || 1;
 
         let targetWidth: number;
@@ -2310,14 +2322,14 @@ export function WebGPUGameCanvas() {
           }
           case 'percentage':
             effectivePixelRatio = Math.min(devicePixelRatio, settings.maxPixelRatio);
-            targetWidth = Math.floor(windowWidth * settings.resolutionScale);
-            targetHeight = Math.floor(windowHeight * settings.resolutionScale);
+            targetWidth = Math.floor(containerWidth * settings.resolutionScale);
+            targetHeight = Math.floor(containerHeight * settings.resolutionScale);
             break;
           case 'native':
           default:
             effectivePixelRatio = Math.min(devicePixelRatio, settings.maxPixelRatio);
-            targetWidth = windowWidth;
-            targetHeight = windowHeight;
+            targetWidth = containerWidth;
+            targetHeight = containerHeight;
             break;
         }
 
@@ -2325,8 +2337,9 @@ export function WebGPUGameCanvas() {
 
         renderer.setPixelRatio(effectivePixelRatio);
         renderer.setSize(targetWidth, targetHeight, false); // false = don't update CSS, canvas stays fullscreen
-        cameraRef.current.camera.aspect = targetWidth / targetHeight;
-        cameraRef.current.camera.updateProjectionMatrix();
+
+        // Sync camera screen dimensions for accurate screenToWorld conversion
+        cameraRef.current.setScreenDimensions(targetWidth, targetHeight);
 
         // Update PostProcessing display size (in device pixels)
         if (renderPipelineRef.current) {
