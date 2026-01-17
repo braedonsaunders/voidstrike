@@ -1201,7 +1201,9 @@ export class BuildingPlacementSystem extends System {
       const distance = Math.sqrt(dx * dx + dy * dy);
 
       // SC2-style: Move inside building footprint when actively constructing
-      const isCloseEnough = distance <= this.CONSTRUCTION_RANGE + building.width / 2;
+      // Use same threshold formula as isWorkerConstructing for consistency
+      const constructThreshold = Math.max(building.width / 2, 3);
+      const isCloseEnough = distance <= this.CONSTRUCTION_RANGE + constructThreshold;
 
       if (isCloseEnough && building.state === 'constructing') {
         // Worker is actively constructing - move around inside the building
