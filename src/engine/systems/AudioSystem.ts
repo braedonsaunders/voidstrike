@@ -7,6 +7,7 @@ import { MusicPlayer } from '@/audio/MusicPlayer';
 import { useGameSetupStore, isLocalPlayer } from '@/store/gameSetupStore';
 import { useUIStore } from '@/store/uiStore';
 import { UNIT_DEFINITIONS } from '@/data/units/dominion';
+import { SeededRandom } from '@/utils/math';
 import * as THREE from 'three';
 
 /**
@@ -28,6 +29,10 @@ export class AudioSystem extends System {
   private camera: THREE.Camera | null = null;
   private initialized = false;
   private currentAmbient: string | null = null;
+
+  // FIX: Use SeededRandom for deterministic voice selection in replays
+  // The seed is based on game tick + unit type hash for variety
+  private audioRng: SeededRandom = new SeededRandom(12345);
 
   // Separate cooldowns per action type
   private lastVoiceTimes: Record<string, number> = {
@@ -192,7 +197,12 @@ export class AudioSystem extends System {
 
     if (soundIds.length === 0) return;
 
-    const soundId = soundIds[Math.floor(Math.random() * soundIds.length)];
+    // FIX: Use SeededRandom for deterministic voice selection in replays
+    // Reseed with game tick + a hash of action for variety while maintaining determinism
+    const tick = this.game.getCurrentTick();
+    const actionHash = action.charCodeAt(0) + (unitId?.charCodeAt(0) || 0) * 256;
+    this.audioRng.reseed(tick * 1000 + actionHash);
+    const soundId = soundIds[Math.floor(this.audioRng.next() * soundIds.length)];
     AudioManager.play(soundId);
     this.lastVoiceTimes[action] = now;
   }

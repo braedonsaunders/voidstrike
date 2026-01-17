@@ -6,6 +6,25 @@
 
 ---
 
+## Multiplayer Security & Sync Fixes (January 2026) ✓
+
+### Critical Security Fixes
+- [x] **Command authorization check** - Game.ts now validates entity ownership before processing commands
+- [x] **Checksum network transmission** - ChecksumSystem events now wired to sendMultiplayerMessage()
+- [x] **Stale command desync detection** - Stale commands now trigger desync instead of silent drop
+
+### Determinism Fixes
+- [x] **fpMul overflow fix** - FixedPoint.ts uses BigInt for overflow-safe 64-bit multiplication
+- [x] **Deterministic sqrt** - deterministicDistance() uses integer sqrt instead of Math.sqrt
+- [x] **AI-aware ProductionSystem** - ProductionSystem checks if owner is AI, skips client store
+
+### Resilience Improvements
+- [x] **Command buffer early warning** - multiplayerStore warns at 80% capacity, triggers network pause
+- [x] **Crowd agent limit warning** - MovementSystem logs warning when agent add fails
+- [x] **Deterministic audio** - AudioSystem uses SeededRandom instead of Math.random()
+
+---
+
 ## Simulation-Based AI Economy (January 2026) ✓
 
 ### SC2-Style Worker Economy

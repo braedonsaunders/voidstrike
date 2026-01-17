@@ -241,6 +241,21 @@ export const useMultiplayerStore = create<MultiplayerState>((set, get) => ({
 
   bufferCommand: (command) => {
     const state = get();
+    const bufferUsage = state.commandBuffer.length / state.maxBufferedCommands;
+
+    // Early warning at 80% capacity
+    if (bufferUsage >= 0.8 && bufferUsage < 1.0) {
+      console.warn(
+        `[Multiplayer] WARNING: Command buffer at ${Math.round(bufferUsage * 100)}% capacity ` +
+        `(${state.commandBuffer.length}/${state.maxBufferedCommands}). ` +
+        `Network may be experiencing issues.`
+      );
+      // Trigger network pause to prevent further buildup
+      if (!state.isNetworkPaused) {
+        get().setNetworkPaused(true, 'Command buffer nearly full - waiting for network');
+      }
+    }
+
     if (state.commandBuffer.length >= state.maxBufferedCommands) {
       // CRITICAL: Buffer overflow means commands will be lost, causing desync
       // Instead of silently dropping, report this as a fatal error

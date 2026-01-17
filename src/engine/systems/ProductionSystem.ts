@@ -10,14 +10,36 @@ import { isLocalPlayer } from '@/store/gameSetupStore';
 import { UNIT_DEFINITIONS } from '@/data/units/dominion';
 import { BUILDING_DEFINITIONS, RESEARCH_MODULE_UNITS, PRODUCTION_MODULE_UNITS } from '@/data/buildings/dominion';
 import { debugProduction } from '@/utils/debugLogger';
+import { EnhancedAISystem } from './EnhancedAISystem';
 
 export class ProductionSystem extends System {
   public readonly name = 'ProductionSystem';
   public priority = 30;
 
+  // Cached reference to AI system (lazy loaded)
+  private aiSystem: EnhancedAISystem | null = null;
+
   constructor(game: Game) {
     super(game);
     this.setupEventListeners();
+  }
+
+  /**
+   * Get the AI system (lazy loaded and cached)
+   */
+  private getAISystem(): EnhancedAISystem | null {
+    if (!this.aiSystem) {
+      this.aiSystem = this.world.getSystem(EnhancedAISystem) || null;
+    }
+    return this.aiSystem;
+  }
+
+  /**
+   * Check if a player is controlled by AI
+   */
+  private isAIPlayer(playerId: string): boolean {
+    const aiSystem = this.getAISystem();
+    return aiSystem?.isAIPlayer(playerId) ?? false;
   }
 
   private setupEventListeners(): void {
@@ -102,25 +124,8 @@ export class ProductionSystem extends System {
       return;
     }
 
-    const store = useGameStore.getState();
-
-    // Check resources
-    if (store.minerals < unitDef.mineralCost) {
-      this.game.eventBus.emit('alert:notEnoughMinerals', {});
-      this.game.eventBus.emit('warning:lowMinerals', {});
-      return;
-    }
-    if (store.vespene < unitDef.vespeneCost) {
-      this.game.eventBus.emit('alert:notEnoughVespene', {});
-      this.game.eventBus.emit('warning:lowVespene', {});
-      return;
-    }
-
-    // Note: Supply is only checked when unit starts producing, not when queueing.
-    // This allows unlimited queueing - supply is allocated for the active unit only.
-
     // Find all valid buildings that can produce this unit, then pick the one with shortest queue
-    let bestBuilding: { entityId: number; building: Building } | null = null;
+    let bestBuilding: { entityId: number; building: Building; selectable: Selectable | undefined } | null = null;
     let shortestQueueLength = Infinity;
 
     for (const entityId of entityIds) {
@@ -142,11 +147,38 @@ export class ProductionSystem extends System {
       // Track building with shortest queue
       if (building.productionQueue.length < shortestQueueLength) {
         shortestQueueLength = building.productionQueue.length;
-        bestBuilding = { entityId, building };
+        const selectable = entity.get<Selectable>('Selectable');
+        bestBuilding = { entityId, building, selectable };
       }
     }
 
     if (!bestBuilding) return;
+
+    // Determine if building owner is AI
+    const ownerPlayerId = bestBuilding.selectable?.playerId;
+    const isOwnerAI = ownerPlayerId ? this.isAIPlayer(ownerPlayerId) : false;
+
+    // FIX: AI players have already deducted resources via EnhancedAISystem
+    // Only check/deduct from game store for human players (local player)
+    const store = useGameStore.getState();
+
+    if (!isOwnerAI) {
+      // Human player - check resources from game store
+      if (store.minerals < unitDef.mineralCost) {
+        this.game.eventBus.emit('alert:notEnoughMinerals', {});
+        this.game.eventBus.emit('warning:lowMinerals', {});
+        return;
+      }
+      if (store.vespene < unitDef.vespeneCost) {
+        this.game.eventBus.emit('alert:notEnoughVespene', {});
+        this.game.eventBus.emit('warning:lowVespene', {});
+        return;
+      }
+    }
+    // Note: AI resources are checked and deducted in EnhancedAISystem before this is called
+
+    // Note: Supply is only checked when unit starts producing, not when queueing.
+    // This allows unlimited queueing - supply is allocated for the active unit only.
 
     // Check if building has reactor and unit is reactor-eligible (double production = 2 units)
     const reactorUnits = PRODUCTION_MODULE_UNITS[bestBuilding.building.buildingId] || [];
@@ -155,13 +187,23 @@ export class ProductionSystem extends System {
     // Determine how many units to produce: 2 if reactor bonus AND enough resources, else 1
     let produceCount = 1;
     if (hasReactorBonus) {
-      const canAffordTwo = store.minerals >= unitDef.mineralCost * 2 &&
-                           store.vespene >= unitDef.vespeneCost * 2;
-      produceCount = canAffordTwo ? 2 : 1;
+      if (isOwnerAI) {
+        // AI: already checked resources, assume they can afford 2 if they have reactor
+        // (AI should only trigger this if it can afford)
+        produceCount = 2;
+      } else {
+        // Human: check if they can afford two
+        const canAffordTwo = store.minerals >= unitDef.mineralCost * 2 &&
+                             store.vespene >= unitDef.vespeneCost * 2;
+        produceCount = canAffordTwo ? 2 : 1;
+      }
     }
 
-    // Deduct resources based on produceCount
-    store.addResources(-unitDef.mineralCost * produceCount, -unitDef.vespeneCost * produceCount);
+    // Deduct resources based on produceCount (only for human players)
+    if (!isOwnerAI) {
+      store.addResources(-unitDef.mineralCost * produceCount, -unitDef.vespeneCost * produceCount);
+    }
+    // AI resources were already deducted in EnhancedAISystem
 
     // Add to production queue with supply cost stored (doubled for reactor)
     // Supply allocation is handled in the update() loop when the item starts producing
@@ -276,20 +318,31 @@ export class ProductionSystem extends System {
       // Check if production is supply-blocked
       if (building.productionQueue.length > 0) {
         const currentItem = building.productionQueue[0];
-        const store = useGameStore.getState();
 
         // Check if we need to allocate supply for this item
         // An item needs supply allocated if it's a unit with supplyCost > 0
         // and supply hasn't been allocated yet
         if (currentItem.type === 'unit' && currentItem.supplyCost > 0 && !currentItem.supplyAllocated) {
-          // Try to allocate supply if there's room
-          if (store.supply + currentItem.supplyCost <= store.maxSupply) {
-            // We have room - allocate supply
-            store.addSupply(currentItem.supplyCost);
+          // FIX: Only use game store for human players, not AI
+          const selectable = entity.get<Selectable>('Selectable');
+          const ownerPlayerId = selectable?.playerId;
+          const isOwnerAI = ownerPlayerId ? this.isAIPlayer(ownerPlayerId) : false;
+
+          if (isOwnerAI) {
+            // AI supply is managed by EnhancedAISystem - just mark as allocated
             currentItem.supplyAllocated = true;
           } else {
-            // No room - skip this building (supply blocked)
-            continue;
+            // Human player - use game store for supply tracking
+            const store = useGameStore.getState();
+            // Try to allocate supply if there's room
+            if (store.supply + currentItem.supplyCost <= store.maxSupply) {
+              // We have room - allocate supply
+              store.addSupply(currentItem.supplyCost);
+              currentItem.supplyAllocated = true;
+            } else {
+              // No room - skip this building (supply blocked)
+              continue;
+            }
           }
         }
       }
