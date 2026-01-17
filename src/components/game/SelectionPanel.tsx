@@ -21,6 +21,7 @@ interface ProductionQueueItem {
   buildTime: number;
   index: number; // Track original index for cancel/reorder
   supplyAllocated: boolean;
+  produceCount: number; // Number of units being produced (2 for reactor bonus)
 }
 
 interface SelectedEntityInfo {
@@ -104,6 +105,7 @@ export const SelectionPanel = memo(function SelectionPanel() {
               buildTime: item.buildTime,
               index: idx,
               supplyAllocated: item.supplyAllocated,
+              produceCount: item.produceCount ?? 1,
             };
           });
 
@@ -414,8 +416,13 @@ const MultiSelectProductionQueues = memo(function MultiSelectProductionQueues({
               {/* Active production item */}
               {activeItem && (
                 <div className="flex items-center gap-1">
-                  <div className="w-6 h-6 bg-void-800 border border-plasma-500/50 rounded flex items-center justify-center flex-shrink-0">
+                  <div className="w-6 h-6 bg-void-800 border border-plasma-500/50 rounded flex items-center justify-center flex-shrink-0 relative">
                     <span className="text-[10px]">{getUnitIcon(activeItem.id)}</span>
+                    {activeItem.produceCount > 1 && (
+                      <span className="absolute -top-1 -right-1 w-3.5 h-3.5 bg-plasma-600 border border-plasma-400 rounded-full text-[7px] flex items-center justify-center text-white font-bold">
+                        x{activeItem.produceCount}
+                      </span>
+                    )}
                   </div>
                   <div className="flex-1 min-w-0">
                     <div className="h-1 bg-void-800 rounded overflow-hidden">
@@ -424,7 +431,9 @@ const MultiSelectProductionQueues = memo(function MultiSelectProductionQueues({
                         style={{ width: `${activeItem.progress * 100}%` }}
                       />
                     </div>
-                    <div className="text-[8px] text-void-500">{Math.floor(activeItem.progress * 100)}%</div>
+                    <div className="text-[8px] text-void-500">
+                      {Math.floor(activeItem.progress * 100)}%{activeItem.produceCount > 1 ? ` (x${activeItem.produceCount})` : ''}
+                    </div>
                   </div>
                   <button
                     onClick={() => handleCancelItem(building.id, 0)}
@@ -533,11 +542,18 @@ const ProductionQueueDisplay = memo(function ProductionQueueDisplay({
       {/* Active item */}
       {activeItem && (
         <div className="flex items-center gap-1.5 mb-2 group">
-          <div className="w-8 h-8 bg-void-800 border border-plasma-500/50 rounded flex items-center justify-center flex-shrink-0">
+          <div className="w-8 h-8 bg-void-800 border border-plasma-500/50 rounded flex items-center justify-center flex-shrink-0 relative">
             <span className="text-sm">{getUnitIcon(activeItem.id)}</span>
+            {activeItem.produceCount > 1 && (
+              <span className="absolute -top-1 -right-1 w-4 h-4 bg-plasma-600 border border-plasma-400 rounded-full text-[8px] flex items-center justify-center text-white font-bold">
+                x{activeItem.produceCount}
+              </span>
+            )}
           </div>
           <div className="flex-1 min-w-0">
-            <div className="text-[10px] text-void-200 truncate">{activeItem.name}</div>
+            <div className="text-[10px] text-void-200 truncate">
+              {activeItem.name}{activeItem.produceCount > 1 ? ` (x${activeItem.produceCount})` : ''}
+            </div>
             <div className="h-1 bg-void-800 rounded overflow-hidden mt-0.5">
               <div
                 className="h-full bg-gradient-to-r from-plasma-600 to-plasma-400"
@@ -571,12 +587,18 @@ const ProductionQueueDisplay = memo(function ProductionQueueDisplay({
                   <div className="w-6 h-6 bg-void-900/80 border border-void-600 rounded flex items-center justify-center">
                     <span className="text-[10px]">{getUnitIcon(item.id)}</span>
                   </div>
-                  <span className="absolute -top-1 -right-1 w-3 h-3 bg-void-700 border border-void-500 rounded-full text-[7px] flex items-center justify-center text-void-300">
-                    {displayIdx + 2}
-                  </span>
+                  {item.produceCount > 1 ? (
+                    <span className="absolute -top-1 -right-1 w-3.5 h-3.5 bg-plasma-600 border border-plasma-400 rounded-full text-[7px] flex items-center justify-center text-white font-bold">
+                      x{item.produceCount}
+                    </span>
+                  ) : (
+                    <span className="absolute -top-1 -right-1 w-3 h-3 bg-void-700 border border-void-500 rounded-full text-[7px] flex items-center justify-center text-void-300">
+                      {displayIdx + 2}
+                    </span>
+                  )}
                 </div>
 
-                <span className="text-[9px] text-void-400 flex-1 truncate">{item.name}</span>
+                <span className="text-[9px] text-void-400 flex-1 truncate">{item.name}{item.produceCount > 1 ? ` x${item.produceCount}` : ''}</span>
 
                 {/* Reorder buttons */}
                 <div className="flex gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">

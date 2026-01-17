@@ -49,12 +49,15 @@ export class ProductionSystem extends System {
         if (selectable && isLocalPlayer(selectable.playerId)) {
           const store = useGameStore.getState();
           const refundPercent = cancelled.progress < 0.5 ? 1 : 0.5;
+          // Refund based on produceCount (1 for normal, 2 for reactor bonus)
+          const produceCount = cancelled.produceCount || 1;
           store.addResources(
-            Math.floor(unitDef.mineralCost * refundPercent),
-            Math.floor(unitDef.vespeneCost * refundPercent)
+            Math.floor(unitDef.mineralCost * produceCount * refundPercent),
+            Math.floor(unitDef.vespeneCost * produceCount * refundPercent)
           );
           if (cancelled.supplyAllocated) {
-            store.addSupply(-unitDef.supplyCost);
+            // Supply cost already accounts for produceCount
+            store.addSupply(-cancelled.supplyCost);
           }
         }
       }
@@ -145,17 +148,23 @@ export class ProductionSystem extends System {
 
     if (!bestBuilding) return;
 
-    // Deduct resources
-    store.addResources(-unitDef.mineralCost, -unitDef.vespeneCost);
-
-    // Check if building has reactor and unit is reactor-eligible (double production = halved build time)
+    // Check if building has reactor and unit is reactor-eligible (double production = 2 units)
     const reactorUnits = PRODUCTION_MODULE_UNITS[bestBuilding.building.buildingId] || [];
     const hasReactorBonus = bestBuilding.building.hasReactor() && reactorUnits.includes(unitType);
-    const effectiveBuildTime = hasReactorBonus ? unitDef.buildTime / 2 : unitDef.buildTime;
+    const produceCount = hasReactorBonus ? 2 : 1;
 
-    // Add to production queue with supply cost stored
+    // Deduct resources (double for reactor bonus)
+    store.addResources(-unitDef.mineralCost * produceCount, -unitDef.vespeneCost * produceCount);
+
+    // Add to production queue with supply cost stored (doubled for reactor)
     // Supply allocation is handled in the update() loop when the item starts producing
-    bestBuilding.building.addToProductionQueue('unit', unitType, effectiveBuildTime, unitDef.supplyCost);
+    bestBuilding.building.addToProductionQueue(
+      'unit',
+      unitType,
+      unitDef.buildTime,
+      unitDef.supplyCost * produceCount,
+      produceCount
+    );
 
     this.game.eventBus.emit('production:started', {
       buildingId: bestBuilding.entityId,
@@ -295,26 +304,34 @@ export class ProductionSystem extends System {
     item: ProductionQueueItem
   ): void {
     if (item.type === 'unit') {
-      // Spawn the unit near the building (not at rally point)
-      const spawnX = buildingTransform.x + building.width / 2 + 1;
-      const spawnY = buildingTransform.y;
+      // Spawn the unit(s) near the building (not at rally point)
+      // For reactor bonus, produceCount will be 2
+      const baseSpawnX = buildingTransform.x + building.width / 2 + 1;
+      const baseSpawnY = buildingTransform.y;
 
       // Get the building's owner from its Selectable component
       const buildingEntity = this.world.getEntity(buildingId);
       const selectable = buildingEntity?.get<Selectable>('Selectable');
       const ownerPlayerId = selectable?.playerId;
 
-      this.game.eventBus.emit('unit:spawn', {
-        unitType: item.id,
-        x: spawnX,
-        y: spawnY,
-        playerId: ownerPlayerId,
-        // Pass rally point coordinates so unit walks there after spawn
-        rallyX: building.rallyX,
-        rallyY: building.rallyY,
-        // Pass rally target for auto-gather (workers rallied to resources)
-        rallyTargetId: building.rallyTargetId,
-      });
+      // Spawn multiple units if produceCount > 1 (reactor bonus)
+      for (let i = 0; i < item.produceCount; i++) {
+        // Offset spawn position slightly for multiple units to avoid overlap
+        const spawnX = baseSpawnX + (i * 0.5);
+        const spawnY = baseSpawnY + (i * 0.5);
+
+        this.game.eventBus.emit('unit:spawn', {
+          unitType: item.id,
+          x: spawnX,
+          y: spawnY,
+          playerId: ownerPlayerId,
+          // Pass rally point coordinates so unit walks there after spawn
+          rallyX: building.rallyX,
+          rallyY: building.rallyY,
+          // Pass rally target for auto-gather (workers rallied to resources)
+          rallyTargetId: building.rallyTargetId,
+        });
+      }
 
       // Emit production complete for Phaser overlay (local player's units only)
       if (ownerPlayerId && isLocalPlayer(ownerPlayerId)) {
@@ -323,6 +340,7 @@ export class ProductionSystem extends System {
           buildingId,
           unitType: item.id,
           unitName: unitDef?.name ?? item.id,
+          produceCount: item.produceCount,
         });
       }
     } else if (item.type === 'upgrade') {
