@@ -12,6 +12,19 @@ import { debugCombat } from '@/utils/debugLogger';
 import { deterministicDamage, quantize, QUANT_DAMAGE } from '@/utils/FixedPoint';
 import { getDamageMultiplier, COMBAT_CONFIG } from '@/data/combat/combat';
 import { getDefaultTargetPriority } from '@/data/units/categories';
+import AssetManager from '@/assets/AssetManager';
+
+/**
+ * Get the visual radius of a unit for attack range calculations.
+ * Uses the model scale from assets.json (how big the unit LOOKS)
+ * rather than just the collision radius (which may be smaller).
+ */
+function getVisualRadius(unit: Unit): number {
+  const modelScale = AssetManager.getUnitScale(unit.unitId);
+  // Use the larger of collision radius or half the model scale
+  // Model scale of 3.0 means the unit is rendered 3x size, so ~1.5 unit radius
+  return Math.max(unit.collisionRadius, modelScale * 0.5);
+}
 
 // Static temp vectors to avoid allocations in hot loops
 const tempTargetScore: { id: number; score: number } | null = null;
@@ -327,22 +340,24 @@ export class CombatSystem extends System {
         }
 
         // Calculate effective distance (edge-to-edge, like SC2)
+        // Uses visual radius (model scale) not just collision radius
         let effectiveDistance: number;
+        const attackerRadius = getVisualRadius(unit);
 
         if (targetBuilding) {
-          // Distance to building edge, minus attacker's collision radius
+          // Distance to building edge, minus attacker's visual radius
           const halfW = targetBuilding.width / 2;
           const halfH = targetBuilding.height / 2;
           const clampedX = Math.max(targetTransform.x - halfW, Math.min(transform.x, targetTransform.x + halfW));
           const clampedY = Math.max(targetTransform.y - halfH, Math.min(transform.y, targetTransform.y + halfH));
           const edgeDx = transform.x - clampedX;
           const edgeDy = transform.y - clampedY;
-          effectiveDistance = Math.max(0, Math.sqrt(edgeDx * edgeDx + edgeDy * edgeDy) - unit.collisionRadius);
+          effectiveDistance = Math.max(0, Math.sqrt(edgeDx * edgeDx + edgeDy * edgeDy) - attackerRadius);
         } else {
-          // Distance between unit edges (center-to-center minus both radii)
+          // Distance between unit edges (center-to-center minus both visual radii)
           const centerDistance = transform.distanceTo(targetTransform);
-          const targetRadius = targetUnit?.collisionRadius ?? 0.5;
-          effectiveDistance = Math.max(0, centerDistance - unit.collisionRadius - targetRadius);
+          const targetRadius = targetUnit ? getVisualRadius(targetUnit) : 0.5;
+          effectiveDistance = Math.max(0, centerDistance - attackerRadius - targetRadius);
         }
 
         if (effectiveDistance <= unit.attackRange) {
@@ -467,10 +482,11 @@ export class CombatSystem extends System {
       const targetIsFlying = unit?.isFlying ?? false;
       if (!selfUnit.canAttackTarget(targetIsFlying)) continue;
 
-      // Edge-to-edge distance (like SC2)
+      // Edge-to-edge distance using visual radius (like SC2)
       const centerDistance = selfTransform.distanceTo(transform);
-      const targetRadius = unit?.collisionRadius ?? 0.5;
-      const distance = Math.max(0, centerDistance - selfUnit.collisionRadius - targetRadius);
+      const attackerRadius = getVisualRadius(selfUnit);
+      const targetRadius = unit ? getVisualRadius(unit) : 0.5;
+      const distance = Math.max(0, centerDistance - attackerRadius - targetRadius);
       if (distance > selfUnit.attackRange) continue;
 
       // Calculate target score based on priority and distance
@@ -507,14 +523,15 @@ export class CombatSystem extends System {
         if (selectable.playerId === selfSelectable.playerId) continue;
         if (health.isDead()) continue;
 
-        // Distance to building edge, minus attacker's collision radius
+        // Distance to building edge, minus attacker's visual radius
         const halfW = building.width / 2;
         const halfH = building.height / 2;
         const clampedX = Math.max(transform.x - halfW, Math.min(selfTransform.x, transform.x + halfW));
         const clampedY = Math.max(transform.y - halfH, Math.min(selfTransform.y, transform.y + halfH));
         const edgeDx = selfTransform.x - clampedX;
         const edgeDy = selfTransform.y - clampedY;
-        const distance = Math.max(0, Math.sqrt(edgeDx * edgeDx + edgeDy * edgeDy) - selfUnit.collisionRadius);
+        const attackerRadius = getVisualRadius(selfUnit);
+        const distance = Math.max(0, Math.sqrt(edgeDx * edgeDx + edgeDy * edgeDy) - attackerRadius);
 
         if (distance > selfUnit.attackRange) continue;
 
@@ -623,10 +640,11 @@ export class CombatSystem extends System {
       const targetIsFlying = unit?.isFlying ?? false;
       if (!selfUnit.canAttackTarget(targetIsFlying)) continue;
 
-      // Edge-to-edge distance (like SC2)
+      // Edge-to-edge distance using visual radius (like SC2)
       const centerDistance = selfTransform.distanceTo(transform);
-      const targetRadius = unit?.collisionRadius ?? 0.5;
-      const distance = Math.max(0, centerDistance - selfUnit.collisionRadius - targetRadius);
+      const attackerRadius = getVisualRadius(selfUnit);
+      const targetRadius = unit ? getVisualRadius(unit) : 0.5;
+      const distance = Math.max(0, centerDistance - attackerRadius - targetRadius);
       if (distance > selfUnit.sightRange) continue;
 
       // Calculate target score based on priority and distance
@@ -663,14 +681,15 @@ export class CombatSystem extends System {
         if (selectable.playerId === selfSelectable.playerId) continue;
         if (health.isDead()) continue;
 
-        // Distance to building edge, minus attacker's collision radius
+        // Distance to building edge, minus attacker's visual radius
         const halfW = building.width / 2;
         const halfH = building.height / 2;
         const clampedX = Math.max(transform.x - halfW, Math.min(selfTransform.x, transform.x + halfW));
         const clampedY = Math.max(transform.y - halfH, Math.min(selfTransform.y, transform.y + halfH));
         const edgeDx = selfTransform.x - clampedX;
         const edgeDy = selfTransform.y - clampedY;
-        const distance = Math.max(0, Math.sqrt(edgeDx * edgeDx + edgeDy * edgeDy) - selfUnit.collisionRadius);
+        const attackerRadius = getVisualRadius(selfUnit);
+        const distance = Math.max(0, Math.sqrt(edgeDx * edgeDx + edgeDy * edgeDy) - attackerRadius);
 
         if (distance > selfUnit.sightRange) continue;
 
