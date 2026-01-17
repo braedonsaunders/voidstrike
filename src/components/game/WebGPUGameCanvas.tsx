@@ -2094,6 +2094,7 @@ export function WebGPUGameCanvas() {
             const overlayOrder: GameOverlayType[] = ['none', 'terrain', 'elevation', 'threat', 'navmesh'];
             const currentIndex = overlayOrder.indexOf(currentOverlay);
             const nextIndex = (currentIndex + 1) % overlayOrder.length;
+            console.log(`[Overlay] Cycling: ${currentOverlay} -> ${overlayOrder[nextIndex]}`);
             uiStore.setActiveOverlay(overlayOrder[nextIndex]);
           }
           break;
@@ -2203,8 +2204,11 @@ export function WebGPUGameCanvas() {
       // Only update if overlay settings changed
       if (overlaySettings === prevOverlaySettings) return;
 
+      console.log(`[Overlay] Settings changed: ${prevOverlaySettings.activeOverlay} -> ${overlaySettings.activeOverlay}`);
+
       // Update overlay manager
       if (overlayManagerRef.current) {
+        console.log(`[Overlay] Calling overlayManagerRef.setActiveOverlay(${overlaySettings.activeOverlay})`);
         overlayManagerRef.current.setActiveOverlay(overlaySettings.activeOverlay);
 
         // Update opacity based on active overlay
@@ -2212,6 +2216,8 @@ export function WebGPUGameCanvas() {
         if (opacityKey in overlaySettings && typeof overlaySettings[opacityKey] === 'number') {
           overlayManagerRef.current.setOpacity(overlaySettings[opacityKey] as number);
         }
+      } else {
+        console.warn('[Overlay] overlayManagerRef.current is null!');
       }
     });
 
