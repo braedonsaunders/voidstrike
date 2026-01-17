@@ -1100,7 +1100,6 @@ export function WebGPUGameCanvas() {
         parent: phaserContainerRef.current,
         width: phaserWidth,
         height: phaserHeight,
-        resolution: window.devicePixelRatio || 1,
         transparent: true,
         scale: {
           mode: Phaser.Scale.RESIZE,
