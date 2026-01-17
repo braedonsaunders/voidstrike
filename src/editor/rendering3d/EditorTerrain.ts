@@ -396,16 +396,16 @@ export class EditorTerrain {
     g *= feature[1];
     b *= feature[2];
 
-    // Platform cells get a subtle tint to distinguish from natural terrain
+    // Platform cells get a distinct gray concrete color
     if (cell.isPlatform) {
-      // Slightly cooler/more uniform tone for platforms
-      r = r * 0.95 + 0.02;
-      g = g * 0.95 + 0.02;
-      b = b * 0.95 + 0.05;
+      // Override with concrete gray - very distinct from natural terrain
+      r = 0.45;
+      g = 0.45;
+      b = 0.48;
     }
 
-    // Darken unwalkable
-    if (!cell.walkable) {
+    // Darken unwalkable (but not platforms)
+    if (!cell.walkable && !cell.isPlatform) {
       r = r * 0.3 + biome.cliff[0] * 0.7;
       g = g * 0.3 + biome.cliff[1] * 0.7;
       b = b * 0.3 + biome.cliff[2] * 0.7;
