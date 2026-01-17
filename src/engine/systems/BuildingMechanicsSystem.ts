@@ -54,6 +54,46 @@ export class BuildingMechanicsSystem extends System {
     this.game.eventBus.on('command:attachToAddon', this.handleAttachToAddonCommand.bind(this));
     this.game.eventBus.on('command:flyingBuildingMove', this.handleFlyingBuildingMoveCommand.bind(this));
     this.game.eventBus.on('command:demolish', this.handleDemolishCommand.bind(this));
+    // Multiplayer-synced addon commands
+    this.game.eventBus.on('addon:lift', this.handleAddonLiftCommand.bind(this));
+    this.game.eventBus.on('addon:land', this.handleAddonLandCommand.bind(this));
+  }
+
+  private handleAddonLiftCommand(command: { buildingId: number; playerId?: string }): void {
+    const entity = this.world.getEntity(command.buildingId);
+    if (!entity) return;
+
+    const building = entity.get<Building>('Building');
+    if (!building || !building.addonEntityId) return;
+
+    // Detach the addon from this building
+    const addonEntity = this.world.getEntity(building.addonEntityId);
+    if (addonEntity) {
+      const addon = addonEntity.get<Building>('Building');
+      if (addon) {
+        addon.attachedToId = null;
+      }
+    }
+    building.detachAddon();
+
+    this.game.eventBus.emit('addon:detached', {
+      buildingId: command.buildingId,
+    });
+  }
+
+  private handleAddonLandCommand(command: { buildingId: number; targetPosition?: { x: number; y: number }; playerId?: string }): void {
+    // This handles a building attaching to an existing addon at a position
+    // The building should fly to the position and then attach
+    const entity = this.world.getEntity(command.buildingId);
+    if (!entity) return;
+
+    const building = entity.get<Building>('Building');
+    if (!building) return;
+
+    // If targetPosition is provided, set the building to fly there
+    if (command.targetPosition) {
+      building.setFlyingTarget(command.targetPosition.x, command.targetPosition.y);
+    }
   }
 
   private handleLiftOffCommand(command: LiftOffCommand): void {

@@ -870,6 +870,74 @@ export class Game {
           playerId: command.playerId,
         });
         break;
+      case 'CANCEL_PRODUCTION':
+        this.eventBus.emit('production:cancel', {
+          entityId: command.entityIds[0],
+          queueIndex: command.queueIndex ?? 0,
+          playerId: command.playerId,
+        });
+        break;
+      case 'CANCEL_RESEARCH':
+        this.eventBus.emit('research:cancel', {
+          entityId: command.entityIds[0],
+          playerId: command.playerId,
+        });
+        break;
+      case 'CANCEL_BUILDING':
+        this.eventBus.emit('building:cancel', {
+          entityId: command.entityIds[0],
+          playerId: command.playerId,
+        });
+        break;
+      case 'QUEUE_REORDER':
+        this.eventBus.emit('production:reorder', {
+          entityId: command.entityIds[0],
+          queueIndex: command.queueIndex ?? 0,
+          newQueueIndex: command.newQueueIndex ?? 0,
+          playerId: command.playerId,
+        });
+        break;
+      case 'SUPPLY_DEPOT_LOWER':
+        this.eventBus.emit('command:lowerSupplyDepot', {
+          buildingId: command.entityIds[0],
+          lower: true,
+          playerId: command.playerId,
+        });
+        break;
+      case 'SUPPLY_DEPOT_RAISE':
+        this.eventBus.emit('command:lowerSupplyDepot', {
+          buildingId: command.entityIds[0],
+          lower: false,
+          playerId: command.playerId,
+        });
+        break;
+      case 'SET_AUTOCAST':
+        this.eventBus.emit('ability:setAutocast', {
+          entityId: command.entityIds[0],
+          abilityId: command.abilityId,
+          enabled: command.autocastEnabled ?? false,
+          playerId: command.playerId,
+        });
+        break;
+      case 'BUILD_WALL':
+        this.eventBus.emit('wall:build', {
+          segments: command.wallSegments ?? [],
+          playerId: command.playerId,
+        });
+        break;
+      case 'ADDON_LIFT':
+        this.eventBus.emit('addon:lift', {
+          buildingId: command.buildingId ?? command.entityIds[0],
+          playerId: command.playerId,
+        });
+        break;
+      case 'ADDON_LAND':
+        this.eventBus.emit('addon:land', {
+          buildingId: command.buildingId ?? command.entityIds[0],
+          targetPosition: command.targetPosition,
+          playerId: command.playerId,
+        });
+        break;
     }
   }
 }
@@ -899,7 +967,18 @@ export interface GameCommand {
     | 'LIFTOFF'
     | 'LAND'
     | 'RALLY'
-    | 'GATHER';
+    | 'GATHER'
+    // New command types for 100% multiplayer sync
+    | 'CANCEL_PRODUCTION'
+    | 'CANCEL_RESEARCH'
+    | 'CANCEL_BUILDING'
+    | 'QUEUE_REORDER'
+    | 'SUPPLY_DEPOT_LOWER'
+    | 'SUPPLY_DEPOT_RAISE'
+    | 'SET_AUTOCAST'
+    | 'BUILD_WALL'
+    | 'ADDON_LIFT'
+    | 'ADDON_LAND';
   entityIds: number[];
   targetPosition?: { x: number; y: number };
   targetEntityId?: number;
@@ -911,4 +990,9 @@ export interface GameCommand {
   transportId?: number; // For load/unload
   bunkerId?: number; // For bunker load/unload
   buildingId?: number; // For liftoff/land
+  // New fields for additional commands
+  queueIndex?: number; // For cancel/reorder production
+  newQueueIndex?: number; // For queue reorder (move to position)
+  autocastEnabled?: boolean; // For SET_AUTOCAST
+  wallSegments?: Array<{ x: number; y: number }>; // For BUILD_WALL
 }

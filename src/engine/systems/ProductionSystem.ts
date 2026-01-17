@@ -24,6 +24,67 @@ export class ProductionSystem extends System {
     this.game.eventBus.on('command:train', this.handleTrainCommand.bind(this));
     this.game.eventBus.on('command:build', this.handleBuildCommand.bind(this));
     this.game.eventBus.on('command:upgrade_building', this.handleUpgradeBuildingCommand.bind(this));
+    // Multiplayer-synced production commands
+    this.game.eventBus.on('production:cancel', this.handleCancelProductionCommand.bind(this));
+    this.game.eventBus.on('production:reorder', this.handleReorderQueueCommand.bind(this));
+  }
+
+  private handleCancelProductionCommand(command: {
+    entityId: number;
+    queueIndex: number;
+    playerId?: string;
+  }): void {
+    const entity = this.world.getEntity(command.entityId);
+    if (!entity) return;
+
+    const building = entity.get<Building>('Building');
+    if (!building) return;
+
+    const cancelled = building.cancelProduction(command.queueIndex);
+    if (cancelled) {
+      const unitDef = UNIT_DEFINITIONS[cancelled.id];
+      if (unitDef) {
+        // Only update store for local player's buildings
+        const selectable = entity.get<Selectable>('Selectable');
+        if (selectable && isLocalPlayer(selectable.playerId)) {
+          const store = useGameStore.getState();
+          const refundPercent = cancelled.progress < 0.5 ? 1 : 0.5;
+          store.addResources(
+            Math.floor(unitDef.mineralCost * refundPercent),
+            Math.floor(unitDef.vespeneCost * refundPercent)
+          );
+          if (cancelled.supplyAllocated) {
+            store.addSupply(-unitDef.supplyCost);
+          }
+        }
+      }
+
+      this.game.eventBus.emit('production:cancelled', {
+        buildingId: command.entityId,
+        itemId: cancelled.id,
+        itemType: cancelled.type,
+      });
+    }
+  }
+
+  private handleReorderQueueCommand(command: {
+    entityId: number;
+    queueIndex: number;
+    newQueueIndex: number;
+    playerId?: string;
+  }): void {
+    const entity = this.world.getEntity(command.entityId);
+    if (!entity) return;
+
+    const building = entity.get<Building>('Building');
+    if (!building) return;
+
+    // Determine direction and call appropriate method
+    if (command.newQueueIndex < command.queueIndex) {
+      building.moveQueueItemUp(command.queueIndex);
+    } else if (command.newQueueIndex > command.queueIndex) {
+      building.moveQueueItemDown(command.queueIndex);
+    }
   }
 
   private handleTrainCommand(command: {

@@ -32,7 +32,11 @@ const EVENT_KINDS = {
   WEBRTC_OFFER: 30433,  // WebRTC offer
   WEBRTC_ANSWER: 30434, // WebRTC answer
   LOBBY_REJECT: 30435,  // Host rejects guest (no slots available)
+  PUBLIC_LOBBY: 30436,  // Public lobby listing for browser
 };
+
+// Tag for public lobby discovery
+const PUBLIC_LOBBY_TAG = 'VOIDSTRIKE_PUBLIC';
 
 // Data channel message types
 export type LobbyMessageType = 'lobby_state' | 'game_start' | 'chat' | 'ping';
@@ -100,6 +104,15 @@ interface UseLobbyReturn {
   connectedGuestCount: number;
   // Reconnection
   reconnect: () => Promise<boolean>;
+  // Public lobby listing
+  publishPublicListing: (lobbyData: {
+    hostName: string;
+    mapName: string;
+    mapId: string;
+    currentPlayers: number;
+    maxPlayers: number;
+    gameMode: string;
+  }) => Promise<boolean>;
 }
 
 function generateLobbyCode(): string {
@@ -726,6 +739,37 @@ export function useLobby(
   // Count guests with open data channels
   const connectedGuestCount = guests.filter(g => g.dataChannel?.readyState === 'open').length;
 
+  // Publish public lobby listing
+  const publishPublicListing = useCallback(async (lobbyData: {
+    hostName: string;
+    mapName: string;
+    mapId: string;
+    currentPlayers: number;
+    maxPlayers: number;
+    gameMode: string;
+  }): Promise<boolean> => {
+    const pool = poolRef.current;
+    const secretKey = secretKeyRef.current;
+    const relays = relaysRef.current;
+    const code = lobbyCode;
+
+    if (!pool || !secretKey || !code || relays.length === 0) {
+      console.warn('[Lobby] Cannot publish public listing - not initialized');
+      return false;
+    }
+
+    try {
+      const { publishPublicLobby } = await import('./usePublicLobbies');
+      return await publishPublicLobby(pool, relays, secretKey, {
+        ...lobbyData,
+        code,
+      });
+    } catch (e) {
+      console.error('[Lobby] Failed to publish public listing:', e);
+      return false;
+    }
+  }, [lobbyCode]);
+
   return {
     status,
     lobbyCode,
@@ -743,6 +787,7 @@ export function useLobby(
     onGameStart,
     reconnect,
     connectedGuestCount,
+    publishPublicListing,
   };
 }
 

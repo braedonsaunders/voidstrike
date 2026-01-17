@@ -49,6 +49,20 @@ export class WallSystem extends System {
 
     // Turret mounting
     this.game.eventBus.on('command:mount_turret', this.handleMountTurret.bind(this));
+
+    // Multiplayer-synced wall build command
+    this.game.eventBus.on('wall:build', this.handleWallBuildCommand.bind(this));
+  }
+
+  private handleWallBuildCommand(command: { segments: Array<{ x: number; y: number }>; playerId?: string }): void {
+    // Forward each segment to the wall placement system via existing mechanism
+    for (const segment of command.segments) {
+      this.game.eventBus.emit('wall:place_request', {
+        x: segment.x,
+        y: segment.y,
+        playerId: command.playerId,
+      });
+    }
   }
 
   public update(deltaTime: number): void {
