@@ -488,7 +488,7 @@ export const UNIT_DEFINITIONS: Record<string, UnitDefinition> = {
     collisionScale: 2.5,
     audio: {
       voiceGroupId: 'dreadnought',
-      weaponSound: 'attack_yamato',
+      weaponSound: 'attack_laser',
       deathSound: 'explosion_large',
     },
   },

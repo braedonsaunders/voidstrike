@@ -192,8 +192,8 @@ export class AbilitySystem extends System {
           this.executePowerCannon(
             casterEntity,
             command.targetEntityId,
-            definition.damage || 200,
-            definition.aoeRadius || 2
+            definition.damage || 300,
+            definition.aoeRadius ?? 0
           );
         }
         break;
