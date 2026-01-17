@@ -834,6 +834,23 @@ export class RecastNavigation {
       if (agent) {
         const pos = agent.position();
         const vel = agent.velocity();
+        const desiredVel = agent.desiredVelocity();
+        const maxSpeed = agent.maxSpeed;
+        const maxAccel = agent.maxAcceleration;
+        const state = agent.state();
+        const target = agent.target();
+
+        // Debug: Log agent state when velocity is unexpectedly low
+        const velMag = Math.sqrt(vel.x * vel.x + vel.z * vel.z);
+        const desiredMag = Math.sqrt(desiredVel.x * desiredVel.x + desiredVel.z * desiredVel.z);
+        if (velMag < maxSpeed * 0.5 && desiredMag > 0.01) {
+          debugPathfinding.log(
+            `[Crowd] entity=${entityId} state=${state} vel=${velMag.toFixed(2)} desired=${desiredMag.toFixed(2)} ` +
+            `maxSpd=${maxSpeed.toFixed(2)} maxAcc=${maxAccel.toFixed(2)} ` +
+            `pos=(${pos.x.toFixed(1)},${pos.y.toFixed(2)},${pos.z.toFixed(1)}) ` +
+            `tgt=(${target?.x?.toFixed(1)},${target?.z?.toFixed(1)})`
+          );
+        }
 
         return {
           x: pos.x,
@@ -884,6 +901,10 @@ export class RecastNavigation {
     if (!this.crowd) return;
 
     try {
+      // Debug: Log crowd update timing (once every ~60 frames to avoid spam)
+      if (Math.random() < 0.017) {
+        debugPathfinding.log(`[Crowd] update dt=${deltaTime.toFixed(4)}s agents=${this.agentMap.size}`);
+      }
       this.crowd.update(deltaTime);
     } catch {
       // Ignore
