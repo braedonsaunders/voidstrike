@@ -8,7 +8,7 @@ import { Game } from '../core/Game';
 import { useGameStore } from '@/store/gameStore';
 import { isLocalPlayer } from '@/store/gameSetupStore';
 import { UNIT_DEFINITIONS } from '@/data/units/dominion';
-import { BUILDING_DEFINITIONS, RESEARCH_MODULE_UNITS } from '@/data/buildings/dominion';
+import { BUILDING_DEFINITIONS, RESEARCH_MODULE_UNITS, PRODUCTION_MODULE_UNITS } from '@/data/buildings/dominion';
 import { debugProduction } from '@/utils/debugLogger';
 
 export class ProductionSystem extends System {
@@ -87,13 +87,19 @@ export class ProductionSystem extends System {
     // Deduct resources
     store.addResources(-unitDef.mineralCost, -unitDef.vespeneCost);
 
+    // Check if building has reactor and unit is reactor-eligible (double production = halved build time)
+    const reactorUnits = PRODUCTION_MODULE_UNITS[bestBuilding.building.buildingId] || [];
+    const hasReactorBonus = bestBuilding.building.hasReactor() && reactorUnits.includes(unitType);
+    const effectiveBuildTime = hasReactorBonus ? unitDef.buildTime / 2 : unitDef.buildTime;
+
     // Add to production queue with supply cost stored
     // Supply allocation is handled in the update() loop when the item starts producing
-    bestBuilding.building.addToProductionQueue('unit', unitType, unitDef.buildTime, unitDef.supplyCost);
+    bestBuilding.building.addToProductionQueue('unit', unitType, effectiveBuildTime, unitDef.supplyCost);
 
     this.game.eventBus.emit('production:started', {
       buildingId: bestBuilding.entityId,
       unitType,
+      hasReactorBonus,
     });
   }
 
