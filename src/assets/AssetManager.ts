@@ -177,8 +177,11 @@ export interface AssetConfig {
   effects?: Record<string, VehicleEffectDefinition>; // Vehicle visual effects (engine trails, exhaust, etc.)
 }
 
-/** Default airborne height for flying units (units above terrain) */
-export const DEFAULT_AIRBORNE_HEIGHT = 8;
+/** Default airborne height for flying units (units above terrain)
+ * Reduced from 8 to 5 for better visual perception of attack ranges.
+ * At height 8, units appeared much farther apart than their actual 2D distance.
+ */
+export const DEFAULT_AIRBORNE_HEIGHT = 5;
 
 /** Full assets.json structure */
 export interface AssetsJsonConfig {
