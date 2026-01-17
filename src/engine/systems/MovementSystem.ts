@@ -16,11 +16,12 @@ import { Unit } from '../components/Unit';
 import { Velocity } from '../components/Velocity';
 import { Building } from '../components/Building';
 import { Resource } from '../components/Resource';
+import { Selectable } from '../components/Selectable';
 import { Game } from '../core/Game';
 import { PooledVector2 } from '@/utils/VectorPool';
 import { TERRAIN_FEATURE_CONFIG, TerrainFeature } from '@/data/maps';
 import { getRecastNavigation, RecastNavigation } from '../pathfinding/RecastNavigation';
-import { debugPerformance, debugPathfinding } from '@/utils/debugLogger';
+import { debugPerformance, debugPathfinding, debugResources } from '@/utils/debugLogger';
 import { snapValue, QUANT_POSITION } from '@/utils/FixedPoint';
 import {
   generateFormationPositions,
@@ -1554,6 +1555,12 @@ export class MovementSystem extends System {
       // Ensure agent is in crowd for collision avoidance
       if (USE_RECAST_CROWD && !unit.isFlying) {
         this.ensureAgentRegistered(entity.id, transform, unit);
+      }
+
+      // Debug: log gathering worker targets periodically
+      if (unit.state === 'gathering' && this.currentTick % 100 === 0 && entity.id % 5 === 0) {
+        const selectable = entity.get<Selectable>('Selectable');
+        debugResources.log(`[MovementSystem] ${selectable?.playerId} gathering worker ${entity.id}: targetX=${unit.targetX?.toFixed(1)}, targetY=${unit.targetY?.toFixed(1)}, pos=(${transform.x.toFixed(1)}, ${transform.y.toFixed(1)}), speed=${unit.currentSpeed.toFixed(2)}, maxSpeed=${unit.maxSpeed}`);
       }
 
       // Get current target
