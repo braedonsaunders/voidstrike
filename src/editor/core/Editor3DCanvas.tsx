@@ -104,10 +104,13 @@ export function Editor3DCanvas({
     isDraggingObject: false,
     draggedObjectId: null as string | null,
     lastPaintPos: null as { x: number; y: number } | null,
-    // Shape tool state (ramp, line, rect, ellipse)
+    // Shape tool state (ramp, line, rect, ellipse, platform_rect)
     shapeStartPos: null as { x: number; y: number } | null,
     isDrawingShape: false,
-    activeShapeType: null as 'ramp' | 'line' | 'rect' | 'ellipse' | null,
+    activeShapeType: null as 'ramp' | 'line' | 'rect' | 'ellipse' | 'platform_rect' | null,
+    // Polygon tool state (for platform_polygon)
+    isDrawingPolygon: false,
+    polygonVertices: [] as Array<{ x: number; y: number }>,
   });
 
   // Performance: track last frame time
@@ -569,6 +572,32 @@ export function Editor3DCanvas({
       case 'line':
       case 'rect':
       case 'ellipse':
+      case 'platform_rect':
+      case 'platform_polygon':
+        return;
+
+      // Platform brush tool - paint platform terrain
+      case 'platform_brush':
+        updates = terrainBrushRef.current.paintPlatform(
+          gridPos.x,
+          gridPos.y,
+          brushSize,
+          paintElevation
+        );
+        break;
+
+      // Convert existing terrain to platform
+      case 'convert_platform':
+        updates = terrainBrushRef.current.convertToPlatform(
+          gridPos.x,
+          gridPos.y,
+          brushSize
+        );
+        break;
+
+      // Edge style tool - cycle edge style on click (handled specially)
+      case 'edge_style':
+        // Edge style is a click tool, not continuous painting
         return;
 
       default:
@@ -621,7 +650,7 @@ export function Editor3DCanvas({
         }
       } else {
         const tool = config.tools.find((t) => t.id === activeTool);
-        const shapeTypes = ['ramp', 'line', 'rect', 'ellipse'];
+        const shapeTypes = ['ramp', 'line', 'rect', 'ellipse', 'platform_rect'];
 
         // Shape tools: click and drag to draw between two points
         if (tool && shapeTypes.includes(tool.type)) {
@@ -629,17 +658,90 @@ export function Editor3DCanvas({
           if (gridPos) {
             paintingState.current.shapeStartPos = gridPos;
             paintingState.current.isDrawingShape = true;
-            paintingState.current.activeShapeType = tool.type as 'ramp' | 'line' | 'rect' | 'ellipse';
+            paintingState.current.activeShapeType = tool.type as 'ramp' | 'line' | 'rect' | 'ellipse' | 'platform_rect';
             onStartBatch();
-            // Start shape preview
+            // Start shape preview (use 'rect' for platform_rect preview)
             brushPreviewRef.current?.startShapePreview(
-              tool.type as 'ramp' | 'line' | 'rect' | 'ellipse',
+              tool.type === 'platform_rect' ? 'rect' : tool.type as 'ramp' | 'line' | 'rect' | 'ellipse',
               worldPos.x,
               worldPos.z
             );
           }
+        } else if (tool && tool.type === 'platform_polygon') {
+          // Polygon tool: click to add vertices
+          const gridPos = worldToGrid(worldPos);
+          if (gridPos) {
+            if (!paintingState.current.isDrawingPolygon) {
+              // Start new polygon
+              paintingState.current.isDrawingPolygon = true;
+              paintingState.current.polygonVertices = [gridPos];
+              onStartBatch();
+            } else {
+              // Check if closing the polygon (click near first vertex)
+              const firstVertex = paintingState.current.polygonVertices[0];
+              const dist = Math.sqrt(
+                Math.pow(gridPos.x - firstVertex.x, 2) +
+                Math.pow(gridPos.y - firstVertex.y, 2)
+              );
+              if (dist < 2 && paintingState.current.polygonVertices.length >= 3) {
+                // Close and complete the polygon
+                if (terrainBrushRef.current && mapData) {
+                  terrainBrushRef.current.setMapData(mapData);
+                  const updates = terrainBrushRef.current.paintPlatformPolygon(
+                    paintingState.current.polygonVertices,
+                    selectedElevation
+                  );
+                  if (updates.length > 0) {
+                    onCellsUpdateBatched(updates);
+                    terrainRef.current?.markCellsDirty(updates.map((u) => ({ x: u.x, y: u.y })));
+                  }
+                }
+                onCommitBatch();
+                terrainRef.current?.updateDirtyChunks();
+                paintingState.current.isDrawingPolygon = false;
+                paintingState.current.polygonVertices = [];
+              } else {
+                // Add vertex
+                paintingState.current.polygonVertices.push(gridPos);
+              }
+            }
+          }
+        } else if (tool && tool.type === 'edge_style') {
+          // Edge style tool: cycle edge style on platform cells
+          const gridPos = worldToGrid(worldPos);
+          if (gridPos && mapData && terrainBrushRef.current) {
+            const cell = mapData.terrain[gridPos.y]?.[gridPos.x];
+            if (cell?.isPlatform) {
+              // Determine which edge is closest to click position
+              const fracX = worldPos.x - gridPos.x;
+              const fracZ = worldPos.z - gridPos.y;
+              let edge: 'north' | 'south' | 'east' | 'west';
+
+              // Determine closest edge based on fractional position in cell
+              if (fracZ < 0.25) edge = 'north';
+              else if (fracZ > 0.75) edge = 'south';
+              else if (fracX < 0.25) edge = 'west';
+              else if (fracX > 0.75) edge = 'east';
+              else edge = 'north'; // Default to north if in center
+
+              // Cycle style: cliff -> natural -> ramp -> cliff
+              const currentStyle = cell.edges?.[edge] || 'cliff';
+              const styles: Array<'cliff' | 'natural' | 'ramp'> = ['cliff', 'natural', 'ramp'];
+              const nextStyle = styles[(styles.indexOf(currentStyle as 'cliff' | 'natural' | 'ramp') + 1) % 3];
+
+              terrainBrushRef.current.setMapData(mapData);
+              const updates = terrainBrushRef.current.setPlatformEdgeStyle(gridPos.x, gridPos.y, edge, nextStyle);
+              if (updates.length > 0) {
+                onStartBatch();
+                onCellsUpdateBatched(updates);
+                terrainRef.current?.markCellsDirty(updates.map((u) => ({ x: u.x, y: u.y })));
+                onCommitBatch();
+                terrainRef.current?.updateDirtyChunks();
+              }
+            }
+          }
         } else {
-          // Standard painting tools (brush, eraser, plateau, raise, lower, smooth, noise)
+          // Standard painting tools (brush, eraser, plateau, raise, lower, smooth, noise, platform_brush, convert_platform)
           onStartBatch();
           paintingState.current.isPainting = true;
           paintingState.current.lastPaintPos = null;
@@ -647,7 +749,7 @@ export function Editor3DCanvas({
         }
       }
     }
-  }, [mapData, activeTool, selectedObjects, raycastToTerrain, paintAt, onObjectSelect, onStartBatch, config.tools, worldToGrid]);
+  }, [mapData, activeTool, selectedObjects, selectedElevation, raycastToTerrain, paintAt, onObjectSelect, onStartBatch, onCommitBatch, onCellsUpdateBatched, config.tools, worldToGrid]);
 
   const handleMouseMove = useCallback((e: React.MouseEvent) => {
     const worldPos = raycastToTerrain(e.clientX, e.clientY);
@@ -752,6 +854,14 @@ export function Editor3DCanvas({
               );
               break;
             }
+
+            case 'platform_rect':
+              updates = terrainBrushRef.current.paintPlatformRect(
+                startPos.x, startPos.y,
+                endPos.x, endPos.y,
+                selectedElevation
+              );
+              break;
           }
 
           if (updates.length > 0) {
@@ -783,7 +893,7 @@ export function Editor3DCanvas({
     brushPreviewRef.current?.setVisible(false);
     setMouseGridPos(null);
 
-    if (paintingState.current.isPainting || paintingState.current.isDrawingShape) {
+    if (paintingState.current.isPainting || paintingState.current.isDrawingShape || paintingState.current.isDrawingPolygon) {
       onCommitBatch();
       terrainRef.current?.updateDirtyChunks();
     }
@@ -795,6 +905,8 @@ export function Editor3DCanvas({
     paintingState.current.isDrawingShape = false;
     paintingState.current.shapeStartPos = null;
     paintingState.current.activeShapeType = null;
+    paintingState.current.isDrawingPolygon = false;
+    paintingState.current.polygonVertices = [];
     brushPreviewRef.current?.endShapePreview();
   }, [onCommitBatch]);
 
