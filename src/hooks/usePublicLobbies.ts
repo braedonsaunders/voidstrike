@@ -86,7 +86,7 @@ export function usePublicLobbies(): UsePublicLobbiesReturn {
 
       console.log('[LobbyBrowser] Subscribing to public lobbies...');
 
-      const sub = pool.subscribeMany(relays, [filter], {
+      const sub = pool.subscribeMany(relays, filter, {
         onevent: (event: NostrEvent) => {
           try {
             const data = JSON.parse(event.content);
