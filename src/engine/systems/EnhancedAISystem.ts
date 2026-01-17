@@ -697,7 +697,13 @@ export class EnhancedAISystem extends System {
       if (step.type === 'unit') {
         success = this.tryTrainUnit(ai, step.id);
       } else if (step.type === 'building') {
-        success = this.tryBuildBuilding(ai, step.id);
+        // Check if this is an addon - route through addon-aware path
+        const buildingDef = BUILDING_DEFINITIONS[step.id];
+        if (buildingDef?.isAddon) {
+          success = this.tryBuildAddon(ai, step.id);
+        } else {
+          success = this.tryBuildBuilding(ai, step.id);
+        }
       }
 
       if (success) {
@@ -777,6 +783,11 @@ export class EnhancedAISystem extends System {
     switch (action.type) {
       case 'build':
         if (action.targetId) {
+          // Check if this is an addon - route through addon-aware path
+          const buildingDef = BUILDING_DEFINITIONS[action.targetId];
+          if (buildingDef?.isAddon) {
+            return this.tryBuildAddon(ai, action.targetId);
+          }
           return this.tryBuildBuilding(ai, action.targetId);
         }
         return false;
@@ -843,9 +854,10 @@ export class EnhancedAISystem extends System {
     if (parentBuilding.state !== 'complete') return false;
 
     // Tech lab is placed adjacent to the building (to the right)
-    // Use building width to calculate proper offset from center
+    // Center-based placement: offset = half parent width + half addon width
+    const addonWidth = moduleDef.width ?? 2;
     const modulePos = {
-      x: target.position.x + parentBuilding.width, // Right edge of parent + addon center offset
+      x: target.position.x + (parentBuilding.width / 2) + (addonWidth / 2),
       y: target.position.y
     };
 
@@ -864,6 +876,28 @@ export class EnhancedAISystem extends System {
 
     debugAI.log(`EnhancedAI: ${ai.playerId} building tech_lab on ${target.buildingId}`);
     return true;
+  }
+
+  /**
+   * Try to build an addon (research_module, production_module).
+   * Routes addon build requests to the appropriate handler by finding an eligible parent building.
+   */
+  private tryBuildAddon(ai: AIPlayer, addonType: string): boolean {
+    const addonDef = BUILDING_DEFINITIONS[addonType];
+    if (!addonDef || !addonDef.isAddon) {
+      debugAI.log(`[EnhancedAI] ${ai.playerId}: tryBuildAddon failed - ${addonType} is not an addon`);
+      return false;
+    }
+
+    // Find an eligible parent building for this addon
+    const target = this.findBuildingNeedingResearchModule(ai);
+    if (!target) {
+      debugAI.log(`[EnhancedAI] ${ai.playerId}: tryBuildAddon failed - no eligible parent building for ${addonType}`);
+      return false;
+    }
+
+    // Route to the addon-specific build method
+    return this.tryBuildResearchModule(ai, target);
   }
 
   private canProduceUnit(ai: AIPlayer, unitId: string): boolean {
