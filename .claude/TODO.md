@@ -138,6 +138,9 @@
 - [x] **Minimap fog of war** - Enemy units/buildings no longer visible through fog of war
 - [x] **3D model integration** - AssetManager wired to load decoration models (trees, rocks, Xel'Naga tower)
 
+### Unit Collision Fixes
+- [x] **Worker physics push collision bug** - Workers (fabricators) were avoiding each other when gathering minerals due to physics push force not exempting worker-to-worker interactions. Separation force already exempted workers, but physics push did not. Fixed by adding worker exemption to `calculatePhysicsPush` in MovementSystem.
+
 ### Audio System Fixes
 - [x] **"Not enough resources" alert audio fix** - Audio was not playing for resource insufficiency alerts. Systems were emitting `'ui:error'` events but AudioSystem was listening for `'alert:notEnoughMinerals'` and `'alert:notEnoughVespene'`. Fixed by updating ProductionSystem, BuildingPlacementSystem, ResearchSystem, and WallSystem to emit the correct alert events alongside the visual warning events.
 

@@ -1028,6 +1028,8 @@ export class MovementSystem extends System {
 
       if (otherUnit.state === 'dead') continue;
       if (otherUnit.isFlying) continue; // Don't push flying units
+      // Allow workers to pass through each other for easier mining
+      if (selfUnit.isWorker && otherUnit.isWorker) continue;
 
       const dx = selfTransform.x - otherTransform.x;
       const dy = selfTransform.y - otherTransform.y;
