@@ -128,6 +128,9 @@ export class DamageNumberSystem {
    * Initialize the text object pool
    */
   private initializePool(): void {
+    // Use device pixel ratio for crisp text on high-DPI displays
+    const resolution = Math.min(window.devicePixelRatio || 1, 2);
+
     for (let i = 0; i < this.poolSize; i++) {
       // Glow layer - soft bloom effect behind text
       const glow = this.scene.add.text(0, 0, '', {
@@ -136,6 +139,7 @@ export class DamageNumberSystem {
         color: GLOW_COLORS.normal,
         stroke: GLOW_COLORS.normal,
         strokeThickness: 12,
+        resolution,
       });
       glow.setOrigin(0.5, 0.5);
       glow.setVisible(false);
@@ -148,6 +152,7 @@ export class DamageNumberSystem {
         color: '#000000',
         stroke: '#000000',
         strokeThickness: 6,
+        resolution,
       });
       shadow.setOrigin(0.5, 0.5);
       shadow.setVisible(false);
@@ -167,6 +172,7 @@ export class DamageNumberSystem {
           blur: 4,
           fill: true,
         },
+        resolution,
       });
       text.setOrigin(0.5, 0.5);
       text.setVisible(false);

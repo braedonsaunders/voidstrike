@@ -913,6 +913,9 @@ export class OverlayScene extends Phaser.Scene {
     const colorHex = '#' + mainColor.toString(16).padStart(6, '0');
     const glowHex = '#' + glowColor.toString(16).padStart(6, '0');
 
+    // Use device pixel ratio for crisp text on high-DPI displays
+    const resolution = Math.min(window.devicePixelRatio || 1, 2);
+
     // Create dark overlay with animated fade
     const overlay = this.add.graphics();
     overlay.setDepth(500);
@@ -995,6 +998,7 @@ export class OverlayScene extends Phaser.Scene {
       color: glowHex,
       stroke: glowHex,
       strokeThickness: 20,
+      resolution,
     });
     titleGlow.setOrigin(0.5, 0.5);
     titleGlow.setAlpha(0);
@@ -1014,6 +1018,7 @@ export class OverlayScene extends Phaser.Scene {
         blur: 12,
         fill: true,
       },
+      resolution,
     });
     title.setOrigin(0.5, 0.5);
     title.setAlpha(0);
@@ -1047,6 +1052,7 @@ export class OverlayScene extends Phaser.Scene {
       color: '#ffffff',
       stroke: '#000000',
       strokeThickness: 2,
+      resolution,
     });
     subtitle.setOrigin(0.5, 0.5);
     subtitle.setAlpha(0);
@@ -1061,6 +1067,7 @@ export class OverlayScene extends Phaser.Scene {
       fontSize: '14px',
       fontFamily: 'Orbitron, sans-serif',
       color: '#666666',
+      resolution,
     });
     durationLabel.setOrigin(1, 0.5);
     durationLabel.setAlpha(0);
@@ -1070,6 +1077,7 @@ export class OverlayScene extends Phaser.Scene {
       fontSize: '28px',
       fontFamily: 'Orbitron, sans-serif',
       color: '#ffffff',
+      resolution,
     });
     durationValue.setOrigin(0.5, 0.5);
     durationValue.setAlpha(0);
@@ -1085,6 +1093,7 @@ export class OverlayScene extends Phaser.Scene {
         color: '#00aaff',
         stroke: '#000000',
         strokeThickness: 3,
+        resolution,
       });
       spectateButton.setOrigin(0.5, 0.5);
       spectateButton.setAlpha(0);
@@ -1123,6 +1132,7 @@ export class OverlayScene extends Phaser.Scene {
         fontSize: '16px',
         fontFamily: 'Inter, sans-serif',
         color: '#555555',
+        resolution,
       });
       hintText.setOrigin(0.5, 0.5);
       hintText.setAlpha(0);
@@ -1133,6 +1143,7 @@ export class OverlayScene extends Phaser.Scene {
         fontSize: '18px',
         fontFamily: 'Inter, sans-serif',
         color: '#666666',
+        resolution,
       });
       hintText.setOrigin(0.5, 0.5);
       hintText.setAlpha(0);
@@ -1303,6 +1314,9 @@ export class OverlayScene extends Phaser.Scene {
     const colorHex = `#${color.toString(16).padStart(6, '0')}`;
     const yPosition = 80 + this.alerts.length * 44;
 
+    // Use device pixel ratio for crisp text on high-DPI displays
+    const resolution = Math.min(window.devicePixelRatio || 1, 2);
+
     // Create container for the alert elements
     const alertContainer = this.add.container(screenWidth / 2, yPosition);
     alertContainer.setDepth(250);
@@ -1314,6 +1328,7 @@ export class OverlayScene extends Phaser.Scene {
       color: colorHex,
       stroke: colorHex,
       strokeThickness: 8,
+      resolution,
     });
     glowText.setOrigin(0.5, 0.5);
     glowText.setAlpha(0.3);
@@ -1333,6 +1348,7 @@ export class OverlayScene extends Phaser.Scene {
         blur: 6,
         fill: true,
       },
+      resolution,
     });
     alertText.setOrigin(0.5, 0.5);
     alertContainer.add(alertText);
