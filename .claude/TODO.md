@@ -306,6 +306,8 @@
 - [x] **AI economy stalled at 0 minerals** - AI couldn't build anything because workers weren't delivering resources due to the above bug. With the fix, AI workers now properly deliver minerals to base.
 
 ### AI & Combat Fixes
+- [x] **Attack range uses actual model bounding box** - Attack range calculations now use actual Three.js bounding box dimensions from loaded models instead of scale approximations. This is the industry-standard approach used in AAA games like SC2. AssetManager stores model dimensions after normalization, and CombatSystem/MovementSystem use cached getModelVisualRadius() for edge-to-edge distance calculations.
+- [x] **Laser projectile rendering** - Fixed invisible laser beams by replacing THREE.Line (linewidth doesn't work in WebGL/WebGPU) with CylinderGeometry mesh with glow effect.
 - [x] **Idle unit auto-attack responsiveness** - Idle units now immediately attack enemies within attack range (no throttle delay). Uses dedicated `findImmediateAttackTarget()` for instant response when enemies enter attack range, while throttled sight-range search remains for longer-range target acquisition.
 - [x] **VisionSystem multi-player support** - Changed from hardcoded ['player1', 'ai'] to dynamic player registration, enabling proper 4-AI spectator games.
 - [x] **Building fog of war fix** - VisionSystem was using hardcoded sightRange=9 for all buildings instead of each building's configured sightRange from its definition. Now correctly uses building.sightRange.
