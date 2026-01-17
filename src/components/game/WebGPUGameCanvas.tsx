@@ -2394,7 +2394,7 @@ export function WebGPUGameCanvas() {
   return (
     <div
       ref={containerRef}
-      className="w-full h-full relative"
+      className="absolute inset-0"
       onMouseDown={handleMouseDown}
       onMouseMove={handleMouseMove}
       onMouseUp={handleMouseUp}

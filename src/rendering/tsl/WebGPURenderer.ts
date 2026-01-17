@@ -207,7 +207,9 @@ export async function createWebGPURenderer(config: WebGPURendererConfig): Promis
 
   // Configure renderer
   renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
-  renderer.setSize(canvas.clientWidth, canvas.clientHeight);
+  // Pass false to NOT update canvas CSS - let CSS classes handle visual sizing
+  // This allows the canvas to resize with its container when DevTools opens/closes
+  renderer.setSize(canvas.clientWidth, canvas.clientHeight, false);
   renderer.toneMapping = THREE.ACESFilmicToneMapping;
   renderer.toneMappingExposure = 1.0;
   // Enable local clipping planes for building construction reveal effect
