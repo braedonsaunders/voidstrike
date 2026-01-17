@@ -130,12 +130,13 @@ export function WebGPUGameCanvas() {
   // Event listener cleanup
   const eventUnsubscribersRef = useRef<(() => void)[]>([]);
 
+  // Track if final game time update has been done (for victory overlay sync)
+  const finalGameTimeUpdatedRef = useRef(false);
+
   // UI state
   const [isSelecting, setIsSelecting] = useState(false);
   const [selectionStart, setSelectionStart] = useState({ x: 0, y: 0 });
   const [selectionEnd, setSelectionEnd] = useState({ x: 0, y: 0 });
-  const [isAttackMove, setIsAttackMove] = useState(false);
-  const [isPatrolMode, setIsPatrolMode] = useState(false);
 
   // Loading state
   const [isLoading, setIsLoading] = useState(true);
@@ -187,7 +188,7 @@ export function WebGPUGameCanvas() {
   const DOUBLE_CLICK_TIME = 400;
   const DOUBLE_CLICK_DIST = 10;
 
-  const { isBuilding, buildingType, buildingPlacementQueue, isSettingRallyPoint, isRepairMode, isLandingMode, landingBuildingId, abilityTargetMode, isWallPlacementMode } = useGameStore();
+  const { isBuilding, buildingType, buildingPlacementQueue, isSettingRallyPoint, isRepairMode, isLandingMode, landingBuildingId, abilityTargetMode, isWallPlacementMode, commandTargetMode } = useGameStore();
 
   // Initialize both Three.js (WebGPU) and Phaser
   useEffect(() => {
@@ -282,9 +283,10 @@ export function WebGPUGameCanvas() {
       const renderer = renderContext.renderer;
 
       // Calculate initial display resolution based on settings
+      // Use container dimensions for accurate sizing with DevTools docked
       const initSettings = graphicsSettings;
-      const initWindowWidth = window.innerWidth;
-      const initWindowHeight = window.innerHeight;
+      const initContainerWidth = containerRef.current?.clientWidth ?? window.innerWidth;
+      const initContainerHeight = containerRef.current?.clientHeight ?? window.innerHeight;
       const initDevicePixelRatio = window.devicePixelRatio || 1;
 
       let initTargetWidth: number;
@@ -303,14 +305,14 @@ export function WebGPUGameCanvas() {
         }
         case 'percentage':
           initEffectivePixelRatio = Math.min(initDevicePixelRatio, initSettings.maxPixelRatio);
-          initTargetWidth = Math.floor(initWindowWidth * initSettings.resolutionScale);
-          initTargetHeight = Math.floor(initWindowHeight * initSettings.resolutionScale);
+          initTargetWidth = Math.floor(initContainerWidth * initSettings.resolutionScale);
+          initTargetHeight = Math.floor(initContainerHeight * initSettings.resolutionScale);
           break;
         case 'native':
         default:
           initEffectivePixelRatio = Math.min(initDevicePixelRatio, initSettings.maxPixelRatio);
-          initTargetWidth = initWindowWidth;
-          initTargetHeight = initWindowHeight;
+          initTargetWidth = initContainerWidth;
+          initTargetHeight = initContainerHeight;
           break;
       }
 
@@ -339,6 +341,9 @@ export function WebGPUGameCanvas() {
 
       cameraRef.current = camera;
       setCameraRef(camera);
+
+      // Sync camera screen dimensions immediately for accurate screenToWorld conversion
+      camera.setScreenDimensions(initTargetWidth, initTargetHeight);
 
       // Create environment
       const environment = new EnvironmentManager(scene, CURRENT_MAP);
@@ -378,6 +383,7 @@ export function WebGPUGameCanvas() {
         aiEnabled: !isBattleSimulatorMode() && !isMultiplayer,
       });
       gameRef.current = game;
+      finalGameTimeUpdatedRef.current = false; // Reset for new game
 
       // Wire up screen-space selection for accurate selection of flying units
       game.selectionSystem.setWorldToScreen((worldX: number, worldZ: number, worldY?: number) => {
@@ -980,10 +986,18 @@ export function WebGPUGameCanvas() {
         // Throttle zustand store updates
         if (deltaTime > 0) {
           // Update game time once per second (only displays MM:SS)
+          const isGameFinished = gameRef.current?.gameStateSystem.isGameFinished() ?? false;
           if (Math.floor(currentTime / 1000) !== Math.floor(prevTime / 1000)) {
-            if (!gameRef.current?.gameStateSystem.isGameFinished()) {
+            if (!isGameFinished) {
               useGameStore.getState().setGameTime(gameTime);
             }
+          }
+          // Final update when game ends to sync HUD clock with victory overlay.
+          // Critical for inactive tabs: game loop (Web Worker) continues but render loop
+          // (RAF) is throttled, causing store to fall behind actual game time.
+          if (isGameFinished && !finalGameTimeUpdatedRef.current) {
+            finalGameTimeUpdatedRef.current = true;
+            useGameStore.getState().setGameTime(gameTime);
           }
           // Update camera position every 100ms for responsive UI
           if (Math.floor(currentTime / 100) !== Math.floor(prevTime / 100)) {
@@ -1077,11 +1091,15 @@ export function WebGPUGameCanvas() {
     const initializePhaserOverlay = () => {
       if (!phaserContainerRef.current || !gameRef.current) return;
 
+      // Use container dimensions for accurate sizing with DevTools docked
+      const phaserWidth = containerRef.current?.clientWidth ?? window.innerWidth;
+      const phaserHeight = containerRef.current?.clientHeight ?? window.innerHeight;
+
       const config: Phaser.Types.Core.GameConfig = {
         type: Phaser.WEBGL,
         parent: phaserContainerRef.current,
-        width: window.innerWidth,
-        height: window.innerHeight,
+        width: phaserWidth,
+        height: phaserHeight,
         resolution: window.devicePixelRatio || 1,
         transparent: true,
         scale: {
@@ -1127,10 +1145,11 @@ export function WebGPUGameCanvas() {
     };
 
     // Calculate display resolution based on graphics settings
+    // Uses container dimensions when available for accurate sizing with DevTools docked
     const calculateDisplayResolution = () => {
       const settings = useUIStore.getState().graphicsSettings;
-      const windowWidth = window.innerWidth;
-      const windowHeight = window.innerHeight;
+      const containerWidth = containerRef.current?.clientWidth ?? window.innerWidth;
+      const containerHeight = containerRef.current?.clientHeight ?? window.innerHeight;
       const devicePixelRatio = window.devicePixelRatio || 1;
 
       let targetWidth: number;
@@ -1148,17 +1167,17 @@ export function WebGPUGameCanvas() {
           break;
         }
         case 'percentage':
-          // Scale the window resolution by a percentage
+          // Scale the container resolution by a percentage
           effectivePixelRatio = Math.min(devicePixelRatio, settings.maxPixelRatio);
-          targetWidth = Math.floor(windowWidth * settings.resolutionScale);
-          targetHeight = Math.floor(windowHeight * settings.resolutionScale);
+          targetWidth = Math.floor(containerWidth * settings.resolutionScale);
+          targetHeight = Math.floor(containerHeight * settings.resolutionScale);
           break;
         case 'native':
         default:
-          // Use full window size with device pixel ratio
+          // Use full container size with device pixel ratio
           effectivePixelRatio = Math.min(devicePixelRatio, settings.maxPixelRatio);
-          targetWidth = windowWidth;
-          targetHeight = windowHeight;
+          targetWidth = containerWidth;
+          targetHeight = containerHeight;
           break;
       }
 
@@ -1188,9 +1207,11 @@ export function WebGPUGameCanvas() {
         }
       }
 
-      // Phaser always uses full window for overlay
+      // Phaser uses container dimensions for accurate sizing with DevTools docked
       if (phaserGameRef.current) {
-        phaserGameRef.current.scale.resize(window.innerWidth, window.innerHeight);
+        const phaserWidth = containerRef.current?.clientWidth ?? window.innerWidth;
+        const phaserHeight = containerRef.current?.clientHeight ?? window.innerHeight;
+        phaserGameRef.current.scale.resize(phaserWidth, phaserHeight);
       }
     };
 
@@ -1253,7 +1274,7 @@ export function WebGPUGameCanvas() {
   // Mouse handlers (same as HybridGameCanvas)
   const handleMouseDown = useCallback((e: React.MouseEvent) => {
     if (e.button === 0) {
-      if (isAttackMove) {
+      if (commandTargetMode === 'attack') {
         const worldPos = cameraRef.current?.screenToWorld(e.clientX, e.clientY);
         if (worldPos && gameRef.current) {
           const selectedUnits = useGameStore.getState().selectedUnits;
@@ -1268,8 +1289,8 @@ export function WebGPUGameCanvas() {
             });
           }
         }
-        if (!e.shiftKey) setIsAttackMove(false);
-      } else if (isPatrolMode) {
+        if (!e.shiftKey) useGameStore.getState().setCommandTargetMode(null);
+      } else if (commandTargetMode === 'patrol') {
         const worldPos = cameraRef.current?.screenToWorld(e.clientX, e.clientY);
         if (worldPos && gameRef.current) {
           const selectedUnits = useGameStore.getState().selectedUnits;
@@ -1284,7 +1305,23 @@ export function WebGPUGameCanvas() {
             });
           }
         }
-        setIsPatrolMode(false);
+        useGameStore.getState().setCommandTargetMode(null);
+      } else if (commandTargetMode === 'move') {
+        const worldPos = cameraRef.current?.screenToWorld(e.clientX, e.clientY);
+        if (worldPos && gameRef.current) {
+          const selectedUnits = useGameStore.getState().selectedUnits;
+          const localPlayer = getLocalPlayerId();
+          if (selectedUnits.length > 0 && localPlayer) {
+            gameRef.current.issueCommand({
+              tick: gameRef.current.getCurrentTick(),
+              playerId: localPlayer,
+              type: 'MOVE',
+              entityIds: selectedUnits,
+              targetPosition: { x: worldPos.x, y: worldPos.z },
+            });
+          }
+        }
+        if (!e.shiftKey) useGameStore.getState().setCommandTargetMode(null);
       } else if (abilityTargetMode) {
         const worldPos = cameraRef.current?.screenToWorld(e.clientX, e.clientY);
         if (worldPos && gameRef.current) {
@@ -1331,14 +1368,16 @@ export function WebGPUGameCanvas() {
           }
           // If not valid, stay in landing mode - player can try another spot
         }
-      } else if (isBuilding && buildingType) {
+      } else if (isBuilding && buildingType && placementPreviewRef.current) {
         // Place building (supports shift-click to queue multiple placements)
-        const worldPos = cameraRef.current?.screenToWorld(e.clientX, e.clientY);
-        if (worldPos && gameRef.current) {
+        const snappedPos = placementPreviewRef.current.getSnappedPosition();
+        const isValid = placementPreviewRef.current.isPlacementValid();
+
+        if (isValid && gameRef.current) {
           const selectedUnits = useGameStore.getState().selectedUnits;
           gameRef.current.eventBus.emit('building:place', {
             buildingType,
-            position: { x: worldPos.x, y: worldPos.z },
+            position: { x: snappedPos.x, y: snappedPos.y },
             workerId: selectedUnits.length > 0 ? selectedUnits[0] : undefined,
           });
 
@@ -1346,11 +1385,16 @@ export function WebGPUGameCanvas() {
             // Shift held: add to queue for visual display, stay in building mode
             useGameStore.getState().addToBuildingQueue({
               buildingType,
-              x: worldPos.x,
-              y: worldPos.z,
+              x: snappedPos.x,
+              y: snappedPos.y,
             });
           } else {
             // No shift: exit building mode
+            useGameStore.getState().setBuildingMode(null);
+          }
+        } else if (!isValid) {
+          // Invalid placement - show error, exit mode if not shift-clicking
+          if (!e.shiftKey) {
             useGameStore.getState().setBuildingMode(null);
           }
         }
@@ -1371,16 +1415,12 @@ export function WebGPUGameCanvas() {
     } else if (e.button === 2) {
       handleRightClick(e);
     }
-  }, [isBuilding, buildingType, isAttackMove, isPatrolMode, isSettingRallyPoint, isRepairMode, isLandingMode, landingBuildingId, abilityTargetMode, isWallPlacementMode]);
+  }, [isBuilding, buildingType, commandTargetMode, isSettingRallyPoint, isRepairMode, isLandingMode, landingBuildingId, abilityTargetMode, isWallPlacementMode]);
 
   const handleRightClick = (e: React.MouseEvent) => {
     // Right-click cancels command modes (alternative to ESC, especially useful in fullscreen)
-    if (isAttackMove) {
-      setIsAttackMove(false);
-      return;
-    }
-    if (isPatrolMode) {
-      setIsPatrolMode(false);
+    if (commandTargetMode) {
+      useGameStore.getState().setCommandTargetMode(null);
       return;
     }
     if (isWallPlacementMode) {
@@ -1886,8 +1926,7 @@ export function WebGPUGameCanvas() {
           {
             // Check if there's an active command mode that ESC should cancel
             const hasActiveCommand =
-              isAttackMove ||
-              isPatrolMode ||
+              commandTargetMode !== null ||
               isRepairMode ||
               isLandingMode ||
               isSettingRallyPoint ||
@@ -1901,8 +1940,7 @@ export function WebGPUGameCanvas() {
               e.preventDefault();
             }
 
-            if (isAttackMove) setIsAttackMove(false);
-            else if (isPatrolMode) setIsPatrolMode(false);
+            if (commandTargetMode) useGameStore.getState().setCommandTargetMode(null);
             else if (isRepairMode) useGameStore.getState().setRepairMode(false);
             else if (isLandingMode) useGameStore.getState().setLandingMode(false);
             else if (isSettingRallyPoint) useGameStore.getState().setRallyPointMode(false);
@@ -1970,12 +2008,18 @@ export function WebGPUGameCanvas() {
           break;
         case 'a':
           if (!isBuilding) {
-            setIsAttackMove(true);
+            useGameStore.getState().setCommandTargetMode('attack');
+          }
+          break;
+        case 'm':
+          // SC2-style: M for move targeting mode
+          if (!isBuilding) {
+            useGameStore.getState().setCommandTargetMode('move');
           }
           break;
         case 'p':
           if (!isBuilding) {
-            setIsPatrolMode(true);
+            useGameStore.getState().setCommandTargetMode('patrol');
           }
           break;
         case 's':
@@ -2057,7 +2101,7 @@ export function WebGPUGameCanvas() {
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [isBuilding, isAttackMove, isPatrolMode, isRepairMode, isLandingMode, isSettingRallyPoint, abilityTargetMode, isWallPlacementMode]);
+  }, [isBuilding, commandTargetMode, isRepairMode, isLandingMode, isSettingRallyPoint, abilityTargetMode, isWallPlacementMode]);
 
   // Subscribe to overlay settings changes
   useEffect(() => {
@@ -2255,8 +2299,9 @@ export function WebGPUGameCanvas() {
 
       if (resolutionChanged && renderContextRef.current && cameraRef.current) {
         // Re-calculate and apply display resolution
-        const windowWidth = window.innerWidth;
-        const windowHeight = window.innerHeight;
+        // Use container dimensions for accurate sizing with DevTools docked
+        const containerWidth = containerRef.current?.clientWidth ?? window.innerWidth;
+        const containerHeight = containerRef.current?.clientHeight ?? window.innerHeight;
         const devicePixelRatio = window.devicePixelRatio || 1;
 
         let targetWidth: number;
@@ -2278,14 +2323,14 @@ export function WebGPUGameCanvas() {
           }
           case 'percentage':
             effectivePixelRatio = Math.min(devicePixelRatio, settings.maxPixelRatio);
-            targetWidth = Math.floor(windowWidth * settings.resolutionScale);
-            targetHeight = Math.floor(windowHeight * settings.resolutionScale);
+            targetWidth = Math.floor(containerWidth * settings.resolutionScale);
+            targetHeight = Math.floor(containerHeight * settings.resolutionScale);
             break;
           case 'native':
           default:
             effectivePixelRatio = Math.min(devicePixelRatio, settings.maxPixelRatio);
-            targetWidth = windowWidth;
-            targetHeight = windowHeight;
+            targetWidth = containerWidth;
+            targetHeight = containerHeight;
             break;
         }
 
@@ -2293,8 +2338,9 @@ export function WebGPUGameCanvas() {
 
         renderer.setPixelRatio(effectivePixelRatio);
         renderer.setSize(targetWidth, targetHeight, false); // false = don't update CSS, canvas stays fullscreen
-        cameraRef.current.camera.aspect = targetWidth / targetHeight;
-        cameraRef.current.camera.updateProjectionMatrix();
+
+        // Sync camera screen dimensions for accurate screenToWorld conversion
+        cameraRef.current.setScreenDimensions(targetWidth, targetHeight);
 
         // Update PostProcessing display size (in device pixels)
         if (renderPipelineRef.current) {
@@ -2363,10 +2409,18 @@ export function WebGPUGameCanvas() {
         </div>
       )}
 
-      {isAttackMove && (
+      {commandTargetMode === 'attack' && (
         <div className="absolute top-4 left-1/2 transform -translate-x-1/2 bg-black/80 px-4 py-2 rounded border border-red-600 z-20">
           <span className="text-red-400">
-            Attack-Move - Click target, ESC to cancel
+            Attack-Move - Click canvas or minimap, ESC to cancel
+          </span>
+        </div>
+      )}
+
+      {commandTargetMode === 'move' && (
+        <div className="absolute top-4 left-1/2 transform -translate-x-1/2 bg-black/80 px-4 py-2 rounded border border-blue-600 z-20">
+          <span className="text-blue-400">
+            Move - Click canvas or minimap, ESC to cancel
           </span>
         </div>
       )}
@@ -2379,10 +2433,10 @@ export function WebGPUGameCanvas() {
         </div>
       )}
 
-      {isPatrolMode && (
+      {commandTargetMode === 'patrol' && (
         <div className="absolute top-4 left-1/2 transform -translate-x-1/2 bg-black/80 px-4 py-2 rounded border border-yellow-600 z-20">
           <span className="text-yellow-400">
-            Patrol Mode - Click destination, ESC to cancel
+            Patrol Mode - Click canvas or minimap, ESC to cancel
           </span>
         </div>
       )}

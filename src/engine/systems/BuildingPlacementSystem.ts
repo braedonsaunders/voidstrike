@@ -32,6 +32,9 @@ export class BuildingPlacementSystem extends System {
   // Distance threshold for worker to be "at" the building site
   private readonly CONSTRUCTION_RANGE = 2.5;
 
+  // Track pending addon attachments (addon ID -> parent building info)
+  private pendingAddonAttachments: Map<number, { parentBuildingId: number; addonType: 'tech_lab' | 'reactor' | null }> = new Map();
+
   constructor(game: Game) {
     super(game);
     this.setupEventListeners();
@@ -365,7 +368,7 @@ export class BuildingPlacementSystem extends System {
 
   /**
    * Handle addon placement (research_module, production_module)
-   * Addons don't require workers and are built instantly
+   * Addons don't require workers but build over time
    */
   private handleAddonPlacement(
     buildingType: string,
@@ -418,14 +421,19 @@ export class BuildingPlacementSystem extends System {
       return;
     }
 
-    // Create the addon entity (instantly complete, no worker needed)
+    // Create the addon entity - starts in 'constructing' state (no worker needed)
     const addonEntity = this.world.createEntity();
     const addonBuilding = new Building(definition);
-    addonBuilding.buildProgress = 1;
-    addonBuilding.state = 'complete';
+    addonBuilding.buildProgress = 0;
+    addonBuilding.state = 'constructing'; // Addons don't need workers, start constructing immediately
     addonBuilding.attachedToId = parentBuildingId;
 
+    // Store addon type for later attachment when complete
+    const techLabType = buildingType === 'research_module' ? 'tech_lab' :
+                        buildingType === 'production_module' ? 'reactor' : null;
+
     const addonHealth = new Health(definition.maxHealth, definition.armor, 'structure');
+    addonHealth.current = definition.maxHealth * 0.1; // Start at 10% health like buildings
 
     addonEntity
       .add(new Transform(x, y, 0))
@@ -433,14 +441,13 @@ export class BuildingPlacementSystem extends System {
       .add(addonHealth)
       .add(new Selectable(Math.max(definition.width, definition.height) * 0.6, 10, playerId));
 
-    // Attach the addon to the parent building
-    const techLabType = buildingType === 'research_module' ? 'tech_lab' :
-                        buildingType === 'production_module' ? 'reactor' : null;
-    if (techLabType) {
-      parentBuilding.attachAddon(techLabType, addonEntity.id);
-    }
+    // Store pending addon attachment info (will be attached when construction completes)
+    this.pendingAddonAttachments.set(addonEntity.id, {
+      parentBuildingId,
+      addonType: techLabType,
+    });
 
-    // Emit success events
+    // Emit placement event
     this.game.eventBus.emit('building:placed', {
       entityId: addonEntity.id,
       buildingType,
@@ -452,14 +459,15 @@ export class BuildingPlacementSystem extends System {
       parentBuildingId,
     });
 
-    this.game.eventBus.emit('building:addon_complete', {
+    // Emit construction started event
+    this.game.eventBus.emit('building:addon_started', {
       parentId: parentBuildingId,
       addonId: addonEntity.id,
       addonType: buildingType,
       playerId,
     });
 
-    debugBuildingPlacement.log(`BuildingPlacementSystem: ${definition.name} addon built for ${parentBuilding.name} at (${x}, ${y})`);
+    debugBuildingPlacement.log(`BuildingPlacementSystem: ${definition.name} addon construction started for ${parentBuilding.name} at (${x}, ${y})`);
   }
 
   /**
@@ -677,14 +685,19 @@ export class BuildingPlacementSystem extends System {
       store.addResources(-addonDef.mineralCost, -addonDef.vespeneCost);
     }
 
-    // Create the addon entity - addons complete instantly when built
+    // Create the addon entity - starts in 'constructing' state (no worker needed)
     const addonEntity = this.world.createEntity();
     const addonBuilding = new Building(addonDef);
-    addonBuilding.buildProgress = 1;
-    addonBuilding.state = 'complete';
+    addonBuilding.buildProgress = 0;
+    addonBuilding.state = 'constructing'; // Addons don't need workers, start constructing immediately
     addonBuilding.attachedToId = buildingId;
 
+    // Store addon type for later attachment when complete
+    const techLabType = addonType === 'research_module' ? 'tech_lab' :
+                        addonType === 'production_module' ? 'reactor' : null;
+
     const addonHealth = new Health(addonDef.maxHealth, addonDef.armor, 'structure');
+    addonHealth.current = addonDef.maxHealth * 0.1; // Start at 10% health like buildings
 
     addonEntity
       .add(new Transform(addonX, addonY, 0))
@@ -692,15 +705,14 @@ export class BuildingPlacementSystem extends System {
       .add(addonHealth)
       .add(new Selectable(Math.max(addonDef.width, addonDef.height) * 0.6, 10, playerId));
 
-    // Attach the addon to the parent building
-    const techLabType = addonType === 'research_module' ? 'tech_lab' :
-                        addonType === 'production_module' ? 'reactor' : null;
-    if (techLabType) {
-      parentBuilding.attachAddon(techLabType, addonEntity.id);
-    }
+    // Store pending addon attachment info (will be attached when construction completes)
+    this.pendingAddonAttachments.set(addonEntity.id, {
+      parentBuildingId: buildingId,
+      addonType: techLabType,
+    });
 
-    // Emit success event
-    this.game.eventBus.emit('building:addon_complete', {
+    // Emit construction started event
+    this.game.eventBus.emit('building:addon_started', {
       parentId: buildingId,
       addonId: addonEntity.id,
       addonType,
@@ -873,8 +885,12 @@ export class BuildingPlacementSystem extends System {
     this.cancelOrphanedBlueprints();
   }
 
+  // Track worker wander state for SC2-style construction movement
+  private workerWanderState: Map<number, { targetX: number; targetY: number; timer: number }> = new Map();
+
   /**
    * Handle workers moving to and arriving at construction sites
+   * SC2-style: Workers move around inside the building footprint while constructing
    */
   private updateWorkerConstruction(dt: number): void {
     const workers = this.world.getEntitiesWith('Unit', 'Transform');
@@ -885,6 +901,8 @@ export class BuildingPlacementSystem extends System {
       if (!unit || !transform) continue;
 
       if (unit.state !== 'building' || unit.constructingBuildingId === null) {
+        // Clean up wander state for workers no longer constructing
+        this.workerWanderState.delete(entity.id);
         continue;
       }
 
@@ -893,6 +911,7 @@ export class BuildingPlacementSystem extends System {
       if (!buildingEntity) {
         // Building was destroyed or cancelled
         unit.cancelBuilding();
+        this.workerWanderState.delete(entity.id);
         continue;
       }
 
@@ -904,15 +923,58 @@ export class BuildingPlacementSystem extends System {
       const dy = transform.y - buildingTransform.y;
       const distance = Math.sqrt(dx * dx + dy * dy);
 
-      if (distance <= this.CONSTRUCTION_RANGE + building.width / 2) {
-        // Worker has arrived - stop moving and construct
+      // SC2-style: Move inside building footprint when actively constructing
+      const isCloseEnough = distance <= this.CONSTRUCTION_RANGE + building.width / 2;
+
+      if (isCloseEnough && building.state === 'constructing') {
+        // Worker is actively constructing - move around inside the building
+        let wander = this.workerWanderState.get(entity.id);
+
+        // Initialize or update wander target
+        if (!wander || wander.timer <= 0) {
+          // Pick new random position inside building footprint
+          const halfW = building.width * 0.35;
+          const halfH = building.height * 0.35;
+          const newX = buildingTransform.x + (Math.random() - 0.5) * halfW * 2;
+          const newY = buildingTransform.y + (Math.random() - 0.5) * halfH * 2;
+          wander = {
+            targetX: newX,
+            targetY: newY,
+            timer: 0.8 + Math.random() * 1.2, // Wander to new spot every 0.8-2 seconds
+          };
+          this.workerWanderState.set(entity.id, wander);
+        }
+
+        // Update timer
+        wander.timer -= dt;
+
+        // Move towards wander target at slow speed
+        const wanderDx = wander.targetX - transform.x;
+        const wanderDy = wander.targetY - transform.y;
+        const wanderDist = Math.sqrt(wanderDx * wanderDx + wanderDy * wanderDy);
+
+        if (wanderDist > 0.3) {
+          // Move slowly inside building (1/3 normal speed)
+          const wanderSpeed = unit.speed * 0.33 * dt;
+          transform.x += (wanderDx / wanderDist) * Math.min(wanderSpeed, wanderDist);
+          transform.y += (wanderDy / wanderDist) * Math.min(wanderSpeed, wanderDist);
+        }
+
+        // Clear pathfinding targets (handled manually here)
         unit.targetX = null;
         unit.targetY = null;
         unit.currentSpeed = 0;
+      } else if (isCloseEnough) {
+        // Worker has arrived but construction not active - just wait
+        unit.targetX = null;
+        unit.targetY = null;
+        unit.currentSpeed = 0;
+        this.workerWanderState.delete(entity.id);
       } else {
         // Keep moving towards building
         unit.targetX = buildingTransform.x;
         unit.targetY = buildingTransform.y;
+        this.workerWanderState.delete(entity.id);
       }
     }
   }
@@ -921,6 +983,7 @@ export class BuildingPlacementSystem extends System {
    * Update construction progress for buildings based on worker presence
    * SC2-style: Construction only progresses while a worker is actively constructing.
    * If worker leaves, construction pauses but does NOT cancel.
+   * Exception: Addons auto-construct without workers.
    */
   private updateBuildingConstruction(dt: number): void {
     const buildings = this.world.getEntitiesWith('Building', 'Health', 'Transform');
@@ -935,8 +998,12 @@ export class BuildingPlacementSystem extends System {
         continue;
       }
 
-      // Check if any worker is actively constructing this building
-      const workerConstructing = this.isWorkerConstructing(entity.id, buildingTransform);
+      // Check if this is an addon (addons auto-construct without workers)
+      const buildingDef = BUILDING_DEFINITIONS[building.buildingId];
+      const isAddon = buildingDef?.isAddon === true;
+
+      // Check if any worker is actively constructing this building (not needed for addons)
+      const workerConstructing = isAddon || this.isWorkerConstructing(entity.id, buildingTransform);
 
       if (workerConstructing) {
         // If building was waiting for worker, start construction now
@@ -977,35 +1044,40 @@ export class BuildingPlacementSystem extends System {
 
           // Get the building's owner
           const selectable = entity.get<Selectable>('Selectable');
-          const buildingDef = BUILDING_DEFINITIONS[building.buildingId];
 
-          // Add supply if applicable - only for local player's buildings
-          if (building.supplyProvided > 0 && selectable?.playerId && isLocalPlayer(selectable.playerId)) {
-            useGameStore.getState().addMaxSupply(building.supplyProvided);
+          // Handle addon completion - attach to parent building
+          if (isAddon) {
+            this.handleAddonCompletion(entity.id, building, selectable?.playerId);
+          } else {
+            // Add supply if applicable - only for local player's buildings
+            if (building.supplyProvided > 0 && selectable?.playerId && isLocalPlayer(selectable.playerId)) {
+              useGameStore.getState().addMaxSupply(building.supplyProvided);
+            }
+
+            // Set default rally point for production buildings
+            if (building.canProduce.length > 0 && building.rallyX === null) {
+              building.setRallyPoint(
+                buildingTransform.x + building.width / 2 + 3,
+                buildingTransform.y
+              );
+            }
+
+            // Release workers
+            this.releaseWorkersFromBuilding(entity.id);
+
+            this.game.eventBus.emit('building:complete', {
+              entityId: entity.id,
+              buildingType: building.buildingId,
+              buildingName: buildingDef?.name ?? building.name,
+              playerId: selectable?.playerId,
+            });
           }
-
-          // Set default rally point for production buildings
-          if (building.canProduce.length > 0 && building.rallyX === null) {
-            building.setRallyPoint(
-              buildingTransform.x + building.width / 2 + 3,
-              buildingTransform.y
-            );
-          }
-
-          // Release workers
-          this.releaseWorkersFromBuilding(entity.id);
-
-          this.game.eventBus.emit('building:complete', {
-            entityId: entity.id,
-            buildingType: building.buildingId,
-            buildingName: buildingDef?.name ?? building.name,
-            playerId: selectable?.playerId,
-          });
 
           debugBuildingPlacement.log(`BuildingPlacementSystem: ${building.name} construction complete!`);
         }
       } else {
         // No worker is constructing - pause if construction had started (SC2-style)
+        // Note: Addons never reach this branch since workerConstructing is always true for them
         if (building.state === 'constructing') {
           building.pauseConstruction();
           this.game.eventBus.emit('building:construction_paused', {
@@ -1018,6 +1090,52 @@ export class BuildingPlacementSystem extends System {
         }
       }
     }
+  }
+
+  /**
+   * Handle addon construction completion - attach to parent building
+   */
+  private handleAddonCompletion(addonEntityId: number, addonBuilding: Building, playerId?: string): void {
+    const pendingAttachment = this.pendingAddonAttachments.get(addonEntityId);
+    if (!pendingAttachment) {
+      debugBuildingPlacement.warn(`BuildingPlacementSystem: No pending attachment found for addon ${addonEntityId}`);
+      return;
+    }
+
+    const { parentBuildingId, addonType } = pendingAttachment;
+
+    // Get the parent building
+    const parentEntity = this.world.getEntity(parentBuildingId);
+    if (!parentEntity) {
+      debugBuildingPlacement.warn(`BuildingPlacementSystem: Parent building ${parentBuildingId} not found for addon completion`);
+      this.pendingAddonAttachments.delete(addonEntityId);
+      return;
+    }
+
+    const parentBuilding = parentEntity.get<Building>('Building');
+    if (!parentBuilding) {
+      debugBuildingPlacement.warn(`BuildingPlacementSystem: Parent building ${parentBuildingId} missing Building component`);
+      this.pendingAddonAttachments.delete(addonEntityId);
+      return;
+    }
+
+    // Attach the addon to the parent building
+    if (addonType) {
+      parentBuilding.attachAddon(addonType, addonEntityId);
+    }
+
+    // Clean up pending attachment
+    this.pendingAddonAttachments.delete(addonEntityId);
+
+    // Emit addon completion event
+    this.game.eventBus.emit('building:addon_complete', {
+      parentId: parentBuildingId,
+      addonId: addonEntityId,
+      addonType: addonBuilding.buildingId,
+      playerId,
+    });
+
+    debugBuildingPlacement.log(`BuildingPlacementSystem: Addon ${addonBuilding.name} attached to parent building ${parentBuildingId}`);
   }
 
   /**

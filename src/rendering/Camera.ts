@@ -149,7 +149,8 @@ export class RTSCamera {
     window.addEventListener('mousedown', this.boundHandleMouseDown);
     window.addEventListener('mouseup', this.boundHandleMouseUp);
     window.addEventListener('wheel', this.boundHandleWheel, { passive: false });
-    window.addEventListener('resize', this.boundHandleResize);
+    // Note: resize handling is done externally via setScreenDimensions() to support
+    // container-based sizing (needed when DevTools is docked). Do not auto-subscribe to window resize.
 
     // Track when cursor leaves/enters the viewport
     document.addEventListener('mouseleave', this.boundHandleMouseLeave);
@@ -591,7 +592,7 @@ export class RTSCamera {
     window.removeEventListener('mousedown', this.boundHandleMouseDown);
     window.removeEventListener('mouseup', this.boundHandleMouseUp);
     window.removeEventListener('wheel', this.boundHandleWheel);
-    window.removeEventListener('resize', this.boundHandleResize);
+    // Note: resize listener not added (handled externally via setScreenDimensions)
     document.removeEventListener('mouseleave', this.boundHandleMouseLeave);
     document.removeEventListener('mouseenter', this.boundHandleMouseEnter);
   }

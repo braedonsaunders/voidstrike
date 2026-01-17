@@ -52,24 +52,48 @@ const ARRIVAL_SPREAD_RADIUS = 2.5;           // Distance from target where sprea
 const ARRIVAL_SPREAD_STRENGTH = 2.0;         // Additional separation at arrival
 
 // Building avoidance - runtime steering to handle edge cases
-// The navmesh walkableRadius (0.6) provides primary clearance; these are backup
-const BUILDING_AVOIDANCE_STRENGTH = 25.0; // Moderate push strength
-const BUILDING_AVOIDANCE_MARGIN = 0.3;    // Small safety margin for hard avoidance
-const BUILDING_AVOIDANCE_SOFT_MARGIN = 0.8; // Reduced early detection zone
-const BUILDING_PREDICTION_LOOKAHEAD = 0.5;  // Seconds to look ahead for collision
+// SC2-STYLE: Reduced margins - trust the navmesh for primary clearance
+const BUILDING_AVOIDANCE_STRENGTH = 15.0; // Reduced from 25 - navmesh handles most avoidance
+const BUILDING_AVOIDANCE_MARGIN = 0.1;    // Minimal margin - navmesh walkableRadius handles clearance
+const BUILDING_AVOIDANCE_SOFT_MARGIN = 0.3; // Reduced from 0.8 - less conservative
+const BUILDING_PREDICTION_LOOKAHEAD = 0.3;  // Reduced from 0.5 - react closer to buildings
 
 // Path request cooldown in ticks (10 ticks @ 20 ticks/sec = 500ms)
 const PATH_REQUEST_COOLDOWN_TICKS = 10;
 
-// Use Recast crowd for collision avoidance
-// Re-enabled with fixes: proper position sync and crowd update timing
+// Use Recast crowd for pathfinding direction (obstacle avoidance disabled in crowd config)
 const USE_RECAST_CROWD = true;
+
+// ==================== SC2-STYLE VELOCITY SMOOTHING ====================
+// Prevents jitter by blending velocity over multiple frames
+
+const VELOCITY_SMOOTHING_FACTOR = 0.3;       // Blend factor: 0=full history, 1=no smoothing
+const VELOCITY_HISTORY_FRAMES = 3;           // Number of frames to average
+const DIRECTION_COMMIT_THRESHOLD = 0.7;      // Dot product threshold for direction commitment
+const DIRECTION_COMMIT_STRENGTH = 0.5;       // How strongly to resist direction changes
+
+// ==================== SC2-STYLE PHYSICS PUSHING ====================
+// Units push each other instead of avoiding - creates natural flow
+
+const PHYSICS_PUSH_RADIUS = 1.2;             // Distance at which pushing starts
+const PHYSICS_PUSH_STRENGTH = 8.0;           // Push force strength
+const PHYSICS_PUSH_FALLOFF = 0.5;            // How quickly push falls off with distance
+const PHYSICS_OVERLAP_PUSH = 20.0;           // Extra strong push when overlapping
+
+// ==================== STUCK DETECTION ====================
+// If unit hasn't moved for N frames, apply random nudge
+
+const STUCK_DETECTION_FRAMES = 12;           // Frames of near-zero movement to trigger
+const STUCK_VELOCITY_THRESHOLD = 0.1;        // Below this speed = considered stuck
+const STUCK_NUDGE_STRENGTH = 2.0;            // Random nudge force when stuck
 
 // Static temp vectors for steering behaviors
 const tempSeparation: PooledVector2 = { x: 0, y: 0 };
 const tempCohesion: PooledVector2 = { x: 0, y: 0 };
 const tempAlignment: PooledVector2 = { x: 0, y: 0 };
 const tempBuildingAvoid: PooledVector2 = { x: 0, y: 0 };
+const tempPhysicsPush: PooledVector2 = { x: 0, y: 0 };
+const tempStuckNudge: PooledVector2 = { x: 0, y: 0 };
 
 // PERF: Cached building query results to avoid double spatial grid lookups
 const cachedBuildingQuery: { entityId: number; results: number[] } = { entityId: -1, results: [] };
@@ -95,6 +119,19 @@ for (let i = 0; i < FORMATION_BUFFER_SIZE; i++) {
   formationBuffer.push({ x: 0, y: 0 });
 }
 
+// Velocity history entry for smoothing
+interface VelocityHistoryEntry {
+  vx: number;
+  vy: number;
+}
+
+// Stuck detection state per unit
+interface StuckState {
+  framesStuck: number;
+  lastX: number;
+  lastY: number;
+}
+
 export class MovementSystem extends System {
   public readonly name = 'MovementSystem';
   public priority = 10;
@@ -111,6 +148,12 @@ export class MovementSystem extends System {
   private separationCache: Map<number, { x: number; y: number; tick: number }> = new Map();
   private currentTick: number = 0;
 
+  // SC2-STYLE: Velocity history for smoothing (prevents jitter)
+  private velocityHistory: Map<number, VelocityHistoryEntry[]> = new Map();
+
+  // SC2-STYLE: Stuck detection state
+  private stuckState: Map<number, StuckState> = new Map();
+
   constructor(game: Game) {
     super(game);
     this.recast = getRecastNavigation();
@@ -122,14 +165,18 @@ export class MovementSystem extends System {
     this.game.eventBus.on('command:patrol', this.handlePatrolCommand.bind(this));
     this.game.eventBus.on('command:formation', this.handleFormationCommand.bind(this));
 
-    // Clean up path request tracking and separation cache when units die to prevent memory leaks
+    // Clean up tracking data when units die to prevent memory leaks
     this.game.eventBus.on('unit:died', (data: { entityId: number }) => {
       this.lastPathRequestTime.delete(data.entityId);
       this.separationCache.delete(data.entityId);
+      this.velocityHistory.delete(data.entityId);
+      this.stuckState.delete(data.entityId);
     });
     this.game.eventBus.on('unit:destroyed', (data: { entityId: number }) => {
       this.lastPathRequestTime.delete(data.entityId);
       this.separationCache.delete(data.entityId);
+      this.velocityHistory.delete(data.entityId);
+      this.stuckState.delete(data.entityId);
     });
   }
 
@@ -279,6 +326,16 @@ export class MovementSystem extends System {
         unit.path = [];
         unit.pathIndex = 0;
         this.requestPathWithCooldown(entityId, targetPosition.x, targetPosition.y, true);
+
+        // Set initial rotation to face target direction
+        // Note: Y is negated for Three.js coordinate system
+        const transform = entity.get<Transform>('Transform');
+        if (transform) {
+          transform.rotation = Math.atan2(
+            -(targetPosition.y - transform.y),
+            targetPosition.x - transform.x
+          );
+        }
       }
       return;
     }
@@ -330,6 +387,16 @@ export class MovementSystem extends System {
         unit.path = [];
         unit.pathIndex = 0;
         this.requestPathWithCooldown(entityId, targetX, targetY, true);
+
+        // Set initial rotation to face target direction
+        // Note: Y is negated for Three.js coordinate system
+        const transform = entity.get<Transform>('Transform');
+        if (transform) {
+          transform.rotation = Math.atan2(
+            -(targetY - transform.y),
+            targetX - transform.x
+          );
+        }
       }
     }
   }
@@ -375,6 +442,13 @@ export class MovementSystem extends System {
         unit.path = [];
         unit.pathIndex = 0;
         this.requestPathWithCooldown(entityId, unitTargetX, unitTargetY, true);
+
+        // Set initial rotation to face target direction
+        // Note: Y is negated for Three.js coordinate system
+        transform.rotation = Math.atan2(
+          -(unitTargetY - transform.y),
+          unitTargetX - transform.x
+        );
       }
     }
   }
@@ -460,7 +534,8 @@ export class MovementSystem extends System {
       if (!entity) continue;
 
       const unit = entity.get<Unit>('Unit');
-      if (!unit) continue;
+      const transform = entity.get<Transform>('Transform');
+      if (!unit || !transform) continue;
 
       const pos = formationPositions[i];
       if (!pos) continue;
@@ -479,6 +554,12 @@ export class MovementSystem extends System {
         unit.path = [];
         unit.pathIndex = 0;
         this.requestPathWithCooldown(entityId, pos.x, pos.y, true);
+        // Set initial rotation to face target direction
+        // Note: Y is negated for Three.js coordinate system
+        transform.rotation = Math.atan2(
+          -(pos.y - transform.y),
+          pos.x - transform.x
+        );
       }
     }
   }
@@ -516,6 +597,12 @@ export class MovementSystem extends System {
           targetPosition.x,
           targetPosition.y,
           true
+        );
+        // Set initial rotation to face target direction
+        // Note: Y is negated for Three.js coordinate system
+        transform.rotation = Math.atan2(
+          -(targetPosition.y - transform.y),
+          targetPosition.x - transform.x
         );
       }
     }
@@ -839,6 +926,193 @@ export class MovementSystem extends System {
     // Alignment force toward average heading
     out.x = (avgVx / avgMag) * ALIGNMENT_STRENGTH;
     out.y = (avgVy / avgMag) * ALIGNMENT_STRENGTH;
+  }
+
+  // ==================== SC2-STYLE VELOCITY SMOOTHING ====================
+
+  /**
+   * Apply velocity smoothing to prevent jitter.
+   * Blends current velocity with history using exponential moving average.
+   */
+  private smoothVelocity(
+    entityId: number,
+    vx: number,
+    vy: number,
+    prevVx: number,
+    prevVy: number
+  ): { vx: number; vy: number } {
+    // Get or create history
+    let history = this.velocityHistory.get(entityId);
+    if (!history) {
+      history = [];
+      this.velocityHistory.set(entityId, history);
+    }
+
+    // Add current velocity to history
+    history.push({ vx, vy });
+    if (history.length > VELOCITY_HISTORY_FRAMES) {
+      history.shift();
+    }
+
+    // Calculate average from history
+    let avgVx = 0;
+    let avgVy = 0;
+    for (const entry of history) {
+      avgVx += entry.vx;
+      avgVy += entry.vy;
+    }
+    avgVx /= history.length;
+    avgVy /= history.length;
+
+    // Blend with current using smoothing factor
+    let smoothedVx = vx * VELOCITY_SMOOTHING_FACTOR + avgVx * (1 - VELOCITY_SMOOTHING_FACTOR);
+    let smoothedVy = vy * VELOCITY_SMOOTHING_FACTOR + avgVy * (1 - VELOCITY_SMOOTHING_FACTOR);
+
+    // Direction commitment: resist sudden direction changes
+    const prevMag = Math.sqrt(prevVx * prevVx + prevVy * prevVy);
+    const currMag = Math.sqrt(smoothedVx * smoothedVx + smoothedVy * smoothedVy);
+
+    if (prevMag > 0.1 && currMag > 0.1) {
+      // Normalize directions
+      const prevDirX = prevVx / prevMag;
+      const prevDirY = prevVy / prevMag;
+      const currDirX = smoothedVx / currMag;
+      const currDirY = smoothedVy / currMag;
+
+      // Calculate dot product (1 = same direction, -1 = opposite)
+      const dot = prevDirX * currDirX + prevDirY * currDirY;
+
+      // If direction change is significant, blend toward previous direction
+      if (dot < DIRECTION_COMMIT_THRESHOLD) {
+        const blendFactor = DIRECTION_COMMIT_STRENGTH * (1 - dot) / 2;
+        smoothedVx = smoothedVx * (1 - blendFactor) + prevVx * blendFactor;
+        smoothedVy = smoothedVy * (1 - blendFactor) + prevVy * blendFactor;
+      }
+    }
+
+    return { vx: smoothedVx, vy: smoothedVy };
+  }
+
+  // ==================== SC2-STYLE PHYSICS PUSHING ====================
+
+  /**
+   * Calculate physics push force from nearby units.
+   * Units push each other instead of avoiding - creates natural flow.
+   */
+  private calculatePhysicsPush(
+    selfId: number,
+    selfTransform: Transform,
+    selfUnit: Unit,
+    out: PooledVector2
+  ): void {
+    out.x = 0;
+    out.y = 0;
+
+    if (selfUnit.isFlying) return;
+
+    const nearbyIds = this.world.unitGrid.queryRadius(
+      selfTransform.x,
+      selfTransform.y,
+      PHYSICS_PUSH_RADIUS + selfUnit.collisionRadius
+    );
+
+    for (const entityId of nearbyIds) {
+      if (entityId === selfId) continue;
+
+      const entity = this.world.getEntity(entityId);
+      if (!entity) continue;
+
+      const otherTransform = entity.get<Transform>('Transform');
+      const otherUnit = entity.get<Unit>('Unit');
+      if (!otherTransform || !otherUnit) continue;
+
+      if (otherUnit.state === 'dead') continue;
+      if (otherUnit.isFlying) continue; // Don't push flying units
+
+      const dx = selfTransform.x - otherTransform.x;
+      const dy = selfTransform.y - otherTransform.y;
+      const distSq = dx * dx + dy * dy;
+      const minDist = selfUnit.collisionRadius + otherUnit.collisionRadius;
+      const pushDist = minDist + PHYSICS_PUSH_RADIUS;
+
+      if (distSq < pushDist * pushDist && distSq > 0.0001) {
+        const dist = Math.sqrt(distSq);
+
+        // Normalize direction (away from other unit)
+        const nx = dx / dist;
+        const ny = dy / dist;
+
+        // Calculate push strength based on distance
+        let pushStrength: number;
+        if (dist < minDist) {
+          // Overlapping - extra strong push
+          pushStrength = PHYSICS_OVERLAP_PUSH * (1 - dist / minDist);
+        } else {
+          // Normal push with falloff
+          const t = (dist - minDist) / PHYSICS_PUSH_RADIUS;
+          pushStrength = PHYSICS_PUSH_STRENGTH * Math.pow(1 - t, PHYSICS_PUSH_FALLOFF);
+        }
+
+        out.x += nx * pushStrength;
+        out.y += ny * pushStrength;
+      }
+    }
+  }
+
+  // ==================== STUCK DETECTION ====================
+
+  /**
+   * Detect if a unit is stuck and apply random nudge if needed.
+   * Returns nudge force to apply (or zero if not stuck).
+   */
+  private handleStuckDetection(
+    entityId: number,
+    transform: Transform,
+    unit: Unit,
+    currentVelMag: number,
+    out: PooledVector2
+  ): void {
+    out.x = 0;
+    out.y = 0;
+
+    // Get or create stuck state
+    let state = this.stuckState.get(entityId);
+    if (!state) {
+      state = { framesStuck: 0, lastX: transform.x, lastY: transform.y };
+      this.stuckState.set(entityId, state);
+    }
+
+    // Check if unit has moved significantly
+    const movedX = Math.abs(transform.x - state.lastX);
+    const movedY = Math.abs(transform.y - state.lastY);
+    const moved = movedX + movedY;
+
+    // Update last position
+    state.lastX = transform.x;
+    state.lastY = transform.y;
+
+    // Determine if stuck
+    const isStuck = currentVelMag < STUCK_VELOCITY_THRESHOLD && moved < 0.05;
+
+    if (isStuck) {
+      state.framesStuck++;
+
+      if (state.framesStuck >= STUCK_DETECTION_FRAMES) {
+        // Apply random nudge using deterministic seeded random
+        // Use entity ID and current tick for seed
+        const seed = entityId * 12345 + this.currentTick;
+        const angle = ((seed % 628) / 100) * Math.PI; // 0 to 2*PI
+
+        out.x = Math.cos(angle) * STUCK_NUDGE_STRENGTH;
+        out.y = Math.sin(angle) * STUCK_NUDGE_STRENGTH;
+
+        // Reset counter after nudge
+        state.framesStuck = 0;
+      }
+    } else {
+      // Reset if moving
+      state.framesStuck = 0;
+    }
   }
 
   /**
@@ -1166,6 +1440,9 @@ export class MovementSystem extends System {
       const velocity = entity.get<Velocity>('Velocity');
       if (!transform || !unit || !velocity) continue;
 
+      // Store previous rotation for render interpolation
+      transform.prevRotation = transform.rotation;
+
       // Handle dead units
       if (unit.state === 'dead') {
         velocity.zero();
@@ -1205,6 +1482,20 @@ export class MovementSystem extends System {
             const sepMag = Math.sqrt(sepMagSq);
             velocity.x = (tempSeparation.x / sepMag) * idleRepelSpeed;
             velocity.y = (tempSeparation.y / sepMag) * idleRepelSpeed;
+
+            // Update rotation to face movement direction
+            // Note: Y is negated for Three.js coordinate system
+            const targetRotation = Math.atan2(-velocity.y, velocity.x);
+            const rotationDiff = targetRotation - transform.rotation;
+            let normalizedDiff = rotationDiff;
+            while (normalizedDiff > Math.PI) normalizedDiff -= Math.PI * 2;
+            while (normalizedDiff < -Math.PI) normalizedDiff += Math.PI * 2;
+            const turnRate = 8 * dt;
+            if (Math.abs(normalizedDiff) < turnRate) {
+              transform.rotation = targetRotation;
+            } else {
+              transform.rotation += Math.sign(normalizedDiff) * turnRate;
+            }
 
             // Apply movement
             transform.translate(velocity.x * dt, velocity.y * dt);
@@ -1316,8 +1607,9 @@ export class MovementSystem extends System {
               targetX = attackTargetX;
               targetY = attackTargetY;
             } else {
+              // Note: Y is negated for Three.js coordinate system
               transform.rotation = Math.atan2(
-                targetTransform.y - transform.y,
+                -(targetTransform.y - transform.y),
                 targetTransform.x - transform.x
               );
               // Use unit's deceleration rate for stopping when in attack range
@@ -1566,13 +1858,40 @@ export class MovementSystem extends System {
       finalVx += tempBuildingAvoid.x;
       finalVy += tempBuildingAvoid.y;
 
-      // Apply velocity
-      const speedDamping = unit.currentSpeed < unit.maxSpeed * 0.2 ? 0.5 : 1.0;
-      velocity.x = finalVx * speedDamping;
-      velocity.y = finalVy * speedDamping;
+      // SC2-STYLE: Physics pushing between units (replaces RVO collision avoidance)
+      if (!unit.isFlying) {
+        this.calculatePhysicsPush(entity.id, transform, unit, tempPhysicsPush);
+        finalVx += tempPhysicsPush.x;
+        finalVy += tempPhysicsPush.y;
+      }
+
+      // SC2-STYLE: Velocity smoothing to prevent jitter
+      const smoothed = this.smoothVelocity(
+        entity.id,
+        finalVx,
+        finalVy,
+        velocity.x,
+        velocity.y
+      );
+      finalVx = smoothed.vx;
+      finalVy = smoothed.vy;
+
+      // SC2-STYLE: Stuck detection and nudge
+      const currentVelMag = Math.sqrt(finalVx * finalVx + finalVy * finalVy);
+      if (distance > this.arrivalThreshold) {
+        this.handleStuckDetection(entity.id, transform, unit, currentVelMag, tempStuckNudge);
+        finalVx += tempStuckNudge.x;
+        finalVy += tempStuckNudge.y;
+      }
+
+      // Apply velocity (removed speed damping - physics push handles this better)
+      velocity.x = finalVx;
+      velocity.y = finalVy;
 
       // Update rotation
-      const targetRotation = Math.atan2(dy, dx);
+      // Note: Y is negated because Three.js rotation.y goes CCW (from +X toward +Z),
+      // but game Y maps to Three.js Z, so we need to flip the Y component
+      const targetRotation = Math.atan2(-(dy), dx);
       const rotationDiff = targetRotation - transform.rotation;
 
       let normalizedDiff = rotationDiff;

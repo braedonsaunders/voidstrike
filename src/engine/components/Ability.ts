@@ -221,14 +221,28 @@ export const DOMINION_ABILITIES: Record<string, AbilityDefinition> = {
   power_cannon: {
     id: 'power_cannon',
     name: 'Power Cannon',
-    description: 'Fire a devastating charged shot dealing massive damage to a single target',
-    cooldown: 15,
-    energyCost: 50,
+    description: 'Channel a devastating charged blast dealing 300 damage to a single target. 2 second charge time.',
+    cooldown: 71, // Long cooldown for big ability
+    energyCost: 100,
     range: 10,
     targetType: 'unit',
     hotkey: 'E',
-    damage: 200,
-    aoeRadius: 2, // Small splash damage around impact
+    damage: 300,
+    duration: 2, // 2 second charge-up time
+    aoeRadius: 0, // Single target - no splash
+  },
+  yamato_cannon: {
+    id: 'yamato_cannon',
+    name: 'Yamato Cannon',
+    description: 'Channel a devastating blast that deals 300 damage to a single target. 2 second charge time.',
+    cooldown: 71, // SC2 Yamato cooldown
+    energyCost: 100, // SC2 Yamato energy cost
+    range: 10, // SC2 Yamato range
+    targetType: 'unit',
+    hotkey: 'Y',
+    damage: 300, // SC2 Yamato base damage (240 + upgrades)
+    duration: 2, // 2 second charge-up time
+    aoeRadius: 0, // Single target - no splash
   },
   warp_jump: {
     id: 'warp_jump',

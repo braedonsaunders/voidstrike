@@ -191,6 +191,13 @@
   - Reduced MovementSystem avoidance margins (0.6→0.3 hard, 1.5→0.8 soft) since navmesh provides primary avoidance
 - [ ] **Debug navmesh visualization** - Visual overlay to verify navmesh coverage
 - [x] **Fix crowd velocity returning near-zero** - Root cause was twofold: (1) Crowd agent maxSpeed was set to unit.currentSpeed (accelerating speed) instead of unit.maxSpeed, artificially capping velocity. (2) Crowd agent maxAcceleration was set to maxSpeed × 1.5 (~4.2) while SC2-style ground units expect instant acceleration (1000). Fixed by always using unit.maxSpeed for crowd and setting maxAcceleration to 100.0 for near-instant acceleration.
+- [x] **SC2-style hybrid steering** - Major overhaul of unit collision avoidance to match SC2's approach:
+  - **Disabled DetourCrowd RVO obstacle avoidance** - Crowd now only provides path corridor direction, not local avoidance (eliminates jitter from RVO oscillation)
+  - **Physics pushing between units** - Units push each other with soft forces instead of avoiding, creating natural flow (PHYSICS_PUSH_STRENGTH=8.0)
+  - **Velocity smoothing** - 3-frame velocity history blending prevents jitter (VELOCITY_SMOOTHING_FACTOR=0.3)
+  - **Direction commitment** - Resists sudden direction reversals to prevent reciprocal dance
+  - **Reduced building avoidance margins** - Trust navmesh more (0.3→0.1 hard, 0.8→0.3 soft)
+  - **Stuck detection with nudge** - If unit hasn't moved for 12 frames, apply deterministic random nudge
 
 ### Terrain Generation Improvements (January 2026)
 - [x] **Slope-based texture blending** - Fixed terrain sampleTerrain() to use average elevation instead of MAX, which was flattening cliffs and preventing proper texture blending
@@ -205,6 +212,12 @@
   - Expanded `isAdjacentToRamp` check radius from 1 to 3 cells to handle wider ramps
   - Added early ramp proximity check to `isCliffEdgeCell` (5-cell radius) to prevent ground cells at ramp ends from being incorrectly flattened as cliff edges
   - This ensures cells near ramps use heightmap values for smooth height transitions instead of being treated as cliff edges, guaranteeing ramps are fully walkable at both upper and lower ends
+
+### Minimap Targeting (January 2026) ✓
+- [x] **SC2-style minimap command targeting** - Press A (attack), M (move), or P (patrol) then click minimap to issue commands
+- [x] **Unified command target mode** - Shared state between canvas and minimap via `commandTargetMode` in gameStore
+- [x] **Visual feedback** - Minimap border changes color when in targeting mode (red=attack, blue=move, yellow=patrol)
+- [x] **Shift-click queuing** - Hold shift to queue commands without exiting targeting mode
 
 ### Camera & Input Fixes (January 2026)
 - [x] **WASD keys removed from camera** - WASD was conflicting with shortcuts (A=attack move, S=stop, etc.). Camera now uses arrow keys only for keyboard panning.
@@ -594,6 +607,20 @@
 - [x] Smooth accel/decel for lift-off and landing animations
 - [x] Thruster effects on all flyable buildings (headquarters, orbital_station, infantry_bay, forge, hangar)
 - [x] Engine exhaust and smoke trail effects during flight
+
+### Building Placement SC2 Polish (January 2026)
+- [x] Fixed green/blue preview offset - Grid tiles now properly centered on building footprint
+- [x] Fixed blueprint persistence bug - Preview clears on invalid placement without shift key
+- [x] SC2-style worker construction - Workers wander inside building footprint during active construction
+- [x] Scaffolding visibility fix - Yellow scaffolding only visible during ACTIVE construction (not paused/waiting)
+- [x] Scaffolding cleanup on instancing - All construction effects (scaffold, dust, blueprint) now cleaned up when building switches to instanced rendering
+
+### Addon System Implementation (January 2026)
+- [x] Production Module (Reactor) button added to CommandCard UI
+- [x] Addons now build over time instead of instantly (18s for Tech Lab, 36s for Reactor)
+- [x] Addons auto-construct without workers (SC2 style)
+- [x] Reactor double-production implemented - Halved build time for reactor-eligible units
+- [x] Tech Lab unlocks advanced units (breacher, operative, devastator, colossus, etc.)
 
 ### Visual Polish
 - [ ] Unit wireframes (damage state)

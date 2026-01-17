@@ -27,6 +27,9 @@ export interface WallLineState {
   totalCost: { minerals: number; vespene: number };
 }
 
+// Command targeting mode for move/attack/patrol (like SC2)
+export type CommandTargetMode = 'move' | 'attack' | 'patrol' | null;
+
 export interface GameState {
   // Loading state
   isGameReady: boolean;
@@ -64,6 +67,7 @@ export interface GameState {
   isLandingMode: boolean; // Landing mode for flying buildings
   landingBuildingId: number | null; // Building ID that is about to land
   abilityTargetMode: string | null; // ability ID being targeted
+  commandTargetMode: CommandTargetMode; // move/attack/patrol targeting mode (SC2-style)
   showMinimap: boolean;
   showResourcePanel: boolean;
   showTechTree: boolean;
@@ -100,6 +104,7 @@ export interface GameState {
   setRepairMode: (isActive: boolean) => void;
   setLandingMode: (isActive: boolean, buildingId?: number | null) => void;
   setAbilityTargetMode: (abilityId: string | null) => void;
+  setCommandTargetMode: (mode: CommandTargetMode) => void;
   setCamera: (x: number, y: number, zoom?: number) => void;
   moveCameraTo: (x: number, y: number) => void;
   clearPendingCameraMove: () => void;
@@ -148,6 +153,7 @@ const initialState = {
   isLandingMode: false,
   landingBuildingId: null,
   abilityTargetMode: null,
+  commandTargetMode: null,
   showMinimap: true,
   showResourcePanel: true,
   showTechTree: false,
@@ -228,6 +234,7 @@ export const useGameStore = create<GameState>((set, get) => ({
       isBuilding: type !== null,
       buildingType: type,
       isSettingRallyPoint: false,
+      commandTargetMode: null,
       // Clear queue when exiting building mode
       buildingPlacementQueue: type === null ? [] : state.buildingPlacementQueue,
     })),
@@ -251,6 +258,7 @@ export const useGameStore = create<GameState>((set, get) => ({
       isLandingMode: false,
       landingBuildingId: null,
       abilityTargetMode: null,
+      commandTargetMode: null,
     }),
 
   startWallLine: (x, y) =>
@@ -316,6 +324,7 @@ export const useGameStore = create<GameState>((set, get) => ({
       isLandingMode: false,
       landingBuildingId: null,
       abilityTargetMode: null,
+      commandTargetMode: null,
     }),
 
   setRepairMode: (isActive) =>
@@ -327,6 +336,7 @@ export const useGameStore = create<GameState>((set, get) => ({
       isLandingMode: false,
       landingBuildingId: null,
       abilityTargetMode: null,
+      commandTargetMode: null,
     }),
 
   setLandingMode: (isActive, buildingId = null) =>
@@ -338,6 +348,7 @@ export const useGameStore = create<GameState>((set, get) => ({
       isSettingRallyPoint: false,
       isRepairMode: false,
       abilityTargetMode: null,
+      commandTargetMode: null,
     }),
 
   setAbilityTargetMode: (abilityId) =>
@@ -349,6 +360,19 @@ export const useGameStore = create<GameState>((set, get) => ({
       isLandingMode: false,
       landingBuildingId: null,
       isRepairMode: false,
+      commandTargetMode: null,
+    }),
+
+  setCommandTargetMode: (mode) =>
+    set({
+      commandTargetMode: mode,
+      isBuilding: false,
+      buildingType: null,
+      isSettingRallyPoint: false,
+      isLandingMode: false,
+      landingBuildingId: null,
+      isRepairMode: false,
+      abilityTargetMode: null,
     }),
 
   setCamera: (x, y, zoom) =>

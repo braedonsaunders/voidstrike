@@ -91,6 +91,10 @@ export interface UnitDefinition {
   // Armor type for damage calculations (e.g., 'light', 'armored', 'massive')
   // If not set, defaults to 'light'
   armorType?: string;
+  // Collision scale multiplier for large units like capital ships
+  // Multiplies the base collision radius (0.3 flying, 0.5 ground) for proper spacing
+  // If not set, defaults to 1.0
+  collisionScale?: number;
   // Audio configuration - references voice groups and sound IDs from config files
   // All audio is data-driven via public/audio/*.config.json files
   audio?: UnitAudioConfig;
@@ -264,8 +268,10 @@ export class Unit extends Component {
     this.canAttackGround = definition.canAttackGround ?? hasDamage;
     this.canAttackAir = definition.canAttackAir ?? false;
 
-    // Collision radius based on unit type
-    this.collisionRadius = definition.isFlying ? 0.3 : 0.5;
+    // Collision radius based on unit type, scaled by collisionScale for large units
+    const baseCollisionRadius = definition.isFlying ? 0.3 : 0.5;
+    const collisionScale = definition.collisionScale ?? 1.0;
+    this.collisionRadius = baseCollisionRadius * collisionScale;
 
     // Transform mechanics
     this.canTransform = definition.canTransform ?? false;

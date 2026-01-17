@@ -360,10 +360,13 @@ export class BuildingPlacementPreview {
     }
 
     // Check all tiles the building would occupy for terrain validity
-    for (let dy = -Math.floor(halfHeight); dy < Math.ceil(halfHeight); dy++) {
-      for (let dx = -Math.floor(halfWidth); dx < Math.ceil(halfWidth); dx++) {
-        const tileX = Math.floor(centerX + dx);
-        const tileY = Math.floor(centerY + dy);
+    // Use same tile calculation as updateGridMesh for consistency
+    for (let ty = 0; ty < height; ty++) {
+      for (let tx = 0; tx < width; tx++) {
+        const tileOffsetX = tx - halfWidth + 0.5;
+        const tileOffsetY = ty - halfHeight + 0.5;
+        const tileX = Math.floor(centerX + tileOffsetX);
+        const tileY = Math.floor(centerY + tileOffsetY);
 
         // Check bounds
         if (tileX < 0 || tileX >= this.mapData.width || tileY < 0 || tileY >= this.mapData.height) {
@@ -405,10 +408,16 @@ export class BuildingPlacementPreview {
     const halfHeight = height / 2;
     let vertexIndex = 0;
 
-    for (let dy = -Math.floor(halfHeight); dy < Math.ceil(halfHeight); dy++) {
-      for (let dx = -Math.floor(halfWidth); dx < Math.ceil(halfWidth); dx++) {
-        const tileX = Math.floor(centerX + dx);
-        const tileY = Math.floor(centerY + dy);
+    // Iterate over tiles from 0 to width/height, positioning relative to building center
+    for (let ty = 0; ty < height; ty++) {
+      for (let tx = 0; tx < width; tx++) {
+        // Calculate tile center relative to building center
+        const tileOffsetX = tx - halfWidth + 0.5;
+        const tileOffsetY = ty - halfHeight + 0.5;
+
+        // World position of this tile
+        const tileX = Math.floor(centerX + tileOffsetX);
+        const tileY = Math.floor(centerY + tileOffsetY);
 
         // Check if this tile is valid
         let tileValid = true;
@@ -423,15 +432,15 @@ export class BuildingPlacementPreview {
 
         const color = tileValid ? BuildingPlacementPreview.VALID_COLOR : BuildingPlacementPreview.INVALID_COLOR;
 
-        // Create quad for this tile
-        const x0 = centerX + dx - 0.5;
-        const x1 = centerX + dx + 0.5;
-        const y0 = centerY + dy - 0.5;
-        const y1 = centerY + dy + 0.5;
+        // Create quad for this tile, centered on the tile position
+        const x0 = centerX + tileOffsetX - 0.5;
+        const x1 = centerX + tileOffsetX + 0.5;
+        const y0 = centerY + tileOffsetY - 0.5;
+        const y1 = centerY + tileOffsetY + 0.5;
 
         // Get terrain height for this tile (use center point)
         const tileHeight = this.getTerrainHeight
-          ? this.getTerrainHeight(centerX + dx, centerY + dy) + BuildingPlacementPreview.GRID_OFFSET
+          ? this.getTerrainHeight(centerX + tileOffsetX, centerY + tileOffsetY) + BuildingPlacementPreview.GRID_OFFSET
           : BuildingPlacementPreview.GRID_OFFSET;
 
         // Four vertices for quad

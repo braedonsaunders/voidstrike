@@ -693,6 +693,32 @@ function CommandCardInner() {
               cost: { minerals: moduleDef.mineralCost, vespene: moduleDef.vespeneCost },
             });
           }
+
+          // Build Production Module (Reactor) addon button
+          const reactorDef = BUILDING_DEFINITIONS['production_module'];
+          if (reactorDef) {
+            const canAffordReactor = minerals >= reactorDef.mineralCost && vespene >= reactorDef.vespeneCost;
+            const localPlayer = getLocalPlayerId();
+            buttons.push({
+              id: 'build_production_module',
+              label: 'Reactor',
+              shortcut: 'C',
+              action: () => {
+                const currentGame = Game.getInstance();
+                const currentSelectedUnits = useGameStore.getState().selectedUnits;
+                if (currentGame && currentSelectedUnits.length > 0) {
+                  currentGame.eventBus.emit('building:build_addon', {
+                    buildingId: currentSelectedUnits[0],
+                    addonType: 'production_module',
+                    playerId: localPlayer,
+                  });
+                }
+              },
+              isDisabled: !canAffordReactor,
+              tooltip: reactorDef.description || 'Addon that enables double production of basic units.',
+              cost: { minerals: reactorDef.mineralCost, vespene: reactorDef.vespeneCost },
+            });
+          }
         }
 
         // Research commands
