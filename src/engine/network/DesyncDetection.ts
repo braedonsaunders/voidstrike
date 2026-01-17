@@ -112,6 +112,8 @@ export class DesyncDetectionManager {
   private isInDesyncState: boolean = false;
   private lastDesyncTick: number = -1;
   private commandHistory: Map<number, SerializedCommand[]> = new Map();
+  private lastCleanupTick: number = 0;
+  private static readonly CLEANUP_INTERVAL_TICKS = 100; // Cleanup every 100 ticks (~5 seconds at 20 TPS)
 
   constructor(game: Game, config: Partial<DesyncDetectionConfig> = {}) {
     this.game = game;
@@ -212,8 +214,12 @@ export class DesyncDetectionManager {
     });
     this.commandHistory.set(data.tick, commands);
 
-    // Cleanup old commands
-    this.cleanupCommandHistory();
+    // PERF: Periodic cleanup instead of per-command to reduce O(n) sweeps
+    const currentTick = this.game.getCurrentTick();
+    if (currentTick - this.lastCleanupTick >= DesyncDetectionManager.CLEANUP_INTERVAL_TICKS) {
+      this.cleanupCommandHistory();
+      this.lastCleanupTick = currentTick;
+    }
   }
 
   /**

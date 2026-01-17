@@ -45,6 +45,7 @@ export function usePublicLobbies(): UsePublicLobbiesReturn {
   const subRef = useRef<{ close: () => void } | null>(null);
   const relaysRef = useRef<string[]>([]);
   const lobbiesMapRef = useRef<Map<string, PublicLobby>>(new Map());
+  const cleanupIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   // Clean up old lobbies periodically
   const cleanupOldLobbies = useCallback(() => {
@@ -65,6 +66,20 @@ export function usePublicLobbies(): UsePublicLobbiesReturn {
   }, []);
 
   const startBrowsing = useCallback(async () => {
+    // Guard: Close any existing subscription before creating a new one
+    if (subRef.current) {
+      subRef.current.close();
+      subRef.current = null;
+    }
+    if (poolRef.current) {
+      poolRef.current.close(relaysRef.current);
+      poolRef.current = null;
+    }
+    if (cleanupIntervalRef.current) {
+      clearInterval(cleanupIntervalRef.current);
+      cleanupIntervalRef.current = null;
+    }
+
     setIsLoading(true);
     setError(null);
 
@@ -127,15 +142,8 @@ export function usePublicLobbies(): UsePublicLobbiesReturn {
 
       subRef.current = sub;
 
-      // Set up periodic cleanup
-      const cleanupInterval = setInterval(cleanupOldLobbies, 30000);
-
-      // Store cleanup for later
-      const originalClose = sub.close;
-      sub.close = () => {
-        clearInterval(cleanupInterval);
-        originalClose.call(sub);
-      };
+      // Set up periodic cleanup using ref
+      cleanupIntervalRef.current = setInterval(cleanupOldLobbies, 30000);
 
     } catch (e) {
       console.error('[LobbyBrowser] Error:', e);
@@ -145,6 +153,10 @@ export function usePublicLobbies(): UsePublicLobbiesReturn {
   }, [cleanupOldLobbies]);
 
   const stopBrowsing = useCallback(() => {
+    if (cleanupIntervalRef.current) {
+      clearInterval(cleanupIntervalRef.current);
+      cleanupIntervalRef.current = null;
+    }
     if (subRef.current) {
       subRef.current.close();
       subRef.current = null;

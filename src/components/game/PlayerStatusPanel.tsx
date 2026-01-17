@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState, memo } from 'react';
+import { useEffect, useState, memo, useRef } from 'react';
 import { useGameSetupStore, PLAYER_COLORS } from '@/store/gameSetupStore';
 import { Game } from '@/engine/core/Game';
 import { Selectable } from '@/engine/components/Selectable';
@@ -24,24 +24,38 @@ export const PlayerStatusPanel = memo(function PlayerStatusPanel() {
   const isSpectator = useGameSetupStore(state => state.isSpectator());
   const [playerStatuses, setPlayerStatuses] = useState<PlayerStatus[]>([]);
 
-  // Update player statuses periodically
+  // Cache to avoid redundant scans within the same tick
+  const lastTickRef = useRef(-1);
+  const cachedStatusesRef = useRef<PlayerStatus[]>([]);
+
+  // Update player statuses with tick-based caching
   useEffect(() => {
-    const updateStatuses = () => {
-      const game = Game.getInstance();
-      if (!game) return;
+    const game = Game.getInstance();
+    if (!game) return;
+
+    // Get active player slots (human or AI) and sort by player ID for consistent ordering
+    const activeSlots = playerSlots
+      .filter(slot => slot.type === 'human' || slot.type === 'ai')
+      .sort((a, b) => {
+        // Extract player number from ID (e.g., "player1" -> 1)
+        const numA = parseInt(a.id.replace('player', ''), 10) || 0;
+        const numB = parseInt(b.id.replace('player', ''), 10) || 0;
+        return numA - numB;
+      });
+
+    const computeStatuses = (): PlayerStatus[] => {
+      const currentTick = game.getCurrentTick();
+      // Skip if already computed for this tick
+      if (currentTick === lastTickRef.current) {
+        return cachedStatusesRef.current;
+      }
 
       const world = game.world;
       const statuses: PlayerStatus[] = [];
 
-      // Get active player slots (human or AI) and sort by player ID for consistent ordering
-      const activeSlots = playerSlots
-        .filter(slot => slot.type === 'human' || slot.type === 'ai')
-        .sort((a, b) => {
-          // Extract player number from ID (e.g., "player1" -> 1)
-          const numA = parseInt(a.id.replace('player', ''), 10) || 0;
-          const numB = parseInt(b.id.replace('player', ''), 10) || 0;
-          return numA - numB;
-        });
+      // PERF: Query entities once, then filter by player
+      const buildings = world.getEntitiesWith('Building', 'Selectable', 'Health');
+      const units = world.getEntitiesWith('Unit', 'Selectable', 'Health');
 
       for (const slot of activeSlots) {
         let buildingCount = 0;
@@ -49,8 +63,7 @@ export const PlayerStatusPanel = memo(function PlayerStatusPanel() {
         let workerCount = 0;
         let armySupply = 0;
 
-        // Count buildings
-        const buildings = world.getEntitiesWith('Building', 'Selectable', 'Health');
+        // Count buildings for this player
         for (const entity of buildings) {
           const selectable = entity.get<Selectable>('Selectable');
           const health = entity.get<Health>('Health');
@@ -59,8 +72,7 @@ export const PlayerStatusPanel = memo(function PlayerStatusPanel() {
           }
         }
 
-        // Count units
-        const units = world.getEntitiesWith('Unit', 'Selectable', 'Health');
+        // Count units for this player
         for (const entity of units) {
           const selectable = entity.get<Selectable>('Selectable');
           const unit = entity.get<Unit>('Unit');
@@ -89,15 +101,32 @@ export const PlayerStatusPanel = memo(function PlayerStatusPanel() {
         });
       }
 
+      lastTickRef.current = currentTick;
+      cachedStatusesRef.current = statuses;
+      return statuses;
+    };
+
+    const updateStatuses = () => {
+      const statuses = computeStatuses();
       setPlayerStatuses(statuses);
     };
+
+    // Subscribe to events that could change player stats
+    const eventBus = game.eventBus;
+    const unsubSpawned = eventBus.on('unit:spawned', updateStatuses);
+    const unsubDied = eventBus.on('unit:died', updateStatuses);
 
     // Update immediately
     updateStatuses();
 
-    // Update every second
-    const interval = setInterval(updateStatuses, 1000);
-    return () => clearInterval(interval);
+    // Update every 2 seconds (reduced from 1s since we have event-driven updates)
+    const interval = setInterval(updateStatuses, 2000);
+
+    return () => {
+      unsubSpawned();
+      unsubDied();
+      clearInterval(interval);
+    };
   }, [playerSlots]);
 
   // Only show if there are multiple players or spectating

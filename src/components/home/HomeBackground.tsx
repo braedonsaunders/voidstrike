@@ -738,6 +738,49 @@ export default function HomeBackground() {
       window.removeEventListener('mousemove', handleMouseMove);
       window.removeEventListener('resize', handleResize);
       cancelAnimationFrame(animationRef.current);
+
+      // Dispose star field
+      if (starsRef.current) {
+        starsRef.current.geometry.dispose();
+        (starsRef.current.material as THREE.Material).dispose();
+        scene.remove(starsRef.current);
+        starsRef.current = null;
+      }
+
+      // Dispose asteroids
+      for (const asteroid of asteroidsRef.current) {
+        asteroid.mesh.geometry.dispose();
+        (asteroid.mesh.material as THREE.Material).dispose();
+        scene.remove(asteroid.mesh);
+      }
+      asteroidsRef.current = [];
+
+      // Dispose energy streams
+      for (const stream of energyStreamsRef.current) {
+        stream.points.geometry.dispose();
+        (stream.points.material as THREE.Material).dispose();
+        scene.remove(stream.points);
+      }
+      energyStreamsRef.current = [];
+
+      // Dispose nebula
+      if (nebulaRef.current) {
+        nebulaRef.current.geometry.dispose();
+        (nebulaRef.current.material as THREE.Material).dispose();
+        scene.remove(nebulaRef.current);
+        nebulaRef.current = null;
+      }
+
+      // Dispose composer passes
+      if (composerRef.current) {
+        for (const pass of composerRef.current.passes) {
+          if ('dispose' in pass && typeof pass.dispose === 'function') {
+            pass.dispose();
+          }
+        }
+        composerRef.current = null;
+      }
+
       renderer.dispose();
       containerRef.current?.removeChild(renderer.domElement);
     };
