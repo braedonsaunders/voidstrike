@@ -110,19 +110,15 @@ export {
 } from './core';
 
 // JSON-based map exports (primary source of truth)
-// Maps are defined in src/data/maps/json/*.json
+// Maps are auto-discovered from src/data/maps/json/*.json
+// Just drop a new .json file in that folder to add a map
 export {
-  VOID_ASSAULT,
-  CRYSTAL_CAVERNS,
-  SCORCHED_BASIN,
-  CONTESTED_FRONTIER,
-  TITANS_COLOSSEUM,
-  BATTLE_ARENA,
   ALL_MAPS,
   MAPS_BY_PLAYER_COUNT,
   RANKED_MAPS,
   getMapById,
   getMapsForPlayerCount,
+  getAllMaps,
   DEFAULT_MAP,
 } from './json';
 

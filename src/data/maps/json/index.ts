@@ -1,57 +1,53 @@
 /**
- * JSON Map Registry
+ * JSON Map Auto-Discovery
  *
  * To add a new map:
- * 1. Drop your .json map file into this folder (src/data/maps/json/)
- * 2. Add an entry to registry.json with the filename and player count
+ * Simply drop your .json map file into this folder (src/data/maps/json/)
+ * It will be automatically discovered and loaded at build time.
  *
- * Example registry.json entry:
- * { "file": "my_custom_map.json", "playerCount": 2 }
+ * Requirements for map JSON:
+ * - Must have a valid "id" field (string)
+ * - Must have "playerCount" field (2, 4, 6, or 8)
+ * - Must follow the MapJson schema (see schema/MapJsonSchema.ts)
  */
 
 import type { MapData } from '../MapTypes';
 import type { MapJson } from '../schema/MapJsonSchema';
 import { jsonToMapData } from '../serialization/deserialize';
 
-// Import registry and all map files
-import registryData from './registry.json';
-import crystalCavernsJson from './crystal_caverns.json';
-import voidAssaultJson from './void_assault.json';
-import scorchedBasinJson from './scorched_basin.json';
-import contestedFrontierJson from './contested_frontier.json';
-import titansColosseumJson from './titans_colosseum.json';
-import battleArenaJson from './battle_arena.json';
+// Webpack require.context to auto-discover all JSON files in this folder
+// This runs at build time and bundles all matching files
+const mapContext = require.context('./', false, /^\.\/(?!registry).*\.json$/);
 
-// Map file name to imported JSON (add new maps here)
-const mapFiles: Record<string, unknown> = {
-  'crystal_caverns.json': crystalCavernsJson,
-  'void_assault.json': voidAssaultJson,
-  'scorched_basin.json': scorchedBasinJson,
-  'contested_frontier.json': contestedFrontierJson,
-  'titans_colosseum.json': titansColosseumJson,
-  'battle_arena.json': battleArenaJson,
-};
+// Load all discovered maps
+const loadedMaps: MapData[] = [];
+const loadErrors: string[] = [];
 
-// Registry type
-interface MapRegistry {
-  maps: Array<{
-    file: string;
-    playerCount: 2 | 4 | 6 | 8;
-  }>;
+for (const key of mapContext.keys()) {
+  try {
+    const json = mapContext(key) as MapJson;
+
+    // Validate required fields exist
+    if (!json.id || typeof json.id !== 'string') {
+      loadErrors.push(`${key}: Missing or invalid 'id' field`);
+      continue;
+    }
+    if (!json.playerCount || ![2, 4, 6, 8].includes(json.playerCount)) {
+      loadErrors.push(`${key}: Missing or invalid 'playerCount' (must be 2, 4, 6, or 8)`);
+      continue;
+    }
+
+    const mapData = jsonToMapData(json);
+    loadedMaps.push(mapData);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    loadErrors.push(`${key}: ${message}`);
+  }
 }
 
-const registry = registryData as MapRegistry;
-
-// Load all maps from registry
-const loadedMaps: MapData[] = [];
-for (const entry of registry.maps) {
-  const json = mapFiles[entry.file];
-  if (json) {
-    const mapData = jsonToMapData(json as MapJson);
-    loadedMaps.push(mapData);
-  } else {
-    console.warn(`Map file not found: ${entry.file} - Add import above`);
-  }
+// Log any load errors in development
+if (loadErrors.length > 0 && process.env.NODE_ENV === 'development') {
+  console.warn('Map loading errors:', loadErrors);
 }
 
 // All maps registry (by ID)
@@ -60,7 +56,7 @@ for (const map of loadedMaps) {
   ALL_MAPS[map.id] = map;
 }
 
-// Maps by player count (from registry)
+// Maps by player count (extracted from map JSON)
 export const MAPS_BY_PLAYER_COUNT: Record<2 | 4 | 6 | 8, MapData[]> = {
   2: [],
   4: [],
@@ -68,24 +64,15 @@ export const MAPS_BY_PLAYER_COUNT: Record<2 | 4 | 6 | 8, MapData[]> = {
   8: [],
 };
 
-for (const entry of registry.maps) {
-  const json = mapFiles[entry.file];
-  if (json) {
-    const mapData = jsonToMapData(json as MapJson);
-    MAPS_BY_PLAYER_COUNT[entry.playerCount].push(mapData);
+for (const map of loadedMaps) {
+  const count = map.playerCount as 2 | 4 | 6 | 8;
+  if (MAPS_BY_PLAYER_COUNT[count]) {
+    MAPS_BY_PLAYER_COUNT[count].push(map);
   }
 }
 
-// Export individual maps for direct access (IDs use underscores to match JSON)
-export const CRYSTAL_CAVERNS = ALL_MAPS['crystal_caverns'];
-export const VOID_ASSAULT = ALL_MAPS['void_assault'];
-export const SCORCHED_BASIN = ALL_MAPS['scorched_basin'];
-export const CONTESTED_FRONTIER = ALL_MAPS['contested_frontier'];
-export const TITANS_COLOSSEUM = ALL_MAPS['titans_colosseum'];
-export const BATTLE_ARENA = ALL_MAPS['battle_arena'];
-
 // Maps available for ranked play
-export const RANKED_MAPS: MapData[] = Object.values(ALL_MAPS).filter(m => m.isRanked);
+export const RANKED_MAPS: MapData[] = loadedMaps.filter(m => m.isRanked);
 
 // Get map by ID
 export function getMapById(id: string): MapData | undefined {
@@ -97,5 +84,13 @@ export function getMapsForPlayerCount(count: 2 | 4 | 6 | 8): MapData[] {
   return MAPS_BY_PLAYER_COUNT[count] || [];
 }
 
-// Default map for quick play (2-player 1v1)
-export const DEFAULT_MAP = CRYSTAL_CAVERNS || loadedMaps[0];
+// Get all loaded maps
+export function getAllMaps(): MapData[] {
+  return [...loadedMaps];
+}
+
+// Default map for quick play (prefer ranked 2-player map)
+export const DEFAULT_MAP =
+  RANKED_MAPS.find(m => m.playerCount === 2) ||
+  MAPS_BY_PLAYER_COUNT[2][0] ||
+  loadedMaps[0];
