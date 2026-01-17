@@ -765,6 +765,7 @@ export class CombatSystem extends System {
       targetHeight,
       targetIsFlying,
       targetUnitType: targetUnit?.unitId, // For airborne height lookup
+      targetPlayerId: targetSelectable?.playerId, // For player-colored damage numbers
       isKillingBlow: targetHealth && targetHealth.current <= 0,
     });
 

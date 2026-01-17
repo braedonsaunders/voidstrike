@@ -17,6 +17,7 @@ import * as Phaser from 'phaser';
 import { EventBus } from '@/engine/core/EventBus';
 import { useProjectionStore } from '@/store/projectionStore';
 import { AssetManager, DEFAULT_AIRBORNE_HEIGHT } from '@/assets/AssetManager';
+import { getPlayerColor } from '@/store/gameSetupStore';
 
 // ============================================
 // CONSTANTS
@@ -25,36 +26,21 @@ import { AssetManager, DEFAULT_AIRBORNE_HEIGHT } from '@/assets/AssetManager';
 // Consolidation window - hits within this time merge into one number
 const CONSOLIDATION_WINDOW = 400; // ms
 
-// Damage thresholds for color coding
+// Damage thresholds for intensity gradient
 const HIGH_DAMAGE_THRESHOLD = 30;
 const CRITICAL_THRESHOLD = 50;
 
-// Colors - vibrant with good contrast
-const COLORS = {
-  normal: '#ffe066',      // Warm gold
-  high: '#ffb347',        // Rich amber
-  critical: '#ff7f50',    // Coral orange
-  killingBlow: '#ff4757', // Vivid red
+// Special colors for non-damage events
+const SPECIAL_COLORS = {
   healing: '#7bed9f',     // Soft green
   shield: '#70a1ff',      // Sky blue
   miss: '#888888',        // Gray for misses
 } as const;
 
-// Glow colors (slightly more saturated for bloom effect)
-const GLOW_COLORS = {
-  normal: '#ffd700',
-  high: '#ff9f1a',
-  critical: '#ff6348',
-  killingBlow: '#ff3838',
-  healing: '#2ed573',
-  shield: '#1e90ff',
-  miss: '#666666',
-} as const;
-
-// Font settings - sized for visibility and impact
+// Font settings - compact for cleaner look
 const FONT_FAMILY = 'Orbitron, Arial Black, Arial, sans-serif';
-const FONT_SIZE = 18; // Readable, impactful size
-const FONT_SIZE_LARGE = 24; // For high damage
+const FONT_SIZE = 12; // Smaller, cleaner size
+const FONT_SIZE_LARGE = 16; // For high damage
 
 // Height offset above unit for damage numbers (above health bar)
 const DAMAGE_NUMBER_HEIGHT_OFFSET = 1.5;
@@ -79,6 +65,7 @@ interface ActiveDamageNumber {
   worldZ: number;
   worldY: number;
   isKillingBlow: boolean;
+  playerId: string; // Owner of the unit taking damage (for color)
   text: Phaser.GameObjects.Text;
   shadow: Phaser.GameObjects.Text;
   glow: Phaser.GameObjects.Text; // Soft glow layer behind text
@@ -138,9 +125,9 @@ export class DamageNumberSystem {
       const glow = this.scene.add.text(0, 0, '', {
         fontSize: `${FONT_SIZE}px`,
         fontFamily: FONT_FAMILY,
-        color: GLOW_COLORS.normal,
-        stroke: GLOW_COLORS.normal,
-        strokeThickness: 12,
+        color: '#ffffff',
+        stroke: '#ffffff',
+        strokeThickness: 8,
         resolution,
       });
       glow.setOrigin(0.5, 0.5);
@@ -153,7 +140,7 @@ export class DamageNumberSystem {
         fontFamily: FONT_FAMILY,
         color: '#000000',
         stroke: '#000000',
-        strokeThickness: 6,
+        strokeThickness: 4,
         resolution,
       });
       shadow.setOrigin(0.5, 0.5);
@@ -164,14 +151,14 @@ export class DamageNumberSystem {
       const text = this.scene.add.text(0, 0, '', {
         fontSize: `${FONT_SIZE}px`,
         fontFamily: FONT_FAMILY,
-        color: COLORS.normal,
+        color: '#ffffff',
         stroke: '#000000',
-        strokeThickness: 4,
+        strokeThickness: 3,
         shadow: {
           offsetX: 0,
-          offsetY: 2,
+          offsetY: 1,
           color: '#000000',
-          blur: 4,
+          blur: 3,
           fill: true,
         },
         resolution,
@@ -238,6 +225,7 @@ export class DamageNumberSystem {
       isCritical?: boolean;
       targetIsFlying?: boolean;
       targetUnitType?: string; // For airborne height lookup
+      targetPlayerId?: string; // For player-colored damage numbers
     }) => {
       this.onDamageDealt(data);
     });
@@ -270,6 +258,7 @@ export class DamageNumberSystem {
     isCritical?: boolean;
     targetIsFlying?: boolean;
     targetUnitType?: string;
+    targetPlayerId?: string;
   }): void {
     const now = Date.now();
     const existing = this.activeNumbers.get(data.targetId);
@@ -287,6 +276,8 @@ export class DamageNumberSystem {
     // Position damage numbers above health bars (model height + extra offset)
     const worldY = terrainHeight + flyingOffset + modelHeight + DAMAGE_NUMBER_HEIGHT_OFFSET;
 
+    const playerId = data.targetPlayerId ?? 'unknown';
+
     if (existing && (now - existing.lastHitTime) < CONSOLIDATION_WINDOW) {
       // Consolidate into existing number
       this.consolidateDamage(existing, data.damage, data.targetPos, worldY, data.isKillingBlow);
@@ -297,7 +288,8 @@ export class DamageNumberSystem {
         data.damage,
         data.targetPos,
         worldY,
-        data.isKillingBlow ?? false
+        data.isKillingBlow ?? false,
+        playerId
       );
     }
   }
@@ -334,14 +326,14 @@ export class DamageNumberSystem {
     const glow = this.scene.add.text(0, 0, 'MISS', {
       fontFamily: FONT_FAMILY,
       fontSize: `${FONT_SIZE}px`,
-      color: GLOW_COLORS.miss,
+      color: '#666666',
       fontStyle: 'bold',
     }).setOrigin(0.5).setAlpha(0.4);
 
     const text = this.scene.add.text(0, 0, 'MISS', {
       fontFamily: FONT_FAMILY,
       fontSize: `${FONT_SIZE}px`,
-      color: COLORS.miss,
+      color: SPECIAL_COLORS.miss,
       fontStyle: 'bold',
     }).setOrigin(0.5);
 
@@ -435,7 +427,8 @@ export class DamageNumberSystem {
     damage: number,
     pos: { x: number; y: number },
     worldY: number,
-    isKillingBlow: boolean
+    isKillingBlow: boolean,
+    playerId: string
   ): void {
     // Remove any existing number for this target
     this.removeDamageNumber(targetId);
@@ -449,6 +442,10 @@ export class DamageNumberSystem {
     // Slight random horizontal offset for visual variety
     const xDrift = (Math.random() - 0.5) * 8;
 
+    // Get player color for this unit
+    const playerColorHex = getPlayerColor(playerId);
+    const glowColor = '#' + playerColorHex.toString(16).padStart(6, '0');
+
     const damageNumber: ActiveDamageNumber = {
       targetId,
       totalDamage: damage,
@@ -459,6 +456,7 @@ export class DamageNumberSystem {
       worldZ: pos.y,
       worldY,
       isKillingBlow,
+      playerId,
       text: textItem.text,
       shadow: textItem.shadow,
       glow: textItem.glow,
@@ -466,7 +464,7 @@ export class DamageNumberSystem {
       xOffset: xDrift,
       currentScale: 0.5,
       isAnimatingPop: false,
-      glowColor: GLOW_COLORS.normal,
+      glowColor,
     };
 
     this.activeNumbers.set(targetId, damageNumber);
@@ -480,10 +478,10 @@ export class DamageNumberSystem {
 
   /**
    * Update the text content and style of a damage number
-   * Dynamic sizing for high damage, glow color updates
+   * Uses player color with gradient - lighter for low damage, darker for high damage
    */
   private updateDamageText(damageNumber: ActiveDamageNumber): void {
-    const { text, shadow, glow, totalDamage, isKillingBlow } = damageNumber;
+    const { text, shadow, glow, totalDamage, isKillingBlow, playerId } = damageNumber;
 
     // Format damage text - simple number
     const damageStr = Math.round(totalDamage).toString();
@@ -492,41 +490,55 @@ export class DamageNumberSystem {
     shadow.setText(damageStr);
     glow.setText(damageStr);
 
-    // Determine color and glow based on damage level
-    let color: string;
-    let glowColor: string;
-    let fontSize = FONT_SIZE;
+    // Get player base color
+    const playerColorHex = getPlayerColor(playerId);
 
-    if (isKillingBlow) {
-      color = COLORS.killingBlow;
-      glowColor = GLOW_COLORS.killingBlow;
-      fontSize = FONT_SIZE_LARGE;
-    } else if (totalDamage >= CRITICAL_THRESHOLD) {
-      color = COLORS.critical;
-      glowColor = GLOW_COLORS.critical;
+    // Calculate damage intensity (0 = low damage, 1 = high damage)
+    // This determines how dark the color should be
+    const damageIntensity = Math.min(1, totalDamage / CRITICAL_THRESHOLD);
+
+    // Create color gradient: lighter (higher brightness) for low damage, darker for high damage
+    // Start at 130% brightness for low damage, go down to 70% for high damage
+    const brightnessMultiplier = 1.3 - (damageIntensity * 0.6);
+    const textColor = this.adjustColorBrightness(playerColorHex, brightnessMultiplier);
+
+    // Glow always uses the base player color
+    const glowColor = '#' + playerColorHex.toString(16).padStart(6, '0');
+
+    // Font size: slightly larger for high damage
+    let fontSize = FONT_SIZE;
+    if (isKillingBlow || totalDamage >= CRITICAL_THRESHOLD) {
       fontSize = FONT_SIZE_LARGE;
     } else if (totalDamage >= HIGH_DAMAGE_THRESHOLD) {
-      color = COLORS.high;
-      glowColor = GLOW_COLORS.high;
       fontSize = FONT_SIZE + 2;
-    } else {
-      color = COLORS.normal;
-      glowColor = GLOW_COLORS.normal;
     }
 
     // Store glow color for animations
     damageNumber.glowColor = glowColor;
 
     // Apply colors
-    text.setColor(color);
+    text.setColor(textColor);
     glow.setColor(glowColor);
-    glow.setStroke(glowColor, 12);
+    glow.setStroke(glowColor, 8);
 
     // Apply font sizes
     text.setFontSize(fontSize);
     shadow.setFontSize(fontSize);
     glow.setFontSize(fontSize);
-    text.setStroke('#000000', 4);
+    text.setStroke('#000000', 3);
+  }
+
+  /**
+   * Adjust color brightness
+   * @param hexColor - Color as hex number (e.g., 0xff4040)
+   * @param multiplier - Brightness multiplier (1 = original, >1 = brighter, <1 = darker)
+   * @returns Color as hex string (e.g., '#ff6060')
+   */
+  private adjustColorBrightness(hexColor: number, multiplier: number): string {
+    const r = Math.min(255, Math.max(0, Math.round(((hexColor >> 16) & 0xff) * multiplier)));
+    const g = Math.min(255, Math.max(0, Math.round(((hexColor >> 8) & 0xff) * multiplier)));
+    const b = Math.min(255, Math.max(0, Math.round((hexColor & 0xff) * multiplier)));
+    return '#' + ((r << 16) | (g << 8) | b).toString(16).padStart(6, '0');
   }
 
   /**

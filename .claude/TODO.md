@@ -189,6 +189,10 @@
 ### Audio System Fixes
 - [x] **"Not enough resources" alert audio fix** - Audio was not playing for resource insufficiency alerts. Systems were emitting `'ui:error'` events but AudioSystem was listening for `'alert:notEnoughMinerals'` and `'alert:notEnoughVespene'`. Fixed by updating ProductionSystem, BuildingPlacementSystem, ResearchSystem, and WallSystem to emit the correct alert events alongside the visual warning events.
 
+### Phaser4 Overlay Fixes
+- [x] **Team marker/selection ring positioning bug** - Ground rings appeared way above the map in battle simulator because InstancedMesh rotation was transforming instance matrix coordinates (Y/Z swap). Fixed by applying rotation per-instance via quaternion instead of on mesh parent.
+- [x] **Damage number player colors** - Damage numbers now use the unit owner's player color with brightness gradient (lighter for low damage, darker for high damage). Also reduced font size from 18px to 12px for cleaner appearance.
+
 ### Building System Fixes
 - [x] **Building construction completion bug** - Buildings would stay translucent, construction particles wouldn't disappear, buildings could resize incorrectly. Fixed material array handling and construction effect cleanup when switching to instanced rendering.
 - [x] **Instanced rendering scale bug** - Buildings using instanced rendering appeared extremely small because the geometry was used without the model's normalization scale. Fixed by tracking and applying modelScale to instance matrices.
