@@ -1330,14 +1330,16 @@ export function WebGPUGameCanvas() {
           }
           // If not valid, stay in landing mode - player can try another spot
         }
-      } else if (isBuilding && buildingType) {
+      } else if (isBuilding && buildingType && placementPreviewRef.current) {
         // Place building (supports shift-click to queue multiple placements)
-        const worldPos = cameraRef.current?.screenToWorld(e.clientX, e.clientY);
-        if (worldPos && gameRef.current) {
+        const snappedPos = placementPreviewRef.current.getSnappedPosition();
+        const isValid = placementPreviewRef.current.isPlacementValid();
+
+        if (isValid && gameRef.current) {
           const selectedUnits = useGameStore.getState().selectedUnits;
           gameRef.current.eventBus.emit('building:place', {
             buildingType,
-            position: { x: worldPos.x, y: worldPos.z },
+            position: { x: snappedPos.x, y: snappedPos.y },
             workerId: selectedUnits.length > 0 ? selectedUnits[0] : undefined,
           });
 
@@ -1345,11 +1347,16 @@ export function WebGPUGameCanvas() {
             // Shift held: add to queue for visual display, stay in building mode
             useGameStore.getState().addToBuildingQueue({
               buildingType,
-              x: worldPos.x,
-              y: worldPos.z,
+              x: snappedPos.x,
+              y: snappedPos.y,
             });
           } else {
             // No shift: exit building mode
+            useGameStore.getState().setBuildingMode(null);
+          }
+        } else if (!isValid) {
+          // Invalid placement - show error, exit mode if not shift-clicking
+          if (!e.shiftKey) {
             useGameStore.getState().setBuildingMode(null);
           }
         }
