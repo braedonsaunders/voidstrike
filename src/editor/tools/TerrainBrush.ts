@@ -4,7 +4,7 @@
  * Handles elevation painting, feature painting, and terrain sculpting.
  */
 
-import type { EditorCell, EditorMapData, EditorConfig } from '../config/EditorConfig';
+import type { EditorCell, EditorMapData, EditorConfig, PlatformEdges } from '../config/EditorConfig';
 
 export interface BrushStroke {
   x: number;
@@ -16,7 +16,10 @@ export interface BrushStroke {
 export interface CellUpdate {
   x: number;
   y: number;
-  cell: Partial<EditorCell>;
+  cell: Partial<EditorCell> & {
+    isPlatform?: boolean;
+    edges?: PlatformEdges;
+  };
 }
 
 export class TerrainBrush {
@@ -658,6 +661,300 @@ export class TerrainBrush {
     }
 
     return updates;
+  }
+
+  // ============================================
+  // PLATFORM TERRAIN METHODS
+  // ============================================
+
+  /**
+   * Standard platform elevation levels (quantized for clean cliffs)
+   */
+  private static readonly PLATFORM_LEVELS = {
+    LOW: 60,
+    MID: 140,
+    HIGH: 220,
+  };
+
+  /**
+   * Quantize elevation to nearest platform level
+   */
+  private quantizeElevation(elevation: number): number {
+    if (elevation < 100) return TerrainBrush.PLATFORM_LEVELS.LOW;
+    if (elevation < 180) return TerrainBrush.PLATFORM_LEVELS.MID;
+    return TerrainBrush.PLATFORM_LEVELS.HIGH;
+  }
+
+  /**
+   * Paint platform terrain at position (circular brush)
+   * Creates geometric platform cells with quantized elevation
+   */
+  public paintPlatform(
+    centerX: number,
+    centerY: number,
+    radius: number,
+    targetElevation: number
+  ): CellUpdate[] {
+    if (!this.mapData) return [];
+
+    const updates: CellUpdate[] = [];
+    const radiusSq = radius * radius;
+    const quantizedElev = this.quantizeElevation(targetElevation);
+
+    for (let dy = -radius; dy <= radius; dy++) {
+      for (let dx = -radius; dx <= radius; dx++) {
+        if (dx * dx + dy * dy <= radiusSq) {
+          const x = Math.floor(centerX + dx);
+          const y = Math.floor(centerY + dy);
+
+          if (this.isInBounds(x, y)) {
+            const cell = this.mapData.terrain[y][x];
+            // Don't overwrite ramps
+            if (cell.isRamp) continue;
+
+            updates.push({
+              x,
+              y,
+              cell: {
+                elevation: quantizedElev,
+                isPlatform: true,
+                walkable: true,
+              },
+            });
+          }
+        }
+      }
+    }
+
+    return updates;
+  }
+
+  /**
+   * Paint a rectangular platform
+   */
+  public paintPlatformRect(
+    x1: number,
+    y1: number,
+    x2: number,
+    y2: number,
+    targetElevation: number
+  ): CellUpdate[] {
+    if (!this.mapData) return [];
+
+    const updates: CellUpdate[] = [];
+    const quantizedElev = this.quantizeElevation(targetElevation);
+
+    const minX = Math.min(Math.floor(x1), Math.floor(x2));
+    const maxX = Math.max(Math.floor(x1), Math.floor(x2));
+    const minY = Math.min(Math.floor(y1), Math.floor(y2));
+    const maxY = Math.max(Math.floor(y1), Math.floor(y2));
+
+    for (let y = minY; y <= maxY; y++) {
+      for (let x = minX; x <= maxX; x++) {
+        if (!this.isInBounds(x, y)) continue;
+
+        const cell = this.mapData.terrain[y][x];
+        if (cell.isRamp) continue;
+
+        updates.push({
+          x,
+          y,
+          cell: {
+            elevation: quantizedElev,
+            isPlatform: true,
+            walkable: true,
+          },
+        });
+      }
+    }
+
+    return updates;
+  }
+
+  /**
+   * Paint a polygon-shaped platform
+   * Uses scanline fill algorithm
+   */
+  public paintPlatformPolygon(
+    vertices: Array<{ x: number; y: number }>,
+    targetElevation: number
+  ): CellUpdate[] {
+    if (!this.mapData || vertices.length < 3) return [];
+
+    const updates: CellUpdate[] = [];
+    const quantizedElev = this.quantizeElevation(targetElevation);
+    const visitedCells = new Set<string>();
+
+    // Find bounding box
+    let minX = Infinity, maxX = -Infinity;
+    let minY = Infinity, maxY = -Infinity;
+    for (const v of vertices) {
+      minX = Math.min(minX, v.x);
+      maxX = Math.max(maxX, v.x);
+      minY = Math.min(minY, v.y);
+      maxY = Math.max(maxY, v.y);
+    }
+
+    // Scanline fill
+    for (let py = Math.floor(minY); py <= Math.ceil(maxY); py++) {
+      if (!this.isInBounds(0, py)) continue;
+
+      // Find intersections with polygon edges
+      const intersections: number[] = [];
+      for (let i = 0; i < vertices.length; i++) {
+        const v1 = vertices[i];
+        const v2 = vertices[(i + 1) % vertices.length];
+
+        if ((v1.y <= py && v2.y > py) || (v2.y <= py && v1.y > py)) {
+          const t = (py - v1.y) / (v2.y - v1.y);
+          intersections.push(v1.x + t * (v2.x - v1.x));
+        }
+      }
+
+      // Sort and fill between pairs
+      intersections.sort((a, b) => a - b);
+
+      for (let i = 0; i < intersections.length - 1; i += 2) {
+        const startX = Math.floor(intersections[i]);
+        const endX = Math.ceil(intersections[i + 1]);
+
+        for (let px = startX; px <= endX; px++) {
+          if (!this.isInBounds(px, py)) continue;
+
+          const key = `${px},${py}`;
+          if (visitedCells.has(key)) continue;
+          visitedCells.add(key);
+
+          const cell = this.mapData.terrain[py][px];
+          if (cell.isRamp) continue;
+
+          updates.push({
+            x: px,
+            y: py,
+            cell: {
+              elevation: quantizedElev,
+              isPlatform: true,
+              walkable: true,
+            },
+          });
+        }
+      }
+    }
+
+    return updates;
+  }
+
+  /**
+   * Convert existing terrain to platform terrain
+   * Quantizes elevation and sets isPlatform flag
+   */
+  public convertToPlatform(
+    centerX: number,
+    centerY: number,
+    radius: number
+  ): CellUpdate[] {
+    if (!this.mapData) return [];
+
+    const updates: CellUpdate[] = [];
+    const radiusSq = radius * radius;
+
+    for (let dy = -radius; dy <= radius; dy++) {
+      for (let dx = -radius; dx <= radius; dx++) {
+        if (dx * dx + dy * dy <= radiusSq) {
+          const x = Math.floor(centerX + dx);
+          const y = Math.floor(centerY + dy);
+
+          if (this.isInBounds(x, y)) {
+            const cell = this.mapData.terrain[y][x];
+            if (cell.isRamp) continue;
+            if (cell.isPlatform) continue; // Already a platform
+
+            const quantizedElev = this.quantizeElevation(cell.elevation);
+
+            updates.push({
+              x,
+              y,
+              cell: {
+                elevation: quantizedElev,
+                isPlatform: true,
+              },
+            });
+          }
+        }
+      }
+    }
+
+    return updates;
+  }
+
+  /**
+   * Set edge style for platform cells
+   */
+  public setPlatformEdgeStyle(
+    x: number,
+    y: number,
+    edge: 'north' | 'south' | 'east' | 'west',
+    style: 'cliff' | 'natural' | 'ramp'
+  ): CellUpdate[] {
+    if (!this.mapData || !this.isInBounds(x, y)) return [];
+
+    const cell = this.mapData.terrain[y][x];
+    if (!cell.isPlatform) return [];
+
+    const currentEdges = cell.edges || {};
+    const newEdges = { ...currentEdges, [edge]: style };
+
+    return [{
+      x,
+      y,
+      cell: {
+        edges: newEdges,
+      },
+    }];
+  }
+
+  /**
+   * Get cells along a line for platform edge painting
+   */
+  public getPlatformLineCells(
+    fromX: number,
+    fromY: number,
+    toX: number,
+    toY: number,
+    width: number
+  ): Array<{ x: number; y: number }> {
+    const cells: Array<{ x: number; y: number }> = [];
+    const visitedCells = new Set<string>();
+
+    const dx = toX - fromX;
+    const dy = toY - fromY;
+    const length = Math.sqrt(dx * dx + dy * dy);
+    if (length === 0) {
+      return [{ x: Math.floor(fromX), y: Math.floor(fromY) }];
+    }
+
+    const steps = Math.ceil(length);
+    const perpX = -dy / length;
+    const perpY = dx / length;
+
+    for (let i = 0; i <= steps; i++) {
+      const t = i / steps;
+      const cx = fromX + dx * t;
+      const cy = fromY + dy * t;
+
+      for (let w = -width / 2; w <= width / 2; w++) {
+        const x = Math.floor(cx + perpX * w);
+        const y = Math.floor(cy + perpY * w);
+        const key = `${x},${y}`;
+
+        if (!visitedCells.has(key)) {
+          visitedCells.add(key);
+          cells.push({ x, y });
+        }
+      }
+    }
+
+    return cells;
   }
 
   /**

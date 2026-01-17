@@ -16,6 +16,7 @@ import type {
   EditorCell,
   EditorObject,
   SymmetryMode,
+  SnapMode,
 } from '../config/EditorConfig';
 
 // Initial state factory
@@ -33,6 +34,8 @@ function createInitialState(config: EditorConfig): EditorState {
     activePanel: config.panels[0]?.id || 'paint',
     activeBiome: config.biomes[0]?.id || 'default',
     symmetryMode: 'none',
+    snapMode: '45deg', // Default to 45-degree snapping for platform tools
+    showGuardrails: true,
     isDirty: false,
     undoStack: [],
     redoStack: [],
@@ -160,6 +163,8 @@ export interface UseEditorStateReturn {
   setActivePanel: (panelId: string) => void;
   setActiveBiome: (biomeId: string) => void;
   setSymmetryMode: (mode: SymmetryMode) => void;
+  setSnapMode: (mode: SnapMode) => void;
+  setShowGuardrails: (visible: boolean) => void;
 
   // Map actions
   loadMap: (data: EditorMapData) => void;
@@ -259,6 +264,14 @@ export function useEditorState(config: EditorConfig): UseEditorStateReturn {
 
   const setSymmetryMode = useCallback((mode: SymmetryMode) => {
     setState((prev) => ({ ...prev, symmetryMode: mode }));
+  }, []);
+
+  const setSnapMode = useCallback((mode: SnapMode) => {
+    setState((prev) => ({ ...prev, snapMode: mode }));
+  }, []);
+
+  const setShowGuardrails = useCallback((visible: boolean) => {
+    setState((prev) => ({ ...prev, showGuardrails: visible }));
   }, []);
 
   // Map actions
@@ -678,6 +691,8 @@ export function useEditorState(config: EditorConfig): UseEditorStateReturn {
     setActivePanel,
     setActiveBiome,
     setSymmetryMode,
+    setSnapMode,
+    setShowGuardrails,
     loadMap,
     updateCell,
     updateCells,

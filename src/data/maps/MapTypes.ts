@@ -4,11 +4,29 @@
 import { BiomeType } from '@/rendering/Biomes';
 
 export type TerrainType =
-  | 'ground'      // Normal walkable terrain
+  | 'ground'      // Normal walkable terrain (natural, smooth heightmap)
+  | 'platform'    // Geometric platform (flat surface, vertical cliff edges)
   | 'unwalkable'  // Cliffs, deep water, void - completely impassable
   | 'ramp'        // Connects different elevations
   | 'unbuildable' // Walkable but can't place buildings
   | 'creep';      // Swarm creep (later)
+
+/**
+ * Edge style for platform cells.
+ * Controls how the edge between this cell and a lower neighbor is rendered.
+ */
+export type PlatformEdgeStyle = 'cliff' | 'natural' | 'ramp';
+
+/**
+ * Per-edge style configuration for platform cells.
+ * If undefined, edge style is auto-detected based on neighbor elevation.
+ */
+export interface PlatformEdges {
+  north?: PlatformEdgeStyle;
+  south?: PlatformEdgeStyle;
+  east?: PlatformEdgeStyle;
+  west?: PlatformEdgeStyle;
+}
 
 /**
  * Terrain features overlay terrain type and add gameplay modifiers.
@@ -107,6 +125,8 @@ export interface MapCell {
   elevation: Elevation;        // 0-255 for smooth terrain
   feature: TerrainFeature;     // Overlay feature (forest, water, etc.)
   textureId: number;           // For visual variety
+  /** Per-edge style for platform cells (optional, auto-detected if not set) */
+  edges?: PlatformEdges;
 }
 
 export interface ResourceNode {
@@ -1058,6 +1078,236 @@ export function scatterForests(
 }
 
 // ============================================
+// SC2-STYLE GEOMETRIC PLATFORM HELPERS
+// ============================================
+
+/**
+ * Standard platform elevation levels (quantized for clean vertical cliffs).
+ * These map to specific heights for consistent cliff faces.
+ */
+export const PLATFORM_ELEVATION = {
+  LOW: 60,    // Low platform level
+  MID: 140,   // Mid platform level
+  HIGH: 220,  // High platform level
+} as const;
+
+/**
+ * Minimum elevation difference to create a cliff edge (units 0-255)
+ */
+export const CLIFF_THRESHOLD = 40;
+
+/**
+ * Quantize an elevation value to the nearest platform level.
+ * Used when converting natural terrain to platform.
+ */
+export function quantizeToPlatformElevation(elevation: Elevation): Elevation {
+  if (elevation < 100) return PLATFORM_ELEVATION.LOW;
+  if (elevation < 180) return PLATFORM_ELEVATION.MID;
+  return PLATFORM_ELEVATION.HIGH;
+}
+
+/**
+ * Create a geometric platform (SC2-style) with flat surface and vertical cliff edges.
+ * Unlike createRaisedPlatform (natural terrain), this uses terrain: 'platform'
+ * which renders with vertical cliff faces instead of smooth slopes.
+ *
+ * @param grid - The terrain grid
+ * @param centerX - Center X of the platform
+ * @param centerY - Center Y of the platform
+ * @param radius - Radius of the platform
+ * @param elevation - Platform elevation (will be quantized)
+ */
+export function createGeometricPlatform(
+  grid: MapCell[][],
+  centerX: number,
+  centerY: number,
+  radius: number,
+  elevation: Elevation
+): void {
+  const quantizedElev = quantizeToPlatformElevation(elevation);
+
+  for (let dy = -radius; dy <= radius; dy++) {
+    for (let dx = -radius; dx <= radius; dx++) {
+      const dist = Math.sqrt(dx * dx + dy * dy);
+      if (dist <= radius) {
+        const px = Math.floor(centerX + dx);
+        const py = Math.floor(centerY + dy);
+
+        if (py >= 0 && py < grid.length && px >= 0 && px < grid[0].length) {
+          // Don't overwrite ramps
+          if (grid[py][px].terrain === 'ramp') continue;
+
+          grid[py][px] = {
+            terrain: 'platform',
+            elevation: quantizedElev,
+            feature: 'none',
+            textureId: Math.floor(Math.random() * 4),
+          };
+        }
+      }
+    }
+  }
+}
+
+/**
+ * Create a rectangular geometric platform (SC2-style).
+ *
+ * @param grid - The terrain grid
+ * @param x - Top-left X
+ * @param y - Top-left Y
+ * @param width - Platform width
+ * @param height - Platform height
+ * @param elevation - Platform elevation (will be quantized)
+ */
+export function createGeometricPlatformRect(
+  grid: MapCell[][],
+  x: number,
+  y: number,
+  width: number,
+  height: number,
+  elevation: Elevation
+): void {
+  const quantizedElev = quantizeToPlatformElevation(elevation);
+
+  for (let dy = 0; dy < height; dy++) {
+    for (let dx = 0; dx < width; dx++) {
+      const px = Math.floor(x + dx);
+      const py = Math.floor(y + dy);
+
+      if (py >= 0 && py < grid.length && px >= 0 && px < grid[0].length) {
+        // Don't overwrite ramps
+        if (grid[py][px].terrain === 'ramp') continue;
+
+        grid[py][px] = {
+          terrain: 'platform',
+          elevation: quantizedElev,
+          feature: 'none',
+          textureId: Math.floor(Math.random() * 4),
+        };
+      }
+    }
+  }
+}
+
+/**
+ * Create a polygon-shaped geometric platform from vertices.
+ * Vertices should be in clockwise or counter-clockwise order.
+ * Uses scanline fill algorithm.
+ *
+ * @param grid - The terrain grid
+ * @param vertices - Array of {x, y} vertices defining the polygon
+ * @param elevation - Platform elevation (will be quantized)
+ */
+export function createGeometricPlatformPolygon(
+  grid: MapCell[][],
+  vertices: Array<{ x: number; y: number }>,
+  elevation: Elevation
+): void {
+  if (vertices.length < 3) return;
+
+  const quantizedElev = quantizeToPlatformElevation(elevation);
+
+  // Find bounding box
+  let minX = Infinity, maxX = -Infinity;
+  let minY = Infinity, maxY = -Infinity;
+  for (const v of vertices) {
+    minX = Math.min(minX, v.x);
+    maxX = Math.max(maxX, v.x);
+    minY = Math.min(minY, v.y);
+    maxY = Math.max(maxY, v.y);
+  }
+
+  // Scanline fill
+  for (let py = Math.floor(minY); py <= Math.ceil(maxY); py++) {
+    if (py < 0 || py >= grid.length) continue;
+
+    // Find intersections with polygon edges
+    const intersections: number[] = [];
+    for (let i = 0; i < vertices.length; i++) {
+      const v1 = vertices[i];
+      const v2 = vertices[(i + 1) % vertices.length];
+
+      // Check if scanline crosses this edge
+      if ((v1.y <= py && v2.y > py) || (v2.y <= py && v1.y > py)) {
+        const t = (py - v1.y) / (v2.y - v1.y);
+        intersections.push(v1.x + t * (v2.x - v1.x));
+      }
+    }
+
+    // Sort intersections
+    intersections.sort((a, b) => a - b);
+
+    // Fill between pairs
+    for (let i = 0; i < intersections.length - 1; i += 2) {
+      const startX = Math.floor(intersections[i]);
+      const endX = Math.ceil(intersections[i + 1]);
+
+      for (let px = startX; px <= endX; px++) {
+        if (px < 0 || px >= grid[0].length) continue;
+
+        // Don't overwrite ramps
+        if (grid[py][px].terrain === 'ramp') continue;
+
+        grid[py][px] = {
+          terrain: 'platform',
+          elevation: quantizedElev,
+          feature: 'none',
+          textureId: Math.floor(Math.random() * 4),
+        };
+      }
+    }
+  }
+}
+
+/**
+ * Convert natural terrain cells to platform terrain.
+ * Quantizes elevation and sets terrain type to 'platform'.
+ *
+ * @param grid - The terrain grid
+ * @param cells - Array of {x, y} cells to convert
+ */
+export function convertToPlatform(
+  grid: MapCell[][],
+  cells: Array<{ x: number; y: number }>
+): void {
+  for (const { x, y } of cells) {
+    if (y < 0 || y >= grid.length || x < 0 || x >= grid[0].length) continue;
+    if (grid[y][x].terrain === 'ramp') continue;
+
+    const cell = grid[y][x];
+    cell.terrain = 'platform';
+    cell.elevation = quantizeToPlatformElevation(cell.elevation);
+  }
+}
+
+/**
+ * Set the edge style for a specific edge of a platform cell.
+ *
+ * @param grid - The terrain grid
+ * @param x - Cell X
+ * @param y - Cell Y
+ * @param edge - Which edge to set
+ * @param style - The edge style
+ */
+export function setPlatformEdgeStyle(
+  grid: MapCell[][],
+  x: number,
+  y: number,
+  edge: 'north' | 'south' | 'east' | 'west',
+  style: PlatformEdgeStyle
+): void {
+  if (y < 0 || y >= grid.length || x < 0 || x >= grid[0].length) return;
+
+  const cell = grid[y][x];
+  if (cell.terrain !== 'platform') return;
+
+  if (!cell.edges) {
+    cell.edges = {};
+  }
+  cell.edges[edge] = style;
+}
+
+// ============================================
 // TERRAIN CONNECTIVITY VALIDATION
 // ============================================
 
@@ -1076,6 +1326,8 @@ export interface ConnectivityValidation {
  */
 function isCellWalkable(cell: MapCell): boolean {
   if (cell.terrain === 'unwalkable') return false;
+  // Platform terrain is walkable (flat surface with cliff edges)
+  if (cell.terrain === 'platform') return true;
 
   const feature = cell.feature || 'none';
   const config = TERRAIN_FEATURE_CONFIG[feature];

@@ -10,6 +10,8 @@
 
 import * as THREE from 'three';
 import type { EditorMapData, EditorCell } from '../config/EditorConfig';
+import { CliffMesh } from './CliffMesh';
+import { GuardrailMesh } from './GuardrailMesh';
 
 // Height scale factor (matches game terrain)
 const HEIGHT_SCALE = 0.04;
@@ -63,6 +65,11 @@ export class EditorTerrain {
   public mesh: THREE.Mesh;
   public mapData: EditorMapData | null = null;
 
+  // Platform terrain rendering
+  private cliffMesh: CliffMesh;
+  private guardrailMesh: GuardrailMesh;
+  private showGuardrails: boolean = true;
+
   private cellSize: number;
   private geometry: THREE.BufferGeometry;
   private material: THREE.MeshLambertMaterial;
@@ -103,6 +110,14 @@ export class EditorTerrain {
     this.mesh = new THREE.Mesh(this.geometry, this.material);
     this.mesh.rotation.x = -Math.PI / 2;
     this.mesh.frustumCulled = false; // Always render (editor viewport)
+
+    // Create platform terrain meshes (cliff faces and guardrails)
+    this.cliffMesh = new CliffMesh({ cellSize: this.cellSize });
+    this.guardrailMesh = new GuardrailMesh({ cellSize: this.cellSize });
+
+    // Add as children (inherits rotation)
+    this.mesh.add(this.cliffMesh.mesh);
+    this.mesh.add(this.guardrailMesh.mesh);
   }
 
   /**
@@ -151,6 +166,11 @@ export class EditorTerrain {
 
     // Build all vertices
     this.rebuildAllVertices();
+
+    // Build platform terrain meshes (cliffs and guardrails)
+    this.cliffMesh.buildFromMapData(mapData);
+    this.guardrailMesh.buildFromMapData(mapData);
+    this.guardrailMesh.setVisible(this.showGuardrails);
   }
 
   /**
@@ -195,6 +215,24 @@ export class EditorTerrain {
     colorAttr.needsUpdate = true;
     normalAttr.needsUpdate = true;
 
+    // Update platform meshes in dirty region
+    if (this.mapData) {
+      this.cliffMesh.updateRegion(
+        this.mapData,
+        this.dirtyMinX,
+        this.dirtyMinY,
+        this.dirtyMaxX,
+        this.dirtyMaxY
+      );
+      this.guardrailMesh.updateRegion(
+        this.mapData,
+        this.dirtyMinX,
+        this.dirtyMinY,
+        this.dirtyMaxX,
+        this.dirtyMaxY
+      );
+    }
+
     // Reset dirty tracking
     this.dirtyMinX = Infinity;
     this.dirtyMaxX = -Infinity;
@@ -209,7 +247,24 @@ export class EditorTerrain {
   public forceUpdate(): void {
     if (this.mapData) {
       this.rebuildAllVertices();
+      this.cliffMesh.buildFromMapData(this.mapData);
+      this.guardrailMesh.buildFromMapData(this.mapData);
     }
+  }
+
+  /**
+   * Set guardrail visibility
+   */
+  public setGuardrailsVisible(visible: boolean): void {
+    this.showGuardrails = visible;
+    this.guardrailMesh.setVisible(visible);
+  }
+
+  /**
+   * Get guardrail visibility
+   */
+  public getGuardrailsVisible(): boolean {
+    return this.showGuardrails;
   }
 
   /**
@@ -258,6 +313,8 @@ export class EditorTerrain {
   public dispose(): void {
     this.geometry.dispose();
     this.material.dispose();
+    this.cliffMesh.dispose();
+    this.guardrailMesh.dispose();
     this.positions = null;
     this.colors = null;
     this.normals = null;
@@ -338,6 +395,14 @@ export class EditorTerrain {
     r *= feature[0];
     g *= feature[1];
     b *= feature[2];
+
+    // Platform cells get a subtle tint to distinguish from natural terrain
+    if (cell.isPlatform) {
+      // Slightly cooler/more uniform tone for platforms
+      r = r * 0.95 + 0.02;
+      g = g * 0.95 + 0.02;
+      b = b * 0.95 + 0.05;
+    }
 
     // Darken unwalkable
     if (!cell.walkable) {
