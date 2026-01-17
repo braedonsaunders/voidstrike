@@ -233,6 +233,7 @@
 
 ### Map Editor Ramp Tool Fix (January 2026)
 - [x] **Ramp traversal fix** - Units couldn't traverse ramps created in the map editor. Root cause: `paintRamp()` in TerrainBrush.ts only set elevation and walkable, but didn't mark cells with `terrain: 'ramp'`. Pathfinding system expects `terrain === 'ramp'` for ramp geometry. Fixed by: (1) Adding `isRamp` field to EditorCell interface, (2) Setting `isRamp: true` in paintRamp(), (3) Converting `isRamp` cells to `terrain: 'ramp'` in editorFormatToMapData(), (4) Preserving ramp status when loading maps via mapDataToEditorFormat().
+- [x] **Ramp entrance walkability fix** - Units got stuck at the TOP entrance of ramps. Root cause: `RAMP_ZONE_RADIUS` in Terrain.ts was set to 3, but cells at ramp entrances need to be within the ramp zone to avoid being marked as cliff edges. Increased `RAMP_ZONE_RADIUS` from 3 to 5 to ensure ramp entrance cells on plateaus use smooth heightMap values for continuous navmesh geometry.
 
 ### Terrain Generation Improvements (January 2026)
 - [x] **Slope-based texture blending** - Fixed terrain sampleTerrain() to use average elevation instead of MAX, which was flattening cliffs and preventing proper texture blending
