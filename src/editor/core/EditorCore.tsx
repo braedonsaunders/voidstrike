@@ -354,8 +354,14 @@ export function EditorCore({
   const contextMenuActions = useMemo((): ContextMenuAction[] => {
     if (!contextMenu) return [];
 
+    // Get cell at context menu position
+    const cellAtPosition = contextMenu.gridPos && state.mapData
+      ? state.mapData.terrain[contextMenu.gridPos.y]?.[contextMenu.gridPos.x]
+      : null;
+
     return buildContextMenuActions({
       gridPos: contextMenu.gridPos,
+      cellAtPosition,
       selectedObjects: state.selectedObjects,
       objectAtPosition: contextMenu.objectAtPosition,
       config,
@@ -369,9 +375,13 @@ export function EditorCore({
       onCopyTerrain: handleCopyTerrain,
       onPasteTerrain: handlePasteTerrain,
       onAddObject: handleAddObjectAtPosition,
+      onUndo: editorState.undo,
+      onRedo: editorState.redo,
       hasCopiedTerrain: copiedTerrain !== null,
+      canUndo: editorState.canUndo,
+      canRedo: editorState.canRedo,
     });
-  }, [contextMenu, state.selectedObjects, config, editorState, handleCopyTerrain, handlePasteTerrain, handleAddObjectAtPosition, copiedTerrain]);
+  }, [contextMenu, state.selectedObjects, state.mapData, config, editorState, handleCopyTerrain, handlePasteTerrain, handleAddObjectAtPosition, copiedTerrain]);
 
   // Keyboard shortcuts
   useEffect(() => {
