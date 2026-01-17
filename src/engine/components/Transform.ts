@@ -11,10 +11,11 @@ export class Transform extends Component {
   public scaleY: number;
   public scaleZ: number;
 
-  // Previous position for interpolation
+  // Previous position and rotation for interpolation
   public prevX: number;
   public prevY: number;
   public prevZ: number;
+  public prevRotation: number;
 
   constructor(
     x = 0,
@@ -37,6 +38,7 @@ export class Transform extends Component {
     this.prevX = x;
     this.prevY = y;
     this.prevZ = z;
+    this.prevRotation = rotation;
   }
 
   public setPosition(x: number, y: number, z?: number): void {
@@ -65,7 +67,13 @@ export class Transform extends Component {
     return Math.sqrt(dx * dx + dy * dy);
   }
 
+  public setRotation(rotation: number): void {
+    this.prevRotation = this.rotation;
+    this.rotation = rotation;
+  }
+
   public lookAt(x: number, y: number): void {
+    this.prevRotation = this.rotation;
     this.rotation = Math.atan2(y - this.y, x - this.x);
   }
 

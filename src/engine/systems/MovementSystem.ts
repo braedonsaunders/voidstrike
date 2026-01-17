@@ -1201,6 +1201,9 @@ export class MovementSystem extends System {
       const velocity = entity.get<Velocity>('Velocity');
       if (!transform || !unit || !velocity) continue;
 
+      // Store previous rotation for render interpolation
+      transform.prevRotation = transform.rotation;
+
       // Handle dead units
       if (unit.state === 'dead') {
         velocity.zero();

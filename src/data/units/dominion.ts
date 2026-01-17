@@ -317,6 +317,8 @@ export const UNIT_DEFINITIONS: Record<string, UnitDefinition> = {
     targetPriority: 100, // High priority - siege units are high-value targets
     category: 'vehicle',
     armorType: 'armored',
+    // Collision scaling - larger tank needs more spacing
+    collisionScale: 1.8,
     audio: {
       voiceGroupId: 'devastator',
       weaponSound: 'attack_cannon',
@@ -346,6 +348,8 @@ export const UNIT_DEFINITIONS: Record<string, UnitDefinition> = {
     isMechanical: true,
     canAttackGround: true,
     canAttackAir: true, // Heavy weapons platform - can target both
+    // Collision scaling - massive mech needs more spacing
+    collisionScale: 2.0,
     audio: {
       voiceGroupId: 'colossus',
       weaponSound: 'attack_laser_battery',
@@ -456,7 +460,7 @@ export const UNIT_DEFINITIONS: Record<string, UnitDefinition> = {
   dreadnought: {
     id: 'dreadnought',
     name: 'Dreadnought',
-    description: 'Massive capital ship with continuous laser cannon and devastating Power Cannon. Attacks ground and air.',
+    description: 'Massive capital ship with continuous laser cannon and devastating Yamato Cannon. Attacks ground and air.',
     faction: 'dominion',
     mineralCost: 400,
     vespeneCost: 300,
@@ -465,13 +469,13 @@ export const UNIT_DEFINITIONS: Record<string, UnitDefinition> = {
     speed: 2.62, // SC2 Battlecruiser speed
     acceleration: 1.4, // SC2 Battlecruiser acceleration - sluggish capital ship
     sightRange: 12,
-    attackRange: 8,
+    attackRange: 10, // Capital ship - greater range than most units
     attackDamage: 12,
     attackSpeed: 2.0, // Continuous laser fire - very fast attack speed
     damageType: 'psionic', // Uses laser visual effect
     maxHealth: 550,
     armor: 3,
-    abilities: ['power_cannon', 'warp_jump'],
+    abilities: ['yamato_cannon', 'warp_jump'],
     isFlying: true,
     isMechanical: true,
     canAttackGround: true,
@@ -480,6 +484,8 @@ export const UNIT_DEFINITIONS: Record<string, UnitDefinition> = {
     targetPriority: 95, // Highest priority - capital ships are critical targets
     category: 'ship',
     armorType: 'massive',
+    // Collision scaling - large capital ship needs more spacing
+    collisionScale: 2.5,
     audio: {
       voiceGroupId: 'dreadnought',
       weaponSound: 'attack_yamato',
