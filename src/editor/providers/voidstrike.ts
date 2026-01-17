@@ -123,7 +123,17 @@ function mapDataToEditorFormat(map: MapData): EditorMapData {
  * Convert editor format back to VOIDSTRIKE MapData
  */
 function editorFormatToMapData(data: EditorMapData): MapData {
+  // DEBUG: Count platforms in editor data
+  let editorPlatformCount = 0;
+  for (const row of data.terrain) {
+    for (const cell of row) {
+      if (cell.isPlatform) editorPlatformCount++;
+    }
+  }
+  console.log('[editorFormatToMapData] Editor cells with isPlatform:', editorPlatformCount);
+
   // Convert terrain grid
+  let convertedPlatformCount = 0; // DEBUG
   const terrain: MapCell[][] = data.terrain.map((row) =>
     row.map((cell) => {
       const featureConfig = TERRAIN_FEATURE_CONFIG[cell.feature as TerrainFeature] || TERRAIN_FEATURE_CONFIG.none;
@@ -133,6 +143,7 @@ function editorFormatToMapData(data: EditorMapData): MapData {
         terrainType = 'ramp';
       } else if (cell.isPlatform) {
         terrainType = 'platform';
+        convertedPlatformCount++; // DEBUG
       } else if (cell.walkable && featureConfig.walkable) {
         terrainType = 'ground';
       } else {
@@ -146,6 +157,7 @@ function editorFormatToMapData(data: EditorMapData): MapData {
       };
     })
   );
+  console.log('[editorFormatToMapData] Converted to terrain=platform:', convertedPlatformCount);
 
   // Convert objects back to game structures
   const expansions: Expansion[] = [];

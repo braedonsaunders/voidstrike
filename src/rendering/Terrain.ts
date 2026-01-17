@@ -809,6 +809,7 @@ export class Terrain {
     // Numeric values: 0=ground/unbuildable (walkable), 1=ramp, 2=unwalkable
     const terrainTypeMap: TerrainType[] = new Array(this.gridWidth * this.gridHeight);
     const terrainTypeNumeric = new Float32Array(this.gridWidth * this.gridHeight);
+    let platformCount = 0; // DEBUG
     for (let y = 0; y <= height; y++) {
       for (let x = 0; x <= width; x++) {
         const idx = y * this.gridWidth + x;
@@ -821,11 +822,13 @@ export class Terrain {
           terrainTypeNumeric[idx] = 1.0;
         } else if (cell.terrain === 'platform') {
           terrainTypeNumeric[idx] = 3.0;  // Platform gets distinct rock/concrete texture
+          platformCount++; // DEBUG
         } else {
           terrainTypeNumeric[idx] = 0.0;  // ground, unbuildable
         }
       }
     }
+    console.log('[Terrain] Platform vertices detected:', platformCount); // DEBUG
 
     // Calculate per-vertex slopes BEFORE smoothing (for texture blending)
     // This captures the actual cliff steepness from terrain cell data
