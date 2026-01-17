@@ -156,6 +156,7 @@ function PlayerSlotRow({
               className="bg-void-800 border border-void-700 rounded px-2 py-1 text-white text-xs
                          focus:outline-none focus:border-void-500 cursor-pointer min-w-[70px]"
             >
+              <option value="human">Human</option>
               <option value="ai">AI</option>
               <option value="open">Open</option>
               <option value="closed">Closed</option>
@@ -746,7 +747,7 @@ export default function GameSetupPage() {
                     }
                   }}
                   canRemove={canRemovePlayer && !isGuestMode}
-                  isLocalPlayer={isGuestMode ? slot.id === mySlotId : index === 0}
+                  isLocalPlayer={isGuestMode ? slot.id === mySlotId : false}
                 />
               ))}
             </div>
