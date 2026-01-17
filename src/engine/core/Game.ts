@@ -661,6 +661,12 @@ export class Game {
       const building = entity.get<Building>('Building');
       if (!transform || !building) continue;
 
+      // Skip flying buildings - they don't block ground placement
+      if (building.isFlying || building.state === 'lifting' ||
+          building.state === 'flying' || building.state === 'landing') {
+        continue;
+      }
+
       const existingHalfW = building.width / 2;
       const existingHalfH = building.height / 2;
       const dx = Math.abs(centerX - transform.x);
@@ -851,7 +857,7 @@ export class Game {
       case 'LAND':
         this.eventBus.emit('command:land', {
           buildingId: command.buildingId ?? command.entityIds[0],
-          targetPosition: command.targetPosition,
+          position: command.targetPosition,
           playerId: command.playerId,
         });
         break;
