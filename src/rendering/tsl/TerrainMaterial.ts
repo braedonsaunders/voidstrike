@@ -13,6 +13,7 @@
 import * as THREE from 'three';
 import {
   Fn,
+  vec3,
   vec4,
   float,
   uniform,
@@ -22,6 +23,10 @@ import {
   normalize,
   clamp,
   attribute,
+  fract,
+  step,
+  mix,
+  abs,
 } from 'three/tsl';
 import { MeshStandardNodeMaterial } from 'three/webgpu';
 import { BiomeType } from '@/rendering/Biomes';
@@ -41,7 +46,6 @@ function getBiomeTextures(biome: BiomeType): {
   dirt: string;
   rock: string;
   cliff: string;
-  platform: string | null; // null = use procedural fallback
 } {
   switch (biome) {
     case 'desert':
@@ -50,7 +54,6 @@ function getBiomeTextures(biome: BiomeType): {
         dirt: 'desert_dirt',
         rock: 'rock',
         cliff: 'desert_cliff',
-        platform: null, // Will use procedural concrete
       };
     case 'frozen':
       return {
@@ -58,7 +61,6 @@ function getBiomeTextures(biome: BiomeType): {
         dirt: 'ice_rock',
         rock: 'ice_rock',
         cliff: 'ice_cliff',
-        platform: null,
       };
     case 'volcanic':
       return {
@@ -66,7 +68,6 @@ function getBiomeTextures(biome: BiomeType): {
         dirt: 'basalt',
         rock: 'basalt',
         cliff: 'volcanic_cliff',
-        platform: null,
       };
     case 'void':
       return {
@@ -74,7 +75,6 @@ function getBiomeTextures(biome: BiomeType): {
         dirt: 'void_rock',
         rock: 'void_rock',
         cliff: 'void_cliff',
-        platform: null,
       };
     case 'jungle':
       return {
@@ -82,7 +82,6 @@ function getBiomeTextures(biome: BiomeType): {
         dirt: 'dirt',
         rock: 'mossy_rock',
         cliff: 'jungle_cliff',
-        platform: null,
       };
     case 'grassland':
     default:
@@ -91,103 +90,8 @@ function getBiomeTextures(biome: BiomeType): {
         dirt: 'dirt',
         rock: 'rock',
         cliff: 'cliff',
-        platform: null, // Will use procedural concrete
       };
   }
-}
-
-/**
- * Create a procedural concrete/metal texture for platforms
- * Returns a canvas-based texture with industrial appearance
- */
-function createProceduralPlatformTexture(
-  type: 'diffuse' | 'normal' | 'roughness',
-  size: number = 512
-): THREE.CanvasTexture {
-  const canvas = document.createElement('canvas');
-  canvas.width = size;
-  canvas.height = size;
-  const ctx = canvas.getContext('2d')!;
-
-  if (type === 'diffuse') {
-    // Concrete/metal gray base with subtle variation
-    ctx.fillStyle = '#6a6a6a';
-    ctx.fillRect(0, 0, size, size);
-
-    // Add subtle noise/grain
-    const imageData = ctx.getImageData(0, 0, size, size);
-    const data = imageData.data;
-    for (let i = 0; i < data.length; i += 4) {
-      const noise = (Math.random() - 0.5) * 20;
-      data[i] = Math.max(0, Math.min(255, data[i] + noise));     // R
-      data[i + 1] = Math.max(0, Math.min(255, data[i + 1] + noise)); // G
-      data[i + 2] = Math.max(0, Math.min(255, data[i + 2] + noise)); // B
-    }
-    ctx.putImageData(imageData, 0, 0);
-
-    // Add grid lines (subtle panel seams)
-    ctx.strokeStyle = '#555555';
-    ctx.lineWidth = 2;
-    const gridSize = size / 4;
-    for (let x = gridSize; x < size; x += gridSize) {
-      ctx.beginPath();
-      ctx.moveTo(x, 0);
-      ctx.lineTo(x, size);
-      ctx.stroke();
-    }
-    for (let y = gridSize; y < size; y += gridSize) {
-      ctx.beginPath();
-      ctx.moveTo(0, y);
-      ctx.lineTo(size, y);
-      ctx.stroke();
-    }
-
-  } else if (type === 'normal') {
-    // Flat normal map with subtle surface detail
-    ctx.fillStyle = '#8080ff'; // Neutral normal (pointing up)
-    ctx.fillRect(0, 0, size, size);
-
-    // Add very subtle variation for surface interest
-    const imageData = ctx.getImageData(0, 0, size, size);
-    const data = imageData.data;
-    for (let i = 0; i < data.length; i += 4) {
-      const noiseX = (Math.random() - 0.5) * 8;
-      const noiseY = (Math.random() - 0.5) * 8;
-      data[i] = Math.max(0, Math.min(255, 128 + noiseX));     // R (X normal)
-      data[i + 1] = Math.max(0, Math.min(255, 128 + noiseY)); // G (Y normal)
-      // B stays at 255 (Z normal, pointing up)
-    }
-    ctx.putImageData(imageData, 0, 0);
-
-  } else if (type === 'roughness') {
-    // Medium-high roughness for concrete (not shiny)
-    ctx.fillStyle = '#b0b0b0'; // ~0.7 roughness
-    ctx.fillRect(0, 0, size, size);
-
-    // Add variation
-    const imageData = ctx.getImageData(0, 0, size, size);
-    const data = imageData.data;
-    for (let i = 0; i < data.length; i += 4) {
-      const noise = (Math.random() - 0.5) * 30;
-      const value = Math.max(128, Math.min(220, 176 + noise));
-      data[i] = value;     // R
-      data[i + 1] = value; // G
-      data[i + 2] = value; // B
-    }
-    ctx.putImageData(imageData, 0, 0);
-  }
-
-  const tex = new THREE.CanvasTexture(canvas);
-  tex.wrapS = THREE.RepeatWrapping;
-  tex.wrapT = THREE.RepeatWrapping;
-  tex.minFilter = THREE.LinearMipmapLinearFilter;
-  tex.magFilter = THREE.LinearFilter;
-  tex.generateMipmaps = true;
-  tex.anisotropy = 16;
-  if (type === 'diffuse') {
-    tex.colorSpace = THREE.SRGBColorSpace;
-  }
-  return tex;
 }
 
 /**
@@ -251,29 +155,14 @@ export class TSLTerrainMaterial {
     const cliffNormal = loadTerrainTexture(loader, `/textures/terrain/${biomeTextures.cliff}_normal.png`);
     const cliffRoughness = loadTerrainTexture(loader, `/textures/terrain/${biomeTextures.cliff}_roughness.png`);
 
-    // Platform textures - use file if exists, otherwise procedural concrete/metal
-    let platformDiffuse: THREE.Texture;
-    let platformNormal: THREE.Texture;
-    let platformRoughness: THREE.Texture;
-
-    if (biomeTextures.platform) {
-      // Load from file (when user adds textures later)
-      platformDiffuse = loadTerrainTexture(loader, `/textures/terrain/${biomeTextures.platform}_diffuse.png`, true);
-      platformNormal = loadTerrainTexture(loader, `/textures/terrain/${biomeTextures.platform}_normal.png`);
-      platformRoughness = loadTerrainTexture(loader, `/textures/terrain/${biomeTextures.platform}_roughness.png`);
-    } else {
-      // Use procedural concrete/metal fallback
-      platformDiffuse = createProceduralPlatformTexture('diffuse');
-      platformNormal = createProceduralPlatformTexture('normal');
-      platformRoughness = createProceduralPlatformTexture('roughness');
-    }
+    // Platform textures are generated procedurally in the shader to stay under WebGPU's 16 texture limit
+    // (4 terrain types × 3 textures = 12, plus MeshStandardNodeMaterial internal textures)
 
     this.textures = [
       grassDiffuse, grassNormal, grassRoughness,
       dirtDiffuse, dirtNormal, dirtRoughness,
       rockDiffuse, rockNormal, rockRoughness,
       cliffDiffuse, cliffNormal, cliffRoughness,
-      platformDiffuse, platformNormal, platformRoughness,
     ];
 
     this.material = this.createMaterial(
@@ -281,7 +170,6 @@ export class TSLTerrainMaterial {
       dirtDiffuse, dirtNormal, dirtRoughness,
       rockDiffuse, rockNormal, rockRoughness,
       cliffDiffuse, cliffNormal, cliffRoughness,
-      platformDiffuse, platformNormal, platformRoughness,
       repeat
     );
   }
@@ -299,9 +187,6 @@ export class TSLTerrainMaterial {
     cliffDiffuse: THREE.Texture,
     cliffNormal: THREE.Texture,
     cliffRoughness: THREE.Texture,
-    platformDiffuse: THREE.Texture,
-    platformNormal: THREE.Texture,
-    platformRoughness: THREE.Texture,
     textureRepeat: number
   ): MeshStandardNodeMaterial {
     const material = new MeshStandardNodeMaterial();
@@ -325,12 +210,21 @@ export class TSLTerrainMaterial {
       // camera distances, causing all textures to appear as cliff when zoomed in.
       const slope = vertexSlope;
 
-      // Sample all 5 diffuse textures (grass, dirt, rock, cliff, platform)
+      // Sample 4 diffuse textures (grass, dirt, rock, cliff)
       const grassColor = texture(grassDiffuse, tiledUV).rgb;
       const dirtColor = texture(dirtDiffuse, tiledUV).rgb;
       const rockColor = texture(rockDiffuse, tiledUV).rgb;
       const cliffColor = texture(cliffDiffuse, tiledUV).rgb;
-      const platformColor = texture(platformDiffuse, tiledUV).rgb;
+
+      // Procedural platform color (concrete gray with panel grid lines)
+      // This avoids exceeding WebGPU's 16 texture limit
+      const platformUV = uv().mul(8.0); // Larger scale for panel tiles
+      const gridX = abs(fract(platformUV.x).sub(0.5));
+      const gridY = abs(fract(platformUV.y).sub(0.5));
+      const gridLine = step(float(0.48), gridX).add(step(float(0.48), gridY));
+      const baseGray = vec3(0.42, 0.42, 0.44); // Concrete gray
+      const lineGray = vec3(0.32, 0.32, 0.34); // Darker seam lines
+      const platformColor = mix(baseGray, lineGray, clamp(gridLine, 0.0, 1.0));
 
       // Terrain type masks - ensure textures match walkability
       // Type values: 0=ground, 1=ramp, 2=unwalkable, 3=platform
@@ -439,7 +333,8 @@ export class TSLTerrainMaterial {
       const dirtR = texture(dirtRoughness, tiledUV).r;
       const rockR = texture(rockRoughness, tiledUV).r;
       const cliffR = texture(cliffRoughness, tiledUV).r;
-      const platformR = texture(platformRoughness, tiledUV).r;
+      // Procedural platform roughness (concrete ~0.7 roughness)
+      const platformR = float(0.7);
 
       // Terrain type masks (same as color node)
       // Type values: 0=ground, 1=ramp, 2=unwalkable, 3=platform
@@ -499,12 +394,13 @@ export class TSLTerrainMaterial {
       const terrainType = attribute('aTerrainType', 'float');
       const slope = vertexSlope;
 
-      // Sample and unpack normal maps (5 textures)
+      // Sample and unpack normal maps (4 textures)
       const grassN = texture(grassNormal, tiledUV).rgb.mul(2.0).sub(1.0);
       const dirtN = texture(dirtNormal, tiledUV).rgb.mul(2.0).sub(1.0);
       const rockN = texture(rockNormal, tiledUV).rgb.mul(2.0).sub(1.0);
       const cliffN = texture(cliffNormal, tiledUV).rgb.mul(2.0).sub(1.0);
-      const platformN = texture(platformNormal, tiledUV).rgb.mul(2.0).sub(1.0);
+      // Procedural platform normal (flat surface pointing up)
+      const platformN = vec3(0.0, 0.0, 1.0);
 
       // Terrain type masks (same as color node)
       // Type values: 0=ground, 1=ramp, 2=unwalkable, 3=platform
