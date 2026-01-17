@@ -64,17 +64,17 @@ export class BuildingMechanicsSystem extends System {
     if (!entity) return;
 
     const building = entity.get<Building>('Building');
-    if (!building || !building.addonId) return;
+    if (!building || !building.addonEntityId) return;
 
     // Detach the addon from this building
-    const addonEntity = this.world.getEntity(building.addonId);
+    const addonEntity = this.world.getEntity(building.addonEntityId);
     if (addonEntity) {
       const addon = addonEntity.get<Building>('Building');
       if (addon) {
-        addon.parentBuildingId = null;
+        addon.attachedToId = null;
       }
     }
-    building.addonId = null;
+    building.detachAddon();
 
     this.game.eventBus.emit('addon:detached', {
       buildingId: command.buildingId,
