@@ -34,8 +34,8 @@ import {
 // Separation - prevents overlapping (strongest force)
 const SEPARATION_RADIUS = 1.0;
 const SEPARATION_STRENGTH_MOVING = 1.2;      // Weak while moving - allow clumping
-const SEPARATION_STRENGTH_IDLE = 2.5;        // Strong when idle - spread out
-const SEPARATION_STRENGTH_ARRIVING = 3.0;    // Strongest at arrival - natural spreading
+const SEPARATION_STRENGTH_IDLE = 1.5;        // Moderate when idle (reduced from 2.5) - prevents jiggling
+const SEPARATION_STRENGTH_ARRIVING = 2.0;    // Strong at arrival (reduced from 3.0) - natural spreading
 const MAX_AVOIDANCE_FORCE = 1.5;
 const MAX_AVOIDANCE_FORCE_SQ = MAX_AVOIDANCE_FORCE * MAX_AVOIDANCE_FORCE;
 
@@ -48,8 +48,9 @@ const ALIGNMENT_RADIUS = 4.0;
 const ALIGNMENT_STRENGTH = 0.3;
 
 // Arrival spreading - units spread out when reaching destination
-const ARRIVAL_SPREAD_RADIUS = 2.5;           // Distance from target where spreading kicks in
-const ARRIVAL_SPREAD_STRENGTH = 2.0;         // Additional separation at arrival
+// SC2-style: Gentle spreading to prevent bunching without causing oscillation
+const ARRIVAL_SPREAD_RADIUS = 2.0;           // Distance from target where spreading kicks in (reduced from 2.5)
+const ARRIVAL_SPREAD_STRENGTH = 1.0;         // Additional separation at arrival (reduced from 2.0)
 
 // Building avoidance - runtime steering to handle edge cases
 // SC2-STYLE: Reduced margins - trust the navmesh for primary clearance
@@ -66,26 +67,30 @@ const USE_RECAST_CROWD = true;
 
 // ==================== SC2-STYLE VELOCITY SMOOTHING ====================
 // Prevents jitter by blending velocity over multiple frames
+// SC2-style: Stronger smoothing prevents micro-oscillations
 
-const VELOCITY_SMOOTHING_FACTOR = 0.3;       // Blend factor: 0=full history, 1=no smoothing
-const VELOCITY_HISTORY_FRAMES = 3;           // Number of frames to average
-const DIRECTION_COMMIT_THRESHOLD = 0.7;      // Dot product threshold for direction commitment
-const DIRECTION_COMMIT_STRENGTH = 0.5;       // How strongly to resist direction changes
+const VELOCITY_SMOOTHING_FACTOR = 0.25;      // Blend factor: 0=full history, 1=no smoothing (reduced from 0.3)
+const VELOCITY_HISTORY_FRAMES = 4;           // Number of frames to average (increased from 3)
+const DIRECTION_COMMIT_THRESHOLD = 0.6;      // Dot product threshold for direction commitment (reduced from 0.7)
+const DIRECTION_COMMIT_STRENGTH = 0.6;       // How strongly to resist direction changes (increased from 0.5)
 
 // ==================== SC2-STYLE PHYSICS PUSHING ====================
 // Units push each other instead of avoiding - creates natural flow
+// SC2-style: Moderate push prevents stacking without causing jitter
 
 const PHYSICS_PUSH_RADIUS = 1.2;             // Distance at which pushing starts
-const PHYSICS_PUSH_STRENGTH = 8.0;           // Push force strength
-const PHYSICS_PUSH_FALLOFF = 0.5;            // How quickly push falls off with distance
-const PHYSICS_OVERLAP_PUSH = 20.0;           // Extra strong push when overlapping
+const PHYSICS_PUSH_STRENGTH = 6.0;           // Push force strength (reduced from 8.0)
+const PHYSICS_PUSH_FALLOFF = 0.6;            // How quickly push falls off with distance (increased from 0.5)
+const PHYSICS_OVERLAP_PUSH = 15.0;           // Extra strong push when overlapping (reduced from 20.0)
 
 // ==================== STUCK DETECTION ====================
 // If unit hasn't moved for N frames, apply random nudge
+// SC2-style: Only trigger for units actively trying to reach a distant target
 
-const STUCK_DETECTION_FRAMES = 12;           // Frames of near-zero movement to trigger
-const STUCK_VELOCITY_THRESHOLD = 0.1;        // Below this speed = considered stuck
-const STUCK_NUDGE_STRENGTH = 2.0;            // Random nudge force when stuck
+const STUCK_DETECTION_FRAMES = 20;           // Frames of near-zero movement to trigger (increased from 12)
+const STUCK_VELOCITY_THRESHOLD = 0.05;       // Below this speed = considered stuck (reduced from 0.1)
+const STUCK_NUDGE_STRENGTH = 1.5;            // Random nudge force when stuck (reduced from 2.0)
+const STUCK_MIN_DISTANCE_TO_TARGET = 2.0;    // Only apply stuck nudge if farther than this from target
 
 // Static temp vectors for steering behaviors
 const tempSeparation: PooledVector2 = { x: 0, y: 0 };
@@ -136,7 +141,8 @@ export class MovementSystem extends System {
   public readonly name = 'MovementSystem';
   public priority = 10;
 
-  private arrivalThreshold = 0.5;
+  // SC2-style: Larger arrival threshold prevents micro-oscillations at destination
+  private arrivalThreshold = 0.8;
   private decelerationThreshold = 2.0;
   private lastPathRequestTime: Map<number, number> = new Map();
   private recast: RecastNavigation;
@@ -1066,16 +1072,31 @@ export class MovementSystem extends System {
   /**
    * Detect if a unit is stuck and apply random nudge if needed.
    * Returns nudge force to apply (or zero if not stuck).
+   *
+   * SC2-style: Only applies to units actively trying to reach a distant target.
+   * Units at or near their destination should NOT receive stuck nudges.
    */
   private handleStuckDetection(
     entityId: number,
     transform: Transform,
     unit: Unit,
     currentVelMag: number,
+    distanceToTarget: number,
     out: PooledVector2
   ): void {
     out.x = 0;
     out.y = 0;
+
+    // SC2-style: Don't nudge units that are close to their target
+    // This is the primary fix for the jiggling issue - units at destination shouldn't be nudged
+    if (distanceToTarget < STUCK_MIN_DISTANCE_TO_TARGET) {
+      // Clear stuck state when near target
+      const state = this.stuckState.get(entityId);
+      if (state) {
+        state.framesStuck = 0;
+      }
+      return;
+    }
 
     // Get or create stuck state
     let state = this.stuckState.get(entityId);
@@ -1093,20 +1114,31 @@ export class MovementSystem extends System {
     state.lastX = transform.x;
     state.lastY = transform.y;
 
-    // Determine if stuck
-    const isStuck = currentVelMag < STUCK_VELOCITY_THRESHOLD && moved < 0.05;
+    // Determine if stuck - must be low velocity AND haven't moved
+    const isStuck = currentVelMag < STUCK_VELOCITY_THRESHOLD && moved < 0.03;
 
     if (isStuck) {
       state.framesStuck++;
 
       if (state.framesStuck >= STUCK_DETECTION_FRAMES) {
-        // Apply random nudge using deterministic seeded random
-        // Use entity ID and current tick for seed
-        const seed = entityId * 12345 + this.currentTick;
-        const angle = ((seed % 628) / 100) * Math.PI; // 0 to 2*PI
+        // Apply nudge TOWARD target instead of random direction
+        // This helps units escape stuck positions while still moving toward goal
+        const dx = unit.targetX !== null ? unit.targetX - transform.x : 0;
+        const dy = unit.targetY !== null ? unit.targetY - transform.y : 0;
+        const dist = Math.sqrt(dx * dx + dy * dy);
 
-        out.x = Math.cos(angle) * STUCK_NUDGE_STRENGTH;
-        out.y = Math.sin(angle) * STUCK_NUDGE_STRENGTH;
+        if (dist > 0.1) {
+          // Nudge toward target with slight perpendicular offset
+          const seed = entityId * 12345 + this.currentTick;
+          const perpOffset = ((seed % 100) / 100 - 0.5) * 0.5; // -0.25 to 0.25
+
+          // Perpendicular direction
+          const perpX = -dy / dist;
+          const perpY = dx / dist;
+
+          out.x = (dx / dist + perpX * perpOffset) * STUCK_NUDGE_STRENGTH;
+          out.y = (dy / dist + perpY * perpOffset) * STUCK_NUDGE_STRENGTH;
+        }
 
         // Reset counter after nudge
         state.framesStuck = 0;
@@ -1472,16 +1504,19 @@ export class MovementSystem extends System {
         this.removeAgentIfRegistered(entity.id);
 
         // IDLE REPULSION: Apply separation forces to idle units so they spread out
-        // This was previously skipped, causing units to stack on top of each other
+        // SC2-style: Only push units that are SIGNIFICANTLY overlapping to prevent jiggling
         if (unit.state === 'idle' && !unit.isFlying) {
           this.calculateSeparationForce(entity.id, transform, unit, tempSeparation, Infinity);
           const sepMagSq = tempSeparation.x * tempSeparation.x + tempSeparation.y * tempSeparation.y;
 
-          // Only apply movement if there's meaningful separation force
-          if (sepMagSq > 0.001) {
-            // Scale by idle separation strength and apply as velocity
-            const idleRepelSpeed = Math.min(unit.maxSpeed * 0.5, Math.sqrt(sepMagSq) * SEPARATION_STRENGTH_IDLE);
+          // SC2-style: Higher threshold prevents minor separation adjustments that cause jiggling
+          // Only move when units are actually overlapping (force > 0.5), not just close
+          const IDLE_SEPARATION_THRESHOLD = 0.25; // Much higher than 0.001 to prevent micro-adjustments
+
+          if (sepMagSq > IDLE_SEPARATION_THRESHOLD) {
+            // SC2-style: Slower, gentler push for idle units (0.3x max speed instead of 0.5x)
             const sepMag = Math.sqrt(sepMagSq);
+            const idleRepelSpeed = Math.min(unit.maxSpeed * 0.3, sepMag * SEPARATION_STRENGTH_IDLE * 0.5);
             velocity.x = (tempSeparation.x / sepMag) * idleRepelSpeed;
             velocity.y = (tempSeparation.y / sepMag) * idleRepelSpeed;
 
@@ -1879,9 +1914,10 @@ export class MovementSystem extends System {
       finalVy = smoothed.vy;
 
       // SC2-STYLE: Stuck detection and nudge
+      // Only apply to units far from their target to prevent destination jiggling
       const currentVelMag = Math.sqrt(finalVx * finalVx + finalVy * finalVy);
       if (distance > this.arrivalThreshold) {
-        this.handleStuckDetection(entity.id, transform, unit, currentVelMag, tempStuckNudge);
+        this.handleStuckDetection(entity.id, transform, unit, currentVelMag, distance, tempStuckNudge);
         finalVx += tempStuckNudge.x;
         finalVy += tempStuckNudge.y;
       }
