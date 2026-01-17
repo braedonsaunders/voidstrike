@@ -246,6 +246,8 @@ export class Terrain {
   private cellSize: number;
   private chunkMeshes: THREE.Mesh[] = []; // Individual chunk meshes
   private chunkGeometries: THREE.BufferGeometry[] = [];
+  private guardrailMesh: THREE.Mesh | null = null;
+  private guardrailGeometry: THREE.BufferGeometry | null = null;
   private material: THREE.Material;
   private tslMaterial: TSLTerrainMaterial | null = null;
 
@@ -316,6 +318,9 @@ export class Terrain {
 
     // Create chunked terrain geometries and meshes
     this.createChunkedTerrain();
+
+    // Create SC2-style guardrails on platform edges
+    this.createGuardrails();
 
     const numChunks = this.chunkMeshes.length;
     debugTerrain.log(`[Terrain] Created ${numChunks} terrain chunks for frustum culling`);
@@ -599,6 +604,184 @@ export class Terrain {
     geometry.computeVertexNormals();
 
     return geometry;
+  }
+
+  /**
+   * Create SC2-style guardrails on platform edges.
+   * Guardrails are placed on platform/ramp edges that don't connect to other platforms.
+   */
+  private createGuardrails(): void {
+    const { width, height, terrain } = this.mapData;
+    const cellSize = this.cellSize;
+
+    const vertices: number[] = [];
+    const normals: number[] = [];
+    const indices: number[] = [];
+    let vertexIndex = 0;
+
+    // Guardrail dimensions
+    const RAIL_HEIGHT = 0.4;        // Height of guardrail
+    const POST_WIDTH = 0.08;        // Width of posts
+    const RAIL_THICKNESS = 0.05;    // Thickness of horizontal rails
+    const POST_SPACING = 1.0;       // One post per cell edge
+
+    // Helper to check if a cell is a platform or ramp
+    const isPlatformOrRamp = (x: number, y: number): boolean => {
+      if (x < 0 || x >= width || y < 0 || y >= height) return false;
+      const cell = terrain[y][x];
+      return cell.terrain === 'platform' || cell.terrain === 'ramp';
+    };
+
+    // Helper to get cell elevation
+    const getElevation = (x: number, y: number): number => {
+      if (x < 0 || x >= width || y < 0 || y >= height) return 0;
+      return terrain[y][x].elevation;
+    };
+
+    // Helper to add a box (post or rail segment)
+    const addBox = (
+      cx: number, cy: number, cz: number,  // Center position
+      sx: number, sy: number, sz: number,  // Half-sizes
+    ) => {
+      // 8 vertices of a box
+      const v = [
+        [cx - sx, cy - sy, cz - sz], // 0: left-bottom-back
+        [cx + sx, cy - sy, cz - sz], // 1: right-bottom-back
+        [cx + sx, cy + sy, cz - sz], // 2: right-top-back
+        [cx - sx, cy + sy, cz - sz], // 3: left-top-back
+        [cx - sx, cy - sy, cz + sz], // 4: left-bottom-front
+        [cx + sx, cy - sy, cz + sz], // 5: right-bottom-front
+        [cx + sx, cy + sy, cz + sz], // 6: right-top-front
+        [cx - sx, cy + sy, cz + sz], // 7: left-top-front
+      ];
+
+      // 6 faces with normals (each face has 4 verts, 2 triangles)
+      const faces = [
+        { verts: [0, 1, 2, 3], normal: [0, 0, -1] },  // Back
+        { verts: [5, 4, 7, 6], normal: [0, 0, 1] },   // Front
+        { verts: [4, 0, 3, 7], normal: [-1, 0, 0] },  // Left
+        { verts: [1, 5, 6, 2], normal: [1, 0, 0] },   // Right
+        { verts: [3, 2, 6, 7], normal: [0, 1, 0] },   // Top
+        { verts: [4, 5, 1, 0], normal: [0, -1, 0] },  // Bottom
+      ];
+
+      for (const face of faces) {
+        const [i0, i1, i2, i3] = face.verts;
+        const [nx, ny, nz] = face.normal;
+
+        // Add 4 vertices for this face
+        for (const vi of [i0, i1, i2, i3]) {
+          vertices.push(v[vi][0], v[vi][1], v[vi][2]);
+          normals.push(nx, ny, nz);
+        }
+
+        // Add 2 triangles (indices relative to vertexIndex)
+        indices.push(vertexIndex, vertexIndex + 1, vertexIndex + 2);
+        indices.push(vertexIndex, vertexIndex + 2, vertexIndex + 3);
+        vertexIndex += 4;
+      }
+    };
+
+    // Scan terrain for platform edges
+    for (let y = 0; y < height; y++) {
+      for (let x = 0; x < width; x++) {
+        if (!isPlatformOrRamp(x, y)) continue;
+
+        const elevation = getElevation(x, y);
+        const baseZ = elevationToHeight(elevation);
+
+        // Check each edge direction (N, S, E, W)
+        const edges = [
+          { dx: 0, dy: -1, startX: x, startY: y, endX: x + 1, endY: y },      // North edge
+          { dx: 0, dy: 1, startX: x, startY: y + 1, endX: x + 1, endY: y + 1 }, // South edge
+          { dx: -1, dy: 0, startX: x, startY: y, endX: x, endY: y + 1 },      // West edge
+          { dx: 1, dy: 0, startX: x + 1, startY: y, endX: x + 1, endY: y + 1 }, // East edge
+        ];
+
+        for (const edge of edges) {
+          const neighborX = x + edge.dx;
+          const neighborY = y + edge.dy;
+
+          // Only add guardrail if neighbor is NOT a platform/ramp at same elevation
+          // or if it's out of bounds
+          const neighborIsPlatform = isPlatformOrRamp(neighborX, neighborY);
+          const neighborElevation = getElevation(neighborX, neighborY);
+          const sameElevation = Math.abs(neighborElevation - elevation) < 20; // ~0.8 height diff
+
+          // Skip if neighbor is platform at same elevation (no guardrail needed)
+          if (neighborIsPlatform && sameElevation) continue;
+
+          // Skip if this cell is a ramp connecting to another elevation
+          // (ramps shouldn't have guardrails on the connecting side)
+          if (terrain[y][x].terrain === 'ramp' && neighborIsPlatform) continue;
+
+          // Calculate edge center position (in local terrain coordinates)
+          const edgeCenterX = (edge.startX + edge.endX) / 2 * cellSize;
+          const edgeCenterY = -((edge.startY + edge.endY) / 2) * cellSize; // Negative Y for terrain rotation
+
+          // Determine edge orientation (horizontal or vertical in local space)
+          const isHorizontalEdge = edge.dy !== 0;
+
+          // Add post at edge center
+          const postCenterZ = baseZ + RAIL_HEIGHT / 2;
+          addBox(
+            edgeCenterX, edgeCenterY, postCenterZ,
+            POST_WIDTH / 2, POST_WIDTH / 2, RAIL_HEIGHT / 2
+          );
+
+          // Add horizontal rail
+          const railZ = baseZ + RAIL_HEIGHT * 0.85;
+          if (isHorizontalEdge) {
+            // Rail runs along X
+            addBox(
+              edgeCenterX, edgeCenterY, railZ,
+              cellSize / 2, RAIL_THICKNESS / 2, RAIL_THICKNESS / 2
+            );
+          } else {
+            // Rail runs along Y
+            addBox(
+              edgeCenterX, edgeCenterY, railZ,
+              RAIL_THICKNESS / 2, cellSize / 2, RAIL_THICKNESS / 2
+            );
+          }
+
+          // Add corner posts at edge ends
+          const post1X = edge.startX * cellSize;
+          const post1Y = -edge.startY * cellSize;
+          const post2X = edge.endX * cellSize;
+          const post2Y = -edge.endY * cellSize;
+
+          addBox(post1X, post1Y, postCenterZ, POST_WIDTH / 2, POST_WIDTH / 2, RAIL_HEIGHT / 2);
+          addBox(post2X, post2Y, postCenterZ, POST_WIDTH / 2, POST_WIDTH / 2, RAIL_HEIGHT / 2);
+        }
+      }
+    }
+
+    // Create geometry if we have any guardrails
+    if (vertices.length === 0) {
+      debugTerrain.log('[Terrain] No guardrails needed');
+      return;
+    }
+
+    this.guardrailGeometry = new THREE.BufferGeometry();
+    this.guardrailGeometry.setAttribute('position', new THREE.Float32BufferAttribute(vertices, 3));
+    this.guardrailGeometry.setAttribute('normal', new THREE.Float32BufferAttribute(normals, 3));
+    this.guardrailGeometry.setIndex(indices);
+
+    // SC2-style yellow/orange hazard color for guardrails
+    const guardrailMaterial = new THREE.MeshStandardMaterial({
+      color: 0xD4A017,  // Golden/orange hazard color
+      roughness: 0.6,
+      metalness: 0.4,
+    });
+
+    this.guardrailMesh = new THREE.Mesh(this.guardrailGeometry, guardrailMaterial);
+    this.guardrailMesh.castShadow = true;
+    this.guardrailMesh.receiveShadow = true;
+    this.mesh.add(this.guardrailMesh);
+
+    const numPosts = Math.floor(vertices.length / (24 * 3)); // Rough estimate
+    debugTerrain.log(`[Terrain] Created guardrails with ~${numPosts} posts`);
   }
 
   // Update shader uniforms (call each frame for animated effects)
@@ -1094,6 +1277,13 @@ export class Terrain {
     }
     this.chunkGeometries = [];
     this.chunkMeshes = [];
+
+    // Dispose guardrail geometry
+    if (this.guardrailGeometry) {
+      this.guardrailGeometry.dispose();
+      this.guardrailGeometry = null;
+    }
+    this.guardrailMesh = null;
 
     if (this.tslMaterial) {
       this.tslMaterial.dispose();
