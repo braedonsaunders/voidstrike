@@ -83,9 +83,8 @@ interface GroundClickIndicator {
 export class OverlayScene extends Phaser.Scene {
   private eventBus: EventBus | null = null;
 
-  // Store event listener registrations for cleanup
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  private eventListeners: Array<{ event: string; handler: (...args: any[]) => void }> = [];
+  // Store unsubscribe functions for cleanup (EventBus.on returns unsubscribe fn)
+  private eventUnsubscribers: Array<() => void> = [];
   private resizeHandler: (() => void) | null = null;
 
   // Tactical view elements
@@ -217,12 +216,13 @@ export class OverlayScene extends Phaser.Scene {
 
   /**
    * Helper to register an event listener and track it for cleanup
+   * EventBus.on returns an unsubscribe function which we store
    */
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   private registerEvent(event: string, handler: (...args: any[]) => void): void {
     if (!this.eventBus) return;
-    this.eventBus.on(event, handler);
-    this.eventListeners.push({ event, handler });
+    const unsubscribe = this.eventBus.on(event, handler);
+    this.eventUnsubscribers.push(unsubscribe);
   }
 
   private setupEventListeners(): void {
@@ -2206,12 +2206,10 @@ export class OverlayScene extends Phaser.Scene {
 
   destroy(): void {
     // Clean up all EventBus listeners to prevent memory leaks
-    if (this.eventBus) {
-      for (const { event, handler } of this.eventListeners) {
-        this.eventBus.off(event, handler);
-      }
-      this.eventListeners = [];
+    for (const unsubscribe of this.eventUnsubscribers) {
+      unsubscribe();
     }
+    this.eventUnsubscribers = [];
 
     // Clean up Phaser scale resize listener
     if (this.resizeHandler) {
