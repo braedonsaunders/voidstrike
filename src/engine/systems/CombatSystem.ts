@@ -342,6 +342,11 @@ export class CombatSystem extends System {
           effectiveDistance = transform.distanceTo(targetTransform);
         }
 
+        // Debug: Log distance vs range for attack checks
+        if (unit.isFlying || (targetUnit && targetUnit.isFlying)) {
+          console.log(`[RANGE DEBUG] ${unit.unitId} at (${transform.x.toFixed(1)}, ${transform.y.toFixed(1)}) -> target at (${targetTransform.x.toFixed(1)}, ${targetTransform.y.toFixed(1)}), distance: ${effectiveDistance.toFixed(1)}, range: ${unit.attackRange}`);
+        }
+
         if (effectiveDistance <= unit.attackRange) {
           // In range - attempt attack
           if (unit.canAttack(gameTime)) {
