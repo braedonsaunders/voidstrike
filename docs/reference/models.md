@@ -857,6 +857,227 @@ PBR materials, isometric view, white background
 
 ---
 
+## WALLS
+
+Walls are modular fortification structures that auto-connect to form defensive perimeters. Each wall segment dynamically selects the correct mesh based on its neighboring connections.
+
+### Polygon Budget (Walls)
+| Wall Type | Triangle Budget |
+|-----------|----------------|
+| Wall Segment (each variant) | 500 - 1,500 |
+| Wall Gate | 2,000 - 4,000 |
+
+### Wall Connection System
+
+Walls use a **modular mesh system** based on neighbor connections:
+- **12 connection types:** `none`, `horizontal`, `vertical`, `corner_ne`, `corner_nw`, `corner_se`, `corner_sw`, `t_north`, `t_south`, `t_east`, `t_west`, `cross`
+- The game automatically selects the correct mesh based on adjacent walls
+- All variants share the same base aesthetic and materials
+
+---
+
+### 18. Wall Segment (Standalone/None)
+**File:** `/public/models/buildings/wall_none.glb`
+
+**Dimensions:** 1m × 1m footprint, 1.5m tall
+
+**Description:** Single wall pillar with no connections. Used when wall has no neighbors.
+
+**AI Prompt:**
+```
+Futuristic military wall segment pillar, single defensive fortification post,
+heavy armored hexagonal pillar design, reinforced metal plating,
+blue-gray armor with subtle glowing accent lights on edges,
+industrial sci-fi fortification, compact 1x1 footprint,
+sturdy base with armored top cap, defensive barrier aesthetic,
+game-ready low poly, PBR materials, isometric view, white background
+```
+
+**Key Features:**
+- Hexagonal or square pillar shape
+- Heavy armored plating
+- Glowing accent lights (accent color)
+- Can mount turret on top
+- 1.5m height for unit cover
+
+---
+
+### 19. Wall Segment (Horizontal)
+**File:** `/public/models/buildings/wall_horizontal.glb`
+
+**Dimensions:** 1m × 1m footprint, 1.5m tall
+
+**Description:** Wall segment connecting east-west neighbors.
+
+**AI Prompt:**
+```
+Futuristic military wall segment horizontal, defensive barrier section,
+thick armored wall extending left and right, reinforced metal plating,
+industrial blue-gray armor, glowing blue accent strip along top,
+connection points on east and west sides, fortified barrier design,
+heavy duty sci-fi wall section, game-ready low poly,
+PBR materials, isometric view, white background
+```
+
+**Key Features:**
+- Extends horizontally (E-W axis)
+- Flat top for turret mounting
+- Connection geometry on east/west edges
+- Armored panel aesthetics
+
+---
+
+### 20. Wall Segment (Vertical)
+**File:** `/public/models/buildings/wall_vertical.glb`
+
+**Dimensions:** 1m × 1m footprint, 1.5m tall
+
+**Description:** Wall segment connecting north-south neighbors.
+
+**AI Prompt:**
+```
+Futuristic military wall segment vertical, defensive barrier section,
+thick armored wall extending forward and back, reinforced metal plating,
+industrial blue-gray armor, glowing blue accent strip along top,
+connection points on north and south sides, fortified barrier design,
+heavy duty sci-fi wall section, game-ready low poly,
+PBR materials, isometric view, white background
+```
+
+**Key Features:**
+- Extends vertically (N-S axis)
+- Same height and aesthetic as horizontal
+- Connection geometry on north/south edges
+
+---
+
+### 21. Wall Segment (Corner NE/NW/SE/SW)
+**Files:**
+- `/public/models/buildings/wall_corner_ne.glb`
+- `/public/models/buildings/wall_corner_nw.glb`
+- `/public/models/buildings/wall_corner_se.glb`
+- `/public/models/buildings/wall_corner_sw.glb`
+
+**Dimensions:** 1m × 1m footprint, 1.5m tall
+
+**Description:** Corner wall segments connecting two perpendicular neighbors.
+
+**AI Prompt:**
+```
+Futuristic military wall corner segment, L-shaped defensive barrier,
+thick armored 90-degree corner wall piece, reinforced corner joint,
+industrial blue-gray armor, glowing blue accent strip along top,
+heavy corner reinforcement, angled armor plating at joint,
+sci-fi fortification corner, game-ready low poly,
+PBR materials, isometric view, white background
+```
+
+**Key Features:**
+- L-shaped geometry
+- Reinforced corner joint
+- Connection geometry on two perpendicular sides
+- Slightly elevated corner cap (turret mounting point)
+
+---
+
+### 22. Wall Segment (T-Junction)
+**Files:**
+- `/public/models/buildings/wall_t_north.glb`
+- `/public/models/buildings/wall_t_south.glb`
+- `/public/models/buildings/wall_t_east.glb`
+- `/public/models/buildings/wall_t_west.glb`
+
+**Dimensions:** 1m × 1m footprint, 1.5m tall
+
+**Description:** T-shaped wall segments connecting three neighbors.
+
+**AI Prompt:**
+```
+Futuristic military wall T-junction segment, three-way defensive barrier,
+thick armored T-shaped wall intersection, reinforced junction point,
+industrial blue-gray armor, glowing blue accent strip along edges,
+heavy central support pillar at junction, armored connecting walls,
+sci-fi fortification T-intersection, game-ready low poly,
+PBR materials, isometric view, white background
+```
+
+**Key Features:**
+- T-shaped geometry
+- Central reinforced junction pillar
+- Connection geometry on three sides
+- Heavy-duty intersection design
+
+---
+
+### 23. Wall Segment (Cross)
+**File:** `/public/models/buildings/wall_cross.glb`
+
+**Dimensions:** 1m × 1m footprint, 1.5m tall
+
+**Description:** Four-way intersection wall connecting all cardinal neighbors.
+
+**AI Prompt:**
+```
+Futuristic military wall cross intersection, four-way defensive barrier,
+thick armored cross-shaped wall junction, reinforced central pillar,
+industrial blue-gray armor, glowing blue accent on central hub,
+heavy armor plating extending in all four directions,
+sci-fi fortification crossroads, heavily reinforced center,
+game-ready low poly, PBR materials, isometric view, white background
+```
+
+**Key Features:**
+- Cross-shaped geometry (+ shape)
+- Reinforced central hub
+- Connection geometry on all four sides
+- Elevated central mounting point
+
+---
+
+### 24. Wall Gate
+**File:** `/public/models/buildings/wall_gate.glb`
+
+**Dimensions:** 2m × 1m footprint, 2m tall
+
+**Description:** Armored gate that opens for friendly units. Wider than standard wall segments.
+
+**AI Prompt:**
+```
+Futuristic military wall gate, armored sliding door fortification,
+heavy blast door with vertical sliding mechanism, reinforced frame,
+thick armored door panels, industrial warning stripes on door,
+blue-gray armor with orange/yellow hazard markings on gate,
+hydraulic door mechanism visible, security scanner on frame,
+glowing status lights (green when open, red when closed),
+sci-fi base entrance gate, 2-unit wide passage, game-ready low poly,
+PBR materials, isometric view, white background
+```
+
+**Key Features:**
+- 2m wide passage (allows unit movement)
+- Sliding door mechanism (animated)
+- Heavy frame with no turret mounting
+- Status indicator lights
+- Hazard markings on door panels
+- Security/scanner details on frame
+
+---
+
+### Wall Construction Animation (Optional)
+
+For procedural wall mesh generation during construction:
+
+**AI Prompt (Construction State):**
+```
+Futuristic wall segment under construction, partially built fortification,
+exposed metal framework scaffolding, incomplete armor plating,
+construction nanobots or welding sparks (optional particle effect),
+blueprint holographic outline showing final shape, industrial construction,
+blue wireframe overlay effect, game-ready low poly, white background
+```
+
+---
+
 ## RESOURCES
 
 ### 1. Mineral Patch
@@ -1342,6 +1563,21 @@ The AssetManager will automatically use custom models when available, falling ba
 - [x] Research Module *(addon)* `research_module.glb`
 - [x] Production Module *(addon)* `production_module.glb`
 
+### Walls (13 total) - 0 complete
+- [ ] Wall None *(standalone pillar)* `wall_none.glb`
+- [ ] Wall Horizontal `wall_horizontal.glb`
+- [ ] Wall Vertical `wall_vertical.glb`
+- [ ] Wall Corner NE `wall_corner_ne.glb`
+- [ ] Wall Corner NW `wall_corner_nw.glb`
+- [ ] Wall Corner SE `wall_corner_se.glb`
+- [ ] Wall Corner SW `wall_corner_sw.glb`
+- [ ] Wall T-North `wall_t_north.glb`
+- [ ] Wall T-South `wall_t_south.glb`
+- [ ] Wall T-East `wall_t_east.glb`
+- [ ] Wall T-West `wall_t_west.glb`
+- [ ] Wall Cross `wall_cross.glb`
+- [ ] Wall Gate *(animated door)* `wall_gate.glb`
+
 ### Resources (2 total) - 2 complete
 - [x] Minerals `minerals.glb`
 - [x] Vespene Geyser `vespene.glb`
@@ -1377,14 +1613,26 @@ The AssetManager will automatically use custom models when available, falling ba
 |----------|----------|-------|----------|
 | Units | 13 | 13 | 100% |
 | Buildings | 17 | 17 | 100% |
+| Walls | 0 | 13 | 0% |
 | Resources | 2 | 2 | 100% |
 | Projectiles | 0 | 3 | 0% |
 | Decorations | 16 | 16 | 100% |
-| **Total** | **48** | **51** | **94%** |
+| **Total** | **48** | **64** | **75%** |
 
 ---
 
 ## Missing Models Priority
+
+### Walls (13 remaining) - HIGH PRIORITY
+Wall segments are needed for the fortification system. Consider creating a single modular wall asset with variants, or use procedural geometry as fallback.
+
+1. **Wall None** - Standalone pillar (no neighbors)
+2. **Wall Horizontal** - East-West connection
+3. **Wall Vertical** - North-South connection
+4. **Wall Corners** - NE, NW, SE, SW (4 variants)
+5. **Wall T-Junctions** - North, South, East, West (4 variants)
+6. **Wall Cross** - Four-way intersection
+7. **Wall Gate** - Animated entrance gate
 
 ### Projectiles (3 remaining)
 1. **Bullet** - Basic projectile

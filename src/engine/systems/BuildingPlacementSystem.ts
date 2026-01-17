@@ -32,8 +32,14 @@ export class BuildingPlacementSystem extends System {
   // Distance threshold for worker to be "at" the building site
   private readonly CONSTRUCTION_RANGE = 2.5;
 
+  // AoE construction range for walls - workers contribute to all walls within this range
+  private readonly WALL_AOE_CONSTRUCTION_RANGE = 3.0;
+
   // Track pending addon attachments (addon ID -> parent building info)
   private pendingAddonAttachments: Map<number, { parentBuildingId: number; addonType: 'tech_lab' | 'reactor' | null }> = new Map();
+
+  // Wall line ID counter for tracking wall segments placed together
+  private nextWallLineId = 1;
 
   constructor(game: Game) {
     super(game);
@@ -59,6 +65,7 @@ export class BuildingPlacementSystem extends System {
 
   /**
    * Handle wall line placement - places multiple wall segments at once
+   * Uses smart worker assignment for efficient construction of long walls
    */
   private handleWallLinePlacement(data: {
     positions: Array<{ x: number; y: number; valid: boolean }>;
@@ -104,16 +111,17 @@ export class BuildingPlacementSystem extends System {
     }
 
     // Find workers for construction
-    const availableWorkers: Entity[] = [];
+    const availableWorkers: Array<{ entity: Entity; x: number; y: number }> = [];
     const workers = this.world.getEntitiesWith('Unit', 'Selectable', 'Transform', 'Health');
     for (const entity of workers) {
       const unit = entity.get<Unit>('Unit')!;
       const selectable = entity.get<Selectable>('Selectable')!;
       const health = entity.get<Health>('Health')!;
+      const transform = entity.get<Transform>('Transform')!;
 
       if (unit.isWorker && selectable.playerId === playerId && !health.isDead()) {
         if (unit.state === 'idle' || unit.state === 'gathering' || unit.state === 'moving') {
-          availableWorkers.push(entity);
+          availableWorkers.push({ entity, x: transform.x, y: transform.y });
         }
       }
     }
@@ -128,12 +136,13 @@ export class BuildingPlacementSystem extends System {
       store.addResources(-totalCost.minerals, -totalCost.vespene);
     }
 
-    // Place wall segments and assign workers round-robin
-    let workerIndex = 0;
-    const placedWalls: number[] = [];
+    // Generate unique wall line ID for this placement
+    const wallLineId = this.nextWallLineId++;
+
+    // Create all wall entities first
+    const placedWalls: Array<{ entityId: number; x: number; y: number }> = [];
 
     for (const pos of validPositions) {
-      // Create wall entity
       const wallEntity = this.world.createEntity();
       const health = new Health(definition.maxHealth, definition.armor, 'structure');
       health.current = definition.maxHealth * 0.1; // Start at 10% health
@@ -150,13 +159,7 @@ export class BuildingPlacementSystem extends System {
         .add(wall)
         .add(new Selectable(0.8, 10, playerId));
 
-      placedWalls.push(wallEntity.id);
-
-      // Assign a worker (round-robin)
-      const worker = availableWorkers[workerIndex % availableWorkers.length];
-      const workerUnit = worker.get<Unit>('Unit')!;
-      workerUnit.startBuilding(buildingType, pos.x, pos.y);
-      workerUnit.constructingBuildingId = wallEntity.id;
+      placedWalls.push({ entityId: wallEntity.id, x: pos.x, y: pos.y });
 
       // Emit placement event
       this.game.eventBus.emit('wall:placed', {
@@ -164,11 +167,76 @@ export class BuildingPlacementSystem extends System {
         position: { x: pos.x, y: pos.y },
         playerId,
       });
-
-      workerIndex++;
     }
 
-    debugBuildingPlacement.log(`BuildingPlacementSystem: Placed ${placedWalls.length} wall segments, assigned ${Math.min(availableWorkers.length, validPositions.length)} workers`);
+    // Get all entity IDs for wall line tracking
+    const allWallEntityIds = placedWalls.map(w => w.entityId);
+
+    // Smart worker assignment: assign each worker to the nearest unassigned segment
+    // Then workers can contribute to ALL nearby walls with AoE construction
+    const assignedSegments = new Set<number>();
+    const workerAssignments: Array<{ worker: Entity; segmentIdx: number }> = [];
+
+    // Sort workers by their distance to the wall line center for balanced distribution
+    const lineCenterX = placedWalls.reduce((sum, w) => sum + w.x, 0) / placedWalls.length;
+    const lineCenterY = placedWalls.reduce((sum, w) => sum + w.y, 0) / placedWalls.length;
+    availableWorkers.sort((a, b) => {
+      const distA = Math.abs(a.x - lineCenterX) + Math.abs(a.y - lineCenterY);
+      const distB = Math.abs(b.x - lineCenterX) + Math.abs(b.y - lineCenterY);
+      return distA - distB;
+    });
+
+    // Assign workers to segments - each worker gets assigned to nearest unassigned segment
+    // Workers will use AoE construction to build ALL nearby walls
+    for (const workerData of availableWorkers) {
+      if (assignedSegments.size >= placedWalls.length) break;
+
+      // Find nearest unassigned segment to this worker
+      let nearestIdx = -1;
+      let nearestDist = Infinity;
+
+      for (let i = 0; i < placedWalls.length; i++) {
+        if (assignedSegments.has(i)) continue;
+
+        const wall = placedWalls[i];
+        const dist = Math.abs(workerData.x - wall.x) + Math.abs(workerData.y - wall.y);
+        if (dist < nearestDist) {
+          nearestDist = dist;
+          nearestIdx = i;
+        }
+      }
+
+      if (nearestIdx >= 0) {
+        assignedSegments.add(nearestIdx);
+        workerAssignments.push({ worker: workerData.entity, segmentIdx: nearestIdx });
+      }
+    }
+
+    // If we have more segments than workers, distribute remaining segments round-robin
+    // Each worker will handle multiple segments via auto-continue
+    if (assignedSegments.size < placedWalls.length) {
+      let workerIdx = 0;
+      for (let i = 0; i < placedWalls.length; i++) {
+        if (!assignedSegments.has(i)) {
+          // This segment will be built via auto-continue by the nearest worker
+          assignedSegments.add(i);
+          workerIdx = (workerIdx + 1) % workerAssignments.length;
+        }
+      }
+    }
+
+    // Apply worker assignments
+    for (const assignment of workerAssignments) {
+      const segment = placedWalls[assignment.segmentIdx];
+      const workerUnit = assignment.worker.get<Unit>('Unit')!;
+
+      workerUnit.startBuilding(buildingType, segment.x, segment.y);
+      workerUnit.constructingBuildingId = segment.entityId;
+      workerUnit.wallLineId = wallLineId;
+      workerUnit.wallLineSegments = [...allWallEntityIds]; // All segments for auto-continue
+    }
+
+    debugBuildingPlacement.log(`BuildingPlacementSystem: Placed ${placedWalls.length} wall segments (line #${wallLineId}), assigned ${workerAssignments.length} workers with smart distribution`);
   }
 
   /**
@@ -742,16 +810,90 @@ export class BuildingPlacementSystem extends System {
 
   /**
    * Release all workers assigned to a building
+   * For walls: supports auto-continue to next unfinished segment in the wall line
    */
   private releaseWorkersFromBuilding(buildingEntityId: number): void {
     const workers = this.world.getEntitiesWith('Unit', 'Transform');
+
     for (const entity of workers) {
       const unit = entity.get<Unit>('Unit')!;
+      const workerTransform = entity.get<Transform>('Transform')!;
+
       if (unit.constructingBuildingId === buildingEntityId) {
+        // Check if this worker has wall line segments for auto-continue
+        if (unit.wallLineSegments.length > 0) {
+          // Find the next unfinished wall segment in the line
+          const nextSegment = this.findNextUnfinishedWallSegment(
+            unit.wallLineSegments,
+            buildingEntityId,
+            workerTransform.x,
+            workerTransform.y
+          );
+
+          if (nextSegment) {
+            // Auto-continue to next segment
+            const nextTransform = nextSegment.entity.get<Transform>('Transform')!;
+            unit.constructingBuildingId = nextSegment.entity.id;
+            unit.buildTargetX = nextTransform.x;
+            unit.buildTargetY = nextTransform.y;
+            unit.targetX = nextTransform.x;
+            unit.targetY = nextTransform.y;
+            // Clear path so MovementSystem calculates new path
+            unit.path = [];
+            unit.pathIndex = 0;
+            debugBuildingPlacement.log(`Worker ${entity.id} auto-continuing to wall segment ${nextSegment.entity.id}`);
+            continue;
+          } else {
+            // All segments complete, clear wall line data
+            unit.wallLineId = null;
+            unit.wallLineSegments = [];
+            debugBuildingPlacement.log(`Worker ${entity.id} finished wall line, all segments complete`);
+          }
+        }
+
         unit.cancelBuilding();
         debugBuildingPlacement.log(`Worker ${entity.id} released from construction`);
       }
     }
+  }
+
+  /**
+   * Find the next unfinished wall segment in a wall line
+   * Prioritizes segments closest to the worker
+   */
+  private findNextUnfinishedWallSegment(
+    wallLineSegments: number[],
+    justCompletedId: number,
+    workerX: number,
+    workerY: number
+  ): { entity: Entity; distance: number } | null {
+    let nearest: { entity: Entity; distance: number } | null = null;
+
+    for (const segmentId of wallLineSegments) {
+      if (segmentId === justCompletedId) continue;
+
+      const segmentEntity = this.world.getEntity(segmentId);
+      if (!segmentEntity) continue;
+
+      const building = segmentEntity.get<Building>('Building');
+      if (!building) continue;
+
+      // Skip complete or destroyed buildings
+      if (building.state === 'complete' || building.state === 'destroyed') continue;
+
+      const transform = segmentEntity.get<Transform>('Transform');
+      if (!transform) continue;
+
+      const dx = transform.x - workerX;
+      const dy = transform.y - workerY;
+      const distance = Math.sqrt(dx * dx + dy * dy);
+
+      if (!nearest || distance < nearest.distance) {
+        nearest = { entity: segmentEntity, distance };
+      }
+    }
+
+    return nearest;
   }
 
   /**
@@ -1158,6 +1300,7 @@ export class BuildingPlacementSystem extends System {
 
   /**
    * Check if any worker is actively constructing a building
+   * For walls: supports AoE construction - workers contribute to ALL nearby walls in their line
    */
   private isWorkerConstructing(buildingEntityId: number, buildingTransform: Transform): boolean {
     // Get building to use its width for consistent threshold with isCloseEnough
@@ -1167,17 +1310,27 @@ export class BuildingPlacementSystem extends System {
     const building = buildingEntity.get<Building>('Building');
     if (!building) return false;
 
+    // Check if this is a wall (for AoE construction)
+    const wall = buildingEntity.get<Wall>('Wall');
+    const isWall = wall !== undefined;
+
     const workers = this.world.getEntitiesWith('Unit', 'Transform');
 
     for (const entity of workers) {
       const unit = entity.get<Unit>('Unit');
       if (!unit) continue;
 
-      if (unit.constructingBuildingId !== buildingEntityId) {
+      if (unit.state !== 'building') {
         continue;
       }
 
-      if (unit.state !== 'building') {
+      // For walls: Allow any worker with this wall in their wallLineSegments to contribute (AoE construction)
+      // For regular buildings: Only the assigned worker can construct
+      const canConstruct = isWall
+        ? (unit.wallLineSegments.includes(buildingEntityId) || unit.constructingBuildingId === buildingEntityId)
+        : (unit.constructingBuildingId === buildingEntityId);
+
+      if (!canConstruct) {
         continue;
       }
 
@@ -1187,10 +1340,17 @@ export class BuildingPlacementSystem extends System {
       const dy = workerTransform.y - buildingTransform.y;
       const distance = Math.sqrt(dx * dx + dy * dy);
 
-      // Worker is close enough to construct - use at least building.width/2 (consistent
-      // with isCloseEnough) but never less than 3 for small buildings to give buffer
-      const constructThreshold = Math.max(building.width / 2, 3);
-      if (distance <= this.CONSTRUCTION_RANGE + constructThreshold) {
+      // Worker is close enough to construct
+      // For walls: Use larger AoE construction range so workers can build multiple nearby walls
+      // For regular buildings: Use standard construction range
+      const constructThreshold = isWall
+        ? this.WALL_AOE_CONSTRUCTION_RANGE
+        : Math.max(building.width / 2, 3);
+      const effectiveRange = isWall
+        ? this.WALL_AOE_CONSTRUCTION_RANGE
+        : this.CONSTRUCTION_RANGE + constructThreshold;
+
+      if (distance <= effectiveRange) {
         return true;
       }
     }
