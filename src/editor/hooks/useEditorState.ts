@@ -15,6 +15,7 @@ import type {
   EditorMapData,
   EditorCell,
   EditorObject,
+  SymmetryMode,
 } from '../config/EditorConfig';
 
 // Initial state factory
@@ -31,10 +32,106 @@ function createInitialState(config: EditorConfig): EditorState {
     selectedObjects: [],
     activePanel: config.panels[0]?.id || 'paint',
     activeBiome: config.biomes[0]?.id || 'default',
+    symmetryMode: 'none',
     isDirty: false,
     undoStack: [],
     redoStack: [],
   };
+}
+
+/**
+ * Apply symmetry to cell updates
+ */
+function applySymmetry(
+  updates: Array<{ x: number; y: number; cell: Partial<EditorCell> }>,
+  mode: SymmetryMode,
+  width: number,
+  height: number
+): Array<{ x: number; y: number; cell: Partial<EditorCell> }> {
+  if (mode === 'none') return updates;
+
+  const centerX = width / 2;
+  const centerY = height / 2;
+  const allUpdates = new Map<string, { x: number; y: number; cell: Partial<EditorCell> }>();
+
+  for (const update of updates) {
+    // Always add the original update
+    allUpdates.set(`${update.x},${update.y}`, update);
+
+    const { x, y, cell } = update;
+
+    switch (mode) {
+      case 'x': {
+        // Mirror across X axis (vertical line through center)
+        const mirrorX = Math.floor(width - 1 - x);
+        if (mirrorX >= 0 && mirrorX < width) {
+          allUpdates.set(`${mirrorX},${y}`, { x: mirrorX, y, cell: { ...cell } });
+        }
+        break;
+      }
+      case 'y': {
+        // Mirror across Y axis (horizontal line through center)
+        const mirrorY = Math.floor(height - 1 - y);
+        if (mirrorY >= 0 && mirrorY < height) {
+          allUpdates.set(`${x},${mirrorY}`, { x, y: mirrorY, cell: { ...cell } });
+        }
+        break;
+      }
+      case 'both': {
+        // Mirror across both axes (4-way symmetry)
+        const mirrorX = Math.floor(width - 1 - x);
+        const mirrorY = Math.floor(height - 1 - y);
+        if (mirrorX >= 0 && mirrorX < width) {
+          allUpdates.set(`${mirrorX},${y}`, { x: mirrorX, y, cell: { ...cell } });
+        }
+        if (mirrorY >= 0 && mirrorY < height) {
+          allUpdates.set(`${x},${mirrorY}`, { x, y: mirrorY, cell: { ...cell } });
+        }
+        if (mirrorX >= 0 && mirrorX < width && mirrorY >= 0 && mirrorY < height) {
+          allUpdates.set(`${mirrorX},${mirrorY}`, { x: mirrorX, y: mirrorY, cell: { ...cell } });
+        }
+        break;
+      }
+      case 'radial4': {
+        // 4-way rotational symmetry (90° rotations)
+        const dx = x - centerX;
+        const dy = y - centerY;
+        const rotations = [
+          { x: Math.floor(centerX - dy), y: Math.floor(centerY + dx) }, // 90°
+          { x: Math.floor(centerX - dx), y: Math.floor(centerY - dy) }, // 180°
+          { x: Math.floor(centerX + dy), y: Math.floor(centerY - dx) }, // 270°
+        ];
+        for (const rot of rotations) {
+          if (rot.x >= 0 && rot.x < width && rot.y >= 0 && rot.y < height) {
+            allUpdates.set(`${rot.x},${rot.y}`, { x: rot.x, y: rot.y, cell: { ...cell } });
+          }
+        }
+        break;
+      }
+      case 'radial8': {
+        // 8-way symmetry (45° rotations + mirrors)
+        const dx = x - centerX;
+        const dy = y - centerY;
+        const points = [
+          { x: Math.floor(centerX - dy), y: Math.floor(centerY + dx) },
+          { x: Math.floor(centerX - dx), y: Math.floor(centerY - dy) },
+          { x: Math.floor(centerX + dy), y: Math.floor(centerY - dx) },
+          { x: Math.floor(centerX - dx), y: Math.floor(centerY + dy) },
+          { x: Math.floor(centerX + dx), y: Math.floor(centerY - dy) },
+          { x: Math.floor(centerX + dy), y: Math.floor(centerY + dx) },
+          { x: Math.floor(centerX - dy), y: Math.floor(centerY - dx) },
+        ];
+        for (const pt of points) {
+          if (pt.x >= 0 && pt.x < width && pt.y >= 0 && pt.y < height) {
+            allUpdates.set(`${pt.x},${pt.y}`, { x: pt.x, y: pt.y, cell: { ...cell } });
+          }
+        }
+        break;
+      }
+    }
+  }
+
+  return Array.from(allUpdates.values());
 }
 
 // Deep clone map data for undo history
@@ -62,6 +159,7 @@ export interface UseEditorStateReturn {
   setOffset: (offset: { x: number; y: number }) => void;
   setActivePanel: (panelId: string) => void;
   setActiveBiome: (biomeId: string) => void;
+  setSymmetryMode: (mode: SymmetryMode) => void;
 
   // Map actions
   loadMap: (data: EditorMapData) => void;
@@ -159,6 +257,10 @@ export function useEditorState(config: EditorConfig): UseEditorStateReturn {
     });
   }, []);
 
+  const setSymmetryMode = useCallback((mode: SymmetryMode) => {
+    setState((prev) => ({ ...prev, symmetryMode: mode }));
+  }, []);
+
   // Map actions
   const loadMap = useCallback((data: EditorMapData) => {
     setState((prev) => ({
@@ -231,15 +333,23 @@ export function useEditorState(config: EditorConfig): UseEditorStateReturn {
     [maxUndoHistory]
   );
 
-  // Batched cell updates - updates without pushing to undo
+  // Batched cell updates - updates without pushing to undo (applies symmetry)
   const updateCellsBatched = useCallback(
     (updates: Array<{ x: number; y: number; cell: Partial<EditorCell> }>) => {
       setState((prev) => {
         if (!prev.mapData) return prev;
 
+        // Apply symmetry to updates
+        const symmetricUpdates = applySymmetry(
+          updates,
+          prev.symmetryMode,
+          prev.mapData.width,
+          prev.mapData.height
+        );
+
         // Create a map of updates for efficient lookup
         const updateMap = new Map<string, Partial<EditorCell>>();
-        for (const { x, y, cell } of updates) {
+        for (const { x, y, cell } of symmetricUpdates) {
           if (y >= 0 && y < prev.mapData.height && x >= 0 && x < prev.mapData.width) {
             updateMap.set(`${x},${y}`, cell);
           }
@@ -567,6 +677,7 @@ export function useEditorState(config: EditorConfig): UseEditorStateReturn {
     setOffset,
     setActivePanel,
     setActiveBiome,
+    setSymmetryMode,
     loadMap,
     updateCell,
     updateCells,

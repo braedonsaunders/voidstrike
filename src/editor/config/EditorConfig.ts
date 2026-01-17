@@ -126,9 +126,13 @@ export type BuiltInToolType =
   | 'plateau'   // Create circular elevated area
   | 'ramp'      // Draw ramps between elevations
   | 'eraser'    // Clear/reset terrain
-  | 'line'      // Draw lines
+  | 'line'      // Draw lines between two points
   | 'rect'      // Draw rectangles
-  | 'ellipse';  // Draw ellipses
+  | 'ellipse'   // Draw ellipses
+  | 'raise'     // Raise elevation with falloff
+  | 'lower'     // Lower elevation with falloff
+  | 'smooth'    // Smooth terrain (average neighbors)
+  | 'noise';    // Add procedural elevation noise
 
 /**
  * Tool configuration
@@ -464,6 +468,9 @@ export interface EditorConfig {
 /**
  * Runtime editor state (internal)
  */
+/** Symmetry mode for terrain editing */
+export type SymmetryMode = 'none' | 'x' | 'y' | 'both' | 'radial4' | 'radial8';
+
 export interface EditorState {
   /** Currently loaded map data */
   mapData: EditorMapData | null;
@@ -487,6 +494,8 @@ export interface EditorState {
   activePanel: string;
   /** Active biome */
   activeBiome: string;
+  /** Symmetry mode for terrain edits */
+  symmetryMode: SymmetryMode;
   /** Has unsaved changes */
   isDirty: boolean;
   /** Undo stack */
@@ -522,12 +531,26 @@ export const DEFAULT_THEME: UIThemeConfig = {
  * Default tools
  */
 export const DEFAULT_TOOLS: ToolConfig[] = [
+  // Selection
   { id: 'select', name: 'Select', icon: '⬚', shortcut: 'V', type: 'select' },
+
+  // Painting
   { id: 'brush', name: 'Brush', icon: '●', shortcut: 'B', type: 'brush', hasBrushSize: true, defaultBrushSize: 5, minBrushSize: 1, maxBrushSize: 20 },
   { id: 'fill', name: 'Fill', icon: '◉', shortcut: 'G', type: 'fill' },
-  { id: 'plateau', name: 'Plateau', icon: '⬡', shortcut: 'P', type: 'plateau', hasBrushSize: true, defaultBrushSize: 10, minBrushSize: 3, maxBrushSize: 30 },
-  { id: 'ramp', name: 'Ramp', icon: '◢', shortcut: 'R', type: 'ramp' },
   { id: 'eraser', name: 'Eraser', icon: '◌', shortcut: 'E', type: 'eraser', hasBrushSize: true, defaultBrushSize: 5, minBrushSize: 1, maxBrushSize: 20 },
+
+  // Shapes (click and drag)
+  { id: 'line', name: 'Line', icon: '╱', shortcut: 'L', type: 'line', hasBrushSize: true, defaultBrushSize: 3, minBrushSize: 1, maxBrushSize: 10 },
+  { id: 'rect', name: 'Rectangle', icon: '▢', shortcut: 'U', type: 'rect' },
+  { id: 'ellipse', name: 'Ellipse', icon: '◯', shortcut: 'O', type: 'ellipse' },
+  { id: 'plateau', name: 'Plateau', icon: '⬡', shortcut: 'P', type: 'plateau', hasBrushSize: true, defaultBrushSize: 10, minBrushSize: 3, maxBrushSize: 30 },
+  { id: 'ramp', name: 'Ramp', icon: '◢', shortcut: 'R', type: 'ramp', hasBrushSize: true, defaultBrushSize: 4, minBrushSize: 2, maxBrushSize: 12 },
+
+  // Sculpting
+  { id: 'raise', name: 'Raise', icon: '▲', shortcut: 'T', type: 'raise', hasBrushSize: true, defaultBrushSize: 6, minBrushSize: 2, maxBrushSize: 20, options: { amount: 15 } },
+  { id: 'lower', name: 'Lower', icon: '▼', shortcut: 'Y', type: 'lower', hasBrushSize: true, defaultBrushSize: 6, minBrushSize: 2, maxBrushSize: 20, options: { amount: 15 } },
+  { id: 'smooth', name: 'Smooth', icon: '〰', shortcut: 'H', type: 'smooth', hasBrushSize: true, defaultBrushSize: 8, minBrushSize: 3, maxBrushSize: 25 },
+  { id: 'noise', name: 'Noise', icon: '░', shortcut: 'N', type: 'noise', hasBrushSize: true, defaultBrushSize: 10, minBrushSize: 3, maxBrushSize: 30, options: { intensity: 20 } },
 ];
 
 /**

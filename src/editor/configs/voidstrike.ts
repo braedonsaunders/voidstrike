@@ -262,7 +262,7 @@ export const VOIDSTRIKE_TOOLS: ToolConfig[] = [
     id: 'border',
     name: 'Border',
     icon: '🏔',
-    shortcut: 'R',
+    shortcut: 'X',  // Changed from 'R' to avoid conflict with Ramp
     type: 'brush',
     hasBrushSize: true,
     defaultBrushSize: 8,
