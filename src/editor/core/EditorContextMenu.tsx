@@ -35,11 +35,15 @@ function SubMenu({
   theme,
   onClose,
   parentRef,
+  onMouseEnter,
+  onMouseLeave,
 }: {
   items: ContextMenuAction[];
   theme: EditorConfig['theme'];
   onClose: () => void;
   parentRef: React.RefObject<HTMLDivElement | null>;
+  onMouseEnter: () => void;
+  onMouseLeave: () => void;
 }) {
   const submenuRef = useRef<HTMLDivElement>(null);
   const [position, setPosition] = useState<'right' | 'left'>('right');
@@ -61,6 +65,8 @@ function SubMenu({
     <div
       ref={submenuRef}
       className="absolute py-1 rounded-lg shadow-2xl backdrop-blur-xl min-w-[180px]"
+      onMouseEnter={onMouseEnter}
+      onMouseLeave={onMouseLeave}
       style={{
         top: 0,
         [position === 'right' ? 'left' : 'right']: '100%',
@@ -96,14 +102,42 @@ function MenuItem({
 }) {
   const [showSubmenu, setShowSubmenu] = useState(false);
   const itemRef = useRef<HTMLDivElement>(null);
+  const hideTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const hasSubmenu = action.submenu && action.submenu.length > 0;
+
+  // Cleanup timeout on unmount
+  useEffect(() => {
+    return () => {
+      if (hideTimeoutRef.current) {
+        clearTimeout(hideTimeoutRef.current);
+      }
+    };
+  }, []);
+
+  const handleMouseEnter = () => {
+    if (!hasSubmenu) return;
+    // Cancel any pending hide
+    if (hideTimeoutRef.current) {
+      clearTimeout(hideTimeoutRef.current);
+      hideTimeoutRef.current = null;
+    }
+    setShowSubmenu(true);
+  };
+
+  const handleMouseLeave = () => {
+    if (!hasSubmenu) return;
+    // Delay hiding to allow mouse to reach submenu
+    hideTimeoutRef.current = setTimeout(() => {
+      setShowSubmenu(false);
+    }, 150);
+  };
 
   return (
     <div
       ref={itemRef}
       className="relative"
-      onMouseEnter={() => hasSubmenu && setShowSubmenu(true)}
-      onMouseLeave={() => hasSubmenu && setShowSubmenu(false)}
+      onMouseEnter={handleMouseEnter}
+      onMouseLeave={handleMouseLeave}
     >
       <button
         onClick={() => {
@@ -136,6 +170,8 @@ function MenuItem({
           theme={theme}
           onClose={onClose}
           parentRef={itemRef}
+          onMouseEnter={handleMouseEnter}
+          onMouseLeave={handleMouseLeave}
         />
       )}
     </div>
