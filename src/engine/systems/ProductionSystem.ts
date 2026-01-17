@@ -151,9 +151,16 @@ export class ProductionSystem extends System {
     // Check if building has reactor and unit is reactor-eligible (double production = 2 units)
     const reactorUnits = PRODUCTION_MODULE_UNITS[bestBuilding.building.buildingId] || [];
     const hasReactorBonus = bestBuilding.building.hasReactor() && reactorUnits.includes(unitType);
-    const produceCount = hasReactorBonus ? 2 : 1;
 
-    // Deduct resources (double for reactor bonus)
+    // Determine how many units to produce: 2 if reactor bonus AND enough resources, else 1
+    let produceCount = 1;
+    if (hasReactorBonus) {
+      const canAffordTwo = store.minerals >= unitDef.mineralCost * 2 &&
+                           store.vespene >= unitDef.vespeneCost * 2;
+      produceCount = canAffordTwo ? 2 : 1;
+    }
+
+    // Deduct resources based on produceCount
     store.addResources(-unitDef.mineralCost * produceCount, -unitDef.vespeneCost * produceCount);
 
     // Add to production queue with supply cost stored (doubled for reactor)
