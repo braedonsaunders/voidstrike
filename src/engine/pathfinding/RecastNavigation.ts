@@ -685,13 +685,21 @@ export class RecastNavigation {
         collisionQueryRange: radius * 5,
       };
 
+      debugPathfinding.log(
+        `[Crowd] addAgent e=${entityId} pos=(${x.toFixed(1)},${terrainY.toFixed(2)},${y.toFixed(1)}) ` +
+        `r=${radius.toFixed(2)} mxS=${maxSpeed.toFixed(2)} mxA=${(maxSpeed * 1.5).toFixed(2)}`
+      );
+
       const agent = this.crowd.addAgent({ x, y: terrainY, z: y }, params);
 
       if (agent) {
         const agentIndex = agent.agentIndex;
         this.agentMap.set(entityId, agentIndex);
         this.agentEntityMap.set(agentIndex, entityId);
+        debugPathfinding.log(`[Crowd] addAgent SUCCESS e=${entityId} idx=${agentIndex}`);
         return agentIndex;
+      } else {
+        debugPathfinding.warn(`[Crowd] addAgent FAILED e=${entityId} - crowd.addAgent returned null`);
       }
     } catch (error) {
       debugPathfinding.warn(`[RecastNavigation] Failed to add agent ${entityId}:`, error);
@@ -734,6 +742,11 @@ export class RecastNavigation {
         // Use terrain height at target for Y coordinate
         // Keep original X/Z to match game coordinates
         const terrainY = this.getTerrainHeight(targetX, targetY);
+        const pos = agent.position();
+        debugPathfinding.log(
+          `[Crowd] setTarget e=${entityId} from=(${pos.x.toFixed(1)},${pos.z.toFixed(1)}) ` +
+          `to=(${targetX.toFixed(1)},${targetY.toFixed(1)}) tgtY=${terrainY.toFixed(2)}`
+        );
         agent.requestMoveTarget({ x: targetX, y: terrainY, z: targetY });
         return true;
       }
