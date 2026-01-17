@@ -231,7 +231,7 @@ function findPath(
     }
 
     // Convert path and apply smoothing
-    const rawPath = result.path.map((point) => ({
+    const rawPath = result.path.map((point: { x: number; y: number; z: number }) => ({
       x: point.x,
       y: point.z,
     }));
