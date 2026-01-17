@@ -7,6 +7,7 @@
  * - O(1) path queries via NavMeshQuery
  * - DetourCrowd for RVO-based collision avoidance
  * - TileCache for dynamic obstacles (buildings)
+ * - Web Worker for off-thread path computation (prevents main thread blocking)
  */
 
 import * as THREE from 'three';
@@ -22,8 +23,8 @@ import {
 } from '../pathfinding/RecastNavigation';
 import { debugPathfinding, debugPerformance } from '@/utils/debugLogger';
 
-// Path request batching
-const MAX_PATHS_PER_FRAME = 8; // Can process more since Recast is faster
+// Path request batching - increased since worker handles computation off-thread
+const MAX_PATHS_PER_FRAME = 16; // Worker can handle more without blocking main thread
 const PATH_REQUEST_COOLDOWN = 20; // Ticks between requests (1 second at 20 TPS)
 
 // Stuck detection
@@ -194,16 +195,189 @@ export class PathfindingSystem extends System {
   // Custom terrain height function (from rendered terrain for accurate heights)
   private terrainHeightFunction: ((x: number, z: number) => number) | null = null;
 
+  // Web Worker for off-thread path computation
+  private pathWorker: Worker | null = null;
+  private workerReady: boolean = false;
+  private workerRequestId: number = 0;
+  private pendingWorkerRequests: Map<number, PathRequest> = new Map();
+
+  // Cached geometry for worker initialization
+  private cachedNavMeshGeometry: { positions: Float32Array; indices: Uint32Array } | null = null;
+
   constructor(game: Game, mapWidth: number, mapHeight: number) {
     super(game);
     this.mapWidth = mapWidth;
     this.mapHeight = mapHeight;
     this.recast = getRecastNavigation();
     this.setupEventListeners();
+    this.initializeWorker();
 
     debugPathfinding.log(
       `[PathfindingSystem] Initialized for ${mapWidth}x${mapHeight} map`
     );
+  }
+
+  /**
+   * Initialize the pathfinding web worker
+   */
+  private initializeWorker(): void {
+    if (typeof Worker === 'undefined') {
+      debugPathfinding.warn('[PathfindingSystem] Web Workers not supported, using main thread fallback');
+      return;
+    }
+
+    try {
+      // Create worker using Next.js compatible URL pattern
+      this.pathWorker = new Worker(
+        new URL('../../workers/pathfinding.worker.ts', import.meta.url)
+      );
+
+      this.pathWorker.onmessage = this.handleWorkerMessage.bind(this);
+      this.pathWorker.onerror = (error) => {
+        debugPathfinding.error('[PathfindingSystem] Worker error:', error);
+        this.workerReady = false;
+      };
+
+      // Initialize WASM in worker
+      this.pathWorker.postMessage({ type: 'init' });
+
+      debugPathfinding.log('[PathfindingSystem] Web Worker created');
+    } catch (error) {
+      debugPathfinding.warn('[PathfindingSystem] Failed to create worker:', error);
+      this.pathWorker = null;
+    }
+  }
+
+  /**
+   * Handle messages from the pathfinding worker
+   */
+  private handleWorkerMessage(event: MessageEvent): void {
+    const message = event.data;
+
+    switch (message.type) {
+      case 'initialized':
+        if (message.success) {
+          debugPathfinding.log('[PathfindingSystem] Worker WASM initialized');
+          // If we have cached geometry, send it to worker
+          if (this.cachedNavMeshGeometry && this.navMeshReady) {
+            this.sendGeometryToWorker();
+          }
+        } else {
+          debugPathfinding.error('[PathfindingSystem] Worker WASM init failed');
+        }
+        break;
+
+      case 'navMeshLoaded':
+        if (message.success) {
+          this.workerReady = true;
+          debugPathfinding.log('[PathfindingSystem] Worker navmesh loaded');
+        } else {
+          debugPathfinding.error('[PathfindingSystem] Worker navmesh load failed');
+        }
+        break;
+
+      case 'pathResult':
+        this.handlePathResult(message.requestId, message.path, message.found);
+        break;
+    }
+  }
+
+  /**
+   * Send navmesh geometry to worker
+   */
+  private sendGeometryToWorker(): void {
+    if (!this.pathWorker || !this.cachedNavMeshGeometry) return;
+
+    this.pathWorker.postMessage({
+      type: 'loadNavMeshFromGeometry',
+      positions: this.cachedNavMeshGeometry.positions,
+      indices: this.cachedNavMeshGeometry.indices,
+      mapWidth: this.mapWidth,
+      mapHeight: this.mapHeight,
+    });
+  }
+
+  /**
+   * Handle path result from worker
+   */
+  private handlePathResult(
+    requestId: number,
+    path: Array<{ x: number; y: number }>,
+    found: boolean
+  ): void {
+    const request = this.pendingWorkerRequests.get(requestId);
+    if (!request) return;
+
+    this.pendingWorkerRequests.delete(requestId);
+
+    const entity = this.world.getEntity(request.entityId);
+    if (!entity) return;
+
+    const unit = entity.get<Unit>('Unit');
+    if (!unit) return;
+
+    if (found && path.length > 0) {
+      unit.setPath(path);
+
+      this.unitPathStates.set(request.entityId, {
+        lastPosition: { x: request.startX, y: request.startY },
+        lastMoveTick: this.game.getCurrentTick(),
+        lastRepathTick: this.game.getCurrentTick(),
+        destinationX: request.endX,
+        destinationY: request.endY,
+      });
+    } else {
+      this.recordFailedPath(request.entityId, request.endX, request.endY);
+      unit.path = [];
+      unit.pathIndex = 0;
+
+      const dx = request.endX - request.startX;
+      const dy = request.endY - request.startY;
+      const dist = Math.sqrt(dx * dx + dy * dy);
+
+      if (dist > 30) {
+        if (unit.state === 'moving') {
+          unit.targetX = null;
+          unit.targetY = null;
+          unit.state = 'idle';
+        } else if (unit.state !== 'building' && unit.state !== 'gathering') {
+          unit.targetX = null;
+          unit.targetY = null;
+        }
+      }
+
+      this.unitPathStates.delete(request.entityId);
+    }
+  }
+
+  /**
+   * Send obstacle update to worker
+   */
+  private sendObstacleToWorker(
+    action: 'add' | 'remove',
+    entityId: number,
+    centerX: number,
+    centerY: number,
+    width: number,
+    height: number
+  ): void {
+    if (!this.pathWorker || !this.workerReady) return;
+
+    if (action === 'add') {
+      this.pathWorker.postMessage({
+        type: 'addObstacle',
+        entityId,
+        centerX,
+        centerY,
+        width,
+        height,
+      });
+    } else {
+      this.pathWorker.postMessage({
+        type: 'removeObstacle',
+        entityId,
+      });
+    }
   }
 
   /**
@@ -234,10 +408,26 @@ export class PathfindingSystem extends System {
     this.failedPathCache.clear();
     this.failedPathCacheKeys = [];
     this.navMeshReady = false;
+    this.workerReady = false;
+    this.pendingWorkerRequests.clear();
+    this.cachedNavMeshGeometry = null;
 
     debugPathfinding.log(
       `[PathfindingSystem] Reinitialized for ${mapWidth}x${mapHeight}`
     );
+  }
+
+  /**
+   * Clean up resources
+   */
+  public dispose(): void {
+    if (this.pathWorker) {
+      this.pathWorker.terminate();
+      this.pathWorker = null;
+    }
+    this.workerReady = false;
+    this.pendingWorkerRequests.clear();
+    this.cachedNavMeshGeometry = null;
   }
 
   /**
@@ -261,6 +451,14 @@ export class PathfindingSystem extends System {
 
     if (success) {
       debugPathfinding.log('[PathfindingSystem] NavMesh ready');
+
+      // Cache geometry for worker
+      this.cachedNavMeshGeometry = { positions, indices };
+
+      // Send geometry to worker if it's initialized
+      if (this.pathWorker) {
+        this.sendGeometryToWorker();
+      }
 
       // Wire up terrain height provider for elevation-aware pathfinding
       // Use custom function if set (for accurate heightMap values), else fall back to game
@@ -336,6 +534,7 @@ export class PathfindingSystem extends System {
       width: number;
       height: number;
     }) => {
+      // Add to main thread recast (for crowd simulation)
       this.recast.addBoxObstacle(
         data.entityId,
         data.position.x,
@@ -343,6 +542,8 @@ export class PathfindingSystem extends System {
         data.width,
         data.height
       );
+      // Forward to worker (for path queries)
+      this.sendObstacleToWorker('add', data.entityId, data.position.x, data.position.y, data.width, data.height);
     });
 
     this.game.eventBus.on('building:destroyed', (data: {
@@ -352,6 +553,8 @@ export class PathfindingSystem extends System {
       height: number;
     }) => {
       this.recast.removeObstacle(data.entityId);
+      // Forward to worker
+      this.sendObstacleToWorker('remove', data.entityId, 0, 0, 0, 0);
     });
 
     this.game.eventBus.on('building:constructionStarted', (data: {
@@ -367,6 +570,8 @@ export class PathfindingSystem extends System {
         data.width,
         data.height
       );
+      // Forward to worker
+      this.sendObstacleToWorker('add', data.entityId, data.position.x, data.position.y, data.width, data.height);
     });
 
     // Unit lifecycle events
@@ -545,7 +750,34 @@ export class PathfindingSystem extends System {
     const unit = entity.get<Unit>('Unit');
     if (!unit) return;
 
-    // Use unit's collision radius for path query - ensures proper clearance
+    // Use worker for path computation if available (non-blocking)
+    if (this.pathWorker && this.workerReady) {
+      const requestId = this.workerRequestId++;
+      this.pendingWorkerRequests.set(requestId, request);
+
+      // Get terrain heights for start/end positions
+      const startHeight = this.terrainHeightFunction
+        ? this.terrainHeightFunction(request.startX, request.startY)
+        : 0;
+      const endHeight = this.terrainHeightFunction
+        ? this.terrainHeightFunction(request.endX, request.endY)
+        : 0;
+
+      this.pathWorker.postMessage({
+        type: 'findPath',
+        requestId,
+        startX: request.startX,
+        startY: request.startY,
+        endX: request.endX,
+        endY: request.endY,
+        agentRadius: unit.collisionRadius,
+        startHeight,
+        endHeight,
+      });
+      return;
+    }
+
+    // Fallback to main thread (blocking) if worker not available
     const result = this.findPath(
       request.startX,
       request.startY,
