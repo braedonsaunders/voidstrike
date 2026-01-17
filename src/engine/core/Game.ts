@@ -57,7 +57,7 @@ export type GameState = 'initializing' | 'running' | 'paused' | 'ended';
 
 // Terrain cell for building placement validation
 export interface TerrainCell {
-  terrain: 'ground' | 'unwalkable' | 'ramp' | 'unbuildable' | 'creep';
+  terrain: 'ground' | 'platform' | 'unwalkable' | 'ramp' | 'unbuildable' | 'creep';
   elevation: number; // 0-255 for new terrain system
   feature?: 'none' | 'water_shallow' | 'water_deep' | 'forest_light' | 'forest_dense' | 'mud' | 'road' | 'void' | 'cliff';
 }
@@ -633,8 +633,8 @@ export class Game {
 
         const cell = this.terrainGrid[tileY][tileX];
 
-        // Must be buildable ground (not unwalkable, ramp, or unbuildable)
-        if (cell.terrain !== 'ground') {
+        // Must be buildable ground or platform (not unwalkable, ramp, or unbuildable)
+        if (cell.terrain !== 'ground' && cell.terrain !== 'platform') {
           return false;
         }
 
