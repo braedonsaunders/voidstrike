@@ -138,6 +138,9 @@
 - [x] **Minimap fog of war** - Enemy units/buildings no longer visible through fog of war
 - [x] **3D model integration** - AssetManager wired to load decoration models (trees, rocks, Xel'Naga tower)
 
+### Audio System Fixes
+- [x] **"Not enough resources" alert audio fix** - Audio was not playing for resource insufficiency alerts. Systems were emitting `'ui:error'` events but AudioSystem was listening for `'alert:notEnoughMinerals'` and `'alert:notEnoughVespene'`. Fixed by updating ProductionSystem, BuildingPlacementSystem, ResearchSystem, and WallSystem to emit the correct alert events alongside the visual warning events.
+
 ### Building System Fixes
 - [x] **Building construction completion bug** - Buildings would stay translucent, construction particles wouldn't disappear, buildings could resize incorrectly. Fixed material array handling and construction effect cleanup when switching to instanced rendering.
 - [x] **Instanced rendering scale bug** - Buildings using instanced rendering appeared extremely small because the geometry was used without the model's normalization scale. Fixed by tracking and applying modelScale to instance matrices.

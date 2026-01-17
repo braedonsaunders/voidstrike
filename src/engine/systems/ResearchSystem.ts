@@ -49,11 +49,14 @@ export class ResearchSystem extends System {
     }
 
     // Check resources
-    if (
-      store.minerals < upgrade.mineralCost ||
-      store.vespene < upgrade.vespeneCost
-    ) {
-      this.game.eventBus.emit('ui:error', { message: 'Not enough resources' });
+    if (store.minerals < upgrade.mineralCost) {
+      this.game.eventBus.emit('alert:notEnoughMinerals', {});
+      this.game.eventBus.emit('warning:lowMinerals', {});
+      return;
+    }
+    if (store.vespene < upgrade.vespeneCost) {
+      this.game.eventBus.emit('alert:notEnoughVespene', {});
+      this.game.eventBus.emit('warning:lowVespene', {});
       return;
     }
 

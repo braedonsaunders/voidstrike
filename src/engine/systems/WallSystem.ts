@@ -371,8 +371,14 @@ export class WallSystem extends System {
 
       // Check cost
       if (isPlayerLocal) {
-        if (store.minerals < upgradeDef.applyCost.minerals || store.vespene < upgradeDef.applyCost.vespene) {
-          this.game.eventBus.emit('ui:error', { message: 'Not enough resources', playerId });
+        if (store.minerals < upgradeDef.applyCost.minerals) {
+          this.game.eventBus.emit('alert:notEnoughMinerals', {});
+          this.game.eventBus.emit('warning:lowMinerals', {});
+          continue;
+        }
+        if (store.vespene < upgradeDef.applyCost.vespene) {
+          this.game.eventBus.emit('alert:notEnoughVespene', {});
+          this.game.eventBus.emit('warning:lowVespene', {});
           continue;
         }
       }
