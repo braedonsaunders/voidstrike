@@ -833,7 +833,7 @@ export class BuildingRenderer {
         meshData.blueprintEffect.position.set(transform.x, terrainHeight, transform.y);
         this.updateBlueprintEffect(meshData.blueprintEffect, dt, meshData.buildingHeight);
       } else if (isPaused) {
-        // Construction paused (SC2-style) - show partially built state without active effects
+        // Construction paused (SC2-style) - show partially built state with blueprint effect
         const progress = building.buildProgress;
 
         // Same Y-scale approach as constructing state
@@ -858,15 +858,18 @@ export class BuildingRenderer {
           meshData.groundDustEffect.visible = false;
         }
 
-        // Hide blueprint effect when paused (construction has started)
-        if (meshData.blueprintEffect) {
-          meshData.blueprintEffect.visible = false;
+        // Show blueprint effect when paused - indicates building needs worker to resume
+        if (!meshData.blueprintEffect) {
+          meshData.blueprintEffect = this.createBlueprintEffect(building.width, building.height, meshData.buildingHeight);
+          this.scene.add(meshData.blueprintEffect);
         }
+        meshData.blueprintEffect.visible = true;
+        meshData.blueprintEffect.position.set(transform.x, terrainHeight, transform.y);
+        this.updateBlueprintEffect(meshData.blueprintEffect, dt, meshData.buildingHeight);
 
-        // Keep scaffold visible during pause to show partial structure
+        // Hide scaffold when paused - only visible during ACTIVE construction
         if (meshData.scaffoldEffect) {
-          meshData.scaffoldEffect.visible = progress < 0.8;
-          meshData.scaffoldEffect.position.set(transform.x, terrainHeight, transform.y);
+          meshData.scaffoldEffect.visible = false;
         }
       } else {
         // Construction in progress (state === 'constructing')

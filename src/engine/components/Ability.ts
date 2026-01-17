@@ -231,6 +231,19 @@ export const DOMINION_ABILITIES: Record<string, AbilityDefinition> = {
     duration: 2, // 2 second charge-up time
     aoeRadius: 0, // Single target - no splash
   },
+  yamato_cannon: {
+    id: 'yamato_cannon',
+    name: 'Yamato Cannon',
+    description: 'Channel a devastating blast that deals 300 damage to a single target. 2 second charge time.',
+    cooldown: 71, // SC2 Yamato cooldown
+    energyCost: 100, // SC2 Yamato energy cost
+    range: 10, // SC2 Yamato range
+    targetType: 'unit',
+    hotkey: 'Y',
+    damage: 300, // SC2 Yamato base damage (240 + upgrades)
+    duration: 2, // 2 second charge-up time
+    aoeRadius: 0, // Single target - no splash
+  },
   warp_jump: {
     id: 'warp_jump',
     name: 'Warp Jump',

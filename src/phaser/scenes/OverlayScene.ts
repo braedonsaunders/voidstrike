@@ -863,6 +863,7 @@ export class OverlayScene extends Phaser.Scene {
 
   /**
    * Show full-screen victory or defeat overlay
+   * Premium animated game end screen with particle effects and dramatic reveal
    * @param isVictory - true for victory, false for defeat, null for draw/spectator
    * @param duration - game duration in seconds
    * @param reason - reason for game end
@@ -871,13 +872,14 @@ export class OverlayScene extends Phaser.Scene {
    */
   private showGameEndOverlay(isVictory: boolean | null, duration: number, reason: string, canSpectate: boolean = false, winner?: string): void {
     // If overlay is already showing, don't create another one
-    // (This can happen if player is eliminated and then game ends shortly after)
     if (this.gameEndOverlay || this.gameEndContainer) {
       return;
     }
 
     const screenWidth = this.scale.width;
     const screenHeight = this.scale.height;
+    const centerX = screenWidth / 2;
+    const centerY = screenHeight / 2;
 
     // Play victory or defeat music
     const musicUrl = isVictory === true
@@ -885,54 +887,147 @@ export class OverlayScene extends Phaser.Scene {
       : '/audio/music/defeat/defeat.mp3';
     MusicPlayer.playOneShot(musicUrl);
 
-    // Create dark overlay
+    // Determine colors based on result
+    let mainColor: number;
+    let glowColor: number;
+    let mainText: string;
+
+    if (reason === 'draw') {
+      mainText = 'DRAW';
+      mainColor = 0xffd700;
+      glowColor = 0xffaa00;
+    } else if (isVictory === null) {
+      mainText = 'GAME OVER';
+      mainColor = 0x8899aa;
+      glowColor = 0x667788;
+    } else if (isVictory) {
+      mainText = 'VICTORY';
+      mainColor = 0x00ff88;
+      glowColor = 0x00cc66;
+    } else {
+      mainText = 'DEFEAT';
+      mainColor = 0xff4466;
+      glowColor = 0xcc2244;
+    }
+
+    const colorHex = '#' + mainColor.toString(16).padStart(6, '0');
+    const glowHex = '#' + glowColor.toString(16).padStart(6, '0');
+
+    // Use device pixel ratio for crisp text on high-DPI displays
+    const resolution = Math.min(window.devicePixelRatio || 1, 2);
+
+    // Create dark overlay with animated fade
     const overlay = this.add.graphics();
     overlay.setDepth(500);
-    overlay.fillStyle(0x000000, 0.85);
+    overlay.fillStyle(0x000000, 0);
     overlay.fillRect(0, 0, screenWidth, screenHeight);
     this.gameEndOverlay = overlay;
 
+    // Animate overlay darkness
+    this.tweens.addCounter({
+      from: 0,
+      to: 0.9,
+      duration: 600,
+      ease: 'Quad.easeOut',
+      onUpdate: (tween) => {
+        const alpha = tween.getValue() ?? 0;
+        overlay.clear();
+        overlay.fillStyle(0x000000, alpha);
+        overlay.fillRect(0, 0, screenWidth, screenHeight);
+      },
+    });
+
     // Create container for all elements
-    const container = this.add.container(screenWidth / 2, screenHeight / 2);
+    const container = this.add.container(centerX, centerY);
     container.setDepth(501);
     this.gameEndContainer = container;
 
-    // Determine text and colors based on result
-    // isVictory: true = local player won, false = local player lost, null = spectator or draw
-    let mainText: string;
-    let mainColor: number;
+    // Animated background glow burst
+    const glowBurst = this.add.graphics();
+    glowBurst.setAlpha(0);
+    container.add(glowBurst);
 
-    if (reason === 'draw') {
-      // Actual draw - all forces lost
-      mainText = 'DRAW';
-      mainColor = 0xffff00;
-    } else if (isVictory === null) {
-      // Spectator watching a non-draw game end
-      mainText = 'GAME OVER';
-      mainColor = 0xaaaaaa;
-    } else if (isVictory) {
-      mainText = 'VICTORY';
-      mainColor = 0x00ff00;
-    } else {
-      mainText = 'DEFEAT';
-      mainColor = 0xff0000;
-    }
+    // Draw radial glow
+    const drawGlow = (radius: number, alpha: number) => {
+      glowBurst.clear();
+      const steps = 20;
+      for (let i = 0; i < steps; i++) {
+        const t = i / steps;
+        const r = radius * (1 - t);
+        const a = alpha * Math.pow(t, 0.5);
+        glowBurst.fillStyle(glowColor, a);
+        glowBurst.fillCircle(0, 0, r);
+      }
+    };
 
-    // Create main title with glow effect
-    const title = this.add.text(0, -80, mainText, {
-      fontSize: '96px',
-      fontFamily: 'Orbitron, sans-serif',
-      color: '#' + mainColor.toString(16).padStart(6, '0'),
+    // Animate glow expansion
+    this.tweens.addCounter({
+      from: 50,
+      to: 400,
+      duration: 800,
+      delay: 200,
+      ease: 'Quad.easeOut',
+      onUpdate: (tween) => {
+        drawGlow(tween.getValue() ?? 50, 0.15);
+      },
+    });
+
+    this.tweens.add({
+      targets: glowBurst,
+      alpha: 1,
+      duration: 400,
+      delay: 200,
+      ease: 'Quad.easeOut',
+    });
+
+    // Decorative horizontal lines that animate in
+    const lineWidth = 300;
+    const topLine = this.add.graphics();
+    const bottomLine = this.add.graphics();
+    topLine.lineStyle(2, mainColor, 0.6);
+    bottomLine.lineStyle(2, mainColor, 0.6);
+    topLine.setAlpha(0);
+    bottomLine.setAlpha(0);
+    container.add(topLine);
+    container.add(bottomLine);
+
+    // Glow text layer (behind main title)
+    const titleGlow = this.add.text(0, -60, mainText, {
+      fontSize: '108px',
+      fontFamily: 'Orbitron, Arial Black, sans-serif',
+      color: glowHex,
+      stroke: glowHex,
+      strokeThickness: 20,
+      resolution,
+    });
+    titleGlow.setOrigin(0.5, 0.5);
+    titleGlow.setAlpha(0);
+    container.add(titleGlow);
+
+    // Main title
+    const title = this.add.text(0, -60, mainText, {
+      fontSize: '108px',
+      fontFamily: 'Orbitron, Arial Black, sans-serif',
+      color: colorHex,
       stroke: '#000000',
       strokeThickness: 6,
+      shadow: {
+        offsetX: 0,
+        offsetY: 4,
+        color: '#000000',
+        blur: 12,
+        fill: true,
+      },
+      resolution,
     });
     title.setOrigin(0.5, 0.5);
+    title.setAlpha(0);
+    title.setScale(0.5);
     container.add(title);
 
-    // Subtitle with reason - show appropriate message based on victory/defeat
+    // Subtitle with reason
     let reasonText: string;
     if (isVictory === null && reason !== 'draw') {
-      // Spectator watching game end - show who won
       const winnerName = winner ? this.formatPlayerName(winner) : 'Unknown';
       if (reason === 'elimination') {
         reasonText = `${winnerName} Wins - Enemy Eliminated`;
@@ -947,107 +1042,214 @@ export class OverlayScene extends Phaser.Scene {
       reasonText = isVictory ? 'Enemy Eliminated' : 'Your Forces Eliminated';
     } else if (reason === 'surrender') {
       reasonText = isVictory ? 'Enemy Surrendered' : 'You Surrendered';
-    } else if (reason === 'draw') {
-      reasonText = 'All Forces Lost';
     } else {
       reasonText = 'Game Over';
     }
-    const subtitle = this.add.text(0, 0, reasonText, {
-      fontSize: '32px',
-      fontFamily: 'Inter, sans-serif',
+
+    const subtitle = this.add.text(0, 30, reasonText, {
+      fontSize: '28px',
+      fontFamily: 'Orbitron, Inter, sans-serif',
       color: '#ffffff',
+      stroke: '#000000',
+      strokeThickness: 2,
+      resolution,
     });
     subtitle.setOrigin(0.5, 0.5);
+    subtitle.setAlpha(0);
     container.add(subtitle);
 
-    // Game duration
+    // Game duration with icon-like decoration (format matches HUD clock: MM:SS with padded minutes)
     const minutes = Math.floor(duration / 60);
     const seconds = Math.floor(duration % 60);
-    const durationText = this.add.text(0, 50, `Game Duration: ${minutes}:${seconds.toString().padStart(2, '0')}`, {
-      fontSize: '24px',
-      fontFamily: 'Inter, sans-serif',
-      color: '#aaaaaa',
-    });
-    durationText.setOrigin(0.5, 0.5);
-    container.add(durationText);
+    const durationStr = `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
 
-    // Show "Continue Spectating" button only if game continues and player can spectate
+    const durationLabel = this.add.text(-40, 80, 'DURATION', {
+      fontSize: '14px',
+      fontFamily: 'Orbitron, sans-serif',
+      color: '#666666',
+      resolution,
+    });
+    durationLabel.setOrigin(1, 0.5);
+    durationLabel.setAlpha(0);
+    container.add(durationLabel);
+
+    const durationValue = this.add.text(0, 80, durationStr, {
+      fontSize: '28px',
+      fontFamily: 'Orbitron, sans-serif',
+      color: '#ffffff',
+      resolution,
+    });
+    durationValue.setOrigin(0.5, 0.5);
+    durationValue.setAlpha(0);
+    container.add(durationValue);
+
+    // Spectate button or menu hint
+    let actionElements: Phaser.GameObjects.GameObject[] = [];
+
     if (canSpectate) {
-      // Continue Spectating button
-      const spectateButton = this.add.text(0, 110, '[ CONTINUE SPECTATING ]', {
-        fontSize: '24px',
+      const spectateButton = this.add.text(0, 150, '[ CONTINUE SPECTATING ]', {
+        fontSize: '22px',
         fontFamily: 'Orbitron, sans-serif',
         color: '#00aaff',
         stroke: '#000000',
-        strokeThickness: 2,
+        strokeThickness: 3,
+        resolution,
       });
       spectateButton.setOrigin(0.5, 0.5);
+      spectateButton.setAlpha(0);
       spectateButton.setInteractive({ useHandCursor: true });
 
-      // Hover effects
       spectateButton.on('pointerover', () => {
         spectateButton.setColor('#00ffff');
-        spectateButton.setScale(1.05);
+        this.tweens.add({
+          targets: spectateButton,
+          scale: 1.08,
+          duration: 100,
+          ease: 'Quad.easeOut',
+        });
       });
       spectateButton.on('pointerout', () => {
         spectateButton.setColor('#00aaff');
-        spectateButton.setScale(1);
+        this.tweens.add({
+          targets: spectateButton,
+          scale: 1,
+          duration: 100,
+          ease: 'Quad.easeOut',
+        });
       });
-
-      // Click handler - hide overlay and enable spectator mode
-      // Use setTimeout to avoid React state update conflicts
       spectateButton.on('pointerdown', () => {
         this.hideGameEndOverlay();
-        // Delay state update to avoid React render conflicts
         setTimeout(() => {
           enableSpectatorMode();
         }, 0);
-        // Transition back to gameplay music
         MusicPlayer.play('gameplay');
       });
 
       container.add(spectateButton);
+      actionElements.push(spectateButton);
 
-      // Return to menu hint (positioned lower)
-      const hintText = this.add.text(0, 160, 'Press ESCAPE to return to menu', {
-        fontSize: '20px',
+      const hintText = this.add.text(0, 200, 'Press ESCAPE to return to menu', {
+        fontSize: '16px',
         fontFamily: 'Inter, sans-serif',
-        color: '#666666',
+        color: '#555555',
+        resolution,
       });
       hintText.setOrigin(0.5, 0.5);
+      hintText.setAlpha(0);
       container.add(hintText);
+      actionElements.push(hintText);
     } else {
-      // No spectating option - just show return to menu hint
-      const hintText = this.add.text(0, 120, 'Press ESCAPE to return to menu', {
-        fontSize: '20px',
+      const hintText = this.add.text(0, 150, 'Press ESCAPE to return to menu', {
+        fontSize: '18px',
         fontFamily: 'Inter, sans-serif',
         color: '#666666',
+        resolution,
       });
       hintText.setOrigin(0.5, 0.5);
+      hintText.setAlpha(0);
       container.add(hintText);
+      actionElements.push(hintText);
     }
 
-    // Animate elements in
-    container.setAlpha(0);
-    this.tweens.add({
-      targets: container,
-      alpha: 1,
-      duration: 500,
-      ease: 'Power2',
-    });
+    // === ANIMATION SEQUENCE ===
 
-    // Pulse animation on title
+    // Title dramatic entrance (delay 300ms)
     this.tweens.add({
       targets: title,
-      scaleX: 1.05,
-      scaleY: 1.05,
-      duration: 1000,
-      yoyo: true,
-      repeat: -1,
-      ease: 'Sine.easeInOut',
+      scale: 1,
+      alpha: 1,
+      duration: 500,
+      delay: 300,
+      ease: 'Back.easeOut',
     });
 
-    // Listen for escape key to return to menu
+    // Title glow bloom
+    this.tweens.add({
+      targets: titleGlow,
+      alpha: 0.35,
+      duration: 600,
+      delay: 300,
+      ease: 'Quad.easeOut',
+    });
+
+    // Decorative lines animate in (delay 500ms)
+    this.time.delayedCall(500, () => {
+      // Animate lines from center outward
+      let lineProgress = 0;
+      const lineTimer = this.time.addEvent({
+        delay: 16,
+        repeat: 30,
+        callback: () => {
+          lineProgress += 1 / 30;
+          const currentWidth = lineWidth * this.easeOutQuart(lineProgress);
+
+          topLine.clear();
+          topLine.lineStyle(2, mainColor, 0.5);
+          topLine.lineBetween(-currentWidth / 2, -120, currentWidth / 2, -120);
+
+          bottomLine.clear();
+          bottomLine.lineStyle(2, mainColor, 0.5);
+          bottomLine.lineBetween(-currentWidth / 2, 120, currentWidth / 2, 120);
+        },
+      });
+
+      topLine.setAlpha(1);
+      bottomLine.setAlpha(1);
+    });
+
+    // Subtitle fade in (delay 600ms)
+    this.tweens.add({
+      targets: subtitle,
+      alpha: 1,
+      y: 25,
+      duration: 400,
+      delay: 600,
+      ease: 'Quad.easeOut',
+    });
+    subtitle.y = 35;
+
+    // Duration fade in (delay 800ms)
+    this.tweens.add({
+      targets: [durationLabel, durationValue],
+      alpha: 1,
+      duration: 400,
+      delay: 800,
+      ease: 'Quad.easeOut',
+    });
+
+    // Action elements fade in (delay 1000ms)
+    this.tweens.add({
+      targets: actionElements,
+      alpha: 1,
+      duration: 400,
+      delay: 1000,
+      ease: 'Quad.easeOut',
+    });
+
+    // Subtle title breathing animation (after entrance)
+    this.time.delayedCall(900, () => {
+      this.tweens.add({
+        targets: title,
+        scaleX: 1.02,
+        scaleY: 1.02,
+        duration: 2000,
+        yoyo: true,
+        repeat: -1,
+        ease: 'Sine.easeInOut',
+      });
+
+      // Glow pulses slightly
+      this.tweens.add({
+        targets: titleGlow,
+        alpha: 0.45,
+        duration: 2000,
+        yoyo: true,
+        repeat: -1,
+        ease: 'Sine.easeInOut',
+      });
+    });
+
+    // Listen for escape key
     if (this.input.keyboard) {
       this.escKeyListener = this.input.keyboard.addKey('ESC');
       this.escKeyListener.once('down', () => {
@@ -1109,47 +1311,116 @@ export class OverlayScene extends Phaser.Scene {
 
   private showAlert(text: string, color: number, duration: number): void {
     const screenWidth = this.scale.width;
+    const colorHex = `#${color.toString(16).padStart(6, '0')}`;
+    const yPosition = 80 + this.alerts.length * 44;
 
-    // Create styled alert text
-    const alertText = this.add.text(screenWidth / 2, 80 + this.alerts.length * 40, text, {
-      fontSize: '24px',
-      fontFamily: 'Arial Black, Arial',
-      color: `#${color.toString(16).padStart(6, '0')}`,
+    // Use device pixel ratio for crisp text on high-DPI displays
+    const resolution = Math.min(window.devicePixelRatio || 1, 2);
+
+    // Create container for the alert elements
+    const alertContainer = this.add.container(screenWidth / 2, yPosition);
+    alertContainer.setDepth(250);
+
+    // Subtle glow/bloom layer behind text
+    const glowText = this.add.text(0, 0, text, {
+      fontSize: '22px',
+      fontFamily: 'Orbitron, Arial Black, Arial, sans-serif',
+      color: colorHex,
+      stroke: colorHex,
+      strokeThickness: 8,
+      resolution,
+    });
+    glowText.setOrigin(0.5, 0.5);
+    glowText.setAlpha(0.3);
+    alertContainer.add(glowText);
+
+    // Main alert text - crisp and readable
+    const alertText = this.add.text(0, 0, text, {
+      fontSize: '22px',
+      fontFamily: 'Orbitron, Arial Black, Arial, sans-serif',
+      color: colorHex,
       stroke: '#000000',
       strokeThickness: 4,
       shadow: {
-        offsetX: 2,
+        offsetX: 0,
         offsetY: 2,
         color: '#000000',
-        blur: 8,
+        blur: 6,
         fill: true,
       },
+      resolution,
     });
     alertText.setOrigin(0.5, 0.5);
-    alertText.setDepth(250);
+    alertContainer.add(alertText);
+
+    // Decorative underline accent
+    const textWidth = alertText.width;
+    const underline = this.add.graphics();
+    underline.lineStyle(2, color, 0.6);
+    underline.lineBetween(-textWidth / 2, 14, textWidth / 2, 14);
+    underline.setAlpha(0);
+    alertContainer.add(underline);
 
     const alert: AlertMessage = {
       text,
       color,
       x: screenWidth / 2,
-      y: 80 + this.alerts.length * 40,
+      y: yPosition,
       createdAt: Date.now(),
       duration,
       graphics: alertText,
     };
 
     this.alerts.push(alert);
-    this.alertContainer.add(alertText);
+    this.alertContainer.add(alertContainer);
 
-    // Animate in
-    alertText.setScale(0);
-    alertText.setAlpha(0);
+    // Entrance animation: scale + alpha + slide
+    alertContainer.setScale(0.8, 0.6);
+    alertContainer.setAlpha(0);
+    alertContainer.y = yPosition - 20;
+
+    // Glow starts larger for bloom effect
+    glowText.setScale(1.2);
+
     this.tweens.add({
-      targets: alertText,
+      targets: alertContainer,
       scale: 1,
       alpha: 1,
-      duration: 150,
+      y: yPosition,
+      duration: 200,
       ease: 'Back.easeOut',
+    });
+
+    // Glow settles to normal size
+    this.tweens.add({
+      targets: glowText,
+      scale: 1,
+      alpha: 0.25,
+      duration: 300,
+      ease: 'Quad.easeOut',
+    });
+
+    // Underline slides in from center
+    this.tweens.add({
+      targets: underline,
+      alpha: 0.5,
+      duration: 250,
+      delay: 100,
+      ease: 'Quad.easeOut',
+    });
+
+    // Exit animation: fade and slide up
+    this.tweens.add({
+      targets: alertContainer,
+      alpha: 0,
+      y: yPosition - 15,
+      scale: 0.95,
+      duration: 300,
+      delay: duration - 300,
+      ease: 'Quad.easeIn',
+      onComplete: () => {
+        alertContainer.destroy();
+      },
     });
   }
 

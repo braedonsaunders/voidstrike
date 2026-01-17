@@ -460,7 +460,7 @@ export const UNIT_DEFINITIONS: Record<string, UnitDefinition> = {
   dreadnought: {
     id: 'dreadnought',
     name: 'Dreadnought',
-    description: 'Massive capital ship with continuous laser cannon and devastating Power Cannon. Attacks ground and air.',
+    description: 'Massive capital ship with continuous laser cannon and devastating Yamato Cannon. Attacks ground and air.',
     faction: 'dominion',
     mineralCost: 400,
     vespeneCost: 300,
@@ -475,7 +475,7 @@ export const UNIT_DEFINITIONS: Record<string, UnitDefinition> = {
     damageType: 'psionic', // Uses laser visual effect
     maxHealth: 550,
     armor: 3,
-    abilities: ['power_cannon', 'warp_jump'],
+    abilities: ['yamato_cannon', 'warp_jump'],
     isFlying: true,
     isMechanical: true,
     canAttackGround: true,

@@ -90,8 +90,8 @@ const CROWD_CONFIG = {
 };
 
 // Agent config for different unit types
-// SC2-style instant acceleration: use very high maxAcceleration so crowd
-// doesn't artificially limit velocity ramp-up (ground units have accel=1000)
+// SC2-style: Use crowd for pathfinding direction, but disable RVO obstacle avoidance
+// to prevent jitter. Unit-to-unit collision is handled by physics pushing instead.
 const DEFAULT_AGENT_PARAMS: Partial<CrowdAgentParams> = {
   radius: 0.5,
   height: 2.0,
@@ -99,10 +99,11 @@ const DEFAULT_AGENT_PARAMS: Partial<CrowdAgentParams> = {
   maxSpeed: 5.0,
   collisionQueryRange: 2.5,
   pathOptimizationRange: 10.0,
-  separationWeight: 2.0,
-  // Update flags for local avoidance
-  updateFlags: 0x1 | 0x2 | 0x4 | 0x8, // All flags enabled
-  obstacleAvoidanceType: 3, // High quality avoidance
+  separationWeight: 0.0, // Disabled - we handle separation with physics pushing
+  // SC2-STYLE: Disable obstacle avoidance to prevent jitter
+  // Only use crowd for path corridor following, not local avoidance
+  updateFlags: 0x1, // DT_CROWD_ANTICIPATE_TURNS only, no obstacle avoidance
+  obstacleAvoidanceType: 0, // Disabled
   queryFilterType: 0,
 };
 

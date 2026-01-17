@@ -29,26 +29,39 @@ const CONSOLIDATION_WINDOW = 400; // ms
 const HIGH_DAMAGE_THRESHOLD = 30;
 const CRITICAL_THRESHOLD = 50;
 
-// Colors - simple yellow for all damage
+// Colors - vibrant with good contrast
 const COLORS = {
-  normal: '#ffff00',      // Yellow
-  high: '#ffcc00',        // Slightly darker yellow
-  critical: '#ffaa00',    // Orange-yellow
-  killingBlow: '#ff6600', // Orange
-  healing: '#00ff88',     // Green (for future use)
-  shield: '#00aaff',      // Blue (for future use)
+  normal: '#ffe066',      // Warm gold
+  high: '#ffb347',        // Rich amber
+  critical: '#ff7f50',    // Coral orange
+  killingBlow: '#ff4757', // Vivid red
+  healing: '#7bed9f',     // Soft green
+  shield: '#70a1ff',      // Sky blue
 } as const;
 
-// Font settings - fixed size, no scaling
+// Glow colors (slightly more saturated for bloom effect)
+const GLOW_COLORS = {
+  normal: '#ffd700',
+  high: '#ff9f1a',
+  critical: '#ff6348',
+  killingBlow: '#ff3838',
+  healing: '#2ed573',
+  shield: '#1e90ff',
+} as const;
+
+// Font settings - sized for visibility and impact
 const FONT_FAMILY = 'Orbitron, Arial Black, Arial, sans-serif';
-const FONT_SIZE = 14; // Smaller, cleaner size
+const FONT_SIZE = 18; // Readable, impactful size
+const FONT_SIZE_LARGE = 24; // For high damage
 
 // Height offset above unit for damage numbers (above health bar)
 const DAMAGE_NUMBER_HEIGHT_OFFSET = 1.5;
 
-// Animation durations - simplified
-const FLOAT_DURATION = 600;
-const FADE_DURATION = 200;
+// Animation durations - tuned for satisfying feedback
+const FLOAT_DURATION = 800;
+const FADE_DURATION = 300;
+const ENTRANCE_DURATION = 120;
+const POP_SCALE = 1.3; // Initial pop scale for entrance
 
 // ============================================
 // INTERFACES
@@ -66,9 +79,12 @@ interface ActiveDamageNumber {
   isKillingBlow: boolean;
   text: Phaser.GameObjects.Text;
   shadow: Phaser.GameObjects.Text;
+  glow: Phaser.GameObjects.Text; // Soft glow layer behind text
   yOffset: number; // Current float offset
+  xOffset: number; // Subtle horizontal drift
   currentScale: number;
   isAnimatingPop: boolean;
+  glowColor: string; // Current glow color for this number
 }
 
 // ============================================
@@ -84,7 +100,7 @@ export class DamageNumberSystem {
   private activeNumbers: Map<number, ActiveDamageNumber> = new Map();
 
   // Pool of text objects for reuse
-  private textPool: Array<{ text: Phaser.GameObjects.Text; shadow: Phaser.GameObjects.Text }> = [];
+  private textPool: Array<{ text: Phaser.GameObjects.Text; shadow: Phaser.GameObjects.Text; glow: Phaser.GameObjects.Text }> = [];
   private poolSize = 30;
 
   // Animation tracking
@@ -112,42 +128,72 @@ export class DamageNumberSystem {
    * Initialize the text object pool
    */
   private initializePool(): void {
+    // Use device pixel ratio for crisp text on high-DPI displays
+    const resolution = Math.min(window.devicePixelRatio || 1, 2);
+
     for (let i = 0; i < this.poolSize; i++) {
+      // Glow layer - soft bloom effect behind text
+      const glow = this.scene.add.text(0, 0, '', {
+        fontSize: `${FONT_SIZE}px`,
+        fontFamily: FONT_FAMILY,
+        color: GLOW_COLORS.normal,
+        stroke: GLOW_COLORS.normal,
+        strokeThickness: 12,
+        resolution,
+      });
+      glow.setOrigin(0.5, 0.5);
+      glow.setVisible(false);
+      glow.setAlpha(0.4);
+
+      // Shadow layer - depth and contrast
       const shadow = this.scene.add.text(0, 0, '', {
         fontSize: `${FONT_SIZE}px`,
         fontFamily: FONT_FAMILY,
         color: '#000000',
         stroke: '#000000',
-        strokeThickness: 0,
+        strokeThickness: 6,
+        resolution,
       });
       shadow.setOrigin(0.5, 0.5);
       shadow.setVisible(false);
-      shadow.setAlpha(0.5);
+      shadow.setAlpha(0.7);
 
+      // Main text layer - crisp and readable
       const text = this.scene.add.text(0, 0, '', {
         fontSize: `${FONT_SIZE}px`,
         fontFamily: FONT_FAMILY,
         color: COLORS.normal,
         stroke: '#000000',
-        strokeThickness: 3,
+        strokeThickness: 4,
+        shadow: {
+          offsetX: 0,
+          offsetY: 2,
+          color: '#000000',
+          blur: 4,
+          fill: true,
+        },
+        resolution,
       });
       text.setOrigin(0.5, 0.5);
       text.setVisible(false);
 
+      // Add in order: glow (back), shadow, text (front)
+      this.container.add(glow);
       this.container.add(shadow);
       this.container.add(text);
-      this.textPool.push({ text, shadow });
+      this.textPool.push({ text, shadow, glow });
     }
   }
 
   /**
    * Acquire a text object from the pool
    */
-  private acquireText(): { text: Phaser.GameObjects.Text; shadow: Phaser.GameObjects.Text } | null {
+  private acquireText(): { text: Phaser.GameObjects.Text; shadow: Phaser.GameObjects.Text; glow: Phaser.GameObjects.Text } | null {
     const item = this.textPool.pop();
     if (item) {
       item.text.setVisible(true);
       item.shadow.setVisible(true);
+      item.glow.setVisible(true);
       return item;
     }
     return null;
@@ -156,13 +202,16 @@ export class DamageNumberSystem {
   /**
    * Release a text object back to the pool
    */
-  private releaseText(item: { text: Phaser.GameObjects.Text; shadow: Phaser.GameObjects.Text }): void {
+  private releaseText(item: { text: Phaser.GameObjects.Text; shadow: Phaser.GameObjects.Text; glow: Phaser.GameObjects.Text }): void {
     item.text.setVisible(false);
     item.shadow.setVisible(false);
+    item.glow.setVisible(false);
     item.text.setAlpha(1);
-    item.shadow.setAlpha(0.6);
+    item.shadow.setAlpha(0.7);
+    item.glow.setAlpha(0.4);
     item.text.setScale(1);
     item.shadow.setScale(1);
+    item.glow.setScale(1);
     this.textPool.push(item);
   }
 
@@ -293,6 +342,9 @@ export class DamageNumberSystem {
 
     const now = Date.now();
 
+    // Slight random horizontal offset for visual variety
+    const xDrift = (Math.random() - 0.5) * 8;
+
     const damageNumber: ActiveDamageNumber = {
       targetId,
       totalDamage: damage,
@@ -305,9 +357,12 @@ export class DamageNumberSystem {
       isKillingBlow,
       text: textItem.text,
       shadow: textItem.shadow,
+      glow: textItem.glow,
       yOffset: 0,
+      xOffset: xDrift,
       currentScale: 0.5,
       isAnimatingPop: false,
+      glowColor: GLOW_COLORS.normal,
     };
 
     this.activeNumbers.set(targetId, damageNumber);
@@ -321,71 +376,102 @@ export class DamageNumberSystem {
 
   /**
    * Update the text content and style of a damage number
-   * Simplified: fixed font size, just update the number
+   * Dynamic sizing for high damage, glow color updates
    */
   private updateDamageText(damageNumber: ActiveDamageNumber): void {
-    const { text, shadow, totalDamage, isKillingBlow } = damageNumber;
+    const { text, shadow, glow, totalDamage, isKillingBlow } = damageNumber;
 
     // Format damage text - simple number
     const damageStr = Math.round(totalDamage).toString();
 
     text.setText(damageStr);
     shadow.setText(damageStr);
+    glow.setText(damageStr);
 
-    // Simple color based on damage level
+    // Determine color and glow based on damage level
     let color: string;
+    let glowColor: string;
+    let fontSize = FONT_SIZE;
+
     if (isKillingBlow) {
       color = COLORS.killingBlow;
+      glowColor = GLOW_COLORS.killingBlow;
+      fontSize = FONT_SIZE_LARGE;
     } else if (totalDamage >= CRITICAL_THRESHOLD) {
       color = COLORS.critical;
+      glowColor = GLOW_COLORS.critical;
+      fontSize = FONT_SIZE_LARGE;
     } else if (totalDamage >= HIGH_DAMAGE_THRESHOLD) {
       color = COLORS.high;
+      glowColor = GLOW_COLORS.high;
+      fontSize = FONT_SIZE + 2;
     } else {
       color = COLORS.normal;
+      glowColor = GLOW_COLORS.normal;
     }
 
-    text.setColor(color);
+    // Store glow color for animations
+    damageNumber.glowColor = glowColor;
 
-    // Fixed font size - no scaling
-    text.setFontSize(FONT_SIZE);
-    shadow.setFontSize(FONT_SIZE);
-    text.setStroke('#000000', 3);
+    // Apply colors
+    text.setColor(color);
+    glow.setColor(glowColor);
+    glow.setStroke(glowColor, 12);
+
+    // Apply font sizes
+    text.setFontSize(fontSize);
+    shadow.setFontSize(fontSize);
+    glow.setFontSize(fontSize);
+    text.setStroke('#000000', 4);
   }
 
   /**
    * Start the entrance animation for a new damage number
-   * Simplified: just fade in and float up
+   * Punchy pop-in with glow bloom effect
    */
   private startEntranceAnimation(damageNumber: ActiveDamageNumber): void {
-    const { text, shadow, targetId } = damageNumber;
+    const { text, shadow, glow, targetId } = damageNumber;
 
     // Clear any existing tweens
     this.clearTweens(targetId);
 
-    // Start at normal scale, just fade in
-    text.setScale(1);
-    shadow.setScale(1);
+    // Start at larger scale for pop effect
+    text.setScale(POP_SCALE);
+    shadow.setScale(POP_SCALE);
+    glow.setScale(POP_SCALE * 1.2); // Glow starts bigger for bloom
     text.setAlpha(0);
     shadow.setAlpha(0);
+    glow.setAlpha(0);
 
     const tweens: Phaser.Tweens.Tween[] = [];
 
-    // Simple fade in
-    const fadeInTween = this.scene.tweens.add({
-      targets: text,
-      alpha: 1,
-      duration: 100,
-      ease: 'Linear',
+    // Pop-in with overshoot for satisfying entrance
+    const popTween = this.scene.tweens.add({
+      targets: [text, shadow],
+      scale: 1,
+      alpha: { value: 1, ease: 'Quad.easeOut' },
+      duration: ENTRANCE_DURATION,
+      ease: 'Back.easeOut',
     });
-    tweens.push(fadeInTween);
+    tweens.push(popTween);
 
-    const shadowFadeIn = this.scene.tweens.add({
-      targets: shadow,
+    // Glow bloom: starts big and bright, settles to subtle
+    const glowTween = this.scene.tweens.add({
+      targets: glow,
+      scale: 1,
       alpha: 0.5,
-      duration: 100,
+      duration: ENTRANCE_DURATION * 1.5,
+      ease: 'Quad.easeOut',
+    });
+    tweens.push(glowTween);
+
+    // Shadow settles to proper alpha
+    this.scene.tweens.add({
+      targets: shadow,
+      alpha: 0.7,
+      duration: ENTRANCE_DURATION,
       ease: 'Linear',
     });
-    tweens.push(shadowFadeIn);
 
     // Start float animation
     this.startFloatAnimation(damageNumber, tweens);
@@ -394,20 +480,20 @@ export class DamageNumberSystem {
   }
 
   /**
-   * Trigger a subtle pulse when damage is consolidated
-   * Simplified: very subtle scale bump
+   * Trigger a satisfying pulse when damage is consolidated
+   * Includes glow intensification
    */
   private triggerPopAnimation(damageNumber: ActiveDamageNumber): void {
     if (damageNumber.isAnimatingPop) return;
 
     damageNumber.isAnimatingPop = true;
-    const { text, shadow } = damageNumber;
+    const { text, shadow, glow } = damageNumber;
 
-    // Very subtle scale bump
+    // Scale bump with glow flash
     this.scene.tweens.add({
       targets: [text, shadow],
-      scale: 1.05,
-      duration: 50,
+      scale: 1.15,
+      duration: 80,
       ease: 'Quad.easeOut',
       yoyo: true,
       onComplete: () => {
@@ -415,23 +501,54 @@ export class DamageNumberSystem {
         damageNumber.currentScale = 1;
       },
     });
+
+    // Glow intensifies briefly
+    this.scene.tweens.add({
+      targets: glow,
+      scale: 1.3,
+      alpha: 0.8,
+      duration: 80,
+      ease: 'Quad.easeOut',
+      yoyo: true,
+      onYoyo: () => {
+        glow.setAlpha(0.4);
+      },
+    });
   }
 
   /**
    * Start the floating animation
-   * Simplified: gentle float up and fade
+   * Smooth float with deceleration, glow fades first
    */
   private startFloatAnimation(damageNumber: ActiveDamageNumber, tweens: Phaser.Tweens.Tween[]): void {
-    // Gentle float upward
+    // Smooth float upward with deceleration
     const floatTween = this.scene.tweens.add({
       targets: damageNumber,
-      yOffset: -25,
+      yOffset: -35,
       duration: FLOAT_DURATION,
-      ease: 'Quad.easeOut',
+      ease: 'Cubic.easeOut',
     });
     tweens.push(floatTween);
 
-    // Fade out at end
+    // Subtle horizontal drift
+    this.scene.tweens.add({
+      targets: damageNumber,
+      xOffset: damageNumber.xOffset * 2,
+      duration: FLOAT_DURATION,
+      ease: 'Sine.easeOut',
+    });
+
+    // Glow fades out earlier for nice trail effect
+    const glowFadeTween = this.scene.tweens.add({
+      targets: damageNumber.glow,
+      alpha: 0,
+      delay: FLOAT_DURATION * 0.4,
+      duration: FLOAT_DURATION * 0.4,
+      ease: 'Quad.easeIn',
+    });
+    tweens.push(glowFadeTween);
+
+    // Main text and shadow fade out at end
     const fadeTween = this.scene.tweens.add({
       targets: [damageNumber.text, damageNumber.shadow],
       alpha: 0,
@@ -447,7 +564,7 @@ export class DamageNumberSystem {
 
   /**
    * Reset float animation when damage is consolidated
-   * Just extends the lifetime of the number
+   * Refreshes the animation for continued visibility
    */
   private resetFloatAnimation(damageNumber: ActiveDamageNumber): void {
     const { targetId } = damageNumber;
@@ -460,17 +577,28 @@ export class DamageNumberSystem {
     // Continue float animation from current position
     const floatTween = this.scene.tweens.add({
       targets: damageNumber,
-      yOffset: -25,
+      yOffset: -35,
       duration: FLOAT_DURATION,
-      ease: 'Quad.easeOut',
+      ease: 'Cubic.easeOut',
     });
     tweens.push(floatTween);
 
     // Ensure alpha is visible
     damageNumber.text.setAlpha(1);
-    damageNumber.shadow.setAlpha(0.5);
+    damageNumber.shadow.setAlpha(0.7);
+    damageNumber.glow.setAlpha(0.5);
 
-    // New fade out
+    // Glow fades earlier
+    const glowFadeTween = this.scene.tweens.add({
+      targets: damageNumber.glow,
+      alpha: 0,
+      delay: FLOAT_DURATION * 0.4,
+      duration: FLOAT_DURATION * 0.4,
+      ease: 'Quad.easeIn',
+    });
+    tweens.push(glowFadeTween);
+
+    // New fade out for text and shadow
     const fadeTween = this.scene.tweens.add({
       targets: [damageNumber.text, damageNumber.shadow],
       alpha: 0,
@@ -488,6 +616,7 @@ export class DamageNumberSystem {
 
   /**
    * Mark a damage number as a killing blow
+   * Creates a dramatic emphasis effect
    */
   private markKillingBlow(targetId: number): void {
     const damageNumber = this.activeNumbers.get(targetId);
@@ -495,13 +624,26 @@ export class DamageNumberSystem {
       damageNumber.isKillingBlow = true;
       this.updateDamageText(damageNumber);
 
-      // Extra pop for killing blow
+      // Dramatic scale pop for killing blow
       this.scene.tweens.add({
         targets: [damageNumber.text, damageNumber.shadow],
-        scale: 1.5,
-        duration: 100,
+        scale: 1.6,
+        duration: 120,
         ease: 'Back.easeOut',
         yoyo: true,
+      });
+
+      // Intense glow flash for emphasis
+      this.scene.tweens.add({
+        targets: damageNumber.glow,
+        scale: 2,
+        alpha: 0.9,
+        duration: 120,
+        ease: 'Quad.easeOut',
+        yoyo: true,
+        onYoyo: () => {
+          damageNumber.glow.setAlpha(0.5);
+        },
       });
     }
   }
@@ -527,7 +669,7 @@ export class DamageNumberSystem {
     const damageNumber = this.activeNumbers.get(targetId);
     if (damageNumber) {
       this.clearTweens(targetId);
-      this.releaseText({ text: damageNumber.text, shadow: damageNumber.shadow });
+      this.releaseText({ text: damageNumber.text, shadow: damageNumber.shadow, glow: damageNumber.glow });
       this.activeNumbers.delete(targetId);
     }
   }
@@ -547,12 +689,14 @@ export class DamageNumberSystem {
         damageNumber.worldY
       );
 
-      // Apply float offset
+      // Apply float and drift offsets
+      const finalX = screenPos.x + damageNumber.xOffset;
       const finalY = screenPos.y + damageNumber.yOffset;
 
-      // Update positions
-      damageNumber.text.setPosition(screenPos.x, finalY);
-      damageNumber.shadow.setPosition(screenPos.x + 2, finalY + 2);
+      // Update positions (glow behind, shadow offset, text on top)
+      damageNumber.glow.setPosition(finalX, finalY);
+      damageNumber.shadow.setPosition(finalX + 1, finalY + 2);
+      damageNumber.text.setPosition(finalX, finalY);
     }
   }
 
@@ -582,6 +726,7 @@ export class DamageNumberSystem {
     for (const item of this.textPool) {
       item.text.destroy();
       item.shadow.destroy();
+      item.glow.destroy();
     }
     this.textPool = [];
 
