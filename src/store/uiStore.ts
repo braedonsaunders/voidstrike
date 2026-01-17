@@ -323,7 +323,8 @@ const savedDebugSettings = loadDebugSettings();
 // ============================================
 
 // Game overlay types for strategic information display
-export type GameOverlayType = 'none' | 'terrain' | 'elevation' | 'threat';
+// 'navmesh' shows ACTUAL pathfinding data from Recast Navigation (critical for debugging)
+export type GameOverlayType = 'none' | 'terrain' | 'elevation' | 'threat' | 'navmesh';
 
 // Overlay settings
 export interface OverlaySettings {
@@ -331,6 +332,7 @@ export interface OverlaySettings {
   terrainOverlayOpacity: number;
   elevationOverlayOpacity: number;
   threatOverlayOpacity: number;
+  navmeshOverlayOpacity: number;
 }
 
 export interface UIState {
@@ -603,6 +605,7 @@ export const useUIStore = create<UIState>((set, get) => ({
     terrainOverlayOpacity: 0.7,
     elevationOverlayOpacity: 0.7,
     threatOverlayOpacity: 0.5,
+    navmeshOverlayOpacity: 0.8,
   },
   performanceMetrics: {
     cpuTime: 0,

@@ -65,7 +65,7 @@ import { LoadingScreen } from './LoadingScreen';
 import { GraphicsOptionsPanel } from './GraphicsOptionsPanel';
 import { DebugMenuPanel } from './DebugMenuPanel';
 import { spawnInitialEntities } from '@/utils/gameSetup';
-import { useUIStore, FIXED_RESOLUTIONS } from '@/store/uiStore';
+import { useUIStore, FIXED_RESOLUTIONS, GameOverlayType } from '@/store/uiStore';
 import { debugInitialization, debugPerformance, debugNetworking } from '@/utils/debugLogger';
 import { DEFAULT_MAP, MapData, getMapById } from '@/data/maps';
 import { Resource } from '@/engine/components/Resource';
@@ -2088,10 +2088,10 @@ export function WebGPUGameCanvas() {
           break;
         case 'o':
           {
-            // Cycle through overlays: none -> terrain -> elevation -> threat -> none
+            // Cycle through overlays: none -> terrain -> elevation -> threat -> navmesh -> none
             const uiStore = useUIStore.getState();
             const currentOverlay = uiStore.overlaySettings.activeOverlay;
-            const overlayOrder: Array<'none' | 'terrain' | 'elevation' | 'threat'> = ['none', 'terrain', 'elevation', 'threat'];
+            const overlayOrder: GameOverlayType[] = ['none', 'terrain', 'elevation', 'threat', 'navmesh'];
             const currentIndex = overlayOrder.indexOf(currentOverlay);
             const nextIndex = (currentIndex + 1) % overlayOrder.length;
             uiStore.setActiveOverlay(overlayOrder[nextIndex]);

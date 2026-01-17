@@ -27,6 +27,7 @@ import { Selectable } from '@/engine/components/Selectable';
 import { Health } from '@/engine/components/Health';
 import { GameOverlayType } from '@/store/uiStore';
 import { getLocalPlayerId } from '@/store/gameSetupStore';
+import { getRecastNavigation } from '@/engine/pathfinding/RecastNavigation';
 
 /**
  * Creates a simple overlay material using TSL
@@ -102,12 +103,15 @@ export class TSLGameOverlayManager {
   private terrainOverlayMesh: THREE.Mesh | null = null;
   private elevationOverlayMesh: THREE.Mesh | null = null;
   private threatOverlayMesh: THREE.Mesh | null = null;
+  private navmeshOverlayMesh: THREE.Mesh | null = null;
 
   // Overlay textures
   private terrainTexture: THREE.DataTexture | null = null;
   private elevationTexture: THREE.DataTexture | null = null;
   private threatTexture: THREE.DataTexture | null = null;
   private threatTextureData: Uint8Array | null = null;
+  private navmeshTexture: THREE.DataTexture | null = null;
+  private navmeshTextureData: Uint8Array | null = null;
 
   // Current state
   private currentOverlay: GameOverlayType = 'none';
@@ -129,6 +133,7 @@ export class TSLGameOverlayManager {
     this.createTerrainOverlay();
     this.createElevationOverlay();
     this.createThreatOverlay();
+    this.createNavmeshOverlay();
 
     // Hide all overlays initially
     this.setActiveOverlay('none');
@@ -259,6 +264,163 @@ export class TSLGameOverlayManager {
     this.scene.add(this.threatOverlayMesh);
   }
 
+  /**
+   * Create navmesh overlay that shows ACTUAL pathfinding data from Recast Navigation.
+   * This queries the real navmesh for each cell to show what the pathfinding system actually sees.
+   * Critical for debugging ramp and connectivity issues.
+   */
+  private createNavmeshOverlay(): void {
+    const { width, height } = this.mapData;
+    this.navmeshTextureData = new Uint8Array(width * height * 4);
+
+    // Initialize with black (will be updated when shown)
+    for (let i = 0; i < width * height * 4; i += 4) {
+      this.navmeshTextureData[i + 0] = 0;
+      this.navmeshTextureData[i + 1] = 0;
+      this.navmeshTextureData[i + 2] = 0;
+      this.navmeshTextureData[i + 3] = 0;
+    }
+
+    this.navmeshTexture = new THREE.DataTexture(this.navmeshTextureData, width, height, THREE.RGBAFormat);
+    this.navmeshTexture.needsUpdate = true;
+    this.navmeshTexture.minFilter = THREE.NearestFilter;
+    this.navmeshTexture.magFilter = THREE.NearestFilter;
+
+    const material = createOverlayMaterial(this.navmeshTexture, 0.8);
+    const geometry = new THREE.PlaneGeometry(width, height);
+
+    this.navmeshOverlayMesh = new THREE.Mesh(geometry, material);
+    this.navmeshOverlayMesh.rotation.x = -Math.PI / 2;
+    this.navmeshOverlayMesh.position.set(width / 2, 0.35, height / 2);
+    this.navmeshOverlayMesh.renderOrder = 92;
+    this.navmeshOverlayMesh.visible = false;
+    this.scene.add(this.navmeshOverlayMesh);
+  }
+
+  /**
+   * Update navmesh overlay by querying Recast Navigation for each cell.
+   * Shows green for walkable, red for unwalkable, yellow for ramps (from map data),
+   * and blue tint for cells where navmesh height differs significantly from expected.
+   */
+  private updateNavmeshOverlay(): void {
+    if (!this.navmeshTextureData || !this.navmeshTexture) return;
+
+    const recast = getRecastNavigation();
+    const { width, height, terrain } = this.mapData;
+
+    // Query navmesh for each cell
+    for (let y = 0; y < height; y++) {
+      for (let x = 0; x < width; x++) {
+        const i = (y * width + x) * 4;
+        const cell = terrain[y]?.[x];
+        const cellX = x + 0.5; // Center of cell
+        const cellZ = y + 0.5;
+
+        // Check if Recast says this cell is walkable
+        const isNavmeshWalkable = recast.isReady() ? recast.isWalkable(cellX, cellZ) : false;
+
+        // Get projected point on navmesh for height comparison
+        let navmeshPoint: { x: number; y: number; z: number } | null = null;
+        if (recast.isReady()) {
+          navmeshPoint = recast.projectToNavMesh(cellX, cellZ);
+        }
+
+        // Get expected terrain height
+        const expectedHeight = this.getTerrainHeight(cellX, cellZ);
+
+        // Determine cell color based on ACTUAL navmesh state
+        if (cell?.terrain === 'unwalkable') {
+          // Map says unwalkable - should be red
+          if (isNavmeshWalkable) {
+            // ERROR: Navmesh says walkable but map says unwalkable (unexpected)
+            this.navmeshTextureData[i + 0] = 255; // Red
+            this.navmeshTextureData[i + 1] = 128; // Orange tint
+            this.navmeshTextureData[i + 2] = 0;
+            this.navmeshTextureData[i + 3] = 220;
+          } else {
+            // Correct: both agree unwalkable
+            this.navmeshTextureData[i + 0] = 100;
+            this.navmeshTextureData[i + 1] = 30;
+            this.navmeshTextureData[i + 2] = 30;
+            this.navmeshTextureData[i + 3] = 150;
+          }
+        } else if (cell?.terrain === 'ramp') {
+          // Map says ramp - show in yellow/gold tones
+          if (isNavmeshWalkable) {
+            // Good: navmesh confirms ramp is walkable
+            this.navmeshTextureData[i + 0] = 80;  // Less red
+            this.navmeshTextureData[i + 1] = 200; // Green (walkable)
+            this.navmeshTextureData[i + 2] = 80;  // Yellow-green
+            this.navmeshTextureData[i + 3] = 200;
+          } else {
+            // CRITICAL BUG: Ramp should be walkable but navmesh says no!
+            this.navmeshTextureData[i + 0] = 255; // Bright red
+            this.navmeshTextureData[i + 1] = 50;
+            this.navmeshTextureData[i + 2] = 200; // Purple-red to highlight issue
+            this.navmeshTextureData[i + 3] = 255; // Full opacity for critical issue
+          }
+        } else {
+          // Map says ground/walkable
+          if (isNavmeshWalkable) {
+            // Good: navmesh confirms walkable - green
+            // Check if height matches (detect potential discontinuities)
+            if (navmeshPoint) {
+              const heightDiff = Math.abs(navmeshPoint.y - expectedHeight);
+              if (heightDiff > 0.5) {
+                // Height mismatch - blue tint to show potential issue
+                this.navmeshTextureData[i + 0] = 80;
+                this.navmeshTextureData[i + 1] = 150;
+                this.navmeshTextureData[i + 2] = 220; // Blue
+                this.navmeshTextureData[i + 3] = 180;
+              } else {
+                // All good - standard green
+                this.navmeshTextureData[i + 0] = 50;
+                this.navmeshTextureData[i + 1] = 180;
+                this.navmeshTextureData[i + 2] = 50;
+                this.navmeshTextureData[i + 3] = 150;
+              }
+            } else {
+              // Walkable but no navmesh point found (shouldn't happen)
+              this.navmeshTextureData[i + 0] = 50;
+              this.navmeshTextureData[i + 1] = 180;
+              this.navmeshTextureData[i + 2] = 50;
+              this.navmeshTextureData[i + 3] = 150;
+            }
+          } else {
+            // BUG: Map says walkable but navmesh says no!
+            this.navmeshTextureData[i + 0] = 255; // Bright red
+            this.navmeshTextureData[i + 1] = 0;
+            this.navmeshTextureData[i + 2] = 0;
+            this.navmeshTextureData[i + 3] = 240;
+          }
+        }
+      }
+    }
+
+    this.navmeshTexture.needsUpdate = true;
+
+    // Log summary
+    let walkableCount = 0;
+    let unwalkableCount = 0;
+    let bugCount = 0;
+    for (let y = 0; y < height; y++) {
+      for (let x = 0; x < width; x++) {
+        const i = (y * width + x) * 4;
+        const cell = terrain[y]?.[x];
+        const isMapWalkable = cell?.terrain !== 'unwalkable';
+        const cellX = x + 0.5;
+        const cellZ = y + 0.5;
+        const isNavWalkable = recast.isReady() ? recast.isWalkable(cellX, cellZ) : false;
+
+        if (isNavWalkable) walkableCount++;
+        else unwalkableCount++;
+
+        if (isMapWalkable && !isNavWalkable) bugCount++;
+      }
+    }
+    console.log(`[NavmeshOverlay] Walkable: ${walkableCount}, Unwalkable: ${unwalkableCount}, Bugs (map says walkable, nav says no): ${bugCount}`);
+  }
+
   private updateThreatOverlay(): void {
     if (!this.world || !this.threatTextureData || !this.threatTexture) return;
 
@@ -348,6 +510,13 @@ export class TSLGameOverlayManager {
     if (this.terrainOverlayMesh) this.terrainOverlayMesh.visible = type === 'terrain';
     if (this.elevationOverlayMesh) this.elevationOverlayMesh.visible = type === 'elevation';
     if (this.threatOverlayMesh) this.threatOverlayMesh.visible = type === 'threat';
+    if (this.navmeshOverlayMesh) {
+      this.navmeshOverlayMesh.visible = type === 'navmesh';
+      // Update navmesh overlay data when shown (one-time query since navmesh is static)
+      if (type === 'navmesh') {
+        this.updateNavmeshOverlay();
+      }
+    }
   }
 
   public getActiveOverlay(): GameOverlayType {
@@ -366,6 +535,7 @@ export class TSLGameOverlayManager {
     updateMaterialOpacity(this.terrainOverlayMesh);
     updateMaterialOpacity(this.elevationOverlayMesh);
     updateMaterialOpacity(this.threatOverlayMesh);
+    updateMaterialOpacity(this.navmeshOverlayMesh);
   }
 
   public update(time: number): void {
@@ -397,5 +567,6 @@ export class TSLGameOverlayManager {
     disposeOverlay(this.terrainOverlayMesh, this.terrainTexture);
     disposeOverlay(this.elevationOverlayMesh, this.elevationTexture);
     disposeOverlay(this.threatOverlayMesh, this.threatTexture);
+    disposeOverlay(this.navmeshOverlayMesh, this.navmeshTexture);
   }
 }
