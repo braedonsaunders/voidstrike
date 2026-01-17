@@ -382,6 +382,7 @@ export class TerrainBrush {
             cell: {
               elevation,
               walkable: true,
+              isRamp: true,
             },
           });
         }
