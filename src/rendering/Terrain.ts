@@ -1142,6 +1142,10 @@ export class Terrain {
     const rampCells = cells.filter(c => c.terrain === 'ramp');
     const hasRamp = rampCells.length > 0;
 
+    // Check if any of the 4 cells is a platform
+    const platformCells = cells.filter(c => c.terrain === 'platform');
+    const hasPlatform = platformCells.length > 0;
+
     let avgElevation: number;
 
     if (hasRamp) {
@@ -1158,15 +1162,17 @@ export class Terrain {
       // - cell10, cell11 = ground cells at elevation 60
       // Using cell11.elevation would give height 2.4 instead of 7.2, creating a hole.
       avgElevation = rampCells.reduce((sum, c) => sum + c.elevation, 0) / rampCells.length;
+    } else if (hasPlatform) {
+      // Use platform elevation for consistent flat surfaces
+      avgElevation = platformCells.reduce((sum, c) => sum + c.elevation, 0) / platformCells.length;
     } else {
-      // No ramps - use simple average elevation for smooth ground
+      // No ramps or platforms - use simple average elevation for smooth ground
       avgElevation = (cell00.elevation + cell10.elevation + cell01.elevation + cell11.elevation) / 4;
     }
 
-    // For terrain type: if any adjacent cell is a ramp, treat this vertex as ramp terrain
-    // This prevents noise from being added to ramp-adjacent vertices, which would create holes
-    // The texture system will still use the actual cell type for rendering
-    const terrainType = hasRamp ? 'ramp' : cell11.terrain;
+    // For terrain type: prioritize ramp > platform > cell11.terrain
+    // This prevents noise from being added to ramp/platform-adjacent vertices
+    const terrainType = hasRamp ? 'ramp' : (hasPlatform ? 'platform' : cell11.terrain);
 
     return {
       terrain: terrainType as typeof cell11.terrain,
