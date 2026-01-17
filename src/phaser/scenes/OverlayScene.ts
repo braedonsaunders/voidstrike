@@ -1052,10 +1052,10 @@ export class OverlayScene extends Phaser.Scene {
     subtitle.setAlpha(0);
     container.add(subtitle);
 
-    // Game duration with icon-like decoration
+    // Game duration with icon-like decoration (format matches HUD clock: MM:SS with padded minutes)
     const minutes = Math.floor(duration / 60);
     const seconds = Math.floor(duration % 60);
-    const durationStr = `${minutes}:${seconds.toString().padStart(2, '0')}`;
+    const durationStr = `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
 
     const durationLabel = this.add.text(-40, 80, 'DURATION', {
       fontSize: '14px',

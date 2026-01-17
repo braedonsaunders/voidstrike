@@ -130,6 +130,9 @@ export function WebGPUGameCanvas() {
   // Event listener cleanup
   const eventUnsubscribersRef = useRef<(() => void)[]>([]);
 
+  // Track if final game time update has been done (for victory overlay sync)
+  const finalGameTimeUpdatedRef = useRef(false);
+
   // UI state
   const [isSelecting, setIsSelecting] = useState(false);
   const [selectionStart, setSelectionStart] = useState({ x: 0, y: 0 });
@@ -376,6 +379,7 @@ export function WebGPUGameCanvas() {
         aiEnabled: !isBattleSimulatorMode() && !isMultiplayer,
       });
       gameRef.current = game;
+      finalGameTimeUpdatedRef.current = false; // Reset for new game
 
       // Wire up screen-space selection for accurate selection of flying units
       game.selectionSystem.setWorldToScreen((worldX: number, worldZ: number, worldY?: number) => {
@@ -978,10 +982,18 @@ export function WebGPUGameCanvas() {
         // Throttle zustand store updates
         if (deltaTime > 0) {
           // Update game time once per second (only displays MM:SS)
+          const isGameFinished = gameRef.current?.gameStateSystem.isGameFinished() ?? false;
           if (Math.floor(currentTime / 1000) !== Math.floor(prevTime / 1000)) {
-            if (!gameRef.current?.gameStateSystem.isGameFinished()) {
+            if (!isGameFinished) {
               useGameStore.getState().setGameTime(gameTime);
             }
+          }
+          // Final update when game ends to sync HUD clock with victory overlay.
+          // Critical for inactive tabs: game loop (Web Worker) continues but render loop
+          // (RAF) is throttled, causing store to fall behind actual game time.
+          if (isGameFinished && !finalGameTimeUpdatedRef.current) {
+            finalGameTimeUpdatedRef.current = true;
+            useGameStore.getState().setGameTime(gameTime);
           }
           // Update camera position every 100ms for responsive UI
           if (Math.floor(currentTime / 100) !== Math.floor(prevTime / 100)) {
