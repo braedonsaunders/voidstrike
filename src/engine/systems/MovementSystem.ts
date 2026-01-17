@@ -29,6 +29,16 @@ import {
   getFormation,
   FORMATION_CONFIG,
 } from '@/data/formations/formations';
+import AssetManager from '@/assets/AssetManager';
+
+/**
+ * Get the visual radius of a unit for attack range calculations.
+ * Uses the model scale from assets.json (how big the unit LOOKS).
+ */
+function getVisualRadius(unit: Unit): number {
+  const modelScale = AssetManager.getUnitScale(unit.unitId);
+  return Math.max(unit.collisionRadius, modelScale * 0.5);
+}
 
 // ==================== SC2-STYLE STEERING CONSTANTS ====================
 
@@ -1645,6 +1655,9 @@ export class MovementSystem extends System {
             let attackTargetY = targetTransform.y;
             let needsToEscape = false;
 
+            // Use visual radius for distance calculations (matches how big unit looks)
+            const attackerRadius = getVisualRadius(unit);
+
             if (targetBuilding) {
               const halfW = targetBuilding.width / 2;
               const halfH = targetBuilding.height / 2;
@@ -1658,11 +1671,11 @@ export class MovementSystem extends System {
               );
               const edgeDx = transform.x - clampedX;
               const edgeDy = transform.y - clampedY;
-              // Edge-to-edge distance (subtract attacker's collision radius)
-              effectiveDistance = Math.max(0, Math.sqrt(edgeDx * edgeDx + edgeDy * edgeDy) - unit.collisionRadius);
+              // Edge-to-edge distance (subtract attacker's visual radius)
+              effectiveDistance = Math.max(0, Math.sqrt(edgeDx * edgeDx + edgeDy * edgeDy) - attackerRadius);
 
               const standOffDistance = unit.attackRange * 0.8;
-              const minSafeDistance = unit.collisionRadius + 0.5;
+              const minSafeDistance = attackerRadius + 0.5;
 
               if (effectiveDistance > minSafeDistance) {
                 const dirX = edgeDx / effectiveDistance;
@@ -1687,10 +1700,10 @@ export class MovementSystem extends System {
                 }
               }
             } else {
-              // Edge-to-edge distance for units (center-to-center minus both radii)
+              // Edge-to-edge distance for units using visual radii
               const centerDistance = transform.distanceTo(targetTransform);
-              const targetRadius = targetUnit?.collisionRadius ?? 0.5;
-              effectiveDistance = Math.max(0, centerDistance - unit.collisionRadius - targetRadius);
+              const targetRadius = targetUnit ? getVisualRadius(targetUnit) : 0.5;
+              effectiveDistance = Math.max(0, centerDistance - attackerRadius - targetRadius);
             }
 
             if (effectiveDistance > unit.attackRange || needsToEscape) {
