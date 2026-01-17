@@ -19,6 +19,7 @@ import { Transform } from '../components/Transform';
 import { Building } from '../components/Building';
 import { Unit } from '../components/Unit';
 import { Resource } from '../components/Resource';
+import { Selectable } from '../components/Selectable';
 import { UnitMechanicsSystem } from '../systems/UnitMechanicsSystem';
 import { BuildingMechanicsSystem } from '../systems/BuildingMechanicsSystem';
 import { GameStateSystem } from '../systems/GameStateSystem';
@@ -37,6 +38,7 @@ import {
   removeMultiplayerMessageHandler,
   reportDesync,
   getDesyncState,
+  useMultiplayerStore,
 } from '@/store/multiplayerStore';
 
 // Multiplayer message types
@@ -44,7 +46,7 @@ import {
 // 1. { type: 'command', payload: GameCommand } - Game.issueCommand format
 // 2. { type: 'command', commandType: string, data: any } - WebGPUGameCanvas format
 interface MultiplayerMessage {
-  type: 'command' | 'quit';
+  type: 'command' | 'quit' | 'checksum';
   payload?: unknown;
   // Alternative format used by WebGPUGameCanvas
   commandType?: string;
@@ -157,6 +159,12 @@ export class Game {
   // Number of ticks to delay command execution (allows time for network sync)
   private readonly COMMAND_DELAY_TICKS = 2;
 
+  // LOCKSTEP BARRIER: Track which players have sent commands for each tick
+  // Format: Map<tick, Set<playerId>>
+  private tickCommandReceipts: Map<number, Set<string>> = new Map();
+  // Maximum ticks to wait for remote commands before triggering desync (10 ticks = 500ms at 20 tick/sec)
+  private readonly LOCKSTEP_TIMEOUT_TICKS = 10;
+
   private constructor(config: Partial<GameConfig> = {}) {
     this.config = { ...DEFAULT_CONFIG, ...config };
     this.eventBus = new EventBus();
@@ -239,9 +247,39 @@ export class Game {
       } else if (message.type === 'quit') {
         console.log('[Game] Remote player quit');
         this.eventBus.emit('multiplayer:playerQuit', message.payload);
+      } else if (message.type === 'checksum') {
+        // CRITICAL FIX: Receive remote checksums and forward to ChecksumSystem
+        const checksumData = message.payload as {
+          tick: number;
+          checksum: number;
+          unitCount: number;
+          buildingCount: number;
+          resourceSum: number;
+          peerId: string;
+        };
+        this.eventBus.emit('network:checksum', checksumData);
       }
     };
     addMultiplayerMessageHandler(this.multiplayerMessageHandler);
+
+    // CRITICAL FIX: Wire local checksum events to network transmission
+    // This was missing - checksums were computed but never sent to peers
+    this.eventBus.on('checksum:computed', (data: {
+      tick: number;
+      checksum: number;
+      unitCount: number;
+      buildingCount: number;
+      resourceSum: number;
+    }) => {
+      const message = {
+        type: 'checksum' as const,
+        payload: {
+          ...data,
+          peerId: this.config.playerId,
+        },
+      };
+      sendMultiplayerMessage(message);
+    });
   }
 
   /**
@@ -799,15 +837,44 @@ export class Game {
       this.commandQueue.set(tick, []);
     }
     this.commandQueue.get(tick)!.push(command);
+
+    // LOCKSTEP BARRIER: Track that we received a command from this player for this tick
+    if (!this.tickCommandReceipts.has(tick)) {
+      this.tickCommandReceipts.set(tick, new Set());
+    }
+    this.tickCommandReceipts.get(tick)!.add(command.playerId);
   }
 
   /**
+   * Get the list of all active players in the multiplayer game.
+   * In 2-player P2P mode, this is local player + remote player.
+   */
+  private getActivePlayerIds(): string[] {
+    const playerIds: string[] = [this.config.playerId];
+    const remotePeerId = useMultiplayerStore.getState().remotePeerId;
+    if (remotePeerId) {
+      playerIds.push(remotePeerId);
+    }
+    return playerIds;
+  }
+
+  /**
+   * LOCKSTEP BARRIER: Track when we first started waiting for a tick
+   * Format: Map<tick, firstWaitTick>
+   */
+  private tickWaitStart: Map<number, number> = new Map();
+
+  /**
    * Process all commands scheduled for the current tick
+   * LOCKSTEP SYNC: Processes commands from all players in deterministic order.
+   * Desync detection is handled via checksums (ChecksumSystem) rather than
+   * blocking on command arrival, since players may have no-op ticks.
    */
   private processQueuedCommands(): void {
+    // Process commands for the current tick
     const commands = this.commandQueue.get(this.currentTick);
     if (commands) {
-      // Sort by player ID for deterministic ordering
+      // Sort by player ID for deterministic ordering across all clients
       commands.sort((a, b) => a.playerId.localeCompare(b.playerId));
       for (const command of commands) {
         this.processCommand(command);
@@ -815,8 +882,11 @@ export class Game {
       this.commandQueue.delete(this.currentTick);
     }
 
-    // Clean up old ticks (shouldn't happen, but safety check)
-    // Collect keys first to avoid mutating Map during iteration
+    // Clean up receipts for this tick
+    this.tickCommandReceipts.delete(this.currentTick);
+
+    // CRITICAL FIX: Stale commands trigger desync instead of silent drop
+    // Stale commands indicate a timing/synchronization failure
     const staleTicks: number[] = [];
     for (const tick of this.commandQueue.keys()) {
       if (tick < this.currentTick) {
@@ -824,8 +894,34 @@ export class Game {
       }
     }
     for (const tick of staleTicks) {
-      console.warn(`[Game] Dropping stale commands from tick ${tick}`);
+      const staleCommands = this.commandQueue.get(tick);
+      // CRITICAL: Stale commands indicate a synchronization failure
+      // This should never happen if networking is working correctly
+      console.error(
+        `[Game] CRITICAL: Stale commands detected for tick ${tick} ` +
+        `(current: ${this.currentTick}). Commands from: ${
+          staleCommands?.map(c => c.playerId).join(', ') || 'none'
+        }. This indicates desync!`
+      );
+      // Report desync instead of silently dropping
+      reportDesync(tick);
+      this.eventBus.emit('desync:detected', {
+        tick,
+        localChecksum: 0,
+        remoteChecksum: 0,
+        remotePeerId: useMultiplayerStore.getState().remotePeerId || 'unknown',
+        reason: 'stale_commands',
+      });
+      // Clean up
       this.commandQueue.delete(tick);
+      this.tickCommandReceipts.delete(tick);
+    }
+
+    // Clean up old wait tracking entries
+    for (const tick of this.tickWaitStart.keys()) {
+      if (tick <= this.currentTick) {
+        this.tickWaitStart.delete(tick);
+      }
     }
   }
 
@@ -843,8 +939,98 @@ export class Game {
     }
   }
 
+  /**
+   * Validate that the command's playerId owns all entities in entityIds.
+   * Returns true if valid, false if authorization fails.
+   * Commands without entityIds (like BUILD with targetPosition) are always valid.
+   */
+  private validateCommandAuthorization(command: GameCommand): boolean {
+    // Commands that don't require entity ownership validation
+    const noEntityValidationCommands: GameCommand['type'][] = [
+      'BUILD', 'BUILD_WALL', // Building placement uses targetPosition
+    ];
+
+    if (noEntityValidationCommands.includes(command.type)) {
+      return true;
+    }
+
+    // If no entities specified, command is valid
+    if (!command.entityIds || command.entityIds.length === 0) {
+      return true;
+    }
+
+    // Validate each entity is owned by the command's playerId
+    for (const entityId of command.entityIds) {
+      const entity = this.world.getEntity(entityId);
+      if (!entity) {
+        // Entity doesn't exist - could be destroyed, skip validation
+        continue;
+      }
+
+      const selectable = entity.get<Selectable>('Selectable');
+      if (!selectable) {
+        // Entity has no owner - skip validation (resources, etc.)
+        continue;
+      }
+
+      // CRITICAL: Verify ownership
+      if (selectable.playerId !== command.playerId) {
+        console.error(
+          `[Game] COMMAND AUTHORIZATION FAILED: Player ${command.playerId} ` +
+          `attempted to control entity ${entityId} owned by ${selectable.playerId}. ` +
+          `Command type: ${command.type}`
+        );
+        // Emit security event for monitoring
+        this.eventBus.emit('security:unauthorizedCommand', {
+          playerId: command.playerId,
+          entityId,
+          entityOwner: selectable.playerId,
+          commandType: command.type,
+          tick: command.tick,
+        });
+        return false;
+      }
+    }
+
+    // Also validate special fields that reference entities
+    if (command.transportId !== undefined) {
+      const transport = this.world.getEntity(command.transportId);
+      const selectable = transport?.get<Selectable>('Selectable');
+      if (selectable && selectable.playerId !== command.playerId) {
+        console.error(`[Game] COMMAND AUTHORIZATION FAILED: transportId ownership mismatch`);
+        return false;
+      }
+    }
+
+    if (command.bunkerId !== undefined) {
+      const bunker = this.world.getEntity(command.bunkerId);
+      const selectable = bunker?.get<Selectable>('Selectable');
+      if (selectable && selectable.playerId !== command.playerId) {
+        console.error(`[Game] COMMAND AUTHORIZATION FAILED: bunkerId ownership mismatch`);
+        return false;
+      }
+    }
+
+    if (command.buildingId !== undefined) {
+      const building = this.world.getEntity(command.buildingId);
+      const selectable = building?.get<Selectable>('Selectable');
+      if (selectable && selectable.playerId !== command.playerId) {
+        console.error(`[Game] COMMAND AUTHORIZATION FAILED: buildingId ownership mismatch`);
+        return false;
+      }
+    }
+
+    return true;
+  }
+
   // Command processing for multiplayer lockstep
   public processCommand(command: GameCommand): void {
+    // SECURITY: Validate command authorization before processing
+    if (this.config.isMultiplayer && !this.validateCommandAuthorization(command)) {
+      // Reject unauthorized commands - do not process
+      return;
+    }
+
     this.eventBus.emit('command:received', command);
 
     switch (command.type) {

@@ -674,6 +674,15 @@ export class MovementSystem extends System {
 
     if (agentIndex >= 0) {
       this.crowdAgents.add(entityId);
+    } else {
+      // FIX: Log warning when agent addition fails (crowd limit exceeded)
+      // This helps diagnose pathfinding issues when there are many units
+      console.warn(
+        `[MovementSystem] Failed to add crowd agent for entity ${entityId}. ` +
+        `Crowd may be at capacity (500 agents). Current agents: ${this.crowdAgents.size}. ` +
+        `Unit will use fallback pathfinding without crowd avoidance.`
+      );
+      // Track failures for debugging - don't spam logs, just warn once per entity
     }
   }
 

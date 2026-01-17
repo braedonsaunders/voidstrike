@@ -95,26 +95,19 @@ export function fpSub(a: number, b: number): number {
 
 /**
  * Multiply two fixed-point numbers
- * Uses 64-bit intermediate to prevent overflow
+ * Uses BigInt for intermediate calculation to prevent overflow
+ * FIX: Previous implementation had overflow bug in mid = lh + hl
  */
 export function fpMul(a: number, b: number): number {
-  // Split into high and low parts for 64-bit multiplication
-  const aLo = a & 0xFFFF;
-  const aHi = a >> 16;
-  const bLo = b & 0xFFFF;
-  const bHi = b >> 16;
+  // Use BigInt for full 64-bit precision to avoid overflow
+  const aBig = BigInt(a);
+  const bBig = BigInt(b);
 
-  // Compute partial products
-  const ll = aLo * bLo;
-  const lh = aLo * bHi;
-  const hl = aHi * bLo;
-  const hh = aHi * bHi;
+  // Full 64-bit multiplication, then shift right by FP_SHIFT
+  const result = (aBig * bBig) >> BigInt(FP_SHIFT);
 
-  // Combine with proper shifting (result needs to be shifted right by FP_SHIFT)
-  const mid = lh + hl;
-  const result = (ll >>> FP_SHIFT) + mid + (hh << FP_SHIFT);
-
-  return result | 0;
+  // Convert back to number, truncating to 32-bit integer
+  return Number(result) | 0;
 }
 
 /**
@@ -389,7 +382,53 @@ export function snapValue(value: number, precision: number = QUANT_POSITION): nu
 // =============================================================================
 
 /**
+ * Integer square root using binary search
+ * Returns floor(sqrt(n)) for non-negative integers
+ * Fully deterministic across platforms
+ */
+export function integerSqrt(n: number): number {
+  if (n < 0) return 0;
+  if (n < 2) return n;
+
+  // Use BigInt for large numbers to avoid precision issues
+  if (n > 0x7FFFFFFF) {
+    const nBig = BigInt(Math.floor(n));
+    let lo = BigInt(1);
+    let hi = nBig;
+
+    while (lo <= hi) {
+      const mid = (lo + hi) >> BigInt(1);
+      const sq = mid * mid;
+      if (sq === nBig) return Number(mid);
+      if (sq < nBig) {
+        lo = mid + BigInt(1);
+      } else {
+        hi = mid - BigInt(1);
+      }
+    }
+    return Number(hi);
+  }
+
+  // Binary search for smaller numbers
+  let lo = 1;
+  let hi = Math.min(n, 46340); // sqrt(2^31-1) ≈ 46340
+
+  while (lo <= hi) {
+    const mid = (lo + hi) >>> 1;
+    const sq = mid * mid;
+    if (sq === n) return mid;
+    if (sq < n) {
+      lo = mid + 1;
+    } else {
+      hi = mid - 1;
+    }
+  }
+  return hi;
+}
+
+/**
  * Deterministic distance calculation using quantized positions
+ * FIX: Uses integer sqrt instead of Math.sqrt for cross-platform determinism
  */
 export function deterministicDistance(x1: number, y1: number, x2: number, y2: number): number {
   // Quantize inputs
@@ -403,8 +442,8 @@ export function deterministicDistance(x1: number, y1: number, x2: number, y2: nu
   const dy = qy2 - qy1;
   const distSq = dx * dx + dy * dy;
 
-  // Use integer square root for determinism, then convert back
-  const dist = Math.sqrt(distSq);
+  // Use deterministic integer square root, then convert back
+  const dist = integerSqrt(distSq);
   return dist / QUANT_POSITION;
 }
 
