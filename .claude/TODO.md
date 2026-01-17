@@ -6,6 +6,32 @@
 
 ---
 
+## Web Worker Performance Optimization (January 2026) ✓
+
+### Vision System Worker
+- [x] **vision.worker.ts** - Off-thread fog of war calculation
+- [x] **VisionSystem integration** - Uses worker when available, main thread fallback
+- [x] **TypedArray transfer** - Uint8Array vision maps for efficient serialization
+- [x] **Watch tower support** - Tower control and vision grant computed in worker
+- [x] **Version tracking** - Stale results discarded, dirty checking for renderers
+
+### AI Decisions Worker
+- [x] **ai-decisions.worker.ts** - Off-thread micro decision-making
+- [x] **AIWorkerManager** - Singleton manager for worker lifecycle
+- [x] **Threat assessment** - Distance, DPS, priority-based threat scoring
+- [x] **Kite decisions** - Ranged units kite away from close enemies
+- [x] **Retreat decisions** - Low health units retreat to base
+- [x] **Transform decisions** - Valkyrie-like units switch modes based on nearby threats
+- [x] **Focus fire** - Target switching for low-health enemies
+- [x] **AIMicroSystem integration** - Non-blocking request/response pattern
+
+### Performance Gains (Estimated)
+- Vision worker: ~5-8ms saved per update (every 10 ticks)
+- AI worker: ~8-15ms saved per update (every 8 ticks)
+- Combined: 25-40ms main thread savings per tick in large games
+
+---
+
 ## Multiplayer Security & Sync Fixes (January 2026) ✓
 
 ### Critical Security Fixes

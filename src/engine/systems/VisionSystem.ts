@@ -11,6 +11,11 @@ import { WatchTower } from '@/data/maps/MapTypes';
 // Vision states for fog of war
 export type VisionState = 'unexplored' | 'explored' | 'visible';
 
+// Vision state encoding for worker communication
+const VISION_UNEXPLORED = 0;
+const VISION_EXPLORED = 1;
+const VISION_VISIBLE = 2;
+
 // Watch tower with activation state
 export interface ActiveWatchTower extends WatchTower {
   id: number;
@@ -54,11 +59,134 @@ export class VisionSystem extends System {
   // PERF: Cached vision masks per player to avoid regenerating every frame
   private visionMaskCache: Map<string, { mask: Float32Array; width: number; height: number; version: number }> = new Map();
 
+  // Web Worker for off-thread vision computation
+  private visionWorker: Worker | null = null;
+  private workerReady: boolean = false;
+  private pendingWorkerUpdate: boolean = false;
+  private lastWorkerVersion: number = 0;
+
   constructor(game: Game, mapWidth: number, mapHeight: number, cellSize: number = 2) {
     super(game);
     this.mapWidth = mapWidth;
     this.mapHeight = mapHeight;
     this.cellSize = cellSize;
+    this.initializeWorker();
+  }
+
+  /**
+   * Initialize the vision web worker
+   */
+  private initializeWorker(): void {
+    if (typeof Worker === 'undefined') {
+      console.warn('[VisionSystem] Web Workers not supported, using main thread fallback');
+      return;
+    }
+
+    try {
+      // Create worker using Next.js compatible URL pattern
+      this.visionWorker = new Worker(
+        new URL('../../workers/vision.worker.ts', import.meta.url)
+      );
+
+      this.visionWorker.onmessage = this.handleWorkerMessage.bind(this);
+      this.visionWorker.onerror = (error) => {
+        console.error('[VisionSystem] Worker error:', error);
+        this.workerReady = false;
+      };
+
+      // Initialize worker with map dimensions
+      this.visionWorker.postMessage({
+        type: 'init',
+        mapWidth: this.mapWidth,
+        mapHeight: this.mapHeight,
+        cellSize: this.cellSize,
+      });
+
+      console.log('[VisionSystem] Web Worker created');
+    } catch (error) {
+      console.warn('[VisionSystem] Failed to create worker:', error);
+      this.visionWorker = null;
+    }
+  }
+
+  /**
+   * Handle messages from the vision worker
+   */
+  private handleWorkerMessage(event: MessageEvent): void {
+    const message = event.data;
+
+    switch (message.type) {
+      case 'initialized':
+        if (message.success) {
+          this.workerReady = true;
+          console.log('[VisionSystem] Worker initialized');
+        } else {
+          console.error('[VisionSystem] Worker init failed');
+        }
+        break;
+
+      case 'visionResult':
+        this.handleVisionResult(
+          message.playerVisions,
+          message.version,
+          message.gridWidth,
+          message.gridHeight
+        );
+        break;
+    }
+  }
+
+  /**
+   * Handle vision computation result from worker
+   */
+  private handleVisionResult(
+    playerVisions: Record<string, Uint8Array>,
+    version: number,
+    gridWidth: number,
+    gridHeight: number
+  ): void {
+    // Ignore stale results
+    if (version <= this.lastWorkerVersion) {
+      return;
+    }
+    this.lastWorkerVersion = version;
+    this.pendingWorkerUpdate = false;
+
+    // Update vision maps from worker data
+    for (const [playerId, visionData] of Object.entries(playerVisions)) {
+      this.ensurePlayerRegistered(playerId);
+
+      const visionGrid = this.visionMap.playerVision.get(playerId)!;
+      const currentVisible = this.visionMap.currentlyVisible.get(playerId)!;
+
+      // Clear current visibility
+      currentVisible.clear();
+
+      // Convert Uint8Array to VisionState[][] and track visible cells
+      for (let y = 0; y < gridHeight; y++) {
+        for (let x = 0; x < gridWidth; x++) {
+          const index = y * gridWidth + x;
+          const value = visionData[index];
+
+          let state: VisionState;
+          if (value === VISION_VISIBLE) {
+            state = 'visible';
+            currentVisible.add(index);
+          } else if (value === VISION_EXPLORED) {
+            state = 'explored';
+          } else {
+            state = 'unexplored';
+          }
+
+          if (visionGrid[y]) {
+            visionGrid[y][x] = state;
+          }
+        }
+      }
+    }
+
+    // Increment version for dirty checking by renderers
+    this.visionVersion++;
   }
 
   /**
@@ -95,6 +223,16 @@ export class VisionSystem extends System {
     this.knownPlayers.clear();
     this.watchTowers = [];
     this.initializeVisionMap();
+
+    // Reinitialize worker with new dimensions
+    if (this.visionWorker && this.workerReady) {
+      this.visionWorker.postMessage({
+        type: 'init',
+        mapWidth: this.mapWidth,
+        mapHeight: this.mapHeight,
+        cellSize: this.cellSize,
+      });
+    }
   }
 
   private initializeVisionMap(): void {
@@ -130,6 +268,18 @@ export class VisionSystem extends System {
     this.knownPlayers.add(playerId);
   }
 
+  /**
+   * Clean up resources
+   */
+  public dispose(): void {
+    if (this.visionWorker) {
+      this.visionWorker.terminate();
+      this.visionWorker = null;
+    }
+    this.workerReady = false;
+    this.pendingWorkerUpdate = false;
+  }
+
   public update(_deltaTime: number): void {
     // Throttle vision updates for performance
     this.tickCounter++;
@@ -138,20 +288,117 @@ export class VisionSystem extends System {
     }
     this.tickCounter = 0;
 
+    // Use worker if available and no update is pending
+    if (this.visionWorker && this.workerReady && !this.pendingWorkerUpdate) {
+      this.updateVisionWithWorker();
+    } else {
+      // Fallback to main thread computation
+      this.updateVisionMainThread();
+    }
+  }
+
+  /**
+   * Send vision update request to worker
+   */
+  private updateVisionWithWorker(): void {
+    // Collect unit data for worker
+    const units: Array<{
+      id: number;
+      x: number;
+      y: number;
+      sightRange: number;
+      playerId: string;
+    }> = [];
+
+    const unitEntities = this.world.getEntitiesWith('Unit', 'Transform', 'Selectable');
+    for (const entity of unitEntities) {
+      const transform = entity.get<Transform>('Transform');
+      const unit = entity.get<Unit>('Unit');
+      const selectable = entity.get<Selectable>('Selectable');
+
+      if (!transform || !unit || !selectable) continue;
+
+      // Register player if new
+      this.ensurePlayerRegistered(selectable.playerId);
+
+      units.push({
+        id: entity.id,
+        x: transform.x,
+        y: transform.y,
+        sightRange: unit.sightRange,
+        playerId: selectable.playerId,
+      });
+    }
+
+    // Collect building data for worker
+    const buildings: Array<{
+      id: number;
+      x: number;
+      y: number;
+      sightRange: number;
+      playerId: string;
+      isOperational: boolean;
+    }> = [];
+
+    const buildingEntities = this.world.getEntitiesWith('Building', 'Transform', 'Selectable');
+    for (const entity of buildingEntities) {
+      const transform = entity.get<Transform>('Transform');
+      const building = entity.get<Building>('Building');
+      const selectable = entity.get<Selectable>('Selectable');
+
+      if (!transform || !building || !selectable) continue;
+
+      // Register player if new
+      this.ensurePlayerRegistered(selectable.playerId);
+
+      buildings.push({
+        id: entity.id,
+        x: transform.x,
+        y: transform.y,
+        sightRange: building.sightRange,
+        playerId: selectable.playerId,
+        isOperational: building.isOperational(),
+      });
+    }
+
+    // Collect watch tower data
+    const watchTowerData = this.watchTowers.map(tower => ({
+      id: tower.id,
+      x: tower.x,
+      y: tower.y,
+      radius: tower.radius,
+    }));
+
+    // Send to worker
+    this.visionVersion++;
+    this.pendingWorkerUpdate = true;
+
+    this.visionWorker!.postMessage({
+      type: 'updateVision',
+      units,
+      buildings,
+      watchTowers: watchTowerData,
+      watchTowerCaptureRadius: this.WATCH_TOWER_CAPTURE_RADIUS,
+      players: Array.from(this.knownPlayers),
+      version: this.visionVersion,
+    });
+  }
+
+  /**
+   * Main thread fallback for vision computation
+   */
+  private updateVisionMainThread(): void {
     // Clear currently visible cells
-    // OPTIMIZED: Use numeric cell keys to avoid string allocation/parsing GC pressure
     const gridWidth = this.visionMap.width;
 
     for (const playerId of this.knownPlayers) {
       const currentVisible = this.visionMap.currentlyVisible.get(playerId);
       const visionGrid = this.visionMap.playerVision.get(playerId);
 
-      // Skip if player not properly registered yet
       if (!currentVisible || !visionGrid) continue;
 
-      // Mark previously visible cells as 'explored' (not 'visible')
+      // Mark previously visible cells as 'explored'
       for (const cellKey of currentVisible) {
-        // Decode numeric key back to x,y (no string parsing needed)
         const x = cellKey % gridWidth;
         const y = Math.floor(cellKey / gridWidth);
         if (visionGrid[y] && visionGrid[y][x] === 'visible') {
@@ -176,7 +423,7 @@ export class VisionSystem extends System {
     // Update watch towers
     this.updateWatchTowers(units);
 
-    // PERF: Increment version for dirty checking by renderers
+    // Increment version for dirty checking by renderers
     this.visionVersion++;
   }
 
@@ -188,8 +435,7 @@ export class VisionSystem extends System {
   }
 
   /**
-   * Update watch tower control and vision
-   * PERF: Uses spatial grid queries per tower instead of O(units × towers) nested loop
+   * Update watch tower control and vision (main thread fallback)
    */
   private updateWatchTowers(units: Entity[]): void {
     // Reset all tower controlling players
@@ -198,10 +444,8 @@ export class VisionSystem extends System {
       tower.isActive = false;
     }
 
-    // PERF: Pre-compute squared capture radius to avoid sqrt in distance checks
     const captureRadiusSq = this.WATCH_TOWER_CAPTURE_RADIUS * this.WATCH_TOWER_CAPTURE_RADIUS;
 
-    // PERF: For each tower, query spatial grid for nearby units instead of checking all units
     for (const tower of this.watchTowers) {
       const nearbyUnitIds = this.world.unitGrid.queryRadius(
         tower.x,
@@ -217,7 +461,6 @@ export class VisionSystem extends System {
         const selectable = entity.get<Selectable>('Selectable');
         if (!transform || !selectable) continue;
 
-        // PERF: Use squared distance - no sqrt needed
         const dx = transform.x - tower.x;
         const dy = transform.y - tower.y;
         const distSq = dx * dx + dy * dy;
@@ -244,7 +487,6 @@ export class VisionSystem extends System {
     const unit = entity.get<Unit>('Unit');
     const selectable = entity.get<Selectable>('Selectable');
 
-    // Skip if components are missing (entity may have been modified during iteration)
     if (!transform || !unit || !selectable) return;
 
     this.revealArea(selectable.playerId, transform.x, transform.y, unit.sightRange);
@@ -255,19 +497,15 @@ export class VisionSystem extends System {
     const building = entity.get<Building>('Building');
     const selectable = entity.get<Selectable>('Selectable');
 
-    // Skip if components are missing (entity may have been modified during iteration)
     if (!transform || !building || !selectable) return;
 
-    // Only provide vision if building is operational (complete, lifting, flying, or landing)
-    // This ensures flying buildings maintain vision while in the air
+    // Only provide vision if building is operational
     if (!building.isOperational()) return;
 
-    // Use the building's configured sight range from its definition
     this.revealArea(selectable.playerId, transform.x, transform.y, building.sightRange);
   }
 
   private revealArea(playerId: string, worldX: number, worldY: number, range: number): void {
-    // Dynamically register player if not known yet
     this.ensurePlayerRegistered(playerId);
 
     const visionGrid = this.visionMap.playerVision.get(playerId)!;
@@ -279,14 +517,10 @@ export class VisionSystem extends System {
     const cellY = Math.floor(worldY / this.cellSize);
     const cellRange = Math.ceil(range / this.cellSize);
 
-    // PERF: Pre-compute squared range to avoid sqrt in inner loop
     const cellRangeSq = cellRange * cellRange;
 
-    // Reveal cells in a circle
-    // OPTIMIZED: Use numeric cell keys (y * width + x) instead of string templates
     for (let dy = -cellRange; dy <= cellRange; dy++) {
       for (let dx = -cellRange; dx <= cellRange; dx++) {
-        // PERF: Use squared distance - no sqrt needed
         const distSq = dx * dx + dy * dy;
         if (distSq <= cellRangeSq) {
           const x = cellX + dx;
@@ -294,7 +528,6 @@ export class VisionSystem extends System {
 
           if (x >= 0 && x < gridWidth && y >= 0 && y < gridHeight) {
             visionGrid[y][x] = 'visible';
-            // Use numeric key: y * width + x (no string allocation)
             currentVisible.add(y * gridWidth + x);
           }
         }
@@ -336,12 +569,11 @@ export class VisionSystem extends System {
   }
 
   // For minimap rendering - get a downsampled vision mask
-  // PERF: Caches masks per player and only regenerates when vision changes
   public getVisionMask(playerId: string, targetWidth: number, targetHeight: number): Float32Array {
     const visionGrid = this.visionMap.playerVision.get(playerId);
     if (!visionGrid) return new Float32Array(targetWidth * targetHeight);
 
-    // PERF: Check cache for existing mask
+    // Check cache for existing mask
     const cacheKey = playerId;
     const cached = this.visionMaskCache.get(cacheKey);
     if (cached &&
@@ -351,7 +583,7 @@ export class VisionSystem extends System {
       return cached.mask;
     }
 
-    // PERF: Reuse existing array if dimensions match, otherwise allocate new
+    // Reuse existing array if dimensions match
     let mask: Float32Array;
     if (cached && cached.width === targetWidth && cached.height === targetHeight) {
       mask = cached.mask;
