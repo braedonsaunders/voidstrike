@@ -831,26 +831,52 @@ export class BattleEffectsRenderer {
   private createLaserEffect(start: THREE.Vector3, end: THREE.Vector3, faction: keyof typeof FACTION_COLORS): void {
     const colors = FACTION_COLORS[faction];
 
-    // Create line geometry
-    const geometry = new THREE.BufferGeometry();
-    const positions = new Float32Array([
-      start.x, start.y, start.z,
-      end.x, end.y, end.z,
-    ]);
-    geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+    // Calculate laser beam direction and length
+    const direction = new THREE.Vector3().subVectors(end, start);
+    const length = direction.length();
+    direction.normalize();
 
-    const material = new THREE.LineBasicMaterial({
+    // Create cylinder geometry for laser beam (radius 0.08 for thin beam)
+    // CylinderGeometry is oriented along Y axis by default
+    const beamRadius = 0.08;
+    const geometry = new THREE.CylinderGeometry(beamRadius, beamRadius, length, 6, 1);
+
+    // Create emissive material for bright laser effect
+    const material = new THREE.MeshBasicMaterial({
       color: colors.primary,
       transparent: true,
       opacity: 1.0,
-      linewidth: 2,
     });
 
-    const line = new THREE.Line(geometry, material);
-    line.renderOrder = RENDER_ORDER.PROJECTILE;
-    this.scene.add(line);
+    const beam = new THREE.Mesh(geometry, material);
 
-    // Create glow at both ends
+    // Position at midpoint between start and end
+    const midpoint = new THREE.Vector3().addVectors(start, end).multiplyScalar(0.5);
+    beam.position.copy(midpoint);
+
+    // Rotate to align with laser direction
+    // Default cylinder points along Y axis, we need to rotate to point along direction
+    const yAxis = new THREE.Vector3(0, 1, 0);
+    const quaternion = new THREE.Quaternion().setFromUnitVectors(yAxis, direction);
+    beam.setRotationFromQuaternion(quaternion);
+
+    beam.renderOrder = RENDER_ORDER.PROJECTILE;
+    this.scene.add(beam);
+
+    // Create larger glow cylinder for bloom effect
+    const glowGeometry = new THREE.CylinderGeometry(beamRadius * 3, beamRadius * 3, length, 6, 1);
+    const glowMaterial = new THREE.MeshBasicMaterial({
+      color: colors.glow,
+      transparent: true,
+      opacity: 0.4,
+    });
+    const glow = new THREE.Mesh(glowGeometry, glowMaterial);
+    glow.position.copy(midpoint);
+    glow.setRotationFromQuaternion(quaternion);
+    glow.renderOrder = RENDER_ORDER.PROJECTILE - 1;
+    this.scene.add(glow);
+
+    // Create glow sprites at both ends
     const startGlow = this.acquireFromPool(this.projectileGlowPool);
     const endGlow = this.acquireFromPool(this.projectileGlowPool);
 
@@ -875,15 +901,19 @@ export class BattleEffectsRenderer {
       const progress = elapsed / duration;
 
       if (progress >= 1) {
-        this.scene.remove(line);
+        this.scene.remove(beam);
+        this.scene.remove(glow);
         geometry.dispose();
         material.dispose();
+        glowGeometry.dispose();
+        glowMaterial.dispose();
         if (startGlow) this.releaseToPool(this.projectileGlowPool, startGlow);
         if (endGlow) this.releaseToPool(this.projectileGlowPool, endGlow);
         return;
       }
 
       material.opacity = 1 - progress;
+      glowMaterial.opacity = 0.4 * (1 - progress);
       if (startGlow) (startGlow.material as THREE.SpriteMaterial).opacity = 0.8 * (1 - progress);
       if (endGlow) (endGlow.material as THREE.SpriteMaterial).opacity = 0.8 * (1 - progress);
 
