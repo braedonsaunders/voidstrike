@@ -103,7 +103,25 @@ export class BuildingMechanicsSystem extends System {
     const building = entity.get<Building>('Building');
     if (!building) return;
 
+    // Save addon entity ID before lift-off (startLiftOff will clear it)
+    const addonEntityId = building.addonEntityId;
+
     if (building.startLiftOff()) {
+      // Clear the addon entity's attachedToId so it's available for other buildings
+      if (addonEntityId !== null) {
+        const addonEntity = this.world.getEntity(addonEntityId);
+        if (addonEntity) {
+          const addon = addonEntity.get<Building>('Building');
+          if (addon) {
+            addon.attachedToId = null;
+          }
+        }
+        this.game.eventBus.emit('addon:detached', {
+          buildingId: command.buildingId,
+          addonId: addonEntityId,
+        });
+      }
+
       this.game.eventBus.emit('building:liftOffStart', {
         buildingId: command.buildingId,
       });
