@@ -108,6 +108,10 @@ export class UnitRenderer {
   private frustumMatrix: THREE.Matrix4 = new THREE.Matrix4();
   private camera: THREE.Camera | null = null;
 
+  // Smooth rotation interpolation - stores visual rotation per entity
+  private visualRotations: Map<number, number> = new Map();
+  private readonly ROTATION_SMOOTH_FACTOR = 0.15; // Exponential smoothing (0.1=slow, 0.3=fast)
+
   constructor(scene: THREE.Scene, world: World, visionSystem?: VisionSystem, terrain?: Terrain) {
     this.scene = scene;
     this.world = world;
@@ -178,6 +182,41 @@ export class UnitRenderer {
     this.tempPosition.set(x, y, z);
     // Use containsPoint with a small margin for unit bounding sphere
     return this.frustum.containsPoint(this.tempPosition);
+  }
+
+  /**
+   * Smoothly interpolate rotation with proper angle wrapping.
+   * Uses exponential smoothing for frame-rate independent smooth rotation.
+   */
+  private getSmoothRotation(entityId: number, targetRotation: number): number {
+    let visualRotation = this.visualRotations.get(entityId);
+
+    if (visualRotation === undefined) {
+      // First time seeing this entity - snap to target
+      this.visualRotations.set(entityId, targetRotation);
+      return targetRotation;
+    }
+
+    // Calculate shortest angular distance (handling wrap-around at ±π)
+    let diff = targetRotation - visualRotation;
+    while (diff > Math.PI) diff -= Math.PI * 2;
+    while (diff < -Math.PI) diff += Math.PI * 2;
+
+    // If very close, snap to target to avoid jitter
+    if (Math.abs(diff) < 0.01) {
+      this.visualRotations.set(entityId, targetRotation);
+      return targetRotation;
+    }
+
+    // Exponential smoothing toward target
+    visualRotation += diff * this.ROTATION_SMOOTH_FACTOR;
+
+    // Normalize to [-π, π]
+    while (visualRotation > Math.PI) visualRotation -= Math.PI * 2;
+    while (visualRotation < -Math.PI) visualRotation += Math.PI * 2;
+
+    this.visualRotations.set(entityId, visualRotation);
+    return visualRotation;
   }
 
   /**
@@ -662,11 +701,11 @@ export class UnitRenderer {
         const animUnit = this.getOrCreateAnimatedUnit(entity.id, unit.unitId, ownerId);
         animUnit.mesh.visible = true;
 
-        // Update position and rotation
+        // Update position and rotation with smooth interpolation
         // Model rotation offset (if any) is baked in from AssetManager during loading.
         // Game forward is +X (matching atan2 convention where angle 0 = +X).
         animUnit.mesh.position.set(transform.x, unitHeight, transform.y);
-        animUnit.mesh.rotation.y = transform.rotation;
+        animUnit.mesh.rotation.y = this.getSmoothRotation(entity.id, transform.rotation);
 
         // Determine animation state
         // isMoving: unit has non-zero velocity
@@ -719,8 +758,9 @@ export class UnitRenderer {
           // We multiply: unit facing (Y rotation) × base rotation to get final orientation.
           // modelScale is the normalization scale from AssetManager (to achieve target height).
           this.tempPosition.set(transform.x, unitHeight + group.yOffset, transform.y);
-          // Create quaternion from unit's facing direction (Y rotation only)
-          this.tempEuler.set(0, transform.rotation, 0);
+          // Create quaternion from unit's facing direction (Y rotation only) with smooth interpolation
+          const smoothRotation = this.getSmoothRotation(entity.id, transform.rotation);
+          this.tempEuler.set(0, smoothRotation, 0);
           this.tempFacingQuat.setFromEuler(this.tempEuler);
           // Combine: facing rotation × base rotation (order matters for proper orientation)
           this.tempQuaternion.copy(this.tempFacingQuat).multiply(group.baseRotation);
@@ -804,6 +844,8 @@ export class UnitRenderer {
         (overlay.teamMarker.material as THREE.Material).dispose();
         this.disposeGroup(overlay.healthBar);
         this.unitOverlays.delete(entityId);
+        // Clean up visual rotation tracking
+        this.visualRotations.delete(entityId);
       }
     }
 
@@ -946,6 +988,9 @@ export class UnitRenderer {
       (overlay.teamMarker.material as THREE.Material).dispose();
     }
     this.unitOverlays.clear();
+
+    // Clear visual rotation tracking
+    this.visualRotations.clear();
   }
 
   /**
@@ -1020,5 +1065,8 @@ export class UnitRenderer {
       this.disposeGroup(overlay.healthBar);
     }
     this.unitOverlays.clear();
+
+    // Clear visual rotation tracking
+    this.visualRotations.clear();
   }
 }
