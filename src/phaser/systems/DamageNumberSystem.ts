@@ -39,8 +39,8 @@ const SPECIAL_COLORS = {
 
 // Font settings - compact for cleaner look
 const FONT_FAMILY = 'Orbitron, Arial Black, Arial, sans-serif';
-const FONT_SIZE = 12; // Smaller, cleaner size
-const FONT_SIZE_LARGE = 16; // For high damage
+const FONT_SIZE = 9; // Compact size
+const FONT_SIZE_LARGE = 12; // For high damage
 
 // Height offset above unit for damage numbers (above health bar)
 const DAMAGE_NUMBER_HEIGHT_OFFSET = 1.5;
