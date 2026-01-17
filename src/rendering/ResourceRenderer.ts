@@ -107,6 +107,7 @@ export class ResourceRenderer {
   // PERF: Cached and sorted entity list - only rebuild when entity set changes
   private _cachedSortedEntities: { id: number; entity: import('@/engine/ecs/Entity').Entity }[] = [];
   private _lastEntityCount: number = -1;
+  private _lastEntityIdSum: number = 0; // Checksum to detect entity changes
 
   constructor(scene: THREE.Scene, world: World, terrain?: Terrain) {
     this.scene = scene;
@@ -532,11 +533,19 @@ export class ResourceRenderer {
     const rawEntities = this.world.getEntitiesWith('Transform', 'Resource');
     const entityCount = rawEntities.length;
 
-    // PERF: Only rebuild sorted entity list when entity count changes
+    // PERF: Compute simple checksum of entity IDs to detect changes
+    // Sum of IDs changes when any entity is added/removed (even with same count)
+    let entityIdSum = 0;
+    for (let i = 0; i < rawEntities.length; i++) {
+      entityIdSum += rawEntities[i].id;
+    }
+
+    // Rebuild when count OR composition changes
     // TAA requires stable ID-based ordering for velocity tracking
-    if (entityCount !== this._lastEntityCount) {
+    if (entityCount !== this._lastEntityCount || entityIdSum !== this._lastEntityIdSum) {
       this._cachedSortedEntities = [...rawEntities].map(e => ({ id: e.id, entity: e })).sort((a, b) => a.id - b.id);
       this._lastEntityCount = entityCount;
+      this._lastEntityIdSum = entityIdSum;
     }
     const entities = this._cachedSortedEntities.map(e => e.entity);
 
@@ -556,7 +565,8 @@ export class ResourceRenderer {
       }
     }
 
-    if (!this._mineralLinesBuilt || Math.abs(mineralCount - this._lastMineralCount) > 2) {
+    // Rebuild mineral lines when any change occurs (depleted minerals, etc.)
+    if (!this._mineralLinesBuilt || mineralCount !== this._lastMineralCount) {
       this.buildMineralLines();
       this._lastMineralCount = mineralCount;
     }

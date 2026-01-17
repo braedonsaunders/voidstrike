@@ -120,13 +120,21 @@ export class GameLoop {
     const cappedDelta = Math.min(deltaTime, 250);
     this.accumulator += cappedDelta;
 
-    // Fixed timestep updates - limit iterations per frame to prevent UI freeze
-    // Process up to 200 ticks per call (10 seconds at 20 tick/sec)
+    // Fixed timestep updates with both iteration AND time budget limits
+    // - maxIterations: prevent runaway catchup (10 ticks = 0.5s at 20 TPS)
+    // - timeBudgetMs: prevent UI freeze even with slow tick processing
     let iterations = 0;
-    const maxIterations = 200;
+    const maxIterations = 10;  // Reduced from 200 to prevent UI blocking
+    const timeBudgetMs = 50;   // Max 50ms per tick() call for 20fps minimum
     const tickStart = performance.now();
 
     while (this.accumulator >= this.tickMs && iterations < maxIterations) {
+      // Check time budget to prevent UI freeze
+      if (iterations > 0 && performance.now() - tickStart > timeBudgetMs) {
+        debugPerformance.warn(`[GameLoop] Yielding after ${iterations} iterations (time budget exceeded)`);
+        break;
+      }
+
       this.updateCallback(this.tickMs);
       this.accumulator -= this.tickMs;
       iterations++;
@@ -138,8 +146,8 @@ export class GameLoop {
       debugPerformance.warn(`[GameLoop] tick: ${iterations} iterations in ${tickElapsed.toFixed(1)}ms, accumulator=${this.accumulator.toFixed(1)}ms`);
     }
 
-    // If we still have excess after max iterations, it will be processed next tick
-    // The accumulator preserves any remaining time
+    // If we still have excess after limits, it will be processed next tick
+    // The accumulator preserves any remaining time for gradual catchup
   }
 
   public getInterpolation(): number {
