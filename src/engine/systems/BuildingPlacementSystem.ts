@@ -1160,6 +1160,13 @@ export class BuildingPlacementSystem extends System {
    * Check if any worker is actively constructing a building
    */
   private isWorkerConstructing(buildingEntityId: number, buildingTransform: Transform): boolean {
+    // Get building to use its width for consistent threshold with isCloseEnough
+    const buildingEntity = this.world.getEntity(buildingEntityId);
+    if (!buildingEntity) return false;
+
+    const building = buildingEntity.get<Building>('Building');
+    if (!building) return false;
+
     const workers = this.world.getEntitiesWith('Unit', 'Transform');
 
     for (const entity of workers) {
@@ -1180,8 +1187,10 @@ export class BuildingPlacementSystem extends System {
       const dy = workerTransform.y - buildingTransform.y;
       const distance = Math.sqrt(dx * dx + dy * dy);
 
-      // Worker is close enough to construct
-      if (distance <= this.CONSTRUCTION_RANGE + 3) {
+      // Worker is close enough to construct - use at least building.width/2 (consistent
+      // with isCloseEnough) but never less than 3 for small buildings to give buffer
+      const constructThreshold = Math.max(building.width / 2, 3);
+      if (distance <= this.CONSTRUCTION_RANGE + constructThreshold) {
         return true;
       }
     }
