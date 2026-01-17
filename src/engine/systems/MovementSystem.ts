@@ -1638,6 +1638,7 @@ export class MovementSystem extends System {
         if (targetEntity) {
           const targetTransform = targetEntity.get<Transform>('Transform');
           const targetBuilding = targetEntity.get<Building>('Building');
+          const targetUnit = targetEntity.get<Unit>('Unit');
           if (targetTransform) {
             let effectiveDistance: number;
             let attackTargetX = targetTransform.x;
@@ -1657,7 +1658,8 @@ export class MovementSystem extends System {
               );
               const edgeDx = transform.x - clampedX;
               const edgeDy = transform.y - clampedY;
-              effectiveDistance = Math.sqrt(edgeDx * edgeDx + edgeDy * edgeDy);
+              // Edge-to-edge distance (subtract attacker's collision radius)
+              effectiveDistance = Math.max(0, Math.sqrt(edgeDx * edgeDx + edgeDy * edgeDy) - unit.collisionRadius);
 
               const standOffDistance = unit.attackRange * 0.8;
               const minSafeDistance = unit.collisionRadius + 0.5;
@@ -1685,7 +1687,10 @@ export class MovementSystem extends System {
                 }
               }
             } else {
-              effectiveDistance = transform.distanceTo(targetTransform);
+              // Edge-to-edge distance for units (center-to-center minus both radii)
+              const centerDistance = transform.distanceTo(targetTransform);
+              const targetRadius = targetUnit?.collisionRadius ?? 0.5;
+              effectiveDistance = Math.max(0, centerDistance - unit.collisionRadius - targetRadius);
             }
 
             if (effectiveDistance > unit.attackRange || needsToEscape) {

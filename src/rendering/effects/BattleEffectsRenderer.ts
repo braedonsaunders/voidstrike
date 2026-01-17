@@ -837,11 +837,10 @@ export class BattleEffectsRenderer {
     direction.normalize();
 
     // Create cylinder geometry for laser beam (radius 0.08 for thin beam)
-    // CylinderGeometry is oriented along Y axis by default
+    // Note: LineBasicMaterial linewidth doesn't work in WebGL/WebGPU, so we use a mesh
     const beamRadius = 0.08;
     const geometry = new THREE.CylinderGeometry(beamRadius, beamRadius, length, 6, 1);
 
-    // Create emissive material for bright laser effect
     const material = new THREE.MeshBasicMaterial({
       color: colors.primary,
       transparent: true,
@@ -854,8 +853,7 @@ export class BattleEffectsRenderer {
     const midpoint = new THREE.Vector3().addVectors(start, end).multiplyScalar(0.5);
     beam.position.copy(midpoint);
 
-    // Rotate to align with laser direction
-    // Default cylinder points along Y axis, we need to rotate to point along direction
+    // Rotate to align with laser direction (cylinder defaults to Y axis)
     const yAxis = new THREE.Vector3(0, 1, 0);
     const quaternion = new THREE.Quaternion().setFromUnitVectors(yAxis, direction);
     beam.setRotationFromQuaternion(quaternion);
