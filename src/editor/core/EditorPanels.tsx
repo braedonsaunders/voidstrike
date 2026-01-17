@@ -10,6 +10,7 @@ import type {
   EditorObject,
   EditorMapData,
 } from '../config/EditorConfig';
+import type { DetailedValidationResult } from './EditorCore';
 
 export interface EditorPanelsProps {
   config: EditorConfig;
@@ -31,6 +32,8 @@ export interface EditorPanelsProps {
   onObjectPropertyUpdate: (id: string, key: string, value: unknown) => void;
   onMetadataUpdate: (updates: Partial<Pick<EditorMapData, 'name' | 'width' | 'height' | 'biomeId'>>) => void;
   onValidate: () => void;
+  onAutoFix?: () => void;
+  validationResult?: DetailedValidationResult;
   onToggleLabels: () => void;
   onToggleGrid: () => void;
   onToggleCategory: (category: string) => void;
@@ -595,45 +598,222 @@ function SettingsPanel({
   );
 }
 
-// Validate panel
+// Validate panel with full results display
 function ValidatePanel({
   config,
+  validationResult,
   onValidate,
+  onAutoFix,
 }: {
   config: EditorConfig;
+  validationResult?: DetailedValidationResult;
   onValidate: () => void;
+  onAutoFix?: () => void;
 }) {
+  const theme = config.theme;
+  const hasResult = validationResult?.timestamp !== undefined;
+  const isValidating = validationResult?.isValidating ?? false;
+  const isValid = validationResult?.valid ?? true;
+  const issues = validationResult?.issues ?? [];
+  const stats = validationResult?.stats;
+
+  const errors = issues.filter(i => i.severity === 'error');
+  const warnings = issues.filter(i => i.severity === 'warning');
+  const hasErrors = errors.length > 0;
+  const hasWarnings = warnings.length > 0;
+  const hasFixes = issues.some(i => i.suggestedFix);
+
   return (
     <div className="space-y-4">
-      <div className="text-xs mb-2" style={{ color: config.theme.text.muted }}>
+      {/* Header */}
+      <div className="text-xs mb-2" style={{ color: theme.text.muted }}>
         Connectivity Validation
       </div>
 
+      {/* Validate Button */}
       <button
         onClick={onValidate}
-        className="w-full py-2.5 rounded text-sm font-medium transition-colors"
+        disabled={isValidating}
+        className="w-full py-2.5 rounded text-sm font-medium transition-colors flex items-center justify-center gap-2"
         style={{
-          backgroundColor: config.theme.primary,
-          color: config.theme.text.primary,
+          backgroundColor: theme.primary,
+          color: theme.text.primary,
+          opacity: isValidating ? 0.7 : 1,
         }}
       >
-        Validate Map
+        {isValidating ? (
+          <>
+            <span className="animate-spin">⟳</span>
+            Validating...
+          </>
+        ) : (
+          <>Validate Map</>
+        )}
       </button>
 
-      <div className="text-[10px]" style={{ color: config.theme.text.muted }}>
+      {/* Description */}
+      <div className="text-[10px]" style={{ color: theme.text.muted }}>
         Validates that all main bases are connected via walkable paths and that natural expansions are
         reachable.
       </div>
 
-      <button
-        className="w-full py-2 rounded text-xs transition-colors"
-        style={{
-          border: `1px solid ${config.theme.border}`,
-          color: config.theme.text.secondary,
-        }}
-      >
-        Auto-fix Issues
-      </button>
+      {/* Validation Result */}
+      {hasResult && !isValidating && (
+        <div className="space-y-3">
+          {/* Status Banner */}
+          <div
+            className="p-3 rounded-lg flex items-center gap-2"
+            style={{
+              backgroundColor: isValid ? `${theme.success}20` : `${theme.error}20`,
+              border: `1px solid ${isValid ? theme.success : theme.error}40`,
+            }}
+          >
+            <span className="text-lg">{isValid ? '✓' : '✗'}</span>
+            <div>
+              <div className="text-sm font-medium" style={{ color: isValid ? theme.success : theme.error }}>
+                {isValid ? 'Validation Passed' : 'Validation Failed'}
+              </div>
+              <div className="text-[10px]" style={{ color: theme.text.muted }}>
+                {errors.length} error{errors.length !== 1 ? 's' : ''}, {warnings.length} warning{warnings.length !== 1 ? 's' : ''}
+              </div>
+            </div>
+          </div>
+
+          {/* Statistics */}
+          {stats && (
+            <div className="p-2 rounded" style={{ backgroundColor: theme.background }}>
+              <div className="text-[10px] mb-1.5" style={{ color: theme.text.muted }}>
+                Connectivity Stats
+              </div>
+              <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-[11px]">
+                <div className="flex justify-between">
+                  <span style={{ color: theme.text.muted }}>Nodes:</span>
+                  <span style={{ color: theme.text.secondary }}>{stats.totalNodes}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span style={{ color: theme.text.muted }}>Islands:</span>
+                  <span style={{ color: stats.islandCount > 1 ? theme.warning : theme.text.secondary }}>
+                    {stats.islandCount}
+                  </span>
+                </div>
+                <div className="flex justify-between">
+                  <span style={{ color: theme.text.muted }}>Connected:</span>
+                  <span style={{ color: theme.success }}>{stats.connectedPairs}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span style={{ color: theme.text.muted }}>Blocked:</span>
+                  <span style={{ color: stats.blockedPairs > 0 ? theme.error : theme.text.secondary }}>
+                    {stats.blockedPairs}
+                  </span>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Errors */}
+          {hasErrors && (
+            <div className="space-y-1.5">
+              <div className="text-[10px] flex items-center gap-1" style={{ color: theme.error }}>
+                <span>●</span> Errors ({errors.length})
+              </div>
+              <div className="space-y-1">
+                {errors.map((issue, idx) => (
+                  <div
+                    key={idx}
+                    className="p-2 rounded text-[11px]"
+                    style={{
+                      backgroundColor: `${theme.error}15`,
+                      border: `1px solid ${theme.error}30`,
+                    }}
+                  >
+                    <div style={{ color: theme.text.primary }}>{issue.message}</div>
+                    {issue.affectedNodes && issue.affectedNodes.length > 0 && (
+                      <div className="mt-1" style={{ color: theme.text.muted }}>
+                        Affected: {issue.affectedNodes.join(', ')}
+                      </div>
+                    )}
+                    {issue.suggestedFix && (
+                      <div className="mt-1 flex items-center gap-1" style={{ color: theme.primary }}>
+                        <span>💡</span> {issue.suggestedFix.description}
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Warnings */}
+          {hasWarnings && (
+            <div className="space-y-1.5">
+              <div className="text-[10px] flex items-center gap-1" style={{ color: theme.warning }}>
+                <span>●</span> Warnings ({warnings.length})
+              </div>
+              <div className="space-y-1">
+                {warnings.map((issue, idx) => (
+                  <div
+                    key={idx}
+                    className="p-2 rounded text-[11px]"
+                    style={{
+                      backgroundColor: `${theme.warning}15`,
+                      border: `1px solid ${theme.warning}30`,
+                    }}
+                  >
+                    <div style={{ color: theme.text.primary }}>{issue.message}</div>
+                    {issue.affectedNodes && issue.affectedNodes.length > 0 && (
+                      <div className="mt-1" style={{ color: theme.text.muted }}>
+                        Affected: {issue.affectedNodes.join(', ')}
+                      </div>
+                    )}
+                    {issue.suggestedFix && (
+                      <div className="mt-1 flex items-center gap-1" style={{ color: theme.primary }}>
+                        <span>💡</span> {issue.suggestedFix.description}
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* No Issues */}
+          {!hasErrors && !hasWarnings && (
+            <div className="text-[11px] text-center py-2" style={{ color: theme.success }}>
+              All connectivity checks passed!
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Auto-fix Button */}
+      {onAutoFix && (
+        <button
+          onClick={onAutoFix}
+          disabled={isValidating || (!hasErrors && !hasFixes)}
+          className="w-full py-2 rounded text-xs transition-colors flex items-center justify-center gap-1.5"
+          style={{
+            border: `1px solid ${hasFixes ? theme.primary : theme.border}`,
+            color: hasFixes ? theme.primary : theme.text.muted,
+            backgroundColor: hasFixes ? `${theme.primary}10` : 'transparent',
+            opacity: isValidating || (!hasErrors && !hasFixes) ? 0.5 : 1,
+            cursor: isValidating || (!hasErrors && !hasFixes) ? 'not-allowed' : 'pointer',
+          }}
+        >
+          <span>🔧</span>
+          {hasFixes ? 'Auto-fix Issues' : 'No Fixes Available'}
+        </button>
+      )}
+
+      {/* Help Text */}
+      <div className="text-[10px] space-y-1" style={{ color: theme.text.muted }}>
+        <div className="font-medium">Validation Checks:</div>
+        <ul className="list-disc list-inside space-y-0.5 ml-1">
+          <li>All main bases can reach each other</li>
+          <li>Each main can reach its natural expansion</li>
+          <li>No important bases are isolated</li>
+          <li>Ramps connect elevation differences</li>
+        </ul>
+      </div>
     </div>
   );
 }
@@ -774,6 +954,8 @@ export function EditorPanels({
   onObjectPropertyUpdate,
   onMetadataUpdate,
   onValidate,
+  onAutoFix,
+  validationResult,
   onToggleLabels,
   onToggleGrid,
   onToggleCategory,
@@ -863,7 +1045,14 @@ export function EditorPanels({
             onToggleCategory={onToggleCategory}
           />
         )}
-        {state.activePanel === 'validate' && <ValidatePanel config={config} onValidate={onValidate} />}
+        {state.activePanel === 'validate' && (
+          <ValidatePanel
+            config={config}
+            validationResult={validationResult}
+            onValidate={onValidate}
+            onAutoFix={onAutoFix}
+          />
+        )}
       </div>
 
       {/* Selected object properties */}

@@ -3,6 +3,7 @@
  *
  * Bridges between the generic editor format and VOIDSTRIKE's MapData format.
  * Handles loading maps, converting between formats, and saving.
+ * Includes full connectivity validation using the map analysis system.
  */
 
 import type {
@@ -13,8 +14,28 @@ import type {
   ValidationResult,
 } from '../config/EditorConfig';
 import type { MapData, MapCell, Expansion, WatchTower, DestructibleRock, MapDecoration, ResourceNode, TerrainType } from '@/data/maps/MapTypes';
-import { ALL_MAPS, TERRAIN_FEATURE_CONFIG, createBaseResources, DIR, MINERAL_DISTANCE_NATURAL } from '@/data/maps';
+import {
+  ALL_MAPS,
+  TERRAIN_FEATURE_CONFIG,
+  createBaseResources,
+  DIR,
+  MINERAL_DISTANCE_NATURAL,
+  analyzeConnectivity,
+  validateConnectivity,
+  autoFixConnectivity,
+} from '@/data/maps';
 import type { TerrainFeature } from '@/data/maps/MapTypes';
+
+// Extended validation result with connectivity details
+interface ExtendedValidationResult extends ValidationResult {
+  stats?: {
+    totalNodes: number;
+    totalEdges: number;
+    islandCount: number;
+    connectedPairs: number;
+    blockedPairs: number;
+  };
+}
 
 /**
  * Convert VOIDSTRIKE MapData to editor format
@@ -323,8 +344,16 @@ export const voidstrikeDataProvider: EditorDataProvider = {
     return createBlankMap(width, height, name);
   },
 
-  async validateMap(data: EditorMapData): Promise<ValidationResult> {
-    const issues: { type: 'error' | 'warning'; message: string }[] = [];
+  async validateMap(data: EditorMapData): Promise<ExtendedValidationResult> {
+    const issues: Array<{
+      type: 'error' | 'warning';
+      message: string;
+      issueType?: string;
+      affectedNodes?: string[];
+      suggestedFix?: { type: string; description: string };
+    }> = [];
+
+    // === BASIC VALIDATION ===
 
     // Check for minimum map size
     if (data.width < 64 || data.height < 64) {
@@ -334,7 +363,11 @@ export const voidstrikeDataProvider: EditorDataProvider = {
     // Check for spawn points
     const spawns = data.objects.filter(obj => obj.type === 'main_base');
     if (spawns.length < 2) {
-      issues.push({ type: 'error', message: 'Map must have at least 2 spawn points (main bases)' });
+      issues.push({
+        type: 'error',
+        message: 'Map must have at least 2 spawn points (main bases)',
+        issueType: 'missing_spawns',
+      });
     }
 
     // Check player count matches spawns
@@ -343,6 +376,7 @@ export const voidstrikeDataProvider: EditorDataProvider = {
       issues.push({
         type: 'warning',
         message: `Player count (${playerCount}) doesn't match spawn count (${spawns.length})`,
+        issueType: 'spawn_mismatch',
       });
     }
 
@@ -352,13 +386,88 @@ export const voidstrikeDataProvider: EditorDataProvider = {
       issues.push({
         type: 'warning',
         message: 'Each spawn should have a natural expansion nearby',
+        issueType: 'missing_naturals',
       });
     }
 
+    // === CONNECTIVITY VALIDATION ===
+    // Convert to MapData and run connectivity analysis
+
+    let stats: ExtendedValidationResult['stats'] | undefined;
+
+    // Only run connectivity validation if we have spawns
+    if (spawns.length >= 2) {
+      try {
+        const mapData = editorFormatToMapData(data);
+        const graph = analyzeConnectivity(mapData);
+        const connectivityResult = validateConnectivity(graph);
+
+        // Add connectivity stats
+        stats = {
+          totalNodes: connectivityResult.stats.totalNodes,
+          totalEdges: connectivityResult.stats.totalEdges,
+          islandCount: connectivityResult.stats.islandCount,
+          connectedPairs: connectivityResult.stats.connectedPairs,
+          blockedPairs: connectivityResult.stats.blockedPairs,
+        };
+
+        // Convert connectivity issues to editor format
+        for (const issue of connectivityResult.issues) {
+          issues.push({
+            type: issue.severity,
+            message: issue.message,
+            issueType: issue.type,
+            affectedNodes: issue.affectedNodes,
+            suggestedFix: issue.suggestedFix ? {
+              type: issue.suggestedFix.type,
+              description: issue.suggestedFix.description,
+            } : undefined,
+          });
+        }
+      } catch (error) {
+        console.error('[Validation] Connectivity analysis failed:', error);
+        issues.push({
+          type: 'warning',
+          message: 'Connectivity analysis failed - check console for details',
+          issueType: 'analysis_error',
+        });
+      }
+    }
+
+    // Determine overall validity
+    const hasErrors = issues.some(i => i.type === 'error');
+
     return {
-      valid: issues.filter(i => i.type === 'error').length === 0,
+      valid: !hasErrors,
       issues,
+      stats,
     };
+  },
+
+  /**
+   * Auto-fix connectivity issues on the map
+   */
+  async autoFixMap(data: EditorMapData): Promise<EditorMapData | null> {
+    try {
+      // Convert to MapData
+      const mapData = editorFormatToMapData(data);
+
+      // Run auto-fix
+      const fixResult = autoFixConnectivity(mapData);
+
+      if (fixResult.rampsAdded === 0) {
+        console.log('[AutoFix] No fixes applied - map may already be valid or no automatic fixes available');
+        return null;
+      }
+
+      console.log(`[AutoFix] Applied ${fixResult.rampsAdded} ramp(s):`, fixResult.messages);
+
+      // Convert back to editor format
+      return mapDataToEditorFormat(mapData);
+    } catch (error) {
+      console.error('[AutoFix] Failed:', error);
+      return null;
+    }
   },
 
   exportForGame(data: EditorMapData) {

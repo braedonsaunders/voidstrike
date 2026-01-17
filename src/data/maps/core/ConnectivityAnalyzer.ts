@@ -3,6 +3,9 @@
  *
  * Uses flood-fill from each base location to determine which bases
  * can reach which other bases via walkable paths.
+ *
+ * IMPORTANT: Uses WALKABLE_CLIMB_ELEVATION from central pathfinding config
+ * to ensure validation matches actual in-game Recast Navigation pathfinding.
  */
 
 import type { MapData, MapCell } from '../MapTypes';
@@ -20,6 +23,7 @@ import {
   edgeKey,
   distance,
 } from './ConnectivityGraph';
+import { WALKABLE_CLIMB_ELEVATION } from '@/data/pathfinding.config';
 
 // =============================================================================
 // WALKABILITY
@@ -32,16 +36,18 @@ function isCellWalkable(cell: MapCell): boolean {
   return config.walkable;
 }
 
-/** Check if movement between two elevations is allowed (considering cliff threshold) */
+/**
+ * Check if movement between two elevations is allowed.
+ * Uses WALKABLE_CLIMB_ELEVATION from central pathfinding config.
+ */
 function canTraverseElevation(fromElev: number, toElev: number, isRamp: boolean): boolean {
-  const CLIFF_THRESHOLD = 40;
   const diff = Math.abs(toElev - fromElev);
 
   // Ramps allow any elevation change
   if (isRamp) return true;
 
-  // Without ramp, can only traverse small elevation differences
-  return diff < CLIFF_THRESHOLD;
+  // Without ramp, can only traverse elevation differences within walkableClimb
+  return diff <= WALKABLE_CLIMB_ELEVATION;
 }
 
 // =============================================================================

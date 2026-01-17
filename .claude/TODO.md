@@ -505,6 +505,19 @@
 - [x] **Editor export** - Export button in Map Editor with Copy to Clipboard and Download options
 - [x] **Build-time bundling** - JSON files imported directly for tree-shaking and bundling
 
+### Map Editor Validation (January 2026) ✓
+- [x] **Full connectivity validation** - Validates main bases reach each other, naturals reachable, no isolated islands
+- [x] **Validation UI panel** - Complete UI with status banner, statistics, error/warning display with suggested fixes
+- [x] **Connectivity statistics** - Shows node count, island count, connected/blocked pairs
+- [x] **Issue display** - Errors and warnings with affected nodes and suggested fixes (e.g., add ramp)
+- [x] **Auto-fix functionality** - Button to automatically add ramps to fix connectivity issues
+- [x] **Real-time feedback** - Loading state during validation, immediate result display
+- [x] **Centralized pathfinding config** - `src/data/pathfinding.config.ts` is single source of truth for:
+  - Recast Navigation navmesh parameters (walkableClimb, walkableSlopeAngle, etc.)
+  - Editor validation thresholds (WALKABLE_CLIMB_ELEVATION)
+  - Terrain generation constants (CLIFF_WALL_THRESHOLD_ELEVATION)
+  - Changing config updates both game pathfinding AND validation automatically
+
 ### Pre-Game Setup
 - [x] Game options menu
 - [x] Map preview

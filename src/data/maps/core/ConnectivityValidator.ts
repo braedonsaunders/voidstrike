@@ -5,6 +5,8 @@
  * 1. All main bases can reach each other
  * 2. Each main can reach at least one natural expansion
  * 3. No important bases are isolated
+ *
+ * Uses WALKABLE_CLIMB_ELEVATION from central pathfinding config.
  */
 
 import { type Point, toXY } from './ElevationMap';
@@ -18,6 +20,7 @@ import {
   distance,
   edgeKey,
 } from './ConnectivityGraph';
+import { WALKABLE_CLIMB_ELEVATION } from '@/data/pathfinding.config';
 
 // =============================================================================
 // VALIDATION RULES
@@ -180,7 +183,8 @@ function validateRampNeeds(graph: ConnectivityGraph): ConnectivityIssue[] {
     const dist = distance(nodeA.position, nodeB.position);
     const elevDiff = Math.abs(nodeA.elevation - nodeB.elevation);
 
-    if ((isMainNatural || isNaturalThird) && dist < 100 && elevDiff >= 40) {
+    // Use central pathfinding config threshold
+    if ((isMainNatural || isNaturalThird) && dist < 100 && elevDiff > WALKABLE_CLIMB_ELEVATION) {
       const suggestedFix = suggestRampBetween(graph, nodeA, nodeB);
 
       issues.push({

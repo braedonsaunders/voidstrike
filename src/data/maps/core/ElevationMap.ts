@@ -100,8 +100,12 @@ export const ELEVATION = {
   HIGH: 220,      // Main base level
 } as const;
 
-/** Minimum elevation difference to create a cliff */
-export const CLIFF_THRESHOLD = 40;
+/**
+ * Minimum elevation difference to create a cliff (for terrain generation).
+ * Re-exported from central pathfinding config for backwards compatibility.
+ * @see src/data/pathfinding.config.ts
+ */
+export { CLIFF_WALL_THRESHOLD_ELEVATION as CLIFF_THRESHOLD } from '@/data/pathfinding.config';
 
 // ============================================================================
 // PAINT COMMANDS

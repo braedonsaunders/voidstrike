@@ -8,6 +8,12 @@ import { TSLTerrainMaterial } from './tsl/TerrainMaterial';
 import AssetManager from '@/assets/AssetManager';
 import { debugTerrain } from '@/utils/debugLogger';
 
+// Import from central pathfinding config - SINGLE SOURCE OF TRUTH
+import {
+  elevationToHeight,
+  CLIFF_WALL_THRESHOLD_ELEVATION,
+} from '@/data/pathfinding.config';
+
 // Shader mode for terrain rendering
 // 'tsl': Uses TSL 4-texture blending (WebGPU + WebGL compatible) - RECOMMENDED
 // 'standard': Uses MeshStandardMaterial single texture (WebGPU + WebGL compatible)
@@ -19,15 +25,6 @@ type TerrainShaderMode = 'tsl' | 'standard' | 'texture' | 'basic' | 'sc2';
 
 // Terrain subdivision for smoother rendering
 const SUBDIVISIONS = 2; // 2x2 subdivisions per cell for better quality
-
-/**
- * Convert 256-level elevation (0-255) to physical world height.
- * Range: 0 to ~10 units (0.04 per level for dramatic cliffs)
- * SC2-style: significant height difference between elevation levels
- */
-function elevationToHeight(elevation: Elevation): number {
-  return elevation * 0.04;
-}
 
 /**
  * Quantize elevation to strict discrete levels for cliff separation.
@@ -1131,7 +1128,8 @@ export class Terrain {
 
     // Wall geometry constants
     const WALL_HEIGHT = 4.0; // Height of cliff walls (taller than walkableClimb)
-    const ELEVATION_DIFF_THRESHOLD = 40; // ~1.6 height units difference
+    // Use CLIFF_WALL_THRESHOLD_ELEVATION from central pathfinding config
+    const ELEVATION_DIFF_THRESHOLD = CLIFF_WALL_THRESHOLD_ELEVATION;
 
     // Pre-compute ramp zones - cells within radius of a ramp use smooth heightMap
     // Radius of 5 ensures ramp entrance cells on plateaus aren't marked as cliff edges
