@@ -194,6 +194,7 @@ export interface GraphicsSettings {
 // ============================================
 
 const GRAPHICS_SETTINGS_KEY = 'voidstrike_graphics_settings';
+const AUDIO_SETTINGS_KEY = 'voidstrike_audio_settings';
 
 interface SavedGraphicsState {
   settings: GraphicsSettings;
@@ -201,7 +202,20 @@ interface SavedGraphicsState {
   version: number; // For future migrations
 }
 
+interface SavedAudioState {
+  musicEnabled: boolean;
+  soundEnabled: boolean;
+  musicVolume: number;
+  soundVolume: number;
+  voicesEnabled: boolean;
+  alertsEnabled: boolean;
+  voiceVolume: number;
+  alertVolume: number;
+  version: number;
+}
+
 const SETTINGS_VERSION = 1;
+const AUDIO_SETTINGS_VERSION = 1;
 
 function saveGraphicsSettings(settings: GraphicsSettings, preset: GraphicsPresetName): void {
   if (typeof window === 'undefined') return;
@@ -237,6 +251,43 @@ function loadGraphicsSettings(): { settings: Partial<GraphicsSettings>; preset: 
     return null;
   }
 }
+
+// ============================================
+// LOCALSTORAGE PERSISTENCE (Audio Settings)
+// ============================================
+
+function saveAudioSettings(state: SavedAudioState): void {
+  if (typeof window === 'undefined') return;
+  try {
+    localStorage.setItem(AUDIO_SETTINGS_KEY, JSON.stringify(state));
+  } catch (e) {
+    console.warn('Failed to save audio settings:', e);
+  }
+}
+
+function loadAudioSettings(): SavedAudioState | null {
+  if (typeof window === 'undefined') return null;
+  try {
+    const saved = localStorage.getItem(AUDIO_SETTINGS_KEY);
+    if (!saved) return null;
+
+    const state = JSON.parse(saved) as SavedAudioState;
+
+    // Version check for future migrations
+    if (state.version !== AUDIO_SETTINGS_VERSION) {
+      debugInitialization.log('[Audio] Settings version mismatch, using defaults');
+      return null;
+    }
+
+    return state;
+  } catch (e) {
+    console.warn('Failed to load audio settings:', e);
+    return null;
+  }
+}
+
+// Load audio settings at module initialization
+const savedAudioSettings = loadAudioSettings();
 
 // ============================================
 // SESSIONSTORAGE PERSISTENCE (Debug Settings)
@@ -431,15 +482,16 @@ export const useUIStore = create<UIState>((set, get) => ({
   contextMenuOpen: false,
   contextMenuPosition: null,
   contextMenuItems: [],
-  soundEnabled: true,
-  musicEnabled: true,
-  soundVolume: 0.7,
-  musicVolume: 0.25,
+  // Audio settings - load from localStorage if available
+  soundEnabled: savedAudioSettings?.soundEnabled ?? true,
+  musicEnabled: savedAudioSettings?.musicEnabled ?? true,
+  soundVolume: savedAudioSettings?.soundVolume ?? 0.7,
+  musicVolume: savedAudioSettings?.musicVolume ?? 0.25,
   // Granular audio defaults
-  voicesEnabled: true,
-  alertsEnabled: true,
-  voiceVolume: 0.7,
-  alertVolume: 0.8,
+  voicesEnabled: savedAudioSettings?.voicesEnabled ?? true,
+  alertsEnabled: savedAudioSettings?.alertsEnabled ?? true,
+  voiceVolume: savedAudioSettings?.voiceVolume ?? 0.7,
+  alertVolume: savedAudioSettings?.alertVolume ?? 0.8,
   showFPS: false,
   showPing: true,
   showGraphicsOptions: false,
@@ -654,22 +706,104 @@ export const useUIStore = create<UIState>((set, get) => ({
       contextMenuItems: [],
     }),
 
-  toggleSound: () => set((state) => ({ soundEnabled: !state.soundEnabled })),
+  toggleSound: () => {
+    set((state) => ({ soundEnabled: !state.soundEnabled }));
+    // Save to localStorage
+    const s = get();
+    saveAudioSettings({
+      musicEnabled: s.musicEnabled, soundEnabled: s.soundEnabled,
+      musicVolume: s.musicVolume, soundVolume: s.soundVolume,
+      voicesEnabled: s.voicesEnabled, alertsEnabled: s.alertsEnabled,
+      voiceVolume: s.voiceVolume, alertVolume: s.alertVolume,
+      version: AUDIO_SETTINGS_VERSION,
+    });
+  },
 
-  toggleMusic: () => set((state) => ({ musicEnabled: !state.musicEnabled })),
+  toggleMusic: () => {
+    set((state) => ({ musicEnabled: !state.musicEnabled }));
+    // Save to localStorage
+    const s = get();
+    saveAudioSettings({
+      musicEnabled: s.musicEnabled, soundEnabled: s.soundEnabled,
+      musicVolume: s.musicVolume, soundVolume: s.soundVolume,
+      voicesEnabled: s.voicesEnabled, alertsEnabled: s.alertsEnabled,
+      voiceVolume: s.voiceVolume, alertVolume: s.alertVolume,
+      version: AUDIO_SETTINGS_VERSION,
+    });
+  },
 
-  setSoundVolume: (volume) => set({ soundVolume: Math.max(0, Math.min(1, volume)) }),
+  setSoundVolume: (volume) => {
+    set({ soundVolume: Math.max(0, Math.min(1, volume)) });
+    const s = get();
+    saveAudioSettings({
+      musicEnabled: s.musicEnabled, soundEnabled: s.soundEnabled,
+      musicVolume: s.musicVolume, soundVolume: s.soundVolume,
+      voicesEnabled: s.voicesEnabled, alertsEnabled: s.alertsEnabled,
+      voiceVolume: s.voiceVolume, alertVolume: s.alertVolume,
+      version: AUDIO_SETTINGS_VERSION,
+    });
+  },
 
-  setMusicVolume: (volume) => set({ musicVolume: Math.max(0, Math.min(1, volume)) }),
+  setMusicVolume: (volume) => {
+    set({ musicVolume: Math.max(0, Math.min(1, volume)) });
+    const s = get();
+    saveAudioSettings({
+      musicEnabled: s.musicEnabled, soundEnabled: s.soundEnabled,
+      musicVolume: s.musicVolume, soundVolume: s.soundVolume,
+      voicesEnabled: s.voicesEnabled, alertsEnabled: s.alertsEnabled,
+      voiceVolume: s.voiceVolume, alertVolume: s.alertVolume,
+      version: AUDIO_SETTINGS_VERSION,
+    });
+  },
 
   // Granular audio actions
-  toggleVoices: () => set((state) => ({ voicesEnabled: !state.voicesEnabled })),
+  toggleVoices: () => {
+    set((state) => ({ voicesEnabled: !state.voicesEnabled }));
+    const s = get();
+    saveAudioSettings({
+      musicEnabled: s.musicEnabled, soundEnabled: s.soundEnabled,
+      musicVolume: s.musicVolume, soundVolume: s.soundVolume,
+      voicesEnabled: s.voicesEnabled, alertsEnabled: s.alertsEnabled,
+      voiceVolume: s.voiceVolume, alertVolume: s.alertVolume,
+      version: AUDIO_SETTINGS_VERSION,
+    });
+  },
 
-  toggleAlerts: () => set((state) => ({ alertsEnabled: !state.alertsEnabled })),
+  toggleAlerts: () => {
+    set((state) => ({ alertsEnabled: !state.alertsEnabled }));
+    const s = get();
+    saveAudioSettings({
+      musicEnabled: s.musicEnabled, soundEnabled: s.soundEnabled,
+      musicVolume: s.musicVolume, soundVolume: s.soundVolume,
+      voicesEnabled: s.voicesEnabled, alertsEnabled: s.alertsEnabled,
+      voiceVolume: s.voiceVolume, alertVolume: s.alertVolume,
+      version: AUDIO_SETTINGS_VERSION,
+    });
+  },
 
-  setVoiceVolume: (volume) => set({ voiceVolume: Math.max(0, Math.min(1, volume)) }),
+  setVoiceVolume: (volume) => {
+    set({ voiceVolume: Math.max(0, Math.min(1, volume)) });
+    const s = get();
+    saveAudioSettings({
+      musicEnabled: s.musicEnabled, soundEnabled: s.soundEnabled,
+      musicVolume: s.musicVolume, soundVolume: s.soundVolume,
+      voicesEnabled: s.voicesEnabled, alertsEnabled: s.alertsEnabled,
+      voiceVolume: s.voiceVolume, alertVolume: s.alertVolume,
+      version: AUDIO_SETTINGS_VERSION,
+    });
+  },
 
-  setAlertVolume: (volume) => set({ alertVolume: Math.max(0, Math.min(1, volume)) }),
+  setAlertVolume: (volume) => {
+    set({ alertVolume: Math.max(0, Math.min(1, volume)) });
+    const s = get();
+    saveAudioSettings({
+      musicEnabled: s.musicEnabled, soundEnabled: s.soundEnabled,
+      musicVolume: s.musicVolume, soundVolume: s.soundVolume,
+      voicesEnabled: s.voicesEnabled, alertsEnabled: s.alertsEnabled,
+      voiceVolume: s.voiceVolume, alertVolume: s.alertVolume,
+      version: AUDIO_SETTINGS_VERSION,
+    });
+  },
 
   toggleFPS: () => set((state) => ({ showFPS: !state.showFPS })),
 

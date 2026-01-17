@@ -188,6 +188,7 @@
 
 ### Audio System Fixes
 - [x] **"Not enough resources" alert audio fix** - Audio was not playing for resource insufficiency alerts. Systems were emitting `'ui:error'` events but AudioSystem was listening for `'alert:notEnoughMinerals'` and `'alert:notEnoughVespene'`. Fixed by updating ProductionSystem, BuildingPlacementSystem, ResearchSystem, and WallSystem to emit the correct alert events alongside the visual warning events.
+- [x] **Music toggle persistence** - Music on/off state (and all audio settings) now persists across page reloads via localStorage. Added `saveAudioSettings()` and `loadAudioSettings()` functions to uiStore.ts that save/restore musicEnabled, soundEnabled, volumes, and granular audio settings.
 
 ### Phaser4 Overlay Fixes
 - [x] **Team marker/selection ring positioning bug** - Ground rings appeared way above the map in battle simulator because InstancedMesh rotation was transforming instance matrix coordinates (Y/Z swap). Fixed by applying rotation per-instance via quaternion instead of on mesh parent.
