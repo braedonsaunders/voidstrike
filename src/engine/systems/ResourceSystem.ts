@@ -149,11 +149,9 @@ export class ResourceSystem extends System {
         // Move to assigned resource
         unit.moveToPosition(assignedTransform.x, assignedTransform.y);
 
-        // Debug: log gather command for player1 workers
+        // Debug: log gather command for all workers
         const selectable = entity.get<Selectable>('Selectable');
-        if (selectable?.playerId === 'player1') {
-          debugResources.log(`[ResourceSystem] player1 worker ${entityId} assigned to gather resource ${assignedTargetId}, moving to (${assignedTransform.x.toFixed(1)}, ${assignedTransform.y.toFixed(1)})`);
-        }
+        debugResources.log(`[ResourceSystem] ${selectable?.playerId} worker ${entityId} assigned to gather resource ${assignedTargetId}, moving to (${assignedTransform.x.toFixed(1)}, ${assignedTransform.y.toFixed(1)}), targetX=${unit.targetX?.toFixed(1)}, targetY=${unit.targetY?.toFixed(1)}, state=${unit.state}`);
       }
     }
   }
@@ -308,11 +306,11 @@ export class ResourceSystem extends System {
 
         const distance = transform.distanceTo(resourceTransform);
 
-        // Debug: log distance for player1 workers periodically
+        // Debug: log distance for all workers periodically
         // DETERMINISM: Use tick-based sampling instead of Math.random() to avoid multiplayer desync
         const selectable = entity.get<Selectable>('Selectable');
-        if (selectable?.playerId === 'player1' && this.game.getCurrentTick() % 100 === 0 && entity.id % 10 === 0) {
-          debugResources.log(`[ResourceSystem] player1 worker ${entity.id}: distance to resource=${distance.toFixed(2)}, isMining=${unit.isMining}, gatherTargetId=${unit.gatherTargetId}`);
+        if (this.game.getCurrentTick() % 100 === 0 && entity.id % 5 === 0) {
+          debugResources.log(`[ResourceSystem] ${selectable?.playerId} worker ${entity.id}: distance=${distance.toFixed(2)}, isMining=${unit.isMining}, gatherTargetId=${unit.gatherTargetId}, targetX=${unit.targetX?.toFixed(1)}, targetY=${unit.targetY?.toFixed(1)}, state=${unit.state}`);
         }
 
         // Vespene extractors are 2x2 buildings - workers need larger gathering distance
