@@ -31,12 +31,29 @@ import {
 } from '@/data/formations/formations';
 import AssetManager from '@/assets/AssetManager';
 
+// Cache visual radii to avoid repeated lookups in hot loops
+const visualRadiusCache = new Map<string, number>();
+
 /**
  * Get the visual radius of a unit for attack range calculations.
- * Uses the model scale from assets.json (how big the unit LOOKS).
- * Ships are longer than tall, so multiply by 2 for width approximation.
+ * Uses actual model bounding box dimensions (industry-standard approach).
+ * Falls back to scale approximation if model not yet loaded.
  */
 function getVisualRadius(unit: Unit): number {
+  // Check cache first for performance
+  const cached = visualRadiusCache.get(unit.unitId);
+  if (cached !== undefined) {
+    return cached;
+  }
+
+  // Try to get actual bounding box radius from loaded model
+  const actualRadius = AssetManager.getModelVisualRadius(unit.unitId);
+  if (actualRadius !== null) {
+    visualRadiusCache.set(unit.unitId, actualRadius);
+    return actualRadius;
+  }
+
+  // Fallback: model not loaded yet, use scale approximation
   const modelScale = AssetManager.getUnitScale(unit.unitId);
   return Math.max(unit.collisionRadius, modelScale * 2);
 }

@@ -243,6 +243,10 @@ const assetAirborneHeights = new Map<string, number>();
 // Store per-asset model heights (from config) - the visual size of the model
 const assetModelHeights = new Map<string, number>();
 
+// Store actual model bounding box dimensions after normalization (width, depth, height)
+// Used for accurate attack range calculations based on actual model size
+const modelBoundingDimensions = new Map<string, { width: number; depth: number; height: number }>();
+
 // Store rendering hints for decorations (from config)
 const renderingHints = new Map<string, RenderingHints>();
 
@@ -449,6 +453,17 @@ function normalizeModel(root: THREE.Object3D, targetHeight: number, assetId?: st
 
   // Recalculate bounds after scaling
   box.setFromObject(root);
+  const finalSize = box.getSize(new THREE.Vector3());
+
+  // Store the actual model dimensions for attack range calculations
+  if (assetId) {
+    modelBoundingDimensions.set(assetId, {
+      width: finalSize.x,
+      depth: finalSize.z,
+      height: finalSize.y,
+    });
+    debugAssets.log(`[AssetManager] Stored bounding dimensions for ${assetId}: ${finalSize.x.toFixed(2)} x ${finalSize.z.toFixed(2)} x ${finalSize.y.toFixed(2)}`);
+  }
 
   // Ground the model (set bottom at y=0) - minY anchor
   if (isFinite(box.min.y)) {
@@ -1123,6 +1138,20 @@ export class AssetManager {
    */
   static getUnitScale(assetId: string): number {
     return assetScaleMultipliers.get(assetId) ?? 1.0;
+  }
+
+  /**
+   * Get the visual radius of a unit based on its actual model bounding box.
+   * Uses the larger of (width/2, depth/2) from the normalized model.
+   * This is the proper way to measure attack range - from the model's edge.
+   *
+   * Returns null if model dimensions haven't been loaded yet.
+   */
+  static getModelVisualRadius(assetId: string): number | null {
+    const dims = modelBoundingDimensions.get(assetId);
+    if (!dims) return null;
+    // Use half the larger horizontal dimension as the radius
+    return Math.max(dims.width, dims.depth) / 2;
   }
 
   // ============================================================================
