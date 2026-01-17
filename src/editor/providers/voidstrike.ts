@@ -12,7 +12,7 @@ import type {
   EditorObject,
   ValidationResult,
 } from '../config/EditorConfig';
-import type { MapData, MapCell, Expansion, WatchTower, DestructibleRock, MapDecoration, ResourceNode } from '@/data/maps/MapTypes';
+import type { MapData, MapCell, Expansion, WatchTower, DestructibleRock, MapDecoration, ResourceNode, TerrainType } from '@/data/maps/MapTypes';
 import { ALL_MAPS, TERRAIN_FEATURE_CONFIG, createBaseResources, DIR, MINERAL_DISTANCE_NATURAL } from '@/data/maps';
 import type { TerrainFeature } from '@/data/maps/MapTypes';
 
@@ -30,6 +30,7 @@ function mapDataToEditorFormat(map: MapData): EditorMapData {
         walkable: cell.terrain !== 'unwalkable' && featureConfig.walkable,
         textureId: cell.textureId,
         isRamp: cell.terrain === 'ramp',
+        isPlatform: cell.terrain === 'platform',
       };
     })
   );
@@ -126,10 +127,12 @@ function editorFormatToMapData(data: EditorMapData): MapData {
   const terrain: MapCell[][] = data.terrain.map((row) =>
     row.map((cell) => {
       const featureConfig = TERRAIN_FEATURE_CONFIG[cell.feature as TerrainFeature] || TERRAIN_FEATURE_CONFIG.none;
-      // Determine terrain type: ramp cells get 'ramp', then check walkability
-      let terrainType: 'ground' | 'ramp' | 'unwalkable' | 'unbuildable';
+      // Determine terrain type: ramp > platform > ground/unwalkable
+      let terrainType: TerrainType;
       if (cell.isRamp) {
         terrainType = 'ramp';
+      } else if (cell.isPlatform) {
+        terrainType = 'platform';
       } else if (cell.walkable && featureConfig.walkable) {
         terrainType = 'ground';
       } else {
