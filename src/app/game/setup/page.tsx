@@ -467,15 +467,18 @@ export default function GameSetupPage() {
     if (!isHost || !isPublicLobby || lobbyStatus !== 'hosting' || !lobbyCode) return;
 
     const publish = () => {
+      const map = ALL_MAPS[selectedMapId];
+      if (!map) return;
+
       const openSlots = playerSlots.filter(s => s.type === 'open').length;
       const activeSlots = playerSlots.filter(s => s.type === 'human' || s.type === 'ai').length;
 
       publishPublicListing({
         hostName: playerName || 'Unknown Host',
-        mapName: selectedMap.name,
+        mapName: map.name,
         mapId: selectedMapId,
         currentPlayers: activeSlots,
-        maxPlayers: selectedMap.maxPlayers - openSlots + activeSlots,
+        maxPlayers: map.maxPlayers - openSlots + activeSlots,
         gameMode: 'standard',
       });
     };
@@ -487,7 +490,7 @@ export default function GameSetupPage() {
     const interval = setInterval(publish, 60000);
 
     return () => clearInterval(interval);
-  }, [isHost, isPublicLobby, lobbyStatus, lobbyCode, playerSlots, playerName, selectedMap, selectedMapId, publishPublicListing]);
+  }, [isHost, isPublicLobby, lobbyStatus, lobbyCode, playerSlots, playerName, selectedMapId, publishPublicListing]);
 
   // Register game start callback (guest only)
   useEffect(() => {
