@@ -72,6 +72,14 @@ interface AttackTargetIndicator {
   duration: number;
 }
 
+interface GroundClickIndicator {
+  worldX: number;
+  worldY: number;
+  type: 'move' | 'attack';
+  startTime: number;
+  duration: number;
+}
+
 export class OverlayScene extends Phaser.Scene {
   private eventBus: EventBus | null = null;
 
@@ -130,6 +138,10 @@ export class OverlayScene extends Phaser.Scene {
   private attackTargetIndicators: AttackTargetIndicator[] = [];
   private attackTargetGraphics!: Phaser.GameObjects.Graphics;
 
+  // Ground click indicators (visual feedback when clicking ground for move/attack commands)
+  private groundClickIndicators: GroundClickIndicator[] = [];
+  private groundClickGraphics!: Phaser.GameObjects.Graphics;
+
   // Effect systems
   private damageNumberSystem: DamageNumberSystem | null = null;
   private screenEffectsSystem: ScreenEffectsSystem | null = null;
@@ -161,6 +173,10 @@ export class OverlayScene extends Phaser.Scene {
     // Attack target indicator graphics
     this.attackTargetGraphics = this.add.graphics();
     this.attackTargetGraphics.setDepth(35);
+
+    // Ground click indicator graphics (move/attack commands)
+    this.groundClickGraphics = this.add.graphics();
+    this.groundClickGraphics.setDepth(36);
 
     // Ability splash container
     this.splashContainer = this.add.container(0, 0);
@@ -415,6 +431,28 @@ export class OverlayScene extends Phaser.Scene {
       if (data.targetEntityId !== undefined) {
         this.addAttackTargetIndicator(data.targetEntityId);
       }
+    });
+
+    // Ground click indicator for move commands
+    this.eventBus.on('command:moveGround', (data: {
+      targetPosition: { x: number; y: number };
+      playerId?: string;
+    }) => {
+      // Only show indicator for local player's commands
+      if (data.playerId && !isLocalPlayer(data.playerId)) return;
+      if (this.isSpectator()) return;
+      this.addGroundClickIndicator(data.targetPosition.x, data.targetPosition.y, 'move');
+    });
+
+    // Ground click indicator for attack-move commands (clicking ground in attack mode)
+    this.eventBus.on('command:attackGround', (data: {
+      targetPosition: { x: number; y: number };
+      playerId?: string;
+    }) => {
+      // Only show indicator for local player's commands
+      if (data.playerId && !isLocalPlayer(data.playerId)) return;
+      if (this.isSpectator()) return;
+      this.addGroundClickIndicator(data.targetPosition.x, data.targetPosition.y, 'attack');
     });
 
     // UI error messages - show as alerts so user can see what went wrong
@@ -1546,6 +1584,9 @@ export class OverlayScene extends Phaser.Scene {
     // Draw and update attack target indicators
     this.updateAttackTargetIndicators(now);
 
+    // Draw and update ground click indicators
+    this.updateGroundClickIndicators(now);
+
     // Update effect systems
     this.damageNumberSystem?.update();
     this.screenEffectsSystem?.update(time, delta);
@@ -1943,6 +1984,196 @@ export class OverlayScene extends Phaser.Scene {
     }
   }
 
+  /**
+   * Add a ground click indicator at the specified world position
+   * Shows visual feedback when clicking ground for move or attack commands
+   */
+  private addGroundClickIndicator(worldX: number, worldY: number, type: 'move' | 'attack'): void {
+    this.groundClickIndicators.push({
+      worldX,
+      worldY,
+      type,
+      startTime: Date.now(),
+      duration: 500,
+    });
+  }
+
+  /**
+   * Update and draw ground click indicators
+   * Move: Green expanding ring with chevron arrows pointing inward
+   * Attack: Red expanding ring with crosshair pattern
+   */
+  private updateGroundClickIndicators(now: number): void {
+    this.groundClickGraphics.clear();
+
+    const projectionStore = useProjectionStore.getState();
+
+    for (let i = this.groundClickIndicators.length - 1; i >= 0; i--) {
+      const indicator = this.groundClickIndicators[i];
+      const elapsed = now - indicator.startTime;
+      const progress = elapsed / indicator.duration;
+
+      if (progress >= 1) {
+        this.groundClickIndicators.splice(i, 1);
+        continue;
+      }
+
+      // Project world position to screen
+      const screenPos = projectionStore.projectToScreen(indicator.worldX, indicator.worldY);
+
+      if (indicator.type === 'move') {
+        this.drawMoveIndicator(screenPos.x, screenPos.y, progress);
+      } else {
+        this.drawAttackGroundIndicator(screenPos.x, screenPos.y, progress);
+      }
+    }
+  }
+
+  /**
+   * Draw move command indicator - green ring with inward-pointing chevrons
+   */
+  private drawMoveIndicator(x: number, y: number, progress: number): void {
+    const baseRadius = 20;
+    const maxRadius = 40;
+
+    // Primary expanding ring
+    const ringProgress = Math.min(1, progress * 1.5);
+    const ringRadius = baseRadius + (maxRadius - baseRadius) * ringProgress;
+    const ringAlpha = (1 - ringProgress) * 0.8;
+
+    if (ringAlpha > 0.01) {
+      this.groundClickGraphics.lineStyle(2.5, 0x00ff66, ringAlpha);
+      this.groundClickGraphics.strokeCircle(x, y, ringRadius);
+    }
+
+    // Secondary ring (delayed)
+    if (progress > 0.1) {
+      const ring2Progress = Math.min(1, (progress - 0.1) * 1.6);
+      const ring2Radius = baseRadius * 0.6 + (maxRadius * 0.7 - baseRadius * 0.6) * ring2Progress;
+      const ring2Alpha = (1 - ring2Progress) * 0.5;
+
+      if (ring2Alpha > 0.01) {
+        this.groundClickGraphics.lineStyle(1.5, 0x44ff88, ring2Alpha);
+        this.groundClickGraphics.strokeCircle(x, y, ring2Radius);
+      }
+    }
+
+    // Center dot that pulses
+    if (progress < 0.6) {
+      const dotProgress = progress / 0.6;
+      const dotAlpha = (1 - dotProgress) * 0.6;
+      const dotRadius = 4 + 2 * dotProgress;
+      this.groundClickGraphics.fillStyle(0x00ff66, dotAlpha);
+      this.groundClickGraphics.fillCircle(x, y, dotRadius);
+    }
+
+    // Inward-pointing chevrons (4 directions)
+    if (progress < 0.5) {
+      const chevronProgress = progress / 0.5;
+      const chevronAlpha = (1 - chevronProgress) * 0.7;
+      const chevronDist = baseRadius + 8 - 6 * chevronProgress;
+      const chevronSize = 6;
+
+      this.groundClickGraphics.lineStyle(2, 0x00ff66, chevronAlpha);
+
+      // Draw 4 chevrons pointing inward
+      const directions = [
+        { angle: 0, dx: 1, dy: 0 },       // Right
+        { angle: Math.PI / 2, dx: 0, dy: 1 },   // Down
+        { angle: Math.PI, dx: -1, dy: 0 },      // Left
+        { angle: -Math.PI / 2, dx: 0, dy: -1 }, // Up
+      ];
+
+      for (const dir of directions) {
+        const cx = x + dir.dx * chevronDist;
+        const cy = y + dir.dy * chevronDist;
+
+        // Chevron pointing toward center
+        const perpX = -dir.dy;
+        const perpY = dir.dx;
+
+        this.groundClickGraphics.lineBetween(
+          cx + perpX * chevronSize - dir.dx * chevronSize,
+          cy + perpY * chevronSize - dir.dy * chevronSize,
+          cx,
+          cy
+        );
+        this.groundClickGraphics.lineBetween(
+          cx - perpX * chevronSize - dir.dx * chevronSize,
+          cy - perpY * chevronSize - dir.dy * chevronSize,
+          cx,
+          cy
+        );
+      }
+    }
+  }
+
+  /**
+   * Draw attack-ground command indicator - red ring with X crosshair
+   */
+  private drawAttackGroundIndicator(x: number, y: number, progress: number): void {
+    const baseRadius = 22;
+    const maxRadius = 45;
+
+    // Primary expanding ring
+    const ringProgress = Math.min(1, progress * 1.5);
+    const ringRadius = baseRadius + (maxRadius - baseRadius) * ringProgress;
+    const ringAlpha = (1 - ringProgress) * 0.8;
+
+    if (ringAlpha > 0.01) {
+      this.groundClickGraphics.lineStyle(2.5, 0xff4444, ringAlpha);
+      this.groundClickGraphics.strokeCircle(x, y, ringRadius);
+    }
+
+    // Secondary ring
+    if (progress > 0.12) {
+      const ring2Progress = Math.min(1, (progress - 0.12) * 1.7);
+      const ring2Radius = baseRadius * 0.65 + (maxRadius * 0.75 - baseRadius * 0.65) * ring2Progress;
+      const ring2Alpha = (1 - ring2Progress) * 0.5;
+
+      if (ring2Alpha > 0.01) {
+        this.groundClickGraphics.lineStyle(1.5, 0xff6666, ring2Alpha);
+        this.groundClickGraphics.strokeCircle(x, y, ring2Radius);
+      }
+    }
+
+    // Inner fill flash
+    if (progress < 0.25) {
+      const fillProgress = progress / 0.25;
+      const fillAlpha = (1 - fillProgress) * 0.2;
+      this.groundClickGraphics.fillStyle(0xff0000, fillAlpha);
+      this.groundClickGraphics.fillCircle(x, y, baseRadius * (1 - fillProgress * 0.2));
+    }
+
+    // X crosshair pattern
+    if (progress < 0.55) {
+      const xProgress = progress / 0.55;
+      const xAlpha = (1 - xProgress) * 0.7;
+      const xSize = 10 + 5 * xProgress;
+      const xOffset = baseRadius * 0.4;
+
+      this.groundClickGraphics.lineStyle(2, 0xff4444, xAlpha);
+
+      // Draw X pattern
+      this.groundClickGraphics.lineBetween(
+        x - xOffset - xSize * 0.5, y - xOffset - xSize * 0.5,
+        x - xOffset + xSize * 0.5, y - xOffset + xSize * 0.5
+      );
+      this.groundClickGraphics.lineBetween(
+        x + xOffset - xSize * 0.5, y - xOffset + xSize * 0.5,
+        x + xOffset + xSize * 0.5, y - xOffset - xSize * 0.5
+      );
+      this.groundClickGraphics.lineBetween(
+        x - xOffset - xSize * 0.5, y + xOffset + xSize * 0.5,
+        x - xOffset + xSize * 0.5, y + xOffset - xSize * 0.5
+      );
+      this.groundClickGraphics.lineBetween(
+        x + xOffset - xSize * 0.5, y + xOffset - xSize * 0.5,
+        x + xOffset + xSize * 0.5, y + xOffset + xSize * 0.5
+      );
+    }
+  }
+
   setTacticalMode(enabled: boolean): void {
     this.tacticalMode = enabled;
 
@@ -1968,6 +2199,7 @@ export class OverlayScene extends Phaser.Scene {
     this.splashContainer?.destroy();
     this.countdownContainer?.destroy();
     this.attackTargetGraphics?.destroy();
+    this.groundClickGraphics?.destroy();
 
     for (const alert of this.alerts) {
       alert.graphics?.destroy();
@@ -1979,6 +2211,7 @@ export class OverlayScene extends Phaser.Scene {
     this.alerts = [];
     this.abilitySplashes = [];
     this.attackTargetIndicators = [];
+    this.groundClickIndicators = [];
     this.edgeWarnings.clear();
     this.vignetteTexture = null;
     this.countdownContainer = null;
