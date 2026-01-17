@@ -611,6 +611,9 @@
 - [ ] Unit wireframes (damage state)
 - [x] Building placement ghost - SC2-style grid + ghost preview when placing
 - [x] Production progress bar - Fixed visibility and positioning for buildings producing units
+- [x] Enhanced damage numbers - Glow effects, pop-in animation, horizontal drift, color-coded by damage
+- [x] Premium text alerts - Orbitron font, glow bloom, underline accents, slide animations
+- [x] World-class victory/defeat screen - Animated radial glow burst, decorative lines, title glow bloom, staggered reveal
 - [ ] Stim Pack visual effect (red tint)
 - [ ] Siege Mode transform animation
 - [ ] Cloak shimmer effect
