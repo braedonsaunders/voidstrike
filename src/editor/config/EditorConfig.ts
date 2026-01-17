@@ -292,6 +292,8 @@ export interface EditorCell {
   textureId?: number;
   /** Material/texture type ID (0=auto based on slope, 1+=explicit material from config) */
   materialId?: number;
+  /** Whether this cell is part of a ramp (connects different elevations) */
+  isRamp?: boolean;
 }
 
 /**

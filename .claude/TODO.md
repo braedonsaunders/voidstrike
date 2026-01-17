@@ -231,6 +231,9 @@
   - **Reduced building avoidance margins** - Trust navmesh more (0.3→0.1 hard, 0.8→0.3 soft)
   - **Stuck detection with nudge** - If unit hasn't moved for 12 frames, apply deterministic random nudge
 
+### Map Editor Ramp Tool Fix (January 2026)
+- [x] **Ramp traversal fix** - Units couldn't traverse ramps created in the map editor. Root cause: `paintRamp()` in TerrainBrush.ts only set elevation and walkable, but didn't mark cells with `terrain: 'ramp'`. Pathfinding system expects `terrain === 'ramp'` for ramp geometry. Fixed by: (1) Adding `isRamp` field to EditorCell interface, (2) Setting `isRamp: true` in paintRamp(), (3) Converting `isRamp` cells to `terrain: 'ramp'` in editorFormatToMapData(), (4) Preserving ramp status when loading maps via mapDataToEditorFormat().
+
 ### Terrain Generation Improvements (January 2026)
 - [x] **Slope-based texture blending** - Fixed terrain sampleTerrain() to use average elevation instead of MAX, which was flattening cliffs and preventing proper texture blending
 - [x] **Pre-calculated slope attribute** - Added aSlope vertex attribute calculated before geometry smoothing for accurate cliff detection regardless of mesh smoothing

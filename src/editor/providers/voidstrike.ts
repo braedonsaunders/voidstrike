@@ -29,6 +29,7 @@ function mapDataToEditorFormat(map: MapData): EditorMapData {
         feature: cell.feature,
         walkable: cell.terrain !== 'unwalkable' && featureConfig.walkable,
         textureId: cell.textureId,
+        isRamp: cell.terrain === 'ramp',
       };
     })
   );
@@ -125,8 +126,17 @@ function editorFormatToMapData(data: EditorMapData): MapData {
   const terrain: MapCell[][] = data.terrain.map((row) =>
     row.map((cell) => {
       const featureConfig = TERRAIN_FEATURE_CONFIG[cell.feature as TerrainFeature] || TERRAIN_FEATURE_CONFIG.none;
+      // Determine terrain type: ramp cells get 'ramp', then check walkability
+      let terrainType: 'ground' | 'ramp' | 'unwalkable' | 'unbuildable';
+      if (cell.isRamp) {
+        terrainType = 'ramp';
+      } else if (cell.walkable && featureConfig.walkable) {
+        terrainType = 'ground';
+      } else {
+        terrainType = 'unwalkable';
+      }
       return {
-        terrain: cell.walkable && featureConfig.walkable ? 'ground' : 'unwalkable',
+        terrain: terrainType,
         elevation: cell.elevation,
         feature: (cell.feature as TerrainFeature) || 'none',
         textureId: cell.textureId || 0,
