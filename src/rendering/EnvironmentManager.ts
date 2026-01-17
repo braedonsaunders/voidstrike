@@ -233,8 +233,9 @@ export class EnvironmentManager {
     }
 
     // Ground fog/mist layer for atmospheric effect
-    // Note: GroundFog uses ShaderMaterial which may not render correctly with WebGPU
-    // TODO: Convert to TSL material for WebGPU compatibility
+    // DISABLED: GroundFog uses legacy ShaderMaterial which is incompatible with WebGPU backend
+    // To fix: Create TSLGroundFog using Three.js TSL (similar to TSLWaterPlane, TSLMapBorderFog)
+    // Priority: Low - map border fog provides sufficient atmospheric effect
     // this.groundFog = new GroundFog(this.mapData, this.biome);
     // this.scene.add(this.groundFog.mesh);
 

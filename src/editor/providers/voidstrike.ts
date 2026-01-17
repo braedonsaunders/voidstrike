@@ -190,10 +190,10 @@ function editorFormatToMapData(data: EditorMapData): MapData {
         health: (obj.properties?.health as number) || 2000,
       });
     } else if (obj.type.startsWith('decoration_')) {
-      // Extract decoration type from object type (e.g., "decoration_tree" -> "tree")
-      const decorationType = obj.properties?.decorationType as string || obj.type.replace('decoration_', '');
+      // Extract decoration type from object type (e.g., "decoration_tree_pine_tall" -> "tree_pine_tall")
+      const decorationType = (obj.properties?.decorationType as string) || obj.type.replace('decoration_', '');
       decorations.push({
-        type: decorationType,
+        type: decorationType as MapDecoration['type'], // Cast to DecorationType
         x: obj.x,
         y: obj.y,
         scale: (obj.properties?.scale as number) || 1.0,
