@@ -264,21 +264,31 @@ export function useEditorState(config: EditorConfig): UseEditorStateReturn {
 
   // Start a batch operation - saves current state for undo
   const startBatch = useCallback(() => {
-    if (state.mapData && !isBatchingRef.current) {
-      batchStateRef.current = cloneMapData(state.mapData);
-      isBatchingRef.current = true;
-    }
-  }, [state.mapData]);
+    // Use functional update to ensure we capture the CURRENT state
+    setState((prev) => {
+      if (prev.mapData && !isBatchingRef.current) {
+        batchStateRef.current = cloneMapData(prev.mapData);
+        isBatchingRef.current = true;
+      }
+      return prev; // Don't modify state, just capture it
+    });
+  }, []);
 
   // Commit a batch operation - pushes saved state to undo stack
   const commitBatch = useCallback(() => {
-    if (batchStateRef.current && isBatchingRef.current) {
+    // Capture ref values BEFORE calling setState to avoid race condition
+    const savedState = batchStateRef.current;
+    const wasBatching = isBatchingRef.current;
+
+    // Reset refs immediately to prevent double-commits
+    batchStateRef.current = null;
+    isBatchingRef.current = false;
+
+    if (savedState && wasBatching) {
       setState((prev) => {
         if (!prev.mapData) return prev;
 
-        const newUndoStack = [...prev.undoStack.slice(-maxUndoHistory + 1), batchStateRef.current!];
-        batchStateRef.current = null;
-        isBatchingRef.current = false;
+        const newUndoStack = [...prev.undoStack.slice(-maxUndoHistory + 1), savedState];
 
         return {
           ...prev,
@@ -287,8 +297,6 @@ export function useEditorState(config: EditorConfig): UseEditorStateReturn {
         };
       });
     }
-    isBatchingRef.current = false;
-    batchStateRef.current = null;
   }, [maxUndoHistory]);
 
   const fillArea = useCallback(
