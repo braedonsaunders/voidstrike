@@ -279,6 +279,15 @@ export class MovementSystem extends System {
         unit.path = [];
         unit.pathIndex = 0;
         this.requestPathWithCooldown(entityId, targetPosition.x, targetPosition.y, true);
+
+        // Set initial rotation to face target direction
+        const transform = entity.get<Transform>('Transform');
+        if (transform) {
+          transform.rotation = Math.atan2(
+            targetPosition.y - transform.y,
+            targetPosition.x - transform.x
+          );
+        }
       }
       return;
     }
@@ -330,6 +339,15 @@ export class MovementSystem extends System {
         unit.path = [];
         unit.pathIndex = 0;
         this.requestPathWithCooldown(entityId, targetX, targetY, true);
+
+        // Set initial rotation to face target direction
+        const transform = entity.get<Transform>('Transform');
+        if (transform) {
+          transform.rotation = Math.atan2(
+            targetY - transform.y,
+            targetX - transform.x
+          );
+        }
       }
     }
   }
@@ -375,6 +393,12 @@ export class MovementSystem extends System {
         unit.path = [];
         unit.pathIndex = 0;
         this.requestPathWithCooldown(entityId, unitTargetX, unitTargetY, true);
+
+        // Set initial rotation to face target direction
+        transform.rotation = Math.atan2(
+          unitTargetY - transform.y,
+          unitTargetX - transform.x
+        );
       }
     }
   }
@@ -460,7 +484,8 @@ export class MovementSystem extends System {
       if (!entity) continue;
 
       const unit = entity.get<Unit>('Unit');
-      if (!unit) continue;
+      const transform = entity.get<Transform>('Transform');
+      if (!unit || !transform) continue;
 
       const pos = formationPositions[i];
       if (!pos) continue;
@@ -479,6 +504,11 @@ export class MovementSystem extends System {
         unit.path = [];
         unit.pathIndex = 0;
         this.requestPathWithCooldown(entityId, pos.x, pos.y, true);
+        // Set initial rotation to face target direction
+        transform.rotation = Math.atan2(
+          pos.y - transform.y,
+          pos.x - transform.x
+        );
       }
     }
   }
@@ -516,6 +546,11 @@ export class MovementSystem extends System {
           targetPosition.x,
           targetPosition.y,
           true
+        );
+        // Set initial rotation to face target direction
+        transform.rotation = Math.atan2(
+          targetPosition.y - transform.y,
+          targetPosition.x - transform.x
         );
       }
     }
@@ -1205,6 +1240,19 @@ export class MovementSystem extends System {
             const sepMag = Math.sqrt(sepMagSq);
             velocity.x = (tempSeparation.x / sepMag) * idleRepelSpeed;
             velocity.y = (tempSeparation.y / sepMag) * idleRepelSpeed;
+
+            // Update rotation to face movement direction
+            const targetRotation = Math.atan2(velocity.y, velocity.x);
+            const rotationDiff = targetRotation - transform.rotation;
+            let normalizedDiff = rotationDiff;
+            while (normalizedDiff > Math.PI) normalizedDiff -= Math.PI * 2;
+            while (normalizedDiff < -Math.PI) normalizedDiff += Math.PI * 2;
+            const turnRate = 8 * dt;
+            if (Math.abs(normalizedDiff) < turnRate) {
+              transform.rotation = targetRotation;
+            } else {
+              transform.rotation += Math.sign(normalizedDiff) * turnRate;
+            }
 
             // Apply movement
             transform.translate(velocity.x * dt, velocity.y * dt);
