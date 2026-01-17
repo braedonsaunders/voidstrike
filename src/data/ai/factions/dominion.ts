@@ -53,6 +53,22 @@ const DOMINION_MACRO_RULES: MacroRule[] = [
   },
 
   // === Worker Production ===
+  // Emergency worker replacement - high priority when under harassment
+  {
+    id: 'workers_emergency',
+    name: 'Emergency Worker Replacement',
+    description: 'Rapidly replace workers lost to harassment',
+    priority: 120, // Higher than supply management
+    conditions: [
+      { type: 'workerReplacementPriority', operator: '>=', value: 0.5 },
+      { type: 'minerals', operator: '>=', value: 50 },
+      { type: 'supplyRatio', operator: '<', value: 0.98 },
+    ],
+    action: { type: 'train', targetId: 'fabricator' },
+    cooldownTicks: 10, // Very fast - queue multiple workers
+  },
+
+  // Standard worker production
   {
     id: 'workers_basic',
     name: 'Train Workers',
@@ -349,6 +365,20 @@ const DOMINION_MACRO_RULES: MacroRule[] = [
   },
 
   // === Expansion ===
+  // Expand when resources are depleting (simulation-based economy trigger)
+  {
+    id: 'expand_depleted',
+    name: 'Expand Due to Depletion',
+    description: 'Resources are running out, need new base',
+    priority: 65, // Higher priority than saturation-based
+    conditions: [
+      { type: 'depletedPatchesNearBases', operator: '>=', value: 3 }, // 3+ patches depleted
+      { type: 'minerals', operator: '>=', value: 350 },
+    ],
+    action: { type: 'expand' },
+    cooldownTicks: 600,
+  },
+
   {
     id: 'expand_saturated',
     name: 'Expand When Saturated',
@@ -407,7 +437,7 @@ export const DOMINION_AI_CONFIG: FactionAIConfig = {
       actionDelayTicks: 60, // 3 seconds
       targetWorkers: 16,
       maxBases: 2,
-      resourceMultiplier: 1.0,
+      miningSpeedMultiplier: 1.0, // Normal mining speed
       buildSpeedMultiplier: 1.0,
       scoutingEnabled: false,
       counterBuildingEnabled: false,
@@ -424,7 +454,7 @@ export const DOMINION_AI_CONFIG: FactionAIConfig = {
       actionDelayTicks: 40, // 2 seconds
       targetWorkers: 22,
       maxBases: 3,
-      resourceMultiplier: 1.0,
+      miningSpeedMultiplier: 1.0, // Normal mining speed
       buildSpeedMultiplier: 1.0,
       scoutingEnabled: true,
       counterBuildingEnabled: false,
@@ -441,7 +471,7 @@ export const DOMINION_AI_CONFIG: FactionAIConfig = {
       actionDelayTicks: 20, // 1 second
       targetWorkers: 28,
       maxBases: 4,
-      resourceMultiplier: 1.0,
+      miningSpeedMultiplier: 1.0, // Normal mining speed
       buildSpeedMultiplier: 1.0,
       scoutingEnabled: true,
       counterBuildingEnabled: true,
@@ -458,7 +488,7 @@ export const DOMINION_AI_CONFIG: FactionAIConfig = {
       actionDelayTicks: 15,
       targetWorkers: 32,
       maxBases: 5,
-      resourceMultiplier: 1.2,
+      miningSpeedMultiplier: 1.25, // 25% faster mining (SC2-style bonus)
       buildSpeedMultiplier: 1.1,
       scoutingEnabled: true,
       counterBuildingEnabled: true,
@@ -475,7 +505,7 @@ export const DOMINION_AI_CONFIG: FactionAIConfig = {
       actionDelayTicks: 10, // Half second
       targetWorkers: 40,
       maxBases: 6,
-      resourceMultiplier: 1.5,
+      miningSpeedMultiplier: 1.5, // 50% faster mining (SC2-style bonus)
       buildSpeedMultiplier: 1.3,
       scoutingEnabled: true,
       counterBuildingEnabled: true,
@@ -491,9 +521,9 @@ export const DOMINION_AI_CONFIG: FactionAIConfig = {
   },
 
   // === Economy Configuration ===
+  // Note: AI now uses real simulation-based economy (no passive income)
+  // Mining speed bonuses are in difficultyConfig.miningSpeedMultiplier
   economy: {
-    workerIncomePerTick: 5,
-    gasIncomeMultiplier: 0.8,
     optimalWorkersPerMineral: 2,
     optimalWorkersPerGas: 3,
     optimalWorkersPerBase: 22,

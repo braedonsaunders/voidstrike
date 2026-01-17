@@ -53,7 +53,9 @@ export type ConditionType =
   | 'maxSupply'
   | 'supplyRatio' // supply / maxSupply
   | 'workers'
+  | 'workerReplacementPriority' // 0-1, urgency of replacing lost workers
   | 'workerSaturation' // workers / (bases * optimalWorkersPerBase)
+  | 'depletedPatchesNearBases' // number of resource patches depleted near bases
   | 'armySupply'
   | 'armyValue'
   | 'bases'
@@ -265,10 +267,6 @@ export interface GlobalMicroSettings {
  * EconomyConfig defines economic behavior and thresholds.
  */
 export interface EconomyConfig {
-  /** Passive income per worker per action tick */
-  workerIncomePerTick: number;
-  /** Gas income multiplier (gas is usually slower) */
-  gasIncomeMultiplier: number;
   /** Optimal workers per mineral line */
   optimalWorkersPerMineral: number;
   /** Optimal workers per gas */
@@ -380,8 +378,8 @@ export interface DifficultySettings {
   targetWorkers: number;
   /** Max bases */
   maxBases: number;
-  /** Resource income multiplier (1.0 = normal, 1.5 = 50% bonus) */
-  resourceMultiplier: number;
+  /** Mining speed multiplier - reduces gather time (1.0 = normal, 1.5 = 50% faster) */
+  miningSpeedMultiplier: number;
   /** Build speed multiplier */
   buildSpeedMultiplier: number;
   /** Enable scouting */
@@ -437,6 +435,12 @@ export function evaluateCondition(
       break;
     case 'workers':
       value = state.workerCount;
+      break;
+    case 'workerReplacementPriority':
+      value = state.workerReplacementPriority;
+      break;
+    case 'depletedPatchesNearBases':
+      value = state.depletedPatchesNearBases;
       break;
     case 'workerSaturation':
       const optimalWorkers = state.baseCount * state.config.economy.optimalWorkersPerBase;
@@ -623,9 +627,13 @@ export interface AIStateSnapshot {
 
   // Units
   workerCount: number;
+  workerReplacementPriority: number; // 0-1, urgency of replacing lost workers
   armySupply: number;
   armyValue: number;
   unitCounts: Map<string, number>;
+
+  // Economy health
+  depletedPatchesNearBases: number; // Resources depleted near AI bases
 
   // Buildings
   baseCount: number;

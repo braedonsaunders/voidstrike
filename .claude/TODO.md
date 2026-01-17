@@ -6,6 +6,32 @@
 
 ---
 
+## Simulation-Based AI Economy (January 2026) ✓
+
+### SC2-Style Worker Economy
+- [x] **Removed passive AI income** - AI no longer gets fake income from worker count
+- [x] **Real worker gathering** - AI workers now actually gather resources and return them to base
+- [x] **Resource crediting via events** - ResourceSystem credits AI via `aiSystem.creditResources()`
+- [x] **Mining speed multiplier** - Higher difficulty AI gets faster mining (1.25x very_hard, 1.5x insane)
+- [x] **Worker death tracking** - AI detects worker deaths and calculates replacement priority
+- [x] **Emergency worker production** - New macro rule with priority 120 when workerReplacementPriority >= 0.5
+- [x] **Worker auto-reassignment** - Workers automatically find new resources when their patch depletes
+- [x] **Resource depletion tracking** - AI tracks depleted patches near bases for expansion decisions
+- [x] **Depletion-based expansion** - New macro rule triggers expansion when 3+ patches deplete
+
+### Economy Metrics System
+- [x] **AIEconomySystem** - New system tracking income rate, worker efficiency, saturation
+- [x] **Income per minute calculation** - Rolling window tracks minerals/vespene per minute
+- [x] **Debug logging** - Periodic economy metrics output for debugging
+- [x] **Event-based tracking** - Listens to `resource:delivered` events
+
+### Configuration Updates
+- [x] **DifficultySettings.miningSpeedMultiplier** - Replaced resourceMultiplier (passive) with miningSpeedMultiplier (active)
+- [x] **Removed workerIncomePerTick** - Economy config no longer has passive income fields
+- [x] **New condition types** - Added `workerReplacementPriority`, `depletedPatchesNearBases` to macro rules
+
+---
+
 ## Selection System Improvements (January 2026) ✓
 
 ### Screen-Space Selection

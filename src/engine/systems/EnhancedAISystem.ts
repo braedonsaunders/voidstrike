@@ -51,6 +51,16 @@ interface AIPlayer {
   workerCount: number;
   targetWorkerCount: number;
 
+  // Worker tracking (for simulation-based economy)
+  previousWorkerIds: Set<number>; // Workers from last tick (for death detection)
+  lastWorkerDeathTick: number; // When a worker last died (for harassment detection)
+  recentWorkerDeaths: number; // Deaths in last N ticks (for replacement priority)
+  workerReplacementPriority: number; // 0-1, higher = more urgent worker production
+
+  // Resource depletion tracking (for expansion decisions)
+  depletedPatchesNearBases: number; // Count of resource patches depleted near bases
+  lastDepletionTick: number; // When a resource last depleted
+
   // Army
   armyValue: number;
   armySupply: number;
@@ -199,6 +209,57 @@ export class EnhancedAISystem extends System {
         ai.state = 'defending';
       }
     });
+
+    // Track resource depletion for expansion decisions
+    this.game.eventBus.on('resource:depleted', (data: { resourceType: string; position: { x: number; y: number } }) => {
+      const currentTick = this.game.getCurrentTick();
+
+      // Check each AI to see if this resource is near one of their bases
+      for (const ai of this.aiPlayers.values()) {
+        const basePositions = this.getAIBasePositions(ai);
+
+        // Check if depleted resource was near any AI base
+        for (const basePos of basePositions) {
+          const dx = data.position.x - basePos.x;
+          const dy = data.position.y - basePos.y;
+          const distance = Math.sqrt(dx * dx + dy * dy);
+
+          // Resources within 30 units of a base are considered "near"
+          if (distance <= 30) {
+            ai.depletedPatchesNearBases++;
+            ai.lastDepletionTick = currentTick;
+            debugAI.log(`[EnhancedAI] ${ai.playerId}: Resource depleted near base! Total depleted: ${ai.depletedPatchesNearBases}`);
+            break; // Only count once even if near multiple bases
+          }
+        }
+      }
+    });
+  }
+
+  /**
+   * Get all base positions for an AI player
+   */
+  private getAIBasePositions(ai: AIPlayer): Array<{ x: number; y: number }> {
+    const config = ai.config;
+    if (!config) return [];
+
+    const baseTypes = config.roles.baseTypes;
+    const positions: Array<{ x: number; y: number }> = [];
+    const buildings = this.getCachedBuildingsWithTransform();
+
+    for (const entity of buildings) {
+      const selectable = entity.get<Selectable>('Selectable');
+      const building = entity.get<Building>('Building');
+      const transform = entity.get<Transform>('Transform');
+
+      if (!selectable || !building || !transform) continue;
+      if (selectable.playerId !== ai.playerId) continue;
+      if (baseTypes.includes(building.buildingId)) {
+        positions.push({ x: transform.x, y: transform.y });
+      }
+    }
+
+    return positions;
   }
 
   public registerAI(
@@ -239,6 +300,16 @@ export class EnhancedAISystem extends System {
       workerCount: 6,
       targetWorkerCount: difficultySettings.targetWorkers,
 
+      // Worker tracking for simulation-based economy
+      previousWorkerIds: new Set(),
+      lastWorkerDeathTick: 0,
+      recentWorkerDeaths: 0,
+      workerReplacementPriority: 0,
+
+      // Resource depletion tracking
+      depletedPatchesNearBases: 0,
+      lastDepletionTick: 0,
+
       armyValue: 0,
       armySupply: 0,
       armyComposition: new Map(),
@@ -268,6 +339,40 @@ export class EnhancedAISystem extends System {
       config: factionConfig,
       macroRuleCooldowns: new Map(),
     });
+  }
+
+  /**
+   * Check if a player is controlled by AI
+   */
+  public isAIPlayer(playerId: string): boolean {
+    return this.aiPlayers.has(playerId);
+  }
+
+  /**
+   * Get the mining speed multiplier for an AI player (SC2-style difficulty bonus)
+   * Returns 1.0 for non-AI players or if AI not found
+   */
+  public getMiningSpeedMultiplier(playerId: string): number {
+    const ai = this.aiPlayers.get(playerId);
+    if (!ai || !ai.config) return 1.0;
+    return ai.config.difficultyConfig[ai.difficulty].miningSpeedMultiplier;
+  }
+
+  /**
+   * Credit resources to an AI player (called when workers deliver resources)
+   * This is the ONLY way AI gets resources - no passive income
+   */
+  public creditResources(playerId: string, minerals: number, vespene: number): void {
+    const ai = this.aiPlayers.get(playerId);
+    if (!ai) return;
+
+    ai.minerals += minerals;
+    ai.vespene += vespene;
+
+    // Debug log periodically
+    if (this.game.getCurrentTick() % 100 === 0) {
+      debugAI.log(`[EnhancedAI] ${playerId} received: +${minerals} minerals, +${vespene} gas (total: ${Math.floor(ai.minerals)}M, ${Math.floor(ai.vespene)}G)`);
+    }
   }
 
   /**
@@ -305,9 +410,12 @@ export class EnhancedAISystem extends System {
       maxSupply: ai.maxSupply,
 
       workerCount: ai.workerCount,
+      workerReplacementPriority: ai.workerReplacementPriority,
       armySupply: ai.armySupply,
       armyValue: ai.armyValue,
       unitCounts: ai.armyComposition,
+
+      depletedPatchesNearBases: ai.depletedPatchesNearBases,
 
       baseCount,
       buildingCounts: ai.buildingCounts,
@@ -416,8 +524,8 @@ export class EnhancedAISystem extends System {
         debugAI.log(`[EnhancedAI] ${playerId}: workers=${ai.workerCount}, buildings=${totalBuildings}, minerals=${Math.floor(ai.minerals)}, state=${ai.state}`);
       }
 
-      // Resource bonus for harder difficulties
-      this.applyResourceBonus(ai);
+      // Update max supply based on buildings
+      this.updateMaxSupply(ai);
 
       // Determine state based on conditions
       this.updateAIState(ai, currentTick);
@@ -439,11 +547,14 @@ export class EnhancedAISystem extends System {
   }
 
   private updateGameState(ai: AIPlayer): void {
+    const currentTick = this.game.getCurrentTick();
+
     // Count workers, army, and buildings
     let workerCount = 0;
     let armySupply = 0;
     const armyComposition = new Map<string, number>();
     const buildingCounts = new Map<string, number>();
+    const currentWorkerIds = new Set<number>();
 
     const units = this.getCachedUnits();
     for (const entity of units) {
@@ -458,6 +569,7 @@ export class EnhancedAISystem extends System {
 
       if (unit.isWorker) {
         workerCount++;
+        currentWorkerIds.add(entity.id);
       } else {
         const def = UNIT_DEFINITIONS[unit.unitId];
         if (def) {
@@ -465,6 +577,39 @@ export class EnhancedAISystem extends System {
           armyComposition.set(unit.unitId, (armyComposition.get(unit.unitId) || 0) + 1);
         }
       }
+    }
+
+    // Detect worker deaths by comparing with previous tick
+    let newDeaths = 0;
+    for (const previousId of ai.previousWorkerIds) {
+      if (!currentWorkerIds.has(previousId)) {
+        newDeaths++;
+        ai.lastWorkerDeathTick = currentTick;
+      }
+    }
+
+    // Track recent deaths (decay over ~5 seconds / 100 ticks)
+    const decayRate = 0.02; // ~2% decay per tick
+    ai.recentWorkerDeaths = Math.max(0, ai.recentWorkerDeaths * (1 - decayRate) + newDeaths);
+
+    // Calculate worker replacement priority based on:
+    // - How many workers we've lost recently
+    // - How far below target we are
+    // - Whether we're being actively harassed
+    const workerDeficit = Math.max(0, ai.targetWorkerCount - workerCount);
+    const deficitRatio = workerCount > 0 ? workerDeficit / ai.targetWorkerCount : 1;
+    const recentDeathsPressure = Math.min(1, ai.recentWorkerDeaths / 5); // 5 deaths = max pressure
+    const isUnderHarassment = currentTick - ai.lastWorkerDeathTick < 100; // Death in last 5 seconds
+
+    // Priority: 0 = no urgency, 1 = critical
+    ai.workerReplacementPriority = Math.min(1, deficitRatio * 0.5 + recentDeathsPressure * 0.3 + (isUnderHarassment ? 0.2 : 0));
+
+    // Store current workers for next tick comparison
+    ai.previousWorkerIds = currentWorkerIds;
+
+    // Log worker deaths
+    if (newDeaths > 0) {
+      debugAI.log(`[EnhancedAI] ${ai.playerId}: ${newDeaths} worker(s) died! Recent deaths: ${ai.recentWorkerDeaths.toFixed(1)}, priority: ${ai.workerReplacementPriority.toFixed(2)}`);
     }
 
     const buildings = this.getCachedBuildings();
@@ -489,28 +634,13 @@ export class EnhancedAISystem extends System {
     ai.supply = workerCount + armySupply;
   }
 
-  private applyResourceBonus(ai: AIPlayer): void {
-    const config = ai.config!; // Config is guaranteed by registerAI
-    const difficultySettings = config.difficultyConfig[ai.difficulty];
+  /**
+   * Update max supply based on buildings (supply logic extracted from old passive income method)
+   */
+  private updateMaxSupply(ai: AIPlayer): void {
+    const config = ai.config!;
     const economyConfig = config.economy;
 
-    // All AI difficulties get passive income based on workers gathering
-    // All values come from data-driven config - no fallbacks
-    const baseIncomePerWorker = economyConfig.workerIncomePerTick;
-    const gasIncomeMultiplier = economyConfig.gasIncomeMultiplier;
-    const incomeMultiplier = difficultySettings.resourceMultiplier;
-
-    ai.minerals += ai.workerCount * baseIncomePerWorker * incomeMultiplier;
-
-    // Vespene income if AI has an extractor
-    const gasExtractor = config.roles.gasExtractor;
-    const extractorCount = ai.buildingCounts.get(gasExtractor) || 0;
-    if (extractorCount > 0) {
-      const workersPerGas = economyConfig.optimalWorkersPerGas;
-      ai.vespene += extractorCount * workersPerGas * baseIncomePerWorker * gasIncomeMultiplier * incomeMultiplier;
-    }
-
-    // Update max supply based on buildings from config
     const supplyPerBase = economyConfig.supplyPerMainBase;
     const supplyPerSupplyBuilding = economyConfig.supplyPerSupplyBuilding;
 
