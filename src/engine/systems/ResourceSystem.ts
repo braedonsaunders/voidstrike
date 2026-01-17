@@ -483,17 +483,26 @@ export class ResourceSystem extends System {
                 // Switch to less saturated patch
                 unit.gatherTargetId = betterPatch.entity.id;
                 unit.moveToPosition(betterPatch.transform.x, betterPatch.transform.y);
+                debugResources.log(`[ResourceSystem] Worker ${workerEntity.id} switching to less saturated patch ${betterPatch.entity.id}`);
                 return;
               }
             }
 
             unit.moveToPosition(resourceTransform.x, resourceTransform.y);
+            debugResources.log(`[ResourceSystem] Worker ${workerEntity.id} dropped off, returning to gather at (${resourceTransform.x.toFixed(1)}, ${resourceTransform.y.toFixed(1)}), targetX=${unit.targetX?.toFixed(1)}`);
             // State already 'gathering'
             return;
+          } else {
+            debugResources.warn(`[ResourceSystem] Worker ${workerEntity.id} resource invalid after drop-off: transform=${!!resourceTransform}, resource=${!!resource}, depleted=${resource?.isDepleted()}`);
           }
+        } else {
+          debugResources.warn(`[ResourceSystem] Worker ${workerEntity.id} gatherTargetId ${unit.gatherTargetId} entity not found after drop-off`);
         }
+      } else {
+        debugResources.warn(`[ResourceSystem] Worker ${workerEntity.id} has no gatherTargetId after drop-off`);
       }
 
+      debugResources.log(`[ResourceSystem] Worker ${workerEntity.id} becoming idle after drop-off (no valid gather target)`);
       unit.state = 'idle';
     } else {
       // Move toward the edge of the base building (not the center)
