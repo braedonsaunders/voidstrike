@@ -206,6 +206,12 @@
   - Added early ramp proximity check to `isCliffEdgeCell` (5-cell radius) to prevent ground cells at ramp ends from being incorrectly flattened as cliff edges
   - This ensures cells near ramps use heightmap values for smooth height transitions instead of being treated as cliff edges, guaranteeing ramps are fully walkable at both upper and lower ends
 
+### Minimap Targeting (January 2026) ✓
+- [x] **SC2-style minimap command targeting** - Press A (attack), M (move), or P (patrol) then click minimap to issue commands
+- [x] **Unified command target mode** - Shared state between canvas and minimap via `commandTargetMode` in gameStore
+- [x] **Visual feedback** - Minimap border changes color when in targeting mode (red=attack, blue=move, yellow=patrol)
+- [x] **Shift-click queuing** - Hold shift to queue commands without exiting targeting mode
+
 ### Camera & Input Fixes (January 2026)
 - [x] **WASD keys removed from camera** - WASD was conflicting with shortcuts (A=attack move, S=stop, etc.). Camera now uses arrow keys only for keyboard panning.
 

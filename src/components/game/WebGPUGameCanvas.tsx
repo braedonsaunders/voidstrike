@@ -134,8 +134,6 @@ export function WebGPUGameCanvas() {
   const [isSelecting, setIsSelecting] = useState(false);
   const [selectionStart, setSelectionStart] = useState({ x: 0, y: 0 });
   const [selectionEnd, setSelectionEnd] = useState({ x: 0, y: 0 });
-  const [isAttackMove, setIsAttackMove] = useState(false);
-  const [isPatrolMode, setIsPatrolMode] = useState(false);
 
   // Loading state
   const [isLoading, setIsLoading] = useState(true);
@@ -187,7 +185,7 @@ export function WebGPUGameCanvas() {
   const DOUBLE_CLICK_TIME = 400;
   const DOUBLE_CLICK_DIST = 10;
 
-  const { isBuilding, buildingType, buildingPlacementQueue, isSettingRallyPoint, isRepairMode, isLandingMode, landingBuildingId, abilityTargetMode, isWallPlacementMode } = useGameStore();
+  const { isBuilding, buildingType, buildingPlacementQueue, isSettingRallyPoint, isRepairMode, isLandingMode, landingBuildingId, abilityTargetMode, isWallPlacementMode, commandTargetMode } = useGameStore();
 
   // Initialize both Three.js (WebGPU) and Phaser
   useEffect(() => {
@@ -1252,7 +1250,7 @@ export function WebGPUGameCanvas() {
   // Mouse handlers (same as HybridGameCanvas)
   const handleMouseDown = useCallback((e: React.MouseEvent) => {
     if (e.button === 0) {
-      if (isAttackMove) {
+      if (commandTargetMode === 'attack') {
         const worldPos = cameraRef.current?.screenToWorld(e.clientX, e.clientY);
         if (worldPos && gameRef.current) {
           const selectedUnits = useGameStore.getState().selectedUnits;
@@ -1267,8 +1265,8 @@ export function WebGPUGameCanvas() {
             });
           }
         }
-        if (!e.shiftKey) setIsAttackMove(false);
-      } else if (isPatrolMode) {
+        if (!e.shiftKey) useGameStore.getState().setCommandTargetMode(null);
+      } else if (commandTargetMode === 'patrol') {
         const worldPos = cameraRef.current?.screenToWorld(e.clientX, e.clientY);
         if (worldPos && gameRef.current) {
           const selectedUnits = useGameStore.getState().selectedUnits;
@@ -1283,7 +1281,23 @@ export function WebGPUGameCanvas() {
             });
           }
         }
-        setIsPatrolMode(false);
+        useGameStore.getState().setCommandTargetMode(null);
+      } else if (commandTargetMode === 'move') {
+        const worldPos = cameraRef.current?.screenToWorld(e.clientX, e.clientY);
+        if (worldPos && gameRef.current) {
+          const selectedUnits = useGameStore.getState().selectedUnits;
+          const localPlayer = getLocalPlayerId();
+          if (selectedUnits.length > 0 && localPlayer) {
+            gameRef.current.issueCommand({
+              tick: gameRef.current.getCurrentTick(),
+              playerId: localPlayer,
+              type: 'MOVE',
+              entityIds: selectedUnits,
+              targetPosition: { x: worldPos.x, y: worldPos.z },
+            });
+          }
+        }
+        if (!e.shiftKey) useGameStore.getState().setCommandTargetMode(null);
       } else if (abilityTargetMode) {
         const worldPos = cameraRef.current?.screenToWorld(e.clientX, e.clientY);
         if (worldPos && gameRef.current) {
@@ -1377,16 +1391,12 @@ export function WebGPUGameCanvas() {
     } else if (e.button === 2) {
       handleRightClick(e);
     }
-  }, [isBuilding, buildingType, isAttackMove, isPatrolMode, isSettingRallyPoint, isRepairMode, isLandingMode, landingBuildingId, abilityTargetMode, isWallPlacementMode]);
+  }, [isBuilding, buildingType, commandTargetMode, isSettingRallyPoint, isRepairMode, isLandingMode, landingBuildingId, abilityTargetMode, isWallPlacementMode]);
 
   const handleRightClick = (e: React.MouseEvent) => {
     // Right-click cancels command modes (alternative to ESC, especially useful in fullscreen)
-    if (isAttackMove) {
-      setIsAttackMove(false);
-      return;
-    }
-    if (isPatrolMode) {
-      setIsPatrolMode(false);
+    if (commandTargetMode) {
+      useGameStore.getState().setCommandTargetMode(null);
       return;
     }
     if (isWallPlacementMode) {
@@ -1892,8 +1902,7 @@ export function WebGPUGameCanvas() {
           {
             // Check if there's an active command mode that ESC should cancel
             const hasActiveCommand =
-              isAttackMove ||
-              isPatrolMode ||
+              commandTargetMode !== null ||
               isRepairMode ||
               isLandingMode ||
               isSettingRallyPoint ||
@@ -1907,8 +1916,7 @@ export function WebGPUGameCanvas() {
               e.preventDefault();
             }
 
-            if (isAttackMove) setIsAttackMove(false);
-            else if (isPatrolMode) setIsPatrolMode(false);
+            if (commandTargetMode) useGameStore.getState().setCommandTargetMode(null);
             else if (isRepairMode) useGameStore.getState().setRepairMode(false);
             else if (isLandingMode) useGameStore.getState().setLandingMode(false);
             else if (isSettingRallyPoint) useGameStore.getState().setRallyPointMode(false);
@@ -1976,12 +1984,18 @@ export function WebGPUGameCanvas() {
           break;
         case 'a':
           if (!isBuilding) {
-            setIsAttackMove(true);
+            useGameStore.getState().setCommandTargetMode('attack');
+          }
+          break;
+        case 'm':
+          // SC2-style: M for move targeting mode
+          if (!isBuilding) {
+            useGameStore.getState().setCommandTargetMode('move');
           }
           break;
         case 'p':
           if (!isBuilding) {
-            setIsPatrolMode(true);
+            useGameStore.getState().setCommandTargetMode('patrol');
           }
           break;
         case 's':
@@ -2063,7 +2077,7 @@ export function WebGPUGameCanvas() {
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [isBuilding, isAttackMove, isPatrolMode, isRepairMode, isLandingMode, isSettingRallyPoint, abilityTargetMode, isWallPlacementMode]);
+  }, [isBuilding, commandTargetMode, isRepairMode, isLandingMode, isSettingRallyPoint, abilityTargetMode, isWallPlacementMode]);
 
   // Subscribe to overlay settings changes
   useEffect(() => {
@@ -2369,10 +2383,18 @@ export function WebGPUGameCanvas() {
         </div>
       )}
 
-      {isAttackMove && (
+      {commandTargetMode === 'attack' && (
         <div className="absolute top-4 left-1/2 transform -translate-x-1/2 bg-black/80 px-4 py-2 rounded border border-red-600 z-20">
           <span className="text-red-400">
-            Attack-Move - Click target, ESC to cancel
+            Attack-Move - Click canvas or minimap, ESC to cancel
+          </span>
+        </div>
+      )}
+
+      {commandTargetMode === 'move' && (
+        <div className="absolute top-4 left-1/2 transform -translate-x-1/2 bg-black/80 px-4 py-2 rounded border border-blue-600 z-20">
+          <span className="text-blue-400">
+            Move - Click canvas or minimap, ESC to cancel
           </span>
         </div>
       )}
@@ -2385,10 +2407,10 @@ export function WebGPUGameCanvas() {
         </div>
       )}
 
-      {isPatrolMode && (
+      {commandTargetMode === 'patrol' && (
         <div className="absolute top-4 left-1/2 transform -translate-x-1/2 bg-black/80 px-4 py-2 rounded border border-yellow-600 z-20">
           <span className="text-yellow-400">
-            Patrol Mode - Click destination, ESC to cancel
+            Patrol Mode - Click canvas or minimap, ESC to cancel
           </span>
         </div>
       )}

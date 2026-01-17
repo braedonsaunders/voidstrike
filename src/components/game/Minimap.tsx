@@ -1,7 +1,7 @@
 'use client';
 
 import { useRef, useEffect, useState, useCallback } from 'react';
-import { useGameStore } from '@/store/gameStore';
+import { useGameStore, CommandTargetMode } from '@/store/gameStore';
 import { useGameSetupStore, getPlayerColor, getLocalPlayerId, isSpectatorMode } from '@/store/gameSetupStore';
 import { Game } from '@/engine/core/Game';
 import { Transform } from '@/engine/components/Transform';
@@ -32,6 +32,7 @@ interface Ping {
 export function Minimap() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const selectedUnits = useGameStore((state) => state.selectedUnits);
+  const commandTargetMode = useGameStore((state) => state.commandTargetMode);
   const [isDragging, setIsDragging] = useState(false);
   const [pings, setPings] = useState<Ping[]>([]);
 
@@ -321,17 +322,67 @@ export function Minimap() {
     };
   }, [selectedUnits, pings]); // Camera position read directly from store in draw loop
 
-  // Handle mouse down - start drag or click
+  // Issue command to minimap position based on current target mode
+  const issueCommandAtPosition = useCallback((pos: { x: number; y: number }, mode: CommandTargetMode, shiftKey: boolean) => {
+    const game = Game.getInstance();
+    if (!game) return;
+
+    const selectedIds = useGameStore.getState().selectedUnits;
+    if (selectedIds.length === 0) return;
+
+    // Check if any selected are units (not buildings)
+    const hasUnits = selectedIds.some((id) => {
+      const entity = game.world.getEntity(id);
+      return entity?.get<Unit>('Unit') !== undefined;
+    });
+
+    if (!hasUnits) return;
+
+    const localPlayer = getLocalPlayerId();
+    if (!localPlayer) return;
+
+    // Map mode to command type
+    const commandType = mode === 'attack' ? 'ATTACK' : mode === 'patrol' ? 'PATROL' : 'MOVE';
+
+    game.issueCommand({
+      tick: game.getCurrentTick(),
+      playerId: localPlayer,
+      type: commandType,
+      entityIds: selectedIds,
+      targetPosition: { x: pos.x, y: pos.y },
+    });
+
+    // Add ping animation
+    setPings((prev) => [...prev, {
+      x: pos.x,
+      y: pos.y,
+      startTime: Date.now(),
+      duration: 1000,
+    }]);
+
+    // Clear targeting mode unless shift is held (for queuing)
+    if (!shiftKey) {
+      useGameStore.getState().setCommandTargetMode(null);
+    }
+  }, []);
+
+  // Handle mouse down - start drag, move camera, or issue targeted command
   const handleMouseDown = useCallback((e: React.MouseEvent<HTMLCanvasElement>) => {
     if (e.button === 0) {
-      // Left click - start dragging or move camera
-      setIsDragging(true);
       const pos = screenToMap(e.clientX, e.clientY);
-      if (pos) {
-        useGameStore.getState().moveCameraTo(pos.x, pos.y);
+      if (!pos) return;
+
+      // If in targeting mode, issue the command
+      if (commandTargetMode) {
+        issueCommandAtPosition(pos, commandTargetMode, e.shiftKey);
+        return;
       }
+
+      // Otherwise, start dragging to pan camera
+      setIsDragging(true);
+      useGameStore.getState().moveCameraTo(pos.x, pos.y);
     }
-  }, [screenToMap]);
+  }, [screenToMap, commandTargetMode, issueCommandAtPosition]);
 
   // Handle mouse move while dragging
   const handleMouseMove = useCallback((e: React.MouseEvent<HTMLCanvasElement>) => {
@@ -403,13 +454,29 @@ export function Minimap() {
     }
   }, [screenToMap]);
 
+  // Determine cursor and border color based on targeting mode
+  const getCursorClass = () => {
+    if (isDragging) return 'cursor-grabbing';
+    if (commandTargetMode === 'attack') return 'cursor-crosshair';
+    if (commandTargetMode === 'move') return 'cursor-pointer';
+    if (commandTargetMode === 'patrol') return 'cursor-crosshair';
+    return 'cursor-crosshair';
+  };
+
+  const getBorderClass = () => {
+    if (commandTargetMode === 'attack') return 'border-red-500';
+    if (commandTargetMode === 'move') return 'border-blue-500';
+    if (commandTargetMode === 'patrol') return 'border-yellow-500';
+    return 'border-void-600';
+  };
+
   return (
     <div className="minimap-container relative">
       <canvas
         ref={canvasRef}
         width={MINIMAP_SIZE}
         height={MINIMAP_SIZE}
-        className={`cursor-${isDragging ? 'grabbing' : 'crosshair'}`}
+        className={getCursorClass()}
         onMouseDown={handleMouseDown}
         onMouseMove={handleMouseMove}
         onMouseUp={handleMouseUp}
@@ -417,8 +484,8 @@ export function Minimap() {
         onContextMenu={handleContextMenu}
         onDoubleClick={handleDoubleClick}
       />
-      {/* Minimap border decoration */}
-      <div className="absolute inset-0 pointer-events-none border-2 border-void-600 rounded" />
+      {/* Minimap border decoration - changes color when in targeting mode */}
+      <div className={`absolute inset-0 pointer-events-none border-2 ${getBorderClass()} rounded transition-colors duration-150`} />
       <div className="absolute -top-1 -left-1 w-3 h-3 border-t-2 border-l-2 border-void-400 pointer-events-none" />
       <div className="absolute -top-1 -right-1 w-3 h-3 border-t-2 border-r-2 border-void-400 pointer-events-none" />
       <div className="absolute -bottom-1 -left-1 w-3 h-3 border-b-2 border-l-2 border-void-400 pointer-events-none" />
