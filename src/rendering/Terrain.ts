@@ -814,11 +814,13 @@ export class Terrain {
         const idx = y * this.gridWidth + x;
         const cell = this.sampleTerrain(terrain, x, y, width, height);
         terrainTypeMap[idx] = cell.terrain;
-        // Convert to numeric: 0=walkable ground, 1=ramp, 2=unwalkable
+        // Convert to numeric: 0=walkable ground, 1=ramp, 2=unwalkable, 3=platform
         if (cell.terrain === 'unwalkable') {
           terrainTypeNumeric[idx] = 2.0;
         } else if (cell.terrain === 'ramp') {
           terrainTypeNumeric[idx] = 1.0;
+        } else if (cell.terrain === 'platform') {
+          terrainTypeNumeric[idx] = 3.0;  // Platform gets distinct rock/concrete texture
         } else {
           terrainTypeNumeric[idx] = 0.0;  // ground, unbuildable
         }
