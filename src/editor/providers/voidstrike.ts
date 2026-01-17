@@ -138,6 +138,7 @@ function editorFormatToMapData(data: EditorMapData): MapData {
   const expansions: Expansion[] = [];
   const watchTowers: WatchTower[] = [];
   const destructibles: DestructibleRock[] = [];
+  const decorations: MapDecoration[] = [];
 
   for (const obj of data.objects) {
     if (['main_base', 'natural', 'third', 'fourth', 'gold'].includes(obj.type)) {
@@ -188,6 +189,16 @@ function editorFormatToMapData(data: EditorMapData): MapData {
         y: obj.y,
         health: (obj.properties?.health as number) || 2000,
       });
+    } else if (obj.type.startsWith('decoration_')) {
+      // Extract decoration type from object type (e.g., "decoration_tree" -> "tree")
+      const decorationType = obj.properties?.decorationType as string || obj.type.replace('decoration_', '');
+      decorations.push({
+        type: decorationType,
+        x: obj.x,
+        y: obj.y,
+        scale: (obj.properties?.scale as number) || 1.0,
+        rotation: (obj.properties?.rotation as number) || 0,
+      });
     }
   }
 
@@ -214,7 +225,7 @@ function editorFormatToMapData(data: EditorMapData): MapData {
     watchTowers,
     ramps: [], // Ramps are embedded in terrain, not separate
     destructibles,
-    decorations: [],
+    decorations,
     playerCount: (data.metadata?.playerCount as 2 | 4 | 6 | 8) || 2,
     maxPlayers: (data.metadata?.maxPlayers as number) || 2,
     isRanked: (data.metadata?.isRanked as boolean) || false,
@@ -280,11 +291,19 @@ export const voidstrikeDataProvider: EditorDataProvider = {
   },
 
   async saveMap(data: EditorMapData) {
-    // In a real implementation, this would save to a database or file
-    // For now, we just convert the format and log it
     const mapData = editorFormatToMapData(data);
-    console.log('Saving map:', mapData);
-    // TODO: Implement actual persistence
+
+    // Save to localStorage as fallback persistence
+    // Real implementation would save to a server or IndexedDB
+    try {
+      const savedMaps = JSON.parse(localStorage.getItem('voidstrike_editor_maps') || '{}');
+      savedMaps[data.id] = mapData;
+      localStorage.setItem('voidstrike_editor_maps', JSON.stringify(savedMaps));
+      console.log('[Editor] Map saved to localStorage:', data.id);
+    } catch (e) {
+      console.error('[Editor] Failed to save map:', e);
+      throw new Error('Failed to save map to storage');
+    }
   },
 
   createMap(width: number, height: number, name: string) {
@@ -292,11 +311,40 @@ export const voidstrikeDataProvider: EditorDataProvider = {
   },
 
   async validateMap(data: EditorMapData): Promise<ValidationResult> {
-    // TODO: Use the connectivity validation system
-    // For now, return valid
+    const issues: { type: 'error' | 'warning'; message: string }[] = [];
+
+    // Check for minimum map size
+    if (data.width < 64 || data.height < 64) {
+      issues.push({ type: 'error', message: 'Map must be at least 64x64' });
+    }
+
+    // Check for spawn points
+    const spawns = data.objects.filter(obj => obj.type === 'main_base');
+    if (spawns.length < 2) {
+      issues.push({ type: 'error', message: 'Map must have at least 2 spawn points (main bases)' });
+    }
+
+    // Check player count matches spawns
+    const playerCount = (data.metadata?.playerCount as number) || 2;
+    if (spawns.length !== playerCount) {
+      issues.push({
+        type: 'warning',
+        message: `Player count (${playerCount}) doesn't match spawn count (${spawns.length})`,
+      });
+    }
+
+    // Check for natural expansions
+    const naturals = data.objects.filter(obj => obj.type === 'natural');
+    if (naturals.length < spawns.length) {
+      issues.push({
+        type: 'warning',
+        message: 'Each spawn should have a natural expansion nearby',
+      });
+    }
+
     return {
-      valid: true,
-      issues: [],
+      valid: issues.filter(i => i.type === 'error').length === 0,
+      issues,
     };
   },
 

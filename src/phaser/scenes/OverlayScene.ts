@@ -83,6 +83,10 @@ interface GroundClickIndicator {
 export class OverlayScene extends Phaser.Scene {
   private eventBus: EventBus | null = null;
 
+  // Store event listener registrations for cleanup
+  private eventListeners: Array<{ event: string; handler: (...args: unknown[]) => void }> = [];
+  private resizeHandler: (() => void) | null = null;
+
   // Tactical view elements
   private tacticalMode = false;
   private tacticalGraphics!: Phaser.GameObjects.Graphics;
@@ -210,11 +214,20 @@ export class OverlayScene extends Phaser.Scene {
     this.damageNumberSystem?.setTerrainHeightFunction(fn);
   }
 
+  /**
+   * Helper to register an event listener and track it for cleanup
+   */
+  private on(event: string, handler: (...args: unknown[]) => void): void {
+    if (!this.eventBus) return;
+    this.on(event, handler);
+    this.eventListeners.push({ event, handler });
+  }
+
   private setupEventListeners(): void {
     if (!this.eventBus) return;
 
     // Combat events increase intensity (only for human player)
-    this.eventBus.on('combat:attack', (data: {
+    this.on('combat:attack', (data: {
       attackerPos?: { x: number; y: number };
       targetPos?: { x: number; y: number };
       damage: number;
@@ -238,7 +251,7 @@ export class OverlayScene extends Phaser.Scene {
     });
 
     // Player takes damage - show vignette (only for local player, not in battle simulator)
-    this.eventBus.on('player:damage', (data: { damage: number; position?: { x: number; y: number }; playerId?: string }) => {
+    this.on('player:damage', (data: { damage: number; position?: { x: number; y: number }; playerId?: string }) => {
       // Skip in spectator mode, battle simulator, or if not local player
       if (this.isSpectator()) return;
       if (isBattleSimulatorMode()) return;
@@ -256,7 +269,7 @@ export class OverlayScene extends Phaser.Scene {
     });
 
     // Nuclear launch detected!
-    this.eventBus.on('alert:nuclear', (data: { targetPosition?: { x: number; y: number } }) => {
+    this.on('alert:nuclear', (data: { targetPosition?: { x: number; y: number } }) => {
       this.showAlert('NUCLEAR LAUNCH DETECTED', 0xff0000, 5000);
       this.addScreenEffect({
         type: 'nuke_warning',
@@ -267,7 +280,7 @@ export class OverlayScene extends Phaser.Scene {
     });
 
     // Base under attack (only for local player)
-    this.eventBus.on('alert:underAttack', (data: { position?: { x: number; y: number }; playerId?: string }) => {
+    this.on('alert:underAttack', (data: { position?: { x: number; y: number }; playerId?: string }) => {
       // Skip in spectator mode or if not local player
       if (this.isSpectator()) return;
       if (data.playerId && !isLocalPlayer(data.playerId)) return;
@@ -279,7 +292,7 @@ export class OverlayScene extends Phaser.Scene {
     });
 
     // Unit died (only show vignette for local player's units)
-    this.eventBus.on('unit:died', (data: { position?: { x: number; y: number }; isPlayerUnit?: boolean; playerId?: string }) => {
+    this.on('unit:died', (data: { position?: { x: number; y: number }; isPlayerUnit?: boolean; playerId?: string }) => {
       // Skip screen effects in spectator mode
       if (this.isSpectator()) return;
 
@@ -299,7 +312,7 @@ export class OverlayScene extends Phaser.Scene {
 
     // Player unit takes damage - show vignette (only for local player, not in battle simulator)
     // NOTE: This is a second listener for the same event - both will fire
-    this.eventBus.on('player:damage', (data: { damage: number; position?: { x: number; y: number }; playerId?: string }) => {
+    this.on('player:damage', (data: { damage: number; position?: { x: number; y: number }; playerId?: string }) => {
       // Skip in spectator mode, battle simulator, or if not local player
       if (this.isSpectator()) return;
       if (isBattleSimulatorMode()) return;
@@ -316,7 +329,7 @@ export class OverlayScene extends Phaser.Scene {
     });
 
     // Production complete notifications (only for local player)
-    this.eventBus.on('production:complete', (data: { unitName: string; buildingName?: string; playerId?: string }) => {
+    this.on('production:complete', (data: { unitName: string; buildingName?: string; playerId?: string }) => {
       // Skip in spectator mode or if not local player
       if (this.isSpectator()) return;
       if (data.playerId && !isLocalPlayer(data.playerId)) return;
@@ -325,7 +338,7 @@ export class OverlayScene extends Phaser.Scene {
     });
 
     // Research complete (only for local player)
-    this.eventBus.on('research:complete', (data: { researchName: string; playerId?: string }) => {
+    this.on('research:complete', (data: { researchName: string; playerId?: string }) => {
       // Skip in spectator mode or if not local player
       if (this.isSpectator()) return;
       if (data.playerId && !isLocalPlayer(data.playerId)) return;
@@ -334,7 +347,7 @@ export class OverlayScene extends Phaser.Scene {
     });
 
     // Building complete - only show for local player's buildings
-    this.eventBus.on('building:complete', (data: { buildingName?: string; buildingType?: string; playerId?: string }) => {
+    this.on('building:complete', (data: { buildingName?: string; buildingType?: string; playerId?: string }) => {
       // Skip in spectator mode or if not local player
       if (this.isSpectator()) return;
       if (data.playerId && !isLocalPlayer(data.playerId)) return;
@@ -344,26 +357,26 @@ export class OverlayScene extends Phaser.Scene {
     });
 
     // Resource warnings (only for human player)
-    this.eventBus.on('warning:lowMinerals', () => {
+    this.on('warning:lowMinerals', () => {
       // Skip in spectator mode
       if (this.isSpectator()) return;
       this.showAlert('NOT ENOUGH MINERALS', 0xffaa00, 1500);
     });
 
-    this.eventBus.on('warning:lowVespene', () => {
+    this.on('warning:lowVespene', () => {
       // Skip in spectator mode
       if (this.isSpectator()) return;
       this.showAlert('NOT ENOUGH VESPENE', 0x00ffaa, 1500);
     });
 
-    this.eventBus.on('warning:supplyBlocked', () => {
+    this.on('warning:supplyBlocked', () => {
       // Skip in spectator mode
       if (this.isSpectator()) return;
       this.showAlert('SUPPLY BLOCKED', 0xff6600, 2000);
     });
 
     // Major ability used - show splash effect
-    this.eventBus.on('ability:major', (data: {
+    this.on('ability:major', (data: {
       abilityName: string;
       position: { x: number; y: number };
       color?: number;
@@ -376,7 +389,7 @@ export class OverlayScene extends Phaser.Scene {
     });
 
     // Player eliminated event (may or may not end the game)
-    this.eventBus.on('game:playerEliminated', (data: {
+    this.on('game:playerEliminated', (data: {
       playerId: string;
       reason: string;
       duration: number;
@@ -393,7 +406,7 @@ export class OverlayScene extends Phaser.Scene {
     });
 
     // Victory/Defeat events - game is completely over
-    this.eventBus.on('game:victory', (data: {
+    this.on('game:victory', (data: {
       winner: string;
       loser: string;
       reason: string;
@@ -405,18 +418,18 @@ export class OverlayScene extends Phaser.Scene {
       this.showGameEndOverlay(isVictory, data.duration, data.reason, false, data.winner);
     });
 
-    this.eventBus.on('game:draw', (data: { duration: number }) => {
+    this.on('game:draw', (data: { duration: number }) => {
       // Game is over - no spectating option
       this.showGameEndOverlay(null, data.duration, 'draw', false);
     });
 
     // Match start countdown
-    this.eventBus.on('game:countdown', () => {
+    this.on('game:countdown', () => {
       this.showMatchCountdown();
     });
 
     // Attack target indicator - shows animated circle when right-clicking to attack
-    this.eventBus.on('command:attack', (data: {
+    this.on('command:attack', (data: {
       entityIds?: number[];
       targetEntityId?: number;
       targetPosition?: { x: number; y: number };
@@ -434,7 +447,7 @@ export class OverlayScene extends Phaser.Scene {
     });
 
     // Ground click indicator for move commands
-    this.eventBus.on('command:moveGround', (data: {
+    this.on('command:moveGround', (data: {
       targetPosition: { x: number; y: number };
       playerId?: string;
     }) => {
@@ -445,7 +458,7 @@ export class OverlayScene extends Phaser.Scene {
     });
 
     // Ground click indicator for attack-move commands (clicking ground in attack mode)
-    this.eventBus.on('command:attackGround', (data: {
+    this.on('command:attackGround', (data: {
       targetPosition: { x: number; y: number };
       playerId?: string;
     }) => {
@@ -456,7 +469,7 @@ export class OverlayScene extends Phaser.Scene {
     });
 
     // UI error messages - show as alerts so user can see what went wrong
-    this.eventBus.on('ui:error', (data: { message: string; playerId?: string }) => {
+    this.on('ui:error', (data: { message: string; playerId?: string }) => {
       // Skip in spectator mode
       if (this.isSpectator()) return;
       // Only show errors from local player (skip AI player errors)
@@ -774,10 +787,11 @@ export class OverlayScene extends Phaser.Scene {
     // Draw the vignette pattern to the texture
     this.redrawVignetteTexture();
 
-    // Handle resize
-    this.scale.on('resize', () => {
+    // Handle resize - store handler for cleanup
+    this.resizeHandler = () => {
       this.redrawVignetteTexture();
-    });
+    };
+    this.scale.on('resize', this.resizeHandler);
   }
 
   /**
@@ -2189,6 +2203,20 @@ export class OverlayScene extends Phaser.Scene {
   }
 
   destroy(): void {
+    // Clean up all EventBus listeners to prevent memory leaks
+    if (this.eventBus) {
+      for (const { event, handler } of this.eventListeners) {
+        this.eventBus.off(event, handler);
+      }
+      this.eventListeners = [];
+    }
+
+    // Clean up Phaser scale resize listener
+    if (this.resizeHandler) {
+      this.scale.off('resize', this.resizeHandler);
+      this.resizeHandler = null;
+    }
+
     // Clean up all graphics and containers
     this.tacticalGraphics?.destroy();
     this.threatZoneGraphics?.destroy();
