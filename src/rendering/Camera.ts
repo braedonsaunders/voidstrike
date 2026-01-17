@@ -573,6 +573,14 @@ export class RTSCamera {
     return { width: this.screenWidth, height: this.screenHeight };
   }
 
+  // Set screen dimensions externally (for when container resizes without window resize event)
+  public setScreenDimensions(width: number, height: number): void {
+    this.screenWidth = width;
+    this.screenHeight = height;
+    this.camera.aspect = width / height;
+    this.camera.updateProjectionMatrix();
+  }
+
   public dispose(): void {
     if (typeof window === 'undefined') return;
 

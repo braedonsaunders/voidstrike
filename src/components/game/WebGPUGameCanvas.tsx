@@ -1172,8 +1172,10 @@ export function WebGPUGameCanvas() {
         const renderer = renderContextRef.current.renderer;
         renderer.setPixelRatio(pixelRatio);
         renderer.setSize(width, height, false); // false = don't update CSS, canvas stays fullscreen
-        cameraRef.current.camera.aspect = width / height;
-        cameraRef.current.camera.updateProjectionMatrix();
+
+        // Sync camera's internal screen dimensions for accurate screenToWorld conversion
+        // This is critical when DevTools opens/closes (ResizeObserver fires but window resize may not)
+        cameraRef.current.setScreenDimensions(width, height);
 
         // Update PostProcessing display size
         if (renderPipelineRef.current) {
