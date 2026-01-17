@@ -90,19 +90,22 @@ export const BattleSimulatorPanel = memo(function BattleSimulatorPanel() {
       }
     }
 
-    // Team 1 attack-moves to the right side
+    // Both teams attack-move to the CENTER of the arena
+    // This ensures units converge and engage regardless of spawn positions
+    const centerX = ARENA_WIDTH / 2;
+    const centerY = ARENA_HEIGHT / 2;
+
     if (team1Units.length > 0) {
       game.eventBus.emit('command:attack', {
         entityIds: team1Units,
-        targetPosition: { x: ARENA_WIDTH - 10, y: ARENA_HEIGHT / 2 },
+        targetPosition: { x: centerX, y: centerY },
       });
     }
 
-    // Team 2 attack-moves to the left side
     if (team2Units.length > 0) {
       game.eventBus.emit('command:attack', {
         entityIds: team2Units,
-        targetPosition: { x: 10, y: ARENA_HEIGHT / 2 },
+        targetPosition: { x: centerX, y: centerY },
       });
     }
 
@@ -126,6 +129,12 @@ export const BattleSimulatorPanel = memo(function BattleSimulatorPanel() {
 
   const handleClearAll = useCallback(() => {
     const game = Game.getInstance();
+
+    // Clear selection first (important: must happen before destroying entities)
+    // This ensures selection rings are properly cleaned up even when game is paused
+    useGameStore.getState().selectUnits([]);
+    game.eventBus.emit('selection:clear', {});
+
     // Get all unit entities and destroy them
     const entities = game.world.getEntitiesWith('Unit', 'Selectable');
     for (const entity of entities) {
