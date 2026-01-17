@@ -625,11 +625,16 @@ export class Terrain {
     const RAIL_THICKNESS = 0.05;    // Thickness of horizontal rails
     const POST_SPACING = 1.0;       // One post per cell edge
 
-    // Helper to check if a cell is a platform or ramp
-    const isPlatformOrRamp = (x: number, y: number): boolean => {
+    // Helper to check if a cell is a platform (not ramp)
+    const isPlatform = (x: number, y: number): boolean => {
       if (x < 0 || x >= width || y < 0 || y >= height) return false;
-      const cell = terrain[y][x];
-      return cell.terrain === 'platform' || cell.terrain === 'ramp';
+      return terrain[y][x].terrain === 'platform';
+    };
+
+    // Helper to check if a cell is a ramp
+    const isRamp = (x: number, y: number): boolean => {
+      if (x < 0 || x >= width || y < 0 || y >= height) return false;
+      return terrain[y][x].terrain === 'ramp';
     };
 
     // Helper to get cell elevation
@@ -682,10 +687,11 @@ export class Terrain {
       }
     };
 
-    // Scan terrain for platform edges
+    // Scan terrain for platform edges (guardrails only on platforms, not ramps)
     for (let y = 0; y < height; y++) {
       for (let x = 0; x < width; x++) {
-        if (!isPlatformOrRamp(x, y)) continue;
+        // Only place guardrails on platforms, not ramps
+        if (!isPlatform(x, y)) continue;
 
         const elevation = getElevation(x, y);
         const baseZ = elevationToHeight(elevation);
@@ -702,18 +708,11 @@ export class Terrain {
           const neighborX = x + edge.dx;
           const neighborY = y + edge.dy;
 
-          // Only add guardrail if neighbor is NOT a platform/ramp at same elevation
-          // or if it's out of bounds
-          const neighborIsPlatform = isPlatformOrRamp(neighborX, neighborY);
           const neighborElevation = getElevation(neighborX, neighborY);
           const sameElevation = Math.abs(neighborElevation - elevation) < 20; // ~0.8 height diff
 
-          // Skip if neighbor is platform at same elevation (no guardrail needed)
-          if (neighborIsPlatform && sameElevation) continue;
-
-          // Skip if this cell is a ramp connecting to another elevation
-          // (ramps shouldn't have guardrails on the connecting side)
-          if (terrain[y][x].terrain === 'ramp' && neighborIsPlatform) continue;
+          // Skip if neighbor is platform at same elevation (no guardrail between connected platforms)
+          if (isPlatform(neighborX, neighborY) && sameElevation) continue;
 
           // Calculate edge center position (in local terrain coordinates)
           const edgeCenterX = (edge.startX + edge.endX) / 2 * cellSize;
