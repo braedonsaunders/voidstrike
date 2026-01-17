@@ -814,11 +814,16 @@ export class Game {
     }
 
     // Clean up old ticks (shouldn't happen, but safety check)
+    // Collect keys first to avoid mutating Map during iteration
+    const staleTicks: number[] = [];
     for (const tick of this.commandQueue.keys()) {
       if (tick < this.currentTick) {
-        console.warn(`[Game] Dropping stale commands from tick ${tick}`);
-        this.commandQueue.delete(tick);
+        staleTicks.push(tick);
       }
+    }
+    for (const tick of staleTicks) {
+      console.warn(`[Game] Dropping stale commands from tick ${tick}`);
+      this.commandQueue.delete(tick);
     }
   }
 

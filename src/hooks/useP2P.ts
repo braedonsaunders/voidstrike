@@ -45,6 +45,7 @@ export interface UseP2PReturn {
   disconnect: () => void;
   sendMessage: (data: unknown) => void;
   onMessage: (handler: (data: unknown) => void) => void;
+  offMessage: (handler: (data: unknown) => void) => void;
 }
 
 export function useP2P(): UseP2PReturn {
@@ -68,6 +69,8 @@ export function useP2P(): UseP2PReturn {
     return () => {
       nostrRef.current?.destroy();
       pcRef.current?.close();
+      // Clear message handlers to prevent memory leaks
+      messageHandlersRef.current.length = 0;
     };
   }, []);
 
@@ -414,6 +417,16 @@ export function useP2P(): UseP2PReturn {
     messageHandlersRef.current.push(handler);
   }, []);
 
+  /**
+   * Unregister a message handler
+   */
+  const offMessage = useCallback((handler: (data: unknown) => void) => {
+    const index = messageHandlersRef.current.indexOf(handler);
+    if (index !== -1) {
+      messageHandlersRef.current.splice(index, 1);
+    }
+  }, []);
+
   return {
     state,
     hostGame,
@@ -424,5 +437,6 @@ export function useP2P(): UseP2PReturn {
     disconnect,
     sendMessage,
     onMessage,
+    offMessage,
   };
 }

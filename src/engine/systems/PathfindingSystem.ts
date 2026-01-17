@@ -31,8 +31,8 @@ const MAX_STUCK_TICKS = 20;
 const MIN_MOVEMENT_THRESHOLD = 0.2;
 const REPATH_INTERVAL_TICKS = 60;
 
-// Failed path caching
-const FAILED_PATH_CACHE_TTL = 10000;
+// Failed path caching - use ticks for determinism (200 ticks = 10s at 20 TPS)
+const FAILED_PATH_CACHE_TTL_TICKS = 200;
 const FAILED_PATH_CACHE_SIZE = 200;
 
 interface PathRequest {
@@ -169,7 +169,7 @@ interface UnitPathState {
 }
 
 interface FailedPathEntry {
-  timestamp: number;
+  tick: number; // Game tick for deterministic timing
   failureCount: number;
 }
 
@@ -490,7 +490,9 @@ export class PathfindingSystem extends System {
     const entry = this.failedPathCache.get(key);
     if (!entry) return false;
 
-    if (Date.now() - entry.timestamp > FAILED_PATH_CACHE_TTL) {
+    // Use tick-based timing for determinism across clients
+    const currentTick = this.game.getCurrentTick();
+    if (currentTick - entry.tick > FAILED_PATH_CACHE_TTL_TICKS) {
       this.failedPathCache.delete(key);
       const idx = this.failedPathCacheKeys.indexOf(key);
       if (idx !== -1) this.failedPathCacheKeys.splice(idx, 1);
@@ -506,14 +508,14 @@ export class PathfindingSystem extends System {
     destY: number
   ): void {
     const key = `${entityId}_${Math.floor(destX)}_${Math.floor(destY)}`;
-    const now = Date.now();
+    const currentTick = this.game.getCurrentTick();
 
     if (this.failedPathCache.size >= FAILED_PATH_CACHE_SIZE) {
       const oldKey = this.failedPathCacheKeys.shift();
       if (oldKey) this.failedPathCache.delete(oldKey);
     }
 
-    this.failedPathCache.set(key, { timestamp: now, failureCount: 1 });
+    this.failedPathCache.set(key, { tick: currentTick, failureCount: 1 });
     this.failedPathCacheKeys.push(key);
   }
 

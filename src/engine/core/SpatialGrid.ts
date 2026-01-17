@@ -122,10 +122,12 @@ export class SpatialGrid {
   /**
    * Query all entities within a radius of a point
    * Returns entity IDs - caller must look up actual entities
-   * PERF: Reuses pre-allocated arrays to avoid GC pressure
+   *
+   * @param out Optional caller-provided array for zero-allocation hot paths.
+   *            If not provided, returns a copy to prevent shared reference bugs.
    */
-  public queryRadius(x: number, y: number, radius: number): number[] {
-    // PERF: Reuse pre-allocated arrays instead of creating new ones every call
+  public queryRadius(x: number, y: number, radius: number, out?: number[]): number[] {
+    // PERF: Reuse pre-allocated arrays for internal computation
     this._queryResults.length = 0;
     this._querySeen.clear();
     this._occupiedCells.length = 0;
@@ -154,15 +156,27 @@ export class SpatialGrid {
       }
     }
 
-    return this._queryResults;
+    // If caller provides output array, copy into it (zero allocation for caller)
+    if (out) {
+      out.length = 0;
+      for (let i = 0; i < this._queryResults.length; i++) {
+        out.push(this._queryResults[i]);
+      }
+      return out;
+    }
+
+    // Return copy to prevent shared reference corruption
+    return [...this._queryResults];
   }
 
   /**
    * Query all entities within an AABB (axis-aligned bounding box)
-   * PERF: Reuses pre-allocated arrays to avoid GC pressure
+   *
+   * @param out Optional caller-provided array for zero-allocation hot paths.
+   *            If not provided, returns a copy to prevent shared reference bugs.
    */
-  public queryRect(minX: number, minY: number, maxX: number, maxY: number): number[] {
-    // PERF: Reuse pre-allocated arrays
+  public queryRect(minX: number, minY: number, maxX: number, maxY: number, out?: number[]): number[] {
+    // PERF: Reuse pre-allocated arrays for internal computation
     this._queryResults.length = 0;
     this._querySeen.clear();
 
@@ -195,7 +209,17 @@ export class SpatialGrid {
       }
     }
 
-    return this._queryResults;
+    // If caller provides output array, copy into it (zero allocation for caller)
+    if (out) {
+      out.length = 0;
+      for (let i = 0; i < this._queryResults.length; i++) {
+        out.push(this._queryResults[i]);
+      }
+      return out;
+    }
+
+    // Return copy to prevent shared reference corruption
+    return [...this._queryResults];
   }
 
   /**
