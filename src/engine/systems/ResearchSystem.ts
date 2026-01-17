@@ -167,7 +167,7 @@ export class ResearchSystem extends System {
       tech_center: [
         'infantry_weapons_1', 'infantry_weapons_2', 'infantry_weapons_3',
         'infantry_armor_1', 'infantry_armor_2', 'infantry_armor_3',
-        'hi_sec_auto_tracking', 'building_armor',
+        'auto_tracking', 'building_armor',
       ],
       arsenal: [
         'vehicle_weapons_1', 'vehicle_weapons_2', 'vehicle_weapons_3',
@@ -179,6 +179,7 @@ export class ResearchSystem extends System {
       infantry_bay: ['combat_stim', 'combat_shield', 'concussive_shells'],
       forge: ['bombardment_systems', 'drilling_claws'],
       hangar: ['cloaking_field', 'medical_reactor'],
+      ops_center: ['stealth_systems', 'enhanced_reactor'],
     };
 
     const available = researchMap[buildingId];

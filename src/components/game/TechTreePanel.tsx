@@ -59,7 +59,7 @@ const TECH_CATEGORIES: TechCategory[] = [
   {
     name: 'Structures',
     building: 'Engineering Bay',
-    upgrades: ['hi_sec_auto_tracking', 'building_armor'],
+    upgrades: ['auto_tracking', 'building_armor'],
   },
 ];
 

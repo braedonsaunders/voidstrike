@@ -36,13 +36,6 @@ export {
 
 // Terrain materials
 export {
-  createProceduralTerrainMaterial,
-  updateProceduralTerrainMaterial,
-  getBiomeShaderConfig as getProceduralBiomeConfig,
-  type ProceduralTerrainConfig,
-} from './ProceduralTerrainMaterial';
-
-export {
   createTextureTerrainMaterial,
   updateTextureTerrainMaterial,
   getBiomeTextureConfig,

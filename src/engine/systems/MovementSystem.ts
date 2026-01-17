@@ -169,6 +169,7 @@ export class MovementSystem extends System {
 
   private setupEventListeners(): void {
     this.game.eventBus.on('command:move', this.handleMoveCommand.bind(this));
+    this.game.eventBus.on('command:attackMove', this.handleAttackMoveCommand.bind(this));
     this.game.eventBus.on('command:patrol', this.handlePatrolCommand.bind(this));
     this.game.eventBus.on('command:formation', this.handleFormationCommand.bind(this));
 
@@ -568,6 +569,36 @@ export class MovementSystem extends System {
           -(pos.y - transform.y),
           pos.x - transform.x
         );
+      }
+    }
+  }
+
+  private handleAttackMoveCommand(data: {
+    entityIds: number[];
+    targetPosition: { x: number; y: number };
+    queue?: boolean;
+  }): void {
+    const { entityIds, targetPosition, queue } = data;
+
+    for (const entityId of entityIds) {
+      const entity = this.world.getEntity(entityId);
+      if (!entity) continue;
+
+      const unit = entity.get<Unit>('Unit');
+      const transform = entity.get<Transform>('Transform');
+      if (!unit || !transform) continue;
+
+      if (queue) {
+        unit.queueCommand({
+          type: 'attackmove',
+          targetX: targetPosition.x,
+          targetY: targetPosition.y,
+        });
+      } else {
+        unit.setAttackMoveTarget(targetPosition.x, targetPosition.y);
+        unit.path = [];
+        unit.pathIndex = 0;
+        this.requestPathWithCooldown(entityId, targetPosition.x, targetPosition.y, true);
       }
     }
   }

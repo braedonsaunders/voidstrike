@@ -202,8 +202,8 @@ export class EnhancedAISystem extends System {
       }
     });
 
-    // Track combat events
-    this.game.eventBus.on('unit:underAttack', (data: { playerId: string }) => {
+    // Track combat events - AI responds to under attack alerts
+    this.game.eventBus.on('alert:underAttack', (data: { playerId: string }) => {
       const ai = this.aiPlayers.get(data.playerId);
       if (ai) {
         ai.state = 'defending';

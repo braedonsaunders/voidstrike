@@ -157,7 +157,6 @@ export type GameCommandType =
   | 'UNLOAD_BUNKER'
   | 'RALLY'
   | 'GATHER'
-  | 'RETURN_CARGO'
   | 'REPAIR'
   | 'HEAL'
   | 'CLOAK'

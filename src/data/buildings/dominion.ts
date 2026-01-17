@@ -41,7 +41,7 @@ export const BUILDING_DEFINITIONS: Record<string, BuildingDefinition> = {
     sightRange: 33, // Large vision radius for main base
     supplyProvided: 11,
     canProduce: ['fabricator'],
-    canResearch: ['sensor_sweep', 'drone', 'supply_drop'],
+    canResearch: ['sensor_sweep', 'supply_drop'],
     canLiftOff: true,
   },
 

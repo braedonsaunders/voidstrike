@@ -527,44 +527,6 @@ export function timeout(
 }
 
 /**
- * Limit - Limits how many times child can run per time window
- */
-export function rateLimit(
-  name: string,
-  maxRuns: number,
-  windowTicks: number,
-  child: BehaviorNode
-): BehaviorNode {
-  const historyKey = `__rl_${name}_${++nodeIdCounter}`;
-
-  return createNode(
-    (context: BehaviorContext) => {
-      let history = context.blackboard.get<number[]>(historyKey) ?? [];
-
-      // Clean old entries
-      const cutoff = context.tick - windowTicks;
-      history = history.filter((t) => t > cutoff);
-
-      if (history.length >= maxRuns) {
-        return 'failure';
-      }
-
-      const status = child(context);
-
-      if (status === 'success') {
-        history.push(context.tick);
-        context.blackboard.set(historyKey, history);
-      }
-
-      return status;
-    },
-    'rateLimit',
-    name,
-    `Limits to ${maxRuns} runs per ${windowTicks} ticks`
-  );
-}
-
-/**
  * Reactive - Re-evaluates condition each tick, can interrupt running child
  */
 export function reactive(
