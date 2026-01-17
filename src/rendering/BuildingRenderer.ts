@@ -89,6 +89,10 @@ export class BuildingRenderer {
   private frustumMatrix: THREE.Matrix4 = new THREE.Matrix4();
   private camera: THREE.Camera | null = null;
 
+  // PERF: Cached sorted entity list to avoid spread+sort every frame
+  private cachedSortedEntities: import('@/engine/ecs/Entity').Entity[] = [];
+  private cachedEntityCount: number = -1;
+
   // Shared materials
   private constructingMaterial: THREE.MeshStandardMaterial;
   private selectionMaterial: THREE.MeshBasicMaterial;
@@ -566,7 +570,18 @@ export class BuildingRenderer {
 
     // TAA: Sort entities by ID for stable instance ordering
     // This ensures previous/current matrix pairs are aligned correctly for velocity
-    const entities = [...this.world.getEntitiesWith('Transform', 'Building')].sort((a, b) => a.id - b.id);
+    // PERF: Only re-sort when entity count changes (add/remove) to avoid O(n log n) every frame
+    const rawEntities = this.world.getEntitiesWith('Transform', 'Building');
+    if (rawEntities.length !== this.cachedEntityCount) {
+      // Rebuild cache - entity count changed (add/remove occurred)
+      this.cachedSortedEntities.length = 0;
+      for (let i = 0; i < rawEntities.length; i++) {
+        this.cachedSortedEntities.push(rawEntities[i]);
+      }
+      this.cachedSortedEntities.sort((a, b) => a.id - b.id);
+      this.cachedEntityCount = rawEntities.length;
+    }
+    const entities = this.cachedSortedEntities;
     // PERF: Reuse pre-allocated Set instead of creating new one every frame
     this._currentIds.clear();
 

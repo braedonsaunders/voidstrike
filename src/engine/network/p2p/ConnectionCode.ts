@@ -153,9 +153,9 @@ export async function generateOfferCode(
   options?: { mode?: '1v1' | '2v2'; map?: string }
 ): Promise<{ code: string; pc: RTCPeerConnection }> {
   // Create data channel (required to generate offer with media)
+  // CRITICAL: ordered:true ensures commands arrive in correct sequence for lockstep
   const channel = pc.createDataChannel('game', {
-    ordered: false,
-    maxRetransmits: 2,
+    ordered: true,
   });
 
   // Create offer

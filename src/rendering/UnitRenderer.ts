@@ -112,6 +112,10 @@ export class UnitRenderer {
   private visualRotations: Map<number, number> = new Map();
   private readonly ROTATION_SMOOTH_FACTOR = 0.15; // Exponential smoothing (0.1=slow, 0.3=fast)
 
+  // PERF: Cached sorted entity list to avoid spread+sort every frame
+  private cachedSortedEntities: import('@/engine/ecs/Entity').Entity[] = [];
+  private cachedEntityCount: number = -1; // Track count to detect changes
+
   constructor(scene: THREE.Scene, world: World, visionSystem?: VisionSystem, terrain?: Terrain) {
     this.scene = scene;
     this.world = world;
@@ -606,7 +610,18 @@ export class UnitRenderer {
 
     // TAA: Sort entities by ID for stable instance ordering
     // This ensures previous/current matrix pairs are aligned correctly for velocity
-    const entities = [...this.world.getEntitiesWith('Transform', 'Unit')].sort((a, b) => a.id - b.id);
+    // PERF: Only re-sort when entity count changes (add/remove) to avoid O(n log n) every frame
+    const rawEntities = this.world.getEntitiesWith('Transform', 'Unit');
+    if (rawEntities.length !== this.cachedEntityCount) {
+      // Rebuild cache - entity count changed (add/remove occurred)
+      this.cachedSortedEntities.length = 0;
+      for (let i = 0; i < rawEntities.length; i++) {
+        this.cachedSortedEntities.push(rawEntities[i]);
+      }
+      this.cachedSortedEntities.sort((a, b) => a.id - b.id);
+      this.cachedEntityCount = rawEntities.length;
+    }
+    const entities = this.cachedSortedEntities;
     // PERF: Reuse pre-allocated Set instead of creating new one every frame
     this._currentIds.clear();
 

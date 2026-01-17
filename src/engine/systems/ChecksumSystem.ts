@@ -369,7 +369,14 @@ export class ChecksumSystem extends System {
         }
         ticksToRemove.push(tick);
       } else if (currentTick - tick > this.config.desyncConfirmationTicks) {
-        // Too old - remove without checking
+        // CRITICAL: Unable to verify checksums for old tick - potential undetected desync
+        // This shouldn't happen in normal gameplay; log as warning
+        console.warn(`[ChecksumSystem] UNVERIFIED: Could not verify checksums for tick ${tick} (${pendingList.length} pending). Local computation may be delayed.`);
+        // If we have pending remote checksums but no local, something is wrong
+        // In production, this could indicate desync or severe lag
+        if (pendingList.length > 0) {
+          console.error(`[ChecksumSystem] Potential desync: remote checksums received but local not computed for tick ${tick}`);
+        }
         ticksToRemove.push(tick);
       }
     }

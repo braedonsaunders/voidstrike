@@ -13,6 +13,7 @@ import { WALL_DEFINITIONS } from '@/data/buildings/walls';
 import { useGameStore } from '@/store/gameStore';
 import { isLocalPlayer, getLocalPlayerId } from '@/store/gameSetupStore';
 import { debugBuildingPlacement } from '@/utils/debugLogger';
+import { SeededRandom } from '@/utils/math';
 
 /**
  * BuildingPlacementSystem handles placing new buildings when workers construct them.
@@ -40,6 +41,9 @@ export class BuildingPlacementSystem extends System {
 
   // Wall line ID counter for tracking wall segments placed together
   private nextWallLineId = 1;
+
+  // Deterministic RNG for worker wandering (multiplayer sync)
+  private readonly wanderRng = new SeededRandom(1);
 
   constructor(game: Game) {
     super(game);
@@ -1206,14 +1210,17 @@ export class BuildingPlacementSystem extends System {
         // Initialize or update wander target
         if (!wander || wander.timer <= 0) {
           // Pick new random position inside building footprint
+          // Use deterministic RNG seeded by entity ID + tick for multiplayer sync
+          const currentTick = this.game.getCurrentTick();
+          this.wanderRng.reseed(entity.id * 31337 + currentTick);
           const halfW = building.width * 0.35;
           const halfH = building.height * 0.35;
-          const newX = buildingTransform.x + (Math.random() - 0.5) * halfW * 2;
-          const newY = buildingTransform.y + (Math.random() - 0.5) * halfH * 2;
+          const newX = buildingTransform.x + (this.wanderRng.next() - 0.5) * halfW * 2;
+          const newY = buildingTransform.y + (this.wanderRng.next() - 0.5) * halfH * 2;
           wander = {
             targetX: newX,
             targetY: newY,
-            timer: 0.8 + Math.random() * 1.2, // Wander to new spot every 0.8-2 seconds
+            timer: 0.8 + this.wanderRng.next() * 1.2, // Wander to new spot every 0.8-2 seconds
           };
           this.workerWanderState.set(entity.id, wander);
         }
