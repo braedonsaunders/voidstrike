@@ -717,6 +717,9 @@ export class Terrain {
           // Skip if neighbor is platform at same elevation (no guardrail between connected platforms)
           if (isPlatform(neighborX, neighborY) && sameElevation) continue;
 
+          // Skip if neighbor is a ramp (leave entrance open for units)
+          if (isRamp(neighborX, neighborY)) continue;
+
           // Calculate edge center position (in local terrain coordinates)
           const edgeCenterX = (edge.startX + edge.endX) / 2 * cellSize;
           const edgeCenterY = -((edge.startY + edge.endY) / 2) * cellSize; // Negative Y for terrain rotation
