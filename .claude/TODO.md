@@ -613,6 +613,7 @@
 - [x] Fixed blueprint persistence bug - Preview clears on invalid placement without shift key
 - [x] SC2-style worker construction - Workers wander inside building footprint during active construction
 - [x] Scaffolding visibility fix - Yellow scaffolding only visible during ACTIVE construction (not paused/waiting)
+- [x] Scaffolding cleanup on instancing - All construction effects (scaffold, dust, blueprint) now cleaned up when building switches to instanced rendering
 
 ### Addon System Implementation (January 2026)
 - [x] Production Module (Reactor) button added to CommandCard UI

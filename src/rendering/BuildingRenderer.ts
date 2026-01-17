@@ -676,11 +676,26 @@ export class BuildingRenderer {
             existingMesh.healthBar.visible = false;
             existingMesh.progressBar.visible = false;
 
-            // CRITICAL: Hide/remove construction effect when switching to instancing
+            // CRITICAL: Clean up all construction effects when switching to instancing
             if (existingMesh.constructionEffect) {
               this.scene.remove(existingMesh.constructionEffect);
               this.disposeGroup(existingMesh.constructionEffect);
               existingMesh.constructionEffect = null;
+            }
+            if (existingMesh.scaffoldEffect) {
+              this.scene.remove(existingMesh.scaffoldEffect);
+              this.disposeGroup(existingMesh.scaffoldEffect);
+              existingMesh.scaffoldEffect = null;
+            }
+            if (existingMesh.groundDustEffect) {
+              this.scene.remove(existingMesh.groundDustEffect);
+              this.disposeGroup(existingMesh.groundDustEffect);
+              existingMesh.groundDustEffect = null;
+            }
+            if (existingMesh.blueprintEffect) {
+              this.scene.remove(existingMesh.blueprintEffect);
+              this.disposeGroup(existingMesh.blueprintEffect);
+              existingMesh.blueprintEffect = null;
             }
 
             // Ensure materials are properly reset for when building returns to individual rendering
