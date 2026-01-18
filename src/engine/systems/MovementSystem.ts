@@ -1745,6 +1745,17 @@ export class MovementSystem extends System {
       // Check arrival
       if (distance < this.arrivalThreshold) {
         if (unit.path.length > 0 && unit.pathIndex < unit.path.length - 1) {
+          // RAMP DEBUG: Log waypoint advancement
+          const nextWaypoint = unit.path[unit.pathIndex + 1];
+          const terrainCell = this.mapData?.terrain?.[Math.floor(transform.y)]?.[Math.floor(transform.x)];
+          const nextCell = nextWaypoint ? this.mapData?.terrain?.[Math.floor(nextWaypoint.y)]?.[Math.floor(nextWaypoint.x)] : null;
+          if (terrainCell?.terrain === 'ramp' || nextCell?.terrain === 'ramp') {
+            console.log(
+              `[MovementSystem] RAMP: Advancing waypoint ${unit.pathIndex} -> ${unit.pathIndex + 1} of ${unit.path.length}. ` +
+              `Current: (${transform.x.toFixed(1)}, ${transform.y.toFixed(1)}) terrain=${terrainCell?.terrain}, ` +
+              `Next: (${nextWaypoint?.x.toFixed(1)}, ${nextWaypoint?.y.toFixed(1)}) terrain=${nextCell?.terrain}`
+            );
+          }
           unit.pathIndex++;
         } else if (unit.state === 'patrolling') {
           unit.nextPatrolPoint();
@@ -1850,6 +1861,17 @@ export class MovementSystem extends System {
           const velMagSq = finalVx * finalVx + finalVy * finalVy;
           const minVelSq = 0.01 * 0.01;
           if (velMagSq < minVelSq && distance > this.arrivalThreshold) {
+            // RAMP DEBUG: Log when crowd returns zero velocity
+            if (distance > 2 && unit.path.length > 0) {
+              const terrainCell = this.mapData?.terrain?.[Math.floor(transform.y)]?.[Math.floor(transform.x)];
+              const targetCell = this.mapData?.terrain?.[Math.floor(targetY)]?.[Math.floor(targetX)];
+              console.warn(
+                `[MovementSystem] RAMP DEBUG: Crowd returned zero velocity for entity ${entity.id}. ` +
+                `Pos: (${transform.x.toFixed(1)}, ${transform.y.toFixed(1)}) terrain=${terrainCell?.terrain}, ` +
+                `Target: (${targetX.toFixed(1)}, ${targetY.toFixed(1)}) terrain=${targetCell?.terrain}, ` +
+                `Distance: ${distance.toFixed(1)}, Path: ${unit.pathIndex}/${unit.path.length}`
+              );
+            }
             // Crowd returned near-zero velocity - use direct movement
             if (distance > 0.01) {
               finalVx = (dx / distance) * unit.maxSpeed;
