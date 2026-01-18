@@ -71,9 +71,15 @@ VOIDSTRIKE is a browser-based RTS game implementing:
 | Instanced rendering | InstancedMesh for units, buildings, selection rings |
 | Object pooling | Particle systems, spatial query results |
 | Archetype caching | O(1) query cache with version invalidation |
-| GPU compute ready | Infrastructure for culling/vision compute shaders |
+| GPU compute ready | Infrastructure exists but uses CPU fallback (TSL compute experimental) |
 | Web Workers | GameLoop, AI, Pathfinding, Vision offloaded |
 | Temporal techniques | TAA, temporal AO, temporal SSR (75% cost reduction) |
+
+**Important Clarification - GPU Compute:**
+- **Rendering**: WebGPU with WebGL fallback
+- **Post-processing**: GPU shaders (TSL for TAA, SSGI, GTAO, SSR, Bloom, Volumetric Fog)
+- **Culling/Vision compute**: CPU-based with typed arrays, writes to GPU textures
+- **Status**: Infrastructure ready for GPU compute migration when Three.js TSL compute nodes mature
 
 ### Performance Issues Found
 
