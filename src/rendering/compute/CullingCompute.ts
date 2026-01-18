@@ -35,11 +35,12 @@ const instanceIndex = (TSL as any).instanceIndex;
 const atomicAdd = (TSL as any).atomicAdd;
 const atomicStore = (TSL as any).atomicStore;
 
-// StorageBufferAttribute and IndirectStorageBufferAttribute exist in three/webgpu
-// but lack TypeScript declarations - access dynamically
+// StorageBufferAttribute, StorageInstancedBufferAttribute, and IndirectStorageBufferAttribute
+// exist in three/webgpu but lack TypeScript declarations - access dynamically
 // eslint-disable-next-line @typescript-eslint/no-require-imports
 import * as THREE_WEBGPU from 'three/webgpu';
 const StorageBufferAttribute = (THREE_WEBGPU as any).StorageBufferAttribute;
+const StorageInstancedBufferAttribute = (THREE_WEBGPU as any).StorageInstancedBufferAttribute;
 const IndirectStorageBufferAttribute = (THREE_WEBGPU as any).IndirectStorageBufferAttribute;
 
 import { GPUUnitBuffer, UnitSlot, createIndirectArgsBuffer } from './GPUUnitBuffer';
@@ -111,10 +112,12 @@ export class CullingCompute {
   private frustumPlanesData = new Float32Array(24); // 6 planes * 4 floats each
   private frustumPlanesStorage: ReturnType<typeof storage> | null = null;
 
-  // GPU storage buffers
+  // GPU storage buffers - wrapped in StorageBufferAttribute for TSL compatibility
+  private transformStorageAttribute: any | null = null; // StorageBufferAttribute
+  private metadataStorageAttribute: any | null = null;  // StorageBufferAttribute
   private transformStorageBuffer: ReturnType<typeof storage> | null = null;
   private metadataStorageBuffer: ReturnType<typeof storage> | null = null;
-  private visibleIndicesBuffer: any | null = null; // StorageBufferAttribute
+  private visibleIndicesAttribute: any | null = null; // StorageBufferAttribute
   private visibleIndicesStorage: ReturnType<typeof storage> | null = null;
   private indirectArgsAttribute: any | null = null; // IndirectStorageBufferAttribute
   private indirectArgsStorage: ReturnType<typeof storage> | null = null;
@@ -125,7 +128,11 @@ export class CullingCompute {
   // Counter for visible units (atomic) - one counter per (unitType, LOD, player) group
   // For simplicity, we use a single global counter and rebuild instance buffers
   private visibleCountBuffer: Uint32Array = new Uint32Array(1);
+  private visibleCountAttribute: any | null = null; // StorageBufferAttribute
   private visibleCountStorageBuffer: ReturnType<typeof storage> | null = null;
+
+  // Frustum planes attribute for storage buffer
+  private frustumPlanesAttribute: any | null = null; // StorageBufferAttribute
 
   // Indirect args data (on CPU for setup, synced to GPU)
   private indirectArgsData: Uint32Array | null = null;
@@ -158,26 +165,40 @@ export class CullingCompute {
     try {
       this.renderer = renderer;
 
-      // Create storage buffers from unit buffer data
-      this.transformStorageBuffer = storage(transformData, 'mat4', MAX_GPU_UNITS);
-      this.metadataStorageBuffer = storage(metadataData, 'vec4', MAX_GPU_UNITS);
+      // Validate StorageInstancedBufferAttribute is available (required for compute shaders)
+      if (!StorageInstancedBufferAttribute || typeof StorageInstancedBufferAttribute !== 'function') {
+        throw new Error('StorageInstancedBufferAttribute not available in three/webgpu');
+      }
 
-      // Create visible indices output buffer (stores slot indices of visible units)
+      // Create StorageInstancedBufferAttributes for TSL storage() nodes
+      // StorageInstancedBufferAttribute is required for compute shaders (not StorageBufferAttribute)
+      // Transform buffer: mat4 = 16 floats per unit
+      this.transformStorageAttribute = new StorageInstancedBufferAttribute(transformData, 16);
+      this.transformStorageBuffer = storage(this.transformStorageAttribute, 'mat4', MAX_GPU_UNITS);
+
+      // Metadata buffer: vec4 = 4 floats per unit
+      this.metadataStorageAttribute = new StorageInstancedBufferAttribute(metadataData, 4);
+      this.metadataStorageBuffer = storage(this.metadataStorageAttribute, 'vec4', MAX_GPU_UNITS);
+
+      // Visible indices output buffer (stores slot indices of visible units)
       const visibleIndicesData = new Uint32Array(MAX_GPU_UNITS);
-      this.visibleIndicesBuffer = new StorageBufferAttribute(visibleIndicesData, 1);
-      this.visibleIndicesStorage = storage(visibleIndicesData, 'uint', MAX_GPU_UNITS);
+      this.visibleIndicesAttribute = new StorageInstancedBufferAttribute(visibleIndicesData, 1);
+      this.visibleIndicesStorage = storage(this.visibleIndicesAttribute, 'uint', MAX_GPU_UNITS);
 
-      // Create indirect args buffer for all unit/LOD/player combinations
+      // Indirect args buffer for all unit/LOD/player combinations
       // DrawIndexedIndirect format: [indexCount, instanceCount, firstIndex, baseVertex, firstInstance]
       const indirectEntryCount = this.maxUnitTypes * this.maxLODLevels * this.maxPlayers;
       this.indirectArgsData = new Uint32Array(indirectEntryCount * 5);
-      this.indirectArgsStorage = storage(this.indirectArgsData, 'uint', indirectEntryCount * 5);
+      const indirectArgsAttr = new StorageInstancedBufferAttribute(this.indirectArgsData, 1);
+      this.indirectArgsStorage = storage(indirectArgsAttr, 'uint', indirectEntryCount * 5);
 
-      // Create visible count buffer (atomic counter)
-      this.visibleCountStorageBuffer = storage(this.visibleCountBuffer, 'uint', 1);
+      // Visible count buffer (atomic counter)
+      this.visibleCountAttribute = new StorageInstancedBufferAttribute(this.visibleCountBuffer, 1);
+      this.visibleCountStorageBuffer = storage(this.visibleCountAttribute, 'uint', 1);
 
-      // Create frustum planes storage buffer (6 planes as vec4)
-      this.frustumPlanesStorage = storage(this.frustumPlanesData, 'vec4', 6);
+      // Frustum planes storage buffer (6 planes as vec4)
+      this.frustumPlanesAttribute = new StorageInstancedBufferAttribute(this.frustumPlanesData, 4);
+      this.frustumPlanesStorage = storage(this.frustumPlanesAttribute, 'vec4', 6);
 
       // Create compute shader with proper output writing
       this.createCullingComputeShader();
@@ -243,11 +264,13 @@ export class CullingCompute {
         return;
       });
 
-      // Read transform matrix - extract position from column 3
+      // Read transform matrix - extract position from column 3 (translation)
+      // In column-major mat4: col0=X axis, col1=Y axis, col2=Z axis, col3=translation
       const transform = transformBuffer.element(unitIndex);
-      const posX = transform[12]; // Mat4 element access (column-major)
-      const posY = transform[13];
-      const posZ = transform[14];
+      const translationCol = transform[3]; // Column 3 is translation vec4
+      const posX = translationCol.x;
+      const posY = translationCol.y;
+      const posZ = translationCol.z;
 
       // Read metadata: vec4(entityId, unitTypeIndex, playerId, boundingRadius)
       const metadata = metadataBuffer.element(unitIndex);
@@ -582,7 +605,7 @@ export class CullingCompute {
    * Get visible indices buffer
    */
   getVisibleIndicesBuffer(): any | null {
-    return this.visibleIndicesBuffer;
+    return this.visibleIndicesAttribute;
   }
 
   /**
@@ -626,9 +649,13 @@ export class CullingCompute {
   dispose(): void {
     this.cachedVisibleSlots.length = 0;
     this.cachedLODAssignments.clear();
-    this.visibleIndicesBuffer = null;
+    this.visibleIndicesAttribute = null;
     this.indirectArgsAttribute = null;
     this.cullingComputeNode = null;
+    this.transformStorageAttribute = null;
+    this.metadataStorageAttribute = null;
+    this.visibleCountAttribute = null;
+    this.frustumPlanesAttribute = null;
   }
 }
 
