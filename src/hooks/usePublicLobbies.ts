@@ -6,6 +6,7 @@ import { useState, useCallback, useRef, useEffect } from 'react';
 import { SimplePool } from 'nostr-tools';
 import type { Filter, NostrEvent } from 'nostr-tools';
 import { getRelays } from '@/engine/network/p2p/NostrRelays';
+import { debugNetworking } from '@/utils/debugLogger';
 
 // Must match the event kind in useMultiplayer.ts
 const PUBLIC_LOBBY_KIND = 30436;
@@ -99,7 +100,7 @@ export function usePublicLobbies(): UsePublicLobbiesReturn {
         since: Math.floor(Date.now() / 1000) - MAX_LOBBY_AGE_SECONDS,
       };
 
-      console.log('[LobbyBrowser] Subscribing to public lobbies...');
+      debugNetworking.log('[LobbyBrowser] Subscribing to public lobbies...');
 
       const sub = pool.subscribeMany(relays, filter, {
         onevent: (event: NostrEvent) => {
@@ -129,13 +130,13 @@ export function usePublicLobbies(): UsePublicLobbiesReturn {
             lobbiesMapRef.current.set(event.id, lobby);
             setLobbies(Array.from(lobbiesMapRef.current.values()));
 
-            console.log('[LobbyBrowser] Found lobby:', lobby.hostName, lobby.code);
+            debugNetworking.log('[LobbyBrowser] Found lobby:', lobby.hostName, lobby.code);
           } catch (e) {
-            console.warn('[LobbyBrowser] Failed to parse lobby event:', e);
+            debugNetworking.warn('[LobbyBrowser] Failed to parse lobby event:', e);
           }
         },
         oneose: () => {
-          console.log('[LobbyBrowser] Caught up with stored events');
+          debugNetworking.log('[LobbyBrowser] Caught up with stored events');
           setIsLoading(false);
         },
       });
@@ -231,7 +232,7 @@ export async function publishPublicLobby(
   );
 
   const successCount = results.filter(r => r.status === 'fulfilled').length;
-  console.log(`[LobbyBrowser] Published public lobby to ${successCount}/${relays.length} relays`);
+  debugNetworking.log(`[LobbyBrowser] Published public lobby to ${successCount}/${relays.length} relays`);
 
   return successCount > 0;
 }

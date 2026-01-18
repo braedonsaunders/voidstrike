@@ -4,6 +4,8 @@
  * Uses end-to-end encryption so relay nodes cannot read the data
  */
 
+import { debugNetworking } from '@/utils/debugLogger';
+
 type EventHandler = (data: { from: string; data: unknown; relayed: boolean; via?: string[] }) => void;
 
 /**
@@ -44,7 +46,7 @@ export class PeerRelayNetwork {
       true,
       ['deriveBits']
     );
-    console.log('[PeerRelay] Initialized with local ID:', this.localId.slice(0, 8) + '...');
+    debugNetworking.log('[PeerRelay] Initialized with local ID:', this.localId.slice(0, 8) + '...');
   }
 
   /**
@@ -67,7 +69,7 @@ export class PeerRelayNetwork {
       []
     );
     this.peerPublicKeys.set(peerId, key);
-    console.log('[PeerRelay] Imported public key for peer:', peerId.slice(0, 8) + '...');
+    debugNetworking.log('[PeerRelay] Imported public key for peer:', peerId.slice(0, 8) + '...');
   }
 
   /**
@@ -94,7 +96,7 @@ export class PeerRelayNetwork {
     // Ask them who they know
     this.requestPeerList(peerId);
 
-    console.log('[PeerRelay] Added direct peer:', peerId.slice(0, 8) + '...');
+    debugNetworking.log('[PeerRelay] Added direct peer:', peerId.slice(0, 8) + '...');
   }
 
   /**
@@ -112,7 +114,7 @@ export class PeerRelayNetwork {
       }
     }
 
-    console.log('[PeerRelay] Removed peer:', peerId.slice(0, 8) + '...');
+    debugNetworking.log('[PeerRelay] Removed peer:', peerId.slice(0, 8) + '...');
   }
 
   /**

@@ -13,7 +13,7 @@ import { VisionSystem } from '../systems/VisionSystem';
 import { AbilitySystem } from '../systems/AbilitySystem';
 import { SpawnSystem } from '../systems/SpawnSystem';
 import { BuildingPlacementSystem } from '../systems/BuildingPlacementSystem';
-import { debugInitialization, debugPerformance } from '@/utils/debugLogger';
+import { debugInitialization, debugPerformance, debugNetworking } from '@/utils/debugLogger';
 import { AudioSystem } from '../systems/AudioSystem';
 import { Transform } from '../components/Transform';
 import { Building } from '../components/Building';
@@ -274,17 +274,17 @@ export class Game {
             return; // Reject the command
           }
 
-          console.log('[Game] Received remote command for tick', command.tick, ':', command.type, 'from', command.playerId);
+          debugNetworking.log('[Game] Received remote command for tick', command.tick, ':', command.type, 'from', command.playerId);
           // Queue for execution at the scheduled tick (lockstep)
           this.queueCommand(command);
         } else if (message.commandType && message.data) {
           // Format 2: Event-based command from WebGPUGameCanvas
           // Emit directly to event bus for systems to process
-          console.log('[Game] Received remote command (event format):', message.commandType);
+          debugNetworking.log('[Game] Received remote command (event format):', message.commandType);
           this.eventBus.emit(message.commandType, message.data);
         }
       } else if (message.type === 'quit') {
-        console.log('[Game] Remote player quit');
+        debugNetworking.log('[Game] Remote player quit');
         this.eventBus.emit('multiplayer:playerQuit', message.payload);
       } else if (message.type === 'checksum') {
         // CRITICAL FIX: Receive remote checksums and forward to ChecksumSystem
@@ -858,7 +858,7 @@ export class Game {
         payload: command,
       };
       sendMultiplayerMessage(message);
-      console.log('[Game] Sent command to remote for tick', executionTick, ':', command.type);
+      debugNetworking.log('[Game] Sent command to remote for tick', executionTick, ':', command.type);
 
       // Queue locally for execution at the scheduled tick
       this.queueCommand(command);
@@ -975,7 +975,7 @@ export class Game {
         payload: { playerId: this.config.playerId },
       };
       sendMultiplayerMessage(message);
-      console.log('[Game] Sent quit notification');
+      debugNetworking.log('[Game] Sent quit notification');
     }
   }
 
@@ -1037,7 +1037,10 @@ export class Game {
       const transport = this.world.getEntity(command.transportId);
       const selectable = transport?.get<Selectable>('Selectable');
       if (selectable && selectable.playerId !== command.playerId) {
-        console.error(`[Game] COMMAND AUTHORIZATION FAILED: transportId ownership mismatch`);
+        console.error(
+          `[Game] Transport ownership mismatch: entity ${command.transportId} ` +
+          `belongs to player ${selectable.playerId}, not ${command.playerId}`
+        );
         return false;
       }
     }
@@ -1046,7 +1049,10 @@ export class Game {
       const bunker = this.world.getEntity(command.bunkerId);
       const selectable = bunker?.get<Selectable>('Selectable');
       if (selectable && selectable.playerId !== command.playerId) {
-        console.error(`[Game] COMMAND AUTHORIZATION FAILED: bunkerId ownership mismatch`);
+        console.error(
+          `[Game] Bunker ownership mismatch: entity ${command.bunkerId} ` +
+          `belongs to player ${selectable.playerId}, not ${command.playerId}`
+        );
         return false;
       }
     }
@@ -1055,7 +1061,10 @@ export class Game {
       const building = this.world.getEntity(command.buildingId);
       const selectable = building?.get<Selectable>('Selectable');
       if (selectable && selectable.playerId !== command.playerId) {
-        console.error(`[Game] COMMAND AUTHORIZATION FAILED: buildingId ownership mismatch`);
+        console.error(
+          `[Game] Building ownership mismatch: entity ${command.buildingId} ` +
+          `belongs to player ${selectable.playerId}, not ${command.playerId}`
+        );
         return false;
       }
     }

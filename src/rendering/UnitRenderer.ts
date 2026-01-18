@@ -10,7 +10,7 @@ import { AssetManager, AnimationMappingConfig, LODLevel, DEFAULT_LOD_DISTANCES, 
 import { Terrain } from './Terrain';
 import { getPlayerColor, getLocalPlayerId, isSpectatorMode } from '@/store/gameSetupStore';
 import { useUIStore } from '@/store/uiStore';
-import { debugAnimation, debugAssets, debugPerformance } from '@/utils/debugLogger';
+import { debugAnimation, debugAssets, debugMesh, debugPerformance } from '@/utils/debugLogger';
 import { setupInstancedVelocity, swapInstanceMatrices, commitInstanceMatrices, disposeInstancedVelocity } from './tsl/InstancedVelocity';
 
 // GPU-driven rendering infrastructure
@@ -277,7 +277,7 @@ export class UnitRenderer {
       this.initializeGPUIndirectRenderer();
     }
 
-    console.log('[UnitRenderer] GPU-driven rendering enabled');
+    debugMesh.log('[UnitRenderer] GPU-driven rendering enabled');
   }
 
   /**
@@ -294,9 +294,9 @@ export class UnitRenderer {
         this.gpuUnitBuffer.getMetadataData()
       );
       this.gpuCullingInitialized = true;
-      console.log('[UnitRenderer] GPU culling compute initialized');
+      debugMesh.log('[UnitRenderer] GPU culling compute initialized');
     } catch (e) {
-      console.warn('[UnitRenderer] Failed to initialize GPU culling:', e);
+      debugMesh.warn('[UnitRenderer] Failed to initialize GPU culling:', e);
     }
   }
 
@@ -320,7 +320,7 @@ export class UnitRenderer {
       debugPerformance.log('  - GPU Culling Compute: ' + (this.gpuCullingInitialized ? 'READY' : 'PENDING'));
       debugPerformance.log('  - GPU Indirect Draw: ENABLED');
     } catch (e) {
-      console.warn('[UnitRenderer] Failed to initialize GPU indirect renderer:', e);
+      debugMesh.warn('[UnitRenderer] Failed to initialize GPU indirect renderer:', e);
     }
   }
 

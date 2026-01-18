@@ -22,6 +22,7 @@
 
 import { System } from '../ecs/System';
 import { Game } from '../core/Game';
+import { debugNetworking } from '@/utils/debugLogger';
 import { Transform } from '../components/Transform';
 import { Unit } from '../components/Unit';
 import { Building } from '../components/Building';
@@ -291,12 +292,12 @@ export class ChecksumSystem extends System {
       report.divergence = divergence;
       report.divergentEntityIds = divergence.entityIds;
 
-      console.warn(
+      debugNetworking.warn(
         `[ChecksumSystem] Merkle tree analysis: Found ${divergence.entityIds.length} divergent entities in ${divergence.comparisons} comparisons (O(log n))`
       );
-      console.warn(`[ChecksumSystem] Divergent path: ${divergence.path.join(' -> ')}`);
+      debugNetworking.warn(`[ChecksumSystem] Divergent path: ${divergence.path.join(' -> ')}`);
       if (divergence.entityIds.length > 0) {
-        console.warn(`[ChecksumSystem] Divergent entity IDs: ${divergence.entityIds.join(', ')}`);
+        debugNetworking.warn(`[ChecksumSystem] Divergent entity IDs: ${divergence.entityIds.join(', ')}`);
       }
     } else if (localChecksumData.merkleTree) {
       // Use category-level comparison if we only have local tree
@@ -305,7 +306,7 @@ export class ChecksumSystem extends System {
         remoteChecksum
       );
       if (divergentCategories.length > 0) {
-        console.warn(`[ChecksumSystem] Likely divergent categories: ${divergentCategories.join(', ')}`);
+        debugNetworking.warn(`[ChecksumSystem] Likely divergent categories: ${divergentCategories.join(', ')}`);
       }
     }
 
@@ -327,7 +328,7 @@ export class ChecksumSystem extends System {
     });
 
     // Log warning
-    console.warn(
+    debugNetworking.warn(
       `[ChecksumSystem] DESYNC DETECTED at tick ${tick}:`,
       `Local: 0x${localChecksum.toString(16)}, Remote: 0x${remoteChecksum.toString(16)}`,
       `(Peer: ${remotePeerId})`
@@ -335,7 +336,7 @@ export class ChecksumSystem extends System {
 
     // Auto-dump state if configured
     if (this.config.autoDumpOnDesync && snapshot) {
-      console.warn('[ChecksumSystem] State snapshot at desync tick:', snapshot);
+      debugNetworking.warn('[ChecksumSystem] State snapshot at desync tick:', snapshot);
     }
   }
 
@@ -416,7 +417,7 @@ export class ChecksumSystem extends System {
   private handleChecksumRequest(): void {
     const currentTick = this.game.getCurrentTick();
     const checksumData = this.computeChecksum(currentTick);
-    console.log(`[ChecksumSystem] Tick ${currentTick} checksum:`, checksumData);
+    debugNetworking.log(`[ChecksumSystem] Tick ${currentTick} checksum:`, checksumData);
   }
 
   /**
@@ -426,7 +427,7 @@ export class ChecksumSystem extends System {
     const tick = this.game.getCurrentTick();
     const snapshot = this.createStateSnapshot(tick);
 
-    console.log('[ChecksumSystem] Current state dump:', snapshot);
+    debugNetworking.log('[ChecksumSystem] Current state dump:', snapshot);
 
     return snapshot;
   }
@@ -482,7 +483,7 @@ export class ChecksumSystem extends System {
 
     // Log if configured
     if (this.config.logChecksums) {
-      console.log(
+      debugNetworking.log(
         `[ChecksumSystem] Tick ${currentTick}: 0x${checksumData.checksum.toString(16)}`,
         `(${checksumData.unitCount} units, ${checksumData.buildingCount} buildings)`
       );
@@ -520,7 +521,7 @@ export class ChecksumSystem extends System {
       } else if (currentTick - tick > this.config.desyncConfirmationTicks) {
         // CRITICAL: Unable to verify checksums for old tick - potential undetected desync
         // This shouldn't happen in normal gameplay; log as warning
-        console.warn(`[ChecksumSystem] UNVERIFIED: Could not verify checksums for tick ${tick} (${pendingList.length} pending). Local computation may be delayed.`);
+        debugNetworking.warn(`[ChecksumSystem] UNVERIFIED: Could not verify checksums for tick ${tick} (${pendingList.length} pending). Local computation may be delayed.`);
         // If we have pending remote checksums but no local, something is wrong
         // In production, this could indicate desync or severe lag
         if (pendingList.length > 0) {

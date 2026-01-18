@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useCallback, useRef, useEffect } from 'react';
+import { debugNetworking } from '@/utils/debugLogger';
 import {
   generateOfferCode,
   generateAnswerCode,
@@ -87,17 +88,17 @@ export function useP2P(): UseP2PReturn {
           handler(data);
         }
       } catch (e) {
-        console.error('[P2P] Failed to parse message:', e);
+        debugNetworking.error('[P2P] Failed to parse message:', e);
       }
     };
 
     channel.onclose = () => {
-      console.log('[P2P] Data channel closed');
+      debugNetworking.log('[P2P] Data channel closed');
       setState(s => ({ ...s, status: 'idle', dataChannel: null }));
     };
 
     channel.onerror = (e) => {
-      console.error('[P2P] Data channel error:', e);
+      debugNetworking.error('[P2P] Data channel error:', e);
     };
 
     setState(s => ({ ...s, dataChannel: channel }));
@@ -115,7 +116,7 @@ export function useP2P(): UseP2PReturn {
 
       // Set up data channel
       pc.ondatachannel = (event) => {
-        console.log('[P2P] Received data channel');
+        debugNetworking.log('[P2P] Received data channel');
         setupDataChannel(event.channel);
       };
 
@@ -153,7 +154,7 @@ export function useP2P(): UseP2PReturn {
 
       // Set up data channel handler
       pc.ondatachannel = (event) => {
-        console.log('[P2P] Received data channel');
+        debugNetworking.log('[P2P] Received data channel');
         setupDataChannel(event.channel);
       };
 
@@ -219,12 +220,12 @@ export function useP2P(): UseP2PReturn {
       };
 
       nostr.onMatchFound = async (opponent) => {
-        console.log('[P2P] Match found:', opponent.pubkey.slice(0, 8) + '...');
+        debugNetworking.log('[P2P] Match found:', opponent.pubkey.slice(0, 8) + '...');
         setState(s => ({ ...s, status: 'match_found', matchedOpponent: opponent }));
 
         // Determine who initiates (lower pubkey)
         if (nostr.shouldInitiate(opponent.pubkey)) {
-          console.log('[P2P] We initiate the connection');
+          debugNetworking.log('[P2P] We initiate the connection');
           // Create WebRTC offer and send via Nostr
           const pc = createPeerConnection();
           pcRef.current = pc;
@@ -276,13 +277,13 @@ export function useP2P(): UseP2PReturn {
 
           setState(s => ({ ...s, peerConnection: pc, nostrStatus: 'Sent offer, waiting for answer...' }));
         } else {
-          console.log('[P2P] Waiting for them to initiate');
+          debugNetworking.log('[P2P] Waiting for them to initiate');
           setState(s => ({ ...s, nostrStatus: 'Waiting for opponent to initiate...' }));
         }
       };
 
       nostr.onOfferReceived = async (signal) => {
-        console.log('[P2P] Received offer from:', signal.fromPubkey.slice(0, 8) + '...');
+        debugNetworking.log('[P2P] Received offer from:', signal.fromPubkey.slice(0, 8) + '...');
         setState(s => ({ ...s, nostrStatus: 'Received offer, creating answer...' }));
 
         // Create peer connection and answer
@@ -301,7 +302,7 @@ export function useP2P(): UseP2PReturn {
           try {
             await pc.addIceCandidate({ candidate, sdpMid: '0', sdpMLineIndex: 0 });
           } catch (e) {
-            console.warn('[P2P] Failed to add ICE candidate:', e);
+            debugNetworking.warn('[P2P] Failed to add ICE candidate:', e);
           }
         }
 
@@ -350,7 +351,7 @@ export function useP2P(): UseP2PReturn {
       };
 
       nostr.onAnswerReceived = async (signal) => {
-        console.log('[P2P] Received answer from:', signal.fromPubkey.slice(0, 8) + '...');
+        debugNetworking.log('[P2P] Received answer from:', signal.fromPubkey.slice(0, 8) + '...');
         setState(s => ({ ...s, nostrStatus: 'Received answer, connecting...' }));
 
         if (!pcRef.current) {
@@ -366,7 +367,7 @@ export function useP2P(): UseP2PReturn {
           try {
             await pcRef.current.addIceCandidate({ candidate, sdpMid: '0', sdpMLineIndex: 0 });
           } catch (e) {
-            console.warn('[P2P] Failed to add ICE candidate:', e);
+            debugNetworking.warn('[P2P] Failed to add ICE candidate:', e);
           }
         }
 
@@ -428,7 +429,7 @@ export function useP2P(): UseP2PReturn {
     if (dcRef.current && dcRef.current.readyState === 'open') {
       dcRef.current.send(JSON.stringify(data));
     } else {
-      console.warn('[P2P] Cannot send message: data channel not open');
+      debugNetworking.warn('[P2P] Cannot send message: data channel not open');
     }
   }, []);
 

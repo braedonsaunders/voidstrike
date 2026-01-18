@@ -6,6 +6,7 @@
  */
 
 import { DefinitionValidator } from './DefinitionValidator';
+import { debugAssets } from '@/utils/debugLogger';
 import type {
   UnitDefinition,
   BuildingDefinition,
@@ -333,7 +334,7 @@ export class DefinitionLoader {
 
     // Log warnings
     for (const warning of refValidation.warnings) {
-      console.warn(`[DefinitionLoader] Warning: ${warning.path}: ${warning.message}`);
+      debugAssets.warn(`[DefinitionLoader] Warning: ${warning.path}: ${warning.message}`);
     }
 
     return {

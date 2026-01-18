@@ -41,6 +41,8 @@ const textureStore = (TSL as any).textureStore;
 // StorageTexture may not be in type declarations
 const StorageTexture = (THREE as any).StorageTexture;
 
+import { debugShaders } from '@/utils/debugLogger';
+
 // Vision state encoding matches VisionSystem.ts
 const VISION_UNEXPLORED = 0;
 const VISION_EXPLORED = 1;
@@ -137,9 +139,9 @@ export class VisionCompute {
       this.gpuComputeAvailable = true;
       this.useCPUFallback = false;
 
-      console.log(`[VisionCompute] GPU compute initialized (${this.gridWidth}x${this.gridHeight} grid, ${this.gridWidth * this.gridHeight} cells)`);
+      debugShaders.log(`[VisionCompute] GPU compute initialized (${this.gridWidth}x${this.gridHeight} grid, ${this.gridWidth * this.gridHeight} cells)`);
     } catch (e) {
-      console.warn('[VisionCompute] GPU compute not available, using CPU fallback:', e);
+      debugShaders.warn('[VisionCompute] GPU compute not available, using CPU fallback:', e);
       this.gpuComputeAvailable = false;
       this.useCPUFallback = true;
     }
@@ -383,10 +385,10 @@ export class VisionCompute {
           // Mark as verified on first successful dispatch
           if (!this.gpuComputeVerified) {
             this.gpuComputeVerified = true;
-            console.log(`[VisionCompute] GPU compute verified working (${count} casters, ${this.gridWidth * this.gridHeight} cells)`);
+            debugShaders.log(`[VisionCompute] GPU compute verified working (${count} casters, ${this.gridWidth * this.gridHeight} cells)`);
           }
         } catch (e) {
-          console.warn('[VisionCompute] GPU compute failed, falling back to CPU:', e);
+          debugShaders.warn('[VisionCompute] GPU compute failed, falling back to CPU:', e);
           this.useCPUFallback = true;
           this.gpuComputeVerified = false;
           this.computeVisionCPU(playerId, casters);
@@ -537,7 +539,7 @@ export class VisionCompute {
    */
   public forceCPUFallback(enable: boolean): void {
     this.useCPUFallback = enable;
-    console.log(`[VisionCompute] CPU fallback ${enable ? 'enabled' : 'disabled'}`);
+    debugShaders.log(`[VisionCompute] CPU fallback ${enable ? 'enabled' : 'disabled'}`);
   }
 
   /**

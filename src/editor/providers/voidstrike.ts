@@ -13,6 +13,7 @@ import type {
   EditorObject,
   ValidationResult,
 } from '../config/EditorConfig';
+import { debugInitialization } from '@/utils/debugLogger';
 import type { MapData, MapCell, Expansion, WatchTower, DestructibleRock, MapDecoration, ResourceNode, TerrainType } from '@/data/maps/MapTypes';
 import {
   ALL_MAPS,
@@ -333,7 +334,7 @@ export const voidstrikeDataProvider: EditorDataProvider = {
       const savedMaps = JSON.parse(localStorage.getItem('voidstrike_editor_maps') || '{}');
       savedMaps[data.id] = mapData;
       localStorage.setItem('voidstrike_editor_maps', JSON.stringify(savedMaps));
-      console.log('[Editor] Map saved to localStorage:', data.id);
+      debugInitialization.log('[Editor] Map saved to localStorage:', data.id);
     } catch (e) {
       console.error('[Editor] Failed to save map:', e);
       throw new Error('Failed to save map to storage');
@@ -456,11 +457,11 @@ export const voidstrikeDataProvider: EditorDataProvider = {
       const fixResult = autoFixConnectivity(mapData);
 
       if (fixResult.rampsAdded === 0) {
-        console.log('[AutoFix] No fixes applied - map may already be valid or no automatic fixes available');
+        debugInitialization.log('[AutoFix] No fixes applied - map may already be valid or no automatic fixes available');
         return null;
       }
 
-      console.log(`[AutoFix] Applied ${fixResult.rampsAdded} ramp(s):`, fixResult.messages);
+      debugInitialization.log(`[AutoFix] Applied ${fixResult.rampsAdded} ramp(s):`, fixResult.messages);
 
       // Convert back to editor format
       return mapDataToEditorFormat(mapData);

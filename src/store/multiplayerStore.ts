@@ -1,4 +1,5 @@
 import { create } from 'zustand';
+import { debugNetworking } from '@/utils/debugLogger';
 
 /**
  * Multiplayer Store
@@ -162,7 +163,7 @@ export const useMultiplayerStore = create<MultiplayerState>((set, get) => ({
       };
 
       const closeHandler = () => {
-        console.log('[Multiplayer] Data channel closed');
+        debugNetworking.log('[Multiplayer] Data channel closed');
         const currentState = get();
 
         // Only trigger reconnection flow if we were previously connected
@@ -206,7 +207,7 @@ export const useMultiplayerStore = create<MultiplayerState>((set, get) => ({
       // Flush buffered commands
       const bufferedCommands = get().flushCommandBuffer();
       if (bufferedCommands.length > 0) {
-        console.log(`[Multiplayer] Flushing ${bufferedCommands.length} buffered commands`);
+        debugNetworking.log(`[Multiplayer] Flushing ${bufferedCommands.length} buffered commands`);
         for (const { command } of bufferedCommands) {
           get().sendMessage(command);
         }
@@ -245,7 +246,7 @@ export const useMultiplayerStore = create<MultiplayerState>((set, get) => ({
 
     // Early warning at 80% capacity
     if (bufferUsage >= 0.8 && bufferUsage < 1.0) {
-      console.warn(
+      debugNetworking.warn(
         `[Multiplayer] WARNING: Command buffer at ${Math.round(bufferUsage * 100)}% capacity ` +
         `(${state.commandBuffer.length}/${state.maxBufferedCommands}). ` +
         `Network may be experiencing issues.`
@@ -293,7 +294,7 @@ export const useMultiplayerStore = create<MultiplayerState>((set, get) => ({
 
     // If disconnected/reconnecting, buffer the command
     if (connectionStatus === 'reconnecting' || connectionStatus === 'waiting') {
-      console.log('[Multiplayer] Buffering command during reconnection');
+      debugNetworking.log('[Multiplayer] Buffering command during reconnection');
       get().bufferCommand(data);
       return false;
     }
@@ -309,7 +310,7 @@ export const useMultiplayerStore = create<MultiplayerState>((set, get) => ({
         return false;
       }
     } else {
-      console.warn('[Multiplayer] Cannot send message: channel not open');
+      debugNetworking.warn('[Multiplayer] Cannot send message: channel not open');
       // Buffer the command
       get().bufferCommand(data);
       return false;
@@ -332,7 +333,7 @@ export const useMultiplayerStore = create<MultiplayerState>((set, get) => ({
     const state = get();
 
     if (state.reconnectAttempts >= state.maxReconnectAttempts) {
-      console.log('[Multiplayer] Max reconnection attempts reached');
+      debugNetworking.log('[Multiplayer] Max reconnection attempts reached');
       set({
         connectionStatus: 'failed',
         isNetworkPaused: true,
@@ -346,7 +347,7 @@ export const useMultiplayerStore = create<MultiplayerState>((set, get) => ({
 
     // Exponential backoff: 2s, 4s, 8s, 16s
     const delay = Math.pow(2, attempt) * 1000;
-    console.log(`[Multiplayer] Reconnection attempt ${attempt}/${state.maxReconnectAttempts} in ${delay}ms`);
+    debugNetworking.log(`[Multiplayer] Reconnection attempt ${attempt}/${state.maxReconnectAttempts} in ${delay}ms`);
 
     set({
       networkPauseReason: `Connection lost. Reconnecting (attempt ${attempt}/${state.maxReconnectAttempts})...`,
@@ -360,7 +361,7 @@ export const useMultiplayerStore = create<MultiplayerState>((set, get) => ({
       try {
         const success = await callback();
         if (success) {
-          console.log('[Multiplayer] Reconnection successful');
+          debugNetworking.log('[Multiplayer] Reconnection successful');
           return true;
         }
       } catch (e) {

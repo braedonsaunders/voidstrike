@@ -9,6 +9,7 @@
  */
 
 import { DefinitionLoader, LoadResult } from './DefinitionLoader';
+import { debugAssets } from '@/utils/debugLogger';
 import type {
   UnitDefinition,
   BuildingDefinition,
@@ -105,8 +106,8 @@ class DefinitionRegistryClass {
     this.rebuildIndices();
 
     this.initialized = true;
-    console.log(`[DefinitionRegistry] Loaded ${this.factions.size} faction(s)`);
-    console.log(`[DefinitionRegistry] Stats:`, this.getStats());
+    debugAssets.log(`[DefinitionRegistry] Loaded ${this.factions.size} faction(s)`);
+    debugAssets.log(`[DefinitionRegistry] Stats:`, this.getStats());
   }
 
   /**

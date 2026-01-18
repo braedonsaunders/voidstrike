@@ -25,6 +25,9 @@ import {
 } from 'recast-navigation';
 import { generateTileCache, generateSoloNavMesh, type TileCacheGeneratorConfig, type SoloNavMeshGeneratorConfig } from '@recast-navigation/generators';
 
+// Debug flag for worker logging (workers can't access UI store)
+const DEBUG = false;
+
 // Message types
 interface InitMessage {
   type: 'init';
@@ -186,13 +189,14 @@ function loadNavMeshFromGeometry(
     return false;
   }
 
-  // Debug: Log geometry info
-  console.log('[PathfindingWorker] Generating navmesh from geometry:', {
-    vertices: positions.length / 3,
-    triangles: indices.length / 3,
-    positionsType: positions.constructor.name,
-    indicesType: indices.constructor.name,
-  });
+  if (DEBUG) {
+    console.log('[PathfindingWorker] Generating navmesh from geometry:', {
+      vertices: positions.length / 3,
+      triangles: indices.length / 3,
+      positionsType: positions.constructor.name,
+      indicesType: indices.constructor.name,
+    });
+  }
 
   try {
     // Try TileCache first (supports dynamic obstacles)
@@ -202,13 +206,15 @@ function loadNavMeshFromGeometry(
       tileCache = result.tileCache;
       navMesh = result.navMesh;
       navMeshQuery = new NavMeshQuery(navMesh);
-      console.log('[PathfindingWorker] TileCache navmesh generated successfully');
+      if (DEBUG) console.log('[PathfindingWorker] TileCache navmesh generated successfully');
       return true;
     }
 
-    // TileCache failed - log error and try solo navmesh
-    console.warn('[PathfindingWorker] TileCache generation failed:', (result as { error?: string }).error);
-    console.log('[PathfindingWorker] Trying solo navmesh fallback...');
+    // TileCache failed - try solo navmesh fallback
+    if (DEBUG) {
+      console.warn('[PathfindingWorker] TileCache generation failed:', (result as { error?: string }).error);
+      console.log('[PathfindingWorker] Trying solo navmesh fallback...');
+    }
 
     // Solo navmesh fallback (no dynamic obstacles but more robust)
     const soloResult = generateSoloNavMesh(positions, indices, SOLO_NAVMESH_CONFIG);
@@ -217,7 +223,7 @@ function loadNavMeshFromGeometry(
       tileCache = null; // No dynamic obstacles in solo mode
       navMesh = soloResult.navMesh;
       navMeshQuery = new NavMeshQuery(navMesh);
-      console.log('[PathfindingWorker] Solo navmesh generated successfully (no dynamic obstacles)');
+      if (DEBUG) console.log('[PathfindingWorker] Solo navmesh generated successfully');
       return true;
     }
 

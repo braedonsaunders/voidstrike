@@ -23,6 +23,7 @@ import { useLobby, LobbyState } from '@/hooks/useMultiplayer';
 import { useMultiplayerStore } from '@/store/multiplayerStore';
 import { LobbyBrowser } from '@/components/lobby/LobbyBrowser';
 import AssetManager from '@/assets/AssetManager';
+import { debugInitialization } from '@/utils/debugLogger';
 
 // Helper to convert THREE.Color to hex string
 function colorToHex(color: { r: number; g: number; b: number }): string {
@@ -498,8 +499,8 @@ export default function GameSetupPage() {
     if (isHost) return;
 
     onGameStart(() => {
-      console.log('[Setup] Game start received, navigating to game...');
-      console.log('[Setup] Guest slot ID:', mySlotId);
+      debugInitialization.log('[Setup] Game start received, navigating to game...');
+      debugInitialization.log('[Setup] Guest slot ID:', mySlotId);
 
       // Reset any existing game instance to ensure fresh multiplayer state
       Game.resetInstance();

@@ -42,6 +42,7 @@ const StorageInstancedBufferAttribute = (THREE_WEBGPU as any).StorageInstancedBu
 const IndirectStorageBufferAttribute = (THREE_WEBGPU as any).IndirectStorageBufferAttribute;
 
 import { GPUUnitBuffer, UnitSlot, createIndirectArgsBuffer } from './GPUUnitBuffer';
+import { debugShaders } from '@/utils/debugLogger';
 
 // LOD distance thresholds
 export interface LODConfig {
@@ -207,9 +208,9 @@ export class CullingCompute {
       // For full GPU-driven rendering, we'd need atomic support in TSL
       this.useCPUFallback = true; // Use CPU path until atomics work
 
-      console.log(`[CullingCompute] GPU compute resources created (${MAX_GPU_UNITS} units) - using CPU fallback for counting`);
+      debugShaders.log(`[CullingCompute] GPU compute initialized (${MAX_GPU_UNITS} units, ${indirectEntryCount} indirect entries)`);
     } catch (e) {
-      console.warn('[CullingCompute] GPU compute init failed, using CPU fallback:', e);
+      debugShaders.warn('[CullingCompute] GPU compute init failed, using CPU fallback:', e);
       this.gpuComputeAvailable = false;
       this.useCPUFallback = true;
     }
@@ -431,7 +432,7 @@ export class CullingCompute {
       // The GPU just did the heavy lifting of frustum testing
 
     } catch (e) {
-      console.warn('[CullingCompute] GPU culling failed:', e);
+      debugShaders.warn('[CullingCompute] GPU culling failed:', e);
       this.useCPUFallback = true;
     }
   }
