@@ -610,6 +610,41 @@ export class CullingCompute {
   }
 
   /**
+   * Get transform storage node for vertex shader binding
+   */
+  getTransformStorage(): ReturnType<typeof storage> | null {
+    return this.transformStorageBuffer;
+  }
+
+  /**
+   * Get metadata storage node for vertex shader binding
+   */
+  getMetadataStorage(): ReturnType<typeof storage> | null {
+    return this.metadataStorageBuffer;
+  }
+
+  /**
+   * Get visible indices storage node for vertex shader binding
+   */
+  getVisibleIndicesStorage(): ReturnType<typeof storage> | null {
+    return this.visibleIndicesStorage;
+  }
+
+  /**
+   * Get indirect args data for CPU readback (debugging)
+   */
+  getIndirectArgsData(): Uint32Array | null {
+    return this.indirectArgsData;
+  }
+
+  /**
+   * Get indirect offset for a (unitType, LOD, player) combination
+   */
+  getIndirectOffset(unitType: number, lod: number, player: number): number {
+    return (unitType * this.maxLODLevels * this.maxPlayers + lod * this.maxPlayers + player) * 5;
+  }
+
+  /**
    * Dispose resources
    */
   dispose(): void {
