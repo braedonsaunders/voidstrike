@@ -188,8 +188,8 @@ export class TSLGameOverlayManager {
 
     this.terrainOverlayMesh = new THREE.Mesh(geometry, material);
     this.terrainOverlayMesh.rotation.x = -Math.PI / 2;
-    this.terrainOverlayMesh.position.set(width / 2, 0.3, height / 2);
-    this.terrainOverlayMesh.renderOrder = 90;
+    this.terrainOverlayMesh.position.set(width / 2, 15, height / 2); // High above terrain
+    this.terrainOverlayMesh.renderOrder = 900;
     this.terrainOverlayMesh.visible = false;
     this.scene.add(this.terrainOverlayMesh);
   }
@@ -231,8 +231,8 @@ export class TSLGameOverlayManager {
 
     this.elevationOverlayMesh = new THREE.Mesh(geometry, material);
     this.elevationOverlayMesh.rotation.x = -Math.PI / 2;
-    this.elevationOverlayMesh.position.set(width / 2, 0.35, height / 2);
-    this.elevationOverlayMesh.renderOrder = 90;
+    this.elevationOverlayMesh.position.set(width / 2, 15, height / 2); // High above terrain
+    this.elevationOverlayMesh.renderOrder = 900;
     this.elevationOverlayMesh.visible = false;
     this.scene.add(this.elevationOverlayMesh);
   }
@@ -258,8 +258,8 @@ export class TSLGameOverlayManager {
 
     this.threatOverlayMesh = new THREE.Mesh(geometry, material);
     this.threatOverlayMesh.rotation.x = -Math.PI / 2;
-    this.threatOverlayMesh.position.set(width / 2, 0.4, height / 2);
-    this.threatOverlayMesh.renderOrder = 91;
+    this.threatOverlayMesh.position.set(width / 2, 15, height / 2); // High above terrain
+    this.threatOverlayMesh.renderOrder = 900;
     this.threatOverlayMesh.visible = false;
     this.scene.add(this.threatOverlayMesh);
   }
@@ -291,8 +291,8 @@ export class TSLGameOverlayManager {
 
     this.navmeshOverlayMesh = new THREE.Mesh(geometry, material);
     this.navmeshOverlayMesh.rotation.x = -Math.PI / 2;
-    this.navmeshOverlayMesh.position.set(width / 2, 0.35, height / 2);
-    this.navmeshOverlayMesh.renderOrder = 92;
+    this.navmeshOverlayMesh.position.set(width / 2, 15, height / 2); // High above terrain
+    this.navmeshOverlayMesh.renderOrder = 900;
     this.navmeshOverlayMesh.visible = false;
     this.scene.add(this.navmeshOverlayMesh);
   }

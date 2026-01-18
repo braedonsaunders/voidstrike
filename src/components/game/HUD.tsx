@@ -148,8 +148,11 @@ export const HUD = memo(function HUD() {
                     className="w-full px-4 py-2 text-left text-sm text-void-200 hover:bg-void-800 transition-colors flex justify-between items-center"
                   >
                     <span>Overlays</span>
-                    <span className={overlaySettings.activeOverlay !== 'none' ? 'text-green-400' : 'text-void-500'}>
-                      {overlaySettings.activeOverlay !== 'none' ? overlaySettings.activeOverlay.toUpperCase() : ''}
+                    <span className={overlaySettings.activeOverlay !== 'none' ? 'text-green-400 text-xs px-1.5 py-0.5 bg-green-900/50 rounded' : 'text-void-500'}>
+                      {overlaySettings.activeOverlay === 'terrain' ? 'TER' :
+                       overlaySettings.activeOverlay === 'elevation' ? 'ELV' :
+                       overlaySettings.activeOverlay === 'threat' ? 'THR' :
+                       overlaySettings.activeOverlay === 'navmesh' ? 'NAV' : ''}
                     </span>
                   </button>
                   {showOverlayMenu && (
