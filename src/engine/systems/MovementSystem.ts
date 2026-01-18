@@ -1886,6 +1886,15 @@ export class MovementSystem extends System {
           const velMagSq = finalVx * finalVx + finalVy * finalVy;
           const minVelSq = 0.01 * 0.01;
           if (velMagSq < minVelSq && distance > this.arrivalThreshold) {
+            // RAMP DEBUG: Log when crowd returns zero velocity
+            if (distance > 2 && unit.path.length > 0) {
+              console.warn(
+                `[MovementSystem] RAMP DEBUG: Crowd returned zero velocity for entity ${entity.id}. ` +
+                `Pos: (${transform.x.toFixed(1)}, ${transform.y.toFixed(1)}), ` +
+                `Target: (${targetX.toFixed(1)}, ${targetY.toFixed(1)}), ` +
+                `Distance: ${distance.toFixed(1)}, Path: ${unit.pathIndex}/${unit.path.length}`
+              );
+            }
             // Crowd returned near-zero velocity - use direct movement
             if (distance > 0.01) {
               finalVx = (dx / distance) * unit.maxSpeed;
