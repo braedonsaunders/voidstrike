@@ -56,30 +56,41 @@ function ScanLine() {
 
 export default function Home() {
   const [isLoaded, setIsLoaded] = useState(false);
+  const [hasMounted, setHasMounted] = useState(false);
   const [mousePosition, setMousePosition] = useState({ x: 0, y: 0 });
   const heroRef = useRef<HTMLDivElement>(null);
   const router = useRouter();
 
   const startBattleSimulator = useGameSetupStore((state) => state.startBattleSimulator);
-  const musicEnabled = useUIStore((state) => state.musicEnabled);
+  const musicEnabledStore = useUIStore((state) => state.musicEnabled);
   const musicVolume = useUIStore((state) => state.musicVolume);
   const toggleMusic = useUIStore((state) => state.toggleMusic);
-  const isFullscreen = useUIStore((state) => state.isFullscreen);
+  const isFullscreenStore = useUIStore((state) => state.isFullscreen);
   const toggleFullscreen = useUIStore((state) => state.toggleFullscreen);
   const setFullscreen = useUIStore((state) => state.setFullscreen);
-  const preferWebGPU = useUIStore((state) => state.preferWebGPU);
+  const preferWebGPUStore = useUIStore((state) => state.preferWebGPU);
   const setPreferWebGPU = useUIStore((state) => state.setPreferWebGPU);
+
+  // Use default values during SSR/hydration to avoid mismatch, then sync after mount
+  const musicEnabled = hasMounted ? musicEnabledStore : true;
+  const isFullscreen = hasMounted ? isFullscreenStore : false;
+  const preferWebGPU = hasMounted ? preferWebGPUStore : true;
+
+  // Mark as mounted after hydration
+  useEffect(() => {
+    setHasMounted(true);
+  }, []);
 
   const handleMusicToggle = useCallback(() => {
     toggleMusic();
-    const newEnabled = !musicEnabled;
+    const newEnabled = !musicEnabledStore;
     MusicPlayer.setMuted(!newEnabled);
     if (!newEnabled) {
       MusicPlayer.pause();
     } else {
       MusicPlayer.resume();
     }
-  }, [toggleMusic, musicEnabled]);
+  }, [toggleMusic, musicEnabledStore]);
 
   // Initialize and play menu music
   useEffect(() => {
