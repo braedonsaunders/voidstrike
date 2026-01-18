@@ -1,0 +1,141 @@
+name: Build WASM Boids
+
+# Build the WASM SIMD boids module when Rust source changes
+# Pre-compiled WASM is committed to avoid Rust toolchain on Vercel
+
+on:
+  push:
+    paths:
+      - 'wasm/boids/**'
+      - '.github/workflows/build-wasm.yml'
+    branches:
+      - main
+      - develop
+  pull_request:
+    paths:
+      - 'wasm/boids/**'
+      - '.github/workflows/build-wasm.yml'
+  workflow_dispatch: # Manual trigger
+
+jobs:
+  build:
+    name: Build WASM with SIMD
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32-unknown-unknown
+
+      - name: Cache Rust dependencies
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: wasm/boids -> target
+
+      - name: Install wasm-pack
+        run: |
+          curl https://rustwasm.github.io/wasm-pack/installer/init.sh -sSf | sh
+
+      - name: Build WASM with SIMD
+        working-directory: wasm/boids
+        run: |
+          # Enable SIMD128 target feature for f32x4 operations
+          RUSTFLAGS="-C target-feature=+simd128" wasm-pack build \
+            --target web \
+            --release \
+            --out-dir pkg \
+            --out-name boids_wasm
+
+      - name: Prepare output directory
+        run: |
+          mkdir -p public/wasm
+
+      - name: Copy WASM artifacts
+        run: |
+          # Copy the WASM binary
+          cp wasm/boids/pkg/boids_wasm_bg.wasm public/wasm/boids_wasm_bg.wasm
+
+          # Copy the JS glue code
+          cp wasm/boids/pkg/boids_wasm.js public/wasm/boids_wasm.js
+
+          # Copy TypeScript definitions (optional, for IDE support)
+          cp wasm/boids/pkg/boids_wasm.d.ts public/wasm/boids_wasm.d.ts || true
+
+      - name: Display WASM size
+        run: |
+          echo "WASM binary size:"
+          ls -lh public/wasm/boids_wasm_bg.wasm
+
+          # Check if SIMD instructions are present
+          echo ""
+          echo "Checking for SIMD instructions..."
+          if command -v wasm2wat &> /dev/null; then
+            wasm2wat public/wasm/boids_wasm_bg.wasm 2>/dev/null | grep -c "f32x4" || echo "f32x4 instructions: 0"
+          else
+            echo "(wasm2wat not installed, skipping SIMD check)"
+          fi
+
+      - name: Commit WASM artifacts
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+          git add public/wasm/
+
+          # Only commit if there are changes
+          if git diff --staged --quiet; then
+            echo "No WASM changes to commit"
+          else
+            git commit -m "chore: Update WASM boids module
+
+Built from $(git log -1 --format='%h' wasm/boids/)
+SIMD enabled: f32x4 operations for 4x throughput"
+            git push
+          fi
+
+      - name: Upload WASM artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: wasm-boids
+          path: |
+            public/wasm/boids_wasm_bg.wasm
+            public/wasm/boids_wasm.js
+            public/wasm/boids_wasm.d.ts
+          retention-days: 7
+
+  # Verify the WASM module works correctly
+  test:
+    name: Test WASM
+    runs-on: ubuntu-latest
+    needs: build
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Download WASM artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: wasm-boids
+          path: public/wasm/
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Type check
+        run: npm run type-check

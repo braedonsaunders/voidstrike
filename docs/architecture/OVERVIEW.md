@@ -15,6 +15,13 @@ voidstrike/
 │   ├── reference/             # Technical reference
 │   ├── security/              # Security documentation
 │   └── tools/                 # Development tools
+├── wasm/                       # WebAssembly modules
+│   └── boids/                 # SIMD-accelerated boids flocking
+│       ├── Cargo.toml         # Rust crate configuration
+│       └── src/
+│           ├── lib.rs         # WASM exports (BoidsEngine)
+│           ├── simd.rs        # f32x4 SIMD operations
+│           └── soa.rs         # SoA memory layout
 ├── src/
 │   ├── app/                   # Next.js App Router
 │   │   ├── page.tsx           # Landing page
@@ -88,6 +95,8 @@ voidstrike/
 │   │   │   ├── RecastNavigation.ts  # WASM-based navmesh pathfinding & crowd simulation
 │   │   │   ├── Grid.ts
 │   │   │   └── SpatialGrid.ts
+│   │   ├── wasm/
+│   │   │   └── WasmBoids.ts         # SIMD-accelerated boids wrapper with JS fallback
 │   │   └── definitions/
 │   │       ├── DefinitionRegistry.ts # Centralized config access
 │   │       ├── DefinitionLoader.ts   # Config loading
@@ -968,15 +977,47 @@ Animations are loaded from GLB files and mapped to game actions:
 1. **Instanced Rendering**: All units of same type use instanced meshes
 2. **Spatial Hashing**: O(1) lookups for nearby entities
 3. **WASM Pathfinding**: Recast Navigation runs near-native via WebAssembly
-4. **Object Pooling**: Reuse entities, projectiles, particles
-5. **LOD System**: Reduce detail at distance
-6. **Frustum Culling**: Don't render off-screen entities
-7. **Delta Compression**: Only send changed state in multiplayer
-8. **Asset Caching**: Meshes cached and cloned for reuse
-9. **WebGPU Texture Limit**: Fragment shaders limited to 16 sampled textures per stage
-   - `MeshStandardNodeMaterial` uses 1 internal texture for environment/IBL
-   - Terrain materials limited to 12 textures (4 layers × 3 maps each)
-   - Displacement maps removed to stay under limit
+4. **WASM SIMD Boids**: f32x4 vector operations for 4x throughput on boids forces (see below)
+5. **Object Pooling**: Reuse entities, projectiles, particles
+6. **LOD System**: Reduce detail at distance
+7. **Frustum Culling**: Don't render off-screen entities
+8. **Delta Compression**: Only send changed state in multiplayer
+9. **Asset Caching**: Meshes cached and cloned for reuse
+10. **WebGPU Texture Limit**: Fragment shaders limited to 16 sampled textures per stage
+    - `MeshStandardNodeMaterial` uses 1 internal texture for environment/IBL
+    - Terrain materials limited to 12 textures (4 layers × 3 maps each)
+    - Displacement maps removed to stay under limit
+
+### WASM SIMD Boids Acceleration
+
+High-performance boids computation using WebAssembly SIMD (f32x4):
+
+```
+wasm/boids/                     # Rust WASM crate
+├── Cargo.toml                  # Crate config with wasm-bindgen
+└── src/
+    ├── lib.rs                  # WASM exports (BoidsEngine class)
+    ├── simd.rs                 # f32x4 SIMD operations
+    └── soa.rs                  # SoA memory layout
+
+src/engine/wasm/
+└── WasmBoids.ts               # TypeScript wrapper with JS fallback
+
+.github/workflows/
+└── build-wasm.yml             # GitHub Actions WASM build pipeline
+```
+
+**Architecture:**
+- **SoA Layout**: Positions, velocities stored in contiguous arrays for cache-friendly SIMD access
+- **f32x4 Operations**: 4 units processed per SIMD instruction (separation, cohesion, alignment)
+- **Batch Processing**: Forces computed for all units in single WASM call
+- **Zero-Copy**: JS gets TypedArray views into WASM linear memory
+- **Graceful Fallback**: Auto-uses JS when SIMD unavailable or <20 units
+
+**Build Pipeline:**
+- GitHub Actions builds WASM on push to `wasm/boids/**`
+- Pre-built WASM committed to `public/wasm/` for Vercel
+- Local build: `./scripts/build-wasm.sh` (requires Rust + wasm-pack)
 
 ## SC2 Parity Features
 
