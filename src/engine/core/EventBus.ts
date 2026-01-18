@@ -64,22 +64,49 @@ export class EventBus {
   /**
    * Emit an event to all subscribers
    * OPTIMIZED: Avoid array allocation on every emit by iterating Map directly
+   * FIX: Improved error handling - collects all errors and continues processing
    */
   public emit<T = unknown>(event: string, data?: T): void {
     const subscriptions = this.events.get(event);
     if (!subscriptions || subscriptions.size === 0) return;
 
-    // Iterate directly over Map entries - avoids Array.from() allocation
-    // Safe because we check if callback still exists before calling
-    // (handles case where callback unsubscribes itself or others)
-    for (const [id, callback] of subscriptions) {
+    // FIX: Create snapshot of IDs to safely iterate even if handlers modify subscriptions
+    // This fixes the iterator invalidation bug where a handler unsubscribing another
+    // handler could cause the iteration to skip or fail
+    const handlerIds = Array.from(subscriptions.keys());
+    const errors: Array<{ id: number; error: unknown }> = [];
+
+    for (const id of handlerIds) {
+      const callback = subscriptions.get(id);
       // Verify callback still exists (could have been removed by previous callback)
-      if (!subscriptions.has(id)) continue;
+      if (!callback) continue;
 
       try {
         callback(data);
       } catch (error) {
+        // FIX: Collect errors instead of just logging, continue processing other handlers
+        errors.push({ id, error });
         debugInitialization.error(`Error in event handler for ${event}:`, error);
+      }
+    }
+
+    // FIX: Report collected errors for monitoring if any occurred
+    if (errors.length > 0) {
+      // Emit error event for monitoring (use different channel to avoid recursion)
+      // Only emit if there are listeners and this isn't itself an error event
+      if (event !== 'eventbus:errors' && this.hasListeners('eventbus:errors')) {
+        try {
+          this.emit('eventbus:errors', {
+            event,
+            errorCount: errors.length,
+            errors: errors.map(e => ({
+              handlerId: e.id,
+              message: e.error instanceof Error ? e.error.message : String(e.error),
+            })),
+          });
+        } catch {
+          // Prevent infinite recursion if error handler itself fails
+        }
       }
     }
   }

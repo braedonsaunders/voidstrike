@@ -165,6 +165,31 @@ export class World {
     return entity;
   }
 
+  /**
+   * Check if an entity exists and is not destroyed.
+   * Use this for validation in performance-critical paths where you only need
+   * to know if an entity is valid, not to retrieve it.
+   */
+  public isEntityValid(id: EntityId): boolean {
+    const entity = this.entities.get(id);
+    return entity !== undefined && !entity.isDestroyed();
+  }
+
+  /**
+   * Validate an entity reference is still valid (not null and not destroyed).
+   * Use this when you have a cached entity reference that may have become stale.
+   * Returns the entity if valid, undefined otherwise.
+   *
+   * USAGE: Instead of using a cached entity directly, re-validate:
+   *   const entity = world.validateEntity(cachedEntity);
+   *   if (!entity) return; // Entity was destroyed
+   */
+  public validateEntity(entity: Entity | undefined | null): Entity | undefined {
+    if (!entity) return undefined;
+    if (entity.isDestroyed()) return undefined;
+    return entity;
+  }
+
   public getEntities(): Entity[] {
     // PERF: Return cached list if still valid
     if (this._cachedEntities && this._cachedEntityListVersion === this._entityListVersion) {
