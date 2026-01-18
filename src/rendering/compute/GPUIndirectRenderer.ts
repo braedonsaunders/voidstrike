@@ -36,10 +36,13 @@ import {
 import * as TSL from 'three/tsl';
 const uint = (TSL as any).uint;
 
-// Three.js classes that may not be in type definitions
-const IndirectStorageBufferAttribute = (THREE as any).IndirectStorageBufferAttribute;
-const StorageBufferAttribute = (THREE as any).StorageBufferAttribute;
-const NodeMaterial = (THREE as any).NodeMaterial || THREE.MeshStandardMaterial;
+// StorageBufferAttribute, IndirectStorageBufferAttribute, NodeMaterial exist in three/webgpu
+// but lack TypeScript declarations - access dynamically
+// eslint-disable-next-line @typescript-eslint/no-require-imports
+import * as THREE_WEBGPU from 'three/webgpu';
+const StorageBufferAttribute = (THREE_WEBGPU as any).StorageBufferAttribute;
+const IndirectStorageBufferAttribute = (THREE_WEBGPU as any).IndirectStorageBufferAttribute;
+const NodeMaterial = (THREE_WEBGPU as any).NodeMaterial || THREE.MeshStandardMaterial;
 
 import { GPUUnitBuffer } from './GPUUnitBuffer';
 import { CullingCompute } from './CullingCompute';
