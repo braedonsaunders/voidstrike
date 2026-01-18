@@ -13,6 +13,10 @@ import { useUIStore } from '@/store/uiStore';
 import { debugAnimation, debugAssets, debugPerformance } from '@/utils/debugLogger';
 import { setupInstancedVelocity, swapInstanceMatrices, commitInstanceMatrices, disposeInstancedVelocity } from './tsl/InstancedVelocity';
 
+// GPU-driven rendering infrastructure
+import { GPUUnitBuffer } from './compute/GPUUnitBuffer';
+import { CullingCompute, LODConfig } from './compute/CullingCompute';
+
 // Instance data for a single unit type + player combo at a specific LOD level
 interface InstancedUnitGroup {
   mesh: THREE.InstancedMesh;
@@ -138,6 +142,14 @@ export class UnitRenderer {
   private cachedSortedEntities: import('@/engine/ecs/Entity').Entity[] = [];
   private cachedEntityCount: number = -1; // Track count to detect changes
 
+  // GPU-Driven Rendering Infrastructure
+  private gpuUnitBuffer: GPUUnitBuffer | null = null;
+  private cullingCompute: CullingCompute | null = null;
+  private useGPUDrivenRendering = false;
+
+  // Track entities managed by GPU buffer
+  private gpuManagedEntities: Set<number> = new Set();
+
   constructor(scene: THREE.Scene, world: World, visionSystem?: VisionSystem, terrain?: Terrain) {
     this.scene = scene;
     this.world = world;
@@ -184,6 +196,109 @@ export class UnitRenderer {
    */
   public setCamera(camera: THREE.Camera): void {
     this.camera = camera;
+  }
+
+  /**
+   * Enable GPU-driven rendering mode
+   *
+   * When enabled:
+   * - Unit transforms stored in GPU buffer
+   * - Frustum culling done via CullingCompute
+   * - Reduced CPU overhead for large unit counts
+   */
+  public enableGPUDrivenRendering(): void {
+    if (this.useGPUDrivenRendering) return;
+
+    this.gpuUnitBuffer = new GPUUnitBuffer({
+      maxUnits: 4096,
+      maxUnitTypes: 64,
+      maxLODLevels: 3,
+      maxPlayers: 8,
+    });
+
+    const settings = useUIStore.getState().graphicsSettings;
+    this.cullingCompute = new CullingCompute({
+      LOD0_MAX: settings.lodDistance0,
+      LOD1_MAX: settings.lodDistance1,
+    });
+
+    this.useGPUDrivenRendering = true;
+    this.gpuManagedEntities.clear();
+
+    console.log('[UnitRenderer] GPU-driven rendering enabled');
+  }
+
+  /**
+   * Disable GPU-driven rendering and fall back to CPU path
+   */
+  public disableGPUDrivenRendering(): void {
+    if (!this.useGPUDrivenRendering) return;
+
+    this.gpuUnitBuffer?.dispose();
+    this.gpuUnitBuffer = null;
+
+    this.cullingCompute?.dispose();
+    this.cullingCompute = null;
+
+    this.useGPUDrivenRendering = false;
+    this.gpuManagedEntities.clear();
+
+    console.log('[UnitRenderer] GPU-driven rendering disabled');
+  }
+
+  /**
+   * Check if GPU-driven rendering is enabled
+   */
+  public isGPUDrivenEnabled(): boolean {
+    return this.useGPUDrivenRendering;
+  }
+
+  /**
+   * Update GPU buffer with entity transform
+   */
+  private updateGPUEntityTransform(
+    entityId: number,
+    unitType: string,
+    playerId: string,
+    x: number,
+    y: number,
+    z: number,
+    rotation: number,
+    scale: number
+  ): void {
+    if (!this.gpuUnitBuffer) return;
+
+    // Allocate slot if new entity
+    if (!this.gpuManagedEntities.has(entityId)) {
+      const slot = this.gpuUnitBuffer.allocateSlot(entityId, unitType, playerId);
+      if (slot) {
+        this.gpuManagedEntities.add(entityId);
+        // Set initial bounding radius
+        this.gpuUnitBuffer.updateBoundingRadius(entityId, 1.0);
+      }
+    }
+
+    // Update transform
+    this.gpuUnitBuffer.updateTransformComponents(entityId, x, y, z, rotation, scale);
+  }
+
+  /**
+   * Remove entity from GPU buffer
+   */
+  private removeGPUEntity(entityId: number): void {
+    if (!this.gpuUnitBuffer) return;
+
+    if (this.gpuManagedEntities.has(entityId)) {
+      this.gpuUnitBuffer.freeSlot(entityId);
+      this.gpuManagedEntities.delete(entityId);
+    }
+  }
+
+  /**
+   * Update LOD config from graphics settings
+   */
+  public updateLODConfig(lodConfig: LODConfig): void {
+    this.cullingCompute?.setLODConfig(lodConfig);
   }
 
   /**
@@ -1224,5 +1339,12 @@ export class UnitRenderer {
     this.visualRotations.clear();
     this.selectedUnits.clear();
     this.visibleUnits.clear();
+
+    // Dispose GPU-driven rendering resources
+    this.gpuUnitBuffer?.dispose();
+    this.gpuUnitBuffer = null;
+    this.cullingCompute?.dispose();
+    this.cullingCompute = null;
+    this.gpuManagedEntities.clear();
   }
 }

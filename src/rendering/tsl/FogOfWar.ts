@@ -18,6 +18,7 @@ import {
 } from 'three/tsl';
 import { MeshBasicNodeMaterial } from 'three/webgpu';
 import { VisionSystem } from '@/engine/systems/VisionSystem';
+import { VisionCompute } from '@/rendering/compute/VisionCompute';
 import { isSpectatorMode } from '@/store/gameSetupStore';
 
 export interface TSLFogOfWarConfig {
@@ -44,6 +45,12 @@ export class TSLFogOfWar {
 
   private visionSystem: VisionSystem | null = null;
   private playerId: string | null = null;
+  private playerIndex: number = 0; // Numeric index for GPU vision
+
+  // GPU Vision Compute (optional, for high-performance mode)
+  private gpuVisionCompute: VisionCompute | null = null;
+  private useGPUVision: boolean = false;
+  private lastGPUVisionVersion: number = -1;
 
   // Uniforms for TSL
   private uUnexploredColor = uniform(new THREE.Color(0x2a3a4a));
@@ -51,7 +58,8 @@ export class TSLFogOfWar {
 
   // PERFORMANCE: Throttle updates
   private lastUpdateTime: number = 0;
-  private updateInterval: number = 100; // Only update every 100ms
+  private updateInterval: number = 100; // Only update every 100ms (CPU path)
+  private gpuUpdateInterval: number = 16; // GPU path can update more frequently
 
   constructor(config: TSLFogOfWarConfig) {
     this.mapWidth = config.mapWidth;
@@ -145,10 +153,34 @@ export class TSLFogOfWar {
 
   public setVisionSystem(visionSystem: VisionSystem): void {
     this.visionSystem = visionSystem;
+
+    // Check if GPU vision is available
+    const gpuCompute = visionSystem.getGPUVisionCompute();
+    if (gpuCompute && gpuCompute.isAvailable()) {
+      this.gpuVisionCompute = gpuCompute;
+      this.useGPUVision = true;
+      console.log('[FogOfWar] Using GPU vision compute');
+    }
   }
 
   public setPlayerId(playerId: string | null): void {
     this.playerId = playerId;
+    // Update player index for GPU vision
+    if (playerId && this.visionSystem) {
+      // Get the player index from vision system
+      // The index is determined by registration order
+      const knownPlayers = Array.from((this.visionSystem as any).knownPlayers || []);
+      this.playerIndex = knownPlayers.indexOf(playerId);
+      if (this.playerIndex === -1) this.playerIndex = 0;
+    }
+  }
+
+  /**
+   * Enable GPU vision mode (called when GPU compute is available)
+   */
+  public setGPUVisionCompute(gpuCompute: VisionCompute | null): void {
+    this.gpuVisionCompute = gpuCompute;
+    this.useGPUVision = gpuCompute !== null && gpuCompute.isAvailable();
   }
 
   public update(): void {
@@ -161,7 +193,13 @@ export class TSLFogOfWar {
     }
     this.mesh.visible = true;
 
-    // PERFORMANCE: Throttle updates
+    // Use GPU vision path if available
+    if (this.useGPUVision && this.gpuVisionCompute) {
+      this.updateFromGPUVision();
+      return;
+    }
+
+    // CPU/Worker path with throttling
     const now = performance.now();
     if (now - this.lastUpdateTime < this.updateInterval) {
       return;
@@ -196,6 +234,61 @@ export class TSLFogOfWar {
         }
 
         this.textureData[i * 4 + 3] = alpha;
+      }
+    }
+
+    this.fogTexture.needsUpdate = true;
+  }
+
+  /**
+   * Update fog texture from GPU vision compute
+   * GPU path can update more frequently since computation is fast
+   */
+  private updateFromGPUVision(): void {
+    if (!this.gpuVisionCompute || !this.playerId) return;
+
+    // Check if vision has changed
+    const currentVersion = this.gpuVisionCompute.getVisionVersion();
+    if (currentVersion === this.lastGPUVisionVersion) {
+      return; // No change, skip update
+    }
+    this.lastGPUVisionVersion = currentVersion;
+
+    // Throttle even GPU path to avoid excessive texture uploads
+    const now = performance.now();
+    if (now - this.lastUpdateTime < this.gpuUpdateInterval) {
+      return;
+    }
+    this.lastUpdateTime = now;
+
+    // Get GPU vision texture and copy to our fog texture
+    const gpuTex = this.gpuVisionCompute.getVisionTexture(this.playerIndex);
+    if (!gpuTex) return;
+
+    const gpuData = gpuTex.image.data as Uint8Array;
+
+    // Copy GPU vision data to fog texture with Y flip
+    // GPU texture format: RGBA where R=explored, G=visible
+    for (let y = 0; y < this.gridHeight; y++) {
+      for (let x = 0; x < this.gridWidth; x++) {
+        const textureY = this.gridHeight - 1 - y;
+        const fogIdx = textureY * this.gridWidth + x;
+        const gpuIdx = (y * this.gridWidth + x) * 4;
+
+        const explored = gpuData[gpuIdx + 0];
+        const visible = gpuData[gpuIdx + 1];
+
+        // Alpha determines fog level: 255 = full fog, 0 = no fog
+        let alpha: number;
+        if (visible > 0) {
+          alpha = 0; // Visible - no fog
+        } else if (explored > 0) {
+          alpha = 128; // Explored - partial fog
+        } else {
+          alpha = 255; // Unexplored - full fog
+        }
+
+        this.textureData[fogIdx * 4 + 3] = alpha;
       }
     }
 
