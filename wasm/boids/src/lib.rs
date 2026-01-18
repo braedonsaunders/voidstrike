@@ -43,7 +43,7 @@
 mod simd;
 mod soa;
 
-use soa::{BoidsBuffer, NeighborList, UnitState};
+use soa::{BoidsBuffer, NeighborList};
 use wasm_bindgen::prelude::*;
 
 // Use `wee_alloc` as the global allocator for smaller WASM size
@@ -269,27 +269,37 @@ impl BoidsEngine {
 }
 
 // ==================== Unit State Constants ====================
-// Exposed as module-level constants for JS
+// Exposed as getter functions for JS (wasm_bindgen doesn't support const exports)
 
 /// Unit is active and should be processed
 #[wasm_bindgen]
-pub const STATE_ACTIVE: u8 = UnitState::Active as u8;
+pub fn state_active() -> u8 {
+    0
+}
 
 /// Unit is dead/inactive
 #[wasm_bindgen]
-pub const STATE_DEAD: u8 = UnitState::Dead as u8;
+pub fn state_dead() -> u8 {
+    1
+}
 
 /// Unit is flying (different collision layer)
 #[wasm_bindgen]
-pub const STATE_FLYING: u8 = UnitState::Flying as u8;
+pub fn state_flying() -> u8 {
+    2
+}
 
 /// Unit is gathering resources (no separation)
 #[wasm_bindgen]
-pub const STATE_GATHERING: u8 = UnitState::Gathering as u8;
+pub fn state_gathering() -> u8 {
+    3
+}
 
 /// Unit is a worker (special rules)
 #[wasm_bindgen]
-pub const STATE_WORKER: u8 = UnitState::Worker as u8;
+pub fn state_worker() -> u8 {
+    4
+}
 
 // ==================== Memory Utilities ====================
 
