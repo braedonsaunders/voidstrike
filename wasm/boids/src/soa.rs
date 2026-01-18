@@ -22,6 +22,7 @@ use std::alloc::{alloc_zeroed, dealloc, Layout};
 const SIMD_ALIGNMENT: usize = 16;
 
 /// Unit state flags for filtering during boids computation
+#[allow(dead_code)]
 #[repr(u8)]
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub enum UnitState {
@@ -77,6 +78,7 @@ pub struct BoidsBuffer {
     capacity: usize,
 }
 
+#[allow(dead_code)]
 impl BoidsBuffer {
     /// Create a new buffer with the specified capacity.
     ///
@@ -318,6 +320,7 @@ pub struct NeighborList {
     capacity: usize,
 }
 
+#[allow(dead_code)]
 impl NeighborList {
     /// Create a new neighbor list with capacity for max_units
     pub fn new(max_units: usize) -> Self {

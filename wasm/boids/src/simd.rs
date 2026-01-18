@@ -415,6 +415,8 @@ pub fn simd_available() -> bool {
 }
 
 /// Optimized SIMD operations for common vector math
+/// Reserved for future true SIMD implementation
+#[allow(dead_code)]
 #[cfg(target_arch = "wasm32")]
 pub mod vector_ops {
     use std::arch::wasm32::*;
