@@ -257,7 +257,7 @@ export class UnitRenderer {
     this.useGPUDrivenRendering = false;
     this.gpuManagedEntities.clear();
 
-    debugPerformance('[UnitRenderer] GPU-driven rendering disabled');
+    debugPerformance.log('[UnitRenderer] GPU-driven rendering disabled');
   }
 
   /**
