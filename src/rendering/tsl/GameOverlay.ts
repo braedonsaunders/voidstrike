@@ -298,9 +298,15 @@ export class TSLGameOverlayManager {
   }
 
   /**
-   * Update navmesh overlay by querying Recast Navigation for each cell.
-   * Shows green for walkable, red for unwalkable, yellow for ramps (from map data),
-   * and blue tint for cells where navmesh height differs significantly from expected.
+   * Update navmesh overlay by testing ACTUAL CONNECTIVITY via path computation.
+   * This is the critical diagnostic that shows if ramps connect low and high ground.
+   *
+   * Color coding:
+   * - Green: Connected to reference point (can path)
+   * - Yellow/Orange: On navmesh but DISCONNECTED (path fails) - THIS SHOWS THE BUG
+   * - Magenta: Ramp that's disconnected (critical!)
+   * - Red: Should be walkable but not on navmesh
+   * - Dark gray: Unwalkable (correct)
    */
   private updateNavmeshOverlay(): void {
     if (!this.navmeshTextureData || !this.navmeshTexture) return;
@@ -308,117 +314,116 @@ export class TSLGameOverlayManager {
     const recast = getRecastNavigation();
     const { width, height, terrain } = this.mapData;
 
-    // Query navmesh for each cell
+    // Find a reference point for connectivity testing
+    // Use center of map at low elevation as the reference
+    let refX = width / 2;
+    let refY = height / 2;
+
+    // Try to find a walkable cell near the center at low elevation
+    let foundRef = false;
+    for (let r = 0; r < Math.max(width, height) / 2 && !foundRef; r++) {
+      for (let dy = -r; dy <= r && !foundRef; dy++) {
+        for (let dx = -r; dx <= r && !foundRef; dx++) {
+          const x = Math.floor(width / 2) + dx;
+          const y = Math.floor(height / 2) + dy;
+          if (x >= 0 && x < width && y >= 0 && y < height) {
+            const cell = terrain[y]?.[x];
+            if (cell && cell.terrain !== 'unwalkable' && cell.terrain !== 'ramp' && cell.elevation < 50) {
+              refX = x + 0.5;
+              refY = y + 0.5;
+              foundRef = true;
+            }
+          }
+        }
+      }
+    }
+
+    console.log(`[NavmeshOverlay] Reference point for connectivity: (${refX.toFixed(1)}, ${refY.toFixed(1)})`);
+
+    let connectedCount = 0;
+    let disconnectedCount = 0;
+    let unwalkableCount = 0;
+    let notOnNavmeshCount = 0;
+
+    // Query navmesh for each cell - test actual path connectivity
     for (let y = 0; y < height; y++) {
       for (let x = 0; x < width; x++) {
         const i = (y * width + x) * 4;
         const cell = terrain[y]?.[x];
-        const cellX = x + 0.5; // Center of cell
+        const cellX = x + 0.5;
         const cellZ = y + 0.5;
 
-        // Check if Recast says this cell is walkable
+        // Check if cell is on navmesh
         const isNavmeshWalkable = recast.isReady() ? recast.isWalkable(cellX, cellZ) : false;
 
-        // Get projected point on navmesh for height comparison
-        let navmeshPoint: { x: number; y: number; z: number } | null = null;
-        if (recast.isReady()) {
-          navmeshPoint = recast.projectToNavMesh(cellX, cellZ);
-        }
-
-        // Get expected terrain height
-        const expectedHeight = this.getTerrainHeight(cellX, cellZ);
-
-        // Determine cell color based on ACTUAL navmesh state
         if (cell?.terrain === 'unwalkable') {
-          // Map says unwalkable - should be red
-          if (isNavmeshWalkable) {
-            // ERROR: Navmesh says walkable but map says unwalkable (unexpected)
-            this.navmeshTextureData[i + 0] = 255; // Red
-            this.navmeshTextureData[i + 1] = 128; // Orange tint
-            this.navmeshTextureData[i + 2] = 0;
-            this.navmeshTextureData[i + 3] = 220;
-          } else {
-            // Correct: both agree unwalkable
-            this.navmeshTextureData[i + 0] = 100;
-            this.navmeshTextureData[i + 1] = 30;
-            this.navmeshTextureData[i + 2] = 30;
-            this.navmeshTextureData[i + 3] = 150;
-          }
-        } else if (cell?.terrain === 'ramp') {
-          // Map says ramp - show in yellow/gold tones
-          if (isNavmeshWalkable) {
-            // Good: navmesh confirms ramp is walkable
-            this.navmeshTextureData[i + 0] = 80;  // Less red
-            this.navmeshTextureData[i + 1] = 200; // Green (walkable)
-            this.navmeshTextureData[i + 2] = 80;  // Yellow-green
-            this.navmeshTextureData[i + 3] = 200;
-          } else {
-            // CRITICAL BUG: Ramp should be walkable but navmesh says no!
-            this.navmeshTextureData[i + 0] = 255; // Bright red
-            this.navmeshTextureData[i + 1] = 50;
-            this.navmeshTextureData[i + 2] = 200; // Purple-red to highlight issue
-            this.navmeshTextureData[i + 3] = 255; // Full opacity for critical issue
-          }
+          // Correctly unwalkable
+          this.navmeshTextureData[i + 0] = 60;
+          this.navmeshTextureData[i + 1] = 60;
+          this.navmeshTextureData[i + 2] = 60;
+          this.navmeshTextureData[i + 3] = 150;
+          unwalkableCount++;
+        } else if (!isNavmeshWalkable) {
+          // Should be walkable but navmesh says no - red
+          this.navmeshTextureData[i + 0] = 255;
+          this.navmeshTextureData[i + 1] = 50;
+          this.navmeshTextureData[i + 2] = 50;
+          this.navmeshTextureData[i + 3] = 220;
+          notOnNavmeshCount++;
         } else {
-          // Map says ground/walkable
-          if (isNavmeshWalkable) {
-            // Good: navmesh confirms walkable - green
-            // Check if height matches (detect potential discontinuities)
-            if (navmeshPoint) {
-              const heightDiff = Math.abs(navmeshPoint.y - expectedHeight);
-              if (heightDiff > 0.5) {
-                // Height mismatch - blue tint to show potential issue
-                this.navmeshTextureData[i + 0] = 80;
-                this.navmeshTextureData[i + 1] = 150;
-                this.navmeshTextureData[i + 2] = 220; // Blue
-                this.navmeshTextureData[i + 3] = 180;
-              } else {
-                // All good - standard green
-                this.navmeshTextureData[i + 0] = 50;
-                this.navmeshTextureData[i + 1] = 180;
-                this.navmeshTextureData[i + 2] = 50;
-                this.navmeshTextureData[i + 3] = 150;
-              }
-            } else {
-              // Walkable but no navmesh point found (shouldn't happen)
+          // On navmesh - test if we can path to reference point
+          const pathResult = recast.isReady() ? recast.findPath(cellX, cellZ, refX, refY) : { found: false, path: [] };
+
+          if (pathResult.found && pathResult.path.length > 0) {
+            // CONNECTED - can reach reference point
+            if (cell?.terrain === 'ramp') {
+              // Ramp that's connected - bright cyan/green
               this.navmeshTextureData[i + 0] = 50;
-              this.navmeshTextureData[i + 1] = 180;
+              this.navmeshTextureData[i + 1] = 255;
+              this.navmeshTextureData[i + 2] = 200;
+              this.navmeshTextureData[i + 3] = 220;
+            } else {
+              // Normal connected cell - green
+              this.navmeshTextureData[i + 0] = 50;
+              this.navmeshTextureData[i + 1] = 200;
               this.navmeshTextureData[i + 2] = 50;
-              this.navmeshTextureData[i + 3] = 150;
+              this.navmeshTextureData[i + 3] = 180;
             }
+            connectedCount++;
           } else {
-            // BUG: Map says walkable but navmesh says no!
-            this.navmeshTextureData[i + 0] = 255; // Bright red
-            this.navmeshTextureData[i + 1] = 0;
-            this.navmeshTextureData[i + 2] = 0;
-            this.navmeshTextureData[i + 3] = 240;
+            // DISCONNECTED - on navmesh but can't reach reference point
+            // THIS IS THE BUG INDICATOR
+            if (cell?.terrain === 'ramp') {
+              // Ramp that's disconnected - magenta (critical!)
+              this.navmeshTextureData[i + 0] = 255;
+              this.navmeshTextureData[i + 1] = 50;
+              this.navmeshTextureData[i + 2] = 255;
+              this.navmeshTextureData[i + 3] = 255;
+            } else {
+              // Normal cell that's disconnected - yellow/orange
+              this.navmeshTextureData[i + 0] = 255;
+              this.navmeshTextureData[i + 1] = 200;
+              this.navmeshTextureData[i + 2] = 50;
+              this.navmeshTextureData[i + 3] = 220;
+            }
+            disconnectedCount++;
           }
         }
       }
+    }
+
+    console.log(`[NavmeshOverlay] Connectivity results:`);
+    console.log(`  - Connected (green): ${connectedCount} cells`);
+    console.log(`  - DISCONNECTED (yellow/magenta): ${disconnectedCount} cells - THESE ARE THE PROBLEM`);
+    console.log(`  - Not on navmesh (red): ${notOnNavmeshCount} cells`);
+    console.log(`  - Unwalkable (gray): ${unwalkableCount} cells`);
+
+    if (disconnectedCount > 0) {
+      console.warn(`[NavmeshOverlay] WARNING: ${disconnectedCount} cells are on navmesh but cannot reach the reference point!`);
+      console.warn(`[NavmeshOverlay] This indicates DISCONNECTED NAVMESH REGIONS - ramps are not connecting elevation levels!`);
     }
 
     this.navmeshTexture.needsUpdate = true;
-
-    // Log summary
-    let walkableCount = 0;
-    let unwalkableCount = 0;
-    let bugCount = 0;
-    for (let y = 0; y < height; y++) {
-      for (let x = 0; x < width; x++) {
-        const i = (y * width + x) * 4;
-        const cell = terrain[y]?.[x];
-        const isMapWalkable = cell?.terrain !== 'unwalkable';
-        const cellX = x + 0.5;
-        const cellZ = y + 0.5;
-        const isNavWalkable = recast.isReady() ? recast.isWalkable(cellX, cellZ) : false;
-
-        if (isNavWalkable) walkableCount++;
-        else unwalkableCount++;
-
-        if (isMapWalkable && !isNavWalkable) bugCount++;
-      }
-    }
-    console.log(`[NavmeshOverlay] Walkable: ${walkableCount}, Unwalkable: ${unwalkableCount}, Bugs (map says walkable, nav says no): ${bugCount}`);
   }
 
   private updateThreatOverlay(): void {
