@@ -430,6 +430,20 @@
 ### Remaining Optimizations
 - [ ] Web Worker for AI calculations
 
+### Future Performance Optimizations (Validated)
+> See **docs/PERFORMANCE_ANALYSIS.md** for detailed analysis and ranking
+
+**Tier 1 (Implement First):**
+- [ ] GPU Compute Vision/Fog of War - WebGPU compute shader for 60Hz vision
+- [ ] Merkle Tree State Checksums - O(log n) desync detection
+- [ ] Temporal Reprojection for GTAO/SSR - Leverage existing velocity buffer
+- [ ] Hierarchical Interest Management - Reduced tick rate for off-screen entities
+
+**Tier 2 (Scaling):**
+- [ ] WASM SIMD for Boids/Movement - 4-8x throughput for flocking
+- [ ] GPU-Driven Indirect Draw - Eliminate CPU-GPU sync for 500+ units
+- [ ] Flow Field Pathfinding - GPU compute for same-destination commands
+
 ---
 
 ## Phase 1: Foundation (COMPLETE ✓)
