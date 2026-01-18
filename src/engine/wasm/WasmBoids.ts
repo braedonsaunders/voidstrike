@@ -175,11 +175,18 @@ export class WasmBoids {
   }
 
   private async doInitialize(): Promise<boolean> {
+    // Only run in browser context
+    if (typeof window === 'undefined') {
+      this.initialized = true;
+      return false;
+    }
+
     try {
       // Dynamic import of WASM module from public directory
-      // The path is resolved at runtime by the browser, not TypeScript
-      // @ts-expect-error - Dynamic import from public path, types defined below
-      const wasmModule = await import('/wasm/boids_wasm.js');
+      // Use variable to prevent static analysis by bundler
+      const wasmPath = '/wasm/boids_wasm.js';
+      // @ts-expect-error - Dynamic runtime import from public path
+      const wasmModule = await (Function('return import("' + wasmPath + '")')());
       await wasmModule.default();
 
       this.wasm = wasmModule as BoidsWasmExports;
