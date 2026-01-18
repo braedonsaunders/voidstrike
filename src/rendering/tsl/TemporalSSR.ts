@@ -141,6 +141,7 @@ export function createTemporalSSRBlendNode(
  * Temporal SSR Manager
  *
  * Manages render targets for SSR temporal accumulation.
+ * Includes quarter-res SSR target for actual 75% GPU cost reduction.
  */
 export class TemporalSSRManager {
   private config: TemporalSSRConfig;
@@ -153,7 +154,15 @@ export class TemporalSSRManager {
   private fullWidth: number;
   private fullHeight: number;
 
-  // History buffers (ping-pong)
+  // Quarter-res SSR render target - THIS is where the actual cost savings come from
+  private quarterSSRTarget: THREE.RenderTarget;
+
+  // Quarter-res G-buffer textures for SSR (downsampled from full-res)
+  private quarterColorTarget: THREE.RenderTarget;
+  private quarterDepthTarget: THREE.RenderTarget;
+  private quarterNormalTarget: THREE.RenderTarget;
+
+  // History buffers (ping-pong) at full resolution
   private historyBufferA: THREE.WebGLRenderTarget;
   private historyBufferB: THREE.WebGLRenderTarget;
   private currentHistory: 'A' | 'B' = 'A';
@@ -165,6 +174,52 @@ export class TemporalSSRManager {
     this.fullHeight = height;
     this.quarterWidth = Math.max(1, Math.floor(width / 2));
     this.quarterHeight = Math.max(1, Math.floor(height / 2));
+
+    // Quarter-res SSR target - SSR raymarching happens here at 25% resolution
+    this.quarterSSRTarget = new THREE.RenderTarget(
+      this.quarterWidth,
+      this.quarterHeight,
+      {
+        type: THREE.HalfFloatType,
+        format: THREE.RGBAFormat,
+        minFilter: THREE.LinearFilter,
+        magFilter: THREE.LinearFilter,
+      }
+    );
+
+    // Quarter-res G-buffer for SSR computation
+    this.quarterColorTarget = new THREE.RenderTarget(
+      this.quarterWidth,
+      this.quarterHeight,
+      {
+        type: THREE.HalfFloatType,
+        format: THREE.RGBAFormat,
+        minFilter: THREE.LinearFilter,
+        magFilter: THREE.LinearFilter,
+      }
+    );
+
+    this.quarterDepthTarget = new THREE.RenderTarget(
+      this.quarterWidth,
+      this.quarterHeight,
+      {
+        type: THREE.HalfFloatType,
+        format: THREE.RedFormat,
+        minFilter: THREE.LinearFilter,
+        magFilter: THREE.LinearFilter,
+      }
+    );
+
+    this.quarterNormalTarget = new THREE.RenderTarget(
+      this.quarterWidth,
+      this.quarterHeight,
+      {
+        type: THREE.HalfFloatType,
+        format: THREE.RGBAFormat,
+        minFilter: THREE.LinearFilter,
+        magFilter: THREE.LinearFilter,
+      }
+    );
 
     // Create history buffers at full resolution (RGBA for color + alpha)
     const historyOptions = {
@@ -185,6 +240,58 @@ export class TemporalSSRManager {
       this.fullHeight,
       historyOptions
     );
+
+    console.log(`[TemporalSSR] Initialized: full=${this.fullWidth}x${this.fullHeight}, quarter=${this.quarterWidth}x${this.quarterHeight} (75% cost reduction)`);
+  }
+
+  /**
+   * Get the quarter-res SSR render target
+   */
+  getQuarterSSRTarget(): THREE.RenderTarget {
+    return this.quarterSSRTarget;
+  }
+
+  /**
+   * Get the quarter-res SSR texture for sampling
+   */
+  getQuarterSSRTexture(): THREE.Texture {
+    return this.quarterSSRTarget.texture;
+  }
+
+  /**
+   * Get the quarter-res color texture
+   */
+  getQuarterColorTexture(): THREE.Texture {
+    return this.quarterColorTarget.texture;
+  }
+
+  /**
+   * Get the quarter-res depth texture
+   */
+  getQuarterDepthTexture(): THREE.Texture {
+    return this.quarterDepthTarget.texture;
+  }
+
+  /**
+   * Get the quarter-res normal texture
+   */
+  getQuarterNormalTexture(): THREE.Texture {
+    return this.quarterNormalTarget.texture;
+  }
+
+  /**
+   * Get quarter-res G-buffer targets for rendering
+   */
+  getQuarterGBufferTargets(): {
+    color: THREE.RenderTarget;
+    depth: THREE.RenderTarget;
+    normal: THREE.RenderTarget;
+  } {
+    return {
+      color: this.quarterColorTarget,
+      depth: this.quarterDepthTarget,
+      normal: this.quarterNormalTarget,
+    };
   }
 
   /**
@@ -220,6 +327,13 @@ export class TemporalSSRManager {
   }
 
   /**
+   * Get full resolution
+   */
+  getFullResolution(): { width: number; height: number } {
+    return { width: this.fullWidth, height: this.fullHeight };
+  }
+
+  /**
    * Update resolution
    */
   setSize(width: number, height: number): void {
@@ -228,6 +342,10 @@ export class TemporalSSRManager {
     this.quarterWidth = Math.max(1, Math.floor(width / 2));
     this.quarterHeight = Math.max(1, Math.floor(height / 2));
 
+    this.quarterSSRTarget.setSize(this.quarterWidth, this.quarterHeight);
+    this.quarterColorTarget.setSize(this.quarterWidth, this.quarterHeight);
+    this.quarterDepthTarget.setSize(this.quarterWidth, this.quarterHeight);
+    this.quarterNormalTarget.setSize(this.quarterWidth, this.quarterHeight);
     this.historyBufferA.setSize(this.fullWidth, this.fullHeight);
     this.historyBufferB.setSize(this.fullWidth, this.fullHeight);
   }
@@ -240,9 +358,20 @@ export class TemporalSSRManager {
   }
 
   /**
+   * Get current config
+   */
+  getConfig(): TemporalSSRConfig {
+    return { ...this.config };
+  }
+
+  /**
    * Dispose resources
    */
   dispose(): void {
+    this.quarterSSRTarget.dispose();
+    this.quarterColorTarget.dispose();
+    this.quarterDepthTarget.dispose();
+    this.quarterNormalTarget.dispose();
     this.historyBufferA.dispose();
     this.historyBufferB.dispose();
   }

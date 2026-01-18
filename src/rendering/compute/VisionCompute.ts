@@ -92,14 +92,19 @@ export class VisionCompute {
   private uCasterCount = uniform(0);
   private uTargetPlayerId = uniform(0);
 
-  // Track if GPU compute is available
+  // Track if GPU compute is available and verified working
   private gpuComputeAvailable = false;
+  private gpuComputeVerified = false;
 
   // Version counter for change detection
   private visionVersion = 0;
 
   // CPU fallback flag
   private useCPUFallback = false;
+
+  // Performance metrics
+  private gpuDispatchCount = 0;
+  private lastGPUDispatchTime = 0;
 
   constructor(renderer: WebGPURenderer, config: VisionComputeConfig) {
     this.renderer = renderer;
@@ -116,9 +121,10 @@ export class VisionCompute {
 
   private initializeResources(): void {
     try {
-      // Check if WebGPU compute is available
-      // Three.js r182 has stable compute support via TSL
-      this.gpuComputeAvailable = true;
+      // Check if renderer supports compute
+      if (!this.renderer || typeof this.renderer.compute !== 'function') {
+        throw new Error('Renderer does not support compute shaders');
+      }
 
       // Update uniforms
       this.uGridWidth.value = this.gridWidth;
@@ -128,7 +134,10 @@ export class VisionCompute {
       // Create storage buffer for casters
       this.casterStorageBuffer = storage(this.casterData, 'vec4', MAX_CASTERS);
 
-      console.log(`[VisionCompute] GPU compute initialized (${this.gridWidth}x${this.gridHeight} grid)`);
+      this.gpuComputeAvailable = true;
+      this.useCPUFallback = false;
+
+      console.log(`[VisionCompute] GPU compute initialized (${this.gridWidth}x${this.gridHeight} grid, ${this.gridWidth * this.gridHeight} cells)`);
     } catch (e) {
       console.warn('[VisionCompute] GPU compute not available, using CPU fallback:', e);
       this.gpuComputeAvailable = false;
@@ -278,6 +287,32 @@ export class VisionCompute {
   }
 
   /**
+   * Check if GPU compute has been verified to work
+   */
+  public isGPUVerified(): boolean {
+    return this.gpuComputeVerified;
+  }
+
+  /**
+   * Get performance statistics
+   */
+  public getStats(): {
+    gpuEnabled: boolean;
+    gpuVerified: boolean;
+    dispatchCount: number;
+    lastDispatchTimeMs: number;
+    gridCells: number;
+  } {
+    return {
+      gpuEnabled: this.isUsingGPU(),
+      gpuVerified: this.gpuComputeVerified,
+      dispatchCount: this.gpuDispatchCount,
+      lastDispatchTimeMs: this.lastGPUDispatchTime,
+      gridCells: this.gridWidth * this.gridHeight,
+    };
+  }
+
+  /**
    * Get current vision version for dirty checking
    */
   public getVisionVersion(): number {
@@ -312,6 +347,8 @@ export class VisionCompute {
    * GPU compute path - runs vision calculation on GPU
    */
   private computeVisionGPU(casters: VisionCaster[], playerIds: Set<number>): void {
+    const startTime = performance.now();
+
     // Upload caster data to storage buffer
     const count = Math.min(casters.length, MAX_CASTERS);
     for (let i = 0; i < count; i++) {
@@ -324,6 +361,8 @@ export class VisionCompute {
 
     // Update caster count uniform
     this.uCasterCount.value = count;
+
+    let dispatchedCount = 0;
 
     // Dispatch compute for each player
     for (const playerId of playerIds) {
@@ -339,13 +378,25 @@ export class VisionCompute {
         try {
           // Execute compute shader
           this.renderer.compute(computeNode);
+          dispatchedCount++;
+
+          // Mark as verified on first successful dispatch
+          if (!this.gpuComputeVerified) {
+            this.gpuComputeVerified = true;
+            console.log(`[VisionCompute] GPU compute verified working (${count} casters, ${this.gridWidth * this.gridHeight} cells)`);
+          }
         } catch (e) {
           console.warn('[VisionCompute] GPU compute failed, falling back to CPU:', e);
           this.useCPUFallback = true;
+          this.gpuComputeVerified = false;
           this.computeVisionCPU(playerId, casters);
         }
       }
     }
+
+    // Track metrics
+    this.gpuDispatchCount += dispatchedCount;
+    this.lastGPUDispatchTime = performance.now() - startTime;
   }
 
   /**
