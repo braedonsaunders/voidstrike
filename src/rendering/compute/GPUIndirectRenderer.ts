@@ -275,42 +275,19 @@ export class GPUIndirectRenderer {
         // Get the visible unit slot index for this instance
         const visibleSlotIndex = visibleIndices.element(instanceIndex);
 
-        // Read the transform matrix from storage buffer
-        const transform = transformBuffer.element(visibleSlotIndex);
+        // Read the transform matrix directly from storage buffer (stored as mat4)
+        const modelMatrix = transformBuffer.element(visibleSlotIndex);
 
-        // Extract matrix columns
-        const col0 = vec4(
-          transform.element(int(0)),
-          transform.element(int(1)),
-          transform.element(int(2)),
-          transform.element(int(3))
-        );
-        const col1 = vec4(
-          transform.element(int(4)),
-          transform.element(int(5)),
-          transform.element(int(6)),
-          transform.element(int(7))
-        );
-        const col2 = vec4(
-          transform.element(int(8)),
-          transform.element(int(9)),
-          transform.element(int(10)),
-          transform.element(int(11))
-        );
-        const col3 = vec4(
-          transform.element(int(12)),
-          transform.element(int(13)),
-          transform.element(int(14)),
-          transform.element(int(15))
-        );
+        // Extract position from matrix column 3 (translation) and add local position
+        // For instanced rendering, we apply the instance transform to local position
+        // modelMatrix is column-major: col0=X axis, col1=Y axis, col2=Z axis, col3=translation
+        const translation = modelMatrix[3].xyz;
+        const scaledX = modelMatrix[0].xyz.mul(positionLocal.x);
+        const scaledY = modelMatrix[1].xyz.mul(positionLocal.y);
+        const scaledZ = modelMatrix[2].xyz.mul(positionLocal.z);
+        const worldPosition = translation.add(scaledX).add(scaledY).add(scaledZ);
 
-        // Build model matrix
-        const modelMatrix = mat4(col0, col1, col2, col3);
-
-        // Transform local position to world position
-        const worldPosition = modelMatrix.mul(vec4(positionLocal, float(1)));
-
-        return worldPosition.xyz;
+        return worldPosition;
       });
 
       // Apply custom vertex position
