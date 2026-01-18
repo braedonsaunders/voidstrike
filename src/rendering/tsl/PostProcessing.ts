@@ -360,6 +360,32 @@ export class RenderPipeline {
    * - Outputs to canvas
    */
   private createDualPipeline(): void {
+    // Initialize temporal managers if enabled
+    if (this.config.temporalAOEnabled && this.config.aoEnabled) {
+      this.temporalAOManager = new TemporalAOManager(
+        this.renderWidth,
+        this.renderHeight,
+        {
+          historyBlendFactor: this.config.temporalAOBlendFactor,
+          depthRejectionThreshold: 0.1,
+          enabled: true,
+        }
+      );
+    }
+
+    if (this.config.temporalSSREnabled && this.config.ssrEnabled) {
+      this.temporalSSRManager = new TemporalSSRManager(
+        this.renderWidth,
+        this.renderHeight,
+        {
+          historyBlendFactor: this.config.temporalSSRBlendFactor,
+          depthRejectionThreshold: 0.05,
+          colorBoxClamp: true,
+          enabled: true,
+        }
+      );
+    }
+
     const useUpscaling = this.config.upscalingMode !== 'off' && this.config.renderScale < 1.0;
 
     if (useUpscaling) {
@@ -499,7 +525,39 @@ export class RenderPipeline {
         this.aoPass = ao(scenePassDepth, null, this.camera);
         this.aoPass.radius.value = this.config.aoRadius;
 
-        const aoValue = this.aoPass.getTextureNode().r;
+        let aoValue = this.aoPass.getTextureNode().r;
+
+        // Apply temporal stability if enabled
+        // This blends current AO with reprojected history to reduce flickering
+        if (this.config.temporalAOEnabled && this.temporalAOManager) {
+          const scenePassVelocity = scenePass.getTextureNode('velocity');
+          if (scenePassVelocity) {
+            const historyTexture = texture(this.temporalAOManager.getHistoryTexture());
+
+            // Create temporal blend node
+            // Uses velocity for reprojection and blends with history
+            const temporalAO = Fn(() => {
+              const fragUV = uv();
+              const velocity = scenePassVelocity.sample(fragUV).xy;
+              const prevUV = fragUV.sub(velocity);
+
+              const currentAO = aoValue;
+              const historyAO = historyTexture.sample(prevUV).r;
+
+              // Bounds check for reprojection
+              const inBounds = prevUV.x.greaterThanEqual(0.0)
+                .and(prevUV.x.lessThanEqual(1.0))
+                .and(prevUV.y.greaterThanEqual(0.0))
+                .and(prevUV.y.lessThanEqual(1.0));
+
+              const blendFactor = inBounds.select(this.uTemporalAOBlend, float(0.0));
+              return mix(currentAO, historyAO, blendFactor);
+            })();
+
+            aoValue = temporalAO;
+          }
+        }
+
         const aoFactor = mix(float(1.0), aoValue, this.uAOIntensity);
         outputNode = scenePassColor.mul(vec3(aoFactor));
       } catch (e) {
@@ -537,7 +595,54 @@ export class RenderPipeline {
         }
 
         if (this.ssrPass) {
-          const ssrTexture = this.ssrPass.getTextureNode();
+          let ssrTexture = this.ssrPass.getTextureNode();
+
+          // Apply temporal stability if enabled
+          // This blends current SSR with reprojected history to reduce flickering
+          if (this.config.temporalSSREnabled && this.temporalSSRManager) {
+            const scenePassVelocity = scenePass.getTextureNode('velocity');
+            if (scenePassVelocity) {
+              const historyTexture = texture(this.temporalSSRManager.getHistoryTexture());
+              const texelSize = vec2(1.0).div(this.uResolution);
+
+              // Create temporal blend node with neighborhood clamping
+              const temporalSSR = Fn(() => {
+                const fragUV = uv();
+                const velocity = scenePassVelocity.sample(fragUV).xy;
+                const prevUV = fragUV.sub(velocity);
+
+                const currentSSR = ssrTexture.sample(fragUV);
+                const historySSR = historyTexture.sample(prevUV);
+
+                // Neighborhood clamping to reduce ghosting
+                const n0 = ssrTexture.sample(fragUV.add(vec2(-1, -1).mul(texelSize)));
+                const n1 = ssrTexture.sample(fragUV.add(vec2(0, -1).mul(texelSize)));
+                const n2 = ssrTexture.sample(fragUV.add(vec2(1, -1).mul(texelSize)));
+                const n3 = ssrTexture.sample(fragUV.add(vec2(-1, 0).mul(texelSize)));
+                const n4 = currentSSR;
+                const n5 = ssrTexture.sample(fragUV.add(vec2(1, 0).mul(texelSize)));
+                const n6 = ssrTexture.sample(fragUV.add(vec2(-1, 1).mul(texelSize)));
+                const n7 = ssrTexture.sample(fragUV.add(vec2(0, 1).mul(texelSize)));
+                const n8 = ssrTexture.sample(fragUV.add(vec2(1, 1).mul(texelSize)));
+
+                const minColor = min(min(min(min(n0, n1), min(n2, n3)), min(min(n4, n5), min(n6, n7))), n8);
+                const maxColor = max(max(max(max(n0, n1), max(n2, n3)), max(max(n4, n5), max(n6, n7))), n8);
+                const clampedHistory = clamp(historySSR, minColor, maxColor);
+
+                // Bounds check for reprojection
+                const inBounds = prevUV.x.greaterThanEqual(0.0)
+                  .and(prevUV.x.lessThanEqual(1.0))
+                  .and(prevUV.y.greaterThanEqual(0.0))
+                  .and(prevUV.y.lessThanEqual(1.0));
+
+                const blendFactor = inBounds.select(this.uTemporalSSRBlend, float(0.0));
+                return mix(currentSSR, clampedHistory, blendFactor);
+              })();
+
+              ssrTexture = temporalSSR;
+            }
+          }
+
           const ssrColor = ssrTexture.rgb;
           const ssrAlpha = ssrTexture.a;
           outputNode = outputNode.add(ssrColor.mul(ssrAlpha));

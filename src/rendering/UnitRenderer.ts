@@ -818,6 +818,11 @@ export class UnitRenderer {
       }
     }
 
+    // GPU-driven rendering: swap transform buffers for velocity calculation
+    if (this.useGPUDrivenRendering && this.gpuUnitBuffer) {
+      this.gpuUnitBuffer.swapTransformBuffers();
+    }
+
     // Reset instance counts for all groups
     // PERF: Use .length = 0 instead of = [] to avoid GC pressure from allocating new arrays every frame
     for (const group of this.instancedGroups.values()) {
@@ -901,6 +906,23 @@ export class UnitRenderer {
       }
 
       // Check if this is an animated unit type
+      // Calculate smooth rotation for both animated and instanced units
+      const smoothRotation = this.getSmoothRotation(entity.id, transform.rotation);
+
+      // GPU-driven rendering: update GPU buffer with transform
+      if (this.useGPUDrivenRendering && this.gpuUnitBuffer) {
+        this.updateGPUEntityTransform(
+          entity.id,
+          unit.unitId,
+          ownerId,
+          transform.x,
+          unitHeight,
+          transform.y,
+          smoothRotation,
+          1.0 // Scale - could be extracted from model if needed
+        );
+      }
+
       if (this.isAnimatedUnitType(unit.unitId)) {
         // Use individual animated mesh
         const animUnit = this.getOrCreateAnimatedUnit(entity.id, unit.unitId, ownerId);
@@ -910,7 +932,7 @@ export class UnitRenderer {
         // Model rotation offset (if any) is baked in from AssetManager during loading.
         // Game forward is +X (matching atan2 convention where angle 0 = +X).
         animUnit.mesh.position.set(transform.x, unitHeight, transform.y);
-        animUnit.mesh.rotation.y = this.getSmoothRotation(entity.id, transform.rotation);
+        animUnit.mesh.rotation.y = smoothRotation;
 
         // Determine animation state
         // isMoving: unit has non-zero velocity
@@ -964,7 +986,7 @@ export class UnitRenderer {
           // modelScale is the normalization scale from AssetManager (to achieve target height).
           this.tempPosition.set(transform.x, unitHeight + group.yOffset, transform.y);
           // Create quaternion from unit's facing direction (Y rotation only) with smooth interpolation
-          const smoothRotation = this.getSmoothRotation(entity.id, transform.rotation);
+          // smoothRotation already calculated above for GPU buffer
           this.tempEuler.set(0, smoothRotation, 0);
           this.tempFacingQuat.setFromEuler(this.tempEuler);
           // Combine: facing rotation × base rotation (order matters for proper orientation)
@@ -1063,6 +1085,11 @@ export class UnitRenderer {
       }
     }
 
+    // GPU-driven rendering: commit buffer changes to GPU
+    if (this.useGPUDrivenRendering && this.gpuUnitBuffer) {
+      this.gpuUnitBuffer.commitChanges();
+    }
+
     // PERF: Clean up instanced groups that have been inactive for too long
     // This prevents draw call accumulation when units die or change LOD levels
     for (const [key, group] of this.instancedGroups) {
@@ -1090,6 +1117,10 @@ export class UnitRenderer {
         this.unitOverlays.delete(entityId);
         // Clean up visual rotation tracking
         this.visualRotations.delete(entityId);
+        // Clean up GPU buffer slot
+        if (this.useGPUDrivenRendering) {
+          this.removeGPUEntity(entityId);
+        }
       }
     }
 
