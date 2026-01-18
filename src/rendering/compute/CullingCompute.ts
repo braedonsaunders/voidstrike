@@ -102,10 +102,14 @@ export class CullingCompute {
 
   // Uniforms for GPU compute
   private uCameraPosition = uniform(new THREE.Vector3());
-  private uFrustumPlanes = uniform(new Float32Array(24)); // 6 planes × vec4
   private uLOD0MaxSq = uniform(0);
   private uLOD1MaxSq = uniform(0);
   private uUnitCount = uniform(0);
+
+  // Frustum planes as storage buffer (6 planes × vec4 = 24 floats)
+  // Cannot use uniform() for Float32Array - must use storage()
+  private frustumPlanesData = new Float32Array(24);
+  private frustumPlanesStorage: ReturnType<typeof storage> | null = null;
 
   // GPU storage buffers
   private transformStorageBuffer: ReturnType<typeof storage> | null = null;
@@ -172,6 +176,9 @@ export class CullingCompute {
       // Create visible count buffer (atomic counter)
       this.visibleCountStorageBuffer = storage(this.visibleCountBuffer, 'uint', 1);
 
+      // Create frustum planes storage buffer (6 planes × 4 floats = 24 floats)
+      this.frustumPlanesStorage = storage(this.frustumPlanesData, 'float', 24);
+
       // Create compute shader with proper output writing
       this.createCullingComputeShader();
 
@@ -219,7 +226,7 @@ export class CullingCompute {
     const indirectArgs = this.indirectArgsStorage!;
     const visibleCount = this.visibleCountStorageBuffer!;
     const cameraPos = this.uCameraPosition;
-    const frustumPlanes = this.uFrustumPlanes;
+    const frustumPlanes = this.frustumPlanesStorage!;
     const lod0MaxSq = this.uLOD0MaxSq;
     const lod1MaxSq = this.uLOD1MaxSq;
     const unitCount = this.uUnitCount;
@@ -378,14 +385,14 @@ export class CullingCompute {
     // Update GPU uniforms
     this.uCameraPosition.value.copy(camera.position);
 
-    // Pack frustum planes for GPU
+    // Pack frustum planes into storage buffer data
     const planes = this.frustum.planes;
     for (let i = 0; i < 6; i++) {
       const offset = i * 4;
-      this.uFrustumPlanes.value[offset + 0] = planes[i].normal.x;
-      this.uFrustumPlanes.value[offset + 1] = planes[i].normal.y;
-      this.uFrustumPlanes.value[offset + 2] = planes[i].normal.z;
-      this.uFrustumPlanes.value[offset + 3] = planes[i].constant;
+      this.frustumPlanesData[offset + 0] = planes[i].normal.x;
+      this.frustumPlanesData[offset + 1] = planes[i].normal.y;
+      this.frustumPlanesData[offset + 2] = planes[i].normal.z;
+      this.frustumPlanesData[offset + 3] = planes[i].constant;
     }
   }
 
