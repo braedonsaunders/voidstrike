@@ -93,6 +93,7 @@ export default function Home() {
   }, [toggleMusic, musicEnabledStore]);
 
   // Initialize and play menu music
+  // Use musicEnabledStore directly (not the SSR-safe wrapper) since MusicPlayer only runs client-side
   useEffect(() => {
     let userInteracted = false;
     let musicStarted = false;
@@ -100,11 +101,11 @@ export default function Home() {
     const startMenuMusic = async () => {
       await MusicPlayer.initialize();
       MusicPlayer.setVolume(musicVolume);
-      MusicPlayer.setMuted(!musicEnabled);
+      MusicPlayer.setMuted(!musicEnabledStore);
       await MusicPlayer.discoverTracks();
 
       // Try to play - if it fails due to autoplay policy, we'll retry on interaction
-      if (musicEnabled && MusicPlayer.getCurrentCategory() !== 'menu') {
+      if (musicEnabledStore && MusicPlayer.getCurrentCategory() !== 'menu') {
         try {
           await MusicPlayer.play('menu');
           musicStarted = true;
@@ -120,7 +121,7 @@ export default function Home() {
       userInteracted = true;
 
       // If music hasn't started yet and is enabled, start it now
-      if (musicEnabled && !MusicPlayer.isCurrentlyPlaying() && MusicPlayer.getCurrentCategory() !== 'menu') {
+      if (musicEnabledStore && !MusicPlayer.isCurrentlyPlaying() && MusicPlayer.getCurrentCategory() !== 'menu') {
         MusicPlayer.play('menu');
       }
 
@@ -148,13 +149,13 @@ export default function Home() {
       window.removeEventListener('mousemove', handleFirstInteraction);
       window.removeEventListener('scroll', handleFirstInteraction);
     };
-  }, [musicEnabled, musicVolume]);
+  }, [musicEnabledStore, musicVolume]);
 
-  // Sync volume changes
+  // Sync volume changes - use store value directly since MusicPlayer only runs client-side
   useEffect(() => {
     MusicPlayer.setVolume(musicVolume);
-    MusicPlayer.setMuted(!musicEnabled);
-  }, [musicVolume, musicEnabled]);
+    MusicPlayer.setMuted(!musicEnabledStore);
+  }, [musicVolume, musicEnabledStore]);
 
   // Sync fullscreen state with browser
   useEffect(() => {
