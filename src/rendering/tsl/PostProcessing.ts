@@ -76,6 +76,10 @@ import { createInstancedVelocityNode } from './InstancedVelocity';
 // Import volumetric fog
 import { createVolumetricFogNode, VolumetricFogNode, VOLUMETRIC_FOG_QUALITY } from './VolumetricFog';
 
+// Import temporal reprojection
+import { TemporalAOManager, createTemporalAOBlendNode } from './TemporalAO';
+import { TemporalSSRManager, createSimpleTemporalSSRNode } from './TemporalSSR';
+
 // ============================================
 // WARNING SUPPRESSION
 // ============================================
@@ -146,12 +150,20 @@ export interface PostProcessingConfig {
   aoRadius: number;
   aoIntensity: number;
 
+  // Temporal AO (quarter-res GTAO with reprojection)
+  temporalAOEnabled: boolean;
+  temporalAOBlendFactor: number; // History blend (default 0.9)
+
   // SSR (Screen Space Reflections)
   ssrEnabled: boolean;
   ssrMaxDistance: number;    // Max reflection distance
   ssrOpacity: number;        // Reflection intensity (0-1)
   ssrThickness: number;      // Ray thickness for hit detection
   ssrMaxRoughness: number;   // Max roughness for reflections (0-1)
+
+  // Temporal SSR (quarter-res SSR with reprojection)
+  temporalSSREnabled: boolean;
+  temporalSSRBlendFactor: number; // History blend (default 0.85)
 
   // SSGI (Screen Space Global Illumination)
   // Provides indirect lighting (light bouncing) + built-in AO
@@ -204,11 +216,17 @@ const DEFAULT_CONFIG: PostProcessingConfig = {
   aoRadius: 2,
   aoIntensity: 0.8,
 
+  temporalAOEnabled: false, // Off by default, enable for performance
+  temporalAOBlendFactor: 0.9, // 90% history, 10% new sample
+
   ssrEnabled: false,
   ssrMaxDistance: 100,
   ssrOpacity: 1.0,
   ssrThickness: 0.1,
   ssrMaxRoughness: 0.5,
+
+  temporalSSREnabled: false, // Off by default, enable for performance
+  temporalSSRBlendFactor: 0.85, // 85% history, 15% new sample (lower for reflections)
 
   ssgiEnabled: false,
   ssgiRadius: 8,
@@ -274,6 +292,10 @@ export class RenderPipeline {
   // EASU upscaling pass (on display pipeline)
   private easuPass: ReturnType<typeof easuUpscale> | null = null;
 
+  // Temporal reprojection managers
+  private temporalAOManager: TemporalAOManager | null = null;
+  private temporalSSRManager: TemporalSSRManager | null = null;
+
   // Uniforms for dynamic updates
   private uVignetteIntensity = uniform(0.25);
   private uAOIntensity = uniform(1.0);
@@ -286,6 +308,10 @@ export class RenderPipeline {
   // SSR uniforms
   private uSSROpacity = uniform(1.0);
   private uSSRMaxRoughness = uniform(0.5);
+
+  // Temporal reprojection uniforms
+  private uTemporalAOBlend = uniform(0.9);
+  private uTemporalSSRBlend = uniform(0.85);
 
   // Resolution tracking
   private displayWidth = 1920;
@@ -769,7 +795,9 @@ export class RenderPipeline {
     const needsRebuild =
       (config.bloomEnabled !== undefined && config.bloomEnabled !== this.config.bloomEnabled) ||
       (config.aoEnabled !== undefined && config.aoEnabled !== this.config.aoEnabled) ||
+      (config.temporalAOEnabled !== undefined && config.temporalAOEnabled !== this.config.temporalAOEnabled) ||
       (config.ssrEnabled !== undefined && config.ssrEnabled !== this.config.ssrEnabled) ||
+      (config.temporalSSREnabled !== undefined && config.temporalSSREnabled !== this.config.temporalSSREnabled) ||
       (config.ssgiEnabled !== undefined && config.ssgiEnabled !== this.config.ssgiEnabled) ||
       (config.fxaaEnabled !== undefined && config.fxaaEnabled !== this.config.fxaaEnabled) ||
       (config.taaEnabled !== undefined && config.taaEnabled !== this.config.taaEnabled) ||
@@ -827,6 +855,10 @@ export class RenderPipeline {
       this.ssgiPass.thickness.value = this.config.ssgiThickness;
       this.ssgiPass.aoIntensity.value = this.config.aoIntensity;
     }
+
+    // Update temporal reprojection parameters
+    this.uTemporalAOBlend.value = this.config.temporalAOBlendFactor;
+    this.uTemporalSSRBlend.value = this.config.temporalSSRBlendFactor;
 
     // Update volumetric fog parameters
     if (this.volumetricFogPass) {
@@ -899,6 +931,8 @@ export class RenderPipeline {
   isTAAEnabled(): boolean { return this.config.taaEnabled && this.config.antiAliasingMode === 'taa'; }
   isSSGIEnabled(): boolean { return this.config.ssgiEnabled; }
   isVolumetricFogEnabled(): boolean { return this.config.volumetricFogEnabled; }
+  isTemporalAOEnabled(): boolean { return this.config.temporalAOEnabled && this.config.aoEnabled; }
+  isTemporalSSREnabled(): boolean { return this.config.temporalSSREnabled && this.config.ssrEnabled; }
   getAntiAliasingMode(): AntiAliasingMode { return this.config.antiAliasingMode; }
   isUpscalingEnabled(): boolean { return this.config.upscalingMode !== 'off' && this.config.renderScale < 1.0; }
   getUpscalingMode(): UpscalingMode { return this.config.upscalingMode; }
@@ -1012,6 +1046,14 @@ export class RenderPipeline {
     if (this.internalRenderTarget) {
       this.internalRenderTarget.dispose();
       this.internalRenderTarget = null;
+    }
+    if (this.temporalAOManager) {
+      this.temporalAOManager.dispose();
+      this.temporalAOManager = null;
+    }
+    if (this.temporalSSRManager) {
+      this.temporalSSRManager.dispose();
+      this.temporalSSRManager = null;
     }
   }
 }
