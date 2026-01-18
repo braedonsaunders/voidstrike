@@ -7,7 +7,7 @@
 
 'use client';
 
-import { useState } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import type {
   EditorConfig,
   EditorState,
@@ -64,7 +64,7 @@ const PANEL_ICONS: Record<string, string> = {
   validate: '✓',
 };
 
-// Collapsible section component
+// Collapsible section component with smooth animation
 function Section({
   title,
   icon,
@@ -81,10 +81,18 @@ function Section({
   badge?: string | number;
 }) {
   const [isOpen, setIsOpen] = useState(defaultOpen);
+  const contentRef = useRef<HTMLDivElement>(null);
+  const [contentHeight, setContentHeight] = useState<number | 'auto'>('auto');
+
+  useEffect(() => {
+    if (contentRef.current) {
+      setContentHeight(contentRef.current.scrollHeight);
+    }
+  }, [children, isOpen]);
 
   return (
     <div
-      className="rounded-lg overflow-hidden"
+      className="rounded-lg overflow-hidden transition-all duration-200"
       style={{
         backgroundColor: theme.background,
         border: `1px solid ${theme.border}40`,
@@ -92,10 +100,10 @@ function Section({
     >
       <button
         onClick={() => setIsOpen(!isOpen)}
-        className="w-full px-3 py-2 flex items-center gap-2 hover:bg-white/5 transition-colors"
+        className="w-full px-3 py-2 flex items-center gap-2 hover:bg-white/5 transition-all duration-200 group"
       >
         <span
-          className="text-[10px] transition-transform"
+          className="text-[10px] transition-transform duration-300 ease-out"
           style={{
             color: theme.text.muted,
             transform: isOpen ? 'rotate(90deg)' : 'rotate(0deg)',
@@ -103,13 +111,13 @@ function Section({
         >
           ▶
         </span>
-        {icon && <span className="text-sm">{icon}</span>}
+        {icon && <span className="text-sm transition-transform duration-200 group-hover:scale-110">{icon}</span>}
         <span className="text-xs font-medium flex-1 text-left" style={{ color: theme.text.secondary }}>
           {title}
         </span>
         {badge !== undefined && (
           <span
-            className="text-[10px] px-1.5 py-0.5 rounded-full"
+            className="text-[10px] px-1.5 py-0.5 rounded-full transition-all duration-200 group-hover:scale-105"
             style={{
               backgroundColor: `${theme.primary}30`,
               color: theme.primary,
@@ -119,16 +127,22 @@ function Section({
           </span>
         )}
       </button>
-      {isOpen && (
-        <div className="px-3 pb-3">
+      <div
+        className="overflow-hidden transition-all duration-300 ease-out"
+        style={{
+          maxHeight: isOpen ? contentHeight : 0,
+          opacity: isOpen ? 1 : 0,
+        }}
+      >
+        <div ref={contentRef} className="px-3 pb-3">
           {children}
         </div>
-      )}
+      </div>
     </div>
   );
 }
 
-// Modern panel tab
+// Modern panel tab with animated indicator
 function PanelTab({
   active,
   onClick,
@@ -147,25 +161,44 @@ function PanelTab({
       onClick={onClick}
       title={name}
       className={`
-        relative px-3 py-2.5 flex items-center justify-center gap-1.5 transition-all duration-150
+        relative px-3 py-2.5 flex items-center justify-center gap-1.5 transition-all duration-200
         ${active ? '' : 'hover:bg-white/5'}
       `}
       style={{
         color: active ? theme.primary : theme.text.muted,
       }}
     >
-      <span className="text-base">{icon || PANEL_ICONS[name.toLowerCase()] || name.charAt(0)}</span>
-      {active && (
-        <div
-          className="absolute bottom-0 left-1/2 -translate-x-1/2 w-6 h-0.5 rounded-full"
-          style={{ backgroundColor: theme.primary }}
-        />
-      )}
+      <span
+        className="text-base transition-transform duration-200"
+        style={{
+          transform: active ? 'scale(1.15)' : 'scale(1)',
+        }}
+      >
+        {icon || PANEL_ICONS[name.toLowerCase()] || name.charAt(0)}
+      </span>
+      {/* Animated underline indicator */}
+      <div
+        className="absolute bottom-0 left-1/2 h-0.5 rounded-full transition-all duration-300 ease-out"
+        style={{
+          backgroundColor: theme.primary,
+          width: active ? '24px' : '0px',
+          transform: 'translateX(-50%)',
+          opacity: active ? 1 : 0,
+        }}
+      />
+      {/* Hover glow effect */}
+      <div
+        className="absolute inset-0 rounded-md transition-opacity duration-200 pointer-events-none"
+        style={{
+          background: `radial-gradient(circle at center, ${theme.primary}15 0%, transparent 70%)`,
+          opacity: active ? 1 : 0,
+        }}
+      />
     </button>
   );
 }
 
-// Slider with visual feedback
+// Slider with visual feedback and premium animations
 function Slider({
   label,
   value,
@@ -184,29 +217,51 @@ function Slider({
   showValue?: boolean;
 }) {
   const percentage = ((value - min) / (max - min)) * 100;
+  const [isDragging, setIsDragging] = useState(false);
 
   return (
-    <div className="space-y-1.5">
+    <div className="space-y-1.5 group">
       <div className="flex justify-between items-center">
         <span className="text-[11px]" style={{ color: theme.text.muted }}>{label}</span>
         {showValue && (
           <span
-            className="text-[11px] font-mono px-1.5 py-0.5 rounded"
+            className="text-[11px] font-mono px-1.5 py-0.5 rounded transition-all duration-200"
             style={{
-              backgroundColor: theme.surface,
-              color: theme.text.secondary,
+              backgroundColor: isDragging ? `${theme.primary}20` : theme.surface,
+              color: isDragging ? theme.primary : theme.text.secondary,
+              transform: isDragging ? 'scale(1.05)' : 'scale(1)',
             }}
           >
             {value}
           </span>
         )}
       </div>
-      <div className="relative h-1.5 rounded-full" style={{ backgroundColor: theme.border }}>
+      <div
+        className="relative h-1.5 rounded-full transition-all duration-200"
+        style={{
+          backgroundColor: theme.border,
+          height: isDragging ? '8px' : '6px',
+        }}
+      >
+        {/* Track fill */}
         <div
-          className="absolute left-0 top-0 h-full rounded-full transition-all"
+          className="absolute left-0 top-0 h-full rounded-full transition-all duration-150"
           style={{
             width: `${percentage}%`,
             backgroundColor: theme.primary,
+            boxShadow: isDragging ? `0 0 8px ${theme.primary}60` : 'none',
+          }}
+        />
+        {/* Thumb indicator */}
+        <div
+          className="absolute top-1/2 -translate-y-1/2 rounded-full bg-white transition-all duration-200 pointer-events-none"
+          style={{
+            left: `${percentage}%`,
+            transform: `translateX(-50%) translateY(-50%) scale(${isDragging ? 1.3 : 1})`,
+            width: isDragging ? '14px' : '10px',
+            height: isDragging ? '14px' : '10px',
+            boxShadow: `0 2px 6px rgba(0,0,0,0.3)`,
+            opacity: isDragging ? 1 : 0,
           }}
         />
         <input
@@ -215,6 +270,11 @@ function Slider({
           max={max}
           value={value}
           onChange={(e) => onChange(Number(e.target.value))}
+          onMouseDown={() => setIsDragging(true)}
+          onMouseUp={() => setIsDragging(false)}
+          onMouseLeave={() => setIsDragging(false)}
+          onTouchStart={() => setIsDragging(true)}
+          onTouchEnd={() => setIsDragging(false)}
           className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
         />
       </div>
@@ -222,7 +282,7 @@ function Slider({
   );
 }
 
-// Tool grid with category support
+// Tool grid with category support and premium animations
 function ToolGrid({
   tools,
   activeTool,
@@ -238,31 +298,49 @@ function ToolGrid({
 }) {
   return (
     <div className={`grid gap-1`} style={{ gridTemplateColumns: `repeat(${columns}, 1fr)` }}>
-      {tools.map((tool) => (
-        <button
-          key={tool.id}
-          onClick={() => onSelect(tool.id)}
-          title={`${tool.name} (${tool.shortcut})`}
-          className={`
-            relative aspect-square rounded-lg flex flex-col items-center justify-center gap-0.5
-            transition-all duration-150
-            ${activeTool === tool.id ? 'ring-2' : 'hover:bg-white/5'}
-          `}
-          style={{
-            backgroundColor: activeTool === tool.id ? `${theme.primary}20` : theme.surface,
-            '--tw-ring-color': theme.primary,
-            color: activeTool === tool.id ? theme.text.primary : theme.text.muted,
-          } as React.CSSProperties}
-        >
-          <span className="text-base">{tool.icon}</span>
-          <span className="text-[9px] leading-tight truncate max-w-full px-1">{tool.name}</span>
-        </button>
-      ))}
+      {tools.map((tool) => {
+        const isActive = activeTool === tool.id;
+        return (
+          <button
+            key={tool.id}
+            onClick={() => onSelect(tool.id)}
+            title={`${tool.name} (${tool.shortcut})`}
+            className={`
+              relative aspect-square rounded-lg flex flex-col items-center justify-center gap-0.5
+              transition-all duration-200 ease-out group
+              ${isActive ? 'ring-2' : 'hover:bg-white/5'}
+            `}
+            style={{
+              backgroundColor: isActive ? `${theme.primary}20` : theme.surface,
+              '--tw-ring-color': theme.primary,
+              color: isActive ? theme.text.primary : theme.text.muted,
+              transform: isActive ? 'scale(1.05)' : 'scale(1)',
+            } as React.CSSProperties}
+          >
+            <span
+              className="text-base transition-transform duration-200 group-hover:scale-110"
+              style={{ transform: isActive ? 'scale(1.1)' : undefined }}
+            >
+              {tool.icon}
+            </span>
+            <span className="text-[9px] leading-tight truncate max-w-full px-1">{tool.name}</span>
+            {/* Active glow effect */}
+            {isActive && (
+              <div
+                className="absolute inset-0 rounded-lg pointer-events-none"
+                style={{
+                  boxShadow: `0 0 12px ${theme.primary}40`,
+                }}
+              />
+            )}
+          </button>
+        );
+      })}
     </div>
   );
 }
 
-// Elevation palette - compact color swatches
+// Elevation palette - compact color swatches with premium animations
 function ElevationPalette({
   elevations,
   selected,
@@ -277,44 +355,49 @@ function ElevationPalette({
   return (
     <div className="space-y-2">
       <div className="flex flex-wrap gap-1">
-        {elevations.map((elev) => (
-          <button
-            key={elev.id}
-            onClick={() => onSelect(elev.id)}
-            title={`${elev.name} (${elev.shortcut || elev.id})`}
-            className={`
-              w-8 h-8 rounded-md border-2 transition-all duration-150 relative
-              ${selected === elev.id ? 'scale-110 ring-2 ring-offset-1' : 'hover:scale-105'}
-            `}
-            style={{
-              backgroundColor: elev.color,
-              borderColor: selected === elev.id ? '#fff' : 'transparent',
-              '--tw-ring-color': theme.primary,
-              '--tw-ring-offset-color': theme.background,
-            } as React.CSSProperties}
-          >
-            {elev.shortcut && (
-              <span
-                className="absolute -bottom-0.5 -right-0.5 text-[8px] w-3 h-3 rounded flex items-center justify-center"
-                style={{
-                  backgroundColor: theme.background,
-                  color: theme.text.muted,
-                }}
-              >
-                {elev.shortcut}
-              </span>
-            )}
-          </button>
-        ))}
+        {elevations.map((elev) => {
+          const isSelected = selected === elev.id;
+          return (
+            <button
+              key={elev.id}
+              onClick={() => onSelect(elev.id)}
+              title={`${elev.name} (${elev.shortcut || elev.id})`}
+              className={`
+                w-8 h-8 rounded-md border-2 transition-all duration-200 ease-out relative group
+                ${isSelected ? 'ring-2 ring-offset-1' : 'hover:scale-110'}
+              `}
+              style={{
+                backgroundColor: elev.color,
+                borderColor: isSelected ? '#fff' : 'transparent',
+                '--tw-ring-color': theme.primary,
+                '--tw-ring-offset-color': theme.background,
+                transform: isSelected ? 'scale(1.15)' : undefined,
+                boxShadow: isSelected ? `0 0 12px ${elev.color}80` : undefined,
+              } as React.CSSProperties}
+            >
+              {elev.shortcut && (
+                <span
+                  className="absolute -bottom-0.5 -right-0.5 text-[8px] w-3 h-3 rounded flex items-center justify-center transition-transform duration-200 group-hover:scale-110"
+                  style={{
+                    backgroundColor: theme.background,
+                    color: theme.text.muted,
+                  }}
+                >
+                  {elev.shortcut}
+                </span>
+              )}
+            </button>
+          );
+        })}
       </div>
-      {/* Selected elevation info */}
+      {/* Selected elevation info with fade transition */}
       {elevations.find((e) => e.id === selected) && (
         <div
-          className="flex items-center gap-2 px-2 py-1.5 rounded-md"
+          className="flex items-center gap-2 px-2 py-1.5 rounded-md transition-all duration-200"
           style={{ backgroundColor: theme.surface }}
         >
           <div
-            className="w-3 h-3 rounded"
+            className="w-3 h-3 rounded transition-colors duration-200"
             style={{ backgroundColor: elevations.find((e) => e.id === selected)?.color }}
           />
           <span className="text-xs" style={{ color: theme.text.secondary }}>
@@ -334,7 +417,7 @@ function ElevationPalette({
   );
 }
 
-// Feature buttons
+// Feature buttons with premium animations
 function FeatureGrid({
   features,
   selected,
@@ -348,29 +431,33 @@ function FeatureGrid({
 }) {
   return (
     <div className="grid grid-cols-3 gap-1">
-      {features.map((feature) => (
-        <button
-          key={feature.id}
-          onClick={() => onSelect(feature.id)}
-          className={`
-            flex items-center gap-1.5 px-2 py-1.5 rounded-md text-xs transition-all
-            ${selected === feature.id ? 'ring-1' : 'hover:bg-white/5'}
-          `}
-          style={{
-            backgroundColor: selected === feature.id ? `${theme.primary}20` : theme.surface,
-            '--tw-ring-color': theme.primary,
-            color: selected === feature.id ? theme.text.primary : theme.text.muted,
-          } as React.CSSProperties}
-        >
-          <span>{feature.icon}</span>
-          <span className="truncate">{feature.name}</span>
-        </button>
-      ))}
+      {features.map((feature) => {
+        const isSelected = selected === feature.id;
+        return (
+          <button
+            key={feature.id}
+            onClick={() => onSelect(feature.id)}
+            className={`
+              flex items-center gap-1.5 px-2 py-1.5 rounded-md text-xs transition-all duration-200 ease-out group
+              ${isSelected ? 'ring-1' : 'hover:bg-white/5 hover:scale-105'}
+            `}
+            style={{
+              backgroundColor: isSelected ? `${theme.primary}20` : theme.surface,
+              '--tw-ring-color': theme.primary,
+              color: isSelected ? theme.text.primary : theme.text.muted,
+              transform: isSelected ? 'scale(1.02)' : undefined,
+            } as React.CSSProperties}
+          >
+            <span className="transition-transform duration-200 group-hover:scale-110">{feature.icon}</span>
+            <span className="truncate">{feature.name}</span>
+          </button>
+        );
+      })}
     </div>
   );
 }
 
-// Material selector
+// Material selector with premium animations
 function MaterialSelector({
   materials,
   selected,
@@ -386,32 +473,36 @@ function MaterialSelector({
 
   return (
     <div className="grid grid-cols-2 gap-1">
-      {materials.map((mat) => (
-        <button
-          key={mat.id}
-          onClick={() => onSelect(mat.id)}
-          className={`
-            flex items-center gap-2 px-2 py-1.5 rounded-md text-xs transition-all
-            ${selected === mat.id ? 'ring-1' : 'hover:bg-white/5'}
-          `}
-          style={{
-            backgroundColor: selected === mat.id ? `${theme.primary}20` : theme.surface,
-            '--tw-ring-color': theme.primary,
-            color: selected === mat.id ? theme.text.primary : theme.text.muted,
-          } as React.CSSProperties}
-        >
-          <span>{mat.icon}</span>
-          <span className="flex-1 truncate text-left">{mat.name}</span>
-          {mat.shortcut && (
-            <span className="text-[10px] opacity-50">{mat.shortcut}</span>
-          )}
-        </button>
-      ))}
+      {materials.map((mat) => {
+        const isSelected = selected === mat.id;
+        return (
+          <button
+            key={mat.id}
+            onClick={() => onSelect(mat.id)}
+            className={`
+              flex items-center gap-2 px-2 py-1.5 rounded-md text-xs transition-all duration-200 ease-out group
+              ${isSelected ? 'ring-1' : 'hover:bg-white/5 hover:scale-105'}
+            `}
+            style={{
+              backgroundColor: isSelected ? `${theme.primary}20` : theme.surface,
+              '--tw-ring-color': theme.primary,
+              color: isSelected ? theme.text.primary : theme.text.muted,
+              transform: isSelected ? 'scale(1.02)' : undefined,
+            } as React.CSSProperties}
+          >
+            <span className="transition-transform duration-200 group-hover:scale-110">{mat.icon}</span>
+            <span className="flex-1 truncate text-left">{mat.name}</span>
+            {mat.shortcut && (
+              <span className="text-[10px] opacity-50 transition-opacity duration-200 group-hover:opacity-100">{mat.shortcut}</span>
+            )}
+          </button>
+        );
+      })}
     </div>
   );
 }
 
-// Toggle switch component
+// Toggle switch component with premium animations
 function ToggleSwitch({
   checked,
   onChange,
@@ -424,19 +515,26 @@ function ToggleSwitch({
   theme: EditorConfig['theme'];
 }) {
   return (
-    <label className="flex items-center justify-between cursor-pointer py-0.5">
-      <span className="text-xs" style={{ color: theme.text.secondary }}>{label}</span>
+    <label className="flex items-center justify-between cursor-pointer py-0.5 group">
+      <span
+        className="text-xs transition-colors duration-200"
+        style={{ color: checked ? theme.text.primary : theme.text.secondary }}
+      >
+        {label}
+      </span>
       <button
         onClick={onChange}
-        className="w-9 h-5 rounded-full relative transition-colors duration-200"
+        className="w-9 h-5 rounded-full relative transition-all duration-300 ease-out"
         style={{
           backgroundColor: checked ? theme.primary : theme.border,
+          boxShadow: checked ? `0 0 8px ${theme.primary}50` : 'none',
         }}
       >
         <span
-          className="absolute top-0.5 w-4 h-4 rounded-full bg-white shadow-sm transition-all duration-200"
+          className="absolute top-0.5 w-4 h-4 rounded-full bg-white shadow-md transition-all duration-300 ease-out"
           style={{
             left: checked ? '18px' : '2px',
+            transform: checked ? 'scale(1.05)' : 'scale(1)',
           }}
         />
       </button>
@@ -551,7 +649,7 @@ function PaintPanel({
   );
 }
 
-// Objects panel (generic for bases, objects, decorations)
+// Objects panel (generic for bases, objects, decorations) with premium animations
 function ObjectsPanel({
   config,
   state,
@@ -604,14 +702,14 @@ function ObjectsPanel({
             <button
               key={objType.id}
               onClick={() => handleAddObject(objType.id)}
-              className="flex items-center gap-2 px-2.5 py-2 rounded-lg text-xs transition-all hover:scale-[1.02]"
+              className="flex items-center gap-2 px-2.5 py-2 rounded-lg text-xs transition-all duration-200 ease-out hover:scale-105 group"
               style={{
                 backgroundColor: theme.surface,
                 color: theme.text.secondary,
                 border: `1px dashed ${theme.border}`,
               }}
             >
-              <span className="text-base">{objType.icon}</span>
+              <span className="text-base transition-transform duration-200 group-hover:scale-110">{objType.icon}</span>
               <span className="truncate">{objType.name}</span>
             </button>
           ))}
@@ -641,15 +739,16 @@ function ObjectsPanel({
                 <div
                   key={obj.id}
                   className={`
-                    flex items-center gap-2 px-2.5 py-2 rounded-lg transition-all
-                    ${isSelected ? 'ring-1' : ''}
+                    flex items-center gap-2 px-2.5 py-2 rounded-lg transition-all duration-200 ease-out group
+                    ${isSelected ? 'ring-1' : 'hover:translate-x-1'}
                   `}
                   style={{
                     backgroundColor: isSelected ? `${theme.primary}20` : theme.surface,
                     '--tw-ring-color': theme.primary,
+                    boxShadow: isSelected ? `0 0 12px ${theme.primary}30` : undefined,
                   } as React.CSSProperties}
                 >
-                  <span className="text-sm">{objType.icon}</span>
+                  <span className="text-sm transition-transform duration-200 group-hover:scale-110">{objType.icon}</span>
                   <div className="flex-1 min-w-0">
                     <div className="text-xs truncate" style={{ color: theme.text.primary }}>
                       {objType.name}
@@ -663,7 +762,7 @@ function ObjectsPanel({
                   </div>
                   <button
                     onClick={() => onObjectRemove(obj.id)}
-                    className="w-6 h-6 rounded flex items-center justify-center hover:bg-white/10 transition-colors"
+                    className="w-6 h-6 rounded flex items-center justify-center transition-all duration-200 hover:bg-white/10 hover:scale-110 opacity-0 group-hover:opacity-100"
                     style={{ color: theme.error }}
                   >
                     ✕
@@ -850,16 +949,18 @@ function ValidatePanel({
 
   return (
     <div className="space-y-3">
-      {/* Validate button */}
+      {/* Validate button with premium animation */}
       <button
         onClick={onValidate}
         disabled={isValidating}
-        className="w-full py-3 rounded-lg text-sm font-medium transition-all flex items-center justify-center gap-2"
+        className="w-full py-3 rounded-lg text-sm font-medium transition-all duration-300 ease-out flex items-center justify-center gap-2 group hover:scale-[1.02] active:scale-[0.98]"
         style={{
           backgroundColor: theme.primary,
           color: '#fff',
           opacity: isValidating ? 0.7 : 1,
-          boxShadow: `0 2px 12px ${theme.primary}40`,
+          boxShadow: isValidating
+            ? `0 2px 12px ${theme.primary}40`
+            : `0 4px 16px ${theme.primary}50`,
         }}
       >
         {isValidating ? (
@@ -869,7 +970,7 @@ function ValidatePanel({
           </>
         ) : (
           <>
-            <span>✓</span>
+            <span className="transition-transform duration-200 group-hover:scale-125">✓</span>
             Validate Map
           </>
         )}
@@ -1236,6 +1337,47 @@ function ShortcutsFooter({ theme }: { theme: EditorConfig['theme'] }) {
   );
 }
 
+// Animated panel content wrapper
+function AnimatedPanelContent({
+  isActive,
+  children,
+}: {
+  isActive: boolean;
+  children: React.ReactNode;
+}) {
+  const [shouldRender, setShouldRender] = useState(isActive);
+  const [isAnimating, setIsAnimating] = useState(false);
+
+  useEffect(() => {
+    if (isActive) {
+      setShouldRender(true);
+      // Small delay to trigger CSS transition
+      requestAnimationFrame(() => {
+        setIsAnimating(true);
+      });
+    } else {
+      setIsAnimating(false);
+      // Wait for animation to complete before unmounting
+      const timer = setTimeout(() => setShouldRender(false), 200);
+      return () => clearTimeout(timer);
+    }
+  }, [isActive]);
+
+  if (!shouldRender) return null;
+
+  return (
+    <div
+      className="transition-all duration-200 ease-out"
+      style={{
+        opacity: isAnimating && isActive ? 1 : 0,
+        transform: isAnimating && isActive ? 'translateY(0)' : 'translateY(8px)',
+      }}
+    >
+      {children}
+    </div>
+  );
+}
+
 // Main panels component
 export function EditorPanels({
   config,
@@ -1265,10 +1407,9 @@ export function EditorPanels({
 
   return (
     <div
-      className="w-72 flex-shrink-0 flex flex-col border-l"
+      className="w-full h-full flex flex-col"
       style={{
         backgroundColor: theme.surface,
-        borderColor: theme.border,
       }}
       onMouseEnter={onMouseEnter}
       onMouseLeave={onMouseLeave}
@@ -1290,9 +1431,9 @@ export function EditorPanels({
         ))}
       </div>
 
-      {/* Panel content */}
-      <div className="flex-1 overflow-y-auto p-3">
-        {state.activePanel === 'paint' && (
+      {/* Panel content with animated transitions */}
+      <div className="flex-1 overflow-y-auto p-3 relative">
+        <AnimatedPanelContent isActive={state.activePanel === 'paint'}>
           <PaintPanel
             config={config}
             state={state}
@@ -1302,8 +1443,8 @@ export function EditorPanels({
             onMaterialSelect={onMaterialSelect}
             onBrushSizeChange={onBrushSizeChange}
           />
-        )}
-        {state.activePanel === 'bases' && (
+        </AnimatedPanelContent>
+        <AnimatedPanelContent isActive={state.activePanel === 'bases'}>
           <ObjectsPanel
             config={config}
             state={state}
@@ -1311,8 +1452,8 @@ export function EditorPanels({
             onObjectAdd={onObjectAdd}
             onObjectRemove={onObjectRemove}
           />
-        )}
-        {state.activePanel === 'objects' && (
+        </AnimatedPanelContent>
+        <AnimatedPanelContent isActive={state.activePanel === 'objects'}>
           <ObjectsPanel
             config={config}
             state={state}
@@ -1320,8 +1461,8 @@ export function EditorPanels({
             onObjectAdd={onObjectAdd}
             onObjectRemove={onObjectRemove}
           />
-        )}
-        {state.activePanel === 'decorations' && (
+        </AnimatedPanelContent>
+        <AnimatedPanelContent isActive={state.activePanel === 'decorations'}>
           <ObjectsPanel
             config={config}
             state={state}
@@ -1329,8 +1470,8 @@ export function EditorPanels({
             onObjectAdd={onObjectAdd}
             onObjectRemove={onObjectRemove}
           />
-        )}
-        {state.activePanel === 'settings' && (
+        </AnimatedPanelContent>
+        <AnimatedPanelContent isActive={state.activePanel === 'settings'}>
           <SettingsPanel
             config={config}
             state={state}
@@ -1341,15 +1482,15 @@ export function EditorPanels({
             onToggleGrid={onToggleGrid}
             onToggleCategory={onToggleCategory}
           />
-        )}
-        {state.activePanel === 'validate' && (
+        </AnimatedPanelContent>
+        <AnimatedPanelContent isActive={state.activePanel === 'validate'}>
           <ValidatePanel
             config={config}
             validationResult={validationResult}
             onValidate={onValidate}
             onAutoFix={onAutoFix}
           />
-        )}
+        </AnimatedPanelContent>
       </div>
 
       {/* Selected object properties */}
