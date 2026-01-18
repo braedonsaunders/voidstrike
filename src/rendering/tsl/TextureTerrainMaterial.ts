@@ -47,33 +47,11 @@ import {
   mat3,
   If,
 } from 'three/tsl';
+import { TextureTerrainConfig, BiomeTextureType, getBiomeTextureConfig } from '../textureConfig';
 
-// ============================================
-// CONFIGURATION
-// ============================================
-
-export interface TextureTerrainConfig {
-  grassTexture: string;
-  grassNormal: string;
-  grassRoughness?: string;
-  grassDisplacement?: string;
-  dirtTexture: string;
-  dirtNormal: string;
-  dirtRoughness?: string;
-  dirtDisplacement?: string;
-  rockTexture: string;
-  rockNormal: string;
-  rockRoughness?: string;
-  rockDisplacement?: string;
-  cliffTexture: string;
-  cliffNormal: string;
-  cliffRoughness?: string;
-  cliffDisplacement?: string;
-  parallaxScale?: number;
-  sunDirection?: THREE.Vector3;
-  sunIntensity?: number;
-  ambientColor?: THREE.Color;
-}
+// Re-export for convenience
+export type { TextureTerrainConfig, BiomeTextureType };
+export { getBiomeTextureConfig };
 
 // ============================================
 // TEXTURE LOADING
@@ -400,51 +378,4 @@ export function updateTextureTerrainMaterial(
   if (sunDirection) {
     uniforms.uSunDirection.value.copy(sunDirection).normalize();
   }
-}
-
-// ============================================
-// BIOME CONFIGURATIONS
-// ============================================
-
-export type BiomeTextureType = 'grassland' | 'desert' | 'frozen' | 'volcanic' | 'void' | 'jungle';
-
-interface BiomeTextureMapping {
-  ground: string;
-  dirt: string;
-  rock: string;
-  cliff: string;
-}
-
-const BIOME_TEXTURE_PREFIXES: Record<BiomeTextureType, BiomeTextureMapping> = {
-  grassland: { ground: 'grass', dirt: 'dirt', rock: 'rock', cliff: 'cliff' },
-  desert: { ground: 'sand', dirt: 'desert_dirt', rock: 'sandstone', cliff: 'desert_cliff' },
-  frozen: { ground: 'snow', dirt: 'permafrost', rock: 'ice_rock', cliff: 'ice_cliff' },
-  volcanic: { ground: 'ash', dirt: 'scorched', rock: 'basalt', cliff: 'volcanic_cliff' },
-  void: { ground: 'void_ground', dirt: 'void_dirt', rock: 'void_rock', cliff: 'void_cliff' },
-  jungle: { ground: 'jungle_floor', dirt: 'mud', rock: 'mossy_rock', cliff: 'jungle_cliff' },
-};
-
-export function getBiomeTextureConfig(biome: BiomeTextureType): TextureTerrainConfig {
-  const basePath = '/textures/terrain/';
-  const prefixes = BIOME_TEXTURE_PREFIXES[biome] ?? BIOME_TEXTURE_PREFIXES.grassland;
-
-  return {
-    grassTexture: `${basePath}${prefixes.ground}_diffuse.png`,
-    grassNormal: `${basePath}${prefixes.ground}_normal.png`,
-    grassRoughness: `${basePath}${prefixes.ground}_roughness.png`,
-    grassDisplacement: `${basePath}${prefixes.ground}_displacement.png`,
-    dirtTexture: `${basePath}${prefixes.dirt}_diffuse.png`,
-    dirtNormal: `${basePath}${prefixes.dirt}_normal.png`,
-    dirtRoughness: `${basePath}${prefixes.dirt}_roughness.png`,
-    dirtDisplacement: `${basePath}${prefixes.dirt}_displacement.png`,
-    rockTexture: `${basePath}${prefixes.rock}_diffuse.png`,
-    rockNormal: `${basePath}${prefixes.rock}_normal.png`,
-    rockRoughness: `${basePath}${prefixes.rock}_roughness.png`,
-    rockDisplacement: `${basePath}${prefixes.rock}_displacement.png`,
-    cliffTexture: `${basePath}${prefixes.cliff}_diffuse.png`,
-    cliffNormal: `${basePath}${prefixes.cliff}_normal.png`,
-    cliffRoughness: `${basePath}${prefixes.cliff}_roughness.png`,
-    cliffDisplacement: `${basePath}${prefixes.cliff}_displacement.png`,
-    parallaxScale: 0.06,
-  };
 }
