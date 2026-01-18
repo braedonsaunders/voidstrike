@@ -243,11 +243,13 @@ export class CullingCompute {
         return;
       });
 
-      // Read transform matrix - extract position from column 3
+      // Read transform matrix - extract position from column 3 (translation)
+      // In column-major mat4: col0=X axis, col1=Y axis, col2=Z axis, col3=translation
       const transform = transformBuffer.element(unitIndex);
-      const posX = transform[12]; // Mat4 element access (column-major)
-      const posY = transform[13];
-      const posZ = transform[14];
+      const translationCol = transform[3]; // Column 3 is translation vec4
+      const posX = translationCol.x;
+      const posY = translationCol.y;
+      const posZ = translationCol.z;
 
       // Read metadata: vec4(entityId, unitTypeIndex, playerId, boundingRadius)
       const metadata = metadataBuffer.element(unitIndex);
