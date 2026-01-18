@@ -314,11 +314,11 @@ export class UnitRenderer {
         this.cullingCompute
       );
       this.gpuIndirectInitialized = true;
-      console.log('[UnitRenderer] GPU indirect renderer initialized successfully');
-      console.log('[UnitRenderer] GPU-driven rendering pipeline READY:');
-      console.log('  - GPU Unit Buffer: INITIALIZED');
-      console.log('  - GPU Culling Compute: ' + (this.gpuCullingInitialized ? 'READY' : 'PENDING'));
-      console.log('  - GPU Indirect Draw: ENABLED');
+      debugPerformance.log('[UnitRenderer] GPU indirect renderer initialized successfully');
+      debugPerformance.log('[UnitRenderer] GPU-driven rendering pipeline READY:');
+      debugPerformance.log('  - GPU Unit Buffer: INITIALIZED');
+      debugPerformance.log('  - GPU Culling Compute: ' + (this.gpuCullingInitialized ? 'READY' : 'PENDING'));
+      debugPerformance.log('  - GPU Indirect Draw: ENABLED');
     } catch (e) {
       console.warn('[UnitRenderer] Failed to initialize GPU indirect renderer:', e);
     }
@@ -979,7 +979,7 @@ export class UnitRenderer {
       // Log GPU indirect rendering status periodically (every 300 frames ~5 seconds)
       if (this.frameCount % 300 === 1) {
         const stats = this.getGPURenderingStats();
-        console.log(
+        debugPerformance.log(
           `[GPU Indirect Rendering] ACTIVE - Managed: ${stats.managedEntities}, ` +
           `Visible: ${stats.visibleCount}, UnitTypes: ${stats.registeredUnitTypes}, ` +
           `Culling: ${stats.cullingReady ? 'GPU' : 'CPU'}, Indirect: ${stats.indirectReady ? 'ON' : 'OFF'}`

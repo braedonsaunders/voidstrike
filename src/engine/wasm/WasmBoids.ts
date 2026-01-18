@@ -16,6 +16,7 @@ import type { Transform } from '../components/Transform';
 import type { Unit } from '../components/Unit';
 import type { Velocity } from '../components/Velocity';
 import type { SpatialGrid } from '../core/SpatialGrid';
+import { debugPerformance } from '@/utils/debugLogger';
 
 // Unit state constants (must match lib.rs)
 const STATE_ACTIVE = 0;
@@ -331,7 +332,7 @@ export class WasmBoids {
       !this.neighborOffsets ||
       !this.neighborCounts
     ) {
-      console.warn('[WasmBoids] syncEntities called but buffers are not initialized');
+      debugPerformance.warn('[WasmBoids] syncEntities called but buffers are not initialized');
       return 0;
     }
 
@@ -420,15 +421,15 @@ export class WasmBoids {
     // Second pass: add reverse neighbor relationships
     // (if A has B as neighbor, B should have A)
     for (let i = 0; i < this.currentCount; i++) {
-      const offset = this.neighborOffsets![i];
-      const count = this.neighborCounts![i];
+      const offset: number = this.neighborOffsets![i];
+      const count: number = this.neighborCounts![i];
 
       for (let j = 0; j < count; j++) {
-        const neighborIdx = this.neighbors![offset + j];
+        const neighborIdx: number = this.neighbors![offset + j];
 
         // Add reverse relationship if not already present
-        const neighborOffset = this.neighborOffsets![neighborIdx];
-        const neighborCount = this.neighborCounts![neighborIdx];
+        const neighborOffset: number = this.neighborOffsets![neighborIdx];
+        const neighborCount: number = this.neighborCounts![neighborIdx];
 
         let found = false;
         for (let k = 0; k < neighborCount; k++) {
