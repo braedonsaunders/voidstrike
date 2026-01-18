@@ -46,10 +46,6 @@ export class Entity {
     return removed;
   }
 
-  public getComponents(): Component[] {
-    return Array.from(this.components.values());
-  }
-
   /**
    * Get all component types into a provided array (avoids allocation)
    * Used by archetype system for efficient signature computation

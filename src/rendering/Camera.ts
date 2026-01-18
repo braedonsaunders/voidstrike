@@ -22,13 +22,6 @@ const DEFAULT_CONFIG: CameraConfig = {
   boundaryPadding: 10,
 };
 
-// Camera location bookmark
-interface CameraLocation {
-  x: number;
-  z: number;
-  zoom: number;
-}
-
 export class RTSCamera {
   public camera: THREE.PerspectiveCamera;
   public target: THREE.Vector3;
@@ -70,9 +63,6 @@ export class RTSCamera {
   private boundHandleResize: () => void;
   private boundHandleMouseLeave: () => void;
   private boundHandleMouseEnter: () => void;
-
-  // Camera location bookmarks (F5-F8)
-  private savedLocations: Map<string, CameraLocation> = new Map();
 
   // Terrain height function for accurate screen-to-world conversion
   private getTerrainHeight: ((x: number, z: number) => number) | null = null;
@@ -469,32 +459,6 @@ export class RTSCamera {
     this.getTerrainHeight = fn;
     // Calculate initial terrain min zoom now that we have the height function
     this.updateTerrainMinZoom();
-  }
-
-  // Save current camera location to a slot (F5-F8)
-  public saveLocation(slot: string): void {
-    this.savedLocations.set(slot, {
-      x: this.target.x,
-      z: this.target.z,
-      zoom: this.currentZoom,
-    });
-  }
-
-  // Recall a saved camera location
-  public recallLocation(slot: string): boolean {
-    const location = this.savedLocations.get(slot);
-    if (location) {
-      this.currentZoom = location.zoom;
-      // Use setPosition for consistent boundary clamping
-      this.setPosition(location.x, location.z);
-      return true;
-    }
-    return false;
-  }
-
-  // Check if a location slot has a saved position
-  public hasLocation(slot: string): boolean {
-    return this.savedLocations.has(slot);
   }
 
   // Convert screen coordinates to world coordinates

@@ -13,14 +13,10 @@
     "generate-manifests": "node scripts/generate-music-manifest.js"
   },
   "dependencies": {
-    "@react-three/drei": "^10.7.7",
-    "@react-three/fiber": "^9.5.0",
     "@recast-navigation/three": "^0.43.0",
-    "howler": "^2.2.4",
     "next": "^16.1.2",
     "nostr-tools": "^2.10.4",
     "pako": "^2.1.0",
-    "pathfinding": "^0.4.18",
     "phaser": "^4.0.0-rc.6",
     "react": "^19.2.3",
     "react-dom": "^19.2.3",
@@ -29,10 +25,8 @@
     "zustand": "^5.0.10"
   },
   "devDependencies": {
-    "@types/howler": "^2.2.11",
     "@types/node": "^20.10.5",
     "@types/pako": "^2.0.3",
-    "@types/pathfinding": "^0.1.0",
     "@types/react": "^19.2.8",
     "@types/react-dom": "^19.2.3",
     "@types/three": "^0.172.0",

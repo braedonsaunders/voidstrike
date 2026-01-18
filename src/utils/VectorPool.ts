@@ -86,50 +86,10 @@ class Vector2Pool {
     }
   }
 
-  /**
-   * Get pool statistics for debugging.
-   */
-  getStats(): { pooled: number; inUse: number } {
-    return {
-      pooled: this.pool.length,
-      inUse: this.inUse,
-    };
-  }
-
-  /**
-   * Clear the pool (useful for cleanup).
-   */
-  clear(): void {
-    this.pool = [];
-    this.inUse = 0;
-  }
 }
 
 // Singleton instance for global use
 export const VectorPool = new Vector2Pool();
-
-// Static temp vectors for simple calculations that don't need pooling
-// Use these for single-frame temporary calculations within a single function
-export const tempVec1: PooledVector2 = { x: 0, y: 0 };
-export const tempVec2: PooledVector2 = { x: 0, y: 0 };
-export const tempVec3: PooledVector2 = { x: 0, y: 0 };
-export const tempVec4: PooledVector2 = { x: 0, y: 0 };
-
-/**
- * Calculate distance squared between two points (avoids sqrt).
- */
-export function distanceSquared(x1: number, y1: number, x2: number, y2: number): number {
-  const dx = x2 - x1;
-  const dy = y2 - y1;
-  return dx * dx + dy * dy;
-}
-
-/**
- * Calculate distance between two points.
- */
-export function distance(x1: number, y1: number, x2: number, y2: number): number {
-  return Math.sqrt(distanceSquared(x1, y1, x2, y2));
-}
 
 /**
  * Normalize a vector in place. Returns magnitude.

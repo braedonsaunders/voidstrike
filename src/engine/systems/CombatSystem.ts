@@ -6,16 +6,12 @@ import { Game } from '../core/Game';
 import { Selectable } from '../components/Selectable';
 import { Building } from '../components/Building';
 import { Resource } from '../components/Resource';
-import { PooledVector2 } from '@/utils/VectorPool';
 import { isLocalPlayer } from '@/store/gameSetupStore';
 import { debugCombat } from '@/utils/debugLogger';
 import { deterministicDamage, quantize, QUANT_DAMAGE } from '@/utils/FixedPoint';
 import { getDamageMultiplier, COMBAT_CONFIG } from '@/data/combat/combat';
 import { getDefaultTargetPriority } from '@/data/units/categories';
 import AssetManager from '@/assets/AssetManager';
-
-// Static temp vectors to avoid allocations in hot loops
-const tempTargetScore: { id: number; score: number } | null = null;
 
 // PERF: Reusable event payload objects to avoid allocation per attack
 const attackEventPayload = {
