@@ -190,6 +190,18 @@ export const HUD = memo(function HUD() {
                         <span>Threat Ranges (Enemy)</span>
                         {overlaySettings.activeOverlay === 'threat' && <span>ON</span>}
                       </button>
+                      <button
+                        onClick={() => {
+                          toggleOverlay('navmesh');
+                          setShowOverlayMenu(false);
+                        }}
+                        className={`w-full px-4 py-2 text-left text-sm hover:bg-void-800 transition-colors flex justify-between items-center ${
+                          overlaySettings.activeOverlay === 'navmesh' ? 'text-purple-400' : 'text-void-200'
+                        }`}
+                      >
+                        <span>Navmesh (Pathfinding)</span>
+                        {overlaySettings.activeOverlay === 'navmesh' && <span>ON</span>}
+                      </button>
                       <div className="border-t border-void-700 my-1" />
                       <div className="px-4 py-1 text-xs text-void-500">
                         Press O to cycle overlays
