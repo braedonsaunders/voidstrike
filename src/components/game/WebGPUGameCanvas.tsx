@@ -1036,7 +1036,7 @@ export function WebGPUGameCanvas() {
         }
 
         const frameElapsed = performance.now() - frameStart;
-        if (frameElapsed > 16) { // Log if frame takes more than 16ms (60fps target)
+        if (DETAILED_TIMING && frameElapsed > 16) { // Log if frame takes more than 16ms (60fps target)
           debugPerformance.warn(`[FRAME] Total: ${frameElapsed.toFixed(1)}ms, Render: ${renderElapsed.toFixed(1)}ms`);
         }
 
