@@ -31,6 +31,7 @@ import {
 } from '@/data/formations/formations';
 import AssetManager from '@/assets/AssetManager';
 import { WasmBoids, getWasmBoids } from '../wasm/WasmBoids';
+import { CROWD_MAX_AGENTS } from '@/data/pathfinding.config';
 
 // ==================== SC2-STYLE STEERING CONSTANTS ====================
 
@@ -187,7 +188,7 @@ export class MovementSystem extends System {
     this.wasmBoidsInitializing = true;
 
     try {
-      this.wasmBoids = await getWasmBoids(500);
+      this.wasmBoids = await getWasmBoids(CROWD_MAX_AGENTS);
       this.useWasmBoids = this.wasmBoids.isAvailable();
 
       if (this.useWasmBoids) {

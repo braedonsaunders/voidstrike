@@ -140,8 +140,10 @@ export const CLIFF_WALL_THRESHOLD_ELEVATION = 40;
 
 /**
  * Maximum number of agents in crowd simulation.
+ * Set high enough for 8-player RTS (200 supply per player × 8 = 1600 supply).
+ * With small units at 0.5 supply, this could mean ~3200 units total.
  */
-export const CROWD_MAX_AGENTS = 500;
+export const CROWD_MAX_AGENTS = 2000;
 
 /**
  * Maximum agent radius for crowd simulation.

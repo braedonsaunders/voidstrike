@@ -502,6 +502,7 @@
   - GitHub Actions workflow for automated WASM builds (`.github/workflows/build-wasm.yml`)
   - Separation, cohesion, and alignment forces computed in batch
   - Auto-enables when 20+ units present, uses JS fallback otherwise
+  - Capacity increased from 500 to 2000 (January 2026) - supports 8-player RTS with 200 supply per player
 - [x] GPU-Driven Indirect Draw - TSL compute culling with IndirectStorageBufferAttribute (January 2026)
 - [ ] Flow Field Pathfinding - GPU compute for same-destination commands
 
