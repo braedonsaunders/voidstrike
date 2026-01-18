@@ -16,6 +16,7 @@ import type { Transform } from '../components/Transform';
 import type { Unit } from '../components/Unit';
 import type { Velocity } from '../components/Velocity';
 import type { SpatialGrid } from '../core/SpatialGrid';
+import { debugPerformance } from '@/utils/debugLogger';
 
 // Unit state constants (must match lib.rs)
 const STATE_ACTIVE = 0;
@@ -252,10 +253,16 @@ export class WasmBoids {
   }
 
   /**
-   * Check if WASM SIMD is available
+   * Check if WASM SIMD is available and buffers are initialized
    */
   isAvailable(): boolean {
-    return this.initialized && this.simdAvailable && this.engine !== null;
+    return (
+      this.initialized &&
+      this.simdAvailable &&
+      this.engine !== null &&
+      this.positionsX !== null &&
+      this.positionsY !== null
+    );
   }
 
   /**
@@ -310,6 +317,24 @@ export class WasmBoids {
     unitGrid: SpatialGrid
   ): number {
     if (!this.isAvailable()) return 0;
+
+    // Additional safety check - ensure all required buffers are initialized
+    // This guards against race conditions where buffers might become null
+    if (
+      !this.positionsX ||
+      !this.positionsY ||
+      !this.velocitiesX ||
+      !this.velocitiesY ||
+      !this.radii ||
+      !this.states ||
+      !this.layers ||
+      !this.neighbors ||
+      !this.neighborOffsets ||
+      !this.neighborCounts
+    ) {
+      debugPerformance.warn('[WasmBoids] syncEntities called but buffers are not initialized');
+      return 0;
+    }
 
     // Clear mappings
     this.entityToIndex.clear();
@@ -396,15 +421,15 @@ export class WasmBoids {
     // Second pass: add reverse neighbor relationships
     // (if A has B as neighbor, B should have A)
     for (let i = 0; i < this.currentCount; i++) {
-      const offset = this.neighborOffsets![i];
-      const count = this.neighborCounts![i];
+      const offset: number = this.neighborOffsets![i];
+      const count: number = this.neighborCounts![i];
 
       for (let j = 0; j < count; j++) {
-        const neighborIdx = this.neighbors![offset + j];
+        const neighborIdx: number = this.neighbors![offset + j];
 
         // Add reverse relationship if not already present
-        const neighborOffset = this.neighborOffsets![neighborIdx];
-        const neighborCount = this.neighborCounts![neighborIdx];
+        const neighborOffset: number = this.neighborOffsets![neighborIdx];
+        const neighborCount: number = this.neighborCounts![neighborIdx];
 
         let found = false;
         for (let k = 0; k < neighborCount; k++) {
