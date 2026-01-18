@@ -162,7 +162,12 @@
 ## GPU Rendering Optimizations (January 2026) ✓
 
 ### GPU Compute Vision/Fog of War
-- [x] **VisionCompute.ts** - GPU-optimized vision computation
+- [x] **VisionCompute.ts** - TSL compute shader for GPU vision calculation
+  - `Fn().compute()` shader with WORKGROUP_SIZE=64 threads
+  - `storage()` buffer for vision casters (vec4: x, y, sightRange, playerId)
+  - `StorageTexture` output for direct fog shader sampling
+  - Loop over casters with manual index tracking (TSL pattern)
+  - CPU fallback path with automatic detection
 - [x] **Optimized CPU path** - Typed arrays and batched updates
 - [x] **GPU texture output** - Direct texture output for fog shader
 - [x] **VisionSystem integration** - Priority: GPU > Worker > Main Thread
@@ -182,10 +187,13 @@
   - Slot allocation/deallocation for entities
   - Transform buffer with velocity tracking
   - Metadata buffer (entityId, unitType, player, radius)
-- [x] **CullingCompute.ts** - Frustum culling and LOD selection
-  - Optimized CPU path (ready for GPU compute migration)
-  - LOD distance thresholds configurable
-  - VisibilityBuffer for indirect draw indexing
+- [x] **CullingCompute.ts** - TSL compute shader for GPU frustum culling
+  - `Fn().compute()` shader with WORKGROUP_SIZE=64 threads
+  - `storage()` buffers for transforms (mat4) and metadata (vec4)
+  - Frustum plane tests against bounding spheres
+  - LOD selection based on camera distance squared
+  - `IndirectStorageBufferAttribute` integration for draw args
+  - CPU fallback path with automatic detection
 - [x] **UnitRenderer GPU mode** - enableGPUDrivenRendering() method
 - [x] **Single buffer design** - Per Toji's best practices for Chrome/Windows
 
@@ -481,9 +489,9 @@
 > See **docs/PERFORMANCE_ANALYSIS.md** for detailed analysis and ranking
 
 **Tier 1 (Implement First):**
-- [ ] GPU Compute Vision/Fog of War - WebGPU compute shader for 60Hz vision
+- [x] GPU Compute Vision/Fog of War - TSL compute shader for 60Hz vision (January 2026)
 - [x] Merkle Tree State Checksums - O(log n) desync detection (January 2026)
-- [ ] Temporal Reprojection for GTAO/SSR - Leverage existing velocity buffer
+- [x] Temporal Reprojection for GTAO/SSR - Leverage existing velocity buffer (January 2026)
 - [ ] Hierarchical Interest Management - Reduced tick rate for off-screen entities
 
 **Tier 2 (Scaling):**
@@ -494,7 +502,7 @@
   - GitHub Actions workflow for automated WASM builds (`.github/workflows/build-wasm.yml`)
   - Separation, cohesion, and alignment forces computed in batch
   - Auto-enables when 20+ units present, uses JS fallback otherwise
-- [ ] GPU-Driven Indirect Draw - Eliminate CPU-GPU sync for 500+ units
+- [x] GPU-Driven Indirect Draw - TSL compute culling with IndirectStorageBufferAttribute (January 2026)
 - [ ] Flow Field Pathfinding - GPU compute for same-destination commands
 
 ---

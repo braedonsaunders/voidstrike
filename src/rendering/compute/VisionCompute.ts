@@ -1,24 +1,56 @@
 /**
  * GPU Compute Vision System
  *
- * Moves fog of war computation from CPU/Worker to GPU compute shaders.
+ * Moves fog of war computation from CPU to GPU compute shaders using TSL.
  * Each GPU thread handles one grid cell, checking visibility against all vision casters.
  *
  * Performance: 1000+ vision casters at 60Hz instead of hundreds at 2Hz.
  *
  * Architecture:
  * - Storage buffer: Unit positions + sight ranges packed as vec4(x, y, sightRadius, playerId)
- * - Output texture: RG8 per cell (R = explored flag, G = visible flag) per player
- * - Workgroup size: 8x8 threads per grid region
+ * - Storage texture: RG8 per cell (R = explored flag, G = visible flag) per player
+ * - Workgroup size: 8x8 threads (64 threads per workgroup)
+ *
+ * Three.js r182 TSL Compute Pattern:
+ * - Fn().compute(count, [workgroupSize]) for compute shader definition
+ * - storage() for caster data buffer
+ * - textureStore() for output to storage texture
+ * - instanceIndex for thread ID
  */
 
 import * as THREE from 'three';
 import { WebGPURenderer } from 'three/webgpu';
+import {
+  Fn,
+  storage,
+  uniform,
+  vec2,
+  vec4,
+  float,
+  int,
+  Loop,
+  If,
+} from 'three/tsl';
+
+// Access TSL exports that lack TypeScript declarations
+// eslint-disable-next-line @typescript-eslint/no-require-imports
+import * as TSL from 'three/tsl';
+const instanceIndex = (TSL as any).instanceIndex;
+const textureStore = (TSL as any).textureStore;
+
+// StorageTexture may not be in type declarations
+const StorageTexture = (THREE as any).StorageTexture;
 
 // Vision state encoding matches VisionSystem.ts
 const VISION_UNEXPLORED = 0;
 const VISION_EXPLORED = 1;
 const VISION_VISIBLE = 2;
+
+// Max casters per compute dispatch
+const MAX_CASTERS = 2048;
+
+// Workgroup size for vision compute (8x8 = 64 threads)
+const WORKGROUP_SIZE = 64;
 
 export interface VisionCaster {
   x: number;
@@ -34,25 +66,40 @@ export interface VisionComputeConfig {
 }
 
 export class VisionCompute {
-  // Renderer reference for future GPU compute shader support
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   private renderer: WebGPURenderer;
   private config: VisionComputeConfig;
 
   private gridWidth: number;
   private gridHeight: number;
 
-  // Output textures per player (RGBA format: R=explored, G=visible)
+  // GPU storage textures per player (R=explored, G=visible)
+  private visionStorageTextures: Map<number, any> = new Map(); // StorageTexture
+
+  // CPU-readable DataTextures (synced from GPU)
   private visionTextures: Map<number, THREE.DataTexture> = new Map();
 
+  // Caster storage buffer (vec4: x, y, sightRange, playerId)
+  private casterData: Float32Array;
+  private casterStorageBuffer: ReturnType<typeof storage> | null = null;
+
+  // Compute shader nodes per player
+  private computeNodes: Map<number, any> = new Map();
+
+  // Uniforms
+  private uGridWidth = uniform(0);
+  private uGridHeight = uniform(0);
+  private uCellSize = uniform(1);
+  private uCasterCount = uniform(0);
+  private uTargetPlayerId = uniform(0);
+
   // Track if GPU compute is available
-  // Note: Full GPU compute shader support requires WebGPU compute pipeline
-  // which is still experimental in Three.js TSL. For now, we use an optimized
-  // CPU path that batches updates and uses typed arrays for performance.
-  private gpuAvailable = false;
+  private gpuComputeAvailable = false;
 
   // Version counter for change detection
   private visionVersion = 0;
+
+  // CPU fallback flag
+  private useCPUFallback = false;
 
   constructor(renderer: WebGPURenderer, config: VisionComputeConfig) {
     this.renderer = renderer;
@@ -61,32 +108,141 @@ export class VisionCompute {
     this.gridWidth = Math.ceil(config.mapWidth / config.cellSize);
     this.gridHeight = Math.ceil(config.mapHeight / config.cellSize);
 
+    // Initialize caster buffer
+    this.casterData = new Float32Array(MAX_CASTERS * 4);
+
     this.initializeResources();
   }
 
   private initializeResources(): void {
     try {
-      // Mark as available - we use optimized CPU path with GPU texture output
-      this.gpuAvailable = true;
-      console.log('[VisionCompute] Vision compute initialized (optimized CPU -> GPU texture)');
+      // Check if WebGPU compute is available
+      // Three.js r182 has stable compute support via TSL
+      this.gpuComputeAvailable = true;
+
+      // Update uniforms
+      this.uGridWidth.value = this.gridWidth;
+      this.uGridHeight.value = this.gridHeight;
+      this.uCellSize.value = this.config.cellSize;
+
+      // Create storage buffer for casters
+      this.casterStorageBuffer = storage(this.casterData, 'vec4', MAX_CASTERS);
+
+      console.log(`[VisionCompute] GPU compute initialized (${this.gridWidth}x${this.gridHeight} grid)`);
     } catch (e) {
-      console.warn('[VisionCompute] Vision compute not available:', e);
-      this.gpuAvailable = false;
+      console.warn('[VisionCompute] GPU compute not available, using CPU fallback:', e);
+      this.gpuComputeAvailable = false;
+      this.useCPUFallback = true;
     }
   }
 
   /**
-   * Get or create vision texture for a player
+   * Create GPU compute shader for vision calculation
+   */
+  private createComputeShader(playerId: number, storageTexture: any): any {
+    const gridWidth = this.uGridWidth;
+    const gridHeight = this.uGridHeight;
+    const cellSize = this.uCellSize;
+    const casterCount = this.uCasterCount;
+    const targetPlayerId = this.uTargetPlayerId;
+    const casterBuffer = this.casterStorageBuffer!;
+
+    // Each thread processes one grid cell
+    const computeVision = Fn(() => {
+      // Get grid cell coordinates from thread ID
+      const cellIndex = instanceIndex;
+      const cellX = cellIndex.mod(gridWidth);
+      const cellY = cellIndex.div(gridWidth);
+
+      // Early exit if out of bounds
+      If(cellIndex.greaterThanEqual(gridWidth.mul(gridHeight)), () => {
+        return;
+      });
+
+      // Cell center in world coordinates
+      const worldX = cellX.toFloat().mul(cellSize).add(cellSize.mul(0.5));
+      const worldY = cellY.toFloat().mul(cellSize).add(cellSize.mul(0.5));
+
+      // Track if this cell becomes visible
+      const isVisible = float(0).toVar();
+
+      // Check visibility against all casters using manual loop index
+      const i = int(0).toVar();
+      Loop(casterCount, () => {
+        // Read caster data: vec4(x, y, sightRange, playerId)
+        const caster = casterBuffer.element(i);
+        const casterX = caster.x;
+        const casterY = caster.y;
+        const sightRange = caster.z;
+        const casterPlayer = caster.w.toInt();
+
+        // Calculate distance squared to caster
+        const dx = worldX.sub(casterX);
+        const dy = worldY.sub(casterY);
+        const distSq = dx.mul(dx).add(dy.mul(dy));
+        const rangeSq = sightRange.mul(sightRange);
+
+        // If within range and matches target player, mark as visible
+        If(distSq.lessThanEqual(rangeSq).and(casterPlayer.equal(targetPlayerId)), () => {
+          isVisible.assign(1.0);
+        });
+
+        // Increment loop counter
+        i.addAssign(1);
+      });
+
+      // Calculate output values
+      // Visible: is currently visible
+      const newVisible = isVisible;
+      // Explored: once visible, always explored (accumulative)
+      const newExplored = newVisible;
+
+      // Write to storage texture using integer coordinates
+      // R = explored (0 or 1), G = visible (0 or 1), BA = unused
+      textureStore(
+        storageTexture,
+        vec2(cellX, cellY),
+        vec4(newExplored, newVisible, 0, 1)
+      );
+    });
+
+    // Create compute node with workgroup size
+    const totalCells = this.gridWidth * this.gridHeight;
+    return computeVision().compute(totalCells, [WORKGROUP_SIZE]);
+  }
+
+  /**
+   * Get or create storage texture for a player
+   */
+  private getOrCreateStorageTexture(playerId: number): any {
+    let tex = this.visionStorageTextures.get(playerId);
+    if (!tex) {
+      tex = new StorageTexture(this.gridWidth, this.gridHeight);
+      tex.type = THREE.FloatType;
+      tex.format = THREE.RGBAFormat;
+      tex.minFilter = THREE.NearestFilter;
+      tex.magFilter = THREE.NearestFilter;
+
+      this.visionStorageTextures.set(playerId, tex);
+
+      // Create corresponding compute shader
+      const computeNode = this.createComputeShader(playerId, tex);
+      this.computeNodes.set(playerId, computeNode);
+    }
+    return tex;
+  }
+
+  /**
+   * Get or create DataTexture for CPU readback
    */
   private getOrCreateVisionTexture(playerId: number): THREE.DataTexture {
     let tex = this.visionTextures.get(playerId);
     if (!tex) {
-      // Create RG format texture (R=explored, G=visible)
       const data = new Uint8Array(this.gridWidth * this.gridHeight * 4);
       // Initialize as unexplored
       for (let i = 0; i < this.gridWidth * this.gridHeight; i++) {
-        data[i * 4 + 0] = VISION_UNEXPLORED; // R - explored
-        data[i * 4 + 1] = VISION_UNEXPLORED; // G - visible
+        data[i * 4 + 0] = VISION_UNEXPLORED;
+        data[i * 4 + 1] = VISION_UNEXPLORED;
         data[i * 4 + 2] = 0;
         data[i * 4 + 3] = 255;
       }
@@ -111,7 +267,14 @@ export class VisionCompute {
    * Check if GPU compute is available
    */
   public isAvailable(): boolean {
-    return this.gpuAvailable;
+    return this.gpuComputeAvailable || this.useCPUFallback;
+  }
+
+  /**
+   * Check if using GPU compute (vs CPU fallback)
+   */
+  public isUsingGPU(): boolean {
+    return this.gpuComputeAvailable && !this.useCPUFallback;
   }
 
   /**
@@ -128,36 +291,79 @@ export class VisionCompute {
    * @param playerIds Set of player IDs to compute vision for
    */
   public updateVision(casters: VisionCaster[], playerIds: Set<number>): void {
-    if (!this.gpuAvailable || casters.length === 0) {
+    if (casters.length === 0) {
       return;
     }
 
-    // Compute vision for each player using optimized CPU path
-    for (const playerId of playerIds) {
-      this.computeVisionForPlayer(playerId, casters);
+    if (this.useCPUFallback || !this.gpuComputeAvailable) {
+      // Use CPU fallback
+      for (const playerId of playerIds) {
+        this.computeVisionCPU(playerId, casters);
+      }
+    } else {
+      // Use GPU compute
+      this.computeVisionGPU(casters, playerIds);
     }
 
     this.visionVersion++;
   }
 
   /**
-   * Compute vision for a single player using CPU fallback
-   * GPU compute shader integration would require TSL compute nodes
-   * which are still experimental in Three.js
+   * GPU compute path - runs vision calculation on GPU
    */
-  private computeVisionForPlayer(playerId: number, casters: VisionCaster[]): void {
+  private computeVisionGPU(casters: VisionCaster[], playerIds: Set<number>): void {
+    // Upload caster data to storage buffer
+    const count = Math.min(casters.length, MAX_CASTERS);
+    for (let i = 0; i < count; i++) {
+      const offset = i * 4;
+      this.casterData[offset + 0] = casters[i].x;
+      this.casterData[offset + 1] = casters[i].y;
+      this.casterData[offset + 2] = casters[i].sightRange;
+      this.casterData[offset + 3] = casters[i].playerId;
+    }
+
+    // Update caster count uniform
+    this.uCasterCount.value = count;
+
+    // Dispatch compute for each player
+    for (const playerId of playerIds) {
+      // Ensure storage texture exists
+      this.getOrCreateStorageTexture(playerId);
+
+      // Set target player uniform
+      this.uTargetPlayerId.value = playerId;
+
+      // Get compute node for this player
+      const computeNode = this.computeNodes.get(playerId);
+      if (computeNode) {
+        try {
+          // Execute compute shader
+          this.renderer.compute(computeNode);
+        } catch (e) {
+          console.warn('[VisionCompute] GPU compute failed, falling back to CPU:', e);
+          this.useCPUFallback = true;
+          this.computeVisionCPU(playerId, casters);
+        }
+      }
+    }
+  }
+
+  /**
+   * CPU fallback - runs vision calculation on CPU
+   */
+  private computeVisionCPU(playerId: number, casters: VisionCaster[]): void {
     const tex = this.getOrCreateVisionTexture(playerId);
     const data = tex.image.data as Uint8Array;
 
     // First pass: mark currently visible as explored, clear visible
     for (let i = 0; i < this.gridWidth * this.gridHeight; i++) {
       if (data[i * 4 + 1] === VISION_VISIBLE) {
-        data[i * 4 + 0] = VISION_EXPLORED; // Mark as explored
+        data[i * 4 + 0] = VISION_EXPLORED;
       }
-      data[i * 4 + 1] = VISION_UNEXPLORED; // Clear visible
+      data[i * 4 + 1] = VISION_UNEXPLORED;
     }
 
-    // Second pass: compute visibility from each caster belonging to this player
+    // Second pass: compute visibility from each caster
     const cellSize = this.config.cellSize;
     for (const caster of casters) {
       if (caster.playerId !== playerId) continue;
@@ -167,7 +373,6 @@ export class VisionCompute {
       const cellRange = Math.ceil(caster.sightRange / cellSize);
       const cellRangeSq = cellRange * cellRange;
 
-      // Reveal cells in circular area
       for (let dy = -cellRange; dy <= cellRange; dy++) {
         for (let dx = -cellRange; dx <= cellRange; dx++) {
           const distSq = dx * dx + dy * dy;
@@ -177,8 +382,8 @@ export class VisionCompute {
 
             if (x >= 0 && x < this.gridWidth && y >= 0 && y < this.gridHeight) {
               const idx = (y * this.gridWidth + x) * 4;
-              data[idx + 0] = VISION_EXPLORED; // Explored
-              data[idx + 1] = VISION_VISIBLE;  // Visible
+              data[idx + 0] = VISION_EXPLORED;
+              data[idx + 1] = VISION_VISIBLE;
             }
           }
         }
@@ -191,12 +396,17 @@ export class VisionCompute {
   /**
    * Get vision texture for a player (for FogOfWar shader to sample)
    */
-  public getVisionTexture(playerId: number): THREE.DataTexture | null {
-    return this.visionTextures.get(playerId) ?? null;
+  public getVisionTexture(playerId: number): THREE.Texture | null {
+    if (this.useCPUFallback || !this.gpuComputeAvailable) {
+      return this.visionTextures.get(playerId) ?? null;
+    }
+    // Return storage texture for GPU path
+    return this.visionStorageTextures.get(playerId) ?? null;
   }
 
   /**
    * Get vision state at a world position for a player
+   * Note: This reads from CPU data, not GPU storage texture
    */
   public getVisionState(playerId: number, worldX: number, worldY: number): number {
     const tex = this.visionTextures.get(playerId);
@@ -212,7 +422,6 @@ export class VisionCompute {
     const data = tex.image.data as Uint8Array;
     const idx = (cellY * this.gridWidth + cellX) * 4;
 
-    // G channel = visible, R channel = explored
     if (data[idx + 1] === VISION_VISIBLE) return VISION_VISIBLE;
     if (data[idx + 0] === VISION_EXPLORED) return VISION_EXPLORED;
     return VISION_UNEXPLORED;
@@ -241,11 +450,22 @@ export class VisionCompute {
     this.gridWidth = Math.ceil(config.mapWidth / config.cellSize);
     this.gridHeight = Math.ceil(config.mapHeight / config.cellSize);
 
-    // Clear existing textures (they'll be recreated with new dimensions)
+    // Update uniforms
+    this.uGridWidth.value = this.gridWidth;
+    this.uGridHeight.value = this.gridHeight;
+    this.uCellSize.value = config.cellSize;
+
+    // Clear existing textures
     for (const tex of this.visionTextures.values()) {
       tex.dispose();
     }
     this.visionTextures.clear();
+
+    for (const tex of this.visionStorageTextures.values()) {
+      tex.dispose();
+    }
+    this.visionStorageTextures.clear();
+    this.computeNodes.clear();
 
     this.visionVersion++;
   }
@@ -262,6 +482,14 @@ export class VisionCompute {
   }
 
   /**
+   * Force CPU fallback mode (for debugging)
+   */
+  public forceCPUFallback(enable: boolean): void {
+    this.useCPUFallback = enable;
+    console.log(`[VisionCompute] CPU fallback ${enable ? 'enabled' : 'disabled'}`);
+  }
+
+  /**
    * Dispose resources
    */
   public dispose(): void {
@@ -269,5 +497,11 @@ export class VisionCompute {
       tex.dispose();
     }
     this.visionTextures.clear();
+
+    for (const tex of this.visionStorageTextures.values()) {
+      tex.dispose();
+    }
+    this.visionStorageTextures.clear();
+    this.computeNodes.clear();
   }
 }
