@@ -271,6 +271,11 @@
 - [x] **"Not enough resources" alert audio fix** - Audio was not playing for resource insufficiency alerts. Systems were emitting `'ui:error'` events but AudioSystem was listening for `'alert:notEnoughMinerals'` and `'alert:notEnoughVespene'`. Fixed by updating ProductionSystem, BuildingPlacementSystem, ResearchSystem, and WallSystem to emit the correct alert events alongside the visual warning events.
 - [x] **Music toggle persistence** - Music on/off state (and all audio settings) now persists across page reloads via localStorage. Added `saveAudioSettings()` and `loadAudioSettings()` functions to uiStore.ts that save/restore musicEnabled, soundEnabled, volumes, and granular audio settings.
 
+### WASM Boids System Fixes (January 2026)
+- [x] **WASM memory access out of bounds fix** - Boids WASM module was crashing with "memory access out of bounds" in compute_forces(). Root cause: neighbor buffer could overflow capacity (maxUnits * 8) due to missing bounds checks. Fixed by adding per-unit (32) and total buffer limits before writing to neighbor arrays.
+- [x] **WASM recursive aliasing error fix** - Rust was throwing "recursive use of an object detected which would lead to unsafe aliasing" when setting unit_count during syncEntities(). Root cause: Second pass for reverse neighbor relationships was fundamentally broken - it wrote neighbors to wrong buffer positions while incrementing counts that assumed contiguous storage. Fixed by removing the broken second pass (boids forces are symmetric anyway when computed bidirectionally from spatial grid queries).
+- [x] **Scene object leak warning threshold** - False positive "LEAK?" warnings at 819 children. Threshold was 500 but RTS games legitimately have 800-1200 scene objects (units, buildings, effects, selection rings). Increased threshold to 1500.
+
 ### Phaser4 Overlay Fixes
 - [x] **Team marker/selection ring positioning bug** - Ground rings appeared way above the map in battle simulator because InstancedMesh rotation was transforming instance matrix coordinates (Y/Z swap). Fixed by applying rotation per-instance via quaternion instead of on mesh parent.
 - [x] **Damage number player colors** - Damage numbers now use the unit owner's player color with brightness gradient (lighter for low damage, darker for high damage). Also reduced font size from 18px to 12px for cleaner appearance.

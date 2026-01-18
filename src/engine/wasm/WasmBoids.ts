@@ -418,9 +418,17 @@ export class WasmBoids {
       this.neighborOffsets![idx] = neighborTotalCount;
       let neighborCount = 0;
 
+      // Max neighbors per unit and total buffer limit
+      const maxNeighborsPerUnit = 32;
+      const maxNeighborsTotal = this.maxUnits * 8;
+
       for (const neighborEntityId of nearbyIds) {
         // Skip self
         if (neighborEntityId === entity.id) continue;
+
+        // Bounds check: prevent buffer overflow
+        if (neighborTotalCount >= maxNeighborsTotal) break;
+        if (neighborCount >= maxNeighborsPerUnit) break;
 
         // Get neighbor's WASM index (if already processed)
         const neighborIdx = this.entityToIndex.get(neighborEntityId);
@@ -429,51 +437,28 @@ export class WasmBoids {
           neighborTotalCount++;
           neighborCount++;
         }
-        // Neighbors not yet processed will be handled in reverse pass
       }
 
       this.neighborCounts![idx] = neighborCount;
       this.currentCount++;
     }
 
-    // Second pass: add reverse neighbor relationships
-    // (if A has B as neighbor, B should have A)
-    for (let i = 0; i < this.currentCount; i++) {
-      const offset: number = this.neighborOffsets![i];
-      const count: number = this.neighborCounts![i];
+    // Note: Reverse neighbor relationships are not added here because:
+    // 1. The WASM expects contiguous neighbor storage per unit
+    // 2. Adding reverse relationships after the first pass would break offsets
+    // 3. Boids forces naturally become symmetric when computed bidirectionally
+    // The spatial grid query in the first pass is sufficient for boids behavior.
 
-      for (let j = 0; j < count; j++) {
-        const neighborIdx: number = this.neighbors![offset + j];
+    // Safety bounds check on neighbor total
+    const maxNeighbors = this.maxUnits * 8;
+    const finalNeighborTotal = Math.min(neighborTotalCount, maxNeighbors);
 
-        // Add reverse relationship if not already present
-        const neighborOffset: number = this.neighborOffsets![neighborIdx];
-        const neighborCount: number = this.neighborCounts![neighborIdx];
-
-        let found = false;
-        for (let k = 0; k < neighborCount; k++) {
-          if (this.neighbors![neighborOffset + k] === i) {
-            found = true;
-            break;
-          }
-        }
-
-        if (!found && neighborCount < 32) {
-          // Add this unit as neighbor of the other unit
-          // Append to existing neighbors
-          const newOffset = this.neighborOffsets![neighborIdx] + this.neighborCounts![neighborIdx];
-          if (newOffset < neighborTotalCount + 1000) {
-            // Safety check
-            this.neighbors![newOffset] = i;
-            this.neighborCounts![neighborIdx]++;
-            neighborTotalCount++;
-          }
-        }
-      }
-    }
+    // Capture count before updating WASM
+    const finalCount = this.currentCount;
 
     // Update WASM with counts
-    this.engine!.unit_count = this.currentCount;
-    this.engine!.set_neighbor_total(neighborTotalCount);
+    this.engine!.unit_count = finalCount;
+    this.engine!.set_neighbor_total(finalNeighborTotal);
 
     return this.currentCount;
   }
