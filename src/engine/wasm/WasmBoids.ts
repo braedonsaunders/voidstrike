@@ -152,7 +152,7 @@ export class WasmBoids {
   private alignmentRadius: number = 4.0;
   private alignmentStrength: number = 0.3;
 
-  constructor(maxUnits: number = 500) {
+  constructor(maxUnits: number = 2000) {
     this.maxUnits = maxUnits;
     this.neighborQueryBuffer = new Array(maxUnits * 8);
   }
@@ -553,7 +553,7 @@ let wasmBoidsInstance: WasmBoids | null = null;
  * Get the global WasmBoids instance
  * Creates and initializes on first call
  */
-export async function getWasmBoids(maxUnits: number = 500): Promise<WasmBoids> {
+export async function getWasmBoids(maxUnits: number = 2000): Promise<WasmBoids> {
   if (!wasmBoidsInstance) {
     wasmBoidsInstance = new WasmBoids(maxUnits);
     await wasmBoidsInstance.initialize();
