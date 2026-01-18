@@ -29,7 +29,7 @@ const STATE_WORKER = 4;
  * Interface for the WASM module exports
  */
 interface BoidsWasmExports {
-  memory: WebAssembly.Memory;
+  wasm_memory: () => WebAssembly.Memory;
   simd_supported: () => boolean;
   BoidsEngine: new (maxUnits: number) => WasmBoidsEngine;
   STATE_ACTIVE: number;
@@ -201,9 +201,8 @@ export class WasmBoids {
       // Create engine instance
       this.engine = new this.wasm.BoidsEngine(this.maxUnits);
 
-      // Get memory via the getter function (memory is not directly exported)
-      const wasmMemory = (wasmModule as { getMemory?: () => WebAssembly.Memory }).getMemory?.();
-      this.memory = wasmMemory ?? null;
+      // Get memory via the exported wasm_memory() function
+      this.memory = this.wasm.wasm_memory();
 
       // Validate memory is available
       if (!this.memory) {

@@ -301,9 +301,22 @@ export function state_worker() {
     return ret;
 }
 
+/**
+ * Export WASM memory for JS typed array views
+ * @returns {any}
+ */
+export function wasm_memory() {
+    const ret = wasm.wasm_memory();
+    return takeObject(ret);
+}
+
 function __wbg_get_imports() {
     const import0 = {
         __proto__: null,
+        __wbg___wbindgen_memory_bd1fbcf21fbef3c8: function() {
+            const ret = wasm.memory;
+            return addHeapObject(ret);
+        },
         __wbg___wbindgen_throw_be289d5034ed271b: function(arg0, arg1) {
             throw new Error(getStringFromWasm0(arg0, arg1));
         },
@@ -547,16 +560,6 @@ async function __wbg_init(module_or_path) {
     const { instance, module } = await __wbg_load(await module_or_path, imports);
 
     return __wbg_finalize_init(instance, module);
-}
-
-// Export memory getter for external access (wasm is only defined after init)
-export const memory = {
-    get buffer() { return wasm?.memory?.buffer; }
-};
-
-// Direct memory reference (available after init)
-export function getMemory() {
-    return wasm?.memory;
 }
 
 export { initSync, __wbg_init as default };

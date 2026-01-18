@@ -159,6 +159,11 @@ export function state_gathering(): number;
  */
 export function state_worker(): number;
 
+/**
+ * Export WASM memory for JS typed array views
+ */
+export function wasm_memory(): any;
+
 export type InitInput = RequestInfo | URL | Response | BufferSource | WebAssembly.Module;
 
 export interface InitOutput {
@@ -197,6 +202,7 @@ export interface InitOutput {
     readonly state_gathering: () => number;
     readonly state_worker: () => number;
     readonly init: () => void;
+    readonly wasm_memory: () => number;
     readonly state_dead: () => number;
     readonly __wbindgen_export: (a: number, b: number, c: number) => void;
     readonly __wbindgen_export2: (a: number, b: number) => number;
