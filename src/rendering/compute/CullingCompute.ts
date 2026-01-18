@@ -32,12 +32,13 @@ import {
 import * as TSL from 'three/tsl';
 const uint = (TSL as any).uint;
 const instanceIndex = (TSL as any).instanceIndex;
+const instancedArray = (TSL as any).instancedArray;
+const atomicAdd = (TSL as any).atomicAdd;
 
-// StorageBufferAttribute, StorageInstancedBufferAttribute, and IndirectStorageBufferAttribute
-// exist in three/webgpu but lack TypeScript declarations - access dynamically
+// StorageInstancedBufferAttribute and IndirectStorageBufferAttribute exist in three/webgpu
+// but lack TypeScript declarations - access dynamically
 // eslint-disable-next-line @typescript-eslint/no-require-imports
 import * as THREE_WEBGPU from 'three/webgpu';
-const StorageBufferAttribute = (THREE_WEBGPU as any).StorageBufferAttribute;
 const StorageInstancedBufferAttribute = (THREE_WEBGPU as any).StorageInstancedBufferAttribute;
 const IndirectStorageBufferAttribute = (THREE_WEBGPU as any).IndirectStorageBufferAttribute;
 
@@ -163,13 +164,12 @@ export class CullingCompute {
     try {
       this.renderer = renderer;
 
-      // Validate StorageInstancedBufferAttribute is available (required for compute shaders)
-      if (!StorageInstancedBufferAttribute || typeof StorageInstancedBufferAttribute !== 'function') {
-        throw new Error('StorageInstancedBufferAttribute not available in three/webgpu');
+      // Validate instancedArray is available (TSL function for storage buffers)
+      if (!instancedArray || typeof instancedArray !== 'function') {
+        throw new Error('instancedArray not available in three/tsl');
       }
 
-      // Create StorageInstancedBufferAttributes for TSL storage() nodes
-      // StorageInstancedBufferAttribute is required for compute shaders (not StorageBufferAttribute)
+      // Create StorageInstancedBufferAttributes for input buffers
       // Transform buffer: mat4 = 16 floats per unit
       this.transformStorageAttribute = new StorageInstancedBufferAttribute(transformData, 16);
       this.transformStorageBuffer = storage(this.transformStorageAttribute, 'mat4', MAX_GPU_UNITS);
@@ -178,36 +178,29 @@ export class CullingCompute {
       this.metadataStorageAttribute = new StorageInstancedBufferAttribute(metadataData, 4);
       this.metadataStorageBuffer = storage(this.metadataStorageAttribute, 'vec4', MAX_GPU_UNITS);
 
-      // Visible indices output buffer (stores slot indices of visible units)
-      const visibleIndicesData = new Uint32Array(MAX_GPU_UNITS);
-      this.visibleIndicesAttribute = new StorageInstancedBufferAttribute(visibleIndicesData, 1);
-      this.visibleIndicesStorage = storage(this.visibleIndicesAttribute, 'uint', MAX_GPU_UNITS);
+      // Visible indices output buffer - using instancedArray for simpler setup
+      this.visibleIndicesStorage = instancedArray(MAX_GPU_UNITS, 'uint');
 
-      // Indirect args buffer for all unit/LOD/player combinations
-      // DrawIndexedIndirect format: [indexCount, instanceCount, firstIndex, baseVertex, firstInstance]
+      // Indirect args buffer - needs atomic access for instance counting
+      // Use instancedArray().toAtomic() for atomic operations
       const indirectEntryCount = this.maxUnitTypes * this.maxLODLevels * this.maxPlayers;
       this.indirectArgsData = new Uint32Array(indirectEntryCount * 5);
-      const indirectArgsAttr = new StorageInstancedBufferAttribute(this.indirectArgsData, 1);
-      this.indirectArgsStorage = storage(indirectArgsAttr, 'uint', indirectEntryCount * 5);
+      this.indirectArgsStorage = instancedArray(indirectEntryCount * 5, 'uint').toAtomic();
 
-      // Visible count buffer (atomic counter)
-      this.visibleCountAttribute = new StorageInstancedBufferAttribute(this.visibleCountBuffer, 1);
-      this.visibleCountStorageBuffer = storage(this.visibleCountAttribute, 'uint', 1);
+      // Visible count buffer - atomic counter using instancedArray().toAtomic()
+      this.visibleCountStorageBuffer = instancedArray(1, 'uint').toAtomic();
 
       // Frustum planes storage buffer (6 planes as vec4)
       this.frustumPlanesAttribute = new StorageInstancedBufferAttribute(this.frustumPlanesData, 4);
       this.frustumPlanesStorage = storage(this.frustumPlanesAttribute, 'vec4', 6);
 
-      // Create compute shader with proper output writing
+      // Create compute shader with atomic operations
       this.createCullingComputeShader();
 
       this.gpuComputeAvailable = true;
-      // Note: TSL doesn't support atomic operations on storage buffers yet
-      // GPU compute writes visibility flags, but CPU still counts results
-      // For full GPU-driven rendering, we'd need atomic support in TSL
-      this.useCPUFallback = true; // Use CPU path until atomics work
+      this.useCPUFallback = false; // GPU path with atomics enabled
 
-      console.log(`[CullingCompute] GPU compute resources created (${MAX_GPU_UNITS} units) - using CPU fallback for counting`);
+      console.log(`[CullingCompute] GPU compute initialized with atomics (${MAX_GPU_UNITS} units, ${indirectEntryCount} indirect entries)`);
     } catch (e) {
       console.warn('[CullingCompute] GPU compute init failed, using CPU fallback:', e);
       this.gpuComputeAvailable = false;
@@ -238,27 +231,30 @@ export class CullingCompute {
    * This shader performs:
    * 1. Frustum culling against 6 planes
    * 2. LOD selection based on camera distance
-   * 3. Write visibility result per unit (no atomics - CPU counts later)
-   *
-   * Output: visibleIndices[unitIndex] = 0 (culled) or (lod + 1) (visible)
-   * CPU reads this buffer to build indirect draw args
+   * 3. Atomic write to visible indices buffer
+   * 4. Atomic increment of indirect draw args instance count
    */
   private createCullingComputeShader(): void {
     const transformBuffer = this.transformStorageBuffer!;
     const metadataBuffer = this.metadataStorageBuffer!;
     const visibleIndices = this.visibleIndicesStorage!;
+    const indirectArgs = this.indirectArgsStorage!;
+    const visibleCount = this.visibleCountStorageBuffer!;
     const cameraPos = this.uCameraPosition;
     const frustumPlanes = this.frustumPlanesStorage!;
     const lod0MaxSq = this.uLOD0MaxSq;
     const lod1MaxSq = this.uLOD1MaxSq;
     const unitCount = this.uUnitCount;
 
+    // Constants for indirect buffer indexing
+    const maxLODs = int(this.maxLODLevels);
+    const maxPlayers = int(this.maxPlayers);
+
     const cullingFn = Fn(() => {
       const unitIndex = instanceIndex;
 
-      // Early exit if out of bounds - write 0 (not visible)
+      // Early exit if out of bounds
       If(unitIndex.greaterThanEqual(unitCount), () => {
-        visibleIndices.element(unitIndex).assign(uint(0));
         return;
       });
 
@@ -272,6 +268,8 @@ export class CullingCompute {
 
       // Read metadata: vec4(entityId, unitTypeIndex, playerId, boundingRadius)
       const metadata = metadataBuffer.element(unitIndex);
+      const unitTypeIndex = int(metadata.y);
+      const playerId = int(metadata.z);
       const radius = metadata.w;
 
       // Frustum culling: test against 6 planes
@@ -321,7 +319,7 @@ export class CullingCompute {
         visible.assign(0);
       });
 
-      // Write visibility result: 0 = culled, (lod + 1) = visible with LOD level
+      // If visible, calculate LOD and write to output buffers
       If(visible.greaterThan(0), () => {
         // Calculate distance squared to camera
         const dx = posX.sub(cameraPos.x);
@@ -329,19 +327,31 @@ export class CullingCompute {
         const dz = posZ.sub(cameraPos.z);
         const distSq = dx.mul(dx).add(dy.mul(dy)).add(dz.mul(dz));
 
-        // Determine LOD level (0, 1, or 2) and encode as (lod + 1)
-        const result = uint(3).toVar(); // Default: LOD2 encoded as 3
+        // Determine LOD level
+        const lod = int(2).toVar();
         If(distSq.lessThanEqual(lod0MaxSq), () => {
-          result.assign(1); // LOD0 encoded as 1
+          lod.assign(0);
         }).Else(() => {
           If(distSq.lessThanEqual(lod1MaxSq), () => {
-            result.assign(2); // LOD1 encoded as 2
+            lod.assign(1);
           });
         });
 
-        visibleIndices.element(unitIndex).assign(result);
-      }).Else(() => {
-        visibleIndices.element(unitIndex).assign(uint(0)); // Not visible
+        // Calculate index into indirect args buffer
+        // Layout: [unitType][lod][player] * 5 (DrawIndexedIndirect stride)
+        // instanceCount is at offset 1 in each entry
+        const indirectIndex = unitTypeIndex.mul(maxLODs).mul(maxPlayers)
+          .add(lod.mul(maxPlayers))
+          .add(playerId);
+        const instanceCountOffset = indirectIndex.mul(int(5)).add(int(1));
+
+        // Atomically increment instance count using atomic storage buffer
+        atomicAdd(indirectArgs.element(instanceCountOffset), uint(1));
+
+        // Write visible unit index to output buffer
+        // Global visible index = atomicAdd on global counter
+        const globalIndex = atomicAdd(visibleCount.element(int(0)), uint(1));
+        visibleIndices.element(globalIndex).assign(uint(unitIndex));
       });
     });
 
@@ -401,10 +411,8 @@ export class CullingCompute {
    * This dispatches the compute shader which:
    * 1. Tests each unit against frustum
    * 2. Calculates LOD based on distance
-   * 3. Writes visibility flags per unit (0 = culled, lod+1 = visible)
-   *
-   * Note: Atomic operations not supported in TSL storage buffers, so GPU writes
-   * visibility flags and CPU counts results to update indirect args.
+   * 3. Atomically writes visible unit indices
+   * 4. Atomically increments indirect draw instance counts
    */
   cullGPU(unitBuffer: GPUUnitBuffer, camera: THREE.Camera): void {
     if (!this.renderer || !this.cullingComputeNode || this.useCPUFallback) {
@@ -418,18 +426,12 @@ export class CullingCompute {
     const activeCount = unitBuffer.getActiveCount();
     this.uUnitCount.value = activeCount;
 
-    // Reset visible count and indirect args
-    this.visibleCountBuffer[0] = 0;
+    // Reset indirect args (the atomic buffers will be reset by the GPU)
     this.resetIndirectArgs();
 
     try {
-      // Execute compute shader - writes visibility flags per unit
+      // Execute compute shader with atomic operations
       this.renderer.compute(this.cullingComputeNode);
-
-      // GPU culling complete - visibility flags are in visibleIndicesAttribute
-      // For now, we rely on the CPU fallback path to count and update indirect args
-      // The GPU just did the heavy lifting of frustum testing
-
     } catch (e) {
       console.warn('[CullingCompute] GPU culling failed:', e);
       this.useCPUFallback = true;
