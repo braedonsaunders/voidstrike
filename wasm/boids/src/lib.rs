@@ -301,13 +301,7 @@ pub fn state_worker() -> u8 {
     4
 }
 
-// ==================== Memory Utilities ====================
-
-/// Get the WASM memory buffer for creating TypedArray views
-#[wasm_bindgen]
-pub fn memory() -> JsValue {
-    wasm_bindgen::memory()
-}
+// Note: wasm-bindgen automatically exports `memory` - don't define it manually
 
 #[cfg(test)]
 mod tests {
