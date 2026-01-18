@@ -549,4 +549,14 @@ async function __wbg_init(module_or_path) {
     return __wbg_finalize_init(instance, module);
 }
 
+// Export memory getter for external access (wasm is only defined after init)
+export const memory = {
+    get buffer() { return wasm?.memory?.buffer; }
+};
+
+// Direct memory reference (available after init)
+export function getMemory() {
+    return wasm?.memory;
+}
+
 export { initSync, __wbg_init as default };

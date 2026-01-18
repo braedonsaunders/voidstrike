@@ -200,10 +200,29 @@ export class WasmBoids {
 
       // Create engine instance
       this.engine = new this.wasm.BoidsEngine(this.maxUnits);
-      this.memory = this.wasm.memory;
+
+      // Get memory via the getter function (memory is not directly exported)
+      const wasmMemory = (wasmModule as { getMemory?: () => WebAssembly.Memory }).getMemory?.();
+      this.memory = wasmMemory ?? null;
+
+      // Validate memory is available
+      if (!this.memory) {
+        console.warn('[WasmBoids] WASM memory not available');
+        this.initialized = true;
+        this.simdAvailable = false;
+        return false;
+      }
 
       // Create typed array views
       this.createViews();
+
+      // Validate views were created successfully
+      if (!this.positionsX || !this.positionsY) {
+        console.warn('[WasmBoids] Failed to create typed array views');
+        this.initialized = true;
+        this.simdAvailable = false;
+        return false;
+      }
 
       // Set default parameters
       this.updateWasmParams();
