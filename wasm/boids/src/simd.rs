@@ -11,9 +11,6 @@
 //!
 //! All operations use squared distances where possible to avoid sqrt.
 
-#[cfg(target_arch = "wasm32")]
-use std::arch::wasm32::*;
-
 use crate::soa::{BoidsBuffer, NeighborList, UnitState};
 
 /// Boids parameters matching the game's SC2-style values
@@ -92,6 +89,8 @@ pub fn compute_all_forces_simd(
 }
 
 /// Compute forces for 4 units simultaneously using SIMD
+/// Process 4 units in a batch
+/// Currently uses scalar per-lane processing; SIMD vectors reserved for future optimization
 #[cfg(target_arch = "wasm32")]
 fn compute_forces_simd_batch(
     buffer: &mut BoidsBuffer,
@@ -100,34 +99,7 @@ fn compute_forces_simd_batch(
     base_index: usize,
 ) {
     unsafe {
-        // Load positions for 4 units
-        let self_x = v128_load(buffer.positions_x.add(base_index) as *const v128);
-        let self_y = v128_load(buffer.positions_y.add(base_index) as *const v128);
-        let self_vx = v128_load(buffer.velocities_x.add(base_index) as *const v128);
-        let self_vy = v128_load(buffer.velocities_y.add(base_index) as *const v128);
-        let self_radii = v128_load(buffer.radii.add(base_index) as *const v128);
-
-        // Accumulators for forces (each is 4 x f32)
-        let mut sep_x = f32x4_splat(0.0);
-        let mut sep_y = f32x4_splat(0.0);
-        let mut coh_sum_x = f32x4_splat(0.0);
-        let mut coh_sum_y = f32x4_splat(0.0);
-        let mut coh_count = f32x4_splat(0.0);
-        let mut align_sum_vx = f32x4_splat(0.0);
-        let mut align_sum_vy = f32x4_splat(0.0);
-        let mut align_count = f32x4_splat(0.0);
-
-        // Radius thresholds as SIMD vectors
-        let sep_radius_sq = f32x4_splat(params.separation_radius * params.separation_radius);
-        let coh_radius_sq = f32x4_splat(params.cohesion_radius * params.cohesion_radius);
-        let align_radius_sq = f32x4_splat(params.alignment_radius * params.alignment_radius);
-        let min_dist_sq = f32x4_splat(0.0001);
-        let sep_strength = f32x4_splat(params.separation_strength);
-        let sep_radius = f32x4_splat(params.separation_radius);
-        let one = f32x4_splat(1.0);
-        let min_speed_sq = f32x4_splat(params.min_moving_speed * params.min_moving_speed);
-
-        // Process each of the 4 units
+        // Process each of the 4 units in this batch
         for lane in 0..4 {
             let unit_idx = base_index + lane;
             let unit_state = *buffer.states.add(unit_idx);
