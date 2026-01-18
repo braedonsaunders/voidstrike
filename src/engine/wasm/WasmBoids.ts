@@ -183,9 +183,8 @@ export class WasmBoids {
 
     try {
       // Dynamic import of WASM module from public directory
-      // Use variable to prevent static analysis by bundler
+      // Use Function constructor to prevent static analysis by bundler
       const wasmPath = '/wasm/boids_wasm.js';
-      // @ts-expect-error - Dynamic runtime import from public path
       const wasmModule = await (Function('return import("' + wasmPath + '")')());
       await wasmModule.default();
 
