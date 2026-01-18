@@ -922,7 +922,13 @@ export function WebGPUGameCanvas() {
         }
 
         // PERF: Monitor for scene object leak (warn if count grows unexpectedly)
-        if (DETAILED_TIMING && sceneChildCount > 500) {
+        // Note: RTS games with many units/buildings can legitimately have 800-1200 scene objects:
+        // - Environment: terrain, lights, decorations (~50)
+        // - Units: instanced meshes + health bars (~200-400)
+        // - Buildings: instanced meshes + effects (~100-200)
+        // - Effects: pools, particles, indicators (~100-200)
+        // - Selection rings: 3 rings per selected unit (~50-150)
+        if (DETAILED_TIMING && sceneChildCount > 1500) {
           debugPerformance.warn(`[LEAK?] Scene has ${sceneChildCount} children - check for object leaks!`);
         }
 
