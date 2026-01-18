@@ -581,6 +581,10 @@ export const DEFAULT_TOOLS: ToolConfig[] = [
   { id: 'ellipse', name: 'Ellipse', icon: '◯', shortcut: 'O', type: 'ellipse' },
   { id: 'plateau', name: 'Plateau', icon: '⬡', shortcut: 'P', type: 'plateau', hasBrushSize: true, defaultBrushSize: 10, minBrushSize: 3, maxBrushSize: 30 },
   { id: 'ramp', name: 'Ramp', icon: '◢', shortcut: 'R', type: 'ramp', hasBrushSize: true, defaultBrushSize: 4, minBrushSize: 2, maxBrushSize: 12 },
+
+  // SC2-Style Platform Tools
+  { id: 'platform_brush', name: 'Platform Brush', icon: '▣', shortcut: 'Shift+B', type: 'platform_brush', hasBrushSize: true, defaultBrushSize: 5, minBrushSize: 2, maxBrushSize: 15 },
+  { id: 'platform_rect', name: 'Platform Rect', icon: '▦', shortcut: 'Shift+U', type: 'platform_rect' },
   { id: 'platform_ramp', name: 'Platform Ramp', icon: '▤', shortcut: 'Shift+R', type: 'platform_ramp', hasBrushSize: true, defaultBrushSize: 4, minBrushSize: 2, maxBrushSize: 12 },
 
   // Sculpting
