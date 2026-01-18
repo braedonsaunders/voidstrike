@@ -106,9 +106,9 @@ export class CullingCompute {
   private uLOD1MaxSq = uniform(0);
   private uUnitCount = uniform(0);
 
-  // Frustum planes as storage buffer (6 planes × vec4 = 24 floats)
-  // Cannot use uniform() for Float32Array - must use storage()
-  private frustumPlanesData = new Float32Array(24);
+  // Frustum planes as storage buffer (6 vec4 planes = 24 floats backing array)
+  // Cannot use uniform() for typed arrays - must use storage()
+  private frustumPlanesData = new Float32Array(24); // 6 planes * 4 floats each
   private frustumPlanesStorage: ReturnType<typeof storage> | null = null;
 
   // GPU storage buffers
@@ -176,8 +176,8 @@ export class CullingCompute {
       // Create visible count buffer (atomic counter)
       this.visibleCountStorageBuffer = storage(this.visibleCountBuffer, 'uint', 1);
 
-      // Create frustum planes storage buffer (6 planes × 4 floats = 24 floats)
-      this.frustumPlanesStorage = storage(this.frustumPlanesData, 'float', 24);
+      // Create frustum planes storage buffer (6 planes as vec4)
+      this.frustumPlanesStorage = storage(this.frustumPlanesData, 'vec4', 6);
 
       // Create compute shader with proper output writing
       this.createCullingComputeShader();
@@ -256,77 +256,47 @@ export class CullingCompute {
       const radius = metadata.w;
 
       // Frustum culling: test against 6 planes
-      // Each plane is vec4(normal.xyz, distance)
+      // Each plane is vec4(normal.xyz, distance) - stored as 6 vec4s in storage buffer
       const visible = float(1).toVar();
 
-      // Test each frustum plane
+      // Test each frustum plane (storage contains 6 vec4 planes)
       // Plane 0
-      const p0 = vec4(
-        frustumPlanes.element(int(0)),
-        frustumPlanes.element(int(1)),
-        frustumPlanes.element(int(2)),
-        frustumPlanes.element(int(3))
-      );
+      const p0 = frustumPlanes.element(int(0));
       const d0 = p0.x.mul(posX).add(p0.y.mul(posY)).add(p0.z.mul(posZ)).add(p0.w);
       If(d0.lessThan(radius.negate()), () => {
         visible.assign(0);
       });
 
       // Plane 1
-      const p1 = vec4(
-        frustumPlanes.element(int(4)),
-        frustumPlanes.element(int(5)),
-        frustumPlanes.element(int(6)),
-        frustumPlanes.element(int(7))
-      );
+      const p1 = frustumPlanes.element(int(1));
       const d1 = p1.x.mul(posX).add(p1.y.mul(posY)).add(p1.z.mul(posZ)).add(p1.w);
       If(d1.lessThan(radius.negate()), () => {
         visible.assign(0);
       });
 
       // Plane 2
-      const p2 = vec4(
-        frustumPlanes.element(int(8)),
-        frustumPlanes.element(int(9)),
-        frustumPlanes.element(int(10)),
-        frustumPlanes.element(int(11))
-      );
+      const p2 = frustumPlanes.element(int(2));
       const d2 = p2.x.mul(posX).add(p2.y.mul(posY)).add(p2.z.mul(posZ)).add(p2.w);
       If(d2.lessThan(radius.negate()), () => {
         visible.assign(0);
       });
 
       // Plane 3
-      const p3 = vec4(
-        frustumPlanes.element(int(12)),
-        frustumPlanes.element(int(13)),
-        frustumPlanes.element(int(14)),
-        frustumPlanes.element(int(15))
-      );
+      const p3 = frustumPlanes.element(int(3));
       const d3 = p3.x.mul(posX).add(p3.y.mul(posY)).add(p3.z.mul(posZ)).add(p3.w);
       If(d3.lessThan(radius.negate()), () => {
         visible.assign(0);
       });
 
       // Plane 4
-      const p4 = vec4(
-        frustumPlanes.element(int(16)),
-        frustumPlanes.element(int(17)),
-        frustumPlanes.element(int(18)),
-        frustumPlanes.element(int(19))
-      );
+      const p4 = frustumPlanes.element(int(4));
       const d4 = p4.x.mul(posX).add(p4.y.mul(posY)).add(p4.z.mul(posZ)).add(p4.w);
       If(d4.lessThan(radius.negate()), () => {
         visible.assign(0);
       });
 
       // Plane 5
-      const p5 = vec4(
-        frustumPlanes.element(int(20)),
-        frustumPlanes.element(int(21)),
-        frustumPlanes.element(int(22)),
-        frustumPlanes.element(int(23))
-      );
+      const p5 = frustumPlanes.element(int(5));
       const d5 = p5.x.mul(posX).add(p5.y.mul(posY)).add(p5.z.mul(posZ)).add(p5.w);
       If(d5.lessThan(radius.negate()), () => {
         visible.assign(0);
