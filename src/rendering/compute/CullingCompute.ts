@@ -16,7 +16,11 @@
  */
 
 import * as THREE from 'three';
-import { WebGPURenderer } from 'three/webgpu';
+import {
+  WebGPURenderer,
+  StorageBufferAttribute,
+  IndirectStorageBufferAttribute,
+} from 'three/webgpu';
 import {
   Fn,
   storage,
@@ -27,22 +31,13 @@ import {
   If,
 } from 'three/tsl';
 
-// Access TSL uint type
-// eslint-disable-next-line @typescript-eslint/no-require-imports
-import * as TSL_TYPES from 'three/tsl';
-const uint = (TSL_TYPES as any).uint;
-
 // Access TSL exports that lack TypeScript declarations
 // eslint-disable-next-line @typescript-eslint/no-require-imports
 import * as TSL from 'three/tsl';
+const uint = (TSL as any).uint;
 const instanceIndex = (TSL as any).instanceIndex;
 const atomicAdd = (TSL as any).atomicAdd;
 const atomicStore = (TSL as any).atomicStore;
-
-// IndirectStorageBufferAttribute and StorageBufferAttribute may not be exported from types
-// These classes may not exist in all Three.js versions - check before using
-const IndirectStorageBufferAttribute = (THREE as any).IndirectStorageBufferAttribute ?? null;
-const StorageBufferAttribute = (THREE as any).StorageBufferAttribute ?? null;
 
 import { GPUUnitBuffer, UnitSlot, createIndirectArgsBuffer } from './GPUUnitBuffer';
 
@@ -154,11 +149,6 @@ export class CullingCompute {
     metadataData: Float32Array
   ): void {
     try {
-      // Check if required Three.js classes exist
-      if (!StorageBufferAttribute) {
-        throw new Error('StorageBufferAttribute not available in this Three.js version - GPU culling compute requires Three.js WebGPU build with storage buffer support');
-      }
-
       this.renderer = renderer;
 
       // Create storage buffers from unit buffer data
