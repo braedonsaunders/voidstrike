@@ -445,7 +445,7 @@
 
 **Tier 1 (Implement First):**
 - [ ] GPU Compute Vision/Fog of War - WebGPU compute shader for 60Hz vision
-- [ ] Merkle Tree State Checksums - O(log n) desync detection
+- [x] Merkle Tree State Checksums - O(log n) desync detection (January 2026)
 - [ ] Temporal Reprojection for GTAO/SSR - Leverage existing velocity buffer
 - [ ] Hierarchical Interest Management - Reduced tick rate for off-screen entities
 
