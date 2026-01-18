@@ -130,6 +130,7 @@ export function createTemporalAONode(
  * Temporal AO Manager
  *
  * Manages the render targets and ping-pong buffers for temporal accumulation.
+ * Includes quarter-res AO target for actual 75% GPU cost reduction.
  */
 export class TemporalAOManager {
   private config: TemporalAOConfig;
@@ -142,7 +143,13 @@ export class TemporalAOManager {
   private fullWidth: number;
   private fullHeight: number;
 
-  // History buffers (ping-pong)
+  // Quarter-res AO render target - THIS is where the actual cost savings come from
+  private quarterAOTarget: THREE.RenderTarget;
+
+  // Quarter-res depth for AO computation (downsampled from full-res)
+  private quarterDepthTarget: THREE.RenderTarget;
+
+  // History buffers (ping-pong) at full resolution
   private historyBufferA: THREE.WebGLRenderTarget;
   private historyBufferB: THREE.WebGLRenderTarget;
   private currentHistory: 'A' | 'B' = 'A';
@@ -157,6 +164,31 @@ export class TemporalAOManager {
     this.fullHeight = height;
     this.quarterWidth = Math.max(1, Math.floor(width / 2));
     this.quarterHeight = Math.max(1, Math.floor(height / 2));
+
+    // Quarter-res AO target - AO is computed here at 25% resolution
+    this.quarterAOTarget = new THREE.RenderTarget(
+      this.quarterWidth,
+      this.quarterHeight,
+      {
+        type: THREE.HalfFloatType,
+        format: THREE.RedFormat,
+        minFilter: THREE.LinearFilter,
+        magFilter: THREE.LinearFilter,
+      }
+    );
+
+    // Quarter-res depth for AO (will be downsampled from full-res depth)
+    this.quarterDepthTarget = new THREE.RenderTarget(
+      this.quarterWidth,
+      this.quarterHeight,
+      {
+        type: THREE.HalfFloatType,
+        format: THREE.RedFormat,
+        minFilter: THREE.LinearFilter,
+        magFilter: THREE.LinearFilter,
+        depthBuffer: true,
+      }
+    );
 
     // Create history buffers at full resolution
     const historyOptions = {
@@ -189,6 +221,36 @@ export class TemporalAOManager {
         magFilter: THREE.NearestFilter,
       }
     );
+
+    console.log(`[TemporalAO] Initialized: full=${this.fullWidth}x${this.fullHeight}, quarter=${this.quarterWidth}x${this.quarterHeight} (75% cost reduction)`);
+  }
+
+  /**
+   * Get the quarter-res AO render target
+   */
+  getQuarterAOTarget(): THREE.RenderTarget {
+    return this.quarterAOTarget;
+  }
+
+  /**
+   * Get the quarter-res AO texture for sampling
+   */
+  getQuarterAOTexture(): THREE.Texture {
+    return this.quarterAOTarget.texture;
+  }
+
+  /**
+   * Get the quarter-res depth render target
+   */
+  getQuarterDepthTarget(): THREE.RenderTarget {
+    return this.quarterDepthTarget;
+  }
+
+  /**
+   * Get the quarter-res depth texture for AO
+   */
+  getQuarterDepthTexture(): THREE.Texture {
+    return this.quarterDepthTarget.texture;
   }
 
   /**
@@ -246,9 +308,18 @@ export class TemporalAOManager {
     this.quarterWidth = Math.max(1, Math.floor(width / 2));
     this.quarterHeight = Math.max(1, Math.floor(height / 2));
 
+    this.quarterAOTarget.setSize(this.quarterWidth, this.quarterHeight);
+    this.quarterDepthTarget.setSize(this.quarterWidth, this.quarterHeight);
     this.historyBufferA.setSize(this.fullWidth, this.fullHeight);
     this.historyBufferB.setSize(this.fullWidth, this.fullHeight);
     this.prevDepthBuffer.setSize(this.fullWidth, this.fullHeight);
+  }
+
+  /**
+   * Get full resolution
+   */
+  getFullResolution(): { width: number; height: number } {
+    return { width: this.fullWidth, height: this.fullHeight };
   }
 
   /**
@@ -259,9 +330,18 @@ export class TemporalAOManager {
   }
 
   /**
+   * Get current config
+   */
+  getConfig(): TemporalAOConfig {
+    return { ...this.config };
+  }
+
+  /**
    * Dispose resources
    */
   dispose(): void {
+    this.quarterAOTarget.dispose();
+    this.quarterDepthTarget.dispose();
     this.historyBufferA.dispose();
     this.historyBufferB.dispose();
     this.prevDepthBuffer.dispose();

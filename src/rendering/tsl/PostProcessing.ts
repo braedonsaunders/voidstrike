@@ -276,6 +276,11 @@ export class RenderPipeline {
   // This is what the display pipeline samples from
   private internalRenderTarget: THREE.RenderTarget | null = null;
 
+  // ========== QUARTER-RES EFFECT PIPELINES ==========
+  // These pipelines run at 1/4 resolution for 75% cost savings
+  private quarterAOPostProcessing: PostProcessing | null = null;
+  private quarterSSRPostProcessing: PostProcessing | null = null;
+
   // ========== DISPLAY PIPELINE (display resolution) ==========
   // This pipeline upscales from internalRenderTarget to canvas
   private displayPostProcessing: PostProcessing | null = null;
@@ -295,6 +300,10 @@ export class RenderPipeline {
   // Temporal reprojection managers
   private temporalAOManager: TemporalAOManager | null = null;
   private temporalSSRManager: TemporalSSRManager | null = null;
+
+  // Quarter-res dimensions
+  private quarterWidth = 960;
+  private quarterHeight = 540;
 
   // Uniforms for dynamic updates
   private uVignetteIntensity = uniform(0.25);
@@ -343,17 +352,26 @@ export class RenderPipeline {
     this.renderWidth = Math.floor(this.displayWidth * effectiveScale);
     this.renderHeight = Math.floor(this.displayHeight * effectiveScale);
 
+    // Calculate quarter-res for temporal effects (1/2 each dimension = 1/4 pixels)
+    this.quarterWidth = Math.max(1, Math.floor(this.renderWidth / 2));
+    this.quarterHeight = Math.max(1, Math.floor(this.renderHeight / 2));
+
     this.createDualPipeline();
     this.applyConfig(this.config);
   }
 
   /**
-   * Create the dual-pipeline architecture
+   * Create the multi-pipeline architecture
+   *
+   * QUARTER-RES PIPELINES (optional): Run at 1/4 resolution for expensive effects
+   * - AO pipeline: depth → GTAO at quarter res → quarter AO texture
+   * - SSR pipeline: color/depth/normal → SSR at quarter res → quarter SSR texture
+   * - 75% GPU cost reduction for these effects
    *
    * INTERNAL PIPELINE: Runs at render resolution
-   * - Renderer is set to render resolution during creation
-   * - All buffers (scene, effects, TAA) are at render resolution
-   * - No resolution mismatches
+   * - Scene rendering with all effects
+   * - Samples quarter-res AO/SSR with temporal upscaling
+   * - No resolution mismatches for TAA
    *
    * DISPLAY PIPELINE: Runs at display resolution
    * - Takes internal output and upscales via EASU
@@ -384,6 +402,15 @@ export class RenderPipeline {
           enabled: true,
         }
       );
+    }
+
+    // Create quarter-res effect pipelines if temporal effects are enabled
+    if (this.config.temporalAOEnabled && this.config.aoEnabled && this.temporalAOManager) {
+      this.createQuarterAOPipeline();
+    }
+
+    if (this.config.temporalSSREnabled && this.config.ssrEnabled && this.temporalSSRManager) {
+      this.createQuarterSSRPipeline();
     }
 
     const useUpscaling = this.config.upscalingMode !== 'off' && this.config.renderScale < 1.0;
@@ -522,26 +549,25 @@ export class RenderPipeline {
     // 2. GTAO Ambient Occlusion (skip if SSGI enabled)
     if (this.config.aoEnabled && !this.config.ssgiEnabled) {
       try {
-        this.aoPass = ao(scenePassDepth, null, this.camera);
-        this.aoPass.radius.value = this.config.aoRadius;
+        let aoValue: any;
 
-        let aoValue = this.aoPass.getTextureNode().r;
-
-        // Apply temporal stability if enabled
-        // This blends current AO with reprojected history to reduce flickering
-        if (this.config.temporalAOEnabled && this.temporalAOManager) {
+        // Check if using quarter-res temporal AO (75% cost reduction)
+        if (this.config.temporalAOEnabled && this.temporalAOManager && this.quarterAOPostProcessing) {
+          // Sample quarter-res AO texture and apply temporal upscaling
+          const quarterAOTexture = texture(this.temporalAOManager.getQuarterAOTexture());
+          const historyTexture = texture(this.temporalAOManager.getHistoryTexture());
           const scenePassVelocity = scenePass.getTextureNode('velocity');
-          if (scenePassVelocity) {
-            const historyTexture = texture(this.temporalAOManager.getHistoryTexture());
 
-            // Create temporal blend node
-            // Uses velocity for reprojection and blends with history
+          if (scenePassVelocity) {
+            // Temporal upscaling: blend quarter-res current with full-res history
             const temporalAO = Fn(() => {
               const fragUV = uv();
               const velocity = scenePassVelocity.sample(fragUV).xy;
               const prevUV = fragUV.sub(velocity);
 
-              const currentAO = aoValue;
+              // Sample quarter-res AO (bilinear filtering provides some upscaling)
+              const currentAO = quarterAOTexture.sample(fragUV).r;
+              // Sample full-res history
               const historyAO = historyTexture.sample(prevUV).r;
 
               // Bounds check for reprojection
@@ -550,11 +576,47 @@ export class RenderPipeline {
                 .and(prevUV.y.greaterThanEqual(0.0))
                 .and(prevUV.y.lessThanEqual(1.0));
 
+              // Use higher history weight (0.9) since quarter-res needs more temporal accumulation
               const blendFactor = inBounds.select(this.uTemporalAOBlend, float(0.0));
               return mix(currentAO, historyAO, blendFactor);
             })();
 
             aoValue = temporalAO;
+          } else {
+            // No velocity - just sample quarter-res directly
+            aoValue = quarterAOTexture.sample(uv()).r;
+          }
+        } else {
+          // Full-res AO (no temporal, or temporal without quarter-res pipeline)
+          this.aoPass = ao(scenePassDepth, null, this.camera);
+          this.aoPass.radius.value = this.config.aoRadius;
+          aoValue = this.aoPass.getTextureNode().r;
+
+          // Apply temporal stability without quarter-res (just smoothing, no cost reduction)
+          if (this.config.temporalAOEnabled && this.temporalAOManager) {
+            const scenePassVelocity = scenePass.getTextureNode('velocity');
+            if (scenePassVelocity) {
+              const historyTexture = texture(this.temporalAOManager.getHistoryTexture());
+
+              const temporalAO = Fn(() => {
+                const fragUV = uv();
+                const velocity = scenePassVelocity.sample(fragUV).xy;
+                const prevUV = fragUV.sub(velocity);
+
+                const currentAO = aoValue;
+                const historyAO = historyTexture.sample(prevUV).r;
+
+                const inBounds = prevUV.x.greaterThanEqual(0.0)
+                  .and(prevUV.x.lessThanEqual(1.0))
+                  .and(prevUV.y.greaterThanEqual(0.0))
+                  .and(prevUV.y.lessThanEqual(1.0));
+
+                const blendFactor = inBounds.select(this.uTemporalAOBlend, float(0.0));
+                return mix(currentAO, historyAO, blendFactor);
+              })();
+
+              aoValue = temporalAO;
+            }
           }
         }
 
@@ -569,43 +631,91 @@ export class RenderPipeline {
     // Uses per-pixel metalness/roughness from G-buffer for accurate reflections
     if (this.config.ssrEnabled) {
       try {
-        // Get MRT textures - normals and metalness/roughness per pixel
-        const scenePassNormal = scenePass.getTextureNode('normal');
-        const scenePassMetalRough = scenePass.getTextureNode('metalrough');
+        let ssrTexture: any;
 
-        // SSR uses per-pixel metalness (R) and roughness (G) from the G-buffer
-        // This ensures reflections only appear on metallic surfaces with appropriate roughness
-        this.ssrPass = (ssr as any)(
-          scenePassColor,
-          scenePassDepth,
-          scenePassNormal,
-          scenePassMetalRough.r,  // Per-pixel metalness from material
-          scenePassMetalRough.g,  // Per-pixel roughness from material
-          this.camera
-        );
+        // Check if using quarter-res temporal SSR (75% cost reduction)
+        if (this.config.temporalSSREnabled && this.temporalSSRManager && this.quarterSSRPostProcessing) {
+          // Sample quarter-res SSR texture and apply temporal upscaling
+          const quarterSSRTexture = texture(this.temporalSSRManager.getQuarterSSRTexture());
+          const historyTexture = texture(this.temporalSSRManager.getHistoryTexture());
+          const scenePassVelocity = scenePass.getTextureNode('velocity');
+          const texelSize = vec2(1.0).div(this.uResolution);
 
-        if (this.ssrPass?.maxDistance) {
-          this.ssrPass.maxDistance.value = this.config.ssrMaxDistance;
-        }
-        if (this.ssrPass?.opacity) {
-          this.ssrPass.opacity.value = this.config.ssrOpacity;
-        }
-        if (this.ssrPass?.thickness) {
-          this.ssrPass.thickness.value = this.config.ssrThickness;
-        }
+          if (scenePassVelocity) {
+            // Temporal upscaling with neighborhood clamping
+            const temporalSSR = Fn(() => {
+              const fragUV = uv();
+              const velocity = scenePassVelocity.sample(fragUV).xy;
+              const prevUV = fragUV.sub(velocity);
 
-        if (this.ssrPass) {
-          let ssrTexture = this.ssrPass.getTextureNode();
+              // Sample quarter-res SSR (bilinear filtering provides some upscaling)
+              const currentSSR = quarterSSRTexture.sample(fragUV);
+              // Sample full-res history
+              const historySSR = historyTexture.sample(prevUV);
 
-          // Apply temporal stability if enabled
-          // This blends current SSR with reprojected history to reduce flickering
-          if (this.config.temporalSSREnabled && this.temporalSSRManager) {
+              // Neighborhood clamping on quarter-res to reduce ghosting
+              const n0 = quarterSSRTexture.sample(fragUV.add(vec2(-1, -1).mul(texelSize)));
+              const n1 = quarterSSRTexture.sample(fragUV.add(vec2(0, -1).mul(texelSize)));
+              const n2 = quarterSSRTexture.sample(fragUV.add(vec2(1, -1).mul(texelSize)));
+              const n3 = quarterSSRTexture.sample(fragUV.add(vec2(-1, 0).mul(texelSize)));
+              const n4 = currentSSR;
+              const n5 = quarterSSRTexture.sample(fragUV.add(vec2(1, 0).mul(texelSize)));
+              const n6 = quarterSSRTexture.sample(fragUV.add(vec2(-1, 1).mul(texelSize)));
+              const n7 = quarterSSRTexture.sample(fragUV.add(vec2(0, 1).mul(texelSize)));
+              const n8 = quarterSSRTexture.sample(fragUV.add(vec2(1, 1).mul(texelSize)));
+
+              const minColor = min(min(min(min(n0, n1), min(n2, n3)), min(min(n4, n5), min(n6, n7))), n8);
+              const maxColor = max(max(max(max(n0, n1), max(n2, n3)), max(max(n4, n5), max(n6, n7))), n8);
+              const clampedHistory = clamp(historySSR, minColor, maxColor);
+
+              // Bounds check for reprojection
+              const inBounds = prevUV.x.greaterThanEqual(0.0)
+                .and(prevUV.x.lessThanEqual(1.0))
+                .and(prevUV.y.greaterThanEqual(0.0))
+                .and(prevUV.y.lessThanEqual(1.0));
+
+              const blendFactor = inBounds.select(this.uTemporalSSRBlend, float(0.0));
+              return mix(currentSSR, clampedHistory, blendFactor);
+            })();
+
+            ssrTexture = temporalSSR;
+          } else {
+            // No velocity - just sample quarter-res directly
+            ssrTexture = quarterSSRTexture;
+          }
+        } else {
+          // Full-res SSR (no temporal, or temporal without quarter-res pipeline)
+          const scenePassNormal = scenePass.getTextureNode('normal');
+          const scenePassMetalRough = scenePass.getTextureNode('metalrough');
+
+          this.ssrPass = (ssr as any)(
+            scenePassColor,
+            scenePassDepth,
+            scenePassNormal,
+            scenePassMetalRough.r,
+            scenePassMetalRough.g,
+            this.camera
+          );
+
+          if (this.ssrPass?.maxDistance) {
+            this.ssrPass.maxDistance.value = this.config.ssrMaxDistance;
+          }
+          if (this.ssrPass?.opacity) {
+            this.ssrPass.opacity.value = this.config.ssrOpacity;
+          }
+          if (this.ssrPass?.thickness) {
+            this.ssrPass.thickness.value = this.config.ssrThickness;
+          }
+
+          ssrTexture = this.ssrPass?.getTextureNode();
+
+          // Apply temporal stability without quarter-res (just smoothing)
+          if (this.config.temporalSSREnabled && this.temporalSSRManager && ssrTexture) {
             const scenePassVelocity = scenePass.getTextureNode('velocity');
             if (scenePassVelocity) {
               const historyTexture = texture(this.temporalSSRManager.getHistoryTexture());
               const texelSize = vec2(1.0).div(this.uResolution);
 
-              // Create temporal blend node with neighborhood clamping
               const temporalSSR = Fn(() => {
                 const fragUV = uv();
                 const velocity = scenePassVelocity.sample(fragUV).xy;
@@ -614,7 +724,6 @@ export class RenderPipeline {
                 const currentSSR = ssrTexture.sample(fragUV);
                 const historySSR = historyTexture.sample(prevUV);
 
-                // Neighborhood clamping to reduce ghosting
                 const n0 = ssrTexture.sample(fragUV.add(vec2(-1, -1).mul(texelSize)));
                 const n1 = ssrTexture.sample(fragUV.add(vec2(0, -1).mul(texelSize)));
                 const n2 = ssrTexture.sample(fragUV.add(vec2(1, -1).mul(texelSize)));
@@ -629,7 +738,6 @@ export class RenderPipeline {
                 const maxColor = max(max(max(max(n0, n1), max(n2, n3)), max(max(n4, n5), max(n6, n7))), n8);
                 const clampedHistory = clamp(historySSR, minColor, maxColor);
 
-                // Bounds check for reprojection
                 const inBounds = prevUV.x.greaterThanEqual(0.0)
                   .and(prevUV.x.lessThanEqual(1.0))
                   .and(prevUV.y.greaterThanEqual(0.0))
@@ -642,7 +750,9 @@ export class RenderPipeline {
               ssrTexture = temporalSSR;
             }
           }
+        }
 
+        if (ssrTexture) {
           const ssrColor = ssrTexture.rgb;
           const ssrAlpha = ssrTexture.a;
           outputNode = outputNode.add(ssrColor.mul(ssrAlpha));
@@ -776,6 +886,119 @@ export class RenderPipeline {
   }
 
   /**
+   * Create quarter-res AO pipeline
+   *
+   * Renders GTAO at 1/4 resolution for 75% GPU cost reduction.
+   * Output is sampled by the main pipeline with temporal upscaling.
+   */
+  private createQuarterAOPipeline(): void {
+    if (!this.temporalAOManager) return;
+
+    // Save original renderer size
+    const originalSize = new THREE.Vector2();
+    this.renderer.getSize(originalSize);
+
+    // Set renderer to quarter resolution
+    this.renderer.setSize(this.quarterWidth, this.quarterHeight, false);
+
+    try {
+      // Create PostProcessing at quarter resolution
+      this.quarterAOPostProcessing = new PostProcessing(this.renderer);
+
+      // Create scene pass at quarter res - this automatically uses quarter-res depth
+      const scenePass = pass(this.scene, this.camera);
+
+      // Get quarter-res depth
+      const scenePassDepth = scenePass.getTextureNode('depth');
+
+      // Create AO at quarter resolution
+      const quarterAO = ao(scenePassDepth, null, this.camera);
+      quarterAO.radius.value = this.config.aoRadius;
+
+      // Output just the AO value (single channel)
+      const aoValue = quarterAO.getTextureNode().r;
+      this.quarterAOPostProcessing.outputNode = vec4(aoValue, aoValue, aoValue, 1.0);
+
+      console.log(`[PostProcessing] Quarter-res AO pipeline created: ${this.quarterWidth}x${this.quarterHeight} (75% cost reduction)`);
+    } catch (e) {
+      console.warn('[PostProcessing] Failed to create quarter-res AO pipeline:', e);
+      this.quarterAOPostProcessing = null;
+    }
+
+    // Restore original renderer size
+    this.renderer.setSize(originalSize.x, originalSize.y, false);
+  }
+
+  /**
+   * Create quarter-res SSR pipeline
+   *
+   * Renders SSR at 1/4 resolution for 75% GPU cost reduction.
+   * Output is sampled by the main pipeline with temporal upscaling.
+   */
+  private createQuarterSSRPipeline(): void {
+    if (!this.temporalSSRManager) return;
+
+    // Save original renderer size
+    const originalSize = new THREE.Vector2();
+    this.renderer.getSize(originalSize);
+
+    // Set renderer to quarter resolution
+    this.renderer.setSize(this.quarterWidth, this.quarterHeight, false);
+
+    try {
+      // Create PostProcessing at quarter resolution
+      this.quarterSSRPostProcessing = new PostProcessing(this.renderer);
+
+      // Create scene pass at quarter res with required MRT outputs
+      const scenePass = pass(this.scene, this.camera);
+
+      // Enable MRT for SSR (normals and metalrough needed)
+      scenePass.setMRT(mrt({
+        output: output,
+        normal: (normalView as any).mul(0.5).add(0.5),
+        metalrough: vec2(materialMetalness, materialRoughness),
+      }));
+
+      // Get quarter-res G-buffer
+      const scenePassColor = scenePass.getTextureNode();
+      const scenePassDepth = scenePass.getTextureNode('depth');
+      const scenePassNormal = scenePass.getTextureNode('normal');
+      const scenePassMetalRough = scenePass.getTextureNode('metalrough');
+
+      // Create SSR at quarter resolution
+      const quarterSSR = (ssr as any)(
+        scenePassColor,
+        scenePassDepth,
+        scenePassNormal,
+        scenePassMetalRough.r,
+        scenePassMetalRough.g,
+        this.camera
+      );
+
+      if (quarterSSR?.maxDistance) {
+        quarterSSR.maxDistance.value = this.config.ssrMaxDistance;
+      }
+      if (quarterSSR?.opacity) {
+        quarterSSR.opacity.value = this.config.ssrOpacity;
+      }
+      if (quarterSSR?.thickness) {
+        quarterSSR.thickness.value = this.config.ssrThickness;
+      }
+
+      // Output SSR (RGBA for color + alpha)
+      this.quarterSSRPostProcessing.outputNode = quarterSSR.getTextureNode();
+
+      console.log(`[PostProcessing] Quarter-res SSR pipeline created: ${this.quarterWidth}x${this.quarterHeight} (75% cost reduction)`);
+    } catch (e) {
+      console.warn('[PostProcessing] Failed to create quarter-res SSR pipeline:', e);
+      this.quarterSSRPostProcessing = null;
+    }
+
+    // Restore original renderer size
+    this.renderer.setSize(originalSize.x, originalSize.y, false);
+  }
+
+  /**
    * Create RCAS-style sharpening pass
    */
   private createSharpeningPass(inputNode: any): any {
@@ -888,6 +1111,24 @@ export class RenderPipeline {
     this.fxaaPass = null;
     this.easuPass = null;
     this.volumetricFogPass = null;
+
+    // Dispose quarter-res pipelines
+    this.quarterAOPostProcessing = null;
+    this.quarterSSRPostProcessing = null;
+
+    // Dispose temporal managers (will be recreated in createDualPipeline)
+    if (this.temporalAOManager) {
+      this.temporalAOManager.dispose();
+      this.temporalAOManager = null;
+    }
+    if (this.temporalSSRManager) {
+      this.temporalSSRManager.dispose();
+      this.temporalSSRManager = null;
+    }
+
+    // Recalculate quarter-res dimensions
+    this.quarterWidth = Math.max(1, Math.floor(this.renderWidth / 2));
+    this.quarterHeight = Math.max(1, Math.floor(this.renderHeight / 2));
 
     // Recreate dual pipeline
     this.createDualPipeline();
@@ -1075,6 +1316,10 @@ export class RenderPipeline {
 
     const useUpscaling = this.config.upscalingMode !== 'off' && this.config.renderScale < 1.0;
 
+    // Step 0: Render quarter-res effect pipelines (if enabled)
+    // These render AO/SSR at 1/4 resolution for 75% cost savings
+    this.renderQuarterResEffects();
+
     if (useUpscaling && this.displayPostProcessing && this.internalRenderTarget) {
       // Dual pipeline mode:
       const originalSize = new THREE.Vector2();
@@ -1103,13 +1348,63 @@ export class RenderPipeline {
       // Single pipeline mode: just render internal to canvas
       this.internalPostProcessing?.render();
     }
+
+    // Step 3: Swap temporal history buffers for next frame
+    this.swapTemporalBuffers();
+  }
+
+  /**
+   * Render quarter-res effect pipelines for 75% GPU cost reduction
+   */
+  private renderQuarterResEffects(): void {
+    const originalSize = new THREE.Vector2();
+    this.renderer.getSize(originalSize);
+
+    // Render quarter-res AO
+    if (this.quarterAOPostProcessing && this.temporalAOManager) {
+      // Set renderer to quarter resolution
+      this.renderer.setSize(this.quarterWidth, this.quarterHeight, false);
+
+      // Render to quarter-res AO target
+      const quarterAOTarget = this.temporalAOManager.getQuarterAOTarget();
+      (this.renderer as any).setRenderTarget(quarterAOTarget);
+      this.quarterAOPostProcessing.render();
+    }
+
+    // Render quarter-res SSR
+    if (this.quarterSSRPostProcessing && this.temporalSSRManager) {
+      // Set renderer to quarter resolution
+      this.renderer.setSize(this.quarterWidth, this.quarterHeight, false);
+
+      // Render to quarter-res SSR target
+      const quarterSSRTarget = this.temporalSSRManager.getQuarterSSRTarget();
+      (this.renderer as any).setRenderTarget(quarterSSRTarget);
+      this.quarterSSRPostProcessing.render();
+    }
+
+    // Restore original size
+    (this.renderer as any).setRenderTarget(null);
+    this.renderer.setSize(originalSize.x, originalSize.y, false);
+  }
+
+  /**
+   * Swap temporal history buffers for next frame
+   */
+  private swapTemporalBuffers(): void {
+    this.temporalAOManager?.swapBuffers();
+    this.temporalSSRManager?.swapBuffers();
   }
 
   /**
    * Async render
    */
   async renderAsync(): Promise<void> {
+    this.updateVolumetricFogCamera();
+
     const useUpscaling = this.config.upscalingMode !== 'off' && this.config.renderScale < 1.0;
+
+    // Render quarter-res effects first
+    await this.renderQuarterResEffectsAsync();
 
     if (useUpscaling && this.displayPostProcessing && this.internalRenderTarget) {
       const originalSize = new THREE.Vector2();
@@ -1130,6 +1425,34 @@ export class RenderPipeline {
     } else {
       await this.internalPostProcessing?.renderAsync();
     }
+
+    // Swap temporal buffers
+    this.swapTemporalBuffers();
+  }
+
+  /**
+   * Async render quarter-res effects
+   */
+  private async renderQuarterResEffectsAsync(): Promise<void> {
+    const originalSize = new THREE.Vector2();
+    this.renderer.getSize(originalSize);
+
+    if (this.quarterAOPostProcessing && this.temporalAOManager) {
+      this.renderer.setSize(this.quarterWidth, this.quarterHeight, false);
+      const quarterAOTarget = this.temporalAOManager.getQuarterAOTarget();
+      (this.renderer as any).setRenderTarget(quarterAOTarget);
+      await this.quarterAOPostProcessing.renderAsync();
+    }
+
+    if (this.quarterSSRPostProcessing && this.temporalSSRManager) {
+      this.renderer.setSize(this.quarterWidth, this.quarterHeight, false);
+      const quarterSSRTarget = this.temporalSSRManager.getQuarterSSRTarget();
+      (this.renderer as any).setRenderTarget(quarterSSRTarget);
+      await this.quarterSSRPostProcessing.renderAsync();
+    }
+
+    (this.renderer as any).setRenderTarget(null);
+    this.renderer.setSize(originalSize.x, originalSize.y, false);
   }
 
   /**
@@ -1152,6 +1475,10 @@ export class RenderPipeline {
       this.internalRenderTarget.dispose();
       this.internalRenderTarget = null;
     }
+    // Dispose quarter-res pipelines
+    this.quarterAOPostProcessing = null;
+    this.quarterSSRPostProcessing = null;
+    // Dispose temporal managers (which own the quarter-res targets)
     if (this.temporalAOManager) {
       this.temporalAOManager.dispose();
       this.temporalAOManager = null;

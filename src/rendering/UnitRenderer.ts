@@ -212,12 +212,28 @@ export class UnitRenderer {
     this.camera = camera;
   }
 
+  // WebGPU renderer reference for GPU compute
+  private webgpuRenderer: import('three/webgpu').WebGPURenderer | null = null;
+  private gpuCullingInitialized = false;
+
+  /**
+   * Set the WebGPU renderer (required for GPU-driven rendering)
+   */
+  public setRenderer(renderer: import('three/webgpu').WebGPURenderer): void {
+    this.webgpuRenderer = renderer;
+
+    // Initialize GPU culling if GPU-driven mode is already enabled
+    if (this.useGPUDrivenRendering && this.gpuUnitBuffer && this.cullingCompute && !this.gpuCullingInitialized) {
+      this.initializeGPUCulling();
+    }
+  }
+
   /**
    * Enable GPU-driven rendering mode
    *
    * When enabled:
    * - Unit transforms stored in GPU buffer
-   * - Frustum culling done via CullingCompute
+   * - Frustum culling done via CullingCompute on GPU
    * - Reduced CPU overhead for large unit counts
    */
   public enableGPUDrivenRendering(): void {
@@ -239,7 +255,32 @@ export class UnitRenderer {
     this.useGPUDrivenRendering = true;
     this.gpuManagedEntities.clear();
 
+    // Initialize GPU compute if renderer is available
+    if (this.webgpuRenderer) {
+      this.initializeGPUCulling();
+    }
+
     console.log('[UnitRenderer] GPU-driven rendering enabled');
+  }
+
+  /**
+   * Initialize GPU culling compute shader
+   */
+  private initializeGPUCulling(): void {
+    if (!this.webgpuRenderer || !this.gpuUnitBuffer || !this.cullingCompute) return;
+    if (this.gpuCullingInitialized) return;
+
+    try {
+      this.cullingCompute.initializeGPUCompute(
+        this.webgpuRenderer,
+        this.gpuUnitBuffer.getTransformData(),
+        this.gpuUnitBuffer.getMetadataData()
+      );
+      this.gpuCullingInitialized = true;
+      console.log('[UnitRenderer] GPU culling compute initialized');
+    } catch (e) {
+      console.warn('[UnitRenderer] Failed to initialize GPU culling:', e);
+    }
   }
 
   /**
@@ -256,6 +297,7 @@ export class UnitRenderer {
 
     this.useGPUDrivenRendering = false;
     this.gpuManagedEntities.clear();
+    this.gpuCullingInitialized = false;
 
     debugPerformance.log('[UnitRenderer] GPU-driven rendering disabled');
   }
@@ -823,6 +865,12 @@ export class UnitRenderer {
 
     // PERF: Update frustum for culling
     this.updateFrustum();
+
+    // GPU-driven culling: dispatch compute shader if available
+    // This runs culling on GPU and populates indirect draw args
+    if (this.useGPUDrivenRendering && this.cullingCompute && this.gpuUnitBuffer && this.camera && this.gpuCullingInitialized) {
+      this.cullingCompute.cullGPU(this.gpuUnitBuffer, this.camera);
+    }
 
     // TAA: Copy current instance matrices to previous BEFORE resetting counts
     // This preserves last frame's transforms for velocity calculation
@@ -1402,5 +1450,7 @@ export class UnitRenderer {
     this.cullingCompute?.dispose();
     this.cullingCompute = null;
     this.gpuManagedEntities.clear();
+    this.webgpuRenderer = null;
+    this.gpuCullingInitialized = false;
   }
 }
