@@ -17,13 +17,9 @@
  * - instanceIndex used to look up visible unit transforms
  */
 
-import * as THREE from 'three';
-import {
-  WebGPURenderer,
-  StorageBufferAttribute,
-  IndirectStorageBufferAttribute,
-  NodeMaterial,
-} from 'three/webgpu';
+// Import from three/webgpu to get WebGPU build with storage buffer classes
+import * as THREE from 'three/webgpu';
+import { WebGPURenderer } from 'three/webgpu';
 import {
   Fn,
   storage,
@@ -40,6 +36,12 @@ import {
 // eslint-disable-next-line @typescript-eslint/no-require-imports
 import * as TSL from 'three/tsl';
 const uint = (TSL as any).uint;
+
+// StorageBufferAttribute, IndirectStorageBufferAttribute, NodeMaterial exist in three/webgpu
+// but lack TypeScript declarations - access via namespace
+const StorageBufferAttribute = (THREE as any).StorageBufferAttribute;
+const IndirectStorageBufferAttribute = (THREE as any).IndirectStorageBufferAttribute;
+const NodeMaterial = (THREE as any).NodeMaterial || THREE.MeshStandardMaterial;
 
 import { GPUUnitBuffer } from './GPUUnitBuffer';
 import { CullingCompute } from './CullingCompute';

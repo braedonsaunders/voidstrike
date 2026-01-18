@@ -15,12 +15,9 @@
  * - Storage buffers for visible instance indices
  */
 
-import * as THREE from 'three';
-import {
-  WebGPURenderer,
-  StorageBufferAttribute,
-  IndirectStorageBufferAttribute,
-} from 'three/webgpu';
+// Import from three/webgpu to get WebGPU build with storage buffer classes
+import * as THREE from 'three/webgpu';
+import { WebGPURenderer } from 'three/webgpu';
 import {
   Fn,
   storage,
@@ -38,6 +35,11 @@ const uint = (TSL as any).uint;
 const instanceIndex = (TSL as any).instanceIndex;
 const atomicAdd = (TSL as any).atomicAdd;
 const atomicStore = (TSL as any).atomicStore;
+
+// StorageBufferAttribute and IndirectStorageBufferAttribute exist in three/webgpu
+// but lack TypeScript declarations - access via namespace
+const StorageBufferAttribute = (THREE as any).StorageBufferAttribute;
+const IndirectStorageBufferAttribute = (THREE as any).IndirectStorageBufferAttribute;
 
 import { GPUUnitBuffer, UnitSlot, createIndirectArgsBuffer } from './GPUUnitBuffer';
 
