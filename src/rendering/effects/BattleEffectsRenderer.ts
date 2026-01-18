@@ -159,6 +159,18 @@ interface MoveIndicator {
   rings: THREE.Mesh[];
 }
 
+interface LaserEffect {
+  beam: THREE.Mesh;
+  glow: THREE.Mesh;
+  beamGeometry: THREE.BufferGeometry;
+  beamMaterial: THREE.Material;
+  glowGeometry: THREE.BufferGeometry;
+  glowMaterial: THREE.Material;
+  startGlow: THREE.Sprite | null;
+  endGlow: THREE.Sprite | null;
+  animationFrameId: number;
+}
+
 // ============================================
 // MESH POOL
 // ============================================
@@ -211,6 +223,7 @@ export class BattleEffectsRenderer {
   private focusFireIndicators: Map<number, FocusFireIndicator> = new Map();
   private targetAttackerCounts: Map<number, Set<number>> = new Map();
   private moveIndicators: MoveIndicator[] = [];
+  private laserEffects: Set<LaserEffect> = new Set();
 
   // Event listener cleanup
   private eventUnsubscribers: (() => void)[] = [];
@@ -839,15 +852,15 @@ export class BattleEffectsRenderer {
     // Create cylinder geometry for laser beam (radius 0.08 for thin beam)
     // Note: LineBasicMaterial linewidth doesn't work in WebGL/WebGPU, so we use a mesh
     const beamRadius = 0.08;
-    const geometry = new THREE.CylinderGeometry(beamRadius, beamRadius, length, 6, 1);
+    const beamGeometry = new THREE.CylinderGeometry(beamRadius, beamRadius, length, 6, 1);
 
-    const material = new THREE.MeshBasicMaterial({
+    const beamMaterial = new THREE.MeshBasicMaterial({
       color: colors.primary,
       transparent: true,
       opacity: 1.0,
     });
 
-    const beam = new THREE.Mesh(geometry, material);
+    const beam = new THREE.Mesh(beamGeometry, beamMaterial);
 
     // Position at midpoint between start and end
     const midpoint = new THREE.Vector3().addVectors(start, end).multiplyScalar(0.5);
@@ -890,6 +903,20 @@ export class BattleEffectsRenderer {
       (endGlow.material as THREE.SpriteMaterial).color.setHex(colors.glow);
     }
 
+    // Track effect for proper cleanup
+    const effect: LaserEffect = {
+      beam,
+      glow,
+      beamGeometry,
+      beamMaterial,
+      glowGeometry,
+      glowMaterial,
+      startGlow,
+      endGlow,
+      animationFrameId: 0,
+    };
+    this.laserEffects.add(effect);
+
     // Animate laser fade
     const startTime = performance.now();
     const duration = 150;
@@ -899,30 +926,47 @@ export class BattleEffectsRenderer {
       const progress = elapsed / duration;
 
       if (progress >= 1) {
-        this.scene.remove(beam);
-        this.scene.remove(glow);
-        geometry.dispose();
-        material.dispose();
-        glowGeometry.dispose();
-        glowMaterial.dispose();
-        if (startGlow) this.releaseToPool(this.projectileGlowPool, startGlow);
-        if (endGlow) this.releaseToPool(this.projectileGlowPool, endGlow);
+        this.cleanupLaserEffect(effect);
         return;
       }
 
-      material.opacity = 1 - progress;
+      beamMaterial.opacity = 1 - progress;
       glowMaterial.opacity = 0.4 * (1 - progress);
       if (startGlow) (startGlow.material as THREE.SpriteMaterial).opacity = 0.8 * (1 - progress);
       if (endGlow) (endGlow.material as THREE.SpriteMaterial).opacity = 0.8 * (1 - progress);
 
-      requestAnimationFrame(animateLaser);
+      effect.animationFrameId = requestAnimationFrame(animateLaser);
     };
 
-    animateLaser();
+    effect.animationFrameId = requestAnimationFrame(animateLaser);
 
     // Create hit effect immediately for lasers
     this.createHitEffect(end, end.y > this.getHeightAt(end.x, end.z) + 2);
     this.eventBus.emit('combat:hit', { position: { x: end.x, y: end.z } });
+  }
+
+  private cleanupLaserEffect(effect: LaserEffect): void {
+    // Cancel any pending animation
+    if (effect.animationFrameId) {
+      cancelAnimationFrame(effect.animationFrameId);
+    }
+
+    // Remove from scene
+    this.scene.remove(effect.beam);
+    this.scene.remove(effect.glow);
+
+    // Dispose geometries and materials
+    effect.beamGeometry.dispose();
+    effect.beamMaterial.dispose();
+    effect.glowGeometry.dispose();
+    effect.glowMaterial.dispose();
+
+    // Return sprites to pool
+    if (effect.startGlow) this.releaseToPool(this.projectileGlowPool, effect.startGlow);
+    if (effect.endGlow) this.releaseToPool(this.projectileGlowPool, effect.endGlow);
+
+    // Remove from tracking set
+    this.laserEffects.delete(effect);
   }
 
   // ============================================
@@ -1641,6 +1685,13 @@ export class BattleEffectsRenderer {
       (indicator.mesh.material as THREE.Material).dispose();
     }
     this.focusFireIndicators.clear();
+
+    // Cleanup all active laser effects
+    for (const effect of this.laserEffects) {
+      this.cleanupLaserEffect(effect);
+    }
+    // Note: cleanupLaserEffect removes from set, but clear anyway for safety
+    this.laserEffects.clear();
 
     // Dispose pools
     const disposeMeshPool = (pool: MeshPool) => {
