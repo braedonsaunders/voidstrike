@@ -74,15 +74,6 @@ class Vector2Pool {
   }
 
   /**
-   * Release multiple vectors back to the pool.
-   */
-  releaseAll(...vecs: PooledVector2[]): void {
-    for (const vec of vecs) {
-      this.release(vec);
-    }
-  }
-
-  /**
    * Scoped vector usage - automatically releases after callback.
    * Use when you need a temporary vector for a quick calculation.
    */
@@ -92,20 +83,6 @@ class Vector2Pool {
       return callback(vec);
     } finally {
       this.release(vec);
-    }
-  }
-
-  /**
-   * Scoped usage with two vectors.
-   */
-  withVectors2<T>(callback: (v1: PooledVector2, v2: PooledVector2) => T): T {
-    const v1 = this.acquire();
-    const v2 = this.acquire();
-    try {
-      return callback(v1, v2);
-    } finally {
-      this.release(v1);
-      this.release(v2);
     }
   }
 
@@ -137,15 +114,6 @@ export const tempVec1: PooledVector2 = { x: 0, y: 0 };
 export const tempVec2: PooledVector2 = { x: 0, y: 0 };
 export const tempVec3: PooledVector2 = { x: 0, y: 0 };
 export const tempVec4: PooledVector2 = { x: 0, y: 0 };
-
-/**
- * Helper to set and return a temp vector (for chaining).
- */
-export function setTemp(vec: PooledVector2, x: number, y: number): PooledVector2 {
-  vec.x = x;
-  vec.y = y;
-  return vec;
-}
 
 /**
  * Calculate distance squared between two points (avoids sqrt).

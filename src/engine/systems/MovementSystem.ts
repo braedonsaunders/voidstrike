@@ -32,33 +32,6 @@ import {
 import AssetManager from '@/assets/AssetManager';
 import { WasmBoids, getWasmBoids } from '../wasm/WasmBoids';
 
-// Cache visual radii to avoid repeated lookups in hot loops
-const visualRadiusCache = new Map<string, number>();
-
-/**
- * Get the visual radius of a unit for attack range calculations.
- * Uses actual model bounding box dimensions (industry-standard approach).
- * Falls back to scale approximation if model not yet loaded.
- */
-function getVisualRadius(unit: Unit): number {
-  // Check cache first for performance
-  const cached = visualRadiusCache.get(unit.unitId);
-  if (cached !== undefined) {
-    return cached;
-  }
-
-  // Try to get actual bounding box radius from loaded model
-  const actualRadius = AssetManager.getModelVisualRadius(unit.unitId);
-  if (actualRadius !== null) {
-    visualRadiusCache.set(unit.unitId, actualRadius);
-    return actualRadius;
-  }
-
-  // Fallback: model not loaded yet, use scale approximation
-  const modelScale = AssetManager.getUnitScale(unit.unitId);
-  return Math.max(unit.collisionRadius, modelScale * 2);
-}
-
 // ==================== SC2-STYLE STEERING CONSTANTS ====================
 
 // Separation - prevents overlapping (strongest force)
@@ -1729,7 +1702,7 @@ export class MovementSystem extends System {
             let needsToEscape = false;
 
             // Use visual radius for distance calculations (matches how big unit looks)
-            const attackerRadius = getVisualRadius(unit);
+            const attackerRadius = AssetManager.getCachedVisualRadius(unit.unitId, unit.collisionRadius);
 
             if (targetBuilding) {
               const halfW = targetBuilding.width / 2;
@@ -1775,7 +1748,7 @@ export class MovementSystem extends System {
             } else {
               // Edge-to-edge distance for units using visual radii
               const centerDistance = transform.distanceTo(targetTransform);
-              const targetRadius = targetUnit ? getVisualRadius(targetUnit) : 0.5;
+              const targetRadius = targetUnit ? AssetManager.getCachedVisualRadius(targetUnit.unitId, targetUnit.collisionRadius) : 0.5;
               effectiveDistance = Math.max(0, centerDistance - attackerRadius - targetRadius);
             }
 

@@ -44,13 +44,6 @@ function quantizeElevation(elevation: Elevation): number {
   return elevationToHeight(220);
 }
 
-// Legacy height lookup for backwards compatibility
-const ELEVATION_HEIGHTS: Record<ElevationLevel, number> = {
-  0: elevationToHeight(60),   // ~2.4 (low ground)
-  1: elevationToHeight(140),  // ~5.6 (natural expansion level)
-  2: elevationToHeight(220),  // ~8.8 (main base level)
-};
-
 /**
  * Feature color tints for rendering
  */

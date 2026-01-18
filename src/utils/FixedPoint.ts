@@ -17,13 +17,7 @@ export const FP_HALF = FP_SCALE >> 1;   // 32768 (for rounding)
 export const FP_MASK = FP_SCALE - 1;    // 65535 (fractional mask)
 
 // Precomputed constants
-export const FP_ZERO = 0;
 export const FP_ONE = FP_SCALE;
-export const FP_TWO = FP_SCALE << 1;
-export const FP_HALF_VAL = FP_HALF;
-export const FP_PI = Math.round(Math.PI * FP_SCALE);
-export const FP_TWO_PI = Math.round(2 * Math.PI * FP_SCALE);
-export const FP_HALF_PI = Math.round(Math.PI * 0.5 * FP_SCALE);
 
 // Maximum safe value to prevent overflow in multiplication
 export const FP_MAX_SAFE = 0x7FFF0000; // ~32767
@@ -56,27 +50,6 @@ export function fpFromInt(value: number): number {
  */
 export function fpToInt(fp: number): number {
   return (fp >> FP_SHIFT) | 0;
-}
-
-/**
- * Round a fixed-point number to nearest integer (in fixed-point)
- */
-export function fpRound(fp: number): number {
-  return ((fp + FP_HALF) >> FP_SHIFT) << FP_SHIFT;
-}
-
-/**
- * Floor a fixed-point number (in fixed-point)
- */
-export function fpFloor(fp: number): number {
-  return (fp >> FP_SHIFT) << FP_SHIFT;
-}
-
-/**
- * Ceiling of a fixed-point number (in fixed-point)
- */
-export function fpCeil(fp: number): number {
-  return ((fp + FP_MASK) >> FP_SHIFT) << FP_SHIFT;
 }
 
 /**
@@ -149,133 +122,6 @@ export function fpSqrt(fp: number): number {
   return x;
 }
 
-/**
- * Fixed-point distance calculation
- * Returns distance in fixed-point format
- */
-export function fpDistance(x1: number, y1: number, x2: number, y2: number): number {
-  const dx = fpSub(x2, x1);
-  const dy = fpSub(y2, y1);
-  const dxSq = fpMul(dx, dx);
-  const dySq = fpMul(dy, dy);
-  return fpSqrt(fpAdd(dxSq, dySq));
-}
-
-/**
- * Fixed-point distance squared (avoids sqrt for comparisons)
- */
-export function fpDistanceSquared(x1: number, y1: number, x2: number, y2: number): number {
-  const dx = fpSub(x2, x1);
-  const dy = fpSub(y2, y1);
-  return fpAdd(fpMul(dx, dx), fpMul(dy, dy));
-}
-
-/**
- * Fixed-point magnitude/length of a 2D vector
- */
-export function fpMagnitude(x: number, y: number): number {
-  return fpSqrt(fpAdd(fpMul(x, x), fpMul(y, y)));
-}
-
-/**
- * Normalize a 2D vector in fixed-point
- * Returns {x, y} in fixed-point format
- */
-export function fpNormalize(x: number, y: number): { x: number; y: number } {
-  const mag = fpMagnitude(x, y);
-  if (mag === 0) return { x: 0, y: 0 };
-  return {
-    x: fpDiv(x, mag),
-    y: fpDiv(y, mag),
-  };
-}
-
-/**
- * Clamp a fixed-point value between min and max
- */
-export function fpClamp(value: number, min: number, max: number): number {
-  if (value < min) return min;
-  if (value > max) return max;
-  return value;
-}
-
-/**
- * Linear interpolation in fixed-point
- * t should be in fixed-point format (0 to FP_ONE)
- */
-export function fpLerp(a: number, b: number, t: number): number {
-  return fpAdd(a, fpMul(fpSub(b, a), t));
-}
-
-/**
- * Fixed-point absolute value
- */
-export function fpAbs(fp: number): number {
-  return fp < 0 ? -fp : fp;
-}
-
-/**
- * Fixed-point minimum
- */
-export function fpMin(a: number, b: number): number {
-  return a < b ? a : b;
-}
-
-/**
- * Fixed-point maximum
- */
-export function fpMax(a: number, b: number): number {
-  return a > b ? a : b;
-}
-
-// =============================================================================
-// Lookup Tables for Trigonometric Functions
-// =============================================================================
-
-// Sine lookup table with 1024 entries (covers 0 to 2*PI)
-const SINE_TABLE_SIZE = 1024;
-const SINE_TABLE: number[] = new Array(SINE_TABLE_SIZE);
-
-// Initialize sine table
-for (let i = 0; i < SINE_TABLE_SIZE; i++) {
-  const angle = (i / SINE_TABLE_SIZE) * Math.PI * 2;
-  SINE_TABLE[i] = Math.round(Math.sin(angle) * FP_SCALE);
-}
-
-/**
- * Fixed-point sine using lookup table
- * Input angle in fixed-point radians
- */
-export function fpSin(angle: number): number {
-  // Normalize angle to 0..2*PI range
-  const normalized = ((angle % FP_TWO_PI) + FP_TWO_PI) % FP_TWO_PI;
-
-  // Convert to table index
-  const index = Math.floor((normalized * SINE_TABLE_SIZE) / FP_TWO_PI) % SINE_TABLE_SIZE;
-
-  return SINE_TABLE[index];
-}
-
-/**
- * Fixed-point cosine using lookup table
- * Input angle in fixed-point radians
- */
-export function fpCos(angle: number): number {
-  return fpSin(fpAdd(angle, FP_HALF_PI));
-}
-
-/**
- * Fixed-point atan2 approximation
- * Returns angle in fixed-point radians
- */
-export function fpAtan2(y: number, x: number): number {
-  if (x === 0 && y === 0) return 0;
-
-  // Use floating point atan2 and convert (acceptable for direction calculations)
-  const angle = Math.atan2(fpToFloat(y), fpToFloat(x));
-  return fpFromFloat(angle);
-}
-
 // =============================================================================
 // Quantization Layer for Snapping Floating-Point to Deterministic Grid
 // =============================================================================
@@ -304,59 +150,17 @@ export function dequantize(quantized: number, precision: number): number {
 }
 
 /**
- * Quantized position for deterministic position comparisons
- */
-export interface QuantizedPosition {
-  qx: number;
-  qy: number;
-}
-
-/**
- * Quantize a 2D position
- */
-export function quantizePosition(x: number, y: number): QuantizedPosition {
-  return {
-    qx: quantize(x, QUANT_POSITION),
-    qy: quantize(y, QUANT_POSITION),
-  };
-}
-
-/**
- * Dequantize a 2D position back to floats
- */
-export function dequantizePosition(pos: QuantizedPosition): { x: number; y: number } {
-  return {
-    x: dequantize(pos.qx, QUANT_POSITION),
-    y: dequantize(pos.qy, QUANT_POSITION),
-  };
-}
-
-/**
  * Quantize damage value for deterministic damage calculations
  */
-export function quantizeDamage(damage: number): number {
+function quantizeDamage(damage: number): number {
   return quantize(damage, QUANT_DAMAGE);
 }
 
 /**
  * Dequantize damage back to float
  */
-export function dequantizeDamage(quantized: number): number {
+function dequantizeDamage(quantized: number): number {
   return dequantize(quantized, QUANT_DAMAGE);
-}
-
-/**
- * Quantize cooldown/time value
- */
-export function quantizeCooldown(cooldown: number): number {
-  return quantize(cooldown, QUANT_COOLDOWN);
-}
-
-/**
- * Dequantize cooldown back to float
- */
-export function dequantizeCooldown(quantized: number): number {
-  return dequantize(quantized, QUANT_COOLDOWN);
 }
 
 /**
