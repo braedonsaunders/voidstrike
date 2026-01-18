@@ -493,6 +493,14 @@ export function WebGPUGameCanvas() {
         unitRendererRef.current.setPlayerId(localPlayerId);
       }
 
+      // Enable GPU-driven rendering if WebGPU compute is available
+      if (renderContext.supportsCompute && renderContext.isWebGPU) {
+        unitRendererRef.current.enableGPUDrivenRendering();
+        unitRendererRef.current.setRenderer(renderer as import('three/webgpu').WebGPURenderer);
+        unitRendererRef.current.setCamera(camera.camera);
+        debugInitialization.log('[WebGPUGameCanvas] GPU-driven unit rendering enabled');
+      }
+
       buildingRendererRef.current = new BuildingRenderer(
         scene,
         game.world,
