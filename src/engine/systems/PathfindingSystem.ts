@@ -1053,6 +1053,7 @@ export class PathfindingSystem extends System {
   /**
    * Add decorations as TileCache obstacles
    * Called after navmesh is ready
+   * FIX: Now also syncs obstacles to pathfinding worker for multiplayer consistency
    */
   private addDecorationObstacles(
     collisions: Array<{ x: number; z: number; radius: number }>
@@ -1070,19 +1071,27 @@ export class PathfindingSystem extends System {
       // Start at -10000 to leave room for other negative ID uses
       const decorationEntityId = -10000 - i;
 
-      // Add cylinder obstacle for the decoration
+      const width = deco.radius * 2;  // diameter
+      const height = deco.radius * 2; // diameter
+
+      // Add cylinder obstacle for the decoration (main thread)
       this.recast.addObstacle(
         decorationEntityId,
         deco.x,
         deco.z, // Note: z is the world Y coordinate in game space
-        deco.radius * 2, // width (diameter)
-        deco.radius * 2  // height (diameter)
+        width,
+        height
       );
+
+      // FIX: Also send to worker for consistent pathfinding in multiplayer
+      // Without this, worker paths through decorations while main thread respects them
+      this.sendObstacleToWorker('add', decorationEntityId, deco.x, deco.z, width, height);
+
       addedCount++;
     }
 
     debugPathfinding.log(
-      `[PathfindingSystem] Added ${addedCount} decoration obstacles (of ${collisions.length} total decorations)`
+      `[PathfindingSystem] Added ${addedCount} decoration obstacles (of ${collisions.length} total decorations) - synced to worker`
     );
   }
 

@@ -117,6 +117,11 @@ export class UnitRenderer {
   private enemySelectionMaterial: THREE.MeshBasicMaterial;
   private teamMarkerGeometry: THREE.CircleGeometry;
 
+  // FIX: Shared health bar geometry to avoid per-unit allocation (GC pressure)
+  private healthBarBgGeometry: THREE.PlaneGeometry;
+  private healthBarFillGeometry: THREE.PlaneGeometry;
+  private healthBarBgMaterial: THREE.MeshBasicMaterial;
+
   // Reusable objects for matrix calculations
   private tempMatrix: THREE.Matrix4 = new THREE.Matrix4();
   private tempPosition: THREE.Vector3 = new THREE.Vector3();
@@ -172,6 +177,15 @@ export class UnitRenderer {
 
     // Team marker geometry - small circle beneath each unit showing team color
     this.teamMarkerGeometry = new THREE.CircleGeometry(0.4, 12);
+
+    // FIX: Pre-create shared health bar geometry to avoid per-unit allocation
+    this.healthBarBgGeometry = new THREE.PlaneGeometry(1.4, 0.18);
+    this.healthBarFillGeometry = new THREE.PlaneGeometry(1.4, 0.18);
+    this.healthBarBgMaterial = new THREE.MeshBasicMaterial({
+      color: 0x333333,
+      transparent: true,
+      opacity: 0.8,
+    });
 
     // Preload common procedural assets
     AssetManager.preloadCommonAssets();
@@ -1088,7 +1102,14 @@ export class UnitRenderer {
         this.scene.remove(overlay.healthBar);
         this.disposeGroup(overlay.healthBar);
         this.unitOverlays.delete(entityId);
-        // Clean up visual rotation tracking
+      }
+    }
+
+    // FIX: Clean up visualRotations for ALL destroyed entities, not just those with overlays
+    // This prevents a memory leak where units without health bars (full HP) would never have
+    // their rotation tracking cleaned up
+    for (const entityId of this.visualRotations.keys()) {
+      if (!this._currentIds.has(entityId)) {
         this.visualRotations.delete(entityId);
       }
     }
@@ -1123,22 +1144,16 @@ export class UnitRenderer {
   private createHealthBar(): THREE.Group {
     const group = new THREE.Group();
 
-    // Background - slightly larger for better visibility
-    const bgGeometry = new THREE.PlaneGeometry(1.4, 0.18);
-    const bgMaterial = new THREE.MeshBasicMaterial({
-      color: 0x333333,
-      transparent: true,
-      opacity: 0.8,
-    });
-    const bg = new THREE.Mesh(bgGeometry, bgMaterial);
+    // FIX: Use shared geometry to avoid per-unit allocation (reduces GC pressure)
+    // Background uses shared geometry and material
+    const bg = new THREE.Mesh(this.healthBarBgGeometry, this.healthBarBgMaterial);
     group.add(bg);
 
-    // Health fill
-    const fillGeometry = new THREE.PlaneGeometry(1.4, 0.18);
+    // Health fill uses shared geometry but needs unique material for color changes
     const fillMaterial = new THREE.MeshBasicMaterial({
       color: 0x00ff00,
     });
-    const fill = new THREE.Mesh(fillGeometry, fillMaterial);
+    const fill = new THREE.Mesh(this.healthBarFillGeometry, fillMaterial);
     fill.position.z = 0.01;
     fill.name = 'healthFill';
     group.add(fill);
@@ -1172,11 +1187,21 @@ export class UnitRenderer {
   private disposeGroup(group: THREE.Group): void {
     group.traverse((child) => {
       if (child instanceof THREE.Mesh) {
-        child.geometry.dispose();
+        // FIX: Don't dispose shared geometry (health bar bg/fill geometry)
+        // Only dispose geometry if it's NOT one of the shared instances
+        if (child.geometry !== this.healthBarBgGeometry &&
+            child.geometry !== this.healthBarFillGeometry) {
+          child.geometry.dispose();
+        }
+        // Dispose materials (except shared healthBarBgMaterial)
         if (child.material instanceof THREE.Material) {
-          child.material.dispose();
+          if (child.material !== this.healthBarBgMaterial) {
+            child.material.dispose();
+          }
         } else if (Array.isArray(child.material)) {
-          child.material.forEach(m => m.dispose());
+          child.material.forEach(m => {
+            if (m !== this.healthBarBgMaterial) m.dispose();
+          });
         }
       }
     });

@@ -158,7 +158,9 @@ export class Game {
   // Command queue for lockstep multiplayer - commands are scheduled for future ticks
   private commandQueue: Map<number, GameCommand[]> = new Map();
   // Number of ticks to delay command execution (allows time for network sync)
-  private readonly COMMAND_DELAY_TICKS = 2;
+  // FIX: Increased from 2 to 4 ticks (200ms at 20 TPS) to handle high-latency connections
+  // 2 ticks (100ms) was too aggressive and caused stale command desyncs on connections >100ms RTT
+  private readonly COMMAND_DELAY_TICKS = 4;
 
   // LOCKSTEP BARRIER: Track which players have sent commands for each tick
   // Format: Map<tick, Set<playerId>>
@@ -236,6 +238,42 @@ export class Game {
         if (message.payload) {
           // Format 1: GameCommand in payload - LOCKSTEP: queue for scheduled tick
           const command = message.payload as GameCommand;
+
+          // SECURITY FIX: Validate that the command's playerId matches the remote peer
+          // This prevents a malicious player from spoofing commands as another player
+          const remotePeerId = useMultiplayerStore.getState().remotePeerId;
+          if (command.playerId !== remotePeerId) {
+            console.error(
+              `[Game] SECURITY: Rejected command with spoofed playerId. ` +
+              `Expected: ${remotePeerId}, Got: ${command.playerId}. Command type: ${command.type}`
+            );
+            this.eventBus.emit('security:spoofedPlayerId', {
+              expectedPlayerId: remotePeerId,
+              spoofedPlayerId: command.playerId,
+              commandType: command.type,
+              tick: command.tick,
+            });
+            return; // Reject the command
+          }
+
+          // SECURITY FIX: Validate command tick is within acceptable range
+          // Prevents commands scheduled for absurdly far future or past
+          const minTick = this.currentTick - this.COMMAND_DELAY_TICKS;
+          const maxTick = this.currentTick + 100; // Allow up to 100 ticks (~5 seconds) in future
+          if (command.tick < minTick || command.tick > maxTick) {
+            console.error(
+              `[Game] SECURITY: Rejected command with invalid tick. ` +
+              `Current: ${this.currentTick}, Command tick: ${command.tick}, Valid range: [${minTick}, ${maxTick}]`
+            );
+            this.eventBus.emit('security:invalidCommandTick', {
+              playerId: command.playerId,
+              commandType: command.type,
+              commandTick: command.tick,
+              currentTick: this.currentTick,
+            });
+            return; // Reject the command
+          }
+
           console.log('[Game] Received remote command for tick', command.tick, ':', command.type, 'from', command.playerId);
           // Queue for execution at the scheduled tick (lockstep)
           this.queueCommand(command);
