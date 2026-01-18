@@ -578,11 +578,27 @@ export class Terrain {
         slopes.push(slope10, slope01, slope11);
 
         // Determine terrain type for shader
+        // Platform sides (unwalkable adjacent to platform) render as platform
         // Ramps adjacent to platforms at similar elevation render as platform
-        // to keep platform edges straight
         let cellTerrainType = 0.0;
         if (cell.terrain === 'unwalkable') {
-          cellTerrainType = 2.0;
+          // Check if this unwalkable cell is adjacent to a platform - if so, render as platform
+          // This makes platform cliff sides use platform material instead of natural rock
+          let adjacentToPlatform = false;
+          for (let dy = -1; dy <= 1 && !adjacentToPlatform; dy++) {
+            for (let dx = -1; dx <= 1 && !adjacentToPlatform; dx++) {
+              if (dx === 0 && dy === 0) continue;
+              const nx = x + dx;
+              const ny = y + dy;
+              if (nx >= 0 && nx < mapWidth && ny >= 0 && ny < mapHeight) {
+                const neighbor = terrain[ny][nx];
+                if (neighbor.terrain === 'platform') {
+                  adjacentToPlatform = true;
+                }
+              }
+            }
+          }
+          cellTerrainType = adjacentToPlatform ? 3.0 : 2.0; // Platform or unwalkable
         } else if (cell.terrain === 'ramp') {
           // Check if this ramp is adjacent to platforms - if so, render as platform
           let adjacentToPlatform = false;

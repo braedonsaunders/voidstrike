@@ -136,6 +136,7 @@ export type BuiltInToolType =
   | 'platform_brush'   // Paint geometric platform terrain
   | 'platform_rect'    // Draw rectangular platform
   | 'platform_polygon' // Draw polygon platform (click vertices)
+  | 'platform_ramp'    // Draw structured ramp with straight edges
   | 'convert_platform' // Convert natural terrain to platform
   | 'edge_style';      // Edit platform edge styles
 
@@ -583,6 +584,7 @@ export const DEFAULT_TOOLS: ToolConfig[] = [
   { id: 'ellipse', name: 'Ellipse', icon: '◯', shortcut: 'O', type: 'ellipse' },
   { id: 'plateau', name: 'Plateau', icon: '⬡', shortcut: 'P', type: 'plateau', hasBrushSize: true, defaultBrushSize: 10, minBrushSize: 3, maxBrushSize: 30 },
   { id: 'ramp', name: 'Ramp', icon: '◢', shortcut: 'R', type: 'ramp', hasBrushSize: true, defaultBrushSize: 4, minBrushSize: 2, maxBrushSize: 12 },
+  { id: 'platform_ramp', name: 'Platform Ramp', icon: '▤', shortcut: 'Shift+R', type: 'platform_ramp', hasBrushSize: true, defaultBrushSize: 4, minBrushSize: 2, maxBrushSize: 12 },
 
   // Sculpting
   { id: 'raise', name: 'Raise', icon: '▲', shortcut: 'T', type: 'raise', hasBrushSize: true, defaultBrushSize: 6, minBrushSize: 2, maxBrushSize: 20, options: { amount: 15 } },

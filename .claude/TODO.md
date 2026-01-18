@@ -287,6 +287,16 @@
 - [x] **Navmesh walkableClimb fix** - Units couldn't traverse ramps because `walkableClimb` in RecastNavigation.ts was set to 0.3, which is too restrictive for typical ramp gradients. A ramp with 100 elevation change over 8 cells has ~0.5 height units per cell, exceeding the 0.3 limit. Increased `walkableClimb` from 0.3 to 0.8 to allow ramp traversal while still blocking cliff jumps (which are 3.2+ units). Added diagnostic logging in Terrain.ts to warn when height steps exceed walkableClimb.
 - [x] **Ramp exit cell protection fix** - Units had trouble pathfinding DOWN ramps. Root cause: Cells at ramp exits were incorrectly marked as cliff edges, causing quantized flat heights instead of smooth heightMap values. This created navmesh discontinuities at ramp exits. Fixed by: (1) Increasing `RAMP_ZONE_RADIUS` from 5 to 8. (2) Adding `adjacentToRampZone` set to track and protect cells touching ramp zones. (3) Skipping adjacent-to-ramp cells in cliff edge detection and expansion. (4) Using smooth heightMap values for vertices near ramp areas.
 
+### SC2-Style Platform Terrain Tools (January 2026)
+- [x] **Platform material on cliff sides** - Unwalkable cells adjacent to platforms now render with platform material instead of natural rock, giving platforms proper geometric depth with consistent material on all sides.
+- [x] **Guardrails at platform edges** - Platforms have guardrails at edges except at ramp entrances where units need to pass.
+- [x] **Structured platform ramp tool** - New `platform_ramp` tool (Shift+R) creates uniform machined ramps with perfectly straight edges. Features:
+  - 45-degree angle snapping for consistent ramp directions
+  - Rectangular shape with uniform width and precise boundaries
+  - Automatic elevation detection from adjacent platforms
+  - Quantized elevation levels for clean platform-to-ramp transitions
+  - Aligns perfectly with platform edges for SC2-style geometric terrain
+
 ### Terrain Generation Improvements (January 2026)
 - [x] **Slope-based texture blending** - Fixed terrain sampleTerrain() to use average elevation instead of MAX, which was flattening cliffs and preventing proper texture blending
 - [x] **Pre-calculated slope attribute** - Added aSlope vertex attribute calculated before geometry smoothing for accurate cliff detection regardless of mesh smoothing

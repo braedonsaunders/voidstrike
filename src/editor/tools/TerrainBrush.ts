@@ -958,6 +958,155 @@ export class TerrainBrush {
   }
 
   /**
+   * Paint a structured platform ramp with perfectly straight edges
+   * Creates a rectangular ramp aligned to the direction of travel
+   * with uniform width and precise boundaries.
+   */
+  public paintPlatformRamp(
+    fromX: number,
+    fromY: number,
+    toX: number,
+    toY: number,
+    width: number,
+    snapMode: 'none' | 'grid' | 'orthogonal' | '45deg' = '45deg'
+  ): CellUpdate[] {
+    if (!this.mapData) return [];
+
+    // Snap endpoint to grid alignment if required
+    let snappedToX = toX;
+    let snappedToY = toY;
+
+    if (snapMode === 'orthogonal') {
+      // Snap to horizontal or vertical (whichever is dominant)
+      const dx = Math.abs(toX - fromX);
+      const dy = Math.abs(toY - fromY);
+      if (dx > dy) {
+        snappedToY = fromY;
+      } else {
+        snappedToX = fromX;
+      }
+    } else if (snapMode === '45deg') {
+      // Snap to nearest 45-degree angle
+      const dx = toX - fromX;
+      const dy = toY - fromY;
+      const angle = Math.atan2(dy, dx);
+      const snappedAngle = Math.round(angle / (Math.PI / 4)) * (Math.PI / 4);
+      const length = Math.sqrt(dx * dx + dy * dy);
+      snappedToX = fromX + Math.cos(snappedAngle) * length;
+      snappedToY = fromY + Math.sin(snappedAngle) * length;
+    } else if (snapMode === 'grid') {
+      // Snap to nearest grid cell
+      snappedToX = Math.round(toX);
+      snappedToY = Math.round(toY);
+    }
+
+    const updates: CellUpdate[] = [];
+    const visitedCells = new Set<string>();
+
+    const dx = snappedToX - fromX;
+    const dy = snappedToY - fromY;
+    const length = Math.sqrt(dx * dx + dy * dy);
+    if (length < 1) return [];
+
+    // Round positions to ensure pixel-perfect alignment
+    const startX = Math.round(fromX);
+    const startY = Math.round(fromY);
+    const endX = Math.round(snappedToX);
+    const endY = Math.round(snappedToY);
+
+    // Calculate direction and perpendicular vectors
+    const dirX = (endX - startX) / length;
+    const dirY = (endY - startY) / length;
+    const perpX = -dirY;
+    const perpY = dirX;
+
+    // Get elevations at endpoints (from adjacent cells if needed)
+    const fromCell = this.mapData.terrain[Math.floor(fromY)]?.[Math.floor(fromX)];
+    const toCell = this.mapData.terrain[Math.floor(snappedToY)]?.[Math.floor(snappedToX)];
+    let fromElev = fromCell?.elevation ?? this.config.terrain.defaultElevation;
+    let toElev = toCell?.elevation ?? this.config.terrain.defaultElevation;
+
+    // Check adjacent cells to find platform elevation at start/end
+    const checkAdjacentElevation = (cx: number, cy: number, searchDir: number): number => {
+      for (let dist = 1; dist <= 3; dist++) {
+        const checkX = Math.floor(cx + dirX * searchDir * dist);
+        const checkY = Math.floor(cy + dirY * searchDir * dist);
+        if (this.isInBounds(checkX, checkY)) {
+          const cell = this.mapData!.terrain[checkY][checkX];
+          if (cell.isPlatform) {
+            return cell.elevation;
+          }
+        }
+      }
+      return -1;
+    };
+
+    // Try to find platform elevations at ends
+    const platformElevAtStart = checkAdjacentElevation(startX, startY, -1);
+    const platformElevAtEnd = checkAdjacentElevation(endX, endY, 1);
+
+    if (platformElevAtStart >= 0) fromElev = platformElevAtStart;
+    if (platformElevAtEnd >= 0) toElev = platformElevAtEnd;
+
+    // Ensure we have different elevations (ramp needs gradient)
+    if (fromElev === toElev) {
+      // Try to determine direction from terrain context
+      const midX = (startX + endX) / 2;
+      const midY = (startY + endY) / 2;
+      const midCell = this.mapData.terrain[Math.floor(midY)]?.[Math.floor(midX)];
+      if (midCell) {
+        // Use midpoint to determine if going up or down
+        if (midCell.elevation < fromElev) {
+          toElev = Math.max(0, fromElev - 80);
+        } else {
+          toElev = Math.min(255, fromElev + 80);
+        }
+      }
+    }
+
+    // Quantize to platform levels for clean transitions
+    fromElev = this.quantizeElevation(fromElev);
+    toElev = this.quantizeElevation(toElev);
+
+    // Calculate exact ramp bounds
+    const halfWidth = Math.floor(width / 2);
+    const steps = Math.ceil(length);
+
+    // Create rectangular ramp with straight edges
+    for (let i = 0; i <= steps; i++) {
+      const t = i / steps;
+      // Linear interpolation for position along ramp
+      const cx = startX + (endX - startX) * t;
+      const cy = startY + (endY - startY) * t;
+      // Linear interpolation for elevation
+      const elevation = Math.round(fromElev + (toElev - fromElev) * t);
+
+      // Fill width perpendicular to ramp direction
+      for (let w = -halfWidth; w <= halfWidth; w++) {
+        const x = Math.floor(cx + perpX * w);
+        const y = Math.floor(cy + perpY * w);
+        const key = `${x},${y}`;
+
+        if (this.isInBounds(x, y) && !visitedCells.has(key)) {
+          visitedCells.add(key);
+          updates.push({
+            x,
+            y,
+            cell: {
+              elevation,
+              walkable: true,
+              isRamp: true,
+              isPlatform: false, // Ramps are not platforms
+            },
+          });
+        }
+      }
+    }
+
+    return updates;
+  }
+
+  /**
    * Check if coordinates are in bounds
    */
   private isInBounds(x: number, y: number): boolean {
