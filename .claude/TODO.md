@@ -450,7 +450,13 @@
 - [ ] Hierarchical Interest Management - Reduced tick rate for off-screen entities
 
 **Tier 2 (Scaling):**
-- [ ] WASM SIMD for Boids/Movement - 4-8x throughput for flocking
+- [x] WASM SIMD for Boids/Movement - 4x throughput for flocking (f32x4 SIMD processing 4 units/instruction)
+  - Rust WASM module with SIMD128 target feature (`wasm/boids/`)
+  - SoA (Structure of Arrays) memory layout for cache-friendly SIMD access
+  - TypeScript wrapper with graceful JS fallback (`src/engine/wasm/WasmBoids.ts`)
+  - GitHub Actions workflow for automated WASM builds (`.github/workflows/build-wasm.yml`)
+  - Separation, cohesion, and alignment forces computed in batch
+  - Auto-enables when 20+ units present, uses JS fallback otherwise
 - [ ] GPU-Driven Indirect Draw - Eliminate CPU-GPU sync for 500+ units
 - [ ] Flow Field Pathfinding - GPU compute for same-destination commands
 

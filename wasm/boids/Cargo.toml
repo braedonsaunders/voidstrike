@@ -1,0 +1,41 @@
+[package]
+name = "boids-wasm"
+version = "1.0.0"
+edition = "2021"
+authors = ["VOIDSTRIKE Team"]
+description = "SIMD-accelerated boids flocking algorithm for WebAssembly"
+license = "MIT"
+repository = "https://github.com/braedonsaunders/voidstrike"
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[features]
+default = ["console_error_panic_hook"]
+
+[dependencies]
+wasm-bindgen = "0.2.100"
+
+# `wee_alloc` is a tiny allocator for WASM that is ~1KB (vs ~10KB for dlmalloc)
+# Trades some allocation speed for smaller bundle size
+wee_alloc = { version = "0.4.5", optional = true }
+
+# Better panic messages in debug builds
+console_error_panic_hook = { version = "0.1.7", optional = true }
+
+[dev-dependencies]
+wasm-bindgen-test = "0.3.50"
+
+[profile.release]
+# Optimize for size with LTO for smallest possible WASM bundle
+opt-level = 3
+lto = true
+codegen-units = 1
+panic = "abort"
+
+# Strip debug info for production
+strip = true
+
+[profile.dev]
+# Keep some optimization in dev for reasonable performance
+opt-level = 1

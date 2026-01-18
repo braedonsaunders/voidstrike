@@ -30,6 +30,7 @@ import {
   FORMATION_CONFIG,
 } from '@/data/formations/formations';
 import AssetManager from '@/assets/AssetManager';
+import { WasmBoids, getWasmBoids } from '../wasm/WasmBoids';
 
 // Cache visual radii to avoid repeated lookups in hot loops
 const visualRadiusCache = new Map<string, number>();
@@ -189,10 +190,53 @@ export class MovementSystem extends System {
   // SC2-STYLE: Stuck detection state
   private stuckState: Map<number, StuckState> = new Map();
 
+  // WASM SIMD boids acceleration
+  private wasmBoids: WasmBoids | null = null;
+  private useWasmBoids: boolean = false;
+  private wasmBoidsInitializing: boolean = false;
+
+  // Threshold: only use WASM when we have enough units to benefit
+  private static readonly WASM_UNIT_THRESHOLD = 20;
+
   constructor(game: Game) {
     super(game);
     this.recast = getRecastNavigation();
     this.setupEventListeners();
+    this.initWasmBoids();
+  }
+
+  /**
+   * Initialize WASM SIMD boids module asynchronously
+   * Falls back to JS if WASM/SIMD unavailable
+   */
+  private async initWasmBoids(): Promise<void> {
+    if (this.wasmBoidsInitializing) return;
+    this.wasmBoidsInitializing = true;
+
+    try {
+      this.wasmBoids = await getWasmBoids(500);
+      this.useWasmBoids = this.wasmBoids.isAvailable();
+
+      if (this.useWasmBoids) {
+        // Configure WASM with game parameters
+        this.wasmBoids.setSeparationParams(
+          SEPARATION_RADIUS,
+          SEPARATION_STRENGTH_IDLE,
+          MAX_AVOIDANCE_FORCE
+        );
+        this.wasmBoids.setCohesionParams(COHESION_RADIUS, COHESION_STRENGTH);
+        this.wasmBoids.setAlignmentParams(ALIGNMENT_RADIUS, ALIGNMENT_STRENGTH);
+
+        console.log('[MovementSystem] WASM SIMD boids enabled');
+      } else {
+        console.log('[MovementSystem] WASM SIMD unavailable, using JS fallback');
+      }
+    } catch (error) {
+      console.warn('[MovementSystem] WASM boids init failed:', error);
+      this.useWasmBoids = false;
+    }
+
+    this.wasmBoidsInitializing = false;
   }
 
   private setupEventListeners(): void {
@@ -1538,6 +1582,17 @@ export class MovementSystem extends System {
       this.recast.updateCrowd(dt);
     }
 
+    // WASM SIMD boids: batch process when we have enough units
+    const useWasmThisFrame = this.useWasmBoids &&
+      this.wasmBoids !== null &&
+      entities.length >= MovementSystem.WASM_UNIT_THRESHOLD;
+
+    if (useWasmThisFrame) {
+      // Sync all entities to WASM buffers and compute forces in batch
+      this.wasmBoids!.syncEntities(entities, this.world.unitGrid);
+      this.wasmBoids!.computeForces();
+    }
+
     for (const entity of entities) {
       const transform = entity.get<Transform>('Transform');
       const unit = entity.get<Unit>('Unit');
@@ -1903,7 +1958,18 @@ export class MovementSystem extends System {
             : distance;
 
           if (distToFinalTarget < ARRIVAL_SPREAD_RADIUS) {
-            this.calculateSeparationForce(entity.id, transform, unit, tempSeparation, distToFinalTarget);
+            // WASM SIMD: Use pre-computed separation when available
+            if (useWasmThisFrame) {
+              const wasmForces = this.wasmBoids!.getForces(entity.id);
+              if (wasmForces) {
+                tempSeparation.x = wasmForces.separationX;
+                tempSeparation.y = wasmForces.separationY;
+              } else {
+                this.calculateSeparationForce(entity.id, transform, unit, tempSeparation, distToFinalTarget);
+              }
+            } else {
+              this.calculateSeparationForce(entity.id, transform, unit, tempSeparation, distToFinalTarget);
+            }
             // Add arrival spreading force
             finalVx += tempSeparation.x * ARRIVAL_SPREAD_STRENGTH;
             finalVy += tempSeparation.y * ARRIVAL_SPREAD_STRENGTH;
@@ -1911,8 +1977,22 @@ export class MovementSystem extends System {
 
           // Add cohesion and alignment for group movement
           if (unit.state === 'moving' || unit.state === 'attackmoving' || unit.state === 'patrolling') {
-            this.calculateCohesionForce(entity.id, transform, unit, tempCohesion);
-            this.calculateAlignmentForce(entity.id, transform, unit, velocity, tempAlignment);
+            // WASM SIMD: Use pre-computed forces when available
+            if (useWasmThisFrame) {
+              const wasmForces = this.wasmBoids!.getForces(entity.id);
+              if (wasmForces) {
+                tempCohesion.x = wasmForces.cohesionX;
+                tempCohesion.y = wasmForces.cohesionY;
+                tempAlignment.x = wasmForces.alignmentX;
+                tempAlignment.y = wasmForces.alignmentY;
+              } else {
+                this.calculateCohesionForce(entity.id, transform, unit, tempCohesion);
+                this.calculateAlignmentForce(entity.id, transform, unit, velocity, tempAlignment);
+              }
+            } else {
+              this.calculateCohesionForce(entity.id, transform, unit, tempCohesion);
+              this.calculateAlignmentForce(entity.id, transform, unit, velocity, tempAlignment);
+            }
             finalVx += tempCohesion.x;
             finalVy += tempCohesion.y;
             finalVx += tempAlignment.x;
@@ -1944,14 +2024,28 @@ export class MovementSystem extends System {
               )
             : distance;
 
-          // Separation - state-dependent strength (stronger at arrival)
-          this.calculateSeparationForce(entity.id, transform, unit, tempSeparation, distToFinalTarget);
-
-          // Cohesion - keeps group together (weak force)
-          this.calculateCohesionForce(entity.id, transform, unit, tempCohesion);
-
-          // Alignment - matches group heading (moderate force)
-          this.calculateAlignmentForce(entity.id, transform, unit, velocity, tempAlignment);
+          // WASM SIMD: Use pre-computed forces when available
+          if (useWasmThisFrame) {
+            const wasmForces = this.wasmBoids!.getForces(entity.id);
+            if (wasmForces) {
+              tempSeparation.x = wasmForces.separationX;
+              tempSeparation.y = wasmForces.separationY;
+              tempCohesion.x = wasmForces.cohesionX;
+              tempCohesion.y = wasmForces.cohesionY;
+              tempAlignment.x = wasmForces.alignmentX;
+              tempAlignment.y = wasmForces.alignmentY;
+            } else {
+              // Entity not in WASM buffer, fallback to JS
+              this.calculateSeparationForce(entity.id, transform, unit, tempSeparation, distToFinalTarget);
+              this.calculateCohesionForce(entity.id, transform, unit, tempCohesion);
+              this.calculateAlignmentForce(entity.id, transform, unit, velocity, tempAlignment);
+            }
+          } else {
+            // JS fallback: calculate forces directly
+            this.calculateSeparationForce(entity.id, transform, unit, tempSeparation, distToFinalTarget);
+            this.calculateCohesionForce(entity.id, transform, unit, tempCohesion);
+            this.calculateAlignmentForce(entity.id, transform, unit, velocity, tempAlignment);
+          }
 
           // Blend all forces with direction to target
           let dirX = distance > 0.01 ? dx / distance : 0;
