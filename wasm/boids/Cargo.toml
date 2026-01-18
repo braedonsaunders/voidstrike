@@ -39,3 +39,8 @@ strip = true
 [profile.dev]
 # Keep some optimization in dev for reasonable performance
 opt-level = 1
+
+# Disable wasm-opt post-processing - it doesn't support SIMD128 and bulk-memory features
+# The Rust compiler already produces well-optimized WASM with the release profile above
+[package.metadata.wasm-pack.profile.release]
+wasm-opt = false
