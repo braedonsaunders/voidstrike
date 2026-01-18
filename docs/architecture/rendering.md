@@ -256,33 +256,61 @@ renderPipeline.applyConfig({
 
 ### GPU-Driven Indirect Draw
 
-**Location:** `src/rendering/compute/GPUUnitBuffer.ts`, `src/rendering/compute/CullingCompute.ts`
+**Location:** `src/rendering/compute/`
+- `GPUUnitBuffer.ts` - Transform and metadata storage
+- `CullingCompute.ts` - GPU frustum culling compute shader
+- `GPUIndirectRenderer.ts` - Indirect draw manager
 
-Infrastructure for GPU-driven rendering (zero CPU per-unit iteration).
+Infrastructure for GPU-driven rendering with zero CPU per-unit iteration.
+
+**Architecture:**
+```
+┌─────────────────┐    ┌──────────────────┐    ┌─────────────────────┐
+│  GPUUnitBuffer  │───→│  CullingCompute  │───→│ GPUIndirectRenderer │
+│ (Storage)       │    │ (GPU Compute)    │    │ (Indirect Draw)     │
+└─────────────────┘    └──────────────────┘    └─────────────────────┘
+      ↓ transforms          ↓ visible indices       ↓ drawIndexedIndirect
+      ↓ metadata            ↓ indirect args         ↓ per (unitType, LOD)
+```
 
 **GPUUnitBuffer:**
 - Slot allocation/deallocation for dynamic entities
 - Transform buffer with velocity tracking (prev/curr matrices)
 - Metadata buffer: `vec4(entityId, unitTypeIndex, playerId, boundingRadius)`
+- `isDirty()` tracking for efficient GPU sync
 - Single buffer design per [Toji's best practices](https://toji.dev/webgpu-best-practices/indirect-draws.html)
 
 **CullingCompute:**
+- TSL `Fn().compute()` shader with WORKGROUP_SIZE=64
 - Frustum culling using bounding spheres
-- LOD selection based on camera distance
-- Configurable LOD thresholds
-- Ready for GPU compute shader migration
+- LOD selection based on camera distance squared
+- `atomicAdd()` for thread-safe instance counting
+- Visible indices buffer written via compute shader
+- `IndirectStorageBufferAttribute` for draw args
+- Storage getters for vertex shader binding
+
+**GPUIndirectRenderer:**
+- IndirectMesh per (unitType, LOD) pair
+- TSL NodeMaterial with storage buffer vertex transform
+- `instanceIndex` → visible slot → transform matrix
+- `mesh.drawIndirect` = IndirectStorageBufferAttribute
+- Single drawIndexedIndirect call per unit type/LOD
+- Falls back to CPU instanced rendering for animated units
 
 **Usage:**
 ```typescript
 // Enable GPU-driven mode
 unitRenderer.enableGPUDrivenRendering();
+unitRenderer.setRenderer(renderer);
 
-// Per-frame update
+// Per-frame (handled internally by UnitRenderer.update())
 gpuUnitBuffer.swapTransformBuffers(); // Start of frame
+cullingCompute.cullGPU(gpuUnitBuffer, camera); // GPU compute dispatch
 gpuUnitBuffer.commitChanges(); // Before render
 
-// Culling (currently CPU, ready for GPU compute)
-const result = cullingCompute.cull(gpuUnitBuffer, camera);
+// Get stats
+const stats = unitRenderer.getGPURenderingStats();
+console.log(stats.visibleCount, stats.totalIndirectDrawCalls);
 ```
 
 **WebGPU Indirect Draw Status:**
