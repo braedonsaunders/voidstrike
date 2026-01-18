@@ -7,6 +7,8 @@ import { Building } from '../components/Building';
 import { Selectable } from '../components/Selectable';
 import { Game } from '../core/Game';
 import { WatchTower } from '@/data/maps/MapTypes';
+import { VisionCompute, VisionCaster } from '@/rendering/compute/VisionCompute';
+import { WebGPURenderer } from 'three/webgpu';
 
 // Vision states for fog of war
 export type VisionState = 'unexplored' | 'explored' | 'visible';
@@ -64,6 +66,13 @@ export class VisionSystem extends System {
   private workerReady: boolean = false;
   private pendingWorkerUpdate: boolean = false;
   private lastWorkerVersion: number = 0;
+
+  // GPU Compute for high-performance vision (WebGPU only)
+  private gpuVisionCompute: VisionCompute | null = null;
+  private useGPUVision: boolean = false;
+  // Player ID to numeric index mapping for GPU
+  private playerIdToIndex: Map<string, number> = new Map();
+  private indexToPlayerId: Map<number, string> = new Map();
 
   constructor(game: Game, mapWidth: number, mapHeight: number, cellSize: number = 2) {
     super(game);
@@ -222,12 +231,23 @@ export class VisionSystem extends System {
     this.mapHeight = mapHeight;
     this.knownPlayers.clear();
     this.watchTowers = [];
+    this.playerIdToIndex.clear();
+    this.indexToPlayerId.clear();
     this.initializeVisionMap();
 
     // Reinitialize worker with new dimensions
     if (this.visionWorker && this.workerReady) {
       this.visionWorker.postMessage({
         type: 'init',
+        mapWidth: this.mapWidth,
+        mapHeight: this.mapHeight,
+        cellSize: this.cellSize,
+      });
+    }
+
+    // Reinitialize GPU vision compute with new dimensions
+    if (this.gpuVisionCompute) {
+      this.gpuVisionCompute.reinitialize({
         mapWidth: this.mapWidth,
         mapHeight: this.mapHeight,
         cellSize: this.cellSize,
@@ -269,6 +289,58 @@ export class VisionSystem extends System {
   }
 
   /**
+   * Initialize GPU compute for vision (WebGPU only)
+   * Call after WebGPU renderer is initialized
+   */
+  public initGPUVision(renderer: WebGPURenderer): void {
+    try {
+      this.gpuVisionCompute = new VisionCompute(renderer, {
+        mapWidth: this.mapWidth,
+        mapHeight: this.mapHeight,
+        cellSize: this.cellSize,
+      });
+
+      if (this.gpuVisionCompute.isAvailable()) {
+        this.useGPUVision = true;
+        console.log('[VisionSystem] GPU vision compute enabled');
+      } else {
+        console.warn('[VisionSystem] GPU vision not available, using worker fallback');
+        this.gpuVisionCompute = null;
+      }
+    } catch (e) {
+      console.warn('[VisionSystem] Failed to initialize GPU vision:', e);
+      this.gpuVisionCompute = null;
+    }
+  }
+
+  /**
+   * Check if GPU vision is enabled
+   */
+  public isGPUVisionEnabled(): boolean {
+    return this.useGPUVision && this.gpuVisionCompute !== null;
+  }
+
+  /**
+   * Get the GPU vision compute instance (for FogOfWar to get textures)
+   */
+  public getGPUVisionCompute(): VisionCompute | null {
+    return this.gpuVisionCompute;
+  }
+
+  /**
+   * Get numeric player index for GPU (creates if not exists)
+   */
+  private getPlayerIndex(playerId: string): number {
+    let index = this.playerIdToIndex.get(playerId);
+    if (index === undefined) {
+      index = this.playerIdToIndex.size;
+      this.playerIdToIndex.set(playerId, index);
+      this.indexToPlayerId.set(index, playerId);
+    }
+    return index;
+  }
+
+  /**
    * Clean up resources
    */
   public dispose(): void {
@@ -278,6 +350,12 @@ export class VisionSystem extends System {
     }
     this.workerReady = false;
     this.pendingWorkerUpdate = false;
+
+    if (this.gpuVisionCompute) {
+      this.gpuVisionCompute.dispose();
+      this.gpuVisionCompute = null;
+    }
+    this.useGPUVision = false;
   }
 
   public update(_deltaTime: number): void {
@@ -288,12 +366,167 @@ export class VisionSystem extends System {
     }
     this.tickCounter = 0;
 
-    // Use worker if available and no update is pending
-    if (this.visionWorker && this.workerReady && !this.pendingWorkerUpdate) {
+    // Priority: GPU > Worker > Main Thread
+    if (this.useGPUVision && this.gpuVisionCompute) {
+      this.updateVisionWithGPU();
+    } else if (this.visionWorker && this.workerReady && !this.pendingWorkerUpdate) {
       this.updateVisionWithWorker();
     } else {
       // Fallback to main thread computation
       this.updateVisionMainThread();
+    }
+  }
+
+  /**
+   * Update vision using GPU compute
+   */
+  private updateVisionWithGPU(): void {
+    if (!this.gpuVisionCompute) return;
+
+    const casters: VisionCaster[] = [];
+
+    // Collect unit data
+    const unitEntities = this.world.getEntitiesWith('Unit', 'Transform', 'Selectable');
+    for (const entity of unitEntities) {
+      const transform = entity.get<Transform>('Transform');
+      const unit = entity.get<Unit>('Unit');
+      const selectable = entity.get<Selectable>('Selectable');
+
+      if (!transform || !unit || !selectable) continue;
+
+      this.ensurePlayerRegistered(selectable.playerId);
+      const playerIndex = this.getPlayerIndex(selectable.playerId);
+
+      casters.push({
+        x: transform.x,
+        y: transform.y,
+        sightRange: unit.sightRange,
+        playerId: playerIndex,
+      });
+    }
+
+    // Collect building data
+    const buildingEntities = this.world.getEntitiesWith('Building', 'Transform', 'Selectable');
+    for (const entity of buildingEntities) {
+      const transform = entity.get<Transform>('Transform');
+      const building = entity.get<Building>('Building');
+      const selectable = entity.get<Selectable>('Selectable');
+
+      if (!transform || !building || !selectable) continue;
+      if (!building.isOperational()) continue;
+
+      this.ensurePlayerRegistered(selectable.playerId);
+      const playerIndex = this.getPlayerIndex(selectable.playerId);
+
+      casters.push({
+        x: transform.x,
+        y: transform.y,
+        sightRange: building.sightRange,
+        playerId: playerIndex,
+      });
+    }
+
+    // Collect watch tower data
+    this.updateWatchTowersGPU(casters, unitEntities);
+
+    // Get player indices to update
+    const playerIndices = new Set<number>();
+    for (const playerId of this.knownPlayers) {
+      playerIndices.add(this.getPlayerIndex(playerId));
+    }
+
+    // Update GPU vision
+    this.gpuVisionCompute.updateVision(casters, playerIndices);
+
+    // Sync GPU results back to CPU vision map for API compatibility
+    this.syncGPUVisionToMap();
+
+    this.visionVersion++;
+  }
+
+  /**
+   * Update watch towers for GPU path
+   */
+  private updateWatchTowersGPU(casters: VisionCaster[], units: Entity[]): void {
+    const captureRadiusSq = this.WATCH_TOWER_CAPTURE_RADIUS * this.WATCH_TOWER_CAPTURE_RADIUS;
+
+    for (const tower of this.watchTowers) {
+      tower.controllingPlayers.clear();
+      tower.isActive = false;
+
+      // Find units within capture radius
+      for (const entity of units) {
+        const transform = entity.get<Transform>('Transform');
+        const selectable = entity.get<Selectable>('Selectable');
+        if (!transform || !selectable) continue;
+
+        const dx = transform.x - tower.x;
+        const dy = transform.y - tower.y;
+        const distSq = dx * dx + dy * dy;
+
+        if (distSq <= captureRadiusSq) {
+          tower.controllingPlayers.add(selectable.playerId);
+          tower.isActive = true;
+        }
+      }
+
+      // Add watch tower as vision caster for controlling players
+      if (tower.isActive) {
+        for (const playerId of tower.controllingPlayers) {
+          casters.push({
+            x: tower.x,
+            y: tower.y,
+            sightRange: tower.radius,
+            playerId: this.getPlayerIndex(playerId),
+          });
+        }
+      }
+    }
+  }
+
+  /**
+   * Sync GPU vision results back to CPU vision map for API compatibility
+   */
+  private syncGPUVisionToMap(): void {
+    if (!this.gpuVisionCompute) return;
+
+    const gridWidth = this.visionMap.width;
+    const gridHeight = this.visionMap.height;
+
+    for (const playerId of this.knownPlayers) {
+      const playerIndex = this.getPlayerIndex(playerId);
+      const tex = this.gpuVisionCompute.getVisionTexture(playerIndex);
+      if (!tex) continue;
+
+      const data = tex.image.data as Uint8Array;
+      const visionGrid = this.visionMap.playerVision.get(playerId);
+      const currentVisible = this.visionMap.currentlyVisible.get(playerId);
+
+      if (!visionGrid || !currentVisible) continue;
+
+      currentVisible.clear();
+
+      for (let y = 0; y < gridHeight; y++) {
+        for (let x = 0; x < gridWidth; x++) {
+          const idx = (y * gridWidth + x) * 4;
+          const explored = data[idx + 0];
+          const visible = data[idx + 1];
+
+          let state: VisionState;
+          if (visible === VISION_VISIBLE) {
+            state = 'visible';
+            currentVisible.add(y * gridWidth + x);
+          } else if (explored === VISION_EXPLORED) {
+            state = 'explored';
+          } else {
+            state = 'unexplored';
+          }
+
+          if (visionGrid[y]) {
+            visionGrid[y][x] = state;
+          }
+        }
+      }
     }
   }
 
