@@ -494,11 +494,14 @@ export function WebGPUGameCanvas() {
       }
 
       // Enable GPU-driven rendering if WebGPU compute is available
+      debugInitialization.log(`[WebGPUGameCanvas] GPU-driven rendering check: isWebGPU=${renderContext.isWebGPU}, supportsCompute=${renderContext.supportsCompute}`);
       if (renderContext.supportsCompute && renderContext.isWebGPU) {
         unitRendererRef.current.enableGPUDrivenRendering();
         unitRendererRef.current.setRenderer(renderer as import('three/webgpu').WebGPURenderer);
         unitRendererRef.current.setCamera(camera.camera);
-        debugInitialization.log('[WebGPUGameCanvas] GPU-driven unit rendering enabled');
+        debugInitialization.log('[WebGPUGameCanvas] GPU-driven unit rendering ENABLED');
+      } else {
+        debugInitialization.log(`[WebGPUGameCanvas] GPU-driven rendering SKIPPED - using CPU path (isWebGPU=${renderContext.isWebGPU}, supportsCompute=${renderContext.supportsCompute})`);
       }
 
       buildingRendererRef.current = new BuildingRenderer(
