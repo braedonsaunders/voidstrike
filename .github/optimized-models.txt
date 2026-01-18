@@ -1,3 +1,0 @@
-5e4bd13a54c377872cfdfe2ee1a655a291b71aafb098da77c1bf9526135f15d6  public/models/buildings/orbital_command.glb
-cec5e862a2d3e993748c5fd4fcfb330ed1b95709e6d84f882f7527547d98394a  public/models/buildings/command_center.glb
-e412d6f6163244af990f1d622dc65fde1c899126151ac446aac5e8d24a080a48  public/models/units/scv.glb
