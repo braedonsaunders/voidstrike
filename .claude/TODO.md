@@ -812,6 +812,16 @@
 - [x] Reactor double-production implemented - Halved build time for reactor-eligible units
 - [x] Tech Lab unlocks advanced units (breacher, operative, devastator, colossus, etc.)
 
+### Map Editor UI Redesign (January 2026) ✓
+- [x] **Toolbar redesign** - Grouped tools (Paint, Shapes, Platform, Sculpt) with dropdown menus
+- [x] **Contextual tool options** - Brush size, symmetry mode, snap mode controls
+- [x] **Collapsible sections** - Panel sections with expand/collapse for better organization
+- [x] **Modern UI styling** - Card-based layout, visual sliders, compact elevation palette
+- [x] **Tool categories** - Paint panel organizes tools by category (Paint, Shapes, Platform, Sculpt)
+- [x] **Symmetry controls** - Mirror X/Y, radial 4/8 symmetry modes in toolbar
+- [x] **Snap controls** - Grid, orthogonal, 45-degree snap modes in toolbar
+- [x] **Enhanced validation panel** - Collapsible sections for statistics, errors, warnings
+
 ### Visual Polish
 - [ ] Unit wireframes (damage state)
 - [x] Building placement ghost - SC2-style grid + ghost preview when placing

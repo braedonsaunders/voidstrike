@@ -623,9 +623,13 @@ export function EditorCore({
             activeTool={state.activeTool}
             selectedElevation={state.selectedElevation}
             brushSize={state.brushSize}
+            symmetryMode={state.symmetryMode}
+            snapMode={state.snapMode}
             onToolSelect={editorState.setActiveTool}
             onBrushSizeChange={editorState.setBrushSize}
             onElevationSelect={editorState.setSelectedElevation}
+            onSymmetryChange={editorState.setSymmetryMode}
+            onSnapChange={editorState.setSnapMode}
           />
 
           {/* 3D Canvas */}
