@@ -201,12 +201,12 @@ export class MovementSystem extends System {
         this.wasmBoids.setCohesionParams(COHESION_RADIUS, COHESION_STRENGTH);
         this.wasmBoids.setAlignmentParams(ALIGNMENT_RADIUS, ALIGNMENT_STRENGTH);
 
-        console.log('[MovementSystem] WASM SIMD boids enabled');
+        debugPathfinding.log('[MovementSystem] WASM SIMD boids enabled');
       } else {
-        console.log('[MovementSystem] WASM SIMD unavailable, using JS fallback');
+        debugPathfinding.log('[MovementSystem] WASM SIMD unavailable, using JS fallback');
       }
     } catch (error) {
-      console.warn('[MovementSystem] WASM boids init failed:', error);
+      debugPathfinding.warn('[MovementSystem] WASM boids init failed:', error);
       this.useWasmBoids = false;
     }
 
@@ -754,7 +754,7 @@ export class MovementSystem extends System {
     } else {
       // FIX: Log warning when agent addition fails (crowd limit exceeded)
       // This helps diagnose pathfinding issues when there are many units
-      console.warn(
+      debugPathfinding.warn(
         `[MovementSystem] Failed to add crowd agent for entity ${entityId}. ` +
         `Crowd may be at capacity (500 agents). Current agents: ${this.crowdAgents.size}. ` +
         `Unit will use fallback pathfinding without crowd avoidance.`
@@ -1915,10 +1915,10 @@ export class MovementSystem extends System {
           const velMagSq = finalVx * finalVx + finalVy * finalVy;
           const minVelSq = 0.01 * 0.01;
           if (velMagSq < minVelSq && distance > this.arrivalThreshold) {
-            // RAMP DEBUG: Log when crowd returns zero velocity
+            // Log when crowd returns zero velocity unexpectedly
             if (distance > 2 && unit.path.length > 0) {
-              console.warn(
-                `[MovementSystem] RAMP DEBUG: Crowd returned zero velocity for entity ${entity.id}. ` +
+              debugPathfinding.warn(
+                `[MovementSystem] Crowd returned zero velocity for entity ${entity.id}. ` +
                 `Pos: (${transform.x.toFixed(1)}, ${transform.y.toFixed(1)}), ` +
                 `Target: (${targetX.toFixed(1)}, ${targetY.toFixed(1)}), ` +
                 `Distance: ${distance.toFixed(1)}, Path: ${unit.pathIndex}/${unit.path.length}`

@@ -9,6 +9,7 @@ import type { MapData } from './MapTypes';
 import type { MapJson } from './schema/MapJsonSchema';
 import { validateMapJson } from './schema/MapJsonSchema';
 import { jsonToMapData } from './serialization/deserialize';
+import { debugTerrain } from '@/utils/debugLogger';
 
 /** Cache of loaded maps */
 const mapCache: Map<string, MapData> = new Map();
@@ -93,7 +94,7 @@ export async function fetchAllMaps(): Promise<Record<string, MapData>> {
       try {
         maps[id] = await fetchMap(id);
       } catch (error) {
-        console.error(`Failed to load map '${id}':`, error);
+        debugTerrain.error(`Failed to load map '${id}':`, error);
       }
     })
   );

@@ -9,6 +9,7 @@ import { Game } from '../core/Game';
 import { WatchTower } from '@/data/maps/MapTypes';
 import { VisionCompute, VisionCaster } from '@/rendering/compute/VisionCompute';
 import { WebGPURenderer } from 'three/webgpu';
+import { debugPathfinding } from '@/utils/debugLogger';
 
 // Vision states for fog of war
 export type VisionState = 'unexplored' | 'explored' | 'visible';
@@ -87,7 +88,7 @@ export class VisionSystem extends System {
    */
   private initializeWorker(): void {
     if (typeof Worker === 'undefined') {
-      console.warn('[VisionSystem] Web Workers not supported, using main thread fallback');
+      debugPathfinding.warn('[VisionSystem] Web Workers not supported, using main thread fallback');
       return;
     }
 
@@ -111,9 +112,9 @@ export class VisionSystem extends System {
         cellSize: this.cellSize,
       });
 
-      console.log('[VisionSystem] Web Worker created');
+      debugPathfinding.log('[VisionSystem] Web Worker created');
     } catch (error) {
-      console.warn('[VisionSystem] Failed to create worker:', error);
+      debugPathfinding.warn('[VisionSystem] Failed to create worker:', error);
       this.visionWorker = null;
     }
   }
@@ -128,7 +129,7 @@ export class VisionSystem extends System {
       case 'initialized':
         if (message.success) {
           this.workerReady = true;
-          console.log('[VisionSystem] Worker initialized');
+          debugPathfinding.log('[VisionSystem] Worker initialized');
         } else {
           console.error('[VisionSystem] Worker init failed');
         }
@@ -302,13 +303,13 @@ export class VisionSystem extends System {
 
       if (this.gpuVisionCompute.isAvailable()) {
         this.useGPUVision = true;
-        console.log('[VisionSystem] GPU vision compute enabled');
+        debugPathfinding.log('[VisionSystem] GPU vision compute enabled');
       } else {
-        console.warn('[VisionSystem] GPU vision not available, using worker fallback');
+        debugPathfinding.warn('[VisionSystem] GPU vision not available, using worker fallback');
         this.gpuVisionCompute = null;
       }
     } catch (e) {
-      console.warn('[VisionSystem] Failed to initialize GPU vision:', e);
+      debugPathfinding.warn('[VisionSystem] Failed to initialize GPU vision:', e);
       this.gpuVisionCompute = null;
     }
   }

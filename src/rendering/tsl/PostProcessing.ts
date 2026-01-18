@@ -31,6 +31,7 @@
 
 import * as THREE from 'three';
 import { WebGPURenderer, PostProcessing } from 'three/webgpu';
+import { debugPostProcessing } from '@/utils/debugLogger';
 import {
   pass,
   uniform,
@@ -542,7 +543,7 @@ export class RenderPipeline {
         const aoValue = ssgiResult.a;
         outputNode = outputNode.mul(aoValue).add(giColor);
       } catch (e) {
-        console.warn('[PostProcessing] SSGI initialization failed:', e);
+        debugPostProcessing.warn('[PostProcessing] SSGI initialization failed:', e);
       }
     }
 
@@ -623,7 +624,7 @@ export class RenderPipeline {
         const aoFactor = mix(float(1.0), aoValue, this.uAOIntensity);
         outputNode = scenePassColor.mul(vec3(aoFactor));
       } catch (e) {
-        console.warn('[PostProcessing] GTAO initialization failed:', e);
+        debugPostProcessing.warn('[PostProcessing] GTAO initialization failed:', e);
       }
     }
 
@@ -758,7 +759,7 @@ export class RenderPipeline {
           outputNode = outputNode.add(ssrColor.mul(ssrAlpha));
         }
       } catch (e) {
-        console.warn('[PostProcessing] SSR initialization failed:', e);
+        debugPostProcessing.warn('[PostProcessing] SSR initialization failed:', e);
       }
     }
 
@@ -771,7 +772,7 @@ export class RenderPipeline {
         this.bloomPass.radius.value = this.config.bloomRadius;
         outputNode = outputNode.add(this.bloomPass);
       } catch (e) {
-        console.warn('[PostProcessing] Bloom initialization failed:', e);
+        debugPostProcessing.warn('[PostProcessing] Bloom initialization failed:', e);
       }
     }
 
@@ -791,7 +792,7 @@ export class RenderPipeline {
         });
         outputNode = this.volumetricFogPass.node;
       } catch (e) {
-        console.warn('[PostProcessing] Volumetric fog initialization failed:', e);
+        debugPostProcessing.warn('[PostProcessing] Volumetric fog initialization failed:', e);
       }
     }
 
@@ -799,7 +800,7 @@ export class RenderPipeline {
     try {
       outputNode = this.createColorGradingPass(outputNode);
     } catch (e) {
-      console.warn('[PostProcessing] Color grading failed:', e);
+      debugPostProcessing.warn('[PostProcessing] Color grading failed:', e);
     }
 
     // 7. Anti-aliasing (TRAA or FXAA)
@@ -822,12 +823,12 @@ export class RenderPipeline {
           outputNode = traaTexture;
         }
       } catch (e) {
-        console.warn('[PostProcessing] TRAA initialization failed, falling back to FXAA:', e);
+        debugPostProcessing.warn('[PostProcessing] TRAA initialization failed, falling back to FXAA:', e);
         try {
           this.fxaaPass = fxaa(outputNode);
           outputNode = this.fxaaPass;
         } catch (fxaaError) {
-          console.warn('[PostProcessing] FXAA fallback also failed:', fxaaError);
+          debugPostProcessing.warn('[PostProcessing] FXAA fallback also failed:', fxaaError);
         }
       }
     } else if (this.config.antiAliasingMode === 'fxaa' || this.config.fxaaEnabled) {
@@ -835,7 +836,7 @@ export class RenderPipeline {
         this.fxaaPass = fxaa(outputNode);
         outputNode = this.fxaaPass;
       } catch (e) {
-        console.warn('[PostProcessing] FXAA initialization failed:', e);
+        debugPostProcessing.warn('[PostProcessing] FXAA initialization failed:', e);
       }
     }
 
@@ -872,7 +873,7 @@ export class RenderPipeline {
         this.easuPass = easuUpscale(inputTexture, renderRes, displayRes, this.config.easuSharpness);
         outputNode = this.easuPass.node;
       } catch (e) {
-        console.warn('[PostProcessing] EASU upscaling failed, using bilinear:', e);
+        debugPostProcessing.warn('[PostProcessing] EASU upscaling failed, using bilinear:', e);
         // Fallback: just sample the texture (GPU does bilinear)
         outputNode = inputTexture;
       }
@@ -919,9 +920,9 @@ export class RenderPipeline {
       const aoValue = quarterAO.getTextureNode().r;
       this.quarterAOPostProcessing.outputNode = vec4(aoValue, aoValue, aoValue, 1.0);
 
-      console.log(`[PostProcessing] Quarter-res AO pipeline created: ${this.quarterWidth}x${this.quarterHeight} (75% cost reduction)`);
+      debugPostProcessing.log(`[PostProcessing] Quarter-res AO pipeline created: ${this.quarterWidth}x${this.quarterHeight} (75% cost reduction)`);
     } catch (e) {
-      console.warn('[PostProcessing] Failed to create quarter-res AO pipeline:', e);
+      debugPostProcessing.warn('[PostProcessing] Failed to create quarter-res AO pipeline:', e);
       this.quarterAOPostProcessing = null;
     }
 
@@ -988,9 +989,9 @@ export class RenderPipeline {
       // Output SSR (RGBA for color + alpha)
       this.quarterSSRPostProcessing.outputNode = quarterSSR.getTextureNode();
 
-      console.log(`[PostProcessing] Quarter-res SSR pipeline created: ${this.quarterWidth}x${this.quarterHeight} (75% cost reduction)`);
+      debugPostProcessing.log(`[PostProcessing] Quarter-res SSR pipeline created: ${this.quarterWidth}x${this.quarterHeight} (75% cost reduction)`);
     } catch (e) {
-      console.warn('[PostProcessing] Failed to create quarter-res SSR pipeline:', e);
+      debugPostProcessing.warn('[PostProcessing] Failed to create quarter-res SSR pipeline:', e);
       this.quarterSSRPostProcessing = null;
     }
 

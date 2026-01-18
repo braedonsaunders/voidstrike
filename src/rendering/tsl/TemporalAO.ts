@@ -30,6 +30,7 @@ import {
   clamp,
   If,
 } from 'three/tsl';
+import { debugShaders } from '@/utils/debugLogger';
 
 export interface TemporalAOConfig {
   historyBlendFactor: number; // 0.0-1.0, how much history to use (default 0.9)
@@ -222,7 +223,7 @@ export class TemporalAOManager {
       }
     );
 
-    console.log(`[TemporalAO] Initialized: full=${this.fullWidth}x${this.fullHeight}, quarter=${this.quarterWidth}x${this.quarterHeight} (75% cost reduction)`);
+    debugShaders.log(`[TemporalAO] Initialized: full=${this.fullWidth}x${this.fullHeight}, quarter=${this.quarterWidth}x${this.quarterHeight} (75% cost reduction)`);
   }
 
   /**

@@ -1199,7 +1199,7 @@ export function WebGPUGameCanvas() {
           phaserLoopWorkerRef.current = worker;
         } catch (err) {
           // Worker failed to initialize - Phaser will still work via RAF when tab is visible
-          console.warn('[WebGPUGameCanvas] Phaser loop worker failed to initialize:', err);
+          debugInitialization.warn('[WebGPUGameCanvas] Phaser loop worker failed to initialize:', err);
         }
       });
     };

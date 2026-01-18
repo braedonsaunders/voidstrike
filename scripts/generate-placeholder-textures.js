@@ -137,7 +137,7 @@ textures.forEach((tex) => {
   console.log(`Created: ${tex.name}`);
 });
 
-console.log('\n✓ All placeholder textures created!');
+console.log('\nAll placeholder textures created.');
 console.log(`\nLocation: ${outputDir}`);
 console.log('\nReplace these with AI-generated textures for better visuals.');
 console.log('Recommended: Use Midjourney with --tile flag or Polycam AI Textures');

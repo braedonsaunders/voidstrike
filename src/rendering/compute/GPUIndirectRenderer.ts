@@ -46,6 +46,7 @@ const NodeMaterial = (THREE_WEBGPU as any).NodeMaterial || THREE.MeshStandardMat
 
 import { GPUUnitBuffer } from './GPUUnitBuffer';
 import { CullingCompute } from './CullingCompute';
+import { debugShaders } from '@/utils/debugLogger';
 
 // Constants
 const MAX_UNITS = 4096;
@@ -155,7 +156,7 @@ export class GPUIndirectRenderer {
     this.indirectArgsAttribute = new IndirectStorageBufferAttribute(this.indirectArgsData, 5);
 
     this.initialized = true;
-    console.log('[GPUIndirectRenderer] Initialized');
+    debugShaders.log('[GPUIndirectRenderer] Initialized');
   }
 
   /**
@@ -237,7 +238,7 @@ export class GPUIndirectRenderer {
       indexCount,
     });
 
-    console.log(`[GPUIndirectRenderer] Created indirect mesh for type ${unitTypeIndex} LOD${lodLevel}`);
+    debugShaders.log(`[GPUIndirectRenderer] Created indirect mesh for type ${unitTypeIndex} LOD${lodLevel}`);
   }
 
   /**
@@ -251,7 +252,7 @@ export class GPUIndirectRenderer {
   private createGPUDrivenMaterial(baseMaterial?: THREE.Material): THREE.Material {
     // If NodeMaterial isn't available, fall back to standard material
     if (!NodeMaterial || typeof NodeMaterial !== 'function') {
-      console.warn('[GPUIndirectRenderer] NodeMaterial not available, using standard material');
+      debugShaders.warn('[GPUIndirectRenderer] NodeMaterial not available, using standard material');
       return baseMaterial?.clone() || new THREE.MeshStandardMaterial({ color: 0x888888 });
     }
 
@@ -317,7 +318,7 @@ export class GPUIndirectRenderer {
       try {
         material.positionNode = gpuPositionNode();
       } catch (e) {
-        console.warn('[GPUIndirectRenderer] Failed to set position node:', e);
+        debugShaders.warn('[GPUIndirectRenderer] Failed to set position node:', e);
       }
     }
 
@@ -446,6 +447,6 @@ export class GPUIndirectRenderer {
     this.cullingCompute = null;
     this.initialized = false;
 
-    console.log('[GPUIndirectRenderer] Disposed');
+    debugShaders.log('[GPUIndirectRenderer] Disposed');
   }
 }

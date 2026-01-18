@@ -41,6 +41,7 @@ import {
 } from '../MapTypes';
 
 import { SeededRandom } from '../../../utils/math';
+import { debugTerrain } from '@/utils/debugLogger';
 
 // Connectivity system imports
 import { analyzeConnectivity, getConnectivitySummary } from './ConnectivityAnalyzer';
@@ -1052,40 +1053,40 @@ export function generateMapWithResult(
     }
 
     if (!connectivity.valid) {
-      messages.push(`[${meta.id}] Connectivity issues detected:`);
+      messages.push(`[ElevationMapGenerator] ${meta.id}: Connectivity issues detected`);
       for (const issue of connectivity.issues) {
-        messages.push(`  ${issue.severity.toUpperCase()}: ${issue.message}`);
+        messages.push(`[ElevationMapGenerator]   ${issue.severity.toUpperCase()}: ${issue.message}`);
       }
 
       if (opts.autoFix) {
-        messages.push(`[${meta.id}] Attempting auto-fix...`);
+        messages.push(`[ElevationMapGenerator] ${meta.id}: Attempting auto-fix`);
         const fixResult = fixConnectivity(mapData);
         autoFixed = fixResult.rampsAdded > 0;
 
         if (fixResult.rampsAdded > 0) {
-          messages.push(`[${meta.id}] Added ${fixResult.rampsAdded} ramps to fix connectivity`);
+          messages.push(`[ElevationMapGenerator] ${meta.id}: Added ${fixResult.rampsAdded} ramps to fix connectivity`);
 
           // Re-validate
           const reGraph = analyzeConnectivity(mapData);
           connectivity = validateConnectivity(reGraph);
 
           if (connectivity.valid) {
-            messages.push(`[${meta.id}] Connectivity fixed successfully`);
+            messages.push(`[ElevationMapGenerator] ${meta.id}: Connectivity fixed successfully`);
           } else {
-            messages.push(`[${meta.id}] WARNING: Some issues remain after auto-fix`);
+            messages.push(`[ElevationMapGenerator] ${meta.id}: Some issues remain after auto-fix`);
           }
         } else {
-          messages.push(`[${meta.id}] No automatic fixes available`);
+          messages.push(`[ElevationMapGenerator] ${meta.id}: No automatic fixes available`);
         }
       }
     } else {
-      messages.push(`[${meta.id}] Connectivity validated: ${connectivity.stats.connectedPairs} connected pairs`);
+      messages.push(`[ElevationMapGenerator] ${meta.id}: Connectivity validated with ${connectivity.stats.connectedPairs} connected pairs`);
     }
 
     // Log messages if verbose
     if (opts.verbose) {
       for (const msg of messages) {
-        console.log(msg);
+        debugTerrain.log(msg);
       }
     }
   }

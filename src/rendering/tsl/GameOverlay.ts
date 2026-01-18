@@ -19,6 +19,7 @@ import {
 } from 'three/tsl';
 import { MeshBasicNodeMaterial } from 'three/webgpu';
 import { MapData, MapCell, TERRAIN_FEATURE_CONFIG, TerrainFeature, elevationToZone } from '@/data/maps';
+import { debugPathfinding } from '@/utils/debugLogger';
 import { World } from '@/engine/ecs/World';
 import { Transform } from '@/engine/components/Transform';
 import { Unit } from '@/engine/components/Unit';
@@ -338,7 +339,7 @@ export class TSLGameOverlayManager {
       }
     }
 
-    console.log(`[NavmeshOverlay] Reference point for connectivity: (${refX.toFixed(1)}, ${refY.toFixed(1)})`);
+    debugPathfinding.log(`[NavmeshOverlay] Reference point for connectivity: (${refX.toFixed(1)}, ${refY.toFixed(1)})`);
 
     let connectedCount = 0;
     let disconnectedCount = 0;
@@ -412,15 +413,15 @@ export class TSLGameOverlayManager {
       }
     }
 
-    console.log(`[NavmeshOverlay] Connectivity results:`);
-    console.log(`  - Connected (green): ${connectedCount} cells`);
-    console.log(`  - DISCONNECTED (yellow/magenta): ${disconnectedCount} cells - THESE ARE THE PROBLEM`);
-    console.log(`  - Not on navmesh (red): ${notOnNavmeshCount} cells`);
-    console.log(`  - Unwalkable (gray): ${unwalkableCount} cells`);
+    debugPathfinding.log(`[NavmeshOverlay] Connectivity results:`);
+    debugPathfinding.log(`[NavmeshOverlay]   Connected (green): ${connectedCount} cells`);
+    debugPathfinding.log(`[NavmeshOverlay]   Disconnected (yellow/magenta): ${disconnectedCount} cells`);
+    debugPathfinding.log(`[NavmeshOverlay]   Not on navmesh (red): ${notOnNavmeshCount} cells`);
+    debugPathfinding.log(`[NavmeshOverlay]   Unwalkable (gray): ${unwalkableCount} cells`);
 
     if (disconnectedCount > 0) {
-      console.warn(`[NavmeshOverlay] WARNING: ${disconnectedCount} cells are on navmesh but cannot reach the reference point!`);
-      console.warn(`[NavmeshOverlay] This indicates DISCONNECTED NAVMESH REGIONS - ramps are not connecting elevation levels!`);
+      debugPathfinding.warn(`[NavmeshOverlay] WARNING: ${disconnectedCount} cells are on navmesh but cannot reach the reference point!`);
+      debugPathfinding.warn(`[NavmeshOverlay] This indicates DISCONNECTED NAVMESH REGIONS - ramps are not connecting elevation levels!`);
     }
 
     this.navmeshTexture.needsUpdate = true;

@@ -20,6 +20,7 @@ import { MeshBasicNodeMaterial } from 'three/webgpu';
 import { VisionSystem } from '@/engine/systems/VisionSystem';
 import { VisionCompute } from '@/rendering/compute/VisionCompute';
 import { isSpectatorMode } from '@/store/gameSetupStore';
+import { debugShaders } from '@/utils/debugLogger';
 
 export interface TSLFogOfWarConfig {
   mapWidth: number;
@@ -159,7 +160,7 @@ export class TSLFogOfWar {
     if (gpuCompute && gpuCompute.isAvailable()) {
       this.gpuVisionCompute = gpuCompute;
       this.useGPUVision = true;
-      console.log('[FogOfWar] Using GPU vision compute');
+      debugShaders.log('[FogOfWar] Using GPU vision compute');
     }
   }
 

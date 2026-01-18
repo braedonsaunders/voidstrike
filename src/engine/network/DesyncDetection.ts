@@ -9,6 +9,7 @@
 import { Game } from '../core/Game';
 import { ChecksumSystem, ChecksumData, GameStateSnapshot, DesyncReport } from '../systems/ChecksumSystem';
 import { quantize, QUANT_POSITION, QUANT_DAMAGE } from '@/utils/FixedPoint';
+import { debugNetworking } from '@/utils/debugLogger';
 
 // =============================================================================
 // Desync Detection Configuration
@@ -165,19 +166,17 @@ export class DesyncDetectionManager {
 
     // Log if verbose
     if (this.config.verboseLogging) {
-      console.group('[DesyncDetection] Desync Detected');
-      console.log('Tick:', data.tick);
-      console.log('Local Checksum:', `0x${data.localChecksum.toString(16)}`);
-      console.log('Remote Checksum:', `0x${data.remoteChecksum.toString(16)}`);
-      console.log('Remote Peer:', data.remotePeerId);
-      console.log('Report:', data.report);
-      console.groupEnd();
+      debugNetworking.log(`[DesyncDetection] Desync detected at tick ${data.tick}`);
+      debugNetworking.log(`[DesyncDetection] Local checksum: 0x${data.localChecksum.toString(16)}`);
+      debugNetworking.log(`[DesyncDetection] Remote checksum: 0x${data.remoteChecksum.toString(16)}`);
+      debugNetworking.log(`[DesyncDetection] Remote peer ID: ${data.remotePeerId}`);
+      debugNetworking.log('[DesyncDetection] Desync report:', data.report);
     }
 
     // Pause game if configured
     if (this.config.pauseOnDesync) {
       this.game.pause();
-      console.warn('[DesyncDetection] Game paused due to desync');
+      debugNetworking.warn('[DesyncDetection] Game paused due to desync');
     }
 
     // Emit UI event for visual indicator

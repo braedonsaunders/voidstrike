@@ -18,8 +18,7 @@ import { ScreenEffectsSystem } from '../systems/ScreenEffectsSystem';
  * - Screen-space effects (damage vignettes, alerts)
  * - Animated alerts and notifications
  *
- * This is what makes VOIDSTRIKE unique - a hybrid 2D/3D approach
- * where Phaser handles the "game feel" polish layer.
+ * Hybrid 2D/3D approach where Phaser handles the UI polish layer.
  */
 
 interface TacticalUnit {
@@ -495,7 +494,7 @@ export class OverlayScene extends Phaser.Scene {
   }
 
   /**
-   * Subtle, elegant match start countdown using Web Worker for timing.
+   * Match start countdown using Web Worker for timing.
    * Web Workers are NOT throttled when browser tab is inactive, ensuring
    * consistent timing for multiplayer game starts.
    *
@@ -917,7 +916,7 @@ export class OverlayScene extends Phaser.Scene {
 
   /**
    * Show full-screen victory or defeat overlay
-   * Premium animated game end screen with particle effects and dramatic reveal
+   * Animated game end screen with particle effects
    * @param isVictory - true for victory, false for defeat, null for draw/spectator
    * @param duration - game duration in seconds
    * @param reason - reason for game end

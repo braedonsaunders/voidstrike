@@ -31,6 +31,7 @@ import {
   clamp,
   length,
 } from 'three/tsl';
+import { debugShaders } from '@/utils/debugLogger';
 
 export interface TemporalSSRConfig {
   historyBlendFactor: number; // 0.0-1.0, how much history to use (default 0.85)
@@ -241,7 +242,7 @@ export class TemporalSSRManager {
       historyOptions
     );
 
-    console.log(`[TemporalSSR] Initialized: full=${this.fullWidth}x${this.fullHeight}, quarter=${this.quarterWidth}x${this.quarterHeight} (75% cost reduction)`);
+    debugShaders.log(`[TemporalSSR] Initialized: full=${this.fullWidth}x${this.fullHeight}, quarter=${this.quarterWidth}x${this.quarterHeight} (75% cost reduction)`);
   }
 
   /**
