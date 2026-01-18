@@ -16,6 +16,7 @@ import { setupInstancedVelocity, swapInstanceMatrices, commitInstanceMatrices, d
 // GPU-driven rendering infrastructure
 import { GPUUnitBuffer } from './compute/GPUUnitBuffer';
 import { CullingCompute, LODConfig } from './compute/CullingCompute';
+import { GPUIndirectRenderer } from './compute/GPUIndirectRenderer';
 
 // Instance data for a single unit type + player combo at a specific LOD level
 interface InstancedUnitGroup {
@@ -150,10 +151,15 @@ export class UnitRenderer {
   // GPU-Driven Rendering Infrastructure
   private gpuUnitBuffer: GPUUnitBuffer | null = null;
   private cullingCompute: CullingCompute | null = null;
+  private gpuIndirectRenderer: GPUIndirectRenderer | null = null;
   private useGPUDrivenRendering = false;
+  private gpuIndirectInitialized = false;
 
   // Track entities managed by GPU buffer
   private gpuManagedEntities: Set<number> = new Set();
+
+  // Track unit type geometries registered with GPU indirect renderer
+  private gpuRegisteredUnitTypes: Set<string> = new Set();
 
   constructor(scene: THREE.Scene, world: World, visionSystem?: VisionSystem, terrain?: Terrain) {
     this.scene = scene;
@@ -226,6 +232,11 @@ export class UnitRenderer {
     if (this.useGPUDrivenRendering && this.gpuUnitBuffer && this.cullingCompute && !this.gpuCullingInitialized) {
       this.initializeGPUCulling();
     }
+
+    // Initialize GPU indirect renderer if available
+    if (this.useGPUDrivenRendering && this.gpuIndirectRenderer && !this.gpuIndirectInitialized) {
+      this.initializeGPUIndirectRenderer();
+    }
   }
 
   /**
@@ -234,6 +245,7 @@ export class UnitRenderer {
    * When enabled:
    * - Unit transforms stored in GPU buffer
    * - Frustum culling done via CullingCompute on GPU
+   * - Indirect draw calls eliminate CPU-GPU roundtrips
    * - Reduced CPU overhead for large unit counts
    */
   public enableGPUDrivenRendering(): void {
@@ -252,12 +264,17 @@ export class UnitRenderer {
       LOD1_MAX: settings.lodDistance1,
     });
 
+    // Create GPU indirect renderer for drawIndexedIndirect
+    this.gpuIndirectRenderer = new GPUIndirectRenderer(this.scene);
+
     this.useGPUDrivenRendering = true;
     this.gpuManagedEntities.clear();
+    this.gpuRegisteredUnitTypes.clear();
 
     // Initialize GPU compute if renderer is available
     if (this.webgpuRenderer) {
       this.initializeGPUCulling();
+      this.initializeGPUIndirectRenderer();
     }
 
     console.log('[UnitRenderer] GPU-driven rendering enabled');
@@ -284,6 +301,42 @@ export class UnitRenderer {
   }
 
   /**
+   * Initialize GPU indirect renderer
+   */
+  private initializeGPUIndirectRenderer(): void {
+    if (!this.webgpuRenderer || !this.gpuUnitBuffer || !this.cullingCompute || !this.gpuIndirectRenderer) return;
+    if (this.gpuIndirectInitialized) return;
+
+    try {
+      this.gpuIndirectRenderer.initialize(
+        this.webgpuRenderer,
+        this.gpuUnitBuffer,
+        this.cullingCompute
+      );
+      this.gpuIndirectInitialized = true;
+      console.log('[UnitRenderer] GPU indirect renderer initialized');
+    } catch (e) {
+      console.warn('[UnitRenderer] Failed to initialize GPU indirect renderer:', e);
+    }
+  }
+
+  /**
+   * Register a unit type geometry with the GPU indirect renderer
+   */
+  private registerUnitTypeForGPU(unitType: string, lodLevel: number, geometry: THREE.BufferGeometry, material?: THREE.Material): void {
+    if (!this.gpuIndirectRenderer || !this.gpuUnitBuffer) return;
+
+    const key = `${unitType}_${lodLevel}`;
+    if (this.gpuRegisteredUnitTypes.has(key)) return;
+
+    const unitTypeIndex = this.gpuUnitBuffer.getUnitTypeIndex(unitType);
+    this.gpuIndirectRenderer.registerUnitType(unitTypeIndex, lodLevel, geometry, material);
+    this.gpuRegisteredUnitTypes.add(key);
+
+    debugPerformance.log(`[UnitRenderer] Registered unit type ${unitType} LOD${lodLevel} for GPU indirect rendering`);
+  }
+
+  /**
    * Disable GPU-driven rendering and fall back to CPU path
    */
   public disableGPUDrivenRendering(): void {
@@ -295,9 +348,14 @@ export class UnitRenderer {
     this.cullingCompute?.dispose();
     this.cullingCompute = null;
 
+    this.gpuIndirectRenderer?.dispose();
+    this.gpuIndirectRenderer = null;
+
     this.useGPUDrivenRendering = false;
     this.gpuManagedEntities.clear();
+    this.gpuRegisteredUnitTypes.clear();
     this.gpuCullingInitialized = false;
+    this.gpuIndirectInitialized = false;
 
     debugPerformance.log('[UnitRenderer] GPU-driven rendering disabled');
   }
@@ -307,6 +365,36 @@ export class UnitRenderer {
    */
   public isGPUDrivenEnabled(): boolean {
     return this.useGPUDrivenRendering;
+  }
+
+  /**
+   * Check if GPU indirect rendering is fully initialized
+   */
+  public isGPUIndirectReady(): boolean {
+    return this.gpuIndirectInitialized && this.gpuCullingInitialized;
+  }
+
+  /**
+   * Get GPU rendering statistics
+   */
+  public getGPURenderingStats(): {
+    enabled: boolean;
+    cullingReady: boolean;
+    indirectReady: boolean;
+    managedEntities: number;
+    registeredUnitTypes: number;
+    visibleCount: number;
+    totalIndirectDrawCalls: number;
+  } {
+    return {
+      enabled: this.useGPUDrivenRendering,
+      cullingReady: this.gpuCullingInitialized,
+      indirectReady: this.gpuIndirectInitialized,
+      managedEntities: this.gpuManagedEntities.size,
+      registeredUnitTypes: this.gpuRegisteredUnitTypes.size,
+      visibleCount: this.cullingCompute?.getVisibleCount() ?? 0,
+      totalIndirectDrawCalls: this.gpuIndirectRenderer?.getTotalVisibleCount() ?? 0,
+    };
   }
 
   /**
@@ -729,6 +817,12 @@ export class UnitRenderer {
       debugAssets.log(`[UnitRenderer] Created instanced group for ${unitType} LOD${lodLevel}: yOffset=${meshWorldY.toFixed(3)}, rotation=(${(rotEuler.x * 180/Math.PI).toFixed(1)}°, ${(rotEuler.y * 180/Math.PI).toFixed(1)}°, ${(rotEuler.z * 180/Math.PI).toFixed(1)}°), scale=${meshWorldScale.toFixed(3)}`);
 
       this.instancedGroups.set(key, group);
+
+      // Register geometry with GPU indirect renderer for GPU-driven rendering
+      if (this.gpuIndirectRenderer && this.gpuIndirectInitialized && geometry) {
+        const baseMat = Array.isArray(material) ? material[0] : material;
+        this.registerUnitTypeForGPU(unitType, lodLevel, geometry, baseMat ?? undefined);
+      }
     }
 
     return group;
@@ -869,6 +963,13 @@ export class UnitRenderer {
     // GPU-driven culling: dispatch compute shader if available
     // This runs culling on GPU and populates indirect draw args
     if (this.useGPUDrivenRendering && this.cullingCompute && this.gpuUnitBuffer && this.camera && this.gpuCullingInitialized) {
+      // Reset indirect args before culling (compute shader will populate instance counts)
+      if (this.gpuIndirectRenderer && this.gpuIndirectInitialized) {
+        this.gpuIndirectRenderer.resetIndirectArgs();
+        this.gpuIndirectRenderer.updateCamera(this.camera);
+      }
+
+      // Dispatch GPU culling compute shader
       this.cullingCompute.cullGPU(this.gpuUnitBuffer, this.camera);
     }
 
@@ -1449,8 +1550,12 @@ export class UnitRenderer {
     this.gpuUnitBuffer = null;
     this.cullingCompute?.dispose();
     this.cullingCompute = null;
+    this.gpuIndirectRenderer?.dispose();
+    this.gpuIndirectRenderer = null;
     this.gpuManagedEntities.clear();
+    this.gpuRegisteredUnitTypes.clear();
     this.webgpuRenderer = null;
     this.gpuCullingInitialized = false;
+    this.gpuIndirectInitialized = false;
   }
 }

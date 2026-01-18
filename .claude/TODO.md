@@ -187,14 +187,24 @@
   - Slot allocation/deallocation for entities
   - Transform buffer with velocity tracking
   - Metadata buffer (entityId, unitType, player, radius)
+  - isDirty() tracking for efficient GPU sync
 - [x] **CullingCompute.ts** - TSL compute shader for GPU frustum culling
   - `Fn().compute()` shader with WORKGROUP_SIZE=64 threads
   - `storage()` buffers for transforms (mat4) and metadata (vec4)
   - Frustum plane tests against bounding spheres
   - LOD selection based on camera distance squared
   - `IndirectStorageBufferAttribute` integration for draw args
+  - Storage buffer getters for vertex shader binding
   - CPU fallback path with automatic detection
+- [x] **GPUIndirectRenderer.ts** - GPU-driven indirect draw manager
+  - IndirectMesh per (unitType, LOD) pair
+  - TSL NodeMaterial with storage buffer vertex transform
+  - `mesh.drawIndirect` = IndirectStorageBufferAttribute
+  - Single drawIndexedIndirect call per unit type/LOD
 - [x] **UnitRenderer GPU mode** - enableGPUDrivenRendering() method
+  - Full lifecycle management for GPU indirect renderer
+  - Unit type geometry registration for indirect draws
+  - GPU rendering stats API for debugging
 - [x] **Single buffer design** - Per Toji's best practices for Chrome/Windows
 
 ### Performance Impact (Estimated)

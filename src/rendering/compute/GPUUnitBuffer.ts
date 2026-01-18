@@ -78,6 +78,7 @@ export class GPUUnitBuffer {
   // Dirty tracking
   private dirtySlots: Set<number> = new Set();
   private needsFullUpdate = true;
+  private isDirtyFlag = true; // Track if any changes need GPU upload
 
   // Reusable matrix for decomposition
   private tempMatrix = new THREE.Matrix4();
@@ -176,6 +177,7 @@ export class GPUUnitBuffer {
     this.setTransformIdentity(index);
 
     this.dirtySlots.add(index);
+    this.isDirtyFlag = true;
     return slot;
   }
 
@@ -193,6 +195,7 @@ export class GPUUnitBuffer {
     // Clear transform to identity (not strictly necessary but clean)
     this.setTransformIdentity(slot.index);
     this.dirtySlots.add(slot.index);
+    this.isDirtyFlag = true;
   }
 
   /**
@@ -235,6 +238,7 @@ export class GPUUnitBuffer {
     }
 
     this.dirtySlots.add(slot.index);
+    this.isDirtyFlag = true;
   }
 
   /**
@@ -279,6 +283,7 @@ export class GPUUnitBuffer {
     this.transformData[offset + 15] = 1;
 
     this.dirtySlots.add(slot.index);
+    this.isDirtyFlag = true;
   }
 
   /**
@@ -291,6 +296,7 @@ export class GPUUnitBuffer {
     const metaOffset = slot.index * 4;
     this.metadataData[metaOffset + 3] = radius;
     this.dirtySlots.add(slot.index);
+    this.isDirtyFlag = true;
   }
 
   /**
@@ -353,6 +359,7 @@ export class GPUUnitBuffer {
       }
       this.needsFullUpdate = false;
       this.dirtySlots.clear();
+      this.isDirtyFlag = false;
       return;
     }
 
@@ -366,7 +373,23 @@ export class GPUUnitBuffer {
         this.metadataBuffer.needsUpdate = true;
       }
       this.dirtySlots.clear();
+      this.isDirtyFlag = false;
     }
+  }
+
+  /**
+   * Check if buffer has uncommitted changes
+   */
+  isDirty(): boolean {
+    return this.isDirtyFlag || this.needsFullUpdate || this.dirtySlots.size > 0;
+  }
+
+  /**
+   * Mark buffer as needing full update
+   */
+  markDirty(): void {
+    this.isDirtyFlag = true;
+    this.needsFullUpdate = true;
   }
 
   /**
