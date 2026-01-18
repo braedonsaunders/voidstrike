@@ -234,6 +234,16 @@
 ### Map Editor Ramp Tool Fix (January 2026)
 - [x] **Ramp traversal fix** - Units couldn't traverse ramps created in the map editor. Root cause: `paintRamp()` in TerrainBrush.ts only set elevation and walkable, but didn't mark cells with `terrain: 'ramp'`. Pathfinding system expects `terrain === 'ramp'` for ramp geometry. Fixed by: (1) Adding `isRamp` field to EditorCell interface, (2) Setting `isRamp: true` in paintRamp(), (3) Converting `isRamp` cells to `terrain: 'ramp'` in editorFormatToMapData(), (4) Preserving ramp status when loading maps via mapDataToEditorFormat().
 
+### SC2-Style Platform Terrain Tools (January 2026)
+- [x] **Platform material on cliff sides** - Unwalkable cells adjacent to platforms now render with platform material instead of natural rock, giving platforms proper geometric depth with consistent material on all sides.
+- [x] **Guardrails at platform edges** - Platforms have guardrails at edges except at ramp entrances where units need to pass.
+- [x] **Structured platform ramp tool** - New `platform_ramp` tool (Shift+R) creates uniform machined ramps with perfectly straight edges. Features:
+  - 45-degree angle snapping for consistent ramp directions
+  - Rectangular shape with uniform width and precise boundaries
+  - Automatic elevation detection from adjacent platforms
+  - Quantized elevation levels for clean platform-to-ramp transitions
+  - Aligns perfectly with platform edges for SC2-style geometric terrain
+
 ### Terrain Generation Improvements (January 2026)
 - [x] **Slope-based texture blending** - Fixed terrain sampleTerrain() to use average elevation instead of MAX, which was flattening cliffs and preventing proper texture blending
 - [x] **Pre-calculated slope attribute** - Added aSlope vertex attribute calculated before geometry smoothing for accurate cliff detection regardless of mesh smoothing

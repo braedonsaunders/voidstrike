@@ -104,10 +104,10 @@ export function Editor3DCanvas({
     isDraggingObject: false,
     draggedObjectId: null as string | null,
     lastPaintPos: null as { x: number; y: number } | null,
-    // Shape tool state (ramp, line, rect, ellipse, platform_rect)
+    // Shape tool state (ramp, line, rect, ellipse, platform_rect, platform_ramp)
     shapeStartPos: null as { x: number; y: number } | null,
     isDrawingShape: false,
-    activeShapeType: null as 'ramp' | 'line' | 'rect' | 'ellipse' | 'platform_rect' | null,
+    activeShapeType: null as 'ramp' | 'line' | 'rect' | 'ellipse' | 'platform_rect' | 'platform_ramp' | null,
     // Polygon tool state (for platform_polygon)
     isDrawingPolygon: false,
     polygonVertices: [] as Array<{ x: number; y: number }>,
@@ -650,7 +650,7 @@ export function Editor3DCanvas({
         }
       } else {
         const tool = config.tools.find((t) => t.id === activeTool);
-        const shapeTypes = ['ramp', 'line', 'rect', 'ellipse', 'platform_rect'];
+        const shapeTypes = ['ramp', 'line', 'rect', 'ellipse', 'platform_rect', 'platform_ramp'];
 
         // Shape tools: click and drag to draw between two points
         if (tool && shapeTypes.includes(tool.type)) {
@@ -658,11 +658,11 @@ export function Editor3DCanvas({
           if (gridPos) {
             paintingState.current.shapeStartPos = gridPos;
             paintingState.current.isDrawingShape = true;
-            paintingState.current.activeShapeType = tool.type as 'ramp' | 'line' | 'rect' | 'ellipse' | 'platform_rect';
+            paintingState.current.activeShapeType = tool.type as 'ramp' | 'line' | 'rect' | 'ellipse' | 'platform_rect' | 'platform_ramp';
             onStartBatch();
-            // Start shape preview (use 'rect' for platform_rect preview)
+            // Start shape preview (use 'rect' for platform_rect, 'ramp' for platform_ramp)
             brushPreviewRef.current?.startShapePreview(
-              tool.type === 'platform_rect' ? 'rect' : tool.type as 'ramp' | 'line' | 'rect' | 'ellipse',
+              tool.type === 'platform_rect' ? 'rect' : tool.type === 'platform_ramp' ? 'ramp' : tool.type as 'ramp' | 'line' | 'rect' | 'ellipse',
               worldPos.x,
               worldPos.z
             );
@@ -860,6 +860,15 @@ export function Editor3DCanvas({
                 startPos.x, startPos.y,
                 endPos.x, endPos.y,
                 selectedElevation
+              );
+              break;
+
+            case 'platform_ramp':
+              updates = terrainBrushRef.current.paintPlatformRamp(
+                startPos.x, startPos.y,
+                endPos.x, endPos.y,
+                brushSize,
+                state.snapMode
               );
               break;
           }
