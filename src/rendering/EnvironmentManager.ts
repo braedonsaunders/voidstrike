@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import { MapData } from '@/data/maps';
 import { BIOMES, BiomeConfig } from './Biomes';
 import { Terrain, MapDecorations } from './Terrain';
-import { CrystalField, GroundFog } from './GroundDetail';
+import { CrystalField } from './GroundDetail';
 import { TSLMapBorderFog } from './tsl/MapBorderFog';
 import { TSLWaterPlane } from './tsl/WaterPlane';
 import { EnvironmentParticles } from './EnhancedDecorations';
@@ -45,7 +45,6 @@ export class EnvironmentManager {
   private pebbles: InstancedPebbles | null = null;
   private crystals: CrystalField | null = null;
   private water: TSLWaterPlane | null = null;
-  private groundFog: GroundFog | null = null;
   private mapBorderFog: TSLMapBorderFog | null = null;
   private particles: EnvironmentParticles | null = null;
   private legacyDecorations: MapDecorations | null = null;
@@ -232,13 +231,6 @@ export class EnvironmentManager {
       this.scene.add(this.water.mesh);
     }
 
-    // Ground fog/mist layer for atmospheric effect
-    // DISABLED: GroundFog uses legacy ShaderMaterial which is incompatible with WebGPU backend
-    // To fix: Create TSLGroundFog using Three.js TSL (similar to TSLWaterPlane, TSLMapBorderFog)
-    // Priority: Low - map border fog provides sufficient atmospheric effect
-    // this.groundFog = new GroundFog(this.mapData, this.biome);
-    // this.scene.add(this.groundFog.mesh);
-
     // Map border fog - dark smoky effect around map edges (SC2-style)
     // Uses TSL for WebGPU/WebGL compatibility
     this.mapBorderFog = new TSLMapBorderFog(this.mapData);
@@ -274,9 +266,6 @@ export class EnvironmentManager {
 
     if (this.water) {
       this.water.update(gameTime);
-    }
-    if (this.groundFog) {
-      this.groundFog.update(gameTime);
     }
     if (this.mapBorderFog) {
       this.mapBorderFog.update(gameTime);
@@ -344,13 +333,6 @@ export class EnvironmentManager {
    */
   public getHeightAt(x: number, y: number): number {
     return this.terrain.getHeightAt(x, y);
-  }
-
-  /**
-   * Get ground fog mesh for visibility toggling
-   */
-  public getGroundFog(): GroundFog | null {
-    return this.groundFog;
   }
 
   /**
@@ -732,7 +714,6 @@ export class EnvironmentManager {
     this.pebbles?.dispose();
     this.crystals?.dispose();
     this.water?.dispose();
-    this.groundFog?.dispose();
     this.mapBorderFog?.dispose();
     this.particles?.dispose();
     this.legacyDecorations?.dispose();
@@ -757,7 +738,6 @@ export class EnvironmentManager {
     if (this.pebbles) this.scene.remove(this.pebbles.group);
     if (this.crystals) this.scene.remove(this.crystals.group);
     if (this.water) this.scene.remove(this.water.mesh);
-    if (this.groundFog) this.scene.remove(this.groundFog.mesh);
     if (this.mapBorderFog) this.scene.remove(this.mapBorderFog.mesh);
     if (this.particles) this.scene.remove(this.particles.points);
     if (this.legacyDecorations) this.scene.remove(this.legacyDecorations.group);

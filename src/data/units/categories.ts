@@ -234,15 +234,6 @@ export function getUnitsInCategory(categoryId: string): string[] {
 }
 
 /**
- * Get all units in a subcategory.
- */
-export function getUnitsInSubcategory(subcategoryId: string): string[] {
-  return Object.entries(UNIT_SUBCATEGORY_ASSIGNMENTS)
-    .filter(([_, sub]) => sub === subcategoryId)
-    .map(([unitId]) => unitId);
-}
-
-/**
  * Get default target priority for a unit based on its category.
  */
 export function getDefaultTargetPriority(unitId: string): number {
@@ -256,14 +247,6 @@ export function getDefaultTargetPriority(unitId: string): number {
 export function isCombatUnit(unitId: string): boolean {
   const category = getUnitCategory(unitId);
   return UNIT_CATEGORIES[category]?.isCombatUnit ?? true;
-}
-
-/**
- * Get the upgrade group for a unit's category.
- */
-export function getUpgradeGroup(unitId: string): string {
-  const category = getUnitCategory(unitId);
-  return UNIT_CATEGORIES[category]?.upgradeGroup ?? 'none';
 }
 
 /**

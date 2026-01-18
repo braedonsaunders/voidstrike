@@ -250,6 +250,9 @@ const modelBoundingDimensions = new Map<string, { width: number; depth: number; 
 // Store rendering hints for decorations (from config)
 const renderingHints = new Map<string, RenderingHints>();
 
+// Cache visual radii to avoid repeated lookups in hot loops (combat, movement systems)
+const visualRadiusCache = new Map<string, number>();
+
 // ============================================================================
 // Preloading State (for lobby preloading)
 // ============================================================================
@@ -1152,6 +1155,32 @@ export class AssetManager {
     if (!dims) return null;
     // Use half the larger horizontal dimension as the radius
     return Math.max(dims.width, dims.depth) / 2;
+  }
+
+  /**
+   * Get the visual radius of a unit for attack range calculations with caching.
+   * Uses actual model bounding box dimensions (industry-standard approach).
+   * Falls back to scale approximation if model not yet loaded.
+   *
+   * @param unitId The unit type ID
+   * @param fallbackCollisionRadius Optional collision radius to use as minimum in fallback
+   */
+  static getCachedVisualRadius(unitId: string, fallbackCollisionRadius: number = 0): number {
+    const cached = visualRadiusCache.get(unitId);
+    if (cached !== undefined) {
+      return cached;
+    }
+
+    // Try to get actual bounding box radius from loaded model
+    const actualRadius = AssetManager.getModelVisualRadius(unitId);
+    if (actualRadius !== null) {
+      visualRadiusCache.set(unitId, actualRadius);
+      return actualRadius;
+    }
+
+    // Fallback: model not loaded yet, use scale approximation
+    const modelScale = AssetManager.getUnitScale(unitId);
+    return Math.max(fallbackCollisionRadius, modelScale * 2);
   }
 
   // ============================================================================

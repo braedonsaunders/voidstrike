@@ -14,33 +14,6 @@ import { getDamageMultiplier, COMBAT_CONFIG } from '@/data/combat/combat';
 import { getDefaultTargetPriority } from '@/data/units/categories';
 import AssetManager from '@/assets/AssetManager';
 
-// Cache visual radii to avoid repeated lookups in hot loops
-const visualRadiusCache = new Map<string, number>();
-
-/**
- * Get the visual radius of a unit for attack range calculations.
- * Uses actual model bounding box dimensions (industry-standard approach).
- * Falls back to scale approximation if model not yet loaded.
- */
-function getVisualRadius(unit: Unit): number {
-  // Check cache first for performance
-  const cached = visualRadiusCache.get(unit.unitId);
-  if (cached !== undefined) {
-    return cached;
-  }
-
-  // Try to get actual bounding box radius from loaded model
-  const actualRadius = AssetManager.getModelVisualRadius(unit.unitId);
-  if (actualRadius !== null) {
-    visualRadiusCache.set(unit.unitId, actualRadius);
-    return actualRadius;
-  }
-
-  // Fallback: model not loaded yet, use scale approximation
-  const modelScale = AssetManager.getUnitScale(unit.unitId);
-  return Math.max(unit.collisionRadius, modelScale * 2);
-}
-
 // Static temp vectors to avoid allocations in hot loops
 const tempTargetScore: { id: number; score: number } | null = null;
 
@@ -357,7 +330,7 @@ export class CombatSystem extends System {
         // Calculate effective distance (edge-to-edge, like SC2)
         // Uses visual radius (model scale) not just collision radius
         let effectiveDistance: number;
-        const attackerRadius = getVisualRadius(unit);
+        const attackerRadius = AssetManager.getCachedVisualRadius(unit.unitId, unit.collisionRadius);
 
         if (targetBuilding) {
           // Distance to building edge, minus attacker's visual radius
@@ -371,7 +344,7 @@ export class CombatSystem extends System {
         } else {
           // Distance between unit edges (center-to-center minus both visual radii)
           const centerDistance = transform.distanceTo(targetTransform);
-          const targetRadius = targetUnit ? getVisualRadius(targetUnit) : 0.5;
+          const targetRadius = targetUnit ? AssetManager.getCachedVisualRadius(targetUnit.unitId, targetUnit.collisionRadius) : 0.5;
           effectiveDistance = Math.max(0, centerDistance - attackerRadius - targetRadius);
         }
 
@@ -499,8 +472,8 @@ export class CombatSystem extends System {
 
       // Edge-to-edge distance using visual radius (like SC2)
       const centerDistance = selfTransform.distanceTo(transform);
-      const attackerRadius = getVisualRadius(selfUnit);
-      const targetRadius = unit ? getVisualRadius(unit) : 0.5;
+      const attackerRadius = AssetManager.getCachedVisualRadius(selfUnit.unitId, selfUnit.collisionRadius);
+      const targetRadius = unit ? AssetManager.getCachedVisualRadius(unit.unitId, unit.collisionRadius) : 0.5;
       const distance = Math.max(0, centerDistance - attackerRadius - targetRadius);
       if (distance > selfUnit.attackRange) continue;
 
@@ -545,7 +518,7 @@ export class CombatSystem extends System {
         const clampedY = Math.max(transform.y - halfH, Math.min(selfTransform.y, transform.y + halfH));
         const edgeDx = selfTransform.x - clampedX;
         const edgeDy = selfTransform.y - clampedY;
-        const attackerRadius = getVisualRadius(selfUnit);
+        const attackerRadius = AssetManager.getCachedVisualRadius(selfUnit.unitId, selfUnit.collisionRadius);
         const distance = Math.max(0, Math.sqrt(edgeDx * edgeDx + edgeDy * edgeDy) - attackerRadius);
 
         if (distance > selfUnit.attackRange) continue;
@@ -657,8 +630,8 @@ export class CombatSystem extends System {
 
       // Edge-to-edge distance using visual radius (like SC2)
       const centerDistance = selfTransform.distanceTo(transform);
-      const attackerRadius = getVisualRadius(selfUnit);
-      const targetRadius = unit ? getVisualRadius(unit) : 0.5;
+      const attackerRadius = AssetManager.getCachedVisualRadius(selfUnit.unitId, selfUnit.collisionRadius);
+      const targetRadius = unit ? AssetManager.getCachedVisualRadius(unit.unitId, unit.collisionRadius) : 0.5;
       const distance = Math.max(0, centerDistance - attackerRadius - targetRadius);
       if (distance > selfUnit.sightRange) continue;
 
@@ -703,7 +676,7 @@ export class CombatSystem extends System {
         const clampedY = Math.max(transform.y - halfH, Math.min(selfTransform.y, transform.y + halfH));
         const edgeDx = selfTransform.x - clampedX;
         const edgeDy = selfTransform.y - clampedY;
-        const attackerRadius = getVisualRadius(selfUnit);
+        const attackerRadius = AssetManager.getCachedVisualRadius(selfUnit.unitId, selfUnit.collisionRadius);
         const distance = Math.max(0, Math.sqrt(edgeDx * edgeDx + edgeDy * edgeDy) - attackerRadius);
 
         if (distance > selfUnit.sightRange) continue;
