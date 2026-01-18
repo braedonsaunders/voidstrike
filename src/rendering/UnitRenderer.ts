@@ -314,7 +314,11 @@ export class UnitRenderer {
         this.cullingCompute
       );
       this.gpuIndirectInitialized = true;
-      console.log('[UnitRenderer] GPU indirect renderer initialized');
+      console.log('[UnitRenderer] GPU indirect renderer initialized successfully');
+      console.log('[UnitRenderer] GPU-driven rendering pipeline READY:');
+      console.log('  - GPU Unit Buffer: INITIALIZED');
+      console.log('  - GPU Culling Compute: ' + (this.gpuCullingInitialized ? 'READY' : 'PENDING'));
+      console.log('  - GPU Indirect Draw: ENABLED');
     } catch (e) {
       console.warn('[UnitRenderer] Failed to initialize GPU indirect renderer:', e);
     }
@@ -971,6 +975,16 @@ export class UnitRenderer {
 
       // Dispatch GPU culling compute shader
       this.cullingCompute.cullGPU(this.gpuUnitBuffer, this.camera);
+
+      // Log GPU indirect rendering status periodically (every 300 frames ~5 seconds)
+      if (this.frameCount % 300 === 1) {
+        const stats = this.getGPURenderingStats();
+        console.log(
+          `[GPU Indirect Rendering] ACTIVE - Managed: ${stats.managedEntities}, ` +
+          `Visible: ${stats.visibleCount}, UnitTypes: ${stats.registeredUnitTypes}, ` +
+          `Culling: ${stats.cullingReady ? 'GPU' : 'CPU'}, Indirect: ${stats.indirectReady ? 'ON' : 'OFF'}`
+        );
+      }
     }
 
     // TAA: Copy current instance matrices to previous BEFORE resetting counts

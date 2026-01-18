@@ -252,10 +252,16 @@ export class WasmBoids {
   }
 
   /**
-   * Check if WASM SIMD is available
+   * Check if WASM SIMD is available and buffers are initialized
    */
   isAvailable(): boolean {
-    return this.initialized && this.simdAvailable && this.engine !== null;
+    return (
+      this.initialized &&
+      this.simdAvailable &&
+      this.engine !== null &&
+      this.positionsX !== null &&
+      this.positionsY !== null
+    );
   }
 
   /**
@@ -310,6 +316,24 @@ export class WasmBoids {
     unitGrid: SpatialGrid
   ): number {
     if (!this.isAvailable()) return 0;
+
+    // Additional safety check - ensure all required buffers are initialized
+    // This guards against race conditions where buffers might become null
+    if (
+      !this.positionsX ||
+      !this.positionsY ||
+      !this.velocitiesX ||
+      !this.velocitiesY ||
+      !this.radii ||
+      !this.states ||
+      !this.layers ||
+      !this.neighbors ||
+      !this.neighborOffsets ||
+      !this.neighborCounts
+    ) {
+      console.warn('[WasmBoids] syncEntities called but buffers are not initialized');
+      return 0;
+    }
 
     // Clear mappings
     this.entityToIndex.clear();
