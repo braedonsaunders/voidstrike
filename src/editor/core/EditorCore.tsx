@@ -678,14 +678,18 @@ export function EditorCore({
           </div>
         </div>
 
-        {/* Right panel (collapsible) - only render when not collapsed */}
-        {!isPanelCollapsed && (
-          <div
-            className="w-[280px] flex-shrink-0 border-l"
-            style={{ borderColor: config.theme.border }}
-            onMouseEnter={handlePanelMouseEnter}
-            onMouseLeave={handlePanelMouseLeave}
-          >
+        {/* Right panel (collapsible) with smooth animation */}
+        <div
+          className="flex-shrink-0 border-l overflow-hidden transition-all duration-300 ease-out"
+          style={{
+            borderColor: config.theme.border,
+            width: isPanelCollapsed ? 0 : 280,
+            opacity: isPanelCollapsed ? 0 : 1,
+          }}
+          onMouseEnter={handlePanelMouseEnter}
+          onMouseLeave={handlePanelMouseLeave}
+        >
+          <div className="w-[280px] h-full">
             <EditorPanels
               config={config}
               state={state}
@@ -709,12 +713,12 @@ export function EditorCore({
               onToggleCategory={toggleCategory}
             />
           </div>
-        )}
+        </div>
 
         {/* Panel toggle button - always visible, positioned at right edge */}
         <button
           onClick={() => setIsPanelCollapsed((prev) => !prev)}
-          className="absolute top-1/2 -translate-y-1/2 w-6 h-16 flex items-center justify-center rounded-l-lg z-30"
+          className="absolute top-1/2 -translate-y-1/2 w-6 h-16 flex items-center justify-center rounded-l-lg z-30 transition-all duration-300 ease-out hover:w-7 group"
           style={{
             backgroundColor: config.theme.surface,
             border: `1px solid ${config.theme.border}`,
@@ -723,7 +727,10 @@ export function EditorCore({
           }}
           title={isPanelCollapsed ? 'Show Panel (Tab)' : 'Hide Panel (Tab)'}
         >
-          <span style={{ color: config.theme.text.muted }}>
+          <span
+            className="transition-transform duration-300 group-hover:scale-110"
+            style={{ color: config.theme.text.muted }}
+          >
             {isPanelCollapsed ? '◀' : '▶'}
           </span>
         </button>
