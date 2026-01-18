@@ -3,7 +3,7 @@
 import { useCallback, useEffect, memo } from 'react';
 import { useGameStore } from '@/store/gameStore';
 import { useUIStore, isAnyMenuOpen } from '@/store/uiStore';
-import { isMultiplayerMode, useGameSetupStore } from '@/store/gameSetupStore';
+import { useGameSetupStore } from '@/store/gameSetupStore';
 import { setEdgeScrollEnabled } from '@/store/cameraStore';
 import { Minimap } from './Minimap';
 import { ResourcePanel } from './ResourcePanel';
@@ -249,19 +249,16 @@ export const HUD = memo(function HUD() {
                   <span>Performance</span>
                   <span className={showPerformancePanel ? 'text-green-400' : 'text-void-500'}>{showPerformancePanel ? 'OPEN' : ''}</span>
                 </button>
-                {/* Debug menu only available in single player (not in multiplayer with multiple humans) */}
-                {!isMultiplayerMode() && (
-                  <button
-                    onClick={() => {
-                      setShowOptionsMenu(false);
-                      toggleDebugMenu();
-                    }}
-                    className="w-full px-4 py-2 text-left text-sm text-void-200 hover:bg-void-800 transition-colors flex justify-between items-center"
-                  >
-                    <span>Debug</span>
-                    <span className={showDebugMenu ? 'text-green-400' : 'text-void-500'}>{showDebugMenu ? 'OPEN' : ''}</span>
-                  </button>
-                )}
+                <button
+                  onClick={() => {
+                    setShowOptionsMenu(false);
+                    toggleDebugMenu();
+                  }}
+                  className="w-full px-4 py-2 text-left text-sm text-void-200 hover:bg-void-800 transition-colors flex justify-between items-center"
+                >
+                  <span>Debug</span>
+                  <span className={showDebugMenu ? 'text-green-400' : 'text-void-500'}>{showDebugMenu ? 'OPEN' : ''}</span>
+                </button>
                 <div className="border-t border-void-700 my-1" />
                 {isEditorPreview && (
                   <button

@@ -5,6 +5,7 @@
  */
 
 import pako from 'pako';
+import { debugNetworking } from '@/utils/debugLogger';
 
 // Crockford's Base32 alphabet - exactly 32 chars, avoids confusing chars (no I/L/O/U)
 // This is a standard encoding that's human-readable and case-insensitive
@@ -50,7 +51,7 @@ async function gatherICECandidates(
 
   return new Promise((resolve) => {
     const timer = setTimeout(() => {
-      console.log(`[ConnectionCode] ICE gathering timed out with ${candidates.length} candidates`);
+      debugNetworking.log(`[ConnectionCode] ICE gathering timed out with ${candidates.length} candidates`);
       resolve(candidates);
     }, timeout);
 
@@ -60,7 +61,7 @@ async function gatherICECandidates(
       } else {
         // ICE gathering complete
         clearTimeout(timer);
-        console.log(`[ConnectionCode] ICE gathering complete: ${candidates.length} candidates`);
+        debugNetworking.log(`[ConnectionCode] ICE gathering complete: ${candidates.length} candidates`);
         resolve(candidates);
       }
     };
@@ -221,7 +222,7 @@ export async function generateOfferCode(
   // Format with prefix and dashes - ensure uppercase
   const code = formatCode(encoded).toUpperCase();
 
-  console.log(`[ConnectionCode] Generated offer code: ${code.length} chars`);
+  debugNetworking.log(`[ConnectionCode] Generated offer code: ${code.length} chars`);
 
   return { code, pc };
 }
@@ -286,7 +287,7 @@ export async function generateAnswerCode(
 
   // Set up data channel handler
   pc.ondatachannel = (event) => {
-    console.log('[ConnectionCode] Received data channel:', event.channel.label);
+    debugNetworking.log('[ConnectionCode] Received data channel:', event.channel.label);
   };
 
   // Set remote description (the offer)
@@ -300,7 +301,7 @@ export async function generateAnswerCode(
     try {
       await pc.addIceCandidate({ candidate, sdpMid: '0', sdpMLineIndex: 0 });
     } catch (e) {
-      console.warn('[ConnectionCode] Failed to add ICE candidate:', e);
+      debugNetworking.warn('[ConnectionCode] Failed to add ICE candidate:', e);
     }
   }
 
@@ -356,7 +357,7 @@ export async function generateAnswerCode(
 
   const code = formatCode(encoded).toUpperCase();
 
-  console.log(`[ConnectionCode] Generated answer code: ${code.length} chars`);
+  debugNetworking.log(`[ConnectionCode] Generated answer code: ${code.length} chars`);
 
   return { code, pc };
 }
@@ -385,11 +386,11 @@ export async function completeConnection(
     try {
       await pc.addIceCandidate({ candidate, sdpMid: '0', sdpMLineIndex: 0 });
     } catch (e) {
-      console.warn('[ConnectionCode] Failed to add ICE candidate:', e);
+      debugNetworking.warn('[ConnectionCode] Failed to add ICE candidate:', e);
     }
   }
 
-  console.log('[ConnectionCode] Connection completed');
+  debugNetworking.log('[ConnectionCode] Connection completed');
 }
 
 /**

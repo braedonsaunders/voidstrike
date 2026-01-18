@@ -13,6 +13,7 @@ import {
 } from 'nostr-tools';
 import pako from 'pako';
 import { getRelays, NostrRelayError } from './NostrRelays';
+import { debugNetworking } from '@/utils/debugLogger';
 
 // Nostr event kinds for VOIDSTRIKE (ephemeral range 20000-29999)
 const EVENT_KINDS = {
@@ -120,7 +121,7 @@ export class NostrMatchmaking {
     this.secretKey = generateSecretKey();
     this.publicKey = getPublicKey(this.secretKey);
 
-    console.log('[Nostr] Generated ephemeral pubkey:', this.publicKey.slice(0, 16) + '...');
+    debugNetworking.log('[Nostr] Generated ephemeral pubkey:', this.publicKey.slice(0, 16) + '...');
   }
 
   /**
@@ -135,7 +136,7 @@ export class NostrMatchmaking {
       this.relays = await getRelays(8);
       this.connected = true;
       this.onStatusChange?.(`Connected to ${this.relays.length} relays`);
-      console.log('[Nostr] Connected to relays:', this.relays);
+      debugNetworking.log('[Nostr] Connected to relays:', this.relays);
     } catch (error) {
       this.connected = false;
       if (error instanceof NostrRelayError) {
@@ -181,7 +182,7 @@ export class NostrMatchmaking {
       this.pool.publish([relay], event)
     ));
 
-    console.log('[Nostr] Published game seek event');
+    debugNetworking.log('[Nostr] Published game seek event');
     this.onStatusChange?.('Searching for opponents...');
 
     // Subscribe to other seekers
@@ -195,7 +196,7 @@ export class NostrMatchmaking {
     const sub = this.pool.subscribeMany(this.relays, seekFilter, {
       onevent: (event) => this.handleSeekEvent(event, options),
       oneose: () => {
-        console.log('[Nostr] Initial seek scan complete');
+        debugNetworking.log('[Nostr] Initial seek scan complete');
       },
     });
 
@@ -248,7 +249,7 @@ export class NostrMatchmaking {
       this.pool.publish([relay], event)
     ));
 
-    console.log('[Nostr] Sent offer to', targetPubkey.slice(0, 8) + '...');
+    debugNetworking.log('[Nostr] Sent offer to', targetPubkey.slice(0, 8) + '...');
 
     // Subscribe to their answer
     const answerFilter: Filter = {
@@ -296,7 +297,7 @@ export class NostrMatchmaking {
       this.pool.publish([relay], event)
     ));
 
-    console.log('[Nostr] Sent answer to', targetPubkey.slice(0, 8) + '...');
+    debugNetworking.log('[Nostr] Sent answer to', targetPubkey.slice(0, 8) + '...');
   }
 
   /**
@@ -327,7 +328,7 @@ export class NostrMatchmaking {
       // Ignore errors during cancel
     }
 
-    console.log('[Nostr] Cancelled matchmaking');
+    debugNetworking.log('[Nostr] Cancelled matchmaking');
   }
 
   /**
@@ -367,7 +368,7 @@ export class NostrMatchmaking {
 
       // Version compatibility check
       if (content.version !== GAME_VERSION) {
-        console.log('[Nostr] Ignoring seeker with different version:', content.version);
+        debugNetworking.log('[Nostr] Ignoring seeker with different version:', content.version);
         return;
       }
 
@@ -375,12 +376,12 @@ export class NostrMatchmaking {
       if (ourOptions.skill && content.skill) {
         const skillDiff = Math.abs(ourOptions.skill - content.skill);
         if (skillDiff > 300) {
-          console.log('[Nostr] Ignoring seeker outside skill range:', skillDiff);
+          debugNetworking.log('[Nostr] Ignoring seeker outside skill range:', skillDiff);
           return;
         }
       }
 
-      console.log('[Nostr] Found potential match:', event.pubkey.slice(0, 8) + '...');
+      debugNetworking.log('[Nostr] Found potential match:', event.pubkey.slice(0, 8) + '...');
 
       this.onMatchFound?.({
         pubkey: event.pubkey,
@@ -398,7 +399,7 @@ export class NostrMatchmaking {
 
     try {
       const content = JSON.parse(event.content) as RTCSignalContent;
-      console.log('[Nostr] Received offer from', event.pubkey.slice(0, 8) + '...');
+      debugNetworking.log('[Nostr] Received offer from', event.pubkey.slice(0, 8) + '...');
 
       this.onOfferReceived?.({
         sdp: decompressSDP(content.sdp),
@@ -417,7 +418,7 @@ export class NostrMatchmaking {
 
     try {
       const content = JSON.parse(event.content) as RTCSignalContent;
-      console.log('[Nostr] Received answer from', event.pubkey.slice(0, 8) + '...');
+      debugNetworking.log('[Nostr] Received answer from', event.pubkey.slice(0, 8) + '...');
 
       this.onAnswerReceived?.({
         sdp: decompressSDP(content.sdp),

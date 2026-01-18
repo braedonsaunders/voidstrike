@@ -2,7 +2,6 @@
 
 import React, { memo } from 'react';
 import { useUIStore, DebugSettings } from '@/store/uiStore';
-import { isMultiplayerMode } from '@/store/gameSetupStore';
 
 interface DebugSettingInfo {
   key: keyof DebugSettings;
@@ -107,8 +106,7 @@ export const DebugMenuPanel = memo(function DebugMenuPanel() {
   const toggleDebugSetting = useUIStore((state) => state.toggleDebugSetting);
   const setAllDebugSettings = useUIStore((state) => state.setAllDebugSettings);
 
-  // Hide debug menu in multiplayer mode (multiple human players)
-  if (!showDebugMenu || isMultiplayerMode()) return null;
+  if (!showDebugMenu) return null;
 
   // Count enabled settings
   const enabledCount = Object.values(debugSettings).filter(Boolean).length - (debugSettings.debugEnabled ? 1 : 0);

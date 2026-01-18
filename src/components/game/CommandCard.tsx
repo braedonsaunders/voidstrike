@@ -290,7 +290,7 @@ function CommandCardInner() {
             // Determine icon and shortcut based on mode
             const isAirMode = mode.isFlying === true;
             const icon = isAirMode ? '✈' : '⬇';
-            const shortcut = isAirMode ? 'F' : 'E'; // F for Fighter, E for assEmble (ground)
+            const shortcut = isAirMode ? 'F' : 'E';
 
             // Build tooltip with mode stats
             let tooltip = `Transform to ${mode.name}`;

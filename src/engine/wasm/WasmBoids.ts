@@ -16,7 +16,7 @@ import type { Transform } from '../components/Transform';
 import type { Unit } from '../components/Unit';
 import type { Velocity } from '../components/Velocity';
 import type { SpatialGrid } from '../core/SpatialGrid';
-import { debugPerformance } from '@/utils/debugLogger';
+import { debugPerformance, debugInitialization } from '@/utils/debugLogger';
 
 // Unit state constants (must match lib.rs)
 const STATE_ACTIVE = 0;
@@ -29,7 +29,7 @@ const STATE_WORKER = 4;
  * Interface for the WASM module exports
  */
 interface BoidsWasmExports {
-  memory: WebAssembly.Memory;
+  wasm_memory: () => WebAssembly.Memory;
   simd_supported: () => boolean;
   BoidsEngine: new (maxUnits: number) => WasmBoidsEngine;
   STATE_ACTIVE: number;
@@ -193,26 +193,44 @@ export class WasmBoids {
       this.simdAvailable = this.wasm.simd_supported();
 
       if (!this.simdAvailable) {
-        console.warn('[WasmBoids] SIMD not available, falling back to JS');
+        debugInitialization.warn('[WasmBoids] SIMD not available, falling back to JS');
         this.initialized = true;
         return false;
       }
 
       // Create engine instance
       this.engine = new this.wasm.BoidsEngine(this.maxUnits);
-      this.memory = this.wasm.memory;
+
+      // Get memory via the exported wasm_memory() function
+      this.memory = this.wasm.wasm_memory();
+
+      // Validate memory is available
+      if (!this.memory) {
+        debugInitialization.warn('[WasmBoids] WASM memory not available');
+        this.initialized = true;
+        this.simdAvailable = false;
+        return false;
+      }
 
       // Create typed array views
       this.createViews();
+
+      // Validate views were created successfully
+      if (!this.positionsX || !this.positionsY) {
+        debugInitialization.warn('[WasmBoids] Failed to create typed array views');
+        this.initialized = true;
+        this.simdAvailable = false;
+        return false;
+      }
 
       // Set default parameters
       this.updateWasmParams();
 
       this.initialized = true;
-      console.log(`[WasmBoids] Initialized with SIMD, capacity: ${this.maxUnits}`);
+      debugInitialization.log(`[WasmBoids] Initialized with SIMD, capacity: ${this.maxUnits}`);
       return true;
     } catch (error) {
-      console.warn('[WasmBoids] Failed to initialize:', error);
+      debugInitialization.warn('[WasmBoids] Failed to initialize:', error);
       this.initialized = true;
       this.simdAvailable = false;
       return false;

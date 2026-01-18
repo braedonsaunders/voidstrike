@@ -3,6 +3,8 @@
  * Uses well-known public relays that accept anonymous posts
  */
 
+import { debugNetworking } from '@/utils/debugLogger';
+
 // Well-known public relays that accept anonymous posts (no auth/whitelist required)
 // Prioritized by reliability and speed
 const PUBLIC_RELAYS = [
@@ -34,8 +36,8 @@ export async function getRelays(count: number = 6): Promise<string[]> {
 
   if (healthyRelays.length === 0) {
     // Fallback: return top relays even if health check failed (might work)
-    console.warn('[Nostr] No healthy relays found, using fallback list');
-    console.log(`[Nostr] Using ${PUBLIC_RELAYS.length} fallback relays:`, PUBLIC_RELAYS);
+    debugNetworking.warn('[Nostr] No healthy relays found, using fallback list');
+    debugNetworking.log(`[Nostr] Using ${PUBLIC_RELAYS.length} fallback relays:`, PUBLIC_RELAYS);
     return PUBLIC_RELAYS; // Return ALL relays as fallback
   }
 
@@ -43,7 +45,7 @@ export async function getRelays(count: number = 6): Promise<string[]> {
   // This ensures events propagate correctly between them
   const selected = healthyRelays.slice(0, Math.min(count, healthyRelays.length));
 
-  console.log(`[Nostr] Using ${selected.length} healthy relays:`, selected);
+  debugNetworking.log(`[Nostr] Using ${selected.length} healthy relays:`, selected);
 
   return selected;
 }

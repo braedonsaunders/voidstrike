@@ -7,6 +7,7 @@
 
 import { Game } from '../core/Game';
 import { World } from '../ecs/World';
+import { debugAI } from '@/utils/debugLogger';
 import { Transform } from '../components/Transform';
 import { Unit } from '../components/Unit';
 import { Building } from '../components/Building';
@@ -109,7 +110,7 @@ export class AIWorkerManager {
    */
   private initializeWorker(): void {
     if (typeof Worker === 'undefined') {
-      console.warn('[AIWorkerManager] Web Workers not supported, using main thread fallback');
+      debugAI.warn('[AIWorkerManager] Web Workers not supported, using main thread fallback');
       return;
     }
 
@@ -130,9 +131,9 @@ export class AIWorkerManager {
         config: {},
       });
 
-      console.log('[AIWorkerManager] AI Worker created');
+      debugAI.log('[AIWorkerManager] AI Worker created');
     } catch (error) {
-      console.warn('[AIWorkerManager] Failed to create worker:', error);
+      debugAI.warn('[AIWorkerManager] Failed to create worker:', error);
       this.worker = null;
     }
   }
@@ -147,9 +148,9 @@ export class AIWorkerManager {
       case 'initialized':
         if (message.success) {
           this.workerReady = true;
-          console.log('[AIWorkerManager] Worker initialized');
+          debugAI.log('[AIWorkerManager] Worker initialized');
         } else {
-          console.error('[AIWorkerManager] Worker init failed');
+          debugAI.error('[AIWorkerManager] Worker init failed');
         }
         break;
 

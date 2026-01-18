@@ -10,6 +10,7 @@
  */
 
 import type { FetchResponse, BatchFetchResponse, WorkerRequest, WorkerResponse } from './gltf.worker';
+import { debugAssets } from '@/utils/debugLogger';
 
 // Disable worker for now - webpack worker-loader may not be working correctly
 // TODO: Debug worker initialization and re-enable
@@ -56,7 +57,7 @@ class GLTFWorkerManager {
       };
 
       this.worker.onerror = (error) => {
-        console.warn('[GLTFWorkerManager] Worker error, falling back to main thread:', error);
+        debugAssets.warn('[GLTFWorkerManager] Worker error, falling back to main thread:', error);
         this.workerFailed = true;
         this.worker?.terminate();
         this.worker = null;
@@ -73,7 +74,7 @@ class GLTFWorkerManager {
         }
       };
     } catch (error) {
-      console.warn('[GLTFWorkerManager] Failed to create worker, using main thread:', error);
+      debugAssets.warn('[GLTFWorkerManager] Failed to create worker, using main thread:', error);
       this.workerFailed = true;
       this.isSupported = false;
     }
@@ -136,7 +137,7 @@ class GLTFWorkerManager {
       // Set timeout to fall back to main thread
       const timeoutId = setTimeout(() => {
         this.pendingRequests.delete(id);
-        console.warn(`[GLTFWorkerManager] Worker timeout for ${url}, using main thread`);
+        debugAssets.warn(`[GLTFWorkerManager] Worker timeout for ${url}, using main thread`);
         this.fetchMainThread(url).then(resolve);
       }, WORKER_TIMEOUT);
 
@@ -184,7 +185,7 @@ class GLTFWorkerManager {
       // Set timeout to fall back to main thread
       const timeoutId = setTimeout(() => {
         this.pendingBatchRequests.delete(id);
-        console.warn(`[GLTFWorkerManager] Worker timeout for batch fetch, using main thread`);
+        debugAssets.warn(`[GLTFWorkerManager] Worker timeout for batch fetch, using main thread`);
         this.batchFetchMainThread(urls).then(resolve);
       }, WORKER_TIMEOUT);
 

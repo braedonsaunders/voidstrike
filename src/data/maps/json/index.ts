@@ -14,6 +14,7 @@
 import type { MapData } from '../MapTypes';
 import type { MapJson } from '../schema/MapJsonSchema';
 import { jsonToMapData } from '../serialization/deserialize';
+import { debugTerrain } from '@/utils/debugLogger';
 
 // Webpack require.context to auto-discover all JSON files in this folder
 // This runs at build time and bundles all matching files
@@ -47,7 +48,7 @@ for (const key of mapContext.keys()) {
 
 // Log any load errors in development
 if (loadErrors.length > 0 && process.env.NODE_ENV === 'development') {
-  console.warn('Map loading errors:', loadErrors);
+  debugTerrain.warn('Map loading errors:', loadErrors);
 }
 
 // All maps registry (by ID)

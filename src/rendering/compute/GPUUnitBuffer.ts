@@ -15,6 +15,7 @@
  */
 
 import * as THREE from 'three';
+import { debugShaders } from '@/utils/debugLogger';
 
 // Maximum units supported (can be increased based on VRAM)
 const MAX_UNITS = 4096;
@@ -101,7 +102,7 @@ export class GPUUnitBuffer {
       this.freeSlots.push(i);
     }
 
-    console.log(`[GPUUnitBuffer] Initialized with ${this.config.maxUnits} unit capacity`);
+    debugShaders.log(`[GPUUnitBuffer] Initialized with ${this.config.maxUnits} unit capacity`);
   }
 
   /**
@@ -148,7 +149,7 @@ export class GPUUnitBuffer {
 
     // Get free slot
     if (this.freeSlots.length === 0) {
-      console.warn('[GPUUnitBuffer] No free slots available');
+      debugShaders.warn('[GPUUnitBuffer] No free slots available');
       return null;
     }
 

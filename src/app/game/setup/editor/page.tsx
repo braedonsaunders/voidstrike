@@ -5,6 +5,7 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { EditorCore, VOIDSTRIKE_EDITOR_CONFIG } from '@/editor';
 import { voidstrikeDataProvider } from '@/editor/providers/voidstrike';
 import { useGameSetupStore, getEditorMapData } from '@/store/gameSetupStore';
+import { debugInitialization } from '@/utils/debugLogger';
 import type { EditorMapData } from '@/editor';
 import type { MapListItem } from '@/editor/core/EditorHeader';
 import type { MapData } from '@/data/maps/MapTypes';
@@ -89,7 +90,7 @@ function EditorPageContent() {
       return;
     }
 
-    console.log('Preview map:', gameData);
+    debugInitialization.log('Preview map:', gameData);
 
     // Store custom map in game setup store
     const store = useGameSetupStore.getState();

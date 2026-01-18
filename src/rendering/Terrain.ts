@@ -1797,14 +1797,14 @@ export class Terrain {
 
     // Log ramp diagnostic info
     if (rampProfile) {
-      console.log(`[Terrain] ${rampProfile}`);
-      console.log(`[Terrain] Max height step between adjacent cells: ${maxHeightStep.toFixed(3)} at (${maxHeightStepLocation.x}, ${maxHeightStepLocation.y}) - walkableClimb is 0.8`);
+      debugTerrain.log(`[Terrain] ${rampProfile}`);
+      debugTerrain.log(`[Terrain] Max height step between adjacent cells: ${maxHeightStep.toFixed(3)} at (${maxHeightStepLocation.x}, ${maxHeightStepLocation.y}) - walkableClimb is 0.8`);
       if (maxHeightStep > 0.8) {
-        console.warn(`[Terrain] WARNING: Height step ${maxHeightStep.toFixed(3)} exceeds walkableClimb (0.8)! Ramp may not be traversable.`);
+        debugTerrain.warn(`[Terrain] WARNING: Height step ${maxHeightStep.toFixed(3)} exceeds walkableClimb (0.8)! Ramp may not be traversable.`);
       }
     }
     if (maxRampBoundaryGap > 0) {
-      console.log(`[Terrain] Max ramp boundary height gap: ${maxRampBoundaryGap.toFixed(3)} at (${rampBoundaryGapLocation.x}, ${rampBoundaryGapLocation.y})`);
+      debugTerrain.log(`[Terrain] Max ramp boundary height gap: ${maxRampBoundaryGap.toFixed(3)} at (${rampBoundaryGapLocation.x}, ${rampBoundaryGapLocation.y})`);
     }
 
     return {

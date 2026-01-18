@@ -52,7 +52,7 @@ function getFileSizeKB(filePath) {
 
 function optimizeModel(inputPath) {
   const inputSize = getFileSizeKB(inputPath);
-  console.log(`\n📦 Processing: ${inputPath} (${formatSize(inputSize * 1024)})`);
+  console.log(`\nProcessing: ${inputPath} (${formatSize(inputSize * 1024)})`);
 
   // Create temp output path
   const dir = path.dirname(inputPath);
@@ -88,22 +88,22 @@ function optimizeModel(inputPath) {
     fs.renameSync(tempOutput, inputPath);
 
     // Status indicator
-    let status = '✅';
+    let status = '[OK]';
     if (outputSize > SIZE_ERROR_KB) {
-      status = '❌';
-      console.log(`   ${status} ${formatSize(inputSize * 1024)} → ${formatSize(outputSize * 1024)} (${reduction}% reduction)`);
-      console.log(`   ⚠️  WARNING: File still too large (>${SIZE_ERROR_KB}KB). Consider reducing polygon count.`);
+      status = '[ERROR]';
+      console.log(`   ${status} ${formatSize(inputSize * 1024)} -> ${formatSize(outputSize * 1024)} (${reduction}% reduction)`);
+      console.log(`   WARNING: File still too large (>${SIZE_ERROR_KB}KB). Consider reducing polygon count.`);
     } else if (outputSize > SIZE_WARNING_KB) {
-      status = '⚠️';
-      console.log(`   ${status} ${formatSize(inputSize * 1024)} → ${formatSize(outputSize * 1024)} (${reduction}% reduction)`);
+      status = '[WARN]';
+      console.log(`   ${status} ${formatSize(inputSize * 1024)} -> ${formatSize(outputSize * 1024)} (${reduction}% reduction)`);
       console.log(`   Note: File larger than recommended ${SIZE_WARNING_KB}KB for RTS units.`);
     } else {
-      console.log(`   ${status} ${formatSize(inputSize * 1024)} → ${formatSize(outputSize * 1024)} (${reduction}% reduction)`);
+      console.log(`   ${status} ${formatSize(inputSize * 1024)} -> ${formatSize(outputSize * 1024)} (${reduction}% reduction)`);
     }
 
     return { success: true, inputSize, outputSize, reduction };
   } catch (error) {
-    console.error(`   ❌ Failed to optimize: ${error.message}`);
+    console.error(`   [ERROR] Failed to optimize: ${error.message}`);
     // Clean up temp file if it exists
     if (fs.existsSync(tempOutput)) {
       fs.unlinkSync(tempOutput);
@@ -138,8 +138,8 @@ function findGlbFiles(dir) {
 }
 
 function main() {
-  console.log('🎮 VOIDSTRIKE Model Optimizer');
-  console.log('━'.repeat(50));
+  console.log('VOIDSTRIKE Model Optimizer');
+  console.log('-'.repeat(50));
   console.log(`Settings: ${CONFIG.textureSize}x${CONFIG.textureSize}, Draco: ${CONFIG.useDraco ? 'ON' : 'OFF'}`);
 
   // Get files to process
@@ -182,8 +182,8 @@ function main() {
   }
 
   // Summary
-  console.log('\n' + '━'.repeat(50));
-  console.log('📊 Summary:');
+  console.log('\n' + '-'.repeat(50));
+  console.log('Summary:');
   console.log(`   Files processed: ${results.success}/${filesToProcess.length}`);
 
   if (results.success > 0) {
@@ -192,7 +192,7 @@ function main() {
   }
 
   if (results.failed > 0) {
-    console.log(`   ❌ ${results.failed} file(s) failed to optimize`);
+    console.log(`   [ERROR] ${results.failed} file(s) failed to optimize`);
     process.exit(1);
   }
 }

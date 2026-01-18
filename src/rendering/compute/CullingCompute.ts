@@ -43,6 +43,7 @@ const StorageInstancedBufferAttribute = (THREE_WEBGPU as any).StorageInstancedBu
 const IndirectStorageBufferAttribute = (THREE_WEBGPU as any).IndirectStorageBufferAttribute;
 
 import { GPUUnitBuffer, UnitSlot, createIndirectArgsBuffer } from './GPUUnitBuffer';
+import { debugShaders } from '@/utils/debugLogger';
 
 // LOD distance thresholds
 export interface LODConfig {
@@ -200,9 +201,9 @@ export class CullingCompute {
       this.gpuComputeAvailable = true;
       this.useCPUFallback = false; // GPU path with atomics enabled
 
-      console.log(`[CullingCompute] GPU compute initialized with atomics (${MAX_GPU_UNITS} units, ${indirectEntryCount} indirect entries)`);
+      debugShaders.log(`[CullingCompute] GPU compute initialized (${MAX_GPU_UNITS} units, ${indirectEntryCount} indirect entries)`);
     } catch (e) {
-      console.warn('[CullingCompute] GPU compute init failed, using CPU fallback:', e);
+      debugShaders.warn('[CullingCompute] GPU compute init failed, using CPU fallback:', e);
       this.gpuComputeAvailable = false;
       this.useCPUFallback = true;
     }
@@ -433,7 +434,7 @@ export class CullingCompute {
       // Execute compute shader with atomic operations
       this.renderer.compute(this.cullingComputeNode);
     } catch (e) {
-      console.warn('[CullingCompute] GPU culling failed:', e);
+      debugShaders.warn('[CullingCompute] GPU culling failed:', e);
       this.useCPUFallback = true;
     }
   }

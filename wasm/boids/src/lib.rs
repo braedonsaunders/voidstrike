@@ -64,6 +64,12 @@ pub fn simd_supported() -> bool {
     simd::simd_available()
 }
 
+/// Export WASM memory for JS typed array views
+#[wasm_bindgen]
+pub fn wasm_memory() -> JsValue {
+    wasm_bindgen::memory()
+}
+
 /// Main boids computation engine
 ///
 /// Manages memory buffers and provides the interface for JS to
@@ -301,7 +307,7 @@ pub fn state_worker() -> u8 {
     4
 }
 
-// Note: wasm-bindgen automatically exports `memory` - don't define it manually
+// Note: Memory is explicitly exported via wasm_memory() function
 
 #[cfg(test)]
 mod tests {
