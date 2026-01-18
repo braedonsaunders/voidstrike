@@ -580,10 +580,35 @@ export class Terrain {
         slopes.push(slope00, slope01, slope10);
         slopes.push(slope10, slope01, slope11);
 
+        // Determine terrain type for shader
+        // Ramps adjacent to platforms at similar elevation render as platform
+        // to keep platform edges straight
         let cellTerrainType = 0.0;
-        if (cell.terrain === 'unwalkable') cellTerrainType = 2.0;
-        else if (cell.terrain === 'ramp') cellTerrainType = 1.0;
-        else if (cell.terrain === 'platform') cellTerrainType = 3.0;
+        if (cell.terrain === 'unwalkable') {
+          cellTerrainType = 2.0;
+        } else if (cell.terrain === 'ramp') {
+          // Check if this ramp is adjacent to platforms - if so, render as platform
+          let adjacentToPlatform = false;
+          for (let dy = -1; dy <= 1 && !adjacentToPlatform; dy++) {
+            for (let dx = -1; dx <= 1 && !adjacentToPlatform; dx++) {
+              if (dx === 0 && dy === 0) continue;
+              const nx = x + dx;
+              const ny = y + dy;
+              if (nx >= 0 && nx < mapWidth && ny >= 0 && ny < mapHeight) {
+                const neighbor = terrain[ny][nx];
+                if (neighbor.terrain === 'platform') {
+                  const elevDiff = Math.abs(neighbor.elevation - cell.elevation);
+                  if (elevDiff < 30) { // Similar elevation
+                    adjacentToPlatform = true;
+                  }
+                }
+              }
+            }
+          }
+          cellTerrainType = adjacentToPlatform ? 3.0 : 1.0; // Platform or ramp
+        } else if (cell.terrain === 'platform') {
+          cellTerrainType = 3.0;
+        }
         terrainTypes.push(cellTerrainType, cellTerrainType, cellTerrainType);
         terrainTypes.push(cellTerrainType, cellTerrainType, cellTerrainType);
 
