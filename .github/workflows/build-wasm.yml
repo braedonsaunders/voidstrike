@@ -74,5 +74,11 @@ jobs:
             echo "No changes to commit"
           else
             git commit -m "chore: Update WASM boids module"
-            git push
+            # Pull with rebase to incorporate any new commits, then push
+            # Retry up to 3 times in case of concurrent pushes
+            for i in 1 2 3; do
+              git pull --rebase origin ${{ github.ref_name }} && git push && break
+              echo "Push attempt $i failed, retrying..."
+              sleep 2
+            done
           fi
