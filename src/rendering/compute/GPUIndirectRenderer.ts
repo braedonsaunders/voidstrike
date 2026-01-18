@@ -36,11 +36,12 @@ import {
 import * as TSL from 'three/tsl';
 const uint = (TSL as any).uint;
 
-// StorageBufferAttribute, IndirectStorageBufferAttribute, NodeMaterial exist in three/webgpu
+// Storage buffer attributes and NodeMaterial exist in three/webgpu
 // but lack TypeScript declarations - access dynamically
 // eslint-disable-next-line @typescript-eslint/no-require-imports
 import * as THREE_WEBGPU from 'three/webgpu';
 const StorageBufferAttribute = (THREE_WEBGPU as any).StorageBufferAttribute;
+const StorageInstancedBufferAttribute = (THREE_WEBGPU as any).StorageInstancedBufferAttribute;
 const IndirectStorageBufferAttribute = (THREE_WEBGPU as any).IndirectStorageBufferAttribute;
 const NodeMaterial = (THREE_WEBGPU as any).NodeMaterial || THREE.MeshStandardMaterial;
 
@@ -149,17 +150,18 @@ export class GPUIndirectRenderer {
     this.transformData = gpuUnitBuffer.getTransformData();
     this.metadataData = gpuUnitBuffer.getMetadataData();
 
-    // Wrap TypedArrays in StorageBufferAttribute for TSL storage() compatibility
+    // Wrap TypedArrays in StorageInstancedBufferAttribute for TSL storage() compatibility
+    // StorageInstancedBufferAttribute is required for compute shaders and instanced rendering
     // Transform: mat4 = 16 floats per unit
-    this.transformStorageAttribute = new StorageBufferAttribute(this.transformData, 16);
+    this.transformStorageAttribute = new StorageInstancedBufferAttribute(this.transformData, 16);
     this.transformStorage = storage(this.transformStorageAttribute, 'mat4', MAX_UNITS);
 
     // Metadata: vec4 = 4 floats per unit
-    this.metadataStorageAttribute = new StorageBufferAttribute(this.metadataData, 4);
+    this.metadataStorageAttribute = new StorageInstancedBufferAttribute(this.metadataData, 4);
     this.metadataStorage = storage(this.metadataStorageAttribute, 'vec4', MAX_UNITS);
 
     // Visible indices: uint = 1 uint per unit
-    this.visibleIndicesStorageAttribute = new StorageBufferAttribute(this.visibleIndicesData, 1);
+    this.visibleIndicesStorageAttribute = new StorageInstancedBufferAttribute(this.visibleIndicesData, 1);
     this.visibleIndicesStorage = storage(this.visibleIndicesStorageAttribute, 'uint', MAX_UNITS);
 
     // Create indirect args attribute
@@ -286,19 +288,18 @@ export class GPUIndirectRenderer {
         // Get the visible unit slot index for this instance
         const visibleSlotIndex = visibleIndices.element(instanceIndex);
 
-        // Read the transform matrix directly from storage buffer (stored as mat4)
+        // Read the transform matrix from storage buffer
         const modelMatrix = transformBuffer.element(visibleSlotIndex);
 
-        // Extract position from matrix column 3 (translation) and add local position
-        // For instanced rendering, we apply the instance transform to local position
-        // modelMatrix is column-major: col0=X axis, col1=Y axis, col2=Z axis, col3=translation
-        const translation = modelMatrix[3].xyz;
-        const scaledX = modelMatrix[0].xyz.mul(positionLocal.x);
-        const scaledY = modelMatrix[1].xyz.mul(positionLocal.y);
-        const scaledZ = modelMatrix[2].xyz.mul(positionLocal.z);
-        const worldPosition = translation.add(scaledX).add(scaledY).add(scaledZ);
+        // Transform local position using matrix multiplication
+        // In TSL, use mat4.mul(vec4) for proper matrix-vector multiplication
+        // Create homogeneous position vec4(pos, 1.0)
+        const localPos4 = vec4(positionLocal, float(1.0));
 
-        return worldPosition;
+        // Multiply mat4 * vec4 and extract xyz for world position
+        const worldPos4 = modelMatrix.mul(localPos4);
+
+        return worldPos4.xyz;
       });
 
       // Apply custom vertex position

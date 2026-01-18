@@ -35,11 +35,12 @@ const instanceIndex = (TSL as any).instanceIndex;
 const atomicAdd = (TSL as any).atomicAdd;
 const atomicStore = (TSL as any).atomicStore;
 
-// StorageBufferAttribute and IndirectStorageBufferAttribute exist in three/webgpu
-// but lack TypeScript declarations - access dynamically
+// StorageBufferAttribute, StorageInstancedBufferAttribute, and IndirectStorageBufferAttribute
+// exist in three/webgpu but lack TypeScript declarations - access dynamically
 // eslint-disable-next-line @typescript-eslint/no-require-imports
 import * as THREE_WEBGPU from 'three/webgpu';
 const StorageBufferAttribute = (THREE_WEBGPU as any).StorageBufferAttribute;
+const StorageInstancedBufferAttribute = (THREE_WEBGPU as any).StorageInstancedBufferAttribute;
 const IndirectStorageBufferAttribute = (THREE_WEBGPU as any).IndirectStorageBufferAttribute;
 
 import { GPUUnitBuffer, UnitSlot, createIndirectArgsBuffer } from './GPUUnitBuffer';
@@ -164,38 +165,39 @@ export class CullingCompute {
     try {
       this.renderer = renderer;
 
-      // Validate StorageBufferAttribute is available
-      if (!StorageBufferAttribute || typeof StorageBufferAttribute !== 'function') {
-        throw new Error('StorageBufferAttribute not available in three/webgpu');
+      // Validate StorageInstancedBufferAttribute is available (required for compute shaders)
+      if (!StorageInstancedBufferAttribute || typeof StorageInstancedBufferAttribute !== 'function') {
+        throw new Error('StorageInstancedBufferAttribute not available in three/webgpu');
       }
 
-      // Create StorageBufferAttributes to wrap TypedArrays for TSL storage() nodes
+      // Create StorageInstancedBufferAttributes for TSL storage() nodes
+      // StorageInstancedBufferAttribute is required for compute shaders (not StorageBufferAttribute)
       // Transform buffer: mat4 = 16 floats per unit
-      this.transformStorageAttribute = new StorageBufferAttribute(transformData, 16);
+      this.transformStorageAttribute = new StorageInstancedBufferAttribute(transformData, 16);
       this.transformStorageBuffer = storage(this.transformStorageAttribute, 'mat4', MAX_GPU_UNITS);
 
       // Metadata buffer: vec4 = 4 floats per unit
-      this.metadataStorageAttribute = new StorageBufferAttribute(metadataData, 4);
+      this.metadataStorageAttribute = new StorageInstancedBufferAttribute(metadataData, 4);
       this.metadataStorageBuffer = storage(this.metadataStorageAttribute, 'vec4', MAX_GPU_UNITS);
 
       // Visible indices output buffer (stores slot indices of visible units)
       const visibleIndicesData = new Uint32Array(MAX_GPU_UNITS);
-      this.visibleIndicesAttribute = new StorageBufferAttribute(visibleIndicesData, 1);
+      this.visibleIndicesAttribute = new StorageInstancedBufferAttribute(visibleIndicesData, 1);
       this.visibleIndicesStorage = storage(this.visibleIndicesAttribute, 'uint', MAX_GPU_UNITS);
 
       // Indirect args buffer for all unit/LOD/player combinations
       // DrawIndexedIndirect format: [indexCount, instanceCount, firstIndex, baseVertex, firstInstance]
       const indirectEntryCount = this.maxUnitTypes * this.maxLODLevels * this.maxPlayers;
       this.indirectArgsData = new Uint32Array(indirectEntryCount * 5);
-      const indirectArgsAttr = new StorageBufferAttribute(this.indirectArgsData, 1);
+      const indirectArgsAttr = new StorageInstancedBufferAttribute(this.indirectArgsData, 1);
       this.indirectArgsStorage = storage(indirectArgsAttr, 'uint', indirectEntryCount * 5);
 
       // Visible count buffer (atomic counter)
-      this.visibleCountAttribute = new StorageBufferAttribute(this.visibleCountBuffer, 1);
+      this.visibleCountAttribute = new StorageInstancedBufferAttribute(this.visibleCountBuffer, 1);
       this.visibleCountStorageBuffer = storage(this.visibleCountAttribute, 'uint', 1);
 
       // Frustum planes storage buffer (6 planes as vec4)
-      this.frustumPlanesAttribute = new StorageBufferAttribute(this.frustumPlanesData, 4);
+      this.frustumPlanesAttribute = new StorageInstancedBufferAttribute(this.frustumPlanesData, 4);
       this.frustumPlanesStorage = storage(this.frustumPlanesAttribute, 'vec4', 6);
 
       // Create compute shader with proper output writing
