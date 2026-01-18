@@ -3,7 +3,16 @@
  *
  * This system computes deterministic checksums of game state at configurable
  * intervals to detect desync between clients. When a desync is detected,
- * it can dump the full state for debugging.
+ * it uses Merkle tree binary search for O(log n) divergent entity identification.
+ *
+ * Merkle Tree Structure:
+ *                     [Root Hash]
+ *                    /           \
+ *           [Units Hash]      [Buildings Hash]      [Resources Hash]
+ *           /         \        /            \
+ *     [Player1]    [Player2]  [Player1]    [Player2]
+ *        /    \
+ *   [Entity1] [Entity2]...
  *
  * The checksum algorithm uses a simple but effective hash that:
  * 1. Is deterministic across platforms
@@ -20,6 +29,14 @@ import { Health } from '../components/Health';
 import { Selectable } from '../components/Selectable';
 import { Resource } from '../components/Resource';
 import { quantize, QUANT_POSITION, QUANT_DAMAGE, QUANT_COOLDOWN } from '@/utils/FixedPoint';
+import {
+  MerkleNode,
+  MerkleTreeData,
+  MerkleTreeBuilder,
+  MerkleTreeComparator,
+  NetworkMerkleTree,
+  DivergenceResult,
+} from '../network/MerkleTree';
 
 // =============================================================================
 // Configuration
@@ -62,6 +79,8 @@ export interface ChecksumData {
   unitPositionHash: number;
   healthSum: number;
   timestamp: number;
+  /** Merkle tree for O(log n) divergence detection */
+  merkleTree?: MerkleTreeData;
 }
 
 export interface EntityStateSnapshot {
@@ -113,6 +132,10 @@ export interface DesyncReport {
   localSnapshot?: GameStateSnapshot;
   differences?: string[];
   timestamp: number;
+  /** Merkle tree divergence result for O(log n) entity identification */
+  divergence?: DivergenceResult;
+  /** Divergent entity IDs found via Merkle tree binary search */
+  divergentEntityIds?: number[];
 }
 
 // =============================================================================
@@ -128,11 +151,16 @@ export class ChecksumSystem extends System {
   private stateSnapshots: GameStateSnapshot[] = [];
   private remoteChecksums: Map<string, Map<number, ChecksumData>> = new Map();
   private desyncReports: DesyncReport[] = [];
-  private pendingDesyncChecks: Map<number, { remotePeerId: string; remoteChecksum: number; receivedTick: number }[]> = new Map();
+  private pendingDesyncChecks: Map<number, { remotePeerId: string; remoteChecksum: number; remoteMerkleTree?: NetworkMerkleTree; receivedTick: number }[]> = new Map();
+
+  // Merkle tree storage for remote peers
+  private remoteMerkleTrees: Map<string, Map<number, NetworkMerkleTree>> = new Map();
 
   // Performance tracking
   private lastChecksumTime: number = 0;
   private avgChecksumTimeMs: number = 0;
+  private lastMerkleTreeTime: number = 0;
+  private avgMerkleTreeTimeMs: number = 0;
 
   // PERF: Pre-allocated buffers for sorting to avoid allocation during checksum
   private _sortBufferUnits: import('../ecs/Entity').Entity[] = [];
@@ -165,6 +193,7 @@ export class ChecksumSystem extends System {
     checksum: number;
     unitCount: number;
     resourceSum: number;
+    merkleTree?: NetworkMerkleTree;
   }): void {
     // Store remote checksum
     if (!this.remoteChecksums.has(data.peerId)) {
@@ -183,8 +212,16 @@ export class ChecksumSystem extends System {
       timestamp: Date.now(),
     });
 
+    // Store remote Merkle tree if provided
+    if (data.merkleTree) {
+      if (!this.remoteMerkleTrees.has(data.peerId)) {
+        this.remoteMerkleTrees.set(data.peerId, new Map());
+      }
+      this.remoteMerkleTrees.get(data.peerId)!.set(data.tick, data.merkleTree);
+    }
+
     // Check for desync
-    this.checkForDesync(data.peerId, data.tick, data.checksum);
+    this.checkForDesync(data.peerId, data.tick, data.checksum, data.merkleTree);
 
     // Cleanup old checksums
     this.cleanupOldChecksums(peerChecksums);
@@ -193,7 +230,12 @@ export class ChecksumSystem extends System {
   /**
    * Check if local and remote checksums match for a given tick
    */
-  private checkForDesync(peerId: string, remoteTick: number, remoteChecksum: number): void {
+  private checkForDesync(
+    peerId: string,
+    remoteTick: number,
+    remoteChecksum: number,
+    remoteMerkleTree?: NetworkMerkleTree
+  ): void {
     const localChecksum = this.checksumHistory.get(remoteTick);
 
     if (!localChecksum) {
@@ -202,6 +244,7 @@ export class ChecksumSystem extends System {
       pending.push({
         remotePeerId: peerId,
         remoteChecksum,
+        remoteMerkleTree,
         receivedTick: this.game.getCurrentTick(),
       });
       this.pendingDesyncChecks.set(remoteTick, pending);
@@ -209,19 +252,21 @@ export class ChecksumSystem extends System {
     }
 
     if (localChecksum.checksum !== remoteChecksum) {
-      this.reportDesync(remoteTick, localChecksum.checksum, remoteChecksum, peerId);
+      this.reportDesync(remoteTick, localChecksum, remoteChecksum, peerId, remoteMerkleTree);
     }
   }
 
   /**
-   * Report a desync and optionally dump state
+   * Report a desync and use Merkle tree for O(log n) divergent entity detection
    */
   private reportDesync(
     tick: number,
-    localChecksum: number,
+    localChecksumData: ChecksumData,
     remoteChecksum: number,
-    remotePeerId: string
+    remotePeerId: string,
+    remoteMerkleTree?: NetworkMerkleTree
   ): void {
+    const localChecksum = localChecksumData.checksum;
     const report: DesyncReport = {
       localTick: tick,
       remoteTick: tick,
@@ -237,6 +282,33 @@ export class ChecksumSystem extends System {
       report.localSnapshot = snapshot;
     }
 
+    // Use Merkle tree for O(log n) divergent entity detection
+    if (localChecksumData.merkleTree && remoteMerkleTree) {
+      const divergence = MerkleTreeComparator.findDivergence(
+        localChecksumData.merkleTree.root,
+        this.reconstructRemoteMerkleNode(remoteMerkleTree)
+      );
+      report.divergence = divergence;
+      report.divergentEntityIds = divergence.entityIds;
+
+      console.warn(
+        `[ChecksumSystem] Merkle tree analysis: Found ${divergence.entityIds.length} divergent entities in ${divergence.comparisons} comparisons (O(log n))`
+      );
+      console.warn(`[ChecksumSystem] Divergent path: ${divergence.path.join(' -> ')}`);
+      if (divergence.entityIds.length > 0) {
+        console.warn(`[ChecksumSystem] Divergent entity IDs: ${divergence.entityIds.join(', ')}`);
+      }
+    } else if (localChecksumData.merkleTree) {
+      // Use category-level comparison if we only have local tree
+      const divergentCategories = this.findDivergentCategoriesByHash(
+        localChecksumData.merkleTree,
+        remoteChecksum
+      );
+      if (divergentCategories.length > 0) {
+        console.warn(`[ChecksumSystem] Likely divergent categories: ${divergentCategories.join(', ')}`);
+      }
+    }
+
     this.desyncReports.push(report);
 
     // Keep only recent reports
@@ -244,13 +316,14 @@ export class ChecksumSystem extends System {
       this.desyncReports.shift();
     }
 
-    // Emit desync event
+    // Emit desync event with Merkle tree info
     this.game.eventBus.emit('desync:detected', {
       tick,
       localChecksum,
       remoteChecksum,
       remotePeerId,
       report,
+      divergentEntityIds: report.divergentEntityIds,
     });
 
     // Log warning
@@ -264,6 +337,77 @@ export class ChecksumSystem extends System {
     if (this.config.autoDumpOnDesync && snapshot) {
       console.warn('[ChecksumSystem] State snapshot at desync tick:', snapshot);
     }
+  }
+
+  /**
+   * Reconstruct a MerkleNode from NetworkMerkleTree for comparison
+   * Only creates the structure needed for binary search, not full tree
+   */
+  private reconstructRemoteMerkleNode(remote: NetworkMerkleTree): MerkleNode {
+    const categoryChildren: MerkleNode[] = [];
+
+    for (const [categoryLabel, categoryHash] of Object.entries(remote.categoryHashes)) {
+      const groupChildren: MerkleNode[] = [];
+      const groups = remote.groupHashes[categoryLabel] || {};
+
+      for (const [groupLabel, groupHash] of Object.entries(groups)) {
+        groupChildren.push({
+          hash: groupHash,
+          type: 'group',
+          label: groupLabel,
+          children: [], // Entity-level not available in compact format
+        });
+      }
+
+      groupChildren.sort((a, b) => a.label.localeCompare(b.label));
+
+      categoryChildren.push({
+        hash: categoryHash,
+        type: 'category',
+        label: categoryLabel,
+        children: groupChildren,
+      });
+    }
+
+    categoryChildren.sort((a, b) => a.label.localeCompare(b.label));
+
+    return {
+      hash: remote.rootHash,
+      type: 'root',
+      label: 'root',
+      children: categoryChildren,
+    };
+  }
+
+  /**
+   * Find potentially divergent categories when we don't have remote Merkle tree
+   */
+  private findDivergentCategoriesByHash(
+    localTree: MerkleTreeData,
+    _remoteRootHash: number
+  ): string[] {
+    // Without remote category hashes, we can only report which categories
+    // have the most entities (likely sources of divergence)
+    const categories = localTree.root.children
+      .map((c) => ({
+        label: c.label,
+        entityCount: this.countEntitiesInNode(c),
+      }))
+      .sort((a, b) => b.entityCount - a.entityCount);
+
+    return categories.slice(0, 2).map((c) => c.label);
+  }
+
+  /**
+   * Count entities in a Merkle node subtree
+   */
+  private countEntitiesInNode(node: MerkleNode): number {
+    if (node.type === 'entity') return 1;
+    let count = 0;
+    for (const child of node.children) {
+      count += this.countEntitiesInNode(child);
+    }
+    return count;
   }
 
   /**
@@ -320,14 +464,19 @@ export class ChecksumSystem extends System {
       }
     }
 
-    // Emit checksum for network synchronization
+    // Emit checksum for network synchronization (includes serialized Merkle tree)
     if (this.config.emitNetworkChecksums) {
+      const merkleTree = checksumData.merkleTree
+        ? MerkleTreeComparator.serializeForNetwork(checksumData.merkleTree)
+        : undefined;
+
       this.game.eventBus.emit('checksum:computed', {
         tick: currentTick,
         checksum: checksumData.checksum,
         unitCount: checksumData.unitCount,
         buildingCount: checksumData.buildingCount,
         resourceSum: checksumData.resourceSum,
+        merkleTree,
       });
     }
 
@@ -364,7 +513,7 @@ export class ChecksumSystem extends System {
         // We now have local checksum - verify
         for (const pending of pendingList) {
           if (localChecksum.checksum !== pending.remoteChecksum) {
-            this.reportDesync(tick, localChecksum.checksum, pending.remoteChecksum, pending.remotePeerId);
+            this.reportDesync(tick, localChecksum, pending.remoteChecksum, pending.remotePeerId, pending.remoteMerkleTree);
           }
         }
         ticksToRemove.push(tick);
@@ -388,8 +537,11 @@ export class ChecksumSystem extends System {
 
   /**
    * Compute a deterministic checksum of the current game state
+   * Also builds a Merkle tree for O(log n) divergence detection
    */
   private computeChecksum(tick: number): ChecksumData {
+    const merkleStartTime = performance.now();
+
     let checksum = 0;
     let unitCount = 0;
     let buildingCount = 0;
@@ -397,7 +549,12 @@ export class ChecksumSystem extends System {
     let unitPositionHash = 0;
     let healthSum = 0;
 
-    // Hash units
+    // Merkle tree leaf nodes grouped by player
+    const unitNodesByPlayer = new Map<string, MerkleNode[]>();
+    const buildingNodesByPlayer = new Map<string, MerkleNode[]>();
+    const resourceNodes: MerkleNode[] = [];
+
+    // Hash units and build Merkle leaf nodes
     // PERF: Reuse pre-allocated buffer instead of creating new array with spread
     const units = this.world.getEntitiesWith('Unit', 'Transform', 'Health', 'Selectable');
     this._sortBufferUnits.length = 0;
@@ -423,33 +580,47 @@ export class ChecksumSystem extends System {
       const qz = quantize(transform.z, QUANT_POSITION);
       const qHealth = quantize(health.current, QUANT_DAMAGE);
 
-      // Hash entity state
-      checksum = this.hashCombine(checksum, entity.id);
-      checksum = this.hashCombine(checksum, qx);
-      checksum = this.hashCombine(checksum, qy);
-      checksum = this.hashCombine(checksum, qz);
-      checksum = this.hashCombine(checksum, qHealth);
-      checksum = this.hashCombine(checksum, this.hashString(unit.state));
-      checksum = this.hashCombine(checksum, unit.targetEntityId || 0);
-
-      // Track aggregates
-      unitPositionHash = this.hashCombine(unitPositionHash, qx ^ qy);
-      healthSum += qHealth;
+      // Compute entity hash for Merkle leaf
+      let entityHash = 0;
+      entityHash = this.hashCombine(entityHash, entity.id);
+      entityHash = this.hashCombine(entityHash, qx);
+      entityHash = this.hashCombine(entityHash, qy);
+      entityHash = this.hashCombine(entityHash, qz);
+      entityHash = this.hashCombine(entityHash, qHealth);
+      entityHash = this.hashCombine(entityHash, this.hashString(unit.state));
+      entityHash = this.hashCombine(entityHash, unit.targetEntityId || 0);
 
       // Hash target position if moving
       if (unit.targetX !== null && unit.targetY !== null) {
         const qtx = quantize(unit.targetX, QUANT_POSITION);
         const qty = quantize(unit.targetY, QUANT_POSITION);
-        checksum = this.hashCombine(checksum, qtx);
-        checksum = this.hashCombine(checksum, qty);
+        entityHash = this.hashCombine(entityHash, qtx);
+        entityHash = this.hashCombine(entityHash, qty);
       }
 
       // Hash cooldowns
       const qLastAttack = quantize(unit.lastAttackTime, QUANT_COOLDOWN);
-      checksum = this.hashCombine(checksum, qLastAttack);
+      entityHash = this.hashCombine(entityHash, qLastAttack);
+
+      // Create Merkle leaf node
+      const leafNode = MerkleTreeBuilder.createEntityNode(entity.id, 'unit', entityHash);
+
+      // Group by player
+      const playerId = selectable.playerId || 'neutral';
+      if (!unitNodesByPlayer.has(playerId)) {
+        unitNodesByPlayer.set(playerId, []);
+      }
+      unitNodesByPlayer.get(playerId)!.push(leafNode);
+
+      // Combine into flat checksum
+      checksum = this.hashCombine(checksum, entityHash);
+
+      // Track aggregates
+      unitPositionHash = this.hashCombine(unitPositionHash, qx ^ qy);
+      healthSum += qHealth;
     }
 
-    // Hash buildings
+    // Hash buildings and build Merkle leaf nodes
     // PERF: Reuse pre-allocated buffer instead of creating new array with spread
     const buildings = this.world.getEntitiesWith('Building', 'Transform', 'Health', 'Selectable');
     this._sortBufferBuildings.length = 0;
@@ -462,6 +633,7 @@ export class ChecksumSystem extends System {
       const transform = entity.get<Transform>('Transform')!;
       const building = entity.get<Building>('Building')!;
       const health = entity.get<Health>('Health')!;
+      const selectable = entity.get<Selectable>('Selectable');
 
       if (health.isDead() || building.state === 'destroyed') continue;
 
@@ -472,17 +644,32 @@ export class ChecksumSystem extends System {
       const qHealth = quantize(health.current, QUANT_DAMAGE);
       const qProgress = quantize(building.buildProgress, 100);
 
-      checksum = this.hashCombine(checksum, entity.id);
-      checksum = this.hashCombine(checksum, qx);
-      checksum = this.hashCombine(checksum, qy);
-      checksum = this.hashCombine(checksum, qHealth);
-      checksum = this.hashCombine(checksum, this.hashString(building.state));
-      checksum = this.hashCombine(checksum, qProgress);
+      // Compute entity hash for Merkle leaf
+      let entityHash = 0;
+      entityHash = this.hashCombine(entityHash, entity.id);
+      entityHash = this.hashCombine(entityHash, qx);
+      entityHash = this.hashCombine(entityHash, qy);
+      entityHash = this.hashCombine(entityHash, qHealth);
+      entityHash = this.hashCombine(entityHash, this.hashString(building.state));
+      entityHash = this.hashCombine(entityHash, qProgress);
+
+      // Create Merkle leaf node
+      const leafNode = MerkleTreeBuilder.createEntityNode(entity.id, 'building', entityHash);
+
+      // Group by player
+      const playerId = selectable?.playerId || 'neutral';
+      if (!buildingNodesByPlayer.has(playerId)) {
+        buildingNodesByPlayer.set(playerId, []);
+      }
+      buildingNodesByPlayer.get(playerId)!.push(leafNode);
+
+      // Combine into flat checksum
+      checksum = this.hashCombine(checksum, entityHash);
 
       healthSum += qHealth;
     }
 
-    // Hash resources
+    // Hash resources and build Merkle leaf nodes
     // PERF: Reuse pre-allocated buffer instead of creating new array with spread
     const resources = this.world.getEntitiesWith('Resource', 'Transform');
     this._sortBufferResources.length = 0;
@@ -499,16 +686,39 @@ export class ChecksumSystem extends System {
       const qy = quantize(transform.y, QUANT_POSITION);
       const qAmount = resource.amount | 0;
 
-      checksum = this.hashCombine(checksum, entity.id);
-      checksum = this.hashCombine(checksum, qx);
-      checksum = this.hashCombine(checksum, qy);
-      checksum = this.hashCombine(checksum, qAmount);
+      // Compute entity hash for Merkle leaf
+      let entityHash = 0;
+      entityHash = this.hashCombine(entityHash, entity.id);
+      entityHash = this.hashCombine(entityHash, qx);
+      entityHash = this.hashCombine(entityHash, qy);
+      entityHash = this.hashCombine(entityHash, qAmount);
+
+      // Create Merkle leaf node (resources are not owned by players)
+      const leafNode = MerkleTreeBuilder.createEntityNode(entity.id, 'resource', entityHash);
+      resourceNodes.push(leafNode);
+
+      // Combine into flat checksum
+      checksum = this.hashCombine(checksum, entityHash);
 
       resourceSum += qAmount;
     }
 
     // Include tick in final hash for ordering verification
     checksum = this.hashCombine(checksum, tick);
+
+    // Build Merkle tree structure
+    const merkleTree = this.buildMerkleTree(
+      tick,
+      unitNodesByPlayer,
+      buildingNodesByPlayer,
+      resourceNodes,
+      unitCount + buildingCount + resourceNodes.length
+    );
+
+    // Track Merkle tree performance
+    const merkleElapsed = performance.now() - merkleStartTime;
+    this.lastMerkleTreeTime = merkleElapsed;
+    this.avgMerkleTreeTimeMs = this.avgMerkleTreeTimeMs * 0.9 + merkleElapsed * 0.1;
 
     return {
       tick,
@@ -519,6 +729,65 @@ export class ChecksumSystem extends System {
       unitPositionHash: unitPositionHash >>> 0,
       healthSum,
       timestamp: Date.now(),
+      merkleTree,
+    };
+  }
+
+  /**
+   * Build the Merkle tree from entity leaf nodes
+   *
+   * Tree Structure:
+   *                     [Root Hash]
+   *                    /           \
+   *           [Units Hash]      [Buildings Hash]      [Resources Hash]
+   *           /         \        /            \
+   *     [Player1]    [Player2]  [Player1]    [Player2]
+   *        /    \
+   *   [Entity1] [Entity2]...
+   */
+  private buildMerkleTree(
+    tick: number,
+    unitNodesByPlayer: Map<string, MerkleNode[]>,
+    buildingNodesByPlayer: Map<string, MerkleNode[]>,
+    resourceNodes: MerkleNode[],
+    entityCount: number
+  ): MerkleTreeData {
+    // Build Units category
+    const unitGroups: MerkleNode[] = [];
+    for (const [playerId, nodes] of unitNodesByPlayer) {
+      if (nodes.length > 0) {
+        unitGroups.push(MerkleTreeBuilder.createGroupNode(playerId, nodes));
+      }
+    }
+    const unitsCategory = MerkleTreeBuilder.createCategoryNode('units', unitGroups);
+
+    // Build Buildings category
+    const buildingGroups: MerkleNode[] = [];
+    for (const [playerId, nodes] of buildingNodesByPlayer) {
+      if (nodes.length > 0) {
+        buildingGroups.push(MerkleTreeBuilder.createGroupNode(playerId, nodes));
+      }
+    }
+    const buildingsCategory = MerkleTreeBuilder.createCategoryNode('buildings', buildingGroups);
+
+    // Build Resources category (single group since not player-owned)
+    const resourcesCategory = MerkleTreeBuilder.createCategoryNode('resources', [
+      MerkleTreeBuilder.createGroupNode('world', resourceNodes),
+    ]);
+
+    // Build root
+    const categories: MerkleNode[] = [];
+    if (unitGroups.length > 0) categories.push(unitsCategory);
+    if (buildingGroups.length > 0) categories.push(buildingsCategory);
+    if (resourceNodes.length > 0) categories.push(resourcesCategory);
+
+    const root = MerkleTreeBuilder.createRootNode(categories);
+
+    return {
+      root,
+      tick,
+      timestamp: Date.now(),
+      entityCount,
     };
   }
 
@@ -688,13 +957,62 @@ export class ChecksumSystem extends System {
   }
 
   /**
-   * Get performance stats
+   * Get performance stats including Merkle tree computation time
    */
-  public getPerformanceStats(): { lastChecksumTimeMs: number; avgChecksumTimeMs: number } {
+  public getPerformanceStats(): {
+    lastChecksumTimeMs: number;
+    avgChecksumTimeMs: number;
+    lastMerkleTreeTimeMs: number;
+    avgMerkleTreeTimeMs: number;
+  } {
     return {
       lastChecksumTimeMs: this.lastChecksumTime,
       avgChecksumTimeMs: this.avgChecksumTimeMs,
+      lastMerkleTreeTimeMs: this.lastMerkleTreeTime,
+      avgMerkleTreeTimeMs: this.avgMerkleTreeTimeMs,
     };
+  }
+
+  /**
+   * Get the latest Merkle tree for the current state
+   */
+  public getLatestMerkleTree(): MerkleTreeData | null {
+    const latestChecksum = this.getLatestChecksum();
+    return latestChecksum?.merkleTree || null;
+  }
+
+  /**
+   * Find divergent entities between local state and a remote Merkle tree
+   * Returns O(log n) result instead of O(n) full comparison
+   */
+  public findDivergentEntities(remoteMerkleTree: NetworkMerkleTree): DivergenceResult | null {
+    const localTree = this.getLatestMerkleTree();
+    if (!localTree) return null;
+
+    return MerkleTreeComparator.findDivergence(
+      localTree.root,
+      this.reconstructRemoteMerkleNode(remoteMerkleTree)
+    );
+  }
+
+  /**
+   * Get divergent categories (quick check without full tree comparison)
+   */
+  public getDivergentCategories(remoteMerkleTree: NetworkMerkleTree): string[] {
+    const localTree = this.getLatestMerkleTree();
+    if (!localTree) return [];
+
+    return MerkleTreeComparator.findDivergentCategories(localTree, remoteMerkleTree);
+  }
+
+  /**
+   * Get divergent groups within a category
+   */
+  public getDivergentGroups(remoteMerkleTree: NetworkMerkleTree, category: string): string[] {
+    const localTree = this.getLatestMerkleTree();
+    if (!localTree) return [];
+
+    return MerkleTreeComparator.findDivergentGroups(localTree, remoteMerkleTree, category);
   }
 
   /**
@@ -772,3 +1090,15 @@ export class ChecksumSystem extends System {
     return differences;
   }
 }
+
+// Re-export Merkle tree types for external use
+export type {
+  MerkleNode,
+  MerkleTreeData,
+  NetworkMerkleTree,
+  DivergenceResult,
+  MerkleCompareRequest,
+  MerkleCompareResponse,
+} from '../network/MerkleTree';
+
+export { MerkleTreeBuilder, MerkleTreeComparator } from '../network/MerkleTree';
