@@ -40,8 +40,9 @@ const atomicAdd = (TSL as any).atomicAdd;
 const atomicStore = (TSL as any).atomicStore;
 
 // IndirectStorageBufferAttribute and StorageBufferAttribute may not be exported from types
-const IndirectStorageBufferAttribute = (THREE as any).IndirectStorageBufferAttribute;
-const StorageBufferAttribute = (THREE as any).StorageBufferAttribute;
+// These classes may not exist in all Three.js versions - check before using
+const IndirectStorageBufferAttribute = (THREE as any).IndirectStorageBufferAttribute ?? null;
+const StorageBufferAttribute = (THREE as any).StorageBufferAttribute ?? null;
 
 import { GPUUnitBuffer, UnitSlot, createIndirectArgsBuffer } from './GPUUnitBuffer';
 
@@ -153,6 +154,11 @@ export class CullingCompute {
     metadataData: Float32Array
   ): void {
     try {
+      // Check if required Three.js classes exist
+      if (!StorageBufferAttribute) {
+        throw new Error('StorageBufferAttribute not available in this Three.js version - GPU culling compute requires Three.js WebGPU build with storage buffer support');
+      }
+
       this.renderer = renderer;
 
       // Create storage buffers from unit buffer data

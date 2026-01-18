@@ -37,8 +37,9 @@ import * as TSL from 'three/tsl';
 const uint = (TSL as any).uint;
 
 // Three.js classes that may not be in type definitions
-const IndirectStorageBufferAttribute = (THREE as any).IndirectStorageBufferAttribute;
-const StorageBufferAttribute = (THREE as any).StorageBufferAttribute;
+// These classes may not exist in all Three.js versions - check before using
+const IndirectStorageBufferAttribute = (THREE as any).IndirectStorageBufferAttribute ?? null;
+const StorageBufferAttribute = (THREE as any).StorageBufferAttribute ?? null;
 const NodeMaterial = (THREE as any).NodeMaterial || THREE.MeshStandardMaterial;
 
 import { GPUUnitBuffer } from './GPUUnitBuffer';
@@ -134,6 +135,11 @@ export class GPUIndirectRenderer {
     cullingCompute: CullingCompute
   ): void {
     if (this.initialized) return;
+
+    // Check if required Three.js classes exist
+    if (!IndirectStorageBufferAttribute) {
+      throw new Error('IndirectStorageBufferAttribute not available in this Three.js version - GPU indirect rendering requires Three.js WebGPU build with indirect draw support');
+    }
 
     this.renderer = renderer;
     this.gpuUnitBuffer = gpuUnitBuffer;
