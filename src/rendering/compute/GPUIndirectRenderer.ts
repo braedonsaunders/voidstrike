@@ -84,7 +84,10 @@ export class GPUIndirectRenderer {
   private renderer: WebGPURenderer | null = null;
   private scene: THREE.Scene;
 
-  // Storage buffers (shared with CullingCompute)
+  // Storage buffers (shared with CullingCompute) - wrapped in StorageBufferAttribute
+  private transformStorageAttribute: any | null = null;  // StorageBufferAttribute
+  private metadataStorageAttribute: any | null = null;   // StorageBufferAttribute
+  private visibleIndicesStorageAttribute: any | null = null; // StorageBufferAttribute
   private transformStorage: ReturnType<typeof storage> | null = null;
   private metadataStorage: ReturnType<typeof storage> | null = null;
   private visibleIndicesStorage: ReturnType<typeof storage> | null = null;
@@ -146,10 +149,18 @@ export class GPUIndirectRenderer {
     this.transformData = gpuUnitBuffer.getTransformData();
     this.metadataData = gpuUnitBuffer.getMetadataData();
 
-    // Create storage buffer nodes for shader access
-    this.transformStorage = storage(this.transformData, 'mat4', MAX_UNITS);
-    this.metadataStorage = storage(this.metadataData, 'vec4', MAX_UNITS);
-    this.visibleIndicesStorage = storage(this.visibleIndicesData, 'uint', MAX_UNITS);
+    // Wrap TypedArrays in StorageBufferAttribute for TSL storage() compatibility
+    // Transform: mat4 = 16 floats per unit
+    this.transformStorageAttribute = new StorageBufferAttribute(this.transformData, 16);
+    this.transformStorage = storage(this.transformStorageAttribute, 'mat4', MAX_UNITS);
+
+    // Metadata: vec4 = 4 floats per unit
+    this.metadataStorageAttribute = new StorageBufferAttribute(this.metadataData, 4);
+    this.metadataStorage = storage(this.metadataStorageAttribute, 'vec4', MAX_UNITS);
+
+    // Visible indices: uint = 1 uint per unit
+    this.visibleIndicesStorageAttribute = new StorageBufferAttribute(this.visibleIndicesData, 1);
+    this.visibleIndicesStorage = storage(this.visibleIndicesStorageAttribute, 'uint', MAX_UNITS);
 
     // Create indirect args attribute
     this.indirectArgsAttribute = new IndirectStorageBufferAttribute(this.indirectArgsData, 5);
@@ -417,6 +428,14 @@ export class GPUIndirectRenderer {
 
     this.unitTypeGeometries.clear();
     this.unitTypeMaterials.clear();
+
+    this.transformStorageAttribute = null;
+    this.metadataStorageAttribute = null;
+    this.visibleIndicesStorageAttribute = null;
+    this.transformStorage = null;
+    this.metadataStorage = null;
+    this.visibleIndicesStorage = null;
+    this.indirectArgsAttribute = null;
 
     this.renderer = null;
     this.gpuUnitBuffer = null;

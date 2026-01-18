@@ -111,10 +111,12 @@ export class CullingCompute {
   private frustumPlanesData = new Float32Array(24); // 6 planes * 4 floats each
   private frustumPlanesStorage: ReturnType<typeof storage> | null = null;
 
-  // GPU storage buffers
+  // GPU storage buffers - wrapped in StorageBufferAttribute for TSL compatibility
+  private transformStorageAttribute: any | null = null; // StorageBufferAttribute
+  private metadataStorageAttribute: any | null = null;  // StorageBufferAttribute
   private transformStorageBuffer: ReturnType<typeof storage> | null = null;
   private metadataStorageBuffer: ReturnType<typeof storage> | null = null;
-  private visibleIndicesBuffer: any | null = null; // StorageBufferAttribute
+  private visibleIndicesAttribute: any | null = null; // StorageBufferAttribute
   private visibleIndicesStorage: ReturnType<typeof storage> | null = null;
   private indirectArgsAttribute: any | null = null; // IndirectStorageBufferAttribute
   private indirectArgsStorage: ReturnType<typeof storage> | null = null;
@@ -125,7 +127,11 @@ export class CullingCompute {
   // Counter for visible units (atomic) - one counter per (unitType, LOD, player) group
   // For simplicity, we use a single global counter and rebuild instance buffers
   private visibleCountBuffer: Uint32Array = new Uint32Array(1);
+  private visibleCountAttribute: any | null = null; // StorageBufferAttribute
   private visibleCountStorageBuffer: ReturnType<typeof storage> | null = null;
+
+  // Frustum planes attribute for storage buffer
+  private frustumPlanesAttribute: any | null = null; // StorageBufferAttribute
 
   // Indirect args data (on CPU for setup, synced to GPU)
   private indirectArgsData: Uint32Array | null = null;
@@ -158,26 +164,39 @@ export class CullingCompute {
     try {
       this.renderer = renderer;
 
-      // Create storage buffers from unit buffer data
-      this.transformStorageBuffer = storage(transformData, 'mat4', MAX_GPU_UNITS);
-      this.metadataStorageBuffer = storage(metadataData, 'vec4', MAX_GPU_UNITS);
+      // Validate StorageBufferAttribute is available
+      if (!StorageBufferAttribute || typeof StorageBufferAttribute !== 'function') {
+        throw new Error('StorageBufferAttribute not available in three/webgpu');
+      }
 
-      // Create visible indices output buffer (stores slot indices of visible units)
+      // Create StorageBufferAttributes to wrap TypedArrays for TSL storage() nodes
+      // Transform buffer: mat4 = 16 floats per unit
+      this.transformStorageAttribute = new StorageBufferAttribute(transformData, 16);
+      this.transformStorageBuffer = storage(this.transformStorageAttribute, 'mat4', MAX_GPU_UNITS);
+
+      // Metadata buffer: vec4 = 4 floats per unit
+      this.metadataStorageAttribute = new StorageBufferAttribute(metadataData, 4);
+      this.metadataStorageBuffer = storage(this.metadataStorageAttribute, 'vec4', MAX_GPU_UNITS);
+
+      // Visible indices output buffer (stores slot indices of visible units)
       const visibleIndicesData = new Uint32Array(MAX_GPU_UNITS);
-      this.visibleIndicesBuffer = new StorageBufferAttribute(visibleIndicesData, 1);
-      this.visibleIndicesStorage = storage(visibleIndicesData, 'uint', MAX_GPU_UNITS);
+      this.visibleIndicesAttribute = new StorageBufferAttribute(visibleIndicesData, 1);
+      this.visibleIndicesStorage = storage(this.visibleIndicesAttribute, 'uint', MAX_GPU_UNITS);
 
-      // Create indirect args buffer for all unit/LOD/player combinations
+      // Indirect args buffer for all unit/LOD/player combinations
       // DrawIndexedIndirect format: [indexCount, instanceCount, firstIndex, baseVertex, firstInstance]
       const indirectEntryCount = this.maxUnitTypes * this.maxLODLevels * this.maxPlayers;
       this.indirectArgsData = new Uint32Array(indirectEntryCount * 5);
-      this.indirectArgsStorage = storage(this.indirectArgsData, 'uint', indirectEntryCount * 5);
+      const indirectArgsAttr = new StorageBufferAttribute(this.indirectArgsData, 1);
+      this.indirectArgsStorage = storage(indirectArgsAttr, 'uint', indirectEntryCount * 5);
 
-      // Create visible count buffer (atomic counter)
-      this.visibleCountStorageBuffer = storage(this.visibleCountBuffer, 'uint', 1);
+      // Visible count buffer (atomic counter)
+      this.visibleCountAttribute = new StorageBufferAttribute(this.visibleCountBuffer, 1);
+      this.visibleCountStorageBuffer = storage(this.visibleCountAttribute, 'uint', 1);
 
-      // Create frustum planes storage buffer (6 planes as vec4)
-      this.frustumPlanesStorage = storage(this.frustumPlanesData, 'vec4', 6);
+      // Frustum planes storage buffer (6 planes as vec4)
+      this.frustumPlanesAttribute = new StorageBufferAttribute(this.frustumPlanesData, 4);
+      this.frustumPlanesStorage = storage(this.frustumPlanesAttribute, 'vec4', 6);
 
       // Create compute shader with proper output writing
       this.createCullingComputeShader();
@@ -584,7 +603,7 @@ export class CullingCompute {
    * Get visible indices buffer
    */
   getVisibleIndicesBuffer(): any | null {
-    return this.visibleIndicesBuffer;
+    return this.visibleIndicesAttribute;
   }
 
   /**
@@ -628,9 +647,13 @@ export class CullingCompute {
   dispose(): void {
     this.cachedVisibleSlots.length = 0;
     this.cachedLODAssignments.clear();
-    this.visibleIndicesBuffer = null;
+    this.visibleIndicesAttribute = null;
     this.indirectArgsAttribute = null;
     this.cullingComputeNode = null;
+    this.transformStorageAttribute = null;
+    this.metadataStorageAttribute = null;
+    this.visibleCountAttribute = null;
+    this.frustumPlanesAttribute = null;
   }
 }
 
