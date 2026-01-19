@@ -790,105 +790,84 @@ const volumetricFog = Fn(({ sceneColor, depth, lightPos, fogDensity }) => {
 
 ---
 
-### 2. Emissive Decorations (Crystals, Alien Structures) ✅ BASIC IMPLEMENTATION
+### 2. Emissive Decorations (Crystals, Alien Structures) ✅ FULLY IMPLEMENTED
 
-**Status:** Basic implementation complete (January 2025). Crystals now respond to graphics settings.
+**Status:** Full implementation with centralized manager and animation support (January 2025).
 
-**What's Working:**
+**Features:**
 - `emissiveDecorationsEnabled` - Toggle emissive glow on/off
 - `emissiveIntensityMultiplier` - Control glow intensity (0.5x - 2.0x)
-- CrystalField class stores material reference and updates emissive properties
-- EnvironmentManager provides methods: `setEmissiveDecorationsEnabled()`, `setEmissiveIntensityMultiplier()`
-- Reactive updates in WebGPUGameCanvas when settings change
+- **Pulsing animation** - Per-biome pulse speed and amplitude
+- **LightPool integration** - Optional attached point lights for individual decorations
+- **InstancedMesh support** - Efficient batch control for crystal fields
 
-**Limitations:**
-- Only CrystalField is currently wired up
-- InstancedDecorations and other emissive objects would need similar treatment
-- No per-object pulsing animation yet
-- Emissive objects don't cast actual point lights (would need LightPool integration)
+**Architecture:**
+
+```typescript
+// EmissiveDecorationManager - centralized emissive control
+// Supports both individual meshes and InstancedMesh batches
+
+// For individual decorations (with optional light attachment):
+emissiveManager.registerDecoration(mesh, {
+  emissive: '#00ff88',
+  emissiveIntensity: 2.0,
+  pulseSpeed: 0.5,
+  pulseAmplitude: 0.2,
+  attachLight: { color: '#00ff88', intensity: 1.5, distance: 8 }
+}, position);
+
+// For InstancedMesh (shared material, uniform animation):
+emissiveManager.registerInstancedDecoration(crystalMesh, {
+  emissive: '#204060',
+  emissiveIntensity: 0.5,
+  pulseSpeed: 0.3,
+  pulseAmplitude: 0.15,
+});
+
+// Per-frame update for animation
+emissiveManager.update(deltaTime);
+```
+
+**Biome-Specific Crystal Effects:**
+
+| Biome | Color | Pulse Speed | Amplitude |
+|-------|-------|-------------|-----------|
+| Frozen | Ice blue (#204060) | 0.3 (subtle) | 0.15 |
+| Void | Purple (#4020a0) | 0.5 (ethereal) | 0.25 |
+| Volcanic | Orange (#802010) | 0.8 (flickering) | 0.3 |
 
 **Files:**
-- `src/rendering/GroundDetail.ts` - CrystalField with emissive controls
-- `src/rendering/EnvironmentManager.ts` - Manager methods
-- `src/components/game/WebGPUGameCanvas.tsx` - Reactive settings
+- `src/rendering/EmissiveDecorationManager.ts` - Manager with animation and light support
+- `src/rendering/GroundDetail.ts` - CrystalField exposes InstancedMesh for registration
+- `src/rendering/EnvironmentManager.ts` - Creates manager, registers decorations
+- `src/rendering/LightPool.ts` - Pooled lights for attached emissive lights
 
-**Previous Design (for reference):**
+**Extending to Other Decorations:**
 
-**Goal:** Crystals and alien structures that emit light, creating stunning visual effects.
-
-#### Implementation Options
-
-**Option A: Material Emissive + Bloom**
-```typescript
-// Simple: Set emissive on material
-crystal.material.emissive = new THREE.Color(0x00ff88);
-crystal.material.emissiveIntensity = 2.0; // > 1.0 triggers bloom
-
-// Animate pulsing
-crystal.material.emissiveIntensity = 1.5 + Math.sin(time) * 0.5;
-```
-- **Pros:** Simple, uses existing bloom pipeline
-- **Cons:** No actual light cast on surroundings
-
-**Option B: Emissive + Point Lights**
-```typescript
-// Create point light at decoration position
-const crystalLight = new THREE.PointLight(0x00ff88, 2.0, 10);
-crystalLight.position.copy(crystal.position);
-scene.add(crystalLight);
-```
-- **Pros:** Actual light affects nearby objects
-- **Cons:** Many point lights = expensive (but see pooling below)
-
-**Option C: SSGI-Based Emission (Best Quality)**
-```typescript
-// Already have SSGI! Just need high emissive values
-crystal.material.emissive = new THREE.Color(0x00ff88);
-crystal.material.emissiveIntensity = 5.0;
-// SSGI automatically handles light bouncing
-```
-- **Pros:** Physically accurate light bleeding, uses existing system
-- **Cons:** Requires SSGI enabled (already high-end option)
-
-#### Proposed Architecture
+To add emissive behavior to new decoration types:
 
 ```typescript
-// In EnvironmentManager or new EmissiveManager
-interface EmissiveDecoration {
-  mesh: THREE.Mesh;
-  baseEmissive: THREE.Color;
-  pulseSpeed: number;
-  pulseAmplitude: number;
-  attachedLight?: THREE.PointLight; // Optional actual light
-}
+// 1. Get or create the mesh
+const alienTower = new THREE.Mesh(geometry, material);
 
-class EmissiveDecorationManager {
-  private decorations: EmissiveDecoration[] = [];
-  private lightPool: THREE.PointLight[] = [];
-
-  update(time: number) {
-    for (const deco of this.decorations) {
-      const pulse = 1.0 + Math.sin(time * deco.pulseSpeed) * deco.pulseAmplitude;
-      deco.mesh.material.emissiveIntensity = pulse;
-
-      if (deco.attachedLight) {
-        deco.attachedLight.intensity = pulse * 0.5;
-      }
-    }
-  }
-}
+// 2. Register with the manager
+emissiveDecorationManager.registerDecoration(alienTower, {
+  emissive: '#ff4400',
+  emissiveIntensity: 3.0,
+  pulseSpeed: 0.5,
+  pulseAmplitude: 0.3,
+  attachLight: {
+    color: '#ff4400',
+    intensity: 2.0,
+    distance: 10,
+  },
+}, alienTower.position);
 ```
 
-#### Proposed UI
-
-```
-[Effects]
-├── [ ] Emissive Decorations
-│   ├── Crystals Glow: [Off|Subtle|Bright|Intense]
-│   ├── Alien Structures: [Off|Subtle|Bright|Intense]
-│   ├── Pulse Animation: [ ] ───●─── 1.0 speed
-│   └── [ ] Cast Light (GPU expensive)
-```
+**Design Notes:**
+- Individual decorations can have attached point lights via LightPool
+- InstancedMesh decorations share one material, so per-instance lights aren't supported
+- Use DecorationLightManager for clustered/distance-sorted decoration lights at scale
 
 ---
 
@@ -1022,8 +1001,8 @@ function applyRenderingHints(mesh: THREE.Mesh, hints: RenderingHints) {
 - [ ] Add UI exposure slider range expansion (0.5-2.5 instead of 0.5-2.0)
 
 **Tier 2: Moderate Effort**
-- [ ] **Light Pool System** - Reusable point/spot lights for effects
-- [ ] **Emissive decoration manager** - Crystals/towers that glow
+- [x] **Light Pool System** - Reusable point/spot lights for effects ✅ Implemented
+- [x] **Emissive decoration manager** - Crystals/towers that glow ✅ Implemented with animation
 - [ ] **Per-biome light color presets** - More dramatic biome lighting
 
 **Tier 3: Advanced (High Impact)**
@@ -1106,7 +1085,7 @@ lightPool.spawn('laser_hit', impactPos, new THREE.Color(0x00ffff), 3.0, 100);
 3. **Medium Term**
    - Light pool for dynamic effects - ✅ Already implemented
    - Building smoke/geyser gas effects
-   - Extend emissive system to InstancedDecorations
+   - ✅ Extend emissive system to InstancedDecorations (done - EmissiveDecorationManager supports both)
 
 4. **Long Term**
    - Clustered deferred lighting

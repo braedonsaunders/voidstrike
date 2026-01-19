@@ -10,6 +10,9 @@ import { EnvironmentParticles } from './EnhancedDecorations';
 import { InstancedTrees, InstancedRocks, InstancedGrass, InstancedPebbles, updateDecorationFrustum } from './InstancedDecorations';
 // AAA-quality decoration light pooling, frustum culling, and distance falloff
 import { DecorationLightManager } from './DecorationLightManager';
+// Centralized emissive decoration management with animation support
+import { EmissiveDecorationManager } from './EmissiveDecorationManager';
+import { LightPool } from './LightPool';
 import {
   SHADOW_QUALITY_PRESETS,
   ENVIRONMENT,
@@ -48,6 +51,9 @@ export class EnvironmentManager {
   private legacyDecorations: MapDecorations | null = null;
   // AAA decoration light manager - pools 50 lights for hundreds of emissive decorations
   private decorationLightManager: DecorationLightManager | null = null;
+  // Centralized emissive decoration manager with animation and light attachment
+  private emissiveDecorationManager: EmissiveDecorationManager | null = null;
+  private emissiveLightPool: LightPool | null = null;
 
   // Lighting
   private ambientLight: THREE.AmbientLight;
@@ -244,6 +250,40 @@ export class EnvironmentManager {
     // This enables maps like Crystal Caverns (295 crystals) to run at 60+ fps
     this.decorationLightManager = new DecorationLightManager(this.scene, 50);
 
+    // Emissive decoration manager with optional light attachment
+    // Uses separate light pool for permanent emissive lights (vs transient combat lights)
+    this.emissiveLightPool = new LightPool(this.scene, 16);
+    this.emissiveDecorationManager = new EmissiveDecorationManager(this.scene, this.emissiveLightPool);
+
+    // Register crystals with emissive decoration manager
+    // This enables centralized animation and intensity control
+    if (this.crystals) {
+      const crystalMesh = this.crystals.getInstancedMesh();
+      if (crystalMesh) {
+        // Get biome-specific emissive color for hints
+        let emissiveHex = '#204060'; // Default frozen
+        let pulseSpeed = 0.3; // Subtle pulse
+        let pulseAmplitude = 0.15;
+
+        if (this.biome.name === 'Void') {
+          emissiveHex = '#4020a0';
+          pulseSpeed = 0.5; // More ethereal pulsing
+          pulseAmplitude = 0.25;
+        } else if (this.biome.name === 'Volcanic') {
+          emissiveHex = '#802010';
+          pulseSpeed = 0.8; // Rapid flickering
+          pulseAmplitude = 0.3;
+        }
+
+        this.emissiveDecorationManager.registerInstancedDecoration(crystalMesh, {
+          emissive: emissiveHex,
+          emissiveIntensity: 0.5,
+          pulseSpeed,
+          pulseAmplitude,
+        });
+      }
+    }
+
     // Legacy decorations (watch towers, destructibles)
     // Pass scene and light manager to enable pooled lights for emissive decorations
     this.legacyDecorations = new MapDecorations(this.mapData, this.terrain, this.scene, this.decorationLightManager);
@@ -275,6 +315,11 @@ export class EnvironmentManager {
     // Update emissive decoration pulsing animation
     if (this.legacyDecorations) {
       this.legacyDecorations.update(deltaTime);
+    }
+
+    // Update emissive decoration manager (crystal pulsing, etc.)
+    if (this.emissiveDecorationManager) {
+      this.emissiveDecorationManager.update(deltaTime);
     }
 
     // PERF: Update AAA decoration light manager - frustum culled, distance-sorted, pooled lights
@@ -687,8 +732,8 @@ export class EnvironmentManager {
    * Enable or disable emissive decorations (crystals, alien structures)
    */
   public setEmissiveDecorationsEnabled(enabled: boolean): void {
-    if (this.crystals) {
-      this.crystals.setEmissiveEnabled(enabled);
+    if (this.emissiveDecorationManager) {
+      this.emissiveDecorationManager.setEnabled(enabled);
     }
   }
 
@@ -696,8 +741,8 @@ export class EnvironmentManager {
    * Set emissive intensity multiplier for decorations
    */
   public setEmissiveIntensityMultiplier(multiplier: number): void {
-    if (this.crystals) {
-      this.crystals.setEmissiveIntensityMultiplier(multiplier);
+    if (this.emissiveDecorationManager) {
+      this.emissiveDecorationManager.setIntensityMultiplier(multiplier);
     }
   }
 
@@ -716,6 +761,8 @@ export class EnvironmentManager {
     this.particles?.dispose();
     this.legacyDecorations?.dispose();
     this.decorationLightManager?.dispose();
+    this.emissiveDecorationManager?.dispose();
+    this.emissiveLightPool?.dispose();
 
     this.scene.remove(this.terrain.mesh);
     this.scene.remove(this.ambientLight);
