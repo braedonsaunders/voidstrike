@@ -593,14 +593,18 @@ export class SelectionSystem extends System {
       }
     }
 
-    // Select all units of the same type belonging to the player
+    // Select all units of the same type belonging to the player within viewport
     for (const entity of entities) {
       const unit = entity.get<Unit>('Unit')!;
       const selectable = entity.get<Selectable>('Selectable')!;
       const health = entity.get<Health>('Health');
+      const transform = entity.get<Transform>('Transform');
 
       // Skip dead units
       if (health && health.isDead()) continue;
+
+      // Only select units within the current viewport
+      if (transform && !this.isInViewport(transform.x, transform.y)) continue;
 
       if (unit.unitId === unitId && selectable.playerId === playerId) {
         selectable.select();
@@ -637,14 +641,18 @@ export class SelectionSystem extends System {
       }
     }
 
-    // Select all buildings of the same type belonging to the player
+    // Select all buildings of the same type belonging to the player within viewport
     for (const entity of entities) {
       const building = entity.get<Building>('Building')!;
       const selectable = entity.get<Selectable>('Selectable')!;
       const health = entity.get<Health>('Health');
+      const transform = entity.get<Transform>('Transform');
 
       // Skip destroyed buildings
       if (health && health.isDead()) continue;
+
+      // Only select buildings within the current viewport
+      if (transform && !this.isInViewport(transform.x, transform.y)) continue;
 
       if (building.buildingId === buildingId && selectable.playerId === playerId) {
         selectable.select();

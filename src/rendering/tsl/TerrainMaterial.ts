@@ -27,9 +27,94 @@ import {
   step,
   mix,
   abs,
+  type ShaderNodeObject,
 } from 'three/tsl';
 import { MeshStandardNodeMaterial } from 'three/webgpu';
 import { BiomeType } from '@/rendering/Biomes';
+
+// ============================================
+// TERRAIN BLEND WEIGHT CALCULATION
+// ============================================
+
+interface TerrainBlendWeights {
+  normGrass: ShaderNodeObject<any>;
+  normDirt: ShaderNodeObject<any>;
+  normRock: ShaderNodeObject<any>;
+  normCliff: ShaderNodeObject<any>;
+  normPlatform: ShaderNodeObject<any>;
+  totalWeight: ShaderNodeObject<any>;
+  isPlatform: ShaderNodeObject<any>;
+  notPlatform: ShaderNodeObject<any>;
+  notFlatUnwalkable: ShaderNodeObject<any>;
+}
+
+/**
+ * Calculate terrain blend weights based on slope and terrain type.
+ * Extracted to avoid duplicating ~40 lines across color/roughness/normal nodes.
+ */
+const createTerrainBlendWeights = Fn(([slope, terrainType]: [ShaderNodeObject<any>, ShaderNodeObject<any>]): TerrainBlendWeights => {
+  // Terrain type masks
+  // Type values: 0=ground, 1=ramp, 2=unwalkable, 3=platform
+  const isGround = smoothstep(float(0.5), float(0.0), terrainType);
+  const isRamp = smoothstep(float(0.5), float(1.0), terrainType).mul(smoothstep(float(1.5), float(1.0), terrainType));
+  const isUnwalkable = smoothstep(float(1.5), float(2.0), terrainType).mul(smoothstep(float(2.5), float(2.0), terrainType));
+  const isPlatform = smoothstep(float(2.5), float(3.0), terrainType);
+
+  // SC2-STYLE: Platforms use platform material, ramps use grass
+  const notPlatform = float(1.0).sub(isPlatform);
+
+  // Base slope-based weights - ONLY for non-platform terrain
+  const baseGrassWeight = smoothstep(float(0.25), float(0.1), slope).mul(notPlatform);
+  const baseDirtWeight = smoothstep(float(0.08), float(0.2), slope).mul(smoothstep(float(0.35), float(0.2), slope)).mul(notPlatform);
+  const baseRockWeight = smoothstep(float(0.2), float(0.35), slope).mul(smoothstep(float(0.55), float(0.4), slope)).mul(notPlatform);
+  const baseCliffWeight = smoothstep(float(0.4), float(0.55), slope).mul(notPlatform);
+
+  // Universal steep slope handling - only for natural terrain
+  const isSteep = smoothstep(float(0.3), float(0.6), slope).mul(notPlatform);
+  const isVerySteep = smoothstep(float(0.5), float(0.8), slope).mul(notPlatform);
+
+  // Flat unwalkable handling
+  const isVerysteepForCliff = smoothstep(float(0.5), float(0.8), slope);
+  const flatUnwalkable = isUnwalkable.mul(float(1.0).sub(isVerysteepForCliff));
+  const notFlatUnwalkable = float(1.0).sub(flatUnwalkable);
+
+  // Final weight calculations
+  const baseGrass = baseGrassWeight.mul(isGround).mul(float(1.0).sub(isSteep));
+  const grassWeight = baseGrass.add(flatUnwalkable.mul(float(10.0))).add(isRamp.mul(float(10.0)));
+  const dirtWeight = baseDirtWeight.mul(isGround).mul(notFlatUnwalkable).add(isSteep.mul(isGround).mul(float(0.2)));
+  const steepUnwalkableRock = isUnwalkable.mul(isVerysteepForCliff).mul(float(0.8)).mul(notPlatform);
+  const rockWeight = baseRockWeight.mul(notFlatUnwalkable)
+    .add(steepUnwalkableRock)
+    .add(isSteep.mul(isGround).mul(float(0.3)));
+  const cliffWeight = baseCliffWeight.mul(isUnwalkable).mul(isVerysteepForCliff)
+    .add(isUnwalkable.mul(isVerySteep).mul(float(1.5)));
+  const platformWeight = isPlatform.mul(float(10.0));
+
+  // Safety fallback - but NOT on platforms
+  const rawTotal = grassWeight.add(dirtWeight).add(rockWeight).add(cliffWeight).add(platformWeight);
+  const needsFallback = smoothstep(float(0.5), float(0.0), rawTotal);
+  const finalRockWeight = rockWeight.add(needsFallback.mul(notPlatform).mul(notFlatUnwalkable));
+
+  // Normalize weights
+  const totalWeight = grassWeight.add(dirtWeight).add(finalRockWeight).add(cliffWeight).add(platformWeight).add(float(0.001));
+  const normGrass = grassWeight.div(totalWeight);
+  const normDirt = dirtWeight.div(totalWeight);
+  const normRock = finalRockWeight.div(totalWeight);
+  const normCliff = cliffWeight.div(totalWeight);
+  const normPlatform = platformWeight.div(totalWeight);
+
+  return {
+    normGrass,
+    normDirt,
+    normRock,
+    normCliff,
+    normPlatform,
+    totalWeight,
+    isPlatform,
+    notPlatform,
+    notFlatUnwalkable,
+  };
+});
 
 export interface TSLTerrainConfig {
   biome: BiomeType;
@@ -258,90 +343,15 @@ export class TSLTerrainMaterial {
       const panelWithBevel = mix(panelWithVariation, bevelColor, bevelMask.mul(0.6));
       const platformColor = mix(panelWithBevel, borderColor, isBorder);
 
-      // Terrain type masks - ensure textures match walkability
-      // Type values: 0=ground, 1=ramp, 2=unwalkable, 3=platform
-      // isGround: 1.0 if ground (type=0), 0.0 otherwise
-      const isGround = smoothstep(float(0.5), float(0.0), terrainType);
-      // isRamp: 1.0 if ramp (type=1), 0.0 otherwise
-      const isRamp = smoothstep(float(0.5), float(1.0), terrainType).mul(smoothstep(float(1.5), float(1.0), terrainType));
-      // isUnwalkable: 1.0 if unwalkable (type=2), 0.0 otherwise
-      const isUnwalkable = smoothstep(float(1.5), float(2.0), terrainType).mul(smoothstep(float(2.5), float(2.0), terrainType));
-      // isPlatform: 1.0 if platform (type=3), 0.0 otherwise - SC2-style geometric platforms
-      const isPlatform = smoothstep(float(2.5), float(3.0), terrainType);
-
-      // SC2-STYLE PLATFORM HANDLING:
-      // Platforms ALWAYS use platform material regardless of slope
-      // Ramps use grass/ground material (walkable paths)
-      const notPlatform = float(1.0).sub(isPlatform);
-
-      // Base slope-based weights - ONLY for non-platform terrain
-      const baseGrassWeight = smoothstep(float(0.25), float(0.1), slope).mul(notPlatform);
-      const baseDirtWeight = smoothstep(float(0.08), float(0.2), slope).mul(smoothstep(float(0.35), float(0.2), slope)).mul(notPlatform);
-      const baseRockWeight = smoothstep(float(0.2), float(0.35), slope).mul(smoothstep(float(0.55), float(0.4), slope)).mul(notPlatform);
-      const baseCliffWeight = smoothstep(float(0.4), float(0.55), slope).mul(notPlatform);
-
-      // UNIVERSAL STEEP SLOPE HANDLING - only for natural terrain (not platforms)
-      const isSteep = smoothstep(float(0.3), float(0.6), slope).mul(notPlatform);
-      const isVerySteep = smoothstep(float(0.5), float(0.8), slope).mul(notPlatform);
-
-      // Apply terrain type constraints for NATURAL terrain only:
-      // Ground: grass + dirt, rock only on steep areas
-      // Unwalkable: rock + cliff ONLY if steep, grass if flat (obstacles)
-
-      // Flat unwalkable: unwalkable terrain that ISN'T steep cliffs
-      const isVerysteepForCliff = smoothstep(float(0.5), float(0.8), slope);
-      const flatUnwalkable = isUnwalkable.mul(float(1.0).sub(isVerysteepForCliff));
-      const notFlatUnwalkable = float(1.0).sub(flatUnwalkable);
-
-      // Base grass from slope (for ground terrain only)
-      const baseGrass = baseGrassWeight.mul(isGround).mul(float(1.0).sub(isSteep));
-
-      // Grass weight - for natural ground, flat unwalkable, AND ramps
-      const grassWeight = baseGrass
-        .add(flatUnwalkable.mul(float(10.0)))   // Flat unwalkable gets grass
-        .add(isRamp.mul(float(10.0)));          // Ramps get grass
-
-      // Dirt - ONLY on natural ground terrain that's somewhat steep
-      const dirtWeight = baseDirtWeight.mul(isGround).mul(notFlatUnwalkable)
-        .add(isSteep.mul(isGround).mul(float(0.2)));
-
-      // Rock - For steep natural terrain only (not platforms)
-      const steepUnwalkableRock = isUnwalkable.mul(isVerysteepForCliff).mul(float(0.8)).mul(notPlatform);
-      const rockWeight = baseRockWeight.mul(notFlatUnwalkable)
-        .add(steepUnwalkableRock)
-        .add(isSteep.mul(isGround).mul(float(0.3)));
-
-      // Cliff - ONLY on VERY STEEP natural unwalkable terrain (actual cliff faces)
-      const cliffWeight = baseCliffWeight.mul(isUnwalkable).mul(isVerysteepForCliff)
-        .add(isUnwalkable.mul(isVerySteep).mul(float(1.5)));
-
-      // Platform - SC2-style geometric platforms only (not ramps)
-      const platformWeight = isPlatform.mul(float(10.0));
-
-      // SAFETY: Guarantee minimum total weight to prevent black areas
-      // But DON'T add fallback rock to platforms - they have explicit textures
-      const minTotalWeight = float(0.5);
-      const rawTotal = grassWeight.add(dirtWeight).add(rockWeight).add(cliffWeight).add(platformWeight);
-      const needsFallback = smoothstep(minTotalWeight, float(0.0), rawTotal);
-      const fallbackRock = needsFallback.mul(notPlatform).mul(notFlatUnwalkable);
-
-      // Final weights with fallback
-      const finalRockWeight = rockWeight.add(fallbackRock);
-
-      // Normalize weights so they sum to 1.0
-      const totalWeight = grassWeight.add(dirtWeight).add(finalRockWeight).add(cliffWeight).add(platformWeight).add(float(0.001));
-      const normGrass = grassWeight.div(totalWeight);
-      const normDirt = dirtWeight.div(totalWeight);
-      const normRock = finalRockWeight.div(totalWeight);
-      const normCliff = cliffWeight.div(totalWeight);
-      const normPlatform = platformWeight.div(totalWeight);
+      // Calculate terrain blend weights using shared helper
+      const weights = createTerrainBlendWeights(slope, terrainType);
 
       // Blend colors using normalized weights (5 textures)
-      const color = grassColor.mul(normGrass)
-        .add(dirtColor.mul(normDirt))
-        .add(rockColor.mul(normRock))
-        .add(cliffColor.mul(normCliff))
-        .add(platformColor.mul(normPlatform));
+      const color = grassColor.mul(weights.normGrass)
+        .add(dirtColor.mul(weights.normDirt))
+        .add(rockColor.mul(weights.normRock))
+        .add(cliffColor.mul(weights.normCliff))
+        .add(platformColor.mul(weights.normPlatform));
 
       return vec4(color, 1.0);
     })();
@@ -374,52 +384,15 @@ export class TSLTerrainMaterial {
       const borderRoughness = float(0.75); // Rough seams
       const platformR = mix(mix(baseRoughness, bevelRoughness, bevelMaskR), borderRoughness, isBorderR);
 
-      // Terrain type masks (same as color node)
-      // Type values: 0=ground, 1=ramp, 2=unwalkable, 3=platform
-      const isGround = smoothstep(float(0.5), float(0.0), terrainType);
-      const isRamp = smoothstep(float(0.5), float(1.0), terrainType).mul(smoothstep(float(1.5), float(1.0), terrainType));
-      const isUnwalkable = smoothstep(float(1.5), float(2.0), terrainType).mul(smoothstep(float(2.5), float(2.0), terrainType));
-      const isPlatform = smoothstep(float(2.5), float(3.0), terrainType);
+      // Calculate terrain blend weights using shared helper
+      const weights = createTerrainBlendWeights(slope, terrainType);
 
-      // SC2-STYLE: Platforms use platform material, ramps use grass
-      const notPlatform = float(1.0).sub(isPlatform);
-
-      // Base weights - ONLY for non-platform terrain
-      const baseGrassWeight = smoothstep(float(0.25), float(0.1), slope).mul(notPlatform);
-      const baseDirtWeight = smoothstep(float(0.08), float(0.2), slope).mul(smoothstep(float(0.35), float(0.2), slope)).mul(notPlatform);
-      const baseRockWeight = smoothstep(float(0.2), float(0.35), slope).mul(smoothstep(float(0.55), float(0.4), slope)).mul(notPlatform);
-      const baseCliffWeight = smoothstep(float(0.4), float(0.55), slope).mul(notPlatform);
-
-      // Universal steep slope handling - only for natural terrain
-      const isSteep = smoothstep(float(0.3), float(0.6), slope).mul(notPlatform);
-      const isVerySteep = smoothstep(float(0.5), float(0.8), slope).mul(notPlatform);
-
-      // Flat unwalkable handling
-      const isVerysteepForCliff = smoothstep(float(0.5), float(0.8), slope);
-      const flatUnwalkable = isUnwalkable.mul(float(1.0).sub(isVerysteepForCliff));
-      const notFlatUnwalkable = float(1.0).sub(flatUnwalkable);
-      const baseGrass = baseGrassWeight.mul(isGround).mul(float(1.0).sub(isSteep));
-      const grassWeight = baseGrass.add(flatUnwalkable.mul(float(10.0))).add(isRamp.mul(float(10.0)));
-      const dirtWeight = baseDirtWeight.mul(isGround).mul(notFlatUnwalkable).add(isSteep.mul(isGround).mul(float(0.2)));
-      const steepUnwalkableRock = isUnwalkable.mul(isVerysteepForCliff).mul(float(0.8)).mul(notPlatform);
-      const rockWeight = baseRockWeight.mul(notFlatUnwalkable)
-        .add(steepUnwalkableRock)
-        .add(isSteep.mul(isGround).mul(float(0.3)));
-      const cliffWeight = baseCliffWeight.mul(isUnwalkable).mul(isVerysteepForCliff).add(isUnwalkable.mul(isVerySteep).mul(float(1.5)));
-      const platformWeight = isPlatform.mul(float(10.0));
-
-      // Safety fallback - but NOT on platforms
-      const rawTotal = grassWeight.add(dirtWeight).add(rockWeight).add(cliffWeight).add(platformWeight);
-      const needsFallback = smoothstep(float(0.5), float(0.0), rawTotal);
-      const finalRockWeight = rockWeight.add(needsFallback.mul(notPlatform).mul(notFlatUnwalkable));
-      const totalWeight = grassWeight.add(dirtWeight).add(finalRockWeight).add(cliffWeight).add(platformWeight).add(float(0.001));
-
-      const roughness = grassR.mul(grassWeight)
-        .add(dirtR.mul(dirtWeight))
-        .add(rockR.mul(finalRockWeight))
-        .add(cliffR.mul(cliffWeight))
-        .add(platformR.mul(platformWeight))
-        .div(totalWeight);
+      // Blend roughness using normalized weights
+      const roughness = grassR.mul(weights.normGrass)
+        .add(dirtR.mul(weights.normDirt))
+        .add(rockR.mul(weights.normRock))
+        .add(cliffR.mul(weights.normCliff))
+        .add(platformR.mul(weights.normPlatform));
 
       return clamp(roughness, 0.1, 0.95);
     })();
@@ -453,52 +426,15 @@ export class TSLTerrainMaterial {
       const bevelNormalY = centerOffset.y.sign().mul(bevelStrength).mul(step(edgeDistX, edgeDistY));
       const platformN = normalize(vec3(bevelNormalX, bevelNormalY, float(1.0)));
 
-      // Terrain type masks (same as color node)
-      // Type values: 0=ground, 1=ramp, 2=unwalkable, 3=platform
-      const isGround = smoothstep(float(0.5), float(0.0), terrainType);
-      const isRamp = smoothstep(float(0.5), float(1.0), terrainType).mul(smoothstep(float(1.5), float(1.0), terrainType));
-      const isUnwalkable = smoothstep(float(1.5), float(2.0), terrainType).mul(smoothstep(float(2.5), float(2.0), terrainType));
-      const isPlatform = smoothstep(float(2.5), float(3.0), terrainType);
+      // Calculate terrain blend weights using shared helper
+      const weights = createTerrainBlendWeights(slope, terrainType);
 
-      // SC2-STYLE: Platforms use platform material, ramps use grass
-      const notPlatform = float(1.0).sub(isPlatform);
-
-      // Base weights - ONLY for non-platform terrain
-      const baseGrassWeight = smoothstep(float(0.25), float(0.1), slope).mul(notPlatform);
-      const baseDirtWeight = smoothstep(float(0.08), float(0.2), slope).mul(smoothstep(float(0.35), float(0.2), slope)).mul(notPlatform);
-      const baseRockWeight = smoothstep(float(0.2), float(0.35), slope).mul(smoothstep(float(0.55), float(0.4), slope)).mul(notPlatform);
-      const baseCliffWeight = smoothstep(float(0.4), float(0.55), slope).mul(notPlatform);
-
-      // Universal steep slope handling - only for natural terrain
-      const isSteep = smoothstep(float(0.3), float(0.6), slope).mul(notPlatform);
-      const isVerySteep = smoothstep(float(0.5), float(0.8), slope).mul(notPlatform);
-
-      // Flat unwalkable handling
-      const isVerysteepForCliff = smoothstep(float(0.5), float(0.8), slope);
-      const flatUnwalkable = isUnwalkable.mul(float(1.0).sub(isVerysteepForCliff));
-      const notFlatUnwalkable = float(1.0).sub(flatUnwalkable);
-      const baseGrass = baseGrassWeight.mul(isGround).mul(float(1.0).sub(isSteep));
-      const grassWeight = baseGrass.add(flatUnwalkable.mul(float(10.0))).add(isRamp.mul(float(10.0)));
-      const dirtWeight = baseDirtWeight.mul(isGround).mul(notFlatUnwalkable).add(isSteep.mul(isGround).mul(float(0.2)));
-      const steepUnwalkableRock = isUnwalkable.mul(isVerysteepForCliff).mul(float(0.8)).mul(notPlatform);
-      const rockWeight = baseRockWeight.mul(notFlatUnwalkable)
-        .add(steepUnwalkableRock)
-        .add(isSteep.mul(isGround).mul(float(0.3)));
-      const cliffWeight = baseCliffWeight.mul(isUnwalkable).mul(isVerysteepForCliff).add(isUnwalkable.mul(isVerySteep).mul(float(1.5)));
-      const platformWeight = isPlatform.mul(float(10.0));
-
-      // Safety fallback - but NOT on platforms
-      const rawTotal = grassWeight.add(dirtWeight).add(rockWeight).add(cliffWeight).add(platformWeight);
-      const needsFallback = smoothstep(float(0.5), float(0.0), rawTotal);
-      const finalRockWeight = rockWeight.add(needsFallback.mul(notPlatform).mul(notFlatUnwalkable));
-      const totalWeight = grassWeight.add(dirtWeight).add(finalRockWeight).add(cliffWeight).add(platformWeight).add(float(0.001));
-
-      const blendedNormal = grassN.mul(grassWeight)
-        .add(dirtN.mul(dirtWeight))
-        .add(rockN.mul(finalRockWeight))
-        .add(cliffN.mul(cliffWeight))
-        .add(platformN.mul(platformWeight))
-        .div(totalWeight);
+      // Blend normals using normalized weights (need totalWeight for proper blending)
+      const blendedNormal = grassN.mul(weights.normGrass)
+        .add(dirtN.mul(weights.normDirt))
+        .add(rockN.mul(weights.normRock))
+        .add(cliffN.mul(weights.normCliff))
+        .add(platformN.mul(weights.normPlatform));
 
       // Normalize and convert back to 0-1 range
       return normalize(blendedNormal).mul(0.5).add(0.5);

@@ -1240,15 +1240,12 @@ export class UnitRenderer {
     }
 
     // Mark instanced overlay matrices as needing update
+    // FIX: Always mark needsUpdate even when count is 0, to ensure GPU clears stale instances
     for (const group of this.selectionRingGroups.values()) {
-      if (group.mesh.count > 0) {
-        group.mesh.instanceMatrix.needsUpdate = true;
-      }
+      group.mesh.instanceMatrix.needsUpdate = true;
     }
     for (const group of this.teamMarkerGroups.values()) {
-      if (group.mesh.count > 0) {
-        group.mesh.instanceMatrix.needsUpdate = true;
-      }
+      group.mesh.instanceMatrix.needsUpdate = true;
     }
 
     // Mark instance matrices as needing update and commit for TAA velocity

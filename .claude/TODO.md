@@ -120,8 +120,7 @@
 - [x] SelectionSystem (TSL) - Team-colored selection rings with animations
 - [x] GPUParticleSystem (TSL) - GPU-instanced particles via EffectEmitter
 - [x] RenderPipeline (TSL) - Post-processing (bloom, SSAO, FXAA, vignette)
-- [x] ProceduralTerrainMaterial (TSL) - Unused but available
-- [x] TextureTerrainMaterial (TSL) - Unused but available
+- [x] TSLTerrainMaterial - Biome-aware terrain with slope blending and SC2-style platforms
 
 ---
 
