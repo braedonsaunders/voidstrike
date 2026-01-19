@@ -17,38 +17,38 @@
  * Final separation distance = (combinedRadius * SEPARATION_RADIUS) + SEPARATION_RADIUS
  * Higher values = units maintain more spacing relative to their size.
  */
-export const SEPARATION_RADIUS = 2.0;
+export const SEPARATION_RADIUS = 2.5;
 
 /**
  * Separation strength while units are moving.
  * Very weak to allow SC2-style clumping during group movement.
  * Units stack together while traveling, then spread at destination.
  */
-export const SEPARATION_STRENGTH_MOVING = 0.3;
+export const SEPARATION_STRENGTH_MOVING = 0.5;
 
 /**
  * Separation strength when units are idle.
  * Strong to ensure clear visual distinction between units.
  */
-export const SEPARATION_STRENGTH_IDLE = 3.0;
+export const SEPARATION_STRENGTH_IDLE = 6.0;
 
 /**
  * Separation strength when units arrive at destination.
  * Very strong to create natural spreading at rally points.
  */
-export const SEPARATION_STRENGTH_ARRIVING = 4.0;
+export const SEPARATION_STRENGTH_ARRIVING = 8.0;
 
 /**
  * Separation strength while units are attacking in range.
  * Very strong for SC2-style unclumping during combat.
  */
-export const SEPARATION_STRENGTH_COMBAT = 5.0;
+export const SEPARATION_STRENGTH_COMBAT = 8.0;
 
 /**
  * Maximum separation/avoidance force magnitude.
  * High value allows strong separation when units overlap.
  */
-export const MAX_AVOIDANCE_FORCE = 4.0;
+export const MAX_AVOIDANCE_FORCE = 10.0;
 
 // =============================================================================
 // COHESION - Keeps groups together (weak boid force)
@@ -91,13 +91,13 @@ export const ALIGNMENT_STRENGTH = 0.3;
  * Distance from target where arrival spreading kicks in.
  * Units of: world units
  */
-export const ARRIVAL_SPREAD_RADIUS = 2.0;
+export const ARRIVAL_SPREAD_RADIUS = 5.0;
 
 /**
  * Additional separation multiplier at arrival.
  * Boosts separation to prevent bunching at rally points.
  */
-export const ARRIVAL_SPREAD_STRENGTH = 1.0;
+export const ARRIVAL_SPREAD_STRENGTH = 2.0;
 
 // =============================================================================
 // BUILDING AVOIDANCE - Runtime steering around structures
@@ -270,7 +270,7 @@ export const COMBAT_SPREAD_SPEED_MULTIPLIER = 0.5;
  * Separation force multiplier for flying units.
  * Flying units have more freedom of movement and need stronger separation.
  */
-export const FLYING_SEPARATION_MULTIPLIER = 1.5;
+export const FLYING_SEPARATION_MULTIPLIER = 2.0;
 
 /**
  * Minimum separation magnitude to trigger combat movement.

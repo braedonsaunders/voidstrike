@@ -886,14 +886,14 @@ export class MovementSystem extends System {
       return;
     }
 
-    // PERF: Check cache first - reuse result if calculated recently
-    const cached = this.separationCache.get(selfId);
-    if (cached && (this.currentTick - cached.tick) < SEPARATION_THROTTLE_TICKS) {
-      // Scale cached result by current strength (state may have changed)
-      out.x = cached.x;
-      out.y = cached.y;
-      return;
-    }
+    // DISABLED CACHE: Ensure fresh calculations every frame for debugging
+    // TODO: Re-enable once separation is working correctly
+    // const cached = this.separationCache.get(selfId);
+    // if (cached && (this.currentTick - cached.tick) < SEPARATION_THROTTLE_TICKS) {
+    //   out.x = cached.x;
+    //   out.y = cached.y;
+    //   return;
+    // }
 
     let forceX = 0;
     let forceY = 0;
@@ -2331,30 +2331,23 @@ export class MovementSystem extends System {
             this.calculateAlignmentForce(entity.id, transform, unit, velocity, tempAlignment);
           }
 
-          // Blend all forces with direction to target
-          let dirX = distance > 0.01 ? dx / distance : 0;
-          let dirY = distance > 0.01 ? dy / distance : 0;
+          // SC2-style: Main velocity is toward target, separation is additive offset
+          // This prevents vibration from direction blending
+          finalVx = prefVx;
+          finalVy = prefVy;
 
-          // Separation is strongest force - full weight
-          dirX += tempSeparation.x;
-          dirY += tempSeparation.y;
+          // Add separation as velocity offset (not direction blend)
+          // This pushes units apart without changing their heading
+          finalVx += tempSeparation.x;
+          finalVy += tempSeparation.y;
 
-          // Cohesion only while moving
+          // Add cohesion and alignment only while moving
           if (unit.state === 'moving' || unit.state === 'attackmoving' || unit.state === 'patrolling') {
-            dirX += tempCohesion.x;
-            dirY += tempCohesion.y;
-            dirX += tempAlignment.x;
-            dirY += tempAlignment.y;
+            finalVx += tempCohesion.x;
+            finalVy += tempCohesion.y;
+            finalVx += tempAlignment.x;
+            finalVy += tempAlignment.y;
           }
-
-          const newMag = Math.sqrt(dirX * dirX + dirY * dirY);
-          if (newMag > 0.01) {
-            dirX /= newMag;
-            dirY /= newMag;
-          }
-
-          finalVx = dirX * unit.currentSpeed;
-          finalVy = dirY * unit.currentSpeed;
         } else {
           // Flying units - apply separation forces for proper spacing
           const distToFinalTarget = unit.targetX !== null && unit.targetY !== null
@@ -2367,22 +2360,13 @@ export class MovementSystem extends System {
           // Calculate separation force for flying units
           this.calculateSeparationForce(entity.id, transform, unit, tempSeparation, distToFinalTarget);
 
-          // Blend movement direction with separation
-          let dirX = distance > 0.01 ? dx / distance : 0;
-          let dirY = distance > 0.01 ? dy / distance : 0;
+          // SC2-style: Main velocity toward target, separation as additive offset
+          finalVx = prefVx;
+          finalVy = prefVy;
 
-          // Add separation force (scaled up for flying units which have more space)
-          dirX += tempSeparation.x * FLYING_SEPARATION_MULTIPLIER;
-          dirY += tempSeparation.y * FLYING_SEPARATION_MULTIPLIER;
-
-          const newMag = Math.sqrt(dirX * dirX + dirY * dirY);
-          if (newMag > 0.01) {
-            dirX /= newMag;
-            dirY /= newMag;
-          }
-
-          finalVx = dirX * unit.currentSpeed;
-          finalVy = dirY * unit.currentSpeed;
+          // Add separation (scaled for flying units)
+          finalVx += tempSeparation.x * FLYING_SEPARATION_MULTIPLIER;
+          finalVy += tempSeparation.y * FLYING_SEPARATION_MULTIPLIER;
         }
       }
 
