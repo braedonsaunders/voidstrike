@@ -41,6 +41,13 @@ import { ssgi } from 'three/addons/tsl/display/SSGINode.js';
 
 import { createVolumetricFogNode, VolumetricFogNode } from '../VolumetricFog';
 import { debugPostProcessing } from '@/utils/debugLogger';
+import {
+  calculateReprojectedUV,
+  isUVInBounds,
+  sampleNeighborhoodBounds,
+  applyNeighborhoodClamp,
+  temporalBlend,
+} from './TemporalUtils';
 
 // ============================================
 // TYPE DEFINITIONS
@@ -493,6 +500,7 @@ export function createFXAAPass(inputNode: any): FXAAPassResult | null {
  * Create temporal AO upscaling node
  *
  * Blends quarter-res current AO with full-res history using velocity reprojection.
+ * Uses shared utilities from TemporalUtils for consistent behavior.
  */
 export function createTemporalAOUpscaleNode(
   quarterAOTexture: THREE.Texture,
@@ -505,23 +513,17 @@ export function createTemporalAOUpscaleNode(
 
   return Fn(() => {
     const fragUV = uv();
-    const velocity = velocityNode.sample(fragUV).xy;
-    const prevUV = fragUV.sub(velocity);
+    const prevUV = calculateReprojectedUV(velocityNode, fragUV);
 
     // Sample quarter-res AO (bilinear filtering provides some upscaling)
     const currentAO = quarterAONode.sample(fragUV).r;
     // Sample full-res history
     const historyAO = historyNode.sample(prevUV).r;
 
-    // Bounds check for reprojection
-    const inBounds = prevUV.x.greaterThanEqual(0.0)
-      .and(prevUV.x.lessThanEqual(1.0))
-      .and(prevUV.y.greaterThanEqual(0.0))
-      .and(prevUV.y.lessThanEqual(1.0));
+    const inBounds = isUVInBounds(prevUV);
 
     // Use higher history weight since quarter-res needs more temporal accumulation
-    const blendFactor = inBounds.select(blendUniform, float(0.0));
-    return mix(currentAO, historyAO, blendFactor);
+    return temporalBlend(currentAO, historyAO, blendUniform, inBounds);
   })();
 }
 
@@ -530,6 +532,7 @@ export function createTemporalAOUpscaleNode(
  *
  * Blends quarter-res current SSR with full-res history using velocity reprojection.
  * Includes neighborhood clamping to reduce ghosting.
+ * Uses shared utilities from TemporalUtils for consistent behavior.
  */
 export function createTemporalSSRUpscaleNode(
   quarterSSRTexture: THREE.Texture,
@@ -543,38 +546,23 @@ export function createTemporalSSRUpscaleNode(
 
   return Fn(() => {
     const fragUV = uv();
-    const velocity = velocityNode.sample(fragUV).xy;
-    const prevUV = fragUV.sub(velocity);
+    const prevUV = calculateReprojectedUV(velocityNode, fragUV);
     const texelSize = vec2(1.0).div(resolutionUniform);
 
-    // Sample quarter-res SSR
-    const currentSSR = quarterSSRNode.sample(fragUV);
-    // Sample full-res history
+    // Sample quarter-res SSR with neighborhood bounds for clamping
+    const { minColor, maxColor, centerSample } = sampleNeighborhoodBounds(
+      quarterSSRNode,
+      fragUV,
+      texelSize
+    );
+
+    // Sample and clamp history to reduce ghosting
     const historySSR = historyNode.sample(prevUV);
+    const clampedHistory = applyNeighborhoodClamp(historySSR, minColor, maxColor);
 
-    // Neighborhood clamping on quarter-res to reduce ghosting
-    const n0 = quarterSSRNode.sample(fragUV.add(vec2(-1, -1).mul(texelSize)));
-    const n1 = quarterSSRNode.sample(fragUV.add(vec2(0, -1).mul(texelSize)));
-    const n2 = quarterSSRNode.sample(fragUV.add(vec2(1, -1).mul(texelSize)));
-    const n3 = quarterSSRNode.sample(fragUV.add(vec2(-1, 0).mul(texelSize)));
-    const n4 = currentSSR;
-    const n5 = quarterSSRNode.sample(fragUV.add(vec2(1, 0).mul(texelSize)));
-    const n6 = quarterSSRNode.sample(fragUV.add(vec2(-1, 1).mul(texelSize)));
-    const n7 = quarterSSRNode.sample(fragUV.add(vec2(0, 1).mul(texelSize)));
-    const n8 = quarterSSRNode.sample(fragUV.add(vec2(1, 1).mul(texelSize)));
+    const inBounds = isUVInBounds(prevUV);
 
-    const minColor = min(min(min(min(n0, n1), min(n2, n3)), min(min(n4, n5), min(n6, n7))), n8);
-    const maxColor = max(max(max(max(n0, n1), max(n2, n3)), max(max(n4, n5), max(n6, n7))), n8);
-    const clampedHistory = clamp(historySSR, minColor, maxColor);
-
-    // Bounds check for reprojection
-    const inBounds = prevUV.x.greaterThanEqual(0.0)
-      .and(prevUV.x.lessThanEqual(1.0))
-      .and(prevUV.y.greaterThanEqual(0.0))
-      .and(prevUV.y.lessThanEqual(1.0));
-
-    const blendFactor = inBounds.select(blendUniform, float(0.0));
-    return mix(currentSSR, clampedHistory, blendFactor);
+    return temporalBlend(centerSample, clampedHistory, blendUniform, inBounds);
   })();
 }
 
@@ -582,6 +570,7 @@ export function createTemporalSSRUpscaleNode(
  * Create temporal blending node for full-res effect with history
  *
  * Generic temporal blending for effects without quarter-res pipeline.
+ * Uses shared utilities from TemporalUtils for consistent behavior.
  */
 export function createTemporalBlendNode(
   currentNode: any,
@@ -593,24 +582,20 @@ export function createTemporalBlendNode(
 
   return Fn(() => {
     const fragUV = uv();
-    const velocity = velocityNode.sample(fragUV).xy;
-    const prevUV = fragUV.sub(velocity);
+    const prevUV = calculateReprojectedUV(velocityNode, fragUV);
 
     const current = currentNode;
     const history = historyNode.sample(prevUV);
 
-    const inBounds = prevUV.x.greaterThanEqual(0.0)
-      .and(prevUV.x.lessThanEqual(1.0))
-      .and(prevUV.y.greaterThanEqual(0.0))
-      .and(prevUV.y.lessThanEqual(1.0));
+    const inBounds = isUVInBounds(prevUV);
 
-    const blendFactor = inBounds.select(blendUniform, float(0.0));
-    return mix(current, history, blendFactor);
+    return temporalBlend(current, history, blendUniform, inBounds);
   })();
 }
 
 /**
  * Create SSR temporal blending node for full-res SSR with neighborhood clamping
+ * Uses shared utilities from TemporalUtils for consistent behavior.
  */
 export function createFullResTemporalSSRNode(
   ssrTextureNode: any,
@@ -623,34 +608,22 @@ export function createFullResTemporalSSRNode(
 
   return Fn(() => {
     const fragUV = uv();
-    const velocity = velocityNode.sample(fragUV).xy;
-    const prevUV = fragUV.sub(velocity);
+    const prevUV = calculateReprojectedUV(velocityNode, fragUV);
     const texelSize = vec2(1.0).div(resolutionUniform);
 
-    const currentSSR = ssrTextureNode.sample(fragUV);
+    // Sample current SSR with neighborhood bounds for clamping
+    const { minColor, maxColor, centerSample } = sampleNeighborhoodBounds(
+      ssrTextureNode,
+      fragUV,
+      texelSize
+    );
+
+    // Sample and clamp history to reduce ghosting
     const historySSR = historyNode.sample(prevUV);
+    const clampedHistory = applyNeighborhoodClamp(historySSR, minColor, maxColor);
 
-    // Neighborhood clamping
-    const n0 = ssrTextureNode.sample(fragUV.add(vec2(-1, -1).mul(texelSize)));
-    const n1 = ssrTextureNode.sample(fragUV.add(vec2(0, -1).mul(texelSize)));
-    const n2 = ssrTextureNode.sample(fragUV.add(vec2(1, -1).mul(texelSize)));
-    const n3 = ssrTextureNode.sample(fragUV.add(vec2(-1, 0).mul(texelSize)));
-    const n4 = currentSSR;
-    const n5 = ssrTextureNode.sample(fragUV.add(vec2(1, 0).mul(texelSize)));
-    const n6 = ssrTextureNode.sample(fragUV.add(vec2(-1, 1).mul(texelSize)));
-    const n7 = ssrTextureNode.sample(fragUV.add(vec2(0, 1).mul(texelSize)));
-    const n8 = ssrTextureNode.sample(fragUV.add(vec2(1, 1).mul(texelSize)));
+    const inBounds = isUVInBounds(prevUV);
 
-    const minColor = min(min(min(min(n0, n1), min(n2, n3)), min(min(n4, n5), min(n6, n7))), n8);
-    const maxColor = max(max(max(max(n0, n1), max(n2, n3)), max(max(n4, n5), max(n6, n7))), n8);
-    const clampedHistory = clamp(historySSR, minColor, maxColor);
-
-    const inBounds = prevUV.x.greaterThanEqual(0.0)
-      .and(prevUV.x.lessThanEqual(1.0))
-      .and(prevUV.y.greaterThanEqual(0.0))
-      .and(prevUV.y.lessThanEqual(1.0));
-
-    const blendFactor = inBounds.select(blendUniform, float(0.0));
-    return mix(currentSSR, clampedHistory, blendFactor);
+    return temporalBlend(centerSample, clampedHistory, blendUniform, inBounds);
   })();
 }
