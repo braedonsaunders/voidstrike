@@ -51,8 +51,12 @@ interface TerrainBlendWeights {
 /**
  * Calculate terrain blend weights based on slope and terrain type.
  * Extracted to avoid duplicating ~40 lines across color/roughness/normal nodes.
+ *
+ * Note: This is a regular TypeScript function (not TSL Fn) that creates TSL nodes.
+ * TSL Fn() expects a single node return value, but we need to return multiple weights.
+ * Using a plain function allows the TSL nodes to be inlined into each calling Fn().
  */
-const createTerrainBlendWeights = Fn(([slope, terrainType]: [ShaderNodeObject<any>, ShaderNodeObject<any>]): TerrainBlendWeights => {
+function createTerrainBlendWeights(slope: ShaderNodeObject<any>, terrainType: ShaderNodeObject<any>): TerrainBlendWeights {
   // Terrain type masks
   // Type values: 0=ground, 1=ramp, 2=unwalkable, 3=platform
   const isGround = smoothstep(float(0.5), float(0.0), terrainType);
@@ -114,7 +118,7 @@ const createTerrainBlendWeights = Fn(([slope, terrainType]: [ShaderNodeObject<an
     notPlatform,
     notFlatUnwalkable,
   };
-});
+}
 
 export interface TSLTerrainConfig {
   biome: BiomeType;
