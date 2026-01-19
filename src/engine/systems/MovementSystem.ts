@@ -1295,9 +1295,25 @@ export class MovementSystem extends System {
       // Ensure agent is registered
       this.ensureAgentRegistered(entity.id, transform, unit);
 
-      // Sync agent position to entity position (handles external movement like knockback)
+      // Sync agent position to entity position ONLY when there's significant drift
+      // Constant teleporting disrupts the crowd's path corridor tracking
       if (this.crowdAgents.has(entity.id)) {
-        this.recast.updateAgentPosition(entity.id, transform.x, transform.y);
+        const crowdState = this.recast.getAgentState(entity.id);
+        if (crowdState) {
+          const driftX = transform.x - crowdState.x;
+          const driftY = transform.y - crowdState.y;
+          const driftSq = driftX * driftX + driftY * driftY;
+
+          // Only teleport if drift exceeds threshold (2 units)
+          // This allows the crowd to compute proper path corridors without disruption
+          const DRIFT_THRESHOLD_SQ = 2 * 2;
+          if (driftSq > DRIFT_THRESHOLD_SQ) {
+            this.recast.updateAgentPosition(entity.id, transform.x, transform.y);
+          }
+        } else {
+          // No crowd state yet - sync position
+          this.recast.updateAgentPosition(entity.id, transform.x, transform.y);
+        }
 
         // Calculate target for this unit
         let targetX: number | null = null;

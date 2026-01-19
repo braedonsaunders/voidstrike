@@ -276,6 +276,14 @@
 - [x] **WASM recursive aliasing error fix** - Rust was throwing "recursive use of an object detected which would lead to unsafe aliasing" when setting unit_count during syncEntities(). Root cause: Second pass for reverse neighbor relationships was fundamentally broken - it wrote neighbors to wrong buffer positions while incrementing counts that assumed contiguous storage. Fixed by removing the broken second pass (boids forces are symmetric anyway when computed bidirectionally from spatial grid queries).
 - [x] **Scene object leak warning threshold** - False positive "LEAK?" warnings at 819 children. Threshold was 500 but RTS games legitimately have 800-1200 scene objects (units, buildings, effects, selection rings). Increased threshold to 1500.
 
+### DetourCrowd Zero Velocity Fix (January 2026)
+- [x] **Crowd returning zero velocity fix** - DetourCrowd was returning zero velocity for units with valid paths/targets, triggering "[MovementSystem] Crowd returned zero velocity" warnings. Root cause was twofold:
+  1. **Target not projected to navmesh** - `setAgentTarget()` was calling `requestMoveTarget()` with raw game coordinates instead of projecting to navmesh first. DetourCrowd needs a valid navmesh position to compute path corridors.
+  2. **Constant teleporting disrupting path corridors** - `prepareCrowdAgents()` was teleporting agents to game positions every frame via `updateAgentPosition()`. This disrupts the crowd's internal path corridor tracking, resetting state before velocity can be computed.
+  - Fixed `setAgentTarget()` to project target onto navmesh using `projectToNavMesh()` before calling `requestMoveTarget()`
+  - Fixed `updateAgentPosition()` to project position onto navmesh for valid agent placement
+  - Fixed `prepareCrowdAgents()` to only teleport when drift exceeds 2 units, allowing crowd to maintain stable path corridors
+
 ### Phaser4 Overlay Fixes
 - [x] **Team marker/selection ring positioning bug** - Ground rings appeared way above the map in battle simulator because InstancedMesh rotation was transforming instance matrix coordinates (Y/Z swap). Fixed by applying rotation per-instance via quaternion instead of on mesh parent.
 - [x] **Damage number player colors** - Damage numbers now use the unit owner's player color with brightness gradient (lighter for low damage, darker for high damage). Also reduced font size from 18px to 12px for cleaner appearance.

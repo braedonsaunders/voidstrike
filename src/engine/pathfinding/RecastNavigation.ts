@@ -668,7 +668,7 @@ export class RecastNavigation {
 
   /**
    * Set agent move target.
-   * Uses terrain height for Y coordinate at target location.
+   * Projects target onto navmesh to ensure valid path corridor computation.
    */
   public setAgentTarget(entityId: number, targetX: number, targetY: number): boolean {
     if (!this.crowd) return false;
@@ -679,8 +679,17 @@ export class RecastNavigation {
     try {
       const agent = this.crowd.getAgent(agentIndex);
       if (agent) {
-        // Use terrain height at target for Y coordinate
-        // Keep original X/Z to match game coordinates
+        // Project target onto navmesh to ensure it's a valid position
+        // This is CRITICAL - requestMoveTarget needs a navmesh position to compute path corridor
+        const projected = this.projectToNavMesh(targetX, targetY);
+        if (projected) {
+          // Use the projected navmesh position (already has correct x, y, z)
+          agent.requestMoveTarget(projected);
+          return true;
+        }
+
+        // Fallback: try with approximate terrain height if projection failed
+        // This can happen at map edges or on dynamic obstacles
         const terrainY = this.getTerrainHeight(targetX, targetY);
         agent.requestMoveTarget({ x: targetX, y: terrainY, z: targetY });
         return true;
@@ -713,25 +722,34 @@ export class RecastNavigation {
 
   /**
    * Update agent position (for teleporting or external movement).
-   * Uses terrain height for Y coordinate to keep agent at correct elevation.
+   * Projects position onto navmesh to ensure valid agent placement.
+   * Returns true if teleport succeeded, false if position is off navmesh.
    */
-  public updateAgentPosition(entityId: number, x: number, y: number): void {
-    if (!this.crowd) return;
+  public updateAgentPosition(entityId: number, x: number, y: number): boolean {
+    if (!this.crowd) return false;
 
     const agentIndex = this.agentMap.get(entityId);
-    if (agentIndex === undefined) return;
+    if (agentIndex === undefined) return false;
 
     try {
       const agent = this.crowd.getAgent(agentIndex);
       if (agent) {
-        // Use terrain height for Y coordinate
-        // Keep original X/Z to match game Transform position
+        // Project position onto navmesh to ensure valid placement
+        const projected = this.projectToNavMesh(x, y);
+        if (projected) {
+          agent.teleport(projected);
+          return true;
+        }
+
+        // Fallback: try with approximate terrain height
         const terrainY = this.getTerrainHeight(x, y);
         agent.teleport({ x, y: terrainY, z: y });
+        return true;
       }
     } catch {
       // Ignore
     }
+    return false;
   }
 
   /**
