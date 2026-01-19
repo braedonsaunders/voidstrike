@@ -19,6 +19,8 @@ export interface TransformMode {
   // Targeting restrictions - which types of units this mode can attack
   canAttackGround?: boolean; // Can attack ground units/buildings (default: true if has damage)
   canAttackAir?: boolean; // Can attack flying units (default: false)
+  // Projectile type override for this mode
+  projectileType?: string;
 }
 
 // Audio configuration for a unit - references voice groups and sound IDs from config files
@@ -98,6 +100,9 @@ export interface UnitDefinition {
   // Audio configuration - references voice groups and sound IDs from config files
   // All audio is data-driven via public/audio/*.config.json files
   audio?: UnitAudioConfig;
+  // Projectile type for ranged attacks - references PROJECTILE_TYPES
+  // If not set, defaults to 'bullet_rifle'
+  projectileType?: string;
 }
 
 // Command queue entry for shift-click queuing
@@ -145,6 +150,7 @@ export class Unit extends Component {
   public lastAttackTime: number;
   public targetEntityId: number | null;
   public splashRadius: number; // AoE damage radius (0 = no splash)
+  public projectileType: string; // Reference to PROJECTILE_TYPES
 
   // Vision
   public sightRange: number;
@@ -252,6 +258,7 @@ export class Unit extends Component {
     this.lastAttackTime = 0;
     this.targetEntityId = null;
     this.splashRadius = definition.splashRadius ?? 0;
+    this.projectileType = definition.projectileType ?? 'bullet_rifle';
 
     this.sightRange = definition.sightRange;
 

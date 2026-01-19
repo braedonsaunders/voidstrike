@@ -4,6 +4,7 @@ import { EventBus } from './EventBus';
 import { MovementSystem } from '../systems/MovementSystem';
 import { SelectionSystem } from '../systems/SelectionSystem';
 import { CombatSystem } from '../systems/CombatSystem';
+import { ProjectileSystem } from '../systems/ProjectileSystem';
 import { ProductionSystem } from '../systems/ProductionSystem';
 import { ResourceSystem } from '../systems/ResourceSystem';
 import { ResearchSystem } from '../systems/ResearchSystem';
@@ -98,6 +99,7 @@ export class Game {
   public pathfindingSystem: PathfindingSystem;
   public aiMicroSystem: AIMicroSystem;
   public selectionSystem!: SelectionSystem;
+  public projectileSystem!: ProjectileSystem;
 
   // Determinism and multiplayer sync systems (only active in multiplayer)
   public checksumSystem: ChecksumSystem | null = null;
@@ -400,6 +402,8 @@ export class Game {
     this.world.addSystem(new UnitMechanicsSystem(this)); // Transform, Cloak, Transport, Heal, Repair
     this.world.addSystem(new MovementSystem(this));
     this.world.addSystem(new CombatSystem(this));
+    this.projectileSystem = new ProjectileSystem(this);
+    this.world.addSystem(this.projectileSystem);
     this.world.addSystem(new ProductionSystem(this));
     this.world.addSystem(new ResourceSystem(this));
     this.world.addSystem(new ResearchSystem(this));

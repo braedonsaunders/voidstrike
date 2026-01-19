@@ -32,7 +32,7 @@ export interface MerkleNode {
   /** Entity ID (only for leaf nodes) */
   entityId?: number;
   /** Entity type for leaf nodes */
-  entityType?: 'unit' | 'building' | 'resource';
+  entityType?: 'unit' | 'building' | 'resource' | 'projectile';
 }
 
 export interface MerkleTreeData {
@@ -95,7 +95,7 @@ export class MerkleTreeBuilder {
    */
   public static createEntityNode(
     entityId: number,
-    entityType: 'unit' | 'building' | 'resource',
+    entityType: 'unit' | 'building' | 'resource' | 'projectile',
     hash: number
   ): MerkleNode {
     return {
