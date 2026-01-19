@@ -1366,7 +1366,8 @@ export class BuildingPlacementSystem extends System {
           debugBuildingPlacement.log(`BuildingPlacementSystem: ${building.name} construction started - worker arrived!`);
         }
 
-        // If building was paused, resume construction         if (building.state === 'paused') {
+        // If building was paused, resume construction
+        if (building.state === 'paused') {
           building.resumeConstruction();
           this.game.eventBus.emit('building:construction_resumed', {
             entityId: entity.id,
@@ -1424,7 +1425,8 @@ export class BuildingPlacementSystem extends System {
           debugBuildingPlacement.log(`BuildingPlacementSystem: ${building.name} construction complete!`);
         }
       } else {
-        // No worker is constructing - pause if construction had started         // Note: Addons never reach this branch since workerConstructing is always true for them
+        // No worker is constructing - pause if construction had started
+        // Note: Addons never reach this branch since workerConstructing is always true for them
         if (building.state === 'constructing') {
           building.pauseConstruction();
           this.game.eventBus.emit('building:construction_paused', {
