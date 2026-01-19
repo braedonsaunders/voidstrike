@@ -25,6 +25,7 @@ import {
   float,
   int,
   uint,
+  vec4,
   If,
   instanceIndex,
   instancedArray,
@@ -32,7 +33,10 @@ import {
   atomicStore,
 } from 'three/tsl';
 
-import { StorageInstancedBufferAttribute } from 'three/webgpu';
+import {
+  StorageInstancedBufferAttribute,
+  StorageBufferAttribute,
+} from 'three/webgpu';
 
 import { GPUUnitBuffer, UnitSlot, createIndirectArgsBuffer } from './GPUUnitBuffer';
 import { debugShaders } from '@/utils/debugLogger';
@@ -106,8 +110,10 @@ export class CullingCompute {
   private transformStorageBuffer: ReturnType<typeof storage> | null = null;
   private metadataStorageBuffer: ReturnType<typeof storage> | null = null;
 
-  // Visible indices output buffer (atomic)
-  private visibleIndicesStorage: ReturnType<typeof instancedArray> | null = null;
+  // Visible indices output buffer - uses StorageBufferAttribute for vertex shader access
+  private visibleIndicesData: Uint32Array | null = null;
+  private visibleIndicesAttribute: StorageBufferAttribute | null = null;
+  private visibleIndicesStorage: ReturnType<typeof storage> | null = null;
 
   // Indirect args buffer (atomic for instance count updates)
   private indirectArgsStorage: ReturnType<typeof instancedArray> | null = null;
@@ -163,8 +169,11 @@ export class CullingCompute {
       this.frustumPlanesAttribute = new StorageInstancedBufferAttribute(this.frustumPlanesData, 4);
       this.frustumPlanesStorage = storage(this.frustumPlanesAttribute, 'vec4', 6);
 
-      // Create output buffers with atomic support
-      this.visibleIndicesStorage = instancedArray(MAX_GPU_UNITS, 'uint');
+      // Create visible indices buffer using StorageBufferAttribute
+      // This allows both compute shader writes AND vertex shader reads via storage().toAttribute()
+      this.visibleIndicesData = new Uint32Array(MAX_GPU_UNITS);
+      this.visibleIndicesAttribute = new StorageBufferAttribute(this.visibleIndicesData, 1);
+      this.visibleIndicesStorage = storage(this.visibleIndicesAttribute, 'uint', MAX_GPU_UNITS);
 
       // Indirect args: atomic buffer for compute shader writes
       const indirectEntryCount = this.maxUnitTypes * this.maxLODLevels * this.maxPlayers;
@@ -259,12 +268,13 @@ export class CullingCompute {
         return;
       });
 
-      // Read transform matrix - extract position from column 3 (translation)
+      // Read transform matrix - extract position by multiplying by vec4(0,0,0,1)
+      // In TSL, we can't use array indexing on mat4, so we extract translation this way
       const transform = transformBuffer.element(unitIndex);
-      const translationCol = transform[3];
-      const posX = translationCol.x;
-      const posY = translationCol.y;
-      const posZ = translationCol.z;
+      const worldPos = transform.mul(vec4(0, 0, 0, 1));
+      const posX = worldPos.x;
+      const posY = worldPos.y;
+      const posZ = worldPos.z;
 
       // Read metadata: vec4(entityId, unitTypeIndex, playerId, boundingRadius)
       const metadata = metadataBuffer.element(unitIndex);
@@ -438,10 +448,18 @@ export class CullingCompute {
   }
 
   /**
-   * Get visible indices storage for vertex shader binding
+   * Get visible indices storage for compute shader writes
    */
-  getVisibleIndicesStorage(): ReturnType<typeof instancedArray> | null {
+  getVisibleIndicesStorage(): ReturnType<typeof storage> | null {
     return this.visibleIndicesStorage;
+  }
+
+  /**
+   * Get visible indices storage as attribute for vertex shader reads
+   * Use this with material.positionNode
+   */
+  getVisibleIndicesAttribute(): StorageBufferAttribute | null {
+    return this.visibleIndicesAttribute;
   }
 
   /**
@@ -594,5 +612,8 @@ export class CullingCompute {
     this.transformStorageAttribute = null;
     this.metadataStorageAttribute = null;
     this.frustumPlanesAttribute = null;
+    this.visibleIndicesAttribute = null;
+    this.visibleIndicesStorage = null;
+    this.visibleIndicesData = null;
   }
 }
