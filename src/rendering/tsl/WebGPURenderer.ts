@@ -101,6 +101,45 @@ function detectIntegratedGpu(description: string, vendor: string): boolean {
   return false;
 }
 
+/**
+ * Try to get GPU name from WebGL debug renderer info.
+ * WebGL often exposes the full GPU name even when WebGPU doesn't.
+ */
+function getWebGLRendererName(): string | null {
+  try {
+    const canvas = document.createElement('canvas');
+    const gl = canvas.getContext('webgl2') || canvas.getContext('webgl');
+    if (!gl) return null;
+
+    const debugInfo = gl.getExtension('WEBGL_debug_renderer_info');
+    if (!debugInfo) return null;
+
+    const renderer = gl.getParameter(debugInfo.UNMASKED_RENDERER_WEBGL);
+    canvas.remove();
+
+    if (renderer && typeof renderer === 'string' && renderer.length > 0) {
+      // Clean up common prefixes/suffixes
+      // e.g., "ANGLE (NVIDIA, NVIDIA GeForce RTX 3050 Direct3D11 vs_5_0 ps_5_0, D3D11)"
+      // Extract just the GPU name
+      let name = renderer;
+
+      // Handle ANGLE wrapper format
+      const angleMatch = renderer.match(/ANGLE \([^,]+,\s*([^,]+)/);
+      if (angleMatch) {
+        name = angleMatch[1].trim();
+        // Remove Direct3D suffix if present
+        name = name.replace(/\s+Direct3D.*$/, '').trim();
+      }
+
+      return name;
+    }
+
+    return null;
+  } catch {
+    return null;
+  }
+}
+
 async function getWebGPUAdapterInfo(): Promise<AdapterInfo> {
   // Check if WebGPU is available
   if (!navigator.gpu) {
@@ -142,31 +181,35 @@ async function getWebGPUAdapterInfo(): Promise<AdapterInfo> {
     // Build GPU name with fallbacks:
     // 1. description - typically has full GPU name (e.g., "NVIDIA GeForce RTX 3050")
     // 2. device - sometimes has GPU identifier
-    // 3. Construct from vendor + architecture if available
-    // 4. Fall back to vendor name alone
-    // 5. "Unknown GPU" as last resort
+    // 3. WebGL debug renderer info - often has full name even when WebGPU doesn't
+    // 4. Construct from vendor + architecture if available
+    // 5. Fall back to vendor name alone
+    // 6. "Unknown GPU" as last resort
     let gpuName = 'Unknown GPU';
     if (info.description && info.description.length > 0) {
       gpuName = info.description;
     } else if (info.device && info.device.length > 0) {
       gpuName = info.device;
-    } else if (info.vendor && info.architecture) {
-      // Capitalize vendor name
-      const vendor = info.vendor.charAt(0).toUpperCase() + info.vendor.slice(1);
-      gpuName = `${vendor} (${info.architecture})`;
-    } else if (info.vendor && info.vendor.length > 0) {
-      const vendor = info.vendor.charAt(0).toUpperCase() + info.vendor.slice(1);
-      gpuName = `${vendor} GPU`;
+    } else {
+      // Try WebGL fallback for GPU name (Chrome restricts WebGPU adapter info for privacy)
+      const webglName = getWebGLRendererName();
+      if (webglName) {
+        gpuName = webglName;
+        debugInitialization.log(`[WebGPU] Got GPU name from WebGL fallback: ${webglName}`);
+      } else if (info.vendor && info.architecture) {
+        const vendor = info.vendor.charAt(0).toUpperCase() + info.vendor.slice(1);
+        gpuName = `${vendor} (${info.architecture})`;
+      } else if (info.vendor && info.vendor.length > 0) {
+        const vendor = info.vendor.charAt(0).toUpperCase() + info.vendor.slice(1);
+        gpuName = `${vendor} GPU`;
+      }
     }
 
     const gpuInfo: GpuAdapterInfo = {
       name: gpuName,
       vendor: info.vendor || 'unknown',
       architecture: info.architecture || '',
-      isIntegrated: detectIntegratedGpu(
-        info.description || info.device || '',
-        info.vendor || ''
-      ),
+      isIntegrated: detectIntegratedGpu(gpuName, info.vendor || ''),
     };
 
     debugInitialization.log(`[WebGPU] GPU detected:`, gpuInfo);
