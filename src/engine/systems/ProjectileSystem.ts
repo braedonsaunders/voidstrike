@@ -11,7 +11,7 @@ import { snapValue } from '@/utils/FixedPoint';
 import { getDamageMultiplier } from '@/data/combat/combat';
 import { debugCombat as debugProjectile } from '@/utils/debugLogger';
 import { isLocalPlayer } from '@/store/gameSetupStore';
-import { DEFAULT_AIRBORNE_HEIGHT } from '@/assets/AssetManager';
+import { AssetManager } from '@/assets/AssetManager';
 
 /**
  * ProjectileSystem - Handles projectile movement and damage application on impact
@@ -118,8 +118,10 @@ export class ProjectileSystem extends System {
           // Update target position including Z for flying units
           projectile.targetX = targetTransform.x;
           projectile.targetY = targetTransform.y;
-          // Add flying height offset if target is airborne (0.5 for ground = center of mass)
-          const flyingOffset = targetUnit?.isFlying ? DEFAULT_AIRBORNE_HEIGHT : 0.5;
+          // Add flying height offset if target is airborne (use per-unit height from assets.json)
+          const flyingOffset = targetUnit?.isFlying
+            ? AssetManager.getAirborneHeight(targetUnit.unitId)
+            : 0.5;
           projectile.targetZ = targetTransform.z + flyingOffset;
         } else {
           // Target died - continue to last known position
@@ -269,7 +271,9 @@ export class ProjectileSystem extends System {
 
           const isKillingBlow = targetHealth.isDead();
           const targetIsFlying = targetUnit?.isFlying ?? false;
-          const targetHeight = targetIsFlying ? DEFAULT_AIRBORNE_HEIGHT : 0;
+          const targetHeight = targetIsFlying && targetUnit
+            ? AssetManager.getAirborneHeight(targetUnit.unitId)
+            : 0;
 
           debugProjectile.log(
             `Projectile ${entity.id} hit target ${projectile.targetEntityId} for ${finalDamage} damage ` +
@@ -386,7 +390,9 @@ export class ProjectileSystem extends System {
 
       const isKillingBlow = health.isDead();
       const targetIsFlying = unit?.isFlying ?? false;
-      const targetHeight = targetIsFlying ? DEFAULT_AIRBORNE_HEIGHT : 0;
+      const targetHeight = targetIsFlying && unit
+        ? AssetManager.getAirborneHeight(unit.unitId)
+        : 0;
 
       debugProjectile.log(
         `Splash hit entity ${entityId} for ${damageWithMultiplier} damage (falloff: ${falloffFactor.toFixed(2)})${isKillingBlow ? ' [KILL]' : ''}`
