@@ -27,20 +27,12 @@ import {
   If,
 } from 'three/tsl';
 
-// Access TSL exports that lack TypeScript declarations
-// eslint-disable-next-line @typescript-eslint/no-require-imports
-import * as TSL from 'three/tsl';
-const uint = (TSL as any).uint;
-const instanceIndex = (TSL as any).instanceIndex;
-const instancedArray = (TSL as any).instancedArray;
-const atomicAdd = (TSL as any).atomicAdd;
-
-// StorageInstancedBufferAttribute and IndirectStorageBufferAttribute exist in three/webgpu
-// but lack TypeScript declarations - access dynamically
-// eslint-disable-next-line @typescript-eslint/no-require-imports
-import * as THREE_WEBGPU from 'three/webgpu';
-const StorageInstancedBufferAttribute = (THREE_WEBGPU as any).StorageInstancedBufferAttribute;
-const IndirectStorageBufferAttribute = (THREE_WEBGPU as any).IndirectStorageBufferAttribute;
+// WebGPU-specific imports (typed in src/types/three-webgpu.d.ts)
+import { uint, instanceIndex, instancedArray, atomicAdd } from 'three/tsl';
+import {
+  StorageInstancedBufferAttribute,
+  IndirectStorageBufferAttribute,
+} from 'three/webgpu';
 
 import { GPUUnitBuffer, UnitSlot, createIndirectArgsBuffer } from './GPUUnitBuffer';
 import { debugShaders } from '@/utils/debugLogger';

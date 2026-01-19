@@ -31,19 +31,13 @@ import {
   instanceIndex,
 } from 'three/tsl';
 
-// Access exports that may lack TypeScript declarations
-// eslint-disable-next-line @typescript-eslint/no-require-imports
-import * as TSL from 'three/tsl';
-const uint = (TSL as any).uint;
-
-// Storage buffer attributes and NodeMaterial exist in three/webgpu
-// but lack TypeScript declarations - access dynamically
-// eslint-disable-next-line @typescript-eslint/no-require-imports
-import * as THREE_WEBGPU from 'three/webgpu';
-const StorageBufferAttribute = (THREE_WEBGPU as any).StorageBufferAttribute;
-const StorageInstancedBufferAttribute = (THREE_WEBGPU as any).StorageInstancedBufferAttribute;
-const IndirectStorageBufferAttribute = (THREE_WEBGPU as any).IndirectStorageBufferAttribute;
-const NodeMaterial = (THREE_WEBGPU as any).NodeMaterial || THREE.MeshStandardMaterial;
+// WebGPU-specific imports (typed in src/types/three-webgpu.d.ts)
+import { uint } from 'three/tsl';
+import {
+  StorageInstancedBufferAttribute,
+  IndirectStorageBufferAttribute,
+  NodeMaterial,
+} from 'three/webgpu';
 
 import { GPUUnitBuffer } from './GPUUnitBuffer';
 import { CullingCompute } from './CullingCompute';
@@ -221,9 +215,9 @@ export class GPUIndirectRenderer {
     mesh.receiveShadow = true;
     mesh.renderOrder = 50;
 
-    // Enable indirect drawing
+    // Enable indirect drawing (typed in src/types/three-webgpu.d.ts)
     if (this.indirectArgsAttribute) {
-      (mesh as any).drawIndirect = this.indirectArgsAttribute;
+      mesh.drawIndirect = this.indirectArgsAttribute;
     }
 
     // Calculate indirect args offset for this unit type + LOD

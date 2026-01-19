@@ -52,7 +52,7 @@ function createOverlayMaterial(overlayTexture: THREE.DataTexture, opacity: numbe
   material.colorNode = outputNode;
 
   // Store opacity uniform for updates
-  (material as any)._uOpacity = uOpacity;
+  material._uOpacity = uOpacity;
 
   return material;
 }
@@ -88,8 +88,8 @@ function createThreatMaterial(threatTexture: THREE.DataTexture, opacity: number)
   material.colorNode = outputNode;
 
   // Store uniforms for updates
-  (material as any)._uOpacity = uOpacity;
-  (material as any)._uTime = uTime;
+  material._uOpacity = uOpacity;
+  material._uTime = uTime;
 
   return material;
 }
@@ -533,8 +533,9 @@ export class TSLGameOverlayManager {
     this.opacity = Math.max(0, Math.min(1, opacity));
 
     const updateMaterialOpacity = (mesh: THREE.Mesh | null) => {
-      if (mesh && (mesh.material as any)._uOpacity) {
-        (mesh.material as any)._uOpacity.value = this.opacity;
+      const mat = mesh?.material as THREE.Material | undefined;
+      if (mat?._uOpacity) {
+        mat._uOpacity.value = this.opacity;
       }
     };
 
@@ -546,8 +547,9 @@ export class TSLGameOverlayManager {
 
   public update(time: number): void {
     // Update threat overlay time for pulsing effect
-    if (this.threatOverlayMesh && (this.threatOverlayMesh.material as any)._uTime) {
-      (this.threatOverlayMesh.material as any)._uTime.value = time;
+    const threatMat = this.threatOverlayMesh?.material as THREE.Material | undefined;
+    if (threatMat?._uTime) {
+      threatMat._uTime.value = time;
     }
 
     // Update threat data periodically

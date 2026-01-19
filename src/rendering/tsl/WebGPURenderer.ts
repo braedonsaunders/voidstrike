@@ -213,7 +213,7 @@ export async function createWebGPURenderer(config: WebGPURendererConfig): Promis
   renderer.toneMapping = THREE.ACESFilmicToneMapping;
   renderer.toneMappingExposure = 1.0;
   // Enable local clipping planes for building construction reveal effect
-  (renderer as any).localClippingEnabled = true;
+  renderer.localClippingEnabled = true;
 
   // Configure shadow maps - always enabled to keep shadow map depth texture initialized
   // The directionalLight.castShadow is always true, but we toggle terrain.receiveShadow

@@ -3,10 +3,9 @@
  *
  * WebGPU-compatible rendering components for VOIDSTRIKE.
  * All components automatically compile to WGSL (WebGPU) or GLSL (WebGL fallback).
+ *
+ * Type declarations for WebGPU/TSL are in src/types/three-webgpu.d.ts
  */
-
-// Type declarations for Three.js WebGPU/TSL modules
-/// <reference path="./types.d.ts" />
 
 // Core renderer
 export {

@@ -96,7 +96,7 @@ export function createSelectionRingMaterial(config: SelectionRingConfig): MeshBa
   })();
 
   // Store uniforms for external updates
-  (material as any)._uniforms = { uTime, uColor, uOpacity };
+  material._uniforms = { uTime, uColor, uOpacity };
 
   return material;
 }
@@ -119,7 +119,7 @@ export function createHoverRingMaterial(): MeshBasicNodeMaterial {
     return vec4(uColor, uOpacity.mul(pulse));
   })();
 
-  (material as any)._uniforms = { uTime, uColor, uOpacity };
+  material._uniforms = { uTime, uColor, uOpacity };
 
   return material;
 }
@@ -128,7 +128,7 @@ export function createHoverRingMaterial(): MeshBasicNodeMaterial {
  * Update selection ring animation
  */
 export function updateSelectionMaterial(material: MeshBasicNodeMaterial, time: number): void {
-  const uniforms = (material as any)._uniforms;
+  const uniforms = material._uniforms;
   if (uniforms?.uTime) {
     uniforms.uTime.value = time;
   }

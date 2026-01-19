@@ -32,13 +32,10 @@ import {
   If,
 } from 'three/tsl';
 
-// Access TSL exports that lack TypeScript declarations
-// eslint-disable-next-line @typescript-eslint/no-require-imports
-import * as TSL from 'three/tsl';
-const instanceIndex = (TSL as any).instanceIndex;
-const textureStore = (TSL as any).textureStore;
+// WebGPU-specific imports (typed in src/types/three-webgpu.d.ts)
+import { instanceIndex, textureStore } from 'three/tsl';
 
-// StorageTexture may not be in type declarations
+// StorageTexture is on THREE namespace, not a named export
 const StorageTexture = (THREE as any).StorageTexture;
 
 import { debugShaders } from '@/utils/debugLogger';
