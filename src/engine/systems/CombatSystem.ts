@@ -588,7 +588,8 @@ export class CombatSystem extends System {
       const targetIsFlying = unit?.isFlying ?? false;
       if (!selfUnit.canAttackTarget(targetIsFlying)) continue;
 
-      // Edge-to-edge distance using visual radius       const centerDistance = selfTransform.distanceTo(transform);
+      // Edge-to-edge distance using visual radius
+      const centerDistance = selfTransform.distanceTo(transform);
       const attackerRadius = AssetManager.getCachedVisualRadius(selfUnit.unitId, selfUnit.collisionRadius);
       const targetRadius = unit ? AssetManager.getCachedVisualRadius(unit.unitId, unit.collisionRadius) : 0.5;
       const distance = Math.max(0, centerDistance - attackerRadius - targetRadius);
@@ -745,7 +746,8 @@ export class CombatSystem extends System {
       const targetIsFlying = unit?.isFlying ?? false;
       if (!selfUnit.canAttackTarget(targetIsFlying)) continue;
 
-      // Edge-to-edge distance using visual radius       const centerDistance = selfTransform.distanceTo(transform);
+      // Edge-to-edge distance using visual radius
+      const centerDistance = selfTransform.distanceTo(transform);
       const attackerRadius = AssetManager.getCachedVisualRadius(selfUnit.unitId, selfUnit.collisionRadius);
       const targetRadius = unit ? AssetManager.getCachedVisualRadius(unit.unitId, unit.collisionRadius) : 0.5;
       const distance = Math.max(0, centerDistance - attackerRadius - targetRadius);
