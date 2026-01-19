@@ -130,12 +130,41 @@ async function getWebGPUAdapterInfo(): Promise<AdapterInfo> {
 
     // Extract GPU info from adapter
     const info = adapter.info;
+
+    // Log raw adapter info for debugging
+    debugInitialization.log(`[WebGPU] Raw adapter info:`, {
+      vendor: info.vendor,
+      architecture: info.architecture,
+      device: info.device,
+      description: info.description,
+    });
+
+    // Build GPU name with fallbacks:
+    // 1. description - typically has full GPU name (e.g., "NVIDIA GeForce RTX 3050")
+    // 2. device - sometimes has GPU identifier
+    // 3. Construct from vendor + architecture if available
+    // 4. Fall back to vendor name alone
+    // 5. "Unknown GPU" as last resort
+    let gpuName = 'Unknown GPU';
+    if (info.description && info.description.length > 0) {
+      gpuName = info.description;
+    } else if (info.device && info.device.length > 0) {
+      gpuName = info.device;
+    } else if (info.vendor && info.architecture) {
+      // Capitalize vendor name
+      const vendor = info.vendor.charAt(0).toUpperCase() + info.vendor.slice(1);
+      gpuName = `${vendor} (${info.architecture})`;
+    } else if (info.vendor && info.vendor.length > 0) {
+      const vendor = info.vendor.charAt(0).toUpperCase() + info.vendor.slice(1);
+      gpuName = `${vendor} GPU`;
+    }
+
     const gpuInfo: GpuAdapterInfo = {
-      name: info.device || info.description || 'Unknown GPU',
+      name: gpuName,
       vendor: info.vendor || 'unknown',
       architecture: info.architecture || '',
       isIntegrated: detectIntegratedGpu(
-        info.device || info.description || '',
+        info.description || info.device || '',
         info.vendor || ''
       ),
     };
