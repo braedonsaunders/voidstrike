@@ -1,9 +1,6 @@
 import * as THREE from 'three';
 import { MapData, MapCell, TerrainType, ElevationLevel, Elevation, TerrainFeature, TERRAIN_FEATURE_CONFIG } from '@/data/maps';
-import { BiomeConfig, BIOMES, blendBiomeColors, BiomeType, getBiomeShaderConfig } from './Biomes';
-import { createTerrainShaderMaterial, updateTerrainShader } from './shaders/TerrainShader';
-import { createVoidstrikeTerrainShaderMaterial, getVoidstrikeBiomeConfig, updateVoidstrikeTerrainShader } from './shaders/VoidstrikeTerrainShader';
-import { createTextureTerrainMaterial, updateTextureTerrainShader, getBiomeTextureConfig, BiomeTextureType } from './shaders/TextureTerrainShader';
+import { BiomeConfig, BIOMES, blendBiomeColors, BiomeType } from './Biomes';
 import { TSLTerrainMaterial } from './tsl/TerrainMaterial';
 import AssetManager from '@/assets/AssetManager';
 import { debugTerrain } from '@/utils/debugLogger';
@@ -13,14 +10,6 @@ import {
   elevationToHeight,
   CLIFF_WALL_THRESHOLD_ELEVATION,
 } from '@/data/pathfinding.config';
-
-// Shader mode for terrain rendering
-// 'tsl': Uses TSL 4-texture blending (WebGPU + WebGL compatible) - RECOMMENDED
-// 'standard': Uses MeshStandardMaterial single texture (WebGPU + WebGL compatible)
-// 'texture': Uses GLSL ShaderMaterial with textures (WebGL only)
-// 'basic': Uses GLSL ShaderMaterial procedural (WebGL only)
-// 'sc2': Uses GLSL ShaderMaterial full procedural (WebGL only)
-type TerrainShaderMode = 'tsl' | 'standard' | 'texture' | 'basic' | 'sc2';
 
 
 // Terrain subdivision for smoother rendering
@@ -249,14 +238,6 @@ export class Terrain {
   private gridWidth: number;
   private gridHeight: number;
 
-  // Shader mode selection:
-  // - 'tsl': Uses TSL 4-texture blending (WebGPU + WebGL compatible) - RECOMMENDED
-  // - 'standard': Uses MeshStandardMaterial single texture (WebGPU + WebGL compatible)
-  // - 'texture': Uses AI-generated textures with GLSL (WebGL only, 60+ FPS)
-  // - 'basic': Simple procedural shader (WebGL only, 30-60 FPS)
-  // - 'sc2': Full procedural (WebGL only, 10 FPS - too slow)
-  private static SHADER_MODE: TerrainShaderMode = 'tsl';
-
   constructor(config: TerrainConfig) {
     this.mapData = config.mapData;
     this.cellSize = config.cellSize ?? 1;
@@ -267,42 +248,14 @@ export class Terrain {
     // Get biome configuration
     this.biome = BIOMES[this.mapData.biome || 'grassland'];
 
-    // Create shader material based on mode
-    switch (Terrain.SHADER_MODE) {
-      case 'tsl':
-        // Use TSL 4-texture blending material (WebGPU + WebGL compatible)
-        debugTerrain.log('[Terrain] Using TSL 4-texture blending for biome:', this.mapData.biome || 'grassland');
-        this.tslMaterial = new TSLTerrainMaterial({
-          biome: this.mapData.biome || 'grassland',
-          mapWidth: this.mapData.width,
-          mapHeight: this.mapData.height,
-        });
-        this.material = this.tslMaterial.material;
-        break;
-      case 'standard':
-        // Use standard PBR material (WebGPU + WebGL compatible)
-        debugTerrain.log('[Terrain] Using standard PBR material for biome:', this.mapData.biome || 'grassland');
-        this.material = this.createStandardMaterial();
-        break;
-      case 'texture':
-        // Use biome-specific textures (falls back to grassland if not available)
-        const biomeType = (this.mapData.biome || 'grassland') as BiomeTextureType;
-        debugTerrain.log(`[Terrain] Using TEXTURE-BASED terrain shader for biome: ${biomeType}`);
-        const textureConfig = getBiomeTextureConfig(biomeType);
-        this.material = createTextureTerrainMaterial(textureConfig);
-        break;
-      case 'sc2':
-        debugTerrain.log('[Terrain] Using Voidstrike terrain shader for biome:', this.mapData.biome || 'grassland');
-        const voidstrikeConfig = getVoidstrikeBiomeConfig(this.mapData.biome || 'grassland');
-        this.material = createVoidstrikeTerrainShaderMaterial(voidstrikeConfig);
-        break;
-      case 'basic':
-      default:
-        debugTerrain.log('[Terrain] Using basic terrain shader');
-        const shaderConfig = getBiomeShaderConfig(this.biome);
-        this.material = createTerrainShaderMaterial(shaderConfig);
-        break;
-    }
+    // Create TSL terrain material (WebGPU + WebGL compatible)
+    debugTerrain.log('[Terrain] Using TSL terrain material for biome:', this.mapData.biome || 'grassland');
+    this.tslMaterial = new TSLTerrainMaterial({
+      biome: this.mapData.biome || 'grassland',
+      mapWidth: this.mapData.width,
+      mapHeight: this.mapData.height,
+    });
+    this.material = this.tslMaterial.material;
 
     // PERF: Create terrain as chunked meshes for frustum culling
     // Each chunk is a separate mesh that Three.js can cull independently
@@ -822,110 +775,8 @@ export class Terrain {
 
   // Update shader uniforms (call each frame for animated effects)
   public update(deltaTime: number, sunDirection?: THREE.Vector3): void {
-    switch (Terrain.SHADER_MODE) {
-      case 'tsl':
-        // Update TSL material uniforms
-        if (this.tslMaterial) {
-          this.tslMaterial.update(deltaTime, sunDirection);
-        }
-        break;
-      case 'standard':
-        // Standard material doesn't need per-frame updates
-        break;
-      case 'texture':
-        updateTextureTerrainShader(this.material as THREE.ShaderMaterial, deltaTime, sunDirection);
-        break;
-      case 'sc2':
-        updateVoidstrikeTerrainShader(this.material as THREE.ShaderMaterial, deltaTime, sunDirection);
-        break;
-      case 'basic':
-      default:
-        updateTerrainShader(this.material as THREE.ShaderMaterial, deltaTime, sunDirection);
-        break;
-    }
-  }
-
-  /**
-   * Create a standard PBR material that works with WebGPU and WebGL
-   * Uses textures for high-resolution terrain rendering
-   */
-  private createStandardMaterial(): THREE.MeshStandardMaterial {
-    // Load terrain textures based on biome
-    const textureLoader = new THREE.TextureLoader();
-    const biomeTextures = this.getBiomeTexturePrefix();
-
-    // Calculate texture repeat based on map size for good visual density
-    // Aim for each texture tile to cover approximately 4-8 world units
-    const mapSize = Math.max(this.mapData.width, this.mapData.height);
-    const repeatScale = Math.max(8, mapSize / 8); // Larger tiles = better resolution
-
-    // Configure texture settings for maximum quality
-    const configureTexture = (texture: THREE.Texture, isSRGB: boolean = false) => {
-      texture.wrapS = THREE.RepeatWrapping;
-      texture.wrapT = THREE.RepeatWrapping;
-      texture.repeat.set(repeatScale, repeatScale);
-      texture.minFilter = THREE.LinearMipmapLinearFilter;
-      texture.magFilter = THREE.LinearFilter;
-      texture.generateMipmaps = true;
-      // Enable anisotropic filtering for sharper textures at angles
-      texture.anisotropy = 4; // Reduced from 16 for better performance
-      if (isSRGB) {
-        texture.colorSpace = THREE.SRGBColorSpace;
-      }
-    };
-
-    // Load diffuse texture
-    const diffuseTexture = textureLoader.load(`/textures/terrain/${biomeTextures}_diffuse.png`);
-    configureTexture(diffuseTexture, true);
-
-    // Load normal map
-    const normalTexture = textureLoader.load(`/textures/terrain/${biomeTextures}_normal.png`);
-    configureTexture(normalTexture, false);
-
-    // Load roughness map
-    const roughnessTexture = textureLoader.load(`/textures/terrain/${biomeTextures}_roughness.png`);
-    configureTexture(roughnessTexture, false);
-
-    // Load displacement map for subtle height detail
-    const displacementTexture = textureLoader.load(`/textures/terrain/${biomeTextures}_displacement.png`);
-    configureTexture(displacementTexture, false);
-
-    const material = new THREE.MeshStandardMaterial({
-      map: diffuseTexture,
-      normalMap: normalTexture,
-      roughnessMap: roughnessTexture,
-      displacementMap: displacementTexture,
-      displacementScale: 0.1, // Subtle displacement for micro-detail
-      // Don't multiply with vertex colors - let textures show properly
-      vertexColors: false,
-      roughness: 1.0, // Use roughness map
-      metalness: 0.0,
-      flatShading: false,
-      normalScale: new THREE.Vector2(1.0, 1.0), // Full normal mapping strength
-    });
-
-    return material;
-  }
-
-  /**
-   * Get the texture prefix for the current biome
-   */
-  private getBiomeTexturePrefix(): string {
-    const biomeType = this.mapData.biome || 'grassland';
-    switch (biomeType) {
-      case 'desert':
-        return 'sand';
-      case 'frozen':
-        return 'snow';
-      case 'volcanic':
-        return 'basalt';
-      case 'void':
-        return 'void_ground';
-      case 'jungle':
-        return 'jungle_floor';
-      case 'grassland':
-      default:
-        return 'grass';
+    if (this.tslMaterial) {
+      this.tslMaterial.update(deltaTime, sunDirection);
     }
   }
 

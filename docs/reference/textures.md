@@ -394,12 +394,15 @@ The AI prompts above were used to generate all textures via [Polycam AI Texture 
 
 ## Code Integration
 
-Once textures are generated, the shader automatically loads them based on biome. See `TextureTerrainShader.ts` for the biome texture configuration system.
+Textures are automatically loaded by `TSLTerrainMaterial` based on biome type. The material handles 4-texture blending (grass, dirt, rock, cliff) with slope-based weight calculation.
 
 ```typescript
-// Example: Getting texture config for a biome
-import { getBiomeTextureConfig } from '@/rendering/shaders/TextureTerrainShader';
+// Example: Creating terrain material for a biome
+import { TSLTerrainMaterial } from '@/rendering/tsl/TerrainMaterial';
 
-const config = getBiomeTextureConfig('desert');
-// Returns paths to sand_*, desert_dirt_*, sandstone_*, desert_cliff_*
+const material = new TSLTerrainMaterial({
+  biome: 'desert',  // Loads sand_*, desert_dirt_*, rock_*, desert_cliff_*
+  mapWidth: 128,
+  mapHeight: 128,
+});
 ```
