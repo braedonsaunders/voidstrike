@@ -4,9 +4,11 @@
 
 VOIDSTRIKE is a browser-based RTS game built with Next.js 14, Three.js, and TypeScript.
 
-**Tech Stack:** Next.js 14 | Three.js (WebGPU/TSL) | TypeScript | ECS Architecture | P2P Multiplayer
+**Tech Stack:** Next.js 16 | Three.js (WebGPU/TSL) | TypeScript | ECS Architecture | P2P Multiplayer
 
 ---
+
+DO NOT CREATE MD FILES UNLESS EXPLICITLY TOLD TO DO SO
 
 ## Documentation Index
 
@@ -30,7 +32,6 @@ Load relevant documentation based on your current task. Don't load everything—
 
 | Document | Path | Purpose |
 |----------|------|---------|
-| **TODO** | `.claude/TODO.md` | Current tasks, roadmap, progress tracking |
 | **Templates** | `.claude/templates/` | Templates for new systems, components, tools, features |
 
 ### Tools Documentation (in `docs/tools/`)
@@ -47,17 +48,15 @@ Load relevant documentation based on your current task. Don't load everything—
 
 ### After EVERY code change, you MUST update relevant documentation:
 
-1. **`.claude/TODO.md`** - Mark completed tasks `[x]`, add new tasks `[ ]`
+1. **`docs/reference/schema.md`** - When changing database tables, data structures, or entity schemas
 
-2. **`docs/reference/schema.md`** - When changing database tables, data structures, or entity schemas
+2. **`docs/design/GAME_DESIGN.md`** - When adding units, buildings, abilities, or game mechanics
 
-3. **`docs/design/GAME_DESIGN.md`** - When adding units, buildings, abilities, or game mechanics
+3. **`docs/architecture/OVERVIEW.md`** - When adding systems, modules, or changing architecture
 
-4. **`docs/architecture/OVERVIEW.md`** - When adding systems, modules, or changing architecture
+4. **`docs/architecture/rendering.md`** - When adding shaders, effects, or graphics features
 
-5. **`docs/architecture/rendering.md`** - When adding shaders, effects, or graphics features
-
-6. **`docs/architecture/networking.md`** - When changing multiplayer or networking code
+5. **`docs/architecture/networking.md`** - When changing multiplayer or networking code
 
 ### Use templates for consistency:
 - New ECS system → `.claude/templates/system.md`
