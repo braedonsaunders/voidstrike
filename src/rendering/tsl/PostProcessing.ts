@@ -396,14 +396,15 @@ export class RenderPipeline {
 
     const scenePassColor = scenePass.getTextureNode();
     const scenePassDepth = scenePass.getTextureNode('depth');
-    const scenePassNormal = scenePass.getTextureNode('normal');
-    const scenePassMetalRough = scenePass.getTextureNode('metalrough');
-    const scenePassVelocity = scenePass.getTextureNode('velocity');
+    // Only retrieve MRT texture nodes that were actually set up
+    const scenePassNormal = needsNormals ? scenePass.getTextureNode('normal') : null;
+    const scenePassMetalRough = needsNormals ? scenePass.getTextureNode('metalrough') : null;
+    const scenePassVelocity = needsVelocity ? scenePass.getTextureNode('velocity') : null;
 
     let outputNode: any = scenePassColor;
 
     // 1. SSGI
-    if (this.config.ssgiEnabled) {
+    if (this.config.ssgiEnabled && scenePassNormal) {
       const result = createSSGIPass(scenePassColor, scenePassDepth, scenePassNormal, this.camera, {
         radius: this.config.ssgiRadius,
         intensity: this.config.ssgiIntensity,
@@ -464,7 +465,7 @@ export class RenderPipeline {
           this.uTemporalSSRBlend
         );
         outputNode = outputNode.add(ssrTexture.rgb.mul(ssrTexture.a));
-      } else {
+      } else if (scenePassNormal && scenePassMetalRough) {
         // Full-res SSR
         const result = createSSRPass(scenePassColor, scenePassDepth, scenePassNormal, scenePassMetalRough, this.camera, {
           maxDistance: this.config.ssrMaxDistance,
@@ -529,7 +530,7 @@ export class RenderPipeline {
     outputNode = createColorGradingPass(outputNode, colorUniforms, this.config.vignetteEnabled);
 
     // 7. Anti-aliasing
-    if (this.config.antiAliasingMode === 'taa' && this.config.taaEnabled) {
+    if (this.config.antiAliasingMode === 'taa' && this.config.taaEnabled && scenePassVelocity) {
       const result = createTRAAPass(outputNode, scenePassDepth, scenePassVelocity, this.camera);
       if (result) {
         this.traaPass = result.pass;
