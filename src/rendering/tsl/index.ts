@@ -34,15 +34,6 @@ export {
   calculateMicroNormal,
 } from './noise';
 
-// Terrain materials
-export {
-  createTextureTerrainMaterial,
-  updateTextureTerrainMaterial,
-  getBiomeTextureConfig,
-  type TextureTerrainConfig,
-  type BiomeTextureType,
-} from './TextureTerrainMaterial';
-
 // Selection system
 export {
   SelectionSystem,
