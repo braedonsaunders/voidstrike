@@ -681,35 +681,3 @@ export class CullingCompute {
     this.frustumPlanesAttribute = null;
   }
 }
-
-/**
- * Helper to extract frustum planes from camera
- * Returns 6 planes: left, right, bottom, top, near, far
- */
-export function extractFrustumPlanes(camera: THREE.Camera): FrustumPlanes {
-  const frustum = new THREE.Frustum();
-  const matrix = new THREE.Matrix4();
-
-  matrix.multiplyMatrices(camera.projectionMatrix, camera.matrixWorldInverse);
-  frustum.setFromProjectionMatrix(matrix);
-
-  return { planes: frustum.planes };
-}
-
-/**
- * Pack frustum planes into Float32Array for GPU upload
- * Each plane = vec4(normal.x, normal.y, normal.z, constant)
- */
-export function packFrustumPlanes(planes: THREE.Plane[]): Float32Array {
-  const data = new Float32Array(planes.length * 4);
-
-  for (let i = 0; i < planes.length; i++) {
-    const plane = planes[i];
-    data[i * 4 + 0] = plane.normal.x;
-    data[i * 4 + 1] = plane.normal.y;
-    data[i * 4 + 2] = plane.normal.z;
-    data[i * 4 + 3] = plane.constant;
-  }
-
-  return data;
-}

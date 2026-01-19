@@ -824,17 +824,6 @@ export class RenderPipeline {
 // UTILITY EXPORTS
 // ============================================
 
-export function createSimplePostProcessing(
-  renderer: WebGPURenderer,
-  scene: THREE.Scene,
-  camera: THREE.Camera
-): PostProcessing {
-  const postProcessing = new PostProcessing(renderer);
-  const scenePass = pass(scene, camera);
-  postProcessing.outputNode = scenePass.getTextureNode();
-  return postProcessing;
-}
-
 export class ScreenShake {
   private camera: THREE.Camera;
   private originalPosition: THREE.Vector3;

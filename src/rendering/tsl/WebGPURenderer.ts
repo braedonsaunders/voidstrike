@@ -232,23 +232,6 @@ export async function createWebGPURenderer(config: WebGPURendererConfig): Promis
 }
 
 /**
- * Create post-processing pipeline using TSL nodes
- */
-export function createPostProcessingPipeline(
-  context: RenderContext,
-  scene: THREE.Scene,
-  camera: THREE.Camera
-): PostProcessing {
-  const postProcessing = new PostProcessing(context.renderer);
-
-  // Import TSL post-processing nodes dynamically
-  // This will be configured by the specific post-processing setup
-  context.postProcessing = postProcessing;
-
-  return postProcessing;
-}
-
-/**
  * Update renderer size on window resize
  */
 export function updateRendererSize(
@@ -263,21 +246,6 @@ export function updateRendererSize(
 }
 
 /**
- * Execute compute shader (WebGPU only)
- */
-export async function executeCompute(
-  context: RenderContext,
-  computeNode: any
-): Promise<void> {
-  if (!context.supportsCompute) {
-    debugShaders.warn('[WebGPU] Compute shaders not supported - skipping');
-    return;
-  }
-
-  await context.renderer.computeAsync(computeNode);
-}
-
-/**
  * Render the scene with post-processing
  */
 export function render(
@@ -289,21 +257,6 @@ export function render(
     context.postProcessing.render();
   } else {
     context.renderer.render(scene, camera);
-  }
-}
-
-/**
- * Render async (for compute shader coordination)
- */
-export async function renderAsync(
-  context: RenderContext,
-  scene: THREE.Scene,
-  camera: THREE.Camera
-): Promise<void> {
-  if (context.postProcessing) {
-    await context.postProcessing.renderAsync();
-  } else {
-    await context.renderer.renderAsync(scene, camera);
   }
 }
 
