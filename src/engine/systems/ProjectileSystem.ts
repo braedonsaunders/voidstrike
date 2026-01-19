@@ -522,7 +522,16 @@ export class ProjectileSystem extends System {
     } else {
       // Homing/linear projectiles that expired without hitting just disappear
       // This shouldn't normally happen for homing, but handles edge cases
-      debugProjectile.log(`Projectile ${entity.id} expired without impact (behavior: ${projectile.behavior})`);
+      const dx = projectile.targetX - transform.x;
+      const dy = projectile.targetY - transform.y;
+      const dz = projectile.targetZ - transform.z;
+      const distSq = dx * dx + dy * dy + dz * dz;
+      debugProjectile.log(
+        `Projectile ${entity.id} expired without impact (behavior: ${projectile.behavior}), ` +
+        `pos: (${transform.x.toFixed(2)}, ${transform.y.toFixed(2)}, ${transform.z.toFixed(2)}), ` +
+        `target: (${projectile.targetX.toFixed(2)}, ${projectile.targetY.toFixed(2)}, ${projectile.targetZ.toFixed(2)}), ` +
+        `dist: ${Math.sqrt(distSq).toFixed(2)}, targetEntityId: ${projectile.targetEntityId}`
+      );
       this.destroyProjectile(entity.id);
     }
   }
