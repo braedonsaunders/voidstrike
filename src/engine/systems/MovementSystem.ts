@@ -2023,6 +2023,10 @@ export class MovementSystem extends System {
             if (effectiveDistance > unit.attackRange || needsToEscape) {
               targetX = attackTargetX;
               targetY = attackTargetY;
+              // Request path to attack position for ground units out of range
+              if (!unit.isFlying) {
+                this.requestPathWithCooldown(entity.id, attackTargetX, attackTargetY);
+              }
             } else {
               // Note: Y is negated for Three.js coordinate system
               transform.rotation = Math.atan2(
