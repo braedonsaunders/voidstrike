@@ -65,6 +65,9 @@ export class Projectile extends Component {
   public velocityY: number;
   public velocityZ: number;
 
+  // For ballistic arc: track start position to interpolate correctly
+  public startZ: number;
+
   // Damage
   public damage: number;          // Pre-calculated damage for primary target (with multiplier/armor)
   public rawDamage: number;       // Raw base damage before multiplier/armor (for splash calculations)
@@ -91,6 +94,7 @@ export class Projectile extends Component {
     targetX: number;
     targetY: number;
     targetZ: number;
+    startZ: number;
     speed: number;
     turnRate: number;
     arcHeight: number;
@@ -124,6 +128,7 @@ export class Projectile extends Component {
     this.velocityX = 0;
     this.velocityY = 0;
     this.velocityZ = 0;
+    this.startZ = data.startZ;
 
     this.damage = data.damage;
     this.rawDamage = data.rawDamage;
