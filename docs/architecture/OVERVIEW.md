@@ -1016,6 +1016,108 @@ src/engine/wasm/
 - Pre-built WASM committed to `public/wasm/` for Vercel
 - Local build: `./scripts/build-wasm.sh` (requires Rust + wasm-pack)
 
+### High-Performance SpatialGrid
+
+Optimized spatial partitioning for 500+ unit battles:
+
+```typescript
+// Flat array storage for O(1) direct cell access
+private readonly fineCells: Int32Array;
+private readonly fineCellCounts: Uint8Array;
+
+// Hierarchical grid: fine (8x8) + coarse (32x32) cells
+// Small radius queries use fine grid, large queries use coarse
+
+// Inline entity data eliminates entity lookups in hot paths
+interface SpatialEntityData {
+  id: number;
+  x: number; y: number; radius: number;
+  isFlying: boolean;
+  state: SpatialUnitState;  // Enum for fast comparison
+  playerId: number;         // Numeric ID for fast comparison
+  collisionRadius: number;
+  isWorker: boolean;
+  maxSpeed: number;
+}
+
+// Query with inline data - no entity.get() calls needed
+const neighbors = unitGrid.queryRadiusWithData(x, y, radius);
+for (const n of neighbors) {
+  // Use n.isFlying, n.state directly - no entity lookup!
+}
+```
+
+**Key Optimizations:**
+- **Flat Array Cells**: `Int32Array` instead of `Map<number, Set>` for direct indexing
+- **Hierarchical Grid**: Fine (8x8) + coarse (32x32) cells for multi-scale queries
+- **Inline Entity Data**: Position, state, player ID stored in grid to avoid lookups
+- **Pre-allocated Buffers**: Reusable query result arrays eliminate GC pressure
+- **Hot Cell Detection**: `getHotCells()` marks cells with multi-player units for combat zone optimization
+- **Fast Enemy Detection**: `hasEnemyInRadius()` with inline data for O(nearby) combat checks
+
+### MovementSystem Optimizations
+
+Performance enhancements for large-scale battles:
+
+```typescript
+// Dirty-flag spatial updates - only update grid when position changed
+const GRID_UPDATE_THRESHOLD_SQ = 0.25; // 0.5 unit movement
+if (distSq > this.GRID_UPDATE_THRESHOLD_SQ) {
+  unitGrid.updateFull(id, x, y, radius, isFlying, state, playerId, ...);
+  this.gridDirtyEntities.add(id);
+} else {
+  unitGrid.updateState(id, state); // Fast path - no spatial update
+}
+
+// Frame entity cache - avoid repeated lookups
+this.frameEntityCache.set(entity.id, { transform, unit, velocity });
+
+// Steering forces use inline SpatialGrid data
+const nearbyData = unitGrid.queryRadiusWithData(x, y, radius);
+for (const other of nearbyData) {
+  if (other.state === SpatialUnitState.Dead) continue;
+  if (other.isFlying !== selfUnit.isFlying) continue;
+  // No entity.get() calls!
+}
+```
+
+**Key Optimizations:**
+- **Dirty-Flag Updates**: Only update grid when unit moves > 0.5 units
+- **Single Pass**: Merged spatial grid update + entity caching in one loop
+- **Inline Data Steering**: Separation, cohesion, physics push use grid data directly
+- **Frame Entity Cache**: Cache component references to avoid repeated lookups
+
+### CombatSystem Optimizations
+
+Efficient target acquisition for large battles:
+
+```typescript
+// Combat-active entity list - only process units near enemies
+private combatActiveUnits: Set<number>;
+
+// Hot cell tracking from SpatialGrid
+private hotCells: Set<number>;
+if (unitGrid.isInHotCell(x, y, hotCells)) {
+  // Unit is near enemies - process target acquisition
+}
+
+// Fast combat zone check with inline data
+const hasEnemy = unitGrid.hasEnemyInRadius(x, y, sightRange, myPlayerId);
+
+// Priority queue for attack cooldowns (min-heap)
+private attackReadyQueue: Array<{ entityId: number; nextAttackTime: number }>;
+while (this.heapPeek().nextAttackTime <= gameTime) {
+  const ready = this.heapPop();
+  // Process attack for ready unit
+}
+```
+
+**Key Optimizations:**
+- **Combat-Active List**: Only iterate units in combat zones, not all 500
+- **Hot Cell Detection**: Skip target acquisition for units in "cold" cells
+- **hasEnemyInRadius()**: O(nearby) enemy detection with inline data
+- **Attack Cooldown Queue**: Min-heap for O(log n) attack scheduling
+
 ## SC2 Parity Features
 
 ### Unit Movement System
