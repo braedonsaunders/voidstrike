@@ -46,7 +46,7 @@ import {
   TSLFogOfWar,
   TSLGameOverlayManager,
 } from '@/rendering/tsl';
-import { initCameraMatrices, setCameraMatricesBeforeRender, updateCameraMatrices, setMaxVertexBuffers } from '@/rendering/tsl/InstancedVelocity';
+import { initCameraMatrices, setCameraMatricesBeforeRender, updateCameraMatrices, setMaxVertexBuffers, onVelocitySetupFailed } from '@/rendering/tsl/InstancedVelocity';
 
 import { useGameStore } from '@/store/gameStore';
 
@@ -478,6 +478,15 @@ export function WebGPUGameCanvas() {
       }
 
       const fogOfWarEnabled = useGameSetupStore.getState().fogOfWar;
+
+      // Register callback to auto-disable TAA if velocity setup fails (vertex buffer limit)
+      onVelocitySetupFailed(() => {
+        const currentSettings = useUIStore.getState().graphicsSettings;
+        if (currentSettings.antiAliasingMode === 'taa') {
+          console.warn('[WebGPUGameCanvas] Auto-switching from TAA to FXAA due to vertex buffer limit');
+          useUIStore.getState().setAntiAliasingMode('fxaa');
+        }
+      });
 
       // Create renderers
       unitRendererRef.current = new UnitRenderer(
