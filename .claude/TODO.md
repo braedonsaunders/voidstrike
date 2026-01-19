@@ -15,6 +15,7 @@
 - [x] **Pre-allocated buffers** - Reusable query results eliminate GC pressure
 - [x] **Hot cell detection** - getHotCells() identifies cells with multi-player units
 - [x] **Fast enemy detection** - hasEnemyInRadius() with inline data for O(nearby) checks
+- [x] **queryRadiusWithData buffer overflow fix** - Dynamic buffer expansion when query exceeds pre-allocated capacity
 
 ### MovementSystem Optimizations
 - [x] **Dirty-flag updates** - Only update grid when unit moves > 0.5 units

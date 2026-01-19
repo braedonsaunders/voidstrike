@@ -651,6 +651,14 @@ export class SpatialGrid {
           const combinedRadius = radius + this.entityRadius[entityId];
 
           if (distSq <= combinedRadius * combinedRadius) {
+            // Ensure buffer has space - expand if needed
+            if (resultCount >= resultArray.length) {
+              resultArray.push({
+                id: 0, x: 0, y: 0, radius: 0,
+                isFlying: false, state: SpatialUnitState.Idle, playerId: 0,
+                collisionRadius: 0, isWorker: false, maxSpeed: 0,
+              });
+            }
             this.fillEntityData(entityId, resultArray[resultCount]);
             resultCount++;
           }
@@ -679,6 +687,14 @@ export class SpatialGrid {
           const combinedRadius = radius + this.entityRadius[entityId];
 
           if (distSq <= combinedRadius * combinedRadius) {
+            // Ensure buffer has space - expand if needed
+            if (resultCount >= resultArray.length) {
+              resultArray.push({
+                id: 0, x: 0, y: 0, radius: 0,
+                isFlying: false, state: SpatialUnitState.Idle, playerId: 0,
+                collisionRadius: 0, isWorker: false, maxSpeed: 0,
+              });
+            }
             this.fillEntityData(entityId, resultArray[resultCount]);
             resultCount++;
           }
