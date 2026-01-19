@@ -46,10 +46,10 @@ export interface NetworkMetrics {
 }
 
 export interface RenderMetrics {
-  drawCalls: number;       // Draw calls this frame
+  drawCalls: number;       // Draw calls this frame (from Three.js renderer.info)
   triangles: number;       // Triangles rendered this frame
-  drawCallsPerSecond: number; // Accumulated over 1 second
-  trianglesPerSecond: number; // Accumulated over 1 second
+  drawCallsPerSecond: number; // Estimated draw calls per second (drawCalls * fps)
+  trianglesPerSecond: number; // Estimated triangles per second (triangles * fps)
 }
 
 export interface PerformanceSnapshot {
@@ -322,19 +322,19 @@ class PerformanceMonitorClass {
   }
 
   /**
-   * Update render metrics (called by WebGPUGameCanvas once per second)
-   * @param drawCalls - Draw calls accumulated over the last second
-   * @param triangles - Triangles accumulated over the last second
-   * @param fps - Current FPS to calculate per-frame values
+   * Update render metrics (called by WebGPUGameCanvas each frame)
+   * @param drawCalls - Draw calls for this frame (reset after each frame)
+   * @param triangles - Triangles rendered this frame (reset after each frame)
+   * @param fps - Current FPS to calculate per-second values
    */
   public updateRenderMetrics(drawCalls: number, triangles: number, fps: number): void {
     if (!this.collectingEnabled) return;
-    // Store both total and per-frame values
-    this.renderMetrics.drawCallsPerSecond = drawCalls;
-    this.renderMetrics.trianglesPerSecond = triangles;
-    // Calculate per-frame values
-    this.renderMetrics.drawCalls = fps > 0 ? Math.round(drawCalls / fps) : drawCalls;
-    this.renderMetrics.triangles = fps > 0 ? Math.round(triangles / fps) : triangles;
+    // Store per-frame values directly (input is already per-frame)
+    this.renderMetrics.drawCalls = drawCalls;
+    this.renderMetrics.triangles = triangles;
+    // Calculate per-second by multiplying per-frame by FPS
+    this.renderMetrics.drawCallsPerSecond = fps > 0 ? Math.round(drawCalls * fps) : drawCalls;
+    this.renderMetrics.trianglesPerSecond = fps > 0 ? Math.round(triangles * fps) : triangles;
   }
 
   /**
