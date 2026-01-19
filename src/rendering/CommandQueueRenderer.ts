@@ -5,6 +5,7 @@ import { Unit, QueuedCommand } from '@/engine/components/Unit';
 import { Transform } from '@/engine/components/Transform';
 import { Selectable } from '@/engine/components/Selectable';
 import { getLocalPlayerId, isSpectatorMode } from '@/store/gameSetupStore';
+import { AssetManager } from '@/assets/AssetManager';
 
 interface WaypointVisual {
   line: THREE.LineSegments;
@@ -134,14 +135,17 @@ export class CommandQueueRenderer {
         continue;
       }
 
+      // Calculate flying height offset for air units (like SC2 behavior)
+      const unitFlyingHeight = unit.isFlying ? AssetManager.getAirborneHeight(unit.unitId) : 0;
+
       const existing = this.waypointVisuals.get(unitId);
 
       if (existing) {
         // Update existing visual
-        this.updateVisual(existing, transform.x, transform.y, waypoints);
+        this.updateVisual(existing, transform.x, transform.y, waypoints, unitFlyingHeight);
       } else {
         // Create new visual
-        const visual = this.createVisual(transform.x, transform.y, waypoints);
+        const visual = this.createVisual(transform.x, transform.y, waypoints, unitFlyingHeight);
         this.waypointVisuals.set(unitId, visual);
       }
     }
@@ -194,7 +198,8 @@ export class CommandQueueRenderer {
   private createVisual(
     startX: number,
     startY: number,
-    waypoints: Array<{ x: number; y: number; type: string }>
+    waypoints: Array<{ x: number; y: number; type: string }>,
+    unitFlyingHeight: number = 0
   ): WaypointVisual {
     // PERFORMANCE: Pre-allocate buffer with extra capacity to avoid frequent resizing
     // Each waypoint needs 2 vertices (start + end of line segment) * 3 components (x, y, z)
@@ -202,7 +207,7 @@ export class CommandQueueRenderer {
     const positions = new Float32Array(initialCapacity * 3);
 
     // Fill initial positions
-    const linePoints = this.createLinePoints(startX, startY, waypoints);
+    const linePoints = this.createLinePoints(startX, startY, waypoints, unitFlyingHeight);
     for (let i = 0; i < linePoints.length && i < initialCapacity; i++) {
       positions[i * 3] = linePoints[i].x;
       positions[i * 3 + 1] = linePoints[i].y;
@@ -235,10 +240,11 @@ export class CommandQueueRenderer {
     visual: WaypointVisual,
     startX: number,
     startY: number,
-    waypoints: Array<{ x: number; y: number; type: string }>
+    waypoints: Array<{ x: number; y: number; type: string }>,
+    unitFlyingHeight: number = 0
   ): void {
     // PERFORMANCE: Update existing buffer instead of recreating geometry every frame
-    const linePoints = this.createLinePoints(startX, startY, waypoints);
+    const linePoints = this.createLinePoints(startX, startY, waypoints, unitFlyingHeight);
     const requiredPoints = linePoints.length;
 
     const positionAttr = visual.line.geometry.getAttribute('position') as THREE.BufferAttribute;
@@ -298,17 +304,22 @@ export class CommandQueueRenderer {
   private createLinePoints(
     startX: number,
     startY: number,
-    waypoints: Array<{ x: number; y: number; type: string }>
+    waypoints: Array<{ x: number; y: number; type: string }>,
+    unitFlyingHeight: number = 0
   ): THREE.Vector3[] {
     const points: THREE.Vector3[] = [];
-    const lineOffset = 0.15; // Height above terrain
+    const groundLineOffset = 0.15; // Height above terrain for ground units
 
     let prevX = startX;
     let prevY = startY;
+    let isFirstSegment = true;
 
     for (const wp of waypoints) {
-      const startHeight = (this.getTerrainHeight ? this.getTerrainHeight(prevX, prevY) : 0) + lineOffset;
-      const endHeight = (this.getTerrainHeight ? this.getTerrainHeight(wp.x, wp.y) : 0) + lineOffset;
+      // First segment starts from unit's position (airborne height for flying units)
+      // Subsequent segments and endpoints are at ground level
+      const startOffset = isFirstSegment ? (unitFlyingHeight > 0 ? unitFlyingHeight : groundLineOffset) : groundLineOffset;
+      const startHeight = (this.getTerrainHeight ? this.getTerrainHeight(prevX, prevY) : 0) + startOffset;
+      const endHeight = (this.getTerrainHeight ? this.getTerrainHeight(wp.x, wp.y) : 0) + groundLineOffset;
 
       points.push(
         new THREE.Vector3(prevX, startHeight, prevY),
@@ -317,6 +328,7 @@ export class CommandQueueRenderer {
 
       prevX = wp.x;
       prevY = wp.y;
+      isFirstSegment = false;
     }
 
     return points;
