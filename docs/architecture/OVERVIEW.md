@@ -727,16 +727,15 @@ Selection with multiple improvements:
    - Speed-scaled emission for dynamic effects
    - Integrates with AdvancedParticleSystem for GPU-instanced rendering
 
-5. **shaders/TerrainShader.ts** - Advanced terrain rendering
-   - Multi-layer procedural texturing (grass, dirt, rock, cliff)
-   - Voronoi-based rock cracks and pebble patterns
-   - PBR-like lighting with Fresnel and GGX specular
-   - Real-time normal map generation from FBM noise
-   - Height and slope-based material blending
-   - Triplanar mapping for cliffs (no UV stretching)
-   - Subsurface scattering approximation for grass
+5. **tsl/TerrainMaterial.ts** - TSL terrain material (WebGPU + WebGL compatible)
+   - 4-texture blending (grass, dirt, rock, cliff) with PBR support
+   - Slope-based weight calculation from vertex attributes
+   - SC2-style terrain type system (ground, ramp, unwalkable, platform)
+   - Procedural platform material with beveled metal panels
+   - Biome-aware texture loading (grassland, desert, frozen, volcanic, void, jungle)
+   - Shared blend weight helper to avoid code duplication
 
-5. **Terrain.ts** - Enhanced terrain geometry with THREE.Terrain-style algorithms
+6. **Terrain.ts** - Enhanced terrain geometry with THREE.Terrain-style algorithms
    - **256-level elevation system** (0-255, like StarCraft 2)
    - Proper Perlin noise with gradient interpolation
    - Fractal Brownian Motion (fBM) for multi-octave noise
