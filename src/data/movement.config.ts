@@ -16,7 +16,7 @@
  * Radius within which separation forces apply between units.
  * Units of: world units
  */
-export const SEPARATION_RADIUS = 1.0;
+export const SEPARATION_RADIUS = 1.5;
 
 /**
  * Separation strength while units are moving.
@@ -40,13 +40,13 @@ export const SEPARATION_STRENGTH_ARRIVING = 2.0;
  * Separation strength while units are attacking in range.
  * Strong for SC2-style unclumping during combat.
  */
-export const SEPARATION_STRENGTH_COMBAT = 2.5;
+export const SEPARATION_STRENGTH_COMBAT = 4.0;
 
 /**
  * Maximum separation/avoidance force magnitude.
  * Prevents extreme forces from causing erratic movement.
  */
-export const MAX_AVOIDANCE_FORCE = 1.5;
+export const MAX_AVOIDANCE_FORCE = 2.5;
 
 // =============================================================================
 // COHESION - Keeps groups together (weak boid force)
@@ -262,7 +262,7 @@ export const PHYSICS_PUSH_THROTTLE_TICKS = 3;
  * Speed multiplier when units spread apart during combat.
  * Lower = units stay closer to targets while unclumping.
  */
-export const COMBAT_SPREAD_SPEED_MULTIPLIER = 0.4;
+export const COMBAT_SPREAD_SPEED_MULTIPLIER = 0.5;
 
 /**
  * Minimum separation magnitude to trigger combat movement.
