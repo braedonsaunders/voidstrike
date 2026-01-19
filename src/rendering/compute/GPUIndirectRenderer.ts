@@ -23,12 +23,11 @@ import {
   storage,
   uniform,
   float,
-  vec3,
   vec4,
-  mat4,
   positionLocal,
   normalLocal,
   instanceIndex,
+  normalize,
 } from 'three/tsl';
 
 import {
@@ -283,24 +282,17 @@ export class GPUIndirectRenderer {
       });
 
       // Custom normal node - transforms normal by the model matrix
+      // For uniform scaling, we can transform normal as direction (w=0) and renormalize
       const gpuNormalNode = Fn(() => {
         const visibleSlotIndex = visibleIndices.element(instanceIndex);
         const modelMatrix = transformBuffer.element(visibleSlotIndex);
 
-        // Extract rotation from model matrix (upper-left 3x3)
-        // For uniform scaling, normal transform = modelMatrix rotation
-        const col0 = modelMatrix[0].xyz;
-        const col1 = modelMatrix[1].xyz;
-        const col2 = modelMatrix[2].xyz;
-        const rotationMatrix = mat4(
-          vec4(col0, float(0)),
-          vec4(col1, float(0)),
-          vec4(col2, float(0)),
-          vec4(vec3(0, 0, 0), float(1))
-        );
+        // Transform normal as direction vector (w=0), then normalize
+        // This works correctly for uniform scaling (common for game units)
+        const normal4 = vec4(normalLocal, float(0.0));
+        const transformedNormal = modelMatrix.mul(normal4).xyz;
 
-        const transformedNormal = rotationMatrix.mul(vec4(normalLocal, float(0))).xyz;
-        return transformedNormal;
+        return normalize(transformedNormal);
       });
 
       material.positionNode = gpuPositionNode();
