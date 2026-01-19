@@ -27,6 +27,43 @@ VOIDSTRIKE uses Three.js with WebGPU renderer and TSL (Three.js Shading Language
 | **Color Grading** | ✅ Implemented | Exposure, saturation, contrast with ACES Filmic tone mapping |
 | **Volumetric Fog** | ✅ Implemented | Raymarched atmospheric scattering with quality presets |
 
+### Post-Processing Architecture (Modular Design)
+
+The post-processing pipeline is split into focused modules for maintainability:
+
+```
+src/rendering/tsl/
+├── PostProcessing.ts        (~900 lines) - Main orchestration
+│   ├── RenderPipeline class - Public API
+│   ├── createDualPipeline() - Multi-resolution setup
+│   ├── render()/renderAsync() - Frame rendering
+│   └── applyConfig() - Runtime configuration
+│
+└── effects/
+    ├── index.ts             - Re-exports all effect modules
+    ├── EffectPasses.ts      (~650 lines) - Effect creation functions
+    │   ├── createSSGIPass()
+    │   ├── createGTAOPass() + applyAOToColor()
+    │   ├── createSSRPass() + applySSRToColor()
+    │   ├── createBloomPass()
+    │   ├── createVolumetricFogPass()
+    │   ├── createColorGradingPass() + acesToneMap()
+    │   ├── createSharpeningPass()
+    │   ├── createTRAAPass() + createFXAAPass()
+    │   └── Temporal upscaling node helpers
+    │
+    └── TemporalManager.ts   (~430 lines) - Quarter-res pipelines
+        ├── createQuarterAOPipeline()
+        ├── createQuarterSSRPipeline()
+        └── TemporalEffectsManager class
+```
+
+**Design Principles:**
+- `PostProcessing.ts` owns pipeline orchestration and public API
+- `EffectPasses.ts` contains pure functions for creating individual effects
+- `TemporalManager.ts` handles quarter-resolution temporal reprojection
+- All modules use the same shared types from `src/types/three-webgpu.d.ts`
+
 ### Anti-Aliasing Details
 
 #### TRAA (Temporal Reprojection Anti-Aliasing)
@@ -709,7 +746,9 @@ These exist in `uiStore.ts` but have no effect:
 
 **Files:**
 - `src/rendering/tsl/VolumetricFog.ts` - TSL implementation
-- `src/rendering/tsl/PostProcessing.ts` - Pipeline integration
+- `src/rendering/tsl/PostProcessing.ts` - Pipeline orchestration (RenderPipeline class)
+- `src/rendering/tsl/effects/EffectPasses.ts` - Individual effect creation functions (SSGI, GTAO, SSR, Bloom, etc.)
+- `src/rendering/tsl/effects/TemporalManager.ts` - Quarter-res temporal pipeline management
 - `src/components/game/WebGPUGameCanvas.tsx` - Reactive settings
 
 **Previous Proposed Approach (for reference):**
