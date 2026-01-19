@@ -16,8 +16,8 @@ import { Building } from '../components/Building';
 import { Unit } from '../components/Unit';
 import { Health } from '../components/Health';
 import { Selectable } from '../components/Selectable';
-import { BUILDING_DEFINITIONS } from '@/data/buildings';
-import { UNIT_DEFINITIONS } from '@/data/units';
+import { BUILDING_DEFINITIONS } from '@/data/buildings/dominion';
+import { UNIT_DEFINITIONS } from '@/data/units/dominion';
 
 /**
  * Types of enemy strategy the AI can infer

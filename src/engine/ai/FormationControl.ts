@@ -16,7 +16,7 @@ import { Transform } from '../components/Transform';
 import { Unit } from '../components/Unit';
 import { Health } from '../components/Health';
 import { Selectable } from '../components/Selectable';
-import { UNIT_DEFINITIONS } from '@/data/units';
+// UNIT_DEFINITIONS not needed - we use unit component data directly
 
 /**
  * Formation types
