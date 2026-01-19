@@ -70,3 +70,31 @@ export {
   // Helper functions
   shouldInitializeTemporalEffects,
 } from './TemporalManager';
+
+// Temporal utilities (shared building blocks)
+export {
+  // UV reprojection
+  calculateReprojectedUV,
+  isUVInBounds,
+
+  // Neighborhood clamping
+  sampleNeighborhoodBounds,
+  applyNeighborhoodClamp,
+
+  // Core temporal blend
+  temporalBlend,
+
+  // High-level blend nodes
+  createSimpleTemporalBlendNode,
+  createClampedTemporalBlendNode,
+  createSingleChannelTemporalBlendNode,
+
+  // Default blend factors
+  DEFAULT_AO_BLEND_FACTOR,
+  DEFAULT_SSR_BLEND_FACTOR,
+  DEFAULT_TEMPORAL_BLEND_FACTOR,
+
+  // Types
+  type TemporalBlendConfig,
+  type NeighborhoodClampConfig,
+} from './TemporalUtils';

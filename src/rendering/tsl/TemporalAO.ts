@@ -16,8 +16,6 @@
 import * as THREE from 'three';
 import {
   Fn,
-  vec2,
-  vec3,
   vec4,
   float,
   texture,
@@ -25,12 +23,14 @@ import {
   uniform,
   mix,
   abs,
-  max,
-  min,
   clamp,
-  If,
 } from 'three/tsl';
 import { debugShaders } from '@/utils/debugLogger';
+import {
+  calculateReprojectedUV,
+  isUVInBounds,
+  temporalBlend,
+} from './effects/TemporalUtils';
 
 export interface TemporalAOConfig {
   historyBlendFactor: number; // 0.0-1.0, how much history to use (default 0.9)
@@ -46,6 +46,9 @@ const DEFAULT_CONFIG: TemporalAOConfig = {
 
 /**
  * Create temporal AO reprojection node
+ *
+ * Uses shared utilities from TemporalUtils for velocity reprojection and bounds checking.
+ * Adds depth rejection on top of the base temporal blend.
  *
  * @param aoTexture Current frame quarter-res AO texture
  * @param velocityTexture Per-pixel velocity from MRT
@@ -70,25 +73,20 @@ export function createTemporalAONode(
 } {
   const uHistoryBlendFactor = uniform(DEFAULT_CONFIG.historyBlendFactor);
   const uDepthRejectionThreshold = uniform(DEFAULT_CONFIG.depthRejectionThreshold);
-  const uResolution = uniform(resolution);
+
+  const velocityNode = texture(velocityTexture);
 
   const node = Fn(() => {
     const fragUV = uv();
 
-    // Sample velocity at current pixel
-    const velocity = texture(velocityTexture, fragUV).xy;
-
-    // Calculate previous frame UV
-    const prevUV = fragUV.sub(velocity);
+    // Use shared utility for velocity reprojection
+    const prevUV = calculateReprojectedUV(velocityNode, fragUV);
 
     // Sample current quarter-res AO (upscaled via bilinear sampling)
     const currentAO = texture(aoTexture, fragUV).r;
 
-    // Check if previous UV is in bounds
-    const inBounds = prevUV.x.greaterThanEqual(0.0)
-      .and(prevUV.x.lessThanEqual(1.0))
-      .and(prevUV.y.greaterThanEqual(0.0))
-      .and(prevUV.y.lessThanEqual(1.0));
+    // Use shared utility for bounds checking
+    const inBounds = isUVInBounds(prevUV);
 
     // Sample history at reprojected position
     const historyAO = texture(historyTexture, prevUV).r;
@@ -109,11 +107,8 @@ export function createTemporalAONode(
     // Combine validity checks
     const validHistory = inBounds.select(depthValid, float(0.0));
 
-    // Blend based on validity
-    // If valid history: use history blend factor
-    // If invalid: use current AO only
-    const blendFactor = uHistoryBlendFactor.mul(validHistory);
-    const result = mix(currentAO, historyAO, blendFactor);
+    // Use shared temporal blend with depth-modulated blend factor
+    const result = temporalBlend(currentAO, historyAO, uHistoryBlendFactor.mul(validHistory), float(1.0));
 
     return vec4(result, result, result, 1.0);
   })();
@@ -352,40 +347,33 @@ export class TemporalAOManager {
 /**
  * Simple helper to create a temporal AO blend pass
  * This blends quarter-res AO with reprojected history using TSL.
+ * Uses shared utilities from TemporalUtils for consistent behavior.
  */
 export function createTemporalAOBlendNode(
   quarterAONode: any, // Quarter-res AO texture node
   historyNode: any, // History AO texture node
   velocityNode: any, // Velocity texture node
-  depthNode: any, // Depth texture node
+  _depthNode: any, // Depth texture node (unused in simplified version)
   config: { historyBlend: number; depthThreshold: number }
 ): ReturnType<typeof Fn> {
   const uHistoryBlend = uniform(config.historyBlend);
-  const uDepthThreshold = uniform(config.depthThreshold);
 
   return Fn(() => {
     const fragUV = uv();
 
-    // Get velocity for reprojection
-    const velocity = velocityNode.sample(fragUV).xy;
-    const prevUV = fragUV.sub(velocity);
+    // Use shared utility for velocity reprojection
+    const prevUV = calculateReprojectedUV(velocityNode, fragUV);
 
     // Sample current quarter-res AO
     const currentAO = quarterAONode.sample(fragUV).r;
 
-    // Check bounds
-    const inBounds = prevUV.x.greaterThanEqual(0.0)
-      .and(prevUV.x.lessThanEqual(1.0))
-      .and(prevUV.y.greaterThanEqual(0.0))
-      .and(prevUV.y.lessThanEqual(1.0));
+    // Use shared utility for bounds checking
+    const inBounds = isUVInBounds(prevUV);
 
     // Sample history
     const historyAO = historyNode.sample(prevUV).r;
 
-    // Blend (simplified - no depth rejection in this version)
-    const blendFactor = inBounds.select(uHistoryBlend, float(0.0));
-    const result = mix(currentAO, historyAO, blendFactor);
-
-    return float(result);
+    // Use shared temporal blend
+    return temporalBlend(currentAO, historyAO, uHistoryBlend, inBounds);
   })();
 }

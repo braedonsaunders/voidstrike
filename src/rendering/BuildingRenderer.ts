@@ -13,12 +13,32 @@ import { debugMesh } from '@/utils/debugLogger';
 import {
   BUILDING_RENDERER,
   BUILDING_SELECTION_RING,
-  BUILDING_CONSTRUCTION,
-  BUILDING_FIRE,
-  BUILDING_PARTICLES,
-  BUILDING_SCAFFOLD,
   RENDER_ORDER,
 } from '@/data/rendering.config';
+import {
+  createConstructingMaterial,
+  createOwnedSelectionMaterial,
+  createEnemySelectionMaterial,
+  createFireMaterial,
+  createSmokeMaterial,
+  createConstructionDustMaterial,
+  createConstructionSparkMaterial,
+  createThrusterCoreMaterial,
+  createThrusterGlowMaterial,
+  createBlueprintLineMaterial,
+  createBlueprintPulseMaterial,
+  createBlueprintScanMaterial,
+  createGroundDustMaterial,
+  createMetalDebrisMaterial,
+  createWeldingFlashMaterial,
+  createScaffoldWireframeMaterial,
+  createScaffoldPoleMaterial,
+  createScaffoldBeamMaterial,
+  createFireGeometry,
+  createScaffoldPoleGeometry,
+  createScaffoldBeamGeometry,
+  createScaffoldDiagonalGeometry,
+} from './tsl/BuildingMaterials';
 // NOTE: Buildings don't move, so we don't use velocity tracking (AAA optimization)
 // Velocity node returns zero for meshes without velocity attributes
 
@@ -163,172 +183,40 @@ export class BuildingRenderer {
     this.visionSystem = visionSystem ?? null;
     this.terrain = terrain ?? null;
 
-    this.constructingMaterial = new THREE.MeshStandardMaterial({
-      color: BUILDING_CONSTRUCTION.COLOR,
-      roughness: BUILDING_CONSTRUCTION.ROUGHNESS,
-      metalness: BUILDING_CONSTRUCTION.METALNESS,
-      transparent: true,
-      opacity: BUILDING_CONSTRUCTION.OPACITY,
-    });
+    // Materials created via factory functions from BuildingMaterials.ts
+    this.constructingMaterial = createConstructingMaterial();
+    this.selectionMaterial = createOwnedSelectionMaterial();
 
-    this.selectionMaterial = new THREE.MeshBasicMaterial({
-      color: BUILDING_SELECTION_RING.OWNED_COLOR,
-      transparent: true,
-      opacity: BUILDING_SELECTION_RING.OPACITY,
-      side: THREE.DoubleSide,
-    });
-
-    this.enemySelectionMaterial = new THREE.MeshBasicMaterial({
-      color: BUILDING_SELECTION_RING.ENEMY_COLOR,
-      transparent: true,
-      opacity: BUILDING_SELECTION_RING.OPACITY,
-      side: THREE.DoubleSide,
-    });
+    this.enemySelectionMaterial = createEnemySelectionMaterial();
 
     // Fire effect materials
-    this.fireMaterial = new THREE.MeshBasicMaterial({
-      color: BUILDING_FIRE.COLOR,
-      transparent: true,
-      opacity: BUILDING_FIRE.OPACITY,
-    });
+    this.fireMaterial = createFireMaterial();
+    this.smokeMaterial = createSmokeMaterial();
+    this.fireGeometry = createFireGeometry();
 
-    this.smokeMaterial = new THREE.MeshBasicMaterial({
-      color: BUILDING_FIRE.SMOKE_COLOR,
-      transparent: true,
-      opacity: BUILDING_FIRE.SMOKE_OPACITY,
-    });
-
-    this.fireGeometry = new THREE.ConeGeometry(
-      BUILDING_FIRE.CONE_RADIUS,
-      BUILDING_FIRE.CONE_HEIGHT,
-      BUILDING_FIRE.CONE_SEGMENTS
-    );
-
-    // Construction dust particles
-    this.constructionDustMaterial = new THREE.PointsMaterial({
-      color: BUILDING_PARTICLES.DUST_COLOR,
-      size: BUILDING_PARTICLES.DUST_SIZE,
-      transparent: true,
-      opacity: BUILDING_PARTICLES.DUST_OPACITY,
-      blending: THREE.NormalBlending,
-      sizeAttenuation: true,
-      depthWrite: false,
-    });
-
-    // Construction sparks (welding/building effect)
-    this.constructionSparkMaterial = new THREE.PointsMaterial({
-      color: BUILDING_PARTICLES.SPARK_COLOR,
-      size: BUILDING_PARTICLES.SPARK_SIZE,
-      transparent: true,
-      opacity: 1.0,
-      blending: THREE.AdditiveBlending,
-      sizeAttenuation: true,
-    });
-
-    // Thruster effect materials (for flying buildings)
-    this.thrusterCoreMaterial = new THREE.PointsMaterial({
-      color: BUILDING_PARTICLES.THRUSTER_CORE_COLOR,
-      size: BUILDING_PARTICLES.THRUSTER_CORE_SIZE,
-      transparent: true,
-      opacity: 0.95,
-      blending: THREE.AdditiveBlending,
-      depthWrite: false,
-    });
-
-    this.thrusterGlowMaterial = new THREE.PointsMaterial({
-      color: BUILDING_PARTICLES.THRUSTER_GLOW_COLOR,
-      size: BUILDING_PARTICLES.THRUSTER_GLOW_SIZE,
-      transparent: true,
-      opacity: 0.6,
-      blending: THREE.AdditiveBlending,
-      depthWrite: false,
-    });
+    // Particle materials
+    this.constructionDustMaterial = createConstructionDustMaterial();
+    this.constructionSparkMaterial = createConstructionSparkMaterial();
+    this.thrusterCoreMaterial = createThrusterCoreMaterial();
+    this.thrusterGlowMaterial = createThrusterGlowMaterial();
 
     // Blueprint holographic effect materials
-    this.blueprintLineMaterial = new THREE.LineBasicMaterial({
-      color: BUILDING_PARTICLES.BLUEPRINT_LINE_COLOR,
-      transparent: true,
-      opacity: 0.8,
-      linewidth: 1,
-    });
+    this.blueprintLineMaterial = createBlueprintLineMaterial();
+    this.blueprintPulseMaterial = createBlueprintPulseMaterial();
+    this.blueprintScanMaterial = createBlueprintScanMaterial();
 
-    this.blueprintPulseMaterial = new THREE.PointsMaterial({
-      color: BUILDING_PARTICLES.BLUEPRINT_PULSE_COLOR,
-      size: BUILDING_PARTICLES.BLUEPRINT_PULSE_SIZE,
-      transparent: true,
-      opacity: 0.9,
-      blending: THREE.AdditiveBlending,
-      sizeAttenuation: true,
-    });
+    // Additional particle materials
+    this.groundDustMaterial = createGroundDustMaterial();
+    this.metalDebrisMaterial = createMetalDebrisMaterial();
+    this.weldingFlashMaterial = createWeldingFlashMaterial();
 
-    this.blueprintScanMaterial = new THREE.MeshBasicMaterial({
-      color: BUILDING_PARTICLES.BLUEPRINT_SCAN_COLOR,
-      transparent: true,
-      opacity: 0.3,
-      side: THREE.DoubleSide,
-      depthWrite: false,
-    });
-
-    // Ground dust effect material
-    this.groundDustMaterial = new THREE.PointsMaterial({
-      color: BUILDING_PARTICLES.GROUND_DUST_COLOR,
-      size: BUILDING_PARTICLES.GROUND_DUST_SIZE,
-      transparent: true,
-      opacity: BUILDING_PARTICLES.GROUND_DUST_OPACITY,
-      blending: THREE.NormalBlending,
-      sizeAttenuation: true,
-      depthWrite: false,
-    });
-
-    // Metal debris particles
-    this.metalDebrisMaterial = new THREE.PointsMaterial({
-      color: BUILDING_PARTICLES.METAL_DEBRIS_COLOR,
-      size: BUILDING_PARTICLES.METAL_DEBRIS_SIZE,
-      transparent: true,
-      opacity: 1.0,
-      blending: THREE.AdditiveBlending,
-      sizeAttenuation: true,
-    });
-
-    // Welding flash material
-    this.weldingFlashMaterial = new THREE.PointsMaterial({
-      color: BUILDING_PARTICLES.WELDING_FLASH_COLOR,
-      size: BUILDING_PARTICLES.WELDING_FLASH_SIZE,
-      transparent: true,
-      opacity: 1.0,
-      blending: THREE.AdditiveBlending,
-      sizeAttenuation: true,
-    });
-
-    // Scaffold wireframe material
-    this.scaffoldMaterial = new THREE.LineBasicMaterial({
-      color: BUILDING_SCAFFOLD.WIREFRAME_COLOR,
-      transparent: true,
-      opacity: BUILDING_SCAFFOLD.WIREFRAME_OPACITY,
-      linewidth: 2,
-    });
-
-    // Pre-create scaffold materials (shared across all scaffolds)
-    this.scaffoldPoleMaterial = new THREE.MeshBasicMaterial({
-      color: BUILDING_SCAFFOLD.POLE_COLOR,
-      transparent: false,
-    });
-    this.scaffoldBeamMaterial = new THREE.MeshBasicMaterial({
-      color: BUILDING_SCAFFOLD.BEAM_COLOR,
-      transparent: false,
-    });
-
-    // Pre-create scaffold geometries (shared and reused)
-    const scaffoldSegs = BUILDING_SCAFFOLD.SEGMENTS;
-    this.scaffoldPoleGeometry = new THREE.CylinderGeometry(
-      BUILDING_SCAFFOLD.POLE_RADIUS, BUILDING_SCAFFOLD.POLE_RADIUS, 1, scaffoldSegs
-    );
-    this.scaffoldBeamGeometry = new THREE.CylinderGeometry(
-      BUILDING_SCAFFOLD.BEAM_RADIUS, BUILDING_SCAFFOLD.BEAM_RADIUS, 1, scaffoldSegs
-    );
-    this.scaffoldDiagonalGeometry = new THREE.CylinderGeometry(
-      BUILDING_SCAFFOLD.DIAGONAL_RADIUS, BUILDING_SCAFFOLD.DIAGONAL_RADIUS, 1, scaffoldSegs
-    );
+    // Scaffold materials and geometries
+    this.scaffoldMaterial = createScaffoldWireframeMaterial();
+    this.scaffoldPoleMaterial = createScaffoldPoleMaterial();
+    this.scaffoldBeamMaterial = createScaffoldBeamMaterial();
+    this.scaffoldPoleGeometry = createScaffoldPoleGeometry();
+    this.scaffoldBeamGeometry = createScaffoldBeamGeometry();
+    this.scaffoldDiagonalGeometry = createScaffoldDiagonalGeometry();
 
     // Register callback to refresh meshes when custom models finish loading
     AssetManager.onModelsLoaded(() => {
