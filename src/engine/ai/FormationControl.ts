@@ -6,8 +6,6 @@
  * - Ranged units behind melee
  * - Spread to avoid splash damage
  * - Army grouping and cohesion
- *
- * Similar to StarCraft 2's unit positioning AI.
  */
 
 import { Entity } from '../ecs/Entity';

@@ -195,6 +195,12 @@ export class CombatSystem extends System {
         continue;
       }
 
+      // Include canAttackWhileMoving units that are moving
+      if (unit.canAttackWhileMoving && unit.state === 'moving') {
+        this.combatActiveUnits.add(entity.id);
+        continue;
+      }
+
       // Include units in hot cells (near enemies)
       if (this.world.unitGrid.isInHotCell(transform.x, transform.y, this.hotCells)) {
         this.combatActiveUnits.add(entity.id);
@@ -454,12 +460,14 @@ export class CombatSystem extends System {
       if (!transform || !unit || !health || health.isDead()) continue;
 
       // Auto-acquire targets for units that need them
+      // canAttackWhileMoving units also acquire targets while moving
       const needsTarget = unit.targetEntityId === null && (
         unit.state === 'idle' ||
         unit.state === 'patrolling' ||
         unit.state === 'attackmoving' ||
         unit.state === 'attacking' ||
-        unit.isHoldingPosition
+        unit.isHoldingPosition ||
+        (unit.canAttackWhileMoving && unit.state === 'moving')
       );
 
       if (needsTarget) {
@@ -491,17 +499,22 @@ export class CombatSystem extends System {
         }
 
         if (target && !unit.isHoldingPosition) {
-          // For attackmoving units, save the destination before switching to attacking
-          const savedTargetX = unit.targetX;
-          const savedTargetY = unit.targetY;
-          const wasAttackMoving = unit.state === 'attackmoving';
+          // Units with canAttackWhileMoving keep moving while attacking
+          if (unit.canAttackWhileMoving && (unit.state === 'moving' || unit.state === 'attackmoving')) {
+            unit.setAttackTargetWhileMoving(target);
+          } else {
+            // For attackmoving units, save the destination before switching to attacking
+            const savedTargetX = unit.targetX;
+            const savedTargetY = unit.targetY;
+            const wasAttackMoving = unit.state === 'attackmoving';
 
-          unit.setAttackTarget(target);
+            unit.setAttackTarget(target);
 
-          // Restore attack-move destination so unit resumes after killing target
-          if (wasAttackMoving && savedTargetX !== null && savedTargetY !== null) {
-            unit.targetX = savedTargetX;
-            unit.targetY = savedTargetY;
+            // Restore attack-move destination so unit resumes after killing target
+            if (wasAttackMoving && savedTargetX !== null && savedTargetY !== null) {
+              unit.targetX = savedTargetX;
+              unit.targetY = savedTargetY;
+            }
           }
         } else if (target && unit.isHoldingPosition) {
           // Holding position units only attack if in range (already confirmed by findImmediateAttackTarget)
@@ -509,13 +522,23 @@ export class CombatSystem extends System {
         }
       }
 
-      // Process attacks
-      if (unit.state === 'attacking' && unit.targetEntityId !== null) {
-        const targetEntity = this.world.getEntity(unit.targetEntityId);
+      // Process attacks for units in attacking state
+      // Also process for canAttackWhileMoving units that are moving/attackmoving with a target
+      const canProcessAttack = unit.targetEntityId !== null && (
+        unit.state === 'attacking' ||
+        (unit.canAttackWhileMoving && (unit.state === 'moving' || unit.state === 'attackmoving'))
+      );
+
+      if (canProcessAttack) {
+        const targetEntity = this.world.getEntity(unit.targetEntityId!);
+        const isAttackingWhileMoving = unit.canAttackWhileMoving && (unit.state === 'moving' || unit.state === 'attackmoving');
 
         if (!targetEntity || targetEntity.isDestroyed()) {
-          // Target no longer exists - check if we were attack-moving
-          if (unit.targetX !== null && unit.targetY !== null) {
+          // Target no longer exists
+          if (isAttackingWhileMoving) {
+            // Attack-while-moving units just clear target and keep moving
+            unit.targetEntityId = null;
+          } else if (unit.targetX !== null && unit.targetY !== null) {
             // Resume attack-move to destination
             unit.state = 'attackmoving';
             unit.targetEntityId = null;
@@ -531,8 +554,11 @@ export class CombatSystem extends System {
         const targetBuilding = targetEntity.get<Building>('Building');
 
         if (!targetTransform || !targetHealth || targetHealth.isDead()) {
-          // Target dead - check if we were attack-moving
-          if (unit.targetX !== null && unit.targetY !== null) {
+          // Target dead
+          if (isAttackingWhileMoving) {
+            // Attack-while-moving units just clear target and keep moving
+            unit.targetEntityId = null;
+          } else if (unit.targetX !== null && unit.targetY !== null) {
             // Resume attack-move to destination
             unit.state = 'attackmoving';
             unit.targetEntityId = null;
@@ -551,7 +577,10 @@ export class CombatSystem extends System {
 
         if (!canAttackThisTarget) {
           // Cannot attack this target type - clear and find new target
-          if (unit.targetX !== null && unit.targetY !== null) {
+          if (isAttackingWhileMoving) {
+            // Attack-while-moving units just clear target and keep moving
+            unit.targetEntityId = null;
+          } else if (unit.targetX !== null && unit.targetY !== null) {
             unit.state = 'attackmoving';
             unit.targetEntityId = null;
           } else if (!unit.executeNextCommand()) {

@@ -231,19 +231,6 @@ export const DOMINION_ABILITIES: Record<string, AbilityDefinition> = {
     duration: 2, // 2 second charge-up time
     aoeRadius: 0, // Single target - no splash
   },
-  yamato_cannon: {
-    id: 'yamato_cannon',
-    name: 'Yamato Cannon',
-    description: 'Channel a devastating blast that deals 300 damage to a single target. 2 second charge time.',
-    cooldown: 71,
-    energyCost: 100,
-    range: 10,
-    targetType: 'unit',
-    hotkey: 'Y',
-    damage: 300,
-    duration: 2, // 2 second charge-up time
-    aoeRadius: 0, // Single target - no splash
-  },
   warp_jump: {
     id: 'warp_jump',
     name: 'Warp Jump',

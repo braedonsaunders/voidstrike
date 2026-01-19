@@ -1129,7 +1129,7 @@ while (this.heapPeek().nextAttackTime <= gameTime) {
 - **hasEnemyInRadius()**: O(nearby) enemy detection with inline data
 - **Attack Cooldown Queue**: Min-heap for O(log n) attack scheduling
 
-## SC2 Parity Features
+## RTS Features
 
 ### Unit Movement System
 
@@ -1199,10 +1199,10 @@ Priority-based target selection:
 
 ```typescript
 const TARGET_PRIORITY = {
-  siege_tank: 100,    // High-value targets first
-  battlecruiser: 95,
-  marine: 50,
-  scv: 10,            // Workers last
+  devastator: 100,    // High-value targets first
+  dreadnought: 95,
+  trooper: 50,
+  fabricator: 10,     // Workers last
 };
 
 // Area of effect damage

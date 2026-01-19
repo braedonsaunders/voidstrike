@@ -260,9 +260,8 @@ export class AbilityAI {
       };
     });
 
-    // Yamato Cannon / Power Cannon - Target high-HP enemies
-    this.evaluators.set('yamato_cannon', this.createYamatoEvaluator('yamato_cannon'));
-    this.evaluators.set('power_cannon', this.createYamatoEvaluator('power_cannon'));
+    // Power Cannon - Target high-HP enemies
+    this.evaluators.set('power_cannon', this.createPowerCannonEvaluator());
 
     // Scanner Sweep - Reveal cloaked enemies
     this.evaluators.set('scanner_sweep', (world, caster, ability, ctx) => {
@@ -275,11 +274,11 @@ export class AbilityAI {
   }
 
   /**
-   * Create evaluator for high-damage single-target abilities
+   * Create evaluator for Power Cannon ability
    */
-  private createYamatoEvaluator(abilityId: string): AbilityEvaluator {
+  private createPowerCannonEvaluator(): AbilityEvaluator {
     return (world, caster, ability, ctx) => {
-      const def = DOMINION_ABILITIES[abilityId];
+      const def = DOMINION_ABILITIES['power_cannon'];
       if (!def) return null;
 
       let bestTarget: Entity | null = null;
@@ -313,9 +312,9 @@ export class AbilityAI {
           value = damage;
         }
 
-        // Bonus for high-priority targets
+        // Bonus for high-priority targets (capital ships, siege units)
         if (unit) {
-          const highPriority = ['colossus', 'dreadnought', 'devastator', 'carrier', 'battlecruiser'];
+          const highPriority = ['colossus', 'dreadnought', 'devastator', 'carrier'];
           if (highPriority.includes(unit.unitId)) {
             value *= 1.5;
           }
@@ -331,7 +330,7 @@ export class AbilityAI {
       if (!bestTarget || bestValue < 200) return null;
 
       return {
-        abilityId,
+        abilityId: 'power_cannon',
         targetType: 'unit',
         targetEntityId: bestTarget.id,
         priority: 8, // High priority

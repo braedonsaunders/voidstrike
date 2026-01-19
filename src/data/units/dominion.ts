@@ -476,14 +476,14 @@ export const UNIT_DEFINITIONS: Record<string, UnitDefinition> = {
   dreadnought: {
     id: 'dreadnought',
     name: 'Dreadnought',
-    description: 'Massive capital ship with continuous laser cannon and devastating Yamato Cannon. Attacks ground and air.',
+    description: 'Massive capital ship with continuous laser cannon and devastating Power Cannon. Attacks ground and air.',
     faction: 'dominion',
     mineralCost: 400,
     vespeneCost: 300,
     buildTime: 64,
     supplyCost: 6,
-    speed: 2.62, // Battlecruiser speed
-    acceleration: 1.4, // Battlecruiser acceleration - sluggish capital ship
+    speed: 2.62,
+    acceleration: 1.4, // Sluggish capital ship
     sightRange: 12,
     attackRange: 10, // Capital ship - greater range than most units
     attackDamage: 12,
@@ -492,11 +492,12 @@ export const UNIT_DEFINITIONS: Record<string, UnitDefinition> = {
     projectileType: 'instant_beam', // Continuous beam weapon, instant damage
     maxHealth: 550,
     armor: 3,
-    abilities: ['yamato_cannon', 'warp_jump'],
+    abilities: ['power_cannon', 'warp_jump'],
     isFlying: true,
     isMechanical: true,
     canAttackGround: true,
     canAttackAir: true, // Capital ship - can target both
+    canAttackWhileMoving: true, // Capital ship turrets track targets while moving
     // Data-driven fields for abstraction
     targetPriority: 95, // Highest priority - capital ships are critical targets
     category: 'ship',

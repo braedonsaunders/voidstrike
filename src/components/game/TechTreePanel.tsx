@@ -54,7 +54,7 @@ const TECH_CATEGORIES: TechCategory[] = [
   {
     name: 'Capital Ships',
     building: 'Fusion Core',
-    upgrades: ['yamato_cannon', 'battlecruiser_weapon_refit'],
+    upgrades: ['power_cannon', 'capital_weapon_refit'],
   },
   {
     name: 'Structures',

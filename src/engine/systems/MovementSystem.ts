@@ -835,7 +835,7 @@ export class MovementSystem extends System {
   /**
    * Get state-dependent separation strength.
    * RTS style: weak while moving (allow clumping), strong when idle/attacking (spread out).
-   * SC2-style: attacking units actively spread apart while firing.
+   * Attacking units actively spread apart while firing.
    */
   private getSeparationStrength(unit: Unit, distanceToTarget: number): number {
     // Workers gathering/building have no separation
@@ -848,7 +848,7 @@ export class MovementSystem extends System {
       return SEPARATION_STRENGTH_ARRIVING;
     }
 
-    // Attacking: strong separation for SC2-style unclumping while fighting
+    // Attacking: strong separation for unclumping while fighting
     if (unit.state === 'attacking') {
       return SEPARATION_STRENGTH_COMBAT;
     }
@@ -2022,7 +2022,7 @@ export class MovementSystem extends System {
                 this.requestPathWithCooldown(entity.id, attackTargetX, attackTargetY);
               }
             } else {
-              // In range - SC2-style: apply separation forces while attacking
+              // In range - apply separation forces while attacking
               // Units spread apart while firing instead of stacking on top of each other
 
               // Face the target

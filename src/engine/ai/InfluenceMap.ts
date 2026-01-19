@@ -6,8 +6,6 @@
  * - Expansion decisions (avoid enemy-controlled regions)
  * - Attack timing (identify weak points in enemy defenses)
  * - Retreat paths (find safe corridors)
- *
- * Similar to StarCraft 2's internal threat assessment grids.
  */
 
 import { World } from '../ecs/World';

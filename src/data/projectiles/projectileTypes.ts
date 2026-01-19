@@ -199,8 +199,8 @@ export const PROJECTILE_TYPES: Record<string, ProjectileDefinition> = {
     scale: 0.5,
   },
 
-  ability_yamato: {
-    id: 'ability_yamato',
+  ability_power_cannon: {
+    id: 'ability_power_cannon',
     behavior: 'linear',
     speed: 25,
     turnRate: 0,
