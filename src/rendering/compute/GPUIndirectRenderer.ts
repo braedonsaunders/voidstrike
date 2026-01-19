@@ -43,16 +43,18 @@ export interface UnitTypeMeshConfig {
 
 /**
  * GPU indirect mesh wrapper
- * Uses InstancedMesh for efficient GPU-driven instancing
+ * Uses Mesh with InstancedBufferGeometry for GPU-driven indirect instancing
  */
 interface IndirectMesh {
-  mesh: THREE.InstancedMesh;
+  mesh: THREE.Mesh;
   unitTypeIndex: number;
   lodLevel: number;
-  geometry: THREE.BufferGeometry;
+  geometry: THREE.InstancedBufferGeometry;
   material: THREE.Material;
   indexCount: number;
   indirectOffset: number; // uint32 offset into indirect args buffer
+  // Instance transform data (mat4 stored as 4 vec4 columns)
+  instanceMatrixAttribute: THREE.InstancedBufferAttribute;
 }
 
 /**
@@ -150,10 +152,12 @@ export class GPUIndirectRenderer {
   /**
    * Create an indirect mesh for a unit type + LOD combination
    *
-   * Uses InstancedMesh for efficient GPU-driven instancing:
-   * - InstancedMesh handles per-instance transforms via instanceMatrix
+   * Uses Mesh with InstancedBufferGeometry for GPU-driven indirect instancing:
+   * - InstancedBufferGeometry with instanced transform attributes
    * - geometry.setIndirect() enables GPU-controlled instance counts
    * - CullingCompute sets instance counts in indirect args buffer
+   *
+   * Pattern from Three.js webgpu_struct_drawindirect example.
    */
   private createIndirectMesh(
     unitTypeIndex: number,
@@ -167,26 +171,49 @@ export class GPUIndirectRenderer {
       return;
     }
 
-    // Clone geometry to avoid modifying the original
-    const meshGeometry = geometry.clone();
+    // Create InstancedBufferGeometry from source geometry
+    const instancedGeometry = new THREE.InstancedBufferGeometry();
+    instancedGeometry.instanceCount = MAX_UNITS;
+
+    // Copy attributes from source geometry
+    for (const name of Object.keys(geometry.attributes)) {
+      instancedGeometry.setAttribute(name, geometry.attributes[name]);
+    }
+
+    // Copy index if present
+    if (geometry.index) {
+      instancedGeometry.setIndex(geometry.index);
+    }
+
+    // Create instance matrix attribute (4 vec4 columns = mat4)
+    // Each instance has 16 floats (4x4 matrix)
+    const instanceMatrixData = new Float32Array(MAX_UNITS * 16);
+
+    // Initialize all matrices to identity
+    for (let i = 0; i < MAX_UNITS; i++) {
+      const offset = i * 16;
+      // Column-major identity matrix
+      instanceMatrixData[offset + 0] = 1; instanceMatrixData[offset + 1] = 0; instanceMatrixData[offset + 2] = 0; instanceMatrixData[offset + 3] = 0;
+      instanceMatrixData[offset + 4] = 0; instanceMatrixData[offset + 5] = 1; instanceMatrixData[offset + 6] = 0; instanceMatrixData[offset + 7] = 0;
+      instanceMatrixData[offset + 8] = 0; instanceMatrixData[offset + 9] = 0; instanceMatrixData[offset + 10] = 1; instanceMatrixData[offset + 11] = 0;
+      instanceMatrixData[offset + 12] = 0; instanceMatrixData[offset + 13] = 0; instanceMatrixData[offset + 14] = 0; instanceMatrixData[offset + 15] = 1;
+    }
+
+    // Create instanced buffer attributes for matrix columns
+    // Three.js uses instanceMatrix attribute name for built-in instancing support
+    const instanceMatrixAttribute = new THREE.InstancedBufferAttribute(instanceMatrixData, 16);
+    instanceMatrixAttribute.setUsage(THREE.DynamicDrawUsage);
+    instancedGeometry.setAttribute('instanceMatrix', instanceMatrixAttribute);
 
     // Create material for instanced rendering
     const material = this.createInstancedMaterial(baseMaterial);
 
-    // Create InstancedMesh with MAX_UNITS capacity
-    // The actual rendered count is controlled by indirect args
-    const mesh = new THREE.InstancedMesh(meshGeometry, material, MAX_UNITS);
+    // Create regular Mesh (not InstancedMesh) with InstancedBufferGeometry
+    const mesh = new THREE.Mesh(instancedGeometry, material);
     mesh.frustumCulled = false; // GPU handles culling
     mesh.castShadow = true;
     mesh.receiveShadow = true;
     mesh.renderOrder = 50;
-
-    // Initialize all instance matrices to identity
-    const identity = new THREE.Matrix4();
-    for (let i = 0; i < MAX_UNITS; i++) {
-      mesh.setMatrixAt(i, identity);
-    }
-    mesh.instanceMatrix.needsUpdate = true;
 
     // Calculate indirect args offset for this unit type + LOD
     const indirectOffset = this.getIndirectOffset(unitTypeIndex, lodLevel, 0);
@@ -202,8 +229,8 @@ export class GPUIndirectRenderer {
 
     // Enable indirect drawing using r182+ API
     if (this.indirectArgsAttribute) {
-      meshGeometry.setIndirect(this.indirectArgsAttribute);
-      meshGeometry.drawIndirectOffset = indirectOffset * 4; // Convert to bytes
+      instancedGeometry.setIndirect(this.indirectArgsAttribute);
+      instancedGeometry.drawIndirectOffset = indirectOffset * 4; // Convert to bytes
     }
 
     this.scene.add(mesh);
@@ -212,13 +239,14 @@ export class GPUIndirectRenderer {
       mesh,
       unitTypeIndex,
       lodLevel,
-      geometry: meshGeometry,
+      geometry: instancedGeometry,
       material,
       indexCount,
       indirectOffset,
+      instanceMatrixAttribute,
     });
 
-    debugShaders.log(`[GPUIndirectRenderer] Created InstancedMesh: type=${unitTypeIndex} LOD=${lodLevel} capacity=${MAX_UNITS}`);
+    debugShaders.log(`[GPUIndirectRenderer] Created indirect mesh: type=${unitTypeIndex} LOD=${lodLevel} capacity=${MAX_UNITS}`);
   }
 
   /**
@@ -322,27 +350,29 @@ export class GPUIndirectRenderer {
     if (!this.gpuUnitBuffer) return;
 
     const transformData = this.gpuUnitBuffer.getTransformData();
-    const tempMatrix = new THREE.Matrix4();
 
-    // Update each InstancedMesh with transforms from GPUUnitBuffer
+    // Update each mesh's instance matrix attribute with transforms from GPUUnitBuffer
     for (const slot of this.gpuUnitBuffer.getAllocatedSlots()) {
-      const offset = slot.index * 16;
-
-      // Read transform from buffer (column-major)
-      tempMatrix.fromArray(transformData, offset);
-
-      // Update the instance matrix in the corresponding mesh
-      // For now, use a simple mapping (this could be optimized)
+      const srcOffset = slot.index * 16;
       const key = `${slot.unitTypeIndex}_0`; // LOD 0 for simplicity
       const meshData = this.indirectMeshes.get(key);
-      if (meshData) {
-        meshData.mesh.setMatrixAt(slot.index, tempMatrix);
+
+      if (meshData && meshData.instanceMatrixAttribute) {
+        const dstArray = meshData.instanceMatrixAttribute.array as Float32Array;
+        const dstOffset = slot.index * 16;
+
+        // Copy transform directly
+        for (let i = 0; i < 16; i++) {
+          dstArray[dstOffset + i] = transformData[srcOffset + i];
+        }
       }
     }
 
-    // Mark all instance matrices as needing update
+    // Mark all instance matrix attributes as needing update
     for (const [, data] of this.indirectMeshes) {
-      data.mesh.instanceMatrix.needsUpdate = true;
+      if (data.instanceMatrixAttribute) {
+        data.instanceMatrixAttribute.needsUpdate = true;
+      }
     }
   }
 
