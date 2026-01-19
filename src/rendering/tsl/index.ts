@@ -41,14 +41,6 @@ export {
   type SelectionRingConfig,
 } from './SelectionMaterial';
 
-// Particle system
-export {
-  GPUParticleSystem,
-  EffectEmitter,
-  PARTICLE_PRESETS,
-  type ParticleEffectConfig,
-} from './ParticleSystem';
-
 // Post-processing (includes TRAA from Three.js)
 export {
   RenderPipeline,

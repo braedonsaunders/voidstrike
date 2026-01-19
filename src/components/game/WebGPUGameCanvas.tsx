@@ -42,13 +42,11 @@ import {
   createWebGPURenderer,
   RenderContext,
   SelectionSystem,
-  GPUParticleSystem,
   RenderPipeline,
-  EffectEmitter,
   TSLFogOfWar,
   TSLGameOverlayManager,
 } from '@/rendering/tsl';
-import { initCameraMatrices, setCameraMatricesBeforeRender, updateCameraMatrices, setMaxVertexBuffers } from '@/rendering/tsl/InstancedVelocity';
+import { initCameraMatrices, setCameraMatricesBeforeRender, updateCameraMatrices, setMaxVertexBuffers, onVelocitySetupFailed } from '@/rendering/tsl/InstancedVelocity';
 
 import { useGameStore } from '@/store/gameStore';
 
@@ -116,7 +114,6 @@ export function WebGPUGameCanvas() {
 
   // TSL Visual Systems (WebGPU-compatible)
   const selectionSystemRef = useRef<SelectionSystem | null>(null);
-  const effectEmitterRef = useRef<EffectEmitter | null>(null);
   const renderPipelineRef = useRef<RenderPipeline | null>(null);
 
   // Phaser refs
@@ -482,6 +479,15 @@ export function WebGPUGameCanvas() {
 
       const fogOfWarEnabled = useGameSetupStore.getState().fogOfWar;
 
+      // Register callback to auto-disable TAA if velocity setup fails (vertex buffer limit)
+      onVelocitySetupFailed(() => {
+        const currentSettings = useUIStore.getState().graphicsSettings;
+        if (currentSettings.antiAliasingMode === 'taa') {
+          console.warn('[WebGPUGameCanvas] Auto-switching from TAA to FXAA due to vertex buffer limit');
+          useUIStore.getState().setAntiAliasingMode('fxaa');
+        }
+      });
+
       // Create renderers
       unitRendererRef.current = new UnitRenderer(
         scene,
@@ -605,9 +611,6 @@ export function WebGPUGameCanvas() {
       // Initialize TSL Visual Systems (WebGPU-compatible)
       selectionSystemRef.current = new SelectionSystem(scene);
 
-      // GPU Particle Effects
-      effectEmitterRef.current = new EffectEmitter(scene, renderer as any, 10000);
-
       // Post-processing pipeline (TSL-based)
       // Note: graphicsSettings already declared at top of function
       if (graphicsSettings.postProcessingEnabled) {
@@ -722,7 +725,7 @@ export function WebGPUGameCanvas() {
         attackerIsFlying?: boolean;
         targetIsFlying?: boolean;
       }) => {
-        if (data.attackerPos && data.targetPos && effectEmitterRef.current) {
+        if (data.attackerPos && data.targetPos && advancedParticlesRef.current) {
           // Calculate terrain heights
           const attackerTerrainHeight = terrain.getHeightAt(data.attackerPos.x, data.attackerPos.y);
           const targetTerrainHeight = terrain.getHeightAt(data.targetPos.x, data.targetPos.y);
@@ -740,8 +743,8 @@ export function WebGPUGameCanvas() {
           _combatEndPos.set(data.targetPos.x, endHeight, data.targetPos.y);
           _combatDirection.copy(_combatEndPos).sub(_combatStartPos).normalize();
 
-          effectEmitterRef.current.muzzleFlash(_combatStartPos, _combatDirection);
-          effectEmitterRef.current.impact(_combatEndPos, _combatDirection.negate());
+          advancedParticlesRef.current.emitMuzzleFlash(_combatStartPos, _combatDirection);
+          advancedParticlesRef.current.emitImpact(_combatEndPos, _combatDirection.negate());
         }
       }));
 
@@ -906,7 +909,6 @@ export function WebGPUGameCanvas() {
 
         // Update TSL visual systems
         selectionSystemRef.current?.update(deltaTime);
-        effectEmitterRef.current?.update(deltaTime / 1000);
 
         // Update battle effects
         battleEffectsRef.current?.update(deltaTime);
@@ -1346,7 +1348,6 @@ export function WebGPUGameCanvas() {
       resourceRendererRef.current?.dispose();
 
       selectionSystemRef.current?.dispose();
-      effectEmitterRef.current?.dispose();
       renderPipelineRef.current?.dispose();
       overlayManagerRef.current?.dispose();
       commandQueueRendererRef.current?.dispose();

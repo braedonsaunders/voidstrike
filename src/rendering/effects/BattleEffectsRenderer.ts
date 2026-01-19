@@ -153,25 +153,7 @@ interface MeshPool<T extends THREE.Object3D = THREE.Mesh> {
   maxSize: number;
 }
 
-// ============================================
-// VECTOR3 POOL
-// ============================================
-
-const VECTOR3_POOL_SIZE = BATTLE_EFFECTS.VECTOR3_POOL_SIZE;
-const vector3Pool: THREE.Vector3[] = [];
-let vector3PoolIndex = 0;
-
-for (let i = 0; i < VECTOR3_POOL_SIZE; i++) {
-  vector3Pool.push(new THREE.Vector3());
-}
-
-function acquireVector3(x = 0, y = 0, z = 0): THREE.Vector3 {
-  const vec = vector3Pool[vector3PoolIndex];
-  vector3PoolIndex = (vector3PoolIndex + 1) % VECTOR3_POOL_SIZE;
-  return vec.set(x, y, z);
-}
-
-// Temp vectors for calculations
+// Temp vectors for calculations (reused to avoid GC pressure)
 const _tempVec1 = new THREE.Vector3();
 const _tempVec2 = new THREE.Vector3();
 const _tempVec3 = new THREE.Vector3();
@@ -1174,7 +1156,7 @@ export class BattleEffectsRenderer {
     mesh.renderOrder = isAirTarget ? RENDER_ORDER.AIR_EFFECT : RENDER_ORDER.GROUND_EFFECT;
 
     this.groundEffects.push({
-      position: acquireVector3(position.x, terrainHeight, position.z),
+      position: new THREE.Vector3(position.x, terrainHeight, position.z),
       progress: 0,
       duration: 0.35,
       mesh,
@@ -1214,7 +1196,7 @@ export class BattleEffectsRenderer {
     mesh.renderOrder = heightOffset > 0 ? RENDER_ORDER.AIR_EFFECT : RENDER_ORDER.GROUND_EFFECT;
 
     this.groundEffects.push({
-      position: acquireVector3(position.x, position.y, position.z),
+      position: new THREE.Vector3(position.x, position.y, position.z),
       progress: 0,
       duration: 0.5,
       mesh,
@@ -1511,7 +1493,7 @@ export class BattleEffectsRenderer {
 
     if (rings.length > 0) {
       this.moveIndicators.push({
-        position: acquireVector3(position.x, position.y, position.z),
+        position: new THREE.Vector3(position.x, position.y, position.z),
         progress: 0,
         duration: 0.5,
         rings,

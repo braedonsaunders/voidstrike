@@ -676,12 +676,7 @@ Located in `src/rendering/tsl/`:
    - Macro color variation across the map
    - **Note**: Displacement maps removed to stay under WebGPU's 16-texture limit
 
-7. **ParticleSystem.ts** - GPU particle system
-   - TSL compute shaders for particle simulation
-   - Burst and continuous emission modes
-   - Physics-based particle movement
-
-8. **SelectionMaterial.ts** - Unit selection visuals
+7. **SelectionMaterial.ts** - Unit selection visuals
    - Animated glowing selection rings
    - Team-colored rings with shimmer animation
    - Hover highlight indicators
@@ -698,12 +693,13 @@ Selection with multiple improvements:
 
 ### Battle Effects (`src/rendering/effects/`)
 
-1. **AdvancedParticleSystem.ts** - GPU-instanced particle effects
+1. **AdvancedParticleSystem.ts** - GPU-instanced particle effects (main particle system)
    - Muzzle flashes, projectile trails
    - Explosion particles with debris
    - Impact sparks and energy effects
    - Death explosions with smoke
-   - Up to 5000 particles via instanced mesh
+   - Up to 15000 particles via instanced mesh
+   - TSL-based rendering with billboard sprites
 
 2. **PostProcessing.ts** (`src/rendering/tsl/`) - Cinematic post-processing
    - HDR bloom for energy weapons and explosions

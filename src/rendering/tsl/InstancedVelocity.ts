@@ -50,6 +50,24 @@ let maxVertexBuffers = 16; // Updated by setMaxVertexBuffers() from render conte
 // Velocity tracking requires 8 attributes (4 for current matrix, 4 for previous)
 const VELOCITY_ATTRIBUTE_COUNT = 8;
 
+// Track if velocity setup has failed (used to auto-disable TAA)
+let velocitySetupFailed = false;
+let onVelocitySetupFailedCallback: (() => void) | null = null;
+
+/**
+ * Check if velocity setup has ever failed (TAA should be disabled)
+ */
+export function hasVelocitySetupFailed(): boolean {
+  return velocitySetupFailed;
+}
+
+/**
+ * Set callback for when velocity setup fails (to auto-disable TAA)
+ */
+export function onVelocitySetupFailed(callback: () => void): void {
+  onVelocitySetupFailedCallback = callback;
+}
+
 /**
  * Set the maximum vertex buffer limit from the render context.
  * Call this after WebGPU renderer initialization.
@@ -97,6 +115,18 @@ export function setupInstancedVelocity(mesh: THREE.InstancedMesh): boolean {
       `Adding ${VELOCITY_ATTRIBUTE_COUNT} velocity attrs would exceed device limit of ${maxVertexBuffers}. ` +
       `Existing attrs: [${Object.keys(mesh.geometry.attributes).join(', ')}]`
     );
+
+    // Mark velocity setup as failed and trigger callback to disable TAA
+    if (!velocitySetupFailed) {
+      velocitySetupFailed = true;
+      debugInitialization.warn(
+        `[InstancedVelocity] TAA will be automatically disabled due to vertex buffer limit. ` +
+        `Device supports ${maxVertexBuffers} buffers, but velocity tracking requires 8 additional.`
+      );
+      if (onVelocitySetupFailedCallback) {
+        onVelocitySetupFailedCallback();
+      }
+    }
     return false;
   }
 

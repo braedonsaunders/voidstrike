@@ -299,13 +299,13 @@ export class TSLGameOverlayManager {
   }
 
   /**
-   * Update navmesh overlay by testing ACTUAL CONNECTIVITY via path computation.
-   * This is the critical diagnostic that shows if ramps connect low and high ground.
+   * Update navmesh overlay by testing actual connectivity via path computation.
+   * Diagnostic tool for verifying ramp connections between elevation levels.
    *
    * Color coding:
-   * - Green: Connected to reference point (can path)
-   * - Yellow/Orange: On navmesh but DISCONNECTED (path fails) - THIS SHOWS THE BUG
-   * - Magenta: Ramp that's disconnected (critical!)
+   * - Green: Connected to reference point (pathable)
+   * - Yellow/Orange: On navmesh but disconnected (path fails)
+   * - Magenta: Disconnected ramp (connectivity issue)
    * - Red: Should be walkable but not on navmesh
    * - Dark gray: Unwalkable (correct)
    */
@@ -392,8 +392,7 @@ export class TSLGameOverlayManager {
             }
             connectedCount++;
           } else {
-            // DISCONNECTED - on navmesh but can't reach reference point
-            // THIS IS THE BUG INDICATOR
+            // Disconnected - on navmesh but can't reach reference point
             if (cell?.terrain === 'ramp') {
               // Ramp that's disconnected - magenta (critical!)
               this.navmeshTextureData[i + 0] = 255;
