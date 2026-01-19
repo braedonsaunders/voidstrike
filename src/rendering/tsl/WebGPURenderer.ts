@@ -21,11 +21,19 @@ export interface WebGPURendererConfig {
   logarithmicDepthBuffer?: boolean;
 }
 
+export interface GpuAdapterInfo {
+  name: string;           // Device description (e.g., "NVIDIA GeForce RTX 4090")
+  vendor: string;         // Vendor name (e.g., "nvidia", "amd", "intel")
+  architecture: string;   // Architecture (e.g., "ampere")
+  isIntegrated: boolean;  // True if likely an integrated GPU
+}
+
 export interface RenderContext {
   renderer: WebGPURenderer;
   isWebGPU: boolean;
   supportsCompute: boolean;
   postProcessing: PostProcessing | null;
+  gpuInfo: GpuAdapterInfo | null;
   deviceLimits: {
     maxVertexBuffers: number;
     maxTextureDimension2D: number;
@@ -52,6 +60,8 @@ interface AdapterInfo {
     maxStorageBufferBindingSize: number;
     maxBufferSize: number;
   };
+  /** GPU adapter info for display */
+  gpuInfo: GpuAdapterInfo | null;
   supported: boolean;
 }
 
@@ -63,6 +73,34 @@ interface AdapterInfo {
  * IMPORTANT: adapter.limits is a GPUSupportedLimits object, NOT a plain JS object.
  * Passing it directly to requiredLimits doesn't work - we must manually copy values.
  */
+/**
+ * Detect if GPU is likely integrated based on name/vendor patterns.
+ */
+function detectIntegratedGpu(description: string, vendor: string): boolean {
+  const desc = description.toLowerCase();
+  const v = vendor.toLowerCase();
+
+  // Intel integrated GPUs
+  if (v === 'intel' || desc.includes('intel')) {
+    // Intel Arc discrete GPUs
+    if (desc.includes('arc')) return false;
+    // Most Intel GPUs are integrated (UHD, Iris, etc.)
+    return true;
+  }
+
+  // AMD integrated (APU) patterns
+  if (desc.includes('radeon graphics') || desc.includes('vega') && desc.includes('ryzen')) {
+    return true;
+  }
+
+  // Apple integrated (M1, M2, etc.)
+  if (v === 'apple' || desc.includes('apple')) {
+    return true; // Apple Silicon is technically integrated
+  }
+
+  return false;
+}
+
 async function getWebGPUAdapterInfo(): Promise<AdapterInfo> {
   // Check if WebGPU is available
   if (!navigator.gpu) {
@@ -70,6 +108,7 @@ async function getWebGPUAdapterInfo(): Promise<AdapterInfo> {
     return {
       requiredLimits: {},
       trackedLimits: { ...DEFAULT_LIMITS },
+      gpuInfo: null,
       supported: false
     };
   }
@@ -84,9 +123,24 @@ async function getWebGPUAdapterInfo(): Promise<AdapterInfo> {
       return {
         requiredLimits: {},
         trackedLimits: { ...DEFAULT_LIMITS },
+        gpuInfo: null,
         supported: false
       };
     }
+
+    // Extract GPU info from adapter
+    const info = adapter.info;
+    const gpuInfo: GpuAdapterInfo = {
+      name: info.device || info.description || 'Unknown GPU',
+      vendor: info.vendor || 'unknown',
+      architecture: info.architecture || '',
+      isIntegrated: detectIntegratedGpu(
+        info.device || info.description || '',
+        info.vendor || ''
+      ),
+    };
+
+    debugInitialization.log(`[WebGPU] GPU detected:`, gpuInfo);
 
     // Copy ALL adapter limits to a plain JS object
     // This is required per Three.js issue #29865 and WebGPU spec
@@ -120,6 +174,7 @@ async function getWebGPUAdapterInfo(): Promise<AdapterInfo> {
         maxStorageBufferBindingSize: requiredLimits.maxStorageBufferBindingSize ?? DEFAULT_LIMITS.maxStorageBufferBindingSize,
         maxBufferSize: requiredLimits.maxBufferSize ?? DEFAULT_LIMITS.maxBufferSize,
       },
+      gpuInfo,
       supported: true,
     };
   } catch (error) {
@@ -127,6 +182,7 @@ async function getWebGPUAdapterInfo(): Promise<AdapterInfo> {
     return {
       requiredLimits: {},
       trackedLimits: { ...DEFAULT_LIMITS },
+      gpuInfo: null,
       supported: false
     };
   }
@@ -227,6 +283,7 @@ export async function createWebGPURenderer(config: WebGPURendererConfig): Promis
     isWebGPU,
     supportsCompute,
     postProcessing: null,
+    gpuInfo: isWebGPU ? adapterInfo.gpuInfo : null,
     deviceLimits: actualLimits,
   };
 }
