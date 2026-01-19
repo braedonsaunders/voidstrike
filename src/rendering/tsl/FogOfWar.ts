@@ -137,36 +137,16 @@ export class TSLFogOfWar {
     const cpuTex = this.cpuFogTexture;
     const unexploredColor = this.uUnexploredColor;
     const exploredColor = this.uExploredColor;
-    const useGPU = this.uUseGPUTexture;
 
+    // CPU-only path - StorageTexture sampling not working in TSL fragment shaders
+    // See: https://discourse.threejs.org/t/cannot-use-textureload-in-fn-to-read-from-storagetexture-instance/81240
     const outputNode = Fn(() => {
-      // Sample both textures (GPU will optimize out unused path)
+      // Sample CPU texture (alpha encoding)
       const cpuData = texture(cpuTex, uv());
 
       // CPU path: visibility encoded in alpha
       // alpha=255 → unexplored, alpha=128 → explored, alpha=0 → visible
-      const cpuVisibility = float(1.0).sub(cpuData.a);
-
-      // For GPU path, we need to handle the StorageTexture sampling
-      // Since we can't conditionally sample different textures in TSL,
-      // we'll update this material when switching to GPU mode
-      let visibility = cpuVisibility;
-
-      // If GPU texture is bound, use it instead
-      // GPU format: R=explored (0 or 1), G=visible (0 or 1)
-      if (this.gpuStorageTexture) {
-        const gpuData = texture(this.gpuStorageTexture, uv());
-        // Convert GPU format to visibility: visible=1, explored=0.5, unexplored=0
-        const gpuVisible = gpuData.g;
-        const gpuExplored = gpuData.r;
-        const gpuVisibility = mix(
-          mix(float(0), float(0.5), step(float(0.5), gpuExplored)),
-          float(1.0),
-          step(float(0.5), gpuVisible)
-        );
-        // Select based on uniform
-        visibility = mix(cpuVisibility, gpuVisibility, useGPU);
-      }
+      const visibility = float(1.0).sub(cpuData.a);
 
       // Step functions to determine state
       const notUnexplored = step(float(0.01), visibility);
@@ -193,8 +173,17 @@ export class TSLFogOfWar {
   /**
    * Rebuild material with GPU texture bound
    * Called when GPU vision becomes available
+   *
+   * NOTE: StorageTexture sampling in fragment shaders has issues in TSL.
+   * For now, we keep using the CPU path until this is resolved.
+   * See: https://discourse.threejs.org/t/cannot-use-textureload-in-fn-to-read-from-storagetexture-instance/81240
    */
   private rebuildMaterialWithGPUTexture(): void {
+    // DISABLED: StorageTexture sampling not working in TSL fragment shaders
+    // Keep using CPU fallback path until a proper solution is found
+    debugShaders.warn('[FogOfWar] GPU StorageTexture sampling disabled - using CPU fallback');
+    return;
+
     if (!this.gpuStorageTexture) return;
 
     const material = new MeshBasicNodeMaterial();
