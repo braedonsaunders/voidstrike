@@ -18,8 +18,9 @@
 
 import * as THREE from 'three';
 import { WebGPURenderer } from 'three/webgpu';
+import { Fn, positionLocal, attribute, vec3 } from 'three/tsl';
 
-import { IndirectStorageBufferAttribute } from 'three/webgpu';
+import { IndirectStorageBufferAttribute, MeshStandardNodeMaterial } from 'three/webgpu';
 
 import { GPUUnitBuffer } from './GPUUnitBuffer';
 import { CullingCompute } from './CullingCompute';
@@ -53,8 +54,8 @@ interface IndirectMesh {
   material: THREE.Material;
   indexCount: number;
   indirectOffset: number; // uint32 offset into indirect args buffer
-  // Instance transform data (mat4 stored as 4 vec4 columns)
-  instanceMatrixAttribute: THREE.InstancedBufferAttribute;
+  // Instance position offset (vec3)
+  instanceOffsetAttribute: THREE.InstancedBufferAttribute;
 }
 
 /**
@@ -185,25 +186,12 @@ export class GPUIndirectRenderer {
       instancedGeometry.setIndex(geometry.index);
     }
 
-    // Create instance matrix attribute (4 vec4 columns = mat4)
-    // Each instance has 16 floats (4x4 matrix)
-    const instanceMatrixData = new Float32Array(MAX_UNITS * 16);
-
-    // Initialize all matrices to identity
-    for (let i = 0; i < MAX_UNITS; i++) {
-      const offset = i * 16;
-      // Column-major identity matrix
-      instanceMatrixData[offset + 0] = 1; instanceMatrixData[offset + 1] = 0; instanceMatrixData[offset + 2] = 0; instanceMatrixData[offset + 3] = 0;
-      instanceMatrixData[offset + 4] = 0; instanceMatrixData[offset + 5] = 1; instanceMatrixData[offset + 6] = 0; instanceMatrixData[offset + 7] = 0;
-      instanceMatrixData[offset + 8] = 0; instanceMatrixData[offset + 9] = 0; instanceMatrixData[offset + 10] = 1; instanceMatrixData[offset + 11] = 0;
-      instanceMatrixData[offset + 12] = 0; instanceMatrixData[offset + 13] = 0; instanceMatrixData[offset + 14] = 0; instanceMatrixData[offset + 15] = 1;
-    }
-
-    // Create instanced buffer attributes for matrix columns
-    // Three.js uses instanceMatrix attribute name for built-in instancing support
-    const instanceMatrixAttribute = new THREE.InstancedBufferAttribute(instanceMatrixData, 16);
-    instanceMatrixAttribute.setUsage(THREE.DynamicDrawUsage);
-    instancedGeometry.setAttribute('instanceMatrix', instanceMatrixAttribute);
+    // Create per-instance position offset attribute (vec3)
+    // This is simpler than full mat4 transforms and works with WebGPU
+    const instanceOffsetData = new Float32Array(MAX_UNITS * 3);
+    const instanceOffsetAttribute = new THREE.InstancedBufferAttribute(instanceOffsetData, 3);
+    instanceOffsetAttribute.setUsage(THREE.DynamicDrawUsage);
+    instancedGeometry.setAttribute('instanceOffset', instanceOffsetAttribute);
 
     // Create material for instanced rendering
     const material = this.createInstancedMaterial(baseMaterial);
@@ -243,7 +231,7 @@ export class GPUIndirectRenderer {
       material,
       indexCount,
       indirectOffset,
-      instanceMatrixAttribute,
+      instanceOffsetAttribute,
     });
 
     debugShaders.log(`[GPUIndirectRenderer] Created indirect mesh: type=${unitTypeIndex} LOD=${lodLevel} capacity=${MAX_UNITS}`);
@@ -252,26 +240,33 @@ export class GPUIndirectRenderer {
   /**
    * Create material for instanced rendering
    *
-   * Uses standard MeshStandardMaterial (not NodeMaterial) for InstancedMesh
-   * compatibility with WebGPU. NodeMaterial has known issues with multiple
-   * InstancedMesh objects (see Three.js issue #31776).
+   * Uses MeshStandardNodeMaterial with custom positionNode that reads
+   * the instanceOffset attribute and adds it to the vertex position.
    */
   private createInstancedMaterial(baseMaterial?: THREE.Material): THREE.Material {
-    // Use regular MeshStandardMaterial for better InstancedMesh compatibility
-    const material = new THREE.MeshStandardMaterial();
+    const material = new MeshStandardNodeMaterial();
 
     // Copy properties from base material if provided
     if (baseMaterial && baseMaterial instanceof THREE.MeshStandardMaterial) {
-      material.color.copy(baseMaterial.color);
+      material.color = baseMaterial.color;
       material.metalness = baseMaterial.metalness;
       material.roughness = baseMaterial.roughness;
       material.map = baseMaterial.map;
       material.normalMap = baseMaterial.normalMap;
     } else {
-      material.color.setHex(0x888888);
+      material.color = new THREE.Color(0x888888);
       material.metalness = 0.1;
       material.roughness = 0.8;
     }
+
+    // Custom position node that adds instance offset to local position
+    // The instanceOffset attribute is set up as an InstancedBufferAttribute (vec3)
+    const positionNode = Fn(() => {
+      const offset = attribute('instanceOffset', 'vec3');
+      return positionLocal.add(offset);
+    })();
+
+    material.positionNode = positionNode;
 
     return material;
   }
@@ -343,7 +338,7 @@ export class GPUIndirectRenderer {
   }
 
   /**
-   * Update instance matrices for all meshes from the GPU unit buffer
+   * Update instance offsets for all meshes from the GPU unit buffer
    * Call this each frame before rendering
    */
   updateInstanceMatrices(): void {
@@ -351,27 +346,31 @@ export class GPUIndirectRenderer {
 
     const transformData = this.gpuUnitBuffer.getTransformData();
 
-    // Update each mesh's instance matrix attribute with transforms from GPUUnitBuffer
+    // Update each mesh's instance offset attribute with positions from GPUUnitBuffer
     for (const slot of this.gpuUnitBuffer.getAllocatedSlots()) {
+      // Extract position from transform matrix (column 3: indices 12, 13, 14)
       const srcOffset = slot.index * 16;
+      const x = transformData[srcOffset + 12];
+      const y = transformData[srcOffset + 13];
+      const z = transformData[srcOffset + 14];
+
       const key = `${slot.unitTypeIndex}_0`; // LOD 0 for simplicity
       const meshData = this.indirectMeshes.get(key);
 
-      if (meshData && meshData.instanceMatrixAttribute) {
-        const dstArray = meshData.instanceMatrixAttribute.array as Float32Array;
-        const dstOffset = slot.index * 16;
+      if (meshData && meshData.instanceOffsetAttribute) {
+        const dstArray = meshData.instanceOffsetAttribute.array as Float32Array;
+        const dstOffset = slot.index * 3;
 
-        // Copy transform directly
-        for (let i = 0; i < 16; i++) {
-          dstArray[dstOffset + i] = transformData[srcOffset + i];
-        }
+        dstArray[dstOffset + 0] = x;
+        dstArray[dstOffset + 1] = y;
+        dstArray[dstOffset + 2] = z;
       }
     }
 
-    // Mark all instance matrix attributes as needing update
+    // Mark all instance offset attributes as needing update
     for (const [, data] of this.indirectMeshes) {
-      if (data.instanceMatrixAttribute) {
-        data.instanceMatrixAttribute.needsUpdate = true;
+      if (data.instanceOffsetAttribute) {
+        data.instanceOffsetAttribute.needsUpdate = true;
       }
     }
   }

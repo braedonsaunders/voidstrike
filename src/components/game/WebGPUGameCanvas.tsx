@@ -494,8 +494,10 @@ export function WebGPUGameCanvas() {
       }
 
       // Enable GPU-driven rendering if WebGPU compute is available
+      // TEMPORARILY DISABLED to debug getNodeType error
+      const GPU_RENDERING_ENABLED = false;
       debugInitialization.log(`[WebGPUGameCanvas] GPU-driven rendering check: isWebGPU=${renderContext.isWebGPU}, supportsCompute=${renderContext.supportsCompute}`);
-      if (renderContext.supportsCompute && renderContext.isWebGPU) {
+      if (GPU_RENDERING_ENABLED && renderContext.supportsCompute && renderContext.isWebGPU) {
         console.log('[WebGPUGameCanvas] Enabling GPU-driven rendering...');
         unitRendererRef.current.enableGPUDrivenRendering();
         unitRendererRef.current.setRenderer(renderer as import('three/webgpu').WebGPURenderer);
