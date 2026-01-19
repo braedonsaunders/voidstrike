@@ -12,6 +12,8 @@ import { deterministicDamage, quantize, QUANT_DAMAGE } from '@/utils/FixedPoint'
 import { getDamageMultiplier, COMBAT_CONFIG } from '@/data/combat/combat';
 import { getDefaultTargetPriority } from '@/data/units/categories';
 import AssetManager from '@/assets/AssetManager';
+import { getProjectileType, DEFAULT_PROJECTILE, isInstantProjectile } from '@/data/projectiles';
+import { DEFAULT_AIRBORNE_HEIGHT } from '@/assets/AssetManager';
 
 // PERF: Reusable event payload objects to avoid allocation per attack
 const attackEventPayload = {
@@ -843,6 +845,10 @@ export class CombatSystem extends System {
       }
     }
 
+    // Get projectile type for this unit
+    const projectileTypeId = attacker.projectileType ?? 'bullet_rifle';
+    const projectileType = getProjectileType(projectileTypeId) ?? DEFAULT_PROJECTILE;
+
     // DETERMINISM: Calculate damage using quantized fixed-point math
     // This ensures identical damage values across different platforms/browsers
     // Using data-driven damage multipliers from @/data/combat/combat.ts
@@ -858,72 +864,116 @@ export class CombatSystem extends System {
       armorReduction
     );
 
-    // Apply primary target damage
-    targetHealth.takeDamage(finalDamage, gameTime);
-
-    // Check if target is a building (for damage number positioning)
+    // Get target info for events and projectile
     const targetEntity = this.world.getEntity(targetId);
     const targetBuilding = targetEntity?.get<Building>('Building');
     const targetHeight = targetBuilding ? Math.max(targetBuilding.width, targetBuilding.height) : 0;
-
-    // Check if target is a flying unit
     const targetUnit = targetEntity?.get<Unit>('Unit');
     const targetIsFlying = targetUnit?.isFlying ?? false;
-
-    // Emit attack event - PERF: Use pooled payload object
     const targetSelectable = targetEntity?.get<Selectable>('Selectable');
-    attackEventPayload.attackerId = attacker.unitId; // Unit type ID for airborne height
-    attackEventPayload.attackerEntityId = attackerId; // Entity ID for focus fire tracking
-    attackEventPayload.attackerPos.x = attackerTransform.x;
-    attackEventPayload.attackerPos.y = attackerTransform.y;
-    attackEventPayload.targetId = targetId; // Entity ID for focus fire tracking
-    attackEventPayload.targetPos.x = targetTransform.x;
-    attackEventPayload.targetPos.y = targetTransform.y;
-    attackEventPayload.targetUnitType = targetUnit?.unitId; // For airborne height lookup
-    attackEventPayload.damage = finalDamage;
-    attackEventPayload.damageType = attacker.damageType;
-    attackEventPayload.targetHeight = targetHeight;
-    attackEventPayload.targetPlayerId = targetSelectable?.playerId;
-    attackEventPayload.attackerIsFlying = attacker.isFlying;
-    attackEventPayload.targetIsFlying = targetIsFlying;
-    attackEventPayload.attackerFaction = attacker.faction || 'terran';
-    this.game.eventBus.emit('combat:attack', attackEventPayload);
 
-    // Emit damage:dealt for Phaser damage number system
-    this.game.eventBus.emit('damage:dealt', {
-      targetId,
-      damage: finalDamage,
-      targetPos: { x: targetTransform.x, y: targetTransform.y },
-      targetHeight,
-      targetIsFlying,
-      targetUnitType: targetUnit?.unitId, // For airborne height lookup
-      targetPlayerId: targetSelectable?.playerId, // For player-colored damage numbers
-      isKillingBlow: targetHealth && targetHealth.current <= 0,
-    });
+    // Get attacker info
+    const attackerEntity = this.world.getEntity(attackerId);
+    const attackerSelectable = attackerEntity?.get<Selectable>('Selectable');
 
-    // Emit player:damage for Phaser overlay effects when local player's unit takes damage
-    // PERF: Use pooled payload object
-    if (targetSelectable?.playerId && isLocalPlayer(targetSelectable.playerId)) {
-      playerDamagePayload.damage = finalDamage;
-      playerDamagePayload.position.x = targetTransform.x;
-      playerDamagePayload.position.y = targetTransform.y;
-      this.game.eventBus.emit('player:damage', playerDamagePayload);
+    // Check if this is an instant weapon (melee, beam) or projectile-based
+    if (isInstantProjectile(projectileTypeId)) {
+      // INSTANT DAMAGE: Apply damage immediately (melee, beams, etc.)
+      targetHealth.takeDamage(finalDamage, gameTime);
+
+      // Emit attack event with full damage info
+      attackEventPayload.attackerId = attacker.unitId;
+      attackEventPayload.attackerEntityId = attackerId;
+      attackEventPayload.attackerPos.x = attackerTransform.x;
+      attackEventPayload.attackerPos.y = attackerTransform.y;
+      attackEventPayload.targetId = targetId;
+      attackEventPayload.targetPos.x = targetTransform.x;
+      attackEventPayload.targetPos.y = targetTransform.y;
+      attackEventPayload.targetUnitType = targetUnit?.unitId;
+      attackEventPayload.damage = finalDamage;
+      attackEventPayload.damageType = attacker.damageType;
+      attackEventPayload.targetHeight = targetHeight;
+      attackEventPayload.targetPlayerId = targetSelectable?.playerId;
+      attackEventPayload.attackerIsFlying = attacker.isFlying;
+      attackEventPayload.targetIsFlying = targetIsFlying;
+      attackEventPayload.attackerFaction = attacker.faction || 'terran';
+      this.game.eventBus.emit('combat:attack', attackEventPayload);
+
+      // Emit damage:dealt for Phaser damage number system
+      this.game.eventBus.emit('damage:dealt', {
+        targetId,
+        damage: finalDamage,
+        targetPos: { x: targetTransform.x, y: targetTransform.y },
+        targetHeight,
+        targetIsFlying,
+        targetUnitType: targetUnit?.unitId,
+        targetPlayerId: targetSelectable?.playerId,
+        isKillingBlow: targetHealth && targetHealth.current <= 0,
+      });
+
+      // Emit player:damage for Phaser overlay effects
+      if (targetSelectable?.playerId && isLocalPlayer(targetSelectable.playerId)) {
+        playerDamagePayload.damage = finalDamage;
+        playerDamagePayload.position.x = targetTransform.x;
+        playerDamagePayload.position.y = targetTransform.y;
+        this.game.eventBus.emit('player:damage', playerDamagePayload);
+      }
+
+      // Apply splash damage immediately for instant weapons
+      if (attacker.splashRadius > 0) {
+        this.applySplashDamage(
+          attackerId,
+          attacker,
+          attackerTransform,
+          targetTransform,
+          finalDamage,
+          gameTime
+        );
+      }
+    } else {
+      // PROJECTILE-BASED: Spawn projectile entity, damage on impact
+      const startZ = attacker.isFlying ? DEFAULT_AIRBORNE_HEIGHT : 0.5;
+      const targetZ = targetIsFlying ? DEFAULT_AIRBORNE_HEIGHT : 0.5;
+
+      this.game.projectileSystem.spawnProjectile({
+        sourceEntityId: attackerId,
+        sourcePlayerId: attackerSelectable?.playerId ?? '',
+        sourceFaction: attacker.faction || 'terran',
+        startX: attackerTransform.x,
+        startY: attackerTransform.y,
+        startZ: attackerTransform.z + startZ,
+        targetEntityId: targetId,
+        targetX: targetTransform.x,
+        targetY: targetTransform.y,
+        targetZ: targetTransform.z + targetZ,
+        projectileType,
+        damage: finalDamage,
+        damageType: attacker.damageType,
+        splashRadius: attacker.splashRadius,
+        splashFalloff: 0.5,
+      });
+
+      // Emit attack event for muzzle flash/audio (no damage info - damage on impact)
+      attackEventPayload.attackerId = attacker.unitId;
+      attackEventPayload.attackerEntityId = attackerId;
+      attackEventPayload.attackerPos.x = attackerTransform.x;
+      attackEventPayload.attackerPos.y = attackerTransform.y;
+      attackEventPayload.targetId = targetId;
+      attackEventPayload.targetPos.x = targetTransform.x;
+      attackEventPayload.targetPos.y = targetTransform.y;
+      attackEventPayload.targetUnitType = targetUnit?.unitId;
+      attackEventPayload.damage = 0; // Damage applied on projectile impact
+      attackEventPayload.damageType = attacker.damageType;
+      attackEventPayload.targetHeight = targetHeight;
+      attackEventPayload.targetPlayerId = targetSelectable?.playerId;
+      attackEventPayload.attackerIsFlying = attacker.isFlying;
+      attackEventPayload.targetIsFlying = targetIsFlying;
+      attackEventPayload.attackerFaction = attacker.faction || 'terran';
+      this.game.eventBus.emit('combat:attack', attackEventPayload);
     }
 
     // Check for under attack alert
     this.checkUnderAttackAlert(targetId, targetTransform, gameTime);
-
-    // Apply AoE/splash damage if applicable
-    if (attacker.splashRadius > 0) {
-      this.applySplashDamage(
-        attackerId,
-        attacker,
-        attackerTransform,
-        targetTransform,
-        finalDamage,
-        gameTime
-      );
-    }
   }
 
   /**

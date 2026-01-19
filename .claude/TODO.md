@@ -51,6 +51,39 @@
 
 ---
 
+## SC2-Style Projectile System (January 2026) ✓
+
+### Projectile Entity System
+- [x] **Projectile.ts component** - ECS component for projectile entities with position, target, behavior
+- [x] **ProjectileSystem.ts** - Handles projectile movement (homing/ballistic/linear) and impact damage
+- [x] **projectileTypes.ts** - Data-driven projectile definitions (bullet, shell, missile, laser, etc.)
+- [x] **CombatSystem integration** - Spawns projectiles instead of instant damage for non-instant weapons
+- [x] **Instant weapons preserved** - Melee, beams, and flames still apply instant damage
+
+### Projectile Behaviors
+- [x] **Homing projectiles** - Track moving targets with configurable turn rate (bullets, missiles)
+- [x] **Ballistic projectiles** - Arc to target position, can miss if target moves (siege shells)
+- [x] **Linear projectiles** - Straight-line travel with no tracking (lasers)
+- [x] **Speed >= 9999 = instant** - Instant damage weapons bypass projectile system
+
+### Visual Integration
+- [x] **BattleEffectsRenderer sync** - Entity-synced projectile visuals with proper cleanup
+- [x] **projectile:spawned event** - Creates visual when ECS projectile entity is created
+- [x] **projectile:impact event** - Creates hit effects and splash visuals on impact
+- [x] **Trail types** - bullet, plasma, missile, shell, laser trail visuals
+
+### Multiplayer Determinism
+- [x] **ChecksumSystem integration** - Projectile entities included in Merkle tree checksums
+- [x] **Quantized positions** - Uses QUANT_POSITION for deterministic hashing
+- [x] **Player grouping** - Projectiles grouped by source player in Merkle tree
+
+### Unit Data Updates
+- [x] **projectileType field** - Added to UnitDefinition and TransformMode interfaces
+- [x] **All units updated** - Dominion units assigned appropriate projectile types
+- [x] **Transform modes** - Different projectile types for Devastator siege/tank, Valkyrie fighter/assault
+
+---
+
 ## Simulation-Based AI Economy (January 2026) ✓
 
 ### SC2-Style Worker Economy

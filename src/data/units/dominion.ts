@@ -15,6 +15,7 @@ const DEVASTATOR_MODES: TransformMode[] = [
     transformTime: 2,
     canAttackGround: true,
     canAttackAir: false, // Artillery - cannot target air
+    projectileType: 'shell_tank',
   },
   {
     id: 'siege',
@@ -29,6 +30,7 @@ const DEVASTATOR_MODES: TransformMode[] = [
     transformTime: 2,
     canAttackGround: true,
     canAttackAir: false, // Artillery - cannot target air
+    projectileType: 'shell_siege', // Arcing siege shells
   },
 ];
 
@@ -47,6 +49,7 @@ const SCORCHER_MODES: TransformMode[] = [
     transformTime: 2,
     canAttackGround: true,
     canAttackAir: false, // Flamethrower - cannot target air
+    projectileType: 'instant_flame',
   },
   {
     id: 'inferno',
@@ -61,6 +64,7 @@ const SCORCHER_MODES: TransformMode[] = [
     transformTime: 2,
     canAttackGround: true,
     canAttackAir: false, // Flamethrower - cannot target air
+    projectileType: 'instant_flame',
   },
 ];
 
@@ -79,6 +83,7 @@ const VALKYRIE_MODES: TransformMode[] = [
     transformTime: 2.25,
     canAttackGround: false, // Air superiority fighter - air only
     canAttackAir: true,
+    projectileType: 'missile_aa', // Anti-air missiles
   },
   {
     id: 'assault',
@@ -93,6 +98,7 @@ const VALKYRIE_MODES: TransformMode[] = [
     transformTime: 2.25,
     canAttackGround: true, // Ground assault mode - ground only
     canAttackAir: false,   // Cannot attack air in assault mode (like SC2 Viking)
+    projectileType: 'missile_ground', // Ground attack missiles
   },
 ];
 
@@ -113,6 +119,7 @@ export const UNIT_DEFINITIONS: Record<string, UnitDefinition> = {
     attackDamage: 5,
     attackSpeed: 0.7,
     damageType: 'normal',
+    projectileType: 'instant_melee', // Melee attack, instant damage
     maxHealth: 45,
     armor: 0,
     isWorker: true,
@@ -148,6 +155,7 @@ export const UNIT_DEFINITIONS: Record<string, UnitDefinition> = {
     attackDamage: 6,
     attackSpeed: 0.86,
     damageType: 'normal',
+    projectileType: 'bullet_rifle', // Standard rifle bullets
     maxHealth: 45,
     armor: 0,
     abilities: ['stim_pack'],
@@ -181,6 +189,7 @@ export const UNIT_DEFINITIONS: Record<string, UnitDefinition> = {
     attackDamage: 10,
     attackSpeed: 0.7,
     damageType: 'concussive',
+    projectileType: 'bullet_heavy', // Heavy concussive rounds
     maxHealth: 125,
     armor: 1,
     abilities: ['stim_pack', 'concussive_shells'],
@@ -210,6 +219,7 @@ export const UNIT_DEFINITIONS: Record<string, UnitDefinition> = {
     attackDamage: 4,
     attackSpeed: 1.1,
     damageType: 'normal',
+    projectileType: 'bullet_rifle', // Light rifle fire
     maxHealth: 60,
     armor: 0,
     abilities: ['jet_pack', 'grenade'],
@@ -239,6 +249,7 @@ export const UNIT_DEFINITIONS: Record<string, UnitDefinition> = {
     attackDamage: 10,
     attackSpeed: 0.86,
     damageType: 'normal',
+    projectileType: 'bullet_sniper', // High-velocity sniper rounds
     maxHealth: 100,
     armor: 0,
     abilities: ['snipe', 'emp_round', 'cloak', 'nuke'],
@@ -270,6 +281,7 @@ export const UNIT_DEFINITIONS: Record<string, UnitDefinition> = {
     attackDamage: 8,
     attackSpeed: 1.8,
     damageType: 'explosive',
+    projectileType: 'instant_flame', // Flame weapon, instant damage
     maxHealth: 90,
     armor: 0,
     abilities: ['transform_inferno'],
@@ -303,6 +315,7 @@ export const UNIT_DEFINITIONS: Record<string, UnitDefinition> = {
     attackDamage: 15,
     attackSpeed: 0.74,
     damageType: 'explosive',
+    projectileType: 'shell_tank', // Tank shells (siege mode uses shell_siege via transform)
     maxHealth: 175,
     armor: 1,
     abilities: ['bombardment_mode'],
@@ -342,6 +355,7 @@ export const UNIT_DEFINITIONS: Record<string, UnitDefinition> = {
     attackDamage: 30,
     attackSpeed: 0.9,
     damageType: 'explosive',
+    projectileType: 'shell_tank', // Heavy cannon shells
     maxHealth: 400,
     armor: 2,
     abilities: ['high_impact_payload'],
@@ -408,6 +422,7 @@ export const UNIT_DEFINITIONS: Record<string, UnitDefinition> = {
     attackDamage: 10,
     attackSpeed: 0.71,
     damageType: 'explosive',
+    projectileType: 'missile_aa', // Anti-air missiles
     maxHealth: 135,
     armor: 0,
     abilities: ['transform_assault'],
@@ -441,6 +456,7 @@ export const UNIT_DEFINITIONS: Record<string, UnitDefinition> = {
     attackDamage: 12,
     attackSpeed: 0.89,
     damageType: 'normal',
+    projectileType: 'laser_fighter', // Fighter laser bolts
     maxHealth: 140,
     armor: 0,
     abilities: ['cloak'],
@@ -473,6 +489,7 @@ export const UNIT_DEFINITIONS: Record<string, UnitDefinition> = {
     attackDamage: 12,
     attackSpeed: 2.0, // Continuous laser fire - very fast attack speed
     damageType: 'psionic', // Uses laser visual effect
+    projectileType: 'instant_beam', // Continuous beam weapon, instant damage
     maxHealth: 550,
     armor: 3,
     abilities: ['yamato_cannon', 'warp_jump'],

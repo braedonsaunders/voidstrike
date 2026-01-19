@@ -50,6 +50,7 @@ const POOL_SIZE = BATTLE_EFFECTS.POOL_SIZE;
 
 interface ProjectileEffect {
   id: number;
+  entityId?: number; // ECS entity ID for entity-synced projectiles
   startPos: THREE.Vector3;
   endPos: THREE.Vector3;
   currentPos: THREE.Vector3;
@@ -58,6 +59,7 @@ interface ProjectileEffect {
   damageType: string;
   faction: keyof typeof FACTION_COLORS;
   isAirTarget: boolean;
+  isEntitySynced: boolean; // True if linked to ECS projectile entity
   // Visual components
   headMesh: THREE.Mesh;
   trailGeometry: THREE.BufferGeometry;
@@ -187,6 +189,7 @@ export class BattleEffectsRenderer {
   // Effect tracking
   private projectileIdCounter = 0;
   private projectileEffects: Map<number, ProjectileEffect> = new Map();
+  private entityToProjectile: Map<number, number> = new Map(); // entityId -> effectId
   private groundEffects: GroundEffect[] = [];
   private impactDecals: ImpactDecal[] = [];
   private explosionEffects: ExplosionEffect[] = [];
@@ -619,7 +622,8 @@ export class BattleEffectsRenderer {
   // ============================================
 
   private setupEventListeners(): void {
-    // Combat attack - create projectile with trail
+    // Combat attack - create muzzle flash and instant weapon effects
+    // For projectile-based attacks (damage === 0), visuals are handled by projectile:spawned
     this.eventUnsubscribers.push(this.eventBus.on('combat:attack', (data: {
       attackerId?: string; // Unit type ID for attacker (e.g., "valkyrie") - for airborne height lookup
       attackerEntityId?: number; // Entity ID for focus fire tracking
@@ -658,12 +662,88 @@ export class BattleEffectsRenderer {
 
         const faction = (data.attackerFaction as keyof typeof FACTION_COLORS) || 'terran';
 
-        this.createProjectileEffect(startPos, endPos, data.damageType, faction, !!data.targetIsFlying);
+        // Only create instant weapon visuals (lasers, melee) when damage > 0
+        // Projectile-based attacks (damage === 0) are handled by projectile:spawned event
+        if (data.damage > 0) {
+          this.createProjectileEffect(startPos, endPos, data.damageType, faction, !!data.targetIsFlying);
+        }
 
         // Track focus fire using entity IDs (pass airborne height for correct positioning)
         if (data.attackerEntityId !== undefined && data.targetId !== undefined) {
           this.trackFocusFire(data.attackerEntityId, data.targetId, data.targetPos, !!data.targetIsFlying, targetAirborneHeight);
         }
+      }
+    }));
+
+    // Projectile spawned - create visual for entity-synced projectile
+    this.eventUnsubscribers.push(this.eventBus.on('projectile:spawned', (data: {
+      entityId: number;
+      startPos: { x: number; y: number; z: number };
+      targetPos: { x: number; y: number; z: number };
+      projectileType: string;
+      faction: string;
+      trailType?: string;
+      visualScale?: number;
+    }) => {
+      const startTerrainHeight = this.getHeightAt(data.startPos.x, data.startPos.y);
+      const targetTerrainHeight = this.getHeightAt(data.targetPos.x, data.targetPos.y);
+
+      const startPos = new THREE.Vector3(
+        data.startPos.x,
+        startTerrainHeight + data.startPos.z,
+        data.startPos.y
+      );
+
+      const endPos = new THREE.Vector3(
+        data.targetPos.x,
+        targetTerrainHeight + data.targetPos.z,
+        data.targetPos.y
+      );
+
+      const faction = (data.faction as keyof typeof FACTION_COLORS) || 'terran';
+
+      // Calculate duration based on distance and a base speed
+      const distance = startPos.distanceTo(endPos);
+      const duration = Math.max(0.15, distance / 40); // ~40 units/sec visual speed
+
+      this.createEntityProjectileEffect(
+        data.entityId,
+        startPos,
+        endPos,
+        data.trailType || 'bullet',
+        faction,
+        duration
+      );
+    }));
+
+    // Projectile impact - create hit effect
+    this.eventUnsubscribers.push(this.eventBus.on('projectile:impact', (data: {
+      entityId: number;
+      position: { x: number; y: number; z: number };
+      damageType: string;
+      splashRadius: number;
+      faction: string;
+      projectileId: string;
+    }) => {
+      const terrainHeight = this.getHeightAt(data.position.x, data.position.y);
+      const impactPos = new THREE.Vector3(
+        data.position.x,
+        terrainHeight + data.position.z,
+        data.position.y
+      );
+
+      // Create hit effect
+      this.createHitEffect(impactPos, data.position.z > 1);
+
+      // Create splash effect if applicable
+      if (data.splashRadius > 0) {
+        this.createSplashEffect(impactPos, data.splashRadius);
+      }
+
+      // Cleanup visual if it still exists
+      const effectId = this.entityToProjectile.get(data.entityId);
+      if (effectId !== undefined) {
+        this.cleanupProjectileEffect(effectId);
       }
     }));
 
@@ -801,6 +881,7 @@ export class BattleEffectsRenderer {
       damageType,
       faction,
       isAirTarget,
+      isEntitySynced: false, // Not linked to ECS entity
       headMesh,
       trailGeometry,
       trailMesh,
@@ -809,6 +890,132 @@ export class BattleEffectsRenderer {
     };
 
     this.projectileEffects.set(id, effect);
+  }
+
+  /**
+   * Create a projectile effect linked to an ECS entity
+   * Unlike createProjectileEffect, these don't emit combat:hit on completion
+   * as the ProjectileSystem handles that
+   */
+  private createEntityProjectileEffect(
+    entityId: number,
+    start: THREE.Vector3,
+    end: THREE.Vector3,
+    trailType: string,
+    faction: keyof typeof FACTION_COLORS,
+    duration: number
+  ): void {
+    // Use laser effect for laser trail type
+    if (trailType === 'laser') {
+      this.createLaserEffect(start, end, faction);
+      return;
+    }
+
+    const headMesh = this.acquireFromPool(this.projectileHeadPool);
+    const glowSprite = this.acquireFromPool(this.projectileGlowPool);
+
+    if (!headMesh || !glowSprite) return;
+
+    // Set faction colors
+    const colors = FACTION_COLORS[faction];
+    (headMesh.material as THREE.MeshBasicMaterial).color.setHex(colors.primary);
+    (glowSprite.material as THREE.SpriteMaterial).color.setHex(colors.glow);
+
+    headMesh.position.copy(start);
+    glowSprite.position.copy(start);
+
+    // Create trail geometry (ribbon)
+    const trailLength = 8;
+    const trailPositions: THREE.Vector3[] = [];
+    for (let i = 0; i < trailLength; i++) {
+      trailPositions.push(start.clone());
+    }
+
+    const trailGeometry = new THREE.BufferGeometry();
+    const trailVertices = new Float32Array(trailLength * 2 * 3);
+    const trailIndices: number[] = [];
+
+    for (let i = 0; i < trailLength - 1; i++) {
+      const base = i * 2;
+      trailIndices.push(base, base + 1, base + 2);
+      trailIndices.push(base + 1, base + 3, base + 2);
+    }
+
+    trailGeometry.setAttribute('position', new THREE.BufferAttribute(trailVertices, 3));
+    trailGeometry.setIndex(trailIndices);
+
+    const trailMaterial = this.trailMaterial.clone();
+    trailMaterial.color.setHex(colors.secondary);
+
+    const trailMesh = new THREE.Mesh(trailGeometry, trailMaterial);
+    trailMesh.renderOrder = RENDER_ORDER.PROJECTILE - 1;
+    this.scene.add(trailMesh);
+
+    const id = this.projectileIdCounter++;
+    const effect: ProjectileEffect = {
+      id,
+      entityId,
+      startPos: start.clone(),
+      endPos: end.clone(),
+      currentPos: start.clone(),
+      progress: 0,
+      duration,
+      damageType: 'normal',
+      faction,
+      isAirTarget: end.y > 2,
+      isEntitySynced: true, // Linked to ECS entity
+      headMesh,
+      trailGeometry,
+      trailMesh,
+      trailPositions,
+      glowSprite,
+    };
+
+    this.projectileEffects.set(id, effect);
+    this.entityToProjectile.set(entityId, id);
+  }
+
+  /**
+   * Cleanup a specific projectile effect
+   */
+  private cleanupProjectileEffect(effectId: number): void {
+    const effect = this.projectileEffects.get(effectId);
+    if (!effect) return;
+
+    this.releaseToPool(this.projectileHeadPool, effect.headMesh);
+    this.releaseToPool(this.projectileGlowPool, effect.glowSprite);
+    this.scene.remove(effect.trailMesh);
+    effect.trailGeometry.dispose();
+    (effect.trailMesh.material as THREE.Material).dispose();
+
+    this.projectileEffects.delete(effectId);
+    if (effect.entityId !== undefined) {
+      this.entityToProjectile.delete(effect.entityId);
+    }
+  }
+
+  /**
+   * Create a splash effect at impact point
+   */
+  private createSplashEffect(position: THREE.Vector3, radius: number): void {
+    // Create expanding shockwave ring
+    const mesh = this.acquireFromPool(this.shockwavePool);
+    if (!mesh) return;
+
+    mesh.position.set(position.x, position.y + GROUND_EFFECT_OFFSET, position.z);
+    mesh.rotation.x = -Math.PI / 2;
+    mesh.scale.set(0.1, 0.1, 1);
+
+    this.groundEffects.push({
+      position: position.clone(),
+      progress: 0,
+      duration: 0.4,
+      mesh,
+      type: 'shockwave',
+      startScale: 0.1,
+      endScale: radius * 0.8,
+      heightOffset: 0,
+    });
   }
 
   private createLaserEffect(start: THREE.Vector3, end: THREE.Vector3, faction: keyof typeof FACTION_COLORS): void {
@@ -1346,9 +1553,13 @@ export class BattleEffectsRenderer {
       effect.progress += dt / effect.duration;
 
       if (effect.progress >= 1) {
-        // Projectile reached target
-        this.createHitEffect(effect.endPos, effect.isAirTarget);
-        this.eventBus.emit('combat:hit', { position: { x: effect.endPos.x, y: effect.endPos.z } });
+        // Projectile reached target (visual only)
+        // For entity-synced projectiles, ProjectileSystem handles the actual impact
+        // For instant projectiles (non-entity-synced), create hit effect here
+        if (!effect.isEntitySynced) {
+          this.createHitEffect(effect.endPos, effect.isAirTarget);
+          this.eventBus.emit('combat:hit', { position: { x: effect.endPos.x, y: effect.endPos.z } });
+        }
 
         // Cleanup
         this.releaseToPool(this.projectileHeadPool, effect.headMesh);
@@ -1356,6 +1567,11 @@ export class BattleEffectsRenderer {
         this.scene.remove(effect.trailMesh);
         effect.trailGeometry.dispose();
         (effect.trailMesh.material as THREE.Material).dispose();
+
+        // Clear entity mapping if applicable
+        if (effect.entityId !== undefined) {
+          this.entityToProjectile.delete(effect.entityId);
+        }
 
         toRemove.push(id);
       } else {

@@ -29,6 +29,7 @@ import { Building } from '../components/Building';
 import { Health } from '../components/Health';
 import { Selectable } from '../components/Selectable';
 import { Resource } from '../components/Resource';
+import { Projectile } from '../components/Projectile';
 import { quantize, QUANT_POSITION, QUANT_DAMAGE, QUANT_COOLDOWN } from '@/utils/FixedPoint';
 import {
   MerkleNode,
@@ -76,6 +77,7 @@ export interface ChecksumData {
   checksum: number;
   unitCount: number;
   buildingCount: number;
+  projectileCount: number;
   resourceSum: number;
   unitPositionHash: number;
   healthSum: number;
@@ -167,6 +169,7 @@ export class ChecksumSystem extends System {
   private _sortBufferUnits: import('../ecs/Entity').Entity[] = [];
   private _sortBufferBuildings: import('../ecs/Entity').Entity[] = [];
   private _sortBufferResources: import('../ecs/Entity').Entity[] = [];
+  private _sortBufferProjectiles: import('../ecs/Entity').Entity[] = [];
 
   constructor(game: Game, config: Partial<ChecksumConfig> = {}) {
     super(game);
@@ -207,6 +210,7 @@ export class ChecksumSystem extends System {
       checksum: data.checksum,
       unitCount: data.unitCount,
       buildingCount: 0,
+      projectileCount: 0,
       resourceSum: data.resourceSum,
       unitPositionHash: 0,
       healthSum: 0,
@@ -485,7 +489,7 @@ export class ChecksumSystem extends System {
     if (this.config.logChecksums) {
       debugNetworking.log(
         `[ChecksumSystem] Tick ${currentTick}: 0x${checksumData.checksum.toString(16)}`,
-        `(${checksumData.unitCount} units, ${checksumData.buildingCount} buildings)`
+        `(${checksumData.unitCount} units, ${checksumData.buildingCount} buildings, ${checksumData.projectileCount} projectiles)`
       );
     }
 
@@ -546,6 +550,7 @@ export class ChecksumSystem extends System {
     let checksum = 0;
     let unitCount = 0;
     let buildingCount = 0;
+    let projectileCount = 0;
     let resourceSum = 0;
     let unitPositionHash = 0;
     let healthSum = 0;
@@ -553,6 +558,7 @@ export class ChecksumSystem extends System {
     // Merkle tree leaf nodes grouped by player
     const unitNodesByPlayer = new Map<string, MerkleNode[]>();
     const buildingNodesByPlayer = new Map<string, MerkleNode[]>();
+    const projectileNodesByPlayer = new Map<string, MerkleNode[]>();
     const resourceNodes: MerkleNode[] = [];
 
     // Hash units and build Merkle leaf nodes
@@ -704,6 +710,61 @@ export class ChecksumSystem extends System {
       resourceSum += qAmount;
     }
 
+    // Hash projectiles and build Merkle leaf nodes
+    // PERF: Reuse pre-allocated buffer instead of creating new array with spread
+    const projectiles = this.world.getEntitiesWith('Projectile', 'Transform');
+    this._sortBufferProjectiles.length = 0;
+    for (let i = 0; i < projectiles.length; i++) {
+      this._sortBufferProjectiles.push(projectiles[i]);
+    }
+    this._sortBufferProjectiles.sort((a, b) => a.id - b.id);
+
+    for (const entity of this._sortBufferProjectiles) {
+      const transform = entity.get<Transform>('Transform')!;
+      const projectile = entity.get<Projectile>('Projectile')!;
+
+      if (projectile.hasImpacted) continue;
+
+      projectileCount++;
+
+      // Quantize position for deterministic hashing
+      const qx = quantize(transform.x, QUANT_POSITION);
+      const qy = quantize(transform.y, QUANT_POSITION);
+      const qz = quantize(transform.z, QUANT_POSITION);
+      const qTargetX = quantize(projectile.targetX, QUANT_POSITION);
+      const qTargetY = quantize(projectile.targetY, QUANT_POSITION);
+      const qTargetZ = quantize(projectile.targetZ, QUANT_POSITION);
+      const qDamage = quantize(projectile.damage, QUANT_DAMAGE);
+
+      // Compute entity hash for Merkle leaf
+      let entityHash = 0;
+      entityHash = this.hashCombine(entityHash, entity.id);
+      entityHash = this.hashCombine(entityHash, qx);
+      entityHash = this.hashCombine(entityHash, qy);
+      entityHash = this.hashCombine(entityHash, qz);
+      entityHash = this.hashCombine(entityHash, qTargetX);
+      entityHash = this.hashCombine(entityHash, qTargetY);
+      entityHash = this.hashCombine(entityHash, qTargetZ);
+      entityHash = this.hashCombine(entityHash, qDamage);
+      entityHash = this.hashCombine(entityHash, projectile.sourceEntityId);
+      entityHash = this.hashCombine(entityHash, projectile.targetEntityId || 0);
+      entityHash = this.hashCombine(entityHash, this.hashString(projectile.behavior));
+      entityHash = this.hashCombine(entityHash, projectile.spawnTick);
+
+      // Create Merkle leaf node
+      const leafNode = MerkleTreeBuilder.createEntityNode(entity.id, 'projectile', entityHash);
+
+      // Group by source player
+      const playerId = projectile.sourcePlayerId || 'neutral';
+      if (!projectileNodesByPlayer.has(playerId)) {
+        projectileNodesByPlayer.set(playerId, []);
+      }
+      projectileNodesByPlayer.get(playerId)!.push(leafNode);
+
+      // Combine into flat checksum
+      checksum = this.hashCombine(checksum, entityHash);
+    }
+
     // Include tick in final hash for ordering verification
     checksum = this.hashCombine(checksum, tick);
 
@@ -712,8 +773,9 @@ export class ChecksumSystem extends System {
       tick,
       unitNodesByPlayer,
       buildingNodesByPlayer,
+      projectileNodesByPlayer,
       resourceNodes,
-      unitCount + buildingCount + resourceNodes.length
+      unitCount + buildingCount + projectileCount + resourceNodes.length
     );
 
     // Track Merkle tree performance
@@ -726,6 +788,7 @@ export class ChecksumSystem extends System {
       checksum: checksum >>> 0, // Ensure unsigned
       unitCount,
       buildingCount,
+      projectileCount,
       resourceSum,
       unitPositionHash: unitPositionHash >>> 0,
       healthSum,
@@ -739,8 +802,8 @@ export class ChecksumSystem extends System {
    *
    * Tree Structure:
    *                     [Root Hash]
-   *                    /           \
-   *           [Units Hash]      [Buildings Hash]      [Resources Hash]
+   *                    /           \             \              \
+   *           [Units Hash]   [Buildings Hash]  [Projectiles]  [Resources Hash]
    *           /         \        /            \
    *     [Player1]    [Player2]  [Player1]    [Player2]
    *        /    \
@@ -750,6 +813,7 @@ export class ChecksumSystem extends System {
     tick: number,
     unitNodesByPlayer: Map<string, MerkleNode[]>,
     buildingNodesByPlayer: Map<string, MerkleNode[]>,
+    projectileNodesByPlayer: Map<string, MerkleNode[]>,
     resourceNodes: MerkleNode[],
     entityCount: number
   ): MerkleTreeData {
@@ -771,6 +835,15 @@ export class ChecksumSystem extends System {
     }
     const buildingsCategory = MerkleTreeBuilder.createCategoryNode('buildings', buildingGroups);
 
+    // Build Projectiles category
+    const projectileGroups: MerkleNode[] = [];
+    for (const [playerId, nodes] of projectileNodesByPlayer) {
+      if (nodes.length > 0) {
+        projectileGroups.push(MerkleTreeBuilder.createGroupNode(playerId, nodes));
+      }
+    }
+    const projectilesCategory = MerkleTreeBuilder.createCategoryNode('projectiles', projectileGroups);
+
     // Build Resources category (single group since not player-owned)
     const resourcesCategory = MerkleTreeBuilder.createCategoryNode('resources', [
       MerkleTreeBuilder.createGroupNode('world', resourceNodes),
@@ -780,6 +853,7 @@ export class ChecksumSystem extends System {
     const categories: MerkleNode[] = [];
     if (unitGroups.length > 0) categories.push(unitsCategory);
     if (buildingGroups.length > 0) categories.push(buildingsCategory);
+    if (projectileGroups.length > 0) categories.push(projectilesCategory);
     if (resourceNodes.length > 0) categories.push(resourcesCategory);
 
     const root = MerkleTreeBuilder.createRootNode(categories);

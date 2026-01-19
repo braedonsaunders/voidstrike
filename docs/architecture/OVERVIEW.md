@@ -68,6 +68,7 @@ voidstrike/
 │   │   │   ├── PathfindingSystem.ts     # Dynamic pathfinding with obstacle detection
 │   │   │   ├── MovementSystem.ts        # Unit movement & formations
 │   │   │   ├── CombatSystem.ts          # Attack, damage, high ground
+│   │   │   ├── ProjectileSystem.ts      # Projectile movement & impact damage
 │   │   │   ├── SelectionSystem.ts       # Screen-space selection with flying unit support
 │   │   │   ├── ProductionSystem.ts      # Building production queues
 │   │   │   ├── ResourceSystem.ts        # Resource gathering
@@ -90,7 +91,8 @@ voidstrike/
 │   │   │   ├── Building.ts
 │   │   │   ├── Resource.ts
 │   │   │   ├── Ability.ts          # Unit abilities component
-│   │   │   └── Wall.ts             # Wall/gate component
+│   │   │   ├── Wall.ts             # Wall/gate component
+│   │   │   └── Projectile.ts       # Projectile entity component
 │   │   ├── pathfinding/
 │   │   │   ├── RecastNavigation.ts  # WASM-based navmesh pathfinding & crowd simulation
 │   │   │   ├── Grid.ts
