@@ -1,20 +1,19 @@
 /**
  * GPU Indirect Renderer
  *
- * Manages GPU-driven rendering with indirect draw calls.
- * Uses compute shader culling results to drive instance counts via
- * IndirectStorageBufferAttribute, eliminating CPU-GPU roundtrips.
+ * Manages GPU-driven rendering with indirect draw calls using Three.js r182+ patterns.
  *
  * Architecture:
- * - One IndirectMesh per (unitType, LOD) pair
- * - Compute shader populates indirect args buffer with visible counts
+ * - One mesh per (unitType, LOD) pair with indirect drawing enabled
+ * - CullingCompute shader populates indirect args buffer with visible counts
  * - Vertex shader reads transforms from storage buffer via visible indices
  * - Single drawIndexedIndirect call per unit type/LOD
  *
- * Three.js r182 Pattern:
- * - mesh.drawIndirect = IndirectStorageBufferAttribute
+ * Three.js r182+ Pattern:
+ * - geometry.setIndirect(IndirectStorageBufferAttribute) for indirect drawing
  * - NodeMaterial with storage buffer access in vertex shader
  * - instanceIndex used to look up visible unit transforms
+ * - Shared IndirectStorageBufferAttribute between compute and render
  */
 
 import * as THREE from 'three';
@@ -24,19 +23,18 @@ import {
   storage,
   uniform,
   float,
-  int,
+  vec3,
   vec4,
   mat4,
   positionLocal,
+  normalLocal,
   instanceIndex,
 } from 'three/tsl';
 
-// WebGPU-specific imports (typed in src/types/three-webgpu.d.ts)
-import { uint } from 'three/tsl';
 import {
   StorageInstancedBufferAttribute,
   IndirectStorageBufferAttribute,
-  NodeMaterial,
+  MeshStandardNodeMaterial,
 } from 'three/webgpu';
 
 import { GPUUnitBuffer } from './GPUUnitBuffer';
@@ -69,49 +67,46 @@ interface IndirectMesh {
   geometry: THREE.BufferGeometry;
   material: THREE.Material;
   indexCount: number;
+  indirectOffset: number; // Byte offset into indirect args buffer
 }
 
 /**
  * GPU Indirect Renderer
  *
  * Manages GPU-driven rendering using indirect draw calls.
+ * Works with CullingCompute to enable fully GPU-driven instance culling.
  */
 export class GPUIndirectRenderer {
   private renderer: WebGPURenderer | null = null;
   private scene: THREE.Scene;
 
-  // Storage buffers (shared with CullingCompute) - wrapped in StorageBufferAttribute
-  private transformStorageAttribute: any | null = null;  // StorageBufferAttribute
-  private metadataStorageAttribute: any | null = null;   // StorageBufferAttribute
-  private visibleIndicesStorageAttribute: any | null = null; // StorageBufferAttribute
+  // Storage buffers (shared with CullingCompute)
   private transformStorage: ReturnType<typeof storage> | null = null;
-  private metadataStorage: ReturnType<typeof storage> | null = null;
   private visibleIndicesStorage: ReturnType<typeof storage> | null = null;
 
   // Indirect meshes per (unitType, LOD)
   private indirectMeshes: Map<string, IndirectMesh> = new Map();
 
-  // Indirect args buffer
+  // Shared indirect args buffer - used by all meshes with different offsets
   private indirectArgsData: Uint32Array;
-  private indirectArgsAttribute: any | null = null;
+  private indirectArgsAttribute: IndirectStorageBufferAttribute | null = null;
 
-  // GPU buffer reference
+  // GPU buffer references
   private gpuUnitBuffer: GPUUnitBuffer | null = null;
   private cullingCompute: CullingCompute | null = null;
 
   // Transform data for storage binding
   private transformData: Float32Array;
-  private metadataData: Float32Array;
   private visibleIndicesData: Uint32Array;
 
   // Registered unit types and their geometries
   private unitTypeGeometries: Map<number, Map<number, THREE.BufferGeometry>> = new Map();
   private unitTypeMaterials: Map<number, THREE.Material> = new Map();
 
-  // Camera uniforms for vertex shader
+  // Camera uniform for vertex shader
   private uCameraPosition = uniform(new THREE.Vector3());
 
-  // Is initialized flag
+  // Initialization state
   private initialized = false;
 
   constructor(scene: THREE.Scene) {
@@ -119,7 +114,6 @@ export class GPUIndirectRenderer {
 
     // Pre-allocate buffers
     this.transformData = new Float32Array(MAX_UNITS * 16);
-    this.metadataData = new Float32Array(MAX_UNITS * 4);
     this.visibleIndicesData = new Uint32Array(MAX_UNITS);
 
     // Indirect args: (unitType * LOD * players) entries × 5 uint32 per entry
@@ -143,27 +137,19 @@ export class GPUIndirectRenderer {
 
     // Get data arrays from GPU buffer
     this.transformData = gpuUnitBuffer.getTransformData();
-    this.metadataData = gpuUnitBuffer.getMetadataData();
 
-    // Wrap TypedArrays in StorageInstancedBufferAttribute for TSL storage() compatibility
-    // StorageInstancedBufferAttribute is required for compute shaders and instanced rendering
-    // Transform: mat4 = 16 floats per unit
-    this.transformStorageAttribute = new StorageInstancedBufferAttribute(this.transformData, 16);
-    this.transformStorage = storage(this.transformStorageAttribute, 'mat4', MAX_UNITS);
+    // Create storage buffers for vertex shader access
+    const transformStorageAttribute = new StorageInstancedBufferAttribute(this.transformData, 16);
+    this.transformStorage = storage(transformStorageAttribute, 'mat4', MAX_UNITS);
 
-    // Metadata: vec4 = 4 floats per unit
-    this.metadataStorageAttribute = new StorageInstancedBufferAttribute(this.metadataData, 4);
-    this.metadataStorage = storage(this.metadataStorageAttribute, 'vec4', MAX_UNITS);
+    // Get visible indices storage from culling compute (shared buffer)
+    this.visibleIndicesStorage = cullingCompute.getVisibleIndicesStorage();
 
-    // Visible indices: uint = 1 uint per unit
-    this.visibleIndicesStorageAttribute = new StorageInstancedBufferAttribute(this.visibleIndicesData, 1);
-    this.visibleIndicesStorage = storage(this.visibleIndicesStorageAttribute, 'uint', MAX_UNITS);
-
-    // Create indirect args attribute
+    // Create shared indirect args attribute
     this.indirectArgsAttribute = new IndirectStorageBufferAttribute(this.indirectArgsData, 5);
 
     this.initialized = true;
-    debugShaders.log('[GPUIndirectRenderer] Initialized');
+    debugShaders.log('[GPUIndirectRenderer] Initialized with shared indirect buffer');
   }
 
   /**
@@ -202,36 +188,40 @@ export class GPUIndirectRenderer {
     const key = `${unitTypeIndex}_${lodLevel}`;
 
     if (this.indirectMeshes.has(key)) {
-      return; // Already created
+      return;
     }
 
-    // Create NodeMaterial that reads transforms from storage buffer
+    // Clone geometry to avoid modifying the original
+    const meshGeometry = geometry.clone();
+
+    // Create GPU-driven material
     const material = this.createGPUDrivenMaterial(baseMaterial);
 
-    // Create mesh with indirect drawing enabled
-    const mesh = new THREE.Mesh(geometry, material);
+    // Create mesh
+    const mesh = new THREE.Mesh(meshGeometry, material);
     mesh.frustumCulled = false; // GPU handles culling
     mesh.castShadow = true;
     mesh.receiveShadow = true;
     mesh.renderOrder = 50;
 
-    // Enable indirect drawing (typed in src/types/three-webgpu.d.ts)
-    if (this.indirectArgsAttribute) {
-      mesh.drawIndirect = this.indirectArgsAttribute;
-    }
-
     // Calculate indirect args offset for this unit type + LOD
-    // Layout: [unitType][lod][player] flattened
+    // We use player 0 as the primary offset - multi-player support would need per-player meshes
+    const indirectOffset = this.getIndirectOffset(unitTypeIndex, lodLevel, 0);
     const indexCount = geometry.index ? geometry.index.count : geometry.attributes.position.count;
 
-    // Initialize indirect args for all player slots
-    for (let player = 0; player < MAX_PLAYERS; player++) {
-      const offset = this.getIndirectOffset(unitTypeIndex, lodLevel, player);
-      this.indirectArgsData[offset + 0] = indexCount;  // indexCount
-      this.indirectArgsData[offset + 1] = 0;           // instanceCount (filled by compute)
-      this.indirectArgsData[offset + 2] = 0;           // firstIndex
-      this.indirectArgsData[offset + 3] = 0;           // baseVertex
-      this.indirectArgsData[offset + 4] = 0;           // firstInstance
+    // Initialize indirect args for this entry
+    this.indirectArgsData[indirectOffset + 0] = indexCount;  // indexCount/vertexCount
+    this.indirectArgsData[indirectOffset + 1] = 0;           // instanceCount (set by compute)
+    this.indirectArgsData[indirectOffset + 2] = 0;           // firstIndex/firstVertex
+    this.indirectArgsData[indirectOffset + 3] = 0;           // baseVertex (indexed) or firstInstance (non-indexed)
+    this.indirectArgsData[indirectOffset + 4] = 0;           // firstInstance (indexed only)
+
+    // Enable indirect drawing using r182+ API: geometry.setIndirect()
+    // The offset is in BYTES, and each entry is 5 uint32 = 20 bytes
+    if (this.indirectArgsAttribute) {
+      meshGeometry.setIndirect(this.indirectArgsAttribute);
+      // Set the byte offset for this specific mesh's indirect args
+      meshGeometry.drawIndirectOffset = indirectOffset * 4; // Convert uint32 offset to bytes
     }
 
     this.scene.add(mesh);
@@ -240,30 +230,25 @@ export class GPUIndirectRenderer {
       mesh,
       unitTypeIndex,
       lodLevel,
-      geometry,
+      geometry: meshGeometry,
       material,
       indexCount,
+      indirectOffset,
     });
 
-    debugShaders.log(`[GPUIndirectRenderer] Created indirect mesh for type ${unitTypeIndex} LOD${lodLevel}`);
+    debugShaders.log(`[GPUIndirectRenderer] Created indirect mesh: type=${unitTypeIndex} LOD=${lodLevel} offset=${indirectOffset}`);
   }
 
   /**
    * Create a GPU-driven material that reads transforms from storage buffers
    *
    * The vertex shader:
-   * 1. Uses instanceIndex to look up the visible unit slot
+   * 1. Uses instanceIndex to look up the visible unit slot from culling results
    * 2. Reads transform matrix from storage buffer
-   * 3. Applies transform to vertex position
+   * 3. Applies transform to vertex position and normal
    */
   private createGPUDrivenMaterial(baseMaterial?: THREE.Material): THREE.Material {
-    // If NodeMaterial isn't available, fall back to standard material
-    if (!NodeMaterial || typeof NodeMaterial !== 'function') {
-      debugShaders.warn('[GPUIndirectRenderer] NodeMaterial not available, using standard material');
-      return baseMaterial?.clone() || new THREE.MeshStandardMaterial({ color: 0x888888 });
-    }
-
-    const material = new NodeMaterial();
+    const material = new MeshStandardNodeMaterial();
 
     // Copy properties from base material if provided
     if (baseMaterial && baseMaterial instanceof THREE.MeshStandardMaterial) {
@@ -272,48 +257,72 @@ export class GPUIndirectRenderer {
       material.roughness = baseMaterial.roughness;
       material.map = baseMaterial.map;
       material.normalMap = baseMaterial.normalMap;
+    } else {
+      material.color = new THREE.Color(0x888888);
+      material.metalness = 0.1;
+      material.roughness = 0.8;
     }
 
     const transformBuffer = this.transformStorage;
     const visibleIndices = this.visibleIndicesStorage;
 
     if (transformBuffer && visibleIndices) {
-      // Custom vertex position node that reads from storage buffer
+      // Custom position node - reads transform from storage buffer
       const gpuPositionNode = Fn(() => {
-        // Get the visible unit slot index for this instance
+        // Get the original unit slot index for this instance from culling results
         const visibleSlotIndex = visibleIndices.element(instanceIndex);
 
         // Read the transform matrix from storage buffer
         const modelMatrix = transformBuffer.element(visibleSlotIndex);
 
-        // Transform local position using matrix multiplication
-        // In TSL, use mat4.mul(vec4) for proper matrix-vector multiplication
-        // Create homogeneous position vec4(pos, 1.0)
+        // Transform local position: worldPos = modelMatrix * vec4(localPos, 1.0)
         const localPos4 = vec4(positionLocal, float(1.0));
-
-        // Multiply mat4 * vec4 and extract xyz for world position
         const worldPos4 = modelMatrix.mul(localPos4);
 
         return worldPos4.xyz;
       });
 
-      // Apply custom vertex position
-      try {
-        material.positionNode = gpuPositionNode();
-      } catch (e) {
-        debugShaders.warn('[GPUIndirectRenderer] Failed to set position node:', e);
-      }
+      // Custom normal node - transforms normal by the model matrix
+      const gpuNormalNode = Fn(() => {
+        const visibleSlotIndex = visibleIndices.element(instanceIndex);
+        const modelMatrix = transformBuffer.element(visibleSlotIndex);
+
+        // Extract rotation from model matrix (upper-left 3x3)
+        // For uniform scaling, normal transform = modelMatrix rotation
+        const col0 = modelMatrix[0].xyz;
+        const col1 = modelMatrix[1].xyz;
+        const col2 = modelMatrix[2].xyz;
+        const rotationMatrix = mat4(
+          vec4(col0, float(0)),
+          vec4(col1, float(0)),
+          vec4(col2, float(0)),
+          vec4(vec3(0, 0, 0), float(1))
+        );
+
+        const transformedNormal = rotationMatrix.mul(vec4(normalLocal, float(0))).xyz;
+        return transformedNormal;
+      });
+
+      material.positionNode = gpuPositionNode();
+      material.normalNode = gpuNormalNode();
     }
 
     return material;
   }
 
   /**
-   * Get the offset into the indirect args buffer for a (unitType, LOD, player) combination
+   * Get the uint32 offset into the indirect args buffer for a (unitType, LOD, player) combination
    */
   private getIndirectOffset(unitType: number, lod: number, player: number): number {
     // Layout: [unitType * (LOD_COUNT * PLAYER_COUNT) + lod * PLAYER_COUNT + player] * 5
     return (unitType * MAX_LOD_LEVELS * MAX_PLAYERS + lod * MAX_PLAYERS + player) * 5;
+  }
+
+  /**
+   * Get byte offset for a (unitType, LOD, player) combination
+   */
+  getIndirectByteOffset(unitType: number, lod: number, player: number): number {
+    return this.getIndirectOffset(unitType, lod, player) * 4;
   }
 
   /**
@@ -325,15 +334,24 @@ export class GPUIndirectRenderer {
     for (let i = 0; i < entryCount; i++) {
       this.indirectArgsData[i * 5 + 1] = 0; // instanceCount = 0
     }
+
+    // Mark attribute as needing update
+    if (this.indirectArgsAttribute) {
+      this.indirectArgsAttribute.needsUpdate = true;
+    }
   }
 
   /**
    * Set the instance count for a specific (unitType, LOD, player) combination
-   * Called after culling to update indirect draw counts
+   * Used by CPU fallback path
    */
   setInstanceCount(unitType: number, lod: number, player: number, count: number): void {
     const offset = this.getIndirectOffset(unitType, lod, player);
     this.indirectArgsData[offset + 1] = count;
+
+    if (this.indirectArgsAttribute) {
+      this.indirectArgsAttribute.needsUpdate = true;
+    }
   }
 
   /**
@@ -352,16 +370,9 @@ export class GPUIndirectRenderer {
   }
 
   /**
-   * Sync visible indices from culling compute
-   */
-  syncVisibleIndices(visibleIndicesBuffer: Uint32Array): void {
-    this.visibleIndicesData.set(visibleIndicesBuffer);
-  }
-
-  /**
    * Get the indirect args attribute for binding to CullingCompute
    */
-  getIndirectArgsAttribute(): any | null {
+  getIndirectArgsAttribute(): IndirectStorageBufferAttribute | null {
     return this.indirectArgsAttribute;
   }
 
@@ -413,11 +424,23 @@ export class GPUIndirectRenderer {
   }
 
   /**
+   * Update mesh visibility based on instance counts
+   * Hides meshes with 0 instances to avoid GPU overhead
+   */
+  updateMeshVisibility(): void {
+    for (const [key, data] of this.indirectMeshes) {
+      const count = this.indirectArgsData[data.indirectOffset + 1];
+      data.mesh.visible = count > 0;
+    }
+  }
+
+  /**
    * Dispose all resources
    */
   dispose(): void {
     for (const [, data] of this.indirectMeshes) {
       this.scene.remove(data.mesh);
+      data.geometry.dispose();
       data.material.dispose();
     }
     this.indirectMeshes.clear();
@@ -425,11 +448,7 @@ export class GPUIndirectRenderer {
     this.unitTypeGeometries.clear();
     this.unitTypeMaterials.clear();
 
-    this.transformStorageAttribute = null;
-    this.metadataStorageAttribute = null;
-    this.visibleIndicesStorageAttribute = null;
     this.transformStorage = null;
-    this.metadataStorage = null;
     this.visibleIndicesStorage = null;
     this.indirectArgsAttribute = null;
 
