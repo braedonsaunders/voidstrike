@@ -29,11 +29,25 @@ const METADATA_STRIDE = 16;
 // DrawIndexedIndirect struct size (5 uint32 = 20 bytes)
 const INDIRECT_ARGS_STRIDE = 20;
 
+// Number of frames to quarantine freed slots before reclamation.
+// WebGPU typically has 2-3 frames in flight; 3 frames provides safety margin.
+const QUARANTINE_FRAMES = 3;
+
 export interface UnitSlot {
   index: number;
   entityId: number;
   unitTypeIndex: number;
   playerId: number;
+}
+
+/**
+ * Quarantined slot awaiting safe reclamation.
+ * Slots are held for QUARANTINE_FRAMES to ensure GPU has finished
+ * using the slot's buffer data before it can be reallocated.
+ */
+interface QuarantinedSlot {
+  index: number;
+  frameFreed: number;
 }
 
 export interface GPUUnitBufferConfig {
@@ -66,6 +80,11 @@ export class GPUUnitBuffer {
   private allocatedSlots: Map<number, UnitSlot> = new Map(); // entityId -> slot
   private freeSlots: number[] = []; // Available slot indices
   private activeCount = 0;
+
+  // Deferred slot reclamation - prevents GPU buffer race conditions
+  // Slots are quarantined for QUARANTINE_FRAMES before becoming available
+  private quarantinedSlots: QuarantinedSlot[] = [];
+  private currentFrame = 0;
 
   // Unit type registry
   private unitTypeToIndex: Map<string, number> = new Map();
@@ -183,20 +202,65 @@ export class GPUUnitBuffer {
   }
 
   /**
-   * Free a slot when a unit is destroyed
+   * Free a slot when a unit is destroyed.
+   *
+   * IMPORTANT: Slots are NOT immediately returned to the free pool.
+   * They are quarantined for QUARANTINE_FRAMES to ensure the GPU has
+   * finished using the slot's buffer data before it can be reallocated.
+   * This prevents WebGPU "setIndexBuffer" crashes caused by stale GPU references.
    */
   freeSlot(entityId: number): void {
     const slot = this.allocatedSlots.get(entityId);
     if (!slot) return;
 
     this.allocatedSlots.delete(entityId);
-    this.freeSlots.push(slot.index);
     this.activeCount--;
 
-    // Clear transform to identity (not strictly necessary but clean)
+    // Quarantine the slot instead of immediately returning to free pool
+    // GPU may still be using this slot's data for in-flight frames
+    this.quarantinedSlots.push({
+      index: slot.index,
+      frameFreed: this.currentFrame,
+    });
+
+    // Clear transform to identity to prevent rendering stale data
     this.setTransformIdentity(slot.index);
     this.dirtySlots.add(slot.index);
     this.isDirtyFlag = true;
+  }
+
+  /**
+   * Process quarantined slots and reclaim those that are safe to reuse.
+   * Call this ONCE per frame, at the START of the update loop.
+   *
+   * Slots are held for QUARANTINE_FRAMES to ensure all in-flight GPU
+   * commands have completed before the slot can be reallocated.
+   */
+  processQuarantinedSlots(): void {
+    this.currentFrame++;
+
+    // Process quarantine queue - reclaim slots that have aged out
+    let writeIndex = 0;
+    for (let i = 0; i < this.quarantinedSlots.length; i++) {
+      const slot = this.quarantinedSlots[i];
+      const framesInQuarantine = this.currentFrame - slot.frameFreed;
+
+      if (framesInQuarantine >= QUARANTINE_FRAMES) {
+        // Safe to reclaim - return to free pool
+        this.freeSlots.push(slot.index);
+      } else {
+        // Keep in quarantine
+        this.quarantinedSlots[writeIndex++] = slot;
+      }
+    }
+    this.quarantinedSlots.length = writeIndex;
+  }
+
+  /**
+   * Get the number of slots currently in quarantine (for debugging/stats)
+   */
+  getQuarantinedCount(): number {
+    return this.quarantinedSlots.length;
   }
 
   /**
@@ -454,6 +518,8 @@ export class GPUUnitBuffer {
     this.activeCount = 0;
     this.needsFullUpdate = true;
     this.dirtySlots.clear();
+    // Clear quarantine queue - all slots are now free
+    this.quarantinedSlots.length = 0;
   }
 
   /**
@@ -465,6 +531,7 @@ export class GPUUnitBuffer {
     this.metadataBuffer = null;
     this.allocatedSlots.clear();
     this.freeSlots.length = 0;
+    this.quarantinedSlots.length = 0;
   }
 }
 

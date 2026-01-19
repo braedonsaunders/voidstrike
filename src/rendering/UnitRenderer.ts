@@ -436,6 +436,7 @@ export class UnitRenderer {
     totalIndirectDrawCalls: number;
     isUsingGPUCulling: boolean;
     gpuCullTimeMs: number;
+    quarantinedSlots: number;
   } {
     const cullingStats = this.cullingCompute?.getGPUCullingStats();
     return {
@@ -448,6 +449,7 @@ export class UnitRenderer {
       totalIndirectDrawCalls: this.gpuIndirectRenderer?.getTotalVisibleCount() ?? 0,
       isUsingGPUCulling: cullingStats?.isUsingGPU ?? false,
       gpuCullTimeMs: cullingStats?.lastCullTimeMs ?? 0,
+      quarantinedSlots: this.gpuUnitBuffer?.getQuarantinedCount() ?? 0,
     };
   }
 
@@ -993,6 +995,12 @@ export class UnitRenderer {
     const updateStart = performance.now();
     this.frameCount++;
 
+    // Process GPU buffer slot quarantine - reclaim slots that are safe to reuse
+    // This MUST happen at the start of the frame before any slot allocations
+    if (this.useGPUDrivenRendering && this.gpuUnitBuffer) {
+      this.gpuUnitBuffer.processQuarantinedSlots();
+    }
+
     // TAA: Sort entities by ID for stable instance ordering
     // This ensures previous/current matrix pairs are aligned correctly for velocity
     // PERF: Only re-sort when entity count changes (add/remove) to avoid O(n log n) every frame
@@ -1033,8 +1041,17 @@ export class UnitRenderer {
           `Units: ${stats.managedEntities}/${stats.visibleCount} managed/active, ` +
           `UnitTypes: ${stats.registeredUnitTypes}, ` +
           `Culling: ${cullingMode} (${stats.gpuCullTimeMs.toFixed(2)}ms), ` +
-          `Indirect: ${stats.indirectReady ? 'ON' : 'OFF'}`
+          `Indirect: ${stats.indirectReady ? 'ON' : 'OFF'}, ` +
+          `Quarantined: ${stats.quarantinedSlots}`
         );
+
+        // Validate mesh geometries periodically to detect any disposed buffers
+        if (this.gpuIndirectRenderer) {
+          const invalidCount = this.gpuIndirectRenderer.validateAllMeshes();
+          if (invalidCount > 0) {
+            debugPerformance.warn(`[GPU Rendering] Found ${invalidCount} invalid meshes - hiding to prevent crashes`);
+          }
+        }
       }
     }
 
