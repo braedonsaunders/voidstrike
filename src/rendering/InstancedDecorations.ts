@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { BiomeConfig } from './Biomes';
 import { MapData } from '@/data/maps';
 import AssetManager from '@/assets/AssetManager';
+import { DECORATIONS } from '@/data/rendering.config';
 
 // PERF: Reusable Euler object for instanced decoration loops (avoids thousands of allocations)
 const _tempEuler = new THREE.Euler();
@@ -17,9 +18,8 @@ let _cameraY = 0;
 let _cameraZ = 0;
 let _maxDistanceSq = 10000; // Squared distance for faster comparison
 
-// Distance culling multiplier - decorations beyond (camera height * multiplier) are culled
-// Lower = more aggressive culling = better performance, but decorations disappear sooner
-const DISTANCE_CULL_MULTIPLIER = 1.2;
+// Distance culling multiplier from config
+const DISTANCE_CULL_MULTIPLIER = DECORATIONS.DISTANCE_CULL_MULTIPLIER;
 
 /**
  * Update the shared frustum from camera matrices.
@@ -38,8 +38,7 @@ export function updateDecorationFrustum(camera: THREE.Camera): void {
 
   // Calculate max distance based on camera height
   // Higher camera = see more = larger distance threshold
-  // Using height * multiplier ensures close-up views still show decorations
-  const maxDist = Math.max(40, _cameraY * DISTANCE_CULL_MULTIPLIER);
+  const maxDist = Math.max(DECORATIONS.MIN_CULL_DISTANCE, _cameraY * DISTANCE_CULL_MULTIPLIER);
   _maxDistanceSq = maxDist * maxDist;
 }
 
@@ -68,8 +67,8 @@ function isInFrustum(x: number, y: number, z: number, margin: number = 2): boole
  */
 function buildRampClearanceSet(mapData: MapData): Set<string> {
   const clearance = new Set<string>();
-  const RAMP_CLEARANCE_RADIUS = 10;
-  const RAMP_EXIT_EXTENSION = 18; // Extra clearance in exit direction
+  const RAMP_CLEARANCE_RADIUS = DECORATIONS.RAMP_CLEARANCE_RADIUS;
+  const RAMP_EXIT_EXTENSION = DECORATIONS.RAMP_EXIT_EXTENSION;
 
   // First pass: circular clearance around all ramp cells
   for (let cy = 0; cy < mapData.height; cy++) {
@@ -318,8 +317,8 @@ export class InstancedTrees {
       borderTreesByModel.set(modelId, []);
     }
 
-    // Border zone is outer 15 cells of map
-    const BORDER_MARGIN = 15;
+    // Border zone
+    const BORDER_MARGIN = DECORATIONS.BORDER_MARGIN;
     const isInBorder = (x: number, y: number) =>
       x < BORDER_MARGIN || x > mapData.width - BORDER_MARGIN ||
       y < BORDER_MARGIN || y > mapData.height - BORDER_MARGIN;
@@ -360,7 +359,7 @@ export class InstancedTrees {
       if (!AssetManager.hasDecorationModel(modelId)) return false;
 
       const height = getHeightAt(x, y);
-      const scale = 0.8 + Math.random() * 0.5;
+      const scale = DECORATIONS.TREE_SCALE_MIN + Math.random() * DECORATIONS.TREE_SCALE_VARIATION;
       const rotation = Math.random() * Math.PI * 2;
 
       const treePos = { x, y, height, scale, rotation };
@@ -371,9 +370,8 @@ export class InstancedTrees {
         playableTreesByModel.get(modelId)!.push(treePos);
       }
 
-      // Store collision data for pathfinding - trees have a trunk collision radius
-      // Scale affects collision size: base radius of 0.8 units scaled by tree scale
-      const collisionRadius = scale * 0.8;
+      // Store collision data for pathfinding
+      const collisionRadius = scale * DECORATIONS.TREE_COLLISION_RADIUS;
       this.treeCollisions.push({ x, z: y, radius: collisionRadius });
 
       return true;
@@ -615,8 +613,8 @@ export class InstancedRocks {
       borderRocksByModel.set(modelId, []);
     }
 
-    // Border zone is outer 15 cells of map
-    const BORDER_MARGIN = 15;
+    // Border zone
+    const BORDER_MARGIN = DECORATIONS.BORDER_MARGIN;
     const isInBorder = (x: number, y: number) =>
       x < BORDER_MARGIN || x > mapData.width - BORDER_MARGIN ||
       y < BORDER_MARGIN || y > mapData.height - BORDER_MARGIN;

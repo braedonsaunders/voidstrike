@@ -10,6 +10,15 @@ import { Terrain } from './Terrain';
 import { getPlayerColor, getLocalPlayerId, isSpectatorMode } from '@/store/gameSetupStore';
 import { useUIStore } from '@/store/uiStore';
 import { debugMesh } from '@/utils/debugLogger';
+import {
+  BUILDING_RENDERER,
+  BUILDING_SELECTION_RING,
+  BUILDING_CONSTRUCTION,
+  BUILDING_FIRE,
+  BUILDING_PARTICLES,
+  BUILDING_SCAFFOLD,
+  RENDER_ORDER,
+} from '@/data/rendering.config';
 // NOTE: Buildings don't move, so we don't use velocity tracking (AAA optimization)
 // Velocity node returns zero for meshes without velocity attributes
 
@@ -62,8 +71,9 @@ interface InstancedBuildingGroup {
   modelQuaternion: THREE.Quaternion;
 }
 
-const MAX_BUILDING_INSTANCES_PER_TYPE = 50;
-const MAX_SELECTION_RING_INSTANCES = 100;
+// Constants from centralized config
+const MAX_BUILDING_INSTANCES_PER_TYPE = BUILDING_RENDERER.MAX_INSTANCES_PER_TYPE;
+const MAX_SELECTION_RING_INSTANCES = BUILDING_RENDERER.MAX_SELECTION_RING_INSTANCES;
 
 // PERF: Instanced selection ring group
 interface InstancedSelectionRingGroup {
@@ -145,7 +155,7 @@ export class BuildingRenderer {
   private blueprintPulseTime: number = 0;
 
   // Fallback elevation heights when terrain isn't available
-  private static readonly ELEVATION_HEIGHTS = [0, 1.8, 3.5];
+  private static readonly ELEVATION_HEIGHTS = BUILDING_RENDERER.ELEVATION_HEIGHTS;
 
   constructor(scene: THREE.Scene, world: World, visionSystem?: VisionSystem, terrain?: Terrain) {
     this.scene = scene;
@@ -154,57 +164,61 @@ export class BuildingRenderer {
     this.terrain = terrain ?? null;
 
     this.constructingMaterial = new THREE.MeshStandardMaterial({
-      color: 0x4a90d9,
-      roughness: 0.5,
-      metalness: 0.5,
+      color: BUILDING_CONSTRUCTION.COLOR,
+      roughness: BUILDING_CONSTRUCTION.ROUGHNESS,
+      metalness: BUILDING_CONSTRUCTION.METALNESS,
       transparent: true,
-      opacity: 0.5,
+      opacity: BUILDING_CONSTRUCTION.OPACITY,
     });
 
     this.selectionMaterial = new THREE.MeshBasicMaterial({
-      color: 0x00ff00,
+      color: BUILDING_SELECTION_RING.OWNED_COLOR,
       transparent: true,
-      opacity: 0.5,
+      opacity: BUILDING_SELECTION_RING.OPACITY,
       side: THREE.DoubleSide,
     });
 
     this.enemySelectionMaterial = new THREE.MeshBasicMaterial({
-      color: 0xff0000,
+      color: BUILDING_SELECTION_RING.ENEMY_COLOR,
       transparent: true,
-      opacity: 0.5,
+      opacity: BUILDING_SELECTION_RING.OPACITY,
       side: THREE.DoubleSide,
     });
 
     // Fire effect materials
     this.fireMaterial = new THREE.MeshBasicMaterial({
-      color: 0xff4400,
+      color: BUILDING_FIRE.COLOR,
       transparent: true,
-      opacity: 0.8,
+      opacity: BUILDING_FIRE.OPACITY,
     });
 
     this.smokeMaterial = new THREE.MeshBasicMaterial({
-      color: 0x333333,
+      color: BUILDING_FIRE.SMOKE_COLOR,
       transparent: true,
-      opacity: 0.5,
+      opacity: BUILDING_FIRE.SMOKE_OPACITY,
     });
 
-    this.fireGeometry = new THREE.ConeGeometry(0.3, 0.8, 8);
+    this.fireGeometry = new THREE.ConeGeometry(
+      BUILDING_FIRE.CONE_RADIUS,
+      BUILDING_FIRE.CONE_HEIGHT,
+      BUILDING_FIRE.CONE_SEGMENTS
+    );
 
-    // Construction dust particles - very large for visibility
+    // Construction dust particles
     this.constructionDustMaterial = new THREE.PointsMaterial({
-      color: 0xddcc99,
-      size: 8.0,
+      color: BUILDING_PARTICLES.DUST_COLOR,
+      size: BUILDING_PARTICLES.DUST_SIZE,
       transparent: true,
-      opacity: 0.7,
+      opacity: BUILDING_PARTICLES.DUST_OPACITY,
       blending: THREE.NormalBlending,
       sizeAttenuation: true,
       depthWrite: false,
     });
 
-    // Construction sparks (welding/building effect) - very large for visibility
+    // Construction sparks (welding/building effect)
     this.constructionSparkMaterial = new THREE.PointsMaterial({
-      color: 0xffdd55,
-      size: 5.0,
+      color: BUILDING_PARTICLES.SPARK_COLOR,
+      size: BUILDING_PARTICLES.SPARK_SIZE,
       transparent: true,
       opacity: 1.0,
       blending: THREE.AdditiveBlending,
@@ -213,8 +227,8 @@ export class BuildingRenderer {
 
     // Thruster effect materials (for flying buildings)
     this.thrusterCoreMaterial = new THREE.PointsMaterial({
-      color: 0x88ccff,
-      size: 0.4,
+      color: BUILDING_PARTICLES.THRUSTER_CORE_COLOR,
+      size: BUILDING_PARTICLES.THRUSTER_CORE_SIZE,
       transparent: true,
       opacity: 0.95,
       blending: THREE.AdditiveBlending,
@@ -222,8 +236,8 @@ export class BuildingRenderer {
     });
 
     this.thrusterGlowMaterial = new THREE.PointsMaterial({
-      color: 0x4488ff,
-      size: 0.6,
+      color: BUILDING_PARTICLES.THRUSTER_GLOW_COLOR,
+      size: BUILDING_PARTICLES.THRUSTER_GLOW_SIZE,
       transparent: true,
       opacity: 0.6,
       blending: THREE.AdditiveBlending,
@@ -232,15 +246,15 @@ export class BuildingRenderer {
 
     // Blueprint holographic effect materials
     this.blueprintLineMaterial = new THREE.LineBasicMaterial({
-      color: 0x00aaff,
+      color: BUILDING_PARTICLES.BLUEPRINT_LINE_COLOR,
       transparent: true,
       opacity: 0.8,
       linewidth: 1,
     });
 
     this.blueprintPulseMaterial = new THREE.PointsMaterial({
-      color: 0x00ddff,
-      size: 4.0,
+      color: BUILDING_PARTICLES.BLUEPRINT_PULSE_COLOR,
+      size: BUILDING_PARTICLES.BLUEPRINT_PULSE_SIZE,
       transparent: true,
       opacity: 0.9,
       blending: THREE.AdditiveBlending,
@@ -248,67 +262,73 @@ export class BuildingRenderer {
     });
 
     this.blueprintScanMaterial = new THREE.MeshBasicMaterial({
-      color: 0x00ccff,
+      color: BUILDING_PARTICLES.BLUEPRINT_SCAN_COLOR,
       transparent: true,
       opacity: 0.3,
       side: THREE.DoubleSide,
       depthWrite: false,
     });
 
-    // Ground dust effect material - very large particles for billowing dust clouds
+    // Ground dust effect material
     this.groundDustMaterial = new THREE.PointsMaterial({
-      color: 0xccbb99,
-      size: 12.0,
+      color: BUILDING_PARTICLES.GROUND_DUST_COLOR,
+      size: BUILDING_PARTICLES.GROUND_DUST_SIZE,
       transparent: true,
-      opacity: 0.6,
+      opacity: BUILDING_PARTICLES.GROUND_DUST_OPACITY,
       blending: THREE.NormalBlending,
       sizeAttenuation: true,
       depthWrite: false,
     });
 
-    // Metal debris particles - bright metallic particles
+    // Metal debris particles
     this.metalDebrisMaterial = new THREE.PointsMaterial({
-      color: 0xeeeeee,
-      size: 3.0,
+      color: BUILDING_PARTICLES.METAL_DEBRIS_COLOR,
+      size: BUILDING_PARTICLES.METAL_DEBRIS_SIZE,
       transparent: true,
       opacity: 1.0,
       blending: THREE.AdditiveBlending,
       sizeAttenuation: true,
     });
 
-    // Welding flash material - very bright white/yellow bursts
+    // Welding flash material
     this.weldingFlashMaterial = new THREE.PointsMaterial({
-      color: 0xffffcc,
-      size: 6.0,
+      color: BUILDING_PARTICLES.WELDING_FLASH_COLOR,
+      size: BUILDING_PARTICLES.WELDING_FLASH_SIZE,
       transparent: true,
       opacity: 1.0,
       blending: THREE.AdditiveBlending,
       sizeAttenuation: true,
     });
 
-    // Scaffold wireframe material - brighter for visibility
+    // Scaffold wireframe material
     this.scaffoldMaterial = new THREE.LineBasicMaterial({
-      color: 0xffaa44,
+      color: BUILDING_SCAFFOLD.WIREFRAME_COLOR,
       transparent: true,
-      opacity: 0.8,
+      opacity: BUILDING_SCAFFOLD.WIREFRAME_OPACITY,
       linewidth: 2,
     });
 
-    // PERF: Pre-create scaffold materials (shared across all scaffolds)
+    // Pre-create scaffold materials (shared across all scaffolds)
     this.scaffoldPoleMaterial = new THREE.MeshBasicMaterial({
-      color: 0xdd8833,
+      color: BUILDING_SCAFFOLD.POLE_COLOR,
       transparent: false,
     });
     this.scaffoldBeamMaterial = new THREE.MeshBasicMaterial({
-      color: 0xaa6622,
+      color: BUILDING_SCAFFOLD.BEAM_COLOR,
       transparent: false,
     });
 
-    // PERF: Pre-create scaffold geometries (shared and reused)
-    // Standard pole heights will be scaled per-instance
-    this.scaffoldPoleGeometry = new THREE.CylinderGeometry(0.08, 0.08, 1, 6);
-    this.scaffoldBeamGeometry = new THREE.CylinderGeometry(0.05, 0.05, 1, 6);
-    this.scaffoldDiagonalGeometry = new THREE.CylinderGeometry(0.035, 0.035, 1, 6);
+    // Pre-create scaffold geometries (shared and reused)
+    const scaffoldSegs = BUILDING_SCAFFOLD.SEGMENTS;
+    this.scaffoldPoleGeometry = new THREE.CylinderGeometry(
+      BUILDING_SCAFFOLD.POLE_RADIUS, BUILDING_SCAFFOLD.POLE_RADIUS, 1, scaffoldSegs
+    );
+    this.scaffoldBeamGeometry = new THREE.CylinderGeometry(
+      BUILDING_SCAFFOLD.BEAM_RADIUS, BUILDING_SCAFFOLD.BEAM_RADIUS, 1, scaffoldSegs
+    );
+    this.scaffoldDiagonalGeometry = new THREE.CylinderGeometry(
+      BUILDING_SCAFFOLD.DIAGONAL_RADIUS, BUILDING_SCAFFOLD.DIAGONAL_RADIUS, 1, scaffoldSegs
+    );
 
     // Register callback to refresh meshes when custom models finish loading
     AssetManager.onModelsLoaded(() => {
@@ -401,8 +421,8 @@ export class BuildingRenderer {
       instancedMesh.castShadow = true;
       instancedMesh.receiveShadow = true;
       instancedMesh.frustumCulled = false;
-      // Buildings render AFTER ground effects (5) but BEFORE damage numbers (100)
-      instancedMesh.renderOrder = 50;
+      // Buildings render AFTER ground effects but BEFORE damage numbers
+      instancedMesh.renderOrder = RENDER_ORDER.UNIT;
 
       this.scene.add(instancedMesh);
 
@@ -435,14 +455,18 @@ export class BuildingRenderer {
     if (!group) {
       // Create shared geometry if not exists
       if (!this.selectionRingGeometry) {
-        this.selectionRingGeometry = new THREE.RingGeometry(0.8, 1.0, 32);
+        this.selectionRingGeometry = new THREE.RingGeometry(
+          BUILDING_SELECTION_RING.INNER_RADIUS,
+          BUILDING_SELECTION_RING.OUTER_RADIUS,
+          BUILDING_SELECTION_RING.SEGMENTS
+        );
       }
       const material = isOwned ? this.selectionMaterial.clone() : this.enemySelectionMaterial.clone();
       const mesh = new THREE.InstancedMesh(this.selectionRingGeometry, material, MAX_SELECTION_RING_INSTANCES);
       mesh.count = 0;
       mesh.frustumCulled = false;
       mesh.rotation.x = -Math.PI / 2;
-      mesh.renderOrder = 5;
+      mesh.renderOrder = RENDER_ORDER.GROUND_EFFECT;
       this.scene.add(mesh);
 
       group = {
@@ -1182,13 +1206,12 @@ export class BuildingRenderer {
 
     // CRITICAL: Clone materials so each building has its own material instance
     // This prevents transparency changes on one building from affecting others
-    // Buildings render AFTER ground effects (5) but BEFORE damage numbers (100)
     // PERF: Also cache mesh children to avoid traverse() calls during construction
-    group.renderOrder = 50;
+    group.renderOrder = RENDER_ORDER.UNIT;
     const cachedMeshChildren: THREE.Mesh[] = [];
     group.traverse((child) => {
       if (child instanceof THREE.Mesh) {
-        child.renderOrder = 50;
+        child.renderOrder = RENDER_ORDER.UNIT;
         if (child.material) {
           if (Array.isArray(child.material)) {
             child.material = child.material.map(mat => mat.clone());

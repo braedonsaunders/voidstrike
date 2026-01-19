@@ -1,4 +1,8 @@
 import * as THREE from 'three';
+import {
+  CAMERA,
+  DEFAULT_CAMERA_CONFIG,
+} from '@/data/rendering.config';
 
 export interface CameraConfig {
   minZoom: number;
@@ -11,16 +15,7 @@ export interface CameraConfig {
   boundaryPadding: number;
 }
 
-const DEFAULT_CONFIG: CameraConfig = {
-  minZoom: 14,
-  maxZoom: 80,
-  panSpeed: 80,
-  zoomSpeed: 5,
-  rotationSpeed: 2,
-  edgeScrollSpeed: 60,
-  edgeScrollThreshold: 50,
-  boundaryPadding: 10,
-};
+const DEFAULT_CONFIG: CameraConfig = DEFAULT_CAMERA_CONFIG;
 
 export class RTSCamera {
   public camera: THREE.PerspectiveCamera;
@@ -86,11 +81,11 @@ export class RTSCamera {
     this.mapWidth = mapWidth;
     this.mapHeight = mapHeight;
 
-    this.camera = new THREE.PerspectiveCamera(60, aspect, 0.1, 300); // Near=0.1 for close zoom without clipping
+    this.camera = new THREE.PerspectiveCamera(CAMERA.FOV, aspect, CAMERA.NEAR_PLANE, CAMERA.FAR_PLANE);
     this.target = new THREE.Vector3(mapWidth / 2, 0, mapHeight / 2);
 
-    this.currentZoom = 45; // SC2-like default: good overview of starting base
-    this.targetZoom = 45; // Initialize target zoom same as current
+    this.currentZoom = CAMERA.INITIAL_ZOOM;
+    this.targetZoom = CAMERA.INITIAL_ZOOM;
     this.currentAngle = 0;
     this.manualPitchOffset = 0; // User can adjust pitch via middle mouse drag
     this.currentPitch = this.calculateZoomBasedPitch(this.currentZoom);
@@ -118,15 +113,15 @@ export class RTSCamera {
     // Normalize zoom to 0-1 range (0 = zoomed in, 1 = zoomed out)
     const t = (zoom - minZoom) / (maxZoom - minZoom);
 
-    // Pitch range: 0.2 (nearly horizontal) to PI/2.5 (~72 degrees, more top-down)
-    const minPitch = 0.2; // Zoomed in: looking at sides of buildings
-    const maxPitch = Math.PI / 2.5; // Zoomed out: more overhead view
+    // Pitch range: MIN_PITCH (nearly horizontal) to MAX_PITCH (~72 degrees, more top-down)
+    const minPitch = CAMERA.MIN_PITCH;
+    const maxPitch = CAMERA.MAX_PITCH;
 
     // Interpolate and add manual offset
     const basePitch = minPitch + t * (maxPitch - minPitch);
 
     // Clamp final pitch to valid range
-    return Math.max(0.15, Math.min(Math.PI / 2 - 0.1, basePitch + this.manualPitchOffset));
+    return Math.max(CAMERA.PITCH_CLAMP_MIN, Math.min(CAMERA.PITCH_CLAMP_MAX, basePitch + this.manualPitchOffset));
   }
 
   private setupEventListeners(): void {
@@ -181,7 +176,7 @@ export class RTSCamera {
       // Adjust manual pitch offset (vertical rotation)
       // Clamp offset so total pitch stays within valid range
       const newOffset = this.manualPitchOffset + deltaY * 0.01;
-      this.manualPitchOffset = Math.max(-0.5, Math.min(0.5, newOffset));
+      this.manualPitchOffset = Math.max(CAMERA.MANUAL_PITCH_OFFSET_MIN, Math.min(CAMERA.MANUAL_PITCH_OFFSET_MAX, newOffset));
 
       // Recalculate pitch with new offset
       this.currentPitch = this.calculateZoomBasedPitch(this.currentZoom);
@@ -225,7 +220,7 @@ export class RTSCamera {
     const effectiveMinZoom = Math.max(this.config.minZoom, this.terrainMinZoom);
 
     // Set target zoom - actual zoom will smoothly interpolate in update()
-    const zoomDelta = e.deltaY * 0.08;
+    const zoomDelta = e.deltaY * CAMERA.WHEEL_ZOOM_MULTIPLIER;
     const newTargetZoom = Math.max(
       effectiveMinZoom,
       Math.min(this.config.maxZoom, this.targetZoom + zoomDelta)
@@ -264,7 +259,7 @@ export class RTSCamera {
       const y = mid * sinPitch;
       const terrainHeight = this.getTerrainHeight(x, z);
 
-      if (y < terrainHeight + 2) {
+      if (y < terrainHeight + CAMERA.MIN_TERRAIN_CLEARANCE) {
         low = mid; // Need more zoom (camera higher)
       } else {
         high = mid; // Can zoom in more
@@ -323,8 +318,8 @@ export class RTSCamera {
     // Smooth zoom interpolation
     const zoomDiff = this.targetZoom - this.currentZoom;
     if (Math.abs(zoomDiff) > 0.01) {
-      // Lerp towards target zoom (8 is the smoothing factor - higher = faster)
-      this.currentZoom += zoomDiff * Math.min(1, dt * 8);
+      // Lerp towards target zoom
+      this.currentZoom += zoomDiff * Math.min(1, dt * CAMERA.ZOOM_LERP_FACTOR);
       // Update pitch based on new zoom level
       this.currentPitch = this.calculateZoomBasedPitch(this.currentZoom);
       this.updateCameraPosition();
@@ -348,9 +343,8 @@ export class RTSCamera {
       this.target.z += rotatedZ;
 
       // Clamp to map boundaries - allow panning close to edges
-      // Use smaller factors to allow panning closer to map edges
-      const viewHalfWidth = this.currentZoom * 0.3;
-      const viewHalfHeight = this.currentZoom * 0.3;
+      const viewHalfWidth = this.currentZoom * CAMERA.VIEW_HALF_SIZE_FACTOR;
+      const viewHalfHeight = this.currentZoom * CAMERA.VIEW_HALF_SIZE_FACTOR;
       this.target.x = Math.max(viewHalfWidth, Math.min(this.mapWidth - viewHalfWidth, this.target.x));
       this.target.z = Math.max(viewHalfHeight, Math.min(this.mapHeight - viewHalfHeight, this.target.z));
 
@@ -377,7 +371,7 @@ export class RTSCamera {
     // Ensure camera stays above terrain at its position
     if (this.getTerrainHeight) {
       const terrainHeight = this.getTerrainHeight(x, z);
-      const minCameraHeight = terrainHeight + 2; // Minimum 2 units above terrain
+      const minCameraHeight = terrainHeight + CAMERA.MIN_TERRAIN_CLEARANCE;
       if (y < minCameraHeight) {
         y = minCameraHeight;
       }
@@ -388,9 +382,9 @@ export class RTSCamera {
   }
 
   public setPosition(x: number, z: number): void {
-    // Calculate viewport half-sizes - use smaller factors to allow panning close to map edges
-    const viewHalfWidth = this.currentZoom * 0.3;
-    const viewHalfHeight = this.currentZoom * 0.3;
+    // Calculate viewport half-sizes
+    const viewHalfWidth = this.currentZoom * CAMERA.VIEW_HALF_SIZE_FACTOR;
+    const viewHalfHeight = this.currentZoom * CAMERA.VIEW_HALF_SIZE_FACTOR;
 
     // Clamp position while allowing camera to get close to edges
     this.target.x = Math.max(viewHalfWidth, Math.min(this.mapWidth - viewHalfWidth, x));
@@ -481,8 +475,8 @@ export class RTSCamera {
     // If we have terrain height function, iterate to find accurate intersection
     // Use iterative refinement with early termination for efficiency
     if (this.getTerrainHeight && this._raycastTarget) {
-      const CONVERGENCE_THRESHOLD = 0.01; // Stop when position change is < this
-      const MAX_ITERATIONS = 6; // More iterations for better accuracy
+      const CONVERGENCE_THRESHOLD = CAMERA.RAYCAST_CONVERGENCE_THRESHOLD;
+      const MAX_ITERATIONS = CAMERA.RAYCAST_MAX_ITERATIONS;
 
       let prevX = this._raycastTarget.x;
       let prevZ = this._raycastTarget.z;
