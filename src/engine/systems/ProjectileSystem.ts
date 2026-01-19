@@ -7,7 +7,7 @@ import { Unit, DamageType } from '../components/Unit';
 import { Selectable } from '../components/Selectable';
 import { Building } from '../components/Building';
 import { Projectile, ProjectileDefinition, ProjectileBehavior } from '../components/Projectile';
-import { quantize, QUANT_POSITION, QUANT_DAMAGE } from '@/utils/FixedPoint';
+import { quantize, snapValue, QUANT_POSITION, QUANT_DAMAGE } from '@/utils/FixedPoint';
 import { getDamageMultiplier } from '@/data/combat/combat';
 import { debugCombat as debugProjectile } from '@/utils/debugLogger';
 import { isLocalPlayer } from '@/store/gameSetupStore';
@@ -146,18 +146,18 @@ export class ProjectileSystem extends System {
 
     // If we'd overshoot, move directly to target
     if (moveDistance >= distance3D) {
-      transform.x = quantize(projectile.targetX, QUANT_POSITION);
-      transform.y = quantize(projectile.targetY, QUANT_POSITION);
-      transform.z = quantize(projectile.targetZ, QUANT_POSITION);
+      transform.x = snapValue(projectile.targetX);
+      transform.y = snapValue(projectile.targetY);
+      transform.z = snapValue(projectile.targetZ);
     } else {
       // Normalize and move in 3D
       const dirX = dx / distance3D;
       const dirY = dy / distance3D;
       const dirZ = dz / distance3D;
 
-      transform.x = quantize(transform.x + dirX * moveDistance, QUANT_POSITION);
-      transform.y = quantize(transform.y + dirY * moveDistance, QUANT_POSITION);
-      transform.z = quantize(transform.z + dirZ * moveDistance, QUANT_POSITION);
+      transform.x = snapValue(transform.x + dirX * moveDistance);
+      transform.y = snapValue(transform.y + dirY * moveDistance);
+      transform.z = snapValue(transform.z + dirZ * moveDistance);
     }
 
     // Update rotation to face movement direction (XY plane)
@@ -185,8 +185,8 @@ export class ProjectileSystem extends System {
     const progress = Math.min(1, (age + 1) / Math.max(1, travelTicks)); // Progress after this tick, clamped
 
     // Linear interpolation for X/Y (horizontal movement)
-    transform.x = quantize(transform.x + projectile.velocityX, QUANT_POSITION);
-    transform.y = quantize(transform.y + projectile.velocityY, QUANT_POSITION);
+    transform.x = snapValue(transform.x + projectile.velocityX);
+    transform.y = snapValue(transform.y + projectile.velocityY);
 
     // Z = linear interpolation from startZ to targetZ, plus parabolic arc
     // Linear component: lerp(startZ, targetZ, progress)
@@ -196,7 +196,7 @@ export class ProjectileSystem extends System {
     // arc = arcHeight * 4 * progress * (1 - progress)
     const arcZ = projectile.arcHeight * 4 * progress * (1 - progress);
 
-    transform.z = quantize(baseZ + arcZ, QUANT_POSITION);
+    transform.z = snapValue(baseZ + arcZ);
 
     // Rotation follows movement direction
     transform.rotation = Math.atan2(projectile.velocityY, projectile.velocityX);
@@ -207,9 +207,9 @@ export class ProjectileSystem extends System {
    */
   private updateLinearProjectile(projectile: Projectile, transform: Transform): void {
     // velocityX/Y/Z were pre-calculated at spawn
-    transform.x = quantize(transform.x + projectile.velocityX, QUANT_POSITION);
-    transform.y = quantize(transform.y + projectile.velocityY, QUANT_POSITION);
-    transform.z = quantize(transform.z + projectile.velocityZ, QUANT_POSITION);
+    transform.x = snapValue(transform.x + projectile.velocityX);
+    transform.y = snapValue(transform.y + projectile.velocityY);
+    transform.z = snapValue(transform.z + projectile.velocityZ);
   }
 
   /**
@@ -597,9 +597,9 @@ export class ProjectileSystem extends System {
     const entity = this.world.createEntity();
 
     const transform = new Transform(
-      quantize(data.startX, QUANT_POSITION),
-      quantize(data.startY, QUANT_POSITION),
-      quantize(data.startZ, QUANT_POSITION)
+      snapValue(data.startX),
+      snapValue(data.startY),
+      snapValue(data.startZ)
     );
     transform.rotation = Math.atan2(dy, dx);
     entity.add(transform);
@@ -611,10 +611,10 @@ export class ProjectileSystem extends System {
       sourceFaction: data.sourceFaction,
       behavior: def.behavior,
       targetEntityId: data.targetEntityId,
-      targetX: quantize(data.targetX, QUANT_POSITION),
-      targetY: quantize(data.targetY, QUANT_POSITION),
-      targetZ: quantize(data.targetZ, QUANT_POSITION),
-      startZ: quantize(data.startZ, QUANT_POSITION),
+      targetX: snapValue(data.targetX),
+      targetY: snapValue(data.targetY),
+      targetZ: snapValue(data.targetZ),
+      startZ: snapValue(data.startZ),
       speed: def.speed,
       turnRate: def.turnRate,
       arcHeight: def.arcHeight,
