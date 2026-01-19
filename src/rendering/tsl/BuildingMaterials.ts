@@ -84,9 +84,12 @@ export function createConstructingMaterial(
 // ============================================
 
 /**
- * Create material for owned building selection rings
+ * Create material for building selection rings (non-animated)
+ *
+ * Note: This is distinct from SelectionMaterial.ts's createSelectionRingMaterial
+ * which creates animated TSL materials for unit selection.
  */
-export function createSelectionRingMaterial(
+export function createBuildingSelectionMaterial(
   config: SelectionRingMaterialConfig
 ): THREE.MeshBasicMaterial {
   return new THREE.MeshBasicMaterial({
@@ -101,7 +104,7 @@ export function createSelectionRingMaterial(
  * Create material for owned building selection (green)
  */
 export function createOwnedSelectionMaterial(): THREE.MeshBasicMaterial {
-  return createSelectionRingMaterial({
+  return createBuildingSelectionMaterial({
     color: BUILDING_SELECTION_RING.OWNED_COLOR,
   });
 }
@@ -110,7 +113,7 @@ export function createOwnedSelectionMaterial(): THREE.MeshBasicMaterial {
  * Create material for enemy building selection (red)
  */
 export function createEnemySelectionMaterial(): THREE.MeshBasicMaterial {
-  return createSelectionRingMaterial({
+  return createBuildingSelectionMaterial({
     color: BUILDING_SELECTION_RING.ENEMY_COLOR,
   });
 }

@@ -1,8 +1,8 @@
 /**
  * TemporalUtils - Shared utilities for temporal reprojection effects
  *
- * This module provides reusable TSL shader building blocks for temporal
- * effects like TAO (Temporal AO) and TSSR (Temporal SSR).
+ * Provides reusable TSL shader building blocks for temporal effects
+ * like Temporal AO and Temporal SSR.
  *
  * Core utilities:
  * - Velocity reprojection: Calculate previous frame UV from velocity
@@ -11,34 +11,14 @@
  * - Temporal blending: Combine current and history frames
  */
 
-import * as THREE from 'three';
 import {
-  Fn,
   vec2,
-  vec4,
   float,
-  texture,
-  uv,
-  uniform,
   mix,
   min,
   max,
   clamp,
 } from 'three/tsl';
-
-// ============================================
-// TYPE DEFINITIONS
-// ============================================
-
-export interface TemporalBlendConfig {
-  /** History blend factor (0.0-1.0), higher = more history. Default: 0.9 */
-  blendFactor: number;
-}
-
-export interface NeighborhoodClampConfig {
-  /** Resolution uniform for texel size calculation */
-  resolutionUniform: ReturnType<typeof uniform>;
-}
 
 // ============================================
 // UV REPROJECTION
@@ -148,116 +128,6 @@ export function temporalBlend(
 ): any {
   const effectiveBlend = inBounds.select(blendFactor, float(0.0));
   return mix(currentValue, historyValue, effectiveBlend);
-}
-
-// ============================================
-// HIGH-LEVEL TEMPORAL BLEND NODES
-// ============================================
-
-/**
- * Create a simple temporal blend node (no neighborhood clamping)
- *
- * Suitable for effects like AO where ghosting is less visible.
- *
- * @param currentTexture Current frame texture
- * @param historyTexture History buffer texture
- * @param velocityNode Velocity texture node
- * @param blendUniform Blend factor uniform
- * @returns TSL node for temporal blending
- */
-export function createSimpleTemporalBlendNode(
-  currentTexture: THREE.Texture,
-  historyTexture: THREE.Texture,
-  velocityNode: any,
-  blendUniform: ReturnType<typeof uniform>
-): any {
-  const currentNode = texture(currentTexture);
-  const historyNode = texture(historyTexture);
-
-  return Fn(() => {
-    const fragUV = uv();
-    const prevUV = calculateReprojectedUV(velocityNode, fragUV);
-
-    const current = currentNode.sample(fragUV);
-    const history = historyNode.sample(prevUV);
-    const inBounds = isUVInBounds(prevUV);
-
-    return temporalBlend(current, history, blendUniform, inBounds);
-  })();
-}
-
-/**
- * Create a temporal blend node with neighborhood clamping
- *
- * Suitable for effects like SSR where ghosting is more noticeable.
- *
- * @param currentTexture Current frame texture
- * @param historyTexture History buffer texture
- * @param velocityNode Velocity texture node
- * @param resolutionUniform Resolution for texel size calculation
- * @param blendUniform Blend factor uniform
- * @returns TSL node for temporal blending with clamping
- */
-export function createClampedTemporalBlendNode(
-  currentTexture: THREE.Texture,
-  historyTexture: THREE.Texture,
-  velocityNode: any,
-  resolutionUniform: ReturnType<typeof uniform>,
-  blendUniform: ReturnType<typeof uniform>
-): any {
-  const currentNode = texture(currentTexture);
-  const historyNode = texture(historyTexture);
-
-  return Fn(() => {
-    const fragUV = uv();
-    const prevUV = calculateReprojectedUV(velocityNode, fragUV);
-    const texelSize = vec2(1.0).div(resolutionUniform);
-
-    // Sample current with neighborhood bounds
-    const { minColor, maxColor, centerSample } = sampleNeighborhoodBounds(
-      currentNode,
-      fragUV,
-      texelSize
-    );
-
-    // Sample and clamp history
-    const history = historyNode.sample(prevUV);
-    const clampedHistory = applyNeighborhoodClamp(history, minColor, maxColor);
-
-    const inBounds = isUVInBounds(prevUV);
-
-    return temporalBlend(centerSample, clampedHistory, blendUniform, inBounds);
-  })();
-}
-
-/**
- * Create a temporal blend node for single-channel data (e.g., AO)
- *
- * @param currentTexture Current frame texture (single channel)
- * @param historyTexture History buffer texture
- * @param velocityNode Velocity texture node
- * @param blendUniform Blend factor uniform
- * @returns TSL node outputting single channel
- */
-export function createSingleChannelTemporalBlendNode(
-  currentTexture: THREE.Texture,
-  historyTexture: THREE.Texture,
-  velocityNode: any,
-  blendUniform: ReturnType<typeof uniform>
-): any {
-  const currentNode = texture(currentTexture);
-  const historyNode = texture(historyTexture);
-
-  return Fn(() => {
-    const fragUV = uv();
-    const prevUV = calculateReprojectedUV(velocityNode, fragUV);
-
-    const current = currentNode.sample(fragUV).r;
-    const history = historyNode.sample(prevUV).r;
-    const inBounds = isUVInBounds(prevUV);
-
-    return temporalBlend(current, history, blendUniform, inBounds);
-  })();
 }
 
 // ============================================
