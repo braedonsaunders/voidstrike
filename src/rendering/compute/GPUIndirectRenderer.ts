@@ -18,13 +18,8 @@
 
 import * as THREE from 'three';
 import { WebGPURenderer } from 'three/webgpu';
-import { storage } from 'three/tsl';
 
-import {
-  StorageInstancedBufferAttribute,
-  IndirectStorageBufferAttribute,
-  MeshStandardNodeMaterial,
-} from 'three/webgpu';
+import { IndirectStorageBufferAttribute } from 'three/webgpu';
 
 import { GPUUnitBuffer } from './GPUUnitBuffer';
 import { CullingCompute } from './CullingCompute';
@@ -229,29 +224,26 @@ export class GPUIndirectRenderer {
   /**
    * Create material for instanced rendering
    *
-   * Uses MeshStandardNodeMaterial which is compatible with WebGPU instancing.
-   * InstancedMesh handles instance transforms via the built-in instanceMatrix attribute.
+   * Uses standard MeshStandardMaterial (not NodeMaterial) for InstancedMesh
+   * compatibility with WebGPU. NodeMaterial has known issues with multiple
+   * InstancedMesh objects (see Three.js issue #31776).
    */
   private createInstancedMaterial(baseMaterial?: THREE.Material): THREE.Material {
-    const material = new MeshStandardNodeMaterial();
+    // Use regular MeshStandardMaterial for better InstancedMesh compatibility
+    const material = new THREE.MeshStandardMaterial();
 
     // Copy properties from base material if provided
     if (baseMaterial && baseMaterial instanceof THREE.MeshStandardMaterial) {
-      material.color = baseMaterial.color;
+      material.color.copy(baseMaterial.color);
       material.metalness = baseMaterial.metalness;
       material.roughness = baseMaterial.roughness;
       material.map = baseMaterial.map;
       material.normalMap = baseMaterial.normalMap;
     } else {
-      material.color = new THREE.Color(0x888888);
+      material.color.setHex(0x888888);
       material.metalness = 0.1;
       material.roughness = 0.8;
     }
-
-    // MeshStandardNodeMaterial + InstancedMesh automatically handles:
-    // - instanceMatrix attribute for per-instance transforms
-    // - instanceIndex for accessing instance data
-    // No custom positionNode needed - Three.js handles instancing
 
     return material;
   }
