@@ -170,7 +170,7 @@ export class InfluenceMap {
         influence = this.config.supplyInfluence * this.config.buildingMultiplier;
 
         // Defensive structures have more influence
-        if (building.canAttack()) {
+        if (building.attackDamage > 0) {
           influence *= this.config.defenseMultiplier;
         }
       }
