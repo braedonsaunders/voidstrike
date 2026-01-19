@@ -559,6 +559,15 @@ export function WebGPUGameCanvas() {
       // Connect particle system to battle effects for volumetric explosions
       battleEffectsRef.current.setParticleSystem(advancedParticlesRef.current);
 
+      // Connect projectile position callback to sync visuals with ECS entities
+      battleEffectsRef.current.setProjectilePositionCallback((entityId: number) => {
+        const entity = game.world.getEntity(entityId);
+        if (!entity || entity.isDestroyed()) return null;
+        const transform = entity.get<Transform>('Transform');
+        if (!transform) return null;
+        return { x: transform.x, y: transform.y, z: transform.z };
+      });
+
       // Vehicle effects system for continuous engine trails, exhaust, dust
       vehicleEffectsRef.current = new VehicleEffectsSystem(game, advancedParticlesRef.current, AssetManager);
       vehicleEffectsRef.current.setTerrainHeightFunction((x, z) => terrain.getHeightAt(x, z));

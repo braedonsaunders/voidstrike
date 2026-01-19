@@ -64,6 +64,33 @@ export class Health extends Component {
     return reducedDamage;
   }
 
+  /**
+   * Apply damage directly without armor reduction.
+   * Used when damage has already been calculated with armor factored in (e.g., projectile impacts).
+   */
+  public applyDamageRaw(amount: number, gameTime: number): number {
+    this.lastDamageTime = gameTime;
+
+    const damage = Math.max(1, amount);
+
+    // Damage shield first
+    if (this.shield > 0) {
+      if (this.shield >= damage) {
+        this.shield -= damage;
+        return damage;
+      } else {
+        const overflow = damage - this.shield;
+        this.shield = 0;
+        this.current -= overflow;
+      }
+    } else {
+      this.current -= damage;
+    }
+
+    this.current = Math.max(0, this.current);
+    return damage;
+  }
+
   public heal(amount: number): number {
     const actualHeal = Math.min(amount, this.max - this.current);
     this.current += actualHeal;
