@@ -93,6 +93,10 @@ export class CullingCompute {
   private gpuComputeAvailable = false;
   private useCPUFallback = true;
 
+  // Track last culling stats for debugging
+  private lastGPUCullTime = 0;
+  private gpuCullFrameCount = 0;
+
   // Uniforms for GPU compute
   private uCameraPosition = uniform(new THREE.Vector3());
   private uLOD0MaxSq = uniform(0);
@@ -193,11 +197,20 @@ export class CullingCompute {
       this.gpuComputeAvailable = true;
       this.useCPUFallback = false; // GPU path with atomics enabled
 
-      debugShaders.log(`[CullingCompute] GPU compute initialized (${MAX_GPU_UNITS} units, ${indirectEntryCount} indirect entries)`);
+      debugShaders.log(`[CullingCompute] GPU compute initialized successfully:`);
+      debugShaders.log(`  - Max units: ${MAX_GPU_UNITS}`);
+      debugShaders.log(`  - Indirect entries: ${indirectEntryCount}`);
+      debugShaders.log(`  - GPU culling: ENABLED`);
+      debugShaders.log(`  - CPU fallback: DISABLED`);
+
+      // Force console output for visibility during initialization
+      console.log('[GPU Culling] ✓ INITIALIZED - GPU compute shaders active');
     } catch (e) {
-      debugShaders.warn('[CullingCompute] GPU compute init failed, using CPU fallback:', e);
+      const errorMsg = e instanceof Error ? e.message : String(e);
+      debugShaders.warn('[CullingCompute] GPU compute init failed:', errorMsg);
       this.gpuComputeAvailable = false;
       this.useCPUFallback = true;
+      console.warn('[GPU Culling] ✗ INIT FAILED - falling back to CPU:', errorMsg);
     }
   }
 
@@ -412,6 +425,8 @@ export class CullingCompute {
       return;
     }
 
+    const cullStart = performance.now();
+
     // Update frustum
     this.updateFrustum(camera);
 
@@ -425,10 +440,32 @@ export class CullingCompute {
     try {
       // Execute compute shader with atomic operations
       this.renderer.compute(this.cullingComputeNode);
+
+      this.lastGPUCullTime = performance.now() - cullStart;
+      this.gpuCullFrameCount++;
     } catch (e) {
-      debugShaders.warn('[CullingCompute] GPU culling failed:', e);
+      const errorMsg = e instanceof Error ? e.message : String(e);
+      debugShaders.warn('[CullingCompute] GPU culling failed:', errorMsg);
       this.useCPUFallback = true;
+      console.warn('[GPU Culling] Execution failed, switching to CPU fallback:', errorMsg);
     }
+  }
+
+  /**
+   * Get GPU culling performance stats
+   */
+  getGPUCullingStats(): {
+    isUsingGPU: boolean;
+    lastCullTimeMs: number;
+    totalFramesCulled: number;
+    activeUnitCount: number;
+  } {
+    return {
+      isUsingGPU: this.gpuComputeAvailable && !this.useCPUFallback,
+      lastCullTimeMs: this.lastGPUCullTime,
+      totalFramesCulled: this.gpuCullFrameCount,
+      activeUnitCount: this.uUnitCount.value,
+    };
   }
 
   /**

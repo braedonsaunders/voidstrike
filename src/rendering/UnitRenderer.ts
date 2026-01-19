@@ -292,6 +292,7 @@ export class UnitRenderer {
     }
 
     debugMesh.log('[UnitRenderer] GPU-driven rendering enabled');
+    console.log('[UnitRenderer] GPU-driven rendering mode: ENABLED');
   }
 
   /**
@@ -310,7 +311,9 @@ export class UnitRenderer {
       this.gpuCullingInitialized = true;
       debugMesh.log('[UnitRenderer] GPU culling compute initialized');
     } catch (e) {
-      debugMesh.warn('[UnitRenderer] Failed to initialize GPU culling:', e);
+      const errorMsg = e instanceof Error ? e.message : String(e);
+      debugMesh.warn('[UnitRenderer] Failed to initialize GPU culling:', errorMsg);
+      console.warn('[UnitRenderer] GPU culling init failed:', errorMsg);
     }
   }
 
@@ -333,8 +336,11 @@ export class UnitRenderer {
       debugPerformance.log('  - GPU Unit Buffer: INITIALIZED');
       debugPerformance.log('  - GPU Culling Compute: ' + (this.gpuCullingInitialized ? 'READY' : 'PENDING'));
       debugPerformance.log('  - GPU Indirect Draw: ENABLED');
+      console.log('[GPU Indirect Renderer] ✓ INITIALIZED - indirect draw calls enabled');
     } catch (e) {
-      debugMesh.warn('[UnitRenderer] Failed to initialize GPU indirect renderer:', e);
+      const errorMsg = e instanceof Error ? e.message : String(e);
+      debugMesh.warn('[UnitRenderer] Failed to initialize GPU indirect renderer:', errorMsg);
+      console.warn('[GPU Indirect Renderer] ✗ INIT FAILED:', errorMsg);
     }
   }
 
@@ -352,6 +358,31 @@ export class UnitRenderer {
     this.gpuRegisteredUnitTypes.add(key);
 
     debugPerformance.log(`[UnitRenderer] Registered unit type ${unitType} LOD${lodLevel} for GPU indirect rendering`);
+  }
+
+  /**
+   * Force CPU fallback mode for debugging
+   * Call from browser console: unitRenderer.forceCPUCulling(true)
+   */
+  public forceCPUCulling(enable: boolean): void {
+    if (!this.cullingCompute) {
+      console.warn('[UnitRenderer] GPU culling not initialized, cannot toggle');
+      return;
+    }
+
+    this.cullingCompute.forceCPUFallback(enable);
+    if (enable) {
+      console.log('[UnitRenderer] ✗ GPU culling DISABLED - using CPU fallback for debugging');
+    } else {
+      console.log('[UnitRenderer] ✓ GPU culling ENABLED');
+    }
+  }
+
+  /**
+   * Check if GPU culling is currently active
+   */
+  public isGPUCullingActive(): boolean {
+    return this.cullingCompute?.isUsingGPU() ?? false;
   }
 
   /**
@@ -403,15 +434,20 @@ export class UnitRenderer {
     registeredUnitTypes: number;
     visibleCount: number;
     totalIndirectDrawCalls: number;
+    isUsingGPUCulling: boolean;
+    gpuCullTimeMs: number;
   } {
+    const cullingStats = this.cullingCompute?.getGPUCullingStats();
     return {
       enabled: this.useGPUDrivenRendering,
       cullingReady: this.gpuCullingInitialized,
       indirectReady: this.gpuIndirectInitialized,
       managedEntities: this.gpuManagedEntities.size,
       registeredUnitTypes: this.gpuRegisteredUnitTypes.size,
-      visibleCount: this.cullingCompute?.getVisibleCount() ?? 0,
+      visibleCount: cullingStats?.activeUnitCount ?? 0,
       totalIndirectDrawCalls: this.gpuIndirectRenderer?.getTotalVisibleCount() ?? 0,
+      isUsingGPUCulling: cullingStats?.isUsingGPU ?? false,
+      gpuCullTimeMs: cullingStats?.lastCullTimeMs ?? 0,
     };
   }
 
@@ -992,10 +1028,13 @@ export class UnitRenderer {
       // Log GPU indirect rendering status periodically (every 300 frames ~5 seconds)
       if (this.frameCount % 300 === 1) {
         const stats = this.getGPURenderingStats();
+        const cullingMode = stats.isUsingGPUCulling ? 'GPU' : 'CPU';
         debugPerformance.log(
-          `[GPU Indirect Rendering] ACTIVE - Managed: ${stats.managedEntities}, ` +
-          `Visible: ${stats.visibleCount}, UnitTypes: ${stats.registeredUnitTypes}, ` +
-          `Culling: ${stats.cullingReady ? 'GPU' : 'CPU'}, Indirect: ${stats.indirectReady ? 'ON' : 'OFF'}`
+          `[GPU Rendering] ${stats.isUsingGPUCulling ? '✓ ACTIVE' : '✗ FALLBACK'} - ` +
+          `Units: ${stats.managedEntities}/${stats.visibleCount} managed/active, ` +
+          `UnitTypes: ${stats.registeredUnitTypes}, ` +
+          `Culling: ${cullingMode} (${stats.gpuCullTimeMs.toFixed(2)}ms), ` +
+          `Indirect: ${stats.indirectReady ? 'ON' : 'OFF'}`
         );
       }
     }

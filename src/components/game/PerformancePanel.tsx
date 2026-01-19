@@ -172,6 +172,33 @@ export const PerformancePanel = memo(function PerformancePanel() {
             </div>
           )}
         </div>
+        {/* GPU Indirect Rendering Status */}
+        <div style={{ borderTop: '1px solid #333', marginTop: '6px', paddingTop: '6px' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '11px', padding: '3px 0' }}>
+            <span style={{ color: '#888' }}>GPU Culling</span>
+            <span style={{
+              fontFamily: 'monospace',
+              color: performanceMetrics.gpuCullingActive ? '#22c55e' : '#888',
+            }}>
+              {performanceMetrics.gpuCullingActive ? 'ON' : 'OFF'}
+            </span>
+          </div>
+          <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '11px', padding: '3px 0' }}>
+            <span style={{ color: '#888' }}>GPU Indirect</span>
+            <span style={{
+              fontFamily: 'monospace',
+              color: performanceMetrics.gpuIndirectActive ? '#22c55e' : '#888',
+            }}>
+              {performanceMetrics.gpuIndirectActive ? 'ON' : 'OFF'}
+            </span>
+          </div>
+          <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '11px', padding: '3px 0' }}>
+            <span style={{ color: '#888' }}>GPU Units</span>
+            <span style={{ fontFamily: 'monospace', color: '#a3a3a3' }}>
+              {performanceMetrics.gpuManagedUnits}
+            </span>
+          </div>
+        </div>
       </div>
 
       {/* Performance Dashboard */}
