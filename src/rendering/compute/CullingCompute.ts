@@ -33,10 +33,7 @@ import {
   atomicStore,
 } from 'three/tsl';
 
-import {
-  StorageInstancedBufferAttribute,
-  StorageBufferAttribute,
-} from 'three/webgpu';
+import { StorageInstancedBufferAttribute } from 'three/webgpu';
 
 import { GPUUnitBuffer, UnitSlot, createIndirectArgsBuffer } from './GPUUnitBuffer';
 import { debugShaders } from '@/utils/debugLogger';
@@ -110,10 +107,9 @@ export class CullingCompute {
   private transformStorageBuffer: ReturnType<typeof storage> | null = null;
   private metadataStorageBuffer: ReturnType<typeof storage> | null = null;
 
-  // Visible indices output buffer - uses StorageBufferAttribute for vertex shader access
-  private visibleIndicesData: Uint32Array | null = null;
-  private visibleIndicesAttribute: StorageBufferAttribute | null = null;
-  private visibleIndicesStorage: ReturnType<typeof storage> | null = null;
+  // Visible indices output buffer - uses instancedArray for both compute AND vertex shader access
+  // instancedArray() is the correct pattern for buffers shared between compute and vertex shaders
+  private visibleIndicesStorage: ReturnType<typeof instancedArray> | null = null;
 
   // Indirect args buffer (atomic for instance count updates)
   private indirectArgsStorage: ReturnType<typeof instancedArray> | null = null;
@@ -169,11 +165,10 @@ export class CullingCompute {
       this.frustumPlanesAttribute = new StorageInstancedBufferAttribute(this.frustumPlanesData, 4);
       this.frustumPlanesStorage = storage(this.frustumPlanesAttribute, 'vec4', 6);
 
-      // Create visible indices buffer using StorageBufferAttribute
-      // This allows both compute shader writes AND vertex shader reads via storage().toAttribute()
-      this.visibleIndicesData = new Uint32Array(MAX_GPU_UNITS);
-      this.visibleIndicesAttribute = new StorageBufferAttribute(this.visibleIndicesData, 1);
-      this.visibleIndicesStorage = storage(this.visibleIndicesAttribute, 'uint', MAX_GPU_UNITS);
+      // Create visible indices buffer using instancedArray
+      // instancedArray() works in BOTH compute shaders AND vertex shaders via .element()
+      // This is the correct Three.js r182 pattern for shared GPU buffers
+      this.visibleIndicesStorage = instancedArray(MAX_GPU_UNITS, 'uint');
 
       // Indirect args: atomic buffer for compute shader writes
       const indirectEntryCount = this.maxUnitTypes * this.maxLODLevels * this.maxPlayers;
@@ -448,18 +443,11 @@ export class CullingCompute {
   }
 
   /**
-   * Get visible indices storage for compute shader writes
+   * Get visible indices storage for both compute and vertex shader access
+   * instancedArray() works in both contexts via .element()
    */
-  getVisibleIndicesStorage(): ReturnType<typeof storage> | null {
+  getVisibleIndicesStorage(): ReturnType<typeof instancedArray> | null {
     return this.visibleIndicesStorage;
-  }
-
-  /**
-   * Get visible indices storage as attribute for vertex shader reads
-   * Use this with material.positionNode
-   */
-  getVisibleIndicesAttribute(): StorageBufferAttribute | null {
-    return this.visibleIndicesAttribute;
   }
 
   /**
@@ -612,8 +600,6 @@ export class CullingCompute {
     this.transformStorageAttribute = null;
     this.metadataStorageAttribute = null;
     this.frustumPlanesAttribute = null;
-    this.visibleIndicesAttribute = null;
     this.visibleIndicesStorage = null;
-    this.visibleIndicesData = null;
   }
 }
