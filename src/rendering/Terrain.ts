@@ -11,9 +11,11 @@ import {
   CLIFF_WALL_THRESHOLD_ELEVATION,
 } from '@/data/pathfinding.config';
 
+// Import from central rendering config
+import { TERRAIN } from '@/data/rendering.config';
 
 // Terrain subdivision for smoother rendering
-const SUBDIVISIONS = 2; // 2x2 subdivisions per cell for better quality
+const SUBDIVISIONS = TERRAIN.SUBDIVISIONS;
 
 /**
  * Quantize elevation to strict discrete levels for cliff separation.
@@ -218,7 +220,7 @@ function fractalNoise(x: number, y: number, octaves: number, persistence: number
 // PERF: Terrain chunk size for frustum culling
 // Each chunk is a separate mesh with its own bounding box
 // Chunks outside the camera frustum are automatically culled by Three.js
-const TERRAIN_CHUNK_SIZE = 32; // 32x32 cells per chunk
+const TERRAIN_CHUNK_SIZE = TERRAIN.CHUNK_SIZE;
 
 export class Terrain {
   public mesh: THREE.Group; // Group containing chunk meshes

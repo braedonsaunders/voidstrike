@@ -10,16 +10,14 @@ import { EnvironmentParticles } from './EnhancedDecorations';
 import { InstancedTrees, InstancedRocks, InstancedGrass, InstancedPebbles, updateDecorationFrustum } from './InstancedDecorations';
 // AAA-quality decoration light pooling, frustum culling, and distance falloff
 import { DecorationLightManager } from './DecorationLightManager';
+import {
+  SHADOW_QUALITY_PRESETS,
+  ENVIRONMENT,
+  FOG_PRESETS,
+  type ShadowQuality,
+} from '@/data/rendering.config';
 
-// Shadow quality presets - radius only applies to PCFSoftShadowMap (we use BasicShadowMap for perf)
-const SHADOW_QUALITY_PRESETS = {
-  low: { mapSize: 256, radius: 1, bias: -0.001 },
-  medium: { mapSize: 512, radius: 2, bias: -0.0005 },
-  high: { mapSize: 1024, radius: 3, bias: -0.0003 },
-  ultra: { mapSize: 2048, radius: 4, bias: -0.0002 },
-} as const;
-
-export type ShadowQuality = keyof typeof SHADOW_QUALITY_PRESETS;
+export type { ShadowQuality };
 
 /**
  * Manages all environmental rendering for a map including:
@@ -67,9 +65,9 @@ export class EnvironmentManager {
   // Shadow update throttling - adaptive based on scene activity
   private shadowFrameCounter = 0;
   // Base intervals: active (units moving) vs static (empty scene)
-  private static readonly SHADOW_UPDATE_INTERVAL_ACTIVE = 6; // ~10fps shadow updates during gameplay
-  private static readonly SHADOW_UPDATE_INTERVAL_STATIC = 30; // ~2fps shadow updates for static scenes
-  private shadowUpdateInterval = EnvironmentManager.SHADOW_UPDATE_INTERVAL_STATIC;
+  private static readonly SHADOW_UPDATE_INTERVAL_ACTIVE: number = ENVIRONMENT.SHADOW_UPDATE_INTERVAL_ACTIVE;
+  private static readonly SHADOW_UPDATE_INTERVAL_STATIC: number = ENVIRONMENT.SHADOW_UPDATE_INTERVAL_STATIC;
+  private shadowUpdateInterval: number = EnvironmentManager.SHADOW_UPDATE_INTERVAL_STATIC;
   private hasMovingEntities = false; // Hint from game about scene activity
 
   // Shadow state
@@ -77,7 +75,7 @@ export class EnvironmentManager {
   private shadowQuality: ShadowQuality = 'high';
   private lastShadowCameraX = 0;
   private lastShadowCameraZ = 0;
-  private readonly SHADOW_CAMERA_UPDATE_THRESHOLD = 5; // Only update if camera moved more than 5 units
+  private readonly SHADOW_CAMERA_UPDATE_THRESHOLD = ENVIRONMENT.SHADOW_CAMERA_UPDATE_THRESHOLD;
 
   constructor(scene: THREE.Scene, mapData: MapData) {
     this.scene = scene;

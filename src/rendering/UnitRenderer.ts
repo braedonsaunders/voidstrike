@@ -12,6 +12,13 @@ import { getPlayerColor, getLocalPlayerId, isSpectatorMode } from '@/store/gameS
 import { useUIStore } from '@/store/uiStore';
 import { debugAnimation, debugAssets, debugMesh, debugPerformance } from '@/utils/debugLogger';
 import { setupInstancedVelocity, swapInstanceMatrices, commitInstanceMatrices, disposeInstancedVelocity } from './tsl/InstancedVelocity';
+import {
+  UNIT_RENDERER,
+  UNIT_SELECTION_RING,
+  UNIT_TEAM_MARKER,
+  UNIT_HEALTH_BAR,
+  RENDER_ORDER,
+} from '@/data/rendering.config';
 
 // GPU-driven rendering infrastructure
 import { GPUUnitBuffer } from './compute/GPUUnitBuffer';
@@ -62,11 +69,11 @@ interface InstancedOverlayGroup {
   maxInstances: number;
 }
 
-const MAX_INSTANCES_PER_TYPE = 100; // Max units of same type per player
-const MAX_OVERLAY_INSTANCES = 200;  // Max units for instanced overlays (selection rings, team markers)
-// Note: Airborne height is now configured per-unit-type in assets.json via "airborneHeight" property
-// Use AssetManager.getAirborneHeight(unitId) to get the configured height (defaults to DEFAULT_AIRBORNE_HEIGHT = 8)
-const INACTIVE_MESH_CLEANUP_FRAMES = 180; // Remove meshes after 3 seconds (60fps) of inactivity
+// Constants from centralized config
+const MAX_INSTANCES_PER_TYPE = UNIT_RENDERER.MAX_INSTANCES_PER_TYPE;
+const MAX_OVERLAY_INSTANCES = UNIT_RENDERER.MAX_OVERLAY_INSTANCES;
+// Note: Airborne height is configured per-unit-type in assets.json via "airborneHeight" property
+const INACTIVE_MESH_CLEANUP_FRAMES = UNIT_RENDERER.INACTIVE_MESH_CLEANUP_FRAMES;
 
 // Default animation name mappings (used when JSON config not available)
 // Each game action maps to a list of possible animation clip names to search for
@@ -142,7 +149,7 @@ export class UnitRenderer {
 
   // Smooth rotation interpolation - stores visual rotation per entity
   private visualRotations: Map<number, number> = new Map();
-  private readonly ROTATION_SMOOTH_FACTOR = 0.15; // Exponential smoothing (0.1=slow, 0.3=fast)
+  private readonly ROTATION_SMOOTH_FACTOR = UNIT_RENDERER.ROTATION_SMOOTH_FACTOR;
 
   // PERF: Cached sorted entity list to avoid spread+sort every frame
   private cachedSortedEntities: import('@/engine/ecs/Entity').Entity[] = [];
@@ -167,30 +174,37 @@ export class UnitRenderer {
     this.visionSystem = visionSystem ?? null;
     this.terrain = terrain ?? null;
 
-    this.selectionGeometry = new THREE.RingGeometry(0.6, 0.8, 16); // Reduced segments for perf
+    this.selectionGeometry = new THREE.RingGeometry(
+      UNIT_SELECTION_RING.INNER_RADIUS,
+      UNIT_SELECTION_RING.OUTER_RADIUS,
+      UNIT_SELECTION_RING.SEGMENTS
+    );
     this.selectionMaterial = new THREE.MeshBasicMaterial({
-      color: 0x00ff00,
+      color: UNIT_SELECTION_RING.OWNED_COLOR,
       transparent: true,
-      opacity: 0.6,
+      opacity: UNIT_SELECTION_RING.OPACITY,
       side: THREE.DoubleSide,
     });
     this.enemySelectionMaterial = new THREE.MeshBasicMaterial({
-      color: 0xff0000,
+      color: UNIT_SELECTION_RING.ENEMY_COLOR,
       transparent: true,
-      opacity: 0.6,
+      opacity: UNIT_SELECTION_RING.OPACITY,
       side: THREE.DoubleSide,
     });
 
     // Team marker geometry - small circle beneath each unit showing team color
-    this.teamMarkerGeometry = new THREE.CircleGeometry(0.4, 12);
+    this.teamMarkerGeometry = new THREE.CircleGeometry(
+      UNIT_TEAM_MARKER.RADIUS,
+      UNIT_TEAM_MARKER.SEGMENTS
+    );
 
-    // FIX: Pre-create shared health bar geometry to avoid per-unit allocation
-    this.healthBarBgGeometry = new THREE.PlaneGeometry(1.4, 0.18);
-    this.healthBarFillGeometry = new THREE.PlaneGeometry(1.4, 0.18);
+    // Pre-create shared health bar geometry to avoid per-unit allocation
+    this.healthBarBgGeometry = new THREE.PlaneGeometry(UNIT_HEALTH_BAR.WIDTH, UNIT_HEALTH_BAR.HEIGHT);
+    this.healthBarFillGeometry = new THREE.PlaneGeometry(UNIT_HEALTH_BAR.WIDTH, UNIT_HEALTH_BAR.HEIGHT);
     this.healthBarBgMaterial = new THREE.MeshBasicMaterial({
-      color: 0x333333,
+      color: UNIT_HEALTH_BAR.BG_COLOR,
       transparent: true,
-      opacity: 0.8,
+      opacity: UNIT_HEALTH_BAR.BG_OPACITY,
     });
 
     // Preload common procedural assets
@@ -539,11 +553,11 @@ export class UnitRenderer {
     if (!animUnit) {
       const playerColor = getPlayerColor(playerId);
       const mesh = AssetManager.getUnitMesh(unitType, playerColor);
-      // Units render AFTER ground effects (5) but BEFORE damage numbers (100)
-      mesh.renderOrder = 50;
+      // Units render AFTER ground effects but BEFORE damage numbers
+      mesh.renderOrder = RENDER_ORDER.UNIT;
       mesh.traverse((child) => {
         if ((child as THREE.Mesh).isMesh) {
-          child.renderOrder = 50;
+          child.renderOrder = RENDER_ORDER.UNIT;
         }
       });
       this.scene.add(mesh);
@@ -794,8 +808,8 @@ export class UnitRenderer {
       instancedMesh.castShadow = true;
       instancedMesh.receiveShadow = true;
       instancedMesh.frustumCulled = false; // We'll handle culling ourselves
-      // Units render AFTER ground effects (5) but BEFORE damage numbers (100)
-      instancedMesh.renderOrder = 50;
+      // Units render AFTER ground effects but BEFORE damage numbers
+      instancedMesh.renderOrder = RENDER_ORDER.UNIT;
 
       // Set up previous instance matrix attributes for TAA velocity
       setupInstancedVelocity(instancedMesh);
@@ -874,8 +888,7 @@ export class UnitRenderer {
       mesh.frustumCulled = false;
       // NOTE: Don't set mesh.rotation here - rotation is applied per-instance to avoid
       // coordinate transform issues with instanced meshes
-      // Selection rings render at same level as ground effects
-      mesh.renderOrder = 5;
+      mesh.renderOrder = RENDER_ORDER.GROUND_EFFECT;
       this.scene.add(mesh);
 
       group = {
@@ -901,7 +914,7 @@ export class UnitRenderer {
       const material = new THREE.MeshBasicMaterial({
         color: teamColor,
         transparent: true,
-        opacity: 0.7,
+        opacity: UNIT_TEAM_MARKER.OPACITY,
         side: THREE.DoubleSide,
       });
       const mesh = new THREE.InstancedMesh(this.teamMarkerGeometry, material, MAX_OVERLAY_INSTANCES);
@@ -909,8 +922,7 @@ export class UnitRenderer {
       mesh.frustumCulled = false;
       // NOTE: Don't set mesh.rotation here - rotation is applied per-instance to avoid
       // coordinate transform issues with instanced meshes
-      // Team markers render just above ground
-      mesh.renderOrder = 4;
+      mesh.renderOrder = RENDER_ORDER.TEAM_MARKER;
       this.scene.add(mesh);
 
       group = {
@@ -929,10 +941,11 @@ export class UnitRenderer {
    * PERF: Get cached terrain height, only recalculating when position changes significantly
    */
   private getCachedTerrainHeight(overlay: UnitOverlay, x: number, y: number): number {
-    // Only recalculate if position changed by more than 0.5 units
+    // Only recalculate if position changed by more than threshold
     const dx = Math.abs(x - overlay.lastX);
     const dy = Math.abs(y - overlay.lastY);
-    if (dx > 0.5 || dy > 0.5) {
+    const threshold = UNIT_RENDERER.TERRAIN_HEIGHT_CACHE_THRESHOLD;
+    if (dx > threshold || dy > threshold) {
       overlay.cachedTerrainHeight = this.terrain?.getHeightAt(x, y) ?? 0;
       overlay.lastX = x;
       overlay.lastY = y;
@@ -1198,8 +1211,8 @@ export class UnitRenderer {
         const healthPercent = health.getHealthPercent();
         overlay.healthBar.visible = healthPercent < 1;
         if (overlay.healthBar.visible) {
-          // Position health bar above the unit model (model height + small offset)
-          overlay.healthBar.position.set(transform.x, unitHeight + modelHeight + 0.3, transform.y);
+          // Position health bar above the unit model
+          overlay.healthBar.position.set(transform.x, unitHeight + modelHeight + UNIT_HEALTH_BAR.Y_OFFSET, transform.y);
           // Only update health bar visuals if health changed
           if (Math.abs(overlay.lastHealth - healthPercent) > 0.01) {
             this.updateHealthBar(overlay.healthBar, health);
@@ -1342,7 +1355,7 @@ export class UnitRenderer {
 
     // Health fill uses shared geometry but needs unique material for color changes
     const fillMaterial = new THREE.MeshBasicMaterial({
-      color: 0x00ff00,
+      color: UNIT_HEALTH_BAR.COLOR_HIGH,
     });
     const fill = new THREE.Mesh(this.healthBarFillGeometry, fillMaterial);
     fill.position.z = 0.01;
@@ -1365,12 +1378,12 @@ export class UnitRenderer {
 
       // Color based on health
       const material = fill.material as THREE.MeshBasicMaterial;
-      if (percent > 0.6) {
-        material.color.setHex(0x00ff00);
-      } else if (percent > 0.3) {
-        material.color.setHex(0xffff00);
+      if (percent > UNIT_HEALTH_BAR.THRESHOLD_HIGH) {
+        material.color.setHex(UNIT_HEALTH_BAR.COLOR_HIGH);
+      } else if (percent > UNIT_HEALTH_BAR.THRESHOLD_LOW) {
+        material.color.setHex(UNIT_HEALTH_BAR.COLOR_MEDIUM);
       } else {
-        material.color.setHex(0xff0000);
+        material.color.setHex(UNIT_HEALTH_BAR.COLOR_LOW);
       }
     }
   }

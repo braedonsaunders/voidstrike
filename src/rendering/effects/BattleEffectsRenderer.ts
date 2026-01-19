@@ -28,51 +28,21 @@ import { EventBus } from '@/engine/core/EventBus';
 import { getLocalPlayerId, isSpectatorMode } from '@/store/gameSetupStore';
 import { AssetManager, DEFAULT_AIRBORNE_HEIGHT } from '@/assets/AssetManager';
 import { AdvancedParticleSystem } from './AdvancedParticleSystem';
+import {
+  BATTLE_EFFECTS,
+  RENDER_ORDER,
+  FACTION_COLORS,
+  BATTLE_GEOMETRIES,
+  BATTLE_MATERIALS,
+} from '@/data/rendering.config';
 
 // ============================================
 // CONSTANTS
 // ============================================
 
-// Note: Airborne height is now configured per-unit-type in assets.json
-// Use AssetManager.getAirborneHeight(unitType) for the configured height
-// DEFAULT_AIRBORNE_HEIGHT (8) is used when unit type is not available
-const GROUND_EFFECT_OFFSET = 0.15; // Height above terrain for ground effects
-const POOL_SIZE = 150;
-
-// Render order constants - units render at 50
-const RENDER_ORDER = {
-  GROUND_DECAL: 15,
-  GROUND_EFFECT: 25,
-  EXPLOSION: 35,       // Explosions below units
-  PROJECTILE: 65,      // Projectiles above units so they're visible
-  AIR_EFFECT: 75,      // Air effects above ground units
-  GLOW: 90,            // Glow effects high but still below UI
-  UI: 100,
-} as const;
-
-// Faction color schemes for projectiles
-const FACTION_COLORS = {
-  terran: {
-    primary: 0xffaa00,    // Orange-yellow tracer
-    secondary: 0xff6600,  // Orange trail
-    glow: 0xffdd44,       // Bright yellow glow
-  },
-  protoss: {
-    primary: 0x4488ff,    // Blue energy
-    secondary: 0x8844ff,  // Purple trail
-    glow: 0x66aaff,       // Cyan glow
-  },
-  zerg: {
-    primary: 0x88ff44,    // Acid green
-    secondary: 0x44aa00,  // Dark green trail
-    glow: 0xaaff66,       // Bright green glow
-  },
-  neutral: {
-    primary: 0xffaa00,
-    secondary: 0xff6600,
-    glow: 0xffdd44,
-  },
-} as const;
+// Note: Airborne height is configured per-unit-type in assets.json
+const GROUND_EFFECT_OFFSET = BATTLE_EFFECTS.GROUND_EFFECT_OFFSET;
+const POOL_SIZE = BATTLE_EFFECTS.POOL_SIZE;
 
 // ============================================
 // INTERFACES
@@ -185,7 +155,7 @@ interface MeshPool<T extends THREE.Object3D = THREE.Mesh> {
 // VECTOR3 POOL
 // ============================================
 
-const VECTOR3_POOL_SIZE = 300;
+const VECTOR3_POOL_SIZE = BATTLE_EFFECTS.VECTOR3_POOL_SIZE;
 const vector3Pool: THREE.Vector3[] = [];
 let vector3PoolIndex = 0;
 
@@ -236,7 +206,7 @@ export class BattleEffectsRenderer {
   private sparkPositions: Float32Array;
   private sparkColors: Float32Array;
   private sparkSizes: Float32Array;
-  private maxSparks = 2000;
+  private maxSparks = BATTLE_EFFECTS.MAX_SPARKS;
 
   // Object pools
   private projectileHeadPool: MeshPool;
