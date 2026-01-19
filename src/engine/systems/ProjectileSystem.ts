@@ -7,7 +7,7 @@ import { Unit, DamageType } from '../components/Unit';
 import { Selectable } from '../components/Selectable';
 import { Building } from '../components/Building';
 import { Projectile, ProjectileDefinition, ProjectileBehavior } from '../components/Projectile';
-import { quantize, snapValue, QUANT_POSITION, QUANT_DAMAGE } from '@/utils/FixedPoint';
+import { snapValue } from '@/utils/FixedPoint';
 import { getDamageMultiplier } from '@/data/combat/combat';
 import { debugCombat as debugProjectile } from '@/utils/debugLogger';
 import { isLocalPlayer } from '@/store/gameSetupStore';
@@ -618,8 +618,8 @@ export class ProjectileSystem extends System {
       speed: def.speed,
       turnRate: def.turnRate,
       arcHeight: def.arcHeight,
-      damage: quantize(data.damage, QUANT_DAMAGE),
-      rawDamage: quantize(data.rawDamage, QUANT_DAMAGE),
+      damage: data.damage,
+      rawDamage: data.rawDamage,
       damageType: data.damageType,
       splashRadius: data.splashRadius,
       splashFalloff: data.splashFalloff ?? 0.5,
