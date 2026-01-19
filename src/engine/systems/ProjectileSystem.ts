@@ -355,6 +355,7 @@ export class ProjectileSystem extends System {
       const transform = entity.get<Transform>('Transform');
       const health = entity.get<Health>('Health');
       const selectable = entity.get<Selectable>('Selectable');
+      const unit = entity.get<Unit>('Unit');
 
       if (!transform || !health || !selectable) continue;
       if (health.isDead()) continue;
@@ -383,11 +384,35 @@ export class ProjectileSystem extends System {
       // takeDamage will apply this target's armor reduction
       health.takeDamage(damageWithMultiplier, gameTime);
 
+      const isKillingBlow = health.isDead();
+      const targetIsFlying = unit?.isFlying ?? false;
+      const targetHeight = targetIsFlying ? DEFAULT_AIRBORNE_HEIGHT : 0;
+
       debugProjectile.log(
-        `Splash hit entity ${entityId} for ${damageWithMultiplier} damage (falloff: ${falloffFactor.toFixed(2)})`
+        `Splash hit entity ${entityId} for ${damageWithMultiplier} damage (falloff: ${falloffFactor.toFixed(2)})${isKillingBlow ? ' [KILL]' : ''}`
       );
 
-      if (health.isDead()) {
+      // Emit damage:dealt for UI damage numbers
+      this.game.eventBus.emit('damage:dealt', {
+        targetId: entityId,
+        damage: damageWithMultiplier,
+        targetPos: { x: transform.x, y: transform.y },
+        targetHeight,
+        targetIsFlying,
+        targetUnitType: unit?.unitId,
+        targetPlayerId: selectable.playerId,
+        isKillingBlow,
+      });
+
+      // Emit player:damage for local player overlay effects
+      if (selectable.playerId && isLocalPlayer(selectable.playerId)) {
+        this.game.eventBus.emit('player:damage', {
+          damage: damageWithMultiplier,
+          position: { x: transform.x, y: transform.y },
+        });
+      }
+
+      if (isKillingBlow) {
         this.emitKillEvent(projectile, entity);
       }
     }
@@ -408,6 +433,7 @@ export class ProjectileSystem extends System {
       const transform = entity.get<Transform>('Transform');
       const health = entity.get<Health>('Health');
       const selectable = entity.get<Selectable>('Selectable');
+      const building = entity.get<Building>('Building');
 
       if (!transform || !health || !selectable) continue;
       if (health.isDead()) continue;
@@ -429,6 +455,32 @@ export class ProjectileSystem extends System {
 
       // takeDamage will apply building's armor reduction
       health.takeDamage(damageWithMultiplier, gameTime);
+
+      const isKillingBlow = health.isDead();
+
+      // Emit damage:dealt for UI damage numbers
+      this.game.eventBus.emit('damage:dealt', {
+        targetId: entityId,
+        damage: damageWithMultiplier,
+        targetPos: { x: transform.x, y: transform.y },
+        targetHeight: 0,
+        targetIsFlying: false,
+        targetUnitType: building?.buildingId,
+        targetPlayerId: selectable.playerId,
+        isKillingBlow,
+      });
+
+      // Emit player:damage for local player overlay effects
+      if (selectable.playerId && isLocalPlayer(selectable.playerId)) {
+        this.game.eventBus.emit('player:damage', {
+          damage: damageWithMultiplier,
+          position: { x: transform.x, y: transform.y },
+        });
+      }
+
+      if (isKillingBlow) {
+        this.emitKillEvent(projectile, entity);
+      }
     }
   }
 
