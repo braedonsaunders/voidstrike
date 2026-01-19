@@ -32,7 +32,6 @@ export const UNIT_ICONS: Record<string, string> = {
   specter: '🦇',
   banshee: '🦇',
   dreadnought: '🚀',
-  battlecruiser: '🚀',
   overseer: '🦅',
 };
 

@@ -40,7 +40,7 @@ export const SEPARATION_STRENGTH_ARRIVING = 8.0;
 
 /**
  * Separation strength while units are attacking in range.
- * Very strong for SC2-style unclumping during combat.
+ * Strong for unclumping during combat.
  */
 export const SEPARATION_STRENGTH_COMBAT = 8.0;
 

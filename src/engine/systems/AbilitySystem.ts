@@ -192,17 +192,6 @@ export class AbilitySystem extends System {
           this.executePowerCannon(
             casterEntity,
             command.targetEntityId,
-            definition.damage || 300,
-            definition.aoeRadius ?? 0
-          );
-        }
-        break;
-
-      case 'yamato_cannon':
-        if (command.targetEntityId) {
-          this.executeYamatoCannon(
-            casterEntity,
-            command.targetEntityId,
             definition.damage || 300
           );
         }
@@ -466,95 +455,6 @@ export class AbilitySystem extends System {
   private executePowerCannon(
     caster: { id: number },
     targetId: number,
-    damage: number,
-    aoeRadius: number
-  ): void {
-    const target = this.world.getEntity(targetId);
-    if (!target) return;
-
-    const casterEntity = this.world.getEntity(caster.id);
-    const casterTransform = casterEntity?.get<Transform>('Transform');
-    const targetTransform = target.get<Transform>('Transform');
-    const targetHealth = target.get<Health>('Health');
-
-    if (!targetHealth || !targetTransform) return;
-
-    // Emit major ability for Phaser overlay
-    if (casterTransform) {
-      this.game.eventBus.emit('ability:major', {
-        abilityName: 'POWER CANNON',
-        position: { x: casterTransform.x, y: casterTransform.y },
-        color: 0xff0066,
-      });
-    }
-
-    // Deal massive damage to primary target
-    targetHealth.takeDamage(damage, this.game.getGameTime());
-
-    // Emit attack event for visual effect (big projectile)
-    this.game.eventBus.emit('combat:attack', {
-      attackerId: caster.id,
-      attackerPos: casterTransform ? { x: casterTransform.x, y: casterTransform.y } : null,
-      targetPos: { x: targetTransform.x, y: targetTransform.y },
-      damage,
-      damageType: 'explosive', // Big shot uses explosive visual
-    });
-
-    // Apply splash damage to nearby enemies
-    if (aoeRadius > 0) {
-      const casterSelectable = casterEntity?.get<Selectable>('Selectable');
-      const nearbyEntities = this.world.getEntitiesWith('Transform', 'Health', 'Selectable');
-
-      for (const entity of nearbyEntities) {
-        if (entity.id === targetId) continue; // Skip primary target
-
-        const entityTransform = entity.get<Transform>('Transform')!;
-        const entityHealth = entity.get<Health>('Health')!;
-        const entitySelectable = entity.get<Selectable>('Selectable')!;
-
-        // Skip allies
-        if (casterSelectable && entitySelectable.playerId === casterSelectable.playerId) continue;
-        if (entityHealth.isDead()) continue;
-
-        // Check distance from impact
-        const dx = entityTransform.x - targetTransform.x;
-        const dy = entityTransform.y - targetTransform.y;
-        const distance = Math.sqrt(dx * dx + dy * dy);
-
-        if (distance <= aoeRadius) {
-          // Splash damage with falloff
-          const falloff = 1 - (distance / aoeRadius) * 0.5;
-          const splashDamage = Math.floor(damage * falloff * 0.5); // 50% of main damage
-          entityHealth.takeDamage(splashDamage, this.game.getGameTime());
-
-          this.game.eventBus.emit('combat:splash', {
-            position: { x: entityTransform.x, y: entityTransform.y },
-            damage: splashDamage,
-          });
-        }
-      }
-    }
-
-    // Emit power cannon impact effect
-    this.game.eventBus.emit('ability:effect', {
-      type: 'power_cannon',
-      casterId: caster.id,
-      targetId,
-      damage,
-      position: { x: targetTransform.x, y: targetTransform.y },
-    });
-
-    // Impact visual notification
-    this.game.eventBus.emit('ability:major', {
-      abilityName: 'POWER IMPACT',
-      position: { x: targetTransform.x, y: targetTransform.y },
-      color: 0xff3300,
-    });
-  }
-
-  private executeYamatoCannon(
-    caster: { id: number },
-    targetId: number,
     damage: number
   ): void {
     const target = this.world.getEntity(targetId);
@@ -570,9 +470,9 @@ export class AbilitySystem extends System {
     // Emit major ability notification for charge-up
     if (casterTransform) {
       this.game.eventBus.emit('ability:major', {
-        abilityName: 'YAMATO CANNON',
+        abilityName: 'POWER CANNON',
         position: { x: casterTransform.x, y: casterTransform.y },
-        color: 0xffaa00, // Orange-yellow for Yamato
+        color: 0xffaa00, // Orange-yellow
       });
     }
 
@@ -588,9 +488,9 @@ export class AbilitySystem extends System {
       damageType: 'psionic', // Big energy beam
     });
 
-    // Emit yamato cannon impact effect
+    // Emit power cannon impact effect
     this.game.eventBus.emit('ability:effect', {
-      type: 'yamato_cannon',
+      type: 'power_cannon',
       casterId: caster.id,
       targetId,
       damage,
@@ -599,7 +499,7 @@ export class AbilitySystem extends System {
 
     // Impact visual notification
     this.game.eventBus.emit('ability:major', {
-      abilityName: 'YAMATO IMPACT',
+      abilityName: 'POWER CANNON IMPACT',
       position: { x: targetTransform.x, y: targetTransform.y },
       color: 0xff6600,
     });

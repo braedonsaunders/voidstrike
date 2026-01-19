@@ -62,7 +62,7 @@ This document contains all audio specifications, AI prompts for generation, and 
 - [x] `combat/grenade_launcher.mp3`
 - [x] `combat/gatling_gun.mp3`
 - [x] `combat/laser_battery.mp3`
-- [x] `combat/yamato.mp3`
+- [x] `combat/power_cannon.mp3`
 
 ### Combat - Impacts ✅ Complete
 - [x] `combat/hit.mp3`
@@ -337,8 +337,8 @@ These are spoken voice announcements that play to notify the player of important
 | `combat/sniper.mp3` | 0.4s | "Silenced sniper rifle, suppressed shot, precision kill, Ghost weapon" |
 | `combat/grenade_launcher.mp3` | 0.5s | "Concussive grenade launcher, heavy thump, explosive projectile launch, Marauder weapon" |
 | `combat/gatling.mp3` | 0.7s | "Gatling cannon fire, dual autocannons, heavy machine gun barrage, Thor weapon" |
-| `combat/laser_battery.mp3` | 0.7s | "Laser battery fire, multiple turrets, capital ship broadside, Battlecruiser weapon" |
-| `combat/yamato.mp3` | 2s | "Massive energy weapon charging and firing, devastating beam cannon, overwhelming power" |
+| `combat/laser_battery.mp3` | 0.7s | "Laser battery fire, multiple turrets, capital ship broadside, Dreadnought weapon" |
+| `combat/power_cannon.mp3` | 2s | "Massive energy weapon charging and firing, devastating beam cannon, overwhelming power" |
 
 ### Impacts
 
