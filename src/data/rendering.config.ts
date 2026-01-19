@@ -72,9 +72,9 @@ export const CAMERA = {
 
 export const UNIT_RENDERER = {
   /** Maximum instances per unit type/player/LOD combination */
-  MAX_INSTANCES_PER_TYPE: 100,
+  MAX_INSTANCES_PER_TYPE: 512,
   /** Maximum units for instanced overlay rendering */
-  MAX_OVERLAY_INSTANCES: 200,
+  MAX_OVERLAY_INSTANCES: 1024,
   /** Frames before inactive mesh groups are cleaned up (3 seconds at 60fps) */
   INACTIVE_MESH_CLEANUP_FRAMES: 180,
   /** Rotation smooth interpolation factor (0.1=slow, 0.3=fast) */
