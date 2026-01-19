@@ -107,8 +107,11 @@ const tempStuckNudge: PooledVector2 = { x: 0, y: 0 };
 // PERF: Cached building query results to avoid double spatial grid lookups
 const cachedBuildingQuery: { entityId: number; results: number[] } = { entityId: -1, results: [] };
 
-// PERF: Separation force throttle interval (recalculate every N ticks instead of every frame)
+// PERF: Steering force throttle intervals (recalculate every N ticks instead of every frame)
 const SEPARATION_THROTTLE_TICKS = 5;
+const COHESION_THROTTLE_TICKS = 8;    // Cohesion is subtle - can update less frequently
+const ALIGNMENT_THROTTLE_TICKS = 8;   // Alignment is subtle - can update less frequently
+const PHYSICS_PUSH_THROTTLE_TICKS = 3; // Push needs to be responsive but can skip some frames
 
 // PERF: Static array to avoid allocation on every building avoidance check
 const DROP_OFF_BUILDINGS = Object.freeze([
@@ -154,9 +157,15 @@ export class MovementSystem extends System {
   // Track which units are registered with crowd
   private crowdAgents: Set<number> = new Set();
 
-  // PERF: Cached separation forces to avoid recalculating every frame
+  // PERF: Cached steering forces to avoid recalculating every frame
   private separationCache: Map<number, { x: number; y: number; tick: number }> = new Map();
+  private cohesionCache: Map<number, { x: number; y: number; tick: number }> = new Map();
+  private alignmentCache: Map<number, { x: number; y: number; tick: number }> = new Map();
+  private physicsPushCache: Map<number, { x: number; y: number; tick: number }> = new Map();
   private currentTick: number = 0;
+
+  // PERF: Batched neighbor query - query once, reuse for all steering behaviors
+  private batchedNeighborCache: Map<number, { ids: number[]; tick: number }> = new Map();
 
   // SC2-STYLE: Velocity history for smoothing (prevents jitter)
   private velocityHistory: Map<number, VelocityHistoryEntry[]> = new Map();
@@ -851,11 +860,12 @@ export class MovementSystem extends System {
     let forceX = 0;
     let forceY = 0;
 
-    const nearbyIds = this.world.unitGrid.queryRadius(
-      selfTransform.x,
-      selfTransform.y,
-      SEPARATION_RADIUS + selfUnit.collisionRadius
-    );
+    // PERF: Use batched neighbor query if available, otherwise query directly
+    const queryRadius = SEPARATION_RADIUS + selfUnit.collisionRadius;
+    const neighborCache = this.batchedNeighborCache.get(selfId);
+    const nearbyIds = (neighborCache && neighborCache.tick === this.currentTick)
+      ? neighborCache.ids
+      : this.world.unitGrid.queryRadius(selfTransform.x, selfTransform.y, queryRadius);
 
     for (const entityId of nearbyIds) {
       if (entityId === selfId) continue;
@@ -912,6 +922,7 @@ export class MovementSystem extends System {
   /**
    * Calculate cohesion force - steers toward the average position of nearby units.
    * Keeps groups together but with very weak force (SC2 style).
+   * PERF: Results are cached and only recalculated every COHESION_THROTTLE_TICKS ticks
    */
   private calculateCohesionForce(
     selfId: number,
@@ -927,15 +938,23 @@ export class MovementSystem extends System {
       return;
     }
 
+    // PERF: Check cache first - reuse result if calculated recently
+    const cached = this.cohesionCache.get(selfId);
+    if (cached && (this.currentTick - cached.tick) < COHESION_THROTTLE_TICKS) {
+      out.x = cached.x;
+      out.y = cached.y;
+      return;
+    }
+
     let sumX = 0;
     let sumY = 0;
     let count = 0;
 
-    const nearbyIds = this.world.unitGrid.queryRadius(
-      selfTransform.x,
-      selfTransform.y,
-      COHESION_RADIUS
-    );
+    // PERF: Use batched neighbor query if available, otherwise query directly
+    const neighborCache = this.batchedNeighborCache.get(selfId);
+    const nearbyIds = (neighborCache && neighborCache.tick === this.currentTick)
+      ? neighborCache.ids
+      : this.world.unitGrid.queryRadius(selfTransform.x, selfTransform.y, COHESION_RADIUS);
 
     for (const entityId of nearbyIds) {
       if (entityId === selfId) continue;
@@ -952,12 +971,22 @@ export class MovementSystem extends System {
       // Only cohere with units moving in same direction
       if (otherUnit.state !== selfUnit.state) continue;
 
+      // PERF: Distance filter when using batched query (which may have larger radius)
+      if (neighborCache && neighborCache.tick === this.currentTick) {
+        const dx = selfTransform.x - otherTransform.x;
+        const dy = selfTransform.y - otherTransform.y;
+        if (dx * dx + dy * dy > COHESION_RADIUS * COHESION_RADIUS) continue;
+      }
+
       sumX += otherTransform.x;
       sumY += otherTransform.y;
       count++;
     }
 
-    if (count === 0) return;
+    if (count === 0) {
+      this.cohesionCache.set(selfId, { x: 0, y: 0, tick: this.currentTick });
+      return;
+    }
 
     // Calculate center of mass
     const centerX = sumX / count;
@@ -968,16 +997,26 @@ export class MovementSystem extends System {
     const dy = centerY - selfTransform.y;
     const dist = Math.sqrt(dx * dx + dy * dy);
 
-    if (dist < 0.1) return;
+    if (dist < 0.1) {
+      this.cohesionCache.set(selfId, { x: 0, y: 0, tick: this.currentTick });
+      return;
+    }
 
     // Weak cohesion force toward center
-    out.x = (dx / dist) * COHESION_STRENGTH;
-    out.y = (dy / dist) * COHESION_STRENGTH;
+    const forceX = (dx / dist) * COHESION_STRENGTH;
+    const forceY = (dy / dist) * COHESION_STRENGTH;
+
+    // PERF: Cache the result
+    this.cohesionCache.set(selfId, { x: forceX, y: forceY, tick: this.currentTick });
+
+    out.x = forceX;
+    out.y = forceY;
   }
 
   /**
    * Calculate alignment force - steers toward the average heading of nearby units.
    * Helps groups move together smoothly.
+   * PERF: Results are cached and only recalculated every ALIGNMENT_THROTTLE_TICKS ticks
    */
   private calculateAlignmentForce(
     selfId: number,
@@ -994,15 +1033,23 @@ export class MovementSystem extends System {
       return;
     }
 
+    // PERF: Check cache first - reuse result if calculated recently
+    const cached = this.alignmentCache.get(selfId);
+    if (cached && (this.currentTick - cached.tick) < ALIGNMENT_THROTTLE_TICKS) {
+      out.x = cached.x;
+      out.y = cached.y;
+      return;
+    }
+
     let sumVx = 0;
     let sumVy = 0;
     let count = 0;
 
-    const nearbyIds = this.world.unitGrid.queryRadius(
-      selfTransform.x,
-      selfTransform.y,
-      ALIGNMENT_RADIUS
-    );
+    // PERF: Use batched neighbor query if available, otherwise query directly
+    const neighborCache = this.batchedNeighborCache.get(selfId);
+    const nearbyIds = (neighborCache && neighborCache.tick === this.currentTick)
+      ? neighborCache.ids
+      : this.world.unitGrid.queryRadius(selfTransform.x, selfTransform.y, ALIGNMENT_RADIUS);
 
     for (const entityId of nearbyIds) {
       if (entityId === selfId) continue;
@@ -1018,6 +1065,13 @@ export class MovementSystem extends System {
       if (otherUnit.state === 'dead') continue;
       if (selfUnit.isFlying !== otherUnit.isFlying) continue;
 
+      // PERF: Distance filter when using batched query (which may have larger radius)
+      if (neighborCache && neighborCache.tick === this.currentTick) {
+        const dx = selfTransform.x - otherTransform.x;
+        const dy = selfTransform.y - otherTransform.y;
+        if (dx * dx + dy * dy > ALIGNMENT_RADIUS * ALIGNMENT_RADIUS) continue;
+      }
+
       // Only align with moving units
       const otherSpeed = otherVelocity.getMagnitude();
       if (otherSpeed < 0.1) continue;
@@ -1028,18 +1082,30 @@ export class MovementSystem extends System {
       count++;
     }
 
-    if (count === 0) return;
+    if (count === 0) {
+      this.alignmentCache.set(selfId, { x: 0, y: 0, tick: this.currentTick });
+      return;
+    }
 
     // Average heading
     const avgVx = sumVx / count;
     const avgVy = sumVy / count;
     const avgMag = Math.sqrt(avgVx * avgVx + avgVy * avgVy);
 
-    if (avgMag < 0.1) return;
+    if (avgMag < 0.1) {
+      this.alignmentCache.set(selfId, { x: 0, y: 0, tick: this.currentTick });
+      return;
+    }
 
     // Alignment force toward average heading
-    out.x = (avgVx / avgMag) * ALIGNMENT_STRENGTH;
-    out.y = (avgVy / avgMag) * ALIGNMENT_STRENGTH;
+    const forceX = (avgVx / avgMag) * ALIGNMENT_STRENGTH;
+    const forceY = (avgVy / avgMag) * ALIGNMENT_STRENGTH;
+
+    // PERF: Cache the result
+    this.alignmentCache.set(selfId, { x: forceX, y: forceY, tick: this.currentTick });
+
+    out.x = forceX;
+    out.y = forceY;
   }
 
   // ==================== SC2-STYLE VELOCITY SMOOTHING ====================
@@ -1112,6 +1178,7 @@ export class MovementSystem extends System {
   /**
    * Calculate physics push force from nearby units.
    * Units push each other instead of avoiding - creates natural flow.
+   * PERF: Results are cached and only recalculated every PHYSICS_PUSH_THROTTLE_TICKS ticks
    */
   private calculatePhysicsPush(
     selfId: number,
@@ -1124,11 +1191,23 @@ export class MovementSystem extends System {
 
     if (selfUnit.isFlying) return;
 
-    const nearbyIds = this.world.unitGrid.queryRadius(
-      selfTransform.x,
-      selfTransform.y,
-      PHYSICS_PUSH_RADIUS + selfUnit.collisionRadius
-    );
+    // PERF: Check cache first - reuse result if calculated recently
+    const cached = this.physicsPushCache.get(selfId);
+    if (cached && (this.currentTick - cached.tick) < PHYSICS_PUSH_THROTTLE_TICKS) {
+      out.x = cached.x;
+      out.y = cached.y;
+      return;
+    }
+
+    // PERF: Use batched neighbor query if available, otherwise query directly
+    const queryRadius = PHYSICS_PUSH_RADIUS + selfUnit.collisionRadius;
+    const neighborCache = this.batchedNeighborCache.get(selfId);
+    const nearbyIds = (neighborCache && neighborCache.tick === this.currentTick)
+      ? neighborCache.ids
+      : this.world.unitGrid.queryRadius(selfTransform.x, selfTransform.y, queryRadius);
+
+    let forceX = 0;
+    let forceY = 0;
 
     for (const entityId of nearbyIds) {
       if (entityId === selfId) continue;
@@ -1169,10 +1248,16 @@ export class MovementSystem extends System {
           pushStrength = PHYSICS_PUSH_STRENGTH * Math.pow(1 - t, PHYSICS_PUSH_FALLOFF);
         }
 
-        out.x += nx * pushStrength;
-        out.y += ny * pushStrength;
+        forceX += nx * pushStrength;
+        forceY += ny * pushStrength;
       }
     }
+
+    // PERF: Cache the result
+    this.physicsPushCache.set(selfId, { x: forceX, y: forceY, tick: this.currentTick });
+
+    out.x = forceX;
+    out.y = forceY;
   }
 
   // ==================== STUCK DETECTION ====================
@@ -1254,6 +1339,47 @@ export class MovementSystem extends System {
     } else {
       // Reset if moving
       state.framesStuck = 0;
+    }
+  }
+
+  /**
+   * PERF: Pre-compute batched neighbors for all steering behaviors.
+   * Query once with the largest radius, then filter by distance in each force calculation.
+   * This reduces 4 spatial queries to 1 per unit in the JS fallback path.
+   */
+  private preBatchNeighbors(
+    entityId: number,
+    transform: Transform,
+    unit: Unit
+  ): void {
+    // Compute the maximum radius needed across all steering behaviors
+    const maxRadius = Math.max(
+      SEPARATION_RADIUS + unit.collisionRadius,
+      COHESION_RADIUS,
+      ALIGNMENT_RADIUS,
+      PHYSICS_PUSH_RADIUS + unit.collisionRadius
+    );
+
+    // Query once and cache
+    const nearbyIds = this.world.unitGrid.queryRadius(
+      transform.x,
+      transform.y,
+      maxRadius
+    );
+
+    // Store in cache (copy the array to avoid reference issues)
+    const cached = this.batchedNeighborCache.get(entityId);
+    if (cached) {
+      cached.ids.length = 0;
+      for (const id of nearbyIds) {
+        cached.ids.push(id);
+      }
+      cached.tick = this.currentTick;
+    } else {
+      this.batchedNeighborCache.set(entityId, {
+        ids: [...nearbyIds],
+        tick: this.currentTick
+      });
     }
   }
 
@@ -2089,12 +2215,16 @@ export class MovementSystem extends System {
               tempAlignment.y = wasmForces.alignmentY;
             } else {
               // Entity not in WASM buffer, fallback to JS
+              // PERF: Pre-batch neighbors for JS path
+              this.preBatchNeighbors(entity.id, transform, unit);
               this.calculateSeparationForce(entity.id, transform, unit, tempSeparation, distToFinalTarget);
               this.calculateCohesionForce(entity.id, transform, unit, tempCohesion);
               this.calculateAlignmentForce(entity.id, transform, unit, velocity, tempAlignment);
             }
           } else {
             // JS fallback: calculate forces directly
+            // PERF: Pre-batch neighbors to reduce 4 spatial queries to 1
+            this.preBatchNeighbors(entity.id, transform, unit);
             this.calculateSeparationForce(entity.id, transform, unit, tempSeparation, distToFinalTarget);
             this.calculateCohesionForce(entity.id, transform, unit, tempCohesion);
             this.calculateAlignmentForce(entity.id, transform, unit, velocity, tempAlignment);
