@@ -1,7 +1,7 @@
 /**
  * GuardrailMesh - Renders small decorative rails along platform cliff edges
  *
- * SC2-style guardrails are thin raised borders that run along the top
+ * Guardrails are thin raised borders that run along the top
  * of cliff edges, providing visual definition to platform boundaries.
  *
  * Features:

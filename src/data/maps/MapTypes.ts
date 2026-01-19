@@ -1,4 +1,4 @@
-// Map data structures for SC2-style maps
+// Map data structures for RTS-style maps
 // Enhanced terrain system with 256 height levels and terrain features
 
 import { BiomeType } from '@/rendering/Biomes';
@@ -71,7 +71,7 @@ export const TERRAIN_FEATURE_CONFIG: Record<TerrainFeature, TerrainFeatureConfig
 };
 
 /**
- * Elevation now uses 0-255 range (like SC2) for smooth terrain.
+ * Elevation now uses 0-255 range for smooth terrain.
  * Gameplay zones for high-ground advantage:
  * - Low ground: 0-85
  * - Mid ground: 86-170
@@ -112,7 +112,7 @@ export function getHighGroundAdvantage(attackerElevation: Elevation, defenderEle
   const attackerZone = elevationToZone(attackerElevation);
   const defenderZone = elevationToZone(defenderElevation);
 
-  // Attacking from lower ground has miss chance (like SC2)
+  // Attacking from lower ground has miss chance
   if (attackerZone === 'low' && defenderZone === 'high') return 0.7; // 30% miss
   if (attackerZone === 'low' && defenderZone === 'mid') return 0.85; // 15% miss
   if (attackerZone === 'mid' && defenderZone === 'high') return 0.85; // 15% miss
@@ -309,7 +309,7 @@ export function createMineralLine(
     const t = (i - 3.5) / 3.5; // -1 to 1, centered
     const angle = angleToBase + t * (arcSpread / 2);
 
-    // Alternate rows for depth (like SC2) - closer patches are even indices
+    // Alternate rows for depth - closer patches are even indices
     const radiusVariation = (i % 2 === 0) ? 0 : 0.8;
     const r = arcRadius + radiusVariation;
 
@@ -395,7 +395,7 @@ export function createVespeneGeysers(
   ];
 }
 
-// STANDARD mineral distance from CC (SC2-style)
+// STANDARD mineral distance from CC
 const MINERAL_DISTANCE = 7; // 7 units from CC center to mineral arc center
 // Natural expansions place minerals further to keep ramp paths clear
 export const MINERAL_DISTANCE_NATURAL = 10;
@@ -576,7 +576,7 @@ export function createRampInTerrain(
 
 /**
  * Create a raised platform (base/expansion) with cliff edges.
- * SC2-style: units can't walk up the edges, only through ramps.
+ * Units can't walk up the edges, only through ramps.
  *
  * @param grid - The terrain grid
  * @param centerX - Center X of the platform

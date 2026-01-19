@@ -92,7 +92,7 @@ export class EnvironmentManager {
     this.terrain = new Terrain({ mapData });
     scene.add(this.terrain.mesh);
 
-    // Setup bright SC2-quality lighting based on biome
+    // Setup bright lighting based on biome
     // Main ambient light - bright base illumination
     this.ambientLight = new THREE.AmbientLight(this.biome.colors.ambient, 0.8);
     scene.add(this.ambientLight);
@@ -235,7 +235,7 @@ export class EnvironmentManager {
       this.scene.add(this.water.mesh);
     }
 
-    // Map border fog - dark smoky effect around map edges (SC2-style)
+    // Map border fog - dark smoky effect around map edges
     // Uses TSL for WebGPU/WebGL compatibility
     this.mapBorderFog = new TSLMapBorderFog(this.mapData);
     this.scene.add(this.mapBorderFog.mesh);

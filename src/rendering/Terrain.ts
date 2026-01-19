@@ -267,7 +267,7 @@ export class Terrain {
     // Create chunked terrain geometries and meshes
     this.createChunkedTerrain();
 
-    // Create SC2-style guardrails on platform edges
+    // Create RTS-style guardrails on platform edges
     this.createGuardrails();
 
     const numChunks = this.chunkMeshes.length;
@@ -307,7 +307,7 @@ export class Terrain {
           }
         } else if (cell.terrain === 'ramp' || cell.terrain === 'platform') {
           // Ramps and platforms: completely smooth with NO noise
-          // SC2-style geometric surfaces are perfectly flat
+          // RTS-style geometric surfaces are perfectly flat
           detailNoise = 0;
         } else {
           const groundNoise = fbmNoise(nx * 6, ny * 6, 3, 2.0, 0.5) * 0.015;
@@ -596,7 +596,7 @@ export class Terrain {
   }
 
   /**
-   * Create SC2-style guardrails on platform edges.
+   * Create RTS-style guardrails on platform edges.
    * Guardrails are placed on platform/ramp edges that don't connect to other platforms.
    */
   private createGuardrails(): void {
@@ -759,7 +759,7 @@ export class Terrain {
     this.guardrailGeometry.setAttribute('normal', new THREE.Float32BufferAttribute(normals, 3));
     this.guardrailGeometry.setIndex(indices);
 
-    // SC2-style yellow/orange hazard color for guardrails
+    // RTS-style yellow/orange hazard color for guardrails
     const guardrailMaterial = new THREE.MeshStandardMaterial({
       color: 0xD4A017,  // Golden/orange hazard color
       roughness: 0.6,
@@ -1186,7 +1186,7 @@ export class Terrain {
    * Returns triangles from walkable terrain plus cliff wall barriers.
    * Used by recast-navigation for navmesh generation.
    *
-   * SC2-STYLE CLIFF HANDLING:
+   * RTS-STYLE CLIFF HANDLING:
    * 1. Walkable floor geometry uses quantized heights for strict elevation separation
    * 2. Ramps use smooth heightMap for natural slope traversal
    * 3. Cliff walls are generated at boundaries between different elevations
@@ -1428,7 +1428,7 @@ export class Terrain {
       }
 
       // Platform cells always generate vertical cliff faces to lower terrain
-      // This creates the geometric SC2-style platform look
+      // This creates the geometric RTS-style platform look
       if (cell.terrain === 'platform' && neighbor.terrain !== 'ramp') {
         const elevDiff = cell.elevation - neighbor.elevation;
         // Only generate wall if this cell is higher than neighbor

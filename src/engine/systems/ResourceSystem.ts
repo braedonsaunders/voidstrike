@@ -143,7 +143,7 @@ export class ResourceSystem extends System {
       const transform = entity.get<Transform>('Transform');
       if (!transform) continue;
 
-      // SC2-style mineral splitting: assign worker to patch with fewest gatherers
+      // Mineral splitting: assign worker to patch with fewest gatherers
       let assignedTargetId = command.targetEntityId;
       let assignedTransform = targetTransform;
 
@@ -165,7 +165,7 @@ export class ResourceSystem extends System {
           targetEntityId: assignedTargetId,
         });
       } else {
-        // If worker is currently constructing, release them from construction (SC2-style)
+        // If worker is currently constructing, release them from construction
         if (unit.state === 'building' && unit.constructingBuildingId !== null) {
           unit.cancelBuilding();
         }
@@ -214,7 +214,7 @@ export class ResourceSystem extends System {
   }
 
   /**
-   * Find all mineral patches within range of a position (SC2-style mineral line)
+   * Find all mineral patches within range of a position (mineral line)
    */
   private findNearbyMineralPatches(
     x: number,
@@ -249,7 +249,7 @@ export class ResourceSystem extends System {
   }
 
   /**
-   * SC2-style: Find the best mineral patch for a worker
+   * Find the best mineral patch for a worker
    * Prefers patches with 0-1 workers, then closest with fewest workers
    */
   private findBestMineralPatch(
@@ -599,7 +599,7 @@ export class ResourceSystem extends System {
           const resource = resourceEntity.get<Resource>('Resource');
 
           if (resourceTransform && resource && !resource.isDepleted()) {
-            // SC2-style rebalancing: check if we should switch to a less saturated patch
+            // Rebalancing: check if we should switch to a less saturated patch
             if (resource.resourceType === 'minerals' && resource.getCurrentGatherers() >= 2) {
               const nearbyPatches = this.findNearbyMineralPatches(resourceTransform.x, resourceTransform.y, 15);
               const betterPatch = nearbyPatches.find(p =>

@@ -5,10 +5,13 @@ import { Transform } from '../components/Transform';
 import { Health } from '../components/Health';
 import { Unit, DamageType } from '../components/Unit';
 import { Selectable } from '../components/Selectable';
+import { Building } from '../components/Building';
 import { Projectile, ProjectileDefinition, ProjectileBehavior } from '../components/Projectile';
 import { quantize, QUANT_POSITION, QUANT_DAMAGE } from '@/utils/FixedPoint';
 import { getDamageMultiplier } from '@/data/combat/combat';
 import { debugCombat as debugProjectile } from '@/utils/debugLogger';
+import { isLocalPlayer } from '@/store/gameSetupStore';
+import { DEFAULT_AIRBORNE_HEIGHT } from '@/assets/AssetManager';
 
 /**
  * ProjectileSystem - Handles projectile movement and damage application on impact
@@ -96,7 +99,7 @@ export class ProjectileSystem extends System {
   }
 
   /**
-   * Update homing projectile - tracks moving target
+   * Update homing projectile - tracks moving target in 3D
    */
   private updateHomingProjectile(
     _entity: Entity,
@@ -109,12 +112,15 @@ export class ProjectileSystem extends System {
       if (targetEntity) {
         const targetTransform = targetEntity.get<Transform>('Transform');
         const targetHealth = targetEntity.get<Health>('Health');
+        const targetUnit = targetEntity.get<Unit>('Unit');
 
         if (targetTransform && targetHealth && !targetHealth.isDead()) {
-          // Update target position
+          // Update target position including Z for flying units
           projectile.targetX = targetTransform.x;
           projectile.targetY = targetTransform.y;
-          projectile.targetZ = targetTransform.z;
+          // Add flying height offset if target is airborne
+          const flyingOffset = targetUnit?.isFlying ? DEFAULT_AIRBORNE_HEIGHT : 0;
+          projectile.targetZ = targetTransform.z + flyingOffset;
         } else {
           // Target died - continue to last known position
           projectile.targetEntityId = null;
@@ -124,41 +130,48 @@ export class ProjectileSystem extends System {
       }
     }
 
-    // Calculate direction to target
+    // Calculate 3D direction to target
     const dx = projectile.targetX - transform.x;
     const dy = projectile.targetY - transform.y;
-    const distSq = dx * dx + dy * dy;
+    const dz = projectile.targetZ - transform.z;
 
-    if (distSq < 0.0001) return; // Already at target
+    // Use 3D distance for proper tracking
+    const dist3DSq = dx * dx + dy * dy + dz * dz;
+    if (dist3DSq < 0.0001) return; // Already at target
 
-    const distance = Math.sqrt(distSq);
+    const distance3D = Math.sqrt(dist3DSq);
 
     // Calculate movement for this tick
     const moveDistance = projectile.speed * this.TICK_DURATION;
 
     // If we'd overshoot, move directly to target
-    if (moveDistance >= distance) {
+    if (moveDistance >= distance3D) {
       transform.x = quantize(projectile.targetX, QUANT_POSITION);
       transform.y = quantize(projectile.targetY, QUANT_POSITION);
+      transform.z = quantize(projectile.targetZ, QUANT_POSITION);
     } else {
-      // Normalize and move
-      const dirX = dx / distance;
-      const dirY = dy / distance;
-
-      // Apply turn rate limiting for missiles (if turnRate < Infinity)
-      // For now, all homing projectiles track instantly
-      // TODO: Implement smooth turning for missiles with finite turnRate
+      // Normalize and move in 3D
+      const dirX = dx / distance3D;
+      const dirY = dy / distance3D;
+      const dirZ = dz / distance3D;
 
       transform.x = quantize(transform.x + dirX * moveDistance, QUANT_POSITION);
       transform.y = quantize(transform.y + dirY * moveDistance, QUANT_POSITION);
+      transform.z = quantize(transform.z + dirZ * moveDistance, QUANT_POSITION);
     }
 
-    // Update rotation to face movement direction
+    // Update rotation to face movement direction (XY plane)
     transform.rotation = Math.atan2(dy, dx);
   }
 
   /**
    * Update ballistic projectile - follows parabolic arc to target position
+   *
+   * The Z position is calculated as:
+   * 1. Linear interpolation from startZ to targetZ based on progress
+   * 2. PLUS a parabolic arc that peaks at arcHeight at progress=0.5
+   *
+   * This allows ballistic projectiles to properly hit air targets.
    */
   private updateBallisticProjectile(
     _entity: Entity,
@@ -167,21 +180,23 @@ export class ProjectileSystem extends System {
     currentTick: number
   ): void {
     const age = currentTick - projectile.spawnTick;
-    const totalTicks = projectile.maxLifetimeTicks;
-    const progress = (age + 1) / totalTicks; // Progress after this tick
+    // Use maxLifetimeTicks - 10 to get actual travel ticks (we added 10 buffer at spawn)
+    const travelTicks = projectile.maxLifetimeTicks - 10;
+    const progress = Math.min(1, (age + 1) / Math.max(1, travelTicks)); // Progress after this tick, clamped
 
     // Linear interpolation for X/Y (horizontal movement)
-    // velocityX/Y were pre-calculated at spawn as distance/ticks
     transform.x = quantize(transform.x + projectile.velocityX, QUANT_POSITION);
     transform.y = quantize(transform.y + projectile.velocityY, QUANT_POSITION);
 
-    // Parabolic arc for Z (height)
-    // z = arcHeight * 4 * progress * (1 - progress)
-    // Peaks at progress = 0.5 with value = arcHeight
-    if (projectile.arcHeight > 0) {
-      const arcZ = projectile.arcHeight * 4 * progress * (1 - progress);
-      transform.z = quantize(arcZ, QUANT_POSITION);
-    }
+    // Z = linear interpolation from startZ to targetZ, plus parabolic arc
+    // Linear component: lerp(startZ, targetZ, progress)
+    const baseZ = projectile.startZ + progress * (projectile.targetZ - projectile.startZ);
+
+    // Arc component: peaks at arcHeight when progress = 0.5
+    // arc = arcHeight * 4 * progress * (1 - progress)
+    const arcZ = projectile.arcHeight * 4 * progress * (1 - progress);
+
+    transform.z = quantize(baseZ + arcZ, QUANT_POSITION);
 
     // Rotation follows movement direction
     transform.rotation = Math.atan2(projectile.velocityY, projectile.velocityX);
@@ -198,7 +213,7 @@ export class ProjectileSystem extends System {
   }
 
   /**
-   * Check if projectile has reached its target
+   * Check if projectile has reached its target (3D distance check)
    */
   private checkImpact(
     entity: Entity,
@@ -208,7 +223,10 @@ export class ProjectileSystem extends System {
   ): void {
     const dx = projectile.targetX - transform.x;
     const dy = projectile.targetY - transform.y;
-    const distSq = dx * dx + dy * dy;
+    const dz = projectile.targetZ - transform.z;
+
+    // Use 3D distance for proper air unit handling
+    const distSq = dx * dx + dy * dy + dz * dz;
 
     if (distSq <= this.IMPACT_RADIUS_SQ) {
       this.applyImpactDamage(entity, projectile, transform, currentTick);
@@ -237,6 +255,11 @@ export class ProjectileSystem extends System {
       const targetEntity = this.world.getEntity(projectile.targetEntityId);
       if (targetEntity) {
         const targetHealth = targetEntity.get<Health>('Health');
+        const targetTransform = targetEntity.get<Transform>('Transform');
+        const targetSelectable = targetEntity.get<Selectable>('Selectable');
+        const targetUnit = targetEntity.get<Unit>('Unit');
+        const targetBuilding = targetEntity.get<Building>('Building');
+
         if (targetHealth && !targetHealth.isDead()) {
           // Apply pre-calculated damage directly (no armor - already factored in)
           const finalDamage = Math.max(1, projectile.damage);
@@ -244,13 +267,39 @@ export class ProjectileSystem extends System {
           // Use applyDamageRaw to bypass Health's armor reduction (already applied)
           targetHealth.applyDamageRaw(finalDamage, gameTime);
 
+          const isKillingBlow = targetHealth.isDead();
+          const targetIsFlying = targetUnit?.isFlying ?? false;
+          const targetHeight = targetIsFlying ? DEFAULT_AIRBORNE_HEIGHT : 0;
+
           debugProjectile.log(
             `Projectile ${entity.id} hit target ${projectile.targetEntityId} for ${finalDamage} damage ` +
-            `(health: ${targetHealth.current.toFixed(1)}/${targetHealth.max})`
+            `(health: ${targetHealth.current.toFixed(1)}/${targetHealth.max})${isKillingBlow ? ' [KILL]' : ''}`
           );
 
+          // Emit damage:dealt for UI damage numbers
+          if (targetTransform) {
+            this.game.eventBus.emit('damage:dealt', {
+              targetId: projectile.targetEntityId,
+              damage: finalDamage,
+              targetPos: { x: targetTransform.x, y: targetTransform.y },
+              targetHeight,
+              targetIsFlying,
+              targetUnitType: targetUnit?.unitId ?? targetBuilding?.buildingId,
+              targetPlayerId: targetSelectable?.playerId,
+              isKillingBlow,
+            });
+
+            // Emit player:damage for local player overlay effects
+            if (targetSelectable?.playerId && isLocalPlayer(targetSelectable.playerId)) {
+              this.game.eventBus.emit('player:damage', {
+                damage: finalDamage,
+                position: { x: targetTransform.x, y: targetTransform.y },
+              });
+            }
+          }
+
           // Check for kill and emit event
-          if (targetHealth.isDead()) {
+          if (isKillingBlow) {
             this.emitKillEvent(projectile, targetEntity);
           }
         }
@@ -306,6 +355,7 @@ export class ProjectileSystem extends System {
       const transform = entity.get<Transform>('Transform');
       const health = entity.get<Health>('Health');
       const selectable = entity.get<Selectable>('Selectable');
+      const unit = entity.get<Unit>('Unit');
 
       if (!transform || !health || !selectable) continue;
       if (health.isDead()) continue;
@@ -334,11 +384,35 @@ export class ProjectileSystem extends System {
       // takeDamage will apply this target's armor reduction
       health.takeDamage(damageWithMultiplier, gameTime);
 
+      const isKillingBlow = health.isDead();
+      const targetIsFlying = unit?.isFlying ?? false;
+      const targetHeight = targetIsFlying ? DEFAULT_AIRBORNE_HEIGHT : 0;
+
       debugProjectile.log(
-        `Splash hit entity ${entityId} for ${damageWithMultiplier} damage (falloff: ${falloffFactor.toFixed(2)})`
+        `Splash hit entity ${entityId} for ${damageWithMultiplier} damage (falloff: ${falloffFactor.toFixed(2)})${isKillingBlow ? ' [KILL]' : ''}`
       );
 
-      if (health.isDead()) {
+      // Emit damage:dealt for UI damage numbers
+      this.game.eventBus.emit('damage:dealt', {
+        targetId: entityId,
+        damage: damageWithMultiplier,
+        targetPos: { x: transform.x, y: transform.y },
+        targetHeight,
+        targetIsFlying,
+        targetUnitType: unit?.unitId,
+        targetPlayerId: selectable.playerId,
+        isKillingBlow,
+      });
+
+      // Emit player:damage for local player overlay effects
+      if (selectable.playerId && isLocalPlayer(selectable.playerId)) {
+        this.game.eventBus.emit('player:damage', {
+          damage: damageWithMultiplier,
+          position: { x: transform.x, y: transform.y },
+        });
+      }
+
+      if (isKillingBlow) {
         this.emitKillEvent(projectile, entity);
       }
     }
@@ -359,6 +433,7 @@ export class ProjectileSystem extends System {
       const transform = entity.get<Transform>('Transform');
       const health = entity.get<Health>('Health');
       const selectable = entity.get<Selectable>('Selectable');
+      const building = entity.get<Building>('Building');
 
       if (!transform || !health || !selectable) continue;
       if (health.isDead()) continue;
@@ -380,6 +455,32 @@ export class ProjectileSystem extends System {
 
       // takeDamage will apply building's armor reduction
       health.takeDamage(damageWithMultiplier, gameTime);
+
+      const isKillingBlow = health.isDead();
+
+      // Emit damage:dealt for UI damage numbers
+      this.game.eventBus.emit('damage:dealt', {
+        targetId: entityId,
+        damage: damageWithMultiplier,
+        targetPos: { x: transform.x, y: transform.y },
+        targetHeight: 0,
+        targetIsFlying: false,
+        targetUnitType: building?.buildingId,
+        targetPlayerId: selectable.playerId,
+        isKillingBlow,
+      });
+
+      // Emit player:damage for local player overlay effects
+      if (selectable.playerId && isLocalPlayer(selectable.playerId)) {
+        this.game.eventBus.emit('player:damage', {
+          damage: damageWithMultiplier,
+          position: { x: transform.x, y: transform.y },
+        });
+      }
+
+      if (isKillingBlow) {
+        this.emitKillEvent(projectile, entity);
+      }
     }
   }
 
@@ -410,17 +511,18 @@ export class ProjectileSystem extends System {
     transform: Transform,
     currentTick: number
   ): void {
-    // Ballistic projectiles apply damage at final position (they hit the ground)
+    // Ballistic projectiles apply damage at final position
     if (projectile.behavior === 'ballistic') {
-      // Move to final target position
+      // Move to final target position (including targetZ for air units)
       transform.x = projectile.targetX;
       transform.y = projectile.targetY;
-      transform.z = 0;
+      transform.z = projectile.targetZ;
 
       this.applyImpactDamage(entity, projectile, transform, currentTick);
     } else {
       // Homing/linear projectiles that expired without hitting just disappear
       // This shouldn't normally happen for homing, but handles edge cases
+      debugProjectile.log(`Projectile ${entity.id} expired without impact (behavior: ${projectile.behavior})`);
       this.destroyProjectile(entity.id);
     }
   }
@@ -466,15 +568,16 @@ export class ProjectileSystem extends System {
     const currentTick = this.game.getCurrentTick();
     const def = data.projectileType;
 
-    // Calculate distance and travel time
+    // Calculate 3D distance and travel time
     const dx = data.targetX - data.startX;
     const dy = data.targetY - data.startY;
     const dz = data.targetZ - data.startZ;
-    const distance = Math.sqrt(dx * dx + dy * dy);
+    // Use 3D distance for proper air unit timing
+    const distance3D = Math.sqrt(dx * dx + dy * dy + dz * dz);
 
     // Calculate how many ticks to reach target
     const speedPerTick = def.speed * this.TICK_DURATION;
-    const travelTicks = Math.max(1, Math.ceil(distance / speedPerTick));
+    const travelTicks = Math.max(1, Math.ceil(distance3D / speedPerTick));
 
     // Pre-calculate velocity for linear/ballistic projectiles
     const velocityX = dx / travelTicks;
@@ -502,6 +605,7 @@ export class ProjectileSystem extends System {
       targetX: quantize(data.targetX, QUANT_POSITION),
       targetY: quantize(data.targetY, QUANT_POSITION),
       targetZ: quantize(data.targetZ, QUANT_POSITION),
+      startZ: quantize(data.startZ, QUANT_POSITION),
       speed: def.speed,
       turnRate: def.turnRate,
       arcHeight: def.arcHeight,

@@ -10,7 +10,7 @@ import { Game } from '@/engine/core/Game';
  * This overlay handles:
  * - "Waiting for player..." when connection is lost
  * - Reconnection attempt progress
- * - Desync notification (SC2-style game ending)
+ * - Desync notification (game ending)
  * - Connection failed state
  */
 export function MultiplayerOverlay() {

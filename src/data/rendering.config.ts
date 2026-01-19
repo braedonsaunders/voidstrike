@@ -14,14 +14,14 @@
 
 /**
  * Default camera configuration for RTS gameplay.
- * SC2-style camera with zoom-dependent pitch.
+ * Camera with zoom-dependent pitch.
  */
 export const CAMERA = {
   /** Minimum zoom distance (closest to ground) */
   MIN_ZOOM: 14,
   /** Maximum zoom distance (furthest from ground) */
   MAX_ZOOM: 80,
-  /** Initial zoom level - SC2-like default for good base overview */
+  /** Initial zoom level - default for good base overview */
   INITIAL_ZOOM: 45,
   /** Camera pan speed (units per second) */
   PAN_SPEED: 80,
@@ -333,6 +333,11 @@ export const RENDER_ORDER = {
 export const FACTION_COLORS = {
   terran: {
     primary: 0xffaa00,    // Orange-yellow tracer
+    secondary: 0xff6600,  // Orange trail
+    glow: 0xffdd44,       // Bright yellow glow
+  },
+  dominion: {
+    primary: 0xffaa00,    // Orange-yellow tracer (same as terran for now)
     secondary: 0xff6600,  // Orange trail
     glow: 0xffdd44,       // Bright yellow glow
   },

@@ -2154,7 +2154,7 @@ export function WebGPUGameCanvas() {
           }
           break;
         case 'm':
-          // SC2-style: M for move targeting mode
+          // M for move targeting mode
           if (!isBuilding) {
             useGameStore.getState().setCommandTargetMode('move');
           }

@@ -488,7 +488,7 @@ export const DOMINION_AI_CONFIG: FactionAIConfig = {
       actionDelayTicks: 15,
       targetWorkers: 32,
       maxBases: 5,
-      miningSpeedMultiplier: 1.25, // 25% faster mining (SC2-style bonus)
+      miningSpeedMultiplier: 1.25, // 25% faster mining (difficulty bonus)
       buildSpeedMultiplier: 1.1,
       scoutingEnabled: true,
       counterBuildingEnabled: true,
@@ -505,7 +505,7 @@ export const DOMINION_AI_CONFIG: FactionAIConfig = {
       actionDelayTicks: 10, // Half second
       targetWorkers: 40,
       maxBases: 6,
-      miningSpeedMultiplier: 1.5, // 50% faster mining (SC2-style bonus)
+      miningSpeedMultiplier: 1.5, // 50% faster mining (difficulty bonus)
       buildSpeedMultiplier: 1.3,
       scoutingEnabled: true,
       counterBuildingEnabled: true,

@@ -842,7 +842,7 @@ export class BuildingRenderer {
         meshData.blueprintEffect.position.set(transform.x, terrainHeight, transform.y);
         this.updateBlueprintEffect(meshData.blueprintEffect, dt, meshData.buildingHeight);
       } else if (isPaused) {
-        // Construction paused (SC2-style) - show partially built state with blueprint effect
+        // Construction paused - show partially built state with blueprint effect
         const progress = building.buildProgress;
 
         // Same Y-scale approach as constructing state
@@ -1139,7 +1139,7 @@ export class BuildingRenderer {
     // Health bar
     const healthBar = this.createBar(0x00ff00);
 
-    // Progress bar - larger and more visible like SC2
+    // Progress bar - larger and more visible
     const progressBar = this.createProgressBar();
 
     return {
@@ -2263,7 +2263,7 @@ export class BuildingRenderer {
   }
 
   /**
-   * Create a SC2-style production progress bar
+   * Create a production progress bar
    * Larger and more visible than the health bar with border outline
    */
   private createProgressBar(): THREE.Group {
@@ -2362,13 +2362,13 @@ export class BuildingRenderer {
       const halfWidth = BuildingRenderer.PROGRESS_BAR_WIDTH / 2;
       fill.position.x = (clampedProgress - 1) * halfWidth;
 
-      // Different colors for construction vs production (SC2 style)
+      // Different colors for construction vs production
       const material = fill.material as THREE.MeshBasicMaterial;
       if (isConstruction) {
         // Blue for building construction
         material.color.setHex(0x00aaff);
       } else {
-        // Green for unit production (like SC2)
+        // Green for unit production
         material.color.setHex(0x00ff88);
       }
     }

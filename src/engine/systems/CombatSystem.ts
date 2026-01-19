@@ -342,7 +342,7 @@ export class CombatSystem extends System {
           });
         }
       } else {
-        // If worker is currently constructing, release them from construction (SC2-style)
+        // If worker is currently constructing, release them from construction
         if (unit.state === 'building' && unit.constructingBuildingId !== null) {
           unit.cancelBuilding();
         }
@@ -561,7 +561,7 @@ export class CombatSystem extends System {
           continue;
         }
 
-        // Calculate effective distance (edge-to-edge, like SC2)
+        // Calculate effective distance (edge-to-edge)
         // Uses visual radius (model scale) not just collision radius
         let effectiveDistance: number;
         const attackerRadius = AssetManager.getCachedVisualRadius(unit.unitId, unit.collisionRadius);
@@ -780,7 +780,7 @@ export class CombatSystem extends System {
       const targetIsFlying = unit?.isFlying ?? false;
       if (!selfUnit.canAttackTarget(targetIsFlying)) continue;
 
-      // Edge-to-edge distance using visual radius (like SC2)
+      // Edge-to-edge distance using visual radius
       const centerDistance = selfTransform.distanceTo(transform);
       const attackerRadius = AssetManager.getCachedVisualRadius(selfUnit.unitId, selfUnit.collisionRadius);
       const targetRadius = unit ? AssetManager.getCachedVisualRadius(unit.unitId, unit.collisionRadius) : 0.5;
@@ -938,7 +938,7 @@ export class CombatSystem extends System {
       const targetIsFlying = unit?.isFlying ?? false;
       if (!selfUnit.canAttackTarget(targetIsFlying)) continue;
 
-      // Edge-to-edge distance using visual radius (like SC2)
+      // Edge-to-edge distance using visual radius
       const centerDistance = selfTransform.distanceTo(transform);
       const attackerRadius = AssetManager.getCachedVisualRadius(selfUnit.unitId, selfUnit.collisionRadius);
       const targetRadius = unit ? AssetManager.getCachedVisualRadius(unit.unitId, unit.collisionRadius) : 0.5;

@@ -1,8 +1,8 @@
 /**
- * Movement System - SC2-Style Clumping & Formations
+ * Movement System - RTS-Style Clumping & Formations
  *
  * Handles unit movement using Recast's DetourCrowd for collision avoidance.
- * Implements SC2-style "magic box" detection for clump vs formation behavior:
+ * Implements RTS-style "magic box" detection for clump vs formation behavior:
  * - Target OUTSIDE selection bounding box → units converge to same point (clump)
  * - Target INSIDE bounding box → units preserve relative spacing (formation nudge)
  *
@@ -34,7 +34,7 @@ import { WasmBoids, getWasmBoids } from '../wasm/WasmBoids';
 import { CROWD_MAX_AGENTS } from '@/data/pathfinding.config';
 import { SpatialEntityData, SpatialUnitState, stateToEnum } from '../core/SpatialGrid';
 
-// ==================== SC2-STYLE STEERING CONSTANTS ====================
+// ==================== RTS-STYLE STEERING CONSTANTS ====================
 
 // Separation - prevents overlapping (strongest force)
 const SEPARATION_RADIUS = 1.0;
@@ -53,12 +53,12 @@ const ALIGNMENT_RADIUS = 4.0;
 const ALIGNMENT_STRENGTH = 0.3;
 
 // Arrival spreading - units spread out when reaching destination
-// SC2-style: Gentle spreading to prevent bunching without causing oscillation
+// RTS-style: Gentle spreading to prevent bunching without causing oscillation
 const ARRIVAL_SPREAD_RADIUS = 2.0;           // Distance from target where spreading kicks in (reduced from 2.5)
 const ARRIVAL_SPREAD_STRENGTH = 1.0;         // Additional separation at arrival (reduced from 2.0)
 
 // Building avoidance - runtime steering to handle edge cases
-// SC2-STYLE: Reduced margins - trust the navmesh for primary clearance
+// RTS-STYLE: Reduced margins - trust the navmesh for primary clearance
 const BUILDING_AVOIDANCE_STRENGTH = 15.0; // Reduced from 25 - navmesh handles most avoidance
 const BUILDING_AVOIDANCE_MARGIN = 0.1;    // Minimal margin - navmesh walkableRadius handles clearance
 const BUILDING_AVOIDANCE_SOFT_MARGIN = 0.3; // Reduced from 0.8 - less conservative
@@ -70,18 +70,18 @@ const PATH_REQUEST_COOLDOWN_TICKS = 10;
 // Use Recast crowd for pathfinding direction (obstacle avoidance disabled in crowd config)
 const USE_RECAST_CROWD = true;
 
-// ==================== SC2-STYLE VELOCITY SMOOTHING ====================
+// ==================== RTS-STYLE VELOCITY SMOOTHING ====================
 // Prevents jitter by blending velocity over multiple frames
-// SC2-style: Stronger smoothing prevents micro-oscillations
+// RTS-style: Stronger smoothing prevents micro-oscillations
 
 const VELOCITY_SMOOTHING_FACTOR = 0.25;      // Blend factor: 0=full history, 1=no smoothing (reduced from 0.3)
 const VELOCITY_HISTORY_FRAMES = 4;           // Number of frames to average (increased from 3)
 const DIRECTION_COMMIT_THRESHOLD = 0.6;      // Dot product threshold for direction commitment (reduced from 0.7)
 const DIRECTION_COMMIT_STRENGTH = 0.6;       // How strongly to resist direction changes (increased from 0.5)
 
-// ==================== SC2-STYLE PHYSICS PUSHING ====================
+// ==================== RTS-STYLE PHYSICS PUSHING ====================
 // Units push each other instead of avoiding - creates natural flow
-// SC2-style: Moderate push prevents stacking without causing jitter
+// RTS-style: Moderate push prevents stacking without causing jitter
 
 const PHYSICS_PUSH_RADIUS = 1.2;             // Distance at which pushing starts
 const PHYSICS_PUSH_STRENGTH = 6.0;           // Push force strength (reduced from 8.0)
@@ -90,7 +90,7 @@ const PHYSICS_OVERLAP_PUSH = 15.0;           // Extra strong push when overlappi
 
 // ==================== STUCK DETECTION ====================
 // If unit hasn't moved for N frames, apply random nudge
-// SC2-style: Only trigger for units actively trying to reach a distant target
+// RTS-style: Only trigger for units actively trying to reach a distant target
 
 const STUCK_DETECTION_FRAMES = 20;           // Frames of near-zero movement to trigger (increased from 12)
 const STUCK_VELOCITY_THRESHOLD = 0.05;       // Below this speed = considered stuck (reduced from 0.1)
@@ -149,7 +149,7 @@ export class MovementSystem extends System {
   public readonly name = 'MovementSystem';
   public priority = 10;
 
-  // SC2-style: Larger arrival threshold prevents micro-oscillations at destination
+  // RTS-style: Larger arrival threshold prevents micro-oscillations at destination
   private arrivalThreshold = 0.8;
   private decelerationThreshold = 2.0;
   private lastPathRequestTime: Map<number, number> = new Map();
@@ -168,10 +168,10 @@ export class MovementSystem extends System {
   // PERF: Batched neighbor query - query once, reuse for all steering behaviors
   private batchedNeighborCache: Map<number, { ids: number[]; tick: number }> = new Map();
 
-  // SC2-STYLE: Velocity history for smoothing (prevents jitter)
+  // RTS-STYLE: Velocity history for smoothing (prevents jitter)
   private velocityHistory: Map<number, VelocityHistoryEntry[]> = new Map();
 
-  // SC2-STYLE: Stuck detection state
+  // RTS-STYLE: Stuck detection state
   private stuckState: Map<number, StuckState> = new Map();
 
   // WASM SIMD boids acceleration
@@ -308,7 +308,7 @@ export class MovementSystem extends System {
 
   /**
    * Calculate the bounding box of a set of units.
-   * Used for SC2-style "magic box" detection.
+   * Used for RTS-style "magic box" detection.
    */
   private calculateBoundingBox(entityIds: number[]): {
     minX: number;
@@ -353,7 +353,7 @@ export class MovementSystem extends System {
 
   /**
    * Check if a target point is inside the bounding box of selected units.
-   * SC2 behavior: target outside box = clump (converge), target inside = preserve spacing
+   * RTS behavior: target outside box = clump (converge), target inside = preserve spacing
    */
   private isTargetInsideMagicBox(
     targetX: number,
@@ -408,7 +408,7 @@ export class MovementSystem extends System {
   }
 
   /**
-   * Handle move command with SC2-style magic box detection.
+   * Handle move command with RTS-style magic box detection.
    *
    * Magic Box Behavior:
    * - Target OUTSIDE the bounding box of selected units → CLUMP MODE
@@ -416,7 +416,7 @@ export class MovementSystem extends System {
    * - Target INSIDE the bounding box → PRESERVE SPACING MODE
    *   Each unit maintains its relative offset from the group center.
    *
-   * This creates natural SC2-like behavior where:
+   * This creates natural RTS-like behavior where:
    * - Long moves (outside group) converge units to the target point
    * - Short moves (within group) nudge formation while maintaining spacing
    */
@@ -476,14 +476,14 @@ export class MovementSystem extends System {
       this.moveUnitsWithRelativeOffsets(entityIds, targetPosition.x, targetPosition.y, box, queue);
     } else {
       // CLUMP MODE: Target is outside the group - all units converge to same point
-      // Separation forces will spread them naturally on arrival (SC2 style)
+      // Separation forces will spread them naturally on arrival (RTS style)
       this.moveUnitsToSamePoint(entityIds, targetPosition.x, targetPosition.y, queue);
     }
   }
 
   /**
    * Clump mode: All units move to the exact same target point.
-   * Separation forces will naturally spread them on arrival (SC2 style).
+   * Separation forces will naturally spread them on arrival (RTS style).
    */
   private moveUnitsToSamePoint(
     entityIds: number[],
@@ -844,7 +844,7 @@ export class MovementSystem extends System {
 
   /**
    * Get state-dependent separation strength.
-   * SC2 style: weak while moving (allow clumping), strong when idle (spread out).
+   * RTS style: weak while moving (allow clumping), strong when idle (spread out).
    */
   private getSeparationStrength(unit: Unit, distanceToTarget: number): number {
     // Workers gathering/building have no separation
@@ -871,7 +871,7 @@ export class MovementSystem extends System {
   }
 
   /**
-   * Calculate separation force (SC2-style soft avoidance)
+   * Calculate separation force (RTS-style soft avoidance)
    * State-dependent: weak while moving (clumping), strong when idle (spreading).
    * PERF: Results are cached and only recalculated every SEPARATION_THROTTLE_TICKS ticks
    */
@@ -960,7 +960,7 @@ export class MovementSystem extends System {
 
   /**
    * Calculate cohesion force - steers toward the average position of nearby units.
-   * Keeps groups together but with very weak force (SC2 style).
+   * Keeps groups together but with very weak force (RTS style).
    * PERF: Results are cached and only recalculated every COHESION_THROTTLE_TICKS ticks
    */
   private calculateCohesionForce(
@@ -1139,7 +1139,7 @@ export class MovementSystem extends System {
     out.y = forceY;
   }
 
-  // ==================== SC2-STYLE VELOCITY SMOOTHING ====================
+  // ==================== RTS-STYLE VELOCITY SMOOTHING ====================
 
   /**
    * Apply velocity smoothing to prevent jitter.
@@ -1204,7 +1204,7 @@ export class MovementSystem extends System {
     return { vx: smoothedVx, vy: smoothedVy };
   }
 
-  // ==================== SC2-STYLE PHYSICS PUSHING ====================
+  // ==================== RTS-STYLE PHYSICS PUSHING ====================
 
   /**
    * Calculate physics push force from nearby units.
@@ -1294,7 +1294,7 @@ export class MovementSystem extends System {
    * Detect if a unit is stuck and apply random nudge if needed.
    * Returns nudge force to apply (or zero if not stuck).
    *
-   * SC2-style: Only applies to units actively trying to reach a distant target.
+   * RTS-style: Only applies to units actively trying to reach a distant target.
    * Units at or near their destination should NOT receive stuck nudges.
    */
   private handleStuckDetection(
@@ -1308,7 +1308,7 @@ export class MovementSystem extends System {
     out.x = 0;
     out.y = 0;
 
-    // SC2-style: Don't nudge units that are close to their target
+    // RTS-style: Don't nudge units that are close to their target
     // This is the primary fix for the jiggling issue - units at destination shouldn't be nudged
     if (distanceToTarget < STUCK_MIN_DISTANCE_TO_TARGET) {
       // Clear stuck state when near target
@@ -1830,7 +1830,7 @@ export class MovementSystem extends System {
 
       if (!canMove) {
         if (unit.currentSpeed > 0) {
-          // Use unit's deceleration rate for stopping (SC2-style snappy stops)
+          // Use unit's deceleration rate for stopping (RTS-style snappy stops)
           unit.currentSpeed = Math.max(
             0,
             unit.currentSpeed - unit.deceleration * dt
@@ -1839,7 +1839,7 @@ export class MovementSystem extends System {
         this.removeAgentIfRegistered(entity.id);
 
         // IDLE REPULSION: Apply separation forces to idle units so they spread out
-        // SC2-style: Only push units that are SIGNIFICANTLY overlapping to prevent jiggling
+        // RTS-style: Only push units that are SIGNIFICANTLY overlapping to prevent jiggling
         if (unit.state === 'idle' && !unit.isFlying) {
           // PERF: Track truly idle status - units that haven't moved for many ticks
           const lastPos = this.lastIdlePosition.get(entity.id);
@@ -1870,12 +1870,12 @@ export class MovementSystem extends System {
           this.calculateSeparationForce(entity.id, transform, unit, tempSeparation, Infinity);
           const sepMagSq = tempSeparation.x * tempSeparation.x + tempSeparation.y * tempSeparation.y;
 
-          // SC2-style: Higher threshold prevents minor separation adjustments that cause jiggling
+          // RTS-style: Higher threshold prevents minor separation adjustments that cause jiggling
           // Only move when units are actually overlapping (force > 0.5), not just close
           const IDLE_SEPARATION_THRESHOLD = 0.25; // Much higher than 0.001 to prevent micro-adjustments
 
           if (sepMagSq > IDLE_SEPARATION_THRESHOLD) {
-            // SC2-style: Slower, gentler push for idle units (0.3x max speed instead of 0.5x)
+            // RTS-style: Slower, gentler push for idle units (0.3x max speed instead of 0.5x)
             const sepMag = Math.sqrt(sepMagSq);
             const idleRepelSpeed = Math.min(unit.maxSpeed * 0.3, sepMag * SEPARATION_STRENGTH_IDLE * 0.5);
             velocity.x = (tempSeparation.x / sepMag) * idleRepelSpeed;
@@ -2150,7 +2150,7 @@ export class MovementSystem extends System {
         targetSpeed = Math.max(targetSpeed, unit.maxSpeed * terrainSpeedMod * 0.3);
       }
 
-      // SC2-style acceleration: use per-unit rates for smooth/snappy feel
+      // RTS-style acceleration: use per-unit rates for smooth/snappy feel
       // Ground units have instant acceleration (1000), air units have gradual (1-5)
       if (unit.currentSpeed < targetSpeed) {
         unit.currentSpeed = Math.min(
@@ -2198,7 +2198,7 @@ export class MovementSystem extends System {
             }
           }
 
-          // SC2-style: add extra separation near arrival for natural spreading
+          // RTS-style: add extra separation near arrival for natural spreading
           // Crowd handles basic separation, but we boost it near destination
           const distToFinalTarget = unit.targetX !== null && unit.targetY !== null
             ? Math.sqrt(
@@ -2264,7 +2264,7 @@ export class MovementSystem extends System {
           prefVy = (dy / distance) * unit.currentSpeed;
         }
 
-        // SC2-style flocking behaviors for non-crowd units
+        // RTS-style flocking behaviors for non-crowd units
         if (!unit.isFlying) {
           // Calculate distance to final target for arrival spreading
           const distToFinalTarget = unit.targetX !== null && unit.targetY !== null
@@ -2338,14 +2338,14 @@ export class MovementSystem extends System {
       finalVx += tempBuildingAvoid.x;
       finalVy += tempBuildingAvoid.y;
 
-      // SC2-STYLE: Physics pushing between units (replaces RVO collision avoidance)
+      // RTS-STYLE: Physics pushing between units (replaces RVO collision avoidance)
       if (!unit.isFlying) {
         this.calculatePhysicsPush(entity.id, transform, unit, tempPhysicsPush);
         finalVx += tempPhysicsPush.x;
         finalVy += tempPhysicsPush.y;
       }
 
-      // SC2-STYLE: Velocity smoothing to prevent jitter
+      // RTS-STYLE: Velocity smoothing to prevent jitter
       const smoothed = this.smoothVelocity(
         entity.id,
         finalVx,
@@ -2356,7 +2356,7 @@ export class MovementSystem extends System {
       finalVx = smoothed.vx;
       finalVy = smoothed.vy;
 
-      // SC2-STYLE: Stuck detection and nudge
+      // RTS-STYLE: Stuck detection and nudge
       // Only apply to units far from their target to prevent destination jiggling
       const currentVelMag = Math.sqrt(finalVx * finalVx + finalVy * finalVy);
       if (distance > this.arrivalThreshold) {

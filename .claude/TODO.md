@@ -1,8 +1,8 @@
 # VOIDSTRIKE - Development Roadmap
 
-## Current Priority: SC2 Parity (Single-Player)
+## Current Priority: Core Features (Single-Player)
 
-> See **ROADMAP_SC2_PARITY.md** for comprehensive feature breakdown
+> See **ROADMAP.md** for comprehensive feature breakdown
 
 ---
 
@@ -80,7 +80,7 @@
 
 ---
 
-## SC2-Style Projectile System (January 2026) ✓
+## Projectile System (January 2026) ✓
 
 ### Projectile Entity System
 - [x] **Projectile.ts component** - ECS component for projectile entities with position, target, behavior
@@ -115,7 +115,7 @@
 
 ## Simulation-Based AI Economy (January 2026) ✓
 
-### SC2-Style Worker Economy
+### Worker Economy
 - [x] **Removed passive AI income** - AI no longer gets fake income from worker count
 - [x] **Real worker gathering** - AI workers now actually gather resources and return them to base
 - [x] **Resource crediting via events** - ResourceSystem credits AI via `aiSystem.creditResources()`
@@ -182,11 +182,11 @@
 - [x] SelectionSystem (TSL) - Team-colored selection rings with animations
 - [x] GPUParticleSystem (TSL) - GPU-instanced particles via EffectEmitter
 - [x] RenderPipeline (TSL) - Post-processing (bloom, SSAO, FXAA, vignette)
-- [x] TSLTerrainMaterial - Biome-aware terrain with slope blending and SC2-style platforms
+- [x] TSLTerrainMaterial - Biome-aware terrain with slope blending and platform rendering
 
 ---
 
-## SC2-Level Visual Overhaul (January 2026) ✓
+## Visual Overhaul (January 2026) ✓
 
 ### Cinematic Homescreen (January 2026) ✓
 - [x] **HomeBackground.tsx** - Cinematic Three.js animated background for homepage
@@ -204,11 +204,11 @@
 - [x] **HybridGameCanvas** - Main component combining both engines
 - [x] **OverlayScene** - Phaser 4 scene for tactical view and screen effects
 
-### SC2-Level Rendering Systems
-- [x] **SC2SelectionSystem** - Animated glowing selection rings with GLSL shaders
-- [x] **SC2ParticleSystem** - GPU-instanced particles (muzzle flashes, explosions, debris)
-- [x] **SC2PostProcessing** - Bloom, vignette, color grading, ACES tone mapping (fixed black screen bug)
-- [x] **SC2TerrainShader** - Multi-layer procedural texturing with PBR-like lighting
+### Rendering Systems
+- [x] **SelectionSystem** - Animated glowing selection rings with GLSL shaders
+- [x] **ParticleSystem** - GPU-instanced particles (muzzle flashes, explosions, debris)
+- [x] **PostProcessing** - Bloom, vignette, color grading, ACES tone mapping (fixed black screen bug)
+- [x] **TerrainShader** - Multi-layer procedural texturing with PBR-like lighting
 
 ### Visual Features
 - [x] Team-colored pulsing selection rings with shimmer animation
@@ -355,12 +355,12 @@
 - [x] **Duplicate start buttons** - Moved start button to bottom of setup page
 - [x] **AI spending player minerals** - BuildingPlacementSystem was deducting from player store for AI buildings
 - [x] **Minimap camera position not updating** - Fixed store subscription and dependency array
-- [x] **SC2TerrainShader not compiling** - Replaced dynamic fbm loop with fixed-octave versions for WebGL
+- [x] **TerrainShader not compiling** - Replaced dynamic fbm loop with fixed-octave versions for WebGL
 - [x] **AI workers stuck at CC** - Drop-off distance was 3 units but CC center is 2.5 from edge, increased to 5
 - [x] **AI deposits to player store** - ResourceSystem now only credits player1 store, AI tracks internally
-- [x] **SC2-style mineral arcs** - Minerals now form tight arcs facing CC, ~7 units away (was 15-20)
+- [x] **Mineral arcs** - Minerals now form tight arcs facing CC, ~7 units away (was 15-20)
 - [x] **Worker mineral splitting** - Workers auto-spread across mineral patches, prefer <2 gatherers
-- [x] **SC2-style flat terrain** - Buildable areas now perfectly flat, only cliffs have height variation
+- [x] **Flat terrain** - Buildable areas now perfectly flat, only cliffs have height variation
 - [x] **Building placement grid** - Green/red tile visualization when placing buildings
 - [x] **Phaser overlay integration** - Fixed event mismatches, added production/research/building alerts
 - [x] **Combat feedback** - Player damage vignette, unit death effects, enhanced combat border
@@ -449,8 +449,8 @@
   - Reduced obstacle expansion from (agentRadius + 0.1) to just 0.1 since walkableRadius handles clearance
   - Reduced MovementSystem avoidance margins (0.6→0.3 hard, 1.5→0.8 soft) since navmesh provides primary avoidance
 - [ ] **Debug navmesh visualization** - Visual overlay to verify navmesh coverage
-- [x] **Fix crowd velocity returning near-zero** - Root cause was twofold: (1) Crowd agent maxSpeed was set to unit.currentSpeed (accelerating speed) instead of unit.maxSpeed, artificially capping velocity. (2) Crowd agent maxAcceleration was set to maxSpeed × 1.5 (~4.2) while SC2-style ground units expect instant acceleration (1000). Fixed by always using unit.maxSpeed for crowd and setting maxAcceleration to 100.0 for near-instant acceleration.
-- [x] **SC2-style hybrid steering** - Major overhaul of unit collision avoidance to match SC2's approach:
+- [x] **Fix crowd velocity returning near-zero** - Root cause was twofold: (1) Crowd agent maxSpeed was set to unit.currentSpeed (accelerating speed) instead of unit.maxSpeed, artificially capping velocity. (2) Crowd agent maxAcceleration was set to maxSpeed × 1.5 (~4.2) while RTS ground units expect instant acceleration (1000). Fixed by always using unit.maxSpeed for crowd and setting maxAcceleration to 100.0 for near-instant acceleration.
+- [x] **Hybrid steering** - Major overhaul of unit collision avoidance:
   - **Disabled DetourCrowd RVO obstacle avoidance** - Crowd now only provides path corridor direction, not local avoidance (eliminates jitter from RVO oscillation)
   - **Physics pushing between units** - Units push each other with soft forces instead of avoiding, creating natural flow (PHYSICS_PUSH_STRENGTH=8.0)
   - **Velocity smoothing** - 3-frame velocity history blending prevents jitter (VELOCITY_SMOOTHING_FACTOR=0.3)
@@ -464,7 +464,7 @@
 - [x] **Navmesh walkableClimb fix** - Units couldn't traverse ramps because `walkableClimb` in RecastNavigation.ts was set to 0.3, which is too restrictive for typical ramp gradients. A ramp with 100 elevation change over 8 cells has ~0.5 height units per cell, exceeding the 0.3 limit. Increased `walkableClimb` from 0.3 to 0.8 to allow ramp traversal while still blocking cliff jumps (which are 3.2+ units). Added diagnostic logging in Terrain.ts to warn when height steps exceed walkableClimb.
 - [x] **Ramp exit cell protection fix** - Units had trouble pathfinding DOWN ramps. Root cause: Cells at ramp exits were incorrectly marked as cliff edges, causing quantized flat heights instead of smooth heightMap values. This created navmesh discontinuities at ramp exits. Fixed by: (1) Increasing `RAMP_ZONE_RADIUS` from 5 to 8. (2) Adding `adjacentToRampZone` set to track and protect cells touching ramp zones. (3) Skipping adjacent-to-ramp cells in cliff edge detection and expansion. (4) Using smooth heightMap values for vertices near ramp areas.
 
-### SC2-Style Platform Terrain Tools (January 2026)
+### Platform Terrain Tools (January 2026)
 - [x] **Platform material on cliff sides** - Unwalkable cells adjacent to platforms now render with platform material instead of natural rock, giving platforms proper geometric depth with consistent material on all sides.
 - [x] **Guardrails at platform edges** - Platforms have guardrails at edges except at ramp entrances where units need to pass.
 - [x] **Structured platform ramp tool** - New `platform_ramp` tool (Shift+R) creates uniform machined ramps with perfectly straight edges. Features:
@@ -472,7 +472,7 @@
   - Rectangular shape with uniform width and precise boundaries
   - Automatic elevation detection from adjacent platforms
   - Quantized elevation levels for clean platform-to-ramp transitions
-  - Aligns perfectly with platform edges for SC2-style geometric terrain
+  - Aligns perfectly with platform edges for clean geometric terrain
 
 ### Terrain Generation Improvements (January 2026)
 - [x] **Slope-based texture blending** - Fixed terrain sampleTerrain() to use average elevation instead of MAX, which was flattening cliffs and preventing proper texture blending
@@ -489,7 +489,7 @@
   - This ensures cells near ramps use heightmap values for smooth height transitions instead of being treated as cliff edges, guaranteeing ramps are fully walkable at both upper and lower ends
 
 ### Minimap Targeting (January 2026) ✓
-- [x] **SC2-style minimap command targeting** - Press A (attack), M (move), or P (patrol) then click minimap to issue commands
+- [x] **Minimap command targeting** - Press A (attack), M (move), or P (patrol) then click minimap to issue commands
 - [x] **Unified command target mode** - Shared state between canvas and minimap via `commandTargetMode` in gameStore
 - [x] **Visual feedback** - Minimap border changes color when in targeting mode (red=attack, blue=move, yellow=patrol)
 - [x] **Shift-click queuing** - Hold shift to queue commands without exiting targeting mode
@@ -521,7 +521,7 @@
 - [x] **AI economy stalled at 0 minerals** - AI couldn't build anything because workers weren't delivering resources due to the above bug. With the fix, AI workers now properly deliver minerals to base.
 
 ### AI & Combat Fixes
-- [x] **Attack range uses actual model bounding box** - Attack range calculations now use actual Three.js bounding box dimensions from loaded models instead of scale approximations. This is the industry-standard approach used in AAA games like SC2. AssetManager stores model dimensions after normalization, and CombatSystem/MovementSystem use cached getModelVisualRadius() for edge-to-edge distance calculations.
+- [x] **Attack range uses actual model bounding box** - Attack range calculations now use actual Three.js bounding box dimensions from loaded models instead of scale approximations. AssetManager stores model dimensions after normalization, and CombatSystem/MovementSystem use cached getModelVisualRadius() for edge-to-edge distance calculations.
 - [x] **Laser projectile rendering** - Fixed invisible laser beams by replacing THREE.Line (linewidth doesn't work in WebGL/WebGPU) with CylinderGeometry mesh with glow effect.
 - [x] **Idle unit auto-attack responsiveness** - Idle units now immediately attack enemies within attack range (no throttle delay). Uses dedicated `findImmediateAttackTarget()` for instant response when enemies enter attack range, while throttled sight-range search remains for longer-range target acquisition.
 - [x] **VisionSystem multi-player support** - Changed from hardcoded ['player1', 'ai'] to dynamic player registration, enabling proper 4-AI spectator games.
@@ -535,7 +535,7 @@
 - [x] **AI expansion support** - AI now builds expansion command centers at resource clusters without nearby bases, enabling multi-base strategies.
 - [x] **AI repair functionality** - Workers automatically repair damaged buildings (<90% health) and mechanical units. Prioritizes critically damaged buildings first.
 - [x] **Building destruction bug** - Fixed buildings with 0 health (on fire) not being destroyed. Added floating-point safety check for death detection.
-- [x] **SC2-style AI expansion timing** - AI now expands more aggressively based on difficulty: Easy (2 bases max), Medium (3), Hard (4), Very Hard (5), Insane (6). Expansion triggers based on worker saturation and cooldowns similar to SC2 AI.
+- [x] **AI expansion timing** - AI now expands more aggressively based on difficulty: Easy (2 bases max), Medium (3), Hard (4), Very Hard (5), Insane (6). Expansion triggers based on worker saturation and cooldowns.
 - [x] **AI tech unit production** - AI now builds tech labs and produces advanced units (devastator, colossus, breacher, operative, specter, valkyrie). Build orders updated to include research modules. Tech unit production probability significantly increased.
 - [x] **Player1 AI spectator fix** - Fixed bug where player1 as AI was treated as human player due to ID-based check instead of type-based check. This could cause AI player1 to not function correctly.
 - [x] **Player status panel ordering** - Fixed player list ordering in spectator mode to sort by player ID (Player 1, Player 2, etc.) instead of array insertion order.
@@ -687,11 +687,11 @@
 - [x] Worker gathering mechanics
 - [x] Resource storage/tracking
 - [x] Supply/population system (UI + tracking)
-- [x] SC2-style worker saturation display (X/Y labels above resources)
+- [x] Worker saturation display (X/Y labels above resources)
 
 ---
 
-## Phase 1.5: SC2 Feel (COMPLETE ✓)
+## Phase 1.5: Core RTS Feel (COMPLETE ✓)
 
 ### Unit Movement & Micro
 - [x] Unit avoidance/steering (Boids-like)
@@ -733,7 +733,7 @@
 - [x] Water/lava animated planes
 - [x] Particle effects (snow, dust, ash, spores)
 - [x] Environment manager
-- [x] Map border fog (SC2-style smoky fog effect around map edges)
+- [x] Map border fog (smoky fog effect around map edges)
 
 ### JSON-Based Map System (January 2026) ✓
 - [x] **JSON map format** - Compact storage with compressed terrain (elevation array, type string, sparse features)
@@ -770,7 +770,7 @@
 
 ## Phase 1.7: Enhanced Terrain System (COMPLETE ✓)
 
-### 256-Level Elevation System (SC2 Parity)
+### 256-Level Elevation System
 - [x] Expanded elevation from 3 levels (0-2) to 256 levels (0-255)
 - [x] Gameplay zones (low: 0-85, mid: 86-170, high: 171-255)
 - [x] Smooth elevation gradients for natural terrain
@@ -850,7 +850,7 @@
 - [x] Hellion ↔ Hellbat
 - [x] Viking/Valkyrie (Fighter ↔ Assault mode)
   - Fighter Mode: Flying, attacks air only (anti-air specialist)
-  - Assault Mode: Ground, attacks ground only (like SC2 Viking)
+  - Assault Mode: Ground, attacks ground only
   - AI transform intelligence: Auto-transforms based on nearby enemy composition
 
 ### Cloak & Detection
@@ -883,7 +883,7 @@
 - [x] Harassment tactics
 - [x] Worker management
 - [x] Defense coordination
-- [x] SC2-style optimal worker saturation targeting (gas first, then minerals)
+- [x] Optimal worker saturation targeting (gas first, then minerals)
 
 ### Game State
 - [x] Victory/defeat conditions
@@ -939,17 +939,17 @@
 - [x] Thruster effects on all flyable buildings (headquarters, orbital_station, infantry_bay, forge, hangar)
 - [x] Engine exhaust and smoke trail effects during flight
 
-### Building Placement SC2 Polish (January 2026)
+### Building Placement Polish (January 2026)
 - [x] Fixed green/blue preview offset - Grid tiles now properly centered on building footprint
 - [x] Fixed blueprint persistence bug - Preview clears on invalid placement without shift key
-- [x] SC2-style worker construction - Workers wander inside building footprint during active construction
+- [x] Worker construction behavior - Workers wander inside building footprint during active construction
 - [x] Scaffolding visibility fix - Yellow scaffolding only visible during ACTIVE construction (not paused/waiting)
 - [x] Scaffolding cleanup on instancing - All construction effects (scaffold, dust, blueprint) now cleaned up when building switches to instanced rendering
 
 ### Addon System Implementation (January 2026)
 - [x] Production Module (Reactor) button added to CommandCard UI
 - [x] Addons now build over time instead of instantly (18s for Tech Lab, 36s for Reactor)
-- [x] Addons auto-construct without workers (SC2 style)
+- [x] Addons auto-construct without workers
 - [x] Reactor double-production implemented - Halved build time for reactor-eligible units
 - [x] Tech Lab unlocks advanced units (breacher, operative, devastator, colossus, etc.)
 
@@ -965,7 +965,7 @@
 
 ### Visual Polish
 - [ ] Unit wireframes (damage state)
-- [x] Building placement ghost - SC2-style grid + ghost preview when placing
+- [x] Building placement ghost - Grid + ghost preview when placing
 - [x] Ground click visual feedback - Phaser 2D overlay indicators for move/attack commands:
   - Move commands: Green expanding ring with inward-pointing chevrons and center dot
   - Attack-move commands: Red expanding ring with X crosshair pattern

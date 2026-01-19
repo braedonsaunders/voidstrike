@@ -220,7 +220,7 @@ export class Game {
       // Set up multiplayer message handler for receiving remote commands
       this.setupMultiplayerMessageHandler();
 
-      // Set up desync handler - SC2-style: end game on desync
+      // Set up desync handler - end game on desync
       this.setupDesyncHandler();
     }
 
@@ -324,7 +324,7 @@ export class Game {
   }
 
   /**
-   * Set up desync handler - SC2-style: end game on desync
+   * Set up desync handler - end game on desync
    * When a desync is detected, we cannot recover (deterministic simulation diverged)
    * so we end the game and notify players.
    */

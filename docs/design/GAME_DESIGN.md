@@ -2,7 +2,7 @@
 
 ## Overview
 
-VOIDSTRIKE is a browser-based real-time strategy game inspired by StarCraft 2, built with modern web technologies. It features 3D graphics, competitive multiplayer, and deep strategic gameplay.
+VOIDSTRIKE is a browser-based real-time strategy game built with modern web technologies. It features 3D graphics, competitive multiplayer, and deep strategic gameplay.
 
 ## Core Vision
 
@@ -91,7 +91,7 @@ For multiplayer, we use deterministic lockstep:
 Workers -> Resource Nodes -> Storage -> Production
 ```
 
-### Worker Saturation (SC2-style)
+### Worker Saturation
 Each resource node displays worker assignment status with floating labels showing "X/Y" (current/optimal):
 
 | Resource Type | Optimal Workers | Max Useful Workers | Label Color |
@@ -140,8 +140,8 @@ Units have restrictions on what they can attack based on air/ground targeting:
 | **No Attack** | ❌ | ❌ | Lifter, Overseer |
 
 **Transform Mode Targeting**: Some units change targeting when transforming:
-- **Valkyrie Fighter Mode** (flying): Air only - anti-air specialist, like SC2 Viking Fighter Mode
-- **Valkyrie Assault Mode** (ground): Ground only - ground assault, like SC2 Viking Assault Mode
+- **Valkyrie Fighter Mode** (flying): Air only - anti-air specialist
+- **Valkyrie Assault Mode** (ground): Ground only - ground assault
 - **Devastator/Scorcher**: Ground only in all modes (artillery/flamethrower)
 
 **AI Transform Intelligence**: AI-controlled Valkyries will intelligently transform based on nearby enemy composition:
@@ -184,7 +184,7 @@ Units have restrictions on what they can attack based on air/ground targeting:
 ### Control Scheme
 - **Left Click** - Select unit/building
 - **Right Click** - Move/Attack/Interact
-- **Shift+Right Click** - Queue command (chain commands like SC2)
+- **Shift+Right Click** - Queue command (chain commands)
 - **Shift+A Click** - Queue attack-move
 - **Box Drag** - Multi-select
 - **Ctrl+#** - Create control group
@@ -208,7 +208,7 @@ Hold **Shift** while placing buildings to queue multiple placements:
 - Workers are assigned to each building as they become available
 - Release shift and click to place final building and exit placement mode
 
-### Unit Movement Behavior (SC2-Style)
+### Unit Movement Behavior
 
 Units use **magic box detection** for natural movement behavior:
 
@@ -235,31 +235,31 @@ Units use **magic box detection** for natural movement behavior:
 - **Circle** - Defensive circle with support center
 - **Siege Line** - Infantry front, artillery back
 
-### Movement Speeds & Acceleration (SC2-Style)
+### Movement Speeds & Acceleration
 
-Units have differentiated movement speeds and acceleration rates based on their StarCraft 2 equivalents:
+Units have differentiated movement speeds and acceleration rates:
 
 **Unit Speed Reference (Dominion Faction):**
 
-| Unit | SC2 Equivalent | Speed | Acceleration | Feel |
-|------|----------------|-------|--------------|------|
-| **Fabricator** | SCV | 4.0 | 50 | Quick worker |
-| **Trooper** | Marine | 3.15 | 1000 | Instant/snappy |
-| **Breacher** | Marauder | 3.15 | 1000 | Instant/snappy |
-| **Vanguard** | Reaper | 5.25 | 1000 | Fast & snappy |
-| **Operative** | Ghost | 3.94 | 1000 | Instant/snappy |
-| **Scorcher** | Hellion | 5.95 | 800 | Fast vehicle |
-| **Devastator** | Siege Tank | 3.15 | 800 | Heavy vehicle |
-| **Colossus** | Thor | 2.62 | 600 | Slow heavy mech |
-| **Lifter** | Medivac | 3.5 | 3.15 | Floaty transport |
-| **Valkyrie** | Viking | 3.85/3.15 | 4.55 | Responsive fighter |
-| **Specter** | Banshee | 3.85 | 4.55 | Strike craft |
-| **Dreadnought** | Battlecruiser | 2.62 | 1.4 | Sluggish capital |
-| **Overseer** | Raven | 4.13 | 2.975 | Support craft |
+| Unit | Role | Speed | Acceleration | Feel |
+|------|------|-------|--------------|------|
+| **Fabricator** | Worker | 4.0 | 50 | Quick worker |
+| **Trooper** | Infantry | 3.15 | 1000 | Instant/snappy |
+| **Breacher** | Heavy Infantry | 3.15 | 1000 | Instant/snappy |
+| **Vanguard** | Recon | 5.25 | 1000 | Fast & snappy |
+| **Operative** | Stealth | 3.94 | 1000 | Instant/snappy |
+| **Scorcher** | Light Vehicle | 5.95 | 800 | Fast vehicle |
+| **Devastator** | Siege | 3.15 | 800 | Heavy vehicle |
+| **Colossus** | Heavy Mech | 2.62 | 600 | Slow heavy mech |
+| **Lifter** | Transport | 3.5 | 3.15 | Floaty transport |
+| **Valkyrie** | Transform | 3.85/3.15 | 4.55 | Responsive fighter |
+| **Specter** | Strike Craft | 3.85 | 4.55 | Strike craft |
+| **Dreadnought** | Capital Ship | 2.62 | 1.4 | Sluggish capital |
+| **Overseer** | Support | 4.13 | 2.975 | Support craft |
 
 **Acceleration System:**
 
-SC2-style acceleration creates distinct unit "feels":
+Acceleration creates distinct unit "feels":
 
 | Unit Type | Acceleration | Deceleration | Behavior |
 |-----------|--------------|--------------|----------|
@@ -280,14 +280,14 @@ SC2-style acceleration creates distinct unit "feels":
 ## Map Design
 
 ### Map Design Principles
-All maps follow StarCraft 2-inspired design principles:
+All maps follow classic RTS design principles:
 
 1. **Protected Main Bases** - Each main base is ~90% enclosed by cliffs with a single narrow ramp exit
 2. **Defensive Natural Expansions** - Natural expansions have chokepoints for defensive play
 3. **Contested Center** - Central area with watch towers for map control
 4. **Multiple Expansion Tiers** - Main → Natural → Third → Fourth → Gold bases
 5. **Narrow Ramps** - 6-10 tile wide ramps for wall-offs and defense
-6. **256-Level Elevation System** - SC2-style 0-255 height levels for smooth terrain (gameplay zones: low 0-85, mid 86-170, high 171-255)
+6. **256-Level Elevation System** - 0-255 height levels for smooth terrain (gameplay zones: low 0-85, mid 86-170, high 171-255)
 
 ### Terrain Feature System
 
@@ -351,11 +351,11 @@ The combat system uses the elevation system:
 - AI and human players are assigned to main bases only
 - Expansion locations are never spawn points
 
-## Building Construction System (SC2-Style)
+## Building Construction System
 
 ### Dominion Construction Mechanics
 
-The Dominion faction uses StarCraft 2 Terran-style construction where workers (Fabricators) physically construct buildings:
+The Dominion faction uses worker-based construction where Fabricators physically construct buildings:
 
 **Construction Flow:**
 1. Player selects a worker and places a building blueprint

@@ -13,7 +13,7 @@
 
 use crate::soa::{BoidsBuffer, NeighborList, UnitState};
 
-/// Boids parameters matching the game's SC2-style values
+/// Boids parameters matching the game's RTS-style values
 #[derive(Clone, Copy, Debug)]
 pub struct BoidsParams {
     /// Radius within which separation force applies
@@ -39,7 +39,7 @@ pub struct BoidsParams {
 
 impl Default for BoidsParams {
     fn default() -> Self {
-        // SC2-style defaults from MovementSystem.ts
+        // RTS-style defaults from MovementSystem.ts
         Self {
             separation_radius: 1.0,
             separation_strength: 1.5, // SEPARATION_STRENGTH_IDLE
