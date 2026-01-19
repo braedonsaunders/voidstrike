@@ -10,7 +10,7 @@ interface QueuedPlacement {
 }
 
 /**
- * Building placement preview system - SC2 style
+ * Building placement preview system - RTS style
  * Shows:
  * - Grid overlay when placing buildings
  * - Green/red tiles for valid/invalid placement
@@ -42,7 +42,7 @@ export class BuildingPlacementPreview {
   private blueprintPulseTime: number = 0;
   private currentBuildingHeight: number = 3; // Default building height for effects
 
-  // Blueprint effect materials (SC2-style holographic blue)
+  // Blueprint effect materials (RTS-style holographic blue)
   private static readonly BLUEPRINT_COLOR = 0x00ccff;
   private static readonly BLUEPRINT_INVALID_COLOR = 0xff4444;
 
@@ -87,7 +87,7 @@ export class BuildingPlacementPreview {
 
   /**
    * Set callback to validate placement against buildings, units, resources, decorations
-   * This enables full SC2-style placement validation
+   * This enables full RTS-style placement validation
    */
   public setPlacementValidator(fn: (centerX: number, centerY: number, width: number, height: number) => boolean): void {
     this.placementValidator = fn;
@@ -162,7 +162,7 @@ export class BuildingPlacementPreview {
   }
 
   /**
-   * Update queue path lines and markers (SC2-style blueprint ghosts)
+   * Update queue path lines and markers (RTS-style blueprint ghosts)
    */
   private updateQueueVisuals(): void {
     this.clearQueueVisuals();
@@ -342,7 +342,7 @@ export class BuildingPlacementPreview {
     // Update or create grid mesh
     this.updateGridMesh(x, y, width, depth);
 
-    // Update or create blueprint effect (SC2-style holographic preview)
+    // Update or create blueprint effect (RTS-style holographic preview)
     this.updateBlueprintEffect(x, y, width, depth, this.currentBuildingHeight);
   }
 
@@ -382,7 +382,7 @@ export class BuildingPlacementPreview {
     }
 
     // Check for entity collisions (buildings, units, resources, decorations)
-    // This is the SC2-style full validation
+    // This is the RTS-style full validation
     if (this.placementValidator && !this.placementValidator(centerX, centerY, width, height)) {
       return false;
     }
@@ -486,7 +486,7 @@ export class BuildingPlacementPreview {
   }
 
   /**
-   * Update or create the blueprint effect (SC2-style holographic preview)
+   * Update or create the blueprint effect (RTS-style holographic preview)
    */
   private updateBlueprintEffect(centerX: number, centerY: number, width: number, depth: number, buildingHeight: number): void {
     // Remove old effect
@@ -515,7 +515,7 @@ export class BuildingPlacementPreview {
   }
 
   /**
-   * Create SC2-style holographic blueprint effect
+   * Create RTS-style holographic blueprint effect
    * Shows wireframe outline, corner markers, scanning plane, and floating particles
    */
   private createBlueprintEffect(buildingWidth: number, buildingDepth: number, buildingHeight: number, opacityMultiplier: number = 1.0): THREE.Group {

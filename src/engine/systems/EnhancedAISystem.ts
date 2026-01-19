@@ -349,7 +349,7 @@ export class EnhancedAISystem extends System {
   }
 
   /**
-   * Get the mining speed multiplier for an AI player (SC2-style difficulty bonus)
+   * Get the mining speed multiplier for an AI player (difficulty bonus)
    * Returns 1.0 for non-AI players or if AI not found
    */
   public getMiningSpeedMultiplier(playerId: string): number {
@@ -2620,7 +2620,7 @@ export class EnhancedAISystem extends System {
 
   /**
    * Find idle workers and send them to gather minerals or vespene
-   * Uses SC2-style optimal saturation targeting
+   * Uses optimal saturation targeting
    * Now considers all AI bases (main and expansions) (data-driven)
    */
   private assignIdleWorkersToGather(ai: AIPlayer): void {
@@ -2812,7 +2812,7 @@ export class EnhancedAISystem extends System {
     let mineralIndex = 0;
     let oversatIndex = 0;
 
-    // Assign idle workers using SC2-style optimal saturation
+    // Assign idle workers using optimal saturation
     for (const workerId of idleWorkers) {
       // Priority 1: Fill undersaturated gas (vespene is more valuable)
       // PERF: Use index instead of find() - advance index past full refineries

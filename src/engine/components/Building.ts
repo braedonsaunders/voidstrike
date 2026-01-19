@@ -212,7 +212,7 @@ export class Building extends Component {
   }
 
   /**
-   * Pause construction when worker leaves (SC2-style)
+   * Pause construction when worker leaves
    * Construction will remain paused until another worker resumes it
    */
   public pauseConstruction(): void {
@@ -222,7 +222,7 @@ export class Building extends Component {
   }
 
   /**
-   * Resume construction when a worker arrives at a paused building (SC2-style)
+   * Resume construction when a worker arrives at a paused building
    */
   public resumeConstruction(): void {
     if (this.state === 'paused') {

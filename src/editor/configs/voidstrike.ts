@@ -25,7 +25,7 @@ import {
 // ============================================
 
 /**
- * VOIDSTRIKE uses a continuous 0-255 elevation system similar to StarCraft 2.
+ * VOIDSTRIKE uses a continuous 0-255 elevation system.
  * Gameplay zones:
  * - Low ground: 0-85 (disadvantage when attacking uphill)
  * - Mid ground: 86-170 (neutral)
@@ -270,7 +270,7 @@ export const VOIDSTRIKE_TOOLS: ToolConfig[] = [
     maxBrushSize: 30,
     options: { elevation: 255, feature: 'cliff', walkable: false },
   },
-  // SC2-style platform tools
+  // Platform tools
   {
     id: 'platform_brush',
     name: 'Platform',

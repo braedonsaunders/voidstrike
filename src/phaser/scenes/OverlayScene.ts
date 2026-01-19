@@ -1876,7 +1876,7 @@ export class OverlayScene extends Phaser.Scene {
 
   /**
    * Add an attack target indicator for the specified entity
-   * Shows an animated red circle under the target like StarCraft 2
+   * Shows an animated red circle under the target
    */
   private addAttackTargetIndicator(entityId: number): void {
     // Remove any existing indicator for this entity

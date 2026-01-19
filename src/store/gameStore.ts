@@ -27,7 +27,7 @@ export interface WallLineState {
   totalCost: { minerals: number; vespene: number };
 }
 
-// Command targeting mode for move/attack/patrol (like SC2)
+// Command targeting mode for move/attack/patrol
 export type CommandTargetMode = 'move' | 'attack' | 'patrol' | null;
 
 export interface GameState {
@@ -67,7 +67,7 @@ export interface GameState {
   isLandingMode: boolean; // Landing mode for flying buildings
   landingBuildingId: number | null; // Building ID that is about to land
   abilityTargetMode: string | null; // ability ID being targeted
-  commandTargetMode: CommandTargetMode; // move/attack/patrol targeting mode (SC2-style)
+  commandTargetMode: CommandTargetMode; // move/attack/patrol targeting mode
   showMinimap: boolean;
   showResourcePanel: boolean;
   showTechTree: boolean;

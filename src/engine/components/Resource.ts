@@ -2,7 +2,7 @@ import { Component } from '../ecs/Component';
 
 export type ResourceType = 'minerals' | 'vespene';
 
-// SC2-style optimal worker counts per resource
+// Optimal worker counts per resource
 // Minerals: 2 workers per patch is optimal, 3 is max (diminishing returns)
 // Vespene: 3 workers per geyser is optimal and max
 export const OPTIMAL_WORKERS_PER_MINERAL = 2;

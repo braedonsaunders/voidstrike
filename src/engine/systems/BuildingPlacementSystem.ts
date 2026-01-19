@@ -63,8 +63,7 @@ export class BuildingPlacementSystem extends System {
     // Handle addon construction
     this.game.eventBus.on('building:build_addon', this.handleBuildAddon.bind(this));
 
-    // Handle worker resuming construction on a paused/in-progress building (SC2-style)
-    this.game.eventBus.on('command:resume_construction', this.handleResumeConstruction.bind(this));
+    // Handle worker resuming construction on a paused/in-progress building     this.game.eventBus.on('command:resume_construction', this.handleResumeConstruction.bind(this));
   }
 
   /**
@@ -247,8 +246,7 @@ export class BuildingPlacementSystem extends System {
   }
 
   /**
-   * Handle a worker being commanded to resume construction on a paused or in-progress building (SC2-style)
-   */
+   * Handle a worker being commanded to resume construction on a paused or in-progress building    */
   private handleResumeConstruction(data: {
     workerId: number;
     buildingId: number;
@@ -1200,12 +1198,12 @@ export class BuildingPlacementSystem extends System {
     this.cancelOrphanedBlueprints();
   }
 
-  // Track worker wander state for SC2-style construction movement
+  // Track worker wander state for RTS-style construction movement
   private workerWanderState: Map<number, { targetX: number; targetY: number; timer: number }> = new Map();
 
   /**
    * Handle workers moving to and arriving at construction sites
-   * SC2-style: Workers move around inside the building footprint while constructing
+   * RTS-style: Workers move around inside the building footprint while constructing
    */
   private updateWorkerConstruction(dt: number): void {
     const workers = this.world.getEntitiesWith('Unit', 'Transform');
@@ -1269,7 +1267,7 @@ export class BuildingPlacementSystem extends System {
       const dy = transform.y - buildingTransform.y;
       const distance = Math.sqrt(dx * dx + dy * dy);
 
-      // SC2-style: Move inside building footprint when actively constructing
+      // RTS-style: Move inside building footprint when actively constructing
       // Use same threshold formula as isWorkerConstructing for consistency
       const constructThreshold = Math.max(building.width / 2, 3);
       const isCloseEnough = distance <= this.CONSTRUCTION_RANGE + constructThreshold;
@@ -1332,7 +1330,7 @@ export class BuildingPlacementSystem extends System {
 
   /**
    * Update construction progress for buildings based on worker presence
-   * SC2-style: Construction only progresses while a worker is actively constructing.
+   * RTS-style: Construction only progresses while a worker is actively constructing.
    * If worker leaves, construction pauses but does NOT cancel.
    * Exception: Addons auto-construct without workers.
    */
@@ -1368,8 +1366,7 @@ export class BuildingPlacementSystem extends System {
           debugBuildingPlacement.log(`BuildingPlacementSystem: ${building.name} construction started - worker arrived!`);
         }
 
-        // If building was paused, resume construction (SC2-style)
-        if (building.state === 'paused') {
+        // If building was paused, resume construction         if (building.state === 'paused') {
           building.resumeConstruction();
           this.game.eventBus.emit('building:construction_resumed', {
             entityId: entity.id,
@@ -1427,8 +1424,7 @@ export class BuildingPlacementSystem extends System {
           debugBuildingPlacement.log(`BuildingPlacementSystem: ${building.name} construction complete!`);
         }
       } else {
-        // No worker is constructing - pause if construction had started (SC2-style)
-        // Note: Addons never reach this branch since workerConstructing is always true for them
+        // No worker is constructing - pause if construction had started         // Note: Addons never reach this branch since workerConstructing is always true for them
         if (building.state === 'constructing') {
           building.pauseConstruction();
           this.game.eventBus.emit('building:construction_paused', {

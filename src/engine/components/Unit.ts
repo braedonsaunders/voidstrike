@@ -56,7 +56,7 @@ export interface UnitDefinition {
   abilities?: string[];
   isWorker?: boolean;
   isFlying?: boolean;
-  acceleration?: number; // units per second squared (SC2: ground=1000 instant, air=1-5 floaty)
+  acceleration?: number; // units per second squared (ground=1000 instant, air=1-5 floaty)
   deceleration?: number; // units per second squared (typically 2x acceleration for snappy stops)
   splashRadius?: number; // AoE splash damage radius
   // Transform mechanics
@@ -128,7 +128,7 @@ export class Unit extends Component {
   public speed: number;
   public maxSpeed: number; // Maximum speed (same as speed)
   public currentSpeed: number; // Current speed for acceleration
-  public acceleration: number; // Acceleration rate (units/sec²) - SC2: ground=1000, air=1-5
+  public acceleration: number; // Acceleration rate (units/sec²) - ground=1000, air=1-5
   public deceleration: number; // Deceleration rate (units/sec²) - typically 2x acceleration for snappy stops
   public targetX: number | null;
   public targetY: number | null;
@@ -234,10 +234,10 @@ export class Unit extends Component {
     this.speed = definition.speed;
     this.maxSpeed = definition.speed;
     this.currentSpeed = 0; // Start at 0, accelerate to max
-    // SC2-style acceleration: ground units have instant (1000), air units have gradual (1-5)
+    // RTS-style acceleration: ground units have instant (1000), air units have gradual (1-5)
     // Default to 15 for backwards compatibility, but new units should specify explicitly
     this.acceleration = definition.acceleration ?? 15;
-    // Deceleration is typically 2x acceleration for snappy stops (SC2 behavior)
+    // Deceleration is typically 2x acceleration for snappy stops
     this.deceleration = definition.deceleration ?? (this.acceleration * 2);
     this.targetX = null;
     this.targetY = null;

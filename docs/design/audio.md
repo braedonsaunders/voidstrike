@@ -261,7 +261,7 @@ public/audio/
 
 | Filename | Duration | AI Prompt |
 |----------|----------|-----------|
-| `music/menu/main_theme.mp3` | 2 min loop | "Epic orchestral sci-fi main menu theme, military drums, brass fanfares, electronic undertones, heroic and imposing, inspired by StarCraft 2 Terran theme, seamless loop" |
+| `music/menu/main_theme.mp3` | 2 min loop | "Epic orchestral sci-fi main menu theme, military drums, brass fanfares, electronic undertones, heroic and imposing, inspired by classic military RTS games Terran theme, seamless loop" |
 | `music/menu/loading.mp3` | 30s loop | "Ambient electronic sci-fi loading screen music, subtle pulsing synths, tension-building, minimal and clean" |
 | `music/menu/victory.mp3` | 15-20s | "Triumphant orchestral victory fanfare, soaring brass, timpani rolls, heroic resolution, sci-fi military style" |
 | `music/menu/defeat.mp3` | 15-20s | "Somber defeat music, minor key, fading brass, melancholic strings, military funeral tone" |
@@ -270,7 +270,7 @@ public/audio/
 
 | Filename | Duration | AI Prompt |
 |----------|----------|-----------|
-| `music/gameplay/gameplay_01.mp3` | 3 min loop | "Intense sci-fi battle music, driving percussion, aggressive brass stabs, electronic elements, military theme, high energy, seamless loop, inspired by StarCraft 2 Terran combat" |
+| `music/gameplay/gameplay_01.mp3` | 3 min loop | "Intense sci-fi battle music, driving percussion, aggressive brass stabs, electronic elements, military theme, high energy, seamless loop, inspired by classic military RTS games Terran combat" |
 | `music/gameplay/gameplay_02.mp3` | 3 min loop | "Epic orchestral combat music, pounding drums, urgent strings, heroic brass motifs, electronic bass, seamless loop" |
 | `music/gameplay/gameplay_03.mp3` | 4 min loop | "Calm sci-fi strategy game ambient music, atmospheric synths, subtle military undertones, spacious and contemplative, seamless loop" |
 | `music/gameplay/gameplay_04.mp3` | 4 min loop | "Tense sci-fi ambient music, low drones, occasional distant percussion, building anticipation, strategic mood, seamless loop" |
@@ -599,7 +599,7 @@ The audio system includes graceful fallback:
 1. **For Music Tracks**:
    - Request seamless loops explicitly
    - Specify "no fade out" for looping tracks
-   - Use "inspired by StarCraft 2" for style reference
+   - Use "inspired by classic military RTS games" for style reference
    - Request "game-ready, normalized audio"
 
 2. **For Sound Effects**:
@@ -610,6 +610,6 @@ The audio system includes graceful fallback:
 
 3. **For Voice Lines**:
    - Describe the character personality
-   - Reference StarCraft for style
+   - Reference classic RTS games for style
    - Request "clean recording, no background noise"
    - Specify emotion and intensity

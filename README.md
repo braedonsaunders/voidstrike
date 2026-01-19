@@ -36,7 +36,7 @@ No human-written code. No licensed assets. This is what happens when you point A
 
 ### What Kind of Game Is This?
 
-A competitive real-time strategy game in the style of StarCraft II, playable directly in your browser. No downloads, no installs - just click and play.
+A competitive real-time strategy game in the style of classic RTS games, playable directly in your browser. No downloads, no installs - just click and play.
 
 **Core Gameplay:**
 - Gather resources, build bases, train armies, destroy your opponent
@@ -49,9 +49,9 @@ A competitive real-time strategy game in the style of StarCraft II, playable dir
 
 | Faction | Playstyle | If You Like... |
 |---------|-----------|----------------|
-| **Dominion** | Defensive, siege-focused | Terran (SC2), GDI (C&C) |
-| **Synthesis** | Mobile, tech-heavy | Protoss (SC2), NOD (C&C) |
-| **Swarm** | Aggressive, swarm tactics | Zerg (SC2), Tyranids (40K) |
+| **Dominion** | Defensive, siege-focused | GDI (C&C), UNSC (Halo Wars) |
+| **Synthesis** | Mobile, tech-heavy | NOD (C&C), Covenant (Halo Wars) |
+| **Swarm** | Aggressive, swarm tactics | Tyranids (40K), Flood (Halo Wars) |
 
 **Dominion** - Human military industrial complex. Tanks that siege, buildings that lift off, infantry that bunker up. Turtle and push.
 

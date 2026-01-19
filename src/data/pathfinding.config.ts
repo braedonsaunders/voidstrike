@@ -22,7 +22,7 @@
  * - Ramp traversability (ramps must have slope < this per cell)
  * - Cliff blocking (cliffs have height difference >> this)
  *
- * SC2-style value: 0.8 allows typical ramps (~0.5 per cell)
+ * Value: 0.8 allows typical ramps (~0.5 per cell)
  * while blocking cliffs (3.2+ height jumps)
  */
 export const WALKABLE_CLIMB = 0.8;
@@ -31,7 +31,7 @@ export const WALKABLE_CLIMB = 0.8;
  * Maximum slope angle units can walk on (degrees).
  * Recast uses this to reject near-vertical surfaces.
  *
- * SC2-style value: 50° allows most ramps while rejecting cliff faces
+ * Value: 50° allows most ramps while rejecting cliff faces
  */
 export const WALKABLE_SLOPE_ANGLE = 50;
 

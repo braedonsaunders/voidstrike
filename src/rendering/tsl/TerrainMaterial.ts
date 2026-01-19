@@ -64,7 +64,7 @@ function createTerrainBlendWeights(slope: ShaderNodeObject<any>, terrainType: Sh
   const isUnwalkable = smoothstep(float(1.5), float(2.0), terrainType).mul(smoothstep(float(2.5), float(2.0), terrainType));
   const isPlatform = smoothstep(float(2.5), float(3.0), terrainType);
 
-  // SC2-STYLE: Platforms use platform material, ramps use grass
+  // Platforms use platform material, ramps use grass
   const notPlatform = float(1.0).sub(isPlatform);
 
   // Base slope-based weights - ONLY for non-platform terrain
@@ -305,7 +305,7 @@ export class TSLTerrainMaterial {
       const rockColor = texture(rockDiffuse, tiledUV).rgb;
       const cliffColor = texture(cliffDiffuse, tiledUV).rgb;
 
-      // SC2-STYLE PROCEDURAL PLATFORM MATERIAL
+      // PROCEDURAL PLATFORM MATERIAL
       // Sci-fi metal panels with beveled edges, subtle variation, and detail
       const platformUV = uv().mul(6.0); // Panel tile scale
       const panelUV = fract(platformUV);

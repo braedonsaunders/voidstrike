@@ -620,7 +620,7 @@ The game uses Three.js WebGPU Renderer with automatic WebGL fallback, powered by
 ├─────────────────────────────────────────────────────────────────┤
 │                   THREE.JS 3D WORLD                             │
 │  ┌─────────────────────────────────────────────────────────┐   │
-│  │  • Isometric 3D Camera (SC2 angle ~60°)                 │   │
+│  │  • Isometric 3D Camera (~60° angle)                     │   │
 │  │  • 3D Terrain with height maps                          │   │
 │  │  • GLB Models (units, buildings) with animations        │   │
 │  │  • Real-time shadows + lighting                         │   │
@@ -728,13 +728,13 @@ Selection with multiple improvements:
 5. **tsl/TerrainMaterial.ts** - TSL terrain material (WebGPU + WebGL compatible)
    - 4-texture blending (grass, dirt, rock, cliff) with PBR support
    - Slope-based weight calculation from vertex attributes
-   - SC2-style terrain type system (ground, ramp, unwalkable, platform)
+   - RTS-style terrain type system (ground, ramp, unwalkable, platform)
    - Procedural platform material with beveled metal panels
    - Biome-aware texture loading (grassland, desert, frozen, volcanic, void, jungle)
    - Shared blend weight helper to avoid code duplication
 
 6. **Terrain.ts** - Enhanced terrain geometry with THREE.Terrain-style algorithms
-   - **256-level elevation system** (0-255, like StarCraft 2)
+   - **256-level elevation system** (0-255, classic RTS-style height precision)
    - Proper Perlin noise with gradient interpolation
    - Fractal Brownian Motion (fBM) for multi-octave noise
    - Ridged multi-fractal noise for mountain ridges
@@ -1016,11 +1016,11 @@ src/engine/wasm/
 - Pre-built WASM committed to `public/wasm/` for Vercel
 - Local build: `./scripts/build-wasm.sh` (requires Rust + wasm-pack)
 
-## SC2 Parity Features
+## Advanced RTS Features
 
 ### Unit Movement System
 
-Enhanced movement with StarCraft 2-like responsiveness:
+Enhanced movement with classic RTS responsiveness:
 
 ```typescript
 // Unit acceleration/deceleration
@@ -1043,7 +1043,7 @@ Features:
 
 ### Command Queue System
 
-SC2-style shift-click command chaining with visual feedback:
+RTS-style shift-click command chaining with visual feedback:
 
 ```typescript
 // Supported queued command types
@@ -1135,7 +1135,7 @@ private checkBuildingDependencies(requirements: string[], playerId: string) {
 ### MapTypes.ts - Terrain Data Structures
 
 ```typescript
-// 256-level elevation (like SC2)
+// 256-level elevation
 type Elevation = number; // 0-255
 
 // Gameplay elevation zones
@@ -1701,7 +1701,7 @@ environment.update(deltaTime, gameTime);
 - **GroundDebris**: Pebbles and sticks scattered on terrain
 - **CrystalField**: Glowing crystal clusters for frozen/void biomes
 - **WaterPlane**: Animated shader with wave simulation
-- **MapBorderFog**: SC2-style dark smoky fog around map edges, animated shader with multi-octave simplex noise for organic smoke movement
+- **MapBorderFog**: Dark smoky fog around map edges, animated shader with multi-octave simplex noise for organic smoke movement
 
 ### Game Overlay Manager (`src/rendering/GameOverlayManager.ts`)
 
@@ -1932,7 +1932,7 @@ wall_weapon: { hp: 500, attackRange: 6, attackDamage: 5 }
 
 ### Building Placement System (`BuildingPlacementSystem.ts`)
 
-Handles SC2-style Terran construction:
+Handles Dominion-style construction (worker builds structure):
 
 ```typescript
 // Building states
@@ -1975,7 +1975,7 @@ interface DifficultySettings {
   actionDelayTicks: number;       // 60 (easy) to 10 (insane)
   targetWorkers: number;          // 16-40 workers
   maxBases: number;               // 2-6 bases
-  miningSpeedMultiplier: number;  // 1.0 (normal) to 1.5 (insane - SC2-style bonus)
+  miningSpeedMultiplier: number;  // 1.0 (normal) to 1.5 (insane - bonus for higher difficulties)
   buildSpeedMultiplier: number;
   scoutingEnabled: boolean;
   microEnabled: boolean;
@@ -1994,7 +1994,7 @@ type AIState = 'building' | 'expanding' | 'attacking' |
 
 #### Simulation-Based Economy
 
-The AI uses a fully simulated economy matching StarCraft 2:
+The AI uses a fully simulated economy:
 
 - **No passive income**: Workers must actually gather and deliver resources
 - **Mining speed bonuses**: Higher difficulties get faster mining (1.25x-1.5x)
@@ -2283,7 +2283,7 @@ if (state) {
 
 ### NavMesh Configuration
 
-Tuned for RTS gameplay with SC2-style cliff handling:
+Tuned for RTS gameplay with strict cliff handling:
 
 ```typescript
 const NAVMESH_CONFIG = {
@@ -2304,7 +2304,7 @@ const NAVMESH_CONFIG = {
 };
 ```
 
-### SC2-Style Cliff Blocking
+### RTS-Style Cliff Blocking
 
 Three-layer defense prevents units from walking up/down cliffs:
 
@@ -2351,9 +2351,9 @@ const BUILDING_AVOIDANCE_SOFT_MARGIN = 1.5; // Early detection zone
 const BUILDING_PREDICTION_LOOKAHEAD = 0.5;  // Seconds ahead
 ```
 
-### SC2-Style Formation & Clumping System
+### RTS-Style Formation & Clumping System
 
-The MovementSystem implements StarCraft 2-style unit movement behavior:
+The MovementSystem implements classic RTS unit movement behavior:
 
 #### Magic Box Detection
 
@@ -2389,7 +2389,7 @@ Separation force strength varies based on unit state:
 
 #### Flocking Behaviors
 
-Three steering forces work together (SC2-style):
+Three steering forces work together:
 
 1. **Separation** - Prevents overlapping, strongest force
 2. **Cohesion** (0.1 weight) - Weak force keeping group together
@@ -2621,7 +2621,7 @@ See `.claude/AUDIO_PROMPTS.md` for comprehensive audio generation prompts includ
 
 ### HomeBackground Component (`src/components/home/HomeBackground.tsx`)
 
-A cinematic Three.js animated background that creates an immersive menu experience similar to StarCraft 2:
+A cinematic Three.js animated background that creates an immersive menu experience:
 
 ```typescript
 // Key features:

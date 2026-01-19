@@ -1526,8 +1526,8 @@ The AssetManager will automatically use custom models when available, falling ba
 
 ## Checklist
 
-> **Note:** This checklist reflects VOIDSTRIKE's actual unit/building names (not SC2 names).
-> The AI prompts above use SC2-style descriptions as reference for visual style.
+> **Note:** This checklist reflects VOIDSTRIKE's actual unit/building names.
+> The AI prompts above use military sci-fi descriptions as reference for visual style.
 
 ### Units (13 total) - 13 complete
 - [x] Fabricator *(worker unit)* `fabricator.glb`

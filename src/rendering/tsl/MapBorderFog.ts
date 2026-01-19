@@ -2,7 +2,7 @@
  * TSL Map Border Fog
  *
  * WebGPU-compatible map boundary fog effect using Three.js Shading Language.
- * Creates dark, smoky fog around map edges similar to StarCraft 2.
+ * Creates dark, smoky fog around map edges.
  */
 
 import * as THREE from 'three';

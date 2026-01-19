@@ -35,7 +35,7 @@ import {
 } from '@/data/pathfinding.config';
 
 // Agent config for different unit types
-// SC2-style: Use crowd for pathfinding direction, but disable RVO obstacle avoidance
+// Use crowd for pathfinding direction, but disable RVO obstacle avoidance
 // to prevent jitter. Unit-to-unit collision is handled by physics pushing instead.
 const DEFAULT_AGENT_PARAMS: Partial<CrowdAgentParams> = {
   radius: 0.5,
@@ -45,7 +45,7 @@ const DEFAULT_AGENT_PARAMS: Partial<CrowdAgentParams> = {
   collisionQueryRange: 2.5,
   pathOptimizationRange: 10.0,
   separationWeight: 0.0, // Disabled - we handle separation with physics pushing
-  // SC2-STYLE: Disable obstacle avoidance to prevent jitter
+  // Disable obstacle avoidance to prevent jitter
   // Only use crowd for path corridor following, not local avoidance
   updateFlags: 0x1, // DT_CROWD_ANTICIPATE_TURNS only, no obstacle avoidance
   obstacleAvoidanceType: 0, // Disabled
@@ -629,7 +629,7 @@ export class RecastNavigation {
         ...DEFAULT_AGENT_PARAMS,
         radius,
         maxSpeed,
-        maxAcceleration: 100.0, // High for instant SC2-style acceleration
+        maxAcceleration: 100.0, // High for instant RTS-style acceleration
         collisionQueryRange: radius * 5,
       };
 
@@ -769,7 +769,7 @@ export class RecastNavigation {
       if (agent) {
         if (params.maxSpeed !== undefined) {
           agent.maxSpeed = params.maxSpeed;
-          agent.maxAcceleration = 100.0; // High for instant SC2-style acceleration
+          agent.maxAcceleration = 100.0; // High for instant RTS-style acceleration
         }
         if (params.radius !== undefined) {
           agent.radius = params.radius;

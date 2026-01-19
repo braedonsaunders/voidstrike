@@ -18,7 +18,7 @@ interface WaypointVisual {
 /**
  * Renders command queue waypoints for selected units.
  * Shows green lines connecting current position -> current target -> queued waypoints
- * Similar to StarCraft 2's shift-click command visualization.
+ * Similar to classic RTS shift-click command visualization.
  */
 export class CommandQueueRenderer {
   private scene: THREE.Scene;
@@ -52,7 +52,7 @@ export class CommandQueueRenderer {
     this.playerId = playerId ?? getLocalPlayerId();
     this.getTerrainHeight = getTerrainHeight ?? null;
 
-    // Create shared resources - green color like SC2 waypoints
+    // Create shared resources - green color for waypoints
     this.lineMaterial = new THREE.LineBasicMaterial({
       color: 0x44ff44,
       transparent: true,
