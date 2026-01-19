@@ -32,6 +32,7 @@ import {
 import AssetManager from '@/assets/AssetManager';
 import { WasmBoids, getWasmBoids } from '../wasm/WasmBoids';
 import { CROWD_MAX_AGENTS } from '@/data/pathfinding.config';
+import { SpatialEntityData, SpatialUnitState, stateToEnum } from '../core/SpatialGrid';
 
 // ==================== RTS-STYLE STEERING CONSTANTS ====================
 
@@ -192,11 +193,51 @@ export class MovementSystem extends System {
   private unitMovedThisTick: Set<number> = new Set();
   private separationDirty: Map<number, boolean> = new Map();
 
+  // PERF: Player ID to numeric index mapping for SpatialGrid
+  private playerIdToIndex: Map<string, number> = new Map();
+  private nextPlayerIndex: number = 1; // Start at 1, 0 = no player
+
+  // PERF: Track entities that need grid updates (dirty flag optimization)
+  private gridDirtyEntities: Set<number> = new Set();
+  private lastGridPositions: Float32Array;
+  private readonly GRID_UPDATE_THRESHOLD_SQ = 0.25; // Only update if moved > 0.5 units
+
+  // PERF: Pre-allocated query result buffer for inline data
+  private readonly _neighborDataBuffer: SpatialEntityData[] = [];
+
+  // PERF: Cached entity data to avoid repeated lookups in single frame
+  private frameEntityCache: Map<number, { transform: Transform; unit: Unit; velocity: Velocity }> = new Map();
+
   constructor(game: Game) {
     super(game);
     this.recast = getRecastNavigation();
     this.setupEventListeners();
     this.initWasmBoids();
+
+    // Initialize typed arrays for grid position tracking
+    const maxEntities = 2048;
+    this.lastGridPositions = new Float32Array(maxEntities * 2); // x, y pairs
+
+    // Pre-allocate neighbor data buffer
+    for (let i = 0; i < 128; i++) {
+      this._neighborDataBuffer.push({
+        id: 0, x: 0, y: 0, radius: 0,
+        isFlying: false, state: SpatialUnitState.Idle, playerId: 0,
+        collisionRadius: 0, isWorker: false, maxSpeed: 0,
+      });
+    }
+  }
+
+  /**
+   * Get numeric player index for SpatialGrid storage (creates if not exists)
+   */
+  private getPlayerIndex(playerId: string): number {
+    let index = this.playerIdToIndex.get(playerId);
+    if (index === undefined) {
+      index = this.nextPlayerIndex++;
+      this.playerIdToIndex.set(playerId, index);
+    }
+    return index;
   }
 
   /**
@@ -860,34 +901,32 @@ export class MovementSystem extends System {
     let forceX = 0;
     let forceY = 0;
 
-    // PERF: Use batched neighbor query if available, otherwise query directly
+    // PERF OPTIMIZATION: Use queryRadiusWithData to get inline entity data
+    // This eliminates entity.get() lookups in the hot path
     const queryRadius = SEPARATION_RADIUS + selfUnit.collisionRadius;
-    const neighborCache = this.batchedNeighborCache.get(selfId);
-    const nearbyIds = (neighborCache && neighborCache.tick === this.currentTick)
-      ? neighborCache.ids
-      : this.world.unitGrid.queryRadius(selfTransform.x, selfTransform.y, queryRadius);
+    const nearbyData = this.world.unitGrid.queryRadiusWithData(
+      selfTransform.x,
+      selfTransform.y,
+      queryRadius,
+      this._neighborDataBuffer
+    );
 
-    for (const entityId of nearbyIds) {
-      if (entityId === selfId) continue;
+    for (let i = 0; i < nearbyData.length; i++) {
+      const other = nearbyData[i];
+      if (other.id === selfId) continue;
 
-      const entity = this.world.getEntity(entityId);
-      if (!entity) continue;
-
-      const otherTransform = entity.get<Transform>('Transform');
-      const otherUnit = entity.get<Unit>('Unit');
-      if (!otherTransform || !otherUnit) continue;
-
-      if (otherUnit.state === 'dead') continue;
-      if (selfUnit.isFlying !== otherUnit.isFlying) continue;
-      if (otherUnit.state === 'gathering') continue;
+      // Use inline data - no entity lookups needed!
+      if (other.state === SpatialUnitState.Dead) continue;
+      if (selfUnit.isFlying !== other.isFlying) continue;
+      if (other.state === SpatialUnitState.Gathering) continue;
       // Allow workers to clip into each other for easier mining
-      if (selfUnit.isWorker && otherUnit.isWorker) continue;
+      if (selfUnit.isWorker && other.isWorker) continue;
 
-      const dx = selfTransform.x - otherTransform.x;
-      const dy = selfTransform.y - otherTransform.y;
+      const dx = selfTransform.x - other.x;
+      const dy = selfTransform.y - other.y;
       const distanceSq = dx * dx + dy * dy;
 
-      const combinedRadius = selfUnit.collisionRadius + otherUnit.collisionRadius;
+      const combinedRadius = selfUnit.collisionRadius + other.collisionRadius;
       const separationDist = Math.max(combinedRadius * 0.5, SEPARATION_RADIUS);
       const separationDistSq = separationDist * separationDist;
 
@@ -950,36 +989,27 @@ export class MovementSystem extends System {
     let sumY = 0;
     let count = 0;
 
-    // PERF: Use batched neighbor query if available, otherwise query directly
-    const neighborCache = this.batchedNeighborCache.get(selfId);
-    const nearbyIds = (neighborCache && neighborCache.tick === this.currentTick)
-      ? neighborCache.ids
-      : this.world.unitGrid.queryRadius(selfTransform.x, selfTransform.y, COHESION_RADIUS);
+    // PERF OPTIMIZATION: Use queryRadiusWithData for inline entity data
+    const selfState = stateToEnum(selfUnit.state);
+    const nearbyData = this.world.unitGrid.queryRadiusWithData(
+      selfTransform.x,
+      selfTransform.y,
+      COHESION_RADIUS,
+      this._neighborDataBuffer
+    );
 
-    for (const entityId of nearbyIds) {
-      if (entityId === selfId) continue;
+    for (let i = 0; i < nearbyData.length; i++) {
+      const other = nearbyData[i];
+      if (other.id === selfId) continue;
 
-      const entity = this.world.getEntity(entityId);
-      if (!entity) continue;
+      // Use inline data - no entity lookups needed!
+      if (other.state === SpatialUnitState.Dead) continue;
+      if (selfUnit.isFlying !== other.isFlying) continue;
+      // Only cohere with units in same state
+      if (other.state !== selfState) continue;
 
-      const otherTransform = entity.get<Transform>('Transform');
-      const otherUnit = entity.get<Unit>('Unit');
-      if (!otherTransform || !otherUnit) continue;
-
-      if (otherUnit.state === 'dead') continue;
-      if (selfUnit.isFlying !== otherUnit.isFlying) continue;
-      // Only cohere with units moving in same direction
-      if (otherUnit.state !== selfUnit.state) continue;
-
-      // PERF: Distance filter when using batched query (which may have larger radius)
-      if (neighborCache && neighborCache.tick === this.currentTick) {
-        const dx = selfTransform.x - otherTransform.x;
-        const dy = selfTransform.y - otherTransform.y;
-        if (dx * dx + dy * dy > COHESION_RADIUS * COHESION_RADIUS) continue;
-      }
-
-      sumX += otherTransform.x;
-      sumY += otherTransform.y;
+      sumX += other.x;
+      sumY += other.y;
       count++;
     }
 
@@ -1045,32 +1075,33 @@ export class MovementSystem extends System {
     let sumVy = 0;
     let count = 0;
 
-    // PERF: Use batched neighbor query if available, otherwise query directly
-    const neighborCache = this.batchedNeighborCache.get(selfId);
-    const nearbyIds = (neighborCache && neighborCache.tick === this.currentTick)
-      ? neighborCache.ids
-      : this.world.unitGrid.queryRadius(selfTransform.x, selfTransform.y, ALIGNMENT_RADIUS);
+    // PERF OPTIMIZATION: Use queryRadiusWithData for initial filtering, then get velocity from cache
+    const nearbyData = this.world.unitGrid.queryRadiusWithData(
+      selfTransform.x,
+      selfTransform.y,
+      ALIGNMENT_RADIUS,
+      this._neighborDataBuffer
+    );
 
-    for (const entityId of nearbyIds) {
-      if (entityId === selfId) continue;
+    for (let i = 0; i < nearbyData.length; i++) {
+      const other = nearbyData[i];
+      if (other.id === selfId) continue;
 
-      const entity = this.world.getEntity(entityId);
-      if (!entity) continue;
+      // Use inline data for fast filtering
+      if (other.state === SpatialUnitState.Dead) continue;
+      if (selfUnit.isFlying !== other.isFlying) continue;
 
-      const otherTransform = entity.get<Transform>('Transform');
-      const otherUnit = entity.get<Unit>('Unit');
-      const otherVelocity = entity.get<Velocity>('Velocity');
-      if (!otherTransform || !otherUnit || !otherVelocity) continue;
-
-      if (otherUnit.state === 'dead') continue;
-      if (selfUnit.isFlying !== otherUnit.isFlying) continue;
-
-      // PERF: Distance filter when using batched query (which may have larger radius)
-      if (neighborCache && neighborCache.tick === this.currentTick) {
-        const dx = selfTransform.x - otherTransform.x;
-        const dy = selfTransform.y - otherTransform.y;
-        if (dx * dx + dy * dy > ALIGNMENT_RADIUS * ALIGNMENT_RADIUS) continue;
+      // Get velocity from frame cache or entity lookup
+      let otherVelocity: Velocity | undefined;
+      const cached = this.frameEntityCache.get(other.id);
+      if (cached) {
+        otherVelocity = cached.velocity;
+      } else {
+        const entity = this.world.getEntity(other.id);
+        if (!entity) continue;
+        otherVelocity = entity.get<Velocity>('Velocity');
       }
+      if (!otherVelocity) continue;
 
       // Only align with moving units
       const otherSpeed = otherVelocity.getMagnitude();
@@ -1199,35 +1230,32 @@ export class MovementSystem extends System {
       return;
     }
 
-    // PERF: Use batched neighbor query if available, otherwise query directly
+    // PERF OPTIMIZATION: Use queryRadiusWithData for inline entity data
     const queryRadius = PHYSICS_PUSH_RADIUS + selfUnit.collisionRadius;
-    const neighborCache = this.batchedNeighborCache.get(selfId);
-    const nearbyIds = (neighborCache && neighborCache.tick === this.currentTick)
-      ? neighborCache.ids
-      : this.world.unitGrid.queryRadius(selfTransform.x, selfTransform.y, queryRadius);
+    const nearbyData = this.world.unitGrid.queryRadiusWithData(
+      selfTransform.x,
+      selfTransform.y,
+      queryRadius,
+      this._neighborDataBuffer
+    );
 
     let forceX = 0;
     let forceY = 0;
 
-    for (const entityId of nearbyIds) {
-      if (entityId === selfId) continue;
+    for (let i = 0; i < nearbyData.length; i++) {
+      const other = nearbyData[i];
+      if (other.id === selfId) continue;
 
-      const entity = this.world.getEntity(entityId);
-      if (!entity) continue;
-
-      const otherTransform = entity.get<Transform>('Transform');
-      const otherUnit = entity.get<Unit>('Unit');
-      if (!otherTransform || !otherUnit) continue;
-
-      if (otherUnit.state === 'dead') continue;
-      if (otherUnit.isFlying) continue; // Don't push flying units
+      // Use inline data - no entity lookups needed!
+      if (other.state === SpatialUnitState.Dead) continue;
+      if (other.isFlying) continue; // Don't push flying units
       // Allow workers to pass through each other for easier mining
-      if (selfUnit.isWorker && otherUnit.isWorker) continue;
+      if (selfUnit.isWorker && other.isWorker) continue;
 
-      const dx = selfTransform.x - otherTransform.x;
-      const dy = selfTransform.y - otherTransform.y;
+      const dx = selfTransform.x - other.x;
+      const dy = selfTransform.y - other.y;
       const distSq = dx * dx + dy * dy;
-      const minDist = selfUnit.collisionRadius + otherUnit.collisionRadius;
+      const minDist = selfUnit.collisionRadius + other.collisionRadius;
       const pushDist = minDist + PHYSICS_PUSH_RADIUS;
 
       if (distSq < pushDist * pushDist && distSq > 0.0001) {
@@ -1697,19 +1725,62 @@ export class MovementSystem extends System {
 
     // PERF: Clear per-frame tracking
     this.unitMovedThisTick.clear();
+    this.frameEntityCache.clear();
+    this.gridDirtyEntities.clear();
 
-    // Update spatial grid
+    // PERF OPTIMIZATION: Merged single pass for spatial grid update and entity caching
+    // Only update grid for entities that have moved significantly (dirty-flag optimization)
     for (const entity of entities) {
       const transform = entity.get<Transform>('Transform');
       const unit = entity.get<Unit>('Unit');
-      if (!transform || !unit) continue;
-      if (unit.state !== 'dead') {
-        this.world.unitGrid.update(
+      const velocity = entity.get<Velocity>('Velocity');
+      if (!transform || !unit || !velocity) continue;
+
+      // Cache entity data for this frame to avoid repeated lookups
+      this.frameEntityCache.set(entity.id, { transform, unit, velocity });
+
+      if (unit.state === 'dead') {
+        this.world.unitGrid.remove(entity.id);
+        continue;
+      }
+
+      // DIRTY FLAG: Check if position changed significantly since last grid update
+      const posIdx = entity.id * 2;
+      const lastX = this.lastGridPositions[posIdx];
+      const lastY = this.lastGridPositions[posIdx + 1];
+      const dx = transform.x - lastX;
+      const dy = transform.y - lastY;
+      const distSq = dx * dx + dy * dy;
+
+      // Only update grid if moved beyond threshold OR first time
+      const needsGridUpdate = distSq > this.GRID_UPDATE_THRESHOLD_SQ || lastX === 0;
+
+      if (needsGridUpdate) {
+        // Get player index for inline data
+        const selectable = entity.get<Selectable>('Selectable');
+        const playerId = selectable ? this.getPlayerIndex(selectable.playerId) : 0;
+
+        // Use full update with inline data for optimal steering/combat performance
+        this.world.unitGrid.updateFull(
           entity.id,
           transform.x,
           transform.y,
-          unit.collisionRadius
+          unit.collisionRadius,
+          unit.isFlying,
+          stateToEnum(unit.state),
+          playerId,
+          unit.collisionRadius,
+          unit.isWorker,
+          unit.maxSpeed
         );
+
+        // Track updated position
+        this.lastGridPositions[posIdx] = transform.x;
+        this.lastGridPositions[posIdx + 1] = transform.y;
+        this.gridDirtyEntities.add(entity.id);
+      } else {
+        // Position didn't change much - just update state if needed
+        this.world.unitGrid.updateState(entity.id, stateToEnum(unit.state));
       }
     }
 

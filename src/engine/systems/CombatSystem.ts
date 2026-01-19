@@ -14,6 +14,7 @@ import { getDefaultTargetPriority } from '@/data/units/categories';
 import AssetManager from '@/assets/AssetManager';
 import { getProjectileType, DEFAULT_PROJECTILE, isInstantProjectile } from '@/data/projectiles';
 import { DEFAULT_AIRBORNE_HEIGHT } from '@/assets/AssetManager';
+import { SpatialEntityData, SpatialUnitState } from '../core/SpatialGrid';
 
 // PERF: Reusable event payload objects to avoid allocation per attack
 const attackEventPayload = {
@@ -97,9 +98,197 @@ export class CombatSystem extends System {
   // PERF: Track player unit counts per grid cell for fast enemy detection
   private lastEnemyCheckResult: Map<number, boolean> = new Map();
 
+  // PERF OPTIMIZATION: Combat-active entity list
+  // Only units in this set are processed for target acquisition
+  private combatActiveUnits: Set<number> = new Set();
+  private combatActiveLastUpdate: number = 0;
+  private readonly COMBAT_ACTIVE_UPDATE_INTERVAL = 5; // Rebuild list every 5 ticks
+
+  // PERF OPTIMIZATION: Hot cell tracking from SpatialGrid
+  // Cells containing units from multiple players are "hot"
+  private hotCells: Set<number> = new Set();
+  private hotCellsLastUpdate: number = 0;
+  private readonly HOT_CELLS_UPDATE_INTERVAL = 10; // Rebuild every 10 ticks
+
+  // PERF OPTIMIZATION: Attack cooldown priority queue (min-heap by next attack time)
+  // Only units in this queue are checked for attacks
+  private attackReadyQueue: Array<{ entityId: number; nextAttackTime: number }> = [];
+  private attackQueueDirty: boolean = true;
+
+  // PERF OPTIMIZATION: Target visibility cache
+  // Maps attacker ID to set of visible enemy IDs
+  private visibilityCache: Map<number, { enemies: number[]; validUntilTick: number }> = new Map();
+  private readonly VISIBILITY_CACHE_DURATION = 5; // Cache valid for 5 ticks
+
+  // PERF: Player ID to numeric index mapping
+  private playerIdToIndex: Map<string, number> = new Map();
+  private nextPlayerIndex: number = 1;
+
+  // PERF: Pre-allocated query result buffer
+  private readonly _targetDataBuffer: SpatialEntityData[] = [];
+
   constructor(game: Game) {
     super(game);
     this.setupEventListeners();
+
+    // Pre-allocate target data buffer
+    for (let i = 0; i < 64; i++) {
+      this._targetDataBuffer.push({
+        id: 0, x: 0, y: 0, radius: 0,
+        isFlying: false, state: SpatialUnitState.Idle, playerId: 0,
+        collisionRadius: 0, isWorker: false, maxSpeed: 0,
+      });
+    }
+  }
+
+  /**
+   * Get numeric player index for fast comparison
+   */
+  private getPlayerIndex(playerId: string): number {
+    let index = this.playerIdToIndex.get(playerId);
+    if (index === undefined) {
+      index = this.nextPlayerIndex++;
+      this.playerIdToIndex.set(playerId, index);
+    }
+    return index;
+  }
+
+  /**
+   * PERF OPTIMIZATION: Update hot cells from SpatialGrid
+   * Hot cells contain units from multiple players - likely combat zones
+   */
+  private updateHotCells(currentTick: number): void {
+    if (currentTick - this.hotCellsLastUpdate < this.HOT_CELLS_UPDATE_INTERVAL) {
+      return;
+    }
+
+    this.hotCells = this.world.unitGrid.getHotCells();
+    this.hotCellsLastUpdate = currentTick;
+  }
+
+  /**
+   * PERF OPTIMIZATION: Rebuild the combat-active unit list
+   * Only units in hot cells or with active targets are tracked
+   */
+  private updateCombatActiveUnits(currentTick: number): void {
+    if (currentTick - this.combatActiveLastUpdate < this.COMBAT_ACTIVE_UPDATE_INTERVAL) {
+      return;
+    }
+
+    this.combatActiveUnits.clear();
+
+    const units = this.world.getEntitiesWith('Transform', 'Unit', 'Health');
+    for (const entity of units) {
+      const transform = entity.get<Transform>('Transform');
+      const unit = entity.get<Unit>('Unit');
+      const health = entity.get<Health>('Health');
+      if (!transform || !unit || !health || health.isDead()) continue;
+
+      // Always include units with active targets
+      if (unit.targetEntityId !== null) {
+        this.combatActiveUnits.add(entity.id);
+        continue;
+      }
+
+      // Include units in attack-move or patrolling states
+      if (unit.state === 'attackmoving' || unit.state === 'patrolling') {
+        this.combatActiveUnits.add(entity.id);
+        continue;
+      }
+
+      // Include units in hot cells (near enemies)
+      if (this.world.unitGrid.isInHotCell(transform.x, transform.y, this.hotCells)) {
+        this.combatActiveUnits.add(entity.id);
+        continue;
+      }
+
+      // Include holding position units
+      if (unit.isHoldingPosition) {
+        this.combatActiveUnits.add(entity.id);
+        continue;
+      }
+    }
+
+    this.combatActiveLastUpdate = currentTick;
+  }
+
+  /**
+   * PERF OPTIMIZATION: Min-heap operations for attack cooldown queue
+   */
+  private heapPush(item: { entityId: number; nextAttackTime: number }): void {
+    this.attackReadyQueue.push(item);
+    this.heapSiftUp(this.attackReadyQueue.length - 1);
+  }
+
+  private heapPop(): { entityId: number; nextAttackTime: number } | undefined {
+    if (this.attackReadyQueue.length === 0) return undefined;
+    const result = this.attackReadyQueue[0];
+    const last = this.attackReadyQueue.pop()!;
+    if (this.attackReadyQueue.length > 0) {
+      this.attackReadyQueue[0] = last;
+      this.heapSiftDown(0);
+    }
+    return result;
+  }
+
+  private heapPeek(): { entityId: number; nextAttackTime: number } | undefined {
+    return this.attackReadyQueue[0];
+  }
+
+  private heapSiftUp(index: number): void {
+    while (index > 0) {
+      const parent = Math.floor((index - 1) / 2);
+      if (this.attackReadyQueue[parent].nextAttackTime <= this.attackReadyQueue[index].nextAttackTime) {
+        break;
+      }
+      [this.attackReadyQueue[parent], this.attackReadyQueue[index]] =
+        [this.attackReadyQueue[index], this.attackReadyQueue[parent]];
+      index = parent;
+    }
+  }
+
+  private heapSiftDown(index: number): void {
+    const length = this.attackReadyQueue.length;
+    while (true) {
+      const left = 2 * index + 1;
+      const right = 2 * index + 2;
+      let smallest = index;
+
+      if (left < length && this.attackReadyQueue[left].nextAttackTime < this.attackReadyQueue[smallest].nextAttackTime) {
+        smallest = left;
+      }
+      if (right < length && this.attackReadyQueue[right].nextAttackTime < this.attackReadyQueue[smallest].nextAttackTime) {
+        smallest = right;
+      }
+
+      if (smallest === index) break;
+
+      [this.attackReadyQueue[index], this.attackReadyQueue[smallest]] =
+        [this.attackReadyQueue[smallest], this.attackReadyQueue[index]];
+      index = smallest;
+    }
+  }
+
+  /**
+   * PERF OPTIMIZATION: Rebuild attack ready queue from all combat units
+   */
+  private rebuildAttackQueue(gameTime: number): void {
+    this.attackReadyQueue.length = 0;
+
+    for (const entityId of this.combatActiveUnits) {
+      const entity = this.world.getEntity(entityId);
+      if (!entity) continue;
+
+      const unit = entity.get<Unit>('Unit');
+      if (!unit || unit.state === 'dead') continue;
+
+      // Calculate next attack time (attackSpeed is attacks per second, so cooldown = 1/attackSpeed)
+      const cooldown = 1 / unit.attackSpeed;
+      const nextAttackTime = unit.lastAttackTime + cooldown;
+      this.heapPush({ entityId, nextAttackTime });
+    }
+
+    this.attackQueueDirty = false;
   }
 
   private setupEventListeners(): void {
@@ -219,49 +408,73 @@ export class CombatSystem extends System {
   public update(deltaTime: number): void {
     const gameTime = this.game.getGameTime();
     const currentTick = this.game.getCurrentTick();
-    const attackers = this.world.getEntitiesWith('Transform', 'Unit', 'Health');
 
-    for (const attacker of attackers) {
-      const transform = attacker.get<Transform>('Transform');
-      const unit = attacker.get<Unit>('Unit');
-      const health = attacker.get<Health>('Health');
-      if (!transform || !unit || !health) continue;
+    // PERF OPTIMIZATION: Update hot cells and combat-active unit list
+    this.updateHotCells(currentTick);
+    this.updateCombatActiveUnits(currentTick);
 
-      // Skip dead units
-      if (health.isDead()) {
-        if (unit.state !== 'dead') {
-          unit.state = 'dead';
-          const selectable = attacker.get<Selectable>('Selectable');
+    // PERF OPTIMIZATION: Rebuild attack queue if dirty
+    if (this.attackQueueDirty) {
+      this.rebuildAttackQueue(gameTime);
+    }
+
+    // PERF OPTIMIZATION: First pass - handle dead units (fast scan of all units)
+    const allUnits = this.world.getEntitiesWith('Transform', 'Unit', 'Health');
+    for (const entity of allUnits) {
+      const health = entity.get<Health>('Health');
+      const unit = entity.get<Unit>('Unit');
+      if (!health || !unit) continue;
+
+      if (health.isDead() && unit.state !== 'dead') {
+        unit.state = 'dead';
+        const transform = entity.get<Transform>('Transform');
+        const selectable = entity.get<Selectable>('Selectable');
+        if (transform) {
           this.game.eventBus.emit('unit:died', {
-            entityId: attacker.id,
+            entityId: entity.id,
             position: { x: transform.x, y: transform.y },
             isPlayerUnit: selectable?.playerId ? isLocalPlayer(selectable.playerId) : false,
             isFlying: unit.isFlying,
             playerId: selectable?.playerId,
-            unitType: unit.unitId, // For airborne height lookup in effects
+            unitType: unit.unitId,
           });
         }
-        continue;
+        // Remove from combat-active set
+        this.combatActiveUnits.delete(entity.id);
       }
+    }
+
+    // PERF OPTIMIZATION: Second pass - target acquisition for combat-active units only
+    for (const entityId of this.combatActiveUnits) {
+      const attacker = this.world.getEntity(entityId);
+      if (!attacker) continue;
+
+      const transform = attacker.get<Transform>('Transform');
+      const unit = attacker.get<Unit>('Unit');
+      const health = attacker.get<Health>('Health');
+      if (!transform || !unit || !health || health.isDead()) continue;
 
       // Auto-acquire targets for units that need them
-      // Includes: idle, patrolling, attackmoving, holding, or 'attacking' with invalid target
       const needsTarget = unit.targetEntityId === null && (
         unit.state === 'idle' ||
         unit.state === 'patrolling' ||
         unit.state === 'attackmoving' ||
-        unit.state === 'attacking' ||  // Edge case: attacking but lost target
+        unit.state === 'attacking' ||
         unit.isHoldingPosition
       );
 
       if (needsTarget) {
-        // PERF: Skip target acquisition entirely for idle units not in combat zones
-        // This avoids expensive spatial queries for units far from any enemies
+        // PERF: Use hot cell check instead of expensive spatial query for idle units
         if (unit.state === 'idle' && !unit.isHoldingPosition) {
-          const inCombatZone = this.checkCombatZone(attacker.id, transform, unit, currentTick);
-          if (!inCombatZone) {
-            // Not in combat zone - skip all target acquisition this tick
-            continue;
+          // Fast check: is this unit in a hot cell?
+          const inHotCell = this.world.unitGrid.isInHotCell(transform.x, transform.y, this.hotCells);
+          if (!inHotCell) {
+            // Also do the full combat zone check for edge cases
+            const inCombatZone = this.checkCombatZone(attacker.id, transform, unit, currentTick);
+            if (!inCombatZone) {
+              // Not in combat zone - skip all target acquisition this tick
+              continue;
+            }
           }
         }
 
@@ -443,6 +656,8 @@ export class CombatSystem extends System {
    * PERF: Check if unit is in a "combat zone" (has enemies within sight range)
    * Uses heavy throttling since this is just to skip processing for truly isolated units.
    * Returns cached result if available, only does actual check every COMBAT_ZONE_CHECK_INTERVAL ticks.
+   *
+   * PERF OPTIMIZATION: Uses SpatialGrid.hasEnemyInRadius for fast inline data lookup.
    */
   private checkCombatZone(
     selfId: number,
@@ -468,38 +683,15 @@ export class CombatSystem extends System {
       return false;
     }
 
-    // Quick scan for ANY enemy unit within sight range
-    // We don't need the best target, just need to know if enemies exist nearby
-    const nearbyUnitIds = this.world.unitGrid.queryRadius(
+    // PERF OPTIMIZATION: Use fast hasEnemyInRadius with inline data
+    // This avoids entity lookups for each potential target
+    const myPlayerId = this.getPlayerIndex(selfSelectable.playerId);
+    let hasEnemyNearby = this.world.unitGrid.hasEnemyInRadius(
       selfTransform.x,
       selfTransform.y,
-      selfUnit.sightRange
+      selfUnit.sightRange,
+      myPlayerId
     );
-
-    let hasEnemyNearby = false;
-
-    for (const entityId of nearbyUnitIds) {
-      if (entityId === selfId) continue;
-
-      const entity = this.world.getEntity(entityId);
-      if (!entity) continue;
-
-      const selectable = entity.get<Selectable>('Selectable');
-      const health = entity.get<Health>('Health');
-      const targetUnit = entity.get<Unit>('Unit');
-
-      if (!selectable || !health) continue;
-      if (selectable.playerId === selfSelectable.playerId) continue;
-      if (health.isDead()) continue;
-
-      // Check if we can even attack this unit type
-      const targetIsFlying = targetUnit?.isFlying ?? false;
-      if (!selfUnit.canAttackTarget(targetIsFlying)) continue;
-
-      // Found an enemy we could potentially attack
-      hasEnemyNearby = true;
-      break;
-    }
 
     // Also check for enemy buildings if we can attack ground
     if (!hasEnemyNearby && selfUnit.canAttackGround) {

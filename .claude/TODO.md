@@ -6,6 +6,35 @@
 
 ---
 
+## High-Performance Battle Simulator Optimization (January 2026) ✓
+
+### SpatialGrid Rewrite
+- [x] **Flat array storage** - Int32Array cells with direct indexing instead of Map<Set>
+- [x] **Hierarchical grid** - Fine (8x8) + coarse (32x32) cells for multi-scale queries
+- [x] **Inline entity data** - Position, state, playerId stored in grid to avoid entity lookups
+- [x] **Pre-allocated buffers** - Reusable query results eliminate GC pressure
+- [x] **Hot cell detection** - getHotCells() identifies cells with multi-player units
+- [x] **Fast enemy detection** - hasEnemyInRadius() with inline data for O(nearby) checks
+
+### MovementSystem Optimizations
+- [x] **Dirty-flag updates** - Only update grid when unit moves > 0.5 units
+- [x] **Single merged pass** - Combined spatial grid update and entity caching
+- [x] **Inline data steering** - Separation, cohesion, physics push use grid data directly
+- [x] **Frame entity cache** - Avoid repeated component lookups within frame
+
+### CombatSystem Optimizations
+- [x] **Combat-active list** - Only process units in combat zones, not all entities
+- [x] **Hot cell tracking** - Skip target acquisition for units in "cold" cells
+- [x] **O(nearby) enemy detection** - hasEnemyInRadius() replaces O(n) scans
+- [x] **Attack cooldown queue** - Min-heap for O(log n) attack scheduling
+
+### Performance Impact
+- 500 unit battles: Movement 7-10ms → 2-4ms (estimated)
+- Combat target acquisition: Only processes ~50-100 combat-active units vs all 500
+- Steering calculations: No entity.get() lookups in hot paths
+
+---
+
 ## Web Worker Performance Optimization (January 2026) ✓
 
 ### Vision System Worker
