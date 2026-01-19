@@ -118,8 +118,8 @@ export class ProjectileSystem extends System {
           // Update target position including Z for flying units
           projectile.targetX = targetTransform.x;
           projectile.targetY = targetTransform.y;
-          // Add flying height offset if target is airborne
-          const flyingOffset = targetUnit?.isFlying ? DEFAULT_AIRBORNE_HEIGHT : 0;
+          // Add flying height offset if target is airborne (0.5 for ground = center of mass)
+          const flyingOffset = targetUnit?.isFlying ? DEFAULT_AIRBORNE_HEIGHT : 0.5;
           projectile.targetZ = targetTransform.z + flyingOffset;
         } else {
           // Target died - continue to last known position
