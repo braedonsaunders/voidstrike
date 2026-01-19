@@ -36,6 +36,18 @@ interface EmissiveDecoration {
 }
 
 /**
+ * Tracked instanced decoration (shared material, no per-instance lights)
+ */
+interface InstancedEmissiveDecoration {
+  mesh: THREE.InstancedMesh;
+  material: THREE.MeshStandardMaterial;
+  baseEmissive: THREE.Color;
+  baseIntensity: number;
+  pulseSpeed: number;
+  pulseAmplitude: number;
+}
+
+/**
  * Manages emissive decorations (crystals, alien structures) with optional attached lights.
  * Supports pulsing animations and per-decoration light emission.
  */
@@ -43,6 +55,7 @@ export class EmissiveDecorationManager {
   private scene: THREE.Scene;
   private lightPool: LightPool | null;
   private decorations: EmissiveDecoration[] = [];
+  private instancedDecorations: InstancedEmissiveDecoration[] = [];
   private enabled: boolean = true;
   private intensityMultiplier: number = 1.0;
   private time: number = 0;
@@ -50,6 +63,40 @@ export class EmissiveDecorationManager {
   constructor(scene: THREE.Scene, lightPool: LightPool | null = null) {
     this.scene = scene;
     this.lightPool = lightPool;
+  }
+
+  /**
+   * Register an InstancedMesh for uniform emissive control.
+   * All instances share the same material, so emissive changes affect all.
+   * Use this for crystalline fields, fungal growths, or other batch decorations.
+   *
+   * Note: Per-instance lights are not supported - use DecorationLightManager
+   * for distance-sorted, frustum-culled decoration lights.
+   */
+  public registerInstancedDecoration(
+    mesh: THREE.InstancedMesh,
+    hints: DecorationRenderingHints
+  ): void {
+    if (!hints.emissive) return;
+
+    const material = mesh.material as THREE.MeshStandardMaterial;
+    if (!material || !(material instanceof THREE.MeshStandardMaterial)) return;
+
+    const emissiveColor = new THREE.Color(hints.emissive);
+    const emissiveIntensity = hints.emissiveIntensity ?? 1.0;
+
+    // Apply initial emissive to material
+    material.emissive = emissiveColor;
+    material.emissiveIntensity = emissiveIntensity * this.intensityMultiplier;
+
+    this.instancedDecorations.push({
+      mesh,
+      material,
+      baseEmissive: emissiveColor.clone(),
+      baseIntensity: emissiveIntensity,
+      pulseSpeed: hints.pulseSpeed ?? 0,
+      pulseAmplitude: hints.pulseAmplitude ?? 0,
+    });
   }
 
   /**
@@ -130,16 +177,24 @@ export class EmissiveDecorationManager {
 
     this.time += deltaTime * 0.001; // Convert to seconds
 
+    // Update individual decorations
     for (const deco of this.decorations) {
-      // Apply pulsing animation if configured
       if (deco.pulseSpeed > 0 && deco.pulseAmplitude > 0) {
         const pulse = 1.0 + Math.sin(this.time * deco.pulseSpeed * Math.PI * 2) * deco.pulseAmplitude;
         const finalIntensity = deco.baseIntensity * pulse * this.intensityMultiplier;
         deco.material.emissiveIntensity = finalIntensity;
 
-        // Update attached light intensity if present
         // Note: LightPool doesn't expose direct intensity control after spawn
         // For proper pulsing lights, we'd need to extend LightPool
+      }
+    }
+
+    // Update instanced decorations (shared material animation)
+    for (const deco of this.instancedDecorations) {
+      if (deco.pulseSpeed > 0 && deco.pulseAmplitude > 0) {
+        const pulse = 1.0 + Math.sin(this.time * deco.pulseSpeed * Math.PI * 2) * deco.pulseAmplitude;
+        const finalIntensity = deco.baseIntensity * pulse * this.intensityMultiplier;
+        deco.material.emissiveIntensity = finalIntensity;
       }
     }
   }
@@ -150,7 +205,19 @@ export class EmissiveDecorationManager {
   public setEnabled(enabled: boolean): void {
     this.enabled = enabled;
 
+    // Update individual decorations
     for (const deco of this.decorations) {
+      if (enabled) {
+        deco.material.emissive = deco.baseEmissive;
+        deco.material.emissiveIntensity = deco.baseIntensity * this.intensityMultiplier;
+      } else {
+        deco.material.emissive = new THREE.Color(0x000000);
+        deco.material.emissiveIntensity = 0;
+      }
+    }
+
+    // Update instanced decorations
+    for (const deco of this.instancedDecorations) {
       if (enabled) {
         deco.material.emissive = deco.baseEmissive;
         deco.material.emissiveIntensity = deco.baseIntensity * this.intensityMultiplier;
@@ -170,13 +237,17 @@ export class EmissiveDecorationManager {
     for (const deco of this.decorations) {
       deco.material.emissiveIntensity = deco.baseIntensity * multiplier;
     }
+
+    for (const deco of this.instancedDecorations) {
+      deco.material.emissiveIntensity = deco.baseIntensity * multiplier;
+    }
   }
 
   /**
-   * Get count of registered emissive decorations
+   * Get count of registered emissive decorations (individual + instanced)
    */
   public getDecorationCount(): number {
-    return this.decorations.length;
+    return this.decorations.length + this.instancedDecorations.length;
   }
 
   /**
@@ -192,6 +263,7 @@ export class EmissiveDecorationManager {
       }
     }
     this.decorations = [];
+    this.instancedDecorations = [];
   }
 
   /**
