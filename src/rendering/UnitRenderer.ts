@@ -292,7 +292,7 @@ export class UnitRenderer {
     }
 
     debugMesh.log('[UnitRenderer] GPU-driven rendering enabled');
-    console.log('[UnitRenderer] GPU-driven rendering mode: ENABLED');
+    debugMesh.log('[UnitRenderer] GPU-driven rendering mode: ENABLED');
   }
 
   /**
@@ -336,7 +336,7 @@ export class UnitRenderer {
       debugPerformance.log('  - GPU Unit Buffer: INITIALIZED');
       debugPerformance.log('  - GPU Culling Compute: ' + (this.gpuCullingInitialized ? 'READY' : 'PENDING'));
       debugPerformance.log('  - GPU Indirect Draw: ENABLED');
-      console.log('[GPU Indirect Renderer] ✓ INITIALIZED - indirect draw calls enabled');
+      debugPerformance.log('[GPU Indirect Renderer] ✓ INITIALIZED - indirect draw calls enabled');
     } catch (e) {
       const errorMsg = e instanceof Error ? e.message : String(e);
       debugMesh.warn('[UnitRenderer] Failed to initialize GPU indirect renderer:', errorMsg);

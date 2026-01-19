@@ -503,15 +503,14 @@ export function WebGPUGameCanvas() {
       const GPU_RENDERING_ENABLED = true;
       debugInitialization.log(`[WebGPUGameCanvas] GPU-driven rendering check: isWebGPU=${renderContext.isWebGPU}, supportsCompute=${renderContext.supportsCompute}`);
       if (GPU_RENDERING_ENABLED && renderContext.supportsCompute && renderContext.isWebGPU) {
-        console.log('[WebGPUGameCanvas] Enabling GPU-driven rendering...');
+        debugInitialization.log('[WebGPUGameCanvas] Enabling GPU-driven rendering...');
         unitRendererRef.current.enableGPUDrivenRendering();
         unitRendererRef.current.setRenderer(renderer as import('three/webgpu').WebGPURenderer);
         unitRendererRef.current.setCamera(camera.camera);
         debugInitialization.log('[WebGPUGameCanvas] GPU-driven unit rendering ENABLED');
-        console.log('[WebGPUGameCanvas] ✓ GPU-driven unit rendering ENABLED');
+        debugInitialization.log('[WebGPUGameCanvas] ✓ GPU-driven unit rendering ENABLED');
       } else {
         debugInitialization.log(`[WebGPUGameCanvas] GPU-driven rendering SKIPPED - using CPU path (isWebGPU=${renderContext.isWebGPU}, supportsCompute=${renderContext.supportsCompute})`);
-        console.log(`[WebGPUGameCanvas] GPU-driven rendering SKIPPED - using CPU path (WebGPU: ${renderContext.isWebGPU}, Compute: ${renderContext.supportsCompute})`);
       }
 
       // Expose debug interface for console access
@@ -526,7 +525,7 @@ export function WebGPUGameCanvas() {
             isGPUActive: () => unitRendererRef.current?.isGPUCullingActive(),
           },
         };
-        console.log('[VOIDSTRIKE] Debug commands available: VOIDSTRIKE.gpu.stats(), VOIDSTRIKE.gpu.forceCPU(true/false)');
+        debugInitialization.log('[VOIDSTRIKE] Debug commands available: VOIDSTRIKE.gpu.stats(), VOIDSTRIKE.gpu.forceCPU(true/false)');
       }
 
       buildingRendererRef.current = new BuildingRenderer(
