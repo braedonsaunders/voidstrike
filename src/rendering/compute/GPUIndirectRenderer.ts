@@ -56,6 +56,8 @@ interface IndirectMesh {
   indirectOffset: number; // uint32 offset into indirect args buffer
   // Instance position offset (vec3)
   instanceOffsetAttribute: THREE.InstancedBufferAttribute;
+  // Track validity - mesh becomes invalid if source geometry was disposed
+  isValid: boolean;
 }
 
 /**
@@ -232,6 +234,7 @@ export class GPUIndirectRenderer {
       indexCount,
       indirectOffset,
       instanceOffsetAttribute,
+      isValid: true,
     });
 
     debugShaders.log(`[GPUIndirectRenderer] Created indirect mesh: type=${unitTypeIndex} LOD=${lodLevel} capacity=${MAX_UNITS}`);
@@ -338,6 +341,56 @@ export class GPUIndirectRenderer {
   }
 
   /**
+   * Validate that a mesh's geometry is still usable.
+   * Returns false if the index buffer has been disposed or is invalid.
+   */
+  private validateMeshGeometry(meshData: IndirectMesh): boolean {
+    if (!meshData.isValid) return false;
+
+    const geometry = meshData.geometry;
+    if (!geometry) {
+      meshData.isValid = false;
+      return false;
+    }
+
+    // Check if index buffer exists and has valid data
+    const index = geometry.index;
+    if (meshData.indexCount > 0 && !index) {
+      // Geometry was supposed to have an index buffer but it's gone
+      debugShaders.warn(`[GPUIndirectRenderer] Index buffer missing for mesh type=${meshData.unitTypeIndex} LOD=${meshData.lodLevel}`);
+      meshData.isValid = false;
+      return false;
+    }
+
+    // Check if the index buffer's array exists (indicates disposal)
+    if (index && !index.array) {
+      debugShaders.warn(`[GPUIndirectRenderer] Index buffer array disposed for mesh type=${meshData.unitTypeIndex} LOD=${meshData.lodLevel}`);
+      meshData.isValid = false;
+      return false;
+    }
+
+    return true;
+  }
+
+  /**
+   * Validate all registered indirect meshes.
+   * Call this periodically or after asset refreshes to detect disposed geometries.
+   * Returns the number of invalid meshes found.
+   */
+  validateAllMeshes(): number {
+    let invalidCount = 0;
+    for (const [key, meshData] of this.indirectMeshes) {
+      if (!this.validateMeshGeometry(meshData)) {
+        invalidCount++;
+        // Hide invalid meshes to prevent rendering crashes
+        meshData.mesh.visible = false;
+        debugShaders.warn(`[GPUIndirectRenderer] Mesh invalidated: ${key}`);
+      }
+    }
+    return invalidCount;
+  }
+
+  /**
    * Update instance offsets for all meshes from the GPU unit buffer
    * Call this each frame before rendering
    */
@@ -357,7 +410,10 @@ export class GPUIndirectRenderer {
       const key = `${slot.unitTypeIndex}_0`; // LOD 0 for simplicity
       const meshData = this.indirectMeshes.get(key);
 
-      if (meshData && meshData.instanceOffsetAttribute) {
+      // Skip invalid meshes to prevent GPU crashes
+      if (!meshData || !meshData.isValid) continue;
+
+      if (meshData.instanceOffsetAttribute) {
         const dstArray = meshData.instanceOffsetAttribute.array as Float32Array;
         const dstOffset = slot.index * 3;
 
@@ -367,9 +423,9 @@ export class GPUIndirectRenderer {
       }
     }
 
-    // Mark all instance offset attributes as needing update
+    // Mark all instance offset attributes as needing update (only for valid meshes)
     for (const [, data] of this.indirectMeshes) {
-      if (data.instanceOffsetAttribute) {
+      if (data.isValid && data.instanceOffsetAttribute) {
         data.instanceOffsetAttribute.needsUpdate = true;
       }
     }
@@ -404,9 +460,15 @@ export class GPUIndirectRenderer {
   /**
    * Update mesh visibility based on instance counts
    * Hides meshes with 0 instances to avoid GPU overhead
+   * Also hides invalid meshes to prevent rendering crashes
    */
   updateMeshVisibility(): void {
-    for (const [key, data] of this.indirectMeshes) {
+    for (const [, data] of this.indirectMeshes) {
+      // Never show invalid meshes
+      if (!data.isValid) {
+        data.mesh.visible = false;
+        continue;
+      }
       const count = this.indirectArgsData[data.indirectOffset + 1];
       data.mesh.visible = count > 0;
     }
