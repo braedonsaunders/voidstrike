@@ -13,7 +13,6 @@ import { getDamageMultiplier, COMBAT_CONFIG } from '@/data/combat/combat';
 import { getDefaultTargetPriority } from '@/data/units/categories';
 import AssetManager from '@/assets/AssetManager';
 import { getProjectileType, DEFAULT_PROJECTILE, isInstantProjectile } from '@/data/projectiles';
-import { DEFAULT_AIRBORNE_HEIGHT } from '@/assets/AssetManager';
 import { SpatialEntityData, SpatialUnitState } from '../core/SpatialGrid';
 
 // PERF: Reusable event payload objects to avoid allocation per attack
@@ -1124,8 +1123,13 @@ export class CombatSystem extends System {
       }
     } else {
       // PROJECTILE-BASED: Spawn projectile entity, damage on impact
-      const startZ = attacker.isFlying ? DEFAULT_AIRBORNE_HEIGHT : 0.5;
-      const targetZ = targetIsFlying ? DEFAULT_AIRBORNE_HEIGHT : 0.5;
+      // Use per-unit airborne heights from assets.json for accurate targeting
+      const startZ = attacker.isFlying
+        ? AssetManager.getAirborneHeight(attacker.unitId)
+        : 0.5;
+      const targetZ = targetIsFlying && targetUnit
+        ? AssetManager.getAirborneHeight(targetUnit.unitId)
+        : 0.5;
 
       const projectileEntity = this.game.projectileSystem.spawnProjectile({
         sourceEntityId: attackerId,
