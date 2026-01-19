@@ -53,19 +53,18 @@ import {
   output,
   normalView,
 } from 'three/tsl';
-// Access TSL exports that lack TypeScript declarations
-// eslint-disable-next-line @typescript-eslint/no-require-imports
-import * as TSL from 'three/tsl';
-const materialMetalness = (TSL as any).materialMetalness;
-const materialRoughness = (TSL as any).materialRoughness;
+// WebGPU-specific imports (typed in src/types/three-webgpu.d.ts)
+import { materialMetalness, materialRoughness } from 'three/tsl';
 
 // Import WebGPU post-processing nodes from addons
+// These modules lack TypeScript declarations - types defined in src/types/three-webgpu.d.ts
 import { bloom } from 'three/addons/tsl/display/BloomNode.js';
 import { ao } from 'three/addons/tsl/display/GTAONode.js';
 import { fxaa } from 'three/addons/tsl/display/FXAANode.js';
+// @ts-expect-error - Three.js addon module lacks TypeScript declarations
 import { traa } from 'three/addons/tsl/display/TRAANode.js';
 import { ssr } from 'three/addons/tsl/display/SSRNode.js';
-// @ts-expect-error - Three.js addon lacks TypeScript declarations
+// @ts-expect-error - Three.js addon module lacks TypeScript declarations
 import { ssgi } from 'three/addons/tsl/display/SSGINode.js';
 
 // Import EASU upscaling
@@ -484,7 +483,7 @@ export class RenderPipeline {
         // Cast normalView to any - TS types say function but it's actually a node at runtime
         scenePass.setMRT(mrt({
           output: output,
-          normal: (normalView as any).mul(0.5).add(0.5),
+          normal: normalView.mul(0.5).add(0.5),
           metalrough: vec2(materialMetalness, materialRoughness),
           velocity: customVelocity,
         }));
@@ -518,7 +517,7 @@ export class RenderPipeline {
         // colorToDirection() returns a Fn node which doesn't have .sample()
         const scenePassNormal = scenePass.getTextureNode('normal');
 
-        this.ssgiPass = (ssgi as any)(
+        this.ssgiPass = ssgi(
           scenePassColor,
           scenePassDepth,
           scenePassNormal,  // Raw texture node, not decoded
@@ -589,6 +588,7 @@ export class RenderPipeline {
           }
         } else {
           // Full-res AO (no temporal, or temporal without quarter-res pipeline)
+          // @ts-expect-error - @types/three declares normalNode as non-nullable but actual API accepts null
           this.aoPass = ao(scenePassDepth, null, this.camera);
           this.aoPass.radius.value = this.config.aoRadius;
           aoValue = this.aoPass.getTextureNode().r;
@@ -689,6 +689,7 @@ export class RenderPipeline {
           const scenePassNormal = scenePass.getTextureNode('normal');
           const scenePassMetalRough = scenePass.getTextureNode('metalrough');
 
+          // Cast to bypass @types/three incomplete ssr() signature (missing roughnessNode param)
           this.ssrPass = (ssr as any)(
             scenePassColor,
             scenePassDepth,
@@ -913,6 +914,7 @@ export class RenderPipeline {
       const scenePassDepth = scenePass.getTextureNode('depth');
 
       // Create AO at quarter resolution
+      // @ts-expect-error - @types/three declares normalNode as non-nullable but actual API accepts null
       const quarterAO = ao(scenePassDepth, null, this.camera);
       quarterAO.radius.value = this.config.aoRadius;
 
@@ -956,7 +958,7 @@ export class RenderPipeline {
       // Enable MRT for SSR (normals and metalrough needed)
       scenePass.setMRT(mrt({
         output: output,
-        normal: (normalView as any).mul(0.5).add(0.5),
+        normal: normalView.mul(0.5).add(0.5),
         metalrough: vec2(materialMetalness, materialRoughness),
       }));
 
@@ -967,6 +969,7 @@ export class RenderPipeline {
       const scenePassMetalRough = scenePass.getTextureNode('metalrough');
 
       // Create SSR at quarter resolution
+      // Cast to bypass @types/three incomplete ssr() signature (missing roughnessNode param)
       const quarterSSR = (ssr as any)(
         scenePassColor,
         scenePassDepth,
@@ -1336,12 +1339,12 @@ export class RenderPipeline {
       // gamma conversion, causing washed out colors.
       this.renderer.outputColorSpace = THREE.LinearSRGBColorSpace;
       this.renderer.setSize(this.renderWidth, this.renderHeight, false);
-      (this.renderer as any).setRenderTarget(this.internalRenderTarget);
+      this.renderer.setRenderTarget(this.internalRenderTarget);
       this.internalPostProcessing?.render();
 
       // Step 2: Restore to display resolution and render to canvas
       // Restore sRGB color space for canvas output (browser expects sRGB)
-      (this.renderer as any).setRenderTarget(null);
+      this.renderer.setRenderTarget(null);
       this.renderer.outputColorSpace = originalColorSpace;
       this.renderer.setSize(originalSize.x, originalSize.y, false);
       this.displayPostProcessing.render();
@@ -1368,7 +1371,7 @@ export class RenderPipeline {
 
       // Render to quarter-res AO target
       const quarterAOTarget = this.temporalAOManager.getQuarterAOTarget();
-      (this.renderer as any).setRenderTarget(quarterAOTarget);
+      this.renderer.setRenderTarget(quarterAOTarget);
       this.quarterAOPostProcessing.render();
     }
 
@@ -1379,12 +1382,12 @@ export class RenderPipeline {
 
       // Render to quarter-res SSR target
       const quarterSSRTarget = this.temporalSSRManager.getQuarterSSRTarget();
-      (this.renderer as any).setRenderTarget(quarterSSRTarget);
+      this.renderer.setRenderTarget(quarterSSRTarget);
       this.quarterSSRPostProcessing.render();
     }
 
     // Restore original size
-    (this.renderer as any).setRenderTarget(null);
+    this.renderer.setRenderTarget(null);
     this.renderer.setSize(originalSize.x, originalSize.y, false);
   }
 
@@ -1416,10 +1419,10 @@ export class RenderPipeline {
       this.renderer.outputColorSpace = THREE.LinearSRGBColorSpace;
 
       this.renderer.setSize(this.renderWidth, this.renderHeight, false);
-      (this.renderer as any).setRenderTarget(this.internalRenderTarget);
+      this.renderer.setRenderTarget(this.internalRenderTarget);
       await this.internalPostProcessing?.renderAsync();
 
-      (this.renderer as any).setRenderTarget(null);
+      this.renderer.setRenderTarget(null);
       this.renderer.outputColorSpace = originalColorSpace;
       this.renderer.setSize(originalSize.x, originalSize.y, false);
       await this.displayPostProcessing.renderAsync();
@@ -1441,18 +1444,18 @@ export class RenderPipeline {
     if (this.quarterAOPostProcessing && this.temporalAOManager) {
       this.renderer.setSize(this.quarterWidth, this.quarterHeight, false);
       const quarterAOTarget = this.temporalAOManager.getQuarterAOTarget();
-      (this.renderer as any).setRenderTarget(quarterAOTarget);
+      this.renderer.setRenderTarget(quarterAOTarget);
       await this.quarterAOPostProcessing.renderAsync();
     }
 
     if (this.quarterSSRPostProcessing && this.temporalSSRManager) {
       this.renderer.setSize(this.quarterWidth, this.quarterHeight, false);
       const quarterSSRTarget = this.temporalSSRManager.getQuarterSSRTarget();
-      (this.renderer as any).setRenderTarget(quarterSSRTarget);
+      this.renderer.setRenderTarget(quarterSSRTarget);
       await this.quarterSSRPostProcessing.renderAsync();
     }
 
-    (this.renderer as any).setRenderTarget(null);
+    this.renderer.setRenderTarget(null);
     this.renderer.setSize(originalSize.x, originalSize.y, false);
   }
 

@@ -30,13 +30,14 @@ import * as THREE from 'three';
 import { Fn, vec2, vec4, mat4, attribute } from 'three/tsl';
 import { debugInitialization } from '@/utils/debugLogger';
 
-// eslint-disable-next-line @typescript-eslint/no-require-imports
-import * as TSL from 'three/tsl';
-const cameraProjectionMatrix = (TSL as any).cameraProjectionMatrix;
-const cameraViewMatrix = (TSL as any).cameraViewMatrix;
-const modelWorldMatrix = (TSL as any).modelWorldMatrix;
-const positionGeometry = (TSL as any).positionGeometry;
-const uniform = (TSL as any).uniform;
+// WebGPU-specific imports (typed in src/types/three-webgpu.d.ts)
+import {
+  cameraProjectionMatrix,
+  cameraViewMatrix,
+  modelWorldMatrix,
+  positionGeometry,
+  uniform,
+} from 'three/tsl';
 
 // Track which meshes have velocity setup
 const velocitySetupMeshes = new WeakSet<THREE.InstancedMesh>();

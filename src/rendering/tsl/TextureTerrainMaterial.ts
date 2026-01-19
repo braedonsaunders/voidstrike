@@ -351,7 +351,7 @@ export function createTextureTerrainMaterial(config: TextureTerrainConfig): Mesh
   })();
 
   // Store uniforms for updates
-  (material as any)._uniforms = {
+  material._uniforms = {
     uTime,
     uSunDirection,
     uSunIntensity,
@@ -370,7 +370,7 @@ export function updateTextureTerrainMaterial(
   deltaTime: number,
   sunDirection?: THREE.Vector3
 ): void {
-  const uniforms = (material as any)._uniforms;
+  const uniforms = material._uniforms;
   if (!uniforms) return;
 
   uniforms.uTime.value += deltaTime;
