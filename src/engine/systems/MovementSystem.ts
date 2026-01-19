@@ -33,69 +33,68 @@ import AssetManager from '@/assets/AssetManager';
 import { WasmBoids, getWasmBoids } from '../wasm/WasmBoids';
 import { CROWD_MAX_AGENTS } from '@/data/pathfinding.config';
 import { SpatialEntityData, SpatialUnitState, stateToEnum } from '../core/SpatialGrid';
+import {
+  // Separation
+  SEPARATION_RADIUS,
+  SEPARATION_STRENGTH_MOVING,
+  SEPARATION_STRENGTH_IDLE,
+  SEPARATION_STRENGTH_ARRIVING,
+  SEPARATION_STRENGTH_COMBAT,
+  MAX_AVOIDANCE_FORCE,
+  // Cohesion
+  COHESION_RADIUS,
+  COHESION_STRENGTH,
+  // Alignment
+  ALIGNMENT_RADIUS,
+  ALIGNMENT_STRENGTH,
+  // Arrival spreading
+  ARRIVAL_SPREAD_RADIUS,
+  ARRIVAL_SPREAD_STRENGTH,
+  // Building avoidance
+  BUILDING_AVOIDANCE_STRENGTH,
+  BUILDING_AVOIDANCE_MARGIN,
+  BUILDING_AVOIDANCE_SOFT_MARGIN,
+  BUILDING_PREDICTION_LOOKAHEAD,
+  // Path requests
+  PATH_REQUEST_COOLDOWN_TICKS,
+  USE_RECAST_CROWD,
+  // Velocity smoothing
+  VELOCITY_SMOOTHING_FACTOR,
+  VELOCITY_HISTORY_FRAMES,
+  DIRECTION_COMMIT_THRESHOLD,
+  DIRECTION_COMMIT_STRENGTH,
+  // Physics push
+  PHYSICS_PUSH_RADIUS,
+  PHYSICS_PUSH_STRENGTH,
+  PHYSICS_PUSH_FALLOFF,
+  PHYSICS_OVERLAP_PUSH,
+  // Stuck detection
+  STUCK_DETECTION_FRAMES,
+  STUCK_VELOCITY_THRESHOLD,
+  STUCK_NUDGE_STRENGTH,
+  STUCK_MIN_DISTANCE_TO_TARGET,
+  // Throttling
+  SEPARATION_THROTTLE_TICKS,
+  COHESION_THROTTLE_TICKS,
+  ALIGNMENT_THROTTLE_TICKS,
+  PHYSICS_PUSH_THROTTLE_TICKS,
+  // Combat movement
+  COMBAT_SPREAD_SPEED_MULTIPLIER,
+  COMBAT_SEPARATION_THRESHOLD,
+  ATTACK_STANDOFF_MULTIPLIER,
+  // Idle behavior
+  TRULY_IDLE_THRESHOLD_TICKS,
+  TRULY_IDLE_PROCESS_INTERVAL,
+  IDLE_SEPARATION_THRESHOLD,
+  IDLE_REPEL_SPEED_MULTIPLIER,
+  // Misc
+  FORMATION_BUFFER_SIZE,
+  UNIT_TURN_RATE,
+  MAGIC_BOX_MARGIN,
+} from '@/data/movement.config';
 
-// ==================== RTS-STYLE STEERING CONSTANTS ====================
-
-// Separation - prevents overlapping (strongest force)
-const SEPARATION_RADIUS = 1.0;
-const SEPARATION_STRENGTH_MOVING = 1.2;      // Weak while moving - allow clumping
-const SEPARATION_STRENGTH_IDLE = 1.5;        // Moderate when idle (reduced from 2.5) - prevents jiggling
-const SEPARATION_STRENGTH_ARRIVING = 2.0;    // Strong at arrival (reduced from 3.0) - natural spreading
-const MAX_AVOIDANCE_FORCE = 1.5;
+// Derived constant (computed from imported value)
 const MAX_AVOIDANCE_FORCE_SQ = MAX_AVOIDANCE_FORCE * MAX_AVOIDANCE_FORCE;
-
-// Cohesion - keeps group together (weak force)
-const COHESION_RADIUS = 8.0;
-const COHESION_STRENGTH = 0.1;               // Very weak - just prevents extreme spreading
-
-// Alignment - matches group heading (moderate force)
-const ALIGNMENT_RADIUS = 4.0;
-const ALIGNMENT_STRENGTH = 0.3;
-
-// Arrival spreading - units spread out when reaching destination
-// RTS-style: Gentle spreading to prevent bunching without causing oscillation
-const ARRIVAL_SPREAD_RADIUS = 2.0;           // Distance from target where spreading kicks in (reduced from 2.5)
-const ARRIVAL_SPREAD_STRENGTH = 1.0;         // Additional separation at arrival (reduced from 2.0)
-
-// Building avoidance - runtime steering to handle edge cases
-// RTS-STYLE: Reduced margins - trust the navmesh for primary clearance
-const BUILDING_AVOIDANCE_STRENGTH = 15.0; // Reduced from 25 - navmesh handles most avoidance
-const BUILDING_AVOIDANCE_MARGIN = 0.1;    // Minimal margin - navmesh walkableRadius handles clearance
-const BUILDING_AVOIDANCE_SOFT_MARGIN = 0.3; // Reduced from 0.8 - less conservative
-const BUILDING_PREDICTION_LOOKAHEAD = 0.3;  // Reduced from 0.5 - react closer to buildings
-
-// Path request cooldown in ticks (10 ticks @ 20 ticks/sec = 500ms)
-const PATH_REQUEST_COOLDOWN_TICKS = 10;
-
-// Use Recast crowd for pathfinding direction (obstacle avoidance disabled in crowd config)
-const USE_RECAST_CROWD = true;
-
-// ==================== RTS-STYLE VELOCITY SMOOTHING ====================
-// Prevents jitter by blending velocity over multiple frames
-// RTS-style: Stronger smoothing prevents micro-oscillations
-
-const VELOCITY_SMOOTHING_FACTOR = 0.25;      // Blend factor: 0=full history, 1=no smoothing (reduced from 0.3)
-const VELOCITY_HISTORY_FRAMES = 4;           // Number of frames to average (increased from 3)
-const DIRECTION_COMMIT_THRESHOLD = 0.6;      // Dot product threshold for direction commitment (reduced from 0.7)
-const DIRECTION_COMMIT_STRENGTH = 0.6;       // How strongly to resist direction changes (increased from 0.5)
-
-// ==================== RTS-STYLE PHYSICS PUSHING ====================
-// Units push each other instead of avoiding - creates natural flow
-// RTS-style: Moderate push prevents stacking without causing jitter
-
-const PHYSICS_PUSH_RADIUS = 1.2;             // Distance at which pushing starts
-const PHYSICS_PUSH_STRENGTH = 6.0;           // Push force strength (reduced from 8.0)
-const PHYSICS_PUSH_FALLOFF = 0.6;            // How quickly push falls off with distance (increased from 0.5)
-const PHYSICS_OVERLAP_PUSH = 15.0;           // Extra strong push when overlapping (reduced from 20.0)
-
-// ==================== STUCK DETECTION ====================
-// If unit hasn't moved for N frames, apply random nudge
-// RTS-style: Only trigger for units actively trying to reach a distant target
-
-const STUCK_DETECTION_FRAMES = 20;           // Frames of near-zero movement to trigger (increased from 12)
-const STUCK_VELOCITY_THRESHOLD = 0.05;       // Below this speed = considered stuck (reduced from 0.1)
-const STUCK_NUDGE_STRENGTH = 1.5;            // Random nudge force when stuck (reduced from 2.0)
-const STUCK_MIN_DISTANCE_TO_TARGET = 2.0;    // Only apply stuck nudge if farther than this from target
 
 // Static temp vectors for steering behaviors
 const tempSeparation: PooledVector2 = { x: 0, y: 0 };
@@ -107,12 +106,6 @@ const tempStuckNudge: PooledVector2 = { x: 0, y: 0 };
 
 // PERF: Cached building query results to avoid double spatial grid lookups
 const cachedBuildingQuery: { entityId: number; results: number[] } = { entityId: -1, results: [] };
-
-// PERF: Steering force throttle intervals (recalculate every N ticks instead of every frame)
-const SEPARATION_THROTTLE_TICKS = 5;
-const COHESION_THROTTLE_TICKS = 8;    // Cohesion is subtle - can update less frequently
-const ALIGNMENT_THROTTLE_TICKS = 8;   // Alignment is subtle - can update less frequently
-const PHYSICS_PUSH_THROTTLE_TICKS = 3; // Push needs to be responsive but can skip some frames
 
 // PERF: Static array to avoid allocation on every building avoidance check
 const DROP_OFF_BUILDINGS = Object.freeze([
@@ -126,7 +119,6 @@ const DROP_OFF_BUILDINGS = Object.freeze([
 ]);
 
 // PERF: Pooled formation position buffer to avoid allocation per move command
-const FORMATION_BUFFER_SIZE = 256; // Max units in a single move command
 const formationBuffer: Array<{ x: number; y: number }> = [];
 for (let i = 0; i < FORMATION_BUFFER_SIZE; i++) {
   formationBuffer.push({ x: 0, y: 0 });
@@ -186,8 +178,6 @@ export class MovementSystem extends System {
   // These units get processed at much lower frequency
   private trulyIdleTicks: Map<number, number> = new Map(); // entityId -> ticks since last movement
   private lastIdlePosition: Map<number, { x: number; y: number }> = new Map();
-  private readonly TRULY_IDLE_THRESHOLD = 20; // Ticks of no movement to be "truly idle"
-  private readonly TRULY_IDLE_PROCESS_INTERVAL = 10; // Process truly idle units every N ticks
 
   // PERF: Dirty flag for separation - only recalculate when neighbors changed
   private unitMovedThisTick: Set<number> = new Set();
@@ -361,7 +351,7 @@ export class MovementSystem extends System {
     box: { minX: number; maxX: number; minY: number; maxY: number }
   ): boolean {
     // Add a small margin to prevent edge-case toggling
-    const margin = 0.5;
+    const margin = MAGIC_BOX_MARGIN;
     return (
       targetX >= box.minX - margin &&
       targetX <= box.maxX + margin &&
@@ -844,7 +834,8 @@ export class MovementSystem extends System {
 
   /**
    * Get state-dependent separation strength.
-   * RTS style: weak while moving (allow clumping), strong when idle (spread out).
+   * RTS style: weak while moving (allow clumping), strong when idle/attacking (spread out).
+   * SC2-style: attacking units actively spread apart while firing.
    */
   private getSeparationStrength(unit: Unit, distanceToTarget: number): number {
     // Workers gathering/building have no separation
@@ -857,6 +848,11 @@ export class MovementSystem extends System {
       return SEPARATION_STRENGTH_ARRIVING;
     }
 
+    // Attacking: strong separation for SC2-style unclumping while fighting
+    if (unit.state === 'attacking') {
+      return SEPARATION_STRENGTH_COMBAT;
+    }
+
     // Moving: weak separation, allow clumping for faster group movement
     if (
       unit.state === 'moving' ||
@@ -866,7 +862,7 @@ export class MovementSystem extends System {
       return SEPARATION_STRENGTH_MOVING;
     }
 
-    // Idle/attacking: strong separation, spread out
+    // Idle: moderate separation, spread out
     return SEPARATION_STRENGTH_IDLE;
   }
 
@@ -1860,8 +1856,8 @@ export class MovementSystem extends System {
           this.lastIdlePosition.set(entity.id, { x: transform.x, y: transform.y });
 
           // PERF: Skip separation processing for truly idle units except at reduced frequency
-          const isTrulyIdle = currentIdleTicks >= this.TRULY_IDLE_THRESHOLD;
-          if (isTrulyIdle && (this.currentTick % this.TRULY_IDLE_PROCESS_INTERVAL !== 0)) {
+          const isTrulyIdle = currentIdleTicks >= TRULY_IDLE_THRESHOLD_TICKS;
+          if (isTrulyIdle && (this.currentTick % TRULY_IDLE_PROCESS_INTERVAL !== 0)) {
             // Truly idle and not on process tick - skip entirely
             velocity.zero();
             continue;
@@ -1871,13 +1867,11 @@ export class MovementSystem extends System {
           const sepMagSq = tempSeparation.x * tempSeparation.x + tempSeparation.y * tempSeparation.y;
 
           // RTS-style: Higher threshold prevents minor separation adjustments that cause jiggling
-          // Only move when units are actually overlapping (force > 0.5), not just close
-          const IDLE_SEPARATION_THRESHOLD = 0.25; // Much higher than 0.001 to prevent micro-adjustments
-
+          // Only move when units are actually overlapping, not just close
           if (sepMagSq > IDLE_SEPARATION_THRESHOLD) {
-            // RTS-style: Slower, gentler push for idle units (0.3x max speed instead of 0.5x)
+            // RTS-style: Slower, gentler push for idle units
             const sepMag = Math.sqrt(sepMagSq);
-            const idleRepelSpeed = Math.min(unit.maxSpeed * 0.3, sepMag * SEPARATION_STRENGTH_IDLE * 0.5);
+            const idleRepelSpeed = Math.min(unit.maxSpeed * IDLE_REPEL_SPEED_MULTIPLIER, sepMag * SEPARATION_STRENGTH_IDLE * 0.5);
             velocity.x = (tempSeparation.x / sepMag) * idleRepelSpeed;
             velocity.y = (tempSeparation.y / sepMag) * idleRepelSpeed;
 
@@ -1888,7 +1882,7 @@ export class MovementSystem extends System {
             let normalizedDiff = rotationDiff;
             while (normalizedDiff > Math.PI) normalizedDiff -= Math.PI * 2;
             while (normalizedDiff < -Math.PI) normalizedDiff += Math.PI * 2;
-            const turnRate = 8 * dt;
+            const turnRate = UNIT_TURN_RATE * dt;
             if (Math.abs(normalizedDiff) < turnRate) {
               transform.rotation = targetRotation;
             } else {
@@ -1988,7 +1982,7 @@ export class MovementSystem extends System {
               // Edge-to-edge distance (subtract attacker's visual radius)
               effectiveDistance = Math.max(0, Math.sqrt(edgeDx * edgeDx + edgeDy * edgeDy) - attackerRadius);
 
-              const standOffDistance = unit.attackRange * 0.8;
+              const standOffDistance = unit.attackRange * ATTACK_STANDOFF_MULTIPLIER;
               const minSafeDistance = attackerRadius + 0.5;
 
               if (effectiveDistance > minSafeDistance) {
@@ -2028,17 +2022,43 @@ export class MovementSystem extends System {
                 this.requestPathWithCooldown(entity.id, attackTargetX, attackTargetY);
               }
             } else {
-              // Note: Y is negated for Three.js coordinate system
+              // In range - SC2-style: apply separation forces while attacking
+              // Units spread apart while firing instead of stacking on top of each other
+
+              // Face the target
               transform.rotation = Math.atan2(
                 -(targetTransform.y - transform.y),
                 targetTransform.x - transform.x
               );
-              // Use unit's deceleration rate for stopping when in attack range
-              unit.currentSpeed = Math.max(
-                0,
-                unit.currentSpeed - unit.deceleration * dt
-              );
-              velocity.zero();
+
+              // Calculate separation force for combat spreading
+              this.calculateSeparationForce(entity.id, transform, unit, tempSeparation, 0);
+
+              // Apply separation as velocity (units slide apart while attacking)
+              // Use reduced speed so units don't run away from their target
+              const combatMoveSpeed = unit.maxSpeed * COMBAT_SPREAD_SPEED_MULTIPLIER;
+              const sepMag = Math.sqrt(tempSeparation.x * tempSeparation.x + tempSeparation.y * tempSeparation.y);
+
+              if (sepMag > COMBAT_SEPARATION_THRESHOLD) {
+                // Normalize and scale to combat movement speed
+                velocity.x = (tempSeparation.x / sepMag) * combatMoveSpeed;
+                velocity.y = (tempSeparation.y / sepMag) * combatMoveSpeed;
+
+                // Apply movement
+                transform.translate(velocity.x * dt, velocity.y * dt);
+                transform.x = snapValue(transform.x, QUANT_POSITION);
+                transform.y = snapValue(transform.y, QUANT_POSITION);
+
+                // Resolve any building collisions from the movement
+                if (!unit.isFlying) {
+                  this.resolveHardBuildingCollision(entity.id, transform, unit);
+                }
+              } else {
+                velocity.zero();
+              }
+
+              // Decelerate main speed (not used for combat spreading, but keeps state consistent)
+              unit.currentSpeed = Math.max(0, unit.currentSpeed - unit.deceleration * dt);
               continue;
             }
           }
@@ -2383,7 +2403,7 @@ export class MovementSystem extends System {
       while (normalizedDiff > Math.PI) normalizedDiff -= Math.PI * 2;
       while (normalizedDiff < -Math.PI) normalizedDiff += Math.PI * 2;
 
-      const turnRate = 8 * dt;
+      const turnRate = UNIT_TURN_RATE * dt;
       if (Math.abs(normalizedDiff) < turnRate) {
         transform.rotation = targetRotation;
       } else {
