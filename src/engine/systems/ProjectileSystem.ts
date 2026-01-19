@@ -55,6 +55,11 @@ export class ProjectileSystem extends System {
 
     this.activeProjectileCount = this._projectileBuffer.length;
 
+    // Debug: Log projectile count periodically (every 20 ticks = 1 second)
+    if (this.activeProjectileCount > 0 && currentTick % 20 === 0) {
+      debugProjectile.log(`ProjectileSystem: ${this.activeProjectileCount} active projectiles at tick ${currentTick}`);
+    }
+
     for (const entity of this._projectileBuffer) {
       const projectile = entity.get<Projectile>('Projectile')!;
       const transform = entity.get<Transform>('Transform')!;
@@ -212,6 +217,9 @@ export class ProjectileSystem extends System {
 
   /**
    * Apply damage when projectile impacts
+   *
+   * NOTE: Damage is pre-calculated by CombatSystem with multiplier and armor already applied.
+   * We apply it directly here - do NOT recalculate multipliers or armor.
    */
   private applyImpactDamage(
     entity: Entity,
@@ -224,19 +232,21 @@ export class ProjectileSystem extends System {
     const gameTime = this.game.getGameTime();
 
     // Apply damage to primary target
+    // NOTE: projectile.damage already has multiplier applied from CombatSystem
     if (projectile.targetEntityId !== null) {
       const targetEntity = this.world.getEntity(projectile.targetEntityId);
       if (targetEntity) {
         const targetHealth = targetEntity.get<Health>('Health');
         if (targetHealth && !targetHealth.isDead()) {
-          // Calculate damage with armor type multiplier
-          const multiplier = getDamageMultiplier(projectile.damageType, targetHealth.armorType);
-          const finalDamage = Math.max(1, Math.floor(projectile.damage * multiplier));
+          // Apply pre-calculated damage directly (no armor - already factored in)
+          const finalDamage = Math.max(1, projectile.damage);
 
-          targetHealth.takeDamage(finalDamage, gameTime);
+          // Use applyDamageRaw to bypass Health's armor reduction (already applied)
+          targetHealth.applyDamageRaw(finalDamage, gameTime);
 
           debugProjectile.log(
-            `Projectile ${entity.id} hit target ${projectile.targetEntityId} for ${finalDamage} damage`
+            `Projectile ${entity.id} hit target ${projectile.targetEntityId} for ${finalDamage} damage ` +
+            `(health: ${targetHealth.current.toFixed(1)}/${targetHealth.max})`
           );
 
           // Check for kill and emit event
@@ -244,6 +254,8 @@ export class ProjectileSystem extends System {
             this.emitKillEvent(projectile, targetEntity);
           }
         }
+      } else {
+        debugProjectile.log(`Projectile ${entity.id} target ${projectile.targetEntityId} no longer exists`);
       }
     }
 
@@ -268,6 +280,9 @@ export class ProjectileSystem extends System {
 
   /**
    * Apply splash damage to nearby units and buildings
+   *
+   * NOTE: Uses rawDamage (base damage before multiplier/armor) to calculate
+   * splash damage individually for each target based on their armor type.
    */
   private applySplashDamage(
     projectile: Projectile,
@@ -298,7 +313,7 @@ export class ProjectileSystem extends System {
       // No friendly fire
       if (selectable.playerId === projectile.sourcePlayerId) continue;
 
-      // Calculate distance-based falloff (quantized for determinism)
+      // Calculate distance-based falloff
       const dx = transform.x - impactTransform.x;
       const dy = transform.y - impactTransform.y;
       const distance = Math.sqrt(dx * dx + dy * dy);
@@ -310,12 +325,18 @@ export class ProjectileSystem extends System {
       const normalizedDist = distance / projectile.splashRadius;
       const falloffFactor = 1 - normalizedDist * projectile.splashFalloff;
 
-      // Calculate splash damage with armor multiplier
+      // Calculate splash damage using rawDamage with per-target multiplier
+      // rawDamage is base damage before any multiplier/armor was applied
       const multiplier = getDamageMultiplier(projectile.damageType, health.armorType);
-      const baseSplashDamage = Math.floor(projectile.damage * falloffFactor);
-      const finalSplashDamage = Math.max(1, Math.floor(baseSplashDamage * multiplier));
+      const baseSplashDamage = Math.floor(projectile.rawDamage * falloffFactor);
+      const damageWithMultiplier = Math.max(1, Math.floor(baseSplashDamage * multiplier));
 
-      health.takeDamage(finalSplashDamage, gameTime);
+      // takeDamage will apply this target's armor reduction
+      health.takeDamage(damageWithMultiplier, gameTime);
+
+      debugProjectile.log(
+        `Splash hit entity ${entityId} for ${damageWithMultiplier} damage (falloff: ${falloffFactor.toFixed(2)})`
+      );
 
       if (health.isDead()) {
         this.emitKillEvent(projectile, entity);
@@ -352,11 +373,13 @@ export class ProjectileSystem extends System {
       const normalizedDist = distance / projectile.splashRadius;
       const falloffFactor = 1 - normalizedDist * projectile.splashFalloff;
 
+      // Calculate splash damage using rawDamage with per-target multiplier
       const multiplier = getDamageMultiplier(projectile.damageType, health.armorType);
-      const baseSplashDamage = Math.floor(projectile.damage * falloffFactor);
-      const finalSplashDamage = Math.max(1, Math.floor(baseSplashDamage * multiplier));
+      const baseSplashDamage = Math.floor(projectile.rawDamage * falloffFactor);
+      const damageWithMultiplier = Math.max(1, Math.floor(baseSplashDamage * multiplier));
 
-      health.takeDamage(finalSplashDamage, gameTime);
+      // takeDamage will apply building's armor reduction
+      health.takeDamage(damageWithMultiplier, gameTime);
     }
   }
 
@@ -429,6 +452,7 @@ export class ProjectileSystem extends System {
     targetZ: number;
     projectileType: ProjectileDefinition;
     damage: number;
+    rawDamage: number; // Base damage before multiplier/armor (for splash calculations)
     damageType: DamageType;
     splashRadius: number;
     splashFalloff?: number;
@@ -482,6 +506,7 @@ export class ProjectileSystem extends System {
       turnRate: def.turnRate,
       arcHeight: def.arcHeight,
       damage: quantize(data.damage, QUANT_DAMAGE),
+      rawDamage: quantize(data.rawDamage, QUANT_DAMAGE),
       damageType: data.damageType,
       splashRadius: data.splashRadius,
       splashFalloff: data.splashFalloff ?? 0.5,

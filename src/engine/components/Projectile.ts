@@ -66,7 +66,8 @@ export class Projectile extends Component {
   public velocityZ: number;
 
   // Damage
-  public damage: number;
+  public damage: number;          // Pre-calculated damage for primary target (with multiplier/armor)
+  public rawDamage: number;       // Raw base damage before multiplier/armor (for splash calculations)
   public damageType: DamageType;
   public splashRadius: number;
   public splashFalloff: number;
@@ -94,6 +95,7 @@ export class Projectile extends Component {
     turnRate: number;
     arcHeight: number;
     damage: number;
+    rawDamage: number;
     damageType: DamageType;
     splashRadius: number;
     splashFalloff: number;
@@ -124,6 +126,7 @@ export class Projectile extends Component {
     this.velocityZ = 0;
 
     this.damage = data.damage;
+    this.rawDamage = data.rawDamage;
     this.damageType = data.damageType;
     this.splashRadius = data.splashRadius;
     this.splashFalloff = data.splashFalloff;

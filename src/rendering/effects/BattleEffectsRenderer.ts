@@ -180,6 +180,9 @@ export class BattleEffectsRenderer {
   private moveIndicators: MoveIndicator[] = [];
   private laserEffects: Set<LaserEffect> = new Set();
 
+  // ECS sync callback for entity-synced projectiles
+  private getProjectilePosition: ((entityId: number) => { x: number; y: number; z: number } | null) | null = null;
+
   // Event listener cleanup
   private eventUnsubscribers: (() => void)[] = [];
 
@@ -525,6 +528,17 @@ export class BattleEffectsRenderer {
    */
   public setTerrainHeightFunction(fn: (x: number, z: number) => number): void {
     this.getTerrainHeight = fn;
+  }
+
+  /**
+   * Set callback to get projectile positions from ECS world.
+   * This enables entity-synced projectile visuals to follow actual ECS positions
+   * instead of just interpolating between start and end.
+   *
+   * @param fn Callback that returns {x, y, z} for an entity ID, or null if entity doesn't exist
+   */
+  public setProjectilePositionCallback(fn: (entityId: number) => { x: number; y: number; z: number } | null): void {
+    this.getProjectilePosition = fn;
   }
 
   private getHeightAt(x: number, z: number): number {
@@ -1534,7 +1548,19 @@ export class BattleEffectsRenderer {
     for (const [id, effect] of this.projectileEffects) {
       effect.progress += dt / effect.duration;
 
-      if (effect.progress >= 1) {
+      // For entity-synced projectiles, check if entity still exists and get real position
+      let entityPosition: { x: number; y: number; z: number } | null = null;
+      let entityGone = false;
+
+      if (effect.isEntitySynced && effect.entityId !== undefined && this.getProjectilePosition) {
+        entityPosition = this.getProjectilePosition(effect.entityId);
+        if (!entityPosition) {
+          // Entity was destroyed (impact happened) - cleanup visual immediately
+          entityGone = true;
+        }
+      }
+
+      if (effect.progress >= 1 || entityGone) {
         // Projectile reached target (visual only)
         // For entity-synced projectiles, ProjectileSystem handles the actual impact
         // For instant projectiles (non-entity-synced), create hit effect here
@@ -1557,8 +1583,22 @@ export class BattleEffectsRenderer {
 
         toRemove.push(id);
       } else {
-        // Update position
-        effect.currentPos.lerpVectors(effect.startPos, effect.endPos, effect.progress);
+        // Update position - use ECS position for entity-synced, interpolation for instant
+        if (entityPosition) {
+          // Use actual ECS position (convert from game coords to Three.js coords)
+          // Game: x=x, y=y (horizontal), z=height
+          // Three.js: x=x, y=height, z=y (horizontal)
+          const terrainHeight = this.getHeightAt(entityPosition.x, entityPosition.y);
+          effect.currentPos.set(
+            entityPosition.x,
+            terrainHeight + entityPosition.z,
+            entityPosition.y
+          );
+        } else {
+          // Fallback to interpolation (for instant weapons or if callback not set)
+          effect.currentPos.lerpVectors(effect.startPos, effect.endPos, effect.progress);
+        }
+
         effect.headMesh.position.copy(effect.currentPos);
         effect.glowSprite.position.copy(effect.currentPos);
 

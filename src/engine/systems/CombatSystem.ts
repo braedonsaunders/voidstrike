@@ -935,7 +935,7 @@ export class CombatSystem extends System {
       const startZ = attacker.isFlying ? DEFAULT_AIRBORNE_HEIGHT : 0.5;
       const targetZ = targetIsFlying ? DEFAULT_AIRBORNE_HEIGHT : 0.5;
 
-      this.game.projectileSystem.spawnProjectile({
+      const projectileEntity = this.game.projectileSystem.spawnProjectile({
         sourceEntityId: attackerId,
         sourcePlayerId: attackerSelectable?.playerId ?? '',
         sourceFaction: attacker.faction || 'terran',
@@ -948,10 +948,16 @@ export class CombatSystem extends System {
         targetZ: targetTransform.z + targetZ,
         projectileType,
         damage: finalDamage,
+        rawDamage: attacker.attackDamage, // Base damage for splash calculations
         damageType: attacker.damageType,
         splashRadius: attacker.splashRadius,
         splashFalloff: 0.5,
       });
+
+      debugCombat.log(
+        `CombatSystem: ${attacker.unitId} (${attackerId}) fired ${projectileTypeId} projectile ` +
+        `(entity: ${projectileEntity?.id ?? 'null'}) at target ${targetId}, damage: ${finalDamage}`
+      );
 
       // Emit attack event for muzzle flash/audio (no damage info - damage on impact)
       attackEventPayload.attackerId = attacker.unitId;
