@@ -819,11 +819,17 @@ export class BuildingPlacementSystem extends System {
   }
 
   /**
-   * Release all workers assigned to a building
+   * Release all workers assigned to a building and push them out of the footprint
    * For walls: supports auto-continue to next unfinished segment in the wall line
    * For other buildings: Primary workers check for queued build commands, helper workers return to original position
    */
-  private releaseWorkersFromBuilding(buildingEntityId: number): void {
+  private releaseWorkersFromBuilding(
+    buildingEntityId: number,
+    buildingX?: number,
+    buildingY?: number,
+    buildingWidth?: number,
+    buildingHeight?: number
+  ): void {
     const workers = this.world.getEntitiesWith('Unit', 'Transform');
 
     for (const entity of workers) {
@@ -831,6 +837,38 @@ export class BuildingPlacementSystem extends System {
       const transform = entity.get<Transform>('Transform')!;
 
       if (unit.constructingBuildingId === buildingEntityId) {
+        // Push worker out of building footprint if they're inside
+        // This ensures they can pathfind correctly after being released
+        if (buildingX !== undefined && buildingY !== undefined && buildingWidth !== undefined && buildingHeight !== undefined) {
+          const halfW = buildingWidth / 2 + 0.5;
+          const halfH = buildingHeight / 2 + 0.5;
+          const dx = transform.x - buildingX;
+          const dy = transform.y - buildingY;
+
+          if (Math.abs(dx) < halfW && Math.abs(dy) < halfH) {
+            // Worker is inside building, push to nearest edge
+            const pushDistX = halfW - Math.abs(dx);
+            const pushDistY = halfH - Math.abs(dy);
+
+            if (pushDistX < pushDistY) {
+              // Push to left/right edge
+              transform.x = buildingX + (dx >= 0 ? halfW + 0.5 : -halfW - 0.5);
+            } else {
+              // Push to top/bottom edge
+              transform.y = buildingY + (dy >= 0 ? halfH + 0.5 : -halfH - 0.5);
+            }
+
+            // Clamp to map bounds
+            transform.x = Math.max(1, Math.min(this.game.config.mapWidth - 1, transform.x));
+            transform.y = Math.max(1, Math.min(this.game.config.mapHeight - 1, transform.y));
+
+            // Update spatial grid position
+            this.world.unitGrid.update(entity.id, transform.x, transform.y, unit.collisionRadius);
+
+            debugBuildingPlacement.log(`Worker ${entity.id} pushed out of completed building to (${transform.x.toFixed(1)}, ${transform.y.toFixed(1)})`);
+          }
+        }
+
         // Check if this worker has wall line segments for auto-continue
         if (unit.wallLineSegments.length > 0) {
           // Find the next unfinished wall segment in the line
@@ -1195,6 +1233,37 @@ export class BuildingPlacementSystem extends System {
       const buildingTransform = buildingEntity.get<Transform>('Transform')!;
       const building = buildingEntity.get<Building>('Building')!;
 
+      // Safety check: If building is already complete, release the worker
+      // This handles edge cases where worker didn't get properly released
+      if (building.isComplete()) {
+        debugBuildingPlacement.log(`Worker ${entity.id} was stuck on completed building ${unit.constructingBuildingId}, releasing`);
+
+        // Push worker out of building footprint
+        const halfW = building.width / 2 + 0.5;
+        const halfH = building.height / 2 + 0.5;
+        const dx = transform.x - buildingTransform.x;
+        const dy = transform.y - buildingTransform.y;
+
+        if (Math.abs(dx) < halfW && Math.abs(dy) < halfH) {
+          const pushDistX = halfW - Math.abs(dx);
+          const pushDistY = halfH - Math.abs(dy);
+
+          if (pushDistX < pushDistY) {
+            transform.x = buildingTransform.x + (dx >= 0 ? halfW + 0.5 : -halfW - 0.5);
+          } else {
+            transform.y = buildingTransform.y + (dy >= 0 ? halfH + 0.5 : -halfH - 0.5);
+          }
+
+          transform.x = Math.max(1, Math.min(this.game.config.mapWidth - 1, transform.x));
+          transform.y = Math.max(1, Math.min(this.game.config.mapHeight - 1, transform.y));
+          this.world.unitGrid.update(entity.id, transform.x, transform.y, unit.collisionRadius);
+        }
+
+        unit.cancelBuilding();
+        this.workerWanderState.delete(entity.id);
+        continue;
+      }
+
       // Check if worker is close enough to construct
       const dx = transform.x - buildingTransform.x;
       const dy = transform.y - buildingTransform.y;
@@ -1344,8 +1413,8 @@ export class BuildingPlacementSystem extends System {
               );
             }
 
-            // Release workers
-            this.releaseWorkersFromBuilding(entity.id);
+            // Release workers and push them out of the building footprint
+            this.releaseWorkersFromBuilding(entity.id, buildingTransform.x, buildingTransform.y, building.width, building.height);
 
             this.game.eventBus.emit('building:complete', {
               entityId: entity.id,
