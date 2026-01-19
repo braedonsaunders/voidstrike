@@ -270,8 +270,9 @@ export function WebGPUGameCanvas() {
       renderContextRef.current = renderContext;
       setIsWebGPU(renderContext.isWebGPU);
 
-      // Set renderer API in UI store for graphics options display
+      // Set renderer API and GPU info in UI store for graphics options display
       useUIStore.getState().setRendererAPI(renderContext.isWebGPU ? 'WebGPU' : 'WebGL');
+      useUIStore.getState().setGpuInfo(renderContext.gpuInfo);
 
       // Set the max vertex buffers from the device limits for velocity tracking
       setMaxVertexBuffers(renderContext.deviceLimits.maxVertexBuffers);

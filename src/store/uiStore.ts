@@ -61,6 +61,14 @@ export interface PerformanceMetrics {
 // Renderer API type (WebGPU or WebGL)
 export type RendererAPI = 'WebGPU' | 'WebGL' | null;
 
+// GPU adapter info for display
+export interface GpuInfo {
+  name: string;           // Device description (e.g., "NVIDIA GeForce RTX 4090")
+  vendor: string;         // Vendor name (e.g., "nvidia", "amd", "intel")
+  architecture: string;   // Architecture (e.g., "ampere")
+  isIntegrated: boolean;  // True if likely an integrated GPU
+}
+
 // Anti-aliasing mode selection
 export type AntiAliasingMode = 'off' | 'fxaa' | 'taa';
 
@@ -385,6 +393,7 @@ export interface UIState {
   graphicsPresetsConfig: GraphicsPresetsConfig | null;
   showGraphicsOptions: boolean;
   rendererAPI: RendererAPI;
+  gpuInfo: GpuInfo | null;
   preferWebGPU: boolean; // User preference for renderer (true = try WebGPU, false = force WebGL)
 
   // Sound settings
@@ -442,6 +451,7 @@ export interface UIState {
   setFixedResolution: (res: FixedResolution) => void;
   setMaxFPS: (fps: number) => void;
   setRendererAPI: (api: RendererAPI) => void;
+  setGpuInfo: (info: GpuInfo | null) => void;
   setPreferWebGPU: (prefer: boolean) => void;
   // Graphics preset actions
   loadGraphicsPresets: () => Promise<void>;
@@ -502,6 +512,7 @@ export const useUIStore = create<UIState>((set, get) => ({
   showPing: true,
   showGraphicsOptions: false,
   rendererAPI: null,
+  gpuInfo: null,
   preferWebGPU: true, // Default to WebGPU for best visual quality
   showSoundOptions: false,
   isFullscreen: false,
@@ -822,6 +833,8 @@ export const useUIStore = create<UIState>((set, get) => ({
   toggleGraphicsOptions: () => set((state) => ({ showGraphicsOptions: !state.showGraphicsOptions })),
 
   setRendererAPI: (api) => set({ rendererAPI: api }),
+
+  setGpuInfo: (info) => set({ gpuInfo: info }),
 
   setPreferWebGPU: (prefer) => set({ preferWebGPU: prefer }),
 

@@ -290,6 +290,7 @@ export const GraphicsOptionsPanel = memo(function GraphicsOptionsPanel() {
   const showGraphicsOptions = useUIStore((state) => state.showGraphicsOptions);
   const graphicsSettings = useUIStore((state) => state.graphicsSettings);
   const rendererAPI = useUIStore((state) => state.rendererAPI);
+  const gpuInfo = useUIStore((state) => state.gpuInfo);
   const toggleGraphicsOptions = useUIStore((state) => state.toggleGraphicsOptions);
   const toggleGraphicsSetting = useUIStore((state) => state.toggleGraphicsSetting);
   const setGraphicsSetting = useUIStore((state) => state.setGraphicsSetting);
@@ -404,6 +405,43 @@ export const GraphicsOptionsPanel = memo(function GraphicsOptionsPanel() {
           ✕
         </button>
       </div>
+
+      {/* GPU Info */}
+      {gpuInfo && (
+        <div style={{
+          marginBottom: '12px',
+          padding: '8px 10px',
+          backgroundColor: gpuInfo.isIntegrated ? 'rgba(234, 179, 8, 0.08)' : '#1a1a1c',
+          borderRadius: '6px',
+          border: gpuInfo.isIntegrated ? '1px solid rgba(234, 179, 8, 0.2)' : 'none',
+        }}>
+          <div style={{
+            fontSize: '10px',
+            color: '#666',
+            marginBottom: '4px',
+          }}>
+            Graphics Adapter
+          </div>
+          <div style={{
+            fontSize: '11px',
+            color: gpuInfo.isIntegrated ? '#eab308' : '#ddd',
+            fontWeight: 500,
+          }}>
+            {gpuInfo.name}
+          </div>
+          {gpuInfo.isIntegrated && (
+            <div style={{
+              fontSize: '9px',
+              color: '#b59420',
+              marginTop: '6px',
+              lineHeight: 1.4,
+            }}>
+              Integrated GPU detected. For better performance, configure your system
+              to use a discrete GPU (NVIDIA Control Panel or AMD Radeon Settings).
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Preset Selector */}
       <div style={{
