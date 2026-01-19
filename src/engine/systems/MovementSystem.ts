@@ -80,6 +80,7 @@ import {
   PHYSICS_PUSH_THROTTLE_TICKS,
   // Combat movement
   COMBAT_SPREAD_SPEED_MULTIPLIER,
+  FLYING_SEPARATION_MULTIPLIER,
   COMBAT_SEPARATION_THRESHOLD,
   ATTACK_STANDOFF_MULTIPLIER,
   // Idle behavior
@@ -899,7 +900,9 @@ export class MovementSystem extends System {
 
     // PERF OPTIMIZATION: Use queryRadiusWithData to get inline entity data
     // This eliminates entity.get() lookups in the hot path
-    const queryRadius = SEPARATION_RADIUS + selfUnit.collisionRadius;
+    // Query radius = unit's desired spacing (collision * multiplier + base radius)
+    const selfDesiredSpacing = selfUnit.collisionRadius * SEPARATION_RADIUS + SEPARATION_RADIUS;
+    const queryRadius = selfDesiredSpacing * 2; // Query wider to catch all potential neighbors
     const nearbyData = this.world.unitGrid.queryRadiusWithData(
       selfTransform.x,
       selfTransform.y,
@@ -922,14 +925,17 @@ export class MovementSystem extends System {
       const dy = selfTransform.y - other.y;
       const distanceSq = dx * dx + dy * dy;
 
+      // Separation distance scales with unit size - larger units need more space
       const combinedRadius = selfUnit.collisionRadius + other.collisionRadius;
-      const separationDist = Math.max(combinedRadius * 0.5, SEPARATION_RADIUS);
+      const separationDist = combinedRadius * SEPARATION_RADIUS + SEPARATION_RADIUS;
       const separationDistSq = separationDist * separationDist;
 
       // PERF: Use squared distance for threshold check, only sqrt when needed
       if (distanceSq < separationDistSq && distanceSq > 0.0001) {
         const distance = Math.sqrt(distanceSq);
-        const strength = baseStrength * (1 - distance / separationDist);
+        // Inverse square falloff - much stronger when close, still effective at range
+        const normalizedDist = distance / separationDist;
+        const strength = baseStrength * (1 - normalizedDist) * (1 - normalizedDist);
         const normalizedDx = dx / distance;
         const normalizedDy = dy / distance;
 
@@ -2350,9 +2356,33 @@ export class MovementSystem extends System {
           finalVx = dirX * unit.currentSpeed;
           finalVy = dirY * unit.currentSpeed;
         } else {
-          // Flying units - direct movement only
-          finalVx = prefVx;
-          finalVy = prefVy;
+          // Flying units - apply separation forces for proper spacing
+          const distToFinalTarget = unit.targetX !== null && unit.targetY !== null
+            ? Math.sqrt(
+                (unit.targetX - transform.x) * (unit.targetX - transform.x) +
+                (unit.targetY - transform.y) * (unit.targetY - transform.y)
+              )
+            : distance;
+
+          // Calculate separation force for flying units
+          this.calculateSeparationForce(entity.id, transform, unit, tempSeparation, distToFinalTarget);
+
+          // Blend movement direction with separation
+          let dirX = distance > 0.01 ? dx / distance : 0;
+          let dirY = distance > 0.01 ? dy / distance : 0;
+
+          // Add separation force (scaled up for flying units which have more space)
+          dirX += tempSeparation.x * FLYING_SEPARATION_MULTIPLIER;
+          dirY += tempSeparation.y * FLYING_SEPARATION_MULTIPLIER;
+
+          const newMag = Math.sqrt(dirX * dirX + dirY * dirY);
+          if (newMag > 0.01) {
+            dirX /= newMag;
+            dirY /= newMag;
+          }
+
+          finalVx = dirX * unit.currentSpeed;
+          finalVy = dirY * unit.currentSpeed;
         }
       }
 
