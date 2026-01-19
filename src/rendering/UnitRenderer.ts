@@ -1019,7 +1019,6 @@ export class UnitRenderer {
       // Reset indirect args before culling (compute shader will populate instance counts)
       if (this.gpuIndirectRenderer && this.gpuIndirectInitialized) {
         this.gpuIndirectRenderer.resetIndirectArgs();
-        this.gpuIndirectRenderer.updateCamera(this.camera);
       }
 
       // Dispatch GPU culling compute shader

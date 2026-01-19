@@ -18,17 +18,7 @@
 
 import * as THREE from 'three';
 import { WebGPURenderer } from 'three/webgpu';
-import {
-  Fn,
-  storage,
-  uniform,
-  float,
-  vec4,
-  positionLocal,
-  normalLocal,
-  instanceIndex,
-  normalize,
-} from 'three/tsl';
+import { storage } from 'three/tsl';
 
 import {
   StorageInstancedBufferAttribute,
@@ -79,9 +69,12 @@ export class GPUIndirectRenderer {
   private renderer: WebGPURenderer | null = null;
   private scene: THREE.Scene;
 
-  // Storage buffers (shared with CullingCompute)
+  // Storage buffers for vertex shader access
   private transformStorage: ReturnType<typeof storage> | null = null;
-  private visibleIndicesStorage: ReturnType<typeof storage> | null = null;
+
+  // Note: visibleIndicesStorage from CullingCompute uses instancedArray() which is
+  // for compute shaders. For now, we skip custom position/normal nodes and let
+  // Three.js handle instancing normally. GPU culling still works via indirect args.
 
   // Indirect meshes per (unitType, LOD)
   private indirectMeshes: Map<string, IndirectMesh> = new Map();
@@ -96,14 +89,10 @@ export class GPUIndirectRenderer {
 
   // Transform data for storage binding
   private transformData: Float32Array;
-  private visibleIndicesData: Uint32Array;
 
   // Registered unit types and their geometries
   private unitTypeGeometries: Map<number, Map<number, THREE.BufferGeometry>> = new Map();
   private unitTypeMaterials: Map<number, THREE.Material> = new Map();
-
-  // Camera uniform for vertex shader
-  private uCameraPosition = uniform(new THREE.Vector3());
 
   // Initialization state
   private initialized = false;
@@ -113,7 +102,6 @@ export class GPUIndirectRenderer {
 
     // Pre-allocate buffers
     this.transformData = new Float32Array(MAX_UNITS * 16);
-    this.visibleIndicesData = new Uint32Array(MAX_UNITS);
 
     // Indirect args: (unitType * LOD * players) entries × 5 uint32 per entry
     const indirectEntryCount = MAX_UNIT_TYPES * MAX_LOD_LEVELS * MAX_PLAYERS;
@@ -137,12 +125,14 @@ export class GPUIndirectRenderer {
     // Get data arrays from GPU buffer
     this.transformData = gpuUnitBuffer.getTransformData();
 
-    // Create storage buffers for vertex shader access
+    // Create storage buffer for transforms (for future use when vertex shader
+    // storage buffer reading is fully working)
     const transformStorageAttribute = new StorageInstancedBufferAttribute(this.transformData, 16);
     this.transformStorage = storage(transformStorageAttribute, 'mat4', MAX_UNITS);
 
-    // Get visible indices storage from culling compute (shared buffer)
-    this.visibleIndicesStorage = cullingCompute.getVisibleIndicesStorage();
+    // Note: We don't use visibleIndicesStorage in vertex shaders currently because
+    // instancedArray() from CullingCompute is designed for compute shaders.
+    // The GPU culling still works by populating indirect args with instance counts.
 
     // Create shared indirect args attribute
     this.indirectArgsAttribute = new IndirectStorageBufferAttribute(this.indirectArgsData, 5);
@@ -239,12 +229,14 @@ export class GPUIndirectRenderer {
   }
 
   /**
-   * Create a GPU-driven material that reads transforms from storage buffers
+   * Create material for GPU-driven rendering
    *
-   * The vertex shader:
-   * 1. Uses instanceIndex to look up the visible unit slot from culling results
-   * 2. Reads transform matrix from storage buffer
-   * 3. Applies transform to vertex position and normal
+   * Note: Custom vertex transform reading from storage buffers is disabled for now
+   * because instancedArray() from CullingCompute doesn't work directly in vertex shaders.
+   * Three.js handles instancing normally; GPU culling works via indirect args instance counts.
+   *
+   * TODO: Implement proper vertex shader storage buffer reading when TSL supports it
+   * or use a different buffer sharing pattern between compute and vertex shaders.
    */
   private createGPUDrivenMaterial(baseMaterial?: THREE.Material): THREE.Material {
     const material = new MeshStandardNodeMaterial();
@@ -262,42 +254,8 @@ export class GPUIndirectRenderer {
       material.roughness = 0.8;
     }
 
-    const transformBuffer = this.transformStorage;
-    const visibleIndices = this.visibleIndicesStorage;
-
-    if (transformBuffer && visibleIndices) {
-      // Custom position node - reads transform from storage buffer
-      const gpuPositionNode = Fn(() => {
-        // Get the original unit slot index for this instance from culling results
-        const visibleSlotIndex = visibleIndices.element(instanceIndex);
-
-        // Read the transform matrix from storage buffer
-        const modelMatrix = transformBuffer.element(visibleSlotIndex);
-
-        // Transform local position: worldPos = modelMatrix * vec4(localPos, 1.0)
-        const localPos4 = vec4(positionLocal, float(1.0));
-        const worldPos4 = modelMatrix.mul(localPos4);
-
-        return worldPos4.xyz;
-      });
-
-      // Custom normal node - transforms normal by the model matrix
-      // For uniform scaling, we can transform normal as direction (w=0) and renormalize
-      const gpuNormalNode = Fn(() => {
-        const visibleSlotIndex = visibleIndices.element(instanceIndex);
-        const modelMatrix = transformBuffer.element(visibleSlotIndex);
-
-        // Transform normal as direction vector (w=0), then normalize
-        // This works correctly for uniform scaling (common for game units)
-        const normal4 = vec4(normalLocal, float(0.0));
-        const transformedNormal = modelMatrix.mul(normal4).xyz;
-
-        return normalize(transformedNormal);
-      });
-
-      material.positionNode = gpuPositionNode();
-      material.normalNode = gpuNormalNode();
-    }
+    // Use standard Three.js instancing - no custom position/normal nodes
+    // GPU culling still works by setting instance counts in indirect args
 
     return material;
   }
@@ -355,13 +313,6 @@ export class GPUIndirectRenderer {
   }
 
   /**
-   * Update camera position uniform
-   */
-  updateCamera(camera: THREE.Camera): void {
-    this.uCameraPosition.value.copy(camera.position);
-  }
-
-  /**
    * Get the indirect args attribute for binding to CullingCompute
    */
   getIndirectArgsAttribute(): IndirectStorageBufferAttribute | null {
@@ -373,13 +324,6 @@ export class GPUIndirectRenderer {
    */
   getIndirectArgsData(): Uint32Array {
     return this.indirectArgsData;
-  }
-
-  /**
-   * Get visible indices storage for binding in vertex shader
-   */
-  getVisibleIndicesStorage(): ReturnType<typeof storage> | null {
-    return this.visibleIndicesStorage;
   }
 
   /**
@@ -441,7 +385,6 @@ export class GPUIndirectRenderer {
     this.unitTypeMaterials.clear();
 
     this.transformStorage = null;
-    this.visibleIndicesStorage = null;
     this.indirectArgsAttribute = null;
 
     this.renderer = null;
