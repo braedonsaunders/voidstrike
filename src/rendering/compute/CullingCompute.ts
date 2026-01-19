@@ -188,7 +188,7 @@ export class CullingCompute {
       debugShaders.log('[CullingCompute] GPU compute initialized');
       debugShaders.log(`  - Max units: ${MAX_GPU_UNITS}`);
       debugShaders.log(`  - Indirect entries: ${indirectEntryCount}`);
-      console.log('[GPU Culling] ✓ INITIALIZED');
+      debugShaders.log('[GPU Culling] ✓ INITIALIZED');
     } catch (e) {
       const errorMsg = e instanceof Error ? e.message : String(e);
       debugShaders.warn('[CullingCompute] GPU compute init failed:', errorMsg);
