@@ -10,7 +10,6 @@
 import * as THREE from 'three';
 import {
   BUILDING_CONSTRUCTION,
-  BUILDING_SELECTION_RING,
   BUILDING_FIRE,
   BUILDING_PARTICLES,
   BUILDING_SCAFFOLD,
@@ -24,11 +23,6 @@ export interface ConstructionMaterialConfig {
   color?: number;
   roughness?: number;
   metalness?: number;
-  opacity?: number;
-}
-
-export interface SelectionRingMaterialConfig {
-  color: number;
   opacity?: number;
 }
 
@@ -76,42 +70,6 @@ export function createConstructingMaterial(
     metalness: config.metalness ?? BUILDING_CONSTRUCTION.METALNESS,
     transparent: true,
     opacity: config.opacity ?? BUILDING_CONSTRUCTION.OPACITY,
-  });
-}
-
-// ============================================
-// SELECTION RING MATERIALS
-// ============================================
-
-/**
- * Create material for owned building selection rings
- */
-export function createSelectionRingMaterial(
-  config: SelectionRingMaterialConfig
-): THREE.MeshBasicMaterial {
-  return new THREE.MeshBasicMaterial({
-    color: config.color,
-    transparent: true,
-    opacity: config.opacity ?? BUILDING_SELECTION_RING.OPACITY,
-    side: THREE.DoubleSide,
-  });
-}
-
-/**
- * Create material for owned building selection (green)
- */
-export function createOwnedSelectionMaterial(): THREE.MeshBasicMaterial {
-  return createSelectionRingMaterial({
-    color: BUILDING_SELECTION_RING.OWNED_COLOR,
-  });
-}
-
-/**
- * Create material for enemy building selection (red)
- */
-export function createEnemySelectionMaterial(): THREE.MeshBasicMaterial {
-  return createSelectionRingMaterial({
-    color: BUILDING_SELECTION_RING.ENEMY_COLOR,
   });
 }
 
@@ -413,8 +371,6 @@ export function createScaffoldDiagonalGeometry(): THREE.CylinderGeometry {
 
 export interface BuildingMaterialBundle {
   constructing: THREE.MeshStandardMaterial;
-  selection: THREE.MeshBasicMaterial;
-  enemySelection: THREE.MeshBasicMaterial;
   fire: THREE.MeshBasicMaterial;
   smoke: THREE.MeshBasicMaterial;
   constructionDust: THREE.PointsMaterial;
@@ -441,8 +397,6 @@ export interface BuildingMaterialBundle {
 export function createBuildingMaterialBundle(): BuildingMaterialBundle {
   return {
     constructing: createConstructingMaterial(),
-    selection: createOwnedSelectionMaterial(),
-    enemySelection: createEnemySelectionMaterial(),
     fire: createFireMaterial(),
     smoke: createSmokeMaterial(),
     constructionDust: createConstructionDustMaterial(),
