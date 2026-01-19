@@ -11,9 +11,7 @@
 export {
   createWebGPURenderer,
   updateRendererSize,
-  executeCompute,
   render,
-  renderAsync,
   disposeRenderer,
   type WebGPURendererConfig,
   type RenderContext,
@@ -54,7 +52,6 @@ export {
 // Post-processing (includes TRAA from Three.js)
 export {
   RenderPipeline,
-  createSimplePostProcessing,
   ScreenShake,
   DamageVignette,
   type PostProcessingConfig,
