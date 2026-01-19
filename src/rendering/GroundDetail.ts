@@ -8,14 +8,13 @@ import { MapData } from '@/data/maps';
  * PERF: Uses InstancedMesh to batch all crystals into a single draw call.
  * Previously created 500-1500 individual meshes = 500-1500 draw calls.
  * Now uses 1 InstancedMesh = 1 draw call regardless of crystal count.
+ *
+ * Emissive control is delegated to EmissiveDecorationManager for centralized
+ * animation and intensity control. Use getInstancedMesh() to register with manager.
  */
 export class CrystalField {
   public group: THREE.Group;
-  private material: THREE.MeshStandardMaterial | null = null;
   private instancedMesh: THREE.InstancedMesh | null = null;
-  private baseEmissiveIntensity: number = 0.5;
-  private emissiveEnabled: boolean = true;
-  private intensityMultiplier: number = 1.0;
 
   // Reusable objects to avoid allocations
   private static readonly tempMatrix = new THREE.Matrix4();
@@ -55,13 +54,10 @@ export class CrystalField {
       roughness: 0.1,
       metalness: 0.3,
       emissive: emissiveColor,
-      emissiveIntensity: this.baseEmissiveIntensity,
+      emissiveIntensity: 0.5, // Base intensity, controlled by EmissiveDecorationManager
       transparent: true,
       opacity: 0.85,
     });
-
-    // Store material reference for emissive controls
-    this.material = crystalMaterial;
 
     // Create base geometry - unit cone that will be scaled per instance
     // Base radius 0.15, height 1.0, 6 segments
@@ -137,29 +133,11 @@ export class CrystalField {
   }
 
   /**
-   * Enable or disable emissive glow on crystals
+   * Get the instanced mesh for registration with EmissiveDecorationManager.
+   * Returns null if no crystals were created (crystalDensity <= 0).
    */
-  public setEmissiveEnabled(enabled: boolean): void {
-    this.emissiveEnabled = enabled;
-    this.updateEmissive();
-  }
-
-  /**
-   * Set emissive intensity multiplier
-   */
-  public setEmissiveIntensityMultiplier(multiplier: number): void {
-    this.intensityMultiplier = multiplier;
-    this.updateEmissive();
-  }
-
-  private updateEmissive(): void {
-    if (this.material) {
-      if (this.emissiveEnabled) {
-        this.material.emissiveIntensity = this.baseEmissiveIntensity * this.intensityMultiplier;
-      } else {
-        this.material.emissiveIntensity = 0;
-      }
-    }
+  public getInstancedMesh(): THREE.InstancedMesh | null {
+    return this.instancedMesh;
   }
 
   public dispose(): void {
@@ -170,7 +148,6 @@ export class CrystalField {
       }
       this.instancedMesh = null;
     }
-    this.material = null;
   }
 }
 
