@@ -7,6 +7,7 @@ import { MusicPlayer } from '@/audio/MusicPlayer';
 import { useGameSetupStore, isLocalPlayer } from '@/store/gameSetupStore';
 import { useUIStore } from '@/store/uiStore';
 import { UNIT_DEFINITIONS } from '@/data/units/dominion';
+import { VOICE_COOLDOWN_CONFIG } from '@/data/audio.config';
 import { SeededRandom } from '@/utils/math';
 import * as THREE from 'three';
 
@@ -34,19 +35,14 @@ export class AudioSystem extends System {
   // The seed is based on game tick + unit type hash for variety
   private audioRng: SeededRandom = new SeededRandom(12345);
 
-  // Separate cooldowns per action type
+  // Separate cooldowns per action type (values from audio.config.ts)
   private lastVoiceTimes: Record<string, number> = {
     select: 0,
     move: 0,
     attack: 0,
     ready: 0,
   };
-  private voiceCooldowns: Record<string, number> = {
-    select: 400,
-    move: 100,
-    attack: 100,
-    ready: 0,
-  };
+  private voiceCooldowns: Record<string, number> = VOICE_COOLDOWN_CONFIG;
 
   constructor(game: Game) {
     super(game);
