@@ -17,8 +17,6 @@ import {
 } from '@/data/rendering.config';
 import {
   createConstructingMaterial,
-  createOwnedSelectionMaterial,
-  createEnemySelectionMaterial,
   createFireMaterial,
   createSmokeMaterial,
   createConstructionDustMaterial,
@@ -39,6 +37,11 @@ import {
   createScaffoldBeamGeometry,
   createScaffoldDiagonalGeometry,
 } from './tsl/BuildingMaterials';
+import {
+  createSelectionRingMaterial,
+  updateSelectionMaterial,
+} from './tsl/SelectionMaterial';
+import { MeshBasicNodeMaterial } from 'three/webgpu';
 // NOTE: Buildings don't move, so we don't use velocity tracking (AAA optimization)
 // Velocity node returns zero for meshes without velocity attributes
 
@@ -139,8 +142,8 @@ export class BuildingRenderer {
 
   // Shared materials
   private constructingMaterial: THREE.MeshStandardMaterial;
-  private selectionMaterial: THREE.MeshBasicMaterial;
-  private enemySelectionMaterial: THREE.MeshBasicMaterial;
+  private selectionMaterial: MeshBasicNodeMaterial;
+  private enemySelectionMaterial: MeshBasicNodeMaterial;
   private fireMaterial: THREE.MeshBasicMaterial;
   private smokeMaterial: THREE.MeshBasicMaterial;
   private fireGeometry: THREE.ConeGeometry;
@@ -183,11 +186,17 @@ export class BuildingRenderer {
     this.visionSystem = visionSystem ?? null;
     this.terrain = terrain ?? null;
 
-    // Materials created via factory functions from BuildingMaterials.ts
+    // Materials created via factory functions
     this.constructingMaterial = createConstructingMaterial();
-    this.selectionMaterial = createOwnedSelectionMaterial();
-
-    this.enemySelectionMaterial = createEnemySelectionMaterial();
+    // Use animated TSL selection materials (same as units)
+    this.selectionMaterial = createSelectionRingMaterial({
+      color: new THREE.Color(BUILDING_SELECTION_RING.OWNED_COLOR),
+      opacity: BUILDING_SELECTION_RING.OPACITY,
+    });
+    this.enemySelectionMaterial = createSelectionRingMaterial({
+      color: new THREE.Color(BUILDING_SELECTION_RING.ENEMY_COLOR),
+      opacity: BUILDING_SELECTION_RING.OPACITY,
+    });
 
     // Fire effect materials
     this.fireMaterial = createFireMaterial();
@@ -349,7 +358,8 @@ export class BuildingRenderer {
           BUILDING_SELECTION_RING.SEGMENTS
         );
       }
-      const material = isOwned ? this.selectionMaterial.clone() : this.enemySelectionMaterial.clone();
+      // Use material directly (not cloned) so animation updates apply to all instances
+      const material = isOwned ? this.selectionMaterial : this.enemySelectionMaterial;
       const mesh = new THREE.InstancedMesh(this.selectionRingGeometry, material, MAX_SELECTION_RING_INSTANCES);
       mesh.count = 0;
       mesh.frustumCulled = false;
@@ -522,6 +532,10 @@ export class BuildingRenderer {
     this.fireAnimTime += dt;
     this.constructionAnimTime += dt;
     this.blueprintPulseTime += dt;
+
+    // Animate selection ring materials
+    updateSelectionMaterial(this.selectionMaterial, this.constructionAnimTime);
+    updateSelectionMaterial(this.enemySelectionMaterial, this.constructionAnimTime);
 
     // PERF: Update frustum for culling
     this.updateFrustum();
