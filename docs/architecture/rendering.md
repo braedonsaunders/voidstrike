@@ -237,18 +237,30 @@ This solves:
 
 ### GPU Compute Vision/Fog of War
 
-**Location:** `src/rendering/compute/VisionCompute.ts`
+**Location:** `src/rendering/compute/VisionCompute.ts`, `src/rendering/tsl/FogOfWar.ts`
 
-The vision system supports GPU-accelerated computation for fog of war:
+Fully GPU-accelerated vision and fog of war computation using Three.js r182 compute shaders.
 
-**Architecture:**
-- Storage buffer: Unit positions + sight ranges packed as `vec4(x, y, sightRange, playerId)`
-- Output texture: RGBA per cell (R=explored, G=visible) per player
-- Optimized CPU path with typed arrays (ready for GPU compute shader migration)
+**Architecture (GPU-Only Path - Option A):**
+```
+┌─────────────────┐    ┌──────────────────┐    ┌─────────────────┐
+│  VisionCompute  │───→│  StorageTexture  │───→│   FogOfWar      │
+│ (GPU Compute)   │    │  (per player)    │    │ (TSL Shader)    │
+└─────────────────┘    └──────────────────┘    └─────────────────┘
+      ↓ caster data        ↓ R=explored           ↓ direct sampling
+      ↓ per-cell test      ↓ G=visible            ↓ no CPU readback
+```
+
+**Key Features:**
+- **No CPU readback**: FogOfWar shader samples StorageTexture directly
+- **Storage buffer**: Caster positions packed as `vec4(x, y, sightRange, playerId)`
+- **Storage texture**: RGBA per cell (R=explored, G=visible) per player
+- **textureStore()**: Compute shader writes directly to StorageTexture
+- **Workgroup size**: 64 threads per workgroup
 
 **Benefits:**
 - 1000+ vision casters at 60Hz (vs. hundreds at 2Hz with worker)
-- Direct texture output for fog shader sampling
+- Zero CPU↔GPU texture upload overhead
 - Version tracking for dirty checking
 
 **Usage:**
@@ -260,8 +272,11 @@ this.gpuVisionCompute = new VisionCompute(renderer, {
   cellSize: 2,
 });
 
-// Update every frame instead of every 10 ticks
+// Update every frame
 gpuVisionCompute.updateVision(casters, playerIds);
+
+// FogOfWar binds and samples the StorageTexture directly
+fogOfWar.setGPUVisionCompute(gpuVisionCompute);
 ```
 
 ### Temporal Reprojection for GTAO/SSR
@@ -298,7 +313,7 @@ renderPipeline.applyConfig({
 - `CullingCompute.ts` - GPU frustum culling compute shader
 - `GPUIndirectRenderer.ts` - Indirect draw manager
 
-Infrastructure for GPU-driven rendering with zero CPU per-unit iteration.
+Fully GPU-driven rendering with zero CPU per-unit iteration. Updated to Three.js r182 patterns.
 
 **Architecture:**
 ```
@@ -317,22 +332,27 @@ Infrastructure for GPU-driven rendering with zero CPU per-unit iteration.
 - `isDirty()` tracking for efficient GPU sync
 - Single buffer design per [Toji's best practices](https://toji.dev/webgpu-best-practices/indirect-draws.html)
 
-**CullingCompute:**
+**CullingCompute (r182 Patterns):**
+- **Two-pass compute**: Reset pass + Cull pass for deterministic results
 - TSL `Fn().compute()` shader with WORKGROUP_SIZE=64
-- Frustum culling using bounding spheres
+- Frustum culling: 6-plane test with bounding sphere rejection
 - LOD selection based on camera distance squared
-- `atomicAdd()` for thread-safe instance counting
-- Visible indices buffer written via compute shader
-- `IndirectStorageBufferAttribute` for draw args
+- **Atomic operations**:
+  - `instancedArray().toAtomic()` for atomic storage buffers
+  - `atomicStore()` for resetting counters (in reset pass)
+  - `atomicAdd()` for thread-safe instance counting (in cull pass)
+- Visible indices buffer populated by compute shader
+- Frustum planes uploaded via `StorageInstancedBufferAttribute`
 - Storage getters for vertex shader binding
 
-**GPUIndirectRenderer:**
-- IndirectMesh per (unitType, LOD) pair
-- TSL NodeMaterial with storage buffer vertex transform
-- `instanceIndex` → visible slot → transform matrix
-- `mesh.drawIndirect` = IndirectStorageBufferAttribute
+**GPUIndirectRenderer (r174+ API):**
+- One IndirectMesh per (unitType, LOD) pair
+- **r174+ indirect draw**: `geometry.setIndirect(IndirectStorageBufferAttribute)`
+- **Per-mesh offset**: `geometry.drawIndirectOffset` for shared buffer
+- TSL `MeshStandardNodeMaterial` with storage buffer vertex transform
+- Vertex shader: `instanceIndex` → visibleIndices[i] → transform matrix
+- Custom normal transformation for proper lighting
 - Single drawIndexedIndirect call per unit type/LOD
-- Falls back to CPU instanced rendering for animated units
 
 **Usage:**
 ```typescript
@@ -342,7 +362,7 @@ unitRenderer.setRenderer(renderer);
 
 // Per-frame (handled internally by UnitRenderer.update())
 gpuUnitBuffer.swapTransformBuffers(); // Start of frame
-cullingCompute.cullGPU(gpuUnitBuffer, camera); // GPU compute dispatch
+cullingCompute.cullGPU(gpuUnitBuffer, camera); // Two-pass GPU compute
 gpuUnitBuffer.commitChanges(); // Before render
 
 // Get stats
@@ -350,10 +370,11 @@ const stats = unitRenderer.getGPURenderingStats();
 console.log(stats.visibleCount, stats.totalIndirectDrawCalls);
 ```
 
-**WebGPU Indirect Draw Status:**
-- `drawIndexedIndirect()` - Standardized, works in Three.js r174+
-- `multiDrawIndexedIndirect()` - Experimental, requires `chrome://flags/#enable-unsafe-webgpu`
-- Our implementation uses single buffer with multiple `drawIndexedIndirect` calls (300x faster than separate buffers on Chrome/Windows)
+**WebGPU Indirect Draw Status (2026):**
+- `geometry.setIndirect()` - Standardized API in Three.js r174+
+- `drawIndirectOffset` - Per-geometry byte offset for shared buffers
+- `multiDrawIndexedIndirect()` - Still experimental via `chromium-experimental-multi-draw-indirect`
+- Our implementation uses single shared buffer with per-geometry offsets
 
 ---
 

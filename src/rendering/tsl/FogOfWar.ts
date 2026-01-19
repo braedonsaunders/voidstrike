@@ -2,7 +2,15 @@
  * TSL Fog of War
  *
  * WebGPU-compatible fog of war implementation using Three.js Shading Language.
- * Works with both WebGPU and WebGL renderers.
+ *
+ * GPU-Only Path (Option A):
+ * - VisionCompute writes vision data to a StorageTexture via compute shader
+ * - FogOfWar shader samples the StorageTexture directly - no CPU readback
+ * - Eliminates the CPU→GPU texture upload bottleneck entirely
+ *
+ * Fallback CPU Path:
+ * - Uses DataTexture for vision data
+ * - VisionSystem updates texture via worker thread
  */
 
 import * as THREE from 'three';
@@ -41,26 +49,30 @@ export class TSLFogOfWar {
 
   private geometry: THREE.PlaneGeometry;
   private material: MeshBasicNodeMaterial;
-  private fogTexture: THREE.DataTexture;
-  private textureData: Uint8Array;
+
+  // CPU fallback: DataTexture for vision data
+  private cpuFogTexture: THREE.DataTexture;
+  private cpuTextureData: Uint8Array;
+
+  // GPU path: StorageTexture reference from VisionCompute
+  private gpuStorageTexture: THREE.Texture | null = null;
 
   private visionSystem: VisionSystem | null = null;
   private playerId: string | null = null;
-  private playerIndex: number = 0; // Numeric index for GPU vision
+  private playerIndex: number = 0;
 
-  // GPU Vision Compute (optional, for high-performance mode)
+  // GPU Vision Compute reference
   private gpuVisionCompute: VisionCompute | null = null;
   private useGPUVision: boolean = false;
-  private lastGPUVisionVersion: number = -1;
 
   // Uniforms for TSL
   private uUnexploredColor = uniform(new THREE.Color(0x2a3a4a));
   private uExploredColor = uniform(new THREE.Color(0x1a2a3a));
+  private uUseGPUTexture = uniform(0); // 0 = CPU, 1 = GPU
 
-  // PERFORMANCE: Throttle updates
+  // Throttle CPU updates
   private lastUpdateTime: number = 0;
-  private updateInterval: number = 100; // Only update every 100ms (CPU path)
-  private gpuUpdateInterval: number = 16; // GPU path can update more frequently
+  private updateInterval: number = 100; // ms
 
   constructor(config: TSLFogOfWarConfig) {
     this.mapWidth = config.mapWidth;
@@ -69,26 +81,24 @@ export class TSLFogOfWar {
     this.gridWidth = Math.ceil(this.mapWidth / this.cellSize);
     this.gridHeight = Math.ceil(this.mapHeight / this.cellSize);
 
-    // Create texture data (RGBA, one byte per channel)
-    this.textureData = new Uint8Array(this.gridWidth * this.gridHeight * 4);
-    // Initialize all to unexplored (black, full opacity)
+    // Create CPU fallback texture
+    this.cpuTextureData = new Uint8Array(this.gridWidth * this.gridHeight * 4);
     for (let i = 0; i < this.gridWidth * this.gridHeight; i++) {
-      this.textureData[i * 4 + 0] = 0; // R
-      this.textureData[i * 4 + 1] = 0; // G
-      this.textureData[i * 4 + 2] = 0; // B
-      this.textureData[i * 4 + 3] = 255; // A (full opacity = unexplored)
+      this.cpuTextureData[i * 4 + 0] = 0;   // R
+      this.cpuTextureData[i * 4 + 1] = 0;   // G
+      this.cpuTextureData[i * 4 + 2] = 0;   // B
+      this.cpuTextureData[i * 4 + 3] = 255; // A (full opacity = unexplored)
     }
 
-    // Create texture
-    this.fogTexture = new THREE.DataTexture(
-      this.textureData,
+    this.cpuFogTexture = new THREE.DataTexture(
+      this.cpuTextureData,
       this.gridWidth,
       this.gridHeight,
       THREE.RGBAFormat
     );
-    this.fogTexture.needsUpdate = true;
-    this.fogTexture.minFilter = THREE.LinearFilter;
-    this.fogTexture.magFilter = THREE.LinearFilter;
+    this.cpuFogTexture.needsUpdate = true;
+    this.cpuFogTexture.minFilter = THREE.LinearFilter;
+    this.cpuFogTexture.magFilter = THREE.LinearFilter;
 
     // Set custom colors if provided
     if (config.unexploredColor) {
@@ -98,51 +108,79 @@ export class TSLFogOfWar {
       this.uExploredColor.value.copy(config.exploredColor);
     }
 
-    // Create TSL material
+    // Create TSL material (initially using CPU texture)
     this.material = this.createTSLMaterial();
 
-    // Create geometry - plane covering the entire map
+    // Create geometry - plane covering the map
     this.geometry = new THREE.PlaneGeometry(this.mapWidth, this.mapHeight);
 
     // Create mesh
     this.mesh = new THREE.Mesh(this.geometry, this.material);
     this.mesh.rotation.x = -Math.PI / 2;
-    // Position fog above all terrain (terrain heights range from 0 to ~10 units based on elevation)
     this.mesh.position.set(this.mapWidth / 2, 12, this.mapHeight / 2);
-    this.mesh.renderOrder = 100; // Render after terrain
+    this.mesh.renderOrder = 100;
   }
 
+  /**
+   * Create TSL material that can sample either CPU DataTexture or GPU StorageTexture
+   *
+   * The shader branches based on uUseGPUTexture uniform:
+   * - CPU path: samples cpuFogTexture (DataTexture with alpha encoding)
+   * - GPU path: samples gpuStorageTexture (RGBA where R=explored, G=visible)
+   */
   private createTSLMaterial(): MeshBasicNodeMaterial {
     const material = new MeshBasicNodeMaterial();
     material.transparent = true;
     material.depthWrite = false;
     material.side = THREE.DoubleSide;
 
-    // Use outputNode to control both color and alpha in one vec4
+    const cpuTex = this.cpuFogTexture;
+    const unexploredColor = this.uUnexploredColor;
+    const exploredColor = this.uExploredColor;
+    const useGPU = this.uUseGPUTexture;
+
     const outputNode = Fn(() => {
-      // Sample fog texture
-      const fogData = texture(this.fogTexture, uv());
-      // visibility: 0 = unexplored (alpha=255), 0.5 = explored (alpha=128), 1 = visible (alpha=0)
-      const visibility = float(1.0).sub(fogData.a);
+      // Sample both textures (GPU will optimize out unused path)
+      const cpuData = texture(cpuTex, uv());
+
+      // CPU path: visibility encoded in alpha
+      // alpha=255 → unexplored, alpha=128 → explored, alpha=0 → visible
+      const cpuVisibility = float(1.0).sub(cpuData.a);
+
+      // For GPU path, we need to handle the StorageTexture sampling
+      // Since we can't conditionally sample different textures in TSL,
+      // we'll update this material when switching to GPU mode
+      let visibility = cpuVisibility;
+
+      // If GPU texture is bound, use it instead
+      // GPU format: R=explored (0 or 1), G=visible (0 or 1)
+      if (this.gpuStorageTexture) {
+        const gpuData = texture(this.gpuStorageTexture, uv());
+        // Convert GPU format to visibility: visible=1, explored=0.5, unexplored=0
+        const gpuVisible = gpuData.g;
+        const gpuExplored = gpuData.r;
+        const gpuVisibility = mix(
+          mix(float(0), float(0.5), step(float(0.5), gpuExplored)),
+          float(1.0),
+          step(float(0.5), gpuVisible)
+        );
+        // Select based on uniform
+        visibility = mix(cpuVisibility, gpuVisibility, useGPU);
+      }
 
       // Step functions to determine state
-      const notUnexplored = step(float(0.01), visibility); // 1 if explored or visible
-      const isVisible = step(float(0.75), visibility); // 1 if visible
+      const notUnexplored = step(float(0.01), visibility);
+      const isVisible = step(float(0.75), visibility);
 
-      // Alpha values: unexplored=0.7, explored=0.35, visible=0
-      const unexploredAlpha = float(0.7);
-      const exploredAlpha = float(0.35);
-      const visibleAlpha = float(0.0);
-
-      // Mix alpha based on state
+      // Alpha: unexplored=0.7, explored=0.35, visible=0
       const alpha = mix(
-        mix(unexploredAlpha, exploredAlpha, notUnexplored),
-        visibleAlpha,
+        mix(float(0.7), float(0.35), notUnexplored),
+        float(0.0),
         isVisible
       );
 
-      // Mix colors based on state
-      const color = mix(this.uUnexploredColor, this.uExploredColor, notUnexplored);
+      // Color: unexplored vs explored
+      const color = mix(unexploredColor, exploredColor, notUnexplored);
 
       return vec4(color, alpha);
     })();
@@ -152,55 +190,152 @@ export class TSLFogOfWar {
     return material;
   }
 
+  /**
+   * Rebuild material with GPU texture bound
+   * Called when GPU vision becomes available
+   */
+  private rebuildMaterialWithGPUTexture(): void {
+    if (!this.gpuStorageTexture) return;
+
+    const material = new MeshBasicNodeMaterial();
+    material.transparent = true;
+    material.depthWrite = false;
+    material.side = THREE.DoubleSide;
+
+    const gpuTex = this.gpuStorageTexture;
+    const unexploredColor = this.uUnexploredColor;
+    const exploredColor = this.uExploredColor;
+
+    // GPU-only shader path - no branching, direct StorageTexture sampling
+    const outputNode = Fn(() => {
+      // Sample GPU StorageTexture directly
+      // Format: RGBA where R=explored (0-1), G=visible (0-1)
+      const visionData = texture(gpuTex, uv());
+      const explored = visionData.r;
+      const visible = visionData.g;
+
+      // Convert to visibility: visible > explored > unexplored
+      // visible: visibility = 1.0
+      // explored: visibility = 0.5
+      // unexplored: visibility = 0.0
+      const visibility = mix(
+        mix(float(0), float(0.5), step(float(0.5), explored)),
+        float(1.0),
+        step(float(0.5), visible)
+      );
+
+      const notUnexplored = step(float(0.01), visibility);
+      const isVisible = step(float(0.75), visibility);
+
+      // Alpha: unexplored=0.7, explored=0.35, visible=0
+      const alpha = mix(
+        mix(float(0.7), float(0.35), notUnexplored),
+        float(0.0),
+        isVisible
+      );
+
+      const color = mix(unexploredColor, exploredColor, notUnexplored);
+
+      return vec4(color, alpha);
+    })();
+
+    material.colorNode = outputNode;
+
+    // Replace material
+    this.material.dispose();
+    this.material = material;
+    this.mesh.material = material;
+
+    debugShaders.log('[FogOfWar] Material rebuilt for GPU-direct sampling');
+  }
+
   public setVisionSystem(visionSystem: VisionSystem): void {
     this.visionSystem = visionSystem;
 
     // Check if GPU vision is available
     const gpuCompute = visionSystem.getGPUVisionCompute();
-    if (gpuCompute && gpuCompute.isAvailable()) {
+    if (gpuCompute && gpuCompute.isAvailable() && gpuCompute.isUsingGPU()) {
       this.gpuVisionCompute = gpuCompute;
-      this.useGPUVision = true;
-      debugShaders.log('[FogOfWar] Using GPU vision compute');
+      this.enableGPUVision();
     }
   }
 
   public setPlayerId(playerId: string | null): void {
     this.playerId = playerId;
-    // Update player index for GPU vision
+
     if (playerId && this.visionSystem) {
-      // Get the player index from vision system
-      // The index is determined by registration order
       const knownPlayers = Array.from((this.visionSystem as any).knownPlayers || []);
       this.playerIndex = knownPlayers.indexOf(playerId);
       if (this.playerIndex === -1) this.playerIndex = 0;
+
+      // If GPU vision is enabled, get the storage texture for this player
+      if (this.useGPUVision && this.gpuVisionCompute) {
+        this.bindGPUTextureForPlayer();
+      }
     }
   }
 
   /**
-   * Enable GPU vision mode (called when GPU compute is available)
+   * Enable GPU vision mode
+   */
+  private enableGPUVision(): void {
+    if (!this.gpuVisionCompute) return;
+
+    this.useGPUVision = true;
+    this.uUseGPUTexture.value = 1;
+
+    debugShaders.log('[FogOfWar] GPU vision enabled');
+  }
+
+  /**
+   * Bind the StorageTexture for the current player
+   */
+  private bindGPUTextureForPlayer(): void {
+    if (!this.gpuVisionCompute) return;
+
+    const storageTex = this.gpuVisionCompute.getVisionTexture(this.playerIndex);
+    if (storageTex && storageTex !== this.gpuStorageTexture) {
+      this.gpuStorageTexture = storageTex;
+      // Rebuild material with the bound GPU texture
+      this.rebuildMaterialWithGPUTexture();
+    }
+  }
+
+  /**
+   * Set GPU vision compute reference directly
    */
   public setGPUVisionCompute(gpuCompute: VisionCompute | null): void {
     this.gpuVisionCompute = gpuCompute;
-    this.useGPUVision = gpuCompute !== null && gpuCompute.isAvailable();
+
+    if (gpuCompute && gpuCompute.isAvailable() && gpuCompute.isUsingGPU()) {
+      this.enableGPUVision();
+      if (this.playerId) {
+        this.bindGPUTextureForPlayer();
+      }
+    } else {
+      this.useGPUVision = false;
+      this.uUseGPUTexture.value = 0;
+    }
   }
 
   public update(): void {
     if (!this.visionSystem) return;
 
-    // In spectator mode, hide the fog mesh entirely (see everything)
+    // In spectator mode, hide fog entirely
     if (isSpectatorMode() || !this.playerId) {
       this.mesh.visible = false;
       return;
     }
     this.mesh.visible = true;
 
-    // Use GPU vision path if available
+    // GPU path: nothing to do - shader samples StorageTexture directly
+    // VisionCompute updates the StorageTexture via compute shader
     if (this.useGPUVision && this.gpuVisionCompute) {
-      this.updateFromGPUVision();
+      // No CPU work needed - GPU handles everything
       return;
     }
 
-    // CPU/Worker path with throttling
+    // CPU fallback path with throttling
     const now = performance.now();
     if (now - this.lastUpdateTime < this.updateInterval) {
       return;
@@ -210,95 +345,45 @@ export class TSLFogOfWar {
     const visionGrid = this.visionSystem.getVisionGridForPlayer(this.playerId);
     if (!visionGrid) return;
 
-    // Update texture data based on vision
-    // Note: Flip Y when writing to texture because after plane rotation (-PI/2 around X),
-    // texture V=0 corresponds to high world Z, but visionGrid[0] is low world Z
+    // Update CPU texture from vision grid
     for (let y = 0; y < this.gridHeight; y++) {
       for (let x = 0; x < this.gridWidth; x++) {
         const textureY = this.gridHeight - 1 - y;
         const i = textureY * this.gridWidth + x;
         const state = visionGrid[y]?.[x] ?? 'unexplored';
 
-        // Alpha determines fog level: 255 = full fog, 0 = no fog
         let alpha: number;
         switch (state) {
           case 'visible':
-            alpha = 0; // No fog
+            alpha = 0;
             break;
           case 'explored':
-            alpha = 128; // Partial fog
+            alpha = 128;
             break;
           case 'unexplored':
           default:
-            alpha = 255; // Full fog
+            alpha = 255;
             break;
         }
 
-        this.textureData[i * 4 + 3] = alpha;
+        this.cpuTextureData[i * 4 + 3] = alpha;
       }
     }
 
-    this.fogTexture.needsUpdate = true;
+    this.cpuFogTexture.needsUpdate = true;
   }
 
   /**
-   * Update fog texture from GPU vision compute
-   * GPU path can update more frequently since computation is fast
+   * Check if GPU vision is active
    */
-  private updateFromGPUVision(): void {
-    if (!this.gpuVisionCompute || !this.playerId) return;
-
-    // Check if vision has changed
-    const currentVersion = this.gpuVisionCompute.getVisionVersion();
-    if (currentVersion === this.lastGPUVisionVersion) {
-      return; // No change, skip update
-    }
-    this.lastGPUVisionVersion = currentVersion;
-
-    // Throttle even GPU path to avoid excessive texture uploads
-    const now = performance.now();
-    if (now - this.lastUpdateTime < this.gpuUpdateInterval) {
-      return;
-    }
-    this.lastUpdateTime = now;
-
-    // Get GPU vision texture and copy to our fog texture
-    const gpuTex = this.gpuVisionCompute.getVisionTexture(this.playerIndex);
-    if (!gpuTex) return;
-
-    const gpuData = gpuTex.image.data as Uint8Array;
-
-    // Copy GPU vision data to fog texture with Y flip
-    // GPU texture format: RGBA where R=explored, G=visible
-    for (let y = 0; y < this.gridHeight; y++) {
-      for (let x = 0; x < this.gridWidth; x++) {
-        const textureY = this.gridHeight - 1 - y;
-        const fogIdx = textureY * this.gridWidth + x;
-        const gpuIdx = (y * this.gridWidth + x) * 4;
-
-        const explored = gpuData[gpuIdx + 0];
-        const visible = gpuData[gpuIdx + 1];
-
-        // Alpha determines fog level: 255 = full fog, 0 = no fog
-        let alpha: number;
-        if (visible > 0) {
-          alpha = 0; // Visible - no fog
-        } else if (explored > 0) {
-          alpha = 128; // Explored - partial fog
-        } else {
-          alpha = 255; // Unexplored - full fog
-        }
-
-        this.textureData[fogIdx * 4 + 3] = alpha;
-      }
-    }
-
-    this.fogTexture.needsUpdate = true;
+  public isUsingGPUVision(): boolean {
+    return this.useGPUVision;
   }
 
   public dispose(): void {
     this.geometry.dispose();
     this.material.dispose();
-    this.fogTexture.dispose();
+    this.cpuFogTexture.dispose();
+    // Note: gpuStorageTexture is owned by VisionCompute, not disposed here
   }
 }

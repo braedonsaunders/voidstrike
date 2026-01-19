@@ -150,6 +150,7 @@ declare module 'three/tsl' {
   export function atomicAnd(storage: ShaderNodeObject<any>, value: ShaderNodeObject<any>): ShaderNodeObject<any>;
   export function atomicOr(storage: ShaderNodeObject<any>, value: ShaderNodeObject<any>): ShaderNodeObject<any>;
   export function atomicXor(storage: ShaderNodeObject<any>, value: ShaderNodeObject<any>): ShaderNodeObject<any>;
+  export function atomicStore(storage: ShaderNodeObject<any>, value: ShaderNodeObject<any>): void;
 
   // Texture operations
   export function texture(tex: any, uv?: any): ShaderNodeObject<any>;
@@ -586,13 +587,20 @@ declare module 'three' {
     isStorageTexture: boolean;
   }
 
-  // Mesh extensions for indirect drawing
-  export interface Mesh {
+  // BufferGeometry extensions for indirect drawing (r174+)
+  export interface BufferGeometry {
     /**
-     * When set, enables indirect drawing for this mesh.
-     * The attribute contains the draw arguments (indexCount, instanceCount, etc.)
+     * Set the indirect draw buffer for this geometry.
+     * The attribute contains draw arguments (indexCount, instanceCount, etc.)
+     * @param attribute IndirectStorageBufferAttribute with draw arguments
      */
-    drawIndirect?: InstancedBufferAttribute | null;
+    setIndirect(attribute: InstancedBufferAttribute | null): void;
+
+    /**
+     * Byte offset into the indirect buffer for this geometry's draw call.
+     * Used when multiple geometries share the same indirect args buffer.
+     */
+    drawIndirectOffset?: number;
   }
 }
 
