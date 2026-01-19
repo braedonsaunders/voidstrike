@@ -82,7 +82,18 @@ voidstrike/
 │   │   │   ├── GameStateSystem.ts       # Victory/defeat conditions
 │   │   │   └── SaveLoadSystem.ts        # Game save/load functionality
 │   │   ├── ai/
-│   │   │   └── BehaviorTree.ts          # Behavior tree for unit AI micro
+│   │   │   ├── BehaviorTree.ts          # Behavior tree for unit AI micro
+│   │   │   ├── UnitBehaviors.ts         # Pre-built behavior trees for units
+│   │   │   ├── AIWorkerManager.ts       # Web Worker for AI decisions
+│   │   │   ├── InfluenceMap.ts          # Spatial threat tracking & safe pathfinding
+│   │   │   ├── PositionalAnalysis.ts    # Terrain analysis (chokes, ramps, defensible positions)
+│   │   │   ├── ScoutingMemory.ts        # Enemy intel with knowledge decay & inference
+│   │   │   ├── FormationControl.ts      # Army formations (concave, spread, box)
+│   │   │   ├── RetreatCoordination.ts   # Group retreat & re-engagement logic
+│   │   │   ├── AbilityAI.ts             # Intelligent ability usage decisions
+│   │   │   ├── WorkerDistribution.ts    # Multi-base worker saturation balancing
+│   │   │   ├── AdvancedAIController.ts  # Unified controller for all AI subsystems
+│   │   │   └── index.ts                 # AI module exports
 │   │   ├── components/
 │   │   │   ├── Transform.ts
 │   │   │   ├── Health.ts
