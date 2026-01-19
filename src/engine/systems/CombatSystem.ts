@@ -86,6 +86,15 @@ export class CombatSystem extends System {
   // Separate throttle tracking for immediate attack-range checks
   private lastImmediateSearchTick: Map<number, number> = new Map();
 
+  // PERF: Combat zone tracking - units with enemies nearby
+  // Units NOT in this set can skip target acquisition entirely when idle
+  private combatAwareUnits: Set<number> = new Set();
+  private combatZoneCheckTick: Map<number, number> = new Map();
+  private readonly COMBAT_ZONE_CHECK_INTERVAL = 15; // Re-check zone every 15 ticks (~750ms)
+
+  // PERF: Track player unit counts per grid cell for fast enemy detection
+  private lastEnemyCheckResult: Map<number, boolean> = new Map();
+
   constructor(game: Game) {
     super(game);
     this.setupEventListeners();
@@ -108,6 +117,10 @@ export class CombatSystem extends System {
     this.cachedTargets.delete(data.entityId);
     this.lastTargetSearchTick.delete(data.entityId);
     this.lastImmediateSearchTick.delete(data.entityId);
+    // PERF: Clean up combat zone tracking
+    this.combatAwareUnits.delete(data.entityId);
+    this.combatZoneCheckTick.delete(data.entityId);
+    this.lastEnemyCheckResult.delete(data.entityId);
   }
 
   private handleAttackCommand(command: {
@@ -240,6 +253,16 @@ export class CombatSystem extends System {
       );
 
       if (needsTarget) {
+        // PERF: Skip target acquisition entirely for idle units not in combat zones
+        // This avoids expensive spatial queries for units far from any enemies
+        if (unit.state === 'idle' && !unit.isHoldingPosition) {
+          const inCombatZone = this.checkCombatZone(attacker.id, transform, unit, currentTick);
+          if (!inCombatZone) {
+            // Not in combat zone - skip all target acquisition this tick
+            continue;
+          }
+        }
+
         let target: number | null = null;
 
         // For idle units, do a fast check for enemies within ATTACK range
@@ -412,6 +435,103 @@ export class CombatSystem extends System {
       if (health.current >= health.max && health.shield >= health.maxShield) continue;
       health.regenerate(deltaTime / 1000, gameTime);
     }
+  }
+
+  /**
+   * PERF: Check if unit is in a "combat zone" (has enemies within sight range)
+   * Uses heavy throttling since this is just to skip processing for truly isolated units.
+   * Returns cached result if available, only does actual check every COMBAT_ZONE_CHECK_INTERVAL ticks.
+   */
+  private checkCombatZone(
+    selfId: number,
+    selfTransform: Transform,
+    selfUnit: Unit,
+    currentTick: number
+  ): boolean {
+    // Check if we have a recent cached result
+    const lastCheck = this.combatZoneCheckTick.get(selfId) || 0;
+    if (currentTick - lastCheck < this.COMBAT_ZONE_CHECK_INTERVAL) {
+      // Use cached result
+      return this.combatAwareUnits.has(selfId);
+    }
+
+    // Time to do an actual check
+    this.combatZoneCheckTick.set(selfId, currentTick);
+
+    // Get self's player ID
+    const selfEntity = this.world.getEntity(selfId);
+    const selfSelectable = selfEntity?.get<Selectable>('Selectable');
+    if (!selfSelectable) {
+      this.combatAwareUnits.delete(selfId);
+      return false;
+    }
+
+    // Quick scan for ANY enemy unit within sight range
+    // We don't need the best target, just need to know if enemies exist nearby
+    const nearbyUnitIds = this.world.unitGrid.queryRadius(
+      selfTransform.x,
+      selfTransform.y,
+      selfUnit.sightRange
+    );
+
+    let hasEnemyNearby = false;
+
+    for (const entityId of nearbyUnitIds) {
+      if (entityId === selfId) continue;
+
+      const entity = this.world.getEntity(entityId);
+      if (!entity) continue;
+
+      const selectable = entity.get<Selectable>('Selectable');
+      const health = entity.get<Health>('Health');
+      const targetUnit = entity.get<Unit>('Unit');
+
+      if (!selectable || !health) continue;
+      if (selectable.playerId === selfSelectable.playerId) continue;
+      if (health.isDead()) continue;
+
+      // Check if we can even attack this unit type
+      const targetIsFlying = targetUnit?.isFlying ?? false;
+      if (!selfUnit.canAttackTarget(targetIsFlying)) continue;
+
+      // Found an enemy we could potentially attack
+      hasEnemyNearby = true;
+      break;
+    }
+
+    // Also check for enemy buildings if we can attack ground
+    if (!hasEnemyNearby && selfUnit.canAttackGround) {
+      const nearbyBuildingIds = this.world.buildingGrid.queryRadius(
+        selfTransform.x,
+        selfTransform.y,
+        selfUnit.sightRange
+      );
+
+      for (const entityId of nearbyBuildingIds) {
+        const entity = this.world.getEntity(entityId);
+        if (!entity) continue;
+
+        const selectable = entity.get<Selectable>('Selectable');
+        const health = entity.get<Health>('Health');
+
+        if (!selectable || !health) continue;
+        if (selectable.playerId === selfSelectable.playerId) continue;
+        if (health.isDead()) continue;
+
+        // Found an enemy building
+        hasEnemyNearby = true;
+        break;
+      }
+    }
+
+    // Update cached state
+    if (hasEnemyNearby) {
+      this.combatAwareUnits.add(selfId);
+    } else {
+      this.combatAwareUnits.delete(selfId);
+    }
+
+    return hasEnemyNearby;
   }
 
   /**

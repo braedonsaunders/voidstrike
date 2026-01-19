@@ -172,6 +172,17 @@ export class MovementSystem extends System {
   // Threshold: only use WASM when we have enough units to benefit
   private static readonly WASM_UNIT_THRESHOLD = 20;
 
+  // PERF: Truly idle tracking - units that have been stationary for many ticks
+  // These units get processed at much lower frequency
+  private trulyIdleTicks: Map<number, number> = new Map(); // entityId -> ticks since last movement
+  private lastIdlePosition: Map<number, { x: number; y: number }> = new Map();
+  private readonly TRULY_IDLE_THRESHOLD = 20; // Ticks of no movement to be "truly idle"
+  private readonly TRULY_IDLE_PROCESS_INTERVAL = 10; // Process truly idle units every N ticks
+
+  // PERF: Dirty flag for separation - only recalculate when neighbors changed
+  private unitMovedThisTick: Set<number> = new Set();
+  private separationDirty: Map<number, boolean> = new Map();
+
   constructor(game: Game) {
     super(game);
     this.recast = getRecastNavigation();
@@ -221,17 +232,26 @@ export class MovementSystem extends System {
 
     // Clean up tracking data when units die to prevent memory leaks
     this.game.eventBus.on('unit:died', (data: { entityId: number }) => {
-      this.lastPathRequestTime.delete(data.entityId);
-      this.separationCache.delete(data.entityId);
-      this.velocityHistory.delete(data.entityId);
-      this.stuckState.delete(data.entityId);
+      this.cleanupUnitTracking(data.entityId);
     });
     this.game.eventBus.on('unit:destroyed', (data: { entityId: number }) => {
-      this.lastPathRequestTime.delete(data.entityId);
-      this.separationCache.delete(data.entityId);
-      this.velocityHistory.delete(data.entityId);
-      this.stuckState.delete(data.entityId);
+      this.cleanupUnitTracking(data.entityId);
     });
+  }
+
+  /**
+   * Clean up all tracking data for a unit
+   */
+  private cleanupUnitTracking(entityId: number): void {
+    this.lastPathRequestTime.delete(entityId);
+    this.separationCache.delete(entityId);
+    this.velocityHistory.delete(entityId);
+    this.stuckState.delete(entityId);
+    // PERF: Clean up truly idle tracking
+    this.trulyIdleTicks.delete(entityId);
+    this.lastIdlePosition.delete(entityId);
+    this.unitMovedThisTick.delete(entityId);
+    this.separationDirty.delete(entityId);
   }
 
   // ==================== MAGIC BOX DETECTION ====================
@@ -1533,6 +1553,9 @@ export class MovementSystem extends System {
     // PERF: Invalidate building query cache at start of frame
     cachedBuildingQuery.entityId = -1;
 
+    // PERF: Clear per-frame tracking
+    this.unitMovedThisTick.clear();
+
     // Update spatial grid
     for (const entity of entities) {
       const transform = entity.get<Transform>('Transform');
@@ -1605,6 +1628,32 @@ export class MovementSystem extends System {
         // IDLE REPULSION: Apply separation forces to idle units so they spread out
         // SC2-style: Only push units that are SIGNIFICANTLY overlapping to prevent jiggling
         if (unit.state === 'idle' && !unit.isFlying) {
+          // PERF: Track truly idle status - units that haven't moved for many ticks
+          const lastPos = this.lastIdlePosition.get(entity.id);
+          const currentIdleTicks = this.trulyIdleTicks.get(entity.id) || 0;
+
+          if (lastPos) {
+            const movedDist = Math.abs(transform.x - lastPos.x) + Math.abs(transform.y - lastPos.y);
+            if (movedDist < 0.01) {
+              // Hasn't moved - increment idle ticks
+              this.trulyIdleTicks.set(entity.id, currentIdleTicks + 1);
+            } else {
+              // Moved - reset idle tracking
+              this.trulyIdleTicks.set(entity.id, 0);
+              this.unitMovedThisTick.add(entity.id);
+            }
+          }
+          // Update last position
+          this.lastIdlePosition.set(entity.id, { x: transform.x, y: transform.y });
+
+          // PERF: Skip separation processing for truly idle units except at reduced frequency
+          const isTrulyIdle = currentIdleTicks >= this.TRULY_IDLE_THRESHOLD;
+          if (isTrulyIdle && (this.currentTick % this.TRULY_IDLE_PROCESS_INTERVAL !== 0)) {
+            // Truly idle and not on process tick - skip entirely
+            velocity.zero();
+            continue;
+          }
+
           this.calculateSeparationForce(entity.id, transform, unit, tempSeparation, Infinity);
           const sepMagSq = tempSeparation.x * tempSeparation.x + tempSeparation.y * tempSeparation.y;
 
@@ -1639,6 +1688,11 @@ export class MovementSystem extends System {
             // Snap position for determinism
             transform.x = snapValue(transform.x, QUANT_POSITION);
             transform.y = snapValue(transform.y, QUANT_POSITION);
+
+            // Mark as moved for neighbor dirty tracking
+            this.unitMovedThisTick.add(entity.id);
+            // Reset truly idle counter since we moved
+            this.trulyIdleTicks.set(entity.id, 0);
 
             // Resolve any building collisions from the push
             this.resolveHardBuildingCollision(entity.id, transform, unit);
