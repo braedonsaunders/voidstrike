@@ -889,6 +889,16 @@
 - [x] Victory/defeat conditions
 - [x] Player statistics (units, resources, APM)
 
+### Advanced AI Systems (January 2026) ✓
+- [x] **Influence Maps** - Spatial threat tracking with decay propagation, safe path finding, expansion analysis
+- [x] **Positional Analysis** - Terrain evaluation for choke points, defensible positions, ramps, attack paths
+- [x] **Scouting Memory** - Enemy intel tracking with knowledge decay, tech inference, strategy detection
+- [x] **Formation Control** - Concave formations, ranged/melee positioning, spread for splash avoidance
+- [x] **Retreat Coordination** - Group retreats to rally points, re-engagement logic, covering fire
+- [x] **Ability AI** - Intelligent ability usage (stim, siege, EMP on energy units, AOE targeting)
+- [x] **Worker Distribution** - Auto-transfer oversaturated workers, multi-base saturation balancing
+- [x] **AdvancedAIController** - Unified controller integrating all subsystems
+
 ---
 
 ## Phase 4: Remaining Dominion Polish (IN PROGRESS)
