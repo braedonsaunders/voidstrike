@@ -41,6 +41,7 @@ const SEPARATION_RADIUS = 1.0;
 const SEPARATION_STRENGTH_MOVING = 1.2;      // Weak while moving - allow clumping
 const SEPARATION_STRENGTH_IDLE = 1.5;        // Moderate when idle (reduced from 2.5) - prevents jiggling
 const SEPARATION_STRENGTH_ARRIVING = 2.0;    // Strong at arrival (reduced from 3.0) - natural spreading
+const SEPARATION_STRENGTH_COMBAT = 2.5;      // Strong while attacking in range - SC2-style unclumping
 const MAX_AVOIDANCE_FORCE = 1.5;
 const MAX_AVOIDANCE_FORCE_SQ = MAX_AVOIDANCE_FORCE * MAX_AVOIDANCE_FORCE;
 
@@ -844,7 +845,8 @@ export class MovementSystem extends System {
 
   /**
    * Get state-dependent separation strength.
-   * RTS style: weak while moving (allow clumping), strong when idle (spread out).
+   * RTS style: weak while moving (allow clumping), strong when idle/attacking (spread out).
+   * SC2-style: attacking units actively spread apart while firing.
    */
   private getSeparationStrength(unit: Unit, distanceToTarget: number): number {
     // Workers gathering/building have no separation
@@ -857,6 +859,11 @@ export class MovementSystem extends System {
       return SEPARATION_STRENGTH_ARRIVING;
     }
 
+    // Attacking: strong separation for SC2-style unclumping while fighting
+    if (unit.state === 'attacking') {
+      return SEPARATION_STRENGTH_COMBAT;
+    }
+
     // Moving: weak separation, allow clumping for faster group movement
     if (
       unit.state === 'moving' ||
@@ -866,7 +873,7 @@ export class MovementSystem extends System {
       return SEPARATION_STRENGTH_MOVING;
     }
 
-    // Idle/attacking: strong separation, spread out
+    // Idle: moderate separation, spread out
     return SEPARATION_STRENGTH_IDLE;
   }
 
@@ -2028,17 +2035,43 @@ export class MovementSystem extends System {
                 this.requestPathWithCooldown(entity.id, attackTargetX, attackTargetY);
               }
             } else {
-              // Note: Y is negated for Three.js coordinate system
+              // In range - SC2-style: apply separation forces while attacking
+              // Units spread apart while firing instead of stacking on top of each other
+
+              // Face the target
               transform.rotation = Math.atan2(
                 -(targetTransform.y - transform.y),
                 targetTransform.x - transform.x
               );
-              // Use unit's deceleration rate for stopping when in attack range
-              unit.currentSpeed = Math.max(
-                0,
-                unit.currentSpeed - unit.deceleration * dt
-              );
-              velocity.zero();
+
+              // Calculate separation force for combat spreading
+              this.calculateSeparationForce(entity.id, transform, unit, tempSeparation, 0);
+
+              // Apply separation as velocity (units slide apart while attacking)
+              // Use reduced speed so units don't run away from their target
+              const combatMoveSpeed = unit.maxSpeed * 0.4;
+              const sepMag = Math.sqrt(tempSeparation.x * tempSeparation.x + tempSeparation.y * tempSeparation.y);
+
+              if (sepMag > 0.1) {
+                // Normalize and scale to combat movement speed
+                velocity.x = (tempSeparation.x / sepMag) * combatMoveSpeed;
+                velocity.y = (tempSeparation.y / sepMag) * combatMoveSpeed;
+
+                // Apply movement
+                transform.translate(velocity.x * dt, velocity.y * dt);
+                transform.x = snapValue(transform.x, QUANT_POSITION);
+                transform.y = snapValue(transform.y, QUANT_POSITION);
+
+                // Resolve any building collisions from the movement
+                if (!unit.isFlying) {
+                  this.resolveHardBuildingCollision(entity.id, transform, unit);
+                }
+              } else {
+                velocity.zero();
+              }
+
+              // Decelerate main speed (not used for combat spreading, but keeps state consistent)
+              unit.currentSpeed = Math.max(0, unit.currentSpeed - unit.deceleration * dt);
               continue;
             }
           }
