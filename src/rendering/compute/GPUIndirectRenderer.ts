@@ -18,18 +18,10 @@
 
 import * as THREE from 'three';
 import { WebGPURenderer } from 'three/webgpu';
-import {
-  storage,
-  Fn,
-  instanceIndex,
-  positionLocal,
-  normalLocal,
-  vec4,
-} from 'three/tsl';
+import { storage } from 'three/tsl';
 
 import {
   StorageInstancedBufferAttribute,
-  StorageBufferAttribute,
   IndirectStorageBufferAttribute,
   MeshStandardNodeMaterial,
 } from 'three/webgpu';
@@ -56,15 +48,16 @@ export interface UnitTypeMeshConfig {
 
 /**
  * GPU indirect mesh wrapper
+ * Uses InstancedMesh for efficient GPU-driven instancing
  */
 interface IndirectMesh {
-  mesh: THREE.Mesh;
+  mesh: THREE.InstancedMesh;
   unitTypeIndex: number;
   lodLevel: number;
   geometry: THREE.BufferGeometry;
   material: THREE.Material;
   indexCount: number;
-  indirectOffset: number; // Byte offset into indirect args buffer
+  indirectOffset: number; // uint32 offset into indirect args buffer
 }
 
 /**
@@ -77,11 +70,7 @@ export class GPUIndirectRenderer {
   private renderer: WebGPURenderer | null = null;
   private scene: THREE.Scene;
 
-  // Storage buffers for vertex shader access - shared with CullingCompute
-  private transformStorage: ReturnType<typeof storage> | null = null;
-  private visibleIndicesStorage: ReturnType<typeof storage> | null = null;
-
-  // Indirect meshes per (unitType, LOD)
+  // Indirect meshes per (unitType, LOD) - uses InstancedMesh for each
   private indirectMeshes: Map<string, IndirectMesh> = new Map();
 
   // Shared indirect args buffer - used by all meshes with different offsets
@@ -130,53 +119,13 @@ export class GPUIndirectRenderer {
     // Get data arrays from GPU buffer
     this.transformData = gpuUnitBuffer.getTransformData();
 
-    // Get storage buffers from CullingCompute for vertex shader access
-    // CullingCompute owns the buffers - we just reference them for vertex shader reads
-    this.transformStorage = cullingCompute.getTransformStorage();
-    this.visibleIndicesStorage = cullingCompute.getVisibleIndicesStorage();
-
-    // Create shared indirect args attribute
+    // Create shared indirect args attribute for all meshes
     this.indirectArgsAttribute = new IndirectStorageBufferAttribute(this.indirectArgsData, 5);
 
     this.initialized = true;
-    debugShaders.log('[GPUIndirectRenderer] Initialized with GPU-driven vertex transforms');
-    debugShaders.log(`  - Transform storage: ${this.transformStorage ? 'ready' : 'null'}`);
-    debugShaders.log(`  - Visible indices storage: ${this.visibleIndicesStorage ? 'ready' : 'null'}`);
-
-    // Rebuild any materials that were created before storage buffers were available
-    this.rebuildMaterialsWithStorageBuffers();
-  }
-
-  /**
-   * Rebuild all materials to use storage buffer transforms
-   * Called after initialize when storage buffers become available
-   */
-  private rebuildMaterialsWithStorageBuffers(): void {
-    if (!this.transformStorage || !this.visibleIndicesStorage) {
-      debugShaders.warn('[GPUIndirectRenderer] Cannot rebuild materials: storage buffers not available');
-      return;
-    }
-
-    let rebuiltCount = 0;
-    for (const [key, meshData] of this.indirectMeshes) {
-      // Get base material from registry
-      const unitTypeIndex = meshData.unitTypeIndex;
-      const baseMaterial = this.unitTypeMaterials.get(unitTypeIndex);
-
-      // Create new GPU-driven material
-      const newMaterial = this.createGPUDrivenMaterial(baseMaterial);
-
-      // Replace the material on the mesh
-      meshData.material.dispose();
-      meshData.material = newMaterial;
-      meshData.mesh.material = newMaterial;
-
-      rebuiltCount++;
-    }
-
-    if (rebuiltCount > 0) {
-      debugShaders.log(`[GPUIndirectRenderer] Rebuilt ${rebuiltCount} materials with storage buffer transforms`);
-    }
+    debugShaders.log('[GPUIndirectRenderer] Initialized with indirect draw calls');
+    debugShaders.log(`  - Max units: ${MAX_UNITS}`);
+    debugShaders.log(`  - Indirect entries: ${MAX_UNIT_TYPES * MAX_LOD_LEVELS * MAX_PLAYERS}`);
   }
 
   /**
@@ -205,6 +154,11 @@ export class GPUIndirectRenderer {
 
   /**
    * Create an indirect mesh for a unit type + LOD combination
+   *
+   * Uses InstancedMesh for efficient GPU-driven instancing:
+   * - InstancedMesh handles per-instance transforms via instanceMatrix
+   * - geometry.setIndirect() enables GPU-controlled instance counts
+   * - CullingCompute sets instance counts in indirect args buffer
    */
   private createIndirectMesh(
     unitTypeIndex: number,
@@ -221,34 +175,40 @@ export class GPUIndirectRenderer {
     // Clone geometry to avoid modifying the original
     const meshGeometry = geometry.clone();
 
-    // Create GPU-driven material
-    const material = this.createGPUDrivenMaterial(baseMaterial);
+    // Create material for instanced rendering
+    const material = this.createInstancedMaterial(baseMaterial);
 
-    // Create mesh
-    const mesh = new THREE.Mesh(meshGeometry, material);
+    // Create InstancedMesh with MAX_UNITS capacity
+    // The actual rendered count is controlled by indirect args
+    const mesh = new THREE.InstancedMesh(meshGeometry, material, MAX_UNITS);
     mesh.frustumCulled = false; // GPU handles culling
     mesh.castShadow = true;
     mesh.receiveShadow = true;
     mesh.renderOrder = 50;
 
+    // Initialize all instance matrices to identity
+    const identity = new THREE.Matrix4();
+    for (let i = 0; i < MAX_UNITS; i++) {
+      mesh.setMatrixAt(i, identity);
+    }
+    mesh.instanceMatrix.needsUpdate = true;
+
     // Calculate indirect args offset for this unit type + LOD
-    // We use player 0 as the primary offset - multi-player support would need per-player meshes
     const indirectOffset = this.getIndirectOffset(unitTypeIndex, lodLevel, 0);
     const indexCount = geometry.index ? geometry.index.count : geometry.attributes.position.count;
 
     // Initialize indirect args for this entry
-    this.indirectArgsData[indirectOffset + 0] = indexCount;  // indexCount/vertexCount
-    this.indirectArgsData[indirectOffset + 1] = 0;           // instanceCount (set by compute)
-    this.indirectArgsData[indirectOffset + 2] = 0;           // firstIndex/firstVertex
-    this.indirectArgsData[indirectOffset + 3] = 0;           // baseVertex (indexed) or firstInstance (non-indexed)
-    this.indirectArgsData[indirectOffset + 4] = 0;           // firstInstance (indexed only)
+    // DrawIndexedIndirect: [indexCount, instanceCount, firstIndex, baseVertex, firstInstance]
+    this.indirectArgsData[indirectOffset + 0] = indexCount;
+    this.indirectArgsData[indirectOffset + 1] = 0; // instanceCount (set by culling compute)
+    this.indirectArgsData[indirectOffset + 2] = 0; // firstIndex
+    this.indirectArgsData[indirectOffset + 3] = 0; // baseVertex
+    this.indirectArgsData[indirectOffset + 4] = 0; // firstInstance
 
-    // Enable indirect drawing using r182+ API: geometry.setIndirect()
-    // The offset is in BYTES, and each entry is 5 uint32 = 20 bytes
+    // Enable indirect drawing using r182+ API
     if (this.indirectArgsAttribute) {
       meshGeometry.setIndirect(this.indirectArgsAttribute);
-      // Set the byte offset for this specific mesh's indirect args
-      meshGeometry.drawIndirectOffset = indirectOffset * 4; // Convert uint32 offset to bytes
+      meshGeometry.drawIndirectOffset = indirectOffset * 4; // Convert to bytes
     }
 
     this.scene.add(mesh);
@@ -263,21 +223,16 @@ export class GPUIndirectRenderer {
       indirectOffset,
     });
 
-    debugShaders.log(`[GPUIndirectRenderer] Created indirect mesh: type=${unitTypeIndex} LOD=${lodLevel} offset=${indirectOffset}`);
+    debugShaders.log(`[GPUIndirectRenderer] Created InstancedMesh: type=${unitTypeIndex} LOD=${lodLevel} capacity=${MAX_UNITS}`);
   }
 
   /**
-   * Create material for GPU-driven rendering
+   * Create material for instanced rendering
    *
-   * Uses TSL to read instance transforms from storage buffers:
-   * 1. visibleIndicesStorage.element(instanceIndex) -> gets actual unit index
-   * 2. transformStorage.element(unitIndex) -> gets the 4x4 transform matrix
-   * 3. Transform positionLocal and normalLocal using the matrix
-   *
-   * This enables fully GPU-driven instancing where the vertex shader reads
-   * all instance data from storage buffers populated by compute shaders.
+   * Uses MeshStandardNodeMaterial which is compatible with WebGPU instancing.
+   * InstancedMesh handles instance transforms via the built-in instanceMatrix attribute.
    */
-  private createGPUDrivenMaterial(baseMaterial?: THREE.Material): THREE.Material {
+  private createInstancedMaterial(baseMaterial?: THREE.Material): THREE.Material {
     const material = new MeshStandardNodeMaterial();
 
     // Copy properties from base material if provided
@@ -293,50 +248,10 @@ export class GPUIndirectRenderer {
       material.roughness = 0.8;
     }
 
-    // If we have storage buffers from CullingCompute, create GPU-driven transform nodes
-    if (this.transformStorage && this.visibleIndicesStorage) {
-      const transforms = this.transformStorage;
-      const visibleIndices = this.visibleIndicesStorage;
-
-      // Create custom position node that reads transforms from storage buffer
-      // instanceIndex in vertex shader context = which instance we're rendering (0 to instanceCount-1)
-      // visibleIndices[instanceIndex] = actual unit index in the transform buffer
-      const positionNode = Fn(() => {
-        // Get the actual unit index from the visible indices buffer
-        const unitIndex = visibleIndices.element(instanceIndex).toInt();
-
-        // Get the transform matrix for this unit
-        const transform = transforms.element(unitIndex);
-
-        // Transform the local position by the instance transform
-        // This applies translation, rotation, and scale
-        const worldPosition = transform.mul(vec4(positionLocal, 1.0));
-
-        return worldPosition.xyz;
-      })();
-
-      // Create custom normal node that transforms normals by the instance matrix
-      // For normals, we multiply by the upper-left 3x3 (rotation/scale) and ignore translation
-      const normalNode = Fn(() => {
-        const unitIndex = visibleIndices.element(instanceIndex).toInt();
-        const transform = transforms.element(unitIndex);
-
-        // Transform normal: use mat4 * vec4(normal, 0) to apply rotation without translation
-        // The w=0 ignores the translation component
-        const worldNormal = transform.mul(vec4(normalLocal, 0.0));
-
-        // Normalize to handle non-uniform scaling
-        return worldNormal.xyz.normalize();
-      })();
-
-      material.positionNode = positionNode;
-      material.normalNode = normalNode;
-
-      debugShaders.log('[GPUIndirectRenderer] Created GPU-driven material with storage buffer transforms');
-    } else {
-      // Fallback: standard Three.js instancing (less efficient, uses InstancedMesh pattern)
-      debugShaders.log('[GPUIndirectRenderer] Using fallback material (no storage buffers available)');
-    }
+    // MeshStandardNodeMaterial + InstancedMesh automatically handles:
+    // - instanceMatrix attribute for per-instance transforms
+    // - instanceIndex for accessing instance data
+    // No custom positionNode needed - Three.js handles instancing
 
     return material;
   }
@@ -408,10 +323,35 @@ export class GPUIndirectRenderer {
   }
 
   /**
-   * Get transform storage for binding in vertex shader
+   * Update instance matrices for all meshes from the GPU unit buffer
+   * Call this each frame before rendering
    */
-  getTransformStorage(): ReturnType<typeof storage> | null {
-    return this.transformStorage;
+  updateInstanceMatrices(): void {
+    if (!this.gpuUnitBuffer) return;
+
+    const transformData = this.gpuUnitBuffer.getTransformData();
+    const tempMatrix = new THREE.Matrix4();
+
+    // Update each InstancedMesh with transforms from GPUUnitBuffer
+    for (const slot of this.gpuUnitBuffer.getAllocatedSlots()) {
+      const offset = slot.index * 16;
+
+      // Read transform from buffer (column-major)
+      tempMatrix.fromArray(transformData, offset);
+
+      // Update the instance matrix in the corresponding mesh
+      // For now, use a simple mapping (this could be optimized)
+      const key = `${slot.unitTypeIndex}_0`; // LOD 0 for simplicity
+      const meshData = this.indirectMeshes.get(key);
+      if (meshData) {
+        meshData.mesh.setMatrixAt(slot.index, tempMatrix);
+      }
+    }
+
+    // Mark all instance matrices as needing update
+    for (const [, data] of this.indirectMeshes) {
+      data.mesh.instanceMatrix.needsUpdate = true;
+    }
   }
 
   /**
@@ -465,7 +405,6 @@ export class GPUIndirectRenderer {
     this.unitTypeGeometries.clear();
     this.unitTypeMaterials.clear();
 
-    this.transformStorage = null;
     this.indirectArgsAttribute = null;
 
     this.renderer = null;
