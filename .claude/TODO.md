@@ -211,6 +211,53 @@
 - AO/SSR: 75% GPU cost reduction with temporal reprojection
 - Unit rendering: Near-zero CPU overhead with GPU-driven path
 
+### GPU Indirect Rendering Verification Checklist (January 2026)
+
+**How to Verify GPU Rendering is Active:**
+1. Open browser DevTools Console (F12)
+2. Look for initialization messages:
+   - `[WebGPUGameCanvas] ✓ GPU-driven unit rendering ENABLED`
+   - `[GPU Culling] ✓ INITIALIZED - GPU compute shaders active`
+   - `[GPU Indirect Renderer] ✓ INITIALIZED - indirect draw calls enabled`
+3. During gameplay, check periodic logs:
+   - `[GPU Rendering] ✓ ACTIVE - Units: X/Y managed/active, Culling: GPU (Xms)`
+4. Use debug commands in console:
+   - `VOIDSTRIKE.gpu.stats()` - Show current GPU rendering statistics
+   - `VOIDSTRIKE.gpu.isGPUActive()` - Check if GPU culling is active
+   - `VOIDSTRIKE.gpu.forceCPU(true)` - Force CPU fallback for testing
+   - `VOIDSTRIKE.gpu.forceCPU(false)` - Re-enable GPU culling
+
+**Cross-Vendor Testing Matrix:**
+
+| Browser | Platform | Backend | Test Status |
+|---------|----------|---------|-------------|
+| Chrome | Windows | D3D12 | [ ] |
+| Chrome | macOS | Metal | [ ] |
+| Chrome | Linux | Vulkan | [ ] |
+| Firefox | Windows | D3D12 | [ ] |
+| Safari | macOS | Metal | [ ] |
+| Edge | Windows | D3D12 | [ ] |
+
+**Per-Browser Test Cases:**
+- [ ] GPU culling activates (check console logs)
+- [ ] Visible count matches CPU baseline (compare with forceCPU toggle)
+- [ ] No visual artifacts (flickering, missing units, double-rendering)
+- [ ] Performance improvement visible in Performance Panel (GPU Culling: ON)
+
+**Edge Case Testing:**
+- [ ] 0 units on screen (all culled)
+- [ ] 1000+ units on screen (stress test)
+- [ ] Camera looking at ground (all units should cull)
+- [ ] Units spawning/dying rapidly (dynamic allocation/deallocation)
+- [ ] Camera rapid movement (frustum culling stability)
+- [ ] GPU culling toggle mid-game (graceful fallback)
+
+**Performance Metrics to Compare (GPU vs CPU):**
+- Frame time (should be lower with GPU culling)
+- Draw calls (should be similar or slightly lower)
+- GPU time (may increase slightly due to compute)
+- CPU time (should decrease - main benefit)
+
 ---
 
 ## Critical Performance Fixes (January 2026)

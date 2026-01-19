@@ -496,12 +496,30 @@ export function WebGPUGameCanvas() {
       // Enable GPU-driven rendering if WebGPU compute is available
       debugInitialization.log(`[WebGPUGameCanvas] GPU-driven rendering check: isWebGPU=${renderContext.isWebGPU}, supportsCompute=${renderContext.supportsCompute}`);
       if (renderContext.supportsCompute && renderContext.isWebGPU) {
+        console.log('[WebGPUGameCanvas] Enabling GPU-driven rendering...');
         unitRendererRef.current.enableGPUDrivenRendering();
         unitRendererRef.current.setRenderer(renderer as import('three/webgpu').WebGPURenderer);
         unitRendererRef.current.setCamera(camera.camera);
         debugInitialization.log('[WebGPUGameCanvas] GPU-driven unit rendering ENABLED');
+        console.log('[WebGPUGameCanvas] ✓ GPU-driven unit rendering ENABLED');
       } else {
         debugInitialization.log(`[WebGPUGameCanvas] GPU-driven rendering SKIPPED - using CPU path (isWebGPU=${renderContext.isWebGPU}, supportsCompute=${renderContext.supportsCompute})`);
+        console.log(`[WebGPUGameCanvas] GPU-driven rendering SKIPPED - using CPU path (WebGPU: ${renderContext.isWebGPU}, Compute: ${renderContext.supportsCompute})`);
+      }
+
+      // Expose debug interface for console access
+      // Usage: VOIDSTRIKE.gpu.stats() - Show GPU rendering stats
+      //        VOIDSTRIKE.gpu.forceCPU(true) - Force CPU fallback
+      //        VOIDSTRIKE.gpu.forceCPU(false) - Re-enable GPU culling
+      if (typeof window !== 'undefined') {
+        (window as any).VOIDSTRIKE = {
+          gpu: {
+            stats: () => unitRendererRef.current?.getGPURenderingStats(),
+            forceCPU: (enable: boolean) => unitRendererRef.current?.forceCPUCulling(enable),
+            isGPUActive: () => unitRendererRef.current?.isGPUCullingActive(),
+          },
+        };
+        console.log('[VOIDSTRIKE] Debug commands available: VOIDSTRIKE.gpu.stats(), VOIDSTRIKE.gpu.forceCPU(true/false)');
       }
 
       buildingRendererRef.current = new BuildingRenderer(
@@ -1080,6 +1098,9 @@ export function WebGPUGameCanvas() {
             renderHeight = displayHeight = Math.floor(size.y * pixelRatio);
           }
 
+          // Get GPU rendering stats from UnitRenderer
+          const gpuStats = unitRendererRef.current?.getGPURenderingStats();
+
           useUIStore.getState().updatePerformanceMetrics({
             cpuTime,
             gpuTime,
@@ -1090,6 +1111,9 @@ export function WebGPUGameCanvas() {
             renderHeight,
             displayWidth,
             displayHeight,
+            gpuCullingActive: gpuStats?.isUsingGPUCulling ?? false,
+            gpuIndirectActive: gpuStats?.indirectReady ?? false,
+            gpuManagedUnits: gpuStats?.managedEntities ?? 0,
           });
 
           // Update PerformanceMonitor with per-frame render metrics

@@ -52,6 +52,10 @@ export interface PerformanceMetrics {
   renderHeight: number; // actual render height in pixels
   displayWidth: number; // display/canvas width in pixels
   displayHeight: number; // display/canvas height in pixels
+  // GPU indirect rendering status
+  gpuCullingActive: boolean;   // true if GPU culling is being used
+  gpuIndirectActive: boolean;  // true if GPU indirect draw is enabled
+  gpuManagedUnits: number;     // units tracked in GPU buffer
 }
 
 // Renderer API type (WebGPU or WebGL)
@@ -617,6 +621,9 @@ export const useUIStore = create<UIState>((set, get) => ({
     renderHeight: 0,
     displayWidth: 0,
     displayHeight: 0,
+    gpuCullingActive: false,
+    gpuIndirectActive: false,
+    gpuManagedUnits: 0,
   },
   debugSettings: savedDebugSettings ?? {
     debugEnabled: false,
