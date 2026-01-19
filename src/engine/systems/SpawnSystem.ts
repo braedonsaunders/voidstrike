@@ -64,7 +64,7 @@ export class SpawnSystem extends System {
     const visualHeight = isFlying ? AssetManager.getAirborneHeight(unitType) : 0;
 
     // Visual scale based on unit size (larger units get bigger hitboxes)
-    // This helps select larger units like battlecruisers more easily
+    // This helps select larger units like capital ships more easily
     const visualScale = definition.maxHealth > 300 ? 1.5 :
                         definition.maxHealth > 150 ? 1.2 : 1.0;
 

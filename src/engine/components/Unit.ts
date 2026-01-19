@@ -103,6 +103,9 @@ export interface UnitDefinition {
   // Projectile type for ranged attacks - references PROJECTILE_TYPES
   // If not set, defaults to 'bullet_rifle'
   projectileType?: string;
+  // Can attack while moving (like capital ships with tracking turrets)
+  // If not set, defaults to false
+  canAttackWhileMoving?: boolean;
 }
 
 // Command queue entry for shift-click queuing
@@ -185,6 +188,7 @@ export class Unit extends Component {
   // Targeting restrictions - which types of units this unit can attack
   public canAttackGround: boolean;
   public canAttackAir: boolean;
+  public canAttackWhileMoving: boolean;
 
   // Collision radius for avoidance
   public collisionRadius: number;
@@ -291,6 +295,7 @@ export class Unit extends Component {
     const hasDamage = definition.attackDamage > 0;
     this.canAttackGround = definition.canAttackGround ?? hasDamage;
     this.canAttackAir = definition.canAttackAir ?? false;
+    this.canAttackWhileMoving = definition.canAttackWhileMoving ?? false;
 
     // Collision radius based on unit type, scaled by collisionScale for large units
     const baseCollisionRadius = definition.isFlying ? 0.3 : 0.5;
@@ -358,6 +363,12 @@ export class Unit extends Component {
     this.state = 'attacking';
     this.targetX = null;
     this.targetY = null;
+  }
+
+  // Set attack target while continuing to move (for units with canAttackWhileMoving)
+  public setAttackTargetWhileMoving(entityId: number): void {
+    this.targetEntityId = entityId;
+    // Don't change state or clear move target - unit keeps moving
   }
 
   // Attack-move: move toward a position while engaging enemies along the way

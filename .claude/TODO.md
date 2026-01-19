@@ -366,7 +366,7 @@
 - [x] **Phaser overlay integration** - Fixed event mismatches, added production/research/building alerts
 - [x] **Combat feedback** - Player damage vignette, unit death effects, enhanced combat border
 - [x] **Resource warnings** - "NOT ENOUGH MINERALS/VESPENE", "SUPPLY BLOCKED" alerts
-- [x] **Ability splashes** - Major ability notifications (Stim Pack, Yamato Cannon)
+- [x] **Ability splashes** - Major ability notifications (Stim Pack, Power Cannon)
 - [x] **Rally point visibility** - Rally points now properly show when production buildings are selected
 - [x] **Rally point right-click** - Right-clicking with building selected sets rally point
 - [x] **Building placement elevation** - Placement grid follows terrain height on elevated areas
@@ -996,11 +996,11 @@
 ## Phase 5: Audio Content (TODO)
 
 ### Weapon Sounds
-- [ ] Gauss rifle (Marine)
-- [ ] Punisher grenades (Marauder)
-- [ ] Flamethrower (Hellion)
-- [ ] Arclite cannon (Siege Tank)
-- [ ] Laser batteries (Battlecruiser)
+- [ ] Gauss rifle (Trooper)
+- [ ] Punisher grenades (Breacher)
+- [ ] Flamethrower (Scorcher)
+- [ ] Arclite cannon (Devastator)
+- [ ] Laser batteries (Dreadnought)
 
 ### Voice Lines
 - [ ] Unit acknowledgments (5+ per unit)

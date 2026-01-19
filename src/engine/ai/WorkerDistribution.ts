@@ -6,8 +6,6 @@
  * - Balance mining between bases
  * - Gas saturation management
  * - Idle worker assignment
- *
- * Similar to StarCraft 2's automatic worker distribution.
  */
 
 import { Entity } from '../ecs/Entity';
