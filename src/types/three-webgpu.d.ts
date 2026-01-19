@@ -580,6 +580,7 @@ declare module 'three/webgpu' {
 
 declare module 'three' {
   // StorageTexture for compute shaders
+  // NOTE: Not available as named export. Access via: (THREE as any).StorageTexture
   export class StorageTexture extends Texture {
     constructor(width?: number, height?: number);
     isStorageTexture: boolean;

@@ -34,7 +34,9 @@ import {
 
 // WebGPU-specific imports (typed in src/types/three-webgpu.d.ts)
 import { instanceIndex, textureStore } from 'three/tsl';
-import { StorageTexture } from 'three';
+
+// StorageTexture is on THREE namespace, not a named export
+const StorageTexture = (THREE as any).StorageTexture;
 
 import { debugShaders } from '@/utils/debugLogger';
 
