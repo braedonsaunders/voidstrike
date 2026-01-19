@@ -18,10 +18,18 @@
 
 import * as THREE from 'three';
 import { WebGPURenderer } from 'three/webgpu';
-import { storage } from 'three/tsl';
+import {
+  storage,
+  Fn,
+  instanceIndex,
+  positionLocal,
+  normalLocal,
+  vec4,
+} from 'three/tsl';
 
 import {
   StorageInstancedBufferAttribute,
+  StorageBufferAttribute,
   IndirectStorageBufferAttribute,
   MeshStandardNodeMaterial,
 } from 'three/webgpu';
@@ -69,12 +77,9 @@ export class GPUIndirectRenderer {
   private renderer: WebGPURenderer | null = null;
   private scene: THREE.Scene;
 
-  // Storage buffers for vertex shader access
+  // Storage buffers for vertex shader access - shared with CullingCompute
   private transformStorage: ReturnType<typeof storage> | null = null;
-
-  // Note: visibleIndicesStorage from CullingCompute uses instancedArray() which is
-  // for compute shaders. For now, we skip custom position/normal nodes and let
-  // Three.js handle instancing normally. GPU culling still works via indirect args.
+  private visibleIndicesStorage: ReturnType<typeof storage> | null = null;
 
   // Indirect meshes per (unitType, LOD)
   private indirectMeshes: Map<string, IndirectMesh> = new Map();
@@ -125,20 +130,53 @@ export class GPUIndirectRenderer {
     // Get data arrays from GPU buffer
     this.transformData = gpuUnitBuffer.getTransformData();
 
-    // Create storage buffer for transforms (for future use when vertex shader
-    // storage buffer reading is fully working)
-    const transformStorageAttribute = new StorageInstancedBufferAttribute(this.transformData, 16);
-    this.transformStorage = storage(transformStorageAttribute, 'mat4', MAX_UNITS);
-
-    // Note: We don't use visibleIndicesStorage in vertex shaders currently because
-    // instancedArray() from CullingCompute is designed for compute shaders.
-    // The GPU culling still works by populating indirect args with instance counts.
+    // Get storage buffers from CullingCompute for vertex shader access
+    // CullingCompute owns the buffers - we just reference them for vertex shader reads
+    this.transformStorage = cullingCompute.getTransformStorage();
+    this.visibleIndicesStorage = cullingCompute.getVisibleIndicesStorage();
 
     // Create shared indirect args attribute
     this.indirectArgsAttribute = new IndirectStorageBufferAttribute(this.indirectArgsData, 5);
 
     this.initialized = true;
-    debugShaders.log('[GPUIndirectRenderer] Initialized with shared indirect buffer');
+    debugShaders.log('[GPUIndirectRenderer] Initialized with GPU-driven vertex transforms');
+    debugShaders.log(`  - Transform storage: ${this.transformStorage ? 'ready' : 'null'}`);
+    debugShaders.log(`  - Visible indices storage: ${this.visibleIndicesStorage ? 'ready' : 'null'}`);
+
+    // Rebuild any materials that were created before storage buffers were available
+    this.rebuildMaterialsWithStorageBuffers();
+  }
+
+  /**
+   * Rebuild all materials to use storage buffer transforms
+   * Called after initialize when storage buffers become available
+   */
+  private rebuildMaterialsWithStorageBuffers(): void {
+    if (!this.transformStorage || !this.visibleIndicesStorage) {
+      debugShaders.warn('[GPUIndirectRenderer] Cannot rebuild materials: storage buffers not available');
+      return;
+    }
+
+    let rebuiltCount = 0;
+    for (const [key, meshData] of this.indirectMeshes) {
+      // Get base material from registry
+      const unitTypeIndex = meshData.unitTypeIndex;
+      const baseMaterial = this.unitTypeMaterials.get(unitTypeIndex);
+
+      // Create new GPU-driven material
+      const newMaterial = this.createGPUDrivenMaterial(baseMaterial);
+
+      // Replace the material on the mesh
+      meshData.material.dispose();
+      meshData.material = newMaterial;
+      meshData.mesh.material = newMaterial;
+
+      rebuiltCount++;
+    }
+
+    if (rebuiltCount > 0) {
+      debugShaders.log(`[GPUIndirectRenderer] Rebuilt ${rebuiltCount} materials with storage buffer transforms`);
+    }
   }
 
   /**
@@ -231,12 +269,13 @@ export class GPUIndirectRenderer {
   /**
    * Create material for GPU-driven rendering
    *
-   * Note: Custom vertex transform reading from storage buffers is disabled for now
-   * because instancedArray() from CullingCompute doesn't work directly in vertex shaders.
-   * Three.js handles instancing normally; GPU culling works via indirect args instance counts.
+   * Uses TSL to read instance transforms from storage buffers:
+   * 1. visibleIndicesStorage.element(instanceIndex) -> gets actual unit index
+   * 2. transformStorage.element(unitIndex) -> gets the 4x4 transform matrix
+   * 3. Transform positionLocal and normalLocal using the matrix
    *
-   * TODO: Implement proper vertex shader storage buffer reading when TSL supports it
-   * or use a different buffer sharing pattern between compute and vertex shaders.
+   * This enables fully GPU-driven instancing where the vertex shader reads
+   * all instance data from storage buffers populated by compute shaders.
    */
   private createGPUDrivenMaterial(baseMaterial?: THREE.Material): THREE.Material {
     const material = new MeshStandardNodeMaterial();
@@ -254,8 +293,50 @@ export class GPUIndirectRenderer {
       material.roughness = 0.8;
     }
 
-    // Use standard Three.js instancing - no custom position/normal nodes
-    // GPU culling still works by setting instance counts in indirect args
+    // If we have storage buffers from CullingCompute, create GPU-driven transform nodes
+    if (this.transformStorage && this.visibleIndicesStorage) {
+      const transforms = this.transformStorage;
+      const visibleIndices = this.visibleIndicesStorage;
+
+      // Create custom position node that reads transforms from storage buffer
+      // instanceIndex in vertex shader context = which instance we're rendering (0 to instanceCount-1)
+      // visibleIndices[instanceIndex] = actual unit index in the transform buffer
+      const positionNode = Fn(() => {
+        // Get the actual unit index from the visible indices buffer
+        const unitIndex = visibleIndices.element(instanceIndex).toInt();
+
+        // Get the transform matrix for this unit
+        const transform = transforms.element(unitIndex);
+
+        // Transform the local position by the instance transform
+        // This applies translation, rotation, and scale
+        const worldPosition = transform.mul(vec4(positionLocal, 1.0));
+
+        return worldPosition.xyz;
+      })();
+
+      // Create custom normal node that transforms normals by the instance matrix
+      // For normals, we multiply by the upper-left 3x3 (rotation/scale) and ignore translation
+      const normalNode = Fn(() => {
+        const unitIndex = visibleIndices.element(instanceIndex).toInt();
+        const transform = transforms.element(unitIndex);
+
+        // Transform normal: use mat4 * vec4(normal, 0) to apply rotation without translation
+        // The w=0 ignores the translation component
+        const worldNormal = transform.mul(vec4(normalLocal, 0.0));
+
+        // Normalize to handle non-uniform scaling
+        return worldNormal.xyz.normalize();
+      })();
+
+      material.positionNode = positionNode;
+      material.normalNode = normalNode;
+
+      debugShaders.log('[GPUIndirectRenderer] Created GPU-driven material with storage buffer transforms');
+    } else {
+      // Fallback: standard Three.js instancing (less efficient, uses InstancedMesh pattern)
+      debugShaders.log('[GPUIndirectRenderer] Using fallback material (no storage buffers available)');
+    }
 
     return material;
   }

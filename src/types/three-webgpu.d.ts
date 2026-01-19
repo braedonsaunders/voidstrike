@@ -110,6 +110,9 @@ declare module 'three/tsl' {
     // Texture sampling (for texture nodes)
     sample(uv: any): ShaderNodeObject<any>;
 
+    // Vector operations (chainable)
+    normalize(): ShaderNodeObject<any>;
+
     // Control flow helpers
     Else(fn: () => void): void;
   };
