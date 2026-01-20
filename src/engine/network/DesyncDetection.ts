@@ -10,6 +10,7 @@ import { Game } from '../core/Game';
 import { ChecksumSystem, ChecksumData, GameStateSnapshot, DesyncReport } from '../systems/ChecksumSystem';
 import { quantize, QUANT_POSITION, QUANT_DAMAGE } from '@/utils/FixedPoint';
 import { debugNetworking } from '@/utils/debugLogger';
+import { distance } from '@/utils/math';
 
 // =============================================================================
 // Desync Detection Configuration
@@ -286,9 +287,7 @@ export class DesyncDetectionManager {
 
         // Check for entities with target positions very close to their current position
         if (entity.qTargetX !== undefined && entity.qTargetY !== undefined) {
-          const dx = Math.abs(entity.qTargetX - entity.qx);
-          const dy = Math.abs(entity.qTargetY - entity.qy);
-          const dist = Math.sqrt(dx * dx + dy * dy);
+          const dist = distance(entity.qx, entity.qy, entity.qTargetX, entity.qTargetY);
           if (dist < 100 && dist > 0) {
             // Very close target - rounding differences could cause different behavior
             possibleCauses.push(`Entity ${entity.id} has near-zero movement target`);

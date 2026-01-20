@@ -16,6 +16,7 @@ import { Health } from '../components/Health';
 import { Selectable } from '../components/Selectable';
 import { Building } from '../components/Building';
 import { Resource } from '../components/Resource';
+import { distance } from '@/utils/math';
 
 /**
  * Base saturation status
@@ -153,9 +154,7 @@ export class WorkerDistribution {
         const resourceTransform = resource.get<Transform>('Transform')!;
         const resourceComp = resource.get<Resource>('Resource')!;
 
-        const dx = resourceTransform.x - basePos.x;
-        const dy = resourceTransform.y - basePos.y;
-        const dist = Math.sqrt(dx * dx + dy * dy);
+        const dist = distance(basePos.x, basePos.y, resourceTransform.x, resourceTransform.y);
 
         if (dist <= this.config.baseRadius) {
           if (resourceComp.resourceType === 'minerals' && resourceComp.amount > 0) {
@@ -176,9 +175,7 @@ export class WorkerDistribution {
         if (!['extractor', 'refinery', 'assimilator'].includes(buildingComp.buildingId)) continue;
         if (!buildingComp.isComplete()) continue;
 
-        const dx = buildingTransform.x - basePos.x;
-        const dy = buildingTransform.y - basePos.y;
-        const dist = Math.sqrt(dx * dx + dy * dy);
+        const dist = distance(basePos.x, basePos.y, buildingTransform.x, buildingTransform.y);
 
         if (dist <= this.config.baseRadius) {
           gasExtractors++;
@@ -199,9 +196,7 @@ export class WorkerDistribution {
         const workerTransform = worker.get<Transform>('Transform')!;
         const workerUnit = worker.get<Unit>('Unit')!;
 
-        const dx = workerTransform.x - basePos.x;
-        const dy = workerTransform.y - basePos.y;
-        const dist = Math.sqrt(dx * dx + dy * dy);
+        const dist = distance(basePos.x, basePos.y, workerTransform.x, workerTransform.y);
 
         if (dist <= this.config.baseRadius) {
           // Check what the worker is gathering
@@ -299,9 +294,7 @@ export class WorkerDistribution {
       // Find workers to transfer (prioritize idle workers, then those furthest from minerals)
       const workersAtBase = workers.filter(w => {
         const transform = w.get<Transform>('Transform')!;
-        const dx = transform.x - fromBase.basePosition.x;
-        const dy = transform.y - fromBase.basePosition.y;
-        return Math.sqrt(dx * dx + dy * dy) <= this.config.baseRadius;
+        return distance(transform.x, transform.y, fromBase.basePosition.x, fromBase.basePosition.y) <= this.config.baseRadius;
       });
 
       // Sort: idle first, then by distance from return point (CC)
@@ -378,9 +371,7 @@ export class WorkerDistribution {
       if (resourceComp.amount <= 0) continue;
       if (resourceComp.resourceType !== 'minerals') continue;
 
-      const dx = transform.x - baseX;
-      const dy = transform.y - baseY;
-      const dist = Math.sqrt(dx * dx + dy * dy);
+      const dist = distance(baseX, baseY, transform.x, transform.y);
 
       if (dist <= this.config.baseRadius && dist < closestDist) {
         closestDist = dist;
@@ -540,9 +531,7 @@ export class WorkerDistribution {
 
         if (resourceComp.amount <= 0) continue;
 
-        const dx = resourceTransform.x - transform.x;
-        const dy = resourceTransform.y - transform.y;
-        const dist = Math.sqrt(dx * dx + dy * dy);
+        const dist = distance(transform.x, transform.y, resourceTransform.x, resourceTransform.y);
 
         if (dist < closestDist) {
           closestDist = dist;

@@ -14,6 +14,7 @@ import { Unit } from '../components/Unit';
 import { Health } from '../components/Health';
 import { Selectable } from '../components/Selectable';
 import { Building } from '../components/Building';
+import { distance } from '@/utils/math';
 
 // Influence value type: positive = friendly, negative = enemy
 export type InfluenceValue = number;
@@ -247,9 +248,7 @@ export class InfluenceMap {
 
     for (let row = minRow; row <= maxRow; row++) {
       for (let col = minCol; col <= maxCol; col++) {
-        const dx = col - centerCol;
-        const dy = row - centerRow;
-        const dist = Math.floor(Math.sqrt(dx * dx + dy * dy));
+        const dist = Math.floor(distance(centerCol, centerRow, col, row));
 
         if (dist <= maxRadius) {
           const decay = this.decayLookup[dist];
@@ -555,7 +554,7 @@ export class InfluenceMap {
 
         if (col < 0 || col >= this.cols || row < 0 || row >= this.rows) continue;
 
-        const dist = Math.sqrt(dc * dc + dr * dr);
+        const dist = distance(0, 0, dc, dr);
         if (dist < 5 || dist > radiusCells) continue; // Not too close, not too far
 
         const index = row * this.cols + col;

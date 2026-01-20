@@ -11,6 +11,8 @@
  *   Output: { type: 'microResult', decisions, tick }
  */
 
+import { distance } from '@/utils/math';
+
 // Unit priority for focus fire (higher = more important to kill)
 const DEFAULT_UNIT_PRIORITY: Record<string, number> = {
   // High priority targets
@@ -148,15 +150,6 @@ function init(workerConfig: AIWorkerConfig): boolean {
 }
 
 /**
- * Calculate distance between two points
- */
-function distance(x1: number, y1: number, x2: number, y2: number): number {
-  const dx = x2 - x1;
-  const dy = y2 - y1;
-  return Math.sqrt(dx * dx + dy * dy);
-}
-
-/**
  * Assess threats for a unit and find best target
  */
 function assessThreats(
@@ -280,7 +273,7 @@ function calculateKitePosition(
 ): { x: number; y: number } {
   const dx = unit.x - kiteFromX;
   const dy = unit.y - kiteFromY;
-  const dist = Math.sqrt(dx * dx + dy * dy);
+  const dist = distance(unit.x, unit.y, kiteFromX, kiteFromY);
 
   if (dist < 0.1) {
     // Random direction if too close

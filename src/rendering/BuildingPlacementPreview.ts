@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { MapData } from '@/data/maps';
 import { BUILDING_DEFINITIONS } from '@/data/buildings/dominion';
+import { distance } from '@/utils/math';
 
 // Interface for queued building placements
 interface QueuedPlacement {
@@ -249,14 +250,14 @@ export class BuildingPlacementPreview {
     const dx = endX - startX;
     const dy = endY - startY;
     const dh = endHeight - startHeight;
-    const distance = Math.sqrt(dx * dx + dy * dy);
-    const segments = Math.floor(distance / (dashLength + gapLength));
+    const dist = distance(startX, startY, endX, endY);
+    const segments = Math.floor(dist / (dashLength + gapLength));
 
-    if (distance < 0.1) return points;
+    if (dist < 0.1) return points;
 
-    const dirX = dx / distance;
-    const dirY = dy / distance;
-    const dirH = dh / distance;
+    const dirX = dx / dist;
+    const dirY = dy / dist;
+    const dirH = dh / dist;
 
     for (let i = 0; i < segments; i++) {
       const segmentStart = i * (dashLength + gapLength);
@@ -266,9 +267,9 @@ export class BuildingPlacementPreview {
       const z1 = startY + dirY * segmentStart;
       const y1 = startHeight + dirH * segmentStart;
 
-      const x2 = startX + dirX * Math.min(segmentEnd, distance);
-      const z2 = startY + dirY * Math.min(segmentEnd, distance);
-      const y2 = startHeight + dirH * Math.min(segmentEnd, distance);
+      const x2 = startX + dirX * Math.min(segmentEnd, dist);
+      const z2 = startY + dirY * Math.min(segmentEnd, dist);
+      const y2 = startHeight + dirH * Math.min(segmentEnd, dist);
 
       // PERF: Use pooled Vector3s instead of creating new ones
       points.push(
@@ -279,7 +280,7 @@ export class BuildingPlacementPreview {
 
     // Add final segment to reach the end point
     const lastSegmentEnd = segments * (dashLength + gapLength);
-    if (lastSegmentEnd < distance) {
+    if (lastSegmentEnd < dist) {
       const x1 = startX + dirX * lastSegmentEnd;
       const z1 = startY + dirY * lastSegmentEnd;
       const y1 = startHeight + dirH * lastSegmentEnd;
@@ -685,7 +686,7 @@ export class BuildingPlacementPreview {
             const angle = this.blueprintPulseTime * 0.5 + (i / (positions.length / 3)) * Math.PI * 2;
             const baseX = basePositions[i * 3];
             const baseZ = basePositions[i * 3 + 2];
-            const radius = Math.sqrt(baseX * baseX + baseZ * baseZ);
+            const radius = distance(0, 0, baseX, baseZ);
             positions[i * 3] = Math.cos(angle) * radius;
             positions[i * 3 + 2] = Math.sin(angle) * radius;
 

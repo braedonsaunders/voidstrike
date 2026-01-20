@@ -5,6 +5,7 @@
  */
 
 import type { EditorCell, EditorMapData, EditorConfig, PlatformEdges } from '../config/EditorConfig';
+import { distance } from '@/utils/math';
 
 export interface BrushStroke {
   x: number;
@@ -353,7 +354,7 @@ export class TerrainBrush {
 
     const dx = toX - fromX;
     const dy = toY - fromY;
-    const length = Math.sqrt(dx * dx + dy * dy);
+    const length = distance(fromX, fromY, toX, toY);
     if (length === 0) return [];
 
     const steps = Math.ceil(length);
@@ -414,7 +415,7 @@ export class TerrainBrush {
 
     const dx = toX - fromX;
     const dy = toY - fromY;
-    const length = Math.sqrt(dx * dx + dy * dy);
+    const length = distance(fromX, fromY, toX, toY);
     if (length === 0) {
       // Single point
       return this.paintElevation(fromX, fromY, Math.ceil(width / 2), elevation, walkable);
@@ -597,7 +598,7 @@ export class TerrainBrush {
 
     const dx = toX - fromX;
     const dy = toY - fromY;
-    const length = Math.sqrt(dx * dx + dy * dy);
+    const length = distance(fromX, fromY, toX, toY);
     if (length === 0) return [{ x: Math.floor(fromX), y: Math.floor(fromY) }];
 
     const steps = Math.ceil(length);
@@ -928,7 +929,7 @@ export class TerrainBrush {
 
     const dx = toX - fromX;
     const dy = toY - fromY;
-    const length = Math.sqrt(dx * dx + dy * dy);
+    const length = distance(fromX, fromY, toX, toY);
     if (length === 0) {
       return [{ x: Math.floor(fromX), y: Math.floor(fromY) }];
     }
@@ -991,7 +992,7 @@ export class TerrainBrush {
       const dy = toY - fromY;
       const angle = Math.atan2(dy, dx);
       const snappedAngle = Math.round(angle / (Math.PI / 4)) * (Math.PI / 4);
-      const length = Math.sqrt(dx * dx + dy * dy);
+      const length = distance(fromX, fromY, toX, toY);
       snappedToX = fromX + Math.cos(snappedAngle) * length;
       snappedToY = fromY + Math.sin(snappedAngle) * length;
     } else if (snapMode === 'grid') {
@@ -1005,7 +1006,7 @@ export class TerrainBrush {
 
     const dx = snappedToX - fromX;
     const dy = snappedToY - fromY;
-    const length = Math.sqrt(dx * dx + dy * dy);
+    const length = distance(fromX, fromY, snappedToX, snappedToY);
     if (length < 1) return [];
 
     // Round positions to ensure pixel-perfect alignment

@@ -8,6 +8,7 @@ import { Selectable } from '../components/Selectable';
 import { Building } from '../components/Building';
 import { Projectile, ProjectileDefinition, ProjectileBehavior } from '../components/Projectile';
 import { snapValue } from '@/utils/FixedPoint';
+import { distance } from '@/utils/math';
 import { getDamageMultiplier } from '@/data/combat/combat';
 import { debugCombat as debugProjectile } from '@/utils/debugLogger';
 import { isLocalPlayer } from '@/store/gameSetupStore';
@@ -368,15 +369,13 @@ export class ProjectileSystem extends System {
       if (selectable.playerId === projectile.sourcePlayerId) continue;
 
       // Calculate distance-based falloff
-      const dx = transform.x - impactTransform.x;
-      const dy = transform.y - impactTransform.y;
-      const distance = Math.sqrt(dx * dx + dy * dy);
+      const dist = distance(impactTransform.x, impactTransform.y, transform.x, transform.y);
 
       // Skip if outside splash radius (edge case from grid query)
-      if (distance > projectile.splashRadius) continue;
+      if (dist > projectile.splashRadius) continue;
 
       // Falloff: 100% at center, (1 - splashFalloff) at edge
-      const normalizedDist = distance / projectile.splashRadius;
+      const normalizedDist = dist / projectile.splashRadius;
       const falloffFactor = 1 - normalizedDist * projectile.splashFalloff;
 
       // Calculate splash damage using rawDamage with per-target multiplier
@@ -445,13 +444,11 @@ export class ProjectileSystem extends System {
       if (health.isDead()) continue;
       if (selectable.playerId === projectile.sourcePlayerId) continue;
 
-      const dx = transform.x - impactTransform.x;
-      const dy = transform.y - impactTransform.y;
-      const distance = Math.sqrt(dx * dx + dy * dy);
+      const dist = distance(impactTransform.x, impactTransform.y, transform.x, transform.y);
 
-      if (distance > projectile.splashRadius) continue;
+      if (dist > projectile.splashRadius) continue;
 
-      const normalizedDist = distance / projectile.splashRadius;
+      const normalizedDist = dist / projectile.splashRadius;
       const falloffFactor = 1 - normalizedDist * projectile.splashFalloff;
 
       // Calculate splash damage using rawDamage with per-target multiplier

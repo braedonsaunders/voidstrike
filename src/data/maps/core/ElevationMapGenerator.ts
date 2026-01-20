@@ -40,7 +40,7 @@ import {
   MINERAL_DISTANCE_NATURAL,
 } from '../MapTypes';
 
-import { SeededRandom } from '../../../utils/math';
+import { SeededRandom, distance } from '../../../utils/math';
 import { debugTerrain } from '@/utils/debugLogger';
 
 // Connectivity system imports
@@ -145,7 +145,7 @@ function paintRamp(
 ): void {
   const dx = toX - fromX;
   const dy = toY - fromY;
-  const length = Math.sqrt(dx * dx + dy * dy);
+  const length = distance(fromX, fromY, toX, toY);
   if (length === 0) return;
 
   const steps = Math.ceil(length);
@@ -237,7 +237,7 @@ function paintRoad(
 ): void {
   const dx = toX - fromX;
   const dy = toY - fromY;
-  const length = Math.sqrt(dx * dx + dy * dy);
+  const length = distance(fromX, fromY, toX, toY);
   if (length === 0) return;
 
   const steps = Math.ceil(length);
@@ -297,7 +297,7 @@ function executePaintCommands(grid: GenerationGrid, commands: PaintCommand[]): v
         // Gradient is like a ramp but doesn't mark cells as ramps
         const dx = gTo.x - gFrom.x;
         const dy = gTo.y - gFrom.y;
-        const length = Math.sqrt(dx * dx + dy * dy);
+        const length = distance(gFrom.x, gFrom.y, gTo.x, gTo.y);
         if (length === 0) break;
 
         const steps = Math.ceil(length);
@@ -651,9 +651,7 @@ function generateDecorations(
   // Helper to check if position is near a base
   const isNearBase = (x: number, y: number, minDist: number = 25): boolean => {
     for (const base of bases) {
-      const dx = x - base.x;
-      const dy = y - base.y;
-      if (Math.sqrt(dx * dx + dy * dy) < minDist) return true;
+      if (distance(x, y, base.x, base.y) < minDist) return true;
     }
     return false;
   };

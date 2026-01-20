@@ -1,4 +1,5 @@
 import { Component } from '../ecs/Component';
+import { distance } from '@/utils/math';
 
 export class Transform extends Component {
   public readonly type = 'Transform';
@@ -56,15 +57,11 @@ export class Transform extends Component {
   }
 
   public distanceTo(other: Transform): number {
-    const dx = this.x - other.x;
-    const dy = this.y - other.y;
-    return Math.sqrt(dx * dx + dy * dy);
+    return distance(this.x, this.y, other.x, other.y);
   }
 
   public distanceToPoint(x: number, y: number): number {
-    const dx = this.x - x;
-    const dy = this.y - y;
-    return Math.sqrt(dx * dx + dy * dy);
+    return distance(this.x, this.y, x, y);
   }
 
   public setRotation(rotation: number): void {

@@ -15,6 +15,7 @@ import AssetManager from '@/assets/AssetManager';
 import { getProjectileType, DEFAULT_PROJECTILE, isInstantProjectile } from '@/data/projectiles';
 import { SpatialEntityData, SpatialUnitState } from '../core/SpatialGrid';
 import { findBestTarget as findBestTargetShared, DEFAULT_SCORING_CONFIG } from '../combat/TargetAcquisition';
+import { distance } from '@/utils/math';
 
 // PERF: Reusable event payload objects to avoid allocation per attack
 const attackEventPayload = {
@@ -1091,15 +1092,13 @@ export class CombatSystem extends System {
       if (health.isDead()) continue;
 
       // Calculate distance from impact point
-      const dx = transform.x - impactPos.x;
-      const dy = transform.y - impactPos.y;
-      const distance = Math.sqrt(dx * dx + dy * dy);
+      const dist = distance(impactPos.x, impactPos.y, transform.x, transform.y);
 
       // Apply splash damage with falloff
-      if (distance > 0 && distance <= attacker.splashRadius) {
+      if (dist > 0 && dist <= attacker.splashRadius) {
         // DETERMINISM: Linear falloff using quantized calculation
         // 100% at center, 50% at edge
-        const qDistance = quantize(distance, QUANT_DAMAGE);
+        const qDistance = quantize(dist, QUANT_DAMAGE);
         const qRadius = quantize(attacker.splashRadius, QUANT_DAMAGE);
         const qFalloff = QUANT_DAMAGE - Math.floor((qDistance * QUANT_DAMAGE * 0.5) / qRadius);
         const qBaseDamage = quantize(baseDamage, QUANT_DAMAGE);
