@@ -10,7 +10,7 @@
  */
 
 import { System } from '../ecs/System';
-import { Entity } from '../ecs/Entity';
+import { Entity, getEntityIndex } from '../ecs/Entity';
 import { Transform } from '../components/Transform';
 import { Unit } from '../components/Unit';
 import { Velocity } from '../components/Velocity';
@@ -1747,7 +1747,8 @@ export class MovementSystem extends System {
       }
 
       // DIRTY FLAG: Check if position changed significantly since last grid update
-      const posIdx = entity.id * 2;
+      // Use entity INDEX (not full ID) for array indexing with generational IDs
+      const posIdx = getEntityIndex(entity.id) * 2;
       const lastX = this.lastGridPositions[posIdx];
       const lastY = this.lastGridPositions[posIdx + 1];
       const dx = transform.x - lastX;
