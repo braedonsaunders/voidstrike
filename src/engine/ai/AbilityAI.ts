@@ -18,6 +18,7 @@ import { Unit } from '../components/Unit';
 import { Health } from '../components/Health';
 import { Selectable } from '../components/Selectable';
 import { Ability, AbilityState, DOMINION_ABILITIES } from '../components/Ability';
+import { distance } from '@/utils/math';
 
 /**
  * Ability usage decision
@@ -119,9 +120,7 @@ export class AbilityAI {
       // Need enemies nearby
       const nearbyEnemies = ctx.enemies.filter(e => {
         const t = e.get<Transform>('Transform')!;
-        const dx = t.x - ctx.casterPos.x;
-        const dy = t.y - ctx.casterPos.y;
-        return Math.sqrt(dx * dx + dy * dy) < 8;
+        return distance(ctx.casterPos.x, ctx.casterPos.y, t.x, t.y) < 8;
       });
 
       if (nearbyEnemies.length < this.config.stimMinEnemies) {
@@ -149,9 +148,7 @@ export class AbilityAI {
       let closestDist = Infinity;
       for (const enemy of ctx.enemies) {
         const t = enemy.get<Transform>('Transform')!;
-        const dx = t.x - ctx.casterPos.x;
-        const dy = t.y - ctx.casterPos.y;
-        const dist = Math.sqrt(dx * dx + dy * dy);
+        const dist = distance(ctx.casterPos.x, ctx.casterPos.y, t.x, t.y);
         if (dist < closestDist) closestDist = dist;
       }
 
@@ -231,9 +228,7 @@ export class AbilityAI {
         const unit = enemy.get<Unit>('Unit');
 
         // Range check
-        const dx = transform.x - ctx.casterPos.x;
-        const dy = transform.y - ctx.casterPos.y;
-        const dist = Math.sqrt(dx * dx + dy * dy);
+        const dist = distance(ctx.casterPos.x, ctx.casterPos.y, transform.x, transform.y);
         if (dist > snipeDef.range) continue;
 
         // Must be biological
@@ -290,9 +285,7 @@ export class AbilityAI {
         const unit = enemy.get<Unit>('Unit');
 
         // Range check
-        const dx = transform.x - ctx.casterPos.x;
-        const dy = transform.y - ctx.casterPos.y;
-        const dist = Math.sqrt(dx * dx + dy * dy);
+        const dist = distance(ctx.casterPos.x, ctx.casterPos.y, transform.x, transform.y);
         if (dist > def.range) continue;
 
         // Prioritize high-value targets we can kill or heavily damage
@@ -357,9 +350,7 @@ export class AbilityAI {
 
     for (const enemy of enemies) {
       const transform = enemy.get<Transform>('Transform')!;
-      const dx = transform.x - casterPos.x;
-      const dy = transform.y - casterPos.y;
-      const dist = Math.sqrt(dx * dx + dy * dy);
+      const dist = distance(casterPos.x, casterPos.y, transform.x, transform.y);
 
       if (dist <= maxRange) {
         totalX += transform.x;
@@ -380,9 +371,7 @@ export class AbilityAI {
     for (const enemy of enemies) {
       const transform = enemy.get<Transform>('Transform')!;
       const health = enemy.get<Health>('Health')!;
-      const dx = transform.x - center.x;
-      const dy = transform.y - center.y;
-      const dist = Math.sqrt(dx * dx + dy * dy);
+      const dist = distance(center.x, center.y, transform.x, transform.y);
 
       if (dist <= aoeRadius) {
         hitUnits.push(enemy.id);

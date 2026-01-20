@@ -11,6 +11,7 @@ import { useGameStore } from '@/store/gameStore';
 import { debugResources } from '@/utils/debugLogger';
 import { isLocalPlayer } from '@/store/gameSetupStore';
 import { EnhancedAISystem } from './EnhancedAISystem';
+import { distance } from '@/utils/math';
 
 // Mining time in seconds (base value - AI may get speed bonuses)
 const MINING_TIME = 2.5;
@@ -231,11 +232,9 @@ export class ResourceSystem extends System {
 
       if (resource.resourceType !== 'minerals' || resource.isDepleted()) continue;
 
-      const dx = transform.x - x;
-      const dy = transform.y - y;
-      const distance = Math.sqrt(dx * dx + dy * dy);
+      const dist = distance(transform.x, transform.y, x, y);
 
-      if (distance <= range) {
+      if (dist <= range) {
         patches.push({
           entity,
           resource,
@@ -293,7 +292,7 @@ export class ResourceSystem extends System {
     playerId: string | undefined
   ): { entityId: number; x: number; y: number } | null {
     const resources = this.getCachedResources();
-    let nearest: { entityId: number; x: number; y: number; distance: number } | null = null;
+    let nearest: { entityId: number; x: number; y: number; dist: number } | null = null;
 
     for (const entity of resources) {
       const resource = entity.get<Resource>('Resource');
@@ -322,19 +321,17 @@ export class ResourceSystem extends System {
       const maxGatherers = resourceType === 'minerals' ? 3 : 3; // Allow some oversaturation
       if (currentGatherers >= maxGatherers) continue;
 
-      const dx = transform.x - x;
-      const dy = transform.y - y;
-      const distance = Math.sqrt(dx * dx + dy * dy);
+      const dist = distance(transform.x, transform.y, x, y);
 
       // Limit search range to reasonable distance (60 units = ~2 base widths)
-      if (distance > 60) continue;
+      if (dist > 60) continue;
 
-      if (!nearest || distance < nearest.distance) {
+      if (!nearest || dist < nearest.dist) {
         nearest = {
           entityId: entity.id,
           x: transform.x,
           y: transform.y,
-          distance,
+          dist,
         };
       }
     }
@@ -415,7 +412,7 @@ export class ResourceSystem extends System {
           continue;
         }
 
-        const distance = transform.distanceTo(resourceTransform);
+        const dist = transform.distanceTo(resourceTransform);
 
         // Get worker's owner for AI speed bonuses and resource crediting
         const selectable = entity.get<Selectable>('Selectable');
@@ -424,14 +421,14 @@ export class ResourceSystem extends System {
         // Debug: log distance for all workers periodically
         // DETERMINISM: Use tick-based sampling instead of Math.random() to avoid multiplayer desync
         if (this.game.getCurrentTick() % 100 === 0 && entity.id % 5 === 0) {
-          debugResources.log(`[ResourceSystem] ${workerId} worker ${entity.id}: distance=${distance.toFixed(2)}, isMining=${unit.isMining}, gatherTargetId=${unit.gatherTargetId}, targetX=${unit.targetX?.toFixed(1)}, targetY=${unit.targetY?.toFixed(1)}, state=${unit.state}`);
+          debugResources.log(`[ResourceSystem] ${workerId} worker ${entity.id}: distance=${dist.toFixed(2)}, isMining=${unit.isMining}, gatherTargetId=${unit.gatherTargetId}, targetX=${unit.targetX?.toFixed(1)}, targetY=${unit.targetY?.toFixed(1)}, state=${unit.state}`);
         }
 
         // Vespene extractors are 2x2 buildings - workers need larger gathering distance
         // Minerals are single tiles - workers can get close
         const gatherDistance = resource.resourceType === 'vespene' ? 3.5 : 2;
 
-        if (distance <= gatherDistance) {
+        if (dist <= gatherDistance) {
           // At resource - start or continue mining
           if (!unit.isMining) {
             // Start mining - use player-specific mining time (AI gets speed bonus)
@@ -463,7 +460,7 @@ export class ResourceSystem extends System {
           if (resource.resourceType === 'vespene') {
             const dx = transform.x - resourceTransform.x;
             const dy = transform.y - resourceTransform.y;
-            const dist = Math.sqrt(dx * dx + dy * dy);
+            const dist = distance(transform.x, transform.y, resourceTransform.x, resourceTransform.y);
             if (dist > 0.1) {
               // Target a point 2 units from center (just outside 2x2 extractor)
               const targetX = resourceTransform.x + (dx / dist) * 2;
@@ -638,7 +635,7 @@ export class ResourceSystem extends System {
       // Target must be OUTSIDE the building avoidance zone (halfWidth + 1.0) to prevent oscillation
       const dx = transform.x - nearestBase.transform.x;
       const dy = transform.y - nearestBase.transform.y;
-      const dist = Math.sqrt(dx * dx + dy * dy);
+      const dist = distance(transform.x, transform.y, nearestBase.transform.x, nearestBase.transform.y);
 
       if (dist > 0.1) {
         // Target a point outside the avoidance zone, in direction toward worker
@@ -694,7 +691,7 @@ export class ResourceSystem extends System {
       const buildingHalfWidth = (building.width || 5) / 2;
       const dx = transform.x - baseTransform.x;
       const dy = transform.y - baseTransform.y;
-      const dist = Math.sqrt(dx * dx + dy * dy);
+      const dist = distance(transform.x, transform.y, baseTransform.x, baseTransform.y);
 
       if (dist > 0.1) {
         const dirX = dx / dist;

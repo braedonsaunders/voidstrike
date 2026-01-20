@@ -24,6 +24,7 @@ import { generateTileCache, generateSoloNavMesh, type TileCacheGeneratorConfig, 
 import { threeToTileCache } from '@recast-navigation/three';
 import * as THREE from 'three';
 import { debugPathfinding, debugInitialization } from '@/utils/debugLogger';
+import { distance } from '@/utils/math';
 
 // Import centralized pathfinding config - SINGLE SOURCE OF TRUTH
 // See src/data/pathfinding.config.ts for parameter documentation
@@ -534,13 +535,13 @@ export class RecastNavigation {
 
     const dx = to.x - from.x;
     const dy = to.y - from.y;
-    const distance = Math.sqrt(dx * dx + dy * dy);
+    const dist = distance(from.x, from.y, to.x, to.y);
 
-    if (distance < 0.5) return true;
+    if (dist < 0.5) return true;
 
     // Sample points along the line
     const stepSize = agentRadius * 0.5;
-    const steps = Math.ceil(distance / stepSize);
+    const steps = Math.ceil(dist / stepSize);
 
     for (let i = 1; i < steps; i++) {
       const t = i / steps;
@@ -591,9 +592,7 @@ export class RecastNavigation {
       if (!result.success || !result.point) return false;
 
       // Check if the closest point is within a reasonable tolerance
-      const dx = result.point.x - x;
-      const dz = result.point.z - y;
-      const dist = Math.sqrt(dx * dx + dz * dz);
+      const dist = distance(x, y, result.point.x, result.point.z);
       return dist < 2.0; // Within 2 units horizontally
     } catch {
       return false;
@@ -831,9 +830,7 @@ export class RecastNavigation {
         const target = agent.target();
         if (!target) return true; // No target = reached
 
-        const dx = target.x - pos.x;
-        const dz = target.z - pos.z;
-        const dist = Math.sqrt(dx * dx + dz * dz);
+        const dist = distance(pos.x, pos.z, target.x, target.z);
         return dist < threshold;
       }
     } catch {

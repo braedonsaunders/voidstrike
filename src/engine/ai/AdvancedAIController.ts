@@ -20,6 +20,7 @@ import { Unit } from '../components/Unit';
 import { Health } from '../components/Health';
 import { Selectable } from '../components/Selectable';
 import { Ability } from '../components/Ability';
+import { distance } from '@/utils/math';
 
 import { InfluenceMap, ThreatAnalysis } from './InfluenceMap';
 import { PositionalAnalysis, StrategicPosition } from './PositionalAnalysis';
@@ -300,9 +301,7 @@ export class AdvancedAIController {
       if (threat.dangerLevel > 0.4) continue;
 
       // Score: lower distance + lower danger + higher quality
-      const dx = exp.x - baseX;
-      const dy = exp.y - baseY;
-      const dist = Math.sqrt(dx * dx + dy * dy);
+      const dist = distance(baseX, baseY, exp.x, exp.y);
 
       const score = -dist * 0.1 - threat.dangerLevel * 10 + exp.quality * 5;
 

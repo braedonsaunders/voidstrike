@@ -24,6 +24,7 @@ import {
   type Obstacle,
 } from 'recast-navigation';
 import { generateTileCache, generateSoloNavMesh, type TileCacheGeneratorConfig, type SoloNavMeshGeneratorConfig } from '@recast-navigation/generators';
+import { distance } from '@/utils/math';
 
 // Debug flag for worker logging (workers can't access UI store)
 const DEBUG = false;
@@ -326,12 +327,12 @@ function canWalkDirect(
 
   const dx = to.x - from.x;
   const dy = to.y - from.y;
-  const distance = Math.sqrt(dx * dx + dy * dy);
+  const dist = distance(from.x, from.y, to.x, to.y);
 
-  if (distance < 0.5) return true;
+  if (dist < 0.5) return true;
 
   const stepSize = agentRadius * 0.5;
-  const steps = Math.ceil(distance / stepSize);
+  const steps = Math.ceil(dist / stepSize);
 
   for (let i = 1; i < steps; i++) {
     const t = i / steps;
@@ -357,9 +358,7 @@ function isWalkable(x: number, y: number, height: number = 0): boolean {
     const result = navMeshQuery.findClosestPoint({ x, y: height, z: y }, { halfExtents });
     if (!result.success || !result.point) return false;
 
-    const dx = result.point.x - x;
-    const dz = result.point.z - y;
-    const dist = Math.sqrt(dx * dx + dz * dz);
+    const dist = distance(x, y, result.point.x, result.point.z);
     return dist < 2.0;
   } catch {
     return false;

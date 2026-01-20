@@ -42,6 +42,7 @@ import {
   getOverlayCache,
   setOverlayCache,
 } from '@/utils/overlayCache';
+import { distance } from '@/utils/math';
 
 // Overlay height above terrain
 const OVERLAY_Y_OFFSET = 0.3;
@@ -892,7 +893,7 @@ export class TSLGameOverlayManager {
           const py = cy + dy;
           if (px < 0 || px >= width || py < 0 || py >= height) continue;
 
-          const dist = Math.sqrt(dx * dx + dy * dy);
+          const dist = distance(cx, cy, px, py);
           if (dist <= attackRange) {
             const i = (py * width + px) * 4;
             const intensity = Math.min(255, this.threatTextureData[i + 0] + 80);
@@ -926,7 +927,7 @@ export class TSLGameOverlayManager {
           const py = cy + dy;
           if (px < 0 || px >= width || py < 0 || py >= height) continue;
 
-          const dist = Math.sqrt(dx * dx + dy * dy);
+          const dist = distance(cx, cy, px, py);
           if (dist <= attackRange) {
             const i = (py * width + px) * 4;
             const intensity = Math.min(255, this.threatTextureData[i + 0] + 100);
@@ -998,7 +999,7 @@ export class TSLGameOverlayManager {
           const py = cy + dy;
           if (px < 0 || px >= width || py < 0 || py >= height) continue;
 
-          const dist = Math.sqrt(dx * dx + dy * dy);
+          const dist = distance(cx, cy, px, py);
           if (dist <= radius) {
             const i = (py * width + px) * 4;
             const falloff = 1 - (dist / radius) * 0.5;

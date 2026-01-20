@@ -8,6 +8,7 @@ import { Terrain } from './Terrain';
 import AssetManager, { LODLevel } from '@/assets/AssetManager';
 import { useUIStore } from '@/store/uiStore';
 import { debugMesh } from '@/utils/debugLogger';
+import { distance } from '@/utils/math';
 // NOTE: Resources don't move, so we don't use velocity tracking (AAA optimization)
 // Velocity node returns zero for meshes without velocity attributes
 
@@ -448,9 +449,7 @@ export class ResourceRenderer {
 
           // Check if close to any patch in the current line
           for (const linePatch of linePatches) {
-            const dx = otherPatch.x - linePatch.x;
-            const dy = otherPatch.y - linePatch.y;
-            const dist = Math.sqrt(dx * dx + dy * dy);
+            const dist = distance(linePatch.x, linePatch.y, otherPatch.x, otherPatch.y);
 
             if (dist <= MINERAL_LINE_GROUPING_DISTANCE) {
               linePatches.push(otherPatch);
@@ -632,9 +631,7 @@ export class ResourceRenderer {
       let lodLevel: LODLevel = 0;
       const settings = useUIStore.getState().graphicsSettings;
       if (settings.lodEnabled && this.camera) {
-        const dx = transform.x - this.camera.position.x;
-        const dz = transform.y - this.camera.position.z;
-        const distanceToCamera = Math.sqrt(dx * dx + dz * dz);
+        const distanceToCamera = distance(transform.x, transform.y, this.camera.position.x, this.camera.position.z);
         lodLevel = AssetManager.getBestLODForDistance(resource.resourceType, distanceToCamera, {
           LOD0_MAX: settings.lodDistance0,
           LOD1_MAX: settings.lodDistance1,

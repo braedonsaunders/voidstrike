@@ -6,6 +6,7 @@ import { Transform } from '@/engine/components/Transform';
 import { Selectable } from '@/engine/components/Selectable';
 import { getLocalPlayerId, isSpectatorMode } from '@/store/gameSetupStore';
 import { AssetManager } from '@/assets/AssetManager';
+import { distance } from '@/utils/math';
 
 interface WaypointVisual {
   lineGroup: THREE.Group;
@@ -159,9 +160,7 @@ export class CommandQueueRenderer {
     // Add current target if unit is moving/attacking somewhere
     if (unit.targetX !== null && unit.targetY !== null) {
       // Only show if unit isn't already at the target
-      const dx = unit.targetX - transform.x;
-      const dy = unit.targetY - transform.y;
-      const dist = Math.sqrt(dx * dx + dy * dy);
+      const dist = distance(transform.x, transform.y, unit.targetX, unit.targetY);
       if (dist > 0.5) {
         waypoints.push({ x: unit.targetX, y: unit.targetY, type: unit.state });
       }

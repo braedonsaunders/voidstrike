@@ -7,6 +7,7 @@ import { Health } from '../components/Health';
 import { Selectable } from '../components/Selectable';
 import { Ability } from '../components/Ability';
 import { Building } from '../components/Building';
+import { distance } from '@/utils/math';
 
 interface TransformCommand {
   entityIds: number[];
@@ -214,11 +215,9 @@ export class UnitMechanicsSystem extends System {
       if (unit.isFlying || unit.isTransport) continue;
 
       // Check if in range (4 units)
-      const dx = transform.x - transportTransform.x;
-      const dy = transform.y - transportTransform.y;
-      const distance = Math.sqrt(dx * dx + dy * dy);
+      const dist = distance(transform.x, transform.y, transportTransform.x, transportTransform.y);
 
-      if (distance > 4) continue;
+      if (dist > 4) continue;
 
       // Try to load
       if (transportUnit.loadUnit(unitId)) {
@@ -314,11 +313,9 @@ export class UnitMechanicsSystem extends System {
       if (unit.isFlying || unit.isWorker || unit.isMechanical) continue;
 
       // Check if in range
-      const dx = transform.x - bunkerTransform.x;
-      const dy = transform.y - bunkerTransform.y;
-      const distance = Math.sqrt(dx * dx + dy * dy);
+      const dist = distance(transform.x, transform.y, bunkerTransform.x, bunkerTransform.y);
 
-      if (distance > 5) continue;
+      if (dist > 5) continue;
 
       data.loadedUnits.push(unitId);
       unit.state = 'loaded';
@@ -589,13 +586,11 @@ export class UnitMechanicsSystem extends System {
       const halfH = building.height / 2;
       const clampedX = Math.max(buildingTransform.x - halfW, Math.min(repairerTransform.x, buildingTransform.x + halfW));
       const clampedY = Math.max(buildingTransform.y - halfH, Math.min(repairerTransform.y, buildingTransform.y + halfH));
-      const dx = repairerTransform.x - clampedX;
-      const dy = repairerTransform.y - clampedY;
-      const distance = Math.sqrt(dx * dx + dy * dy);
+      const dist = distance(repairerTransform.x, repairerTransform.y, clampedX, clampedY);
 
-      if (distance <= autocastRange) {
-        if (!closestTarget || distance < closestTarget.distance) {
-          closestTarget = { id: buildingId, distance };
+      if (dist <= autocastRange) {
+        if (!closestTarget || dist < closestTarget.distance) {
+          closestTarget = { id: buildingId, distance: dist };
         }
       }
     }
@@ -631,13 +626,11 @@ export class UnitMechanicsSystem extends System {
       if (targetHealth.isDead()) continue;
 
       // Calculate distance
-      const dx = targetTransform.x - repairerTransform.x;
-      const dy = targetTransform.y - repairerTransform.y;
-      const distance = Math.sqrt(dx * dx + dy * dy);
+      const dist = distance(targetTransform.x, targetTransform.y, repairerTransform.x, repairerTransform.y);
 
-      if (distance <= autocastRange) {
-        if (!closestTarget || distance < closestTarget.distance) {
-          closestTarget = { id: unitId, distance };
+      if (dist <= autocastRange) {
+        if (!closestTarget || dist < closestTarget.distance) {
+          closestTarget = { id: unitId, distance: dist };
         }
       }
     }
@@ -692,11 +685,9 @@ export class UnitMechanicsSystem extends System {
     }
 
     // Check range
-    const dx = targetTransform.x - healerTransform.x;
-    const dy = targetTransform.y - healerTransform.y;
-    const distance = Math.sqrt(dx * dx + dy * dy);
+    const dist = distance(targetTransform.x, targetTransform.y, healerTransform.x, healerTransform.y);
 
-    if (distance > unit.healRange) {
+    if (dist > unit.healRange) {
       // Move toward target
       unit.setMoveTarget(targetTransform.x, targetTransform.y, true);
       return;
@@ -773,16 +764,14 @@ export class UnitMechanicsSystem extends System {
       const halfH = targetBuilding.height / 2;
       const clampedX = Math.max(targetTransform.x - halfW, Math.min(repairerTransform.x, targetTransform.x + halfW));
       const clampedY = Math.max(targetTransform.y - halfH, Math.min(repairerTransform.y, targetTransform.y + halfH));
-      const edgeDx = repairerTransform.x - clampedX;
-      const edgeDy = repairerTransform.y - clampedY;
-      effectiveDistance = Math.sqrt(edgeDx * edgeDx + edgeDy * edgeDy);
+      effectiveDistance = distance(repairerTransform.x, repairerTransform.y, clampedX, clampedY);
 
       // Calculate move target at building edge with buffer
       if (effectiveDistance > repairRange) {
         // Direction from building center to repairer
         const dx = repairerTransform.x - targetTransform.x;
         const dy = repairerTransform.y - targetTransform.y;
-        const dist = Math.sqrt(dx * dx + dy * dy);
+        const dist = distance(repairerTransform.x, repairerTransform.y, targetTransform.x, targetTransform.y);
         if (dist > 0.01) {
           const dirX = dx / dist;
           const dirY = dy / dist;
@@ -793,9 +782,7 @@ export class UnitMechanicsSystem extends System {
       }
     } else {
       // For units, use center-to-center distance
-      const dx = targetTransform.x - repairerTransform.x;
-      const dy = targetTransform.y - repairerTransform.y;
-      effectiveDistance = Math.sqrt(dx * dx + dy * dy);
+      effectiveDistance = distance(targetTransform.x, targetTransform.y, repairerTransform.x, repairerTransform.y);
     }
 
     if (effectiveDistance > repairRange) {
@@ -860,9 +847,7 @@ export class UnitMechanicsSystem extends System {
 
         for (const enemy of enemies) {
           const enemyTransform = enemy.get<Transform>('Transform')!;
-          const dx = enemyTransform.x - bunkerTransform.x;
-          const dy = enemyTransform.y - bunkerTransform.y;
-          const dist = Math.sqrt(dx * dx + dy * dy);
+          const dist = distance(enemyTransform.x, enemyTransform.y, bunkerTransform.x, bunkerTransform.y);
           if (dist < closestDist) {
             closestDist = dist;
             closestEnemy = enemy;
@@ -911,11 +896,9 @@ export class UnitMechanicsSystem extends System {
       if (selectable.playerId === playerId) continue;
       if (health.isDead()) continue;
 
-      const dx = transform.x - x;
-      const dy = transform.y - y;
-      const distance = Math.sqrt(dx * dx + dy * dy);
+      const dist = distance(transform.x, transform.y, x, y);
 
-      if (distance <= range) {
+      if (dist <= range) {
         enemies.push(entity);
       }
     }
@@ -933,11 +916,9 @@ export class UnitMechanicsSystem extends System {
       if (selectable.playerId === playerId) continue;
       if (health.isDead()) continue;
 
-      const dx = transform.x - x;
-      const dy = transform.y - y;
-      const distance = Math.sqrt(dx * dx + dy * dy);
+      const dist = distance(transform.x, transform.y, x, y);
 
-      if (distance <= range) {
+      if (dist <= range) {
         enemies.push(entity);
       }
     }

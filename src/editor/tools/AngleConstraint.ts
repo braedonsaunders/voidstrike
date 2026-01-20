@@ -10,11 +10,7 @@
  */
 
 import type { SnapMode } from '../config/EditorConfig';
-
-export interface Point {
-  x: number;
-  y: number;
-}
+import { distance, type Point } from '@/utils/math';
 
 /** Angles for orthogonal snapping (in radians) */
 const ORTHOGONAL_ANGLES = [
@@ -85,16 +81,14 @@ export function constrainEndpoint(
  * Snap endpoint to the nearest allowed angle from the start point
  */
 export function snapToAngle(from: Point, to: Point, allowedAngles: number[]): Point {
-  const dx = to.x - from.x;
-  const dy = to.y - from.y;
-  const distance = Math.sqrt(dx * dx + dy * dy);
+  const dist = distance(from.x, from.y, to.x, to.y);
 
-  if (distance < 0.001) {
+  if (dist < 0.001) {
     return { ...from };
   }
 
   // Calculate current angle
-  const currentAngle = Math.atan2(dy, dx);
+  const currentAngle = Math.atan2(to.y - from.y, to.x - from.x);
 
   // Find the nearest allowed angle
   let nearestAngle = allowedAngles[0];
@@ -110,8 +104,8 @@ export function snapToAngle(from: Point, to: Point, allowedAngles: number[]): Po
 
   // Calculate snapped endpoint at the same distance
   return {
-    x: from.x + Math.cos(nearestAngle) * distance,
-    y: from.y + Math.sin(nearestAngle) * distance,
+    x: from.x + Math.cos(nearestAngle) * dist,
+    y: from.y + Math.sin(nearestAngle) * dist,
   };
 }
 
@@ -179,10 +173,8 @@ export function getConstrainedPreview(
   const endpoint = constrainEndpoint(from, cursor, mode, gridSize);
 
   // Check if we actually snapped (endpoint differs from cursor significantly)
-  const dx = endpoint.x - cursor.x;
-  const dy = endpoint.y - cursor.y;
-  const snapDistance = Math.sqrt(dx * dx + dy * dy);
-  const isSnapped = snapDistance > 0.01;
+  const snapDist = distance(cursor.x, cursor.y, endpoint.x, endpoint.y);
+  const isSnapped = snapDist > 0.01;
 
   // Calculate snap angle if snapped
   let snapAngle: number | null = null;

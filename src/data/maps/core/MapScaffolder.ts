@@ -27,6 +27,7 @@ import {
   ramp,
   border,
 } from './ElevationMap';
+import { distance } from '@/utils/math';
 
 // =============================================================================
 // TYPES
@@ -151,9 +152,7 @@ function findClosestOfType(
     if (other === base) continue;
     if (other.type !== targetType) continue;
 
-    const dx = other.x - base.x;
-    const dy = other.y - base.y;
-    const dist = Math.sqrt(dx * dx + dy * dy);
+    const dist = distance(base.x, base.y, other.x, other.y);
 
     if (dist < closestDist) {
       closestDist = dist;

@@ -22,6 +22,7 @@ import {
   PathResult,
 } from '../pathfinding/RecastNavigation';
 import { debugPathfinding, debugPerformance } from '@/utils/debugLogger';
+import { distance } from '@/utils/math';
 
 // Path request batching - increased since worker handles computation off-thread
 const MAX_PATHS_PER_FRAME = 16; // Worker can handle more without blocking main thread
@@ -333,9 +334,7 @@ export class PathfindingSystem extends System {
       unit.path = [];
       unit.pathIndex = 0;
 
-      const dx = request.endX - request.startX;
-      const dy = request.endY - request.startY;
-      const dist = Math.sqrt(dx * dx + dy * dy);
+      const dist = distance(request.startX, request.startY, request.endX, request.endY);
 
       if (dist > 30) {
         if (unit.state === 'moving') {
@@ -819,9 +818,7 @@ export class PathfindingSystem extends System {
 
       // Keep targetX/targetY set so unit can move directly
       // Only clear if target is very far (clearly needs a path)
-      const dx = request.endX - request.startX;
-      const dy = request.endY - request.startY;
-      const dist = Math.sqrt(dx * dx + dy * dy);
+      const dist = distance(request.startX, request.startY, request.endX, request.endY);
 
       if (dist > 30) {
         // Target is far, truly unreachable - reset for non-building units
@@ -965,9 +962,7 @@ export class PathfindingSystem extends System {
         state.destinationY = unit.targetY;
       }
 
-      const dx = transform.x - state.lastPosition.x;
-      const dy = transform.y - state.lastPosition.y;
-      const distanceMoved = Math.sqrt(dx * dx + dy * dy);
+      const distanceMoved = distance(state.lastPosition.x, state.lastPosition.y, transform.x, transform.y);
 
       if (distanceMoved > MIN_MOVEMENT_THRESHOLD) {
         state.lastPosition = { x: transform.x, y: transform.y };

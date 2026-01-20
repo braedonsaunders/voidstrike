@@ -7,6 +7,7 @@
 
 import type { MapData, MapCell, Ramp, ElevationLevel } from '../MapTypes';
 import { type Point, type RampCommand, ramp as createRampCommand, CLIFF_THRESHOLD, toXY } from './ElevationMap';
+import { distance } from '@/utils/math';
 import type {
   ConnectivityResult,
   ConnectivityIssue,
@@ -78,7 +79,7 @@ function applyRampToTerrain(
 
   const dx = x2 - x1;
   const dy = y2 - y1;
-  const length = Math.sqrt(dx * dx + dy * dy);
+  const length = distance(x1, y1, x2, y2);
 
   // Determine ramp direction
   let direction: 'north' | 'south' | 'east' | 'west';
