@@ -1,0 +1,731 @@
+/**
+ * AIBuildOrderExecutor - Build order execution and macro rule management
+ *
+ * Handles:
+ * - Build order step execution (buildings, units, research)
+ * - Data-driven macro rule evaluation and execution
+ * - Building placement and addon construction
+ * - Unit training
+ * - Research initiation (NEW - implements the stubbed research feature)
+ *
+ * Uses the data-driven FactionAIConfig for all production decisions.
+ */
+
+import { Transform } from '../../components/Transform';
+import { Unit } from '../../components/Unit';
+import { Building } from '../../components/Building';
+import { Health } from '../../components/Health';
+import { Selectable } from '../../components/Selectable';
+import { Game } from '../../core/Game';
+import { UNIT_DEFINITIONS } from '@/data/units/dominion';
+import { BUILDING_DEFINITIONS } from '@/data/buildings/dominion';
+import { RESEARCH_DEFINITIONS } from '@/data/research/dominion';
+import { debugAI } from '@/utils/debugLogger';
+import type { AICoordinator, AIPlayer } from './AICoordinator';
+import { AIEconomyManager } from './AIEconomyManager';
+import {
+  type MacroRule,
+  type RuleCondition,
+  type MacroAction,
+  type AIStateSnapshot,
+  evaluateRule,
+} from '@/data/ai/aiConfig';
+import type { BuildOrderStep } from '@/data/ai/buildOrders';
+import { getCounterRecommendation, analyzeThreatGaps } from '../AIMicroSystem';
+
+// Build order index for when we've finished the build order
+const BUILD_ORDER_COMPLETE = 999;
+
+export class AIBuildOrderExecutor {
+  private game: Game;
+  private coordinator: AICoordinator;
+  private economyManager: AIEconomyManager | null = null;
+
+  constructor(game: Game, coordinator: AICoordinator) {
+    this.game = game;
+    this.coordinator = coordinator;
+  }
+
+  private get world() {
+    return this.game.world;
+  }
+
+  public setEconomyManager(economyManager: AIEconomyManager): void {
+    this.economyManager = economyManager;
+  }
+
+  private getEconomyManager(): AIEconomyManager {
+    if (!this.economyManager) {
+      // Lazy init - get from coordinator if needed
+      this.economyManager = new AIEconomyManager(this.game, this.coordinator);
+    }
+    return this.economyManager;
+  }
+
+  // === Build Order Execution ===
+
+  /**
+   * Execute the next step in the build order.
+   */
+  public executeBuildOrder(ai: AIPlayer): void {
+    if (ai.buildOrderIndex >= ai.buildOrder.length) {
+      return;
+    }
+
+    const step = ai.buildOrder[ai.buildOrderIndex];
+
+    // Check supply condition (BuildOrderStep uses 'supply' property)
+    if (step.supply !== undefined && ai.supply < step.supply) {
+      return;
+    }
+
+    // Execute the step
+    let success = this.executeBuildOrderStep(ai, step);
+
+    if (success) {
+      ai.buildOrderIndex++;
+      ai.buildOrderFailureCount = 0;
+      debugAI.log(`[AIBuildOrder] ${ai.playerId}: Build order step ${ai.buildOrderIndex}/${ai.buildOrder.length} complete: ${step.type} ${step.id || ''}`);
+    } else {
+      ai.buildOrderFailureCount++;
+      if (ai.buildOrderFailureCount > 10) {
+        // Skip problematic step after too many failures
+        debugAI.log(`[AIBuildOrder] ${ai.playerId}: Skipping stuck build order step: ${step.type} ${step.id || ''}`);
+        ai.buildOrderIndex++;
+        ai.buildOrderFailureCount = 0;
+      }
+    }
+  }
+
+  private executeBuildOrderStep(ai: AIPlayer, step: BuildOrderStep): boolean {
+    // BuildOrderStep uses 'id' for the target, and 'type' values: 'unit', 'building', 'research', 'ability'
+    switch (step.type) {
+      case 'building':
+        return this.tryBuildBuilding(ai, step.id);
+      case 'unit':
+        return this.tryTrainUnit(ai, step.id);
+      case 'research':
+        return this.tryStartResearch(ai, step.id);
+      case 'ability':
+        // Abilities not yet supported in AI build orders
+        debugAI.log(`[AIBuildOrder] ${ai.playerId}: Ability step not implemented: ${step.id}`);
+        return true;
+      default:
+        debugAI.log(`[AIBuildOrder] ${ai.playerId}: Unknown build order step type: ${step.type}`);
+        return true;
+    }
+  }
+
+  // === Macro Rule Execution ===
+
+  /**
+   * Execute data-driven macro rules for continuous production.
+   */
+  public doMacro(ai: AIPlayer): void {
+    const currentTick = this.game.getCurrentTick();
+    const config = ai.config!;
+
+    // Create state snapshot for rule evaluation
+    const snapshot = this.coordinator.createStateSnapshot(ai, currentTick);
+
+    // Counter-building logic for harder difficulties
+    const diffConfig = config.difficultyConfig[ai.difficulty];
+    if (diffConfig.counterBuildingEnabled) {
+      this.handleCounterBuilding(ai, snapshot);
+    }
+
+    // Sort rules by priority (higher first)
+    const sortedRules = [...config.macroRules].sort((a, b) => b.priority - a.priority);
+
+    // Try to execute rules
+    for (const rule of sortedRules) {
+      // Check difficulty restriction
+      if (rule.difficulties && !rule.difficulties.includes(ai.difficulty)) {
+        continue;
+      }
+
+      // Check cooldown
+      const lastExecution = ai.macroRuleCooldowns.get(rule.id) || 0;
+      if (currentTick - lastExecution < rule.cooldownTicks) {
+        continue;
+      }
+
+      // Evaluate rule conditions
+      if (!evaluateRule(rule, snapshot)) {
+        continue;
+      }
+
+      // Execute rule action
+      const success = this.executeRuleAction(ai, rule.action, snapshot);
+      if (success) {
+        ai.macroRuleCooldowns.set(rule.id, currentTick);
+        // Only execute one production rule per tick to prevent over-spending
+        if (rule.action.type === 'train' || rule.action.type === 'build') {
+          break;
+        }
+      }
+    }
+  }
+
+  private handleCounterBuilding(ai: AIPlayer, snapshot: AIStateSnapshot): void {
+    const recommendation = getCounterRecommendation(
+      this.world,
+      ai.playerId,
+      ai.buildingCounts
+    );
+
+    // Check for urgent anti-air needs
+    const threatGaps = analyzeThreatGaps(this.world, ai.playerId);
+    if (threatGaps.uncounterableAirThreats > 0 && !snapshot.hasAntiAir) {
+      // Prioritize anti-air production
+      for (const rec of recommendation.unitsToBuild) {
+        if (rec.priority >= 10) {
+          this.tryTrainUnit(ai, rec.unitId);
+          break;
+        }
+      }
+    }
+  }
+
+  private executeRuleAction(ai: AIPlayer, action: MacroAction, _snapshot: AIStateSnapshot): boolean {
+    switch (action.type) {
+      case 'train':
+        if (action.targetId) {
+          return this.tryTrainUnit(ai, action.targetId);
+        } else if (action.options) {
+          // Weighted random selection
+          const totalWeight = action.options.reduce((sum: number, opt: { id: string; weight: number }) => sum + opt.weight, 0);
+          let random = this.coordinator.getRandom().next() * totalWeight;
+          for (const option of action.options) {
+            random -= option.weight;
+            if (random <= 0) {
+              return this.tryTrainUnit(ai, option.id);
+            }
+          }
+        }
+        return false;
+
+      case 'build':
+        // Check if this is a research_module addon build
+        if (action.targetId === 'research_module') {
+          return this.tryBuildAddon(ai, action.targetId);
+        }
+        return this.tryBuildBuilding(ai, action.targetId!);
+
+      case 'expand':
+        return this.tryExpand(ai);
+
+      case 'research':
+        return this.tryStartResearch(ai, action.targetId!);
+
+      default:
+        return false;
+    }
+  }
+
+  // === Building Construction ===
+
+  /**
+   * Try to build a building.
+   */
+  public tryBuildBuilding(ai: AIPlayer, buildingType: string): boolean {
+    const config = ai.config!;
+    const buildingDef = BUILDING_DEFINITIONS[buildingType];
+    if (!buildingDef) {
+      debugAI.log(`[AIBuildOrder] ${ai.playerId}: tryBuildBuilding failed - unknown building type: ${buildingType}`);
+      return false;
+    }
+
+    if (ai.minerals < buildingDef.mineralCost || ai.vespene < buildingDef.vespeneCost) {
+      return false;
+    }
+
+    const basePos = this.coordinator.findAIBase(ai);
+    if (!basePos) {
+      debugAI.log(`[AIBuildOrder] ${ai.playerId}: tryBuildBuilding failed - cannot find AI base!`);
+      return false;
+    }
+
+    const economyManager = this.getEconomyManager();
+    const workerId = economyManager.findAvailableWorker(ai.playerId);
+    if (workerId === null) {
+      debugAI.log(`[AIBuildOrder] ${ai.playerId}: tryBuildBuilding failed - no available worker for ${buildingType}`);
+      return false;
+    }
+
+    let buildPos: { x: number; y: number } | null = null;
+
+    // Special handling for extractors - must be placed on vespene geysers
+    if (buildingType === config.roles.gasExtractor) {
+      buildPos = economyManager.findAvailableVespeneGeyser(ai, basePos);
+      if (!buildPos) {
+        debugAI.log(`[AIBuildOrder] ${ai.playerId}: tryBuildBuilding failed - no available vespene geyser near base`);
+        return false;
+      }
+    } else {
+      buildPos = this.findBuildingSpot(ai.playerId, basePos, buildingDef.width, buildingDef.height, workerId);
+      if (!buildPos) {
+        debugAI.log(`[AIBuildOrder] ${ai.playerId}: tryBuildBuilding failed - no valid building spot for ${buildingType}`);
+        return false;
+      }
+    }
+
+    ai.minerals -= buildingDef.mineralCost;
+    ai.vespene -= buildingDef.vespeneCost;
+
+    this.game.eventBus.emit('building:place', {
+      buildingType,
+      position: buildPos,
+      playerId: ai.playerId,
+      workerId,
+    });
+
+    debugAI.log(`[AIBuildOrder] ${ai.playerId}: Placed ${buildingType} at (${buildPos.x.toFixed(1)}, ${buildPos.y.toFixed(1)}) with worker ${workerId}`);
+
+    return true;
+  }
+
+  /**
+   * Find a suitable spot to place a building.
+   */
+  private findBuildingSpot(
+    playerId: string,
+    basePos: { x: number; y: number },
+    width: number,
+    height: number,
+    excludeEntityId?: number
+  ): { x: number; y: number } | null {
+    const offsets: Array<{ x: number; y: number }> = [];
+
+    // Generate offsets in expanding rings around the base
+    for (let radius = 6; radius <= 20; radius += 3) {
+      for (let angle = 0; angle < 8; angle++) {
+        const theta = (angle * Math.PI * 2) / 8 + this.coordinator.getRandom().next() * 0.5;
+        const x = Math.round(Math.cos(theta) * radius);
+        const y = Math.round(Math.sin(theta) * radius);
+        offsets.push({ x, y });
+      }
+    }
+
+    // Shuffle offsets for variety
+    for (let i = offsets.length - 1; i > 0; i--) {
+      const j = Math.floor(this.coordinator.getRandom().next() * (i + 1));
+      [offsets[i], offsets[j]] = [offsets[j], offsets[i]];
+    }
+
+    // Try each offset until we find a valid spot
+    for (const offset of offsets) {
+      const pos = { x: basePos.x + offset.x, y: basePos.y + offset.y };
+      if (this.game.isValidBuildingPlacement(pos.x, pos.y, width, height, excludeEntityId)) {
+        return pos;
+      }
+    }
+
+    return null;
+  }
+
+  // === Addon Construction ===
+
+  /**
+   * Try to build an addon on an existing building.
+   */
+  public tryBuildAddon(ai: AIPlayer, addonType: string): boolean {
+    const buildings = this.coordinator.getCachedBuildings();
+
+    const addonDef = BUILDING_DEFINITIONS[addonType];
+    if (!addonDef) {
+      debugAI.log(`[AIBuildOrder] ${ai.playerId}: Unknown addon type: ${addonType}`);
+      return false;
+    }
+
+    // Check resources first
+    if (ai.minerals < addonDef.mineralCost || ai.vespene < addonDef.vespeneCost) {
+      return false;
+    }
+
+    // Find a building that can have an addon
+    for (const entity of buildings) {
+      const selectable = entity.get<Selectable>('Selectable')!;
+      const building = entity.get<Building>('Building')!;
+
+      if (selectable.playerId !== ai.playerId) continue;
+      if (!building.isComplete()) continue;
+      if (!building.canHaveAddon) continue;
+      if (building.hasAddon()) continue;
+
+      // Found a valid building - deduct resources and emit event
+      ai.minerals -= addonDef.mineralCost;
+      ai.vespene -= addonDef.vespeneCost;
+
+      this.game.eventBus.emit('building:build_addon', {
+        buildingId: entity.id,
+        addonType,
+        playerId: ai.playerId,
+      });
+
+      debugAI.log(`[AIBuildOrder] ${ai.playerId}: Building addon ${addonType} on building ${entity.id}`);
+      return true;
+    }
+
+    return false;
+  }
+
+  // === Unit Training ===
+
+  /**
+   * Try to train a unit.
+   */
+  public tryTrainUnit(ai: AIPlayer, unitType: string): boolean {
+    const unitDef = UNIT_DEFINITIONS[unitType];
+    if (!unitDef) return false;
+
+    if (ai.minerals < unitDef.mineralCost || ai.vespene < unitDef.vespeneCost) return false;
+    if (ai.supply + unitDef.supplyCost > ai.maxSupply) return false;
+
+    const requiresResearchModule = this.unitRequiresResearchModule(unitType);
+
+    const buildings = this.world.getEntitiesWith('Building', 'Selectable');
+    for (const entity of buildings) {
+      const selectable = entity.get<Selectable>('Selectable')!;
+      const building = entity.get<Building>('Building')!;
+
+      if (selectable.playerId !== ai.playerId) continue;
+      if (!building.isComplete()) continue;
+      if (!building.canProduce.includes(unitType)) continue;
+      if (building.productionQueue.length >= 3) continue;
+
+      if (requiresResearchModule) {
+        if (!building.hasAddon() || !building.hasTechLab()) {
+          continue;
+        }
+      }
+
+      ai.minerals -= unitDef.mineralCost;
+      ai.vespene -= unitDef.vespeneCost;
+      building.addToProductionQueue('unit', unitType, unitDef.buildTime);
+
+      return true;
+    }
+
+    return false;
+  }
+
+  /**
+   * Check if a unit type requires a research module addon.
+   */
+  private unitRequiresResearchModule(unitType: string): boolean {
+    const unitDef = UNIT_DEFINITIONS[unitType];
+    if (!unitDef) return false;
+
+    // Units that require research module (tech lab)
+    const techUnits = ['operative', 'inferno', 'colossus', 'devastator', 'dreadnought'];
+    return techUnits.includes(unitType);
+  }
+
+  // === Research System (NEW IMPLEMENTATION) ===
+
+  /**
+   * Try to start a research upgrade at an appropriate building.
+   * This implements the previously stubbed research functionality.
+   */
+  public tryStartResearch(ai: AIPlayer, researchId: string): boolean {
+    const research = RESEARCH_DEFINITIONS[researchId];
+    if (!research) {
+      debugAI.log(`[AIBuildOrder] ${ai.playerId}: Unknown research: ${researchId}`);
+      return false;
+    }
+
+    // Check if already researched
+    if (ai.completedResearch.has(researchId)) {
+      debugAI.log(`[AIBuildOrder] ${ai.playerId}: Research already complete: ${researchId}`);
+      return true; // Return true to advance build order
+    }
+
+    // Check if already in progress
+    if (ai.researchInProgress.has(researchId)) {
+      return false;
+    }
+
+    // Check resources
+    if (ai.minerals < research.mineralCost || ai.vespene < research.vespeneCost) {
+      return false;
+    }
+
+    // Check requirements
+    if (research.requirements) {
+      for (const req of research.requirements) {
+        // Check if requirement is a building
+        if (BUILDING_DEFINITIONS[req]) {
+          if (!ai.buildingCounts.has(req) || ai.buildingCounts.get(req)! === 0) {
+            debugAI.log(`[AIBuildOrder] ${ai.playerId}: Research ${researchId} requires building: ${req}`);
+            return false;
+          }
+        } else {
+          // Requirement is another research
+          if (!ai.completedResearch.has(req)) {
+            debugAI.log(`[AIBuildOrder] ${ai.playerId}: Research ${researchId} requires research: ${req}`);
+            return false;
+          }
+        }
+      }
+    }
+
+    // Find a building that can perform this research
+    const researchBuilding = this.findBuildingForResearch(ai, researchId);
+    if (!researchBuilding) {
+      debugAI.log(`[AIBuildOrder] ${ai.playerId}: No building available for research: ${researchId}`);
+      return false;
+    }
+
+    // Deduct resources
+    ai.minerals -= research.mineralCost;
+    ai.vespene -= research.vespeneCost;
+
+    // Track research in progress
+    ai.researchInProgress.set(researchId, researchBuilding);
+
+    // Emit research command
+    this.game.eventBus.emit('command:research', {
+      entityIds: [researchBuilding],
+      upgradeId: researchId,
+    });
+
+    debugAI.log(`[AIBuildOrder] ${ai.playerId}: Started research: ${researchId} at building ${researchBuilding}`);
+    return true;
+  }
+
+  /**
+   * Find a building that can perform the specified research.
+   */
+  private findBuildingForResearch(ai: AIPlayer, researchId: string): number | null {
+    // Map of building types to what they can research
+    const researchMap: Record<string, string[]> = {
+      tech_center: [
+        'infantry_weapons_1', 'infantry_weapons_2', 'infantry_weapons_3',
+        'infantry_armor_1', 'infantry_armor_2', 'infantry_armor_3',
+        'auto_tracking', 'building_armor',
+      ],
+      arsenal: [
+        'vehicle_weapons_1', 'vehicle_weapons_2', 'vehicle_weapons_3',
+        'vehicle_armor_1', 'vehicle_armor_2', 'vehicle_armor_3',
+        'ship_weapons_1', 'ship_weapons_2', 'ship_weapons_3',
+        'ship_armor_1', 'ship_armor_2', 'ship_armor_3',
+      ],
+      power_core: ['nova_cannon', 'dreadnought_weapon_refit'],
+      infantry_bay: ['combat_stim', 'combat_shield', 'concussive_shells'],
+      forge: ['bombardment_systems', 'drilling_claws'],
+      hangar: ['cloaking_field', 'medical_reactor'],
+      ops_center: ['stealth_systems', 'enhanced_reactor'],
+    };
+
+    // Find which building type can research this
+    let targetBuildingType: string | null = null;
+    for (const [buildingType, researches] of Object.entries(researchMap)) {
+      if (researches.includes(researchId)) {
+        targetBuildingType = buildingType;
+        break;
+      }
+    }
+
+    if (!targetBuildingType) {
+      return null;
+    }
+
+    // Find an available building of this type
+    const buildings = this.coordinator.getCachedBuildings();
+    for (const entity of buildings) {
+      const selectable = entity.get<Selectable>('Selectable')!;
+      const building = entity.get<Building>('Building')!;
+      const health = entity.get<Health>('Health')!;
+
+      if (selectable.playerId !== ai.playerId) continue;
+      if (health.isDead()) continue;
+      if (!building.isComplete()) continue;
+      if (building.buildingId !== targetBuildingType) continue;
+
+      // Check if building is already researching
+      const isResearching = building.productionQueue.some(
+        (item) => item.type === 'upgrade'
+      );
+      if (isResearching) continue;
+
+      return entity.id;
+    }
+
+    return null;
+  }
+
+  // === Expansion ===
+
+  /**
+   * Try to expand to a new base location.
+   */
+  public tryExpand(ai: AIPlayer): boolean {
+    const config = ai.config!;
+    const diffConfig = config.difficultyConfig[ai.difficulty];
+
+    // Check if we've hit the max bases for this difficulty
+    const currentBases = this.coordinator.countPlayerBases(ai);
+    if (currentBases >= diffConfig.maxBases) {
+      return false;
+    }
+
+    // Get expansion building type (usually an upgraded command center)
+    const expansionType = config.roles.baseTypes[1] || config.roles.mainBase;
+    const buildingDef = BUILDING_DEFINITIONS[expansionType];
+    if (!buildingDef) {
+      return false;
+    }
+
+    // Check resources
+    if (ai.minerals < buildingDef.mineralCost || ai.vespene < buildingDef.vespeneCost) {
+      return false;
+    }
+
+    // Find expansion location
+    const expansionLocation = this.findExpansionLocation(ai);
+    if (!expansionLocation) {
+      debugAI.log(`[AIBuildOrder] ${ai.playerId}: No expansion location found`);
+      return false;
+    }
+
+    const economyManager = this.getEconomyManager();
+    const workerId = economyManager.findAvailableWorker(ai.playerId);
+    if (workerId === null) {
+      return false;
+    }
+
+    ai.minerals -= buildingDef.mineralCost;
+    ai.vespene -= buildingDef.vespeneCost;
+
+    this.game.eventBus.emit('building:place', {
+      buildingType: expansionType,
+      position: expansionLocation,
+      playerId: ai.playerId,
+      workerId,
+    });
+
+    debugAI.log(`[AIBuildOrder] ${ai.playerId}: Expanding to (${expansionLocation.x.toFixed(1)}, ${expansionLocation.y.toFixed(1)})`);
+    return true;
+  }
+
+  /**
+   * Find a suitable expansion location (near mineral patches).
+   */
+  private findExpansionLocation(ai: AIPlayer): { x: number; y: number } | null {
+    const resources = this.coordinator.getCachedResources();
+    const buildings = this.coordinator.getCachedBuildingsWithTransform();
+
+    // Find mineral clusters not near existing bases
+    const existingBases = this.coordinator.getAIBasePositions(ai);
+
+    // Also consider enemy bases to avoid
+    const enemyBases: Array<{ x: number; y: number }> = [];
+    for (const entity of buildings) {
+      const selectable = entity.get<Selectable>('Selectable')!;
+      const building = entity.get<Building>('Building')!;
+      const transform = entity.get<Transform>('Transform')!;
+
+      if (selectable.playerId === ai.playerId) continue;
+      if (ai.config!.roles.baseTypes.includes(building.buildingId)) {
+        enemyBases.push({ x: transform.x, y: transform.y });
+      }
+    }
+
+    // Find mineral clusters
+    interface MineralCluster {
+      x: number;
+      y: number;
+      mineralCount: number;
+      distanceToNearestBase: number;
+    }
+
+    const mineralClusters: MineralCluster[] = [];
+    const visited = new Set<string>();
+
+    for (const entity of resources) {
+      const resource = entity.get<import('../../components/Resource').Resource>('Resource');
+      const transform = entity.get<Transform>('Transform');
+
+      if (!resource || !transform) continue;
+      if (resource.resourceType !== 'minerals') continue;
+      if (resource.isDepleted()) continue;
+
+      const key = `${Math.floor(transform.x / 20)},${Math.floor(transform.y / 20)}`;
+      if (visited.has(key)) continue;
+      visited.add(key);
+
+      // Check distance to existing bases
+      let distanceToNearestBase = Infinity;
+      for (const base of existingBases) {
+        const dx = transform.x - base.x;
+        const dy = transform.y - base.y;
+        const dist = Math.sqrt(dx * dx + dy * dy);
+        distanceToNearestBase = Math.min(distanceToNearestBase, dist);
+      }
+
+      // Skip if too close to existing base
+      if (distanceToNearestBase < 30) continue;
+
+      // Check distance to enemy bases
+      let tooCloseToEnemy = false;
+      for (const enemyBase of enemyBases) {
+        const dx = transform.x - enemyBase.x;
+        const dy = transform.y - enemyBase.y;
+        const dist = Math.sqrt(dx * dx + dy * dy);
+        if (dist < 25) {
+          tooCloseToEnemy = true;
+          break;
+        }
+      }
+      if (tooCloseToEnemy) continue;
+
+      // Count nearby minerals
+      let mineralCount = 0;
+      for (const other of resources) {
+        const otherResource = other.get<import('../../components/Resource').Resource>('Resource');
+        const otherTransform = other.get<Transform>('Transform');
+
+        if (!otherResource || !otherTransform) continue;
+        if (otherResource.resourceType !== 'minerals') continue;
+
+        const dx = otherTransform.x - transform.x;
+        const dy = otherTransform.y - transform.y;
+        if (Math.sqrt(dx * dx + dy * dy) < 15) {
+          mineralCount++;
+        }
+      }
+
+      if (mineralCount >= 3) {
+        mineralClusters.push({
+          x: transform.x,
+          y: transform.y,
+          mineralCount,
+          distanceToNearestBase,
+        });
+      }
+    }
+
+    // Sort by mineral count (descending) then by distance (prefer closer)
+    mineralClusters.sort((a, b) => {
+      if (b.mineralCount !== a.mineralCount) {
+        return b.mineralCount - a.mineralCount;
+      }
+      return a.distanceToNearestBase - b.distanceToNearestBase;
+    });
+
+    // Return first valid location
+    for (const cluster of mineralClusters) {
+      // Offset slightly from mineral cluster center
+      const buildPos = { x: cluster.x + 5, y: cluster.y + 5 };
+
+      // Check if valid placement
+      const buildingDef = BUILDING_DEFINITIONS[ai.config!.roles.mainBase];
+      if (this.game.isValidBuildingPlacement(buildPos.x, buildPos.y, buildingDef.width, buildingDef.height)) {
+        return buildPos;
+      }
+    }
+
+    return null;
+  }
+}
