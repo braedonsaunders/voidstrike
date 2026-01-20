@@ -34,6 +34,8 @@ import { Unit } from '../components/Unit';
 import { Health } from '../components/Health';
 import { Selectable } from '../components/Selectable';
 import { Building } from '../components/Building';
+import { findBestTarget as findBestTargetShared, TargetQueryOptions } from '../combat/TargetAcquisition';
+import AssetManager from '@/assets/AssetManager';
 
 // ==================== HELPER FUNCTIONS ====================
 
@@ -158,76 +160,38 @@ function calculateThreatScore(ctx: BehaviorContext): number {
 }
 
 /**
- * Find best target using priority system
+ * Find best target using shared TargetAcquisition utility.
+ * Uses data-driven priority weights from unit categories.
  */
 function findBestTarget(ctx: BehaviorContext): number | null {
   const data = getUnitData(ctx);
   if (!data) return null;
 
   const { transform, unit, selectable } = data;
-  const range = unit.sightRange;
 
-  const nearbyIds = ctx.world.unitGrid.queryRadius(transform.x, transform.y, range);
+  // Use shared target acquisition with behavior tree scoring config
+  const result = findBestTargetShared(ctx.world, {
+    x: transform.x,
+    y: transform.y,
+    range: unit.sightRange,
+    attackerPlayerId: selectable.playerId,
+    attackRange: unit.attackRange,
+    canAttackAir: unit.canAttackAir,
+    canAttackGround: unit.canAttackGround,
+    includeBuildingsInSearch: unit.canAttackGround,
+    attackerVisualRadius: AssetManager.getCachedVisualRadius(unit.unitId, unit.collisionRadius),
+    excludeEntityId: ctx.entityId,
+    // AI behavior tree uses slightly different weights
+    scoringConfig: {
+      priorityWeight: 0.6,
+      distanceWeight: 25,
+      healthWeight: 25,
+      inRangeBonus: 30,
+      buildingBasePriority: 25,
+    },
+  });
 
-  // Unit priority weights
-  const PRIORITY: Record<string, number> = {
-    devastator: 100,
-    colossus: 90,
-    lifter: 85,
-    specter: 80,
-    valkyrie: 75,
-    inferno: 70,
-    breacher: 65,
-    trooper: 60,
-    operative: 55,
-    vanguard: 50,
-    scorcher: 45,
-    constructor: 10,
-    worker: 5,
-  };
-
-  let bestTarget: number | null = null;
-  let bestScore = -Infinity;
-
-  for (const id of nearbyIds) {
-    if (id === ctx.entityId) continue;
-
-    const enemy = ctx.world.getEntity(id);
-    if (!enemy) continue;
-
-    const enemySelectable = enemy.get<Selectable>('Selectable');
-    const enemyHealth = enemy.get<Health>('Health');
-    const enemyTransform = enemy.get<Transform>('Transform');
-    const enemyUnit = enemy.get<Unit>('Unit');
-
-    if (!enemySelectable || !enemyHealth || !enemyTransform || !enemyUnit) continue;
-    if (enemySelectable.playerId === selectable.playerId) continue;
-    if (enemyHealth.isDead()) continue;
-
-    const dist = distance(transform.x, transform.y, enemyTransform.x, enemyTransform.y);
-
-    // Base priority score
-    const priorityScore = PRIORITY[enemyUnit.unitId] ?? 30;
-
-    // Distance factor (prefer closer targets)
-    const distanceFactor = Math.max(0, 1 - dist / range);
-
-    // Low health factor (prefer almost-dead targets)
-    const healthPercent = enemyHealth.getHealthPercent();
-    const lowHealthBonus = healthPercent < 0.3 ? 50 : healthPercent < 0.5 ? 25 : 0;
-
-    // In attack range bonus
-    const inRangeBonus = dist <= unit.attackRange ? 30 : 0;
-
-    const score = priorityScore * distanceFactor + lowHealthBonus + inRangeBonus;
-
-    if (score > bestScore) {
-      bestScore = score;
-      bestTarget = id;
-    }
-  }
-
-  return bestTarget;
+  return result?.entityId ?? null;
 }
 
 // ==================== CONDITION NODES ====================
