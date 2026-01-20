@@ -49,7 +49,116 @@ export interface UseGameInputReturn {
   handleContextMenu: (e: ReactMouseEvent) => void;
 }
 
-// Helper to find entity at a world position
+// Helper to find entity at a screen position using screen-space distance
+// This correctly handles air units by projecting their visual position to screen space
+function findEntityAtScreenPosition(
+  game: Game,
+  screenX: number,
+  screenY: number,
+  camera: RTSCamera
+) {
+  // Screen-space click radii in pixels
+  const resourceScreenRadius = 40;
+  const unitScreenRadius = 35;
+  const buildingScreenRadius = 50;
+
+  let closestEntity: { entity: ReturnType<typeof game.world.getEntity>; distance: number } | null = null;
+
+  // Check resources first
+  const resources = game.world.getEntitiesWith('Resource', 'Transform');
+  for (const entity of resources) {
+    const transform = entity.get<Transform>('Transform')!;
+    const screenPos = camera.worldToScreen(transform.x, transform.y);
+    if (!screenPos) continue;
+
+    const dx = screenPos.x - screenX;
+    const dy = screenPos.y - screenY;
+    const dist = Math.sqrt(dx * dx + dy * dy);
+
+    if (dist < resourceScreenRadius) {
+      if (!closestEntity || dist < closestEntity.distance) {
+        closestEntity = { entity, distance: dist };
+      }
+    }
+  }
+
+  // Check units - project with visualHeight for air units
+  const units = game.world.getEntitiesWith('Unit', 'Transform', 'Health', 'Selectable');
+  for (const entity of units) {
+    const transform = entity.get<Transform>('Transform')!;
+    const health = entity.get<Health>('Health')!;
+    const selectable = entity.get<Selectable>('Selectable')!;
+    if (health.isDead()) continue;
+
+    // Get terrain height and add visual height for flying units
+    const getTerrainHeight = camera.getTerrainHeightFunction();
+    const terrainHeight = getTerrainHeight?.(transform.x, transform.y) ?? 0;
+    const visualHeight = selectable.visualHeight ?? 0;
+    const worldY = terrainHeight + visualHeight;
+
+    const screenPos = camera.worldToScreen(transform.x, transform.y, worldY);
+    if (!screenPos) continue;
+
+    const dx = screenPos.x - screenX;
+    const dy = screenPos.y - screenY;
+    const dist = Math.sqrt(dx * dx + dy * dy);
+
+    // Scale click radius by visual scale for larger units
+    const visualScale = selectable.visualScale ?? 1;
+    const effectiveRadius = unitScreenRadius * visualScale;
+
+    if (dist < effectiveRadius) {
+      // Prioritize units over resources
+      if (!closestEntity || dist < closestEntity.distance) {
+        closestEntity = { entity, distance: dist };
+      }
+    }
+  }
+
+  // If we found a unit, return it (units have priority)
+  if (closestEntity) {
+    const unit = closestEntity.entity?.get<Unit>('Unit');
+    if (unit) {
+      return { entity: closestEntity.entity! };
+    }
+  }
+
+  // Check buildings
+  const buildings = game.world.getEntitiesWith('Building', 'Transform', 'Health', 'Selectable');
+  for (const entity of buildings) {
+    const transform = entity.get<Transform>('Transform')!;
+    const health = entity.get<Health>('Health')!;
+    const selectable = entity.get<Selectable>('Selectable')!;
+    if (health.isDead()) continue;
+
+    // Flying buildings also need height consideration
+    const building = entity.get<Building>('Building')!;
+    const getTerrainHeightFn = camera.getTerrainHeightFunction();
+    const terrainHeight = getTerrainHeightFn?.(transform.x, transform.y) ?? 0;
+    const visualHeight = building.isFlying && building.state === 'flying' ? (selectable.visualHeight ?? 0) : 0;
+    const worldY = terrainHeight + visualHeight;
+
+    const screenPos = camera.worldToScreen(transform.x, transform.y, worldY);
+    if (!screenPos) continue;
+
+    const dx = screenPos.x - screenX;
+    const dy = screenPos.y - screenY;
+    const dist = Math.sqrt(dx * dx + dy * dy);
+
+    const visualScale = selectable.visualScale ?? 1;
+    const effectiveRadius = buildingScreenRadius * visualScale;
+
+    if (dist < effectiveRadius) {
+      if (!closestEntity || dist < closestEntity.distance) {
+        closestEntity = { entity, distance: dist };
+      }
+    }
+  }
+
+  return closestEntity ? { entity: closestEntity.entity! } : null;
+}
+
+// Legacy world-space helper for cases where screen position isn't available
 function findEntityAtPosition(game: Game, x: number, z: number) {
   const resourceClickRadius = 2.5;
   const unitClickRadius = 1.5;
@@ -163,8 +272,9 @@ export function useGameInput({
       }
 
       const coords = getContainerCoords(e);
-      const worldPos = cameraRef.current?.screenToWorld(coords.x, coords.y);
-      if (!worldPos || !gameRef.current) return;
+      const camera = cameraRef.current;
+      const worldPos = camera?.screenToWorld(coords.x, coords.y);
+      if (!worldPos || !gameRef.current || !camera) return;
 
       const selectedUnits = useGameStore.getState().selectedUnits;
       const game = gameRef.current;
@@ -184,7 +294,7 @@ export function useGameInput({
 
       // Handle repair mode
       if (isRepairMode) {
-        const clickedEntity = findEntityAtPosition(game, worldPos.x, worldPos.z);
+        const clickedEntity = findEntityAtScreenPosition(game, coords.x, coords.y, camera);
         if (clickedEntity) {
           const building = clickedEntity.entity.get<Building>('Building');
           const unit = clickedEntity.entity.get<Unit>('Unit');
@@ -232,7 +342,7 @@ export function useGameInput({
       // Handle normal right-click commands
       if (selectedUnits.length > 0) {
         const queue = e.shiftKey;
-        const clickedEntity = findEntityAtPosition(game, worldPos.x, worldPos.z);
+        const clickedEntity = findEntityAtScreenPosition(game, coords.x, coords.y, camera);
 
         if (clickedEntity) {
           const resource = clickedEntity.entity.get<Resource>('Resource');
@@ -450,9 +560,9 @@ export function useGameInput({
           if (!e.shiftKey) useGameStore.getState().setCommandTargetMode(null);
         } else if (abilityTargetMode) {
           const worldPos = cameraRef.current?.screenToWorld(coords.x, coords.y);
-          if (worldPos && gameRef.current) {
+          if (worldPos && gameRef.current && cameraRef.current) {
             const selectedUnits = useGameStore.getState().selectedUnits;
-            const clickedEntity = findEntityAtPosition(gameRef.current, worldPos.x, worldPos.z);
+            const clickedEntity = findEntityAtScreenPosition(gameRef.current, coords.x, coords.y, cameraRef.current);
             const localPlayer = getLocalPlayerId();
 
             if (localPlayer) {
