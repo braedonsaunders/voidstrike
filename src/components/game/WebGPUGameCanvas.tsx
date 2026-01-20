@@ -2140,10 +2140,10 @@ export function WebGPUGameCanvas() {
           break;
         case 'o':
           {
-            // Cycle through overlays: none -> terrain -> elevation -> threat -> navmesh -> none
+            // Cycle through overlays: none -> elevation -> threat -> navmesh -> resource -> none
             const uiStore = useUIStore.getState();
             const currentOverlay = uiStore.overlaySettings.activeOverlay;
-            const overlayOrder: GameOverlayType[] = ['none', 'terrain', 'elevation', 'threat', 'navmesh'];
+            const overlayOrder: GameOverlayType[] = ['none', 'elevation', 'threat', 'navmesh', 'resource'];
             const currentIndex = overlayOrder.indexOf(currentOverlay);
             const nextIndex = (currentIndex + 1) % overlayOrder.length;
             uiStore.setActiveOverlay(overlayOrder[nextIndex]);

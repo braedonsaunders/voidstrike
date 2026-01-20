@@ -336,23 +336,23 @@ const savedDebugSettings = loadDebugSettings();
 
 // Game overlay types for strategic information display
 // 'navmesh' shows ACTUAL pathfinding data from Recast Navigation (critical for debugging)
-export type GameOverlayType = 'none' | 'terrain' | 'elevation' | 'threat' | 'navmesh';
+// 'resource' highlights mineral fields and gas geysers
+export type GameOverlayType = 'none' | 'elevation' | 'threat' | 'navmesh' | 'resource';
 
 // Extended overlay types including SC2-style tactical features
-export type ExtendedOverlayType = GameOverlayType | 'buildable' | 'attackRange' | 'visionRange' | 'resource';
+export type ExtendedOverlayType = GameOverlayType | 'buildable' | 'attackRange' | 'visionRange';
 
 // Overlay settings
 export interface OverlaySettings {
   activeOverlay: GameOverlayType;
-  terrainOverlayOpacity: number;
   elevationOverlayOpacity: number;
   threatOverlayOpacity: number;
   navmeshOverlayOpacity: number;
+  resourceOverlayOpacity: number;
   buildableOverlayOpacity: number;
   // Real-time overlay states (hold-to-show)
   showAttackRange: boolean;
   showVisionRange: boolean;
-  showResourceOverlay: boolean;
   // Navmesh computation progress
   navmeshComputeProgress: number;
   navmeshIsComputing: boolean;
@@ -493,7 +493,6 @@ export interface UIState {
   // Real-time overlay actions (SC2-style hold-to-show)
   setShowAttackRange: (show: boolean) => void;
   setShowVisionRange: (show: boolean) => void;
-  setShowResourceOverlay: (show: boolean) => void;
   // Navmesh computation progress
   setNavmeshComputeProgress: (progress: number) => void;
   setNavmeshIsComputing: (computing: boolean) => void;
@@ -635,14 +634,13 @@ export const useUIStore = create<UIState>((set, get) => ({
   showPerformancePanel: false,
   overlaySettings: {
     activeOverlay: 'none',
-    terrainOverlayOpacity: 0.7,
     elevationOverlayOpacity: 0.7,
     threatOverlayOpacity: 0.5,
     navmeshOverlayOpacity: 0.8,
+    resourceOverlayOpacity: 0.7,
     buildableOverlayOpacity: 0.6,
     showAttackRange: false,
     showVisionRange: false,
-    showResourceOverlay: false,
     navmeshComputeProgress: 0,
     navmeshIsComputing: false,
   },
@@ -1194,11 +1192,6 @@ export const useUIStore = create<UIState>((set, get) => ({
   setShowVisionRange: (show) =>
     set((state) => ({
       overlaySettings: { ...state.overlaySettings, showVisionRange: show },
-    })),
-
-  setShowResourceOverlay: (show) =>
-    set((state) => ({
-      overlaySettings: { ...state.overlaySettings, showResourceOverlay: show },
     })),
 
   // Navmesh computation progress

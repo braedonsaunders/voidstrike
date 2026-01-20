@@ -19,19 +19,6 @@ import { BattleSimulatorPanel } from './BattleSimulatorPanel';
 
 // Legend configuration for each overlay type
 const OVERLAY_LEGENDS: Record<Exclude<GameOverlayType, 'none'>, { title: string; items: Array<{ color: string; label: string }> }> = {
-  terrain: {
-    title: 'Terrain Overlay',
-    items: [
-      { color: 'bg-green-500', label: 'Walkable & Buildable' },
-      { color: 'bg-gray-500', label: 'Unbuildable' },
-      { color: 'bg-red-600', label: 'Unwalkable' },
-      { color: 'bg-yellow-500', label: 'Ramp' },
-      { color: 'bg-cyan-400', label: 'Road (Fast)' },
-      { color: 'bg-blue-600', label: 'Water' },
-      { color: 'bg-amber-600', label: 'Mud (Slow)' },
-      { color: 'bg-orange-500', label: 'Forest' },
-    ],
-  },
   elevation: {
     title: 'Elevation Overlay',
     items: [
@@ -56,6 +43,13 @@ const OVERLAY_LEGENDS: Record<Exclude<GameOverlayType, 'none'>, { title: string;
       { color: 'bg-fuchsia-500', label: 'Disconnected Ramp' },
       { color: 'bg-red-500', label: 'Not on Navmesh' },
       { color: 'bg-gray-600', label: 'Unwalkable' },
+    ],
+  },
+  resource: {
+    title: 'Resource Overlay',
+    items: [
+      { color: 'bg-blue-400', label: 'Minerals' },
+      { color: 'bg-green-400', label: 'Gas' },
     ],
   },
 };
@@ -217,26 +211,14 @@ export const HUD = memo(function HUD() {
                   >
                     <span>Overlays</span>
                     <span className={overlaySettings.activeOverlay !== 'none' ? 'text-green-400 text-xs px-1.5 py-0.5 bg-green-900/50 rounded' : 'text-void-500'}>
-                      {overlaySettings.activeOverlay === 'terrain' ? 'TER' :
-                       overlaySettings.activeOverlay === 'elevation' ? 'ELV' :
+                      {overlaySettings.activeOverlay === 'elevation' ? 'ELV' :
                        overlaySettings.activeOverlay === 'threat' ? 'THR' :
-                       overlaySettings.activeOverlay === 'navmesh' ? 'NAV' : ''}
+                       overlaySettings.activeOverlay === 'navmesh' ? 'NAV' :
+                       overlaySettings.activeOverlay === 'resource' ? 'RES' : ''}
                     </span>
                   </button>
                   {showOverlayMenu && (
                     <div className="absolute right-full top-0 mr-1 bg-void-900 border border-void-700 rounded shadow-lg z-50 min-w-[180px]">
-                      <button
-                        onClick={() => {
-                          toggleOverlay('terrain');
-                          setShowOverlayMenu(false);
-                        }}
-                        className={`w-full px-4 py-2 text-left text-sm hover:bg-void-800 transition-colors flex justify-between items-center ${
-                          overlaySettings.activeOverlay === 'terrain' ? 'text-green-400' : 'text-void-200'
-                        }`}
-                      >
-                        <span>Terrain (Walkability)</span>
-                        {overlaySettings.activeOverlay === 'terrain' && <span>ON</span>}
-                      </button>
                       <button
                         onClick={() => {
                           toggleOverlay('elevation');
@@ -272,6 +254,18 @@ export const HUD = memo(function HUD() {
                       >
                         <span>Navmesh (Pathfinding)</span>
                         {overlaySettings.activeOverlay === 'navmesh' && <span>ON</span>}
+                      </button>
+                      <button
+                        onClick={() => {
+                          toggleOverlay('resource');
+                          setShowOverlayMenu(false);
+                        }}
+                        className={`w-full px-4 py-2 text-left text-sm hover:bg-void-800 transition-colors flex justify-between items-center ${
+                          overlaySettings.activeOverlay === 'resource' ? 'text-blue-400' : 'text-void-200'
+                        }`}
+                      >
+                        <span>Resources (Minerals/Gas)</span>
+                        {overlaySettings.activeOverlay === 'resource' && <span>ON</span>}
                       </button>
                       <div className="border-t border-void-700 my-1" />
                       <div className="px-4 py-1 text-xs text-void-500">
