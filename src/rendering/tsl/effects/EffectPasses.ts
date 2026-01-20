@@ -27,7 +27,6 @@ import {
   min,
   max,
   texture,
-  cameraProjectionMatrixInverse,
 } from 'three/tsl';
 
 // WebGPU post-processing nodes from addons
@@ -696,6 +695,8 @@ export function createFogOfWarPass(
   // Camera uniforms for world position reconstruction
   const uCameraNear = uniform(camera.near);
   const uCameraFar = uniform(camera.far);
+  // Custom inverse projection matrix (NOT the built-in which is jittered by TRAA)
+  const uInverseProjection = uniform(camera.projectionMatrixInverse.clone());
   // Camera world matrix (inverse view) for view->world transform
   const uCameraWorldMatrix = uniform(camera.matrixWorld.clone());
 
@@ -737,8 +738,8 @@ export function createFogOfWarPass(
     // Build clip-space position (WebGPU uses depth 0-1)
     const clipPos = vec4(screenX, screenY, depthSample, float(1.0));
 
-    // Transform clip -> view space via inverse projection
-    const viewPos4 = cameraProjectionMatrixInverse.mul(clipPos);
+    // Transform clip -> view space via our custom inverse projection uniform
+    const viewPos4 = uInverseProjection.mul(clipPos);
     const viewPos = viewPos4.xyz.div(viewPos4.w);
 
     // Transform view -> world space via camera world matrix
@@ -951,6 +952,8 @@ export function createFogOfWarPass(
     // Update camera parameters for world position reconstruction
     uCameraNear.value = cam.near;
     uCameraFar.value = cam.far;
+    // Inverse projection for clip->view transform (using our own uniform, not built-in jittered one)
+    uInverseProjection.value.copy(cam.projectionMatrixInverse);
     // Camera world matrix transforms view-space to world-space
     uCameraWorldMatrix.value.copy(cam.matrixWorld);
   };
