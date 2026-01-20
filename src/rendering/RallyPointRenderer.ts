@@ -8,11 +8,9 @@ import { getLocalPlayerId, isSpectatorMode } from '@/store/gameSetupStore';
 
 interface RallyPoint {
   buildingId: number;
-  line: THREE.Line;
+  lineGroup: THREE.Group;
+  lineMeshes: THREE.Mesh[];
   marker: THREE.Mesh;
-  // PERF: Reusable position attribute for line updates (avoids geometry recreation)
-  positionAttribute: THREE.BufferAttribute;
-  maxPoints: number;
 }
 
 export class RallyPointRenderer {
@@ -25,14 +23,14 @@ export class RallyPointRenderer {
   private rallyPoints: Map<number, RallyPoint> = new Map();
   private selectedBuildingIds: Set<number> = new Set();
 
-  // Shared materials
-  private lineMaterial: THREE.LineBasicMaterial;
+  // Shared materials and geometry
+  private lineMaterial: THREE.MeshBasicMaterial;
   private markerMaterial: THREE.MeshBasicMaterial;
   private markerGeometry: THREE.ConeGeometry;
-
-  // PERF: Reusable Vector3 objects for line point calculations (avoids allocation in hot path)
-  private readonly _tempVec1 = new THREE.Vector3();
-  private readonly _tempVec2 = new THREE.Vector3();
+  private lineSegmentGeometry: THREE.BoxGeometry;
+  private readonly LINE_WIDTH = 0.06;
+  private readonly DASH_LENGTH = 0.5;
+  private readonly GAP_LENGTH = 0.3;
 
   constructor(
     scene: THREE.Scene,
@@ -48,11 +46,11 @@ export class RallyPointRenderer {
     this.getTerrainHeight = getTerrainHeight ?? null;
 
     // Create shared resources
-    this.lineMaterial = new THREE.LineBasicMaterial({
+    // Using MeshBasicMaterial instead of LineBasicMaterial because linewidth doesn't work in WebGL/WebGPU
+    this.lineMaterial = new THREE.MeshBasicMaterial({
       color: 0x00ff88,
       transparent: true,
       opacity: 0.7,
-      linewidth: 2,
     });
 
     this.markerMaterial = new THREE.MeshBasicMaterial({
@@ -62,6 +60,9 @@ export class RallyPointRenderer {
     });
 
     this.markerGeometry = new THREE.ConeGeometry(0.3, 0.6, 8);
+
+    // Unit box geometry for line segments - will be scaled to dash length
+    this.lineSegmentGeometry = new THREE.BoxGeometry(1, this.LINE_WIDTH, this.LINE_WIDTH);
 
     this.setupEventListeners();
   }
@@ -109,9 +110,8 @@ export class RallyPointRenderer {
     // Remove rally points for buildings no longer selected
     for (const [buildingId, rallyPoint] of this.rallyPoints.entries()) {
       if (!this.selectedBuildingIds.has(buildingId)) {
-        this.scene.remove(rallyPoint.line);
+        this.scene.remove(rallyPoint.lineGroup);
         this.scene.remove(rallyPoint.marker);
-        rallyPoint.line.geometry.dispose();
         this.rallyPoints.delete(buildingId);
       }
     }
@@ -151,7 +151,7 @@ export class RallyPointRenderer {
           building.rallyY
         );
         this.rallyPoints.set(buildingId, rallyPoint);
-        this.scene.add(rallyPoint.line);
+        this.scene.add(rallyPoint.lineGroup);
         this.scene.add(rallyPoint.marker);
       }
     }
@@ -163,21 +163,17 @@ export class RallyPointRenderer {
     endX: number,
     endY: number
   ): RallyPoint {
-    // PERF: Pre-allocate buffer for max expected points (prevents recreation)
-    // Max distance ~200 units, dash+gap = 0.8, so ~250 segments * 2 points = 500 points
-    const maxPoints = 500;
-    const positions = new Float32Array(maxPoints * 3);
-    const positionAttribute = new THREE.BufferAttribute(positions, 3);
-    positionAttribute.setUsage(THREE.DynamicDrawUsage);
+    const lineGroup = new THREE.Group();
+    const lineMeshes: THREE.Mesh[] = [];
 
-    const geometry = new THREE.BufferGeometry();
-    geometry.setAttribute('position', positionAttribute);
-
-    // Fill initial points
-    const pointCount = this.fillDashedLinePositions(positionAttribute, startX, startY, endX, endY);
-    geometry.setDrawRange(0, pointCount);
-
-    const line = new THREE.Line(geometry, this.lineMaterial);
+    // Create dashed line segment meshes
+    const segments = this.createDashedLineSegments(startX, startY, endX, endY);
+    for (const seg of segments) {
+      const mesh = new THREE.Mesh(this.lineSegmentGeometry, this.lineMaterial);
+      this.positionLineSegmentMesh(mesh, seg.start, seg.end);
+      lineGroup.add(mesh);
+      lineMeshes.push(mesh);
+    }
 
     // Create marker at rally point - account for terrain height
     const endHeight = this.getTerrainHeight ? this.getTerrainHeight(endX, endY) : 0;
@@ -185,7 +181,7 @@ export class RallyPointRenderer {
     marker.position.set(endX, endHeight + 0.5, endY);
     marker.rotation.x = Math.PI; // Point downward
 
-    return { buildingId: 0, line, marker, positionAttribute, maxPoints };
+    return { buildingId: 0, lineGroup, lineMeshes, marker };
   }
 
   private updateRallyPointVisual(
@@ -195,10 +191,24 @@ export class RallyPointRenderer {
     endX: number,
     endY: number
   ): void {
-    // PERF: Reuse existing buffer attribute instead of recreating geometry
-    const pointCount = this.fillDashedLinePositions(rallyPoint.positionAttribute, startX, startY, endX, endY);
-    rallyPoint.positionAttribute.needsUpdate = true;
-    rallyPoint.line.geometry.setDrawRange(0, pointCount);
+    const segments = this.createDashedLineSegments(startX, startY, endX, endY);
+
+    // Add or remove line meshes as needed
+    while (rallyPoint.lineMeshes.length > segments.length) {
+      const mesh = rallyPoint.lineMeshes.pop()!;
+      rallyPoint.lineGroup.remove(mesh);
+    }
+
+    while (rallyPoint.lineMeshes.length < segments.length) {
+      const mesh = new THREE.Mesh(this.lineSegmentGeometry, this.lineMaterial);
+      rallyPoint.lineGroup.add(mesh);
+      rallyPoint.lineMeshes.push(mesh);
+    }
+
+    // Update line mesh positions
+    for (let i = 0; i < segments.length; i++) {
+      this.positionLineSegmentMesh(rallyPoint.lineMeshes[i], segments[i].start, segments[i].end);
+    }
 
     // Update marker position - account for terrain height
     const endHeight = this.getTerrainHeight ? this.getTerrainHeight(endX, endY) : 0;
@@ -209,35 +219,28 @@ export class RallyPointRenderer {
     rallyPoint.marker.rotation.y = time;
   }
 
-  /**
-   * PERF: Fill dashed line positions directly into buffer attribute (no allocation)
-   * Returns the number of points written
-   */
-  private fillDashedLinePositions(
-    attribute: THREE.BufferAttribute,
+  private createDashedLineSegments(
     startX: number,
     startY: number,
     endX: number,
     endY: number
-  ): number {
-    const dashLength = 0.5;
-    const gapLength = 0.3;
+  ): Array<{ start: THREE.Vector3; end: THREE.Vector3 }> {
+    const segments: Array<{ start: THREE.Vector3; end: THREE.Vector3 }> = [];
     const lineOffset = 0.2; // Height above terrain
 
     const dx = endX - startX;
     const dy = endY - startY;
     const distance = Math.sqrt(dx * dx + dy * dy);
-    if (distance < 0.01) return 0;
+    if (distance < 0.01) return segments;
 
-    const segments = Math.floor(distance / (dashLength + gapLength));
+    const dashPlusGap = this.DASH_LENGTH + this.GAP_LENGTH;
+    const numDashes = Math.floor(distance / dashPlusGap);
     const dirX = dx / distance;
     const dirY = dy / distance;
 
-    let pointIndex = 0;
-
-    for (let i = 0; i < segments && pointIndex < attribute.count - 2; i++) {
-      const segmentStart = i * (dashLength + gapLength);
-      const segmentEnd = segmentStart + dashLength;
+    for (let i = 0; i < numDashes; i++) {
+      const segmentStart = i * dashPlusGap;
+      const segmentEnd = segmentStart + this.DASH_LENGTH;
 
       const x1 = startX + dirX * segmentStart;
       const z1 = startY + dirY * segmentStart;
@@ -247,35 +250,61 @@ export class RallyPointRenderer {
       const y1 = (this.getTerrainHeight ? this.getTerrainHeight(x1, z1) : 0) + lineOffset;
       const y2 = (this.getTerrainHeight ? this.getTerrainHeight(x2, z2) : 0) + lineOffset;
 
-      attribute.setXYZ(pointIndex++, x1, y1, z1);
-      attribute.setXYZ(pointIndex++, x2, y2, z2);
+      segments.push({
+        start: new THREE.Vector3(x1, y1, z1),
+        end: new THREE.Vector3(x2, y2, z2),
+      });
     }
 
-    // Add final segment to reach the end point
-    const lastSegmentEnd = segments * (dashLength + gapLength);
-    if (lastSegmentEnd < distance && pointIndex < attribute.count - 2) {
+    // Add final segment to reach the end point if needed
+    const lastSegmentEnd = numDashes * dashPlusGap;
+    if (lastSegmentEnd < distance) {
       const x1 = startX + dirX * lastSegmentEnd;
       const z1 = startY + dirY * lastSegmentEnd;
       const y1 = (this.getTerrainHeight ? this.getTerrainHeight(x1, z1) : 0) + lineOffset;
       const yEnd = (this.getTerrainHeight ? this.getTerrainHeight(endX, endY) : 0) + lineOffset;
 
-      attribute.setXYZ(pointIndex++, x1, y1, z1);
-      attribute.setXYZ(pointIndex++, endX, yEnd, endY);
+      segments.push({
+        start: new THREE.Vector3(x1, y1, z1),
+        end: new THREE.Vector3(endX, yEnd, endY),
+      });
     }
 
-    return pointIndex;
+    return segments;
+  }
+
+  private positionLineSegmentMesh(mesh: THREE.Mesh, start: THREE.Vector3, end: THREE.Vector3): void {
+    // Calculate segment length and midpoint
+    const dx = end.x - start.x;
+    const dy = end.y - start.y;
+    const dz = end.z - start.z;
+    const length = Math.sqrt(dx * dx + dy * dy + dz * dz);
+
+    // Position at midpoint
+    mesh.position.set(
+      (start.x + end.x) / 2,
+      (start.y + end.y) / 2,
+      (start.z + end.z) / 2
+    );
+
+    // Scale to segment length
+    mesh.scale.set(length, 1, 1);
+
+    // Rotate to align with segment direction
+    mesh.lookAt(end);
+    mesh.rotateY(Math.PI / 2);
   }
 
   public dispose(): void {
     for (const rallyPoint of this.rallyPoints.values()) {
-      this.scene.remove(rallyPoint.line);
+      this.scene.remove(rallyPoint.lineGroup);
       this.scene.remove(rallyPoint.marker);
-      rallyPoint.line.geometry.dispose();
     }
     this.rallyPoints.clear();
 
     this.lineMaterial.dispose();
     this.markerMaterial.dispose();
     this.markerGeometry.dispose();
+    this.lineSegmentGeometry.dispose();
   }
 }
