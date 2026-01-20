@@ -335,8 +335,10 @@ export class VehicleEffectsSystem {
       const isIdle = unit.state === 'idle';
 
       // Calculate rotation matrix for transforming local directions
-      // Attachment points are defined in unit-local space where +X is forward (facing direction)
-      this._tempQuat.setFromAxisAngle(new THREE.Vector3(0, 1, 0), transform.rotation);
+      // Attachment points are defined in MODEL-local space (before config rotation offset)
+      // We need to apply both the model's config rotation AND the game world rotation
+      const modelRotationY = this.assetManager.getModelRotationY(tracked.unitType);
+      this._tempQuat.setFromAxisAngle(new THREE.Vector3(0, 1, 0), transform.rotation + modelRotationY);
       this._rotationMatrix.makeRotationFromQuaternion(this._tempQuat);
 
       // Process each effect
