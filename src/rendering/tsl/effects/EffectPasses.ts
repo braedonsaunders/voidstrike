@@ -27,6 +27,9 @@ import {
   min,
   max,
   texture,
+  normalize,
+  abs,
+  tan,
 } from 'three/tsl';
 
 // WebGPU post-processing nodes from addons
@@ -692,12 +695,14 @@ export function createFogOfWarPass(
   const uGridDimensions = uniform(new THREE.Vector2(128, 128));
   const uCellSize = uniform(2.0);
 
-  // Camera uniforms for depth reconstruction
-  const uCameraNear = uniform(camera.near);
-  const uCameraFar = uniform(camera.far);
-  const uCameraPos = uniform(camera.position.clone());
-  const uInverseProjection = uniform(new THREE.Matrix4());
-  const uInverseView = uniform(new THREE.Matrix4());
+  // Camera uniforms for world position reconstruction
+  // Using frustum corners on ground plane for reliable mapping
+  // Corners are: bottomLeft, bottomRight, topLeft, topRight (in screen space)
+  // Each vec2 contains world X, Z coordinates where frustum ray hits ground
+  const uFrustumBL = uniform(new THREE.Vector2(0, 0)); // bottom-left
+  const uFrustumBR = uniform(new THREE.Vector2(256, 0)); // bottom-right
+  const uFrustumTL = uniform(new THREE.Vector2(0, 256)); // top-left
+  const uFrustumTR = uniform(new THREE.Vector2(256, 256)); // top-right
 
   // Vision texture (will be set dynamically)
   let visionTextureRef: THREE.Texture | null = null;
@@ -723,26 +728,17 @@ export function createFogOfWarPass(
     // Early exit if disabled
     const result = vec3(sceneColor).toVar();
 
-    // Sample depth and reconstruct world position
+    // Reconstruct world XZ position using frustum corner interpolation
+    // This avoids TSL matrix multiplication issues and works reliably for RTS camera
+    // Bilinear interpolation: lerp bottom edge, lerp top edge, then lerp between them
+    const bottomXZ = mix(vec2(uFrustumBL), vec2(uFrustumBR), fragUV.x);
+    const topXZ = mix(vec2(uFrustumTL), vec2(uFrustumTR), fragUV.x);
+    const worldXZ = mix(bottomXZ, topXZ, fragUV.y);
+    const worldX = worldXZ.x;
+    const worldZ = worldXZ.y;
+    // Height from depth for fog density variation (approximate)
     const depthSample = texture(depthNode, fragUV).r;
-    const z = depthSample.mul(2.0).sub(1.0);
-
-    // Reconstruct world position using inverse matrices
-    // NDC to clip space
-    const ndcX = fragUV.x.mul(2.0).sub(1.0);
-    const ndcY = fragUV.y.mul(2.0).sub(1.0);
-    const clipPos = vec4(ndcX, ndcY, z, float(1.0));
-
-    // Clip space -> View space (using inverse projection)
-    const viewPos = uInverseProjection.mul(clipPos);
-    // Perspective division in view space
-    const viewPosNorm = viewPos.xyz.div(viewPos.w);
-
-    // View space -> World space (using inverse view / camera matrix world)
-    const worldPos4 = uInverseView.mul(vec4(viewPosNorm, float(1.0)));
-    const worldX = worldPos4.x;
-    const worldY = worldPos4.y;
-    const worldZ = worldPos4.z;
+    const worldY = depthSample.mul(20.0); // Scale depth to approximate height
 
     // Convert world position to vision grid UV
     const visionU = worldX.div(uMapDimensions.x);
@@ -933,12 +929,48 @@ export function createFogOfWarPass(
     uTime.value = t;
   };
 
+  // Helper to compute where a screen corner ray hits the ground plane (Y=0)
+  const computeGroundIntersection = (
+    cam: THREE.PerspectiveCamera,
+    ndcX: number,
+    ndcY: number,
+    raycaster: THREE.Raycaster,
+    groundPlane: THREE.Plane
+  ): THREE.Vector2 => {
+    // Set raycaster from camera through NDC point
+    raycaster.setFromCamera(new THREE.Vector2(ndcX, ndcY), cam);
+    const ray = raycaster.ray;
+
+    // Intersect with ground plane (Y=0)
+    const target = new THREE.Vector3();
+    const intersects = ray.intersectPlane(groundPlane, target);
+
+    if (intersects) {
+      return new THREE.Vector2(target.x, target.z);
+    }
+    // Fallback: project camera position onto ground with offset
+    return new THREE.Vector2(
+      cam.position.x + ndcX * 100,
+      cam.position.z - ndcY * 100
+    );
+  };
+
+  // Reusable objects for updateCamera
+  const raycaster = new THREE.Raycaster();
+  const groundPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0); // Y=0 plane
+
   const updateCamera = (cam: THREE.PerspectiveCamera) => {
-    uCameraNear.value = cam.near;
-    uCameraFar.value = cam.far;
-    uCameraPos.value.copy(cam.position);
-    uInverseProjection.value.copy(cam.projectionMatrixInverse);
-    uInverseView.value.copy(cam.matrixWorld);
+    // Compute frustum corners where screen edges intersect ground plane
+    // NDC coordinates: bottom-left (-1,-1), bottom-right (1,-1), top-left (-1,1), top-right (1,1)
+    const bl = computeGroundIntersection(cam, -1, -1, raycaster, groundPlane);
+    const br = computeGroundIntersection(cam, 1, -1, raycaster, groundPlane);
+    const tl = computeGroundIntersection(cam, -1, 1, raycaster, groundPlane);
+    const tr = computeGroundIntersection(cam, 1, 1, raycaster, groundPlane);
+
+    uFrustumBL.value.copy(bl);
+    uFrustumBR.value.copy(br);
+    uFrustumTL.value.copy(tl);
+    uFrustumTR.value.copy(tr);
   };
 
   const applyConfig = (config: Partial<FogOfWarConfig>) => {
