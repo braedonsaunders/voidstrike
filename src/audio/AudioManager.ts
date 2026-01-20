@@ -256,8 +256,16 @@ class AudioManagerClass {
       this.audioContext = new (window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext)();
     }
 
-    // Resume audio context on user interaction
+    // Resume audio context - try immediately first, then add listeners as fallback
     if (this.audioContext && this.audioContext.state === 'suspended') {
+      // Try to resume immediately - this works if we're still within a user gesture context
+      // (e.g., the click that started the game might still be active)
+      this.audioContext.resume().catch(() => {
+        // Silent catch - immediate resume failed, will rely on event listeners below
+      });
+
+      // Add event listeners as fallback for when immediate resume fails
+      // This handles cases where spectators don't interact with the game at all
       const resumeAudio = () => {
         this.audioContext?.resume();
         document.removeEventListener('click', resumeAudio);
@@ -447,7 +455,13 @@ class AudioManagerClass {
   // ============================================================================
 
   public playAt(soundId: string, position: THREE.Vector3, volumeMultiplier = 1): void {
-    if (this.muted || !this.listener) return;
+    if (this.muted) return;
+
+    // Fall back to 2D audio if no listener (e.g., spectator mode or initialization issue)
+    if (!this.listener) {
+      this.play(soundId, volumeMultiplier);
+      return;
+    }
 
     const config = this.soundConfigs.get(soundId);
     if (!config) {
