@@ -6,6 +6,36 @@
 
 ---
 
+## Fog of War Post-Processing Overhaul (January 2026) ✓
+
+### StarCraft 2-Inspired Visual Upgrade
+- [x] **Post-processing integration** - Moved fog of war from mesh overlay to post-processing pass
+- [x] **Soft edge transitions** - Multi-sample Gaussian blur kernel eliminates blocky cell edges
+- [x] **Desaturation for explored areas** - SC2-style grayscale + cool color shift for "memory" effect
+- [x] **Animated procedural clouds** - Multi-octave FBM noise for unexplored regions
+- [x] **Temporal smoothing** - ~0.3 second dissolve for visibility transitions
+- [x] **Edge glow (rim light)** - Screen-space derivative detection for vision boundary highlight
+- [x] **Height-aware fog** - Fog density varies with terrain height
+
+### GPU Vision Compute Enhancements
+- [x] **Temporal smoothing in compute shader** - Smooth visibility in GPU with ping-pong buffers
+- [x] **RGBA texture format** - R=explored, G=visible, B=velocity, A=smooth
+- [x] **Linear filtering** - GPU texture uses LinearFilter for hardware interpolation
+
+### Quality Presets
+- [x] **Low** - 1 sample, 1 cloud octave, no temporal (mobile/low-end)
+- [x] **Medium** - 5 samples, 2 octaves, temporal enabled
+- [x] **High** - 9 samples (3x3 kernel), 3 octaves, temporal enabled (default)
+- [x] **Ultra** - 13 samples (diamond), 3+ octaves, full temporal
+
+### Architecture Changes
+- [x] **TSLFogOfWar refactored** - Now provides vision texture only (mesh removed)
+- [x] **FogOfWarPass created** - Post-processing pass in EffectPasses.ts
+- [x] **Pipeline integration** - Inserted between SSR and Bloom in render pipeline
+- [x] **uiStore settings** - Quality, edge blur, desaturation, cloud speed, rim intensity
+
+---
+
 ## High-Performance Battle Simulator Optimization (January 2026) ✓
 
 ### SpatialGrid Rewrite

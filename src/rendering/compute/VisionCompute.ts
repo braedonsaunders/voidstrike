@@ -8,8 +8,13 @@
  *
  * Architecture:
  * - Storage buffer: Unit positions + sight ranges packed as vec4(x, y, sightRadius, playerId)
- * - Storage texture: RGBA per cell (R = explored flag, G = visible flag) per player
+ * - Storage texture: RGBA per cell per player
+ *   - R = explored flag (0 or 1, persists once seen)
+ *   - G = visible flag (0 or 1, current frame)
+ *   - B = visibility velocity (change rate for edge effects)
+ *   - A = smooth visibility (temporally filtered for smooth transitions)
  * - Workgroup size: 64 threads
+ * - Ping-pong buffers for temporal accumulation
  * - FogOfWar shader samples StorageTexture directly (no CPU readback)
  */
 
@@ -27,6 +32,8 @@ import {
   If,
   instanceIndex,
   textureStore,
+  texture,
+  max,
 } from 'three/tsl';
 
 import { debugShaders } from '@/utils/debugLogger';
@@ -39,6 +46,9 @@ const MAX_CASTERS = 2048;
 
 // Workgroup size for vision compute
 const WORKGROUP_SIZE = 64;
+
+// Temporal smoothing factor (higher = faster transitions)
+const TEMPORAL_BLEND_SPEED = 0.15;
 
 export interface VisionCaster {
   x: number;
@@ -60,8 +70,11 @@ export class VisionCompute {
   private gridWidth: number;
   private gridHeight: number;
 
-  // GPU storage textures per player (R=explored, G=visible)
-  private visionStorageTextures: Map<number, THREE.Texture> = new Map();
+  // GPU storage textures per player - ping-pong for temporal accumulation
+  // Format: RGBA where R=explored, G=visible, B=velocity, A=smooth visibility
+  private visionTexturesA: Map<number, THREE.Texture> = new Map();
+  private visionTexturesB: Map<number, THREE.Texture> = new Map();
+  private currentBufferIsA: Map<number, boolean> = new Map();
 
   // Caster storage buffer
   private casterData: Float32Array;
@@ -76,6 +89,8 @@ export class VisionCompute {
   private uCellSize = uniform(1);
   private uCasterCount = uniform(0);
   private uTargetPlayerId = uniform(0);
+  private uTemporalBlend = uniform(TEMPORAL_BLEND_SPEED);
+  private uDeltaTime = uniform(0.016); // ~60fps default
 
   // State tracking
   private gpuComputeAvailable = false;
@@ -115,7 +130,7 @@ export class VisionCompute {
       this.useCPUFallback = false;
 
       debugShaders.log(`[VisionCompute] GPU compute initialized (${this.gridWidth}x${this.gridHeight} grid)`);
-      console.log('[GPU Vision] ✓ INITIALIZED');
+      console.log('[GPU Vision] ✓ INITIALIZED with temporal smoothing');
     } catch (e) {
       const errorMsg = e instanceof Error ? e.message : String(e);
       debugShaders.warn('[VisionCompute] GPU compute not available:', errorMsg);
@@ -126,15 +141,25 @@ export class VisionCompute {
   }
 
   /**
-   * Create GPU compute shader for vision calculation
+   * Create GPU compute shader for vision calculation with temporal smoothing
+   *
+   * Output format (RGBA):
+   * - R: explored (0 or 1) - persists once area is seen
+   * - G: visible (0 or 1) - current frame visibility
+   * - B: velocity (signed) - rate of visibility change for edge effects
+   * - A: smooth visibility (0-1) - temporally filtered for smooth transitions
    */
-  private createComputeShader(storageTexture: THREE.Texture): any {
+  private createComputeShader(
+    currentTexture: THREE.Texture,
+    previousTexture: THREE.Texture
+  ): any {
     const gridWidth = this.uGridWidth;
     const gridHeight = this.uGridHeight;
     const cellSize = this.uCellSize;
     const casterCount = this.uCasterCount;
     const targetPlayerId = this.uTargetPlayerId;
     const casterBuffer = this.casterStorageBuffer!;
+    const temporalBlend = this.uTemporalBlend;
 
     const computeVision = Fn(() => {
       const cellIndex = instanceIndex;
@@ -150,7 +175,16 @@ export class VisionCompute {
       const worldX = cellX.toFloat().mul(cellSize).add(cellSize.mul(0.5));
       const worldY = cellY.toFloat().mul(cellSize).add(cellSize.mul(0.5));
 
-      // Track visibility
+      // Read previous frame's data for temporal accumulation
+      const prevUV = vec2(
+        cellX.toFloat().add(0.5).div(gridWidth),
+        cellY.toFloat().add(0.5).div(gridHeight)
+      );
+      const prevData = texture(previousTexture).sample(prevUV);
+      const prevExplored = prevData.r;
+      const prevSmooth = prevData.a;
+
+      // Track visibility for current frame
       const isVisible = float(0).toVar();
 
       // Check against all casters
@@ -174,13 +208,32 @@ export class VisionCompute {
         i.addAssign(1);
       });
 
-      // Write to storage texture
-      // R = explored (once visible, always explored)
-      // G = currently visible
+      // ============================================
+      // TEMPORAL SMOOTHING
+      // ============================================
+      // Smooth visibility transitions over time
+      // new_smooth = lerp(prev_smooth, current_visible, blend_speed)
+      const targetSmooth = isVisible;
+      const newSmooth = prevSmooth.add(targetSmooth.sub(prevSmooth).mul(temporalBlend));
+
+      // Visibility velocity (for edge glow effects)
+      // Positive = becoming visible, Negative = becoming hidden
+      const velocity = targetSmooth.sub(prevSmooth);
+
+      // Explored flag - once seen, always explored
+      const newExplored = max(prevExplored, isVisible);
+
+      // ============================================
+      // WRITE OUTPUT
+      // ============================================
+      // R = explored (persists)
+      // G = visible (current frame, binary)
+      // B = velocity (change rate, signed)
+      // A = smooth (temporally filtered 0-1)
       textureStore(
-        storageTexture,
+        currentTexture,
         vec2(cellX, cellY),
-        vec4(isVisible, isVisible, 0, 1)
+        vec4(newExplored, isVisible, velocity.mul(0.5).add(0.5), newSmooth)
       );
     });
 
@@ -189,26 +242,47 @@ export class VisionCompute {
   }
 
   /**
-   * Get or create storage texture for a player
+   * Get or create storage textures for a player (ping-pong pair)
    */
-  private getOrCreateStorageTexture(playerId: number): THREE.Texture {
-    const existing = this.visionStorageTextures.get(playerId);
-    if (existing) {
-      return existing;
+  private getOrCreateStorageTextures(playerId: number): {
+    current: THREE.Texture;
+    previous: THREE.Texture;
+  } {
+    let texA = this.visionTexturesA.get(playerId);
+    let texB = this.visionTexturesB.get(playerId);
+
+    if (!texA || !texB) {
+      // Create ping-pong pair
+      texA = new StorageTexture(this.gridWidth, this.gridHeight) as THREE.Texture;
+      texA.type = THREE.FloatType;
+      texA.format = THREE.RGBAFormat;
+      texA.minFilter = THREE.LinearFilter; // Linear for smooth sampling
+      texA.magFilter = THREE.LinearFilter;
+      texA.wrapS = THREE.ClampToEdgeWrapping;
+      texA.wrapT = THREE.ClampToEdgeWrapping;
+
+      texB = new StorageTexture(this.gridWidth, this.gridHeight) as THREE.Texture;
+      texB.type = THREE.FloatType;
+      texB.format = THREE.RGBAFormat;
+      texB.minFilter = THREE.LinearFilter;
+      texB.magFilter = THREE.LinearFilter;
+      texB.wrapS = THREE.ClampToEdgeWrapping;
+      texB.wrapT = THREE.ClampToEdgeWrapping;
+
+      this.visionTexturesA.set(playerId, texA);
+      this.visionTexturesB.set(playerId, texB);
+      this.currentBufferIsA.set(playerId, true);
+
+      // Create compute node for this player
+      const computeNode = this.createComputeShader(texA, texB);
+      this.computeNodes.set(playerId, { nodeAB: computeNode, nodeBA: null });
     }
 
-    const tex = new StorageTexture(this.gridWidth, this.gridHeight) as THREE.Texture;
-    tex.type = THREE.FloatType;
-    tex.format = THREE.RGBAFormat;
-    tex.minFilter = THREE.NearestFilter;
-    tex.magFilter = THREE.NearestFilter;
-
-    this.visionStorageTextures.set(playerId, tex);
-
-    const computeNode = this.createComputeShader(tex);
-    this.computeNodes.set(playerId, computeNode);
-
-    return tex;
+    const isA = this.currentBufferIsA.get(playerId) ?? true;
+    return {
+      current: isA ? texA! : texB!,
+      previous: isA ? texB! : texA!,
+    };
   }
 
   /**
@@ -259,10 +333,21 @@ export class VisionCompute {
   }
 
   /**
+   * Set temporal blend speed (0-1, higher = faster transitions)
+   */
+  public setTemporalBlendSpeed(speed: number): void {
+    this.uTemporalBlend.value = Math.max(0.01, Math.min(1.0, speed));
+  }
+
+  /**
    * Update vision with new caster data
    */
-  public updateVision(casters: VisionCaster[], playerIds: Set<number>): void {
+  public updateVision(casters: VisionCaster[], playerIds: Set<number>, deltaTime?: number): void {
     if (casters.length === 0) return;
+
+    if (deltaTime !== undefined) {
+      this.uDeltaTime.value = deltaTime;
+    }
 
     if (!this.gpuComputeAvailable || this.useCPUFallback) {
       // CPU fallback is handled by VisionSystem
@@ -274,7 +359,7 @@ export class VisionCompute {
   }
 
   /**
-   * GPU compute path
+   * GPU compute path with temporal smoothing
    */
   private computeVisionGPU(casters: VisionCaster[], playerIds: Set<number>): void {
     const startTime = performance.now();
@@ -294,25 +379,29 @@ export class VisionCompute {
     let dispatchedCount = 0;
 
     for (const playerId of playerIds) {
-      this.getOrCreateStorageTexture(playerId);
+      const { current, previous } = this.getOrCreateStorageTextures(playerId);
       this.uTargetPlayerId.value = playerId;
 
-      const computeNode = this.computeNodes.get(playerId);
-      if (computeNode) {
-        try {
-          this.renderer.compute(computeNode);
-          dispatchedCount++;
+      // Create compute node with current buffer configuration
+      const isA = this.currentBufferIsA.get(playerId) ?? true;
+      const computeNode = this.createComputeShader(current, previous);
 
-          if (!this.gpuComputeVerified) {
-            this.gpuComputeVerified = true;
-            debugShaders.log(`[VisionCompute] GPU compute verified (${count} casters)`);
-          }
-        } catch (e) {
-          const errorMsg = e instanceof Error ? e.message : String(e);
-          debugShaders.warn('[VisionCompute] GPU compute failed:', errorMsg);
-          this.useCPUFallback = true;
-          this.gpuComputeVerified = false;
+      try {
+        this.renderer.compute(computeNode);
+        dispatchedCount++;
+
+        // Swap buffers for next frame
+        this.currentBufferIsA.set(playerId, !isA);
+
+        if (!this.gpuComputeVerified) {
+          this.gpuComputeVerified = true;
+          debugShaders.log(`[VisionCompute] GPU compute verified with temporal smoothing (${count} casters)`);
         }
+      } catch (e) {
+        const errorMsg = e instanceof Error ? e.message : String(e);
+        debugShaders.warn('[VisionCompute] GPU compute failed:', errorMsg);
+        this.useCPUFallback = true;
+        this.gpuComputeVerified = false;
       }
     }
 
@@ -322,10 +411,22 @@ export class VisionCompute {
 
   /**
    * Get vision storage texture for a player
-   * Returns the StorageTexture that FogOfWar samples directly
+   * Returns the current (most recent) StorageTexture that FogOfWar samples directly
+   *
+   * Texture format:
+   * - R: explored (0-1)
+   * - G: visible (0-1)
+   * - B: velocity (0.5 = no change, <0.5 = hiding, >0.5 = revealing)
+   * - A: smooth visibility (0-1, temporally filtered)
    */
   public getVisionTexture(playerId: number): THREE.Texture | null {
-    return this.visionStorageTextures.get(playerId) ?? null;
+    const isA = this.currentBufferIsA.get(playerId);
+    if (isA === undefined) return null;
+
+    // Return the buffer that was just written (current)
+    return isA
+      ? this.visionTexturesB.get(playerId) ?? null
+      : this.visionTexturesA.get(playerId) ?? null;
   }
 
   /**
@@ -341,10 +442,15 @@ export class VisionCompute {
     this.uCellSize.value = config.cellSize;
 
     // Clear existing textures
-    for (const tex of this.visionStorageTextures.values()) {
+    for (const tex of this.visionTexturesA.values()) {
       tex.dispose();
     }
-    this.visionStorageTextures.clear();
+    for (const tex of this.visionTexturesB.values()) {
+      tex.dispose();
+    }
+    this.visionTexturesA.clear();
+    this.visionTexturesB.clear();
+    this.currentBufferIsA.clear();
     this.computeNodes.clear();
 
     this.visionVersion++;
@@ -362,6 +468,16 @@ export class VisionCompute {
   }
 
   /**
+   * Get map dimensions
+   */
+  public getMapDimensions(): { width: number; height: number } {
+    return {
+      width: this.config.mapWidth,
+      height: this.config.mapHeight,
+    };
+  }
+
+  /**
    * Force CPU fallback mode (for debugging)
    */
   public forceCPUFallback(enable: boolean): void {
@@ -373,10 +489,15 @@ export class VisionCompute {
    * Dispose resources
    */
   public dispose(): void {
-    for (const tex of this.visionStorageTextures.values()) {
+    for (const tex of this.visionTexturesA.values()) {
       tex.dispose();
     }
-    this.visionStorageTextures.clear();
+    for (const tex of this.visionTexturesB.values()) {
+      tex.dispose();
+    }
+    this.visionTexturesA.clear();
+    this.visionTexturesB.clear();
+    this.currentBufferIsA.clear();
     this.computeNodes.clear();
   }
 }

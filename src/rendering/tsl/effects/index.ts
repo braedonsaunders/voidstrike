@@ -34,6 +34,13 @@ export {
   type VolumetricFogConfig,
   type VolumetricFogPassResult,
 
+  // Fog of War (StarCraft 2-style)
+  createFogOfWarPass,
+  FOG_OF_WAR_QUALITY_PRESETS,
+  type FogOfWarConfig,
+  type FogOfWarPassResult,
+  type FogOfWarQuality,
+
   // Color Grading
   createColorGradingPass,
   acesToneMap,

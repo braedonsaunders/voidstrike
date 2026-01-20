@@ -26,6 +26,7 @@ VOIDSTRIKE uses Three.js with WebGPU renderer and TSL (Three.js Shading Language
 | **Vignette** | ✅ Implemented | Cinematic edge darkening |
 | **Color Grading** | ✅ Implemented | Exposure, saturation, contrast with ACES Filmic tone mapping |
 | **Volumetric Fog** | ✅ Implemented | Raymarched atmospheric scattering with quality presets |
+| **Fog of War** | ✅ Implemented | StarCraft 2-style vision with soft edges, desaturation, animated clouds |
 
 ### Post-Processing Architecture (Modular Design)
 
@@ -223,10 +224,11 @@ This solves:
 2. **SSGI** - Global illumination + AO (if enabled)
 3. **GTAO** - Ambient occlusion (if SSGI disabled)
 4. **SSR** - Screen space reflections
-5. **Bloom** - HDR glow
-6. **Volumetric Fog** - Raymarched atmospheric scattering (if enabled)
-7. **Color Grading** - Exposure, saturation, contrast, vignette
-8. **TAA/FXAA** - Anti-aliasing
+5. **Fog of War** - StarCraft 2-style vision post-process (if enabled)
+6. **Bloom** - HDR glow
+7. **Volumetric Fog** - Raymarched atmospheric scattering (if enabled)
+8. **Color Grading** - Exposure, saturation, contrast, vignette
+9. **TAA/FXAA** - Anti-aliasing
 
 **Display Pipeline (display resolution):**
 1. **EASU** - Edge-adaptive upscaling from internal output
@@ -771,6 +773,71 @@ These exist in `uiStore.ts` but have no effect:
 - `src/rendering/tsl/effects/EffectPasses.ts` - Individual effect creation functions (SSGI, GTAO, SSR, Bloom, etc.)
 - `src/rendering/tsl/effects/TemporalManager.ts` - Quarter-res temporal pipeline management
 - `src/components/game/WebGPUGameCanvas.tsx` - Reactive settings
+
+### 2. Fog of War System ✅ IMPLEMENTED (StarCraft 2-Style)
+
+**Status:** Fully implemented and integrated into the PostProcessing pipeline (January 2026).
+
+**Implementation Details:**
+
+The fog of war system has been completely redesigned from a simple overlay mesh to a sophisticated post-processing effect inspired by StarCraft 2. Key features:
+
+1. **Soft Edge Transitions** - Multi-sample Gaussian blur kernel (3x3, 9 samples) on the vision texture eliminates blocky cell edges. Configurable blur radius (0-4 cells).
+
+2. **Desaturation for Explored Areas** - Previously seen areas are not just darkened but desaturated (up to 70%) and given a cool blue color shift, creating the distinctive "memory" effect from SC2.
+
+3. **Animated Procedural Clouds** - Unexplored regions feature multi-octave animated FBM noise creating slowly drifting clouds with subtle color variation (dark blues/purples).
+
+4. **Temporal Smoothing** - Both GPU compute and CPU fallback paths implement temporal smoothing for visibility transitions (~0.3 second dissolve), eliminating harsh instant on/off.
+
+5. **Edge Glow (Rim Light)** - Screen-space derivatives detect visibility boundaries and add a subtle rim glow, making the vision radius feel more defined.
+
+6. **Height-Aware Fog** - Fog density varies with terrain height (configurable influence), with valleys appearing foggier than high ground.
+
+7. **Quality Presets** - Low (1 sample, 1 octave), Medium (5 samples, 2 octaves), High (9 samples, 3 octaves), Ultra (13 samples, 3+ octaves)
+
+**Architecture:**
+```
+VisionSystem (game logic)
+    ↓ caster positions
+VisionCompute (GPU) - Ping-pong StorageTextures with temporal smoothing
+    ↓ RGBA: R=explored, G=visible, B=velocity, A=smooth
+TSLFogOfWar (texture provider)
+    ↓ vision texture
+FogOfWarPass (post-processing)
+    ↓ modified scene color (desaturated, cloud overlay, rim glow)
+Bloom → Volumetric Fog → Color Grading → TAA
+```
+
+**Vision Texture Format (RGBA):**
+- **R channel:** Explored flag (0 or 1) - persists once seen
+- **G channel:** Visible flag (0 or 1) - current frame binary
+- **B channel:** Velocity (0.5 = no change, <0.5 = hiding, >0.5 = revealing)
+- **A channel:** Smooth visibility (0-1, temporally filtered for transitions)
+
+**Files:**
+- `src/rendering/tsl/effects/EffectPasses.ts` - `createFogOfWarPass()` function
+- `src/rendering/compute/VisionCompute.ts` - GPU compute with temporal smoothing
+- `src/rendering/tsl/FogOfWar.ts` - Vision texture provider (removed mesh)
+- `src/rendering/tsl/PostProcessing.ts` - Pipeline integration
+- `src/store/uiStore.ts` - Quality settings (edge blur, desaturation, cloud speed, etc.)
+
+**Performance:**
+- GPU path: Zero CPU overhead, StorageTexture direct sampling
+- CPU fallback: 50ms throttling with temporal smoothing
+- Post-process cost: ~0.5-1ms depending on quality preset
+
+**Configuration (via Graphics Settings):**
+| Setting | Default | Range | Description |
+|---------|---------|-------|-------------|
+| `fogOfWarQuality` | high | low/medium/high/ultra | Edge samples and cloud octaves |
+| `fogOfWarEdgeBlur` | 2.5 | 0-4 | Blur radius in cells |
+| `fogOfWarDesaturation` | 0.7 | 0-1 | Explored area desaturation |
+| `fogOfWarExploredDarkness` | 0.5 | 0.3-0.7 | Explored brightness multiplier |
+| `fogOfWarUnexploredDarkness` | 0.12 | 0.05-0.2 | Unexplored brightness |
+| `fogOfWarCloudSpeed` | 0.015 | 0-0.1 | Cloud animation speed |
+| `fogOfWarRimIntensity` | 0.12 | 0-0.3 | Edge glow intensity |
+| `fogOfWarHeightInfluence` | 0.25 | 0-1 | Terrain height effect on fog |
 
 **Previous Proposed Approach (for reference):**
 
