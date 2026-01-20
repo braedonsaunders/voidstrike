@@ -3,6 +3,7 @@ import {
   CAMERA,
   DEFAULT_CAMERA_CONFIG,
 } from '@/data/rendering.config';
+import { clamp } from '@/utils/math';
 
 export interface CameraConfig {
   minZoom: number;
@@ -121,7 +122,7 @@ export class RTSCamera {
     const basePitch = minPitch + t * (maxPitch - minPitch);
 
     // Clamp final pitch to valid range
-    return Math.max(CAMERA.PITCH_CLAMP_MIN, Math.min(CAMERA.PITCH_CLAMP_MAX, basePitch + this.manualPitchOffset));
+    return clamp(basePitch + this.manualPitchOffset, CAMERA.PITCH_CLAMP_MIN, CAMERA.PITCH_CLAMP_MAX);
   }
 
   private setupEventListeners(): void {
@@ -176,7 +177,7 @@ export class RTSCamera {
       // Adjust manual pitch offset (vertical rotation)
       // Clamp offset so total pitch stays within valid range
       const newOffset = this.manualPitchOffset + deltaY * 0.01;
-      this.manualPitchOffset = Math.max(CAMERA.MANUAL_PITCH_OFFSET_MIN, Math.min(CAMERA.MANUAL_PITCH_OFFSET_MAX, newOffset));
+      this.manualPitchOffset = clamp(newOffset, CAMERA.MANUAL_PITCH_OFFSET_MIN, CAMERA.MANUAL_PITCH_OFFSET_MAX);
 
       // Recalculate pitch with new offset
       this.currentPitch = this.calculateZoomBasedPitch(this.currentZoom);
@@ -345,8 +346,8 @@ export class RTSCamera {
       // Clamp to map boundaries - allow panning close to edges
       const viewHalfWidth = this.currentZoom * CAMERA.VIEW_HALF_SIZE_FACTOR;
       const viewHalfHeight = this.currentZoom * CAMERA.VIEW_HALF_SIZE_FACTOR;
-      this.target.x = Math.max(viewHalfWidth, Math.min(this.mapWidth - viewHalfWidth, this.target.x));
-      this.target.z = Math.max(viewHalfHeight, Math.min(this.mapHeight - viewHalfHeight, this.target.z));
+      this.target.x = clamp(this.target.x, viewHalfWidth, this.mapWidth - viewHalfWidth);
+      this.target.z = clamp(this.target.z, viewHalfHeight, this.mapHeight - viewHalfHeight);
 
       // Update terrain min zoom when camera position changes
       this.updateTerrainMinZoom();
@@ -387,8 +388,8 @@ export class RTSCamera {
     const viewHalfHeight = this.currentZoom * CAMERA.VIEW_HALF_SIZE_FACTOR;
 
     // Clamp position while allowing camera to get close to edges
-    this.target.x = Math.max(viewHalfWidth, Math.min(this.mapWidth - viewHalfWidth, x));
-    this.target.z = Math.max(viewHalfHeight, Math.min(this.mapHeight - viewHalfHeight, z));
+    this.target.x = clamp(x, viewHalfWidth, this.mapWidth - viewHalfWidth);
+    this.target.z = clamp(z, viewHalfHeight, this.mapHeight - viewHalfHeight);
 
     // Update terrain min zoom for new position
     this.updateTerrainMinZoom();

@@ -5,7 +5,7 @@
  */
 
 import type { EditorCell, EditorMapData, EditorConfig, PlatformEdges } from '../config/EditorConfig';
-import { distance } from '@/utils/math';
+import { distance, clamp } from '@/utils/math';
 
 export interface BrushStroke {
   x: number;
@@ -568,7 +568,7 @@ export class TerrainBrush {
             const currentCell = this.mapData.terrain[y][x];
             const falloff = 1 - Math.sqrt(distSq) / radius;
             const noise = (seededRandom(x, y) - 0.5) * 2 * intensity * falloff;
-            const newElevation = Math.max(0, Math.min(255, Math.round(currentCell.elevation + noise)));
+            const newElevation = clamp(Math.round(currentCell.elevation + noise), 0, 255);
 
             updates.push({
               x,

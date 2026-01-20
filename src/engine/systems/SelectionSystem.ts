@@ -6,7 +6,7 @@ import { Building } from '../components/Building';
 import { Health } from '../components/Health';
 import { Game } from '../core/Game';
 import { useGameStore } from '@/store/gameStore';
-import { distance } from '@/utils/math';
+import { distance, clamp } from '@/utils/math';
 
 /**
  * Selection system with screen-space box selection, selection radius buffer,
@@ -227,8 +227,8 @@ export class SelectionSystem extends System {
     rectMaxY: number
   ): boolean {
     // Find the closest point on the rectangle to the circle center
-    const closestX = Math.max(rectMinX, Math.min(cx, rectMaxX));
-    const closestY = Math.max(rectMinY, Math.min(cy, rectMaxY));
+    const closestX = clamp(cx, rectMinX, rectMaxX);
+    const closestY = clamp(cy, rectMinY, rectMaxY);
 
     // Calculate distance from circle center to closest point
     const dx = cx - closestX;
@@ -301,8 +301,8 @@ export class SelectionSystem extends System {
 
       // Check if entity's bounding circle overlaps with selection box
       // This is circle-rectangle intersection
-      const closestX = Math.max(minX, Math.min(transform.x, maxX));
-      const closestY = Math.max(minY, Math.min(transform.y, maxY));
+      const closestX = clamp(transform.x, minX, maxX);
+      const closestY = clamp(transform.y, minY, maxY);
       const dx = transform.x - closestX;
       const dy = transform.y - closestY;
       const distanceSquared = dx * dx + dy * dy;

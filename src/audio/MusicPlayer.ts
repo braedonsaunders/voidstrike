@@ -1,6 +1,7 @@
 import { debugAudio } from '@/utils/debugLogger';
 import { audioConfig, MusicCategoryConfig } from './audioConfig';
 import musicManifest from '@/data/music-manifest.json';
+import { clamp } from '@/utils/math';
 
 export interface MusicTrack {
   name: string;
@@ -512,7 +513,7 @@ class MusicPlayerClass {
    * Set music volume (0-1)
    */
   public setVolume(volume: number): void {
-    this.volume = Math.max(0, Math.min(1, volume));
+    this.volume = clamp(volume, 0, 1);
     if (this.currentAudio && !this.muted) {
       this.currentAudio.volume = this.volume;
     }

@@ -18,6 +18,7 @@ import type {
   SymmetryMode,
   SnapMode,
 } from '../config/EditorConfig';
+import { clamp } from '@/utils/math';
 
 // Initial state factory
 function createInitialState(config: EditorConfig): EditorState {
@@ -238,7 +239,7 @@ export function useEditorState(config: EditorConfig): UseEditorStateReturn {
 
   // View actions
   const setZoom = useCallback((zoom: number) => {
-    const clampedZoom = Math.max(config.canvas.minZoom, Math.min(config.canvas.maxZoom, zoom));
+    const clampedZoom = clamp(zoom, config.canvas.minZoom, config.canvas.maxZoom);
     setState((prev) => ({ ...prev, zoom: clampedZoom }));
   }, [config.canvas.minZoom, config.canvas.maxZoom]);
 

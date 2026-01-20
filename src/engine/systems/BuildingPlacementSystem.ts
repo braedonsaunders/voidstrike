@@ -13,7 +13,7 @@ import { WALL_DEFINITIONS } from '@/data/buildings/walls';
 import { useGameStore } from '@/store/gameStore';
 import { isLocalPlayer, getLocalPlayerId } from '@/store/gameSetupStore';
 import { debugBuildingPlacement } from '@/utils/debugLogger';
-import { SeededRandom, distance } from '@/utils/math';
+import { SeededRandom, distance, clamp } from '@/utils/math';
 
 /**
  * BuildingPlacementSystem handles placing new buildings when workers construct them.
@@ -858,8 +858,8 @@ export class BuildingPlacementSystem extends System {
             }
 
             // Clamp to map bounds
-            transform.x = Math.max(1, Math.min(this.game.config.mapWidth - 1, transform.x));
-            transform.y = Math.max(1, Math.min(this.game.config.mapHeight - 1, transform.y));
+            transform.x = clamp(transform.x, 1, this.game.config.mapWidth - 1);
+            transform.y = clamp(transform.y, 1, this.game.config.mapHeight - 1);
 
             // Update spatial grid position
             this.world.unitGrid.update(entity.id, transform.x, transform.y, unit.collisionRadius);
@@ -1108,8 +1108,8 @@ export class BuildingPlacementSystem extends System {
         const newY = centerY + pushY;
 
         // Clamp to map bounds
-        const clampedX = Math.max(1, Math.min(this.game.config.mapWidth - 1, newX));
-        const clampedY = Math.max(1, Math.min(this.game.config.mapHeight - 1, newY));
+        const clampedX = clamp(newX, 1, this.game.config.mapWidth - 1);
+        const clampedY = clamp(newY, 1, this.game.config.mapHeight - 1);
 
         // Move the unit
         unit.setMoveTarget(clampedX, clampedY);
@@ -1280,8 +1280,8 @@ export class BuildingPlacementSystem extends System {
             transform.y = buildingTransform.y + (dy >= 0 ? halfH + 0.5 : -halfH - 0.5);
           }
 
-          transform.x = Math.max(1, Math.min(this.game.config.mapWidth - 1, transform.x));
-          transform.y = Math.max(1, Math.min(this.game.config.mapHeight - 1, transform.y));
+          transform.x = clamp(transform.x, 1, this.game.config.mapWidth - 1);
+          transform.y = clamp(transform.y, 1, this.game.config.mapHeight - 1);
           this.world.unitGrid.update(entity.id, transform.x, transform.y, unit.collisionRadius);
         }
 

@@ -10,6 +10,7 @@ import { Building } from '@/engine/components/Building';
 import { Resource } from '@/engine/components/Resource';
 import { Selectable } from '@/engine/components/Selectable';
 import { Health } from '@/engine/components/Health';
+import { clamp } from '@/utils/math';
 
 const MINIMAP_SIZE = 192;
 
@@ -48,8 +49,8 @@ export function Minimap() {
     const mapHeight = game.config.mapHeight;
 
     const rect = canvas.getBoundingClientRect();
-    const x = Math.max(0, Math.min(mapWidth, (clientX - rect.left) / MINIMAP_SIZE * mapWidth));
-    const y = Math.max(0, Math.min(mapHeight, (clientY - rect.top) / MINIMAP_SIZE * mapHeight));
+    const x = clamp((clientX - rect.left) / MINIMAP_SIZE * mapWidth, 0, mapWidth);
+    const y = clamp((clientY - rect.top) / MINIMAP_SIZE * mapHeight, 0, mapHeight);
     return { x, y };
   }, []);
 
@@ -260,8 +261,8 @@ export function Minimap() {
       let viewY = currentCameraY * scale - viewHeight / 2;
 
       // Clamp viewport rectangle to stay within minimap bounds
-      const clampedX = Math.max(0, Math.min(MINIMAP_SIZE - viewWidth, viewX));
-      const clampedY = Math.max(0, Math.min(MINIMAP_SIZE - viewHeight, viewY));
+      const clampedX = clamp(viewX, 0, MINIMAP_SIZE - viewWidth);
+      const clampedY = clamp(viewY, 0, MINIMAP_SIZE - viewHeight);
 
       ctx.strokeStyle = '#ffffff';
       ctx.lineWidth = 1.5;

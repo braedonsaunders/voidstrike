@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import { debugInitialization } from '@/utils/debugLogger';
+import { clamp } from '@/utils/math';
 
 export type ScreenType = 'main-menu' | 'game' | 'lobby' | 'loading' | 'settings';
 export type NotificationType = 'info' | 'warning' | 'error' | 'success';
@@ -796,7 +797,7 @@ export const useUIStore = create<UIState>((set, get) => ({
   },
 
   setSoundVolume: (volume) => {
-    set({ soundVolume: Math.max(0, Math.min(1, volume)) });
+    set({ soundVolume: clamp(volume, 0, 1) });
     const s = get();
     saveAudioSettings({
       musicEnabled: s.musicEnabled, soundEnabled: s.soundEnabled,
@@ -808,7 +809,7 @@ export const useUIStore = create<UIState>((set, get) => ({
   },
 
   setMusicVolume: (volume) => {
-    set({ musicVolume: Math.max(0, Math.min(1, volume)) });
+    set({ musicVolume: clamp(volume, 0, 1) });
     const s = get();
     saveAudioSettings({
       musicEnabled: s.musicEnabled, soundEnabled: s.soundEnabled,
@@ -845,7 +846,7 @@ export const useUIStore = create<UIState>((set, get) => ({
   },
 
   setVoiceVolume: (volume) => {
-    set({ voiceVolume: Math.max(0, Math.min(1, volume)) });
+    set({ voiceVolume: clamp(volume, 0, 1) });
     const s = get();
     saveAudioSettings({
       musicEnabled: s.musicEnabled, soundEnabled: s.soundEnabled,
@@ -857,7 +858,7 @@ export const useUIStore = create<UIState>((set, get) => ({
   },
 
   setAlertVolume: (volume) => {
-    set({ alertVolume: Math.max(0, Math.min(1, volume)) });
+    set({ alertVolume: clamp(volume, 0, 1) });
     const s = get();
     saveAudioSettings({
       musicEnabled: s.musicEnabled, soundEnabled: s.soundEnabled,
@@ -1196,7 +1197,7 @@ export const useUIStore = create<UIState>((set, get) => ({
         return {
           overlaySettings: {
             ...state.overlaySettings,
-            [key]: Math.max(0, Math.min(1, opacity)),
+            [key]: clamp(opacity, 0, 1),
           },
         };
       }

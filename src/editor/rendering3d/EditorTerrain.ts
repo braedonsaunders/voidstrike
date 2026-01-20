@@ -12,6 +12,7 @@ import * as THREE from 'three';
 import type { EditorMapData, EditorCell } from '../config/EditorConfig';
 import { CliffMesh } from './CliffMesh';
 import { GuardrailMesh } from './GuardrailMesh';
+import { clamp } from '@/utils/math';
 
 // Height scale factor (matches game terrain)
 const HEIGHT_SCALE = 0.04;
@@ -179,10 +180,10 @@ export class EditorTerrain {
   public markCellsDirty(cells: Array<{ x: number; y: number }>): void {
     for (const { x, y } of cells) {
       // Expand dirty region (include neighboring vertices)
-      this.dirtyMinX = Math.min(this.dirtyMinX, Math.max(0, x - 1));
-      this.dirtyMaxX = Math.max(this.dirtyMaxX, Math.min(this.gridWidth - 1, x + 2));
-      this.dirtyMinY = Math.min(this.dirtyMinY, Math.max(0, y - 1));
-      this.dirtyMaxY = Math.max(this.dirtyMaxY, Math.min(this.gridHeight - 1, y + 2));
+      this.dirtyMinX = Math.min(this.dirtyMinX, clamp(x - 1, 0, this.gridWidth - 1));
+      this.dirtyMaxX = Math.max(this.dirtyMaxX, clamp(x + 2, 0, this.gridWidth - 1));
+      this.dirtyMinY = Math.min(this.dirtyMinY, clamp(y - 1, 0, this.gridHeight - 1));
+      this.dirtyMaxY = Math.max(this.dirtyMaxY, clamp(y + 2, 0, this.gridHeight - 1));
     }
     this.isDirty = true;
   }

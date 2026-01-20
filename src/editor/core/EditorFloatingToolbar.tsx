@@ -9,6 +9,7 @@
 
 import { useState, useRef, useCallback, useEffect } from 'react';
 import type { EditorConfig, ToolConfig } from '../config/EditorConfig';
+import { clamp } from '@/utils/math';
 
 export interface EditorFloatingToolbarProps {
   config: EditorConfig;
@@ -154,8 +155,8 @@ function BrushSizeControl({
         style={{
           borderColor: theme.primary,
           color: theme.text.primary,
-          width: Math.max(24, Math.min(40, 16 + value * 2)),
-          height: Math.max(24, Math.min(40, 16 + value * 2)),
+          width: clamp(16 + value * 2, 24, 40),
+          height: clamp(16 + value * 2, 24, 40),
         }}
       >
         {value}

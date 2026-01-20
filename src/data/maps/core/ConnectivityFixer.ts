@@ -7,7 +7,7 @@
 
 import type { MapData, MapCell, Ramp, ElevationLevel } from '../MapTypes';
 import { type Point, type RampCommand, ramp as createRampCommand, CLIFF_THRESHOLD, toXY } from './ElevationMap';
-import { distance } from '@/utils/math';
+import { distance, clamp } from '@/utils/math';
 import type {
   ConnectivityResult,
   ConnectivityIssue,
@@ -90,10 +90,10 @@ function applyRampToTerrain(
   }
 
   // Get elevations at endpoints
-  const fromY = Math.max(0, Math.min(terrain.length - 1, Math.floor(y1)));
-  const fromX = Math.max(0, Math.min(terrain[0].length - 1, Math.floor(x1)));
-  const toY = Math.max(0, Math.min(terrain.length - 1, Math.floor(y2)));
-  const toX = Math.max(0, Math.min(terrain[0].length - 1, Math.floor(x2)));
+  const fromY = clamp(Math.floor(y1), 0, terrain.length - 1);
+  const fromX = clamp(Math.floor(x1), 0, terrain[0].length - 1);
+  const toY = clamp(Math.floor(y2), 0, terrain.length - 1);
+  const toX = clamp(Math.floor(x2), 0, terrain[0].length - 1);
 
   const fromElevation = terrain[fromY][fromX].elevation;
   const toElevation = terrain[toY][toX].elevation;

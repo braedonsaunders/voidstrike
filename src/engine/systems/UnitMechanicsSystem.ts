@@ -7,7 +7,7 @@ import { Health } from '../components/Health';
 import { Selectable } from '../components/Selectable';
 import { Ability } from '../components/Ability';
 import { Building } from '../components/Building';
-import { distance } from '@/utils/math';
+import { distance, clamp } from '@/utils/math';
 
 interface TransformCommand {
   entityIds: number[];
@@ -584,8 +584,8 @@ export class UnitMechanicsSystem extends System {
       // Calculate distance to building edge
       const halfW = building.width / 2;
       const halfH = building.height / 2;
-      const clampedX = Math.max(buildingTransform.x - halfW, Math.min(repairerTransform.x, buildingTransform.x + halfW));
-      const clampedY = Math.max(buildingTransform.y - halfH, Math.min(repairerTransform.y, buildingTransform.y + halfH));
+      const clampedX = clamp(repairerTransform.x, buildingTransform.x - halfW, buildingTransform.x + halfW);
+      const clampedY = clamp(repairerTransform.y, buildingTransform.y - halfH, buildingTransform.y + halfH);
       const dist = distance(repairerTransform.x, repairerTransform.y, clampedX, clampedY);
 
       if (dist <= autocastRange) {
@@ -762,8 +762,8 @@ export class UnitMechanicsSystem extends System {
       // Calculate closest point on building edge
       const halfW = targetBuilding.width / 2;
       const halfH = targetBuilding.height / 2;
-      const clampedX = Math.max(targetTransform.x - halfW, Math.min(repairerTransform.x, targetTransform.x + halfW));
-      const clampedY = Math.max(targetTransform.y - halfH, Math.min(repairerTransform.y, targetTransform.y + halfH));
+      const clampedX = clamp(repairerTransform.x, targetTransform.x - halfW, targetTransform.x + halfW);
+      const clampedY = clamp(repairerTransform.y, targetTransform.y - halfH, targetTransform.y + halfH);
       effectiveDistance = distance(repairerTransform.x, repairerTransform.y, clampedX, clampedY);
 
       // Calculate move target at building edge with buffer

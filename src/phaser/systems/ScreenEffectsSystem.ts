@@ -20,6 +20,7 @@ import * as Phaser from 'phaser';
 import { EventBus } from '@/engine/core/EventBus';
 import { useProjectionStore } from '@/store/projectionStore';
 import { getLocalPlayerId, isLocalPlayer, isSpectatorMode, isBattleSimulatorMode } from '@/store/gameSetupStore';
+import { clamp } from '@/utils/math';
 
 // ============================================
 // CONSTANTS
@@ -358,12 +359,12 @@ export class ScreenEffectsSystem {
         // Left or right edge
         edgeX = cos > 0 ? screenWidth - margin : margin;
         edgeY = centerY + (edgeX - centerX) * (sin / cos);
-        edgeY = Math.max(margin, Math.min(screenHeight - margin, edgeY));
+        edgeY = clamp(edgeY, margin, screenHeight - margin);
       } else {
         // Top or bottom edge
         edgeY = sin > 0 ? screenHeight - margin : margin;
         edgeX = centerX + (edgeY - centerY) * (cos / sin);
-        edgeX = Math.max(margin, Math.min(screenWidth - margin, edgeX));
+        edgeX = clamp(edgeX, margin, screenWidth - margin);
       }
 
       // Draw arrow pointing toward center
