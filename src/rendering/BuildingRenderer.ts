@@ -1018,10 +1018,18 @@ export class BuildingRenderer {
           meshData.progressBar.position.set(transform.x, terrainHeight + meshData.buildingHeight + flyingOffset + 0.75, transform.y);
           meshData.progressBar.visible = true;
           this.updateProgressBar(meshData.progressBar, building.buildProgress, true);
+          // Billboard: make progress bar face the camera
+          if (this.camera) {
+            meshData.progressBar.lookAt(this.camera.position);
+          }
         } else if (building.productionQueue.length > 0) {
           meshData.progressBar.position.set(transform.x, terrainHeight + meshData.buildingHeight + flyingOffset + 0.75, transform.y);
           meshData.progressBar.visible = true;
           this.updateProgressBar(meshData.progressBar, building.getProductionProgress(), false);
+          // Billboard: make progress bar face the camera
+          if (this.camera) {
+            meshData.progressBar.lookAt(this.camera.position);
+          }
         } else {
           meshData.progressBar.visible = false;
         }
@@ -2266,27 +2274,36 @@ export class BuildingRenderer {
 
     // Bar dimensions - larger for better visibility
     const barWidth = BuildingRenderer.PROGRESS_BAR_WIDTH;
-    const barHeight = 0.3;
-    const borderPadding = 0.06;
+    const barHeight = 0.35;
+    const borderPadding = 0.08;
 
-    // Outer border (bright outline for visibility)
+    // Outer border (bright cyan outline for high visibility)
     const borderGeometry = new THREE.PlaneGeometry(barWidth + borderPadding * 2, barHeight + borderPadding * 2);
     const borderMaterial = new THREE.MeshBasicMaterial({
-      color: 0x222222,
+      color: 0x00ffff,
       transparent: true,
-      opacity: 0.95,
+      opacity: 0.9,
       depthTest: false,
     });
     const border = new THREE.Mesh(borderGeometry, borderMaterial);
     border.renderOrder = 999;
     group.add(border);
 
-    // Background (dark)
+    // Inner border (dark for contrast)
+    const innerBorderGeometry = new THREE.PlaneGeometry(barWidth + 0.04, barHeight + 0.04);
+    const innerBorderMaterial = new THREE.MeshBasicMaterial({
+      color: 0x000000,
+      depthTest: false,
+    });
+    const innerBorder = new THREE.Mesh(innerBorderGeometry, innerBorderMaterial);
+    innerBorder.position.z = 0.005;
+    innerBorder.renderOrder = 999;
+    group.add(innerBorder);
+
+    // Background (visible dark red/maroon to show unfilled portion clearly)
     const bgGeometry = new THREE.PlaneGeometry(barWidth, barHeight);
     const bgMaterial = new THREE.MeshBasicMaterial({
-      color: 0x111111,
-      transparent: true,
-      opacity: 0.95,
+      color: 0x330000,
       depthTest: false,
     });
     const bg = new THREE.Mesh(bgGeometry, bgMaterial);
@@ -2294,10 +2311,10 @@ export class BuildingRenderer {
     bg.renderOrder = 1000;
     group.add(bg);
 
-    // Fill bar (will be colored dynamically)
+    // Fill bar (will be colored dynamically - bright green/blue)
     const fillGeometry = new THREE.PlaneGeometry(barWidth, barHeight);
     const fillMaterial = new THREE.MeshBasicMaterial({
-      color: 0x00ff88, // Default green, will be changed dynamically
+      color: 0x00ff88,
       depthTest: false,
     });
     const fill = new THREE.Mesh(fillGeometry, fillMaterial);
@@ -2306,21 +2323,19 @@ export class BuildingRenderer {
     fill.renderOrder = 1001;
     group.add(fill);
 
-    // Inner highlight (glow effect along top edge)
-    const highlightGeometry = new THREE.PlaneGeometry(barWidth, barHeight * 0.3);
-    const highlightMaterial = new THREE.MeshBasicMaterial({
+    // Leading edge indicator (bright white line at progress edge)
+    const edgeGeometry = new THREE.PlaneGeometry(0.06, barHeight * 1.1);
+    const edgeMaterial = new THREE.MeshBasicMaterial({
       color: 0xffffff,
-      transparent: true,
-      opacity: 0.2,
       depthTest: false,
     });
-    const highlight = new THREE.Mesh(highlightGeometry, highlightMaterial);
-    highlight.position.y = barHeight * 0.25;
-    highlight.position.z = 0.03;
-    highlight.renderOrder = 1002;
-    group.add(highlight);
+    const edge = new THREE.Mesh(edgeGeometry, edgeMaterial);
+    edge.position.z = 0.03;
+    edge.name = 'edge';
+    edge.renderOrder = 1002;
+    group.add(edge);
 
-    group.lookAt(0, 100, 0);
+    // Don't set lookAt here - we'll billboard toward camera each frame
     group.visible = false;
 
     return group;
@@ -2349,23 +2364,34 @@ export class BuildingRenderer {
 
   private updateProgressBar(progressBar: THREE.Group, progress: number, isConstruction: boolean = false): void {
     const fill = progressBar.getObjectByName('fill') as THREE.Mesh;
+    const edge = progressBar.getObjectByName('edge') as THREE.Mesh;
+    const halfWidth = BuildingRenderer.PROGRESS_BAR_WIDTH / 2;
+
     if (fill) {
       const clampedProgress = Math.max(0.01, progress); // Ensure minimum visibility
       fill.scale.x = clampedProgress;
       // Position the fill so it anchors to the left edge
       // When scaled, we need to offset by (progress - 1) * halfWidth to keep left edge fixed
-      const halfWidth = BuildingRenderer.PROGRESS_BAR_WIDTH / 2;
       fill.position.x = (clampedProgress - 1) * halfWidth;
 
       // Different colors for construction vs production
       const material = fill.material as THREE.MeshBasicMaterial;
       if (isConstruction) {
         // Blue for building construction
-        material.color.setHex(0x00aaff);
+        material.color.setHex(0x00ccff);
       } else {
-        // Green for unit production
-        material.color.setHex(0x00ff88);
+        // Bright green for unit production
+        material.color.setHex(0x00ff66);
       }
+    }
+
+    // Update leading edge indicator position (at the right edge of the fill)
+    if (edge) {
+      const clampedProgress = Math.max(0.01, progress);
+      // Position at the right edge of the filled portion
+      // Fill left edge is at -halfWidth, right edge is at -halfWidth + (clampedProgress * barWidth)
+      // Which simplifies to: -halfWidth + clampedProgress * 2 * halfWidth = halfWidth * (2 * clampedProgress - 1)
+      edge.position.x = halfWidth * (2 * clampedProgress - 1);
     }
   }
 
