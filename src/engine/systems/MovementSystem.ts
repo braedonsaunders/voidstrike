@@ -206,7 +206,7 @@ export class MovementSystem extends System {
     this.initWasmBoids();
 
     // Initialize typed arrays for grid position tracking
-    const maxEntities = 2048;
+    const maxEntities = 4096;
     this.lastGridPositions = new Float32Array(maxEntities * 2); // x, y pairs
 
     // Pre-allocate neighbor data buffer
