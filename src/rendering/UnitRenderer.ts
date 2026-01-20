@@ -21,6 +21,15 @@ import {
   RENDER_ORDER,
 } from '@/data/rendering.config';
 
+// Shared rendering utilities
+import {
+  HealthBarRenderer,
+  SelectionRingRenderer,
+  TransformUtils,
+  SmoothRotation,
+  EntityIdTracker,
+} from './shared';
+
 // GPU-driven rendering infrastructure
 import { CullingService, EntityCategory } from './services/CullingService';
 import { LODConfig } from './compute/UnifiedCullingCompute';
@@ -62,7 +71,7 @@ interface UnitOverlay {
   lastY: number;
 }
 
-// Instanced overlay groups for selection rings and team markers
+// Instanced overlay group for team markers
 interface InstancedOverlayGroup {
   mesh: THREE.InstancedMesh;
   entityIds: number[];     // Maps instance index to entity ID
@@ -105,53 +114,33 @@ export class UnitRenderer {
   // Per-unit overlays (health bars only - selection rings and team markers are now instanced)
   private unitOverlays: Map<number, UnitOverlay> = new Map();
 
-  // PERF: Instanced overlay groups - greatly reduces draw calls
-  // Selection rings: keyed by 'owned' or 'enemy'
-  private selectionRingGroups: Map<string, InstancedOverlayGroup> = new Map();
-  // Team markers: keyed by playerId
+  // PERF: Shared health bar renderer (reduces GC pressure with shared geometry)
+  private healthBarRenderer: HealthBarRenderer;
+
+  // PERF: Shared selection ring renderer (instanced, reduces draw calls)
+  private selectionRingRenderer: SelectionRingRenderer;
+
+  // Team markers: keyed by playerId (still per-player instanced groups)
   private teamMarkerGroups: Map<string, InstancedOverlayGroup> = new Map();
-  // Track which units are selected and visible for instanced rendering
-  private selectedUnits: Map<number, { position: THREE.Vector3; isOwned: boolean }> = new Map();
+  private teamMarkerGeometry: THREE.CircleGeometry;
+
+  // Track which units are visible for instanced team marker rendering
   private visibleUnits: Map<number, { position: THREE.Vector3; playerId: string }> = new Map();
 
-  // PERF: Pre-allocated Set for tracking current entity IDs to avoid per-frame allocation
-  private readonly _currentIds: Set<number> = new Set();
+  // PERF: Pre-allocated entity ID tracker to avoid per-frame allocation
+  private readonly entityIdTracker: EntityIdTracker = new EntityIdTracker();
 
   // Frame counter for tracking inactive meshes
   private frameCount: number = 0;
 
-  // Shared resources
-  private selectionGeometry: THREE.RingGeometry;
-  private selectionMaterial: THREE.Material; // TSL animated material
-  private enemySelectionMaterial: THREE.Material; // TSL animated material
-  private teamMarkerGeometry: THREE.CircleGeometry;
-
-  // Animation timing for selection rings
-  private selectionAnimationTime: number = 0;
-
-  // FIX: Shared health bar geometry to avoid per-unit allocation (GC pressure)
-  private healthBarBgGeometry: THREE.PlaneGeometry;
-  private healthBarFillGeometry: THREE.PlaneGeometry;
-  private healthBarBgMaterial: THREE.MeshBasicMaterial;
-
-  // Reusable objects for matrix calculations
-  private tempMatrix: THREE.Matrix4 = new THREE.Matrix4();
-  private tempPosition: THREE.Vector3 = new THREE.Vector3();
-  private tempQuaternion: THREE.Quaternion = new THREE.Quaternion();
-  private tempFacingQuat: THREE.Quaternion = new THREE.Quaternion(); // For unit facing direction
-  private tempScale: THREE.Vector3 = new THREE.Vector3(1, 1, 1);
-  private tempEuler: THREE.Euler = new THREE.Euler();
-  // Pre-computed rotation for flat ground overlays (rings, markers)
-  private groundOverlayRotation: THREE.Quaternion = new THREE.Quaternion().setFromEuler(
-    new THREE.Euler(-Math.PI / 2, 0, 0)
-  );
+  // PERF: Shared transform utilities (reusable temp objects)
+  private readonly transformUtils: TransformUtils = new TransformUtils();
 
   // Camera reference for culling
   private camera: THREE.Camera | null = null;
 
-  // Smooth rotation interpolation - stores visual rotation per entity
-  private visualRotations: Map<number, number> = new Map();
-  private readonly ROTATION_SMOOTH_FACTOR = UNIT_RENDERER.ROTATION_SMOOTH_FACTOR;
+  // PERF: Shared smooth rotation interpolation
+  private readonly smoothRotation: SmoothRotation = new SmoothRotation(UNIT_RENDERER.ROTATION_SMOOTH_FACTOR);
 
   // PERF: Cached sorted entity list to avoid spread+sort every frame
   private cachedSortedEntities: import('@/engine/ecs/Entity').Entity[] = [];
@@ -174,19 +163,16 @@ export class UnitRenderer {
     this.visionSystem = visionSystem ?? null;
     this.terrain = terrain ?? null;
 
-    this.selectionGeometry = new THREE.RingGeometry(
-      UNIT_SELECTION_RING.INNER_RADIUS,
-      UNIT_SELECTION_RING.OUTER_RADIUS,
-      UNIT_SELECTION_RING.SEGMENTS
-    );
-    // TSL animated selection ring materials with pulsing/shimmer effects
-    this.selectionMaterial = createSelectionRingMaterial({
-      color: TEAM_COLORS.player1, // Cyan for owned units
+    // Initialize shared health bar renderer
+    this.healthBarRenderer = new HealthBarRenderer();
+
+    // Initialize shared selection ring renderer
+    this.selectionRingRenderer = new SelectionRingRenderer(scene, {
+      innerRadius: UNIT_SELECTION_RING.INNER_RADIUS,
+      outerRadius: UNIT_SELECTION_RING.OUTER_RADIUS,
+      segments: UNIT_SELECTION_RING.SEGMENTS,
       opacity: UNIT_SELECTION_RING.OPACITY,
-    });
-    this.enemySelectionMaterial = createSelectionRingMaterial({
-      color: TEAM_COLORS.player2, // Red for enemy units
-      opacity: UNIT_SELECTION_RING.OPACITY,
+      maxInstances: UNIT_RENDERER.MAX_OVERLAY_INSTANCES,
     });
 
     // Team marker geometry - small circle beneath each unit showing team color
@@ -194,15 +180,6 @@ export class UnitRenderer {
       UNIT_TEAM_MARKER.RADIUS,
       UNIT_TEAM_MARKER.SEGMENTS
     );
-
-    // Pre-create shared health bar geometry to avoid per-unit allocation
-    this.healthBarBgGeometry = new THREE.PlaneGeometry(UNIT_HEALTH_BAR.WIDTH, UNIT_HEALTH_BAR.HEIGHT);
-    this.healthBarFillGeometry = new THREE.PlaneGeometry(UNIT_HEALTH_BAR.WIDTH, UNIT_HEALTH_BAR.HEIGHT);
-    this.healthBarBgMaterial = new THREE.MeshBasicMaterial({
-      color: UNIT_HEALTH_BAR.BG_COLOR,
-      transparent: true,
-      opacity: UNIT_HEALTH_BAR.BG_OPACITY,
-    });
 
     // Preload common procedural assets
     AssetManager.preloadCommonAssets();
@@ -481,34 +458,7 @@ export class UnitRenderer {
    * Uses exponential smoothing for frame-rate independent smooth rotation.
    */
   private getSmoothRotation(entityId: number, targetRotation: number): number {
-    let visualRotation = this.visualRotations.get(entityId);
-
-    if (visualRotation === undefined) {
-      // First time seeing this entity - snap to target
-      this.visualRotations.set(entityId, targetRotation);
-      return targetRotation;
-    }
-
-    // Calculate shortest angular distance (handling wrap-around at ±π)
-    let diff = targetRotation - visualRotation;
-    while (diff > Math.PI) diff -= Math.PI * 2;
-    while (diff < -Math.PI) diff += Math.PI * 2;
-
-    // If very close, snap to target to avoid jitter
-    if (Math.abs(diff) < 0.01) {
-      this.visualRotations.set(entityId, targetRotation);
-      return targetRotation;
-    }
-
-    // Exponential smoothing toward target
-    visualRotation += diff * this.ROTATION_SMOOTH_FACTOR;
-
-    // Normalize to [-π, π]
-    while (visualRotation > Math.PI) visualRotation -= Math.PI * 2;
-    while (visualRotation < -Math.PI) visualRotation += Math.PI * 2;
-
-    this.visualRotations.set(entityId, visualRotation);
-    return visualRotation;
+    return this.smoothRotation.getSmoothRotation(entityId, targetRotation);
   }
 
   /**
@@ -843,7 +793,7 @@ export class UnitRenderer {
 
     if (!overlay) {
       // Health bar (kept individual due to dynamic width based on health %)
-      const healthBar = this.createHealthBar();
+      const healthBar = this.healthBarRenderer.createHealthBar();
       healthBar.visible = false;
       this.scene.add(healthBar);
 
@@ -861,35 +811,6 @@ export class UnitRenderer {
     }
 
     return overlay;
-  }
-
-  /**
-   * Get or create an instanced selection ring group (owned=green, enemy=red)
-   */
-  private getOrCreateSelectionRingGroup(isOwned: boolean): InstancedOverlayGroup {
-    const key = isOwned ? 'owned' : 'enemy';
-    let group = this.selectionRingGroups.get(key);
-
-    if (!group) {
-      const material = isOwned ? this.selectionMaterial.clone() : this.enemySelectionMaterial.clone();
-      const mesh = new THREE.InstancedMesh(this.selectionGeometry, material, MAX_OVERLAY_INSTANCES);
-      mesh.count = 0;
-      mesh.frustumCulled = false;
-      // NOTE: Don't set mesh.rotation here - rotation is applied per-instance to avoid
-      // coordinate transform issues with instanced meshes
-      mesh.renderOrder = RENDER_ORDER.GROUND_EFFECT;
-      this.scene.add(mesh);
-
-      group = {
-        mesh,
-        entityIds: [],
-        positions: [],
-        maxInstances: MAX_OVERLAY_INSTANCES,
-      };
-      this.selectionRingGroups.set(key, group);
-    }
-
-    return group;
   }
 
   /**
@@ -947,8 +868,7 @@ export class UnitRenderer {
     this.frameCount++;
 
     // Update selection ring animation time (shared across all instances)
-    this.selectionAnimationTime += deltaTime;
-    updateSelectionRingTime(this.selectionAnimationTime);
+    this.selectionRingRenderer.updateAnimation(deltaTime);
 
     // TAA: Sort entities by ID for stable instance ordering
     // This ensures previous/current matrix pairs are aligned correctly for velocity
@@ -964,8 +884,8 @@ export class UnitRenderer {
       this.cachedEntityCount = rawEntities.length;
     }
     const entities = this.cachedSortedEntities;
-    // PERF: Reuse pre-allocated Set instead of creating new one every frame
-    this._currentIds.clear();
+    // PERF: Reuse pre-allocated entity ID tracker
+    this.entityIdTracker.reset();
 
     // TAA: Copy current instance matrices to previous BEFORE resetting counts
     // This preserves last frame's transforms for velocity calculation
@@ -1019,15 +939,11 @@ export class UnitRenderer {
     }
 
     // PERF: Reset instanced overlay groups
-    for (const group of this.selectionRingGroups.values()) {
-      group.mesh.count = 0;
-      group.entityIds.length = 0;
-    }
+    this.selectionRingRenderer.resetInstances();
     for (const group of this.teamMarkerGroups.values()) {
       group.mesh.count = 0;
       group.entityIds.length = 0;
     }
-    this.selectedUnits.clear();
     this.visibleUnits.clear();
 
     // Hide animated units that may be hidden
@@ -1037,7 +953,7 @@ export class UnitRenderer {
 
     // Build instance data
     for (const entity of entities) {
-      this._currentIds.add(entity.id);
+      this.entityIdTracker.add(entity.id);
 
       const transform = entity.get<Transform>('Transform');
       const unit = entity.get<Unit>('Unit');
@@ -1171,16 +1087,16 @@ export class UnitRenderer {
           // baseRotation is the model's full base rotation (X, Y, Z from assets.json config).
           // We multiply: unit facing (Y rotation) × base rotation to get final orientation.
           // modelScale is the normalization scale from AssetManager (to achieve target height).
-          this.tempPosition.set(transform.x, unitHeight + group.yOffset, transform.y);
+          this.transformUtils.tempPosition.set(transform.x, unitHeight + group.yOffset, transform.y);
           // Create quaternion from unit's facing direction (Y rotation only) with smooth interpolation
           // smoothRotation already calculated above for GPU buffer
-          this.tempEuler.set(0, smoothRotation, 0);
-          this.tempFacingQuat.setFromEuler(this.tempEuler);
+          this.transformUtils.tempEuler.set(0, smoothRotation, 0);
+          this.transformUtils.tempFacingQuat.setFromEuler(this.transformUtils.tempEuler);
           // Combine: facing rotation × base rotation (order matters for proper orientation)
-          this.tempQuaternion.copy(this.tempFacingQuat).multiply(group.baseRotation);
-          this.tempScale.setScalar(group.modelScale);
-          this.tempMatrix.compose(this.tempPosition, this.tempQuaternion, this.tempScale);
-          group.mesh.setMatrixAt(instanceIndex, this.tempMatrix);
+          this.transformUtils.tempQuaternion.copy(this.transformUtils.tempFacingQuat).multiply(group.baseRotation);
+          this.transformUtils.tempScale.setScalar(group.modelScale);
+          this.transformUtils.tempMatrix.compose(this.transformUtils.tempPosition, this.transformUtils.tempQuaternion, this.transformUtils.tempScale);
+          group.mesh.setMatrixAt(instanceIndex, this.transformUtils.tempMatrix);
 
           group.mesh.count++;
         }
@@ -1195,10 +1111,12 @@ export class UnitRenderer {
         playerId: ownerId,
       });
 
-      // PERF: Track selected unit for instanced selection ring rendering
+      // PERF: Add selected unit to instanced selection ring renderer
       if (selectable?.isSelected) {
-        this.selectedUnits.set(entity.id, {
+        this.selectionRingRenderer.addInstance({
+          entityId: entity.id,
           position: new THREE.Vector3(transform.x, unitHeight + 0.05, transform.y),
+          scale: 1,
           isOwned,
         });
       }
@@ -1212,7 +1130,7 @@ export class UnitRenderer {
           overlay.healthBar.position.set(transform.x, unitHeight + modelHeight + UNIT_HEALTH_BAR.Y_OFFSET, transform.y);
           // Only update health bar visuals if health changed
           if (Math.abs(overlay.lastHealth - healthPercent) > 0.01) {
-            this.updateHealthBar(overlay.healthBar, health);
+            this.healthBarRenderer.updateHealthBar(overlay.healthBar, health);
             overlay.lastHealth = healthPercent;
           }
         }
@@ -1225,35 +1143,17 @@ export class UnitRenderer {
       if (group.mesh.count < group.maxInstances) {
         const idx = group.mesh.count;
         group.entityIds[idx] = entityId;
-        // Team markers are flat on ground - apply rotation per-instance to lay flat
-        this.tempPosition.copy(data.position);
-        this.tempScale.set(1, 1, 1);
-        this.tempMatrix.compose(this.tempPosition, this.groundOverlayRotation, this.tempScale);
-        group.mesh.setMatrixAt(idx, this.tempMatrix);
+        // Team markers are flat on ground - use shared transform utils
+        this.transformUtils.composeGroundOverlay(data.position.x, data.position.y, data.position.z, 1);
+        group.mesh.setMatrixAt(idx, this.transformUtils.tempMatrix);
         group.mesh.count++;
       }
     }
 
-    // PERF: Build instanced selection ring matrices
-    for (const [entityId, data] of this.selectedUnits) {
-      const group = this.getOrCreateSelectionRingGroup(data.isOwned);
-      if (group.mesh.count < group.maxInstances) {
-        const idx = group.mesh.count;
-        group.entityIds[idx] = entityId;
-        // Selection rings are flat on ground - apply rotation per-instance to lay flat
-        this.tempPosition.copy(data.position);
-        this.tempScale.set(1, 1, 1);
-        this.tempMatrix.compose(this.tempPosition, this.groundOverlayRotation, this.tempScale);
-        group.mesh.setMatrixAt(idx, this.tempMatrix);
-        group.mesh.count++;
-      }
-    }
+    // PERF: Commit instanced selection ring matrices (built via addInstance calls above)
+    this.selectionRingRenderer.commitInstances();
 
-    // Mark instanced overlay matrices as needing update
-    // FIX: Always mark needsUpdate even when count is 0, to ensure GPU clears stale instances
-    for (const group of this.selectionRingGroups.values()) {
-      group.mesh.instanceMatrix.needsUpdate = true;
-    }
+    // Mark team marker matrices as needing update
     for (const group of this.teamMarkerGroups.values()) {
       group.mesh.instanceMatrix.needsUpdate = true;
     }
@@ -1290,19 +1190,19 @@ export class UnitRenderer {
 
     // Clean up resources for destroyed entities (health bars only - overlays are instanced)
     for (const [entityId, overlay] of this.unitOverlays) {
-      if (!this._currentIds.has(entityId)) {
+      if (!this.entityIdTracker.has(entityId)) {
         this.scene.remove(overlay.healthBar);
-        this.disposeGroup(overlay.healthBar);
+        this.healthBarRenderer.disposeHealthBar(overlay.healthBar);
         this.unitOverlays.delete(entityId);
       }
     }
 
-    // FIX: Clean up visualRotations for ALL destroyed entities, not just those with overlays
+    // FIX: Clean up smooth rotations for ALL destroyed entities, not just those with overlays
     // This prevents a memory leak where units without health bars (full HP) would never have
     // their rotation tracking cleaned up
-    for (const entityId of this.visualRotations.keys()) {
-      if (!this._currentIds.has(entityId)) {
-        this.visualRotations.delete(entityId);
+    for (const entityId of this.smoothRotation.keys()) {
+      if (!this.entityIdTracker.has(entityId)) {
+        this.smoothRotation.remove(entityId);
         // Clean up culling service registration
         this.removeEntityFromCulling(entityId);
       }
@@ -1310,7 +1210,7 @@ export class UnitRenderer {
 
     // Clean up animated units for destroyed entities
     for (const [entityId, animUnit] of this.animatedUnits) {
-      if (!this._currentIds.has(entityId)) {
+      if (!this.entityIdTracker.has(entityId)) {
         this.scene.remove(animUnit.mesh);
         animUnit.mixer.stopAllAction();
         // Properly clean up mixer caches to prevent memory leaks
@@ -1333,72 +1233,6 @@ export class UnitRenderer {
     if (updateElapsed > 16) {
       debugPerformance.warn(`[UnitRenderer] UPDATE: ${entities.length} entities took ${updateElapsed.toFixed(1)}ms`);
     }
-  }
-
-  private createHealthBar(): THREE.Group {
-    const group = new THREE.Group();
-
-    // FIX: Use shared geometry to avoid per-unit allocation (reduces GC pressure)
-    // Background uses shared geometry and material
-    const bg = new THREE.Mesh(this.healthBarBgGeometry, this.healthBarBgMaterial);
-    group.add(bg);
-
-    // Health fill uses shared geometry but needs unique material for color changes
-    const fillMaterial = new THREE.MeshBasicMaterial({
-      color: UNIT_HEALTH_BAR.COLOR_HIGH,
-    });
-    const fill = new THREE.Mesh(this.healthBarFillGeometry, fillMaterial);
-    fill.position.z = 0.01;
-    fill.name = 'healthFill';
-    group.add(fill);
-
-    // Make health bar always face camera
-    group.lookAt(0, 100, 0);
-
-    return group;
-  }
-
-  private updateHealthBar(healthBar: THREE.Group, health: Health): void {
-    const fill = healthBar.getObjectByName('healthFill') as THREE.Mesh;
-
-    if (fill) {
-      const percent = health.getHealthPercent();
-      fill.scale.x = percent;
-      fill.position.x = (percent - 1) / 2;
-
-      // Color based on health
-      const material = fill.material as THREE.MeshBasicMaterial;
-      if (percent > UNIT_HEALTH_BAR.THRESHOLD_HIGH) {
-        material.color.setHex(UNIT_HEALTH_BAR.COLOR_HIGH);
-      } else if (percent > UNIT_HEALTH_BAR.THRESHOLD_LOW) {
-        material.color.setHex(UNIT_HEALTH_BAR.COLOR_MEDIUM);
-      } else {
-        material.color.setHex(UNIT_HEALTH_BAR.COLOR_LOW);
-      }
-    }
-  }
-
-  private disposeGroup(group: THREE.Group): void {
-    group.traverse((child) => {
-      if (child instanceof THREE.Mesh) {
-        // FIX: Don't dispose shared geometry (health bar bg/fill geometry)
-        // Only dispose geometry if it's NOT one of the shared instances
-        if (child.geometry !== this.healthBarBgGeometry &&
-            child.geometry !== this.healthBarFillGeometry) {
-          child.geometry.dispose();
-        }
-        // Dispose materials (except shared healthBarBgMaterial)
-        if (child.material instanceof THREE.Material) {
-          if (child.material !== this.healthBarBgMaterial) {
-            child.material.dispose();
-          }
-        } else if (Array.isArray(child.material)) {
-          child.material.forEach(m => {
-            if (m !== this.healthBarBgMaterial) m.dispose();
-          });
-        }
-      }
-    });
   }
 
   /**
@@ -1446,19 +1280,11 @@ export class UnitRenderer {
     // Clear overlays (health bars only - selection rings and team markers are instanced)
     for (const overlay of this.unitOverlays.values()) {
       this.scene.remove(overlay.healthBar);
-      this.disposeGroup(overlay.healthBar);
+      this.healthBarRenderer.disposeHealthBar(overlay.healthBar);
     }
     this.unitOverlays.clear();
 
-    // Clear instanced overlay groups
-    for (const group of this.selectionRingGroups.values()) {
-      this.scene.remove(group.mesh);
-      if (group.mesh.material instanceof THREE.Material) {
-        group.mesh.material.dispose();
-      }
-    }
-    this.selectionRingGroups.clear();
-
+    // Clear team marker groups
     for (const group of this.teamMarkerGroups.values()) {
       this.scene.remove(group.mesh);
       if (group.mesh.material instanceof THREE.Material) {
@@ -1467,9 +1293,8 @@ export class UnitRenderer {
     }
     this.teamMarkerGroups.clear();
 
-    // Clear visual rotation tracking
-    this.visualRotations.clear();
-    this.selectedUnits.clear();
+    // Clear rotation tracking
+    this.smoothRotation.clear();
     this.visibleUnits.clear();
   }
 
@@ -1493,9 +1318,9 @@ export class UnitRenderer {
   }
 
   public dispose(): void {
-    this.selectionGeometry.dispose();
-    this.selectionMaterial.dispose();
-    this.enemySelectionMaterial.dispose();
+    // Dispose shared utilities
+    this.healthBarRenderer.dispose();
+    this.selectionRingRenderer.dispose();
     this.teamMarkerGeometry.dispose();
 
     // NOTE: Do NOT dispose geometry - it's shared with the asset cache
@@ -1530,22 +1355,14 @@ export class UnitRenderer {
     this.animatedUnits.clear();
     this.animatedUnitTypes.clear();
 
-    // Dispose health bars (selection rings and team markers are instanced)
+    // Dispose health bars
     for (const overlay of this.unitOverlays.values()) {
       this.scene.remove(overlay.healthBar);
-      this.disposeGroup(overlay.healthBar);
+      this.healthBarRenderer.disposeHealthBar(overlay.healthBar);
     }
     this.unitOverlays.clear();
 
-    // Dispose instanced overlay groups
-    for (const group of this.selectionRingGroups.values()) {
-      this.scene.remove(group.mesh);
-      if (group.mesh.material instanceof THREE.Material) {
-        group.mesh.material.dispose();
-      }
-    }
-    this.selectionRingGroups.clear();
-
+    // Dispose team marker groups
     for (const group of this.teamMarkerGroups.values()) {
       this.scene.remove(group.mesh);
       if (group.mesh.material instanceof THREE.Material) {
@@ -1554,9 +1371,8 @@ export class UnitRenderer {
     }
     this.teamMarkerGroups.clear();
 
-    // Clear visual rotation tracking
-    this.visualRotations.clear();
-    this.selectedUnits.clear();
+    // Clear rotation tracking
+    this.smoothRotation.clear();
     this.visibleUnits.clear();
 
     // Dispose GPU-driven rendering resources
