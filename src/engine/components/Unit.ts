@@ -172,6 +172,7 @@ export class Unit extends Component {
   public isHelperWorker: boolean; // True if this worker auto-assisted (not primary builder)
   public returnPositionX: number | null; // Position to return to after helping
   public returnPositionY: number | null;
+  public previousGatherTargetId: number | null; // Previous gather target to return to after helping
 
   // Wall line construction - workers build multiple wall segments efficiently
   public wallLineId: number | null; // Unique ID for the wall line this worker is assigned to
@@ -279,6 +280,7 @@ export class Unit extends Component {
     this.isHelperWorker = false;
     this.returnPositionX = null;
     this.returnPositionY = null;
+    this.previousGatherTargetId = null;
 
     // Wall line construction
     this.wallLineId = null;
@@ -740,6 +742,7 @@ export class Unit extends Component {
     this.isHelperWorker = false;
     this.returnPositionX = null;
     this.returnPositionY = null;
+    this.previousGatherTargetId = null;
   }
 
   // Check if worker is actively constructing (near building site)
