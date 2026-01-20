@@ -496,7 +496,8 @@ export function WebGPUGameCanvas() {
         fogOfWarEnabled ? game.visionSystem : undefined,
         terrain
       );
-      if (fogOfWarEnabled && localPlayerId) {
+      // Always set player ID for health bar visibility (not just when fog of war is enabled)
+      if (localPlayerId) {
         unitRendererRef.current.setPlayerId(localPlayerId);
       }
 
@@ -535,7 +536,8 @@ export function WebGPUGameCanvas() {
         fogOfWarEnabled ? game.visionSystem : undefined,
         terrain
       );
-      if (fogOfWarEnabled && localPlayerId) {
+      // Always set player ID for progress bar visibility (not just when fog of war is enabled)
+      if (localPlayerId) {
         buildingRendererRef.current.setPlayerId(localPlayerId);
       }
 
