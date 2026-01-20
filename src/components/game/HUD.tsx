@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, memo } from 'react';
 import { useGameStore } from '@/store/gameStore';
-import { useUIStore, isAnyMenuOpen } from '@/store/uiStore';
+import { useUIStore, isAnyMenuOpen, GameOverlayType } from '@/store/uiStore';
 import { useGameSetupStore } from '@/store/gameSetupStore';
 import { setEdgeScrollEnabled } from '@/store/cameraStore';
 import { Minimap } from './Minimap';
@@ -16,6 +16,74 @@ import { PlayerStatusPanel } from './PlayerStatusPanel';
 import { SoundOptionsPanel } from './SoundOptionsPanel';
 import { PerformancePanel } from './PerformancePanel';
 import { BattleSimulatorPanel } from './BattleSimulatorPanel';
+
+// Legend configuration for each overlay type
+const OVERLAY_LEGENDS: Record<Exclude<GameOverlayType, 'none'>, { title: string; items: Array<{ color: string; label: string }> }> = {
+  terrain: {
+    title: 'Terrain Overlay',
+    items: [
+      { color: 'bg-green-500', label: 'Walkable & Buildable' },
+      { color: 'bg-gray-500', label: 'Unbuildable' },
+      { color: 'bg-red-600', label: 'Unwalkable' },
+      { color: 'bg-yellow-500', label: 'Ramp' },
+      { color: 'bg-cyan-400', label: 'Road (Fast)' },
+      { color: 'bg-blue-600', label: 'Water' },
+      { color: 'bg-amber-600', label: 'Mud (Slow)' },
+      { color: 'bg-orange-500', label: 'Forest' },
+    ],
+  },
+  elevation: {
+    title: 'Elevation Overlay',
+    items: [
+      { color: 'bg-yellow-400', label: 'High Ground' },
+      { color: 'bg-blue-400', label: 'Mid Ground' },
+      { color: 'bg-green-700', label: 'Low Ground' },
+    ],
+  },
+  threat: {
+    title: 'Threat Overlay',
+    items: [
+      { color: 'bg-red-600', label: 'Enemy Attack Range' },
+      { color: 'bg-red-900', label: 'Multiple Threats' },
+    ],
+  },
+  navmesh: {
+    title: 'Navmesh Overlay',
+    items: [
+      { color: 'bg-green-500', label: 'Connected (Pathable)' },
+      { color: 'bg-cyan-400', label: 'Connected Ramp' },
+      { color: 'bg-yellow-500', label: 'Disconnected Region' },
+      { color: 'bg-fuchsia-500', label: 'Disconnected Ramp' },
+      { color: 'bg-red-500', label: 'Not on Navmesh' },
+      { color: 'bg-gray-600', label: 'Unwalkable' },
+    ],
+  },
+};
+
+// Overlay Legend Component
+const OverlayLegend = memo(function OverlayLegend({ overlayType }: { overlayType: Exclude<GameOverlayType, 'none'> }) {
+  const legend = OVERLAY_LEGENDS[overlayType];
+  if (!legend) return null;
+
+  return (
+    <div className="bg-void-900/90 border border-void-700 rounded-lg p-3 shadow-lg backdrop-blur-sm min-w-48">
+      <h3 className="text-sm font-display text-void-200 mb-2 pb-1 border-b border-void-700">
+        {legend.title}
+      </h3>
+      <div className="space-y-1">
+        {legend.items.map((item, index) => (
+          <div key={index} className="flex items-center gap-2 text-xs text-void-300">
+            <div className={`w-3 h-3 rounded-sm ${item.color}`} />
+            <span>{item.label}</span>
+          </div>
+        ))}
+      </div>
+      <div className="mt-2 pt-1 border-t border-void-700 text-xs text-void-500">
+        Press O to cycle
+      </div>
+    </div>
+  );
+});
 
 // PERF: Wrap HUD in memo to prevent unnecessary re-renders when parent state changes
 export const HUD = memo(function HUD() {
@@ -308,6 +376,13 @@ export const HUD = memo(function HUD() {
       {showPlayerStatus && (
         <div className="absolute top-12 right-2 pointer-events-auto">
           <PlayerStatusPanel />
+        </div>
+      )}
+
+      {/* Overlay Legend - shows when an overlay is active */}
+      {overlaySettings.activeOverlay !== 'none' && (
+        <div className="absolute top-12 left-2 pointer-events-auto">
+          <OverlayLegend overlayType={overlaySettings.activeOverlay} />
         </div>
       )}
 
