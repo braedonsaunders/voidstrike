@@ -38,8 +38,13 @@ import {
 
 import { debugShaders } from '@/utils/debugLogger';
 
-// StorageTexture is on THREE namespace
-const StorageTexture = (THREE as any).StorageTexture;
+/**
+ * StorageTexture class for GPU compute shaders.
+ *
+ * Three.js r182+ includes StorageTexture but doesn't export it as a named export.
+ * We access it via the THREE namespace. The class is declared in three-webgpu.d.ts.
+ */
+const StorageTexture = THREE.StorageTexture as typeof THREE.StorageTexture;
 
 // Max casters per compute dispatch
 const MAX_CASTERS = 4096;
@@ -63,6 +68,20 @@ export interface VisionComputeConfig {
   cellSize: number;
 }
 
+/**
+ * Internal type for compute shader node cache.
+ *
+ * TSL compute nodes are created dynamically via Fn().compute() and lack
+ * official TypeScript declarations. We store them for potential reuse,
+ * though currently we recreate them each frame due to ping-pong buffers.
+ */
+interface ComputeNodeCache {
+  /** Compute node writing A, reading B */
+  nodeAB: ReturnType<ReturnType<typeof Fn>['compute']> | null;
+  /** Compute node writing B, reading A */
+  nodeBA: ReturnType<ReturnType<typeof Fn>['compute']> | null;
+}
+
 export class VisionCompute {
   private renderer: WebGPURenderer;
   private config: VisionComputeConfig;
@@ -81,7 +100,7 @@ export class VisionCompute {
   private casterStorageBuffer: ReturnType<typeof storage> | null = null;
 
   // Compute shader nodes per player
-  private computeNodes: Map<number, any> = new Map();
+  private computeNodes: Map<number, ComputeNodeCache> = new Map();
 
   // Uniforms
   private uGridWidth = uniform(0);
@@ -141,18 +160,20 @@ export class VisionCompute {
   }
 
   /**
-   * Create GPU compute shader for vision calculation with temporal smoothing
+   * Create GPU compute shader for vision calculation with temporal smoothing.
    *
    * Output format (RGBA):
    * - R: explored (0 or 1) - persists once area is seen
    * - G: visible (0 or 1) - current frame visibility
    * - B: velocity (signed) - rate of visibility change for edge effects
    * - A: smooth visibility (0-1) - temporally filtered for smooth transitions
+   *
+   * @returns TSL compute node ready for dispatch via renderer.compute()
    */
   private createComputeShader(
     currentTexture: THREE.Texture,
     previousTexture: THREE.Texture
-  ): any {
+  ): ReturnType<ReturnType<typeof Fn>['compute']> {
     const gridWidth = this.uGridWidth;
     const gridHeight = this.uGridHeight;
     const cellSize = this.uCellSize;

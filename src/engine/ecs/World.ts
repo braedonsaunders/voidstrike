@@ -330,8 +330,13 @@ export class World {
     }
   }
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  public getSystem<T extends System>(systemClass: new (...args: any[]) => T): T | undefined {
+  /**
+   * Get a system by its class constructor.
+   * Uses abstract constructor type to match how systems are instantiated.
+   */
+  public getSystem<T extends System>(
+    systemClass: abstract new (...args: never[]) => T
+  ): T | undefined {
     return this.systems.find((s): s is T => s instanceof systemClass);
   }
 

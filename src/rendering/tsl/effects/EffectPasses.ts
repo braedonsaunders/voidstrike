@@ -7,6 +7,21 @@
  *
  * These functions are used by RenderPipeline to compose the full
  * post-processing chain.
+ *
+ * ## Type Safety Note
+ *
+ * This module uses `any` for TSL shader node parameters. This is INTENTIONAL
+ * because TSL operators work polymorphically:
+ *
+ * - A color parameter could be `vec3`, `vec4`, or another shader node
+ * - Arithmetic operations accept mixed types (float * vec3 → vec3)
+ * - The GPU handles type promotion automatically
+ *
+ * Attempting to strictly type these would require extensive conditional
+ * types that hurt readability without practical benefit. The `any` usage
+ * is contained within shader composition and doesn't leak to game logic.
+ *
+ * See `src/types/three-webgpu.d.ts` for detailed rationale.
  */
 
 import * as THREE from 'three';

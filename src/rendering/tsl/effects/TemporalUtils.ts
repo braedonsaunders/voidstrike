@@ -9,6 +9,13 @@
  * - Bounds checking: Validate reprojected UV is within screen
  * - Neighborhood clamping: Reduce ghosting by constraining history
  * - Temporal blending: Combine current and history frames
+ *
+ * ## Type Safety Note
+ *
+ * TSL shader node parameters use `any` because shader operators work
+ * polymorphically. A "texture node" could be any shader graph node that
+ * produces color data, and arithmetic operations accept mixed types.
+ * This is standard practice for shader DSLs. See `src/types/three-webgpu.d.ts`.
  */
 
 import {
