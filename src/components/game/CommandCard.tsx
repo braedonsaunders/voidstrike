@@ -1063,7 +1063,7 @@ function CommandCardInner() {
       )}
 
       {/* Command grid - 4 columns, 3 rows */}
-      <div className="w-80 bg-black/80 border border-void-700/50 rounded-lg p-2 backdrop-blur-sm">
+      <div className="w-80 h-52 bg-black/80 border border-void-700/50 rounded-lg p-2 backdrop-blur-sm">
         <div className="grid grid-cols-4 gap-1.5">
           {commands.map((cmd) => (
             <div
