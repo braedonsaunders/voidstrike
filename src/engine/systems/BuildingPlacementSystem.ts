@@ -63,7 +63,8 @@ export class BuildingPlacementSystem extends System {
     // Handle addon construction
     this.game.eventBus.on('building:build_addon', this.handleBuildAddon.bind(this));
 
-    // Handle worker resuming construction on a paused/in-progress building     this.game.eventBus.on('command:resume_construction', this.handleResumeConstruction.bind(this));
+    // Handle worker resuming construction on a paused/in-progress building
+    this.game.eventBus.on('command:resume_construction', this.handleResumeConstruction.bind(this));
   }
 
   /**
@@ -898,14 +899,43 @@ export class BuildingPlacementSystem extends System {
           }
         }
 
-        // Check if this is a helper worker that should return to their original position
-        if (unit.isHelperWorker && unit.returnPositionX !== null && unit.returnPositionY !== null) {
+        // Check if this is a helper worker that should return to their original task
+        if (unit.isHelperWorker) {
+          const previousGatherTargetId = unit.previousGatherTargetId;
           const returnX = unit.returnPositionX;
           const returnY = unit.returnPositionY;
-          unit.cancelBuilding();
-          // Move back to original position
-          unit.setMoveTarget(returnX, returnY);
-          debugBuildingPlacement.log(`Helper worker ${entity.id} returning to original position (${returnX.toFixed(1)}, ${returnY.toFixed(1)})`);
+
+          // Check if the worker had a previous gather target and it still exists
+          if (previousGatherTargetId !== null) {
+            const resourceEntity = this.world.getEntity(previousGatherTargetId);
+            if (resourceEntity) {
+              const resource = resourceEntity.get<Resource>('Resource');
+              // Verify resource still exists and has resources left
+              if (resource && resource.amount > 0) {
+                // Restore gathering task
+                unit.cancelBuilding();
+                unit.gatherTargetId = previousGatherTargetId;
+                unit.state = 'gathering';
+                // Get resource position and move to it
+                const resourceTransform = resourceEntity.get<Transform>('Transform');
+                if (resourceTransform) {
+                  unit.targetX = resourceTransform.x;
+                  unit.targetY = resourceTransform.y;
+                }
+                debugBuildingPlacement.log(`Helper worker ${entity.id} returning to gather resource ${previousGatherTargetId}`);
+                continue;
+              }
+            }
+          }
+
+          // Fall back to returning to original position if no valid gather target
+          if (returnX !== null && returnY !== null) {
+            unit.cancelBuilding();
+            unit.setMoveTarget(returnX, returnY);
+            debugBuildingPlacement.log(`Helper worker ${entity.id} returning to original position (${returnX.toFixed(1)}, ${returnY.toFixed(1)})`);
+          } else {
+            unit.cancelBuilding();
+          }
         }
         // Check if the worker has queued build commands
         else if (unit.commandQueue.length > 0 && unit.commandQueue[0].type === 'build') {
@@ -1569,8 +1599,8 @@ export class BuildingPlacementSystem extends System {
   private readonly AUTO_ASSIST_RANGE = 15;
 
   /**
-   * Auto-assign nearby idle workers to help with blueprints that have no workers assigned.
-   * These workers are marked as helpers and will return to their original position when done.
+   * Auto-assign nearby idle or gathering workers to help with blueprints that have no workers assigned.
+   * These workers are marked as helpers and will return to their original task when done.
    */
   private autoAssignIdleWorkers(): void {
     const buildings = this.world.getEntitiesWith('Building', 'Transform', 'Selectable');
@@ -1591,7 +1621,7 @@ export class BuildingPlacementSystem extends System {
         continue;
       }
 
-      // Find a nearby idle worker to auto-assign
+      // Find a nearby idle or gathering worker to auto-assign
       let closestWorker: Entity | null = null;
       let closestDistance = this.AUTO_ASSIST_RANGE;
 
@@ -1601,13 +1631,16 @@ export class BuildingPlacementSystem extends System {
         const workerSelectable = workerEntity.get<Selectable>('Selectable')!;
         const health = workerEntity.get<Health>('Health')!;
 
-        // Must be a worker, same player, idle, and alive
+        // Must be a worker, same player, idle or gathering, and alive
         if (!unit.isWorker) continue;
         if (workerSelectable.playerId !== buildingSelectable.playerId) continue;
-        if (unit.state !== 'idle') continue;
+        // Auto-enlist idle workers or gathering workers (they'll return to gathering after)
+        if (unit.state !== 'idle' && unit.state !== 'gathering') continue;
         if (health.isDead()) continue;
         // Don't auto-assign workers that already have queued commands
         if (unit.commandQueue.length > 0) continue;
+        // Don't auto-assign workers that are already building something
+        if (unit.constructingBuildingId !== null) continue;
 
         const dx = workerTransform.x - buildingTransform.x;
         const dy = workerTransform.y - buildingTransform.y;
@@ -1619,7 +1652,7 @@ export class BuildingPlacementSystem extends System {
         }
       }
 
-      // Assign the closest idle worker as a helper
+      // Assign the closest available worker as a helper
       if (closestWorker) {
         const unit = closestWorker.get<Unit>('Unit')!;
         const workerTransform = closestWorker.get<Transform>('Transform')!;
@@ -1628,6 +1661,13 @@ export class BuildingPlacementSystem extends System {
         unit.returnPositionX = workerTransform.x;
         unit.returnPositionY = workerTransform.y;
         unit.isHelperWorker = true;
+
+        // Store previous gather target if worker was gathering
+        if (unit.state === 'gathering' && unit.gatherTargetId !== null) {
+          unit.previousGatherTargetId = unit.gatherTargetId;
+        } else {
+          unit.previousGatherTargetId = null;
+        }
 
         // Assign to construction
         unit.constructingBuildingId = buildingEntity.id;
@@ -1639,8 +1679,15 @@ export class BuildingPlacementSystem extends System {
         unit.targetY = buildingTransform.y;
         unit.path = [];
         unit.pathIndex = 0;
+        // Clear gathering state while building
+        unit.gatherTargetId = null;
+        unit.isMining = false;
+        unit.miningTimer = 0;
 
-        debugBuildingPlacement.log(`Auto-assigned idle worker ${closestWorker.id} to help build ${building.name} (will return to ${unit.returnPositionX?.toFixed(1)}, ${unit.returnPositionY?.toFixed(1)})`);
+        const taskInfo = unit.previousGatherTargetId
+          ? `will return to gathering resource ${unit.previousGatherTargetId}`
+          : `will return to (${unit.returnPositionX?.toFixed(1)}, ${unit.returnPositionY?.toFixed(1)})`;
+        debugBuildingPlacement.log(`Auto-assigned worker ${closestWorker.id} to help build ${building.name} (${taskInfo})`);
       }
     }
   }
