@@ -74,8 +74,14 @@ voidstrike/
 │   │   │   ├── ResourceSystem.ts        # Resource gathering
 │   │   │   ├── VisionSystem.ts          # Fog of war visibility
 │   │   │   ├── AbilitySystem.ts         # Unit abilities & cooldowns
-│   │   │   ├── EnhancedAISystem.ts      # Advanced AI with build orders & counter-building
+│   │   │   ├── EnhancedAISystem.ts      # AI wrapper (delegates to ai/AICoordinator)
 │   │   │   ├── AIMicroSystem.ts         # AI unit micro (kiting, focus fire, positioning)
+│   │   │   └── ai/                      # Modular AI subsystems
+│   │   │       ├── AICoordinator.ts     # Central orchestrator
+│   │   │       ├── AIEconomyManager.ts  # Worker & resource management
+│   │   │       ├── AIBuildOrderExecutor.ts # Production & research
+│   │   │       ├── AITacticsManager.ts  # Combat decisions
+│   │   │       └── AIScoutingManager.ts # Map exploration
 │   │   │   ├── UnitMechanicsSystem.ts   # Transform, cloak, transport, heal
 │   │   │   ├── BuildingMechanicsSystem.ts # Lift-off, addons, lowering
 │   │   │   ├── WallSystem.ts            # Wall connections, gates, upgrades
@@ -2077,9 +2083,25 @@ Key features:
 - **No Auto-Cancel**: Paused buildings persist until manually resumed or destroyed
 - **Multiple Workers**: Multiple workers can speed up construction
 
-### Enhanced AI System (`EnhancedAISystem.ts`)
+### AI System Architecture (`src/engine/systems/ai/`)
 
-5-tier difficulty system with strategic behaviors and simulation-based economy:
+The AI system uses a modular architecture with focused subsystems coordinated by a central orchestrator:
+
+```
+src/engine/systems/ai/
+├── AICoordinator.ts        # Central orchestrator, manages AI players
+├── AIEconomyManager.ts     # Worker management, resource gathering, repair
+├── AIBuildOrderExecutor.ts # Build orders, macro rules, production, research
+├── AITacticsManager.ts     # Combat state, attack/defend/harass execution
+├── AIScoutingManager.ts    # Map exploration, intel gathering
+└── index.ts                # Module exports
+```
+
+The `EnhancedAISystem.ts` wrapper provides backward compatibility by delegating to `AICoordinator`.
+
+#### Difficulty System
+
+5-tier difficulty with strategic behaviors and simulation-based economy:
 
 ```typescript
 type AIDifficulty = 'easy' | 'medium' | 'hard' | 'very_hard' | 'insane';
@@ -2088,7 +2110,7 @@ interface DifficultySettings {
   actionDelayTicks: number;       // 60 (easy) to 10 (insane)
   targetWorkers: number;          // 16-40 workers
   maxBases: number;               // 2-6 bases
-  miningSpeedMultiplier: number;  // 1.0 (normal) to 1.5 (insane - bonus for higher difficulties)
+  miningSpeedMultiplier: number;  // 1.0 (normal) to 1.5 (insane)
   buildSpeedMultiplier: number;
   scoutingEnabled: boolean;
   microEnabled: boolean;
@@ -2098,12 +2120,17 @@ interface DifficultySettings {
 // State machine
 type AIState = 'building' | 'expanding' | 'attacking' |
                'defending' | 'scouting' | 'harassing';
-
-// Simulation-based economy (no passive income)
-// Workers actually gather and return resources to base
-// AI gets resources via aiSystem.creditResources(playerId, minerals, vespene)
-// Higher difficulties get faster mining speed, not fake income
 ```
+
+#### Subsystem Responsibilities
+
+| Subsystem | Responsibilities |
+|-----------|------------------|
+| **AICoordinator** | AI player state, subsystem coordination, entity query caching |
+| **AIEconomyManager** | Worker gathering, repair assignment, incomplete building resumption |
+| **AIBuildOrderExecutor** | Build order steps, macro rules, research initiation, expansion |
+| **AITacticsManager** | Tactical state, attack/defend/harass phase execution |
+| **AIScoutingManager** | Scout selection, target determination, enemy intel |
 
 #### Simulation-Based Economy
 
@@ -2114,6 +2141,19 @@ The AI uses a fully simulated economy:
 - **Worker death tracking**: AI detects harassment and increases worker production priority
 - **Resource depletion awareness**: AI tracks depleted patches to inform expansion decisions
 - **Auto-reassignment**: Workers automatically find new resources when patches deplete
+
+#### Research System Integration
+
+The AI can now initiate research through `AIBuildOrderExecutor.tryStartResearch()`:
+
+```typescript
+// Finds appropriate building, checks requirements, deducts resources
+tryStartResearch(ai: AIPlayer, researchId: string): boolean
+
+// Research tracking in AIPlayer
+completedResearch: Set<string>;
+researchInProgress: Map<string, number>; // researchId -> buildingId
+```
 
 #### Worker Lifecycle Management
 
@@ -2128,9 +2168,9 @@ interface AIPlayer {
 }
 ```
 
-### AI Economy System (`AIEconomySystem.ts`)
+### AI Economy Metrics System (`AIEconomySystem.ts`)
 
-Metrics tracking for AI economy debugging:
+Metrics tracking for AI economy debugging (separate from AIEconomyManager):
 
 ```typescript
 interface AIEconomyMetrics {
