@@ -7,6 +7,7 @@ import { Health } from '../components/Health';
 import { Selectable } from '../components/Selectable';
 import { BUILDING_DEFINITIONS, RESEARCH_MODULE_UNITS, PRODUCTION_MODULE_UNITS } from '@/data/buildings/dominion';
 import { useGameStore } from '@/store/gameStore';
+import { findBuildingTarget } from '../combat/TargetAcquisition';
 
 interface LiftOffCommand {
   buildingId: number;
@@ -533,35 +534,16 @@ export class BuildingMechanicsSystem extends System {
     });
   }
 
+  /**
+   * Find best target using spatial grid for O(nearby) instead of O(all entities).
+   * Uses the shared TargetAcquisition utility with priority-based scoring.
+   */
   private findBestTarget(
     transform: Transform,
     playerId: string,
     range: number
   ): { entity: Entity; distance: number } | null {
-    let bestTarget: { entity: Entity; distance: number } | null = null;
-
-    const entities = this.world.getEntitiesWith('Transform', 'Health', 'Selectable');
-
-    for (const entity of entities) {
-      const targetSelectable = entity.get<Selectable>('Selectable')!;
-      const targetHealth = entity.get<Health>('Health')!;
-      const targetTransform = entity.get<Transform>('Transform')!;
-
-      if (targetSelectable.playerId === playerId) continue;
-      if (targetHealth.isDead()) continue;
-
-      const dx = targetTransform.x - transform.x;
-      const dy = targetTransform.y - transform.y;
-      const distance = Math.sqrt(dx * dx + dy * dy);
-
-      if (distance <= range) {
-        if (!bestTarget || distance < bestTarget.distance) {
-          bestTarget = { entity, distance };
-        }
-      }
-    }
-
-    return bestTarget;
+    return findBuildingTarget(this.world, transform, playerId, range);
   }
 
   // Check if a unit can be produced with current addon

@@ -14,6 +14,7 @@ import { getDefaultTargetPriority } from '@/data/units/categories';
 import AssetManager from '@/assets/AssetManager';
 import { getProjectileType, DEFAULT_PROJECTILE, isInstantProjectile } from '@/data/projectiles';
 import { SpatialEntityData, SpatialUnitState } from '../core/SpatialGrid';
+import { findBestTarget as findBestTargetShared, DEFAULT_SCORING_CONFIG } from '../combat/TargetAcquisition';
 
 // PERF: Reusable event payload objects to avoid allocation per attack
 const attackEventPayload = {
@@ -760,6 +761,7 @@ export class CombatSystem extends System {
    * Fast attack target search for idle/holding units
    * Checks only within ATTACK range (not sight range) for responsive auto-attack
    * Uses light throttle (1 tick = ~50ms) for performance
+   * Uses shared TargetAcquisition utility for consistent priority scoring.
    */
   private findImmediateAttackTarget(
     selfId: number,
@@ -779,101 +781,21 @@ export class CombatSystem extends System {
     const selfSelectable = selfEntity?.get<Selectable>('Selectable');
     if (!selfSelectable) return null;
 
-    let bestTarget: { id: number; score: number } | null = null;
+    // Use shared target acquisition for attack-range search
+    const result = findBestTargetShared(this.world, {
+      x: selfTransform.x,
+      y: selfTransform.y,
+      range: selfUnit.attackRange,
+      attackerPlayerId: selfSelectable.playerId,
+      attackRange: selfUnit.attackRange,
+      canAttackAir: selfUnit.canAttackAir,
+      canAttackGround: selfUnit.canAttackGround,
+      includeBuildingsInSearch: selfUnit.canAttackGround,
+      attackerVisualRadius: AssetManager.getCachedVisualRadius(selfUnit.unitId, selfUnit.collisionRadius),
+      excludeEntityId: selfId,
+    });
 
-    // Use spatial grid to find nearby units within ATTACK range
-    const nearbyUnitIds = this.world.unitGrid.queryRadius(
-      selfTransform.x,
-      selfTransform.y,
-      selfUnit.attackRange
-    );
-
-    // Check nearby units
-    for (const entityId of nearbyUnitIds) {
-      if (entityId === selfId) continue;
-
-      const entity = this.world.getEntity(entityId);
-      if (!entity) continue;
-
-      const transform = entity.get<Transform>('Transform');
-      const health = entity.get<Health>('Health');
-      const selectable = entity.get<Selectable>('Selectable');
-      const unit = entity.get<Unit>('Unit');
-
-      if (!transform || !health || !selectable) continue;
-      if (selectable.playerId === selfSelectable.playerId) continue;
-      if (health.isDead()) continue;
-
-      // Check if attacker can target this unit based on air/ground status
-      const targetIsFlying = unit?.isFlying ?? false;
-      if (!selfUnit.canAttackTarget(targetIsFlying)) continue;
-
-      // Edge-to-edge distance using visual radius
-      const centerDistance = selfTransform.distanceTo(transform);
-      const attackerRadius = AssetManager.getCachedVisualRadius(selfUnit.unitId, selfUnit.collisionRadius);
-      const targetRadius = unit ? AssetManager.getCachedVisualRadius(unit.unitId, unit.collisionRadius) : 0.5;
-      const distance = Math.max(0, centerDistance - attackerRadius - targetRadius);
-      if (distance > selfUnit.attackRange) continue;
-
-      // Calculate target score based on priority and distance
-      const unitId = unit?.unitId || 'default';
-      const basePriority = getTargetPriority(unitId, unit);
-      const distanceFactor = 1 - (distance / selfUnit.attackRange);
-      const healthFactor = 1 - (health.current / health.max);
-      const score = basePriority * 0.5 + distanceFactor * 30 + healthFactor * 20;
-
-      if (!bestTarget || score > bestTarget.score) {
-        bestTarget = { id: entityId, score };
-      }
-    }
-
-    // Also check nearby buildings within attack range
-    // Buildings are ground targets, so require canAttackGround
-    if (selfUnit.canAttackGround) {
-      const nearbyBuildingIds = this.world.buildingGrid.queryRadius(
-        selfTransform.x,
-        selfTransform.y,
-        selfUnit.attackRange
-      );
-
-      for (const entityId of nearbyBuildingIds) {
-        const entity = this.world.getEntity(entityId);
-        if (!entity) continue;
-
-        const transform = entity.get<Transform>('Transform');
-        const health = entity.get<Health>('Health');
-        const selectable = entity.get<Selectable>('Selectable');
-        const building = entity.get<Building>('Building');
-
-        if (!transform || !health || !selectable || !building) continue;
-        if (selectable.playerId === selfSelectable.playerId) continue;
-        if (health.isDead()) continue;
-
-        // Distance to building edge, minus attacker's visual radius
-        const halfW = building.width / 2;
-        const halfH = building.height / 2;
-        const clampedX = Math.max(transform.x - halfW, Math.min(selfTransform.x, transform.x + halfW));
-        const clampedY = Math.max(transform.y - halfH, Math.min(selfTransform.y, transform.y + halfH));
-        const edgeDx = selfTransform.x - clampedX;
-        const edgeDy = selfTransform.y - clampedY;
-        const attackerRadius = AssetManager.getCachedVisualRadius(selfUnit.unitId, selfUnit.collisionRadius);
-        const distance = Math.max(0, Math.sqrt(edgeDx * edgeDx + edgeDy * edgeDy) - attackerRadius);
-
-        if (distance > selfUnit.attackRange) continue;
-
-        // Buildings have lower priority than combat units
-        const basePriority = 30;
-        const distanceFactor = 1 - (distance / selfUnit.attackRange);
-        const healthFactor = 1 - (health.current / health.max);
-        const score = basePriority * 0.5 + distanceFactor * 30 + healthFactor * 20;
-
-        if (!bestTarget || score > bestTarget.score) {
-          bestTarget = { id: entityId, score };
-        }
-      }
-    }
-
-    return bestTarget?.id || null;
+    return result?.entityId ?? null;
   }
 
   /**
@@ -925,7 +847,8 @@ export class CombatSystem extends System {
 
   /**
    * Find the best target using spatial grid for O(nearby) instead of O(all entities)
-   * Prioritizes high-threat units over workers
+   * Prioritizes high-threat units over workers.
+   * Uses shared TargetAcquisition utility for consistent priority scoring.
    */
   private findBestTargetSpatial(
     selfId: number,
@@ -937,101 +860,21 @@ export class CombatSystem extends System {
     const selfSelectable = selfEntity?.get<Selectable>('Selectable');
     if (!selfSelectable) return null;
 
-    let bestTarget: { id: number; score: number } | null = null;
+    // Use shared target acquisition for sight-range search
+    const result = findBestTargetShared(this.world, {
+      x: selfTransform.x,
+      y: selfTransform.y,
+      range: selfUnit.sightRange,
+      attackerPlayerId: selfSelectable.playerId,
+      attackRange: selfUnit.attackRange,
+      canAttackAir: selfUnit.canAttackAir,
+      canAttackGround: selfUnit.canAttackGround,
+      includeBuildingsInSearch: selfUnit.canAttackGround,
+      attackerVisualRadius: AssetManager.getCachedVisualRadius(selfUnit.unitId, selfUnit.collisionRadius),
+      excludeEntityId: selfId,
+    });
 
-    // Use spatial grid to find nearby units - much faster than checking all entities
-    const nearbyUnitIds = this.world.unitGrid.queryRadius(
-      selfTransform.x,
-      selfTransform.y,
-      selfUnit.sightRange
-    );
-
-    // Check nearby units
-    for (const entityId of nearbyUnitIds) {
-      if (entityId === selfId) continue;
-
-      const entity = this.world.getEntity(entityId);
-      if (!entity) continue;
-
-      const transform = entity.get<Transform>('Transform');
-      const health = entity.get<Health>('Health');
-      const selectable = entity.get<Selectable>('Selectable');
-      const unit = entity.get<Unit>('Unit');
-
-      if (!transform || !health || !selectable) continue;
-      if (selectable.playerId === selfSelectable.playerId) continue;
-      if (health.isDead()) continue;
-
-      // Check if attacker can target this unit based on air/ground status
-      const targetIsFlying = unit?.isFlying ?? false;
-      if (!selfUnit.canAttackTarget(targetIsFlying)) continue;
-
-      // Edge-to-edge distance using visual radius
-      const centerDistance = selfTransform.distanceTo(transform);
-      const attackerRadius = AssetManager.getCachedVisualRadius(selfUnit.unitId, selfUnit.collisionRadius);
-      const targetRadius = unit ? AssetManager.getCachedVisualRadius(unit.unitId, unit.collisionRadius) : 0.5;
-      const distance = Math.max(0, centerDistance - attackerRadius - targetRadius);
-      if (distance > selfUnit.sightRange) continue;
-
-      // Calculate target score based on priority and distance
-      const unitId = unit?.unitId || 'default';
-      const basePriority = getTargetPriority(unitId, unit);
-      const distanceFactor = 1 - (distance / selfUnit.sightRange);
-      const healthFactor = 1 - (health.current / health.max);
-      const score = basePriority * 0.5 + distanceFactor * 30 + healthFactor * 20;
-
-      if (!bestTarget || score > bestTarget.score) {
-        bestTarget = { id: entityId, score };
-      }
-    }
-
-    // Also check nearby buildings using building grid
-    // Buildings are ground targets, so require canAttackGround
-    if (selfUnit.canAttackGround) {
-      const nearbyBuildingIds = this.world.buildingGrid.queryRadius(
-        selfTransform.x,
-        selfTransform.y,
-        selfUnit.sightRange
-      );
-
-      for (const entityId of nearbyBuildingIds) {
-        const entity = this.world.getEntity(entityId);
-        if (!entity) continue;
-
-        const transform = entity.get<Transform>('Transform');
-        const health = entity.get<Health>('Health');
-        const selectable = entity.get<Selectable>('Selectable');
-        const building = entity.get<Building>('Building');
-
-        if (!transform || !health || !selectable || !building) continue;
-        if (selectable.playerId === selfSelectable.playerId) continue;
-        if (health.isDead()) continue;
-
-        // Distance to building edge, minus attacker's visual radius
-        const halfW = building.width / 2;
-        const halfH = building.height / 2;
-        const clampedX = Math.max(transform.x - halfW, Math.min(selfTransform.x, transform.x + halfW));
-        const clampedY = Math.max(transform.y - halfH, Math.min(selfTransform.y, transform.y + halfH));
-        const edgeDx = selfTransform.x - clampedX;
-        const edgeDy = selfTransform.y - clampedY;
-        const attackerRadius = AssetManager.getCachedVisualRadius(selfUnit.unitId, selfUnit.collisionRadius);
-        const distance = Math.max(0, Math.sqrt(edgeDx * edgeDx + edgeDy * edgeDy) - attackerRadius);
-
-        if (distance > selfUnit.sightRange) continue;
-
-        // Buildings have lower priority than combat units
-        const basePriority = 30;
-        const distanceFactor = 1 - (distance / selfUnit.sightRange);
-        const healthFactor = 1 - (health.current / health.max);
-        const score = basePriority * 0.5 + distanceFactor * 30 + healthFactor * 20;
-
-        if (!bestTarget || score > bestTarget.score) {
-          bestTarget = { id: entityId, score };
-        }
-      }
-    }
-
-    return bestTarget?.id || null;
+    return result?.entityId ?? null;
   }
 
   private performAttack(
