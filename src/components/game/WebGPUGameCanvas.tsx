@@ -2408,9 +2408,8 @@ export function WebGPUGameCanvas() {
           );
 
           // Set fog of war map dimensions
-          const mapConfig = useGameSetupStore.getState().mapSettings;
-          if (mapConfig && useGameSetupStore.getState().fogOfWar && !isSpectatorMode()) {
-            renderPipelineRef.current.setFogOfWarMapDimensions(mapConfig.width, mapConfig.height);
+          if (useGameSetupStore.getState().fogOfWar && !isSpectatorMode()) {
+            renderPipelineRef.current.setFogOfWarMapDimensions(CURRENT_MAP.width, CURRENT_MAP.height);
           }
 
           // Initialize camera matrices for TAA velocity calculation
