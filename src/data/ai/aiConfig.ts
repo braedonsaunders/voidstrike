@@ -527,6 +527,9 @@ function getRefValue(ref: string, state: AIStateSnapshot): number {
       return state.config.economy.optimalWorkersPerBase;
     case 'productionBuildingsPerBase':
       return 2; // Default: 2 production buildings per base
+    case 'targetWorkers':
+      // Use difficulty-specific target workers
+      return state.config.difficultyConfig[state.difficulty].targetWorkers;
     default:
       return 0;
   }

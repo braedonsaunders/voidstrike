@@ -67,14 +67,15 @@ const DOMINION_MACRO_RULES: MacroRule[] = [
     cooldownTicks: 10, // Very fast - queue multiple workers
   },
 
-  // Standard worker production
+  // Standard worker production - uses difficulty-specific target workers
   {
     id: 'workers_basic',
     name: 'Train Workers',
-    description: 'Keep worker production going',
+    description: 'Keep worker production going up to difficulty target',
     priority: 90,
     conditions: [
-      { type: 'workerSaturation', operator: '<', value: 1.0 },
+      // Use targetWorkers reference from difficulty config instead of global saturation
+      { type: 'workers', operator: '<', value: 0, compareRef: 'targetWorkers', compareMultiplier: 1.0 },
       { type: 'minerals', operator: '>=', value: 50 },
       { type: 'supplyRatio', operator: '<', value: 0.95 },
     ],
@@ -142,7 +143,7 @@ const DOMINION_MACRO_RULES: MacroRule[] = [
     description: 'Get gas for tech units',
     priority: 80,
     conditions: [
-      { type: 'workers', operator: '>=', value: 12 },
+      { type: 'workers', operator: '>=', value: 10 }, // Lowered from 12
       { type: 'buildingCount', operator: '==', value: 0, targetId: 'extractor' },
       { type: 'minerals', operator: '>=', value: 75 },
     ],
@@ -150,25 +151,41 @@ const DOMINION_MACRO_RULES: MacroRule[] = [
     cooldownTicks: 100,
   },
 
-  // Additional extractors at expansions
+  // Second extractor at main base - most bases have 2 vespene geysers
+  {
+    id: 'extractor_second',
+    name: 'Second Extractor',
+    description: 'Build second gas at main base',
+    priority: 72,
+    conditions: [
+      { type: 'workers', operator: '>=', value: 14 },
+      { type: 'buildingCount', operator: '==', value: 1, targetId: 'extractor' },
+      { type: 'buildingCount', operator: '>=', value: 1, targetId: 'infantry_bay' },
+      { type: 'minerals', operator: '>=', value: 75 },
+    ],
+    action: { type: 'build', targetId: 'extractor' },
+    cooldownTicks: 150,
+  },
+
+  // Additional extractors at expansions (2 per base)
   {
     id: 'extractor_expansion',
     name: 'Expansion Extractors',
     description: 'Build extractors at new bases',
     priority: 60,
     conditions: [
-      { type: 'workers', operator: '>=', value: 20 },
+      { type: 'workers', operator: '>=', value: 18 },
       { type: 'bases', operator: '>=', value: 2 },
-      // extractors < bases
-      { type: 'buildingCount', operator: '<', value: 1, targetId: 'extractor', compareRef: 'bases', compareMultiplier: 1 },
+      // extractors < bases * 2 (2 per base)
+      { type: 'buildingCount', operator: '<', value: 2, targetId: 'extractor', compareRef: 'bases', compareMultiplier: 2 },
       { type: 'minerals', operator: '>=', value: 75 },
     ],
     action: { type: 'build', targetId: 'extractor' },
-    cooldownTicks: 200,
+    cooldownTicks: 150,
   },
 
   // === Tech Buildings ===
-  // Forge for vehicles
+  // Forge for vehicles - ALL difficulties can tech
   {
     id: 'forge_first',
     name: 'First Forge',
@@ -178,15 +195,15 @@ const DOMINION_MACRO_RULES: MacroRule[] = [
       { type: 'buildingCount', operator: '>=', value: 1, targetId: 'infantry_bay' },
       { type: 'buildingCount', operator: '>=', value: 1, targetId: 'extractor' },
       { type: 'buildingCount', operator: '==', value: 0, targetId: 'forge' },
-      { type: 'vespene', operator: '>=', value: 100 },
-      { type: 'minerals', operator: '>=', value: 150 },
+      { type: 'vespene', operator: '>=', value: 75 }, // Lowered
+      { type: 'minerals', operator: '>=', value: 100 }, // Lowered
     ],
     action: { type: 'build', targetId: 'forge' },
     cooldownTicks: 200,
-    difficulties: ['medium', 'hard', 'very_hard', 'insane'],
+    // NO difficulty restriction - all AI can tech
   },
 
-  // Hangar for air units
+  // Hangar for air units - ALL difficulties
   {
     id: 'hangar_first',
     name: 'First Hangar',
@@ -195,29 +212,28 @@ const DOMINION_MACRO_RULES: MacroRule[] = [
     conditions: [
       { type: 'buildingCount', operator: '>=', value: 1, targetId: 'forge' },
       { type: 'buildingCount', operator: '==', value: 0, targetId: 'hangar' },
-      { type: 'vespene', operator: '>=', value: 100 },
-      { type: 'minerals', operator: '>=', value: 150 },
+      { type: 'vespene', operator: '>=', value: 75 }, // Lowered
+      { type: 'minerals', operator: '>=', value: 100 }, // Lowered
     ],
     action: { type: 'build', targetId: 'hangar' },
     cooldownTicks: 200,
-    difficulties: ['medium', 'hard', 'very_hard', 'insane'],
+    // NO difficulty restriction
   },
 
-  // Research modules for tech units
+  // Research modules for tech units - ALL difficulties
   {
     id: 'research_module',
     name: 'Research Module',
     description: 'Build tech lab for advanced units',
     priority: 68,
     conditions: [
-      { type: 'buildingCount', operator: '>=', value: 1, targetId: 'extractor' },
-      { type: 'buildingCount', operator: '<', value: 3, targetId: 'research_module' },
+      { type: 'buildingCount', operator: '>=', value: 1, targetId: 'infantry_bay' },
       { type: 'vespene', operator: '>=', value: 50 },
       { type: 'minerals', operator: '>=', value: 50 },
     ],
     action: { type: 'build', targetId: 'research_module' },
-    cooldownTicks: 300,
-    difficulties: ['medium', 'hard', 'very_hard', 'insane'],
+    cooldownTicks: 250,
+    // NO difficulty restriction
   },
 
   // === Unit Production - Anti-Air Priority ===
@@ -243,7 +259,22 @@ const DOMINION_MACRO_RULES: MacroRule[] = [
     difficulties: ['hard', 'very_hard', 'insane'],
   },
 
-  // === Unit Production - Heavy Units ===
+  // === Unit Production - Heavy Units (ALL DIFFICULTIES) ===
+  {
+    id: 'train_dreadnought',
+    name: 'Train Dreadnought',
+    description: 'Build capital ship',
+    priority: 58,
+    conditions: [
+      { type: 'buildingCount', operator: '>=', value: 1, targetId: 'hangar' },
+      { type: 'vespene', operator: '>=', value: 300 },
+      { type: 'minerals', operator: '>=', value: 400 },
+      { type: 'armySupply', operator: '>=', value: 20 }, // Need army to protect
+    ],
+    action: { type: 'train', targetId: 'dreadnought' },
+    cooldownTicks: 100,
+  },
+
   {
     id: 'train_colossus',
     name: 'Train Colossus',
@@ -251,12 +282,12 @@ const DOMINION_MACRO_RULES: MacroRule[] = [
     priority: 55,
     conditions: [
       { type: 'buildingCount', operator: '>=', value: 1, targetId: 'forge' },
-      { type: 'vespene', operator: '>=', value: 200 },
-      { type: 'minerals', operator: '>=', value: 300 },
+      { type: 'vespene', operator: '>=', value: 150 }, // Lowered
+      { type: 'minerals', operator: '>=', value: 250 }, // Lowered
     ],
     action: { type: 'train', targetId: 'colossus' },
-    cooldownTicks: 60,
-    difficulties: ['hard', 'very_hard', 'insane'],
+    cooldownTicks: 50,
+    // NO difficulty restriction
   },
 
   {
@@ -266,15 +297,15 @@ const DOMINION_MACRO_RULES: MacroRule[] = [
     priority: 52,
     conditions: [
       { type: 'buildingCount', operator: '>=', value: 1, targetId: 'forge' },
-      { type: 'vespene', operator: '>=', value: 125 },
-      { type: 'minerals', operator: '>=', value: 200 },
+      { type: 'vespene', operator: '>=', value: 100 }, // Lowered
+      { type: 'minerals', operator: '>=', value: 150 }, // Lowered
     ],
     action: { type: 'train', targetId: 'devastator' },
-    cooldownTicks: 50,
-    difficulties: ['medium', 'hard', 'very_hard', 'insane'],
+    cooldownTicks: 40,
+    // NO difficulty restriction
   },
 
-  // === Unit Production - Air Units ===
+  // === Unit Production - Air Units (ALL DIFFICULTIES) ===
   {
     id: 'train_valkyrie',
     name: 'Train Valkyrie',
@@ -282,12 +313,12 @@ const DOMINION_MACRO_RULES: MacroRule[] = [
     priority: 50,
     conditions: [
       { type: 'buildingCount', operator: '>=', value: 1, targetId: 'hangar' },
-      { type: 'vespene', operator: '>=', value: 75 },
-      { type: 'minerals', operator: '>=', value: 150 },
+      { type: 'vespene', operator: '>=', value: 50 }, // Lowered
+      { type: 'minerals', operator: '>=', value: 100 }, // Lowered
     ],
     action: { type: 'train', targetId: 'valkyrie' },
-    cooldownTicks: 50,
-    difficulties: ['medium', 'hard', 'very_hard', 'insane'],
+    cooldownTicks: 40,
+    // NO difficulty restriction
   },
 
   {
@@ -297,86 +328,132 @@ const DOMINION_MACRO_RULES: MacroRule[] = [
     priority: 48,
     conditions: [
       { type: 'buildingCount', operator: '>=', value: 1, targetId: 'hangar' },
-      { type: 'vespene', operator: '>=', value: 100 },
-      { type: 'minerals', operator: '>=', value: 150 },
+      { type: 'vespene', operator: '>=', value: 75 }, // Lowered
+      { type: 'minerals', operator: '>=', value: 100 }, // Lowered
     ],
     action: { type: 'train', targetId: 'specter' },
-    cooldownTicks: 60,
-    difficulties: ['hard', 'very_hard', 'insane'],
+    cooldownTicks: 50,
+    // NO difficulty restriction
   },
 
-  // === Unit Production - Vehicles ===
+  // === Unit Production - Vehicles (ALL DIFFICULTIES) ===
   {
     id: 'train_scorcher',
     name: 'Train Scorcher',
     description: 'Build fast harassment vehicle',
-    priority: 45,
+    priority: 46,
     conditions: [
       { type: 'buildingCount', operator: '>=', value: 1, targetId: 'forge' },
       { type: 'vespene', operator: '>=', value: 25 },
-      { type: 'minerals', operator: '>=', value: 100 },
+      { type: 'minerals', operator: '>=', value: 75 },
     ],
     action: { type: 'train', targetId: 'scorcher' },
-    cooldownTicks: 40,
+    cooldownTicks: 35,
   },
 
-  // === Unit Production - Infantry ===
+  // === Unit Production - Infantry (ALL DIFFICULTIES) ===
   {
     id: 'train_breacher',
     name: 'Train Breacher',
     description: 'Build anti-armor infantry',
-    priority: 42,
+    priority: 44,
     conditions: [
       { type: 'buildingCount', operator: '>=', value: 1, targetId: 'infantry_bay' },
       { type: 'vespene', operator: '>=', value: 25 },
       { type: 'minerals', operator: '>=', value: 50 },
     ],
     action: { type: 'train', targetId: 'breacher' },
-    cooldownTicks: 35,
-    difficulties: ['medium', 'hard', 'very_hard', 'insane'],
+    cooldownTicks: 30,
+    // NO difficulty restriction
   },
 
   {
     id: 'train_vanguard',
     name: 'Train Vanguard',
     description: 'Build jetpack infantry',
-    priority: 40,
+    priority: 42,
     conditions: [
       { type: 'buildingCount', operator: '>=', value: 1, targetId: 'infantry_bay' },
       { type: 'vespene', operator: '>=', value: 50 },
       { type: 'minerals', operator: '>=', value: 75 },
     ],
     action: { type: 'train', targetId: 'vanguard' },
-    cooldownTicks: 40,
+    cooldownTicks: 35,
   },
 
-  // Trooper - basic unit, fallback production
-  // Aggressive army production - higher priority to keep building units
+  // === Mixed Army Production ===
+  // Aggressive production with variety based on available buildings
+  {
+    id: 'train_mixed_army_with_vehicles',
+    name: 'Mixed Army (With Vehicles)',
+    description: 'Train diverse army when forge is available',
+    priority: 47,
+    conditions: [
+      { type: 'buildingCount', operator: '>=', value: 1, targetId: 'forge' },
+      { type: 'minerals', operator: '>=', value: 150 },
+      { type: 'vespene', operator: '>=', value: 50 },
+      { type: 'supplyRatio', operator: '<', value: 0.9 },
+    ],
+    action: {
+      type: 'train',
+      options: [
+        { id: 'trooper', weight: 6 },
+        { id: 'breacher', weight: 4 },
+        { id: 'scorcher', weight: 5 },
+        { id: 'devastator', weight: 3 },
+      ],
+    },
+    cooldownTicks: 12,
+  },
+
+  {
+    id: 'train_mixed_army_with_air',
+    name: 'Mixed Army (With Air)',
+    description: 'Train diverse army when hangar is available',
+    priority: 49,
+    conditions: [
+      { type: 'buildingCount', operator: '>=', value: 1, targetId: 'hangar' },
+      { type: 'minerals', operator: '>=', value: 150 },
+      { type: 'vespene', operator: '>=', value: 75 },
+      { type: 'supplyRatio', operator: '<', value: 0.9 },
+    ],
+    action: {
+      type: 'train',
+      options: [
+        { id: 'trooper', weight: 5 },
+        { id: 'devastator', weight: 4 },
+        { id: 'valkyrie', weight: 4 },
+        { id: 'specter', weight: 2 },
+      ],
+    },
+    cooldownTicks: 12,
+  },
+
   {
     id: 'train_army_aggressive',
-    name: 'Aggressive Army Production',
-    description: 'Keep production buildings busy - always train units',
-    priority: 45, // Higher than basic trooper rule
+    name: 'Aggressive Infantry Production',
+    description: 'Keep infantry production going',
+    priority: 40,
     conditions: [
       { type: 'buildingCount', operator: '>=', value: 1, targetId: 'infantry_bay' },
-      { type: 'minerals', operator: '>=', value: 100 }, // Have some mineral buffer
+      { type: 'minerals', operator: '>=', value: 75 },
       { type: 'supplyRatio', operator: '<', value: 0.9 },
-      { type: 'workerSaturation', operator: '>=', value: 0.6 }, // Economy is decent
     ],
     action: {
       type: 'train',
       options: [
         { id: 'trooper', weight: 10 },
-        { id: 'breacher', weight: 5 }, // Some variety
+        { id: 'breacher', weight: 4 },
+        { id: 'vanguard', weight: 3 },
       ],
     },
-    cooldownTicks: 15, // Fast - keep queuing
+    cooldownTicks: 15,
   },
 
   {
     id: 'train_trooper',
     name: 'Train Trooper',
-    description: 'Basic infantry unit - fallback when economy is lower',
+    description: 'Basic infantry fallback',
     priority: 30,
     conditions: [
       { type: 'buildingCount', operator: '>=', value: 1, targetId: 'infantry_bay' },
@@ -384,7 +461,7 @@ const DOMINION_MACRO_RULES: MacroRule[] = [
       { type: 'supplyRatio', operator: '<', value: 0.95 },
     ],
     action: { type: 'train', targetId: 'trooper' },
-    cooldownTicks: 20,
+    cooldownTicks: 18,
   },
 
   // === Expansion ===
@@ -466,8 +543,8 @@ export const DOMINION_AI_CONFIG: FactionAIConfig = {
       counterBuildingEnabled: false,
       microEnabled: false,
       harassmentEnabled: false,
-      expansionCooldown: 1200,
-      attackCooldown: 800,
+      expansionCooldown: 600,    // Lowered - expand more often
+      attackCooldown: 200,       // Lowered - attack every 10 seconds
       scoutCooldown: 0,
       harassCooldown: 0,
       minWorkersForExpansion: 14,
@@ -483,9 +560,9 @@ export const DOMINION_AI_CONFIG: FactionAIConfig = {
       counterBuildingEnabled: false,
       microEnabled: false,
       harassmentEnabled: false,
-      expansionCooldown: 800,
-      attackCooldown: 500,
-      scoutCooldown: 600,
+      expansionCooldown: 500,    // Lowered
+      attackCooldown: 150,       // Lowered - attack every 7.5 seconds
+      scoutCooldown: 400,
       harassCooldown: 0,
       minWorkersForExpansion: 12,
       minArmyForExpansion: 6,
@@ -500,45 +577,45 @@ export const DOMINION_AI_CONFIG: FactionAIConfig = {
       counterBuildingEnabled: true,
       microEnabled: true,
       harassmentEnabled: true,
-      expansionCooldown: 600,
-      attackCooldown: 350,
-      scoutCooldown: 400,
-      harassCooldown: 400,
-      minWorkersForExpansion: 10,
-      minArmyForExpansion: 4,
-    },
-    very_hard: {
-      actionDelayTicks: 15,
-      targetWorkers: 32,
-      maxBases: 5,
-      miningSpeedMultiplier: 1.25, // 25% faster mining (difficulty bonus)
-      buildSpeedMultiplier: 1.1,
-      scoutingEnabled: true,
-      counterBuildingEnabled: true,
-      microEnabled: true,
-      harassmentEnabled: true,
-      expansionCooldown: 500,
-      attackCooldown: 250,
+      expansionCooldown: 400,    // Lowered
+      attackCooldown: 100,       // Lowered - attack every 5 seconds
       scoutCooldown: 300,
       harassCooldown: 300,
       minWorkersForExpansion: 8,
       minArmyForExpansion: 2,
     },
+    very_hard: {
+      actionDelayTicks: 15,
+      targetWorkers: 32,
+      maxBases: 5,
+      miningSpeedMultiplier: 1.25,
+      buildSpeedMultiplier: 1.1,
+      scoutingEnabled: true,
+      counterBuildingEnabled: true,
+      microEnabled: true,
+      harassmentEnabled: true,
+      expansionCooldown: 350,    // Lowered
+      attackCooldown: 80,        // Lowered - attack every 4 seconds
+      scoutCooldown: 200,
+      harassCooldown: 200,
+      minWorkersForExpansion: 6,
+      minArmyForExpansion: 0,
+    },
     insane: {
-      actionDelayTicks: 10, // Half second
+      actionDelayTicks: 10,
       targetWorkers: 40,
       maxBases: 6,
-      miningSpeedMultiplier: 1.5, // 50% faster mining (difficulty bonus)
+      miningSpeedMultiplier: 1.5,
       buildSpeedMultiplier: 1.3,
       scoutingEnabled: true,
       counterBuildingEnabled: true,
       microEnabled: true,
       harassmentEnabled: true,
-      expansionCooldown: 400,
-      attackCooldown: 150,
-      scoutCooldown: 200,
-      harassCooldown: 200,
-      minWorkersForExpansion: 6,
+      expansionCooldown: 250,    // Lowered
+      attackCooldown: 40,        // Lowered - attack every 2 seconds
+      scoutCooldown: 150,
+      harassCooldown: 150,
+      minWorkersForExpansion: 4,
       minArmyForExpansion: 0,
     },
   },

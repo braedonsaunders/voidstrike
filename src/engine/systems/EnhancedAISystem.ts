@@ -886,41 +886,25 @@ export class EnhancedAISystem extends System {
   }
 
   /**
-   * Rally newly produced units to join the main army.
-   * Keeps army consolidated rather than leaving units idle at production buildings.
+   * Rally newly produced units to a staging point near the base.
+   * Uses a fixed rally point instead of army center to prevent scattered formations.
    */
   private rallyNewUnitsToArmy(ai: AIPlayer): void {
     const armyUnits = this.getArmyUnits(ai.playerId);
     if (armyUnits.length === 0) return;
 
     const currentTick = this.game.getCurrentTick();
-
-    // Find idle army units near production buildings and send them to the main army
     const basePos = this.findAIBase(ai);
     if (!basePos) return;
 
-    // Calculate army center of mass for rally point
-    let armyCenterX = 0;
-    let armyCenterY = 0;
-    let armyCount = 0;
+    // Use a fixed rally point slightly in front of the base
+    // This keeps the army consolidated instead of scattered across the map
+    const rallyPoint = {
+      x: basePos.x + 12,
+      y: basePos.y + 12,
+    };
 
-    for (const unitId of armyUnits) {
-      const entity = this.world.getEntity(unitId);
-      if (!entity) continue;
-      const transform = entity.get<Transform>('Transform');
-      if (!transform) continue;
-
-      armyCenterX += transform.x;
-      armyCenterY += transform.y;
-      armyCount++;
-    }
-
-    if (armyCount === 0) return;
-
-    armyCenterX /= armyCount;
-    armyCenterY /= armyCount;
-
-    // Find idle units near base and send them to army rally point
+    // Find idle units and rally them to the staging point
     const unitsToRally: number[] = [];
     for (const unitId of armyUnits) {
       const entity = this.world.getEntity(unitId);
@@ -933,20 +917,14 @@ export class EnhancedAISystem extends System {
       // Only rally idle units
       if (unit.state !== 'idle') continue;
 
-      // Check if unit is near base (within 15 units - probably just produced)
-      const dxBase = transform.x - basePos.x;
-      const dyBase = transform.y - basePos.y;
-      const distToBase = Math.sqrt(dxBase * dxBase + dyBase * dyBase);
+      // Check distance to rally point
+      const dx = transform.x - rallyPoint.x;
+      const dy = transform.y - rallyPoint.y;
+      const distToRally = Math.sqrt(dx * dx + dy * dy);
 
-      if (distToBase < 15) {
-        // Check if far from army center
-        const dxArmy = transform.x - armyCenterX;
-        const dyArmy = transform.y - armyCenterY;
-        const distToArmy = Math.sqrt(dxArmy * dxArmy + dyArmy * dyArmy);
-
-        if (distToArmy > 10) {
-          unitsToRally.push(unitId);
-        }
+      // Rally units that are too far from the staging point
+      if (distToRally > 8) {
+        unitsToRally.push(unitId);
       }
     }
 
@@ -956,7 +934,7 @@ export class EnhancedAISystem extends System {
         playerId: ai.playerId,
         type: 'MOVE',
         entityIds: unitsToRally,
-        targetPosition: { x: armyCenterX, y: armyCenterY },
+        targetPosition: rallyPoint,
       };
       this.game.processCommand(command);
     }
@@ -1791,44 +1769,53 @@ export class EnhancedAISystem extends System {
       return;
     }
 
-    // For each army unit, find a nearby enemy it can actually attack
-    let anyEnemyFound = false;
-    for (const unitId of armyUnits) {
-      const entity = this.world.getEntity(unitId);
-      if (!entity) continue;
-      const unit = entity.get<Unit>('Unit');
-      const transform = entity.get<Transform>('Transform');
-      if (!unit || !transform) continue;
+    // FOCUS FIRE: Find the closest enemy to base and have ALL units attack it
+    // This is much more effective than each unit picking its own target
+    const closestEnemy = this.findNearestEnemyEntity(
+      ai.playerId,
+      baseLocation,
+      50, // Increased defensive range
+      undefined // Don't filter by attacker - we'll handle that per unit
+    );
 
-      // Skip units already attacking with a target
-      if (unit.state === 'attacking' && unit.targetEntityId !== null) continue;
+    if (closestEnemy) {
+      // Find all idle or non-attacking units and focus fire on this target
+      const unitsToAttack: number[] = [];
+      for (const unitId of armyUnits) {
+        const entity = this.world.getEntity(unitId);
+        if (!entity) continue;
+        const unit = entity.get<Unit>('Unit');
+        if (!unit) continue;
 
-      // Find a nearby enemy this specific unit can attack (filters by canAttackGround/canAttackAir)
-      const nearbyEnemy = this.findNearestEnemyEntity(
-        ai.playerId,
-        { x: transform.x, y: transform.y },
-        30,
-        unit  // Pass attacker to filter valid targets
-      );
+        // Skip units already attacking THIS target
+        if (unit.state === 'attacking' && unit.targetEntityId === closestEnemy.entityId) continue;
 
-      if (nearbyEnemy) {
-        anyEnemyFound = true;
-        const directAttackCommand: GameCommand = {
+        // Check if this unit can attack the target
+        const targetEntity = this.world.getEntity(closestEnemy.entityId);
+        if (targetEntity) {
+          const targetUnit = targetEntity.get<Unit>('Unit');
+          const targetIsFlying = targetUnit?.isFlying ?? false;
+          if (!unit.canAttackTarget(targetIsFlying)) continue;
+        }
+
+        unitsToAttack.push(unitId);
+      }
+
+      if (unitsToAttack.length > 0) {
+        // Issue single focus fire command for all units
+        const focusFireCommand: GameCommand = {
           tick: currentTick,
           playerId: ai.playerId,
           type: 'ATTACK',
-          entityIds: [unitId],
-          targetEntityId: nearbyEnemy.entityId,
+          entityIds: unitsToAttack,
+          targetEntityId: closestEnemy.entityId,
         };
-        this.game.processCommand(directAttackCommand);
+        this.game.processCommand(focusFireCommand);
       }
-    }
-
-    if (!anyEnemyFound) {
-      // No enemy in range - rally units near the base (not AT it) to form a defensive position
-      // Position units in front of the base (offset by 8 units)
+    } else {
+      // No enemy in range - rally units near the base to form a defensive position
       const rallyPoint = {
-        x: baseLocation.x + 8,
+        x: baseLocation.x + 10,
         y: baseLocation.y + 8,
       };
 
