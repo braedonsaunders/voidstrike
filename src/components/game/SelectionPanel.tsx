@@ -150,7 +150,7 @@ export const SelectionPanel = memo(function SelectionPanel() {
 
   if (selectedInfo.length === 0) {
     return (
-      <div className="game-panel p-4 h-44 flex items-center justify-center">
+      <div className="game-panel p-4 h-52 flex items-center justify-center">
         <span className="text-void-500 text-sm">Select units or buildings</span>
       </div>
     );
@@ -190,7 +190,7 @@ export const SelectionPanel = memo(function SelectionPanel() {
     const queuedItems = productionQueue.slice(1);
 
     return (
-      <div className="game-panel p-3 h-44 overflow-hidden">
+      <div className="game-panel p-3 h-52 overflow-hidden">
         <div className="flex gap-3 h-full">
           {/* Left side: Portrait and entity info */}
           <div className="flex flex-col min-w-0 flex-1">
@@ -294,7 +294,7 @@ export const SelectionPanel = memo(function SelectionPanel() {
   const hasProductionQueues = buildingsWithQueues.length > 0;
 
   return (
-    <div className="game-panel p-3 h-44 overflow-y-auto">
+    <div className="game-panel p-3 h-52 overflow-y-auto">
       <div className="flex gap-3 h-full">
         {/* Left side: Entity icons grid */}
         <div className={`${hasProductionQueues ? 'flex-1' : 'w-full'}`}>
