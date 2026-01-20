@@ -51,6 +51,7 @@ export interface UseGameInputReturn {
 
 // Helper to find entity at a screen position using screen-space distance
 // This correctly handles air units by projecting their visual position to screen space
+// PERF: Uses spatial grid queries (O(1) average) instead of O(n) full entity iteration
 function findEntityAtScreenPosition(
   game: Game,
   screenX: number,
@@ -62,12 +63,29 @@ function findEntityAtScreenPosition(
   const unitScreenRadius = 35;
   const buildingScreenRadius = 50;
 
+  // Convert screen position to world coordinates for spatial query
+  const worldPos = camera.screenToWorld(screenX, screenY);
+  if (!worldPos) return null;
+
+  // Calculate world-space search radius based on camera zoom
+  // A pixel on screen corresponds to roughly (1/zoom) world units
+  const zoom = camera.getZoom?.() ?? 1;
+  const maxScreenRadius = Math.max(resourceScreenRadius, unitScreenRadius, buildingScreenRadius);
+  // Use generous world radius to ensure we capture all potential candidates
+  const worldSearchRadius = (maxScreenRadius / zoom) * 1.5 + 5;
+
   let closestEntity: { entity: ReturnType<typeof game.world.getEntity>; distance: number } | null = null;
 
-  // Check resources first
+  // Check resources - use archetype query since resources aren't in spatial grid
+  // Resources are typically static and fewer in number
   const resources = game.world.getEntitiesWith('Resource', 'Transform');
   for (const entity of resources) {
     const transform = entity.get<Transform>('Transform')!;
+    // Early world-space distance check to skip distant resources
+    const worldDx = transform.x - worldPos.x;
+    const worldDz = transform.y - worldPos.z;
+    if (worldDx * worldDx + worldDz * worldDz > worldSearchRadius * worldSearchRadius) continue;
+
     const screenPos = camera.worldToScreen(transform.x, transform.y);
     if (!screenPos) continue;
 
@@ -82,12 +100,16 @@ function findEntityAtScreenPosition(
     }
   }
 
-  // Check units - project with visualHeight for air units
-  const units = game.world.getEntitiesWith('Unit', 'Transform', 'Health', 'Selectable');
-  for (const entity of units) {
-    const transform = entity.get<Transform>('Transform')!;
-    const health = entity.get<Health>('Health')!;
-    const selectable = entity.get<Selectable>('Selectable')!;
+  // Query unit spatial grid - O(1) average instead of O(n)
+  const unitCandidates = game.world.unitGrid.queryRadius(worldPos.x, worldPos.z, worldSearchRadius);
+  for (const idx of unitCandidates) {
+    const entity = game.world.getEntityByIndex(idx);
+    if (!entity) continue;
+
+    const transform = entity.get<Transform>('Transform');
+    const health = entity.get<Health>('Health');
+    const selectable = entity.get<Selectable>('Selectable');
+    if (!transform || !health || !selectable) continue;
     if (health.isDead()) continue;
 
     // Get terrain height and add visual height for flying units
@@ -123,16 +145,20 @@ function findEntityAtScreenPosition(
     }
   }
 
-  // Check buildings
-  const buildings = game.world.getEntitiesWith('Building', 'Transform', 'Health', 'Selectable');
-  for (const entity of buildings) {
-    const transform = entity.get<Transform>('Transform')!;
-    const health = entity.get<Health>('Health')!;
-    const selectable = entity.get<Selectable>('Selectable')!;
+  // Query building spatial grid - O(1) average instead of O(n)
+  const buildingCandidates = game.world.buildingGrid.queryRadius(worldPos.x, worldPos.z, worldSearchRadius);
+  for (const idx of buildingCandidates) {
+    const entity = game.world.getEntityByIndex(idx);
+    if (!entity) continue;
+
+    const transform = entity.get<Transform>('Transform');
+    const health = entity.get<Health>('Health');
+    const selectable = entity.get<Selectable>('Selectable');
+    const building = entity.get<Building>('Building');
+    if (!transform || !health || !selectable || !building) continue;
     if (health.isDead()) continue;
 
     // Flying buildings also need height consideration
-    const building = entity.get<Building>('Building')!;
     const getTerrainHeightFn = camera.getTerrainHeightFunction();
     const terrainHeight = getTerrainHeightFn?.(transform.x, transform.y) ?? 0;
     const visualHeight = building.isFlying && building.state === 'flying' ? (selectable.visualHeight ?? 0) : 0;
@@ -156,52 +182,6 @@ function findEntityAtScreenPosition(
   }
 
   return closestEntity ? { entity: closestEntity.entity! } : null;
-}
-
-// Legacy world-space helper for cases where screen position isn't available
-function findEntityAtPosition(game: Game, x: number, z: number) {
-  const resourceClickRadius = 2.5;
-  const unitClickRadius = 1.5;
-  const buildingClickRadius = 2.0;
-
-  // Check resources first
-  const resources = game.world.getEntitiesWith('Resource', 'Transform');
-  for (const entity of resources) {
-    const transform = entity.get<Transform>('Transform')!;
-    const dx = transform.x - x;
-    const dy = transform.y - z;
-    if (dx * dx + dy * dy < resourceClickRadius * resourceClickRadius) {
-      return { entity };
-    }
-  }
-
-  // Check units
-  const units = game.world.getEntitiesWith('Unit', 'Transform', 'Health');
-  for (const entity of units) {
-    const transform = entity.get<Transform>('Transform')!;
-    const health = entity.get<Health>('Health')!;
-    if (health.isDead()) continue;
-    const dx = transform.x - x;
-    const dy = transform.y - z;
-    if (dx * dx + dy * dy < unitClickRadius * unitClickRadius) {
-      return { entity };
-    }
-  }
-
-  // Check buildings
-  const buildings = game.world.getEntitiesWith('Building', 'Transform', 'Health');
-  for (const entity of buildings) {
-    const transform = entity.get<Transform>('Transform')!;
-    const health = entity.get<Health>('Health')!;
-    if (health.isDead()) continue;
-    const dx = transform.x - x;
-    const dy = transform.y - z;
-    if (dx * dx + dy * dy < buildingClickRadius * buildingClickRadius) {
-      return { entity };
-    }
-  }
-
-  return null;
 }
 
 export function useGameInput({
