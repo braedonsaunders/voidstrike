@@ -2,13 +2,14 @@
  * TSL Game Overlay Manager
  *
  * WebGPU-compatible strategic overlays using Three.js Shading Language.
- * Provides terrain, elevation, threat, and navmesh visualization.
+ * Provides elevation, threat, navmesh, build grid, and resource visualization.
  * Works with both WebGPU and WebGL renderers.
  *
  * Key features:
- * - Progressive navmesh computation (no more 30s freeze)
- * - Worker-based threat updates
+ * - GPU-based terrain-conforming overlays (vertex displacement in shader)
+ * - Progressive navmesh computation with BFS flood-fill
  * - IndexedDB caching for static overlays
+ * - SC2-style attack/vision range overlays
  */
 
 import * as THREE from 'three';
@@ -21,9 +22,12 @@ import {
   texture,
   uv,
   sin,
+  positionLocal,
+  add,
+  mul,
 } from 'three/tsl';
 import { MeshBasicNodeMaterial } from 'three/webgpu';
-import { MapData, MapCell, TERRAIN_FEATURE_CONFIG, TerrainFeature, elevationToZone } from '@/data/maps';
+import { MapData, MapCell, TERRAIN_FEATURE_CONFIG, elevationToZone } from '@/data/maps';
 import { debugPathfinding } from '@/utils/debugLogger';
 import { World } from '@/engine/ecs/World';
 import { Transform } from '@/engine/components/Transform';
@@ -31,6 +35,7 @@ import { Unit } from '@/engine/components/Unit';
 import { Building } from '@/engine/components/Building';
 import { Selectable } from '@/engine/components/Selectable';
 import { Health } from '@/engine/components/Health';
+import { Resource } from '@/engine/components/Resource';
 import { GameOverlayType } from '@/store/uiStore';
 import { getLocalPlayerId } from '@/store/gameSetupStore';
 import { getRecastNavigation } from '@/engine/pathfinding/RecastNavigation';
@@ -40,19 +45,47 @@ import {
   setOverlayCache,
 } from '@/utils/overlayCache';
 
+// Overlay height offset above terrain to prevent z-fighting
+const OVERLAY_HEIGHT_OFFSET = 0.15;
+
 /**
- * Creates a simple overlay material using TSL
+ * Creates a terrain-conforming overlay material using TSL.
+ * Displaces vertices on GPU using heightmap texture.
  */
-function createOverlayMaterial(overlayTexture: THREE.DataTexture, opacity: number): MeshBasicNodeMaterial {
+function createTerrainConformingMaterial(
+  overlayTexture: THREE.DataTexture,
+  heightmapTexture: THREE.DataTexture,
+  opacity: number,
+  heightOffset: number = OVERLAY_HEIGHT_OFFSET
+): MeshBasicNodeMaterial {
   const material = new MeshBasicNodeMaterial();
   material.transparent = true;
   material.depthWrite = false;
-  material.depthTest = false; // Render on top of terrain
+  material.depthTest = true; // Enable depth test for proper occlusion
   material.side = THREE.DoubleSide;
 
-  const uOpacity = uniform(opacity);
+  // Polygon offset to prevent z-fighting with terrain
+  material.polygonOffset = true;
+  material.polygonOffsetFactor = -1;
+  material.polygonOffsetUnits = -1;
 
-  // Use vec4 output with colorNode (same pattern as FogOfWar)
+  const uOpacity = uniform(opacity);
+  const uHeightOffset = uniform(heightOffset);
+
+  // Vertex position node - displace Y based on heightmap
+  const positionNode = Fn(() => {
+    const pos = positionLocal;
+    // Sample heightmap using UV (position is in local space, UV maps to 0-1)
+    const heightSample = texture(heightmapTexture, uv());
+    // R channel contains normalized height (0-1), scale to world units
+    const terrainHeight = heightSample.r.mul(float(20.0)); // Max height ~20 units
+    // Displace Y position
+    return vec3(pos.x, pos.y.add(terrainHeight).add(uHeightOffset), pos.z);
+  })();
+
+  material.positionNode = positionNode;
+
+  // Color output
   const outputNode = Fn(() => {
     const texColor = texture(overlayTexture, uv());
     const alpha = texColor.a.mul(uOpacity);
@@ -61,26 +94,46 @@ function createOverlayMaterial(overlayTexture: THREE.DataTexture, opacity: numbe
 
   material.colorNode = outputNode;
 
-  // Store opacity uniform for updates
-  material._uOpacity = uOpacity;
+  // Store uniforms for updates
+  (material as any)._uOpacity = uOpacity;
+  (material as any)._uHeightOffset = uHeightOffset;
 
   return material;
 }
 
 /**
- * Creates a threat overlay material with pulsing effect
+ * Creates a terrain-conforming threat material with pulsing effect
  */
-function createThreatMaterial(threatTexture: THREE.DataTexture, opacity: number): MeshBasicNodeMaterial {
+function createTerrainConformingThreatMaterial(
+  threatTexture: THREE.DataTexture,
+  heightmapTexture: THREE.DataTexture,
+  opacity: number
+): MeshBasicNodeMaterial {
   const material = new MeshBasicNodeMaterial();
   material.transparent = true;
   material.depthWrite = false;
-  material.depthTest = false; // Render on top of terrain
+  material.depthTest = true;
   material.side = THREE.DoubleSide;
+
+  material.polygonOffset = true;
+  material.polygonOffsetFactor = -2;
+  material.polygonOffsetUnits = -2;
 
   const uOpacity = uniform(opacity);
   const uTime = uniform(0);
+  const uHeightOffset = uniform(OVERLAY_HEIGHT_OFFSET + 0.05); // Slightly above other overlays
 
-  // Use vec4 output with colorNode (same pattern as FogOfWar)
+  // Vertex position with terrain conforming
+  const positionNode = Fn(() => {
+    const pos = positionLocal;
+    const heightSample = texture(heightmapTexture, uv());
+    const terrainHeight = heightSample.r.mul(float(20.0));
+    return vec3(pos.x, pos.y.add(terrainHeight).add(uHeightOffset), pos.z);
+  })();
+
+  material.positionNode = positionNode;
+
+  // Color with pulsing effect
   const outputNode = Fn(() => {
     const uvCoord = uv();
     const texColor = texture(threatTexture, uvCoord);
@@ -97,9 +150,120 @@ function createThreatMaterial(threatTexture: THREE.DataTexture, opacity: number)
 
   material.colorNode = outputNode;
 
-  // Store uniforms for updates
-  material._uOpacity = uOpacity;
-  material._uTime = uTime;
+  (material as any)._uOpacity = uOpacity;
+  (material as any)._uTime = uTime;
+  (material as any)._uHeightOffset = uHeightOffset;
+
+  return material;
+}
+
+/**
+ * Creates a build grid material with green/red validity colors
+ */
+function createBuildGridMaterial(
+  gridTexture: THREE.DataTexture,
+  heightmapTexture: THREE.DataTexture,
+  opacity: number
+): MeshBasicNodeMaterial {
+  const material = new MeshBasicNodeMaterial();
+  material.transparent = true;
+  material.depthWrite = false;
+  material.depthTest = true;
+  material.side = THREE.DoubleSide;
+
+  material.polygonOffset = true;
+  material.polygonOffsetFactor = -3;
+  material.polygonOffsetUnits = -3;
+
+  const uOpacity = uniform(opacity);
+  const uHeightOffset = uniform(OVERLAY_HEIGHT_OFFSET + 0.1);
+
+  // Vertex position with terrain conforming
+  const positionNode = Fn(() => {
+    const pos = positionLocal;
+    const heightSample = texture(heightmapTexture, uv());
+    const terrainHeight = heightSample.r.mul(float(20.0));
+    return vec3(pos.x, pos.y.add(terrainHeight).add(uHeightOffset), pos.z);
+  })();
+
+  material.positionNode = positionNode;
+
+  // Color output - R channel = validity (1=valid green, 0=invalid red)
+  const outputNode = Fn(() => {
+    const texColor = texture(gridTexture, uv());
+    const validity = texColor.r;
+
+    // Green for valid, red for invalid
+    const validColor = vec3(0.2, 0.8, 0.3);
+    const invalidColor = vec3(0.9, 0.2, 0.2);
+    const gridColor = validColor.mul(validity).add(invalidColor.mul(float(1.0).sub(validity)));
+
+    // Grid pattern - only show where there's data (alpha > 0)
+    const alpha = texColor.a.mul(uOpacity);
+
+    return vec4(gridColor, alpha);
+  })();
+
+  material.colorNode = outputNode;
+
+  (material as any)._uOpacity = uOpacity;
+  (material as any)._uHeightOffset = uHeightOffset;
+
+  return material;
+}
+
+/**
+ * Creates a resource overlay material
+ */
+function createResourceMaterial(
+  resourceTexture: THREE.DataTexture,
+  heightmapTexture: THREE.DataTexture,
+  opacity: number
+): MeshBasicNodeMaterial {
+  const material = new MeshBasicNodeMaterial();
+  material.transparent = true;
+  material.depthWrite = false;
+  material.depthTest = true;
+  material.side = THREE.DoubleSide;
+
+  material.polygonOffset = true;
+  material.polygonOffsetFactor = -1;
+  material.polygonOffsetUnits = -1;
+
+  const uOpacity = uniform(opacity);
+  const uTime = uniform(0);
+  const uHeightOffset = uniform(OVERLAY_HEIGHT_OFFSET);
+
+  // Vertex position with terrain conforming
+  const positionNode = Fn(() => {
+    const pos = positionLocal;
+    const heightSample = texture(heightmapTexture, uv());
+    const terrainHeight = heightSample.r.mul(float(20.0));
+    return vec3(pos.x, pos.y.add(terrainHeight).add(uHeightOffset), pos.z);
+  })();
+
+  material.positionNode = positionNode;
+
+  // Color with gentle pulse for resources
+  const outputNode = Fn(() => {
+    const uvCoord = uv();
+    const texColor = texture(resourceTexture, uvCoord);
+
+    // Gentle pulse
+    const pulse = float(0.9).add(float(0.1).mul(sin(uTime.mul(1.5))));
+
+    // Color based on resource type (stored in RGB)
+    const resourceColor = texColor.rgb.mul(pulse);
+    const alpha = texColor.a.mul(uOpacity);
+
+    return vec4(resourceColor, alpha);
+  })();
+
+  material.colorNode = outputNode;
+
+  (material as any)._uOpacity = uOpacity;
+  (material as any)._uTime = uTime;
+  (material as any)._uHeightOffset = uHeightOffset;
 
   return material;
 }
@@ -111,27 +275,38 @@ export class TSLGameOverlayManager {
   private world: World | null = null;
   private getTerrainHeight: (x: number, y: number) => number;
 
+  // Heightmap texture for GPU terrain conforming
+  private heightmapTexture: THREE.DataTexture | null = null;
+
   // Overlay meshes
-  private terrainOverlayMesh: THREE.Mesh | null = null;
   private elevationOverlayMesh: THREE.Mesh | null = null;
   private threatOverlayMesh: THREE.Mesh | null = null;
   private navmeshOverlayMesh: THREE.Mesh | null = null;
+  private buildGridOverlayMesh: THREE.Mesh | null = null;
+  private resourceOverlayMesh: THREE.Mesh | null = null;
 
   // Overlay textures
-  private terrainTexture: THREE.DataTexture | null = null;
   private elevationTexture: THREE.DataTexture | null = null;
   private threatTexture: THREE.DataTexture | null = null;
   private threatTextureData: Uint8Array | null = null;
   private navmeshTexture: THREE.DataTexture | null = null;
   private navmeshTextureData: Uint8Array | null = null;
+  private buildGridTexture: THREE.DataTexture | null = null;
+  private buildGridTextureData: Uint8Array | null = null;
+  private resourceTexture: THREE.DataTexture | null = null;
+  private resourceTextureData: Uint8Array | null = null;
 
   // Current state
   private currentOverlay: GameOverlayType = 'none';
   private opacity: number = 0.7;
 
-  // Threat overlay update throttling (increased from 200ms for better performance)
+  // Threat overlay update throttling
   private lastThreatUpdate: number = 0;
   private threatUpdateInterval: number = 500;
+
+  // Resource overlay update throttling
+  private lastResourceUpdate: number = 0;
+  private resourceUpdateInterval: number = 1000;
 
   // Navmesh progressive computation state
   private navmeshIsComputing: boolean = false;
@@ -152,16 +327,74 @@ export class TSLGameOverlayManager {
     this.mapHash = computeMapHash(mapData);
     this.getTerrainHeight = getTerrainHeight;
 
-    this.createTerrainOverlay();
+    // Create heightmap texture first (needed by all overlays)
+    this.createHeightmapTexture();
+
+    // Create all overlays
     this.createElevationOverlay();
     this.createThreatOverlay();
     this.createNavmeshOverlay();
+    this.createBuildGridOverlay();
+    this.createResourceOverlay();
 
     // Hide all overlays initially
     this.setActiveOverlay('none');
 
     // Try to load cached navmesh data
     this.loadCachedNavmesh();
+  }
+
+  /**
+   * Create heightmap texture from terrain heights for GPU displacement
+   */
+  private createHeightmapTexture(): void {
+    const { width, height } = this.mapData;
+    const textureData = new Uint8Array(width * height * 4);
+
+    // Find min/max heights for normalization
+    let minHeight = Infinity;
+    let maxHeight = -Infinity;
+
+    for (let y = 0; y < height; y++) {
+      for (let x = 0; x < width; x++) {
+        const h = this.getTerrainHeight(x + 0.5, y + 0.5);
+        if (h < minHeight) minHeight = h;
+        if (h > maxHeight) maxHeight = h;
+      }
+    }
+
+    const heightRange = Math.max(maxHeight - minHeight, 1);
+
+    // Create texture data with normalized heights
+    for (let y = 0; y < height; y++) {
+      for (let x = 0; x < width; x++) {
+        const i = (y * width + x) * 4;
+        const h = this.getTerrainHeight(x + 0.5, y + 0.5);
+        // Normalize to 0-255, store in R channel
+        const normalized = Math.floor(((h - minHeight) / heightRange) * 255);
+        textureData[i + 0] = normalized;
+        textureData[i + 1] = normalized;
+        textureData[i + 2] = normalized;
+        textureData[i + 3] = 255;
+      }
+    }
+
+    this.heightmapTexture = new THREE.DataTexture(textureData, width, height, THREE.RGBAFormat);
+    this.heightmapTexture.needsUpdate = true;
+    this.heightmapTexture.minFilter = THREE.LinearFilter;
+    this.heightmapTexture.magFilter = THREE.LinearFilter;
+    this.heightmapTexture.wrapS = THREE.ClampToEdgeWrapping;
+    this.heightmapTexture.wrapT = THREE.ClampToEdgeWrapping;
+  }
+
+  /**
+   * Create overlay geometry with subdivisions for terrain conforming
+   */
+  private createOverlayGeometry(): THREE.PlaneGeometry {
+    const { width, height } = this.mapData;
+    // Use same resolution as map for accurate terrain conforming
+    const geometry = new THREE.PlaneGeometry(width, height, width, height);
+    return geometry;
   }
 
   /**
@@ -183,23 +416,14 @@ export class TSLGameOverlayManager {
     }
   }
 
-  /**
-   * Set callback for navmesh computation progress
-   */
   public setNavmeshProgressCallback(callback: (progress: number) => void): void {
     this.onNavmeshProgress = callback;
   }
 
-  /**
-   * Set callback for navmesh computation completion
-   */
   public setNavmeshCompleteCallback(callback: (stats: { connected: number; disconnected: number; duration: number }) => void): void {
     this.onNavmeshComplete = callback;
   }
 
-  /**
-   * Get navmesh computation state
-   */
   public getNavmeshState(): { isComputing: boolean; progress: number; cached: boolean } {
     return {
       isComputing: this.navmeshIsComputing,
@@ -210,57 +434,6 @@ export class TSLGameOverlayManager {
 
   public setWorld(world: World): void {
     this.world = world;
-  }
-
-  private getTerrainColor(cell: MapCell): { r: number; g: number; b: number; a: number } {
-    const feature = cell.feature || 'none';
-    const config = TERRAIN_FEATURE_CONFIG[feature];
-
-    if (cell.terrain === 'unwalkable' || !config.walkable) {
-      if (feature === 'water_deep') return { r: 30, g: 80, b: 180, a: 200 };
-      if (feature === 'void') return { r: 40, g: 20, b: 60, a: 220 };
-      return { r: 180, g: 50, b: 50, a: 200 };
-    }
-    if (feature === 'road') return { r: 80, g: 200, b: 220, a: 180 };
-    if (feature === 'water_shallow') return { r: 100, g: 150, b: 220, a: 180 };
-    if (feature === 'mud') return { r: 180, g: 120, b: 60, a: 180 };
-    if (feature === 'forest_dense') return { r: 200, g: 130, b: 50, a: 180 };
-    if (feature === 'forest_light') return { r: 180, g: 200, b: 80, a: 160 };
-    if (cell.terrain === 'ramp') return { r: 220, g: 200, b: 80, a: 150 };
-    if (cell.terrain === 'unbuildable' || !config.buildable) return { r: 120, g: 120, b: 130, a: 140 };
-    return { r: 80, g: 180, b: 80, a: 150 };
-  }
-
-  private createTerrainOverlay(): void {
-    const { width, height, terrain } = this.mapData;
-    const textureData = new Uint8Array(width * height * 4);
-
-    for (let y = 0; y < height; y++) {
-      for (let x = 0; x < width; x++) {
-        const i = (y * width + x) * 4;
-        const cell = terrain[y]?.[x] || { terrain: 'walkable', elevation: 0, feature: 'none' };
-        const color = this.getTerrainColor(cell);
-        textureData[i + 0] = color.r;
-        textureData[i + 1] = color.g;
-        textureData[i + 2] = color.b;
-        textureData[i + 3] = color.a;
-      }
-    }
-
-    this.terrainTexture = new THREE.DataTexture(textureData, width, height, THREE.RGBAFormat);
-    this.terrainTexture.needsUpdate = true;
-    this.terrainTexture.minFilter = THREE.NearestFilter;
-    this.terrainTexture.magFilter = THREE.NearestFilter;
-
-    const material = createOverlayMaterial(this.terrainTexture, this.opacity);
-    const geometry = new THREE.PlaneGeometry(width, height);
-
-    this.terrainOverlayMesh = new THREE.Mesh(geometry, material);
-    this.terrainOverlayMesh.rotation.x = -Math.PI / 2;
-    this.terrainOverlayMesh.position.set(width / 2, 15, height / 2); // High above terrain
-    this.terrainOverlayMesh.renderOrder = 900;
-    this.terrainOverlayMesh.visible = false;
-    this.scene.add(this.terrainOverlayMesh);
   }
 
   private getElevationColor(elevation: number): { r: number; g: number; b: number; a: number } {
@@ -295,13 +468,13 @@ export class TSLGameOverlayManager {
     this.elevationTexture.minFilter = THREE.LinearFilter;
     this.elevationTexture.magFilter = THREE.LinearFilter;
 
-    const material = createOverlayMaterial(this.elevationTexture, this.opacity);
-    const geometry = new THREE.PlaneGeometry(width, height);
+    const material = createTerrainConformingMaterial(this.elevationTexture, this.heightmapTexture!, this.opacity);
+    const geometry = this.createOverlayGeometry();
 
     this.elevationOverlayMesh = new THREE.Mesh(geometry, material);
     this.elevationOverlayMesh.rotation.x = -Math.PI / 2;
-    this.elevationOverlayMesh.position.set(width / 2, 15, height / 2); // High above terrain
-    this.elevationOverlayMesh.renderOrder = 900;
+    this.elevationOverlayMesh.position.set(width / 2, 0, height / 2);
+    this.elevationOverlayMesh.renderOrder = 100;
     this.elevationOverlayMesh.visible = false;
     this.scene.add(this.elevationOverlayMesh);
   }
@@ -322,27 +495,21 @@ export class TSLGameOverlayManager {
     this.threatTexture.minFilter = THREE.LinearFilter;
     this.threatTexture.magFilter = THREE.LinearFilter;
 
-    const material = createThreatMaterial(this.threatTexture, this.opacity);
-    const geometry = new THREE.PlaneGeometry(width, height);
+    const material = createTerrainConformingThreatMaterial(this.threatTexture, this.heightmapTexture!, this.opacity);
+    const geometry = this.createOverlayGeometry();
 
     this.threatOverlayMesh = new THREE.Mesh(geometry, material);
     this.threatOverlayMesh.rotation.x = -Math.PI / 2;
-    this.threatOverlayMesh.position.set(width / 2, 15, height / 2); // High above terrain
-    this.threatOverlayMesh.renderOrder = 900;
+    this.threatOverlayMesh.position.set(width / 2, 0, height / 2);
+    this.threatOverlayMesh.renderOrder = 101;
     this.threatOverlayMesh.visible = false;
     this.scene.add(this.threatOverlayMesh);
   }
 
-  /**
-   * Create navmesh overlay that shows ACTUAL pathfinding data from Recast Navigation.
-   * This queries the real navmesh for each cell to show what the pathfinding system actually sees.
-   * Critical for debugging ramp and connectivity issues.
-   */
   private createNavmeshOverlay(): void {
     const { width, height } = this.mapData;
     this.navmeshTextureData = new Uint8Array(width * height * 4);
 
-    // Initialize with black (will be updated when shown)
     for (let i = 0; i < width * height * 4; i += 4) {
       this.navmeshTextureData[i + 0] = 0;
       this.navmeshTextureData[i + 1] = 0;
@@ -355,45 +522,85 @@ export class TSLGameOverlayManager {
     this.navmeshTexture.minFilter = THREE.NearestFilter;
     this.navmeshTexture.magFilter = THREE.NearestFilter;
 
-    const material = createOverlayMaterial(this.navmeshTexture, 0.8);
-    const geometry = new THREE.PlaneGeometry(width, height);
+    const material = createTerrainConformingMaterial(this.navmeshTexture, this.heightmapTexture!, 0.8);
+    const geometry = this.createOverlayGeometry();
 
     this.navmeshOverlayMesh = new THREE.Mesh(geometry, material);
     this.navmeshOverlayMesh.rotation.x = -Math.PI / 2;
-    this.navmeshOverlayMesh.position.set(width / 2, 15, height / 2); // High above terrain
-    this.navmeshOverlayMesh.renderOrder = 900;
+    this.navmeshOverlayMesh.position.set(width / 2, 0, height / 2);
+    this.navmeshOverlayMesh.renderOrder = 100;
     this.navmeshOverlayMesh.visible = false;
     this.scene.add(this.navmeshOverlayMesh);
   }
 
+  private createBuildGridOverlay(): void {
+    const { width, height } = this.mapData;
+    this.buildGridTextureData = new Uint8Array(width * height * 4);
+
+    // Initialize to transparent
+    for (let i = 0; i < width * height * 4; i += 4) {
+      this.buildGridTextureData[i + 0] = 0;
+      this.buildGridTextureData[i + 1] = 0;
+      this.buildGridTextureData[i + 2] = 0;
+      this.buildGridTextureData[i + 3] = 0;
+    }
+
+    this.buildGridTexture = new THREE.DataTexture(this.buildGridTextureData, width, height, THREE.RGBAFormat);
+    this.buildGridTexture.needsUpdate = true;
+    this.buildGridTexture.minFilter = THREE.NearestFilter;
+    this.buildGridTexture.magFilter = THREE.NearestFilter;
+
+    const material = createBuildGridMaterial(this.buildGridTexture, this.heightmapTexture!, 0.6);
+    const geometry = this.createOverlayGeometry();
+
+    this.buildGridOverlayMesh = new THREE.Mesh(geometry, material);
+    this.buildGridOverlayMesh.rotation.x = -Math.PI / 2;
+    this.buildGridOverlayMesh.position.set(width / 2, 0, height / 2);
+    this.buildGridOverlayMesh.renderOrder = 102;
+    this.buildGridOverlayMesh.visible = false;
+    this.scene.add(this.buildGridOverlayMesh);
+  }
+
+  private createResourceOverlay(): void {
+    const { width, height } = this.mapData;
+    this.resourceTextureData = new Uint8Array(width * height * 4);
+
+    // Initialize to transparent
+    for (let i = 0; i < width * height * 4; i += 4) {
+      this.resourceTextureData[i + 0] = 0;
+      this.resourceTextureData[i + 1] = 0;
+      this.resourceTextureData[i + 2] = 0;
+      this.resourceTextureData[i + 3] = 0;
+    }
+
+    this.resourceTexture = new THREE.DataTexture(this.resourceTextureData, width, height, THREE.RGBAFormat);
+    this.resourceTexture.needsUpdate = true;
+    this.resourceTexture.minFilter = THREE.LinearFilter;
+    this.resourceTexture.magFilter = THREE.LinearFilter;
+
+    const material = createResourceMaterial(this.resourceTexture, this.heightmapTexture!, 0.7);
+    const geometry = this.createOverlayGeometry();
+
+    this.resourceOverlayMesh = new THREE.Mesh(geometry, material);
+    this.resourceOverlayMesh.rotation.x = -Math.PI / 2;
+    this.resourceOverlayMesh.position.set(width / 2, 0, height / 2);
+    this.resourceOverlayMesh.renderOrder = 100;
+    this.resourceOverlayMesh.visible = false;
+    this.scene.add(this.resourceOverlayMesh);
+  }
+
   /**
    * Update navmesh overlay using efficient BFS flood-fill algorithm.
-   *
-   * NEW ALGORITHM (O(n) instead of O(n²)):
-   * 1. First pass: Check walkability for all cells (fast isWalkable queries)
-   * 2. BFS flood-fill: From reference point, mark all reachable cells
-   *
-   * This is dramatically faster than the old approach which called findPath()
-   * for every single cell (O(n²) pathfinding operations).
-   *
-   * Color coding:
-   * - Green: Connected to reference point (reachable via BFS)
-   * - Cyan: Connected ramp
-   * - Yellow/Orange: On navmesh but disconnected (isolated region)
-   * - Magenta: Disconnected ramp (connectivity issue)
-   * - Red: Should be walkable but not on navmesh
-   * - Dark gray: Unwalkable terrain
+   * O(n) instead of O(n²) - dramatically faster than pathfinding per cell.
    */
   private async updateNavmeshOverlay(): Promise<void> {
     if (!this.navmeshTextureData || !this.navmeshTexture) return;
 
-    // If already cached, just use cached data
     if (this.navmeshCached) {
       debugPathfinding.log('[NavmeshOverlay] Using cached data');
       return;
     }
 
-    // If already computing, don't start again
     if (this.navmeshIsComputing) {
       debugPathfinding.log('[NavmeshOverlay] Computation already in progress');
       return;
@@ -413,18 +620,16 @@ export class TSLGameOverlayManager {
     const { width, height, terrain } = this.mapData;
     const totalCells = width * height;
 
-    // Arrays to track cell states
-    const walkableGrid = new Uint8Array(totalCells); // 1 = walkable on navmesh
-    const connectedGrid = new Uint8Array(totalCells); // 1 = connected to reference
-    const terrainType = new Uint8Array(totalCells); // 0 = normal, 1 = ramp, 2 = unwalkable
+    const walkableGrid = new Uint8Array(totalCells);
+    const connectedGrid = new Uint8Array(totalCells);
+    const terrainType = new Uint8Array(totalCells);
 
-    // ========== PHASE 1: Walkability check (fast) ==========
+    // Phase 1: Walkability check
     debugPathfinding.log('[NavmeshOverlay] Phase 1: Checking walkability...');
 
     let walkableCount = 0;
     let unwalkableTerrainCount = 0;
 
-    // Process walkability in batches
     const BATCH_SIZE = 4096;
     let processed = 0;
 
@@ -436,7 +641,6 @@ export class TSLGameOverlayManager {
         const y = Math.floor(idx / width);
         const cell = terrain[y]?.[x];
 
-        // Check terrain type first
         if (cell?.terrain === 'unwalkable') {
           terrainType[idx] = 2;
           unwalkableTerrainCount++;
@@ -447,7 +651,6 @@ export class TSLGameOverlayManager {
           terrainType[idx] = 1;
         }
 
-        // Check if walkable on navmesh
         const cellX = x + 0.5;
         const cellZ = y + 0.5;
         if (recast.isWalkable(cellX, cellZ)) {
@@ -457,7 +660,7 @@ export class TSLGameOverlayManager {
       }
 
       processed = batchEnd;
-      this.navmeshProgress = (processed / totalCells) * 0.5; // First 50% is walkability
+      this.navmeshProgress = (processed / totalCells) * 0.5;
 
       if (this.onNavmeshProgress) {
         this.onNavmeshProgress(this.navmeshProgress);
@@ -474,10 +677,9 @@ export class TSLGameOverlayManager {
     const phase1Time = performance.now() - startTime;
     debugPathfinding.log(`[NavmeshOverlay] Phase 1 complete: ${walkableCount} walkable cells in ${phase1Time.toFixed(0)}ms`);
 
-    // ========== PHASE 2: Find reference point ==========
+    // Phase 2: Find reference point
     let refIdx = -1;
 
-    // Find a good reference point near center
     for (let r = 0; r < Math.max(width, height) / 2; r++) {
       let found = false;
       for (let dy = -r; dy <= r && !found; dy++) {
@@ -496,18 +698,16 @@ export class TSLGameOverlayManager {
       if (found) break;
     }
 
-    // ========== PHASE 3: BFS flood-fill for connectivity ==========
+    // Phase 3: BFS flood-fill for connectivity
     debugPathfinding.log('[NavmeshOverlay] Phase 2: BFS flood-fill for connectivity...');
 
     let connectedCount = 0;
 
     if (refIdx >= 0) {
-      // BFS from reference point
       const queue: number[] = [refIdx];
       connectedGrid[refIdx] = 1;
       connectedCount = 1;
 
-      // 8-directional neighbors for connectivity
       const dx = [-1, 0, 1, -1, 1, -1, 0, 1];
       const dy = [-1, -1, -1, 0, 0, 1, 1, 1];
 
@@ -527,10 +727,8 @@ export class TSLGameOverlayManager {
 
           const nidx = ny * width + nx;
 
-          // Skip if already visited or not walkable
           if (connectedGrid[nidx] === 1 || walkableGrid[nidx] === 0) continue;
 
-          // Mark as connected
           connectedGrid[nidx] = 1;
           connectedCount++;
           queue.push(nidx);
@@ -538,7 +736,6 @@ export class TSLGameOverlayManager {
 
         bfsProcessed++;
 
-        // Yield periodically
         if (bfsProcessed % BFS_BATCH === 0) {
           this.navmeshProgress = 0.5 + (connectedCount / walkableCount) * 0.4;
           if (this.onNavmeshProgress) {
@@ -552,7 +749,7 @@ export class TSLGameOverlayManager {
     const phase2Time = performance.now() - startTime - phase1Time;
     debugPathfinding.log(`[NavmeshOverlay] Phase 2 complete: ${connectedCount} connected cells in ${phase2Time.toFixed(0)}ms`);
 
-    // ========== PHASE 4: Generate texture ==========
+    // Phase 4: Generate texture
     debugPathfinding.log('[NavmeshOverlay] Phase 3: Generating texture...');
 
     let disconnectedCount = 0;
@@ -565,43 +762,35 @@ export class TSLGameOverlayManager {
       const isConnected = connectedGrid[idx] === 1;
 
       if (tType === 2) {
-        // Unwalkable terrain - dark gray
         this.navmeshTextureData![i + 0] = 60;
         this.navmeshTextureData![i + 1] = 60;
         this.navmeshTextureData![i + 2] = 60;
         this.navmeshTextureData![i + 3] = 150;
       } else if (!isWalkable) {
-        // Not on navmesh - red
         this.navmeshTextureData![i + 0] = 255;
         this.navmeshTextureData![i + 1] = 50;
         this.navmeshTextureData![i + 2] = 50;
         this.navmeshTextureData![i + 3] = 220;
         notOnNavmeshCount++;
       } else if (isConnected) {
-        // Connected to reference
         if (tType === 1) {
-          // Connected ramp - cyan
           this.navmeshTextureData![i + 0] = 50;
           this.navmeshTextureData![i + 1] = 255;
           this.navmeshTextureData![i + 2] = 200;
           this.navmeshTextureData![i + 3] = 220;
         } else {
-          // Connected normal - green
           this.navmeshTextureData![i + 0] = 50;
           this.navmeshTextureData![i + 1] = 200;
           this.navmeshTextureData![i + 2] = 50;
           this.navmeshTextureData![i + 3] = 180;
         }
       } else {
-        // Disconnected (on navmesh but can't reach reference)
         if (tType === 1) {
-          // Disconnected ramp - magenta
           this.navmeshTextureData![i + 0] = 255;
           this.navmeshTextureData![i + 1] = 50;
           this.navmeshTextureData![i + 2] = 255;
           this.navmeshTextureData![i + 3] = 255;
         } else {
-          // Disconnected normal - orange/yellow
           this.navmeshTextureData![i + 0] = 255;
           this.navmeshTextureData![i + 1] = 200;
           this.navmeshTextureData![i + 2] = 50;
@@ -616,7 +805,7 @@ export class TSLGameOverlayManager {
 
     const duration = performance.now() - startTime;
 
-    debugPathfinding.log(`[NavmeshOverlay] Completed in ${duration.toFixed(0)}ms (was ~30s before optimization)`);
+    debugPathfinding.log(`[NavmeshOverlay] Completed in ${duration.toFixed(0)}ms`);
     debugPathfinding.log(`[NavmeshOverlay]   Connected: ${connectedCount}, Disconnected: ${disconnectedCount}`);
     debugPathfinding.log(`[NavmeshOverlay]   Not on navmesh: ${notOnNavmeshCount}, Unwalkable: ${unwalkableTerrainCount}`);
 
@@ -624,7 +813,6 @@ export class TSLGameOverlayManager {
       debugPathfinding.warn(`[NavmeshOverlay] WARNING: ${disconnectedCount} disconnected cells detected!`);
     }
 
-    // Cache the result
     setOverlayCache(
       this.mapHash,
       'navmesh',
@@ -636,7 +824,6 @@ export class TSLGameOverlayManager {
     this.navmeshCached = true;
     this.navmeshIsComputing = false;
 
-    // Notify completion
     if (this.onNavmeshComplete) {
       this.onNavmeshComplete({
         connected: connectedCount,
@@ -692,7 +879,7 @@ export class TSLGameOverlayManager {
       }
     }
 
-    // Also accumulate threat from enemy buildings
+    // Accumulate threat from enemy buildings
     const buildings = this.world.getEntitiesWith('Building', 'Transform', 'Selectable', 'Health');
     for (const entity of buildings) {
       const selectable = entity.get<Selectable>('Selectable')!;
@@ -729,18 +916,182 @@ export class TSLGameOverlayManager {
     this.threatTexture.needsUpdate = true;
   }
 
+  /**
+   * Update resource overlay showing mineral fields and gas geysers
+   */
+  private updateResourceOverlay(): void {
+    if (!this.world || !this.resourceTextureData || !this.resourceTexture) return;
+
+    const { width, height } = this.mapData;
+
+    // Clear resource data
+    for (let i = 0; i < width * height * 4; i += 4) {
+      this.resourceTextureData[i + 0] = 0;
+      this.resourceTextureData[i + 1] = 0;
+      this.resourceTextureData[i + 2] = 0;
+      this.resourceTextureData[i + 3] = 0;
+    }
+
+    // Find all resources
+    const resources = this.world.getEntitiesWith('Resource', 'Transform');
+    for (const entity of resources) {
+      const transform = entity.get<Transform>('Transform')!;
+      const resource = entity.get<Resource>('Resource')!;
+
+      const cx = Math.floor(transform.x);
+      const cy = Math.floor(transform.y);
+
+      // Calculate resource percentage remaining
+      const percentRemaining = resource.maxAmount > 0 ? resource.amount / resource.maxAmount : 0;
+
+      // Color based on resource type
+      let r = 0, g = 0, b = 0;
+      const radius = 2;
+
+      if (resource.resourceType === 'minerals') {
+        // Blue for minerals
+        r = 50;
+        g = 150;
+        b = 255;
+      } else if (resource.resourceType === 'vespene') {
+        // Green for vespene gas
+        r = 50;
+        g = 255;
+        b = 100;
+      } else {
+        // Yellow for other
+        r = 255;
+        g = 200;
+        b = 50;
+      }
+
+      // Draw resource area with intensity based on remaining amount
+      const intensity = 0.5 + percentRemaining * 0.5;
+
+      for (let dy = -radius; dy <= radius; dy++) {
+        for (let dx = -radius; dx <= radius; dx++) {
+          const px = cx + dx;
+          const py = cy + dy;
+          if (px < 0 || px >= width || py < 0 || py >= height) continue;
+
+          const dist = Math.sqrt(dx * dx + dy * dy);
+          if (dist <= radius) {
+            const i = (py * width + px) * 4;
+            const falloff = 1 - (dist / radius) * 0.5;
+            this.resourceTextureData[i + 0] = Math.floor(r * intensity * falloff);
+            this.resourceTextureData[i + 1] = Math.floor(g * intensity * falloff);
+            this.resourceTextureData[i + 2] = Math.floor(b * intensity * falloff);
+            this.resourceTextureData[i + 3] = Math.floor(180 * intensity * falloff);
+          }
+        }
+      }
+    }
+
+    this.resourceTexture.needsUpdate = true;
+  }
+
+  /**
+   * Update build grid overlay for building placement
+   * Shows green for valid placement, red for invalid
+   */
+  public updateBuildGrid(
+    centerX: number,
+    centerY: number,
+    buildingWidth: number,
+    buildingHeight: number,
+    validityChecker: (x: number, y: number) => boolean
+  ): void {
+    if (!this.buildGridTextureData || !this.buildGridTexture) return;
+
+    const { width, height } = this.mapData;
+
+    // Clear previous grid
+    for (let i = 0; i < width * height * 4; i += 4) {
+      this.buildGridTextureData[i + 0] = 0;
+      this.buildGridTextureData[i + 1] = 0;
+      this.buildGridTextureData[i + 2] = 0;
+      this.buildGridTextureData[i + 3] = 0;
+    }
+
+    // Calculate grid area to show (building footprint + padding)
+    const padding = 5;
+    const startX = Math.max(0, Math.floor(centerX - buildingWidth / 2) - padding);
+    const startY = Math.max(0, Math.floor(centerY - buildingHeight / 2) - padding);
+    const endX = Math.min(width, Math.ceil(centerX + buildingWidth / 2) + padding);
+    const endY = Math.min(height, Math.ceil(centerY + buildingHeight / 2) + padding);
+
+    // Fill grid cells
+    for (let y = startY; y < endY; y++) {
+      for (let x = startX; x < endX; x++) {
+        const i = (y * width + x) * 4;
+        const isValid = validityChecker(x, y);
+
+        // R channel = validity (255 = valid, 0 = invalid)
+        this.buildGridTextureData[i + 0] = isValid ? 255 : 0;
+        this.buildGridTextureData[i + 1] = 0;
+        this.buildGridTextureData[i + 2] = 0;
+        // Alpha - show grid pattern
+        this.buildGridTextureData[i + 3] = 150;
+      }
+    }
+
+    this.buildGridTexture.needsUpdate = true;
+  }
+
+  /**
+   * Clear the build grid overlay
+   */
+  public clearBuildGrid(): void {
+    if (!this.buildGridTextureData || !this.buildGridTexture) return;
+
+    const { width, height } = this.mapData;
+
+    for (let i = 0; i < width * height * 4; i += 4) {
+      this.buildGridTextureData[i + 0] = 0;
+      this.buildGridTextureData[i + 1] = 0;
+      this.buildGridTextureData[i + 2] = 0;
+      this.buildGridTextureData[i + 3] = 0;
+    }
+
+    this.buildGridTexture.needsUpdate = true;
+  }
+
+  /**
+   * Show/hide build grid
+   */
+  public setBuildGridVisible(visible: boolean): void {
+    if (this.buildGridOverlayMesh) {
+      this.buildGridOverlayMesh.visible = visible;
+    }
+  }
+
+  /**
+   * Show/hide resource overlay
+   */
+  public setResourceOverlayVisible(visible: boolean): void {
+    if (this.resourceOverlayMesh) {
+      this.resourceOverlayMesh.visible = visible;
+      if (visible) {
+        this.updateResourceOverlay();
+      }
+    }
+  }
+
   public setActiveOverlay(type: GameOverlayType): void {
     this.currentOverlay = type;
 
-    if (this.terrainOverlayMesh) this.terrainOverlayMesh.visible = type === 'terrain';
     if (this.elevationOverlayMesh) this.elevationOverlayMesh.visible = type === 'elevation';
     if (this.threatOverlayMesh) this.threatOverlayMesh.visible = type === 'threat';
     if (this.navmeshOverlayMesh) {
       this.navmeshOverlayMesh.visible = type === 'navmesh';
-      // Start progressive navmesh computation when shown
-      // Uses caching and async processing to avoid freezing
       if (type === 'navmesh') {
         this.updateNavmeshOverlay();
+      }
+    }
+    if (this.resourceOverlayMesh) {
+      this.resourceOverlayMesh.visible = type === 'resource';
+      if (type === 'resource') {
+        this.updateResourceOverlay();
       }
     }
   }
@@ -754,22 +1105,28 @@ export class TSLGameOverlayManager {
 
     const updateMaterialOpacity = (mesh: THREE.Mesh | null) => {
       const mat = mesh?.material as THREE.Material | undefined;
-      if (mat?._uOpacity) {
-        mat._uOpacity.value = this.opacity;
+      if ((mat as any)?._uOpacity) {
+        (mat as any)._uOpacity.value = this.opacity;
       }
     };
 
-    updateMaterialOpacity(this.terrainOverlayMesh);
     updateMaterialOpacity(this.elevationOverlayMesh);
     updateMaterialOpacity(this.threatOverlayMesh);
     updateMaterialOpacity(this.navmeshOverlayMesh);
+    updateMaterialOpacity(this.resourceOverlayMesh);
   }
 
   public update(time: number): void {
     // Update threat overlay time for pulsing effect
     const threatMat = this.threatOverlayMesh?.material as THREE.Material | undefined;
-    if (threatMat?._uTime) {
-      threatMat._uTime.value = time;
+    if ((threatMat as any)?._uTime) {
+      (threatMat as any)._uTime.value = time;
+    }
+
+    // Update resource overlay time for pulsing effect
+    const resourceMat = this.resourceOverlayMesh?.material as THREE.Material | undefined;
+    if ((resourceMat as any)?._uTime) {
+      (resourceMat as any)._uTime.value = time;
     }
 
     // Update threat data periodically
@@ -778,6 +1135,15 @@ export class TSLGameOverlayManager {
       if (now - this.lastThreatUpdate > this.threatUpdateInterval) {
         this.updateThreatOverlay();
         this.lastThreatUpdate = now;
+      }
+    }
+
+    // Update resource overlay if visible
+    if (this.resourceOverlayMesh?.visible) {
+      const now = performance.now();
+      if (now - this.lastResourceUpdate > this.resourceUpdateInterval) {
+        this.updateResourceOverlay();
+        this.lastResourceUpdate = now;
       }
     }
   }
@@ -792,9 +1158,14 @@ export class TSLGameOverlayManager {
       if (tex) tex.dispose();
     };
 
-    disposeOverlay(this.terrainOverlayMesh, this.terrainTexture);
     disposeOverlay(this.elevationOverlayMesh, this.elevationTexture);
     disposeOverlay(this.threatOverlayMesh, this.threatTexture);
     disposeOverlay(this.navmeshOverlayMesh, this.navmeshTexture);
+    disposeOverlay(this.buildGridOverlayMesh, this.buildGridTexture);
+    disposeOverlay(this.resourceOverlayMesh, this.resourceTexture);
+
+    if (this.heightmapTexture) {
+      this.heightmapTexture.dispose();
+    }
   }
 }
