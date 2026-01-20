@@ -35,21 +35,12 @@ import { CROWD_MAX_AGENTS } from '@/data/pathfinding.config';
 import { SpatialEntityData, SpatialUnitState, stateToEnum } from '../core/SpatialGrid';
 import { collisionConfig } from '@/data/collisionConfig';
 import {
-  // Separation (strengths still from movement.config for now, multiplier from collision config)
-  SEPARATION_STRENGTH_MOVING,
-  SEPARATION_STRENGTH_IDLE,
-  SEPARATION_STRENGTH_ARRIVING,
-  SEPARATION_STRENGTH_COMBAT,
-  MAX_AVOIDANCE_FORCE,
   // Cohesion
   COHESION_RADIUS,
   COHESION_STRENGTH,
   // Alignment
   ALIGNMENT_RADIUS,
   ALIGNMENT_STRENGTH,
-  // Arrival spreading
-  ARRIVAL_SPREAD_RADIUS,
-  ARRIVAL_SPREAD_STRENGTH,
   // Building avoidance
   BUILDING_AVOIDANCE_STRENGTH,
   BUILDING_AVOIDANCE_MARGIN,
@@ -63,11 +54,6 @@ import {
   VELOCITY_HISTORY_FRAMES,
   DIRECTION_COMMIT_THRESHOLD,
   DIRECTION_COMMIT_STRENGTH,
-  // Physics push
-  PHYSICS_PUSH_RADIUS,
-  PHYSICS_PUSH_STRENGTH,
-  PHYSICS_PUSH_FALLOFF,
-  PHYSICS_OVERLAP_PUSH,
   // Stuck detection
   STUCK_DETECTION_FRAMES,
   STUCK_VELOCITY_THRESHOLD,
@@ -79,23 +65,15 @@ import {
   ALIGNMENT_THROTTLE_TICKS,
   PHYSICS_PUSH_THROTTLE_TICKS,
   // Combat movement
-  COMBAT_SPREAD_SPEED_MULTIPLIER,
-  FLYING_SEPARATION_MULTIPLIER,
-  COMBAT_SEPARATION_THRESHOLD,
   ATTACK_STANDOFF_MULTIPLIER,
   // Idle behavior
   TRULY_IDLE_THRESHOLD_TICKS,
   TRULY_IDLE_PROCESS_INTERVAL,
-  IDLE_SEPARATION_THRESHOLD,
-  IDLE_REPEL_SPEED_MULTIPLIER,
   // Misc
   FORMATION_BUFFER_SIZE,
   UNIT_TURN_RATE,
   MAGIC_BOX_MARGIN,
 } from '@/data/movement.config';
-
-// Derived constant (computed from imported value)
-const MAX_AVOIDANCE_FORCE_SQ = MAX_AVOIDANCE_FORCE * MAX_AVOIDANCE_FORCE;
 
 // Static temp vectors for steering behaviors
 const tempSeparation: PooledVector2 = { x: 0, y: 0 };
@@ -244,11 +222,11 @@ export class MovementSystem extends System {
       this.useWasmBoids = this.wasmBoids.isAvailable();
 
       if (this.useWasmBoids) {
-        // Configure WASM with game parameters (use collision config values)
+        // Configure WASM with game parameters from collision config
         this.wasmBoids.setSeparationParams(
           collisionConfig.separationMultiplier,
-          SEPARATION_STRENGTH_IDLE,
-          MAX_AVOIDANCE_FORCE
+          collisionConfig.separationStrengthIdle,
+          collisionConfig.separationMaxForce
         );
         this.wasmBoids.setCohesionParams(COHESION_RADIUS, COHESION_STRENGTH);
         this.wasmBoids.setAlignmentParams(ALIGNMENT_RADIUS, ALIGNMENT_STRENGTH);
@@ -844,27 +822,27 @@ export class MovementSystem extends System {
       return 0;
     }
 
-    // Near arrival: strongest separation for natural spreading
-    if (distanceToTarget < ARRIVAL_SPREAD_RADIUS && distanceToTarget > 0) {
-      return SEPARATION_STRENGTH_ARRIVING;
+    // Near arrival: gentle spreading at destination
+    if (distanceToTarget < collisionConfig.arrivalSpreadRadius && distanceToTarget > 0) {
+      return collisionConfig.separationStrengthArriving;
     }
 
-    // Attacking: strong separation for unclumping while fighting
+    // Attacking: minimal separation - focus on attacking, not spreading
     if (unit.state === 'attacking') {
-      return SEPARATION_STRENGTH_COMBAT;
+      return collisionConfig.separationStrengthCombat;
     }
 
-    // Moving: weak separation, allow clumping for faster group movement
+    // Moving: very weak separation, allow clumping during movement
     if (
       unit.state === 'moving' ||
       unit.state === 'attackmoving' ||
       unit.state === 'patrolling'
     ) {
-      return SEPARATION_STRENGTH_MOVING;
+      return collisionConfig.separationStrengthMoving;
     }
 
-    // Idle: moderate separation, spread out
-    return SEPARATION_STRENGTH_IDLE;
+    // Idle: gentle spreading over time
+    return collisionConfig.separationStrengthIdle;
   }
 
   /**
@@ -945,11 +923,13 @@ export class MovementSystem extends System {
       }
     }
 
-    // PERF: Use squared magnitude comparison first
+    // Cap the force magnitude to prevent jerky movement
+    const maxForce = collisionConfig.separationMaxForce;
+    const maxForceSq = maxForce * maxForce;
     const magnitudeSq = forceX * forceX + forceY * forceY;
-    if (magnitudeSq > MAX_AVOIDANCE_FORCE_SQ) {
+    if (magnitudeSq > maxForceSq) {
       const magnitude = Math.sqrt(magnitudeSq);
-      const scale = MAX_AVOIDANCE_FORCE / magnitude;
+      const scale = maxForce / magnitude;
       forceX *= scale;
       forceY *= scale;
     }
@@ -1234,7 +1214,7 @@ export class MovementSystem extends System {
     }
 
     // PERF OPTIMIZATION: Use queryRadiusWithData for inline entity data
-    const queryRadius = PHYSICS_PUSH_RADIUS + selfUnit.collisionRadius;
+    const queryRadius = collisionConfig.physicsPushRadius + selfUnit.collisionRadius;
     const nearbyData = this.world.unitGrid.queryRadiusWithData(
       selfTransform.x,
       selfTransform.y,
@@ -1259,7 +1239,7 @@ export class MovementSystem extends System {
       const dy = selfTransform.y - other.y;
       const distSq = dx * dx + dy * dy;
       const minDist = selfUnit.collisionRadius + other.collisionRadius;
-      const pushDist = minDist + PHYSICS_PUSH_RADIUS;
+      const pushDist = minDist + collisionConfig.physicsPushRadius;
 
       if (distSq < pushDist * pushDist && distSq > 0.0001) {
         const dist = Math.sqrt(distSq);
@@ -1271,12 +1251,12 @@ export class MovementSystem extends System {
         // Calculate push strength based on distance
         let pushStrength: number;
         if (dist < minDist) {
-          // Overlapping - extra strong push
-          pushStrength = PHYSICS_OVERLAP_PUSH * (1 - dist / minDist);
+          // Overlapping - gentle push to resolve
+          pushStrength = collisionConfig.physicsOverlapPush * (1 - dist / minDist);
         } else {
           // Normal push with falloff
-          const t = (dist - minDist) / PHYSICS_PUSH_RADIUS;
-          pushStrength = PHYSICS_PUSH_STRENGTH * Math.pow(1 - t, PHYSICS_PUSH_FALLOFF);
+          const t = (dist - minDist) / collisionConfig.physicsPushRadius;
+          pushStrength = collisionConfig.physicsPushStrength * Math.pow(1 - t, collisionConfig.physicsPushFalloff);
         }
 
         forceX += nx * pushStrength;
@@ -1388,7 +1368,7 @@ export class MovementSystem extends System {
       unit.collisionRadius * collisionConfig.separationQueryRadiusMultiplier,
       COHESION_RADIUS,
       ALIGNMENT_RADIUS,
-      PHYSICS_PUSH_RADIUS + unit.collisionRadius
+      collisionConfig.physicsPushRadius + unit.collisionRadius
     );
 
     // Query once and cache
@@ -1874,12 +1854,11 @@ export class MovementSystem extends System {
           this.calculateSeparationForce(entity.id, transform, unit, tempSeparation, Infinity);
           const sepMagSq = tempSeparation.x * tempSeparation.x + tempSeparation.y * tempSeparation.y;
 
-          // RTS-style: Higher threshold prevents minor separation adjustments that cause jiggling
-          // Only move when units are actually overlapping, not just close
-          if (sepMagSq > IDLE_SEPARATION_THRESHOLD) {
-            // RTS-style: Slower, gentler push for idle units
+          // High threshold prevents micro-adjustments - only move when really overlapping
+          if (sepMagSq > collisionConfig.idleSeparationThreshold) {
+            // Slow, gentle push for idle units - prevents jittery behavior
             const sepMag = Math.sqrt(sepMagSq);
-            const idleRepelSpeed = Math.min(unit.maxSpeed * IDLE_REPEL_SPEED_MULTIPLIER, sepMag * SEPARATION_STRENGTH_IDLE * 0.5);
+            const idleRepelSpeed = Math.min(unit.maxSpeed * collisionConfig.idleRepelSpeedMultiplier, sepMag * collisionConfig.separationStrengthIdle * 0.5);
             velocity.x = (tempSeparation.x / sepMag) * idleRepelSpeed;
             velocity.y = (tempSeparation.y / sepMag) * idleRepelSpeed;
 
@@ -2047,10 +2026,10 @@ export class MovementSystem extends System {
 
               // Apply separation as velocity (units slide apart while attacking)
               // Use reduced speed so units don't run away from their target
-              const combatMoveSpeed = unit.maxSpeed * COMBAT_SPREAD_SPEED_MULTIPLIER;
+              const combatMoveSpeed = unit.maxSpeed * collisionConfig.combatSpreadSpeedMultiplier;
               const sepMag = Math.sqrt(tempSeparation.x * tempSeparation.x + tempSeparation.y * tempSeparation.y);
 
-              if (sepMag > COMBAT_SEPARATION_THRESHOLD) {
+              if (sepMag > collisionConfig.combatSeparationThreshold) {
                 // Normalize and scale to combat movement speed
                 velocity.x = (tempSeparation.x / sepMag) * combatMoveSpeed;
                 velocity.y = (tempSeparation.y / sepMag) * combatMoveSpeed;
@@ -2245,7 +2224,7 @@ export class MovementSystem extends System {
               )
             : distance;
 
-          if (distToFinalTarget < ARRIVAL_SPREAD_RADIUS) {
+          if (distToFinalTarget < collisionConfig.arrivalSpreadRadius) {
             // WASM SIMD: Use pre-computed separation when available
             if (useWasmThisFrame) {
               const wasmForces = this.wasmBoids!.getForces(entity.id);
@@ -2259,8 +2238,8 @@ export class MovementSystem extends System {
               this.calculateSeparationForce(entity.id, transform, unit, tempSeparation, distToFinalTarget);
             }
             // Add arrival spreading force
-            finalVx += tempSeparation.x * ARRIVAL_SPREAD_STRENGTH;
-            finalVy += tempSeparation.y * ARRIVAL_SPREAD_STRENGTH;
+            finalVx += tempSeparation.x * collisionConfig.arrivalSpreadStrength;
+            finalVy += tempSeparation.y * collisionConfig.arrivalSpreadStrength;
           }
 
           // Add cohesion and alignment for group movement
@@ -2368,13 +2347,13 @@ export class MovementSystem extends System {
           // Calculate separation force for flying units
           this.calculateSeparationForce(entity.id, transform, unit, tempSeparation, distToFinalTarget);
 
-          // SC2-style: Main velocity toward target, separation as additive offset
+          // Main velocity toward target, separation as additive offset
           finalVx = prefVx;
           finalVy = prefVy;
 
           // Add separation (scaled for flying units)
-          finalVx += tempSeparation.x * FLYING_SEPARATION_MULTIPLIER;
-          finalVy += tempSeparation.y * FLYING_SEPARATION_MULTIPLIER;
+          finalVx += tempSeparation.x * collisionConfig.flyingSeparationMultiplier;
+          finalVy += tempSeparation.y * collisionConfig.flyingSeparationMultiplier;
         }
       }
 

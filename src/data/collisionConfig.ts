@@ -31,6 +31,7 @@ export interface PhysicsConfig {
 export interface IdleConfig {
   separationThreshold: number;
   repelSpeedMultiplier: number;
+  settleThreshold: number;
 }
 
 export interface CombatConfig {
@@ -63,32 +64,33 @@ export interface CollisionConfig {
 
 const DEFAULT_CONFIG: CollisionConfig = {
   separation: {
-    multiplier: 1.15,
-    queryRadiusMultiplier: 2.5,
-    strengthMoving: 0.5,
-    strengthIdle: 6.0,
-    strengthArriving: 8.0,
-    strengthCombat: 8.0,
-    maxForce: 10.0,
-    flyingMultiplier: 1.5,
+    multiplier: 1.0,
+    queryRadiusMultiplier: 2.0,
+    strengthMoving: 0.15,
+    strengthIdle: 0.8,
+    strengthArriving: 1.0,
+    strengthCombat: 0.3,
+    maxForce: 2.0,
+    flyingMultiplier: 1.2,
   },
   physics: {
-    pushRadius: 1.2,
-    pushStrength: 6.0,
-    pushFalloff: 0.6,
-    overlapPush: 15.0,
+    pushRadius: 0.8,
+    pushStrength: 1.5,
+    pushFalloff: 0.8,
+    overlapPush: 3.0,
   },
   idle: {
-    separationThreshold: 0.25,
-    repelSpeedMultiplier: 0.3,
+    separationThreshold: 0.5,
+    repelSpeedMultiplier: 0.12,
+    settleThreshold: 0.85,
   },
   combat: {
-    spreadSpeedMultiplier: 0.5,
-    separationThreshold: 0.1,
+    spreadSpeedMultiplier: 0.25,
+    separationThreshold: 0.3,
   },
   arrival: {
-    spreadRadius: 5.0,
-    spreadStrength: 2.0,
+    spreadRadius: 3.0,
+    spreadStrength: 1.2,
   },
   defaults: {
     groundUnitRadius: 0.5,
@@ -217,6 +219,10 @@ class CollisionConfigLoader {
 
   public get idleRepelSpeedMultiplier(): number {
     return this.getConfig().idle.repelSpeedMultiplier;
+  }
+
+  public get idleSettleThreshold(): number {
+    return this.getConfig().idle.settleThreshold;
   }
 
   // Combat
