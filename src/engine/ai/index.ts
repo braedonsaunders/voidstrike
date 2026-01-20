@@ -23,6 +23,3 @@ export { AbilityAI, type AbilityDecision, executeAbilityDecision } from './Abili
 
 // Economic AI systems
 export { WorkerDistribution, type BaseSaturation, type WorkerTransfer } from './WorkerDistribution';
-
-// Unified AI controller
-export { AdvancedAIController, type AdvancedAIConfig, type StrategicAssessment } from './AdvancedAIController';
