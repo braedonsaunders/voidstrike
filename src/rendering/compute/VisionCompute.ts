@@ -42,9 +42,13 @@ import { debugShaders } from '@/utils/debugLogger';
  * StorageTexture class for GPU compute shaders.
  *
  * Three.js r182+ includes StorageTexture but doesn't export it as a named export.
- * We access it via the THREE namespace. The class is declared in three-webgpu.d.ts.
+ * We access it via the THREE namespace at runtime. The class extends THREE.Texture.
+ *
+ * @see three-webgpu.d.ts for type declaration
  */
-const StorageTexture = THREE.StorageTexture as typeof THREE.StorageTexture;
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const StorageTexture: new (width: number, height: number) => THREE.Texture = (THREE as any)
+  .StorageTexture;
 
 // Max casters per compute dispatch
 const MAX_CASTERS = 4096;
