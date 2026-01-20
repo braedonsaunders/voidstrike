@@ -8,12 +8,9 @@ import { getLocalPlayerId, isSpectatorMode } from '@/store/gameSetupStore';
 import { AssetManager } from '@/assets/AssetManager';
 
 interface WaypointVisual {
-  line: THREE.LineSegments;
+  lineGroup: THREE.Group;
+  lineMeshes: THREE.Mesh[];
   markers: THREE.Mesh[];
-  // PERFORMANCE: Track max allocated size to avoid frequent buffer resizing
-  maxPoints: number;
-  // Track if line needs update
-  lineNeedsUpdate: boolean;
 }
 
 /**
@@ -31,10 +28,12 @@ export class CommandQueueRenderer {
   private waypointVisuals: Map<number, WaypointVisual> = new Map();
   private selectedUnitIds: Set<number> = new Set();
 
-  // Shared materials
-  private lineMaterial: THREE.LineBasicMaterial;
+  // Shared materials and geometry
+  private lineMaterial: THREE.MeshBasicMaterial;
   private markerMaterial: THREE.MeshBasicMaterial;
   private markerGeometry: THREE.SphereGeometry;
+  private lineSegmentGeometry: THREE.BoxGeometry;
+  private readonly LINE_WIDTH = 0.08;
 
   // PERFORMANCE: Throttle updates - waypoints don't need 60fps updates
   private lastUpdateTime: number = 0;
@@ -54,11 +53,11 @@ export class CommandQueueRenderer {
     this.getTerrainHeight = getTerrainHeight ?? null;
 
     // Create shared resources - green color for waypoints
-    this.lineMaterial = new THREE.LineBasicMaterial({
+    // Using MeshBasicMaterial instead of LineBasicMaterial because linewidth doesn't work in WebGL/WebGPU
+    this.lineMaterial = new THREE.MeshBasicMaterial({
       color: 0x44ff44,
       transparent: true,
       opacity: 0.6,
-      linewidth: 1,
     });
 
     this.markerMaterial = new THREE.MeshBasicMaterial({
@@ -68,6 +67,9 @@ export class CommandQueueRenderer {
     });
 
     this.markerGeometry = new THREE.SphereGeometry(0.2, 8, 8);
+
+    // Unit box geometry for line segments - will be scaled to segment length
+    this.lineSegmentGeometry = new THREE.BoxGeometry(1, this.LINE_WIDTH, this.LINE_WIDTH);
 
     this.setupEventListeners();
   }
@@ -201,27 +203,19 @@ export class CommandQueueRenderer {
     waypoints: Array<{ x: number; y: number; type: string }>,
     unitFlyingHeight: number = 0
   ): WaypointVisual {
-    // PERFORMANCE: Pre-allocate buffer with extra capacity to avoid frequent resizing
-    // Each waypoint needs 2 vertices (start + end of line segment) * 3 components (x, y, z)
-    const initialCapacity = Math.max(waypoints.length * 2, 10);
-    const positions = new Float32Array(initialCapacity * 3);
+    const lineGroup = new THREE.Group();
+    const lineMeshes: THREE.Mesh[] = [];
 
-    // Fill initial positions
-    const linePoints = this.createLinePoints(startX, startY, waypoints, unitFlyingHeight);
-    for (let i = 0; i < linePoints.length && i < initialCapacity; i++) {
-      positions[i * 3] = linePoints[i].x;
-      positions[i * 3 + 1] = linePoints[i].y;
-      positions[i * 3 + 2] = linePoints[i].z;
+    // Create line segment meshes
+    const segments = this.createLineSegments(startX, startY, waypoints, unitFlyingHeight);
+    for (const seg of segments) {
+      const mesh = new THREE.Mesh(this.lineSegmentGeometry, this.lineMaterial);
+      this.positionLineSegmentMesh(mesh, seg.start, seg.end);
+      lineGroup.add(mesh);
+      lineMeshes.push(mesh);
     }
 
-    const lineGeometry = new THREE.BufferGeometry();
-    lineGeometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
-    // Ensure we have at least some geometry to prevent WebGPU errors
-    // setDrawRange(0, 0) can cause issues with some renderers
-    lineGeometry.setDrawRange(0, Math.max(linePoints.length, 2));
-
-    const line = new THREE.LineSegments(lineGeometry, this.lineMaterial);
-    this.scene.add(line);
+    this.scene.add(lineGroup);
 
     // Create markers at each waypoint
     const markers: THREE.Mesh[] = [];
@@ -233,7 +227,7 @@ export class CommandQueueRenderer {
       markers.push(marker);
     }
 
-    return { line, markers, maxPoints: initialCapacity, lineNeedsUpdate: false };
+    return { lineGroup, lineMeshes, markers };
   }
 
   private updateVisual(
@@ -243,42 +237,23 @@ export class CommandQueueRenderer {
     waypoints: Array<{ x: number; y: number; type: string }>,
     unitFlyingHeight: number = 0
   ): void {
-    // PERFORMANCE: Update existing buffer instead of recreating geometry every frame
-    const linePoints = this.createLinePoints(startX, startY, waypoints, unitFlyingHeight);
-    const requiredPoints = linePoints.length;
+    const segments = this.createLineSegments(startX, startY, waypoints, unitFlyingHeight);
 
-    const positionAttr = visual.line.geometry.getAttribute('position') as THREE.BufferAttribute;
+    // Add or remove line meshes as needed
+    while (visual.lineMeshes.length > segments.length) {
+      const mesh = visual.lineMeshes.pop()!;
+      visual.lineGroup.remove(mesh);
+    }
 
-    // Check if we need to resize the buffer (only when capacity is exceeded)
-    if (requiredPoints > visual.maxPoints) {
-      // Need larger buffer - dispose and recreate
-      visual.line.geometry.dispose();
-      const newCapacity = Math.max(requiredPoints * 2, visual.maxPoints * 2);
-      const positions = new Float32Array(newCapacity * 3);
+    while (visual.lineMeshes.length < segments.length) {
+      const mesh = new THREE.Mesh(this.lineSegmentGeometry, this.lineMaterial);
+      visual.lineGroup.add(mesh);
+      visual.lineMeshes.push(mesh);
+    }
 
-      for (let i = 0; i < linePoints.length; i++) {
-        positions[i * 3] = linePoints[i].x;
-        positions[i * 3 + 1] = linePoints[i].y;
-        positions[i * 3 + 2] = linePoints[i].z;
-      }
-
-      const newGeometry = new THREE.BufferGeometry();
-      newGeometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
-      // Ensure we have at least some geometry to prevent WebGPU errors
-      newGeometry.setDrawRange(0, Math.max(requiredPoints, 2));
-      visual.line.geometry = newGeometry;
-      visual.maxPoints = newCapacity;
-    } else {
-      // PERFORMANCE: Reuse existing buffer - just update values in place
-      const positions = positionAttr.array as Float32Array;
-      for (let i = 0; i < linePoints.length; i++) {
-        positions[i * 3] = linePoints[i].x;
-        positions[i * 3 + 1] = linePoints[i].y;
-        positions[i * 3 + 2] = linePoints[i].z;
-      }
-      positionAttr.needsUpdate = true;
-      // Ensure we have at least some geometry to prevent WebGPU errors
-      visual.line.geometry.setDrawRange(0, Math.max(requiredPoints, 2));
+    // Update line mesh positions
+    for (let i = 0; i < segments.length; i++) {
+      this.positionLineSegmentMesh(visual.lineMeshes[i], segments[i].start, segments[i].end);
     }
 
     // Update markers - add or remove as needed
@@ -301,13 +276,13 @@ export class CommandQueueRenderer {
     }
   }
 
-  private createLinePoints(
+  private createLineSegments(
     startX: number,
     startY: number,
     waypoints: Array<{ x: number; y: number; type: string }>,
     unitFlyingHeight: number = 0
-  ): THREE.Vector3[] {
-    const points: THREE.Vector3[] = [];
+  ): Array<{ start: THREE.Vector3; end: THREE.Vector3 }> {
+    const segments: Array<{ start: THREE.Vector3; end: THREE.Vector3 }> = [];
     const groundLineOffset = 0.15; // Height above terrain for ground units
 
     let prevX = startX;
@@ -321,22 +296,43 @@ export class CommandQueueRenderer {
       const startHeight = (this.getTerrainHeight ? this.getTerrainHeight(prevX, prevY) : 0) + startOffset;
       const endHeight = (this.getTerrainHeight ? this.getTerrainHeight(wp.x, wp.y) : 0) + groundLineOffset;
 
-      points.push(
-        new THREE.Vector3(prevX, startHeight, prevY),
-        new THREE.Vector3(wp.x, endHeight, wp.y)
-      );
+      segments.push({
+        start: new THREE.Vector3(prevX, startHeight, prevY),
+        end: new THREE.Vector3(wp.x, endHeight, wp.y),
+      });
 
       prevX = wp.x;
       prevY = wp.y;
       isFirstSegment = false;
     }
 
-    return points;
+    return segments;
+  }
+
+  private positionLineSegmentMesh(mesh: THREE.Mesh, start: THREE.Vector3, end: THREE.Vector3): void {
+    // Calculate segment length and midpoint
+    const dx = end.x - start.x;
+    const dy = end.y - start.y;
+    const dz = end.z - start.z;
+    const length = Math.sqrt(dx * dx + dy * dy + dz * dz);
+
+    // Position at midpoint
+    mesh.position.set(
+      (start.x + end.x) / 2,
+      (start.y + end.y) / 2,
+      (start.z + end.z) / 2
+    );
+
+    // Scale to segment length
+    mesh.scale.set(length, 1, 1);
+
+    // Rotate to align with segment direction
+    mesh.lookAt(end);
+    mesh.rotateY(Math.PI / 2);
   }
 
   private removeVisual(visual: WaypointVisual): void {
-    this.scene.remove(visual.line);
-    visual.line.geometry.dispose();
+    this.scene.remove(visual.lineGroup);
 
     for (const marker of visual.markers) {
       this.scene.remove(marker);
@@ -352,5 +348,6 @@ export class CommandQueueRenderer {
     this.lineMaterial.dispose();
     this.markerMaterial.dispose();
     this.markerGeometry.dispose();
+    this.lineSegmentGeometry.dispose();
   }
 }
