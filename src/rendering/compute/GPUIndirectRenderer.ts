@@ -22,8 +22,8 @@ import { Fn, positionLocal, attribute, vec3 } from 'three/tsl';
 
 import { IndirectStorageBufferAttribute, MeshStandardNodeMaterial } from 'three/webgpu';
 
-import { GPUUnitBuffer } from './GPUUnitBuffer';
-import { CullingCompute } from './CullingCompute';
+import { GPUEntityBuffer, EntityCategory } from './GPUEntityBuffer';
+import { UnifiedCullingCompute } from './UnifiedCullingCompute';
 import { debugShaders } from '@/utils/debugLogger';
 
 // Constants
@@ -78,8 +78,8 @@ export class GPUIndirectRenderer {
   private indirectArgsAttribute: IndirectStorageBufferAttribute | null = null;
 
   // GPU buffer references
-  private gpuUnitBuffer: GPUUnitBuffer | null = null;
-  private cullingCompute: CullingCompute | null = null;
+  private gpuEntityBuffer: GPUEntityBuffer | null = null;
+  private cullingCompute: UnifiedCullingCompute | null = null;
 
   // Transform data for storage binding
   private transformData: Float32Array;
@@ -107,17 +107,17 @@ export class GPUIndirectRenderer {
    */
   initialize(
     renderer: WebGPURenderer,
-    gpuUnitBuffer: GPUUnitBuffer,
-    cullingCompute: CullingCompute
+    gpuEntityBuffer: GPUEntityBuffer,
+    cullingCompute: UnifiedCullingCompute
   ): void {
     if (this.initialized) return;
 
     this.renderer = renderer;
-    this.gpuUnitBuffer = gpuUnitBuffer;
+    this.gpuEntityBuffer = gpuEntityBuffer;
     this.cullingCompute = cullingCompute;
 
     // Get data arrays from GPU buffer
-    this.transformData = gpuUnitBuffer.getTransformData();
+    this.transformData = gpuEntityBuffer.getTransformData();
 
     // Create shared indirect args attribute for all meshes
     this.indirectArgsAttribute = new IndirectStorageBufferAttribute(this.indirectArgsData, 5);
@@ -391,23 +391,24 @@ export class GPUIndirectRenderer {
   }
 
   /**
-   * Update instance offsets for all meshes from the GPU unit buffer
+   * Update instance offsets for all meshes from the GPU entity buffer
    * Call this each frame before rendering
    */
   updateInstanceMatrices(): void {
-    if (!this.gpuUnitBuffer) return;
+    if (!this.gpuEntityBuffer) return;
 
-    const transformData = this.gpuUnitBuffer.getTransformData();
+    const transformData = this.gpuEntityBuffer.getTransformData();
 
-    // Update each mesh's instance offset attribute with positions from GPUUnitBuffer
-    for (const slot of this.gpuUnitBuffer.getAllocatedSlots()) {
+    // Update each mesh's instance offset attribute with positions from GPUEntityBuffer
+    // Only process units (buildings use their own rendering path)
+    for (const slot of this.gpuEntityBuffer.getSlotsByCategory(EntityCategory.Unit)) {
       // Extract position from transform matrix (column 3: indices 12, 13, 14)
       const srcOffset = slot.index * 16;
       const x = transformData[srcOffset + 12];
       const y = transformData[srcOffset + 13];
       const z = transformData[srcOffset + 14];
 
-      const key = `${slot.unitTypeIndex}_0`; // LOD 0 for simplicity
+      const key = `${slot.typeIndex}_0`; // LOD 0 for simplicity
       const meshData = this.indirectMeshes.get(key);
 
       // Skip invalid meshes to prevent GPU crashes
@@ -491,7 +492,7 @@ export class GPUIndirectRenderer {
     this.indirectArgsAttribute = null;
 
     this.renderer = null;
-    this.gpuUnitBuffer = null;
+    this.gpuEntityBuffer = null;
     this.cullingCompute = null;
     this.initialized = false;
 

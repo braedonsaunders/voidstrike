@@ -10,6 +10,7 @@ import { Terrain } from './Terrain';
 import { getPlayerColor, getLocalPlayerId, isSpectatorMode } from '@/store/gameSetupStore';
 import { useUIStore } from '@/store/uiStore';
 import { debugMesh } from '@/utils/debugLogger';
+import { CullingService, EntityCategory } from './services/CullingService';
 import {
   BUILDING_RENDERER,
   BUILDING_SELECTION_RING,
@@ -132,10 +133,9 @@ export class BuildingRenderer {
     new THREE.Euler(-Math.PI / 2, 0, 0)
   );
 
-  // PERF: Frustum culling for instances
-  private frustum: THREE.Frustum = new THREE.Frustum();
-  private frustumMatrix: THREE.Matrix4 = new THREE.Matrix4();
+  // Camera reference and shared culling service
   private camera: THREE.Camera | null = null;
+  private cullingService: CullingService | null = null;
 
   // PERF: Cached sorted entity list to avoid spread+sort every frame
   private cachedSortedEntities: import('@/engine/ecs/Entity').Entity[] = [];
@@ -468,33 +468,17 @@ export class BuildingRenderer {
   }
 
   /**
-   * Set camera reference for frustum culling
+   * Set camera reference for LOD calculations
    */
   public setCamera(camera: THREE.Camera): void {
     this.camera = camera;
   }
 
   /**
-   * Update frustum from camera - call before update loop
-   * PERF: camera.updateMatrixWorld() is called once in main render loop
+   * Set shared culling service (created by UnitRenderer, shared with BuildingRenderer)
    */
-  private updateFrustum(): void {
-    if (!this.camera) return;
-    // PERF: updateMatrixWorld() is now called once in WebGPUGameCanvas before renderer updates
-    this.frustumMatrix.multiplyMatrices(
-      this.camera.projectionMatrix,
-      this.camera.matrixWorldInverse
-    );
-    this.frustum.setFromProjectionMatrix(this.frustumMatrix);
-  }
-
-  /**
-   * Check if a position is within the camera frustum
-   */
-  private isInFrustum(x: number, y: number, z: number): boolean {
-    if (!this.camera) return true;
-    this.tempPosition.set(x, y, z);
-    return this.frustum.containsPoint(this.tempPosition);
+  public setCullingService(cullingService: CullingService): void {
+    this.cullingService = cullingService;
   }
 
   /**
@@ -537,9 +521,6 @@ export class BuildingRenderer {
 
     // Selection ring animation is handled by shared global time uniform
     // (updated by UnitRenderer.update via updateSelectionRingTime)
-
-    // PERF: Update frustum for culling
-    this.updateFrustum();
 
     // TAA: Sort entities by ID for stable instance ordering
     // This ensures previous/current matrix pairs are aligned correctly for velocity
@@ -616,8 +597,17 @@ export class BuildingRenderer {
       }
       const buildingHeight = Math.max(building.width, building.height) + 2; // Approximate height
 
-      // PERF: Skip buildings outside camera frustum
-      if (!this.isInFrustum(transform.x, terrainHeight + buildingHeight / 2, transform.y)) {
+      // Register building with culling service and update transform
+      if (this.cullingService) {
+        if (!this.cullingService.isRegistered(entity.id)) {
+          this.cullingService.registerEntity(entity.id, building.buildingId, ownerId, EntityCategory.Building);
+          this.cullingService.markStatic(entity.id); // Buildings don't move
+        }
+        this.cullingService.updateTransform(entity.id, transform.x, terrainHeight + buildingHeight / 2, transform.y, 0, 1);
+      }
+
+      // PERF: Skip buildings outside camera frustum (using proper sphere-frustum intersection)
+      if (this.cullingService && !this.cullingService.isVisible(entity.id)) {
         // Hide existing mesh but keep building tracked
         const existingMesh = this.buildingMeshes.get(entity.id);
         if (existingMesh) {
@@ -1067,6 +1057,9 @@ export class BuildingRenderer {
     // Remove meshes for destroyed entities
     for (const [entityId, meshData] of this.buildingMeshes) {
       if (!this._currentIds.has(entityId)) {
+        // Unregister from culling service
+        this.cullingService?.unregisterEntity(entityId);
+
         this.scene.remove(meshData.group);
         this.scene.remove(meshData.selectionRing);
         this.scene.remove(meshData.healthBar);

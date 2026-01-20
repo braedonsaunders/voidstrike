@@ -308,44 +308,85 @@ renderPipeline.applyConfig({
 });
 ```
 
-### GPU-Driven Indirect Draw
+### Unified Culling System
 
-**Location:** `src/rendering/compute/`
-- `GPUUnitBuffer.ts` - Transform and metadata storage
-- `CullingCompute.ts` - GPU frustum culling compute shader
-- `GPUIndirectRenderer.ts` - Indirect draw manager
+**Location:** `src/rendering/compute/` and `src/rendering/services/`
 
-Fully GPU-driven rendering with zero CPU per-unit iteration. Updated to Three.js r182 patterns.
+The culling system provides unified frustum culling for all entities (units and buildings) with proper sphere-frustum intersection.
 
 **Architecture:**
 ```
-┌─────────────────┐    ┌──────────────────┐    ┌─────────────────────┐
-│  GPUUnitBuffer  │───→│  CullingCompute  │───→│ GPUIndirectRenderer │
-│ (Storage)       │    │ (GPU Compute)    │    │ (Indirect Draw)     │
-└─────────────────┘    └──────────────────┘    └─────────────────────┘
-      ↓ transforms          ↓ visible indices       ↓ drawIndexedIndirect
-      ↓ metadata            ↓ indirect args         ↓ per (unitType, LOD)
+┌─────────────────┐    ┌────────────────────────┐    ┌─────────────────────┐
+│  CullingService │───→│  UnifiedCullingCompute │───→│ GPUIndirectRenderer │
+│ (High-Level API)│    │  (GPU/CPU Culling)     │    │ (Indirect Draw)     │
+└─────────────────┘    └────────────────────────┘    └─────────────────────┘
+        ↓                        ↓                           ↓
+        ↓                 ┌──────────────────┐               ↓
+        └────────────────→│  GPUEntityBuffer │←──────────────┘
+                          │  (Shared Storage)│
+                          └──────────────────┘
 ```
 
-**GPUUnitBuffer:**
-- Slot allocation/deallocation for dynamic entities
-- Transform buffer with velocity tracking (prev/curr matrices)
-- Metadata buffer: `vec4(entityId, unitTypeIndex, playerId, boundingRadius)`
-- `isDirty()` tracking for efficient GPU sync
-- Single buffer design per [Toji's best practices](https://toji.dev/webgpu-best-practices/indirect-draws.html)
+**File Structure:**
+- `CullingService.ts` - High-level interface for renderers
+- `GPUEntityBuffer.ts` - Unified transform/metadata storage for units + buildings
+- `UnifiedCullingCompute.ts` - GPU/CPU frustum culling with sphere intersection
+- `GPUIndirectRenderer.ts` - Indirect draw manager
 
-**CullingCompute (r182 Patterns):**
+**Key Features:**
+1. **Unified Entity Buffer** - Single buffer handles both units and buildings
+2. **Proper Sphere-Frustum Intersection** - Fixes disappearing objects at close zoom
+3. **Category-Aware Culling** - Separate indirect args for units vs buildings
+4. **Automatic Bounding Radius** - Derives from AssetManager model dimensions
+5. **GPU/CPU Fallback** - WebGPU when available, CPU fallback for WebGL
+
+**GPUEntityBuffer:**
+- Slot allocation with category (Unit/Building) support
+- Transform buffer with velocity tracking (prev/curr matrices)
+- Metadata buffer: `vec4(entityId, packedTypeAndCategory, playerId, boundingRadius)`
+  - `packedTypeAndCategory`: typeIndex | (category << 16)
+- Static entity optimization (buildings skip per-frame transform updates)
+- Quarantine system for safe GPU buffer reclamation
+
+**UnifiedCullingCompute (r182 Patterns):**
 - **Two-pass compute**: Reset pass + Cull pass for deterministic results
+- **Sphere-Frustum Intersection**: `if (distance_to_plane < -radius)` instead of point test
 - TSL `Fn().compute()` shader with WORKGROUP_SIZE=64
-- Frustum culling: 6-plane test with bounding sphere rejection
 - LOD selection based on camera distance squared
 - **Atomic operations**:
-  - `instancedArray().toAtomic()` for atomic storage buffers
   - `atomicStore()` for resetting counters (in reset pass)
   - `atomicAdd()` for thread-safe instance counting (in cull pass)
-- Visible indices buffer populated by compute shader
-- Frustum planes uploaded via `StorageInstancedBufferAttribute`
-- Storage getters for vertex shader binding
+- **Category-aware** indirect args buffers (separate for units/buildings)
+- CPU fallback using `THREE.Frustum.intersectsSphere()`
+
+**CullingService (High-Level API):**
+```typescript
+// Create service (typically in UnitRenderer.enableGPUDrivenRendering())
+const cullingService = new CullingService({ maxEntities: 8192 });
+cullingService.initialize(renderer, supportsCompute);
+
+// Register entities
+cullingService.registerEntity(entityId, 'marine', playerId, EntityCategory.Unit);
+cullingService.registerEntity(entityId, 'command_center', playerId, EntityCategory.Building);
+cullingService.markStatic(buildingId); // Buildings don't move
+
+// Per-frame update
+cullingService.updateTransform(entityId, x, y, z, rotation, scale);
+cullingService.performCulling(camera);
+
+// Query visibility
+if (cullingService.isVisible(entityId)) {
+  // Render entity
+  const lod = cullingService.getLOD(entityId);
+}
+```
+
+**Renderer Integration:**
+- `UnitRenderer` creates and owns the CullingService
+- `BuildingRenderer` receives the shared CullingService via `setCullingService()`
+- Both renderers use `isVisible()` for frustum culling instead of point-in-frustum tests
+
+### GPU-Driven Indirect Draw
 
 **GPUIndirectRenderer (r174+ API):**
 - One IndirectMesh per (unitType, LOD) pair
@@ -358,18 +399,16 @@ Fully GPU-driven rendering with zero CPU per-unit iteration. Updated to Three.js
 
 **Usage:**
 ```typescript
-// Enable GPU-driven mode
+// Enable GPU-driven mode (UnitRenderer)
 unitRenderer.enableGPUDrivenRendering();
 unitRenderer.setRenderer(renderer);
 
-// Per-frame (handled internally by UnitRenderer.update())
-gpuUnitBuffer.swapTransformBuffers(); // Start of frame
-cullingCompute.cullGPU(gpuUnitBuffer, camera); // Two-pass GPU compute
-gpuUnitBuffer.commitChanges(); // Before render
+// Share culling service with BuildingRenderer
+buildingRenderer.setCullingService(unitRenderer.getCullingService());
 
 // Get stats
 const stats = unitRenderer.getGPURenderingStats();
-console.log(stats.visibleCount, stats.totalIndirectDrawCalls);
+console.log(stats.visibleEntities, stats.totalIndirectDrawCalls);
 ```
 
 **WebGPU Indirect Draw Status (2026):**
