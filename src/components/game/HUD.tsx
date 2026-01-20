@@ -221,7 +221,8 @@ export const HUD = memo(function HUD() {
                       {overlaySettings.activeOverlay === 'elevation' ? 'ELV' :
                        overlaySettings.activeOverlay === 'threat' ? 'THR' :
                        overlaySettings.activeOverlay === 'navmesh' ? 'NAV' :
-                       overlaySettings.activeOverlay === 'resource' ? 'RES' : ''}
+                       overlaySettings.activeOverlay === 'resource' ? 'RES' :
+                       overlaySettings.activeOverlay === 'buildable' ? 'BLD' : ''}
                     </span>
                   </button>
                   {showOverlayMenu && (
