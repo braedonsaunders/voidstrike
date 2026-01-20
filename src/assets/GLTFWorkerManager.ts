@@ -48,19 +48,17 @@ class GLTFWorkerManager {
 
     try {
       // Create worker as ES module (required for Next.js 16+ Turbopack)
-      const workerUrl = new URL('../workers/gltf.worker.ts', import.meta.url);
-      console.log('[GLTFWorkerManager] Creating worker with URL:', workerUrl.href);
-
-      this.worker = new Worker(workerUrl, { type: 'module' });
-      console.log('[GLTFWorkerManager] Worker created successfully');
+      this.worker = new Worker(
+        new URL('../workers/gltf.worker.ts', import.meta.url),
+        { type: 'module' }
+      );
 
       this.worker.onmessage = (event: MessageEvent<WorkerResponse>) => {
-        console.log('[GLTFWorkerManager] Received message from worker:', event.data.type);
         this.handleMessage(event.data);
       };
 
       this.worker.onerror = (error) => {
-        console.error('[GLTFWorkerManager] Worker error, falling back to main thread:', error);
+        debugAssets.warn('[GLTFWorkerManager] Worker error, falling back to main thread:', error);
         this.workerFailed = true;
         this.worker?.terminate();
         this.worker = null;
@@ -89,14 +87,12 @@ class GLTFWorkerManager {
   private handleMessage(response: WorkerResponse): void {
     if (response.type === 'fetchResult') {
       const pending = this.pendingRequests.get(response.id);
-      console.log(`[GLTFWorkerManager] fetchResult for ${response.url}: success=${response.success}, hasData=${!!response.data}, dataSize=${response.data?.byteLength ?? 0}`);
       if (pending) {
         clearTimeout(pending.timeoutId);
         this.pendingRequests.delete(response.id);
         if (response.success && response.data) {
           pending.resolve(response.data);
         } else {
-          console.warn(`[GLTFWorkerManager] No data for ${response.url}, error: ${response.error}`);
           pending.resolve(null);
         }
       }
@@ -163,7 +159,6 @@ class GLTFWorkerManager {
       };
 
       try {
-        console.log(`[GLTFWorkerManager] Sending request ${id} for ${url}`);
         this.worker!.postMessage(request);
       } catch (error) {
         // If postMessage fails, fall back to main thread immediately

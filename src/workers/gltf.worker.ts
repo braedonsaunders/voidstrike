@@ -15,9 +15,6 @@
 // Declare self as DedicatedWorkerGlobalScope for proper TypeScript support
 declare const self: DedicatedWorkerGlobalScope;
 
-// Log immediately when worker script loads
-console.log('[gltf.worker] Worker script loaded and executing');
-
 export interface FetchRequest {
   type: 'fetch';
   id: number;
@@ -75,11 +72,9 @@ async function fetchGLB(url: string): Promise<{ success: boolean; data?: ArrayBu
  * Handle incoming messages from main thread
  */
 self.onmessage = async (event: MessageEvent<WorkerRequest>) => {
-  console.log('[gltf.worker] Received message:', event.data);
   const request = event.data;
 
   if (request.type === 'fetch') {
-    console.log('[gltf.worker] Fetching:', request.url);
     const result = await fetchGLB(request.url);
     const response: FetchResponse = {
       type: 'fetchResult',
