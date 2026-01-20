@@ -127,6 +127,10 @@ export class BuildingRenderer {
   private readonly _currentIds: Set<number> = new Set();
   private tempQuaternion: THREE.Quaternion = new THREE.Quaternion();
   private tempScale: THREE.Vector3 = new THREE.Vector3(1, 1, 1);
+  // Pre-computed rotation for flat ground overlays (selection rings)
+  private groundOverlayRotation: THREE.Quaternion = new THREE.Quaternion().setFromEuler(
+    new THREE.Euler(-Math.PI / 2, 0, 0)
+  );
 
   // PERF: Frustum culling for instances
   private frustum: THREE.Frustum = new THREE.Frustum();
@@ -360,7 +364,8 @@ export class BuildingRenderer {
       const mesh = new THREE.InstancedMesh(this.selectionRingGeometry, material, MAX_SELECTION_RING_INSTANCES);
       mesh.count = 0;
       mesh.frustumCulled = false;
-      mesh.rotation.x = -Math.PI / 2;
+      // NOTE: Don't set mesh.rotation here - rotation is applied per-instance to avoid
+      // coordinate transform issues with instanced meshes (matches UnitRenderer approach)
       mesh.renderOrder = RENDER_ORDER.GROUND_EFFECT;
       this.scene.add(mesh);
 
@@ -1036,10 +1041,10 @@ export class BuildingRenderer {
       if (group.mesh.count < group.maxInstances) {
         const idx = group.mesh.count;
         group.entityIds[idx] = entityId;
+        // Selection rings are flat on ground - apply rotation per-instance to lay flat
         this.tempPosition.copy(data.position);
         this.tempScale.set(data.scale, data.scale, 1);
-        this.tempQuaternion.identity();
-        this.tempMatrix.compose(this.tempPosition, this.tempQuaternion, this.tempScale);
+        this.tempMatrix.compose(this.tempPosition, this.groundOverlayRotation, this.tempScale);
         group.mesh.setMatrixAt(idx, this.tempMatrix);
         group.mesh.count++;
       }
