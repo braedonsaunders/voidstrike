@@ -284,8 +284,9 @@ export class EnvironmentManager {
       }
     }
 
-    // Legacy decorations (watch towers, destructibles)
-    // Pass scene and light manager to enable pooled lights for emissive decorations
+    // MapDecorations handles explicit map decorations, watch towers, and destructibles.
+    // Required even with instanced systems - InstancedTrees/Rocks only handle random procedural decorations.
+    // Pass scene and light manager to enable pooled lights for emissive decorations.
     this.legacyDecorations = new MapDecorations(this.mapData, this.terrain, this.scene, this.decorationLightManager);
     this.scene.add(this.legacyDecorations.group);
   }

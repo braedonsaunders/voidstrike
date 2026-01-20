@@ -845,7 +845,8 @@ export class AssetManager {
       return wrapper;
     }
 
-    // No procedural fallback for decorations yet
+    // No custom model found - log warning for debugging
+    debugAssets.warn(`[AssetManager] Missing decoration model: ${decorationType}`);
     return null;
   }
 
