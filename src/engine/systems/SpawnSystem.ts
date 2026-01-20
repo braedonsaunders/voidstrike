@@ -81,7 +81,9 @@ export class SpawnSystem extends System {
 
     // Add abilities if the unit has any
     if (definition.abilities && definition.abilities.length > 0) {
-      const abilityComponent = new Ability();
+      const maxEnergy = definition.maxEnergy ?? 0;
+      const energyRegen = definition.energyRegen ?? 0;
+      const abilityComponent = new Ability(maxEnergy, energyRegen);
 
       for (const abilityId of definition.abilities) {
         const abilityDef = DOMINION_ABILITIES[abilityId];

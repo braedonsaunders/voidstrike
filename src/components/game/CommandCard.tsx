@@ -87,6 +87,8 @@ const COMMAND_ICONS: Record<string, string> = {
   scanner_sweep: '📡',
   supply_drop: '📦',
   scanner: '📡',
+  power_cannon: '⚡',
+  warp_jump: '🌀',
   // Transform modes
   transform_fighter: '✈',
   transform_assault: '⬇',
@@ -321,6 +323,41 @@ function CommandCardInner() {
               tooltip: isTransforming
                 ? `Transforming... (${Math.round(unit.transformProgress * 100)}%)`
                 : tooltip,
+            });
+          }
+        }
+
+        // Unit abilities (e.g., Dreadnought Power Cannon, Warp Jump)
+        const abilityComponent = entity.get<Ability>('Ability');
+        if (abilityComponent) {
+          const abilities = abilityComponent.getAbilityList();
+          for (const abilityState of abilities) {
+            const def = abilityState.definition;
+            const canUse = abilityComponent.canUseAbility(def.id);
+            const energyCost = def.energyCost;
+
+            buttons.push({
+              id: `ability_${def.id}`,
+              label: def.name,
+              shortcut: def.hotkey,
+              action: () => {
+                if (def.targetType === 'point') {
+                  // Point-targeted ability (e.g., Warp Jump)
+                  useGameStore.getState().setAbilityTargetMode(def.id);
+                } else if (def.targetType === 'unit') {
+                  // Unit-targeted ability (e.g., Power Cannon)
+                  useGameStore.getState().setAbilityTargetMode(def.id);
+                } else {
+                  // Instant cast (e.g., self-buff)
+                  game.eventBus.emit('command:ability', {
+                    entityIds: selectedUnits,
+                    abilityId: def.id,
+                  });
+                }
+              },
+              isDisabled: !canUse,
+              tooltip: def.description + (abilityState.currentCooldown > 0 ? ` (CD: ${Math.ceil(abilityState.currentCooldown)}s)` : ''),
+              cost: energyCost > 0 ? { minerals: 0, vespene: 0, supply: energyCost } : undefined,
             });
           }
         }
