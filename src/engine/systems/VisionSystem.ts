@@ -367,6 +367,22 @@ export class VisionSystem extends System {
     }
     this.tickCounter = 0;
 
+    this.computeVision();
+  }
+
+  /**
+   * Force an immediate vision update regardless of game state or throttling.
+   * Call this after spawning initial entities to ensure fog of war shows
+   * correct visibility from the start (e.g., during countdown).
+   */
+  public forceUpdate(): void {
+    this.computeVision();
+  }
+
+  /**
+   * Compute vision using the best available method (GPU > Worker > Main Thread)
+   */
+  private computeVision(): void {
     // Priority: GPU > Worker > Main Thread
     if (this.useGPUVision && this.gpuVisionCompute) {
       this.updateVisionWithGPU();

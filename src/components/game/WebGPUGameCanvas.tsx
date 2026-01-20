@@ -820,6 +820,9 @@ export function WebGPUGameCanvas() {
         watchTowerRendererRef.current = new WatchTowerRenderer(scene, game.visionSystem);
       }
 
+      // Force initial vision update so fog of war shows correct visibility during countdown
+      game.visionSystem.forceUpdate();
+
       // Initialize audio (must await to ensure sounds are preloaded before game starts)
       await game.audioSystem.initialize(camera.camera, CURRENT_MAP.biome);
 
