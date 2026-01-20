@@ -1,4 +1,6 @@
 import { Component } from '../ecs/Component';
+import { AssetManager } from '@/assets/AssetManager';
+import { collisionConfig } from '@/data/collisionConfig';
 
 export type UnitState = 'idle' | 'moving' | 'attackmoving' | 'attacking' | 'gathering' | 'building' | 'dead' | 'patrolling' | 'transforming' | 'loaded';
 export type DamageType = 'normal' | 'explosive' | 'concussive' | 'psionic';
@@ -93,10 +95,6 @@ export interface UnitDefinition {
   // Armor type for damage calculations (e.g., 'light', 'armored', 'massive')
   // If not set, defaults to 'light'
   armorType?: string;
-  // Collision scale multiplier for large units like capital ships
-  // Multiplies the base collision radius (0.3 flying, 0.5 ground) for proper spacing
-  // If not set, defaults to 1.0
-  collisionScale?: number;
   // Audio configuration - references voice groups and sound IDs from config files
   // All audio is data-driven via public/audio/*.config.json files
   audio?: UnitAudioConfig;
@@ -297,10 +295,16 @@ export class Unit extends Component {
     this.canAttackAir = definition.canAttackAir ?? false;
     this.canAttackWhileMoving = definition.canAttackWhileMoving ?? false;
 
-    // Collision radius based on unit type, scaled by collisionScale for large units
-    const baseCollisionRadius = definition.isFlying ? 0.3 : 0.5;
-    const collisionScale = definition.collisionScale ?? 1.0;
-    this.collisionRadius = baseCollisionRadius * collisionScale;
+    // Collision radius from assets.json, fallback to config defaults
+    const assetCollisionRadius = AssetManager.getCollisionRadius(definition.id);
+    if (assetCollisionRadius !== null) {
+      this.collisionRadius = assetCollisionRadius;
+    } else {
+      // Fallback to defaults from collision.config.json
+      this.collisionRadius = definition.isFlying
+        ? collisionConfig.defaultFlyingUnitRadius
+        : collisionConfig.defaultGroundUnitRadius;
+    }
 
     // Transform mechanics
     this.canTransform = definition.canTransform ?? false;

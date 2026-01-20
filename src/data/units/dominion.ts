@@ -330,8 +330,6 @@ export const UNIT_DEFINITIONS: Record<string, UnitDefinition> = {
     targetPriority: 100, // High priority - siege units are high-value targets
     category: 'vehicle',
     armorType: 'armored',
-    // Collision scaling - larger tank needs more spacing
-    collisionScale: 1.8,
     audio: {
       voiceGroupId: 'devastator',
       weaponSound: 'attack_cannon',
@@ -362,8 +360,6 @@ export const UNIT_DEFINITIONS: Record<string, UnitDefinition> = {
     isMechanical: true,
     canAttackGround: true,
     canAttackAir: true, // Heavy weapons platform - can target both
-    // Collision scaling - massive mech needs more spacing
-    collisionScale: 2.0,
     audio: {
       voiceGroupId: 'colossus',
       weaponSound: 'attack_laser_battery',
@@ -502,8 +498,6 @@ export const UNIT_DEFINITIONS: Record<string, UnitDefinition> = {
     targetPriority: 95, // Highest priority - capital ships are critical targets
     category: 'ship',
     armorType: 'massive',
-    // Collision scaling - large capital ship needs more spacing
-    collisionScale: 2.5,
     audio: {
       voiceGroupId: 'dreadnought',
       weaponSound: 'attack_laser',

@@ -165,9 +165,10 @@ fn compute_forces_simd_batch(
                 let dy = uy - ny;
                 let dist_sq = dx * dx + dy * dy;
 
-                // Combined radius for separation
+                // Separation distance is proportional to combined unit sizes
+                // params.separation_radius is actually the separation multiplier from config
                 let combined_r = ur + nr;
-                let sep_dist = (combined_r * 0.5).max(params.separation_radius);
+                let sep_dist = combined_r * params.separation_radius;
                 let sep_dist_sq = sep_dist * sep_dist;
 
                 // Separation force

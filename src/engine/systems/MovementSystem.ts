@@ -33,9 +33,9 @@ import AssetManager from '@/assets/AssetManager';
 import { WasmBoids, getWasmBoids } from '../wasm/WasmBoids';
 import { CROWD_MAX_AGENTS } from '@/data/pathfinding.config';
 import { SpatialEntityData, SpatialUnitState, stateToEnum } from '../core/SpatialGrid';
+import { collisionConfig } from '@/data/collisionConfig';
 import {
-  // Separation
-  SEPARATION_RADIUS,
+  // Separation (strengths still from movement.config for now, multiplier from collision config)
   SEPARATION_STRENGTH_MOVING,
   SEPARATION_STRENGTH_IDLE,
   SEPARATION_STRENGTH_ARRIVING,
@@ -244,9 +244,9 @@ export class MovementSystem extends System {
       this.useWasmBoids = this.wasmBoids.isAvailable();
 
       if (this.useWasmBoids) {
-        // Configure WASM with game parameters
+        // Configure WASM with game parameters (use collision config values)
         this.wasmBoids.setSeparationParams(
-          SEPARATION_RADIUS,
+          collisionConfig.separationMultiplier,
           SEPARATION_STRENGTH_IDLE,
           MAX_AVOIDANCE_FORCE
         );
@@ -900,8 +900,8 @@ export class MovementSystem extends System {
 
     // PERF OPTIMIZATION: Use queryRadiusWithData to get inline entity data
     // This eliminates entity.get() lookups in the hot path
-    // Query radius = unit's desired spacing (collision * multiplier + base radius)
-    const selfDesiredSpacing = selfUnit.collisionRadius * SEPARATION_RADIUS + SEPARATION_RADIUS;
+    // Query radius based on unit's collision radius and config multiplier
+    const selfDesiredSpacing = selfUnit.collisionRadius * collisionConfig.separationQueryRadiusMultiplier;
     const queryRadius = selfDesiredSpacing * 2; // Query wider to catch all potential neighbors
     const nearbyData = this.world.unitGrid.queryRadiusWithData(
       selfTransform.x,
@@ -925,9 +925,10 @@ export class MovementSystem extends System {
       const dy = selfTransform.y - other.y;
       const distanceSq = dx * dx + dy * dy;
 
-      // Separation distance scales with unit size - larger units need more space
+      // Separation distance is proportional to combined unit sizes
+      // No fixed constant - units separate based purely on their model sizes
       const combinedRadius = selfUnit.collisionRadius + other.collisionRadius;
-      const separationDist = combinedRadius * SEPARATION_RADIUS + SEPARATION_RADIUS;
+      const separationDist = combinedRadius * collisionConfig.separationMultiplier;
       const separationDistSq = separationDist * separationDist;
 
       // PERF: Use squared distance for threshold check, only sqrt when needed
@@ -1384,7 +1385,7 @@ export class MovementSystem extends System {
   ): void {
     // Compute the maximum radius needed across all steering behaviors
     const maxRadius = Math.max(
-      SEPARATION_RADIUS + unit.collisionRadius,
+      unit.collisionRadius * collisionConfig.separationQueryRadiusMultiplier,
       COHESION_RADIUS,
       ALIGNMENT_RADIUS,
       PHYSICS_PUSH_RADIUS + unit.collisionRadius
