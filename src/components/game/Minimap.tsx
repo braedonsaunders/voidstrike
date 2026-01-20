@@ -460,7 +460,7 @@ export function Minimap() {
     if (commandTargetMode === 'attack') return 'cursor-crosshair';
     if (commandTargetMode === 'move') return 'cursor-pointer';
     if (commandTargetMode === 'patrol') return 'cursor-crosshair';
-    return 'cursor-grab';
+    return 'cursor-pointer';
   };
 
   const getBorderClass = () => {
