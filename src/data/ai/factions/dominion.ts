@@ -67,15 +67,15 @@ const DOMINION_MACRO_RULES: MacroRule[] = [
     cooldownTicks: 10, // Very fast - queue multiple workers
   },
 
-  // Standard worker production - uses difficulty-specific target workers
+  // Standard worker production - caps at 16 per base (optimal saturation)
   {
     id: 'workers_basic',
     name: 'Train Workers',
-    description: 'Keep worker production going up to difficulty target',
+    description: 'Keep worker production going up to optimal saturation',
     priority: 90,
     conditions: [
-      // Use targetWorkers reference from difficulty config instead of global saturation
-      { type: 'workers', operator: '<', value: 0, compareRef: 'targetWorkers', compareMultiplier: 1.0 },
+      // workerSaturation = workers / (bases * 16), so < 1.0 means under-saturated
+      { type: 'workerSaturation', operator: '<', value: 1.0 },
       { type: 'minerals', operator: '>=', value: 50 },
       { type: 'supplyRatio', operator: '<', value: 0.95 },
     ],
@@ -626,7 +626,7 @@ export const DOMINION_AI_CONFIG: FactionAIConfig = {
   economy: {
     optimalWorkersPerMineral: 2,
     optimalWorkersPerGas: 3,
-    optimalWorkersPerBase: 22,
+    optimalWorkersPerBase: 16, // 16 is optimal (2 per patch * 8 patches) - like StarCraft
     supplyPerMainBase: 11,
     supplyPerSupplyBuilding: 8,
     supplyBuildBuffer: 4, // FIX: Build supply when within 4 of max (was 2)
