@@ -96,9 +96,10 @@ export class VisionSystem extends System {
     }
 
     try {
-      // Create worker using Next.js compatible URL pattern
+      // Create worker as ES module (required for Next.js 16+ Turbopack)
       this.visionWorker = new Worker(
-        new URL('../../workers/vision.worker.ts', import.meta.url)
+        new URL('../../workers/vision.worker.ts', import.meta.url),
+        { type: 'module' }
       );
 
       this.visionWorker.onmessage = this.handleWorkerMessage.bind(this);

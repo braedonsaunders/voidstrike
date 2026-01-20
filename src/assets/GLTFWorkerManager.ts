@@ -46,9 +46,10 @@ class GLTFWorkerManager {
     if (this.worker || !this.isSupported || this.workerFailed) return;
 
     try {
-      // Create worker - named *.worker.ts to match webpack worker-loader pattern
+      // Create worker as ES module (required for Next.js 16+ Turbopack)
       this.worker = new Worker(
-        new URL('./gltf.worker.ts', import.meta.url)
+        new URL('./gltf.worker.ts', import.meta.url),
+        { type: 'module' }
       );
 
       this.worker.onmessage = (event: MessageEvent<WorkerResponse>) => {

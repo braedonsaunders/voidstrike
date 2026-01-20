@@ -115,8 +115,10 @@ export class AIWorkerManager {
     }
 
     try {
+      // Create worker as ES module (required for Next.js 16+ Turbopack)
       this.worker = new Worker(
-        new URL('../../workers/ai-decisions.worker.ts', import.meta.url)
+        new URL('../../workers/ai-decisions.worker.ts', import.meta.url),
+        { type: 'module' }
       );
 
       this.worker.onmessage = this.handleWorkerMessage.bind(this);

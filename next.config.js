@@ -35,7 +35,8 @@ const nextConfig = {
   },
 
   webpack: (config, { isServer }) => {
-    // Add support for web workers
+    // Legacy worker-loader support (only applies when NOT using Turbopack)
+    // Turbopack handles workers natively via new Worker(new URL(...), { type: 'module' })
     config.module.rules.push({
       test: /\.worker\.(js|ts)$/,
       use: { loader: 'worker-loader' },

@@ -559,10 +559,11 @@ export class OverlayScene extends Phaser.Scene {
     this.countdownText.setAlpha(0);
     this.countdownContainer.add(this.countdownText);
 
-    // Initialize Web Worker for timing
+    // Initialize Web Worker for timing (ES module for Next.js 16+ Turbopack)
     try {
       this.countdownWorker = new Worker(
-        new URL('../../workers/countdownWorker.ts', import.meta.url)
+        new URL('../../workers/countdownWorker.ts', import.meta.url),
+        { type: 'module' }
       );
 
       this.countdownWorker.onmessage = (event) => {
