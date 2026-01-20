@@ -58,7 +58,9 @@ export type WorkerResponse = FetchResponse | BatchFetchResponse;
  */
 async function fetchGLB(url: string): Promise<{ success: boolean; data?: ArrayBuffer; error?: string }> {
   try {
-    const response = await fetch(url);
+    // Workers need absolute URLs - relative URLs don't resolve correctly
+    const absoluteUrl = url.startsWith('/') ? `${self.location.origin}${url}` : url;
+    const response = await fetch(absoluteUrl);
     if (!response.ok) {
       return { success: false, error: `HTTP ${response.status}: ${response.statusText}` };
     }
