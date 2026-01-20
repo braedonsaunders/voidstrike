@@ -802,8 +802,18 @@ export class RenderPipeline {
     }
   }
 
+  /**
+   * Update fog of war camera matrices for proper world position reconstruction
+   */
+  updateFogOfWarCamera(): void {
+    if (this.fogOfWarPass && this.camera instanceof THREE.PerspectiveCamera) {
+      this.fogOfWarPass.updateCamera(this.camera);
+    }
+  }
+
   render(): void {
     this.updateVolumetricFogCamera();
+    this.updateFogOfWarCamera();
     const useUpscaling = this.config.upscalingMode !== 'off' && this.config.renderScale < 1.0;
     this.renderQuarterResEffects();
 

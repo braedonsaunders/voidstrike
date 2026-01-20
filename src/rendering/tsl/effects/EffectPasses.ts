@@ -644,6 +644,7 @@ export interface FogOfWarPassResult {
   setVisionTexture: (tex: THREE.Texture | null) => void;
   setEnabled: (enabled: boolean) => void;
   updateTime: (t: number) => void;
+  updateCamera: (cam: THREE.PerspectiveCamera) => void;
   applyConfig: (config: Partial<FogOfWarConfig>) => void;
 }
 
@@ -725,21 +726,23 @@ export function createFogOfWarPass(
     // Sample depth and reconstruct world position
     const depthSample = texture(depthNode, fragUV).r;
     const z = depthSample.mul(2.0).sub(1.0);
-    const linearDepth = uCameraNear.mul(uCameraFar).div(
-      uCameraFar.sub(z.mul(uCameraFar.sub(uCameraNear)))
-    );
 
-    // Reconstruct world XZ position from UV and depth
-    // Simplified approach - works for top-down RTS camera
+    // Reconstruct world position using inverse matrices
+    // NDC to clip space
     const ndcX = fragUV.x.mul(2.0).sub(1.0);
     const ndcY = fragUV.y.mul(2.0).sub(1.0);
+    const clipPos = vec4(ndcX, ndcY, z, float(1.0));
 
-    // Approximate world position (camera looking down)
-    const aspectRatio = float(16.0 / 9.0);
-    const fovFactor = linearDepth.mul(1.0); // Approximate FOV scaling
-    const worldX = uCameraPos.x.add(ndcX.mul(fovFactor).mul(aspectRatio));
-    const worldZ = uCameraPos.z.sub(ndcY.mul(fovFactor));
-    const worldY = linearDepth.mul(0.04); // Approximate terrain height from depth
+    // Clip space -> View space (using inverse projection)
+    const viewPos = uInverseProjection.mul(clipPos);
+    // Perspective division in view space
+    const viewPosNorm = viewPos.xyz.div(viewPos.w);
+
+    // View space -> World space (using inverse view / camera matrix world)
+    const worldPos4 = uInverseView.mul(vec4(viewPosNorm, float(1.0)));
+    const worldX = worldPos4.x;
+    const worldY = worldPos4.y;
+    const worldZ = worldPos4.z;
 
     // Convert world position to vision grid UV
     const visionU = worldX.div(uMapDimensions.x);
@@ -981,6 +984,7 @@ export function createFogOfWarPass(
     setVisionTexture,
     setEnabled,
     updateTime,
+    updateCamera,
     applyConfig,
   };
 }
