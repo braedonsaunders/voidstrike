@@ -1,88 +1,91 @@
 {
   "$schema": "./collision.config.schema.json",
-  "_description": "Unit collision and separation configuration - controls how units space themselves apart",
+  "_description": "Unit collision and separation configuration - SC2-style: allow overlap while moving, gentle spreading when stopped",
 
   "separation": {
-    "_description": "Separation force parameters - prevents unit overlapping",
+    "_description": "Separation force parameters - SC2 style: weak forces, allow significant overlap",
 
-    "multiplier": 1.15,
-    "_multiplier_description": "Base separation distance = (radius1 + radius2) * multiplier. Units separate at this proportion of their combined radii.",
+    "multiplier": 1.0,
+    "_multiplier_description": "Separation distance = (radius1 + radius2) * multiplier. 1.0 = units touch edges. SC2 allows overlap.",
 
-    "queryRadiusMultiplier": 2.5,
-    "_queryRadiusMultiplier_description": "Spatial query radius = unit's collision radius * this value. Determines how far to search for neighbors.",
+    "queryRadiusMultiplier": 2.0,
+    "_queryRadiusMultiplier_description": "Spatial query radius = unit's collision radius * this value.",
 
-    "strengthMoving": 0.5,
-    "_strengthMoving_description": "Separation force while moving. Low value allows SC2-style clumping during group movement.",
+    "strengthMoving": 0.15,
+    "_strengthMoving_description": "Separation while moving. Very weak - SC2 allows extreme clumping during movement.",
 
-    "strengthIdle": 6.0,
-    "_strengthIdle_description": "Separation force when idle. Strong to ensure clear visual distinction between units.",
+    "strengthIdle": 0.8,
+    "_strengthIdle_description": "Separation when idle. Gentle spreading - not jerky adjustments.",
 
-    "strengthArriving": 8.0,
-    "_strengthArriving_description": "Separation force when arriving at destination. Very strong to create natural spreading.",
+    "strengthArriving": 1.0,
+    "_strengthArriving_description": "Separation at destination. Gentle spread, not sudden explosion.",
 
-    "strengthCombat": 8.0,
-    "_strengthCombat_description": "Separation force during combat. Strong for unclumping while fighting.",
+    "strengthCombat": 0.3,
+    "_strengthCombat_description": "Separation during combat. Minimal - units should focus on attacking, not spreading.",
 
-    "maxForce": 10.0,
-    "_maxForce_description": "Maximum separation force magnitude. High value allows strong separation when units overlap.",
+    "maxForce": 2.0,
+    "_maxForce_description": "Maximum separation force. Low cap prevents jerky movement.",
 
-    "flyingMultiplier": 1.5,
-    "_flyingMultiplier_description": "Separation force multiplier for flying units. Flying units have more freedom and need stronger separation."
+    "flyingMultiplier": 1.2,
+    "_flyingMultiplier_description": "Flying unit separation multiplier. Slightly stronger for air units."
   },
 
   "physics": {
-    "_description": "Physics pushing parameters - units push through each other when overlapping",
+    "_description": "Physics pushing - only for hard overlaps, should be rare",
 
-    "pushRadius": 1.2,
-    "_pushRadius_description": "Distance at which physics pushing starts (world units).",
+    "pushRadius": 0.8,
+    "_pushRadius_description": "Distance for physics push. Smaller = only push when really overlapping.",
 
-    "pushStrength": 6.0,
-    "_pushStrength_description": "Base push force strength.",
+    "pushStrength": 1.5,
+    "_pushStrength_description": "Push force. Gentle - slide apart, don't bounce.",
 
-    "pushFalloff": 0.6,
-    "_pushFalloff_description": "How quickly push force falls off with distance. Higher = faster falloff.",
+    "pushFalloff": 0.8,
+    "_pushFalloff_description": "How quickly push falls off. Higher = faster falloff, less bouncy.",
 
-    "overlapPush": 15.0,
-    "_overlapPush_description": "Extra strong push force when units overlap. Quickly resolves accidental overlaps."
+    "overlapPush": 3.0,
+    "_overlapPush_description": "Extra push when overlapping. Much gentler than before."
   },
 
   "idle": {
-    "_description": "Idle behavior parameters - how units behave at rest",
+    "_description": "Idle behavior - SC2 style: only spread when really overlapping, very slowly",
 
-    "separationThreshold": 0.25,
-    "_separationThreshold_description": "Minimum separation force magnitude to move an idle unit. Prevents micro-adjustments.",
+    "separationThreshold": 0.5,
+    "_separationThreshold_description": "Minimum force to move idle unit. High = ignore small overlaps, feel settled.",
 
-    "repelSpeedMultiplier": 0.3,
-    "_repelSpeedMultiplier_description": "Speed multiplier for idle unit repulsion movement. Slower prevents jittery behavior."
+    "repelSpeedMultiplier": 0.12,
+    "_repelSpeedMultiplier_description": "Speed for idle spreading. Very slow = smooth, not jittery.",
+
+    "settleThreshold": 0.85,
+    "_settleThreshold_description": "Units stop adjusting when at this fraction of ideal separation distance."
   },
 
   "combat": {
-    "_description": "Combat movement parameters",
+    "_description": "Combat movement - minimal spreading, focus on attacking",
 
-    "spreadSpeedMultiplier": 0.5,
-    "_spreadSpeedMultiplier_description": "Speed multiplier when units spread apart during combat.",
+    "spreadSpeedMultiplier": 0.25,
+    "_spreadSpeedMultiplier_description": "Speed when spreading in combat. Slow to maintain formation.",
 
-    "separationThreshold": 0.1,
-    "_separationThreshold_description": "Minimum separation magnitude to trigger combat movement."
+    "separationThreshold": 0.3,
+    "_separationThreshold_description": "High threshold - don't spread for minor overlaps during combat."
   },
 
   "arrival": {
-    "_description": "Arrival spreading parameters - units spread when reaching destination",
+    "_description": "Arrival spreading - gentle fan-out at destination",
 
-    "spreadRadius": 5.0,
-    "_spreadRadius_description": "Distance from target where arrival spreading kicks in (world units).",
+    "spreadRadius": 3.0,
+    "_spreadRadius_description": "Distance where arrival spreading kicks in. Smaller = spread closer to target.",
 
-    "spreadStrength": 2.0,
-    "_spreadStrength_description": "Additional separation multiplier at arrival."
+    "spreadStrength": 1.2,
+    "_spreadStrength_description": "Arrival spread multiplier. Gentle boost, not explosion."
   },
 
   "defaults": {
-    "_description": "Default collision radius values when not specified in assets.json",
+    "_description": "Default collision radius when not in assets.json",
 
     "groundUnitRadius": 0.5,
-    "_groundUnitRadius_description": "Default collision radius for ground units (world units).",
+    "_groundUnitRadius_description": "Default ground unit radius.",
 
     "flyingUnitRadius": 0.4,
-    "_flyingUnitRadius_description": "Default collision radius for flying units (world units)."
+    "_flyingUnitRadius_description": "Default flying unit radius."
   }
 }
