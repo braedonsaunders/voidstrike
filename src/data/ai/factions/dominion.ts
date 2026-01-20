@@ -24,7 +24,6 @@ import {
 const DOMINION_MACRO_RULES: MacroRule[] = [
   // === CRITICAL: Supply Management ===
   // Build supply when we're getting close to capped
-  // FIX: Changed from maxSupply - 2 to supplyRatio >= 0.7 (70% full)
   {
     id: 'supply_early',
     name: 'Build Supply (Early)',
@@ -32,7 +31,7 @@ const DOMINION_MACRO_RULES: MacroRule[] = [
     priority: 100, // Highest priority - never get supply blocked
     conditions: [
       { type: 'supplyRatio', operator: '>=', value: 0.7 },
-      { type: 'minerals', operator: '>=', value: 100 },
+      { type: 'minerals', operator: '>=', value: 75 }, // Lowered from 100 - supply is critical
     ],
     action: { type: 'build', targetId: 'supply_cache' },
     cooldownTicks: 40, // ~2 seconds
@@ -45,11 +44,11 @@ const DOMINION_MACRO_RULES: MacroRule[] = [
     description: 'Emergency supply when nearly blocked',
     priority: 150, // Even higher priority
     conditions: [
-      { type: 'supplyRatio', operator: '>=', value: 0.9 },
-      { type: 'minerals', operator: '>=', value: 100 },
+      { type: 'supplyRatio', operator: '>=', value: 0.85 },
+      { type: 'minerals', operator: '>=', value: 50 }, // Very low threshold - emergency
     ],
     action: { type: 'build', targetId: 'supply_cache' },
-    cooldownTicks: 20,
+    cooldownTicks: 15, // Faster cooldown for emergencies
   },
 
   // === Worker Production ===
@@ -99,22 +98,24 @@ const DOMINION_MACRO_RULES: MacroRule[] = [
     cooldownTicks: 100,
   },
 
-  // Second infantry bay - FIX: Now uses dynamic scaling
+  // Second infantry bay - ALL DIFFICULTIES need to scale production
   {
     id: 'infantry_bay_scale',
     name: 'Scale Infantry Bays',
     description: 'Build more production as economy grows',
     priority: 70,
     conditions: [
-      { type: 'workers', operator: '>=', value: 16 },
-      { type: 'armySupply', operator: '>=', value: 4 },
+      { type: 'workers', operator: '>=', value: 12 }, // Lowered from 16 - easier to trigger
+      { type: 'armySupply', operator: '>=', value: 2 }, // Lowered from 4
       { type: 'minerals', operator: '>=', value: 150 },
-      // Dynamic: production buildings < bases * 2
+      // Have at least 1 infantry bay already
+      { type: 'buildingCount', operator: '>=', value: 1, targetId: 'infantry_bay' },
+      // But less than bases * 2
       { type: 'buildingCount', operator: '<', value: 2, targetId: 'infantry_bay', compareRef: 'bases', compareMultiplier: 2 },
     ],
     action: { type: 'build', targetId: 'infantry_bay' },
     cooldownTicks: 200,
-    difficulties: ['medium', 'hard', 'very_hard', 'insane'],
+    // NO difficulties restriction - ALL difficulties can scale production
   },
 
   // Third+ infantry bay for aggressive macro
@@ -124,14 +125,14 @@ const DOMINION_MACRO_RULES: MacroRule[] = [
     description: 'More production for harder difficulties',
     priority: 65,
     conditions: [
-      { type: 'workers', operator: '>=', value: 24 },
-      { type: 'minerals', operator: '>=', value: 200 },
+      { type: 'workers', operator: '>=', value: 20 }, // Lowered from 24
+      { type: 'minerals', operator: '>=', value: 175 },
       { type: 'buildingCount', operator: '<', value: 4, targetId: 'infantry_bay' },
-      { type: 'bases', operator: '>=', value: 2 },
+      { type: 'bases', operator: '>=', value: 1 }, // Can do with 1 base on hard+
     ],
     action: { type: 'build', targetId: 'infantry_bay' },
-    cooldownTicks: 300,
-    difficulties: ['hard', 'very_hard', 'insane'],
+    cooldownTicks: 250,
+    difficulties: ['medium', 'hard', 'very_hard', 'insane'], // Opened to medium too
   },
 
   // === Gas Extraction ===
@@ -350,11 +351,33 @@ const DOMINION_MACRO_RULES: MacroRule[] = [
   },
 
   // Trooper - basic unit, fallback production
+  // Aggressive army production - higher priority to keep building units
+  {
+    id: 'train_army_aggressive',
+    name: 'Aggressive Army Production',
+    description: 'Keep production buildings busy - always train units',
+    priority: 45, // Higher than basic trooper rule
+    conditions: [
+      { type: 'buildingCount', operator: '>=', value: 1, targetId: 'infantry_bay' },
+      { type: 'minerals', operator: '>=', value: 100 }, // Have some mineral buffer
+      { type: 'supplyRatio', operator: '<', value: 0.9 },
+      { type: 'workerSaturation', operator: '>=', value: 0.6 }, // Economy is decent
+    ],
+    action: {
+      type: 'train',
+      options: [
+        { id: 'trooper', weight: 10 },
+        { id: 'breacher', weight: 5 }, // Some variety
+      ],
+    },
+    cooldownTicks: 15, // Fast - keep queuing
+  },
+
   {
     id: 'train_trooper',
     name: 'Train Trooper',
-    description: 'Basic infantry unit',
-    priority: 30, // Lower priority - build when nothing else to do
+    description: 'Basic infantry unit - fallback when economy is lower',
+    priority: 30,
     conditions: [
       { type: 'buildingCount', operator: '>=', value: 1, targetId: 'infantry_bay' },
       { type: 'minerals', operator: '>=', value: 50 },
@@ -637,13 +660,13 @@ export const DOMINION_AI_CONFIG: FactionAIConfig = {
       },
     ],
 
-    // Attack thresholds by difficulty
+    // Attack thresholds by difficulty - lowered for more aggressive play
     attackThresholds: {
-      easy: 25,
-      medium: 20,
-      hard: 15,
-      very_hard: 12,
-      insane: 8,
+      easy: 15,      // Lowered from 25 - attack earlier
+      medium: 12,    // Lowered from 20
+      hard: 10,      // Lowered from 15
+      very_hard: 8,  // Lowered from 12
+      insane: 6,     // Lowered from 8
     },
 
     // Defense ratio (keep this % of army for defense)

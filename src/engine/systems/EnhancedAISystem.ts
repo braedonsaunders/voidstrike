@@ -527,11 +527,101 @@ export class EnhancedAISystem extends System {
       // Update max supply based on buildings
       this.updateMaxSupply(ai);
 
-      // Determine state based on conditions
-      this.updateAIState(ai, currentTick);
+      // === PARALLEL AI ARCHITECTURE ===
+      // Economic layer runs EVERY tick, regardless of tactical state
+      // This ensures production never stops during combat
+      this.runEconomicLayer(ai, currentTick);
 
-      // Execute state-specific behavior
-      this.executeStateBehavior(ai, currentTick);
+      // Determine tactical state (attacking/defending/etc)
+      this.updateTacticalState(ai, currentTick);
+
+      // Execute tactical behavior (unit micro, attack commands)
+      this.executeTacticalBehavior(ai, currentTick);
+    }
+  }
+
+  /**
+   * Economic layer - runs EVERY tick regardless of tactical state.
+   * Handles: worker gathering, building construction, unit production, supply management.
+   * This is the core fix: AI continues developing while attacking/defending.
+   */
+  private runEconomicLayer(ai: AIPlayer, currentTick: number): void {
+    // Resume incomplete buildings
+    this.tryResumeIncompleteBuildings(ai);
+
+    // Repair damaged buildings and units
+    this.assignWorkersToRepair(ai);
+
+    // Send idle workers to gather
+    this.assignIdleWorkersToGather(ai);
+
+    // Follow build order if still in progress
+    if (ai.buildOrderIndex < ai.buildOrder.length) {
+      this.executeBuildOrder(ai);
+      return;
+    }
+
+    // Post-build order: continuous macro
+    this.doMacro(ai);
+  }
+
+  /**
+   * Execute build order steps (extracted from executeBuildingPhase).
+   */
+  private executeBuildOrder(ai: AIPlayer): void {
+    const step = ai.buildOrder[ai.buildOrderIndex];
+
+    // Check supply condition
+    if (step.supply && ai.supply < step.supply) {
+      // Continue macro while waiting for supply threshold
+      this.doMacro(ai);
+      return;
+    }
+
+    // Check custom condition
+    if (step.condition) {
+      const conditionMet = typeof step.condition === 'function'
+        ? step.condition(ai)
+        : this.checkNamedCondition(step.condition, ai);
+      if (!conditionMet) {
+        // Still run macro while waiting for condition
+        this.doMacro(ai);
+        return;
+      }
+    }
+
+    // Execute build order step
+    let success = false;
+    if (step.type === 'unit') {
+      success = this.tryTrainUnit(ai, step.id);
+    } else if (step.type === 'building') {
+      const buildingDef = BUILDING_DEFINITIONS[step.id];
+      if (buildingDef?.isAddon) {
+        success = this.tryBuildAddon(ai, step.id);
+      } else {
+        success = this.tryBuildBuilding(ai, step.id);
+      }
+    }
+
+    if (success) {
+      ai.buildOrderIndex++;
+      ai.buildOrderFailureCount = 0;
+      debugAI.log(`[EnhancedAI] ${ai.playerId}: Completed build order step ${ai.buildOrderIndex - 1} (${step.type}: ${step.id})`);
+    } else {
+      // Track failure
+      if (this.game.getCurrentTick() % 20 === 0) {
+        ai.buildOrderFailureCount++;
+      }
+
+      // Skip stuck step after 10 consecutive failures (~10 seconds)
+      if (ai.buildOrderFailureCount >= 10) {
+        debugAI.warn(`[EnhancedAI] ${ai.playerId}: Skipping stuck build order step ${ai.buildOrderIndex} (${step.type}: ${step.id})`);
+        ai.buildOrderIndex++;
+        ai.buildOrderFailureCount = 0;
+      }
+
+      // Still run macro while stuck on build order
+      this.doMacro(ai);
     }
   }
 
@@ -657,8 +747,12 @@ export class EnhancedAISystem extends System {
     ai.maxSupply = baseSupply + supplyBuildingCount * supplyPerSupplyBuilding;
   }
 
-  private updateAIState(ai: AIPlayer, currentTick: number): void {
-    const config = ai.config!; // Config is guaranteed by registerAI
+  /**
+   * Determine tactical state for unit commands.
+   * This is SEPARATE from economic decisions - production happens regardless of tactical state.
+   */
+  private updateTacticalState(ai: AIPlayer, currentTick: number): void {
+    const config = ai.config!;
     const difficultySettings = config.difficultyConfig[ai.difficulty];
     const economyConfig = config.economy;
     const tacticalConfig = config.tactical;
@@ -676,13 +770,23 @@ export class EnhancedAISystem extends System {
       return;
     }
 
-    // CRITICAL: Continue attacking if already in attack state and enemies still exist
+    // Continue attacking if already in attack state, but allow exit conditions
     if (ai.state === 'attacking') {
-      const hasArmy = this.getArmyUnits(ai.playerId).length > 0;
+      const armyUnits = this.getArmyUnits(ai.playerId);
       const hasEnemies = this.findAnyEnemyTarget(ai) !== null;
-      if (hasArmy && hasEnemies) {
-        return; // Stay in attacking state - finish the job!
+
+      // Exit attacking if: no army left, or no enemies left
+      if (armyUnits.length === 0 || !hasEnemies) {
+        ai.state = 'building';
+        return;
       }
+
+      // Stay attacking but don't block other state transitions for too long
+      // Allow re-evaluation every 200 ticks (~10 seconds) to check expansion needs
+      if (currentTick - ai.lastAttackTick < 200) {
+        return; // Stay in attacking state
+      }
+      // After 200 ticks, fall through to check expansion/other priorities
     }
 
     // Check if should harass (from difficulty settings)
@@ -694,13 +798,11 @@ export class EnhancedAISystem extends System {
       }
     }
 
-    // === EXPANSION LOGIC (FIXED) ===
-    // Uses OR logic for some conditions instead of requiring ALL conditions
+    // === EXPANSION LOGIC ===
     const totalBases = this.countPlayerBases(ai);
     const cooldownElapsed = currentTick - ai.lastExpansionTick >= ai.expansionCooldown;
     const belowMaxBases = totalBases < difficultySettings.maxBases;
 
-    // All values from config - no fallbacks
     const expansionMineralThreshold = economyConfig.expansionMineralThreshold;
     const optimalWorkersPerBase = economyConfig.optimalWorkersPerBase;
     const saturationRatio = economyConfig.saturationExpansionRatio;
@@ -708,17 +810,9 @@ export class EnhancedAISystem extends System {
     const hasEnoughMinerals = ai.minerals >= expansionMineralThreshold;
     const hasEnoughWorkers = ai.workerCount >= difficultySettings.minWorkersForExpansion;
     const hasEnoughArmy = ai.armySupply >= difficultySettings.minArmyForExpansion;
-
-    // Saturation-based expansion - if workers are saturated, expand regardless of army
     const isSaturated = ai.workerCount >= totalBases * optimalWorkersPerBase * saturationRatio;
-
-    // Time-based expansion - expand after long game time even without perfect conditions
     const longGameTime = currentTick > 2000;
 
-    // Flexible expansion logic:
-    // 1. Standard expansion: cooldown + workers + army + minerals + below max
-    // 2. Saturated bases: cooldown + saturated + minerals + below max (no army requirement)
-    // 3. Late game: cooldown + time + minerals + below max (no worker/army requirement)
     const standardExpansion = cooldownElapsed && hasEnoughWorkers && hasEnoughArmy && hasEnoughMinerals && belowMaxBases;
     const saturationExpansion = cooldownElapsed && isSaturated && hasEnoughMinerals && belowMaxBases;
     const timeBasedExpansion = cooldownElapsed && longGameTime && hasEnoughMinerals && belowMaxBases;
@@ -762,10 +856,16 @@ export class EnhancedAISystem extends System {
     return count;
   }
 
-  private executeStateBehavior(ai: AIPlayer, currentTick: number): void {
+  /**
+   * Execute tactical behavior based on current state.
+   * This handles UNIT COMMANDS ONLY - production is handled by runEconomicLayer.
+   */
+  private executeTacticalBehavior(ai: AIPlayer, currentTick: number): void {
     switch (ai.state) {
       case 'building':
-        this.executeBuildingPhase(ai);
+        // No tactical actions needed - economy layer handles everything
+        // But we can rally new units to a staging point
+        this.rallyNewUnitsToArmy(ai);
         break;
       case 'expanding':
         this.executeExpandingPhase(ai);
@@ -774,7 +874,7 @@ export class EnhancedAISystem extends System {
         this.executeAttackingPhase(ai, currentTick);
         break;
       case 'defending':
-        this.executeDefendingPhase(ai);
+        this.executeDefendingPhase(ai, currentTick);
         break;
       case 'scouting':
         this.executeScoutingPhase(ai, currentTick);
@@ -785,83 +885,81 @@ export class EnhancedAISystem extends System {
     }
   }
 
-  private executeBuildingPhase(ai: AIPlayer): void {
-    // First priority: Resume incomplete buildings (paused or waiting for worker)
-    // This prevents resources from being wasted on abandoned construction
-    if (this.tryResumeIncompleteBuildings(ai)) {
-      // Only resume one building per tick to avoid pulling all workers
-      // Continue with other tasks after assigning a worker
+  /**
+   * Rally newly produced units to join the main army.
+   * Keeps army consolidated rather than leaving units idle at production buildings.
+   */
+  private rallyNewUnitsToArmy(ai: AIPlayer): void {
+    const armyUnits = this.getArmyUnits(ai.playerId);
+    if (armyUnits.length === 0) return;
+
+    const currentTick = this.game.getCurrentTick();
+
+    // Find idle army units near production buildings and send them to the main army
+    const basePos = this.findAIBase(ai);
+    if (!basePos) return;
+
+    // Calculate army center of mass for rally point
+    let armyCenterX = 0;
+    let armyCenterY = 0;
+    let armyCount = 0;
+
+    for (const unitId of armyUnits) {
+      const entity = this.world.getEntity(unitId);
+      if (!entity) continue;
+      const transform = entity.get<Transform>('Transform');
+      if (!transform) continue;
+
+      armyCenterX += transform.x;
+      armyCenterY += transform.y;
+      armyCount++;
     }
 
-    // Second priority: Repair damaged buildings and units
-    this.assignWorkersToRepair(ai);
+    if (armyCount === 0) return;
 
-    // Send idle workers to gather (instead of just passive income)
-    this.assignIdleWorkersToGather(ai);
+    armyCenterX /= armyCount;
+    armyCenterY /= armyCount;
 
-    // Follow build order if available
-    if (ai.buildOrderIndex < ai.buildOrder.length) {
-      const step = ai.buildOrder[ai.buildOrderIndex];
+    // Find idle units near base and send them to army rally point
+    const unitsToRally: number[] = [];
+    for (const unitId of armyUnits) {
+      const entity = this.world.getEntity(unitId);
+      if (!entity) continue;
 
-      // Check supply condition
-      if (step.supply && ai.supply < step.supply) {
-        // Continue macro while waiting
-        this.doMacro(ai);
-        return;
-      }
+      const unit = entity.get<Unit>('Unit');
+      const transform = entity.get<Transform>('Transform');
+      if (!unit || !transform) continue;
 
-      // Check custom condition (supports both function and named string conditions)
-      // BUG FIX: Wait for condition instead of skipping the step
-      if (step.condition) {
-        const conditionMet = typeof step.condition === 'function'
-          ? step.condition(ai)
-          : this.checkNamedCondition(step.condition, ai);
-        if (!conditionMet) {
-          // Wait until condition is met - don't skip the step
-          return;
+      // Only rally idle units
+      if (unit.state !== 'idle') continue;
+
+      // Check if unit is near base (within 15 units - probably just produced)
+      const dxBase = transform.x - basePos.x;
+      const dyBase = transform.y - basePos.y;
+      const distToBase = Math.sqrt(dxBase * dxBase + dyBase * dyBase);
+
+      if (distToBase < 15) {
+        // Check if far from army center
+        const dxArmy = transform.x - armyCenterX;
+        const dyArmy = transform.y - armyCenterY;
+        const distToArmy = Math.sqrt(dxArmy * dxArmy + dyArmy * dyArmy);
+
+        if (distToArmy > 10) {
+          unitsToRally.push(unitId);
         }
       }
-
-      // Execute build order step
-      let success = false;
-      if (step.type === 'unit') {
-        success = this.tryTrainUnit(ai, step.id);
-      } else if (step.type === 'building') {
-        // Check if this is an addon - route through addon-aware path
-        const buildingDef = BUILDING_DEFINITIONS[step.id];
-        if (buildingDef?.isAddon) {
-          success = this.tryBuildAddon(ai, step.id);
-        } else {
-          success = this.tryBuildBuilding(ai, step.id);
-        }
-      }
-
-      if (success) {
-        ai.buildOrderIndex++;
-        ai.buildOrderFailureCount = 0; // Reset failure counter on success
-        debugAI.log(`[EnhancedAI] ${ai.playerId}: Completed build order step ${ai.buildOrderIndex - 1} (${step.type}: ${step.id})`);
-      } else {
-        // Track failure - only count once per second (20 ticks) to avoid instant skipping
-        if (this.game.getCurrentTick() % 20 === 0) {
-          ai.buildOrderFailureCount++;
-        }
-
-        // Skip stuck step after 10 consecutive failure checks (~10 seconds)
-        // This prevents permanent stuck states from blocking all progress
-        if (ai.buildOrderFailureCount >= 10) {
-          debugAI.warn(`[EnhancedAI] ${ai.playerId}: Skipping stuck build order step ${ai.buildOrderIndex} (${step.type}: ${step.id}) after ${ai.buildOrderFailureCount} failures`);
-          ai.buildOrderIndex++;
-          ai.buildOrderFailureCount = 0;
-        } else if (this.game.getCurrentTick() % 100 === 0) {
-          // Log when stuck on a build order step (every 5 seconds)
-          debugAI.log(`[EnhancedAI] ${ai.playerId}: Stuck on build order step ${ai.buildOrderIndex} (${step.type}: ${step.id}), minerals=${Math.floor(ai.minerals)}, supply=${ai.supply}/${ai.maxSupply}, failures=${ai.buildOrderFailureCount}`);
-        }
-      }
-      return;
     }
 
-    // Post-build order: Standard macro
-    this.doMacro(ai);
+    if (unitsToRally.length > 0) {
+      const command: GameCommand = {
+        tick: currentTick,
+        playerId: ai.playerId,
+        type: 'MOVE',
+        entityIds: unitsToRally,
+        targetPosition: { x: armyCenterX, y: armyCenterY },
+      };
+      this.game.processCommand(command);
+    }
   }
 
   /**
@@ -1131,8 +1229,9 @@ export class EnhancedAISystem extends System {
       }
     }
 
-    // Continue normal building phase if expansion failed or not possible
-    this.executeBuildingPhase(ai);
+    // Expansion failed or not possible - state will be re-evaluated next tick
+    // Production is handled by runEconomicLayer, so no fallback needed here
+    ai.state = 'building';
   }
 
   /**
@@ -1388,8 +1487,58 @@ export class EnhancedAISystem extends System {
       }
     }
 
-    // Continue attacking - stay in attack state until enemies are gone
-    // This ensures AI pursues victory
+    // Rally reinforcements: send newly produced units from base to join the attack
+    this.rallyReinforcementsToAttack(ai, enemyTarget, currentTick);
+  }
+
+  /**
+   * Rally newly produced units from base to join an ongoing attack.
+   * This ensures continuous reinforcement during combat.
+   */
+  private rallyReinforcementsToAttack(
+    ai: AIPlayer,
+    attackTarget: { x: number; y: number },
+    currentTick: number
+  ): void {
+    const basePos = this.findAIBase(ai);
+    if (!basePos) return;
+
+    const armyUnits = this.getArmyUnits(ai.playerId);
+    const reinforcements: number[] = [];
+
+    for (const unitId of armyUnits) {
+      const entity = this.world.getEntity(unitId);
+      if (!entity) continue;
+
+      const unit = entity.get<Unit>('Unit');
+      const transform = entity.get<Transform>('Transform');
+      if (!unit || !transform) continue;
+
+      // Find idle units near base - these are freshly produced reinforcements
+      if (unit.state !== 'idle') continue;
+
+      const dxBase = transform.x - basePos.x;
+      const dyBase = transform.y - basePos.y;
+      const distToBase = Math.sqrt(dxBase * dxBase + dyBase * dyBase);
+
+      // Units within 20 units of base are considered "at base" and need rallying
+      if (distToBase < 20) {
+        reinforcements.push(unitId);
+      }
+    }
+
+    if (reinforcements.length > 0) {
+      // Send reinforcements to attack the enemy position
+      const command: GameCommand = {
+        tick: currentTick,
+        playerId: ai.playerId,
+        type: 'ATTACK',
+        entityIds: reinforcements,
+        targetPosition: attackTarget,
+      };
+      this.game.processCommand(command);
+      debugAI.log(`[EnhancedAI] ${ai.playerId}: Rallying ${reinforcements.length} reinforcements to attack`);
+    }
   }
 
   /**
@@ -1632,7 +1781,7 @@ export class EnhancedAISystem extends System {
     return false;
   }
 
-  private executeDefendingPhase(ai: AIPlayer): void {
+  private executeDefendingPhase(ai: AIPlayer, currentTick: number): void {
     const baseLocation = this.findAIBase(ai);
     if (!baseLocation) return;
 
@@ -1641,8 +1790,6 @@ export class EnhancedAISystem extends System {
       ai.state = 'building';
       return;
     }
-
-    const currentTick = this.game.getCurrentTick();
 
     // For each army unit, find a nearby enemy it can actually attack
     let anyEnemyFound = false;
