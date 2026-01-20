@@ -75,6 +75,9 @@ export class VisionSystem extends System {
   private playerIdToIndex: Map<string, number> = new Map();
   private indexToPlayerId: Map<number, string> = new Map();
 
+  // Track active computation path for debugging
+  private activeComputePath: 'gpu' | 'worker' | 'main-thread' | null = null;
+
   constructor(game: Game, mapWidth: number, mapHeight: number, cellSize: number = 2) {
     super(game);
     this.mapWidth = mapWidth;
@@ -100,7 +103,7 @@ export class VisionSystem extends System {
 
       this.visionWorker.onmessage = this.handleWorkerMessage.bind(this);
       this.visionWorker.onerror = (error) => {
-        console.error('[VisionSystem] Worker error:', error);
+        debugPathfinding.error('[VisionSystem] Worker error:', error);
         this.workerReady = false;
       };
 
@@ -131,7 +134,7 @@ export class VisionSystem extends System {
           this.workerReady = true;
           debugPathfinding.log('[VisionSystem] Worker initialized');
         } else {
-          console.error('[VisionSystem] Worker init failed');
+          debugPathfinding.error('[VisionSystem] Worker init failed');
         }
         break;
 
@@ -234,6 +237,7 @@ export class VisionSystem extends System {
     this.watchTowers = [];
     this.playerIdToIndex.clear();
     this.indexToPlayerId.clear();
+    this.activeComputePath = null; // Reset to log path on next compute
     this.initializeVisionMap();
 
     // Reinitialize worker with new dimensions
@@ -322,6 +326,13 @@ export class VisionSystem extends System {
   }
 
   /**
+   * Get the active vision computation path for debugging
+   */
+  public getActiveComputePath(): 'gpu' | 'worker' | 'main-thread' | null {
+    return this.activeComputePath;
+  }
+
+  /**
    * Get the GPU vision compute instance (for FogOfWar to get textures)
    */
   public getGPUVisionCompute(): VisionCompute | null {
@@ -385,11 +396,22 @@ export class VisionSystem extends System {
   private computeVision(): void {
     // Priority: GPU > Worker > Main Thread
     if (this.useGPUVision && this.gpuVisionCompute) {
+      if (this.activeComputePath !== 'gpu') {
+        this.activeComputePath = 'gpu';
+        debugPathfinding.log('[VisionSystem] Vision compute path: GPU');
+      }
       this.updateVisionWithGPU();
     } else if (this.visionWorker && this.workerReady && !this.pendingWorkerUpdate) {
+      if (this.activeComputePath !== 'worker') {
+        this.activeComputePath = 'worker';
+        debugPathfinding.log('[VisionSystem] Vision compute path: Worker');
+      }
       this.updateVisionWithWorker();
     } else {
-      // Fallback to main thread computation
+      if (this.activeComputePath !== 'main-thread') {
+        this.activeComputePath = 'main-thread';
+        debugPathfinding.log('[VisionSystem] Vision compute path: Main Thread (fallback)');
+      }
       this.updateVisionMainThread();
     }
   }

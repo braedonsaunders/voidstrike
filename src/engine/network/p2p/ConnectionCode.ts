@@ -181,7 +181,7 @@ export async function generateOfferCode(
 
   // Also check if SDP looks valid
   if (!sanitizedSdp.includes('v=0') || !sanitizedSdp.includes('m=')) {
-    console.error('[ConnectionCode] Invalid SDP:', sanitizedSdp.slice(0, 200));
+    debugNetworking.error('[ConnectionCode] Invalid SDP:', sanitizedSdp.slice(0, 200));
     throw new ConnectionCodeError('Failed to create offer: invalid SDP format');
   }
 
@@ -203,7 +203,7 @@ export async function generateOfferCode(
 
   // Debug: check for undefined in JSON
   if (json.includes('undefined')) {
-    console.error('[ConnectionCode] JSON contains undefined:', json.slice(0, 500));
+    debugNetworking.error('[ConnectionCode] JSON contains undefined:', json.slice(0, 500));
     throw new ConnectionCodeError('Internal error: undefined value in connection data');
   }
 
@@ -215,7 +215,7 @@ export async function generateOfferCode(
   // Final safety check - Crockford's Base32 doesn't have 'I', 'L', 'O', 'U'
   // If these appear, something went wrong
   if (/[ILOU]/i.test(encoded)) {
-    console.error('[ConnectionCode] Encoded contains invalid chars:', encoded.slice(0, 100));
+    debugNetworking.error('[ConnectionCode] Encoded contains invalid chars:', encoded.slice(0, 100));
     throw new ConnectionCodeError('Internal error: encoding produced invalid characters');
   }
 
@@ -342,7 +342,7 @@ export async function generateAnswerCode(
 
   // Debug: check for undefined in JSON
   if (json.includes('undefined')) {
-    console.error('[ConnectionCode] JSON contains undefined:', json.slice(0, 500));
+    debugNetworking.error('[ConnectionCode] JSON contains undefined:', json.slice(0, 500));
     throw new ConnectionCodeError('Internal error: undefined value in connection data');
   }
 
@@ -351,7 +351,7 @@ export async function generateAnswerCode(
 
   // Safety check - Crockford's Base32 doesn't have 'I', 'L', 'O', 'U'
   if (/[ILOU]/i.test(encoded)) {
-    console.error('[ConnectionCode] Encoded contains invalid chars:', encoded.slice(0, 100));
+    debugNetworking.error('[ConnectionCode] Encoded contains invalid chars:', encoded.slice(0, 100));
     throw new ConnectionCodeError('Internal error: encoding produced invalid characters');
   }
 
