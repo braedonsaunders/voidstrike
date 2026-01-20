@@ -1902,6 +1902,9 @@ export class MovementSystem extends System {
             transform.x = snapValue(transform.x, QUANT_POSITION);
             transform.y = snapValue(transform.y, QUANT_POSITION);
 
+            // Clamp to map bounds to prevent falling off edges
+            this.clampToMapBounds(transform);
+
             // Mark as moved for neighbor dirty tracking
             this.unitMovedThisTick.add(entity.id);
             // Reset truly idle counter since we moved
@@ -2054,6 +2057,9 @@ export class MovementSystem extends System {
                 transform.translate(velocity.x * dt, velocity.y * dt);
                 transform.x = snapValue(transform.x, QUANT_POSITION);
                 transform.y = snapValue(transform.y, QUANT_POSITION);
+
+                // Clamp to map bounds to prevent falling off edges
+                this.clampToMapBounds(transform);
 
                 // Resolve any building collisions from the movement
                 if (!unit.isFlying) {
@@ -2432,6 +2438,9 @@ export class MovementSystem extends System {
       transform.x = snapValue(transform.x, QUANT_POSITION);
       transform.y = snapValue(transform.y, QUANT_POSITION);
 
+      // Clamp to map bounds to prevent falling off edges
+      this.clampToMapBounds(transform);
+
       // Hard collision resolution
       // PERF: Uses same cached building query as avoidance force above
       if (!unit.isFlying) {
@@ -2465,6 +2474,25 @@ export class MovementSystem extends System {
     }
 
     return config.speedModifier;
+  }
+
+  /**
+   * Clamp unit position to map boundaries.
+   * Prevents units from falling off the edge of the map.
+   * Uses a small margin (1 unit) to keep units slightly inside the playable area.
+   */
+  private clampToMapBounds(transform: Transform): void {
+    const margin = 1;
+    const minX = margin;
+    const minY = margin;
+    const maxX = this.game.config.mapWidth - margin;
+    const maxY = this.game.config.mapHeight - margin;
+
+    if (transform.x < minX) transform.x = minX;
+    else if (transform.x > maxX) transform.x = maxX;
+
+    if (transform.y < minY) transform.y = minY;
+    else if (transform.y > maxY) transform.y = maxY;
   }
 
   /**

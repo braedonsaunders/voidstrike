@@ -604,9 +604,12 @@ export class PathfindingSystem extends System {
       const unit = entity.get<Unit>('Unit');
       if (!transform || !unit) return;
 
-      // Flying units don't need pathfinding
+      // Flying units don't need pathfinding, but still clamp to map bounds
       if (unit.isFlying) {
-        unit.setPath([{ x: data.targetX, y: data.targetY }]);
+        const margin = 1;
+        const clampedX = Math.max(margin, Math.min(this.mapWidth - margin, data.targetX));
+        const clampedY = Math.max(margin, Math.min(this.mapHeight - margin, data.targetY));
+        unit.setPath([{ x: clampedX, y: clampedY }]);
         return;
       }
 
@@ -622,6 +625,11 @@ export class PathfindingSystem extends System {
   }
 
   private queuePathRequest(request: PathRequest): void {
+    // Clamp destination to map bounds to prevent pathfinding to positions outside the map
+    const margin = 1;
+    request.endX = Math.max(margin, Math.min(this.mapWidth - margin, request.endX));
+    request.endY = Math.max(margin, Math.min(this.mapHeight - margin, request.endY));
+
     const entity = this.world.getEntity(request.entityId);
     const unit = entity?.get<Unit>('Unit');
     const isBuilding = unit?.state === 'building' && unit?.constructingBuildingId !== null;
