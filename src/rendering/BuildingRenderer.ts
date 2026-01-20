@@ -38,8 +38,14 @@ import {
   createScaffoldBeamGeometry,
   createScaffoldDiagonalGeometry,
 } from './tsl/BuildingMaterials';
-import { createSelectionRingMaterial, TEAM_COLORS } from './tsl/SelectionMaterial';
 import { MeshBasicNodeMaterial } from 'three/webgpu';
+
+// Shared rendering utilities
+import {
+  SelectionRingRenderer,
+  TransformUtils,
+  EntityIdTracker,
+} from './shared';
 // NOTE: Buildings don't move, so we don't use velocity tracking (AAA optimization)
 // Velocity node returns zero for meshes without velocity attributes
 
@@ -96,14 +102,6 @@ interface InstancedBuildingGroup {
 const MAX_BUILDING_INSTANCES_PER_TYPE = BUILDING_RENDERER.MAX_INSTANCES_PER_TYPE;
 const MAX_SELECTION_RING_INSTANCES = BUILDING_RENDERER.MAX_SELECTION_RING_INSTANCES;
 
-// PERF: Instanced selection ring group
-interface InstancedSelectionRingGroup {
-  mesh: THREE.InstancedMesh;
-  isOwned: boolean;
-  entityIds: number[];
-  maxInstances: number;
-}
-
 export class BuildingRenderer {
   private scene: THREE.Scene;
   private world: World;
@@ -115,23 +113,14 @@ export class BuildingRenderer {
   // PERFORMANCE: Instanced mesh groups for completed static buildings
   private instancedGroups: Map<string, InstancedBuildingGroup> = new Map();
 
-  // PERF: Instanced selection rings (saves ~30+ draw calls)
-  private selectionRingGroups: Map<string, InstancedSelectionRingGroup> = new Map();
-  private selectedBuildings: Map<number, { position: THREE.Vector3; scale: number; isOwned: boolean }> = new Map();
-  private selectionRingGeometry: THREE.RingGeometry | null = null;
+  // PERF: Shared selection ring renderer (instanced, reduces draw calls)
+  private selectionRingRenderer: SelectionRingRenderer;
 
-  // Reusable objects for matrix calculations
-  private tempMatrix: THREE.Matrix4 = new THREE.Matrix4();
-  private tempPosition: THREE.Vector3 = new THREE.Vector3();
+  // PERF: Shared transform utilities (reusable temp objects)
+  private readonly transformUtils: TransformUtils = new TransformUtils();
 
-  // PERF: Pre-allocated Set for tracking current entity IDs to avoid per-frame allocation
-  private readonly _currentIds: Set<number> = new Set();
-  private tempQuaternion: THREE.Quaternion = new THREE.Quaternion();
-  private tempScale: THREE.Vector3 = new THREE.Vector3(1, 1, 1);
-  // Pre-computed rotation for flat ground overlays (selection rings)
-  private groundOverlayRotation: THREE.Quaternion = new THREE.Quaternion().setFromEuler(
-    new THREE.Euler(-Math.PI / 2, 0, 0)
-  );
+  // PERF: Pre-allocated entity ID tracker to avoid per-frame allocation
+  private readonly entityIdTracker: EntityIdTracker = new EntityIdTracker();
 
   // Camera reference and shared culling service
   private camera: THREE.Camera | null = null;
@@ -143,8 +132,6 @@ export class BuildingRenderer {
 
   // Shared materials
   private constructingMaterial: THREE.MeshStandardMaterial;
-  private selectionMaterial: MeshBasicNodeMaterial;
-  private enemySelectionMaterial: MeshBasicNodeMaterial;
   private fireMaterial: THREE.MeshBasicMaterial;
   private smokeMaterial: THREE.MeshBasicMaterial;
   private fireGeometry: THREE.ConeGeometry;
@@ -189,14 +176,14 @@ export class BuildingRenderer {
 
     // Materials created via factory functions
     this.constructingMaterial = createConstructingMaterial();
-    // TSL animated selection ring materials (same as units - cyan/red, pulsing/shimmer)
-    this.selectionMaterial = createSelectionRingMaterial({
-      color: TEAM_COLORS.player1, // Cyan for owned buildings
+
+    // Initialize shared selection ring renderer
+    this.selectionRingRenderer = new SelectionRingRenderer(scene, {
+      innerRadius: BUILDING_SELECTION_RING.INNER_RADIUS,
+      outerRadius: BUILDING_SELECTION_RING.OUTER_RADIUS,
+      segments: BUILDING_SELECTION_RING.SEGMENTS,
       opacity: BUILDING_SELECTION_RING.OPACITY,
-    });
-    this.enemySelectionMaterial = createSelectionRingMaterial({
-      color: TEAM_COLORS.player2, // Red for enemy buildings
-      opacity: BUILDING_SELECTION_RING.OPACITY,
+      maxInstances: MAX_SELECTION_RING_INSTANCES,
     });
 
     // Fire effect materials
@@ -338,44 +325,6 @@ export class BuildingRenderer {
       };
 
       this.instancedGroups.set(key, group);
-    }
-
-    return group;
-  }
-
-  /**
-   * PERF: Get or create instanced selection ring group (owned=green, enemy=red)
-   */
-  private getOrCreateSelectionRingGroup(isOwned: boolean): InstancedSelectionRingGroup {
-    const key = isOwned ? 'owned' : 'enemy';
-    let group = this.selectionRingGroups.get(key);
-
-    if (!group) {
-      // Create shared geometry if not exists
-      if (!this.selectionRingGeometry) {
-        this.selectionRingGeometry = new THREE.RingGeometry(
-          BUILDING_SELECTION_RING.INNER_RADIUS,
-          BUILDING_SELECTION_RING.OUTER_RADIUS,
-          BUILDING_SELECTION_RING.SEGMENTS
-        );
-      }
-      // Use material directly (not cloned) so animation updates apply to all instances
-      const material = isOwned ? this.selectionMaterial : this.enemySelectionMaterial;
-      const mesh = new THREE.InstancedMesh(this.selectionRingGeometry, material, MAX_SELECTION_RING_INSTANCES);
-      mesh.count = 0;
-      mesh.frustumCulled = false;
-      // NOTE: Don't set mesh.rotation here - rotation is applied per-instance to avoid
-      // coordinate transform issues with instanced meshes (matches UnitRenderer approach)
-      mesh.renderOrder = RENDER_ORDER.GROUND_EFFECT;
-      this.scene.add(mesh);
-
-      group = {
-        mesh,
-        isOwned,
-        entityIds: [],
-        maxInstances: MAX_SELECTION_RING_INSTANCES,
-      };
-      this.selectionRingGroups.set(key, group);
     }
 
     return group;
@@ -536,8 +485,8 @@ export class BuildingRenderer {
       this.cachedEntityCount = rawEntities.length;
     }
     const entities = this.cachedSortedEntities;
-    // PERF: Reuse pre-allocated Set instead of creating new one every frame
-    this._currentIds.clear();
+    // PERF: Reuse pre-allocated entity ID tracker
+    this.entityIdTracker.reset();
 
     // Reset instanced group counts
     // PERF: Use .length = 0 instead of = [] to avoid GC pressure from allocating new arrays every frame
@@ -547,17 +496,13 @@ export class BuildingRenderer {
     }
 
     // PERF: Reset instanced selection ring groups
-    for (const group of this.selectionRingGroups.values()) {
-      group.mesh.count = 0;
-      group.entityIds.length = 0;
-    }
-    this.selectedBuildings.clear();
+    this.selectionRingRenderer.resetInstances();
 
     // Track which buildings use instancing (to skip individual mesh handling)
     const instancedBuildingIds = new Set<number>();
 
     for (const entity of entities) {
-      this._currentIds.add(entity.id);
+      this.entityIdTracker.add(entity.id);
 
       const transform = entity.get<Transform>('Transform');
       const building = entity.get<Building>('Building');
@@ -642,11 +587,11 @@ export class BuildingRenderer {
           // Set instance matrix - CRITICAL: Use model's world transforms from normalization
           // The Y offset ensures buildings are properly grounded (bottom at terrain level)
           // The quaternion captures the full rotation including MODEL_FORWARD_OFFSET and any parent rotations
-          this.tempPosition.set(transform.x, terrainHeight + group.modelYOffset, transform.y);
-          this.tempScale.copy(group.modelScale);
-          this.tempQuaternion.copy(group.modelQuaternion);
-          this.tempMatrix.compose(this.tempPosition, this.tempQuaternion, this.tempScale);
-          group.mesh.setMatrixAt(group.mesh.count, this.tempMatrix);
+          this.transformUtils.tempPosition.set(transform.x, terrainHeight + group.modelYOffset, transform.y);
+          this.transformUtils.tempScale.copy(group.modelScale);
+          this.transformUtils.tempQuaternion.copy(group.modelQuaternion);
+          this.transformUtils.tempMatrix.compose(this.transformUtils.tempPosition, this.transformUtils.tempQuaternion, this.transformUtils.tempScale);
+          group.mesh.setMatrixAt(group.mesh.count, this.transformUtils.tempMatrix);
           group.entityIds.push(entity.id);
           group.mesh.count++;
           group.mesh.instanceMatrix.needsUpdate = true;
@@ -937,12 +882,13 @@ export class BuildingRenderer {
         }
       }
 
-      // PERF: Track selected buildings for instanced selection ring rendering
+      // PERF: Add selected buildings to instanced selection ring renderer
       // Hide individual selection ring - we use instanced rendering instead
       const ringSize = Math.max(building.width, building.height) * 0.9;
       meshData.selectionRing.visible = false; // Always hide individual ring
       if (selectable?.isSelected) {
-        this.selectedBuildings.set(entity.id, {
+        this.selectionRingRenderer.addInstance({
+          entityId: entity.id,
           position: new THREE.Vector3(transform.x, terrainHeight + flyingOffset + 0.05, transform.y),
           scale: ringSize,
           isOwned,
@@ -1033,30 +979,12 @@ export class BuildingRenderer {
       }
     }
 
-    // PERF: Build instanced selection ring matrices
-    for (const [entityId, data] of this.selectedBuildings) {
-      const group = this.getOrCreateSelectionRingGroup(data.isOwned);
-      if (group.mesh.count < group.maxInstances) {
-        const idx = group.mesh.count;
-        group.entityIds[idx] = entityId;
-        // Selection rings are flat on ground - apply rotation per-instance to lay flat
-        this.tempPosition.copy(data.position);
-        this.tempScale.set(data.scale, data.scale, 1);
-        this.tempMatrix.compose(this.tempPosition, this.groundOverlayRotation, this.tempScale);
-        group.mesh.setMatrixAt(idx, this.tempMatrix);
-        group.mesh.count++;
-      }
-    }
-
-    // Mark instanced selection ring matrices as needing update
-    // FIX: Always mark needsUpdate even when count is 0, to ensure GPU clears stale instances
-    for (const group of this.selectionRingGroups.values()) {
-      group.mesh.instanceMatrix.needsUpdate = true;
-    }
+    // PERF: Commit instanced selection ring matrices (built via addInstance calls above)
+    this.selectionRingRenderer.commitInstances();
 
     // Remove meshes for destroyed entities
     for (const [entityId, meshData] of this.buildingMeshes) {
-      if (!this._currentIds.has(entityId)) {
+      if (!this.entityIdTracker.has(entityId)) {
         // Unregister from culling service
         this.cullingService?.unregisterEntity(entityId);
 
@@ -1131,11 +1059,12 @@ export class BuildingRenderer {
       }
     });
 
-    // Selection ring - reduced segments for performance
+    // Selection ring - kept for data structure but not displayed (using instanced rendering)
     const ringGeometry = new THREE.RingGeometry(0.8, 1, 16);
-    const selectionRing = new THREE.Mesh(ringGeometry, this.selectionMaterial);
+    const selectionRingMaterial = new THREE.MeshBasicMaterial({ color: 0x00d4ff, transparent: true, opacity: 0.9 });
+    const selectionRing = new THREE.Mesh(ringGeometry, selectionRingMaterial);
     selectionRing.rotation.x = -Math.PI / 2;
-    selectionRing.visible = false;
+    selectionRing.visible = false; // Always hidden, using instanced rendering instead
 
     // Health bar
     const healthBar = this.createBar(0x00ff00);
@@ -2428,8 +2357,7 @@ export class BuildingRenderer {
 
   public dispose(): void {
     this.constructingMaterial.dispose();
-    this.selectionMaterial.dispose();
-    this.enemySelectionMaterial.dispose();
+    this.selectionRingRenderer.dispose();
     this.fireMaterial.dispose();
     this.smokeMaterial.dispose();
     this.fireGeometry.dispose();
@@ -2493,18 +2421,5 @@ export class BuildingRenderer {
     }
     this.instancedGroups.clear();
 
-    // Dispose instanced selection ring groups
-    for (const group of this.selectionRingGroups.values()) {
-      this.scene.remove(group.mesh);
-      if (group.mesh.material instanceof THREE.Material) {
-        group.mesh.material.dispose();
-      }
-    }
-    this.selectionRingGroups.clear();
-    this.selectedBuildings.clear();
-    if (this.selectionRingGeometry) {
-      this.selectionRingGeometry.dispose();
-      this.selectionRingGeometry = null;
-    }
   }
 }
