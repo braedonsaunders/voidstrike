@@ -149,6 +149,14 @@ export class OverlayScene extends Phaser.Scene {
   private damageNumberSystem: DamageNumberSystem | null = null;
   private screenEffectsSystem: ScreenEffectsSystem | null = null;
 
+  // SC2-style range preview overlays
+  private attackRangeGraphics!: Phaser.GameObjects.Graphics;
+  private visionRangeGraphics!: Phaser.GameObjects.Graphics;
+  private resourceOverlayGraphics!: Phaser.GameObjects.Graphics;
+  private showAttackRange: boolean = false;
+  private showVisionRange: boolean = false;
+  private showResourceOverlay: boolean = false;
+
   constructor() {
     super({ key: 'OverlayScene' });
   }
@@ -180,6 +188,16 @@ export class OverlayScene extends Phaser.Scene {
     // Ground click indicator graphics (move/attack commands)
     this.groundClickGraphics = this.add.graphics();
     this.groundClickGraphics.setDepth(36);
+
+    // SC2-style range preview graphics
+    this.attackRangeGraphics = this.add.graphics();
+    this.attackRangeGraphics.setDepth(37);
+
+    this.visionRangeGraphics = this.add.graphics();
+    this.visionRangeGraphics.setDepth(38);
+
+    this.resourceOverlayGraphics = this.add.graphics();
+    this.resourceOverlayGraphics.setDepth(39);
 
     // Ability splash container
     this.splashContainer = this.add.container(0, 0);
@@ -491,6 +509,44 @@ export class OverlayScene extends Phaser.Scene {
         1000
       );
     });
+
+    // SC2-style hold-to-show overlays
+    // R key: Show attack range of selected units
+    this.input.keyboard.on('keydown-R', () => {
+      this.showAttackRange = true;
+    });
+    this.input.keyboard.on('keyup-R', () => {
+      this.showAttackRange = false;
+    });
+
+    // V key: Show vision range of selected units
+    this.input.keyboard.on('keydown-V', () => {
+      this.showVisionRange = true;
+    });
+    this.input.keyboard.on('keyup-V', () => {
+      this.showVisionRange = false;
+    });
+  }
+
+  /**
+   * Set attack range preview visibility (can be called from external code)
+   */
+  public setShowAttackRange(show: boolean): void {
+    this.showAttackRange = show;
+  }
+
+  /**
+   * Set vision range preview visibility (can be called from external code)
+   */
+  public setShowVisionRange(show: boolean): void {
+    this.showVisionRange = show;
+  }
+
+  /**
+   * Set resource overlay visibility
+   */
+  public setShowResourceOverlay(show: boolean): void {
+    this.showResourceOverlay = show;
   }
 
   /**
@@ -1570,10 +1626,24 @@ export class OverlayScene extends Phaser.Scene {
     this.threatZoneGraphics.clear();
     this.rallyPathGraphics.clear();
     this.vignetteGraphics.clear();
+    this.attackRangeGraphics.clear();
+    this.visionRangeGraphics.clear();
+    this.resourceOverlayGraphics.clear();
 
     // Draw tactical overlay if enabled
     if (this.tacticalMode) {
       this.drawTacticalOverlay();
+    }
+
+    // Draw SC2-style range previews
+    if (this.showAttackRange) {
+      this.drawAttackRangePreview();
+    }
+    if (this.showVisionRange) {
+      this.drawVisionRangePreview();
+    }
+    if (this.showResourceOverlay) {
+      this.drawResourceOverlay();
     }
 
     // Update damage vignette
@@ -2203,6 +2273,189 @@ export class OverlayScene extends Phaser.Scene {
     return this.tacticalMode;
   }
 
+  /**
+   * Draw attack range circles for selected units (SC2-style)
+   * Shows red circles indicating weapon range
+   */
+  private drawAttackRangePreview(): void {
+    const store = useGameStore.getState();
+    const selectedUnits = store.selectedUnits;
+
+    if (!selectedUnits || selectedUnits.length === 0) return;
+
+    const projectionStore = useProjectionStore.getState();
+    const game = Game.getInstance();
+    if (!game) return;
+
+    for (const unitId of selectedUnits) {
+      const entity = game.world.getEntity(unitId);
+      if (!entity) continue;
+
+      const transform = entity.get<Transform>('Transform');
+      const unit = entity.get('Unit') as { attackRange?: number } | undefined;
+
+      if (!transform || !unit) continue;
+
+      const attackRange = unit.attackRange || 5;
+      const screenPos = projectionStore.projectToScreen(transform.x, transform.y);
+
+      // Convert world range to approximate screen pixels
+      // This is an approximation based on typical zoom levels
+      const pixelsPerUnit = projectionStore.getPixelsPerUnit?.() || 20;
+      const screenRadius = attackRange * pixelsPerUnit;
+
+      // Draw outer glow
+      this.attackRangeGraphics.lineStyle(4, 0xff3333, 0.15);
+      this.attackRangeGraphics.strokeCircle(screenPos.x, screenPos.y, screenRadius + 4);
+
+      // Draw main range circle
+      this.attackRangeGraphics.lineStyle(2, 0xff4444, 0.6);
+      this.attackRangeGraphics.strokeCircle(screenPos.x, screenPos.y, screenRadius);
+
+      // Draw inner highlight
+      this.attackRangeGraphics.lineStyle(1, 0xff6666, 0.3);
+      this.attackRangeGraphics.strokeCircle(screenPos.x, screenPos.y, screenRadius - 2);
+
+      // Draw fill with very low alpha
+      this.attackRangeGraphics.fillStyle(0xff0000, 0.05);
+      this.attackRangeGraphics.fillCircle(screenPos.x, screenPos.y, screenRadius);
+
+      // Draw crosshair at center
+      const crossSize = 6;
+      this.attackRangeGraphics.lineStyle(1, 0xff4444, 0.5);
+      this.attackRangeGraphics.lineBetween(
+        screenPos.x - crossSize, screenPos.y,
+        screenPos.x + crossSize, screenPos.y
+      );
+      this.attackRangeGraphics.lineBetween(
+        screenPos.x, screenPos.y - crossSize,
+        screenPos.x, screenPos.y + crossSize
+      );
+    }
+  }
+
+  /**
+   * Draw vision range circles for selected units (SC2-style)
+   * Shows blue circles indicating sight range
+   */
+  private drawVisionRangePreview(): void {
+    const store = useGameStore.getState();
+    const selectedUnits = store.selectedUnits;
+
+    if (!selectedUnits || selectedUnits.length === 0) return;
+
+    const projectionStore = useProjectionStore.getState();
+    const game = Game.getInstance();
+    if (!game) return;
+
+    for (const unitId of selectedUnits) {
+      const entity = game.world.getEntity(unitId);
+      if (!entity) continue;
+
+      const transform = entity.get<Transform>('Transform');
+      const unit = entity.get('Unit') as { sightRange?: number } | undefined;
+
+      if (!transform || !unit) continue;
+
+      const sightRange = unit.sightRange || 10;
+      const screenPos = projectionStore.projectToScreen(transform.x, transform.y);
+
+      // Convert world range to approximate screen pixels
+      const pixelsPerUnit = projectionStore.getPixelsPerUnit?.() || 20;
+      const screenRadius = sightRange * pixelsPerUnit;
+
+      // Draw outer glow
+      this.visionRangeGraphics.lineStyle(4, 0x4488ff, 0.12);
+      this.visionRangeGraphics.strokeCircle(screenPos.x, screenPos.y, screenRadius + 4);
+
+      // Draw main vision circle
+      this.visionRangeGraphics.lineStyle(2, 0x6699ff, 0.5);
+      this.visionRangeGraphics.strokeCircle(screenPos.x, screenPos.y, screenRadius);
+
+      // Draw inner highlight
+      this.visionRangeGraphics.lineStyle(1, 0x88aaff, 0.25);
+      this.visionRangeGraphics.strokeCircle(screenPos.x, screenPos.y, screenRadius - 2);
+
+      // Draw fill with very low alpha
+      this.visionRangeGraphics.fillStyle(0x4488ff, 0.03);
+      this.visionRangeGraphics.fillCircle(screenPos.x, screenPos.y, screenRadius);
+
+      // Draw small eye icon at center (simple)
+      const eyeSize = 4;
+      this.visionRangeGraphics.fillStyle(0x6699ff, 0.6);
+      this.visionRangeGraphics.fillCircle(screenPos.x, screenPos.y, eyeSize);
+      this.visionRangeGraphics.fillStyle(0xffffff, 0.8);
+      this.visionRangeGraphics.fillCircle(screenPos.x, screenPos.y, eyeSize * 0.4);
+    }
+  }
+
+  /**
+   * Draw resource overlay showing resource nodes
+   * Highlights mineral and vespene locations with remaining amounts
+   */
+  private drawResourceOverlay(): void {
+    const projectionStore = useProjectionStore.getState();
+    const game = Game.getInstance();
+    if (!game) return;
+
+    // Find all resource entities
+    const resources = game.world.getEntitiesWith('Resource', 'Transform');
+
+    for (const entity of resources) {
+      const transform = entity.get<Transform>('Transform');
+      const resource = entity.get('Resource') as {
+        resourceType?: string;
+        amount?: number;
+        maxAmount?: number;
+      } | undefined;
+
+      if (!transform || !resource) continue;
+
+      const screenPos = projectionStore.projectToScreen(transform.x, transform.y);
+
+      // Color based on resource type
+      let color: number;
+      let glowColor: number;
+      if (resource.resourceType === 'vespene' || resource.resourceType === 'gas') {
+        color = 0x00ff66;
+        glowColor = 0x00cc44;
+      } else {
+        // Minerals/default
+        color = 0xffcc00;
+        glowColor = 0xcc9900;
+      }
+
+      // Draw glow
+      this.resourceOverlayGraphics.fillStyle(glowColor, 0.15);
+      this.resourceOverlayGraphics.fillCircle(screenPos.x, screenPos.y, 24);
+
+      // Draw marker ring
+      this.resourceOverlayGraphics.lineStyle(3, color, 0.7);
+      this.resourceOverlayGraphics.strokeCircle(screenPos.x, screenPos.y, 16);
+
+      // Draw inner fill
+      this.resourceOverlayGraphics.fillStyle(color, 0.2);
+      this.resourceOverlayGraphics.fillCircle(screenPos.x, screenPos.y, 12);
+
+      // Draw resource amount bar if available
+      if (resource.amount !== undefined && resource.maxAmount) {
+        const percentage = resource.amount / resource.maxAmount;
+        const barWidth = 30;
+        const barHeight = 4;
+        const barX = screenPos.x - barWidth / 2;
+        const barY = screenPos.y + 22;
+
+        // Background
+        this.resourceOverlayGraphics.fillStyle(0x000000, 0.5);
+        this.resourceOverlayGraphics.fillRect(barX - 1, barY - 1, barWidth + 2, barHeight + 2);
+
+        // Fill based on remaining
+        this.resourceOverlayGraphics.fillStyle(color, 0.8);
+        this.resourceOverlayGraphics.fillRect(barX, barY, barWidth * percentage, barHeight);
+      }
+    }
+  }
+
   destroy(): void {
     // Clean up all EventBus listeners to prevent memory leaks
     for (const unsubscribe of this.eventUnsubscribers) {
@@ -2227,6 +2480,9 @@ export class OverlayScene extends Phaser.Scene {
     this.countdownContainer?.destroy();
     this.attackTargetGraphics?.destroy();
     this.groundClickGraphics?.destroy();
+    this.attackRangeGraphics?.destroy();
+    this.visionRangeGraphics?.destroy();
+    this.resourceOverlayGraphics?.destroy();
 
     for (const alert of this.alerts) {
       alert.graphics?.destroy();

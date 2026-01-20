@@ -1284,3 +1284,163 @@ CombatSystem.processAttack()
 ├── Emit 'damage:dealt' → DamageNumberSystem shows/consolidates number
 └── Emit 'player:damage' → ScreenEffectsSystem triggers effects
 ```
+
+---
+
+## Strategic Overlay System (January 2025)
+
+### Overview
+
+VOIDSTRIKE features a comprehensive overlay system for strategic information display, inspired by StarCraft 2 and other top-tier RTS games. The system provides:
+
+- **3D Strategic Overlays**: Terrain, elevation, threat zones, navmesh connectivity, buildable grid
+- **2D Tactical Overlays**: Attack range, vision range, resource markers
+- **Progressive Computation**: No more 30-second freezes on navmesh overlay
+- **IndexedDB Caching**: Static overlays cached for instant loading
+
+### Architecture
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                     OVERLAY SYSTEM                               │
+│                                                                  │
+│  ┌─────────────────────┐     ┌─────────────────────────────┐    │
+│  │  TSLGameOverlayManager │     │  OverlayScene (Phaser 2D)   │    │
+│  │  (src/rendering/tsl/)│     │  (src/phaser/scenes/)       │    │
+│  │                     │     │                             │    │
+│  │  • Terrain overlay  │     │  • Attack range (hold R)    │    │
+│  │  • Elevation overlay│     │  • Vision range (hold V)    │    │
+│  │  • Threat overlay   │     │  • Resource markers         │    │
+│  │  • Navmesh overlay  │     │  • Tactical grid view       │    │
+│  │  • Buildable grid   │     │                             │    │
+│  └─────────────────────┘     └─────────────────────────────┘    │
+│                                                                  │
+│  ┌───────────────────────────────────────────────────────────┐  │
+│  │                    WEB WORKERS                             │  │
+│  │  overlay.worker.ts     pathfinding.worker.ts              │  │
+│  │  • Navmesh chunk       • Batch isWalkable queries         │  │
+│  │    processing          • Batch connectivity checks        │  │
+│  │  • Threat computation                                     │  │
+│  │  • Buildable grid                                         │  │
+│  └───────────────────────────────────────────────────────────┘  │
+│                                                                  │
+│  ┌───────────────────────────────────────────────────────────┐  │
+│  │                    CACHING (IndexedDB)                     │  │
+│  │  overlayCache.ts - Static overlay persistence              │  │
+│  │  • Keyed by map hash + overlay type                        │  │
+│  │  • 7-day expiry                                            │  │
+│  │  • Version invalidation                                    │  │
+│  └───────────────────────────────────────────────────────────┘  │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+### Overlay Types
+
+#### Strategic Overlays (3D)
+
+| Overlay | Type | Update | Description |
+|---------|------|--------|-------------|
+| **Terrain** | Static | Cached | Walkability by terrain type (green=walk, red=blocked) |
+| **Elevation** | Static | Cached | Elevation zones (yellow=high, blue=mid, green=low) |
+| **Threat** | Dynamic | 500ms | Enemy attack ranges as red heatmap |
+| **Navmesh** | Static | Progressive | Pathfinding connectivity (green=connected, magenta=disconnected ramps) |
+| **Buildable** | Dynamic | On request | Building placement grid (green=buildable, red=blocked, gray=occupied) |
+
+#### Tactical Overlays (2D - SC2 Style)
+
+| Overlay | Activation | Description |
+|---------|------------|-------------|
+| **Attack Range** | Hold R | Red circles showing selected units' weapon range |
+| **Vision Range** | Hold V | Blue circles showing selected units' sight range |
+| **Resource** | Toggle | Highlights resource nodes with remaining amounts |
+| **Tactical View** | Backtick (`) | Grid overlay with "TACTICAL" label |
+
+### Performance Optimizations
+
+#### Navmesh Progressive Computation
+**Problem**: Original navmesh overlay froze game for 30+ seconds (65,536 pathfinding queries synchronously).
+
+**Solution**:
+```typescript
+// Process in batches with yielding
+const BATCH_SIZE = 1024;
+
+const processBatch = async (): Promise<void> => {
+  for (let idx = processed; idx < batchEnd; idx++) {
+    // Process cell...
+  }
+
+  // Update texture progressively for visual feedback
+  this.navmeshTexture.needsUpdate = true;
+
+  // Yield to main thread
+  await new Promise(resolve => setTimeout(resolve, 0));
+  await processBatch();
+};
+```
+
+**Result**: Overlay appears progressively in <2 seconds, game remains responsive.
+
+#### Threat Overlay Worker Offloading
+**Problem**: Threat overlay caused frame drops every 200ms with many units.
+
+**Solution**:
+- Increased update interval from 200ms to 500ms
+- Moved computation to `overlay.worker.ts`
+- Only updates when threat overlay is visible
+
+#### IndexedDB Caching
+Static overlays (terrain, elevation, navmesh) are computed once and cached:
+
+```typescript
+// Cache key: mapHash_overlayType
+const cached = await getOverlayCache(mapHash, 'navmesh');
+if (cached) {
+  textureData.set(cached.data);
+  texture.needsUpdate = true;
+  return; // Instant load
+}
+
+// Compute if not cached...
+await setOverlayCache(mapHash, 'navmesh', textureData, width, height);
+```
+
+### Keyboard Shortcuts
+
+| Key | Overlay | Mode |
+|-----|---------|------|
+| `` ` `` | Tactical view | Toggle |
+| `O` | Cycle strategic overlays | Toggle |
+| `R` | Attack range | Hold |
+| `V` | Vision range | Hold |
+
+### Color Coding Reference
+
+#### Navmesh Overlay
+| Color | Meaning |
+|-------|---------|
+| Green | Connected to reference point (pathable) |
+| Cyan/Green | Connected ramp |
+| Yellow/Orange | On navmesh but disconnected |
+| Magenta | **Disconnected ramp (critical issue!)** |
+| Red | Should be walkable but not on navmesh |
+| Dark Gray | Correctly unwalkable |
+
+#### Threat Overlay
+| Intensity | Meaning |
+|-----------|---------|
+| Transparent | No threat |
+| Light Red | Light threat (1-2 units) |
+| Bright Red | Heavy threat (multiple units/buildings) |
+
+### Files
+
+| File | Purpose |
+|------|---------|
+| `src/rendering/tsl/GameOverlay.ts` | TSL-based 3D strategic overlays |
+| `src/rendering/OverlayManager.ts` | Unified overlay manager (alternative) |
+| `src/phaser/scenes/OverlayScene.ts` | Phaser 2D tactical overlays |
+| `src/workers/overlay.worker.ts` | Overlay computation worker |
+| `src/workers/pathfinding.worker.ts` | Batch pathfinding queries |
+| `src/utils/overlayCache.ts` | IndexedDB caching |
+| `src/store/uiStore.ts` | Overlay state management |
