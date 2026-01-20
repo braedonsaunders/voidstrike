@@ -1,3 +1,4 @@
+/// <reference lib="webworker" />
 /**
  * GLTF Worker - Offloads network I/O for GLB file fetching
  *
@@ -10,6 +11,9 @@
  * - Main thread stays responsive during loading
  * - ArrayBuffer transfer is zero-copy
  */
+
+// Declare self as DedicatedWorkerGlobalScope for proper TypeScript support
+declare const self: DedicatedWorkerGlobalScope;
 
 export interface FetchRequest {
   type: 'fetch';
@@ -46,9 +50,6 @@ export interface BatchFetchResponse {
 export type WorkerRequest = FetchRequest | BatchFetchRequest;
 export type WorkerResponse = FetchResponse | BatchFetchResponse;
 
-// Worker context
-const ctx: Worker = self as unknown as Worker;
-
 /**
  * Fetch a single GLB file
  */
@@ -68,7 +69,7 @@ async function fetchGLB(url: string): Promise<{ success: boolean; data?: ArrayBu
 /**
  * Handle incoming messages from main thread
  */
-ctx.onmessage = async (event: MessageEvent<WorkerRequest>) => {
+self.onmessage = async (event: MessageEvent<WorkerRequest>) => {
   const request = event.data;
 
   if (request.type === 'fetch') {
@@ -82,9 +83,9 @@ ctx.onmessage = async (event: MessageEvent<WorkerRequest>) => {
 
     // Transfer ArrayBuffer ownership (zero-copy)
     if (result.data) {
-      ctx.postMessage(response, [result.data]);
+      self.postMessage(response, [result.data]);
     } else {
-      ctx.postMessage(response);
+      self.postMessage(response);
     }
   } else if (request.type === 'batchFetch') {
     // Fetch all URLs in parallel
@@ -106,7 +107,7 @@ ctx.onmessage = async (event: MessageEvent<WorkerRequest>) => {
       .filter((r) => r.data)
       .map((r) => r.data as ArrayBuffer);
 
-    ctx.postMessage(response, transfers);
+    self.postMessage(response, transfers);
   }
 };
 

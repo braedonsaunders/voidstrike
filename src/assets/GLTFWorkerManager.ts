@@ -9,7 +9,7 @@
  * less responsiveness during loading.
  */
 
-import type { FetchResponse, BatchFetchResponse, WorkerRequest, WorkerResponse } from './gltf.worker';
+import type { FetchResponse, BatchFetchResponse, WorkerRequest, WorkerResponse } from '../workers/gltf.worker';
 import { debugAssets } from '@/utils/debugLogger';
 
 // Enable Web Worker for off-main-thread GLB fetching
@@ -48,7 +48,7 @@ class GLTFWorkerManager {
     try {
       // Create worker as ES module (required for Next.js 16+ Turbopack)
       this.worker = new Worker(
-        new URL('./gltf.worker.ts', import.meta.url),
+        new URL('../workers/gltf.worker.ts', import.meta.url),
         { type: 'module' }
       );
 
