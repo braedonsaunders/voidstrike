@@ -886,8 +886,8 @@ export class EnhancedAISystem extends System {
   }
 
   /**
-   * Rally newly produced units to a staging point near the base.
-   * Uses a fixed rally point instead of army center to prevent scattered formations.
+   * Rally newly produced units to a staging area near the base.
+   * Each AI has a different rally direction, and each unit gets variance.
    */
   private rallyNewUnitsToArmy(ai: AIPlayer): void {
     const armyUnits = this.getArmyUnits(ai.playerId);
@@ -897,15 +897,16 @@ export class EnhancedAISystem extends System {
     const basePos = this.findAIBase(ai);
     if (!basePos) return;
 
-    // Use a fixed rally point slightly in front of the base
-    // This keeps the army consolidated instead of scattered across the map
-    const rallyPoint = {
-      x: basePos.x + 12,
-      y: basePos.y + 12,
-    };
+    // Each AI gets a different rally direction based on their player ID hash
+    // This prevents all AIs from rallying in the same relative direction
+    const playerHash = ai.playerId.split('').reduce((acc, c) => acc + c.charCodeAt(0), 0);
+    const baseAngle = (playerHash % 8) * (Math.PI / 4); // 8 possible directions
+    const rallyDistance = 10 + (playerHash % 5); // 10-14 units from base
 
-    // Find idle units and rally them to the staging point
-    const unitsToRally: number[] = [];
+    const baseRallyX = basePos.x + Math.cos(baseAngle) * rallyDistance;
+    const baseRallyY = basePos.y + Math.sin(baseAngle) * rallyDistance;
+
+    // Rally each idle unit to a slightly different position
     for (const unitId of armyUnits) {
       const entity = this.world.getEntity(unitId);
       if (!entity) continue;
@@ -917,26 +918,31 @@ export class EnhancedAISystem extends System {
       // Only rally idle units
       if (unit.state !== 'idle') continue;
 
-      // Check distance to rally point
-      const dx = transform.x - rallyPoint.x;
-      const dy = transform.y - rallyPoint.y;
+      // Check distance to base rally area
+      const dx = transform.x - baseRallyX;
+      const dy = transform.y - baseRallyY;
       const distToRally = Math.sqrt(dx * dx + dy * dy);
 
-      // Rally units that are too far from the staging point
-      if (distToRally > 8) {
-        unitsToRally.push(unitId);
-      }
-    }
+      // Rally units that are too far from the staging area
+      if (distToRally > 10) {
+        // Add variance based on unit ID for deterministic spread
+        const variance = 6; // Spread radius
+        const angle = (unitId % 8) * (Math.PI / 4); // 8 positions around the point
+        const offsetX = Math.cos(angle) * variance * ((unitId % 3) * 0.5 + 0.5);
+        const offsetY = Math.sin(angle) * variance * ((unitId % 3) * 0.5 + 0.5);
 
-    if (unitsToRally.length > 0) {
-      const command: GameCommand = {
-        tick: currentTick,
-        playerId: ai.playerId,
-        type: 'MOVE',
-        entityIds: unitsToRally,
-        targetPosition: rallyPoint,
-      };
-      this.game.processCommand(command);
+        const command: GameCommand = {
+          tick: currentTick,
+          playerId: ai.playerId,
+          type: 'MOVE',
+          entityIds: [unitId],
+          targetPosition: {
+            x: baseRallyX + offsetX,
+            y: baseRallyY + offsetY,
+          },
+        };
+        this.game.processCommand(command);
+      }
     }
   }
 
