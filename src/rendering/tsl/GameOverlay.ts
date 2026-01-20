@@ -948,13 +948,13 @@ export class TSLGameOverlayManager {
       let r = 0, g = 0, b = 0;
       const radius = 2;
 
-      if (resource.type === 'minerals') {
+      if (resource.resourceType === 'minerals') {
         // Blue for minerals
         r = 50;
         g = 150;
         b = 255;
-      } else if (resource.type === 'gas') {
-        // Green for gas
+      } else if (resource.resourceType === 'vespene') {
+        // Green for vespene gas
         r = 50;
         g = 255;
         b = 100;
