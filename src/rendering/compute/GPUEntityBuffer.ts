@@ -1,29 +1,33 @@
 /**
- * GPU Unit Buffer Manager
+ * GPU Entity Buffer Manager
  *
- * Manages GPU storage buffers for unit transforms, enabling GPU-driven rendering.
+ * Unified GPU storage for all cullable entities (units and buildings).
+ * Replaces the separate GPUUnitBuffer with a category-aware system.
+ *
  * Key features:
- * - All unit transforms stored in GPU buffer (no per-frame CPU upload)
- * - Slot allocation/deallocation for dynamic entity spawn/destroy
- * - Direct GPU writes for transform updates
+ * - Single buffer for both units and buildings
+ * - Category field distinguishes entity types for separate indirect args
+ * - Proper bounding radius storage for accurate sphere-frustum culling
+ * - Static entity optimization (buildings skip per-frame transform updates)
  *
  * Architecture:
- * - Transform buffer: mat4 per unit (64 bytes)
- * - Metadata buffer: vec4(entityId, unitTypeIndex, playerId, boundingRadius)
- * - Visibility buffer: uint indices of visible units (written by culling compute)
- * - Indirect args buffer: DrawIndexedIndirect args per (unitType × LOD) combination
+ * - Transform buffer: mat4 per entity (64 bytes)
+ * - Metadata buffer: vec4(entityId, packedTypeAndCategory, playerId, boundingRadius)
+ *   - packedTypeAndCategory: typeIndex | (category << 16)
+ * - Visibility buffer: uint indices of visible entities (written by culling compute)
+ * - Indirect args buffer: DrawIndexedIndirect args per (type × LOD × player) combination
  */
 
 import * as THREE from 'three';
 import { debugShaders } from '@/utils/debugLogger';
 
-// Maximum units supported (can be increased based on VRAM)
-const MAX_UNITS = 4096;
+// Maximum entities supported (units + buildings combined)
+const MAX_ENTITIES = 8192;
 
-// Bytes per unit transform (mat4 = 16 floats × 4 bytes)
+// Bytes per entity transform (mat4 = 16 floats × 4 bytes)
 const TRANSFORM_STRIDE = 64;
 
-// Bytes per unit metadata (vec4 = 4 floats × 4 bytes)
+// Bytes per entity metadata (vec4 = 4 floats × 4 bytes)
 const METADATA_STRIDE = 16;
 
 // DrawIndexedIndirect struct size (5 uint32 = 20 bytes)
@@ -33,11 +37,23 @@ const INDIRECT_ARGS_STRIDE = 20;
 // WebGPU typically has 2-3 frames in flight; 3 frames provides safety margin.
 const QUARANTINE_FRAMES = 3;
 
-export interface UnitSlot {
+/**
+ * Entity category for distinguishing units from buildings in the unified buffer.
+ * Packed into high 16 bits of metadata.y alongside typeIndex.
+ */
+export enum EntityCategory {
+  Unit = 0,
+  Building = 1,
+}
+
+export interface EntitySlot {
   index: number;
   entityId: number;
-  unitTypeIndex: number;
+  typeIndex: number;
   playerId: number;
+  category: EntityCategory;
+  boundingRadius: number;
+  isStatic: boolean;
 }
 
 /**
@@ -50,21 +66,21 @@ interface QuarantinedSlot {
   frameFreed: number;
 }
 
-export interface GPUUnitBufferConfig {
-  maxUnits?: number;
-  maxUnitTypes?: number;
+export interface GPUEntityBufferConfig {
+  maxEntities?: number;
+  maxTypes?: number;
   maxLODLevels?: number;
   maxPlayers?: number;
 }
 
 /**
- * GPU Unit Buffer Manager
+ * GPU Entity Buffer Manager
  *
- * Handles GPU buffer allocation and updates for unit rendering.
- * Designed to work with compute shader culling and indirect drawing.
+ * Handles GPU buffer allocation and updates for all cullable entities.
+ * Designed to work with UnifiedCullingCompute for GPU-accelerated culling.
  */
-export class GPUUnitBuffer {
-  private config: Required<GPUUnitBufferConfig>;
+export class GPUEntityBuffer {
+  private config: Required<GPUEntityBufferConfig>;
 
   // CPU-side buffers (for upload to GPU)
   private transformData: Float32Array;
@@ -77,71 +93,75 @@ export class GPUUnitBuffer {
   private metadataBuffer: THREE.InstancedBufferAttribute | null = null;
 
   // Slot management
-  private allocatedSlots: Map<number, UnitSlot> = new Map(); // entityId -> slot
+  private allocatedSlots: Map<number, EntitySlot> = new Map(); // entityId -> slot
   private freeSlots: number[] = []; // Available slot indices
   private activeCount = 0;
+  private unitCount = 0;
+  private buildingCount = 0;
 
   // Deferred slot reclamation - prevents GPU buffer race conditions
-  // Slots are quarantined for QUARANTINE_FRAMES before becoming available
   private quarantinedSlots: QuarantinedSlot[] = [];
   private currentFrame = 0;
 
-  // Unit type registry
-  private unitTypeToIndex: Map<string, number> = new Map();
-  private indexToUnitType: Map<number, string> = new Map();
-  private nextUnitTypeIndex = 0;
+  // Type registry (shared for units and buildings, distinguished by category)
+  private typeToIndex: Map<string, number> = new Map();
+  private indexToType: Map<number, string> = new Map();
+  private nextTypeIndex = 0;
 
   // Player registry
   private playerIdToIndex: Map<string, number> = new Map();
   private nextPlayerIndex = 0;
 
+  // Static entities (buildings) - skip per-frame updates
+  private staticEntities: Set<number> = new Set();
+
   // Dirty tracking
   private dirtySlots: Set<number> = new Set();
   private needsFullUpdate = true;
-  private isDirtyFlag = true; // Track if any changes need GPU upload
+  private isDirtyFlag = true;
 
   // Reusable matrix for decomposition
   private tempMatrix = new THREE.Matrix4();
 
-  constructor(config: GPUUnitBufferConfig = {}) {
+  constructor(config: GPUEntityBufferConfig = {}) {
     this.config = {
-      maxUnits: config.maxUnits ?? MAX_UNITS,
-      maxUnitTypes: config.maxUnitTypes ?? 64,
+      maxEntities: config.maxEntities ?? MAX_ENTITIES,
+      maxTypes: config.maxTypes ?? 128, // 64 unit types + 64 building types
       maxLODLevels: config.maxLODLevels ?? 3,
       maxPlayers: config.maxPlayers ?? 8,
     };
 
     // Allocate CPU buffers
-    this.transformData = new Float32Array(this.config.maxUnits * 16); // mat4
-    this.prevTransformData = new Float32Array(this.config.maxUnits * 16);
-    this.metadataData = new Float32Array(this.config.maxUnits * 4); // vec4
+    this.transformData = new Float32Array(this.config.maxEntities * 16); // mat4
+    this.prevTransformData = new Float32Array(this.config.maxEntities * 16);
+    this.metadataData = new Float32Array(this.config.maxEntities * 4); // vec4
 
     // Initialize free slots (all available)
-    for (let i = this.config.maxUnits - 1; i >= 0; i--) {
+    for (let i = this.config.maxEntities - 1; i >= 0; i--) {
       this.freeSlots.push(i);
     }
 
-    debugShaders.log(`[GPUUnitBuffer] Initialized with ${this.config.maxUnits} unit capacity`);
+    debugShaders.log(`[GPUEntityBuffer] Initialized with ${this.config.maxEntities} entity capacity`);
   }
 
   /**
-   * Get or register a unit type index
+   * Get or register a type index (for both units and buildings)
    */
-  getUnitTypeIndex(unitType: string): number {
-    let index = this.unitTypeToIndex.get(unitType);
+  getTypeIndex(typeId: string): number {
+    let index = this.typeToIndex.get(typeId);
     if (index === undefined) {
-      index = this.nextUnitTypeIndex++;
-      this.unitTypeToIndex.set(unitType, index);
-      this.indexToUnitType.set(index, unitType);
+      index = this.nextTypeIndex++;
+      this.typeToIndex.set(typeId, index);
+      this.indexToType.set(index, typeId);
     }
     return index;
   }
 
   /**
-   * Get unit type string from index
+   * Get type string from index
    */
-  getUnitTypeFromIndex(index: number): string | undefined {
-    return this.indexToUnitType.get(index);
+  getTypeFromIndex(index: number): string | undefined {
+    return this.indexToType.get(index);
   }
 
   /**
@@ -157,9 +177,21 @@ export class GPUUnitBuffer {
   }
 
   /**
-   * Allocate a slot for a new unit
+   * Allocate a slot for a new entity
+   *
+   * @param entityId Unique entity ID
+   * @param typeId Type identifier (unit type or building type)
+   * @param playerId Owner player ID
+   * @param category Entity category (Unit or Building)
+   * @param boundingRadius Actual bounding radius for culling (from model dimensions)
    */
-  allocateSlot(entityId: number, unitType: string, playerId: string): UnitSlot | null {
+  allocateSlot(
+    entityId: number,
+    typeId: string,
+    playerId: string,
+    category: EntityCategory,
+    boundingRadius: number
+  ): EntitySlot | null {
     // Check if already allocated
     const existing = this.allocatedSlots.get(entityId);
     if (existing) {
@@ -168,30 +200,39 @@ export class GPUUnitBuffer {
 
     // Get free slot
     if (this.freeSlots.length === 0) {
-      debugShaders.warn('[GPUUnitBuffer] No free slots available');
+      debugShaders.warn('[GPUEntityBuffer] No free slots available');
       return null;
     }
 
     const index = this.freeSlots.pop()!;
-    const unitTypeIndex = this.getUnitTypeIndex(unitType);
+    const typeIndex = this.getTypeIndex(typeId);
     const playerIndex = this.getPlayerIndex(playerId);
 
-    const slot: UnitSlot = {
+    const slot: EntitySlot = {
       index,
       entityId,
-      unitTypeIndex,
+      typeIndex,
       playerId: playerIndex,
+      category,
+      boundingRadius,
+      isStatic: false,
     };
 
     this.allocatedSlots.set(entityId, slot);
     this.activeCount++;
+    if (category === EntityCategory.Unit) {
+      this.unitCount++;
+    } else {
+      this.buildingCount++;
+    }
 
-    // Initialize metadata
+    // Initialize metadata with packed type and category
     const metaOffset = index * 4;
+    const packedTypeAndCategory = typeIndex | (category << 16);
     this.metadataData[metaOffset + 0] = entityId;
-    this.metadataData[metaOffset + 1] = unitTypeIndex;
+    this.metadataData[metaOffset + 1] = packedTypeAndCategory;
     this.metadataData[metaOffset + 2] = playerIndex;
-    this.metadataData[metaOffset + 3] = 1.0; // Bounding radius (default)
+    this.metadataData[metaOffset + 3] = boundingRadius;
 
     // Initialize transform to identity
     this.setTransformIdentity(index);
@@ -202,28 +243,31 @@ export class GPUUnitBuffer {
   }
 
   /**
-   * Free a slot when a unit is destroyed.
+   * Free a slot when an entity is destroyed.
    *
-   * IMPORTANT: Slots are NOT immediately returned to the free pool.
-   * They are quarantined for QUARANTINE_FRAMES to ensure the GPU has
+   * Slots are quarantined for QUARANTINE_FRAMES to ensure the GPU has
    * finished using the slot's buffer data before it can be reallocated.
-   * This prevents WebGPU "setIndexBuffer" crashes caused by stale GPU references.
    */
   freeSlot(entityId: number): void {
     const slot = this.allocatedSlots.get(entityId);
     if (!slot) return;
 
     this.allocatedSlots.delete(entityId);
+    this.staticEntities.delete(entityId);
     this.activeCount--;
+    if (slot.category === EntityCategory.Unit) {
+      this.unitCount--;
+    } else {
+      this.buildingCount--;
+    }
 
-    // Quarantine the slot instead of immediately returning to free pool
-    // GPU may still be using this slot's data for in-flight frames
+    // Quarantine the slot
     this.quarantinedSlots.push({
       index: slot.index,
       frameFreed: this.currentFrame,
     });
 
-    // Clear transform to identity to prevent rendering stale data
+    // Clear transform to identity
     this.setTransformIdentity(slot.index);
     this.dirtySlots.add(slot.index);
     this.isDirtyFlag = true;
@@ -232,21 +276,17 @@ export class GPUUnitBuffer {
   /**
    * Process quarantined slots and reclaim those that are safe to reuse.
    * Call this ONCE per frame, at the START of the update loop.
-   *
-   * Slots are held for QUARANTINE_FRAMES to ensure all in-flight GPU
-   * commands have completed before the slot can be reallocated.
    */
   processQuarantinedSlots(): void {
     this.currentFrame++;
 
-    // Process quarantine queue - reclaim slots that have aged out
     let writeIndex = 0;
     for (let i = 0; i < this.quarantinedSlots.length; i++) {
       const slot = this.quarantinedSlots[i];
       const framesInQuarantine = this.currentFrame - slot.frameFreed;
 
       if (framesInQuarantine >= QUARANTINE_FRAMES) {
-        // Safe to reclaim - return to free pool
+        // Safe to reclaim
         this.freeSlots.push(slot.index);
       } else {
         // Keep in quarantine
@@ -257,7 +297,25 @@ export class GPUUnitBuffer {
   }
 
   /**
-   * Get the number of slots currently in quarantine (for debugging/stats)
+   * Mark an entity as static (buildings). Static entities skip per-frame transform updates.
+   */
+  markStatic(entityId: number): void {
+    const slot = this.allocatedSlots.get(entityId);
+    if (slot) {
+      slot.isStatic = true;
+      this.staticEntities.add(entityId);
+    }
+  }
+
+  /**
+   * Check if an entity is static
+   */
+  isStatic(entityId: number): boolean {
+    return this.staticEntities.has(entityId);
+  }
+
+  /**
+   * Get the number of slots currently in quarantine
    */
   getQuarantinedCount(): number {
     return this.quarantinedSlots.length;
@@ -288,7 +346,7 @@ export class GPUUnitBuffer {
   }
 
   /**
-   * Update a unit's transform
+   * Update an entity's transform from a matrix
    */
   updateTransform(entityId: number, matrix: THREE.Matrix4): void {
     const slot = this.allocatedSlots.get(entityId);
@@ -297,7 +355,6 @@ export class GPUUnitBuffer {
     const offset = slot.index * 16;
     const elements = matrix.elements;
 
-    // Copy matrix elements (already column-major)
     for (let i = 0; i < 16; i++) {
       this.transformData[offset + i] = elements[i];
     }
@@ -307,7 +364,7 @@ export class GPUUnitBuffer {
   }
 
   /**
-   * Update a unit's transform from position, rotation, scale
+   * Update an entity's transform from position, rotation, scale
    */
   updateTransformComponents(
     entityId: number,
@@ -352,12 +409,13 @@ export class GPUUnitBuffer {
   }
 
   /**
-   * Update bounding radius for a unit (used for culling)
+   * Update bounding radius for an entity
    */
   updateBoundingRadius(entityId: number, radius: number): void {
     const slot = this.allocatedSlots.get(entityId);
     if (!slot) return;
 
+    slot.boundingRadius = radius;
     const metaOffset = slot.index * 4;
     this.metadataData[metaOffset + 3] = radius;
     this.dirtySlots.add(slot.index);
@@ -369,7 +427,6 @@ export class GPUUnitBuffer {
    * Call at START of frame before updating transforms
    */
   swapTransformBuffers(): void {
-    // Copy current to previous
     this.prevTransformData.set(this.transformData);
   }
 
@@ -412,7 +469,6 @@ export class GPUUnitBuffer {
    */
   commitChanges(): void {
     if (this.needsFullUpdate) {
-      // Full buffer update
       if (this.transformBuffer) {
         this.transformBuffer.needsUpdate = true;
       }
@@ -428,8 +484,6 @@ export class GPUUnitBuffer {
       return;
     }
 
-    // Partial update (mark whole buffer dirty for now)
-    // True partial update would require WebGPU buffer.writeBuffer()
     if (this.dirtySlots.size > 0) {
       if (this.transformBuffer) {
         this.transformBuffer.needsUpdate = true;
@@ -460,29 +514,61 @@ export class GPUUnitBuffer {
   /**
    * Get slot for an entity
    */
-  getSlot(entityId: number): UnitSlot | undefined {
+  getSlot(entityId: number): EntitySlot | undefined {
     return this.allocatedSlots.get(entityId);
+  }
+
+  /**
+   * Check if entity is registered
+   */
+  hasEntity(entityId: number): boolean {
+    return this.allocatedSlots.has(entityId);
   }
 
   /**
    * Get all allocated slots
    */
-  getAllocatedSlots(): IterableIterator<UnitSlot> {
+  getAllocatedSlots(): IterableIterator<EntitySlot> {
     return this.allocatedSlots.values();
   }
 
   /**
-   * Get active unit count
+   * Get slots by category
+   */
+  *getSlotsByCategory(category: EntityCategory): IterableIterator<EntitySlot> {
+    for (const slot of this.allocatedSlots.values()) {
+      if (slot.category === category) {
+        yield slot;
+      }
+    }
+  }
+
+  /**
+   * Get active entity count
    */
   getActiveCount(): number {
     return this.activeCount;
   }
 
   /**
+   * Get unit count
+   */
+  getUnitCount(): number {
+    return this.unitCount;
+  }
+
+  /**
+   * Get building count
+   */
+  getBuildingCount(): number {
+    return this.buildingCount;
+  }
+
+  /**
    * Get buffer capacity
    */
   getCapacity(): number {
-    return this.config.maxUnits;
+    return this.config.maxEntities;
   }
 
   /**
@@ -500,10 +586,17 @@ export class GPUUnitBuffer {
   }
 
   /**
-   * Get number of registered unit types
+   * Get number of registered types
    */
-  getUnitTypeCount(): number {
-    return this.nextUnitTypeIndex;
+  getTypeCount(): number {
+    return this.nextTypeIndex;
+  }
+
+  /**
+   * Get config
+   */
+  getConfig(): Required<GPUEntityBufferConfig> {
+    return this.config;
   }
 
   /**
@@ -511,14 +604,16 @@ export class GPUUnitBuffer {
    */
   clear(): void {
     this.allocatedSlots.clear();
+    this.staticEntities.clear();
     this.freeSlots.length = 0;
-    for (let i = this.config.maxUnits - 1; i >= 0; i--) {
+    for (let i = this.config.maxEntities - 1; i >= 0; i--) {
       this.freeSlots.push(i);
     }
     this.activeCount = 0;
+    this.unitCount = 0;
+    this.buildingCount = 0;
     this.needsFullUpdate = true;
     this.dirtySlots.clear();
-    // Clear quarantine queue - all slots are now free
     this.quarantinedSlots.length = 0;
   }
 
@@ -530,6 +625,7 @@ export class GPUUnitBuffer {
     this.prevTransformBuffer = null;
     this.metadataBuffer = null;
     this.allocatedSlots.clear();
+    this.staticEntities.clear();
     this.freeSlots.length = 0;
     this.quarantinedSlots.length = 0;
   }
@@ -556,35 +652,33 @@ export interface IndirectDrawArgs {
 /**
  * Create indirect args buffer for GPU-driven drawing
  *
- * @param unitTypeCount Number of unique unit types
+ * @param typeCount Number of unique types (units + buildings)
  * @param lodCount Number of LOD levels (typically 3)
  * @param playerCount Number of players
  */
 export function createIndirectArgsBuffer(
-  unitTypeCount: number,
+  typeCount: number,
   lodCount: number = 3,
   playerCount: number = 8
 ): {
   buffer: Uint32Array;
-  getOffset: (unitType: number, lod: number, player: number) => number;
-  setIndexCount: (unitType: number, lod: number, player: number, count: number) => void;
+  getOffset: (type: number, lod: number, player: number) => number;
+  setIndexCount: (type: number, lod: number, player: number, count: number) => void;
   resetInstanceCounts: () => void;
 } {
-  // One set of args per (unitType × LOD × player) combination
-  const entryCount = unitTypeCount * lodCount * playerCount;
+  const entryCount = typeCount * lodCount * playerCount;
   const buffer = new Uint32Array(entryCount * 5); // 5 u32 per DrawIndexedIndirect
 
-  const getOffset = (unitType: number, lod: number, player: number): number => {
-    return (unitType * lodCount * playerCount + player * lodCount + lod) * 5;
+  const getOffset = (type: number, lod: number, player: number): number => {
+    return (type * lodCount * playerCount + player * lodCount + lod) * 5;
   };
 
-  const setIndexCount = (unitType: number, lod: number, player: number, count: number): void => {
-    const offset = getOffset(unitType, lod, player);
+  const setIndexCount = (type: number, lod: number, player: number, count: number): void => {
+    const offset = getOffset(type, lod, player);
     buffer[offset] = count; // indexCount
   };
 
   const resetInstanceCounts = (): void => {
-    // Reset all instanceCount values to 0 (offset + 1)
     for (let i = 0; i < entryCount; i++) {
       buffer[i * 5 + 1] = 0; // instanceCount
     }

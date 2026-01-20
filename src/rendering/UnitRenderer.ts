@@ -22,8 +22,8 @@ import {
 } from '@/data/rendering.config';
 
 // GPU-driven rendering infrastructure
-import { GPUUnitBuffer } from './compute/GPUUnitBuffer';
-import { CullingCompute, LODConfig } from './compute/CullingCompute';
+import { CullingService, EntityCategory } from './services/CullingService';
+import { LODConfig } from './compute/UnifiedCullingCompute';
 import { GPUIndirectRenderer } from './compute/GPUIndirectRenderer';
 
 // Instance data for a single unit type + player combo at a specific LOD level
@@ -146,9 +146,7 @@ export class UnitRenderer {
     new THREE.Euler(-Math.PI / 2, 0, 0)
   );
 
-  // PERF: Frustum culling for instances
-  private frustum: THREE.Frustum = new THREE.Frustum();
-  private frustumMatrix: THREE.Matrix4 = new THREE.Matrix4();
+  // Camera reference for culling
   private camera: THREE.Camera | null = null;
 
   // Smooth rotation interpolation - stores visual rotation per entity
@@ -159,15 +157,13 @@ export class UnitRenderer {
   private cachedSortedEntities: import('@/engine/ecs/Entity').Entity[] = [];
   private cachedEntityCount: number = -1; // Track count to detect changes
 
-  // GPU-Driven Rendering Infrastructure
-  private gpuUnitBuffer: GPUUnitBuffer | null = null;
-  private cullingCompute: CullingCompute | null = null;
+  // Unified Culling Service (handles both GPU and CPU culling paths)
+  private cullingService: CullingService | null = null;
+
+  // GPU Indirect Renderer for draw call optimization
   private gpuIndirectRenderer: GPUIndirectRenderer | null = null;
   private useGPUDrivenRendering = false;
   private gpuIndirectInitialized = false;
-
-  // Track entities managed by GPU buffer
-  private gpuManagedEntities: Set<number> = new Set();
 
   // Track unit type geometries registered with GPU indirect renderer
   private gpuRegisteredUnitTypes: Set<string> = new Set();
@@ -243,8 +239,8 @@ export class UnitRenderer {
   public setRenderer(renderer: import('three/webgpu').WebGPURenderer): void {
     this.webgpuRenderer = renderer;
 
-    // Initialize GPU culling if GPU-driven mode is already enabled
-    if (this.useGPUDrivenRendering && this.gpuUnitBuffer && this.cullingCompute && !this.gpuCullingInitialized) {
+    // Initialize culling service with GPU support if available
+    if (this.useGPUDrivenRendering && this.cullingService && !this.gpuCullingInitialized) {
       this.initializeGPUCulling();
     }
 
@@ -258,32 +254,27 @@ export class UnitRenderer {
    * Enable GPU-driven rendering mode
    *
    * When enabled:
-   * - Unit transforms stored in GPU buffer
-   * - Frustum culling done via CullingCompute on GPU
+   * - Unit transforms stored in unified GPU buffer
+   * - Frustum culling done via CullingService (GPU or CPU fallback)
+   * - Proper sphere-frustum intersection for accurate culling
    * - Indirect draw calls eliminate CPU-GPU roundtrips
-   * - Reduced CPU overhead for large unit counts
    */
   public enableGPUDrivenRendering(): void {
     if (this.useGPUDrivenRendering) return;
 
-    this.gpuUnitBuffer = new GPUUnitBuffer({
-      maxUnits: 4096,
-      maxUnitTypes: 64,
-      maxLODLevels: 3,
-      maxPlayers: 8,
-    });
-
     const settings = useUIStore.getState().graphicsSettings;
-    this.cullingCompute = new CullingCompute({
-      LOD0_MAX: settings.lodDistance0,
-      LOD1_MAX: settings.lodDistance1,
+    this.cullingService = new CullingService({
+      maxEntities: 8192, // Units + buildings combined
+      lodConfig: {
+        LOD0_MAX: settings.lodDistance0,
+        LOD1_MAX: settings.lodDistance1,
+      },
     });
 
     // Create GPU indirect renderer for drawIndexedIndirect
     this.gpuIndirectRenderer = new GPUIndirectRenderer(this.scene);
 
     this.useGPUDrivenRendering = true;
-    this.gpuManagedEntities.clear();
     this.gpuRegisteredUnitTypes.clear();
 
     // Initialize GPU compute if renderer is available
@@ -297,20 +288,16 @@ export class UnitRenderer {
   }
 
   /**
-   * Initialize GPU culling compute shader
+   * Initialize GPU culling via CullingService
    */
   private initializeGPUCulling(): void {
-    if (!this.webgpuRenderer || !this.gpuUnitBuffer || !this.cullingCompute) return;
+    if (!this.webgpuRenderer || !this.cullingService) return;
     if (this.gpuCullingInitialized) return;
 
     try {
-      this.cullingCompute.initializeGPUCompute(
-        this.webgpuRenderer,
-        this.gpuUnitBuffer.getTransformData(),
-        this.gpuUnitBuffer.getMetadataData()
-      );
+      this.cullingService.initialize(this.webgpuRenderer, true);
       this.gpuCullingInitialized = true;
-      debugMesh.log('[UnitRenderer] GPU culling compute initialized');
+      debugMesh.log('[UnitRenderer] GPU culling initialized via CullingService');
     } catch (e) {
       const errorMsg = e instanceof Error ? e.message : String(e);
       debugMesh.warn('[UnitRenderer] Failed to initialize GPU culling:', errorMsg);
@@ -322,26 +309,26 @@ export class UnitRenderer {
    * Initialize GPU indirect renderer
    */
   private initializeGPUIndirectRenderer(): void {
-    if (!this.webgpuRenderer || !this.gpuUnitBuffer || !this.cullingCompute || !this.gpuIndirectRenderer) return;
+    if (!this.webgpuRenderer || !this.cullingService || !this.gpuIndirectRenderer) return;
     if (this.gpuIndirectInitialized) return;
 
     try {
       this.gpuIndirectRenderer.initialize(
         this.webgpuRenderer,
-        this.gpuUnitBuffer,
-        this.cullingCompute
+        this.cullingService.getEntityBuffer(),
+        this.cullingService.getCullingCompute()
       );
       this.gpuIndirectInitialized = true;
       debugPerformance.log('[UnitRenderer] GPU indirect renderer initialized successfully');
       debugPerformance.log('[UnitRenderer] GPU-driven rendering pipeline READY:');
-      debugPerformance.log('  - GPU Unit Buffer: INITIALIZED');
+      debugPerformance.log('  - GPU Entity Buffer: INITIALIZED');
       debugPerformance.log('  - GPU Culling Compute: ' + (this.gpuCullingInitialized ? 'READY' : 'PENDING'));
       debugPerformance.log('  - GPU Indirect Draw: ENABLED');
-      debugPerformance.log('[GPU Indirect Renderer] ✓ INITIALIZED - indirect draw calls enabled');
+      debugPerformance.log('[GPU Indirect Renderer] INITIALIZED - indirect draw calls enabled');
     } catch (e) {
       const errorMsg = e instanceof Error ? e.message : String(e);
       debugMesh.warn('[UnitRenderer] Failed to initialize GPU indirect renderer:', errorMsg);
-      console.warn('[GPU Indirect Renderer] ✗ INIT FAILED:', errorMsg);
+      console.warn('[GPU Indirect Renderer] INIT FAILED:', errorMsg);
     }
   }
 
@@ -349,13 +336,13 @@ export class UnitRenderer {
    * Register a unit type geometry with the GPU indirect renderer
    */
   private registerUnitTypeForGPU(unitType: string, lodLevel: number, geometry: THREE.BufferGeometry, material?: THREE.Material): void {
-    if (!this.gpuIndirectRenderer || !this.gpuUnitBuffer) return;
+    if (!this.gpuIndirectRenderer || !this.cullingService) return;
 
     const key = `${unitType}_${lodLevel}`;
     if (this.gpuRegisteredUnitTypes.has(key)) return;
 
-    const unitTypeIndex = this.gpuUnitBuffer.getUnitTypeIndex(unitType);
-    this.gpuIndirectRenderer.registerUnitType(unitTypeIndex, lodLevel, geometry, material);
+    const typeIndex = this.cullingService.getEntityBuffer().getTypeIndex(unitType);
+    this.gpuIndirectRenderer.registerUnitType(typeIndex, lodLevel, geometry, material);
     this.gpuRegisteredUnitTypes.add(key);
 
     debugPerformance.log(`[UnitRenderer] Registered unit type ${unitType} LOD${lodLevel} for GPU indirect rendering`);
@@ -366,16 +353,16 @@ export class UnitRenderer {
    * Call from browser console: unitRenderer.forceCPUCulling(true)
    */
   public forceCPUCulling(enable: boolean): void {
-    if (!this.cullingCompute) {
-      console.warn('[UnitRenderer] GPU culling not initialized, cannot toggle');
+    if (!this.cullingService) {
+      console.warn('[UnitRenderer] Culling service not initialized, cannot toggle');
       return;
     }
 
-    this.cullingCompute.forceCPUFallback(enable);
+    this.cullingService.forceCPUFallback(enable);
     if (enable) {
-      console.log('[UnitRenderer] ✗ GPU culling DISABLED - using CPU fallback for debugging');
+      console.log('[UnitRenderer] GPU culling DISABLED - using CPU fallback for debugging');
     } else {
-      console.log('[UnitRenderer] ✓ GPU culling ENABLED');
+      console.log('[UnitRenderer] GPU culling ENABLED');
     }
   }
 
@@ -383,7 +370,7 @@ export class UnitRenderer {
    * Check if GPU culling is currently active
    */
   public isGPUCullingActive(): boolean {
-    return this.cullingCompute?.isUsingGPU() ?? false;
+    return this.cullingService?.isUsingGPU() ?? false;
   }
 
   /**
@@ -392,17 +379,13 @@ export class UnitRenderer {
   public disableGPUDrivenRendering(): void {
     if (!this.useGPUDrivenRendering) return;
 
-    this.gpuUnitBuffer?.dispose();
-    this.gpuUnitBuffer = null;
-
-    this.cullingCompute?.dispose();
-    this.cullingCompute = null;
+    this.cullingService?.dispose();
+    this.cullingService = null;
 
     this.gpuIndirectRenderer?.dispose();
     this.gpuIndirectRenderer = null;
 
     this.useGPUDrivenRendering = false;
-    this.gpuManagedEntities.clear();
     this.gpuRegisteredUnitTypes.clear();
     this.gpuCullingInitialized = false;
     this.gpuIndirectInitialized = false;
@@ -439,25 +422,25 @@ export class UnitRenderer {
     gpuCullTimeMs: number;
     quarantinedSlots: number;
   } {
-    const cullingStats = this.cullingCompute?.getGPUCullingStats();
+    const cullingStats = this.cullingService?.getStats();
     return {
       enabled: this.useGPUDrivenRendering,
       cullingReady: this.gpuCullingInitialized,
       indirectReady: this.gpuIndirectInitialized,
-      managedEntities: this.gpuManagedEntities.size,
+      managedEntities: cullingStats?.totalEntities ?? 0,
       registeredUnitTypes: this.gpuRegisteredUnitTypes.size,
-      visibleCount: cullingStats?.activeUnitCount ?? 0,
+      visibleCount: cullingStats?.visibleEntities ?? 0,
       totalIndirectDrawCalls: this.gpuIndirectRenderer?.getTotalVisibleCount() ?? 0,
       isUsingGPUCulling: cullingStats?.isUsingGPU ?? false,
-      gpuCullTimeMs: cullingStats?.lastCullTimeMs ?? 0,
-      quarantinedSlots: this.gpuUnitBuffer?.getQuarantinedCount() ?? 0,
+      gpuCullTimeMs: this.cullingService?.getCullingCompute().getGPUCullingStats().lastCullTimeMs ?? 0,
+      quarantinedSlots: cullingStats?.quarantinedSlots ?? 0,
     };
   }
 
   /**
-   * Update GPU buffer with entity transform
+   * Update culling service with entity transform
    */
-  private updateGPUEntityTransform(
+  private updateEntityCulling(
     entityId: number,
     unitType: string,
     playerId: string,
@@ -467,64 +450,31 @@ export class UnitRenderer {
     rotation: number,
     scale: number
   ): void {
-    if (!this.gpuUnitBuffer) return;
+    if (!this.cullingService) return;
 
-    // Allocate slot if new entity
-    if (!this.gpuManagedEntities.has(entityId)) {
-      const slot = this.gpuUnitBuffer.allocateSlot(entityId, unitType, playerId);
-      if (slot) {
-        this.gpuManagedEntities.add(entityId);
-        // Set initial bounding radius
-        this.gpuUnitBuffer.updateBoundingRadius(entityId, 1.0);
-      }
+    // Register entity if not already registered
+    if (!this.cullingService.isRegistered(entityId)) {
+      this.cullingService.registerEntity(entityId, unitType, playerId, EntityCategory.Unit);
     }
 
-    // Update transform
-    this.gpuUnitBuffer.updateTransformComponents(entityId, x, y, z, rotation, scale);
+    // Update transform (CullingService automatically gets proper bounding radius from AssetManager)
+    this.cullingService.updateTransform(entityId, x, y, z, rotation, scale);
   }
 
   /**
-   * Remove entity from GPU buffer
+   * Remove entity from culling service
    */
-  private removeGPUEntity(entityId: number): void {
-    if (!this.gpuUnitBuffer) return;
-
-    if (this.gpuManagedEntities.has(entityId)) {
-      this.gpuUnitBuffer.freeSlot(entityId);
-      this.gpuManagedEntities.delete(entityId);
-    }
+  private removeEntityFromCulling(entityId: number): void {
+    this.cullingService?.unregisterEntity(entityId);
   }
 
   /**
    * Update LOD config from graphics settings
    */
   public updateLODConfig(lodConfig: LODConfig): void {
-    this.cullingCompute?.setLODConfig(lodConfig);
+    this.cullingService?.getCullingCompute().setLODConfig(lodConfig);
   }
 
-  /**
-   * Update frustum from camera - call before update loop
-   * PERF: camera.updateMatrixWorld() is called once in main render loop
-   */
-  private updateFrustum(): void {
-    if (!this.camera) return;
-    // PERF: updateMatrixWorld() is now called once in WebGPUGameCanvas before renderer updates
-    this.frustumMatrix.multiplyMatrices(
-      this.camera.projectionMatrix,
-      this.camera.matrixWorldInverse
-    );
-    this.frustum.setFromProjectionMatrix(this.frustumMatrix);
-  }
-
-  /**
-   * Check if a position is within the camera frustum (with margin for unit size)
-   */
-  private isInFrustum(x: number, y: number, z: number, margin: number = 2): boolean {
-    if (!this.camera) return true; // If no camera, assume visible
-    this.tempPosition.set(x, y, z);
-    // Use containsPoint with a small margin for unit bounding sphere
-    return this.frustum.containsPoint(this.tempPosition);
-  }
 
   /**
    * Smoothly interpolate rotation with proper angle wrapping.
@@ -1000,12 +950,6 @@ export class UnitRenderer {
     this.selectionAnimationTime += deltaTime;
     updateSelectionRingTime(this.selectionAnimationTime);
 
-    // Process GPU buffer slot quarantine - reclaim slots that are safe to reuse
-    // This MUST happen at the start of the frame before any slot allocations
-    if (this.useGPUDrivenRendering && this.gpuUnitBuffer) {
-      this.gpuUnitBuffer.processQuarantinedSlots();
-    }
-
     // TAA: Sort entities by ID for stable instance ordering
     // This ensures previous/current matrix pairs are aligned correctly for velocity
     // PERF: Only re-sort when entity count changes (add/remove) to avoid O(n log n) every frame
@@ -1023,27 +967,34 @@ export class UnitRenderer {
     // PERF: Reuse pre-allocated Set instead of creating new one every frame
     this._currentIds.clear();
 
-    // PERF: Update frustum for culling
-    this.updateFrustum();
+    // TAA: Copy current instance matrices to previous BEFORE resetting counts
+    // This preserves last frame's transforms for velocity calculation
+    for (const group of this.instancedGroups.values()) {
+      if (group.mesh.count > 0) {
+        swapInstanceMatrices(group.mesh);
+      }
+    }
 
-    // GPU-driven culling: dispatch compute shader if available
-    // This runs culling on GPU and populates indirect draw args
-    if (this.useGPUDrivenRendering && this.cullingCompute && this.gpuUnitBuffer && this.camera && this.gpuCullingInitialized) {
-      // Reset indirect args before culling (compute shader will populate instance counts)
+    // GPU-driven rendering: swap transform buffers for velocity calculation
+    if (this.useGPUDrivenRendering && this.cullingService) {
+      this.cullingService.swapTransformBuffers();
+    }
+
+    // Perform frustum culling (uses previous frame's transforms - acceptable latency)
+    if (this.cullingService && this.camera) {
+      // Reset indirect args before culling
       if (this.gpuIndirectRenderer && this.gpuIndirectInitialized) {
         this.gpuIndirectRenderer.resetIndirectArgs();
       }
+      this.cullingService.performCulling(this.camera);
 
-      // Dispatch GPU culling compute shader
-      this.cullingCompute.cullGPU(this.gpuUnitBuffer, this.camera);
-
-      // Log GPU indirect rendering status periodically (every 300 frames ~5 seconds)
+      // Log culling status periodically (every 300 frames ~5 seconds)
       if (this.frameCount % 300 === 1) {
         const stats = this.getGPURenderingStats();
         const cullingMode = stats.isUsingGPUCulling ? 'GPU' : 'CPU';
         debugPerformance.log(
-          `[GPU Rendering] ${stats.isUsingGPUCulling ? '✓ ACTIVE' : '✗ FALLBACK'} - ` +
-          `Units: ${stats.managedEntities}/${stats.visibleCount} managed/active, ` +
+          `[Unified Culling] ${stats.isUsingGPUCulling ? 'GPU ACTIVE' : 'CPU FALLBACK'} - ` +
+          `Entities: ${stats.managedEntities}/${stats.visibleCount} total/visible, ` +
           `UnitTypes: ${stats.registeredUnitTypes}, ` +
           `Culling: ${cullingMode} (${stats.gpuCullTimeMs.toFixed(2)}ms), ` +
           `Indirect: ${stats.indirectReady ? 'ON' : 'OFF'}, ` +
@@ -1058,19 +1009,6 @@ export class UnitRenderer {
           }
         }
       }
-    }
-
-    // TAA: Copy current instance matrices to previous BEFORE resetting counts
-    // This preserves last frame's transforms for velocity calculation
-    for (const group of this.instancedGroups.values()) {
-      if (group.mesh.count > 0) {
-        swapInstanceMatrices(group.mesh);
-      }
-    }
-
-    // GPU-driven rendering: swap transform buffers for velocity calculation
-    if (this.useGPUDrivenRendering && this.gpuUnitBuffer) {
-      this.gpuUnitBuffer.swapTransformBuffers();
     }
 
     // Reset instance counts for all groups
@@ -1145,23 +1083,12 @@ export class UnitRenderer {
       const modelHeight = AssetManager.getModelHeight(unit.unitId);
       const unitHeight = terrainHeight + flyingOffset;
 
-      // PERF: Skip units outside camera frustum
-      if (!this.isInFrustum(transform.x, unitHeight + 1, transform.y)) {
-        // Hide health bar if exists (selection rings and team markers are instanced)
-        const overlay = this.unitOverlays.get(entity.id);
-        if (overlay) {
-          overlay.healthBar.visible = false;
-        }
-        continue;
-      }
-
-      // Check if this is an animated unit type
       // Calculate smooth rotation for both animated and instanced units
       const smoothRotation = this.getSmoothRotation(entity.id, transform.rotation);
 
-      // GPU-driven rendering: update GPU buffer with transform
-      if (this.useGPUDrivenRendering && this.gpuUnitBuffer) {
-        this.updateGPUEntityTransform(
+      // Update culling service with entity transform (registers if needed)
+      if (this.cullingService) {
+        this.updateEntityCulling(
           entity.id,
           unit.unitId,
           ownerId,
@@ -1169,8 +1096,18 @@ export class UnitRenderer {
           unitHeight,
           transform.y,
           smoothRotation,
-          1.0 // Scale - could be extracted from model if needed
+          1.0 // Scale
         );
+      }
+
+      // PERF: Skip units outside camera frustum (using proper sphere-frustum intersection)
+      if (this.cullingService && this.camera && !this.cullingService.isVisible(entity.id)) {
+        // Hide health bar if exists (selection rings and team markers are instanced)
+        const existingOverlay = this.unitOverlays.get(entity.id);
+        if (existingOverlay) {
+          existingOverlay.healthBar.visible = false;
+        }
+        continue;
       }
 
       if (this.isAnimatedUnitType(unit.unitId)) {
@@ -1332,11 +1269,6 @@ export class UnitRenderer {
       }
     }
 
-    // GPU-driven rendering: commit buffer changes to GPU
-    if (this.useGPUDrivenRendering && this.gpuUnitBuffer) {
-      this.gpuUnitBuffer.commitChanges();
-    }
-
     // PERF: Clean up instanced groups that have been inactive for too long
     // This prevents draw call accumulation when units die or change LOD levels
     for (const [key, group] of this.instancedGroups) {
@@ -1371,10 +1303,8 @@ export class UnitRenderer {
     for (const entityId of this.visualRotations.keys()) {
       if (!this._currentIds.has(entityId)) {
         this.visualRotations.delete(entityId);
-        // Clean up GPU buffer slot
-        if (this.useGPUDrivenRendering) {
-          this.removeGPUEntity(entityId);
-        }
+        // Clean up culling service registration
+        this.removeEntityFromCulling(entityId);
       }
     }
 
@@ -1630,13 +1560,10 @@ export class UnitRenderer {
     this.visibleUnits.clear();
 
     // Dispose GPU-driven rendering resources
-    this.gpuUnitBuffer?.dispose();
-    this.gpuUnitBuffer = null;
-    this.cullingCompute?.dispose();
-    this.cullingCompute = null;
+    this.cullingService?.dispose();
+    this.cullingService = null;
     this.gpuIndirectRenderer?.dispose();
     this.gpuIndirectRenderer = null;
-    this.gpuManagedEntities.clear();
     this.gpuRegisteredUnitTypes.clear();
     this.webgpuRenderer = null;
     this.gpuCullingInitialized = false;
