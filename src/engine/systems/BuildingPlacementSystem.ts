@@ -37,7 +37,7 @@ export class BuildingPlacementSystem extends System {
   private readonly WALL_AOE_CONSTRUCTION_RANGE = 3.0;
 
   // Track pending addon attachments (addon ID -> parent building info)
-  private pendingAddonAttachments: Map<number, { parentBuildingId: number; addonType: 'tech_lab' | 'reactor' | null }> = new Map();
+  private pendingAddonAttachments: Map<number, { parentBuildingId: number; addonType: 'research_module' | 'production_module' | null }> = new Map();
 
   // Wall line ID counter for tracking wall segments placed together
   private nextWallLineId = 1;
@@ -517,8 +517,8 @@ export class BuildingPlacementSystem extends System {
     addonBuilding.attachedToId = parentBuildingId;
 
     // Store addon type for later attachment when complete
-    const techLabType = buildingType === 'research_module' ? 'tech_lab' :
-                        buildingType === 'production_module' ? 'reactor' : null;
+    const addonTypeForAttachment = buildingType === 'research_module' ? 'research_module' :
+                        buildingType === 'production_module' ? 'production_module' : null;
 
     const addonHealth = new Health(definition.maxHealth, definition.armor, 'structure');
     addonHealth.current = definition.maxHealth * 0.1; // Start at 10% health like buildings
@@ -532,7 +532,7 @@ export class BuildingPlacementSystem extends System {
     // Store pending addon attachment info (will be attached when construction completes)
     this.pendingAddonAttachments.set(addonEntity.id, {
       parentBuildingId,
-      addonType: techLabType,
+      addonType: addonTypeForAttachment,
     });
 
     // Emit placement event
@@ -787,8 +787,8 @@ export class BuildingPlacementSystem extends System {
     addonBuilding.attachedToId = buildingId;
 
     // Store addon type for later attachment when complete
-    const techLabType = addonType === 'research_module' ? 'tech_lab' :
-                        addonType === 'production_module' ? 'reactor' : null;
+    const addonTypeForAttachment = addonType === 'research_module' ? 'research_module' :
+                        addonType === 'production_module' ? 'production_module' : null;
 
     const addonHealth = new Health(addonDef.maxHealth, addonDef.armor, 'structure');
     addonHealth.current = addonDef.maxHealth * 0.1; // Start at 10% health like buildings
@@ -802,7 +802,7 @@ export class BuildingPlacementSystem extends System {
     // Store pending addon attachment info (will be attached when construction completes)
     this.pendingAddonAttachments.set(addonEntity.id, {
       parentBuildingId: buildingId,
-      addonType: techLabType,
+      addonType: addonTypeForAttachment,
     });
 
     // Emit construction started event

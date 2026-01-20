@@ -216,7 +216,7 @@ export class BuildingMechanicsSystem extends System {
     if (!building || !addon) return;
 
     const addonType = addon.buildingId === 'research_module' ? 'research_module' : 'production_module';
-    building.attachAddon(addonType as AddonType, data.addonId);
+    building.attachAddon(addonType, data.addonId);
     addon.attachedToId = data.buildingId;
 
     this.game.eventBus.emit('building:addonAttached', {

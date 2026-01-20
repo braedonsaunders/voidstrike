@@ -1,7 +1,7 @@
 import { Component } from '../ecs/Component';
 
 export type BuildingState = 'waiting_for_worker' | 'constructing' | 'paused' | 'complete' | 'destroyed' | 'lifting' | 'flying' | 'landing';
-export type AddonType = 'tech_lab' | 'reactor' | null;
+export type AddonType = 'research_module' | 'production_module' | null;
 
 export interface BuildingDefinition {
   id: string;
@@ -380,11 +380,11 @@ export class Building extends Component {
   }
 
   public hasTechLab(): boolean {
-    return this.currentAddon === 'tech_lab';
+    return this.currentAddon === 'research_module';
   }
 
   public hasReactor(): boolean {
-    return this.currentAddon === 'reactor';
+    return this.currentAddon === 'production_module';
   }
 
   // ==================== LIFT-OFF MECHANICS ====================
