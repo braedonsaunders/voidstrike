@@ -679,6 +679,14 @@ function CommandCardInner() {
           const canTrain = hasTechLab && canAfford;
           const attackTypeText = getAttackTypeText(unitDef);
 
+          // Build tooltip with description and requirements info
+          let tooltipText = (unitDef.description || `Train ${unitDef.name}`) + ` [${attackTypeText}]`;
+          if (!hasTechLab) {
+            tooltipText += ' - Requires Research Module';
+          } else if (!hasSupply) {
+            tooltipText += ' (Need more supply)';
+          }
+
           buttons.push({
             id: `train_${unitId}`,
             label: unitDef.name,
@@ -696,9 +704,7 @@ function CommandCardInner() {
               }
             },
             isDisabled: !canTrain,
-            tooltip: !hasTechLab
-              ? `${unitDef.description || unitDef.name} [${attackTypeText}] - Requires Research Module`
-              : (unitDef.description || `Train ${unitDef.name}`) + ` [${attackTypeText}]` + (!hasSupply ? ' (Need more supply)' : ''),
+            tooltip: tooltipText,
             cost: { minerals: unitDef.mineralCost, vespene: unitDef.vespeneCost, supply: unitDef.supplyCost },
           });
         });
@@ -1043,42 +1049,46 @@ function CommandCardInner() {
       <div className="w-60 bg-black/80 border border-void-700/50 rounded-lg p-2 backdrop-blur-sm">
         <div className="grid grid-cols-4 gap-1.5">
           {commands.map((cmd) => (
-            <button
+            <div
               key={cmd.id}
-              className={`
-                relative w-[52px] h-[52px] flex flex-col items-center justify-center
-                bg-gradient-to-b from-void-800/80 to-void-900/80
-                border rounded
-                transition-all duration-100
-                ${cmd.isDisabled
-                  ? 'opacity-40 cursor-not-allowed border-void-700/30'
-                  : 'border-void-600/50 hover:from-void-700 hover:to-void-800 hover:border-blue-400/60 active:scale-95'
-                }
-                ${cmd.id === 'back' ? 'bg-gradient-to-b from-void-700/80 to-void-800/80' : ''}
-              `}
-              onClick={cmd.action}
-              disabled={cmd.isDisabled}
+              className="relative"
               onMouseEnter={() => setHoveredCmd(cmd.id)}
               onMouseLeave={() => setHoveredCmd(null)}
             >
-              {/* Icon */}
-              <span className="text-lg leading-none mb-0.5">{getIcon(cmd.id)}</span>
+              <button
+                className={`
+                  relative w-[52px] h-[52px] flex flex-col items-center justify-center
+                  bg-gradient-to-b from-void-800/80 to-void-900/80
+                  border rounded
+                  transition-all duration-100
+                  ${cmd.isDisabled
+                    ? 'opacity-40 cursor-not-allowed border-void-700/30'
+                    : 'border-void-600/50 hover:from-void-700 hover:to-void-800 hover:border-blue-400/60 active:scale-95'
+                  }
+                  ${cmd.id === 'back' ? 'bg-gradient-to-b from-void-700/80 to-void-800/80' : ''}
+                `}
+                onClick={cmd.action}
+                disabled={cmd.isDisabled}
+              >
+                {/* Icon */}
+                <span className="text-lg leading-none mb-0.5">{getIcon(cmd.id)}</span>
 
-              {/* Label */}
-              <span className="text-[8px] text-void-300 truncate w-full text-center leading-tight px-0.5">
-                {cmd.label.length > 8 ? cmd.label.substring(0, 7) + '..' : cmd.label}
-              </span>
+                {/* Label */}
+                <span className="text-[8px] text-void-300 truncate w-full text-center leading-tight px-0.5">
+                  {cmd.label.length > 8 ? cmd.label.substring(0, 7) + '..' : cmd.label}
+                </span>
 
-              {/* Hotkey badge */}
-              <span className="absolute bottom-0 right-0.5 text-[7px] text-void-500 font-mono">
-                {cmd.shortcut}
-              </span>
+                {/* Hotkey badge */}
+                <span className="absolute bottom-0 right-0.5 text-[7px] text-void-500 font-mono">
+                  {cmd.shortcut}
+                </span>
 
-              {/* Can't afford indicator */}
-              {cmd.cost && cmd.isDisabled && (
-                <div className="absolute inset-0 border border-red-500/40 rounded pointer-events-none" />
-              )}
-            </button>
+                {/* Can't afford indicator */}
+                {cmd.cost && cmd.isDisabled && (
+                  <div className="absolute inset-0 border border-red-500/40 rounded pointer-events-none" />
+                )}
+              </button>
+            </div>
           ))}
 
           {/* Empty slots */}
