@@ -2,14 +2,19 @@
 
 ## Project Overview
 
-VOIDSTRIKE is a browser-based RTS game built with Next.js 14, Three.js, and TypeScript.
+VOIDSTRIKE is a browser-based RTS game built with Next.js 14, Three.js r182, and TypeScript.
 
 **Tech Stack:** Next.js 16 | Three.js (WebGPU/TSL) | TypeScript | ECS Architecture | P2P Multiplayer
 
 ---
 
 DO NOT CREATE MD FILES UNLESS EXPLICITLY TOLD TO DO SO.
+
 ALWAYS WRITE REFERENCE QUALITY PRODUCTION READY CODE. NEVER LEAVE THINGS INCOMPLETE, CREATE STUBS, ETC.
+
+IF YOU NEED MORE CONTEXT, DO NOT CODE UNTIL YOU FIND IT. DO FREQUENT RESEARCH FOR THE LATEST TECHNIQUES
+
+IF YOU SEE DEAD CODE, DUPLICATE IMPLEMENTATIONS, ETC -> SPEAK UP ABOUT IT NO MATTER IF IT IS RELATED TO YOUR CURRENT TASK.
 
 ## Documentation Index
 
