@@ -540,6 +540,27 @@ export class RTSCamera {
     this.camera.updateProjectionMatrix();
   }
 
+  // Get the visible world-space bounds from the camera's current view
+  // Returns the min/max X and Z coordinates visible on screen (at ground level)
+  public getViewportBounds(): { minX: number; maxX: number; minZ: number; maxZ: number } {
+    // Sample the four corners of the screen to find world-space bounds
+    const topLeft = this.screenToWorld(0, 0);
+    const topRight = this.screenToWorld(this.screenWidth, 0);
+    const bottomLeft = this.screenToWorld(0, this.screenHeight);
+    const bottomRight = this.screenToWorld(this.screenWidth, this.screenHeight);
+
+    // Find min/max across all corners
+    const xs = [topLeft.x, topRight.x, bottomLeft.x, bottomRight.x];
+    const zs = [topLeft.z, topRight.z, bottomLeft.z, bottomRight.z];
+
+    return {
+      minX: Math.min(...xs),
+      maxX: Math.max(...xs),
+      minZ: Math.min(...zs),
+      maxZ: Math.max(...zs),
+    };
+  }
+
   public dispose(): void {
     if (typeof window === 'undefined') return;
 

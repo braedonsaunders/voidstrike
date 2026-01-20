@@ -872,6 +872,15 @@ export function WebGPUGameCanvas() {
         const updatesStart = performance.now();
         camera.update(deltaTime);
 
+        // Update viewport bounds for selection culling (double-click selects only visible units)
+        const viewportBounds = camera.getViewportBounds();
+        gameRef.current?.selectionSystem.setViewportBounds(
+          viewportBounds.minX,
+          viewportBounds.maxX,
+          viewportBounds.minZ,
+          viewportBounds.maxZ
+        );
+
         // PERF: Set camera reference for frustum culling in renderers
         const threeCamera = camera.camera;
         unitRendererRef.current?.setCamera(threeCamera);
