@@ -423,31 +423,33 @@ export function waitForConnection(
 }
 
 /**
- * Get the data channel from a peer connection
+ * Wait for a data channel to be received from the remote peer.
+ *
+ * Use this on the answerer side to wait for the offerer's data channel.
+ * The offerer should store their own channel reference from createDataChannel().
+ *
+ * @param pc - The RTCPeerConnection to wait on
+ * @param timeout - Maximum time to wait in milliseconds (default: 10000)
+ * @returns Promise resolving to the received RTCDataChannel
  */
-export function getDataChannel(pc: RTCPeerConnection): Promise<RTCDataChannel> {
+export function waitForDataChannel(
+  pc: RTCPeerConnection,
+  timeout: number = 10000
+): Promise<RTCDataChannel> {
   return new Promise((resolve, reject) => {
-    // Check if we already have a data channel (we're the offerer)
-    const existingChannel = (pc as unknown as { _channel?: RTCDataChannel })._channel;
-    if (existingChannel && existingChannel.readyState === 'open') {
-      resolve(existingChannel);
-      return;
-    }
+    const timer = setTimeout(() => {
+      reject(new ConnectionCodeError('Timed out waiting for data channel'));
+    }, timeout);
 
-    // Wait for data channel from remote (we're the answerer)
     pc.ondatachannel = (event) => {
+      clearTimeout(timer);
       const channel = event.channel;
       if (channel.readyState === 'open') {
         resolve(channel);
       } else {
         channel.onopen = () => resolve(channel);
-        channel.onerror = (e) => reject(new ConnectionCodeError('Data channel error'));
+        channel.onerror = () => reject(new ConnectionCodeError('Data channel error'));
       }
     };
-
-    // Timeout
-    setTimeout(() => {
-      reject(new ConnectionCodeError('Timed out waiting for data channel'));
-    }, 10000);
   });
 }

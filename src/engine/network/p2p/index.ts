@@ -11,7 +11,7 @@ export {
   completeConnection,
   createPeerConnection,
   waitForConnection,
-  getDataChannel,
+  waitForDataChannel,
   ConnectionCodeError,
   type ConnectionCodeData,
 } from './ConnectionCode';

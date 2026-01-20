@@ -7,6 +7,38 @@
  *
  * This file extends the base Three.js types with WebGPU-specific APIs
  * that lack official TypeScript declarations.
+ *
+ * ## Why `any` is used extensively in TSL types
+ *
+ * TSL (Three.js Shading Language) is a shader DSL where operators work
+ * polymorphically across different types. For example:
+ *
+ * ```typescript
+ * // All of these are valid and return different result types:
+ * float(1).add(float(2))           // Returns ShaderNodeObject<float>
+ * vec3(1,2,3).add(float(1))        // Returns ShaderNodeObject<vec3>
+ * vec3(1,2,3).add(vec3(4,5,6))     // Returns ShaderNodeObject<vec3>
+ * texture(tex).sample(uv).mul(2)  // Returns ShaderNodeObject<vec4>
+ * ```
+ *
+ * The `any` type in method parameters and return types is INTENTIONAL because:
+ *
+ * 1. **Polymorphic operators**: `.add()`, `.mul()`, `.mix()` etc. accept
+ *    floats, vectors, matrices, or other shader nodes interchangeably
+ *
+ * 2. **Type promotion**: GPU shaders automatically promote types
+ *    (e.g., float * vec3 → vec3), which TypeScript cannot express
+ *
+ * 3. **Shader graph composition**: Nodes are composed fluently where
+ *    the output type depends on the input combination
+ *
+ * 4. **Official Three.js stance**: Three.js itself doesn't provide TSL
+ *    types, and the community consensus is that full typing would require
+ *    extensive conditional types that hurt readability without benefit
+ *
+ * This is the industry-standard approach for shader DSL type declarations.
+ * The `any` usage here is contained, intentional, and doesn't leak into
+ * game logic code.
  */
 
 import type {

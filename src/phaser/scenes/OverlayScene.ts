@@ -230,13 +230,15 @@ export class OverlayScene extends Phaser.Scene {
   }
 
   /**
-   * Helper to register an event listener and track it for cleanup
-   * EventBus.on returns an unsubscribe function which we store
+   * Helper to register an event listener and track it for cleanup.
+   * EventBus.on returns an unsubscribe function which we store.
+   *
+   * @param event - The event name to subscribe to
+   * @param handler - Callback receiving the event data (typed per-call via generic)
    */
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  private registerEvent(event: string, handler: (...args: any[]) => void): void {
+  private registerEvent<T = unknown>(event: string, handler: (data: T) => void): void {
     if (!this.eventBus) return;
-    const unsubscribe = this.eventBus.on(event, handler);
+    const unsubscribe = this.eventBus.on<T>(event, handler);
     this.eventUnsubscribers.push(unsubscribe);
   }
 

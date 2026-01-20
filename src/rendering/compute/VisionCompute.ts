@@ -38,8 +38,17 @@ import {
 
 import { debugShaders } from '@/utils/debugLogger';
 
-// StorageTexture is on THREE namespace
-const StorageTexture = (THREE as any).StorageTexture;
+/**
+ * StorageTexture class for GPU compute shaders.
+ *
+ * Three.js r182+ includes StorageTexture but doesn't export it as a named export.
+ * We access it via the THREE namespace at runtime. The class extends THREE.Texture.
+ *
+ * @see three-webgpu.d.ts for type declaration
+ */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const StorageTexture: new (width: number, height: number) => THREE.Texture = (THREE as any)
+  .StorageTexture;
 
 // Max casters per compute dispatch
 const MAX_CASTERS = 4096;
@@ -63,6 +72,20 @@ export interface VisionComputeConfig {
   cellSize: number;
 }
 
+/**
+ * Internal type for compute shader node cache.
+ *
+ * TSL compute nodes are created dynamically via Fn().compute() and lack
+ * official TypeScript declarations. The compute node type is opaque -
+ * it's passed to renderer.compute() which handles dispatch internally.
+ */
+interface ComputeNodeCache {
+  /** Compute node writing A, reading B */
+  nodeAB: unknown;
+  /** Compute node writing B, reading A */
+  nodeBA: unknown;
+}
+
 export class VisionCompute {
   private renderer: WebGPURenderer;
   private config: VisionComputeConfig;
@@ -81,7 +104,7 @@ export class VisionCompute {
   private casterStorageBuffer: ReturnType<typeof storage> | null = null;
 
   // Compute shader nodes per player
-  private computeNodes: Map<number, any> = new Map();
+  private computeNodes: Map<number, ComputeNodeCache> = new Map();
 
   // Uniforms
   private uGridWidth = uniform(0);
@@ -141,18 +164,20 @@ export class VisionCompute {
   }
 
   /**
-   * Create GPU compute shader for vision calculation with temporal smoothing
+   * Create GPU compute shader for vision calculation with temporal smoothing.
    *
    * Output format (RGBA):
    * - R: explored (0 or 1) - persists once area is seen
    * - G: visible (0 or 1) - current frame visibility
    * - B: velocity (signed) - rate of visibility change for edge effects
    * - A: smooth visibility (0-1) - temporally filtered for smooth transitions
+   *
+   * @returns TSL compute node ready for dispatch via renderer.compute()
    */
   private createComputeShader(
     currentTexture: THREE.Texture,
     previousTexture: THREE.Texture
-  ): any {
+  ): unknown {
     const gridWidth = this.uGridWidth;
     const gridHeight = this.uGridHeight;
     const cellSize = this.uCellSize;
