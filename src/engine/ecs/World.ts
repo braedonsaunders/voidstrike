@@ -1,8 +1,15 @@
-import { Entity, EntityId } from './Entity';
+import { Entity } from './Entity';
+import {
+  EntityId,
+  EntityIdAllocator,
+  INVALID_ENTITY_ID,
+  getEntityIndex,
+  isInvalidEntityId,
+} from './EntityId';
 import { Component, ComponentType } from './Component';
 import { System } from './System';
 import { SpatialGrid } from '../core/SpatialGrid';
-import { debugPerformance } from '@/utils/debugLogger';
+import { debugPerformance, debugInitialization } from '@/utils/debugLogger';
 import { PerformanceMonitor } from '../core/PerformanceMonitor';
 
 /**
@@ -23,10 +30,16 @@ interface Archetype {
   entities: Set<EntityId>;     // Entities with this exact signature
 }
 
+/** Maximum CONCURRENT entities - with ID recycling, this is the actual limit, not lifetime total */
+const MAX_ENTITIES = 4096;
+
 export class World {
-  private entities: Map<EntityId, Entity> = new Map();
+  /** Entities keyed by INDEX (not full EntityId) for O(1) lookup from SpatialGrid results */
+  private entities: Map<number, Entity> = new Map();
   private systems: System[] = [];
-  private nextEntityId: EntityId = 1;
+
+  /** Generational entity ID allocator - handles ID recycling with stale reference detection */
+  private entityIdAllocator: EntityIdAllocator = new EntityIdAllocator(MAX_ENTITIES);
 
   // Component storage for faster queries (kept for backwards compatibility)
   private componentIndex: Map<ComponentType, Set<EntityId>> = new Map();
@@ -60,33 +73,47 @@ export class World {
   }
 
   public createEntity(): Entity {
-    const id = this.nextEntityId++;
+    const id = this.entityIdAllocator.allocate();
+    if (isInvalidEntityId(id)) {
+      throw new Error(`World: Failed to allocate entity - exceeded max capacity of ${MAX_ENTITIES}`);
+    }
+    const index = getEntityIndex(id);
     const entity = new Entity(id, this);
-    this.entities.set(id, entity);
+    this.entities.set(index, entity);
     // Invalidate entity list cache
     this._entityListVersion++;
     return entity;
   }
 
   public destroyEntity(id: EntityId): void {
-    const entity = this.entities.get(id);
+    const index = getEntityIndex(id);
+    const entity = this.entities.get(index);
     if (!entity) return;
 
-    // Remove from spatial grids
-    this.unitGrid.remove(id);
-    this.buildingGrid.remove(id);
+    // Validate generation matches (catch stale references)
+    if (entity.id !== id) {
+      console.warn(`World.destroyEntity: Stale EntityId ${id}, current entity has id ${entity.id}`);
+      return;
+    }
 
-    // Remove from archetype
-    this.removeEntityFromArchetype(id);
+    // Remove from spatial grids
+    this.unitGrid.remove(index);
+    this.buildingGrid.remove(index);
+
+    // Remove from archetype (uses full EntityId for archetype tracking)
+    this.removeEntityFromArchetype(entity.id);
 
     // Remove from component indices (kept for backwards compatibility)
     for (const [type, entityIds] of this.componentIndex) {
-      entityIds.delete(id);
+      entityIds.delete(entity.id);
     }
 
     // Mark entity as destroyed
     entity.destroy();
-    this.entities.delete(id);
+    this.entities.delete(index);
+
+    // Return ID to allocator for recycling (increments generation)
+    this.entityIdAllocator.free(id);
 
     // Invalidate entity list cache
     this._entityListVersion++;
@@ -156,10 +183,30 @@ export class World {
     // No-op for archetype system - cache is invalidated when archetypes change
   }
 
+  /**
+   * Get entity by full EntityId (validates generation)
+   */
   public getEntity(id: EntityId): Entity | undefined {
-    const entity = this.entities.get(id);
-    // Filter out destroyed entities to prevent systems from modifying dead entities
-    if (entity?.isDestroyed()) {
+    if (isInvalidEntityId(id)) return undefined;
+
+    const index = getEntityIndex(id);
+    const entity = this.entities.get(index);
+
+    // Validate: entity exists, not destroyed, and generation matches
+    if (!entity || entity.isDestroyed() || entity.id !== id) {
+      return undefined;
+    }
+    return entity;
+  }
+
+  /**
+   * Get entity by INDEX only (for SpatialGrid query results)
+   * Use this when you have an index from SpatialGrid queries.
+   * Does NOT validate generation - the entity at this index may have been recycled.
+   */
+  public getEntityByIndex(index: number): Entity | undefined {
+    const entity = this.entities.get(index);
+    if (!entity || entity.isDestroyed()) {
       return undefined;
     }
     return entity;
@@ -171,8 +218,11 @@ export class World {
    * to know if an entity is valid, not to retrieve it.
    */
   public isEntityValid(id: EntityId): boolean {
-    const entity = this.entities.get(id);
-    return entity !== undefined && !entity.isDestroyed();
+    if (isInvalidEntityId(id)) return false;
+
+    const index = getEntityIndex(id);
+    const entity = this.entities.get(index);
+    return entity !== undefined && !entity.isDestroyed() && entity.id === id;
   }
 
   /**
@@ -252,7 +302,8 @@ export class World {
       if (hasAll) {
         // Add all entities from this archetype
         for (const entityId of archetype.entities) {
-          const entity = this.entities.get(entityId);
+          // Archetypes store full EntityIds, but entities Map is keyed by index
+          const entity = this.entities.get(getEntityIndex(entityId));
           if (entity && !entity.isDestroyed()) {
             result.push(entity);
           }
@@ -318,7 +369,7 @@ export class World {
     this.componentIndex.get(type)!.add(entityId);
 
     // Update archetype - entity's component signature has changed
-    const entity = this.entities.get(entityId);
+    const entity = this.entities.get(getEntityIndex(entityId));
     if (entity) {
       this.updateEntityArchetype(entityId, entity);
     }
@@ -330,7 +381,7 @@ export class World {
     this.componentIndex.get(type)?.delete(entityId);
 
     // Update archetype - entity's component signature has changed
-    const entity = this.entities.get(entityId);
+    const entity = this.entities.get(getEntityIndex(entityId));
     if (entity && !entity.isDestroyed()) {
       this.updateEntityArchetype(entityId, entity);
     }
@@ -344,7 +395,37 @@ export class World {
     this.queryCache.clear();
     this.archetypeCacheVersion = 0;
     this.queryCacheVersion = -1;
-    this.nextEntityId = 1;
+    this.entityIdAllocator.clear();
+    this._cachedEntities = null;
+    this._entityListVersion++;
+  }
+
+  /**
+   * Check if an EntityId is valid using generational validation.
+   * This catches stale references where the ID was recycled.
+   */
+  public isEntityIdValid(id: EntityId): boolean {
+    return this.entityIdAllocator.isValid(id) && this.entities.has(getEntityIndex(id));
+  }
+
+  /**
+   * Get the entity index from an EntityId.
+   * Use this when you need the index for array-based storage (e.g., SpatialGrid).
+   */
+  public getEntityIndex(id: EntityId): number {
+    return getEntityIndex(id);
+  }
+
+  /**
+   * Get entity ID allocator stats for debugging
+   */
+  public getEntityIdStats(): {
+    allocated: number;
+    free: number;
+    capacity: number;
+    highWaterMark: number;
+  } {
+    return this.entityIdAllocator.getStats();
   }
 
   public getEntityCount(): number {

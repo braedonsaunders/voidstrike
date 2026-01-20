@@ -1,8 +1,22 @@
 import { Component, ComponentType } from './Component';
 import { World } from './World';
 import { debugInitialization } from '@/utils/debugLogger';
+import {
+  EntityId,
+  INVALID_ENTITY_ID,
+  getEntityIndex,
+  getEntityGeneration,
+  isInvalidEntityId,
+} from './EntityId';
 
-export type EntityId = number;
+// Re-export EntityId types and utilities for backwards compatibility
+export {
+  type EntityId,
+  INVALID_ENTITY_ID,
+  getEntityIndex,
+  getEntityGeneration,
+  isInvalidEntityId,
+} from './EntityId';
 
 export class Entity {
   public readonly id: EntityId;

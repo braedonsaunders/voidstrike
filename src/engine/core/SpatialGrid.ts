@@ -7,11 +7,18 @@
  * - Inline entity data to avoid entity lookups in hot paths
  * - Pre-allocated buffers to eliminate GC pressure
  *
+ * IMPORTANT: This grid uses ENTITY INDEX (bounded) for array storage,
+ * not full EntityId. With generational IDs, the index portion is bounded
+ * (0 to maxTotalEntities-1), allowing fixed-size array allocation.
+ * Callers should pass getEntityIndex(entityId) for the id parameter.
+ *
  * Complexity:
  * - Insert/Update: O(cells_touched) where cells_touched ≈ 1-4 typically
  * - Query: O(cells_in_radius × avg_entities_per_cell)
  * - With coarse grid: O(coarse_cells) for large radius queries
  */
+
+import { getEntityIndex } from '../ecs/EntityId';
 
 /** Unit state enum for inline storage - must match Unit component states */
 export const enum SpatialUnitState {
@@ -339,6 +346,8 @@ export class SpatialGrid {
   /**
    * Full update with inline unit data.
    * Use this for optimal performance - avoids entity lookups later.
+   *
+   * @param id Entity ID or index. With generational IDs, extracts index automatically.
    */
   public updateFull(
     id: number,
@@ -352,29 +361,32 @@ export class SpatialGrid {
     isWorker: boolean,
     maxSpeed: number
   ): void {
-    if (id >= this.maxTotalEntities) {
-      console.warn(`SpatialGrid: Entity ID ${id} exceeds max ${this.maxTotalEntities}`);
+    // Extract index from EntityId (handles both raw index and generational ID)
+    const idx = getEntityIndex(id);
+
+    if (idx >= this.maxTotalEntities) {
+      console.warn(`SpatialGrid: Entity index ${idx} exceeds max ${this.maxTotalEntities}`);
       return;
     }
 
     // Remove from old cells if entity exists
-    if (this.entityExists[id]) {
+    if (this.entityExists[idx]) {
       // Remove from fine cells
-      const fineBase = id * 4;
+      const fineBase = idx * 4;
       for (let i = 0; i < 4; i++) {
         const cellIndex = this.entityFineCells[fineBase + i];
         if (cellIndex >= 0) {
-          this.removeFromFineCell(cellIndex, id);
+          this.removeFromFineCell(cellIndex, idx);
           this.entityFineCells[fineBase + i] = -1;
         }
       }
 
       // Remove from coarse cells
-      const coarseBase = id * 4;
+      const coarseBase = idx * 4;
       for (let i = 0; i < 4; i++) {
         const cellIndex = this.entityCoarseCells[coarseBase + i];
         if (cellIndex >= 0) {
-          this.removeFromCoarseCell(cellIndex, id);
+          this.removeFromCoarseCell(cellIndex, idx);
           this.entityCoarseCells[coarseBase + i] = -1;
         }
       }
@@ -382,39 +394,39 @@ export class SpatialGrid {
       this.entityCount++;
     }
 
-    // Update entity data (SoA)
-    this.entityX[id] = x;
-    this.entityY[id] = y;
-    this.entityRadius[id] = radius;
-    this.entityCollisionRadius[id] = collisionRadius;
-    this.entityMaxSpeed[id] = maxSpeed;
-    this.entityState[id] = state;
-    this.entityPlayerId[id] = playerId;
+    // Update entity data (SoA) - all indexed by entity index
+    this.entityX[idx] = x;
+    this.entityY[idx] = y;
+    this.entityRadius[idx] = radius;
+    this.entityCollisionRadius[idx] = collisionRadius;
+    this.entityMaxSpeed[idx] = maxSpeed;
+    this.entityState[idx] = state;
+    this.entityPlayerId[idx] = playerId;
 
     // Pack flags: bit0=exists, bit1=isFlying, bit2=isWorker
     let flags = 1; // exists
     if (isFlying) flags |= 2;
     if (isWorker) flags |= 4;
-    this.entityFlags[id] = flags;
-    this.entityExists[id] = 1;
+    this.entityFlags[idx] = flags;
+    this.entityExists[idx] = 1;
 
-    // Add to new fine cells
+    // Add to new fine cells (store index in cells)
     this._cellBuffer.length = 0;
     this.getFineCellsForEntity(x, y, radius, this._cellBuffer);
-    const fineBase = id * 4;
+    const fineBase = idx * 4;
     for (let i = 0; i < this._cellBuffer.length && i < 4; i++) {
       const cellIndex = this._cellBuffer[i];
-      this.addToFineCell(cellIndex, id);
+      this.addToFineCell(cellIndex, idx);
       this.entityFineCells[fineBase + i] = cellIndex;
     }
 
-    // Add to new coarse cells
+    // Add to new coarse cells (store index in cells)
     this._cellBuffer.length = 0;
     this.getCoarseCellsForEntity(x, y, radius, this._cellBuffer);
-    const coarseBase = id * 4;
+    const coarseBase = idx * 4;
     for (let i = 0; i < this._cellBuffer.length && i < 4; i++) {
       const cellIndex = this._cellBuffer[i];
-      this.addToCoarseCell(cellIndex, id);
+      this.addToCoarseCell(cellIndex, idx);
       this.entityCoarseCells[coarseBase + i] = cellIndex;
     }
   }
@@ -424,13 +436,14 @@ export class SpatialGrid {
    * Returns true if the cell assignment changed.
    */
   public updatePosition(id: number, x: number, y: number): boolean {
-    if (id >= this.maxTotalEntities || !this.entityExists[id]) {
+    const idx = getEntityIndex(id);
+    if (idx >= this.maxTotalEntities || !this.entityExists[idx]) {
       return false;
     }
 
-    const oldX = this.entityX[id];
-    const oldY = this.entityY[id];
-    const radius = this.entityRadius[id];
+    const oldX = this.entityX[idx];
+    const oldY = this.entityY[idx];
+    const radius = this.entityRadius[idx];
 
     // Check if cell assignment would change
     const oldFineCell = this.getFineCell(oldX, oldY);
@@ -438,20 +451,20 @@ export class SpatialGrid {
 
     if (oldFineCell === newFineCell) {
       // Same cell - just update position data
-      this.entityX[id] = x;
-      this.entityY[id] = y;
+      this.entityX[idx] = x;
+      this.entityY[idx] = y;
       return false;
     }
 
     // Cell changed - full update needed
     this.updateFull(
-      id, x, y, radius,
-      (this.entityFlags[id] & 2) !== 0,  // isFlying
-      this.entityState[id],
-      this.entityPlayerId[id],
-      this.entityCollisionRadius[id],
-      (this.entityFlags[id] & 4) !== 0,  // isWorker
-      this.entityMaxSpeed[id]
+      idx, x, y, radius,
+      (this.entityFlags[idx] & 2) !== 0,  // isFlying
+      this.entityState[idx],
+      this.entityPlayerId[idx],
+      this.entityCollisionRadius[idx],
+      (this.entityFlags[idx] & 4) !== 0,  // isWorker
+      this.entityMaxSpeed[idx]
     );
     return true;
   }
@@ -460,8 +473,9 @@ export class SpatialGrid {
    * Update only the state (no spatial update needed)
    */
   public updateState(id: number, state: SpatialUnitState): void {
-    if (id < this.maxTotalEntities && this.entityExists[id]) {
-      this.entityState[id] = state;
+    const idx = getEntityIndex(id);
+    if (idx < this.maxTotalEntities && this.entityExists[idx]) {
+      this.entityState[idx] = state;
     }
   }
 
@@ -469,33 +483,34 @@ export class SpatialGrid {
    * Remove an entity from the grid
    */
   public remove(id: number): void {
-    if (id >= this.maxTotalEntities || !this.entityExists[id]) {
+    const idx = getEntityIndex(id);
+    if (idx >= this.maxTotalEntities || !this.entityExists[idx]) {
       return;
     }
 
     // Remove from fine cells
-    const fineBase = id * 4;
+    const fineBase = idx * 4;
     for (let i = 0; i < 4; i++) {
       const cellIndex = this.entityFineCells[fineBase + i];
       if (cellIndex >= 0) {
-        this.removeFromFineCell(cellIndex, id);
+        this.removeFromFineCell(cellIndex, idx);
         this.entityFineCells[fineBase + i] = -1;
       }
     }
 
     // Remove from coarse cells
-    const coarseBase = id * 4;
+    const coarseBase = idx * 4;
     for (let i = 0; i < 4; i++) {
       const cellIndex = this.entityCoarseCells[coarseBase + i];
       if (cellIndex >= 0) {
-        this.removeFromCoarseCell(cellIndex, id);
+        this.removeFromCoarseCell(cellIndex, idx);
         this.entityCoarseCells[coarseBase + i] = -1;
       }
     }
 
     // Clear entity data
-    this.entityExists[id] = 0;
-    this.entityFlags[id] = 0;
+    this.entityExists[idx] = 0;
+    this.entityFlags[idx] = 0;
     this.entityCount--;
   }
 
@@ -734,11 +749,12 @@ export class SpatialGrid {
    * Get inline entity data by ID (O(1) lookup)
    */
   public getEntityData(id: number): SpatialEntityData | null {
-    if (id >= this.maxTotalEntities || !this.entityExists[id]) {
+    const idx = getEntityIndex(id);
+    if (idx >= this.maxTotalEntities || !this.entityExists[idx]) {
       return null;
     }
 
-    this.fillEntityData(id, this._entityDataBuffer);
+    this.fillEntityData(idx, this._entityDataBuffer);
     return this._entityDataBuffer;
   }
 
@@ -746,14 +762,15 @@ export class SpatialGrid {
    * Get entity position (for backwards compatibility)
    */
   public getEntityPosition(id: number): { x: number; y: number; radius: number } | null {
-    if (id >= this.maxTotalEntities || !this.entityExists[id]) {
+    const idx = getEntityIndex(id);
+    if (idx >= this.maxTotalEntities || !this.entityExists[idx]) {
       return null;
     }
 
     return {
-      x: this.entityX[id],
-      y: this.entityY[id],
-      radius: this.entityRadius[id],
+      x: this.entityX[idx],
+      y: this.entityY[idx],
+      radius: this.entityRadius[idx],
     };
   }
 
@@ -761,7 +778,8 @@ export class SpatialGrid {
    * Check if entity exists in grid
    */
   public has(id: number): boolean {
-    return id < this.maxTotalEntities && this.entityExists[id] === 1;
+    const idx = getEntityIndex(id);
+    return idx < this.maxTotalEntities && this.entityExists[idx] === 1;
   }
 
   /**
