@@ -1,0 +1,88 @@
+{
+  "$schema": "./collision.config.schema.json",
+  "_description": "Unit collision and separation configuration - controls how units space themselves apart",
+
+  "separation": {
+    "_description": "Separation force parameters - prevents unit overlapping",
+
+    "multiplier": 1.15,
+    "_multiplier_description": "Base separation distance = (radius1 + radius2) * multiplier. Units separate at this proportion of their combined radii.",
+
+    "queryRadiusMultiplier": 2.5,
+    "_queryRadiusMultiplier_description": "Spatial query radius = unit's collision radius * this value. Determines how far to search for neighbors.",
+
+    "strengthMoving": 0.5,
+    "_strengthMoving_description": "Separation force while moving. Low value allows SC2-style clumping during group movement.",
+
+    "strengthIdle": 6.0,
+    "_strengthIdle_description": "Separation force when idle. Strong to ensure clear visual distinction between units.",
+
+    "strengthArriving": 8.0,
+    "_strengthArriving_description": "Separation force when arriving at destination. Very strong to create natural spreading.",
+
+    "strengthCombat": 8.0,
+    "_strengthCombat_description": "Separation force during combat. Strong for unclumping while fighting.",
+
+    "maxForce": 10.0,
+    "_maxForce_description": "Maximum separation force magnitude. High value allows strong separation when units overlap.",
+
+    "flyingMultiplier": 1.5,
+    "_flyingMultiplier_description": "Separation force multiplier for flying units. Flying units have more freedom and need stronger separation."
+  },
+
+  "physics": {
+    "_description": "Physics pushing parameters - units push through each other when overlapping",
+
+    "pushRadius": 1.2,
+    "_pushRadius_description": "Distance at which physics pushing starts (world units).",
+
+    "pushStrength": 6.0,
+    "_pushStrength_description": "Base push force strength.",
+
+    "pushFalloff": 0.6,
+    "_pushFalloff_description": "How quickly push force falls off with distance. Higher = faster falloff.",
+
+    "overlapPush": 15.0,
+    "_overlapPush_description": "Extra strong push force when units overlap. Quickly resolves accidental overlaps."
+  },
+
+  "idle": {
+    "_description": "Idle behavior parameters - how units behave at rest",
+
+    "separationThreshold": 0.25,
+    "_separationThreshold_description": "Minimum separation force magnitude to move an idle unit. Prevents micro-adjustments.",
+
+    "repelSpeedMultiplier": 0.3,
+    "_repelSpeedMultiplier_description": "Speed multiplier for idle unit repulsion movement. Slower prevents jittery behavior."
+  },
+
+  "combat": {
+    "_description": "Combat movement parameters",
+
+    "spreadSpeedMultiplier": 0.5,
+    "_spreadSpeedMultiplier_description": "Speed multiplier when units spread apart during combat.",
+
+    "separationThreshold": 0.1,
+    "_separationThreshold_description": "Minimum separation magnitude to trigger combat movement."
+  },
+
+  "arrival": {
+    "_description": "Arrival spreading parameters - units spread when reaching destination",
+
+    "spreadRadius": 5.0,
+    "_spreadRadius_description": "Distance from target where arrival spreading kicks in (world units).",
+
+    "spreadStrength": 2.0,
+    "_spreadStrength_description": "Additional separation multiplier at arrival."
+  },
+
+  "defaults": {
+    "_description": "Default collision radius values when not specified in assets.json",
+
+    "groundUnitRadius": 0.5,
+    "_groundUnitRadius_description": "Default collision radius for ground units (world units).",
+
+    "flyingUnitRadius": 0.4,
+    "_flyingUnitRadius_description": "Default collision radius for flying units (world units)."
+  }
+}

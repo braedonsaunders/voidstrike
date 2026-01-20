@@ -169,6 +169,7 @@ export interface AssetConfig {
   model: string;
   height?: number; // Target height in game units - model is scaled to this height (optional)
   scale?: number; // Additional scale multiplier applied after height normalization (default: 1.0)
+  collisionRadius?: number; // Collision radius in game units for separation/steering (default from collision.config.json)
   airborneHeight?: number; // For flying units: height above terrain in game units (default: 8)
   animationSpeed?: number;
   rotation?: RotationConfig; // Rotation offset in degrees on all axes
@@ -242,6 +243,9 @@ const assetAirborneHeights = new Map<string, number>();
 
 // Store per-asset model heights (from config) - the visual size of the model
 const assetModelHeights = new Map<string, number>();
+
+// Store per-asset collision radii (from config) - used for separation/steering
+const assetCollisionRadii = new Map<string, number>();
 
 // Store actual model bounding box dimensions after normalization (width, depth, height)
 // Used for accurate attack range calculations based on actual model size
@@ -1119,6 +1123,15 @@ export class AssetManager {
   }
 
   /**
+   * Get the collision radius for an asset (used for separation/steering).
+   * Returns the configured value from assets.json, or null if not specified.
+   * Callers should fall back to collision.config.json defaults if null.
+   */
+  static getCollisionRadius(assetId: string): number | null {
+    return assetCollisionRadii.get(assetId) ?? null;
+  }
+
+  /**
    * Get the scale multiplier for an asset.
    * Returns 1.0 if not configured. This is applied after height normalization.
    */
@@ -1534,6 +1547,10 @@ export class AssetManager {
       const modelHeight = config.height ?? config.scale;
       if (modelHeight !== undefined) {
         assetModelHeights.set(assetId, modelHeight);
+      }
+      // Store collision radius if specified (for separation/steering)
+      if (config.collisionRadius !== undefined) {
+        assetCollisionRadii.set(assetId, config.collisionRadius);
       }
     }
 
