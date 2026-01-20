@@ -90,6 +90,52 @@ Load relevant documentation based on your current task. Don't load everything—
 - Use EventBus for cross-system communication
 - Use `SeededRandom` from `utils/math.ts` for any randomness
 
+### Singleton Pattern
+Use class-based singletons with static methods for global managers:
+
+```ts
+export class MySingleton {
+  private static instance: MySingleton | null = null;
+  private static initPromise: Promise<MySingleton> | null = null;
+
+  private constructor() { /* private constructor */ }
+
+  // Async access (initializes on first call)
+  public static async getInstance(): Promise<MySingleton> {
+    if (MySingleton.initPromise) return MySingleton.initPromise;
+    if (MySingleton.instance) return MySingleton.instance;
+    MySingleton.initPromise = (async () => {
+      const instance = new MySingleton();
+      await instance.initialize();
+      MySingleton.instance = instance;
+      return instance;
+    })();
+    return MySingleton.initPromise;
+  }
+
+  // Sync access (returns null if not initialized)
+  public static getInstanceSync(): MySingleton | null {
+    return MySingleton.instance;
+  }
+
+  // Reset for game restart
+  public static resetInstance(): void {
+    MySingleton.instance = null;
+    MySingleton.initPromise = null;
+  }
+}
+
+// Convenience helpers for backward compatibility
+export async function getMySingleton(): Promise<MySingleton> {
+  return MySingleton.getInstance();
+}
+export function getMySingletonSync(): MySingleton | null {
+  return MySingleton.getInstanceSync();
+}
+```
+
+Examples: `RecastNavigation`, `WasmBoids`, `PerformanceMonitor`
+
 ### Naming Conventions
 - Components: `PascalCase.tsx`
 - Utilities: `camelCase.ts`

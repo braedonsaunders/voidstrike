@@ -18,6 +18,12 @@
  * - formations: Unit formation patterns
  * - ai: AI build orders and difficulty configuration
  *
+ * Tree-Shaking Note:
+ * For better tree-shaking in performance-critical code, prefer direct imports:
+ *   import { getDamageMultiplier } from '@/data/combat/combat';
+ * instead of:
+ *   import { getDamageMultiplier } from '@/data';
+ *
  * @example
  * import { getDamageMultiplier, RESOURCE_TYPES, getFormation } from '@/data';
  */

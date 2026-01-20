@@ -100,8 +100,14 @@ interface EntityMapping {
 
 /**
  * High-level wrapper for WASM SIMD boids computation
+ *
+ * Singleton Pattern: Use getInstance() or getWasmBoids() to access.
+ * Direct construction is not allowed.
  */
 export class WasmBoids {
+  private static instance: WasmBoids | null = null;
+  private static initPromise: Promise<WasmBoids> | null = null;
+
   private wasm: BoidsWasmExports | null = null;
   private engine: WasmBoidsEngine | null = null;
   private memory: WebAssembly.Memory | null = null;
@@ -153,9 +159,49 @@ export class WasmBoids {
   private alignmentRadius: number = 4.0;
   private alignmentStrength: number = 0.3;
 
-  constructor(maxUnits: number = 2000) {
+  private constructor(maxUnits: number = 2000) {
     this.maxUnits = maxUnits;
     this.neighborQueryBuffer = new Array(maxUnits * 8);
+  }
+
+  /**
+   * Get singleton instance (async - initializes WASM if needed)
+   */
+  public static async getInstance(maxUnits: number = 2000): Promise<WasmBoids> {
+    if (WasmBoids.initPromise) {
+      return WasmBoids.initPromise;
+    }
+
+    if (WasmBoids.instance) {
+      return WasmBoids.instance;
+    }
+
+    WasmBoids.initPromise = (async () => {
+      const instance = new WasmBoids(maxUnits);
+      await instance.initialize();
+      WasmBoids.instance = instance;
+      return instance;
+    })();
+
+    return WasmBoids.initPromise;
+  }
+
+  /**
+   * Get singleton instance synchronously (returns null if not yet initialized)
+   */
+  public static getInstanceSync(): WasmBoids | null {
+    return WasmBoids.instance;
+  }
+
+  /**
+   * Reset singleton (for game restart)
+   */
+  public static resetInstance(): void {
+    if (WasmBoids.instance) {
+      WasmBoids.instance.clear();
+      WasmBoids.instance = null;
+    }
+    WasmBoids.initPromise = null;
   }
 
   /**
@@ -574,25 +620,19 @@ export class WasmBoids {
   }
 }
 
-// Singleton instance for global access
-let wasmBoidsInstance: WasmBoids | null = null;
-
 /**
- * Get the global WasmBoids instance
- * Creates and initializes on first call
+ * Get the global WasmBoids instance (async - initializes on first call)
+ * Convenience wrapper for WasmBoids.getInstance()
  */
 export async function getWasmBoids(maxUnits: number = 2000): Promise<WasmBoids> {
-  if (!wasmBoidsInstance) {
-    wasmBoidsInstance = new WasmBoids(maxUnits);
-    await wasmBoidsInstance.initialize();
-  }
-  return wasmBoidsInstance;
+  return WasmBoids.getInstance(maxUnits);
 }
 
 /**
  * Get the global WasmBoids instance synchronously
  * Returns null if not yet initialized
+ * Convenience wrapper for WasmBoids.getInstanceSync()
  */
 export function getWasmBoidsSync(): WasmBoids | null {
-  return wasmBoidsInstance;
+  return WasmBoids.getInstanceSync();
 }
