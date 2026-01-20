@@ -22,7 +22,7 @@ import {
   PathResult,
 } from '../pathfinding/RecastNavigation';
 import { debugPathfinding, debugPerformance } from '@/utils/debugLogger';
-import { distance } from '@/utils/math';
+import { distance, clamp } from '@/utils/math';
 
 // Path request batching - increased since worker handles computation off-thread
 const MAX_PATHS_PER_FRAME = 16; // Worker can handle more without blocking main thread
@@ -607,8 +607,8 @@ export class PathfindingSystem extends System {
       // Flying units don't need pathfinding, but still clamp to map bounds
       if (unit.isFlying) {
         const margin = 1;
-        const clampedX = Math.max(margin, Math.min(this.mapWidth - margin, data.targetX));
-        const clampedY = Math.max(margin, Math.min(this.mapHeight - margin, data.targetY));
+        const clampedX = clamp(data.targetX, margin, this.mapWidth - margin);
+        const clampedY = clamp(data.targetY, margin, this.mapHeight - margin);
         unit.setPath([{ x: clampedX, y: clampedY }]);
         return;
       }
@@ -627,8 +627,8 @@ export class PathfindingSystem extends System {
   private queuePathRequest(request: PathRequest): void {
     // Clamp destination to map bounds to prevent pathfinding to positions outside the map
     const margin = 1;
-    request.endX = Math.max(margin, Math.min(this.mapWidth - margin, request.endX));
-    request.endY = Math.max(margin, Math.min(this.mapHeight - margin, request.endY));
+    request.endX = clamp(request.endX, margin, this.mapWidth - margin);
+    request.endY = clamp(request.endY, margin, this.mapHeight - margin);
 
     const entity = this.world.getEntity(request.entityId);
     const unit = entity?.get<Unit>('Unit');

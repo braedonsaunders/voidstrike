@@ -37,6 +37,7 @@ import {
 } from 'three/tsl';
 
 import { debugShaders } from '@/utils/debugLogger';
+import { clamp } from '@/utils/math';
 
 /**
  * StorageTexture class for GPU compute shaders.
@@ -361,7 +362,7 @@ export class VisionCompute {
    * Set temporal blend speed (0-1, higher = faster transitions)
    */
   public setTemporalBlendSpeed(speed: number): void {
-    this.uTemporalBlend.value = Math.max(0.01, Math.min(1.0, speed));
+    this.uTemporalBlend.value = clamp(speed, 0.01, 1.0);
   }
 
   /**

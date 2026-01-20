@@ -2,7 +2,7 @@
 // Enhanced terrain system with 256 height levels and terrain features
 
 import { BiomeType } from '@/rendering/Biomes';
-import { distance } from '@/utils/math';
+import { distance, clamp } from '@/utils/math';
 
 export type TerrainType =
   | 'ground'      // Normal walkable terrain (natural, smooth heightmap)
@@ -825,8 +825,8 @@ function floodFill(
   const queue: Array<{ x: number; y: number }> = [];
 
   // Clamp start position to grid
-  const sx = Math.max(0, Math.min(width - 1, Math.floor(startX)));
-  const sy = Math.max(0, Math.min(height - 1, Math.floor(startY)));
+  const sx = clamp(Math.floor(startX), 0, width - 1);
+  const sy = clamp(Math.floor(startY), 0, height - 1);
 
   // Check if start is walkable
   if (!isCellWalkable(grid[sy][sx])) {
@@ -936,8 +936,8 @@ export function validateMapConnectivity(mapData: MapData): ConnectivityValidatio
   // Check which locations are reachable
   let connectedCount = 0;
   for (const loc of locations) {
-    const lx = Math.max(0, Math.min(width - 1, Math.floor(loc.x)));
-    const ly = Math.max(0, Math.min(height - 1, Math.floor(loc.y)));
+    const lx = clamp(Math.floor(loc.x), 0, width - 1);
+    const ly = clamp(Math.floor(loc.y), 0, height - 1);
     const idx = ly * width + lx;
 
     // Check if location itself or nearby cells are reachable
@@ -1035,8 +1035,8 @@ export function ensurePathBetween(
 
   // First check if path already exists
   const startReachable = floodFill(grid, x1, y1, width, height);
-  const endX = Math.max(0, Math.min(width - 1, Math.floor(x2)));
-  const endY = Math.max(0, Math.min(height - 1, Math.floor(y2)));
+  const endX = clamp(Math.floor(x2), 0, width - 1);
+  const endY = clamp(Math.floor(y2), 0, height - 1);
   const endIdx = endY * width + endX;
 
   if (startReachable.has(endIdx)) {
@@ -1109,8 +1109,8 @@ export function autoFixConnectivity(mapData: MapData): number {
 
     // Check if already reachable
     const reachable = floodFill(terrain, baseLocation.x, baseLocation.y, width, height);
-    const tx = Math.max(0, Math.min(width - 1, Math.floor(target.x)));
-    const ty = Math.max(0, Math.min(height - 1, Math.floor(target.y)));
+    const tx = clamp(Math.floor(target.x), 0, width - 1);
+    const ty = clamp(Math.floor(target.y), 0, height - 1);
 
     let isReachable = reachable.has(ty * width + tx);
     if (!isReachable) {

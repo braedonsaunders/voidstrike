@@ -42,7 +42,7 @@ import {
   getOverlayCache,
   setOverlayCache,
 } from '@/utils/overlayCache';
-import { distance } from '@/utils/math';
+import { distance, clamp } from '@/utils/math';
 
 // Overlay height above terrain
 const OVERLAY_Y_OFFSET = 0.3;
@@ -1061,7 +1061,7 @@ export class TSLGameOverlayManager {
   }
 
   public setOpacity(opacity: number): void {
-    this.opacity = Math.max(0, Math.min(1, opacity));
+    this.opacity = clamp(opacity, 0, 1);
 
     const updateMaterialOpacity = (mesh: THREE.Mesh | null) => {
       const mat = mesh?.material as THREE.Material | undefined;

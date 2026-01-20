@@ -18,6 +18,7 @@ import { EventBus } from '@/engine/core/EventBus';
 import { useProjectionStore } from '@/store/projectionStore';
 import { AssetManager, DEFAULT_AIRBORNE_HEIGHT } from '@/assets/AssetManager';
 import { getPlayerColor } from '@/store/gameSetupStore';
+import { clamp } from '@/utils/math';
 
 // ============================================
 // CONSTANTS
@@ -535,9 +536,9 @@ export class DamageNumberSystem {
    * @returns Color as hex string (e.g., '#ff6060')
    */
   private adjustColorBrightness(hexColor: number, multiplier: number): string {
-    const r = Math.min(255, Math.max(0, Math.round(((hexColor >> 16) & 0xff) * multiplier)));
-    const g = Math.min(255, Math.max(0, Math.round(((hexColor >> 8) & 0xff) * multiplier)));
-    const b = Math.min(255, Math.max(0, Math.round((hexColor & 0xff) * multiplier)));
+    const r = clamp(Math.round(((hexColor >> 16) & 0xff) * multiplier), 0, 255);
+    const g = clamp(Math.round(((hexColor >> 8) & 0xff) * multiplier), 0, 255);
+    const b = clamp(Math.round((hexColor & 0xff) * multiplier), 0, 255);
     return '#' + ((r << 16) | (g << 8) | b).toString(16).padStart(6, '0');
   }
 

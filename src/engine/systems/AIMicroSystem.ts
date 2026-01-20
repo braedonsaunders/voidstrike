@@ -6,7 +6,7 @@ import { Health } from '../components/Health';
 import { Selectable } from '../components/Selectable';
 import { Building } from '../components/Building';
 import { Game, GameCommand } from '../core/Game';
-import { distance } from '@/utils/math';
+import { distance, clamp } from '@/utils/math';
 import { BehaviorTreeRunner, Blackboard, globalBlackboard } from '../ai/BehaviorTree';
 import {
   createCombatMicroTree,
@@ -471,8 +471,8 @@ export class AIMicroSystem extends System {
     let targetY = transform.y + (dy / dist) * kiteDistance;
 
     // Clamp to map bounds
-    targetX = Math.max(2, Math.min(this.game.config.mapWidth - 2, targetX));
-    targetY = Math.max(2, Math.min(this.game.config.mapHeight - 2, targetY));
+    targetX = clamp(targetX, 2, this.game.config.mapWidth - 2);
+    targetY = clamp(targetY, 2, this.game.config.mapHeight - 2);
 
     // Save target BEFORE move command clears it
     const savedTargetId = unit.targetEntityId;

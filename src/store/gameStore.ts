@@ -2,6 +2,7 @@ import { create } from 'zustand';
 import { UpgradeEffect } from '@/data/research/dominion';
 import { Game } from '@/engine/core/Game';
 import { getLocalPlayerId } from '@/store/gameSetupStore';
+import { clamp } from '@/utils/math';
 
 export interface ResearchedUpgrade {
   id: string;
@@ -200,7 +201,7 @@ export const useGameStore = create<GameState>((set, get) => ({
 
   addSupply: (amount) =>
     set((state) => ({
-      supply: Math.max(0, Math.min(state.maxSupply, state.supply + amount)),
+      supply: clamp(state.supply + amount, 0, state.maxSupply),
     })),
 
   addMaxSupply: (amount) =>

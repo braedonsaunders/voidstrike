@@ -28,6 +28,7 @@ import {
   wait,
   inverter,
 } from './BehaviorTree';
+import { clamp } from '@/utils/math';
 
 import { Transform } from '../components/Transform';
 import { Unit } from '../components/Unit';
@@ -417,8 +418,8 @@ export const kiteFromMelee = action('KiteFromMelee', (ctx) => {
   const mapWidth = ctx.game.config.mapWidth;
   const mapHeight = ctx.game.config.mapHeight;
 
-  unit.targetX = Math.max(1, Math.min(mapWidth - 1, targetX));
-  unit.targetY = Math.max(1, Math.min(mapHeight - 1, targetY));
+  unit.targetX = clamp(targetX, 1, mapWidth - 1);
+  unit.targetY = clamp(targetY, 1, mapHeight - 1);
 
   return true;
 });

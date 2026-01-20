@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { debugAudio } from '@/utils/debugLogger';
 import { audioConfig, SoundPriorityName } from './audioConfig';
+import { clamp } from '@/utils/math';
 
 export type SoundCategory = 'ui' | 'combat' | 'unit' | 'building' | 'ambient' | 'music' | 'voice' | 'alert';
 
@@ -744,12 +745,12 @@ class AudioManagerClass {
   // ============================================================================
 
   public setMasterVolume(volume: number): void {
-    this.masterVolume = Math.max(0, Math.min(1, volume));
+    this.masterVolume = clamp(volume, 0, 1);
     this.updateAllVolumes();
   }
 
   public setCategoryVolume(category: SoundCategory, volume: number): void {
-    this.categoryVolumes[category] = Math.max(0, Math.min(1, volume));
+    this.categoryVolumes[category] = clamp(volume, 0, 1);
     this.updateAllVolumes();
   }
 

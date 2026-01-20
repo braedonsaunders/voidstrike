@@ -35,6 +35,7 @@ import {
   BATTLE_GEOMETRIES,
   BATTLE_MATERIALS,
 } from '@/data/rendering.config';
+import { clamp } from '@/utils/math';
 
 // ============================================
 // CONSTANTS
@@ -512,9 +513,9 @@ export class BattleEffectsRenderer {
     const data = imageData.data;
     for (let i = 0; i < data.length; i += 4) {
       const noise = (Math.random() - 0.5) * 30;
-      data[i] = Math.max(0, Math.min(255, data[i] + noise));
-      data[i + 1] = Math.max(0, Math.min(255, data[i + 1] + noise));
-      data[i + 2] = Math.max(0, Math.min(255, data[i + 2] + noise));
+      data[i] = clamp(data[i] + noise, 0, 255);
+      data[i + 1] = clamp(data[i + 1] + noise, 0, 255);
+      data[i + 2] = clamp(data[i + 2] + noise, 0, 255);
     }
     ctx.putImageData(imageData, 0, 0);
 

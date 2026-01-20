@@ -24,6 +24,7 @@ import {
   distance,
 } from './ConnectivityGraph';
 import { WALKABLE_CLIMB_ELEVATION } from '@/data/pathfinding.config';
+import { clamp } from '@/utils/math';
 
 // =============================================================================
 // WALKABILITY
@@ -76,8 +77,8 @@ function floodFillFrom(
   const pathMap = new Map<number, number[]>();
 
   // Clamp start position
-  const sx = Math.max(0, Math.min(width - 1, Math.floor(startX)));
-  const sy = Math.max(0, Math.min(height - 1, Math.floor(startY)));
+  const sx = clamp(Math.floor(startX), 0, width - 1);
+  const sy = clamp(Math.floor(startY), 0, height - 1);
   const startIdx = sy * width + sx;
 
   // Find walkable cell near start if start isn't walkable

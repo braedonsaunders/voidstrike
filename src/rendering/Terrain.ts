@@ -4,6 +4,7 @@ import { BiomeConfig, BIOMES, blendBiomeColors, BiomeType } from './Biomes';
 import { TSLTerrainMaterial } from './tsl/TerrainMaterial';
 import AssetManager from '@/assets/AssetManager';
 import { debugTerrain } from '@/utils/debugLogger';
+import { clamp } from '@/utils/math';
 
 // Import from central pathfinding config - SINGLE SOURCE OF TRUTH
 import {
@@ -478,9 +479,9 @@ export class Terrain {
             color.lerp(accents[accentIndex], (noiseVal - 0.7) * 1.5);
           }
           const brightVar = (noise2D(x * 2.5, y * 2.5, 789) - 0.5) * 0.12;
-          color.r = Math.max(0, Math.min(1, color.r + brightVar));
-          color.g = Math.max(0, Math.min(1, color.g + brightVar));
-          color.b = Math.max(0, Math.min(1, color.b + brightVar));
+          color.r = clamp(color.r + brightVar, 0, 1);
+          color.g = clamp(color.g + brightVar, 0, 1);
+          color.b = clamp(color.b + brightVar, 0, 1);
           const edgeFactor = this.getEdgeFactor(terrain, x, y, mapWidth, mapHeight);
           if (edgeFactor > 0) {
             color.multiplyScalar(1 - edgeFactor * 0.25);
@@ -859,10 +860,10 @@ export class Terrain {
   ): MapCell {
     // Vertex (x, y) is at the corner of 4 cells: (x-1,y-1), (x-1,y), (x,y-1), (x,y)
     // Sample all 4 touching cells (clamped to valid indices)
-    const x0 = Math.max(0, Math.min(width - 1, x - 1));
-    const x1 = Math.max(0, Math.min(width - 1, x));
-    const y0 = Math.max(0, Math.min(height - 1, y - 1));
-    const y1 = Math.max(0, Math.min(height - 1, y));
+    const x0 = clamp(x - 1, 0, width - 1);
+    const x1 = clamp(x, 0, width - 1);
+    const y0 = clamp(y - 1, 0, height - 1);
+    const y1 = clamp(y, 0, height - 1);
 
     const cell00 = terrain[y0][x0];  // Top-left
     const cell10 = terrain[y0][x1];  // Top-right
@@ -1377,8 +1378,8 @@ export class Terrain {
         }
 
         // Determine height: prioritize ramp area > normal ground > cliff edge
-        const hx = Math.max(0, Math.min(vx, this.gridWidth - 1));
-        const hy = Math.max(0, Math.min(vy, this.gridHeight - 1));
+        const hx = clamp(vx, 0, this.gridWidth - 1);
+        const hy = clamp(vy, 0, this.gridHeight - 1);
 
         if (touchesRampArea) {
           // Vertex near ramp uses smooth heightMap for continuous slope
@@ -1395,8 +1396,8 @@ export class Terrain {
 
     // Helper: Get pre-computed consistent vertex height
     const getVertexHeight = (vx: number, vy: number): number => {
-      const hx = Math.max(0, Math.min(vx, width));
-      const hy = Math.max(0, Math.min(vy, height));
+      const hx = clamp(vx, 0, width);
+      const hy = clamp(vy, 0, height);
       return vertexHeights[hy * (width + 1) + hx];
     };
 

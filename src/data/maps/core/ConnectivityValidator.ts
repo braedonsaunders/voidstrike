@@ -21,6 +21,7 @@ import {
   edgeKey,
 } from './ConnectivityGraph';
 import { WALKABLE_CLIMB_ELEVATION } from '@/data/pathfinding.config';
+import { clamp } from '@/utils/math';
 
 // =============================================================================
 // VALIDATION RULES
@@ -220,7 +221,7 @@ function suggestRampBetween(
 
   // Determine ramp direction and width based on distance
   const dist = distance(nodeA.position, nodeB.position);
-  const rampWidth = Math.min(12, Math.max(8, Math.floor(dist / 5)));
+  const rampWidth = clamp(Math.floor(dist / 5), 8, 12);
 
   return {
     type: 'add_ramp',

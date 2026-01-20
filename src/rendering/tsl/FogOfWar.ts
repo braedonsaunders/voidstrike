@@ -18,6 +18,7 @@ import { VisionSystem } from '@/engine/systems/VisionSystem';
 import { VisionCompute } from '@/rendering/compute/VisionCompute';
 import { isSpectatorMode } from '@/store/gameSetupStore';
 import { debugShaders } from '@/utils/debugLogger';
+import { clamp } from '@/utils/math';
 
 export interface TSLFogOfWarConfig {
   mapWidth: number;
@@ -288,7 +289,7 @@ export class TSLFogOfWar {
    * Set temporal blend speed (0-1, higher = faster transitions)
    */
   public setTemporalBlendSpeed(speed: number): void {
-    this.temporalBlendSpeed = Math.max(0.01, Math.min(1.0, speed));
+    this.temporalBlendSpeed = clamp(speed, 0.01, 1.0);
   }
 
   /**

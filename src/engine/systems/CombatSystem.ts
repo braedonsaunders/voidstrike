@@ -15,7 +15,7 @@ import AssetManager from '@/assets/AssetManager';
 import { getProjectileType, DEFAULT_PROJECTILE, isInstantProjectile } from '@/data/projectiles';
 import { SpatialEntityData, SpatialUnitState } from '../core/SpatialGrid';
 import { findBestTarget as findBestTargetShared, DEFAULT_SCORING_CONFIG } from '../combat/TargetAcquisition';
-import { distance } from '@/utils/math';
+import { distance, clamp } from '@/utils/math';
 
 // PERF: Reusable event payload objects to avoid allocation per attack
 const attackEventPayload = {
@@ -1140,8 +1140,8 @@ export class CombatSystem extends System {
       // Distance to building edge
       const halfW = building.width / 2;
       const halfH = building.height / 2;
-      const clampedX = Math.max(transform.x - halfW, Math.min(impactPos.x, transform.x + halfW));
-      const clampedY = Math.max(transform.y - halfH, Math.min(impactPos.y, transform.y + halfH));
+      const clampedX = clamp(impactPos.x, transform.x - halfW, transform.x + halfW);
+      const clampedY = clamp(impactPos.y, transform.y - halfH, transform.y + halfH);
       const edgeDx = impactPos.x - clampedX;
       const edgeDy = impactPos.y - clampedY;
       const distance = Math.sqrt(edgeDx * edgeDx + edgeDy * edgeDy);
