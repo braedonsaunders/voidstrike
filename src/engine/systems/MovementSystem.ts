@@ -41,11 +41,6 @@ import {
   // Alignment
   ALIGNMENT_RADIUS,
   ALIGNMENT_STRENGTH,
-  // Building avoidance
-  BUILDING_AVOIDANCE_STRENGTH,
-  BUILDING_AVOIDANCE_MARGIN,
-  BUILDING_AVOIDANCE_SOFT_MARGIN,
-  BUILDING_PREDICTION_LOOKAHEAD,
   // Path requests
   PATH_REQUEST_COOLDOWN_TICKS,
   USE_RECAST_CROWD,
@@ -54,11 +49,6 @@ import {
   VELOCITY_HISTORY_FRAMES,
   DIRECTION_COMMIT_THRESHOLD,
   DIRECTION_COMMIT_STRENGTH,
-  // Stuck detection
-  STUCK_DETECTION_FRAMES,
-  STUCK_VELOCITY_THRESHOLD,
-  STUCK_NUDGE_STRENGTH,
-  STUCK_MIN_DISTANCE_TO_TARGET,
   // Throttling
   SEPARATION_THROTTLE_TICKS,
   COHESION_THROTTLE_TICKS,
@@ -1291,10 +1281,8 @@ export class MovementSystem extends System {
     out.x = 0;
     out.y = 0;
 
-    // RTS-style: Don't nudge units that are close to their target
-    // This is the primary fix for the jiggling issue - units at destination shouldn't be nudged
-    if (distanceToTarget < STUCK_MIN_DISTANCE_TO_TARGET) {
-      // Clear stuck state when near target
+    // Don't nudge units that are very close to their target
+    if (distanceToTarget < collisionConfig.stuckMinDistanceToTarget) {
       const state = this.stuckState.get(entityId);
       if (state) {
         state.framesStuck = 0;
@@ -1319,29 +1307,37 @@ export class MovementSystem extends System {
     state.lastY = transform.y;
 
     // Determine if stuck - must be low velocity AND haven't moved
-    const isStuck = currentVelMag < STUCK_VELOCITY_THRESHOLD && moved < 0.03;
+    const isStuck = currentVelMag < collisionConfig.stuckVelocityThreshold && moved < 0.03;
 
     if (isStuck) {
       state.framesStuck++;
 
-      if (state.framesStuck >= STUCK_DETECTION_FRAMES) {
-        // Apply nudge TOWARD target instead of random direction
-        // This helps units escape stuck positions while still moving toward goal
+      if (state.framesStuck >= collisionConfig.stuckDetectionFrames) {
         const dx = unit.targetX !== null ? unit.targetX - transform.x : 0;
         const dy = unit.targetY !== null ? unit.targetY - transform.y : 0;
         const dist = Math.sqrt(dx * dx + dy * dy);
 
         if (dist > 0.1) {
-          // Nudge toward target with slight perpendicular offset
+          // Use deterministic random to pick tangential direction
           const seed = entityId * 12345 + this.currentTick;
-          const perpOffset = ((seed % 100) / 100 - 0.5) * 0.5; // -0.25 to 0.25
+          const tangentSign = (seed % 2 === 0) ? 1 : -1;
 
-          // Perpendicular direction
+          // Perpendicular (tangential) direction to target
           const perpX = -dy / dist;
           const perpY = dx / dist;
 
-          out.x = (dx / dist + perpX * perpOffset) * STUCK_NUDGE_STRENGTH;
-          out.y = (dy / dist + perpY * perpOffset) * STUCK_NUDGE_STRENGTH;
+          // Blend between tangential escape and toward-target based on tangentialBias
+          // High tangentialBias = more sideways movement to escape obstacles
+          const bias = collisionConfig.stuckTangentialBias;
+          const towardX = dx / dist;
+          const towardY = dy / dist;
+
+          // Nudge direction: blend tangential and toward-target
+          const nudgeX = perpX * tangentSign * bias + towardX * (1 - bias);
+          const nudgeY = perpY * tangentSign * bias + towardY * (1 - bias);
+
+          out.x = nudgeX * collisionConfig.stuckNudgeStrength;
+          out.y = nudgeY * collisionConfig.stuckNudgeStrength;
         }
 
         // Reset counter after nudge
@@ -1528,7 +1524,10 @@ export class MovementSystem extends System {
 
     // Query larger radius to include soft avoidance zone
     // PERF: Use cached query - same query used by resolveHardBuildingCollision
-    const queryRadius = BUILDING_AVOIDANCE_SOFT_MARGIN + selfUnit.collisionRadius + 8;
+    const softMargin = collisionConfig.buildingAvoidanceSoftMargin;
+    const hardMargin = collisionConfig.buildingAvoidanceHardMargin;
+    const avoidStrength = collisionConfig.buildingAvoidanceStrength;
+    const queryRadius = softMargin + selfUnit.collisionRadius + 8;
     const nearbyBuildingIds = this.getCachedBuildingQuery(
       entityId,
       selfTransform.x,
@@ -1561,8 +1560,9 @@ export class MovementSystem extends System {
 
     // Calculate predicted position for predictive avoidance
     const speed = Math.sqrt(velocityX * velocityX + velocityY * velocityY);
-    const predictedX = selfTransform.x + velocityX * BUILDING_PREDICTION_LOOKAHEAD;
-    const predictedY = selfTransform.y + velocityY * BUILDING_PREDICTION_LOOKAHEAD;
+    const predictionTime = collisionConfig.buildingAvoidancePredictionLookahead;
+    const predictedX = selfTransform.x + velocityX * predictionTime;
+    const predictedY = selfTransform.y + velocityY * predictionTime;
 
     for (const buildingId of nearbyBuildingIds) {
       if (selfUnit.constructingBuildingId === buildingId) continue;
@@ -1583,8 +1583,8 @@ export class MovementSystem extends System {
       const baseHalfHeight = building.height / 2;
 
       // === TIER 1: Hard avoidance (immediate collision prevention) ===
-      const hardHalfWidth = baseHalfWidth + BUILDING_AVOIDANCE_MARGIN;
-      const hardHalfHeight = baseHalfHeight + BUILDING_AVOIDANCE_MARGIN;
+      const hardHalfWidth = baseHalfWidth + hardMargin;
+      const hardHalfHeight = baseHalfHeight + hardMargin;
 
       const clampedX = Math.max(
         buildingTransform.x - hardHalfWidth,
@@ -1599,12 +1599,12 @@ export class MovementSystem extends System {
       const dy = selfTransform.y - clampedY;
       const distance = Math.sqrt(dx * dx + dy * dy);
 
-      const hardCollisionDist = selfUnit.collisionRadius + BUILDING_AVOIDANCE_MARGIN;
+      const hardCollisionDist = selfUnit.collisionRadius + hardMargin;
 
       if (distance < hardCollisionDist && distance > 0.01) {
-        // Strong push proportional to how deep we are
+        // Push proportional to how deep we are
         const penetration = 1 - (distance / hardCollisionDist);
-        const strength = BUILDING_AVOIDANCE_STRENGTH * penetration * penetration; // Quadratic for stronger close push
+        const strength = avoidStrength * penetration * penetration;
         const normalizedDx = dx / distance;
         const normalizedDy = dy / distance;
 
@@ -1617,17 +1617,17 @@ export class MovementSystem extends System {
         const toCenterDist = Math.sqrt(toCenterX * toCenterX + toCenterY * toCenterY);
 
         if (toCenterDist > 0.01) {
-          forceX += (toCenterX / toCenterDist) * BUILDING_AVOIDANCE_STRENGTH * 1.5;
-          forceY += (toCenterY / toCenterDist) * BUILDING_AVOIDANCE_STRENGTH * 1.5;
+          forceX += (toCenterX / toCenterDist) * avoidStrength * 1.5;
+          forceY += (toCenterY / toCenterDist) * avoidStrength * 1.5;
         } else {
-          forceX += BUILDING_AVOIDANCE_STRENGTH * 1.5;
+          forceX += avoidStrength * 1.5;
         }
         continue; // Skip soft avoidance for emergency case
       }
 
       // === TIER 2: Soft avoidance (smooth steering in approach zone) ===
-      const softHalfWidth = baseHalfWidth + BUILDING_AVOIDANCE_SOFT_MARGIN;
-      const softHalfHeight = baseHalfHeight + BUILDING_AVOIDANCE_SOFT_MARGIN;
+      const softHalfWidth = baseHalfWidth + softMargin;
+      const softHalfHeight = baseHalfHeight + softMargin;
 
       const softClampedX = Math.max(
         buildingTransform.x - softHalfWidth,
@@ -1642,12 +1642,12 @@ export class MovementSystem extends System {
       const softDy = selfTransform.y - softClampedY;
       const softDistance = Math.sqrt(softDx * softDx + softDy * softDy);
 
-      const softCollisionDist = selfUnit.collisionRadius + BUILDING_AVOIDANCE_SOFT_MARGIN;
+      const softCollisionDist = selfUnit.collisionRadius + softMargin;
 
       if (softDistance < softCollisionDist && softDistance > hardCollisionDist) {
         // Gentle steering force in soft zone
         const t = (softDistance - hardCollisionDist) / (softCollisionDist - hardCollisionDist);
-        const softStrength = BUILDING_AVOIDANCE_STRENGTH * 0.3 * (1 - t);
+        const softStrength = avoidStrength * 0.3 * (1 - t);
         const normalizedDx = softDx / softDistance;
         const normalizedDy = softDy / softDistance;
 
@@ -1671,7 +1671,7 @@ export class MovementSystem extends System {
         const predDistance = Math.sqrt(predDx * predDx + predDy * predDy);
 
         // If predicted position would be inside collision zone, steer perpendicular to velocity
-        if (predDistance < selfUnit.collisionRadius + BUILDING_AVOIDANCE_MARGIN * 0.5) {
+        if (predDistance < selfUnit.collisionRadius + hardMargin * 0.5) {
           // Calculate perpendicular direction (choose the one away from building center)
           const toBuildingX = buildingTransform.x - selfTransform.x;
           const toBuildingY = buildingTransform.y - selfTransform.y;
@@ -1684,7 +1684,8 @@ export class MovementSystem extends System {
           const dot = perpX * toBuildingX + perpY * toBuildingY;
           const sign = dot > 0 ? -1 : 1;
 
-          const predictiveStrength = BUILDING_AVOIDANCE_STRENGTH * 0.5;
+          // Use configurable predictive strength multiplier
+          const predictiveStrength = avoidStrength * collisionConfig.buildingAvoidancePredictiveStrengthMultiplier;
           forceX += perpX * sign * predictiveStrength;
           forceY += perpY * sign * predictiveStrength;
         }
@@ -2485,7 +2486,9 @@ export class MovementSystem extends System {
    */
   private resolveHardBuildingCollision(entityId: number, transform: Transform, unit: Unit): void {
     // PERF: Use cached query - same query already performed by calculateBuildingAvoidanceForce
-    const queryRadius = BUILDING_AVOIDANCE_SOFT_MARGIN + unit.collisionRadius + 8;
+    const softMargin = collisionConfig.buildingAvoidanceSoftMargin;
+    const hardMargin = collisionConfig.buildingAvoidanceHardMargin;
+    const queryRadius = softMargin + unit.collisionRadius + 8;
     const nearbyBuildingIds = this.getCachedBuildingQuery(
       entityId,
       transform.x,
@@ -2512,7 +2515,7 @@ export class MovementSystem extends System {
       }
 
       // Use consistent margin with building avoidance system
-      const collisionMargin = BUILDING_AVOIDANCE_MARGIN + unit.collisionRadius;
+      const collisionMargin = hardMargin + unit.collisionRadius;
       const halfWidth = building.width / 2 + collisionMargin;
       const halfHeight = building.height / 2 + collisionMargin;
 

@@ -49,6 +49,22 @@ export interface DefaultsConfig {
   flyingUnitRadius: number;
 }
 
+export interface BuildingAvoidanceConfig {
+  strength: number;
+  hardMargin: number;
+  softMargin: number;
+  predictionLookahead: number;
+  predictiveStrengthMultiplier: number;
+}
+
+export interface StuckConfig {
+  detectionFrames: number;
+  velocityThreshold: number;
+  nudgeStrength: number;
+  minDistanceToTarget: number;
+  tangentialBias: number;
+}
+
 export interface CollisionConfig {
   separation: SeparationConfig;
   physics: PhysicsConfig;
@@ -56,6 +72,8 @@ export interface CollisionConfig {
   combat: CombatConfig;
   arrival: ArrivalConfig;
   defaults: DefaultsConfig;
+  buildingAvoidance: BuildingAvoidanceConfig;
+  stuck: StuckConfig;
 }
 
 // ============================================================================
@@ -95,6 +113,20 @@ const DEFAULT_CONFIG: CollisionConfig = {
   defaults: {
     groundUnitRadius: 0.5,
     flyingUnitRadius: 0.4,
+  },
+  buildingAvoidance: {
+    strength: 6.0,
+    hardMargin: 0.1,
+    softMargin: 0.5,
+    predictionLookahead: 0.2,
+    predictiveStrengthMultiplier: 0.3,
+  },
+  stuck: {
+    detectionFrames: 15,
+    velocityThreshold: 0.08,
+    nudgeStrength: 2.5,
+    minDistanceToTarget: 1.0,
+    tangentialBias: 0.7,
   },
 };
 
@@ -136,6 +168,8 @@ class CollisionConfigLoader {
         combat: { ...DEFAULT_CONFIG.combat, ...json.combat },
         arrival: { ...DEFAULT_CONFIG.arrival, ...json.arrival },
         defaults: { ...DEFAULT_CONFIG.defaults, ...json.defaults },
+        buildingAvoidance: { ...DEFAULT_CONFIG.buildingAvoidance, ...json.buildingAvoidance },
+        stuck: { ...DEFAULT_CONFIG.stuck, ...json.stuck },
       };
       console.log('[CollisionConfig] Loaded collision configuration');
     } catch (error) {
@@ -250,6 +284,48 @@ class CollisionConfigLoader {
 
   public get defaultFlyingUnitRadius(): number {
     return this.getConfig().defaults.flyingUnitRadius;
+  }
+
+  // Building Avoidance
+  public get buildingAvoidanceStrength(): number {
+    return this.getConfig().buildingAvoidance.strength;
+  }
+
+  public get buildingAvoidanceHardMargin(): number {
+    return this.getConfig().buildingAvoidance.hardMargin;
+  }
+
+  public get buildingAvoidanceSoftMargin(): number {
+    return this.getConfig().buildingAvoidance.softMargin;
+  }
+
+  public get buildingAvoidancePredictionLookahead(): number {
+    return this.getConfig().buildingAvoidance.predictionLookahead;
+  }
+
+  public get buildingAvoidancePredictiveStrengthMultiplier(): number {
+    return this.getConfig().buildingAvoidance.predictiveStrengthMultiplier;
+  }
+
+  // Stuck Detection
+  public get stuckDetectionFrames(): number {
+    return this.getConfig().stuck.detectionFrames;
+  }
+
+  public get stuckVelocityThreshold(): number {
+    return this.getConfig().stuck.velocityThreshold;
+  }
+
+  public get stuckNudgeStrength(): number {
+    return this.getConfig().stuck.nudgeStrength;
+  }
+
+  public get stuckMinDistanceToTarget(): number {
+    return this.getConfig().stuck.minDistanceToTarget;
+  }
+
+  public get stuckTangentialBias(): number {
+    return this.getConfig().stuck.tangentialBias;
   }
 }
 
