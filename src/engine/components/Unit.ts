@@ -65,6 +65,9 @@ export interface UnitDefinition {
   canTransform?: boolean;
   transformModes?: TransformMode[];
   defaultMode?: string;
+  // Energy system (for ability-using units like Dreadnought)
+  maxEnergy?: number; // max energy pool
+  energyRegen?: number; // energy regenerated per second
   // Cloak mechanics
   canCloak?: boolean;
   cloakEnergyCost?: number; // energy per second while cloaked
