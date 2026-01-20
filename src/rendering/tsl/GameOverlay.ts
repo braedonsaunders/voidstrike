@@ -587,9 +587,9 @@ export class TSLGameOverlayManager {
 
       let visionRange = 0;
       if (unit) {
-        visionRange = unit.visionRange || 10;
+        visionRange = unit.sightRange || 10;
       } else if (building) {
-        visionRange = building.visionRange || 8;
+        visionRange = building.sightRange || 8;
       }
 
       if (visionRange <= 0) continue;
