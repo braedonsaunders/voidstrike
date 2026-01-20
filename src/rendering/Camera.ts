@@ -455,6 +455,11 @@ export class RTSCamera {
     this.updateTerrainMinZoom();
   }
 
+  // Get the terrain height function (for external use in screen-space calculations)
+  public getTerrainHeightFunction(): ((x: number, z: number) => number) | null {
+    return this.getTerrainHeight;
+  }
+
   // Convert screen coordinates to world coordinates
   // PERF: Reuses cached raycaster/vectors to avoid allocation on every call
   public screenToWorld(screenX: number, screenY: number): THREE.Vector3 {
