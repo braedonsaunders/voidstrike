@@ -63,7 +63,8 @@ export class BuildingPlacementSystem extends System {
     // Handle addon construction
     this.game.eventBus.on('building:build_addon', this.handleBuildAddon.bind(this));
 
-    // Handle worker resuming construction on a paused/in-progress building     this.game.eventBus.on('command:resume_construction', this.handleResumeConstruction.bind(this));
+    // Handle worker resuming construction on a paused/in-progress building
+    this.game.eventBus.on('command:resume_construction', this.handleResumeConstruction.bind(this));
   }
 
   /**
