@@ -367,21 +367,27 @@ export class TSLGameOverlayManager {
   }
 
   /**
-   * Update navmesh overlay by testing actual connectivity via path computation.
-   * Uses PROGRESSIVE COMPUTATION to avoid freezing the game.
-   * Diagnostic tool for verifying ramp connections between elevation levels.
+   * Update navmesh overlay using efficient BFS flood-fill algorithm.
+   *
+   * NEW ALGORITHM (O(n) instead of O(n²)):
+   * 1. First pass: Check walkability for all cells (fast isWalkable queries)
+   * 2. BFS flood-fill: From reference point, mark all reachable cells
+   *
+   * This is dramatically faster than the old approach which called findPath()
+   * for every single cell (O(n²) pathfinding operations).
    *
    * Color coding:
-   * - Green: Connected to reference point (pathable)
-   * - Yellow/Orange: On navmesh but disconnected (path fails)
+   * - Green: Connected to reference point (reachable via BFS)
+   * - Cyan: Connected ramp
+   * - Yellow/Orange: On navmesh but disconnected (isolated region)
    * - Magenta: Disconnected ramp (connectivity issue)
    * - Red: Should be walkable but not on navmesh
-   * - Dark gray: Unwalkable (correct)
+   * - Dark gray: Unwalkable terrain
    */
   private async updateNavmeshOverlay(): Promise<void> {
     if (!this.navmeshTextureData || !this.navmeshTexture) return;
 
-    // If already cached, just update the texture
+    // If already cached, just use cached data
     if (this.navmeshCached) {
       debugPathfinding.log('[NavmeshOverlay] Using cached data');
       return;
@@ -405,11 +411,73 @@ export class TSLGameOverlayManager {
     }
 
     const { width, height, terrain } = this.mapData;
+    const totalCells = width * height;
 
-    // Find a reference point for connectivity testing
-    let refX = width / 2;
-    let refY = height / 2;
+    // Arrays to track cell states
+    const walkableGrid = new Uint8Array(totalCells); // 1 = walkable on navmesh
+    const connectedGrid = new Uint8Array(totalCells); // 1 = connected to reference
+    const terrainType = new Uint8Array(totalCells); // 0 = normal, 1 = ramp, 2 = unwalkable
 
+    // ========== PHASE 1: Walkability check (fast) ==========
+    debugPathfinding.log('[NavmeshOverlay] Phase 1: Checking walkability...');
+
+    let walkableCount = 0;
+    let unwalkableTerrainCount = 0;
+
+    // Process walkability in batches
+    const BATCH_SIZE = 4096;
+    let processed = 0;
+
+    const processWalkabilityBatch = async (): Promise<void> => {
+      const batchEnd = Math.min(processed + BATCH_SIZE, totalCells);
+
+      for (let idx = processed; idx < batchEnd; idx++) {
+        const x = idx % width;
+        const y = Math.floor(idx / width);
+        const cell = terrain[y]?.[x];
+
+        // Check terrain type first
+        if (cell?.terrain === 'unwalkable') {
+          terrainType[idx] = 2;
+          unwalkableTerrainCount++;
+          continue;
+        }
+
+        if (cell?.terrain === 'ramp') {
+          terrainType[idx] = 1;
+        }
+
+        // Check if walkable on navmesh
+        const cellX = x + 0.5;
+        const cellZ = y + 0.5;
+        if (recast.isWalkable(cellX, cellZ)) {
+          walkableGrid[idx] = 1;
+          walkableCount++;
+        }
+      }
+
+      processed = batchEnd;
+      this.navmeshProgress = (processed / totalCells) * 0.5; // First 50% is walkability
+
+      if (this.onNavmeshProgress) {
+        this.onNavmeshProgress(this.navmeshProgress);
+      }
+
+      if (processed < totalCells) {
+        await new Promise(resolve => setTimeout(resolve, 0));
+        await processWalkabilityBatch();
+      }
+    };
+
+    await processWalkabilityBatch();
+
+    const phase1Time = performance.now() - startTime;
+    debugPathfinding.log(`[NavmeshOverlay] Phase 1 complete: ${walkableCount} walkable cells in ${phase1Time.toFixed(0)}ms`);
+
+    // ========== PHASE 2: Find reference point ==========
+    let refIdx = -1;
+
+    // Find a good reference point near center
     for (let r = 0; r < Math.max(width, height) / 2; r++) {
       let found = false;
       for (let dy = -r; dy <= r && !found; dy++) {
@@ -417,10 +485,9 @@ export class TSLGameOverlayManager {
           const x = Math.floor(width / 2) + dx;
           const y = Math.floor(height / 2) + dy;
           if (x >= 0 && x < width && y >= 0 && y < height) {
-            const cell = terrain[y]?.[x];
-            if (cell && cell.terrain !== 'unwalkable' && cell.terrain !== 'ramp' && cell.elevation < 50) {
-              refX = x + 0.5;
-              refY = y + 0.5;
+            const idx = y * width + x;
+            if (walkableGrid[idx] === 1 && terrainType[idx] !== 1) {
+              refIdx = idx;
               found = true;
             }
           }
@@ -429,105 +496,129 @@ export class TSLGameOverlayManager {
       if (found) break;
     }
 
-    debugPathfinding.log(`[NavmeshOverlay] Reference point: (${refX.toFixed(1)}, ${refY.toFixed(1)})`);
-    debugPathfinding.log(`[NavmeshOverlay] Starting progressive computation for ${width * height} cells...`);
+    // ========== PHASE 3: BFS flood-fill for connectivity ==========
+    debugPathfinding.log('[NavmeshOverlay] Phase 2: BFS flood-fill for connectivity...');
 
     let connectedCount = 0;
-    let disconnectedCount = 0;
-    let unwalkableCount = 0;
-    let notOnNavmeshCount = 0;
 
-    // Process in batches to avoid blocking the main thread
-    const BATCH_SIZE = 1024;
-    const totalCells = width * height;
-    let processed = 0;
+    if (refIdx >= 0) {
+      // BFS from reference point
+      const queue: number[] = [refIdx];
+      connectedGrid[refIdx] = 1;
+      connectedCount = 1;
 
-    const processBatch = async (): Promise<void> => {
-      const batchEnd = Math.min(processed + BATCH_SIZE, totalCells);
+      // 8-directional neighbors for connectivity
+      const dx = [-1, 0, 1, -1, 1, -1, 0, 1];
+      const dy = [-1, -1, -1, 0, 0, 1, 1, 1];
 
-      for (let idx = processed; idx < batchEnd; idx++) {
-        const x = idx % width;
-        const y = Math.floor(idx / width);
-        const i = idx * 4;
-        const cell = terrain[y]?.[x];
-        const cellX = x + 0.5;
-        const cellZ = y + 0.5;
+      let bfsProcessed = 0;
+      const BFS_BATCH = 8192;
 
-        const isNavmeshWalkable = recast.isWalkable(cellX, cellZ);
+      while (queue.length > 0) {
+        const current = queue.shift()!;
+        const cx = current % width;
+        const cy = Math.floor(current / width);
 
-        if (cell?.terrain === 'unwalkable') {
-          this.navmeshTextureData![i + 0] = 60;
-          this.navmeshTextureData![i + 1] = 60;
-          this.navmeshTextureData![i + 2] = 60;
-          this.navmeshTextureData![i + 3] = 150;
-          unwalkableCount++;
-        } else if (!isNavmeshWalkable) {
-          this.navmeshTextureData![i + 0] = 255;
-          this.navmeshTextureData![i + 1] = 50;
-          this.navmeshTextureData![i + 2] = 50;
-          this.navmeshTextureData![i + 3] = 220;
-          notOnNavmeshCount++;
-        } else {
-          const pathResult = recast.findPath(cellX, cellZ, refX, refY);
+        for (let d = 0; d < 8; d++) {
+          const nx = cx + dx[d];
+          const ny = cy + dy[d];
 
-          if (pathResult.found && pathResult.path.length > 0) {
-            if (cell?.terrain === 'ramp') {
-              this.navmeshTextureData![i + 0] = 50;
-              this.navmeshTextureData![i + 1] = 255;
-              this.navmeshTextureData![i + 2] = 200;
-              this.navmeshTextureData![i + 3] = 220;
-            } else {
-              this.navmeshTextureData![i + 0] = 50;
-              this.navmeshTextureData![i + 1] = 200;
-              this.navmeshTextureData![i + 2] = 50;
-              this.navmeshTextureData![i + 3] = 180;
-            }
-            connectedCount++;
-          } else {
-            if (cell?.terrain === 'ramp') {
-              this.navmeshTextureData![i + 0] = 255;
-              this.navmeshTextureData![i + 1] = 50;
-              this.navmeshTextureData![i + 2] = 255;
-              this.navmeshTextureData![i + 3] = 255;
-            } else {
-              this.navmeshTextureData![i + 0] = 255;
-              this.navmeshTextureData![i + 1] = 200;
-              this.navmeshTextureData![i + 2] = 50;
-              this.navmeshTextureData![i + 3] = 220;
-            }
-            disconnectedCount++;
+          if (nx < 0 || nx >= width || ny < 0 || ny >= height) continue;
+
+          const nidx = ny * width + nx;
+
+          // Skip if already visited or not walkable
+          if (connectedGrid[nidx] === 1 || walkableGrid[nidx] === 0) continue;
+
+          // Mark as connected
+          connectedGrid[nidx] = 1;
+          connectedCount++;
+          queue.push(nidx);
+        }
+
+        bfsProcessed++;
+
+        // Yield periodically
+        if (bfsProcessed % BFS_BATCH === 0) {
+          this.navmeshProgress = 0.5 + (connectedCount / walkableCount) * 0.4;
+          if (this.onNavmeshProgress) {
+            this.onNavmeshProgress(this.navmeshProgress);
           }
+          await new Promise(resolve => setTimeout(resolve, 0));
         }
       }
+    }
 
-      processed = batchEnd;
-      this.navmeshProgress = processed / totalCells;
+    const phase2Time = performance.now() - startTime - phase1Time;
+    debugPathfinding.log(`[NavmeshOverlay] Phase 2 complete: ${connectedCount} connected cells in ${phase2Time.toFixed(0)}ms`);
 
-      // Update texture progressively for visual feedback
-      if (this.navmeshTexture) {
-        this.navmeshTexture.needsUpdate = true;
+    // ========== PHASE 4: Generate texture ==========
+    debugPathfinding.log('[NavmeshOverlay] Phase 3: Generating texture...');
+
+    let disconnectedCount = 0;
+    let notOnNavmeshCount = 0;
+
+    for (let idx = 0; idx < totalCells; idx++) {
+      const i = idx * 4;
+      const tType = terrainType[idx];
+      const isWalkable = walkableGrid[idx] === 1;
+      const isConnected = connectedGrid[idx] === 1;
+
+      if (tType === 2) {
+        // Unwalkable terrain - dark gray
+        this.navmeshTextureData![i + 0] = 60;
+        this.navmeshTextureData![i + 1] = 60;
+        this.navmeshTextureData![i + 2] = 60;
+        this.navmeshTextureData![i + 3] = 150;
+      } else if (!isWalkable) {
+        // Not on navmesh - red
+        this.navmeshTextureData![i + 0] = 255;
+        this.navmeshTextureData![i + 1] = 50;
+        this.navmeshTextureData![i + 2] = 50;
+        this.navmeshTextureData![i + 3] = 220;
+        notOnNavmeshCount++;
+      } else if (isConnected) {
+        // Connected to reference
+        if (tType === 1) {
+          // Connected ramp - cyan
+          this.navmeshTextureData![i + 0] = 50;
+          this.navmeshTextureData![i + 1] = 255;
+          this.navmeshTextureData![i + 2] = 200;
+          this.navmeshTextureData![i + 3] = 220;
+        } else {
+          // Connected normal - green
+          this.navmeshTextureData![i + 0] = 50;
+          this.navmeshTextureData![i + 1] = 200;
+          this.navmeshTextureData![i + 2] = 50;
+          this.navmeshTextureData![i + 3] = 180;
+        }
+      } else {
+        // Disconnected (on navmesh but can't reach reference)
+        if (tType === 1) {
+          // Disconnected ramp - magenta
+          this.navmeshTextureData![i + 0] = 255;
+          this.navmeshTextureData![i + 1] = 50;
+          this.navmeshTextureData![i + 2] = 255;
+          this.navmeshTextureData![i + 3] = 255;
+        } else {
+          // Disconnected normal - orange/yellow
+          this.navmeshTextureData![i + 0] = 255;
+          this.navmeshTextureData![i + 1] = 200;
+          this.navmeshTextureData![i + 2] = 50;
+          this.navmeshTextureData![i + 3] = 220;
+        }
+        disconnectedCount++;
       }
+    }
 
-      // Notify progress
-      if (this.onNavmeshProgress) {
-        this.onNavmeshProgress(this.navmeshProgress);
-      }
-
-      // Continue processing if not done
-      if (processed < totalCells) {
-        // Yield to main thread to keep game responsive
-        await new Promise(resolve => setTimeout(resolve, 0));
-        await processBatch();
-      }
-    };
-
-    await processBatch();
+    this.navmeshTexture.needsUpdate = true;
+    this.navmeshProgress = 1;
 
     const duration = performance.now() - startTime;
 
-    debugPathfinding.log(`[NavmeshOverlay] Completed in ${duration.toFixed(0)}ms`);
+    debugPathfinding.log(`[NavmeshOverlay] Completed in ${duration.toFixed(0)}ms (was ~30s before optimization)`);
     debugPathfinding.log(`[NavmeshOverlay]   Connected: ${connectedCount}, Disconnected: ${disconnectedCount}`);
-    debugPathfinding.log(`[NavmeshOverlay]   Not on navmesh: ${notOnNavmeshCount}, Unwalkable: ${unwalkableCount}`);
+    debugPathfinding.log(`[NavmeshOverlay]   Not on navmesh: ${notOnNavmeshCount}, Unwalkable: ${unwalkableTerrainCount}`);
 
     if (disconnectedCount > 0) {
       debugPathfinding.warn(`[NavmeshOverlay] WARNING: ${disconnectedCount} disconnected cells detected!`);
@@ -544,7 +635,6 @@ export class TSLGameOverlayManager {
 
     this.navmeshCached = true;
     this.navmeshIsComputing = false;
-    this.navmeshProgress = 1;
 
     // Notify completion
     if (this.onNavmeshComplete) {
