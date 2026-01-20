@@ -48,12 +48,14 @@ class GLTFWorkerManager {
 
     try {
       // Create worker as ES module (required for Next.js 16+ Turbopack)
-      this.worker = new Worker(
-        new URL('../workers/gltf.worker.ts', import.meta.url),
-        { type: 'module' }
-      );
+      const workerUrl = new URL('../workers/gltf.worker.ts', import.meta.url);
+      debugAssets.log('[GLTFWorkerManager] Creating worker with URL:', workerUrl.href);
+
+      this.worker = new Worker(workerUrl, { type: 'module' });
+      debugAssets.log('[GLTFWorkerManager] Worker created successfully');
 
       this.worker.onmessage = (event: MessageEvent<WorkerResponse>) => {
+        debugAssets.log('[GLTFWorkerManager] Received message from worker:', event.data.type);
         this.handleMessage(event.data);
       };
 
@@ -159,6 +161,7 @@ class GLTFWorkerManager {
       };
 
       try {
+        debugAssets.log(`[GLTFWorkerManager] Sending request ${id} for ${url}`);
         this.worker!.postMessage(request);
       } catch (error) {
         // If postMessage fails, fall back to main thread immediately
