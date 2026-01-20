@@ -66,7 +66,13 @@ voidstrike/
 │   │   │   ├── SpawnSystem.ts           # Unit spawning from production
 │   │   │   ├── BuildingPlacementSystem.ts # Building construction
 │   │   │   ├── PathfindingSystem.ts     # Dynamic pathfinding with obstacle detection
-│   │   │   ├── MovementSystem.ts        # Unit movement & formations
+│   │   │   ├── MovementSystem.ts        # Unit movement & formations (thin wrapper)
+│   │   │   ├── movement/                # Movement subsystem modules
+│   │   │   │   ├── FlockingBehavior.ts     # Boids: separation, cohesion, alignment
+│   │   │   │   ├── PathfindingMovement.ts  # A-star/navmesh, crowd, building avoidance
+│   │   │   │   ├── FormationMovement.ts    # Magic box, group formations
+│   │   │   │   ├── MovementOrchestrator.ts # Main coordinator
+│   │   │   │   └── index.ts                # Module exports
 │   │   │   ├── CombatSystem.ts          # Attack, damage, high ground
 │   │   │   ├── ProjectileSystem.ts      # Projectile movement & impact damage
 │   │   │   ├── SelectionSystem.ts       # Screen-space selection with flying unit support
@@ -1065,6 +1071,32 @@ for (const n of neighbors) {
 - **Pre-allocated Buffers**: Reusable query result arrays eliminate GC pressure
 - **Hot Cell Detection**: `getHotCells()` marks cells with multi-player units for combat zone optimization
 - **Fast Enemy Detection**: `hasEnemyInRadius()` with inline data for O(nearby) combat checks
+
+### MovementSystem Architecture
+
+The MovementSystem has been refactored into modular subsystems for maintainability:
+
+```
+MovementSystem.ts (thin wrapper)
+  └── MovementOrchestrator (main coordinator)
+        ├── FlockingBehavior      # Boids steering forces
+        ├── PathfindingMovement   # A-star, crowd, building avoidance
+        └── FormationMovement     # Magic box, group formations
+```
+
+**Module Responsibilities:**
+
+| Module | Responsibility |
+|--------|----------------|
+| **FlockingBehavior** | Separation, cohesion, alignment, physics push, velocity smoothing, stuck detection |
+| **PathfindingMovement** | Crowd agent management, path requests, building avoidance (3-tier), terrain speed modifiers |
+| **FormationMovement** | Magic box detection, group formations, move command handling |
+| **MovementOrchestrator** | Main update loop, spatial grid updates, WASM boids integration, attack-move/patrol |
+
+**Key Design Decisions:**
+- **Separation cache re-enabled**: Now that code is isolated, the separation force cache is re-enabled for performance
+- **Deterministic behavior preserved**: All modules maintain determinism for multiplayer sync
+- **Per-frame entity cache**: Component lookups cached for alignment force calculations
 
 ### MovementSystem Optimizations
 
@@ -2374,24 +2406,24 @@ Features:
 
 ### MovementSystem Integration
 
-The MovementSystem uses Recast's DetourCrowd for collision avoidance:
+The MovementSystem uses Recast's DetourCrowd for collision avoidance via the PathfindingMovement module:
 
 ```typescript
-// Each unit is registered as a crowd agent
-recast.addAgent(entityId, transform.x, transform.y, unit.radius, unit.maxSpeed);
-
-// Movement targets set via crowd API
-recast.setAgentTarget(entityId, targetX, targetY);
-
-// Crowd simulation updates agent positions/velocities
-recast.updateCrowd(deltaTime);
+// PathfindingMovement handles crowd agent lifecycle
+pathfinding.ensureAgentRegistered(entityId, transform, unit);
+pathfinding.prepareCrowdAgents(entities, dt);
+pathfinding.updateCrowd(dt);
 
 // Get computed velocity for smooth movement
-const state = recast.getAgentState(entityId);
+const state = pathfinding.getAgentState(entityId);
 if (state) {
   velocity.x = state.vx;
   velocity.y = state.vy;
 }
+
+// Building avoidance is handled by PathfindingMovement
+pathfinding.calculateBuildingAvoidanceForce(entityId, transform, unit, out, vx, vy);
+pathfinding.resolveHardBuildingCollision(entityId, transform, unit);
 ```
 
 ### NavMesh Configuration
@@ -2466,7 +2498,7 @@ const BUILDING_PREDICTION_LOOKAHEAD = 0.5;  // Seconds ahead
 
 ### RTS-Style Formation & Clumping System
 
-The MovementSystem implements classic RTS unit movement behavior:
+The FormationMovement module implements classic RTS unit movement behavior:
 
 #### Magic Box Detection
 
@@ -2500,7 +2532,7 @@ Separation force strength varies based on unit state:
 | **Arriving** | 3.0 (strongest) | Natural spreading at destination |
 | **Gathering** | 0 | Workers can overlap at resources |
 
-#### Flocking Behaviors
+#### Flocking Behaviors (FlockingBehavior module)
 
 Three steering forces work together:
 
