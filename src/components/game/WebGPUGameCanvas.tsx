@@ -351,9 +351,9 @@ export function WebGPUGameCanvas() {
           }, 100);
         }
 
-        // Initialize Phaser loop worker for background tab immunity
+        // Initialize Phaser loop worker for background tab immunity (ES module for Next.js 16+ Turbopack)
         try {
-          const worker = new Worker(new URL('../../workers/phaserLoopWorker.ts', import.meta.url));
+          const worker = new Worker(new URL('../../workers/phaserLoopWorker.ts', import.meta.url), { type: 'module' });
 
           worker.onmessage = (e: MessageEvent) => {
             if (e.data.type === 'tick') {

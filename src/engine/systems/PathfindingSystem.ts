@@ -229,9 +229,10 @@ export class PathfindingSystem extends System {
     }
 
     try {
-      // Create worker using Next.js compatible URL pattern
+      // Create worker as ES module (required for Next.js 16+ Turbopack)
       this.pathWorker = new Worker(
-        new URL('../../workers/pathfinding.worker.ts', import.meta.url)
+        new URL('../../workers/pathfinding.worker.ts', import.meta.url),
+        { type: 'module' }
       );
 
       this.pathWorker.onmessage = this.handleWorkerMessage.bind(this);
