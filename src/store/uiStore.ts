@@ -348,6 +348,9 @@ const savedDebugSettings = loadDebugSettings();
 // 'navmesh' shows ACTUAL pathfinding data from Recast Navigation (critical for debugging)
 export type GameOverlayType = 'none' | 'terrain' | 'elevation' | 'threat' | 'navmesh';
 
+// Extended overlay types including SC2-style tactical features
+export type ExtendedOverlayType = GameOverlayType | 'buildable' | 'attackRange' | 'visionRange' | 'resource';
+
 // Overlay settings
 export interface OverlaySettings {
   activeOverlay: GameOverlayType;
@@ -355,6 +358,14 @@ export interface OverlaySettings {
   elevationOverlayOpacity: number;
   threatOverlayOpacity: number;
   navmeshOverlayOpacity: number;
+  buildableOverlayOpacity: number;
+  // Real-time overlay states (hold-to-show)
+  showAttackRange: boolean;
+  showVisionRange: boolean;
+  showResourceOverlay: boolean;
+  // Navmesh computation progress
+  navmeshComputeProgress: number;
+  navmeshIsComputing: boolean;
 }
 
 export interface UIState {
@@ -489,6 +500,13 @@ export interface UIState {
   setActiveOverlay: (overlay: GameOverlayType) => void;
   toggleOverlay: (overlay: GameOverlayType) => void;
   setOverlayOpacity: (overlay: GameOverlayType, opacity: number) => void;
+  // Real-time overlay actions (SC2-style hold-to-show)
+  setShowAttackRange: (show: boolean) => void;
+  setShowVisionRange: (show: boolean) => void;
+  setShowResourceOverlay: (show: boolean) => void;
+  // Navmesh computation progress
+  setNavmeshComputeProgress: (progress: number) => void;
+  setNavmeshIsComputing: (computing: boolean) => void;
   // Performance metrics action
   updatePerformanceMetrics: (metrics: Partial<PerformanceMetrics>) => void;
 }
@@ -641,6 +659,12 @@ export const useUIStore = create<UIState>((set, get) => ({
     elevationOverlayOpacity: 0.7,
     threatOverlayOpacity: 0.5,
     navmeshOverlayOpacity: 0.8,
+    buildableOverlayOpacity: 0.6,
+    showAttackRange: false,
+    showVisionRange: false,
+    showResourceOverlay: false,
+    navmeshComputeProgress: 0,
+    navmeshIsComputing: false,
   },
   performanceMetrics: {
     cpuTime: 0,
@@ -1180,6 +1204,33 @@ export const useUIStore = create<UIState>((set, get) => ({
       }
       return state;
     }),
+
+  // Real-time overlay actions (SC2-style hold-to-show)
+  setShowAttackRange: (show) =>
+    set((state) => ({
+      overlaySettings: { ...state.overlaySettings, showAttackRange: show },
+    })),
+
+  setShowVisionRange: (show) =>
+    set((state) => ({
+      overlaySettings: { ...state.overlaySettings, showVisionRange: show },
+    })),
+
+  setShowResourceOverlay: (show) =>
+    set((state) => ({
+      overlaySettings: { ...state.overlaySettings, showResourceOverlay: show },
+    })),
+
+  // Navmesh computation progress
+  setNavmeshComputeProgress: (progress) =>
+    set((state) => ({
+      overlaySettings: { ...state.overlaySettings, navmeshComputeProgress: progress },
+    })),
+
+  setNavmeshIsComputing: (computing) =>
+    set((state) => ({
+      overlaySettings: { ...state.overlaySettings, navmeshIsComputing: computing },
+    })),
 
   updatePerformanceMetrics: (metrics) =>
     set((state) => ({
