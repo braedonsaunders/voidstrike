@@ -1036,6 +1036,23 @@ function CommandCardInner() {
 
   const hoveredCommand = commands.find((c) => c.id === hoveredCmd);
 
+  // Handle clicks on disabled buttons to play resource alerts
+  const handleDisabledClick = useCallback((cmd: CommandButton) => {
+    if (!cmd.isDisabled || !cmd.cost) return;
+
+    const game = Game.getInstance();
+    if (!game) return;
+
+    // Check which resource is insufficient and emit appropriate alert
+    if (cmd.cost.minerals > 0 && minerals < cmd.cost.minerals) {
+      game.eventBus.emit('alert:notEnoughMinerals', {});
+    } else if (cmd.cost.vespene > 0 && vespene < cmd.cost.vespene) {
+      game.eventBus.emit('alert:notEnoughVespene', {});
+    } else if (cmd.cost.supply && cmd.cost.supply > 0 && supply + cmd.cost.supply > maxSupply) {
+      game.eventBus.emit('alert:supplyBlocked', {});
+    }
+  }, [minerals, vespene, supply, maxSupply]);
+
   return (
     <div className="relative">
       {/* Menu title when in submenu */}
@@ -1054,6 +1071,7 @@ function CommandCardInner() {
               className="relative"
               onMouseEnter={() => setHoveredCmd(cmd.id)}
               onMouseLeave={() => setHoveredCmd(null)}
+              onClick={() => cmd.isDisabled && handleDisabledClick(cmd)}
             >
               <button
                 className={`
