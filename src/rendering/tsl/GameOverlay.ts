@@ -186,7 +186,7 @@ export class TSLGameOverlayManager {
   private opacity: number = 0.7;
   private showAttackRange: boolean = false;
   private showVisionRange: boolean = false;
-  private selectedEntityIds: string[] = [];
+  private selectedEntityIds: number[] = [];
 
   // Threat overlay update throttling
   private lastThreatUpdate: number = 0;
@@ -1079,7 +1079,7 @@ export class TSLGameOverlayManager {
   /**
    * Set selected entity IDs for range overlay display
    */
-  public setSelectedEntities(entityIds: string[]): void {
+  public setSelectedEntities(entityIds: number[]): void {
     this.selectedEntityIds = entityIds;
     // Update range rings if visible
     if (this.showAttackRange) {
