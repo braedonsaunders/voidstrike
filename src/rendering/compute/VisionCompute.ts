@@ -76,14 +76,14 @@ export interface VisionComputeConfig {
  * Internal type for compute shader node cache.
  *
  * TSL compute nodes are created dynamically via Fn().compute() and lack
- * official TypeScript declarations. We store them for potential reuse,
- * though currently we recreate them each frame due to ping-pong buffers.
+ * official TypeScript declarations. The compute node type is opaque -
+ * it's passed to renderer.compute() which handles dispatch internally.
  */
 interface ComputeNodeCache {
   /** Compute node writing A, reading B */
-  nodeAB: ReturnType<ReturnType<typeof Fn>['compute']> | null;
+  nodeAB: unknown;
   /** Compute node writing B, reading A */
-  nodeBA: ReturnType<ReturnType<typeof Fn>['compute']> | null;
+  nodeBA: unknown;
 }
 
 export class VisionCompute {
@@ -177,7 +177,7 @@ export class VisionCompute {
   private createComputeShader(
     currentTexture: THREE.Texture,
     previousTexture: THREE.Texture
-  ): ReturnType<ReturnType<typeof Fn>['compute']> {
+  ): unknown {
     const gridWidth = this.uGridWidth;
     const gridHeight = this.uGridHeight;
     const cellSize = this.uCellSize;
