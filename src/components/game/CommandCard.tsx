@@ -1026,17 +1026,8 @@ function CommandCardInner() {
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [menuMode, selectedUnits, commands]);
 
-  if (commands.length === 0) {
-    return (
-      <div className="w-80 h-52 bg-black/80 border border-void-700/50 rounded-lg flex items-center justify-center backdrop-blur-sm">
-        <span className="text-void-500 text-sm">Select units or buildings</span>
-      </div>
-    );
-  }
-
-  const hoveredCommand = commands.find((c) => c.id === hoveredCmd);
-
   // Handle clicks on disabled buttons to play resource alerts
+  // Must be defined before early return to satisfy React hooks rules
   const handleDisabledClick = useCallback((cmd: CommandButton) => {
     if (!cmd.isDisabled || !cmd.cost) return;
 
@@ -1052,6 +1043,16 @@ function CommandCardInner() {
       game.eventBus.emit('alert:supplyBlocked', {});
     }
   }, [minerals, vespene, supply, maxSupply]);
+
+  if (commands.length === 0) {
+    return (
+      <div className="w-80 h-52 bg-black/80 border border-void-700/50 rounded-lg flex items-center justify-center backdrop-blur-sm">
+        <span className="text-void-500 text-sm">Select units or buildings</span>
+      </div>
+    );
+  }
+
+  const hoveredCommand = commands.find((c) => c.id === hoveredCmd);
 
   return (
     <div className="relative">
