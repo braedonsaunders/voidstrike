@@ -42,7 +42,7 @@ import { debugShaders } from '@/utils/debugLogger';
 const StorageTexture = (THREE as any).StorageTexture;
 
 // Max casters per compute dispatch
-const MAX_CASTERS = 2048;
+const MAX_CASTERS = 4096;
 
 // Workgroup size for vision compute
 const WORKGROUP_SIZE = 64;

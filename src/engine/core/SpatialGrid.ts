@@ -75,7 +75,7 @@ const DEFAULT_CONFIG: GridConfig = {
   fineCellSize: 8,
   coarseCellSize: 32,  // 4x fine cells
   maxEntitiesPerCell: 64,
-  maxTotalEntities: 2048,
+  maxTotalEntities: 4096,
 };
 
 /**
