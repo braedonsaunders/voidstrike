@@ -797,7 +797,7 @@ export default function HomeBackground() {
   return (
     <div
       ref={containerRef}
-      className="fixed inset-0 z-0"
+      className="fixed inset-0 z-0 pointer-events-none"
       style={{ background: '#050010' }}
     />
   );
