@@ -2299,9 +2299,11 @@ export class OverlayScene extends Phaser.Scene {
       const attackRange = unit.attackRange || 5;
       const screenPos = projectionStore.projectToScreen(transform.x, transform.y);
 
-      // Convert world range to approximate screen pixels
-      // This is an approximation based on typical zoom levels
-      const pixelsPerUnit = projectionStore.getPixelsPerUnit?.() || 20;
+      // Calculate pixels per unit by projecting a point 1 unit away
+      const offsetPos = projectionStore.projectToScreen(transform.x + 1, transform.y);
+      const dx = offsetPos.x - screenPos.x;
+      const dy = offsetPos.y - screenPos.y;
+      const pixelsPerUnit = Math.sqrt(dx * dx + dy * dy) || 20;
       const screenRadius = attackRange * pixelsPerUnit;
 
       // Draw outer glow
@@ -2360,8 +2362,11 @@ export class OverlayScene extends Phaser.Scene {
       const sightRange = unit.sightRange || 10;
       const screenPos = projectionStore.projectToScreen(transform.x, transform.y);
 
-      // Convert world range to approximate screen pixels
-      const pixelsPerUnit = projectionStore.getPixelsPerUnit?.() || 20;
+      // Calculate pixels per unit by projecting a point 1 unit away
+      const offsetPos = projectionStore.projectToScreen(transform.x + 1, transform.y);
+      const dx = offsetPos.x - screenPos.x;
+      const dy = offsetPos.y - screenPos.y;
+      const pixelsPerUnit = Math.sqrt(dx * dx + dy * dy) || 20;
       const screenRadius = sightRange * pixelsPerUnit;
 
       // Draw outer glow

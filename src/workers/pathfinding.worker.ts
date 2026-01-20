@@ -90,22 +90,6 @@ interface FindNearestPointMessage {
   height?: number;
 }
 
-// Batch queries for overlay visualization
-interface BatchIsWalkableMessage {
-  type: 'batchIsWalkable';
-  requestId: number;
-  cells: Array<{ x: number; y: number }>;
-}
-
-interface BatchConnectivityMessage {
-  type: 'batchConnectivity';
-  requestId: number;
-  cells: Array<{ x: number; y: number }>;
-  refX: number;
-  refY: number;
-  chunkIndex: number;
-}
-
 type WorkerMessage =
   | InitMessage
   | LoadNavMeshMessage
@@ -114,9 +98,7 @@ type WorkerMessage =
   | AddObstacleMessage
   | RemoveObstacleMessage
   | IsWalkableMessage
-  | FindNearestPointMessage
-  | BatchIsWalkableMessage
-  | BatchConnectivityMessage;
+  | FindNearestPointMessage;
 
 // NavMesh config - must match main thread config
 const NAVMESH_CONFIG: Partial<TileCacheGeneratorConfig> = {
@@ -403,43 +385,6 @@ function findNearestPoint(x: number, y: number, height: number = 0): { x: number
 }
 
 /**
- * Batch check if multiple points are walkable
- * Returns Uint8Array where 1 = walkable, 0 = not walkable
- */
-function batchIsWalkable(cells: Array<{ x: number; y: number }>): Uint8Array {
-  const results = new Uint8Array(cells.length);
-
-  for (let i = 0; i < cells.length; i++) {
-    results[i] = isWalkable(cells[i].x, cells[i].y) ? 1 : 0;
-  }
-
-  return results;
-}
-
-/**
- * Batch check connectivity - can each cell reach the reference point?
- * Returns Uint8Array where 1 = connected, 0 = not connected
- */
-function batchConnectivity(
-  cells: Array<{ x: number; y: number }>,
-  refX: number,
-  refY: number
-): Uint8Array {
-  const results = new Uint8Array(cells.length);
-
-  if (!navMeshQuery) return results;
-
-  for (let i = 0; i < cells.length; i++) {
-    const cell = cells[i];
-    // Only check connectivity for cells we know are walkable
-    const pathResult = findPath(cell.x, cell.y, refX, refY, 0.5);
-    results[i] = (pathResult.found && pathResult.path.length > 0) ? 1 : 0;
-  }
-
-  return results;
-}
-
-/**
  * Add box obstacle
  */
 function addObstacle(
@@ -594,27 +539,6 @@ self.onmessage = async (event: MessageEvent<WorkerMessage>) => {
         requestId: message.requestId,
         point,
       });
-      break;
-    }
-
-    case 'batchIsWalkable': {
-      const results = batchIsWalkable(message.cells);
-      self.postMessage({
-        type: 'batchIsWalkableResult',
-        requestId: message.requestId,
-        results,
-      }, { transfer: [results.buffer] });
-      break;
-    }
-
-    case 'batchConnectivity': {
-      const results = batchConnectivity(message.cells, message.refX, message.refY);
-      self.postMessage({
-        type: 'batchConnectivityResult',
-        requestId: message.requestId,
-        chunkIndex: message.chunkIndex,
-        results,
-      }, { transfer: [results.buffer] });
       break;
     }
   }
