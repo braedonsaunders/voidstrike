@@ -10,6 +10,7 @@ import type {
   BuildingDefinition,
   ResearchDefinition,
   AbilityDefinition,
+  AbilityTargetType,
   WallDefinition,
   WallUpgradeDefinition,
   FactionManifest,
@@ -22,9 +23,9 @@ import type {
 } from './types';
 
 type DamageType = 'normal' | 'explosive' | 'concussive' | 'psionic';
-type AbilityTargetType = 'none' | 'point' | 'unit' | 'ally' | 'self';
 
 const VALID_DAMAGE_TYPES: DamageType[] = ['normal', 'explosive', 'concussive', 'psionic'];
+// AbilityTargetType imported from engine layer - these are the valid target types
 const VALID_TARGET_TYPES: AbilityTargetType[] = ['none', 'point', 'unit', 'ally', 'self'];
 const VALID_UNIT_CATEGORIES = ['infantry', 'vehicle', 'ship'] as const;
 const VALID_UPGRADE_EFFECT_TYPES = [

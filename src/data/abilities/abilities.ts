@@ -15,7 +15,10 @@
 
 // ==================== ABILITY TYPES ====================
 
-export type AbilityTargetType = 'instant' | 'targeted' | 'ground' | 'passive' | 'toggle' | 'autocast';
+// AbilityActivationMode describes how an ability is activated (instant, targeted, etc.)
+// This is distinct from AbilityTargetType in engine/components/Ability.ts which describes
+// the targeting behavior (none, point, unit, ally, self)
+export type AbilityActivationMode = 'instant' | 'targeted' | 'ground' | 'passive' | 'toggle' | 'autocast';
 export type AbilityEffectType =
   | 'damage'
   | 'heal'
@@ -52,14 +55,16 @@ export interface AbilityTargetFilter {
 
 // ==================== ABILITY DEFINITION ====================
 
-export interface AbilityDefinition {
+// AbilityDataDefinition is for data layer definitions (game content)
+// This is distinct from AbilityDefinition in engine/components/Ability.ts which is for ECS runtime
+export interface AbilityDataDefinition {
   id: string;
   name: string;
   description: string;
   icon?: string;
 
   // Targeting
-  targetType: AbilityTargetType;
+  targetType: AbilityActivationMode;
   range?: number; // Range for targeted abilities
   radius?: number; // Effect radius for AoE
 
@@ -92,7 +97,7 @@ export interface AbilityDefinition {
 
 // ==================== ABILITY DEFINITIONS ====================
 
-export const ABILITY_DEFINITIONS: Record<string, AbilityDefinition> = {
+export const ABILITY_DEFINITIONS: Record<string, AbilityDataDefinition> = {
   // === INFANTRY ABILITIES ===
 
   stim_pack: {
@@ -443,7 +448,7 @@ export const ABILITY_DEFINITIONS: Record<string, AbilityDefinition> = {
  * Ability Registry class for managing and querying abilities.
  */
 class AbilityRegistryClass {
-  private abilities: Map<string, AbilityDefinition> = new Map();
+  private abilities: Map<string, AbilityDataDefinition> = new Map();
   private initialized: boolean = false;
 
   public initialize(): void {
@@ -456,31 +461,31 @@ class AbilityRegistryClass {
     this.initialized = true;
   }
 
-  public get(abilityId: string): AbilityDefinition | undefined {
+  public get(abilityId: string): AbilityDataDefinition | undefined {
     this.initialize();
     return this.abilities.get(abilityId);
   }
 
-  public getAll(): Map<string, AbilityDefinition> {
+  public getAll(): Map<string, AbilityDataDefinition> {
     this.initialize();
     return this.abilities;
   }
 
-  public register(ability: AbilityDefinition): void {
+  public register(ability: AbilityDataDefinition): void {
     this.abilities.set(ability.id, ability);
   }
 
-  public getByTargetType(targetType: AbilityTargetType): AbilityDefinition[] {
+  public getByActivationMode(mode: AbilityActivationMode): AbilityDataDefinition[] {
     this.initialize();
-    return Array.from(this.abilities.values()).filter(a => a.targetType === targetType);
+    return Array.from(this.abilities.values()).filter(a => a.targetType === mode);
   }
 
-  public getAutocastAbilities(): AbilityDefinition[] {
+  public getAutocastAbilities(): AbilityDataDefinition[] {
     this.initialize();
     return Array.from(this.abilities.values()).filter(a => a.canAutocast);
   }
 
-  public getAbilitiesRequiringResearch(researchId: string): AbilityDefinition[] {
+  public getAbilitiesRequiringResearch(researchId: string): AbilityDataDefinition[] {
     this.initialize();
     return Array.from(this.abilities.values()).filter(
       a => a.requiresResearch?.includes(researchId)
@@ -498,9 +503,9 @@ export const AbilityRegistry = new AbilityRegistryClass();
 // ==================== HELPER FUNCTIONS ====================
 
 /**
- * Get an ability definition by ID.
+ * Get an ability data definition by ID.
  */
-export function getAbility(abilityId: string): AbilityDefinition | undefined {
+export function getAbility(abilityId: string): AbilityDataDefinition | undefined {
   return AbilityRegistry.get(abilityId);
 }
 
@@ -514,16 +519,16 @@ export function unitHasAbility(unitAbilities: string[] | undefined, abilityId: s
 /**
  * Get all abilities for a unit.
  */
-export function getUnitAbilities(abilityIds: string[] | undefined): AbilityDefinition[] {
+export function getUnitAbilities(abilityIds: string[] | undefined): AbilityDataDefinition[] {
   if (!abilityIds) return [];
-  return abilityIds.map(id => AbilityRegistry.get(id)).filter((a): a is AbilityDefinition => a !== undefined);
+  return abilityIds.map(id => AbilityRegistry.get(id)).filter((a): a is AbilityDataDefinition => a !== undefined);
 }
 
 /**
  * Check if an ability can be used (energy, cooldown, etc.).
  */
 export function canUseAbility(
-  ability: AbilityDefinition,
+  ability: AbilityDataDefinition,
   currentEnergy: number,
   currentHealth: number,
   cooldownRemaining: number,
@@ -560,7 +565,7 @@ export function canUseAbility(
  * Calculate ability damage with modifiers.
  */
 export function calculateAbilityDamage(
-  ability: AbilityDefinition,
+  ability: AbilityDataDefinition,
   bonusDamage: number = 0
 ): number {
   const damageEffect = ability.effects.find(e => e.type === 'damage');

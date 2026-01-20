@@ -90,12 +90,23 @@ export {
   getUnitAbilities,
   canUseAbility,
   calculateAbilityDamage,
-  type AbilityDefinition,
+  type AbilityDataDefinition,
   type AbilityEffect,
-  type AbilityTargetType,
+  type AbilityActivationMode,
   type AbilityEffectType,
   type AbilityTargetFilter,
 } from './abilities/abilities';
+
+// Ability mapper for converting between data and engine layer types
+export {
+  mapActivationModeToTargetType,
+  toEngineAbilityDefinition,
+  toEngineAbilityDefinitions,
+  requiresTargetSelection,
+  isToggleAbility,
+  isPassiveAbility,
+  canAutocast,
+} from './abilities/abilityMapper';
 
 // ==================== FORMATIONS ====================
 export {
