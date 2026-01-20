@@ -700,18 +700,20 @@ export function createFogOfWarPass(
   const uCameraWorldMatrix = uniform(camera.matrixWorld.clone());
 
   // Vision texture (will be set dynamically)
-  let visionTextureRef: THREE.Texture | null = null;
   const uHasVisionTexture = uniform(0.0);
 
   // Create a placeholder texture for initial binding
+  // This texture will be REPLACED (not data-updated) when vision texture is set
   const placeholderData = new Uint8Array(4);
   placeholderData[0] = 0; // R - explored
   placeholderData[1] = 0; // G - visible
-  placeholderData[2] = 0; // B - velocity
-  placeholderData[3] = 255; // A - smooth visibility
+  placeholderData[2] = 128; // B - velocity (0.5 = no change)
+  placeholderData[3] = 0; // A - smooth visibility
   const placeholderTexture = new THREE.DataTexture(placeholderData, 1, 1, THREE.RGBAFormat);
   placeholderTexture.needsUpdate = true;
-  let currentVisionTexture: THREE.Texture = placeholderTexture;
+
+  // Create the texture node ONCE - we'll update its internal reference
+  const visionTextureNode = texture(placeholderTexture);
 
   // ============================================
   // SHADER NODE
@@ -778,13 +780,11 @@ export function createFogOfWarPass(
       { offset: vec2(1, 1), weight: 0.0625 },
     ];
 
-    // Create texture node for vision
-    const visionTex = texture(currentVisionTexture);
-
+    // Use the shared vision texture node (updated externally via setVisionTexture)
     for (const sample of gaussianWeights) {
       const sampleUV = validUV.add(sample.offset.mul(blurRadius));
       const clampedSampleUV = clamp(sampleUV, 0.001, 0.999);
-      const visionSample = visionTex.sample(clampedSampleUV);
+      const visionSample = visionTextureNode.sample(clampedSampleUV);
 
       // Vision texture format: R=explored, G=visible, B=velocity, A=smooth
       const sampleExplored = visionSample.r;
@@ -911,9 +911,10 @@ export function createFogOfWarPass(
   };
 
   const setVisionTexture = (tex: THREE.Texture | null) => {
-    visionTextureRef = tex;
     if (tex) {
-      currentVisionTexture = tex;
+      // Update the TextureNode's internal texture reference
+      // In TSL, TextureNode.value holds the THREE.Texture
+      (visionTextureNode as any).value = tex;
       uHasVisionTexture.value = 1.0;
 
       // Update grid dimensions from texture
@@ -921,7 +922,7 @@ export function createFogOfWarPass(
         uGridDimensions.value.set(tex.image.width || 128, tex.image.height || 128);
       }
     } else {
-      currentVisionTexture = placeholderTexture;
+      (visionTextureNode as any).value = placeholderTexture;
       uHasVisionTexture.value = 0.0;
     }
   };
