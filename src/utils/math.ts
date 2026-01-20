@@ -1,3 +1,9 @@
+/** Canonical 2D point interface */
+export interface Point {
+  x: number;
+  y: number;
+}
+
 export function clamp(value: number, min: number, max: number): number {
   return Math.max(min, Math.min(max, value));
 }
@@ -18,6 +24,20 @@ export function distanceSquared(x1: number, y1: number, x2: number, y2: number):
   return dx * dx + dy * dy;
 }
 
+/** Point-based distance calculation for objects with x, y properties */
+export function distanceXY(a: Point, b: Point): number {
+  const dx = b.x - a.x;
+  const dy = b.y - a.y;
+  return Math.sqrt(dx * dx + dy * dy);
+}
+
+/** Point-based squared distance (avoids sqrt - use for comparisons) */
+export function distanceSquaredXY(a: Point, b: Point): number {
+  const dx = b.x - a.x;
+  const dy = b.y - a.y;
+  return dx * dx + dy * dy;
+}
+
 export function normalize(x: number, y: number): { x: number; y: number } {
   const mag = Math.sqrt(x * x + y * y);
   if (mag === 0) return { x: 0, y: 0 };
@@ -28,10 +48,24 @@ export function angle(x1: number, y1: number, x2: number, y2: number): number {
   return Math.atan2(y2 - y1, x2 - x1);
 }
 
+/**
+ * @internal NON-DETERMINISTIC - DO NOT USE IN GAMEPLAY CODE
+ * Uses Math.random() which breaks multiplayer sync. For gameplay randomness,
+ * use SeededRandom instead. This function exists only for non-gameplay uses
+ * like UI effects or debugging.
+ * @deprecated Use SeededRandom.nextRange() for deterministic gameplay
+ */
 export function randomRange(min: number, max: number): number {
   return min + Math.random() * (max - min);
 }
 
+/**
+ * @internal NON-DETERMINISTIC - DO NOT USE IN GAMEPLAY CODE
+ * Uses Math.random() which breaks multiplayer sync. For gameplay randomness,
+ * use SeededRandom instead. This function exists only for non-gameplay uses
+ * like UI effects or debugging.
+ * @deprecated Use SeededRandom.nextInt() for deterministic gameplay
+ */
 export function randomInt(min: number, max: number): number {
   return Math.floor(randomRange(min, max + 1));
 }

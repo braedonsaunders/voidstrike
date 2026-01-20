@@ -3,6 +3,7 @@ import { BiomeConfig } from './Biomes';
 import { MapData } from '@/data/maps';
 import AssetManager from '@/assets/AssetManager';
 import { DECORATIONS } from '@/data/rendering.config';
+import { distance } from '@/utils/math';
 
 // PERF: Reusable Euler object for instanced decoration loops (avoids thousands of allocations)
 const _tempEuler = new THREE.Euler();
@@ -77,7 +78,7 @@ function buildRampClearanceSet(mapData: MapData): Set<string> {
       if (cell.terrain === 'ramp') {
         for (let dy = -RAMP_CLEARANCE_RADIUS; dy <= RAMP_CLEARANCE_RADIUS; dy++) {
           for (let dx = -RAMP_CLEARANCE_RADIUS; dx <= RAMP_CLEARANCE_RADIUS; dx++) {
-            const dist = Math.sqrt(dx * dx + dy * dy);
+            const dist = distance(cx, cy, cx + dx, cy + dy);
             if (dist <= RAMP_CLEARANCE_RADIUS) {
               clearance.add(`${cx + dx},${cy + dy}`);
             }

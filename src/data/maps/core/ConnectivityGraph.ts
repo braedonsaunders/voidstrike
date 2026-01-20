@@ -6,6 +6,7 @@
  */
 
 import { type Point, toXY } from './ElevationMap';
+import { distanceXY } from '@/utils/math';
 
 // =============================================================================
 // NODE TYPES
@@ -191,11 +192,7 @@ export function edgeKey(from: string, to: string): string {
 
 /** Calculate straight-line distance between two points */
 export function distance(a: Point, b: Point): number {
-  const pa = toXY(a);
-  const pb = toXY(b);
-  const dx = pb.x - pa.x;
-  const dy = pb.y - pa.y;
-  return Math.sqrt(dx * dx + dy * dy);
+  return distanceXY(toXY(a), toXY(b));
 }
 
 /** Create an empty connectivity graph */

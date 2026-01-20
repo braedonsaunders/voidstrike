@@ -14,6 +14,7 @@
 import * as THREE from 'three';
 import type { EditorMapData } from '../config/EditorConfig';
 import { EdgeDetector, type CellEdgeInfo } from '../terrain/EdgeDetector';
+import { distance } from '@/utils/math';
 
 /** Height scale factor - matches terrain rendering */
 const HEIGHT_SCALE = 0.04;
@@ -250,7 +251,7 @@ export class GuardrailMesh {
 
     const dx = x2 - x1;
     const dy = y2 - y1;
-    const len = Math.sqrt(dx * dx + dy * dy);
+    const len = distance(x1, y1, x2, y2);
     if (len < 0.01) return;
 
     // Perpendicular direction for width

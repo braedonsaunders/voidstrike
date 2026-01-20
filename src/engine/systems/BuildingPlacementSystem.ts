@@ -13,7 +13,7 @@ import { WALL_DEFINITIONS } from '@/data/buildings/walls';
 import { useGameStore } from '@/store/gameStore';
 import { isLocalPlayer, getLocalPlayerId } from '@/store/gameSetupStore';
 import { debugBuildingPlacement } from '@/utils/debugLogger';
-import { SeededRandom } from '@/utils/math';
+import { SeededRandom, distance } from '@/utils/math';
 
 /**
  * BuildingPlacementSystem handles placing new buildings when workers construct them.
@@ -998,12 +998,10 @@ export class BuildingPlacementSystem extends System {
       const transform = segmentEntity.get<Transform>('Transform');
       if (!transform) continue;
 
-      const dx = transform.x - workerX;
-      const dy = transform.y - workerY;
-      const distance = Math.sqrt(dx * dx + dy * dy);
+      const dist = distance(workerX, workerY, transform.x, transform.y);
 
-      if (!nearest || distance < nearest.distance) {
-        nearest = { entity: segmentEntity, distance };
+      if (!nearest || dist < nearest.distance) {
+        nearest = { entity: segmentEntity, distance: dist };
       }
     }
 
@@ -1293,14 +1291,12 @@ export class BuildingPlacementSystem extends System {
       }
 
       // Check if worker is close enough to construct
-      const dx = transform.x - buildingTransform.x;
-      const dy = transform.y - buildingTransform.y;
-      const distance = Math.sqrt(dx * dx + dy * dy);
+      const dist = distance(buildingTransform.x, buildingTransform.y, transform.x, transform.y);
 
       // RTS-style: Move inside building footprint when actively constructing
       // Use same threshold formula as isWorkerConstructing for consistency
       const constructThreshold = Math.max(building.width / 2, 3);
-      const isCloseEnough = distance <= this.CONSTRUCTION_RANGE + constructThreshold;
+      const isCloseEnough = dist <= this.CONSTRUCTION_RANGE + constructThreshold;
 
       if (isCloseEnough && building.state === 'constructing') {
         // Worker is actively constructing - move around inside the building
@@ -1555,9 +1551,7 @@ export class BuildingPlacementSystem extends System {
 
       const workerTransform = entity.get<Transform>('Transform');
       if (!workerTransform) continue;
-      const dx = workerTransform.x - buildingTransform.x;
-      const dy = workerTransform.y - buildingTransform.y;
-      const distance = Math.sqrt(dx * dx + dy * dy);
+      const dist = distance(buildingTransform.x, buildingTransform.y, workerTransform.x, workerTransform.y);
 
       // Worker is close enough to construct
       // For walls: Use larger AoE construction range so workers can build multiple nearby walls
@@ -1569,7 +1563,7 @@ export class BuildingPlacementSystem extends System {
         ? this.WALL_AOE_CONSTRUCTION_RANGE
         : this.CONSTRUCTION_RANGE + constructThreshold;
 
-      if (distance <= effectiveRange) {
+      if (dist <= effectiveRange) {
         return true;
       }
     }
@@ -1642,12 +1636,10 @@ export class BuildingPlacementSystem extends System {
         // Don't auto-assign workers that are already building something
         if (unit.constructingBuildingId !== null) continue;
 
-        const dx = workerTransform.x - buildingTransform.x;
-        const dy = workerTransform.y - buildingTransform.y;
-        const distance = Math.sqrt(dx * dx + dy * dy);
+        const dist = distance(buildingTransform.x, buildingTransform.y, workerTransform.x, workerTransform.y);
 
-        if (distance < closestDistance) {
-          closestDistance = distance;
+        if (dist < closestDistance) {
+          closestDistance = dist;
           closestWorker = workerEntity;
         }
       }

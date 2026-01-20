@@ -17,6 +17,7 @@ import { Building } from '../components/Building';
 import { Resource } from '../components/Resource';
 import { Selectable } from '../components/Selectable';
 import { Health } from '../components/Health';
+import { distance } from '@/utils/math';
 
 /**
  * Types of strategic positions
@@ -337,9 +338,7 @@ export class PositionalAnalysis {
       // Find or create cluster
       let addedToCluster = false;
       for (const cluster of resourceClusters) {
-        const dx = transform.x - cluster.x;
-        const dy = transform.y - cluster.y;
-        if (Math.sqrt(dx * dx + dy * dy) < 10) {
+        if (distance(transform.x, transform.y, cluster.x, cluster.y) < 10) {
           // Update cluster center
           cluster.x = (cluster.x * cluster.count + transform.x) / (cluster.count + 1);
           cluster.y = (cluster.y * cluster.count + transform.y) / (cluster.count + 1);
@@ -398,7 +397,7 @@ export class PositionalAnalysis {
         const index = row * this.cols + col;
         if (passable[index] === 0) continue;
 
-        const dist = Math.sqrt(dc * dc + dr * dr);
+        const dist = distance(0, 0, dc, dr);
         const edgeDist = edgeDistance[index];
 
         // Score: far from original position is bad, near walls is good
@@ -445,9 +444,7 @@ export class PositionalAnalysis {
       // Check this isn't too close to existing position
       let tooClose = false;
       for (const existing of positions) {
-        const dx = existing.x - behindX;
-        const dy = existing.y - behindY;
-        if (Math.sqrt(dx * dx + dy * dy) < 5) {
+        if (distance(existing.x, existing.y, behindX, behindY) < 5) {
           tooClose = true;
           break;
         }
@@ -485,9 +482,7 @@ export class PositionalAnalysis {
         if (toRemove.has(indices[j])) continue;
 
         const pos2 = positions[indices[j]];
-        const dx = pos1.x - pos2.x;
-        const dy = pos1.y - pos2.y;
-        const dist = Math.sqrt(dx * dx + dy * dy);
+        const dist = distance(pos1.x, pos1.y, pos2.x, pos2.y);
 
         if (dist < minDistance) {
           // Keep higher quality
@@ -523,9 +518,7 @@ export class PositionalAnalysis {
         const p1 = positions[i];
         const p2 = positions[j];
 
-        const dx = p2.x - p1.x;
-        const dy = p2.y - p1.y;
-        const dist = Math.sqrt(dx * dx + dy * dy);
+        const dist = distance(p1.x, p1.y, p2.x, p2.y);
 
         // Only connect nearby positions
         if (dist > 30) continue;
@@ -549,7 +542,7 @@ export class PositionalAnalysis {
 
     const dx = x2 - x1;
     const dy = y2 - y1;
-    const dist = Math.sqrt(dx * dx + dy * dy);
+    const dist = distance(x1, y1, x2, y2);
     const steps = Math.ceil(dist / this.cellSize);
 
     for (let i = 0; i <= steps; i++) {
@@ -606,9 +599,7 @@ export class PositionalAnalysis {
     let nearestDist = Infinity;
 
     for (const choke of chokes) {
-      const dx = choke.x - x;
-      const dy = choke.y - y;
-      const dist = Math.sqrt(dx * dx + dy * dy);
+      const dist = distance(x, y, choke.x, choke.y);
 
       if (dist < nearestDist) {
         nearestDist = dist;
@@ -630,9 +621,7 @@ export class PositionalAnalysis {
     let nearestDist = Infinity;
 
     for (const pos of positions) {
-      const dx = pos.x - x;
-      const dy = pos.y - y;
-      const dist = Math.sqrt(dx * dx + dy * dy);
+      const dist = distance(x, y, pos.x, pos.y);
 
       if (dist < nearestDist) {
         nearestDist = dist;
@@ -659,9 +648,7 @@ export class PositionalAnalysis {
     for (const pos of this.analysis.positions) {
       if (type && pos.type !== type) continue;
 
-      const dx = pos.x - x;
-      const dy = pos.y - y;
-      if (Math.sqrt(dx * dx + dy * dy) <= radius) {
+      if (distance(x, y, pos.x, pos.y) <= radius) {
         results.push(pos);
       }
     }
@@ -676,9 +663,7 @@ export class PositionalAnalysis {
     const nearest = this.getNearestChoke(x, y);
     if (!nearest) return false;
 
-    const dx = nearest.x - x;
-    const dy = nearest.y - y;
-    return Math.sqrt(dx * dx + dy * dy) <= tolerance;
+    return distance(x, y, nearest.x, nearest.y) <= tolerance;
   }
 
   /**

@@ -5,6 +5,7 @@ import { Building } from '@/engine/components/Building';
 import { Transform } from '@/engine/components/Transform';
 import { Selectable } from '@/engine/components/Selectable';
 import { getLocalPlayerId, isSpectatorMode } from '@/store/gameSetupStore';
+import { distance } from '@/utils/math';
 
 interface RallyPoint {
   buildingId: number;
@@ -230,13 +231,13 @@ export class RallyPointRenderer {
 
     const dx = endX - startX;
     const dy = endY - startY;
-    const distance = Math.sqrt(dx * dx + dy * dy);
-    if (distance < 0.01) return segments;
+    const dist = distance(startX, startY, endX, endY);
+    if (dist < 0.01) return segments;
 
     const dashPlusGap = this.DASH_LENGTH + this.GAP_LENGTH;
-    const numDashes = Math.floor(distance / dashPlusGap);
-    const dirX = dx / distance;
-    const dirY = dy / distance;
+    const numDashes = Math.floor(dist / dashPlusGap);
+    const dirX = dx / dist;
+    const dirY = dy / dist;
 
     for (let i = 0; i < numDashes; i++) {
       const segmentStart = i * dashPlusGap;
@@ -244,8 +245,8 @@ export class RallyPointRenderer {
 
       const x1 = startX + dirX * segmentStart;
       const z1 = startY + dirY * segmentStart;
-      const x2 = startX + dirX * Math.min(segmentEnd, distance);
-      const z2 = startY + dirY * Math.min(segmentEnd, distance);
+      const x2 = startX + dirX * Math.min(segmentEnd, dist);
+      const z2 = startY + dirY * Math.min(segmentEnd, dist);
 
       const y1 = (this.getTerrainHeight ? this.getTerrainHeight(x1, z1) : 0) + lineOffset;
       const y2 = (this.getTerrainHeight ? this.getTerrainHeight(x2, z2) : 0) + lineOffset;
@@ -258,7 +259,7 @@ export class RallyPointRenderer {
 
     // Add final segment to reach the end point if needed
     const lastSegmentEnd = numDashes * dashPlusGap;
-    if (lastSegmentEnd < distance) {
+    if (lastSegmentEnd < dist) {
       const x1 = startX + dirX * lastSegmentEnd;
       const z1 = startY + dirY * lastSegmentEnd;
       const y1 = (this.getTerrainHeight ? this.getTerrainHeight(x1, z1) : 0) + lineOffset;

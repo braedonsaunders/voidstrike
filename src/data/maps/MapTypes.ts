@@ -2,6 +2,7 @@
 // Enhanced terrain system with 256 height levels and terrain features
 
 import { BiomeType } from '@/rendering/Biomes';
+import { distance } from '@/utils/math';
 
 export type TerrainType =
   | 'ground'      // Normal walkable terrain (natural, smooth heightmap)
@@ -598,7 +599,7 @@ export function createRaisedPlatform(
 
   for (let dy = -outerRadius; dy <= outerRadius; dy++) {
     for (let dx = -outerRadius; dx <= outerRadius; dx++) {
-      const dist = Math.sqrt(dx * dx + dy * dy);
+      const dist = distance(0, 0, dx, dy);
       const px = Math.floor(centerX + dx);
       const py = Math.floor(centerY + dy);
 
@@ -1045,7 +1046,7 @@ export function ensurePathBetween(
   // Carve a straight corridor between points
   const dx = x2 - x1;
   const dy = y2 - y1;
-  const dist = Math.sqrt(dx * dx + dy * dy);
+  const dist = distance(x1, y1, x2, y2);
   const steps = Math.ceil(dist);
 
   // Perpendicular direction for corridor width
@@ -1137,7 +1138,7 @@ export function autoFixConnectivity(mapData: MapData): number {
       for (const idx of reachable) {
         const ry = Math.floor(idx / width);
         const rx = idx % width;
-        const d = Math.sqrt((rx - tx) * (rx - tx) + (ry - ty) * (ry - ty));
+        const d = distance(rx, ry, tx, ty);
         if (d < closestDist) {
           closestDist = d;
           closestReachable = { x: rx, y: ry };

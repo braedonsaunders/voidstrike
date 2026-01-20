@@ -11,7 +11,7 @@ import { UNIT_DEFINITIONS } from '@/data/units/dominion';
 import { BUILDING_DEFINITIONS, RESEARCH_MODULE_UNITS } from '@/data/buildings/dominion';
 import { getCounterRecommendation } from './AIMicroSystem';
 import { debugAI } from '@/utils/debugLogger';
-import { SeededRandom } from '@/utils/math';
+import { SeededRandom, distance } from '@/utils/math';
 import {
   getRandomBuildOrder,
   type AIDifficulty,
@@ -220,12 +220,10 @@ export class EnhancedAISystem extends System {
 
         // Check if depleted resource was near any AI base
         for (const basePos of basePositions) {
-          const dx = data.position.x - basePos.x;
-          const dy = data.position.y - basePos.y;
-          const distance = Math.sqrt(dx * dx + dy * dy);
+          const dist = distance(basePos.x, basePos.y, data.position.x, data.position.y);
 
           // Resources within 30 units of a base are considered "near"
-          if (distance <= 30) {
+          if (dist <= 30) {
             ai.depletedPatchesNearBases++;
             ai.lastDepletionTick = currentTick;
             debugAI.log(`[EnhancedAI] ${ai.playerId}: Resource depleted near base! Total depleted: ${ai.depletedPatchesNearBases}`);
@@ -919,9 +917,7 @@ export class EnhancedAISystem extends System {
       if (unit.state !== 'idle') continue;
 
       // Check distance to base rally area
-      const dx = transform.x - baseRallyX;
-      const dy = transform.y - baseRallyY;
-      const distToRally = Math.sqrt(dx * dx + dy * dy);
+      const distToRally = distance(baseRallyX, baseRallyY, transform.x, transform.y);
 
       // Rally units that are too far from the staging area
       if (distToRally > 10) {
@@ -1253,9 +1249,7 @@ export class EnhancedAISystem extends System {
       // Check if this mineral is near an existing cluster
       let addedToCluster = false;
       for (const cluster of mineralClusters) {
-        const dx = transform.x - cluster.x;
-        const dy = transform.y - cluster.y;
-        if (Math.sqrt(dx * dx + dy * dy) < 10) {
+        if (distance(cluster.x, cluster.y, transform.x, transform.y) < 10) {
           // Update cluster center (weighted average)
           cluster.x = (cluster.x * cluster.count + transform.x) / (cluster.count + 1);
           cluster.y = (cluster.y * cluster.count + transform.y) / (cluster.count + 1);
@@ -1280,9 +1274,7 @@ export class EnhancedAISystem extends System {
       // Check if this cluster already has a command center
       let hasCCNearby = false;
       for (const base of existingBases) {
-        const dx = cluster.x - base.x;
-        const dy = cluster.y - base.y;
-        if (Math.sqrt(dx * dx + dy * dy) < 15) {
+        if (distance(base.x, base.y, cluster.x, cluster.y) < 15) {
           hasCCNearby = true;
           break;
         }
@@ -1291,12 +1283,10 @@ export class EnhancedAISystem extends System {
       if (hasCCNearby) continue;
 
       // Calculate distance from AI base to this cluster
-      const dx = cluster.x - aiBase.x;
-      const dy = cluster.y - aiBase.y;
-      const distance = Math.sqrt(dx * dx + dy * dy);
+      const dist = distance(aiBase.x, aiBase.y, cluster.x, cluster.y);
 
       // Prefer closer expansions
-      if (!bestLocation || distance < bestLocation.distance) {
+      if (!bestLocation || dist < bestLocation.distance) {
         // Calculate CC placement: offset FROM mineral cluster TOWARD the AI's main base
         // The CC should be placed on the "home" side of the minerals (closer to AI base)
         // Standard mineral distance is ~7 units from CC center
@@ -1306,7 +1296,7 @@ export class EnhancedAISystem extends System {
         bestLocation = {
           x: cluster.x + Math.cos(dirToBase) * ccOffset,
           y: cluster.y + Math.sin(dirToBase) * ccOffset,
-          distance
+          distance: dist
         };
       }
     }
@@ -1412,9 +1402,7 @@ export class EnhancedAISystem extends System {
       if (isAttackMovingNoTarget || isMovingNoTarget) {
         const transform = entity.get<Transform>('Transform');
         if (transform && unit.targetX !== null && unit.targetY !== null) {
-          const dx = unit.targetX - transform.x;
-          const dy = unit.targetY - transform.y;
-          const distToTarget = Math.sqrt(dx * dx + dy * dy);
+          const distToTarget = distance(transform.x, transform.y, unit.targetX, unit.targetY);
           // If close to destination (or no destination for moving), give new orders
           if (distToTarget < 3) {
             idleOrNeedingOrders.push(unitId);
@@ -1577,9 +1565,7 @@ export class EnhancedAISystem extends System {
       if (baseTypes.includes(building.buildingId)) {
         data.basePos = { x: transform.x, y: transform.y };
         // Calculate distance from this AI's base to enemy base
-        const dx = transform.x - aiBase.x;
-        const dy = transform.y - aiBase.y;
-        data.distance = Math.sqrt(dx * dx + dy * dy);
+        data.distance = distance(aiBase.x, aiBase.y, transform.x, transform.y);
       }
     }
 
@@ -1587,9 +1573,7 @@ export class EnhancedAISystem extends System {
     for (const [enemyId, data] of enemyData) {
       if (data.distance === Infinity && data.buildings.length > 0) {
         const firstBuilding = data.buildings[0];
-        const dx = firstBuilding.x - aiBase.x;
-        const dy = firstBuilding.y - aiBase.y;
-        data.distance = Math.sqrt(dx * dx + dy * dy);
+        data.distance = distance(aiBase.x, aiBase.y, firstBuilding.x, firstBuilding.y);
         data.basePos = { x: firstBuilding.x, y: firstBuilding.y };
       }
     }
@@ -1643,19 +1627,17 @@ export class EnhancedAISystem extends System {
       if (health.isDead()) continue;
 
       const enemyId = selectable.playerId;
-      const dx = transform.x - aiBase.x;
-      const dy = transform.y - aiBase.y;
-      const distance = Math.sqrt(dx * dx + dy * dy);
+      const dist = distance(aiBase.x, aiBase.y, transform.x, transform.y);
 
       // PERF: Track closest unit per player (replaces sort + [0])
       const existing = closestUnitByPlayer.get(enemyId);
-      if (!existing || distance < existing.distance) {
-        closestUnitByPlayer.set(enemyId, { x: transform.x, y: transform.y, distance });
+      if (!existing || dist < existing.distance) {
+        closestUnitByPlayer.set(enemyId, { x: transform.x, y: transform.y, distance: dist });
       }
 
       // PERF: Track overall closest (replaces nested loop)
-      if (!overallClosestUnit || distance < overallClosestUnit.distance) {
-        overallClosestUnit = { x: transform.x, y: transform.y, distance };
+      if (!overallClosestUnit || dist < overallClosestUnit.distance) {
+        overallClosestUnit = { x: transform.x, y: transform.y, distance: dist };
       }
     }
 
@@ -1686,7 +1668,7 @@ export class EnhancedAISystem extends System {
     if (approachFrom) {
       dx = buildingX - approachFrom.x;
       dy = buildingY - approachFrom.y;
-      const dist = Math.sqrt(dx * dx + dy * dy);
+      const dist = distance(approachFrom.x, approachFrom.y, buildingX, buildingY);
       if (dist > 0) {
         dx /= dist;
         dy /= dist;
@@ -1833,9 +1815,7 @@ export class EnhancedAISystem extends System {
         const transform = entity.get<Transform>('Transform');
         if (!transform) continue;
 
-        const dx = transform.x - rallyPoint.x;
-        const dy = transform.y - rallyPoint.y;
-        const distToRally = Math.sqrt(dx * dx + dy * dy);
+        const distToRally = distance(rallyPoint.x, rallyPoint.y, transform.x, transform.y);
 
         // Only issue move command if unit is more than 3 units away from rally point
         if (distToRally > 3) {
@@ -1879,11 +1859,9 @@ export class EnhancedAISystem extends System {
       if (selectable.playerId === playerId) continue;
       if (health.isDead()) continue;
 
-      const dx = transform.x - position.x;
-      const dy = transform.y - position.y;
-      const distance = Math.sqrt(dx * dx + dy * dy);
+      const dist = distance(position.x, position.y, transform.x, transform.y);
 
-      if (distance <= range) {
+      if (dist <= range) {
         return { x: transform.x, y: transform.y };
       }
     }
@@ -1928,12 +1906,10 @@ export class EnhancedAISystem extends System {
         if (!attacker.canAttackTarget(targetIsFlying)) continue;
       }
 
-      const dx = transform.x - position.x;
-      const dy = transform.y - position.y;
-      const distance = Math.sqrt(dx * dx + dy * dy);
+      const dist = distance(position.x, position.y, transform.x, transform.y);
 
-      if (distance <= range && (!closestEnemy || distance < closestEnemy.distance)) {
-        closestEnemy = { entityId: entity.id, x: transform.x, y: transform.y, distance };
+      if (dist <= range && (!closestEnemy || dist < closestEnemy.distance)) {
+        closestEnemy = { entityId: entity.id, x: transform.x, y: transform.y, distance: dist };
       }
     }
 
@@ -1954,12 +1930,10 @@ export class EnhancedAISystem extends System {
         if (selectable.playerId === playerId) continue;
         if (health.isDead()) continue;
 
-        const dx = transform.x - position.x;
-        const dy = transform.y - position.y;
-        const distance = Math.sqrt(dx * dx + dy * dy);
+        const dist = distance(position.x, position.y, transform.x, transform.y);
 
-        if (distance <= range && (!closestEnemy || distance < closestEnemy.distance)) {
-          closestEnemy = { entityId: entity.id, x: transform.x, y: transform.y, distance };
+        if (dist <= range && (!closestEnemy || dist < closestEnemy.distance)) {
+          closestEnemy = { entityId: entity.id, x: transform.x, y: transform.y, distance: dist };
         }
       }
     }
@@ -2307,14 +2281,12 @@ export class EnhancedAISystem extends System {
 
       // Check distance to any base
       for (const basePos of basePositions) {
-        const dx = transform.x - basePos.x;
-        const dy = transform.y - basePos.y;
-        const distance = Math.sqrt(dx * dx + dy * dy);
+        const dist = distance(basePos.x, basePos.y, transform.x, transform.y);
 
         // Only consider geysers within reasonable distance of any base
-        if (distance < 30) {
-          if (!closestGeyser || distance < closestGeyser.distance) {
-            closestGeyser = { x: transform.x, y: transform.y, distance };
+        if (dist < 30) {
+          if (!closestGeyser || dist < closestGeyser.distance) {
+            closestGeyser = { x: transform.x, y: transform.y, distance: dist };
           }
           break; // Found a nearby base, no need to check others
         }
@@ -2363,11 +2335,9 @@ export class EnhancedAISystem extends System {
 
       // Check if this geyser is near any AI base
       for (const basePos of basePositions) {
-        const dx = transform.x - basePos.x;
-        const dy = transform.y - basePos.y;
-        const distance = Math.sqrt(dx * dx + dy * dy);
+        const dist = distance(basePos.x, basePos.y, transform.x, transform.y);
 
-        if (distance < 30) {
+        if (dist < 30) {
           availableCount++;
           break; // Don't count same geyser multiple times
         }
@@ -2802,11 +2772,9 @@ export class EnhancedAISystem extends System {
       // Check distance to ANY base
       let minDistance = Infinity;
       for (const basePos of basePositions) {
-        const dx = transform.x - basePos.x;
-        const dy = transform.y - basePos.y;
-        const distance = Math.sqrt(dx * dx + dy * dy);
-        if (distance < minDistance) {
-          minDistance = distance;
+        const dist = distance(basePos.x, basePos.y, transform.x, transform.y);
+        if (dist < minDistance) {
+          minDistance = dist;
         }
       }
 

@@ -6,6 +6,7 @@ import { Health } from '../components/Health';
 import { Selectable } from '../components/Selectable';
 import { Building } from '../components/Building';
 import { Game, GameCommand } from '../core/Game';
+import { distance } from '@/utils/math';
 import { BehaviorTreeRunner, Blackboard, globalBlackboard } from '../ai/BehaviorTree';
 import {
   createCombatMicroTree,
@@ -461,13 +462,13 @@ export class AIMicroSystem extends System {
     // Calculate kite direction
     const dx = transform.x - kiteFromX;
     const dy = transform.y - kiteFromY;
-    const distance = Math.sqrt(dx * dx + dy * dy);
+    const dist = distance(kiteFromX, kiteFromY, transform.x, transform.y);
 
-    if (distance < 0.1) return;
+    if (dist < 0.1) return;
 
     const kiteDistance = unit.attackRange * 0.6;
-    let targetX = transform.x + (dx / distance) * kiteDistance;
-    let targetY = transform.y + (dy / distance) * kiteDistance;
+    let targetX = transform.x + (dx / dist) * kiteDistance;
+    let targetY = transform.y + (dy / dist) * kiteDistance;
 
     // Clamp to map bounds
     targetX = Math.max(2, Math.min(this.game.config.mapWidth - 2, targetX));
@@ -525,17 +526,17 @@ export class AIMicroSystem extends System {
     // Calculate retreat direction (towards base)
     const dx = basePosition.x - transform.x;
     const dy = basePosition.y - transform.y;
-    const distance = Math.sqrt(dx * dx + dy * dy);
+    const dist = distance(transform.x, transform.y, basePosition.x, basePosition.y);
 
-    if (distance < 10) {
+    if (dist < 10) {
       // Already near base
       state.retreating = false;
       return;
     }
 
-    const retreatDistance = Math.min(15, distance);
-    const targetX = transform.x + (dx / distance) * retreatDistance;
-    const targetY = transform.y + (dy / distance) * retreatDistance;
+    const retreatDistance = Math.min(15, dist);
+    const targetX = transform.x + (dx / dist) * retreatDistance;
+    const targetY = transform.y + (dy / dist) * retreatDistance;
 
     const command: GameCommand = {
       tick: this.game.getCurrentTick(),
@@ -654,9 +655,7 @@ export class AIMicroSystem extends System {
       const targetIsFlying = nearbyUnit.isFlying;
       if (!unit.canAttackTarget(targetIsFlying)) continue;
 
-      const dx = nearbyTransform.x - transform.x;
-      const dy = nearbyTransform.y - transform.y;
-      const distance = Math.sqrt(dx * dx + dy * dy);
+      const dist = distance(transform.x, transform.y, nearbyTransform.x, nearbyTransform.y);
 
       const dps = nearbyUnit.attackDamage * nearbyUnit.attackSpeed;
       const priority = UNIT_PRIORITY[nearbyUnit.unitId] || 50;
@@ -664,7 +663,7 @@ export class AIMicroSystem extends System {
 
       // Threat score calculation using data-driven weights from config
       const threatWeights = DOMINION_AI_CONFIG.tactical.threatWeights;
-      const distanceFactor = Math.max(0, 1 - distance / threatRange) * threatWeights.distance;
+      const distanceFactor = Math.max(0, 1 - dist / threatRange) * threatWeights.distance;
       const damageFactor = (dps / 20) * threatWeights.damage;
       const priorityFactor = (priority / 100) * threatWeights.priority;
       const healthFactor = (1 + (1 - healthPercent)) * threatWeights.health;
@@ -680,7 +679,7 @@ export class AIMicroSystem extends System {
       threats.push({
         entityId: nearbyId,
         threatScore,
-        distance,
+        distance: dist,
         healthPercent,
         dps,
         unitType: nearbyUnit.unitId,
@@ -808,10 +807,8 @@ export class AIMicroSystem extends System {
       if (nearbyHealth.isDead()) continue;
 
       // Calculate distance for weighting
-      const dx = nearbyTransform.x - transform.x;
-      const dy = nearbyTransform.y - transform.y;
-      const distance = Math.sqrt(dx * dx + dy * dy);
-      const distanceWeight = Math.max(0, 1 - distance / TRANSFORM_SCAN_RANGE);
+      const dist = distance(transform.x, transform.y, nearbyTransform.x, nearbyTransform.y);
+      const distanceWeight = Math.max(0, 1 - dist / TRANSFORM_SCAN_RANGE);
 
       // Calculate threat score (damage potential)
       const dps = nearbyUnit.attackDamage * nearbyUnit.attackSpeed;
@@ -1054,14 +1051,12 @@ export function analyzeThreatGaps(
     if (myUnit.unit.isWorker) continue;
 
     for (const enemyAir of enemyAirUnits) {
-      const dx = myUnit.transform.x - enemyAir.transform.x;
-      const dy = myUnit.transform.y - enemyAir.transform.y;
-      const distance = Math.sqrt(dx * dx + dy * dy);
+      const dist = distance(enemyAir.transform.x, enemyAir.transform.y, myUnit.transform.x, myUnit.transform.y);
 
       // Is the enemy air unit close enough to be a threat?
-      if (distance <= THREAT_RANGE) {
+      if (dist <= THREAT_RANGE) {
         // Is the enemy air unit targeting our unit or nearby?
-        if (distance <= enemyAir.unit.attackRange * 1.5) {
+        if (dist <= enemyAir.unit.attackRange * 1.5) {
           analysis.unitsUnderAirAttack++;
           analysis.uncounterableAirThreats++;
           break; // Count each of our units only once

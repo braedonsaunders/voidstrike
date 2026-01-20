@@ -14,6 +14,7 @@ import { Transform } from '../components/Transform';
 import { Unit } from '../components/Unit';
 import { Health } from '../components/Health';
 import { Selectable } from '../components/Selectable';
+import { distance } from '@/utils/math';
 // UNIT_DEFINITIONS not needed - we use unit component data directly
 
 /**
@@ -187,7 +188,7 @@ export class FormationControl {
     // Calculate facing direction
     const dx = enemyCenter.x - group.center.x;
     const dy = enemyCenter.y - group.center.y;
-    const dist = Math.sqrt(dx * dx + dy * dy);
+    const dist = distance(group.center.x, group.center.y, enemyCenter.x, enemyCenter.y);
     const facing = dist > 0 ? { x: dx / dist, y: dy / dist } : { x: 0, y: -1 };
     group.facing = facing;
 
@@ -564,9 +565,7 @@ export class FormationControl {
       const transform = entity.get<Transform>('Transform');
       if (!transform) continue;
 
-      const dx = transform.x - slot.targetPosition.x;
-      const dy = transform.y - slot.targetPosition.y;
-      if (Math.sqrt(dx * dx + dy * dy) > tolerance) {
+      if (distance(transform.x, transform.y, slot.targetPosition.x, slot.targetPosition.y) > tolerance) {
         return false;
       }
     }
@@ -620,7 +619,7 @@ export class FormationControl {
   ): { x: number; y: number } {
     const dx = enemyCenter.x - armyCenter.x;
     const dy = enemyCenter.y - armyCenter.y;
-    const dist = Math.sqrt(dx * dx + dy * dy);
+    const dist = distance(armyCenter.x, armyCenter.y, enemyCenter.x, enemyCenter.y);
 
     if (dist <= preferredRange) {
       // Already in range

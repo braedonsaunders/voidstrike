@@ -34,6 +34,7 @@ import { WasmBoids, getWasmBoids } from '../wasm/WasmBoids';
 import { CROWD_MAX_AGENTS } from '@/data/pathfinding.config';
 import { SpatialEntityData, SpatialUnitState, stateToEnum } from '../core/SpatialGrid';
 import { collisionConfig } from '@/data/collisionConfig';
+import { distance } from '@/utils/math';
 import {
   // Cohesion
   COHESION_RADIUS,
@@ -998,7 +999,7 @@ export class MovementSystem extends System {
     // Direction to center of mass
     const dx = centerX - selfTransform.x;
     const dy = centerY - selfTransform.y;
-    const dist = Math.sqrt(dx * dx + dy * dy);
+    const dist = distance(selfTransform.x, selfTransform.y, centerX, centerY);
 
     if (dist < 0.1) {
       this.cohesionCache.set(selfId, { x: 0, y: 0, tick: this.currentTick });
@@ -1313,9 +1314,11 @@ export class MovementSystem extends System {
       state.framesStuck++;
 
       if (state.framesStuck >= collisionConfig.stuckDetectionFrames) {
-        const dx = unit.targetX !== null ? unit.targetX - transform.x : 0;
-        const dy = unit.targetY !== null ? unit.targetY - transform.y : 0;
-        const dist = Math.sqrt(dx * dx + dy * dy);
+        const targetXVal = unit.targetX ?? transform.x;
+        const targetYVal = unit.targetY ?? transform.y;
+        const dx = targetXVal - transform.x;
+        const dy = targetYVal - transform.y;
+        const dist = distance(transform.x, transform.y, targetXVal, targetYVal);
 
         if (dist > 0.1) {
           // Use deterministic random to pick tangential direction
@@ -1597,20 +1600,20 @@ export class MovementSystem extends System {
 
       const dx = selfTransform.x - clampedX;
       const dy = selfTransform.y - clampedY;
-      const distance = Math.sqrt(dx * dx + dy * dy);
+      const dist = distance(clampedX, clampedY, selfTransform.x, selfTransform.y);
 
       const hardCollisionDist = selfUnit.collisionRadius + hardMargin;
 
-      if (distance < hardCollisionDist && distance > 0.01) {
+      if (dist < hardCollisionDist && dist > 0.01) {
         // Push proportional to how deep we are
-        const penetration = 1 - (distance / hardCollisionDist);
+        const penetration = 1 - (dist / hardCollisionDist);
         const strength = avoidStrength * penetration * penetration;
-        const normalizedDx = dx / distance;
-        const normalizedDy = dy / distance;
+        const normalizedDx = dx / dist;
+        const normalizedDy = dy / dist;
 
         forceX += normalizedDx * strength;
         forceY += normalizedDy * strength;
-      } else if (distance < 0.01) {
+      } else if (dist < 0.01) {
         // Inside building - emergency escape
         const toCenterX = selfTransform.x - buildingTransform.x;
         const toCenterY = selfTransform.y - buildingTransform.y;
@@ -2090,10 +2093,10 @@ export class MovementSystem extends System {
 
       const dx = targetX - transform.x;
       const dy = targetY - transform.y;
-      const distance = Math.sqrt(dx * dx + dy * dy);
+      const dist = distance(transform.x, transform.y, targetX, targetY);
 
       // Check arrival
-      if (distance < this.arrivalThreshold) {
+      if (dist < this.arrivalThreshold) {
         if (unit.path.length > 0 && unit.pathIndex < unit.path.length - 1) {
           unit.pathIndex++;
         } else if (unit.state === 'patrolling') {
@@ -2163,8 +2166,8 @@ export class MovementSystem extends System {
       );
       targetSpeed *= terrainSpeedMod;
 
-      if (distance < this.decelerationThreshold) {
-        targetSpeed = targetSpeed * (distance / this.decelerationThreshold);
+      if (dist < this.decelerationThreshold) {
+        targetSpeed = targetSpeed * (dist / this.decelerationThreshold);
         targetSpeed = Math.max(targetSpeed, unit.maxSpeed * terrainSpeedMod * 0.3);
       }
 
@@ -2199,31 +2202,28 @@ export class MovementSystem extends System {
           // fall back to direct movement (handles edge cases like first frame after agent add)
           const velMagSq = finalVx * finalVx + finalVy * finalVy;
           const minVelSq = 0.01 * 0.01;
-          if (velMagSq < minVelSq && distance > this.arrivalThreshold) {
+          if (velMagSq < minVelSq && dist > this.arrivalThreshold) {
             // Log when crowd returns zero velocity unexpectedly
-            if (distance > 2 && unit.path.length > 0) {
+            if (dist > 2 && unit.path.length > 0) {
               debugPathfinding.warn(
                 `[MovementSystem] Crowd returned zero velocity for entity ${entity.id}. ` +
                 `Pos: (${transform.x.toFixed(1)}, ${transform.y.toFixed(1)}), ` +
                 `Target: (${targetX.toFixed(1)}, ${targetY.toFixed(1)}), ` +
-                `Distance: ${distance.toFixed(1)}, Path: ${unit.pathIndex}/${unit.path.length}`
+                `Distance: ${dist.toFixed(1)}, Path: ${unit.pathIndex}/${unit.path.length}`
               );
             }
             // Crowd returned near-zero velocity - use direct movement
-            if (distance > 0.01) {
-              finalVx = (dx / distance) * unit.maxSpeed;
-              finalVy = (dy / distance) * unit.maxSpeed;
+            if (dist > 0.01) {
+              finalVx = (dx / dist) * unit.maxSpeed;
+              finalVy = (dy / dist) * unit.maxSpeed;
             }
           }
 
           // RTS-style: add extra separation near arrival for natural spreading
           // Crowd handles basic separation, but we boost it near destination
           const distToFinalTarget = unit.targetX !== null && unit.targetY !== null
-            ? Math.sqrt(
-                (unit.targetX - transform.x) * (unit.targetX - transform.x) +
-                (unit.targetY - transform.y) * (unit.targetY - transform.y)
-              )
-            : distance;
+            ? distance(transform.x, transform.y, unit.targetX, unit.targetY)
+            : dist;
 
           if (distToFinalTarget < collisionConfig.arrivalSpreadRadius) {
             // WASM SIMD: Use pre-computed separation when available
@@ -2268,29 +2268,26 @@ export class MovementSystem extends System {
           }
         } else {
           // Agent not in crowd or state unavailable - fallback to direct movement
-          if (distance > 0.01) {
-            finalVx = (dx / distance) * unit.currentSpeed;
-            finalVy = (dy / distance) * unit.currentSpeed;
+          if (dist > 0.01) {
+            finalVx = (dx / dist) * unit.currentSpeed;
+            finalVy = (dy / dist) * unit.currentSpeed;
           }
         }
       } else {
         // Direct movement for flying units or when crowd not available
         let prefVx = 0;
         let prefVy = 0;
-        if (distance > 0.01) {
-          prefVx = (dx / distance) * unit.currentSpeed;
-          prefVy = (dy / distance) * unit.currentSpeed;
+        if (dist > 0.01) {
+          prefVx = (dx / dist) * unit.currentSpeed;
+          prefVy = (dy / dist) * unit.currentSpeed;
         }
 
         // RTS-style flocking behaviors for non-crowd units
         if (!unit.isFlying) {
           // Calculate distance to final target for arrival spreading
           const distToFinalTarget = unit.targetX !== null && unit.targetY !== null
-            ? Math.sqrt(
-                (unit.targetX - transform.x) * (unit.targetX - transform.x) +
-                (unit.targetY - transform.y) * (unit.targetY - transform.y)
-              )
-            : distance;
+            ? distance(transform.x, transform.y, unit.targetX, unit.targetY)
+            : dist;
 
           // WASM SIMD: Use pre-computed forces when available
           if (useWasmThisFrame) {
@@ -2339,11 +2336,8 @@ export class MovementSystem extends System {
         } else {
           // Flying units - apply separation forces for proper spacing
           const distToFinalTarget = unit.targetX !== null && unit.targetY !== null
-            ? Math.sqrt(
-                (unit.targetX - transform.x) * (unit.targetX - transform.x) +
-                (unit.targetY - transform.y) * (unit.targetY - transform.y)
-              )
-            : distance;
+            ? distance(transform.x, transform.y, unit.targetX, unit.targetY)
+            : dist;
 
           // Calculate separation force for flying units
           this.calculateSeparationForce(entity.id, transform, unit, tempSeparation, distToFinalTarget);
@@ -2385,8 +2379,8 @@ export class MovementSystem extends System {
       // RTS-STYLE: Stuck detection and nudge
       // Only apply to units far from their target to prevent destination jiggling
       const currentVelMag = Math.sqrt(finalVx * finalVx + finalVy * finalVy);
-      if (distance > this.arrivalThreshold) {
-        this.handleStuckDetection(entity.id, transform, unit, currentVelMag, distance, tempStuckNudge);
+      if (dist > this.arrivalThreshold) {
+        this.handleStuckDetection(entity.id, transform, unit, currentVelMag, dist, tempStuckNudge);
         finalVx += tempStuckNudge.x;
         finalVy += tempStuckNudge.y;
       }

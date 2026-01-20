@@ -6,6 +6,7 @@ import { Health } from '../components/Health';
 import { Ability, AbilityDefinition, AbilityTargetType } from '../components/Ability';
 import { Selectable } from '../components/Selectable';
 import { Building } from '../components/Building';
+import { distance } from '@/utils/math';
 
 interface AbilityCommand {
   entityIds: number[];
@@ -317,11 +318,9 @@ export class AbilitySystem extends System {
       const health = entity.get<Health>('Health')!;
       const ability = entity.get<Ability>('Ability');
 
-      const dx = transform.x - position.x;
-      const dy = transform.y - position.y;
-      const distance = Math.sqrt(dx * dx + dy * dy);
+      const dist = distance(transform.x, transform.y, position.x, position.y);
 
-      if (distance <= radius) {
+      if (dist <= radius) {
         // Drain all shields
         if (health.shield > 0) {
           health.shield = 0;
@@ -645,13 +644,11 @@ export class AbilitySystem extends System {
       const transform = entity.get<Transform>('Transform')!;
       const health = entity.get<Health>('Health')!;
 
-      const dx = transform.x - position.x;
-      const dy = transform.y - position.y;
-      const distance = Math.sqrt(dx * dx + dy * dy);
+      const dist = distance(transform.x, transform.y, position.x, position.y);
 
-      if (distance <= radius) {
+      if (dist <= radius) {
         // Calculate damage falloff from center
-        const falloff = 1 - (distance / radius) * 0.5;
+        const falloff = 1 - (dist / radius) * 0.5;
         health.takeDamage(damage * falloff, this.game.getGameTime());
       }
     }

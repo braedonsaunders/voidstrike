@@ -8,6 +8,7 @@ import { Selectable } from '../components/Selectable';
 import { BUILDING_DEFINITIONS, RESEARCH_MODULE_UNITS, PRODUCTION_MODULE_UNITS } from '@/data/buildings/dominion';
 import { useGameStore } from '@/store/gameStore';
 import { findBuildingTarget } from '../combat/TargetAcquisition';
+import { distance } from '@/utils/math';
 
 interface LiftOffCommand {
   buildingId: number;
@@ -393,10 +394,10 @@ export class BuildingMechanicsSystem extends System {
 
           const dx = targetX - transform.x;
           const dy = targetY - transform.y;
-          const distance = Math.sqrt(dx * dx + dy * dy);
+          const dist = distance(transform.x, transform.y, targetX, targetY);
 
           const arrivalThreshold = 0.5;
-          if (distance < arrivalThreshold) {
+          if (dist < arrivalThreshold) {
             // Arrived at destination
             building.clearFlyingTarget();
 
@@ -428,9 +429,9 @@ export class BuildingMechanicsSystem extends System {
             const stoppingDistance = currentSpeedSq / (2 * deceleration);
 
             let targetSpeed: number;
-            if (distance <= stoppingDistance + 0.5) {
+            if (dist <= stoppingDistance + 0.5) {
               // Decelerate as we approach
-              targetSpeed = Math.max(0.3, Math.sqrt(2 * deceleration * distance));
+              targetSpeed = Math.max(0.3, Math.sqrt(2 * deceleration * dist));
             } else {
               // Accelerate toward max speed
               targetSpeed = maxSpeed;
@@ -448,7 +449,7 @@ export class BuildingMechanicsSystem extends System {
             }
 
             const moveDistance = building.flyingCurrentSpeed * dt;
-            const ratio = Math.min(moveDistance / distance, 1);
+            const ratio = Math.min(moveDistance / dist, 1);
             transform.x += dx * ratio;
             transform.y += dy * ratio;
           }

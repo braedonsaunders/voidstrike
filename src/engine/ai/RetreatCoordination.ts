@@ -20,6 +20,7 @@ import { Unit } from '../components/Unit';
 import { Health } from '../components/Health';
 import { Selectable } from '../components/Selectable';
 import { InfluenceMap } from './InfluenceMap';
+import { distance } from '@/utils/math';
 
 /**
  * Retreat state for a unit
@@ -221,9 +222,7 @@ export class RetreatCoordination {
     order.rallyPoint = rallyPoint;
 
     // Check distance to rally
-    const dx = transform.x - rallyPoint.x;
-    const dy = transform.y - rallyPoint.y;
-    const distToRally = Math.sqrt(dx * dx + dy * dy);
+    const distToRally = distance(transform.x, transform.y, rallyPoint.x, rallyPoint.y);
 
     // State transitions
     switch (order.state) {
@@ -308,7 +307,7 @@ export class RetreatCoordination {
       // Rally between army and home base
       const dx = homeBase.x - armyCenter.x;
       const dy = homeBase.y - armyCenter.y;
-      const dist = Math.sqrt(dx * dx + dy * dy);
+      const dist = distance(armyCenter.x, armyCenter.y, homeBase.x, homeBase.y);
 
       if (dist > 0) {
         const retreatDist = Math.min(this.config.rallyDistance, dist * 0.5);

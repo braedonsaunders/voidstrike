@@ -6,6 +6,7 @@ import { Building } from '../components/Building';
 import { Health } from '../components/Health';
 import { Game } from '../core/Game';
 import { useGameStore } from '@/store/gameStore';
+import { distance } from '@/utils/math';
 
 /**
  * Selection system with screen-space box selection, selection radius buffer,
@@ -388,9 +389,7 @@ export class SelectionSystem extends System {
       if (!screenPos) continue; // Behind camera
 
       // Calculate screen-space distance
-      const dx = screenX - screenPos.x;
-      const dy = screenY - screenPos.y;
-      const screenDistance = Math.sqrt(dx * dx + dy * dy);
+      const screenDistance = distance(screenX, screenY, screenPos.x, screenPos.y);
 
       // Calculate screen-space selection radius (more generous for better feel)
       const visualScale = selectable.visualScale ?? 1;

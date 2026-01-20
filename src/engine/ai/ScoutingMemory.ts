@@ -18,6 +18,7 @@ import { Health } from '../components/Health';
 import { Selectable } from '../components/Selectable';
 import { BUILDING_DEFINITIONS } from '@/data/buildings/dominion';
 import { UNIT_DEFINITIONS } from '@/data/units/dominion';
+import { distance } from '@/utils/math';
 
 /**
  * Types of enemy strategy the AI can infer
@@ -353,9 +354,7 @@ export class ScoutingMemory {
 
     // Check if this is near an existing known base
     for (const base of intel.bases) {
-      const dx = base.position.x - transform.x;
-      const dy = base.position.y - transform.y;
-      if (Math.sqrt(dx * dx + dy * dy) < 15) {
+      if (distance(transform.x, transform.y, base.position.x, base.position.y) < 15) {
         // Near existing base, might be upgrade or replacement
         base.buildingIds.push(building.buildingId as unknown as number);
         return;

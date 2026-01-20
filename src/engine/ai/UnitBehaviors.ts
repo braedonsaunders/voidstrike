@@ -36,6 +36,7 @@ import { Selectable } from '../components/Selectable';
 import { Building } from '../components/Building';
 import { findBestTarget as findBestTargetShared, TargetQueryOptions } from '../combat/TargetAcquisition';
 import AssetManager from '@/assets/AssetManager';
+import { distance } from '@/utils/math';
 
 // ==================== HELPER FUNCTIONS ====================
 
@@ -54,15 +55,6 @@ function getUnitData(ctx: BehaviorContext) {
   if (!unit || !transform || !health || !selectable) return null;
 
   return { entity, unit, transform, health, selectable };
-}
-
-/**
- * Calculate distance between two points
- */
-function distance(x1: number, y1: number, x2: number, y2: number): number {
-  const dx = x2 - x1;
-  const dy = y2 - y1;
-  return Math.sqrt(dx * dx + dy * dy);
 }
 
 /**
@@ -413,7 +405,7 @@ export const kiteFromMelee = action('KiteFromMelee', (ctx) => {
   // Move away from threat
   const dx = transform.x - threatX;
   const dy = transform.y - threatY;
-  const dist = Math.sqrt(dx * dx + dy * dy);
+  const dist = distance(transform.x, transform.y, threatX, threatY);
 
   if (dist < 0.1) return false;
 
@@ -470,7 +462,7 @@ export const retreatToBase = action('RetreatToBase', (ctx) => {
     if (enemy) {
       const dx = transform.x - enemy.transform.x;
       const dy = transform.y - enemy.transform.y;
-      const dist = Math.sqrt(dx * dx + dy * dy);
+      const dist = distance(transform.x, transform.y, enemy.transform.x, enemy.transform.y);
       if (dist > 0.1) {
         unit.targetX = transform.x + (dx / dist) * 15;
         unit.targetY = transform.y + (dy / dist) * 15;
