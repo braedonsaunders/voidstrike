@@ -1056,6 +1056,11 @@ export function WebGPUGameCanvas() {
               }
             }
           }
+
+          // Update overlay manager with selected entities for range rings
+          if (overlayManagerRef.current) {
+            overlayManagerRef.current.setSelectedEntities(selectedUnits);
+          }
         }
 
         // Throttle zustand store updates
@@ -2162,10 +2167,10 @@ export function WebGPUGameCanvas() {
           break;
         case 'o':
           {
-            // Cycle through overlays: none -> elevation -> threat -> navmesh -> resource -> none
+            // Cycle through overlays: none -> elevation -> threat -> navmesh -> resource -> buildable -> none
             const uiStore = useUIStore.getState();
             const currentOverlay = uiStore.overlaySettings.activeOverlay;
-            const overlayOrder: GameOverlayType[] = ['none', 'elevation', 'threat', 'navmesh', 'resource'];
+            const overlayOrder: GameOverlayType[] = ['none', 'elevation', 'threat', 'navmesh', 'resource', 'buildable'];
             const currentIndex = overlayOrder.indexOf(currentOverlay);
             const nextIndex = (currentIndex + 1) % overlayOrder.length;
             uiStore.setActiveOverlay(overlayOrder[nextIndex]);
@@ -2221,6 +2226,26 @@ export function WebGPUGameCanvas() {
             store.setShowKeyboardShortcuts(!store.showKeyboardShortcuts);
           }
           break;
+      }
+
+      // Alt+A: Toggle attack range overlay for selected units
+      if (e.altKey && key === 'a') {
+        e.preventDefault();
+        if (overlayManagerRef.current) {
+          const state = overlayManagerRef.current.getRangeOverlayState();
+          overlayManagerRef.current.setShowAttackRange(!state.attackRange);
+        }
+        return;
+      }
+
+      // Alt+V: Toggle vision range overlay for selected units
+      if (e.altKey && key === 'v') {
+        e.preventDefault();
+        if (overlayManagerRef.current) {
+          const state = overlayManagerRef.current.getRangeOverlayState();
+          overlayManagerRef.current.setShowVisionRange(!state.visionRange);
+        }
+        return;
       }
 
       // Control groups (0-9)
