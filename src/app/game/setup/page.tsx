@@ -390,6 +390,11 @@ export default function GameSetupPage() {
     removeGuest(slotId);
   }, [removeGuest]);
 
+  // Only enable Nostr when multiplayer is needed:
+  // - Any slot is "open" (waiting for guests)
+  // - Public lobby listing is enabled
+  const needsMultiplayer = playerSlots.some(s => s.type === 'open') || isPublicLobby;
+
   const {
     status: lobbyStatus,
     lobbyCode,
@@ -407,7 +412,11 @@ export default function GameSetupPage() {
     onGameStart,
     connectedGuestCount,
     publishPublicListing,
-  } = useLobby(handleGuestJoin, handleGuestLeave);
+  } = useLobby({
+    enabled: needsMultiplayer,
+    onGuestJoin: handleGuestJoin,
+    onGuestLeave: handleGuestLeave,
+  });
 
   // Multiplayer store for game
   const {

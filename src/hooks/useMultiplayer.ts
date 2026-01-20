@@ -68,6 +68,7 @@ const ICE_SERVERS: RTCIceServer[] = [
 ];
 
 export type LobbyStatus =
+  | 'disabled'     // Nostr not active (single-player mode)
   | 'initializing'
   | 'hosting'      // Your lobby is active, waiting for guests
   | 'joining'      // Attempting to join another lobby
@@ -189,11 +190,19 @@ async function publishToRelays(
   return successCount > 0;
 }
 
-export function useLobby(
-  onGuestJoin?: (guestName: string) => string | null, // Returns slot ID or null
-  onGuestLeave?: (slotId: string) => void
-): UseLobbyReturn {
-  const [status, setStatus] = useState<LobbyStatus>('initializing');
+export interface UseLobbyOptions {
+  /** When false, Nostr is not initialized (single-player mode). Defaults to true. */
+  enabled?: boolean;
+  /** Called when a guest requests to join. Returns slot ID or null if no slots. */
+  onGuestJoin?: (guestName: string) => string | null;
+  /** Called when a guest leaves. */
+  onGuestLeave?: (slotId: string) => void;
+}
+
+export function useLobby(options: UseLobbyOptions = {}): UseLobbyReturn {
+  const { enabled = true, onGuestJoin, onGuestLeave } = options;
+
+  const [status, setStatus] = useState<LobbyStatus>(enabled ? 'initializing' : 'disabled');
   const [lobbyCode, setLobbyCode] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [guests, setGuests] = useState<GuestConnection[]>([]);
@@ -248,9 +257,17 @@ export function useLobby(
     return () => hostConnection.removeEventListener('message', handleMessage);
   }, [hostConnection]);
 
-  // Initialize lobby (host mode)
+  // Initialize lobby (host mode) - only when enabled
   useEffect(() => {
+    // Skip initialization in single-player mode
+    if (!enabled) {
+      setStatus('disabled');
+      setLobbyCode(null);
+      return;
+    }
+
     let mounted = true;
+    setStatus('initializing');
 
     const initLobby = async () => {
       try {
@@ -442,6 +459,7 @@ export function useLobby(
       // Cleanup subscriptions - close quietly
       try {
         subRef.current?.close();
+        subRef.current = null;
       } catch { /* ignore */ }
       // Clear any pending join timeout to prevent stale state updates
       if (joinTimeoutRef.current) {
@@ -451,6 +469,10 @@ export function useLobby(
       // Don't explicitly close the pool - nostr-tools throws unhandled errors
       // when websockets are already closing. Let browser garbage collect instead.
       poolRef.current = null;
+      // Clear refs
+      secretKeyRef.current = null;
+      pubkeyRef.current = null;
+      relaysRef.current = [];
       // Close peer connections
       guests.forEach(g => {
         try {
@@ -458,7 +480,7 @@ export function useLobby(
         } catch { /* ignore */ }
       });
     };
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [enabled, onGuestJoin]); // Re-initialize when enabled changes or guest handler changes
 
   const joinLobby = useCallback(async (code: string, playerName: string) => {
     try {
