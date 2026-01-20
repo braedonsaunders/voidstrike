@@ -821,7 +821,14 @@ export function WebGPUGameCanvas() {
       }
 
       // Force initial vision update so fog of war shows correct visibility during countdown
+      // This registers players in the vision system based on spawned entities
       game.visionSystem.forceUpdate();
+
+      // Re-set player ID on fog of war now that players are registered
+      // (setPlayerId was called earlier before players existed, so playerIndex was wrong)
+      if (fogOfWarRef.current && localPlayerId) {
+        fogOfWarRef.current.setPlayerId(localPlayerId);
+      }
 
       // Initialize audio (must await to ensure sounds are preloaded before game starts)
       await game.audioSystem.initialize(camera.camera, CURRENT_MAP.biome);
