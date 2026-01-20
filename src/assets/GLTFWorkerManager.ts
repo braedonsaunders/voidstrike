@@ -9,14 +9,15 @@
  * less responsiveness during loading.
  */
 
-import type { FetchResponse, BatchFetchResponse, WorkerRequest, WorkerResponse } from './gltf.worker';
+import type { FetchResponse, BatchFetchResponse, WorkerRequest, WorkerResponse } from '../workers/gltf.worker';
 import { debugAssets } from '@/utils/debugLogger';
 
 // Enable Web Worker for off-main-thread GLB fetching
 const ENABLE_WORKER = true;
 
 // Timeout for worker requests (ms) - falls back to main thread if exceeded
-const WORKER_TIMEOUT = 10000;
+// Reduced from 10s to 3s for faster fallback when worker fails to load
+const WORKER_TIMEOUT = 3000;
 
 class GLTFWorkerManager {
   private worker: Worker | null = null;
@@ -47,12 +48,14 @@ class GLTFWorkerManager {
 
     try {
       // Create worker as ES module (required for Next.js 16+ Turbopack)
-      this.worker = new Worker(
-        new URL('./gltf.worker.ts', import.meta.url),
-        { type: 'module' }
-      );
+      const workerUrl = new URL('../workers/gltf.worker.ts', import.meta.url);
+      debugAssets.log('[GLTFWorkerManager] Creating worker with URL:', workerUrl.href);
+
+      this.worker = new Worker(workerUrl, { type: 'module' });
+      debugAssets.log('[GLTFWorkerManager] Worker created successfully');
 
       this.worker.onmessage = (event: MessageEvent<WorkerResponse>) => {
+        debugAssets.log('[GLTFWorkerManager] Received message from worker:', event.data.type);
         this.handleMessage(event.data);
       };
 
@@ -127,7 +130,8 @@ class GLTFWorkerManager {
     }
 
     this.initWorker();
-    if (!this.worker) {
+    // Check again after init - worker may have failed during creation or onerror may have fired
+    if (!this.worker || this.workerFailed) {
       return this.fetchMainThread(url);
     }
 
@@ -156,7 +160,16 @@ class GLTFWorkerManager {
         url,
       };
 
-      this.worker!.postMessage(request);
+      try {
+        debugAssets.log(`[GLTFWorkerManager] Sending request ${id} for ${url}`);
+        this.worker!.postMessage(request);
+      } catch (error) {
+        // If postMessage fails, fall back to main thread immediately
+        clearTimeout(timeoutId);
+        this.pendingRequests.delete(id);
+        debugAssets.warn(`[GLTFWorkerManager] postMessage failed for ${url}, using main thread:`, error);
+        this.fetchMainThread(url).then(resolve);
+      }
     });
   }
 
@@ -175,7 +188,8 @@ class GLTFWorkerManager {
     }
 
     this.initWorker();
-    if (!this.worker) {
+    // Check again after init - worker may have failed during creation or onerror may have fired
+    if (!this.worker || this.workerFailed) {
       return this.batchFetchMainThread(urls);
     }
 
@@ -185,7 +199,7 @@ class GLTFWorkerManager {
       // Set timeout to fall back to main thread
       const timeoutId = setTimeout(() => {
         this.pendingBatchRequests.delete(id);
-        debugAssets.warn(`[GLTFWorkerManager] Worker timeout for batch fetch, using main thread`);
+        debugAssets.warn('[GLTFWorkerManager] Worker timeout for batch fetch, using main thread');
         this.batchFetchMainThread(urls).then(resolve);
       }, WORKER_TIMEOUT);
 
@@ -204,7 +218,15 @@ class GLTFWorkerManager {
         urls,
       };
 
-      this.worker!.postMessage(request);
+      try {
+        this.worker!.postMessage(request);
+      } catch (error) {
+        // If postMessage fails, fall back to main thread immediately
+        clearTimeout(timeoutId);
+        this.pendingBatchRequests.delete(id);
+        debugAssets.warn('[GLTFWorkerManager] postMessage failed for batch fetch, using main thread:', error);
+        this.batchFetchMainThread(urls).then(resolve);
+      }
     });
   }
 
