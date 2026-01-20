@@ -882,8 +882,20 @@ export function createFogOfWarPass(
     const rimContribution = uRimColor.mul(rimGlow).mul(isVisible);
     finalColor.addAssign(rimContribution);
 
+    // DEBUG: Show world position as color to verify reconstruction
+    // Red = X position, Blue = Z position (normalized to map dimensions)
+    const debugWorldColor = vec3(
+      clamp(worldX.div(uMapDimensions.x), 0.0, 1.0),
+      float(0.2),
+      clamp(worldZ.div(uMapDimensions.y), 0.0, 1.0)
+    );
+
     // Apply fog effect only if vision texture is bound
-    result.assign(mix(sceneColor, finalColor, uEnabled.mul(uHasVisionTexture)));
+    // If no vision texture, show debug world position colors
+    const hasTexture = uHasVisionTexture.greaterThan(0.5);
+    const fogResult = mix(sceneColor, finalColor, uEnabled);
+    const debugResult = mix(sceneColor, debugWorldColor, float(0.5));
+    result.assign(hasTexture.select(fogResult, debugResult));
 
     return vec4(result, float(1.0));
   });
