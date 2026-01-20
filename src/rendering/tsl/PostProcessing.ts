@@ -69,6 +69,7 @@ import {
   createSharpeningPass,
   createTRAAPass,
   createFXAAPass,
+  createFogOfWarPass,
   // Temporal helpers
   createTemporalAOUpscaleNode,
   createTemporalSSRUpscaleNode,
@@ -76,6 +77,8 @@ import {
   createTemporalBlendNode,
   // Types
   type ColorGradingUniforms,
+  type FogOfWarPassResult,
+  type FogOfWarQuality,
 } from './effects';
 
 // Import temporal pipeline management
@@ -174,6 +177,16 @@ export interface PostProcessingConfig {
   volumetricFogQuality: 'low' | 'medium' | 'high' | 'ultra';
   volumetricFogDensity: number;
   volumetricFogScattering: number;
+  // Fog of War (StarCraft 2-style)
+  fogOfWarEnabled: boolean;
+  fogOfWarQuality: FogOfWarQuality;
+  fogOfWarEdgeBlur: number; // 0-4 cells
+  fogOfWarDesaturation: number; // 0-1
+  fogOfWarExploredDarkness: number; // 0.3-0.7
+  fogOfWarUnexploredDarkness: number; // 0.05-0.2
+  fogOfWarCloudSpeed: number; // animation speed
+  fogOfWarRimIntensity: number; // 0-0.3
+  fogOfWarHeightInfluence: number; // 0-1
 }
 
 const DEFAULT_CONFIG: PostProcessingConfig = {
@@ -215,6 +228,16 @@ const DEFAULT_CONFIG: PostProcessingConfig = {
   volumetricFogQuality: 'medium',
   volumetricFogDensity: 1.0,
   volumetricFogScattering: 1.0,
+  // Fog of War defaults (StarCraft 2-style)
+  fogOfWarEnabled: false,
+  fogOfWarQuality: 'high',
+  fogOfWarEdgeBlur: 2.5,
+  fogOfWarDesaturation: 0.7,
+  fogOfWarExploredDarkness: 0.5,
+  fogOfWarUnexploredDarkness: 0.12,
+  fogOfWarCloudSpeed: 0.015,
+  fogOfWarRimIntensity: 0.12,
+  fogOfWarHeightInfluence: 0.25,
 };
 
 // ============================================
@@ -242,6 +265,7 @@ export class RenderPipeline {
   private fxaaPass: any = null;
   private traaPass: any = null;
   private volumetricFogPass: VolumetricFogNode | null = null;
+  private fogOfWarPass: FogOfWarPassResult | null = null;
   private easuPass: ReturnType<typeof easuUpscale> | null = null;
 
   // Temporal managers
@@ -494,7 +518,23 @@ export class RenderPipeline {
       }
     }
 
-    // 4. Bloom
+    // 4. Fog of War (StarCraft 2-style post-process)
+    if (this.config.fogOfWarEnabled && this.camera instanceof THREE.PerspectiveCamera) {
+      this.fogOfWarPass = createFogOfWarPass(outputNode, scenePassDepth, this.camera);
+      this.fogOfWarPass.applyConfig({
+        quality: this.config.fogOfWarQuality,
+        edgeBlurRadius: this.config.fogOfWarEdgeBlur,
+        desaturation: this.config.fogOfWarDesaturation,
+        exploredDarkness: this.config.fogOfWarExploredDarkness,
+        unexploredDarkness: this.config.fogOfWarUnexploredDarkness,
+        cloudSpeed: this.config.fogOfWarCloudSpeed,
+        rimIntensity: this.config.fogOfWarRimIntensity,
+        heightInfluence: this.config.fogOfWarHeightInfluence,
+      });
+      outputNode = this.fogOfWarPass.node;
+    }
+
+    // 5. Bloom
     if (this.config.bloomEnabled) {
       const result = createBloomPass(outputNode, {
         threshold: this.config.bloomThreshold,
@@ -507,7 +547,7 @@ export class RenderPipeline {
       }
     }
 
-    // 5. Volumetric Fog
+    // 6. Volumetric Fog
     if (this.config.volumetricFogEnabled && this.camera instanceof THREE.PerspectiveCamera) {
       const result = createVolumetricFogPass(outputNode, scenePassDepth, this.camera, {
         quality: this.config.volumetricFogQuality,
@@ -520,7 +560,7 @@ export class RenderPipeline {
       }
     }
 
-    // 6. Color grading
+    // 7. Color grading
     const colorUniforms: ColorGradingUniforms = {
       vignetteIntensity: this.uVignetteIntensity,
       exposure: this.uExposure,
@@ -529,7 +569,7 @@ export class RenderPipeline {
     };
     outputNode = createColorGradingPass(outputNode, colorUniforms, this.config.vignetteEnabled);
 
-    // 7. Anti-aliasing
+    // 8. Anti-aliasing
     if (this.config.antiAliasingMode === 'taa' && this.config.taaEnabled && scenePassVelocity) {
       const result = createTRAAPass(outputNode, scenePassDepth, scenePassVelocity, this.camera);
       if (result) {
@@ -599,6 +639,7 @@ export class RenderPipeline {
     this.fxaaPass = null;
     this.easuPass = null;
     this.volumetricFogPass = null;
+    this.fogOfWarPass = null;
     this.quarterAOPostProcessing = null;
     this.quarterSSRPostProcessing = null;
     this.temporalAOManager?.dispose();
@@ -625,7 +666,8 @@ export class RenderPipeline {
       (config.vignetteEnabled !== undefined && config.vignetteEnabled !== this.config.vignetteEnabled) ||
       (config.upscalingMode !== undefined && config.upscalingMode !== this.config.upscalingMode) ||
       (config.renderScale !== undefined && config.renderScale !== this.config.renderScale) ||
-      (config.volumetricFogEnabled !== undefined && config.volumetricFogEnabled !== this.config.volumetricFogEnabled);
+      (config.volumetricFogEnabled !== undefined && config.volumetricFogEnabled !== this.config.volumetricFogEnabled) ||
+      (config.fogOfWarEnabled !== undefined && config.fogOfWarEnabled !== this.config.fogOfWarEnabled);
 
     this.config = { ...this.config, ...config };
 
@@ -664,6 +706,17 @@ export class RenderPipeline {
       density: this.config.volumetricFogDensity,
       scattering: this.config.volumetricFogScattering,
     });
+    // Fog of War config
+    this.fogOfWarPass?.applyConfig({
+      quality: this.config.fogOfWarQuality,
+      edgeBlurRadius: this.config.fogOfWarEdgeBlur,
+      desaturation: this.config.fogOfWarDesaturation,
+      exploredDarkness: this.config.fogOfWarExploredDarkness,
+      unexploredDarkness: this.config.fogOfWarUnexploredDarkness,
+      cloudSpeed: this.config.fogOfWarCloudSpeed,
+      rimIntensity: this.config.fogOfWarRimIntensity,
+      heightInfluence: this.config.fogOfWarHeightInfluence,
+    });
     this.uSharpeningIntensity.value = this.config.taaSharpeningIntensity;
     this.easuPass?.setSharpness(this.config.easuSharpness);
     this.easuPass?.setRenderResolution(this.renderWidth, this.renderHeight);
@@ -696,6 +749,7 @@ export class RenderPipeline {
   isTAAEnabled(): boolean { return this.config.taaEnabled && this.config.antiAliasingMode === 'taa'; }
   isSSGIEnabled(): boolean { return this.config.ssgiEnabled; }
   isVolumetricFogEnabled(): boolean { return this.config.volumetricFogEnabled; }
+  isFogOfWarEnabled(): boolean { return this.config.fogOfWarEnabled; }
   isTemporalAOEnabled(): boolean { return this.config.temporalAOEnabled && this.config.aoEnabled; }
   isTemporalSSREnabled(): boolean { return this.config.temporalSSREnabled && this.config.ssrEnabled; }
   getAntiAliasingMode(): AntiAliasingMode { return this.config.antiAliasingMode; }
@@ -705,6 +759,42 @@ export class RenderPipeline {
   getRenderScalePercent(): number { return Math.round(this.config.renderScale * 100); }
   getRenderResolution(): { width: number; height: number } { return { width: this.renderWidth, height: this.renderHeight }; }
   getDisplayResolution(): { width: number; height: number } { return { width: this.displayWidth, height: this.displayHeight }; }
+
+  // Fog of War methods
+  /**
+   * Set the vision texture for fog of war rendering
+   * This texture comes from VisionCompute and contains:
+   * - R: explored (0-1)
+   * - G: visible (0-1)
+   * - B: velocity (0.5 = no change)
+   * - A: smooth visibility (0-1, temporally filtered)
+   */
+  setFogOfWarVisionTexture(texture: THREE.Texture | null): void {
+    this.fogOfWarPass?.setVisionTexture(texture);
+  }
+
+  /**
+   * Update fog of war animation time (for cloud movement)
+   */
+  updateFogOfWarTime(time: number): void {
+    this.fogOfWarPass?.updateTime(time);
+  }
+
+  /**
+   * Set fog of war map dimensions for proper world-space calculations
+   */
+  setFogOfWarMapDimensions(width: number, height: number): void {
+    if (this.fogOfWarPass) {
+      this.fogOfWarPass.uniforms.mapDimensions.value.set(width, height);
+    }
+  }
+
+  /**
+   * Get the fog of war pass for direct access (e.g., setting grid dimensions)
+   */
+  getFogOfWarPass(): FogOfWarPassResult | null {
+    return this.fogOfWarPass;
+  }
 
   updateVolumetricFogCamera(): void {
     if (this.volumetricFogPass && this.camera instanceof THREE.PerspectiveCamera) {

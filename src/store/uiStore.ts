@@ -173,6 +173,16 @@ export interface GraphicsSettings {
   volumetricFogDensity: number;
   volumetricFogScattering: number;
 
+  // Fog of War (StarCraft 2-style post-processing)
+  fogOfWarQuality: 'low' | 'medium' | 'high' | 'ultra';
+  fogOfWarEdgeBlur: number; // 0-4 cells
+  fogOfWarDesaturation: number; // 0-1
+  fogOfWarExploredDarkness: number; // 0.3-0.7
+  fogOfWarUnexploredDarkness: number; // 0.05-0.2
+  fogOfWarCloudSpeed: number;
+  fogOfWarRimIntensity: number; // 0-0.3
+  fogOfWarHeightInfluence: number; // 0-1
+
   // Lighting
   shadowFill: number; // 0-1, controls ground bounce light intensity
   dynamicLightsEnabled: boolean;
@@ -583,6 +593,16 @@ export const useUIStore = create<UIState>((set, get) => ({
     volumetricFogQuality: 'medium' as const,
     volumetricFogDensity: 1.0,
     volumetricFogScattering: 1.0,
+
+    // Fog of War (StarCraft 2-style) - High quality defaults for polished look
+    fogOfWarQuality: 'high' as const,
+    fogOfWarEdgeBlur: 2.5, // Soft edges like SC2
+    fogOfWarDesaturation: 0.7, // Strong desaturation for explored
+    fogOfWarExploredDarkness: 0.5, // Half brightness for explored
+    fogOfWarUnexploredDarkness: 0.12, // Very dark unexplored
+    fogOfWarCloudSpeed: 0.015, // Slow, subtle cloud animation
+    fogOfWarRimIntensity: 0.12, // Subtle edge glow
+    fogOfWarHeightInfluence: 0.25, // Moderate height influence
 
     // Lighting
     shadowFill: 0.3, // 30% ground bounce fill light

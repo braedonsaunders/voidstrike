@@ -40,6 +40,7 @@ import { ssr } from 'three/addons/tsl/display/SSRNode.js';
 import { ssgi } from 'three/addons/tsl/display/SSGINode.js';
 
 import { createVolumetricFogNode, VolumetricFogNode } from '../VolumetricFog';
+import { snoise3D, fbm3 } from '../noise';
 import { debugPostProcessing } from '@/utils/debugLogger';
 import {
   calculateReprojectedUV,
@@ -591,6 +592,397 @@ export function createTemporalBlendNode(
 
     return temporalBlend(current, history, blendUniform, inBounds);
   })();
+}
+
+// ============================================
+// FOG OF WAR (StarCraft 2-Inspired Post-Process)
+// ============================================
+
+export type FogOfWarQuality = 'low' | 'medium' | 'high' | 'ultra';
+
+export const FOG_OF_WAR_QUALITY_PRESETS = {
+  low: { edgeSamples: 1, cloudOctaves: 1, temporalEnabled: false },
+  medium: { edgeSamples: 5, cloudOctaves: 2, temporalEnabled: true },
+  high: { edgeSamples: 9, cloudOctaves: 3, temporalEnabled: true },
+  ultra: { edgeSamples: 13, cloudOctaves: 3, temporalEnabled: true },
+} as const;
+
+export interface FogOfWarConfig {
+  quality: FogOfWarQuality;
+  edgeBlurRadius: number; // 0-4 cells
+  desaturation: number; // 0-1 for explored areas
+  exploredDarkness: number; // multiplier for explored areas (0.4-0.7)
+  unexploredDarkness: number; // multiplier for unexplored areas (0.1-0.2)
+  cloudSpeed: number; // animation speed
+  cloudScale: number; // cloud texture scale
+  rimIntensity: number; // edge glow intensity
+  rimColor: THREE.Color;
+  heightInfluence: number; // 0-1 how much height affects fog density
+  coolShift: THREE.Color; // color tint for explored areas
+}
+
+export interface FogOfWarPassResult {
+  node: any;
+  uniforms: {
+    enabled: ReturnType<typeof uniform>;
+    time: ReturnType<typeof uniform>;
+    quality: ReturnType<typeof uniform>;
+    edgeBlurRadius: ReturnType<typeof uniform>;
+    desaturation: ReturnType<typeof uniform>;
+    exploredDarkness: ReturnType<typeof uniform>;
+    unexploredDarkness: ReturnType<typeof uniform>;
+    cloudSpeed: ReturnType<typeof uniform>;
+    cloudScale: ReturnType<typeof uniform>;
+    rimIntensity: ReturnType<typeof uniform>;
+    rimColor: ReturnType<typeof uniform>;
+    heightInfluence: ReturnType<typeof uniform>;
+    coolShift: ReturnType<typeof uniform>;
+    mapDimensions: ReturnType<typeof uniform>;
+    gridDimensions: ReturnType<typeof uniform>;
+    cellSize: ReturnType<typeof uniform>;
+  };
+  setVisionTexture: (tex: THREE.Texture | null) => void;
+  setEnabled: (enabled: boolean) => void;
+  updateTime: (t: number) => void;
+  applyConfig: (config: Partial<FogOfWarConfig>) => void;
+}
+
+/**
+ * Create StarCraft 2-inspired Fog of War post-processing pass
+ *
+ * Features:
+ * - Soft edge transitions via multi-sample blur kernel
+ * - Desaturation + cool color shift for explored areas
+ * - Animated procedural clouds for unexplored regions
+ * - Edge glow / rim light at visibility boundaries
+ * - Height-aware fog density
+ * - Quality presets from low to ultra
+ *
+ * @param sceneColorNode - Scene color input (from previous pass)
+ * @param depthNode - Scene depth texture for world position reconstruction
+ * @param camera - Camera for depth reconstruction
+ */
+export function createFogOfWarPass(
+  sceneColorNode: any,
+  depthNode: any,
+  camera: THREE.PerspectiveCamera
+): FogOfWarPassResult {
+  // ============================================
+  // UNIFORMS
+  // ============================================
+  const uEnabled = uniform(1.0);
+  const uTime = uniform(0.0);
+  const uQuality = uniform(2); // 0=low, 1=medium, 2=high, 3=ultra
+
+  // Visual parameters
+  const uEdgeBlurRadius = uniform(2.5); // Cells
+  const uDesaturation = uniform(0.7);
+  const uExploredDarkness = uniform(0.5);
+  const uUnexploredDarkness = uniform(0.12);
+  const uCloudSpeed = uniform(0.015);
+  const uCloudScale = uniform(0.08);
+  const uRimIntensity = uniform(0.12);
+  const uRimColor = uniform(new THREE.Color(0.6, 0.8, 1.0));
+  const uHeightInfluence = uniform(0.25);
+  const uCoolShift = uniform(new THREE.Color(0.85, 0.9, 1.0));
+
+  // Map configuration
+  const uMapDimensions = uniform(new THREE.Vector2(256, 256));
+  const uGridDimensions = uniform(new THREE.Vector2(128, 128));
+  const uCellSize = uniform(2.0);
+
+  // Camera uniforms for depth reconstruction
+  const uCameraNear = uniform(camera.near);
+  const uCameraFar = uniform(camera.far);
+  const uCameraPos = uniform(camera.position.clone());
+  const uInverseProjection = uniform(new THREE.Matrix4());
+  const uInverseView = uniform(new THREE.Matrix4());
+
+  // Vision texture (will be set dynamically)
+  let visionTextureRef: THREE.Texture | null = null;
+  const uHasVisionTexture = uniform(0.0);
+
+  // Create a placeholder texture for initial binding
+  const placeholderData = new Uint8Array(4);
+  placeholderData[0] = 0; // R - explored
+  placeholderData[1] = 0; // G - visible
+  placeholderData[2] = 0; // B - velocity
+  placeholderData[3] = 255; // A - smooth visibility
+  const placeholderTexture = new THREE.DataTexture(placeholderData, 1, 1, THREE.RGBAFormat);
+  placeholderTexture.needsUpdate = true;
+  let currentVisionTexture: THREE.Texture = placeholderTexture;
+
+  // ============================================
+  // SHADER NODE
+  // ============================================
+  const fogOfWarNode = Fn(() => {
+    const fragUV = uv();
+    const sceneColor = vec3(sceneColorNode).toVar();
+
+    // Early exit if disabled
+    const result = vec3(sceneColor).toVar();
+
+    // Sample depth and reconstruct world position
+    const depthSample = texture(depthNode, fragUV).r;
+    const z = depthSample.mul(2.0).sub(1.0);
+    const linearDepth = uCameraNear.mul(uCameraFar).div(
+      uCameraFar.sub(z.mul(uCameraFar.sub(uCameraNear)))
+    );
+
+    // Reconstruct world XZ position from UV and depth
+    // Simplified approach - works for top-down RTS camera
+    const ndcX = fragUV.x.mul(2.0).sub(1.0);
+    const ndcY = fragUV.y.mul(2.0).sub(1.0);
+
+    // Approximate world position (camera looking down)
+    const aspectRatio = float(16.0 / 9.0);
+    const fovFactor = linearDepth.mul(1.0); // Approximate FOV scaling
+    const worldX = uCameraPos.x.add(ndcX.mul(fovFactor).mul(aspectRatio));
+    const worldZ = uCameraPos.z.sub(ndcY.mul(fovFactor));
+    const worldY = linearDepth.mul(0.04); // Approximate terrain height from depth
+
+    // Convert world position to vision grid UV
+    const visionU = worldX.div(uMapDimensions.x);
+    const visionV = worldZ.div(uMapDimensions.y);
+    const visionUV = vec2(visionU, visionV).toVar();
+
+    // Clamp to valid range
+    const validUV = clamp(visionUV, 0.0, 1.0);
+
+    // ============================================
+    // MULTI-SAMPLE BLUR FOR SOFT EDGES
+    // ============================================
+    const texelSize = vec2(1.0).div(uGridDimensions);
+    const blurRadius = uEdgeBlurRadius.mul(texelSize);
+
+    // Sample vision texture with blur kernel
+    // Quality determines number of samples
+    const visibility = float(0.0).toVar();
+    const explored = float(0.0).toVar();
+    const totalWeight = float(0.0).toVar();
+
+    // 9-sample 3x3 Gaussian blur (high quality)
+    const gaussianWeights = [
+      { offset: vec2(0, 0), weight: 0.25 },
+      { offset: vec2(-1, 0), weight: 0.125 },
+      { offset: vec2(1, 0), weight: 0.125 },
+      { offset: vec2(0, -1), weight: 0.125 },
+      { offset: vec2(0, 1), weight: 0.125 },
+      { offset: vec2(-1, -1), weight: 0.0625 },
+      { offset: vec2(1, -1), weight: 0.0625 },
+      { offset: vec2(-1, 1), weight: 0.0625 },
+      { offset: vec2(1, 1), weight: 0.0625 },
+    ];
+
+    // Create texture node for vision
+    const visionTex = texture(currentVisionTexture);
+
+    for (const sample of gaussianWeights) {
+      const sampleUV = validUV.add(sample.offset.mul(blurRadius));
+      const clampedSampleUV = clamp(sampleUV, 0.001, 0.999);
+      const visionSample = visionTex.sample(clampedSampleUV);
+
+      // Vision texture format: R=explored, G=visible, B=velocity, A=smooth
+      const sampleExplored = visionSample.r;
+      const sampleVisible = visionSample.g;
+      const sampleSmooth = visionSample.a.greaterThan(0.0).select(visionSample.a, sampleVisible);
+
+      const w = float(sample.weight);
+      explored.addAssign(sampleExplored.mul(w));
+      visibility.addAssign(sampleSmooth.mul(w));
+      totalWeight.addAssign(w);
+    }
+
+    // Normalize
+    explored.divAssign(totalWeight);
+    visibility.divAssign(totalWeight);
+
+    // ============================================
+    // VISIBILITY STATE CLASSIFICATION
+    // ============================================
+    // visibility > 0.5 = visible
+    // explored > 0.5 && visibility <= 0.5 = explored (seen before)
+    // else = unexplored
+
+    const isVisible = smoothstep(float(0.4), float(0.6), visibility);
+    const isExplored = smoothstep(float(0.4), float(0.6), explored);
+    const isUnexplored = float(1.0).sub(max(isVisible, isExplored));
+
+    // ============================================
+    // EDGE DETECTION FOR RIM GLOW
+    // ============================================
+    // Use screen-space derivatives of visibility for edge detection
+    const dVdx = visibility.dFdx();
+    const dVdy = visibility.dFdy();
+    const edgeStrength = length(vec2(dVdx, dVdy)).mul(10.0);
+    const rimGlow = smoothstep(float(0.0), float(0.5), edgeStrength).mul(uRimIntensity);
+
+    // ============================================
+    // ANIMATED CLOUDS FOR UNEXPLORED
+    // ============================================
+    const cloudPos = vec3(
+      worldX.mul(uCloudScale),
+      worldZ.mul(uCloudScale),
+      uTime.mul(uCloudSpeed)
+    );
+
+    // Multi-octave cloud noise
+    const cloud1 = fbm3(cloudPos).mul(0.5).add(0.5); // Large swirls
+    const cloud2 = fbm3(cloudPos.mul(2.0).add(100.0)).mul(0.5).add(0.5); // Medium
+    const cloud3 = snoise3D(cloudPos.mul(4.0).add(200.0)).mul(0.5).add(0.5); // Fine detail
+
+    // Combine octaves
+    const cloudNoise = cloud1.mul(0.5).add(cloud2.mul(0.3)).add(cloud3.mul(0.2));
+
+    // Cloud density variation for unexplored
+    const unexploredBase = uUnexploredDarkness;
+    const unexploredVariation = float(0.08);
+    const unexploredBrightness = unexploredBase.add(cloudNoise.mul(unexploredVariation));
+
+    // Subtle color variation in clouds (dark blues/purples)
+    const cloudColor = vec3(
+      unexploredBrightness.mul(0.9),
+      unexploredBrightness.mul(0.95),
+      unexploredBrightness
+    );
+
+    // ============================================
+    // HEIGHT-AWARE FOG DENSITY
+    // ============================================
+    // Fog is denser in low areas, thinner on high ground
+    const normalizedHeight = clamp(worldY.div(20.0), 0.0, 1.0); // Assume max height ~20
+    const heightFactor = float(1.0).sub(normalizedHeight.mul(uHeightInfluence));
+
+    // ============================================
+    // EXPLORED AREA PROCESSING
+    // ============================================
+    // Desaturate + darken + cool color shift
+    const luminance = dot(sceneColor, vec3(0.299, 0.587, 0.114));
+    const desaturatedColor = mix(sceneColor, vec3(luminance), uDesaturation);
+    const exploredColor = desaturatedColor.mul(uExploredDarkness).mul(uCoolShift);
+
+    // ============================================
+    // COMPOSITE FINAL COLOR
+    // ============================================
+    // Start with scene color for visible areas
+    let finalColor = sceneColor.toVar();
+
+    // Apply explored effect (desaturation + darkening)
+    const exploredAmount = isExplored.mul(float(1.0).sub(isVisible));
+    finalColor.assign(mix(finalColor, exploredColor, exploredAmount.mul(heightFactor)));
+
+    // Apply unexplored effect (cloud overlay)
+    finalColor.assign(mix(finalColor, cloudColor, isUnexplored.mul(heightFactor)));
+
+    // Add rim glow at visibility edges
+    const rimContribution = uRimColor.mul(rimGlow).mul(isVisible);
+    finalColor.addAssign(rimContribution);
+
+    // Apply fog effect only if vision texture is bound
+    result.assign(mix(sceneColor, finalColor, uEnabled.mul(uHasVisionTexture)));
+
+    return vec4(result, float(1.0));
+  });
+
+  // ============================================
+  // PUBLIC API
+  // ============================================
+  const uniforms = {
+    enabled: uEnabled,
+    time: uTime,
+    quality: uQuality,
+    edgeBlurRadius: uEdgeBlurRadius,
+    desaturation: uDesaturation,
+    exploredDarkness: uExploredDarkness,
+    unexploredDarkness: uUnexploredDarkness,
+    cloudSpeed: uCloudSpeed,
+    cloudScale: uCloudScale,
+    rimIntensity: uRimIntensity,
+    rimColor: uRimColor,
+    heightInfluence: uHeightInfluence,
+    coolShift: uCoolShift,
+    mapDimensions: uMapDimensions,
+    gridDimensions: uGridDimensions,
+    cellSize: uCellSize,
+  };
+
+  const setVisionTexture = (tex: THREE.Texture | null) => {
+    visionTextureRef = tex;
+    if (tex) {
+      currentVisionTexture = tex;
+      uHasVisionTexture.value = 1.0;
+
+      // Update grid dimensions from texture
+      if (tex.image) {
+        uGridDimensions.value.set(tex.image.width || 128, tex.image.height || 128);
+      }
+    } else {
+      currentVisionTexture = placeholderTexture;
+      uHasVisionTexture.value = 0.0;
+    }
+  };
+
+  const setEnabled = (enabled: boolean) => {
+    uEnabled.value = enabled ? 1.0 : 0.0;
+  };
+
+  const updateTime = (t: number) => {
+    uTime.value = t;
+  };
+
+  const updateCamera = (cam: THREE.PerspectiveCamera) => {
+    uCameraNear.value = cam.near;
+    uCameraFar.value = cam.far;
+    uCameraPos.value.copy(cam.position);
+    uInverseProjection.value.copy(cam.projectionMatrixInverse);
+    uInverseView.value.copy(cam.matrixWorld);
+  };
+
+  const applyConfig = (config: Partial<FogOfWarConfig>) => {
+    if (config.quality !== undefined) {
+      const qualityIndex = ['low', 'medium', 'high', 'ultra'].indexOf(config.quality);
+      uQuality.value = qualityIndex >= 0 ? qualityIndex : 2;
+    }
+    if (config.edgeBlurRadius !== undefined) {
+      uEdgeBlurRadius.value = config.edgeBlurRadius;
+    }
+    if (config.desaturation !== undefined) {
+      uDesaturation.value = config.desaturation;
+    }
+    if (config.exploredDarkness !== undefined) {
+      uExploredDarkness.value = config.exploredDarkness;
+    }
+    if (config.unexploredDarkness !== undefined) {
+      uUnexploredDarkness.value = config.unexploredDarkness;
+    }
+    if (config.cloudSpeed !== undefined) {
+      uCloudSpeed.value = config.cloudSpeed;
+    }
+    if (config.cloudScale !== undefined) {
+      uCloudScale.value = config.cloudScale;
+    }
+    if (config.rimIntensity !== undefined) {
+      uRimIntensity.value = config.rimIntensity;
+    }
+    if (config.rimColor !== undefined) {
+      uRimColor.value.copy(config.rimColor);
+    }
+    if (config.heightInfluence !== undefined) {
+      uHeightInfluence.value = config.heightInfluence;
+    }
+    if (config.coolShift !== undefined) {
+      uCoolShift.value.copy(config.coolShift);
+    }
+  };
+
+  return {
+    node: fogOfWarNode(),
+    uniforms,
+    setVisionTexture,
+    setEnabled,
+    updateTime,
+    applyConfig,
+  };
 }
 
 /**

@@ -541,12 +541,12 @@ export function WebGPUGameCanvas() {
 
       resourceRendererRef.current = new ResourceRenderer(scene, game.world, terrain);
 
-      // TSL FogOfWar - WebGPU compatible
+      // TSL FogOfWar - Vision texture provider for post-processing
+      // Fog of war rendering is now handled by the post-processing pipeline
       if (fogOfWarEnabled && !isSpectatorMode()) {
         const fogOfWar = new TSLFogOfWar({ mapWidth, mapHeight });
         fogOfWar.setVisionSystem(game.visionSystem);
         fogOfWar.setPlayerId(localPlayerId);
-        scene.add(fogOfWar.mesh);
         fogOfWarRef.current = fogOfWar;
       }
 
@@ -660,6 +660,16 @@ export function WebGPUGameCanvas() {
             volumetricFogQuality: graphicsSettings.volumetricFogQuality,
             volumetricFogDensity: graphicsSettings.volumetricFogDensity,
             volumetricFogScattering: graphicsSettings.volumetricFogScattering,
+            // Fog of War (StarCraft 2-style post-processing)
+            fogOfWarEnabled: fogOfWarEnabled && !isSpectatorMode(),
+            fogOfWarQuality: graphicsSettings.fogOfWarQuality,
+            fogOfWarEdgeBlur: graphicsSettings.fogOfWarEdgeBlur,
+            fogOfWarDesaturation: graphicsSettings.fogOfWarDesaturation,
+            fogOfWarExploredDarkness: graphicsSettings.fogOfWarExploredDarkness,
+            fogOfWarUnexploredDarkness: graphicsSettings.fogOfWarUnexploredDarkness,
+            fogOfWarCloudSpeed: graphicsSettings.fogOfWarCloudSpeed,
+            fogOfWarRimIntensity: graphicsSettings.fogOfWarRimIntensity,
+            fogOfWarHeightInfluence: graphicsSettings.fogOfWarHeightInfluence,
           }
         );
 
@@ -668,6 +678,11 @@ export function WebGPUGameCanvas() {
           initTargetWidth * initEffectivePixelRatio,
           initTargetHeight * initEffectivePixelRatio
         );
+
+        // Set fog of war map dimensions
+        if (fogOfWarEnabled && !isSpectatorMode()) {
+          renderPipelineRef.current.setFogOfWarMapDimensions(mapWidth, mapHeight);
+        }
 
         // Initialize camera matrices for TAA/SSGI velocity calculation
         if (graphicsSettings.taaEnabled || graphicsSettings.ssgiEnabled) {
@@ -899,6 +914,13 @@ export function WebGPUGameCanvas() {
           buildingRendererRef.current?.update();
           resourceRendererRef.current?.update();
           fogOfWarRef.current?.update();
+        }
+
+        // Update post-processing fog of war with vision texture and animation time
+        if (renderPipelineRef.current?.isFogOfWarEnabled() && fogOfWarRef.current) {
+          const visionTexture = fogOfWarRef.current.getVisionTexture();
+          renderPipelineRef.current.setFogOfWarVisionTexture(visionTexture);
+          renderPipelineRef.current.updateFogOfWarTime(currentTime / 1000);
         }
 
         rallyPointRendererRef.current?.update();
@@ -2316,6 +2338,15 @@ export function WebGPUGameCanvas() {
           volumetricFogQuality: settings.volumetricFogQuality,
           volumetricFogDensity: settings.volumetricFogDensity,
           volumetricFogScattering: settings.volumetricFogScattering,
+          // Fog of War settings
+          fogOfWarQuality: settings.fogOfWarQuality,
+          fogOfWarEdgeBlur: settings.fogOfWarEdgeBlur,
+          fogOfWarDesaturation: settings.fogOfWarDesaturation,
+          fogOfWarExploredDarkness: settings.fogOfWarExploredDarkness,
+          fogOfWarUnexploredDarkness: settings.fogOfWarUnexploredDarkness,
+          fogOfWarCloudSpeed: settings.fogOfWarCloudSpeed,
+          fogOfWarRimIntensity: settings.fogOfWarRimIntensity,
+          fogOfWarHeightInfluence: settings.fogOfWarHeightInfluence,
         });
       }
 
@@ -2363,8 +2394,23 @@ export function WebGPUGameCanvas() {
               volumetricFogQuality: settings.volumetricFogQuality,
               volumetricFogDensity: settings.volumetricFogDensity,
               volumetricFogScattering: settings.volumetricFogScattering,
+              // Fog of War (StarCraft 2-style post-processing)
+              fogOfWarEnabled: useGameSetupStore.getState().fogOfWar && !isSpectatorMode(),
+              fogOfWarQuality: settings.fogOfWarQuality,
+              fogOfWarEdgeBlur: settings.fogOfWarEdgeBlur,
+              fogOfWarDesaturation: settings.fogOfWarDesaturation,
+              fogOfWarExploredDarkness: settings.fogOfWarExploredDarkness,
+              fogOfWarUnexploredDarkness: settings.fogOfWarUnexploredDarkness,
+              fogOfWarCloudSpeed: settings.fogOfWarCloudSpeed,
+              fogOfWarRimIntensity: settings.fogOfWarRimIntensity,
+              fogOfWarHeightInfluence: settings.fogOfWarHeightInfluence,
             }
           );
+
+          // Set fog of war map dimensions
+          if (useGameSetupStore.getState().fogOfWar && !isSpectatorMode()) {
+            renderPipelineRef.current.setFogOfWarMapDimensions(CURRENT_MAP.width, CURRENT_MAP.height);
+          }
 
           // Initialize camera matrices for TAA velocity calculation
           if (settings.taaEnabled) {
