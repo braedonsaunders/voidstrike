@@ -1196,6 +1196,7 @@ export class Game {
           entityIds: command.entityIds,
           targetEntityId: command.targetEntityId,
           playerId: command.playerId,
+          queue: command.queue,
         });
         break;
       case 'CANCEL_PRODUCTION':
@@ -1324,4 +1325,5 @@ export interface GameCommand {
   newQueueIndex?: number; // For queue reorder (move to position)
   autocastEnabled?: boolean; // For SET_AUTOCAST
   wallSegments?: Array<{ x: number; y: number }>; // For BUILD_WALL
+  queue?: boolean; // For shift-click command chaining
 }
