@@ -538,6 +538,17 @@ export class ProjectileSystem extends System {
         `target: (${projectile.targetX.toFixed(2)}, ${projectile.targetY.toFixed(2)}, ${projectile.targetZ.toFixed(2)}), ` +
         `dist: ${Math.sqrt(distSq).toFixed(2)}, targetEntityId: ${projectile.targetEntityId}`
       );
+
+      // FIX: Emit impact event so visual effects are cleaned up (no damage, just cleanup)
+      this.game.eventBus.emit('projectile:impact', {
+        entityId: entity.id,
+        position: { x: transform.x, y: transform.y, z: transform.z },
+        damageType: projectile.damageType,
+        splashRadius: 0, // No splash effect for expired projectiles
+        faction: projectile.sourceFaction,
+        projectileId: projectile.projectileId,
+      });
+
       this.destroyProjectile(entity.id);
     }
   }

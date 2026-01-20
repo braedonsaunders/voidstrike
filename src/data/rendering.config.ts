@@ -85,17 +85,25 @@ export const UNIT_RENDERER = {
 
 export const UNIT_SELECTION_RING = {
   /** Inner radius of selection ring */
-  INNER_RADIUS: 0.6,
+  INNER_RADIUS: 0.85,
   /** Outer radius of selection ring */
-  OUTER_RADIUS: 0.8,
-  /** Number of geometry segments */
-  SEGMENTS: 16,
+  OUTER_RADIUS: 1.0,
+  /** Number of geometry segments (higher = smoother circle) */
+  SEGMENTS: 48,
   /** Material opacity */
-  OPACITY: 0.6,
-  /** Color for owned unit selection */
-  OWNED_COLOR: 0x00ff00,
-  /** Color for enemy unit selection */
-  ENEMY_COLOR: 0xff0000,
+  OPACITY: 0.9,
+  /** Color for owned unit selection (cyan) */
+  OWNED_COLOR: 0x00d4ff,
+  /** Color for enemy unit selection (red) */
+  ENEMY_COLOR: 0xff3030,
+  /** Pulse animation speed */
+  PULSE_SPEED: 3.0,
+  /** Pulse intensity (0-1) */
+  PULSE_INTENSITY: 0.15,
+  /** Shimmer animation speed */
+  SHIMMER_SPEED: 2.0,
+  /** Number of shimmer bands */
+  SHIMMER_BANDS: 8,
 } as const;
 
 export const UNIT_TEAM_MARKER = {
@@ -145,17 +153,17 @@ export const BUILDING_RENDERER = {
 
 export const BUILDING_SELECTION_RING = {
   /** Inner radius of building selection ring */
-  INNER_RADIUS: 0.8,
+  INNER_RADIUS: 0.85,
   /** Outer radius of building selection ring */
   OUTER_RADIUS: 1.0,
-  /** Number of geometry segments */
-  SEGMENTS: 32,
+  /** Number of geometry segments (higher = smoother circle) */
+  SEGMENTS: 48,
   /** Material opacity */
-  OPACITY: 0.5,
-  /** Color for owned building selection */
-  OWNED_COLOR: 0x00ff00,
-  /** Color for enemy building selection */
-  ENEMY_COLOR: 0xff0000,
+  OPACITY: 0.9,
+  /** Color for owned building selection (cyan - matches unit rings) */
+  OWNED_COLOR: 0x00d4ff,
+  /** Color for enemy building selection (red - matches unit rings) */
+  ENEMY_COLOR: 0xff3030,
 } as const;
 
 export const BUILDING_CONSTRUCTION = {

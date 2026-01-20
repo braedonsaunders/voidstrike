@@ -37,10 +37,7 @@ import {
   createScaffoldBeamGeometry,
   createScaffoldDiagonalGeometry,
 } from './tsl/BuildingMaterials';
-import {
-  createSelectionRingMaterial,
-  updateSelectionMaterial,
-} from './tsl/SelectionMaterial';
+import { createSelectionRingMaterial, TEAM_COLORS } from './tsl/SelectionMaterial';
 import { MeshBasicNodeMaterial } from 'three/webgpu';
 // NOTE: Buildings don't move, so we don't use velocity tracking (AAA optimization)
 // Velocity node returns zero for meshes without velocity attributes
@@ -188,13 +185,13 @@ export class BuildingRenderer {
 
     // Materials created via factory functions
     this.constructingMaterial = createConstructingMaterial();
-    // Use animated TSL selection materials (same as units)
+    // TSL animated selection ring materials (same as units - cyan/red, pulsing/shimmer)
     this.selectionMaterial = createSelectionRingMaterial({
-      color: new THREE.Color(BUILDING_SELECTION_RING.OWNED_COLOR),
+      color: TEAM_COLORS.player1, // Cyan for owned buildings
       opacity: BUILDING_SELECTION_RING.OPACITY,
     });
     this.enemySelectionMaterial = createSelectionRingMaterial({
-      color: new THREE.Color(BUILDING_SELECTION_RING.ENEMY_COLOR),
+      color: TEAM_COLORS.player2, // Red for enemy buildings
       opacity: BUILDING_SELECTION_RING.OPACITY,
     });
 
@@ -533,9 +530,8 @@ export class BuildingRenderer {
     this.constructionAnimTime += dt;
     this.blueprintPulseTime += dt;
 
-    // Animate selection ring materials
-    updateSelectionMaterial(this.selectionMaterial, this.constructionAnimTime);
-    updateSelectionMaterial(this.enemySelectionMaterial, this.constructionAnimTime);
+    // Selection ring animation is handled by shared global time uniform
+    // (updated by UnitRenderer.update via updateSelectionRingTime)
 
     // PERF: Update frustum for culling
     this.updateFrustum();
@@ -1050,10 +1046,9 @@ export class BuildingRenderer {
     }
 
     // Mark instanced selection ring matrices as needing update
+    // FIX: Always mark needsUpdate even when count is 0, to ensure GPU clears stale instances
     for (const group of this.selectionRingGroups.values()) {
-      if (group.mesh.count > 0) {
-        group.mesh.instanceMatrix.needsUpdate = true;
-      }
+      group.mesh.instanceMatrix.needsUpdate = true;
     }
 
     // Remove meshes for destroyed entities

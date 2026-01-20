@@ -31,12 +31,12 @@ export {
   calculateMicroNormal,
 } from './noise';
 
-// Selection system
+// Selection ring materials (instanced)
 export {
-  SelectionSystem,
   createSelectionRingMaterial,
   createHoverRingMaterial,
-  updateSelectionMaterial,
+  updateSelectionRingTime,
+  updateSelectionMaterial, // Deprecated, use updateSelectionRingTime
   TEAM_COLORS,
   type SelectionRingConfig,
 } from './SelectionMaterial';

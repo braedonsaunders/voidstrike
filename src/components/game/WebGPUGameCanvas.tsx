@@ -41,7 +41,6 @@ import { LightPool } from '@/rendering/LightPool';
 import {
   createWebGPURenderer,
   RenderContext,
-  SelectionSystem,
   RenderPipeline,
   TSLFogOfWar,
   TSLGameOverlayManager,
@@ -113,7 +112,6 @@ export function WebGPUGameCanvas() {
   const lightPoolRef = useRef<LightPool | null>(null);
 
   // TSL Visual Systems (WebGPU-compatible)
-  const selectionSystemRef = useRef<SelectionSystem | null>(null);
   const renderPipelineRef = useRef<RenderPipeline | null>(null);
 
   // Phaser refs
@@ -618,9 +616,6 @@ export function WebGPUGameCanvas() {
       });
       scene.add(wallPlacementPreviewRef.current.group);
 
-      // Initialize TSL Visual Systems (WebGPU-compatible)
-      selectionSystemRef.current = new SelectionSystem(scene);
-
       // Post-processing pipeline (TSL-based)
       // Note: graphicsSettings already declared at top of function
       if (graphicsSettings.postProcessingEnabled) {
@@ -939,9 +934,6 @@ export function WebGPUGameCanvas() {
         environmentRef.current?.setHasMovingEntities(entityCount > 0);
         environmentRef.current?.updateShadows();
 
-        // Update TSL visual systems
-        selectionSystemRef.current?.update(deltaTime);
-
         // Update battle effects
         battleEffectsRef.current?.update(deltaTime);
         advancedParticlesRef.current?.update(deltaTime / 1000, cameraRef.current?.camera);
@@ -984,83 +976,11 @@ export function WebGPUGameCanvas() {
           debugPerformance.warn(`[LEAK?] Scene has ${sceneChildCount} children - check for object leaks!`);
         }
 
-        // PERF: Update selection rings with optimized change detection
+        // Selection rings are now handled by UnitRenderer's instanced rendering
+        // Update overlay manager with selected entities for range rings
         const selectedUnits = useGameStore.getState().selectedUnits;
-        const gameInstance = gameRef.current;
-        if (gameInstance && selectionSystemRef.current) {
-          const rings = (selectionSystemRef.current as any).selectionRings as Map<number, unknown> | undefined;
-          const ringsSize = rings?.size ?? 0;
-          const selectedCount = selectedUnits.length;
-
-          // PERF: Only process if there's something to do
-          if (selectedCount > 0 || ringsSize > 0) {
-            // PERF: Build Set only when we have rings to check against (avoid allocation when empty)
-            // Also reuse approach: check rings directly instead of building intermediate Set
-
-            // PERF: Create rings for newly selected units - check directly against rings Map
-            for (let i = 0; i < selectedCount; i++) {
-              const unitId = selectedUnits[i];
-              if (!rings?.has(unitId)) {
-                const entity = gameInstance.world.getEntity(unitId);
-                if (entity) {
-                  const selectable = entity.get<Selectable>('Selectable');
-                  if (selectable) {
-                    selectionSystemRef.current.createSelectionRing(unitId, selectable.playerId, 1);
-                  }
-                }
-              }
-            }
-
-            // PERF: Remove rings for deselected units - only if we have rings
-            if (ringsSize > 0) {
-              // PERF: For small selections, iterate rings and check against array (avoid Set allocation)
-              // For large selections, building a Set is worth it
-              if (selectedCount <= 20) {
-                // Small selection: O(rings * selected) but avoids allocation
-                for (const [id] of rings!) {
-                  let found = false;
-                  for (let i = 0; i < selectedCount; i++) {
-                    if (selectedUnits[i] === id) {
-                      found = true;
-                      break;
-                    }
-                  }
-                  if (!found) {
-                    selectionSystemRef.current.removeSelectionRing(id);
-                  }
-                }
-              } else {
-                // Large selection: build Set for O(1) lookup
-                const selectedSet = new Set(selectedUnits);
-                for (const [id] of rings!) {
-                  if (!selectedSet.has(id)) {
-                    selectionSystemRef.current.removeSelectionRing(id);
-                  }
-                }
-              }
-            }
-
-            // Update positions for all selected units (units may have moved)
-            for (let i = 0; i < selectedCount; i++) {
-              const unitId = selectedUnits[i];
-              const entity = gameInstance.world.getEntity(unitId);
-              if (entity) {
-                const transform = entity.get<Transform>('Transform');
-                const unit = entity.get<Unit>('Unit');
-                if (transform) {
-                  const terrainHeight = environmentRef.current?.getHeightAt(transform.x, transform.y) ?? 0;
-                  // Add airborne height for flying units so selection ring appears at unit height
-                  const airborneHeight = unit?.isFlying ? AssetManager.getAirborneHeight(unit.unitId) : 0;
-                  selectionSystemRef.current.updateSelectionRing(unitId, transform.x, terrainHeight + airborneHeight, transform.y);
-                }
-              }
-            }
-          }
-
-          // Update overlay manager with selected entities for range rings
-          if (overlayManagerRef.current) {
-            overlayManagerRef.current.setSelectedEntities(selectedUnits);
-          }
+        if (overlayManagerRef.current) {
+          overlayManagerRef.current.setSelectedEntities(selectedUnits);
         }
 
         // Throttle zustand store updates
@@ -1384,7 +1304,6 @@ export function WebGPUGameCanvas() {
       buildingRendererRef.current?.dispose();
       resourceRendererRef.current?.dispose();
 
-      selectionSystemRef.current?.dispose();
       renderPipelineRef.current?.dispose();
       overlayManagerRef.current?.dispose();
       commandQueueRendererRef.current?.dispose();
