@@ -129,11 +129,3 @@ export function createHoverRingMaterial(): MeshBasicNodeMaterial {
   return material;
 }
 
-/**
- * @deprecated Use updateSelectionRingTime() instead for global time updates
- */
-export function updateSelectionMaterial(material: MeshBasicNodeMaterial, time: number): void {
-  // Legacy support - individual material time updates no longer needed
-  // All materials now share globalTimeUniform
-  updateSelectionRingTime(time);
-}

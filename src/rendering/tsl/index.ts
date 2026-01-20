@@ -36,7 +36,6 @@ export {
   createSelectionRingMaterial,
   createHoverRingMaterial,
   updateSelectionRingTime,
-  updateSelectionMaterial, // Deprecated, use updateSelectionRingTime
   TEAM_COLORS,
   type SelectionRingConfig,
 } from './SelectionMaterial';

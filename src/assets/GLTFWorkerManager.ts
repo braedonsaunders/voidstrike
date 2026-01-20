@@ -12,9 +12,8 @@
 import type { FetchResponse, BatchFetchResponse, WorkerRequest, WorkerResponse } from './gltf.worker';
 import { debugAssets } from '@/utils/debugLogger';
 
-// Disable worker for now - webpack worker-loader may not be working correctly
-// TODO: Debug worker initialization and re-enable
-const ENABLE_WORKER = false;
+// Enable Web Worker for off-main-thread GLB fetching
+const ENABLE_WORKER = true;
 
 // Timeout for worker requests (ms) - falls back to main thread if exceeded
 const WORKER_TIMEOUT = 10000;
