@@ -2222,11 +2222,8 @@ export class MovementSystem extends System {
           // RTS-style: add extra separation near arrival for natural spreading
           // Crowd handles basic separation, but we boost it near destination
           const distToFinalTarget = unit.targetX !== null && unit.targetY !== null
-            ? Math.sqrt(
-                (unit.targetX - transform.x) * (unit.targetX - transform.x) +
-                (unit.targetY - transform.y) * (unit.targetY - transform.y)
-              )
-            : distance;
+            ? distance(transform.x, transform.y, unit.targetX, unit.targetY)
+            : dist;
 
           if (distToFinalTarget < collisionConfig.arrivalSpreadRadius) {
             // WASM SIMD: Use pre-computed separation when available
@@ -2271,29 +2268,26 @@ export class MovementSystem extends System {
           }
         } else {
           // Agent not in crowd or state unavailable - fallback to direct movement
-          if (distance > 0.01) {
-            finalVx = (dx / distance) * unit.currentSpeed;
-            finalVy = (dy / distance) * unit.currentSpeed;
+          if (dist > 0.01) {
+            finalVx = (dx / dist) * unit.currentSpeed;
+            finalVy = (dy / dist) * unit.currentSpeed;
           }
         }
       } else {
         // Direct movement for flying units or when crowd not available
         let prefVx = 0;
         let prefVy = 0;
-        if (distance > 0.01) {
-          prefVx = (dx / distance) * unit.currentSpeed;
-          prefVy = (dy / distance) * unit.currentSpeed;
+        if (dist > 0.01) {
+          prefVx = (dx / dist) * unit.currentSpeed;
+          prefVy = (dy / dist) * unit.currentSpeed;
         }
 
         // RTS-style flocking behaviors for non-crowd units
         if (!unit.isFlying) {
           // Calculate distance to final target for arrival spreading
           const distToFinalTarget = unit.targetX !== null && unit.targetY !== null
-            ? Math.sqrt(
-                (unit.targetX - transform.x) * (unit.targetX - transform.x) +
-                (unit.targetY - transform.y) * (unit.targetY - transform.y)
-              )
-            : distance;
+            ? distance(transform.x, transform.y, unit.targetX, unit.targetY)
+            : dist;
 
           // WASM SIMD: Use pre-computed forces when available
           if (useWasmThisFrame) {
@@ -2342,11 +2336,8 @@ export class MovementSystem extends System {
         } else {
           // Flying units - apply separation forces for proper spacing
           const distToFinalTarget = unit.targetX !== null && unit.targetY !== null
-            ? Math.sqrt(
-                (unit.targetX - transform.x) * (unit.targetX - transform.x) +
-                (unit.targetY - transform.y) * (unit.targetY - transform.y)
-              )
-            : distance;
+            ? distance(transform.x, transform.y, unit.targetX, unit.targetY)
+            : dist;
 
           // Calculate separation force for flying units
           this.calculateSeparationForce(entity.id, transform, unit, tempSeparation, distToFinalTarget);
@@ -2388,8 +2379,8 @@ export class MovementSystem extends System {
       // RTS-STYLE: Stuck detection and nudge
       // Only apply to units far from their target to prevent destination jiggling
       const currentVelMag = Math.sqrt(finalVx * finalVx + finalVy * finalVy);
-      if (distance > this.arrivalThreshold) {
-        this.handleStuckDetection(entity.id, transform, unit, currentVelMag, distance, tempStuckNudge);
+      if (dist > this.arrivalThreshold) {
+        this.handleStuckDetection(entity.id, transform, unit, currentVelMag, dist, tempStuckNudge);
         finalVx += tempStuckNudge.x;
         finalVy += tempStuckNudge.y;
       }
