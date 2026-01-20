@@ -12,6 +12,7 @@ import { getPlayerColor, getLocalPlayerId, isSpectatorMode } from '@/store/gameS
 import { useUIStore } from '@/store/uiStore';
 import { debugAnimation, debugAssets, debugMesh, debugPerformance } from '@/utils/debugLogger';
 import { setupInstancedVelocity, swapInstanceMatrices, commitInstanceMatrices, disposeInstancedVelocity } from './tsl/InstancedVelocity';
+import { createSelectionRingMaterial, updateSelectionRingTime, TEAM_COLORS } from './tsl/SelectionMaterial';
 import {
   UNIT_RENDERER,
   UNIT_SELECTION_RING,
@@ -121,9 +122,12 @@ export class UnitRenderer {
 
   // Shared resources
   private selectionGeometry: THREE.RingGeometry;
-  private selectionMaterial: THREE.MeshBasicMaterial;
-  private enemySelectionMaterial: THREE.MeshBasicMaterial;
+  private selectionMaterial: THREE.Material; // TSL animated material
+  private enemySelectionMaterial: THREE.Material; // TSL animated material
   private teamMarkerGeometry: THREE.CircleGeometry;
+
+  // Animation timing for selection rings
+  private selectionAnimationTime: number = 0;
 
   // FIX: Shared health bar geometry to avoid per-unit allocation (GC pressure)
   private healthBarBgGeometry: THREE.PlaneGeometry;
@@ -179,17 +183,14 @@ export class UnitRenderer {
       UNIT_SELECTION_RING.OUTER_RADIUS,
       UNIT_SELECTION_RING.SEGMENTS
     );
-    this.selectionMaterial = new THREE.MeshBasicMaterial({
-      color: UNIT_SELECTION_RING.OWNED_COLOR,
-      transparent: true,
+    // TSL animated selection ring materials with pulsing/shimmer effects
+    this.selectionMaterial = createSelectionRingMaterial({
+      color: TEAM_COLORS.player1, // Cyan for owned units
       opacity: UNIT_SELECTION_RING.OPACITY,
-      side: THREE.DoubleSide,
     });
-    this.enemySelectionMaterial = new THREE.MeshBasicMaterial({
-      color: UNIT_SELECTION_RING.ENEMY_COLOR,
-      transparent: true,
+    this.enemySelectionMaterial = createSelectionRingMaterial({
+      color: TEAM_COLORS.player2, // Red for enemy units
       opacity: UNIT_SELECTION_RING.OPACITY,
-      side: THREE.DoubleSide,
     });
 
     // Team marker geometry - small circle beneath each unit showing team color
@@ -994,6 +995,10 @@ export class UnitRenderer {
   public update(deltaTime: number = 1/60): void {
     const updateStart = performance.now();
     this.frameCount++;
+
+    // Update selection ring animation time (shared across all instances)
+    this.selectionAnimationTime += deltaTime;
+    updateSelectionRingTime(this.selectionAnimationTime);
 
     // Process GPU buffer slot quarantine - reclaim slots that are safe to reuse
     // This MUST happen at the start of the frame before any slot allocations
