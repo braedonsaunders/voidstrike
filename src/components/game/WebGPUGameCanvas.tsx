@@ -1436,6 +1436,7 @@ export function WebGPUGameCanvas() {
               type: 'ATTACK',
               entityIds: selectedUnits,
               targetPosition: { x: worldPos.x, y: worldPos.z },
+              queue: e.shiftKey,
             });
             // Visual feedback for attack-ground command
             gameRef.current.eventBus.emit('command:attackGround', {
@@ -1457,10 +1458,11 @@ export function WebGPUGameCanvas() {
               type: 'PATROL',
               entityIds: selectedUnits,
               targetPosition: { x: worldPos.x, y: worldPos.z },
+              queue: e.shiftKey,
             });
           }
         }
-        useGameStore.getState().setCommandTargetMode(null);
+        if (!e.shiftKey) useGameStore.getState().setCommandTargetMode(null);
       } else if (commandTargetMode === 'move') {
         const worldPos = cameraRef.current?.screenToWorld(coords.x, coords.y);
         if (worldPos && gameRef.current) {
@@ -1473,6 +1475,7 @@ export function WebGPUGameCanvas() {
               type: 'MOVE',
               entityIds: selectedUnits,
               targetPosition: { x: worldPos.x, y: worldPos.z },
+              queue: e.shiftKey,
             });
             // Visual feedback for move command
             gameRef.current.eventBus.emit('command:moveGround', {
@@ -1691,6 +1694,7 @@ export function WebGPUGameCanvas() {
               type: 'GATHER',
               entityIds: workerIds,
               targetEntityId: clickedEntity.entity.id,
+              queue,
             });
             return;
           }
@@ -1790,6 +1794,7 @@ export function WebGPUGameCanvas() {
             type: 'MOVE',
             entityIds: unitIds,
             targetPosition: { x: worldPos.x, y: worldPos.z },
+            queue,
           });
           // Visual feedback for move command
           game.eventBus.emit('command:moveGround', {
