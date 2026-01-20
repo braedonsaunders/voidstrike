@@ -87,5 +87,43 @@
 
     "flyingUnitRadius": 0.4,
     "_flyingUnitRadius_description": "Default flying unit radius."
+  },
+
+  "buildingAvoidance": {
+    "_description": "Building avoidance - prevents units from walking into structures",
+
+    "strength": 6.0,
+    "_strength_description": "Base avoidance force. Lower = less fighting with target direction, reduces orbiting.",
+
+    "hardMargin": 0.1,
+    "_hardMargin_description": "Hard collision margin around buildings (world units).",
+
+    "softMargin": 0.5,
+    "_softMargin_description": "Soft avoidance zone for early steering (world units).",
+
+    "predictionLookahead": 0.2,
+    "_predictionLookahead_description": "How far ahead to predict collisions (seconds).",
+
+    "predictiveStrengthMultiplier": 0.3,
+    "_predictiveStrengthMultiplier_description": "Predictive avoidance strength as fraction of base. Lower = less orbiting."
+  },
+
+  "stuck": {
+    "_description": "Stuck detection and resolution - helps units escape when blocked",
+
+    "detectionFrames": 15,
+    "_detectionFrames_description": "Frames of no movement before unit is considered stuck.",
+
+    "velocityThreshold": 0.08,
+    "_velocityThreshold_description": "Speed below which unit might be stuck.",
+
+    "nudgeStrength": 2.5,
+    "_nudgeStrength_description": "Force applied to nudge stuck units. Should be strong enough to overcome avoidance.",
+
+    "minDistanceToTarget": 1.0,
+    "_minDistanceToTarget_description": "Don't apply stuck detection if closer than this to target.",
+
+    "tangentialBias": 0.7,
+    "_tangentialBias_description": "How much to nudge tangentially vs toward target. 1.0 = fully tangential escape."
   }
 }

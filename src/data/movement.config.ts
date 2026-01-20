@@ -100,36 +100,6 @@ export const ARRIVAL_SPREAD_RADIUS = 5.0;
 export const ARRIVAL_SPREAD_STRENGTH = 2.0;
 
 // =============================================================================
-// BUILDING AVOIDANCE - Runtime steering around structures
-// =============================================================================
-
-/**
- * Force strength when avoiding buildings.
- * Navmesh handles primary avoidance; this is for edge cases.
- */
-export const BUILDING_AVOIDANCE_STRENGTH = 15.0;
-
-/**
- * Hard collision margin around buildings.
- * Minimal since navmesh walkableRadius handles primary clearance.
- * Units of: world units
- */
-export const BUILDING_AVOIDANCE_MARGIN = 0.1;
-
-/**
- * Soft avoidance margin for early steering.
- * Units start steering before hitting hard collision zone.
- * Units of: world units
- */
-export const BUILDING_AVOIDANCE_SOFT_MARGIN = 0.3;
-
-/**
- * How far ahead to predict building collisions.
- * Units of: seconds of movement lookahead
- */
-export const BUILDING_PREDICTION_LOOKAHEAD = 0.3;
-
-// =============================================================================
 // PATH REQUESTS - Pathfinding throttling
 // =============================================================================
 
@@ -199,34 +169,6 @@ export const PHYSICS_PUSH_FALLOFF = 0.6;
  * Quickly resolves accidental overlaps.
  */
 export const PHYSICS_OVERLAP_PUSH = 15.0;
-
-// =============================================================================
-// STUCK DETECTION - Handles units that can't move
-// =============================================================================
-
-/**
- * Frames of near-zero movement before unit is considered stuck.
- * Units of: frames
- */
-export const STUCK_DETECTION_FRAMES = 20;
-
-/**
- * Speed threshold below which unit is considered stuck.
- * Units of: world units per second
- */
-export const STUCK_VELOCITY_THRESHOLD = 0.05;
-
-/**
- * Random nudge force applied to stuck units.
- */
-export const STUCK_NUDGE_STRENGTH = 1.5;
-
-/**
- * Minimum distance to target for stuck detection to apply.
- * Prevents nudging units that are already at destination.
- * Units of: world units
- */
-export const STUCK_MIN_DISTANCE_TO_TARGET = 2.0;
 
 // =============================================================================
 // STEERING FORCE THROTTLING - Performance optimization
@@ -368,16 +310,6 @@ export const ALIGNMENT_CONFIG = {
 } as const;
 
 /**
- * All building avoidance parameters grouped together.
- */
-export const BUILDING_AVOIDANCE_CONFIG = {
-  strength: BUILDING_AVOIDANCE_STRENGTH,
-  margin: BUILDING_AVOIDANCE_MARGIN,
-  softMargin: BUILDING_AVOIDANCE_SOFT_MARGIN,
-  predictionLookahead: BUILDING_PREDICTION_LOOKAHEAD,
-} as const;
-
-/**
  * All velocity smoothing parameters grouped together.
  */
 export const VELOCITY_SMOOTHING_CONFIG = {
@@ -395,16 +327,6 @@ export const PHYSICS_PUSH_CONFIG = {
   strength: PHYSICS_PUSH_STRENGTH,
   falloff: PHYSICS_PUSH_FALLOFF,
   overlapPush: PHYSICS_OVERLAP_PUSH,
-} as const;
-
-/**
- * All stuck detection parameters grouped together.
- */
-export const STUCK_DETECTION_CONFIG = {
-  frames: STUCK_DETECTION_FRAMES,
-  velocityThreshold: STUCK_VELOCITY_THRESHOLD,
-  nudgeStrength: STUCK_NUDGE_STRENGTH,
-  minDistanceToTarget: STUCK_MIN_DISTANCE_TO_TARGET,
 } as const;
 
 /**
