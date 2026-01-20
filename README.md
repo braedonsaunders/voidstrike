@@ -178,7 +178,7 @@ All depth-dependent effects execute at render resolution. Upscaling happens in a
 
 ---
 
-### StarCraft 2-Style Fog of War
+### AAA-Style Fog of War
 
 Not a simple darkness overlay. The full implementation includes:
 
@@ -224,11 +224,11 @@ These modules have minimal coupling and could be extracted as standalone package
 
 ### Factions
 
-| Faction | Theme | Playstyle | Comparable To |
-|---------|-------|-----------|---------------|
-| **Dominion** | Military industrial complex | Defensive, siege-oriented | Terran (SC2), GDI (C&C) |
-| **Synthesis** | Transcendent AI collective | Shield-based, psionic abilities | Protoss (SC2) |
-| **Swarm** | Adaptive biological horror | Cheap units, overwhelming numbers | Zerg (SC2), Tyranids (40K) |
+| Faction | Theme | Playstyle |
+|---------|-------|-----------|
+| **Dominion** | Military industrial complex | Defensive, siege-oriented |
+| **Synthesis** | Transcendent AI collective | Shield-based, psionic abilities |
+| **Swarm** | Adaptive biological horror | Cheap units, overwhelming numbers |
 
 **Dominion** builds bunkers, sieges tanks, and turtles until ready to push with superior firepower.
 
