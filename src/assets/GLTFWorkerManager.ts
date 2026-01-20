@@ -89,12 +89,14 @@ class GLTFWorkerManager {
   private handleMessage(response: WorkerResponse): void {
     if (response.type === 'fetchResult') {
       const pending = this.pendingRequests.get(response.id);
+      console.log(`[GLTFWorkerManager] fetchResult for ${response.url}: success=${response.success}, hasData=${!!response.data}, dataSize=${response.data?.byteLength ?? 0}`);
       if (pending) {
         clearTimeout(pending.timeoutId);
         this.pendingRequests.delete(response.id);
         if (response.success && response.data) {
           pending.resolve(response.data);
         } else {
+          console.warn(`[GLTFWorkerManager] No data for ${response.url}, error: ${response.error}`);
           pending.resolve(null);
         }
       }
