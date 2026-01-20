@@ -77,13 +77,13 @@ A groundbreaking multiplayer architecture that requires **zero servers** to oper
 │  └─────────────────────────────────────────────────────────────────────┘   │
 │                                                                             │
 │  ┌─────────────────────────────────────────────────────────────────────┐   │
-│  │                    PHASE 1: CONNECTION CODES                        │   │
+│  │                    PHASE 1: LOBBY CODES                            │   │
 │  │  ┌───────────────────────────────────────────────────────────────┐ │   │
-│  │  │  • Share code: VOID-A3K7-F9X2-BMRP-Q8YN                       │ │   │
-│  │  │  • Encodes compressed SDP offer + ICE candidates              │ │   │
-│  │  │  • Friend enters code → instant P2P connection                │ │   │
+│  │  │  • Share 4-character lobby code (e.g., ABCD)                  │ │   │
+│  │  │  • Host publishes to Nostr, guest joins via code              │ │   │
+│  │  │  • WebRTC handshake happens automatically                     │ │   │
 │  │  │  • Works with any internet connection                         │ │   │
-│  │  │  • Zero external dependencies                                 │ │   │
+│  │  │  • Fallback: manual SDP exchange if Nostr unavailable         │ │   │
 │  │  └───────────────────────────────────────────────────────────────┘ │   │
 │  └─────────────────────────────────────────────────────────────────────┘   │
 │                                                                             │
@@ -183,16 +183,16 @@ This is **only for connection setup**. Once connected, both players are complete
 
 ---
 
-## Phase 1: Connection Codes (100% Reliable)
+## Phase 1: Lobby Codes (100% Reliable)
 
 ### The Concept
 
-Encode a complete WebRTC connection offer into a human-shareable code. No signaling server needed.
+4-character lobby codes for simple game joining. Host creates a lobby, gets a code like `ABCD`, shares it with friends.
 
 ```
-VOID-A3K7-F9X2-BMRP-Q8YN-T4LC
-     └──────────────────────┘
-        Compressed SDP + ICE
+ABCD  ←  4-character alphanumeric code
+         Published to Nostr relays
+         Guest enters code to join
 ```
 
 ### Technical Implementation
@@ -407,7 +407,7 @@ function formatCode(encoded: string): string {
 
 ```
 ┌─────────────────────────────────────────────────────────────────────────────┐
-│                    CONNECTION CODE FLOW (2-WAY EXCHANGE)                    │
+│                         LOBBY CODE FLOW                                     │
 ├─────────────────────────────────────────────────────────────────────────────┤
 │                                                                             │
 │  PLAYER A (Host)                              PLAYER B (Joiner)             │
@@ -416,39 +416,27 @@ function formatCode(encoded: string): string {
 │  1. Click "Host Game"                                                       │
 │         │                                                                   │
 │         ▼                                                                   │
-│  2. Generate offer + gather ICE                                             │
+│  2. Lobby created, code generated                                           │
 │         │                                                                   │
 │         ▼                                                                   │
 │  3. Display code:                                                           │
 │     ┌─────────────────────────────┐                                         │
-│     │ YOUR CODE:                  │                                         │
-│     │ VOID-A3K7-F9X2-BMRP-Q8YN   │    ──(share via Discord/SMS)──►         │
+│     │ LOBBY CODE: ABCD            │    ──(share via Discord/SMS)──►         │
 │     │                             │                                         │
-│     │ [Copy] [QR Code]           │                   │                     │
+│     │ [Copy]                      │                   │                     │
 │     │                             │                   ▼                     │
-│     │ Waiting for friend's code...│         1. Click "Join Game"           │
-│     │ Enter their code: [______] │                   │                     │
-│     └─────────────────────────────┘                   ▼                     │
-│         │                               2. Enter host's code               │
+│     │ Waiting for players...      │         1. Click "Join Game"           │
+│     └─────────────────────────────┘                   │                     │
+│         │                                             ▼                     │
+│         │                               2. Enter code: ABCD                 │
 │         │                                        │                         │
 │         │                                        ▼                         │
-│         │                               3. Parse code, set remote offer    │
+│         │                               3. Nostr finds host's lobby         │
 │         │                                        │                         │
 │         │                                        ▼                         │
-│         │                               4. Generate answer + gather ICE    │
+│         │◄─────── WebRTC handshake via Nostr ────┤                         │
 │         │                                        │                         │
-│         │                                        ▼                         │
-│         │                               5. Display THEIR code:             │
-│         │                               ┌─────────────────────────────┐    │
-│         │         ◄──(share back)────   │ YOUR RESPONSE CODE:         │    │
-│         │                               │ VOID-X9M2-K4TP-WNFH-Y3BC   │    │
-│         ▼                               └─────────────────────────────┘    │
-│  4. Enter friend's response code                                            │
-│         │                                                                   │
-│         ▼                                                                   │
-│  5. Parse code, complete handshake                                          │
-│         │                                                                   │
-│         ▼                                                                   │
+│         ▼                                        ▼                         │
 │  ═══════════════════════════════════════════════════════════════════════   │
 │                    DIRECT P2P CONNECTION ESTABLISHED                        │
 │  ═══════════════════════════════════════════════════════════════════════   │
@@ -456,7 +444,7 @@ function formatCode(encoded: string): string {
 └─────────────────────────────────────────────────────────────────────────────┘
 ```
 
-**Note**: This requires exchanging TWO codes (one each direction). For single-code flow, use Phase 3 (Nostr) to automatically exchange the response.
+Nostr handles the WebRTC signaling automatically. One code, no back-and-forth.
 
 ---
 
