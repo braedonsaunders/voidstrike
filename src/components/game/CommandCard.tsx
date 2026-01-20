@@ -397,7 +397,7 @@ function CommandCardInner() {
           // Build Advanced submenu button
           buttons.push({
             id: 'build_advanced',
-            label: 'Build Adv.',
+            label: 'Advanced',
             shortcut: 'V',
             action: () => setMenuMode('build_advanced'),
             tooltip: 'Build advanced structures',
@@ -1028,7 +1028,7 @@ function CommandCardInner() {
 
   if (commands.length === 0) {
     return (
-      <div className="w-60 h-44 bg-black/80 border border-void-700/50 rounded-lg flex items-center justify-center backdrop-blur-sm">
+      <div className="w-80 h-52 bg-black/80 border border-void-700/50 rounded-lg flex items-center justify-center backdrop-blur-sm">
         <span className="text-void-500 text-sm">Select units or buildings</span>
       </div>
     );
@@ -1046,7 +1046,7 @@ function CommandCardInner() {
       )}
 
       {/* Command grid - 4 columns, 3 rows */}
-      <div className="w-60 bg-black/80 border border-void-700/50 rounded-lg p-2 backdrop-blur-sm">
+      <div className="w-80 bg-black/80 border border-void-700/50 rounded-lg p-2 backdrop-blur-sm">
         <div className="grid grid-cols-4 gap-1.5">
           {commands.map((cmd) => (
             <div
@@ -1057,7 +1057,7 @@ function CommandCardInner() {
             >
               <button
                 className={`
-                  relative w-[52px] h-[52px] flex flex-col items-center justify-center
+                  relative w-[72px] h-[58px] flex flex-col items-center justify-center
                   bg-gradient-to-b from-void-800/80 to-void-900/80
                   border rounded
                   transition-all duration-100
@@ -1074,8 +1074,8 @@ function CommandCardInner() {
                 <span className="text-lg leading-none mb-0.5">{getIcon(cmd.id)}</span>
 
                 {/* Label */}
-                <span className="text-[8px] text-void-300 truncate w-full text-center leading-tight px-0.5">
-                  {cmd.label.length > 8 ? cmd.label.substring(0, 7) + '..' : cmd.label}
+                <span className="text-[8px] text-void-300 w-full text-center leading-tight px-0.5 line-clamp-2">
+                  {cmd.label}
                 </span>
 
                 {/* Hotkey badge */}
@@ -1095,7 +1095,7 @@ function CommandCardInner() {
           {Array.from({ length: Math.max(0, 12 - commands.length) }).map((_, i) => (
             <div
               key={`empty-${i}`}
-              className="w-[52px] h-[52px] bg-void-900/30 border border-void-800/20 rounded"
+              className="w-[72px] h-[58px] bg-void-900/30 border border-void-800/20 rounded"
             />
           ))}
         </div>
