@@ -337,10 +337,10 @@ const savedDebugSettings = loadDebugSettings();
 // Game overlay types for strategic information display
 // 'navmesh' shows ACTUAL pathfinding data from Recast Navigation (critical for debugging)
 // 'resource' highlights mineral fields and gas geysers
-export type GameOverlayType = 'none' | 'elevation' | 'threat' | 'navmesh' | 'resource';
+export type GameOverlayType = 'none' | 'elevation' | 'threat' | 'navmesh' | 'resource' | 'buildable';
 
-// Extended overlay types including SC2-style tactical features
-export type ExtendedOverlayType = GameOverlayType | 'buildable' | 'attackRange' | 'visionRange';
+// Extended overlay types including SC2-style tactical features (attack/vision are dynamic, not cycleable)
+export type ExtendedOverlayType = GameOverlayType | 'attackRange' | 'visionRange';
 
 // Overlay settings
 export interface OverlaySettings {

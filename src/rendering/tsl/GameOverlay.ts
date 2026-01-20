@@ -2,13 +2,15 @@
  * TSL Game Overlay Manager
  *
  * WebGPU-compatible strategic overlays using Three.js Shading Language.
- * Provides elevation, threat, navmesh, and resource visualization.
+ * Provides elevation, threat, navmesh, resource, and buildable visualization.
+ * Also provides SC2-style unit range indicators (attack/vision).
  * Works with both WebGPU and WebGL renderers.
  *
  * Key features:
  * - Progressive navmesh computation with BFS flood-fill
  * - IndexedDB caching for static overlays
  * - Terrain-conforming rendering (overlays follow terrain height)
+ * - Unit-centric range rings for selected units
  */
 
 import * as THREE from 'three';
@@ -143,6 +145,12 @@ function createResourceMaterial(resourceTexture: THREE.DataTexture, opacity: num
   return material;
 }
 
+// Range ring configuration
+const RING_SEGMENTS = 64;
+const RING_LINE_WIDTH = 0.15;
+const ATTACK_RANGE_COLOR = 0xff4444;
+const VISION_RANGE_COLOR = 0x4488ff;
+
 export class TSLGameOverlayManager {
   private scene: THREE.Scene;
   private mapData: MapData;
@@ -155,6 +163,7 @@ export class TSLGameOverlayManager {
   private threatOverlayMesh: THREE.Mesh | null = null;
   private navmeshOverlayMesh: THREE.Mesh | null = null;
   private resourceOverlayMesh: THREE.Mesh | null = null;
+  private buildableOverlayMesh: THREE.Mesh | null = null;
 
   // Overlay textures
   private elevationTexture: THREE.DataTexture | null = null;
@@ -164,10 +173,20 @@ export class TSLGameOverlayManager {
   private navmeshTextureData: Uint8Array | null = null;
   private resourceTexture: THREE.DataTexture | null = null;
   private resourceTextureData: Uint8Array | null = null;
+  private buildableTexture: THREE.DataTexture | null = null;
+
+  // Range ring groups (SC2-style unit range indicators)
+  private attackRangeGroup: THREE.Group;
+  private visionRangeGroup: THREE.Group;
+  private attackRangeMaterial: THREE.MeshBasicMaterial;
+  private visionRangeMaterial: THREE.MeshBasicMaterial;
 
   // Current state
   private currentOverlay: GameOverlayType = 'none';
   private opacity: number = 0.7;
+  private showAttackRange: boolean = false;
+  private showVisionRange: boolean = false;
+  private selectedEntityIds: string[] = [];
 
   // Threat overlay update throttling
   private lastThreatUpdate: number = 0;
@@ -176,6 +195,10 @@ export class TSLGameOverlayManager {
   // Resource overlay update throttling
   private lastResourceUpdate: number = 0;
   private resourceUpdateInterval: number = 1000;
+
+  // Range overlay update throttling
+  private lastRangeUpdate: number = 0;
+  private rangeUpdateInterval: number = 100;
 
   // Navmesh progressive computation state
   private navmeshIsComputing: boolean = false;
@@ -196,11 +219,38 @@ export class TSLGameOverlayManager {
     this.mapHash = computeMapHash(mapData);
     this.getTerrainHeight = getTerrainHeight;
 
+    // Create range ring groups
+    this.attackRangeGroup = new THREE.Group();
+    this.attackRangeGroup.visible = false;
+    this.scene.add(this.attackRangeGroup);
+
+    this.visionRangeGroup = new THREE.Group();
+    this.visionRangeGroup.visible = false;
+    this.scene.add(this.visionRangeGroup);
+
+    // Create range ring materials
+    this.attackRangeMaterial = new THREE.MeshBasicMaterial({
+      color: ATTACK_RANGE_COLOR,
+      transparent: true,
+      opacity: 0.4,
+      side: THREE.DoubleSide,
+      depthWrite: false,
+    });
+
+    this.visionRangeMaterial = new THREE.MeshBasicMaterial({
+      color: VISION_RANGE_COLOR,
+      transparent: true,
+      opacity: 0.3,
+      side: THREE.DoubleSide,
+      depthWrite: false,
+    });
+
     // Create all overlays
     this.createElevationOverlay();
     this.createThreatOverlay();
     this.createNavmeshOverlay();
     this.createResourceOverlay();
+    this.createBuildableOverlay();
 
     // Hide all overlays initially
     this.setActiveOverlay('none');
@@ -403,6 +453,158 @@ export class TSLGameOverlayManager {
     this.resourceOverlayMesh.renderOrder = 100;
     this.resourceOverlayMesh.visible = false;
     this.scene.add(this.resourceOverlayMesh);
+  }
+
+  /**
+   * Create buildable overlay showing where buildings can be placed.
+   * Green = buildable, Red = not buildable
+   */
+  private createBuildableOverlay(): void {
+    const { width, height, terrain } = this.mapData;
+    const textureData = new Uint8Array(width * height * 4);
+
+    for (let y = 0; y < height; y++) {
+      for (let x = 0; x < width; x++) {
+        const i = (y * width + x) * 4;
+        const cell = terrain[y]?.[x];
+
+        // Check if cell is buildable
+        // Buildings can only be placed on 'ground' terrain
+        const isBuildable = cell?.terrain === 'ground';
+
+        if (isBuildable) {
+          // Green for buildable
+          textureData[i + 0] = 50;
+          textureData[i + 1] = 200;
+          textureData[i + 2] = 50;
+          textureData[i + 3] = 140;
+        } else {
+          // Red tint for non-buildable (but not too prominent)
+          textureData[i + 0] = 180;
+          textureData[i + 1] = 50;
+          textureData[i + 2] = 50;
+          textureData[i + 3] = 100;
+        }
+      }
+    }
+
+    this.buildableTexture = new THREE.DataTexture(textureData, width, height, THREE.RGBAFormat);
+    this.buildableTexture.needsUpdate = true;
+    this.buildableTexture.minFilter = THREE.NearestFilter;
+    this.buildableTexture.magFilter = THREE.NearestFilter;
+
+    const material = createOverlayMaterial(this.buildableTexture, 0.6);
+    const geometry = this.createTerrainConformingGeometry();
+
+    this.buildableOverlayMesh = new THREE.Mesh(geometry, material);
+    this.buildableOverlayMesh.rotation.x = -Math.PI / 2;
+    this.buildableOverlayMesh.position.set(width / 2, 0, height / 2);
+    this.buildableOverlayMesh.renderOrder = 100;
+    this.buildableOverlayMesh.visible = false;
+    this.scene.add(this.buildableOverlayMesh);
+  }
+
+  /**
+   * Create a ring geometry for range indicators
+   */
+  private createRingGeometry(innerRadius: number, outerRadius: number): THREE.RingGeometry {
+    return new THREE.RingGeometry(innerRadius, outerRadius, RING_SEGMENTS);
+  }
+
+  /**
+   * Update attack range rings for selected units
+   */
+  private updateAttackRangeRings(): void {
+    if (!this.world || !this.showAttackRange) return;
+
+    // Clear existing rings
+    while (this.attackRangeGroup.children.length > 0) {
+      const child = this.attackRangeGroup.children[0];
+      this.attackRangeGroup.remove(child);
+      if (child instanceof THREE.Mesh) {
+        child.geometry.dispose();
+      }
+    }
+
+    // Create rings for selected units
+    for (const entityId of this.selectedEntityIds) {
+      const entity = this.world.getEntity(entityId);
+      if (!entity) continue;
+
+      const transform = entity.get<Transform>('Transform');
+      const unit = entity.get<Unit>('Unit');
+      const building = entity.get<Building>('Building');
+
+      if (!transform) continue;
+
+      let attackRange = 0;
+      if (unit && unit.attackRange > 0) {
+        attackRange = unit.attackRange;
+      } else if (building && building.attackRange && building.attackRange > 0) {
+        attackRange = building.attackRange;
+      }
+
+      if (attackRange <= 0) continue;
+
+      const innerRadius = attackRange - RING_LINE_WIDTH;
+      const outerRadius = attackRange + RING_LINE_WIDTH;
+      const geometry = this.createRingGeometry(Math.max(0.1, innerRadius), outerRadius);
+      const ring = new THREE.Mesh(geometry, this.attackRangeMaterial);
+
+      const terrainHeight = this.getTerrainHeight(transform.x, transform.y);
+      ring.position.set(transform.x, terrainHeight + OVERLAY_Y_OFFSET + 0.1, transform.y);
+      ring.rotation.x = -Math.PI / 2;
+
+      this.attackRangeGroup.add(ring);
+    }
+  }
+
+  /**
+   * Update vision range rings for selected units
+   */
+  private updateVisionRangeRings(): void {
+    if (!this.world || !this.showVisionRange) return;
+
+    // Clear existing rings
+    while (this.visionRangeGroup.children.length > 0) {
+      const child = this.visionRangeGroup.children[0];
+      this.visionRangeGroup.remove(child);
+      if (child instanceof THREE.Mesh) {
+        child.geometry.dispose();
+      }
+    }
+
+    // Create rings for selected units
+    for (const entityId of this.selectedEntityIds) {
+      const entity = this.world.getEntity(entityId);
+      if (!entity) continue;
+
+      const transform = entity.get<Transform>('Transform');
+      const unit = entity.get<Unit>('Unit');
+      const building = entity.get<Building>('Building');
+
+      if (!transform) continue;
+
+      let visionRange = 0;
+      if (unit) {
+        visionRange = unit.visionRange || 10;
+      } else if (building) {
+        visionRange = building.visionRange || 8;
+      }
+
+      if (visionRange <= 0) continue;
+
+      const innerRadius = visionRange - RING_LINE_WIDTH;
+      const outerRadius = visionRange + RING_LINE_WIDTH;
+      const geometry = this.createRingGeometry(Math.max(0.1, innerRadius), outerRadius);
+      const ring = new THREE.Mesh(geometry, this.visionRangeMaterial);
+
+      const terrainHeight = this.getTerrainHeight(transform.x, transform.y);
+      ring.position.set(transform.x, terrainHeight + OVERLAY_Y_OFFSET + 0.05, transform.y);
+      ring.rotation.x = -Math.PI / 2;
+
+      this.visionRangeGroup.add(ring);
+    }
   }
 
   /**
@@ -820,6 +1022,7 @@ export class TSLGameOverlayManager {
     if (this.threatOverlayMesh) this.threatOverlayMesh.visible = false;
     if (this.navmeshOverlayMesh) this.navmeshOverlayMesh.visible = false;
     if (this.resourceOverlayMesh) this.resourceOverlayMesh.visible = false;
+    if (this.buildableOverlayMesh) this.buildableOverlayMesh.visible = false;
 
     // Show the selected overlay
     switch (type) {
@@ -844,6 +1047,9 @@ export class TSLGameOverlayManager {
           this.updateResourceOverlay();
         }
         break;
+      case 'buildable':
+        if (this.buildableOverlayMesh) this.buildableOverlayMesh.visible = true;
+        break;
     }
 
     debugPathfinding.log(`[GameOverlay] Set active overlay: ${type}`);
@@ -867,6 +1073,53 @@ export class TSLGameOverlayManager {
     updateMaterialOpacity(this.threatOverlayMesh);
     updateMaterialOpacity(this.navmeshOverlayMesh);
     updateMaterialOpacity(this.resourceOverlayMesh);
+    updateMaterialOpacity(this.buildableOverlayMesh);
+  }
+
+  /**
+   * Set selected entity IDs for range overlay display
+   */
+  public setSelectedEntities(entityIds: string[]): void {
+    this.selectedEntityIds = entityIds;
+    // Update range rings if visible
+    if (this.showAttackRange) {
+      this.updateAttackRangeRings();
+    }
+    if (this.showVisionRange) {
+      this.updateVisionRangeRings();
+    }
+  }
+
+  /**
+   * Show/hide attack range rings for selected units
+   */
+  public setShowAttackRange(show: boolean): void {
+    this.showAttackRange = show;
+    this.attackRangeGroup.visible = show;
+    if (show) {
+      this.updateAttackRangeRings();
+    }
+  }
+
+  /**
+   * Show/hide vision range rings for selected units
+   */
+  public setShowVisionRange(show: boolean): void {
+    this.showVisionRange = show;
+    this.visionRangeGroup.visible = show;
+    if (show) {
+      this.updateVisionRangeRings();
+    }
+  }
+
+  /**
+   * Get current range overlay states
+   */
+  public getRangeOverlayState(): { attackRange: boolean; visionRange: boolean } {
+    return {
+      attackRange: this.showAttackRange,
+      visionRange: this.showVisionRange,
+    };
   }
 
   public update(time: number): void {
@@ -899,6 +1152,18 @@ export class TSLGameOverlayManager {
         this.lastResourceUpdate = now;
       }
     }
+
+    // Update range rings periodically (units may move)
+    const now = performance.now();
+    if (now - this.lastRangeUpdate > this.rangeUpdateInterval) {
+      if (this.showAttackRange) {
+        this.updateAttackRangeRings();
+      }
+      if (this.showVisionRange) {
+        this.updateVisionRangeRings();
+      }
+      this.lastRangeUpdate = now;
+    }
   }
 
   public dispose(): void {
@@ -915,5 +1180,24 @@ export class TSLGameOverlayManager {
     disposeOverlay(this.threatOverlayMesh, this.threatTexture);
     disposeOverlay(this.navmeshOverlayMesh, this.navmeshTexture);
     disposeOverlay(this.resourceOverlayMesh, this.resourceTexture);
+    disposeOverlay(this.buildableOverlayMesh, this.buildableTexture);
+
+    // Dispose range ring groups
+    const disposeGroup = (group: THREE.Group) => {
+      while (group.children.length > 0) {
+        const child = group.children[0];
+        group.remove(child);
+        if (child instanceof THREE.Mesh) {
+          child.geometry.dispose();
+        }
+      }
+      this.scene.remove(group);
+    };
+
+    disposeGroup(this.attackRangeGroup);
+    disposeGroup(this.visionRangeGroup);
+
+    this.attackRangeMaterial.dispose();
+    this.visionRangeMaterial.dispose();
   }
 }

@@ -52,6 +52,13 @@ const OVERLAY_LEGENDS: Record<Exclude<GameOverlayType, 'none'>, { title: string;
       { color: 'bg-green-400', label: 'Gas' },
     ],
   },
+  buildable: {
+    title: 'Buildable Overlay',
+    items: [
+      { color: 'bg-green-500', label: 'Buildable' },
+      { color: 'bg-red-500', label: 'Not Buildable' },
+    ],
+  },
 };
 
 // Overlay Legend Component
@@ -266,6 +273,18 @@ export const HUD = memo(function HUD() {
                       >
                         <span>Resources (Minerals/Gas)</span>
                         {overlaySettings.activeOverlay === 'resource' && <span>ON</span>}
+                      </button>
+                      <button
+                        onClick={() => {
+                          toggleOverlay('buildable');
+                          setShowOverlayMenu(false);
+                        }}
+                        className={`w-full px-4 py-2 text-left text-sm hover:bg-void-800 transition-colors flex justify-between items-center ${
+                          overlaySettings.activeOverlay === 'buildable' ? 'text-green-400' : 'text-void-200'
+                        }`}
+                      >
+                        <span>Buildable (Placement)</span>
+                        {overlaySettings.activeOverlay === 'buildable' && <span>ON</span>}
                       </button>
                       <div className="border-t border-void-700 my-1" />
                       <div className="px-4 py-1 text-xs text-void-500">
