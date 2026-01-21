@@ -320,6 +320,11 @@ export class RecastNavigation {
         if (z > maxZ) maxZ = z;
       }
 
+      // Use console.log for production visibility of critical info
+      console.log(`[RecastNavigation] Generating navmesh: ${indices.length / 3} triangles, ${positions.length / 3} vertices`);
+      console.log(`[RecastNavigation] Geometry bounds: X=[${minX.toFixed(1)}, ${maxX.toFixed(1)}], Y(height)=[${minY.toFixed(2)}, ${maxY.toFixed(2)}], Z=[${minZ.toFixed(1)}, ${maxZ.toFixed(1)}]`);
+      console.log(`[RecastNavigation] Config: walkableClimb=${NAVMESH_CONFIG.walkableClimb}, walkableSlopeAngle=${NAVMESH_CONFIG.walkableSlopeAngle}`);
+
       debugInitialization.log('[RecastNavigation] Generating navmesh from geometry...', {
         positionsLength: positions.length,
         indicesLength: indices.length,
@@ -580,6 +585,9 @@ export class RecastNavigation {
   // Diagnostic counter for logging first few walkability failures
   private walkabilityDiagnosticCount = 0;
   private readonly MAX_WALKABILITY_LOGS = 20;
+  private walkabilitySuccessCount = 0;
+  private walkabilityFailCount = 0;
+  private loggedSummary = false;
 
   /**
    * Check if a point is on the navmesh (walkable).
@@ -594,34 +602,54 @@ export class RecastNavigation {
       const halfExtents = { x: 2, y: 20, z: 2 };
       const result = this.navMeshQuery.findClosestPoint({ x, y: queryY, z: y }, { halfExtents });
 
-      // Log diagnostic info for first few failures
-      if (this.walkabilityDiagnosticCount < this.MAX_WALKABILITY_LOGS) {
-        if (!result.success || !result.point) {
-          debugPathfinding.log(
-            `[Navmesh] isWalkable FAIL (no result): pos=(${x.toFixed(1)}, ${y.toFixed(1)}), ` +
-            `queryY=${queryY.toFixed(2)}, result.success=${result.success}`
-          );
-          this.walkabilityDiagnosticCount++;
-        } else {
-          const dist = distance(x, y, result.point.x, result.point.z);
-          if (dist >= 2.0) {
-            debugPathfinding.log(
-              `[Navmesh] isWalkable FAIL (dist): pos=(${x.toFixed(1)}, ${y.toFixed(1)}), ` +
-              `queryY=${queryY.toFixed(2)}, closest=(${result.point.x.toFixed(1)}, ${result.point.y.toFixed(2)}, ${result.point.z.toFixed(1)}), ` +
-              `dist=${dist.toFixed(2)}`
-            );
-            this.walkabilityDiagnosticCount++;
-          }
-        }
+      // Log first few queries to understand what's happening (uses console.log for production visibility)
+      if (this.walkabilityDiagnosticCount < 5) {
+        console.log(
+          `[Navmesh DEBUG] Query at (${x.toFixed(1)}, ${y.toFixed(1)}), height=${queryY.toFixed(2)}, ` +
+          `success=${result.success}, point=${result.point ? `(${result.point.x.toFixed(1)}, ${result.point.y.toFixed(2)}, ${result.point.z.toFixed(1)})` : 'null'}`
+        );
+        this.walkabilityDiagnosticCount++;
       }
 
-      if (!result.success || !result.point) return false;
+      if (!result.success || !result.point) {
+        this.walkabilityFailCount++;
+        return false;
+      }
 
       // Check if the closest point is within a reasonable tolerance
       const dist = distance(x, y, result.point.x, result.point.z);
-      return dist < 2.0; // Within 2 units horizontally
+
+      // Log failures for diagnostic
+      if (dist >= 2.0 && this.walkabilityDiagnosticCount < this.MAX_WALKABILITY_LOGS) {
+        debugPathfinding.log(
+          `[Navmesh] isWalkable FAIL (dist): pos=(${x.toFixed(1)}, ${y.toFixed(1)}), ` +
+          `queryY=${queryY.toFixed(2)}, closest=(${result.point.x.toFixed(1)}, ${result.point.y.toFixed(2)}, ${result.point.z.toFixed(1)}), ` +
+          `dist=${dist.toFixed(2)}`
+        );
+        this.walkabilityDiagnosticCount++;
+        this.walkabilityFailCount++;
+        return false;
+      }
+
+      if (dist < 2.0) {
+        this.walkabilitySuccessCount++;
+        return true;
+      }
+
+      this.walkabilityFailCount++;
+      return false;
     } catch {
       return false;
+    }
+  }
+
+  /**
+   * Log walkability statistics (call periodically for diagnostics)
+   */
+  public logWalkabilityStats(): void {
+    if (!this.loggedSummary && (this.walkabilitySuccessCount > 0 || this.walkabilityFailCount > 0)) {
+      console.log(`[Navmesh] Walkability stats: success=${this.walkabilitySuccessCount}, fail=${this.walkabilityFailCount}`);
+      this.loggedSummary = true;
     }
   }
 
@@ -629,7 +657,8 @@ export class RecastNavigation {
 
   /**
    * Add a unit to crowd simulation.
-   * Uses terrain height for the Y coordinate to place agent at correct elevation.
+   * Projects position onto navmesh surface to ensure valid polygon placement.
+   * DetourCrowd requires agents to be exactly ON navmesh polygons to work.
    */
   public addAgent(
     entityId: number,
@@ -646,9 +675,15 @@ export class RecastNavigation {
     }
 
     try {
-      // Use terrain height for Y coordinate to place agent at correct elevation
-      // Keep original X/Z (game coords) to avoid position drift between game and crowd
-      const terrainY = this.getTerrainHeight(x, y);
+      // Project position onto navmesh surface for valid polygon placement
+      // Critical: agents must be ON a navmesh polygon for crowd to compute velocity
+      const projected = this.projectToNavMesh(x, y);
+      if (!projected) {
+        debugPathfinding.warn(
+          `[RecastNavigation] Cannot add agent ${entityId}: position (${x.toFixed(1)}, ${y.toFixed(1)}) not on navmesh`
+        );
+        return -1;
+      }
 
       const params: Partial<CrowdAgentParams> = {
         ...DEFAULT_AGENT_PARAMS,
@@ -658,7 +693,7 @@ export class RecastNavigation {
         collisionQueryRange: radius * 5,
       };
 
-      const agent = this.crowd.addAgent({ x, y: terrainY, z: y }, params);
+      const agent = this.crowd.addAgent(projected, params);
 
       if (agent) {
         const agentIndex = agent.agentIndex;

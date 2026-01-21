@@ -24,7 +24,7 @@ interface OverlayCacheEntry {
 }
 
 // Current cache version - increment when overlay computation changes
-const CACHE_VERSION = 2;
+const CACHE_VERSION = 3;
 
 // Max age for cached entries (7 days)
 const MAX_CACHE_AGE_MS = 7 * 24 * 60 * 60 * 1000;
