@@ -842,6 +842,12 @@ export class TSLGameOverlayManager {
 
     const duration = performance.now() - startTime;
 
+    // Use console.log for production visibility
+    console.log(`[NavmeshOverlay] Completed in ${duration.toFixed(0)}ms`);
+    console.log(`[NavmeshOverlay] Connected: ${connectedCount}, Disconnected: ${disconnectedCount}, Not on navmesh: ${notOnNavmeshCount}`);
+    console.log(`[NavmeshOverlay] Walkable by type:`, walkableByType);
+    console.log(`[NavmeshOverlay] NOT walkable by type:`, notWalkableByType);
+
     debugPathfinding.log(`[NavmeshOverlay] Completed in ${duration.toFixed(0)}ms`);
     debugPathfinding.log(`[NavmeshOverlay]   Connected: ${connectedCount}, Disconnected: ${disconnectedCount}`);
     debugPathfinding.log(`[NavmeshOverlay]   Not on navmesh: ${notOnNavmeshCount}, Unwalkable: ${unwalkableTerrainCount}`);
