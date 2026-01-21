@@ -6,7 +6,6 @@ import { Building, AddonType } from '../components/Building';
 import { Health } from '../components/Health';
 import { Selectable } from '../components/Selectable';
 import { BUILDING_DEFINITIONS, RESEARCH_MODULE_UNITS, PRODUCTION_MODULE_UNITS } from '@/data/buildings/dominion';
-import { useGameStore } from '@/store/gameStore';
 import { findBuildingTarget } from '../combat/TargetAcquisition';
 import { distance } from '@/utils/math';
 
@@ -288,12 +287,12 @@ export class BuildingMechanicsSystem extends System {
 
       // Refund supply if building provides supply and is complete
       if (building.isComplete() && building.supplyProvided > 0) {
-        useGameStore.getState().addMaxSupply(-building.supplyProvided);
+        this.game.statePort.addMaxSupply(-building.supplyProvided);
       }
 
       // Refund resources
       if (refundMinerals > 0 || refundVespene > 0) {
-        useGameStore.getState().addResources(refundMinerals, refundVespene);
+        this.game.statePort.addResources(refundMinerals, refundVespene);
       }
 
       // Mark as destroyed

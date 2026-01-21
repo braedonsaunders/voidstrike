@@ -5,7 +5,6 @@ import { Health } from '../components/Health';
 import { Selectable } from '../components/Selectable';
 import { Ability, DOMINION_ABILITIES } from '../components/Ability';
 import { Game } from '../core/Game';
-import { useGameStore } from '@/store/gameStore';
 import { isLocalPlayer } from '@/store/gameSetupStore';
 import { UNIT_DEFINITIONS } from '@/data/units/dominion';
 import { BUILDING_DEFINITIONS, RESEARCH_MODULE_UNITS, PRODUCTION_MODULE_UNITS } from '@/data/buildings/dominion';
@@ -69,17 +68,16 @@ export class ProductionSystem extends System {
         // Only update store for local player's buildings
         const selectable = entity.get<Selectable>('Selectable');
         if (selectable && isLocalPlayer(selectable.playerId)) {
-          const store = useGameStore.getState();
           const refundPercent = cancelled.progress < 0.5 ? 1 : 0.5;
           // Refund based on produceCount (1 for normal, 2 for reactor bonus)
           const produceCount = cancelled.produceCount || 1;
-          store.addResources(
+          this.game.statePort.addResources(
             Math.floor(unitDef.mineralCost * produceCount * refundPercent),
             Math.floor(unitDef.vespeneCost * produceCount * refundPercent)
           );
           if (cancelled.supplyAllocated) {
             // Supply cost already accounts for produceCount
-            store.addSupply(-cancelled.supplyCost);
+            this.game.statePort.addSupply(-cancelled.supplyCost);
           }
         }
       }
@@ -160,16 +158,14 @@ export class ProductionSystem extends System {
 
     // FIX: AI players have already deducted resources via EnhancedAISystem
     // Only check/deduct from game store for human players (local player)
-    const store = useGameStore.getState();
-
     if (!isOwnerAI) {
       // Human player - check resources from game store
-      if (store.minerals < unitDef.mineralCost) {
+      if (this.game.statePort.getMinerals() < unitDef.mineralCost) {
         this.game.eventBus.emit('alert:notEnoughMinerals', {});
         this.game.eventBus.emit('warning:lowMinerals', {});
         return;
       }
-      if (store.vespene < unitDef.vespeneCost) {
+      if (this.game.statePort.getVespene() < unitDef.vespeneCost) {
         this.game.eventBus.emit('alert:notEnoughVespene', {});
         this.game.eventBus.emit('warning:lowVespene', {});
         return;
@@ -193,15 +189,15 @@ export class ProductionSystem extends System {
         produceCount = 2;
       } else {
         // Human: check if they can afford two
-        const canAffordTwo = store.minerals >= unitDef.mineralCost * 2 &&
-                             store.vespene >= unitDef.vespeneCost * 2;
+        const canAffordTwo = this.game.statePort.getMinerals() >= unitDef.mineralCost * 2 &&
+                             this.game.statePort.getVespene() >= unitDef.vespeneCost * 2;
         produceCount = canAffordTwo ? 2 : 1;
       }
     }
 
     // Deduct resources based on produceCount (only for human players)
     if (!isOwnerAI) {
-      store.addResources(-unitDef.mineralCost * produceCount, -unitDef.vespeneCost * produceCount);
+      this.game.statePort.addResources(-unitDef.mineralCost * produceCount, -unitDef.vespeneCost * produceCount);
     }
     // AI resources were already deducted in EnhancedAISystem
 
@@ -248,15 +244,13 @@ export class ProductionSystem extends System {
       return;
     }
 
-    const store = useGameStore.getState();
-
     // Check resources
-    if (store.minerals < upgradeDef.mineralCost) {
+    if (this.game.statePort.getMinerals() < upgradeDef.mineralCost) {
       this.game.eventBus.emit('alert:notEnoughMinerals', {});
       this.game.eventBus.emit('warning:lowMinerals', {});
       return;
     }
-    if (store.vespene < upgradeDef.vespeneCost) {
+    if (this.game.statePort.getVespene() < upgradeDef.vespeneCost) {
       this.game.eventBus.emit('alert:notEnoughVespene', {});
       this.game.eventBus.emit('warning:lowVespene', {});
       return;
@@ -280,7 +274,7 @@ export class ProductionSystem extends System {
       if (isUpgrading) continue;
 
       // Deduct resources
-      store.addResources(-upgradeDef.mineralCost, -upgradeDef.vespeneCost);
+      this.game.statePort.addResources(-upgradeDef.mineralCost, -upgradeDef.vespeneCost);
 
       // Add to production queue as 'upgrade' type with building ID
       building.addToProductionQueue('upgrade', upgradeTo, upgradeDef.buildTime);
@@ -333,11 +327,10 @@ export class ProductionSystem extends System {
             currentItem.supplyAllocated = true;
           } else {
             // Human player - use game store for supply tracking
-            const store = useGameStore.getState();
             // Try to allocate supply if there's room
-            if (store.supply + currentItem.supplyCost <= store.maxSupply) {
+            if (this.game.statePort.getSupply() + currentItem.supplyCost <= this.game.statePort.getMaxSupply()) {
               // We have room - allocate supply
-              store.addSupply(currentItem.supplyCost);
+              this.game.statePort.addSupply(currentItem.supplyCost);
               currentItem.supplyAllocated = true;
             } else {
               // No room - skip this building (supply blocked)

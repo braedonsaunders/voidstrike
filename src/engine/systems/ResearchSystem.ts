@@ -2,7 +2,6 @@ import { System } from '../ecs/System';
 import { Building } from '../components/Building';
 import { Selectable } from '../components/Selectable';
 import { Game } from '../core/Game';
-import { useGameStore } from '@/store/gameStore';
 import { RESEARCH_DEFINITIONS, ResearchDefinition } from '@/data/research/dominion';
 import { BUILDING_DEFINITIONS } from '@/data/buildings/dominion';
 import { debugProduction } from '@/utils/debugLogger';
@@ -33,11 +32,10 @@ export class ResearchSystem extends System {
       return;
     }
 
-    const store = useGameStore.getState();
-    const playerId = store.playerId;
+    const playerId = this.game.config.playerId;
 
     // Check if already researched
-    if (store.hasResearch(playerId, upgradeId)) {
+    if (this.game.statePort.hasResearch(playerId, upgradeId)) {
       this.game.eventBus.emit('ui:error', { message: 'Already researched' });
       return;
     }
@@ -49,12 +47,12 @@ export class ResearchSystem extends System {
     }
 
     // Check resources
-    if (store.minerals < upgrade.mineralCost) {
+    if (this.game.statePort.getMinerals() < upgrade.mineralCost) {
       this.game.eventBus.emit('alert:notEnoughMinerals', {});
       this.game.eventBus.emit('warning:lowMinerals', {});
       return;
     }
-    if (store.vespene < upgrade.vespeneCost) {
+    if (this.game.statePort.getVespene() < upgrade.vespeneCost) {
       this.game.eventBus.emit('alert:notEnoughVespene', {});
       this.game.eventBus.emit('warning:lowVespene', {});
       return;
@@ -84,7 +82,7 @@ export class ResearchSystem extends System {
       }
 
       // Deduct resources
-      store.addResources(-upgrade.mineralCost, -upgrade.vespeneCost);
+      this.game.statePort.addResources(-upgrade.mineralCost, -upgrade.vespeneCost);
 
       // Add to production queue
       building.addToProductionQueue('upgrade', upgradeId, upgrade.researchTime);
@@ -114,10 +112,8 @@ export class ResearchSystem extends System {
     const selectable = entity.get<Selectable>('Selectable');
     const playerId = selectable?.playerId ?? 'player1';
 
-    const store = useGameStore.getState();
-
     // Register the upgrade
-    store.addResearch(playerId, upgradeId, upgrade.effects, store.gameTime);
+    this.game.statePort.addResearch(playerId, upgradeId, upgrade.effects, this.game.getGameTime());
 
     // Emit UI notification
     this.game.eventBus.emit('ui:notification', {
@@ -132,8 +128,6 @@ export class ResearchSystem extends System {
   }
 
   private checkRequirements(upgrade: ResearchDefinition, playerId: string): boolean {
-    const store = useGameStore.getState();
-
     if (!upgrade.requirements) return true;
 
     for (const req of upgrade.requirements) {
@@ -154,7 +148,7 @@ export class ResearchSystem extends System {
         if (!hasBuilding) return false;
       } else {
         // Requirement is another upgrade
-        if (!store.hasResearch(playerId, req)) return false;
+        if (!this.game.statePort.hasResearch(playerId, req)) return false;
       }
     }
 
@@ -202,7 +196,6 @@ export class ResearchSystem extends System {
 
   // Helper to get available research for a building considering player progress
   public getAvailableResearch(buildingId: string, playerId: string): ResearchDefinition[] {
-    const store = useGameStore.getState();
     const available: ResearchDefinition[] = [];
 
     // Get base available research for this building type
@@ -211,7 +204,7 @@ export class ResearchSystem extends System {
     // Check each research definition
     for (const [upgradeId, upgrade] of Object.entries(RESEARCH_DEFINITIONS)) {
       // Skip if already researched
-      if (store.hasResearch(playerId, upgradeId)) continue;
+      if (this.game.statePort.hasResearch(playerId, upgradeId)) continue;
 
       // Skip if can't be researched at this building
       if (!this.canBuildingResearch(buildingId, upgradeId)) continue;

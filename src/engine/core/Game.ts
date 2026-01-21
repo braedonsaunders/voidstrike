@@ -56,6 +56,8 @@ interface MultiplayerMessage {
 }
 import { DesyncDetectionManager, DesyncDetectionConfig } from '../network/DesyncDetection';
 import { bootstrapDefinitions } from '../definitions';
+import type { GameStatePort } from './GameStatePort';
+import { ZustandStateAdapter } from '@/adapters/ZustandStateAdapter';
 
 export type GameState = 'initializing' | 'running' | 'paused' | 'ended';
 
@@ -89,6 +91,7 @@ const DEFAULT_CONFIG: GameConfig = {
 export class Game {
   private static instance: Game | null = null;
 
+  public statePort: GameStatePort;
   public world: World;
   public eventBus: EventBus;
   public config: GameConfig;
@@ -170,8 +173,9 @@ export class Game {
   // Maximum ticks to wait for remote commands before triggering desync (10 ticks = 500ms at 20 tick/sec)
   private readonly LOCKSTEP_TIMEOUT_TICKS = 10;
 
-  private constructor(config: Partial<GameConfig> = {}) {
+  private constructor(config: Partial<GameConfig> = {}, statePort?: GameStatePort) {
     this.config = { ...DEFAULT_CONFIG, ...config };
+    this.statePort = statePort ?? new ZustandStateAdapter();
     this.eventBus = new EventBus();
 
     // Bootstrap definition registry from TypeScript data
@@ -353,10 +357,10 @@ export class Game {
     });
   }
 
-  public static getInstance(config?: Partial<GameConfig>): Game {
+  public static getInstance(config?: Partial<GameConfig>, statePort?: GameStatePort): Game {
     if (!Game.instance) {
       debugInitialization.log(`[Game] CREATING NEW INSTANCE with config:`, config ? `${config.mapWidth}x${config.mapHeight}` : 'DEFAULT 128x128');
-      Game.instance = new Game(config);
+      Game.instance = new Game(config, statePort);
     } else if (config && (config.mapWidth || config.mapHeight)) {
       // Update map dimensions if a new config is provided with map settings
       // This handles cases where components access Game before GameCanvas initializes it
