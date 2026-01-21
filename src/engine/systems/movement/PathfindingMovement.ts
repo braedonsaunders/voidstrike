@@ -236,7 +236,8 @@ export class PathfindingMovement {
           // This allows the crowd to compute proper path corridors without disruption
           const DRIFT_THRESHOLD_SQ = 2 * 2;
           if (driftSq > DRIFT_THRESHOLD_SQ) {
-            this.recast.updateAgentPosition(entity.id, transform.x, transform.y);
+            // Pass current height to preserve layer on multi-level navmesh (ramps, platforms)
+            this.recast.updateAgentPosition(entity.id, transform.x, transform.y, crowdState.height);
           }
         } else {
           // No crowd state yet - sync position
