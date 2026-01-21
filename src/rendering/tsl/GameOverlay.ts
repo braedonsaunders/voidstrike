@@ -649,6 +649,10 @@ export class TSLGameOverlayManager {
     let walkableCount = 0;
     let unwalkableTerrainCount = 0;
 
+    // Track walkability by terrain type for diagnostics
+    const walkableByType: Record<string, number> = {};
+    const notWalkableByType: Record<string, number> = {};
+
     const BATCH_SIZE = 4096;
     let processed = 0;
 
@@ -659,6 +663,7 @@ export class TSLGameOverlayManager {
         const x = idx % width;
         const y = Math.floor(idx / width);
         const cell = terrain[y]?.[x];
+        const terrainTypeName = cell?.terrain || 'unknown';
 
         if (cell?.terrain === 'unwalkable') {
           terrainType[idx] = 2;
@@ -675,6 +680,9 @@ export class TSLGameOverlayManager {
         if (recast.isWalkable(cellX, cellZ)) {
           walkableGrid[idx] = 1;
           walkableCount++;
+          walkableByType[terrainTypeName] = (walkableByType[terrainTypeName] || 0) + 1;
+        } else {
+          notWalkableByType[terrainTypeName] = (notWalkableByType[terrainTypeName] || 0) + 1;
         }
       }
 
@@ -692,6 +700,10 @@ export class TSLGameOverlayManager {
     };
 
     await processWalkabilityBatch();
+
+    // Log detailed walkability breakdown by terrain type
+    debugPathfinding.log('[NavmeshOverlay] Walkable by terrain type:', walkableByType);
+    debugPathfinding.log('[NavmeshOverlay] NOT walkable by terrain type:', notWalkableByType);
 
     const phase1Time = performance.now() - startTime;
     debugPathfinding.log(`[NavmeshOverlay] Phase 1 complete: ${walkableCount} walkable cells in ${phase1Time.toFixed(0)}ms`);
