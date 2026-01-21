@@ -4,6 +4,7 @@ import React, { memo } from 'react';
 import { useUIStore } from '@/store/uiStore';
 import { PerformanceDashboard } from './PerformanceDashboard';
 import { PerformanceRecorder } from './PerformanceRecorder';
+import { BasePanel } from './BasePanel';
 
 // Format number with K/M suffix for large numbers
 function formatNumber(num: number): string {
@@ -27,53 +28,12 @@ export const PerformancePanel = memo(function PerformancePanel() {
   if (!showPerformancePanel) return null;
 
   return (
-    <div
-      style={{
-        position: 'absolute',
-        top: '50px',
-        right: '10px',
-        backgroundColor: 'rgba(10, 10, 12, 0.98)',
-        border: '1px solid #333',
-        borderRadius: '8px',
-        padding: '12px',
-        color: 'white',
-        fontFamily: 'system-ui, -apple-system, sans-serif',
-        fontSize: '12px',
-        zIndex: 1000,
-        width: '280px',
-        maxHeight: '80vh',
-        overflowY: 'auto',
-        pointerEvents: 'auto',
-        boxShadow: '0 8px 32px rgba(0,0,0,0.5)',
-      }}
-      onWheel={(e) => e.stopPropagation()}
+    <BasePanel
+      title="Performance"
+      onClose={togglePerformancePanel}
+      width={280}
+      testId="performance-panel"
     >
-      {/* Header */}
-      <div style={{
-        display: 'flex',
-        justifyContent: 'space-between',
-        alignItems: 'center',
-        marginBottom: '12px',
-        paddingBottom: '8px',
-        borderBottom: '1px solid #222',
-      }}>
-        <span style={{ fontSize: '13px', fontWeight: 600 }}>Performance</span>
-        <button
-          onClick={() => togglePerformancePanel()}
-          style={{
-            background: 'none',
-            border: 'none',
-            color: '#666',
-            cursor: 'pointer',
-            fontSize: '14px',
-            padding: '4px',
-            lineHeight: 1,
-          }}
-        >
-          ✕
-        </button>
-      </div>
-
       {/* FPS Counter Toggle */}
       <div style={{
         display: 'flex',
@@ -214,6 +174,6 @@ export const PerformancePanel = memo(function PerformancePanel() {
         {/* Performance Recorder */}
         <PerformanceRecorder />
       </div>
-    </div>
+    </BasePanel>
   );
 });

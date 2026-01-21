@@ -2,6 +2,7 @@
 
 import React, { memo } from 'react';
 import { useUIStore, DebugSettings } from '@/store/uiStore';
+import { BasePanel } from './BasePanel';
 
 interface DebugSettingInfo {
   key: keyof DebugSettings;
@@ -117,44 +118,17 @@ export const DebugMenuPanel = memo(function DebugMenuPanel() {
   };
 
   return (
-    <div
-      style={{
-        position: 'absolute',
-        top: '50px',
-        right: '10px',
-        backgroundColor: 'rgba(0, 0, 0, 0.95)',
-        border: '1px solid #444',
-        borderRadius: '8px',
-        padding: '16px',
-        color: 'white',
-        fontFamily: 'monospace',
-        fontSize: '13px',
-        zIndex: 1000,
-        minWidth: '280px',
-        maxHeight: '80vh',
-        overflowY: 'auto',
-      }}
+    <BasePanel
+      title="Debug Menu"
+      onClose={toggleDebugMenu}
+      minWidth={280}
+      width={undefined}
+      fontFamily="monospace"
+      backgroundColor="rgba(0, 0, 0, 0.95)"
+      borderColor="#444"
+      showHeaderBorder={false}
+      testId="debug-menu-panel"
     >
-      {/* Header */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
-        <h3 style={{ margin: 0, fontSize: '14px' }}>Debug Menu</h3>
-        <button
-          onClick={(e) => {
-            e.preventDefault();
-            toggleDebugMenu();
-          }}
-          style={{
-            background: 'none',
-            border: 'none',
-            color: '#888',
-            cursor: 'pointer',
-            fontSize: '16px',
-          }}
-        >
-          ✕
-        </button>
-      </div>
-
       {/* === MASTER TOGGLE === */}
       <div style={sectionStyle}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
@@ -263,6 +237,6 @@ export const DebugMenuPanel = memo(function DebugMenuPanel() {
       <div style={{ marginTop: '12px', paddingTop: '12px', borderTop: '1px solid #333', fontSize: '10px', color: '#666' }}>
         Debug logs appear in browser console (F12)
       </div>
-    </div>
+    </BasePanel>
   );
 });
