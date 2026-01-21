@@ -1632,9 +1632,26 @@ export class Terrain {
       if (h > maxHeight) maxHeight = h;
     }
 
+    let platformCellCount = 0;
     for (let y = 0; y < height; y++) {
       for (let x = 0; x < width; x++) {
         if (terrain[y][x].terrain === 'ramp') rampCellCount++;
+        if (terrain[y][x].terrain === 'platform') platformCellCount++;
+      }
+    }
+
+    // Count walkable cells by terrain type to diagnose geometry generation
+    let walkablePlatformCells = 0;
+    let walkableRampCells = 0;
+    let walkableGroundCells = 0;
+    for (let y = 0; y < height; y++) {
+      for (let x = 0; x < width; x++) {
+        if (isCellWalkable(x, y)) {
+          const t = terrain[y][x].terrain;
+          if (t === 'platform') walkablePlatformCells++;
+          else if (t === 'ramp') walkableRampCells++;
+          else if (t === 'ground' || t === 'unbuildable') walkableGroundCells++;
+        }
       }
     }
 
@@ -1646,8 +1663,29 @@ export class Terrain {
     debugTerrain.log(
       `[Terrain] Height range: ${minHeight.toFixed(2)} to ${maxHeight.toFixed(2)} ` +
       `(${(maxHeight - minHeight).toFixed(2)} total), ` +
-      `${rampCellCount} ramp cells, ${rampZoneCount} ramp zone cells`
+      `${rampCellCount} ramp cells, ${rampZoneCount} ramp zone cells, ${platformCellCount} platform cells`
     );
+    debugTerrain.log(
+      `[Terrain] Walkable cells by type: platform=${walkablePlatformCells}, ramp=${walkableRampCells}, ground=${walkableGroundCells}`
+    );
+
+    // Log platform height diagnostic - find first platform cell and report its height
+    if (platformCellCount > 0) {
+      for (let y = 0; y < height && platformCellCount > 0; y++) {
+        for (let x = 0; x < width; x++) {
+          if (terrain[y][x].terrain === 'platform') {
+            const platformHeight = getVertexHeight(x, y);
+            const platformElevation = terrain[y][x].elevation;
+            debugTerrain.log(
+              `[Terrain] Sample platform cell at (${x},${y}): elevation=${platformElevation}, ` +
+              `vertexHeight=${platformHeight.toFixed(3)}, expected=${(platformElevation * 0.04).toFixed(3)}`
+            );
+            break;
+          }
+        }
+        break;
+      }
+    }
 
     // Log ramp diagnostic info
     if (rampProfile) {
