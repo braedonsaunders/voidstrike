@@ -784,8 +784,12 @@ export class RecastNavigation {
    * Update agent position (for teleporting or external movement).
    * Projects position onto navmesh to ensure valid agent placement.
    * Returns true if teleport succeeded, false if position is off navmesh.
+   *
+   * @param currentHeight - Optional hint for agent's current height (from crowd state).
+   *   On multi-level navmeshes, this ensures the agent stays on the correct layer
+   *   (e.g., ramp surface) instead of snapping to a different layer (e.g., ground).
    */
-  public updateAgentPosition(entityId: number, x: number, y: number): boolean {
+  public updateAgentPosition(entityId: number, x: number, y: number, currentHeight?: number): boolean {
     if (!this.crowd) return false;
 
     const agentIndex = this.agentMap.get(entityId);
@@ -794,16 +798,28 @@ export class RecastNavigation {
     try {
       const agent = this.crowd.getAgent(agentIndex);
       if (agent) {
-        // Project position onto navmesh to ensure valid placement
-        const projected = this.projectToNavMesh(x, y);
-        if (projected) {
-          agent.teleport(projected);
+        // Use current height if provided (preserves layer on multi-level navmesh),
+        // otherwise fall back to terrain height provider
+        const queryY = currentHeight ?? this.getTerrainHeight(x, y);
+
+        // Search with tighter vertical tolerance when we have current height
+        // to avoid snapping to wrong layer
+        const halfExtents = currentHeight !== undefined
+          ? { x: 2, y: 2, z: 2 }   // Tight search near current height
+          : { x: 2, y: 10, z: 2 }; // Wide search when height unknown
+
+        const result = this.navMeshQuery?.findClosestPoint(
+          { x, y: queryY, z: y },
+          { halfExtents }
+        );
+
+        if (result?.success && result.point) {
+          agent.teleport({ x: result.point.x, y: result.point.y, z: result.point.z });
           return true;
         }
 
-        // Fallback: try with approximate terrain height
-        const terrainY = this.getTerrainHeight(x, y);
-        agent.teleport({ x, y: terrainY, z: y });
+        // Fallback: teleport directly with query height
+        agent.teleport({ x, y: queryY, z: y });
         return true;
       }
     } catch {
@@ -847,6 +863,7 @@ export class RecastNavigation {
   public getAgentState(entityId: number): {
     x: number;
     y: number;
+    height: number;
     vx: number;
     vy: number;
   } | null {
@@ -864,6 +881,7 @@ export class RecastNavigation {
         return {
           x: pos.x,
           y: pos.z,
+          height: pos.y,  // Include 3D height for multi-level navmesh
           vx: vel.x,
           vy: vel.z,
         };
