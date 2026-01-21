@@ -95,13 +95,20 @@ export class EditorBrushPreview {
 
   /**
    * Show brush for a specific tool
+   * @param materialColor Optional hex color string (e.g., "#ff0000") to show when painting with a specific material
    */
-  public showForTool(toolId: string, brushSize: number): void {
+  public showForTool(toolId: string, brushSize: number, materialColor?: string): void {
     const toolsWithBrush = ['brush', 'eraser', 'plateau', 'smooth', 'raise', 'lower', 'noise', 'line', 'ramp'];
 
     if (toolsWithBrush.includes(toolId)) {
       this.setRadius(brushSize);
       this.setVisible(true);
+
+      // If material color is provided for brush tool, use it
+      if (toolId === 'brush' && materialColor) {
+        this.setColor(parseInt(materialColor.replace('#', ''), 16));
+        return;
+      }
 
       // Set color based on tool
       switch (toolId) {

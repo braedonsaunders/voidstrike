@@ -116,7 +116,7 @@ export function Editor3DCanvas({
   // Performance: track last frame time
   const lastFrameTimeRef = useRef(0);
 
-  const { mapData, activeTool, selectedElevation, selectedFeature, brushSize, selectedObjects } = state;
+  const { mapData, activeTool, selectedElevation, selectedFeature, selectedMaterial, brushSize, selectedObjects } = state;
 
   // Initialize Three.js scene
   useEffect(() => {
@@ -507,6 +507,13 @@ export function Editor3DCanvas({
             cell: { ...u.cell, ...featureUpdates[i]?.cell },
           }));
         }
+        // Apply selected material if one is explicitly selected (not auto/0)
+        if (selectedMaterial > 0) {
+          updates = updates.map((u) => ({
+            ...u,
+            cell: { ...u.cell, materialId: selectedMaterial },
+          }));
+        }
         break;
 
       case 'eraser':
@@ -608,7 +615,7 @@ export function Editor3DCanvas({
       onCellsUpdateBatched(updates);
       terrainRef.current?.markCellsDirty(updates.map((u) => ({ x: u.x, y: u.y })));
     }
-  }, [mapData, config, activeTool, selectedElevation, selectedFeature, brushSize, worldToGrid, onCellsUpdateBatched, onFillArea]);
+  }, [mapData, config, activeTool, selectedElevation, selectedFeature, selectedMaterial, brushSize, worldToGrid, onCellsUpdateBatched, onFillArea]);
 
   // Mouse handlers
   const handleMouseDown = useCallback((e: React.MouseEvent) => {
@@ -763,7 +770,11 @@ export function Editor3DCanvas({
 
       // Update brush preview - pass Y from raycast to avoid offset on slopes
       brushPreviewRef.current?.setPosition(worldPos.x, worldPos.z, worldPos.y);
-      brushPreviewRef.current?.showForTool(activeTool, brushSize);
+      // Get material color if a material is selected
+      const materialColor = selectedMaterial > 0
+        ? config.terrain.materials?.find((m) => m.id === selectedMaterial)?.color
+        : undefined;
+      brushPreviewRef.current?.showForTool(activeTool, brushSize, materialColor);
 
       // Track hovered object
       if (rtsCameraRef.current && containerRef.current) {
@@ -800,7 +811,7 @@ export function Editor3DCanvas({
     if (paintingState.current.isDrawingShape && worldPos) {
       brushPreviewRef.current?.updateShapePreview(worldPos.x, worldPos.z);
     }
-  }, [activeTool, brushSize, raycastToTerrain, worldToGrid, paintAt, onObjectUpdate, onCursorMove, onObjectHover, mapData?.objects]);
+  }, [activeTool, brushSize, selectedMaterial, config, raycastToTerrain, worldToGrid, paintAt, onObjectUpdate, onCursorMove, onObjectHover, mapData?.objects]);
 
   const handleMouseUp = useCallback((e: React.MouseEvent) => {
     // Handle shape tool completion (ramp, line, rect, ellipse)
