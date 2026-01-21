@@ -8,7 +8,6 @@ import { Health } from '../components/Health';
 import { Selectable } from '../components/Selectable';
 import { Unit } from '../components/Unit';
 import { WALL_DEFINITIONS, WALL_UPGRADE_DEFINITIONS, WallUpgradeType } from '@/data/buildings/walls';
-import { useGameStore } from '@/store/gameStore';
 import { isLocalPlayer, getLocalPlayerId } from '@/store/gameSetupStore';
 
 /**
@@ -345,11 +344,10 @@ export class WallSystem extends System {
 
     if (!upgradeDef) return;
 
-    const store = useGameStore.getState();
     const isPlayerLocal = isLocalPlayer(playerId);
 
     // Check if research is complete
-    if (!store.hasResearch(playerId, `wall_${upgradeType}`)) {
+    if (!this.game.statePort.hasResearch(playerId, `wall_${upgradeType}`)) {
       this.game.eventBus.emit('ui:error', { message: `Research ${upgradeDef.name} first`, playerId });
       return;
     }
@@ -371,12 +369,12 @@ export class WallSystem extends System {
 
       // Check cost
       if (isPlayerLocal) {
-        if (store.minerals < upgradeDef.applyCost.minerals) {
+        if (this.game.statePort.getMinerals() < upgradeDef.applyCost.minerals) {
           this.game.eventBus.emit('alert:notEnoughMinerals', {});
           this.game.eventBus.emit('warning:lowMinerals', {});
           continue;
         }
-        if (store.vespene < upgradeDef.applyCost.vespene) {
+        if (this.game.statePort.getVespene() < upgradeDef.applyCost.vespene) {
           this.game.eventBus.emit('alert:notEnoughVespene', {});
           this.game.eventBus.emit('warning:lowVespene', {});
           continue;
@@ -385,7 +383,7 @@ export class WallSystem extends System {
 
       // Deduct resources
       if (isPlayerLocal) {
-        store.addResources(-upgradeDef.applyCost.minerals, -upgradeDef.applyCost.vespene);
+        this.game.statePort.addResources(-upgradeDef.applyCost.minerals, -upgradeDef.applyCost.vespene);
       }
 
       // Start upgrade

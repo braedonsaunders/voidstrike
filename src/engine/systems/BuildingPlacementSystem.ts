@@ -10,7 +10,6 @@ import { Resource } from '../components/Resource';
 import { Wall } from '../components/Wall';
 import { BUILDING_DEFINITIONS } from '@/data/buildings/dominion';
 import { WALL_DEFINITIONS } from '@/data/buildings/walls';
-import { useGameStore } from '@/store/gameStore';
 import { isLocalPlayer, getLocalPlayerId } from '@/store/gameSetupStore';
 import { debugBuildingPlacement } from '@/utils/debugLogger';
 import { SeededRandom, distance, clamp } from '@/utils/math';
@@ -97,17 +96,16 @@ export class BuildingPlacementSystem extends System {
       vespene: definition.vespeneCost * validPositions.length,
     };
 
-    const store = useGameStore.getState();
     const isPlayerLocal = isLocalPlayer(playerId);
 
     // Check resources
     if (isPlayerLocal) {
-      if (store.minerals < totalCost.minerals) {
+      if (this.game.statePort.getMinerals() < totalCost.minerals) {
         this.game.eventBus.emit('alert:notEnoughMinerals', {});
         this.game.eventBus.emit('warning:lowMinerals', {});
         return;
       }
-      if (store.vespene < totalCost.vespene) {
+      if (this.game.statePort.getVespene() < totalCost.vespene) {
         this.game.eventBus.emit('alert:notEnoughVespene', {});
         this.game.eventBus.emit('warning:lowVespene', {});
         return;
@@ -137,7 +135,7 @@ export class BuildingPlacementSystem extends System {
 
     // Deduct resources
     if (isPlayerLocal) {
-      store.addResources(-totalCost.minerals, -totalCost.vespene);
+      this.game.statePort.addResources(-totalCost.minerals, -totalCost.vespene);
     }
 
     // Generate unique wall line ID for this placement
@@ -347,17 +345,16 @@ export class BuildingPlacementSystem extends System {
       return;
     }
 
-    const store = useGameStore.getState();
     const isPlayerLocal = isLocalPlayer(playerId);
 
     // Check resources (only for local player - AI handles its own resources)
     if (isPlayerLocal) {
-      if (store.minerals < definition.mineralCost) {
+      if (this.game.statePort.getMinerals() < definition.mineralCost) {
         this.game.eventBus.emit('alert:notEnoughMinerals', {});
         this.game.eventBus.emit('warning:lowMinerals', {});
         return;
       }
-      if (store.vespene < definition.vespeneCost) {
+      if (this.game.statePort.getVespene() < definition.vespeneCost) {
         this.game.eventBus.emit('alert:notEnoughVespene', {});
         this.game.eventBus.emit('warning:lowVespene', {});
         return;
@@ -405,7 +402,7 @@ export class BuildingPlacementSystem extends System {
 
     // Deduct resources (only for local player - AI handles its own resources)
     if (isPlayerLocal) {
-      store.addResources(-definition.mineralCost, -definition.vespeneCost);
+      this.game.statePort.addResources(-definition.mineralCost, -definition.vespeneCost);
     }
 
     // Create the building entity at the snapped center position
@@ -594,8 +591,7 @@ export class BuildingPlacementSystem extends System {
     workerId: number | undefined,
     playerId: string
   ): { entity: Entity } | null {
-    const store = useGameStore.getState();
-    const selectedUnits = store.selectedUnits;
+    const selectedUnits = this.game.statePort.getSelectedUnits();
 
     // If specific worker ID provided, use that ONLY if they're not already building
     if (workerId !== undefined) {
@@ -687,7 +683,7 @@ export class BuildingPlacementSystem extends System {
       // Add supply if applicable - only for local player's buildings
       const selectable = entity.get<Selectable>('Selectable');
       if (building.supplyProvided > 0 && selectable?.playerId && isLocalPlayer(selectable.playerId)) {
-        useGameStore.getState().addMaxSupply(building.supplyProvided);
+        this.game.statePort.addMaxSupply(building.supplyProvided);
       }
 
       // Release any workers constructing this building
@@ -750,15 +746,14 @@ export class BuildingPlacementSystem extends System {
     }
 
     // Check resources (only for local player)
-    const store = useGameStore.getState();
     const isPlayerLocal = isLocalPlayer(playerId);
     if (isPlayerLocal) {
-      if (store.minerals < addonDef.mineralCost) {
+      if (this.game.statePort.getMinerals() < addonDef.mineralCost) {
         this.game.eventBus.emit('alert:notEnoughMinerals', {});
         this.game.eventBus.emit('warning:lowMinerals', {});
         return;
       }
-      if (store.vespene < addonDef.vespeneCost) {
+      if (this.game.statePort.getVespene() < addonDef.vespeneCost) {
         this.game.eventBus.emit('alert:notEnoughVespene', {});
         this.game.eventBus.emit('warning:lowVespene', {});
         return;
@@ -777,7 +772,7 @@ export class BuildingPlacementSystem extends System {
 
     // Deduct resources (only for local player)
     if (isPlayerLocal) {
-      store.addResources(-addonDef.mineralCost, -addonDef.vespeneCost);
+      this.game.statePort.addResources(-addonDef.mineralCost, -addonDef.vespeneCost);
     }
 
     // Create the addon entity - starts in 'constructing' state (no worker needed)
@@ -1426,7 +1421,7 @@ export class BuildingPlacementSystem extends System {
           } else {
             // Add supply if applicable - only for local player's buildings
             if (building.supplyProvided > 0 && selectable?.playerId && isLocalPlayer(selectable.playerId)) {
-              useGameStore.getState().addMaxSupply(building.supplyProvided);
+              this.game.statePort.addMaxSupply(building.supplyProvided);
             }
 
             // Set default rally point for production buildings
@@ -1711,8 +1706,7 @@ export class BuildingPlacementSystem extends System {
       if (definition) {
         // Refund resources to the player (only for local player)
         if (isLocalPlayer(selectable.playerId)) {
-          const store = useGameStore.getState();
-          store.addResources(definition.mineralCost, definition.vespeneCost);
+          this.game.statePort.addResources(definition.mineralCost, definition.vespeneCost);
           debugBuildingPlacement.log(`BuildingPlacementSystem: Refunded ${definition.mineralCost} minerals, ${definition.vespeneCost} vespene for cancelled ${building.name}`);
         }
 

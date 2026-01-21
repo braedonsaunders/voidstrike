@@ -9,7 +9,6 @@ import { Ability } from '../components/Ability';
 import { UNIT_DEFINITIONS } from '@/data/units/dominion';
 import { DOMINION_ABILITIES } from '../components/Ability';
 import { debugSpawning } from '@/utils/debugLogger';
-import { useGameStore } from '@/store/gameStore';
 import { isLocalPlayer } from '@/store/gameSetupStore';
 import { AssetManager } from '@/assets/AssetManager';
 
@@ -142,7 +141,7 @@ export class SpawnSystem extends System {
       if (unit && selectable && selectable.playerId && isLocalPlayer(selectable.playerId)) {
         const definition = UNIT_DEFINITIONS[unit.unitId];
         if (definition && definition.supplyCost > 0) {
-          useGameStore.getState().addSupply(-definition.supplyCost);
+          this.game.statePort.addSupply(-definition.supplyCost);
         }
       }
 

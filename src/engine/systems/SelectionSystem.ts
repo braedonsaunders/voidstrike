@@ -5,7 +5,6 @@ import { Unit } from '../components/Unit';
 import { Building } from '../components/Building';
 import { Health } from '../components/Health';
 import { Game } from '../core/Game';
-import { useGameStore } from '@/store/gameStore';
 import { distance, clamp } from '@/utils/math';
 
 /**
@@ -199,15 +198,15 @@ export class SelectionSystem extends System {
 
     // Update store
     if (additive) {
-      const current = useGameStore.getState().selectedUnits;
+      const current = this.game.statePort.getSelectedUnits();
       // PERF: Avoid multiple spread operations by using Set directly
       const combinedSet = new Set(current);
       for (let i = 0; i < selectedIds.length; i++) {
         combinedSet.add(selectedIds[i]);
       }
-      useGameStore.getState().selectUnits(Array.from(combinedSet));
+      this.game.statePort.selectUnits(Array.from(combinedSet));
     } else {
-      useGameStore.getState().selectUnits(selectedIds);
+      this.game.statePort.selectUnits(selectedIds);
     }
 
     this.game.eventBus.emit('selection:changed', { selectedIds });
@@ -332,15 +331,15 @@ export class SelectionSystem extends System {
 
     // Update store
     if (additive) {
-      const current = useGameStore.getState().selectedUnits;
+      const current = this.game.statePort.getSelectedUnits();
       // PERF: Avoid multiple spread operations by using Set directly
       const combinedSet = new Set(current);
       for (let i = 0; i < selectedIds.length; i++) {
         combinedSet.add(selectedIds[i]);
       }
-      useGameStore.getState().selectUnits(Array.from(combinedSet));
+      this.game.statePort.selectUnits(Array.from(combinedSet));
     } else {
-      useGameStore.getState().selectUnits(selectedIds);
+      this.game.statePort.selectUnits(selectedIds);
     }
 
     this.game.eventBus.emit('selection:changed', { selectedIds });
@@ -457,13 +456,13 @@ export class SelectionSystem extends System {
 
     // Update store
     if (!additive) {
-      useGameStore.getState().selectUnits(selectedIds);
+      this.game.statePort.selectUnits(selectedIds);
     } else {
-      const current = useGameStore.getState().selectedUnits;
+      const current = this.game.statePort.getSelectedUnits();
       if (closestEntity && selectedIds.length > 0) {
-        useGameStore.getState().selectUnits([...current, ...selectedIds]);
+        this.game.statePort.selectUnits([...current, ...selectedIds]);
       } else if (closestEntity) {
-        useGameStore.getState().selectUnits(current.filter((id) => id !== closestEntity!.id));
+        this.game.statePort.selectUnits(current.filter((id) => id !== closestEntity!.id));
       }
     }
 
@@ -567,13 +566,13 @@ export class SelectionSystem extends System {
 
     // Update store
     if (!additive) {
-      useGameStore.getState().selectUnits(selectedIds);
+      this.game.statePort.selectUnits(selectedIds);
     } else {
-      const current = useGameStore.getState().selectedUnits;
+      const current = this.game.statePort.getSelectedUnits();
       if (closestEntity && selectedIds.length > 0) {
-        useGameStore.getState().selectUnits([...current, ...selectedIds]);
+        this.game.statePort.selectUnits([...current, ...selectedIds]);
       } else if (closestEntity) {
-        useGameStore.getState().selectUnits(current.filter((id) => id !== closestEntity!.id));
+        this.game.statePort.selectUnits(current.filter((id) => id !== closestEntity!.id));
       }
     }
 
@@ -613,15 +612,15 @@ export class SelectionSystem extends System {
 
     // Update store
     if (additive) {
-      const current = useGameStore.getState().selectedUnits;
+      const current = this.game.statePort.getSelectedUnits();
       // PERF: Avoid multiple spread operations by using Set directly
       const combinedSet = new Set(current);
       for (let i = 0; i < selectedIds.length; i++) {
         combinedSet.add(selectedIds[i]);
       }
-      useGameStore.getState().selectUnits(Array.from(combinedSet));
+      this.game.statePort.selectUnits(Array.from(combinedSet));
     } else {
-      useGameStore.getState().selectUnits(selectedIds);
+      this.game.statePort.selectUnits(selectedIds);
     }
 
     this.game.eventBus.emit('selection:changed', { selectedIds });
@@ -661,15 +660,15 @@ export class SelectionSystem extends System {
 
     // Update store
     if (additive) {
-      const current = useGameStore.getState().selectedUnits;
+      const current = this.game.statePort.getSelectedUnits();
       // PERF: Avoid multiple spread operations by using Set directly
       const combinedSet = new Set(current);
       for (let i = 0; i < selectedIds.length; i++) {
         combinedSet.add(selectedIds[i]);
       }
-      useGameStore.getState().selectUnits(Array.from(combinedSet));
+      this.game.statePort.selectUnits(Array.from(combinedSet));
     } else {
-      useGameStore.getState().selectUnits(selectedIds);
+      this.game.statePort.selectUnits(selectedIds);
     }
 
     this.game.eventBus.emit('selection:changed', { selectedIds });
@@ -699,7 +698,7 @@ export class SelectionSystem extends System {
     }
 
     this.controlGroups.set(group, entityIds);
-    useGameStore.getState().setControlGroup(group, entityIds);
+    this.game.statePort.setControlGroup(group, entityIds);
   }
 
   private handleGetControlGroup(data: { group: number }): void {
@@ -734,7 +733,7 @@ export class SelectionSystem extends System {
       }
     }
 
-    useGameStore.getState().selectUnits(validIds);
+    this.game.statePort.selectUnits(validIds);
     this.game.eventBus.emit('selection:changed', { selectedIds: validIds });
   }
 
@@ -745,13 +744,13 @@ export class SelectionSystem extends System {
       selectable.deselect();
     }
 
-    useGameStore.getState().selectUnits([]);
+    this.game.statePort.selectUnits([]);
     this.game.eventBus.emit('selection:changed', { selectedIds: [] });
   }
 
   public update(_deltaTime: number): void {
     // Auto-deselect dead units
-    const selectedUnits = useGameStore.getState().selectedUnits;
+    const selectedUnits = this.game.statePort.getSelectedUnits();
     let needsUpdate = false;
     const validSelectedIds: number[] = [];
 
@@ -778,7 +777,7 @@ export class SelectionSystem extends System {
 
     // Update store if selection changed
     if (needsUpdate) {
-      useGameStore.getState().selectUnits(validSelectedIds);
+      this.game.statePort.selectUnits(validSelectedIds);
       this.game.eventBus.emit('selection:changed', { selectedIds: validSelectedIds });
     }
   }

@@ -7,7 +7,6 @@ import { Building } from '../components/Building';
 import { Selectable } from '../components/Selectable';
 import { Game } from '../core/Game';
 import { World } from '../ecs/World';
-import { useGameStore } from '@/store/gameStore';
 import { debugResources } from '@/utils/debugLogger';
 import { isLocalPlayer } from '@/store/gameSetupStore';
 import { EnhancedAISystem } from './EnhancedAISystem';
@@ -573,8 +572,7 @@ export class ResourceSystem extends System {
           aiSystem.creditResources(workerOwner, minerals, vespene);
         } else if (isLocalPlayer(workerOwner)) {
           // Credit local human player via game store
-          const store = useGameStore.getState();
-          store.addResources(minerals, vespene);
+          this.game.statePort.addResources(minerals, vespene);
         }
       }
 
