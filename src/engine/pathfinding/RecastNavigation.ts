@@ -577,6 +577,10 @@ export class RecastNavigation {
     }
   }
 
+  // Diagnostic counter for logging first few walkability failures
+  private walkabilityDiagnosticCount = 0;
+  private readonly MAX_WALKABILITY_LOGS = 20;
+
   /**
    * Check if a point is on the navmesh (walkable).
    * Uses terrain height for better query accuracy.
@@ -589,6 +593,28 @@ export class RecastNavigation {
       const queryY = this.getTerrainHeight(x, y);
       const halfExtents = { x: 2, y: 20, z: 2 };
       const result = this.navMeshQuery.findClosestPoint({ x, y: queryY, z: y }, { halfExtents });
+
+      // Log diagnostic info for first few failures
+      if (this.walkabilityDiagnosticCount < this.MAX_WALKABILITY_LOGS) {
+        if (!result.success || !result.point) {
+          debugPathfinding.log(
+            `[Navmesh] isWalkable FAIL (no result): pos=(${x.toFixed(1)}, ${y.toFixed(1)}), ` +
+            `queryY=${queryY.toFixed(2)}, result.success=${result.success}`
+          );
+          this.walkabilityDiagnosticCount++;
+        } else {
+          const dist = distance(x, y, result.point.x, result.point.z);
+          if (dist >= 2.0) {
+            debugPathfinding.log(
+              `[Navmesh] isWalkable FAIL (dist): pos=(${x.toFixed(1)}, ${y.toFixed(1)}), ` +
+              `queryY=${queryY.toFixed(2)}, closest=(${result.point.x.toFixed(1)}, ${result.point.y.toFixed(2)}, ${result.point.z.toFixed(1)}), ` +
+              `dist=${dist.toFixed(2)}`
+            );
+            this.walkabilityDiagnosticCount++;
+          }
+        }
+      }
+
       if (!result.success || !result.point) return false;
 
       // Check if the closest point is within a reasonable tolerance
