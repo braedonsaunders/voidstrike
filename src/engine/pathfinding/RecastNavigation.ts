@@ -588,6 +588,7 @@ export class RecastNavigation {
   private walkabilitySuccessCount = 0;
   private walkabilityFailCount = 0;
   private loggedSummary = false;
+  private targetSetLogCount = 0;  // For logging cross-height target sets
 
   /**
    * Check if a point is on the navmesh (walkable).
@@ -679,7 +680,8 @@ export class RecastNavigation {
       // Critical: agents must be ON a navmesh polygon for crowd to compute velocity
       const projected = this.projectToNavMesh(x, y);
       if (!projected) {
-        debugPathfinding.warn(
+        // Use console.warn for production visibility
+        console.warn(
           `[RecastNavigation] Cannot add agent ${entityId}: position (${x.toFixed(1)}, ${y.toFixed(1)}) not on navmesh`
         );
         return -1;
@@ -699,6 +701,13 @@ export class RecastNavigation {
         const agentIndex = agent.agentIndex;
         this.agentMap.set(entityId, agentIndex);
         this.agentEntityMap.set(agentIndex, entityId);
+        // Log successful agent addition with height for multi-level navmesh debugging
+        if (this.agentMap.size <= 5) {
+          console.log(
+            `[RecastNavigation] Added agent ${entityId} at height ${projected.y.toFixed(2)} ` +
+            `(game pos: ${x.toFixed(1)}, ${y.toFixed(1)})`
+          );
+        }
         return agentIndex;
       }
     } catch (error) {
@@ -739,10 +748,20 @@ export class RecastNavigation {
     try {
       const agent = this.crowd.getAgent(agentIndex);
       if (agent) {
+        const agentPos = agent.position();
         // Project target onto navmesh to ensure it's a valid position
         // This is CRITICAL - requestMoveTarget needs a navmesh position to compute path corridor
         const projected = this.projectToNavMesh(targetX, targetY);
         if (projected) {
+          // Log height difference for cross-elevation moves (ramp debugging)
+          const heightDiff = Math.abs(projected.y - agentPos.y);
+          if (heightDiff > 0.5 && this.targetSetLogCount < 3) {
+            console.log(
+              `[RecastNavigation] Cross-height target: agent at h=${agentPos.y.toFixed(2)}, ` +
+              `target at h=${projected.y.toFixed(2)}, diff=${heightDiff.toFixed(2)}`
+            );
+            this.targetSetLogCount++;
+          }
           // Use the projected navmesh position (already has correct x, y, z)
           agent.requestMoveTarget(projected);
           return true;
@@ -751,6 +770,9 @@ export class RecastNavigation {
         // Fallback: try with approximate terrain height if projection failed
         // This can happen at map edges or on dynamic obstacles
         const terrainY = this.getTerrainHeight(targetX, targetY);
+        console.warn(
+          `[RecastNavigation] Target projection failed for (${targetX.toFixed(1)}, ${targetY.toFixed(1)}), using fallback`
+        );
         agent.requestMoveTarget({ x: targetX, y: terrainY, z: targetY });
         return true;
       }
