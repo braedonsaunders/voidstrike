@@ -645,21 +645,23 @@ export const RESEARCH_DEFINITIONS: Record<string, ResearchDefinition> = {
 
 export const DOMINION_RESEARCH = Object.values(RESEARCH_DEFINITIONS);
 
+// Building -> research mapping (single source of truth)
+export const BUILDING_RESEARCH_MAP: Record<string, string[]> = {
+  tech_center: ['infantry_weapons_1', 'infantry_armor_1', 'auto_tracking', 'building_armor'],
+  arsenal: ['vehicle_weapons_1', 'vehicle_armor_1', 'ship_weapons_1', 'ship_armor_1'],
+  power_core: ['nova_cannon', 'dreadnought_weapon_refit'],
+  infantry_bay_research_module: ['combat_stim', 'combat_shield', 'concussive_shells'],
+  forge_research_module: ['bombardment_systems', 'drilling_claws', 'thermal_igniter'],
+  hangar_research_module: ['cloaking_field', 'medical_reactor'],
+  ops_center: ['stealth_systems', 'enhanced_reactor'],
+};
+
 // Helper function to get all available research for a building
 export function getAvailableResearch(buildingId: string): ResearchDefinition[] {
-  const building = {
-    tech_center: ['infantry_weapons_1', 'infantry_armor_1', 'auto_tracking', 'building_armor'],
-    arsenal: ['vehicle_weapons_1', 'vehicle_armor_1', 'ship_weapons_1', 'ship_armor_1'],
-    power_core: ['nova_cannon', 'dreadnought_weapon_refit'],
-    infantry_bay_research_module: ['combat_stim', 'combat_shield', 'concussive_shells'],
-    forge_research_module: ['bombardment_systems', 'drilling_claws', 'thermal_igniter'],
-    hangar_research_module: ['cloaking_field', 'medical_reactor'],
-    ops_center: ['stealth_systems', 'enhanced_reactor'],
-  }[buildingId];
+  const researchIds = BUILDING_RESEARCH_MAP[buildingId];
+  if (!researchIds) return [];
 
-  if (!building) return [];
-
-  return building
+  return researchIds
     .map(id => RESEARCH_DEFINITIONS[id])
     .filter((r): r is ResearchDefinition => r !== undefined);
 }

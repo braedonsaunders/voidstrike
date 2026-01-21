@@ -3,19 +3,10 @@
  * Dynamically builds tech tree categories from research definitions
  */
 
-import { RESEARCH_DEFINITIONS, ResearchDefinition, UpgradeEffect } from './research/dominion';
-import { BUILDING_DEFINITIONS } from './buildings/dominion';
+import { RESEARCH_DEFINITIONS, ResearchDefinition, UpgradeEffect, BUILDING_RESEARCH_MAP } from './research/dominion';
 
-// Building -> research mapping (canonical source)
-export const BUILDING_RESEARCH_MAP: Record<string, string[]> = {
-  tech_center: ['infantry_weapons_1', 'infantry_armor_1', 'auto_tracking', 'building_armor'],
-  arsenal: ['vehicle_weapons_1', 'vehicle_armor_1', 'ship_weapons_1', 'ship_armor_1'],
-  power_core: ['nova_cannon', 'dreadnought_weapon_refit'],
-  infantry_bay_research_module: ['combat_stim', 'combat_shield', 'concussive_shells'],
-  forge_research_module: ['bombardment_systems', 'drilling_claws', 'thermal_igniter'],
-  hangar_research_module: ['cloaking_field', 'medical_reactor'],
-  ops_center: ['stealth_systems', 'enhanced_reactor'],
-};
+// Re-export for convenience
+export { BUILDING_RESEARCH_MAP };
 
 // Human-readable building names
 export const BUILDING_DISPLAY_NAMES: Record<string, string> = {
