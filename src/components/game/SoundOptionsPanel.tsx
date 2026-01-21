@@ -4,6 +4,7 @@ import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useUIStore } from '@/store/uiStore';
 import { AudioManager } from '@/audio/AudioManager';
 import { MusicPlayer } from '@/audio/MusicPlayer';
+import { BasePanel } from './BasePanel';
 
 /**
  * Sound options panel with volume sliders, now playing display, and playback controls.
@@ -133,56 +134,15 @@ export function SoundOptionsPanel() {
   if (!showSoundOptions) return null;
 
   return (
-    <div
-      style={{
-        position: 'absolute',
-        top: '50px',
-        right: '10px',
-        backgroundColor: 'rgba(10, 10, 15, 0.95)',
-        border: '1px solid #3a3a4a',
-        borderRadius: '10px',
-        padding: '14px 16px',
-        color: '#e0e0e8',
-        fontFamily: 'system-ui, -apple-system, sans-serif',
-        fontSize: '13px',
-        zIndex: 1000,
-        minWidth: '260px',
-        backdropFilter: 'blur(10px)',
-        boxShadow: '0 4px 20px rgba(0, 0, 0, 0.4)',
-        pointerEvents: 'auto',
-      }}
+    <BasePanel
+      title="Sound Settings"
+      onClose={toggleSoundOptions}
+      minWidth={260}
+      width={undefined}
+      backgroundColor="rgba(10, 10, 15, 0.95)"
+      borderColor="#3a3a4a"
+      testId="sound-options-panel"
     >
-      {/* Header */}
-      <div style={{
-        display: 'flex',
-        justifyContent: 'space-between',
-        alignItems: 'center',
-        marginBottom: '14px',
-        paddingBottom: '10px',
-        borderBottom: '1px solid #2a2a3a'
-      }}>
-        <h3 style={{ margin: 0, fontSize: '14px', fontWeight: 600, color: '#fff' }}>
-          Sound Settings
-        </h3>
-        <button
-          onClick={toggleSoundOptions}
-          style={{
-            background: 'none',
-            border: 'none',
-            color: '#666',
-            cursor: 'pointer',
-            fontSize: '16px',
-            padding: '2px 6px',
-            borderRadius: '4px',
-            transition: 'color 0.2s',
-          }}
-          onMouseEnter={(e) => e.currentTarget.style.color = '#fff'}
-          onMouseLeave={(e) => e.currentTarget.style.color = '#666'}
-        >
-          x
-        </button>
-      </div>
-
       {/* Now Playing Section */}
       <div style={{
         backgroundColor: 'rgba(40, 40, 60, 0.5)',
@@ -511,6 +471,6 @@ export function SoundOptionsPanel() {
           </div>
         </div>
       </div>
-    </div>
+    </BasePanel>
   );
 }

@@ -1,8 +1,7 @@
 'use client';
 
 import { useGameStore } from '@/store/gameStore';
-import { useUIStore } from '@/store/uiStore';
-import { useEffect } from 'react';
+import { BaseModal } from './BaseModal';
 
 interface ShortcutCategory {
   name: string;
@@ -74,69 +73,50 @@ const SHORTCUTS: ShortcutCategory[] = [
 export function KeyboardShortcutsPanel() {
   const { showKeyboardShortcuts, setShowKeyboardShortcuts } = useGameStore();
 
-  // Close on escape
-  useEffect(() => {
-    if (!showKeyboardShortcuts) return;
-
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape' || e.key === '?') {
-        // Prevent ESC from exiting fullscreen when closing the panel
-        if (e.key === 'Escape' && useUIStore.getState().isFullscreen) {
-          e.preventDefault();
-        }
-        setShowKeyboardShortcuts(false);
-      }
-    };
-
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [showKeyboardShortcuts, setShowKeyboardShortcuts]);
-
-  if (!showKeyboardShortcuts) return null;
+  const handleClose = () => setShowKeyboardShortcuts(false);
 
   return (
-    <div className="absolute inset-0 bg-black/80 flex items-center justify-center pointer-events-auto z-50">
-      <div className="bg-void-950 border border-void-700 rounded-lg max-w-4xl w-full max-h-[90vh] overflow-hidden">
-        {/* Header */}
-        <div className="flex items-center justify-between px-6 py-4 border-b border-void-800">
-          <h2 className="font-display text-2xl text-white">Keyboard Shortcuts</h2>
-          <button
-            onClick={() => setShowKeyboardShortcuts(false)}
-            className="text-void-400 hover:text-white transition-colors text-2xl"
-          >
-            &times;
-          </button>
+    <BaseModal
+      title="Keyboard Shortcuts"
+      isOpen={showKeyboardShortcuts}
+      onClose={handleClose}
+      width="auto"
+      maxWidth="64rem"
+      maxHeight="90vh"
+      backdropOpacity={0.8}
+      closeKeys={['?']}
+      closeHint="Press ? or Esc to close"
+      className="bg-void-950 border-void-700"
+      testId="keyboard-shortcuts-panel"
+    >
+      {/* Content */}
+      <div className="p-6 overflow-y-auto max-h-[calc(90vh-80px)]">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          {SHORTCUTS.map((category) => (
+            <div key={category.name}>
+              <h3 className="font-display text-lg text-void-300 mb-3 border-b border-void-800 pb-2">
+                {category.name}
+              </h3>
+              <div className="space-y-2">
+                {category.shortcuts.map((shortcut, index) => (
+                  <div key={index} className="flex items-start gap-3">
+                    <kbd className="bg-void-800 text-void-200 px-2 py-1 rounded text-xs font-mono min-w-[80px] text-center shrink-0">
+                      {shortcut.key}
+                    </kbd>
+                    <span className="text-void-400 text-sm">{shortcut.description}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          ))}
         </div>
 
-        {/* Content */}
-        <div className="p-6 overflow-y-auto max-h-[calc(90vh-80px)]">
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {SHORTCUTS.map((category) => (
-              <div key={category.name}>
-                <h3 className="font-display text-lg text-void-300 mb-3 border-b border-void-800 pb-2">
-                  {category.name}
-                </h3>
-                <div className="space-y-2">
-                  {category.shortcuts.map((shortcut, index) => (
-                    <div key={index} className="flex items-start gap-3">
-                      <kbd className="bg-void-800 text-void-200 px-2 py-1 rounded text-xs font-mono min-w-[80px] text-center shrink-0">
-                        {shortcut.key}
-                      </kbd>
-                      <span className="text-void-400 text-sm">{shortcut.description}</span>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            ))}
-          </div>
-
-          {/* Footer hint */}
-          <div className="mt-6 pt-4 border-t border-void-800 text-center text-void-500 text-sm">
-            Press <kbd className="bg-void-800 px-2 py-0.5 rounded">?</kbd> or{' '}
-            <kbd className="bg-void-800 px-2 py-0.5 rounded">Esc</kbd> to close
-          </div>
+        {/* Footer hint */}
+        <div className="mt-6 pt-4 border-t border-void-800 text-center text-void-500 text-sm">
+          Press <kbd className="bg-void-800 px-2 py-0.5 rounded">?</kbd> or{' '}
+          <kbd className="bg-void-800 px-2 py-0.5 rounded">Esc</kbd> to close
         </div>
       </div>
-    </div>
+    </BaseModal>
   );
 }

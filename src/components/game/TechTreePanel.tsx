@@ -1,9 +1,10 @@
 'use client';
 
-import { useEffect, memo, useMemo } from 'react';
+import { memo, useMemo } from 'react';
 import { useGameStore } from '@/store/gameStore';
 import { RESEARCH_DEFINITIONS, ResearchDefinition } from '@/data/research/dominion';
 import { BUILDING_DEFINITIONS } from '@/data/buildings/dominion';
+import { BaseModal } from './BaseModal';
 
 interface TechCategory {
   name: string;
@@ -181,79 +182,52 @@ const CategorySection = memo(function CategorySection({ category }: { category: 
 export function TechTreePanel() {
   const { showTechTree, setShowTechTree } = useGameStore();
 
-  // Handle ESC key to close
-  useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape' && showTechTree) {
-        setShowTechTree(false);
-      }
-    };
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [showTechTree, setShowTechTree]);
-
-  if (!showTechTree) return null;
+  const handleClose = () => setShowTechTree(false);
 
   return (
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 pointer-events-auto"
-      onClick={(e) => {
-        // Close when clicking backdrop
-        if (e.target === e.currentTarget) {
-          setShowTechTree(false);
-        }
-      }}
+    <BaseModal
+      title="Tech Tree - Dominion"
+      isOpen={showTechTree}
+      onClose={handleClose}
+      width="900px"
+      maxWidth="95vw"
+      height="85vh"
+      testId="tech-tree-panel"
     >
-      <div className="bg-void-900 border border-void-600 rounded-lg shadow-xl w-[900px] max-w-[95vw] h-[85vh] flex flex-col">
-        {/* Header */}
-        <div className="flex items-center justify-between p-4 border-b border-void-700 flex-shrink-0">
-          <h2 className="text-xl font-bold text-white">Tech Tree - Dominion</h2>
-          <div className="flex items-center gap-2">
-            <span className="text-void-500 text-sm">Press ESC or click outside to close</span>
-            <button
-              onClick={() => setShowTechTree(false)}
-              className="w-8 h-8 flex items-center justify-center bg-red-900/50 hover:bg-red-800 text-white rounded border border-red-700 transition-colors text-xl leading-none"
-            >
-              ✕
-            </button>
+      {/* Content - Scrollable */}
+      <div className="flex-1 overflow-y-auto p-4 custom-scrollbar">
+        {/* Upgrade Categories */}
+        <div className="grid grid-cols-2 gap-6">
+          <div>
+            {TECH_CATEGORIES.slice(0, 4).map((cat) => (
+              <CategorySection key={cat.name} category={cat} />
+            ))}
+          </div>
+          <div>
+            {TECH_CATEGORIES.slice(4).map((cat) => (
+              <CategorySection key={cat.name} category={cat} />
+            ))}
           </div>
         </div>
 
-        {/* Content - Scrollable */}
-        <div className="flex-1 overflow-y-auto p-4 custom-scrollbar">
-          {/* Upgrade Categories */}
-          <div className="grid grid-cols-2 gap-6">
-            <div>
-              {TECH_CATEGORIES.slice(0, 4).map((cat) => (
-                <CategorySection key={cat.name} category={cat} />
-              ))}
+        {/* Legend */}
+        <div className="mt-4 pt-4 border-t border-void-700">
+          <div className="flex items-center gap-6 text-xs text-void-400">
+            <div className="flex items-center gap-2">
+              <div className="w-4 h-4 bg-green-900/50 border border-green-500 rounded" />
+              <span>Researched</span>
             </div>
-            <div>
-              {TECH_CATEGORIES.slice(4).map((cat) => (
-                <CategorySection key={cat.name} category={cat} />
-              ))}
+            <div className="flex items-center gap-2">
+              <div className="w-4 h-4 bg-void-800/80 border border-void-500 rounded" />
+              <span>Available</span>
             </div>
-          </div>
-
-          {/* Legend */}
-          <div className="mt-4 pt-4 border-t border-void-700">
-            <div className="flex items-center gap-6 text-xs text-void-400">
-              <div className="flex items-center gap-2">
-                <div className="w-4 h-4 bg-green-900/50 border border-green-500 rounded" />
-                <span>Researched</span>
-              </div>
-              <div className="flex items-center gap-2">
-                <div className="w-4 h-4 bg-void-800/80 border border-void-500 rounded" />
-                <span>Available</span>
-              </div>
-              <div className="flex items-center gap-2">
-                <div className="w-4 h-4 bg-void-900/50 border border-void-700 rounded opacity-60" />
-                <span>Locked</span>
-              </div>
+            <div className="flex items-center gap-2">
+              <div className="w-4 h-4 bg-void-900/50 border border-void-700 rounded opacity-60" />
+              <span>Locked</span>
             </div>
           </div>
         </div>
       </div>
-    </div>
+    </BaseModal>
   );
 }

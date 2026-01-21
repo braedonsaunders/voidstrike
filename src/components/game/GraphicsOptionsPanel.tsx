@@ -2,6 +2,7 @@
 
 import React, { useEffect, useState, memo, useCallback } from 'react';
 import { useUIStore, GraphicsSettings, AntiAliasingMode, UpscalingMode, ResolutionMode, FixedResolution, FIXED_RESOLUTIONS, GraphicsPresetName } from '@/store/uiStore';
+import { BasePanel } from './BasePanel';
 
 // ============================================
 // COMPACT UI COMPONENTS
@@ -346,65 +347,16 @@ export const GraphicsOptionsPanel = memo(function GraphicsOptionsPanel() {
   const fsrRequiresTaa = graphicsSettings.upscalingMode === 'easu';
 
   return (
-    <div
-      style={{
-        position: 'absolute',
-        top: '50px',
-        right: '10px',
-        backgroundColor: 'rgba(10, 10, 12, 0.98)',
-        border: '1px solid #333',
-        borderRadius: '8px',
-        padding: '12px',
-        color: 'white',
-        fontFamily: 'system-ui, -apple-system, sans-serif',
-        fontSize: '12px',
-        zIndex: 1000,
-        width: '280px',
-        maxHeight: '80vh',
-        overflowY: 'auto',
-        pointerEvents: 'auto',
-        boxShadow: '0 8px 32px rgba(0,0,0,0.5)',
+    <BasePanel
+      title="Graphics"
+      onClose={toggleGraphicsOptions}
+      width={280}
+      badge={{
+        text: rendererAPI || 'Unknown',
+        color: isWebGPU ? 'green' : 'yellow',
       }}
-      onWheel={(e) => e.stopPropagation()}
+      testId="graphics-options-panel"
     >
-      {/* Header */}
-      <div style={{
-        display: 'flex',
-        justifyContent: 'space-between',
-        alignItems: 'center',
-        marginBottom: '12px',
-        paddingBottom: '8px',
-        borderBottom: '1px solid #222',
-      }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-          <span style={{ fontSize: '13px', fontWeight: 600 }}>Graphics</span>
-          <span style={{
-            padding: '2px 6px',
-            borderRadius: '4px',
-            fontSize: '9px',
-            fontWeight: 600,
-            backgroundColor: isWebGPU ? 'rgba(34, 197, 94, 0.15)' : 'rgba(234, 179, 8, 0.15)',
-            color: isWebGPU ? '#22c55e' : '#eab308',
-            border: `1px solid ${isWebGPU ? '#22c55e40' : '#eab30840'}`,
-          }}>
-            {rendererAPI || 'Unknown'}
-          </span>
-        </div>
-        <button
-          onClick={() => toggleGraphicsOptions()}
-          style={{
-            background: 'none',
-            border: 'none',
-            color: '#666',
-            cursor: 'pointer',
-            fontSize: '14px',
-            padding: '4px',
-            lineHeight: 1,
-          }}
-        >
-          ✕
-        </button>
-      </div>
 
       {/* GPU Info */}
       {gpuInfo && (
@@ -1160,6 +1112,6 @@ export const GraphicsOptionsPanel = memo(function GraphicsOptionsPanel() {
           />
         </div>
       )}
-    </div>
+    </BasePanel>
   );
 });
