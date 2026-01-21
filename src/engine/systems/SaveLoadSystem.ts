@@ -44,7 +44,7 @@ const MAX_SAVE_SLOTS = 10;
 
 export class SaveLoadSystem extends System {
   public readonly name = 'SaveLoadSystem';
-  public priority = 250; // Run very late
+  // Priority is set by SystemRegistry based on dependencies (runs very late, after GameStateSystem)
 
   private lastAutoSave: number = 0;
   private autoSaveEnabled: boolean = true;

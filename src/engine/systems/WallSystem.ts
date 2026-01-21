@@ -22,7 +22,7 @@ import { isLocalPlayer, getLocalPlayerId } from '@/store/gameSetupStore';
  */
 export class WallSystem extends System {
   public readonly name = 'WallSystem';
-  public priority = 15; // Run after BuildingPlacementSystem
+  // Priority is set by SystemRegistry based on dependencies (runs after BuildingPlacementSystem)
 
   // Distance to check for gate proximity
   private static readonly GATE_TRIGGER_DISTANCE = 3;

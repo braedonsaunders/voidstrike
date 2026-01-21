@@ -26,7 +26,7 @@ import * as THREE from 'three';
  */
 export class AudioSystem extends System {
   public readonly name = 'AudioSystem';
-  public priority = 100;
+  // Priority is set by SystemRegistry based on dependencies (runs after CombatSystem)
   private camera: THREE.Camera | null = null;
   private initialized = false;
   private currentAmbient: string | null = null;

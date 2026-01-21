@@ -73,7 +73,7 @@ function getTargetPriority(unitId: string, unit?: Unit): number {
 
 export class CombatSystem extends System {
   public readonly name = 'CombatSystem';
-  public priority = 20;
+  // Priority is set by SystemRegistry based on dependencies (runs after MovementSystem, VisionSystem)
 
   // Track last under attack alert time per player
   private lastUnderAttackAlert: Map<string, number> = new Map();

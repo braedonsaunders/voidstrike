@@ -28,7 +28,7 @@ import { SeededRandom, distance, clamp } from '@/utils/math';
  */
 export class BuildingPlacementSystem extends System {
   public readonly name = 'BuildingPlacementSystem';
-  public priority = 5; // Run before MovementSystem to populate buildingGrid
+  // Priority is set by SystemRegistry based on dependencies (runs after SelectionSystem)
 
   // Distance threshold for worker to be "at" the building site
   private readonly CONSTRUCTION_RANGE = 2.5;

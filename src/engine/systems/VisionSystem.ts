@@ -39,7 +39,7 @@ export interface VisionMap {
 
 export class VisionSystem extends System {
   public readonly name = 'VisionSystem';
-  public priority = 5; // Run after movement
+  // Priority is set by SystemRegistry based on dependencies (runs after MovementSystem)
 
   private visionMap!: VisionMap;
   private mapWidth: number;

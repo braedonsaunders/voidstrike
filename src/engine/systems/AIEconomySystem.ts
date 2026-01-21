@@ -44,7 +44,7 @@ interface IncomeTracker {
 
 export class AIEconomySystem extends System {
   public readonly name = 'AIEconomySystem';
-  public priority = 101; // Run after EnhancedAISystem
+  // Priority is set by SystemRegistry based on dependencies (runs after EnhancedAISystem)
 
   private aiSystem: EnhancedAISystem | null = null;
   private incomeTrackers: Map<string, IncomeTracker> = new Map();

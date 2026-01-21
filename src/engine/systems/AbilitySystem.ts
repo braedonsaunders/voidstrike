@@ -31,7 +31,7 @@ interface DelayedAbilityEffect {
 
 export class AbilitySystem extends System {
   public readonly name = 'AbilitySystem';
-  public priority = 25;
+  // Priority is set by SystemRegistry based on dependencies (runs after CombatSystem)
 
   // Queue for delayed ability effects (replaces setTimeout)
   private pendingEffects: DelayedAbilityEffect[] = [];

@@ -22,7 +22,7 @@ import { AssetManager } from '@/assets/AssetManager';
  */
 export class SpawnSystem extends System {
   public readonly name = 'SpawnSystem';
-  public priority = 5; // Run early
+  // Priority is set by SystemRegistry based on dependencies (no deps, runs early)
 
   constructor(game: Game) {
     super(game);

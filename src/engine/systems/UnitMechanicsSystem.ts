@@ -58,7 +58,7 @@ interface BunkerData {
 
 export class UnitMechanicsSystem extends System {
   public readonly name = 'UnitMechanicsSystem';
-  public priority = 15; // After selection, before movement
+  // Priority is set by SystemRegistry based on dependencies (runs after SelectionSystem)
 
   // Track bunker data separately since Building component doesn't have it
   private bunkerData: Map<number, BunkerData> = new Map();

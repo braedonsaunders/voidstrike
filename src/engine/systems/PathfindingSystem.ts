@@ -177,7 +177,7 @@ interface FailedPathEntry {
 
 export class PathfindingSystem extends System {
   public readonly name = 'PathfindingSystem';
-  public priority = 5;
+  // Priority is set by SystemRegistry based on dependencies (runs after BuildingPlacementSystem)
 
   private recast: RecastNavigation;
   private unitPathStates: Map<number, UnitPathState> = new Map();

@@ -1,37 +1,30 @@
 import { World } from '../ecs/World';
 import { GameLoop } from './GameLoop';
 import { EventBus } from './EventBus';
-import { MovementSystem } from '../systems/MovementSystem';
+import { SystemRegistry } from './SystemRegistry';
+import { getSystemDefinitions } from '../systems/systemDependencies';
+
+// Systems that need direct references in Game class
 import { SelectionSystem } from '../systems/SelectionSystem';
-import { CombatSystem } from '../systems/CombatSystem';
 import { ProjectileSystem } from '../systems/ProjectileSystem';
-import { ProductionSystem } from '../systems/ProductionSystem';
-import { ResourceSystem } from '../systems/ResourceSystem';
-import { ResearchSystem } from '../systems/ResearchSystem';
-import { EnhancedAISystem, AIDifficulty } from '../systems/EnhancedAISystem';
-import { AIEconomySystem } from '../systems/AIEconomySystem';
+import { AIDifficulty } from '../systems/EnhancedAISystem';
 import { VisionSystem } from '../systems/VisionSystem';
-import { AbilitySystem } from '../systems/AbilitySystem';
-import { SpawnSystem } from '../systems/SpawnSystem';
-import { BuildingPlacementSystem } from '../systems/BuildingPlacementSystem';
-import { debugInitialization, debugPerformance, debugNetworking } from '@/utils/debugLogger';
 import { AudioSystem } from '../systems/AudioSystem';
+import { GameStateSystem } from '../systems/GameStateSystem';
+import { SaveLoadSystem } from '../systems/SaveLoadSystem';
+import { PathfindingSystem } from '../systems/PathfindingSystem';
+import { AIMicroSystem } from '../systems/AIMicroSystem';
+import { ChecksumSystem } from '../systems/ChecksumSystem';
+
+import { debugInitialization, debugPerformance, debugNetworking } from '@/utils/debugLogger';
 import { Transform } from '../components/Transform';
 import { Building } from '../components/Building';
 import { Unit } from '../components/Unit';
 import { Resource } from '../components/Resource';
 import { Selectable } from '../components/Selectable';
-import { UnitMechanicsSystem } from '../systems/UnitMechanicsSystem';
-import { BuildingMechanicsSystem } from '../systems/BuildingMechanicsSystem';
-import { GameStateSystem } from '../systems/GameStateSystem';
-import { SaveLoadSystem } from '../systems/SaveLoadSystem';
-import { PathfindingSystem } from '../systems/PathfindingSystem';
-import { AIMicroSystem } from '../systems/AIMicroSystem';
-import { WallSystem } from '../systems/WallSystem';
 import { RecastNavigation } from '../pathfinding/RecastNavigation';
 import { getLocalPlayerId } from '@/store/gameSetupStore';
 import { PerformanceMonitor } from './PerformanceMonitor';
-import { ChecksumSystem, ChecksumConfig } from '../systems/ChecksumSystem';
 import {
   isMultiplayerMode,
   isNetworkPaused,
@@ -391,43 +384,39 @@ export class Game {
   }
 
   private initializeSystems(): void {
-    // Add systems in order of execution
-    this.world.addSystem(new SpawnSystem(this));
-    this.world.addSystem(new BuildingPlacementSystem(this));
-    this.selectionSystem = new SelectionSystem(this);
-    this.world.addSystem(this.selectionSystem);
-    this.world.addSystem(this.pathfindingSystem); // Dynamic pathfinding with obstacle detection
-    this.world.addSystem(new BuildingMechanicsSystem(this)); // Lift-off, Addons, Building attacks
-    this.world.addSystem(new WallSystem(this)); // Wall connections, gates, shields
-    this.world.addSystem(new UnitMechanicsSystem(this)); // Transform, Cloak, Transport, Heal, Repair
-    this.world.addSystem(new MovementSystem(this));
-    this.world.addSystem(new CombatSystem(this));
-    this.projectileSystem = new ProjectileSystem(this);
-    this.world.addSystem(this.projectileSystem);
-    this.world.addSystem(new ProductionSystem(this));
-    this.world.addSystem(new ResourceSystem(this));
-    this.world.addSystem(new ResearchSystem(this));
-    this.world.addSystem(new AbilitySystem(this));
-    this.world.addSystem(this.visionSystem);
-    this.world.addSystem(this.audioSystem);
-    this.world.addSystem(this.gameStateSystem); // Victory/defeat conditions
-    this.world.addSystem(this.saveLoadSystem); // Save/Load functionality
+    // Use SystemRegistry for dependency-based ordering
+    // This replaces the old priority-based system which had conflicts
+    const registry = new SystemRegistry();
+    registry.registerAll(getSystemDefinitions());
 
-    if (this.config.aiEnabled) {
-      const enhancedAI = new EnhancedAISystem(this, this.config.aiDifficulty);
-      this.world.addSystem(enhancedAI);
-      this.world.addSystem(new AIEconomySystem(this)); // AI economy metrics tracking
-      this.world.addSystem(this.aiMicroSystem); // AI unit micro (kiting, focus fire)
-      // NOTE: AI player registration with AIMicroSystem happens in spawnInitialEntities()
-      // This ensures the store has the correct player configuration when registration occurs
-      // Do NOT register here as the store may have stale/default state at this point
+    // Validate dependencies at startup
+    const errors = registry.validate();
+    if (errors.length > 0) {
+      console.error('[Game] System dependency errors:', errors);
+      throw new Error(`Invalid system dependencies:\n${errors.join('\n')}`);
     }
 
-    // Checksum system runs LAST to capture final state after all gameplay systems
-    // Only added in multiplayer - no overhead in single-player
-    if (this.checksumSystem) {
-      this.world.addSystem(this.checksumSystem);
+    // Log execution order for debugging
+    const order = registry.getExecutionOrder();
+    debugInitialization.log('[Game] System execution order:', order.join(' → '));
+
+    // Create systems in dependency order
+    const systems = registry.createSystems(this);
+
+    // Add all systems to world
+    for (const system of systems) {
+      this.world.addSystem(system);
+
+      // Capture references to systems that are accessed elsewhere
+      if (system.name === 'SelectionSystem') {
+        this.selectionSystem = system as SelectionSystem;
+      } else if (system.name === 'ProjectileSystem') {
+        this.projectileSystem = system as ProjectileSystem;
+      }
     }
+
+    // NOTE: AI player registration with AIMicroSystem happens in spawnInitialEntities()
+    // This ensures the store has the correct player configuration when registration occurs
   }
 
   /**

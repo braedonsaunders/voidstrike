@@ -9,7 +9,7 @@ import { debugProduction } from '@/utils/debugLogger';
 
 export class ResearchSystem extends System {
   public readonly name = 'ResearchSystem';
-  public priority = 32; // After ProductionSystem
+  // Priority is set by SystemRegistry based on dependencies (runs after ProductionSystem)
 
   constructor(game: Game) {
     super(game);
