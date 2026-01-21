@@ -883,23 +883,41 @@ export class Terrain {
     let avgElevation: number;
 
     if (hasRamp) {
-      // CRITICAL FIX: At ramp boundaries, use the MAXIMUM elevation of ALL adjacent cells
-      // (not just ramp cells) to ensure vertices match the highest adjacent terrain.
+      // Ramp boundary height calculation - needs to handle two cases:
       //
-      // Why this matters for navmesh connectivity:
-      // - Recast's cell height (ch) is 0.2 units
-      // - If a boundary vertex is even 0.2 units lower than the adjacent platform,
-      //   Recast puts them in different vertical spans = disconnected polygons
-      // - Averaging only ramp cells creates gaps at ramp-platform boundaries
+      // Case 1: Ramp meets terrain at SIMILAR elevation (platform-ramp connection)
+      //   - Use MAX elevation to ensure vertices match exactly
+      //   - Prevents 0.2-unit gaps that break Recast polygon connectivity
       //
-      // Example at top of ramp meeting platform (both at elevation 140):
-      // - Old: averaged ramp cells (130+140)/2 = 135 → height 5.4
-      // - Platform expects: elevation 140 → height 5.6
-      // - Gap of 0.2 units = broken navmesh connectivity!
+      // Case 2: Ramp meets terrain at DIFFERENT elevation (ramp-cliff boundary)
+      //   - Use RAMP cells' average elevation to preserve smooth ramp slope
+      //   - Using MAX would create impossibly steep slopes (>50 degrees)
       //
-      // Fix: Use max elevation so boundary matches the platform
-      const maxElevation = Math.max(...cells.map(c => c.elevation));
-      avgElevation = maxElevation;
+      // Threshold: 20 elevation units (~0.8 height = walkableClimb)
+      const SIMILAR_ELEVATION_THRESHOLD = 20;
+
+      const rampElevations = rampCells.map(c => c.elevation);
+      const nonRampElevations = cells.filter(c => c.terrain !== 'ramp').map(c => c.elevation);
+
+      const avgRampElev = rampElevations.reduce((a, b) => a + b, 0) / rampElevations.length;
+
+      if (nonRampElevations.length === 0) {
+        // All cells are ramps - use their average
+        avgElevation = avgRampElev;
+      } else {
+        // Check if non-ramp cells are at similar elevation to ramp cells
+        const avgNonRampElev = nonRampElevations.reduce((a, b) => a + b, 0) / nonRampElevations.length;
+        const elevationDiff = Math.abs(avgRampElev - avgNonRampElev);
+
+        if (elevationDiff <= SIMILAR_ELEVATION_THRESHOLD) {
+          // Similar elevations: use MAX to ensure exact match at platform-ramp boundaries
+          avgElevation = Math.max(...cells.map(c => c.elevation));
+        } else {
+          // Cliff boundary: use ramp elevation to preserve smooth ramp slope
+          // The cliff terrain will have its own geometry at its own height
+          avgElevation = avgRampElev;
+        }
+      }
     } else if (hasPlatform) {
       // Use platform elevation for consistent flat surfaces
       avgElevation = platformCells.reduce((sum, c) => sum + c.elevation, 0) / platformCells.length;
