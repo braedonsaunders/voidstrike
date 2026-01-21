@@ -70,6 +70,53 @@ export const BUILDING_ICONS: Record<string, string> = {
   tech_lab: '🔬',
 };
 
+export const RESEARCH_ICONS: Record<string, string> = {
+  // Tiered upgrades
+  infantry_weapons: '⚔️',
+  infantry_armor: '🛡️',
+  vehicle_weapons: '💥',
+  vehicle_armor: '🛡️',
+  ship_weapons: '🚀',
+  ship_armor: '🛡️',
+
+  // Capital ship
+  nova_cannon: '💫',
+  dreadnought_weapon_refit: '⚡',
+
+  // Infantry abilities
+  combat_stim: '💉',
+  combat_shield: '🛡️',
+  concussive_shells: '💥',
+
+  // Vehicle abilities
+  bombardment_systems: '🎯',
+  drilling_claws: '⛏️',
+  thermal_igniter: '🔥',
+
+  // Air abilities
+  cloaking_field: '👁️',
+  medical_reactor: '✚',
+
+  // Structure upgrades
+  auto_tracking: '🎯',
+  building_armor: '🏗️',
+
+  // Covert ops
+  stealth_systems: '👻',
+  enhanced_reactor: '⚡',
+};
+
+export function getResearchIcon(researchId: string): string {
+  // Check exact match first
+  if (RESEARCH_ICONS[researchId]) return RESEARCH_ICONS[researchId];
+
+  // Check without level suffix (e.g., infantry_weapons_1 -> infantry_weapons)
+  const baseId = researchId.replace(/_\d+$/, '');
+  if (RESEARCH_ICONS[baseId]) return RESEARCH_ICONS[baseId];
+
+  return '🔬';
+}
+
 export const COMMAND_ICONS: Record<string, string> = {
   // Basic commands
   move: '➤',
