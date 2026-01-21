@@ -253815,24 +253815,6 @@
       "toElevation": 2
     },
     {
-      "x": 103,
-      "y": 127,
-      "width": 1,
-      "height": 1,
-      "direction": "north",
-      "fromElevation": 0,
-      "toElevation": 0
-    },
-    {
-      "x": 256,
-      "y": 127,
-      "width": 1,
-      "height": 1,
-      "direction": "north",
-      "fromElevation": 0,
-      "toElevation": 0
-    },
-    {
       "x": 45,
       "y": 187,
       "width": 58,
@@ -253858,24 +253840,6 @@
       "direction": "south",
       "fromElevation": 0,
       "toElevation": 2
-    },
-    {
-      "x": 103,
-      "y": 192,
-      "width": 1,
-      "height": 1,
-      "direction": "north",
-      "fromElevation": 0,
-      "toElevation": 0
-    },
-    {
-      "x": 256,
-      "y": 192,
-      "width": 1,
-      "height": 1,
-      "direction": "north",
-      "fromElevation": 0,
-      "toElevation": 0
     }
   ],
   "destructibles": [
