@@ -1372,7 +1372,12 @@ export class Terrain {
             if (!expandedCliffEdgeCells.has(cellKey)) {
               allCliffEdge = false;
             } else {
-              cliffElevation = terrain[cy][cx].elevation;
+              // Use MAXIMUM elevation among cliff edge cells to keep platforms flat
+              // Without this, platform edges get ground-level heights, creating >50 degree slopes
+              const cellElev = terrain[cy][cx].elevation;
+              if (cellElev > cliffElevation) {
+                cliffElevation = cellElev;
+              }
             }
           }
         }
