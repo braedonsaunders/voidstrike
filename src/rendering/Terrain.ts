@@ -1475,19 +1475,16 @@ export class Terrain {
         const h01 = getVertexHeight(x, y + 1);
         const h11 = getVertexHeight(x + 1, y + 1);
 
-        // Create two triangles for floor (CCW winding when viewed from +Y = normal points UP)
-        // Right-hand rule: curl fingers in vertex order, thumb = normal direction
-        // Triangle 1: (x,y) → (x+1,y) → (x,y+1) = CCW from above = normal UP
+        // Create two triangles for floor (CCW winding for Recast)
         vertices.push(x, h00, y);
-        vertices.push(x + 1, h10, y);
         vertices.push(x, h01, y + 1);
+        vertices.push(x + 1, h10, y);
         indices.push(vertexIndex, vertexIndex + 1, vertexIndex + 2);
         vertexIndex += 3;
 
-        // Triangle 2: (x+1,y) → (x+1,y+1) → (x,y+1) = CCW from above = normal UP
         vertices.push(x + 1, h10, y);
-        vertices.push(x + 1, h11, y + 1);
         vertices.push(x, h01, y + 1);
+        vertices.push(x + 1, h11, y + 1);
         indices.push(vertexIndex, vertexIndex + 1, vertexIndex + 2);
         vertexIndex += 3;
       }
