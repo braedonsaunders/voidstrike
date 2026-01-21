@@ -657,7 +657,8 @@ export class RecastNavigation {
 
   /**
    * Add a unit to crowd simulation.
-   * Uses terrain height for the Y coordinate to place agent at correct elevation.
+   * Projects position onto navmesh surface to ensure valid polygon placement.
+   * DetourCrowd requires agents to be exactly ON navmesh polygons to work.
    */
   public addAgent(
     entityId: number,
@@ -674,9 +675,15 @@ export class RecastNavigation {
     }
 
     try {
-      // Use terrain height for Y coordinate to place agent at correct elevation
-      // Keep original X/Z (game coords) to avoid position drift between game and crowd
-      const terrainY = this.getTerrainHeight(x, y);
+      // Project position onto navmesh surface for valid polygon placement
+      // Critical: agents must be ON a navmesh polygon for crowd to compute velocity
+      const projected = this.projectToNavMesh(x, y);
+      if (!projected) {
+        debugPathfinding.warn(
+          `[RecastNavigation] Cannot add agent ${entityId}: position (${x.toFixed(1)}, ${y.toFixed(1)}) not on navmesh`
+        );
+        return -1;
+      }
 
       const params: Partial<CrowdAgentParams> = {
         ...DEFAULT_AGENT_PARAMS,
@@ -686,7 +693,7 @@ export class RecastNavigation {
         collisionQueryRange: radius * 5,
       };
 
-      const agent = this.crowd.addAgent({ x, y: terrainY, z: y }, params);
+      const agent = this.crowd.addAgent(projected, params);
 
       if (agent) {
         const agentIndex = agent.agentIndex;
