@@ -21,7 +21,7 @@ import { MovementOrchestrator } from './movement/MovementOrchestrator';
 
 export class MovementSystem extends System {
   public readonly name = 'MovementSystem';
-  public priority = 10;
+  // Priority is set by SystemRegistry based on dependencies (runs after PathfindingSystem, UnitMechanicsSystem)
 
   private orchestrator: MovementOrchestrator;
 

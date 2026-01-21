@@ -324,6 +324,43 @@ class MovementSystem extends System {
 }
 ```
 
+### System Execution Order
+
+Systems are executed in dependency order, determined by the `SystemRegistry` (`src/engine/core/SystemRegistry.ts`). Instead of numeric priorities (which were error-prone), the registry uses explicit dependencies and topological sort.
+
+**Execution Layers:**
+
+| Layer | Systems | Purpose |
+|-------|---------|---------|
+| **Input** | SelectionSystem | Handle player input |
+| **Spawn** | SpawnSystem | Create new entities |
+| **Placement** | BuildingPlacementSystem, PathfindingSystem | Building grid, navmesh |
+| **Mechanics** | BuildingMechanicsSystem, WallSystem, UnitMechanicsSystem | Unit/building mechanics |
+| **Movement** | MovementSystem | Unit movement with collision avoidance |
+| **Vision** | VisionSystem | Fog of war (runs AFTER movement) |
+| **Combat** | CombatSystem, ProjectileSystem, AbilitySystem | Combat resolution |
+| **Economy** | ResourceSystem, ProductionSystem, ResearchSystem | Resource gathering, production |
+| **AI** | EnhancedAISystem, AIEconomySystem, AIMicroSystem | AI decision making |
+| **Output** | AudioSystem | Audio feedback |
+| **Meta** | GameStateSystem, ChecksumSystem, SaveLoadSystem | Victory/defeat, sync, persistence |
+
+**Adding New Systems:**
+
+1. Create the system in `src/engine/systems/`
+2. Add to `SYSTEM_DEFINITIONS` in `src/engine/systems/systemDependencies.ts`
+3. Specify dependencies (systems that must run before it)
+4. The registry validates at startup - no cycles, no missing deps
+
+```typescript
+// Example: Adding a new system
+{
+  name: 'MyNewSystem',
+  dependencies: ['MovementSystem', 'CombatSystem'], // Must run after these
+  factory: (game: Game) => new MyNewSystem(game),
+  condition: (game: Game) => game.config.featureEnabled, // Optional
+}
+```
+
 ### Game Loop
 
 Fixed timestep with interpolation for smooth rendering:

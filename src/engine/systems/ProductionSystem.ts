@@ -14,7 +14,7 @@ import { EnhancedAISystem } from './EnhancedAISystem';
 
 export class ProductionSystem extends System {
   public readonly name = 'ProductionSystem';
-  public priority = 30;
+  // Priority is set by SystemRegistry based on dependencies (runs after ResourceSystem)
 
   // Cached reference to AI system (lazy loaded)
   private aiSystem: EnhancedAISystem | null = null;

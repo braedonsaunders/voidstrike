@@ -29,7 +29,7 @@ import { AssetManager } from '@/assets/AssetManager';
  */
 export class ProjectileSystem extends System {
   public readonly name = 'ProjectileSystem';
-  public priority = 21; // Run after CombatSystem (20) creates projectiles
+  // Priority is set by SystemRegistry based on dependencies (runs after CombatSystem)
 
   // Tick rate for movement calculations
   private readonly TICK_DURATION = 0.05; // 50ms at 20 TPS

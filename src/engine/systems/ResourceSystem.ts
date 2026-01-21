@@ -18,7 +18,7 @@ const MINING_TIME = 2.5;
 
 export class ResourceSystem extends System {
   public readonly name = 'ResourceSystem';
-  public priority = 25;
+  // Priority is set by SystemRegistry based on dependencies (runs after MovementSystem)
 
   // PERF: Cache resources to avoid repeated getEntitiesWith calls
   private cachedResources: Entity[] | null = null;

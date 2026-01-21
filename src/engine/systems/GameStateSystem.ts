@@ -34,7 +34,7 @@ export interface GameResult {
 
 export class GameStateSystem extends System {
   public readonly name = 'GameStateSystem';
-  public priority = 200; // Run late, after most other systems
+  // Priority is set by SystemRegistry based on dependencies (runs late, after gameplay systems)
 
   private playerStats: Map<string, PlayerStats> = new Map();
   private playerTeams: Map<string, TeamNumber> = new Map(); // Cache player -> team mapping

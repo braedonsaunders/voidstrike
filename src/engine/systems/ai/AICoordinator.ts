@@ -122,7 +122,7 @@ interface EntityQueryCache {
 
 export class AICoordinator extends System {
   public readonly name = 'AICoordinator';
-  public priority = 100;
+  // Note: AICoordinator is used internally by EnhancedAISystem, not registered directly
 
   private aiPlayers: Map<string, AIPlayer> = new Map();
   private ticksBetweenActions = 20;

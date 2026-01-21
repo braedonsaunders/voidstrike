@@ -24,7 +24,7 @@ export type { AIPlayer, AIState, AIDifficulty };
 
 export class EnhancedAISystem extends System {
   public readonly name = 'EnhancedAISystem';
-  public priority = 100; // Match AICoordinator priority
+  // Priority is set by SystemRegistry based on dependencies (runs after CombatSystem, ResourceSystem)
 
   private coordinator: AICoordinator;
 

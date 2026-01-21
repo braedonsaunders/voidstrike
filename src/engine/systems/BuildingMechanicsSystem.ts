@@ -41,7 +41,7 @@ interface DemolishCommand {
 
 export class BuildingMechanicsSystem extends System {
   public readonly name = 'BuildingMechanicsSystem';
-  public priority = 8; // Before UnitMechanicsSystem
+  // Priority is set by SystemRegistry based on dependencies (runs after BuildingPlacementSystem)
 
   constructor(game: Game) {
     super(game);

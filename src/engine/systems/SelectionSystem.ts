@@ -14,7 +14,7 @@ import { distance, clamp } from '@/utils/math';
  */
 export class SelectionSystem extends System {
   public readonly name = 'SelectionSystem';
-  public priority = 1;
+  // Priority is set by SystemRegistry based on dependencies (no deps, runs early)
 
   private controlGroups: Map<number, number[]> = new Map();
 

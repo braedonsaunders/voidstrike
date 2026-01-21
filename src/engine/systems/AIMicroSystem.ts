@@ -63,7 +63,7 @@ const UNIT_PRIORITY: Record<string, number> = DOMINION_AI_CONFIG.tactical.unitPr
 
 export class AIMicroSystem extends System {
   public readonly name = 'AIMicroSystem';
-  public priority = 95; // Run after EnhancedAISystem but before movement
+  // Priority is set by SystemRegistry based on dependencies (runs after EnhancedAISystem, CombatSystem)
 
   private unitStates: Map<number, UnitMicroState> = new Map();
   private aiPlayerIds: Set<string> = new Set();
