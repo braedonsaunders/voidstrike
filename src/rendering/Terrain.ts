@@ -883,19 +883,23 @@ export class Terrain {
     let avgElevation: number;
 
     if (hasRamp) {
-      // CRITICAL: Use the average elevation of RAMP cells only
-      // This ensures vertices adjacent to ramps use the ramp's interpolated elevation
-      // and don't get pulled to a different ground/cliff elevation.
+      // CRITICAL FIX: At ramp boundaries, use the MAXIMUM elevation of ALL adjacent cells
+      // (not just ramp cells) to ensure vertices match the highest adjacent terrain.
       //
-      // Bug fixed: Previously used cell11.elevation, but cell11 might be ground/cliff
-      // at a different elevation than the ramp. This caused "holes" at ramp edges
-      // where vertices suddenly dropped to ground level.
+      // Why this matters for navmesh connectivity:
+      // - Recast's cell height (ch) is 0.2 units
+      // - If a boundary vertex is even 0.2 units lower than the adjacent platform,
+      //   Recast puts them in different vertical spans = disconnected polygons
+      // - Averaging only ramp cells creates gaps at ramp-platform boundaries
       //
-      // For example, at the right edge of a ramp:
-      // - cell00, cell01 = ramp cells at elevation 180
-      // - cell10, cell11 = ground cells at elevation 60
-      // Using cell11.elevation would give height 2.4 instead of 7.2, creating a hole.
-      avgElevation = rampCells.reduce((sum, c) => sum + c.elevation, 0) / rampCells.length;
+      // Example at top of ramp meeting platform (both at elevation 140):
+      // - Old: averaged ramp cells (130+140)/2 = 135 → height 5.4
+      // - Platform expects: elevation 140 → height 5.6
+      // - Gap of 0.2 units = broken navmesh connectivity!
+      //
+      // Fix: Use max elevation so boundary matches the platform
+      const maxElevation = Math.max(...cells.map(c => c.elevation));
+      avgElevation = maxElevation;
     } else if (hasPlatform) {
       // Use platform elevation for consistent flat surfaces
       avgElevation = platformCells.reduce((sum, c) => sum + c.elevation, 0) / platformCells.length;
