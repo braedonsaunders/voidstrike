@@ -23,8 +23,9 @@ import {
   importNavMesh,
   type Obstacle,
 } from 'recast-navigation';
-import { generateTileCache, generateSoloNavMesh, type TileCacheGeneratorConfig, type SoloNavMeshGeneratorConfig } from '@recast-navigation/generators';
+import { generateTileCache, generateSoloNavMesh } from '@recast-navigation/generators';
 import { distance } from '@/utils/math';
+import { NAVMESH_CONFIG, SOLO_NAVMESH_CONFIG } from '@/data/pathfinding.config';
 
 // Debug flag for worker logging (workers can't access UI store)
 const DEBUG = false;
@@ -100,31 +101,6 @@ type WorkerMessage =
   | RemoveObstacleMessage
   | IsWalkableMessage
   | FindNearestPointMessage;
-
-// NavMesh config - must match main thread config
-const NAVMESH_CONFIG: Partial<TileCacheGeneratorConfig> = {
-  cs: 0.5,
-  ch: 0.2,
-  walkableSlopeAngle: 50,
-  walkableHeight: 2,
-  walkableClimb: 0.3,
-  walkableRadius: 0.6,
-  maxSimplificationError: 0.5,
-  tileSize: 32,
-  expectedLayersPerTile: 4,
-  maxObstacles: 512,
-};
-
-// Fallback solo navmesh config (no dynamic obstacles, but more robust)
-const SOLO_NAVMESH_CONFIG: Partial<SoloNavMeshGeneratorConfig> = {
-  cs: 0.5,
-  ch: 0.2,
-  walkableSlopeAngle: 50,
-  walkableHeight: 2,
-  walkableClimb: 0.3,
-  walkableRadius: 0.6,
-  maxSimplificationError: 0.5,
-};
 
 // State
 let navMesh: NavMesh | null = null;
