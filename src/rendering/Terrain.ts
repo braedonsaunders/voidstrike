@@ -1263,13 +1263,38 @@ export class Terrain {
       }
     }
 
+    // CRITICAL FIX: Add a second layer of adjacency to prevent steep slopes at boundaries
+    // Without this, vertices at the edge of adjacentToRampZone can have a different height
+    // calculation method than their neighbors, creating slopes steeper than walkableSlopeAngle.
+    //
+    // The navmesh cell size (0.5) is smaller than terrain cells (1.0), so even a small
+    // height discontinuity creates a steep slope that Recast rejects.
+    const extendedRampArea = new Set<string>(adjacentToRampZone);
+    for (const key of adjacentToRampZone) {
+      const [ax, ay] = key.split(',').map(Number);
+      for (let dy = -2; dy <= 2; dy++) {
+        for (let dx = -2; dx <= 2; dx++) {
+          const nx = ax + dx;
+          const ny = ay + dy;
+          if (nx >= 0 && nx < width && ny >= 0 && ny < height) {
+            const neighborKey = `${nx},${ny}`;
+            if (!rampZone.has(neighborKey) && !adjacentToRampZone.has(neighborKey)) {
+              extendedRampArea.add(neighborKey);
+            }
+          }
+        }
+      }
+    }
+
     for (let y = 0; y < height; y++) {
       for (let x = 0; x < width; x++) {
         const cell = terrain[y][x];
         if (cell.terrain === 'unwalkable' || cell.terrain === 'ramp') continue;
         if (rampZone.has(`${x},${y}`)) continue;
-        // NEW: Skip cells adjacent to ramp zones to ensure smooth ramp transitions
+        // Skip cells adjacent to ramp zones to ensure smooth ramp transitions
         if (adjacentToRampZone.has(`${x},${y}`)) continue;
+        // Skip cells in extended ramp area to prevent steep slopes at boundaries
+        if (extendedRampArea.has(`${x},${y}`)) continue;
 
         // Check 8 neighbors
         let isCliffEdge = false;
@@ -1286,10 +1311,11 @@ export class Terrain {
                 isCliffEdge = true;
               }
               // Case 2: Adjacent to walkable at different elevation (elevation boundary)
-              // Skip if neighbor is in or adjacent to ramp zone
+              // Skip if neighbor is in ramp zone, adjacent to it, or in extended area
               else if (neighbor.terrain !== 'ramp' &&
                        !rampZone.has(`${nx},${ny}`) &&
-                       !adjacentToRampZone.has(`${nx},${ny}`)) {
+                       !adjacentToRampZone.has(`${nx},${ny}`) &&
+                       !extendedRampArea.has(`${nx},${ny}`)) {
                 const elevDiff = Math.abs(neighbor.elevation - cell.elevation);
                 if (elevDiff > ELEVATION_DIFF_THRESHOLD) {
                   isCliffEdge = true;
@@ -1306,7 +1332,7 @@ export class Terrain {
 
     // SECOND PASS: Also mark cells adjacent to cliff edge cells
     // This ensures vertices at boundaries have consistent heights
-    // BUT: Don't expand into ramp zones or cells adjacent to ramp zones
+    // BUT: Don't expand into ramp zones, adjacent-to-ramp zones, or extended ramp area
     const expandedCliffEdgeCells = new Set<string>(cliffEdgeCells);
     for (const key of cliffEdgeCells) {
       const [cx, cy] = key.split(',').map(Number);
@@ -1317,11 +1343,12 @@ export class Terrain {
           if (nx >= 0 && nx < width && ny >= 0 && ny < height) {
             const neighbor = terrain[ny][nx];
             const neighborKey = `${nx},${ny}`;
-            // Don't expand into ramp zones or cells adjacent to ramp zones
+            // Don't expand into ramp zones, adjacent-to-ramp zones, or extended ramp area
             if (neighbor.terrain !== 'unwalkable' &&
                 neighbor.terrain !== 'ramp' &&
                 !rampZone.has(neighborKey) &&
-                !adjacentToRampZone.has(neighborKey)) {
+                !adjacentToRampZone.has(neighborKey) &&
+                !extendedRampArea.has(neighborKey)) {
               expandedCliffEdgeCells.add(neighborKey);
             }
           }
@@ -1369,8 +1396,9 @@ export class Terrain {
         for (const { cx, cy } of adjacentCells) {
           if (cx >= 0 && cx < width && cy >= 0 && cy < height) {
             const cellKey = `${cx},${cy}`;
-            // Check ramp zone OR adjacent to ramp zone for smooth transitions
-            if (rampZone.has(cellKey) || adjacentToRampZone.has(cellKey)) {
+            // Check ramp zone, adjacent to ramp zone, OR extended ramp area for smooth transitions
+            // The extended area prevents steep slopes at the boundary between heightMap and flat elevation
+            if (rampZone.has(cellKey) || adjacentToRampZone.has(cellKey) || extendedRampArea.has(cellKey)) {
               touchesRampArea = true;
             }
             if (!expandedCliffEdgeCells.has(cellKey)) {
