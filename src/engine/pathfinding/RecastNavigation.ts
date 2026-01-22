@@ -582,13 +582,9 @@ export class RecastNavigation {
     }
   }
 
-  // Diagnostic counter for logging first few walkability failures
-  private walkabilityDiagnosticCount = 0;
+  // Diagnostic counter for limiting walkability log output
+  private walkabilityLogCount = 0;
   private readonly MAX_WALKABILITY_LOGS = 20;
-  private walkabilitySuccessCount = 0;
-  private walkabilityFailCount = 0;
-  private loggedSummary = false;
-  private targetSetLogCount = 0;  // For logging cross-height target sets
 
   /**
    * Check if a point is on the navmesh (walkable).
@@ -603,54 +599,27 @@ export class RecastNavigation {
       const halfExtents = { x: 2, y: 20, z: 2 };
       const result = this.navMeshQuery.findClosestPoint({ x, y: queryY, z: y }, { halfExtents });
 
-      // Log first few queries to understand what's happening (uses console.log for production visibility)
-      if (this.walkabilityDiagnosticCount < 5) {
-        console.log(
-          `[Navmesh DEBUG] Query at (${x.toFixed(1)}, ${y.toFixed(1)}), height=${queryY.toFixed(2)}, ` +
-          `success=${result.success}, point=${result.point ? `(${result.point.x.toFixed(1)}, ${result.point.y.toFixed(2)}, ${result.point.z.toFixed(1)})` : 'null'}`
-        );
-        this.walkabilityDiagnosticCount++;
-      }
-
       if (!result.success || !result.point) {
-        this.walkabilityFailCount++;
         return false;
       }
 
       // Check if the closest point is within a reasonable tolerance
       const dist = distance(x, y, result.point.x, result.point.z);
 
-      // Log failures for diagnostic
-      if (dist >= 2.0 && this.walkabilityDiagnosticCount < this.MAX_WALKABILITY_LOGS) {
+      // Log first few failures for diagnostics
+      if (dist >= 2.0 && this.walkabilityLogCount < this.MAX_WALKABILITY_LOGS) {
         debugPathfinding.log(
           `[Navmesh] isWalkable FAIL (dist): pos=(${x.toFixed(1)}, ${y.toFixed(1)}), ` +
           `queryY=${queryY.toFixed(2)}, closest=(${result.point.x.toFixed(1)}, ${result.point.y.toFixed(2)}, ${result.point.z.toFixed(1)}), ` +
           `dist=${dist.toFixed(2)}`
         );
-        this.walkabilityDiagnosticCount++;
-        this.walkabilityFailCount++;
+        this.walkabilityLogCount++;
         return false;
       }
 
-      if (dist < 2.0) {
-        this.walkabilitySuccessCount++;
-        return true;
-      }
-
-      this.walkabilityFailCount++;
-      return false;
+      return dist < 2.0;
     } catch {
       return false;
-    }
-  }
-
-  /**
-   * Log walkability statistics (call periodically for diagnostics)
-   */
-  public logWalkabilityStats(): void {
-    if (!this.loggedSummary && (this.walkabilitySuccessCount > 0 || this.walkabilityFailCount > 0)) {
-      console.log(`[Navmesh] Walkability stats: success=${this.walkabilitySuccessCount}, fail=${this.walkabilityFailCount}`);
-      this.loggedSummary = true;
     }
   }
 
@@ -701,13 +670,6 @@ export class RecastNavigation {
         const agentIndex = agent.agentIndex;
         this.agentMap.set(entityId, agentIndex);
         this.agentEntityMap.set(agentIndex, entityId);
-        // Log successful agent addition with height for multi-level navmesh debugging
-        if (this.agentMap.size <= 5) {
-          console.log(
-            `[RecastNavigation] Added agent ${entityId} at height ${projected.y.toFixed(2)} ` +
-            `(game pos: ${x.toFixed(1)}, ${y.toFixed(1)})`
-          );
-        }
         return agentIndex;
       }
     } catch (error) {
@@ -753,15 +715,6 @@ export class RecastNavigation {
         // This is CRITICAL - requestMoveTarget needs a navmesh position to compute path corridor
         const projected = this.projectToNavMesh(targetX, targetY);
         if (projected) {
-          // Log height difference for cross-elevation moves (ramp debugging)
-          const heightDiff = Math.abs(projected.y - agentPos.y);
-          if (heightDiff > 0.5 && this.targetSetLogCount < 3) {
-            console.log(
-              `[RecastNavigation] Cross-height target: agent at h=${agentPos.y.toFixed(2)}, ` +
-              `target at h=${projected.y.toFixed(2)}, diff=${heightDiff.toFixed(2)}`
-            );
-            this.targetSetLogCount++;
-          }
           // Use the projected navmesh position (already has correct x, y, z)
           agent.requestMoveTarget(projected);
           return true;

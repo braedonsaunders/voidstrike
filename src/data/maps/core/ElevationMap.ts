@@ -101,6 +101,19 @@ export const ELEVATION = {
 } as const;
 
 /**
+ * Quantize an elevation value to the nearest platform level.
+ * Used for platform tools to ensure clean cliff boundaries.
+ *
+ * @param elevation Raw elevation value (0-255)
+ * @returns Quantized elevation (60, 140, or 220)
+ */
+export function quantizeElevation(elevation: number): number {
+  if (elevation < 100) return ELEVATION.LOW;
+  if (elevation < 180) return ELEVATION.MID;
+  return ELEVATION.HIGH;
+}
+
+/**
  * Minimum elevation difference to create a cliff (for terrain generation).
  * Re-exported from central pathfinding config for backwards compatibility.
  * @see src/data/pathfinding.config.ts

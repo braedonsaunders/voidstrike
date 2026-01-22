@@ -12,6 +12,7 @@ import {
   MAX_RAMP_ELEVATION_PER_CELL,
   type RampConstraintResult,
 } from '@/data/pathfinding.config';
+import { ELEVATION, quantizeElevation } from '@/data/maps/core/ElevationMap';
 
 export interface BrushStroke {
   x: number;
@@ -391,18 +392,7 @@ export class TerrainBrush {
     const fromElev = fromCell?.elevation ?? this.config.terrain.defaultElevation;
     const toElev = toCell?.elevation ?? this.config.terrain.defaultElevation;
 
-    const originalLength = distance(fromX, fromY, toX, toY);
-    const elevationDelta = Math.abs(toElev - fromElev);
-
-    // DEBUG: Log constraint check inputs
-    console.log(
-      `[TerrainBrush] Ramp constraint check: ` +
-      `from elev ${fromElev} to elev ${toElev}, delta ${elevationDelta}, ` +
-      `original length ${originalLength.toFixed(1)}, ` +
-      `max per cell ${MAX_RAMP_ELEVATION_PER_CELL}`
-    );
-
-    // Calculate extended endpoint if needed to meet constraints
+    // Calculate extended endpoint if needed to meet walkableClimb constraints
     const extended = calculateExtendedRampEndpoint(
       fromX,
       fromY,
@@ -410,13 +400,6 @@ export class TerrainBrush {
       toY,
       fromElev,
       toElev
-    );
-
-    // DEBUG: Log extension result
-    console.log(
-      `[TerrainBrush] Extension result: wasExtended=${extended.wasExtended}, ` +
-      `minRequired=${extended.validation.minRequiredLength}, ` +
-      `extended to (${extended.x.toFixed(1)}, ${extended.y.toFixed(1)})`
     );
 
     // Use extended endpoint for painting
@@ -767,24 +750,6 @@ export class TerrainBrush {
   // ============================================
 
   /**
-   * Standard platform elevation levels (quantized for clean cliffs)
-   */
-  private static readonly PLATFORM_LEVELS = {
-    LOW: 60,
-    MID: 140,
-    HIGH: 220,
-  };
-
-  /**
-   * Quantize elevation to nearest platform level
-   */
-  private quantizeElevation(elevation: number): number {
-    if (elevation < 100) return TerrainBrush.PLATFORM_LEVELS.LOW;
-    if (elevation < 180) return TerrainBrush.PLATFORM_LEVELS.MID;
-    return TerrainBrush.PLATFORM_LEVELS.HIGH;
-  }
-
-  /**
    * Paint platform terrain at position (circular brush)
    * Creates geometric platform cells with quantized elevation
    */
@@ -798,7 +763,7 @@ export class TerrainBrush {
 
     const updates: CellUpdate[] = [];
     const radiusSq = radius * radius;
-    const quantizedElev = this.quantizeElevation(targetElevation);
+    const quantizedElev = quantizeElevation(targetElevation);
 
     for (let dy = -radius; dy <= radius; dy++) {
       for (let dx = -radius; dx <= radius; dx++) {
@@ -841,7 +806,7 @@ export class TerrainBrush {
     if (!this.mapData) return [];
 
     const updates: CellUpdate[] = [];
-    const quantizedElev = this.quantizeElevation(targetElevation);
+    const quantizedElev = quantizeElevation(targetElevation);
 
     const minX = Math.min(Math.floor(x1), Math.floor(x2));
     const maxX = Math.max(Math.floor(x1), Math.floor(x2));
@@ -881,7 +846,7 @@ export class TerrainBrush {
     if (!this.mapData || vertices.length < 3) return [];
 
     const updates: CellUpdate[] = [];
-    const quantizedElev = this.quantizeElevation(targetElevation);
+    const quantizedElev = quantizeElevation(targetElevation);
     const visitedCells = new Set<string>();
 
     // Find bounding box
@@ -968,7 +933,7 @@ export class TerrainBrush {
             if (cell.isRamp) continue;
             if (cell.isPlatform) continue; // Already a platform
 
-            const quantizedElev = this.quantizeElevation(cell.elevation);
+            const quantizedElev = quantizeElevation(cell.elevation);
 
             updates.push({
               x,
@@ -1182,8 +1147,8 @@ export class TerrainBrush {
     }
 
     // Quantize to platform levels for clean transitions
-    fromElev = this.quantizeElevation(fromElev);
-    toElev = this.quantizeElevation(toElev);
+    fromElev = quantizeElevation(fromElev);
+    toElev = quantizeElevation(toElev);
 
     // Calculate extended endpoint if needed to meet constraints
     const extended = calculateExtendedRampEndpoint(
