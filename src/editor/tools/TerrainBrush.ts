@@ -388,8 +388,65 @@ export class TerrainBrush {
     // Get elevations at endpoints
     const fromCell = this.mapData.terrain[Math.floor(fromY)]?.[Math.floor(fromX)];
     const toCell = this.mapData.terrain[Math.floor(toY)]?.[Math.floor(toX)];
-    const fromElev = fromCell?.elevation ?? this.config.terrain.defaultElevation;
-    const toElev = toCell?.elevation ?? this.config.terrain.defaultElevation;
+    let fromElev = fromCell?.elevation ?? this.config.terrain.defaultElevation;
+    let toElev = toCell?.elevation ?? this.config.terrain.defaultElevation;
+
+    // Calculate direction for adjacent platform detection
+    const rawDx = toX - fromX;
+    const rawDy = toY - fromY;
+    const rawLength = distance(fromX, fromY, toX, toY);
+    const dirX = rawLength > 0 ? rawDx / rawLength : 0;
+    const dirY = rawLength > 0 ? rawDy / rawLength : 0;
+
+    // Check adjacent cells for platforms to get proper elevation endpoints
+    const checkAdjacentElevation = (cx: number, cy: number, searchDir: number): number => {
+      for (let dist = 1; dist <= 5; dist++) {
+        const checkX = Math.floor(cx + dirX * searchDir * dist);
+        const checkY = Math.floor(cy + dirY * searchDir * dist);
+        if (this.isInBounds(checkX, checkY)) {
+          const cell = this.mapData!.terrain[checkY][checkX];
+          if (cell.isPlatform || cell.elevation !== fromElev) {
+            return cell.elevation;
+          }
+        }
+      }
+      return -1;
+    };
+
+    // Try to find different elevations at ends
+    const elevAtStart = checkAdjacentElevation(fromX, fromY, -1);
+    const elevAtEnd = checkAdjacentElevation(toX, toY, 1);
+
+    if (elevAtStart >= 0 && elevAtStart !== fromElev) fromElev = elevAtStart;
+    if (elevAtEnd >= 0 && elevAtEnd !== toElev) toElev = elevAtEnd;
+
+    // If elevations are still the same, force a gradient using platform levels
+    if (fromElev === toElev) {
+      // Quantize current elevation to nearest platform level
+      const quantized = this.quantizeElevation(fromElev);
+      // Determine direction based on terrain context
+      const midX = (fromX + toX) / 2;
+      const midY = (fromY + toY) / 2;
+      const midCell = this.mapData.terrain[Math.floor(midY)]?.[Math.floor(midX)];
+
+      if (midCell && midCell.elevation !== fromElev) {
+        // Use midpoint elevation to determine direction
+        if (midCell.elevation < fromElev) {
+          toElev = Math.max(TerrainBrush.PLATFORM_LEVELS.LOW, quantized - 80);
+        } else {
+          toElev = Math.min(TerrainBrush.PLATFORM_LEVELS.HIGH, quantized + 80);
+        }
+      } else {
+        // Default: create a ramp going up one platform level
+        if (quantized < TerrainBrush.PLATFORM_LEVELS.HIGH) {
+          toElev = quantized + 80;
+        } else {
+          toElev = quantized - 80;
+        }
+      }
+      // Quantize the adjusted elevation
+      toElev = this.quantizeElevation(toElev);
+    }
 
     // Calculate extended endpoint if needed to meet constraints
     const extended = calculateExtendedRampEndpoint(
@@ -425,6 +482,13 @@ export class TerrainBrush {
     const perpX = -dy / length;
     const perpY = dx / length;
 
+    // Log ramp creation for debugging
+    console.log(
+      `[TerrainBrush] Creating ramp: from (${fromX.toFixed(1)}, ${fromY.toFixed(1)}) elev ${fromElev} ` +
+      `to (${actualToX.toFixed(1)}, ${actualToY.toFixed(1)}) elev ${toElev}, ` +
+      `length ${length.toFixed(1)} cells, width ${width}`
+    );
+
     for (let i = 0; i <= steps; i++) {
       const t = i / steps;
       const cx = fromX + dx * t;
@@ -450,6 +514,8 @@ export class TerrainBrush {
         }
       }
     }
+
+    console.log(`[TerrainBrush] Ramp created with ${updates.length} cell updates`);
 
     return {
       updates,
