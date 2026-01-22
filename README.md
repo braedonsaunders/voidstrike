@@ -15,6 +15,15 @@
 
 ---
 
+## ⚠️ Work in Progress
+
+- **Other factions/races** — Additional playable factions beyond the current three
+- **Naval combat** — Water-based units and naval warfare mechanics
+- **Ramp pathfinding issues** — Units occasionally get stuck on terrain transitions
+- **Multiplayer testing** — Stress testing P2P netcode at scale
+
+---
+
 ## The Experiment
 
 Can AI produce production-quality game code? Not a prototype or tech demo - an actual shippable codebase with deterministic netcode, custom shaders, and real game design.
