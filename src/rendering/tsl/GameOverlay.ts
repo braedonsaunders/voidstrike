@@ -273,16 +273,17 @@ export class TSLGameOverlayManager {
     const positions = geometry.attributes.position.array as Float32Array;
 
     // Displace each vertex based on terrain height
-    // PlaneGeometry is created in XY plane, we rotate it to XZ plane
-    // So positions are: x = local X, y = local Y (will become Z after rotation)
+    // PlaneGeometry is created in XY plane, we rotate it -PI/2 around X to XZ plane
+    // After rotation: local (x, y, z) -> world relative (x, z, -y)
+    // After translation by (width/2, 0, height/2): world (x + w/2, z, -y + h/2)
     for (let i = 0; i < positions.length; i += 3) {
       const localX = positions[i];
       const localY = positions[i + 1];
-      // Convert local coordinates to world coordinates
-      // Plane is centered at origin, so offset by half width/height
+      // Convert local coordinates to final world coordinates after rotation and translation
       const worldX = localX + width / 2;
-      const worldZ = localY + height / 2;
-      // Get terrain height and set as Z (will become Y after rotation)
+      // After -PI/2 rotation around X: localY -> -worldZ, so worldZ = -localY + height/2
+      const worldZ = height / 2 - localY;
+      // Get terrain height and set as local Z (becomes world Y after rotation)
       const terrainHeight = this.getTerrainHeight(worldX, worldZ);
       positions[i + 2] = terrainHeight + OVERLAY_Y_OFFSET;
     }
@@ -348,7 +349,8 @@ export class TSLGameOverlayManager {
 
     for (let y = 0; y < height; y++) {
       for (let x = 0; x < width; x++) {
-        // Flip Y coordinate for texture UV mapping
+        // Y-flip: terrain[y] at worldZ=y needs to map to UV V=(height-y)/height
+        // which corresponds to texture row (height-1-y)
         const textureY = height - 1 - y;
         const i = (textureY * width + x) * 4;
         const cell = terrain[y]?.[x];
@@ -468,7 +470,7 @@ export class TSLGameOverlayManager {
 
     for (let y = 0; y < height; y++) {
       for (let x = 0; x < width; x++) {
-        // Flip Y coordinate for texture UV mapping
+        // Y-flip: terrain[y] at worldZ=y maps to texture row (height-1-y)
         const textureY = height - 1 - y;
         const i = (textureY * width + x) * 4;
         const cell = terrain[y]?.[x];
@@ -791,8 +793,7 @@ export class TSLGameOverlayManager {
     let notOnNavmeshCount = 0;
 
     for (let idx = 0; idx < totalCells; idx++) {
-      // Flip Y coordinate for texture UV mapping
-      // PlaneGeometry UV (0,0) is at bottom-left, but we iterate top-to-bottom
+      // Y-flip: terrain[y] at worldZ=y maps to texture row (height-1-y)
       const x = idx % width;
       const y = Math.floor(idx / width);
       const textureY = height - 1 - y;
@@ -923,7 +924,7 @@ export class TSLGameOverlayManager {
 
           const dist = distance(cx, cy, px, py);
           if (dist <= attackRange) {
-            // Flip Y coordinate for texture UV mapping
+            // Y-flip: terrain[py] at worldZ=py maps to texture row (height-1-py)
             const textureY = height - 1 - py;
             const i = (textureY * width + px) * 4;
             const intensity = Math.min(255, this.threatTextureData[i + 0] + 80);
@@ -959,7 +960,7 @@ export class TSLGameOverlayManager {
 
           const dist = distance(cx, cy, px, py);
           if (dist <= attackRange) {
-            // Flip Y coordinate for texture UV mapping
+            // Y-flip: terrain[py] at worldZ=py maps to texture row (height-1-py)
             const textureY = height - 1 - py;
             const i = (textureY * width + px) * 4;
             const intensity = Math.min(255, this.threatTextureData[i + 0] + 100);
@@ -1033,7 +1034,7 @@ export class TSLGameOverlayManager {
 
           const dist = distance(cx, cy, px, py);
           if (dist <= radius) {
-            // Flip Y coordinate for texture UV mapping
+            // Y-flip: terrain[py] at worldZ=py maps to texture row (height-1-py)
             const textureY = height - 1 - py;
             const i = (textureY * width + px) * 4;
             const falloff = 1 - (dist / radius) * 0.5;
