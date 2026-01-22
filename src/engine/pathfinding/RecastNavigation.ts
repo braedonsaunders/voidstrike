@@ -582,9 +582,11 @@ export class RecastNavigation {
     }
   }
 
-  // Diagnostic counter for limiting walkability log output
+  // Diagnostic counters for limiting log output
   private walkabilityLogCount = 0;
   private readonly MAX_WALKABILITY_LOGS = 20;
+  private agentFailLogCount = 0;
+  private readonly MAX_AGENT_FAIL_LOGS = 5;
 
   /**
    * Check if a point is on the navmesh (walkable).
@@ -649,10 +651,16 @@ export class RecastNavigation {
       // Critical: agents must be ON a navmesh polygon for crowd to compute velocity
       const projected = this.projectToNavMesh(x, y);
       if (!projected) {
-        // Use console.warn for production visibility
-        console.warn(
-          `[RecastNavigation] Cannot add agent ${entityId}: position (${x.toFixed(1)}, ${y.toFixed(1)}) not on navmesh`
-        );
+        // Rate-limit warnings to avoid console spam
+        if (this.agentFailLogCount < this.MAX_AGENT_FAIL_LOGS) {
+          console.warn(
+            `[RecastNavigation] Cannot add agent ${entityId}: position (${x.toFixed(1)}, ${y.toFixed(1)}) not on navmesh`
+          );
+          this.agentFailLogCount++;
+          if (this.agentFailLogCount === this.MAX_AGENT_FAIL_LOGS) {
+            console.warn('[RecastNavigation] Suppressing further agent failure warnings...');
+          }
+        }
         return -1;
       }
 
