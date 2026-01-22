@@ -443,10 +443,6 @@ export class TerrainBrush {
     const perpX = -dy / length;
     const perpY = dx / length;
 
-    console.log(
-      `[TerrainBrush] Painting ramp: length ${length.toFixed(1)} cells, ${steps} steps, width ${width}`
-    );
-
     for (let i = 0; i <= steps; i++) {
       const t = i / steps;
       const cx = fromX + dx * t;
@@ -472,8 +468,6 @@ export class TerrainBrush {
         }
       }
     }
-
-    console.log(`[TerrainBrush] Ramp created with ${updates.length} cell updates`);
 
     return {
       updates,

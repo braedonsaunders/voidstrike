@@ -189,6 +189,23 @@ export class EditorTerrain {
   }
 
   /**
+   * Apply cell updates directly to internal state.
+   * This is called synchronously during painting to ensure the mesh
+   * reflects updates immediately, before React state propagates.
+   */
+  public applyCellUpdates(updates: Array<{ x: number; y: number; cell: Partial<EditorCell> }>): void {
+    if (!this.mapData) return;
+
+    // Apply updates directly to mapData
+    for (const { x, y, cell } of updates) {
+      if (y >= 0 && y < this.mapData.height && x >= 0 && x < this.mapData.width) {
+        const existingCell = this.mapData.terrain[y][x];
+        this.mapData.terrain[y][x] = { ...existingCell, ...cell };
+      }
+    }
+  }
+
+  /**
    * Update dirty region (call after painting)
    */
   public updateDirtyChunks(): void {

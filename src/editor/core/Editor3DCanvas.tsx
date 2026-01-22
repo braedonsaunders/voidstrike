@@ -613,6 +613,8 @@ export function Editor3DCanvas({
 
     if (updates.length > 0) {
       onCellsUpdateBatched(updates);
+      // Apply updates directly to terrain before React state propagates
+      terrainRef.current?.applyCellUpdates(updates);
       terrainRef.current?.markCellsDirty(updates.map((u) => ({ x: u.x, y: u.y })));
     }
   }, [mapData, config, activeTool, selectedElevation, selectedFeature, selectedMaterial, brushSize, worldToGrid, onCellsUpdateBatched, onFillArea]);
@@ -700,6 +702,8 @@ export function Editor3DCanvas({
                   );
                   if (updates.length > 0) {
                     onCellsUpdateBatched(updates);
+                    // Apply updates directly to terrain before React state propagates
+                    terrainRef.current?.applyCellUpdates(updates);
                     terrainRef.current?.markCellsDirty(updates.map((u) => ({ x: u.x, y: u.y })));
                   }
                 }
@@ -741,6 +745,8 @@ export function Editor3DCanvas({
               if (updates.length > 0) {
                 onStartBatch();
                 onCellsUpdateBatched(updates);
+                // Apply updates directly to terrain before React state propagates
+                terrainRef.current?.applyCellUpdates(updates);
                 terrainRef.current?.markCellsDirty(updates.map((u) => ({ x: u.x, y: u.y })));
                 onCommitBatch();
                 terrainRef.current?.updateDirtyChunks();
@@ -906,6 +912,8 @@ export function Editor3DCanvas({
 
           if (updates.length > 0) {
             onCellsUpdateBatched(updates);
+            // Apply updates directly to terrain before React state propagates
+            terrainRef.current?.applyCellUpdates(updates);
             terrainRef.current?.markCellsDirty(updates.map((u) => ({ x: u.x, y: u.y })));
           }
         }

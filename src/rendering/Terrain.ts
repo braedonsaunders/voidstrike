@@ -1447,19 +1447,6 @@ export class Terrain {
           vertexHeights[vy * (width + 1) + vx] = this.heightMap[hy * this.gridWidth + hx];
         }
 
-        // DEBUG: Log info for vertices around the failing query positions (85-89, 49-54)
-        if (vx >= 85 && vx <= 89 && vy >= 49 && vy <= 54) {
-          const heightVal = vertexHeights[vy * (width + 1) + vx];
-          const hmVal = this.heightMap[hy * this.gridWidth + hx];
-          const inRampZone = rampZone.has(`${vx},${vy}`) || rampZone.has(`${vx-1},${vy}`) || rampZone.has(`${vx},${vy-1}`) || rampZone.has(`${vx-1},${vy-1}`);
-          const inAdjZone = adjacentToRampZone.has(`${vx},${vy}`) || adjacentToRampZone.has(`${vx-1},${vy}`) || adjacentToRampZone.has(`${vx},${vy-1}`) || adjacentToRampZone.has(`${vx-1},${vy-1}`);
-          const inExtArea = extendedRampArea.has(`${vx},${vy}`) || extendedRampArea.has(`${vx-1},${vy}`) || extendedRampArea.has(`${vx},${vy-1}`) || extendedRampArea.has(`${vx-1},${vy-1}`);
-          console.log(
-            `[NavmeshDebug] Vertex (${vx},${vy}): height=${heightVal.toFixed(2)}, heightMap=${hmVal.toFixed(2)}, ` +
-            `touchesRampArea=${touchesRampArea}, allCliffEdge=${allCliffEdge}, cliffElev=${cliffElevation}, ` +
-            `inRampZone=${inRampZone}, inAdjZone=${inAdjZone}, inExtArea=${inExtArea}`
-          );
-        }
       }
     }
 
@@ -1533,24 +1520,6 @@ export class Terrain {
     // ========================================
     // PASS 1: Generate walkable floor geometry
     // ========================================
-
-    // DEBUG: Log terrain info for cells around the failing query positions (85-89, 49-54)
-    for (let dy = 49; dy <= 54; dy++) {
-      for (let dx = 85; dx <= 89; dx++) {
-        if (dx >= 0 && dx < width && dy >= 0 && dy < height) {
-          const cell = terrain[dy][dx];
-          const walkable = isCellWalkable(dx, dy);
-          const inRZ = rampZone.has(`${dx},${dy}`);
-          const inAZ = adjacentToRampZone.has(`${dx},${dy}`);
-          const inEA = extendedRampArea.has(`${dx},${dy}`);
-          const isCE = expandedCliffEdgeCells.has(`${dx},${dy}`);
-          console.log(
-            `[NavmeshDebug] Cell (${dx},${dy}): terrain=${cell.terrain}, elev=${cell.elevation}, ` +
-            `walkable=${walkable}, inRampZone=${inRZ}, inAdjZone=${inAZ}, inExtArea=${inEA}, isCliffEdge=${isCE}`
-          );
-        }
-      }
-    }
 
     for (let y = 0; y < height; y++) {
       for (let x = 0; x < width; x++) {
