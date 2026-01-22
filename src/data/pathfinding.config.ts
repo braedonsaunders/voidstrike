@@ -105,13 +105,6 @@ export function elevationToHeight(elevation: number): number {
   return elevation * ELEVATION_TO_HEIGHT_FACTOR;
 }
 
-/**
- * Convert world height to terrain elevation (0-255).
- */
-export function heightToElevation(height: number): number {
-  return Math.round(height / ELEVATION_TO_HEIGHT_FACTOR);
-}
-
 // =============================================================================
 // DERIVED VALUES (for validation and terrain analysis)
 // =============================================================================
@@ -133,6 +126,16 @@ export const WALKABLE_CLIMB_ELEVATION = Math.floor(WALKABLE_CLIMB / ELEVATION_TO
  * Set to 2x the walkable climb to ensure walls exist where needed.
  */
 export const CLIFF_WALL_THRESHOLD_ELEVATION = 40;
+
+/**
+ * Elevation threshold for ramp-terrain boundary height calculation.
+ * When ramp and non-ramp cells at a vertex differ by less than this,
+ * use MAX elevation to ensure smooth connection. When greater,
+ * the boundary is treated as a cliff edge.
+ *
+ * Set to WALKABLE_CLIMB / ELEVATION_TO_HEIGHT_FACTOR = 20 elevation units = 0.8 height
+ */
+export const RAMP_BOUNDARY_ELEVATION_THRESHOLD = Math.floor(WALKABLE_CLIMB / ELEVATION_TO_HEIGHT_FACTOR);
 
 // =============================================================================
 // CROWD SIMULATION
