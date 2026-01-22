@@ -1665,16 +1665,19 @@ export class Terrain {
         const h01 = getVertexHeight(x, y + 1);
         const h11 = getVertexHeight(x + 1, y + 1);
 
-        // Create two triangles for floor (CCW winding for Recast)
-        vertices.push(x, h00, y);
-        vertices.push(x, h01, y + 1);
-        vertices.push(x + 1, h10, y);
+        // Create two triangles for floor with CCW winding for Recast
+        // Recast expects counter-clockwise winding when viewed from above (+Y)
+        // Triangle 1: NW(x,y) -> NE(x+1,y) -> SW(x,y+1)
+        vertices.push(x, h00, y);           // NW corner
+        vertices.push(x + 1, h10, y);       // NE corner
+        vertices.push(x, h01, y + 1);       // SW corner
         indices.push(vertexIndex, vertexIndex + 1, vertexIndex + 2);
         vertexIndex += 3;
 
-        vertices.push(x + 1, h10, y);
-        vertices.push(x, h01, y + 1);
-        vertices.push(x + 1, h11, y + 1);
+        // Triangle 2: NE(x+1,y) -> SE(x+1,y+1) -> SW(x,y+1)
+        vertices.push(x + 1, h10, y);       // NE corner
+        vertices.push(x + 1, h11, y + 1);   // SE corner
+        vertices.push(x, h01, y + 1);       // SW corner
         indices.push(vertexIndex, vertexIndex + 1, vertexIndex + 2);
         vertexIndex += 3;
       }
