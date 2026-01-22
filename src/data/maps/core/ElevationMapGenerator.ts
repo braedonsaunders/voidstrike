@@ -42,6 +42,10 @@ import {
 
 import { SeededRandom, distance } from '../../../utils/math';
 import { debugTerrain } from '@/utils/debugLogger';
+import {
+  calculateMinRampLength,
+  MAX_RAMP_ELEVATION_PER_CELL,
+} from '@/data/pathfinding.config';
 
 // Connectivity system imports
 import { analyzeConnectivity, getConnectivitySummary } from './ConnectivityAnalyzer';
@@ -133,7 +137,8 @@ function paintRect(
 
 /**
  * Paint a ramp corridor between two points
- * Creates a walkable gradient between different elevations
+ * Creates a walkable gradient between different elevations.
+ * Automatically extends the ramp if needed to satisfy walkableClimb constraints.
  */
 function paintRamp(
   grid: GenerationGrid,
@@ -143,18 +148,38 @@ function paintRamp(
   toY: number,
   width: number
 ): void {
-  const dx = toX - fromX;
-  const dy = toY - fromY;
-  const length = distance(fromX, fromY, toX, toY);
+  // Get elevations at endpoints
+  const fromElev = grid.elevation[Math.floor(fromY)]?.[Math.floor(fromX)] ?? ELEVATION.LOW;
+  const toElev = grid.elevation[Math.floor(toY)]?.[Math.floor(toX)] ?? ELEVATION.LOW;
+  const elevationDelta = Math.abs(toElev - fromElev);
+
+  // Calculate minimum required length based on walkableClimb constraints
+  const minRequiredLength = calculateMinRampLength(elevationDelta);
+
+  let dx = toX - fromX;
+  let dy = toY - fromY;
+  let length = distance(fromX, fromY, toX, toY);
   if (length === 0) return;
+
+  // Auto-extend ramp if too short for the elevation delta
+  let actualToX = toX;
+  let actualToY = toY;
+  if (length < minRequiredLength && minRequiredLength > 0) {
+    const scale = minRequiredLength / length;
+    actualToX = fromX + dx * scale;
+    actualToY = fromY + dy * scale;
+    dx = actualToX - fromX;
+    dy = actualToY - fromY;
+    length = minRequiredLength;
+    debugTerrain.log(
+      `[ElevationMapGenerator] Ramp auto-extended: elevation delta ${elevationDelta} ` +
+      `requires min length ${minRequiredLength} (max ${MAX_RAMP_ELEVATION_PER_CELL} per cell)`
+    );
+  }
 
   const steps = Math.ceil(length);
   const perpX = -dy / length;
   const perpY = dx / length;
-
-  // Get elevations at endpoints
-  const fromElev = grid.elevation[Math.floor(fromY)]?.[Math.floor(fromX)] ?? ELEVATION.LOW;
-  const toElev = grid.elevation[Math.floor(toY)]?.[Math.floor(toX)] ?? ELEVATION.LOW;
 
   for (let i = 0; i <= steps; i++) {
     const t = i / steps;

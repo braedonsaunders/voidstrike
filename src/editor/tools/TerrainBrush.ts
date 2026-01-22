@@ -6,6 +6,12 @@
 
 import type { EditorCell, EditorMapData, EditorConfig, PlatformEdges } from '../config/EditorConfig';
 import { distance, clamp } from '@/utils/math';
+import {
+  validateRampConstraints,
+  calculateExtendedRampEndpoint,
+  MAX_RAMP_ELEVATION_PER_CELL,
+  type RampConstraintResult,
+} from '@/data/pathfinding.config';
 
 export interface BrushStroke {
   x: number;
@@ -21,6 +27,23 @@ export interface CellUpdate {
     isPlatform?: boolean;
     edges?: PlatformEdges;
   };
+}
+
+/**
+ * Result of ramp painting operations.
+ * Includes cell updates plus validation info for editor warnings.
+ */
+export interface RampResult {
+  /** Cell updates to apply */
+  updates: CellUpdate[];
+  /** Ramp constraint validation result */
+  validation: RampConstraintResult;
+  /** Whether the ramp was auto-extended to meet constraints */
+  wasExtended: boolean;
+  /** Original endpoint before extension (if extended) */
+  originalEndpoint?: { x: number; y: number };
+  /** Final endpoint after any extension */
+  finalEndpoint: { x: number; y: number };
 }
 
 export class TerrainBrush {
@@ -337,35 +360,70 @@ export class TerrainBrush {
   }
 
   /**
-   * Paint a ramp between two points
-   * Creates a walkable gradient between different elevations
+   * Paint a ramp between two points with constraint validation.
+   * Auto-extends the ramp if needed to meet walkableClimb constraints.
+   * Returns detailed validation info for editor warnings.
    */
-  public paintRamp(
+  public paintRampWithValidation(
     fromX: number,
     fromY: number,
     toX: number,
     toY: number,
     width: number
-  ): CellUpdate[] {
-    if (!this.mapData) return [];
-
-    const updates: CellUpdate[] = [];
-    const visitedCells = new Set<string>();
-
-    const dx = toX - fromX;
-    const dy = toY - fromY;
-    const length = distance(fromX, fromY, toX, toY);
-    if (length === 0) return [];
-
-    const steps = Math.ceil(length);
-    const perpX = -dy / length;
-    const perpY = dx / length;
+  ): RampResult {
+    if (!this.mapData) {
+      return {
+        updates: [],
+        validation: {
+          isValid: true,
+          minRequiredLength: 0,
+          actualLength: 0,
+          maxElevationPerCell: 0,
+        },
+        wasExtended: false,
+        finalEndpoint: { x: toX, y: toY },
+      };
+    }
 
     // Get elevations at endpoints
     const fromCell = this.mapData.terrain[Math.floor(fromY)]?.[Math.floor(fromX)];
     const toCell = this.mapData.terrain[Math.floor(toY)]?.[Math.floor(toX)];
     const fromElev = fromCell?.elevation ?? this.config.terrain.defaultElevation;
     const toElev = toCell?.elevation ?? this.config.terrain.defaultElevation;
+
+    // Calculate extended endpoint if needed to meet constraints
+    const extended = calculateExtendedRampEndpoint(
+      fromX,
+      fromY,
+      toX,
+      toY,
+      fromElev,
+      toElev
+    );
+
+    // Use extended endpoint for painting
+    const actualToX = extended.x;
+    const actualToY = extended.y;
+
+    const updates: CellUpdate[] = [];
+    const visitedCells = new Set<string>();
+
+    const dx = actualToX - fromX;
+    const dy = actualToY - fromY;
+    const length = distance(fromX, fromY, actualToX, actualToY);
+
+    if (length === 0) {
+      return {
+        updates: [],
+        validation: extended.validation,
+        wasExtended: false,
+        finalEndpoint: { x: toX, y: toY },
+      };
+    }
+
+    const steps = Math.ceil(length);
+    const perpX = -dy / length;
+    const perpY = dx / length;
 
     for (let i = 0; i <= steps; i++) {
       const t = i / steps;
@@ -393,7 +451,29 @@ export class TerrainBrush {
       }
     }
 
-    return updates;
+    return {
+      updates,
+      validation: extended.validation,
+      wasExtended: extended.wasExtended,
+      originalEndpoint: extended.wasExtended ? { x: toX, y: toY } : undefined,
+      finalEndpoint: { x: actualToX, y: actualToY },
+    };
+  }
+
+  /**
+   * Paint a ramp between two points
+   * Creates a walkable gradient between different elevations.
+   * Automatically enforces walkableClimb constraints by extending
+   * the ramp if needed.
+   */
+  public paintRamp(
+    fromX: number,
+    fromY: number,
+    toX: number,
+    toY: number,
+    width: number
+  ): CellUpdate[] {
+    return this.paintRampWithValidation(fromX, fromY, toX, toY, width).updates;
   }
 
   /**
@@ -959,19 +1039,31 @@ export class TerrainBrush {
   }
 
   /**
-   * Paint a structured platform ramp with perfectly straight edges
-   * Creates a rectangular ramp aligned to the direction of travel
-   * with uniform width and precise boundaries.
+   * Paint a structured platform ramp with constraint validation.
+   * Auto-extends the ramp if needed to meet walkableClimb constraints.
+   * Returns detailed validation info for editor warnings.
    */
-  public paintPlatformRamp(
+  public paintPlatformRampWithValidation(
     fromX: number,
     fromY: number,
     toX: number,
     toY: number,
     width: number,
     snapMode: 'none' | 'grid' | 'orthogonal' | '45deg' = '45deg'
-  ): CellUpdate[] {
-    if (!this.mapData) return [];
+  ): RampResult {
+    if (!this.mapData) {
+      return {
+        updates: [],
+        validation: {
+          isValid: true,
+          minRequiredLength: 0,
+          actualLength: 0,
+          maxElevationPerCell: 0,
+        },
+        wasExtended: false,
+        finalEndpoint: { x: toX, y: toY },
+      };
+    }
 
     // Snap endpoint to grid alignment if required
     let snappedToX = toX;
@@ -992,34 +1084,40 @@ export class TerrainBrush {
       const dy = toY - fromY;
       const angle = Math.atan2(dy, dx);
       const snappedAngle = Math.round(angle / (Math.PI / 4)) * (Math.PI / 4);
-      const length = distance(fromX, fromY, toX, toY);
-      snappedToX = fromX + Math.cos(snappedAngle) * length;
-      snappedToY = fromY + Math.sin(snappedAngle) * length;
+      const len = distance(fromX, fromY, toX, toY);
+      snappedToX = fromX + Math.cos(snappedAngle) * len;
+      snappedToY = fromY + Math.sin(snappedAngle) * len;
     } else if (snapMode === 'grid') {
       // Snap to nearest grid cell
       snappedToX = Math.round(toX);
       snappedToY = Math.round(toY);
     }
 
-    const updates: CellUpdate[] = [];
-    const visitedCells = new Set<string>();
-
-    const dx = snappedToX - fromX;
-    const dy = snappedToY - fromY;
-    const length = distance(fromX, fromY, snappedToX, snappedToY);
-    if (length < 1) return [];
+    const initialLength = distance(fromX, fromY, snappedToX, snappedToY);
+    if (initialLength < 1) {
+      return {
+        updates: [],
+        validation: {
+          isValid: true,
+          minRequiredLength: 0,
+          actualLength: 0,
+          maxElevationPerCell: 0,
+        },
+        wasExtended: false,
+        finalEndpoint: { x: snappedToX, y: snappedToY },
+      };
+    }
 
     // Round positions to ensure pixel-perfect alignment
     const startX = Math.round(fromX);
     const startY = Math.round(fromY);
-    const endX = Math.round(snappedToX);
-    const endY = Math.round(snappedToY);
+    let endX = Math.round(snappedToX);
+    let endY = Math.round(snappedToY);
 
-    // Calculate direction and perpendicular vectors
-    const dirX = (endX - startX) / length;
-    const dirY = (endY - startY) / length;
-    const perpX = -dirY;
-    const perpY = dirX;
+    // Calculate direction vectors for finding adjacent platforms
+    const tempLength = distance(startX, startY, endX, endY);
+    const dirX = tempLength > 0 ? (endX - startX) / tempLength : 0;
+    const dirY = tempLength > 0 ? (endY - startY) / tempLength : 0;
 
     // Get elevations at endpoints (from adjacent cells if needed)
     const fromCell = this.mapData.terrain[Math.floor(fromY)]?.[Math.floor(fromX)];
@@ -1069,6 +1167,42 @@ export class TerrainBrush {
     fromElev = this.quantizeElevation(fromElev);
     toElev = this.quantizeElevation(toElev);
 
+    // Calculate extended endpoint if needed to meet constraints
+    const extended = calculateExtendedRampEndpoint(
+      startX,
+      startY,
+      endX,
+      endY,
+      fromElev,
+      toElev
+    );
+
+    // Use extended endpoint if needed
+    const wasExtended = extended.wasExtended;
+    if (wasExtended) {
+      endX = Math.round(extended.x);
+      endY = Math.round(extended.y);
+    }
+
+    const updates: CellUpdate[] = [];
+    const visitedCells = new Set<string>();
+
+    const length = distance(startX, startY, endX, endY);
+    if (length < 1) {
+      return {
+        updates: [],
+        validation: extended.validation,
+        wasExtended: false,
+        finalEndpoint: { x: endX, y: endY },
+      };
+    }
+
+    // Recalculate direction and perpendicular vectors with final positions
+    const finalDirX = (endX - startX) / length;
+    const finalDirY = (endY - startY) / length;
+    const perpX = -finalDirY;
+    const perpY = finalDirX;
+
     // Calculate exact ramp bounds
     const halfWidth = Math.floor(width / 2);
     const steps = Math.ceil(length);
@@ -1104,7 +1238,31 @@ export class TerrainBrush {
       }
     }
 
-    return updates;
+    return {
+      updates,
+      validation: extended.validation,
+      wasExtended,
+      originalEndpoint: wasExtended ? { x: snappedToX, y: snappedToY } : undefined,
+      finalEndpoint: { x: endX, y: endY },
+    };
+  }
+
+  /**
+   * Paint a structured platform ramp with perfectly straight edges
+   * Creates a rectangular ramp aligned to the direction of travel
+   * with uniform width and precise boundaries.
+   * Automatically enforces walkableClimb constraints by extending
+   * the ramp if needed.
+   */
+  public paintPlatformRamp(
+    fromX: number,
+    fromY: number,
+    toX: number,
+    toY: number,
+    width: number,
+    snapMode: 'none' | 'grid' | 'orthogonal' | '45deg' = '45deg'
+  ): CellUpdate[] {
+    return this.paintPlatformRampWithValidation(fromX, fromY, toX, toY, width, snapMode).updates;
   }
 
   /**
