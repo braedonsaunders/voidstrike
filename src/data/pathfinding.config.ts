@@ -196,3 +196,130 @@ export const CROWD_CONFIG = {
   maxAgents: CROWD_MAX_AGENTS,
   maxAgentRadius: CROWD_MAX_AGENT_RADIUS,
 } as const;
+
+// =============================================================================
+// RAMP CONSTRAINT VALIDATION
+// =============================================================================
+
+/**
+ * Maximum elevation change per cell for a traversable ramp.
+ * Derived from WALKABLE_CLIMB with margin for navmesh cell sampling.
+ *
+ * With WALKABLE_CLIMB = 0.8 and ELEVATION_TO_HEIGHT_FACTOR = 0.04:
+ * - 0.8 / 0.04 = 20 elevation units theoretical max
+ * - Using 16 to provide safety margin for interpolation/quantization
+ */
+export const MAX_RAMP_ELEVATION_PER_CELL = 16;
+
+/**
+ * Result of ramp constraint validation.
+ */
+export interface RampConstraintResult {
+  /** Whether the ramp is valid without modifications */
+  isValid: boolean;
+  /** Minimum length required for a valid ramp (in cells) */
+  minRequiredLength: number;
+  /** Actual length of the ramp (in cells) */
+  actualLength: number;
+  /** Maximum per-cell elevation delta with current length */
+  maxElevationPerCell: number;
+  /** Warning message if ramp is invalid */
+  warning?: string;
+}
+
+/**
+ * Calculate the minimum ramp length required for a given elevation delta.
+ * Ensures per-cell height step stays within WALKABLE_CLIMB.
+ *
+ * @param elevationDelta - Absolute difference in elevation (0-255 scale)
+ * @returns Minimum length in grid cells
+ */
+export function calculateMinRampLength(elevationDelta: number): number {
+  if (elevationDelta === 0) return 1;
+  // minLength = elevationDelta / maxElevationPerCell, rounded up
+  return Math.ceil(Math.abs(elevationDelta) / MAX_RAMP_ELEVATION_PER_CELL);
+}
+
+/**
+ * Validate a ramp's dimensions against walkable climb constraints.
+ *
+ * @param fromElevation - Starting elevation (0-255)
+ * @param toElevation - Ending elevation (0-255)
+ * @param length - Ramp length in grid cells
+ * @returns Constraint validation result
+ */
+export function validateRampConstraints(
+  fromElevation: number,
+  toElevation: number,
+  length: number
+): RampConstraintResult {
+  const elevationDelta = Math.abs(toElevation - fromElevation);
+  const minRequiredLength = calculateMinRampLength(elevationDelta);
+  const maxElevationPerCell = length > 0 ? elevationDelta / length : elevationDelta;
+  const isValid = length >= minRequiredLength;
+
+  let warning: string | undefined;
+  if (!isValid) {
+    const heightDelta = (elevationDelta * ELEVATION_TO_HEIGHT_FACTOR).toFixed(2);
+    const heightPerCell = (maxElevationPerCell * ELEVATION_TO_HEIGHT_FACTOR).toFixed(2);
+    warning =
+      `Ramp too steep: ${heightPerCell} height/cell exceeds walkableClimb (${WALKABLE_CLIMB}). ` +
+      `Elevation delta: ${elevationDelta} (${heightDelta} height). ` +
+      `Minimum length: ${minRequiredLength} cells, actual: ${Math.ceil(length)} cells.`;
+  }
+
+  return {
+    isValid,
+    minRequiredLength,
+    actualLength: length,
+    maxElevationPerCell,
+    warning,
+  };
+}
+
+/**
+ * Calculate extended ramp endpoint to satisfy walkable climb constraints.
+ * Extends the ramp in the same direction until the slope is valid.
+ *
+ * @param fromX - Start X coordinate
+ * @param fromY - Start Y coordinate
+ * @param toX - End X coordinate
+ * @param toY - End Y coordinate
+ * @param fromElevation - Starting elevation (0-255)
+ * @param toElevation - Ending elevation (0-255)
+ * @returns Extended endpoint { x, y } and validation info
+ */
+export function calculateExtendedRampEndpoint(
+  fromX: number,
+  fromY: number,
+  toX: number,
+  toY: number,
+  fromElevation: number,
+  toElevation: number
+): { x: number; y: number; wasExtended: boolean; validation: RampConstraintResult } {
+  const dx = toX - fromX;
+  const dy = toY - fromY;
+  const currentLength = Math.sqrt(dx * dx + dy * dy);
+
+  const validation = validateRampConstraints(fromElevation, toElevation, currentLength);
+
+  if (validation.isValid || currentLength === 0) {
+    return { x: toX, y: toY, wasExtended: false, validation };
+  }
+
+  // Extend the ramp in the same direction
+  const minLength = validation.minRequiredLength;
+  const scale = minLength / currentLength;
+  const extendedX = fromX + dx * scale;
+  const extendedY = fromY + dy * scale;
+
+  // Recalculate validation for extended ramp
+  const extendedValidation = validateRampConstraints(fromElevation, toElevation, minLength);
+
+  return {
+    x: extendedX,
+    y: extendedY,
+    wasExtended: true,
+    validation: extendedValidation,
+  };
+}

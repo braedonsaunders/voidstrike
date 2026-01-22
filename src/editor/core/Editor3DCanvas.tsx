@@ -22,7 +22,7 @@ import { EditorTerrain } from '../rendering3d/EditorTerrain';
 import { EditorObjects } from '../rendering3d/EditorObjects';
 import { EditorGrid } from '../rendering3d/EditorGrid';
 import { EditorBrushPreview } from '../rendering3d/EditorBrushPreview';
-import { TerrainBrush } from '../tools/TerrainBrush';
+import { TerrainBrush, type RampResult } from '../tools/TerrainBrush';
 import { ObjectPlacer } from '../tools/ObjectPlacer';
 import { RTSCamera } from '@/rendering/Camera';
 
@@ -827,13 +827,23 @@ export function Editor3DCanvas({
           let updates: Array<{ x: number; y: number; cell: Partial<EditorCell> }> = [];
 
           switch (shapeType) {
-            case 'ramp':
-              updates = terrainBrushRef.current.paintRamp(
+            case 'ramp': {
+              const rampResult = terrainBrushRef.current.paintRampWithValidation(
                 startPos.x, startPos.y,
                 endPos.x, endPos.y,
                 brushSize
               );
+              updates = rampResult.updates;
+              if (rampResult.wasExtended) {
+                console.warn(
+                  `[Editor] Ramp auto-extended to meet walkableClimb constraints. ` +
+                  `Original: (${endPos.x.toFixed(1)}, ${endPos.y.toFixed(1)}) → ` +
+                  `Extended: (${rampResult.finalEndpoint.x.toFixed(1)}, ${rampResult.finalEndpoint.y.toFixed(1)}). ` +
+                  `Min length: ${rampResult.validation.minRequiredLength} cells.`
+                );
+              }
               break;
+            }
 
             case 'line':
               updates = terrainBrushRef.current.paintLine(
@@ -874,14 +884,24 @@ export function Editor3DCanvas({
               );
               break;
 
-            case 'platform_ramp':
-              updates = terrainBrushRef.current.paintPlatformRamp(
+            case 'platform_ramp': {
+              const platformRampResult = terrainBrushRef.current.paintPlatformRampWithValidation(
                 startPos.x, startPos.y,
                 endPos.x, endPos.y,
                 brushSize,
                 state.snapMode
               );
+              updates = platformRampResult.updates;
+              if (platformRampResult.wasExtended) {
+                console.warn(
+                  `[Editor] Platform ramp auto-extended to meet walkableClimb constraints. ` +
+                  `Original: (${endPos.x.toFixed(1)}, ${endPos.y.toFixed(1)}) → ` +
+                  `Extended: (${platformRampResult.finalEndpoint.x.toFixed(1)}, ${platformRampResult.finalEndpoint.y.toFixed(1)}). ` +
+                  `Min length: ${platformRampResult.validation.minRequiredLength} cells.`
+                );
+              }
               break;
+            }
           }
 
           if (updates.length > 0) {
