@@ -24,8 +24,8 @@ interface OverlayCacheEntry {
 }
 
 // Current cache version - increment when overlay computation changes
-// v12: Fixed terrain conforming geometry coordinate mapping and Y-flip for proper overlay alignment
-const CACHE_VERSION = 12;
+// v13: Fixed navmesh geometry threshold to use WALKABLE_CLIMB_ELEVATION for proper slope handling
+const CACHE_VERSION = 13;
 
 // Max age for cached entries (7 days)
 const MAX_CACHE_AGE_MS = 7 * 24 * 60 * 60 * 1000;

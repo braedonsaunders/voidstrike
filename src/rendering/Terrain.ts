@@ -11,6 +11,7 @@ import {
   elevationToHeight,
   CLIFF_WALL_THRESHOLD_ELEVATION,
   RAMP_BOUNDARY_ELEVATION_THRESHOLD,
+  WALKABLE_CLIMB_ELEVATION,
 } from '@/data/pathfinding.config';
 
 // Import from central rendering config
@@ -1246,8 +1247,11 @@ export class Terrain {
 
     // Wall geometry constants
     const WALL_HEIGHT = 4.0; // Height of cliff walls (taller than walkableClimb)
-    // Use CLIFF_WALL_THRESHOLD_ELEVATION from central pathfinding config
-    const ELEVATION_DIFF_THRESHOLD = CLIFF_WALL_THRESHOLD_ELEVATION;
+    // Use WALKABLE_CLIMB_ELEVATION for cliff edge detection to ensure slopes stay under 50°
+    // CLIFF_WALL_THRESHOLD_ELEVATION (40) is too high - cells with elevation diff 30-39
+    // create slopes of 50-57° which Recast rejects. WALKABLE_CLIMB_ELEVATION (18) ensures
+    // height differences stay within walkableClimb (0.8) and slopes under walkableSlopeAngle.
+    const ELEVATION_DIFF_THRESHOLD = WALKABLE_CLIMB_ELEVATION;
 
     // Pre-compute ramp zones - cells within radius of a ramp use smooth heightMap
     // Increased from 5 to 8 to ensure ramp exit cells aren't marked as cliff edges
