@@ -1224,9 +1224,6 @@ export class Terrain {
     const width = this.mapData.width;
     const height = this.mapData.height;
 
-    // UNCONDITIONAL DEBUG: Always log at start to confirm function runs
-    console.log(`[NavmeshDebug] generateWalkableGeometry() CALLED - map size: ${width}x${height}`);
-
     const vertices: number[] = [];
     const indices: number[] = [];
     let vertexIndex = 0;
@@ -1257,18 +1254,6 @@ export class Terrain {
         }
       }
     }
-
-    // DEBUG: Log ramp zone info
-    const rampCellsActual: string[] = [];
-    for (let y = 0; y < height; y++) {
-      for (let x = 0; x < width; x++) {
-        if (terrain[y][x].terrain === 'ramp') {
-          rampCellsActual.push(`(${x},${y},elev=${terrain[y][x].elevation})`);
-        }
-      }
-    }
-    console.log(`[NavmeshDebug] Found ${rampCellsActual.length} actual ramp cells: ${rampCellsActual.join(', ')}`);
-    console.log(`[NavmeshDebug] rampZone size: ${rampZone.size}, first 10: ${[...rampZone].slice(0, 10).join(', ')}`);
 
     // Pre-compute cliff edge cells - cells that need flat heights
     // This includes:
@@ -1583,10 +1568,6 @@ export class Terrain {
       if (changesThisPass === 0) break;
     }
 
-    if (smoothedCount > 0) {
-      console.log(`[NavmeshDebug] Slope smoothing: adjusted ${smoothedCount} vertices over ${SMOOTHING_PASSES} passes`);
-    }
-
     // Helper: Get pre-computed consistent vertex height
     const getVertexHeight = (vx: number, vy: number): number => {
       const hx = clamp(vx, 0, width);
@@ -1657,24 +1638,6 @@ export class Terrain {
     // ========================================
     // PASS 1: Generate walkable floor geometry
     // ========================================
-
-    // DEBUG: Log terrain info for cells around the failing query positions (85-89, 49-54)
-    for (let dy = 49; dy <= 54; dy++) {
-      for (let dx = 85; dx <= 89; dx++) {
-        if (dx >= 0 && dx < width && dy >= 0 && dy < height) {
-          const cell = terrain[dy][dx];
-          const walkable = isCellWalkable(dx, dy);
-          const inRZ = rampZone.has(`${dx},${dy}`);
-          const inAZ = adjacentToRampZone.has(`${dx},${dy}`);
-          const inEA = extendedRampArea.has(`${dx},${dy}`);
-          const isCE = expandedCliffEdgeCells.has(`${dx},${dy}`);
-          console.log(
-            `[NavmeshDebug] Cell (${dx},${dy}): terrain=${cell.terrain}, elev=${cell.elevation}, ` +
-            `walkable=${walkable}, inRampZone=${inRZ}, inAdjZone=${inAZ}, inExtArea=${inEA}, isCliffEdge=${isCE}`
-          );
-        }
-      }
-    }
 
     for (let y = 0; y < height; y++) {
       for (let x = 0; x < width; x++) {
@@ -1910,13 +1873,6 @@ export class Terrain {
     if (maxRampBoundaryGap > 0) {
       debugTerrain.log(`[Terrain] Max ramp boundary height gap: ${maxRampBoundaryGap.toFixed(3)} at (${rampBoundaryGapLocation.x}, ${rampBoundaryGapLocation.y})`);
     }
-
-    // UNCONDITIONAL DEBUG: Log completion and stats
-    console.log(
-      `[NavmeshDebug] generateWalkableGeometry() COMPLETED - ` +
-      `${floorTriangles} floor tris, ${wallTriangles} wall tris, ` +
-      `${rampCellCount} ramps, heightRange: ${minHeight.toFixed(2)} to ${maxHeight.toFixed(2)}`
-    );
 
     return {
       positions: new Float32Array(vertices),
