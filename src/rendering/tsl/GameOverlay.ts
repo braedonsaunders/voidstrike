@@ -348,7 +348,9 @@ export class TSLGameOverlayManager {
 
     for (let y = 0; y < height; y++) {
       for (let x = 0; x < width; x++) {
-        const i = (y * width + x) * 4;
+        // Flip Y coordinate for texture UV mapping
+        const textureY = height - 1 - y;
+        const i = (textureY * width + x) * 4;
         const cell = terrain[y]?.[x];
         const elevation = cell?.elevation ?? 0;
         const color = this.getElevationColor(elevation);
@@ -466,7 +468,9 @@ export class TSLGameOverlayManager {
 
     for (let y = 0; y < height; y++) {
       for (let x = 0; x < width; x++) {
-        const i = (y * width + x) * 4;
+        // Flip Y coordinate for texture UV mapping
+        const textureY = height - 1 - y;
+        const i = (textureY * width + x) * 4;
         const cell = terrain[y]?.[x];
 
         // Check if cell is buildable
@@ -787,7 +791,14 @@ export class TSLGameOverlayManager {
     let notOnNavmeshCount = 0;
 
     for (let idx = 0; idx < totalCells; idx++) {
-      const i = idx * 4;
+      // Flip Y coordinate for texture UV mapping
+      // PlaneGeometry UV (0,0) is at bottom-left, but we iterate top-to-bottom
+      const x = idx % width;
+      const y = Math.floor(idx / width);
+      const textureY = height - 1 - y;
+      const textureIdx = textureY * width + x;
+      const i = textureIdx * 4;
+
       const tType = terrainType[idx];
       const isWalkable = walkableGrid[idx] === 1;
       const isConnected = connectedGrid[idx] === 1;
@@ -842,15 +853,14 @@ export class TSLGameOverlayManager {
 
     const duration = performance.now() - startTime;
 
-    // Use console.log for production visibility
-    console.log(`[NavmeshOverlay] Completed in ${duration.toFixed(0)}ms`);
-    console.log(`[NavmeshOverlay] Connected: ${connectedCount}, Disconnected: ${disconnectedCount}, Not on navmesh: ${notOnNavmeshCount}`);
-    console.log(`[NavmeshOverlay] Walkable by type:`, walkableByType);
-    console.log(`[NavmeshOverlay] NOT walkable by type:`, notWalkableByType);
+    // Summary log for production - detailed breakdown available via debug logger
+    console.log(`[NavmeshOverlay] Completed: ${connectedCount} connected, ${disconnectedCount} disconnected, ${notOnNavmeshCount} not on navmesh (${duration.toFixed(0)}ms)`);
 
     debugPathfinding.log(`[NavmeshOverlay] Completed in ${duration.toFixed(0)}ms`);
     debugPathfinding.log(`[NavmeshOverlay]   Connected: ${connectedCount}, Disconnected: ${disconnectedCount}`);
     debugPathfinding.log(`[NavmeshOverlay]   Not on navmesh: ${notOnNavmeshCount}, Unwalkable: ${unwalkableTerrainCount}`);
+    debugPathfinding.log(`[NavmeshOverlay]   Walkable by type:`, walkableByType);
+    debugPathfinding.log(`[NavmeshOverlay]   NOT walkable by type:`, notWalkableByType);
 
     if (disconnectedCount > 0) {
       debugPathfinding.warn(`[NavmeshOverlay] WARNING: ${disconnectedCount} disconnected cells detected!`);
@@ -913,7 +923,9 @@ export class TSLGameOverlayManager {
 
           const dist = distance(cx, cy, px, py);
           if (dist <= attackRange) {
-            const i = (py * width + px) * 4;
+            // Flip Y coordinate for texture UV mapping
+            const textureY = height - 1 - py;
+            const i = (textureY * width + px) * 4;
             const intensity = Math.min(255, this.threatTextureData[i + 0] + 80);
             this.threatTextureData[i + 0] = intensity;
             this.threatTextureData[i + 3] = Math.min(200, this.threatTextureData[i + 3] + 60);
@@ -947,7 +959,9 @@ export class TSLGameOverlayManager {
 
           const dist = distance(cx, cy, px, py);
           if (dist <= attackRange) {
-            const i = (py * width + px) * 4;
+            // Flip Y coordinate for texture UV mapping
+            const textureY = height - 1 - py;
+            const i = (textureY * width + px) * 4;
             const intensity = Math.min(255, this.threatTextureData[i + 0] + 100);
             this.threatTextureData[i + 0] = intensity;
             this.threatTextureData[i + 3] = Math.min(220, this.threatTextureData[i + 3] + 80);
@@ -1019,7 +1033,9 @@ export class TSLGameOverlayManager {
 
           const dist = distance(cx, cy, px, py);
           if (dist <= radius) {
-            const i = (py * width + px) * 4;
+            // Flip Y coordinate for texture UV mapping
+            const textureY = height - 1 - py;
+            const i = (textureY * width + px) * 4;
             const falloff = 1 - (dist / radius) * 0.5;
             this.resourceTextureData[i + 0] = Math.floor(r * intensity * falloff);
             this.resourceTextureData[i + 1] = Math.floor(g * intensity * falloff);

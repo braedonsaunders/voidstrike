@@ -72,6 +72,10 @@ export class PathfindingMovement {
   private game: PathfindingGame;
   private world: PathfindingWorld;
 
+  // Rate limiting for warnings
+  private crowdAgentFailLogCount = 0;
+  private readonly MAX_CROWD_AGENT_FAIL_LOGS = 5;
+
   constructor(
     recast: RecastNavigation,
     game: PathfindingGame,
@@ -170,12 +174,18 @@ export class PathfindingMovement {
     if (agentIndex >= 0) {
       this.crowdAgents.add(entityId);
     } else {
-      // FIX: Log warning when agent addition fails (crowd limit exceeded)
-      debugPathfinding.warn(
-        `[PathfindingMovement] Failed to add crowd agent for entity ${entityId}. ` +
-        `Crowd may be at capacity (500 agents). Current agents: ${this.crowdAgents.size}. ` +
-        `Unit will use fallback pathfinding without crowd avoidance.`
-      );
+      // Rate-limit warnings to avoid console spam
+      if (this.crowdAgentFailLogCount < this.MAX_CROWD_AGENT_FAIL_LOGS) {
+        debugPathfinding.warn(
+          `[PathfindingMovement] Failed to add crowd agent for entity ${entityId}. ` +
+          `Crowd may be at capacity (500 agents). Current agents: ${this.crowdAgents.size}. ` +
+          `Unit will use fallback pathfinding without crowd avoidance.`
+        );
+        this.crowdAgentFailLogCount++;
+        if (this.crowdAgentFailLogCount === this.MAX_CROWD_AGENT_FAIL_LOGS) {
+          debugPathfinding.warn('[PathfindingMovement] Suppressing further crowd agent failure warnings...');
+        }
+      }
     }
   }
 
