@@ -902,20 +902,36 @@ export class Terrain {
       const avgRampElev = rampElevations.reduce((a, b) => a + b, 0) / rampElevations.length;
 
       if (nonRampElevations.length === 0) {
-        // All cells are ramps - use their average
+        // All cells are ramps - use their average for smooth internal slope
         avgElevation = avgRampElev;
       } else {
-        // Check if non-ramp cells are at similar elevation to ramp cells
+        // Ramp-to-terrain boundary - use the ramp cell closest to the non-ramp terrain
+        // This ensures the height step at the boundary stays within walkableClimb
         const avgNonRampElev = nonRampElevations.reduce((a, b) => a + b, 0) / nonRampElevations.length;
-        const elevationDiff = Math.abs(avgRampElev - avgNonRampElev);
+        const maxRampElev = Math.max(...rampElevations);
+        const minRampElev = Math.min(...rampElevations);
 
-        if (elevationDiff <= SIMILAR_ELEVATION_THRESHOLD) {
-          // Similar elevations: use MAX to ensure exact match at platform-ramp boundaries
-          avgElevation = Math.max(...cells.map(c => c.elevation));
+        // Determine if non-ramp terrain is above or below the ramp
+        if (avgNonRampElev >= maxRampElev) {
+          // Non-ramp is at or above the highest ramp cell - this is a ramp top boundary
+          // Use MAX to match the platform elevation and prevent gaps
+          const elevationDiff = avgNonRampElev - maxRampElev;
+          if (elevationDiff <= SIMILAR_ELEVATION_THRESHOLD) {
+            avgElevation = Math.max(...cells.map(c => c.elevation));
+          } else {
+            // Large gap - use max ramp elevation, step will be handled by navmesh
+            avgElevation = maxRampElev;
+          }
         } else {
-          // Cliff boundary: use ramp elevation to preserve smooth ramp slope
-          // The cliff terrain will have its own geometry at its own height
-          avgElevation = avgRampElev;
+          // Non-ramp is below the ramp - this is a ramp bottom boundary
+          // Use MIN ramp elevation to meet the lower terrain
+          const elevationDiff = minRampElev - avgNonRampElev;
+          if (elevationDiff <= SIMILAR_ELEVATION_THRESHOLD) {
+            avgElevation = Math.min(...cells.map(c => c.elevation));
+          } else {
+            // Large gap - use min ramp elevation
+            avgElevation = minRampElev;
+          }
         }
       }
     } else if (hasPlatform) {
