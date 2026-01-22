@@ -808,6 +808,7 @@ export class MovementOrchestrator {
     // Calculate velocity
     let finalVx = 0;
     let finalVy = 0;
+    let crowdHeight: number | null = null; // Track navmesh height for terrain following
 
     const entityCache: FlockingEntityCache = {
       get: (id: number) => this.frameEntityCache.get(id),
@@ -819,6 +820,7 @@ export class MovementOrchestrator {
       if (state) {
         finalVx = state.vx;
         finalVy = state.vy;
+        crowdHeight = state.height; // Store height for terrain following
 
         // Fallback if crowd returns zero velocity
         const velMagSq = finalVx * finalVx + finalVy * finalVy;
@@ -992,6 +994,12 @@ export class MovementOrchestrator {
     transform.x = snapValue(transform.x, QUANT_POSITION);
     transform.y = snapValue(transform.y, QUANT_POSITION);
     this.pathfinding.clampToMapBounds(transform);
+
+    // Update Z height for terrain following (ramps, elevated platforms)
+    // Use crowd agent's height if available (most accurate for navmesh surface)
+    if (crowdHeight !== null && !unit.isFlying) {
+      transform.z = crowdHeight;
+    }
 
     // Hard collision resolution
     if (!unit.isFlying) {
