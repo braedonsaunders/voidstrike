@@ -391,6 +391,17 @@ export class TerrainBrush {
     const fromElev = fromCell?.elevation ?? this.config.terrain.defaultElevation;
     const toElev = toCell?.elevation ?? this.config.terrain.defaultElevation;
 
+    const originalLength = distance(fromX, fromY, toX, toY);
+    const elevationDelta = Math.abs(toElev - fromElev);
+
+    // DEBUG: Log constraint check inputs
+    console.log(
+      `[TerrainBrush] Ramp constraint check: ` +
+      `from elev ${fromElev} to elev ${toElev}, delta ${elevationDelta}, ` +
+      `original length ${originalLength.toFixed(1)}, ` +
+      `max per cell ${MAX_RAMP_ELEVATION_PER_CELL}`
+    );
+
     // Calculate extended endpoint if needed to meet constraints
     const extended = calculateExtendedRampEndpoint(
       fromX,
@@ -399,6 +410,13 @@ export class TerrainBrush {
       toY,
       fromElev,
       toElev
+    );
+
+    // DEBUG: Log extension result
+    console.log(
+      `[TerrainBrush] Extension result: wasExtended=${extended.wasExtended}, ` +
+      `minRequired=${extended.validation.minRequiredLength}, ` +
+      `extended to (${extended.x.toFixed(1)}, ${extended.y.toFixed(1)})`
     );
 
     // Use extended endpoint for painting
@@ -425,6 +443,10 @@ export class TerrainBrush {
     const perpX = -dy / length;
     const perpY = dx / length;
 
+    console.log(
+      `[TerrainBrush] Painting ramp: length ${length.toFixed(1)} cells, ${steps} steps, width ${width}`
+    );
+
     for (let i = 0; i <= steps; i++) {
       const t = i / steps;
       const cx = fromX + dx * t;
@@ -450,6 +472,8 @@ export class TerrainBrush {
         }
       }
     }
+
+    console.log(`[TerrainBrush] Ramp created with ${updates.length} cell updates`);
 
     return {
       updates,
