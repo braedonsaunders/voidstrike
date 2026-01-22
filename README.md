@@ -2,7 +2,7 @@
 
 # VOIDSTRIKE
 
-**Browser-native RTS. 124,000 lines of TypeScript. Written entirely by AI.**
+**Browser-native RTS. 100,000+ lines of TypeScript. Written entirely by AI.**
 
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.0-blue?logo=typescript)](https://www.typescriptlang.org/)
 [![Three.js](https://img.shields.io/badge/Three.js-r182-black?logo=three.js)](https://threejs.org/)
@@ -12,6 +12,15 @@
 [Play](#quick-start) · [Technical Architecture](#technical-architecture) · [Extractable Libraries](#extractable-libraries) · [For Players](#for-rts-players)
 
 </div>
+
+---
+
+## ⚠️ Work in Progress
+
+- **Other factions/races** — Additional playable factions beyond Dominion
+- **Naval combat** — Water-based units and naval warfare mechanics
+- **Ramp pathfinding issues** — Units get stuck on terrain transitions
+- **Multiplayer testing** — Stress testing P2P netcode at scale
 
 ---
 
