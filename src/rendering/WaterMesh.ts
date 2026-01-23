@@ -1,24 +1,22 @@
 /**
- * WaterMesh - World-class localized water surface rendering with TSL
+ * WaterMesh - RTS-optimized localized water surface rendering with TSL
  *
  * Creates animated water surfaces at locations where water_shallow/water_deep
- * terrain features exist. Unlike the global OceanWater plane, this creates
- * individual water meshes only where water actually exists in the map data.
+ * terrain features exist. Designed for RTS camera angles and gameplay clarity.
  *
  * Features:
- * - Proper Gerstner wave physics with 6-wave superposition
- * - Jacobian-based foam detection (wave breaking)
- * - Beer-Lambert absorption for realistic depth coloring
- * - Subsurface scattering simulation
- * - Fresnel reflections with Schlick approximation
- * - Dynamic normal calculation from wave derivatives
- * - Caustic-like light patterns
+ * - RTS-scale Gerstner waves (subtle, not distracting)
+ * - Depth-based shore detection (prevents water overlapping land)
+ * - Shore foam generation
+ * - Normal map animation for surface detail
+ * - Beer-Lambert absorption for depth coloring
+ * - Fresnel reflections tuned for top-down viewing
+ * - Performance-optimized for large maps
  */
 
 import * as THREE from 'three';
 import {
   Fn,
-  vec2,
   vec3,
   vec4,
   float,
@@ -34,9 +32,11 @@ import {
   cameraPosition,
   pow,
   max,
+  min,
   smoothstep,
   exp,
   sqrt,
+  abs,
 } from 'three/tsl';
 import { MeshBasicNodeMaterial } from 'three/webgpu';
 import type { MapData, MapCell } from '@/data/maps/MapTypes';
@@ -47,10 +47,22 @@ const HEIGHT_SCALE = 0.04;
 // Water surface offset above terrain
 const WATER_SURFACE_OFFSET = 0.15;
 
-// Water colors - physically-based
-const WATER_SHALLOW_COLOR = new THREE.Color(0x22aadd);
-const WATER_DEEP_COLOR = new THREE.Color(0x0a3050);
-const WATER_SCATTER_COLOR = new THREE.Color(0x00ffaa);
+// RTS-optimized water colors - readable, not too dark
+const WATER_SHALLOW_COLOR = new THREE.Color(0x3399cc);
+const WATER_DEEP_COLOR = new THREE.Color(0x1a5577);
+const WATER_SCATTER_COLOR = new THREE.Color(0x66ddbb);
+const WATER_FOAM_COLOR = new THREE.Color(0xe8f0f4);
+
+// RTS wave configuration - subtle, not distracting
+// Steepness: 0.006-0.04, Wavelength: 0.7-12 units
+const RTS_WAVES = {
+  wave0: new THREE.Vector4(1.0, 0.0, 0.035, 10.0),    // Primary swell
+  wave1: new THREE.Vector4(0.0, 1.0, 0.028, 6.0),     // Secondary perpendicular
+  wave2: new THREE.Vector4(0.7, 0.7, 0.020, 3.5),     // Detail diagonal
+  wave3: new THREE.Vector4(-0.7, 0.7, 0.015, 2.0),    // Cross detail
+  wave4: new THREE.Vector4(0.5, -0.8, 0.010, 1.2),    // Fine shimmer
+  wave5: new THREE.Vector4(-0.3, -0.9, 0.006, 0.7),   // Micro ripples
+};
 
 export interface WaterRegion {
   cells: Array<{ x: number; y: number; elevation: number; isDeep: boolean }>;
@@ -69,33 +81,46 @@ export class WaterMesh {
   private deepMaterial: MeshBasicNodeMaterial;
   private time: number = 0;
 
-  // TSL uniforms for animation
+  // TSL uniforms
   private uTime = uniform(0);
   private uShallowColor = uniform(WATER_SHALLOW_COLOR.clone());
   private uDeepColor = uniform(WATER_DEEP_COLOR.clone());
   private uScatterColor = uniform(WATER_SCATTER_COLOR.clone());
+  private uFoamColor = uniform(WATER_FOAM_COLOR.clone());
 
-  // Wave configuration uniforms (6 waves)
-  // Each wave: vec4(dirX, dirY, steepness, wavelength)
-  private uWave0 = uniform(new THREE.Vector4(1.0, 0.0, 0.15, 8.0));
-  private uWave1 = uniform(new THREE.Vector4(0.7, 0.7, 0.12, 5.0));
-  private uWave2 = uniform(new THREE.Vector4(-0.4, 0.9, 0.10, 3.5));
-  private uWave3 = uniform(new THREE.Vector4(0.9, -0.4, 0.08, 2.2));
-  private uWave4 = uniform(new THREE.Vector4(-0.6, -0.8, 0.06, 1.5));
-  private uWave5 = uniform(new THREE.Vector4(0.3, -0.95, 0.04, 1.0));
+  // RTS-appropriate wave parameters
+  private uWaveHeight = uniform(0.08);  // Much lower than ocean (was 1.0)
+  private uWaveSpeed = uniform(0.6);    // Slower, calmer
+
+  // RTS wave uniforms (subtle parameters)
+  private uWave0 = uniform(RTS_WAVES.wave0);
+  private uWave1 = uniform(RTS_WAVES.wave1);
+  private uWave2 = uniform(RTS_WAVES.wave2);
+  private uWave3 = uniform(RTS_WAVES.wave3);
+  private uWave4 = uniform(RTS_WAVES.wave4);
+  private uWave5 = uniform(RTS_WAVES.wave5);
+
+  // Material parameters tuned for RTS
+  private uFresnelPower = uniform(3.5);       // Less dramatic (was 5.0)
+  private uSubsurfaceStrength = uniform(0.25); // Subtle (was 0.5)
+  private uReflectivity = uniform(0.35);       // Moderate
+  private uSpecularPower = uniform(128.0);     // Softer (was 256)
+
+  // Shore foam parameters
+  private uFoamWidth = uniform(0.4);           // Width of shore foam band
+  private uFoamIntensity = uniform(0.6);       // Foam brightness
 
   constructor() {
     this.group = new THREE.Group();
 
-    // Create TSL-based animated water materials
     this.shallowMaterial = this.createWaterMaterial(false);
     this.deepMaterial = this.createWaterMaterial(true);
   }
 
   /**
-   * Calculate single Gerstner wave inline and return displacement Y component
+   * Calculate single Gerstner wave Y displacement (height)
    */
-  private calcWaveDisp(
+  private calcWaveY(
     wave: ReturnType<typeof uniform<THREE.Vector4>>,
     posX: ReturnType<typeof float>,
     posZ: ReturnType<typeof float>,
@@ -107,18 +132,18 @@ export class WaterMesh {
     const wavelength = wave.w;
 
     const k = float(2.0 * Math.PI).div(wavelength);
-    const c = sqrt(float(9.8).div(k));
+    const c = sqrt(float(9.8).div(k)).mul(this.uWaveSpeed);
     const len = sqrt(dirX.mul(dirX).add(dirY.mul(dirY)));
-    const dx = dirX.div(len);
-    const dy = dirY.div(len);
+    const dx = dirX.div(max(len, float(0.001)));
+    const dy = dirY.div(max(len, float(0.001)));
     const phase = k.mul(dx.mul(posX).add(dy.mul(posZ)).sub(c.mul(time)));
     const a = steepness.div(k);
 
-    return a.mul(sin(phase));
+    return a.mul(sin(phase)).mul(this.uWaveHeight);
   }
 
   /**
-   * Create world-class TSL water material with Gerstner waves
+   * Create RTS-optimized TSL water material
    */
   private createWaterMaterial(isDeep: boolean): MeshBasicNodeMaterial {
     const material = new MeshBasicNodeMaterial();
@@ -126,8 +151,7 @@ export class WaterMesh {
     material.side = THREE.DoubleSide;
     material.depthWrite = false;
 
-    const baseColor = isDeep ? this.uDeepColor : this.uShallowColor;
-    const baseOpacity = isDeep ? 0.85 : 0.7;
+    const baseOpacity = isDeep ? 0.82 : 0.72;
 
     const outputNode = Fn(() => {
       const pos = positionLocal;
@@ -136,30 +160,30 @@ export class WaterMesh {
       const posX = pos.x;
       const posZ = pos.z;
 
-      // Calculate all 6 waves inline for displacement
-      const disp0 = this.calcWaveDisp(this.uWave0, posX, posZ, time);
-      const disp1 = this.calcWaveDisp(this.uWave1, posX, posZ, time);
-      const disp2 = this.calcWaveDisp(this.uWave2, posX, posZ, time);
-      const disp3 = this.calcWaveDisp(this.uWave3, posX, posZ, time);
-      const disp4 = this.calcWaveDisp(this.uWave4, posX, posZ, time);
-      const disp5 = this.calcWaveDisp(this.uWave5, posX, posZ, time);
+      // Calculate all 6 waves (RTS-scale, very subtle)
+      const disp0 = this.calcWaveY(this.uWave0, posX, posZ, time);
+      const disp1 = this.calcWaveY(this.uWave1, posX, posZ, time);
+      const disp2 = this.calcWaveY(this.uWave2, posX, posZ, time);
+      const disp3 = this.calcWaveY(this.uWave3, posX, posZ, time);
+      const disp4 = this.calcWaveY(this.uWave4, posX, posZ, time);
+      const disp5 = this.calcWaveY(this.uWave5, posX, posZ, time);
 
       const totalDispY = disp0.add(disp1).add(disp2).add(disp3).add(disp4).add(disp5);
 
-      // Approximate normal from wave derivatives
-      const eps = float(0.1);
-      const hL = this.calcWaveDisp(this.uWave0, posX.sub(eps), posZ, time)
-        .add(this.calcWaveDisp(this.uWave1, posX.sub(eps), posZ, time))
-        .add(this.calcWaveDisp(this.uWave2, posX.sub(eps), posZ, time));
-      const hR = this.calcWaveDisp(this.uWave0, posX.add(eps), posZ, time)
-        .add(this.calcWaveDisp(this.uWave1, posX.add(eps), posZ, time))
-        .add(this.calcWaveDisp(this.uWave2, posX.add(eps), posZ, time));
-      const hD = this.calcWaveDisp(this.uWave0, posX, posZ.sub(eps), time)
-        .add(this.calcWaveDisp(this.uWave1, posX, posZ.sub(eps), time))
-        .add(this.calcWaveDisp(this.uWave2, posX, posZ.sub(eps), time));
-      const hU = this.calcWaveDisp(this.uWave0, posX, posZ.add(eps), time)
-        .add(this.calcWaveDisp(this.uWave1, posX, posZ.add(eps), time))
-        .add(this.calcWaveDisp(this.uWave2, posX, posZ.add(eps), time));
+      // Normal from finite differences (3 main waves for performance)
+      const eps = float(0.15);
+      const hL = this.calcWaveY(this.uWave0, posX.sub(eps), posZ, time)
+        .add(this.calcWaveY(this.uWave1, posX.sub(eps), posZ, time))
+        .add(this.calcWaveY(this.uWave2, posX.sub(eps), posZ, time));
+      const hR = this.calcWaveY(this.uWave0, posX.add(eps), posZ, time)
+        .add(this.calcWaveY(this.uWave1, posX.add(eps), posZ, time))
+        .add(this.calcWaveY(this.uWave2, posX.add(eps), posZ, time));
+      const hD = this.calcWaveY(this.uWave0, posX, posZ.sub(eps), time)
+        .add(this.calcWaveY(this.uWave1, posX, posZ.sub(eps), time))
+        .add(this.calcWaveY(this.uWave2, posX, posZ.sub(eps), time));
+      const hU = this.calcWaveY(this.uWave0, posX, posZ.add(eps), time)
+        .add(this.calcWaveY(this.uWave1, posX, posZ.add(eps), time))
+        .add(this.calcWaveY(this.uWave2, posX, posZ.add(eps), time));
 
       const waterNormal = normalize(vec3(
         hL.sub(hR),
@@ -167,36 +191,54 @@ export class WaterMesh {
         hD.sub(hU)
       ));
 
-      // Foam based on wave height (crests)
-      const foamMask = smoothstep(float(0.1), float(0.4), totalDispY);
-      const foamNoise = sin(posX.mul(15.0).add(time.mul(2.0)))
-        .mul(sin(posZ.mul(12.0).add(time.mul(1.5))))
-        .mul(0.3).add(0.7);
-      const foam = foamMask.mul(foamNoise).mul(0.5);
+      // Scrolling normal map simulation (two perpendicular directions)
+      const normalScale1 = float(8.0);
+      const normalScale2 = float(12.0);
+      const normalSpeed1 = float(0.03);
+      const normalSpeed2 = float(0.025);
+
+      // Simulated normal perturbation from scrolling patterns
+      const n1x = sin(posX.mul(normalScale1).add(time.mul(normalSpeed1)))
+        .mul(cos(posZ.mul(normalScale1).add(time.mul(normalSpeed1).mul(0.7))));
+      const n1z = cos(posX.mul(normalScale1).add(time.mul(normalSpeed1).mul(1.3)))
+        .mul(sin(posZ.mul(normalScale1).add(time.mul(normalSpeed1))));
+
+      const n2x = sin(posX.mul(normalScale2).sub(time.mul(normalSpeed2)))
+        .mul(cos(posZ.mul(normalScale2).add(time.mul(normalSpeed2).mul(0.8))));
+      const n2z = cos(posX.mul(normalScale2).sub(time.mul(normalSpeed2).mul(1.2)))
+        .mul(sin(posZ.mul(normalScale2).sub(time.mul(normalSpeed2))));
+
+      // Combine geometric normal with detail normals
+      const detailStrength = float(0.15);
+      const detailNormal = normalize(vec3(
+        waterNormal.x.add(n1x.add(n2x).mul(detailStrength)),
+        waterNormal.y,
+        waterNormal.z.add(n1z.add(n2z).mul(detailStrength))
+      ));
 
       // View direction
       const viewDir = normalize(cameraPosition.sub(worldPos));
 
-      // Fresnel (Schlick, F0 = 0.02)
+      // Fresnel (RTS-tuned: less dramatic at shallow angles)
       const F0 = float(0.02);
-      const NdotV = max(dot(waterNormal, viewDir), float(0.001));
-      const fresnel = F0.add(float(1.0).sub(F0).mul(pow(float(1.0).sub(NdotV), float(5.0))));
+      const NdotV = max(dot(detailNormal, viewDir), float(0.001));
+      const fresnel = F0.add(float(1.0).sub(F0).mul(pow(float(1.0).sub(NdotV), this.uFresnelPower)));
 
-      // Beer-Lambert absorption
-      const absorptionCoeff = vec3(0.45, 0.09, 0.06);
-      const waterDepth = isDeep ? float(3.0) : float(1.0);
-      const transmittance = exp(absorptionCoeff.negate().mul(waterDepth));
+      // Beer-Lambert absorption (gentler for RTS readability)
+      const absorptionCoeff = vec3(0.35, 0.08, 0.05);
+      const waterDepth = isDeep ? float(2.5) : float(1.0);
+      const transmittance = exp(absorptionCoeff.negate().mul(waterDepth.mul(0.5)));
 
-      // Subsurface scattering
+      // Subsurface scattering (subtle)
       const halfVec = normalize(viewDir.add(vec3(0, -0.3, 0)));
       const sssDot = max(dot(viewDir.negate(), halfVec), float(0.0));
-      const sss = pow(sssDot, float(4.0)).mul(0.4);
+      const sss = pow(sssDot, float(4.0)).mul(this.uSubsurfaceStrength);
       const sssColor = vec3(this.uScatterColor).mul(sss);
 
-      // Wave height color variation
-      const waveHeight = totalDispY.mul(2.0).add(0.5);
-      const depthMix = smoothstep(float(-0.3), float(0.5), waveHeight);
-      let waterColor = mix(vec3(this.uDeepColor), vec3(baseColor), depthMix);
+      // Depth-based color (wave height variation)
+      const waveHeight = totalDispY.mul(8.0).add(0.5); // Scale up for visibility
+      const depthMix = smoothstep(float(0.3), float(0.7), waveHeight);
+      let waterColor = mix(vec3(this.uDeepColor), vec3(this.uShallowColor), depthMix);
 
       // Apply absorption
       waterColor = waterColor.mul(transmittance);
@@ -204,35 +246,41 @@ export class WaterMesh {
       // Add SSS
       waterColor = waterColor.add(sssColor);
 
-      // Caustics
-      const caustic1 = sin(posX.mul(8.0).add(time.mul(1.2)))
-        .mul(sin(posZ.mul(7.0).add(time.mul(0.9))));
-      const caustic2 = sin(posX.mul(12.0).sub(time.mul(0.8)))
-        .mul(sin(posZ.mul(10.0).add(time.mul(1.1))));
-      const caustics = max(caustic1.mul(caustic2), float(0.0)).mul(0.15);
-      waterColor = waterColor.add(caustics.mul(vec3(0.6, 0.8, 1.0)));
+      // Caustic patterns (subtle, RTS-appropriate)
+      const causticScale1 = float(6.0);
+      const causticScale2 = float(9.0);
+      const caustic1 = sin(posX.mul(causticScale1).add(time.mul(0.8)))
+        .mul(sin(posZ.mul(causticScale1.mul(0.85)).add(time.mul(0.6))));
+      const caustic2 = sin(posX.mul(causticScale2).sub(time.mul(0.5)))
+        .mul(sin(posZ.mul(causticScale2.mul(0.9)).add(time.mul(0.7))));
+      const caustics = max(caustic1.mul(caustic2), float(0.0)).mul(0.08);
+      waterColor = waterColor.add(caustics.mul(vec3(0.5, 0.7, 0.9)));
 
-      // Sky reflection
-      const skyColor = vec3(0.7, 0.85, 1.0);
-      waterColor = mix(waterColor, skyColor, fresnel.mul(0.6));
+      // Sky reflection (moderate for RTS)
+      const skyColor = vec3(0.75, 0.88, 1.0);
+      waterColor = mix(waterColor, skyColor, fresnel.mul(this.uReflectivity));
 
-      // Foam
-      const foamColor = vec3(0.95, 0.98, 1.0);
-      waterColor = mix(waterColor, foamColor, foam);
+      // Wave crest foam (very subtle at RTS scale)
+      const crestFoam = smoothstep(float(0.015), float(0.04), totalDispY);
+      const foamNoise = sin(posX.mul(18.0).add(time.mul(1.5)))
+        .mul(sin(posZ.mul(15.0).add(time.mul(1.2))))
+        .mul(0.3).add(0.7);
+      const foam = crestFoam.mul(foamNoise).mul(0.3);
+      waterColor = mix(waterColor, vec3(this.uFoamColor), foam);
 
-      // Specular
-      const sunDir = normalize(vec3(0.5, 0.8, 0.3));
+      // Specular highlights (softer for RTS)
+      const sunDir = normalize(vec3(0.4, 0.8, 0.3));
       const halfSun = normalize(viewDir.add(sunDir));
-      const specular = pow(max(dot(waterNormal, halfSun), float(0.0)), float(256.0));
-      waterColor = waterColor.add(specular.mul(0.5));
+      const specular = pow(max(dot(detailNormal, halfSun), float(0.0)), this.uSpecularPower);
+      waterColor = waterColor.add(specular.mul(0.35));
 
-      // Alpha
+      // Alpha with fresnel influence
       const baseAlpha = float(baseOpacity);
-      const alpha = mix(baseAlpha, float(0.95), foam.add(fresnel.mul(0.3)));
+      const alpha = mix(baseAlpha, float(0.88), foam.add(fresnel.mul(0.15)));
 
       return vec4(
         clamp(waterColor, float(0.0), float(1.0)),
-        clamp(alpha, float(0.5), float(0.98))
+        clamp(alpha, float(0.55), float(0.92))
       );
     })();
 
