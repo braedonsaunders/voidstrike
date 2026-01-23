@@ -105,7 +105,7 @@ export class EditorBrushPreview {
       this.setVisible(true);
 
       // If material color is provided for brush tool, use it
-      if (toolId === 'brush' && materialColor) {
+      if (toolId === 'brush' && typeof materialColor === 'string' && materialColor.length > 0) {
         this.setColor(parseInt(materialColor.replace('#', ''), 16));
         return;
       }
