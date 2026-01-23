@@ -14,7 +14,7 @@ import { WallPlacementPreview } from '@/rendering/WallPlacementPreview';
 import { TSLGameOverlayManager } from '@/rendering/tsl';
 import { useGameStore } from '@/store/gameStore';
 import { useUIStore, GameOverlayType } from '@/store/uiStore';
-import { getLocalPlayerId, isBattleSimulatorMode } from '@/store/gameSetupStore';
+import { getLocalPlayerId, isBattleSimulatorMode, isMultiplayerMode } from '@/store/gameSetupStore';
 import { Transform } from '@/engine/components/Transform';
 import { Resource } from '@/engine/components/Resource';
 import { Unit } from '@/engine/components/Unit';
@@ -919,6 +919,18 @@ export function useGameInput({
           const currentIndex = overlayOrder.indexOf(currentOverlay);
           const nextIndex = (currentIndex + 1) % overlayOrder.length;
           uiStore.setActiveOverlay(overlayOrder[nextIndex]);
+          break;
+        }
+        case '`': {
+          // Toggle debug console (only in single player)
+          if (!isMultiplayerMode()) {
+            e.preventDefault();
+            const uiStore = useUIStore.getState();
+            if (!uiStore.consoleEnabled) {
+              uiStore.setConsoleEnabled(true);
+            }
+            uiStore.toggleConsole();
+          }
           break;
         }
         case 'a':

@@ -67,6 +67,11 @@ export class MockStatePort implements GameStatePort {
     this.vespene = Math.max(0, this.vespene + vespene);
   }
 
+  setResources(minerals: number, vespene: number): void {
+    this.minerals = Math.max(0, minerals);
+    this.vespene = Math.max(0, vespene);
+  }
+
   addSupply(delta: number): void {
     this.supply = Math.max(0, Math.min(this.maxSupply, this.supply + delta));
   }

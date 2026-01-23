@@ -88,6 +88,7 @@ export interface GameState {
   setControlGroup: (key: number, ids: number[]) => void;
   getControlGroup: (key: number) => number[];
   addResources: (minerals: number, vespene: number) => void;
+  setResources: (minerals: number, vespene: number) => void;
   addSupply: (amount: number) => void;
   addMaxSupply: (amount: number) => void;
   setGameTime: (time: number) => void;
@@ -197,6 +198,12 @@ export const useGameStore = create<GameState>((set, get) => ({
     set((state) => ({
       minerals: Math.max(0, state.minerals + minerals),
       vespene: Math.max(0, state.vespene + vespene),
+    })),
+
+  setResources: (minerals, vespene) =>
+    set(() => ({
+      minerals: Math.max(0, minerals),
+      vespene: Math.max(0, vespene),
     })),
 
   addSupply: (amount) =>

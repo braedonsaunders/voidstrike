@@ -17,6 +17,7 @@ import * as THREE from 'three';
 import { VisionSystem } from '@/engine/systems/VisionSystem';
 import { VisionCompute } from '@/rendering/compute/VisionCompute';
 import { isSpectatorMode } from '@/store/gameSetupStore';
+import { getConsoleEngineSync } from '@/engine/debug/ConsoleEngine';
 import { debugShaders } from '@/utils/debugLogger';
 import { clamp } from '@/utils/math';
 
@@ -174,6 +175,12 @@ export class TSLFogOfWar {
       return;
     }
 
+    // Check if fog is disabled via debug console
+    const consoleEngine = getConsoleEngineSync();
+    if (consoleEngine?.getFlag('fogDisabled')) {
+      return;
+    }
+
     // GPU path: just ensure we have the latest texture bound
     if (this.useGPUVision && this.gpuVisionCompute) {
       this.bindGPUTextureForPlayer();
@@ -245,6 +252,12 @@ export class TSLFogOfWar {
     if (!this.enabled) return null;
 
     if (isSpectatorMode() || !this.playerId) {
+      return null;
+    }
+
+    // Check if fog is disabled via debug console
+    const consoleEngine = getConsoleEngineSync();
+    if (consoleEngine?.getFlag('fogDisabled')) {
       return null;
     }
 

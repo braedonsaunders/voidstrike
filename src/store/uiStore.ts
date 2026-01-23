@@ -431,6 +431,10 @@ export interface UIState {
   // Performance panel
   showPerformancePanel: boolean;
 
+  // Debug console
+  consoleEnabled: boolean;
+  showConsole: boolean;
+
   // Overlay settings for strategic view
   overlaySettings: OverlaySettings;
 
@@ -492,6 +496,10 @@ export interface UIState {
   setAllDebugSettings: (enabled: boolean) => void;
   // Performance panel actions
   togglePerformancePanel: () => void;
+  // Debug console actions
+  setConsoleEnabled: (enabled: boolean) => void;
+  toggleConsole: () => void;
+  setShowConsole: (show: boolean) => void;
   // HUD menu actions
   setShowOptionsMenu: (show: boolean) => void;
   setShowOverlayMenu: (show: boolean) => void;
@@ -653,6 +661,8 @@ export const useUIStore = create<UIState>((set, get) => ({
   graphicsPresetsConfig: null,
   showDebugMenu: false,
   showPerformancePanel: false,
+  consoleEnabled: false,
+  showConsole: false,
   overlaySettings: {
     activeOverlay: 'none',
     elevationOverlayOpacity: 0.7,
@@ -1124,6 +1134,11 @@ export const useUIStore = create<UIState>((set, get) => ({
 
   togglePerformancePanel: () => set((state) => ({ showPerformancePanel: !state.showPerformancePanel })),
 
+  // Debug console actions
+  setConsoleEnabled: (enabled: boolean) => set({ consoleEnabled: enabled }),
+  toggleConsole: () => set((state) => ({ showConsole: state.consoleEnabled && !state.showConsole })),
+  setShowConsole: (show: boolean) => set((state) => ({ showConsole: state.consoleEnabled && show })),
+
   // HUD menu actions
   setShowOptionsMenu: (show: boolean) => set({ showOptionsMenu: show }),
   setShowOverlayMenu: (show: boolean) => set({ showOverlayMenu: show }),
@@ -1136,6 +1151,7 @@ export const useUIStore = create<UIState>((set, get) => ({
     showSoundOptions: false,
     showPerformancePanel: false,
     showDebugMenu: false,
+    showConsole: false,
   }),
 
   toggleDebugSetting: (key) => {
@@ -1244,6 +1260,7 @@ export const isAnyMenuOpen = (state: UIState): boolean => {
     state.showGraphicsOptions ||
     state.showSoundOptions ||
     state.showPerformancePanel ||
-    state.showDebugMenu
+    state.showDebugMenu ||
+    state.showConsole
   );
 };

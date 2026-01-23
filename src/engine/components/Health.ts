@@ -18,6 +18,9 @@ export class Health extends Component {
   public shieldRegenDelay: number; // Seconds before regen starts
   private lastDamageTime: number;
 
+  // Debug: invincibility for god mode
+  public isInvincible: boolean = false;
+
   constructor(
     max: number,
     armor = 0,
@@ -41,6 +44,9 @@ export class Health extends Component {
   }
 
   public takeDamage(amount: number, gameTime: number): number {
+    // God mode - no damage
+    if (this.isInvincible) return 0;
+
     this.lastDamageTime = gameTime;
 
     // Apply armor reduction
@@ -69,6 +75,9 @@ export class Health extends Component {
    * Used when damage has already been calculated with armor factored in (e.g., projectile impacts).
    */
   public applyDamageRaw(amount: number, gameTime: number): number {
+    // God mode - no damage
+    if (this.isInvincible) return 0;
+
     this.lastDamageTime = gameTime;
 
     const damage = Math.max(1, amount);
