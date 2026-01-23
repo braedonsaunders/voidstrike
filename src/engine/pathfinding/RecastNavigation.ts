@@ -70,22 +70,36 @@ export interface RecastAgentHandle {
 export type TerrainHeightProvider = (x: number, z: number) => number;
 
 /**
+ * Movement domain types for pathfinding
+ */
+export type MovementDomain = 'ground' | 'water' | 'amphibious' | 'air';
+
+/**
  * Main Recast Navigation Manager
  *
  * Handles navmesh generation, path queries, and crowd simulation.
+ * Supports separate navmeshes for ground and water navigation.
  */
 export class RecastNavigation {
   private static instance: RecastNavigation | null = null;
   private static initPromise: Promise<void> | null = null;
 
+  // Ground navmesh (standard terrain)
   private navMesh: NavMesh | null = null;
   private navMeshQuery: NavMeshQuery | null = null;
   private tileCache: TileCache | null = null;
   private crowd: Crowd | null = null;
 
-  // Track agents by entity ID
+  // Water navmesh (for naval units)
+  private waterNavMesh: NavMesh | null = null;
+  private waterNavMeshQuery: NavMeshQuery | null = null;
+  private waterTileCache: TileCache | null = null;
+  private waterCrowd: Crowd | null = null;
+
+  // Track agents by entity ID and their movement domain
   private agentMap: Map<number, number> = new Map(); // entityId -> agentIndex
   private agentEntityMap: Map<number, number> = new Map(); // agentIndex -> entityId
+  private agentDomains: Map<number, MovementDomain> = new Map(); // entityId -> domain
 
   // Track obstacle references for buildings
   private obstacleRefs: Map<number, Obstacle> = new Map(); // buildingEntityId -> obstacle
@@ -96,6 +110,7 @@ export class RecastNavigation {
 
   // Initialization state
   private initialized: boolean = false;
+  private waterInitialized: boolean = false;
 
   // Terrain height provider for elevation-aware queries
   private terrainHeightProvider: TerrainHeightProvider | null = null;
@@ -203,6 +218,35 @@ export class RecastNavigation {
       return this.terrainHeightProvider(x, z);
     }
     return 0;
+  }
+
+  /**
+   * Project a 2D point onto the water navmesh surface.
+   * Returns the 3D navmesh position (x, y, z) or null if no valid point found.
+   */
+  public projectToWaterNavMesh(
+    x: number,
+    z: number,
+    halfExtents?: { x: number; y: number; z: number }
+  ): { x: number; y: number; z: number } | null {
+    if (!this.waterNavMeshQuery) return null;
+
+    try {
+      const waterHeight = 0.15;
+      const searchExtents = halfExtents ?? { x: 2, y: 10, z: 2 };
+
+      const result = this.waterNavMeshQuery.findClosestPoint(
+        { x, y: waterHeight, z },
+        { halfExtents: searchExtents }
+      );
+
+      if (result.success && result.point) {
+        return { x: result.point.x, y: result.point.y, z: result.point.z };
+      }
+      return null;
+    } catch {
+      return null;
+    }
   }
 
   /**
@@ -431,6 +475,71 @@ export class RecastNavigation {
   }
 
   /**
+   * Generate water navmesh from water geometry.
+   * Used for naval unit pathfinding.
+   *
+   * @param positions - Float32Array of vertex positions
+   * @param indices - Uint32Array of triangle indices
+   * @param mapWidth - Map width in world units
+   * @param mapHeight - Map height in world units
+   */
+  public async generateWaterNavMesh(
+    positions: Float32Array,
+    indices: Uint32Array,
+    mapWidth: number,
+    mapHeight: number
+  ): Promise<boolean> {
+    const startTime = performance.now();
+
+    // Check if there's any water geometry to process
+    if (positions.length === 0 || indices.length === 0) {
+      debugPathfinding.log('[RecastNavigation] No water geometry - water navmesh not generated');
+      return false;
+    }
+
+    try {
+      await RecastNavigation.initWasm();
+
+      console.log(`[RecastNavigation] Generating water navmesh: ${indices.length / 3} triangles, ${positions.length / 3} vertices`);
+
+      // Use solo navmesh for water - simpler and more robust
+      // Water doesn't need dynamic obstacles (buildings don't go in water)
+      const result = generateSoloNavMesh(positions, indices, SOLO_NAVMESH_CONFIG);
+
+      if (!result.success || !result.navMesh) {
+        debugPathfinding.warn('[RecastNavigation] Water navmesh generation failed');
+        return false;
+      }
+
+      this.waterNavMesh = result.navMesh;
+      this.waterNavMeshQuery = new NavMeshQuery(this.waterNavMesh);
+
+      // Create water crowd simulation
+      this.waterCrowd = new Crowd(this.waterNavMesh, {
+        maxAgents: CROWD_CONFIG.maxAgents,
+        maxAgentRadius: CROWD_CONFIG.maxAgentRadius,
+      });
+
+      this.waterInitialized = true;
+
+      const elapsed = performance.now() - startTime;
+      console.log(`[RecastNavigation] Water navmesh generated in ${elapsed.toFixed(1)}ms`);
+
+      return true;
+    } catch (error) {
+      debugPathfinding.warn('[RecastNavigation] Error generating water navmesh:', error);
+      return false;
+    }
+  }
+
+  /**
+   * Check if water navmesh is ready
+   */
+  public isWaterReady(): boolean {
+    return this.waterInitialized && this.waterNavMesh !== null && this.waterNavMeshQuery !== null;
+  }
+
+  /**
    * Find path between two points.
    * Uses terrain height for better query accuracy on multi-elevation terrain.
    *
@@ -504,6 +613,109 @@ export class RecastNavigation {
       return { path: smoothedPath, found: true };
     } catch {
       return { path: [], found: false };
+    }
+  }
+
+  /**
+   * Find path on water navmesh for naval units.
+   * Similar to findPath but uses water navmesh.
+   *
+   * @param startX - Start X coordinate
+   * @param startY - Start Y coordinate (world Z)
+   * @param endX - End X coordinate
+   * @param endY - End Y coordinate (world Z)
+   * @param agentRadius - Optional agent radius for path query
+   */
+  public findWaterPath(
+    startX: number,
+    startY: number,
+    endX: number,
+    endY: number,
+    agentRadius: number = DEFAULT_AGENT_RADIUS
+  ): PathResult {
+    if (!this.waterNavMeshQuery) {
+      return { path: [], found: false };
+    }
+
+    try {
+      const searchRadius = Math.max(agentRadius * 4, 2);
+      const halfExtents = { x: searchRadius, y: 10, z: searchRadius };
+
+      // Water surface is relatively flat, use constant height
+      const waterHeight = 0.15;
+
+      const startQuery = { x: startX, y: waterHeight, z: startY };
+      const endQuery = { x: endX, y: waterHeight, z: endY };
+
+      const startOnMesh = this.waterNavMeshQuery.findClosestPoint(startQuery, { halfExtents });
+      const endOnMesh = this.waterNavMeshQuery.findClosestPoint(endQuery, { halfExtents });
+
+      if (!startOnMesh.success || !startOnMesh.point || !endOnMesh.success || !endOnMesh.point) {
+        return { path: [], found: false };
+      }
+
+      const result = this.waterNavMeshQuery.computePath(startOnMesh.point, endOnMesh.point, { halfExtents });
+
+      if (!result.success || !result.path || result.path.length === 0) {
+        return { path: [], found: false };
+      }
+
+      const rawPath: Array<{ x: number; y: number }> = result.path.map((point) => ({
+        x: point.x,
+        y: point.z,
+      }));
+
+      const smoothedPath = this.smoothPath(rawPath, agentRadius);
+
+      return { path: smoothedPath, found: true };
+    } catch {
+      return { path: [], found: false };
+    }
+  }
+
+  /**
+   * Find path with movement domain awareness.
+   * Automatically uses the correct navmesh based on domain.
+   *
+   * @param startX - Start X coordinate
+   * @param startY - Start Y coordinate
+   * @param endX - End X coordinate
+   * @param endY - End Y coordinate
+   * @param domain - Movement domain (ground, water, amphibious, air)
+   * @param agentRadius - Optional agent radius
+   */
+  public findPathForDomain(
+    startX: number,
+    startY: number,
+    endX: number,
+    endY: number,
+    domain: MovementDomain,
+    agentRadius: number = DEFAULT_AGENT_RADIUS
+  ): PathResult {
+    switch (domain) {
+      case 'water':
+        return this.findWaterPath(startX, startY, endX, endY, agentRadius);
+
+      case 'amphibious': {
+        // Try water path first, fall back to ground
+        const waterResult = this.findWaterPath(startX, startY, endX, endY, agentRadius);
+        if (waterResult.found) return waterResult;
+        return this.findPath(startX, startY, endX, endY, agentRadius);
+      }
+
+      case 'air':
+        // Air units don't need navmesh - direct line
+        return {
+          path: [
+            { x: startX, y: startY },
+            { x: endX, y: endY },
+          ],
+          found: true,
+        };
+
+      case 'ground':
+      default:
+        return this.findPath(startX, startY, endX, endY, agentRadius);
     }
   }
 
@@ -703,15 +915,19 @@ export class RecastNavigation {
    * Remove a unit from crowd simulation
    */
   public removeAgent(entityId: number): void {
-    if (!this.crowd) return;
-
     const agentIndex = this.agentMap.get(entityId);
     if (agentIndex === undefined) return;
 
+    const domain = this.agentDomains.get(entityId) || 'ground';
+    const targetCrowd = domain === 'water' ? this.waterCrowd : this.crowd;
+
+    if (!targetCrowd) return;
+
     try {
-      this.crowd.removeAgent(agentIndex);
+      targetCrowd.removeAgent(agentIndex);
       this.agentMap.delete(entityId);
       this.agentEntityMap.delete(agentIndex);
+      this.agentDomains.delete(entityId);
     } catch (error) {
       debugPathfinding.warn(`[RecastNavigation] Failed to remove agent ${entityId}:`, error);
     }
@@ -722,18 +938,25 @@ export class RecastNavigation {
    * Projects target onto navmesh to ensure valid path corridor computation.
    */
   public setAgentTarget(entityId: number, targetX: number, targetY: number): boolean {
-    if (!this.crowd) return false;
-
     const agentIndex = this.agentMap.get(entityId);
     if (agentIndex === undefined) return false;
 
+    const domain = this.agentDomains.get(entityId) || 'ground';
+    const targetCrowd = domain === 'water' ? this.waterCrowd : this.crowd;
+    const navQuery = domain === 'water' ? this.waterNavMeshQuery : this.navMeshQuery;
+
+    if (!targetCrowd || !navQuery) return false;
+
     try {
-      const agent = this.crowd.getAgent(agentIndex);
+      const agent = targetCrowd.getAgent(agentIndex);
       if (agent) {
         const agentPos = agent.position();
         // Project target onto navmesh to ensure it's a valid position
         // This is CRITICAL - requestMoveTarget needs a navmesh position to compute path corridor
-        const projected = this.projectToNavMesh(targetX, targetY);
+        // Use the appropriate navmesh based on domain
+        const projected = domain === 'water'
+          ? this.projectToWaterNavMesh(targetX, targetY)
+          : this.projectToNavMesh(targetX, targetY);
         if (projected) {
           // Check height difference for ramp traversal debugging
           const heightDiff = Math.abs(agentPos.y - projected.y);
@@ -873,13 +1096,16 @@ export class RecastNavigation {
     vx: number;
     vy: number;
   } | null {
-    if (!this.crowd) return null;
-
     const agentIndex = this.agentMap.get(entityId);
     if (agentIndex === undefined) return null;
 
+    const domain = this.agentDomains.get(entityId) || 'ground';
+    const targetCrowd = domain === 'water' ? this.waterCrowd : this.crowd;
+
+    if (!targetCrowd) return null;
+
     try {
-      const agent = this.crowd.getAgent(agentIndex);
+      const agent = targetCrowd.getAgent(agentIndex);
       if (agent) {
         const pos = agent.position();
         const vel = agent.velocity();
@@ -959,6 +1185,114 @@ export class RecastNavigation {
     } catch {
       // Ignore
     }
+
+    // Also update water crowd
+    if (this.waterCrowd) {
+      try {
+        this.waterCrowd.update(deltaTime);
+      } catch {
+        // Ignore
+      }
+    }
+  }
+
+  /**
+   * Add a naval unit to water crowd simulation.
+   */
+  public addWaterAgent(
+    entityId: number,
+    x: number,
+    y: number,
+    radius: number = 0.5,
+    maxSpeed: number = 5.0
+  ): number {
+    if (!this.waterCrowd || !this.waterNavMeshQuery) return -1;
+
+    // Remove existing agent if present
+    if (this.agentMap.has(entityId)) {
+      this.removeAgent(entityId);
+    }
+
+    try {
+      // Project position onto water navmesh
+      const waterHeight = 0.15;
+      const halfExtents = { x: 2, y: 10, z: 2 };
+      const result = this.waterNavMeshQuery.findClosestPoint(
+        { x, y: waterHeight, z: y },
+        { halfExtents }
+      );
+
+      if (!result.success || !result.point) {
+        console.warn(`[RecastNavigation] Cannot add water agent ${entityId}: position not on water navmesh`);
+        return -1;
+      }
+
+      const params: Partial<CrowdAgentParams> = {
+        ...DEFAULT_AGENT_PARAMS,
+        radius,
+        maxSpeed,
+        maxAcceleration: 50.0, // Slower acceleration for ships
+        collisionQueryRange: radius * 6, // Larger for ships
+      };
+
+      const agent = this.waterCrowd.addAgent(result.point, params);
+
+      if (agent) {
+        const agentIndex = agent.agentIndex;
+        this.agentMap.set(entityId, agentIndex);
+        this.agentEntityMap.set(agentIndex, entityId);
+        this.agentDomains.set(entityId, 'water');
+        return agentIndex;
+      }
+    } catch (error) {
+      debugPathfinding.warn(`[RecastNavigation] Failed to add water agent ${entityId}:`, error);
+    }
+
+    return -1;
+  }
+
+  /**
+   * Add agent with movement domain awareness.
+   * Automatically uses the correct crowd based on domain.
+   */
+  public addAgentForDomain(
+    entityId: number,
+    x: number,
+    y: number,
+    domain: MovementDomain,
+    radius: number = 0.5,
+    maxSpeed: number = 5.0
+  ): number {
+    this.agentDomains.set(entityId, domain);
+
+    switch (domain) {
+      case 'water':
+        return this.addWaterAgent(entityId, x, y, radius, maxSpeed);
+
+      case 'amphibious':
+        // Start on ground, switch to water when entering
+        // For now, try ground first
+        const groundResult = this.addAgent(entityId, x, y, radius, maxSpeed);
+        if (groundResult === -1) {
+          return this.addWaterAgent(entityId, x, y, radius, maxSpeed);
+        }
+        return groundResult;
+
+      case 'air':
+        // Air units don't use crowd simulation
+        return -1;
+
+      case 'ground':
+      default:
+        return this.addAgent(entityId, x, y, radius, maxSpeed);
+    }
+  }
+
+  /**
+   * Get movement domain for an entity
+   */
+  public getAgentDomain(entityId: number): MovementDomain {
+    return this.agentDomains.get(entityId) || 'ground';
   }
 
   // ==================== DEBUG: CROSS-HEIGHT PATHFINDING ====================
@@ -1225,14 +1559,23 @@ export class RecastNavigation {
   public dispose(): void {
     this.agentMap.clear();
     this.agentEntityMap.clear();
+    this.agentDomains.clear();
     this.obstacleRefs.clear();
 
+    // Ground navmesh
     this.crowd = null;
     this.navMeshQuery = null;
     this.navMesh = null;
     this.tileCache = null;
 
+    // Water navmesh
+    this.waterCrowd = null;
+    this.waterNavMeshQuery = null;
+    this.waterNavMesh = null;
+    this.waterTileCache = null;
+
     this.initialized = false;
+    this.waterInitialized = false;
   }
 }
 

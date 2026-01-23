@@ -4,7 +4,7 @@ import { BIOMES, BiomeConfig } from './Biomes';
 import { Terrain, MapDecorations } from './Terrain';
 import { CrystalField } from './GroundDetail';
 import { TSLMapBorderFog } from './tsl/MapBorderFog';
-import { TSLWaterPlane } from './tsl/WaterPlane';
+import { OceanWater } from './tsl/OceanWater';
 import { WaterMesh } from './WaterMesh';
 import { EnvironmentParticles } from './EnhancedDecorations';
 // PERFORMANCE: Use instanced decorations instead of individual meshes
@@ -46,7 +46,7 @@ export class EnvironmentManager {
   private grass: InstancedGrass | null = null;
   private pebbles: InstancedPebbles | null = null;
   private crystals: CrystalField | null = null;
-  private water: TSLWaterPlane | null = null;
+  private water: OceanWater | null = null;
   private waterMesh: WaterMesh | null = null;
   private mapBorderFog: TSLMapBorderFog | null = null;
   private particles: EnvironmentParticles | null = null;
@@ -236,9 +236,9 @@ export class EnvironmentManager {
       this.scene.add(this.crystals.group);
     }
 
-    // Water/lava plane - TSL WebGPU compatible (global animated plane)
+    // Water/lava plane - World-class TSL ocean shader with Gerstner waves
     if (this.biome.hasWater) {
-      this.water = new TSLWaterPlane(this.mapData, this.biome);
+      this.water = new OceanWater(this.mapData, this.biome);
       this.scene.add(this.water.mesh);
     }
 

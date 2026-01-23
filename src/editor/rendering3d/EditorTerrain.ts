@@ -123,6 +123,11 @@ export class EditorTerrain {
     this.mesh.add(this.cliffMesh.mesh);
     this.mesh.add(this.guardrailMesh.mesh);
     this.mesh.add(this.waterMesh.group);
+
+    // Counter-rotate water mesh to cancel parent terrain rotation.
+    // WaterMesh creates geometry in world space (Y = height), but as a child of
+    // the terrain mesh (rotated -90 around X), it needs compensation.
+    this.waterMesh.group.rotation.x = Math.PI / 2;
   }
 
   /**

@@ -44,6 +44,7 @@ interface PathRequest {
   endX: number;
   endY: number;
   priority: number;
+  movementDomain?: 'ground' | 'water' | 'amphibious' | 'air';
 }
 
 /**
@@ -487,6 +488,32 @@ export class PathfindingSystem extends System {
   }
 
   /**
+   * Initialize water navmesh from water geometry
+   * Called by Game when terrain is loaded and has water cells
+   */
+  public async initializeWaterNavMesh(
+    positions: Float32Array,
+    indices: Uint32Array
+  ): Promise<boolean> {
+    debugPathfinding.log('[PathfindingSystem] Initializing water navmesh...');
+
+    const success = await this.recast.generateWaterNavMesh(
+      positions,
+      indices,
+      this.mapWidth,
+      this.mapHeight
+    );
+
+    if (success) {
+      debugPathfinding.log('[PathfindingSystem] Water navmesh initialized successfully');
+    } else {
+      debugPathfinding.log('[PathfindingSystem] No water navmesh generated (map may not have water)');
+    }
+
+    return success;
+  }
+
+  /**
    * Initialize navmesh from Three.js mesh
    */
   public async initializeNavMeshFromMesh(
@@ -604,8 +631,8 @@ export class PathfindingSystem extends System {
       const unit = entity.get<Unit>('Unit');
       if (!transform || !unit) return;
 
-      // Flying units don't need pathfinding, but still clamp to map bounds
-      if (unit.isFlying) {
+      // Air units use direct paths (no terrain collision)
+      if (unit.movementDomain === 'air') {
         const margin = 1;
         const clampedX = clamp(data.targetX, margin, this.mapWidth - margin);
         const clampedY = clamp(data.targetY, margin, this.mapHeight - margin);
@@ -620,6 +647,7 @@ export class PathfindingSystem extends System {
         endX: data.targetX,
         endY: data.targetY,
         priority: data.priority ?? 1,
+        movementDomain: unit.movementDomain,
       });
     });
   }
@@ -791,11 +819,14 @@ export class PathfindingSystem extends System {
     }
 
     // Fallback to main thread (blocking) if worker not available
-    const result = this.findPath(
+    // Use movement domain-aware pathfinding
+    const domain = request.movementDomain ?? unit.movementDomain ?? 'ground';
+    const result = this.findPathForDomain(
       request.startX,
       request.startY,
       request.endX,
       request.endY,
+      domain,
       unit.collisionRadius
     );
 
@@ -860,6 +891,21 @@ export class PathfindingSystem extends System {
     }
 
     return this.recast.findPath(startX, startY, endX, endY, agentRadius);
+  }
+
+  /**
+   * Find path with movement domain awareness.
+   * Uses the appropriate navmesh based on the unit's movement domain.
+   */
+  public findPathForDomain(
+    startX: number,
+    startY: number,
+    endX: number,
+    endY: number,
+    domain: 'ground' | 'water' | 'amphibious' | 'air',
+    agentRadius: number = 0.5
+  ): PathResult {
+    return this.recast.findPathForDomain(startX, startY, endX, endY, domain, agentRadius);
   }
 
   public isWalkable(x: number, y: number): boolean {
@@ -992,6 +1038,7 @@ export class PathfindingSystem extends System {
               endX: state.destinationX,
               endY: state.destinationY,
               priority: 3,
+              movementDomain: unit.movementDomain,
             });
 
             state.lastMoveTick = currentTick;

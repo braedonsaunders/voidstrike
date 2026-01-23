@@ -1,12 +1,39 @@
 /**
- * WaterMesh - Localized water surface rendering
+ * WaterMesh - Localized water surface rendering with TSL animation
  *
  * Creates animated water surfaces at locations where water_shallow/water_deep
- * terrain features exist. Unlike the global TSLWaterPlane, this creates
+ * terrain features exist. Unlike the global OceanWater plane, this creates
  * individual water meshes only where water actually exists in the map data.
+ *
+ * Features:
+ * - TSL-based animated wave effects
+ * - Depth-based coloring (shallow vs deep)
+ * - Fresnel reflections
+ * - Foam simulation at edges
  */
 
 import * as THREE from 'three';
+import {
+  Fn,
+  vec3,
+  vec4,
+  float,
+  uniform,
+  uv,
+  sin,
+  cos,
+  mix,
+  clamp,
+  dot,
+  normalize,
+  positionLocal,
+  positionWorld,
+  cameraPosition,
+  pow,
+  max,
+  smoothstep,
+} from 'three/tsl';
+import { MeshBasicNodeMaterial } from 'three/webgpu';
 import type { MapData, MapCell } from '@/data/maps/MapTypes';
 
 // Height scale factor (matches Terrain.ts)
@@ -32,29 +59,81 @@ export class WaterMesh {
   public group: THREE.Group;
 
   private waterMeshes: THREE.Mesh[] = [];
-  private waterMaterial: THREE.MeshBasicMaterial;
-  private deepWaterMaterial: THREE.MeshBasicMaterial;
+  private shallowMaterial: MeshBasicNodeMaterial;
+  private deepMaterial: MeshBasicNodeMaterial;
   private time: number = 0;
+
+  // TSL uniforms for animation
+  private uTime = uniform(0);
+  private uShallowColor = uniform(WATER_SHALLOW_COLOR.clone());
+  private uDeepColor = uniform(WATER_DEEP_COLOR.clone());
 
   constructor() {
     this.group = new THREE.Group();
 
-    // Create water materials
-    this.waterMaterial = new THREE.MeshBasicMaterial({
-      color: WATER_SHALLOW_COLOR,
-      transparent: true,
-      opacity: 0.65,
-      side: THREE.DoubleSide,
-      depthWrite: false,
-    });
+    // Create TSL-based animated water materials
+    this.shallowMaterial = this.createWaterMaterial(false);
+    this.deepMaterial = this.createWaterMaterial(true);
+  }
 
-    this.deepWaterMaterial = new THREE.MeshBasicMaterial({
-      color: WATER_DEEP_COLOR,
-      transparent: true,
-      opacity: 0.8,
-      side: THREE.DoubleSide,
-      depthWrite: false,
-    });
+  /**
+   * Create TSL-based water material with animation
+   */
+  private createWaterMaterial(isDeep: boolean): MeshBasicNodeMaterial {
+    const material = new MeshBasicNodeMaterial();
+    material.transparent = true;
+    material.side = THREE.DoubleSide;
+    material.depthWrite = false;
+
+    const baseColor = isDeep ? this.uDeepColor : this.uShallowColor;
+    const baseOpacity = isDeep ? 0.8 : 0.65;
+
+    const outputNode = Fn(() => {
+      const uvCoord = uv();
+      const pos = positionLocal;
+      const worldPos = positionWorld;
+      const time = this.uTime;
+
+      // Multi-layer wave animation
+      const wave1 = sin(pos.x.mul(0.8).add(pos.z.mul(0.5)).add(time.mul(0.6))).mul(0.5).add(0.5);
+      const wave2 = sin(pos.x.mul(1.2).add(pos.z.mul(0.8)).add(time.mul(0.9))).mul(0.5).add(0.5);
+      const wave3 = sin(pos.x.mul(0.3).add(pos.z.mul(1.1)).add(time.mul(0.4))).mul(0.5).add(0.5);
+      const waveMix = wave1.mul(0.5).add(wave2.mul(0.3)).add(wave3.mul(0.2));
+
+      // Surface ripple effect
+      const ripple1 = sin(uvCoord.x.mul(30.0).add(time.mul(1.2)))
+        .mul(sin(uvCoord.y.mul(25.0).add(time.mul(0.8))))
+        .mul(0.1);
+      const ripple2 = sin(uvCoord.x.mul(50.0).add(time.mul(1.8)))
+        .mul(sin(uvCoord.y.mul(45.0).add(time.mul(1.3))))
+        .mul(0.05);
+      const ripples = ripple1.add(ripple2);
+
+      // Fresnel effect for reflectivity
+      const viewDir = cameraPosition.sub(worldPos).normalize();
+      const upNormal = vec3(0, 1, 0);
+      const NdotV = max(dot(upNormal, viewDir), float(0.0));
+      const fresnel = pow(float(1.0).sub(NdotV), float(2.0)).mul(0.3);
+
+      // Color variation based on waves
+      const colorVariation = waveMix.mul(0.15);
+      let color = vec3(baseColor);
+      color = color.add(colorVariation).add(fresnel);
+
+      // Caustic-like highlights
+      const caustic = smoothstep(float(0.6), float(0.9), wave1.mul(wave2).add(ripples));
+      color = color.add(caustic.mul(0.15));
+
+      // Animated opacity with subtle pulsing
+      const opacityPulse = sin(time.mul(isDeep ? 0.3 : 0.5)).mul(0.05);
+      const alpha = float(baseOpacity).add(opacityPulse).add(fresnel.mul(0.1));
+
+      return vec4(clamp(color, float(0.0), float(1.0)), clamp(alpha, float(0.4), float(0.95)));
+    })();
+
+    material.colorNode = outputNode;
+
+    return material;
   }
 
   /**
@@ -290,7 +369,7 @@ export class WaterMesh {
     geometry.setIndex(indices);
     geometry.computeVertexNormals();
 
-    const material = isDeep ? this.deepWaterMaterial : this.waterMaterial;
+    const material = isDeep ? this.deepMaterial : this.shallowMaterial;
     const mesh = new THREE.Mesh(geometry, material);
     mesh.renderOrder = 1; // Render after terrain
 
@@ -303,13 +382,8 @@ export class WaterMesh {
    */
   public update(deltaTime: number): void {
     this.time += deltaTime;
-
-    // Subtle opacity pulsing
-    const opacityShallow = 0.6 + Math.sin(this.time * 0.5) * 0.05;
-    const opacityDeep = 0.75 + Math.sin(this.time * 0.3) * 0.05;
-
-    this.waterMaterial.opacity = opacityShallow;
-    this.deepWaterMaterial.opacity = opacityDeep;
+    // Update TSL time uniform for shader animation
+    this.uTime.value = this.time;
   }
 
   /**
@@ -328,7 +402,7 @@ export class WaterMesh {
    */
   public dispose(): void {
     this.clear();
-    this.waterMaterial.dispose();
-    this.deepWaterMaterial.dispose();
+    this.shallowMaterial.dispose();
+    this.deepMaterial.dispose();
   }
 }

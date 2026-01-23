@@ -638,6 +638,18 @@ export class Game {
   }
 
   /**
+   * Initialize the water navmesh for naval unit pathfinding.
+   * Should be called after terrain is created if the map has water.
+   */
+  public async initializeWaterNavMesh(
+    positions: Float32Array,
+    indices: Uint32Array
+  ): Promise<boolean> {
+    debugInitialization.log(`[Game] INITIALIZING_WATER_NAVMESH: ${positions.length / 3} vertices, ${indices.length / 3} triangles`);
+    return this.pathfindingSystem.initializeWaterNavMesh(positions, indices);
+  }
+
+  /**
    * Set decoration collision data for building placement validation and pathfinding.
    * Should be called after environment is loaded.
    * Large decorations (radius > 1) will also block pathfinding cells.
