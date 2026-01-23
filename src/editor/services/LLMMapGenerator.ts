@@ -375,6 +375,160 @@ const MAP_BLUEPRINT_SCHEMA = {
   },
 } as const;
 
+/**
+ * Gemini-compatible schema (no const, no oneOf, string enums only)
+ */
+const GEMINI_SCHEMA = {
+  type: 'object',
+  required: ['meta', 'canvas', 'paint', 'bases'],
+  properties: {
+    meta: {
+      type: 'object',
+      required: ['id', 'name', 'players'],
+      properties: {
+        id: { type: 'string', description: 'Unique snake_case identifier' },
+        name: { type: 'string', description: 'Display name for the map' },
+        author: { type: 'string', description: 'Map author (use "AI Generator")' },
+        description: { type: 'string', description: 'Brief description of the map theme and gameplay' },
+        players: { type: 'integer', description: 'Number of players: 2, 4, 6, or 8' },
+      },
+    },
+    canvas: {
+      type: 'object',
+      required: ['width', 'height', 'biome'],
+      properties: {
+        width: { type: 'integer', description: 'Map width in cells (128-256)' },
+        height: { type: 'integer', description: 'Map height in cells (128-256)' },
+        biome: {
+          type: 'string',
+          enum: ['grassland', 'desert', 'frozen', 'volcanic', 'void', 'jungle'],
+          description: 'Visual biome theme',
+        },
+      },
+    },
+    paint: {
+      type: 'array',
+      description: 'Paint commands executed in order. Each object has cmd (fill/plateau/rect/ramp/water/forest/void/road/unwalkable/border/mud) plus relevant properties.',
+      items: {
+        type: 'object',
+        required: ['cmd'],
+        properties: {
+          cmd: {
+            type: 'string',
+            enum: ['fill', 'plateau', 'rect', 'ramp', 'water', 'forest', 'void', 'road', 'unwalkable', 'border', 'mud'],
+            description: 'Command type',
+          },
+          elevation: { type: 'integer', description: 'Elevation: 60=LOW, 140=MID, 220=HIGH' },
+          x: { type: 'number', description: 'X coordinate' },
+          y: { type: 'number', description: 'Y coordinate' },
+          radius: { type: 'number', description: 'Radius for circular shapes' },
+          width: { type: 'number', description: 'Width for rectangles or ramp width' },
+          height: { type: 'number', description: 'Height for rectangles' },
+          thickness: { type: 'number', description: 'Border thickness (10-15 typical)' },
+          from: {
+            type: 'array',
+            items: { type: 'number' },
+            description: '[x, y] start point for ramps/roads',
+          },
+          to: {
+            type: 'array',
+            items: { type: 'number' },
+            description: '[x, y] end point for ramps/roads',
+          },
+          depth: { type: 'string', enum: ['shallow', 'deep'], description: 'Water depth' },
+          density: { type: 'string', enum: ['sparse', 'light', 'medium', 'dense'], description: 'Forest density' },
+        },
+      },
+    },
+    bases: {
+      type: 'array',
+      description: 'Base locations. Each player needs main + natural + third minimum.',
+      items: {
+        type: 'object',
+        required: ['x', 'y', 'type'],
+        properties: {
+          x: { type: 'number' },
+          y: { type: 'number' },
+          type: {
+            type: 'string',
+            enum: ['main', 'natural', 'third', 'fourth', 'fifth', 'gold', 'pocket'],
+            description: 'Base type',
+          },
+          playerSlot: { type: 'integer', description: 'Player number (1-8) for main bases' },
+          mineralDirection: {
+            type: 'string',
+            enum: ['up', 'down', 'left', 'right', 'up_left', 'up_right', 'down_left', 'down_right'],
+            description: 'Direction minerals face',
+          },
+          isGold: { type: 'boolean', description: 'Rich mineral base' },
+        },
+      },
+    },
+    watchTowers: {
+      type: 'array',
+      description: 'Vision-granting neutral structures',
+      items: {
+        type: 'object',
+        required: ['x', 'y', 'vision'],
+        properties: {
+          x: { type: 'number' },
+          y: { type: 'number' },
+          vision: { type: 'integer', description: 'Vision radius (20-40)' },
+        },
+      },
+    },
+    destructibles: {
+      type: 'array',
+      description: 'Breakable rocks',
+      items: {
+        type: 'object',
+        required: ['x', 'y', 'health'],
+        properties: {
+          x: { type: 'number' },
+          y: { type: 'number' },
+          health: { type: 'integer', description: 'Health (500-2000)' },
+          size: { type: 'string', enum: ['small', 'medium', 'large'] },
+        },
+      },
+    },
+    decorationRules: {
+      type: 'object',
+      description: 'Procedural decoration rules',
+      properties: {
+        border: {
+          type: 'object',
+          properties: {
+            style: { type: 'string', enum: ['rocks', 'crystals', 'trees', 'mixed', 'alien', 'dead_trees'] },
+            density: { type: 'number', description: '0-1' },
+            scale: {
+              type: 'array',
+              items: { type: 'number' },
+              description: '[min, max] scale',
+            },
+            innerOffset: { type: 'number' },
+            outerOffset: { type: 'number' },
+          },
+        },
+        scatter: {
+          type: 'object',
+          properties: {
+            rocks: { type: 'number' },
+            debris: { type: 'number' },
+          },
+        },
+        baseRings: {
+          type: 'object',
+          properties: {
+            rocks: { type: 'integer' },
+            trees: { type: 'integer' },
+          },
+        },
+        seed: { type: 'integer' },
+      },
+    },
+  },
+};
+
 // ============================================================================
 // SYSTEM PROMPT
 // ============================================================================
@@ -580,7 +734,7 @@ async function callGemini(config: LLMConfig, settings: MapGenerationSettings): P
               {
                 name: 'generate_map_blueprint',
                 description: 'Generate a complete RTS map blueprint with terrain, bases, and decorations',
-                parameters: MAP_BLUEPRINT_SCHEMA,
+                parameters: GEMINI_SCHEMA,
               },
             ],
           },
