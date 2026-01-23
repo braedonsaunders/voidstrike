@@ -51,6 +51,11 @@ if (loadErrors.length > 0 && process.env.NODE_ENV === 'development') {
   debugTerrain.warn('Map loading errors:', loadErrors);
 }
 
+// Log loaded maps in development
+if (process.env.NODE_ENV === 'development') {
+  debugTerrain.log(`Loaded ${loadedMaps.length} maps:`, loadedMaps.map(m => m.id));
+}
+
 // All maps registry (by ID) - includes special mode maps
 export const ALL_MAPS: Record<string, MapData> = {};
 for (const map of loadedMaps) {

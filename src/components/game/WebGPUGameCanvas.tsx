@@ -176,8 +176,15 @@ export function WebGPUGameCanvas() {
           debugInitialization.log(`[WebGPUGameCanvas] Loading custom/preview map: ${CURRENT_MAP.name}`);
         } else {
           const selectedMapId = useGameSetupStore.getState().selectedMapId;
-          CURRENT_MAP = getMapById(selectedMapId) || DEFAULT_MAP;
-          debugInitialization.log(`[WebGPUGameCanvas] Loading map: ${CURRENT_MAP.name}`);
+          const requestedMap = getMapById(selectedMapId);
+          if (requestedMap) {
+            CURRENT_MAP = requestedMap;
+            debugInitialization.log(`[WebGPUGameCanvas] Loading map: ${CURRENT_MAP.name}`);
+          } else {
+            console.warn(`[WebGPUGameCanvas] Map '${selectedMapId}' not found, falling back to default`);
+            CURRENT_MAP = DEFAULT_MAP;
+            debugInitialization.log(`[WebGPUGameCanvas] Fallback to map: ${CURRENT_MAP.name}`);
+          }
         }
 
         setLoadingStatus('Loading 3D models');
