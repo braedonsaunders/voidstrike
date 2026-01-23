@@ -181,6 +181,7 @@ export interface UseEditorStateReturn {
   updateObject: (id: string, updates: Partial<EditorObject>) => void;
   updateObjectProperty: (id: string, key: string, value: unknown) => void;
   removeObject: (id: string) => void;
+  replaceObjects: (objects: EditorObject[]) => void;
   selectObjects: (ids: string[]) => void;
   clearSelection: () => void;
 
@@ -572,6 +573,26 @@ export function useEditorState(config: EditorConfig): UseEditorStateReturn {
     });
   }, [maxUndoHistory]);
 
+  const replaceObjects = useCallback((objects: EditorObject[]) => {
+    setState((prev) => {
+      if (!prev.mapData) return prev;
+
+      const newUndoStack = [...prev.undoStack.slice(-maxUndoHistory + 1), cloneMapData(prev.mapData)];
+
+      return {
+        ...prev,
+        mapData: {
+          ...prev.mapData,
+          objects,
+        },
+        selectedObjects: [],
+        undoStack: newUndoStack,
+        redoStack: [],
+        isDirty: true,
+      };
+    });
+  }, [maxUndoHistory]);
+
   const selectObjects = useCallback((ids: string[]) => {
     setState((prev) => ({ ...prev, selectedObjects: ids }));
   }, []);
@@ -705,6 +726,7 @@ export function useEditorState(config: EditorConfig): UseEditorStateReturn {
     updateObject,
     updateObjectProperty,
     removeObject,
+    replaceObjects,
     selectObjects,
     clearSelection,
     undo,

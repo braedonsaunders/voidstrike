@@ -18,6 +18,8 @@ import type {
 import { useEditorState } from '../hooks/useEditorState';
 import { useUIStore } from '@/store/uiStore';
 import { MusicPlayer } from '@/audio/MusicPlayer';
+import { mapDataToEditorFormat } from '../providers/voidstrike';
+import type { MapData } from '@/data/maps/MapTypes';
 
 // Detailed validation result type for the editor UI
 export interface DetailedValidationResult {
@@ -271,6 +273,18 @@ export function EditorCore({
     if (!state.mapData) return;
     onPlay?.(state.mapData);
   }, [state.mapData, onPlay]);
+
+  // Handle AI-generated map
+  const handleAIMapGenerated = useCallback((mapData: MapData) => {
+    // Convert MapData to EditorMapData and load into editor
+    const editorMapData = mapDataToEditorFormat(mapData);
+    loadMap(editorMapData);
+  }, [loadMap]);
+
+  // Handle update objects (for border decorations, etc.)
+  const handleUpdateObjects = useCallback((objects: EditorObject[]) => {
+    editorState.replaceObjects(objects);
+  }, [editorState]);
 
   // Handle validate
   const handleValidate = useCallback(async () => {
@@ -711,6 +725,8 @@ export function EditorCore({
               onToggleLabels={toggleLabels}
               onToggleGrid={toggleGrid}
               onToggleCategory={toggleCategory}
+              onAIMapGenerated={handleAIMapGenerated}
+              onUpdateObjects={handleUpdateObjects}
             />
           </div>
         </div>

@@ -41,7 +41,7 @@ interface ExtendedValidationResult extends ValidationResult {
 /**
  * Convert VOIDSTRIKE MapData to editor format
  */
-function mapDataToEditorFormat(map: MapData): EditorMapData {
+export function mapDataToEditorFormat(map: MapData): EditorMapData {
   // Convert terrain grid
   const terrain: EditorCell[][] = map.terrain.map((row) =>
     row.map((cell) => {
