@@ -24,8 +24,8 @@ interface OverlayCacheEntry {
 }
 
 // Current cache version - increment when overlay computation changes
-// v13: Fixed navmesh geometry threshold to use WALKABLE_CLIMB_ELEVATION for proper slope handling
-const CACHE_VERSION = 13;
+// v14: Fixed navmesh geometry to use shared vertices for Recast polygon connectivity
+const CACHE_VERSION = 14;
 
 // Max age for cached entries (7 days)
 const MAX_CACHE_AGE_MS = 7 * 24 * 60 * 60 * 1000;
