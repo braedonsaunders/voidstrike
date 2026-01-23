@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 
-export type BiomeType = 'grassland' | 'desert' | 'frozen' | 'volcanic' | 'void' | 'jungle';
+export type BiomeType = 'grassland' | 'desert' | 'frozen' | 'volcanic' | 'void' | 'jungle' | 'ocean';
 
 export interface BiomeColors {
   ground: THREE.Color[];      // Multiple ground colors for variation
@@ -278,6 +278,48 @@ export const BIOMES: Record<BiomeType, BiomeConfig> = {
     waterLevel: -1,
     particleType: 'spores', // Floating spores and pollen
     groundRoughness: 0.8,
+    groundMetalness: 0.0,
+  },
+
+  ocean: {
+    name: 'Ocean',
+    colors: {
+      ground: [
+        new THREE.Color(0xc2b280), // Sandy beach
+        new THREE.Color(0xd4c494), // Light sand
+        new THREE.Color(0xb8a870), // Wet sand
+        new THREE.Color(0xe0d4a8), // Dry sand highlight
+        new THREE.Color(0xa09060), // Dark sand
+      ],
+      cliff: [
+        new THREE.Color(0x7a8a90), // Wet rock
+        new THREE.Color(0x8a9aa0), // Light coastal rock
+        new THREE.Color(0x6a7a80), // Dark rock
+      ],
+      ramp: [
+        new THREE.Color(0x9a8a70), // Sandy ramp
+        new THREE.Color(0x8a7a60), // Darker sandy ramp
+        new THREE.Color(0xaa9a80), // Light sandy ramp
+      ],
+      accent: [
+        new THREE.Color(0x40a0c0), // Shallow water tint
+        new THREE.Color(0x60c0e0), // Foam
+        new THREE.Color(0x20608080), // Seaweed
+      ],
+      water: new THREE.Color(0x1060a0), // Deep ocean blue
+      fog: new THREE.Color(0xb0d0e8),   // Coastal mist
+      ambient: new THREE.Color(0x6080a0), // Cool ocean ambient
+      sun: new THREE.Color(0xfff8e8),   // Warm coastal sun
+      sky: new THREE.Color(0x70b0d8),   // Clear coastal sky
+    },
+    grassDensity: 0.1,   // Sparse beach grass
+    treeDensity: 0.05,   // Few palm trees
+    rockDensity: 0.15,   // Coastal rocks
+    crystalDensity: 0,   // No crystals
+    hasWater: true,      // Ocean water
+    waterLevel: 0.5,     // Water level for naval units
+    particleType: 'none', // No particles
+    groundRoughness: 0.7,
     groundMetalness: 0.0,
   },
 };

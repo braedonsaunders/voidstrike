@@ -139,25 +139,33 @@ export class RecastNavigation {
 
     // Check for SharedArrayBuffer availability (required for threaded WASM)
     const hasSharedArrayBuffer = typeof SharedArrayBuffer !== 'undefined';
-    debugInitialization.log('[RecastNavigation] SharedArrayBuffer available:', hasSharedArrayBuffer);
+    console.log('[RecastNavigation] SharedArrayBuffer available:', hasSharedArrayBuffer);
 
     if (!hasSharedArrayBuffer) {
-      debugInitialization.warn(
+      console.warn(
         '[RecastNavigation] SharedArrayBuffer is not available. ' +
         'This may be due to missing security headers (COOP/COEP). ' +
         'Navmesh initialization may fail on Safari and other browsers.'
       );
     }
 
-    debugInitialization.log('[RecastNavigation] Initializing WASM module...');
+    console.log('[RecastNavigation] Initializing WASM module...');
 
-    RecastNavigation.initPromise = init()
+    // Create a timeout promise to prevent infinite hangs
+    const INIT_TIMEOUT_MS = 10000; // 10 seconds
+    const timeoutPromise = new Promise<never>((_, reject) => {
+      setTimeout(() => {
+        reject(new Error(`WASM initialization timed out after ${INIT_TIMEOUT_MS}ms`));
+      }, INIT_TIMEOUT_MS);
+    });
+
+    RecastNavigation.initPromise = Promise.race([init(), timeoutPromise])
       .then(() => {
-        debugInitialization.log('[RecastNavigation] WASM module initialized successfully');
+        console.log('[RecastNavigation] WASM module initialized successfully');
       })
       .catch((error) => {
-        debugInitialization.error('[RecastNavigation] WASM initialization failed:', error);
-        debugInitialization.error(
+        console.error('[RecastNavigation] WASM initialization failed:', error);
+        console.error(
           '[RecastNavigation] If this is Safari, ensure the server sends these headers:\n' +
           '  Cross-Origin-Opener-Policy: same-origin\n' +
           '  Cross-Origin-Embedder-Policy: require-corp'
@@ -298,8 +306,12 @@ export class RecastNavigation {
   ): Promise<boolean> {
     const startTime = performance.now();
 
+    console.log(`[RecastNavigation] generateFromGeometry called: ${positions.length / 3} vertices, ${indices.length / 3} triangles, map ${mapWidth}x${mapHeight}`);
+
     try {
+      console.log('[RecastNavigation] Waiting for WASM initialization...');
       await RecastNavigation.initWasm();
+      console.log('[RecastNavigation] WASM initialization complete, proceeding...');
 
       this.mapWidth = mapWidth;
       this.mapHeight = mapHeight;

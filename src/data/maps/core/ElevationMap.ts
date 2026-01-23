@@ -19,7 +19,8 @@ export type BiomeType =
   | 'frozen'
   | 'volcanic'
   | 'void'
-  | 'jungle';
+  | 'jungle'
+  | 'ocean';
 
 export interface BiomeTheme {
   biome: BiomeType;
@@ -85,6 +86,15 @@ export const BIOME_THEMES: Record<BiomeType, BiomeTheme> = {
     fogColor: '#304030',
     fogNear: 70,
     fogFar: 220,
+  },
+  ocean: {
+    biome: 'ocean',
+    skyboxColor: '#70B0D8',
+    ambientColor: '#4060A0',
+    sunColor: '#FFF8E8',
+    fogColor: '#B0D0E8',
+    fogNear: 100,
+    fogFar: 350,
   },
 };
 

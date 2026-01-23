@@ -56,6 +56,7 @@ const BIOMES: Array<{ id: BiomeType; name: string; icon: string }> = [
   { id: 'frozen', name: 'Frozen', icon: '❄️' },
   { id: 'volcanic', name: 'Volcanic', icon: '🌋' },
   { id: 'jungle', name: 'Jungle', icon: '🌴' },
+  { id: 'ocean', name: 'Ocean', icon: '🌊' },
 ];
 
 const BORDER_STYLES: Array<{ id: MapGenerationSettings['borderStyle']; name: string }> = [
