@@ -3,7 +3,7 @@
 import { useCallback, useEffect, memo } from 'react';
 import { useGameStore } from '@/store/gameStore';
 import { useUIStore, isAnyMenuOpen, GameOverlayType } from '@/store/uiStore';
-import { useGameSetupStore } from '@/store/gameSetupStore';
+import { useGameSetupStore, isMultiplayerMode } from '@/store/gameSetupStore';
 import { setEdgeScrollEnabled } from '@/store/cameraStore';
 import { Minimap } from './Minimap';
 import { ResourcePanel } from './ResourcePanel';
@@ -16,6 +16,7 @@ import { PlayerStatusPanel } from './PlayerStatusPanel';
 import { SoundOptionsPanel } from './SoundOptionsPanel';
 import { PerformancePanel } from './PerformancePanel';
 import { BattleSimulatorPanel } from './BattleSimulatorPanel';
+import { ConsolePanel } from './ConsolePanel';
 
 // Legend configuration for each overlay type
 const OVERLAY_LEGENDS: Record<Exclude<GameOverlayType, 'none'>, { title: string; items: Array<{ color: string; label: string }> }> = {
@@ -100,6 +101,8 @@ export const HUD = memo(function HUD() {
     showOptionsMenu, setShowOptionsMenu,
     showOverlayMenu, setShowOverlayMenu,
     showPlayerStatus, setShowPlayerStatus,
+    // Debug console
+    consoleEnabled, setConsoleEnabled, showConsole, toggleConsole,
   } = useUIStore();
   const isBattleSimulator = useGameSetupStore((state) => state.isBattleSimulator);
   const isEditorPreview = useGameSetupStore((state) => state.isEditorPreview);
@@ -341,6 +344,26 @@ export const HUD = memo(function HUD() {
                   <span>Debug</span>
                   <span className={showDebugMenu ? 'text-green-400' : 'text-void-500'}>{showDebugMenu ? 'OPEN' : ''}</span>
                 </button>
+                {/* Console - only available in single player */}
+                {!isMultiplayerMode() && (
+                  <button
+                    onClick={() => {
+                      if (!consoleEnabled) {
+                        setConsoleEnabled(true);
+                        toggleConsole();
+                      } else {
+                        toggleConsole();
+                      }
+                      setShowOptionsMenu(false);
+                    }}
+                    className="w-full px-4 py-2 text-left text-sm text-void-200 hover:bg-void-800 transition-colors flex justify-between items-center"
+                  >
+                    <span>Console</span>
+                    <span className={showConsole ? 'text-green-400' : consoleEnabled ? 'text-yellow-400' : 'text-void-500'}>
+                      {showConsole ? 'OPEN' : consoleEnabled ? 'ON' : ''}
+                    </span>
+                  </button>
+                )}
                 <div className="border-t border-void-700 my-1" />
                 {isEditorPreview && (
                   <button
@@ -414,6 +437,9 @@ export const HUD = memo(function HUD() {
 
       {/* Performance Panel */}
       <PerformancePanel />
+
+      {/* Debug Console - only available in single player */}
+      {!isMultiplayerMode() && consoleEnabled && <ConsolePanel />}
 
       {/* Pause overlay */}
       {isPaused && (

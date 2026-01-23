@@ -51,6 +51,10 @@ export class ZustandStateAdapter implements GameStatePort {
     useGameStore.getState().addResources(minerals, vespene);
   }
 
+  setResources(minerals: number, vespene: number): void {
+    useGameStore.getState().setResources(minerals, vespene);
+  }
+
   addSupply(delta: number): void {
     useGameStore.getState().addSupply(delta);
   }

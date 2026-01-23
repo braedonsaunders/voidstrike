@@ -22,6 +22,7 @@ export interface GameStatePort {
   selectUnits(entityIds: number[]): void;
   setControlGroup(groupNumber: number, entityIds: number[]): void;
   addResources(minerals: number, vespene: number): void;
+  setResources(minerals: number, vespene: number): void;
   addSupply(delta: number): void;
   addMaxSupply(delta: number): void;
 }
