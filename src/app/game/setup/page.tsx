@@ -3,7 +3,7 @@
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useEffect, useState, useCallback } from 'react';
-import { ALL_MAPS, MapData } from '@/data/maps';
+import { ALL_MAPS, LOBBY_MAPS, MapData } from '@/data/maps';
 import { MusicPlayer } from '@/audio/MusicPlayer';
 import { useUIStore } from '@/store/uiStore';
 import { BIOMES } from '@/rendering/Biomes';
@@ -535,12 +535,14 @@ export default function GameSetupPage() {
   }, [isHost, onGameStart, receivedLobbyState, mySlotId, startGame, router]);
 
   const [mapSearch, setMapSearch] = useState('');
-  const allMaps = Object.values(ALL_MAPS);
-  const maps = allMaps.filter(map =>
+  // Use LOBBY_MAPS for selection grid (excludes special mode maps like battle simulator)
+  const lobbyMaps = Object.values(LOBBY_MAPS);
+  const maps = lobbyMaps.filter(map =>
     map.name.toLowerCase().includes(mapSearch.toLowerCase()) ||
     map.biome?.toLowerCase().includes(mapSearch.toLowerCase())
   );
-  const selectedMap = ALL_MAPS[selectedMapId] || allMaps[0];
+  // Use ALL_MAPS for lookup (includes special mode maps)
+  const selectedMap = ALL_MAPS[selectedMapId] || lobbyMaps[0];
 
   // Get used colors for duplicate prevention
   const usedColors = new Set(
@@ -623,7 +625,7 @@ export default function GameSetupPage() {
   // Display values - use received state for guests, local state for host
   const displayPlayerSlots = isGuestMode && receivedLobbyState ? receivedLobbyState.playerSlots : playerSlots;
   const displayMapId = isGuestMode && receivedLobbyState ? receivedLobbyState.selectedMapId : selectedMapId;
-  const displayMap = ALL_MAPS[displayMapId] || allMaps[0];
+  const displayMap = ALL_MAPS[displayMapId] || lobbyMaps[0];
   const displayStartingResources = isGuestMode && receivedLobbyState ? receivedLobbyState.startingResources : startingResources;
   const displayGameSpeed = isGuestMode && receivedLobbyState ? receivedLobbyState.gameSpeed : gameSpeed;
   const displayFogOfWar = isGuestMode && receivedLobbyState ? receivedLobbyState.fogOfWar : fogOfWar;

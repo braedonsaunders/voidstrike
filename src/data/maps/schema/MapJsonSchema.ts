@@ -166,6 +166,9 @@ export interface MapJson {
   /** Available in ranked matchmaking */
   isRanked: boolean;
 
+  /** Special mode map (hidden from lobby selection, e.g., battle simulator) */
+  isSpecialMode?: boolean;
+
   /** Optional thumbnail URL */
   thumbnailUrl?: string;
 

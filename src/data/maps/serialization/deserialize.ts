@@ -134,6 +134,7 @@ export function jsonToMapData(json: MapJson): MapData {
     playerCount: json.playerCount,
     maxPlayers: json.maxPlayers,
     isRanked: json.isRanked,
+    isSpecialMode: json.isSpecialMode,
     thumbnailUrl: json.thumbnailUrl,
 
     terrain,

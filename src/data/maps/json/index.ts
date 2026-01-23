@@ -51,10 +51,18 @@ if (loadErrors.length > 0 && process.env.NODE_ENV === 'development') {
   debugTerrain.warn('Map loading errors:', loadErrors);
 }
 
-// All maps registry (by ID)
+// All maps registry (by ID) - includes special mode maps
 export const ALL_MAPS: Record<string, MapData> = {};
 for (const map of loadedMaps) {
   ALL_MAPS[map.id] = map;
+}
+
+// Lobby-visible maps - excludes special mode maps (battle simulator, etc.)
+export const LOBBY_MAPS: Record<string, MapData> = {};
+for (const map of loadedMaps) {
+  if (!map.isSpecialMode) {
+    LOBBY_MAPS[map.id] = map;
+  }
 }
 
 // Maps by player count (extracted from map JSON)
