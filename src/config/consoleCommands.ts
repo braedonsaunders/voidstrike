@@ -580,21 +580,10 @@ export const CONSOLE_COMMANDS: ConsoleCommand[] = [
     ],
     execute: (args, ctx) => {
       const targetPlayer = args.player as string | undefined;
-      const game = ctx.game;
 
-      // Find AI coordinator system
-      const aiSystem = game.world.getSystem?.('AICoordinator');
-      if (!aiSystem) {
-        return { success: false, message: 'AI system not found' };
-      }
-
-      // Trigger attack
-      if ((aiSystem as { forceAttack?: (player?: string) => void }).forceAttack) {
-        (aiSystem as { forceAttack: (player?: string) => void }).forceAttack(targetPlayer);
-        return { success: true, message: `Forced AI attack${targetPlayer ? ` for ${targetPlayer}` : ''}` };
-      }
-
-      return { success: false, message: 'AI attack not available' };
+      // Emit event to trigger AI attack
+      ctx.game.eventBus.emit('debug:forceAIAttack', { playerId: targetPlayer });
+      return { success: true, message: `Forced AI attack${targetPlayer ? ` for ${targetPlayer}` : ''}` };
     },
   },
 ];
