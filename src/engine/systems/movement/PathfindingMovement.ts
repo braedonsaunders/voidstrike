@@ -163,10 +163,13 @@ export class PathfindingMovement {
     if (unit.isFlying) return;
     if (this.crowdAgents.has(entityId)) return;
 
-    const agentIndex = this.recast.addAgent(
+    // Use movement domain-aware agent registration
+    // Naval units use water navmesh, ground units use ground navmesh
+    const agentIndex = this.recast.addAgentForDomain(
       entityId,
       transform.x,
       transform.y,
+      unit.movementDomain,
       unit.collisionRadius,
       unit.maxSpeed
     );
