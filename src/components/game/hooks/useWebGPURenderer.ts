@@ -102,6 +102,11 @@ export function useWebGPURenderer({
   onProgress,
   onWebGPUDetected,
 }: UseWebGPURendererProps): UseWebGPURendererReturn {
+  // Store map in a ref so initializeRenderer always gets the latest value
+  // This fixes timing issues where CURRENT_MAP is updated after the hook is called
+  const mapRef = useRef<MapData>(map);
+  mapRef.current = map;
+
   // All renderer refs
   const renderContextRef = useRef<RenderContext | null>(null);
   const sceneRef = useRef<THREE.Scene | null>(null);
@@ -231,15 +236,16 @@ export function useWebGPURenderer({
       sceneRef.current = scene;
 
       // Create camera
-      const mapWidth = map.width;
-      const mapHeight = map.height;
+      const currentMap = mapRef.current;
+      const mapWidth = currentMap.width;
+      const mapHeight = currentMap.height;
       const camera = new RTSCamera(width / height, mapWidth, mapHeight);
       cameraRef.current = camera;
       setCameraRef(camera);
       camera.setScreenDimensions(width, height);
 
       // Create environment
-      const environment = new EnvironmentManager(scene, map);
+      const environment = new EnvironmentManager(scene, currentMap);
       environmentRef.current = environment;
       const terrain = environment.terrain;
 
@@ -248,8 +254,8 @@ export function useWebGPURenderer({
       // Position camera at player spawn
       const localPlayerSlot = useGameSetupStore.getState().getLocalPlayerSlot();
       const playerSpawn =
-        map.spawns?.find((s) => s.playerSlot === localPlayerSlot) ||
-        map.spawns?.[0] ||
+        currentMap.spawns?.find((s) => s.playerSlot === localPlayerSlot) ||
+        currentMap.spawns?.[0] ||
         { x: mapWidth / 2, y: mapHeight / 2 };
       camera.setPosition(playerSpawn.x, playerSpawn.y);
       camera.setAngle(0);
@@ -272,7 +278,7 @@ export function useWebGPURenderer({
       });
 
       // Set terrain data
-      game.setTerrainGrid(map.terrain);
+      game.setTerrainGrid(currentMap.terrain);
       game.setDecorationCollisions(environment.getRockCollisions());
 
       onProgress(55, 'Generating navigation mesh');
@@ -392,7 +398,7 @@ export function useWebGPURenderer({
       );
 
       // Create placement preview
-      placementPreviewRef.current = new BuildingPlacementPreview(map, (x: number, y: number) => terrain.getHeightAt(x, y));
+      placementPreviewRef.current = new BuildingPlacementPreview(currentMap, (x: number, y: number) => terrain.getHeightAt(x, y));
       placementPreviewRef.current.setVespeneGeyserChecker((x: number, y: number) => {
         const resources = game.world.getEntitiesWith('Resource', 'Transform');
         const searchRadius = 1.5;
@@ -414,7 +420,7 @@ export function useWebGPURenderer({
       scene.add(placementPreviewRef.current.group);
 
       // Create wall placement preview
-      wallPlacementPreviewRef.current = new WallPlacementPreview(map, (x: number, y: number) => terrain.getHeightAt(x, y));
+      wallPlacementPreviewRef.current = new WallPlacementPreview(currentMap, (x: number, y: number) => terrain.getHeightAt(x, y));
       wallPlacementPreviewRef.current.setPlacementValidator((x: number, y: number, w: number, h: number) => {
         return game.isValidBuildingPlacement(x, y, w, h, undefined, true);
       });
@@ -501,7 +507,7 @@ export function useWebGPURenderer({
       }
 
       // Create overlay manager
-      overlayManagerRef.current = new TSLGameOverlayManager(scene, map, (x, y) => terrain.getHeightAt(x, y));
+      overlayManagerRef.current = new TSLGameOverlayManager(scene, currentMap, (x, y) => terrain.getHeightAt(x, y));
       overlayManagerRef.current.setWorld(game.world);
 
       // Create command queue renderer
@@ -587,8 +593,8 @@ export function useWebGPURenderer({
       );
 
       // Create watch tower renderer
-      if (map.watchTowers && map.watchTowers.length > 0) {
-        game.visionSystem.setWatchTowers(map.watchTowers);
+      if (currentMap.watchTowers && currentMap.watchTowers.length > 0) {
+        game.visionSystem.setWatchTowers(currentMap.watchTowers);
         watchTowerRendererRef.current = new WatchTowerRenderer(scene, game.visionSystem);
       }
 
