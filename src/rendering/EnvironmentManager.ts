@@ -5,6 +5,7 @@ import { Terrain, MapDecorations } from './Terrain';
 import { CrystalField } from './GroundDetail';
 import { TSLMapBorderFog } from './tsl/MapBorderFog';
 import { TSLWaterPlane } from './tsl/WaterPlane';
+import { WaterMesh } from './WaterMesh';
 import { EnvironmentParticles } from './EnhancedDecorations';
 // PERFORMANCE: Use instanced decorations instead of individual meshes
 import { InstancedTrees, InstancedRocks, InstancedGrass, InstancedPebbles, updateDecorationFrustum } from './InstancedDecorations';
@@ -46,6 +47,7 @@ export class EnvironmentManager {
   private pebbles: InstancedPebbles | null = null;
   private crystals: CrystalField | null = null;
   private water: TSLWaterPlane | null = null;
+  private waterMesh: WaterMesh | null = null;
   private mapBorderFog: TSLMapBorderFog | null = null;
   private particles: EnvironmentParticles | null = null;
   private legacyDecorations: MapDecorations | null = null;
@@ -229,11 +231,17 @@ export class EnvironmentManager {
       this.scene.add(this.crystals.group);
     }
 
-    // Water/lava plane - TSL WebGPU compatible
+    // Water/lava plane - TSL WebGPU compatible (global animated plane)
     if (this.biome.hasWater) {
       this.water = new TSLWaterPlane(this.mapData, this.biome);
       this.scene.add(this.water.mesh);
     }
+
+    // Localized water mesh - renders water surfaces where water features exist
+    // This works regardless of biome.hasWater setting
+    this.waterMesh = new WaterMesh();
+    this.waterMesh.buildFromMapData(this.mapData);
+    this.scene.add(this.waterMesh.group);
 
     // Map border fog - dark smoky effect around map edges
     // Uses TSL for WebGPU/WebGL compatibility
@@ -305,6 +313,9 @@ export class EnvironmentManager {
 
     if (this.water) {
       this.water.update(gameTime);
+    }
+    if (this.waterMesh) {
+      this.waterMesh.update(deltaTime);
     }
     if (this.mapBorderFog) {
       this.mapBorderFog.update(gameTime);
@@ -758,6 +769,7 @@ export class EnvironmentManager {
     this.pebbles?.dispose();
     this.crystals?.dispose();
     this.water?.dispose();
+    this.waterMesh?.dispose();
     this.mapBorderFog?.dispose();
     this.particles?.dispose();
     this.legacyDecorations?.dispose();
@@ -784,6 +796,7 @@ export class EnvironmentManager {
     if (this.pebbles) this.scene.remove(this.pebbles.group);
     if (this.crystals) this.scene.remove(this.crystals.group);
     if (this.water) this.scene.remove(this.water.mesh);
+    if (this.waterMesh) this.scene.remove(this.waterMesh.group);
     if (this.mapBorderFog) this.scene.remove(this.mapBorderFog.mesh);
     if (this.particles) this.scene.remove(this.particles.points);
     if (this.legacyDecorations) this.scene.remove(this.legacyDecorations.group);
