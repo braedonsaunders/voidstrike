@@ -6,7 +6,7 @@
  */
 
 import type { MutableRefObject, RefObject } from 'react';
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
 import * as THREE from 'three';
 import { RenderContext, RenderPipeline, TSLFogOfWar } from '@/rendering/tsl';
 import { EnvironmentManager } from '@/rendering/EnvironmentManager';
@@ -40,6 +40,10 @@ export function usePostProcessing({
   containerRef,
   map,
 }: UsePostProcessingProps): void {
+  // Store map in a ref so effects always get the latest value
+  const mapRef = useRef<MapData>(map);
+  mapRef.current = map;
+
   // Subscribe to overlay settings changes
   useEffect(() => {
     const unsubscribe = useUIStore.subscribe((state: UIState, prevState: UIState) => {
@@ -164,7 +168,7 @@ export function usePostProcessing({
 
           // Set fog of war map dimensions
           if (useGameSetupStore.getState().fogOfWar && !isSpectatorMode()) {
-            renderPipelineRef.current.setFogOfWarMapDimensions(map.width, map.height);
+            renderPipelineRef.current.setFogOfWarMapDimensions(mapRef.current.width, mapRef.current.height);
           }
 
           // Initialize camera matrices for TAA
