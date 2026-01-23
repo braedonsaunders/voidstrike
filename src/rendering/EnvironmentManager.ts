@@ -176,6 +176,11 @@ export class EnvironmentManager {
         fogNear = mapData.fogNear ?? 80;
         fogFar = mapData.fogFar ?? 250;
         break;
+      case 'ocean':
+        // Coastal mist - good visibility
+        fogNear = mapData.fogNear ?? 70;
+        fogFar = mapData.fogFar ?? 220;
+        break;
       case 'grassland':
       default:
         // Light atmospheric haze - good visibility
@@ -639,6 +644,7 @@ export class EnvironmentManager {
         case 'void': fogNear = 20; fogFar = 90; break;
         case 'frozen': fogNear = 50; fogFar = 160; break;
         case 'desert': fogNear = 80; fogFar = 250; break;
+        case 'ocean': fogNear = 70; fogFar = 220; break;
         default: fogNear = 60; fogFar = 180; break;
       }
 
@@ -663,6 +669,7 @@ export class EnvironmentManager {
         case 'void': baseFogNear = 20; baseFogFar = 90; break;
         case 'frozen': baseFogNear = 50; baseFogFar = 160; break;
         case 'desert': baseFogNear = 80; baseFogFar = 250; break;
+        case 'ocean': baseFogNear = 70; baseFogFar = 220; break;
         default: baseFogNear = 60; baseFogFar = 180; break;
       }
 

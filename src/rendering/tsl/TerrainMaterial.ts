@@ -172,6 +172,13 @@ function getBiomeTextures(biome: BiomeType): {
         rock: 'mossy_rock',
         cliff: 'jungle_cliff',
       };
+    case 'ocean':
+      return {
+        grass: 'sand',        // Sandy beach
+        dirt: 'desert_dirt',  // Wet sand
+        rock: 'rock',         // Coastal rock
+        cliff: 'cliff',       // Cliff face
+      };
     case 'grassland':
     default:
       return {
