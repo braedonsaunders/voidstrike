@@ -160,7 +160,10 @@ function Checkbox({
   theme: EditorConfig['theme'];
 }) {
   return (
-    <label className="flex items-center gap-2 cursor-pointer group">
+    <label
+      className="flex items-center gap-2 cursor-pointer group"
+      onClick={() => onChange(!checked)}
+    >
       <div
         className="w-4 h-4 rounded border-2 flex items-center justify-center transition-all"
         style={{
