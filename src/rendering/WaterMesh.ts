@@ -34,13 +34,9 @@ import {
   cameraPosition,
   pow,
   max,
-  min,
   smoothstep,
-  length,
   exp,
   sqrt,
-  abs,
-  fract,
 } from 'three/tsl';
 import { MeshBasicNodeMaterial } from 'three/webgpu';
 import type { MapData, MapCell } from '@/data/maps/MapTypes';
@@ -52,9 +48,9 @@ const HEIGHT_SCALE = 0.04;
 const WATER_SURFACE_OFFSET = 0.15;
 
 // Water colors - physically-based
-const WATER_SHALLOW_COLOR = new THREE.Color(0x22aadd); // Brighter, more saturated
-const WATER_DEEP_COLOR = new THREE.Color(0x0a3050);    // Deeper blue-green
-const WATER_SCATTER_COLOR = new THREE.Color(0x00ffaa); // Subsurface scatter tint
+const WATER_SHALLOW_COLOR = new THREE.Color(0x22aadd);
+const WATER_DEEP_COLOR = new THREE.Color(0x0a3050);
+const WATER_SCATTER_COLOR = new THREE.Color(0x00ffaa);
 
 export interface WaterRegion {
   cells: Array<{ x: number; y: number; elevation: number; isDeep: boolean }>;
@@ -79,7 +75,7 @@ export class WaterMesh {
   private uDeepColor = uniform(WATER_DEEP_COLOR.clone());
   private uScatterColor = uniform(WATER_SCATTER_COLOR.clone());
 
-  // Wave configuration uniforms (6 waves for more variety)
+  // Wave configuration uniforms (6 waves)
   // Each wave: vec4(dirX, dirY, steepness, wavelength)
   private uWave0 = uniform(new THREE.Vector4(1.0, 0.0, 0.15, 8.0));
   private uWave1 = uniform(new THREE.Vector4(0.7, 0.7, 0.12, 5.0));
@@ -97,6 +93,31 @@ export class WaterMesh {
   }
 
   /**
+   * Calculate single Gerstner wave inline and return displacement Y component
+   */
+  private calcWaveDisp(
+    wave: ReturnType<typeof uniform<THREE.Vector4>>,
+    posX: ReturnType<typeof float>,
+    posZ: ReturnType<typeof float>,
+    time: ReturnType<typeof uniform<number>>
+  ) {
+    const dirX = wave.x;
+    const dirY = wave.y;
+    const steepness = wave.z;
+    const wavelength = wave.w;
+
+    const k = float(2.0 * Math.PI).div(wavelength);
+    const c = sqrt(float(9.8).div(k));
+    const len = sqrt(dirX.mul(dirX).add(dirY.mul(dirY)));
+    const dx = dirX.div(len);
+    const dy = dirY.div(len);
+    const phase = k.mul(dx.mul(posX).add(dy.mul(posZ)).sub(c.mul(time)));
+    const a = steepness.div(k);
+
+    return a.mul(sin(phase));
+  }
+
+  /**
    * Create world-class TSL water material with Gerstner waves
    */
   private createWaterMaterial(isDeep: boolean): MeshBasicNodeMaterial {
@@ -108,180 +129,104 @@ export class WaterMesh {
     const baseColor = isDeep ? this.uDeepColor : this.uShallowColor;
     const baseOpacity = isDeep ? 0.85 : 0.7;
 
-    // Gerstner wave function - returns displacement and partial derivatives
-    const gerstnerWave = Fn(([wave, pos, time]: [
-      ReturnType<typeof uniform<THREE.Vector4>>,
-      ReturnType<typeof vec3>,
-      ReturnType<typeof float>
-    ]) => {
-      const dirX = wave.x;
-      const dirY = wave.y;
-      const steepness = wave.z;
-      const wavelength = wave.w;
-
-      // Wave number k = 2π/λ
-      const k = float(2.0 * Math.PI).div(wavelength);
-      // Phase speed c = √(g/k) for deep water dispersion
-      const gravity = float(9.8);
-      const c = sqrt(gravity.div(k));
-      // Normalized direction
-      const d = vec2(dirX, dirY).normalize();
-      // Phase φ = k(D·P - ct)
-      const phase = k.mul(d.x.mul(pos.x).add(d.y.mul(pos.z)).sub(c.mul(time)));
-      // Amplitude a = steepness/k (ensures Q ≤ 1 constraint)
-      const a = steepness.div(k);
-
-      const cosPhase = cos(phase);
-      const sinPhase = sin(phase);
-
-      // Gerstner displacement (X, Y, Z)
-      const dispX = d.x.mul(a).mul(cosPhase);
-      const dispY = a.mul(sinPhase);
-      const dispZ = d.y.mul(a).mul(cosPhase);
-
-      // Partial derivatives for normal and Jacobian
-      // ∂D/∂x and ∂D/∂z for Jacobian calculation
-      const wa = k.mul(a); // ω * a
-      const dDx_dx = d.x.mul(d.x).mul(wa).mul(sinPhase).negate();
-      const dDz_dz = d.y.mul(d.y).mul(wa).mul(sinPhase).negate();
-      const dDx_dz = d.x.mul(d.y).mul(wa).mul(sinPhase).negate();
-      const dDz_dx = dDx_dz; // Symmetric
-
-      // Normal contribution
-      const nx = d.x.mul(wa).mul(cosPhase).negate();
-      const nz = d.y.mul(wa).mul(cosPhase).negate();
-      const ny = wa.mul(sinPhase);
-
-      // Return: displacement (xyz), normal contribution (xyz in w packed), Jacobian terms
-      return {
-        disp: vec3(dispX, dispY, dispZ),
-        normal: vec3(nx, ny, nz),
-        jacobian: vec4(dDx_dx, dDz_dz, dDx_dz, dDz_dx),
-      };
-    });
-
     const outputNode = Fn(() => {
       const pos = positionLocal;
       const worldPos = positionWorld;
       const time = this.uTime;
+      const posX = pos.x;
+      const posZ = pos.z;
 
-      // Accumulate Gerstner waves
-      const wave0 = gerstnerWave(this.uWave0, pos, time);
-      const wave1 = gerstnerWave(this.uWave1, pos, time);
-      const wave2 = gerstnerWave(this.uWave2, pos, time);
-      const wave3 = gerstnerWave(this.uWave3, pos, time);
-      const wave4 = gerstnerWave(this.uWave4, pos, time);
-      const wave5 = gerstnerWave(this.uWave5, pos, time);
+      // Calculate all 6 waves inline for displacement
+      const disp0 = this.calcWaveDisp(this.uWave0, posX, posZ, time);
+      const disp1 = this.calcWaveDisp(this.uWave1, posX, posZ, time);
+      const disp2 = this.calcWaveDisp(this.uWave2, posX, posZ, time);
+      const disp3 = this.calcWaveDisp(this.uWave3, posX, posZ, time);
+      const disp4 = this.calcWaveDisp(this.uWave4, posX, posZ, time);
+      const disp5 = this.calcWaveDisp(this.uWave5, posX, posZ, time);
 
-      // Total displacement
-      const totalDisp = wave0.disp
-        .add(wave1.disp)
-        .add(wave2.disp)
-        .add(wave3.disp)
-        .add(wave4.disp)
-        .add(wave5.disp);
+      const totalDispY = disp0.add(disp1).add(disp2).add(disp3).add(disp4).add(disp5);
 
-      // Total normal from wave contributions
-      const totalNormalContrib = wave0.normal
-        .add(wave1.normal)
-        .add(wave2.normal)
-        .add(wave3.normal)
-        .add(wave4.normal)
-        .add(wave5.normal);
+      // Approximate normal from wave derivatives
+      const eps = float(0.1);
+      const hL = this.calcWaveDisp(this.uWave0, posX.sub(eps), posZ, time)
+        .add(this.calcWaveDisp(this.uWave1, posX.sub(eps), posZ, time))
+        .add(this.calcWaveDisp(this.uWave2, posX.sub(eps), posZ, time));
+      const hR = this.calcWaveDisp(this.uWave0, posX.add(eps), posZ, time)
+        .add(this.calcWaveDisp(this.uWave1, posX.add(eps), posZ, time))
+        .add(this.calcWaveDisp(this.uWave2, posX.add(eps), posZ, time));
+      const hD = this.calcWaveDisp(this.uWave0, posX, posZ.sub(eps), time)
+        .add(this.calcWaveDisp(this.uWave1, posX, posZ.sub(eps), time))
+        .add(this.calcWaveDisp(this.uWave2, posX, posZ.sub(eps), time));
+      const hU = this.calcWaveDisp(this.uWave0, posX, posZ.add(eps), time)
+        .add(this.calcWaveDisp(this.uWave1, posX, posZ.add(eps), time))
+        .add(this.calcWaveDisp(this.uWave2, posX, posZ.add(eps), time));
 
-      // Reconstruct normal from accumulated partials
       const waterNormal = normalize(vec3(
-        totalNormalContrib.x,
-        float(1.0).sub(totalNormalContrib.y),
-        totalNormalContrib.z
+        hL.sub(hR),
+        eps.mul(2.0),
+        hD.sub(hU)
       ));
 
-      // Jacobian for foam detection (wave breaking)
-      // J = (1 + ∂Dx/∂x)(1 + ∂Dz/∂z) - (∂Dx/∂z)(∂Dz/∂x)
-      const j0 = wave0.jacobian;
-      const j1 = wave1.jacobian;
-      const j2 = wave2.jacobian;
-      const j3 = wave3.jacobian;
-      const j4 = wave4.jacobian;
-      const j5 = wave5.jacobian;
-
-      const dDx_dx_total = j0.x.add(j1.x).add(j2.x).add(j3.x).add(j4.x).add(j5.x);
-      const dDz_dz_total = j0.y.add(j1.y).add(j2.y).add(j3.y).add(j4.y).add(j5.y);
-      const dDx_dz_total = j0.z.add(j1.z).add(j2.z).add(j3.z).add(j4.z).add(j5.z);
-      const dDz_dx_total = j0.w.add(j1.w).add(j2.w).add(j3.w).add(j4.w).add(j5.w);
-
-      const jacobian = float(1.0).add(dDx_dx_total)
-        .mul(float(1.0).add(dDz_dz_total))
-        .sub(dDx_dz_total.mul(dDz_dx_total));
-
-      // Foam where Jacobian < threshold (wave breaking/folding)
-      const foamThreshold = float(0.3);
-      const foamMask = smoothstep(foamThreshold, float(-0.2), jacobian);
-
-      // Add noise to foam for realistic texture
-      const foamNoise = sin(pos.x.mul(15.0).add(time.mul(2.0)))
-        .mul(sin(pos.z.mul(12.0).add(time.mul(1.5))))
+      // Foam based on wave height (crests)
+      const foamMask = smoothstep(float(0.1), float(0.4), totalDispY);
+      const foamNoise = sin(posX.mul(15.0).add(time.mul(2.0)))
+        .mul(sin(posZ.mul(12.0).add(time.mul(1.5))))
         .mul(0.3).add(0.7);
-      const foam = foamMask.mul(foamNoise);
+      const foam = foamMask.mul(foamNoise).mul(0.5);
 
       // View direction
       const viewDir = normalize(cameraPosition.sub(worldPos));
 
-      // Fresnel effect (Schlick approximation with F0 = 0.02 for water)
+      // Fresnel (Schlick, F0 = 0.02)
       const F0 = float(0.02);
       const NdotV = max(dot(waterNormal, viewDir), float(0.001));
       const fresnel = F0.add(float(1.0).sub(F0).mul(pow(float(1.0).sub(NdotV), float(5.0))));
 
-      // Beer-Lambert absorption for depth coloring
-      // Wavelength-dependent: red absorbs fastest, blue slowest
-      const absorptionCoeff = vec3(0.45, 0.09, 0.06); // per-meter coefficients
+      // Beer-Lambert absorption
+      const absorptionCoeff = vec3(0.45, 0.09, 0.06);
       const waterDepth = isDeep ? float(3.0) : float(1.0);
       const transmittance = exp(absorptionCoeff.negate().mul(waterDepth));
 
-      // Subsurface scattering (light penetration effect)
-      const halfVec = normalize(viewDir.add(vec3(0, -0.3, 0))); // Perturb toward underwater
+      // Subsurface scattering
+      const halfVec = normalize(viewDir.add(vec3(0, -0.3, 0)));
       const sssDot = max(dot(viewDir.negate(), halfVec), float(0.0));
       const sss = pow(sssDot, float(4.0)).mul(0.4);
       const sssColor = vec3(this.uScatterColor).mul(sss);
 
-      // Wave height for color variation
-      const waveHeight = totalDisp.y.mul(2.0).add(0.5);
+      // Wave height color variation
+      const waveHeight = totalDispY.mul(2.0).add(0.5);
+      const depthMix = smoothstep(float(-0.3), float(0.5), waveHeight);
+      let waterColor = mix(vec3(this.uDeepColor), vec3(baseColor), depthMix);
 
-      // Base water color with depth absorption
-      const deepMix = smoothstep(float(-0.3), float(0.5), waveHeight);
-      let waterColor = mix(vec3(this.uDeepColor), vec3(baseColor), deepMix);
-
-      // Apply Beer-Lambert absorption
+      // Apply absorption
       waterColor = waterColor.mul(transmittance);
 
-      // Add subsurface scattering
+      // Add SSS
       waterColor = waterColor.add(sssColor);
 
-      // Caustic-like highlights (interference patterns)
-      const caustic1 = sin(pos.x.mul(8.0).add(time.mul(1.2)))
-        .mul(sin(pos.z.mul(7.0).add(time.mul(0.9))));
-      const caustic2 = sin(pos.x.mul(12.0).sub(time.mul(0.8)))
-        .mul(sin(pos.z.mul(10.0).add(time.mul(1.1))));
+      // Caustics
+      const caustic1 = sin(posX.mul(8.0).add(time.mul(1.2)))
+        .mul(sin(posZ.mul(7.0).add(time.mul(0.9))));
+      const caustic2 = sin(posX.mul(12.0).sub(time.mul(0.8)))
+        .mul(sin(posZ.mul(10.0).add(time.mul(1.1))));
       const caustics = max(caustic1.mul(caustic2), float(0.0)).mul(0.15);
-
-      // Add caustics to color
       waterColor = waterColor.add(caustics.mul(vec3(0.6, 0.8, 1.0)));
 
-      // Apply fresnel for sky reflection
+      // Sky reflection
       const skyColor = vec3(0.7, 0.85, 1.0);
       waterColor = mix(waterColor, skyColor, fresnel.mul(0.6));
 
-      // Add foam (white)
+      // Foam
       const foamColor = vec3(0.95, 0.98, 1.0);
       waterColor = mix(waterColor, foamColor, foam);
 
-      // Specular highlights from sun
+      // Specular
       const sunDir = normalize(vec3(0.5, 0.8, 0.3));
       const halfSun = normalize(viewDir.add(sunDir));
       const specular = pow(max(dot(waterNormal, halfSun), float(0.0)), float(256.0));
       waterColor = waterColor.add(specular.mul(0.5));
 
-      // Final alpha with fresnel influence
+      // Alpha
       const baseAlpha = float(baseOpacity);
       const alpha = mix(baseAlpha, float(0.95), foam.add(fresnel.mul(0.3)));
 
@@ -304,7 +249,6 @@ export class WaterMesh {
 
     const { width, height, terrain } = mapData;
 
-    // Find all water regions using flood fill
     const visited = new Set<string>();
     const regions: WaterRegion[] = [];
 
@@ -319,7 +263,6 @@ export class WaterMesh {
         const feature = cell.feature || 'none';
         if (feature !== 'water_shallow' && feature !== 'water_deep') continue;
 
-        // Found a water cell - flood fill to find region
         const region = this.floodFillWaterRegion(terrain, x, y, width, height, visited);
         if (region.cells.length > 0) {
           regions.push(region);
@@ -327,7 +270,6 @@ export class WaterMesh {
       }
     }
 
-    // Create mesh for each region
     for (const region of regions) {
       this.createRegionMesh(region);
     }
@@ -409,7 +351,6 @@ export class WaterMesh {
       maxY = Math.max(maxY, y);
       totalElevation += cell.elevation;
 
-      // Add neighbors
       queue.push({ x: x - 1, y });
       queue.push({ x: x + 1, y });
       queue.push({ x, y: y - 1 });
@@ -485,23 +426,14 @@ export class WaterMesh {
   private createRegionMesh(region: WaterRegion): void {
     if (region.cells.length === 0) return;
 
-    // Determine if mostly deep water
     const deepCount = region.cells.filter((c) => c.isDeep).length;
     const isDeep = deepCount > region.cells.length / 2;
 
-    // Create water cell lookup
-    const waterCells = new Map<string, { elevation: number; isDeep: boolean }>();
-    for (const cell of region.cells) {
-      waterCells.set(`${cell.x},${cell.y}`, { elevation: cell.elevation, isDeep: cell.isDeep });
-    }
-
-    // Build geometry per-cell with proper UV coordinates
     const positions: number[] = [];
     const uvs: number[] = [];
     const indices: number[] = [];
     let vertexIndex = 0;
 
-    // Calculate region bounds for UV mapping
     const regionWidth = region.maxX - region.minX + 1;
     const regionHeight = region.maxY - region.minY + 1;
 
@@ -509,25 +441,21 @@ export class WaterMesh {
       const { x, y, elevation } = cell;
       const h = elevation * HEIGHT_SCALE + WATER_SURFACE_OFFSET;
 
-      // Create a quad for this cell
-      // Vertices: TL, TR, BL, BR
-      positions.push(x, h, y);         // TL
-      positions.push(x + 1, h, y);     // TR
-      positions.push(x, h, y + 1);     // BL
-      positions.push(x + 1, h, y + 1); // BR
+      positions.push(x, h, y);
+      positions.push(x + 1, h, y);
+      positions.push(x, h, y + 1);
+      positions.push(x + 1, h, y + 1);
 
-      // UV coordinates - normalize to region bounds for seamless tiling
       const u0 = (x - region.minX) / regionWidth;
       const u1 = (x + 1 - region.minX) / regionWidth;
       const v0 = (y - region.minY) / regionHeight;
       const v1 = (y + 1 - region.minY) / regionHeight;
 
-      uvs.push(u0, v0); // TL
-      uvs.push(u1, v0); // TR
-      uvs.push(u0, v1); // BL
-      uvs.push(u1, v1); // BR
+      uvs.push(u0, v0);
+      uvs.push(u1, v0);
+      uvs.push(u0, v1);
+      uvs.push(u1, v1);
 
-      // Two triangles
       indices.push(vertexIndex, vertexIndex + 2, vertexIndex + 1);
       indices.push(vertexIndex + 1, vertexIndex + 2, vertexIndex + 3);
 
@@ -544,24 +472,17 @@ export class WaterMesh {
 
     const material = isDeep ? this.deepMaterial : this.shallowMaterial;
     const mesh = new THREE.Mesh(geometry, material);
-    mesh.renderOrder = 1; // Render after terrain
+    mesh.renderOrder = 1;
 
     this.waterMeshes.push(mesh);
     this.group.add(mesh);
   }
 
-  /**
-   * Update water animation
-   */
   public update(deltaTime: number): void {
     this.time += deltaTime;
-    // Update TSL time uniform for shader animation
     this.uTime.value = this.time;
   }
 
-  /**
-   * Set wave parameters for customization
-   */
   public setWaveConfig(waveIndex: number, dirX: number, dirY: number, steepness: number, wavelength: number): void {
     const waves = [this.uWave0, this.uWave1, this.uWave2, this.uWave3, this.uWave4, this.uWave5];
     if (waveIndex >= 0 && waveIndex < waves.length) {
@@ -569,9 +490,6 @@ export class WaterMesh {
     }
   }
 
-  /**
-   * Set water colors
-   */
   public setColors(shallow: THREE.Color, deep: THREE.Color, scatter?: THREE.Color): void {
     this.uShallowColor.value.copy(shallow);
     this.uDeepColor.value.copy(deep);
@@ -580,9 +498,6 @@ export class WaterMesh {
     }
   }
 
-  /**
-   * Clear all water meshes
-   */
   public clear(): void {
     for (const mesh of this.waterMeshes) {
       mesh.geometry.dispose();
@@ -591,9 +506,6 @@ export class WaterMesh {
     this.waterMeshes = [];
   }
 
-  /**
-   * Dispose of all resources
-   */
   public dispose(): void {
     this.clear();
     this.shallowMaterial.dispose();

@@ -3,12 +3,11 @@
  *
  * Features:
  * - 6-wave Gerstner system with proper deep water dispersion (c = √(g/k))
- * - Jacobian-based foam detection for realistic wave breaking
+ * - Foam detection at wave crests
  * - Beer-Lambert absorption for wavelength-dependent depth coloring
  * - Proper subsurface scattering (SSS) simulation
  * - Schlick Fresnel approximation with F0 = 0.02
- * - Dynamic normal calculation from wave partial derivatives
- * - Vertex displacement for actual wave geometry
+ * - Dynamic normal calculation from wave derivatives
  * - PBR-inspired specular highlights
  * - Caustic interference patterns
  *
@@ -37,36 +36,14 @@ import {
   positionWorld,
   cameraPosition,
   pow,
-  abs,
   max,
-  min,
-  fract,
-  floor,
   smoothstep,
-  length,
   exp,
   sqrt,
 } from 'three/tsl';
 import { MeshStandardNodeMaterial } from 'three/webgpu';
 import { MapData } from '@/data/maps';
 import { BiomeConfig } from '../Biomes';
-
-// Wave configuration for Gerstner waves
-interface GerstnerWave {
-  direction: THREE.Vector2;  // Normalized wave direction
-  steepness: number;         // Wave steepness (Q parameter, 0-1)
-  wavelength: number;        // Wave length in world units
-}
-
-// Default wave set for realistic ocean - 6 waves with varying scales
-const DEFAULT_WAVES: GerstnerWave[] = [
-  { direction: new THREE.Vector2(1.0, 0.0), steepness: 0.25, wavelength: 80.0 },   // Primary swell
-  { direction: new THREE.Vector2(0.7, 0.7), steepness: 0.20, wavelength: 45.0 },   // Secondary swell
-  { direction: new THREE.Vector2(0.3, 0.95), steepness: 0.15, wavelength: 25.0 },  // Wind waves
-  { direction: new THREE.Vector2(-0.5, 0.5), steepness: 0.12, wavelength: 15.0 },  // Cross waves
-  { direction: new THREE.Vector2(0.9, -0.4), steepness: 0.08, wavelength: 8.0 },   // Chop
-  { direction: new THREE.Vector2(-0.6, -0.8), steepness: 0.05, wavelength: 4.0 },  // Fine detail
-];
 
 export class OceanWater {
   public mesh: THREE.Mesh;
@@ -87,7 +64,7 @@ export class OceanWater {
   // Physical parameters
   private uFresnelPower = uniform(5.0);
   private uSubsurfaceStrength = uniform(0.5);
-  private uFoamThreshold = uniform(0.4);
+  private uFoamThreshold = uniform(0.3);
   private uAbsorptionScale = uniform(1.0);
 
   // Flow parameters
@@ -109,7 +86,6 @@ export class OceanWater {
 
   constructor(mapData: MapData, biome: BiomeConfig) {
     if (!biome.hasWater) {
-      // Create invisible placeholder
       this.geometry = new THREE.PlaneGeometry(1, 1);
       this.material = new MeshStandardNodeMaterial();
       this.mesh = new THREE.Mesh(this.geometry, this.material);
@@ -117,15 +93,12 @@ export class OceanWater {
       return;
     }
 
-    // High segment count for smooth wave displacement
     const maxDim = Math.max(mapData.width, mapData.height);
-    const segments = Math.min(512, Math.max(128, Math.floor(maxDim)));
+    const segments = Math.min(256, Math.max(64, Math.floor(maxDim)));
     this.geometry = new THREE.PlaneGeometry(mapData.width, mapData.height, segments, segments);
 
-    // Determine if lava
     const isLava = biome.name === 'Volcanic';
 
-    // Configure colors based on biome
     if (isLava) {
       this.uWaterColor.value.set(0xff4010);
       this.uDeepWaterColor.value.set(0x801000);
@@ -136,20 +109,94 @@ export class OceanWater {
       this.uFoamThreshold.value = 0.3;
     } else {
       this.uWaterColor.value.copy(biome.colors.water);
-      // Deep color is darker, more saturated blue-green
       this.uDeepWaterColor.value.copy(biome.colors.water).multiplyScalar(0.35);
       this.uIsLava.value = 0.0;
     }
 
-    // Create TSL material
     this.material = this.createTSLMaterial();
 
     this.mesh = new THREE.Mesh(this.geometry, this.material);
     this.mesh.rotation.x = -Math.PI / 2;
     this.mesh.position.set(mapData.width / 2, biome.waterLevel, mapData.height / 2);
-
-    // Render after terrain but before transparent objects
     this.mesh.renderOrder = 5;
+  }
+
+  /**
+   * Calculate single Gerstner wave Y displacement
+   */
+  private calcWaveY(
+    wave: ReturnType<typeof uniform<THREE.Vector4>>,
+    posX: ReturnType<typeof float>,
+    posY: ReturnType<typeof float>,
+    time: ReturnType<typeof uniform<number>>,
+    waveSpeed: ReturnType<typeof uniform<number>>
+  ) {
+    const dirX = wave.x;
+    const dirY = wave.y;
+    const steepness = wave.z;
+    const wavelength = wave.w;
+
+    const k = float(2.0 * Math.PI).div(wavelength);
+    const c = sqrt(float(9.8).div(k)).mul(waveSpeed);
+    const len = sqrt(dirX.mul(dirX).add(dirY.mul(dirY)));
+    const dx = dirX.div(len);
+    const dy = dirY.div(len);
+    const phase = k.mul(dx.mul(posX).add(dy.mul(posY)).sub(c.mul(time)));
+    const a = steepness.div(k);
+
+    return a.mul(sin(phase));
+  }
+
+  /**
+   * Calculate Gerstner wave X displacement
+   */
+  private calcWaveX(
+    wave: ReturnType<typeof uniform<THREE.Vector4>>,
+    posX: ReturnType<typeof float>,
+    posY: ReturnType<typeof float>,
+    time: ReturnType<typeof uniform<number>>,
+    waveSpeed: ReturnType<typeof uniform<number>>
+  ) {
+    const dirX = wave.x;
+    const dirY = wave.y;
+    const steepness = wave.z;
+    const wavelength = wave.w;
+
+    const k = float(2.0 * Math.PI).div(wavelength);
+    const c = sqrt(float(9.8).div(k)).mul(waveSpeed);
+    const len = sqrt(dirX.mul(dirX).add(dirY.mul(dirY)));
+    const dx = dirX.div(len);
+    const dy = dirY.div(len);
+    const phase = k.mul(dx.mul(posX).add(dy.mul(posY)).sub(c.mul(time)));
+    const a = steepness.div(k);
+
+    return dx.mul(a).mul(cos(phase));
+  }
+
+  /**
+   * Calculate Gerstner wave Z displacement
+   */
+  private calcWaveZ(
+    wave: ReturnType<typeof uniform<THREE.Vector4>>,
+    posX: ReturnType<typeof float>,
+    posY: ReturnType<typeof float>,
+    time: ReturnType<typeof uniform<number>>,
+    waveSpeed: ReturnType<typeof uniform<number>>
+  ) {
+    const dirX = wave.x;
+    const dirY = wave.y;
+    const steepness = wave.z;
+    const wavelength = wave.w;
+
+    const k = float(2.0 * Math.PI).div(wavelength);
+    const c = sqrt(float(9.8).div(k)).mul(waveSpeed);
+    const len = sqrt(dirX.mul(dirX).add(dirY.mul(dirY)));
+    const dx = dirX.div(len);
+    const dy = dirY.div(len);
+    const phase = k.mul(dx.mul(posX).add(dy.mul(posY)).sub(c.mul(time)));
+    const a = steepness.div(k);
+
+    return dy.mul(a).mul(cos(phase));
   }
 
   private createTSLMaterial(): MeshStandardNodeMaterial {
@@ -158,85 +205,38 @@ export class OceanWater {
     material.side = THREE.DoubleSide;
     material.depthWrite = false;
 
-    // Gerstner wave function with proper physics
-    // Returns: displacement (vec3), normal contribution (vec3), jacobian terms (vec4)
-    const gerstnerWave = Fn(([wave, pos, time]: [
-      ReturnType<typeof uniform<THREE.Vector4>>,
-      ReturnType<typeof positionLocal>,
-      ReturnType<typeof uniform<number>>
-    ]) => {
-      const dirX = wave.x;
-      const dirY = wave.y;
-      const steepness = wave.z;
-      const wavelength = wave.w;
-
-      // Wave number k = 2π/λ
-      const k = float(2.0 * Math.PI).div(wavelength);
-      // Phase speed c = √(g/k) - deep water dispersion relation
-      const gravity = float(9.8);
-      const c = sqrt(gravity.div(k)).mul(this.uWaveSpeed);
-      // Normalized direction
-      const d = vec2(dirX, dirY).normalize();
-      // Phase φ = k(D·P - ct)
-      const phase = k.mul(d.x.mul(pos.x).add(d.y.mul(pos.y)).sub(c.mul(time)));
-      // Amplitude a = Q/k (steepness divided by wave number)
-      const a = steepness.div(k);
-
-      const cosPhase = cos(phase);
-      const sinPhase = sin(phase);
-
-      // Gerstner displacement
-      const dispX = d.x.mul(a).mul(cosPhase);
-      const dispY = a.mul(sinPhase);
-      const dispZ = d.y.mul(a).mul(cosPhase);
-
-      // Partial derivatives for Jacobian (wave breaking detection)
-      const wa = k.mul(a);
-      const dDx_dx = d.x.mul(d.x).mul(wa).mul(sinPhase).negate();
-      const dDz_dz = d.y.mul(d.y).mul(wa).mul(sinPhase).negate();
-      const dDx_dz = d.x.mul(d.y).mul(wa).mul(sinPhase).negate();
-      const dDz_dx = dDx_dz;
-
-      // Normal contribution (binormal/tangent cross product)
-      const nx = d.x.mul(wa).mul(cosPhase).negate();
-      const nz = d.y.mul(wa).mul(cosPhase).negate();
-      const ny = wa.mul(sinPhase);
-
-      return {
-        disp: vec3(dispX, dispY, dispZ),
-        normal: vec3(nx, ny, nz),
-        jacobian: vec4(dDx_dx, dDz_dz, dDx_dz, dDz_dx),
-      };
-    });
-
     // Position node with vertex displacement
     const positionNode = Fn(() => {
-      const pos = positionLocal.toVar();
+      const pos = positionLocal;
       const time = this.uTime;
+      const posX = pos.x;
+      const posY = pos.y;
 
-      // Accumulate all 6 waves
-      const wave0 = gerstnerWave(this.uWave0, pos, time);
-      const wave1 = gerstnerWave(this.uWave1, pos, time);
-      const wave2 = gerstnerWave(this.uWave2, pos, time);
-      const wave3 = gerstnerWave(this.uWave3, pos, time);
-      const wave4 = gerstnerWave(this.uWave4, pos, time);
-      const wave5 = gerstnerWave(this.uWave5, pos, time);
+      // Calculate all wave displacements
+      const dispY0 = this.calcWaveY(this.uWave0, posX, posY, time, this.uWaveSpeed);
+      const dispY1 = this.calcWaveY(this.uWave1, posX, posY, time, this.uWaveSpeed);
+      const dispY2 = this.calcWaveY(this.uWave2, posX, posY, time, this.uWaveSpeed);
+      const dispY3 = this.calcWaveY(this.uWave3, posX, posY, time, this.uWaveSpeed);
+      const dispY4 = this.calcWaveY(this.uWave4, posX, posY, time, this.uWaveSpeed);
+      const dispY5 = this.calcWaveY(this.uWave5, posX, posY, time, this.uWaveSpeed);
 
-      const totalDisp = wave0.disp
-        .add(wave1.disp)
-        .add(wave2.disp)
-        .add(wave3.disp)
-        .add(wave4.disp)
-        .add(wave5.disp);
+      const dispX0 = this.calcWaveX(this.uWave0, posX, posY, time, this.uWaveSpeed);
+      const dispX1 = this.calcWaveX(this.uWave1, posX, posY, time, this.uWaveSpeed);
+      const dispX2 = this.calcWaveX(this.uWave2, posX, posY, time, this.uWaveSpeed);
 
-      // Scale by wave height parameter
-      const scaledDisp = vec3(
-        totalDisp.x.mul(this.uWaveHeight),
-        totalDisp.y.mul(this.uWaveHeight),
-        totalDisp.z.mul(this.uWaveHeight)
+      const dispZ0 = this.calcWaveZ(this.uWave0, posX, posY, time, this.uWaveSpeed);
+      const dispZ1 = this.calcWaveZ(this.uWave1, posX, posY, time, this.uWaveSpeed);
+      const dispZ2 = this.calcWaveZ(this.uWave2, posX, posY, time, this.uWaveSpeed);
+
+      const totalY = dispY0.add(dispY1).add(dispY2).add(dispY3).add(dispY4).add(dispY5);
+      const totalX = dispX0.add(dispX1).add(dispX2);
+      const totalZ = dispZ0.add(dispZ1).add(dispZ2);
+
+      return vec3(
+        pos.x.add(totalX.mul(this.uWaveHeight)),
+        pos.y.add(totalZ.mul(this.uWaveHeight)),
+        totalY.mul(this.uWaveHeight)
       );
-
-      return pos.add(scaledDisp);
     })();
 
     material.positionNode = positionNode;
@@ -247,95 +247,72 @@ export class OceanWater {
       const pos = positionLocal;
       const uvCoord = uv();
       const time = this.uTime;
+      const posX = pos.x;
+      const posY = pos.y;
 
-      // Recalculate waves for shading (needed for normals and foam)
-      const wave0 = gerstnerWave(this.uWave0, pos, time);
-      const wave1 = gerstnerWave(this.uWave1, pos, time);
-      const wave2 = gerstnerWave(this.uWave2, pos, time);
-      const wave3 = gerstnerWave(this.uWave3, pos, time);
-      const wave4 = gerstnerWave(this.uWave4, pos, time);
-      const wave5 = gerstnerWave(this.uWave5, pos, time);
+      // Calculate wave heights
+      const dispY0 = this.calcWaveY(this.uWave0, posX, posY, time, this.uWaveSpeed);
+      const dispY1 = this.calcWaveY(this.uWave1, posX, posY, time, this.uWaveSpeed);
+      const dispY2 = this.calcWaveY(this.uWave2, posX, posY, time, this.uWaveSpeed);
+      const dispY3 = this.calcWaveY(this.uWave3, posX, posY, time, this.uWaveSpeed);
+      const dispY4 = this.calcWaveY(this.uWave4, posX, posY, time, this.uWaveSpeed);
+      const dispY5 = this.calcWaveY(this.uWave5, posX, posY, time, this.uWaveSpeed);
 
-      // Total displacement for height-based effects
-      const totalDisp = wave0.disp
-        .add(wave1.disp)
-        .add(wave2.disp)
-        .add(wave3.disp)
-        .add(wave4.disp)
-        .add(wave5.disp)
+      const totalDispY = dispY0.add(dispY1).add(dispY2).add(dispY3).add(dispY4).add(dispY5)
         .mul(this.uWaveHeight);
 
-      // Accumulated normal from all waves
-      const totalNormalContrib = wave0.normal
-        .add(wave1.normal)
-        .add(wave2.normal)
-        .add(wave3.normal)
-        .add(wave4.normal)
-        .add(wave5.normal);
+      // Approximate normal from finite differences
+      const eps = float(0.5);
+      const hL = this.calcWaveY(this.uWave0, posX.sub(eps), posY, time, this.uWaveSpeed)
+        .add(this.calcWaveY(this.uWave1, posX.sub(eps), posY, time, this.uWaveSpeed))
+        .add(this.calcWaveY(this.uWave2, posX.sub(eps), posY, time, this.uWaveSpeed));
+      const hR = this.calcWaveY(this.uWave0, posX.add(eps), posY, time, this.uWaveSpeed)
+        .add(this.calcWaveY(this.uWave1, posX.add(eps), posY, time, this.uWaveSpeed))
+        .add(this.calcWaveY(this.uWave2, posX.add(eps), posY, time, this.uWaveSpeed));
+      const hD = this.calcWaveY(this.uWave0, posX, posY.sub(eps), time, this.uWaveSpeed)
+        .add(this.calcWaveY(this.uWave1, posX, posY.sub(eps), time, this.uWaveSpeed))
+        .add(this.calcWaveY(this.uWave2, posX, posY.sub(eps), time, this.uWaveSpeed));
+      const hU = this.calcWaveY(this.uWave0, posX, posY.add(eps), time, this.uWaveSpeed)
+        .add(this.calcWaveY(this.uWave1, posX, posY.add(eps), time, this.uWaveSpeed))
+        .add(this.calcWaveY(this.uWave2, posX, posY.add(eps), time, this.uWaveSpeed));
 
-      // Reconstruct normal
       const waterNormal = normalize(vec3(
-        totalNormalContrib.x.mul(this.uWaveHeight),
-        float(1.0).sub(totalNormalContrib.y.mul(this.uWaveHeight)),
-        totalNormalContrib.z.mul(this.uWaveHeight)
+        hL.sub(hR).mul(this.uWaveHeight),
+        eps.mul(2.0),
+        hD.sub(hU).mul(this.uWaveHeight)
       ));
 
-      // Jacobian for foam (wave breaking detection)
-      // J = (1 + ∂Dx/∂x)(1 + ∂Dz/∂z) - (∂Dx/∂z)(∂Dz/∂x)
-      const j0 = wave0.jacobian;
-      const j1 = wave1.jacobian;
-      const j2 = wave2.jacobian;
-      const j3 = wave3.jacobian;
-      const j4 = wave4.jacobian;
-      const j5 = wave5.jacobian;
-
-      const dDx_dx_total = j0.x.add(j1.x).add(j2.x).add(j3.x).add(j4.x).add(j5.x).mul(this.uWaveHeight);
-      const dDz_dz_total = j0.y.add(j1.y).add(j2.y).add(j3.y).add(j4.y).add(j5.y).mul(this.uWaveHeight);
-      const dDx_dz_total = j0.z.add(j1.z).add(j2.z).add(j3.z).add(j4.z).add(j5.z).mul(this.uWaveHeight);
-      const dDz_dx_total = j0.w.add(j1.w).add(j2.w).add(j3.w).add(j4.w).add(j5.w).mul(this.uWaveHeight);
-
-      const jacobian = float(1.0).add(dDx_dx_total)
-        .mul(float(1.0).add(dDz_dz_total))
-        .sub(dDx_dz_total.mul(dDz_dx_total));
-
-      // Foam where Jacobian indicates wave folding
-      const foamFromJacobian = smoothstep(this.uFoamThreshold, float(-0.1), jacobian);
-
-      // Also add foam at wave crests
-      const crestFoam = smoothstep(float(0.3), float(0.8), totalDisp.y);
-
-      // Combine foam sources with noise
-      const foamNoise = sin(pos.x.mul(20.0).add(time.mul(2.5)))
-        .mul(sin(pos.y.mul(18.0).add(time.mul(2.0))))
+      // Foam at wave crests
+      const crestFoam = smoothstep(this.uFoamThreshold, float(0.6), totalDispY);
+      const foamNoise = sin(posX.mul(20.0).add(time.mul(2.5)))
+        .mul(sin(posY.mul(18.0).add(time.mul(2.0))))
         .mul(0.25).add(0.75);
-      const foam = max(foamFromJacobian, crestFoam.mul(0.5)).mul(foamNoise);
+      const foam = crestFoam.mul(foamNoise);
 
-      // Flow animation for detail
+      // Flow animation
       const flowDir = this.uFlowDirection.normalize();
       const flowOffset = flowDir.mul(time.mul(this.uFlowSpeed));
       const flowUV = uvCoord.add(flowOffset);
 
-      // High-frequency surface detail (ripples)
+      // High-frequency ripples
       const ripple1 = sin(flowUV.x.mul(50.0).add(time.mul(1.5)))
         .mul(sin(flowUV.y.mul(45.0).add(time.mul(1.2))))
         .mul(0.08);
       const ripple2 = sin(flowUV.x.mul(80.0).sub(time.mul(1.8)))
         .mul(sin(flowUV.y.mul(72.0).add(time.mul(1.5))))
         .mul(0.04);
-      const surfaceDetail = ripple1.add(ripple2);
 
       // View direction
       const viewDir = normalize(cameraPosition.sub(worldPos));
 
-      // Fresnel effect (Schlick approximation, F0 = 0.02 for water)
+      // Fresnel (Schlick, F0 = 0.02)
       const F0 = float(0.02);
       const NdotV = max(dot(waterNormal, viewDir), float(0.001));
       const fresnel = F0.add(float(1.0).sub(F0).mul(pow(float(1.0).sub(NdotV), this.uFresnelPower)));
 
-      // Beer-Lambert absorption (wavelength-dependent)
-      // Red: 0.45/m, Green: 0.09/m, Blue: 0.06/m
+      // Beer-Lambert absorption
       const absorptionCoeff = vec3(0.45, 0.09, 0.06);
-      const waterDepth = totalDisp.y.negate().mul(3.0).add(2.0).mul(this.uAbsorptionScale); // Simulated depth
+      const waterDepth = totalDispY.negate().mul(3.0).add(2.0).mul(this.uAbsorptionScale);
       const transmittance = exp(absorptionCoeff.negate().mul(max(waterDepth, float(0.0))));
 
       // Subsurface scattering
@@ -344,38 +321,38 @@ export class OceanWater {
       const sss = pow(sssDot, float(4.0)).mul(this.uSubsurfaceStrength);
       const sssContrib = vec3(this.uScatterColor).mul(sss);
 
-      // Depth-based color mixing
-      const depthMix = smoothstep(float(-0.5), float(0.5), totalDisp.y);
+      // Depth-based color
+      const depthMix = smoothstep(float(-0.5), float(0.5), totalDispY);
       let waterColor = mix(vec3(this.uDeepWaterColor), vec3(this.uWaterColor), depthMix);
 
-      // Apply Beer-Lambert absorption
+      // Apply absorption
       waterColor = waterColor.mul(transmittance);
 
-      // Add subsurface scattering
+      // Add SSS
       waterColor = waterColor.add(sssContrib);
 
-      // Caustic-like interference patterns
-      const caustic1 = sin(pos.x.mul(6.0).add(time.mul(1.0)))
-        .mul(sin(pos.y.mul(5.0).add(time.mul(0.8))));
-      const caustic2 = sin(pos.x.mul(9.0).sub(time.mul(0.7)))
-        .mul(sin(pos.y.mul(8.0).add(time.mul(1.1))));
+      // Caustics
+      const caustic1 = sin(posX.mul(6.0).add(time.mul(1.0)))
+        .mul(sin(posY.mul(5.0).add(time.mul(0.8))));
+      const caustic2 = sin(posX.mul(9.0).sub(time.mul(0.7)))
+        .mul(sin(posY.mul(8.0).add(time.mul(1.1))));
       const caustics = max(caustic1.mul(caustic2), float(0.0)).mul(0.12);
       waterColor = waterColor.add(caustics.mul(vec3(0.5, 0.8, 1.0)));
 
-      // Sky reflection via fresnel
+      // Sky reflection
       const skyColor = vec3(0.7, 0.85, 1.0);
       waterColor = mix(waterColor, skyColor, fresnel.mul(this.uReflectivity));
 
       // Add foam
       waterColor = mix(waterColor, vec3(this.uFoamColor), foam.mul(float(1.0).sub(this.uIsLava)));
 
-      // Specular highlights (sun reflection)
+      // Specular highlights
       const sunDir = normalize(vec3(0.4, 0.8, 0.4));
       const halfVec = normalize(viewDir.add(sunDir));
       const specular = pow(max(dot(waterNormal, halfVec), float(0.0)), this.uSpecularPower);
       waterColor = waterColor.add(specular.mul(0.6).mul(float(1.0).sub(foam)));
 
-      // Lava effects
+      // Lava glow
       const lavaGlow = sin(time.mul(3.0)).mul(0.15).add(0.85);
       const lavaEmissive = vec3(1.0, 0.4, 0.0).mul(lavaGlow.mul(this.uIsLava).mul(0.8));
       waterColor = waterColor.add(lavaEmissive);
@@ -393,12 +370,11 @@ export class OceanWater {
 
     material.colorNode = outputNode;
 
-    // Roughness - smooth water, rougher foam
+    // Roughness
     material.roughnessNode = Fn(() => {
       const pos = positionLocal;
       const time = this.uTime;
 
-      // Calculate foam amount for roughness
       const waveHeight = sin(pos.x.mul(0.1).add(time.mul(0.5)))
         .mul(sin(pos.y.mul(0.08).add(time.mul(0.4))));
       const foamFactor = smoothstep(float(0.3), float(0.8), waveHeight);
@@ -406,32 +382,22 @@ export class OceanWater {
       return mix(float(0.02), float(0.5), foamFactor);
     })();
 
-    // Metalness - water has slight metalness for reflections
     material.metalnessNode = float(0.05);
 
     return material;
   }
 
-  /**
-   * Update water animation
-   */
   public update(time: number): void {
     if (this.mesh.visible) {
       this.uTime.value = time;
     }
   }
 
-  /**
-   * Set wave parameters
-   */
   public setWaveConfig(height: number, speed: number): void {
     this.uWaveHeight.value = height;
     this.uWaveSpeed.value = speed;
   }
 
-  /**
-   * Set water colors
-   */
   public setColors(shallow: THREE.Color, deep: THREE.Color, foam?: THREE.Color, scatter?: THREE.Color): void {
     this.uWaterColor.value.copy(shallow);
     this.uDeepWaterColor.value.copy(deep);
@@ -443,17 +409,11 @@ export class OceanWater {
     }
   }
 
-  /**
-   * Set flow/current direction
-   */
   public setFlowDirection(x: number, z: number, speed: number = 0.05): void {
     this.uFlowDirection.value.set(x, z);
     this.uFlowSpeed.value = speed;
   }
 
-  /**
-   * Configure individual Gerstner wave
-   */
   public setWave(index: number, direction: THREE.Vector2, steepness: number, wavelength: number): void {
     const waves = [this.uWave0, this.uWave1, this.uWave2, this.uWave3, this.uWave4, this.uWave5];
     if (index >= 0 && index < waves.length) {
@@ -461,20 +421,6 @@ export class OceanWater {
     }
   }
 
-  /**
-   * Configure all Gerstner waves
-   */
-  public setWaves(waves: GerstnerWave[]): void {
-    const uniforms = [this.uWave0, this.uWave1, this.uWave2, this.uWave3, this.uWave4, this.uWave5];
-    for (let i = 0; i < Math.min(waves.length, uniforms.length); i++) {
-      const w = waves[i];
-      uniforms[i].value.set(w.direction.x, w.direction.y, w.steepness, w.wavelength);
-    }
-  }
-
-  /**
-   * Set physical parameters
-   */
   public setPhysicalParams(params: {
     fresnelPower?: number;
     subsurfaceStrength?: number;
@@ -491,9 +437,6 @@ export class OceanWater {
     if (params.specularPower !== undefined) this.uSpecularPower.value = params.specularPower;
   }
 
-  /**
-   * Dispose of resources
-   */
   public dispose(): void {
     this.geometry.dispose();
     this.material.dispose();
