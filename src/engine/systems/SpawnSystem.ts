@@ -70,9 +70,13 @@ export class SpawnSystem extends System {
     // Selection radius based on unit type
     const selectionRadius = isFlying ? 1.5 : 1.2;
 
+    // Get terrain height at spawn position (for ramps and elevated platforms)
+    // Flying units stay at Z=0 since their visual height is handled by visualHeight
+    const spawnHeight = isFlying ? 0 : this.game.getTerrainHeightAt(x, y);
+
     // Add core components
     entity
-      .add(new Transform(x, y, 0))
+      .add(new Transform(x, y, spawnHeight))
       .add(new Unit(definition))
       .add(new Health(definition.maxHealth, definition.armor, this.getArmorType(definition)))
       .add(new Selectable(selectionRadius, 5, playerId, visualScale, visualHeight))

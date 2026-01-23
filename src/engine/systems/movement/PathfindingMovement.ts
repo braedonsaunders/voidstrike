@@ -293,7 +293,7 @@ export class PathfindingMovement {
   /**
    * Get agent state from crowd
    */
-  public getAgentState(entityId: number): { x: number; y: number; vx: number; vy: number } | null {
+  public getAgentState(entityId: number): { x: number; y: number; height: number; vx: number; vy: number } | null {
     return this.recast.getAgentState(entityId);
   }
 

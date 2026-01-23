@@ -214,9 +214,13 @@ function spawnUnit(
 ): void {
   const world = game.world;
 
+  // Get terrain height at spawn position for ramps/elevated terrain
+  const isFlying = definition.isFlying ?? false;
+  const spawnHeight = isFlying ? 0 : game.getTerrainHeightAt(x, y);
+
   const entity = world.createEntity();
   entity
-    .add(new Transform(x, y, 0))
+    .add(new Transform(x, y, spawnHeight))
     .add(new Unit(definition))
     .add(
       new Health(
