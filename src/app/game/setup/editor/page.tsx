@@ -4,7 +4,7 @@ import { Suspense, useState, useEffect, useCallback, useRef } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { EditorCore, VOIDSTRIKE_EDITOR_CONFIG } from '@/editor';
 import { voidstrikeDataProvider } from '@/editor/providers/voidstrike';
-import { useGameSetupStore, getEditorMapData } from '@/store/gameSetupStore';
+import { useGameSetupStore, loadEditorMapDataFromStorage } from '@/store/gameSetupStore';
 import { debugInitialization } from '@/utils/debugLogger';
 import type { EditorMapData } from '@/editor';
 import type { MapListItem } from '@/editor/core/EditorHeader';
@@ -34,15 +34,28 @@ function EditorPageContent() {
   );
   const [editorKey, setEditorKey] = useState(0); // Key to force re-render EditorCore
 
-  // Check for stored editor map data (returning from preview)
-  const storedEditorMapData = getEditorMapData();
-  const [initialMapData, setInitialMapData] = useState<EditorMapData | undefined>(
-    storedEditorMapData || undefined
-  );
+  // State for restored editor map data (returning from preview)
+  const [initialMapData, setInitialMapData] = useState<EditorMapData | undefined>(undefined);
+  const [isLoadingStoredData, setIsLoadingStoredData] = useState(true);
   const hasRestoredFromPreview = useRef(false);
 
   // Track current map data for preview
   const currentMapDataRef = useRef<EditorMapData | null>(null);
+
+  // Load stored editor map data from IndexedDB (returning from preview)
+  useEffect(() => {
+    const loadStoredData = async () => {
+      const storedData = await loadEditorMapDataFromStorage();
+      if (storedData && !hasRestoredFromPreview.current) {
+        hasRestoredFromPreview.current = true;
+        setInitialMapData(storedData);
+        // Clear the stored data after we've used it for initial load
+        useGameSetupStore.getState().clearEditorPreviewState();
+      }
+      setIsLoadingStoredData(false);
+    };
+    loadStoredData();
+  }, []);
 
   // Load available maps list
   useEffect(() => {
@@ -52,15 +65,6 @@ function EditorPageContent() {
     };
     loadMapList();
   }, []);
-
-  // Clear stored editor map data after restoring from preview
-  useEffect(() => {
-    if (storedEditorMapData && !hasRestoredFromPreview.current) {
-      hasRestoredFromPreview.current = true;
-      // Clear the stored data after we've used it for initial load
-      useGameSetupStore.getState().clearEditorPreviewState();
-    }
-  }, [storedEditorMapData]);
 
   const handleCancel = () => {
     // Navigate back to home if came from home page (new=true), otherwise to setup
@@ -127,6 +131,15 @@ function EditorPageContent() {
     setEditorKey((prev: number) => prev + 1);
     router.replace('/game/setup/editor?new=true');
   }, [router]);
+
+  // Show loading while checking for stored data from preview
+  if (isLoadingStoredData) {
+    return (
+      <main className="h-screen bg-black flex items-center justify-center">
+        <div className="text-void-400">Loading editor...</div>
+      </main>
+    );
+  }
 
   return (
     <EditorCore

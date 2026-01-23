@@ -14,6 +14,7 @@ import type {
   ValidationResult,
 } from '../config/EditorConfig';
 import { debugInitialization } from '@/utils/debugLogger';
+import { safeLocalStorageSet, safeLocalStorageGet } from '@/utils/storage';
 import type { MapData, MapCell, Expansion, WatchTower, DestructibleRock, MapDecoration, ResourceNode, TerrainType } from '@/data/maps/MapTypes';
 import {
   ALL_MAPS,
@@ -328,17 +329,24 @@ export const voidstrikeDataProvider: EditorDataProvider = {
   async saveMap(data: EditorMapData) {
     const mapData = editorFormatToMapData(data);
 
-    // Save to localStorage as fallback persistence
-    // Real implementation would save to a server or IndexedDB
-    try {
-      const savedMaps = JSON.parse(localStorage.getItem('voidstrike_editor_maps') || '{}');
-      savedMaps[data.id] = mapData;
-      localStorage.setItem('voidstrike_editor_maps', JSON.stringify(savedMaps));
-      debugInitialization.log('[Editor] Map saved to localStorage:', data.id);
-    } catch (e) {
-      console.error('[Editor] Failed to save map:', e);
-      throw new Error('Failed to save map to storage');
+    // Load existing maps using safe storage
+    const existingResult = safeLocalStorageGet<Record<string, MapData>>('voidstrike_editor_maps');
+    const savedMaps = existingResult.success && existingResult.data ? existingResult.data : {};
+
+    // Add the new map
+    savedMaps[data.id] = mapData;
+
+    // Save with compression for large maps
+    const saveResult = safeLocalStorageSet('voidstrike_editor_maps', savedMaps, true);
+
+    if (!saveResult.success) {
+      if (saveResult.error === 'quota_exceeded') {
+        throw new Error('Storage quota exceeded. Try deleting some saved maps to free up space.');
+      }
+      throw new Error(saveResult.message || 'Failed to save map to storage');
     }
+
+    debugInitialization.log('[Editor] Map saved to localStorage:', data.id);
   },
 
   createMap(width: number, height: number, name: string) {
