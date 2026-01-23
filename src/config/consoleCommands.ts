@@ -491,7 +491,7 @@ export const CONSOLE_COMMANDS: ConsoleCommand[] = [
       if (ctx.camera) {
         const camPos = ctx.camera.getPosition?.();
         if (camPos) {
-          msg += `  Camera: (${camPos.x.toFixed(1)}, ${camPos.y.toFixed(1)})\n`;
+          msg += `  Camera: (${camPos.x.toFixed(1)}, ${camPos.z.toFixed(1)})\n`;
         }
         const zoom = ctx.camera.getZoom?.();
         if (zoom !== undefined) {
